@@ -1,0 +1,53 @@
+name: SORIDRAW Backend V2 Step 4 Mobile Docs Finalize
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step4-mobile-doc-finalize.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Update master checkpoint
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md')
+          text = path.read_text(encoding='utf-8')
+          status = "Status: IMPLEMENTATION / Step 4 Preview validation IN PROGRESS — mobile core user-flow passed and read-only postcheck verified 743/743 Music Note parity, 1/1 stable Recent -> V2 recentVisible:true, and no folder/section drift; Suno Library credit-dependent new-generation/visibility remains UNVERIFIED and M-005 stays open before Step 4 can fully close"
+          text, count = re.subn(r'^Status:.*$', status, text, count=1, flags=re.MULTILINE)
+          if count != 1:
+              raise SystemExit(f'Master status replace mismatch: {count}')
+
+          report_line = "Step 4 mobile postcheck result: `docs/SORIDRAW_BACKEND_V2_STEP4_MOBILE_POSTCHECK_RESULT.md`."
+          if report_line not in text:
+              anchor = "2-A4d bounded catch-up result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4D_BOUNDED_CATCHUP_RESULT.md`."
+              if anchor not in text:
+                  raise SystemExit('Master report anchor missing')
+              text = text.replace(anchor, anchor + "\n" + report_line, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit docs
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git diff --cached --check
+          git commit -m "docs: mark Step 4 mobile checkpoint in progress"
+          git push origin HEAD:preview

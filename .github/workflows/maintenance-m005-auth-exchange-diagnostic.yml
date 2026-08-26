@@ -1,0 +1,79 @@
+name: SORIDRAW M-005 Auth Exchange Diagnostic
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/maintenance-m005-auth-exchange-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v7
+        with:
+          ref: preview
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Authenticate Firebase diagnostic session
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install existing Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Diagnose custom-token exchange without data mutation
+        working-directory: functions
+        env:
+          FIREBASE_PROJECT_ID: soridraw-app-866a5
+          FIREBASE_API_KEY: AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const admin=require('firebase-admin');
+          if(!admin.apps.length) admin.initializeApp({credential:admin.credential.applicationDefault(),projectId:process.env.FIREBASE_PROJECT_ID});
+          const db=admin.firestore();
+          const sanitize=(value)=>String(value||'').replace(/eyJ[A-Za-z0-9._-]+/g,'[REDACTED_TOKEN]').replace(/AIza[A-Za-z0-9_-]+/g,'[REDACTED_API_KEY]').slice(0,500);
+          (async()=>{
+            const snap=await db.collectionGroup('tracks').limit(100).get();
+            const chosen=snap.docs.map(doc=>({doc,data:doc.data()||{},uid:doc.ref.parent.parent?.id||''})).find(x=>x.uid&&x.data.taskId);
+            if(!chosen) throw new Error('no existing owner uid candidate');
+            const custom=await admin.auth().createCustomToken(chosen.uid);
+            const parts=custom.split('.');
+            let payload={}; try{payload=JSON.parse(Buffer.from(parts[1],'base64url').toString('utf8'))}catch{}
+            console.log('M005_CUSTOM_TOKEN_META='+JSON.stringify({issuer:payload.iss||null,audience:payload.aud||null,uidPresent:Boolean(payload.uid||payload.sub),projectId:process.env.FIREBASE_PROJECT_ID}));
+            const exchange=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(process.env.FIREBASE_API_KEY)}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:custom,returnSecureToken:true})});
+            const body=await exchange.json().catch(()=>({}));
+            const err=body?.error||{};
+            console.log('M005_EXCHANGE_HTTP='+exchange.status);
+            console.log('M005_EXCHANGE_ERROR='+JSON.stringify({code:err.code||null,message:sanitize(err.message),errors:Array.isArray(err.errors)?err.errors.map(x=>({message:sanitize(x?.message),reason:sanitize(x?.reason),domain:sanitize(x?.domain)})):[]}));
+            console.log('M005_EXCHANGE_SUCCESS='+Boolean(exchange.ok&&body.idToken));
+            console.log('M005_FIRESTORE_WRITES=0');
+            console.log('M005_FUNCTION_DEPLOYS=0');
+            if(exchange.ok&&body.idToken) process.exit(0);
+          })().catch(e=>{console.error('M005_DIAGNOSTIC_ERROR='+sanitize(e?.message||e));process.exit(1)});
+          NODE
+
+      - name: Scope proof
+        if: always()
+        run: |
+          echo 'M005_DIAGNOSTIC_ONLY=YES'
+          echo 'M005_FIRESTORE_WRITES=0'
+          echo 'M005_FIRESTORE_DELETES=0'
+          echo 'M005_FUNCTION_DEPLOYS=0'
+          echo 'M005_RULES_DEPLOYS=0'
+          echo 'M005_HOSTING_DEPLOYS=0'
+          echo 'M005_MAIN_CHANGES=0'

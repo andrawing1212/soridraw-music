@@ -42,17 +42,16 @@ jobs:
           set -euo pipefail
           node <<'NODE'
           const admin=require('firebase-admin');
-          const fs=require('fs');
-          const sanitize=(v)=>String(v||'').replace(/eyJ[A-Za-z0-9._-]+/g,'[REDACTED_TOKEN]').replace(/AIza[A-Za-z0-9_-]+/g,'[REDACTED_API_KEY]').slice(0,300);
-          const cred=JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,'utf8'));
           const project=process.env.FIREBASE_PROJECT_ID;
+          const sanitize=(v)=>String(v||'').replace(/eyJ[A-Za-z0-9._-]+/g,'[REDACTED_TOKEN]').replace(/AIza[A-Za-z0-9_-]+/g,'[REDACTED_API_KEY]').slice(0,300);
           const accessToken=async()=>{
             const {GoogleAuth}=require('google-auth-library');
-            const auth=new GoogleAuth({scopes:['https://www.googleapis.com/auth/cloud-platform']}); const client=await auth.getClient(); const t=await client.getAccessToken(); return t.token;
+            const auth=new GoogleAuth({scopes:['https://www.googleapis.com/auth/cloud-platform']});
+            const client=await auth.getClient(); const t=await client.getAccessToken(); return t.token;
           };
           (async()=>{
             const token=await accessToken();
-            const list=await fetch(`https://iam.googleapis.com/v1/projects/${project}/serviceAccounts?pageSize=100`,{headers:{authorization:`Bearer ${token}`}});
+            const list=await fetch(`https://iam.googleapis.com/v1/projects/${project}/serviceAccounts?pageSize=100`,{headers:{authorization:`Bearer ${token}`,'x-goog-user-project':project}});
             const listBody=await list.json();
             console.log('M005_TARGET_SA_LIST_HTTP='+list.status);
             if(!list.ok) { console.log('M005_TARGET_SA_LIST_ERROR='+sanitize(listBody?.error?.message)); return; }
@@ -64,17 +63,17 @@ jobs:
             const chosen=snap.docs.map(doc=>({doc,data:doc.data()||{},uid:doc.ref.parent.parent?.id||''})).find(x=>x.uid&&x.data.taskId);
             if(!chosen) throw new Error('no owner uid candidate');
             for(const email of preferred){
-              const label=email.split('@')[0].replace(/[A-Za-z0-9_-]{8,}/g,'candidate');
+              const kind=email.includes('firebase-adminsdk')?'firebase-adminsdk':email.includes('appspot')?'appspot':email.includes('compute')?'compute':'other';
               try{
                 const app=admin.initializeApp({credential:admin.credential.applicationDefault(),projectId:project,serviceAccountId:email},'signer-'+Math.random().toString(36).slice(2));
                 const custom=await app.auth().createCustomToken(chosen.uid);
                 const payload=JSON.parse(Buffer.from(custom.split('.')[1],'base64url').toString('utf8'));
                 const ex=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(process.env.FIREBASE_API_KEY)}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:custom,returnSecureToken:true})});
                 const body=await ex.json().catch(()=>({}));
-                console.log('M005_SIGNER_ATTEMPT='+JSON.stringify({type:label,issuerProjectMatch:String(payload.iss||'').endsWith(`@${project}.iam.gserviceaccount.com`)||String(payload.iss||'').includes(project),http:ex.status,success:Boolean(ex.ok&&body.idToken),error:sanitize(body?.error?.message)}));
+                console.log('M005_SIGNER_ATTEMPT='+JSON.stringify({kind,issuerProjectMatch:String(payload.iss||'').includes(project),http:ex.status,success:Boolean(ex.ok&&body.idToken),error:sanitize(body?.error?.message)}));
                 if(ex.ok&&body.idToken){ console.log('M005_TARGET_SIGNER_EXCHANGE=PASS'); return; }
               } catch(e){
-                console.log('M005_SIGNER_ATTEMPT_ERROR='+JSON.stringify({type:label,message:sanitize(e?.message||e)}));
+                console.log('M005_SIGNER_ATTEMPT_ERROR='+JSON.stringify({kind,message:sanitize(e?.message||e)}));
               }
             }
             console.log('M005_TARGET_SIGNER_EXCHANGE=UNAVAILABLE');

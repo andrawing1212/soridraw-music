@@ -23,152 +23,27 @@ jobs:
         with:
           ref: preview
           fetch-depth: 0
+
       - uses: actions/setup-node@v7
         with:
           node-version: '20.20.2'
           cache: npm
 
-      - name: Apply approved deterministic 2-A4c patch
+      - name: Apply approved 2-A4c runtime source
+        run: python3 .deploy/run-backend-v2-step2a4c.py
+
+      - name: Apply build-patcher compatibility
+        run: python3 .deploy/apply-backend-v2-step2a4c-build-compat.py
+
+      - name: Install and validate source
         shell: bash
         run: |
           set -euo pipefail
-          cp .deploy/apply-backend-v2-step2a4c.py /tmp/apply-backend-v2-step2a4c.py
-          python3 - <<'PY'
-          from pathlib import Path
-          path=Path('/tmp/apply-backend-v2-step2a4c.py')
-          text=path.read_text(encoding='utf-8')
-          old="helper_anchor = \"const RAP_APP_CHECK_RECAPTCHA_SITE_KEY = import.meta.env.VITE_RAP_APP_CHECK_RECAPTCHA_SITE_KEY?.trim() || '';\""
-          new="helper_anchor = \"import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';\""
-          if old not in text: raise SystemExit('helper anchor fixer missing old anchor')
-          text=text.replace(old,new,1)
-          old_call="replace_once(helper_anchor, helper + helper_anchor, 'helper insertion')"
-          new_call="replace_once(helper_anchor, helper_anchor + '\\n\\n' + helper, 'helper insertion')"
-          if old_call not in text: raise SystemExit('helper insertion fixer missing call')
-          path.write_text(text.replace(old_call,new_call,1),encoding='utf-8')
-          PY
-          python3 /tmp/apply-backend-v2-step2a4c.py
-
-      - name: Make 910 prebuild compatible with 2-A4c mirror targets
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          path=Path('.deploy/apply-910-recent-text-batch-unsave-fix.py')
-          text=path.read_text(encoding='utf-8')
-
-          marker="if MARKER not in app:\n"
-          if marker not in text:
-              raise SystemExit('910 compatibility insertion anchor missing')
-          compat=r'''# Step 2-A4c compatibility: normalize the three mirror-aware boundary shapes
-# that 910 intentionally replaces with its delayed queue. The delayed helper below
-# receives the same stable mirror target so V1-first -> V2 shadow semantics survive.
-mirror_boundary_compat_pairs = [
-    (
-        "await runV1MutationBoundary({ domain: 'recent', operation: 'regenerate', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));\n      markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);",
-        "await setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true });\n      markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);",
-    ),
-    (
-        "await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));\n      markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);",
-        "await setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true });\n      markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);",
-    ),
-    (
-        "runV1MutationBoundary({ domain: 'recent', operation: 'pre-favorite-edit', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextHistory[currentIndex]], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }))\n          .then(() => markCacheDiagnostic('recentSongs', 'SYNC', 0, 1))\n          .catch((error) => {",
-        "setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true })\n          .then(() => markCacheDiagnostic('recentSongs', 'SYNC', 0, 1))\n          .catch((error) => {",
-    ),
-]
-for boundary_shape, legacy_shape in mirror_boundary_compat_pairs:
-    if boundary_shape in app:
-        app = app.replace(boundary_shape, legacy_shape, 1)
-
-'''
-          text=text.replace(marker, compat+marker, 1)
-
-          pairs=[
-            (
-              "const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit' } | null>(null);",
-              "const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[] } | null>(null);",
-            ),
-            (
-              "await runV1MutationBoundary({ domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: pending.songs }), { merge: true }));",
-              "await runV1MutationBoundary({ domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets }, setDoc(ref, sanitizeForFirestore({ songs: pending.songs }), { merge: true }));",
-            ),
-            (
-              "const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit') => {",
-              "const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit', mirrorTargets?: V1MutationMirrorTarget[]) => {",
-            ),
-            (
-              "recentSongTextWritePendingRef.current = { uid, songs, operation };",
-              "recentSongTextWritePendingRef.current = { uid, songs, operation, mirrorTargets };",
-            ),
-            (
-              "queueRecentSongTextWrite(user.uid, nextHistory, 'regenerate');",
-              "queueRecentSongTextWrite(user.uid, nextHistory, 'regenerate', buildRecentMirrorTargets([nextSong], 'upsert'));",
-            ),
-            (
-              "queueRecentSongTextWrite(user.uid, nextHistory, 'edit');",
-              "queueRecentSongTextWrite(user.uid, nextHistory, 'edit', buildRecentMirrorTargets([nextSong], 'upsert'));",
-            ),
-            (
-              "queueRecentSongTextWrite(user.uid, nextHistory, 'pre-favorite-edit');",
-              "queueRecentSongTextWrite(user.uid, nextHistory, 'pre-favorite-edit', buildRecentMirrorTargets([nextHistory[currentIndex]], 'upsert'));",
-            ),
-          ]
-          for old,new in pairs:
-              count=text.count(old)
-              if count != 1:
-                  raise SystemExit(f'910 mirror compatibility anchor mismatch: {old[:70]} count={count}')
-              text=text.replace(old,new,1)
-          path.write_text(text,encoding='utf-8')
-          print('A4C_910_COMPAT=PASS')
-          PY
           git diff --check
-
-      - name: Validate source scope and contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          app=Path('src/App.tsx').read_text(encoding='utf-8')
-          mirror=Path('src/data/v2PreviewShadowMirror.ts').read_text(encoding='utf-8')
-          boundary=Path('src/data/v1MutationBoundary.ts').read_text(encoding='utf-8')
-          outbox=Path('src/data/indexedDbMirrorOutbox.ts').read_text(encoding='utf-8')
-          patch910=Path('.deploy/apply-910-recent-text-batch-unsave-fix.py').read_text(encoding='utf-8')
-          for marker in ["import './data/v2PreviewShadowMirror'",'ensureLiveSoridrawSongId','soridrawSongId: favoriteSoridrawSongId',"operation: 'save-batch'", "operation: 'regenerate'", "operation: 'add-lyrics-language'", "operation: 'edit'", "operation: 'pre-favorite-edit'"]:
-              assert marker in app, marker
-          for marker in ["BACKEND_V2_PREVIEW_SHADOW_HOST = 'soridraw-music-git-preview-andrawing1212.vercel.app'",'BACKEND_V2_PREVIEW_SHADOW_MAX_TARGETS_PER_MUTATION = 10',"targetKind: 'soridraw'",'processPendingOutbox','runTransaction','legacyRecentIndex']:
-              assert marker in mirror, marker
-          assert 'deleteDoc(' not in mirror
-          assert "startsWith('bulk-')" in mirror
-          assert 'registerV1MutationPostSuccessHook' in boundary
-          assert 'sourceDocumentId?: string' in outbox
-          for marker in ['mirrorTargets: pending.mirrorTargets','V1MutationMirrorTarget[]','buildRecentMirrorTargets([nextSong]','buildRecentMirrorTargets([nextHistory[currentIndex]]']:
-              assert marker in patch910, marker
-          print('A4C_STATIC_SAFETY=PASS')
-          PY
           npm ci --ignore-scripts
           npx tsc --noEmit
-
-      - name: V1-first boundary contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > ./a4c-boundary-test.ts <<'TS'
-          import { registerV1MutationPostSuccessHook, runV1MutationBoundary } from './src/data/v1MutationBoundary.ts';
-          let seen = 0;
-          registerV1MutationPostSuccessHook(async () => { seen += 1; });
-          const value = await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: 'u' }, Promise.resolve(7));
-          await new Promise((resolve) => setTimeout(resolve, 0));
-          if (value !== 7 || seen !== 1) throw new Error('post-success hook failed');
-          seen = 0;
-          try { await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: 'u' }, Promise.reject(new Error('v1'))); } catch {}
-          await new Promise((resolve) => setTimeout(resolve, 0));
-          if (seen !== 0) throw new Error('mirror ran after V1 failure');
-          console.log('A4C_BOUNDARY_CONTRACT=PASS');
-          TS
-          npx tsx ./a4c-boundary-test.ts
-          rm ./a4c-boundary-test.ts
+          python3 .deploy/verify-backend-v2-step2a4c.py source
+          npx tsx .deploy/test-backend-v2-step2a4c-boundary.ts
 
       - name: Save intended source before build-time patchers
         shell: bash
@@ -187,22 +62,9 @@ for boundary_shape, legacy_shape in mirror_boundary_compat_pairs:
           set -euo pipefail
           npm run build
           npx tsc --noEmit
-          python3 - <<'PY'
-          from pathlib import Path
-          app=Path('src/App.tsx').read_text(encoding='utf-8')
-          for marker in [
-              'SORIDRAW_910_RECENT_TEXT_BATCH_UNSAVE_FIX',
-              'mirrorTargets: pending.mirrorTargets',
-              "queueRecentSongTextWrite(user.uid, nextHistory, 'regenerate', buildRecentMirrorTargets([nextSong], 'upsert'))",
-              "queueRecentSongTextWrite(user.uid, nextHistory, 'edit', buildRecentMirrorTargets([nextSong], 'upsert'))",
-              "queueRecentSongTextWrite(user.uid, nextHistory, 'pre-favorite-edit', buildRecentMirrorTargets([nextHistory[currentIndex]], 'upsert'))",
-              "import './data/v2PreviewShadowMirror'",
-          ]:
-              assert marker in app, marker
-          print('A4C_BUILT_RUNTIME_CONTRACT=PASS')
-          PY
+          python3 .deploy/verify-backend-v2-step2a4c.py built
 
-      - name: Restore intended source and commit only approved scope
+      - name: Restore intended source
         shell: bash
         run: |
           set -euo pipefail
@@ -214,25 +76,12 @@ for boundary_shape, legacy_shape in mirror_boundary_compat_pairs:
           cp /tmp/a4c-intended/.deploy/apply-910-recent-text-batch-unsave-fix.py .deploy/apply-910-recent-text-batch-unsave-fix.py
           git diff --check
           npx tsc --noEmit
-          python3 - <<'PY'
-          import subprocess
-          from pathlib import Path
-          rows=subprocess.check_output(['git','status','--porcelain'],text=True).splitlines()
-          changed={row[3:] for row in rows if len(row)>=4}
-          expected={
-              'src/App.tsx',
-              'src/data/v1MutationBoundary.ts',
-              'src/data/indexedDbMirrorOutbox.ts',
-              'src/data/v2PreviewShadowMirror.ts',
-              '.deploy/apply-910-recent-text-batch-unsave-fix.py',
-          }
-          if changed != expected: raise SystemExit(f'2-A4c final scope mismatch: {sorted(changed)}')
-          mirror=Path('src/data/v2PreviewShadowMirror.ts').read_text(encoding='utf-8')
-          if 'deleteDoc(' in mirror or 'firebase-functions' in mirror: raise SystemExit('2-A4c forbidden mutation/dependency found')
-          for path in ['firestore.rules','firestore.indexes.json','database.rules.json','functions/src/index.ts','firebase.json']:
-              if subprocess.run(['git','diff','--quiet','HEAD','--',path]).returncode != 0: raise SystemExit(f'protected file changed: {path}')
-          print('A4C_FINAL_SCOPE=PASS')
-          PY
+          python3 .deploy/verify-backend-v2-step2a4c.py final
+
+      - name: Commit validated implementation
+        shell: bash
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/App.tsx src/data/v1MutationBoundary.ts src/data/indexedDbMirrorOutbox.ts src/data/v2PreviewShadowMirror.ts .deploy/apply-910-recent-text-batch-unsave-fix.py

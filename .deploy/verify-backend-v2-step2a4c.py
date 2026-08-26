@@ -12,6 +12,7 @@ boundary = Path('src/data/v1MutationBoundary.ts').read_text(encoding='utf-8')
 outbox = Path('src/data/indexedDbMirrorOutbox.ts').read_text(encoding='utf-8')
 patch910 = Path('.deploy/apply-910-recent-text-batch-unsave-fix.py').read_text(encoding='utf-8')
 patch912 = Path('.deploy/apply-912-heart-triggered-recent-save.py').read_text(encoding='utf-8')
+patch913 = Path('.deploy/apply-913-recent-save-runtime-fix.py').read_text(encoding='utf-8')
 
 for marker in [
     "import './data/v2PreviewShadowMirror'",
@@ -58,11 +59,19 @@ for marker in [
 ]:
     if marker not in patch912:
         raise SystemExit(f'missing 912 compatibility marker: {marker}')
+for marker in [
+    'Step 2-A4c compatibility: preserve mirrorTargets while removing invalid cache ref.',
+    'songs: nextSongs, operation, mirrorTargets',
+    "mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert')",
+]:
+    if marker not in patch913:
+        raise SystemExit(f'missing 913 compatibility marker: {marker}')
 
 if mode == 'built':
     for marker in [
         'SORIDRAW_910_RECENT_TEXT_BATCH_UNSAVE_FIX',
         'SORIDRAW_912_HEART_TRIGGERED_RECENT_SAVE',
+        'SORIDRAW_913_RECENT_SAVE_RUNTIME_FIX',
         'mirrorTargets: pending.mirrorTargets',
         'mirrorTargets?: V1MutationMirrorTarget[]',
         "mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert')",
@@ -70,6 +79,8 @@ if mode == 'built':
     ]:
         if marker not in app:
             raise SystemExit(f'missing built App marker: {marker}')
+    if 'recentSongsCacheRef' in app:
+        raise SystemExit('913 invalid recentSongsCacheRef remains in built App')
     print('A4C_BUILT_RUNTIME_CONTRACT=PASS')
 elif mode == 'final':
     rows = subprocess.check_output(['git', 'status', '--porcelain'], text=True).splitlines()
@@ -81,6 +92,7 @@ elif mode == 'final':
         'src/data/v2PreviewShadowMirror.ts',
         '.deploy/apply-910-recent-text-batch-unsave-fix.py',
         '.deploy/apply-912-heart-triggered-recent-save.py',
+        '.deploy/apply-913-recent-save-runtime-fix.py',
     }
     if changed != expected:
         raise SystemExit(f'2-A4c final scope mismatch: {sorted(changed)}')

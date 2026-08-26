@@ -129,3 +129,44 @@ if compat912 not in text912:
         text912 = replace_once(text912, old, new, label)
     path912.write_text(text912, encoding='utf-8')
 print('A4C_BUILD_COMPAT_912=PASS')
+
+
+# -----------------------------------------------------------------------------
+# 913: removes a bad temporary cache ref introduced by 912. Its anchors must
+# include the new mirrorTargets fields so it removes only the bad ref and preserves
+# the V1-first shadow target carried through the heart commit.
+# -----------------------------------------------------------------------------
+path913 = Path('.deploy/apply-913-recent-save-runtime-fix.py')
+text913 = path913.read_text(encoding='utf-8')
+compat913 = '# Step 2-A4c compatibility: preserve mirrorTargets while removing invalid cache ref.'
+if compat913 not in text913:
+    text913 = text913.replace(
+        "MARKER = 'SORIDRAW_913_RECENT_SAVE_RUNTIME_FIX'\n",
+        "MARKER = 'SORIDRAW_913_RECENT_SAVE_RUNTIME_FIX'\n\n# Step 2-A4c compatibility: preserve mirrorTargets while removing invalid cache ref.\n",
+        1,
+    )
+    pairs913 = [
+        (
+            "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation };''',",
+            "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets };''',",
+            '913 edit old anchor mirror target',
+        ),
+        (
+            "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation };''',",
+            "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets };''',",
+            '913 edit new anchor mirror target',
+        ),
+    ]
+    # Same token occurs twice (before/after blocks). Replace both deliberately.
+    old_token = "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation };''',"
+    if text913.count(old_token) != 2:
+        raise SystemExit(f'913 edit anchor count mismatch: {text913.count(old_token)}')
+    text913 = text913.replace(old_token, "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets };''',")
+
+    old_heart = "            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',\n          };\n          await flushRecentSongTextWrite();'''"
+    new_heart = "            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',\n            mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),\n          };\n          await flushRecentSongTextWrite();'''"
+    if text913.count(old_heart) != 2:
+        raise SystemExit(f'913 heart anchor count mismatch: {text913.count(old_heart)}')
+    text913 = text913.replace(old_heart, new_heart)
+    path913.write_text(text913, encoding='utf-8')
+print('A4C_BUILD_COMPAT_913=PASS')

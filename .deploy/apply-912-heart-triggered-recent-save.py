@@ -2,6 +2,8 @@ from pathlib import Path
 
 MARKER = 'SORIDRAW_912_HEART_TRIGGERED_RECENT_SAVE'
 
+# Step 2-A4c compatibility: keep stable mirror targets through heart-triggered commit.
+
 
 def replace_once(source: str, before: str, after: str, label: str) -> str:
     count = source.count(before)
@@ -22,9 +24,9 @@ if MARKER not in app:
     # Any edit after a heart save detaches that recent-song version from the
     # Music Note snapshot so it becomes a new, unsaved working version.
     # ---------------------------------------------------------------------
-    queue_old = '''  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit') => {
+    queue_old = '''  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit', mirrorTargets?: V1MutationMirrorTarget[]) => {
     if (!uid || !Array.isArray(songs)) return;
-    recentSongTextWritePendingRef.current = { uid, songs, operation };
+    recentSongTextWritePendingRef.current = { uid, songs, operation, mirrorTargets };
     if (recentSongTextWriteTimerRef.current !== null) {
       window.clearTimeout(recentSongTextWriteTimerRef.current);
     }
@@ -41,7 +43,7 @@ if MARKER not in app:
     return () => window.removeEventListener('pagehide', handlePageHide);
   }, [flushRecentSongTextWrite]);
 '''
-    queue_new = '''  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit') => {
+    queue_new = '''  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit', mirrorTargets?: V1MutationMirrorTarget[]) => {
     if (!uid || !Array.isArray(songs)) return;
 
     const activeIndex = historyIndexRef.current;
@@ -63,7 +65,7 @@ if MARKER not in app:
     // Local persistence only. No timer and no pagehide Firestore flush.
     recentSongsCacheRef.current = nextSongs;
     saveRecentSongsCache(uid, nextSongs);
-    recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation };
+    recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets };
   }, []);
 '''
     app = replace_once(app, queue_old, queue_new, '912 remove timer and keep recent edits local')
@@ -207,6 +209,7 @@ if MARKER not in app:
             uid: user.uid,
             songs: nextCommittedHistory,
             operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',
+            mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
           };
           await flushRecentSongTextWrite();
         }

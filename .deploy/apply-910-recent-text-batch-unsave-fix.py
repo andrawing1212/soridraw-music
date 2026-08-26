@@ -36,6 +36,25 @@ for boundary_shape, legacy_shape in boundary_compat_pairs:
     if boundary_shape in app:
         app = app.replace(boundary_shape, legacy_shape, 1)
 
+# Step 2-A4c compatibility: preserve mirror targets through the 910 delayed queue.
+mirror_boundary_compat_pairs = [
+    (
+        "await runV1MutationBoundary({ domain: 'recent', operation: 'regenerate', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));\n      markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);",
+        "await setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true });\n      markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);",
+    ),
+    (
+        "await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));\n      markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);",
+        "await setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true });\n      markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);",
+    ),
+    (
+        "runV1MutationBoundary({ domain: 'recent', operation: 'pre-favorite-edit', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextHistory[currentIndex]], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }))\n          .then(() => markCacheDiagnostic('recentSongs', 'SYNC', 0, 1))\n          .catch((error) => {",
+        "setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true })\n          .then(() => markCacheDiagnostic('recentSongs', 'SYNC', 0, 1))\n          .catch((error) => {",
+    ),
+]
+for boundary_shape, legacy_shape in mirror_boundary_compat_pairs:
+    if boundary_shape in app:
+        app = app.replace(boundary_shape, legacy_shape, 1)
+
 if MARKER not in app:
     # -------------------------------------------------------------------------
     # 1) Recent-song text edits: local-first, debounce server writes.
@@ -45,7 +64,7 @@ if MARKER not in app:
     # -------------------------------------------------------------------------
     helper_anchor = '''  const persistRegeneratedCurrentSong = async (nextSong: SongResult) => {'''
     helper = '''  const recentSongTextWriteTimerRef = useRef<number | null>(null);
-  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit' } | null>(null);
+  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[] } | null>(null);
 
   const flushRecentSongTextWrite = useCallback(async () => {
     const pending = recentSongTextWritePendingRef.current;
@@ -59,7 +78,7 @@ if MARKER not in app:
 
     try {
       const ref = doc(db, "user_recent_songs", pending.uid);
-      await runV1MutationBoundary({ domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: pending.songs }), { merge: true }));
+      await runV1MutationBoundary({ domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets }, setDoc(ref, sanitizeForFirestore({ songs: pending.songs }), { merge: true }));
       markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
     } catch (error) {
       // Keep the newest pending value so a later edit/flush can retry instead of
@@ -69,9 +88,9 @@ if MARKER not in app:
     }
   }, []);
 
-  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit') => {
+  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit', mirrorTargets?: V1MutationMirrorTarget[]) => {
     if (!uid || !Array.isArray(songs)) return;
-    recentSongTextWritePendingRef.current = { uid, songs, operation };
+    recentSongTextWritePendingRef.current = { uid, songs, operation, mirrorTargets };
     if (recentSongTextWriteTimerRef.current !== null) {
       window.clearTimeout(recentSongTextWriteTimerRef.current);
     }
@@ -102,7 +121,7 @@ if MARKER not in app:
 
   const handleRegenerateCurrentSongPart'''
     regen_new = '''    if (user?.uid) {
-      queueRecentSongTextWrite(user.uid, nextHistory, 'regenerate');
+      queueRecentSongTextWrite(user.uid, nextHistory, 'regenerate', buildRecentMirrorTargets([nextSong], 'upsert'));
     }
   };
 
@@ -125,7 +144,7 @@ if MARKER not in app:
         raise SystemExit('910 recent-song manual text save anchor missing')
     manual_replacement = (
         manual_match.group(1)
-        + '''      if (user?.uid) {\n        queueRecentSongTextWrite(user.uid, nextHistory, 'edit');\n      }\n\n'''
+        + '''      if (user?.uid) {\n        queueRecentSongTextWrite(user.uid, nextHistory, 'edit', buildRecentMirrorTargets([nextSong], 'upsert'));\n      }\n\n'''
         + manual_match.group(2)
     )
     app = app[:manual_match.start()] + manual_replacement + app[manual_match.end():]
@@ -158,7 +177,7 @@ if MARKER not in app:
     if not heart_match:
         raise SystemExit('910 favorite-before-save recent text anchor missing')
     app = app[:heart_match.start()] + '''      if (user?.uid) {
-        queueRecentSongTextWrite(user.uid, nextHistory, 'pre-favorite-edit');
+        queueRecentSongTextWrite(user.uid, nextHistory, 'pre-favorite-edit', buildRecentMirrorTargets([nextHistory[currentIndex]], 'upsert'));
       }''' + app[heart_match.end():]
 
     # -------------------------------------------------------------------------

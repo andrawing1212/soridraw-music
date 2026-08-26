@@ -1,9 +1,11 @@
-// Backend V2 Step 2-A4b
+// Backend V2 Step 2-A4c
 // Central boundary for EXISTING V1 Recent/Music Note mutations.
-// This module deliberately performs no Firebase/network/IndexedDB/V2 work.
-// A later separately approved step may attach best-effort mirroring only after V1 succeeds.
+// V1 stays authoritative. The registered Preview shadow hook is invoked only AFTER
+// a V1 mutation resolves successfully, and hook failures never change V1 success.
 
-export const BACKEND_V2_V1_MUTATION_MIRROR_ENABLED = false as const;
+import type { V2LiveMirrorOperation } from './v2LiveMutation';
+
+export const BACKEND_V2_V1_MUTATION_MIRROR_ENABLED = true as const;
 
 export type V1MutationDomain = 'recent' | 'musicNote';
 
@@ -34,38 +36,49 @@ export type V1MusicNoteMutationOperation =
 
 export type V1MutationOperation = V1RecentMutationOperation | V1MusicNoteMutationOperation;
 
+export interface V1MutationMirrorTarget {
+  targetSongId: string;
+  operation: V2LiveMirrorOperation;
+  sourceUpdatedAtMs: number;
+  sourceDocumentId?: string;
+}
+
 export interface V1MutationBoundaryContext {
   domain: V1MutationDomain;
   operation: V1MutationOperation;
   uid: string;
-  /** Existing V1 document IDs when already known. Never used as cross-domain identity proof. */
   documentIds?: readonly string[];
-  /** Number of V1 content documents affected by this logical mutation. */
   affectedCount?: number;
+  mirrorTargets?: readonly V1MutationMirrorTarget[];
 }
 
 export type V1MutationWrite<T> = Promise<T> | (() => Promise<T>);
+export type V1MutationPostSuccessHook = (
+  context: Readonly<V1MutationBoundaryContext>,
+  result: unknown,
+) => void | Promise<void>;
 
-/**
- * Passes one existing V1 mutation through the common boundary and returns/throws exactly as it does.
- *
- * Accepting the already-created Promise is intentional in Step 2-A4b: it lets us wrap existing
- * Firestore expressions with the smallest possible behavioral change. A future approved mirror
- * can still run only after this Promise resolves successfully.
- *
- * Step 2-A4b invariants:
- * - V1 is authoritative,
- * - no V2 mirror is executed,
- * - no outbox is opened,
- * - no extra Firebase read/write is introduced,
- * - no mutation is retried here.
- *
- * The context is intentionally metadata-only. It is a future hook point, not a payload copy.
- */
+let postSuccessHook: V1MutationPostSuccessHook | null = null;
+
+export const registerV1MutationPostSuccessHook = (hook: V1MutationPostSuccessHook | null): void => {
+  postSuccessHook = hook;
+};
+
 export async function runV1MutationBoundary<T>(
-  _context: Readonly<V1MutationBoundaryContext>,
+  context: Readonly<V1MutationBoundaryContext>,
   writeV1: V1MutationWrite<T>,
 ): Promise<T> {
   const pending = typeof writeV1 === 'function' ? writeV1() : writeV1;
-  return await pending;
+  const result = await pending;
+  const hook = postSuccessHook;
+  if (hook) {
+    try {
+      Promise.resolve(hook(context, result)).catch((error) => {
+        console.warn('[Backend V2 2-A4c] Preview shadow mirror failed after V1 success.', error);
+      });
+    } catch (error) {
+      console.warn('[Backend V2 2-A4c] Preview shadow mirror hook failed after V1 success.', error);
+    }
+  }
+  return result;
 }

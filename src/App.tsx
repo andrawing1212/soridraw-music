@@ -1,4 +1,31 @@
-import { runV1MutationBoundary } from './data/v1MutationBoundary';
+import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
+import './data/v2PreviewShadowMirror';
+import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
+
+const getLiveSoridrawSongId = (song: any): string | null => {
+  const value = String(song?.soridrawSongId || '').trim();
+  return isSoridrawSongId(value) ? value : null;
+};
+
+const ensureLiveSoridrawSongId = <T extends Record<string, any>>(song: T): T => {
+  if (!song || typeof song !== 'object' || getLiveSoridrawSongId(song)) return song;
+  const soridrawSongId = createSoridrawSongId();
+  try { (song as any).soridrawSongId = soridrawSongId; return song; }
+  catch { return { ...song, soridrawSongId }; }
+};
+
+const buildRecentMirrorTargets = (songs: readonly any[], operation: 'upsert' | 'recent-hide', sourceUpdatedAtMs = Date.now()): V1MutationMirrorTarget[] => {
+  const seen = new Set<string>(); const targets: V1MutationMirrorTarget[] = [];
+  for (const song of songs || []) {
+    const targetSongId = getLiveSoridrawSongId(song);
+    if (!targetSongId || seen.has(targetSongId)) continue;
+    seen.add(targetSongId); targets.push({ targetSongId, operation, sourceUpdatedAtMs });
+    if (targets.length >= 10) break;
+  }
+  return targets;
+};
+
+
 import React, { useState, useEffect, useLayoutEffect, useRef, Component, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useMediaQuery } from './lib/mediaQueryStore';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from './lib/studioActionBarGeometry';
@@ -8885,7 +8912,7 @@ const toggleCycleVariantSelection = (
           if (existingFav.isLocked) {
             await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', existingFav.id), { isLocked: false }));
           }
-          await runV1MutationBoundary({ domain: 'musicNote', operation: 'permanent-delete', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, deleteDoc(doc(db, 'favorites', existingFav.id)));
+          await runV1MutationBoundary({ domain: 'musicNote', operation: 'permanent-delete', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([existingFav], 'recent-hide').map((target) => ({ ...target, operation: 'music-note-unsave' as const, sourceDocumentId: existingFav.id })) }, deleteDoc(doc(db, 'favorites', existingFav.id)));
           rememberFavoriteDeletedTombstones(user.uid, [existingFav.id]);
           removeLocalFavorite(existingFav.id);
 
@@ -9014,9 +9041,12 @@ const toggleCycleVariantSelection = (
       }
 
       const createdAtMs = Date.now();
+      song = ensureLiveSoridrawSongId(song as any) as SongResult;
+      const favoriteSoridrawSongId = getLiveSoridrawSongId(song);
       const resolvedGenre = getResolvedGenre(song);
       const favoritePayload = sanitizeForFirestore({
         uid: user.uid,
+        soridrawSongId: favoriteSoridrawSongId,
         title: song.title,
         koreanTitle: song.koreanTitle ?? '',
         englishTitle: song.englishTitle ?? '',
@@ -10462,7 +10492,7 @@ const toggleCycleVariantSelection = (
       if (userRef.current) {
         try {
           const ref = doc(db, "user_recent_songs", userRef.current.uid);
-          await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: userRef.current.uid, affectedCount: 0 }, setDoc(ref, { songs: [] }, { merge: true }));
+          await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: userRef.current.uid, affectedCount: 0, mirrorTargets: buildRecentMirrorTargets(historyRef.current, 'recent-hide') }, setDoc(ref, { songs: [] }, { merge: true }));
         } catch (error) {
           console.error('Failed to clear history in Firestore:', error);
         }
@@ -10488,7 +10518,7 @@ const toggleCycleVariantSelection = (
     if (user) {
       try {
         const ref = doc(db, "user_recent_songs", user.uid);
-        await runV1MutationBoundary({ domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: newHistory }), { merge: true }));
+        await runV1MutationBoundary({ domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([history[index]], 'recent-hide') }, setDoc(ref, sanitizeForFirestore({ songs: newHistory }), { merge: true }));
       } catch (e) {
         console.error("Failed to update history in Firestore:", e);
       }
@@ -10511,7 +10541,7 @@ const toggleCycleVariantSelection = (
       if (user) {
         try {
           const ref = doc(db, "user_recent_songs", user.uid);
-          await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: 0 }, setDoc(ref, { songs: [] }, { merge: true }));
+          await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: 0, mirrorTargets: buildRecentMirrorTargets(history, 'recent-hide') }, setDoc(ref, { songs: [] }, { merge: true }));
         } catch (e) {
           console.error("Failed to clear history in Firestore:", e);
         }
@@ -10708,15 +10738,23 @@ const toggleCycleVariantSelection = (
 const saveRecentSongsBatch = async (newSongs: any[]) => {
   if (!user || !Array.isArray(newSongs) || newSongs.length === 0) return;
 
+  const canonicalNewSongs = newSongs.map((song) => ensureLiveSoridrawSongId(song));
+
   const saveOperation = async () => {
     try {
       const ref = doc(db, "user_recent_songs", user.uid);
       const snap = await getDoc(ref);
       const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
       const recoverySongs = findRecoverableLocalRecentSongs(user.uid);
-      const updatedSongs = mergeRecentSongLists(newSongs, firestoreSongs, recoverySongs);
+      const updatedSongs = mergeRecentSongLists(canonicalNewSongs, firestoreSongs, recoverySongs);
+      const updatedStableIds = new Set(updatedSongs.map((song: any) => getLiveSoridrawSongId(song)).filter(Boolean));
+      const mirrorAtMs = Date.now();
+      const mirrorTargets = [
+        ...buildRecentMirrorTargets(canonicalNewSongs, 'upsert', mirrorAtMs),
+        ...buildRecentMirrorTargets(firestoreSongs.filter((song: any) => { const stableId = getLiveSoridrawSongId(song); return Boolean(stableId && !updatedStableIds.has(stableId)); }), 'recent-hide', mirrorAtMs),
+      ].slice(0, 10);
 
-      await runV1MutationBoundary({ domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: newSongs.length }, setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true }));
+      await runV1MutationBoundary({ domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: canonicalNewSongs.length, mirrorTargets }, setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true }));
       recentSongsReadyToCacheRef.current = true;
       applyRecentSongsState(updatedSongs, {
         preferredIndex: 0,
@@ -12366,7 +12404,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
     if (user) {
       const ref = doc(db, "user_recent_songs", user.uid);
-      await runV1MutationBoundary({ domain: 'recent', operation: 'regenerate', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));
+      await runV1MutationBoundary({ domain: 'recent', operation: 'regenerate', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));
     }
   };
 
@@ -12625,7 +12663,7 @@ ${normalizePromptForDisplay(result.prompt)}
         if (currentHistoryIndex < 0) return prev;
         if (user) {
           const ref = doc(db, "user_recent_songs", user.uid);
-          runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true })).catch((error) => {
+          runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true })).catch((error) => {
             console.error('Failed to persist added lyric language:', error);
           });
         }
@@ -12769,7 +12807,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
       if (user) {
         const ref = doc(db, "user_recent_songs", user.uid);
-        await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));
+        await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));
       }
 
       setIsRecentSongEditOpen(false);
@@ -12856,7 +12894,7 @@ ${normalizePromptForDisplay(result.prompt)}
 
       if (user) {
         const ref = doc(db, "user_recent_songs", user.uid);
-        runV1MutationBoundary({ domain: 'recent', operation: 'pre-favorite-edit', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true })).catch((error) => {
+        runV1MutationBoundary({ domain: 'recent', operation: 'pre-favorite-edit', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextHistory[currentIndex]], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true })).catch((error) => {
           console.error('Failed to persist studio edit before favorite save:', error);
         });
       }

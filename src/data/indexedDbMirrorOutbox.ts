@@ -27,6 +27,8 @@ export const BACKEND_V2_MIRROR_OUTBOX_MAX_PER_USER = 200;
 export type V2MirrorOutboxStatus = 'pending' | 'exhausted';
 
 export type V2MirrorOutboxRecord = V2MirrorMutationEnvelope & {
+  /** Exact V1 favorite document id for bounded payload re-read; never song identity. */
+  sourceDocumentId?: string;
   attemptCount: number;
   nextAttemptAtMs: number;
   lastAttemptAtMs: number | null;
@@ -140,7 +142,7 @@ export class BackendV2MirrorOutbox {
     this.dbPromise = null;
   }
 
-  async enqueue(input: V2MirrorMutationEnvelope): Promise<boolean> {
+  async enqueue(input: V2MirrorMutationEnvelope & { sourceDocumentId?: string }): Promise<boolean> {
     // Rebuild through the pure contract to reject malformed/forbidden identities.
     const validated = createV2MirrorMutationEnvelope({
       uid: input.uid,
@@ -180,8 +182,10 @@ export class BackendV2MirrorOutbox {
       }
 
       const nowMs = requireNonNegativeInteger(this.now(), 'now');
+      const sourceDocumentId = input.sourceDocumentId ? requireSegment(input.sourceDocumentId, 'sourceDocumentId') : undefined;
       const record: V2MirrorOutboxRecord = {
         ...validated,
+        ...(sourceDocumentId ? { sourceDocumentId } : {}),
         attemptCount: 0,
         nextAttemptAtMs: nowMs,
         lastAttemptAtMs: null,

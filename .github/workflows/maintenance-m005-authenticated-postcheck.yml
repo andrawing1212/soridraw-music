@@ -1,0 +1,117 @@
+name: SORIDRAW M-005 Authenticated Postdeploy Check
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/maintenance-m005-authenticated-postcheck.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v7
+        with:
+          ref: preview
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Authenticate Firebase read/postcheck session
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install existing Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Verify deployed target metadata before postcheck
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user --disable-pip-version-check -q google-auth requests
+          python3 - <<'PY'
+          import json, os, requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          project='soridraw-app-866a5'; region='us-central1'; name='getSunoTrackStatus'
+          creds=service_account.Credentials.from_service_account_file(os.environ['GOOGLE_APPLICATION_CREDENTIALS'],scopes=['https://www.googleapis.com/auth/cloud-platform']); creds.refresh(Request())
+          h={'Authorization':f'Bearer {creds.token}','X-Goog-User-Project':project}
+          r=requests.get(f'https://cloudfunctions.googleapis.com/v2/projects/{project}/locations/{region}/functions/{name}',headers=h,timeout=30); r.raise_for_status(); f=r.json()
+          out={'state':f.get('state'),'updateTime':f.get('updateTime'),'runtime':(f.get('buildConfig') or {}).get('runtime'),'entryPoint':(f.get('buildConfig') or {}).get('entryPoint')}
+          print('M005_POSTCHECK_TARGET='+json.dumps(out))
+          if out['state']!='ACTIVE' or out['runtime']!='nodejs20' or out['entryPoint']!='getSunoTrackStatus': raise SystemExit('deployed target metadata mismatch')
+          PY
+
+      - name: Run authenticated existing completed track postcheck
+        working-directory: functions
+        env:
+          FIREBASE_PROJECT_ID: soridraw-app-866a5
+          FIREBASE_API_KEY: AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA
+          PREVIEW_ORIGIN: https://soridraw-music-git-preview-andrawing1212.vercel.app
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const admin=require('firebase-admin');
+          if(!admin.apps.length) admin.initializeApp({credential:admin.credential.applicationDefault(),projectId:process.env.FIREBASE_PROJECT_ID});
+          const db=admin.firestore();
+          const endpoint='https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
+          const timeValue=(v)=>{try{return v?.toMillis?.()||Number(v||0)||0}catch{return 0}};
+          (async()=>{
+            const snap=await db.collectionGroup('tracks').get();
+            const all=snap.docs.map(doc=>({doc,data:doc.data()||{},uid:doc.ref.parent.parent?.id||''}));
+            const candidates=all.filter(x=>x.uid && x.data.taskId && ['completed','complete','success','succeeded'].includes(String(x.data.status||'').toLowerCase()) && String(x.data.provider||'')!=='dryRun')
+              .sort((a,b)=>Math.max(timeValue(b.data.updatedAt),timeValue(b.data.createdAt))-Math.max(timeValue(a.data.updatedAt),timeValue(a.data.createdAt)));
+            console.log('M005_TRACK_SCAN_TOTAL='+all.length+',completedCandidates='+candidates.length);
+            if(!candidates.length) throw new Error('no completed existing track available');
+            const chosen=candidates[0];
+            const custom=await admin.auth().createCustomToken(chosen.uid);
+            const exchange=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(process.env.FIREBASE_API_KEY)}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:custom,returnSecureToken:true})});
+            const auth=await exchange.json();
+            console.log('M005_ID_TOKEN_EXCHANGE_HTTP='+exchange.status);
+            if(!exchange.ok||!auth.idToken) throw new Error('ID token exchange failed');
+            const before={status:chosen.data.status,audioValidationStatus:chosen.data.audioValidationStatus||null,hadAudioUrl:Boolean(chosen.data.audioUrl||chosen.data.streamAudioUrl)};
+            const response=await fetch(endpoint,{method:'POST',headers:{'content-type':'application/json','origin':process.env.PREVIEW_ORIGIN,'authorization':`Bearer ${auth.idToken}`},body:JSON.stringify({trackId:chosen.doc.id,taskId:chosen.data.taskId})});
+            const text=await response.text(); let payload; try{payload=JSON.parse(text)}catch{payload={raw:text.slice(0,300)}}
+            console.log('M005_AUTH_POSTCHECK_HTTP='+response.status);
+            console.log('M005_AUTH_POSTCHECK_BEFORE='+JSON.stringify(before));
+            console.log('M005_AUTH_POSTCHECK_RESULT='+JSON.stringify({ok:payload?.ok,status:payload?.status,audioValidationStatus:payload?.audioValidationStatus,hasAudioUrl:Boolean(payload?.audioUrl),reportedCount:Array.isArray(payload?.reportedAudioUrls)?payload.reportedAudioUrls.length:null,verifiedCount:Array.isArray(payload?.audioUrls)?payload.audioUrls.length:null}));
+            if(!response.ok||payload?.ok!==true) throw new Error('authenticated function postcheck failed');
+            const validation=String(payload.audioValidationStatus||'');
+            if(!['verified','pending_or_empty','missing'].includes(validation)) throw new Error('unexpected audioValidationStatus: '+validation);
+            if(validation==='verified'&&!payload.audioUrl) throw new Error('verified missing audioUrl');
+            if(validation!=='verified'&&payload.audioUrl) throw new Error('unverified exposed audioUrl');
+            if(payload.audioUrl){
+              const media=await fetch(payload.audioUrl,{headers:{Range:'bytes=0-0'},redirect:'follow'});
+              const ct=String(media.headers.get('content-type')||'').trim().toLowerCase();
+              const reader=media.body?.getReader(); const first=reader?await reader.read():{value:new Uint8Array(await media.arrayBuffer())}; try{await reader?.cancel()}catch{}
+              const bytes=first.value?.byteLength||0;
+              console.log('M005_INDEPENDENT_MEDIA_PROBE='+JSON.stringify({http:media.status,contentType:ct,bytes}));
+              if(!media.ok||!ct.startsWith('audio/')||bytes<1) throw new Error('independent returned media probe failed');
+            }
+            const afterSnap=await chosen.doc.ref.get(); const after=afterSnap.data()||{};
+            if(String(after.audioValidationStatus||'')!==validation) throw new Error('Firestore validation status mismatch');
+            console.log('M005_AUTHENTICATED_EXISTING_TRACK_POSTCHECK=PASS');
+            console.log('M005_NEW_MUSIC_GENERATION=0');
+            console.log('M005_CREDIT_CONSUMING_GENERATION=0');
+            console.log('M005_EXPECTED_POSTCHECK_TRACK_WRITES=1_PLUS_OPTIONAL_EXISTING_SHARE_SNAPSHOT');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Scope proof
+        if: always()
+        run: |
+          echo 'M005_FUNCTION_DEPLOYS_THIS_RUN=0'
+          echo 'M005_RULES_DEPLOYS=0'
+          echo 'M005_HOSTING_DEPLOYS=0'
+          echo 'M005_MAIN_CHANGES=0'
+          echo 'M005_NEW_MUSIC_GENERATION=0'

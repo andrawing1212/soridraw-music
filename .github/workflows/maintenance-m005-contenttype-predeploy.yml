@@ -1,0 +1,194 @@
+name: SORIDRAW M-005 Content-Type Audio Hardening Predeploy
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/maintenance-m005-contenttype-predeploy.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-m005-contenttype-predeploy
+  cancel-in-progress: false
+
+jobs:
+  predeploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Setup Node 22 for build tooling
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Apply exact Content-Type plus byte hardening to source
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('functions/src/index.ts')
+          src=p.read_text(encoding='utf-8')
+          old='''    if (!response.ok) return false;\n\n    const reader = response.body?.getReader();'''
+          new='''    if (!response.ok) return false;\n\n    const contentType = String(response.headers.get("content-type") || "").trim().toLowerCase();\n    if (!contentType.startsWith("audio/")) {\n      console.warn("[Music API] audio validation rejected non-audio response", {\n        host: parsed.hostname,\n        contentType: contentType || "missing",\n      });\n      try { await response.body?.cancel(); } catch {}\n      return false;\n    }\n\n    const reader = response.body?.getReader();'''
+          count=src.count(old)
+          if count != 1:
+              raise SystemExit(f'M005 probe anchor mismatch: {count}')
+          next_src=src.replace(old,new,1)
+          if next_src.count('contentType.startsWith("audio/")') != 1:
+              raise SystemExit('M005 audio content-type guard count mismatch')
+          p.write_text(next_src,encoding='utf-8')
+          print('M005_PATCH=functions/src/index.ts probe only')
+          PY
+          git diff -- functions/src/index.ts
+
+      - name: Assert only approved source area changed
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          diff=subprocess.check_output(['git','diff','--unified=0','--','functions/src/index.ts'], text=True)
+          required=[
+            'const contentType = String(response.headers.get("content-type") || "").trim().toLowerCase();',
+            'if (!contentType.startsWith("audio/")) {',
+            'audio validation rejected non-audio response',
+            'try { await response.body?.cancel(); } catch {}',
+          ]
+          for marker in required:
+              if marker not in diff: raise SystemExit('approved diff marker missing: '+marker)
+          forbidden=['getSunoTrackStatus = onRequest','verifyAuth','trackRef.update','status =','apiStatusResponse']
+          added='\n'.join(line[1:] for line in diff.splitlines() if line.startswith('+') and not line.startswith('+++'))
+          for marker in forbidden:
+              if marker in added: raise SystemExit('unexpected approved-scope change: '+marker)
+          print('M005_SCOPE=probe-only PASS')
+          PY
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Read-only production dependency impact classification
+        working-directory: functions
+        run: |
+          set -euo pipefail
+          npm audit --omit=dev --json > /tmp/m005-audit.json || true
+          node <<'NODE'
+          const fs=require('fs');
+          const a=JSON.parse(fs.readFileSync('/tmp/m005-audit.json','utf8'));
+          const vulns=a.vulnerabilities || {};
+          const rows=Object.entries(vulns)
+            .filter(([,v]) => ['critical','high'].includes(String(v.severity)))
+            .map(([name,v]) => ({name,severity:v.severity,isDirect:!!v.isDirect,range:v.range,fixAvailable:v.fixAvailable,via:(v.via||[]).map(x=>typeof x==='string'?x:{source:x.source,name:x.name,severity:x.severity,title:x.title,range:x.range})}));
+          const meta=a.metadata?.vulnerabilities || {};
+          console.log('M005_AUDIT_COUNTS='+JSON.stringify(meta));
+          console.log('M005_AUDIT_HIGH_CRITICAL='+JSON.stringify(rows));
+          console.log('M005_AUDIT_DEPENDENCY_CHANGES=0');
+          NODE
+
+      - name: Build Functions exactly
+        working-directory: functions
+        run: npm run build
+
+      - name: Assert generated deployment entry contains hardening
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('functions/src/index.ts').read_text(encoding='utf-8')
+          generated=Path('functions/src/securedIndex.ts').read_text(encoding='utf-8')
+          markers=[
+            'response.headers.get("content-type")',
+            'contentType.startsWith("audio/")',
+            'audio validation rejected non-audio response',
+            'const verifiedAudioUrls: string[] = []',
+            'finalAudioUrl = verifiedAudioUrls[0] || "";',
+          ]
+          for marker in markers:
+              if marker not in src: raise SystemExit('source marker missing: '+marker)
+              if marker not in generated: raise SystemExit('generated marker missing: '+marker)
+          print('M005_GENERATED_ENTRY_HARDENING=PASS')
+          PY
+
+      - name: Run compiled probe fixtures
+        working-directory: functions
+        run: |
+          set -euo pipefail
+          cp lib/securedIndex.js /tmp/m005-securedIndex.js
+          printf '\nexports.__m005Probe = probeSunoAudioUrlHasBytes;\n' >> lib/securedIndex.js
+          node <<'NODE'
+          const mod=require('./lib/securedIndex.js');
+          const probe=mod.__m005Probe;
+          if (typeof probe !== 'function') throw new Error('compiled probe export unavailable');
+          const run=async(name,responseFactory,expected,url='https://fixture.suno.ai/audio.mp3')=>{
+            global.fetch=async()=>responseFactory();
+            const actual=await probe(url);
+            console.log(`M005_FIXTURE_${name}=${actual}`);
+            if(actual!==expected) throw new Error(`${name}: expected ${expected}, got ${actual}`);
+          };
+          (async()=>{
+            await run('AUDIO_ZERO',()=>new Response(null,{status:206,headers:{'content-type':'audio/mpeg'}}),false);
+            await run('IMAGE_BYTES',()=>new Response(new Uint8Array([255,216,255]),{status:206,headers:{'content-type':'image/jpeg'}}),false);
+            await run('AUDIO_BYTES',()=>new Response(new Uint8Array([73,68,51]),{status:206,headers:{'content-type':'audio/mpeg'}}),true);
+            global.fetch=async()=>{throw new Error('fixture network error')};
+            const network=await probe('https://fixture.suno.ai/fail.mp3');
+            console.log('M005_FIXTURE_FETCH_ERROR='+network);
+            if(network!==false) throw new Error('fetch error must fail closed');
+            let called=false;
+            global.fetch=async()=>{called=true; return new Response(new Uint8Array([1]),{status:200,headers:{'content-type':'audio/mpeg'}})};
+            const insecure=await probe('http://fixture.suno.ai/audio.mp3');
+            console.log('M005_FIXTURE_NON_HTTPS='+insecure+',fetchCalled='+called);
+            if(insecure!==false || called) throw new Error('non-HTTPS must fail before fetch');
+            console.log('M005_FIXTURES=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          mv /tmp/m005-securedIndex.js lib/securedIndex.js
+
+      - name: Verify Node20 target preservation method
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('functions/package.json')
+          d=json.loads(p.read_text(encoding='utf-8'))
+          repo_engine=d.get('engines',{}).get('node')
+          if repo_engine != '22': raise SystemExit('unexpected repository Functions node engine: '+str(repo_engine))
+          d.setdefault('engines',{})['node']='20'
+          Path('/tmp/m005-package-node20.json').write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          verify=json.loads(Path('/tmp/m005-package-node20.json').read_text(encoding='utf-8'))
+          if verify['engines']['node'] != '20': raise SystemExit('Node20 deploy override failed')
+          print('M005_REPO_NODE_ENGINE=22')
+          print('M005_DEPLOY_WORKSPACE_NODE_ENGINE=20')
+          print('M005_NODE20_PRESERVE_METHOD=temporary workspace package engine override only; not committed')
+          PY
+
+      - name: Commit approved source patch only
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add functions/src/index.ts
+          test "$(git diff --cached --name-only)" = 'functions/src/index.ts'
+          git commit -m 'fix: require audio content type for Suno byte validation'
+          git push origin HEAD:preview
+          echo 'M005_SOURCE_PATCH_COMMITTED=YES'
+
+      - name: No deployment proof
+        if: always()
+        run: |
+          echo 'M005_PREDEPLOY_ONLY=YES'
+          echo 'M005_FUNCTIONS_DEPLOYS=0'
+          echo 'M005_FIRESTORE_WRITES=0'
+          echo 'M005_FIRESTORE_DELETES=0'
+          echo 'M005_RULES_DEPLOYS=0'
+          echo 'M005_HOSTING_DEPLOYS=0'
+          echo 'M005_MAIN_CHANGES=0'

@@ -32,6 +32,9 @@ jobs:
       - name: Apply approved 2-A4c runtime source
         run: python3 .deploy/run-backend-v2-step2a4c.py
 
+      - name: Harden temporary compatibility script
+        run: python3 .deploy/fix-backend-v2-step2a4c-compat-script.py
+
       - name: Apply build-patcher compatibility
         run: python3 .deploy/apply-backend-v2-step2a4c-build-compat.py
 
@@ -91,5 +94,3 @@ jobs:
           git add src/App.tsx src/data/v1MutationBoundary.ts src/data/indexedDbMirrorOutbox.ts src/data/v2PreviewShadowMirror.ts .deploy/apply-910-recent-text-batch-unsave-fix.py .deploy/apply-912-heart-triggered-recent-save.py .deploy/apply-913-recent-save-runtime-fix.py
           git commit -m "feat: activate Preview V1-first V2 shadow mirror"
           git push origin HEAD:preview
-
-# rerun after 913 compatibility anchor correction

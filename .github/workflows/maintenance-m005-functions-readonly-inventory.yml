@@ -1,0 +1,58 @@
+name: SORIDRAW M-005 Functions Readonly Inventory
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/maintenance-m005-functions-readonly-inventory.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}'
+          create_credentials_file: true
+          export_environment_variables: true
+      - name: Read deployed Functions metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user --disable-pip-version-check -q google-auth requests
+          python3 - <<'PY'
+          import json, os, requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          project='soridraw-app-866a5'
+          creds=service_account.Credentials.from_service_account_file(os.environ['GOOGLE_APPLICATION_CREDENTIALS'],scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          creds.refresh(Request())
+          headers={'Authorization':f'Bearer {creds.token}','X-Goog-User-Project':project,'Accept':'application/json'}
+          url=f'https://cloudfunctions.googleapis.com/v2/projects/{project}/locations/us-central1/functions?pageSize=100'
+          r=requests.get(url,headers=headers,timeout=30)
+          print('M005_FUNCTIONS_API_STATUS='+str(r.status_code))
+          r.raise_for_status()
+          rows=[]
+          for f in r.json().get('functions',[]):
+              name=str(f.get('name','')).split('/')[-1]
+              if 'suno' in name.lower() or 'music' in name.lower() or name in ['getSunoTrackStatus']:
+                  rows.append({'name':name,'state':f.get('state'),'updateTime':f.get('updateTime'),'runtime':(f.get('buildConfig') or {}).get('runtime'),'entryPoint':(f.get('buildConfig') or {}).get('entryPoint'),'service':str((f.get('serviceConfig') or {}).get('service','')).split('/')[-1]})
+          print('M005_DEPLOYED_FUNCTIONS='+json.dumps(rows,ensure_ascii=False))
+          if not any(x.get('name')=='getSunoTrackStatus' or x.get('entryPoint')=='getSunoTrackStatus' for x in rows):
+              print('M005_STATUS_FUNCTION_METADATA=NOT_FOUND_IN_FILTER')
+          else:
+              print('M005_STATUS_FUNCTION_METADATA=FOUND')
+          PY
+      - name: Prove read-only scope
+        run: |
+          echo 'M005_FUNCTIONS_DEPLOYS=0'
+          echo 'M005_FIRESTORE_READS=0'
+          echo 'M005_FIRESTORE_WRITES=0'

@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / M-008 Firestore canonical-song Rules alignment and M-009 Vercel Preview prebuild blocker are both closed; 2-A4c Preview shadow writes are now the next gated step and remain OFF pending separate exact write approval + fresh quota gate; Step 4 remains blocked
+Status: IMPLEMENTATION / Step 2-A4c Preview V1-first -> V2 shadow mirror complete and one real authenticated Music Note save verified live; legacy Recent fallback remains intentional; 2-A4d bounded live-gap catch-up is next and requires separate exact write approval + fresh quota gate; Step 4 remains blocked pending 2-A4d
 Last updated: 2026-08-26 (KST)
 Primary working branch: preview
 Integrated main baseline: `240f193431b4f3f9cba56519fcff8769c95005a0`
@@ -186,6 +186,7 @@ Preflight/adapter report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTAT
 2-A4 live mutation/sync risk review: `docs/SORIDRAW_BACKEND_V2_STEP2_A4_LIVE_MUTATION_SYNC_RISK_REVIEW.md`.
 2-A4a inert identity/outbox result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`.
 2-A4b V1 mutation-boundary result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4B_V1_MUTATION_BOUNDARY_RESULT.md`.
+2-A4c Preview shadow-mirror result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4C_PREVIEW_SHADOW_MIRROR_RESULT.md`.
 Maintenance ledger: `docs/SORIDRAW_MAINTENANCE_BACKLOG.md`.
 Maintenance Gate A result: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 2-A4a inert identity/outbox result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`.
@@ -268,6 +269,17 @@ Risk decision:
 - No Rules/indexes/Functions/Hosting deploy, main promotion, Firebase migration/backfill, API-key change or Suno Library migration occurred.
 - 2-A4c remains blocked until Maintenance Gate A clears M-001/M-002/M-003/M-008 and then receives separate exact write approval.
 - Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2_A4B_V1_MUTATION_BOUNDARY_RESULT.md`.
+
+### 2-A4c complete — Preview V1-first -> V2 shadow mirror activated and live-verified
+- Fresh quota and deployed canonical-song Rules gates passed before activation; V1 remained authoritative and no V1 delete was enabled.
+- Runtime activation commit `564459d1175c7ac47bb3c31c4b054e9b6096d34f` passed the exact production build path, TypeScript, V1-first boundary contract and 910/912/913 generated-runtime compatibility checks before Preview deployment.
+- The Preview-only post-success hook mirrors only explicit stable `sd_` targets after a successful V1 mutation; failures remain best-effort through the bounded durable IndexedDB outbox and cannot roll back V1 success.
+- Real authenticated verification run `32953223584` / job `98129139786` completed SUCCESS after one Preview heart-ON action: 742 V1 favorites were scanned, exactly one recent active stable-ID favorite candidate was found, and exactly one same-ID canonical V2 document matched with `schemaVersion:2`, `musicNote:true`, mutation/version metadata present and no forbidden secret fields.
+- The test item was a legacy Recent entry. Its V1 Recent bundle did not carry the newly assigned stable ID and the V2 canonical document therefore remained `recentVisible:false`; this is intentional legacy fallback, not a mirror failure, because historical Recent entries must never be positional re-keyed or guessed from title/lyrics/prompt/hash.
+- A future Step 4 test of a newly created stable-ID Recent song will separately validate the normal `recentVisible:true` path.
+- The live verifier itself performed 0 writes/deletes and 0 Rules/Functions/Hosting deploys. Temporary 2-A4c write/preflight/source-inspection/live-verification workflows were removed immediately after verification.
+- 2-A4c is complete. Next write stage is 2-A4d bounded live-gap catch-up, which must receive a separate exact approval after a new quota gate and exact eligible-write count.
+- Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2_A4C_PREVIEW_SHADOW_MIRROR_RESULT.md`.
 
 ### Maintenance M-009 complete — real Vercel prebuild path repaired and verified
 - Historical build-time patchers 874/901/905/910/912/913 were made compatible with the current committed mutation-boundary/runtime source; the required prebuild feature chain was not removed or globally bypassed.

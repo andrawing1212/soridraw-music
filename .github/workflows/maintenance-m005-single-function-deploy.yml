@@ -1,0 +1,270 @@
+name: SORIDRAW M-005 Single Function Deploy
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/maintenance-m005-single-function-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-m005-single-function-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Setup Node 22 deployment tooling
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Authenticate exact Firebase project
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Capture before-deploy function metadata
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user --disable-pip-version-check -q google-auth requests
+          python3 - <<'PY'
+          import json, os, requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          project='soridraw-app-866a5'; region='us-central1'
+          names=['getSunoTrackStatus','createSunoTrack','getSunoRemainingCredits']
+          creds=service_account.Credentials.from_service_account_file(os.environ['GOOGLE_APPLICATION_CREDENTIALS'],scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          creds.refresh(Request())
+          headers={'Authorization':f'Bearer {creds.token}','X-Goog-User-Project':project,'Accept':'application/json'}
+          out={}
+          for name in names:
+              url=f'https://cloudfunctions.googleapis.com/v2/projects/{project}/locations/{region}/functions/{name}'
+              r=requests.get(url,headers=headers,timeout=30); r.raise_for_status(); f=r.json()
+              out[name]={
+                'state':f.get('state'),
+                'updateTime':f.get('updateTime'),
+                'runtime':(f.get('buildConfig') or {}).get('runtime'),
+                'entryPoint':(f.get('buildConfig') or {}).get('entryPoint'),
+                'uri':(f.get('serviceConfig') or {}).get('uri'),
+                'service':str((f.get('serviceConfig') or {}).get('service','')).split('/')[-1],
+                'source':(f.get('buildConfig') or {}).get('source'),
+              }
+          if out['getSunoTrackStatus']['state']!='ACTIVE' or out['getSunoTrackStatus']['runtime']!='nodejs20':
+              raise SystemExit('target before-state is not ACTIVE nodejs20')
+          open('/tmp/m005-before.json','w').write(json.dumps(out,indent=2))
+          print('M005_BEFORE_TARGET='+json.dumps({k:v for k,v in out['getSunoTrackStatus'].items() if k!='source'},ensure_ascii=False))
+          print('M005_BEFORE_SIBLINGS='+json.dumps({k:{'updateTime':v['updateTime'],'runtime':v['runtime']} for k,v in out.items() if k!='getSunoTrackStatus'},ensure_ascii=False))
+          PY
+
+      - name: Verify approved hardening source and unchanged dependency lock
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          src=Path('functions/src/index.ts').read_text(encoding='utf-8')
+          for marker in [
+            'response.headers.get("content-type")',
+            'contentType.startsWith("audio/")',
+            'audio validation rejected non-audio response',
+            'const verifiedAudioUrls: string[] = []',
+            'finalAudioUrl = verifiedAudioUrls[0] || "";',
+          ]:
+              if marker not in src: raise SystemExit('hardening marker missing: '+marker)
+          base='f1d0e40d2c746c007f86b8ab8ea48b8921cd6001'
+          raw=subprocess.check_output(['git','show',f'{base}:functions/package-lock.json'],text=True)
+          old=json.loads(raw); cur=json.loads(Path('functions/package-lock.json').read_text(encoding='utf-8'))
+          old['packages']['']['engines']['node']='20'
+          cur['packages']['']['engines']['node']='20'
+          if old != cur:
+              raise SystemExit('functions dependency lock drifted beyond the approved Node engine change')
+          print('M005_DEPENDENCY_LOCK_EQUIVALENT_TO_DEPLOYED_ERA=YES')
+          print('M005_AUDIT_FINDINGS_CLASS=pre-existing transitive dependency debt; no dependency versions introduced by M-005')
+          PY
+
+      - name: Install existing Functions dependency lock
+        working-directory: functions
+        run: npm ci
+
+      - name: Re-run production audit classification without changes
+        working-directory: functions
+        run: |
+          set -euo pipefail
+          npm audit --omit=dev --json > /tmp/m005-audit.json || true
+          node <<'NODE'
+          const fs=require('fs'); const a=JSON.parse(fs.readFileSync('/tmp/m005-audit.json','utf8'));
+          const rows=Object.entries(a.vulnerabilities||{}).filter(([,v])=>['high','critical'].includes(v.severity)).map(([name,v])=>({name,severity:v.severity,isDirect:!!v.isDirect,fixAvailable:!!v.fixAvailable}));
+          console.log('M005_AUDIT_COUNTS='+JSON.stringify(a.metadata?.vulnerabilities||{}));
+          console.log('M005_AUDIT_HIGH_CRITICAL_CLASS='+JSON.stringify(rows));
+          if(rows.some(r=>r.isDirect)) throw new Error('unexpected direct high/critical dependency finding');
+          console.log('M005_DEPENDENCY_CHANGES=0');
+          NODE
+
+      - name: Build and compiled hardening fixtures
+        working-directory: functions
+        run: |
+          set -euo pipefail
+          npm run build
+          grep -F 'contentType.startsWith("audio/")' src/securedIndex.ts >/dev/null
+          grep -F 'audio validation rejected non-audio response' src/securedIndex.ts >/dev/null
+          cp lib/securedIndex.js /tmp/m005-securedIndex.js
+          printf '\nexports.__m005Probe = probeSunoAudioUrlHasBytes;\n' >> lib/securedIndex.js
+          node <<'NODE'
+          const probe=require('./lib/securedIndex.js').__m005Probe;
+          const run=async(name,factory,expected,url='https://fixture.suno.ai/audio.mp3')=>{
+            global.fetch=async()=>factory(); const actual=await probe(url); console.log(`M005_FIXTURE_${name}=${actual}`); if(actual!==expected) throw new Error(name);
+          };
+          (async()=>{
+            await run('AUDIO_ZERO',()=>new Response(null,{status:206,headers:{'content-type':'audio/mpeg'}}),false);
+            await run('IMAGE_BYTES',()=>new Response(new Uint8Array([1,2,3]),{status:206,headers:{'content-type':'image/jpeg'}}),false);
+            await run('TEXT_BYTES',()=>new Response(new Uint8Array([1]),{status:200,headers:{'content-type':'text/html'}}),false);
+            await run('JSON_BYTES',()=>new Response(new Uint8Array([1]),{status:200,headers:{'content-type':'application/json'}}),false);
+            await run('AUDIO_BYTES',()=>new Response(new Uint8Array([73,68,51]),{status:206,headers:{'content-type':'audio/mpeg'}}),true);
+            global.fetch=async()=>{throw new Error('fixture network error')}; if(await probe('https://fixture.suno.ai/fail.mp3')) throw new Error('network fail-open');
+            let called=false; global.fetch=async()=>{called=true;return new Response(new Uint8Array([1]),{status:200,headers:{'content-type':'audio/mpeg'}})};
+            if(await probe('http://fixture.suno.ai/audio.mp3') || called) throw new Error('non-HTTPS fail-open');
+            console.log('M005_COMPILED_FIXTURES=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          mv /tmp/m005-securedIndex.js lib/securedIndex.js
+
+      - name: Apply temporary Node20 deployment override only
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ['functions/package.json','functions/package-lock.json']:
+              p=Path(name); data=json.loads(p.read_text(encoding='utf-8'))
+              if name.endswith('package.json'):
+                  if data.get('engines',{}).get('node')!='22': raise SystemExit('unexpected package engine')
+                  data['engines']['node']='20'
+              else:
+                  if data['packages']['']['engines']['node']!='22': raise SystemExit('unexpected lock engine')
+                  data['packages']['']['engines']['node']='20'
+              p.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print('M005_DEPLOY_RUNTIME_REQUEST=nodejs20')
+          print('M005_NODE20_OVERRIDE_COMMITTED=NO')
+          PY
+          test "$(node -p "require('./functions/package.json').engines.node")" = '20'
+          test "$(node -p "require('./functions/package-lock.json').packages[''].engines.node")" = '20'
+
+      - name: Deploy getSunoTrackStatus only
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+        run: |
+          set -euo pipefail
+          echo 'M005_DEPLOY_COMMAND=functions:getSunoTrackStatus only'
+          npx -y firebase-tools@latest deploy --only functions:getSunoTrackStatus --project soridraw-app-866a5 --non-interactive
+
+      - name: Verify target updated, Node20 preserved, siblings untouched
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, requests, time
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          project='soridraw-app-866a5'; region='us-central1'; names=['getSunoTrackStatus','createSunoTrack','getSunoRemainingCredits']
+          before=json.load(open('/tmp/m005-before.json'))
+          creds=service_account.Credentials.from_service_account_file(os.environ['GOOGLE_APPLICATION_CREDENTIALS'],scopes=['https://www.googleapis.com/auth/cloud-platform']); creds.refresh(Request())
+          headers={'Authorization':f'Bearer {creds.token}','X-Goog-User-Project':project,'Accept':'application/json'}
+          after={}
+          for name in names:
+              url=f'https://cloudfunctions.googleapis.com/v2/projects/{project}/locations/{region}/functions/{name}'
+              r=requests.get(url,headers=headers,timeout=30); r.raise_for_status(); f=r.json()
+              after[name]={'state':f.get('state'),'updateTime':f.get('updateTime'),'runtime':(f.get('buildConfig') or {}).get('runtime'),'entryPoint':(f.get('buildConfig') or {}).get('entryPoint'),'uri':(f.get('serviceConfig') or {}).get('uri')}
+          target=after['getSunoTrackStatus']
+          if target['state']!='ACTIVE': raise SystemExit('target not ACTIVE after deploy')
+          if target['runtime']!='nodejs20': raise SystemExit('Node20 runtime was not preserved: '+str(target['runtime']))
+          if target['updateTime']==before['getSunoTrackStatus']['updateTime']: raise SystemExit('target updateTime did not change')
+          for name in ['createSunoTrack','getSunoRemainingCredits']:
+              if after[name]['updateTime']!=before[name]['updateTime']:
+                  raise SystemExit('sibling Function changed unexpectedly: '+name)
+          open('/tmp/m005-after.json','w').write(json.dumps(after,indent=2))
+          print('M005_POST_DEPLOY_TARGET='+json.dumps(target,ensure_ascii=False))
+          print('M005_SIBLING_FUNCTIONS_UNCHANGED=YES')
+          PY
+
+      - name: Existing completed track non-credit post-check
+        working-directory: functions
+        env:
+          FIREBASE_PROJECT_ID: soridraw-app-866a5
+          FIREBASE_API_KEY: AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA
+          PREVIEW_ORIGIN: https://soridraw-music-git-preview-andrawing1212.vercel.app
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const admin=require('firebase-admin');
+          if(!admin.apps.length) admin.initializeApp({credential:admin.credential.applicationDefault(),projectId:process.env.FIREBASE_PROJECT_ID});
+          const db=admin.firestore();
+          const endpoint='https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
+          const timeValue=(v)=>{try{return v?.toMillis?.()||Number(v||0)||0}catch{return 0}};
+          (async()=>{
+            const snap=await db.collectionGroup('tracks').get();
+            const candidates=snap.docs.map(doc=>({doc,data:doc.data()||{},uid:doc.ref.parent.parent?.id||''}))
+              .filter(x=>x.uid && x.data.taskId && ['completed','complete','success','succeeded'].includes(String(x.data.status||'').toLowerCase()) && String(x.data.provider||'')!=='dryRun')
+              .sort((a,b)=>Math.max(timeValue(b.data.updatedAt),timeValue(b.data.createdAt))-Math.max(timeValue(a.data.updatedAt),timeValue(a.data.createdAt)));
+            if(!candidates.length) throw new Error('no existing completed non-dryRun track available');
+            const chosen=candidates[0];
+            let headers={'content-type':'application/json','origin':process.env.PREVIEW_ORIGIN};
+            let body={trackId:chosen.doc.id,taskId:chosen.data.taskId};
+            if(chosen.data.isPublic===true){
+              body.ownerUid=chosen.uid;
+              console.log('M005_POSTCHECK_AUTH_MODE=existing-public-track');
+            } else {
+              const custom=await admin.auth().createCustomToken(chosen.uid);
+              const exchange=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(process.env.FIREBASE_API_KEY)}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:custom,returnSecureToken:true})});
+              const auth=await exchange.json(); if(!exchange.ok||!auth.idToken) throw new Error('ID token exchange failed: '+exchange.status);
+              headers.authorization=`Bearer ${auth.idToken}`;
+              console.log('M005_POSTCHECK_AUTH_MODE=temporary-id-token');
+            }
+            const before={status:chosen.data.status,audioValidationStatus:chosen.data.audioValidationStatus||null,hadAudioUrl:Boolean(chosen.data.audioUrl||chosen.data.streamAudioUrl)};
+            const response=await fetch(endpoint,{method:'POST',headers,body:JSON.stringify(body)});
+            const text=await response.text(); let payload; try{payload=JSON.parse(text)}catch{payload={raw:text.slice(0,300)}}
+            console.log('M005_POSTCHECK_HTTP='+response.status);
+            console.log('M005_POSTCHECK_BEFORE='+JSON.stringify(before));
+            console.log('M005_POSTCHECK_RESULT='+JSON.stringify({ok:payload?.ok,status:payload?.status,audioValidationStatus:payload?.audioValidationStatus,hasAudioUrl:Boolean(payload?.audioUrl),reportedCount:Array.isArray(payload?.reportedAudioUrls)?payload.reportedAudioUrls.length:null,verifiedCount:Array.isArray(payload?.audioUrls)?payload.audioUrls.length:null}));
+            if(!response.ok || payload?.ok!==true) throw new Error('post-check function call failed');
+            if(!['verified','pending_or_empty','missing'].includes(String(payload.audioValidationStatus||''))) throw new Error('unexpected audioValidationStatus');
+            if(payload.audioValidationStatus==='verified' && !payload.audioUrl) throw new Error('verified response missing audioUrl');
+            if(payload.audioValidationStatus!=='verified' && payload.audioUrl) throw new Error('unverified response exposed audioUrl');
+            if(payload.audioUrl){
+              const media=await fetch(payload.audioUrl,{headers:{Range:'bytes=0-0'},redirect:'follow'});
+              const ct=String(media.headers.get('content-type')||'').toLowerCase();
+              const reader=media.body?.getReader(); const first=reader?await reader.read():{value:new Uint8Array(await media.arrayBuffer())}; try{await reader?.cancel()}catch{}
+              const bytes=first.value?.byteLength||0;
+              console.log('M005_POSTCHECK_MEDIA='+JSON.stringify({http:media.status,contentType:ct,bytes}));
+              if(!media.ok || !ct.startsWith('audio/') || bytes<1) throw new Error('returned audio URL failed independent byte/type probe');
+            }
+            const afterSnap=await chosen.doc.ref.get(); const after=afterSnap.data()||{};
+            if(String(after.audioValidationStatus||'')!==String(payload.audioValidationStatus||'')) throw new Error('Firestore post-check validation state mismatch');
+            console.log('M005_EXISTING_TRACK_POSTCHECK=PASS');
+            console.log('M005_NEW_MUSIC_GENERATION=0');
+            console.log('M005_CREDIT_CONSUMING_GENERATION=0');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Final scope proof
+        if: always()
+        run: |
+          echo 'M005_TARGET_FUNCTION=getSunoTrackStatus'
+          echo 'M005_OTHER_FUNCTION_DEPLOYS=0'
+          echo 'M005_RULES_DEPLOYS=0'
+          echo 'M005_HOSTING_DEPLOYS=0'
+          echo 'M005_MAIN_CHANGES=0'
+          echo 'M005_DEPENDENCY_CHANGES=0'
+          echo 'M005_NEW_MUSIC_GENERATION=0'

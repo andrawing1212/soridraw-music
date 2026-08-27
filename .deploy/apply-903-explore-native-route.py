@@ -67,7 +67,7 @@ if nav_marker not in text:
 
     replace_once(
         "  const allTopNavItems: Array<{ key: NavigationMenuKey; path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [\n    { key: 'home', path: '/', label: '홈', icon: HomeIcon },\n    { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },",
-        "  const allTopNavItems: Array<{ key: NavigationMenuKey | 'explore'; path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [\n    { key: 'home', path: '/', label: '홈', icon: HomeIcon },\n    { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },\n    { key: 'explore', path: '/explore', label: '익스플로어', icon: ExploreCompass },",
+        "  const allTopNavItems: Array<{ key: NavigationMenuKey | 'explore'; path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [\n    { key: 'home', path: '/', label: '홈', icon: HomeIcon },\n    { key: 'explore', path: '/explore', label: '익스플로어', icon: ExploreCompass },\n    { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },",
         'native Explore nav item',
     )
 
@@ -86,7 +86,7 @@ if nav_marker not in text:
 
 required_fragments = [
     "path=\"/explore\"",
-    "key: 'explore', path: '/explore', label: '익스플로어'",
+    "{ key: 'home', path: '/', label: '홈', icon: HomeIcon },\n    { key: 'explore', path: '/explore', label: '익스플로어', icon: ExploreCompass },\n    { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },",
     "soridraw-compact-nav-scroll",
 ]
 for fragment in required_fragments:
@@ -98,4 +98,4 @@ if text.count('data-soridraw-nav-key={item.key}') < 2:
     raise RuntimeError('apply-903: desktop/mobile nav mode keys are incomplete')
 
 path.write_text(text, encoding='utf-8')
-print('apply-903: Explore native route + desktop/tablet/mobile navigation verified')
+print('apply-903: Explore native route + Explore-before-Studio navigation verified')

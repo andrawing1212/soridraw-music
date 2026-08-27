@@ -33,7 +33,6 @@ def add_nav_key_after_map(map_anchor: str, label: str) -> None:
     text = text[:line_end] + '\n' + data_line + text[line_end:]
 
 
-# Route: Explore is a normal App route, not a second application shell.
 if route_marker not in text:
     lazy_anchor = "const FavoritesPageLazy = lazy(() => import('./pages/FavoritesPage'));\n"
     replace_once(
@@ -49,7 +48,6 @@ if route_marker not in text:
         'Explore App route',
     )
 
-# Navigation: use the same native item list for desktop, tablet and compact mobile.
 if nav_marker not in text:
     lucide_anchor = "from 'lucide-react';"
     lucide_index = text.find(lucide_anchor)
@@ -74,8 +72,6 @@ if nav_marker not in text:
     add_nav_key_after_map('{topNavItems.map((item) => {', 'desktop top navigation')
     add_nav_key_after_map("{topNavItems.filter((item) => item.key !== 'myPage').map((item) => {", 'compact mobile navigation')
 
-    # Preserve the current compact navigation look. Overflow becomes horizontally
-    # reachable only when the complete menu cannot fit on a narrow phone.
     replace_once(
         '          <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">',
         '          <div className="soridraw-compact-nav-scroll flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden">',
@@ -96,6 +92,20 @@ if text.count("key: 'explore', path: '/explore'") != 1:
     raise RuntimeError('apply-903: Explore native nav item must exist exactly once')
 if text.count('data-soridraw-nav-key={item.key}') < 2:
     raise RuntimeError('apply-903: desktop/mobile nav mode keys are incomplete')
+
+# Temporary targeted inspection for the existing account popup and compact-nav behavior.
+lines = text.splitlines()
+print('--- EXPLORE 8C RAILLESS ACCOUNT INSPECT START ---')
+for needle in ['관리자메뉴', '마이페이지', '모드 변경', '로그아웃', 'goToCompactMobileNav', 'isCompactStudioMobileNavigation']:
+    hits = [i for i, line in enumerate(lines) if needle in line]
+    print(f'### {needle} hits={len(hits)}')
+    for i in hits[:4]:
+        lo = max(0, i - 8)
+        hi = min(len(lines), i + 15)
+        print(f'--- {needle} lines {lo+1}-{hi} ---')
+        for n in range(lo, hi):
+            print(f'{n+1}: {lines[n]}')
+print('--- EXPLORE 8C RAILLESS ACCOUNT INSPECT END ---')
 
 path.write_text(text, encoding='utf-8')
 print('apply-903: Explore native route + Explore-before-Studio navigation verified')

@@ -5,9 +5,14 @@ export const LEGACY_LIBRARY_ADMIN_ONLY_STORAGE_KEY = 'soridraw_navigation_suno_l
 
 export const NAVIGATION_MENU_KEYS = ['home', 'explore', 'studio', 'musicNote', 'library', 'lab', 'myPage'] as const;
 export type NavigationMenuKey = typeof NAVIGATION_MENU_KEYS[number];
+type LegacyNavigationMenuKey = Exclude<NavigationMenuKey, 'explore'>;
 
-export type NavigationMenuVisibility = Record<NavigationMenuKey, boolean>;
-export type NavigationMenuAdminOnly = Record<NavigationMenuKey, boolean>;
+// Explore was added after the original navigation settings shipped. Keep the
+// new key optional at the type boundary so older in-app/default objects remain
+// source compatible; normalizeNavigationVisibilitySettings always materializes
+// it to a boolean before settings are used or saved.
+export type NavigationMenuVisibility = Record<LegacyNavigationMenuKey, boolean> & { explore?: boolean };
+export type NavigationMenuAdminOnly = Record<LegacyNavigationMenuKey, boolean> & { explore?: boolean };
 export type NavigationMenuAccessMode = 'public' | 'admin' | 'hidden';
 
 export type NavigationVisibilitySettings = {
@@ -58,7 +63,7 @@ export const normalizeNavigationVisibilitySettings = (
   return {
     menuVisibility: {
       home: asBooleanOrFallback(visibilitySource.home, fallback.menuVisibility.home),
-      explore: asBooleanOrFallback(visibilitySource.explore, fallback.menuVisibility.explore),
+      explore: asBooleanOrFallback(visibilitySource.explore, fallback.menuVisibility.explore ?? true),
       studio: asBooleanOrFallback(visibilitySource.studio, fallback.menuVisibility.studio),
       musicNote: asBooleanOrFallback(visibilitySource.musicNote, fallback.menuVisibility.musicNote),
       library: asBooleanOrFallback(
@@ -72,7 +77,7 @@ export const normalizeNavigationVisibilitySettings = (
     },
     menuAdminOnly: {
       home: asBooleanOrFallback(adminOnlySource.home, fallback.menuAdminOnly.home),
-      explore: asBooleanOrFallback(adminOnlySource.explore, fallback.menuAdminOnly.explore),
+      explore: asBooleanOrFallback(adminOnlySource.explore, fallback.menuAdminOnly.explore ?? false),
       studio: asBooleanOrFallback(adminOnlySource.studio, fallback.menuAdminOnly.studio),
       musicNote: asBooleanOrFallback(adminOnlySource.musicNote, fallback.menuAdminOnly.musicNote),
       library: asBooleanOrFallback(
@@ -133,8 +138,14 @@ export const writeStoredNavigationVisibilitySettings = (settings: NavigationVisi
 };
 
 export const getNavigationFirestorePayload = (settings: NavigationVisibilitySettings) => ({
-  menuVisibility: settings.menuVisibility,
-  menuAdminOnly: settings.menuAdminOnly,
+  menuVisibility: {
+    ...settings.menuVisibility,
+    explore: settings.menuVisibility.explore ?? true,
+  },
+  menuAdminOnly: {
+    ...settings.menuAdminOnly,
+    explore: settings.menuAdminOnly.explore ?? false,
+  },
   // Keep legacy library fields so older deployed clients continue to behave correctly.
   showSunoLibraryMenu: settings.menuVisibility.library,
   sunoLibraryMenuAdminOnly: settings.menuAdminOnly.library,
@@ -144,8 +155,14 @@ export const getNavigationMenuAccessMode = (
   settings: NavigationVisibilitySettings,
   key: NavigationMenuKey,
 ): NavigationMenuAccessMode => {
-  if (!settings.menuVisibility[key]) return 'hidden';
-  return settings.menuAdminOnly[key] ? 'admin' : 'public';
+  const visible = key === 'explore'
+    ? (settings.menuVisibility.explore ?? true)
+    : settings.menuVisibility[key];
+  if (!visible) return 'hidden';
+  const adminOnly = key === 'explore'
+    ? (settings.menuAdminOnly.explore ?? false)
+    : settings.menuAdminOnly[key];
+  return adminOnly ? 'admin' : 'public';
 };
 
 export const setNavigationMenuAccessMode = (
@@ -174,6 +191,8 @@ export const NAVIGATION_MENU_PATHS: Record<NavigationMenuKey, string> = {
 };
 
 export const getFirstEnabledNavigationPath = (visibility: NavigationMenuVisibility): string => {
-  const firstEnabled = NAVIGATION_MENU_KEYS.find((key) => visibility[key]);
+  const firstEnabled = NAVIGATION_MENU_KEYS.find((key) => (
+    key === 'explore' ? (visibility.explore ?? true) : visibility[key]
+  ));
   return firstEnabled ? NAVIGATION_MENU_PATHS[firstEnabled] : '/';
 };

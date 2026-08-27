@@ -1,9 +1,9 @@
 import React, { useEffect, useLayoutEffect, useState } from 'react';
-import { Compass, Home, Zap } from 'lucide-react';
+import { Compass, FlaskConical, Heart, Home, Library, Zap } from 'lucide-react';
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { auth } from '../../firebase';
-import { applySoridrawDisplayMode, readSoridrawDisplayMode } from '../../services/themePreferences';
+import { applySoridrawDisplayMode, readSoridrawDisplayMode, type SoridrawDisplayMode } from '../../services/themePreferences';
 import StudioPageFrame from '../studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from '../studio/StudioLeftRail';
 import ExplorePage from '../../pages/ExplorePage';
@@ -12,12 +12,20 @@ export default function ExploreShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
+  const [displayMode, setDisplayMode] = useState<SoridrawDisplayMode>(() => readSoridrawDisplayMode());
 
   useLayoutEffect(() => {
-    applySoridrawDisplayMode(readSoridrawDisplayMode());
+    const mode = applySoridrawDisplayMode(readSoridrawDisplayMode());
+    setDisplayMode(mode);
   }, []);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
+
+  useEffect(() => {
+    const handleThemeChange = () => setDisplayMode(readSoridrawDisplayMode());
+    window.addEventListener('soridraw-theme-change', handleThemeChange as EventListener);
+    return () => window.removeEventListener('soridraw-theme-change', handleThemeChange as EventListener);
+  }, []);
 
   const go = (path: string) => {
     if (`${location.pathname}${location.search}` === path) {
@@ -51,6 +59,8 @@ export default function ExploreShell() {
     />
   );
 
+  const isSplitMode = displayMode === 'studio-black';
+
   return (
     <div className="soridraw-app-root soridraw-explore-app-shell">
       <header className="soridraw-top-navigation soridraw-explore-top-navigation">
@@ -59,6 +69,13 @@ export default function ExploreShell() {
           <button type="button" className="soridraw-top-nav-item" onClick={() => go('/')}><Home aria-hidden="true" /><span>홈</span></button>
           <button type="button" className="soridraw-top-nav-item" onClick={() => go('/studio')}><Zap aria-hidden="true" /><span>스튜디오</span></button>
           <button type="button" className="soridraw-top-nav-item is-active" data-soridraw-explore-native="true" aria-current="page" onClick={() => go('/explore')}><Compass aria-hidden="true" /><span>익스플로어</span></button>
+          {!isSplitMode && (
+            <>
+              <button type="button" className="soridraw-top-nav-item" onClick={() => go('/history')}><Heart aria-hidden="true" /><span>뮤직노트</span></button>
+              <button type="button" className="soridraw-top-nav-item" onClick={() => go('/suno-library')}><Library aria-hidden="true" /><span>라이브러리</span></button>
+              <button type="button" className="soridraw-top-nav-item" onClick={() => go('/lab')}><FlaskConical aria-hidden="true" /><span>Labs</span></button>
+            </>
+          )}
         </nav>
         <span className="soridraw-explore-top-spacer" aria-hidden="true" />
       </header>

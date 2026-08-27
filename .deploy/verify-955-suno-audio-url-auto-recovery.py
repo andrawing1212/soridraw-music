@@ -44,5 +44,7 @@ print('verify-955: PASS')
 
 # SORIDRAW 8-E-4: keep the existing prebuild chain stable without rewriting package.json.
 # apply-902 has already run earlier in the chain, so the 956 patch can safely extend
-# the generated FavoritesPage publication UI here.
+# the generated FavoritesPage publication UI here. 957 is a narrow follow-up that only
+# fixes modal pointer ownership and the three card state-button visuals/spacing.
 runpy.run_path('.deploy/apply-956-explore-8e4-music-note-publication-ui.py', run_name='__main__')
+runpy.run_path('.deploy/apply-957-explore-8e4-interaction-button-visual-fix.py', run_name='__main__')

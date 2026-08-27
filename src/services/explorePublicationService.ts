@@ -5,7 +5,13 @@ const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev
 const PUBLICATION_PAGE_SIZE = 50;
 const MAX_PUBLICATION_PAGES = 8;
 
-export type ExploreMusicNotePublicationState = {
+export type ExplorePublicationOptions = {
+  allowNextSongApply: boolean;
+  allowFollowerSave: boolean;
+  profilePinned: boolean;
+};
+
+export type ExploreMusicNotePublicationState = ExplorePublicationOptions & {
   status: 'private' | 'public';
   trackId: string;
 };
@@ -16,6 +22,9 @@ type ExplorePublicationItem = {
   sourceType?: string;
   sourceId?: string;
   isPublic?: boolean;
+  allowNextSongApply?: boolean;
+  allowFollowerSave?: boolean;
+  profilePinned?: boolean;
 };
 
 class ExploreApiError extends Error {
@@ -29,6 +38,12 @@ class ExploreApiError extends Error {
     this.status = status;
   }
 }
+
+const DEFAULT_PUBLICATION_OPTIONS: ExplorePublicationOptions = {
+  allowNextSongApply: false,
+  allowFollowerSave: false,
+  profilePinned: false,
+};
 
 const getMusicNoteTrackId = (uid: string, sourceId: string) => `music_note_${uid}_${sourceId}`;
 
@@ -98,6 +113,17 @@ const normalizePublicationItem = (item: any): ExplorePublicationItem => ({
   sourceType: String(item?.sourceType || '').trim() || undefined,
   sourceId: String(item?.sourceId || '').trim() || undefined,
   isPublic: Boolean(item?.isPublic),
+  allowNextSongApply: Boolean(item?.allowNextSongApply),
+  allowFollowerSave: Boolean(item?.allowFollowerSave),
+  profilePinned: Boolean(item?.profilePinned),
+});
+
+const normalizePublicationOptions = (
+  options?: Partial<ExplorePublicationOptions> | null,
+): ExplorePublicationOptions => ({
+  allowNextSongApply: Boolean(options?.allowNextSongApply),
+  allowFollowerSave: Boolean(options?.allowFollowerSave),
+  profilePinned: Boolean(options?.profilePinned),
 });
 
 export const getExploreMusicNotePublicationState = async (
@@ -128,6 +154,9 @@ export const getExploreMusicNotePublicationState = async (
       return {
         status: match.isPublic ? 'public' : 'private',
         trackId: match.trackId || match.id || expectedTrackId,
+        allowNextSongApply: Boolean(match.allowNextSongApply),
+        allowFollowerSave: Boolean(match.allowFollowerSave),
+        profilePinned: Boolean(match.profilePinned),
       };
     }
 
@@ -135,28 +164,41 @@ export const getExploreMusicNotePublicationState = async (
     if (!cursor) break;
   }
 
-  return { status: 'private', trackId: expectedTrackId };
+  return {
+    status: 'private',
+    trackId: expectedTrackId,
+    ...DEFAULT_PUBLICATION_OPTIONS,
+  };
 };
 
 export const publishMusicNoteToExplore = async (
   user: User,
   sourceId: string,
+  options?: Partial<ExplorePublicationOptions>,
 ): Promise<ExploreMusicNotePublicationState> => {
   const normalizedSourceId = String(sourceId || '').trim();
   if (!normalizedSourceId) {
     throw new ExploreApiError('SOURCE_ID_REQUIRED', '뮤직노트 원본 ID를 확인하지 못했습니다.');
   }
 
+  const normalizedOptions = normalizePublicationOptions(options);
   const payload = await requestExplore(user, '/v1/publications', {
     method: 'POST',
     body: JSON.stringify({
       sourceType: 'music_note',
       sourceId: normalizedSourceId,
+      ...normalizedOptions,
     }),
   });
 
   const trackId = String(payload?.data?.trackId || getMusicNoteTrackId(user.uid, normalizedSourceId)).trim();
-  return { status: 'public', trackId };
+  return {
+    status: 'public',
+    trackId,
+    allowNextSongApply: Boolean(payload?.data?.allowNextSongApply ?? normalizedOptions.allowNextSongApply),
+    allowFollowerSave: Boolean(payload?.data?.allowFollowerSave ?? normalizedOptions.allowFollowerSave),
+    profilePinned: Boolean(payload?.data?.profilePinned ?? normalizedOptions.profilePinned),
+  };
 };
 
 export const setExploreTrackVisibility = async (
@@ -181,6 +223,34 @@ export const setExploreTrackVisibility = async (
   return {
     status: Boolean(payload?.data?.isPublic) ? 'public' : 'private',
     trackId: String(payload?.data?.trackId || normalizedTrackId).trim(),
+    ...DEFAULT_PUBLICATION_OPTIONS,
+  };
+};
+
+export const setExploreTrackPublicationOptions = async (
+  user: User,
+  trackId: string,
+  options: ExplorePublicationOptions,
+): Promise<ExplorePublicationOptions> => {
+  const normalizedTrackId = String(trackId || '').trim();
+  if (!normalizedTrackId) {
+    throw new ExploreApiError('TRACK_ID_REQUIRED', 'Explore 곡 ID를 확인하지 못했습니다.');
+  }
+
+  const normalizedOptions = normalizePublicationOptions(options);
+  const payload = await requestExplore(
+    user,
+    `/v1/tracks/${encodeURIComponent(normalizedTrackId)}/publication-options`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(normalizedOptions),
+    },
+  );
+
+  return {
+    allowNextSongApply: Boolean(payload?.data?.allowNextSongApply ?? normalizedOptions.allowNextSongApply),
+    allowFollowerSave: Boolean(payload?.data?.allowFollowerSave ?? normalizedOptions.allowFollowerSave),
+    profilePinned: Boolean(payload?.data?.profilePinned ?? normalizedOptions.profilePinned),
   };
 };
 

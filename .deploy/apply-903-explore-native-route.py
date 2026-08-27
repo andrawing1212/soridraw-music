@@ -13,6 +13,26 @@ def replace_once(source: str, target: str, label: str) -> None:
     text = text.replace(source, target, 1)
 
 
+def add_nav_key_after_map(map_anchor: str, label: str) -> None:
+    global text
+    map_index = text.find(map_anchor)
+    if map_index < 0:
+        raise RuntimeError(f'apply-903: map anchor not found: {label}')
+    key_index = text.find('key={item.path}', map_index)
+    if key_index < 0 or key_index - map_index > 1800:
+        raise RuntimeError(f'apply-903: key anchor not found near {label}')
+    line_start = text.rfind('\n', 0, key_index) + 1
+    line_end = text.find('\n', key_index)
+    if line_end < 0:
+        raise RuntimeError(f'apply-903: malformed key line near {label}')
+    key_line = text[line_start:line_end]
+    indent = key_line[:len(key_line) - len(key_line.lstrip())]
+    data_line = f'{indent}data-soridraw-nav-key={{item.key}}'
+    if data_line in text[line_start:line_end + len(data_line) + 4]:
+        return
+    text = text[:line_end] + '\n' + data_line + text[line_end:]
+
+
 # Route: Explore is a normal App route, not a second application shell.
 if route_marker not in text:
     lazy_anchor = "const FavoritesPageLazy = lazy(() => import('./pages/FavoritesPage'));\n"
@@ -31,14 +51,11 @@ if route_marker not in text:
 
 # Navigation: use the same native item list for desktop, tablet and compact mobile.
 if nav_marker not in text:
-    # Use a dedicated alias so this remains safe even if App later imports Compass elsewhere.
     lucide_anchor = "from 'lucide-react';"
     lucide_index = text.find(lucide_anchor)
     if lucide_index < 0:
         raise RuntimeError('apply-903: lucide-react import anchor not found')
-    import_line_start = text.rfind('import ', 0, lucide_index)
     import_line_end = lucide_index + len(lucide_anchor)
-    lucide_import = text[import_line_start:import_line_end]
     if 'ExploreCompass' not in text:
         text = text[:import_line_end] + "\nimport { Compass as ExploreCompass } from 'lucide-react';" + text[import_line_end:]
 
@@ -54,38 +71,22 @@ if nav_marker not in text:
         'native Explore nav item',
     )
 
-    # Both native maps (desktop and compact mobile/tablet) receive a stable mode key.
-    nav_key_anchor = "                  key={item.path}\n"
-    nav_key_count = text.count(nav_key_anchor)
-    if nav_key_count < 2:
-        raise RuntimeError(f'apply-903: expected desktop/mobile nav key anchors, found {nav_key_count}')
-    text = text.replace(
-        nav_key_anchor,
-        "                  key={item.path}\n                  data-soridraw-nav-key={item.key}\n",
-        2,
-    )
+    add_nav_key_after_map('{topNavItems.map((item) => {', 'desktop top navigation')
+    add_nav_key_after_map("{topNavItems.filter((item) => item.key !== 'myPage').map((item) => {", 'compact mobile navigation')
 
-    # Compact navigation keeps its current geometry; when all items do not fit,
-    # it becomes horizontally reachable instead of silently clipping later items.
+    # Preserve the current compact navigation look. Overflow becomes horizontally
+    # reachable only when the complete menu cannot fit on a narrow phone.
     replace_once(
         '          <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">',
         '          <div className="soridraw-compact-nav-scroll flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden">',
         'compact navigation overflow',
     )
 
-    # The existing compact Studio workspace switch only remaps Studio/Music Note/Library.
-    # Explore intentionally falls through to its normal route behavior.
-    text = text.replace(
-        route_marker,
-        route_marker + "\n" + nav_marker,
-        1,
-    )
+    text = text.replace(route_marker, route_marker + "\n" + nav_marker, 1)
 
-# Build-time assertions: fail loudly rather than ship another partial navigation state.
 required_fragments = [
     "path=\"/explore\"",
     "key: 'explore', path: '/explore', label: '익스플로어'",
-    "data-soridraw-nav-key={item.key}",
     "soridraw-compact-nav-scroll",
 ]
 for fragment in required_fragments:

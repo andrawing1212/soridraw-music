@@ -86,7 +86,7 @@ helper_code = r'''  const refreshFavoriteExplorePublicationState = async (song: 
       return;
     }
     if (!getFavoriteSunoShareUrl(song)) {
-      showFavoriteToast('수노 URL을 먼저 연결해주세요.');
+      showFavoriteToast('수노 URL을 먼저 등록해주세요. 정상 연결되면 Explore에 공개할 수 있습니다.');
       return;
     }
     if (explorePublicationBusyId === sourceId) return;
@@ -119,10 +119,16 @@ menu_anchor = '''                                <button onClick={() => executeF
 menu_replacement = '''                                <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
                                 <button
                                   type="button"
-                                  disabled={!getFavoriteSunoShareUrl(song) || explorePublicationBusyId === getFavoriteDocumentId(song)}
+                                  disabled={explorePublicationBusyId === getFavoriteDocumentId(song)}
+                                  aria-disabled={!getFavoriteSunoShareUrl(song) || undefined}
                                   onClick={() => toggleFavoriteExplorePublication(song)}
-                                  className="flex w-full items-center gap-3 bg-transparent px-4 py-2.5 text-left text-sm text-white/85 transition-colors hover:bg-white/5 hover:text-[#FFC1BC] disabled:cursor-not-allowed disabled:opacity-30"
-                                  title={getFavoriteSunoShareUrl(song) ? undefined : '수노 URL 연결 후 공개할 수 있습니다.'}
+                                  className={cn(
+                                    "flex w-full items-center gap-3 bg-transparent px-4 py-2.5 text-left text-sm transition-colors disabled:cursor-wait disabled:opacity-35",
+                                    getFavoriteSunoShareUrl(song)
+                                      ? "text-white/85 hover:bg-white/5 hover:text-[#FFC1BC]"
+                                      : "cursor-pointer text-white/30 hover:bg-white/[0.025] hover:text-white/45"
+                                  )}
+                                  title={getFavoriteSunoShareUrl(song) ? undefined : '수노 URL을 먼저 등록해주세요.'}
                                 >
                                   {explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public'
                                     ? <Lock className="h-4 w-4" />
@@ -151,17 +157,24 @@ detail_replacement = '''                    >
                       <button
                         type="button"
                         onClick={() => toggleFavoriteExplorePublication(selectedSong)}
-                        disabled={isEditing || !getFavoriteSunoShareUrl(selectedSong) || explorePublicationBusyId === getFavoriteDocumentId(selectedSong)}
+                        disabled={isEditing || explorePublicationBusyId === getFavoriteDocumentId(selectedSong)}
+                        aria-disabled={!getFavoriteSunoShareUrl(selectedSong) || undefined}
                         onMouseEnter={() => onHover({
                           id: 'detail-explore-visibility',
                           label: explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public' ? '비공개' : '공개',
                           description: getFavoriteSunoShareUrl(selectedSong)
                             ? (explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public' ? 'Explore에서 이 곡을 비공개로 전환합니다.' : '이 곡을 Explore에 공개합니다.')
-                            : '수노 URL을 연결한 뒤 Explore에 공개할 수 있습니다.',
+                            : '수노 URL을 먼저 등록해주세요. 정상 연결되면 Explore에 공개할 수 있습니다.',
                         })}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                        className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.035] text-white/78 transition-all hover:bg-[#FF7A72]/12 hover:text-[#FFC1BC] disabled:cursor-not-allowed disabled:opacity-30"
+                        className={cn(
+                          "inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.035] transition-all disabled:cursor-wait disabled:opacity-30",
+                          getFavoriteSunoShareUrl(selectedSong)
+                            ? "text-white/78 hover:bg-[#FF7A72]/12 hover:text-[#FFC1BC]"
+                            : "cursor-pointer text-white/25 hover:bg-white/[0.055] hover:text-white/40"
+                        )}
                         aria-label={explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public' ? 'Explore 비공개' : 'Explore 공개'}
+                        title={getFavoriteSunoShareUrl(selectedSong) ? undefined : '수노 URL을 먼저 등록해주세요.'}
                       >
                         {explorePublicationBusyId === getFavoriteDocumentId(selectedSong)
                           ? <Loader2 className="h-5 w-5 animate-spin" />

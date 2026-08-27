@@ -17,8 +17,6 @@ def replace_once(source: str, target: str, label: str) -> None:
 
 
 # Metadata-only sunoData must not make an old pending task look healthy forever.
-# Locate the existing guard structurally because earlier Library patches can change
-# whitespace/comments while keeping the same semantics.
 stale_fn_index = text.find('  const isTrackStuck = (group: any) => {')
 if stale_fn_index < 0:
     raise RuntimeError('apply-950: isTrackStuck not found')
@@ -46,8 +44,7 @@ replacement = '''    const hasAudioUrls = Array.isArray(group?.audioUrls) && gro
     }'''
 text = text[:line_start] + replacement + text[replace_end:]
 
-# Add a helper that deliberately waits until the normal 10-minute polling window
-# has finished. This keeps normal generation behavior untouched.
+# Wait until the normal 10-minute automatic polling window has finished.
 collect_anchor = "  const collectStatusCandidates = (source: any): string[] => {"
 collect_index = text.find(collect_anchor)
 if collect_index < 0:
@@ -72,22 +69,14 @@ helper_code = r'''  const isTrackPastAutoCheckWindow = (group: any) => {
 text = text[:collect_index] + helper_code + text[collect_index:]
 
 # Keep one stale recovery attempt per track for the current SPA session.
-checking_anchor = 'const checkingIdsRef = useRef'
-checking_index = text.find(checking_anchor)
-if checking_index < 0:
-    raise RuntimeError('apply-950: checkingIdsRef anchor not found')
-checking_line_end = text.find('\n', checking_index)
-if checking_line_end < 0:
-    raise RuntimeError('apply-950: checkingIdsRef line malformed')
-text = (
-    text[:checking_line_end]
-    + "\n  const staleRecoveryAttemptedRef = useRef<Set<string>>(new Set());"
-    + text[checking_line_end:]
+replace_once(
+    "  const [statusChecking, setStatusChecking] = useState<string | null>(null);",
+    "  const [statusChecking, setStatusChecking] = useState<string | null>(null);\n  const staleRecoveryAttemptedRef = useRef<Set<string>>(new Set());",
+    'stale recovery session ref',
 )
 
-# Replace the old direct 3-minute fail hook. Old pending tasks now get exactly
-# one server status check after the 10-minute automatic polling window before
-# being marked failed. No completed/playable track enters this path.
+# Replace the old direct 3-minute fail hook. Old pending tasks get one server
+# status check after 10 minutes before they are finalized as failed.
 safety_comment = '// Identify tracks that have been stuck for more than 3 minutes without audio URLs'
 safety_comment_index = text.find(safety_comment)
 if safety_comment_index < 0:
@@ -181,7 +170,6 @@ new_safety_effect = r'''  useEffect(() => {
 '''
 text = text[:safety_start] + new_safety_effect + text[next_effect:]
 
-# Header status badge: stale tasks stop spinning while the one-time recovery is resolving.
 old_badge = '''      case 'processing':
       case 'submitted':
       case 'pending':
@@ -213,8 +201,6 @@ new_badge = '''      case 'processing':
         break;'''
 replace_once(old_badge, new_badge, 'stale status header badge')
 
-# Track row: do not show an infinite spinning state for a task already past the
-# entire automatic polling window.
 replace_once(
     "                      const isPending = !isFailed && !audioUrl;",
     "                      const isStalePending = !isFailed && !audioUrl && isTrackPastAutoCheckWindow(group);\n                      const isPending = !isFailed && !audioUrl && !isStalePending;",

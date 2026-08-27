@@ -64,23 +64,12 @@ new_extract = """    const playableUrl = getPlayableUrlFromSource(group);
     }];"""
 replace_once(old_extract, new_extract, 'root fallback url')
 
-old_remove = """  const removeWorkspaceTracksLocally = (trackIds: string[]) => {
-    const removedIds = new Set(
-      trackIds
-        .map((id) => String(id || '').trim())
-        .filter(Boolean)
-    );
-    if (removedIds.size === 0) return;
-
-    setTracks((prev) => {
-      const next = (Array.isArray(prev) ? prev : []).filter(
-        (track: any) => !removedIds.has(String(track?.id || '').trim())
-      );
-      const uid = user?.uid || appUser?.uid || auth.currentUser?.uid;
-      if (uid) saveWorkspaceTrackCache(uid, next);
-      return next;
-    });
-  };"""
+# Previous cache stages can reshape this helper, so replace it by function boundaries
+# instead of depending on one historical body string.
+remove_start = text.find('  const removeWorkspaceTracksLocally = (trackIds: string[]) => {')
+remove_end = text.find('\n  useEffect(() => {', remove_start)
+if remove_start < 0 or remove_end < 0:
+    raise RuntimeError('apply-954: removeWorkspaceTracksLocally boundaries not found')
 new_remove = """  const syncLibraryWorkspaceSessionTracks = (uid: string, nextTracks: any[]) => {
     if (!uid || libraryWorkspaceSession?.uid !== uid) return;
     libraryWorkspaceSession.tracks = nextTracks;
@@ -118,8 +107,9 @@ new_remove = """  const syncLibraryWorkspaceSessionTracks = (uid: string, nextTr
       }
       return next;
     });
-  };"""
-replace_once(old_remove, new_remove, 'local cache helpers')
+  };
+"""
+text = text[:remove_start] + new_remove + text[remove_end:]
 
 # Bulk restore: keep mounted state/session/cache in sync.
 replace_once(

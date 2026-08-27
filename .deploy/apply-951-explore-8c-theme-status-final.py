@@ -3,14 +3,6 @@ from pathlib import Path
 MARKER = 'SORIDRAW_EXPLORE_8C_THEME_STATUS_FINAL_951'
 
 
-def insert_after_once(text: str, anchor: str, addition: str, label: str) -> str:
-    index = text.find(anchor)
-    if index < 0:
-        raise RuntimeError(f'951 anchor not found: {label}')
-    end = index + len(anchor)
-    return text[:end] + addition + text[end:]
-
-
 # -----------------------------------------------------------------------------
 # 1) Switching from Classic Music Note / Library into Split must enter the real
 #    /studio workspace, not keep the old standalone route inside a split frame.
@@ -19,15 +11,19 @@ app_path = Path('src/App.tsx')
 app = app_path.read_text(encoding='utf-8')
 
 if MARKER not in app:
-    select_index = app.find("nextParams.set('view', view)")
+    select_index = app.find('  const selectStudioWorkspaceView = useCallback')
     if select_index < 0:
-        raise RuntimeError('951 App split workspace URL writer not found')
+        raise RuntimeError('951 App selectStudioWorkspaceView not found')
 
-    effect_end_anchor = "  }, [location.pathname, location.search, studioWorkspaceView]);"
-    effect_end_index = app.find(effect_end_anchor, select_index)
-    if effect_end_index < 0:
-        raise RuntimeError('951 App split workspace URL reader end not found')
-    insert_at = effect_end_index + len(effect_end_anchor)
+    callback_end = app.find('  }, [', select_index)
+    if callback_end < 0:
+        callback_end = app.find('  }, []);', select_index)
+    if callback_end < 0:
+        raise RuntimeError('951 App selectStudioWorkspaceView callback end not found')
+    callback_line_end = app.find('\n', callback_end)
+    if callback_line_end < 0:
+        callback_line_end = len(app)
+    insert_at = callback_line_end
 
     transition_effect = r'''
 

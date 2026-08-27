@@ -22,6 +22,8 @@ const currentHostname = typeof window === "undefined"
   : window.location.hostname.toLowerCase();
 const isAiStudioPreview = /^ais-dev-[a-z0-9-]+-[0-9]+\.[a-z0-9-]+\.run\.app$/.test(currentHostname);
 const isVercelTestApp = currentHostname === "soridraw-music.vercel.app";
+const isVercelPreviewApp = currentHostname === "soridraw-music-git-preview-andrawing1212.vercel.app"
+  || /^soridraw-music-git-preview-[a-z0-9-]+\.vercel\.app$/.test(currentHostname);
 const isFirebaseHostedApp = currentHostname === "soridraw.web.app"
   || currentHostname === "soridraw.firebaseapp.com"
   || currentHostname === "soridraw-app-866a5.web.app"
@@ -37,11 +39,10 @@ if (isAiStudioPreview && typeof self !== "undefined") {
 
 let appCheck = null;
 // Use the reCAPTCHA Enterprise site key that is registered to this Firebase web
-// app and whose website-key domain list includes the Vercel test host and the
-// Firebase production hosts. AI Studio keeps the registered debug-provider
-// path; deployed Vercel/Firebase hosts use real reCAPTCHA Enterprise attestation.
+// app. Vercel preview/test and Firebase production hosts use real Enterprise
+// attestation; only the explicit AI Studio run.app pattern uses the debug path.
 const APP_CHECK_SITE_KEY = "6Le6bGEtAAAAAOVROhuXew0lxJcpVNVwPZN0ZWKO";
-const shouldInitializeAppCheck = isAiStudioPreview || isVercelTestApp || isFirebaseHostedApp;
+const shouldInitializeAppCheck = isAiStudioPreview || isVercelPreviewApp || isVercelTestApp || isFirebaseHostedApp;
 if (APP_CHECK_SITE_KEY && shouldInitializeAppCheck && typeof window !== "undefined") {
   try {
     appCheck = initializeAppCheck(app, {

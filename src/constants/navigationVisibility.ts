@@ -3,7 +3,7 @@ export const LEGACY_NAVIGATION_VISIBILITY_STORAGE_KEY = 'soridraw_navigation_vis
 export const LEGACY_LIBRARY_VISIBILITY_STORAGE_KEY = 'soridraw_navigation_show_suno_library_menu';
 export const LEGACY_LIBRARY_ADMIN_ONLY_STORAGE_KEY = 'soridraw_navigation_suno_library_admin_only';
 
-export const NAVIGATION_MENU_KEYS = ['home', 'studio', 'musicNote', 'library', 'lab', 'myPage'] as const;
+export const NAVIGATION_MENU_KEYS = ['home', 'explore', 'studio', 'musicNote', 'library', 'lab', 'myPage'] as const;
 export type NavigationMenuKey = typeof NAVIGATION_MENU_KEYS[number];
 
 export type NavigationMenuVisibility = Record<NavigationMenuKey, boolean>;
@@ -17,6 +17,7 @@ export type NavigationVisibilitySettings = {
 
 export const DEFAULT_NAVIGATION_MENU_VISIBILITY: NavigationMenuVisibility = {
   home: true,
+  explore: true,
   studio: true,
   musicNote: true,
   library: false,
@@ -26,6 +27,7 @@ export const DEFAULT_NAVIGATION_MENU_VISIBILITY: NavigationMenuVisibility = {
 
 export const DEFAULT_NAVIGATION_MENU_ADMIN_ONLY: NavigationMenuAdminOnly = {
   home: false,
+  explore: false,
   studio: false,
   musicNote: false,
   library: false,
@@ -56,6 +58,7 @@ export const normalizeNavigationVisibilitySettings = (
   return {
     menuVisibility: {
       home: asBooleanOrFallback(visibilitySource.home, fallback.menuVisibility.home),
+      explore: asBooleanOrFallback(visibilitySource.explore, fallback.menuVisibility.explore),
       studio: asBooleanOrFallback(visibilitySource.studio, fallback.menuVisibility.studio),
       musicNote: asBooleanOrFallback(visibilitySource.musicNote, fallback.menuVisibility.musicNote),
       library: asBooleanOrFallback(
@@ -69,6 +72,7 @@ export const normalizeNavigationVisibilitySettings = (
     },
     menuAdminOnly: {
       home: asBooleanOrFallback(adminOnlySource.home, fallback.menuAdminOnly.home),
+      explore: asBooleanOrFallback(adminOnlySource.explore, fallback.menuAdminOnly.explore),
       studio: asBooleanOrFallback(adminOnlySource.studio, fallback.menuAdminOnly.studio),
       musicNote: asBooleanOrFallback(adminOnlySource.musicNote, fallback.menuAdminOnly.musicNote),
       library: asBooleanOrFallback(
@@ -161,6 +165,7 @@ export const setNavigationMenuAccessMode = (
 
 export const NAVIGATION_MENU_PATHS: Record<NavigationMenuKey, string> = {
   home: '/',
+  explore: '/explore',
   studio: '/studio',
   musicNote: '/history',
   library: '/suno-library',

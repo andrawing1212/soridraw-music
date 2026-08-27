@@ -1,0 +1,15 @@
+.soridraw-compact-nav-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior-x: contain;
+}
+
+.soridraw-compact-nav-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+html[data-soridraw-theme="studio-black"] [data-soridraw-nav-key]:not([data-soridraw-nav-key="home"]):not([data-soridraw-nav-key="studio"]):not([data-soridraw-nav-key="explore"]) {
+  display: none !important;
+}

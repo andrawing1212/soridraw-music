@@ -22,13 +22,6 @@ export default function ExploreNavigationBridge() {
         return;
       }
 
-      if (navigation.querySelector('[data-soridraw-explore-native="true"]')) {
-        currentHost?.remove();
-        currentHost = null;
-        setHost(null);
-        return;
-      }
-
       const topNavItems = Array.from(navigation.querySelectorAll<HTMLElement>('.soridraw-top-nav-item'));
       const studioButton = topNavItems.find((item) => normalizeLabel(item).includes('스튜디오'));
       if (!studioButton?.parentElement) {
@@ -39,7 +32,7 @@ export default function ExploreNavigationBridge() {
       const isSplitMode = document.documentElement.dataset.soridrawTheme === 'studio-black';
       topNavItems.forEach((item) => {
         const label = normalizeLabel(item);
-        const keepInSplit = label.includes('홈') || label.includes('스튜디오');
+        const keepInSplit = label.includes('홈') || label.includes('스튜디오') || label.includes('익스플로어');
         if (isSplitMode && !keepInSplit) item.setAttribute('data-soridraw-explore-split-hide', 'true');
         else item.removeAttribute('data-soridraw-explore-split-hide');
       });
@@ -55,7 +48,7 @@ export default function ExploreNavigationBridge() {
       }
 
       currentHost = nextHost;
-      setHost(nextHost);
+      setHost((previous) => previous === nextHost ? previous : nextHost);
     };
 
     syncNavigation();
@@ -70,9 +63,8 @@ export default function ExploreNavigationBridge() {
       document.querySelectorAll('[data-soridraw-explore-split-hide]').forEach((element) => {
         element.removeAttribute('data-soridraw-explore-split-hide');
       });
-      setHost(null);
     };
-  }, [location.pathname]);
+  }, []);
 
   if (!host) return null;
 

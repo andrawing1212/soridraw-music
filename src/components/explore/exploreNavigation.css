@@ -10,6 +10,11 @@
   height: 0;
 }
 
-html[data-soridraw-theme="studio-black"] [data-soridraw-nav-key]:not([data-soridraw-nav-key="home"]):not([data-soridraw-nav-key="studio"]):not([data-soridraw-nav-key="explore"]) {
-  display: none !important;
+/* Split-only menu reduction applies from tablet upward.
+   At true mobile width, even a PC window that still carries studio-black must
+   use the same compact navigation contents as the normal dark/light mobile UI. */
+@media (min-width: 640px) {
+  html[data-soridraw-theme="studio-black"] [data-soridraw-nav-key]:not([data-soridraw-nav-key="home"]):not([data-soridraw-nav-key="studio"]):not([data-soridraw-nav-key="explore"]) {
+    display: none !important;
+  }
 }

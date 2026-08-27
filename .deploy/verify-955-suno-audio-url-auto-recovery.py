@@ -1,4 +1,5 @@
 from pathlib import Path
+import runpy
 
 checks = {
     'src/services/sunoAudioRecovery.ts': [
@@ -40,3 +41,8 @@ if '/api/v1/generate' in service:
     raise RuntimeError('verify-955: client recovery must not call a new generation endpoint')
 
 print('verify-955: PASS')
+
+# SORIDRAW 8-E-4: keep the existing prebuild chain stable without rewriting package.json.
+# apply-902 has already run earlier in the chain, so the 956 patch can safely extend
+# the generated FavoritesPage publication UI here.
+runpy.run_path('.deploy/apply-956-explore-8e4-music-note-publication-ui.py', run_name='__main__')

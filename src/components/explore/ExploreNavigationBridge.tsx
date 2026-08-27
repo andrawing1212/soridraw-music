@@ -36,11 +36,12 @@ export default function ExploreNavigationBridge() {
         return;
       }
 
+      const isSplitMode = document.documentElement.dataset.soridrawTheme === 'studio-black';
       topNavItems.forEach((item) => {
         const label = normalizeLabel(item);
-        const keep = label.includes('홈') || label.includes('스튜디오');
-        if (keep) item.removeAttribute('data-soridraw-explore-split-hide');
-        else item.setAttribute('data-soridraw-explore-split-hide', 'true');
+        const keepInSplit = label.includes('홈') || label.includes('스튜디오');
+        if (isSplitMode && !keepInSplit) item.setAttribute('data-soridraw-explore-split-hide', 'true');
+        else item.removeAttribute('data-soridraw-explore-split-hide');
       });
 
       let nextHost = navigation.querySelector<HTMLElement>(`[${HOST_ATTR}="true"]`);
@@ -60,9 +61,11 @@ export default function ExploreNavigationBridge() {
     syncNavigation();
     observer = new MutationObserver(syncNavigation);
     observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('soridraw-theme-change', syncNavigation as EventListener);
 
     return () => {
       observer?.disconnect();
+      window.removeEventListener('soridraw-theme-change', syncNavigation as EventListener);
       currentHost?.remove();
       document.querySelectorAll('[data-soridraw-explore-split-hide]').forEach((element) => {
         element.removeAttribute('data-soridraw-explore-split-hide');

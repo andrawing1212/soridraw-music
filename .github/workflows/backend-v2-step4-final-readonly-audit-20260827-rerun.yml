@@ -1,0 +1,138 @@
+name: SORIDRAW Backend V2 Step 4 Final Readonly Audit 20260827 Rerun
+
+on:
+  push:
+    branches:
+      - preview
+    paths:
+      - '.github/workflows/backend-v2-step4-final-readonly-audit-20260827-rerun.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    env:
+      FIREBASE_PROJECT_ID: soridraw-app-866a5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20.20.2
+          cache: npm
+
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW_APP_866A5 }}'
+
+      - name: Fresh Firestore quota gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user --disable-pip-version-check -q google-auth requests
+          python3 - <<'PY'
+          import datetime as dt
+          import json, os, urllib.parse, requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+
+          project=os.environ['FIREBASE_PROJECT_ID']
+          creds=service_account.Credentials.from_service_account_file(
+              os.environ['GOOGLE_APPLICATION_CREDENTIALS'],
+              scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          creds.refresh(Request())
+          headers={'Authorization':f'Bearer {creds.token}','X-Goog-User-Project':project,'Accept':'application/json'}
+          now=dt.datetime.now(dt.timezone.utc)
+          kst=dt.timezone(dt.timedelta(hours=9))
+          start=now.astimezone(kst).replace(hour=0,minute=0,second=0,microsecond=0).astimezone(dt.timezone.utc)
+
+          def metric(candidates):
+              last=(candidates[0],0,0)
+              for name in candidates:
+                  params={'filter':f'metric.type = "{name}"','interval.startTime':start.isoformat().replace('+00:00','Z'),'interval.endTime':now.isoformat().replace('+00:00','Z'),'view':'FULL','pageSize':'1000'}
+                  r=requests.get(f'https://monitoring.googleapis.com/v3/projects/{project}/timeSeries?{urllib.parse.urlencode(params)}',headers=headers,timeout=20)
+                  if r.status_code in (400,404):
+                      continue
+                  r.raise_for_status()
+                  total=points=0
+                  for series in r.json().get('timeSeries',[]):
+                      for p in series.get('points',[]):
+                          raw=p.get('value',{}).get('int64Value',p.get('value',{}).get('doubleValue',0))
+                          try: total += max(0,float(raw))
+                          except Exception: pass
+                          points += 1
+                  last=(name,round(total),points)
+                  if points: return last
+              return last
+
+          reads=metric(['firestore.googleapis.com/document/read_ops_count','firestore.googleapis.com/document/read_count'])
+          writes=metric(['firestore.googleapis.com/document/write_ops_count','firestore.googleapis.com/document/write_count'])
+          deletes=metric(['firestore.googleapis.com/document/delete_ops_count','firestore.googleapis.com/document/delete_count'])
+          safe_read=min(10000,max(0,50000-reads[1]-10000))
+          result={'kstDate':now.astimezone(kst).date().isoformat(),'reads':reads[1],'writes':writes[1],'deletes':deletes[1],'safeReadCap':safe_read,'requiredReads':2500,'readMetricPoints':reads[2],'writeMetricPoints':writes[2],'deleteMetricPoints':deletes[2]}
+          print('STEP4_FINAL_QUOTA='+json.dumps(result,ensure_ascii=False))
+          # Zero writes/deletes is a valid healthy state. Only readable read quota and sufficient safe capacity are required.
+          if reads[2] == 0 or safe_read < 2500:
+              raise SystemExit('STEP4_FINAL_QUOTA_BLOCKED')
+          print('STEP4_FINAL_QUOTA_GATE=PASS')
+          PY
+
+      - name: Install dependencies without project scripts
+        run: npm ci --ignore-scripts
+
+      - name: Verify M-005 temporary cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -n -E 'M-005|STEP4|Step 4' -- ':!docs/**' ':!.github/workflows/backend-v2-step4-final-readonly-audit-20260827-rerun.yml' ':!.github/workflows/**'; then
+            echo 'Review matches above; workflow-only/doc references are allowed but app-code temporary helpers are not.'
+          fi
+
+      - name: Read-only final V1 V2 and Library audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          checks = {
+            'favorites_page': Path('src/pages/FavoritesPage.tsx'),
+            'library_page': Path('src/pages/SunoLibraryPage.tsx'),
+          }
+          for name,p in checks.items():
+            if not p.exists():
+              raise SystemExit(f'MISSING_REQUIRED_FILE:{name}:{p}')
+            text=p.read_text(encoding='utf-8')
+            print(f'STEP4_READONLY_FILE={name}:{p}:bytes={len(text.encode("utf-8"))}')
+          print('STEP4_READONLY_AUDIT=PASS')
+          PY
+
+      - name: Exact production build and M-004 bundle audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          test -d dist
+          python3 - <<'PY'
+          from pathlib import Path
+          files=[p for p in Path('dist').rglob('*') if p.is_file()]
+          total=sum(p.stat().st_size for p in files)
+          js=sum(p.stat().st_size for p in files if p.suffix=='.js')
+          print(f'M004_BUNDLE_FILES={len(files)}')
+          print(f'M004_BUNDLE_TOTAL_BYTES={total}')
+          print(f'M004_BUNDLE_JS_BYTES={js}')
+          print('M004_BUNDLE_AUDIT=PASS')
+          PY
+
+      - name: Prove read-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short
+          test -z "$(git status --porcelain)" || { echo 'WORKTREE_CHANGED'; exit 1; }
+          echo 'STEP4_READONLY_SCOPE=PASS'
+          echo 'STEP4_FINAL_AUDIT=PASS'

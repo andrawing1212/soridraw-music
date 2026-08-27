@@ -50,7 +50,8 @@ if route_marker not in text:
         'Explore App route',
     )
 
-# Explore is a native nav item shared by desktop/tablet/mobile.
+# Explore is a real NavigationMenuKey, so it must use the exact same
+# menuVisibility/menuAdminOnly gate as every existing menu.
 if nav_marker not in text:
     lucide_anchor = "from 'lucide-react';"
     lucide_index = text.find(lucide_anchor)
@@ -60,15 +61,14 @@ if nav_marker not in text:
     if 'ExploreCompass' not in text:
         text = text[:import_line_end] + "\nimport { Compass as ExploreCompass } from 'lucide-react';" + text[import_line_end:]
 
-    replace_once(
-        "  const canShowMenu = (key: NavigationMenuKey) => {\n    if (!menuVisibility[key]) return false;\n    if (menuAdminOnly[key] && !isAdminUser) return false;\n    return true;\n  };",
-        "  const canShowMenu = (key: NavigationMenuKey | 'explore') => {\n    if (key === 'explore') return true;\n    if (!menuVisibility[key]) return false;\n    if (menuAdminOnly[key] && !isAdminUser) return false;\n    return true;\n  };",
-        'navigation visibility function',
-    )
+    # Do NOT special-case Explore as always visible. NavigationMenuKey now includes
+    # `explore`, so the existing canShowMenu() is the single source of truth.
+    if "const canShowMenu = (key: NavigationMenuKey)" not in text:
+        raise RuntimeError('apply-903: shared navigation visibility function missing')
 
     replace_once(
         "  const allTopNavItems: Array<{ key: NavigationMenuKey; path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [\n    { key: 'home', path: '/', label: '홈', icon: HomeIcon },\n    { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },",
-        "  const allTopNavItems: Array<{ key: NavigationMenuKey | 'explore'; path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [\n    { key: 'home', path: '/', label: '홈', icon: HomeIcon },\n    { key: 'explore', path: '/explore', label: '익스플로어', icon: ExploreCompass },\n    { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },",
+        "  const allTopNavItems: Array<{ key: NavigationMenuKey; path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [\n    { key: 'home', path: '/', label: '홈', icon: HomeIcon },\n    { key: 'explore', path: '/explore', label: '익스플로어', icon: ExploreCompass },\n    { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },",
         'native Explore nav item',
     )
 
@@ -167,10 +167,13 @@ required_fragments = [
     "if (!shouldUseStudioWorkspaceMobileNavigation || !onStudioWorkspaceSelect)",
     "isRailLessNavigationViewport && item.key === 'lab'",
     "isRailLessNavigationViewport && canShowMenu('lab')",
+    "const canShowMenu = (key: NavigationMenuKey)",
 ]
 for fragment in required_fragments:
     if fragment not in text:
         raise RuntimeError(f'apply-903: verification failed: {fragment}')
+if "key === 'explore'" in text:
+    raise RuntimeError('apply-903: Explore must not bypass shared visibility permissions')
 if text.count("key: 'explore', path: '/explore'") != 1:
     raise RuntimeError('apply-903: Explore native nav item must exist exactly once')
 if text.count('data-soridraw-nav-key={item.key}') < 2:
@@ -179,4 +182,4 @@ if text.count("navigate('/lab')") < 1:
     raise RuntimeError('apply-903: rail-less account Labs action missing')
 
 path.write_text(text, encoding='utf-8')
-print('apply-903: Explore nav UI and normal/split routing separation verified')
+print('apply-903: Explore native menu now shares all navigation permission gates')

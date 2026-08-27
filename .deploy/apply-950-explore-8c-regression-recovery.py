@@ -17,12 +17,34 @@ def replace_once(source: str, target: str, label: str) -> None:
 
 
 # Metadata-only sunoData must not make an old pending task look healthy forever.
-# Only a real playable audio URL is completion evidence for the stale guard.
-replace_once(
-    "    const hasSunoData = Array.isArray(group?.sunoData) && group.sunoData.length > 0;\n    const hasAudioUrls = Array.isArray(group?.audioUrls) && group.audioUrls.length > 0;\n\n    if (hasAudioUrl || hasSunoData || hasAudioUrls) {\n      return false;\n    }",
-    "    const hasAudioUrls = Array.isArray(group?.audioUrls) && group.audioUrls.some((entry: any) => {\n      const rawUrl = typeof entry === 'string'\n        ? entry\n        : entry?.url || entry?.audio_url || entry?.audioUrl || '';\n      return typeof rawUrl === 'string' && rawUrl.trim().length > 0;\n    });\n\n    if (hasAudioUrl || hasAudioUrls) {\n      return false;\n    }",
-    'metadata-only Suno data stale guard',
-)
+# Locate the existing guard structurally because earlier Library patches can change
+# whitespace/comments while keeping the same semantics.
+stale_fn_index = text.find('  const isTrackStuck = (group: any) => {')
+if stale_fn_index < 0:
+    raise RuntimeError('apply-950: isTrackStuck not found')
+has_suno_index = text.find('const hasSunoData =', stale_fn_index)
+collect_index = text.find('  const collectStatusCandidates = (source: any): string[] => {', stale_fn_index)
+if has_suno_index < 0 or collect_index < 0 or has_suno_index > collect_index:
+    raise RuntimeError('apply-950: stale metadata guard not found')
+line_start = text.rfind('\n', 0, has_suno_index) + 1
+if_index = text.find('if (hasAudioUrl || hasSunoData || hasAudioUrls)', has_suno_index, collect_index)
+if if_index < 0:
+    raise RuntimeError('apply-950: stale completion evidence condition not found')
+if_close = text.find('\n    }', if_index, collect_index)
+if if_close < 0:
+    raise RuntimeError('apply-950: stale completion evidence block malformed')
+replace_end = if_close + len('\n    }')
+replacement = '''    const hasAudioUrls = Array.isArray(group?.audioUrls) && group.audioUrls.some((entry: any) => {
+      const rawUrl = typeof entry === 'string'
+        ? entry
+        : entry?.url || entry?.audio_url || entry?.audioUrl || '';
+      return typeof rawUrl === 'string' && rawUrl.trim().length > 0;
+    });
+
+    if (hasAudioUrl || hasAudioUrls) {
+      return false;
+    }'''
+text = text[:line_start] + replacement + text[replace_end:]
 
 # Add a helper that deliberately waits until the normal 10-minute polling window
 # has finished. This keeps normal generation behavior untouched.
@@ -66,12 +88,14 @@ text = (
 # Replace the old direct 3-minute fail hook. Old pending tasks now get exactly
 # one server status check after the 10-minute automatic polling window before
 # being marked failed. No completed/playable track enters this path.
-safety_start = text.find('  useEffect(() => {\n    if (!user || isSharedView || tracks.length === 0) return;\n\n    // Identify tracks that have been stuck for more than 3 minutes without audio URLs')
-if safety_start < 0:
-    raise RuntimeError('apply-950: old Suno Safety Hook start not found')
-next_effect = text.find('  useEffect(() => {\n    if (isSharedView || !user) return;', safety_start)
-if next_effect < 0:
-    raise RuntimeError('apply-950: auto polling effect anchor not found')
+safety_comment = '// Identify tracks that have been stuck for more than 3 minutes without audio URLs'
+safety_comment_index = text.find(safety_comment)
+if safety_comment_index < 0:
+    raise RuntimeError('apply-950: old Suno Safety Hook comment not found')
+safety_start = text.rfind('  useEffect(() => {', 0, safety_comment_index)
+next_effect = text.find('  useEffect(() => {\n    if (isSharedView || !user) return;', safety_comment_index)
+if safety_start < 0 or next_effect < 0:
+    raise RuntimeError('apply-950: Suno Safety Hook boundaries not found')
 
 new_safety_effect = r'''  useEffect(() => {
     if (!user || isSharedView || tracks.length === 0) return;
@@ -139,8 +163,6 @@ new_safety_effect = r'''  useEffect(() => {
             return;
           }
 
-          // The upstream service still cannot confirm completion after the full
-          // automatic polling window. Stop the permanent spinner deterministically.
           await markTimedOut('생성 상태 장기 미확정 (10분 초과)');
         } catch (error) {
           console.warn(`[Suno stale recovery] ${id}`, error);
@@ -159,8 +181,7 @@ new_safety_effect = r'''  useEffect(() => {
 '''
 text = text[:safety_start] + new_safety_effect + text[next_effect:]
 
-# Header status badge: stale tasks stop spinning while the one-time recovery is
-# being resolved. No new border is added.
+# Header status badge: stale tasks stop spinning while the one-time recovery is resolving.
 old_badge = '''      case 'processing':
       case 'submitted':
       case 'pending':

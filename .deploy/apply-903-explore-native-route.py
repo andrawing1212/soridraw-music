@@ -84,12 +84,19 @@ if nav_marker not in text:
     text = text.replace(route_marker, route_marker + "\n" + nav_marker, 1)
 
 # When side rails do not exist (<1100px), every display mode uses the same
-# mobile navigation behavior. Labs leaves the top row and moves into account.
+# compact top UI. Only split mode is allowed to translate Music Note/Library
+# taps into Studio internal workspace changes. Dark/light always use real routes.
 if rail_less_marker not in text:
     replace_once(
-        "  const isCompactStudioMobileNavigation = studioCompactMobileLayout && Boolean(onStudioWorkspaceSelect);",
-        "  const isRailLessNavigationViewport = useMediaQuery('(max-width: 1099px)');\n  const isCompactStudioMobileNavigation = isRailLessNavigationViewport && Boolean(onStudioWorkspaceSelect);",
-        'rail-less mobile navigation behavior',
+        "  const isCompactStudioMobileNavigation = studioCompactMobileLayout && Boolean(onStudioWorkspaceSelect);\n  const isCompactStudioRoute = isCompactStudioMobileNavigation && location.pathname === '/studio';",
+        "  const isRailLessNavigationViewport = useMediaQuery('(max-width: 1099px)');\n  const isCompactStudioMobileNavigation = isRailLessNavigationViewport;\n  const shouldUseStudioWorkspaceMobileNavigation = displayMode === 'studio-black'\n    && studioCompactMobileLayout\n    && Boolean(onStudioWorkspaceSelect);\n  const isCompactStudioRoute = shouldUseStudioWorkspaceMobileNavigation && location.pathname === '/studio';",
+        'rail-less UI versus split workspace routing',
+    )
+
+    replace_once(
+        "    if (!isCompactStudioMobileNavigation || !onStudioWorkspaceSelect) {\n      goToTopNav(item.path, { clearSuno: item.clearSuno });\n      return;\n    }",
+        "    if (!shouldUseStudioWorkspaceMobileNavigation || !onStudioWorkspaceSelect) {\n      goToTopNav(item.path, { clearSuno: item.clearSuno });\n      return;\n    }",
+        'normal dark/light route preservation',
     )
 
     replace_once(
@@ -155,6 +162,9 @@ required_fragments = [
     "{ key: 'home', path: '/', label: '홈', icon: HomeIcon },\n    { key: 'explore', path: '/explore', label: '익스플로어', icon: ExploreCompass },\n    { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },",
     "soridraw-compact-nav-scroll",
     "const isRailLessNavigationViewport = useMediaQuery('(max-width: 1099px)');",
+    "const isCompactStudioMobileNavigation = isRailLessNavigationViewport;",
+    "const shouldUseStudioWorkspaceMobileNavigation = displayMode === 'studio-black'",
+    "if (!shouldUseStudioWorkspaceMobileNavigation || !onStudioWorkspaceSelect)",
     "isRailLessNavigationViewport && item.key === 'lab'",
     "isRailLessNavigationViewport && canShowMenu('lab')",
 ]
@@ -169,4 +179,4 @@ if text.count("navigate('/lab')") < 1:
     raise RuntimeError('apply-903: rail-less account Labs action missing')
 
 path.write_text(text, encoding='utf-8')
-print('apply-903: Explore + rail-less mobile/tablet navigation verified')
+print('apply-903: Explore nav UI and normal/split routing separation verified')

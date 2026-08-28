@@ -8,6 +8,8 @@ on:
       - '.github/workflows/firebase-hosting-migration-phase1-preflight.yml'
       - 'firebase.hosting-only.json'
       - '.deploy/check-firebase-hosting-migration-phase1.mjs'
+      - '.deploy/verify-955-suno-audio-url-auto-recovery.py'
+      - '.deploy/run-977-cache-live-resilient.py'
 
 permissions:
   contents: read

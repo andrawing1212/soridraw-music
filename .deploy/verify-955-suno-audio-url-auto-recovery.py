@@ -42,12 +42,7 @@ if '/api/v1/generate' in service:
 
 print('verify-955: PASS')
 
-# SORIDRAW 8-E-4: keep the existing prebuild chain stable without rewriting package.json.
-# 956-959 build the publication UI and button semantics. 960 removes the expensive
-# favorites/users mutation path from Music Note personal Like/Lock. 961 removes the
-# 1.2-second server debounce too: Like/Lock stay memory + localStorage only while open,
-# then dirty changes sync once on Music Note exit/pagehide. 962 makes the state fills a
-# child layer so global button CSS cannot hide inactive/active circular backgrounds.
+# SORIDRAW 8-E-4 build chain.
 runpy.run_path('.deploy/apply-956-explore-8e4-music-note-publication-ui.py', run_name='__main__')
 runpy.run_path('.deploy/apply-957-explore-8e4-interaction-button-visual-fix.py', run_name='__main__')
 runpy.run_path('.deploy/apply-958-explore-8e4-state-button-fill-live-like.py', run_name='__main__')
@@ -55,3 +50,4 @@ runpy.run_path('.deploy/apply-959-explore-8e4-personal-like-fix.py', run_name='_
 runpy.run_path('.deploy/run-960-music-note-lightweight-card-state.py', run_name='__main__')
 runpy.run_path('.deploy/apply-961-music-note-exit-only-card-state-sync.py', run_name='__main__')
 runpy.run_path('.deploy/apply-962-music-note-state-button-fill-layer.py', run_name='__main__')
+runpy.run_path('.deploy/apply-963-music-note-keyword-and-filled-icon-tune.py', run_name='__main__')

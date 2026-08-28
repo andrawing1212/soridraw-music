@@ -185,6 +185,58 @@ export const updateExplorePublicProfile = async (
 
 export type ExploreProfileMediaKind = 'avatar' | 'background';
 
+export type ExploreProfileMediaCrop = {
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+};
+
+export type ExploreProfileCropRect = {
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+};
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+export const getExploreProfileCropRect = (
+  sourceWidth: number,
+  sourceHeight: number,
+  kind: ExploreProfileMediaKind,
+  crop: ExploreProfileMediaCrop = { zoom: 1, offsetX: 0, offsetY: 0 },
+): ExploreProfileCropRect => {
+  const safeWidth = Math.max(1, Number(sourceWidth) || 1);
+  const safeHeight = Math.max(1, Number(sourceHeight) || 1);
+  const targetRatio = kind === 'avatar' ? 1 : 1600 / 600;
+  const sourceRatio = safeWidth / safeHeight;
+
+  let baseWidth = safeWidth;
+  let baseHeight = safeHeight;
+  if (sourceRatio > targetRatio) {
+    baseHeight = safeHeight;
+    baseWidth = safeHeight * targetRatio;
+  } else {
+    baseWidth = safeWidth;
+    baseHeight = safeWidth / targetRatio;
+  }
+
+  const zoom = clamp(Number(crop.zoom) || 1, 1, 3);
+  const sw = Math.max(1, baseWidth / zoom);
+  const sh = Math.max(1, baseHeight / zoom);
+  const xRange = Math.max(0, (safeWidth - sw) / 2);
+  const yRange = Math.max(0, (safeHeight - sh) / 2);
+  const offsetX = clamp(Number(crop.offsetX) || 0, -1, 1);
+  const offsetY = clamp(Number(crop.offsetY) || 0, -1, 1);
+
+  return {
+    sx: clamp((safeWidth - sw) / 2 + offsetX * xRange, 0, Math.max(0, safeWidth - sw)),
+    sy: clamp((safeHeight - sh) / 2 + offsetY * yRange, 0, Math.max(0, safeHeight - sh)),
+    sw,
+    sh,
+  };
+};
+
 export const uploadExploreProfileMedia = async (
   user: User,
   kind: ExploreProfileMediaKind,
@@ -198,7 +250,7 @@ export const uploadExploreProfileMedia = async (
   return String(payload?.data?.url || '').trim();
 };
 
-const loadBitmap = async (file: File): Promise<{ width: number; height: number; draw: (ctx: CanvasRenderingContext2D, sx: number, sy: number, sw: number, sh: number, dw: number, dh: number) => void; close: () => void }> => {
+const loadBitmap = async (file: Blob): Promise<{ width: number; height: number; draw: (ctx: CanvasRenderingContext2D, sx: number, sy: number, sw: number, sh: number, dw: number, dh: number) => void; close: () => void }> => {
   if (typeof createImageBitmap === 'function') {
     const bitmap = await createImageBitmap(file);
     return {
@@ -227,31 +279,23 @@ const loadBitmap = async (file: File): Promise<{ width: number; height: number; 
   }
 };
 
-export const prepareExploreProfileMedia = async (file: File, kind: ExploreProfileMediaKind): Promise<Blob> => {
-  if (!file.type.startsWith('image/')) throw new Error('이미지 파일만 선택할 수 있습니다.');
+export const prepareExploreProfileMedia = async (
+  file: Blob,
+  kind: ExploreProfileMediaKind,
+  crop: ExploreProfileMediaCrop = { zoom: 1, offsetX: 0, offsetY: 0 },
+): Promise<Blob> => {
+  if (!String(file.type || '').startsWith('image/')) throw new Error('이미지 파일만 선택할 수 있습니다.');
   const source = await loadBitmap(file);
   try {
     const targetWidth = kind === 'avatar' ? 512 : 1600;
     const targetHeight = kind === 'avatar' ? 512 : 600;
-    const targetRatio = targetWidth / targetHeight;
-    const sourceRatio = source.width / source.height;
-    let sx = 0;
-    let sy = 0;
-    let sw = source.width;
-    let sh = source.height;
-    if (sourceRatio > targetRatio) {
-      sw = source.height * targetRatio;
-      sx = (source.width - sw) / 2;
-    } else {
-      sh = source.width / targetRatio;
-      sy = (source.height - sh) / 2;
-    }
+    const rect = getExploreProfileCropRect(source.width, source.height, kind, crop);
     const canvas = document.createElement('canvas');
     canvas.width = targetWidth;
     canvas.height = targetHeight;
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('이미지 처리 기능을 사용할 수 없습니다.');
-    source.draw(ctx, sx, sy, sw, sh, targetWidth, targetHeight);
+    source.draw(ctx, rect.sx, rect.sy, rect.sw, rect.sh, targetWidth, targetHeight);
     const quality = kind === 'avatar' ? 0.82 : 0.78;
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((result) => result ? resolve(result) : reject(new Error('이미지 압축에 실패했습니다.')), 'image/webp', quality);

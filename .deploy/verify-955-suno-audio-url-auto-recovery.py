@@ -56,3 +56,4 @@ runpy.run_path('.deploy/apply-965-explore-publication-state-hydration.py', run_n
 runpy.run_path('.deploy/apply-966-music-note-state-button-final-align.py', run_name='__main__')
 runpy.run_path('.deploy/apply-967-music-note-state-button-hover-tone.py', run_name='__main__')
 runpy.run_path('.deploy/apply-968-music-note-card-rhythm.py', run_name='__main__')
+runpy.run_path('.deploy/apply-969-music-note-genre-and-color-dot-cleanup.py', run_name='__main__')

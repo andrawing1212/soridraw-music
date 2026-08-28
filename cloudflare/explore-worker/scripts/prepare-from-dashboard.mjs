@@ -21,13 +21,16 @@ const run = (command, args, cwd = process.cwd()) => {
 rmSync(REMOTE_DIR, { recursive: true, force: true });
 
 // Pull the currently deployed Dashboard Worker into an ephemeral directory.
-// This keeps the exact existing D1/R2 bindings instead of guessing IDs in Git.
+// Wrangler 4 delegates `init --from-dash` to create-cloudflare by default;
+// --no-delegate-c3 forces Wrangler's direct dashboard download path so the
+// existing Worker source/config (including D1/R2 bindings) is actually fetched.
 run('npx', [
   'wrangler',
   'init',
   REMOTE_DIR,
   '--from-dash',
   WORKER_NAME,
+  '--no-delegate-c3',
   '--yes',
 ]);
 

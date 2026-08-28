@@ -29,7 +29,6 @@ def replace_between(start: str, end: str, replacement: str, label: str) -> None:
         raise RuntimeError(f'apply-961: end anchor not found: {label}')
     text = text[:start_index] + replacement + text[end_index:]
 
-# Remove the 1.2 second debounce contract. Like/Lock are local-only while the Music Note page is open.
 replace_once(
     "const MUSIC_NOTE_CARD_STATE_WRITE_DELAY_MS = 1200;\n",
     "const MUSIC_NOTE_CARD_STATE_DIRTY_STORAGE_BASE = 'soridraw_music_note_card_state_dirty_v1';\n",
@@ -88,7 +87,6 @@ const flushMusicNoteCardStateServerWrite = (uid: string): Promise<boolean> => {
       clearMusicNoteCardStateDirty(uid);
       return true;
     } catch (error) {
-      // Keep the dirty marker + local cache so the next page exit can retry safely.
       console.warn('Music Note card-state exit sync failed; local dirty state is preserved.', error);
       return false;
     } finally {
@@ -100,12 +98,10 @@ const flushMusicNoteCardStateServerWrite = (uid: string): Promise<boolean> => {
   return task;
 };
 
-const SORIDRAW_MUSIC_NOTE_LIGHTWEIGHT_CARD_STATE_960 = true;
 const SORIDRAW_MUSIC_NOTE_EXIT_ONLY_CARD_STATE_SYNC_961 = true;
 '''
 replace_between(pending_start, pending_end, exit_sync_block, 'replace debounce writer with exit-only writer')
 
-# The shared listener may merge a newer local cache, but it must never write merely because data was read.
 replace_once(
     '''      if (Object.keys(localNewer).length > 0) {
         scheduleMusicNoteCardStateServerWrite(uid, localNewer, merged.updatedAtMs);
@@ -117,15 +113,12 @@ replace_once(
     'remove hydration-triggered write',
 )
 
-# Every Like/Lock click now changes memory + localStorage only and marks one dirty bit.
 replace_once(
     '    scheduleMusicNoteCardStateServerWrite(user.uid, { [id]: nextItem }, now);\n',
     '    markMusicNoteCardStateDirty(user.uid);\n',
     'click becomes local-only dirty mark',
 )
 
-# Flush once when leaving the Music Note page. pagehide is best-effort for closing/navigation;
-# dirty localStorage survives if the browser terminates before Firestore finishes.
 accessor_anchor = '''  const getMusicNoteCardStateSongId = (song: any) => String(
 '''
 flush_effect = r'''  useEffect(() => {
@@ -165,7 +158,6 @@ for forbidden in [
     if forbidden in text:
         raise RuntimeError(f'apply-961 verification failed: click-time server writer remains: {forbidden}')
 
-# Personal Like/Lock must stay out of the legacy expensive mutation routes.
 if "updateFavorite(song.id, { isLiked:" in text:
     raise RuntimeError('apply-961 verification failed: personal Like still writes favorites')
 if "updateFavorite(song.id, { isLocked:" in text:

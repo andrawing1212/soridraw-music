@@ -5,8 +5,9 @@ css_path = Path('src/index.css')
 text = page_path.read_text(encoding='utf-8')
 css = css_path.read_text(encoding='utf-8')
 marker = '// SORIDRAW_MUSIC_NOTE_COMPACT_SUNO_BUTTONS_964'
+css_marker = '/* SORIDRAW_MUSIC_NOTE_COMPACT_SUNO_BUTTONS_964 */'
 
-if marker in text and marker in css:
+if marker in text and css_marker in css:
     print('apply-964: already applied')
     raise SystemExit(0)
 
@@ -19,7 +20,6 @@ if start < 0 or end < 0:
     raise RuntimeError('apply-964: state button region not found')
 region = text[start:end]
 
-# Compact spacing and 30px circular controls, closer to the Suno reference.
 region = region.replace('items-center gap-1"', 'items-center gap-[5px]"', 1)
 button_class = 'relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all'
 compact_class = 'relative flex h-[30px] w-[30px] shrink-0 items-center justify-center overflow-hidden rounded-full transition-all'
@@ -86,14 +86,9 @@ if old_public_active not in region:
 region = region.replace(old_public_active, new_public_active, 1)
 
 text = text[:start] + region + text[end:]
-
-# OFF stays visibly darker than the original #343438. ON remains white.
 text = text.replace("background: active ? '#f7f7f7' : '#29292d',", "background: active ? '#f7f7f7' : '#303034',", 1)
-
-# Marker near 963 contract.
 text = text.replace('// SORIDRAW_MUSIC_NOTE_VISUAL_TUNE_963\n', '// SORIDRAW_MUSIC_NOTE_VISUAL_TUNE_963\n  ' + marker + '\n', 1)
 
-css_marker = '/* SORIDRAW_MUSIC_NOTE_COMPACT_SUNO_BUTTONS_964 */'
 if css_marker not in css:
     css += r'''
 
@@ -109,7 +104,6 @@ html:not(.dark) .soridraw-musicnote-song-keywords > :is(button, span, div) {
   color: rgba(30, 30, 32, 0.42) !important;
 }
 '''
-css = css.replace(css_marker, marker)
 
 required = [
     marker,
@@ -122,7 +116,7 @@ required = [
 for fragment in required:
     if fragment not in text:
         raise RuntimeError(f'apply-964 verification failed: missing {fragment}')
-if marker not in css:
+if css_marker not in css:
     raise RuntimeError('apply-964 verification failed: css marker missing')
 
 page_path.write_text(text, encoding='utf-8')

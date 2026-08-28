@@ -20,18 +20,19 @@ const run = (command, args, cwd = process.cwd()) => {
 
 rmSync(REMOTE_DIR, { recursive: true, force: true });
 
-// Pull the currently deployed Dashboard Worker into an ephemeral directory.
-// Wrangler 4 delegates `init --from-dash` to create-cloudflare by default;
-// --no-delegate-c3 forces Wrangler's direct dashboard download path so the
-// existing Worker source/config (including D1/R2 bindings) is actually fetched.
+// Clone the currently deployed Dashboard Worker into a disposable project.
+// Using create-cloudflare --existing-script is the supported path for importing
+// an existing Worker and lets us explicitly control the output directory.
 run('npx', [
-  'wrangler',
-  'init',
-  REMOTE_DIR,
-  '--from-dash',
-  WORKER_NAME,
-  '--no-delegate-c3',
   '--yes',
+  'create-cloudflare@2.72.3',
+  REMOTE_DIR,
+  '--existing-script',
+  WORKER_NAME,
+  '--wrangler-defaults',
+  '--no-deploy',
+  '--no-git',
+  '--no-open',
 ]);
 
 if (!existsSync(REMOTE_DIR)) {

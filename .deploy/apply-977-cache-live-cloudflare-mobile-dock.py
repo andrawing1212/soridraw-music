@@ -10,6 +10,22 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def insert_before_return_after(text: str, start_anchor: str, insertion: str, label: str) -> str:
+    """Insert before the first component return following start_anchor.
+
+    This intentionally avoids matching the full sampledThrough block because earlier
+    build patches can make harmless formatting changes around that block.
+    """
+    start = text.find(start_anchor)
+    if start < 0:
+        raise RuntimeError(f'apply-977: {label} start anchor missing')
+    return_marker = "\n\n  return ("
+    return_at = text.find(return_marker, start)
+    if return_at < 0:
+        raise RuntimeError(f'apply-977: {label} return anchor missing')
+    return text[:return_at] + insertion + text[return_at:]
+
+
 # 1) CACHE LIVE: Cloudflare counters + mobile collapsed -> right docked mini button.
 overlay_path = Path('src/components/CacheDiagnosticsOverlay.tsx')
 overlay = overlay_path.read_text(encoding='utf-8')
@@ -80,12 +96,13 @@ if MARKER not in overlay:
         "  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {\n    const drag = dragRef.current;\n    if (!drag || drag.pointerId !== event.pointerId) return;\n    const deltaX = event.clientX - drag.startX;\n    const deltaY = event.clientY - drag.startY;\n\n    if (isMobile && collapsed && !docked && Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY)) {\n      if (deltaX > 42) {\n        dragRef.current = null;\n        setDocked(true);\n      }\n      return;\n    }\n\n    const next = clampPosition(\n      drag.originX + deltaX,\n      drag.originY + deltaY,\n    );\n    setPosition(next);\n  };",
         'overlay collapsed right swipe dock',
     )
-    overlay = replace_once(
-        overlay,
-        "  const sampledThrough = serverUsage?.sampledThroughMs\n    ? new Date(serverUsage.sampledThroughMs).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })\n    : '';\n\n  return (",
-        "  const sampledThrough = serverUsage?.sampledThroughMs\n    ? new Date(serverUsage.sampledThroughMs).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })\n    : '';\n  const cloudflareMetered = cloudflare.meteredResponses > 0;\n\n  if (docked && isMobile) {\n    return (\n      <button\n        type=\"button\"\n        title=\"CACHE LIVE 소형 패널 펼치기\"\n        aria-label=\"CACHE LIVE 소형 패널 펼치기\"\n        onClick={() => setDocked(false)}\n        className=\"fixed bottom-[18px] right-2 z-[9998] grid h-11 w-11 place-items-center rounded-full border-0 bg-black/80 p-0 text-white/80 shadow-2xl outline-none backdrop-blur-md transition hover:bg-black/90 hover:text-white\"\n      >\n        <span className=\"text-[10px] font-black tracking-[-0.02em]\">CACHE</span>\n        <span className=\"absolute bottom-[5px] right-[6px] min-w-[12px] rounded-full bg-white/10 px-1 text-[7px] font-black tabular-nums text-white/55\">{formatNumber(cloudflare.workerRequests)}</span>\n      </button>\n    );\n  }\n\n  return (",
-        'overlay docked mini render',
-    )
+    if 'CACHE LIVE 소형 패널 펼치기' not in overlay:
+        overlay = insert_before_return_after(
+            overlay,
+            "  const sampledThrough = serverUsage?.sampledThroughMs",
+            "\n  const cloudflareMetered = cloudflare.meteredResponses > 0;\n\n  if (docked && isMobile) {\n    return (\n      <button\n        type=\"button\"\n        title=\"CACHE LIVE 소형 패널 펼치기\"\n        aria-label=\"CACHE LIVE 소형 패널 펼치기\"\n        onClick={() => setDocked(false)}\n        className=\"fixed bottom-[18px] right-2 z-[9998] grid h-11 w-11 place-items-center rounded-full border-0 bg-black/80 p-0 text-white/80 shadow-2xl outline-none backdrop-blur-md transition hover:bg-black/90 hover:text-white\"\n      >\n        <span className=\"text-[10px] font-black tracking-[-0.02em]\">CACHE</span>\n        <span className=\"absolute bottom-[5px] right-[6px] min-w-[12px] rounded-full bg-white/10 px-1 text-[7px] font-black tabular-nums text-white/55\">{formatNumber(cloudflare.workerRequests)}</span>\n      </button>\n    );\n  }\n",
+            'overlay docked mini render',
+        )
     overlay = replace_once(
         overlay,
         "              SDK 읽기 {formatNumber(actual.reads)} · Cloud 읽기 {serverUsage ? formatNumber(todayOps?.reads) : '—'}",

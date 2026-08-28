@@ -5,7 +5,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, normalize } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const WORKER_NAME = 'soridraw-explore-api';
@@ -103,6 +103,67 @@ const cloudflareGet = async (url, headers) => {
   return response;
 };
 
+const safeModulePath = (name) => {
+  const raw = String(name || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  const cleaned = normalize(raw).replace(/\\/g, '/');
+  if (!cleaned || cleaned === '.' || cleaned.startsWith('../') || cleaned.includes('/../')) {
+    throw new Error(`Unsafe Worker module path returned by Cloudflare: ${name}`);
+  }
+  return cleaned;
+};
+
+const writeWorkerSourcePayload = async (response) => {
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+
+  if (!contentType.includes('multipart/form-data')) {
+    const source = await response.text();
+    if (!source.trim()) throw new Error('Cloudflare returned an empty Worker source.');
+    writeFileSync(join(REMOTE_DIR, 'worker.js'), source, 'utf8');
+    return './worker.js';
+  }
+
+  const form = await response.formData();
+  let metadata = {};
+  const writtenModules = [];
+
+  for (const [fieldName, value] of form.entries()) {
+    if (typeof value === 'string') {
+      if (fieldName === 'metadata' && value.trim()) {
+        metadata = parseJson(value, 'Worker multipart metadata');
+      }
+      continue;
+    }
+
+    const moduleName = safeModulePath(value.name || fieldName);
+    const target = join(REMOTE_DIR, moduleName);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, Buffer.from(await value.arrayBuffer()));
+    writtenModules.push(moduleName);
+  }
+
+  if (!writtenModules.length) {
+    throw new Error('Cloudflare multipart Worker payload contained no source modules.');
+  }
+
+  const declaredMain = metadata?.main_module || metadata?.body_part || '';
+  let mainModule = declaredMain ? safeModulePath(declaredMain) : writtenModules[0];
+
+  if (!writtenModules.includes(mainModule)) {
+    const basenameMatch = writtenModules.find((item) => item.endsWith(`/${mainModule}`) || item === mainModule);
+    if (basenameMatch) mainModule = basenameMatch;
+  }
+
+  if (!writtenModules.includes(mainModule)) {
+    throw new Error(
+      `Cloudflare metadata main module was not found in payload: ${mainModule}; modules=${writtenModules.join(',')}`
+    );
+  }
+
+  console.log(`[SORIDRAW Worker] source modules: ${writtenModules.join(', ')}`);
+  console.log(`[SORIDRAW Worker] main module: ${mainModule}`);
+  return `./${mainModule}`;
+};
+
 rmSync(REMOTE_DIR, { recursive: true, force: true });
 mkdirSync(REMOTE_DIR, { recursive: true });
 
@@ -110,15 +171,12 @@ const accountId = getAccountId();
 const authHeaders = getApiAuth();
 const apiBase = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${WORKER_NAME}`;
 
-// Fetch the exact currently deployed Worker source directly from Cloudflare.
+// Cloudflare returns module Workers as multipart/form-data. Parse the payload and
+// persist only the real source modules instead of writing MIME boundaries as JS.
 const sourceResponse = await cloudflareGet(`${apiBase}/content/v2`, authHeaders);
-const workerSource = await sourceResponse.text();
-if (!workerSource.trim()) {
-  throw new Error('Cloudflare returned an empty Worker source.');
-}
-writeFileSync(join(REMOTE_DIR, 'worker.js'), workerSource, 'utf8');
+const workerMain = await writeWorkerSourcePayload(sourceResponse);
 
-// Read current runtime settings so compatibility/observability stay aligned.
+// Read current runtime settings so compatibility stays aligned.
 const settingsEnvelope = await (
   await cloudflareGet(`${apiBase}/settings`, {
     ...authHeaders,
@@ -142,7 +200,7 @@ if (!databaseId) {
 const compatibilityDate = String(settings.compatibility_date || '2026-08-26').slice(0, 10);
 const config = {
   name: WORKER_NAME,
-  main: './worker.js',
+  main: workerMain,
   compatibility_date: compatibilityDate,
   keep_vars: true,
   d1_databases: [
@@ -163,10 +221,17 @@ const config = {
 if (Array.isArray(settings.compatibility_flags) && settings.compatibility_flags.length) {
   config.compatibility_flags = settings.compatibility_flags;
 }
+
+// Keep only Wrangler-supported observability fields. The API currently returns
+// redact_query_string, which Wrangler 4.102 warns is not a valid config field.
 if (settings.observability && typeof settings.observability === 'object') {
-  config.observability = settings.observability;
+  config.observability = {
+    enabled: settings.observability.enabled !== false,
+  };
+  if (typeof settings.observability.head_sampling_rate === 'number') {
+    config.observability.head_sampling_rate = settings.observability.head_sampling_rate;
+  }
 } else {
-  // Preserve the currently enabled Workers Logs behavior seen in the dashboard.
   config.observability = { enabled: true, head_sampling_rate: 1 };
 }
 

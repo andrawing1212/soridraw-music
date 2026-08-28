@@ -1,0 +1,117 @@
+name: Firebase Hosting Migration Phase 2 Canary
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/firebase-hosting-migration-phase2-canary.yml'
+      - '.deploy/check-firebase-hosting-migration-phase2.mjs'
+      - 'firebase.hosting-only.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-hosting-migration-phase2-canary
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Re-run Phase 1 hosting boundary check
+        run: node .deploy/check-firebase-hosting-migration-phase1.mjs
+
+      - name: Verify Phase 2 canary boundary
+        run: node .deploy/check-firebase-hosting-migration-phase2.mjs
+
+      - name: Build current preview app
+        run: npm run build
+
+      - name: Type check built workspace
+        run: npx tsc --noEmit
+
+      - name: Prepare Firebase canary credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SERVICE_ACCOUNT_JSON" || { echo 'FIREBASE_SERVICE_ACCOUNT_SORIDRAW is missing'; exit 2; }
+          credential_file="$RUNNER_TEMP/firebase-service-account.json"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$credential_file"
+          chmod 600 "$credential_file"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$credential_file" >> "$GITHUB_ENV"
+
+      - name: Snapshot official Firebase Hosting before canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/production-before.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/production-before.html"
+          sha256sum "$RUNNER_TEMP/production-before.html" | awk '{print $1}' > "$RUNNER_TEMP/production-before.sha"
+
+      - name: Verify Vercel preview fallback before canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw-music-git-preview-andrawing1212.vercel.app/ -o "$RUNNER_TEMP/vercel-preview.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/vercel-preview.html"
+          echo '[Firebase Hosting migration] Vercel preview fallback is reachable.'
+
+      - name: Deploy Firebase Hosting canary channel only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest hosting:channel:deploy phase2-preview \
+            --project soridraw \
+            --config firebase.hosting-only.json \
+            --expires 7d \
+            --json | tee "$RUNNER_TEMP/phase2-deploy.json"
+
+          canary_url="$(grep -oE 'https://[^"[:space:]]+\.web\.app' "$RUNNER_TEMP/phase2-deploy.json" | head -n 1 || true)"
+          test -n "$canary_url" || { echo 'Could not extract Firebase Hosting canary URL'; exit 3; }
+          echo "CANARY_URL=$canary_url" >> "$GITHUB_ENV"
+          echo "[Firebase Hosting migration] canary=$canary_url"
+
+      - name: Smoke test Firebase canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "$CANARY_URL/" -o "$RUNNER_TEMP/canary-index.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/canary-index.html"
+          echo "[Firebase Hosting migration] canary smoke PASS: $CANARY_URL/"
+
+      - name: Verify official Firebase Hosting stayed unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/production-after.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/production-after.html"
+          sha256sum "$RUNNER_TEMP/production-after.html" | awk '{print $1}' > "$RUNNER_TEMP/production-after.sha"
+          cmp "$RUNNER_TEMP/production-before.sha" "$RUNNER_TEMP/production-after.sha"
+          echo '[Firebase Hosting migration] official Firebase Hosting unchanged.'
+
+      - name: Phase 2 result
+        run: |
+          echo 'Phase 2 Hosting canary passed.'
+          echo "Canary URL: $CANARY_URL"
+          echo 'Vercel preview remains available as fallback.'
+          echo 'No live Hosting release, Functions deploy, Firestore/Database Rules update, or backend migration was performed.'

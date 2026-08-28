@@ -50,4 +50,4 @@ runpy.run_path('.deploy/apply-956-explore-8e4-music-note-publication-ui.py', run
 runpy.run_path('.deploy/apply-957-explore-8e4-interaction-button-visual-fix.py', run_name='__main__')
 runpy.run_path('.deploy/apply-958-explore-8e4-state-button-fill-live-like.py', run_name='__main__')
 runpy.run_path('.deploy/apply-959-explore-8e4-personal-like-fix.py', run_name='__main__')
-runpy.run_path('.deploy/apply-960-music-note-lightweight-card-state.py', run_name='__main__')
+runpy.run_path('.deploy/run-960-music-note-lightweight-card-state.py', run_name='__main__')

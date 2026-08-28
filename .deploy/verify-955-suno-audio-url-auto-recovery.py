@@ -54,3 +54,4 @@ runpy.run_path('.deploy/apply-963-music-note-keyword-and-filled-icon-tune.py', r
 runpy.run_path('.deploy/apply-964-music-note-compact-suno-buttons.py', run_name='__main__')
 runpy.run_path('.deploy/apply-965-explore-publication-state-hydration.py', run_name='__main__')
 runpy.run_path('.deploy/apply-966-music-note-state-button-final-align.py', run_name='__main__')
+runpy.run_path('.deploy/apply-967-music-note-state-button-hover-tone.py', run_name='__main__')

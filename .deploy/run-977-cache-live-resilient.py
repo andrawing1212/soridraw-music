@@ -58,3 +58,8 @@ for token in ['SDK READ 발생처', 'Cloudflare 앱 · Worker', 'R2 · Class A']
         raise RuntimeError(f'run-977: preserved CACHE LIVE feature missing after patch: {token}')
 
 print('run-977: preserved 925 SDK source trace + applied 977 Cloudflare/mobile diagnostics')
+
+# Final 8-E compatibility check. 902 reads the normalized FavoriteSunoLink cover
+# metadata; keep that type contract aligned without changing stored data or runtime UI.
+compat_path = Path('.deploy/apply-978-explore-publication-normalized-cover-type-fix.py')
+exec(compile(compat_path.read_text(encoding='utf-8'), str(compat_path), 'exec'), {'__name__': '__main__'})

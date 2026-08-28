@@ -86,19 +86,23 @@ replaceOnce(
 );
 
 replaceOnce(
-`        apiStatusResponse: data
+`        audioValidationStatus,
+        sunoData: sunoData,
+        apiStatusResponse: data
       });`,
-`        apiStatusResponse: data,
+`        audioValidationStatus,
+        sunoData: sunoData,
+        apiStatusResponse: data,
         recoveryOnly
       });`,
-  'response recoveryOnly marker'
+  'getSunoTrackStatus response recoveryOnly marker'
 );
 
 for (const required of [
   marker,
   'const recoveryOnly = req.body?.recoveryOnly === true',
   'if (!recoveryOnly) {',
-  'recoveryOnly\n      });',
+  'apiStatusResponse: data,\n        recoveryOnly',
 ]) {
   if (!text.includes(required)) {
     throw new Error(`apply-suno-recovery-readonly-972 verification failed: ${required}`);

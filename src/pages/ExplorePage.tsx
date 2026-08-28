@@ -1,11 +1,25 @@
+// SORIDRAW_EXPLORE_8E5_SOCIAL_PUBLIC_PROFILE
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Compass, ExternalLink, Heart, Loader2, MessageCircle, Music2, Search, X } from 'lucide-react';
+import { ArrowLeft, Compass, ExternalLink, Heart, Loader2, Music2, Pin, Search, UserCheck, UserPlus, X } from 'lucide-react';
+import { onAuthStateChanged, type User } from 'firebase/auth';
+import { useSearchParams } from 'react-router-dom';
+import { auth } from '../firebase';
+import { getExploreLikedTrackIds, setExploreTrackLike } from '../services/exploreLikeService';
+import {
+  getExploreFollowState,
+  getExplorePublicProfile,
+  getExplorePublicProfileTracks,
+  setExploreFollow,
+  type ExploreFollowState,
+  type ExplorePublicProfile,
+} from '../services/exploreSocialService';
 import '../components/explore/explore.css';
 
 type ExploreSort = 'recommended' | 'latest' | 'popular';
 
 type ExploreTrack = {
   id: string;
+  ownerUid: string;
   title: string;
   displayName: string;
   avatarUrl?: string | null;
@@ -13,7 +27,7 @@ type ExploreTrack = {
   sunoUrlPrimary?: string | null;
   openUrl?: string | null;
   likeCount: number;
-  commentCount: number;
+  profilePinned: boolean;
 };
 
 type ExploreApiResponse = {
@@ -36,16 +50,22 @@ const safeCount = (value: unknown) => {
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
 };
 
+const readNestedCount = (row: Record<string, unknown>, key: string) => {
+  const stats = row.stats && typeof row.stats === 'object' ? row.stats as Record<string, unknown> : null;
+  return safeCount(row[key] ?? stats?.[key]);
+};
+
 const normalizeTrack = (row: Record<string, unknown>): ExploreTrack => ({
   id: safeText(row.id),
+  ownerUid: safeText(row.ownerUid ?? row.owner_uid),
   title: safeText(row.title, '제목 없는 곡'),
-  displayName: safeText(row.displayName ?? row.ownerDisplayName, 'SORiDRAW'),
-  avatarUrl: safeText(row.avatarUrl) || null,
+  displayName: safeText(row.ownerNickname ?? row.displayName ?? row.ownerDisplayName, 'SORiDRAW'),
+  avatarUrl: safeText(row.ownerAvatarUrl ?? row.avatarUrl) || null,
   coverUrl: safeText(row.coverUrl) || null,
   sunoUrlPrimary: safeText(row.sunoUrlPrimary) || null,
   openUrl: safeText(row.openUrl) || null,
-  likeCount: safeCount(row.likeCount),
-  commentCount: safeCount(row.commentCount),
+  likeCount: readNestedCount(row, 'likeCount'),
+  profilePinned: Boolean(row.profilePinned ?? row.profile_pinned ?? (row.options as Record<string, unknown> | undefined)?.profilePinned),
 });
 
 const isOpenableUrl = (value?: string | null) => {
@@ -64,7 +84,19 @@ const formatCount = (value: number) => {
   return String(value);
 };
 
-function ExploreTrackCard({ track }: { track: ExploreTrack }) {
+function ExploreTrackCard({
+  track,
+  liked,
+  likeBusy,
+  onToggleLike,
+  onOpenProfile,
+}: {
+  track: ExploreTrack;
+  liked: boolean;
+  likeBusy: boolean;
+  onToggleLike: (track: ExploreTrack) => void;
+  onOpenProfile: (track: ExploreTrack) => void;
+}) {
   const [imageFailed, setImageFailed] = useState(false);
   const openUrl = isOpenableUrl(track.openUrl)
     ? track.openUrl
@@ -100,6 +132,11 @@ function ExploreTrackCard({ track }: { track: ExploreTrack }) {
               <Music2 />
             </span>
           )}
+          {track.profilePinned && (
+            <span className="soridraw-explore-pin-badge" title="공개 프로필 고정" aria-label="공개 프로필 고정">
+              <Pin aria-hidden="true" />
+            </span>
+          )}
           {openUrl && (
             <span className="soridraw-explore-cover-open" aria-hidden="true">
               <ExternalLink />
@@ -110,17 +147,32 @@ function ExploreTrackCard({ track }: { track: ExploreTrack }) {
 
       <div className="soridraw-explore-card-copy">
         <h3 title={track.title}>{track.title}</h3>
-        <div className="soridraw-explore-creator">
+        <button
+          type="button"
+          className="soridraw-explore-creator"
+          onClick={() => onOpenProfile(track)}
+          disabled={!track.ownerUid}
+          title={track.ownerUid ? `${track.displayName} 공개 프로필` : track.displayName}
+        >
           <span className="soridraw-explore-avatar" aria-hidden="true">
             {track.avatarUrl ? <img src={track.avatarUrl} alt="" referrerPolicy="no-referrer" /> : track.displayName.charAt(0).toUpperCase()}
           </span>
-          <span title={track.displayName}>{track.displayName}</span>
-        </div>
+          <span>{track.displayName}</span>
+        </button>
       </div>
 
       <div className="soridraw-explore-card-actions" aria-label="곡 반응 정보">
-        <span title="좋아요"><Heart aria-hidden="true" /> {formatCount(track.likeCount)}</span>
-        <span title="댓글"><MessageCircle aria-hidden="true" /> {formatCount(track.commentCount)}</span>
+        <button
+          type="button"
+          className={`soridraw-explore-like-button${liked ? ' is-liked' : ''}`}
+          onClick={() => onToggleLike(track)}
+          disabled={likeBusy}
+          title={liked ? '좋아요 취소' : '좋아요'}
+          aria-label={liked ? '좋아요 취소' : '좋아요'}
+        >
+          {likeBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <Heart aria-hidden="true" />}
+          <span>{formatCount(track.likeCount)}</span>
+        </button>
         <button
           type="button"
           className="soridraw-explore-open-button"
@@ -137,6 +189,9 @@ function ExploreTrackCard({ track }: { track: ExploreTrack }) {
 }
 
 export default function ExplorePage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const profileUid = safeText(searchParams.get('profile'));
+  const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [sort, setSort] = useState<ExploreSort>('recommended');
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -144,7 +199,23 @@ export default function ExplorePage() {
   const [tracks, setTracks] = useState<ExploreTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [likedTrackIds, setLikedTrackIds] = useState<Record<string, boolean>>({});
+  const [likeBusyTrackId, setLikeBusyTrackId] = useState<string | null>(null);
+  const [socialNotice, setSocialNotice] = useState('');
+  const [profile, setProfile] = useState<ExplorePublicProfile | null>(null);
+  const [profileTracks, setProfileTracks] = useState<ExploreTrack[]>([]);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [followState, setFollowState] = useState<ExploreFollowState | null>(null);
+  const [followBusy, setFollowBusy] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const likeHydrationKeyRef = useRef('');
+
+  useEffect(() => onAuthStateChanged(auth, (currentUser) => {
+    setUser(currentUser);
+    likeHydrationKeyRef.current = '';
+    if (!currentUser) setLikedTrackIds({});
+  }), []);
 
   const requestUrl = useMemo(() => {
     const cleanQuery = submittedQuery.trim();
@@ -188,10 +259,95 @@ export default function ExplorePage() {
   }, [requestUrl]);
 
   useEffect(() => {
+    if (!profileUid) {
+      setProfile(null);
+      setProfileTracks([]);
+      setProfileError('');
+      setFollowState(null);
+      return;
+    }
+
+    let cancelled = false;
+    setProfileLoading(true);
+    setProfileError('');
+    setSocialNotice('');
+
+    Promise.all([
+      getExplorePublicProfile(profileUid),
+      getExplorePublicProfileTracks(profileUid),
+    ])
+      .then(async ([nextProfile, rows]) => {
+        if (cancelled) return;
+        const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
+        normalizedTracks.sort((a, b) => Number(b.profilePinned) - Number(a.profilePinned));
+        setProfile(nextProfile);
+        setProfileTracks(normalizedTracks);
+
+        if (user && user.uid !== profileUid) {
+          try {
+            const nextFollowState = await getExploreFollowState(user, profileUid);
+            if (!cancelled) setFollowState(nextFollowState);
+          } catch (reason) {
+            console.warn('Explore follow state load failed:', reason);
+            if (!cancelled) setFollowState(null);
+          }
+        } else {
+          setFollowState(null);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        console.error('Explore public profile load failed:', reason);
+        setProfile(null);
+        setProfileTracks([]);
+        setProfileError(reason instanceof Error ? reason.message : '공개 프로필을 불러오지 못했어요.');
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [profileUid, user]);
+
+  const visibleTracks = profileUid ? profileTracks : tracks;
+
+  useEffect(() => {
+    if (!user || visibleTracks.length === 0) return;
+    const ids = [...new Set(visibleTracks.map((track) => track.id).filter(Boolean))].slice(0, 50);
+    const hydrationKey = `${user.uid}:${profileUid || 'feed'}:${ids.join(',')}`;
+    if (!ids.length || likeHydrationKeyRef.current === hydrationKey) return;
+    likeHydrationKeyRef.current = hydrationKey;
+
+    let cancelled = false;
+    getExploreLikedTrackIds(user, ids)
+      .then((likedIds) => {
+        if (cancelled) return;
+        setLikedTrackIds((prev) => {
+          const next = { ...prev };
+          ids.forEach((id) => { next[id] = false; });
+          likedIds.forEach((id) => { next[id] = true; });
+          return next;
+        });
+      })
+      .catch((reason) => {
+        console.warn('Explore like state hydration failed:', reason);
+        likeHydrationKeyRef.current = '';
+      });
+
+    return () => { cancelled = true; };
+  }, [user, visibleTracks, profileUid]);
+
+  useEffect(() => {
     if (!searchOpen) return;
     const timer = window.setTimeout(() => searchInputRef.current?.focus(), 0);
     return () => window.clearTimeout(timer);
   }, [searchOpen]);
+
+  useEffect(() => {
+    if (!socialNotice) return;
+    const timer = window.setTimeout(() => setSocialNotice(''), 2200);
+    return () => window.clearTimeout(timer);
+  }, [socialNotice]);
 
   const submitSearch = (event: React.FormEvent) => {
     event.preventDefault();
@@ -204,8 +360,157 @@ export default function ExplorePage() {
     setSearchOpen(false);
   };
 
+  const openProfile = (track: ExploreTrack) => {
+    if (!track.ownerUid) return;
+    setSearchParams({ profile: track.ownerUid });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const closeProfile = () => {
+    setSearchParams({});
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const updateTrackLikeCount = (trackId: string, likeCount: number) => {
+    const patch = (list: ExploreTrack[]) => list.map((track) => track.id === trackId ? { ...track, likeCount } : track);
+    setTracks(patch);
+    setProfileTracks(patch);
+  };
+
+  const toggleLike = async (track: ExploreTrack) => {
+    if (!user) {
+      setSocialNotice('좋아요는 로그인 후 사용할 수 있어요.');
+      return;
+    }
+    if (likeBusyTrackId) return;
+    const currentLiked = Boolean(likedTrackIds[track.id]);
+    setLikeBusyTrackId(track.id);
+    try {
+      const result = await setExploreTrackLike(user, track.id, !currentLiked);
+      setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
+      updateTrackLikeCount(track.id, result.likeCount);
+    } catch (reason) {
+      console.error('Explore like failed:', reason);
+      setSocialNotice(reason instanceof Error ? reason.message : '좋아요 처리에 실패했어요.');
+    } finally {
+      setLikeBusyTrackId(null);
+    }
+  };
+
+  const toggleFollow = async () => {
+    if (!profileUid || !profile) return;
+    if (!user) {
+      setSocialNotice('팔로우는 로그인 후 사용할 수 있어요.');
+      return;
+    }
+    if (user.uid === profileUid || followBusy) return;
+    const nextShouldFollow = !Boolean(followState?.isFollowing);
+    setFollowBusy(true);
+    try {
+      const result = await setExploreFollow(user, profileUid, nextShouldFollow);
+      setFollowState(result);
+      setProfile((prev) => prev ? {
+        ...prev,
+        followerCount: result.followerCount || (nextShouldFollow ? prev.followerCount + 1 : Math.max(0, prev.followerCount - 1)),
+        followingCount: result.followingCount || prev.followingCount,
+      } : prev);
+    } catch (reason) {
+      console.error('Explore follow failed:', reason);
+      setSocialNotice(reason instanceof Error ? reason.message : '팔로우 처리에 실패했어요.');
+    } finally {
+      setFollowBusy(false);
+    }
+  };
+
+  const renderTrackGrid = (items: ExploreTrack[], label: string) => (
+    <section className="soridraw-explore-grid" aria-label={label}>
+      {items.map((track) => (
+        <ExploreTrackCard
+          key={track.id}
+          track={track}
+          liked={Boolean(likedTrackIds[track.id])}
+          likeBusy={likeBusyTrackId === track.id}
+          onToggleLike={toggleLike}
+          onOpenProfile={openProfile}
+        />
+      ))}
+    </section>
+  );
+
+  if (profileUid) {
+    return (
+      <main className="soridraw-explore-page">
+        <section className="soridraw-explore-profile-toolbar">
+          <button type="button" onClick={closeProfile} className="soridraw-explore-back-button" aria-label="Explore로 돌아가기">
+            <ArrowLeft aria-hidden="true" />
+          </button>
+          <span>공개 프로필</span>
+        </section>
+
+        {socialNotice && <div className="soridraw-explore-social-notice" role="status">{socialNotice}</div>}
+
+        {profileLoading ? (
+          <div className="soridraw-explore-state" role="status"><Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 프로필을 불러오는 중</div>
+        ) : profileError || !profile ? (
+          <div className="soridraw-explore-state soridraw-explore-state--empty">
+            <Compass aria-hidden="true" />
+            <strong>공개 프로필을 열지 못했어요.</strong>
+            <span>{profileError || '잠시 후 다시 시도해주세요.'}</span>
+          </div>
+        ) : (
+          <>
+            <section className="soridraw-explore-profile-head">
+              <div className="soridraw-explore-profile-avatar" aria-hidden="true">
+                {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" /> : profile.nickname.charAt(0).toUpperCase()}
+              </div>
+              <div className="soridraw-explore-profile-copy">
+                <div className="soridraw-explore-profile-name-line">
+                  <h1>{profile.nickname}</h1>
+                  {user?.uid === profileUid ? (
+                    <span className="soridraw-explore-own-profile">내 공개 프로필</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={toggleFollow}
+                      disabled={followBusy}
+                      className={`soridraw-explore-follow-button${followState?.isFollowing ? ' is-following' : ''}`}
+                    >
+                      {followBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : followState?.isFollowing ? <UserCheck aria-hidden="true" /> : <UserPlus aria-hidden="true" />}
+                      {followState?.isFollowing ? '팔로잉' : '팔로우'}
+                    </button>
+                  )}
+                </div>
+                {profile.bio && <p>{profile.bio}</p>}
+                <div className="soridraw-explore-profile-stats">
+                  <span>팔로워 <strong>{formatCount(profile.followerCount)}</strong></span>
+                  <span>팔로잉 <strong>{formatCount(profile.followingCount)}</strong></span>
+                  <span>공개곡 <strong>{formatCount(profile.trackCount || profileTracks.length)}</strong></span>
+                </div>
+              </div>
+            </section>
+
+            {profileTracks.length === 0 ? (
+              <div className="soridraw-explore-state soridraw-explore-state--empty">
+                <Music2 aria-hidden="true" />
+                <strong>아직 공개된 곡이 없어요.</strong>
+              </div>
+            ) : (
+              <>
+                {profileTracks.some((track) => track.profilePinned) && (
+                  <div className="soridraw-explore-profile-section-label"><Pin aria-hidden="true" /> 고정된 공개곡</div>
+                )}
+                {renderTrackGrid(profileTracks, `${profile.nickname} 공개곡`)}
+              </>
+            )}
+          </>
+        )}
+      </main>
+    );
+  }
+
   return (
     <main className="soridraw-explore-page">
+      {socialNotice && <div className="soridraw-explore-social-notice" role="status">{socialNotice}</div>}
       <section className="soridraw-explore-head">
         <div>
           <div className="soridraw-explore-title-line">
@@ -276,11 +581,7 @@ export default function ExplorePage() {
           <strong>{submittedQuery ? '검색 결과가 없어요.' : '아직 공개된 곡이 없어요.'}</strong>
           <span>{submittedQuery ? '다른 검색어로 찾아보세요.' : '공개된 곡이 생기면 이곳에 표시됩니다.'}</span>
         </div>
-      ) : (
-        <section className="soridraw-explore-grid" aria-label="Explore 곡 목록">
-          {tracks.map((track) => <ExploreTrackCard key={track.id} track={track} />)}
-        </section>
-      )}
+      ) : renderTrackGrid(tracks, 'Explore 곡 목록')}
     </main>
   );
 }

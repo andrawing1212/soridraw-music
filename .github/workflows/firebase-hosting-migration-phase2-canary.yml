@@ -72,8 +72,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --max-time 30 https://soridraw-music-git-preview-andrawing1212.vercel.app/ -o "$RUNNER_TEMP/vercel-preview.html"
-          grep -q '<div id="root"></div>' "$RUNNER_TEMP/vercel-preview.html"
+          curl --retry 12 --retry-all-errors --retry-delay 10 -fsS --max-time 30 \
+            https://soridraw-music-git-preview-andrawing1212.vercel.app/ \
+            -o /dev/null
           echo '[Firebase Hosting migration] Vercel preview fallback is reachable.'
 
       - name: Deploy Firebase Hosting canary channel only

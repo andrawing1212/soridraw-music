@@ -56,7 +56,8 @@ const parseHybridText = (value: unknown): string[] => {
   const text = String(value || '').trim();
   if (!text) return [];
   return text
-    .split(/\s*(?:\+|\/|·|,|&|×|x)\s*/i)
+    // Keep ampersands intact so names like R&B are never split.
+    .split(/\s*(?:\+|\/|·|,|×)\s*/)
     .map(normalizeGenre)
     .filter(Boolean);
 };

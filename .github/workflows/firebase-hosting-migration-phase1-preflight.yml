@@ -46,6 +46,15 @@ jobs:
       - name: Build current app without publishing
         run: npm run build
 
+      - name: Trace generated FavoriteSunoLink type
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '--- source/generated matches ---'
+          grep -R -n -C 4 -E 'FavoriteSunoLink|getFavoriteSunoLinks' .deploy src || true
+          echo '--- generated FavoritesPage around imageUrl ---'
+          grep -n -C 8 -E 'sunoLink.*imageUrl|\.imageUrl' src/pages/FavoritesPage.tsx | tail -n 120 || true
+
       - name: Type check built workspace
         run: npx tsc --noEmit
 

@@ -45,8 +45,9 @@ print('verify-955: PASS')
 # SORIDRAW 8-E-4: keep the existing prebuild chain stable without rewriting package.json.
 # apply-902 has already run earlier in the chain, so the 956 patch can safely extend
 # the generated FavoritesPage publication UI here. 957 repairs modal interaction and
-# spacing, and 958 locks the final monochrome state-button contract while wiring the
-# already-existing Worker like endpoints.
+# spacing, 958 locks the monochrome button contract, and 959 corrects Music Note's
+# personal Like semantics so every owned card can be liked independently of Explore.
 runpy.run_path('.deploy/apply-956-explore-8e4-music-note-publication-ui.py', run_name='__main__')
 runpy.run_path('.deploy/apply-957-explore-8e4-interaction-button-visual-fix.py', run_name='__main__')
 runpy.run_path('.deploy/apply-958-explore-8e4-state-button-fill-live-like.py', run_name='__main__')
+runpy.run_path('.deploy/apply-959-explore-8e4-personal-like-fix.py', run_name='__main__')

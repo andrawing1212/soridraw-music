@@ -1,0 +1,4 @@
+SORIDRAW 972 isolated getSunoTrackStatus deploy trigger
+approved_at=2026-08-28
+scope=functions:getSunoTrackStatus only
+mode=recoveryOnly-readonly

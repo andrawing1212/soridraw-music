@@ -1,0 +1,105 @@
+name: Firebase Hosting Migration Phase 1 Preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/firebase-hosting-migration-phase1-preflight.yml'
+      - 'firebase.hosting-only.json'
+      - '.deploy/check-firebase-hosting-migration-phase1.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-hosting-migration-phase1-preflight
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Verify Hosting-only migration boundary
+        run: node .deploy/check-firebase-hosting-migration-phase1.mjs
+
+      - name: Build current app without publishing
+        run: npm run build
+
+      - name: Type check built workspace
+        run: npx tsc --noEmit
+
+      - name: Prepare Firebase read-only credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SERVICE_ACCOUNT_JSON" || { echo 'FIREBASE_SERVICE_ACCOUNT_SORIDRAW is missing'; exit 2; }
+          credential_file="$RUNNER_TEMP/firebase-service-account.json"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$credential_file"
+          chmod 600 "$credential_file"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$credential_file" >> "$GITHUB_ENV"
+
+      - name: Read existing Firebase Hosting sites
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest hosting:sites:list --project soridraw --json > "$RUNNER_TEMP/firebase-sites.json"
+          node - "$RUNNER_TEMP/firebase-sites.json" <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const possible = [payload?.result?.sites, payload?.result, payload?.sites, payload];
+          const sites = possible.find(Array.isArray) || [];
+          const ids = sites.map((site) => {
+            const raw = String(site?.site || site?.siteId || site?.id || site?.name || '');
+            return raw.includes('/') ? raw.split('/').filter(Boolean).pop() : raw;
+          }).filter(Boolean);
+          console.log(`[Firebase Hosting migration] sites=${ids.join(',') || '(none)'}`);
+          if (!ids.includes('soridraw')) {
+            throw new Error(`Expected production Hosting site soridraw was not found. sites=${ids.join(',')}`);
+          }
+          NODE
+
+      - name: Read existing Hosting channels
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest hosting:channel:list --project soridraw --json > "$RUNNER_TEMP/firebase-channels.json"
+          node - "$RUNNER_TEMP/firebase-channels.json" <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const possible = [payload?.result?.channels, payload?.result, payload?.channels, payload];
+          const channels = possible.find(Array.isArray) || [];
+          const ids = channels.map((channel) => String(channel?.channel || channel?.channelId || channel?.id || channel?.name || '').split('/').filter(Boolean).pop()).filter(Boolean);
+          console.log(`[Firebase Hosting migration] channels=${ids.join(',') || '(none)'}`);
+          NODE
+
+      - name: Verify current official app is unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/production-index.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/production-index.html"
+          echo '[Firebase Hosting migration] production endpoint unchanged: https://soridraw.web.app/'
+
+      - name: Phase 1 result
+        run: |
+          echo 'Phase 1 preflight passed.'
+          echo 'No Hosting release, backend write, Rules update, or Functions update was performed.'

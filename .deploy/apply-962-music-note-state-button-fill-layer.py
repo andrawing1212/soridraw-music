@@ -97,12 +97,12 @@ new_public_shell = f'''                              className="relative flex h-
 replace_once(old_public_shell, new_public_shell, 'public shell')
 
 public_content_anchor = '''                            >
-                              {explorePublicationBusySourceId === getFavoriteDocumentId(song)
+                              {explorePublicationBusyId === getFavoriteDocumentId(song)
                                 ? <Loader2 className="h-4 w-4 animate-spin" />
                                 : <Globe2 className="h-4 w-4" />}'''
 public_content_new = f'''                            >
                               {{renderMusicNoteStateButtonFill({public_state})}}
-                              {{explorePublicationBusySourceId === getFavoriteDocumentId(song)
+                              {{explorePublicationBusyId === getFavoriteDocumentId(song)
                                 ? <Loader2 className="relative z-[1] h-4 w-4 animate-spin" />
                                 : <Globe2 className="relative z-[1] h-4 w-4" />}}'''
 replace_once(public_content_anchor, public_content_new, 'public fill + icon')

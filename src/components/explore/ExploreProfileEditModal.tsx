@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ImagePlus, Link2, Loader2, Pencil, Plus, UserRound, X } from 'lucide-react';
+import { ImagePlus, Link2, Loader2, Pencil, Plus, RefreshCw, UserRound, X } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import {
   getExplorePublicProfile,
-  prepareExploreProfileMedia,
   updateExplorePublicProfile,
   uploadExploreProfileMedia,
   type ExploreProfileDraft,
+  type ExploreProfileMediaKind,
   type ExplorePublicProfile,
 } from '../../services/exploreSocialService';
+import { suggestExploreProfileGenres } from '../../services/exploreProfileGenreSuggestionService';
+import ExploreImageCropModal from './ExploreImageCropModal';
 
 type Props = {
   user: User;
@@ -16,6 +18,11 @@ type Props = {
   onClose: () => void;
   onSaved: (profile: ExplorePublicProfile) => void;
 };
+
+type CropEditorState = {
+  kind: ExploreProfileMediaKind;
+  file: File;
+} | null;
 
 const genericNames = new Set(['SORIDRAW 사용자', 'SORIDRAW User', 'SORiDRAW', 'SORIDRAW']);
 
@@ -46,41 +53,51 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
     tiktokUrl: profile.socialLinks?.tiktok || '',
   }));
   const [genreInput, setGenreInput] = useState('');
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
+  const [avatarBlob, setAvatarBlob] = useState<Blob | null>(null);
+  const [backgroundBlob, setBackgroundBlob] = useState<Blob | null>(null);
   const [avatarPreview, setAvatarPreview] = useState(profile.avatarUrl || '');
   const [backgroundPreview, setBackgroundPreview] = useState(profile.backgroundUrl || '');
+  const [cropEditor, setCropEditor] = useState<CropEditorState>(null);
+  const [genreRefreshing, setGenreRefreshing] = useState(false);
+  const [genreNotice, setGenreNotice] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
+  const avatarPreviewRef = useRef(avatarPreview);
+  const backgroundPreviewRef = useRef(backgroundPreview);
 
-  useEffect(() => {
-    return () => {
-      if (avatarPreview.startsWith('blob:')) URL.revokeObjectURL(avatarPreview);
-      if (backgroundPreview.startsWith('blob:')) URL.revokeObjectURL(backgroundPreview);
-    };
-  }, [avatarPreview, backgroundPreview]);
+  useEffect(() => { avatarPreviewRef.current = avatarPreview; }, [avatarPreview]);
+  useEffect(() => { backgroundPreviewRef.current = backgroundPreview; }, [backgroundPreview]);
+  useEffect(() => () => {
+    if (avatarPreviewRef.current.startsWith('blob:')) URL.revokeObjectURL(avatarPreviewRef.current);
+    if (backgroundPreviewRef.current.startsWith('blob:')) URL.revokeObjectURL(backgroundPreviewRef.current);
+  }, []);
 
   const handleValid = useMemo(() => /^[a-z0-9._]{3,24}$/.test(draft.handle) && !draft.handle.startsWith('.') && !draft.handle.endsWith('.') && !draft.handle.includes('..'), [draft.handle]);
 
-  const selectImage = (file: File | undefined, kind: 'avatar' | 'background') => {
+  const selectImage = (file: File | undefined, kind: ExploreProfileMediaKind) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       setError('이미지 파일만 선택할 수 있습니다.');
       return;
     }
     setError('');
-    const nextUrl = URL.createObjectURL(file);
+    setCropEditor({ kind, file });
+  };
+
+  const applyEditedImage = (kind: ExploreProfileMediaKind, blob: Blob) => {
+    const nextUrl = URL.createObjectURL(blob);
     if (kind === 'avatar') {
       if (avatarPreview.startsWith('blob:')) URL.revokeObjectURL(avatarPreview);
-      setAvatarFile(file);
+      setAvatarBlob(blob);
       setAvatarPreview(nextUrl);
     } else {
       if (backgroundPreview.startsWith('blob:')) URL.revokeObjectURL(backgroundPreview);
-      setBackgroundFile(file);
+      setBackgroundBlob(blob);
       setBackgroundPreview(nextUrl);
     }
+    setCropEditor(null);
   };
 
   const addGenre = () => {
@@ -92,6 +109,33 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
     }
     setDraft((prev) => ({ ...prev, genres: [...prev.genres, value] }));
     setGenreInput('');
+    setGenreNotice('');
+    setError('');
+  };
+
+  const refreshGenres = async () => {
+    if (genreRefreshing) return;
+    setGenreRefreshing(true);
+    setGenreNotice('');
+    setError('');
+    try {
+      const result = await suggestExploreProfileGenres(user.uid);
+      if (result.recentSongCount === 0) {
+        setGenreNotice('최근 생성곡이 없어 자동 추천을 만들지 못했어요.');
+        return;
+      }
+      if (result.genres.length === 0) {
+        setGenreNotice(`최근 ${result.recentSongCount}곡에서 장르 정보를 찾지 못했어요.`);
+        return;
+      }
+      setDraft((prev) => ({ ...prev, genres: result.genres }));
+      setGenreNotice(`최근 ${result.recentSongCount}곡 기준으로 대표 장르를 갱신했어요. 서버 읽기 ${result.firestoreReads}회.`);
+    } catch (reason) {
+      console.error('Explore profile genre refresh failed:', reason);
+      setError(reason instanceof Error ? reason.message : '최근곡 장르를 불러오지 못했습니다.');
+    } finally {
+      setGenreRefreshing(false);
+    }
   };
 
   const save = async () => {
@@ -110,14 +154,8 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
     setError('');
     try {
       await updateExplorePublicProfile(user, { ...draft, nickname });
-      if (backgroundFile) {
-        const blob = await prepareExploreProfileMedia(backgroundFile, 'background');
-        await uploadExploreProfileMedia(user, 'background', blob);
-      }
-      if (avatarFile) {
-        const blob = await prepareExploreProfileMedia(avatarFile, 'avatar');
-        await uploadExploreProfileMedia(user, 'avatar', blob);
-      }
+      if (backgroundBlob) await uploadExploreProfileMedia(user, 'background', backgroundBlob);
+      if (avatarBlob) await uploadExploreProfileMedia(user, 'avatar', avatarBlob);
       const refreshed = await getExplorePublicProfile(user.uid);
       onSaved(refreshed);
       onClose();
@@ -131,7 +169,7 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
 
   return (
     <div className="soridraw-explore-profile-edit-overlay" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget && !saving) onClose();
+      if (event.target === event.currentTarget && !saving && !cropEditor) onClose();
     }}>
       <section className="soridraw-explore-profile-edit-modal" role="dialog" aria-modal="true" aria-labelledby="soridraw-profile-edit-title">
         <header className="soridraw-explore-profile-edit-header">
@@ -145,16 +183,22 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
             {backgroundPreview ? <img src={backgroundPreview} alt="" /> : <span><ImagePlus aria-hidden="true" /> 배경 이미지 선택</span>}
             <span className="soridraw-explore-profile-image-edit-badge"><Pencil aria-hidden="true" /></span>
           </button>
-          <input ref={backgroundInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => selectImage(event.target.files?.[0], 'background')} />
-          <p className="soridraw-explore-profile-edit-help">가로형 이미지를 권장합니다. 저장할 때 1600×600 WEBP로 자동 최적화합니다.</p>
+          <input ref={backgroundInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => {
+            selectImage(event.target.files?.[0], 'background');
+            event.currentTarget.value = '';
+          }} />
+          <p className="soridraw-explore-profile-edit-help">선택 후 위치 이동과 확대/축소를 조정하고 1600×600 WEBP로 저장합니다.</p>
 
           <label className="soridraw-explore-profile-edit-label">프로필 사진</label>
           <button type="button" className="soridraw-explore-profile-avatar-picker" onClick={() => avatarInputRef.current?.click()} disabled={saving}>
             {avatarPreview ? <img src={avatarPreview} alt="" /> : <UserRound aria-hidden="true" />}
             <span className="soridraw-explore-profile-image-edit-badge"><Pencil aria-hidden="true" /></span>
           </button>
-          <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => selectImage(event.target.files?.[0], 'avatar')} />
-          <p className="soridraw-explore-profile-edit-help">정사각형으로 잘라 512×512 WEBP로 자동 최적화합니다.</p>
+          <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => {
+            selectImage(event.target.files?.[0], 'avatar');
+            event.currentTarget.value = '';
+          }} />
+          <p className="soridraw-explore-profile-edit-help">선택 후 위치 이동과 확대/축소를 조정하고 512×512 WEBP로 저장합니다.</p>
 
           <label className="soridraw-explore-profile-edit-label" htmlFor="soridraw-profile-nickname">닉네임</label>
           <input id="soridraw-profile-nickname" className="soridraw-explore-profile-edit-input" value={draft.nickname} maxLength={40} onChange={(event) => setDraft((prev) => ({ ...prev, nickname: event.target.value }))} />
@@ -172,13 +216,34 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
           </div>
           <p className="soridraw-explore-profile-edit-help">페이지를 구분하는 고유 이름입니다. 중복 확인은 저장할 때 한 번만 합니다.</p>
 
-          <label className="soridraw-explore-profile-edit-label">대표 장르 <span>{draft.genres.length}/5</span></label>
+          <div className="soridraw-explore-profile-genre-heading">
+            <label className="soridraw-explore-profile-edit-label">대표 장르 <span>{draft.genres.length}/5</span></label>
+            <button
+              type="button"
+              className="soridraw-explore-profile-genre-refresh"
+              onClick={() => void refreshGenres()}
+              disabled={genreRefreshing}
+              aria-label="최근 10곡에서 대표 장르 새로고침"
+              title="최근 10곡에서 대표 장르 새로고침"
+            >
+              {genreRefreshing ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}
+            </button>
+          </div>
           <div className="soridraw-explore-profile-genre-add">
             <input value={genreInput} maxLength={20} placeholder="장르 입력" onChange={(event) => setGenreInput(event.target.value)} onKeyDown={(event) => {
               if (event.key === 'Enter') { event.preventDefault(); addGenre(); }
             }} />
-            <button type="button" onClick={addGenre} disabled={!genreInput.trim() || draft.genres.length >= 5}><Plus aria-hidden="true" /> 추가</button>
+            <button
+              type="button"
+              className="soridraw-explore-profile-genre-plus"
+              onClick={addGenre}
+              disabled={!genreInput.trim() || draft.genres.length >= 5}
+              aria-label="장르 추가"
+              title="장르 추가"
+            ><Plus aria-hidden="true" /></button>
           </div>
+          <p className="soridraw-explore-profile-edit-help">직접 입력하거나 새로고침 버튼을 눌러 최근 10곡 기준으로 자동 추천합니다. 자동 조회는 버튼을 누를 때만 1회 실행됩니다.</p>
+          {genreNotice && <div className="soridraw-explore-profile-genre-notice" role="status">{genreNotice}</div>}
           {draft.genres.length > 0 && <div className="soridraw-explore-profile-genre-chips">
             {draft.genres.map((genre) => <button key={genre} type="button" onClick={() => setDraft((prev) => ({ ...prev, genres: prev.genres.filter((item) => item !== genre) }))}>{genre}<X aria-hidden="true" /></button>)}
           </div>}
@@ -206,6 +271,15 @@ export default function ExploreProfileEditModal({ user, profile, onClose, onSave
           </button>
         </footer>
       </section>
+
+      {cropEditor && (
+        <ExploreImageCropModal
+          file={cropEditor.file}
+          kind={cropEditor.kind}
+          onCancel={() => setCropEditor(null)}
+          onApply={(blob) => applyEditedImage(cropEditor.kind, blob)}
+        />
+      )}
     </div>
   );
 }

@@ -10,8 +10,8 @@ if marker in css:
 
 css += r'''
 
-/* SORIDRAW_MUSIC_NOTE_CARD_RHYTHM_968
- * Give genre/title the same breathing rhythm as title/actions without changing
+/* SORIDRAW_MUSIC_NOTE_CARD_RHYTHM_968 */
+/* Give genre/title the same breathing rhythm as title/actions without changing
  * the list structure. The row and thumbnail grow together so alignment stays stable. */
 :root body #root .soridraw-app-root
 .soridraw-musicnote-theme.soridraw-responsive-content-page

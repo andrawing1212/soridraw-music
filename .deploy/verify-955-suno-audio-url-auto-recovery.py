@@ -44,10 +44,12 @@ print('verify-955: PASS')
 
 # SORIDRAW 8-E-4: keep the existing prebuild chain stable without rewriting package.json.
 # 956-959 build the publication UI and final button visuals. 960 removes the expensive
-# favorites/users mutation path from Music Note personal Like/Lock and reuses the one
-# existing user_structures SPA listener with local-first + 1.2s batched persistence.
+# favorites/users mutation path from Music Note personal Like/Lock. 961 removes the
+# 1.2-second server debounce too: Like/Lock stay memory + localStorage only while the
+# page is open, and dirty changes sync once on Music Note exit/pagehide.
 runpy.run_path('.deploy/apply-956-explore-8e4-music-note-publication-ui.py', run_name='__main__')
 runpy.run_path('.deploy/apply-957-explore-8e4-interaction-button-visual-fix.py', run_name='__main__')
 runpy.run_path('.deploy/apply-958-explore-8e4-state-button-fill-live-like.py', run_name='__main__')
 runpy.run_path('.deploy/apply-959-explore-8e4-personal-like-fix.py', run_name='__main__')
 runpy.run_path('.deploy/run-960-music-note-lightweight-card-state.py', run_name='__main__')
+runpy.run_path('.deploy/apply-961-music-note-exit-only-card-state-sync.py', run_name='__main__')

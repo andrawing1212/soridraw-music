@@ -60,7 +60,7 @@ if 'apply-suno-recovery-readonly-972.cjs' not in functions_package:
 
 print('verify-955: PASS (local success cache + 24h negative cache + recoveryOnly contract)')
 
-# SORIDRAW 8-E-4 build chain.
+# SORIDRAW 8-E build chain.
 runpy.run_path('.deploy/apply-956-explore-8e4-music-note-publication-ui.py', run_name='__main__')
 runpy.run_path('.deploy/apply-957-explore-8e4-interaction-button-visual-fix.py', run_name='__main__')
 runpy.run_path('.deploy/apply-958-explore-8e4-state-button-fill-live-like.py', run_name='__main__')
@@ -78,3 +78,4 @@ runpy.run_path('.deploy/apply-969-music-note-genre-and-color-dot-cleanup.py', ru
 runpy.run_path('.deploy/apply-970-library-color-dot-menu-cleanup.py', run_name='__main__')
 runpy.run_path('.deploy/apply-971-library-color-palette-layer-fix.py', run_name='__main__')
 runpy.run_path('.deploy/apply-973-library-played-write-dedupe.py', run_name='__main__')
+runpy.run_path('.deploy/apply-974-explore-social-public-profile.py', run_name='__main__')

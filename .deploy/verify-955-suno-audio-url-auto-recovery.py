@@ -80,3 +80,4 @@ runpy.run_path('.deploy/apply-971-library-color-palette-layer-fix.py', run_name=
 runpy.run_path('.deploy/apply-973-library-played-write-dedupe.py', run_name='__main__')
 runpy.run_path('.deploy/apply-974-explore-social-public-profile.py', run_name='__main__')
 runpy.run_path('.deploy/apply-975-explore-public-profile-edit-ui.py', run_name='__main__')
+runpy.run_path('.deploy/apply-976-explore-profile-crop-genre-refresh.py', run_name='__main__')

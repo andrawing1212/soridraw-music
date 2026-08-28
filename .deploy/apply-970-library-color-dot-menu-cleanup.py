@@ -15,7 +15,7 @@ def replace_once(old: str, new: str, label: str) -> None:
         raise RuntimeError(f'apply-970: anchor not found: {label}')
     text = text.replace(old, new, 1)
 
-# Workspace top color filter: keep the click target, but remove the outer gray/ring button visual.
+# Workspace top color filter: keep the click target, remove outer ring/gray button visual.
 replace_once(
 '''                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
                       workspaceColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
@@ -47,44 +47,84 @@ replace_once(
     'playlist top color filter dots',
 )
 
-# Workspace track palette: one dark palette surface + colored dots only.
+# Workspace track palette: one dark Music Note-style palette surface.
 replace_once(
 '''                              <div data-floating-menu="true" className="absolute top-7 left-0 z-30 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-black/20" onClick={(e) => e.stopPropagation()}>''',
 '''                              <div data-floating-menu="true" className="absolute left-0 top-7 z-[260] flex items-center gap-2 rounded-xl bg-[#2a2a2a] p-2 shadow-xl" onClick={(e) => e.stopPropagation()}>''',
     'workspace palette surface',
 )
 replace_once(
-'''                                    className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
-                                    style={{ backgroundColor: c.color }}''',
-'''                                    className="flex h-6 w-6 items-center justify-center rounded-full !bg-transparent !shadow-none !ring-0 outline-none transition-transform hover:scale-110"
+'''                                  <button
+                                    key={c.value}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (multiSelectMode && selectedTrackCount > 0) {
+                                        handleBulkChangeColor(c.value);
+                                      } else {
+                                        handleChangeWorkspaceColor(group, idx, c.value);
+                                        setActiveColorMenu(null);
+                                      }
+                                    }}
+                                    className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                                    style={{ backgroundColor: c.color }}
+                                  />''',
+'''                                  <button
+                                    key={c.value}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (multiSelectMode && selectedTrackCount > 0) {
+                                        handleBulkChangeColor(c.value);
+                                      } else {
+                                        handleChangeWorkspaceColor(group, idx, c.value);
+                                        setActiveColorMenu(null);
+                                      }
+                                    }}
+                                    className="flex h-6 w-6 items-center justify-center rounded-full !bg-transparent !shadow-none !ring-0 outline-none transition-transform hover:scale-110"
                                   >
                                     <span className="block h-4 w-4 rounded-full" style={{ backgroundColor: c.color }} />
-                                  </button>
-                                  <button aria-hidden="true" className="hidden"''',
+                                  </button>''',
     'workspace palette dot button',
 )
-# Undo the temporary hidden button tail introduced only to preserve the existing closing tag shape.
-text = text.replace('''                                  <button aria-hidden="true" className="hidden">\n                                  </button>''', '', 1)
 
-# Playlist track palette: mirror the same Music Note-style palette.
+# Playlist track palette: same palette surface + colored dots only.
 replace_once(
 '''                            <div data-floating-menu="true" className="absolute top-6 left-0 z-10 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-black/20">''',
 '''                            <div data-floating-menu="true" className="absolute left-0 top-7 z-[260] flex items-center gap-2 rounded-xl bg-[#2a2a2a] p-2 shadow-xl" onClick={(e) => e.stopPropagation()}>''',
     'playlist palette surface',
 )
 replace_once(
-'''                                  className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
-                                  style={{ backgroundColor: c.color }}''',
-'''                                  className="flex h-6 w-6 items-center justify-center rounded-full !bg-transparent !shadow-none !ring-0 outline-none transition-transform hover:scale-110"
+'''                                <button
+                                  key={c.value}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (multiSelectMode && selectedTrackCount > 0) {
+                                      handleBulkChangeColor(c.value);
+                                    } else {
+                                      handleChangeColor(item, c.value);
+                                      setActiveColorMenu(null);
+                                    }
+                                  }}
+                                  className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                                  style={{ backgroundColor: c.color }}
+                                />''',
+'''                                <button
+                                  key={c.value}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (multiSelectMode && selectedTrackCount > 0) {
+                                      handleBulkChangeColor(c.value);
+                                    } else {
+                                      handleChangeColor(item, c.value);
+                                      setActiveColorMenu(null);
+                                    }
+                                  }}
+                                  className="flex h-6 w-6 items-center justify-center rounded-full !bg-transparent !shadow-none !ring-0 outline-none transition-transform hover:scale-110"
                                 >
                                   <span className="block h-4 w-4 rounded-full" style={{ backgroundColor: c.color }} />
-                                </button>
-                                <button aria-hidden="true" className="hidden"''',
+                                </button>''',
     'playlist palette dot button',
 )
-text = text.replace('''                                <button aria-hidden="true" className="hidden">\n                                </button>''', '', 1)
 
-# Keep a stable marker near the color options for build verification.
 anchor = "const COLOR_OPTIONS = [\n"
 if anchor not in text:
     raise RuntimeError('apply-970: COLOR_OPTIONS anchor missing')

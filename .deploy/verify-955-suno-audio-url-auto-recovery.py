@@ -77,3 +77,4 @@ runpy.run_path('.deploy/apply-968-music-note-card-rhythm.py', run_name='__main__
 runpy.run_path('.deploy/apply-969-music-note-genre-and-color-dot-cleanup.py', run_name='__main__')
 runpy.run_path('.deploy/apply-970-library-color-dot-menu-cleanup.py', run_name='__main__')
 runpy.run_path('.deploy/apply-971-library-color-palette-layer-fix.py', run_name='__main__')
+runpy.run_path('.deploy/apply-973-library-played-write-dedupe.py', run_name='__main__')

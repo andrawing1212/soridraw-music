@@ -2,7 +2,7 @@ from pathlib import Path
 
 path = Path('src/pages/FavoritesPage.tsx')
 text = path.read_text(encoding='utf-8')
-marker = '// SORIDRAW_MUSIC_NOTE_EXIT_ONLY_CARD_STATE_SYNC_961'
+marker = 'const SORIDRAW_MUSIC_NOTE_EXIT_ONLY_CARD_STATE_SYNC_961 = true;'
 
 if marker in text:
     print('apply-961: already applied')

@@ -2,6 +2,6 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "soridraw-explore-api",
   "main": "./placeholder.js",
-  "compatibility_date": "2026-08-29",
+  "compatibility_date": "2026-08-28",
   "keep_vars": true
 }

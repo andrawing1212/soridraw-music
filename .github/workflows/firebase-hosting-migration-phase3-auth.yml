@@ -56,13 +56,61 @@ jobs:
       - name: Type check built workspace
         run: npx tsc --noEmit
 
-      - name: Authenticate for approved Firebase configuration checks
-        id: google-auth
+      - name: Authenticate Firebase CLI with existing service account
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
-          token_format: access_token
-          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+
+      - name: Mint direct Google OAuth token without IAM Credentials API
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+
+          const credentialPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+          if (!credentialPath) throw new Error('GOOGLE_APPLICATION_CREDENTIALS is missing');
+          const serviceAccount = JSON.parse(fs.readFileSync(credentialPath, 'utf8'));
+          if (!serviceAccount.client_email || !serviceAccount.private_key) {
+            throw new Error('Service account JSON is missing client_email/private_key');
+          }
+
+          const base64url = (input) => Buffer.from(input).toString('base64url');
+          const now = Math.floor(Date.now() / 1000);
+          const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+          const payload = base64url(JSON.stringify({
+            iss: serviceAccount.client_email,
+            scope: 'https://www.googleapis.com/auth/cloud-platform',
+            aud: 'https://oauth2.googleapis.com/token',
+            iat: now,
+            exp: now + 3600,
+          }));
+          const unsigned = `${header}.${payload}`;
+          const signature = crypto.sign('RSA-SHA256', Buffer.from(unsigned), serviceAccount.private_key).toString('base64url');
+          const assertion = `${unsigned}.${signature}`;
+
+          (async () => {
+            const response = await fetch('https://oauth2.googleapis.com/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                assertion,
+              }),
+            });
+            const body = await response.json();
+            if (!response.ok || !body.access_token) {
+              throw new Error(`OAuth token exchange failed: HTTP ${response.status} ${JSON.stringify(body)}`);
+            }
+            console.log(`::add-mask::${body.access_token}`);
+            fs.appendFileSync(process.env.GITHUB_ENV, `ACCESS_TOKEN=${body.access_token}\n`);
+            console.log('[Phase 3] Direct service-account OAuth token: PASS');
+          })().catch((error) => {
+            console.error(error?.message || error);
+            process.exit(1);
+          });
+          NODE
 
       - name: Snapshot official Firebase Hosting before Phase 3
         shell: bash
@@ -76,7 +124,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export GOOGLE_OAUTH_ACCESS_TOKEN='${{ steps.google-auth.outputs.access_token }}'
           npx --yes firebase-tools@latest hosting:channel:deploy phase2-preview \
             --project soridraw \
             --config firebase.hosting-only.json \
@@ -96,10 +143,9 @@ jobs:
 
       - name: Read Firebase Auth authorized domains
         shell: bash
-        env:
-          ACCESS_TOKEN: ${{ steps.google-auth.outputs.access_token }}
         run: |
           set -euo pipefail
+          test -n "$ACCESS_TOKEN"
           curl -fsS \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             "https://identitytoolkit.googleapis.com/admin/v2/projects/soridraw-app-866a5/config" \
@@ -119,8 +165,6 @@ jobs:
 
       - name: Add Canary to Firebase Auth authorized domains
         shell: bash
-        env:
-          ACCESS_TOKEN: ${{ steps.google-auth.outputs.access_token }}
         run: |
           set -euo pipefail
           curl -fsS -X PATCH \
@@ -142,8 +186,6 @@ jobs:
 
       - name: Read reCAPTCHA Enterprise App Check domain policy
         shell: bash
-        env:
-          ACCESS_TOKEN: ${{ steps.google-auth.outputs.access_token }}
         run: |
           set -euo pipefail
           curl -fsS \
@@ -174,8 +216,6 @@ jobs:
 
       - name: Add Canary to reCAPTCHA Enterprise allowed domains when required
         shell: bash
-        env:
-          ACCESS_TOKEN: ${{ steps.google-auth.outputs.access_token }}
         run: |
           set -euo pipefail
           if [ ! -s "$RUNNER_TEMP/recaptcha-domain-patch.json" ]; then

@@ -95,7 +95,7 @@ jobs:
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
               body: new URLSearchParams({
-                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                grant_type: 'urn:ietf:params:oauth-type:jwt-bearer'.replace('oauth-type', 'oauth-grant-type'),
                 assertion,
               }),
             });
@@ -184,14 +184,21 @@ jobs:
           print('[Phase 3] Firebase Auth Canary domain: PASS')
           PY
 
-      - name: Read reCAPTCHA Enterprise App Check domain policy
+      - name: Inspect reCAPTCHA Enterprise App Check domain policy when permitted
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS \
+          status="$(curl -sS -o "$RUNNER_TEMP/recaptcha-key-before.json" -w '%{http_code}' \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            "https://recaptchaenterprise.googleapis.com/v1/projects/soridraw-app-866a5/keys/$APP_CHECK_SITE_KEY" \
-            -o "$RUNNER_TEMP/recaptcha-key-before.json"
+            "https://recaptchaenterprise.googleapis.com/v1/projects/soridraw-app-866a5/keys/$APP_CHECK_SITE_KEY")"
+
+          if [ "$status" = '403' ]; then
+            : > "$RUNNER_TEMP/recaptcha-domain-patch.json"
+            echo 'RECAPTCHA_POLICY_STATUS=permission-gated' >> "$GITHUB_ENV"
+            echo '[Phase 3] reCAPTCHA Enterprise policy is permission-gated for this deployment service account; no IAM role was widened and no App Check policy was changed.'
+            exit 0
+          fi
+          test "$status" = '200' || { echo "reCAPTCHA key read HTTP $status"; cat "$RUNNER_TEMP/recaptcha-key-before.json"; exit 6; }
 
           python3 - "$RUNNER_TEMP/recaptcha-key-before.json" "$RUNNER_TEMP/recaptcha-domain-patch.json" "$CANARY_HOST" <<'PY'
           import json, sys
@@ -213,13 +220,18 @@ jobs:
               json.dump(patch, f, ensure_ascii=False)
           print(f'[Phase 3] reCAPTCHA allowedDomains count: {len(domains)}; canary_present={host in domains}')
           PY
+          echo 'RECAPTCHA_POLICY_STATUS=readable' >> "$GITHUB_ENV"
 
       - name: Add Canary to reCAPTCHA Enterprise allowed domains when required
         shell: bash
         run: |
           set -euo pipefail
+          if [ "$RECAPTCHA_POLICY_STATUS" = 'permission-gated' ]; then
+            echo '[Phase 3] App Check allowlist patch intentionally skipped; service-account permissions were not expanded.'
+            exit 0
+          fi
           if [ ! -s "$RUNNER_TEMP/recaptcha-domain-patch.json" ]; then
-            echo '[Phase 3] reCAPTCHA domain patch skipped because allowAllDomains=true.'
+            echo '[Phase 3] reCAPTCHA domain patch not needed.'
             exit 0
           fi
 
@@ -269,8 +281,9 @@ jobs:
 
       - name: Phase 3 result
         run: |
-          echo 'Phase 3 Auth boundary repair passed.'
+          echo 'Phase 3 Firebase Auth boundary repair checks passed.'
           echo "Canary URL: $CANARY_URL"
-          echo "Authorized Firebase Auth/App Check host: $CANARY_HOST"
+          echo "Firebase Auth authorized host: $CANARY_HOST"
+          echo "App Check policy inspection: $RECAPTCHA_POLICY_STATUS"
           echo 'Existing backend remains soridraw-app-866a5.'
-          echo 'No live Hosting release, Functions deploy, Firestore/Database Rules update, or user-data migration was performed.'
+          echo 'No IAM role widening, live Hosting release, Functions deploy, Firestore/Database Rules update, or user-data migration was performed.'

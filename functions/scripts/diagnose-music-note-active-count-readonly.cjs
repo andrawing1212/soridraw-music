@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 
 const PROJECT_ID = 'soridraw-app-866a5';
 if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
@@ -30,28 +31,29 @@ const isSoftRemoved = (row) => Boolean(
   row?.unsavedAt
 );
 
-const getIdentity = (entry) => String(
-  entry?.data?.favoriteKey ||
-  entry?.data?.soridrawSongId ||
-  entry?.data?.sourceSongId ||
-  entry?.data?.originalId ||
-  entry?.data?.id ||
-  entry?.id || ''
-).trim();
+const normalize = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const signature = (entry) => {
+  const row = entry.data || {};
+  const title = normalize(row.title || row.koreanTitle || row.englishTitle || '');
+  const createdMs = Number(row.createdAtMs || 0) || toMs(row.createdAt);
+  const prompt = normalize(row.prompt || row.stylePrompt || row.musicPrompt || '');
+  const lyricsKo = normalize(row?.lyrics?.korean || row.koreanLyrics || '');
+  const raw = `${createdMs}|${title}|${prompt}|${lyricsKo}`;
+  return crypto.createHash('sha256').update(raw).digest('hex');
+};
 
 const summarizePages = (docs, maxPages = 20) => {
   const pages = [];
   for (let i = 0; i < docs.length && pages.length < maxPages; i += 20) {
     const slice = docs.slice(i, i + 20);
     const activeRows = slice.filter((entry) => !isSoftRemoved(entry.data));
-    const removedRows = slice.length - activeRows.length;
     const firstMs = toMs(slice[0]?.data?.createdAtMs || slice[0]?.data?.createdAt);
     const lastMs = toMs(slice[slice.length - 1]?.data?.createdAtMs || slice[slice.length - 1]?.data?.createdAt);
     pages.push({
       page: pages.length + 1,
       rawDocs: slice.length,
       activeVisible: activeRows.length,
-      removedHidden: removedRows,
+      removedHidden: slice.length - activeRows.length,
       firstMonth: firstMs ? new Date(firstMs).toISOString().slice(0, 7) : null,
       lastMonth: lastMs ? new Date(lastMs).toISOString().slice(0, 7) : null,
     });
@@ -73,22 +75,45 @@ const summarizePages = (docs, maxPages = 20) => {
   }
   if (!targetUid) throw new Error('No target account found');
 
-  const createdAtSnap = await db.collection('favorites')
+  const snap = await db.collection('favorites')
     .where('uid', '==', targetUid)
     .orderBy('createdAt', 'desc')
     .get();
-  const createdAtDocs = createdAtSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() || {} }));
+  const docs = snap.docs.map((doc) => ({ id: doc.id, data: doc.data() || {} }));
+  const active = docs.filter((entry) => !isSoftRemoved(entry.data));
+  const removed = docs.filter((entry) => isSoftRemoved(entry.data));
 
-  const active = createdAtDocs.filter((entry) => !isSoftRemoved(entry.data));
-  const removed = createdAtDocs.filter((entry) => isSoftRemoved(entry.data));
-  const activeIdentityKeys = active.map(getIdentity).filter(Boolean);
-  const uniqueActiveIdentityCount = new Set(activeIdentityKeys).size;
-  const activeDuplicateIdentityDocs = activeIdentityKeys.length - uniqueActiveIdentityCount;
-
-  const createdAtTypeCounts = {};
-  for (const entry of createdAtDocs) {
+  const typeBreakdown = {};
+  for (const entry of docs) {
     const type = createdAtType(entry.data?.createdAt);
-    createdAtTypeCounts[type] = (createdAtTypeCounts[type] || 0) + 1;
+    const bucket = typeBreakdown[type] || { raw: 0, active: 0, removed: 0 };
+    bucket.raw += 1;
+    if (isSoftRemoved(entry.data)) bucket.removed += 1;
+    else bucket.active += 1;
+    typeBreakdown[type] = bucket;
+  }
+
+  const objectActive = active.filter((entry) => createdAtType(entry.data?.createdAt) === 'object');
+  const timestampActive = active.filter((entry) => createdAtType(entry.data?.createdAt) === 'timestamp');
+  const objectSignatures = new Set(objectActive.map(signature));
+  const timestampSignatures = timestampActive.map(signature);
+  const timestampExactSignatureMatchesObject = timestampSignatures.filter((sig) => objectSignatures.has(sig)).length;
+
+  const objectCreatedAtMs = new Set(objectActive.map((entry) => Number(entry.data?.createdAtMs || 0)).filter((v) => v > 0));
+  const timestampCreatedAtMsMatchesObject = timestampActive.filter((entry) => objectCreatedAtMs.has(Number(entry.data?.createdAtMs || 0))).length;
+
+  const signatureCounts = new Map();
+  for (const entry of active) {
+    const sig = signature(entry);
+    signatureCounts.set(sig, (signatureCounts.get(sig) || 0) + 1);
+  }
+  let duplicateSignatureGroups = 0;
+  let duplicateSignatureExtraDocs = 0;
+  for (const count of signatureCounts.values()) {
+    if (count > 1) {
+      duplicateSignatureGroups += 1;
+      duplicateSignatureExtraDocs += count - 1;
+    }
   }
 
   let createdAtMsQuery = { querySucceeded: false, indexRequired: false, errorCode: null };
@@ -124,38 +149,32 @@ const summarizePages = (docs, maxPages = 20) => {
     };
   }
 
-  const monthCounts = {};
-  for (const entry of createdAtDocs) {
-    const ms = toMs(entry.data?.createdAtMs || entry.data?.createdAt);
-    const month = ms ? new Date(ms).toISOString().slice(0, 7) : 'unknown';
-    const bucket = monthCounts[month] || { raw: 0, active: 0, removed: 0 };
-    bucket.raw += 1;
-    if (isSoftRemoved(entry.data)) bucket.removed += 1;
-    else bucket.active += 1;
-    monthCounts[month] = bucket;
-  }
-
   console.log(JSON.stringify({
     mode: 'READ_ONLY_MUSIC_NOTE_ACTIVE_COUNT_DIAGNOSTIC',
     projectId: PROJECT_ID,
     targetSelection: 'largest_profile_favoriteCount_no_uid_output',
     profileFavoriteCount: targetFavoriteCount,
-    rawFavoriteDocs: createdAtDocs.length,
+    rawFavoriteDocs: docs.length,
     activeFavoriteDocs: active.length,
     softRemovedDocs: removed.length,
-    uniqueActiveIdentityCount,
-    activeDuplicateIdentityDocs,
     activeMinusProfileCount: active.length - targetFavoriteCount,
-    uniqueActiveMinusProfileCount: uniqueActiveIdentityCount - targetFavoriteCount,
-    createdAtTypeCounts,
-    createdAtOrderingPages: summarizePages(createdAtDocs, 20),
+    createdAtTypeBreakdown: typeBreakdown,
+    timestampVsObjectComparison: {
+      objectActive: objectActive.length,
+      timestampActive: timestampActive.length,
+      timestampExactSignatureMatchesObject,
+      timestampCreatedAtMsMatchesObject,
+      duplicateSignatureGroups,
+      duplicateSignatureExtraDocs,
+    },
+    createdAtOrderingPages: summarizePages(docs, 20),
     createdAtMsQuery,
-    monthCounts,
     safety: {
       readsOnly: true,
       firestoreWrites: 0,
       firestoreDeletes: 0,
       deployments: 0,
+      contentValuesLogged: false,
     },
   }, null, 2));
 })().catch((error) => {

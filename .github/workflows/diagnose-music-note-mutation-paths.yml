@@ -1,0 +1,35 @@
+name: Diagnose Music Note Mutation Paths
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/diagnose-music-note-mutation-paths.py'
+      - '.github/workflows/diagnose-music-note-mutation-paths.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install app dependencies
+        run: npm install --no-audit --no-fund
+      - name: Generate final source
+        run: npm run prebuild
+      - name: Scan Music Note mutation paths
+        run: python3 .deploy/diagnose-music-note-mutation-paths.py
+      - name: Safety confirmation
+        run: echo 'Source scan only; no Firebase reads, writes, deletes, or deployments.'

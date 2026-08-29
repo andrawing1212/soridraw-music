@@ -35,3 +35,10 @@
 - 데이터 안전: favorites/suno_tracks 원본 문서 쓰기·삭제·백필 없음. Functions/Rules/Hosting/Auth 변경 없음.
 - 검증: 정적 assertions PASS, TypeScript PASS, Vite build PASS.
 - 다음: 임시 workflow 제거 후 diff 감사 → `preview` 반영 및 Firebase Preview 배포 → Music Note 493개/Library 더보기 실사용 확인.
+
+## 2026-08-30 — Stage 3 Preview 반영 전 최종 diff 감사
+- 브랜치: `preview-stage3-pagination`
+- 작업: 임시 진단/수정 GitHub Actions 4개 삭제 후 `preview` 기준 net diff 재확인.
+- 최종 net diff: `src/App.tsx`, `src/pages/FavoritesPage.tsx`, `src/pages/SunoLibraryPage.tsx`, `DOCS/WORKFLOW_GUARDRAILS.md`, `DOCS/WORK_LOG.md` 5개만 남음.
+- 결과: 임시 workflow/진단 파일 0개, Functions/Rules/Firestore/Auth/Hosting 설정 파일 변경 0개.
+- 다음: 검증된 branch HEAD를 `preview`에 fast-forward하고 Firebase Preview 배포·smoke·production 불변 확인.

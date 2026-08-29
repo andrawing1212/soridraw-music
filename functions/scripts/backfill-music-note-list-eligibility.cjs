@@ -47,7 +47,7 @@ const isSharedNote = (row = {}) => Boolean(
 );
 
 // Keep this classifier identical to the read-only diagnostic that established
-// the 493 My Note / 13 Shared Note baseline.
+// the accepted My Note / Shared Note baseline.
 const isMyNoteVisible = (row = {}) => !isUiHidden(row) && !isSharedNote(row);
 
 const HISTORY_KEYS = new Set([
@@ -156,7 +156,7 @@ const commitPatches = async (patches) => {
 
   const bundleItems = latest20.map((entry) => cleanValue({
     ...entry.normalizedData,
-    id: entry.id,
+    id: entry.normalizedData?.id || entry.id,
     firestoreId: entry.id,
   })).filter(Boolean);
   const lastBundleItem = latest20[latest20.length - 1] || null;

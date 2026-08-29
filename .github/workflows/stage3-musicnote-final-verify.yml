@@ -1,0 +1,53 @@
+name: Stage3 MusicNote Final Verify
+
+on:
+  push:
+    branches:
+      - preview-stage3-final
+    paths:
+      - .deploy/stage3_musicnote_final.py
+      - .github/workflows/stage3-musicnote-final-verify.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: preview-stage3-final
+          fetch-depth: 0
+      - name: Apply source patch
+        run: python3 .deploy/stage3_musicnote_final.py
+      - name: Cost guard
+        run: |
+          grep -Fq 'limit(FAVORITES_PAGE_SIZE + 1)' src/App.tsx
+          grep -Fq 'orderBy(documentId())' src/App.tsx
+          grep -Fq 'favoriteTotalCount' src/App.tsx
+          grep -Fq 'musicNoteRemainingCount' src/pages/FavoritesPage.tsx
+          if grep -Fq 'MUSIC_NOTE_COMPATIBILITY_SCAN_LIMIT' src/App.tsx; then exit 1; fi
+          if grep -Fq 'limit(2000)' src/App.tsx; then exit 1; fi
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Commit verified source
+        run: |
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git add src/App.tsx src/pages/FavoritesPage.tsx
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'fix(stage3): make Music Note server paging authoritative'
+          git push origin HEAD:preview-stage3-final

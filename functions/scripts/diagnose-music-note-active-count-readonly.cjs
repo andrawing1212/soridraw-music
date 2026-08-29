@@ -123,6 +123,9 @@ const simulate985VisibleAdds = (docs, maxPages = 12) => {
   const active = normalizedDocs.filter((entry) => !isSoftRemoved(entry.data));
   const uiVisible = normalizedDocs.filter((entry) => !isUiHidden(entry.data));
   const removed = normalizedDocs.filter((entry) => isSoftRemoved(entry.data));
+  const mixedUiVisible = mixedDocs.filter((entry) => !isUiHidden(entry.data));
+  const timestampDocs = mixedDocs.filter((entry) => createdAtType(entry.data?.createdAt) === 'timestamp');
+  const timestampVisible = timestampDocs.filter((entry) => !isUiHidden(entry.data));
 
   const hiddenFlags = {
     hiddenTrue: normalizedDocs.filter((entry) => entry.data?.hidden === true).length,
@@ -130,6 +133,20 @@ const simulate985VisibleAdds = (docs, maxPages = 12) => {
     deletedAtPresent: normalizedDocs.filter((entry) => Boolean(entry.data?.deletedAt)).length,
     trashedAtPresent: normalizedDocs.filter((entry) => Boolean(entry.data?.trashedAt)).length,
     softRemoved: removed.length,
+  };
+
+  const timestampGroup = {
+    raw: timestampDocs.length,
+    softActive: timestampDocs.filter((entry) => !isSoftRemoved(entry.data)).length,
+    uiVisible: timestampVisible.length,
+    createdAtMsPresent: timestampDocs.filter((entry) => Number(entry.data?.createdAtMs || 0) > 0).length,
+    hiddenTrue: timestampDocs.filter((entry) => entry.data?.hidden === true).length,
+    favoriteHiddenTrue: timestampDocs.filter((entry) => entry.data?.favoriteHidden === true).length,
+    deletedAtPresent: timestampDocs.filter((entry) => Boolean(entry.data?.deletedAt)).length,
+    trashedAtPresent: timestampDocs.filter((entry) => Boolean(entry.data?.trashedAt)).length,
+    savedFalse: timestampDocs.filter((entry) => entry.data?.saved === false).length,
+    favoriteRemovedTrue: timestampDocs.filter((entry) => entry.data?.favoriteRemoved === true).length,
+    hasSoridrawSongId: timestampDocs.filter((entry) => Boolean(String(entry.data?.soridrawSongId || '').trim())).length,
   };
 
   const typeBreakdown = {};
@@ -143,13 +160,12 @@ const simulate985VisibleAdds = (docs, maxPages = 12) => {
   }
 
   const objectActive = active.filter((entry) => createdAtType(entry.data?.createdAt) === 'object');
-  const timestampActive = active.filter((entry) => createdAtType(entry.data?.createdAt) === 'timestamp');
   const objectSignatures = new Set(objectActive.map(signature));
-  const timestampSignatures = timestampActive.map(signature);
+  const timestampSignatures = timestampDocs.filter((entry) => !isSoftRemoved(entry.data)).map(signature);
   const timestampExactSignatureMatchesObject = timestampSignatures.filter((sig) => objectSignatures.has(sig)).length;
 
   const signatureCounts = new Map();
-  for (const entry of uiVisible) {
+  for (const entry of mixedUiVisible) {
     const sig = signature(entry);
     signatureCounts.set(sig, (signatureCounts.get(sig) || 0) + 1);
   }
@@ -167,16 +183,18 @@ const simulate985VisibleAdds = (docs, maxPages = 12) => {
     projectId: PROJECT_ID,
     targetSelection: 'largest_profile_favoriteCount_no_uid_output',
     profileFavoriteCount: targetFavoriteCount,
-    rawFavoriteDocs: normalizedDocs.length,
-    softActiveFavoriteDocs: active.length,
-    uiVisibleFavoriteDocs: uiVisible.length,
-    softRemovedDocs: removed.length,
-    uiVisibleMinusProfileCount: uiVisible.length - targetFavoriteCount,
+    mixedRawFavoriteDocs: mixedDocs.length,
+    mixedUiVisibleFavoriteDocs: mixedUiVisible.length,
+    normalizedRawFavoriteDocs: normalizedDocs.length,
+    normalizedSoftActiveFavoriteDocs: active.length,
+    normalizedUiVisibleFavoriteDocs: uiVisible.length,
+    normalizedSoftRemovedDocs: removed.length,
+    timestampGroup,
     hiddenFlags,
     createdAtTypeBreakdown: typeBreakdown,
     timestampVsObjectComparison: {
       objectActive: objectActive.length,
-      timestampActive: timestampActive.length,
+      timestampActive: timestampDocs.filter((entry) => !isSoftRemoved(entry.data)).length,
       timestampExactSignatureMatchesObject,
       duplicateVisibleSignatureGroups: duplicateSignatureGroups,
       duplicateVisibleSignatureExtraDocs: duplicateSignatureExtraDocs,

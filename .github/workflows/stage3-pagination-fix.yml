@@ -1,0 +1,225 @@
+name: Stage3 Pagination Fix
+
+on:
+  push:
+    branches: [preview-stage3-pagination]
+    paths:
+      - '.github/workflows/stage3-pagination-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout stage3 branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview-stage3-pagination
+          fetch-depth: 0
+
+      - name: Apply minimal pagination fixes to frozen source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, got {count}')
+              return text.replace(old, new, 1)
+
+          # ---------- Suno Library ----------
+          path = Path('src/pages/SunoLibraryPage.tsx')
+          text = path.read_text(encoding='utf-8')
+          text = replace_once(
+              text,
+              "const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE;",
+              "const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE + 1;\nconst LIBRARY_COMPATIBILITY_SCAN_LIMIT = 2000;",
+              'library fetch size',
+          )
+
+          anchor = """const getLibraryWorkspaceTrackCreatedAtMs = (track: any): number => {\n  const value = track?.createdAt;\n  if (!value) return 0;\n  if (typeof value?.toMillis === 'function') return value.toMillis();\n  if (typeof value?.seconds === 'number') return value.seconds * 1000;\n  const parsed = new Date(value).getTime();\n  return Number.isFinite(parsed) ? parsed : 0;\n};\n"""
+          helpers = anchor + """\ntype LibraryWorkspacePageMeta = {\n  lastDoc: Date | null;\n  hasMore: boolean;\n  paginationFallback: boolean;\n};\n\nconst getLibraryWorkspacePageMetaStorageKey = (uid: string) => `soridraw_suno_tracks_page_meta_v1_${uid}`;\n\nconst getLibraryWorkspaceCursorCreatedAtMs = (cursor: any): number => {\n  if (!cursor) return 0;\n  if (cursor instanceof Date) return cursor.getTime();\n  if (typeof cursor?.toMillis === 'function') return cursor.toMillis();\n  const data = typeof cursor?.data === 'function' ? cursor.data() : null;\n  if (data) return getLibraryWorkspaceTrackCreatedAtMs(data);\n  return getLibraryWorkspaceTrackCreatedAtMs({ createdAt: cursor });\n};\n\nconst readLibraryWorkspacePageMeta = (uid: string): LibraryWorkspacePageMeta | null => {\n  if (!uid || typeof localStorage === 'undefined') return null;\n  try {\n    const raw = localStorage.getItem(getLibraryWorkspacePageMetaStorageKey(uid));\n    if (!raw) return null;\n    const parsed = JSON.parse(raw);\n    const cursorCreatedAtMs = Number(parsed?.cursorCreatedAtMs || 0);\n    return {\n      lastDoc: Number.isFinite(cursorCreatedAtMs) && cursorCreatedAtMs > 0 ? new Date(cursorCreatedAtMs) : null,\n      hasMore: parsed?.hasMore === true,\n      paginationFallback: parsed?.paginationFallback === true,\n    };\n  } catch {\n    return null;\n  }\n};\n\nconst saveLibraryWorkspacePageMeta = (\n  uid: string,\n  lastDoc: any | null,\n  hasMore: boolean,\n  paginationFallback: boolean,\n) => {\n  if (!uid || typeof localStorage === 'undefined') return;\n  try {\n    localStorage.setItem(getLibraryWorkspacePageMetaStorageKey(uid), JSON.stringify({\n      cursorCreatedAtMs: getLibraryWorkspaceCursorCreatedAtMs(lastDoc),\n      hasMore: hasMore === true,\n      paginationFallback: paginationFallback === true,\n    }));\n  } catch {}\n};\n"""
+          text = replace_once(text, anchor, helpers, 'library page meta helpers')
+
+          text = replace_once(
+              text,
+              """const emitLibraryWorkspaceSession = (session: LibraryWorkspaceSession) => {\n  const snapshot = snapshotLibraryWorkspaceSession(session);\n""",
+              """const emitLibraryWorkspaceSession = (session: LibraryWorkspaceSession) => {\n  saveLibraryWorkspacePageMeta(session.uid, session.lastDoc, session.hasMore, session.paginationFallback);\n  const snapshot = snapshotLibraryWorkspaceSession(session);\n""",
+              'library emit meta persistence',
+          )
+
+          text = replace_once(
+              text,
+              """  const cachedTracks = readLibraryWorkspaceTrackCache(uid);\n  const session: LibraryWorkspaceSession = {\n    uid,\n    tracks: cachedTracks,\n    lastDoc: null,\n    hasMore: false,\n    paginationFallback: false,\n""",
+              """  const cachedTracks = readLibraryWorkspaceTrackCache(uid);\n  const cachedPageMeta = readLibraryWorkspacePageMeta(uid);\n  const session: LibraryWorkspaceSession = {\n    uid,\n    tracks: cachedTracks,\n    lastDoc: cachedPageMeta?.lastDoc || null,\n    hasMore: cachedPageMeta?.hasMore === true,\n    paginationFallback: cachedPageMeta?.paginationFallback === true,\n""",
+              'library session meta restore',
+          )
+
+          count = text.count("const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;")
+          if count != 3:
+              raise SystemExit(f'library precise hasMore: expected 3 matches, got {count}')
+          text = text.replace(
+              "const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;",
+              "const hasMore = docs.length > WORKSPACE_SERVER_PAGE_SIZE;",
+          )
+
+          text = replace_once(
+              text,
+              """    return cachedTracks.length === 0 || localVersion <= 0 || remoteVersion > localVersion;\n""",
+              """    return cachedTracks.length === 0 || !cachedPageMeta || localVersion <= 0 || remoteVersion > localVersion;\n""",
+              'library missing page meta verification',
+          )
+
+          text = replace_once(
+              text,
+              """  libraryWorkspaceSession.lastDoc = lastDoc;\n  libraryWorkspaceSession.hasMore = hasMore;\n  libraryWorkspaceSession.ready = true;\n};\n""",
+              """  libraryWorkspaceSession.lastDoc = lastDoc;\n  libraryWorkspaceSession.hasMore = hasMore;\n  libraryWorkspaceSession.ready = true;\n  saveLibraryWorkspacePageMeta(uid, lastDoc, hasMore, libraryWorkspaceSession.paginationFallback);\n};\n""",
+              'library merged page meta persistence',
+          )
+
+          old_library_load_more = """  const loadMoreWorkspaceTracks = async () => {\n    if (!user || isSharedView || workspacePaginationFallbackRef.current) {\n      setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));\n      return;\n    }\n\n    if (workspaceVisibleCount < filteredTracks.length) {\n      setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));\n      return;\n    }\n\n    if (!hasMoreWorkspaceServerTracks || !workspaceLastTrackDocRef.current || isLoadingMoreWorkspaceTracks) return;\n\n    setIsLoadingMoreWorkspaceTracks(true);\n    try {\n      const tracksRef = collection(db, 'suno_tracks', user.uid, 'tracks');\n      const nextQuery = query(\n        tracksRef,\n        orderBy('createdAt', 'desc'),\n        startAfter(workspaceLastTrackDocRef.current),\n        limit(WORKSPACE_SERVER_FETCH_SIZE)\n      );\n      const snapshot = await getDocs(nextQuery);\n      const docs = snapshot.docs;\n      const hasMore = docs.length > WORKSPACE_SERVER_PAGE_SIZE;\n      const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);\n      workspaceLastTrackDocRef.current = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : workspaceLastTrackDocRef.current;\n      setHasMoreWorkspaceServerTracks(hasMore);\n\n      const list = visibleDocs.map(doc => ({\n        id: doc.id,\n        ...doc.data()\n      }));\n\n      mergeLibraryWorkspaceSessionPage(user.uid, list, workspaceLastTrackDocRef.current, hasMore);\n      setTracks((prev) => {\n        const merged = mergeWorkspaceTracks(list, Array.isArray(prev) ? prev : []);\n        saveWorkspaceTrackCache(user.uid, merged);\n        return merged;\n      });\n      setWorkspaceVisibleCount((prev) => prev + WORKSPACE_PAGE_SIZE);\n    } catch (error) {\n      console.error('load more workspace tracks failed:', error);\n      workspacePaginationFallbackRef.current = true;\n      setHasMoreWorkspaceServerTracks(false);\n    } finally {\n      setIsLoadingMoreWorkspaceTracks(false);\n    }\n  };\n"""
+          new_library_load_more = """  const loadMoreWorkspaceTracks = async () => {\n    if (!user || isSharedView || workspacePaginationFallbackRef.current) {\n      setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));\n      return;\n    }\n\n    if (workspaceVisibleCount < filteredTracks.length) {\n      setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));\n      return;\n    }\n\n    if (!hasMoreWorkspaceServerTracks || !workspaceLastTrackDocRef.current || isLoadingMoreWorkspaceTracks) return;\n\n    setIsLoadingMoreWorkspaceTracks(true);\n    try {\n      const tracksRef = collection(db, 'suno_tracks', user.uid, 'tracks');\n      const nextQuery = query(\n        tracksRef,\n        orderBy('createdAt', 'desc'),\n        startAfter(workspaceLastTrackDocRef.current),\n        limit(WORKSPACE_SERVER_FETCH_SIZE)\n      );\n      const snapshot = await getDocs(nextQuery);\n      const docs = snapshot.docs;\n      const hasMore = docs.length > WORKSPACE_SERVER_PAGE_SIZE;\n      const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);\n      workspaceLastTrackDocRef.current = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : workspaceLastTrackDocRef.current;\n\n      const list = visibleDocs.map(doc => ({\n        id: doc.id,\n        ...doc.data()\n      }));\n\n      mergeLibraryWorkspaceSessionPage(user.uid, list, workspaceLastTrackDocRef.current, hasMore);\n      setTracks((prev) => {\n        const merged = mergeWorkspaceTracks(list, Array.isArray(prev) ? prev : []);\n        saveWorkspaceTrackCache(user.uid, merged);\n        return merged;\n      });\n\n      if (hasMore) {\n        setHasMoreWorkspaceServerTracks(true);\n      } else {\n        try {\n          // Compatibility tail read only after the ordered pagination is exhausted.\n          // This recovers legacy tracks that do not have createdAt without changing server data.\n          const compatibilitySnapshot = await getDocs(query(tracksRef, limit(LIBRARY_COMPATIBILITY_SCAN_LIMIT)));\n          const compatibilityList = compatibilitySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));\n          workspaceLastTrackDocRef.current = null;\n          workspacePaginationFallbackRef.current = false;\n          setHasMoreWorkspaceServerTracks(false);\n          mergeLibraryWorkspaceSessionPage(user.uid, compatibilityList, null, false);\n          setTracks((prev) => {\n            const merged = mergeWorkspaceTracks(compatibilityList, Array.isArray(prev) ? prev : []);\n            saveWorkspaceTrackCache(user.uid, merged);\n            return merged;\n          });\n          markCacheDiagnostic('library', 'SYNC', Math.max(1, compatibilitySnapshot.docs.length));\n        } catch (compatibilityError) {\n          console.warn('Library legacy compatibility tail read failed; keeping retry available.', compatibilityError);\n          setHasMoreWorkspaceServerTracks(true);\n          saveLibraryWorkspacePageMeta(user.uid, workspaceLastTrackDocRef.current, true, false);\n        }\n      }\n      setWorkspaceVisibleCount((prev) => prev + WORKSPACE_PAGE_SIZE);\n    } catch (error) {\n      console.error('load more workspace tracks failed:', error);\n      workspacePaginationFallbackRef.current = true;\n      setHasMoreWorkspaceServerTracks(false);\n      saveLibraryWorkspacePageMeta(user.uid, workspaceLastTrackDocRef.current, false, true);\n    } finally {\n      setIsLoadingMoreWorkspaceTracks(false);\n    }\n  };\n"""
+          text = replace_once(text, old_library_load_more, new_library_load_more, 'library load more compatibility')
+          path.write_text(text, encoding='utf-8')
+
+          # ---------- Music Note UI ----------
+          path = Path('src/pages/FavoritesPage.tsx')
+          text = path.read_text(encoding='utf-8')
+          text = replace_once(
+              text,
+              """    hasMoreFavorites &&\n    filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE\n""",
+              """    hasMoreFavorites\n""",
+              'music note server more predicate',
+          )
+          text = replace_once(
+              text,
+              """                    ? `더보기 (${filteredFavorites.length - visibleCount}개 남음)`\n""",
+              """                    ? `더보기 (${Math.min(MUSIC_NOTE_VISIBLE_BATCH_SIZE, Math.max(0, filteredFavorites.length - visibleCount))}개 더 보기)`\n""",
+              'music note cached more label',
+          )
+          path.write_text(text, encoding='utf-8')
+
+          # ---------- Music Note server owner ----------
+          path = Path('src/App.tsx')
+          text = path.read_text(encoding='utf-8')
+          text = replace_once(
+              text,
+              """  const FAVORITES_PAGE_SIZE = 20;\n  const favoritePaginationCursorRef = useRef<any>(null);\n""",
+              """  const FAVORITES_PAGE_SIZE = 20;\n  const FAVORITES_SERVER_FETCH_SIZE = FAVORITES_PAGE_SIZE + 1;\n  const MUSIC_NOTE_COMPATIBILITY_SCAN_LIMIT = 2000;\n  const MUSIC_NOTE_PAGINATION_COMPLETE_STORAGE_BASE = 'soridraw_music_note_pagination_complete_v1';\n  const favoritePaginationCursorRef = useRef<any>(null);\n""",
+              'music note pagination constants',
+          )
+
+          cursor_anchor = """const clearMusicNotePaginationCursor = (uid: string) => {\n  if (!uid || typeof localStorage === 'undefined') return;\n  try {\n    localStorage.removeItem(getMusicNoteScopedStorageKey(MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE, uid));\n  } catch {}\n};\n"""
+          cursor_helpers = cursor_anchor + """\nconst readMusicNotePaginationComplete = (uid: string): boolean => {\n  if (!uid || typeof localStorage === 'undefined') return false;\n  try {\n    return localStorage.getItem(getMusicNoteScopedStorageKey(MUSIC_NOTE_PAGINATION_COMPLETE_STORAGE_BASE, uid)) === '1';\n  } catch {\n    return false;\n  }\n};\n\nconst writeMusicNotePaginationComplete = (uid: string, complete: boolean) => {\n  if (!uid || typeof localStorage === 'undefined') return;\n  try {\n    const key = getMusicNoteScopedStorageKey(MUSIC_NOTE_PAGINATION_COMPLETE_STORAGE_BASE, uid);\n    if (complete) localStorage.setItem(key, '1');\n    else localStorage.removeItem(key);\n  } catch {}\n};\n"""
+          text = replace_once(text, cursor_anchor, cursor_helpers, 'music note completion marker helpers')
+
+          text = replace_once(
+              text,
+              """  const writeFavoritesCache = (uid: string, list: any[]) => {\n""",
+              """  const writeFavoritesCache = (uid: string, list: any[], options: { skipBundleWrite?: boolean } = {}) => {\n""",
+              'music note local-only cache option',
+          )
+          cache_sig_index = text.index("const writeFavoritesCache = (uid: string, list: any[], options:")
+          cache_tail_index = text.index("  };", cache_sig_index)
+          cache_slice = text[cache_sig_index:cache_tail_index]
+          old_guard = "if (musicNoteBundleActiveUids.has(uid)) {"
+          if cache_slice.count(old_guard) != 1:
+              raise SystemExit(f'music note bundle guard: expected 1 match in writeFavoritesCache, got {cache_slice.count(old_guard)}')
+          cache_slice = cache_slice.replace(old_guard, "if (!options.skipBundleWrite && musicNoteBundleActiveUids.has(uid)) {", 1)
+          text = text[:cache_sig_index] + cache_slice + text[cache_tail_index:]
+
+          text = replace_once(
+              text,
+              """        const hasCachedMusicNote = Array.isArray(cachedFavs) && cachedFavs.length > 0;\n        if (hasCachedMusicNote) {\n          const persistedCursor = readMusicNotePaginationCursor(currentUser.uid);\n          favoritePaginationCursorRef.current = persistedCursor;\n          favoritePaginationExhaustedRef.current = !persistedCursor;\n          setHasMoreFavorites(Boolean(persistedCursor));\n          setIsFavoritesLoading(false);\n        }\n""",
+              """        const hasCachedMusicNote = Array.isArray(cachedFavs) && cachedFavs.length > 0;\n        const musicNotePaginationCompleteAtBootstrap = hasCachedMusicNote\n          && readMusicNotePaginationComplete(currentUser.uid);\n        if (hasCachedMusicNote) {\n          const persistedCursor = musicNotePaginationCompleteAtBootstrap\n            ? null\n            : readMusicNotePaginationCursor(currentUser.uid);\n          favoritePaginationCursorRef.current = persistedCursor;\n          favoritePaginationExhaustedRef.current = musicNotePaginationCompleteAtBootstrap;\n          // Old caches may not have a cursor because previous builds lost page metadata.\n          // Keep one recovery action available until the compatibility scan proves completion.\n          setHasMoreFavorites(!musicNotePaginationCompleteAtBootstrap);\n          setIsFavoritesLoading(false);\n        } else {\n          writeMusicNotePaginationComplete(currentUser.uid, false);\n        }\n""",
+              'music note cache pagination restore',
+          )
+
+          text = replace_once(
+              text,
+              """            orderBy('createdAt', 'desc'),\n            limit(FAVORITES_PAGE_SIZE)\n          );\n""",
+              """            orderBy('createdAt', 'desc'),\n            limit(FAVORITES_SERVER_FETCH_SIZE)\n          );\n""",
+              'music note first page lookahead',
+          )
+
+          text = replace_once(
+              text,
+              """            favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;\n            favoritePaginationFallbackModeRef.current = false;\n            setHasMoreFavorites(!favoritePaginationExhaustedRef.current);\n""",
+              """            // The ordered source alone cannot prove completion because legacy favorites may not have createdAt.\n            favoritePaginationExhaustedRef.current = false;\n            favoritePaginationFallbackModeRef.current = false;\n            writeMusicNotePaginationComplete(currentUser.uid, false);\n            setHasMoreFavorites(true);\n""",
+              'music note first page completion ownership',
+          )
+
+          text = replace_once(
+              text,
+              """              favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;\n              favoritePaginationExhaustedRef.current = !bundle.hasMore;\n              favoritePaginationFallbackModeRef.current = false;\n              setHasMoreFavorites(bundle.hasMore);\n""",
+              """              // Bundle data refreshes the latest rows, but an existing local cache owns its deeper pagination state.\n              if (!hasCachedMusicNote) {\n                favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;\n                if (favoritePaginationCursorRef.current) {\n                  try {\n                    localStorage.setItem(\n                      getMusicNoteScopedStorageKey(MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE, currentUser.uid),\n                      String(bundle.cursorCreatedAtMs),\n                    );\n                  } catch {}\n                }\n                favoritePaginationExhaustedRef.current = false;\n                writeMusicNotePaginationComplete(currentUser.uid, false);\n                setHasMoreFavorites(true);\n              }\n              favoritePaginationFallbackModeRef.current = false;\n""",
+              'music note bundle cursor ownership',
+          )
+
+          old_load_more = """  const loadMoreFavorites = useCallback(async () => {\n    const currentUser = user || auth.currentUser;\n    if (!currentUser?.uid) return;\n    if (favoritePaginationFallbackModeRef.current) return;\n    if (favoritePaginationLoadingRef.current || favoritePaginationExhaustedRef.current) return;\n    const cursor = favoritePaginationCursorRef.current;\n    if (!cursor) return;\n\n    favoritePaginationLoadingRef.current = true;\n    setIsLoadingMoreFavorites(true);\n    try {\n      const q = query(\n        collection(db, 'favorites'),\n        where('uid', '==', currentUser.uid),\n        orderBy('createdAt', 'desc'),\n        startAfter(cursor),\n        limit(FAVORITES_PAGE_SIZE)\n      );\n      const snapshot = await getDocs(q);\n      const nextDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);\n      const nextFavs = nextDocs.map(mapFavoriteFirestoreDoc);\n      if (nextDocs.length > 0) {\n        favoritePaginationCursorRef.current = nextDocs[nextDocs.length - 1];\n        writeMusicNotePaginationCursor(currentUser.uid, favoritePaginationCursorRef.current);\n      } else {\n        clearMusicNotePaginationCursor(currentUser.uid);\n      }\n      favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;\n      setHasMoreFavorites(!favoritePaginationExhaustedRef.current);\n      setFavorites((prev) => {\n        const merged = mergeFavoritePages(prev || [], nextFavs);\n        writeFavoritesCache(currentUser.uid, merged);\n        return merged;\n      });\n    } catch (error) {\n      console.warn('Favorites additional page load failed. Keeping the current list instead of crashing the page.', error);\n      favoritePaginationExhaustedRef.current = true;\n      setHasMoreFavorites(false);\n    } finally {\n      favoritePaginationLoadingRef.current = false;\n      setIsLoadingMoreFavorites(false);\n    }\n  }, [user]);\n"""
+          new_load_more = """  const loadMoreFavorites = useCallback(async () => {\n    const currentUser = user || auth.currentUser;\n    if (!currentUser?.uid) return;\n    if (favoritePaginationFallbackModeRef.current) return;\n    if (favoritePaginationLoadingRef.current || favoritePaginationExhaustedRef.current) return;\n\n    const recoverLegacyCompatibleFavorites = async (): Promise<boolean> => {\n      try {\n        // Tail-only bounded read: recovers legacy documents that are omitted by orderBy(createdAt).\n        // It never writes or backfills user favorite documents.\n        const compatibilitySnapshot = await getDocs(query(\n          collection(db, 'favorites'),\n          where('uid', '==', currentUser.uid),\n          limit(MUSIC_NOTE_COMPATIBILITY_SCAN_LIMIT)\n        ));\n        const compatibilityFavs = compatibilitySnapshot.docs.map(mapFavoriteFirestoreDoc);\n        setFavorites((prev) => {\n          const merged = mergeFavoritePages(prev || [], compatibilityFavs);\n          writeFavoritesCache(currentUser.uid, merged, { skipBundleWrite: true });\n          return merged;\n        });\n        favoritePaginationCursorRef.current = null;\n        favoritePaginationExhaustedRef.current = true;\n        clearMusicNotePaginationCursor(currentUser.uid);\n        writeMusicNotePaginationComplete(currentUser.uid, true);\n        setHasMoreFavorites(false);\n        markCacheDiagnostic('musicNote', 'SYNC', Math.max(1, compatibilitySnapshot.docs.length));\n        return true;\n      } catch (compatibilityError) {\n        console.warn('Music Note legacy compatibility tail read failed; keeping retry available.', compatibilityError);\n        favoritePaginationExhaustedRef.current = false;\n        setHasMoreFavorites(true);\n        return false;\n      }\n    };\n\n    favoritePaginationLoadingRef.current = true;\n    setIsLoadingMoreFavorites(true);\n    try {\n      const cursor = favoritePaginationCursorRef.current;\n      if (!cursor) {\n        await recoverLegacyCompatibleFavorites();\n        return;\n      }\n\n      const q = query(\n        collection(db, 'favorites'),\n        where('uid', '==', currentUser.uid),\n        orderBy('createdAt', 'desc'),\n        startAfter(cursor),\n        limit(FAVORITES_SERVER_FETCH_SIZE)\n      );\n      const snapshot = await getDocs(q);\n      const nextDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);\n      const nextFavs = nextDocs.map(mapFavoriteFirestoreDoc);\n      if (nextDocs.length > 0) {\n        favoritePaginationCursorRef.current = nextDocs[nextDocs.length - 1];\n        writeMusicNotePaginationCursor(currentUser.uid, favoritePaginationCursorRef.current);\n      }\n\n      setFavorites((prev) => {\n        const merged = mergeFavoritePages(prev || [], nextFavs);\n        writeFavoritesCache(currentUser.uid, merged);\n        return merged;\n      });\n\n      const orderedHasMore = snapshot.docs.length > FAVORITES_PAGE_SIZE;\n      if (orderedHasMore) {\n        favoritePaginationExhaustedRef.current = false;\n        writeMusicNotePaginationComplete(currentUser.uid, false);\n        setHasMoreFavorites(true);\n      } else {\n        await recoverLegacyCompatibleFavorites();\n      }\n    } catch (error) {\n      console.warn('Favorites additional page load failed. Keeping the current list instead of crashing the page.', error);\n      favoritePaginationExhaustedRef.current = true;\n      setHasMoreFavorites(false);\n    } finally {\n      favoritePaginationLoadingRef.current = false;\n      setIsLoadingMoreFavorites(false);\n    }\n  }, [user]);\n"""
+          text = replace_once(text, old_load_more, new_load_more, 'music note load more compatibility')
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Static Stage3 assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "WORKSPACE_SERVER_PAGE_SIZE + 1" src/pages/SunoLibraryPage.tsx
+          grep -Fq "soridraw_suno_tracks_page_meta_v1_" src/pages/SunoLibraryPage.tsx
+          grep -Fq "LIBRARY_COMPATIBILITY_SCAN_LIMIT" src/pages/SunoLibraryPage.tsx
+          grep -Fq "FAVORITES_SERVER_FETCH_SIZE" src/App.tsx
+          grep -Fq "MUSIC_NOTE_COMPATIBILITY_SCAN_LIMIT" src/App.tsx
+          grep -Fq "soridraw_music_note_pagination_complete_v1" src/App.tsx
+          grep -Fq "skipBundleWrite: true" src/App.tsx
+          ! grep -Fq "filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE" src/pages/FavoritesPage.tsx
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Append successful work memo
+        shell: bash
+        run: |
+          cat >> DOCS/WORK_LOG.md <<'EOF'
+
+          ## 2026-08-30 — Stage 3 페이지네이션 소스 수정 1차
+          - 브랜치: `preview-stage3-pagination`
+          - 변경 파일: `src/App.tsx`, `src/pages/FavoritesPage.tsx`, `src/pages/SunoLibraryPage.tsx`.
+          - 라이브러리: 로컬 track cache와 별도로 `hasMore/cursor/fallback` 페이지 메타를 저장·복원. 10개 표시를 위해 11개 lookahead 조회로 다음 페이지를 정확히 판정. ordered pagination 끝에서만 최대 2,000건의 읽기 전용 호환 스캔으로 `createdAt` 없는 레거시 문서를 로컬 캐시에 병합.
+          - 뮤직노트: 20개 표시를 위해 21개 lookahead 조회. 기존 캐시의 깊은 pagination state를 first-page bundle이 덮지 않게 분리. 페이지 끝에서만 최대 2,000건 읽기 전용 호환 스캔으로 레거시 문서를 로컬 캐시에 병합하고 완료 마커를 저장.
+          - UI: 캐시 잔량 전체를 `남음`으로 표시하지 않고 다음에 실제 표시할 개수만 안내. 서버 `hasMore`가 true면 현재 필터 결과가 20개 미만이어도 더보기 요청 가능.
+          - 데이터 안전: favorites/suno_tracks 원본 문서 쓰기·삭제·백필 없음. Functions/Rules/Hosting/Auth 변경 없음.
+          - 검증: TypeScript PASS, Vite build PASS.
+          - 다음: 임시 workflow 제거 후 diff 감사 → Preview 배포 → 실제 Music Note 493개 연속 노출 및 Library 더보기 실사용 확인.
+          EOF
+
+      - name: Commit verified source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git add src/App.tsx src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx DOCS/WORK_LOG.md
+          git diff --cached --quiet && { echo 'No changes to commit'; exit 1; }
+          git commit -m "fix(stage3): restore pagination metadata and legacy reads"
+          git push origin HEAD:preview-stage3-pagination

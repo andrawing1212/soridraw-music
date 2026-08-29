@@ -29,7 +29,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > "$RUNNER_TEMP/probe-auth-popup.mjs" <<'NODE'
+          cat > probe-auth-popup.mjs <<'NODE'
           import { chromium } from 'playwright';
           import fs from 'node:fs';
 
@@ -100,7 +100,7 @@ jobs:
             await browser.close();
           }
           NODE
-          node "$RUNNER_TEMP/probe-auth-popup.mjs" || true
+          node probe-auth-popup.mjs || true
 
       - name: Upload browser diagnostic
         if: always()
@@ -110,5 +110,5 @@ jobs:
           path: |
             stage2-auth-popup.txt
             stage2-auth-popup.png
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 3

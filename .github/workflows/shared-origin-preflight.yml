@@ -92,10 +92,12 @@ jobs:
         shell: bash
         run: |
           set -u
-          status="$(curl -sS -o "$RUNNER_TEMP/explore-cors.txt" -w '%{http_code}' \
+          status="$(curl -sS -D "$RUNNER_TEMP/explore-headers.txt" -o "$RUNNER_TEMP/explore-cors.txt" -w '%{http_code}' \
             -H 'Origin: https://preview.soridraw.com' \
             'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1' || true)"
           echo "[Shared Origin Preflight] Current LIVE Explore feed HTTP: ${status:-network-error}"
+          allow_origin="$(grep -i '^access-control-allow-origin:' "$RUNNER_TEMP/explore-headers.txt" | tail -n 1 | tr -d '\r' || true)"
+          echo "[Shared Origin Preflight] Current LIVE Explore CORS header: ${allow_origin:-missing}"
           if [ -f "$RUNNER_TEMP/explore-cors.txt" ]; then head -c 400 "$RUNNER_TEMP/explore-cors.txt" || true; echo; fi
           echo '[Shared Origin Preflight] Diagnostic only; no Worker deployment was performed.'
 

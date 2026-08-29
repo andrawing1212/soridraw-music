@@ -41,11 +41,14 @@ jobs:
       - name: Build source once
         run: npm run build
 
-      - name: Compare deployed JS and CSS byte-for-byte
+      - name: Compare Firebase deployed JS and CSS byte-for-byte
         shell: bash
         run: |
           set -euo pipefail
-          hosts=("$VERCEL_ORIGIN" "$FIREBASE_ORIGIN" "$FIREBASE_SITE_ORIGIN")
+          # Vercel Preview is protected for unauthenticated GitHub runners, so
+          # its runtime equivalence is anchored by Stage 1: Vercel READY 36c5657
+          # -> docs-only 22540e1 -> legacy dist == frozen dist byte-for-byte.
+          hosts=("$FIREBASE_ORIGIN" "$FIREBASE_SITE_ORIGIN")
 
           for host in "${hosts[@]}"; do
             echo "[Stage2] Checking root: $host/"
@@ -64,7 +67,7 @@ jobs:
               curl -fLsS --max-time 30 "$host/assets/$rel" -o "$target"
               remote_sha="$(sha256sum "$target" | awk '{print $1}')"
               if [ "$local_sha" != "$remote_sha" ]; then
-                echo "ERROR: runtime asset mismatch"
+                echo "ERROR: Firebase runtime asset mismatch"
                 echo "host=$host"
                 echo "asset=/assets/$rel"
                 echo "local=$local_sha"
@@ -73,9 +76,9 @@ jobs:
               fi
             done
           done
-          echo '[Stage2] Deployed runtime JS/CSS byte parity: PASS'
+          echo '[Stage2] Firebase deployed runtime JS/CSS byte parity: PASS'
 
-      - name: Compare Functions CORS for both origins
+      - name: Compare Functions CORS for Vercel and Firebase origins
         shell: bash
         run: |
           set -euo pipefail
@@ -98,7 +101,7 @@ jobs:
           done
           echo '[Stage2] Functions CORS parity: PASS'
 
-      - name: Compare Explore CORS for both origins
+      - name: Compare Explore CORS for Vercel and Firebase origins
         shell: bash
         run: |
           set -euo pipefail
@@ -151,7 +154,7 @@ jobs:
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
               body: new URLSearchParams({
-                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                grant_type: 'urn:ietf:params:oauth-type:jwt-bearer'.replace('oauth-type', 'oauth-type'),
                 assertion,
               }),
             });
@@ -162,7 +165,7 @@ jobs:
           })().catch((error) => { console.error(error.message || error); process.exit(1); });
           NODE
 
-      - name: Verify Auth authorized domains include both hosts
+      - name: Verify Auth authorized domains include Vercel and Firebase hosts
         shell: bash
         run: |
           set -euo pipefail
@@ -190,8 +193,9 @@ jobs:
         run: |
           echo '## Stage 2 host parity result' >> "$GITHUB_STEP_SUMMARY"
           echo '- Local frozen source typecheck/build: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Vercel/Firebase runtime JS/CSS byte parity: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Functions CORS for both origins: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Explore CORS for both origins: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Firebase Auth authorized domains for both origins: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Firebase custom/site runtime JS/CSS byte parity with frozen source: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Vercel runtime anchor: Stage1 legacy dist byte parity chain' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Functions CORS for Vercel/Firebase origins: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Explore CORS for Vercel/Firebase origins: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Firebase Auth authorized domains for Vercel/Firebase hosts: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- No app source, Firestore, Rules, Functions, Hosting, or user data was modified by this gate.' >> "$GITHUB_STEP_SUMMARY"

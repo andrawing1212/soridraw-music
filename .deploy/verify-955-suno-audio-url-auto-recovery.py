@@ -86,3 +86,4 @@ runpy.run_path('.deploy/apply-979-music-note-legacy-cache-cursor-recovery.py', r
 runpy.run_path('.deploy/apply-981-music-note-load-more-self-heal.py', run_name='__main__')
 runpy.run_path('.deploy/apply-982-music-note-loaded-metadata-hydration.py', run_name='__main__')
 runpy.run_path('.deploy/apply-983-music-note-cursor-chain-repair.py', run_name='__main__')
+runpy.run_path('.deploy/apply-984-music-note-server-first-more.py', run_name='__main__')

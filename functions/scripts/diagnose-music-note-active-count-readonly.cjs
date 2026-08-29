@@ -13,6 +13,15 @@ const toMs = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const createdAtType = (value) => {
+  if (value === null || value === undefined) return 'missing';
+  if (typeof value === 'number') return 'number';
+  if (typeof value === 'string') return 'string';
+  if (typeof value?.toMillis === 'function' || typeof value?.seconds === 'number') return 'timestamp';
+  if (value instanceof Date) return 'date';
+  return typeof value;
+};
+
 const isSoftRemoved = (row) => Boolean(
   row?.favoriteRemoved === true ||
   row?.saved === false ||
@@ -70,29 +79,50 @@ const summarizePages = (docs, maxPages = 20) => {
     .get();
   const createdAtDocs = createdAtSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() || {} }));
 
-  const createdAtMsPage1 = await db.collection('favorites')
-    .where('uid', '==', targetUid)
-    .orderBy('createdAtMs', 'desc')
-    .limit(20)
-    .get();
-  const createdAtMsPage2 = createdAtMsPage1.size
-    ? await db.collection('favorites')
-      .where('uid', '==', targetUid)
-      .orderBy('createdAtMs', 'desc')
-      .startAfter(createdAtMsPage1.docs[createdAtMsPage1.docs.length - 1])
-      .limit(20)
-      .get()
-    : null;
-  const createdAtMsDocs = [
-    ...createdAtMsPage1.docs,
-    ...(createdAtMsPage2?.docs || []),
-  ].map((doc) => ({ id: doc.id, data: doc.data() || {} }));
-
   const active = createdAtDocs.filter((entry) => !isSoftRemoved(entry.data));
   const removed = createdAtDocs.filter((entry) => isSoftRemoved(entry.data));
   const activeIdentityKeys = active.map(getIdentity).filter(Boolean);
   const uniqueActiveIdentityCount = new Set(activeIdentityKeys).size;
   const activeDuplicateIdentityDocs = activeIdentityKeys.length - uniqueActiveIdentityCount;
+
+  const createdAtTypeCounts = {};
+  for (const entry of createdAtDocs) {
+    const type = createdAtType(entry.data?.createdAt);
+    createdAtTypeCounts[type] = (createdAtTypeCounts[type] || 0) + 1;
+  }
+
+  let createdAtMsQuery = { querySucceeded: false, indexRequired: false, errorCode: null };
+  try {
+    const page1 = await db.collection('favorites')
+      .where('uid', '==', targetUid)
+      .orderBy('createdAtMs', 'desc')
+      .limit(20)
+      .get();
+    const page2 = page1.size
+      ? await db.collection('favorites')
+        .where('uid', '==', targetUid)
+        .orderBy('createdAtMs', 'desc')
+        .startAfter(page1.docs[page1.docs.length - 1])
+        .limit(20)
+        .get()
+      : null;
+    const first40 = [...page1.docs, ...(page2?.docs || [])].map((doc) => ({ id: doc.id, data: doc.data() || {} }));
+    createdAtMsQuery = {
+      querySucceeded: true,
+      indexRequired: false,
+      errorCode: null,
+      page1Count: page1.size,
+      page2Count: page2?.size || 0,
+      first40Pages: summarizePages(first40, 2),
+    };
+  } catch (error) {
+    const message = String(error?.message || error || '');
+    createdAtMsQuery = {
+      querySucceeded: false,
+      indexRequired: message.includes('requires an index'),
+      errorCode: Number(error?.code || 0) || null,
+    };
+  }
 
   const monthCounts = {};
   for (const entry of createdAtDocs) {
@@ -117,13 +147,9 @@ const summarizePages = (docs, maxPages = 20) => {
     activeDuplicateIdentityDocs,
     activeMinusProfileCount: active.length - targetFavoriteCount,
     uniqueActiveMinusProfileCount: uniqueActiveIdentityCount - targetFavoriteCount,
+    createdAtTypeCounts,
     createdAtOrderingPages: summarizePages(createdAtDocs, 20),
-    createdAtMsQuery: {
-      querySucceeded: true,
-      page1Count: createdAtMsPage1.size,
-      page2Count: createdAtMsPage2?.size || 0,
-      first40Pages: summarizePages(createdAtMsDocs, 2),
-    },
+    createdAtMsQuery,
     monthCounts,
     safety: {
       readsOnly: true,

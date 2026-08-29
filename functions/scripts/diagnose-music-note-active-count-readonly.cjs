@@ -31,6 +31,14 @@ const isSoftRemoved = (row) => Boolean(
   row?.unsavedAt
 );
 
+const isUiHidden = (row) => Boolean(
+  isSoftRemoved(row) ||
+  row?.hidden === true ||
+  row?.favoriteHidden === true ||
+  row?.deletedAt ||
+  row?.trashedAt
+);
+
 const normalize = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
 const signature = (entry) => {
   const row = entry.data || {};
@@ -42,20 +50,45 @@ const signature = (entry) => {
   return crypto.createHash('sha256').update(raw).digest('hex');
 };
 
-const summarizePages = (docs, maxPages = 20) => {
+const monthOf = (entry) => {
+  const ms = Number(entry?.data?.createdAtMs || 0) || toMs(entry?.data?.createdAt);
+  return ms > 0 ? new Date(ms).toISOString().slice(0, 7) : null;
+};
+
+const summarizeRawPages = (docs, maxPages = 12) => {
   const pages = [];
   for (let i = 0; i < docs.length && pages.length < maxPages; i += 20) {
     const slice = docs.slice(i, i + 20);
-    const activeRows = slice.filter((entry) => !isSoftRemoved(entry.data));
-    const firstMs = toMs(slice[0]?.data?.createdAtMs || slice[0]?.data?.createdAt);
-    const lastMs = toMs(slice[slice.length - 1]?.data?.createdAtMs || slice[slice.length - 1]?.data?.createdAt);
     pages.push({
       page: pages.length + 1,
       rawDocs: slice.length,
-      activeVisible: activeRows.length,
-      removedHidden: slice.length - activeRows.length,
-      firstMonth: firstMs ? new Date(firstMs).toISOString().slice(0, 7) : null,
-      lastMonth: lastMs ? new Date(lastMs).toISOString().slice(0, 7) : null,
+      softActive: slice.filter((entry) => !isSoftRemoved(entry.data)).length,
+      uiVisible: slice.filter((entry) => !isUiHidden(entry.data)).length,
+      firstMonth: monthOf(slice[0]),
+      lastMonth: monthOf(slice[slice.length - 1]),
+    });
+  }
+  return pages;
+};
+
+const simulate985VisibleAdds = (docs, maxPages = 12) => {
+  const pages = [];
+  let index = 0;
+  while (index < docs.length && pages.length < maxPages) {
+    const softActive = [];
+    const start = index;
+    while (index < docs.length && softActive.length < 20) {
+      const entry = docs[index++];
+      if (!isSoftRemoved(entry.data)) softActive.push(entry);
+    }
+    if (softActive.length === 0) break;
+    pages.push({
+      page: pages.length + 1,
+      rawDocsConsumed: index - start,
+      softActiveReturned: softActive.length,
+      uiVisibleAfterPageFilter: softActive.filter((entry) => !isUiHidden(entry.data)).length,
+      firstMonth: monthOf(softActive[0]),
+      lastMonth: monthOf(softActive[softActive.length - 1]),
     });
   }
   return pages;
@@ -75,16 +108,32 @@ const summarizePages = (docs, maxPages = 20) => {
   }
   if (!targetUid) throw new Error('No target account found');
 
-  const snap = await db.collection('favorites')
+  const mixedSnap = await db.collection('favorites')
     .where('uid', '==', targetUid)
     .orderBy('createdAt', 'desc')
     .get();
-  const docs = snap.docs.map((doc) => ({ id: doc.id, data: doc.data() || {} }));
-  const active = docs.filter((entry) => !isSoftRemoved(entry.data));
-  const removed = docs.filter((entry) => isSoftRemoved(entry.data));
+  const mixedDocs = mixedSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() || {} }));
+
+  const normalizedSnap = await db.collection('favorites')
+    .where('uid', '==', targetUid)
+    .orderBy('createdAtMs', 'desc')
+    .get();
+  const normalizedDocs = normalizedSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() || {} }));
+
+  const active = normalizedDocs.filter((entry) => !isSoftRemoved(entry.data));
+  const uiVisible = normalizedDocs.filter((entry) => !isUiHidden(entry.data));
+  const removed = normalizedDocs.filter((entry) => isSoftRemoved(entry.data));
+
+  const hiddenFlags = {
+    hiddenTrue: normalizedDocs.filter((entry) => entry.data?.hidden === true).length,
+    favoriteHiddenTrue: normalizedDocs.filter((entry) => entry.data?.favoriteHidden === true).length,
+    deletedAtPresent: normalizedDocs.filter((entry) => Boolean(entry.data?.deletedAt)).length,
+    trashedAtPresent: normalizedDocs.filter((entry) => Boolean(entry.data?.trashedAt)).length,
+    softRemoved: removed.length,
+  };
 
   const typeBreakdown = {};
-  for (const entry of docs) {
+  for (const entry of mixedDocs) {
     const type = createdAtType(entry.data?.createdAt);
     const bucket = typeBreakdown[type] || { raw: 0, active: 0, removed: 0 };
     bucket.raw += 1;
@@ -99,11 +148,8 @@ const summarizePages = (docs, maxPages = 20) => {
   const timestampSignatures = timestampActive.map(signature);
   const timestampExactSignatureMatchesObject = timestampSignatures.filter((sig) => objectSignatures.has(sig)).length;
 
-  const objectCreatedAtMs = new Set(objectActive.map((entry) => Number(entry.data?.createdAtMs || 0)).filter((v) => v > 0));
-  const timestampCreatedAtMsMatchesObject = timestampActive.filter((entry) => objectCreatedAtMs.has(Number(entry.data?.createdAtMs || 0))).length;
-
   const signatureCounts = new Map();
-  for (const entry of active) {
+  for (const entry of uiVisible) {
     const sig = signature(entry);
     signatureCounts.set(sig, (signatureCounts.get(sig) || 0) + 1);
   }
@@ -116,59 +162,27 @@ const summarizePages = (docs, maxPages = 20) => {
     }
   }
 
-  let createdAtMsQuery = { querySucceeded: false, indexRequired: false, errorCode: null };
-  try {
-    const page1 = await db.collection('favorites')
-      .where('uid', '==', targetUid)
-      .orderBy('createdAtMs', 'desc')
-      .limit(20)
-      .get();
-    const page2 = page1.size
-      ? await db.collection('favorites')
-        .where('uid', '==', targetUid)
-        .orderBy('createdAtMs', 'desc')
-        .startAfter(page1.docs[page1.docs.length - 1])
-        .limit(20)
-        .get()
-      : null;
-    const first40 = [...page1.docs, ...(page2?.docs || [])].map((doc) => ({ id: doc.id, data: doc.data() || {} }));
-    createdAtMsQuery = {
-      querySucceeded: true,
-      indexRequired: false,
-      errorCode: null,
-      page1Count: page1.size,
-      page2Count: page2?.size || 0,
-      first40Pages: summarizePages(first40, 2),
-    };
-  } catch (error) {
-    const message = String(error?.message || error || '');
-    createdAtMsQuery = {
-      querySucceeded: false,
-      indexRequired: message.includes('requires an index'),
-      errorCode: Number(error?.code || 0) || null,
-    };
-  }
-
   console.log(JSON.stringify({
-    mode: 'READ_ONLY_MUSIC_NOTE_ACTIVE_COUNT_DIAGNOSTIC',
+    mode: 'READ_ONLY_MUSIC_NOTE_VISIBLE_COUNT_DIAGNOSTIC',
     projectId: PROJECT_ID,
     targetSelection: 'largest_profile_favoriteCount_no_uid_output',
     profileFavoriteCount: targetFavoriteCount,
-    rawFavoriteDocs: docs.length,
-    activeFavoriteDocs: active.length,
+    rawFavoriteDocs: normalizedDocs.length,
+    softActiveFavoriteDocs: active.length,
+    uiVisibleFavoriteDocs: uiVisible.length,
     softRemovedDocs: removed.length,
-    activeMinusProfileCount: active.length - targetFavoriteCount,
+    uiVisibleMinusProfileCount: uiVisible.length - targetFavoriteCount,
+    hiddenFlags,
     createdAtTypeBreakdown: typeBreakdown,
     timestampVsObjectComparison: {
       objectActive: objectActive.length,
       timestampActive: timestampActive.length,
       timestampExactSignatureMatchesObject,
-      timestampCreatedAtMsMatchesObject,
-      duplicateSignatureGroups,
-      duplicateSignatureExtraDocs,
+      duplicateVisibleSignatureGroups: duplicateSignatureGroups,
+      duplicateVisibleSignatureExtraDocs: duplicateSignatureExtraDocs,
     },
-    createdAtOrderingPages: summarizePages(docs, 20),
-    createdAtMsQuery,
+    normalizedRaw20Pages: summarizeRawPages(normalizedDocs, 12),
+    simulated985Pages: simulate985VisibleAdds(normalizedDocs, 12),
     safety: {
       readsOnly: true,
       firestoreWrites: 0,

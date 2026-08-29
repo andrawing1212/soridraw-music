@@ -1,0 +1,87 @@
+name: Diagnose Preview Pagination Runtime
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/diagnose-preview-pagination-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Generate exact final source
+        run: |
+          set -euo pipefail
+          npm run prebuild
+          python3 .deploy/apply-980-library-pagination-metadata-recovery.py
+
+      - name: Extract final pagination runtime gates
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          targets = [
+              (Path('src/App.tsx'), [
+                  'const hasCachedMusicNote',
+                  'shouldVerifyMusicNoteBundle',
+                  'setHasMoreFavorites(bundle.hasMore)',
+                  'const loadMoreFavorites',
+                  'favoritePaginationExhaustedRef.current',
+              ]),
+              (Path('src/pages/FavoritesPage.tsx'), [
+                  'canShowCachedMusicNoteMore',
+                  'canRequestMoreMusicNotePage',
+                  'shouldShowMusicNoteMoreButton',
+                  'onLoadMoreFavorites',
+              ]),
+              (Path('src/pages/SunoLibraryPage.tsx'), [
+                  'const startLibraryBundleVerification',
+                  'session.hasMore = bundle.hasMore',
+                  'workspaceLastTrackDocRef.current',
+                  'setHasMoreWorkspaceServerTracks',
+                  'hasMoreWorkspaceServerTracks',
+                  '더보기',
+                  '14일',
+                  '이전곡',
+                  '1회 불러오',
+              ]),
+          ]
+
+          for path, needles in targets:
+              text = path.read_text(encoding='utf-8')
+              lines = text.splitlines()
+              print(f'\n===== {path} =====')
+              for needle in needles:
+                  hits = [i for i,line in enumerate(lines) if needle in line]
+                  print(f'\n--- needle={needle!r} hits={len(hits)} ---')
+                  for i in hits[:12]:
+                      lo=max(0,i-14); hi=min(len(lines),i+25)
+                      print(f'### lines {lo+1}-{hi}')
+                      for n in range(lo,hi):
+                          print(f'{n+1}: {lines[n]}')
+          PY
+
+      - name: Confirm read-only
+        run: |
+          echo 'READ-ONLY diagnostic only.'
+          echo 'No Hosting deploy, Functions deploy, Firestore/Rules write, main change, or production change.'

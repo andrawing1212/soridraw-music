@@ -23,20 +23,14 @@ def replace_once(source: str, before: str, after: str, label: str) -> str:
 
 
 def add_document_id_import(source: str) -> str:
-    pattern = re.compile(r"import\s*\{(?P<body>.*?)\}\s*from\s*['\"]firebase/firestore['\"]\s*;", re.S)
-    for match in pattern.finditer(source):
-        body = match.group('body')
-        if 'startAfter' not in body or 'getDocs' not in body:
-            continue
-        if re.search(r'\bdocumentId\b', body):
-            return source
-        trimmed = body.rstrip()
-        if trimmed.endswith(','):
-            next_body = f"{trimmed}\n  documentId,\n"
-        else:
-            next_body = f"{trimmed},\n  documentId,\n"
-        return source[:match.start('body')] + next_body + source[match.end('body'):]
-    raise SystemExit('986 Firestore import containing startAfter/getDocs not found')
+    # Generated App.tsx can contain several separate firebase/firestore imports.
+    # Do not assume startAfter/getDocs live in the same declaration. A dedicated
+    # import is valid ESM/TypeScript and is much less brittle across generated builds.
+    if re.search(r'\bdocumentId\b', source):
+        return source
+    if 'firebase/firestore' not in source:
+        raise SystemExit('986 firebase/firestore module import not found')
+    return "import { documentId } from 'firebase/firestore';\n" + source
 
 
 def add_eligibility_after_saved(source: str, value: bool) -> tuple[str, int]:

@@ -71,7 +71,7 @@ jobs:
           grep -Fq "where('uid', '==', currentUser.uid)" src/App.tsx
           grep -Fq "orderBy('createdAt', 'desc')" src/App.tsx
           grep -Fq 'favoritePaginationCanonicalAnchorVerifiedRef' src/App.tsx
-          grep -Fq 'favoritePaginationCursorRef.current = canonicalCursor;' src/App.tsx
+          grep -Fq 'favoritePaginationCursorRef.current = canonicalCursorDoc;' src/App.tsx
           grep -Fq 'setFavorites(canonicalFavs);' src/App.tsx
           grep -Fq 'setHasMoreFavorites(bundle.hasMore);' src/App.tsx
           grep -Fq "new CustomEvent('soridraw:music-note-page-metadata'" src/App.tsx

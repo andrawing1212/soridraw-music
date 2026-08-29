@@ -30,9 +30,7 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Generate base source
-        run: |
-          set -euo pipefail
-          npm run prebuild
+        run: npm run prebuild
 
       - name: Apply 984
         run: python3 .deploy/apply-984-music-note-server-first-more.py
@@ -40,23 +38,44 @@ jobs:
       - name: Apply 985
         run: python3 .deploy/apply-985-music-note-normalized-page-chain.py
 
-      - name: Check 986 App mutation anchors
+      - name: Check 986 Firestore import anchor
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
           app=Path('src/App.tsx').read_text(encoding='utf-8')
-          if 'SORIDRAW_985_MUSIC_NOTE_NORMALIZED_PAGE_CHAIN' not in app: raise SystemExit('missing 985 marker')
           firestore=list(re.finditer(r"import\s*\{(?P<body>.*?)\}\s*from\s*['\"]firebase/firestore['\"]\s*;", app, re.S))
-          if not any('startAfter' in m.group('body') and 'getDocs' in m.group('body') for m in firestore): raise SystemExit('firestore import anchor')
+          if not any('startAfter' in m.group('body') and 'getDocs' in m.group('body') for m in firestore): raise SystemExit(1)
+          PY
+
+      - name: Check 986 active save anchors
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          app=Path('src/App.tsx').read_text(encoding='utf-8')
           active=len(re.findall(r'(?m)^[ \t]*saved: true,\n(?![ \t]*musicNoteListEligible:)', app))
+          if active < 2: raise SystemExit(1)
+          PY
+
+      - name: Check 986 inactive save anchors
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          app=Path('src/App.tsx').read_text(encoding='utf-8')
           inactive=len(re.findall(r'(?m)^[ \t]*saved: false,\n(?![ \t]*musicNoteListEligible:)', app))
-          if active < 2: raise SystemExit(f'active saved:true anchors={active}')
-          if inactive < 1: raise SystemExit(f'inactive saved:false anchors={inactive}')
-          allowed_old="'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'isLocked',"
-          allowed_new="'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'musicNoteListEligible', 'isLocked',"
-          if allowed_old not in app and allowed_new not in app: raise SystemExit('allowed-key anchor')
-          print('APP_MUTATION_ANCHORS_PASS')
+          if inactive < 1: raise SystemExit(1)
+          PY
+
+      - name: Check 986 allowed-key anchor
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          app=Path('src/App.tsx').read_text(encoding='utf-8')
+          old="'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'isLocked',"
+          new="'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'musicNoteListEligible', 'isLocked',"
+          if old not in app and new not in app: raise SystemExit(1)
           PY
 
       - name: Check 986 Favorites data anchors
@@ -64,16 +83,14 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           f=Path('src/pages/FavoritesPage.tsx').read_text(encoding='utf-8')
-          checks={
-            'profile import': "import { favoritesStore } from '../hooks/useFavoritesStore';\n",
-            'state': "  const [selectedSong, setSelectedSong] = useState<any | null>(null);\n",
-            'shared': "      sourceType: 'shared_music_note',\n",
-            'trash': """    const updates = {\n      hidden: true,\n      favoriteHidden: true,\n      isPublic: false,\n      deletedAt: serverTimestamp(),\n      trashedAt,\n    };""",
-            'restore': """    const updates = {\n      hidden: false,\n      favoriteHidden: false,\n      deletedAt: null,\n      trashedAt: null,\n    };""",
-          }
-          for name,needle in checks.items():
-            if needle not in f: raise SystemExit(f'{name} anchor')
-          print('FAVORITES_DATA_ANCHORS_PASS')
+          checks=[
+            "import { favoritesStore } from '../hooks/useFavoritesStore';\n",
+            "  const [selectedSong, setSelectedSong] = useState<any | null>(null);\n",
+            "      sourceType: 'shared_music_note',\n",
+            """    const updates = {\n      hidden: true,\n      favoriteHidden: true,\n      isPublic: false,\n      deletedAt: serverTimestamp(),\n      trashedAt,\n    };""",
+            """    const updates = {\n      hidden: false,\n      favoriteHidden: false,\n      deletedAt: null,\n      trashedAt: null,\n    };""",
+          ]
+          if any(x not in f for x in checks): raise SystemExit(1)
           PY
 
       - name: Check 986 Favorites UI anchors
@@ -82,13 +99,11 @@ jobs:
           from pathlib import Path
           import re
           f=Path('src/pages/FavoritesPage.tsx').read_text(encoding='utf-8')
-          if "  const canShowCachedMusicNoteMore = visibleCount < filteredFavorites.length;\n" not in f: raise SystemExit('canShowCachedMusicNoteMore anchor')
+          if "  const canShowCachedMusicNoteMore = visibleCount < filteredFavorites.length;\n" not in f: raise SystemExit(1)
           m=re.search(r"(?P<head>  const canRequestMoreMusicNotePage = Boolean\(\n)(?P<body>.*?)(?P<tail>\n  \);)", f, re.S)
-          if not m: raise SystemExit('canRequestMoreMusicNotePage anchor')
-          if '    hasMoreFavorites' not in m.group('body'): raise SystemExit('hasMoreFavorites inner anchor')
+          if not m or '    hasMoreFavorites' not in m.group('body'): raise SystemExit(1)
           more='''          {shouldShowMusicNoteMoreButton && (\n            <div className="flex justify-center pt-1" data-selection-keep="true">'''
-          if more not in f: raise SystemExit('More UI anchor')
-          print('FAVORITES_UI_ANCHORS_PASS')
+          if more not in f: raise SystemExit(1)
           PY
 
       - name: Check 986 loadMore anchors
@@ -99,10 +114,7 @@ jobs:
           s='  const loadMoreFavorites = useCallback(async () => {'
           e='  const syncMusicNoteIncrementalFromRemoteVersion = useCallback'
           start=app.find(s); end=app.find(e,start)
-          if start < 0: raise SystemExit('loadMore start anchor')
-          if end < 0: raise SystemExit('loadMore end anchor')
-          if 'SORIDRAW_985_MUSIC_NOTE_NORMALIZED_PAGE_CHAIN' not in app[start:end]: raise SystemExit('985 marker not in loadMore')
-          print('LOADMORE_ANCHORS_PASS')
+          if start < 0 or end < 0 or 'SORIDRAW_985_MUSIC_NOTE_NORMALIZED_PAGE_CHAIN' not in app[start:end]: raise SystemExit(1)
           PY
 
       - name: Apply 986
@@ -113,26 +125,22 @@ jobs:
 
       - name: Verify 986 bounded query and migration paths
         run: |
-          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          app = Path('src/App.tsx').read_text(encoding='utf-8')
-          favorites = Path('src/pages/FavoritesPage.tsx').read_text(encoding='utf-8')
-          start = app.index('  const loadMoreFavorites = useCallback(async () => {')
-          end = app.index('  const syncMusicNoteIncrementalFromRemoteVersion = useCallback', start)
-          block = app[start:end]
-          for marker in ["where('musicNoteListEligible', '==', true)", "orderBy('createdAtMs', 'desc')", "orderBy(documentId(), 'desc')", 'startAfter(cursorCreatedAtMs, cursorId)', 'limit(FAVORITES_PAGE_SIZE)', 'cursorItem?.firestoreId || cursorItem?.id', 'firestoreId: docSnap.id']:
-              if marker not in block: raise SystemExit(f'missing 986 marker: {marker}')
-          if 'while (' in block: raise SystemExit('repeated scan remains')
-          if 'FAVORITES_PAGE_SIZE + 1' in block: raise SystemExit('look-ahead remains')
-          for marker in ['musicNoteListEligible: false','musicNoteListEligible: true','musicNoteProfileCount','musicNoteRemainingCount','전체 {musicNoteProfileCount}곡 · 현재 {musicNoteCurrentCount}곡 · 남은 {musicNoteRemainingCount}곡']:
-              if marker not in favorites: raise SystemExit(f'missing Favorites marker: {marker}')
-          print('VERIFY_986_PASS')
+          app=Path('src/App.tsx').read_text(encoding='utf-8')
+          favorites=Path('src/pages/FavoritesPage.tsx').read_text(encoding='utf-8')
+          start=app.index('  const loadMoreFavorites = useCallback(async () => {')
+          end=app.index('  const syncMusicNoteIncrementalFromRemoteVersion = useCallback',start)
+          block=app[start:end]
+          required=["where('musicNoteListEligible', '==', true)","orderBy('createdAtMs', 'desc')","orderBy(documentId(), 'desc')",'startAfter(cursorCreatedAtMs, cursorId)','limit(FAVORITES_PAGE_SIZE)','cursorItem?.firestoreId || cursorItem?.id','firestoreId: docSnap.id']
+          if any(x not in block for x in required): raise SystemExit(1)
+          if 'while (' in block or 'FAVORITES_PAGE_SIZE + 1' in block: raise SystemExit(1)
+          ui=['musicNoteListEligible: false','musicNoteListEligible: true','musicNoteProfileCount','musicNoteRemainingCount','전체 {musicNoteProfileCount}곡 · 현재 {musicNoteCurrentCount}곡 · 남은 {musicNoteRemainingCount}곡']
+          if any(x not in favorites for x in ui): raise SystemExit(1)
           PY
 
       - name: Typecheck and build generated source
         run: |
-          set -euo pipefail
           npx tsc --noEmit
           npx vite build
 

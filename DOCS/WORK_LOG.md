@@ -1,0 +1,18 @@
+# SORIDRAW 누적 작업 일지
+
+> 모든 의미 있는 진단·수정·검증·배포 작업은 삭제하지 않고 아래에 계속 append한다.
+
+## 2026-08-30 — 작업 메모 체계 고정
+- 브랜치: `preview-stage3-pagination`
+- 작업: 사용자 요청에 따라 모든 작업의 누적 메모 규칙을 저장소에 고정.
+- 변경: `DOCS/WORKFLOW_GUARDRAILS.md`에 `DEPLOYMENT_PROGRESS.md` + `WORK_LOG.md` 이중 기록 원칙 추가.
+- 결과: 이후 진단/수정/테스트/배포/보류 판단을 모두 이 파일에 누적 기록.
+- 다음: 3단계 뮤직노트·라이브러리 페이지네이션 최소 수정 진행.
+
+## 2026-08-30 — Stage 3 원인 진단
+- 브랜치: `preview-stage3-pagination`
+- 작업: 동결된 실제 소스에서 Music Note / Suno Library 페이지네이션 소유권 재분석.
+- 라이브러리 원인: 로컬 곡 캐시는 유지되지만 재진입 시 페이지 메타 `hasMore`/다음 cursor가 초기값으로 돌아가 서버에 다음 곡이 있어도 더보기 버튼이 사라질 수 있음.
+- 뮤직노트 원인: UI `visibleCount`와 서버 cursor/`hasMoreFavorites`가 별도 소유되고, first-page bundle 갱신이 더 깊게 진행한 pagination cursor를 앞쪽으로 되돌릴 수 있음. 또한 `filteredFavorites.length >= 20` 조건 때문에 서버에 다음 페이지가 있어도 현재 보이는 필터 결과가 20 미만이면 더보기 요청 자체가 막힐 수 있음.
+- 데이터 안전: Firestore 문서 수정/삭제/백필/Rules/Functions 변경 없이 클라이언트 읽기·캐시 메타만 수정하는 방향으로 확정.
+- 다음: 페이지 메타 단일 소유 + 레거시 `createdAt` 누락 문서 호환 읽기 최소 패치 후 build/typecheck 검증.

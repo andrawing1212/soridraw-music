@@ -1,0 +1,91 @@
+name: Stage3 Pagination Source Diagnostic
+
+on:
+  push:
+    branches: [preview-stage3-pagination]
+    paths:
+      - '.github/workflows/stage3-pagination-source-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout stage3 branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview-stage3-pagination
+
+      - name: Extract Music Note pagination paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def extract(path, patterns, radius=14):
+              lines = Path(path).read_text(encoding='utf-8').splitlines()
+              hits = []
+              rx = re.compile('|'.join(f'(?:{p})' for p in patterns), re.I)
+              for i, line in enumerate(lines):
+                  if rx.search(line):
+                      hits.append(i)
+              ranges = []
+              for i in hits:
+                  s, e = max(0, i-radius), min(len(lines), i+radius+1)
+                  if ranges and s <= ranges[-1][1] + 2:
+                      ranges[-1] = (ranges[-1][0], max(ranges[-1][1], e))
+                  else:
+                      ranges.append((s, e))
+              out = [f'# {path}', f'# hits={len(hits)} ranges={len(ranges)}']
+              for s, e in ranges:
+                  out.append(f'\n## lines {s+1}-{e}')
+                  out.extend(f'{n+1:06d}: {lines[n]}' for n in range(s, e))
+              return '\n'.join(out) + '\n'
+
+          music_patterns = [
+              r'musicNote', r'favorite', r'visibleCount', r'hasMore', r'loadMore', r'pageCursor',
+              r'startAfter', r'limit\(', r'getDocs', r'onSnapshot', r'listBundle', r'cache',
+              r'cursor', r'nextPage', r'fetchPage', r'createdAtMs', r'pageSize', r'10',
+          ]
+          Path('stage3-music-note.txt').write_text(
+              extract('src/pages/FavoritesPage.tsx', music_patterns, radius=10), encoding='utf-8'
+          )
+
+          lib_patterns = [
+              r'hasMore', r'loadMore', r'pageCursor', r'startAfter', r'limit\(', r'getDocs',
+              r'onSnapshot', r'cache', r'cursor', r'nextPage', r'fetchPage', r'pageSize',
+              r'library', r'suno', r'visibleCount', r'lastDoc', r'lastVisible',
+          ]
+          Path('stage3-library.txt').write_text(
+              extract('src/pages/SunoLibraryPage.tsx', lib_patterns, radius=10), encoding='utf-8'
+          )
+
+          cache_patterns = [
+              r'listBundle', r'music', r'favorite', r'library', r'hasMore', r'cursor', r'page',
+              r'cache', r'recent', r'limit', r'createdAtMs',
+          ]
+          Path('stage3-cache.txt').write_text(
+              extract('src/lib/listBundleCache.ts', cache_patterns, radius=10), encoding='utf-8'
+          )
+          PY
+
+          echo '--- Music Note key symbols ---'
+          grep -nE 'const .*?(music|favorite|visible|hasMore|loadMore|cursor|page)|function .*?(music|favorite|load|page)|useState.*?(favorite|visible|hasMore|cursor)' src/pages/FavoritesPage.tsx | head -n 250 || true
+          echo '--- Library key symbols ---'
+          grep -nE 'const .*?(library|track|visible|hasMore|loadMore|cursor|page)|function .*?(library|track|load|page)|useState.*?(track|visible|hasMore|cursor)' src/pages/SunoLibraryPage.tsx | head -n 250 || true
+
+      - name: Upload source diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage3-pagination-source-diagnostic
+          path: |
+            stage3-music-note.txt
+            stage3-library.txt
+            stage3-cache.txt
+          retention-days: 3

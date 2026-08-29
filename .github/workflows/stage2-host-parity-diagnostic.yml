@@ -1,0 +1,47 @@
+name: Stage2 Host Parity Diagnostic
+
+on:
+  push:
+    branches: [preview-host-parity]
+    paths:
+      - '.github/workflows/stage2-host-parity-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fetch host entrypoints and record asset refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/stage2-host-diagnostic.txt"
+          : > "$report"
+          hosts=(
+            'https://soridraw-music-git-preview-andrawing1212.vercel.app'
+            'https://preview.soridraw.com'
+            'https://soridraw-preview.web.app'
+          )
+          for host in "${hosts[@]}"; do
+            file="$RUNNER_TEMP/$(echo "$host" | tr -cd '[:alnum:]').html"
+            status="$(curl -LsS --max-time 30 -o "$file" -w '%{http_code}' "$host/")"
+            {
+              echo "HOST=$host"
+              echo "HTTP=$status"
+              grep -oE '/assets/[A-Za-z0-9._-]+\.(js|css)' "$file" | sort -u || true
+              echo
+            } >> "$report"
+          done
+          cat "$report"
+          cp "$report" stage2-host-diagnostic.txt
+
+      - name: Upload diagnostic report
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2-host-diagnostic
+          path: stage2-host-diagnostic.txt
+          retention-days: 3

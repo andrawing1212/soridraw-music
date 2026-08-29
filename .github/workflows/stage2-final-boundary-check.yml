@@ -1,0 +1,82 @@
+name: Stage2 Final Boundary Check
+
+on:
+  push:
+    branches: [preview-host-parity]
+    paths:
+      - '.github/workflows/stage2-final-boundary-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  final-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout parity branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview-host-parity
+
+      - name: Check Google Auth URI creation for both origins
+        shell: bash
+        env:
+          FIREBASE_API_KEY: AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/google-auth-uri.txt"
+          : > "$report"
+          for origin in \
+            'https://soridraw-music-git-preview-andrawing1212.vercel.app/' \
+            'https://preview.soridraw.com/'; do
+            payload="$(python3 - "$origin" <<'PY'
+          import json, sys
+          print(json.dumps({
+              'identifier': 'stage2-parity-check@soridraw.invalid',
+              'continueUri': sys.argv[1],
+              'providerId': 'google.com',
+          }))
+          PY
+          )"
+            body="$RUNNER_TEMP/auth-$(echo "$origin" | tr -cd '[:alnum:]').json"
+            status="$(curl -sS -o "$body" -w '%{http_code}' -X POST \
+              -H 'Content-Type: application/json' \
+              --data "$payload" \
+              "https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=$FIREBASE_API_KEY")"
+            echo "ORIGIN=$origin HTTP=$status" | tee -a "$report"
+            if [ "$status" != '200' ]; then
+              cat "$body" | tee -a "$report"
+              exit 31
+            fi
+            python3 - "$body" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding='utf-8'))
+          if not data.get('authUri'):
+              raise SystemExit(f"authUri missing: {data}")
+          print('Google Auth URI: PASS')
+          PY
+          done
+          cp "$report" stage2-google-auth-uri.txt
+
+      - name: Record host-specific source conditions
+        shell: bash
+        run: |
+          set -euo pipefail
+          report='stage2-host-conditions.txt'
+          {
+            echo '# Host-specific source references under src/'
+            grep -RInE --exclude='firebase.js' \
+              '(location\.hostname|window\.location|vercel\.app|soridraw\.com|web\.app|firebaseapp\.com)' src || true
+          } > "$report"
+          cat "$report"
+
+      - name: Upload final boundary reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2-final-boundary
+          path: |
+            stage2-google-auth-uri.txt
+            stage2-host-conditions.txt
+          retention-days: 3

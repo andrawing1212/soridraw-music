@@ -10,3 +10,10 @@
 - 조치: `preview` 앱 코드를 Stage 3 적용 직전 안전 기준 `0b5744d2fe88b5e24de9a9893f7f9f37c6a9dda9`로 강제 롤백.
 - 재설계 원칙: 전체/2,000건 scan 금지. 캐시는 첫 화면 표시만 담당. 서버 20개 단위 페이지를 실제 목록의 유일한 기준으로 사용. 더보기는 캐시 소진 대기 없이 서버 다음 페이지 요청. 실제 남은 곡 수만 표시.
 - 데이터 안전: Firestore 원본 문서/Rules/Functions/Auth/Test/Production 변경 없음.
+
+## 2026-08-30 — Stage 3 안전 롤백 Firebase Preview 재배포 완료
+- 배포 커밋: `5c1ebcaf174eb059becdc43f02b969620e4bf6e7`.
+- GitHub Actions: Firebase Hosting Custom Preview run `33269705161`.
+- 결과: build PASS, TypeScript PASS, Firebase Preview deploy PASS, Auth preview domain PASS, smoke PASS, backend origin boundary PASS, Production 불변 PASS.
+- 상태: `preview.soridraw.com`은 Stage 3 비용 폭주 수정 전의 안전 앱 코드로 복귀.
+- Test(main) / Production 변경 없음.

@@ -17,3 +17,14 @@
 - 결과: build PASS, TypeScript PASS, Firebase Preview deploy PASS, Auth preview domain PASS, smoke PASS, backend origin boundary PASS, Production 불변 PASS.
 - 상태: `preview.soridraw.com`은 Stage 3 비용 폭주 수정 전의 안전 앱 코드로 복귀.
 - Test(main) / Production 변경 없음.
+
+## 2026-08-30 — Stage 3 두 번째 실사용 실패 / 증거 기반 재조사 시작
+- 재설계본 `e9c3fb76a599e96b171f2910743f728cd99a820c` 실사용에서 다시 비정상 확인.
+- 증상 1: Music Note `더보기` 시 새 페이지가 하단에 붙지 않고 기존 목록 중간중간에 카드가 다시 나타남.
+- 증상 2: 최근 추가한 3곡이 Music Note에 보이지 않음.
+- 증상 3: 서버 사용량/호출 상태가 비정상적으로 증가하는 현상 보고.
+- 문제 커밋은 `preview-stage3-final` 브랜치에 보존하여 비교 자료로 사용.
+- 추가 보정 패치 금지. 영상 + 현재 코드 + Firestore 공식 문서 + 유사 사례를 대조해 세 증상의 원인을 각각 증명한 뒤 재설계.
+- 확인 대상: `mergeFavoritePages` 병합/재정렬, cache/server page 혼합, `orderBy(createdAt)` 필드 존재 조건, cursor 소유권, Library effect 재실행/force refresh, bundle/listener 잔존 경로.
+- 비용 위험 차단을 위해 `preview` 앱 코드는 직전 안전 기준 `d2571f527a0a4b4cb0608527f1c48b9985d3caf0`으로 되돌리고 이 기록 커밋으로 Firebase Preview 재배포를 트리거함.
+- 데이터 안전: 전체 scan/backfill/자동 서버 쓰기 금지. main/Production 변경 금지.

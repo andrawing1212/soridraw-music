@@ -1,0 +1,212 @@
+name: Firebase Functions Test Host CORS Rollout
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/firebase-functions-test-host-cors-rollout.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-functions-test-host-cors-rollout
+  cancel-in-progress: false
+
+jobs:
+  exact-live-source-rollout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PROJECT: soridraw-app-866a5
+      REGION: us-central1
+      TEST_WEB_ORIGIN: https://soridraw-test.web.app
+      TEST_FIREBASE_ORIGIN: https://soridraw-test.firebaseapp.com
+
+    steps:
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Authenticate Google
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Roll out two test origins one Function at a time from each exact live source
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          functions=(
+            saveGoogleGeminiApiKey
+            deleteGoogleGeminiApiKey
+            getGoogleGeminiApiKeyStatus
+            getGoogleGeminiApiKey
+            generateGeminiContent
+            saveSunoApiKey
+            deleteSunoApiKey
+            fetchSunoShareMetadata
+            getSunoRemainingCredits
+            getSunoRemainingCreditsAfterComplete
+            createSunoTrack
+            getSunoTrackStatus
+          )
+
+          verify_options() {
+            python3 - "$1" "$2" <<'PY'
+          import json, sys
+          before=json.load(open(sys.argv[1], encoding='utf-8'))
+          after=json.load(open(sys.argv[2], encoding='utf-8'))
+          def pick(d):
+              b=d.get('buildConfig') or {}
+              s=d.get('serviceConfig') or {}
+              return {
+                'runtime': b.get('runtime'),
+                'entryPoint': b.get('entryPoint'),
+                'environmentVariables': b.get('environmentVariables'),
+                'availableMemory': s.get('availableMemory'),
+                'timeoutSeconds': s.get('timeoutSeconds'),
+                'minInstanceCount': s.get('minInstanceCount'),
+                'maxInstanceCount': s.get('maxInstanceCount'),
+                'maxInstanceRequestConcurrency': s.get('maxInstanceRequestConcurrency'),
+                'serviceAccountEmail': s.get('serviceAccountEmail'),
+                'ingressSettings': s.get('ingressSettings'),
+                'secretEnvironmentVariables': s.get('secretEnvironmentVariables'),
+              }
+          if pick(before) != pick(after):
+              print('BEFORE', json.dumps(pick(before), ensure_ascii=False, sort_keys=True))
+              print('AFTER ', json.dumps(pick(after), ensure_ascii=False, sort_keys=True))
+              raise SystemExit('Critical runtime configuration changed')
+          PY
+          }
+
+          cors_status() {
+            local fn="$1" origin="$2"
+            local url="https://us-central1-$PROJECT.cloudfunctions.net/$fn"
+            local code allow
+            code="$(curl -sS -o /tmp/cors-body -D /tmp/cors-head -w '%{http_code}' -X OPTIONS \
+              -H "Origin: $origin" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "$url" || true)"
+            allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/cors-head)"
+            printf '%s|%s' "$code" "$allow"
+          }
+
+          for fn in "${functions[@]}"; do
+            echo "========== $fn =========="
+            work="$RUNNER_TEMP/cors-$fn"
+            rm -rf "$work"
+            mkdir -p "$work/source"
+
+            before="$work/before.json"
+            gcloud functions describe "$fn" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$before"
+            eval "$(python3 - "$before" <<'PY'
+          import json, shlex, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8'))
+          src=((data.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}
+          bucket=str(src.get('bucket') or '')
+          obj=str(src.get('object') or '')
+          if not bucket or not obj:
+              raise SystemExit('Live source storage location unavailable')
+          print('B='+shlex.quote(bucket))
+          print('O='+shlex.quote(obj))
+          PY
+            )"
+
+            gcloud storage cp "gs://$B/$O" "$work/live.zip" >/dev/null
+            unzip -q "$work/live.zip" -d "$work/source"
+            test -f "$work/source/src/index.ts"
+            test -f "$work/source/package.json"
+            cp "$work/source/src/index.ts" "$work/index.before.ts"
+
+            old="$(cors_status "$fn" 'https://soridraw-music.vercel.app')"
+            echo "[BEFORE] Vercel=$old"
+            test "${old%%|*}" = '204' || { echo "$fn: existing Vercel CORS is not healthy; refusing deploy"; exit 11; }
+
+            current_web="$(cors_status "$fn" "$TEST_WEB_ORIGIN")"
+            current_fb="$(cors_status "$fn" "$TEST_FIREBASE_ORIGIN")"
+            if [ "${current_web%%|*}" = '204' ] && [ "${current_fb%%|*}" = '204' ]; then
+              echo "[SKIP] $fn already accepts both Firebase test origins."
+              continue
+            fi
+
+            python3 - "$work/index.before.ts" "$work/source/src/index.ts" <<'PY'
+          from pathlib import Path
+          import re, sys
+          before=Path(sys.argv[1]).read_text(encoding='utf-8')
+          target=Path(sys.argv[2])
+          wanted=['https://soridraw-test.web.app','https://soridraw-test.firebaseapp.com']
+          m=re.search(r'((?:const|var)\s+ALLOWED_ORIGINS\s*=\s*\[)(.*?)(\n\s*\];)', before, re.S)
+          if not m:
+              raise SystemExit('ALLOWED_ORIGINS block not found')
+          body=m.group(2)
+          additions=[]
+          for origin in wanted:
+              if origin not in body:
+                  additions.append(f'\n  "{origin}",')
+          if not additions:
+              raise SystemExit('No origin additions required but runtime CORS was not healthy')
+          expected=before[:m.end(2)] + ''.join(additions) + before[m.end(2):]
+          target.write_text(expected, encoding='utf-8')
+          after=target.read_text(encoding='utf-8')
+          if after != expected:
+              raise SystemExit('Source patch mismatch')
+          if len(after)-len(before) != sum(len(x) for x in additions):
+              raise SystemExit('Unexpected source delta')
+          print('Added only:', ', '.join(wanted))
+          PY
+
+            (
+              cd "$work/source"
+              npm ci --no-audit --no-fund
+              npm run build
+              grep -Fq "$TEST_WEB_ORIGIN" lib/index.js
+              grep -Fq "$TEST_FIREBASE_ORIGIN" lib/index.js
+            )
+
+            cat > "$work/firebase.json" <<JSON
+          {
+            "functions": {
+              "source": "$work/source"
+            }
+          }
+          JSON
+
+            npx --yes firebase-tools@latest deploy \
+              --project "$PROJECT" \
+              --config "$work/firebase.json" \
+              --only "functions:$fn" \
+              --non-interactive
+
+            after="$work/after.json"
+            gcloud functions describe "$fn" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$after"
+            verify_options "$before" "$after"
+
+            vercel_ok=''
+            web_ok=''
+            fb_ok=''
+            for attempt in $(seq 1 15); do
+              v="$(cors_status "$fn" 'https://soridraw-music.vercel.app')"
+              w="$(cors_status "$fn" "$TEST_WEB_ORIGIN")"
+              f="$(cors_status "$fn" "$TEST_FIREBASE_ORIGIN")"
+              [ "${v%%|*}" = '204' ] && [ "${v#*|}" = 'https://soridraw-music.vercel.app' ] && vercel_ok=yes
+              [ "${w%%|*}" = '204' ] && [ "${w#*|}" = "$TEST_WEB_ORIGIN" ] && web_ok=yes
+              [ "${f%%|*}" = '204' ] && [ "${f#*|}" = "$TEST_FIREBASE_ORIGIN" ] && fb_ok=yes
+              if [ "$vercel_ok" = yes ] && [ "$web_ok" = yes ] && [ "$fb_ok" = yes ]; then break; fi
+              sleep 10
+            done
+            echo "[AFTER] Vercel=$(cors_status "$fn" 'https://soridraw-music.vercel.app') TestWeb=$(cors_status "$fn" "$TEST_WEB_ORIGIN") TestFirebase=$(cors_status "$fn" "$TEST_FIREBASE_ORIGIN")"
+            test "$vercel_ok" = yes
+            test "$web_ok" = yes
+            test "$fb_ok" = yes
+            echo "[PASS] $fn exact-live-source CORS rollout complete."
+          done
+
+          echo 'ALL_FIREBASE_CORS_FUNCTIONS_COMPLETE=true'
+          echo 'NO_FIRESTORE_MIGRATION=true'
+          echo 'NO_RULES_DEPLOY=true'
+          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'

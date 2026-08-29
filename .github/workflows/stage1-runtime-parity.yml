@@ -39,7 +39,7 @@ jobs:
         working-directory: frozen
         run: npm ci --no-audit --no-fund
 
-      - name: Materialize legacy generated source
+      - name: Materialize legacy generated source exactly once
         working-directory: legacy
         run: npm run prebuild
 
@@ -50,9 +50,9 @@ jobs:
           diff -qr legacy/src frozen/src
           echo 'Generated src parity: PASS'
 
-      - name: Build legacy runtime
+      - name: Build legacy runtime without re-running prebuild
         working-directory: legacy
-        run: npm run build
+        run: npx vite build
 
       - name: Build frozen runtime
         working-directory: frozen

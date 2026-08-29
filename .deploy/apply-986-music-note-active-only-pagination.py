@@ -167,7 +167,10 @@ count_block = r'''  const musicNoteLoadedOwnCount = favorites.filter((item: any)
     ? Math.max(0, musicNoteProfileCount - musicNoteCurrentCount)
     : 0;
 
-  const canShowCachedMusicNoteMore = visibleCount < filteredFavorites.length;
+  const canShowCachedMusicNoteMore = Boolean(
+    visibleCount < filteredFavorites.length
+    && (musicNoteProfileCount <= 0 || musicNoteRemainingCount > 0)
+  );
 '''
 if 'const musicNoteLoadedOwnCount = favorites.filter' not in favorites:
     favorites = replace_once(favorites, count_anchor, count_block, 'loaded/remaining count')
@@ -246,7 +249,7 @@ active_block = r'''  const loadMoreFavorites = useCallback(async () => {
 
     const cursorItem = eligibleBaseItems[eligibleBaseItems.length - 1];
     const cursorCreatedAtMs = Number(cursorItem?.createdAtMs || 0);
-    const cursorId = String(cursorItem?.id || '').trim();
+    const cursorId = String(cursorItem?.firestoreId || cursorItem?.id || '').trim();
     if (!cursorCreatedAtMs || !cursorId) {
       return loadMoreFavoritesLegacy985();
     }
@@ -266,7 +269,16 @@ active_block = r'''  const loadMoreFavorites = useCallback(async () => {
 
       const snapshot = await getDocs(pageQuery);
       const nextFavs = snapshot.docs
-        .map(mapFavoriteFirestoreDoc)
+        .map((docSnap: any) => {
+          const mapped: any = mapFavoriteFirestoreDoc(docSnap);
+          const raw: any = docSnap.data?.() || {};
+          return {
+            ...mapped,
+            firestoreId: docSnap.id,
+            createdAtMs: Number(raw.createdAtMs || mapped?.createdAtMs || 0),
+            musicNoteListEligible: raw.musicNoteListEligible === true,
+          };
+        })
         .filter((item: any) => item?.musicNoteListEligible === true);
 
       if (nextFavs.length > 0) {
@@ -310,6 +322,9 @@ required = [
     "orderBy(documentId(), 'desc')",
     'startAfter(cursorCreatedAtMs, cursorId)',
     'limit(FAVORITES_PAGE_SIZE)',
+    'cursorItem?.firestoreId || cursorItem?.id',
+    'firestoreId: docSnap.id',
+    'musicNoteListEligible: raw.musicNoteListEligible === true',
     'return loadMoreFavoritesLegacy985();',
 ]
 for fragment in required:
@@ -333,6 +348,6 @@ favorites_path.write_text(favorites, encoding='utf-8')
 print(
     f'Applied SORIDRAW 986: active-only bounded Music Note pagination; '
     f'future active writes patched={active_write_count}, inactive writes patched={inactive_write_count}. '
-    'Trash/restore metadata and zero-read profile totals are included. '
+    'Trash/restore metadata, stable Firestore cursor identity, and zero-read profile totals are included. '
     'Legacy 985 remains only as a migration-safe fallback until metadata backfill.'
 )

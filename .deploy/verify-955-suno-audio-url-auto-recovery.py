@@ -83,3 +83,4 @@ runpy.run_path('.deploy/apply-975-explore-public-profile-edit-ui.py', run_name='
 runpy.run_path('.deploy/apply-976-explore-profile-crop-genre-refresh.py', run_name='__main__')
 runpy.run_path('.deploy/run-977-cache-live-resilient.py', run_name='__main__')
 runpy.run_path('.deploy/apply-979-music-note-legacy-cache-cursor-recovery.py', run_name='__main__')
+runpy.run_path('.deploy/apply-981-music-note-load-more-self-heal.py', run_name='__main__')

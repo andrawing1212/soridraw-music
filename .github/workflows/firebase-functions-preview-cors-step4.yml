@@ -1,0 +1,104 @@
+name: Firebase Functions Preview CORS Step 4
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/firebase-functions-preview-cors-step4.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-functions-preview-cors-step4
+  cancel-in-progress: false
+
+jobs:
+  deploy-missing-preview-origin-functions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
+
+      - name: Build Functions with fixed custom-domain CORS
+        run: npm --prefix functions run build
+
+      - name: Verify fixed preview origins in generated Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for origin in \
+            'https://preview.soridraw.com' \
+            'https://soridraw-preview.web.app' \
+            'https://soridraw-preview.firebaseapp.com'; do
+            grep -Fq "$origin" functions/src/index.ts
+            grep -Fq "$origin" functions/lib/securedIndex.js
+          done
+          echo 'Generated Functions CORS allowlist: PASS'
+
+      - name: Verify deployment does not change data rules/config
+        run: git diff --exit-code -- firestore.rules database.rules.json firebase.json
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}'
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools
+
+      - name: Deploy only missing API Functions
+        run: |
+          firebase deploy \
+            --project soridraw-app-866a5 \
+            --only functions:getSunoRemainingCredits,functions:getGoogleGeminiApiKeyStatus,functions:saveGoogleGeminiApiKey,functions:deleteGoogleGeminiApiKey \
+            --non-interactive
+
+      - name: Verify preview and production CORS boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoints=(
+            getSunoRemainingCredits
+            getGoogleGeminiApiKeyStatus
+            saveGoogleGeminiApiKey
+            deleteGoogleGeminiApiKey
+          )
+          origins=(
+            'https://preview.soridraw.com'
+            'https://soridraw.web.app'
+          )
+          for endpoint in "${endpoints[@]}"; do
+            for origin in "${origins[@]}"; do
+              headers="$RUNNER_TEMP/${endpoint}-$(echo "$origin" | tr '/:.' '_').headers"
+              status="$(curl -sS -D "$headers" -o /dev/null -w '%{http_code}' -X OPTIONS \
+                -H "Origin: $origin" \
+                -H 'Access-Control-Request-Method: POST' \
+                -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+                "https://us-central1-soridraw-app-866a5.cloudfunctions.net/$endpoint")"
+              test "$status" = '204'
+              grep -Eiq "^access-control-allow-origin: ${origin//./\.}\r?$" "$headers"
+              echo "$endpoint / $origin: PASS ($status)"
+            done
+          done
+
+      - name: Safety summary
+        run: |
+          echo 'Step 4 complete.'
+          echo 'Only four existing shared Functions were redeployed with the fixed-origin build.'
+          echo 'No Firestore/Database Rules, Hosting release, main branch, user data, API key value, or migration was changed by this workflow.'

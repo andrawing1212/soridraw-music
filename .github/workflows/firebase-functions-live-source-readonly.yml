@@ -1,0 +1,94 @@
+name: Firebase Functions Live Source Readonly
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/firebase-functions-live-source-readonly.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-live-function:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main as comparison baseline
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Authenticate Google read-only inspection
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Describe deployed getSunoApiKeyStatus and inspect source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          project='soridraw-app-866a5'
+          region='us-central1'
+          fn='getSunoApiKeyStatus'
+
+          gcloud functions describe "$fn" --gen2 --region "$region" --project "$project" --format=json > "$RUNNER_TEMP/function.json"
+          python3 - "$RUNNER_TEMP/function.json" "$GITHUB_ENV" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding='utf-8'))
+          source = ((data.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}
+          bucket = source.get('bucket')
+          obj = source.get('object')
+          generation = source.get('generation')
+          print('LIVE_UPDATE_TIME=' + str(data.get('updateTime') or ''))
+          print('LIVE_BUILD=' + str(((data.get('buildConfig') or {}).get('build') or '')))
+          print('SOURCE_BUCKET=' + str(bucket or ''))
+          print('SOURCE_OBJECT=' + str(obj or ''))
+          if not bucket or not obj:
+              raise SystemExit('Deployed source storage location unavailable')
+          with open(sys.argv[2], 'a', encoding='utf-8') as f:
+              f.write(f'SOURCE_BUCKET={bucket}\nSOURCE_OBJECT={obj}\n')
+              if generation:
+                  f.write(f'SOURCE_GENERATION={generation}\n')
+          PY
+
+          uri="gs://$SOURCE_BUCKET/$SOURCE_OBJECT"
+          echo "[Live Source] copying deployed archive: $uri"
+          gcloud storage cp "$uri" "$RUNNER_TEMP/live-source.zip"
+          mkdir -p "$RUNNER_TEMP/live-source"
+          unzip -q "$RUNNER_TEMP/live-source.zip" -d "$RUNNER_TEMP/live-source"
+          echo '[Live Source] archive files:'
+          find "$RUNNER_TEMP/live-source" -maxdepth 3 -type f | sed "s#$RUNNER_TEMP/live-source/##" | sort | head -n 80
+
+          candidate=''
+          for path in \
+            "$RUNNER_TEMP/live-source/functions/src/index.ts" \
+            "$RUNNER_TEMP/live-source/src/index.ts" \
+            "$RUNNER_TEMP/live-source/functions/lib/index.js" \
+            "$RUNNER_TEMP/live-source/lib/index.js"; do
+            if [ -f "$path" ]; then candidate="$path"; break; fi
+          done
+          test -n "$candidate" || { echo 'Could not find deployed index source'; exit 5; }
+          echo "[Live Source] selected: ${candidate#$RUNNER_TEMP/live-source/}"
+
+          python3 - "$candidate" <<'PY'
+          import re, sys
+          text = open(sys.argv[1], encoding='utf-8').read()
+          m = re.search(r'(?:const|var)\s+ALLOWED_ORIGINS\s*=\s*\[(.*?)\];', text, re.S)
+          if not m:
+              raise SystemExit('ALLOWED_ORIGINS block not found in deployed source')
+          block = m.group(1)
+          domains = re.findall(r'["\'](https?://[^"\']+)["\']', block)
+          print('[Live Source] ALLOWED_ORIGINS:')
+          for domain in domains:
+              print('  ' + domain)
+          print('LIVE_HAS_TEST_WEB=' + str('https://soridraw-test.web.app' in domains).lower())
+          print('LIVE_HAS_TEST_FIREBASEAPP=' + str('https://soridraw-test.firebaseapp.com' in domains).lower())
+          print('LIVE_HAS_PREVIEW_CUSTOM=' + str('https://preview.soridraw.com' in domains).lower())
+          print('LIVE_HAS_PREVIEW_WEB=' + str('https://soridraw-preview.web.app' in domains).lower())
+          PY
+
+          echo 'READ_ONLY=true'
+          echo 'NO_FUNCTIONS_DEPLOY=true'
+          echo 'NO_DATA_WRITE=true'

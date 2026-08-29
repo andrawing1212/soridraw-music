@@ -21,31 +21,18 @@ const isSoftRemoved = (row) => Boolean(
   row?.unsavedAt
 );
 
-(async () => {
-  const usersSnap = await db.collection('users').get();
-  let targetUid = '';
-  let targetFavoriteCount = -1;
-  for (const doc of usersSnap.docs) {
-    const row = doc.data() || {};
-    const count = Number(row.favoriteCount || 0);
-    if (count > targetFavoriteCount) {
-      targetUid = doc.id;
-      targetFavoriteCount = count;
-    }
-  }
-  if (!targetUid) throw new Error('No target account found');
+const getIdentity = (entry) => String(
+  entry?.data?.favoriteKey ||
+  entry?.data?.soridrawSongId ||
+  entry?.data?.sourceSongId ||
+  entry?.data?.originalId ||
+  entry?.data?.id ||
+  entry?.id || ''
+).trim();
 
-  const snap = await db.collection('favorites')
-    .where('uid', '==', targetUid)
-    .orderBy('createdAt', 'desc')
-    .get();
-
-  const docs = snap.docs.map((doc) => ({ id: doc.id, data: doc.data() || {} }));
-  const active = docs.filter((entry) => !isSoftRemoved(entry.data));
-  const removed = docs.filter((entry) => isSoftRemoved(entry.data));
-
+const summarizePages = (docs, maxPages = 20) => {
   const pages = [];
-  for (let i = 0; i < docs.length && pages.length < 20; i += 20) {
+  for (let i = 0; i < docs.length && pages.length < maxPages; i += 20) {
     const slice = docs.slice(i, i + 20);
     const activeRows = slice.filter((entry) => !isSoftRemoved(entry.data));
     const removedRows = slice.length - activeRows.length;
@@ -60,9 +47,55 @@ const isSoftRemoved = (row) => Boolean(
       lastMonth: lastMs ? new Date(lastMs).toISOString().slice(0, 7) : null,
     });
   }
+  return pages;
+};
+
+(async () => {
+  const usersSnap = await db.collection('users').get();
+  let targetUid = '';
+  let targetFavoriteCount = -1;
+  for (const doc of usersSnap.docs) {
+    const row = doc.data() || {};
+    const count = Number(row.favoriteCount || 0);
+    if (count > targetFavoriteCount) {
+      targetUid = doc.id;
+      targetFavoriteCount = count;
+    }
+  }
+  if (!targetUid) throw new Error('No target account found');
+
+  const createdAtSnap = await db.collection('favorites')
+    .where('uid', '==', targetUid)
+    .orderBy('createdAt', 'desc')
+    .get();
+  const createdAtDocs = createdAtSnap.docs.map((doc) => ({ id: doc.id, data: doc.data() || {} }));
+
+  const createdAtMsPage1 = await db.collection('favorites')
+    .where('uid', '==', targetUid)
+    .orderBy('createdAtMs', 'desc')
+    .limit(20)
+    .get();
+  const createdAtMsPage2 = createdAtMsPage1.size
+    ? await db.collection('favorites')
+      .where('uid', '==', targetUid)
+      .orderBy('createdAtMs', 'desc')
+      .startAfter(createdAtMsPage1.docs[createdAtMsPage1.docs.length - 1])
+      .limit(20)
+      .get()
+    : null;
+  const createdAtMsDocs = [
+    ...createdAtMsPage1.docs,
+    ...(createdAtMsPage2?.docs || []),
+  ].map((doc) => ({ id: doc.id, data: doc.data() || {} }));
+
+  const active = createdAtDocs.filter((entry) => !isSoftRemoved(entry.data));
+  const removed = createdAtDocs.filter((entry) => isSoftRemoved(entry.data));
+  const activeIdentityKeys = active.map(getIdentity).filter(Boolean);
+  const uniqueActiveIdentityCount = new Set(activeIdentityKeys).size;
+  const activeDuplicateIdentityDocs = activeIdentityKeys.length - uniqueActiveIdentityCount;
 
   const monthCounts = {};
-  for (const entry of docs) {
+  for (const entry of createdAtDocs) {
     const ms = toMs(entry.data?.createdAtMs || entry.data?.createdAt);
     const month = ms ? new Date(ms).toISOString().slice(0, 7) : 'unknown';
     const bucket = monthCounts[month] || { raw: 0, active: 0, removed: 0 };
@@ -77,11 +110,20 @@ const isSoftRemoved = (row) => Boolean(
     projectId: PROJECT_ID,
     targetSelection: 'largest_profile_favoriteCount_no_uid_output',
     profileFavoriteCount: targetFavoriteCount,
-    rawFavoriteDocs: docs.length,
+    rawFavoriteDocs: createdAtDocs.length,
     activeFavoriteDocs: active.length,
     softRemovedDocs: removed.length,
+    uniqueActiveIdentityCount,
+    activeDuplicateIdentityDocs,
     activeMinusProfileCount: active.length - targetFavoriteCount,
-    first20PagesRawVsVisible: pages,
+    uniqueActiveMinusProfileCount: uniqueActiveIdentityCount - targetFavoriteCount,
+    createdAtOrderingPages: summarizePages(createdAtDocs, 20),
+    createdAtMsQuery: {
+      querySucceeded: true,
+      page1Count: createdAtMsPage1.size,
+      page2Count: createdAtMsPage2?.size || 0,
+      first40Pages: summarizePages(createdAtMsDocs, 2),
+    },
     monthCounts,
     safety: {
       readsOnly: true,

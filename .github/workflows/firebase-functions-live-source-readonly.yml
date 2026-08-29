@@ -34,24 +34,23 @@ jobs:
           fn='getSunoApiKeyStatus'
 
           gcloud functions describe "$fn" --gen2 --region "$region" --project "$project" --format=json > "$RUNNER_TEMP/function.json"
-          python3 - "$RUNNER_TEMP/function.json" "$GITHUB_ENV" <<'PY'
-          import json, sys
+          eval "$(python3 - "$RUNNER_TEMP/function.json" <<'PY'
+          import json, shlex, sys
           data = json.load(open(sys.argv[1], encoding='utf-8'))
           source = ((data.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}
           bucket = source.get('bucket')
           obj = source.get('object')
           generation = source.get('generation')
-          print('LIVE_UPDATE_TIME=' + str(data.get('updateTime') or ''))
-          print('LIVE_BUILD=' + str(((data.get('buildConfig') or {}).get('build') or '')))
-          print('SOURCE_BUCKET=' + str(bucket or ''))
-          print('SOURCE_OBJECT=' + str(obj or ''))
+          print('echo ' + shlex.quote('LIVE_UPDATE_TIME=' + str(data.get('updateTime') or '')))
+          print('echo ' + shlex.quote('LIVE_BUILD=' + str(((data.get('buildConfig') or {}).get('build') or ''))))
           if not bucket or not obj:
               raise SystemExit('Deployed source storage location unavailable')
-          with open(sys.argv[2], 'a', encoding='utf-8') as f:
-              f.write(f'SOURCE_BUCKET={bucket}\nSOURCE_OBJECT={obj}\n')
-              if generation:
-                  f.write(f'SOURCE_GENERATION={generation}\n')
+          print('SOURCE_BUCKET=' + shlex.quote(str(bucket)))
+          print('SOURCE_OBJECT=' + shlex.quote(str(obj)))
+          if generation:
+              print('SOURCE_GENERATION=' + shlex.quote(str(generation)))
           PY
+          )"
 
           uri="gs://$SOURCE_BUCKET/$SOURCE_OBJECT"
           echo "[Live Source] copying deployed archive: $uri"

@@ -29,19 +29,39 @@ jobs:
       - name: Install
         run: npm install --no-audit --no-fund
 
-      - name: Generate exact final source
+      - name: Generate base source
         run: |
           set -euo pipefail
           npm run prebuild
+          echo '[986 readonly] prebuild: PASS'
+
+      - name: Apply 984
+        run: |
+          set -euo pipefail
           python3 .deploy/apply-984-music-note-server-first-more.py
+          echo '[986 readonly] 984: PASS'
+
+      - name: Apply 985
+        run: |
+          set -euo pipefail
           python3 .deploy/apply-985-music-note-normalized-page-chain.py
-          python3 .deploy/apply-986-music-note-active-only-pagination.py
-          python3 .deploy/apply-980-library-pagination-metadata-recovery.py
           grep -Fq 'SORIDRAW_985_MUSIC_NOTE_NORMALIZED_PAGE_CHAIN' src/App.tsx
+          echo '[986 readonly] 985: PASS'
+
+      - name: Apply 986
+        run: |
+          set -euo pipefail
+          python3 .deploy/apply-986-music-note-active-only-pagination.py
           grep -Fq 'SORIDRAW_986_MUSIC_NOTE_ACTIVE_ONLY_PAGINATION' src/App.tsx
           grep -Fq 'musicNoteListEligible: false' src/pages/FavoritesPage.tsx
           grep -Fq 'musicNoteProfileCount' src/pages/FavoritesPage.tsx
-          echo '[986 readonly] exact generated source: PASS'
+          echo '[986 readonly] 986: PASS'
+
+      - name: Apply 980 Library recovery
+        run: |
+          set -euo pipefail
+          python3 .deploy/apply-980-library-pagination-metadata-recovery.py
+          echo '[986 readonly] 980: PASS'
 
       - name: Verify 986 bounded query and migration paths
         run: |
@@ -92,51 +112,6 @@ jobs:
           npx tsc --noEmit
           npx vite build
           echo '[986 readonly] typecheck + Vite build: PASS'
-
-      - name: Extract final pagination runtime gates
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          targets = [
-              (Path('src/App.tsx'), [
-                  'const hasCachedMusicNote',
-                  'setHasMoreFavorites(bundle.hasMore)',
-                  'const loadMoreFavoritesLegacy985',
-                  'const loadMoreFavorites',
-                  "where('musicNoteListEligible', '==', true)",
-                  'favoritePaginationExhaustedRef.current',
-              ]),
-              (Path('src/pages/FavoritesPage.tsx'), [
-                  'musicNoteProfileCount',
-                  'musicNoteRemainingCount',
-                  'canShowCachedMusicNoteMore',
-                  'canRequestMoreMusicNotePage',
-                  'shouldShowMusicNoteMoreButton',
-                  'onLoadMoreFavorites',
-              ]),
-              (Path('src/pages/SunoLibraryPage.tsx'), [
-                  'const startLibraryBundleVerification',
-                  'session.hasMore = bundle.hasMore',
-                  'workspaceLastTrackDocRef.current',
-                  'setHasMoreWorkspaceServerTracks',
-                  'hasMoreWorkspaceServerTracks',
-              ]),
-          ]
-
-          for path, needles in targets:
-              text = path.read_text(encoding='utf-8')
-              lines = text.splitlines()
-              print(f'\n===== {path} =====')
-              for needle in needles:
-                  hits = [i for i,line in enumerate(lines) if needle in line]
-                  print(f'\n--- needle={needle!r} hits={len(hits)} ---')
-                  for i in hits[:8]:
-                      lo=max(0,i-8); hi=min(len(lines),i+15)
-                      print(f'### lines {lo+1}-{hi}')
-                      for n in range(lo,hi):
-                          print(f'{n+1}: {lines[n]}')
-          PY
 
       - name: Confirm read-only
         run: |

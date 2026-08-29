@@ -25,6 +25,35 @@ const tallyFields = (rows, fields) => {
   return result;
 };
 
+const tallyFavoriteMetadata = (entries) => {
+  const result = {
+    total: entries.length,
+    favoriteColorTagPresent: 0,
+    colorTagPresent: 0,
+    sunoLinksNonEmpty: 0,
+    sunoShareUrlPresent: 0,
+    sunoUrlPresent: 0,
+    sunoSongUrlPresent: 0,
+    storedIdPresent: 0,
+    storedIdDiffersFromDocId: 0,
+  };
+  for (const entry of entries) {
+    const row = entry.data || {};
+    if (isPresent(row.favoriteColorTag)) result.favoriteColorTagPresent += 1;
+    if (isPresent(row.colorTag)) result.colorTagPresent += 1;
+    if (Array.isArray(row.sunoLinks) && row.sunoLinks.length > 0) result.sunoLinksNonEmpty += 1;
+    if (isPresent(row.sunoShareUrl)) result.sunoShareUrlPresent += 1;
+    if (isPresent(row.sunoUrl)) result.sunoUrlPresent += 1;
+    if (isPresent(row.sunoSongUrl)) result.sunoSongUrlPresent += 1;
+    const storedId = String(row.id || '').trim();
+    if (storedId) {
+      result.storedIdPresent += 1;
+      if (storedId !== entry.doc.id) result.storedIdDiffersFromDocId += 1;
+    }
+  }
+  return result;
+};
+
 const resolveTaskId = (row) => String(
   row?.taskId || row?.task_id || row?.meta?.taskId || row?.meta?.task_id
   || row?.sourceTaskId || row?.generationTaskId || row?.source?.taskId
@@ -70,7 +99,8 @@ const resolveTrackId = (row, docId = '') => String(
   }
   if (!targetUid) throw new Error('No account with favorites/tracks found');
 
-  const favoriteRows = (favoritesByUid.get(targetUid) || []).map((entry) => entry.data);
+  const targetFavoriteEntries = favoritesByUid.get(targetUid) || [];
+  const favoriteRows = targetFavoriteEntries.map((entry) => entry.data);
   const targetTrackEntries = tracksByUid.get(targetUid) || [];
   const trackRows = targetTrackEntries.map((entry) => entry.data);
 
@@ -106,6 +136,14 @@ const resolveTrackId = (row, docId = '') => String(
   const musicBundleData = musicBundle.exists ? (musicBundle.data() || {}) : {};
   const libraryBundleData = libraryBundle.exists ? (libraryBundle.data() || {}) : {};
 
+  const favoriteEntriesSorted = [...targetFavoriteEntries].sort((a, b) => {
+    const aMs = Number(a.data?.createdAtMs || 0) || toMs(a.data?.createdAt);
+    const bMs = Number(b.data?.createdAtMs || 0) || toMs(b.data?.createdAt);
+    return bMs - aMs;
+  });
+  const favoriteLatest20Entries = favoriteEntriesSorted.slice(0, 20);
+  const favoriteOlderEntries = favoriteEntriesSorted.slice(20);
+
   const cutoffMs = Date.now() - 14 * 24 * 60 * 60 * 1000;
   let olderThan14Days = 0;
   let olderRecoverable = 0;
@@ -127,6 +165,11 @@ const resolveTrackId = (row, docId = '') => String(
     projectId: PROJECT_ID,
     targetSelection: 'largest_tracks_plus_favorites_account_no_uid_output',
     favorites: tallyFields(favoriteRows, ['createdAt', 'createdAtMs', 'updatedAtMs', 'taskId', 'trackId']),
+    favoriteMetadata: {
+      all: tallyFavoriteMetadata(targetFavoriteEntries),
+      latest20: tallyFavoriteMetadata(favoriteLatest20Entries),
+      olderAfter20: tallyFavoriteMetadata(favoriteOlderEntries),
+    },
     tracks: tallyFields(trackRows, ['createdAt', 'createdAtMs', 'taskId', 'trackId', 'sourceTaskId', 'sourceId']),
     musicNotePaging: {
       page1Count: favoritePage1.size,

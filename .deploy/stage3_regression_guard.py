@@ -25,10 +25,21 @@ if cache_slice.count(guard) != 1:
     raise SystemExit(f'bundle write guard in writeFavoritesCache: expected 1 match, got {cache_slice.count(guard)}')
 cache_slice = cache_slice.replace(guard, "if (!options.skipBundleWrite && musicNoteBundleActiveUids.has(uid)) {", 1)
 text = text[:cache_start] + cache_slice + text[cache_end:]
-count = text.count("writeFavoritesCache(uid, merged);")
-if count != 2:
-    raise SystemExit(f'Music Note bounded paging cache writes: expected 2 matches, got {count}')
-text = text.replace("writeFavoritesCache(uid, merged);", "writeFavoritesCache(uid, merged, { skipBundleWrite: true });")
+
+# Only the authoritative first-page and load-more block gets skipBundleWrite.
+# Manual Sync must retain its existing bundle publication behavior.
+page_start = text.index("  const ensureFavoritesPageServerFirstPage = useCallback(async () => {")
+page_end = text.index("  const searchFavoritesOnServer = useCallback", page_start)
+page_slice = text[page_start:page_end]
+cache_call = "writeFavoritesCache(uid, merged);"
+if page_slice.count(cache_call) != 2:
+    raise SystemExit(f'Music Note bounded paging cache writes: expected 2 matches in paging block, got {page_slice.count(cache_call)}')
+page_slice = page_slice.replace(cache_call, "writeFavoritesCache(uid, merged, { skipBundleWrite: true });")
+text = text[:page_start] + page_slice + text[page_end:]
+if text.count("writeFavoritesCache(uid, merged, { skipBundleWrite: true });") != 2:
+    raise SystemExit('Music Note paging skipBundleWrite count is not exactly 2')
+if text.count("writeFavoritesCache(uid, merged);") < 1:
+    raise SystemExit('Music Note manual sync cache write was unexpectedly removed')
 app.write_text(text, encoding='utf-8')
 
 # A changed authoritative count should re-verify the first server page, including cross-device/save-delete changes.

@@ -16,3 +16,11 @@
 - 뮤직노트 원인: UI `visibleCount`와 서버 cursor/`hasMoreFavorites`가 별도 소유되고, first-page bundle 갱신이 더 깊게 진행한 pagination cursor를 앞쪽으로 되돌릴 수 있음. 또한 `filteredFavorites.length >= 20` 조건 때문에 서버에 다음 페이지가 있어도 현재 보이는 필터 결과가 20 미만이면 더보기 요청 자체가 막힐 수 있음.
 - 데이터 안전: Firestore 문서 수정/삭제/백필/Rules/Functions 변경 없이 클라이언트 읽기·캐시 메타만 수정하는 방향으로 확정.
 - 다음: 페이지 메타 단일 소유 + 레거시 `createdAt` 누락 문서 호환 읽기 최소 패치 후 build/typecheck 검증.
+
+## 2026-08-30 — Stage 3 소스 수정 1차 검증 실패
+- 브랜치: `preview-stage3-pagination`
+- 실행: GitHub Actions `Stage3 Pagination Fix` run `33267799384`.
+- 결과: 소스 패치 PASS, 정적 assertions PASS, `npm ci` PASS, TypeScript FAIL.
+- 에러: `src/App.tsx`의 `MUSIC_NOTE_PAGINATION_COMPLETE_STORAGE_BASE`가 모듈 helper보다 안쪽 React component scope에 선언되어 helper에서 참조할 수 없었음.
+- 안전조치: TypeScript 실패 즉시 build·소스 commit·배포를 자동 중단. Stage 3 앱 소스는 아직 브랜치에 반영되지 않았고 Firestore/Functions/Rules/Hosting/Auth/사용자 데이터 변경도 없음.
+- 다음: 완료 마커 상수만 기존 pagination storage 상수와 같은 module scope로 이동한 뒤 동일 수정안을 재검증.

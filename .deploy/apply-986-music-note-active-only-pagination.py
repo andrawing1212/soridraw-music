@@ -175,25 +175,31 @@ count_block = r'''  const musicNoteLoadedOwnCount = favorites.filter((item: any)
 if 'const musicNoteLoadedOwnCount = favorites.filter' not in favorites:
     favorites = replace_once(favorites, count_anchor, count_block, 'loaded/remaining count')
 
-can_request_before = '''  const canRequestMoreMusicNotePage = Boolean(
-    !isMusicNoteSharedView &&
-    !searchQuery.trim() &&
-    favoriteColorFilter === 'all' &&
-    !favoriteTrashView &&
-    hasMoreFavorites &&
-    filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE
-  );'''
-can_request_after = '''  const canRequestMoreMusicNotePage = Boolean(
-    !isMusicNoteSharedView &&
-    !searchQuery.trim() &&
-    favoriteColorFilter === 'all' &&
-    !favoriteTrashView &&
-    (musicNoteProfileCount <= 0 || musicNoteRemainingCount > 0) &&
-    hasMoreFavorites &&
-    filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE
-  );'''
-if can_request_after not in favorites:
-    favorites = replace_once(favorites, can_request_before, can_request_after, 'remaining-count more gate')
+# 981 intentionally removed the legacy local-20 gate. Preserve whichever generated
+# form is present and add only the profile remaining-count guard.
+can_request_pattern = re.compile(
+    r"(?P<head>  const canRequestMoreMusicNotePage = Boolean\(\n)(?P<body>.*?)(?P<tail>\n  \);)",
+    re.S,
+)
+can_request_match = can_request_pattern.search(favorites)
+if not can_request_match:
+    raise SystemExit('986 canRequestMoreMusicNotePage anchor missing')
+can_request_body = can_request_match.group('body')
+if 'musicNoteRemainingCount > 0' not in can_request_body:
+    if '    hasMoreFavorites' not in can_request_body:
+        raise SystemExit('986 hasMoreFavorites guard missing from canRequestMoreMusicNotePage')
+    can_request_body = can_request_body.replace(
+        '    hasMoreFavorites',
+        '    (musicNoteProfileCount <= 0 || musicNoteRemainingCount > 0) &&\n    hasMoreFavorites',
+        1,
+    )
+    favorites = (
+        favorites[:can_request_match.start()]
+        + can_request_match.group('head')
+        + can_request_body
+        + can_request_match.group('tail')
+        + favorites[can_request_match.end():]
+    )
 
 more_ui_anchor = '''          {shouldShowMusicNoteMoreButton && (
             <div className="flex justify-center pt-1" data-selection-keep="true">'''

@@ -741,6 +741,7 @@ import {
   where,
   limit,
   startAfter,
+  documentId,
   addDoc,
   writeBatch,
   getDocs,
@@ -2646,6 +2647,9 @@ function HistoryRouteWrapper({
   isFavoritesLoading,
   hasMoreFavorites,
   isLoadingMoreFavorites,
+  favoriteTotalCount,
+  musicNoteLoadedIds,
+  ensureFavoritesPageServerFirstPage,
   loadMoreFavorites,
   searchFavoritesOnServer,
   refreshFavoritesFromServerFirstPage,
@@ -2691,6 +2695,9 @@ function HistoryRouteWrapper({
       isFavoritesLoading={isFavoritesLoading}
       hasMoreFavorites={hasMoreFavorites}
       isLoadingMoreFavorites={isLoadingMoreFavorites}
+      favoriteTotalCount={favoriteTotalCount}
+      musicNoteLoadedIds={musicNoteLoadedIds}
+      onEnsureFavoritesPage={ensureFavoritesPageServerFirstPage}
       onLoadMoreFavorites={loadMoreFavorites}
       onServerSearchFavorites={searchFavoritesOnServer}
       onManualSyncFavorites={refreshFavoritesFromServerFirstPage}
@@ -4957,6 +4964,51 @@ function App() {
   const favoritePaginationFallbackModeRef = useRef(false);
   const [hasMoreFavorites, setHasMoreFavorites] = useState(false);
   const [isLoadingMoreFavorites, setIsLoadingMoreFavorites] = useState(false);
+  const [favoriteTotalCount, setFavoriteTotalCountState] = useState<number | null>(null);
+  const favoriteTotalCountRef = useRef<number | null>(null);
+  const [musicNoteLoadedIds, setMusicNoteLoadedIds] = useState<string[]>([]);
+  const musicNoteLoadedIdsRef = useRef<string[]>([]);
+  const musicNotePageInitializedUidRef = useRef<string | null>(null);
+  const musicNotePageInitializedCountRef = useRef<number | null>(null);
+  const musicNotePageInitInFlightUidRef = useRef<string | null>(null);
+  const favoritePrimaryPaginationDoneRef = useRef(false);
+  const favoriteLegacyPaginationCursorRef = useRef<any>(null);
+  const favoriteLegacyPaginationDoneRef = useRef(false);
+
+  const updateFavoriteTotalCount = (value: unknown) => {
+    const parsed = Number(value);
+    const next = Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null;
+    favoriteTotalCountRef.current = next;
+    setFavoriteTotalCountState(next);
+  };
+
+  const replaceMusicNoteLoadedIds = (items: any[]): string[] => {
+    const seen = new Set<string>();
+    const next: string[] = [];
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      const id = String(item?.id || item?.firestoreId || '').trim();
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      next.push(id);
+    });
+    musicNoteLoadedIdsRef.current = next;
+    setMusicNoteLoadedIds(next);
+    return next;
+  };
+
+  const appendMusicNoteLoadedItems = (items: any[]): string[] => {
+    const next = [...musicNoteLoadedIdsRef.current];
+    const seen = new Set(next);
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      const id = String(item?.id || item?.firestoreId || '').trim();
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      next.push(id);
+    });
+    musicNoteLoadedIdsRef.current = next;
+    setMusicNoteLoadedIds(next);
+    return next;
+  };
   const isFavoriteSoftRemoved = (favorite: any) => Boolean(
     favorite?.favoriteRemoved === true
     || favorite?.saved === false
@@ -8620,6 +8672,19 @@ const toggleCycleVariantSelection = (
       }
 
       if (currentUser) {
+        if (musicNotePageInitializedUidRef.current !== currentUser.uid) {
+          musicNotePageInitializedUidRef.current = null;
+          musicNotePageInitializedCountRef.current = null;
+          musicNotePageInitInFlightUidRef.current = null;
+          favoritePrimaryPaginationDoneRef.current = false;
+          favoriteLegacyPaginationCursorRef.current = null;
+          favoriteLegacyPaginationDoneRef.current = false;
+          replaceMusicNoteLoadedIds([]);
+        }
+        const cachedProfileForFavoriteCount = readUserProfileCache(currentUser.uid) as any;
+        if (cachedProfileForFavoriteCount && Number.isFinite(Number(cachedProfileForFavoriteCount.favoriteCount))) {
+          updateFavoriteTotalCount(cachedProfileForFavoriteCount.favoriteCount);
+        }
         const cachedRole = readCachedUserRole();
         if (!cachedRole || cachedRole.uid !== currentUser.uid) {
           setCachedUserRoleHint(null);
@@ -8698,6 +8763,7 @@ const toggleCycleVariantSelection = (
 
           if (docSnap.exists()) {
             const data = docSnap.data();
+            updateFavoriteTotalCount(data?.favoriteCount);
             writeUserProfileCache(currentUser.uid, data);
             const recentSongsVersion = Number(data?.syncVersions?.recentSongs || 0);
             if (recentSongsVersion > 0 && typeof window !== 'undefined') {
@@ -8994,10 +9060,12 @@ const toggleCycleVariantSelection = (
                 const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
                 return !favoriteId || !localDeletedIds.has(favoriteId);
               });
-              favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
-              favoritePaginationExhaustedRef.current = !bundle.hasMore;
-              favoritePaginationFallbackModeRef.current = false;
-              setHasMoreFavorites(bundle.hasMore);
+              if (musicNotePageInitializedUidRef.current !== currentUser.uid) {
+                favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
+                favoritePaginationExhaustedRef.current = !bundle.hasMore;
+                favoritePaginationFallbackModeRef.current = false;
+                setHasMoreFavorites(bundle.hasMore);
+              }
               setFavorites((prev) => {
                 const previous = Array.isArray(prev) ? prev : [];
                 const bundleVersion = Number(bundle.updatedAtMs || 0);
@@ -9067,6 +9135,14 @@ const toggleCycleVariantSelection = (
         setFavorites([]);
         setHasMoreFavorites(false);
         setIsLoadingMoreFavorites(false);
+        updateFavoriteTotalCount(null);
+        replaceMusicNoteLoadedIds([]);
+        musicNotePageInitializedUidRef.current = null;
+        musicNotePageInitializedCountRef.current = null;
+        musicNotePageInitInFlightUidRef.current = null;
+        favoritePrimaryPaginationDoneRef.current = false;
+        favoriteLegacyPaginationCursorRef.current = null;
+        favoriteLegacyPaginationDoneRef.current = false;
         favoritePaginationCursorRef.current = null;
         favoritePaginationExhaustedRef.current = false;
         favoritePaginationLoadingRef.current = false;
@@ -9089,49 +9165,164 @@ const toggleCycleVariantSelection = (
     };
   }, []);
 
+  const ensureFavoritesPageServerFirstPage = useCallback(async () => {
+    const currentUser = user || auth.currentUser;
+    if (!currentUser?.uid) return;
+    const uid = currentUser.uid;
+    const totalCount = favoriteTotalCountRef.current;
+    if (
+      musicNotePageInitializedUidRef.current === uid
+      && musicNotePageInitializedCountRef.current === totalCount
+      && musicNoteLoadedIdsRef.current.length > 0
+    ) return;
+    if (musicNotePageInitInFlightUidRef.current === uid) return;
+
+    musicNotePageInitInFlightUidRef.current = uid;
+    favoritePaginationLoadingRef.current = true;
+    setIsLoadingMoreFavorites(true);
+    try {
+      const firstPageQuery = query(
+        collection(db, 'favorites'),
+        where('uid', '==', uid),
+        orderBy('createdAt', 'desc'),
+        limit(FAVORITES_PAGE_SIZE + 1)
+      );
+      const snapshot = await getDocs(firstPageQuery);
+      const pageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
+      const pageFavorites = sortFavoriteList(
+        pageDocs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite))
+      );
+
+      setFavorites((prev) => {
+        const merged = mergeFavoritePages(prev || [], pageFavorites);
+        writeFavoritesCache(uid, merged);
+        return merged;
+      });
+      const loadedIds = replaceMusicNoteLoadedIds(pageFavorites);
+      favoritePaginationCursorRef.current = pageDocs[pageDocs.length - 1] || null;
+      if (favoritePaginationCursorRef.current) writeMusicNotePaginationCursor(uid, favoritePaginationCursorRef.current);
+      else clearMusicNotePaginationCursor(uid);
+      favoritePrimaryPaginationDoneRef.current = snapshot.docs.length <= FAVORITES_PAGE_SIZE;
+      favoriteLegacyPaginationCursorRef.current = null;
+      favoriteLegacyPaginationDoneRef.current = false;
+      favoritePaginationFallbackModeRef.current = false;
+      favoritePaginationExhaustedRef.current = false;
+      musicNotePageInitializedUidRef.current = uid;
+      musicNotePageInitializedCountRef.current = totalCount;
+
+      const hasRemainingByCount = totalCount === null
+        ? snapshot.docs.length > FAVORITES_PAGE_SIZE
+        : loadedIds.length < totalCount;
+      setHasMoreFavorites(hasRemainingByCount);
+      markCacheDiagnostic('musicNote', 'SYNC', Math.max(1, snapshot.docs.length));
+    } catch (error) {
+      console.warn('Music Note first server page verification failed; keeping cached first screen and retry available.', error);
+      musicNotePageInitializedUidRef.current = null;
+      setHasMoreFavorites((favoriteTotalCountRef.current ?? 0) > musicNoteLoadedIdsRef.current.length);
+    } finally {
+      musicNotePageInitInFlightUidRef.current = null;
+      favoritePaginationLoadingRef.current = false;
+      setIsLoadingMoreFavorites(false);
+      setIsFavoritesLoading(false);
+    }
+  }, [user]);
+
   const loadMoreFavorites = useCallback(async () => {
     const currentUser = user || auth.currentUser;
     if (!currentUser?.uid) return;
-    if (favoritePaginationFallbackModeRef.current) return;
-    if (favoritePaginationLoadingRef.current || favoritePaginationExhaustedRef.current) return;
-    const cursor = favoritePaginationCursorRef.current;
-    if (!cursor) return;
+    const uid = currentUser.uid;
+    if (favoritePaginationLoadingRef.current) return;
+
+    if (musicNotePageInitializedUidRef.current !== uid || musicNoteLoadedIdsRef.current.length === 0) {
+      await ensureFavoritesPageServerFirstPage();
+      return;
+    }
+
+    const totalCount = favoriteTotalCountRef.current;
+    if (totalCount !== null && musicNoteLoadedIdsRef.current.length >= totalCount) {
+      favoritePaginationExhaustedRef.current = true;
+      setHasMoreFavorites(false);
+      return;
+    }
 
     favoritePaginationLoadingRef.current = true;
     setIsLoadingMoreFavorites(true);
     try {
-      const q = query(
-        collection(db, 'favorites'),
-        where('uid', '==', currentUser.uid),
-        orderBy('createdAt', 'desc'),
-        startAfter(cursor),
-        limit(FAVORITES_PAGE_SIZE)
-      );
-      const snapshot = await getDocs(q);
-      const nextDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-      const nextFavs = nextDocs.map(mapFavoriteFirestoreDoc);
-      if (nextDocs.length > 0) {
-        favoritePaginationCursorRef.current = nextDocs[nextDocs.length - 1];
-        writeMusicNotePaginationCursor(currentUser.uid, favoritePaginationCursorRef.current);
+      let snapshot: any = null;
+      let pageDocs: any[] = [];
+
+      if (!favoritePrimaryPaginationDoneRef.current && favoritePaginationCursorRef.current) {
+        const nextQuery = query(
+          collection(db, 'favorites'),
+          where('uid', '==', uid),
+          orderBy('createdAt', 'desc'),
+          startAfter(favoritePaginationCursorRef.current),
+          limit(FAVORITES_PAGE_SIZE + 1)
+        );
+        snapshot = await getDocs(nextQuery);
+        pageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
+        favoritePrimaryPaginationDoneRef.current = snapshot.docs.length <= FAVORITES_PAGE_SIZE;
+        if (pageDocs.length > 0) {
+          favoritePaginationCursorRef.current = pageDocs[pageDocs.length - 1];
+        } else {
+          favoritePrimaryPaginationDoneRef.current = true;
+          favoritePaginationCursorRef.current = null;
+        }
       } else {
-        clearMusicNotePaginationCursor(currentUser.uid);
+        if (favoriteLegacyPaginationDoneRef.current) {
+          favoritePaginationExhaustedRef.current = true;
+          setHasMoreFavorites(false);
+          return;
+        }
+        const constraints: any[] = [where('uid', '==', uid), orderBy(documentId())];
+        if (favoriteLegacyPaginationCursorRef.current) {
+          constraints.push(startAfter(favoriteLegacyPaginationCursorRef.current));
+        }
+        constraints.push(limit(FAVORITES_PAGE_SIZE));
+        snapshot = await getDocs(query(collection(db, 'favorites'), ...constraints));
+        pageDocs = snapshot.docs;
+        favoriteLegacyPaginationCursorRef.current = pageDocs[pageDocs.length - 1] || favoriteLegacyPaginationCursorRef.current;
+        favoriteLegacyPaginationDoneRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
       }
-      favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
-      setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
-      setFavorites((prev) => {
-        const merged = mergeFavoritePages(prev || [], nextFavs);
-        writeFavoritesCache(currentUser.uid, merged);
-        return merged;
-      });
+
+      const alreadyLoaded = new Set(musicNoteLoadedIdsRef.current);
+      const pageFavorites = sortFavoriteList(
+        pageDocs
+          .map(mapFavoriteFirestoreDoc)
+          .filter((favorite) => !isFavoriteSoftRemoved(favorite))
+          .filter((favorite) => {
+            const id = String(favorite?.id || favorite?.firestoreId || '').trim();
+            return Boolean(id && !alreadyLoaded.has(id));
+          })
+      );
+
+      if (pageFavorites.length > 0) {
+        setFavorites((prev) => {
+          const merged = mergeFavoritePages(prev || [], pageFavorites);
+          writeFavoritesCache(uid, merged);
+          return merged;
+        });
+      }
+      const loadedIds = appendMusicNoteLoadedItems(pageFavorites);
+      const remainingByCount = totalCount === null ? null : Math.max(0, totalCount - loadedIds.length);
+      const physicallyDone = favoritePrimaryPaginationDoneRef.current && favoriteLegacyPaginationDoneRef.current;
+      const hasMore = remainingByCount === null ? !physicallyDone : remainingByCount > 0 && !physicallyDone;
+      favoritePaginationExhaustedRef.current = !hasMore;
+      setHasMoreFavorites(hasMore);
+      markCacheDiagnostic('musicNote', 'SYNC', Math.max(1, snapshot?.docs?.length || 0));
+
+      if (physicallyDone && remainingByCount !== null && remainingByCount > 0) {
+        console.warn(`Music Note paging finished with ${remainingByCount} count mismatch; no automatic full scan will run.`);
+      }
     } catch (error) {
-      console.warn('Favorites additional page load failed. Keeping the current list instead of crashing the page.', error);
-      favoritePaginationExhaustedRef.current = true;
-      setHasMoreFavorites(false);
+      console.warn('Favorites bounded page load failed. Keeping current list and retry available.', error);
+      favoritePaginationExhaustedRef.current = false;
+      setHasMoreFavorites(true);
     } finally {
       favoritePaginationLoadingRef.current = false;
       setIsLoadingMoreFavorites(false);
     }
-  }, [user]);
+  }, [user, ensureFavoritesPageServerFirstPage]);
 
   const syncMusicNoteIncrementalFromRemoteVersion = useCallback(async (
     remoteVersion: number,
@@ -16968,6 +17159,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               isFavoritesLoading={isFavoritesLoading}
                               hasMoreFavorites={hasMoreFavorites}
                               isLoadingMoreFavorites={isLoadingMoreFavorites}
+                              favoriteTotalCount={favoriteTotalCount}
+                              musicNoteLoadedIds={musicNoteLoadedIds}
+                              ensureFavoritesPageServerFirstPage={ensureFavoritesPageServerFirstPage}
                               loadMoreFavorites={loadMoreFavorites}
                               searchFavoritesOnServer={searchFavoritesOnServer}
                               refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
@@ -18521,6 +18715,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     isFavoritesLoading={isFavoritesLoading}
                     hasMoreFavorites={hasMoreFavorites}
                     isLoadingMoreFavorites={isLoadingMoreFavorites}
+                    favoriteTotalCount={favoriteTotalCount}
+                    musicNoteLoadedIds={musicNoteLoadedIds}
+                    ensureFavoritesPageServerFirstPage={ensureFavoritesPageServerFirstPage}
                     loadMoreFavorites={loadMoreFavorites}
                     searchFavoritesOnServer={searchFavoritesOnServer}
                     refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}

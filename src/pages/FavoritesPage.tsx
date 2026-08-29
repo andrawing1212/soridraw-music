@@ -894,6 +894,9 @@ export default function FavoritesPage({
   isFavoritesLoading = false,
   hasMoreFavorites = false,
   isLoadingMoreFavorites = false,
+  favoriteTotalCount = null,
+  musicNoteLoadedIds = [],
+  onEnsureFavoritesPage,
   onLoadMoreFavorites,
   onServerSearchFavorites,
   onManualSyncFavorites,
@@ -913,6 +916,9 @@ export default function FavoritesPage({
   isFavoritesLoading?: boolean;
   hasMoreFavorites?: boolean;
   isLoadingMoreFavorites?: boolean;
+  favoriteTotalCount?: number | null;
+  musicNoteLoadedIds?: string[];
+  onEnsureFavoritesPage?: () => Promise<void> | void;
   onLoadMoreFavorites?: () => Promise<void> | void;
   onServerSearchFavorites?: (searchText: string) => Promise<any[]>;
   onManualSyncFavorites?: () => Promise<{ ok: boolean; limited?: boolean; message?: string }>;
@@ -976,9 +982,20 @@ export default function FavoritesPage({
   const serverSearchRunIdRef = useRef(0);
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
   const baseFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
+  const canonicalPagedFavoriteSource = (() => {
+    if (isMusicNoteSharedView || musicNoteViewMode !== 'noteSpace' || deferredSearchQuery.trim() || musicNoteLoadedIds.length === 0) {
+      return baseFavoriteSource;
+    }
+    const byId = new Map<string, any>();
+    (favorites || []).forEach((favorite: any) => {
+      const id = getFavoriteDocumentId(favorite);
+      if (id) byId.set(id, favorite);
+    });
+    return musicNoteLoadedIds.map((id) => byId.get(id)).filter(Boolean);
+  })();
   const activeFavoriteSource = !isMusicNoteSharedView && deferredSearchQuery.trim()
     ? mergeMusicNoteSearchSource(baseFavoriteSource, serverSearchFavorites)
-    : baseFavoriteSource;
+    : canonicalPagedFavoriteSource;
   const [creatorNameByUid, setCreatorNameByUid] = useState<Record<string, string>>({});
   const isSharedMusicNoteItem = (song: any) => Boolean(
     song?.sharedReadOnly
@@ -2797,6 +2814,11 @@ export default function FavoritesPage({
   useEffect(() => {
     favoritesRef.current = favorites || [];
   }, [favorites]);
+
+  useEffect(() => {
+    if (isMusicNoteSharedView) return;
+    void onEnsureFavoritesPage?.();
+  }, [isMusicNoteSharedView, onEnsureFavoritesPage]);
 
   useEffect(() => {
     if (!selectedSong?.id || isMusicNoteSharedView) return;
@@ -5381,16 +5403,21 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   });
 
-  const canShowCachedMusicNoteMore = visibleCount < filteredFavorites.length;
-  const canRequestMoreMusicNotePage = Boolean(
+  const isCanonicalMusicNotePagingView = Boolean(
     !isMusicNoteSharedView &&
+    musicNoteViewMode === 'noteSpace' &&
     !searchQuery.trim() &&
     favoriteColorFilter === 'all' &&
-    !favoriteTrashView &&
-    hasMoreFavorites &&
-    filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE
+    !favoriteTrashView
   );
-  const shouldShowMusicNoteMoreButton = canShowCachedMusicNoteMore || canRequestMoreMusicNotePage;
+  const musicNoteRemainingCount = favoriteTotalCount === null
+    ? null
+    : Math.max(0, favoriteTotalCount - musicNoteLoadedIds.length);
+  const canRequestMoreMusicNotePage = Boolean(isCanonicalMusicNotePagingView && hasMoreFavorites);
+  const canShowCachedMusicNoteMore = Boolean(
+    !isCanonicalMusicNotePagingView && visibleCount < filteredFavorites.length
+  );
+  const shouldShowMusicNoteMoreButton = canRequestMoreMusicNotePage || canShowCachedMusicNoteMore;
 
   const musicNoteFilterCount = (sortBy !== 'latest' ? 1 : 0) + (favoriteTrashView ? 1 : 0);
 
@@ -6596,12 +6623,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 onPointerDown={(event) => { if (isSelectionMode) event.stopPropagation(); }}
                 onClick={async (event) => {
                   event.stopPropagation();
-                  if (canShowCachedMusicNoteMore) {
+                  if (canRequestMoreMusicNotePage) {
+                    await onLoadMoreFavorites?.();
                     setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE);
                     return;
                   }
-                  if (canRequestMoreMusicNotePage) {
-                    await onLoadMoreFavorites?.();
+                  if (canShowCachedMusicNoteMore) {
                     setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE);
                   }
                 }}
@@ -6615,10 +6642,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 <Plus className="w-5 h-5 text-[#FF7A72] group-hover:rotate-90 transition-transform" />
                 {isLoadingMoreFavorites
                   ? '불러오는 중...'
-                  : canShowCachedMusicNoteMore
-                    ? `더보기 (${filteredFavorites.length - visibleCount}개 남음)`
-                    : musicNoteViewMode === 'noteSpace'
-                      ? '더보기 (20개 더 불러오기)'
+                  : isCanonicalMusicNotePagingView && musicNoteRemainingCount !== null
+                    ? `더보기 (${musicNoteRemainingCount}개 남음)`
+                    : canShowCachedMusicNoteMore
+                      ? `더보기 (${filteredFavorites.length - visibleCount}개 남음)`
                       : '더보기'}
               </button>
             </div>

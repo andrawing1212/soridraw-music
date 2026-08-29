@@ -9,6 +9,8 @@ on:
       - '.deploy/apply-981-music-note-load-more-self-heal.py'
       - '.deploy/apply-982-music-note-loaded-metadata-hydration.py'
       - '.deploy/apply-983-music-note-cursor-chain-repair.py'
+      - '.deploy/apply-984-music-note-server-first-more.py'
+      - '.deploy/apply-985-music-note-normalized-page-chain.py'
       - '.deploy/verify-955-suno-audio-url-auto-recovery.py'
       - '.github/workflows/firebase-hosting-preview-pagination-recovery.yml'
   workflow_dispatch:
@@ -57,6 +59,15 @@ jobs:
           grep -Fq 'SORIDRAW_983_MUSIC_NOTE_CURSOR_CHAIN_REPAIR' src/pages/FavoritesPage.tsx
           echo '[pagination] 979 + 981 + 982 + 983 generated: PASS'
 
+      - name: Apply normalized Music Note server paging
+        run: |
+          set -euo pipefail
+          python3 .deploy/apply-984-music-note-server-first-more.py
+          python3 .deploy/apply-985-music-note-normalized-page-chain.py
+          grep -Fq 'SORIDRAW_984_MUSIC_NOTE_SERVER_FIRST_MORE' src/pages/FavoritesPage.tsx
+          grep -Fq 'SORIDRAW_985_MUSIC_NOTE_NORMALIZED_PAGE_CHAIN' src/App.tsx
+          echo '[pagination] 984 + 985 generated: PASS'
+
       - name: Apply Library pagination metadata recovery
         run: |
           set -euo pipefail
@@ -64,25 +75,35 @@ jobs:
           grep -Fq 'SORIDRAW_980_LIBRARY_PAGINATION_METADATA_RECOVERY' src/pages/SunoLibraryPage.tsx
           echo '[pagination] 980 generated: PASS'
 
-      - name: Verify bounded pagination and metadata invariants
+      - name: Verify normalized Music Note invariants
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq "where('uid', '==', currentUser.uid)" src/App.tsx
-          grep -Fq "orderBy('createdAt', 'desc')" src/App.tsx
-          grep -Fq 'favoritePaginationCanonicalAnchorVerifiedRef' src/App.tsx
-          grep -Fq 'favoritePaginationCursorRef.current = canonicalCursorDoc;' src/App.tsx
-          grep -Fq 'setFavorites(canonicalFavs);' src/App.tsx
-          grep -Fq 'setHasMoreFavorites(bundle.hasMore);' src/App.tsx
-          grep -Fq "new CustomEvent('soridraw:music-note-page-metadata'" src/App.tsx
-          grep -Fq "window.addEventListener('soridraw:music-note-page-metadata'" src/pages/FavoritesPage.tsx
-          grep -Fq 'loadedFavoriteMetadataRef' src/pages/FavoritesPage.tsx
-          grep -Fq 'hasSongLinksField' src/pages/FavoritesPage.tsx
-          grep -Fq 'hasSongColorField' src/pages/FavoritesPage.tsx
+          python3 - <<'PY'
+          from pathlib import Path
+          app = Path('src/App.tsx').read_text(encoding='utf-8')
+          start = app.index('  const loadMoreFavorites = useCallback(async () => {')
+          end = app.index('  const syncMusicNoteIncrementalFromRemoteVersion = useCallback', start)
+          block = app[start:end]
+          required = [
+              "where('uid', '==', currentUser.uid)",
+              "orderBy('createdAtMs', 'desc')",
+              'const fetchActivePage = async (startCursor: any) => {',
+              'if (!isFavoriteSoftRemoved(mapped))',
+              'const merged = mergeFavoritePages(baseItems, nextPage.items);',
+              'favoritePaginationCursorRef.current = nextPage.cursor || cursor;',
+          ]
+          for marker in required:
+              if marker not in block:
+                  raise SystemExit(f'missing normalized Music Note marker: {marker}')
+          if "orderBy('createdAt', 'desc')" in block:
+              raise SystemExit('mixed-type createdAt still present in Music Note loadMore block')
+          print('[pagination] createdAtMs normalized active-song page chain: PASS')
+          PY
           grep -Fq 'session.lastDoc = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;' src/pages/SunoLibraryPage.tsx
           grep -Fq 'session.hasMore = bundle.hasMore;' src/pages/SunoLibraryPage.tsx
           grep -Fq 'startAfter(workspaceLastTrackDocRef.current)' src/pages/SunoLibraryPage.tsx
-          echo '[pagination] canonical Music Note chain + metadata hydration + bounded Library paths: PASS'
+          echo '[pagination] bounded Library paths: PASS'
 
       - name: Typecheck and build generated source
         run: |
@@ -131,5 +152,6 @@ jobs:
 
       - name: Result
         run: |
-          echo 'Music Note canonical pagination chain + saved colour/Suno URL metadata hydration deployed to soridraw-preview only.'
+          echo 'Music Note paging now uses uid + createdAtMs and appends 20 active saved songs per click on soridraw-preview only.'
+          echo 'URL/colour restoration is intentionally not part of 985 validation.'
           echo 'No main change, production Hosting release, Functions deploy, Firestore/Database Rules change, or user-data migration in this workflow.'

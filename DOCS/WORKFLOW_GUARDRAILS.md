@@ -43,7 +43,7 @@ Test/Production의 동일 구조 통일은 각각 4단계/6단계에서 진행�
 ## 5. 현재 작업 로드맵
 1. Preview 빌드·배포 구조 단순화 — **COMPLETE**
 2. Vercel ↔ Firebase 기능 1:1 복구 — **COMPLETE**
-3. 뮤직노트·라이브러리 페이지네이션 정상화 — **NEXT**
+3. 뮤직노트·라이브러리 페이지네이션 정상화 — **IN PROGRESS**
 4. Firebase 테스트 환경 구조 통일
 5. Auth / App Check / CORS 주소 최종 정리
 6. 정식 Firebase 배포 구조 통일
@@ -63,12 +63,19 @@ Test/Production의 동일 구조 통일은 각각 4단계/6단계에서 진행�
 
 사용자는 이 진척도를 기준으로 다음 계획을 세우므로 새 채팅에서도 반드시 유지한다.
 
-## 7. 데이터 안전
+## 7. 누적 작업 메모 — 모든 작업마다 필수
+- `DOCS/DEPLOYMENT_PROGRESS.md`는 현재 전체 상태와 다음 단계 요약을 유지한다.
+- `DOCS/WORK_LOG.md`는 **누적 작업 일지**로 사용한다.
+- 진단, 원인 확정, 소스 수정, 테스트, 빌드, 배포, 롤백, 보류 결정까지 모든 의미 있는 작업이 끝날 때마다 `DOCS/WORK_LOG.md`에 날짜/브랜치/작업/결과/다음 작업을 append한다.
+- 임시 진단 워크플로를 삭제하더라도 진단 결과와 판단 근거는 WORK_LOG에 남긴다.
+- 새 채팅에서는 `WORKFLOW_GUARDRAILS.md` → `DEPLOYMENT_PROGRESS.md` → `WORK_LOG.md` 최신 항목 순서로 확인하고 이어간다.
+
+## 8. 데이터 안전
 Firestore/Auth/Functions의 저장 구조나 읽기 방식이 바뀌면 기존 사용자 데이터 호환성을 먼저 확인한다.
 기존 데이터를 못 읽거나 덮어쓸 가능성이 있으면 배포하지 않는다.
 데이터 삭제/덮어쓰기/백필은 별도 승인 없이 실행하지 않는다.
 
-## 8. 현재 앱 버그 메모 — 3단계에서 처리
+## 9. 현재 앱 버그 메모 — 3단계에서 처리
 - 뮤직노트: 캐시 + 서버 이중 페이지네이션으로 전체 수/연속 목록이 깨짐. 약 493개 기준 전체 서버 체인을 정상화해야 함.
 - 라이브러리: 서버에 더 있어도 `hasMore`가 false가 되면 더보기 버튼이 사라지는 현상.
 - Explore: 현재 정상. 건드리지 않는다.
@@ -81,7 +88,7 @@ Firestore/Auth/Functions의 저장 구조나 읽기 방식이 바뀌면 기존 �
 - Firestore 인덱스/저장 필드/읽기 구조 변경이 정말 필요하면 호환성을 먼저 확인하고 별도 보고한다.
 - Explore와 Hosting/Auth는 이번 단계에서 건드리지 않는다.
 
-## 9. 2단계 Hosting/Auth 완료 기준 메모
+## 10. 2단계 Hosting/Auth 완료 기준 메모
 - Firebase Preview custom/site 실제 JS/CSS가 현재 동결 source build와 동일함을 확인했다.
 - Vercel/Firebase Origin 모두 Functions CORS 및 Explore CORS를 통과했다.
 - Firebase Auth authorized domains에 Vercel Preview 및 Firebase Preview 주소가 모두 등록되어 있다.
@@ -90,11 +97,11 @@ Firestore/Auth/Functions의 저장 구조나 읽기 방식이 바뀌면 기존 �
 - `src/constants/emailVerification.ts`는 Firebase Preview 3개 주소로 인증 완료 후 복귀할 수 있게 수정됐다.
 - `src/data/v2PreviewShadowMirror.ts`의 Vercel 전용 Backend V2 shadow 경로는 별도 실험/진단 기능이므로 Hosting 이관과 섞지 않는다.
 
-## 10. Functions 범위
+## 11. Functions 범위
 1단계 legacy root build가 `functions/src/index.ts`에도 생성 차이를 만들 수 있다는 점은 확인했지만, 1단계에는 포함하지 않았다.
 Functions/Rules/Firestore는 배포하지 않았으며, Functions는 별도 `functions/package.json` 빌드 체인을 유지한다.
 Functions 구조 정리가 필요한 경우 별도 단계에서 호환성 검증 후 진행한다.
 
-## 11. UI 고정 원칙
+## 12. UI 고정 원칙
 앱의 버튼/창에 외곽선(테두리 선)을 새로 넣지 않는다.
 기존 디자인·반응형 동작은 요청 없는 한 변경하지 않는다.

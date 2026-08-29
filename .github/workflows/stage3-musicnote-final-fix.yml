@@ -1,0 +1,335 @@
+name: Stage3 MusicNote Final Fix
+
+on:
+  push:
+    branches: [preview-stage3-final]
+    paths:
+      - '.github/workflows/stage3-musicnote-final-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview-stage3-final
+          fetch-depth: 0
+
+      - name: Apply bounded server-owned Music Note paging
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, got {count}')
+              return text.replace(old, new, 1)
+
+          app = Path('src/App.tsx')
+          text = app.read_text(encoding='utf-8')
+
+          text = replace_once(
+              text,
+              "  startAfter,\n  addDoc,",
+              "  startAfter,\n  documentId,\n  addDoc,",
+              'documentId import',
+          )
+
+          state_anchor = """  const [hasMoreFavorites, setHasMoreFavorites] = useState(false);\n  const [isLoadingMoreFavorites, setIsLoadingMoreFavorites] = useState(false);\n"""
+          state_insert = state_anchor + """  const [favoriteTotalCount, setFavoriteTotalCountState] = useState<number | null>(null);\n  const favoriteTotalCountRef = useRef<number | null>(null);\n  const [musicNoteLoadedIds, setMusicNoteLoadedIds] = useState<string[]>([]);\n  const musicNoteLoadedIdsRef = useRef<string[]>([]);\n  const musicNotePageInitializedUidRef = useRef<string | null>(null);\n  const musicNotePageInitializedCountRef = useRef<number | null>(null);\n  const musicNotePageInitInFlightUidRef = useRef<string | null>(null);\n  const favoritePrimaryPaginationDoneRef = useRef(false);\n  const favoriteLegacyPaginationCursorRef = useRef<any>(null);\n  const favoriteLegacyPaginationDoneRef = useRef(false);\n\n  const updateFavoriteTotalCount = (value: unknown) => {\n    const parsed = Number(value);\n    const next = Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null;\n    favoriteTotalCountRef.current = next;\n    setFavoriteTotalCountState(next);\n  };\n\n  const replaceMusicNoteLoadedIds = (items: any[]): string[] => {\n    const seen = new Set<string>();\n    const next: string[] = [];\n    (Array.isArray(items) ? items : []).forEach((item) => {\n      const id = String(item?.id || item?.firestoreId || '').trim();\n      if (!id || seen.has(id)) return;\n      seen.add(id);\n      next.push(id);\n    });\n    musicNoteLoadedIdsRef.current = next;\n    setMusicNoteLoadedIds(next);\n    return next;\n  };\n\n  const appendMusicNoteLoadedItems = (items: any[]): string[] => {\n    const next = [...musicNoteLoadedIdsRef.current];\n    const seen = new Set(next);\n    (Array.isArray(items) ? items : []).forEach((item) => {\n      const id = String(item?.id || item?.firestoreId || '').trim();\n      if (!id || seen.has(id)) return;\n      seen.add(id);\n      next.push(id);\n    });\n    musicNoteLoadedIdsRef.current = next;\n    setMusicNoteLoadedIds(next);\n    return next;\n  };\n"""
+          text = replace_once(text, state_anchor, state_insert, 'music note paging state')
+
+          user_anchor = """      if (currentUser) {\n        const cachedRole = readCachedUserRole();\n"""
+          user_insert = """      if (currentUser) {\n        if (musicNotePageInitializedUidRef.current !== currentUser.uid) {\n          musicNotePageInitializedUidRef.current = null;\n          musicNotePageInitializedCountRef.current = null;\n          musicNotePageInitInFlightUidRef.current = null;\n          favoritePrimaryPaginationDoneRef.current = false;\n          favoriteLegacyPaginationCursorRef.current = null;\n          favoriteLegacyPaginationDoneRef.current = false;\n          replaceMusicNoteLoadedIds([]);\n        }\n        const cachedProfileForFavoriteCount = readUserProfileCache(currentUser.uid) as any;\n        if (cachedProfileForFavoriteCount && Number.isFinite(Number(cachedProfileForFavoriteCount.favoriteCount))) {\n          updateFavoriteTotalCount(cachedProfileForFavoriteCount.favoriteCount);\n        }\n        const cachedRole = readCachedUserRole();\n"""
+          text = replace_once(text, user_anchor, user_insert, 'auth music note paging reset')
+
+          snapshot_anchor = """          if (docSnap.exists()) {\n            const data = docSnap.data();\n            writeUserProfileCache(currentUser.uid, data);\n"""
+          snapshot_insert = """          if (docSnap.exists()) {\n            const data = docSnap.data();\n            updateFavoriteTotalCount(data?.favoriteCount);\n            writeUserProfileCache(currentUser.uid, data);\n"""
+          text = replace_once(text, snapshot_anchor, snapshot_insert, 'favorite count from user doc')
+
+          logout_anchor = """      } else {\n        setFavorites([]);\n        setHasMoreFavorites(false);\n        setIsLoadingMoreFavorites(false);\n        favoritePaginationCursorRef.current = null;\n        favoritePaginationExhaustedRef.current = false;\n        favoritePaginationLoadingRef.current = false;\n        favoritePaginationFallbackModeRef.current = false;\n        setIsFavoritesLoading(false);\n"""
+          logout_insert = """      } else {\n        setFavorites([]);\n        setHasMoreFavorites(false);\n        setIsLoadingMoreFavorites(false);\n        updateFavoriteTotalCount(null);\n        replaceMusicNoteLoadedIds([]);\n        musicNotePageInitializedUidRef.current = null;\n        musicNotePageInitializedCountRef.current = null;\n        musicNotePageInitInFlightUidRef.current = null;\n        favoritePrimaryPaginationDoneRef.current = false;\n        favoriteLegacyPaginationCursorRef.current = null;\n        favoriteLegacyPaginationDoneRef.current = false;\n        favoritePaginationCursorRef.current = null;\n        favoritePaginationExhaustedRef.current = false;\n        favoritePaginationLoadingRef.current = false;\n        favoritePaginationFallbackModeRef.current = false;\n        setIsFavoritesLoading(false);\n"""
+          text = replace_once(text, logout_anchor, logout_insert, 'logout paging reset')
+
+          # Once the page owns a real server cursor, bundle refreshes may refresh data but cannot rewind pagination.
+          bundle_cursor = """              favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;\n              favoritePaginationExhaustedRef.current = !bundle.hasMore;\n              favoritePaginationFallbackModeRef.current = false;\n              setHasMoreFavorites(bundle.hasMore);\n"""
+          bundle_guard = """              if (musicNotePageInitializedUidRef.current !== currentUser.uid) {\n                favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;\n                favoritePaginationExhaustedRef.current = !bundle.hasMore;\n                favoritePaginationFallbackModeRef.current = false;\n                setHasMoreFavorites(bundle.hasMore);\n              }\n"""
+          text = replace_once(text, bundle_cursor, bundle_guard, 'bundle cannot rewind active page cursor')
+
+          history_sig = """  hasMoreFavorites,\n  isLoadingMoreFavorites,\n  loadMoreFavorites,\n  searchFavoritesOnServer,\n"""
+          history_sig_new = """  hasMoreFavorites,\n  isLoadingMoreFavorites,\n  favoriteTotalCount,\n  musicNoteLoadedIds,\n  ensureFavoritesPageServerFirstPage,\n  loadMoreFavorites,\n  searchFavoritesOnServer,\n"""
+          text = replace_once(text, history_sig, history_sig_new, 'HistoryRouteWrapper signature')
+
+          lazy_props = """      hasMoreFavorites={hasMoreFavorites}\n      isLoadingMoreFavorites={isLoadingMoreFavorites}\n      onLoadMoreFavorites={loadMoreFavorites}\n"""
+          lazy_props_new = """      hasMoreFavorites={hasMoreFavorites}\n      isLoadingMoreFavorites={isLoadingMoreFavorites}\n      favoriteTotalCount={favoriteTotalCount}\n      musicNoteLoadedIds={musicNoteLoadedIds}\n      onEnsureFavoritesPage={ensureFavoritesPageServerFirstPage}\n      onLoadMoreFavorites={loadMoreFavorites}\n"""
+          text = replace_once(text, lazy_props, lazy_props_new, 'FavoritesPage paging props')
+
+          route_props = """                              hasMoreFavorites={hasMoreFavorites}\n                              isLoadingMoreFavorites={isLoadingMoreFavorites}\n                              loadMoreFavorites={loadMoreFavorites}\n"""
+          route_props_new = """                              hasMoreFavorites={hasMoreFavorites}\n                              isLoadingMoreFavorites={isLoadingMoreFavorites}\n                              favoriteTotalCount={favoriteTotalCount}\n                              musicNoteLoadedIds={musicNoteLoadedIds}\n                              ensureFavoritesPageServerFirstPage={ensureFavoritesPageServerFirstPage}\n                              loadMoreFavorites={loadMoreFavorites}\n"""
+          count = text.count(route_props)
+          if count < 1:
+              raise SystemExit('HistoryRouteWrapper route props: no matches')
+          text = text.replace(route_props, route_props_new)
+
+          # Also handle non-Studio indentation variants.
+          route_props_2 = """                    hasMoreFavorites={hasMoreFavorites}\n                    isLoadingMoreFavorites={isLoadingMoreFavorites}\n                    loadMoreFavorites={loadMoreFavorites}\n"""
+          route_props_2_new = """                    hasMoreFavorites={hasMoreFavorites}\n                    isLoadingMoreFavorites={isLoadingMoreFavorites}\n                    favoriteTotalCount={favoriteTotalCount}\n                    musicNoteLoadedIds={musicNoteLoadedIds}\n                    ensureFavoritesPageServerFirstPage={ensureFavoritesPageServerFirstPage}\n                    loadMoreFavorites={loadMoreFavorites}\n"""
+          text = text.replace(route_props_2, route_props_2_new)
+
+          load_pattern = re.compile(r"  const loadMoreFavorites = useCallback\(async \(\) => \{.*?\n  \}, \[user\]\);", re.S)
+          matches = list(load_pattern.finditer(text))
+          if len(matches) != 1:
+              raise SystemExit(f'loadMoreFavorites: expected 1 match, got {len(matches)}')
+
+          replacement = r'''  const ensureFavoritesPageServerFirstPage = useCallback(async () => {
+    const currentUser = user || auth.currentUser;
+    if (!currentUser?.uid) return;
+    const uid = currentUser.uid;
+    const totalCount = favoriteTotalCountRef.current;
+    if (
+      musicNotePageInitializedUidRef.current === uid
+      && musicNotePageInitializedCountRef.current === totalCount
+      && musicNoteLoadedIdsRef.current.length > 0
+    ) return;
+    if (musicNotePageInitInFlightUidRef.current === uid) return;
+
+    musicNotePageInitInFlightUidRef.current = uid;
+    favoritePaginationLoadingRef.current = true;
+    setIsLoadingMoreFavorites(true);
+    try {
+      const firstPageQuery = query(
+        collection(db, 'favorites'),
+        where('uid', '==', uid),
+        orderBy('createdAt', 'desc'),
+        limit(FAVORITES_PAGE_SIZE + 1)
+      );
+      const snapshot = await getDocs(firstPageQuery);
+      const pageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
+      const pageFavorites = sortFavoriteList(
+        pageDocs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite))
+      );
+
+      setFavorites((prev) => {
+        const merged = mergeFavoritePages(prev || [], pageFavorites);
+        writeFavoritesCache(uid, merged);
+        return merged;
+      });
+      const loadedIds = replaceMusicNoteLoadedIds(pageFavorites);
+      favoritePaginationCursorRef.current = pageDocs[pageDocs.length - 1] || null;
+      if (favoritePaginationCursorRef.current) writeMusicNotePaginationCursor(uid, favoritePaginationCursorRef.current);
+      else clearMusicNotePaginationCursor(uid);
+      favoritePrimaryPaginationDoneRef.current = snapshot.docs.length <= FAVORITES_PAGE_SIZE;
+      favoriteLegacyPaginationCursorRef.current = null;
+      favoriteLegacyPaginationDoneRef.current = false;
+      favoritePaginationFallbackModeRef.current = false;
+      favoritePaginationExhaustedRef.current = false;
+      musicNotePageInitializedUidRef.current = uid;
+      musicNotePageInitializedCountRef.current = totalCount;
+
+      const hasRemainingByCount = totalCount === null ? snapshot.docs.length > FAVORITES_PAGE_SIZE : loadedIds.length < totalCount;
+      setHasMoreFavorites(hasRemainingByCount);
+      markCacheDiagnostic('musicNote', 'SYNC', Math.max(1, snapshot.docs.length));
+    } catch (error) {
+      console.warn('Music Note first server page verification failed; keeping cached first screen and retry available.', error);
+      musicNotePageInitializedUidRef.current = null;
+      const persistedCursor = readMusicNotePaginationCursor(uid);
+      favoritePaginationCursorRef.current = persistedCursor;
+      setHasMoreFavorites(Boolean(persistedCursor) || (favoriteTotalCountRef.current ?? 0) > musicNoteLoadedIdsRef.current.length);
+    } finally {
+      musicNotePageInitInFlightUidRef.current = null;
+      favoritePaginationLoadingRef.current = false;
+      setIsLoadingMoreFavorites(false);
+      setIsFavoritesLoading(false);
+    }
+  }, [user]);
+
+  const loadMoreFavorites = useCallback(async () => {
+    const currentUser = user || auth.currentUser;
+    if (!currentUser?.uid) return;
+    const uid = currentUser.uid;
+    if (favoritePaginationLoadingRef.current) return;
+
+    if (musicNotePageInitializedUidRef.current !== uid || musicNoteLoadedIdsRef.current.length === 0) {
+      await ensureFavoritesPageServerFirstPage();
+      return;
+    }
+
+    const totalCount = favoriteTotalCountRef.current;
+    if (totalCount !== null && musicNoteLoadedIdsRef.current.length >= totalCount) {
+      favoritePaginationExhaustedRef.current = true;
+      setHasMoreFavorites(false);
+      return;
+    }
+
+    favoritePaginationLoadingRef.current = true;
+    setIsLoadingMoreFavorites(true);
+    try {
+      let snapshot: any = null;
+      let pageDocs: any[] = [];
+      let source: 'primary' | 'legacy' = 'primary';
+
+      if (!favoritePrimaryPaginationDoneRef.current && favoritePaginationCursorRef.current) {
+        const nextQuery = query(
+          collection(db, 'favorites'),
+          where('uid', '==', uid),
+          orderBy('createdAt', 'desc'),
+          startAfter(favoritePaginationCursorRef.current),
+          limit(FAVORITES_PAGE_SIZE + 1)
+        );
+        snapshot = await getDocs(nextQuery);
+        pageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
+        favoritePrimaryPaginationDoneRef.current = snapshot.docs.length <= FAVORITES_PAGE_SIZE;
+        if (pageDocs.length > 0) {
+          favoritePaginationCursorRef.current = pageDocs[pageDocs.length - 1];
+          writeMusicNotePaginationCursor(uid, favoritePaginationCursorRef.current);
+        } else {
+          favoritePrimaryPaginationDoneRef.current = true;
+          favoritePaginationCursorRef.current = null;
+          clearMusicNotePaginationCursor(uid);
+        }
+      } else {
+        source = 'legacy';
+        if (favoriteLegacyPaginationDoneRef.current) {
+          favoritePaginationExhaustedRef.current = true;
+          setHasMoreFavorites(false);
+          return;
+        }
+        const constraints: any[] = [
+          where('uid', '==', uid),
+          orderBy(documentId()),
+        ];
+        if (favoriteLegacyPaginationCursorRef.current) {
+          constraints.push(startAfter(favoriteLegacyPaginationCursorRef.current));
+        }
+        constraints.push(limit(FAVORITES_PAGE_SIZE));
+        const legacyQuery = query(collection(db, 'favorites'), ...constraints);
+        snapshot = await getDocs(legacyQuery);
+        pageDocs = snapshot.docs;
+        favoriteLegacyPaginationCursorRef.current = pageDocs[pageDocs.length - 1] || favoriteLegacyPaginationCursorRef.current;
+        favoriteLegacyPaginationDoneRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
+      }
+
+      const alreadyLoaded = new Set(musicNoteLoadedIdsRef.current);
+      const pageFavorites = sortFavoriteList(
+        pageDocs
+          .map(mapFavoriteFirestoreDoc)
+          .filter((favorite) => !isFavoriteSoftRemoved(favorite))
+          .filter((favorite) => {
+            const id = String(favorite?.id || favorite?.firestoreId || '').trim();
+            return Boolean(id && !alreadyLoaded.has(id));
+          })
+      );
+
+      if (pageFavorites.length > 0) {
+        setFavorites((prev) => {
+          const merged = mergeFavoritePages(prev || [], pageFavorites);
+          writeFavoritesCache(uid, merged);
+          return merged;
+        });
+      }
+      const loadedIds = appendMusicNoteLoadedItems(pageFavorites);
+      const remainingByCount = totalCount === null ? null : Math.max(0, totalCount - loadedIds.length);
+      const physicallyDone = favoritePrimaryPaginationDoneRef.current && favoriteLegacyPaginationDoneRef.current;
+      const hasMore = remainingByCount === null ? !physicallyDone : remainingByCount > 0 && !physicallyDone;
+      favoritePaginationExhaustedRef.current = !hasMore;
+      favoritePaginationFallbackModeRef.current = source === 'legacy';
+      setHasMoreFavorites(hasMore);
+      markCacheDiagnostic('musicNote', 'SYNC', Math.max(1, snapshot?.docs?.length || 0));
+
+      if (physicallyDone && remainingByCount !== null && remainingByCount > 0) {
+        console.warn(`Music Note paging finished with ${remainingByCount} count mismatch; no automatic full scan will run.`);
+      }
+    } catch (error) {
+      console.warn('Favorites bounded page load failed. Keeping current list and retry available.', error);
+      favoritePaginationExhaustedRef.current = false;
+      setHasMoreFavorites(true);
+    } finally {
+      favoritePaginationLoadingRef.current = false;
+      setIsLoadingMoreFavorites(false);
+    }
+  }, [user, ensureFavoritesPageServerFirstPage]);'''
+          text = load_pattern.sub(replacement, text, count=1)
+
+          app.write_text(text, encoding='utf-8')
+
+          fav = Path('src/pages/FavoritesPage.tsx')
+          ftext = fav.read_text(encoding='utf-8')
+          ftext = replace_once(
+              ftext,
+              """  hasMoreFavorites = false,\n  isLoadingMoreFavorites = false,\n  onLoadMoreFavorites,\n  onServerSearchFavorites,\n""",
+              """  hasMoreFavorites = false,\n  isLoadingMoreFavorites = false,\n  favoriteTotalCount = null,\n  musicNoteLoadedIds = [],\n  onEnsureFavoritesPage,\n  onLoadMoreFavorites,\n  onServerSearchFavorites,\n""",
+              'FavoritesPage params',
+          )
+          ftext = replace_once(
+              ftext,
+              """  hasMoreFavorites?: boolean;\n  isLoadingMoreFavorites?: boolean;\n  onLoadMoreFavorites?: () => Promise<void> | void;\n""",
+              """  hasMoreFavorites?: boolean;\n  isLoadingMoreFavorites?: boolean;\n  favoriteTotalCount?: number | null;\n  musicNoteLoadedIds?: string[];\n  onEnsureFavoritesPage?: () => Promise<void> | void;\n  onLoadMoreFavorites?: () => Promise<void> | void;\n""",
+              'FavoritesPage prop types',
+          )
+
+          source_anchor = """  const baseFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;\n  const activeFavoriteSource = !isMusicNoteSharedView && deferredSearchQuery.trim()\n    ? mergeMusicNoteSearchSource(baseFavoriteSource, serverSearchFavorites)\n    : baseFavoriteSource;\n"""
+          source_new = """  const baseFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;\n  const canonicalPagedFavoriteSource = (() => {\n    if (isMusicNoteSharedView || musicNoteViewMode !== 'noteSpace' || deferredSearchQuery.trim() || musicNoteLoadedIds.length === 0) {\n      return baseFavoriteSource;\n    }\n    const byId = new Map<string, any>();\n    (favorites || []).forEach((favorite: any) => {\n      const id = getFavoriteDocumentId(favorite);\n      if (id) byId.set(id, favorite);\n    });\n    return musicNoteLoadedIds.map((id) => byId.get(id)).filter(Boolean);\n  })();\n  const activeFavoriteSource = !isMusicNoteSharedView && deferredSearchQuery.trim()\n    ? mergeMusicNoteSearchSource(baseFavoriteSource, serverSearchFavorites)\n    : canonicalPagedFavoriteSource;\n"""
+          ftext = replace_once(ftext, source_anchor, source_new, 'canonical paged source')
+
+          # Trigger exactly one bounded server first-page verification when the normal Music Note page is entered.
+          effect_anchor = """  useEffect(() => {\n    favoritesRef.current = favorites || [];\n  }, [favorites]);\n"""
+          effect_new = effect_anchor + """\n  useEffect(() => {\n    if (isMusicNoteSharedView) return;\n    void onEnsureFavoritesPage?.();\n  }, [isMusicNoteSharedView, onEnsureFavoritesPage]);\n"""
+          ftext = replace_once(ftext, effect_anchor, effect_new, 'Music Note page server verification effect')
+
+          more_anchor = """  const canShowCachedMusicNoteMore = visibleCount < filteredFavorites.length;\n  const canRequestMoreMusicNotePage = Boolean(\n    !isMusicNoteSharedView &&\n    !searchQuery.trim() &&\n    favoriteColorFilter === 'all' &&\n    !favoriteTrashView &&\n    hasMoreFavorites &&\n    filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE\n  );\n  const shouldShowMusicNoteMoreButton = canShowCachedMusicNoteMore || canRequestMoreMusicNotePage;\n"""
+          more_new = """  const isCanonicalMusicNotePagingView = Boolean(\n    !isMusicNoteSharedView &&\n    musicNoteViewMode === 'noteSpace' &&\n    !searchQuery.trim() &&\n    favoriteColorFilter === 'all' &&\n    !favoriteTrashView\n  );\n  const musicNoteRemainingCount = favoriteTotalCount === null\n    ? null\n    : Math.max(0, favoriteTotalCount - musicNoteLoadedIds.length);\n  const canRequestMoreMusicNotePage = Boolean(isCanonicalMusicNotePagingView && hasMoreFavorites);\n  const canShowCachedMusicNoteMore = Boolean(\n    !isCanonicalMusicNotePagingView && visibleCount < filteredFavorites.length\n  );\n  const shouldShowMusicNoteMoreButton = canRequestMoreMusicNotePage || canShowCachedMusicNoteMore;\n"""
+          ftext = replace_once(ftext, more_anchor, more_new, 'Music Note more ownership')
+
+          click_anchor = """                  if (canShowCachedMusicNoteMore) {\n                    setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE);\n                    return;\n                  }\n                  if (canRequestMoreMusicNotePage) {\n                    await onLoadMoreFavorites?.();\n                    setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE);\n                  }\n"""
+          click_new = """                  if (canRequestMoreMusicNotePage) {\n                    await onLoadMoreFavorites?.();\n                    setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE);\n                    return;\n                  }\n                  if (canShowCachedMusicNoteMore) {\n                    setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE);\n                  }\n"""
+          ftext = replace_once(ftext, click_anchor, click_new, 'Music Note server-first more click')
+
+          label_anchor = """                {isLoadingMoreFavorites\n                  ? '불러오는 중...'\n                  : canShowCachedMusicNoteMore\n                    ? `더보기 (${filteredFavorites.length - visibleCount}개 남음)`\n                    : musicNoteViewMode === 'noteSpace'\n                      ? '더보기 (20개 더 불러오기)'\n                      : '더보기'}\n"""
+          label_new = """                {isLoadingMoreFavorites\n                  ? '불러오는 중...'\n                  : isCanonicalMusicNotePagingView && musicNoteRemainingCount !== null\n                    ? `더보기 (${musicNoteRemainingCount}개 남음)`\n                    : canShowCachedMusicNoteMore\n                      ? `더보기 (${filteredFavorites.length - visibleCount}개 남음)`\n                      : '더보기'}\n"""
+          ftext = replace_once(ftext, label_anchor, label_new, 'Music Note authoritative remaining label')
+
+          fav.write_text(ftext, encoding='utf-8')
+          PY
+
+      - name: Static cost and ownership assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "favoriteTotalCount" src/App.tsx
+          grep -Fq "musicNoteLoadedIds" src/App.tsx
+          grep -Fq "limit(FAVORITES_PAGE_SIZE + 1)" src/App.tsx
+          grep -Fq "orderBy(documentId())" src/App.tsx
+          grep -Fq "더보기 (${musicNoteRemainingCount}개 남음)" src/pages/FavoritesPage.tsx
+          ! grep -Fq "MUSIC_NOTE_COMPATIBILITY_SCAN_LIMIT" src/App.tsx
+          ! grep -Fq "limit(2000)" src/App.tsx
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit
+      - run: npm run build
+
+      - name: Commit verified source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git add src/App.tsx src/pages/FavoritesPage.tsx
+          if git diff --cached --quiet; then
+            echo "No source changes"
+            exit 0
+          fi
+          git commit -m "fix(stage3): make Music Note server paging authoritative"
+          git push origin HEAD:preview-stage3-final

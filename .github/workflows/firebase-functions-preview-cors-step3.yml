@@ -1,0 +1,102 @@
+name: Firebase Functions Preview CORS Step 3
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/firebase-functions-preview-cors-step3.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-functions-preview-cors-step3
+  cancel-in-progress: false
+
+jobs:
+  deploy-track-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      BACKEND_PROJECT: soridraw-app-866a5
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+      OFFICIAL_ORIGIN: https://soridraw.web.app
+      FUNCTION_URL: https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install and build Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix functions --no-audit --no-fund
+          npm --prefix functions run build
+          grep -Fq 'https://preview.soridraw.com' functions/lib/securedIndex.js
+          grep -Fq 'recoveryOnly' functions/lib/securedIndex.js
+          grep -Fq 'if (!recoveryOnly)' functions/src/index.ts
+          git diff --exit-code -- firestore.rules database.rules.json firebase.json
+          echo '[Functions CORS Step 3] CORS + recoveryOnly + protected-config gate: PASS'
+
+      - name: Confirm previously deployed recovery contract record
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'status=success' .deploy/suno-recovery-readonly-972-deploy-result.txt
+          grep -Fq 'function=getSunoTrackStatus' .deploy/suno-recovery-readonly-972-deploy-result.txt
+          grep -Fq 'mode=recoveryOnly skips track/share writes' .deploy/suno-recovery-readonly-972-deploy-result.txt
+          echo '[Functions CORS Step 3] prior recoveryOnly deployment record: PASS'
+
+      - name: Authenticate Google/Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy only getSunoTrackStatus
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only functions:getSunoTrackStatus \
+            --project "$BACKEND_PROJECT" \
+            --non-interactive
+          echo '[Functions CORS Step 3] getSunoTrackStatus deploy: PASS'
+
+      - name: Verify preview and official CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          for origin in "$PREVIEW_ORIGIN" "$OFFICIAL_ORIGIN"; do
+            ok=''
+            for attempt in $(seq 1 18); do
+              curl -sS -D "$RUNNER_TEMP/track.headers" -o /dev/null -X OPTIONS \
+                -H "Origin: $origin" \
+                -H 'Access-Control-Request-Method: POST' \
+                -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+                "$FUNCTION_URL" || true
+              status="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' "$RUNNER_TEMP/track.headers")"
+              allow="$(grep -i '^access-control-allow-origin:' "$RUNNER_TEMP/track.headers" | tail -n 1 | tr -d '\r' | sed 's/^[^:]*:[[:space:]]*//' || true)"
+              echo "[Functions CORS Step 3] origin=$origin attempt=$attempt HTTP=${status:-missing} allow=${allow:-missing}"
+              if [ "$status" = '204' ] && [ "$allow" = "$origin" ]; then ok='yes'; break; fi
+              sleep 10
+            done
+            test "$ok" = 'yes'
+          done
+          echo '[Functions CORS Step 3] preview + official CORS verification: PASS'
+
+      - name: Result
+        run: |
+          echo 'Deployed only getSunoTrackStatus with the already-approved recoveryOnly contract plus fixed preview CORS.'
+          echo 'No authenticated track request was executed by this workflow.'
+          echo 'No Firestore/Database Rules update, Hosting release, main change, user-data write, delete, or migration was performed.'

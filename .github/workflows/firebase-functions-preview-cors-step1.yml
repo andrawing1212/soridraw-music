@@ -1,0 +1,154 @@
+name: Firebase Functions Preview CORS Step 1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/firebase-functions-preview-cors-step1.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-functions-preview-cors-step1
+  cancel-in-progress: false
+
+jobs:
+  deploy-readonly-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      BACKEND_PROJECT: soridraw-app-866a5
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+      OFFICIAL_ORIGIN: https://soridraw.web.app
+      FUNCTION_URL: https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoApiKeyStatus
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
+
+      - name: Build Functions and verify preview CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix functions run build
+          for origin in \
+            'https://preview.soridraw.com' \
+            'https://soridraw-preview.web.app' \
+            'https://soridraw-preview.firebaseapp.com'; do
+            grep -Fq "$origin" functions/src/index.ts
+            grep -Fq "$origin" functions/lib/securedIndex.js
+          done
+          echo '[Functions CORS Step 1] Build + generated allowlist: PASS'
+
+      - name: Verify protected data config unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- firestore.rules database.rules.json firebase.json
+          echo '[Functions CORS Step 1] Firestore/Database/Firebase config unchanged: PASS'
+
+      - name: Capture live CORS baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          preview_status="$(curl -sS -o "$RUNNER_TEMP/preview-before.txt" -w '%{http_code}' -X OPTIONS \
+            -H "Origin: $PREVIEW_ORIGIN" \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+            "$FUNCTION_URL" || true)"
+          official_status="$(curl -sS -D "$RUNNER_TEMP/official-before.headers" -o /dev/null -w '%{http_code}' -X OPTIONS \
+            -H "Origin: $OFFICIAL_ORIGIN" \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+            "$FUNCTION_URL" || true)"
+          echo "[Functions CORS Step 1] preview before: $preview_status"
+          echo "[Functions CORS Step 1] official before: $official_status"
+          test "$official_status" = '204'
+
+      - name: Authenticate Google/Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Verify backend Functions visibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest functions:list --project "$BACKEND_PROJECT" --json > "$RUNNER_TEMP/functions-list.json"
+          node - "$RUNNER_TEMP/functions-list.json" <<'NODE'
+          const fs = require('fs');
+          const raw = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const rows = Array.isArray(raw) ? raw : (raw.result || raw.functions || []);
+          const names = JSON.stringify(rows);
+          if (!names.includes('getSunoApiKeyStatus')) throw new Error('getSunoApiKeyStatus not visible in backend function inventory');
+          console.log('[Functions CORS Step 1] Backend function inventory access: PASS');
+          NODE
+
+      - name: Deploy only read-only API-key status Function
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only functions:getSunoApiKeyStatus \
+            --project "$BACKEND_PROJECT" \
+            --non-interactive
+          echo '[Functions CORS Step 1] getSunoApiKeyStatus deploy: PASS'
+
+      - name: Verify preview CORS after deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=''
+          for attempt in $(seq 1 18); do
+            curl -sS -D "$RUNNER_TEMP/preview-after.headers" -o "$RUNNER_TEMP/preview-after.txt" -X OPTIONS \
+              -H "Origin: $PREVIEW_ORIGIN" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "$FUNCTION_URL" || true
+            status="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' "$RUNNER_TEMP/preview-after.headers")"
+            allow="$(grep -i '^access-control-allow-origin:' "$RUNNER_TEMP/preview-after.headers" | tail -n 1 | tr -d '\r' | sed 's/^[^:]*:[[:space:]]*//' || true)"
+            echo "[Functions CORS Step 1] attempt=$attempt preview HTTP=${status:-missing} allow-origin=${allow:-missing}"
+            if [ "$status" = '204' ] && [ "$allow" = "$PREVIEW_ORIGIN" ]; then
+              ok='yes'
+              break
+            fi
+            sleep 10
+          done
+          test "$ok" = 'yes'
+          echo '[Functions CORS Step 1] preview.soridraw.com CORS: PASS'
+
+      - name: Verify existing official origin still allowed
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -D "$RUNNER_TEMP/official-after.headers" -o /dev/null -X OPTIONS \
+            -H "Origin: $OFFICIAL_ORIGIN" \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+            "$FUNCTION_URL"
+          status="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' "$RUNNER_TEMP/official-after.headers")"
+          allow="$(grep -i '^access-control-allow-origin:' "$RUNNER_TEMP/official-after.headers" | tail -n 1 | tr -d '\r' | sed 's/^[^:]*:[[:space:]]*//' || true)"
+          test "$status" = '204'
+          test "$allow" = "$OFFICIAL_ORIGIN"
+          echo '[Functions CORS Step 1] existing official origin preserved: PASS'
+
+      - name: Result
+        run: |
+          echo 'Deployed only getSunoApiKeyStatus to shared backend.'
+          echo 'No save/delete API-key function deployed in this step.'
+          echo 'No getSunoTrackStatus deploy in this step.'
+          echo 'No Firestore/Database Rules, Hosting, main branch, or user-data migration changes.'

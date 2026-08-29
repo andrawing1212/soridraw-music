@@ -25,11 +25,21 @@ const isVercelTestApp = currentHostname === "soridraw-music.vercel.app";
 const isVercelPreviewApp = currentHostname === "soridraw-music-git-preview-andrawing1212.vercel.app"
   || /^soridraw-music-git-preview-[a-z0-9-]+\.vercel\.app$/.test(currentHostname);
 const isFirebaseHostingPreviewApp = /^soridraw--[a-z0-9-]+\.web\.app$/.test(currentHostname);
+const isFirebaseMultiSiteApp = currentHostname === "soridraw-preview.web.app"
+  || currentHostname === "soridraw-preview.firebaseapp.com"
+  || currentHostname === "soridraw-test.web.app"
+  || currentHostname === "soridraw-test.firebaseapp.com";
+const isSoridrawCustomDomain = currentHostname === "preview.soridraw.com"
+  || currentHostname === "test.soridraw.com"
+  || currentHostname === "soridraw.com"
+  || currentHostname === "www.soridraw.com";
 const isFirebaseHostedApp = currentHostname === "soridraw.web.app"
   || currentHostname === "soridraw.firebaseapp.com"
   || currentHostname === "soridraw-app-866a5.web.app"
   || currentHostname === "soridraw-app-866a5.firebaseapp.com"
-  || isFirebaseHostingPreviewApp;
+  || isFirebaseHostingPreviewApp
+  || isFirebaseMultiSiteApp
+  || isSoridrawCustomDomain;
 
 // AI Studio previews run inside an ephemeral run.app development host where
 // reCAPTCHA Enterprise can fail. Firebase's debug provider is enabled only

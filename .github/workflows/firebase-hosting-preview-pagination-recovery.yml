@@ -8,6 +8,7 @@ on:
       - '.deploy/apply-980-library-pagination-metadata-recovery.py'
       - '.deploy/apply-981-music-note-load-more-self-heal.py'
       - '.deploy/apply-982-music-note-loaded-metadata-hydration.py'
+      - '.deploy/apply-983-music-note-cursor-chain-repair.py'
       - '.deploy/verify-955-suno-audio-url-auto-recovery.py'
       - '.github/workflows/firebase-hosting-preview-pagination-recovery.yml'
   workflow_dispatch:
@@ -52,7 +53,9 @@ jobs:
           grep -Fq 'SORIDRAW_981_MUSIC_NOTE_LOAD_MORE_SELF_HEAL' src/App.tsx
           grep -Fq 'SORIDRAW_982_MUSIC_NOTE_LOADED_METADATA_HYDRATION' src/App.tsx
           grep -Fq 'SORIDRAW_982_MUSIC_NOTE_LOADED_METADATA_HYDRATION' src/pages/FavoritesPage.tsx
-          echo '[pagination] 979 + 981 + 982 generated: PASS'
+          grep -Fq 'SORIDRAW_983_MUSIC_NOTE_CURSOR_CHAIN_REPAIR' src/App.tsx
+          grep -Fq 'SORIDRAW_983_MUSIC_NOTE_CURSOR_CHAIN_REPAIR' src/pages/FavoritesPage.tsx
+          echo '[pagination] 979 + 981 + 982 + 983 generated: PASS'
 
       - name: Apply Library pagination metadata recovery
         run: |
@@ -65,7 +68,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;' src/App.tsx
+          grep -Fq "where('uid', '==', currentUser.uid)" src/App.tsx
+          grep -Fq "orderBy('createdAt', 'desc')" src/App.tsx
+          grep -Fq 'favoritePaginationCanonicalAnchorVerifiedRef' src/App.tsx
+          grep -Fq 'favoritePaginationCursorRef.current = canonicalCursor;' src/App.tsx
+          grep -Fq 'setFavorites(canonicalFavs);' src/App.tsx
           grep -Fq 'setHasMoreFavorites(bundle.hasMore);' src/App.tsx
           grep -Fq "new CustomEvent('soridraw:music-note-page-metadata'" src/App.tsx
           grep -Fq "window.addEventListener('soridraw:music-note-page-metadata'" src/pages/FavoritesPage.tsx
@@ -75,7 +82,7 @@ jobs:
           grep -Fq 'session.lastDoc = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;' src/pages/SunoLibraryPage.tsx
           grep -Fq 'session.hasMore = bundle.hasMore;' src/pages/SunoLibraryPage.tsx
           grep -Fq 'startAfter(workspaceLastTrackDocRef.current)' src/pages/SunoLibraryPage.tsx
-          echo '[pagination] bounded page + saved metadata hydration paths: PASS'
+          echo '[pagination] canonical Music Note chain + metadata hydration + bounded Library paths: PASS'
 
       - name: Typecheck and build generated source
         run: |
@@ -124,5 +131,5 @@ jobs:
 
       - name: Result
         run: |
-          echo 'Music Note pagination + saved colour/Suno URL metadata hydration deployed to soridraw-preview only.'
+          echo 'Music Note canonical pagination chain + saved colour/Suno URL metadata hydration deployed to soridraw-preview only.'
           echo 'No main change, production Hosting release, Functions deploy, Firestore/Database Rules change, or user-data migration in this workflow.'

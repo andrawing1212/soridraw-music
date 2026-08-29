@@ -1,0 +1,47 @@
+name: Diagnose Preview Pagination Source
+
+on:
+  push:
+    branches:
+      - preview
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Inspect Music Note pagination source
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '===== App.tsx pagination symbols ====='
+          grep -n -E 'loadMoreFavorites|hasMoreFavorites|favoritesLast|lastFavorite|startAfter\(|FAVORITE.*PAGE|favorite.*cursor|favorite.*Cursor' src/App.tsx || true
+          echo '===== App.tsx contexts ====='
+          python3 - <<'PY'
+          from pathlib import Path
+          lines = Path('src/App.tsx').read_text(encoding='utf-8').splitlines()
+          needles = ['loadMoreFavorites', 'hasMoreFavorites', 'startAfter(', 'favoritesLast', 'lastFavorite']
+          hits = sorted({i for i,line in enumerate(lines) if any(n in line for n in needles)})
+          covered = set()
+          for i in hits:
+              lo=max(0,i-70); hi=min(len(lines),i+150)
+              if any(j in covered for j in range(lo, hi)):
+                  continue
+              covered.update(range(lo, hi))
+              print(f'--- context line {i+1} ---')
+              for j in range(lo,hi): print(f'{j+1:06d}: {lines[j]}')
+          PY
+
+      - name: Inspect Library pagination source
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -n -E 'loadMoreWorkspaceTracks|hasMoreWorkspaceServerTracks|workspaceLastTrackDocRef|WORKSPACE_SERVER_FETCH_SIZE|startAfter\(' src/pages/SunoLibraryPage.tsx || true

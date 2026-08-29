@@ -46,9 +46,17 @@
 
 ### 기타 변경 파일
 - `functions/src/index.ts`
+- **이번 1단계에서는 Functions 파일을 반영하지 않았다.** Functions는 별도 `functions/package.json` 빌드 체인을 사용하며, Functions 배포/구조 정리는 별도 단계에서 검증한다.
 
-## 검증 기준
-1. `npx tsc --noEmit` 통과
-2. 자동 소스변형이 제거된 상태에서 `npm run build` 통과
-3. `npm run build`를 연속 두 번 실행해도 `src/**`와 `package.json` diff가 동일
-4. 검증 성공 전에는 `preview`에 합치지 않음
+## 검증 결과
+1. 기존 legacy 패치 체인을 1회 적용: **PASS**
+2. 생성된 legacy `src/**`와 동결된 실제 `src/**` 비교: **완전 동일 PASS**
+3. `npx tsc --noEmit`: **PASS**
+4. 자동 소스변형 제거 후 `npm run build`: **PASS**
+5. `npm run build` 연속 2회 실행 후 `src/**`/`package.json` 추가 변형 없음: **PASS**
+6. legacy 생성 소스로 만든 `dist`와 동결 소스로 만든 `dist` 바이트 단위 비교: **완전 동일 PASS**
+
+## 결론
+프론트엔드 런타임 동작을 바꾸지 않고, 빌드 때마다 Python이 소스를 다시 작성하던 구조를 실제 소스 단일 기준으로 전환할 수 있음이 검증됐다.
+
+다음 단계는 이 검증된 최종 트리를 `preview`에 반영하고 Firebase Preview Hosting 빌드/배포/smoke test를 확인하는 것이다.

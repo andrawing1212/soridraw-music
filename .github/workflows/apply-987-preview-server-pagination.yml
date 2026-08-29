@@ -5,6 +5,7 @@ on:
     branches: [preview]
     paths:
       - '.github/workflows/apply-987-preview-server-pagination.yml'
+      - '.deploy/apply-987-build-entry.py'
       - '.deploy/apply-987-preview-server-pagination-parity.py'
 
 permissions:
@@ -32,7 +33,7 @@ jobs:
           from pathlib import Path
           path = Path('package.json')
           source = path.read_text(encoding='utf-8')
-          patch = 'python3 .deploy/apply-987-preview-server-pagination-parity.py'
+          patch = 'python3 .deploy/apply-987-build-entry.py'
           if patch in source:
               print('987 already registered in package scripts')
               raise SystemExit(0)

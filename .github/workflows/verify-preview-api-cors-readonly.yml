@@ -1,0 +1,52 @@
+name: Verify Preview API CORS Read-only
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/verify-preview-api-cors-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check deployed API CORS without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoints=(
+            getSunoRemainingCredits
+            getGoogleGeminiApiKeyStatus
+            saveGoogleGeminiApiKey
+            deleteGoogleGeminiApiKey
+          )
+          failed=0
+          for endpoint in "${endpoints[@]}"; do
+            headers="$RUNNER_TEMP/${endpoint}.headers"
+            body="$RUNNER_TEMP/${endpoint}.body"
+            status="$(curl -sS -D "$headers" -o "$body" -w '%{http_code}' -X OPTIONS \
+              -H 'Origin: https://preview.soridraw.com' \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "https://us-central1-soridraw-app-866a5.cloudfunctions.net/$endpoint" || true)"
+            allow_origin="$(grep -i '^access-control-allow-origin:' "$headers" | tail -n 1 | tr -d '\r' | sed 's/^[^:]*:[[:space:]]*//' || true)"
+            echo "$endpoint status=$status allow-origin=${allow_origin:-MISSING}"
+            if [ "$status" != '204' ] || [ "$allow_origin" != 'https://preview.soridraw.com' ]; then
+              failed=1
+              echo '--- headers ---'
+              cat "$headers" || true
+              echo '--- body ---'
+              cat "$body" || true
+            fi
+          done
+          test "$failed" = '0'
+          echo 'All four preview API CORS preflights: PASS'
+
+      - name: Safety summary
+        if: always()
+        run: echo 'READ-ONLY HTTP verification only; no Firebase/GitHub/user-data mutation.'

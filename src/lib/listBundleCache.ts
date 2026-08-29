@@ -67,6 +67,33 @@ const getItemCreatedAtMs = (item: any): number => (
   || 0
 );
 
+const getItemId = (item: any): string => String(item?.firestoreId || item?.id || '').trim();
+
+const isLegacyMusicNoteVisible = (item: any): boolean => {
+  if (!item) return false;
+  if (item?.musicNoteListEligible === true) return true;
+  if (item?.musicNoteListEligible === false) return false;
+
+  const removed = Boolean(
+    item?.favoriteRemoved === true
+    || item?.saved === false
+    || item?.favoriteRemovedAt
+    || item?.unlikedAt
+    || item?.unsavedAt
+    || item?.hidden === true
+    || item?.favoriteHidden === true
+    || item?.deletedAt
+    || item?.trashedAt
+  );
+  const shared = Boolean(
+    item?.isSharedMusicNote === true
+    || item?.sharedReadOnly === true
+    || String(item?.sourceType || '') === 'shared_music_note'
+    || item?.sharedNoteShareId
+  );
+  return !removed && !shared;
+};
+
 const HISTORY_KEYS = new Set([
   'lyricRevisions',
   'lyricsHistory',
@@ -126,9 +153,16 @@ const normalizeDeletedIds = (value?: string[]) => Array.from(new Set(
 )).slice(-450);
 
 const prepareItems = (kind: ListBundleKind, sourceItems: any[], limit: number): any[] => {
-  const sorted = [...(Array.isArray(sourceItems) ? sourceItems : [])]
-    .filter(Boolean)
-    .sort((a, b) => getItemCreatedAtMs(b) - getItemCreatedAtMs(a))
+  const source = [...(Array.isArray(sourceItems) ? sourceItems : [])].filter(Boolean);
+  const eligibleSource = kind === 'musicNote'
+    ? source.filter(isLegacyMusicNoteVisible)
+    : source;
+  const sorted = eligibleSource
+    .sort((a, b) => {
+      const createdDelta = getItemCreatedAtMs(b) - getItemCreatedAtMs(a);
+      if (createdDelta !== 0) return createdDelta;
+      return getItemId(b).localeCompare(getItemId(a));
+    })
     .slice(0, Math.max(1, limit));
 
   return sorted.map((item) => cleanValue(item, kind)).filter(Boolean);

@@ -1,0 +1,105 @@
+name: SORIDRAW Shared Origin Preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - 'functions/**'
+      - 'cloudflare/explore-worker/patches/**'
+      - '.github/workflows/shared-origin-preflight.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-shared-origin-preflight
+  cancel-in-progress: true
+
+jobs:
+  readonly-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
+
+      - name: Build Functions with fixed preview CORS patch
+        run: npm --prefix functions run build
+
+      - name: Verify generated Functions allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          for origin in \
+            'https://preview.soridraw.com' \
+            'https://soridraw-preview.web.app' \
+            'https://soridraw-preview.firebaseapp.com'; do
+            grep -Fq "$origin" functions/src/index.ts
+            grep -Fq "$origin" functions/lib/securedIndex.js
+          done
+          echo '[Shared Origin Preflight] Functions build contains all fixed preview origins: PASS'
+
+      - name: Syntax check Explore Worker patch
+        run: node --check cloudflare/explore-worker/patches/001-fixed-preview-origin-cors.mjs
+
+      - name: Test Explore Worker patch against synthetic live-source shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/worker-fixture"
+          mkdir -p "$fixture"
+          cat > "$fixture/worker.js" <<'EOF'
+          const ALLOWED_ORIGINS = ["https://soridraw-music-git-preview-andrawing1212.vercel.app","https://soridraw-music.vercel.app"];
+          const errorCode = "ORIGIN_NOT_ALLOWED";
+          EOF
+          SORIDRAW_REMOTE_WORKER_DIR="$fixture" node cloudflare/explore-worker/patches/001-fixed-preview-origin-cors.mjs
+          for origin in \
+            'https://preview.soridraw.com' \
+            'https://soridraw-preview.web.app' \
+            'https://soridraw-preview.firebaseapp.com'; do
+            grep -Fq "$origin" "$fixture/worker.js"
+          done
+          echo '[Shared Origin Preflight] Explore Worker patch fixture: PASS'
+
+      - name: Diagnose current live Functions origin boundary
+        shell: bash
+        run: |
+          set -u
+          status="$(curl -sS -o "$RUNNER_TEMP/function-cors.txt" -w '%{http_code}' -X OPTIONS \
+            -H 'Origin: https://preview.soridraw.com' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+            'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoApiKeyStatus' || true)"
+          echo "[Shared Origin Preflight] Current LIVE Functions preflight HTTP: ${status:-network-error}"
+          if [ -f "$RUNNER_TEMP/function-cors.txt" ]; then head -c 400 "$RUNNER_TEMP/function-cors.txt" || true; echo; fi
+          echo '[Shared Origin Preflight] Diagnostic only; no Functions deployment was performed.'
+
+      - name: Diagnose current live Explore origin boundary
+        shell: bash
+        run: |
+          set -u
+          status="$(curl -sS -o "$RUNNER_TEMP/explore-cors.txt" -w '%{http_code}' \
+            -H 'Origin: https://preview.soridraw.com' \
+            'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1' || true)"
+          echo "[Shared Origin Preflight] Current LIVE Explore feed HTTP: ${status:-network-error}"
+          if [ -f "$RUNNER_TEMP/explore-cors.txt" ]; then head -c 400 "$RUNNER_TEMP/explore-cors.txt" || true; echo; fi
+          echo '[Shared Origin Preflight] Diagnostic only; no Worker deployment was performed.'
+
+      - name: Confirm read-only result
+        run: |
+          echo 'Shared origin fixes are prepared and build-tested on preview.'
+          echo 'No Firebase Functions deploy, Cloudflare Worker deploy, Firestore/Database Rules update, user-data migration, main change, or production Hosting release was performed.'

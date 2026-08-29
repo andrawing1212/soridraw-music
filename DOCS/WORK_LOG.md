@@ -24,3 +24,14 @@
 - 에러: `src/App.tsx`의 `MUSIC_NOTE_PAGINATION_COMPLETE_STORAGE_BASE`가 모듈 helper보다 안쪽 React component scope에 선언되어 helper에서 참조할 수 없었음.
 - 안전조치: TypeScript 실패 즉시 build·소스 commit·배포를 자동 중단. Stage 3 앱 소스는 아직 브랜치에 반영되지 않았고 Firestore/Functions/Rules/Hosting/Auth/사용자 데이터 변경도 없음.
 - 다음: 완료 마커 상수만 기존 pagination storage 상수와 같은 module scope로 이동한 뒤 동일 수정안을 재검증.
+
+## 2026-08-30 — Stage 3 페이지네이션 소스 수정 2차 검증 PASS
+- 브랜치: `preview-stage3-pagination`
+- 변경 파일: `src/App.tsx`, `src/pages/FavoritesPage.tsx`, `src/pages/SunoLibraryPage.tsx`.
+- 라이브러리: 로컬 track cache와 별도로 `hasMore/cursor/fallback` 페이지 메타를 저장·복원. 10개 표시를 위해 11개 lookahead 조회로 다음 페이지를 정확히 판정. ordered pagination 끝에서만 최대 2,000건의 읽기 전용 호환 스캔으로 `createdAt` 없는 레거시 문서를 로컬 캐시에 병합.
+- 뮤직노트: 20개 표시를 위해 21개 lookahead 조회. 기존 캐시의 깊은 pagination state를 first-page bundle이 덮지 않게 분리. 페이지 끝에서만 최대 2,000건 읽기 전용 호환 스캔으로 레거시 문서를 로컬 캐시에 병합하고 완료 마커를 저장.
+- UI: 캐시 잔량 전체를 `남음`으로 표시하지 않고 다음에 실제 표시할 개수만 안내. 서버 `hasMore`가 true면 현재 필터 결과가 20개 미만이어도 더보기 요청 가능.
+- 1차 실패 보정: 완료 마커 storage 상수를 module scope로 이동. 다른 수정 로직은 1차 패치를 그대로 재사용.
+- 데이터 안전: favorites/suno_tracks 원본 문서 쓰기·삭제·백필 없음. Functions/Rules/Hosting/Auth 변경 없음.
+- 검증: 정적 assertions PASS, TypeScript PASS, Vite build PASS.
+- 다음: 임시 workflow 제거 후 diff 감사 → `preview` 반영 및 Firebase Preview 배포 → Music Note 493개/Library 더보기 실사용 확인.

@@ -5387,8 +5387,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     !searchQuery.trim() &&
     favoriteColorFilter === 'all' &&
     !favoriteTrashView &&
-    hasMoreFavorites &&
-    filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE
+    hasMoreFavorites
   );
   const shouldShowMusicNoteMoreButton = canShowCachedMusicNoteMore || canRequestMoreMusicNotePage;
 
@@ -6616,7 +6615,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 {isLoadingMoreFavorites
                   ? '불러오는 중...'
                   : canShowCachedMusicNoteMore
-                    ? `더보기 (${filteredFavorites.length - visibleCount}개 남음)`
+                    ? `더보기 (${Math.min(MUSIC_NOTE_VISIBLE_BATCH_SIZE, Math.max(0, filteredFavorites.length - visibleCount))}개 더 보기)`
                     : musicNoteViewMode === 'noteSpace'
                       ? '더보기 (20개 더 불러오기)'
                       : '더보기'}

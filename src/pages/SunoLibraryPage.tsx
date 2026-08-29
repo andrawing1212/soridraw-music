@@ -52,7 +52,8 @@ const fallbackSharedPlaylists: Playlist[] = [
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
 const WORKSPACE_PAGE_SIZE = 10;
 const WORKSPACE_SERVER_PAGE_SIZE = 10;
-const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE;
+const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE + 1;
+const LIBRARY_COMPATIBILITY_SCAN_LIMIT = 2000;
 const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
 const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
 const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
@@ -111,6 +112,56 @@ const getLibraryWorkspaceTrackCreatedAtMs = (track: any): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+type LibraryWorkspacePageMeta = {
+  lastDoc: Date | null;
+  hasMore: boolean;
+  paginationFallback: boolean;
+};
+
+const getLibraryWorkspacePageMetaStorageKey = (uid: string) => `soridraw_suno_tracks_page_meta_v1_${uid}`;
+
+const getLibraryWorkspaceCursorCreatedAtMs = (cursor: any): number => {
+  if (!cursor) return 0;
+  if (cursor instanceof Date) return cursor.getTime();
+  if (typeof cursor?.toMillis === 'function') return cursor.toMillis();
+  const data = typeof cursor?.data === 'function' ? cursor.data() : null;
+  if (data) return getLibraryWorkspaceTrackCreatedAtMs(data);
+  return getLibraryWorkspaceTrackCreatedAtMs({ createdAt: cursor });
+};
+
+const readLibraryWorkspacePageMeta = (uid: string): LibraryWorkspacePageMeta | null => {
+  if (!uid || typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(getLibraryWorkspacePageMetaStorageKey(uid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const cursorCreatedAtMs = Number(parsed?.cursorCreatedAtMs || 0);
+    return {
+      lastDoc: Number.isFinite(cursorCreatedAtMs) && cursorCreatedAtMs > 0 ? new Date(cursorCreatedAtMs) : null,
+      hasMore: parsed?.hasMore === true,
+      paginationFallback: parsed?.paginationFallback === true,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const saveLibraryWorkspacePageMeta = (
+  uid: string,
+  lastDoc: any | null,
+  hasMore: boolean,
+  paginationFallback: boolean,
+) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(getLibraryWorkspacePageMetaStorageKey(uid), JSON.stringify({
+      cursorCreatedAtMs: getLibraryWorkspaceCursorCreatedAtMs(lastDoc),
+      hasMore: hasMore === true,
+      paginationFallback: paginationFallback === true,
+    }));
+  } catch {}
+};
+
 const mergeLibraryWorkspaceSessionTracks = (incoming: any[], previous: any[] = []): any[] => {
   const map = new Map<string, any>();
   (Array.isArray(previous) ? previous : []).forEach((track: any) => {
@@ -152,6 +203,7 @@ const snapshotLibraryWorkspaceSession = (session: LibraryWorkspaceSession): Libr
 });
 
 const emitLibraryWorkspaceSession = (session: LibraryWorkspaceSession) => {
+  saveLibraryWorkspacePageMeta(session.uid, session.lastDoc, session.hasMore, session.paginationFallback);
   const snapshot = snapshotLibraryWorkspaceSession(session);
   session.subscribers.forEach((listener) => {
     try {
@@ -196,12 +248,13 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
   }
 
   const cachedTracks = readLibraryWorkspaceTrackCache(uid);
+  const cachedPageMeta = readLibraryWorkspacePageMeta(uid);
   const session: LibraryWorkspaceSession = {
     uid,
     tracks: cachedTracks,
-    lastDoc: null,
-    hasMore: false,
-    paginationFallback: false,
+    lastDoc: cachedPageMeta?.lastDoc || null,
+    hasMore: cachedPageMeta?.hasMore === true,
+    paginationFallback: cachedPageMeta?.paginationFallback === true,
     ready: cachedTracks.length > 0,
     started: true,
     unsubscribe: null,
@@ -249,7 +302,7 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
     session.paginationFallback = false;
     session.unsubscribe = onSnapshot(pageQuery, (snapshot) => {
       const docs = snapshot.docs;
-      const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
+      const hasMore = docs.length > WORKSPACE_SERVER_PAGE_SIZE;
       const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
       const list = visibleDocs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
       session.lastDoc = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : null;
@@ -285,7 +338,7 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
     try {
       const snapshot = await getDocs(pageQuery);
       const docs = snapshot.docs;
-      const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
+      const hasMore = docs.length > WORKSPACE_SERVER_PAGE_SIZE;
       const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
       const list = visibleDocs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
       session.lastDoc = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : null;
@@ -362,7 +415,7 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
     const localVersion = readLibraryBundleLocalSyncVersion(uid);
     const remoteVersion = readRemoteLibraryVersion();
     // localVersion === 0 is a one-time 936 migration check for existing caches.
-    return cachedTracks.length === 0 || localVersion <= 0 || remoteVersion > localVersion;
+    return cachedTracks.length === 0 || !cachedPageMeta || localVersion <= 0 || remoteVersion > localVersion;
   };
 
   const handleLibraryProfileVersion = (event: Event) => {
@@ -420,6 +473,7 @@ const mergeLibraryWorkspaceSessionPage = (
   libraryWorkspaceSession.lastDoc = lastDoc;
   libraryWorkspaceSession.hasMore = hasMore;
   libraryWorkspaceSession.ready = true;
+  saveLibraryWorkspacePageMeta(uid, lastDoc, hasMore, libraryWorkspaceSession.paginationFallback);
 };
 
 const readStoredSunoCredits = (uid?: string | null): { credits: number | null; updatedAt: number | null } => {
@@ -1594,10 +1648,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       );
       const snapshot = await getDocs(nextQuery);
       const docs = snapshot.docs;
-      const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
+      const hasMore = docs.length > WORKSPACE_SERVER_PAGE_SIZE;
       const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
       workspaceLastTrackDocRef.current = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : workspaceLastTrackDocRef.current;
-      setHasMoreWorkspaceServerTracks(hasMore);
 
       const list = visibleDocs.map(doc => ({
         id: doc.id,
@@ -1610,11 +1663,37 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         saveWorkspaceTrackCache(user.uid, merged);
         return merged;
       });
+
+      if (hasMore) {
+        setHasMoreWorkspaceServerTracks(true);
+      } else {
+        try {
+          // Compatibility tail read only after the ordered pagination is exhausted.
+          // This recovers legacy tracks that do not have createdAt without changing server data.
+          const compatibilitySnapshot = await getDocs(query(tracksRef, limit(LIBRARY_COMPATIBILITY_SCAN_LIMIT)));
+          const compatibilityList = compatibilitySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          workspaceLastTrackDocRef.current = null;
+          workspacePaginationFallbackRef.current = false;
+          setHasMoreWorkspaceServerTracks(false);
+          mergeLibraryWorkspaceSessionPage(user.uid, compatibilityList, null, false);
+          setTracks((prev) => {
+            const merged = mergeWorkspaceTracks(compatibilityList, Array.isArray(prev) ? prev : []);
+            saveWorkspaceTrackCache(user.uid, merged);
+            return merged;
+          });
+          markCacheDiagnostic('library', 'SYNC', Math.max(1, compatibilitySnapshot.docs.length));
+        } catch (compatibilityError) {
+          console.warn('Library legacy compatibility tail read failed; keeping retry available.', compatibilityError);
+          setHasMoreWorkspaceServerTracks(true);
+          saveLibraryWorkspacePageMeta(user.uid, workspaceLastTrackDocRef.current, true, false);
+        }
+      }
       setWorkspaceVisibleCount((prev) => prev + WORKSPACE_PAGE_SIZE);
     } catch (error) {
       console.error('load more workspace tracks failed:', error);
       workspacePaginationFallbackRef.current = true;
       setHasMoreWorkspaceServerTracks(false);
+      saveLibraryWorkspacePageMeta(user.uid, workspaceLastTrackDocRef.current, false, true);
     } finally {
       setIsLoadingMoreWorkspaceTracks(false);
     }

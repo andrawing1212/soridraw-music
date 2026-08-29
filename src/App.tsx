@@ -5452,12 +5452,12 @@ function App() {
     return mergeFavoritePages(firstPageFavs, retainedCached);
   };
 
-  const writeFavoritesCache = (uid: string, list: any[]) => {
+  const writeFavoritesCache = (uid: string, list: any[], options: { skipBundleWrite?: boolean } = {}) => {
     const safeList = filterDeletedFavoriteTombstones(uid, Array.isArray(list) ? list : []);
 
     // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date
     favoritesInMemoryCache.set(uid, safeList);
-    if (musicNoteBundleActiveUids.has(uid)) {
+    if (!options.skipBundleWrite && musicNoteBundleActiveUids.has(uid)) {
       scheduleListBundleWrite('musicNote', uid, safeList, {
         limit: 20,
         hasMore: safeList.length >= 20,
@@ -9195,7 +9195,7 @@ const toggleCycleVariantSelection = (
 
       setFavorites((prev) => {
         const merged = mergeFavoritePages(prev || [], pageFavorites);
-        writeFavoritesCache(uid, merged);
+        writeFavoritesCache(uid, merged, { skipBundleWrite: true });
         return merged;
       });
       const loadedIds = replaceMusicNoteLoadedIds(pageFavorites);
@@ -9299,7 +9299,7 @@ const toggleCycleVariantSelection = (
       if (pageFavorites.length > 0) {
         setFavorites((prev) => {
           const merged = mergeFavoritePages(prev || [], pageFavorites);
-          writeFavoritesCache(uid, merged);
+          writeFavoritesCache(uid, merged, { skipBundleWrite: true });
           return merged;
         });
       }

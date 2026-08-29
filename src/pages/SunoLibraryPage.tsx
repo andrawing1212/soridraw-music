@@ -221,10 +221,10 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
   return session;
 };
 
-const ensureLibraryWorkspaceServerFirstPage = (uid: string): Promise<void> => {
+const ensureLibraryWorkspaceServerFirstPage = (uid: string, force = false): Promise<void> => {
   if (!uid) return Promise.resolve();
   const session = startLibraryWorkspaceSession(uid);
-  if (session.serverInitialized) return Promise.resolve();
+  if (session.serverInitialized && !force) return Promise.resolve();
   const existing = libraryWorkspaceFirstPageInFlight.get(uid);
   if (existing) return existing;
 
@@ -1436,9 +1436,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       unsubscribeWorkspaceView = subscribeLibraryWorkspaceSession(resolvedUser.uid, applySession);
       if (alreadyRunning && libraryWorkspaceSession?.serverInitialized) {
         markCacheDiagnostic('library', 'CACHE', 0);
-      } else {
-        void ensureLibraryWorkspaceServerFirstPage(resolvedUser.uid);
       }
+      // One bounded re-entry refresh keeps newly generated tracks visible without an idle listener.
+      void ensureLibraryWorkspaceServerFirstPage(resolvedUser.uid, true);
     });
 
     return () => {

@@ -2818,7 +2818,7 @@ export default function FavoritesPage({
   useEffect(() => {
     if (isMusicNoteSharedView) return;
     void onEnsureFavoritesPage?.();
-  }, [isMusicNoteSharedView, onEnsureFavoritesPage]);
+  }, [isMusicNoteSharedView, onEnsureFavoritesPage, favoriteTotalCount]);
 
   useEffect(() => {
     if (!selectedSong?.id || isMusicNoteSharedView) return;

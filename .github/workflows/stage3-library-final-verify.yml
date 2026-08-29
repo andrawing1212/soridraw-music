@@ -1,0 +1,55 @@
+name: Stage3 Library Final Verify
+
+on:
+  push:
+    branches:
+      - preview-stage3-final
+    paths:
+      - .deploy/stage3_library_final.py
+      - .github/workflows/stage3-library-final-verify.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: preview-stage3-final
+          fetch-depth: 0
+      - name: Apply source patch
+        run: python3 .deploy/stage3_library_final.py
+      - name: Cost and ownership guard
+        run: |
+          grep -Fq 'WORKSPACE_SERVER_PAGE_SIZE + 1' src/pages/SunoLibraryPage.tsx
+          grep -Fq 'serverTrackIds' src/pages/SunoLibraryPage.tsx
+          grep -Fq 'ensureLibraryWorkspaceServerFirstPage' src/pages/SunoLibraryPage.tsx
+          if grep -Fq "scheduleListBundleWrite('library'" src/pages/SunoLibraryPage.tsx; then exit 1; fi
+          if grep -Fq "subscribeListBundle('library'" src/pages/SunoLibraryPage.tsx; then exit 1; fi
+          if grep -Fq 'onSnapshot(pageQuery' src/pages/SunoLibraryPage.tsx; then exit 1; fi
+          if grep -Fq 'LIBRARY_COMPATIBILITY_SCAN_LIMIT' src/pages/SunoLibraryPage.tsx; then exit 1; fi
+          if grep -Fq 'limit(2000)' src/pages/SunoLibraryPage.tsx; then exit 1; fi
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Commit verified source
+        run: |
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git add src/pages/SunoLibraryPage.tsx
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'fix(stage3): make Library paging bounded and read-only'
+          git push origin HEAD:preview-stage3-final

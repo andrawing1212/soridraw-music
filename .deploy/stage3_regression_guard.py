@@ -17,12 +17,14 @@ text = replace_once(
     "const writeFavoritesCache = (uid: string, list: any[], options: { skipBundleWrite?: boolean } = {}) => {",
     'writeFavoritesCache options',
 )
-text = replace_once(
-    text,
-    "if (musicNoteBundleActiveUids.has(uid)) {",
-    "if (!options.skipBundleWrite && musicNoteBundleActiveUids.has(uid)) {",
-    'bundle write guard',
-)
+cache_start = text.index("const writeFavoritesCache = (uid: string, list: any[], options:")
+cache_end = text.index("  const patchFavoriteCacheImmediately", cache_start)
+cache_slice = text[cache_start:cache_end]
+guard = "if (musicNoteBundleActiveUids.has(uid)) {"
+if cache_slice.count(guard) != 1:
+    raise SystemExit(f'bundle write guard in writeFavoritesCache: expected 1 match, got {cache_slice.count(guard)}')
+cache_slice = cache_slice.replace(guard, "if (!options.skipBundleWrite && musicNoteBundleActiveUids.has(uid)) {", 1)
+text = text[:cache_start] + cache_slice + text[cache_end:]
 count = text.count("writeFavoritesCache(uid, merged);")
 if count != 2:
     raise SystemExit(f'Music Note bounded paging cache writes: expected 2 matches, got {count}')

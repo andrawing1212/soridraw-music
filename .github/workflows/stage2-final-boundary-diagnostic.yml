@@ -1,0 +1,77 @@
+name: Stage2 Final Boundary Diagnostic
+
+on:
+  push:
+    branches: [preview-host-parity]
+    paths:
+      - '.github/workflows/stage2-final-boundary-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout parity branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview-host-parity
+
+      - name: Probe Google Auth URI creation
+        shell: bash
+        env:
+          FIREBASE_API_KEY: AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA
+        run: |
+          set -u
+          report='stage2-google-auth-uri.txt'
+          : > "$report"
+          for origin in \
+            'https://soridraw-music-git-preview-andrawing1212.vercel.app/' \
+            'https://preview.soridraw.com/'; do
+            payload="$(python3 - "$origin" <<'PY'
+          import json, sys
+          print(json.dumps({
+              'identifier': 'stage2-parity-check@soridraw.invalid',
+              'continueUri': sys.argv[1],
+              'providerId': 'google.com',
+          }))
+          PY
+          )"
+            body="$RUNNER_TEMP/auth-$(echo "$origin" | tr -cd '[:alnum:]').json"
+            status="$(curl -sS -o "$body" -w '%{http_code}' -X POST \
+              -H 'Content-Type: application/json' \
+              --data "$payload" \
+              "https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=$FIREBASE_API_KEY" || true)"
+            {
+              echo "ORIGIN=$origin"
+              echo "HTTP=$status"
+              cat "$body" 2>/dev/null || true
+              echo
+            } >> "$report"
+          done
+          cat "$report"
+
+      - name: Record host-specific source conditions
+        shell: bash
+        run: |
+          set -euo pipefail
+          report='stage2-host-conditions.txt'
+          {
+            echo '# Host-specific source references under src/ excluding src/firebase.js'
+            grep -RInE --exclude='firebase.js' \
+              '(location\.hostname|window\.location|vercel\.app|soridraw\.com|web\.app|firebaseapp\.com)' src || true
+          } > "$report"
+          cat "$report"
+
+      - name: Upload diagnostic reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2-final-boundary-diagnostic
+          path: |
+            stage2-google-auth-uri.txt
+            stage2-host-conditions.txt
+          retention-days: 3

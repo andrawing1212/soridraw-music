@@ -69,12 +69,146 @@ if allowed_before in app:
 elif allowed_after not in app:
     raise SystemExit('986 favorite sync allowed-key anchor missing')
 
+# FavoritesPage uses the already-loaded user profile cache for the total count.
+# This adds zero Firestore reads to the Music Note page.
+profile_import = "import { favoritesStore } from '../hooks/useFavoritesStore';\n"
+profile_import_with_count = profile_import + "import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';\n"
+if profile_import_with_count not in favorites:
+    favorites = replace_once(favorites, profile_import, profile_import_with_count, 'profile-cache import')
+
+state_anchor = "  const [selectedSong, setSelectedSong] = useState<any | null>(null);\n"
+state_with_count = state_anchor + r'''  const [musicNoteProfileCount, setMusicNoteProfileCount] = useState<number>(() => {
+    const profile = readUserProfileCache(user?.uid) as any;
+    return Math.max(0, Number(profile?.musicNoteCount || 0));
+  });
+
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) {
+      setMusicNoteProfileCount(0);
+      return;
+    }
+
+    const syncCount = (profile?: any) => {
+      const source = profile || (readUserProfileCache(uid) as any);
+      setMusicNoteProfileCount(Math.max(0, Number(source?.musicNoteCount || 0)));
+    };
+    syncCount();
+
+    const handleProfileCache = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail || {};
+      if (String(detail?.uid || '') !== uid) return;
+      syncCount(detail?.profile);
+    };
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
+    return () => window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
+  }, [user?.uid]);
+
+'''
+if 'const [musicNoteProfileCount, setMusicNoteProfileCount]' not in favorites:
+    favorites = replace_once(favorites, state_anchor, state_with_count, 'profile count state')
+
 # Shared notes live in the same favorites collection but must never enter My Note
 # active-only pages.
 shared_before = "      sourceType: 'shared_music_note',\n"
 shared_after = "      sourceType: 'shared_music_note',\n      musicNoteListEligible: false,\n"
 if shared_after not in favorites:
     favorites = replace_once(favorites, shared_before, shared_after, 'shared-note eligibility')
+
+# Moving an own note to the trash must remove it from the active server query.
+trash_before = '''    const updates = {
+      hidden: true,
+      favoriteHidden: true,
+      isPublic: false,
+      deletedAt: serverTimestamp(),
+      trashedAt,
+    };'''
+trash_after = '''    const updates = {
+      hidden: true,
+      favoriteHidden: true,
+      isPublic: false,
+      deletedAt: serverTimestamp(),
+      trashedAt,
+      musicNoteListEligible: false,
+    };'''
+if trash_after not in favorites:
+    favorites = replace_once(favorites, trash_before, trash_after, 'trash eligibility')
+
+# Restore is an own-note action in this page; make the restored row queryable again.
+restore_before = '''    const updates = {
+      hidden: false,
+      favoriteHidden: false,
+      deletedAt: null,
+      trashedAt: null,
+    };'''
+restore_after = '''    const updates = {
+      hidden: false,
+      favoriteHidden: false,
+      deletedAt: null,
+      trashedAt: null,
+      musicNoteListEligible: true,
+    };'''
+if restore_after not in favorites:
+    favorites = replace_once(favorites, restore_before, restore_after, 'restore eligibility')
+
+# Count only loaded, active, own-note rows. The total comes from the profile that the
+# app already reads, so no count query is introduced.
+count_anchor = "  const canShowCachedMusicNoteMore = visibleCount < filteredFavorites.length;\n"
+count_block = r'''  const musicNoteLoadedOwnCount = favorites.filter((item: any) => (
+    item?.musicNoteListEligible === true
+    && !isFavoriteSoftRemoved(item)
+    && !isFavoriteInTrash(item)
+    && !isSharedMusicNoteItem(item)
+  )).length;
+  const musicNoteCurrentCount = musicNoteProfileCount > 0
+    ? Math.min(musicNoteProfileCount, musicNoteLoadedOwnCount, visibleCount)
+    : Math.min(musicNoteLoadedOwnCount, visibleCount);
+  const musicNoteRemainingCount = musicNoteProfileCount > 0
+    ? Math.max(0, musicNoteProfileCount - musicNoteCurrentCount)
+    : 0;
+
+  const canShowCachedMusicNoteMore = visibleCount < filteredFavorites.length;
+'''
+if 'const musicNoteLoadedOwnCount = favorites.filter' not in favorites:
+    favorites = replace_once(favorites, count_anchor, count_block, 'loaded/remaining count')
+
+can_request_before = '''  const canRequestMoreMusicNotePage = Boolean(
+    !isMusicNoteSharedView &&
+    !searchQuery.trim() &&
+    favoriteColorFilter === 'all' &&
+    !favoriteTrashView &&
+    hasMoreFavorites &&
+    filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE
+  );'''
+can_request_after = '''  const canRequestMoreMusicNotePage = Boolean(
+    !isMusicNoteSharedView &&
+    !searchQuery.trim() &&
+    favoriteColorFilter === 'all' &&
+    !favoriteTrashView &&
+    (musicNoteProfileCount <= 0 || musicNoteRemainingCount > 0) &&
+    hasMoreFavorites &&
+    filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE
+  );'''
+if can_request_after not in favorites:
+    favorites = replace_once(favorites, can_request_before, can_request_after, 'remaining-count more gate')
+
+more_ui_anchor = '''          {shouldShowMusicNoteMoreButton && (
+            <div className="flex justify-center pt-1" data-selection-keep="true">'''
+more_ui_with_count = r'''          {musicNoteProfileCount > 0
+            && !isMusicNoteSharedView
+            && musicNoteViewMode === 'noteSpace'
+            && !searchQuery.trim()
+            && favoriteColorFilter === 'all'
+            && !favoriteTrashView && (
+              <div className="flex justify-center pt-2 text-[11px] font-semibold text-[var(--text-secondary)]/70" data-selection-keep="true">
+                전체 {musicNoteProfileCount}곡 · 현재 {musicNoteCurrentCount}곡 · 남은 {musicNoteRemainingCount}곡
+              </div>
+            )}
+
+          {shouldShowMusicNoteMoreButton && (
+            <div className="flex justify-center pt-1" data-selection-keep="true">'''
+if '전체 {musicNoteProfileCount}곡 · 현재 {musicNoteCurrentCount}곡 · 남은 {musicNoteRemainingCount}곡' not in favorites:
+    favorites = replace_once(favorites, more_ui_anchor, more_ui_with_count, 'count summary UI')
 
 start_anchor = '  const loadMoreFavorites = useCallback(async () => {'
 end_anchor = '  const syncMusicNoteIncrementalFromRemoteVersion = useCallback'
@@ -188,12 +322,17 @@ if 'FAVORITES_PAGE_SIZE + 1' in canonical:
 if "orderBy('createdAt', 'desc')" in canonical:
     raise SystemExit('986 safety failed: mixed-type createdAt remains in active-only hot path')
 if 'musicNoteListEligible: false' not in favorites:
-    raise SystemExit('986 safety failed: shared-note writes are not explicitly excluded')
+    raise SystemExit('986 safety failed: shared/trash writes are not explicitly excluded')
+if 'musicNoteListEligible: true' not in favorites:
+    raise SystemExit('986 safety failed: restored own notes are not re-enabled')
+if 'musicNoteProfileCount' not in favorites or 'musicNoteRemainingCount' not in favorites:
+    raise SystemExit('986 safety failed: zero-read profile count UI is missing')
 
 app_path.write_text(app, encoding='utf-8')
 favorites_path.write_text(favorites, encoding='utf-8')
 print(
     f'Applied SORIDRAW 986: active-only bounded Music Note pagination; '
     f'future active writes patched={active_write_count}, inactive writes patched={inactive_write_count}. '
+    'Trash/restore metadata and zero-read profile totals are included. '
     'Legacy 985 remains only as a migration-safe fallback until metadata backfill.'
 )

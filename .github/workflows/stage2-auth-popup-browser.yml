@@ -1,0 +1,114 @@
+name: Stage2 Auth Popup Browser Diagnostic
+
+on:
+  push:
+    branches: [preview-host-parity]
+    paths:
+      - '.github/workflows/stage2-auth-popup-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auth-popup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout parity branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview-host-parity
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Probe Firebase Preview Google popup start
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/probe-auth-popup.mjs" <<'NODE'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs';
+
+          const report = [];
+          const push = (line) => { report.push(line); console.log(line); };
+          const browser = await chromium.launch({ headless: true });
+          const context = await browser.newContext();
+          const page = await context.newPage();
+          const consoleErrors = [];
+          page.on('console', (msg) => {
+            if (msg.type() === 'error') consoleErrors.push(msg.text());
+          });
+          page.on('pageerror', (error) => consoleErrors.push(`pageerror:${error.message}`));
+
+          try {
+            await page.goto('https://preview.soridraw.com/?auth=login', { waitUntil: 'domcontentloaded', timeout: 45000 });
+            await page.waitForTimeout(3000);
+            push(`ENTRY_URL=${page.url()}`);
+
+            const allButtons = await page.locator('button').allTextContents();
+            push(`BUTTONS=${JSON.stringify(allButtons.map((v) => v.trim()).filter(Boolean))}`);
+
+            let googleButton = page.locator('button').filter({ hasText: /Google|구글/i }).first();
+            if (await googleButton.count() === 0) {
+              const loginButton = page.locator('button').filter({ hasText: /로그인|login/i }).first();
+              if (await loginButton.count() > 0) {
+                await loginButton.click();
+                await page.waitForTimeout(1000);
+                googleButton = page.locator('button').filter({ hasText: /Google|구글/i }).first();
+              }
+            }
+
+            if (await googleButton.count() === 0) {
+              push('GOOGLE_BUTTON=NOT_FOUND');
+              await page.screenshot({ path: 'stage2-auth-popup.png', fullPage: true });
+              process.exitCode = 41;
+            } else {
+              push(`GOOGLE_BUTTON_TEXT=${JSON.stringify((await googleButton.textContent())?.trim() || '')}`);
+              const popupPromise = context.waitForEvent('page', { timeout: 15000 }).catch(() => null);
+              await googleButton.click();
+              const popup = await popupPromise;
+              if (!popup) {
+                push('POPUP=NOT_OPENED');
+                await page.waitForTimeout(2000);
+                push(`PAGE_URL_AFTER_CLICK=${page.url()}`);
+                push(`BODY_AFTER_CLICK=${JSON.stringify((await page.locator('body').innerText()).slice(0, 1200))}`);
+                await page.screenshot({ path: 'stage2-auth-popup.png', fullPage: true });
+                process.exitCode = 42;
+              } else {
+                await popup.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+                await popup.waitForTimeout(1500);
+                const popupUrl = popup.url();
+                push(`POPUP_URL=${popupUrl}`);
+                const ok = popupUrl.includes('accounts.google.com')
+                  || popupUrl.includes('soridraw-app-866a5.firebaseapp.com')
+                  || popupUrl.includes('/__/auth/handler');
+                push(`POPUP_AUTH_FLOW=${ok ? 'PASS' : 'UNEXPECTED_URL'}`);
+                await popup.screenshot({ path: 'stage2-auth-popup.png', fullPage: true }).catch(() => {});
+                if (!ok) process.exitCode = 43;
+              }
+            }
+          } catch (error) {
+            push(`ERROR=${error?.stack || error}`);
+            process.exitCode = 44;
+          } finally {
+            push(`CONSOLE_ERRORS=${JSON.stringify(consoleErrors)}`);
+            fs.writeFileSync('stage2-auth-popup.txt', report.join('\n') + '\n');
+            await browser.close();
+          }
+          NODE
+          node "$RUNNER_TEMP/probe-auth-popup.mjs" || true
+
+      - name: Upload browser diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2-auth-popup-browser
+          path: |
+            stage2-auth-popup.txt
+            stage2-auth-popup.png
+          if-no-files-found: ignore
+          retention-days: 3

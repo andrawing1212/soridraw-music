@@ -1,3 +1,4 @@
+// 2026-08-30: no-op marker to redeploy the pre-Stage3 safe Preview baseline after rollback.
 import fs from 'node:fs';
 
 const read = (path) => fs.readFileSync(path, 'utf8');

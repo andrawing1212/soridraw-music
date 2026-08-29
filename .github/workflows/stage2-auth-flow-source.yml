@@ -1,0 +1,41 @@
+name: Stage2 Auth Flow Source Diagnostic
+
+on:
+  push:
+    branches: [preview-host-parity]
+    paths:
+      - '.github/workflows/stage2-auth-flow-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout parity branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview-host-parity
+
+      - name: Record auth flow source context
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '# Firebase auth flow references'
+            grep -RInC 6 -E 'signInWithPopup|signInWithRedirect|getRedirectResult|GoogleAuthProvider|googleProvider' src || true
+            echo
+            echo '# Login UI references'
+            grep -RInC 4 -E 'Google.*로그인|구글.*로그인|Google.*login|로그인.*Google|로그인.*구글' src || true
+          } > stage2-auth-flow-source.txt
+          cat stage2-auth-flow-source.txt
+
+      - name: Upload auth flow source report
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2-auth-flow-source
+          path: stage2-auth-flow-source.txt
+          retention-days: 3

@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Activity, Crown, Home, Key, Mic2, SlidersHorizontal, Tags, Users } from 'lucide-react';
-import { doc, onSnapshot } from 'firebase/firestore';
+
 import { useLocation, useNavigate } from 'react-router-dom';
-import { auth, db } from '../firebase';
+import { auth } from '../firebase';
 import { FULL_ADMIN_PERMISSIONS, normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';
 import type { AdminPermissionKey, AdminPermissions, StaffRole } from '../types';
 import { cn } from '../lib/utils';
+import { USER_PROFILE_CACHE_EVENT, isUserProfileCacheStorageKey, readUserProfileCache } from '../lib/userProfileCache';
+
+const SORIDRAW_929_SINGLE_USER_PROFILE_SOURCE = true;
 
 type AdminPageLayoutProps = { title: string; description?: string; actions?: React.ReactNode; children: React.ReactNode };
 type AdminTab = { path: string; label: string; icon: React.ElementType; permission?: AdminPermissionKey; masterOnly?: boolean };
@@ -48,51 +51,29 @@ export default function AdminPageLayout({ title, description, actions, children 
     const uid = auth.currentUser?.uid;
     if (!uid) return;
 
-    let unsubscribe: (() => void) | null = null;
-    let retryTimer: number | null = null;
-    let retryAttempt = 0;
-    let disposed = false;
-
-    const attach = () => {
-      if (disposed || auth.currentUser?.uid !== uid) return;
-      if (unsubscribe) {
-        try { unsubscribe(); } catch {}
-        unsubscribe = null;
-      }
-
-      unsubscribe = onSnapshot(doc(db, 'users', uid), (snapshot) => {
-        retryAttempt = 0;
-        if (retryTimer !== null) {
-          window.clearTimeout(retryTimer);
-          retryTimer = null;
-        }
-        const data = snapshot.exists() ? snapshot.data() : null;
-        setStaffRole(normalizeStaffRole(data));
-        setPermissions(normalizeAdminPermissions(data));
-      }, (error: any) => {
-        // 843 — Keep the last live/cached navigation state and reattach slowly.
-        // Firestore does not continue a listener after its error callback fires.
-        console.warn('[Admin layout] user permission listener unavailable; keeping last verified/cached layout state.', error);
-        const code = String(error?.code || '').toLowerCase();
-        const transient = ['resource-exhausted', 'unavailable', 'deadline-exceeded', 'aborted', 'internal']
-          .some((candidate) => code.includes(candidate));
-        if (!transient || disposed) return;
-        const delays = [30_000, 60_000, 120_000, 300_000];
-        const delay = delays[Math.min(retryAttempt, delays.length - 1)];
-        retryAttempt += 1;
-        if (retryTimer !== null) window.clearTimeout(retryTimer);
-        retryTimer = window.setTimeout(() => {
-          retryTimer = null;
-          attach();
-        }, delay);
-      });
+    const applyCachedProfile = () => {
+      const profile = readUserProfileCache(uid);
+      if (!profile) return;
+      setStaffRole(normalizeStaffRole(profile));
+      setPermissions(normalizeAdminPermissions(profile));
     };
 
-    attach();
+    applyCachedProfile();
+
+    const handleProfileCache = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string }>).detail;
+      if (!detail || detail.uid !== uid) return;
+      applyCachedProfile();
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (isUserProfileCacheStorageKey(event.key, uid)) applyCachedProfile();
+    };
+
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
+    window.addEventListener('storage', handleStorage);
     return () => {
-      disposed = true;
-      if (retryTimer !== null) window.clearTimeout(retryTimer);
-      if (unsubscribe) unsubscribe();
+      window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
+      window.removeEventListener('storage', handleStorage);
     };
   }, []);
 

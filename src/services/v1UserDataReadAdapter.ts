@@ -8,7 +8,7 @@
  * - Step 2-A3 initially wires only playlist-list reads through this bridge.
  */
 
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from '../lib/firestoreMeasured';
 import { db } from '../firebase';
 import {
   createV1UserDataAdapter,

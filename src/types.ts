@@ -659,7 +659,16 @@ export interface AppUserInfo {
   generationPreferences?: {
     autoModelFallback?: boolean;
   };
+  syncVersions?: {
+    googleGeminiApiKey?: number;
+    sectionCustom?: number;
+    recentSongs?: number;
+    musicNote?: number;
+    library?: number;
+  };
 }
+
+// SORIDRAW_892_CACHE_SYNC_VERSION_FOUNDATION
 
 // ==========================================
 // Suno API Types

@@ -1,9 +1,11 @@
 // SORIDRAW_EXPLORE_8E5_SOCIAL_PUBLIC_PROFILE
+// SORIDRAW_EXPLORE_8E5_PROFILE_EDIT_UI_975
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Compass, ExternalLink, Heart, Loader2, Music2, Pin, Search, UserCheck, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Compass, ExternalLink, Heart, Loader2, Music2, Pencil, Pin, Search, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
+import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { getExploreLikedTrackIds, setExploreTrackLike } from '../services/exploreLikeService';
 import {
   getExploreFollowState,
@@ -13,6 +15,7 @@ import {
   type ExploreFollowState,
   type ExplorePublicProfile,
 } from '../services/exploreSocialService';
+import ExploreProfileEditModal from '../components/explore/ExploreProfileEditModal';
 import '../components/explore/explore.css';
 
 type ExploreSort = 'recommended' | 'latest' | 'popular';
@@ -20,6 +23,7 @@ type ExploreSort = 'recommended' | 'latest' | 'popular';
 type ExploreTrack = {
   id: string;
   ownerUid: string;
+  ownerHandle: string;
   title: string;
   displayName: string;
   avatarUrl?: string | null;
@@ -58,6 +62,7 @@ const readNestedCount = (row: Record<string, unknown>, key: string) => {
 const normalizeTrack = (row: Record<string, unknown>): ExploreTrack => ({
   id: safeText(row.id),
   ownerUid: safeText(row.ownerUid ?? row.owner_uid),
+  ownerHandle: safeText(row.ownerHandle ?? row.owner_handle).replace(/^@+/, ''),
   title: safeText(row.title, '제목 없는 곡'),
   displayName: safeText(row.ownerNickname ?? row.displayName ?? row.ownerDisplayName, 'SORiDRAW'),
   avatarUrl: safeText(row.ownerAvatarUrl ?? row.avatarUrl) || null,
@@ -208,6 +213,7 @@ export default function ExplorePage() {
   const [profileError, setProfileError] = useState('');
   const [followState, setFollowState] = useState<ExploreFollowState | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
+  const [profileEditOpen, setProfileEditOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const likeHydrationKeyRef = useRef('');
 
@@ -238,6 +244,7 @@ export default function ExplorePage() {
       signal: controller.signal,
     })
       .then(async (response) => {
+        recordCloudflareResponse(response);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json() as Promise<ExploreApiResponse>;
       })
@@ -264,6 +271,7 @@ export default function ExplorePage() {
       setProfileTracks([]);
       setProfileError('');
       setFollowState(null);
+      setProfileEditOpen(false);
       return;
     }
 
@@ -283,9 +291,9 @@ export default function ExplorePage() {
         setProfile(nextProfile);
         setProfileTracks(normalizedTracks);
 
-        if (user && user.uid !== profileUid) {
+        if (user && user.uid !== nextProfile.uid) {
           try {
-            const nextFollowState = await getExploreFollowState(user, profileUid);
+            const nextFollowState = await getExploreFollowState(user, nextProfile.uid);
             if (!cancelled) setFollowState(nextFollowState);
           } catch (reason) {
             console.warn('Explore follow state load failed:', reason);
@@ -362,7 +370,7 @@ export default function ExplorePage() {
 
   const openProfile = (track: ExploreTrack) => {
     if (!track.ownerUid) return;
-    setSearchParams({ profile: track.ownerUid });
+    setSearchParams({ profile: track.ownerHandle ? `@${track.ownerHandle}` : track.ownerUid });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -403,11 +411,11 @@ export default function ExplorePage() {
       setSocialNotice('팔로우는 로그인 후 사용할 수 있어요.');
       return;
     }
-    if (user.uid === profileUid || followBusy) return;
+    if (user.uid === profile.uid || followBusy) return;
     const nextShouldFollow = !Boolean(followState?.isFollowing);
     setFollowBusy(true);
     try {
-      const result = await setExploreFollow(user, profileUid, nextShouldFollow);
+      const result = await setExploreFollow(user, profile.uid, nextShouldFollow);
       setFollowState(result);
       setProfile((prev) => prev ? {
         ...prev,
@@ -459,35 +467,66 @@ export default function ExplorePage() {
           </div>
         ) : (
           <>
-            <section className="soridraw-explore-profile-head">
-              <div className="soridraw-explore-profile-avatar" aria-hidden="true">
-                {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" /> : profile.nickname.charAt(0).toUpperCase()}
-              </div>
-              <div className="soridraw-explore-profile-copy">
-                <div className="soridraw-explore-profile-name-line">
-                  <h1>{profile.nickname}</h1>
-                  {user?.uid === profileUid ? (
-                    <span className="soridraw-explore-own-profile">내 공개 프로필</span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={toggleFollow}
-                      disabled={followBusy}
-                      className={`soridraw-explore-follow-button${followState?.isFollowing ? ' is-following' : ''}`}
-                    >
-                      {followBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : followState?.isFollowing ? <UserCheck aria-hidden="true" /> : <UserPlus aria-hidden="true" />}
-                      {followState?.isFollowing ? '팔로잉' : '팔로우'}
-                    </button>
-                  )}
+            <section className={`soridraw-explore-profile-head${profile.backgroundUrl ? ' has-background' : ''}`}>
+              {profile.backgroundUrl && (
+                <div className="soridraw-explore-profile-background" aria-hidden="true">
+                  <img src={profile.backgroundUrl} alt="" referrerPolicy="no-referrer" />
+                  <span />
                 </div>
-                {profile.bio && <p>{profile.bio}</p>}
-                <div className="soridraw-explore-profile-stats">
-                  <span>팔로워 <strong>{formatCount(profile.followerCount)}</strong></span>
-                  <span>팔로잉 <strong>{formatCount(profile.followingCount)}</strong></span>
-                  <span>공개곡 <strong>{formatCount(profile.trackCount || profileTracks.length)}</strong></span>
+              )}
+              <div className="soridraw-explore-profile-content">
+                <div className="soridraw-explore-profile-avatar" aria-hidden="true">
+                  {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" /> : profile.nickname.charAt(0).toUpperCase()}
+                </div>
+                <div className="soridraw-explore-profile-copy">
+                  <div className="soridraw-explore-profile-name-line">
+                    <h1>{user?.uid === profile.uid && ['SORIDRAW 사용자', 'SORIDRAW User', 'SORiDRAW', 'SORIDRAW'].includes(profile.nickname) ? (user.displayName || user.email?.split('@')[0] || profile.nickname) : profile.nickname}</h1>
+                    {user?.uid === profile.uid ? (
+                      <button type="button" className="soridraw-explore-profile-edit-button" onClick={() => setProfileEditOpen(true)}>
+                        <Pencil aria-hidden="true" /> 편집
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={toggleFollow}
+                        disabled={followBusy}
+                        className={`soridraw-explore-follow-button${followState?.isFollowing ? ' is-following' : ''}`}
+                      >
+                        {followBusy ? <Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> : followState?.isFollowing ? <UserCheck aria-hidden="true" /> : <UserPlus aria-hidden="true" />}
+                        {followState?.isFollowing ? '팔로잉' : '팔로우'}
+                      </button>
+                    )}
+                  </div>
+                  {profile.handle && <div className="soridraw-explore-profile-handle">@{profile.handle}</div>}
+                  {profile.bio && <p>{profile.bio}</p>}
+                  <div className="soridraw-explore-profile-stats">
+                    <span>팔로워 <strong>{formatCount(profile.followerCount)}</strong></span>
+                    <span>팔로잉 <strong>{formatCount(profile.followingCount)}</strong></span>
+                    <span>공개곡 <strong>{formatCount(profile.trackCount || profileTracks.length)}</strong></span>
+                  </div>
+                  {profile.genres.length > 0 && <div className="soridraw-explore-profile-genres">{profile.genres.map((genre) => <span key={genre}>{genre}</span>)}</div>}
+                  {(profile.socialLinks.spotify || profile.socialLinks.instagram || profile.socialLinks.tiktok) && (
+                    <div className="soridraw-explore-profile-social-links">
+                      {profile.socialLinks.spotify && <a href={profile.socialLinks.spotify} target="_blank" rel="noreferrer">Spotify</a>}
+                      {profile.socialLinks.instagram && <a href={profile.socialLinks.instagram} target="_blank" rel="noreferrer">Instagram</a>}
+                      {profile.socialLinks.tiktok && <a href={profile.socialLinks.tiktok} target="_blank" rel="noreferrer">TikTok</a>}
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
+
+            {profileEditOpen && user?.uid === profile.uid && (
+              <ExploreProfileEditModal
+                user={user}
+                profile={profile}
+                onClose={() => setProfileEditOpen(false)}
+                onSaved={(nextProfile) => {
+                  setProfile(nextProfile);
+                  if (nextProfile.handle) setSearchParams({ profile: `@${nextProfile.handle}` }, { replace: true });
+                }}
+              />
+            )}
 
             {profileTracks.length === 0 ? (
               <div className="soridraw-explore-state soridraw-explore-state--empty">

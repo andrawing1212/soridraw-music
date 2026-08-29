@@ -1,10 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { FlaskConical, Heart, Home, Library, Loader2, ShieldAlert, SlidersHorizontal, User as UserIcon, Zap } from 'lucide-react';
+import { doc, getDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
+import { Compass, FlaskConical, Heart, Home, Library, Loader2, ShieldAlert, SlidersHorizontal, User as UserIcon, Zap } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
-import { db } from '../firebase';
+import { auth, db } from '../firebase';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 import { FIRESTORE_READ_CACHE_KEYS, writeFirestoreReadCache } from '../lib/firestoreReadCache';
+import { readCacheDiagnosticsEnabled, readCacheDiagnosticsGloballyEnabled, readCacheDiagnosticsOwnerUid, setCacheDiagnosticsEnabled } from '../lib/cacheDiagnostics';
+
+const SORIDRAW_898_CACHE_DIAGNOSTICS_LIVE_PANEL = true;
+const SORIDRAW_897_CACHE_DIAGNOSTICS_ADMIN_SCOPE = true;
+const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 import {
   DEFAULT_NAVIGATION_VISIBILITY_SETTINGS,
   getNavigationFirestorePayload,
@@ -74,6 +79,7 @@ function AccessModeSelector({
   );
 }
 
+// SORIDRAW_NAV_PERMISSION_ADMIN_953
 export default function AdminAppSettingsPage() {
   const initialNavigationSettings = readStoredNavigationVisibilitySettings();
   const [savedSettings, setSavedSettings] = useState<NavigationVisibilitySettings>(initialNavigationSettings);
@@ -85,6 +91,16 @@ export default function AdminAppSettingsPage() {
   const [isClicheLoading, setIsClicheLoading] = useState(true);
   const [isSavingCliche, setIsSavingCliche] = useState(false);
   const [clicheMessage, setClicheMessage] = useState('');
+  const [cacheDiagnosticsEnabled, setCacheDiagnosticsEnabledState] = useState(() => readCacheDiagnosticsEnabled(auth.currentUser?.uid || null));
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid || '';
+    if (!uid) return;
+    if (readCacheDiagnosticsGloballyEnabled() && !readCacheDiagnosticsOwnerUid()) {
+      setCacheDiagnosticsEnabled(true, uid);
+      setCacheDiagnosticsEnabledState(true);
+    }
+  }, []);
 
   const hasUnsavedNavigationChanges = useMemo(
     () => JSON.stringify(savedSettings) !== JSON.stringify(draftSettings),
@@ -229,6 +245,7 @@ export default function AdminAppSettingsPage() {
     icon: React.ElementType;
   }> = [
     { key: 'home', label: '홈', description: '메인 홈 화면과 홈 메뉴를 관리합니다.', icon: Home },
+    { key: 'explore', label: '익스플로어', description: '공개 음악 탐색과 크리에이터 화면을 관리합니다.', icon: Compass },
     { key: 'studio', label: '스튜디오', description: '가사·프롬프트 제작 화면을 관리합니다.', icon: Zap },
     { key: 'musicNote', label: '뮤직노트', description: '저장한 곡과 제작 데이터 관리 화면을 관리합니다.', icon: Heart },
     { key: 'library', label: '라이브러리', description: 'Music API 생성곡과 재생 목록 화면을 관리합니다.', icon: Library },
@@ -348,6 +365,27 @@ export default function AdminAppSettingsPage() {
               </button>
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-3xl bg-[var(--bg-secondary)] px-5 py-4 shadow-sm md:px-6">
+          <div className="min-w-0">
+            <h3 className="text-sm font-black text-[var(--text-primary)]">캐시 진단 표시</h3>
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-secondary)]">
+              각 화면 상단의 CACHE / SYNC와 실제 읽기·조회 횟수를 표시합니다. 이 설정은 이 기기에만 저장되며 서버 요청을 만들지 않습니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !cacheDiagnosticsEnabled;
+              setCacheDiagnosticsEnabledState(next);
+              setCacheDiagnosticsEnabled(next, auth.currentUser?.uid || null);
+            }}
+            aria-pressed={cacheDiagnosticsEnabled}
+            className={`shrink-0 rounded-xl px-4 py-2 text-xs font-black transition-all ${cacheDiagnosticsEnabled ? 'bg-[#BBA8CA] text-[#1b161d]' : 'bg-white/[0.055] text-[var(--text-secondary)] hover:bg-white/[0.09]'}`}
+          >
+            {cacheDiagnosticsEnabled ? 'ON' : 'OFF'}
+          </button>
         </div>
 
         {clicheMessage && (

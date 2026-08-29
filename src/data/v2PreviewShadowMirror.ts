@@ -3,7 +3,7 @@
  * V1 is authoritative. Only exact stable sd_ IDs are eligible.
  */
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, runTransaction } from '../lib/firestoreMeasured';
 import { auth, db } from '../firebase';
 import { backendV2MirrorOutbox, type V2MirrorOutboxRecord } from './indexedDbMirrorOutbox';
 import { compareV2MirrorVersion, createV2MirrorMutationEnvelope, isSoridrawSongId, type V2LiveMirrorOperation } from './v2LiveMutation';

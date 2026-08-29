@@ -1,5 +1,6 @@
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
+import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 
 const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
 
@@ -32,6 +33,7 @@ const requestPublic = async (path: string) => {
     method: 'GET',
     headers: { Accept: 'application/json' },
   });
+  recordCloudflareResponse(response, path);
   const payload = await readPayload(response);
   if (!response.ok) {
     const message = String(payload?.message || payload?.error?.message || payload?.error || '공개 프로필을 불러오지 못했습니다.').trim();
@@ -51,6 +53,7 @@ const requestAuthed = async (user: User, path: string, init: RequestInit = {}) =
       ...(init.headers || {}),
     },
   });
+  recordCloudflareResponse(response, path);
   const payload = await readPayload(response);
   if (!response.ok) {
     const code = String(payload?.code || payload?.error?.code || '').trim();

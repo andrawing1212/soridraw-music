@@ -1,5 +1,6 @@
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
+import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 
 const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
 const PUBLICATION_PAGE_SIZE = 50;
@@ -94,6 +95,7 @@ const requestExplore = async (
       ...(init.headers || {}),
     },
   });
+  recordCloudflareResponse(response, path);
   const payload = await readResponsePayload(response);
 
   if (!response.ok) {
@@ -125,6 +127,46 @@ const normalizePublicationOptions = (
   allowFollowerSave: Boolean(options?.allowFollowerSave),
   profilePinned: Boolean(options?.profilePinned),
 });
+
+// SORIDRAW_EXPLORE_PUBLICATION_BATCH_STATE_965
+export const getExploreMusicNotePublicationStates = async (
+  user: User,
+): Promise<Record<string, ExploreMusicNotePublicationState>> => {
+  const result: Record<string, ExploreMusicNotePublicationState> = {};
+  let cursor = '';
+
+  for (let page = 0; page < MAX_PUBLICATION_PAGES; page += 1) {
+    const query = new URLSearchParams({
+      visibility: 'all',
+      limit: String(PUBLICATION_PAGE_SIZE),
+    });
+    if (cursor) query.set('cursor', cursor);
+
+    const payload = await requestExplore(user, `/v1/me/publications?${query.toString()}`);
+    const items = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+
+    items
+      .map(normalizePublicationItem)
+      .forEach((item) => {
+        if (item.sourceType !== 'music_note') return;
+        const sourceId = String(item.sourceId || '').trim();
+        if (!sourceId) return;
+        const expectedTrackId = getMusicNoteTrackId(user.uid, sourceId);
+        result[sourceId] = {
+          status: item.isPublic ? 'public' : 'private',
+          trackId: item.trackId || item.id || expectedTrackId,
+          allowNextSongApply: Boolean(item.allowNextSongApply),
+          allowFollowerSave: Boolean(item.allowFollowerSave),
+          profilePinned: Boolean(item.profilePinned),
+        };
+      });
+
+    cursor = String(payload?.data?.nextCursor || '').trim();
+    if (!cursor) break;
+  }
+
+  return result;
+};
 
 export const getExploreMusicNotePublicationState = async (
   user: User,

@@ -1,5 +1,6 @@
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
+import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 
 const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
 
@@ -37,6 +38,7 @@ const requestExploreLike = async (user: User, path: string, init: RequestInit = 
       ...(init.headers || {}),
     },
   });
+  recordCloudflareResponse(response, path);
   const payload = await readPayload(response);
 
   if (!response.ok) {

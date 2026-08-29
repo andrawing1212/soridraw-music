@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, doc, writeBatch, serverTimestamp, getDocs, setDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp, getDocs, setDoc, updateDoc, deleteDoc, query, where } from '../lib/firestoreMeasured';
 import { Playlist, PlaylistItem } from '../types';
 import { v1UserDataReadAdapter } from './v1UserDataReadAdapter';
 
@@ -302,7 +302,7 @@ export const fetchTrackLikes = async (globalIds: string[], uid: string | undefin
   const result: Record<string, { likeCount: number, likedByMe: boolean }> = {};
   if (globalIds.length === 0) return result;
 
-  const { getDoc } = await import('firebase/firestore');
+  const { getDoc } = await import('../lib/firestoreMeasured');
 
   await Promise.all(globalIds.map(async (gid) => {
     try {
@@ -332,7 +332,7 @@ export const fetchTrackLikes = async (globalIds: string[], uid: string | undefin
 };
 
 export const toggleTrackLike = async (globalId: string, uid: string, currentlyLiked: boolean): Promise<number> => {
-  const { runTransaction } = await import('firebase/firestore');
+  const { runTransaction } = await import('../lib/firestoreMeasured');
   const countRef = doc(db, 'playlist_like_counts', globalId);
   const likeRef = doc(db, `playlist_likes/${globalId}/users`, uid);
 
@@ -368,7 +368,7 @@ export const fetchSharedTracksStatus = async (sourceIds: string[]): Promise<Reco
   const result: Record<string, { isPublic: boolean, checkedAt: number }> = {};
   if (sourceIds.length === 0) return result;
 
-  const { getDoc } = await import('firebase/firestore');
+  const { getDoc } = await import('../lib/firestoreMeasured');
 
   await Promise.all(sourceIds.map(async (sid) => {
     try {

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where } from '../lib/firestoreMeasured';
 import { httpsCallable } from 'firebase/functions';
 import { CheckCircle2, Crown, FlaskConical, Loader2, RefreshCw, Save, Search, ShieldCheck } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';

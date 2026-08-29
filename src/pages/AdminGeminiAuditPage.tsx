@@ -30,6 +30,8 @@ const CONTEXT_LABELS: Record<string, string> = {
   repairSparseLyrics: '가사 밀도 보완',
   repairSparseLyricsSecondPass: '가사 밀도 2차 보완',
   languageMixWholeLyricRetry: '언어 혼합 재작성',
+  languageMixLockedWholeRewrite: '언어 혼합 가사 재작성',
+  repairV1FinalProductionCues: '섹션 지시문 보완',
   rewriteLyricHardBanLines: '금지어 줄 교정',
   rewriteLyricHardBanLinesSecondPass: '금지어 2차 교정',
   rewriteLyricHardBanCards: '금지어 통합 교정',
@@ -39,6 +41,14 @@ const CONTEXT_LABELS: Record<string, string> = {
   translateKoreanTitleToEnglish: '한국어 제목 영어 변환',
   generateCustomSectionMetadata: '사용자 섹션 분석',
 };
+
+const SORIDRAW_888_ADMIN_CONTEXT_LABELS = true;
+
+function contextLabel(context: string): string {
+  const clean = String(context || '').trim();
+  if (clean.startsWith('languageMixLockedWholeRewrite')) return '언어 혼합 가사 재작성';
+  return CONTEXT_LABELS[clean] || clean || 'Gemini 호출';
+}
 
 function numberText(value: number): string {
   return Math.max(0, Number(value) || 0).toLocaleString('ko-KR');
@@ -265,7 +275,7 @@ export default function AdminGeminiAuditPage() {
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                               <span className="font-black text-amber-300">{skip.model} 건너뜀</span>
                               <span>{modelSkipReasonText(skip)}</span>
-                              <span className="text-[var(--text-secondary)]">· {CONTEXT_LABELS[skip.context] || skip.context}</span>
+                              <span className="text-[var(--text-secondary)]">· {contextLabel(skip.context)}</span>
                             </div>
                             {skip.detail && skip.reason !== 'in_flight' && (
                               <div className="mt-0.5 break-words text-[var(--text-secondary)]">사유: {skip.detail}</div>
@@ -284,7 +294,7 @@ export default function AdminGeminiAuditPage() {
                                 {call.sequence}
                               </span>
                               <span className="truncate text-xs font-black text-[var(--text-primary)]">
-                                {CONTEXT_LABELS[call.context] || call.context}
+                                {contextLabel(call.context)}
                               </span>
                               {call.fallbackAttempt > 1 && (
                                 <span className="rounded-full bg-amber-400/10 px-2 py-0.5 text-[10px] font-black text-amber-300">

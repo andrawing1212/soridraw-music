@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 
-if (!admin.apps.length) admin.initializeApp();
+const PROJECT_ID = 'soridraw-app-866a5';
+if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();
 
 const isPresent = (value) => value !== undefined && value !== null && String(value).trim() !== '';
@@ -44,6 +45,7 @@ const tallyFields = (rows, fields) => {
 
   console.log(JSON.stringify({
     mode: 'READ_ONLY_COUNT_ONLY',
+    projectId: PROJECT_ID,
     favorites,
     tracks,
   }, null, 2));

@@ -6,6 +6,9 @@ on:
     paths:
       - '.deploy/apply-979-music-note-legacy-cache-cursor-recovery.py'
       - '.deploy/apply-980-library-pagination-metadata-recovery.py'
+      - '.deploy/apply-981-music-note-load-more-self-heal.py'
+      - '.deploy/apply-982-music-note-loaded-metadata-hydration.py'
+      - '.deploy/verify-955-suno-audio-url-auto-recovery.py'
       - '.github/workflows/firebase-hosting-preview-pagination-recovery.yml'
   workflow_dispatch:
 
@@ -46,7 +49,10 @@ jobs:
           set -euo pipefail
           npm run prebuild
           grep -Fq 'SORIDRAW_979_MUSIC_NOTE_LEGACY_CACHE_CURSOR_RECOVERY' src/App.tsx
-          echo '[pagination] 979 generated: PASS'
+          grep -Fq 'SORIDRAW_981_MUSIC_NOTE_LOAD_MORE_SELF_HEAL' src/App.tsx
+          grep -Fq 'SORIDRAW_982_MUSIC_NOTE_LOADED_METADATA_HYDRATION' src/App.tsx
+          grep -Fq 'SORIDRAW_982_MUSIC_NOTE_LOADED_METADATA_HYDRATION' src/pages/FavoritesPage.tsx
+          echo '[pagination] 979 + 981 + 982 generated: PASS'
 
       - name: Apply Library pagination metadata recovery
         run: |
@@ -55,24 +61,21 @@ jobs:
           grep -Fq 'SORIDRAW_980_LIBRARY_PAGINATION_METADATA_RECOVERY' src/pages/SunoLibraryPage.tsx
           echo '[pagination] 980 generated: PASS'
 
-      - name: Verify bounded pagination invariants
+      - name: Verify bounded pagination and metadata invariants
         shell: bash
         run: |
           set -euo pipefail
           grep -Fq 'favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;' src/App.tsx
           grep -Fq 'setHasMoreFavorites(bundle.hasMore);' src/App.tsx
+          grep -Fq "new CustomEvent('soridraw:music-note-page-metadata'" src/App.tsx
+          grep -Fq "window.addEventListener('soridraw:music-note-page-metadata'" src/pages/FavoritesPage.tsx
+          grep -Fq 'loadedFavoriteMetadataRef' src/pages/FavoritesPage.tsx
+          grep -Fq 'hasSongLinksField' src/pages/FavoritesPage.tsx
+          grep -Fq 'hasSongColorField' src/pages/FavoritesPage.tsx
           grep -Fq 'session.lastDoc = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;' src/pages/SunoLibraryPage.tsx
           grep -Fq 'session.hasMore = bundle.hasMore;' src/pages/SunoLibraryPage.tsx
           grep -Fq 'startAfter(workspaceLastTrackDocRef.current)' src/pages/SunoLibraryPage.tsx
-          echo '[pagination] bounded bundle/page paths: PASS'
-
-      - name: Locate old-song one-time-load UI in final generated source
-        shell: bash
-        run: |
-          set +e
-          echo '--- old-song UI matches (diagnostic only) ---'
-          grep -RniE '14일|이전곡|1회 불러오|오래된 곡' src .deploy | head -n 80
-          exit 0
+          echo '[pagination] bounded page + saved metadata hydration paths: PASS'
 
       - name: Typecheck and build generated source
         run: |
@@ -121,5 +124,5 @@ jobs:
 
       - name: Result
         run: |
-          echo 'Music Note + Library pagination metadata recovery deployed to soridraw-preview only.'
+          echo 'Music Note pagination + saved colour/Suno URL metadata hydration deployed to soridraw-preview only.'
           echo 'No main change, production Hosting release, Functions deploy, Firestore/Database Rules change, or user-data migration in this workflow.'

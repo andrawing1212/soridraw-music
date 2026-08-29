@@ -1,0 +1,197 @@
+name: Stage2 Vercel Firebase Host Parity
+
+on:
+  push:
+    branches: [preview-host-parity]
+    paths:
+      - '.github/workflows/stage2-host-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      VERCEL_ORIGIN: https://soridraw-music-git-preview-andrawing1212.vercel.app
+      FIREBASE_ORIGIN: https://preview.soridraw.com
+      FIREBASE_SITE_ORIGIN: https://soridraw-preview.web.app
+      BACKEND_PROJECT: soridraw-app-866a5
+
+    steps:
+      - name: Checkout parity branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview-host-parity
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Type check source
+        run: npx tsc --noEmit
+
+      - name: Build source once
+        run: npm run build
+
+      - name: Compare deployed JS and CSS byte-for-byte
+        shell: bash
+        run: |
+          set -euo pipefail
+          hosts=("$VERCEL_ORIGIN" "$FIREBASE_ORIGIN" "$FIREBASE_SITE_ORIGIN")
+
+          for host in "${hosts[@]}"; do
+            echo "[Stage2] Checking root: $host/"
+            curl -fLsS --max-time 30 "$host/" -o "$RUNNER_TEMP/root.html"
+            grep -q '<div id="root"></div>' "$RUNNER_TEMP/root.html"
+          done
+
+          mapfile -t runtime_files < <(find dist/assets -type f \( -name '*.js' -o -name '*.css' \) -printf '%P\n' | sort)
+          test "${#runtime_files[@]}" -gt 0
+          echo "[Stage2] Runtime JS/CSS files: ${#runtime_files[@]}"
+
+          for rel in "${runtime_files[@]}"; do
+            local_sha="$(sha256sum "dist/assets/$rel" | awk '{print $1}')"
+            for host in "${hosts[@]}"; do
+              target="$RUNNER_TEMP/$(echo "$host" | tr -cd '[:alnum:]')-$(basename "$rel")"
+              curl -fLsS --max-time 30 "$host/assets/$rel" -o "$target"
+              remote_sha="$(sha256sum "$target" | awk '{print $1}')"
+              if [ "$local_sha" != "$remote_sha" ]; then
+                echo "ERROR: runtime asset mismatch"
+                echo "host=$host"
+                echo "asset=/assets/$rel"
+                echo "local=$local_sha"
+                echo "remote=$remote_sha"
+                exit 20
+              fi
+            done
+          done
+          echo '[Stage2] Deployed runtime JS/CSS byte parity: PASS'
+
+      - name: Compare Functions CORS for both origins
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint='https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoApiKeyStatus'
+          for origin in "$VERCEL_ORIGIN" "$FIREBASE_ORIGIN"; do
+            headers="$RUNNER_TEMP/functions-$(echo "$origin" | tr -cd '[:alnum:]').headers"
+            status="$(curl -sS -o /dev/null -D "$headers" -w '%{http_code}' -X OPTIONS \
+              -H "Origin: $origin" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "$endpoint")"
+            echo "[Stage2] Functions CORS $origin -> HTTP $status"
+            test "$status" = '204'
+            acao="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {sub(/\r$/, "", $2); print $2}' "$headers" | tail -n1)"
+            if [ "$acao" != '*' ] && [ "$acao" != "$origin" ]; then
+              echo "ERROR: Functions ACAO does not allow $origin (got: ${acao:-missing})"
+              cat "$headers"
+              exit 21
+            fi
+          done
+          echo '[Stage2] Functions CORS parity: PASS'
+
+      - name: Compare Explore CORS for both origins
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint='https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1'
+          for origin in "$VERCEL_ORIGIN" "$FIREBASE_ORIGIN"; do
+            headers="$RUNNER_TEMP/explore-$(echo "$origin" | tr -cd '[:alnum:]').headers"
+            body="$RUNNER_TEMP/explore-$(echo "$origin" | tr -cd '[:alnum:]').json"
+            status="$(curl -sS -o "$body" -D "$headers" -w '%{http_code}' -H "Origin: $origin" "$endpoint")"
+            echo "[Stage2] Explore CORS $origin -> HTTP $status"
+            test "$status" = '200'
+            acao="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {sub(/\r$/, "", $2); print $2}' "$headers" | tail -n1)"
+            if [ "$acao" != '*' ] && [ "$acao" != "$origin" ]; then
+              echo "ERROR: Explore ACAO does not allow $origin (got: ${acao:-missing})"
+              cat "$headers"
+              exit 22
+            fi
+          done
+          echo '[Stage2] Explore CORS parity: PASS'
+
+      - name: Authenticate Google for read-only Auth config check
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Mint Google OAuth token
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const credentialPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+          if (!credentialPath) throw new Error('GOOGLE_APPLICATION_CREDENTIALS is missing');
+          const serviceAccount = JSON.parse(fs.readFileSync(credentialPath, 'utf8'));
+          const base64url = (input) => Buffer.from(input).toString('base64url');
+          const now = Math.floor(Date.now() / 1000);
+          const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+          const payload = base64url(JSON.stringify({
+            iss: serviceAccount.client_email,
+            scope: 'https://www.googleapis.com/auth/cloud-platform',
+            aud: 'https://oauth2.googleapis.com/token',
+            iat: now,
+            exp: now + 3600,
+          }));
+          const unsigned = `${header}.${payload}`;
+          const signature = crypto.sign('RSA-SHA256', Buffer.from(unsigned), serviceAccount.private_key).toString('base64url');
+          const assertion = `${unsigned}.${signature}`;
+          (async () => {
+            const response = await fetch('https://oauth2.googleapis.com/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                assertion,
+              }),
+            });
+            const body = await response.json();
+            if (!response.ok || !body.access_token) throw new Error(`OAuth token exchange failed: HTTP ${response.status}`);
+            console.log(`::add-mask::${body.access_token}`);
+            fs.appendFileSync(process.env.GITHUB_ENV, `ACCESS_TOKEN=${body.access_token}\n`);
+          })().catch((error) => { console.error(error.message || error); process.exit(1); });
+          NODE
+
+      - name: Verify Auth authorized domains include both hosts
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://identitytoolkit.googleapis.com/admin/v2/projects/$BACKEND_PROJECT/config" \
+            -o "$RUNNER_TEMP/auth-config.json"
+          python3 - "$RUNNER_TEMP/auth-config.json" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding='utf-8'))
+          domains = set(data.get('authorizedDomains', []))
+          wanted = {
+              'soridraw-music-git-preview-andrawing1212.vercel.app',
+              'preview.soridraw.com',
+              'soridraw-preview.web.app',
+              'soridraw-preview.firebaseapp.com',
+          }
+          missing = sorted(wanted - domains)
+          if missing:
+              raise SystemExit(f'Auth authorizedDomains missing: {missing}')
+          print('[Stage2] Auth authorizedDomains parity: PASS')
+          PY
+
+      - name: Stage2 result
+        run: |
+          echo '## Stage 2 host parity result' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Local frozen source typecheck/build: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Vercel/Firebase runtime JS/CSS byte parity: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Functions CORS for both origins: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Explore CORS for both origins: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Firebase Auth authorized domains for both origins: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- No app source, Firestore, Rules, Functions, Hosting, or user data was modified by this gate.' >> "$GITHUB_STEP_SUMMARY"

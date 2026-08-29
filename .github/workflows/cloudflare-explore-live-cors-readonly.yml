@@ -1,0 +1,45 @@
+name: Cloudflare Explore Live CORS Readonly
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cloudflare-explore-live-cors-readonly.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-live-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview tooling
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Prepare exact live Explore Worker source without deploy
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN secret is unavailable'; exit 2; }
+          npm install --no-audit --no-fund
+          npm run cf:prepare
+
+          echo '[Explore Live] source files:'
+          find .remote-worker -maxdepth 3 -type f | sort
+          echo '[Explore Live] CORS-related lines:'
+          grep -RniE 'allowedOrigins|ALLOWED_ORIGINS|Access-Control-Allow-Origin|preview\.soridraw|soridraw-music\.vercel|soridraw-preview|soridraw-test' .remote-worker || true
+          echo 'READ_ONLY=true'
+          echo 'NO_WORKER_DEPLOY=true'
+          echo 'NO_D1_WRITE=true'

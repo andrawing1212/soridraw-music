@@ -1,4 +1,5 @@
 from pathlib import Path
+import runpy
 
 source_path = Path('.deploy/apply-977-cache-live-cloudflare-mobile-dock.py')
 source = source_path.read_text(encoding='utf-8')
@@ -57,4 +58,9 @@ for token in ['SDK READ 발생처', 'Cloudflare 앱 · Worker', 'R2 · Class A']
     if token not in overlay:
         raise RuntimeError(f'run-977: preserved CACHE LIVE feature missing after patch: {token}')
 
-print('run-977: preserved 925 SDK source trace + applied 977 Cloudflare/mobile diagnostics')
+# 978 is a type-only normalization compatibility patch. It does not change
+# persisted data or runtime behavior; it only makes the generated 902 source use
+# the normalized coverUrl field that already contains legacy imageUrl data.
+runpy.run_path('.deploy/apply-978-explore-publication-normalized-cover-type-fix.py', run_name='__main__')
+
+print('run-977: preserved 925 SDK source trace + applied 977 Cloudflare/mobile diagnostics + 978 type compatibility')

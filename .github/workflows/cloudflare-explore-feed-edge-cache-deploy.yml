@@ -41,10 +41,15 @@ jobs:
           npm install --no-audit --no-fund
           npm run cf:prepare
           node --check .remote-worker/worker.js
-          grep -Fq 'SORIDRAW_EXPLORE_FEED_EDGE_CACHE_002' .remote-worker/worker.js
-          grep -Fq 'handleFeedWithEdgeCache(request, url, env, cors)' .remote-worker/worker.js
+
+          # Cloudflare returns the deployed Worker in compiled form. Source comments,
+          # whitespace and `return await` may be removed, so verify behavior markers
+          # instead of requiring the pre-compile source spelling.
+          grep -Fq 'handleFeedWithEdgeCache' .remote-worker/worker.js
+          grep -Fq 'caches.default' .remote-worker/worker.js
           grep -Fq 'X-SORIDRAW-Edge-Cache' .remote-worker/worker.js
-          echo "MUTATION_INVALIDATION_ROUTES=$(grep -Fc 'if (response.ok) await invalidateExploreFeedEdgeCache(request);' .remote-worker/worker.js || true)"
+          grep -Fq 'invalidateExploreFeedEdgeCache' .remote-worker/worker.js
+          echo "MUTATION_INVALIDATION_REFERENCES=$(grep -Fc 'invalidateExploreFeedEdgeCache' .remote-worker/worker.js || true)"
           echo 'EDGE_CACHE_SOURCE_VALIDATION=PASS'
 
       - name: Deploy only prepared Explore Worker
@@ -55,7 +60,7 @@ jobs:
           npm run cf:deploy
           echo 'EXPLORE_WORKER_EDGE_CACHE_DEPLOY=PASS'
 
-      - name: Re-read deployed Worker and verify persisted source
+      - name: Re-read deployed Worker and verify persisted behavior
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -63,9 +68,11 @@ jobs:
           rm -rf .remote-worker
           npm run cf:prepare
           node --check .remote-worker/worker.js
-          grep -Fq 'SORIDRAW_EXPLORE_FEED_EDGE_CACHE_002' .remote-worker/worker.js
-          grep -Fq 'handleFeedWithEdgeCache(request, url, env, cors)' .remote-worker/worker.js
-          echo 'LIVE_EDGE_CACHE_SOURCE=PASS'
+          grep -Fq 'handleFeedWithEdgeCache' .remote-worker/worker.js
+          grep -Fq 'caches.default' .remote-worker/worker.js
+          grep -Fq 'X-SORIDRAW-Edge-Cache' .remote-worker/worker.js
+          grep -Fq 'invalidateExploreFeedEdgeCache' .remote-worker/worker.js
+          echo 'LIVE_EDGE_CACHE_BEHAVIOR_SOURCE=PASS'
 
       - name: Verify second public-feed request is D1-free edge HIT
         shell: bash

@@ -19,6 +19,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Re-run marker after Firebase test App Check domains were added manually.
           origins=(
             'https://soridraw-music.vercel.app'
             'https://preview.soridraw.com'

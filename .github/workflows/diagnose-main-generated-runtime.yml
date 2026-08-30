@@ -44,3 +44,5 @@ jobs:
           name: generated-main-runtime-targets
           path: /tmp/runtime
           retention-days: 1
+
+# 2026-08-30: rerun for Library cache-key diagnosis after Firebase test migration.

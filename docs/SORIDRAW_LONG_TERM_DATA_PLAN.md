@@ -127,4 +127,14 @@ SORIDRAW 데이터 구조의 장기 목표는 다음과 같다.
 
 ## 현재 단계
 
-2026-08-31 기준: **1~3단계 구현/프리뷰 배포 완료. 실제 사용자 검증 후 4단계 Firebase 이전 안정화로 복귀하며, 이후 5~8단계를 순서대로 진행한다.**
+2026-08-31 기준: **1~4단계 완료.**
+
+- 1단계: Explore 30초 전체 재조회 제거 및 재진입 검증 완료.
+- 2단계: Explore/좋아요/Music Note 공개상태 영구 캐시 및 앱 재실행 후 서버 재조회 0 검증 완료.
+- 3단계: 공통 Cache Envelope/version 기반 적용 완료.
+- 4단계: Firebase 도메인 이전 안정화 완료.
+  - PREVIEW: `preview.soridraw.com` 정상.
+  - TEST: `main → soridraw-test → test.soridraw.com` 빌드/배포/HTTPS/Hosting parity/Auth/Functions/Explore CORS 검증 완료.
+  - PRODUCTION: `soridraw.com → soridraw` 및 `www.soridraw.com → soridraw.com` 연결/HTTPS/현재 Production Hosting parity/Auth/Functions/Explore CORS 검증 완료. 새 Production 앱 코드 배포는 수행하지 않음.
+
+**다음 고정 작업은 5단계 `실시간 Version Signal 실험`이다.** 작은 관리자 설정 1종으로 먼저 검증한 뒤, 성공한 방식만 6단계 Delta Sync 공통 엔진으로 승격한다.

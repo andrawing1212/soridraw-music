@@ -7,6 +7,9 @@ const ALLOWED_RETURN_ORIGINS = new Set([
   'https://preview.soridraw.com',
   'https://soridraw-preview.web.app',
   'https://soridraw-preview.firebaseapp.com',
+  'https://test.soridraw.com',
+  'https://soridraw-test.web.app',
+  'https://soridraw-test.firebaseapp.com',
 ]);
 
 const getSafeReturnOrigin = () => {

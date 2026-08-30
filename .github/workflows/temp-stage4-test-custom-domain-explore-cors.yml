@@ -40,25 +40,30 @@ jobs:
           npm install --no-audit --no-fund
           npm run cf:prepare
           cp .remote-worker/worker.js "$RUNNER_TEMP/worker.before.js"
-          grep -Fq 'https://soridraw-music.vercel.app' .remote-worker/worker.js
-          grep -Fq 'https://preview.soridraw.com' .remote-worker/worker.js
-          grep -Fq 'https://soridraw-test.web.app' .remote-worker/worker.js
-          grep -Fq 'https://soridraw-test.firebaseapp.com' .remote-worker/worker.js
+          for origin in \
+            'https://soridraw-music.vercel.app' \
+            'https://preview.soridraw.com' \
+            'https://soridraw-test.web.app' \
+            'https://soridraw-test.firebaseapp.com'; do
+            grep -Fq "$origin" .remote-worker/worker.js
+          done
           python3 - "$RUNNER_TEMP/worker.before.js" .remote-worker/worker.js "$CUSTOM_TEST_ORIGIN" <<'PY'
           from pathlib import Path
-          import re, sys
+          import sys
           before=Path(sys.argv[1]).read_text(encoding='utf-8')
           target=Path(sys.argv[2])
           wanted=sys.argv[3]
-          if wanted in before:
+          if f'"{wanted}"' in before:
               target.write_text(before, encoding='utf-8')
               print('[Explore CORS] custom TEST origin already present; no source patch needed')
               raise SystemExit(0)
-          m=re.search(r'((?:const|var)\s+ALLOWED_ORIGINS\s*=\s*\[)(.*?)(\n\s*\];)', before, re.S)
-          if not m:
-              raise SystemExit('ALLOWED_ORIGINS block not found in exact live Worker')
-          addition=f'\n  "{wanted}",'
-          expected=before[:m.end(2)] + addition + before[m.end(2):]
+          anchor='  "https://soridraw-music.vercel.app",\n'
+          if anchor not in before:
+              raise SystemExit('Expected exact-live Vercel CORS anchor is missing')
+          addition=f'  "{wanted}",\n'
+          expected=before.replace(anchor, anchor+addition, 1)
+          if len(expected)-len(before) != len(addition):
+              raise SystemExit('Unexpected Worker source delta')
           target.write_text(expected, encoding='utf-8')
           if target.read_text(encoding='utf-8') != expected:
               raise SystemExit('Worker exact patch mismatch')

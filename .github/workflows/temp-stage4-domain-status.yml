@@ -1,0 +1,46 @@
+name: Stage4 Domain Status
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-stage4-domain-status.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HOSTING_PROJECT: soridraw
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Current domain state
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(gcloud auth application-default print-access-token)"
+          for pair in 'soridraw-test:test.soridraw.com' 'soridraw:soridraw.com' 'soridraw:www.soridraw.com'; do
+            site="${pair%%:*}"; domain="${pair#*:}"; file="$RUNNER_TEMP/${domain//./_}.json"
+            code="$(curl -sS -o "$file" -w '%{http_code}' -H "Authorization: Bearer $token" "https://firebasehosting.googleapis.com/v1beta1/projects/$HOSTING_PROJECT/sites/$site/customDomains/$domain")"
+            echo "DOMAIN $site $domain api=$code"
+            if [ "$code" = 200 ]; then
+              python3 - "$file" <<'PY'
+          import json,sys
+          j=json.load(open(sys.argv[1],encoding='utf-8'))
+          print(' ownership=',j.get('ownershipState',''),'host=',j.get('hostState',''),'redirect=',j.get('redirectTarget',''))
+          print(' requiredDnsUpdates=',json.dumps(j.get('requiredDnsUpdates') or {},ensure_ascii=False))
+          print(' issues=',json.dumps(j.get('issues') or [],ensure_ascii=False))
+          PY
+            fi
+            getent ahosts "$domain" | head -n 4 || true
+            https="$(curl -sS -o /tmp/body -D /tmp/head --max-time 15 -w '%{http_code}' "https://$domain/" || true)"
+            loc="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/head 2>/dev/null || true)"
+            echo " https=$https location=${loc:-none}"
+          done
+          echo 'READ_ONLY_STATUS_COMPLETE=true'

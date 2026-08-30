@@ -1,6 +1,6 @@
 name: Cloudflare Explore Live CORS Readonly
 
-# 2026-08-30: rerun after CLOUDFLARE_API_TOKEN registration.
+# 2026-08-30: rerun after CLOUDFLARE_API_TOKEN registration; Wrangler 4.102 requires Node 22+.
 on:
   workflow_dispatch:
   push:
@@ -23,10 +23,10 @@ jobs:
         with:
           ref: preview
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Prepare exact live Explore Worker source without deploy
         working-directory: cloudflare/explore-worker

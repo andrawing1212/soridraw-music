@@ -1,0 +1,194 @@
+name: TEMP Stage4 Test Custom Domain Functions CORS
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-stage4-test-custom-domain-functions-cors.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temp-stage4-test-custom-domain-functions-cors
+  cancel-in-progress: false
+
+jobs:
+  exact-live-source-rollout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PROJECT: soridraw-app-866a5
+      REGION: us-central1
+      CUSTOM_TEST_ORIGIN: https://test.soridraw.com
+      TEST_WEB_ORIGIN: https://soridraw-test.web.app
+      TEST_FIREBASE_ORIGIN: https://soridraw-test.firebaseapp.com
+
+    steps:
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Authenticate Google
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Add only test custom domain to exact live Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          functions=(
+            getSunoApiKeyStatus
+            saveGoogleGeminiApiKey
+            deleteGoogleGeminiApiKey
+            getGoogleGeminiApiKeyStatus
+            getGoogleGeminiApiKey
+            generateGeminiContent
+            saveSunoApiKey
+            deleteSunoApiKey
+            fetchSunoShareMetadata
+            getSunoRemainingCredits
+            getSunoRemainingCreditsAfterComplete
+            createSunoTrack
+            getSunoTrackStatus
+          )
+
+          cors_status() {
+            local fn="$1" origin="$2"
+            local url="https://us-central1-$PROJECT.cloudfunctions.net/$fn"
+            local code allow
+            code="$(curl -sS -o /tmp/cors-body -D /tmp/cors-head -w '%{http_code}' -X OPTIONS \
+              -H "Origin: $origin" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "$url" || true)"
+            allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/cors-head)"
+            printf '%s|%s' "$code" "$allow"
+          }
+
+          verify_options() {
+            python3 - "$1" "$2" <<'PY'
+          import json, sys
+          before=json.load(open(sys.argv[1], encoding='utf-8'))
+          after=json.load(open(sys.argv[2], encoding='utf-8'))
+          def pick(d):
+              b=d.get('buildConfig') or {}
+              s=d.get('serviceConfig') or {}
+              return {
+                'runtime': b.get('runtime'),
+                'entryPoint': b.get('entryPoint'),
+                'environmentVariables': b.get('environmentVariables'),
+                'availableMemory': s.get('availableMemory'),
+                'timeoutSeconds': s.get('timeoutSeconds'),
+                'minInstanceCount': s.get('minInstanceCount'),
+                'maxInstanceCount': s.get('maxInstanceCount'),
+                'maxInstanceRequestConcurrency': s.get('maxInstanceRequestConcurrency'),
+                'serviceAccountEmail': s.get('serviceAccountEmail'),
+                'ingressSettings': s.get('ingressSettings'),
+                'secretEnvironmentVariables': s.get('secretEnvironmentVariables'),
+              }
+          if pick(before) != pick(after):
+              print('BEFORE', json.dumps(pick(before), ensure_ascii=False, sort_keys=True))
+              print('AFTER ', json.dumps(pick(after), ensure_ascii=False, sort_keys=True))
+              raise SystemExit('Critical runtime configuration changed')
+          PY
+          }
+
+          for fn in "${functions[@]}"; do
+            echo "========== $fn =========="
+            current="$(cors_status "$fn" "$CUSTOM_TEST_ORIGIN")"
+            if [ "${current%%|*}" = '204' ] && [ "${current#*|}" = "$CUSTOM_TEST_ORIGIN" ]; then
+              echo "[SKIP] $fn already accepts $CUSTOM_TEST_ORIGIN"
+              continue
+            fi
+
+            for origin in 'https://soridraw-music.vercel.app' 'https://preview.soridraw.com' "$TEST_WEB_ORIGIN" "$TEST_FIREBASE_ORIGIN"; do
+              healthy="$(cors_status "$fn" "$origin")"
+              test "${healthy%%|*}" = '204' || { echo "$fn: existing CORS unhealthy for $origin ($healthy); refusing deploy"; exit 11; }
+            done
+
+            work="$RUNNER_TEMP/custom-cors-$fn"
+            rm -rf "$work"
+            mkdir -p "$work/source"
+            before="$work/before.json"
+            gcloud functions describe "$fn" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$before"
+            eval "$(python3 - "$before" <<'PY'
+          import json, shlex, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8'))
+          src=((data.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}
+          bucket=str(src.get('bucket') or '')
+          obj=str(src.get('object') or '')
+          if not bucket or not obj:
+              raise SystemExit('Live source storage location unavailable')
+          print('B='+shlex.quote(bucket))
+          print('O='+shlex.quote(obj))
+          PY
+            )"
+            gcloud storage cp "gs://$B/$O" "$work/live.zip" >/dev/null
+            unzip -q "$work/live.zip" -d "$work/source"
+            test -f "$work/source/src/index.ts"
+            test -f "$work/source/package.json"
+            cp "$work/source/src/index.ts" "$work/index.before.ts"
+
+            python3 - "$work/index.before.ts" "$work/source/src/index.ts" "$CUSTOM_TEST_ORIGIN" <<'PY'
+          from pathlib import Path
+          import re, sys
+          source=Path(sys.argv[1]).read_text(encoding='utf-8')
+          target=Path(sys.argv[2])
+          wanted=sys.argv[3]
+          m=re.search(r'((?:const|var)\s+ALLOWED_ORIGINS\s*=\s*\[)(.*?)(\n\s*\];)', source, re.S)
+          if not m:
+              raise SystemExit('ALLOWED_ORIGINS block not found')
+          body=m.group(2)
+          if wanted in body:
+              raise SystemExit('Custom test origin already in source but runtime CORS is unhealthy')
+          addition=f'\n  "{wanted}",'
+          expected=source[:m.end(2)] + addition + source[m.end(2):]
+          target.write_text(expected, encoding='utf-8')
+          if target.read_text(encoding='utf-8') != expected:
+              raise SystemExit('Exact source patch mismatch')
+          print('Added only:', wanted)
+          PY
+
+            (
+              cd "$work/source"
+              npm ci --no-audit --no-fund
+              npm run build
+              grep -Fq "$CUSTOM_TEST_ORIGIN" lib/index.js
+            )
+
+            cat > "$work/firebase.json" <<JSON
+          {
+            "functions": {
+              "source": "$work/source"
+            }
+          }
+          JSON
+
+            npx --yes firebase-tools@latest deploy \
+              --project "$PROJECT" \
+              --config "$work/firebase.json" \
+              --only "functions:$fn" \
+              --non-interactive
+
+            after="$work/after.json"
+            gcloud functions describe "$fn" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$after"
+            verify_options "$before" "$after"
+
+            ok=''
+            for attempt in $(seq 1 15); do
+              result="$(cors_status "$fn" "$CUSTOM_TEST_ORIGIN")"
+              if [ "${result%%|*}" = '204' ] && [ "${result#*|}" = "$CUSTOM_TEST_ORIGIN" ]; then ok=yes; break; fi
+              sleep 10
+            done
+            echo "[AFTER] $fn custom-test=$(cors_status "$fn" "$CUSTOM_TEST_ORIGIN")"
+            test "$ok" = yes
+          done
+
+          echo 'CUSTOM_TEST_DOMAIN_FUNCTIONS_CORS_COMPLETE=true'
+          echo 'NO_FIRESTORE_MIGRATION=true'
+          echo 'NO_RULES_DEPLOY=true'
+          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'

@@ -1,8 +1,23 @@
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import { invalidateExploreFeedSessionCache } from './exploreSessionCache';
 
 const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
+
+
+// SORIDRAW_EXPLORE_CLIENT_SESSION_CACHE_988
+const likedStateByUid = new Map<string, Map<string, boolean>>();
+
+const getLikedStateCache = (uid: string) => {
+  const normalizedUid = String(uid || '').trim();
+  let cache = likedStateByUid.get(normalizedUid);
+  if (!cache) {
+    cache = new Map<string, boolean>();
+    likedStateByUid.set(normalizedUid, cache);
+  }
+  return cache;
+};
 
 const buildAuthHeaders = async (user: User) => {
   const [idToken, appCheckToken] = await Promise.all([
@@ -53,11 +68,20 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   const normalized = [...new Set(trackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean))].slice(0, 50);
   if (!normalized.length) return [];
 
-  const query = new URLSearchParams({ trackIds: normalized.join(',') });
-  const payload = await requestExploreLike(user, `/v1/me/likes?${query.toString()}`);
-  return Array.isArray(payload?.data?.likedTrackIds)
-    ? payload.data.likedTrackIds.map((trackId: unknown) => String(trackId || '').trim()).filter(Boolean)
-    : [];
+  const cache = getLikedStateCache(user.uid);
+  const missing = normalized.filter((trackId) => !cache.has(trackId));
+  if (missing.length) {
+    const query = new URLSearchParams({ trackIds: missing.join(',') });
+    const payload = await requestExploreLike(user, `/v1/me/likes?${query.toString()}`);
+    const likedIds = new Set(
+      Array.isArray(payload?.data?.likedTrackIds)
+        ? payload.data.likedTrackIds.map((trackId: unknown) => String(trackId || '').trim()).filter(Boolean)
+        : [],
+    );
+    missing.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
+  }
+
+  return normalized.filter((trackId) => cache.get(trackId) === true);
 };
 
 export const setExploreTrackLike = async (
@@ -74,9 +98,12 @@ export const setExploreTrackLike = async (
     { method: liked ? 'PUT' : 'DELETE' },
   );
 
-  return {
+  const result = {
     trackId: String(payload?.data?.trackId || normalizedTrackId).trim(),
     liked: Boolean(payload?.data?.liked),
     likeCount: Number(payload?.data?.likeCount || 0),
   };
+  getLikedStateCache(user.uid).set(result.trackId, result.liked);
+  invalidateExploreFeedSessionCache();
+  return result;
 };

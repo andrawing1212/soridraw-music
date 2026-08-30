@@ -6,6 +6,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import { readExploreFeedSessionCache, writeExploreFeedSessionCache } from '../services/exploreSessionCache';
 import { getExploreLikedTrackIds, setExploreTrackLike } from '../services/exploreLikeService';
 import {
   getExploreFollowState,
@@ -234,6 +235,14 @@ export default function ExplorePage() {
   }, [sort, submittedQuery]);
 
   useEffect(() => {
+    const cachedRows = readExploreFeedSessionCache(requestUrl);
+    if (cachedRows) {
+      setError('');
+      setTracks(cachedRows.map(normalizeTrack).filter((track) => track.id));
+      setLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
     setLoading(true);
     setError('');
@@ -250,6 +259,7 @@ export default function ExplorePage() {
       })
       .then((payload) => {
         const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+        writeExploreFeedSessionCache(requestUrl, rows);
         setTracks(rows.map(normalizeTrack).filter((track) => track.id));
       })
       .catch((reason: unknown) => {

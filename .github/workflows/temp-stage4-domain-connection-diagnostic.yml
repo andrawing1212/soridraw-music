@@ -41,19 +41,11 @@ jobs:
           token="$(cat "$RUNNER_TEMP/google-token")"
           for pair in "$TEST_SITE:$TEST_DOMAIN" "$PROD_SITE:$PROD_DOMAIN" "$PROD_SITE:$WWW_DOMAIN"; do
             site="${pair%%:*}"; domain="${pair#*:}"
-            status="$(curl -sS -o "$RUNNER_TEMP/${domain//./_}.json" -w '%{http_code}' -H "Authorization: Bearer $token" \
-              "https://firebasehosting.googleapis.com/v1beta1/projects/$HOSTING_PROJECT/sites/$site/customDomains/$domain")"
+            file="$RUNNER_TEMP/${domain//./_}.json"
+            status="$(curl -sS -o "$file" -w '%{http_code}' -H "Authorization: Bearer $token" "https://firebasehosting.googleapis.com/v1beta1/projects/$HOSTING_PROJECT/sites/$site/customDomains/$domain")"
             echo "[FirebaseDomain] site=$site domain=$domain http=$status"
             if [ "$status" = 200 ]; then
-              python3 - "$RUNNER_TEMP/${domain//./_}.json" <<'PY'
-import json,sys
-j=json.load(open(sys.argv[1],encoding='utf-8'))
-print('  state=', j.get('customDomainState') or j.get('state') or '')
-print('  certState=', (j.get('cert') or {}).get('state',''))
-print('  hostState=', j.get('hostState',''))
-for k in ('issues','requiredDnsUpdates'):
-    if j.get(k): print(' ',k,'=',json.dumps(j[k],ensure_ascii=False))
-PY
+              python3 -c "import json,sys; j=json.load(open(sys.argv[1],encoding='utf-8')); print(' state=',j.get('customDomainState') or j.get('state') or ''); print(' hostState=',j.get('hostState','')); print(' requiredDnsUpdates=',json.dumps(j.get('requiredDnsUpdates') or {},ensure_ascii=False)); print(' issues=',json.dumps(j.get('issues') or [],ensure_ascii=False))" "$file"
             fi
           done
       - name: Inspect Cloudflare zone and DNS records read-only
@@ -61,27 +53,14 @@ PY
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo '[Cloudflare] token missing'; exit 2; }
-          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
-          status="$(curl -sS -o "$RUNNER_TEMP/zones.json" -w '%{http_code}' "${auth[@]}" 'https://api.cloudflare.com/client/v4/zones?name=soridraw.com&status=active')"
+          status="$(curl -sS -o "$RUNNER_TEMP/zones.json" -w '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' 'https://api.cloudflare.com/client/v4/zones?name=soridraw.com&status=active')"
           echo "[Cloudflare] zones HTTP $status"
           test "$status" = 200 || exit 3
-          zone_id="$(python3 - "$RUNNER_TEMP/zones.json" <<'PY'
-import json,sys
-j=json.load(open(sys.argv[1],encoding='utf-8'))
-r=j.get('result') or []
-print((r[0] if r else {}).get('id',''))
-PY
-)"
+          zone_id="$(python3 -c "import json,sys; j=json.load(open(sys.argv[1],encoding='utf-8')); r=j.get('result') or []; print((r[0] if r else {}).get('id',''))" "$RUNNER_TEMP/zones.json")"
           test -n "$zone_id" || { echo '[Cloudflare] active soridraw.com zone not found'; exit 4; }
           echo "ZONE_ID=$zone_id" >> "$GITHUB_ENV"
           for name in "$TEST_DOMAIN" "$PROD_DOMAIN" "$WWW_DOMAIN"; do
-            curl -fsS "${auth[@]}" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?name=$name" -o "$RUNNER_TEMP/dns-${name//./_}.json"
-            python3 - "$RUNNER_TEMP/dns-${name//./_}.json" "$name" <<'PY'
-import json,sys
-j=json.load(open(sys.argv[1],encoding='utf-8')); name=sys.argv[2]
-rows=j.get('result') or []
-print(f'[CloudflareDNS] {name} count={len(rows)}')
-for r in rows:
-    print(' ',r.get('type'),r.get('name'),'->',r.get('content'),'proxied=',r.get('proxied'),'id=',r.get('id'))
-PY
+            file="$RUNNER_TEMP/dns-${name//./_}.json"
+            curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?name=$name" -o "$file"
+            python3 -c "import json,sys; j=json.load(open(sys.argv[1],encoding='utf-8')); name=sys.argv[2]; rows=j.get('result') or []; print(f'[CloudflareDNS] {name} count={len(rows)}'); [print(' ',r.get('type'),r.get('name'),'->',r.get('content'),'proxied=',r.get('proxied'),'id=',r.get('id')) for r in rows]" "$file" "$name"
           done

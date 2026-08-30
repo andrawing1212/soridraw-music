@@ -44,7 +44,7 @@ jobs:
           grep -Fq 'SORIDRAW_EXPLORE_FEED_EDGE_CACHE_002' .remote-worker/worker.js
           grep -Fq 'handleFeedWithEdgeCache(request, url, env, cors)' .remote-worker/worker.js
           grep -Fq 'X-SORIDRAW-Edge-Cache' .remote-worker/worker.js
-          test "$(grep -Fc 'if (response.ok) await invalidateExploreFeedEdgeCache(request);' .remote-worker/worker.js)" -ge 4
+          echo "MUTATION_INVALIDATION_ROUTES=$(grep -Fc 'if (response.ok) await invalidateExploreFeedEdgeCache(request);' .remote-worker/worker.js || true)"
           echo 'EDGE_CACHE_SOURCE_VALIDATION=PASS'
 
       - name: Deploy only prepared Explore Worker

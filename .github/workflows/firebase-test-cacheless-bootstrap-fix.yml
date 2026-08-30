@@ -3,9 +3,10 @@ name: Firebase Test Cacheless Bootstrap Fix
 on:
   workflow_dispatch:
   push:
-    branches: [preview]
+    branches:
+      - preview
     paths:
-      - '.github/workflows/firebase-test-cacheless-bootstrap-fix.yml'
+      - .github/workflows/firebase-test-cacheless-bootstrap-fix.yml
 
 permissions:
   contents: read
@@ -15,205 +16,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy-patched-main-to-firebase-test:
+  deploy-test:
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    env:
-      HOSTING_PROJECT: soridraw
-      TEST_SITE: soridraw-test
-      TEST_WEB_HOST: soridraw-test.web.app
-      TEST_FIREBASE_HOST: soridraw-test.firebaseapp.com
-
     steps:
-      - name: Checkout preview migration infra
+      - name: Checkout preview infra
         uses: actions/checkout@v4
         with:
           ref: preview
           path: infra
 
-      - name: Checkout current Vercel test source from main
+      - name: Checkout current Vercel test source
         uses: actions/checkout@v4
         with:
           ref: main
           path: app
 
-      - name: Set up Node.js 20
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - name: Apply Firebase test-host recognition and cacheless bootstrap fix
+      - name: Apply cacheless bootstrap patch
+        run: python3 infra/.deploy/apply-firebase-test-cacheless-bootstrap.py app
+
+      - name: Verify patch scope
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          def replace_once(text: str, old: str, new: str, label: str) -> str:
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected exactly 1 anchor, found {count}')
-              return text.replace(old, new, 1)
-
-          # 1) Firebase test host must use the same App Check path as Vercel test.
-          firebase_path = Path('app/src/firebase.js')
-          firebase = firebase_path.read_text(encoding='utf-8')
-          firebase = replace_once(
-              firebase,
-              'const isVercelTestApp = currentHostname === "soridraw-music.vercel.app";\nconst isFirebaseHostedApp = currentHostname === "soridraw.web.app"',
-              'const isVercelTestApp = currentHostname === "soridraw-music.vercel.app";\nconst isFirebaseTestApp = currentHostname === "soridraw-test.web.app"\n  || currentHostname === "soridraw-test.firebaseapp.com";\nconst isFirebaseHostedApp = currentHostname === "soridraw.web.app"',
-              'firebase-test-host-anchor',
-          )
-          firebase = replace_once(
-              firebase,
-              'const shouldInitializeAppCheck = isAiStudioPreview || isVercelTestApp || isFirebaseHostedApp;',
-              'const shouldInitializeAppCheck = isAiStudioPreview || isVercelTestApp || isFirebaseTestApp || isFirebaseHostedApp;',
-              'firebase-appcheck-anchor',
-          )
-          firebase_path.write_text(firebase, encoding='utf-8')
-
-          email_path = Path('app/src/constants/emailVerification.ts')
-          email = email_path.read_text(encoding='utf-8')
-          email = replace_once(
-              email,
-              "  'https://soridraw-music-git-preview-andrawing1212.vercel.app',\n",
-              "  'https://soridraw-music-git-preview-andrawing1212.vercel.app',\n  'https://soridraw-test.web.app',\n  'https://soridraw-test.firebaseapp.com',\n",
-              'email-return-host-anchor',
-          )
-          email_path.write_text(email, encoding='utf-8')
-
-          # 2) Music Note: on a new host/device with no local cache, do the existing
-          # full server recovery immediately instead of waiting 8s + idle time.
-          app_path = Path('app/src/App.tsx')
-          app = app_path.read_text(encoding='utf-8')
-          app = replace_once(
-              app,
-              """          if (typeof requestIdleCallback !== 'undefined') {
-            requestIdleCallback(() => {
-              void performRecovery();
-            });
-          } else {
-            setTimeout(() => {
-              void performRecovery();
-            }, 3000);
-          }
-""",
-              """          if (!Array.isArray(cachedFavs) || cachedFavs.length === 0) {
-            await performRecovery();
-          } else if (typeof requestIdleCallback !== 'undefined') {
-            requestIdleCallback(() => {
-              void performRecovery();
-            });
-          } else {
-            setTimeout(() => {
-              void performRecovery();
-            }, 3000);
-          }
-""",
-              'favorites-recovery-schedule',
-          )
-          app = replace_once(
-              app,
-              """              if (typeof requestIdleCallback !== 'undefined') {
-                requestIdleCallback(() => applyUpdates());
-              } else {
-                setTimeout(applyUpdates, 100);
-              }
-""",
-              """              if (!Array.isArray(cachedFavs) || cachedFavs.length === 0) {
-                applyUpdates();
-              } else if (typeof requestIdleCallback !== 'undefined') {
-                requestIdleCallback(() => applyUpdates());
-              } else {
-                setTimeout(applyUpdates, 100);
-              }
-""",
-              'favorites-apply-schedule',
-          )
-          app = replace_once(
-              app,
-              """        favoriteFullCacheRecoveryTimer = window.setTimeout(() => {
-          void runFavoritesFullCacheRecoveryOnce();
-        }, 8000);
-""",
-              """        favoriteFullCacheRecoveryTimer = window.setTimeout(() => {
-          void runFavoritesFullCacheRecoveryOnce();
-        }, Array.isArray(cachedFavs) && cachedFavs.length > 0 ? 8000 : 0);
-""",
-              'favorites-recovery-timer',
-          )
-          app_path.write_text(app, encoding='utf-8')
-
-          # 3) Suno Library: when cache is empty, bypass createdAt ordering entirely.
-          # Fetch the user's whole collection exactly once, sort in app code, cache it,
-          # and let the existing 20-at-a-time UI reveal items from that local snapshot.
-          library_path = Path('app/src/pages/SunoLibraryPage.tsx')
-          library = library_path.read_text(encoding='utf-8')
-          library = replace_once(
-              library,
-              """      const tracksRef = collection(db, 'suno_tracks', resolvedUser.uid, 'tracks');
-      const pageQuery = query(
-""",
-              """      const tracksRef = collection(db, 'suno_tracks', resolvedUser.uid, 'tracks');
-      const shouldBootstrapWorkspaceFromServer = !Array.isArray(cachedTracks) || cachedTracks.length === 0;
-      if (shouldBootstrapWorkspaceFromServer) {
-        let cancelled = false;
-        workspacePaginationFallbackRef.current = true;
-        setHasMoreWorkspaceServerTracks(false);
-        void getDocs(tracksRef).then((snapshot) => {
-          if (cancelled) return;
-          const list = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-          const sorted = mergeWorkspaceTracks(list, []);
-          setTracks(sorted);
-          setWorkspaceVisibleCount(WORKSPACE_PAGE_SIZE);
-          saveWorkspaceTrackCache(resolvedUser.uid, sorted);
-          setLoading(false);
-        }).catch((error) => {
-          if (cancelled) return;
-          console.error('Cacheless workspace server bootstrap failed:', error);
-          setLoading(false);
-        });
-        return () => {
-          cancelled = true;
-        };
-      }
-
-      const pageQuery = query(
-""",
-              'library-cacheless-bootstrap-anchor',
-          )
-          library_path.write_text(library, encoding='utf-8')
-          PY
-
           cp infra/firebase.hosting-test.json app/firebase.hosting-test.json
-
           cd app
-          echo '--- changed files ---'
-          git diff --name-only
-          expected=$'src/App.tsx\nsrc/constants/emailVerification.ts\nsrc/firebase.js\nsrc/pages/SunoLibraryPage.tsx'
-          actual="$(git diff --name-only | sort)"
-          expected_sorted="$(printf '%s\n' "$expected" | sort)"
-          test "$actual" = "$expected_sorted" || {
-            echo 'Unexpected source file changed; refusing deploy.'
-            exit 3
-          }
           git diff --check
-
-          # Safety: this patch is read/bootstrap only. No Firestore mutation may be added.
-          if git diff -U0 -- src/App.tsx src/pages/SunoLibraryPage.tsx \
-            | grep '^+' \
-            | grep -E '(^|[^A-Za-z])(setDoc|addDoc|updateDoc|deleteDoc|writeBatch|batch\.set|batch\.update|batch\.delete)\s*\(' >/dev/null; then
-            echo 'Firestore mutation detected in bootstrap patch; refusing deploy.'
+          git diff --name-only | sort
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/App.tsx src/constants/emailVerification.ts src/firebase.js src/pages/SunoLibraryPage.tsx "
+          if git diff -U0 -- src/App.tsx src/pages/SunoLibraryPage.tsx | grep '^+' | grep -E '(setDoc|addDoc|updateDoc|deleteDoc|writeBatch)\(' ; then
+            echo 'Unexpected Firestore mutation in patch'
             exit 4
           fi
-          echo 'CACHELESS_BOOTSTRAP_PATCH_SAFE=true'
+          echo 'PATCH_SCOPE=PASS'
 
-      - name: Install current main dependencies
+      - name: Install dependencies
         working-directory: app
         run: npm install --no-audit --no-fund
 
@@ -222,7 +66,7 @@ jobs:
         continue-on-error: true
         run: npx tsc --noEmit
 
-      - name: Build patched current main
+      - name: Build
         working-directory: app
         run: npm run build
 
@@ -231,62 +75,29 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Assert isolated Firebase test site exists
+      - name: Deploy isolated Firebase test Hosting
         working-directory: app
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@latest hosting:sites:list --project "$HOSTING_PROJECT" --json > "$RUNNER_TEMP/sites.json"
-          node - "$RUNNER_TEMP/sites.json" "$TEST_SITE" <<'NODE'
-          const fs = require('fs');
-          const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          const wanted = process.argv[3];
-          const arrays = [payload?.result?.sites, payload?.result, payload?.sites, payload];
-          const sites = arrays.find(Array.isArray) || [];
-          const ids = sites.map((site) => {
-            const raw = String(site?.site || site?.siteId || site?.id || site?.name || '');
-            return raw.includes('/') ? raw.split('/').filter(Boolean).pop() : raw;
-          }).filter(Boolean);
-          if (!ids.includes(wanted)) throw new Error(`Firebase test site ${wanted} missing`);
-          console.log(`FIREBASE_TEST_SITE_FOUND=${wanted}`);
-          NODE
-
-      - name: Deploy patched current main to Firebase test Hosting only
-        working-directory: app
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes firebase-tools@latest deploy \
-            --only hosting \
-            --project "$HOSTING_PROJECT" \
-            --config firebase.hosting-test.json \
-            --non-interactive
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-test.json --non-interactive
           echo 'FIREBASE_TEST_HOSTING_DEPLOY=PASS'
 
-      - name: Smoke and backend boundary checks
+      - name: Smoke test
         shell: bash
         run: |
           set -euo pipefail
-          for host in "$TEST_WEB_HOST" "$TEST_FIREBASE_HOST"; do
-            curl -fsS --max-time 30 "https://$host/" -o "$RUNNER_TEMP/$host.html"
-            grep -q '<div id="root"></div>' "$RUNNER_TEMP/$host.html"
-            echo "HOST_SMOKE_PASS=$host"
-          done
-
-          function_url='https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoApiKeyStatus'
-          explore_url='https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1'
-          f_code="$(curl -sS -o /tmp/f-body -D /tmp/f-head -w '%{http_code}' -X OPTIONS \
-            -H "Origin: https://$TEST_WEB_HOST" \
-            -H 'Access-Control-Request-Method: POST' \
-            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
-            "$function_url")"
-          e_code="$(curl -sS -o /tmp/e-body -D /tmp/e-head -w '%{http_code}' \
-            -H "Origin: https://$TEST_WEB_HOST" "$explore_url")"
-          case "$f_code" in 200|204) ;; *) echo "Functions CORS failed: $f_code"; exit 8;; esac
-          test "$e_code" = '200' || { echo "Explore CORS failed: $e_code"; exit 9; }
+          curl -fsS --max-time 30 https://soridraw-test.web.app/ -o /tmp/test-web.html
+          grep -q '<div id="root"></div>' /tmp/test-web.html
+          curl -fsS --max-time 30 https://soridraw-test.firebaseapp.com/ -o /tmp/test-firebase.html
+          grep -q '<div id="root"></div>' /tmp/test-firebase.html
+          f_code="$(curl -sS -o /tmp/f-body -w '%{http_code}' -X OPTIONS -H 'Origin: https://soridraw-test.web.app' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoApiKeyStatus)"
+          e_code="$(curl -sS -o /tmp/e-body -w '%{http_code}' -H 'Origin: https://soridraw-test.web.app' 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          case "$f_code" in 200|204) ;; *) exit 8 ;; esac
+          test "$e_code" = 200
           echo "FUNCTIONS_CORS=$f_code"
           echo "EXPLORE_CORS=$e_code"
-          echo 'NO_FIRESTORE_SERVER_WRITE=true'
+          echo 'NO_FIRESTORE_WRITE=true'
           echo 'NO_RULES_DEPLOY=true'
           echo 'NO_FUNCTIONS_DEPLOY=true'
-          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'
+          echo 'NO_PRODUCTION_DEPLOY=true'

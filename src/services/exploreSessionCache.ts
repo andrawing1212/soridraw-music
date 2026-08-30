@@ -101,3 +101,5 @@ export const invalidateExploreFeedSessionCache = () => {
   exploreFeedMemoryCache.clear();
   removeSoridrawPersistentCachesBySourceType(EXPLORE_FEED_SOURCE_TYPE);
 };
+
+// Firebase Preview deployment trigger: 2026-08-31 stage 1-3 cache foundation.

@@ -1,0 +1,123 @@
+name: Preview Cache Parity Apply
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/preview-cache-parity-apply.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preview-cache-parity-apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Snapshot source before cache migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp src/App.tsx "$RUNNER_TEMP/App.before.tsx"
+          cp src/pages/SunoLibraryPage.tsx "$RUNNER_TEMP/SunoLibraryPage.before.tsx"
+
+      - name: Apply preview cache parity
+        run: python3 .deploy/apply-preview-cache-parity-v1.py .
+
+      - name: Verify exact migration scope and safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff -- src/App.tsx src/pages/SunoLibraryPage.tsx > "$RUNNER_TEMP/cache-parity.patch"
+          test -s "$RUNNER_TEMP/cache-parity.patch"
+
+          mapfile -t changed < <(git diff --name-only)
+          printf 'CHANGED=%s\n' "${changed[*]}"
+          test "${#changed[@]}" -eq 2
+          printf '%s\n' "${changed[@]}" | grep -qx 'src/App.tsx'
+          printf '%s\n' "${changed[@]}" | grep -qx 'src/pages/SunoLibraryPage.tsx'
+
+          # Music Note: UID schema + complete cacheless server rebuild.
+          grep -q "MUSIC_NOTE_CACHE_SCHEMA_VERSION = '3'" src/App.tsx
+          grep -q "getMusicNoteCacheSchemaKey = (uid: string)" src/App.tsx
+          grep -q "Cacheless Music Note full bootstrap failed" src/App.tsx
+          grep -q "where('uid', '==', currentUser.uid)" src/App.tsx
+          grep -q "musicNoteActiveUiUid !== nextMusicNoteUiUid" src/App.tsx
+
+          # Library: large payload is UID-keyed IndexedDB, never localStorage JSON.
+          grep -q "LIBRARY_WORKSPACE_CACHE_SCHEMA_VERSION = '3'" src/pages/SunoLibraryPage.tsx
+          grep -q "LIBRARY_WORKSPACE_CACHE_DB_NAME = 'soridraw_library_workspace_cache_v3'" src/pages/SunoLibraryPage.tsx
+          grep -q "readLibraryWorkspaceTrackCacheFromIndexedDb" src/pages/SunoLibraryPage.tsx
+          grep -q "persistLibraryWorkspaceTrackCacheNow" src/pages/SunoLibraryPage.tsx
+          grep -q "const snapshot = await getDocs(tracksRef);" src/pages/SunoLibraryPage.tsx
+          grep -q "void hydrateLibraryWorkspaceCacheThenSync();" src/pages/SunoLibraryPage.tsx
+          grep -q "libraryActiveUiUid !== nextLibraryUiUid" src/pages/SunoLibraryPage.tsx
+
+          python3 - <<'PY'
+          from pathlib import Path
+          app = Path('src/App.tsx').read_text(encoding='utf-8')
+          lib = Path('src/pages/SunoLibraryPage.tsx').read_text(encoding='utf-8')
+          assert 'localStorage.setItem(`soridraw_suno_tracks_cache_${uid}`' not in lib
+          assert "const fullSnapshot = await getDocs(query(\n              collection(db, 'favorites'),\n              where('uid', '==', currentUser.uid),\n            ));" in app
+          assert "const snapshot = await getDocs(tracksRef);" in lib
+          print('EXACT_FULL_READ_CONTRACT=PASS')
+          print('NO_LIBRARY_PAYLOAD_LOCALSTORAGE_WRITER=PASS')
+          PY
+
+          # Migration itself must add no Firestore/server writes and no ordered/limited full bootstrap.
+          if grep '^+' "$RUNNER_TEMP/cache-parity.patch" | grep -E '(setDoc|addDoc|updateDoc|deleteDoc|writeBatch|scheduleListBundleWrite)\s*\(' >/dev/null; then
+            echo 'Unexpected Firestore/server write added by cache migration.'
+            exit 4
+          fi
+          if grep '^+' "$RUNNER_TEMP/cache-parity.patch" | grep -E "orderBy\('createdAt'|limit\(" >/dev/null; then
+            echo 'Cache migration added orderBy/limit to a new path.'
+            exit 5
+          fi
+
+          echo 'PATCH_SCOPE=PASS'
+          echo 'UID_ISOLATION=PASS'
+          echo 'CACHE_VERSION_INVALIDATION=PASS'
+          echo 'NO_FIRESTORE_WRITE_ADDED=PASS'
+          echo 'NO_RULES_CHANGE=true'
+          echo 'NO_FUNCTIONS_CHANGE=true'
+          echo 'NO_MAIN_CHANGE=true'
+          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit source migration to preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.tsx src/pages/SunoLibraryPage.tsx
+          git commit -m 'fix(preview): unify Music Note and Library cache-first recovery'
+          git push origin HEAD:preview
+          echo "SOURCE_COMMIT=$(git rev-parse HEAD)"
+          echo 'PREVIEW_SOURCE_PUSH=PASS'

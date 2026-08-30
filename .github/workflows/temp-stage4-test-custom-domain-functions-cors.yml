@@ -20,9 +20,6 @@ jobs:
     env:
       PROJECT: soridraw-app-866a5
       REGION: us-central1
-      CUSTOM_TEST_ORIGIN: https://test.soridraw.com
-      TEST_WEB_ORIGIN: https://soridraw-test.web.app
-      TEST_FIREBASE_ORIGIN: https://soridraw-test.firebaseapp.com
 
     steps:
       - name: Set up Node.js 22
@@ -35,14 +32,14 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Add only test custom domain to active exact-live Functions
+      - name: Normalize Firebase migration origins on active exact-live Functions
         shell: bash
         run: |
           set -euo pipefail
 
           # Active browser-facing endpoints only. The legacy direct-key endpoint
-          # getGoogleGeminiApiKey is intentionally excluded: the current app uses
-          # the server proxy/status path and must not re-open direct secret return.
+          # getGoogleGeminiApiKey remains intentionally excluded so TEST migration
+          # never re-opens direct API-secret return to the browser.
           functions=(
             getSunoApiKeyStatus
             saveGoogleGeminiApiKey
@@ -56,6 +53,15 @@ jobs:
             getSunoRemainingCreditsAfterComplete
             createSunoTrack
             getSunoTrackStatus
+          )
+
+          required_origins=(
+            'https://soridraw-preview.web.app'
+            'https://soridraw-preview.firebaseapp.com'
+            'https://preview.soridraw.com'
+            'https://soridraw-test.web.app'
+            'https://soridraw-test.firebaseapp.com'
+            'https://test.soridraw.com'
           )
 
           cors_status() {
@@ -101,18 +107,28 @@ jobs:
 
           for fn in "${functions[@]}"; do
             echo "========== $fn =========="
-            current="$(cors_status "$fn" "$CUSTOM_TEST_ORIGIN")"
-            if [ "${current%%|*}" = '204' ] && [ "${current#*|}" = "$CUSTOM_TEST_ORIGIN" ]; then
-              echo "[SKIP] $fn already accepts $CUSTOM_TEST_ORIGIN"
+            missing=()
+            for origin in "${required_origins[@]}"; do
+              result="$(cors_status "$fn" "$origin")"
+              if [ "${result%%|*}" != '204' ] || [ "${result#*|}" != "$origin" ]; then
+                missing+=("$origin")
+              fi
+            done
+
+            if [ "${#missing[@]}" -eq 0 ]; then
+              echo "[SKIP] $fn already accepts every Firebase PREVIEW/TEST origin"
               continue
             fi
 
-            for origin in 'https://soridraw-music.vercel.app' 'https://preview.soridraw.com' "$TEST_WEB_ORIGIN" "$TEST_FIREBASE_ORIGIN"; do
-              healthy="$(cors_status "$fn" "$origin")"
-              test "${healthy%%|*}" = '204' || { echo "$fn: existing CORS unhealthy for $origin ($healthy); refusing deploy"; exit 11; }
-            done
+            # Existing Vercel compatibility must remain healthy before any exact-live patch.
+            legacy="$(cors_status "$fn" 'https://soridraw-music.vercel.app')"
+            test "${legacy%%|*}" = '204' || { echo "$fn: existing Vercel CORS unhealthy ($legacy); refusing deploy"; exit 11; }
 
-            work="$RUNNER_TEMP/custom-cors-$fn"
+            printf '[PATCH] %s missing origins:' "$fn"
+            printf ' %s' "${missing[@]}"
+            echo
+
+            work="$RUNNER_TEMP/migration-cors-$fn"
             rm -rf "$work"
             mkdir -p "$work/source"
             before="$work/before.json"
@@ -135,31 +151,34 @@ jobs:
             test -f "$work/source/package.json"
             cp "$work/source/src/index.ts" "$work/index.before.ts"
 
-            python3 - "$work/index.before.ts" "$work/source/src/index.ts" "$CUSTOM_TEST_ORIGIN" <<'PY'
+            python3 - "$work/index.before.ts" "$work/source/src/index.ts" "${missing[@]}" <<'PY'
           from pathlib import Path
           import re, sys
           source=Path(sys.argv[1]).read_text(encoding='utf-8')
           target=Path(sys.argv[2])
-          wanted=sys.argv[3]
+          wanted=sys.argv[3:]
           m=re.search(r'((?:const|var)\s+ALLOWED_ORIGINS\s*=\s*\[)(.*?)(\n\s*\];)', source, re.S)
           if not m:
               raise SystemExit('ALLOWED_ORIGINS block not found')
           body=m.group(2)
-          if wanted in body:
-              raise SystemExit('Custom test origin already in source but runtime CORS is unhealthy')
-          addition=f'\n  "{wanted}",'
-          expected=source[:m.end(2)] + addition + source[m.end(2):]
+          actual=[origin for origin in wanted if f'"{origin}"' not in body]
+          if not actual:
+              raise SystemExit('Runtime CORS unhealthy but every requested origin already exists in source')
+          additions=''.join(f'\n  "{origin}",' for origin in actual)
+          expected=source[:m.end(2)] + additions + source[m.end(2):]
           target.write_text(expected, encoding='utf-8')
           if target.read_text(encoding='utf-8') != expected:
               raise SystemExit('Exact source patch mismatch')
-          print('Added only:', wanted)
+          if len(expected)-len(source) != len(additions):
+              raise SystemExit('Unexpected source delta')
+          print('Added only:', ', '.join(actual))
           PY
 
             (
               cd "$work/source"
               npm ci --no-audit --no-fund
               npm run build
-              grep -Fq "$CUSTOM_TEST_ORIGIN" lib/index.js
+              for origin in "${missing[@]}"; do grep -Fq "$origin" lib/index.js; done
             )
 
             cat > "$work/firebase.json" <<JSON
@@ -180,17 +199,21 @@ jobs:
             gcloud functions describe "$fn" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$after"
             verify_options "$before" "$after"
 
-            ok=''
-            for attempt in $(seq 1 15); do
-              result="$(cors_status "$fn" "$CUSTOM_TEST_ORIGIN")"
-              if [ "${result%%|*}" = '204' ] && [ "${result#*|}" = "$CUSTOM_TEST_ORIGIN" ]; then ok=yes; break; fi
-              sleep 10
+            for origin in "${required_origins[@]}"; do
+              ok=''
+              for attempt in $(seq 1 15); do
+                result="$(cors_status "$fn" "$origin")"
+                if [ "${result%%|*}" = '204' ] && [ "${result#*|}" = "$origin" ]; then ok=yes; break; fi
+                sleep 10
+              done
+              echo "[AFTER] $fn $origin=$(cors_status "$fn" "$origin")"
+              test "$ok" = yes
             done
-            echo "[AFTER] $fn custom-test=$(cors_status "$fn" "$CUSTOM_TEST_ORIGIN")"
-            test "$ok" = yes
+            legacy_after="$(cors_status "$fn" 'https://soridraw-music.vercel.app')"
+            test "${legacy_after%%|*}" = '204'
           done
 
-          echo 'CUSTOM_TEST_DOMAIN_FUNCTIONS_CORS_COMPLETE=true'
+          echo 'FIREBASE_PREVIEW_TEST_FUNCTIONS_CORS_COMPLETE=true'
           echo 'LEGACY_DIRECT_GEMINI_KEY_ENDPOINT_LEFT_RESTRICTED=true'
           echo 'NO_FIRESTORE_MIGRATION=true'
           echo 'NO_RULES_DEPLOY=true'

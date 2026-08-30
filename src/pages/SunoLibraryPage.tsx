@@ -83,23 +83,153 @@ type LibraryWorkspaceSession = LibraryWorkspaceSessionView & {
 let libraryWorkspaceSession: LibraryWorkspaceSession | null = null;
 let libraryWorkspaceAuthGuardStarted = false;
 
-const readLibraryWorkspaceTrackCache = (uid: string): any[] => {
+const LIBRARY_WORKSPACE_CACHE_SCHEMA_VERSION = '3';
+const LIBRARY_WORKSPACE_CACHE_SCHEMA_STORAGE_BASE = 'soridraw_library_workspace_cache_schema_v3';
+const LIBRARY_WORKSPACE_CACHE_DB_NAME = 'soridraw_library_workspace_cache_v3';
+const LIBRARY_WORKSPACE_CACHE_STORE = 'workspace';
+let libraryActiveUiUid: string | null = null;
+const libraryWorkspaceInMemoryCache = new Map<string, any[]>();
+const libraryWorkspaceCacheWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+let libraryWorkspaceCacheDbPromise: Promise<IDBDatabase | null> | null = null;
+
+const getLibraryWorkspaceCacheSchemaKey = (uid: string) => `${LIBRARY_WORKSPACE_CACHE_SCHEMA_STORAGE_BASE}_${uid}`;
+const getLegacyLibraryWorkspacePayloadCacheKey = (uid: string) => `soridraw_suno_tracks_cache_${uid}`;
+
+const isLibraryWorkspaceCacheSchemaCurrent = (uid: string): boolean => {
+  if (!uid || typeof localStorage === 'undefined') return false;
   try {
-    const raw = localStorage.getItem(`soridraw_suno_tracks_cache_${uid}`);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.warn('Failed to read shared library workspace cache:', error);
-    return [];
+    return localStorage.getItem(getLibraryWorkspaceCacheSchemaKey(uid)) === LIBRARY_WORKSPACE_CACHE_SCHEMA_VERSION;
+  } catch {
+    return false;
   }
 };
 
-const saveLibraryWorkspaceTrackCache = (uid: string, list: any[]) => {
+const markLibraryWorkspaceCacheSchemaCurrent = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return;
   try {
-    localStorage.setItem(`soridraw_suno_tracks_cache_${uid}`, JSON.stringify(Array.isArray(list) ? list : []));
-  } catch (error) {
-    console.warn('Failed to save shared library workspace cache:', error);
+    localStorage.setItem(getLibraryWorkspaceCacheSchemaKey(uid), LIBRARY_WORKSPACE_CACHE_SCHEMA_VERSION);
+  } catch {}
+};
+
+const openLibraryWorkspaceCacheDb = (): Promise<IDBDatabase | null> => {
+  if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+  if (libraryWorkspaceCacheDbPromise) return libraryWorkspaceCacheDbPromise;
+  libraryWorkspaceCacheDbPromise = new Promise((resolve) => {
+    let settled = false;
+    const request = indexedDB.open(LIBRARY_WORKSPACE_CACHE_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(LIBRARY_WORKSPACE_CACHE_STORE)) {
+        database.createObjectStore(LIBRARY_WORKSPACE_CACHE_STORE, { keyPath: 'uid' });
+      }
+    };
+    request.onsuccess = () => {
+      settled = true;
+      const database = request.result;
+      database.onversionchange = () => {
+        database.close();
+        libraryWorkspaceCacheDbPromise = null;
+      };
+      resolve(database);
+    };
+    request.onerror = () => {
+      if (!settled) resolve(null);
+    };
+    request.onblocked = () => {
+      if (!settled) resolve(null);
+    };
+  });
+  return libraryWorkspaceCacheDbPromise;
+};
+
+const readLibraryWorkspaceTrackCacheFromIndexedDb = async (uid: string): Promise<any[] | null> => {
+  if (!uid) return null;
+  const database = await openLibraryWorkspaceCacheDb();
+  if (!database) return null;
+  try {
+    return await new Promise<any[] | null>((resolve) => {
+      const transaction = database.transaction(LIBRARY_WORKSPACE_CACHE_STORE, 'readonly');
+      const request = transaction.objectStore(LIBRARY_WORKSPACE_CACHE_STORE).get(uid);
+      request.onsuccess = () => {
+        const record = request.result;
+        resolve(record && Array.isArray(record.tracks) ? record.tracks : null);
+      };
+      request.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
   }
+};
+
+const persistLibraryWorkspaceTrackCacheNow = async (uid: string, list: any[]): Promise<boolean> => {
+  if (!uid) return false;
+  const database = await openLibraryWorkspaceCacheDb();
+  if (!database) return false;
+  const safeList = Array.isArray(list) ? list : [];
+  try {
+    return await new Promise<boolean>((resolve) => {
+      const transaction = database.transaction(LIBRARY_WORKSPACE_CACHE_STORE, 'readwrite');
+      transaction.oncomplete = () => resolve(true);
+      transaction.onerror = () => resolve(false);
+      transaction.onabort = () => resolve(false);
+      transaction.objectStore(LIBRARY_WORKSPACE_CACHE_STORE).put({
+        uid,
+        schemaVersion: LIBRARY_WORKSPACE_CACHE_SCHEMA_VERSION,
+        tracks: safeList,
+        savedAtMs: Date.now(),
+      });
+    });
+  } catch {
+    return false;
+  }
+};
+
+const prepareLibraryWorkspaceCacheForUser = (uid: string): boolean => {
+  if (!uid) return true;
+  const schemaCurrent = isLibraryWorkspaceCacheSchemaCurrent(uid);
+  if (!schemaCurrent) {
+    libraryWorkspaceInMemoryCache.delete(uid);
+    const pendingTimer = libraryWorkspaceCacheWriteTimers.get(uid);
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      libraryWorkspaceCacheWriteTimers.delete(uid);
+    }
+    if (typeof localStorage !== 'undefined') {
+      try {
+        // Old Library payloads were large JSON blobs in localStorage. They are
+        // deliberately retired so a partial/quota-failed payload cannot return.
+        localStorage.removeItem(getLegacyLibraryWorkspacePayloadCacheKey(uid));
+        localStorage.removeItem(`soridraw_library_local_sync_version_v1_${uid}`);
+      } catch (error) {
+        console.warn('Library legacy cache invalidation failed:', error);
+      }
+    }
+  }
+  return !schemaCurrent;
+};
+
+const readLibraryWorkspaceTrackCache = (uid: string): any[] => {
+  const cached = libraryWorkspaceInMemoryCache.get(uid);
+  return Array.isArray(cached) ? cached : [];
+};
+
+const saveLibraryWorkspaceTrackCache = (uid: string, list: any[]) => {
+  if (!uid) return;
+  const safeList = Array.isArray(list) ? list : [];
+  libraryWorkspaceInMemoryCache.set(uid, safeList);
+  const pendingTimer = libraryWorkspaceCacheWriteTimers.get(uid);
+  if (pendingTimer) clearTimeout(pendingTimer);
+  const timer = setTimeout(() => {
+    libraryWorkspaceCacheWriteTimers.delete(uid);
+    void persistLibraryWorkspaceTrackCacheNow(uid, safeList).then((persisted) => {
+      if (persisted) {
+        markLibraryWorkspaceCacheSchemaCurrent(uid);
+      } else {
+        console.warn('Library IndexedDB cache write failed; schema remains unverified.');
+      }
+    });
+  }, 500);
+  libraryWorkspaceCacheWriteTimers.set(uid, timer);
 };
 
 const getLibraryWorkspaceTrackCreatedAtMs = (track: any): number => {
@@ -195,6 +325,7 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
     stopLibraryWorkspaceSession();
   }
 
+  const libraryCacheNeedsFullBootstrap = prepareLibraryWorkspaceCacheForUser(uid);
   const cachedTracks = readLibraryWorkspaceTrackCache(uid);
   const session: LibraryWorkspaceSession = {
     uid,
@@ -212,6 +343,37 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
   libraryWorkspaceSession = session;
 
   const tracksRef = collection(db, 'suno_tracks', uid, 'tracks');
+  let libraryFullBootstrapStarted = false;
+  const bootstrapCachelessLibraryFromServerOnce = async () => {
+    if (libraryFullBootstrapStarted) return;
+    libraryFullBootstrapStarted = true;
+    try {
+      const snapshot = await getDocs(tracksRef);
+      if (libraryWorkspaceSession !== session || session.uid !== uid) return;
+      const list = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      session.tracks = mergeLibraryWorkspaceSessionTracks(list, []);
+      libraryWorkspaceInMemoryCache.set(uid, session.tracks);
+      session.lastDoc = null;
+      session.hasMore = false;
+      session.paginationFallback = true;
+      session.ready = true;
+      const persisted = await persistLibraryWorkspaceTrackCacheNow(uid, session.tracks);
+      if (persisted) {
+        markLibraryWorkspaceCacheSchemaCurrent(uid);
+        const remoteVersion = readRemoteLibraryVersion();
+        if (remoteVersion > 0) writeLibraryBundleLocalSyncVersion(uid, remoteVersion);
+      } else {
+        console.warn('Library full bootstrap loaded server data but IndexedDB persistence failed.');
+      }
+      markCacheDiagnostic('library', 'SYNC', snapshot.docs.length);
+      emitLibraryWorkspaceSession(session);
+    } catch (bootstrapError) {
+      console.warn('Cacheless Library full bootstrap failed.', bootstrapError);
+      session.ready = true;
+      emitLibraryWorkspaceSession(session);
+    }
+  };
+
   const pageQuery = query(
     tracksRef,
     orderBy('createdAt', 'desc'),
@@ -361,13 +523,41 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
   const shouldVerifyLibraryBundle = () => {
     const localVersion = readLibraryBundleLocalSyncVersion(uid);
     const remoteVersion = readRemoteLibraryVersion();
-    // localVersion === 0 is a one-time 936 migration check for existing caches.
-    return cachedTracks.length === 0 || localVersion <= 0 || remoteVersion > localVersion;
+    return session.tracks.length === 0 || remoteVersion > localVersion;
+  };
+
+  let libraryHydrationStarted = false;
+  const hydrateLibraryWorkspaceCacheThenSync = async () => {
+    if (libraryHydrationStarted) return;
+    libraryHydrationStarted = true;
+
+    if (!libraryCacheNeedsFullBootstrap) {
+      const durableTracks = await readLibraryWorkspaceTrackCacheFromIndexedDb(uid);
+      if (libraryWorkspaceSession !== session || session.uid !== uid) return;
+      // [] is a valid durable zero-track cache. null means missing/corrupt cache.
+      if (durableTracks !== null) {
+        libraryWorkspaceInMemoryCache.set(uid, durableTracks);
+        session.tracks = mergeLibraryWorkspaceSessionTracks(durableTracks, []);
+        session.lastDoc = null;
+        session.hasMore = false;
+        session.paginationFallback = true;
+        session.ready = true;
+        markCacheDiagnostic('library', 'CACHE', 0);
+        emitLibraryWorkspaceSession(session);
+        if (shouldVerifyLibraryBundle() && readRemoteLibraryVersion() > readLibraryBundleLocalSyncVersion(uid)) {
+          startLibraryBundleVerification();
+        }
+        return;
+      }
+    }
+
+    await bootstrapCachelessLibraryFromServerOnce();
   };
 
   const handleLibraryProfileVersion = (event: Event) => {
     const detail = (event as CustomEvent<{ uid?: string }>).detail;
     if (!detail || detail.uid !== uid) return;
+    if (!session.ready) return;
     if (readRemoteLibraryVersion() > readLibraryBundleLocalSyncVersion(uid)) {
       startLibraryBundleVerification();
     }
@@ -380,13 +570,9 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
     };
   }
 
-  if (shouldVerifyLibraryBundle()) {
-    startLibraryBundleVerification();
-  } else {
-    session.ready = true;
-    markCacheDiagnostic('library', 'CACHE', 0);
-    emitLibraryWorkspaceSession(session);
-  }
+  // Durable cache always gets first chance. Server is used only when the
+  // UID cache is missing/outdated, or later when the profile version proves it changed.
+  void hydrateLibraryWorkspaceCacheThenSync();
 
 
   return session;
@@ -1375,11 +1561,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   const saveWorkspaceTrackCache = (uid: string, list: any[]) => {
-    try {
-      localStorage.setItem(`soridraw_suno_tracks_cache_${uid}`, JSON.stringify(list));
-    } catch (e) {
-      console.error('Failed to save suno_tracks to cache:', e);
-    }
+    saveLibraryWorkspaceTrackCache(uid, list);
   };
 
   const syncLibraryWorkspaceSessionTracks = (uid: string, nextTracks: any[]) => {
@@ -1515,6 +1697,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const unsubscribeAuth = auth.onAuthStateChanged((currentUser) => {
       const resolvedUser = currentUser || appUser || auth.currentUser;
       setUser(resolvedUser);
+      const nextLibraryUiUid = resolvedUser?.uid || null;
+      if (libraryActiveUiUid !== nextLibraryUiUid) {
+        // Account A/B active state must never cross even for one render.
+        setTracks([]);
+        setWorkspaceVisibleCount(WORKSPACE_PAGE_SIZE);
+        libraryActiveUiUid = nextLibraryUiUid;
+      }
 
       if (unsubscribeWorkspaceView) {
         unsubscribeWorkspaceView();

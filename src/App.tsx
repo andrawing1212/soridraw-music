@@ -219,6 +219,67 @@ const MUSIC_NOTE_DEVICE_ID_STORAGE_KEY = 'soridraw_music_note_device_id_v1';
 const MUSIC_NOTE_SYNC_VERSION_EVENT = 'soridraw:music-note-sync-version';
 const musicNoteFreshBootstrapUids = new Set<string>();
 
+const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '3';
+const MUSIC_NOTE_CACHE_SCHEMA_STORAGE_BASE = 'soridraw_music_note_cache_schema_v3';
+let musicNoteActiveUiUid: string | null = null;
+
+const getMusicNoteCacheSchemaKey = (uid: string) => `${MUSIC_NOTE_CACHE_SCHEMA_STORAGE_BASE}_${uid}`;
+const getMusicNotePayloadCacheKey = (uid: string) => `soridraw_favorites_cache_${uid}`;
+
+const hasMusicNotePayloadCache = (uid: string): boolean => {
+  if (!uid) return false;
+  if (favoritesInMemoryCache.has(uid)) return true;
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem(getMusicNotePayloadCacheKey(uid)) !== null;
+  } catch {
+    return false;
+  }
+};
+
+const isMusicNoteCacheSchemaCurrent = (uid: string): boolean => {
+  if (!uid || typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem(getMusicNoteCacheSchemaKey(uid)) === MUSIC_NOTE_CACHE_SCHEMA_VERSION;
+  } catch {
+    return false;
+  }
+};
+
+const prepareMusicNoteCacheForUser = (uid: string): boolean => {
+  if (!uid) return true;
+  const schemaCurrent = isMusicNoteCacheSchemaCurrent(uid);
+  if (!schemaCurrent) {
+    favoritesInMemoryCache.delete(uid);
+    const pendingTimer = favoritesCacheWriteTimers.get(uid);
+    if (pendingTimer) {
+      try { clearTimeout(pendingTimer); } catch {}
+      favoritesCacheWriteTimers.delete(uid);
+    }
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(getMusicNotePayloadCacheKey(uid));
+        localStorage.removeItem(`soridraw_favorites_cache_max_count_${uid}`);
+        localStorage.removeItem(`${MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE}_${uid}`);
+        localStorage.removeItem(`${MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE}_${uid}`);
+        localStorage.removeItem(`${MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE}_${uid}`);
+        localStorage.removeItem(`soridraw_favorites_full_cache_recovery_v3_${uid}`);
+      } catch (error) {
+        console.warn('Music Note legacy cache invalidation failed:', error);
+      }
+    }
+  }
+  // Stored [] is a valid zero-item payload. Missing payload always rebuilds.
+  return !schemaCurrent || !hasMusicNotePayloadCache(uid);
+};
+
+const markMusicNoteCacheSchemaCurrent = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(getMusicNoteCacheSchemaKey(uid), MUSIC_NOTE_CACHE_SCHEMA_VERSION);
+  } catch {}
+};
+
 const getMusicNoteScopedStorageKey = (base: string, uid: string) => `${base}_${uid}`;
 const readMusicNoteSyncVersion = (base: string, uid: string): number => {
   if (!uid || typeof localStorage === 'undefined') return 0;
@@ -8557,6 +8618,13 @@ const toggleCycleVariantSelection = (
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      const nextMusicNoteUiUid = currentUser?.uid || null;
+      if (musicNoteActiveUiUid !== nextMusicNoteUiUid) {
+        // Never leave account A's active list visible while account B hydrates.
+        // Durable caches remain separated by UID.
+        setFavorites([]);
+        musicNoteActiveUiUid = nextMusicNoteUiUid;
+      }
       if (currentUser) {
         const nextHeaderIdentity = getHeaderIdentityFromUser(currentUser);
         setCachedHeaderIdentity(nextHeaderIdentity);
@@ -8830,15 +8898,17 @@ const toggleCycleVariantSelection = (
         attachUserRoleListener();
 
         // Fetch favorites for the user.
-        // Server reads are paged, but the local cache is kept as a free UI fallback so My/Shared tabs do not appear empty while older pages are not loaded yet.
+        // A cache is trusted only when both its UID-scoped schema and payload are
+        // current. Old/partial caches are discarded for this UID only.
+        const musicNoteCacheNeedsFullBootstrap = prepareMusicNoteCacheForUser(currentUser.uid);
         const cachedFavs = getFavoritesCacheInMemoryOrLocalStorage(currentUser.uid);
-        if (Array.isArray(cachedFavs) && cachedFavs.length > 0) {
+        if (!musicNoteCacheNeedsFullBootstrap && hasMusicNotePayloadCache(currentUser.uid)) {
           musicNoteFreshBootstrapUids.delete(currentUser.uid);
         } else {
           musicNoteFreshBootstrapUids.add(currentUser.uid);
         }
 
-        if (Array.isArray(cachedFavs) && cachedFavs.length > 0) {
+        if (!musicNoteCacheNeedsFullBootstrap && hasMusicNotePayloadCache(currentUser.uid)) {
           markCacheDiagnostic('musicNote', 'CACHE', 0);
           // Do not slice the cache. It costs nothing and prevents existing My Note / Shared Note items from visually disappearing.
           setFavorites(sortFavoriteList(cachedFavs.filter((favorite) => !isFavoriteSoftRemoved(favorite))));
@@ -8893,12 +8963,47 @@ const toggleCycleVariantSelection = (
           }
         };
 
-        // 921: the old automatic full-collection recovery is intentionally dead.
-        // Full collection reads are allowed only for explicit all-item operations.
-        const runFavoritesFullCacheRecoveryOnce = async () => {};
+        // Cache migration/new-device bootstrap: one complete read is the
+        // authoritative source. No orderBy/limit means legacy rows without
+        // createdAt are included too. No server data is written by this path.
+        const runFavoritesFullCacheRecoveryOnce = async () => {
+          if (!musicNoteCacheNeedsFullBootstrap) return;
+          try {
+            const fullSnapshot = await getDocs(query(
+              collection(db, 'favorites'),
+              where('uid', '==', currentUser.uid),
+            ));
+            if (auth.currentUser?.uid !== currentUser.uid) return;
+            const fullFavorites = sortFavoriteList(
+              fullSnapshot.docs
+                .map(mapFavoriteFirestoreDoc)
+                .filter((favorite) => !isFavoriteSoftRemoved(favorite)),
+            );
+            favoritePaginationCursorRef.current = null;
+            clearMusicNotePaginationCursor(currentUser.uid);
+            favoritePaginationExhaustedRef.current = true;
+            favoritePaginationLoadingRef.current = false;
+            favoritePaginationFallbackModeRef.current = true;
+            setHasMoreFavorites(false);
+            setIsLoadingMoreFavorites(false);
+            setFavorites(fullFavorites);
+            writeFavoritesCache(currentUser.uid, fullFavorites);
+            favoritesStore.setFavorites(fullFavorites);
+            markMusicNoteCacheSchemaCurrent(currentUser.uid);
+            musicNoteFreshBootstrapUids.delete(currentUser.uid);
+            markCacheDiagnostic('musicNote', 'SYNC', fullSnapshot.docs.length);
+          } catch (bootstrapError) {
+            console.warn('Cacheless Music Note full bootstrap failed.', bootstrapError);
+          } finally {
+            setIsFavoritesLoading(false);
+          }
+        };
 
-
-        const hasCachedMusicNote = Array.isArray(cachedFavs) && cachedFavs.length > 0;
+        const hasCachedMusicNote = !musicNoteCacheNeedsFullBootstrap
+          && hasMusicNotePayloadCache(currentUser.uid);
+        if (musicNoteCacheNeedsFullBootstrap) {
+          void runFavoritesFullCacheRecoveryOnce();
+        }
         if (hasCachedMusicNote) {
           const persistedCursor = readMusicNotePaginationCursor(currentUser.uid);
           favoritePaginationCursorRef.current = persistedCursor;
@@ -8908,7 +9013,7 @@ const toggleCycleVariantSelection = (
         }
 
         const attachFavoritesSourceBootstrap902 = () => {
-          if (unsubFavs || hasCachedMusicNote) return;
+          if (unsubFavs || hasCachedMusicNote || musicNoteCacheNeedsFullBootstrap) return;
           const q = query(
             collection(db, 'favorites'),
             where('uid', '==', currentUser.uid),
@@ -8976,9 +9081,10 @@ const toggleCycleVariantSelection = (
           MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE,
           currentUser.uid,
         );
-        const shouldVerifyMusicNoteBundle = !hasCachedMusicNote
-          || musicNoteLocalVersionAtBootstrap <= 0
-          || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap;
+        const shouldVerifyMusicNoteBundle = hasCachedMusicNote && (
+          musicNoteLocalVersionAtBootstrap <= 0
+          || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap
+        );
 
         if (shouldVerifyMusicNoteBundle) {
           unsubMusicNoteBundle = subscribeListBundle('musicNote', currentUser.uid, {

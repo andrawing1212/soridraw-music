@@ -6,7 +6,11 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
-import { readExploreFeedSessionCache, writeExploreFeedSessionCache } from '../services/exploreSessionCache';
+import {
+  patchExploreFeedSessionCacheRow,
+  readExploreFeedSessionCache,
+  writeExploreFeedSessionCache,
+} from '../services/exploreSessionCache';
 import { getExploreLikedTrackIds, setExploreTrackLike } from '../services/exploreLikeService';
 import {
   getExploreFollowState,
@@ -259,7 +263,7 @@ export default function ExplorePage() {
       })
       .then((payload) => {
         const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
-        writeExploreFeedSessionCache(requestUrl, rows);
+        writeExploreFeedSessionCache(requestUrl, rows, safeText(payload?.data?.nextCursor) || null);
         setTracks(rows.map(normalizeTrack).filter((track) => track.id));
       })
       .catch((reason: unknown) => {
@@ -407,6 +411,7 @@ export default function ExplorePage() {
       const result = await setExploreTrackLike(user, track.id, !currentLiked);
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
       updateTrackLikeCount(track.id, result.likeCount);
+      patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: result.likeCount });
     } catch (reason) {
       console.error('Explore like failed:', reason);
       setSocialNotice(reason instanceof Error ? reason.message : '좋아요 처리에 실패했어요.');

@@ -1,52 +1,47 @@
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
-import { invalidateExploreFeedSessionCache } from './exploreSessionCache';
+import { readSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
 
 const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
 
 
-// SORIDRAW_EXPLORE_CLIENT_SESSION_CACHE_989
-const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = '1';
-const EXPLORE_LIKE_CACHE_KEY_BASE = 'soridraw_explore_liked_state_cache_v1';
+// SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
+const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
+const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
+const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
 const likedStateByUid = new Map<string, Map<string, boolean>>();
-
-const getLikedStateStorageKey = (uid: string) => `${EXPLORE_LIKE_CACHE_KEY_BASE}_${uid}`;
 
 const readLikedStateStorage = (uid: string): Map<string, boolean> => {
   const values = new Map<string, boolean>();
-  if (typeof window === 'undefined') return values;
-  try {
-    const raw = window.sessionStorage.getItem(getLikedStateStorageKey(uid));
-    if (!raw) return values;
-    const parsed = JSON.parse(raw);
-    if (
-      parsed?.schemaVersion !== EXPLORE_LIKE_CACHE_SCHEMA_VERSION ||
-      !parsed?.values ||
-      typeof parsed.values !== 'object' ||
-      Array.isArray(parsed.values)
-    ) {
-      window.sessionStorage.removeItem(getLikedStateStorageKey(uid));
-      return values;
-    }
-    Object.entries(parsed.values as Record<string, unknown>).forEach(([trackId, liked]) => {
-      if (trackId && typeof liked === 'boolean') values.set(trackId, liked);
-    });
-    return values;
-  } catch {
-    try { window.sessionStorage.removeItem(getLikedStateStorageKey(uid)); } catch {}
-    return values;
-  }
+  const envelope = readSoridrawPersistentCache<Record<string, boolean>>({
+    cacheKey: EXPLORE_LIKE_CACHE_KEY,
+    sourceType: EXPLORE_LIKE_SOURCE_TYPE,
+    schemaVersion: EXPLORE_LIKE_CACHE_SCHEMA_VERSION,
+    uid,
+  });
+  if (!envelope?.data || typeof envelope.data !== 'object' || Array.isArray(envelope.data)) return values;
+  Object.entries(envelope.data).forEach(([trackId, liked]) => {
+    if (trackId && typeof liked === 'boolean') values.set(trackId, liked);
+  });
+  return values;
 };
 
 const persistLikedStateCache = (uid: string, cache: Map<string, boolean>) => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.sessionStorage.setItem(getLikedStateStorageKey(uid), JSON.stringify({
-      schemaVersion: EXPLORE_LIKE_CACHE_SCHEMA_VERSION,
-      values: Object.fromEntries(cache),
-    }));
-  } catch {}
+  writeSoridrawPersistentCache<Record<string, boolean>>({
+    cacheKey: EXPLORE_LIKE_CACHE_KEY,
+    sourceType: EXPLORE_LIKE_SOURCE_TYPE,
+    schemaVersion: EXPLORE_LIKE_CACHE_SCHEMA_VERSION,
+    dataVersion: 0,
+    uid,
+    syncCursor: null,
+    serverRevision: null,
+    deletedIds: [],
+    expiresAt: null,
+    dirty: false,
+    pendingMutationId: null,
+    data: Object.fromEntries(cache),
+  });
 };
 
 const getLikedStateCache = (uid: string) => {
@@ -147,6 +142,5 @@ export const setExploreTrackLike = async (
   const cache = getLikedStateCache(user.uid);
   cache.set(result.trackId, result.liked);
   persistLikedStateCache(user.uid, cache);
-  invalidateExploreFeedSessionCache();
   return result;
 };

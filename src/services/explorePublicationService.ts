@@ -1,6 +1,12 @@
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import {
+  readSoridrawPersistentCache,
+  removeSoridrawPersistentCache,
+  removeSoridrawPersistentCachesBySourceType,
+  writeSoridrawPersistentCache,
+} from '../lib/soridrawPersistentCache';
 import { invalidateExploreFeedSessionCache } from './exploreSessionCache';
 
 const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
@@ -50,12 +56,12 @@ const DEFAULT_PUBLICATION_OPTIONS: ExplorePublicationOptions = {
 const getMusicNoteTrackId = (uid: string, sourceId: string) => `music_note_${uid}_${sourceId}`;
 
 
-// SORIDRAW_EXPLORE_CLIENT_SESSION_CACHE_988
-const PUBLICATION_SESSION_CACHE_BASE = 'soridraw_explore_publication_states_v1';
+// SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
+const PUBLICATION_CACHE_SCHEMA_VERSION = 1;
+const PUBLICATION_CACHE_KEY = 'explore-publication-states';
+const PUBLICATION_CACHE_SOURCE_TYPE = 'explore_publication_states';
 const publicationMemoryCache = new Map<string, Record<string, ExploreMusicNotePublicationState>>();
 const publicationInflight = new Map<string, Promise<Record<string, ExploreMusicNotePublicationState>>>();
-
-const publicationSessionKey = (uid: string) => `${PUBLICATION_SESSION_CACHE_BASE}_${uid}`;
 
 const clonePublicationStates = (
   states: Record<string, ExploreMusicNotePublicationState>,
@@ -68,31 +74,30 @@ const readPublicationStateCache = (uid: string): Record<string, ExploreMusicNote
   if (!normalizedUid) return null;
   const memory = publicationMemoryCache.get(normalizedUid);
   if (memory) return clonePublicationStates(memory);
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.sessionStorage.getItem(publicationSessionKey(normalizedUid));
-    if (raw === null) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-    const normalized: Record<string, ExploreMusicNotePublicationState> = {};
-    Object.entries(parsed).forEach(([sourceId, value]) => {
-      const state = value as Partial<ExploreMusicNotePublicationState> | null;
-      const trackId = String(state?.trackId || '').trim();
-      if (!sourceId || !trackId) return;
-      normalized[sourceId] = {
-        status: state?.status === 'public' ? 'public' : 'private',
-        trackId,
-        allowNextSongApply: Boolean(state?.allowNextSongApply),
-        allowFollowerSave: Boolean(state?.allowFollowerSave),
-        profilePinned: Boolean(state?.profilePinned),
-      };
-    });
-    publicationMemoryCache.set(normalizedUid, normalized);
-    return clonePublicationStates(normalized);
-  } catch {
-    try { window.sessionStorage.removeItem(publicationSessionKey(normalizedUid)); } catch { /* ignore */ }
-    return null;
-  }
+
+  const envelope = readSoridrawPersistentCache<Record<string, ExploreMusicNotePublicationState>>({
+    cacheKey: PUBLICATION_CACHE_KEY,
+    sourceType: PUBLICATION_CACHE_SOURCE_TYPE,
+    schemaVersion: PUBLICATION_CACHE_SCHEMA_VERSION,
+    uid: normalizedUid,
+  });
+  if (!envelope?.data || typeof envelope.data !== 'object' || Array.isArray(envelope.data)) return null;
+
+  const normalized: Record<string, ExploreMusicNotePublicationState> = {};
+  Object.entries(envelope.data).forEach(([sourceId, value]) => {
+    const state = value as Partial<ExploreMusicNotePublicationState> | null;
+    const trackId = String(state?.trackId || '').trim();
+    if (!sourceId || !trackId) return;
+    normalized[sourceId] = {
+      status: state?.status === 'public' ? 'public' : 'private',
+      trackId,
+      allowNextSongApply: Boolean(state?.allowNextSongApply),
+      allowFollowerSave: Boolean(state?.allowFollowerSave),
+      profilePinned: Boolean(state?.profilePinned),
+    };
+  });
+  publicationMemoryCache.set(normalizedUid, normalized);
+  return clonePublicationStates(normalized);
 };
 
 const writePublicationStateCache = (
@@ -103,12 +108,20 @@ const writePublicationStateCache = (
   if (!normalizedUid) return;
   const cloned = clonePublicationStates(states);
   publicationMemoryCache.set(normalizedUid, cloned);
-  if (typeof window === 'undefined') return;
-  try {
-    window.sessionStorage.setItem(publicationSessionKey(normalizedUid), JSON.stringify(cloned));
-  } catch {
-    // Memory cache still prevents repeated server sweeps during this app session.
-  }
+  writeSoridrawPersistentCache<Record<string, ExploreMusicNotePublicationState>>({
+    cacheKey: PUBLICATION_CACHE_KEY,
+    sourceType: PUBLICATION_CACHE_SOURCE_TYPE,
+    schemaVersion: PUBLICATION_CACHE_SCHEMA_VERSION,
+    dataVersion: 0,
+    uid: normalizedUid,
+    syncCursor: null,
+    serverRevision: null,
+    deletedIds: [],
+    expiresAt: null,
+    dirty: false,
+    pendingMutationId: null,
+    data: cloned,
+  });
 };
 
 const patchPublicationStateBySourceId = (
@@ -142,13 +155,12 @@ export const clearExplorePublicationSessionCache = (uid?: string | null) => {
   if (normalizedUid) {
     publicationMemoryCache.delete(normalizedUid);
     publicationInflight.delete(normalizedUid);
-    if (typeof window !== 'undefined') {
-      try { window.sessionStorage.removeItem(publicationSessionKey(normalizedUid)); } catch { /* ignore */ }
-    }
+    removeSoridrawPersistentCache(PUBLICATION_CACHE_KEY, normalizedUid);
     return;
   }
   publicationMemoryCache.clear();
   publicationInflight.clear();
+  removeSoridrawPersistentCachesBySourceType(PUBLICATION_CACHE_SOURCE_TYPE);
 };
 
 const readResponsePayload = async (response: Response): Promise<any> => {

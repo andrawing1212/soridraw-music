@@ -1,0 +1,59 @@
+name: Stage4 Production CORS Progress
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-stage4-prod-cors-progress.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PROJECT: soridraw-app-866a5
+      ORIGIN: https://soridraw.com
+      EXPLORE_API: https://soridraw-explore-api.andrawing1212.workers.dev
+    steps:
+      - name: Check current production custom-domain CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          functions=(
+            getSunoApiKeyStatus
+            saveGoogleGeminiApiKey
+            deleteGoogleGeminiApiKey
+            getGoogleGeminiApiKeyStatus
+            generateGeminiContent
+            saveSunoApiKey
+            deleteSunoApiKey
+            fetchSunoShareMetadata
+            getSunoRemainingCredits
+            getSunoRemainingCreditsAfterComplete
+            createSunoTrack
+            getSunoTrackStatus
+          )
+          pass=0
+          fail=0
+          for fn in "${functions[@]}"; do
+            code="$(curl -sS -o /tmp/body -D /tmp/head -w '%{http_code}' -X OPTIONS \
+              -H "Origin: $ORIGIN" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "https://us-central1-$PROJECT.cloudfunctions.net/$fn" || true)"
+            allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/head)"
+            if [ "$code" = 204 ] && [ "$allow" = "$ORIGIN" ]; then
+              echo "PASS $fn"
+              pass=$((pass+1))
+            else
+              echo "PENDING $fn code=$code allow=${allow:-none}"
+              fail=$((fail+1))
+            fi
+          done
+          code="$(curl -sS -o /tmp/exbody -D /tmp/exhead -w '%{http_code}' -H "Origin: $ORIGIN" "$EXPLORE_API/v1/feed?sort=latest&limit=1" || true)"
+          allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/exhead)"
+          echo "EXPLORE code=$code allow=${allow:-none}"
+          echo "FUNCTIONS_PASS=$pass FUNCTIONS_PENDING=$fail"

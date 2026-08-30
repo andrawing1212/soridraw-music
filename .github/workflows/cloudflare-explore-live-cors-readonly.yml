@@ -1,5 +1,6 @@
 name: Cloudflare Explore Live CORS Readonly
 
+# 2026-08-30: rerun after CLOUDFLARE_API_TOKEN registration.
 on:
   workflow_dispatch:
   push:

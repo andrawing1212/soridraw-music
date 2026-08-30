@@ -176,7 +176,7 @@ const apiBase = `https://api.cloudflare.com/client/v4/accounts/${accountId}/work
 const sourceResponse = await cloudflareGet(`${apiBase}/content/v2`, authHeaders);
 const workerMain = await writeWorkerSourcePayload(sourceResponse);
 
-// Read current runtime settings so compatibility stays aligned.
+// Read current runtime settings so compatibility and bindings stay aligned.
 const settingsEnvelope = await (
   await cloudflareGet(`${apiBase}/settings`, {
     ...authHeaders,
@@ -185,16 +185,31 @@ const settingsEnvelope = await (
 ).json();
 const settings = settingsEnvelope?.result || settingsEnvelope || {};
 
-// Resolve the existing D1 database UUID by name. Never auto-create a database.
-const d1ListRaw = parseJson(
-  runCapture('npx', ['wrangler', 'd1', 'list', '--json']),
-  'wrangler d1 list'
+// Prefer the live Worker's own D1 binding ID from /settings. This keeps the
+// sync path read-only and avoids requiring account-wide D1 list permission.
+const settingsBindings = Array.isArray(settings.bindings) ? settings.bindings : [];
+const liveD1Binding = settingsBindings.find(
+  (item) => item?.type === 'd1' && item?.name === 'DB'
 );
-const d1List = Array.isArray(d1ListRaw) ? d1ListRaw : d1ListRaw?.result || [];
-const database = d1List.find((item) => item?.name === D1_DATABASE_NAME);
-const databaseId = database?.uuid || database?.id || database?.database_id;
+let databaseId =
+  liveD1Binding?.id ||
+  liveD1Binding?.database_id ||
+  liveD1Binding?.uuid ||
+  '';
+
+// Backward-compatible fallback for older Cloudflare settings payloads.
 if (!databaseId) {
-  throw new Error(`Existing D1 database not found: ${D1_DATABASE_NAME}`);
+  const d1ListRaw = parseJson(
+    runCapture('npx', ['wrangler', 'd1', 'list', '--json']),
+    'wrangler d1 list'
+  );
+  const d1List = Array.isArray(d1ListRaw) ? d1ListRaw : d1ListRaw?.result || [];
+  const database = d1List.find((item) => item?.name === D1_DATABASE_NAME);
+  databaseId = database?.uuid || database?.id || database?.database_id || '';
+}
+
+if (!databaseId) {
+  throw new Error(`Existing D1 database binding not found: ${D1_DATABASE_NAME}`);
 }
 
 const compatibilityDate = String(settings.compatibility_date || '2026-08-26').slice(0, 10);

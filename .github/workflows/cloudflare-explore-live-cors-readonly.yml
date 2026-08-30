@@ -1,6 +1,6 @@
 name: Cloudflare Explore Live CORS Readonly
 
-# 2026-08-30: rerun after CLOUDFLARE_API_TOKEN registration; Wrangler 4.102 requires Node 22+.
+# 2026-08-30: rerun after live-settings D1 binding fallback fix; Wrangler 4.102 requires Node 22+.
 on:
   workflow_dispatch:
   push:

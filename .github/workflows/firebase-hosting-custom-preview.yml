@@ -94,7 +94,7 @@ jobs:
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
               body: new URLSearchParams({
-                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                grant_type: 'urn:ietf:params:oauth-grant-type:jwt-bearer',
                 assertion,
               }),
             });
@@ -270,3 +270,5 @@ jobs:
           echo 'Backend remains soridraw-app-866a5.'
           echo "App Check policy inspection: ${RECAPTCHA_POLICY_STATUS:-not-run}"
           echo 'No Functions deploy, Firestore/Database Rules update, user-data migration, main change, or production Hosting release was performed.'
+
+# Manual preview redeploy trigger: 2026-08-30T19:29Z

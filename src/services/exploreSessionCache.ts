@@ -42,3 +42,5 @@ export const writeExploreFeedSessionCache = (
 export const invalidateExploreFeedSessionCache = () => {
   exploreFeedSessionCache.clear();
 };
+
+// Firebase Preview deployment anchor: keeps this cache-first client build tied to preview.soridraw.com.

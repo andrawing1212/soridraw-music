@@ -1,0 +1,90 @@
+name: Apply 988 Explore Client Session Cache
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-988-explore-client-session-cache.py'
+      - '.github/workflows/apply-988-explore-client-session-cache.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-988-explore-client-session-cache
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply client cache patch
+        run: python3 .deploy/apply-988-explore-client-session-cache.py
+
+      - name: Verify cache contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'SORIDRAW_EXPLORE_CLIENT_SESSION_CACHE_988' src/services/exploreSessionCache.ts
+          grep -Fq 'publicationMemoryCache' src/services/explorePublicationService.ts
+          grep -Fq 'window.sessionStorage' src/services/explorePublicationService.ts
+          grep -Fq 'const missing = normalized.filter' src/services/exploreLikeService.ts
+          grep -Fq 'readExploreFeedSessionCache(requestUrl)' src/pages/ExplorePage.tsx
+          grep -Fq 'writeExploreFeedSessionCache(requestUrl, rows)' src/pages/ExplorePage.tsx
+          test "$(grep -Fc '/v1/me/publications?' src/services/explorePublicationService.ts)" = '1'
+          echo 'MUSIC_NOTE_PUBLICATION_SESSION_CACHE=PASS'
+          echo 'EXPLORE_LIKE_MISSING_ONLY_CACHE=PASS'
+          echo 'EXPLORE_FEED_NAVIGATION_CACHE=PASS'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify no server data/schema changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/pages/ExplorePage\.tsx|src/services/explorePublicationService\.ts|src/services/exploreLikeService\.ts|src/services/exploreSessionCache\.ts)$' || true)"
+          if [ -n "$bad" ]; then
+            echo "Unexpected generated changes:"
+            echo "$bad"
+            exit 1
+          fi
+          echo 'NO_FIRESTORE_SCHEMA_CHANGE=true'
+          echo 'NO_D1_SCHEMA_CHANGE=true'
+          echo 'NO_SERVER_DATA_MIGRATION=true'
+
+      - name: Commit actual preview source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo '988 already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/pages/ExplorePage.tsx src/services/explorePublicationService.ts src/services/exploreLikeService.ts src/services/exploreSessionCache.ts
+          git commit -m 'fix: cache Explore navigation and publication state in preview'
+          git push origin HEAD:preview

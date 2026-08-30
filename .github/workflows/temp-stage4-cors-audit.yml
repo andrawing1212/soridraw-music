@@ -1,0 +1,54 @@
+name: Stage4 Custom Domain CORS Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-stage4-cors-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BACKEND_PROJECT: soridraw-app-866a5
+      EXPLORE_API: https://soridraw-explore-api.andrawing1212.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Audit Functions and Explore CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=0
+          check_function() {
+            local origin="$1" fn="$2" code allow
+            code="$(curl -sS -o /tmp/fn-body -D /tmp/fn-head -w '%{http_code}' -X OPTIONS \
+              -H "Origin: https://$origin" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "https://us-central1-$BACKEND_PROJECT.cloudfunctions.net/$fn" || true)"
+            allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/fn-head)"
+            echo "FUNCTION origin=$origin fn=$fn code=$code allow=${allow:-none}"
+            if [ "$code" != 204 ] || [ "$allow" != "https://$origin" ]; then failed=1; fi
+          }
+          check_explore() {
+            local origin="$1" code allow
+            code="$(curl -sS -o /tmp/ex-body -D /tmp/ex-head -w '%{http_code}' -H "Origin: https://$origin" \
+              "$EXPLORE_API/v1/feed?sort=latest&limit=1" || true)"
+            allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/ex-head)"
+            echo "EXPLORE origin=$origin code=$code allow=${allow:-none}"
+            if [ "$code" != 200 ] || [ "$allow" != "https://$origin" ]; then failed=1; fi
+          }
+          for origin in test.soridraw.com soridraw.com; do
+            check_function "$origin" getSunoApiKeyStatus
+            check_function "$origin" generateGeminiContent
+            check_explore "$origin"
+          done
+          if [ "$failed" != 0 ]; then echo 'CUSTOM_DOMAIN_CORS_PASS=false'; exit 2; fi
+          echo 'CUSTOM_DOMAIN_CORS_PASS=true'

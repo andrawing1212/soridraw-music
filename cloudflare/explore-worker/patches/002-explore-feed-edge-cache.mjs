@@ -6,9 +6,11 @@ if (!remoteDir) throw new Error('SORIDRAW_REMOTE_WORKER_DIR is required.');
 const workerPath = join(remoteDir, 'worker.js');
 let source = readFileSync(workerPath, 'utf8');
 const marker = 'SORIDRAW_EXPLORE_FEED_EDGE_CACHE_002';
+const alreadyApplied = source.includes(marker)
+  || (source.includes('handleFeedWithEdgeCache') && source.includes('X-SORIDRAW-Edge-Cache'));
 
-if (source.includes(marker)) {
-  console.log('[SORIDRAW Worker] Explore feed edge cache already applied.');
+if (alreadyApplied) {
+  console.log('[SORIDRAW Worker] Explore feed edge cache already applied (source or compiled runtime).');
   process.exit(0);
 }
 

@@ -1,0 +1,95 @@
+name: Apply 989 Explore Like Cache Diagnostic Clarity
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-989-explore-like-diagnostic-clarity.py'
+      - '.github/workflows/apply-989-explore-like-diagnostic-clarity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-989-explore-like-diagnostic-clarity
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply 989 client-only patch
+        run: python3 .deploy/apply-989-explore-like-diagnostic-clarity.py
+
+      - name: Verify cache and diagnostic contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'soridraw_explore_liked_state_cache_v1' src/services/exploreLikeService.ts
+          grep -Fq 'window.sessionStorage.setItem(getLikedStateStorageKey(uid)' src/services/exploreLikeService.ts
+          grep -Fq 'persistLikedStateCache(user.uid, cache)' src/services/exploreLikeService.ts
+          grep -Fq 'paths: Record<string, CloudflarePathDiagnosticState>' src/lib/cloudflareDiagnostics.ts
+          grep -Fq "'/v1/me/likes'" src/components/CacheDiagnosticsOverlay.tsx
+          grep -Fq 'CLOUDFLARE 발생처' src/components/CacheDiagnosticsOverlay.tsx
+          grep -Fq 'text-[12px] font-bold text-[#c6b5ff]' src/components/CacheDiagnosticsOverlay.tsx
+          if grep -Fq '위=프로젝트 Cloud / SDK · 아래=기능별 참고값' src/components/CacheDiagnosticsOverlay.tsx; then
+            echo 'Low-value tiny footer still exists.'
+            exit 1
+          fi
+          echo 'EXPLORE_LIKE_SESSION_CACHE=PASS'
+          echo 'CLOUDFLARE_PATH_BREAKDOWN=PASS'
+          echo 'DIAGNOSTIC_READABILITY=PASS'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify client-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only)"
+          printf '%s\n' "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreLikeService\.ts|src/lib/cloudflareDiagnostics\.ts|src/components/CacheDiagnosticsOverlay\.tsx)$' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected source changes:'
+            printf '%s\n' "$bad"
+            exit 1
+          fi
+          echo 'NO_FIRESTORE_SCHEMA_CHANGE=true'
+          echo 'NO_D1_SCHEMA_CHANGE=true'
+          echo 'NO_FUNCTIONS_CHANGE=true'
+          echo 'NO_HOSTING_DEPLOY=true'
+
+      - name: Commit actual preview source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo '989 already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/services/exploreLikeService.ts src/lib/cloudflareDiagnostics.ts src/components/CacheDiagnosticsOverlay.tsx
+          git commit -m 'fix(preview): cache Explore likes and clarify diagnostics'
+          git push origin HEAD:preview

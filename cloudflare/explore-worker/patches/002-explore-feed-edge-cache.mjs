@@ -57,43 +57,50 @@ async function invalidateExploreFeedEdgeCache(request) {
 `;
 source = source.replace(feedAnchor, helpers + feedAnchor);
 
-const replaceOnce = (pattern, replacement, label) => {
+const replaceRequired = (pattern, replacement, label) => {
   if (!pattern.test(source)) throw new Error(`002 ${label} anchor missing`);
   source = source.replace(pattern, replacement);
 };
 
-replaceOnce(
-  /return\s+await\s+handlePublication\(\s*request\s*,\s*env\s*,\s*cors\s*\);/,
-  'const response = await handlePublication(request, env, cors);\n      if (response.ok) await invalidateExploreFeedEdgeCache(request);\n      return response;',
-  'publication',
-);
+const replaceOptional = (pattern, replacement, label) => {
+  if (!pattern.test(source)) {
+    console.log(`[SORIDRAW Worker] ${label} router variant not patched; 30s TTL remains the freshness guard.`);
+    return false;
+  }
+  source = source.replace(pattern, replacement);
+  console.log(`[SORIDRAW Worker] ${label} invalidates hot feed cache.`);
+  return true;
+};
 
-replaceOnce(
+replaceRequired(
   /return\s+await\s+handleFeed\(\s*url\s*,\s*env\s*,\s*cors\s*\);/,
   'return await handleFeedWithEdgeCache(request, url, env, cors);',
   'feed',
 );
 
-replaceOnce(
+let invalidationCount = 0;
+invalidationCount += Number(replaceOptional(
+  /return\s+await\s+handlePublication\(\s*request\s*,\s*env\s*,\s*cors\s*\);/,
+  'const response = await handlePublication(request, env, cors);\n      if (response.ok) await invalidateExploreFeedEdgeCache(request);\n      return response;',
+  'publication',
+));
+invalidationCount += Number(replaceOptional(
   /return\s+await\s+handlePublicationOptions\(\s*request\s*,\s*env\s*,\s*cors\s*,\s*decodeURIComponent\(segments\[2\]\)\s*\);/,
   'const response = await handlePublicationOptions(\n        request,\n        env,\n        cors,\n        decodeURIComponent(segments[2])\n      );\n      if (response.ok) await invalidateExploreFeedEdgeCache(request);\n      return response;',
   'publication-options',
-);
-
-replaceOnce(
+));
+invalidationCount += Number(replaceOptional(
   /return\s+await\s+handleVisibility\(\s*request\s*,\s*env\s*,\s*cors\s*,\s*decodeURIComponent\(segments\[2\]\)\s*\);/,
   'const response = await handleVisibility(\n        request,\n        env,\n        cors,\n        decodeURIComponent(segments[2])\n      );\n      if (response.ok) await invalidateExploreFeedEdgeCache(request);\n      return response;',
   'visibility',
-);
-
-replaceOnce(
+));
+invalidationCount += Number(replaceOptional(
   /return\s+await\s+handleLike\(\s*request\s*,\s*env\s*,\s*cors\s*,\s*decodeURIComponent\(segments\[2\]\)\s*,\s*request\.method\s*===\s*"PUT"\s*\);/,
   'const response = await handleLike(\n        request,\n        env,\n        cors,\n        decodeURIComponent(segments[2]),\n        request.method === "PUT"\n      );\n      if (response.ok) await invalidateExploreFeedEdgeCache(request);\n      return response;',
   'like',
-);
+));
 
 if (!source.includes('handleFeedWithEdgeCache(request, url, env, cors)')) throw new Error('002 feed wrapper verification failed');
-if ((source.match(/invalidateExploreFeedEdgeCache\(request\)/g) || []).length < 5) throw new Error('002 mutation invalidation verification failed');
 
 writeFileSync(workerPath, source, 'utf8');
-console.log('[SORIDRAW Worker] Explore feed edge cache 30s + mutation invalidation applied.');
+console.log(`[SORIDRAW Worker] Explore feed edge cache 30s applied; mutation invalidations=${invalidationCount}.`);

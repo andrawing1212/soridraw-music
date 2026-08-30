@@ -4,6 +4,12 @@ const ALLOWED_RETURN_ORIGINS = new Set([
   'https://soridraw-music.vercel.app',
   'https://soridraw-music-git-main-andrawing1212.vercel.app',
   'https://soridraw-music-git-preview-andrawing1212.vercel.app',
+  'https://preview.soridraw.com',
+  'https://soridraw-preview.web.app',
+  'https://soridraw-preview.firebaseapp.com',
+  'https://test.soridraw.com',
+  'https://soridraw-test.web.app',
+  'https://soridraw-test.firebaseapp.com',
 ]);
 
 const getSafeReturnOrigin = () => {

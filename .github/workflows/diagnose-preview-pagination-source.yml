@@ -1,0 +1,76 @@
+name: Diagnose Preview Pagination Source
+
+on:
+  push:
+    branches:
+      - preview
+    paths:
+      - '.github/workflows/diagnose-preview-pagination-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Apply legacy prebuild chain only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run prebuild
+
+      - name: Inspect generated Library pagination runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/pages/SunoLibraryPage.tsx')
+          lines = p.read_text(encoding='utf-8').splitlines()
+          needles = [
+            'WORKSPACE_SERVER_PAGE_SIZE',
+            'WORKSPACE_SERVER_FETCH_SIZE',
+            'startLibraryWorkspaceSession',
+            'mergeLibraryLatestBundleWithCache',
+            'loadMoreWorkspaceTracks',
+            'canShowCachedWorkspaceMore',
+            'hasMoreWorkspaceTracks',
+            'workspaceLastTrackDocRef',
+          ]
+          hits = sorted({i for i,line in enumerate(lines) if any(n in line for n in needles)})
+          covered=[]
+          for i in hits:
+            lo=max(0,i-45); hi=min(len(lines),i+115)
+            if any(lo >= a and hi <= b for a,b in covered):
+              continue
+            covered.append((lo,hi))
+            print(f'--- GENERATED LIBRARY CONTEXT {i+1} ({lo+1}-{hi}) ---')
+            for j in range(lo,hi):
+              print(f'{j+1:06d}: {lines[j]}')
+          PY
+
+      - name: Inspect generated Music Note pagination runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/App.tsx')
+          lines = p.read_text(encoding='utf-8').splitlines()
+          needles = ['loadMoreFavorites =','firstPageFavs','mergeFavoriteFirstPageWithCache','favoritePaginationCursorRef']
+          hits = sorted({i for i,line in enumerate(lines) if any(n in line for n in needles)})
+          for i in hits:
+            lo=max(0,i-35); hi=min(len(lines),i+100)
+            print(f'--- GENERATED APP CONTEXT {i+1} ---')
+            for j in range(lo,hi): print(f'{j+1:06d}: {lines[j]}')
+          PY

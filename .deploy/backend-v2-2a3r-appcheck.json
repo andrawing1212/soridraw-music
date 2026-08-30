@@ -1,0 +1,9 @@
+{
+  "tool": "backend-v2-2a3r-appcheck-readonly",
+  "projectId": "soridraw-app-866a5",
+  "status": "unavailable",
+  "authOutcome": "success",
+  "installOutcome": "success",
+  "inspectOutcome": "failure",
+  "safety": {"configWrites":0,"databaseReads":0,"databaseWrites":0,"databaseDeletes":0}
+}

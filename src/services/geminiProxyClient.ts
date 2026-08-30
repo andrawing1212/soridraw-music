@@ -7,7 +7,14 @@ const CLOUD_FUNCTIONS_BASE_URL = 'https://us-central1-soridraw-app-866a5.cloudfu
 const GEMINI_LATENCY_POLICY = 'bounded-v1' as const;
 const GEMINI_THINKING_POLICY = 'initial-36-low-small-35-low-v2' as const;
 const FAST_REPAIR_CONTEXT = 'repairV1FinalProductionCues';
+const SORIDRAW_887_LATENCY_FASTPATH = true;
+const SORIDRAW_888_SPLIT_LANGUAGE_MIX_ROUTE = true;
 const INITIAL_SONG_MODEL_CHAIN = [
+  'gemini-3.6-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+] as const;
+const LANGUAGE_MIX_MODEL_CHAIN = [
   'gemini-3.7-flash',
   'gemini-3.6-flash',
   'gemini-3.5-flash-lite',
@@ -186,11 +193,14 @@ function normalizeRequestedModelChain(meta: any, requestParams: any): string[] {
   return normalized.length ? normalized : requested;
 }
 
+function isLanguageMixWholeRewriteContext(context: string): boolean {
+  return String(context || '').trim().startsWith('languageMixLockedWholeRewrite');
+}
+
 function isInitialSongGenerationContext(context: string): boolean {
   const clean = String(context || '').trim();
   return clean === 'generateSong'
     || clean === 'generateSongCompactFallback'
-    || clean.startsWith('languageMixLockedWholeRewrite')
     || clean.startsWith('generateSong v2');
 }
 
@@ -198,11 +208,13 @@ function getPreFilteredCooldownSkips(
   context: string,
   requested: string[],
 ): GeminiProxyModelSkip[] {
-  const canonical = isInitialSongGenerationContext(context)
-    ? [...INITIAL_SONG_MODEL_CHAIN]
-    : context === FAST_REPAIR_CONTEXT
-      ? [...FAST_REPAIR_MODEL_CHAIN]
-      : [];
+  const canonical = isLanguageMixWholeRewriteContext(context)
+    ? [...LANGUAGE_MIX_MODEL_CHAIN]
+    : isInitialSongGenerationContext(context)
+      ? [...INITIAL_SONG_MODEL_CHAIN]
+      : context === FAST_REPAIR_CONTEXT
+        ? [...FAST_REPAIR_MODEL_CHAIN]
+        : [];
   if (!canonical.length) return [];
   return canonical
     .filter((model) => !requested.includes(model))
@@ -223,6 +235,11 @@ function resolveLatencyModelChain(meta: any, requestParams: any): string[] {
   const context = String(meta?.context || '').trim();
   const sessionId = String(meta?.sessionId || '').trim();
   const requested = normalizeRequestedModelChain(meta, requestParams);
+
+  if (isLanguageMixWholeRewriteContext(context) && requested.length > 1) {
+    const languageMixChain = LANGUAGE_MIX_MODEL_CHAIN.filter((model) => requested.includes(model));
+    if (languageMixChain.length) return languageMixChain;
+  }
 
   if (context === FAST_REPAIR_CONTEXT) {
     const fastBase = requested.length > 1
@@ -274,6 +291,8 @@ function getServerCooldownSkips(
     ));
 }
 
+const SORIDRAW_877_DEDICATED_JAPANESE_AUDIT_SLOT = true;
+
 async function generateContentViaFirebase(params: any): Promise<any> {
   const user = auth.currentUser;
   if (!user?.uid) {
@@ -289,6 +308,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
   }
 
   const sessionId = String(meta.sessionId || '').trim();
+  const serverSessionId = String(meta.serverSessionId || sessionId).trim();
   const context = String(meta.context || 'Gemini 호출').trim();
   const requestedModelChain = normalizeRequestedModelChain(meta, requestParams);
   const preFilteredCooldownSkips = getPreFilteredCooldownSkips(context, requestedModelChain);
@@ -316,7 +336,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
     },
     body: JSON.stringify({
       request: requestParams,
-      sessionId,
+      sessionId: serverSessionId,
       context,
       fallbackAttempt: Math.max(1, Math.round(Number(meta.fallbackAttempt) || 1)),
       modelChain: modelChain.length ? modelChain : undefined,

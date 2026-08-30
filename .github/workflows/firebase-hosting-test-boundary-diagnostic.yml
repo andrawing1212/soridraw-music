@@ -1,0 +1,61 @@
+name: Firebase Hosting Test Boundary Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/firebase-hosting-test-boundary-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  readonly-boundaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check Hosting origins without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Stage 4 re-check after persistent cache 1-3 validation.
+          origins=(
+            'https://soridraw-music.vercel.app'
+            'https://preview.soridraw.com'
+            'https://soridraw-preview.web.app'
+            'https://soridraw-test.web.app'
+            'https://soridraw-test.firebaseapp.com'
+            'https://test.soridraw.com'
+          )
+
+          function_url='https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoApiKeyStatus'
+          explore_url='https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1'
+          failed=0
+
+          for origin in "${origins[@]}"; do
+            f_code="$(curl -sS -o /tmp/f-body -D /tmp/f-head -w '%{http_code}' -X OPTIONS \
+              -H "Origin: $origin" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "$function_url" || true)"
+            f_allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/f-head)"
+
+            e_code="$(curl -sS -o /tmp/e-body -D /tmp/e-head -w '%{http_code}' \
+              -H "Origin: $origin" "$explore_url" || true)"
+            e_allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/e-head)"
+
+            echo "ORIGIN=$origin FUNCTIONS_HTTP=$f_code FUNCTIONS_ALLOW=${f_allow:-none} EXPLORE_HTTP=$e_code EXPLORE_ALLOW=${e_allow:-none}"
+
+            if [ "$origin" = 'https://soridraw-test.web.app' ] || [ "$origin" = 'https://soridraw-test.firebaseapp.com' ] || [ "$origin" = 'https://test.soridraw.com' ]; then
+              case "$f_code" in 200|204) ;; *) failed=1;; esac
+              if [ "$e_code" != '200' ]; then failed=1; fi
+              if [ "$e_allow" != "$origin" ] && [ "$e_allow" != '*' ]; then failed=1; fi
+            fi
+          done
+
+          echo 'READ_ONLY=true'
+          echo 'NO_FIRESTORE_WRITE=true'
+          echo 'NO_FUNCTIONS_DEPLOY=true'
+          echo 'NO_HOSTING_DEPLOY=true'
+          exit "$failed"

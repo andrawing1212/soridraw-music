@@ -1,8 +1,10 @@
+// SORIDRAW_926_SESSION_PROFILE_STRUCTURE_CACHE
+// SORIDRAW_892_CACHE_SYNC_VERSION_FOUNDATION
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { onAuthStateChanged, updateProfile, User } from 'firebase/auth';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc } from '../lib/firestoreMeasured';
 import {
  ArrowLeft,
  CheckCircle2,
@@ -28,6 +30,7 @@ import { AppUserInfo, UserRole } from '../types';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 import SunoApiSettingsPanel from '../components/SunoApiSettingsPanel';
 import { readGeminiAutoModelFallback, writeGeminiAutoModelFallback } from '../services/geminiModelPreferences';
+import { USER_PROFILE_CACHE_EVENT, isUserProfileCacheStorageKey, readUserProfileCache } from '../lib/userProfileCache';
 
 type FeatureState = boolean | 'partial';
 type FeatureKey =
@@ -250,7 +253,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  const navigate = useNavigate();
  const location = useLocation();
  const [user, setUser] = useState<User | null>(auth.currentUser);
- const [profile, setProfile] = useState<AppUserInfo | null>(null);
+ const [profile, setProfile] = useState<AppUserInfo | null>(() => readUserProfileCache(auth.currentUser?.uid));
  const [isApiRegistered, setIsApiRegistered] = useState(() => getLocalApiStatus(auth.currentUser?.uid));
  const [remainingCredits, setRemainingCredits] = useState<number | null>(() => getRemainingCredits(auth.currentUser?.uid));
  const [nicknameDraft, setNicknameDraft] = useState('');
@@ -275,21 +278,35 @@ export default function MyPage({ onLogout }: MyPageProps) {
  }, []);
 
  useEffect(() => {
-
- if (!user) {
+ if (!user?.uid) {
  setProfile(null);
  return;
  }
- const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (snapshot) => {
- const nextProfile = snapshot.exists() ? ({ uid: user.uid, ...snapshot.data() } as AppUserInfo) : null;
- setProfile(nextProfile);
- }, (error) => {
- // 844 — Keep the last profile UI on transient Firestore failures instead of allowing
- // an operational data error to become a page-level failure.
- console.error('MyPage profile listener failed. Keeping the last available profile state.', error);
- });
- return () => unsubscribe();
- }, [user]);
+
+ const uid = user.uid;
+ const applyCachedProfile = () => {
+ const cached = readUserProfileCache(uid);
+ if (cached) setProfile(cached);
+ };
+ applyCachedProfile();
+
+ const handleProfileCache = (event: Event) => {
+ const detail = (event as CustomEvent<{ uid?: string; profile?: AppUserInfo }>).detail;
+ if (!detail || detail.uid !== uid) return;
+ if (detail.profile) setProfile(detail.profile);
+ else applyCachedProfile();
+ };
+ const handleStorage = (event: StorageEvent) => {
+ if (isUserProfileCacheStorageKey(event.key, uid)) applyCachedProfile();
+ };
+
+ window.addEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
+ window.addEventListener('storage', handleStorage);
+ return () => {
+ window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
+ window.removeEventListener('storage', handleStorage);
+ };
+ }, [user?.uid]);
 
  useEffect(() => {
  if (!user?.uid || !profile) return;
@@ -651,7 +668,10 @@ export default function MyPage({ onLogout }: MyPageProps) {
 
  <div className="grid gap-5 lg:grid-cols-2 items-start">
  <div id="music-api-credit-section" className="scroll-mt-24">
- <SunoApiSettingsPanel className="h-full bg-gradient-to-br from-[#24191f]/95 via-[#191824]/95 to-[#161922]/95" />
+ <SunoApiSettingsPanel
+ className="h-full bg-gradient-to-br from-[#24191f]/95 via-[#191824]/95 to-[#161922]/95"
+ googleGeminiApiKeyVersion={profile?.syncVersions?.googleGeminiApiKey ?? null}
+ />
  </div>
 
  <motion.section

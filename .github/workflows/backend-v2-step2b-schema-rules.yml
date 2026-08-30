@@ -1,0 +1,192 @@
+name: SORIDRAW Backend V2 Step 2-B Schema Rules
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/trigger-backend-v2-step2b.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-backend-v2-step2b
+  cancel-in-progress: false
+
+jobs:
+  validate-and-stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Capture immutable baselines
+        run: |
+          set -euo pipefail
+          sha256sum firestore.indexes.json > /tmp/step2b-indexes.sha256
+          git rev-parse HEAD > /tmp/step2b-head.txt
+
+      - name: Apply deterministic Step 2-B patch
+        run: python3 .deploy/apply-backend-v2-step2b.py
+
+      - name: Verify additive-only approved scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -N src/data/v2Schema.ts docs/SORIDRAW_BACKEND_V2_STEP2B_SCHEMA_RULES.md
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              'firestore.rules',
+              'src/data/v2Schema.ts',
+              'docs/SORIDRAW_BACKEND_V2_STEP2B_SCHEMA_RULES.md',
+              'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md',
+          }
+          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
+          if changed != expected:
+              raise SystemExit(f'2-B scope mismatch: changed={sorted(changed)} expected={sorted(expected)}')
+
+          numstat = subprocess.check_output(['git','diff','--numstat','--','firestore.rules'], text=True).strip().split()
+          if len(numstat) < 2 or int(numstat[1]) != 0:
+              raise SystemExit(f'firestore.rules must be additive-only in 2-B; numstat={numstat}')
+
+          protected = [
+              'firestore.indexes.json',
+              'database.rules.json',
+              'src/App.tsx',
+              'src/firebase.js',
+              'functions/src/index.ts',
+              'src/pages/SunoLibraryPage.tsx',
+              'src/services/playlistService.ts',
+              'src/lib/songUtils.ts',
+          ]
+          for path in protected:
+              result = subprocess.run(['git','diff','--quiet','HEAD','--',path])
+              if result.returncode != 0:
+                  raise SystemExit(f'protected file changed in 2-B: {path}')
+          print('Step 2-B approved scope/additive-only check PASS')
+          PY
+          sha256sum --check /tmp/step2b-indexes.sha256
+
+      - name: Verify schema and Rules markers
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          rules = Path('firestore.rules').read_text(encoding='utf-8')
+          schema = Path('src/data/v2Schema.ts').read_text(encoding='utf-8')
+          master = Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md').read_text(encoding='utf-8')
+
+          required_rules = [
+              'SORIDRAW_BACKEND_V2_STEP2B_ADDITIVE_RULES',
+              'match /songs/{songId}',
+              'match /playlists/{playlistId}',
+              'match /items/{itemId}',
+              "settingsId == 'sections'",
+              'hasValidV2SongMetadata',
+              'ownerCreatesWithoutMigrationProvenance',
+              'ownerPreservesMigrationProvenance',
+              'data.schemaVersion == 2',
+              'data.musicNote is bool',
+              'data.recentVisible is bool',
+              'data.v2UpdatedAtMs is int',
+          ]
+          for marker in required_rules:
+              if marker not in rules:
+                  raise SystemExit(f'missing Rules marker: {marker}')
+
+          for legacy_path in [
+              'match /favorites/{favoriteId}',
+              'match /user_recent_songs/{uid}',
+              'match /user_structures/{uid}',
+              'match /user_list_caches/{uid}/bundles/{bundleId}',
+              'match /user_playlists/{uid}/lists/{playlistId}',
+              'match /suno_tracks/{uid}/tracks/{trackId}',
+          ]:
+              if legacy_path not in rules:
+                  raise SystemExit(f'V1 rule missing after additive patch: {legacy_path}')
+
+          for marker in [
+              'V2_SONG_SCHEMA_VERSION = 2',
+              "song: 'users/{uid}/songs/{songId}'",
+              "playlist: 'users/{uid}/playlists/{playlistId}'",
+              "playlistItem: 'users/{uid}/playlists/{playlistId}/items/{itemId}'",
+              "sections: 'users/{uid}/settings/sections'",
+          ]:
+              if marker not in schema:
+                  raise SystemExit(f'missing schema marker: {marker}')
+
+          if 'Step 2-B complete in source' not in master:
+              raise SystemExit('master plan Step 2-B status was not updated')
+          print('Step 2-B schema/Rules contract markers PASS')
+          PY
+
+      - name: Set up Node.js 20 for frontend parity
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Typecheck new schema module only
+        run: npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution Bundler src/data/v2Schema.ts
+
+      - name: Production build without lifecycle patch scripts
+        run: npx vite build
+
+      - name: Set up Node.js 22 for local Firestore Rules compiler
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java 21 for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Compile Rules in local demo emulator only
+        run: |
+          set -euo pipefail
+          npx -y firebase-tools emulators:exec \
+            --only firestore \
+            --project demo-soridraw-v2 \
+            "node -e \"console.log('Step 2-B Firestore emulator Rules compile PASS')\""
+
+      - name: Final no-side-effect safety gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          sha256sum --check /tmp/step2b-indexes.sha256
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              'firestore.rules',
+              'src/data/v2Schema.ts',
+              'docs/SORIDRAW_BACKEND_V2_STEP2B_SCHEMA_RULES.md',
+              'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md',
+          }
+          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
+          if changed != expected:
+              raise SystemExit(f'validation side-effect detected: {sorted(changed)}')
+          print('Step 2-B final safety gate PASS; Firebase deploy count = 0')
+          PY
+
+      - name: Commit validated Step 2-B source to preview
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firestore.rules src/data/v2Schema.ts \
+            docs/SORIDRAW_BACKEND_V2_STEP2B_SCHEMA_RULES.md \
+            docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git commit -m "feat: add Backend V2 Step 2-B schema and rules source"
+          git push origin HEAD:preview

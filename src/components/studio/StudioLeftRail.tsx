@@ -56,6 +56,7 @@ type RailTooltip = {
 const PROFILE_MENU_WIDTH = 200;
 const PROFILE_MENU_GAP = 8;
 
+// SORIDRAW_NAV_PERMISSION_RAIL_953
 export default function StudioLeftRail({
   activeWorkspace,
   onCreate,
@@ -205,16 +206,16 @@ export default function StudioLeftRail({
           onMouseLeave={() => setIsThemeMenuOpen(false)}
         >
           <div className="soridraw-studio-profile-menu" role="menu" aria-label="개인 메뉴">
-            <button type="button" role="menuitem" onClick={() => runMenuAction(onProfile)}>
+            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" onClick={() => runMenuAction(onProfile)}>
               <span>내 프로필</span>
             </button>
-            <button type="button" role="menuitem" onClick={() => runMenuAction(onSettings)}>
+            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" onClick={() => runMenuAction(onSettings)}>
               <span>설정</span>
             </button>
-            <button type="button" role="menuitem" onClick={() => runMenuAction(onPlan)}>
+            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" onClick={() => runMenuAction(onPlan)}>
               <span>요금제</span>
             </button>
-            <button type="button" role="menuitem" onClick={() => runMenuAction(onBilling)}>
+            <button type="button" role="menuitem" data-soridraw-menu-access="my-page" onClick={() => runMenuAction(onBilling)}>
               <span>결제 관리</span>
             </button>
 
@@ -356,6 +357,7 @@ export default function StudioLeftRail({
             </button>
             <button
               type="button"
+              data-soridraw-menu-access="music-note"
               className={`soridraw-studio-rail-item${activeWorkspace === 'music-note' ? ' is-active' : ''}`}
               onClick={onMusicNote}
               aria-current={activeWorkspace === 'music-note' ? 'page' : undefined}
@@ -368,6 +370,7 @@ export default function StudioLeftRail({
             </button>
             <button
               type="button"
+              data-soridraw-menu-access="library"
               className={`soridraw-studio-rail-item${activeWorkspace === 'library' ? ' is-active' : ''}`}
               onClick={onLibrary}
               aria-current={activeWorkspace === 'library' ? 'page' : undefined}
@@ -406,6 +409,7 @@ export default function StudioLeftRail({
           <div className="soridraw-studio-rail-bottom-actions" aria-label="추가 메뉴">
             <button
               type="button"
+              data-soridraw-menu-access="lab"
               className="soridraw-studio-rail-item soridraw-studio-rail-bottom-item"
               onClick={onLab}
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, 'Labs')}

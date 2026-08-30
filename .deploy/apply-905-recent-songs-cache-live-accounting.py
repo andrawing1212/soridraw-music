@@ -13,19 +13,61 @@ def replace_once(source: str, before: str, after: str, label: str) -> str:
 
 def replace_all(source: str, before: str, after: str, label: str) -> str:
     count = source.count(before)
-    if count < 1:
-        raise SystemExit(f'{label} anchor mismatch: {count}')
-    return source.replace(before, after)
+    if count >= 1:
+        return source.replace(before, after)
+
+    diag = "markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);"
+    # Keep this historical accounting patch compatible with the Backend V2
+    # mutation boundary. 2-A4c legitimately adds mirrorTargets metadata to the
+    # boundary context, but the authoritative V1 setDoc expression and its
+    # one-write accounting remain exactly the same.
+    boundary_pairs = {
+        'recent songs clear write accounting': [
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: userRef.current.uid, affectedCount: 0 }, setDoc(ref, { songs: [] }, { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: userRef.current.uid, affectedCount: 0 }, setDoc(ref, { songs: [] }, { merge: true }));\n          " + diag),
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: 0 }, setDoc(ref, { songs: [] }, { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: 0 }, setDoc(ref, { songs: [] }, { merge: true }));\n          " + diag),
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: userRef.current.uid, affectedCount: 0, mirrorTargets: buildRecentMirrorTargets(historyRef.current, 'recent-hide') }, setDoc(ref, { songs: [] }, { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: userRef.current.uid, affectedCount: 0, mirrorTargets: buildRecentMirrorTargets(historyRef.current, 'recent-hide') }, setDoc(ref, { songs: [] }, { merge: true }));\n          " + diag),
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: 0, mirrorTargets: buildRecentMirrorTargets(history, 'recent-hide') }, setDoc(ref, { songs: [] }, { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: 0, mirrorTargets: buildRecentMirrorTargets(history, 'recent-hide') }, setDoc(ref, { songs: [] }, { merge: true }));\n          " + diag),
+        ],
+        'recent songs delete write accounting': [
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: newHistory }), { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: newHistory }), { merge: true }));\n        " + diag),
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([history[index]], 'recent-hide') }, setDoc(ref, sanitizeForFirestore({ songs: newHistory }), { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([history[index]], 'recent-hide') }, setDoc(ref, sanitizeForFirestore({ songs: newHistory }), { merge: true }));\n        " + diag),
+        ],
+        'recent songs generation write accounting': [
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: newSongs.length }, setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: newSongs.length }, setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true }));\n      " + diag),
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: canonicalNewSongs.length, mirrorTargets }, setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: canonicalNewSongs.length, mirrorTargets }, setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true }));\n      " + diag),
+        ],
+        'recent songs edit write accounting': [
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'regenerate', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'regenerate', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));\n      " + diag),
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));\n      " + diag),
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'regenerate', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'regenerate', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));\n      " + diag),
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));\n      " + diag),
+        ],
+        'recent songs async language write accounting': [
+            ("runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true })).catch((error) => {", "runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true }))\n            .then(() => " + diag.replace(';','') + ")\n            .catch((error) => {"),
+            ("runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true })).catch((error) => {", "runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true }))\n            .then(() => " + diag.replace(';','') + ")\n            .catch((error) => {"),
+        ],
+        'recent songs async studio edit write accounting': [
+            ("runV1MutationBoundary({ domain: 'recent', operation: 'pre-favorite-edit', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true })).catch((error) => {", "runV1MutationBoundary({ domain: 'recent', operation: 'pre-favorite-edit', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }))\n          .then(() => " + diag.replace(';','') + ")\n          .catch((error) => {"),
+            ("runV1MutationBoundary({ domain: 'recent', operation: 'pre-favorite-edit', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextHistory[currentIndex]], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true })).catch((error) => {", "runV1MutationBoundary({ domain: 'recent', operation: 'pre-favorite-edit', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextHistory[currentIndex]], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }))\n          .then(() => " + diag.replace(';','') + ")\n          .catch((error) => {"),
+        ],
+    }
+    pairs = boundary_pairs.get(label, [])
+    matched = 0
+    for old, new in pairs:
+        n = source.count(old)
+        if n:
+            source = source.replace(old, new)
+            matched += n
+    if matched < 1:
+        raise SystemExit(f'{label} anchor mismatch: raw={count} boundary={matched}')
+    print(f'SORIDRAW 905 {label} adapted to V1 mutation boundary: {matched}')
+    return source
 
 
 app_path = Path('src/App.tsx')
 app = app_path.read_text(encoding='utf-8')
 
 if MARKER not in app:
-    # Keep the recent-songs cache path aligned with Music Note 903/904:
-    # local cache first, then one explicit server document read. A persistent
-    # listener is unnecessary here and causes a second read callback after the
-    # same device writes the recent-songs document.
     listener_pattern = re.compile(
         r'''    const ref = doc\(db, "user_recent_songs", user\.uid\);\n'''
         r'''    const unsubscribe = onSnapshot\(\n'''
@@ -62,7 +104,6 @@ if MARKER not in app:
         1,
     )
 
-    # The save merge performs one explicit document read before its write.
     app = replace_once(
         app,
         '''      const snap = await getDoc(ref);\n      const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];''',
@@ -70,7 +111,6 @@ if MARKER not in app:
         'recent songs merge read accounting',
     )
 
-    # Every successful user_recent_songs document write is one Firestore write.
     app = replace_all(
         app,
         '''await setDoc(ref, { songs: [] }, { merge: true });''',

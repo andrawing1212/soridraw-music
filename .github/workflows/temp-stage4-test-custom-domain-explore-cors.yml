@@ -1,0 +1,108 @@
+name: TEMP Stage4 Test Custom Domain Explore CORS
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-stage4-test-custom-domain-explore-cors.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temp-stage4-test-custom-domain-explore-cors
+  cancel-in-progress: false
+
+jobs:
+  exact-live-worker-cors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CUSTOM_TEST_ORIGIN: https://test.soridraw.com
+    steps:
+      - name: Checkout preview tooling
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare exact live Worker and patch only custom TEST origin
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN secret is unavailable'; exit 2; }
+          npm install --no-audit --no-fund
+          npm run cf:prepare
+          cp .remote-worker/worker.js "$RUNNER_TEMP/worker.before.js"
+          for origin in \
+            'https://soridraw-music.vercel.app' \
+            'https://preview.soridraw.com' \
+            'https://soridraw-test.web.app' \
+            'https://soridraw-test.firebaseapp.com'; do
+            grep -Fq "$origin" .remote-worker/worker.js
+          done
+          python3 - "$RUNNER_TEMP/worker.before.js" .remote-worker/worker.js "$CUSTOM_TEST_ORIGIN" <<'PY'
+          from pathlib import Path
+          import sys
+          before=Path(sys.argv[1]).read_text(encoding='utf-8')
+          target=Path(sys.argv[2])
+          wanted=sys.argv[3]
+          if f'"{wanted}"' in before:
+              target.write_text(before, encoding='utf-8')
+              print('[Explore CORS] custom TEST origin already present; no source patch needed')
+              raise SystemExit(0)
+          anchor='  "https://soridraw-music.vercel.app",\n'
+          if anchor not in before:
+              raise SystemExit('Expected exact-live Vercel CORS anchor is missing')
+          addition=f'  "{wanted}",\n'
+          expected=before.replace(anchor, anchor+addition, 1)
+          if len(expected)-len(before) != len(addition):
+              raise SystemExit('Unexpected Worker source delta')
+          target.write_text(expected, encoding='utf-8')
+          if target.read_text(encoding='utf-8') != expected:
+              raise SystemExit('Worker exact patch mismatch')
+          print('[Explore CORS] added only', wanted)
+          PY
+          grep -Fq "$CUSTOM_TEST_ORIGIN" .remote-worker/worker.js
+
+      - name: Deploy only prepared Explore Worker
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run cf:deploy
+          echo '[Explore CORS] Worker deploy: PASS'
+
+      - name: Re-read live Worker and verify custom TEST CORS
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .remote-worker
+          npm run cf:prepare
+          for origin in \
+            'https://soridraw-music.vercel.app' \
+            'https://preview.soridraw.com' \
+            'https://soridraw-test.web.app' \
+            'https://soridraw-test.firebaseapp.com' \
+            "$CUSTOM_TEST_ORIGIN"; do
+            grep -Fq "$origin" .remote-worker/worker.js
+          done
+          code="$(curl -sS -o /tmp/body -D /tmp/head -w '%{http_code}' \
+            -H "Origin: $CUSTOM_TEST_ORIGIN" \
+            'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1' || true)"
+          allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/head)"
+          echo "[Explore CORS] custom TEST http=$code allow=${allow:-none}"
+          test "$code" = '200'
+          test "$allow" = "$CUSTOM_TEST_ORIGIN"
+          echo 'EXPLORE_CUSTOM_TEST_CORS_COMPLETE=true'
+          echo 'NO_D1_MIGRATION=true'
+          echo 'NO_D1_WRITE=true'
+          echo 'NO_R2_DATA_WRITE=true'
+          echo 'NO_FIREBASE_PRODUCTION_HOSTING_DEPLOY=true'

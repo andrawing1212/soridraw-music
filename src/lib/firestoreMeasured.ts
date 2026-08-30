@@ -7,57 +7,99 @@ import {
 
 export * from 'firebase/firestore';
 
-const countSnapshotRead = (snapshot: any) => {
+const SORIDRAW_927_MONOTONIC_SECTION_VERSION_AND_OP_TRACE = true;
+const SORIDRAW_925_CACHE_LIVE_LARGE_SOURCE_TRACE = true;
+
+const normalizeSourcePath = (value: unknown): string => {
+  const raw = String(value || '').trim().replace(/^\/+|\/+$/g, '');
+  if (!raw) return 'unknown';
+  const segments = raw.split('/').filter(Boolean);
+  if (segments[0] === 'suno_tracks' && segments.length >= 3) return 'suno_tracks/*/tracks';
+  if (segments[0] === 'user_list_caches') return 'user_list_caches';
+  return segments[0] || 'unknown';
+};
+
+const getSourceLabel = (target: any): string => {
+  try {
+    const directPath = String(target?.path || '').trim();
+    if (directPath) return normalizeSourcePath(directPath);
+
+    const internalQuery = target?._query;
+    const group = String(internalQuery?.collectionGroup || '').trim();
+    if (group) return `group:${group}`;
+
+    const internalPath = internalQuery?.path;
+    if (Array.isArray(internalPath?.segments) && internalPath.segments.length > 0) {
+      return normalizeSourcePath(internalPath.segments.join('/'));
+    }
+    if (typeof internalPath?.canonicalString === 'function') {
+      const canonical = internalPath.canonicalString();
+      if (canonical) return normalizeSourcePath(canonical);
+    }
+    const keyPath = String(target?._key?.path?.canonicalString?.() || '').trim();
+    if (keyPath) return normalizeSourcePath(keyPath);
+  } catch {}
+  return 'unknown';
+};
+
+const countSnapshotRead = (snapshot: any, source: string) => {
   if (snapshot?.metadata?.fromCache === true) {
     markFirestoreActualCacheHit(1);
     return;
   }
   if (Array.isArray(snapshot?.docs)) {
-    markFirestoreActualRead(Math.max(1, Number(snapshot?.size ?? snapshot.docs.length ?? 0)));
+    markFirestoreActualRead(Math.max(1, Number(snapshot?.size ?? snapshot.docs.length ?? 0)), source);
     return;
   }
-  markFirestoreActualRead(1);
+  markFirestoreActualRead(1, source);
 };
 
 export const getDoc = (async (...args: any[]) => {
+  const source = `${getSourceLabel(args[0])}:getDoc`;
   const snapshot = await (Firestore.getDoc as any)(...args);
-  countSnapshotRead(snapshot);
+  countSnapshotRead(snapshot, source);
   return snapshot;
 }) as typeof Firestore.getDoc;
 
 export const getDocFromServer = (async (...args: any[]) => {
+  const source = `${getSourceLabel(args[0])}:getDocFromServer`;
   const snapshot = await (Firestore.getDocFromServer as any)(...args);
-  markFirestoreActualRead(1);
+  markFirestoreActualRead(1, source);
   return snapshot;
 }) as typeof Firestore.getDocFromServer;
 
 export const getDocs = (async (...args: any[]) => {
+  const source = `${getSourceLabel(args[0])}:getDocs`;
   const snapshot = await (Firestore.getDocs as any)(...args);
-  countSnapshotRead(snapshot);
+  countSnapshotRead(snapshot, source);
   return snapshot;
 }) as typeof Firestore.getDocs;
 
 export const setDoc = (async (...args: any[]) => {
+  const source = getSourceLabel(args[0]);
   const result = await (Firestore.setDoc as any)(...args);
-  markFirestoreActualWrite(1);
+  markFirestoreActualWrite(1, `${source}:write`);
   return result;
 }) as typeof Firestore.setDoc;
 
 export const updateDoc = (async (...args: any[]) => {
+  const source = getSourceLabel(args[0]);
   const result = await (Firestore.updateDoc as any)(...args);
-  markFirestoreActualWrite(1);
+  markFirestoreActualWrite(1, `${source}:write`);
   return result;
 }) as typeof Firestore.updateDoc;
 
 export const deleteDoc = (async (...args: any[]) => {
+  const source = getSourceLabel(args[0]);
   const result = await (Firestore.deleteDoc as any)(...args);
-  markFirestoreActualWrite(1);
+  markFirestoreActualWrite(1, `${source}:write`);
   return result;
 }) as typeof Firestore.deleteDoc;
 
 export const addDoc = (async (...args: any[]) => {
+  const source = getSourceLabel(args[0]);
   const result = await (Firestore.addDoc as any)(...args);
-  markFirestoreActualWrite(1);
+  markFirestoreActualWrite(1, `${source}:write`);
   return result;
 }) as typeof Firestore.addDoc;
 
@@ -72,7 +114,9 @@ const snapshotFingerprint = (snapshot: any): string => {
   }
 };
 
-const recordListenerSnapshot = (snapshot: any, state: { seenServer: boolean; fingerprint: string }) => {
+type ListenerState = { seenServer: boolean; fingerprint: string; source: string };
+
+const recordListenerSnapshot = (snapshot: any, state: ListenerState) => {
   if (snapshot?.metadata?.fromCache === true) {
     markFirestoreActualCacheHit(1);
     return;
@@ -82,7 +126,7 @@ const recordListenerSnapshot = (snapshot: any, state: { seenServer: boolean; fin
     if (!state.seenServer) {
       state.seenServer = true;
       state.fingerprint = snapshotFingerprint(snapshot);
-      markFirestoreActualRead(Math.max(1, Number(snapshot?.size ?? snapshot.docs.length ?? 0)));
+      markFirestoreActualRead(Math.max(1, Number(snapshot?.size ?? snapshot.docs.length ?? 0)), state.source);
       return;
     }
     let changed = 0;
@@ -92,15 +136,17 @@ const recordListenerSnapshot = (snapshot: any, state: { seenServer: boolean; fin
       try { changed = snapshot.docChanges?.()?.length || 0; } catch {}
     }
     const nextFingerprint = snapshotFingerprint(snapshot);
-    if (changed > 0) markFirestoreActualRead(changed);
-    else if (nextFingerprint !== state.fingerprint) markFirestoreActualRead(Math.max(1, Number(snapshot?.size ?? snapshot.docs.length ?? 0)));
+    if (changed > 0) markFirestoreActualRead(changed, state.source);
+    else if (nextFingerprint !== state.fingerprint) {
+      markFirestoreActualRead(Math.max(1, Number(snapshot?.size ?? snapshot.docs.length ?? 0)), state.source);
+    }
     state.fingerprint = nextFingerprint;
     return;
   }
 
   const nextFingerprint = snapshotFingerprint(snapshot);
   if (!state.seenServer || nextFingerprint !== state.fingerprint) {
-    markFirestoreActualRead(1);
+    markFirestoreActualRead(1, state.source);
   }
   state.seenServer = true;
   state.fingerprint = nextFingerprint;
@@ -108,7 +154,11 @@ const recordListenerSnapshot = (snapshot: any, state: { seenServer: boolean; fin
 
 export const onSnapshot = ((...rawArgs: any[]) => {
   const args = [...rawArgs];
-  const state = { seenServer: false, fingerprint: '' };
+  const state: ListenerState = {
+    seenServer: false,
+    fingerprint: '',
+    source: `${getSourceLabel(args[0])}:onSnapshot`,
+  };
 
   for (let index = 1; index < args.length; index += 1) {
     const candidate = args[index];
@@ -138,14 +188,18 @@ export const onSnapshot = ((...rawArgs: any[]) => {
 
 export const writeBatch = ((...args: any[]) => {
   const batch: any = (Firestore.writeBatch as any)(...args);
-  let operations = 0;
+  const sourceWrites: Record<string, number> = {};
+  const rememberWrite = (target: any) => {
+    const source = `${getSourceLabel(target)}:batch`;
+    sourceWrites[source] = Number(sourceWrites[source] || 0) + 1;
+  };
   const measured: any = {};
-  measured.set = (...setArgs: any[]) => { operations += 1; batch.set(...setArgs); return measured; };
-  measured.update = (...updateArgs: any[]) => { operations += 1; batch.update(...updateArgs); return measured; };
-  measured.delete = (...deleteArgs: any[]) => { operations += 1; batch.delete(...deleteArgs); return measured; };
+  measured.set = (...setArgs: any[]) => { rememberWrite(setArgs[0]); batch.set(...setArgs); return measured; };
+  measured.update = (...updateArgs: any[]) => { rememberWrite(updateArgs[0]); batch.update(...updateArgs); return measured; };
+  measured.delete = (...deleteArgs: any[]) => { rememberWrite(deleteArgs[0]); batch.delete(...deleteArgs); return measured; };
   measured.commit = async () => {
     const result = await batch.commit();
-    if (operations > 0) markFirestoreActualWrite(operations);
+    Object.entries(sourceWrites).forEach(([source, count]) => markFirestoreActualWrite(count, source));
     return result;
   };
   return measured;
@@ -153,18 +207,22 @@ export const writeBatch = ((...args: any[]) => {
 
 export const runTransaction = (async (...rawArgs: any[]) => {
   const [db, updateFunction, options] = rawArgs;
-  let committedWrites = 0;
+  let committedWrites: Record<string, number> = {};
   const measuredUpdate = async (transaction: any) => {
-    let attemptWrites = 0;
+    const attemptWrites: Record<string, number> = {};
+    const rememberWrite = (target: any) => {
+      const source = `${getSourceLabel(target)}:transactionWrite`;
+      attemptWrites[source] = Number(attemptWrites[source] || 0) + 1;
+    };
     const measured: any = {};
     measured.get = async (...getArgs: any[]) => {
       const snapshot = await transaction.get(...getArgs);
-      markFirestoreActualRead(1);
+      markFirestoreActualRead(1, `${getSourceLabel(getArgs[0])}:transactionGet`);
       return snapshot;
     };
-    measured.set = (...setArgs: any[]) => { attemptWrites += 1; transaction.set(...setArgs); return measured; };
-    measured.update = (...updateArgs: any[]) => { attemptWrites += 1; transaction.update(...updateArgs); return measured; };
-    measured.delete = (...deleteArgs: any[]) => { attemptWrites += 1; transaction.delete(...deleteArgs); return measured; };
+    measured.set = (...setArgs: any[]) => { rememberWrite(setArgs[0]); transaction.set(...setArgs); return measured; };
+    measured.update = (...updateArgs: any[]) => { rememberWrite(updateArgs[0]); transaction.update(...updateArgs); return measured; };
+    measured.delete = (...deleteArgs: any[]) => { rememberWrite(deleteArgs[0]); transaction.delete(...deleteArgs); return measured; };
     const result = await updateFunction(measured);
     committedWrites = attemptWrites;
     return result;
@@ -172,6 +230,6 @@ export const runTransaction = (async (...rawArgs: any[]) => {
   const result = options === undefined
     ? await (Firestore.runTransaction as any)(db, measuredUpdate)
     : await (Firestore.runTransaction as any)(db, measuredUpdate, options);
-  if (committedWrites > 0) markFirestoreActualWrite(committedWrites);
+  Object.entries(committedWrites).forEach(([source, count]) => markFirestoreActualWrite(count, source));
   return result;
 }) as typeof Firestore.runTransaction;

@@ -64,6 +64,7 @@ import {
 } from "./generation/v1/rules";
 import {
   finishGeminiAuditSession,
+  mergeGeminiAuditSessionIntoParent,
   recordGeminiAuditCall,
   startGeminiAuditSession,
 } from "./geminiAuditLog";
@@ -217,6 +218,8 @@ type GeminiGenerationRequestBudget = {
   maxCorrectionRequests: number;
   usedRequests: number;
   usedCorrectionRequests: number;
+  reservedFinalJapaneseAuditRequests: number;
+  usedDedicatedFinalJapaneseAuditOperations: number;
 };
 
 const GEMINI_GENERATION_MAX_REQUESTS = 5;
@@ -240,12 +243,23 @@ function beginGeminiGenerationRequestBudget(sessionId: string): void {
     maxCorrectionRequests: GEMINI_GENERATION_MAX_CORRECTION_REQUESTS,
     usedRequests: 0,
     usedCorrectionRequests: 0,
+    reservedFinalJapaneseAuditRequests: 0,
+    usedDedicatedFinalJapaneseAuditOperations: 0,
   });
 }
 
 function endGeminiGenerationRequestBudget(sessionId: string): void {
   if (!sessionId) return;
   geminiGenerationRequestBudgets.delete(sessionId);
+}
+
+function reserveFinalJapaneseAuditRequest(sessionId: string): void {
+  const budget = geminiGenerationRequestBudgets.get(String(sessionId || '').trim());
+  if (!budget) return;
+  budget.reservedFinalJapaneseAuditRequests = Math.max(
+    budget.reservedFinalJapaneseAuditRequests || 0,
+    1,
+  );
 }
 
 function isInitialSongGenerationContext(context: string): boolean {
@@ -261,7 +275,8 @@ function isFinalHardBanSafetyContext(context: string): boolean {
   return clean === 'rewriteLyricHardBanCards'
     || clean === 'rewriteLyricHardBanLines'
     || clean === 'rewriteLyricHardBanLinesSecondPass'
-    || clean === 'repairSelectedLanguageCard';
+    || clean === 'repairSelectedLanguageCard'
+    || clean === '일본어 네이티브 의미 검수';
 }
 
 function consumeGeminiGenerationRequestBudget(
@@ -277,6 +292,22 @@ function consumeGeminiGenerationRequestBudget(
   // the one allowed structure/density quality correction already ran.
   const isCorrection = !isInitialSongGenerationContext(context) && !isFinalHardBanSafetyContext(context);
   const isNewCorrectionOperation = isCorrection && fallbackAttempt <= 1;
+  const reservedForFinalJapaneseAudit = Math.max(0, budget.reservedFinalJapaneseAuditRequests || 0);
+  const isFinalJapaneseAudit = String(context || '').trim() === '일본어 네이티브 의미 검수';
+  const effectiveMaxForOtherCalls = Math.max(0, budget.maxRequests - reservedForFinalJapaneseAudit);
+  if (isFinalJapaneseAudit) {
+    if ((budget.usedDedicatedFinalJapaneseAuditOperations || 0) >= 1) {
+      throw new GeminiRequestBudgetExceededError('최종 일본어 네이티브 의미 검수 전용 호출은 곡당 1회만 허용됩니다.');
+    }
+    budget.usedDedicatedFinalJapaneseAuditOperations += 1;
+    budget.usedRequests += 1;
+    return;
+  }
+  if (reservedForFinalJapaneseAudit > 0 && budget.usedRequests >= effectiveMaxForOtherCalls) {
+    throw new GeminiRequestBudgetExceededError(
+      `최종 일본어 네이티브 의미 검수 1회를 위해 남은 호출을 예약하여 ${context} 호출을 생략했습니다.`,
+    );
+  }
   if (budget.usedRequests >= budget.maxRequests) {
     throw new GeminiRequestBudgetExceededError(
       `곡 생성 Gemini 호출 상한(${budget.maxRequests}회)에 도달해 ${context} 호출을 생략했습니다.`,
@@ -360,7 +391,7 @@ function recordGeminiServerAttempts(
   let cursorMs = startedAtMs;
   attempts.forEach((attempt, index) => {
     const physicalAttempt = firstFallbackAttempt + index;
-    if (index > 0) {
+    if (index > 0 && String(context || '').trim() !== '일본어 네이티브 의미 검수') {
       try {
         consumeGeminiGenerationRequestBudget(sessionId, context, physicalAttempt);
       } catch (budgetError) {
@@ -408,6 +439,10 @@ function getAuditedAI(
           : undefined;
         const context = meta?.context || 'Gemini 호출';
         consumeGeminiGenerationRequestBudget(sessionId, context, meta?.fallbackAttempt || 1);
+        const isDedicatedFinalJapaneseAudit = String(context || '').trim() === '일본어 네이티브 의미 검수';
+        const serverSessionId = isDedicatedFinalJapaneseAudit
+          ? `${sessionId.slice(0, 148)}:ja-final`
+          : sessionId;
         const startedAtMs = Date.now();
         const model = String(params?.model || 'unknown');
         try {
@@ -416,6 +451,7 @@ function getAuditedAI(
                 ...params,
                 __soridrawMeta: {
                   sessionId,
+                  serverSessionId,
                   context,
                   fallbackAttempt: meta?.fallbackAttempt || 1,
                   modelChain: meta?.modelChain,
@@ -33416,6 +33452,8 @@ async function callV1LockedLanguageMixRewrite(args: {
   requestedRatio: number;
   sectionNames: string[];
   parallelPair?: boolean;
+  singleCardSingleTargetGuard?: boolean;
+  singleCardTwoTargetGuard?: boolean;
   candidateExpansion?: {
     actualRatio: number;
     lowerBound: number;
@@ -33468,15 +33506,26 @@ async function callV1LockedLanguageMixRewrite(args: {
     vocal: args.params.vocal,
   });
   const twoLanguageSelection = isV1ExactlyTwoLanguageSelection(args.params);
+  const singleCardSingleTargetGuard = Boolean(args.singleCardSingleTargetGuard && args.targetLanguages.length === 1);
+  const singleCardTwoTargetGuard = Boolean(args.singleCardTwoTargetGuard && args.targetLanguages.length === 2);
+  const compactJsonGuard = twoLanguageSelection || singleCardSingleTargetGuard || singleCardTwoTargetGuard;
   const candidateExpansionMode = Boolean(args.candidateExpansion);
-  const twoLanguageAdaptiveCandidateFloor = twoLanguageSelection && blockPlan.mode === 'adaptive-arrangement'
+  const twoLanguageAdaptiveCandidateFloor = (twoLanguageSelection || singleCardSingleTargetGuard || singleCardTwoTargetGuard) && blockPlan.mode === 'adaptive-arrangement'
     ? Math.min(
         blockPlan.candidateLineCount || document.sungLines.length,
         Math.max(8, Math.ceil(blockPlan.targetLineCount * 0.75)),
       )
     : 0;
   const multiTargetCardMode = args.targetLanguages.length > 1;
-  const responseMode = twoLanguageSelection
+  const responseMode = singleCardTwoTargetGuard
+    ? candidateExpansionMode
+      ? 'compact-schema-json-single-card-two-target-deficit-completion'
+      : 'compact-schema-json-single-card-two-target-guard'
+    : singleCardSingleTargetGuard
+    ? candidateExpansionMode
+      ? 'compact-schema-json-single-card-single-target-deficit-completion'
+      : 'compact-schema-json-single-card-single-target-guard'
+    : twoLanguageSelection
     ? candidateExpansionMode
       ? multiTargetCardMode
         ? 'compact-schema-json-two-card-multi-target-deficit-completion'
@@ -33551,7 +33600,7 @@ async function callV1LockedLanguageMixRewrite(args: {
   const twoLanguageCleanupContract = twoLanguageSelection
     ? `- TWO-LANGUAGE SOURCE CLEANUP: Every response item must include baseText. If sourceContainsTarget=true, baseText must be a natural meaning-preserving rewrite in the card's base language only. If sourceContainsTarget=false, baseText must exactly equal sourceText. baseText is the clean base-language foundation; finalText is the optional language-mix candidate layered on top. Never copy target-language residue into baseText.`
     : '';
-  const twoLanguageCandidatePoolContract = twoLanguageSelection && blockPlan.mode === 'adaptive-arrangement'
+  const twoLanguageCandidatePoolContract = (twoLanguageSelection || singleCardSingleTargetGuard || singleCardTwoTargetGuard) && blockPlan.mode === 'adaptive-arrangement'
     ? `- TWO-LANGUAGE CANDIDATE POOL CONTRACT: The application needs a broad pool of at least ${twoLanguageAdaptiveCandidateFloor} suitable candidate lines so it can choose a musical subset inside the ${lowerBound}-${upperBound}% whole-song band. This is a candidate-pool requirement, not a command to apply every line. Spread strong alternatives across the available early, middle, and late timeline zones, and include non-hook story or transition lines instead of concentrating the pool in repeated choruses.
 - Only the ids explicitly linked by mirrorPolicy=same-target-anchor may repeat one exact hook anchor. Unlinked Chorus 2 and Final Chorus lines must be free to preserve, expand, reduce, reverse, or reframe the earlier language behavior.
 - The suitable pool must not be dominated by base-language clauses followed by literal translated tails. Include a musically related mix of complete target-language lines, target-first or internal switches, compact anchors, and preserved base-language lines. Keep meaning connected to the surrounding scene.`
@@ -33569,7 +33618,7 @@ async function callV1LockedLanguageMixRewrite(args: {
 ${args.candidateExpansion.targetLanguageDeficits?.length ? `- TARGET-LANGUAGE COVERAGE DEFICITS: ${JSON.stringify(args.candidateExpansion.targetLanguageDeficits)}. Create high-quality candidates specifically in every missing or underrepresented language until each minimumRatio is reachable. Do not spend this retry only on a language that already passed its minimum.` : ''}
 - Do not merely append literal translated tails. Use complete target-language lines, target-first lines, or internally switched lines with a clear musical reason. Prioritize sections outside ${JSON.stringify(args.candidateExpansion.selectedSections)} and timeline zones not yet represented in ${JSON.stringify(args.candidateExpansion.selectedTimelineZones)}, but occupancy completion is the primary technical goal.`
     : '';
-  const responseShapeExample = twoLanguageSelection
+  const responseShapeExample = compactJsonGuard
     ? '{"lines":[{"id":"L1","baseText":"...","finalText":"...","suitable":true,"semanticRole":"hook-core","semanticPriority":90}]}'
     : '{"lines":[{"id":"L1","finalText":"...","suitable":true,"semanticRole":"hook-core","semanticPriority":90,"mixForm":"short-phrase","switchPosition":"target-first","arrangementPriority":92,"motifFamily":"chorus-memory","meaningConnection":"...","phoneticConnection":"..."}]}';
   const systemInstruction = `You are SORIDRAW's locked whole-lyric language-mix writer.
@@ -33579,7 +33628,7 @@ ${args.candidateExpansion.targetLanguageDeficits?.length ? `- TARGET-LANGUAGE CO
 - Return exactly one response item for every input id, in the same order. Never omit, merge, split, or invent an id.
 - finalText must be one complete singable lyric line. Never include square brackets, section names, production directions, explanations, or line breaks inside finalText.
 - The application supplies candidate opportunities and any pre-existing off-plan target-language lines that must be restored to the base language. In adaptive-arrangement mode, candidate opportunities are deliberately broader than the final applied set.
-${twoLanguageSelection && blockPlan.mode === 'adaptive-arrangement'
+${(twoLanguageSelection || singleCardSingleTargetGuard || singleCardTwoTargetGuard) && blockPlan.mode === 'adaptive-arrangement'
   ? `- In adaptive-arrangement mode, targetLineCount is a rough final-selection hint, while candidateCoverageFloor=${twoLanguageAdaptiveCandidateFloor} is the minimum breadth required for the candidate pool. Supply enough genuinely usable alternatives for the application to choose from; do not confuse candidate breadth with final placement.`
   : '- In adaptive-arrangement mode, targetLineCount is only a rough expected-selection hint for the whole song, never a quota. Do not mark every opportunity suitable merely to approach that number; preserve any line whose change is not artistically necessary.'}
 - Follow rewriteAction exactly. For mix-target-language, create one required language-mix line. For offer-mix-candidate, decide whether the line strengthens the whole-song arc: create a candidate with suitable=true, or preserve sourceText exactly with suitable=false. For restore-base-language, preserve the line's meaning and role but rewrite it naturally in the base language only, with no target-language residue.
@@ -33600,8 +33649,8 @@ ${getV1LanguageMixStrategyInstruction(args.requestedRatio)}
 - Choose target-language moments because they carry a key story word, narrative turn, hook meaning, emotional confession, or final payoff. Do not choose random objects merely because they are easy to translate.
 - The plan covers the candidate positions and timeline. Keep meaning continuous with the previous and next lyric lines.
 - In adaptive-arrangement mode, offer-mix-candidate may be a mixed line or a complete target-language line. The target language may enter first, appear internally, follow the base language, or carry the full line. Choose the form from genre grammar, section function, story development, vocal flow, and motif unity.
-${twoLanguageSelection
-  ? '- In compact two-language output mode, decide mix form, switch position, arrangement priority, and motif continuity internally, but return only the compact response fields. The application infers audible mix form and switch direction from finalText and uses semanticPriority for selection.'
+${compactJsonGuard
+  ? '- In compact guarded output mode, decide mix form, switch position, arrangement priority, and motif continuity internally, but return only the compact response fields. The application infers audible mix form and switch direction from finalText and uses semanticPriority for selection.'
   : '- In adaptive-arrangement mode, mixForm must be one of keyword-anchor, short-phrase, extended-phrase, complete-target-line. switchPosition must be one of base-first, target-first, internal-switch, full-line. arrangementPriority must express how strongly this candidate belongs in the inferred whole-song arc. motifFamily should name the audible relationship shared by related sections, or be empty when the line stands alone.'}
 - In within-line-rhyme mode, every rewriteAction=mix-target-language finalText must visibly contain both languages and function as one K-pop lyric line. Textbook grammar, full-sentence syntax, and literal translation are not required. Fully target-language lines are invalid. restore-base-language lines must contain only the base language.
 - In within-line-rhyme mode, obey each mix-target-language line's mixForm. keyword-anchor means one meaningful target-language word, or at most two inseparable words, chosen for core meaning or audible rhyme. short-phrase means one compact target-language phrase or mini-sentence. extended-phrase is rare and allowed only when the plan explicitly requests it.
@@ -33619,7 +33668,7 @@ ${twoLanguageSelection
 - Return JSON only, with no markdown fence and no explanation.
 - Shape: ${responseShapeExample}
 - For rewriteAction=mix-target-language, suitable=true only when finalText satisfies rewriteMode, mixForm, targetShareGuide, targetTokenGuide, and targetUnitGuide. For 5% short-phrase lines, self-check both the target-language word count and estimated spoken-syllable count before setting suitable=true.
-- For rewriteAction=offer-mix-candidate, suitable=true only when the line strengthens the Language Arrangement Arc and contains valid target-language material. There is no per-line targetShare quota in adaptive mode. suitable=false must preserve sourceText exactly.${twoLanguageSelection ? '' : ' meaningConnection and phoneticConnection are optional diagnostics only; they do not make a weak lyric acceptable.'}
+- For rewriteAction=offer-mix-candidate, suitable=true only when the line strengthens the Language Arrangement Arc and contains valid target-language material. There is no per-line targetShare quota in adaptive mode. suitable=false must preserve sourceText exactly.${compactJsonGuard ? '' : ' meaningConnection and phoneticConnection are optional diagnostics only; they do not make a weak lyric acceptable.'}
 - For rewriteAction=restore-base-language, suitable=true only when finalText preserves the original meaning in the base language and contains no target-language material.
 - For rewriteRequired=false, rewriteAction=preserve, or an unused offer-mix-candidate, suitable=false and finalText must exactly match sourceText.
 - semanticRole must be one of hook-core, story-anchor, narrative-turn, emotional-payoff, connector.
@@ -33652,7 +33701,7 @@ ${twoLanguageSelection
   // Gemini generateContent는 복잡한 responseSchema를 요청 단계에서 400 INVALID_ARGUMENT로
   // 거부할 수 있으므로, 출력에 꼭 필요한 6개 필드만 구조화하고 개수/추가 필드 검사는
   // 기존 로컬 검증기가 담당한다. 한 언어 및 다른 생성 경로는 변경하지 않는다.
-  const twoLanguageResponseSchema = twoLanguageSelection
+  const twoLanguageResponseSchema = compactJsonGuard
     ? {
         type: Type.OBJECT,
         properties: {
@@ -33687,7 +33736,7 @@ ${twoLanguageSelection
     contents: requestText,
     config: {
       systemInstruction,
-      ...(twoLanguageSelection
+      ...(compactJsonGuard
         ? {
             responseMimeType: 'application/json',
             ...(useSchema && twoLanguageResponseSchema
@@ -33728,7 +33777,7 @@ ${twoLanguageSelection
       const dispatchCode = getGeminiErrorCode(dispatchError);
       const dispatchStatus = getGeminiErrorStatus(dispatchError);
       const dispatchText = describeGeminiError(dispatchError).toLowerCase();
-      const schemaDispatchRejected = twoLanguageSelection
+      const schemaDispatchRejected = compactJsonGuard
         && dispatchCode === 400
         && (dispatchStatus === 'INVALID_ARGUMENT' || dispatchText.includes('invalid argument'));
       if (!schemaDispatchRejected) throw dispatchError;
@@ -33736,7 +33785,11 @@ ${twoLanguageSelection
       // 정확히 두 언어 경로에서만 스키마 요청이 거부되면 JSON MIME 모드로 1회 재요청한다.
       // 프롬프트의 compact response contract와 기존 ID/누락/중복 검증은 그대로 유지된다.
       retryUsed = true;
-      effectiveResponseMode = 'json-mime-two-language-schema-fallback';
+      effectiveResponseMode = singleCardTwoTargetGuard
+        ? 'json-mime-single-card-two-target-schema-fallback'
+        : singleCardSingleTargetGuard
+          ? 'json-mime-single-card-single-target-schema-fallback'
+          : 'json-mime-two-language-schema-fallback';
       activeGenerateParams = buildGenerateParams(false);
       response = await execute('languageMixLockedWholeRewriteSchemaFallback', activeGenerateParams);
     }
@@ -33746,8 +33799,8 @@ ${twoLanguageSelection
     try {
       parsed = parseGeminiJsonObject(responseText || '{}');
     } catch (parseError) {
-      if (!twoLanguageSelection) throw parseError;
-      // 정확히 두 언어 경로에서만 JSON 파싱 실패를 현재 활성 출력 모드로 1회 재요청한다.
+      if (!compactJsonGuard) throw parseError;
+      // 881: 기존 두 언어 경로와 1카드+1혼합 경로만 JSON 파싱 실패 시 같은 활성 출력 모드로 1회 재요청한다.
       retryUsed = true;
       response = await execute('languageMixLockedWholeRewriteJsonRetry', activeGenerateParams);
       responseText = String(response?.text || '');
@@ -33832,6 +33885,7 @@ ${twoLanguageSelection
     throw error;
   } finally {
     endGeminiGenerationRequestBudget(auditSessionId);
+    mergeGeminiAuditSessionIntoParent(auditSessionId, args.params.__geminiAuditSessionId);
   }
 }
 
@@ -33959,6 +34013,8 @@ async function applyV1LockedWholeLyricLanguageMix(
       };
     }
     try {
+      const singleCardSingleTargetMix = cards.length === 1 && targetLanguages.length === 1;
+      const singleCardTwoTargetMix = cards.length === 1 && targetLanguages.length === 2;
       const parallelPair = twoLanguageSelection && cards.length === 2;
       const response = await callV1LockedLanguageMixRewrite({
         params,
@@ -33970,6 +34026,8 @@ async function applyV1LockedWholeLyricLanguageMix(
         requestedRatio,
         sectionNames: expectedOrder,
         parallelPair,
+        singleCardSingleTargetGuard: singleCardSingleTargetMix,
+        singleCardTwoTargetGuard: singleCardTwoTargetMix,
       });
       let activeResponseLines = response.responseLines;
       let applied = applyV1WholeRewriteResponse({
@@ -33991,7 +34049,7 @@ async function applyV1LockedWholeLyricLanguageMix(
       let candidateExpansionResponse: Awaited<ReturnType<typeof callV1LockedLanguageMixRewrite>> | null = null;
       let candidateExpansionStartingRatio: number | null = null;
       let candidateExpansionHigherOccupancyOverrideCount = 0;
-      const needsTwoLanguageCandidateExpansion = twoLanguageSelection
+      const needsTwoLanguageCandidateExpansion = (twoLanguageSelection || singleCardSingleTargetMix || singleCardTwoTargetMix)
         && requestedRatio >= 10
         && requestedRatio <= 50
         && (applied.status !== 'applied' || !applied.ratioBandPassed || !targetCoverage.passed);
@@ -34031,6 +34089,8 @@ async function applyV1LockedWholeLyricLanguageMix(
           requestedRatio,
           sectionNames: expectedOrder,
           parallelPair,
+          singleCardSingleTargetGuard: singleCardSingleTargetMix,
+          singleCardTwoTargetGuard: singleCardTwoTargetMix,
           candidateExpansion: {
             actualRatio: applied.actualRatio,
             lowerBound: applied.lowerBound,
@@ -34075,7 +34135,7 @@ async function applyV1LockedWholeLyricLanguageMix(
         );
       }
 
-      if (twoLanguageSelection
+      if ((twoLanguageSelection || singleCardSingleTargetMix || singleCardTwoTargetMix)
         && requestedRatio >= 10
         && requestedRatio <= 50
         && (applied.status !== 'applied' || !applied.ratioBandPassed || !targetCoverage.passed)) {
@@ -34131,7 +34191,7 @@ async function applyV1LockedWholeLyricLanguageMix(
         targetLanguages as V1LanguageMixCode[],
         requestedRatio,
       );
-      if (twoLanguageSelection
+      if ((twoLanguageSelection || singleCardSingleTargetMix || singleCardTwoTargetMix)
         && requestedRatio >= 10
         && requestedRatio <= 50
         && applied.status === 'applied'
@@ -34924,49 +34984,334 @@ function hasExpectedSelectedLanguageScript(value: unknown, language: LanguageCod
 }
 
 function hasDominantSelectedLanguageBody(value: unknown, language: LanguageCode): boolean {
-  const text = lyricBodyWithoutSectionCues(value);
-  if (!text.trim()) return false;
-
-  // 856: Japanese needs a dominance check, not merely "some Kana exists".
-  // Count Kanji as Japanese only when the body also carries enough Kana context.
-  // This keeps normal Japanese lyrics (Kana + Kanji) valid while rejecting cases
-  // where an English lyric contains only a few isolated Japanese lines.
-  if (language === 'ja') {
-    // 858: reject standalone Latin sung/ad-lib lines in strict Japanese cards.
-    // Standalone square-bracket section/performance/production cues remain allowed.
-    const hasForeignLatinSungLine = String(value || '')
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .some((line) => {
-        if (/^\[[^\]]+\]$/.test(line)) return false;
-        const latinInLine = (line.match(/[A-Za-zÀ-ÖØ-öø-ÿĀ-žẀ-ỿ]/g) || []).length;
-        const kanaInLine = (line.match(/[\u3040-\u30ff\u31f0-\u31ff]/g) || []).length;
-        const hanInLine = (line.match(/[\u3400-\u9fff]/g) || []).length;
-        return latinInLine >= 3 && (kanaInLine + hanInLine) === 0;
-      });
-    if (hasForeignLatinSungLine) return false;
-
-    const hangul = (text.match(/[가-힣]/g) || []).length;
-    const kana = (text.match(/[\u3040-\u30ff\u31f0-\u31ff]/g) || []).length;
-    const han = (text.match(/[\u3400-\u9fff]/g) || []).length;
-    const cyrillic = (text.match(/[\u0400-\u04ff]/g) || []).length;
-    const thai = (text.match(/[\u0e00-\u0e7f]/g) || []).length;
-    const latin = (text.match(/[A-Za-zÀ-ÖØ-öø-ÿĀ-žẀ-ỿ]/g) || []).length;
-    const japanese = kana + han;
-    const recognized = japanese + hangul + cyrillic + thai + latin;
-    if (recognized <= 0 || japanese < 12 || kana < 6) return false;
-
-    const japaneseShare = japanese / recognized;
-    const kanaShareWithinJapanese = japanese > 0 ? kana / japanese : 0;
-    return japaneseShare >= 0.78 && kanaShareWithinJapanese >= 0.10;
-  }
-
-  return hasExpectedSelectedLanguageScript(text, language);
+  return inspectSelectedLanguageBodyContract(value, language).valid;
 }
 
 function getSelectedLanguageFallbackTitle(language: LanguageCode): string {
   return SELECTED_LANGUAGE_FALLBACK_TITLE_MAP[language] || 'Untitled';
+}
+
+const SORIDRAW_862_TARGETED_SELECTED_LANGUAGE_REPAIR = true;
+
+type SelectedLanguageRepairTarget = {
+  lineIndex: number;
+  text: string;
+  before: string;
+  after: string;
+};
+
+type SelectedLanguageRepairReplacement = {
+  lineIndex: number;
+  text: string;
+};
+
+function isStandaloneSelectedLanguageCueLine(value: string): boolean {
+  return /^\s*\[[^\]]+\]\s*$/.test(String(value || ''));
+}
+
+function countSelectedLanguageScripts(value: string): {
+  hangul: number;
+  kana: number;
+  han: number;
+  cyrillic: number;
+  thai: number;
+  latin: number;
+} {
+  const text = String(value || '');
+  return {
+    hangul: (text.match(/[가-힣]/g) || []).length,
+    kana: (text.match(/[\u3040-\u30ff\u31f0-\u31ff]/g) || []).length,
+    han: (text.match(/[\u3400-\u9fff]/g) || []).length,
+    cyrillic: (text.match(/[\u0400-\u04ff]/g) || []).length,
+    thai: (text.match(/[\u0e00-\u0e7f]/g) || []).length,
+    latin: (text.match(/[A-Za-zÀ-ÖØ-öø-ÿĀ-žẀ-ỿ]/g) || []).length,
+  };
+}
+
+const SORIDRAW_863_SELECTED_LANGUAGE_CONTRACT_ALIGN = true;
+
+type SelectedLanguageBodyContractReport = {
+  valid: boolean;
+  reasons: string[];
+  metrics: {
+    recognized: number;
+    targetScript: number;
+    kana: number;
+    han: number;
+    latin: number;
+    hangul: number;
+    cyrillic: number;
+    thai: number;
+    targetShare: number;
+    kanaShareWithinJapanese: number;
+    foreignLatinSungLineCount: number;
+  };
+};
+
+function inspectSelectedLanguageBodyContract(
+  value: unknown,
+  language: LanguageCode,
+): SelectedLanguageBodyContractReport {
+  const raw = String(value || '');
+  const text = lyricBodyWithoutSectionCues(raw);
+  const counts = countSelectedLanguageScripts(text);
+  const baseMetrics = {
+    recognized: 0,
+    targetScript: 0,
+    kana: counts.kana,
+    han: counts.han,
+    latin: counts.latin,
+    hangul: counts.hangul,
+    cyrillic: counts.cyrillic,
+    thai: counts.thai,
+    targetShare: 0,
+    kanaShareWithinJapanese: 0,
+    foreignLatinSungLineCount: 0,
+  };
+
+  if (!text.trim()) {
+    return { valid: false, reasons: ['empty-body'], metrics: baseMetrics };
+  }
+
+  if (language !== 'ja') {
+    const valid = hasExpectedSelectedLanguageScript(text, language);
+    return {
+      valid,
+      reasons: valid ? [] : ['expected-script-missing'],
+      metrics: {
+        ...baseMetrics,
+        recognized: text.replace(/\s/g, '').length,
+      },
+    };
+  }
+
+  const foreignLatinSungLineCount = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => {
+      if (isStandaloneSelectedLanguageCueLine(line)) return false;
+      const lineCounts = countSelectedLanguageScripts(line);
+      return lineCounts.latin >= 3 && (lineCounts.kana + lineCounts.han) === 0;
+    }).length;
+
+  const japanese = counts.kana + counts.han;
+  const recognized = japanese + counts.hangul + counts.cyrillic + counts.thai + counts.latin;
+  const targetShare = recognized > 0 ? japanese / recognized : 0;
+  const kanaShareWithinJapanese = japanese > 0 ? counts.kana / japanese : 0;
+  const reasons: string[] = [];
+
+  if (foreignLatinSungLineCount > 0) reasons.push('foreign-latin-sung-line');
+  if (recognized <= 0) reasons.push('recognized-script-empty');
+  if (japanese < 12) reasons.push('japanese-script-below-minimum');
+  if (counts.kana < 6) reasons.push('kana-below-minimum');
+  if (targetShare < 0.78) reasons.push('japanese-share-below-0.78');
+  if (kanaShareWithinJapanese < 0.10) reasons.push('kana-share-below-0.10');
+
+  return {
+    valid: reasons.length === 0,
+    reasons,
+    metrics: {
+      ...baseMetrics,
+      recognized,
+      targetScript: japanese,
+      targetShare,
+      kanaShareWithinJapanese,
+      foreignLatinSungLineCount,
+    },
+  };
+}
+
+function selectedLanguageSungLineNeedsRepair(value: string, language: LanguageCode): boolean {
+  const line = String(value || '').trim();
+  if (!line || isStandaloneSelectedLanguageCueLine(line)) return false;
+  const counts = countSelectedLanguageScripts(line);
+  const nonPunctuation = line.replace(/[\s\d\p{P}\p{S}]/gu, '');
+  if (!nonPunctuation) return false;
+
+  switch (language) {
+    case 'ja': {
+      const japanese = counts.kana + counts.han;
+      return japanese <= 0
+        || counts.hangul > 0
+        || counts.cyrillic > 0
+        || counts.thai > 0
+        || counts.latin >= 3;
+    }
+    case 'zh':
+      return counts.han <= 0 || counts.kana > 0 || counts.hangul > 0 || counts.cyrillic > 0 || counts.thai > 0;
+    case 'ko':
+      return counts.hangul <= 0 || counts.kana > 0 || counts.cyrillic > 0 || counts.thai > 0;
+    case 'ru':
+      return counts.cyrillic <= 0 || counts.hangul > 0 || counts.kana > 0 || counts.thai > 0;
+    case 'th':
+      return counts.thai <= 0 || counts.hangul > 0 || counts.kana > 0 || counts.cyrillic > 0;
+    case 'en':
+    case 'es':
+    case 'fr':
+    case 'de':
+      return counts.latin <= 0 || counts.hangul > 0 || counts.kana > 0 || counts.cyrillic > 0 || counts.thai > 0;
+    default:
+      return false;
+  }
+}
+
+function collectSelectedLanguageRepairTargets(
+  value: string,
+  language: LanguageCode,
+  forceAllSungLines = false,
+): SelectedLanguageRepairTarget[] {
+  const lines = String(value || '').replace(/\r\n?/g, '\n').split('\n');
+  const sungIndexes = lines
+    .map((line, lineIndex) => ({ line, lineIndex }))
+    .filter(({ line }) => Boolean(String(line || '').trim()) && !isStandaloneSelectedLanguageCueLine(line))
+    .map(({ lineIndex }) => lineIndex);
+
+  const previousSung = (lineIndex: number): string => {
+    for (let index = lineIndex - 1; index >= 0; index -= 1) {
+      const line = String(lines[index] || '').trim();
+      if (line && !isStandaloneSelectedLanguageCueLine(line)) return line;
+    }
+    return '';
+  };
+  const nextSung = (lineIndex: number): string => {
+    for (let index = lineIndex + 1; index < lines.length; index += 1) {
+      const line = String(lines[index] || '').trim();
+      if (line && !isStandaloneSelectedLanguageCueLine(line)) return line;
+    }
+    return '';
+  };
+
+  return sungIndexes
+    .filter((lineIndex) => forceAllSungLines || selectedLanguageSungLineNeedsRepair(lines[lineIndex], language))
+    .map((lineIndex) => ({
+      lineIndex,
+      text: String(lines[lineIndex] || '').trim(),
+      before: previousSung(lineIndex),
+      after: nextSung(lineIndex),
+    }));
+}
+
+function applySelectedLanguageRepairReplacements(
+  sourceLyrics: string,
+  targetLanguage: LanguageCode,
+  requestedTargets: SelectedLanguageRepairTarget[],
+  replacements: SelectedLanguageRepairReplacement[],
+): string {
+  const lines = String(sourceLyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const requested = new Set(requestedTargets.map((item) => item.lineIndex));
+  const seen = new Set<number>();
+
+  for (const item of replacements || []) {
+    const lineIndex = Math.round(Number(item?.lineIndex));
+    const text = String(item?.text || '').trim();
+    if (!Number.isFinite(lineIndex) || seen.has(lineIndex) || !requested.has(lineIndex)) continue;
+    if (lineIndex < 0 || lineIndex >= lines.length || isStandaloneSelectedLanguageCueLine(lines[lineIndex])) continue;
+    if (!text || selectedLanguageSungLineNeedsRepair(text, targetLanguage)) continue;
+    lines[lineIndex] = text;
+    seen.add(lineIndex);
+  }
+
+  return lines.join('\n').trim();
+}
+
+async function requestTargetedSelectedLanguageLineRepairs(
+  ai: GoogleGenAI,
+  targetLanguage: LanguageCode,
+  targetName: string,
+  nativeScript: string,
+  currentLyrics: string,
+  targets: SelectedLanguageRepairTarget[],
+  context: 'repairSelectedLanguageCard' | 'repairSelectedLanguageCardStrict',
+): Promise<{ lyrics: string; title: string }> {
+  const validationReport = inspectSelectedLanguageBodyContract(currentLyrics, targetLanguage);
+  const compactLyricContext = lyricBodyWithoutSectionCues(currentLyrics).slice(0, 1800);
+  const response = await generateContentWithModelFallback(
+    ai,
+    {
+      model: context === 'repairSelectedLanguageCard' ? 'gemini-3.5-flash' : 'gemini-3.5-flash-lite',
+      contents: JSON.stringify({
+        targetLanguage,
+        targetLanguageName: targetName,
+        lyricContext: compactLyricContext,
+        validationFailureCodes: validationReport.reasons,
+        validationMetrics: validationReport.metrics,
+        repairLines: targets.map((item) => ({
+          lineIndex: item.lineIndex,
+          text: item.text,
+          before: item.before,
+          after: item.after,
+        })),
+      }),
+      config: {
+        systemInstruction: `You are SORIDRAW's targeted selected-language lyric-line repair stage.
+
+TARGET LANGUAGE CONTRACT:
+- Target language: ${targetName}.
+- Every replacement sung line must use ${nativeScript}.
+- For Japanese, write natural modern Japanese directly. No romaji, no standalone English lexical sung line, and no Korean/English sentence skeleton translated mechanically into Japanese.
+- SORIDRAW_864_JAPANESE_NATIVE_DRAFT_PASS: when the target is Japanese, each replacement must sound independently natural when read aloud without seeing the source line. Preserve the scene and intent, but freely reorder, compress, or omit source-language information when that is necessary for native Japanese syntax.
+- For Japanese replacements, verify modifier→noun and noun→predicate fit, natural particles, physically plausible subject/object/location relations, and ordinary contemporary collocation. Avoid abstract noun stacking, translated spatial logic, redundant meaning, or filler used only to sound poetic.
+- SORIDRAW_865_JAPANESE_NATIVE_RELATION_FINAL: before returning a Japanese replacement, identify its main predicate and confirm that every attached subject/object/location/state and case particle forms a relation a native Japanese speaker would actually use. Reject combinations that are merely grammatically possible but pragmatically odd, semantically mismatched, or dependent on another language's clause structure.
+- Check the replacement as one spoken lyric line and against its supplied before/after context. Keep the original story role, but choose native Japanese collocations and predicate frames even when that requires reordering or compressing the source idea.
+- Never repair by inserting a memorized phrase, a generic poetic noun, or a fixed answer for a scene. Generate the wording from the current context each time.
+- Repeated wording is acceptable only when it is clearly functioning as the hook. Otherwise keep the replacement distinct from neighboring lines while preserving the same story role.
+- Keep the original meaning, speaker, emotional direction, and approximate line breath.
+
+FULL-CARD VALIDATOR CONTRACT — 863:
+- The replacements are merged back into the original card and judged by the SAME deterministic contract reported in validationFailureCodes/validationMetrics.
+- For Japanese, sung text must remain Japanese-dominant: no standalone Latin/romaji sung line; at least 12 Japanese-script characters including at least 6 Kana; Japanese share at least 0.78 of recognized target/foreign script; Kana at least 0.10 of Japanese script.
+- Fix the reported contract failure naturally inside only the supplied lines. Do not pad with meaningless Kana, repeat phrases, or add filler just to satisfy counts.
+
+STRICT SCOPE CONTRACT — 862:
+- Rewrite ONLY the supplied repairLines. Do not regenerate the full lyric card.
+- Return exactly one replacement for each supplied lineIndex and no other lyric lines.
+- Never return section tags, production cues, explanations, markdown, or analysis inside replacement text.
+- Use before/after only as local context. Do not rewrite them.
+- Do not invent a new scene, hook, character, or topic.
+- title must be a concise natural ${targetName} title based on lyricContext. For Japanese, prefer a concise title that a native listener can understand immediately from the song's central scene or hook; do not translate another language's title mechanically.
+- Return valid JSON only: { "title": "...", "replacements": [{ "lineIndex": 0, "text": "..." }] }.` ,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            replacements: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  lineIndex: { type: Type.NUMBER },
+                  text: { type: Type.STRING },
+                },
+                required: ['lineIndex', 'text'],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ['title', 'replacements'],
+          additionalProperties: false,
+        },
+      },
+    },
+    context,
+    context === 'repairSelectedLanguageCard'
+      ? ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']
+      : ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+  );
+
+  const parsed = parseGeminiJsonObject(response?.text || '{}');
+  const replacements = (Array.isArray(parsed?.replacements) ? parsed.replacements : [])
+    .map((item: any) => ({
+      lineIndex: Math.round(Number(item?.lineIndex)),
+      text: String(item?.text || '').trim(),
+    }))
+    .filter((item: SelectedLanguageRepairReplacement) => Number.isFinite(item.lineIndex) && Boolean(item.text));
+
+  return {
+    lyrics: applySelectedLanguageRepairReplacements(currentLyrics, targetLanguage, targets, replacements),
+    title: String(parsed?.title || '').trim().replace(/^['\"]+|['\"]+$/g, ''),
+  };
 }
 
 async function repairSelectedLanguageCardWithGemini(
@@ -34981,96 +35326,60 @@ async function repairSelectedLanguageCardWithGemini(
   const nativeScript = SELECTED_LANGUAGE_NATIVE_SCRIPT_MAP[targetLanguage] || 'the language’s normal native writing system';
   const current = String(currentLyrics || '').trim();
   const sibling = String(siblingLyrics || '').trim();
-  const mode = current ? 'repair the wrong-language lyric card' : 'create the missing selected-language lyric card';
-  const response = await generateContentWithModelFallback(
-    ai,
-    {
-      model: 'gemini-3.5-flash',
-      contents: JSON.stringify({
+  let lyrics = current;
+  let title = '';
+
+  if (current) {
+    let targets = collectSelectedLanguageRepairTargets(current, targetLanguage);
+    if (!targets.length && !hasDominantSelectedLanguageBody(current, targetLanguage)) {
+      targets = collectSelectedLanguageRepairTargets(current, targetLanguage, true);
+    }
+    if (targets.length) {
+      const targeted = await requestTargetedSelectedLanguageLineRepairs(
+        ai,
         targetLanguage,
-        targetLanguageName: targetName,
-        productionPrompt: String(productionPrompt || '').slice(0, 2600),
-        currentLyrics: current,
-        siblingLyrics: sibling,
-        exactSectionOrder: isGenerationEngineV2(params)
-          ? Array.from(new Set(
-              String(current || sibling || '')
-                .replace(/\r\n?/g, '\n')
-                .split('\n')
-                .map((line) => line.trim())
-                .filter((line) => /^\[[^\]]+\]$/.test(line))
-                .map((line) => line.slice(1, -1).split(/[:：]/)[0].trim())
-                .filter(Boolean),
-            ))
-          : getV1SectionBlueprint(params).entries.map((entry) => entry.name),
-      }),
-      config: {
-        systemInstruction: `You are SORIDRAW's required selected-language lyric-card recovery stage.
-Your job is to ${mode}.
-
-ABSOLUTE LANGUAGE CONTRACT:
-- Target language: ${targetName}.
-- Write the entire sung lyric body in ${nativeScript}.
-- Never substitute English for Japanese, Chinese, Russian, Thai, or another selected language.
-- Japanese must contain natural Hiragana/Katakana in the sung body; do not return romaji or Kanji-only lyric lines.
-- For Japanese, English is permitted only inside standalone square-bracket structural/production cues. Sung lines and parenthetical ad-libs must stay in Japanese script.
-- For Japanese, prefer ordinary native collocations, particles, predicate pairings, and lyric sense-units; do not preserve foreign-language syntax just because the meaning is similar.
-- Do not add an unselected lyric language.
-
-STRUCTURE / QUALITY CONTRACT:
-- Preserve the supplied exact section order and section families.
-- If currentLyrics exists, preserve its section count, story direction, hook function, speaker identity, line breath, and production-cue placement while rewriting the sung body into ${targetName}.
-- If currentLyrics is empty, use siblingLyrics as the shared story/hook reference but write a natural independent ${targetName} lyric, not a literal line-by-line translation.
-- Keep English structural section tags and standalone English production cues unchanged in role. Sung lyric lines themselves must follow the target-language contract.
-- Do not add explanations, markdown, analysis, or extra fields.
-- Return valid JSON only: { "title": "...", "lyrics": "..." }.
-- title must be a natural ${targetName} song title in the target script.`,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            lyrics: { type: Type.STRING },
-          },
-          required: ['title', 'lyrics'],
-          additionalProperties: false,
-        },
-      },
-    },
-    'repairSelectedLanguageCard',
-    ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
-  );
-
-  const parsed = parseGeminiJsonObject(response?.text || '{}');
-  let lyrics = String(parsed?.lyrics || '').trim();
-  let title = String(parsed?.title || '').trim().replace(/^['"]+|['"]+$/g, '');
-
-  // 860: quality-invalid selected-language output gets one bounded strict recovery pass.
-  // Normal cards still cost zero extra calls. This pass exists only when the first
-  // recovery returned valid JSON but still failed the deterministic language gate.
-  if (!hasDominantSelectedLanguageBody(lyrics, targetLanguage)) {
-    const strictResponse = await generateContentWithModelFallback(
+        targetName,
+        nativeScript,
+        current,
+        targets,
+        'repairSelectedLanguageCard',
+      );
+      lyrics = targeted.lyrics;
+      title = targeted.title;
+    }
+  } else {
+    const response = await generateContentWithModelFallback(
       ai,
       {
-        model: 'gemini-3.5-flash-lite',
+        model: 'gemini-3.5-flash',
         contents: JSON.stringify({
           targetLanguage,
           targetLanguageName: targetName,
-          invalidLyrics: lyrics || current,
+          productionPrompt: String(productionPrompt || '').slice(0, 1200),
           siblingLyrics: sibling,
+          exactSectionOrder: isGenerationEngineV2(params)
+            ? Array.from(new Set(
+                String(sibling || '')
+                  .replace(/\r\n?/g, '\n')
+                  .split('\n')
+                  .map((line) => line.trim())
+                  .filter((line) => /^\[[^\]]+\]$/.test(line))
+                  .map((line) => line.slice(1, -1).split(/[:：]/)[0].trim())
+                  .filter(Boolean),
+              ))
+            : getV1SectionBlueprint(params).entries.map((entry) => entry.name),
         }),
         config: {
-          systemInstruction: `You are SORIDRAW's FINAL selected-language lyric-card recovery pass.
-This pass runs only because the previous recovery still failed the deterministic language validator.
-
-NON-NEGOTIABLE OUTPUT CONTRACT:
-- Target language: ${targetName}.
-- Rewrite every sung lyric line in ${nativeScript}.
-- Preserve standalone square-bracket section/performance/production cues, but never use Latin/English/romaji as sung lyric text when the target is Japanese.
-- For Japanese, use natural modern Japanese with enough Hiragana/Katakana context around Kanji. Never return Kanji-only lyric lines and never leave English lexical ad-libs outside square brackets.
-- Preserve section order, story direction, hook role, speaker identity, and approximate line breath.
-- Prefer idiomatic native phrasing over literal translation. Do not explain.
-- Return valid JSON only: { "title": "...", "lyrics": "..." }.`,
+          systemInstruction: `You are SORIDRAW's missing selected-language lyric-card recovery stage.
+Target language: ${targetName}.
+Write the sung lyric body in ${nativeScript}.
+When the target language is Japanese, draft directly in contemporary Japanese: use native collocations, natural particles and predicates, concrete verb-led phrasing, and semantically plausible modifier/noun and subject/object/location relations. Silently re-read each sung line before returning JSON and rewrite any line that only works as a literal translation, abstract noun stack, redundant image, or unnatural Japanese collocation.
+SORIDRAW_865_JAPANESE_NATIVE_RELATION_FINAL: in that silent read-through, verify each line's main predicate against its subject/object/location/state and particles, plus modifier/head-noun and verb/noun collocation. Rewrite any relation that a native speaker would find pragmatically odd even if the grammar is technically legal. Preserve the same scene and intent; do not substitute generic lyric language or canned phrases.
+Preserve the supplied section order and shared story/hook direction from siblingLyrics, but write natural independent ${targetName} rather than literal line-by-line translation.
+Keep English square-bracket section/performance/production cues in their structural role only.
+Do not add an unselected lyric language, explanations, markdown, analysis, or extra fields.
+Return valid JSON only: { "title": "...", "lyrics": "..." }.
+The title must be a natural ${targetName} song title in the target script.`,
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,
@@ -35083,15 +35392,44 @@ NON-NEGOTIABLE OUTPUT CONTRACT:
           },
         },
       },
-      'repairSelectedLanguageCardStrict',
-      ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+      'repairSelectedLanguageCard',
+      ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
     );
-    const strictParsed = parseGeminiJsonObject(strictResponse?.text || '{}');
-    lyrics = String(strictParsed?.lyrics || '').trim();
-    title = String(strictParsed?.title || '').trim().replace(/^['"]+|['"]+$/g, '');
+    const parsed = parseGeminiJsonObject(response?.text || '{}');
+    lyrics = String(parsed?.lyrics || '').trim();
+    title = String(parsed?.title || '').trim().replace(/^['\"]+|['\"]+$/g, '');
   }
 
-  if (!hasDominantSelectedLanguageBody(lyrics, targetLanguage)) {
+  // Stage 1 keeps the existing deterministic validator unchanged. If the targeted
+  // first pass is still invalid, run one bounded targeted strict pass instead of
+  // regenerating the whole card again.
+  if (!hasDominantSelectedLanguageBody(lyrics, targetLanguage) && lyrics) {
+    let strictTargets = collectSelectedLanguageRepairTargets(lyrics, targetLanguage);
+    if (!strictTargets.length) {
+      strictTargets = collectSelectedLanguageRepairTargets(lyrics, targetLanguage, true);
+    }
+    if (strictTargets.length) {
+      const strict = await requestTargetedSelectedLanguageLineRepairs(
+        ai,
+        targetLanguage,
+        targetName,
+        nativeScript,
+        lyrics,
+        strictTargets,
+        'repairSelectedLanguageCardStrict',
+      );
+      lyrics = strict.lyrics;
+      if (strict.title) title = strict.title;
+    }
+  }
+
+  const finalLanguageContract = inspectSelectedLanguageBodyContract(lyrics, targetLanguage);
+  if (!finalLanguageContract.valid) {
+    console.warn('[SORIDRAW Selected Language Contract] recovery exhausted', {
+      targetLanguage,
+      reasons: finalLanguageContract.reasons,
+      metrics: finalLanguageContract.metrics,
+    });
     throw new Error(`선택한 ${targetName} 가사 카드가 올바른 문자 체계/언어 비중으로 생성되지 않았습니다.`);
   }
   if (!hasExpectedSelectedLanguageScript(title, targetLanguage, true)) {
@@ -35126,7 +35464,7 @@ async function enforceSelectedLanguageCardsBeforeHardBan(
   const next: SongResult = {
     ...result,
     lyrics: { ...result.lyrics },
-    appliedKeywords: { ...(result.appliedKeywords || {}) },
+    appliedKeywords: { ...result.appliedKeywords },
   };
   const intentionalLanguageMix = isV1LanguageMixEnabledForParams(params);
   const selectedBodyMatches = (lyrics: string, target: LanguageCode) =>
@@ -35179,6 +35517,264 @@ async function enforceSelectedLanguageCardsBeforeHardBan(
   }
 
   return next;
+}
+
+
+const SORIDRAW_866_JAPANESE_NATIVE_SEMANTIC_AUDIT = true;
+const SORIDRAW_875_JAPANESE_AUDIT_QUALITY_TUNING = true;
+const SORIDRAW_876_JAPANESE_AUDIT_MICROTUNE = true;
+const SORIDRAW_877_DEDICATED_JAPANESE_AUDIT_SLOT = true;
+const SORIDRAW_881_LANGUAGE_MIX_SINGLE_CARD_SINGLE_TARGET = true;
+const SORIDRAW_882_LANGUAGE_MIX_SINGLE_CARD_CANDIDATE_POOL = true;
+const SORIDRAW_885_LANGUAGE_MIX_SINGLE_CARD_TWO_TARGET = true;
+const SORIDRAW_883_LANGUAGE_MIX_AUDIT_GROUPING = true;
+
+type JapaneseNativeSemanticAuditReplacement = {
+  lineIndex: number;
+  text: string;
+};
+
+function collectJapaneseNativeSemanticAuditLines(value: string): Array<{ lineIndex: number; text: string }> {
+  return String(value || '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line, lineIndex) => ({ lineIndex, text: String(line || '').trim() }))
+    .filter((item) => Boolean(item.text) && !isStandaloneSelectedLanguageCueLine(item.text));
+}
+
+function applyJapaneseNativeSemanticAuditReplacements(
+  sourceLyrics: string,
+  replacements: JapaneseNativeSemanticAuditReplacement[],
+): string {
+  const lines = String(sourceLyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const auditable = new Set(collectJapaneseNativeSemanticAuditLines(sourceLyrics).map((item) => item.lineIndex));
+  const seen = new Set<number>();
+
+  for (const item of replacements || []) {
+    const lineIndex = Math.round(Number(item?.lineIndex));
+    const text = String(item?.text || '').trim();
+    if (!Number.isFinite(lineIndex) || seen.has(lineIndex) || !auditable.has(lineIndex)) continue;
+    if (!text || text.length > 180 || /^\s*\[[^\]]+\]\s*$/.test(text)) continue;
+    if (selectedLanguageSungLineNeedsRepair(text, 'ja')) continue;
+    lines[lineIndex] = text;
+    seen.add(lineIndex);
+  }
+
+  return lines.join('\n').trim();
+}
+
+const SORIDRAW_871_FINAL_JAPANESE_AUDIT_BOUNDARY = true;
+
+function hasAuditableJapaneseBodyAtFinalBoundary(result: SongResult): boolean {
+  const applied = (result?.appliedKeywords || {}) as any;
+  const candidates = [
+    String(applied?.lyricsByLanguage?.ja || '').trim(),
+    String(result?.lyrics?.korean || '').trim(),
+    String(result?.lyrics?.english || '').trim(),
+  ].filter(Boolean);
+  return candidates.some((lyrics) => {
+    const text = lyricBodyWithoutSectionCues(lyrics);
+    const counts = countSelectedLanguageScripts(text);
+    const japanese = counts.kana + counts.han;
+    const recognized = japanese + counts.hangul + counts.cyrillic + counts.thai + counts.latin;
+    const share = recognized > 0 ? japanese / recognized : 0;
+    return japanese >= 12 && counts.kana >= 6 && share >= 0.55;
+  });
+}
+
+async function auditJapaneseNativeSemanticsAtFinalBoundary(
+  result: SongResult,
+  params: GenerateSongParams,
+  ai: GoogleGenAI,
+): Promise<SongResult> {
+  if (!result?.lyrics || params.isNoLyrics) return result;
+
+  const SORIDRAW_867_JAPANESE_AUDIT_ROUTE_FIX = true;
+  const slots = getV1SelectedLyricSlotLanguages(params);
+  const preferredCards: Array<'korean' | 'english'> = [];
+  if (slots.koreanSlotLanguage === 'ja') preferredCards.push('korean');
+  if (slots.englishSlotLanguage === 'ja') preferredCards.push('english');
+
+  const SORIDRAW_868_JAPANESE_AUDIT_FINAL_BODY_ROUTE = true;
+  const SORIDRAW_869_JAPANESE_AUDIT_CANONICAL_LANGUAGE_MAP = true;
+  const SORIDRAW_870_JAPANESE_AUDIT_PRIORITY_ROUTE = true;
+
+  const applied = (result.appliedKeywords || {}) as any;
+  const canonicalJapaneseLyrics = String(applied.lyricsByLanguage?.ja || '').trim();
+
+  // 870: Audit routing must never depend on language metadata or the strict final
+  // validator. Detect the actual Japanese sung body directly from the final payload.
+  // This is intentionally looser than the acceptance validator: it only answers
+  // "is this a Japanese lyric body worth auditing?", not "is it already perfect?".
+  const japaneseBodyScore = (lyrics: string): { eligible: boolean; score: number } => {
+    const text = lyricBodyWithoutSectionCues(String(lyrics || ''));
+    const counts = countSelectedLanguageScripts(text);
+    const japanese = counts.kana + counts.han;
+    const recognized = japanese + counts.hangul + counts.cyrillic + counts.thai + counts.latin;
+    const share = recognized > 0 ? japanese / recognized : 0;
+    return {
+      eligible: japanese >= 12 && counts.kana >= 6 && share >= 0.55,
+      score: japanese * 10 + counts.kana * 2 - (counts.hangul + counts.cyrillic + counts.thai + counts.latin),
+    };
+  };
+
+  const physicalCandidates = (['korean', 'english'] as const)
+    .map((card) => {
+      const lyrics = String(result.lyrics?.[card] || '').trim();
+      const detected = japaneseBodyScore(lyrics);
+      const metadataBonus = (card === 'korean' && slots.koreanSlotLanguage === 'ja')
+        || (card === 'english' && slots.englishSlotLanguage === 'ja')
+        ? 100000
+        : 0;
+      return { card, lyrics, eligible: detected.eligible, score: detected.score + metadataBonus };
+    })
+    .filter((item) => item.lyrics && item.eligible)
+    .sort((a, b) => b.score - a.score);
+
+  const canonicalDetected = japaneseBodyScore(canonicalJapaneseLyrics);
+  let japaneseCard: 'korean' | 'english' | null = physicalCandidates[0]?.card || null;
+  if (!japaneseCard && canonicalDetected.eligible) {
+    if (slots.koreanSlotLanguage === 'ja') japaneseCard = 'korean';
+    else if (slots.englishSlotLanguage === 'ja') japaneseCard = 'english';
+  }
+
+  const physicalJapaneseLyrics = japaneseCard
+    ? String(result.lyrics?.[japaneseCard] || '').trim()
+    : '';
+  const currentLyrics = canonicalDetected.eligible
+    ? canonicalJapaneseLyrics
+    : physicalJapaneseLyrics;
+  if (!currentLyrics || !japaneseBodyScore(currentLyrics).eligible) return result;
+  const lines = collectJapaneseNativeSemanticAuditLines(currentLyrics);
+  if (!currentLyrics || lines.length < 2) return result;
+
+  try {
+    const response = await generateContentWithModelFallback(
+      ai,
+      {
+        model: 'gemini-3.5-flash-lite',
+        contents: JSON.stringify({
+          title: String(result.title || '').slice(0, 180),
+          lines,
+        }),
+        config: {
+          systemInstruction: `You are SORIDRAW's final native-Japanese lyric semantic auditor.
+
+PURPOSE — 875 QUALITY TUNING:
+- Review ONLY the supplied Japanese sung lines after the song is otherwise complete.
+- Act like a careful native Japanese lyric editor, not a literal-meaning checker.
+- Repair clear native-Japanese drafting defects that a native editor would confidently correct, including subtle but unmistakable unnaturalness.
+- If a line is already natural Japanese, leave it unchanged by omitting it from replacements.
+- When genuinely uncertain whether something is an intentional lyric image, KEEP the original line.
+
+POETIC LANGUAGE MUST BE PRESERVED:
+- Do NOT reject a line merely because its literal physical action is impossible.
+- Natural metaphor, personification, symbolism, synesthesia, compressed lyric grammar, fragments, and image-based phrasing are valid when a native Japanese listener can immediately read them as deliberate lyric expression.
+- Judge the distinction a native lyric editor would make: emotionally coherent intentional image = keep; accidental dependency/collocation artifact = repair.
+- An unusual expression is not an error by itself. If its image, emotion, and grammatical relation are naturally understandable in Japanese lyric context, keep it.
+- Never flatten a good poetic line into ordinary explanatory prose just to make it literal.
+
+REPAIR CLEAR NATIVE-JAPANESE DRAFTING DEFECTS SUCH AS:
+- accidental lexical, particle, copula, or phrase duplication that reads as a generation artifact rather than intentional hook repetition;
+- a predicate taking a subject, object, location, complement, or case particle that native Japanese would not naturally assign to it;
+- a modifier attaching to the wrong head, or a noun/verb, adjective/noun, or noun/noun collocation that feels non-native rather than intentionally poetic;
+- an incomplete or dangling relation where a phrase is grammatically present but its semantic attachment is unclear or unnatural in the surrounding line context;
+- a hidden Korean/English clause relation or source-language calque that must be mentally translated back before the Japanese makes sense;
+- an accidental subject/reference shift, semantic contradiction, or missing predicate argument that reads as generation error rather than purposeful ambiguity;
+- a locally awkward wording that a native lyric editor would plainly smooth while preserving the same image and meaning.
+
+MICRO-TUNING PRIORITIES — 876:
+- Distinguish intentional hook repetition from accidental local duplication. Repeated full hook lines, chorus callbacks, parallelism, anaphora, and rhythmic repetition may be deliberate and should be preserved. But duplicated nouns, particles, copulas, or short phrases inside the same local clause/phrase with no clear rhythmic or semantic function should be repaired.
+- For noun/verb and complement/predicate relations, judge native Japanese selection and attachment, not just dictionary meaning. If the predicate would not naturally take that subject/object/complement in the given scene, or the relation only becomes understandable after mentally translating from another language, repair it.
+- Prefer the smallest native correction that preserves the same image, speaker, tense, emotional direction, and song hook. Do not replace an unusual but coherent lyric image merely because a more ordinary phrase exists.
+- When a candidate could plausibly be either deliberate poetry or an error, keep it unless neighboring lines make the accidental relation clear.
+
+AUDIT METHOD:
+- First read the whole supplied lyric once for scene, speaker, and recurring imagery.
+- Then inspect every sung line together with its neighboring lines; do not judge isolated words mechanically.
+- Before replacing a line, make one final check: could a native listener reasonably hear the original as deliberate poetic compression, metaphor, personification, or hook repetition? If yes, omit the replacement.
+- Prefer a minimal local correction over rewriting a full line whenever possible.
+
+REPAIR CONTRACT:
+- Preserve the same scene, speaker, emotion, narrative role, approximate breath length, and poetic intensity.
+- Repair the smallest possible set of lines. Do not rewrite neighboring good lines.
+- Do not introduce a new scene, new hook, generic lyric filler, memorized stock phrase, or fixed answer.
+- Intentional hook repetition is not an error.
+- Every replacement must be natural contemporary Japanese using native Japanese script.
+- Return JSON only: { "replacements": [{ "lineIndex": 0, "text": "..." }] }.
+- If nothing clearly needs repair, return { "replacements": [] }.` ,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              replacements: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    lineIndex: { type: Type.NUMBER },
+                    text: { type: Type.STRING },
+                  },
+                  required: ['lineIndex', 'text'],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ['replacements'],
+            additionalProperties: false,
+          },
+        },
+      },
+      '일본어 네이티브 의미 검수',
+      ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+    );
+
+    const parsed = parseGeminiJsonObject(response?.text || '{}');
+    const replacements = (Array.isArray(parsed?.replacements) ? parsed.replacements : [])
+      .map((item: any) => ({
+        lineIndex: Math.round(Number(item?.lineIndex)),
+        text: String(item?.text || '').trim(),
+      }))
+      .filter((item: JapaneseNativeSemanticAuditReplacement) => Number.isFinite(item.lineIndex) && Boolean(item.text));
+
+    if (!replacements.length) return result;
+
+    const auditedLyrics = applyJapaneseNativeSemanticAuditReplacements(currentLyrics, replacements);
+    if (!auditedLyrics || auditedLyrics === currentLyrics) return result;
+    if (!inspectSelectedLanguageBodyContract(auditedLyrics, 'ja').valid) {
+      console.warn('[SORIDRAW 866 Japanese Audit] candidate rejected by selected-language contract');
+      return result;
+    }
+
+    const currentApplied = (result.appliedKeywords || {}) as any;
+    const candidate: SongResult = {
+      ...result,
+      lyrics: japaneseCard
+        ? {
+            ...result.lyrics,
+            [japaneseCard]: auditedLyrics,
+          }
+        : result.lyrics,
+      appliedKeywords: {
+        ...currentApplied,
+        lyricsByLanguage: {
+          ...(currentApplied.lyricsByLanguage || {}),
+          ja: auditedLyrics,
+        },
+      } as any,
+    };
+    try {
+      assertNoFinalLyricHardBanViolations(candidate, params);
+    } catch (error) {
+      console.warn('[SORIDRAW 866 Japanese Audit] candidate rejected by hard-ban guard:', error);
+      return result;
+    }
+    return candidate;
+  } catch (error) {
+    // Quality audit is fail-open: model quota/latency must never discard a usable song.
+    console.warn('[SORIDRAW 866 Japanese Audit] audit unavailable; preserving original Japanese lyrics:', error);
+    return result;
+  }
 }
 
 function refreshSelectedLanguageOutputMaps(
@@ -35384,6 +35980,11 @@ export async function generateSong(
 
     guarded = await applyV1LockedWholeLyricLanguageMix(guarded, params);
 
+    guarded = refreshSelectedLanguageOutputMaps(guarded, params);
+    if (hasAuditableJapaneseBodyAtFinalBoundary(guarded)) {
+      reserveFinalJapaneseAuditRequest(auditSessionId);
+    }
+
     if (route !== 'v2' && guarded?.lyrics) {
       const postLanguageMixIntegrity = await repairV1FinalSectionAndCueIntegrity(
         guarded,
@@ -35415,6 +36016,11 @@ export async function generateSong(
     }
 
     guarded = refreshSelectedLanguageOutputMaps(guarded, params);
+    guarded = await auditJapaneseNativeSemanticsAtFinalBoundary(
+      guarded,
+      params,
+      getAuditedAI(params.geminiApiKey, auditSessionId),
+    );
     assertNoFinalLyricHardBanViolations(guarded, params);
     delete (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
     delete (guarded as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
@@ -35763,6 +36369,16 @@ ${cardTargetScriptLines || '    - No extra mixed script required.'}`
 - 861: semantic-native Japanese line check. Reject redundant meaning inside one phrase (for example, an adjective that merely repeats the noun's meaning), physically impossible location/body-part chains, and noun-noun or noun-predicate pairings whose semantic relationship is unclear in ordinary Japanese.
 - Abstract metaphors are allowed only when the relationship is immediately intelligible in Japanese. If an image depends on translated concepts such as an unnatural 'line/texture/name of time/day' construction, rewrite it as a concrete Japanese action, sensation, or scene instead of preserving the foreign-language metaphor.
 - Before finalizing, read each sung line as a standalone Japanese sentence fragment: the subject/object/location relationship must still make sense without relying on a source-language sentence that the listener cannot see.
+- 864 native drafting pass: build every Japanese sung line from the current scene directly in Japanese. Do not preserve foreign-language noun chains, modifier order, spatial relations, or clause logic merely because they are grammatically translatable.
+- Prefer concrete verb-led Japanese phrasing, conventional particle/predicate pairings, and collocations that sound normal when spoken aloud by a contemporary native speaker.
+- Silently re-read every Japanese sung line before returning JSON. Check modifier→noun fit, subject/object/location plausibility, ordinary Japanese collocation, semantic redundancy, hook clarity, and singable breath. Rewrite only lines that fail this native read-through; do not output the audit.
+- SORIDRAW_865_JAPANESE_NATIVE_RELATION_FINAL: for each Japanese sung line, identify the main predicate and verify that its subject, object, destination/location, state, and case particles are relations a native speaker would naturally assign to that predicate. If the relation is only technically grammatical or only makes sense after translating it back into another language, rewrite the line in native Japanese while preserving the same scene and intent.
+- Verify modifier→head-noun compatibility and verb/noun collocation as spoken contemporary Japanese, not dictionary-level word compatibility. Prefer the simplest native relation that carries the intended image over a poetic-looking but unusual combination.
+- Check physical and temporal plausibility inside the current scene: actions must have a plausible actor/object/place, sensations must belong to something that can naturally carry them, and neighboring clauses must connect without a hidden source-language premise.
+- Do not solve this check with stock lyric vocabulary, generic emotion, extra abstraction, or a canned phrase. The corrected line must remain specific to the existing scene, speaker, and narrative role.
+- If an abstract image is not immediately intelligible in Japanese, keep the same emotion and scene but express it through a concrete action, sensation, object, or observable change instead of forcing the abstraction into Japanese.
+- Repetition is allowed when it functions as an intentional hook. Do not create near-duplicate lines or repeat the same image only because the wording changed slightly.
+- Do not improve a weak line by inserting generic lyric vocabulary or unrelated emotion. Every image and feeling must stay grounded in the song's existing scene, speaker, and story.
 - Phrase by natural Japanese lyric sense-units rather than translating another language line-by-line. Favor everyday idiomatic combinations a native Japanese lyricist would plausibly sing, while keeping the lyric concise enough to sing naturally.
 - Keep the same song meaning and section architecture, but let Japanese phrasing compress, omit, or reorder information naturally when needed for singing.
 - The Japanese sung body must be clearly Japanese-dominant enough to pass selected-language validation without repairSelectedLanguageCard.`

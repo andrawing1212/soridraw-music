@@ -5081,3 +5081,57 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   background: #E5DCCE !important;
   background-color: #E5DCCE !important;
 }
+
+
+/* SORIDRAW_MUSIC_NOTE_VISUAL_TUNE_963
+   Music Note applied keywords are metadata text, not controls: remove chip fills/borders
+   and lower their contrast. State buttons keep white ON fills, darker OFF fills. */
+.soridraw-musicnote-song-keywords {
+  gap: 0.38rem !important;
+}
+.soridraw-musicnote-song-keywords > :is(button, span, div) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  color: rgba(255, 255, 255, 0.43) !important;
+  padding-left: 0.08rem !important;
+  padding-right: 0.08rem !important;
+}
+.soridraw-musicnote-song-keywords > :is(button, span, div):is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.52) !important;
+}
+html[data-soridraw-color-mode="light"] .soridraw-musicnote-song-keywords > :is(button, span, div),
+html:not(.dark) .soridraw-musicnote-song-keywords > :is(button, span, div) {
+  color: rgba(30, 30, 32, 0.48) !important;
+}
+
+
+/* SORIDRAW_MUSIC_NOTE_COMPACT_SUNO_BUTTONS_964 */
+.soridraw-musicnote-song-keywords > :is(button, span, div) {
+  color: rgba(255, 255, 255, 0.38) !important;
+}
+.soridraw-musicnote-song-keywords > :is(button, span, div):is(:hover, :active, :focus, :focus-visible) {
+  color: rgba(255, 255, 255, 0.46) !important;
+}
+html[data-soridraw-color-mode="light"] .soridraw-musicnote-song-keywords > :is(button, span, div),
+html:not(.dark) .soridraw-musicnote-song-keywords > :is(button, span, div) {
+  color: rgba(30, 30, 32, 0.42) !important;
+}
+
+
+/* SORIDRAW_MUSIC_NOTE_STATE_BUTTON_HOVER_TONE_967 */
+.soridraw-musicnote-song-state-actions > button {
+  --soridraw-musicnote-state-bg: #242428;
+}
+@media (hover: hover) and (pointer: fine) {
+  .soridraw-musicnote-song-state-actions > button:hover {
+    --soridraw-musicnote-state-bg: #303034;
+  }
+}

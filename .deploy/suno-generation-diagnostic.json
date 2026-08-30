@@ -1,0 +1,49 @@
+{
+  "tool": "diagnose-recent-suno-tracks-readonly",
+  "projectId": "soridraw-app-866a5",
+  "generatedAt": "2026-08-25T04:24:02.031Z",
+  "lookbackMinutes": 90,
+  "safety": {
+    "databaseWrites": 0,
+    "databaseDeletes": 0,
+    "documentIdsPrinted": false,
+    "userIdsPrinted": false,
+    "contentValuesPrinted": false,
+    "apiKeysPrinted": false
+  },
+  "scan": {
+    "collectionGroupDocumentsRead": 73,
+    "exactLibraryQueryDocumentsRead": 21,
+    "sunoTrackDocumentsScanned": 73,
+    "recentSunoTrackRecords": 1,
+    "statusCounts": {
+      "completed": 1
+    }
+  },
+  "recent": [
+    {
+      "createdAt": "2026-08-25T04:13:01.936Z",
+      "updatedAt": "2026-08-25T04:13:43.827Z",
+      "status": "completed",
+      "taskIdPresent": true,
+      "taskIdUnknown": false,
+      "providerTaskIdPresent": true,
+      "apiResponseCode": 200,
+      "apiResponsePresent": true,
+      "apiStatusResponsePresent": true,
+      "requestPayloadPresent": true,
+      "hasAudio": true,
+      "sunoDataItems": 2,
+      "audioUrlsItems": 2,
+      "groupHidden": false,
+      "allSunoItemsHidden": false,
+      "defaultVisibilityEligible": true,
+      "failureMarkerPresent": false,
+      "provider": "sunoapi.org",
+      "libraryExactQueryReturned": true,
+      "libraryExactQueryRank": 1,
+      "libraryExactQueryTop20": true
+    }
+  ],
+  "elapsedMs": 3518
+}

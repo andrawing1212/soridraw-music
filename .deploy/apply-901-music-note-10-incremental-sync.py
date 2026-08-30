@@ -402,12 +402,19 @@ const clearMusicNotePaginationCursor = (uid: string) => {
         "          const saveSignal = buildFavoriteSyncSignal('save', { ...song, ...restoreUpdates }, [{ ...existingFav, ...restoreUpdates }], restoredAt);",
         'restore signal timestamp',
     )
-    app = replace_once(
-        app,
-        "    try {\n      await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);\n      const favoriteUpdatedAtMs = Date.now();",
-        "    try {\n      const favoriteUpdatedAtMs = Date.now();\n      sanitizedUpdates = sanitizeForFirestore({ ...sanitizedUpdates, updatedAtMs: favoriteUpdatedAtMs });\n      await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);",
-        'normal update updatedAtMs',
-    )
+    old_normal_update = "    try {\n      await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);\n      const favoriteUpdatedAtMs = Date.now();"
+    normal_update = "    try {\n      const favoriteUpdatedAtMs = Date.now();\n      sanitizedUpdates = sanitizeForFirestore({ ...sanitizedUpdates, updatedAtMs: favoriteUpdatedAtMs });\n      await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);"
+    boundary_normal_update = "    try {\n      await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user?.uid || currentFavorite?.uid || '', documentIds: [id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));\n      const favoriteUpdatedAtMs = Date.now();"
+    boundary_normal_update_with_version = "    try {\n      const favoriteUpdatedAtMs = Date.now();\n      sanitizedUpdates = sanitizeForFirestore({ ...sanitizedUpdates, updatedAtMs: favoriteUpdatedAtMs });\n      await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user?.uid || currentFavorite?.uid || '', documentIds: [id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));"
+    if app.count(old_normal_update) == 1 and app.count(boundary_normal_update) == 0:
+        app = app.replace(old_normal_update, normal_update, 1)
+    elif app.count(old_normal_update) == 0 and app.count(boundary_normal_update) == 1:
+        app = app.replace(boundary_normal_update, boundary_normal_update_with_version, 1)
+        print('SORIDRAW 901 normal update adapted to V1 mutation boundary')
+    elif app.count(boundary_normal_update_with_version) == 1:
+        print('SORIDRAW 901 normal update updatedAtMs already present; no-op')
+    else:
+        raise SystemExit('normal update updatedAtMs semantic mismatch')
 
     # Every existing compact favorite signal write advances the prepared
     # syncVersions.musicNote field without replacing sibling syncVersions fields.
@@ -421,8 +428,8 @@ const clearMusicNotePaginationCursor = (uid: string) => {
     # Clear-all now publishes one cumulative delete signal so another device can
     # remove all deleted cached ids through the existing users listener.
     clear_old = "      await batch.commit();\n      showToast(`${unlockedDocs.length}개의 곡이 삭제되었습니다.`);"
-    clear_new = '''      await batch.commit();
-      const deletedAt = Date.now();
+    clear_boundary_old = "      await runV1MutationBoundary({ domain: 'musicNote', operation: 'bulk-delete', uid: user.uid, documentIds: unlockedDocs.map((docSnap) => docSnap.id), affectedCount: unlockedDocs.length }, batch.commit());\n      showToast(`${unlockedDocs.length}개의 곡이 삭제되었습니다.`);"
+    clear_new_body = '''      const deletedAt = Date.now();
       const deletedFavorites = unlockedDocs.map(mapFavoriteFirestoreDoc);
       rememberFavoriteDeletedTombstones(user.uid, deletedFavorites.map((favorite) => favorite.id).filter(Boolean));
       const deleteSignal = buildFavoriteSyncSignal('delete', deletedFavorites[0] || {}, deletedFavorites, deletedAt);
@@ -433,7 +440,15 @@ const clearMusicNotePaginationCursor = (uid: string) => {
         'syncVersions.musicNote': deletedAt,
       });
       showToast(`${unlockedDocs.length}개의 곡이 삭제되었습니다.`);'''
-    app = replace_once(app, clear_old, clear_new, 'clear all delete signal')
+    clear_new = "      await batch.commit();\n" + clear_new_body
+    clear_boundary_new = "      await runV1MutationBoundary({ domain: 'musicNote', operation: 'bulk-delete', uid: user.uid, documentIds: unlockedDocs.map((docSnap) => docSnap.id), affectedCount: unlockedDocs.length }, batch.commit());\n" + clear_new_body
+    if app.count(clear_old) == 1 and app.count(clear_boundary_old) == 0:
+        app = app.replace(clear_old, clear_new, 1)
+    elif app.count(clear_old) == 0 and app.count(clear_boundary_old) == 1:
+        app = app.replace(clear_boundary_old, clear_boundary_new, 1)
+        print('SORIDRAW 901 clear-all adapted to V1 mutation boundary')
+    else:
+        raise SystemExit('clear all delete signal semantic mismatch')
 
     app = app.replace(
         "// In paged loading mode, never rely on the currently visible 20-item slice for destructive all-item actions.",

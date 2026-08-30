@@ -8,9 +8,10 @@ import {
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { auth, db } from '../firebase';
-import { doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
 import { ensureDefaultPlaylists, getPlaylistsByType, addPlaylistItem } from '../services/playlistService';
-import { downloadAudioWithTitle } from '../lib/songUtils';
+import { downloadSunoAudioWithRecovery } from '../services/sunoAudioRecovery';
+// SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
 import SunoTrackDetailModal from './SunoTrackDetailModal';
 
 function ScrollText({ text, className = '' }: { text: string; className?: string }) {
@@ -503,12 +504,19 @@ export default function GlobalPlayer() {
     handleModeChange('expanded');
   };
 
-  const handleDownload = (url: string, title?: string) => {
-    if (!url) {
+  const handleDownload = async (url: string, title?: string) => {
+    if (!url && !currentTrack) {
       alert('아직 다운로드할 음원이 없습니다.');
       return;
     }
-    downloadAudioWithTitle(url, title);
+
+    const target = currentTrack
+      ? { ...currentTrack, url: url || currentTrack.url }
+      : { url, title: title || 'SORIDRAW' };
+    const result = await downloadSunoAudioWithRecovery(target, title || currentTrack?.title);
+    if (!result.ok) {
+      alert('Music API에서 현재 다운로드 가능한 음원 링크를 찾지 못했습니다. 잠시 후 다시 시도해주세요.');
+    }
   };
 
   const handleCopyShareLink = async () => {

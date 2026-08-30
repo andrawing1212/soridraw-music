@@ -1,0 +1,118 @@
+name: SORIDRAW Backend V2 2-A3-R App Check Read-only Preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/trigger-backend-v2-2a3r-appcheck.txt'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-backend-v2-2a3r-appcheck-readonly
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Authenticate read-only config session
+        id: auth
+        continue-on-error: true
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install Functions dependencies
+        id: install
+        continue-on-error: true
+        working-directory: functions
+        run: npm ci
+
+      - name: Read reCAPTCHA Enterprise website-key domains
+        id: inspect
+        if: steps.auth.outcome == 'success' && steps.install.outcome == 'success'
+        continue-on-error: true
+        working-directory: functions
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const { GoogleAuth } = require('google-auth-library');
+          const projectId = 'soridraw-app-866a5';
+          const keyId = '6Le6bGEtAAAAAOVROhuXew0lxJcpVNVwPZN0ZWKO';
+          const previewDomain = 'soridraw-music-git-preview-andrawing1212.vercel.app';
+          (async () => {
+            const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+            const client = await auth.getClient();
+            const token = await client.getAccessToken();
+            const res = await fetch(`https://recaptchaenterprise.googleapis.com/v1/projects/${projectId}/keys/${keyId}`, {
+              headers: { Authorization: `Bearer ${token.token}` },
+            });
+            const text = await res.text();
+            if (!res.ok) throw new Error(`recaptcha key read failed ${res.status}: ${text.slice(0, 500)}`);
+            const data = JSON.parse(text);
+            const domains = Array.isArray(data?.webSettings?.allowedDomains) ? data.webSettings.allowedDomains : [];
+            const report = {
+              tool: 'backend-v2-2a3r-appcheck-readonly',
+              projectId,
+              previewDomain,
+              allowedDomains: domains,
+              previewDomainPresent: domains.includes(previewDomain),
+              safety: { configWrites: 0, databaseReads: 0, databaseWrites: 0, databaseDeletes: 0 },
+              generatedAt: new Date().toISOString(),
+            };
+            fs.mkdirSync('../.deploy', { recursive: true });
+            fs.writeFileSync('../.deploy/backend-v2-2a3r-appcheck.json', JSON.stringify(report, null, 2) + '\n');
+            console.log(JSON.stringify(report, null, 2));
+          })().catch((error) => {
+            console.error(error?.stack || error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Record outcome
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy
+          if [ ! -f .deploy/backend-v2-2a3r-appcheck.json ]; then
+            cat > .deploy/backend-v2-2a3r-appcheck.json <<JSON
+          {
+            "tool": "backend-v2-2a3r-appcheck-readonly",
+            "projectId": "soridraw-app-866a5",
+            "status": "unavailable",
+            "authOutcome": "${{ steps.auth.outcome }}",
+            "installOutcome": "${{ steps.install.outcome }}",
+            "inspectOutcome": "${{ steps.inspect.outcome }}",
+            "safety": {"configWrites":0,"databaseReads":0,"databaseWrites":0,"databaseDeletes":0}
+          }
+          JSON
+          fi
+          cat .deploy/backend-v2-2a3r-appcheck.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit read-only result
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/backend-v2-2a3r-appcheck.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "docs: record 2-A3-R App Check read-only preflight"
+          git push origin HEAD:preview

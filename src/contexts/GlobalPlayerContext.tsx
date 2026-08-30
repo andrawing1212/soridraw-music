@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { applyRecoveredSunoAudioUrl, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
+// SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
 
 export interface Track {
   url: string;
@@ -181,6 +183,59 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
+  const recoverAndRetryPlayback = useCallback(async (track: Track, error?: any) => {
+    const failedUrl = String(track?.url || '').trim();
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+
+    const recovered = await recoverSunoAudioUrl(track, { failedUrl });
+    if (!recovered?.audioUrl || !audioRef.current) {
+      notifyPlaybackUnavailable(track, error);
+      updateMediaSession(track, 'paused');
+      return false;
+    }
+
+    const recoveredTrack = applyRecoveredSunoAudioUrl(track, recovered) as Track;
+    currentTrackRef.current = recoveredTrack;
+    setCurrentTrack(recoveredTrack);
+
+    const sourceParentId = String(track?.parent?.id || track?.parent?.trackId || track?.parent?.sourceId || '').trim();
+    const sourceIndex = Number(track?.index ?? 0);
+    const nextQueue = queueRef.current.map((queued) => {
+      const queuedParentId = String(queued?.parent?.id || queued?.parent?.trackId || queued?.parent?.sourceId || '').trim();
+      const queuedIndex = Number(queued?.index ?? 0);
+      if (sourceParentId && queuedParentId === sourceParentId && queuedIndex === sourceIndex) {
+        return applyRecoveredSunoAudioUrl(queued, recovered) as Track;
+      }
+      if (!sourceParentId && queued.url === failedUrl) {
+        return applyRecoveredSunoAudioUrl(queued, recovered) as Track;
+      }
+      return queued;
+    });
+    queueRef.current = nextQueue;
+    setQueue(nextQueue);
+
+    const audio = audioRef.current;
+    try {
+      audio.pause();
+      audio.src = recovered.audioUrl;
+      audio.currentTime = 0;
+      audio.load();
+      await audio.play();
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+      updateMediaSession(recoveredTrack, 'playing');
+      return true;
+    } catch (retryError) {
+      console.error('Recovered audio play failed:', retryError);
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      notifyPlaybackUnavailable(recoveredTrack, retryError);
+      updateMediaSession(recoveredTrack, 'paused');
+      return false;
+    }
+  }, [notifyPlaybackUnavailable, updateMediaSession]);
+
   const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
     if (!track?.url || !audioRef.current) return;
 
@@ -216,24 +271,18 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch((err) => {
-          console.error('Audio play failed:', err);
-          setIsPlaying(false);
-          isPlayingRef.current = false;
-          notifyPlaybackUnavailable(track, err);
-          updateMediaSession(track, 'paused');
+          console.error('Audio play failed; attempting Task ID URL recovery:', err);
+          void recoverAndRetryPlayback(track, err);
         });
       }
 
       setIsPlaying(true);
       isPlayingRef.current = true;
     } catch (error) {
-      console.error('Audio play failed:', error);
-      setIsPlaying(false);
-      isPlayingRef.current = false;
-      notifyPlaybackUnavailable(track, error);
-      updateMediaSession(track, 'paused');
+      console.error('Audio play failed; attempting Task ID URL recovery:', error);
+      void recoverAndRetryPlayback(track, error);
     }
-  }, [notifyPlaybackUnavailable, updateMediaSession]);
+  }, [recoverAndRetryPlayback, updateMediaSession]);
 
   const findCurrentIndex = useCallback((current: Track | null, list: Track[]) => {
     if (!current || list.length === 0) return -1;

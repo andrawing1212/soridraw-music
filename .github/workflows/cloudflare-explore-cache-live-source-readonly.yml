@@ -1,0 +1,53 @@
+name: Cloudflare Explore Cache Live Source Readonly
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cloudflare-explore-cache-live-source-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview tooling
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare exact unpatched live Worker without deploy
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN unavailable'; exit 2; }
+          npm install --no-audit --no-fund
+          mkdir -p "$RUNNER_TEMP/explore-patches"
+          if [ -f patches/002-explore-feed-edge-cache.mjs ]; then
+            mv patches/002-explore-feed-edge-cache.mjs "$RUNNER_TEMP/explore-patches/"
+          fi
+          npm run cf:prepare
+          echo '[Explore cache diag] feed/publication/mutation anchors:'
+          grep -nE "v1/feed|v1/me/publications|v1/publications|handleFeed|handlePublication|handleVisibility|handleLike|caches\.default|Cache-Control" .remote-worker/worker.js | head -n 320 || true
+          echo 'READ_ONLY=true'
+          echo 'NO_WORKER_DEPLOY=true'
+          echo 'NO_D1_WRITE=true'
+
+      - name: Upload exact unpatched live Worker source
+        uses: actions/upload-artifact@v4
+        with:
+          name: explore-live-worker-cache-source-unpatched
+          path: cloudflare/explore-worker/.remote-worker/worker.js
+          retention-days: 1

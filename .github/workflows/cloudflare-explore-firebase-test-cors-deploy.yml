@@ -1,0 +1,75 @@
+name: Cloudflare Explore Firebase Test CORS Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cloudflare-explore-firebase-test-cors-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-explore-firebase-test-cors-deploy
+  cancel-in-progress: false
+
+jobs:
+  exact-live-worker-cors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview tooling
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare exact live Worker and apply only Firebase test CORS patch
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN secret is unavailable'; exit 2; }
+          npm install --no-audit --no-fund
+          npm run cf:prepare
+          grep -Fq 'https://soridraw-music.vercel.app' .remote-worker/worker.js
+          grep -Fq 'https://preview.soridraw.com' .remote-worker/worker.js
+          grep -Fq 'https://soridraw-test.web.app' .remote-worker/worker.js
+          grep -Fq 'https://soridraw-test.firebaseapp.com' .remote-worker/worker.js
+          test "$(grep -Fc 'https://soridraw-test.web.app' .remote-worker/worker.js)" = '1'
+          test "$(grep -Fc 'https://soridraw-test.firebaseapp.com' .remote-worker/worker.js)" = '1'
+          echo '[Explore CORS] exact-live source prepared with two test origins: PASS'
+
+      - name: Deploy only prepared Explore Worker
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run cf:deploy
+          echo '[Explore CORS] Worker deploy: PASS'
+
+      - name: Re-read live Worker and verify CORS source persisted
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .remote-worker
+          npm run cf:prepare
+          grep -Fq 'https://soridraw-music.vercel.app' .remote-worker/worker.js
+          grep -Fq 'https://preview.soridraw.com' .remote-worker/worker.js
+          grep -Fq 'https://soridraw-test.web.app' .remote-worker/worker.js
+          grep -Fq 'https://soridraw-test.firebaseapp.com' .remote-worker/worker.js
+          test "$(grep -Fc 'https://soridraw-test.web.app' .remote-worker/worker.js)" = '1'
+          test "$(grep -Fc 'https://soridraw-test.firebaseapp.com' .remote-worker/worker.js)" = '1'
+          echo 'EXPLORE_FIREBASE_TEST_CORS_COMPLETE=true'
+          echo 'NO_D1_MIGRATION=true'
+          echo 'NO_D1_WRITE=true'
+          echo 'NO_R2_DATA_WRITE=true'
+          echo 'NO_FIREBASE_PRODUCTION_HOSTING_DEPLOY=true'

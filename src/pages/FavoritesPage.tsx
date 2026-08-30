@@ -1,3 +1,4 @@
+import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
@@ -6,6 +7,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
 import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../components/MusicApiGenerateModal';
 import StudioCenterModalPortal from '../components/studio/StudioCenterModalPortal';
+import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
+
+const SORIDRAW_930_ROUTE_USER_READ_CACHE = true;
+const SORIDRAW_917_MUSIC_NOTE_DELTA_SYNC_NO_FULLSCAN = true;
+const SORIDRAW_902_LIST_BUNDLE_CACHE = true;
+const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 import { GENRES, MOODS, THEMES, SOUND_STYLES, INSTRUMENT_SOUNDS } from '../constants';
 import {
   Music,
@@ -29,6 +36,8 @@ import {
   Square,
   SlidersHorizontal,
   Heart as HeartIcon,
+  ThumbsUp,
+  Globe2,
   Lock,
   Unlock,
   Edit2,
@@ -52,10 +61,21 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { User } from 'firebase/auth';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc, setDoc, deleteDoc, addDoc, collection, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, deleteDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot } from '../lib/firestoreMeasured';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { favoritesStore } from '../hooks/useFavoritesStore';
+import {
+  getExploreMusicNotePublicationState,
+  getExploreMusicNotePublicationStates,
+  getExplorePublicationErrorMessage,
+  publishMusicNoteToExplore,
+  setExploreTrackPublicationOptions,
+  setExploreTrackVisibility,
+  type ExploreMusicNotePublicationState,
+  type ExplorePublicationOptions,
+} from '../services/explorePublicationService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
+import { readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 
 
 const PROJECT_ID = 'soridraw-app-866a5';
@@ -63,8 +83,206 @@ const REGION = 'us-central1';
 const BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
 const SUNO_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_suno_api_key_registered';
 const MUSIC_NOTE_VISIBLE_BATCH_SIZE = 20;
+const SORIDRAW_901_MUSIC_NOTE_10_INCREMENTAL_SYNC = true;
 const MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT = 450;
 let musicNoteVisibleCountMemory = MUSIC_NOTE_VISIBLE_BATCH_SIZE;
+
+
+type MusicNoteFolderSharedSession = {
+  data: any | null;
+  listeners: Set<(data: any) => void>;
+  unsubscribe: (() => void) | null;
+};
+
+const musicNoteFolderSharedSessions = new Map<string, MusicNoteFolderSharedSession>();
+
+const subscribeMusicNoteFolderDocument = (uid: string, listener: (data: any) => void) => {
+  let session = musicNoteFolderSharedSessions.get(uid);
+  if (!session) {
+    session = { data: null, listeners: new Set(), unsubscribe: null };
+    musicNoteFolderSharedSessions.set(uid, session);
+  }
+
+  session.listeners.add(listener);
+  if (session.data !== null) {
+    const cachedData = session.data;
+    queueMicrotask(() => {
+      if (session?.listeners.has(listener)) listener(cachedData);
+    });
+  }
+
+  if (!session.unsubscribe) {
+    const targetSession = session;
+    targetSession.unsubscribe = onSnapshot(
+      doc(db, 'user_structures', uid),
+      (snapshot) => {
+        const nextData: any = snapshot.exists() ? snapshot.data() : {};
+        targetSession.data = nextData;
+        targetSession.listeners.forEach((subscriber) => subscriber(nextData));
+      },
+      (error) => {
+        console.warn('music note folder shared listener failed:', error);
+        targetSession.unsubscribe = null;
+      },
+    );
+  }
+
+  return () => {
+    session?.listeners.delete(listener);
+    // Intentionally keep the single Firestore listener alive for this SPA session.
+    // Re-subscribing on every route mount would recreate the original read leak.
+  };
+};
+
+const SORIDRAW_934_MUSIC_NOTE_FOLDER_SHARED_LISTENER = true;
+
+
+type MusicNoteCardStateItem = {
+  liked: boolean;
+  locked: boolean;
+  updatedAtMs: number;
+};
+
+type MusicNoteCardStateSnapshot = {
+  schemaVersion: 1;
+  items: Record<string, MusicNoteCardStateItem>;
+  updatedAtMs: number;
+};
+
+const MUSIC_NOTE_CARD_STATE_STORAGE_BASE = 'soridraw_music_note_card_state_v1';
+const MUSIC_NOTE_CARD_STATE_DIRTY_STORAGE_BASE = 'soridraw_music_note_card_state_dirty_v1';
+const EMPTY_MUSIC_NOTE_CARD_STATE: MusicNoteCardStateSnapshot = {
+  schemaVersion: 1,
+  items: {},
+  updatedAtMs: 0,
+};
+
+const getMusicNoteCardStateStorageKey = (uid: string) => `${MUSIC_NOTE_CARD_STATE_STORAGE_BASE}_${uid}`;
+
+const normalizeMusicNoteCardState = (value: any): MusicNoteCardStateSnapshot => {
+  const rawItems = value && typeof value?.items === 'object' && value.items ? value.items : {};
+  const items: Record<string, MusicNoteCardStateItem> = {};
+  Object.entries(rawItems).forEach(([id, raw]: [string, any]) => {
+    const normalizedId = String(id || '').trim();
+    if (!normalizedId || !raw || typeof raw !== 'object') return;
+    items[normalizedId] = {
+      liked: Boolean(raw.liked),
+      locked: Boolean(raw.locked),
+      updatedAtMs: Number(raw.updatedAtMs || 0),
+    };
+  });
+  return {
+    schemaVersion: 1,
+    items,
+    updatedAtMs: Number(value?.updatedAtMs || 0),
+  };
+};
+
+const mergeMusicNoteCardStateSnapshots = (
+  first: MusicNoteCardStateSnapshot,
+  second: MusicNoteCardStateSnapshot,
+): MusicNoteCardStateSnapshot => {
+  const ids = new Set([...Object.keys(first.items || {}), ...Object.keys(second.items || {})]);
+  const items: Record<string, MusicNoteCardStateItem> = {};
+  ids.forEach((id) => {
+    const a = first.items?.[id];
+    const b = second.items?.[id];
+    if (!a) items[id] = b;
+    else if (!b) items[id] = a;
+    else items[id] = Number(b.updatedAtMs || 0) >= Number(a.updatedAtMs || 0) ? b : a;
+  });
+  return {
+    schemaVersion: 1,
+    items,
+    updatedAtMs: Math.max(Number(first.updatedAtMs || 0), Number(second.updatedAtMs || 0)),
+  };
+};
+
+const readMusicNoteCardStateLocal = (uid: string): MusicNoteCardStateSnapshot => {
+  if (!uid || typeof localStorage === 'undefined') return EMPTY_MUSIC_NOTE_CARD_STATE;
+  try {
+    const raw = localStorage.getItem(getMusicNoteCardStateStorageKey(uid));
+    return raw ? normalizeMusicNoteCardState(JSON.parse(raw)) : EMPTY_MUSIC_NOTE_CARD_STATE;
+  } catch {
+    return EMPTY_MUSIC_NOTE_CARD_STATE;
+  }
+};
+
+const writeMusicNoteCardStateLocal = (uid: string, snapshot: MusicNoteCardStateSnapshot) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(getMusicNoteCardStateStorageKey(uid), JSON.stringify(snapshot));
+  } catch {
+    // Local persistence is an optimization; in-memory state still works.
+  }
+};
+
+const getMusicNoteCardStateDirtyStorageKey = (uid: string) => `${MUSIC_NOTE_CARD_STATE_DIRTY_STORAGE_BASE}_${uid}`;
+
+const isMusicNoteCardStateDirty = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem(getMusicNoteCardStateDirtyStorageKey(uid)) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const markMusicNoteCardStateDirty = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(getMusicNoteCardStateDirtyStorageKey(uid), '1');
+  } catch {
+    // The in-memory state still works even when localStorage is unavailable.
+  }
+};
+
+const clearMusicNoteCardStateDirty = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.removeItem(getMusicNoteCardStateDirtyStorageKey(uid));
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+};
+
+const musicNoteCardStateFlushInFlight = new Map<string, Promise<boolean>>();
+
+const flushMusicNoteCardStateServerWrite = (uid: string): Promise<boolean> => {
+  if (!uid || !isMusicNoteCardStateDirty(uid)) return Promise.resolve(false);
+  const existing = musicNoteCardStateFlushInFlight.get(uid);
+  if (existing) return existing;
+
+  const snapshot = readMusicNoteCardStateLocal(uid);
+  const task = (async () => {
+    try {
+      await setDoc(doc(db, 'user_structures', uid), {
+        musicNoteCardState: {
+          schemaVersion: 1,
+          items: snapshot.items,
+          updatedAtMs: snapshot.updatedAtMs,
+          updatedAt: serverTimestamp(),
+        },
+      }, { merge: true });
+      clearMusicNoteCardStateDirty(uid);
+      return true;
+    } catch (error) {
+      console.warn('Music Note card-state exit sync failed; local dirty state is preserved.', error);
+      return false;
+    } finally {
+      musicNoteCardStateFlushInFlight.delete(uid);
+    }
+  })();
+
+  musicNoteCardStateFlushInFlight.set(uid, task);
+  return task;
+};
+
+const SORIDRAW_MUSIC_NOTE_EXIT_ONLY_CARD_STATE_SYNC_961 = true;
+const SORIDRAW_MUSIC_NOTE_STATE_BUTTON_FILL_LAYER_962 = true;
+  // SORIDRAW_MUSIC_NOTE_VISUAL_TUNE_963
+  // SORIDRAW_MUSIC_NOTE_COMPACT_SUNO_BUTTONS_964
+const SORIDRAW_MUSIC_NOTE_LIGHTWEIGHT_CARD_STATE_960 = true;
 
 const scopedApiStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
 
@@ -1174,6 +1392,65 @@ export default function FavoritesPage({
   const [isShaking, setIsShaking] = useState(false);
   const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
   const [activeFavoriteMenuId, setActiveFavoriteMenuId] = useState<string | null>(null);
+  // SORIDRAW_EXPLORE_PUBLICATION_UI_902
+  const [explorePublicationStateBySongId, setExplorePublicationStateBySongId] = useState<Record<string, ExploreMusicNotePublicationState>>({});
+  const [explorePublicationBusyId, setExplorePublicationBusyId] = useState<string | null>(null);
+  // SORIDRAW_EXPLORE_8E4_MUSIC_NOTE_PUBLICATION_UI_956
+  // SORIDRAW_EXPLORE_8E4_INTERACTION_BUTTON_FIX_957
+  // SORIDRAW_EXPLORE_8E4_STATE_BUTTON_FILL_LIVE_LIKE_958
+  // SORIDRAW_EXPLORE_8E4_PERSONAL_LIKE_FIX_959
+  const [explorePublicationDialog, setExplorePublicationDialog] = useState<{
+    song: any;
+    sourceId: string;
+    state: ExploreMusicNotePublicationState;
+    options: ExplorePublicationOptions;
+  } | null>(null);
+  const [explorePublicationPrivateConfirm, setExplorePublicationPrivateConfirm] = useState(false);
+  // SORIDRAW_EXPLORE_PUBLICATION_STATE_HYDRATION_965
+  // SORIDRAW_MUSIC_NOTE_STATE_BUTTON_FINAL_ALIGN_966
+  // SORIDRAW_MUSIC_NOTE_STATE_BUTTON_HOVER_TONE_967
+  const explorePublicationHydratedUidRef = useRef<string | null>(null);
+  const [musicNoteCardState, setMusicNoteCardState] = useState<MusicNoteCardStateSnapshot>(EMPTY_MUSIC_NOTE_CARD_STATE);
+  const musicNoteCardStateRef = useRef<MusicNoteCardStateSnapshot>(EMPTY_MUSIC_NOTE_CARD_STATE);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      musicNoteCardStateRef.current = EMPTY_MUSIC_NOTE_CARD_STATE;
+      setMusicNoteCardState(EMPTY_MUSIC_NOTE_CARD_STATE);
+      return;
+    }
+
+    const uid = user.uid;
+    const localState = readMusicNoteCardStateLocal(uid);
+    musicNoteCardStateRef.current = localState;
+    setMusicNoteCardState(localState);
+
+    let active = true;
+    const unsubscribe = subscribeMusicNoteFolderDocument(uid, (data: any) => {
+      if (!active) return;
+      const serverState = normalizeMusicNoteCardState(data?.musicNoteCardState);
+      const currentLocal = musicNoteCardStateRef.current;
+      const merged = mergeMusicNoteCardStateSnapshots(serverState, currentLocal);
+      const localNewer: Record<string, MusicNoteCardStateItem> = {};
+      Object.entries(currentLocal.items).forEach(([id, item]) => {
+        const serverItem = serverState.items?.[id];
+        if (!serverItem || Number(item.updatedAtMs || 0) > Number(serverItem.updatedAtMs || 0)) {
+          localNewer[id] = item;
+        }
+      });
+
+      musicNoteCardStateRef.current = merged;
+      setMusicNoteCardState(merged);
+      writeMusicNoteCardStateLocal(uid, merged);
+      // Local-newer data stays cached and dirty; do not write while this page is open.
+      // A single exit flush handles all accumulated Like/Lock changes.
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [user?.uid]);
   const [favoriteContextMenuPosition, setFavoriteContextMenuPosition] = useState<{ songId: string; top: number; left: number } | null>(null);
   const [favoriteColorMap, setFavoriteColorMap] = useState<Record<string, string>>({});
   const [activeFavoriteColorMenuId, setActiveFavoriteColorMenuId] = useState<string | null>(null);
@@ -1227,10 +1504,20 @@ export default function FavoritesPage({
         }
         return;
       }
+      const cachedProfile = readUserProfileCache(user.uid);
+      if (cachedProfile) {
+        if (!cancelled) {
+          setFavoriteUserProfile(cachedProfile);
+          setIsFavoriteAdminUser(Boolean(cachedProfile.role === 'admin'));
+        }
+        return;
+      }
+
       try {
         const snap = await getDoc(doc(db, 'users', user.uid));
         if (!cancelled) {
           const data: any | null = snap.exists() ? { uid: user.uid, ...snap.data() } : null;
+          if (data) writeUserProfileCache(user.uid, data);
           setFavoriteUserProfile(data);
           setIsFavoriteAdminUser(Boolean(data && data.role === 'admin'));
         }
@@ -1278,11 +1565,10 @@ export default function FavoritesPage({
   };
 
   const handleManualFavoriteSync = async () => {
-    if (!onManualSyncFavorites || isManualSyncingFavorites || isManualSyncUsedToday) return;
+    if (!onManualSyncFavorites || isManualSyncingFavorites) return;
     setIsManualSyncingFavorites(true);
     try {
       const result = await onManualSyncFavorites();
-      if (result?.ok || result?.limited) setIsManualSyncUsedToday(true);
       showFavoriteToast(result?.message || (result?.ok ? '뮤직노트를 동기화했습니다.' : '동기화에 실패했습니다.'));
     } catch (error) {
       console.error('manual favorite sync failed:', error);
@@ -1403,10 +1689,15 @@ export default function FavoritesPage({
     (async () => {
       const entries: Array<[string, string]> = await Promise.all(uids.map(async (uid): Promise<[string, string]> => {
         try {
+          const cachedProfile = readUserProfileCache(uid);
+          if (cachedProfile) {
+            return [uid, getCreatorNicknameFromProfile(cachedProfile, null)];
+          }
           const snap = await getDoc(doc(db, 'users', uid));
           if (!snap.exists()) return [uid, ''];
           const data: any = snap.data();
-          return [uid, getCreatorNicknameFromProfile({ ...data, uid }, null)];
+          const cached = writeUserProfileCache(uid, { ...data, uid });
+          return [uid, getCreatorNicknameFromProfile(cached, null)];
         } catch {
           return [uid, ''];
         }
@@ -1602,39 +1893,31 @@ export default function FavoritesPage({
 
 
   useEffect(() => {
-    let cancelled = false;
+    if (!user?.uid) {
+      setMyNoteFolders(DEFAULT_MY_NOTE_FOLDERS);
+      setSharedNoteFolders(DEFAULT_SHARED_NOTE_FOLDERS);
+      setSelectedMyNoteFolderId('default');
+      setSelectedSharedNoteFolderId('default');
+      return;
+    }
 
-    const loadMusicNoteFolders = async () => {
-      if (!user?.uid) {
-        setMyNoteFolders(DEFAULT_MY_NOTE_FOLDERS);
-        setSharedNoteFolders(DEFAULT_SHARED_NOTE_FOLDERS);
-        setSelectedMyNoteFolderId('default');
-        setSelectedSharedNoteFolderId('default');
-        return;
-      }
-
-      try {
-        const snap = await getDoc(doc(db, 'user_structures', user.uid));
-        if (cancelled) return;
-        const data: any = snap.exists() ? snap.data() : {};
-        const stored = data?.musicNoteFolders || {};
-        const nextMy = normalizeMusicNoteFolders(stored.myNote || data?.myNoteFolders, DEFAULT_MY_NOTE_FOLDERS);
-        const nextShared = normalizeMusicNoteFolders(stored.sharedNote || data?.sharedNoteFolders, DEFAULT_SHARED_NOTE_FOLDERS);
-        setMyNoteFolders(nextMy);
-        setSharedNoteFolders(nextShared);
-        setSelectedMyNoteFolderId((prev) => nextMy.some((folder) => folder.id === prev) ? prev : 'default');
-        setSelectedSharedNoteFolderId((prev) => nextShared.some((folder) => folder.id === prev) ? prev : 'default');
-      } catch (error) {
-        console.warn('load music note folders failed:', error);
-        if (!cancelled) {
-          setMyNoteFolders(DEFAULT_MY_NOTE_FOLDERS);
-          setSharedNoteFolders(DEFAULT_SHARED_NOTE_FOLDERS);
-        }
-      }
+    let active = true;
+    const applyFolderData = (data: any) => {
+      if (!active) return;
+      const stored = data?.musicNoteFolders || {};
+      const nextMy = normalizeMusicNoteFolders(stored.myNote || data?.myNoteFolders, DEFAULT_MY_NOTE_FOLDERS);
+      const nextShared = normalizeMusicNoteFolders(stored.sharedNote || data?.sharedNoteFolders, DEFAULT_SHARED_NOTE_FOLDERS);
+      setMyNoteFolders(nextMy);
+      setSharedNoteFolders(nextShared);
+      setSelectedMyNoteFolderId((prev) => nextMy.some((folder) => folder.id === prev) ? prev : 'default');
+      setSelectedSharedNoteFolderId((prev) => nextShared.some((folder) => folder.id === prev) ? prev : 'default');
     };
 
-    loadMusicNoteFolders();
-    return () => { cancelled = true; };
+    const unsubscribe = subscribeMusicNoteFolderDocument(user.uid, applyFolderData);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [user?.uid]);
 
   useEffect(() => {
@@ -1712,7 +1995,7 @@ export default function FavoritesPage({
       chunk.forEach((id) => {
         batch.update(doc(db, 'favorites', id), updates);
       });
-      await batch.commit();
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-update', uid: user?.uid || '', documentIds: chunk, affectedCount: chunk.length }, batch.commit());
     }
   };
 
@@ -1931,7 +2214,7 @@ export default function FavoritesPage({
   };
 
   const deleteSongsByMusicNoteContext = async (songs: any[]): Promise<boolean> => {
-    const deletableSongs = songs.filter((song) => getFavoriteDocumentId(song) && !song.isLocked);
+    const deletableSongs = songs.filter((song) => getFavoriteDocumentId(song) && !isMusicNoteCardLocked(song));
     if (deletableSongs.length === 0) {
       showFavoriteToast(songs.length === 0 ? '삭제할 곡을 선택해주세요.' : '잠긴 곡은 삭제할 수 없습니다.');
       return false;
@@ -2907,9 +3190,91 @@ export default function FavoritesPage({
     setIsEditing(true);
   };
 
+  useEffect(() => {
+    if (!user?.uid) return;
+    const uid = user.uid;
+    const flushIfDirty = () => {
+      if (isMusicNoteCardStateDirty(uid)) void flushMusicNoteCardStateServerWrite(uid);
+    };
+
+    window.addEventListener('pagehide', flushIfDirty);
+    return () => {
+      window.removeEventListener('pagehide', flushIfDirty);
+      flushIfDirty();
+    };
+  }, [user?.uid]);
+
+  const getMusicNoteCardStateSongId = (song: any) => String(
+    song?.firestoreId || song?.favoriteFirestoreId || song?.id || ''
+  ).trim();
+
+  const getMusicNoteCardStateItem = (song: any): MusicNoteCardStateItem | null => {
+    const id = getMusicNoteCardStateSongId(song);
+    return id ? (musicNoteCardState.items?.[id] || null) : null;
+  };
+
+  const isMusicNoteCardLiked = (song: any) => {
+    const item = getMusicNoteCardStateItem(song);
+    return item ? Boolean(item.liked) : Boolean(song?.isLiked);
+  };
+
+  const isMusicNoteCardLocked = (song: any) => {
+    const item = getMusicNoteCardStateItem(song);
+    const locked = item ? Boolean(item.locked) : Boolean(song?.isLocked);
+    if (item && song && typeof song === 'object') song.isLocked = locked;
+    return locked;
+  };
+
+  const updateMusicNoteCardStateForSong = (
+    song: any,
+    patch: Partial<Pick<MusicNoteCardStateItem, 'liked' | 'locked'>>,
+  ) => {
+    if (!user?.uid || !song || shouldHideSunoUrlControls(song)) return;
+    const id = getMusicNoteCardStateSongId(song);
+    if (!id) return;
+
+    const previousItem = getMusicNoteCardStateItem(song);
+    const now = Date.now();
+    const nextItem: MusicNoteCardStateItem = {
+      liked: patch.liked ?? (previousItem ? Boolean(previousItem.liked) : Boolean(song?.isLiked)),
+      locked: patch.locked ?? (previousItem ? Boolean(previousItem.locked) : Boolean(song?.isLocked)),
+      updatedAtMs: now,
+    };
+    const nextSnapshot: MusicNoteCardStateSnapshot = {
+      schemaVersion: 1,
+      items: { ...musicNoteCardStateRef.current.items, [id]: nextItem },
+      updatedAtMs: now,
+    };
+
+    musicNoteCardStateRef.current = nextSnapshot;
+    setMusicNoteCardState(nextSnapshot);
+    writeMusicNoteCardStateLocal(user.uid, nextSnapshot);
+    markMusicNoteCardStateDirty(user.uid);
+
+    // Keep legacy object consumers in this render/session consistent without a favorites write.
+    song.isLiked = nextItem.liked;
+    song.isLocked = nextItem.locked;
+  };
+
+  const renderMusicNoteStateButtonFill = (active: boolean) => (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 rounded-full"
+      style={{
+        background: active ? '#f7f7f7' : 'var(--soridraw-musicnote-state-bg, #242428)',
+        boxShadow: active ? '0 2px 9px rgba(0,0,0,0.24)' : 'none',
+      }}
+    />
+  );
+
+  const handleTogglePersonalLike = (song: any) => {
+    if (!song || shouldHideSunoUrlControls(song)) return;
+    updateMusicNoteCardStateForSong(song, { liked: !isMusicNoteCardLiked(song) });
+  };
+
   const handleToggleLock = async (song: any) => {
-    const newLockedState = !song.isLocked;
-    await updateFavorite(song.id, { isLocked: newLockedState });
+    const newLockedState = !isMusicNoteCardLocked(song);
+    updateMusicNoteCardStateForSong(song, { locked: newLockedState });
 
     if (newLockedState) {
       recentlyUnlockedFavoriteIdsRef.current.delete(song.id);
@@ -2955,7 +3320,7 @@ export default function FavoritesPage({
   };
 
   const handlePopupDelete = async (song: any) => {
-    if (song.isLocked) {
+    if (isMusicNoteCardLocked(song)) {
       forceDeleteUnlockedFavoriteIfNeeded(song);
       return;
     }
@@ -2991,7 +3356,7 @@ export default function FavoritesPage({
   });
 
   const getSelectionLockHover = (
-    allSelectedLocked = selectedSongs.length > 0 && selectedSongs.every(song => song.isLocked)
+    allSelectedLocked = selectedSongs.length > 0 && selectedSongs.every(song => isMusicNoteCardLocked(song))
   ) => ({
     id: 'selection-lock',
     label: allSelectedLocked ? '선택 잠금 해제' : '선택 잠금',
@@ -3607,7 +3972,7 @@ export default function FavoritesPage({
     const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
     if (selectedSongs.length === 0) return;
 
-    const allLocked = selectedSongs.every(song => song.isLocked);
+    const allLocked = selectedSongs.every(song => isMusicNoteCardLocked(song));
     setPendingSelectionAction(allLocked ? 'unlock' : 'lock');
   };
 
@@ -3615,7 +3980,7 @@ export default function FavoritesPage({
     const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
     if (selectedSongs.length === 0) return;
 
-    await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: shouldLock })));
+    selectedSongs.forEach((song) => updateMusicNoteCardStateForSong(song, { locked: shouldLock }));
     setLastSelectionAction(shouldLock ? 'lock' : 'unlock');
     
     if (selectedSong && selectedSongIds.includes(selectedSong.id)) {
@@ -3632,7 +3997,7 @@ export default function FavoritesPage({
     }
 
     const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
-    const deletableSongs = selectedSongs.filter(song => !song.isLocked);
+    const deletableSongs = selectedSongs.filter(song => !isMusicNoteCardLocked(song));
 
     if (deletableSongs.length === 0) {
       setIsShaking(true);
@@ -3655,7 +4020,7 @@ export default function FavoritesPage({
 
   const executeSelectedDelete = async () => {
     const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
-    const deletableSongs = selectedSongs.filter(song => !song.isLocked);
+    const deletableSongs = selectedSongs.filter(song => !isMusicNoteCardLocked(song));
     
     const deleted = await deleteSongsByMusicNoteContext(deletableSongs);
     if (deleted) exitSelectionMode();
@@ -3817,9 +4182,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
   const isFavoriteTrashMode = musicNoteViewMode === 'noteSpace' && favoriteTrashView;
-  const selectedLockedCount = selectedSongs.filter(song => song.isLocked).length;
-  const hasDeletableSongs = selectedSongs.some(s => !s.isLocked);
-  const areSelectedSongsAllLocked = selectedSongs.length > 0 && selectedSongs.every(song => song.isLocked);
+  const selectedLockedCount = selectedSongs.filter(song => isMusicNoteCardLocked(song)).length;
+  const hasDeletableSongs = selectedSongs.some(s => !isMusicNoteCardLocked(s));
+  const areSelectedSongsAllLocked = selectedSongs.length > 0 && selectedSongs.every(song => isMusicNoteCardLocked(song));
 
   const handleSelectionMoveToFolder = () => {
     if (selectedSongIds.length === 0) return;
@@ -3830,7 +4195,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   const handleSelectionQuickLock = async () => {
     if (selectedSongs.length === 0) return;
     const shouldLock = !areSelectedSongsAllLocked;
-    await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: shouldLock })));
+    selectedSongs.forEach((song) => updateMusicNoteCardStateForSong(song, { locked: shouldLock }));
     setFavoriteSelectionMoreOpen(false);
     showFavoriteToast(shouldLock ? `${selectedSongs.length}곡을 잠금 처리했습니다.` : `${selectedSongs.length}곡 잠금을 해제했습니다.`);
     exitSelectionMode();
@@ -3838,7 +4203,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   const handleSelectionQuickDelete = () => {
     if (selectedSongIds.length === 0) return;
-    const deletable = activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !item.isLocked);
+    const deletable = activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !isMusicNoteCardLocked(item));
     if (deletable.length === 0) {
       showFavoriteToast('잠긴 곡은 삭제할 수 없습니다.');
       return;
@@ -4505,7 +4870,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     });
 
     try {
-      await addDoc(collection(db, 'favorites'), payload);
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'shared-note-save', uid: user?.uid || '', affectedCount: 1 }, addDoc(collection(db, 'favorites'), payload));
       setMusicNoteViewMode('sharedNote');
       setSelectedSharedNoteFolderId('default');
       setActiveFavoriteMenuId(null);
@@ -4514,6 +4879,199 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     } catch (error) {
       console.error('save shared music note failed:', error);
       showFavoriteToast('공유 노트 저장에 실패했습니다.');
+    }
+  };
+
+  const hasConnectedFavoriteSunoUrl = (song: any) => {
+    const mainUrl = String(getFavoriteSunoShareUrl(song) || '').trim();
+    if (!mainUrl) return false;
+
+    const links = getFavoriteSunoLinks(song);
+    const connectedLink = links.find((link: any) => String(link?.url || '').trim() === mainUrl)
+      || links.find((link: any) => String(link?.url || '').trim());
+    if (!connectedLink) return false;
+
+    // URL text alone is not enough. A successful Suno metadata connection leaves
+    // fetchedAt or usable metadata on the normalized link. The metadata fallback
+    // keeps older successfully-linked Music Note records compatible.
+    return Boolean(
+      connectedLink?.fetchedAt
+      || String(connectedLink?.title || '').trim()
+      || String(connectedLink?.coverUrl || '').trim()
+      || Number(connectedLink?.durationSeconds || 0) > 0
+      || String(connectedLink?.durationText || '').trim()
+    );
+  };
+
+  const canToggleFavoriteExplorePublication = (song: any) => {
+    const sourceId = getFavoriteDocumentId(song);
+    return explorePublicationStateBySongId[sourceId]?.status === 'public'
+      || hasConnectedFavoriteSunoUrl(song);
+  };
+
+  const refreshFavoriteExplorePublicationState = async (song: any) => {
+    if (!user?.uid || !song || shouldHideSunoUrlControls(song)) return;
+    const sourceId = getFavoriteDocumentId(song);
+    if (!sourceId) return;
+
+    try {
+      const state = await getExploreMusicNotePublicationState(user, sourceId);
+      setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: state }));
+    } catch (error) {
+      console.warn('explore publication state load failed:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeFavoriteMenuId || !user?.uid) return;
+    const song = activeFavoriteSource.find((item) => getFavoriteDocumentId(item) === activeFavoriteMenuId || item?.id === activeFavoriteMenuId);
+    const sourceId = getFavoriteDocumentId(song);
+    if (!song || !sourceId || explorePublicationStateBySongId[sourceId]) return;
+    void refreshFavoriteExplorePublicationState(song);
+  }, [activeFavoriteMenuId, user?.uid]);
+
+  useEffect(() => {
+    if (!selectedSong || !user?.uid || isSelectedSongReadOnly) return;
+    const sourceId = getFavoriteDocumentId(selectedSong);
+    if (!sourceId || explorePublicationStateBySongId[sourceId]) return;
+    void refreshFavoriteExplorePublicationState(selectedSong);
+  }, [selectedSong, user?.uid, isSelectedSongReadOnly]);
+
+
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) {
+      explorePublicationHydratedUidRef.current = null;
+      return;
+    }
+    if (!Array.isArray(activeFavoriteSource) || activeFavoriteSource.length === 0) return;
+    if (explorePublicationHydratedUidRef.current === uid) return;
+
+    explorePublicationHydratedUidRef.current = uid;
+    void getExploreMusicNotePublicationStates(user)
+      .then((states) => {
+        if (explorePublicationHydratedUidRef.current !== uid) return;
+        // Server hydration restores persisted state after reload. Any state changed in
+        // this live session wins so an in-flight hydration cannot undo a recent click.
+        setExplorePublicationStateBySongId((prev) => ({ ...states, ...prev }));
+      })
+      .catch((error) => {
+        console.warn('explore publication list hydration failed:', error);
+        if (explorePublicationHydratedUidRef.current === uid) {
+          explorePublicationHydratedUidRef.current = null;
+        }
+      });
+  }, [user?.uid, activeFavoriteSource.length]);
+
+  const openFavoriteExplorePublicationDialog = async (song: any) => {
+    setActiveFavoriteMenuId(null);
+    setExplorePublicationPrivateConfirm(false);
+
+    if (!user?.uid) {
+      showFavoriteToast('로그인이 필요합니다.');
+      onLogin?.();
+      return;
+    }
+    if (!song || shouldHideSunoUrlControls(song)) {
+      showFavoriteToast('내 뮤직노트 곡만 Explore 공개 설정을 변경할 수 있습니다.');
+      return;
+    }
+
+    const sourceId = getFavoriteDocumentId(song);
+    if (!sourceId) {
+      showFavoriteToast('뮤직노트 원본 정보를 확인하지 못했습니다.');
+      return;
+    }
+    if (explorePublicationBusyId === sourceId) return;
+
+    setExplorePublicationBusyId(sourceId);
+    try {
+      const state = await getExploreMusicNotePublicationState(user, sourceId);
+      setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: state }));
+      setExplorePublicationDialog({
+        song,
+        sourceId,
+        state,
+        options: {
+          allowNextSongApply: Boolean(state.allowNextSongApply),
+          allowFollowerSave: Boolean(state.allowFollowerSave),
+          profilePinned: Boolean(state.profilePinned),
+        },
+      });
+    } catch (error) {
+      console.error('explore publication dialog load failed:', error);
+      showFavoriteToast(getExplorePublicationErrorMessage(error));
+    } finally {
+      setExplorePublicationBusyId((current) => current === sourceId ? null : current);
+    }
+  };
+
+  const updateFavoriteExplorePublicationDialogOption = (key: keyof ExplorePublicationOptions) => {
+    setExplorePublicationDialog((current) => current
+      ? { ...current, options: { ...current.options, [key]: !current.options[key] } }
+      : current);
+  };
+
+  const submitFavoriteExplorePublicationDialog = async () => {
+    if (!user?.uid || !explorePublicationDialog) return;
+    const { song, sourceId, state, options } = explorePublicationDialog;
+    if (explorePublicationBusyId === sourceId) return;
+
+    if (state.status !== 'public' && !hasConnectedFavoriteSunoUrl(song)) {
+      showFavoriteToast('수노 URL을 먼저 등록하고 정상 연결해주세요. 연결이 확인되면 Explore에 공개할 수 있습니다.');
+      return;
+    }
+
+    setExplorePublicationBusyId(sourceId);
+    try {
+      let nextState: ExploreMusicNotePublicationState;
+      if (state.status === 'public') {
+        const savedOptions = await setExploreTrackPublicationOptions(user, state.trackId, options);
+        nextState = { ...state, ...savedOptions, status: 'public' };
+        showFavoriteToast('공개 설정을 저장했습니다.');
+      } else {
+        nextState = await publishMusicNoteToExplore(user, sourceId, options);
+        showFavoriteToast('Explore에 공개했습니다.');
+      }
+
+      setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: nextState }));
+      setExplorePublicationDialog(null);
+      setExplorePublicationPrivateConfirm(false);
+    } catch (error) {
+      console.error('explore publication submit failed:', error);
+      showFavoriteToast(getExplorePublicationErrorMessage(error));
+    } finally {
+      setExplorePublicationBusyId((current) => current === sourceId ? null : current);
+    }
+  };
+
+  const makeFavoriteExplorePublicationPrivate = async () => {
+    if (!user?.uid || !explorePublicationDialog) return;
+    const { sourceId, state, options } = explorePublicationDialog;
+    if (state.status !== 'public' || explorePublicationBusyId === sourceId) return;
+
+    if (!explorePublicationPrivateConfirm) {
+      setExplorePublicationPrivateConfirm(true);
+      return;
+    }
+
+    setExplorePublicationBusyId(sourceId);
+    try {
+      const visibilityState = await setExploreTrackVisibility(user, state.trackId, false);
+      const nextState: ExploreMusicNotePublicationState = {
+        ...visibilityState,
+        ...options,
+        status: 'private',
+      };
+      setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: nextState }));
+      setExplorePublicationDialog(null);
+      setExplorePublicationPrivateConfirm(false);
+      showFavoriteToast('Explore에서 비공개로 전환했습니다.');
+    } catch (error) {
+      console.error('explore publication private transition failed:', error);
+      showFavoriteToast(getExplorePublicationErrorMessage(error));
+    } finally {
+      setExplorePublicationBusyId((current) => current === sourceId ? null : current);
     }
   };
 
@@ -4546,23 +5104,23 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'lock') {
-      if (!song.isLocked) handleToggleLock(song);
+      if (!isMusicNoteCardLocked(song)) handleToggleLock(song);
       return;
     }
 
     if (action === 'unlock') {
-      if (song.isLocked) handleToggleLock(song);
+      if (isMusicNoteCardLocked(song)) handleToggleLock(song);
       return;
     }
 
     if (action === 'lockSelected') {
-      selectedSongIds.forEach(id => updateFavorite(id, { isLocked: true }));
+      activeFavoriteSource.filter((item) => selectedSongIds.includes(item.id)).forEach((item) => updateMusicNoteCardStateForSong(item, { locked: true }));
       exitSelectionMode();
       return;
     }
 
     if (action === 'unlockSelected') {
-      selectedSongIds.forEach(id => updateFavorite(id, { isLocked: false }));
+      activeFavoriteSource.filter((item) => selectedSongIds.includes(item.id)).forEach((item) => updateMusicNoteCardStateForSong(item, { locked: false }));
       exitSelectionMode();
       return;
     }
@@ -4579,7 +5137,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'unfavoriteSelected') {
-      activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !item.isLocked).forEach(item => toggleFavorite(item));
+      activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !isMusicNoteCardLocked(item)).forEach(item => toggleFavorite(item));
       exitSelectionMode();
       return;
     }
@@ -4590,7 +5148,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'deleteSelected') {
-      const targets = activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !item.isLocked);
+      const targets = activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !isMusicNoteCardLocked(item));
       deleteSongsByMusicNoteContext(targets).then((deleted) => { if (deleted) exitSelectionMode(); });
       return;
     }
@@ -4656,7 +5214,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'delete') {
-      if (song.isLocked) {
+      if (isMusicNoteCardLocked(song)) {
         forceDeleteUnlockedFavoriteIfNeeded(song);
       } else {
         deleteSongsByMusicNoteContext([song]);
@@ -4813,10 +5371,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         return aT.localeCompare(bT);
       }
       case 'locked-top':
-        if (a.isLocked !== b.isLocked) return a.isLocked ? -1 : 1;
+        if (isMusicNoteCardLocked(a) !== isMusicNoteCardLocked(b)) return isMusicNoteCardLocked(a) ? -1 : 1;
         return getTimestampMs(b.createdAtMs || b.createdAt) - getTimestampMs(a.createdAtMs || a.createdAt);
       case 'locked-bottom':
-        if (a.isLocked !== b.isLocked) return a.isLocked ? 1 : -1;
+        if (isMusicNoteCardLocked(a) !== isMusicNoteCardLocked(b)) return isMusicNoteCardLocked(a) ? 1 : -1;
         return getTimestampMs(b.createdAtMs || b.createdAt) - getTimestampMs(a.createdAtMs || a.createdAt);
       default:
         return 0;
@@ -4913,7 +5471,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       const titleUpdates = mode === 'sharedNote'
         ? { sharedNoteFolderTitle: trimmedTitle, sharedNoteFolderUpdatedAt: Date.now() }
         : { noteFolderTitle: trimmedTitle, noteFolderUpdatedAt: Date.now() };
-      await Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), titleUpdates)));
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-rename', uid: user?.uid || '', documentIds: affectedSongs.map((song) => song.id), affectedCount: affectedSongs.length }, Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), titleUpdates))));
       setMusicNoteFolderRenameArgs(null);
       showFavoriteToast('폴더 이름이 변경되었습니다.');
     } catch (error) {
@@ -4958,7 +5516,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       const fallbackUpdates = mode === 'sharedNote'
         ? { sharedNoteFolderId: 'default', sharedNoteFolderTitle: '기본', sharedNoteFolderUpdatedAt: Date.now() }
         : { noteFolderId: 'default', noteFolderTitle: '기본', noteFolderUpdatedAt: Date.now() };
-      await Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), fallbackUpdates)));
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-delete', uid: user?.uid || '', documentIds: affectedSongs.map((song) => song.id), affectedCount: affectedSongs.length }, Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), fallbackUpdates))));
       setMusicNoteFolderDeleteArgs(null);
       showFavoriteToast('폴더를 삭제했습니다. 곡은 기본 폴더로 이동했습니다.');
     } catch (error) {
@@ -5320,16 +5878,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             {isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
           </div>
         </div>
+        {!isMusicNoteSharedView && <CacheDiagnosticBadge domain="musicNote" className="mt-1.5" />}
       </div>
       {!isMusicNoteSharedView && (
         <button
           type="button"
-          disabled={!onManualSyncFavorites || isManualSyncingFavorites || isManualSyncUsedToday}
+          disabled={!onManualSyncFavorites || isManualSyncingFavorites}
           onClick={handleManualFavoriteSync}
           onMouseEnter={() => onHover({
             id: 'music-note-manual-sync',
             label: '동기화',
-            description: isManualSyncUsedToday ? '오늘 수동 동기화 1회를 이미 사용했습니다.' : '서버의 최신 뮤직노트 20개를 다시 확인합니다. 하루 1회만 사용할 수 있습니다.',
+            description: '변경 신호가 있을 때만 최신 변경분을 확인합니다. 전체 곡을 다시 읽지 않습니다.',
             _ts: Date.now(),
           })}
           onMouseLeave={() => onHover(null)}
@@ -5337,11 +5896,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             "soridraw-musicnote-hero-sync flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.055] text-white/55 transition-all",
             isManualSyncingFavorites
               ? "cursor-wait text-[#FFBB22]"
-              : isManualSyncUsedToday
-                ? "cursor-not-allowed opacity-35"
-                : "hover:bg-white/[0.09] hover:text-[#FFBB22]"
+              : "hover:bg-white/[0.09] hover:text-[#FFBB22]"
           )}
-          title={isManualSyncUsedToday ? '오늘 동기화 1회 사용 완료' : '뮤직노트 동기화'}
+          title="뮤직노트 변경분 동기화"
         >
           <RefreshCw className={cn("h-4 w-4", isManualSyncingFavorites && "animate-spin")} />
         </button>
@@ -5681,7 +6238,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     isFavoriteTrashMode ? "opacity-65 grayscale-[0.35] saturate-[0.45]" : ""
                   )}
                 >
-                  <div className="soridraw-musicnote-song-row flex items-center gap-3 md:gap-4 px-4 md:px-6 py-4">
+                  <div className="soridraw-musicnote-song-row flex items-center gap-3 md:gap-4 px-4 md:px-6 py-5">
                     {isSelectionMode && (
                       <button
                         data-no-card-long-press="true"
@@ -5805,11 +6362,95 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         </span>
                       </div>
 
-                      <div className="mt-1.5 flex min-w-0 items-center gap-2">
+                      <div className="mt-2 flex min-h-8 min-w-0 items-center gap-2">
                         {musicNoteListCreator && (
                           <span className="soridraw-musicnote-song-creator shrink-0 whitespace-nowrap text-[9px] font-bold leading-none text-[#FFC1BC]/90 md:text-[10px] select-none cursor-default">
                             {musicNoteListCreator}
                           </span>
+                        )}
+                        {!shouldHideSunoUrlControls(song) && (
+                          <div className="soridraw-musicnote-song-state-actions flex shrink-0 items-center gap-[5px]" onClick={(event) => event.stopPropagation()}>
+                            <button
+                              data-no-card-long-press="true"
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void handleTogglePersonalLike(song);
+                              }}
+                              className="relative flex h-[29px] w-[29px] shrink-0 items-center justify-center overflow-hidden rounded-full transition-all"
+                              style={{ border: 'none', outline: 'none', background: 'transparent' }}
+                              aria-label={isMusicNoteCardLiked(song) ? '좋아요 해제' : '좋아요'}
+                              title={isMusicNoteCardLiked(song) ? '좋아요 해제' : '좋아요'}
+                            >
+                              {renderMusicNoteStateButtonFill(isMusicNoteCardLiked(song))}
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 24 24"
+                                className="relative z-[1] h-[13px] w-[13px]"
+                                style={{
+                                  color: isMusicNoteCardLiked(song) ? '#202024' : 'rgba(255,255,255,0.66)',
+                                  transform: 'translateX(0.5px)',
+                                }}
+                              >
+                                <path fill="currentColor" d="M2.8 20.2h3.4V9.7H2.8v10.5Zm18.1-9.35c0-.93-.75-1.68-1.68-1.68h-5.28l.8-3.87.03-.28c0-.35-.14-.69-.38-.93L13.5 3.2 7.9 8.8a1.7 1.7 0 0 0-.5 1.2v7.9c0 .93.75 1.68 1.68 1.68h7.58c.7 0 1.31-.42 1.57-1.03l2.53-5.9c.09-.2.14-.43.14-.67v-1.13Z" />
+                              </svg>
+                            </button>
+                            <button
+                              data-no-card-long-press="true"
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void handleToggleLock(song);
+                              }}
+                              className="relative flex h-[29px] w-[29px] shrink-0 items-center justify-center overflow-hidden rounded-full transition-all"
+                              style={{ border: 'none', outline: 'none', background: 'transparent' }}
+                              aria-label={isMusicNoteCardLocked(song) ? '잠금 해제' : '잠금'}
+                              title={isMusicNoteCardLocked(song) ? '잠금 해제' : '잠금'}
+                            >
+                              {renderMusicNoteStateButtonFill(isMusicNoteCardLocked(song))}
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 24 24"
+                                className="relative z-[1] h-[13px] w-[13px]"
+                                style={{ color: isMusicNoteCardLocked(song) ? '#202024' : 'rgba(255,255,255,0.66)' }}
+                              >
+                                <path fill="currentColor" fillRule="evenodd" d="M7.1 9V6.9a4.9 4.9 0 0 1 9.8 0V9h.7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6.4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h.7Zm2.2 0h5.4V6.9a2.7 2.7 0 0 0-5.4 0V9Z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                            <button
+                              data-no-card-long-press="true"
+                              type="button"
+                              disabled={explorePublicationBusyId === getFavoriteDocumentId(song)}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void openFavoriteExplorePublicationDialog(song);
+                              }}
+                              className="relative flex h-[29px] w-[29px] shrink-0 items-center justify-center overflow-hidden rounded-full transition-all disabled:cursor-wait disabled:opacity-40"
+                              style={{ border: 'none', outline: 'none', background: 'transparent', color: explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public' ? '#252528' : 'rgba(255,255,255,0.78)' }}
+                              aria-label={explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public' ? '공개 설정' : '공개'}
+                              title={explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public' ? '공개 설정' : '공개'}
+                            >
+                              {renderMusicNoteStateButtonFill(explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public')}
+                              {explorePublicationBusyId === getFavoriteDocumentId(song)
+                                ? <Loader2 className="relative z-[1] h-[13px] w-[13px] animate-spin" />
+                                : (
+                                  <svg
+                                    aria-hidden="true"
+                                    viewBox="0 0 24 24"
+                                    className="relative z-[1] h-[13px] w-[13px]"
+                                    style={{
+                                      color: explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public' ? '#202024' : 'rgba(255,255,255,0.66)',
+                                      transform: 'translateX(0.5px)',
+                                    }}
+                                  >
+                                    <path fill="currentColor" d="M12 2.2A9.8 9.8 0 1 0 12 21.8 9.8 9.8 0 0 0 12 2.2Zm6.55 5.9h-2.72a15.4 15.4 0 0 0-1.18-3.15 8.05 8.05 0 0 1 3.9 3.15ZM12 4.15c.72 1.08 1.3 2.4 1.68 3.95h-3.36c.38-1.55.96-2.87 1.68-3.95ZM4.65 14a7.95 7.95 0 0 1 0-4h3.17a17.5 17.5 0 0 0 0 4H4.65Zm.8 2h2.72c.27 1.13.67 2.2 1.18 3.15A8.05 8.05 0 0 1 5.45 16Zm2.72-7.9H5.45a8.05 8.05 0 0 1 3.9-3.15A15.4 15.4 0 0 0 8.17 8.1ZM12 19.85c-.72-1.08-1.3-2.4-1.68-3.85h3.36c-.38 1.45-.96 2.77-1.68 3.85ZM14.07 14H9.93a14.1 14.1 0 0 1 0-4h4.14a14.1 14.1 0 0 1 0 4Zm.58 5.15c.51-.95.91-2.02 1.18-3.15h2.72a8.05 8.05 0 0 1-3.9 3.15ZM16.18 14a17.5 17.5 0 0 0 0-4h3.17a7.95 7.95 0 0 1 0 4h-3.17Z" />
+                                  </svg>
+                                )}
+                            </button>
+                          </div>
                         )}
                         <div
                           className="soridraw-musicnote-song-keywords favorite-keyword-strip flex h-5 min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden whitespace-nowrap rounded-md pr-2"
@@ -5826,17 +6467,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     </div>
 
                     <div className="soridraw-musicnote-song-actions flex items-center gap-2 shrink-0">
-                      {song.isLocked && (
-                        <span className="hidden md:inline-flex h-10 w-10 items-center justify-center text-[#FF7A72]">
-                          <Lock className="w-4 h-4" />
-                        </span>
-                      )}
-
-                      {song.isLocked && (
-                        <span className="inline-flex h-10 w-10 items-center justify-center text-[#FF7A72] md:hidden">
-                          <Lock className="w-3.5 h-3.5" />
-                        </span>
-                      )}
 <div className="relative">
                         <button
                           data-floating-menu="true"
@@ -5911,13 +6541,35 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               <>
                                 <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Info className="w-4 h-4" />디테일 & Edit</button>
                                 <button onClick={() => executeFavoriteMenuAction('select', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Square className="w-4 h-4" />선택</button>
-                                {!song.isLocked ? (
+                                {!isMusicNoteCardLocked(song) ? (
                                   <button onClick={() => executeFavoriteMenuAction('lock', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Lock className="w-4 h-4" />잠금</button>
                                 ) : (
                                   <button onClick={() => executeFavoriteMenuAction('unlock', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Unlock className="w-4 h-4" />잠금해제</button>
                                 )}
                                 <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#FF7A72] hover:text-[#FF8C85] hover:bg-transparent flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
                                 <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
+                                <button
+                                  type="button"
+                                  disabled={explorePublicationBusyId === getFavoriteDocumentId(song)}
+                                  aria-disabled={!canToggleFavoriteExplorePublication(song) || undefined}
+                                  onClick={() => openFavoriteExplorePublicationDialog(song)}
+                                  className={cn(
+                                    "flex w-full items-center gap-3 bg-transparent px-4 py-2.5 text-left text-sm transition-colors disabled:cursor-wait disabled:opacity-35",
+                                    canToggleFavoriteExplorePublication(song)
+                                      ? "text-white/85 hover:bg-white/5 hover:text-[#FFC1BC]"
+                                      : "cursor-pointer text-white/30 hover:bg-white/[0.025] hover:text-white/45"
+                                  )}
+                                  title={canToggleFavoriteExplorePublication(song) ? undefined : '수노 URL을 등록하고 정상 연결해주세요.'}
+                                >
+                                  {explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public'
+                                    ? <Lock className="h-4 w-4" />
+                                    : <Unlock className="h-4 w-4" />}
+                                  {explorePublicationBusyId === getFavoriteDocumentId(song)
+                                    ? '처리 중...'
+                                    : explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public'
+                                      ? '비공개'
+                                      : '공개'}
+                                </button>
                                 {!shouldHideSunoUrlControls(song) && (
                                   <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#FFC1BC] hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 연결</button>
                                 )}
@@ -6361,6 +7013,151 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {explorePublicationDialog && (
+          <StudioCenterModalPortal themeClassName="soridraw-explore-publication-modal-portal">
+            <motion.div
+              initial={{ opacity: 1 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 1 }}
+              transition={{ duration: 0 }}
+              className="pointer-events-auto fixed inset-0 z-[430] flex items-end justify-center bg-black/58 px-4 py-5 backdrop-blur-sm md:items-center"
+              style={{ pointerEvents: 'auto', touchAction: 'manipulation' }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onTouchStart={(event) => event.stopPropagation()}
+              onClick={() => {
+                if (explorePublicationBusyId !== explorePublicationDialog.sourceId) {
+                  setExplorePublicationDialog(null);
+                  setExplorePublicationPrivateConfirm(false);
+                }
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 1, y: 0, scale: 1 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0 }}
+                className="pointer-events-auto w-full max-w-[430px] overflow-hidden rounded-[28px] bg-[#1b1b1b] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.6)] md:p-6"
+                style={{ pointerEvents: 'auto' }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onMouseDown={(event) => event.stopPropagation()}
+                onTouchStart={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#FFC1BC]/72">Explore</p>
+                    <h3 className="mt-1 text-xl font-black text-white">공개 설정</h3>
+                    <p className="mt-1 truncate text-xs font-semibold text-white/42">
+                      {String(explorePublicationDialog.song?.title || explorePublicationDialog.song?.koreanTitle || explorePublicationDialog.song?.englishTitle || '제목 없는 곡')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (explorePublicationBusyId !== explorePublicationDialog.sourceId) {
+                        setExplorePublicationDialog(null);
+                        setExplorePublicationPrivateConfirm(false);
+                      }
+                    }}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.055] text-white/50 transition-all hover:bg-white/[0.09] hover:text-white"
+                    aria-label="공개 설정 닫기"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-6 space-y-2.5">
+                  {([
+                    { key: 'allowNextSongApply', label: '다음곡에 적용 허용', description: '다른 사용자가 이 곡의 공개 설정을 다음곡에 활용할 수 있습니다.' },
+                    { key: 'allowFollowerSave', label: '팔로워 곡 저장 허용', description: '나를 팔로우한 사용자가 이 공개곡을 공유 노트에 저장할 수 있습니다.' },
+                    { key: 'profilePinned', label: '공개 프로필에 고정', description: '공개 프로필의 상단에 이 곡을 고정합니다.' },
+                  ] as const).map((item) => {
+                    const active = explorePublicationDialog.options[item.key];
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        role="switch"
+                        aria-checked={active}
+                        onClick={() => updateFavoriteExplorePublicationDialogOption(item.key)}
+                        className="flex w-full items-center gap-4 rounded-2xl bg-white/[0.045] px-4 py-3.5 text-left transition-all hover:bg-white/[0.07]"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-black text-white/88">{item.label}</span>
+                          <span className="mt-1 block text-[11px] leading-5 text-white/38">{item.description}</span>
+                        </span>
+                        <span
+                          className={cn(
+                            "relative h-7 w-12 shrink-0 rounded-full transition-all",
+                            active ? "bg-[#FF7A72]" : "bg-white/[0.11]"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "absolute top-1 h-5 w-5 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.28)] transition-all",
+                              active ? "left-6" : "left-1"
+                            )}
+                          />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {explorePublicationDialog.state.status === 'public' && explorePublicationPrivateConfirm && (
+                  <div className="mt-4 rounded-2xl bg-red-500/10 px-4 py-3 text-xs font-semibold leading-5 text-red-200/85">
+                    비공개로 전환하면 Explore와 공개 프로필에서 즉시 숨겨집니다. D1 기록은 삭제하지 않습니다.
+                  </div>
+                )}
+
+                <div className="mt-6 grid gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void submitFavoriteExplorePublicationDialog()}
+                    disabled={explorePublicationBusyId === explorePublicationDialog.sourceId}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FF7A72] text-sm font-black text-white shadow-[0_12px_28px_rgba(255,122,114,0.18)] transition-all hover:bg-[#FF8C85] disabled:cursor-wait disabled:opacity-45"
+                  >
+                    {explorePublicationBusyId === explorePublicationDialog.sourceId && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {explorePublicationDialog.state.status === 'public' ? '저장' : '공개'}
+                  </button>
+
+                  {explorePublicationDialog.state.status === 'public' && (
+                    <button
+                      type="button"
+                      onClick={() => void makeFavoriteExplorePublicationPrivate()}
+                      disabled={explorePublicationBusyId === explorePublicationDialog.sourceId}
+                      className={cn(
+                        "flex h-11 w-full items-center justify-center rounded-2xl text-sm font-black transition-all disabled:cursor-wait disabled:opacity-45",
+                        explorePublicationPrivateConfirm
+                          ? "bg-red-500/18 text-red-200 hover:bg-red-500/24"
+                          : "bg-white/[0.055] text-white/48 hover:bg-white/[0.085] hover:text-white/78"
+                      )}
+                    >
+                      {explorePublicationPrivateConfirm ? '비공개 전환 확인' : '비공개로 전환'}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (explorePublicationBusyId !== explorePublicationDialog.sourceId) {
+                        setExplorePublicationDialog(null);
+                        setExplorePublicationPrivateConfirm(false);
+                      }
+                    }}
+                    className="h-10 w-full rounded-2xl bg-transparent text-xs font-bold text-white/30 transition-colors hover:text-white/60"
+                  >
+                    취소
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          </StudioCenterModalPortal>
         )}
       </AnimatePresence>
 
@@ -6840,20 +7637,20 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     <button
                       onClick={() => handlePopupToggleLock(selectedSong)}
                       disabled={isEditing}
-                      onMouseEnter={() => onHover({ id: 'detail-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
+                      onMouseEnter={() => onHover({ id: 'detail-lock', label: isMusicNoteCardLocked(selectedSong) ? '잠금 해제' : '잠금', description: isMusicNoteCardLocked(selectedSong) ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
                       onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                      onTouchStart={() => onLongPressStart({ id: 'detail-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
+                      onTouchStart={() => onLongPressStart({ id: 'detail-lock', label: isMusicNoteCardLocked(selectedSong) ? '잠금 해제' : '잠금', description: isMusicNoteCardLocked(selectedSong) ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
                       onTouchEnd={onLongPressEnd}
                       data-soridraw-detail-lock-button="true"
-                      data-locked={selectedSong.isLocked ? 'true' : 'false'}
+                      data-locked={isMusicNoteCardLocked(selectedSong) ? 'true' : 'false'}
                       className={cn(
                         'soridraw-detail-state-button soridraw-detail-lock-state-button group inline-flex h-12 w-12 items-center justify-center rounded-2xl border text-sm transition-all disabled:cursor-not-allowed disabled:opacity-35',
-                        selectedSong.isLocked
+                        isMusicNoteCardLocked(selectedSong)
                           ? 'border-transparent'
                           : 'border-transparent'
                       )}
                     >
-                      {selectedSong.isLocked ? (
+                      {isMusicNoteCardLocked(selectedSong) ? (
                         <Lock className="soridraw-detail-lock-icon soridraw-detail-lock-icon--locked h-5 w-5" />
                       ) : (
                         <>
@@ -6866,16 +7663,16 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       data-detail-delete-button="true"
                       data-soridraw-detail-delete-button="true"
                       data-confirm={confirmDeleteSong ? 'true' : 'false'}
-                      data-locked={selectedSong.isLocked ? 'true' : 'false'}
+                      data-locked={isMusicNoteCardLocked(selectedSong) ? 'true' : 'false'}
                       onClick={() => handlePopupDelete(selectedSong)}
                       disabled={isEditing}
-                      onMouseEnter={() => onHover({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
+                      onMouseEnter={() => onHover({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: isMusicNoteCardLocked(selectedSong) ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
                       onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                      onTouchStart={() => onLongPressStart({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
+                      onTouchStart={() => onLongPressStart({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: isMusicNoteCardLocked(selectedSong) ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
                         'soridraw-detail-state-button inline-flex h-12 w-12 items-center justify-center rounded-2xl border transition-all disabled:cursor-not-allowed disabled:opacity-35',
-                        selectedSong.isLocked
+                        isMusicNoteCardLocked(selectedSong)
                           ? 'border-transparent bg-white/[0.03] text-white/18'
                           : confirmDeleteSong
                             ? 'border-transparent bg-red-500/18 text-red-500 hover:bg-red-500/26'
@@ -6884,6 +7681,37 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     >
                       <Trash2 className="h-5 w-5" />
                     </button>
+
+                    {!isSelectedSongReadOnly && (
+                      <button
+                        type="button"
+                        onClick={() => openFavoriteExplorePublicationDialog(selectedSong)}
+                        disabled={isEditing || explorePublicationBusyId === getFavoriteDocumentId(selectedSong)}
+                        aria-disabled={!canToggleFavoriteExplorePublication(selectedSong) || undefined}
+                        onMouseEnter={() => onHover({
+                          id: 'detail-explore-visibility',
+                          label: explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public' ? '비공개' : '공개',
+                          description: canToggleFavoriteExplorePublication(selectedSong)
+                            ? (explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public' ? 'Explore에서 이 곡을 비공개로 전환합니다.' : '이 곡을 Explore에 공개합니다.')
+                            : '수노 URL을 먼저 등록하고 정상 연결해주세요. 연결이 확인되면 Explore에 공개할 수 있습니다.',
+                        })}
+                        onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                        className={cn(
+                          "inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.035] transition-all disabled:cursor-wait disabled:opacity-30",
+                          canToggleFavoriteExplorePublication(selectedSong)
+                            ? "text-white/78 hover:bg-[#FF7A72]/12 hover:text-[#FFC1BC]"
+                            : "cursor-pointer text-white/25 hover:bg-white/[0.055] hover:text-white/40"
+                        )}
+                        aria-label={explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public' ? 'Explore 비공개' : 'Explore 공개'}
+                        title={canToggleFavoriteExplorePublication(selectedSong) ? undefined : '수노 URL을 등록하고 정상 연결해주세요.'}
+                      >
+                        {explorePublicationBusyId === getFavoriteDocumentId(selectedSong)
+                          ? <Loader2 className="h-5 w-5 animate-spin" />
+                          : explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public'
+                            ? <Lock className="h-5 w-5" />
+                            : <Unlock className="h-5 w-5" />}
+                      </button>
+                    )}
 
                     {isEditing && isModified && (
                       <button

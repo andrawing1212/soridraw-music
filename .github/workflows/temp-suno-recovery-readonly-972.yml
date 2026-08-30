@@ -1,0 +1,90 @@
+name: SORIDRAW 972 Suno Recovery Readonly Deploy
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/trigger-972-suno-recovery-readonly.txt'
+
+concurrency:
+  group: soridraw-972-suno-recovery-readonly
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  deploy-function:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions ci --no-audit --no-fund
+
+      - name: Build Functions
+        run: npm --prefix functions run build
+
+      - name: Verify readonly recovery export
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'SORIDRAW_SUNO_RECOVERY_READONLY_972' functions/src/index.ts
+          grep -q 'SORIDRAW_SUNO_RECOVERY_READONLY_972' functions/src/securedIndex.ts
+          grep -q 'recoveryOnly' functions/src/securedIndex.ts
+          grep -q 'if (!recoveryOnly)' functions/src/securedIndex.ts
+          test -f functions/lib/securedIndex.js
+
+      - name: Authenticate to Firebase backend project
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy getSunoTrackStatus only
+        id: deploy
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes firebase-tools@latest deploy --only functions:getSunoTrackStatus --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/suno-recovery-readonly-972.log
+
+      - name: Record deploy result
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          if [ "${{ steps.deploy.outcome }}" = "success" ]; then STATUS=success; else STATUS=failure; fi
+          {
+            echo "status=${STATUS}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "commit=${GITHUB_SHA}"
+            echo "target_project=soridraw-app-866a5"
+            echo "function=getSunoTrackStatus"
+            echo "scope=functions:getSunoTrackStatus only"
+            echo "mode=recoveryOnly skips track/share writes"
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            echo "--- deploy log tail ---"
+            tail -n 120 /tmp/suno-recovery-readonly-972.log 2>/dev/null || true
+          } > .deploy/suno-recovery-readonly-972-deploy-result.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/suno-recovery-readonly-972-deploy-result.txt
+          git commit -m "chore(972): record Suno recovery function deploy" || true
+          git push origin HEAD:preview
+
+      - name: Fail workflow when deploy failed
+        if: steps.deploy.outcome != 'success'
+        run: exit 1

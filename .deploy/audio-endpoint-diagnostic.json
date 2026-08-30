@@ -1,0 +1,143 @@
+{
+  "tool": "diagnose-recent-audio-endpoints-readonly",
+  "projectId": "soridraw-app-866a5",
+  "generatedAt": "2026-08-25T04:57:25.610Z",
+  "lookbackMinutes": 120,
+  "safety": {
+    "databaseWrites": 0,
+    "databaseDeletes": 0,
+    "rtdbReads": 0,
+    "rtdbWrites": 0,
+    "documentIdsPrinted": false,
+    "userIdsPrinted": false,
+    "contentValuesPrinted": false,
+    "apiKeysPrinted": false,
+    "audioUrlsPrinted": false,
+    "externalProbeRangeMaxBytes": 1024
+  },
+  "firestoreReads": {
+    "collectionGroupDocumentsRead": 73,
+    "sunoTrackDocumentsScanned": 73
+  },
+  "newestCompletedTrack": {
+    "createdAt": "2026-08-25T04:13:01.936Z",
+    "updatedAt": "2026-08-25T04:49:03.606Z",
+    "status": "completed",
+    "provider": "sunoapi.org",
+    "candidateOccurrences": 8,
+    "uniqueEndpointCount": 4,
+    "discoveredFieldCounts": {
+      "audioUrl": 2,
+      "streamAudioUrl": 2,
+      "audioUrls[]": 2,
+      "sourceStreamAudioUrl": 2
+    }
+  },
+  "probeSummary": {
+    "endpointCount": 4,
+    "classificationCounts": {
+      "success_but_empty_body": 4
+    },
+    "healthyEndpointPresent": false
+  },
+  "probes": [
+    {
+      "sourceHost": "musicfile.removeai.ai",
+      "headStatus": 405,
+      "headContentLength": "31",
+      "headContentType": "application/json",
+      "headAcceptRanges": null,
+      "headCors": null,
+      "rangeStatus": 200,
+      "rangeContentLength": null,
+      "rangeContentRange": null,
+      "rangeContentType": "audio/mp3",
+      "rangeCors": null,
+      "sampledBytes": 0,
+      "finalHost": "musicfile.removeai.ai",
+      "classification": "success_but_empty_body",
+      "errorType": null,
+      "candidateKeys": [
+        "audioUrl",
+        "audioUrls[]",
+        "streamAudioUrl"
+      ],
+      "candidateSources": [
+        "stored-root"
+      ]
+    },
+    {
+      "sourceHost": "musicfile.removeai.ai",
+      "headStatus": 405,
+      "headContentLength": "31",
+      "headContentType": "application/json",
+      "headAcceptRanges": null,
+      "headCors": null,
+      "rangeStatus": 200,
+      "rangeContentLength": null,
+      "rangeContentRange": null,
+      "rangeContentType": "audio/mp3",
+      "rangeCors": null,
+      "sampledBytes": 0,
+      "finalHost": "musicfile.removeai.ai",
+      "classification": "success_but_empty_body",
+      "errorType": null,
+      "candidateKeys": [
+        "audioUrl",
+        "audioUrls[]",
+        "streamAudioUrl"
+      ],
+      "candidateSources": [
+        "stored-root",
+        "stored-sunoData"
+      ]
+    },
+    {
+      "sourceHost": "audiopipe.suno.ai",
+      "headStatus": 405,
+      "headContentLength": "31",
+      "headContentType": "application/json",
+      "headAcceptRanges": null,
+      "headCors": null,
+      "rangeStatus": 200,
+      "rangeContentLength": null,
+      "rangeContentRange": null,
+      "rangeContentType": "audio/mp3",
+      "rangeCors": null,
+      "sampledBytes": 0,
+      "finalHost": "audiopipe.suno.ai",
+      "classification": "success_but_empty_body",
+      "errorType": null,
+      "candidateKeys": [
+        "sourceStreamAudioUrl"
+      ],
+      "candidateSources": [
+        "stored-sunoData"
+      ]
+    },
+    {
+      "sourceHost": "audiopipe.suno.ai",
+      "headStatus": 405,
+      "headContentLength": "31",
+      "headContentType": "application/json",
+      "headAcceptRanges": null,
+      "headCors": null,
+      "rangeStatus": 200,
+      "rangeContentLength": null,
+      "rangeContentRange": null,
+      "rangeContentType": "audio/mp3",
+      "rangeCors": null,
+      "sampledBytes": 0,
+      "finalHost": "audiopipe.suno.ai",
+      "classification": "success_but_empty_body",
+      "errorType": null,
+      "candidateKeys": [
+        "sourceStreamAudioUrl"
+      ],
+      "candidateSources": [
+        "stored-sunoData"
+      ]
+    }
+  ],
+  "elapsedMs": 23553
+}

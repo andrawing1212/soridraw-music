@@ -1,4 +1,4 @@
-import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDocFromServer, serverTimestamp, setDoc, updateDoc } from './firestoreMeasured';
 import { db } from '../firebase';
 import { markCacheDiagnosticWrite } from './cacheDiagnostics';
 
@@ -29,15 +29,68 @@ type BundleListenerCallbacks = {
 
 const LIST_BUNDLE_COLLECTION = 'user_list_caches';
 const LIST_BUNDLE_SCHEMA_VERSION = 1;
+const SORIDRAW_904_MUSIC_NOTE_LAZY_BUNDLE_ENTRY = true;
+const MUSIC_NOTE_BUNDLE_PAGE_ENTRY_EVENT = 'soridraw:music-note-bundle-page-entry';
+const SORIDRAW_903_LIST_BUNDLE_ONE_SHOT = true;
 const LIST_BUNDLE_MAX_BYTES = 850_000;
 const writeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const lastPayloadHashes = new Map<string, string>();
+const LIST_BUNDLE_HASH_STORAGE_PREFIX = 'soridraw_list_bundle_hash_v1';
+const SORIDRAW_936_LIBRARY_VERSION_SYNC_ONLY = true;
+const SORIDRAW_906_NAVIGATION_NO_BUNDLE_WRITES = true;
 
 const getBundleDocId = (kind: ListBundleKind) => (
   kind === 'musicNote' ? 'music_note_latest_20' : 'library_latest_10_sets'
 );
 
 const getBundleKey = (kind: ListBundleKind, uid: string) => `${kind}:${uid}`;
+const LIBRARY_LOCAL_SYNC_VERSION_STORAGE_BASE = 'soridraw_library_local_sync_version_v1';
+
+export const readLibraryBundleLocalSyncVersion = (uid: string): number => {
+  if (!uid || typeof localStorage === 'undefined') return 0;
+  try {
+    const value = Number(localStorage.getItem(`${LIBRARY_LOCAL_SYNC_VERSION_STORAGE_BASE}_${uid}`) || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+};
+
+export const writeLibraryBundleLocalSyncVersion = (uid: string, version: number): void => {
+  if (!uid || !Number.isFinite(version) || version <= 0 || typeof localStorage === 'undefined') return;
+  try {
+    const previous = readLibraryBundleLocalSyncVersion(uid);
+    localStorage.setItem(
+      `${LIBRARY_LOCAL_SYNC_VERSION_STORAGE_BASE}_${uid}`,
+      String(Math.max(previous, Math.floor(version))),
+    );
+  } catch {}
+};
+
+const getBundleHashStorageKey = (kind: ListBundleKind, uid: string) => `${LIST_BUNDLE_HASH_STORAGE_PREFIX}:${kind}:${uid}`;
+
+const readRememberedPayloadHash = (kind: ListBundleKind, uid: string): string => {
+  const key = getBundleKey(kind, uid);
+  const memoryHash = lastPayloadHashes.get(key);
+  if (memoryHash) return memoryHash;
+  if (typeof localStorage === 'undefined') return '';
+  try {
+    const stored = localStorage.getItem(getBundleHashStorageKey(kind, uid)) || '';
+    if (stored) lastPayloadHashes.set(key, stored);
+    return stored;
+  } catch {
+    return '';
+  }
+};
+
+const rememberPayloadHash = (kind: ListBundleKind, uid: string, hash: string) => {
+  if (!uid || !hash) return;
+  lastPayloadHashes.set(getBundleKey(kind, uid), hash);
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(getBundleHashStorageKey(kind, uid), hash);
+  } catch {}
+};
 
 const getBundleRef = (kind: ListBundleKind, uid: string) => (
   doc(db, LIST_BUNDLE_COLLECTION, uid, 'bundles', getBundleDocId(kind))
@@ -173,7 +226,7 @@ export const rememberListBundleSnapshot = (
     hasMore: bundle.hasMore,
     deletedIds: bundle.deletedIds,
   });
-  lastPayloadHashes.set(getBundleKey(kind, uid), makePayloadHash(comparable));
+  rememberPayloadHash(kind, uid, makePayloadHash(comparable));
 };
 
 export const scheduleListBundleWrite = (
@@ -186,14 +239,14 @@ export const scheduleListBundleWrite = (
   const key = getBundleKey(kind, uid);
   const comparable = buildComparablePayload(kind, items, options);
   const payloadHash = makePayloadHash(comparable);
-  if (lastPayloadHashes.get(key) === payloadHash) return;
+  if (readRememberedPayloadHash(kind, uid) === payloadHash) return;
 
   const existingTimer = writeTimers.get(key);
   if (existingTimer) clearTimeout(existingTimer);
 
   const timer = setTimeout(async () => {
     writeTimers.delete(key);
-    if (lastPayloadHashes.get(key) === payloadHash) return;
+    if (readRememberedPayloadHash(kind, uid) === payloadHash) return;
 
     const payload = {
       ...comparable,
@@ -209,7 +262,19 @@ export const scheduleListBundleWrite = (
     try {
       await setDoc(getBundleRef(kind, uid), payload, { merge: false });
       markCacheDiagnosticWrite(kind === 'musicNote' ? 'musicNote' : 'library', 1);
-      lastPayloadHashes.set(key, payloadHash);
+      rememberPayloadHash(kind, uid, payloadHash);
+      if (kind === 'library') {
+        const libraryVersion = Number(payload.updatedAtMs || Date.now());
+        // Same-device cache must advance before the remote invalidation token.
+        writeLibraryBundleLocalSyncVersion(uid, libraryVersion);
+        try {
+          await updateDoc(doc(db, 'users', uid), { 'syncVersions.library': libraryVersion });
+        } catch (error) {
+          // The Library payload itself is already safe. A failed token update must
+          // not duplicate or roll back the bundle write.
+          console.warn('[listBundleCache] Library sync version publish failed:', error);
+        }
+      }
     } catch (error: any) {
       // Preview/test can safely fall back to the existing per-item query until the
       // additive Firestore rule for user_list_caches is explicitly deployed.
@@ -227,31 +292,89 @@ export const subscribeListBundle = (
 ) => {
   if (!uid) return () => {};
 
-  return onSnapshot(
-    getBundleRef(kind, uid),
-    (snapshot) => {
-      const meta = { fromCache: snapshot.metadata.fromCache };
-      if (!snapshot.exists()) {
-        callbacks.onMissing?.(meta);
-        return;
+  let cancelled = false;
+  let started = false;
+
+  const runOneShotRead = () => {
+    if (cancelled || started) return;
+    started = true;
+
+    void getDocFromServer(getBundleRef(kind, uid))
+      .then((snapshot) => {
+        if (cancelled) return;
+        const meta = { fromCache: false };
+        if (!snapshot.exists()) {
+          callbacks.onMissing?.(meta);
+          return;
+        }
+
+        const data = snapshot.data() || {};
+        const items = Array.isArray(data.items) ? data.items : [];
+        const bundle: ListBundleSnapshot = {
+          schemaVersion: Number(data.schemaVersion || 0),
+          kind,
+          items,
+          itemCount: Number(data.itemCount || items.length || 0),
+          cursorCreatedAtMs: Number(data.cursorCreatedAtMs || 0),
+          hasMore: data.hasMore === true,
+          deletedIds: normalizeDeletedIds(data.deletedIds),
+          updatedAtMs: Number(data.updatedAtMs || 0),
+        };
+
+        rememberListBundleSnapshot(kind, uid, bundle, kind === 'musicNote' ? 20 : 10);
+        callbacks.onData(bundle, meta);
+      })
+      .catch((error) => {
+        if (!cancelled) callbacks.onError?.(error);
+      });
+  };
+
+  const handleMusicNotePageEntry = () => runOneShotRead();
+
+  if (kind === 'musicNote') {
+    // 904: Home/login startup only prepares this callback. No Firestore read happens
+    // until the Music Note route explicitly announces that it is actually visible.
+    if (typeof window !== 'undefined') {
+      window.addEventListener(MUSIC_NOTE_BUNDLE_PAGE_ENTRY_EVENT, handleMusicNotePageEntry as EventListener);
+      if ((window as any).__soridrawMusicNotePageActive === true) {
+        runOneShotRead();
       }
+    }
+  } else {
+    // Library behavior stays exactly as 903: one document read when Library starts.
+    runOneShotRead();
+  }
 
-      const data = snapshot.data() || {};
-      const items = Array.isArray(data.items) ? data.items : [];
-      const bundle: ListBundleSnapshot = {
-        schemaVersion: Number(data.schemaVersion || 0),
-        kind,
-        items,
-        itemCount: Number(data.itemCount || items.length || 0),
-        cursorCreatedAtMs: Number(data.cursorCreatedAtMs || 0),
-        hasMore: data.hasMore === true,
-        deletedIds: normalizeDeletedIds(data.deletedIds),
-        updatedAtMs: Number(data.updatedAtMs || 0),
-      };
-
-      rememberListBundleSnapshot(kind, uid, bundle, kind === 'musicNote' ? 20 : 10);
-      callbacks.onData(bundle, meta);
-    },
-    (error) => callbacks.onError?.(error),
-  );
+  return () => {
+    cancelled = true;
+    if (kind === 'musicNote' && typeof window !== 'undefined') {
+      window.removeEventListener(MUSIC_NOTE_BUNDLE_PAGE_ENTRY_EVENT, handleMusicNotePageEntry as EventListener);
+    }
+  };
 };
+
+
+export const readListBundleFromServerOnce = async (
+  kind: ListBundleKind,
+  uid: string,
+): Promise<ListBundleSnapshot | null> => {
+  if (!uid) return null;
+  const snapshot = await getDocFromServer(getBundleRef(kind, uid));
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data() || {};
+  const items = Array.isArray(data.items) ? data.items : [];
+  const bundle: ListBundleSnapshot = {
+    schemaVersion: Number(data.schemaVersion || 0),
+    kind,
+    items,
+    itemCount: Number(data.itemCount || items.length || 0),
+    cursorCreatedAtMs: Number(data.cursorCreatedAtMs || 0),
+    hasMore: data.hasMore === true,
+    deletedIds: normalizeDeletedIds(data.deletedIds),
+    updatedAtMs: Number(data.updatedAtMs || 0),
+  };
+  rememberListBundleSnapshot(kind, uid, bundle, kind === 'musicNote' ? 20 : 10);
+  return bundle;
+};
+
+const SORIDRAW_921_FIRESTORE_COST_HARDENING = true;

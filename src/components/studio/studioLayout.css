@@ -14817,3 +14817,113 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   background-color: #E1716A !important;
   color: #FFF0EE !important;
 }
+
+
+/* SORIDRAW_NAV_PERMISSION_VISIBILITY_953
+   App navigation access is the single source of truth in dark/light/split.
+   These selectors only mirror its resolved result into split-style left rails. */
+:root[data-soridraw-nav-music-note='hide'] [data-soridraw-menu-access='music-note'],
+:root[data-soridraw-nav-library='hide'] [data-soridraw-menu-access='library'],
+:root[data-soridraw-nav-lab='hide'] [data-soridraw-menu-access='lab'],
+:root[data-soridraw-nav-my-page='hide'] [data-soridraw-menu-access='my-page'] {
+  display: none !important;
+}
+
+
+/* SORIDRAW_MUSIC_NOTE_CARD_RHYTHM_968 */
+/* Give genre/title the same breathing rhythm as title/actions without changing
+ * the list structure. The row and thumbnail grow together so alignment stays stable. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page
+.soridraw-musicnote-song-row {
+  height: 88px !important;
+  min-height: 88px !important;
+  max-height: 88px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page
+.soridraw-musicnote-song-media {
+  width: 50px !important;
+  min-width: 50px !important;
+  max-width: 50px !important;
+  height: 64px !important;
+  min-height: 64px !important;
+  max-height: 64px !important;
+  flex: 0 0 50px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-title {
+  margin-top: 6px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-title {
+  margin-top: 5px !important;
+}
+
+
+/* SORIDRAW_MUSIC_NOTE_GENRE_COLOR_DOT_CLEANUP_969 */
+/* Genre is secondary metadata: match the dim keyword tone and reduce it slightly. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-genre {
+  font-size: 12px !important;
+  color: rgba(255, 255, 255, 0.43) !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-genre {
+  font-size: 10px !important;
+  color: rgba(255, 255, 255, 0.43) !important;
+}
+
+html[data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page .soridraw-musicnote-song-genre,
+html:not(.dark) body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page .soridraw-musicnote-song-genre {
+  color: rgba(30, 30, 32, 0.48) !important;
+}
+
+/* Per-song color picker: keep the hit area, show only the actual color dot. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme [data-favorite-color-control="true"],
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme [data-favorite-color-control="true"]:is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Color picker popup dots: no secondary gray/ring button around the dot. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme [data-favorite-color-menu="true"] button,
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme [data-favorite-color-menu="true"] button:is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Top color filter: retain the large shared filter tray, but each color is only a dot. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-responsive-color-filter > button:not(.soridraw-color-reset-button),
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-responsive-color-filter > button:not(.soridraw-color-reset-button):is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}

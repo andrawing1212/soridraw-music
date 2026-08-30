@@ -17,6 +17,8 @@ export type FirestoreActualState = {
   cacheHits: number;
   lastReads: number;
   lastWrites: number;
+  readSources: Record<string, number>;
+  writeSources: Record<string, number>;
   updatedAt: number;
 };
 
@@ -47,8 +49,26 @@ const makeEmptyFirestoreActualState = (updatedAt = 0): FirestoreActualState => (
   cacheHits: 0,
   lastReads: 0,
   lastWrites: 0,
+  readSources: {},
+  writeSources: {},
   updatedAt,
 });
+
+const normalizeFirestoreSourceMap = (value: unknown): Record<string, number> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const next: Record<string, number> = {};
+  Object.entries(value as Record<string, unknown>).forEach(([rawKey, rawValue]) => {
+    const key = String(rawKey || 'unknown').trim().slice(0, 96) || 'unknown';
+    const count = Number(rawValue || 0);
+    if (Number.isFinite(count) && count > 0) next[key] = Math.floor(count);
+  });
+  return next;
+};
+
+const addFirestoreSourceCount = (map: Record<string, number>, source: string, count: number) => {
+  const key = String(source || 'unknown').trim().slice(0, 96) || 'unknown';
+  return { ...map, [key]: Number(map[key] || 0) + count };
+};
 
 export function readCacheDiagnosticsEnabled(uid?: string | null): boolean {
   if (typeof localStorage === 'undefined') return false;
@@ -97,6 +117,8 @@ export function readFirestoreActual(): FirestoreActualState {
       cacheHits: normalize(parsed?.cacheHits),
       lastReads: normalize(parsed?.lastReads),
       lastWrites: normalize(parsed?.lastWrites),
+      readSources: normalizeFirestoreSourceMap(parsed?.readSources),
+      writeSources: normalizeFirestoreSourceMap(parsed?.writeSources),
       updatedAt: normalize(parsed?.updatedAt),
     };
   } catch {
@@ -120,7 +142,7 @@ export function resetFirestoreActual(): void {
   writeFirestoreActual(makeEmptyFirestoreActualState(Date.now()));
 }
 
-export function markFirestoreActualRead(reads = 1): void {
+export function markFirestoreActualRead(reads = 1, source = 'unknown'): void {
   if (!readCacheDiagnosticsGloballyEnabled()) return;
   const count = Number.isFinite(reads) && reads > 0 ? Math.floor(reads) : 0;
   if (count <= 0) return;
@@ -130,11 +152,12 @@ export function markFirestoreActualRead(reads = 1): void {
     reads: previous.reads + count,
     lastReads: count,
     lastWrites: 0,
+    readSources: addFirestoreSourceCount(previous.readSources || {}, source, count),
     updatedAt: Date.now(),
   });
 }
 
-export function markFirestoreActualWrite(writes = 1): void {
+export function markFirestoreActualWrite(writes = 1, source = 'unknown'): void {
   if (!readCacheDiagnosticsGloballyEnabled()) return;
   const count = Number.isFinite(writes) && writes > 0 ? Math.floor(writes) : 0;
   if (count <= 0) return;
@@ -144,6 +167,7 @@ export function markFirestoreActualWrite(writes = 1): void {
     writes: previous.writes + count,
     lastReads: 0,
     lastWrites: count,
+    writeSources: addFirestoreSourceCount(previous.writeSources || {}, source, count),
     updatedAt: Date.now(),
   });
 }
@@ -252,6 +276,8 @@ export function markCacheDiagnostic(
     window.dispatchEvent(new CustomEvent(CACHE_DIAGNOSTICS_UPDATE_EVENT, { detail: { domain, state: next } }));
   }
 }
+
+const SORIDRAW_925_CACHE_LIVE_LARGE_SOURCE_TRACE = true;
 
 export function markCacheDiagnosticWrite(domain: CacheDiagnosticDomain, writes = 1): void {
   markCacheDiagnostic(domain, 'SYNC', 0, writes);

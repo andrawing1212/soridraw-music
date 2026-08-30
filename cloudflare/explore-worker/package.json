@@ -1,0 +1,12 @@
+{
+  "name": "soridraw-explore-worker-sync",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cf:prepare": "node ./scripts/prepare-from-dashboard.mjs",
+    "cf:deploy": "node ./scripts/deploy-prepared.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.102.0"
+  }
+}

@@ -1,0 +1,3 @@
+Backend V2 Step 2-B validation trigger
+2026-08-25 KST
+rerun: java21

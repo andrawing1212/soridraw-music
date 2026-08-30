@@ -9,7 +9,7 @@ import {
   deleteDoc, 
   doc, 
   serverTimestamp 
-} from 'firebase/firestore';
+} from '../lib/firestoreMeasured';
 import { db, auth } from '../firebase';
 import { VocalTone } from '../types';
 import { 
@@ -30,9 +30,11 @@ import { cn } from '../lib/utils';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AdminPageLayout from '../components/AdminPageLayout';
 import { normalizeStaffRole } from '../constants/adminPermissions';
+import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
 
 export default function AdminVocalTonesPage({ isAdmin: isAdminProp }: { isAdmin?: boolean }) {
-  const navigate = useNavigate();
+  const SORIDRAW_929_SINGLE_USER_PROFILE_SOURCE = true;
+const navigate = useNavigate();
   const location = useLocation();
   const [vocalTones, setVocalTones] = useState<VocalTone[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -101,19 +103,18 @@ export default function AdminVocalTonesPage({ isAdmin: isAdminProp }: { isAdmin?
 
   useEffect(() => {
     if (!auth.currentUser || isAdminProp !== undefined) return;
-    
-    // Support real-time role check if prop wasn't passed or we want extra safety
-    const unsub = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        if (normalizeStaffRole(data) !== null) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
-      }
-    });
-    return () => unsub();
+    const uid = auth.currentUser.uid;
+    const applyCachedAdmin = () => {
+      const profile = readUserProfileCache(uid);
+      if (profile) setIsAdmin(normalizeStaffRole(profile) !== null);
+    };
+    applyCachedAdmin();
+    const handleProfileCache = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string }>).detail;
+      if (detail?.uid === uid) applyCachedAdmin();
+    };
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
+    return () => window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
   }, [isAdminProp]);
 
   useEffect(() => {

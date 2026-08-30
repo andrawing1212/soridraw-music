@@ -8,7 +8,7 @@ import {
   query,
   serverTimestamp,
   updateDoc,
-} from 'firebase/firestore';
+} from '../lib/firestoreMeasured';
 import { auth, db, functions, httpsCallable } from '../firebase';
 import { AccountStatus, AppUserInfo, PaymentStatus, UserRole } from '../types';
 import {
@@ -49,7 +49,9 @@ import { cn } from '../lib/utils';
 import { getTimestampMs } from '../App';
 import { FULL_ADMIN_PERMISSIONS, normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';
 import { PRESENCE_DIAGNOSTIC_EVENT, readPresenceDiagnostic, type PresenceDiagnostic } from '../services/presenceService';
+import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
 
+const SORIDRAW_929_SINGLE_USER_PROFILE_SOURCE = true;
 const ROLE_LABELS: Record<UserRole, string> = {
   free: 'Free',
   basic: 'Basic',
@@ -601,9 +603,18 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
   useEffect(() => {
     if (!auth.currentUser || isAdminProp !== undefined) return;
-    getDoc(doc(db, 'users', auth.currentUser.uid))
-      .then((snapshot) => setIsAdmin(normalizeStaffRole(snapshot.data()) !== null))
-      .catch((error) => console.error('Admin check failed:', error));
+    const uid = auth.currentUser.uid;
+    const applyCachedAdmin = () => {
+      const profile = readUserProfileCache(uid);
+      if (profile) setIsAdmin(normalizeStaffRole(profile) !== null);
+    };
+    applyCachedAdmin();
+    const handleProfileCache = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string }>).detail;
+      if (detail?.uid === uid) applyCachedAdmin();
+    };
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
+    return () => window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
   }, [isAdminProp]);
 
   const fetchAuthDirectory = useCallback(async () => {

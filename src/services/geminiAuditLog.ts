@@ -311,6 +311,34 @@ export function recordGeminiAuditCall(input: {
   writeSessions(sessions);
 }
 
+export function mergeGeminiAuditSessionIntoParent(
+  childSessionId: string | undefined,
+  parentSessionId: string | undefined,
+): void {
+  const childId = String(childSessionId || '').trim();
+  const parentId = String(parentSessionId || '').trim();
+  if (!childId || !parentId || childId === parentId) return;
+  const sessions = readSessions();
+  const child = sessions.find((session) => session.id === childId);
+  const parent = sessions.find((session) => session.id === parentId);
+  if (!child || !parent) return;
+  const appendedCalls = child.calls.map((call, index) => ({
+    ...call,
+    sessionId: parentId,
+    sequence: parent.calls.length + index + 1,
+  }));
+  const updatedParent: GeminiAuditSession = {
+    ...parent,
+    calls: [...parent.calls, ...appendedCalls],
+    modelSkips: mergeModelSkips(parent.modelSkips, child.modelSkips || []),
+  };
+  writeSessions(
+    sessions
+      .filter((session) => session.id !== childId)
+      .map((session) => session.id === parentId ? updatedParent : session),
+  );
+}
+
 export function summarizeGeminiAuditSession(session: GeminiAuditSession): GeminiAuditUsage & {
   callCount: number;
   failedCallCount: number;

@@ -1,0 +1,198 @@
+name: Firebase Test Cacheless Bootstrap Fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - preview
+    paths:
+      - .github/workflows/firebase-test-cacheless-bootstrap-fix.yml
+      - .deploy/apply-firebase-test-cacheless-bootstrap.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-test-cacheless-bootstrap-fix
+  cancel-in-progress: true
+
+jobs:
+  deploy-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout preview migration infra
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          path: infra
+
+      - name: Checkout current Vercel test source from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: app
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install current main dependencies
+        working-directory: app
+        run: npm install --no-audit --no-fund
+
+      - name: Generate exact current Vercel runtime source
+        working-directory: app
+        run: npm run prebuild
+
+      - name: Snapshot generated runtime targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/cacheless-before/src/pages /tmp/cacheless-before/src/constants
+          cp app/src/App.tsx /tmp/cacheless-before/src/App.tsx
+          cp app/src/pages/SunoLibraryPage.tsx /tmp/cacheless-before/src/pages/SunoLibraryPage.tsx
+          cp app/src/firebase.js /tmp/cacheless-before/src/firebase.js
+          cp app/src/constants/emailVerification.ts /tmp/cacheless-before/src/constants/emailVerification.ts
+
+      - name: Apply cacheless bootstrap and UID cache schema
+        run: python3 infra/.deploy/apply-firebase-test-cacheless-bootstrap.py app
+
+      - name: Verify cache and account isolation safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp infra/firebase.hosting-test.json app/firebase.hosting-test.json
+
+          diff -u /tmp/cacheless-before/src/App.tsx app/src/App.tsx > /tmp/app.patch || true
+          diff -u /tmp/cacheless-before/src/pages/SunoLibraryPage.tsx app/src/pages/SunoLibraryPage.tsx > /tmp/library.patch || true
+          diff -u /tmp/cacheless-before/src/firebase.js app/src/firebase.js > /tmp/firebase.patch || true
+          diff -u /tmp/cacheless-before/src/constants/emailVerification.ts app/src/constants/emailVerification.ts > /tmp/email.patch || true
+
+          test -s /tmp/app.patch
+          test -s /tmp/library.patch
+          test -s /tmp/firebase.patch
+          test -s /tmp/email.patch
+
+          # Full cacheless bootstrap still exists and remains read-only.
+          grep -q "Cacheless Music Note full bootstrap failed" app/src/App.tsx
+          grep -q "const shouldVerifyMusicNoteBundle = hasCachedMusicNote" app/src/App.tsx
+          grep -q "const snapshot = await getDocs(tracksRef);" app/src/pages/SunoLibraryPage.tsx
+
+          # Cache schema is UID-scoped and marked only after successful full reads.
+          grep -q "MUSIC_NOTE_CACHE_SCHEMA_VERSION = '2'" app/src/App.tsx
+          grep -q "getMusicNoteCacheSchemaKey = (uid: string)" app/src/App.tsx
+          grep -q "markMusicNoteCacheSchemaCurrent(currentUser.uid)" app/src/App.tsx
+          grep -q "LIBRARY_WORKSPACE_CACHE_SCHEMA_VERSION = '2'" app/src/pages/SunoLibraryPage.tsx
+          grep -q "getLibraryWorkspaceCacheSchemaKey = (uid: string)" app/src/pages/SunoLibraryPage.tsx
+          grep -q "markLibraryWorkspaceCacheSchemaCurrent(uid)" app/src/pages/SunoLibraryPage.tsx
+
+          # Account switches clear active UI memory only; durable payload keys stay UID-scoped.
+          grep -q "musicNoteActiveUiUid !== nextMusicNoteUiUid" app/src/App.tsx
+          grep -q "libraryActiveUiUid !== nextLibraryUiUid" app/src/pages/SunoLibraryPage.tsx
+          grep -q 'soridraw_favorites_cache_${uid}' app/src/App.tsx
+          grep -q 'soridraw_suno_tracks_cache_${uid}' app/src/pages/SunoLibraryPage.tsx
+
+          grep -q 'const isFirebaseTestApp' app/src/firebase.js
+          grep -q 'soridraw-test.web.app' app/src/constants/emailVerification.ts
+
+          cat /tmp/app.patch /tmp/library.patch \
+            | grep '^+' \
+            | grep -E '(setDoc|addDoc|updateDoc|deleteDoc|writeBatch|scheduleListBundleWrite)\s*\(' \
+            && { echo 'Unexpected Firestore/server write added by cache migration'; exit 4; } || true
+
+          # Intended bootstrap reads are exactly un-ordered/un-limited user reads.
+          grep -q "where('uid', '==', currentUser.uid)" /tmp/app.patch
+          grep -q "getDocs(tracksRef)" /tmp/library.patch
+          if grep '^+' /tmp/app.patch /tmp/library.patch | grep -E "orderBy\('createdAt'|limit\(" >/dev/null; then
+            echo 'Cacheless bootstrap accidentally added orderBy/limit.'
+            exit 5
+          fi
+
+          echo 'PATCH_SCOPE=PASS'
+          echo 'CACHELESS_FULL_READ_ONLY=PASS'
+          echo 'UID_SCOPED_CACHE_SCHEMA_V2=PASS'
+          echo 'ACCOUNT_SWITCH_MEMORY_RESET=PASS'
+          echo 'NO_FIRESTORE_WRITE_ADDED=PASS'
+
+      - name: TypeScript check generated patched runtime
+        working-directory: app
+        run: npx tsc --noEmit
+
+      - name: Build without re-running prebuild
+        working-directory: app
+        run: npx vite build
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Assert isolated Firebase test site exists
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest hosting:sites:list --project soridraw --json > "$RUNNER_TEMP/sites.json"
+          node - "$RUNNER_TEMP/sites.json" <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const arrays = [payload?.result?.sites, payload?.result, payload?.sites, payload];
+          const sites = arrays.find(Array.isArray) || [];
+          const ids = sites.map((site) => {
+            const raw = String(site?.site || site?.siteId || site?.id || site?.name || '');
+            return raw.includes('/') ? raw.split('/').filter(Boolean).pop() : raw;
+          }).filter(Boolean);
+          if (!ids.includes('soridraw-test')) throw new Error('isolated soridraw-test Hosting site missing');
+          if (!ids.includes('soridraw')) throw new Error('production soridraw Hosting site unexpectedly missing');
+          console.log('ISOLATED_TEST_SITE=PASS');
+          NODE
+
+      - name: Deploy isolated Firebase test Hosting only
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project soridraw \
+            --config firebase.hosting-test.json \
+            --non-interactive
+          echo 'FIREBASE_TEST_HOSTING_DEPLOY=PASS'
+
+      - name: Smoke and shared-backend boundary checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in soridraw-test.web.app soridraw-test.firebaseapp.com; do
+            ok=''
+            for attempt in $(seq 1 8); do
+              if curl -fsS --max-time 30 "https://$host/" -o "$RUNNER_TEMP/$host.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/$host.html"; then
+                ok='yes'
+                break
+              fi
+              sleep 5
+            done
+            test "$ok" = yes
+            echo "HOST_SMOKE_PASS=$host"
+          done
+
+          f_code="$(curl -sS -o /tmp/f-body -D /tmp/f-head -w '%{http_code}' -X OPTIONS \
+            -H 'Origin: https://soridraw-test.web.app' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+            https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoApiKeyStatus)"
+          e_code="$(curl -sS -o /tmp/e-body -D /tmp/e-head -w '%{http_code}' \
+            -H 'Origin: https://soridraw-test.web.app' \
+            'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          case "$f_code" in 200|204) ;; *) echo "Functions CORS failed: $f_code"; exit 8 ;; esac
+          test "$e_code" = 200
+          echo "FUNCTIONS_CORS=$f_code"
+          echo "EXPLORE_CORS=$e_code"
+          echo 'NO_FIRESTORE_SERVER_WRITE=true'
+          echo 'NO_RULES_DEPLOY=true'
+          echo 'NO_FUNCTIONS_DEPLOY=true'
+          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'

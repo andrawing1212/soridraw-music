@@ -1,0 +1,220 @@
+name: TEMP Stage4 Test Custom Domain Functions CORS
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-stage4-test-custom-domain-functions-cors.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temp-stage4-test-custom-domain-functions-cors
+  cancel-in-progress: false
+
+jobs:
+  exact-live-source-rollout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PROJECT: soridraw-app-866a5
+      REGION: us-central1
+
+    steps:
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Authenticate Google
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Normalize Firebase migration origins on active exact-live Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Active browser-facing endpoints only. The legacy direct-key endpoint
+          # getGoogleGeminiApiKey remains intentionally excluded so TEST migration
+          # never re-opens direct API-secret return to the browser.
+          functions=(
+            getSunoApiKeyStatus
+            saveGoogleGeminiApiKey
+            deleteGoogleGeminiApiKey
+            getGoogleGeminiApiKeyStatus
+            generateGeminiContent
+            saveSunoApiKey
+            deleteSunoApiKey
+            fetchSunoShareMetadata
+            getSunoRemainingCredits
+            getSunoRemainingCreditsAfterComplete
+            createSunoTrack
+            getSunoTrackStatus
+          )
+
+          required_origins=(
+            'https://soridraw-preview.web.app'
+            'https://soridraw-preview.firebaseapp.com'
+            'https://preview.soridraw.com'
+            'https://soridraw-test.web.app'
+            'https://soridraw-test.firebaseapp.com'
+            'https://test.soridraw.com'
+          )
+
+          cors_status() {
+            local fn="$1" origin="$2"
+            local url="https://us-central1-$PROJECT.cloudfunctions.net/$fn"
+            local code allow
+            code="$(curl -sS -o /tmp/cors-body -D /tmp/cors-head -w '%{http_code}' -X OPTIONS \
+              -H "Origin: $origin" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "$url" || true)"
+            allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/cors-head)"
+            printf '%s|%s' "$code" "$allow"
+          }
+
+          verify_options() {
+            python3 - "$1" "$2" <<'PY'
+          import json, sys
+          before=json.load(open(sys.argv[1], encoding='utf-8'))
+          after=json.load(open(sys.argv[2], encoding='utf-8'))
+          def pick(d):
+              b=d.get('buildConfig') or {}
+              s=d.get('serviceConfig') or {}
+              return {
+                'runtime': b.get('runtime'),
+                'entryPoint': b.get('entryPoint'),
+                'environmentVariables': b.get('environmentVariables'),
+                'availableMemory': s.get('availableMemory'),
+                'timeoutSeconds': s.get('timeoutSeconds'),
+                'minInstanceCount': s.get('minInstanceCount'),
+                'maxInstanceCount': s.get('maxInstanceCount'),
+                'maxInstanceRequestConcurrency': s.get('maxInstanceRequestConcurrency'),
+                'serviceAccountEmail': s.get('serviceAccountEmail'),
+                'ingressSettings': s.get('ingressSettings'),
+                'secretEnvironmentVariables': s.get('secretEnvironmentVariables'),
+              }
+          if pick(before) != pick(after):
+              print('BEFORE', json.dumps(pick(before), ensure_ascii=False, sort_keys=True))
+              print('AFTER ', json.dumps(pick(after), ensure_ascii=False, sort_keys=True))
+              raise SystemExit('Critical runtime configuration changed')
+          PY
+          }
+
+          for fn in "${functions[@]}"; do
+            echo "========== $fn =========="
+            missing=()
+            for origin in "${required_origins[@]}"; do
+              result="$(cors_status "$fn" "$origin")"
+              if [ "${result%%|*}" != '204' ] || [ "${result#*|}" != "$origin" ]; then
+                missing+=("$origin")
+              fi
+            done
+
+            if [ "${#missing[@]}" -eq 0 ]; then
+              echo "[SKIP] $fn already accepts every Firebase PREVIEW/TEST origin"
+              continue
+            fi
+
+            # Existing Vercel compatibility must remain healthy before any exact-live patch.
+            legacy="$(cors_status "$fn" 'https://soridraw-music.vercel.app')"
+            test "${legacy%%|*}" = '204' || { echo "$fn: existing Vercel CORS unhealthy ($legacy); refusing deploy"; exit 11; }
+
+            printf '[PATCH] %s missing origins:' "$fn"
+            printf ' %s' "${missing[@]}"
+            echo
+
+            work="$RUNNER_TEMP/migration-cors-$fn"
+            rm -rf "$work"
+            mkdir -p "$work/source"
+            before="$work/before.json"
+            gcloud functions describe "$fn" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$before"
+            eval "$(python3 - "$before" <<'PY'
+          import json, shlex, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8'))
+          src=((data.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}
+          bucket=str(src.get('bucket') or '')
+          obj=str(src.get('object') or '')
+          if not bucket or not obj:
+              raise SystemExit('Live source storage location unavailable')
+          print('B='+shlex.quote(bucket))
+          print('O='+shlex.quote(obj))
+          PY
+            )"
+            gcloud storage cp "gs://$B/$O" "$work/live.zip" >/dev/null
+            unzip -q "$work/live.zip" -d "$work/source"
+            test -f "$work/source/src/index.ts"
+            test -f "$work/source/package.json"
+            cp "$work/source/src/index.ts" "$work/index.before.ts"
+
+            python3 - "$work/index.before.ts" "$work/source/src/index.ts" "${missing[@]}" <<'PY'
+          from pathlib import Path
+          import re, sys
+          source=Path(sys.argv[1]).read_text(encoding='utf-8')
+          target=Path(sys.argv[2])
+          wanted=sys.argv[3:]
+          m=re.search(r'((?:const|var)\s+ALLOWED_ORIGINS\s*=\s*\[)(.*?)(\n\s*\];)', source, re.S)
+          if not m:
+              raise SystemExit('ALLOWED_ORIGINS block not found')
+          body=m.group(2)
+          actual=[origin for origin in wanted if f'"{origin}"' not in body]
+          if not actual:
+              raise SystemExit('Runtime CORS unhealthy but every requested origin already exists in source')
+          additions=''.join(f'\n  "{origin}",' for origin in actual)
+          expected=source[:m.end(2)] + additions + source[m.end(2):]
+          target.write_text(expected, encoding='utf-8')
+          if target.read_text(encoding='utf-8') != expected:
+              raise SystemExit('Exact source patch mismatch')
+          if len(expected)-len(source) != len(additions):
+              raise SystemExit('Unexpected source delta')
+          print('Added only:', ', '.join(actual))
+          PY
+
+            (
+              cd "$work/source"
+              npm ci --no-audit --no-fund
+              npm run build
+              for origin in "${missing[@]}"; do grep -Fq "$origin" lib/index.js; done
+            )
+
+            cat > "$work/firebase.json" <<JSON
+          {
+            "functions": {
+              "source": "$work/source"
+            }
+          }
+          JSON
+
+            npx --yes firebase-tools@latest deploy \
+              --project "$PROJECT" \
+              --config "$work/firebase.json" \
+              --only "functions:$fn" \
+              --non-interactive
+
+            after="$work/after.json"
+            gcloud functions describe "$fn" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$after"
+            verify_options "$before" "$after"
+
+            for origin in "${required_origins[@]}"; do
+              ok=''
+              for attempt in $(seq 1 15); do
+                result="$(cors_status "$fn" "$origin")"
+                if [ "${result%%|*}" = '204' ] && [ "${result#*|}" = "$origin" ]; then ok=yes; break; fi
+                sleep 10
+              done
+              echo "[AFTER] $fn $origin=$(cors_status "$fn" "$origin")"
+              test "$ok" = yes
+            done
+            legacy_after="$(cors_status "$fn" 'https://soridraw-music.vercel.app')"
+            test "${legacy_after%%|*}" = '204'
+          done
+
+          echo 'FIREBASE_PREVIEW_TEST_FUNCTIONS_CORS_COMPLETE=true'
+          echo 'LEGACY_DIRECT_GEMINI_KEY_ENDPOINT_LEFT_RESTRICTED=true'
+          echo 'NO_FIRESTORE_MIGRATION=true'
+          echo 'NO_RULES_DEPLOY=true'
+          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'

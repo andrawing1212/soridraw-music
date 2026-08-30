@@ -2843,6 +2843,79 @@ export const createSunoTrack = onRequest(
   }
 );
 
+const getSunoAudioCandidateUrls = (item: any): string[] => Array.from(new Set(
+  [
+    item?.audioUrl,
+    item?.streamAudioUrl,
+    item?.audio_url,
+    item?.stream_audio_url,
+    item?.sourceAudioUrl,
+    item?.source_audio_url,
+    item?.sourceStreamAudioUrl,
+    item?.source_stream_audio_url,
+  ]
+    .map((value) => pickFirstString(value))
+    .filter(Boolean)
+));
+
+const probeSunoAudioUrlHasBytes = async (url: string): Promise<boolean> => {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:") return false;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 7000);
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: { Range: "bytes=0-0" },
+    });
+    if (!response.ok) return false;
+
+    const contentType = String(response.headers.get("content-type") || "").trim().toLowerCase();
+    if (!contentType.startsWith("audio/")) {
+      console.warn("[Music API] audio validation rejected non-audio response", {
+        host: parsed.hostname,
+        contentType: contentType || "missing",
+      });
+      try { await response.body?.cancel(); } catch {}
+      return false;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      const buffer = await response.arrayBuffer();
+      return buffer.byteLength > 0;
+    }
+
+    const first = await reader.read();
+    try { await reader.cancel(); } catch {}
+    return Boolean(first.value && first.value.byteLength > 0);
+  } catch (error: any) {
+    console.warn("[Music API] audio validation probe failed", {
+      host: parsed.hostname,
+      message: error?.message || String(error),
+    });
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const findFirstUsableSunoAudioUrl = async (item: any): Promise<string> => {
+  const candidates = getSunoAudioCandidateUrls(item);
+  for (const candidate of candidates) {
+    if (await probeSunoAudioUrlHasBytes(candidate)) return candidate;
+  }
+  return "";
+};
+
 export const getSunoTrackStatus = onRequest(
   { region: "us-central1" },
   async (req, res) => {
@@ -3000,16 +3073,20 @@ export const getSunoTrackStatus = onRequest(
       const rawSunoData = Array.isArray(sunoDataRaw) ? sunoDataRaw : [sunoDataRaw];
       const sunoData = rawSunoData.filter(Boolean).map(normalizeSunoDataItem);
 
-      const audioUrls: string[] = sunoData
-        .map((item: any) => pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url))
-        .filter(Boolean);
+      const reportedAudioUrls = Array.from(new Set(sunoData.flatMap((item: any) => getSunoAudioCandidateUrls(item))));
+      const verifiedAudioUrls: string[] = [];
+      for (const item of sunoData) {
+        const verified = await findFirstUsableSunoAudioUrl(item);
+        if (verified) verifiedAudioUrls.push(verified);
+      }
+      const allReportedAudioVerified = sunoData.length > 0 && verifiedAudioUrls.length === sunoData.length;
 
       // If it's just a missing taskId error from API, do not mark as failed.
       if (!isMissingTaskIdError) {
-        const hasAnyAudio = audioUrls.length > 0;
-        const hasAllAudio = sunoData.length > 0 && sunoData.every((item: any) => !!pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url));
+        const hasAnyAudio = verifiedAudioUrls.length > 0;
+        const hasAllAudio = allReportedAudioVerified;
         const anyItemFailed = sunoData.some((item: any) => isFailedStatus(item?.status));
-        const allItemsCompleted = sunoData.length > 0 && sunoData.every((item: any) => isCompleteStatus(item?.status) || !!pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url));
+        const allItemsCompleted = sunoData.length > 0 && sunoData.every((item: any) => isCompleteStatus(item?.status));
         const apiReportedComplete = isCompleteStatus(data?.status) || isCompleteStatus(responseData?.status) || isCompleteStatus(responseObj?.status);
 
         for (const item of sunoData) {
@@ -3021,11 +3098,11 @@ export const getSunoTrackStatus = onRequest(
           status = hasAnyAudio ? "processing" : "failed";
         } else if (hasAllAudio && (apiReportedComplete || allItemsCompleted || hasAnyAudio)) {
           status = "completed";
-        } else if (hasAnyAudio) {
-          // One result may be ready before the second one. Keep polling instead of freezing as completed.
+        } else if (reportedAudioUrls.length > 0 || hasAnyAudio) {
+          // A URL string alone is not completion. Empty/temporarily unavailable media keeps polling.
           status = "processing";
         } else if (apiReportedComplete) {
-          // API can report SUCCESS before audio URLs become available. Keep polling.
+          // API can report SUCCESS before usable audio bytes become available. Keep polling.
           status = "processing";
         } else {
           status = String(data?.status || responseData?.status || status || "processing").toLowerCase();
@@ -3034,10 +3111,16 @@ export const getSunoTrackStatus = onRequest(
          console.warn("External API reported missing taskId. Not changing track status to failed.", data);
       }
 
+      const audioValidationStatus = allReportedAudioVerified
+        ? "verified"
+        : (reportedAudioUrls.length > 0 ? "pending_or_empty" : "missing");
+
       const updates: any = {
         apiStatusResponse: data,
         sunoData: sunoData,
-        audioUrls: audioUrls,
+        audioUrls: verifiedAudioUrls,
+        reportedAudioUrls: reportedAudioUrls,
+        audioValidationStatus,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       };
       
@@ -3050,17 +3133,7 @@ export const getSunoTrackStatus = onRequest(
 
       const first = Array.isArray(sunoData) ? sunoData.find((item: any) => pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url)) || sunoData[0] : null;
 
-      finalAudioUrl =
-        pickFirstString(
-          first?.audioUrl,
-          first?.streamAudioUrl,
-          first?.audio_url,
-          first?.stream_audio_url,
-          first?.sourceAudioUrl,
-          first?.sourceStreamAudioUrl,
-          responseObj?.audioUrl,
-          responseObj?.audio_url
-        );
+      finalAudioUrl = verifiedAudioUrls[0] || "";
 
       finalImageUrl =
         pickFirstString(
@@ -3105,7 +3178,9 @@ export const getSunoTrackStatus = onRequest(
         audioUrl: finalAudioUrl,
         streamAudioUrl: finalAudioUrl,
         imageUrl: finalImageUrl,
-        audioUrls: audioUrls,
+        audioUrls: verifiedAudioUrls,
+        reportedAudioUrls: reportedAudioUrls,
+        audioValidationStatus,
         sunoData: sunoData,
         apiStatusResponse: data
       });

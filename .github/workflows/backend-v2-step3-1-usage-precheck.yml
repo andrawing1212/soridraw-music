@@ -1,0 +1,249 @@
+name: SORIDRAW Backend V2 Step 3-1 Usage Precheck
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step3-1-usage-precheck.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  precheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Authenticate monitoring-only session
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install Functions dependencies without lifecycle scripts
+        working-directory: functions
+        run: npm ci --ignore-scripts
+
+      - name: Query Firestore Cloud Monitoring usage and compute safe backup cap
+        working-directory: functions
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+          GOOGLE_CLOUD_QUOTA_PROJECT: soridraw-app-866a5
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const admin = require('firebase-admin');
+
+          const TARGET_PROJECT = 'soridraw-app-866a5';
+          const FREE_READS = 50_000;
+          const READ_RESERVE = 10_000;
+          const ABSOLUTE_MIGRATION_READ_CAP = 10_000;
+          const STEP0_KNOWN_PEAK_TODAY_READS = 636;
+          const STEP1B_BACKUP_ESTIMATE = 841;
+          const RECENT_WINDOW_MINUTES = 10;
+
+          const now = new Date();
+          const kstDate = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Seoul',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(now);
+          const dayStartMs = Date.parse(`${kstDate}T00:00:00+09:00`);
+          const endMs = now.getTime();
+          const recentStartMs = endMs - RECENT_WINDOW_MINUTES * 60_000;
+
+          const metricFamilies = {
+            reads: [
+              'firestore.googleapis.com/document/read_ops_count',
+              'firestore.googleapis.com/document/read_count',
+            ],
+            writes: [
+              'firestore.googleapis.com/document/write_ops_count',
+              'firestore.googleapis.com/document/write_count',
+            ],
+            deletes: [
+              'firestore.googleapis.com/document/delete_ops_count',
+              'firestore.googleapis.com/document/delete_count',
+            ],
+            billableReads: ['firestore.googleapis.com/api/billable_read_units'],
+            billableRealtimeReads: ['firestore.googleapis.com/api/billable_realtime_read_units'],
+            billableWrites: ['firestore.googleapis.com/api/billable_write_units'],
+          };
+
+          const getValue = (point) => {
+            const raw = point?.value?.int64Value ?? point?.value?.doubleValue ?? 0;
+            const value = Number(raw);
+            return Number.isFinite(value) && value > 0 ? value : 0;
+          };
+
+          const queryMetric = async (accessToken, metricType) => {
+            const params = new URLSearchParams({
+              filter: `metric.type = "${metricType}"`,
+              'interval.startTime': new Date(dayStartMs).toISOString(),
+              'interval.endTime': new Date(endMs).toISOString(),
+              view: 'FULL',
+              pageSize: '1000',
+            });
+            let pageToken = '';
+            let pageCount = 0;
+            let today = 0;
+            let recent = 0;
+            let sampledThroughMs = 0;
+            let pointCount = 0;
+
+            do {
+              if (pageToken) params.set('pageToken', pageToken);
+              else params.delete('pageToken');
+              const url = `https://monitoring.googleapis.com/v3/projects/${encodeURIComponent(TARGET_PROJECT)}/timeSeries?${params.toString()}`;
+              const response = await fetch(url, {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  'X-Goog-User-Project': TARGET_PROJECT,
+                  Accept: 'application/json',
+                },
+              });
+              const body = await response.text();
+              if (!response.ok) {
+                const error = new Error(`Cloud Monitoring API ${response.status}: ${body.slice(0, 500)}`);
+                error.statusCode = response.status;
+                throw error;
+              }
+              const payload = body ? JSON.parse(body) : {};
+              for (const series of Array.isArray(payload.timeSeries) ? payload.timeSeries : []) {
+                for (const point of Array.isArray(series.points) ? series.points : []) {
+                  const value = getValue(point);
+                  const pointEndMs = Date.parse(String(point?.interval?.endTime || ''));
+                  today += value;
+                  pointCount += 1;
+                  if (Number.isFinite(pointEndMs)) {
+                    sampledThroughMs = Math.max(sampledThroughMs, pointEndMs);
+                    if (pointEndMs >= recentStartMs) recent += value;
+                  }
+                }
+              }
+              pageToken = String(payload.nextPageToken || '');
+              pageCount += 1;
+              if (pageCount > 5) throw new Error('Cloud Monitoring pagination exceeded safety limit');
+            } while (pageToken);
+
+            return {
+              metricType,
+              today: Math.round(today),
+              recent: Math.round(recent),
+              sampledThroughMs,
+              pointCount,
+            };
+          };
+
+          const queryFamily = async (accessToken, family) => {
+            let firstEmpty = null;
+            for (const metricType of family) {
+              try {
+                const result = await queryMetric(accessToken, metricType);
+                if (result.pointCount > 0) return result;
+                if (!firstEmpty) firstEmpty = result;
+              } catch (error) {
+                if (error?.statusCode === 400 || error?.statusCode === 404) continue;
+                throw error;
+              }
+            }
+            return firstEmpty || { metricType: family[0], today: 0, recent: 0, sampledThroughMs: 0, pointCount: 0 };
+          };
+
+          (async () => {
+            const credential = admin.credential.applicationDefault();
+            const token = await credential.getAccessToken();
+            const accessToken = String(token?.access_token || '');
+            if (!accessToken) throw new Error('Google Cloud access token unavailable');
+
+            const entries = await Promise.all(Object.entries(metricFamilies).map(async ([key, family]) => [key, await queryFamily(accessToken, family)]));
+            const metrics = Object.fromEntries(entries);
+            const todayReads = metrics.reads.today;
+            const availableMigrationReads = FREE_READS - Math.max(todayReads, STEP0_KNOWN_PEAK_TODAY_READS) - READ_RESERVE;
+            const safeReadCap = Math.min(ABSOLUTE_MIGRATION_READ_CAP, Math.max(0, availableMigrationReads));
+            const safeForEstimatedBackup = safeReadCap >= STEP1B_BACKUP_ESTIMATE;
+            const sampledThroughMs = Math.max(...Object.values(metrics).map((m) => m.sampledThroughMs || 0));
+
+            const report = {
+              status: safeForEstimatedBackup ? 'SAFE_TO_PREPARE_BACKUP' : 'PAUSE_FOR_QUOTA',
+              targetProject: TARGET_PROJECT,
+              quotaProject: TARGET_PROJECT,
+              kstDate,
+              fetchedAt: now.toISOString(),
+              sampledThrough: sampledThroughMs ? new Date(sampledThroughMs).toISOString() : null,
+              monitoringOnly: true,
+              firestoreDocumentReadsCausedByThisPrecheck: 0,
+              firestoreWritesCausedByThisPrecheck: 0,
+              firestoreDeletesCausedByThisPrecheck: 0,
+              backupExecuted: false,
+              step1bEstimatedBackupReads: STEP1B_BACKUP_ESTIMATE,
+              policy: {
+                freeReads: FREE_READS,
+                readReserve: READ_RESERVE,
+                step0KnownPeakTodayReads: STEP0_KNOWN_PEAK_TODAY_READS,
+                absoluteMigrationReadCap: ABSOLUTE_MIGRATION_READ_CAP,
+              },
+              documentOps: {
+                today: {
+                  reads: metrics.reads.today,
+                  writes: metrics.writes.today,
+                  deletes: metrics.deletes.today,
+                },
+                recent10m: {
+                  reads: metrics.reads.recent,
+                  writes: metrics.writes.recent,
+                  deletes: metrics.deletes.recent,
+                },
+              },
+              billableUnits: {
+                today: {
+                  reads: metrics.billableReads.today,
+                  realtimeReads: metrics.billableRealtimeReads.today,
+                  writes: metrics.billableWrites.today,
+                },
+                recent10m: {
+                  reads: metrics.billableReads.recent,
+                  realtimeReads: metrics.billableRealtimeReads.recent,
+                  writes: metrics.billableWrites.recent,
+                },
+              },
+              computed: {
+                availableMigrationReads,
+                safeReadCap,
+                safeForEstimatedBackup,
+              },
+              metricTypes: Object.fromEntries(Object.entries(metrics).map(([key, value]) => [key, value.metricType])),
+            };
+
+            console.log('SORIDRAW_STEP3_1_USAGE_PRECHECK=' + JSON.stringify(report));
+            if (!safeForEstimatedBackup) process.exitCode = 2;
+          })().catch((error) => {
+            console.error('SORIDRAW_STEP3_1_USAGE_PRECHECK_ERROR=' + String(error?.message || error));
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Confirm no repository or Firebase mutation command exists in precheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+          unexpected="$(git status --porcelain | grep -vE '^\?\? gha-creds-[A-Za-z0-9_-]+\.json$' || true)"
+          test -z "$unexpected"
+          echo 'Step 3-1 usage precheck is monitoring-only; no Firestore document read/write/delete or deploy command executed.'

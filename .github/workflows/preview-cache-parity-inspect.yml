@@ -1,0 +1,60 @@
+name: Preview Cache Parity Inspect
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/preview-cache-parity-inspect.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Print exact cache anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def show(path, needles, radius=1300):
+              text = Path(path).read_text(encoding='utf-8')
+              print(f'===== {path} bytes={len(text)} lines={text.count(chr(10))+1} =====')
+              for needle in needles:
+                  idx = text.find(needle)
+                  print(f'\n--- NEEDLE {needle!r} idx={idx} ---')
+                  if idx < 0:
+                      continue
+                  start=max(0,idx-radius); end=min(len(text),idx+len(needle)+radius)
+                  print(text[start:end])
+
+          show('src/App.tsx', [
+              'const musicNoteFreshBootstrapUids',
+              'const unsubscribe = onAuthStateChanged(auth, (currentUser) => {',
+              '// Fetch favorites for the user.',
+              'const runFavoritesFullCacheRecoveryOnce = async () => {',
+              'favoriteFullCacheRecoveryTimer = window.setTimeout',
+              'const hasCachedMusicNote =',
+          ], 1700)
+          show('src/pages/SunoLibraryPage.tsx', [
+              'let libraryWorkspaceAuthGuardStarted = false;',
+              'const readLibraryWorkspaceTrackCache =',
+              'const startLibraryWorkspaceSession = (uid: string)',
+              'const shouldVerifyLibraryBundle =',
+              'const handleLibraryProfileVersion =',
+              'if (shouldVerifyLibraryBundle())',
+              'const saveWorkspaceTrackCache =',
+              'const resolvedUser = currentUser || appUser || auth.currentUser;',
+          ], 1800)
+          PY
+          echo 'READ_ONLY=true'
+          echo 'NO_APP_SOURCE_WRITE=true'

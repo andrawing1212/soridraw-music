@@ -12,7 +12,10 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-# Firebase test host recognition only.
+# IMPORTANT: apply this only AFTER main's official npm prebuild patch chain.
+# This preserves the exact Vercel runtime and changes only cacheless bootstrap
+# plus Firebase test-host recognition in the isolated Firebase test deployment.
+
 firebase_path = ROOT / 'src/firebase.js'
 firebase = firebase_path.read_text(encoding='utf-8')
 firebase = replace_once(
@@ -39,107 +42,159 @@ email = replace_once(
 )
 email_path.write_text(email, encoding='utf-8')
 
-# Music Note: cacheless/new-host bootstrap must use the existing full un-ordered
-# Firestore recovery immediately, rather than waiting for delayed idle recovery.
+# Music Note: main 921 intentionally disabled automatic unbounded recovery for
+# normal cached sessions. For a brand-new host/device only, rebuild the local
+# cache from the complete user-owned server collection exactly once. No orderBy
+# or limit means legacy favorites without createdAt are included. Bundle/page
+# bootstrap is skipped during this first cacheless session, so it cannot replace
+# the complete snapshot with a 20-item subset.
 app_path = ROOT / 'src/App.tsx'
 app = app_path.read_text(encoding='utf-8')
 app = replace_once(
     app,
-    """          if (typeof requestIdleCallback !== 'undefined') {
-            requestIdleCallback(() => {
-              void performRecovery();
-            });
-          } else {
-            setTimeout(() => {
-              void performRecovery();
-            }, 3000);
-          }
+    """        // 921: the old automatic full-collection recovery is intentionally dead.
+        // Full collection reads are allowed only for explicit all-item operations.
+        const runFavoritesFullCacheRecoveryOnce = async () => {};
 """,
-    """          if (!Array.isArray(cachedFavs) || cachedFavs.length === 0) {
-            await performRecovery();
-          } else if (typeof requestIdleCallback !== 'undefined') {
-            requestIdleCallback(() => {
-              void performRecovery();
-            });
-          } else {
-            setTimeout(() => {
-              void performRecovery();
-            }, 3000);
+    """        // Firebase Hosting migration safety: a brand-new host/device has no
+        // domain-scoped Music Note cache. In that one case rebuild the local cache
+        // from the complete user-owned server collection exactly once.
+        const runFavoritesFullCacheRecoveryOnce = async () => {
+          if (Array.isArray(cachedFavs) && cachedFavs.length > 0) return;
+          try {
+            const fullSnapshot = await getDocs(query(
+              collection(db, 'favorites'),
+              where('uid', '==', currentUser.uid),
+            ));
+            if (auth.currentUser?.uid !== currentUser.uid) return;
+            const fullFavorites = sortFavoriteList(
+              fullSnapshot.docs
+                .map(mapFavoriteFirestoreDoc)
+                .filter((favorite) => !isFavoriteSoftRemoved(favorite)),
+            );
+            favoritePaginationCursorRef.current = null;
+            clearMusicNotePaginationCursor(currentUser.uid);
+            favoritePaginationExhaustedRef.current = true;
+            favoritePaginationLoadingRef.current = false;
+            favoritePaginationFallbackModeRef.current = true;
+            setHasMoreFavorites(false);
+            setIsLoadingMoreFavorites(false);
+            setFavorites(fullFavorites);
+            // writeFavoritesCache is local-only here because the cacheless path
+            // deliberately never marks a Music Note bundle active in this session.
+            writeFavoritesCache(currentUser.uid, fullFavorites);
+            musicNoteFreshBootstrapUids.delete(currentUser.uid);
+            markCacheDiagnostic('musicNote', 'SYNC', fullSnapshot.docs.length);
+          } catch (bootstrapError) {
+            console.warn('Cacheless Music Note full bootstrap failed.', bootstrapError);
+          } finally {
+            setIsFavoritesLoading(false);
           }
+        };
 """,
-    'favorites-recovery-schedule',
+    'music-note-cacheless-full-bootstrap-function',
 )
 app = replace_once(
     app,
-    """              if (typeof requestIdleCallback !== 'undefined') {
-                requestIdleCallback(() => applyUpdates());
-              } else {
-                setTimeout(applyUpdates, 100);
-              }
+    """        const hasCachedMusicNote = Array.isArray(cachedFavs) && cachedFavs.length > 0;
+        if (hasCachedMusicNote) {
 """,
-    """              if (!Array.isArray(cachedFavs) || cachedFavs.length === 0) {
-                applyUpdates();
-              } else if (typeof requestIdleCallback !== 'undefined') {
-                requestIdleCallback(() => applyUpdates());
-              } else {
-                setTimeout(applyUpdates, 100);
-              }
+    """        const hasCachedMusicNote = Array.isArray(cachedFavs) && cachedFavs.length > 0;
+        if (!hasCachedMusicNote) {
+          void runFavoritesFullCacheRecoveryOnce();
+        }
+        if (hasCachedMusicNote) {
 """,
-    'favorites-apply-schedule',
+    'music-note-cacheless-bootstrap-start',
 )
 app = replace_once(
     app,
-    """        favoriteFullCacheRecoveryTimer = window.setTimeout(() => {
-          void runFavoritesFullCacheRecoveryOnce();
-        }, 8000);
+    """        const shouldVerifyMusicNoteBundle = !hasCachedMusicNote
+          || musicNoteLocalVersionAtBootstrap <= 0
+          || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap;
 """,
-    """        favoriteFullCacheRecoveryTimer = window.setTimeout(() => {
-          void runFavoritesFullCacheRecoveryOnce();
-        }, Array.isArray(cachedFavs) && cachedFavs.length > 0 ? 8000 : 0);
+    """        const shouldVerifyMusicNoteBundle = hasCachedMusicNote && (
+          musicNoteLocalVersionAtBootstrap <= 0
+          || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap
+        );
 """,
-    'favorites-recovery-timer',
+    'music-note-skip-bundle-during-cacheless-bootstrap',
 )
 app_path.write_text(app, encoding='utf-8')
 
-# Suno Library: if this browser/host has no workspace cache, do one full server
-# read with no orderBy/limit so legacy documents without createdAt are included.
+# Suno Library: same cacheless rule. Read the complete user collection once with
+# no orderBy/limit, sort locally, cache locally, and use the existing local More
+# UI. No list-bundle write is scheduled during this bootstrap.
 library_path = ROOT / 'src/pages/SunoLibraryPage.tsx'
 library = library_path.read_text(encoding='utf-8')
 library = replace_once(
     library,
-    """      const tracksRef = collection(db, 'suno_tracks', resolvedUser.uid, 'tracks');
-      const pageQuery = query(
+    """  const tracksRef = collection(db, 'suno_tracks', uid, 'tracks');
+  const pageQuery = query(
 """,
-    """      const tracksRef = collection(db, 'suno_tracks', resolvedUser.uid, 'tracks');
-      const shouldBootstrapWorkspaceFromServer = !Array.isArray(cachedTracks) || cachedTracks.length === 0;
-      if (shouldBootstrapWorkspaceFromServer) {
-        let cancelled = false;
-        workspacePaginationFallbackRef.current = true;
-        setHasMoreWorkspaceServerTracks(false);
-        void getDocs(tracksRef).then((snapshot) => {
-          if (cancelled) return;
-          const list = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-          const sorted = mergeWorkspaceTracks(list, []);
-          setTracks(sorted);
-          setWorkspaceVisibleCount(WORKSPACE_PAGE_SIZE);
-          saveWorkspaceTrackCache(resolvedUser.uid, sorted);
-          setLoading(false);
-        }).catch((error) => {
-          if (cancelled) return;
-          console.error('Cacheless workspace server bootstrap failed:', error);
-          setLoading(false);
-        });
-        return () => {
-          cancelled = true;
-        };
-      }
+    """  const tracksRef = collection(db, 'suno_tracks', uid, 'tracks');
+  const cachelessLibraryBootstrap = cachedTracks.length === 0;
+  const bootstrapCachelessLibraryFromServerOnce = async () => {
+    if (!cachelessLibraryBootstrap) return;
+    try {
+      const snapshot = await getDocs(tracksRef);
+      if (libraryWorkspaceSession !== session || session.uid !== uid) return;
+      const list = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      session.tracks = mergeLibraryWorkspaceSessionTracks(list, []);
+      session.lastDoc = null;
+      session.hasMore = false;
+      // Full server state is now local; More must reveal local rows only and must
+      // never ask the createdAt cursor chain for another partial page this session.
+      session.paginationFallback = true;
+      session.ready = true;
+      saveLibraryWorkspaceTrackCache(uid, session.tracks);
+      markCacheDiagnostic('library', 'SYNC', snapshot.docs.length);
+      emitLibraryWorkspaceSession(session);
+    } catch (bootstrapError) {
+      console.warn('Cacheless Library full bootstrap failed.', bootstrapError);
+      session.ready = true;
+      emitLibraryWorkspaceSession(session);
+    }
+  };
 
-      const pageQuery = query(
+  const pageQuery = query(
 """,
-    'library-cacheless-bootstrap-anchor',
+    'library-cacheless-full-bootstrap-function',
+)
+library = replace_once(
+    library,
+    """  const handleLibraryProfileVersion = (event: Event) => {
+    const detail = (event as CustomEvent<{ uid?: string }>).detail;
+    if (!detail || detail.uid !== uid) return;
+    if (readRemoteLibraryVersion() > readLibraryBundleLocalSyncVersion(uid)) {
+      startLibraryBundleVerification();
+    }
+  };
+""",
+    """  const handleLibraryProfileVersion = (event: Event) => {
+    const detail = (event as CustomEvent<{ uid?: string }>).detail;
+    if (!detail || detail.uid !== uid) return;
+    if (cachelessLibraryBootstrap) return;
+    if (readRemoteLibraryVersion() > readLibraryBundleLocalSyncVersion(uid)) {
+      startLibraryBundleVerification();
+    }
+  };
+""",
+    'library-cacheless-version-event-guard',
+)
+library = replace_once(
+    library,
+    """  if (shouldVerifyLibraryBundle()) {
+    startLibraryBundleVerification();
+  } else {
+""",
+    """  if (cachelessLibraryBootstrap) {
+    void bootstrapCachelessLibraryFromServerOnce();
+  } else if (shouldVerifyLibraryBundle()) {
+    startLibraryBundleVerification();
+  } else {
+""",
+    'library-cacheless-bootstrap-start',
 )
 library_path.write_text(library, encoding='utf-8')
 

@@ -1,0 +1,178 @@
+name: Stage4 Domain Finalize
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-stage4-domain-finalize.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stage4-domain-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      BACKEND_PROJECT: soridraw-app-866a5
+      HOSTING_PROJECT: soridraw
+      TEST_SITE: soridraw-test
+      PROD_SITE: soridraw
+      TEST_DOMAIN: test.soridraw.com
+      PROD_DOMAIN: soridraw.com
+      WWW_DOMAIN: www.soridraw.com
+      TEST_WEB: soridraw-test.web.app
+      PROD_WEB: soridraw.web.app
+      EXPLORE_API: https://soridraw-explore-api.andrawing1212.workers.dev
+
+    steps:
+      - name: Checkout preview tooling
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Authenticate Google
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Mint OAuth token
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud auth application-default print-access-token > "$RUNNER_TEMP/google-token"
+          echo '[Stage4 domain] OAuth token: PASS'
+
+      - name: Ensure Auth custom domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(cat "$RUNNER_TEMP/google-token")"
+          curl -fsS -H "Authorization: Bearer $token" \
+            "https://identitytoolkit.googleapis.com/admin/v2/projects/$BACKEND_PROJECT/config" \
+            -o "$RUNNER_TEMP/auth-before.json"
+          python3 - "$RUNNER_TEMP/auth-before.json" "$RUNNER_TEMP/auth-patch.json" "$TEST_DOMAIN" "$PROD_DOMAIN" "$WWW_DOMAIN" <<'PY'
+          import json,sys
+          source,target,*wanted=sys.argv[1:]
+          data=json.load(open(source,encoding='utf-8'))
+          domains=list(dict.fromkeys([str(v).strip() for v in data.get('authorizedDomains',[]) if str(v).strip()] + wanted))
+          json.dump({'authorizedDomains':domains},open(target,'w',encoding='utf-8'),ensure_ascii=False)
+          PY
+          curl -fsS -X PATCH -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+            --data-binary "@$RUNNER_TEMP/auth-patch.json" \
+            "https://identitytoolkit.googleapis.com/admin/v2/projects/$BACKEND_PROJECT/config?updateMask=authorizedDomains" \
+            -o "$RUNNER_TEMP/auth-after.json"
+          python3 - "$RUNNER_TEMP/auth-after.json" "$TEST_DOMAIN" "$PROD_DOMAIN" "$WWW_DOMAIN" <<'PY'
+          import json,sys
+          d=set(json.load(open(sys.argv[1],encoding='utf-8')).get('authorizedDomains',[]))
+          missing=[x for x in sys.argv[2:] if x not in d]
+          if missing: raise SystemExit(f'missing Auth domains: {missing}')
+          print('[Stage4 domain] Auth custom domains: PASS')
+          PY
+
+      - name: Wait for DNS, Firebase ownership, certificate, and HTTPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(cat "$RUNNER_TEMP/google-token")"
+          ready=''
+          for attempt in $(seq 1 60); do
+            echo "[Stage4 domain] propagation attempt $attempt/60"
+            all_api=yes
+            for pair in "$TEST_SITE:$TEST_DOMAIN" "$PROD_SITE:$PROD_DOMAIN" "$PROD_SITE:$WWW_DOMAIN"; do
+              site="${pair%%:*}"; domain="${pair#*:}"
+              file="$RUNNER_TEMP/${domain//./_}.json"
+              status="$(curl -sS -o "$file" -w '%{http_code}' -H "Authorization: Bearer $token" \
+                "https://firebasehosting.googleapis.com/v1beta1/projects/$HOSTING_PROJECT/sites/$site/customDomains/$domain" || true)"
+              if [ "$status" != 200 ]; then
+                echo "  $domain Firebase API HTTP $status"
+                all_api=no
+                continue
+              fi
+              python3 - "$file" <<'PY'
+          import json,sys
+          j=json.load(open(sys.argv[1],encoding='utf-8'))
+          print(' ',j.get('name',''), 'ownership=',j.get('ownershipState',''), 'host=',j.get('hostState',''), 'cert=',(j.get('cert') or {}).get('state',''))
+          PY
+            done
+
+            test_ok=no; prod_ok=no; www_ok=no
+            if curl -fsS --max-time 20 "https://$TEST_DOMAIN/" -o "$RUNNER_TEMP/test-custom.html" 2>/dev/null && grep -q '<div id="root"></div>' "$RUNNER_TEMP/test-custom.html"; then test_ok=yes; fi
+            if curl -fsS --max-time 20 "https://$PROD_DOMAIN/" -o "$RUNNER_TEMP/prod-custom.html" 2>/dev/null && grep -q '<div id="root"></div>' "$RUNNER_TEMP/prod-custom.html"; then prod_ok=yes; fi
+            code="$(curl -sS -o /dev/null -D "$RUNNER_TEMP/www-head" --max-time 20 -w '%{http_code}' "https://$WWW_DOMAIN/" 2>/dev/null || true)"
+            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' "$RUNNER_TEMP/www-head" 2>/dev/null || true)"
+            case "$code" in 301|302|303|307|308) [[ "$location" == https://$PROD_DOMAIN* ]] && www_ok=yes || true ;; esac
+            echo "  HTTPS test=$test_ok prod=$prod_ok wwwRedirect=$www_ok code=${code:-none} location=${location:-none}"
+
+            if [ "$all_api" = yes ] && [ "$test_ok" = yes ] && [ "$prod_ok" = yes ] && [ "$www_ok" = yes ]; then
+              ready=yes
+              echo '[Stage4 domain] DNS + Firebase HTTPS: PASS'
+              break
+            fi
+            sleep 20
+          done
+          test "$ready" = yes || { echo '[Stage4 domain] propagation/certificate did not finish within 20 minutes'; exit 7; }
+
+      - name: Verify TEST and production site parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "https://$TEST_WEB/" -o "$RUNNER_TEMP/test-web.html"
+          curl -fsS --max-time 30 "https://$TEST_DOMAIN/" -o "$RUNNER_TEMP/test-domain.html"
+          cmp "$RUNNER_TEMP/test-web.html" "$RUNNER_TEMP/test-domain.html"
+          echo '[Stage4 domain] TEST custom domain serves soridraw-test: PASS'
+
+          curl -fsS --max-time 30 "https://$PROD_WEB/" -o "$RUNNER_TEMP/prod-web.html"
+          curl -fsS --max-time 30 "https://$PROD_DOMAIN/" -o "$RUNNER_TEMP/prod-domain.html"
+          cmp "$RUNNER_TEMP/prod-web.html" "$RUNNER_TEMP/prod-domain.html"
+          echo '[Stage4 domain] Production custom domain serves current soridraw site: PASS'
+
+          curl -fsS --max-time 30 https://preview.soridraw.com/ -o "$RUNNER_TEMP/preview.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview.html"
+          echo '[Stage4 domain] Preview domain unchanged/reachable: PASS'
+
+      - name: Verify Functions and Explore CORS from custom domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_function() {
+            local origin="$1" fn="$2" code allow
+            code="$(curl -sS -o /tmp/fn-body -D /tmp/fn-head -w '%{http_code}' -X OPTIONS \
+              -H "Origin: https://$origin" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "https://us-central1-$BACKEND_PROJECT.cloudfunctions.net/$fn" || true)"
+            allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/fn-head)"
+            echo "[Stage4 domain] Function $fn origin=$origin HTTP=$code allow=${allow:-none}"
+            test "$code" = 204
+            test "$allow" = "https://$origin"
+          }
+          check_explore() {
+            local origin="$1" code allow
+            code="$(curl -sS -o /tmp/ex-body -D /tmp/ex-head -w '%{http_code}' -H "Origin: https://$origin" \
+              "$EXPLORE_API/v1/feed?sort=latest&limit=1" || true)"
+            allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/ex-head)"
+            echo "[Stage4 domain] Explore origin=$origin HTTP=$code allow=${allow:-none}"
+            test "$code" = 200
+            test "$allow" = "https://$origin"
+          }
+          for origin in "$TEST_DOMAIN" "$PROD_DOMAIN"; do
+            check_function "$origin" getSunoApiKeyStatus
+            check_function "$origin" generateGeminiContent
+            check_explore "$origin"
+          done
+
+      - name: Final boundary
+        run: |
+          echo 'STAGE4_DOMAIN_CONNECTION_PASS=true'
+          echo 'TEST_DOMAIN=test.soridraw.com'
+          echo 'PRODUCTION_DOMAIN=soridraw.com'
+          echo 'WWW_REDIRECT=www.soridraw.com -> soridraw.com'
+          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'
+          echo 'NO_FUNCTIONS_DEPLOY=true'
+          echo 'NO_FIRESTORE_OR_RULES_CHANGE=true'

@@ -4,7 +4,7 @@ on:
   push:
     branches: [preview]
     paths:
-      - '.deploy/apply-989-explore-like-diagnostic-clarity.py'
+      - '.deploy/apply-989b-explore-like-diagnostic-clarity.py'
       - '.github/workflows/apply-989-explore-like-diagnostic-clarity.yml'
   workflow_dispatch:
 
@@ -33,7 +33,7 @@ jobs:
           cache: npm
 
       - name: Apply 989 client-only patch
-        run: python3 .deploy/apply-989-explore-like-diagnostic-clarity.py
+        run: python3 .deploy/apply-989b-explore-like-diagnostic-clarity.py
 
       - name: Verify cache and diagnostic contract
         shell: bash

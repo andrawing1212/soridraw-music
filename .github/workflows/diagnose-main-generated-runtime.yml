@@ -1,0 +1,46 @@
+name: Diagnose Main Generated Runtime
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/diagnose-main-generated-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Generate exact Vercel runtime source
+        run: npm run prebuild
+      - name: Collect target generated files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/runtime/src/pages /tmp/runtime/src/constants
+          cp src/App.tsx /tmp/runtime/src/App.tsx
+          cp src/pages/FavoritesPage.tsx /tmp/runtime/src/pages/FavoritesPage.tsx
+          cp src/pages/SunoLibraryPage.tsx /tmp/runtime/src/pages/SunoLibraryPage.tsx
+          cp src/firebase.js /tmp/runtime/src/firebase.js
+          cp src/constants/emailVerification.ts /tmp/runtime/src/constants/emailVerification.ts
+      - name: Upload generated runtime source
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-main-runtime-targets
+          path: /tmp/runtime
+          retention-days: 1

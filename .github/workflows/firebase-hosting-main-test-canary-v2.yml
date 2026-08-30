@@ -1,9 +1,9 @@
-name: Firebase Hosting Main Test Canary V2
+name: Firebase Hosting Main TEST
 
 on:
   workflow_dispatch:
   push:
-    branches: [preview]
+    branches: [main]
     paths:
       - '.github/workflows/firebase-hosting-main-test-canary-v2.yml'
 
@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: firebase-hosting-main-test-canary-v2
-  cancel-in-progress: true
+  group: firebase-hosting-main-test
+  cancel-in-progress: false
 
 jobs:
   deploy-main-to-firebase-test:
@@ -24,87 +24,41 @@ jobs:
       TEST_SITE: soridraw-test
       TEST_WEB_HOST: soridraw-test.web.app
       TEST_FIREBASE_HOST: soridraw-test.firebaseapp.com
+      TEST_CUSTOM_HOST: test.soridraw.com
       APP_CHECK_SITE_KEY: 6Le6bGEtAAAAAOVROhuXew0lxJcpVNVwPZN0ZWKO
 
     steps:
-      - name: Checkout hosting migration infra from preview
-        uses: actions/checkout@v4
-        with:
-          ref: preview
-          path: infra
-
-      - name: Checkout current Vercel test source from main
+      - name: Checkout exact main
         uses: actions/checkout@v4
         with:
           ref: main
-          path: app
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-          cache-dependency-path: app/package-lock.json
 
-      - name: Apply only Firebase test host compatibility in runner
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build exact main
+        run: npm run build
+
+      - name: Verify TEST host recognition is already in source
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          firebase_path = Path('app/src/firebase.js')
-          source = firebase_path.read_text(encoding='utf-8')
-          old = 'const isVercelTestApp = currentHostname === "soridraw-music.vercel.app";\nconst isFirebaseHostedApp = currentHostname === "soridraw.web.app"'
-          new = 'const isVercelTestApp = currentHostname === "soridraw-music.vercel.app";\nconst isFirebaseTestApp = currentHostname === "soridraw-test.web.app"\n  || currentHostname === "soridraw-test.firebaseapp.com";\nconst isFirebaseHostedApp = currentHostname === "soridraw.web.app"'
-          if old not in source:
-              raise SystemExit('firebase.js hosting anchor changed; refusing broad patch')
-          source = source.replace(old, new, 1)
-          old2 = 'const shouldInitializeAppCheck = isAiStudioPreview || isVercelTestApp || isFirebaseHostedApp;'
-          new2 = 'const shouldInitializeAppCheck = isAiStudioPreview || isVercelTestApp || isFirebaseTestApp || isFirebaseHostedApp;'
-          if old2 not in source:
-              raise SystemExit('firebase.js App Check anchor changed; refusing broad patch')
-          source = source.replace(old2, new2, 1)
-          firebase_path.write_text(source, encoding='utf-8')
-
-          email_path = Path('app/src/constants/emailVerification.ts')
-          email = email_path.read_text(encoding='utf-8')
-          anchor = "  'https://soridraw-music-git-preview-andrawing1212.vercel.app',\n"
-          replacement = anchor + "  'https://soridraw-test.web.app',\n  'https://soridraw-test.firebaseapp.com',\n"
-          if anchor not in email:
-              raise SystemExit('emailVerification.ts hosting anchor changed; refusing broad patch')
-          email = email.replace(anchor, replacement, 1)
-          email_path.write_text(email, encoding='utf-8')
-          PY
-
-          cp infra/firebase.hosting-test.json app/firebase.hosting-test.json
-
-          cd app
-          changed="$(git diff --name-only)"
-          printf '%s\n' "$changed"
-          test "$changed" = $'src/constants/emailVerification.ts\nsrc/firebase.js' || {
-            echo 'Unexpected main-source changes in hosting canary workspace.'
-            exit 3
-          }
-          git diff --check
-          if git diff -- src/firebase.js src/constants/emailVerification.ts | grep -E '^[-+].*(favorites|library|firestore|query\(|getDocs|onSnapshot|limit\(|startAfter|orderBy)' >/dev/null; then
-            echo 'Data-read logic token detected in hosting-only patch. Refusing deploy.'
-            exit 4
-          fi
-          echo '[Hosting Test Canary] Data-read code untouched; only test-host recognition added in runner.'
-
-      - name: Install current main dependencies
-        working-directory: app
-        run: npm install --no-audit --no-fund
-
-      - name: Record existing main TypeScript debt
-        working-directory: app
-        continue-on-error: true
-        run: npx tsc --noEmit
-
-      - name: Build current main through existing Vercel path
-        working-directory: app
-        run: npm run build
+          grep -Fq 'test.soridraw.com' src/firebase.js
+          grep -Fq 'soridraw-test.web.app' src/firebase.js
+          grep -Fq 'soridraw-test.firebaseapp.com' src/firebase.js
+          grep -Fq 'https://test.soridraw.com' src/constants/emailVerification.ts
+          grep -Fq 'https://soridraw-test.web.app' src/constants/emailVerification.ts
+          grep -Fq 'https://soridraw-test.firebaseapp.com' src/constants/emailVerification.ts
+          echo '[Firebase TEST] Source host recognition: PASS'
 
       - name: Authenticate Google and Firebase
         uses: google-github-actions/auth@v2
@@ -147,27 +101,24 @@ jobs:
             if (!response.ok || !body.access_token) throw new Error(`OAuth token exchange failed: HTTP ${response.status}`);
             console.log(`::add-mask::${body.access_token}`);
             fs.appendFileSync(process.env.GITHUB_ENV, `ACCESS_TOKEN=${body.access_token}\n`);
-            console.log('[Hosting Test Canary] OAuth token: PASS');
+            console.log('[Firebase TEST] OAuth token: PASS');
           })().catch((error) => {
             console.error(error?.message || error);
             process.exit(1);
           });
           NODE
 
-      - name: Snapshot Vercel test and Firebase production
+      - name: Snapshot production before TEST deployment
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --max-time 30 https://soridraw-music.vercel.app/ -o "$RUNNER_TEMP/vercel-test.html"
-          grep -q '<div id="root"></div>' "$RUNNER_TEMP/vercel-test.html"
           curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/production-before.html"
           grep -q '<div id="root"></div>' "$RUNNER_TEMP/production-before.html"
           sha256sum "$RUNNER_TEMP/production-before.html" | awk '{print $1}' > "$RUNNER_TEMP/production-before.sha"
-          echo '[Hosting Test Canary] Existing Vercel test and Firebase production reachable.'
+          echo '[Firebase TEST] Production baseline captured.'
 
-      - name: Assert isolated Firebase test site already exists
+      - name: Assert isolated TEST Hosting site exists
         shell: bash
-        working-directory: app
         run: |
           set -euo pipefail
           npx --yes firebase-tools@latest hosting:sites:list --project "$HOSTING_PROJECT" --json > "$RUNNER_TEMP/firebase-sites.json"
@@ -181,15 +132,14 @@ jobs:
             const raw = String(site?.site || site?.siteId || site?.id || site?.name || '');
             return raw.includes('/') ? raw.split('/').filter(Boolean).pop() : raw;
           }).filter(Boolean);
-          console.log(`[Hosting Test Canary] Existing Hosting sites: ${ids.join(',') || '(none)'}`);
-          if (!ids.includes('soridraw')) throw new Error('Official production Hosting site soridraw is missing; aborting.');
-          if (!ids.includes(wanted)) throw new Error(`Isolated Firebase test site ${wanted} is missing; refusing to create resources automatically.`);
-          console.log(`[Hosting Test Canary] Isolated test site ${wanted}: PASS`);
+          console.log(`[Firebase TEST] Hosting sites: ${ids.join(',') || '(none)'}`);
+          if (!ids.includes('soridraw')) throw new Error('Production Hosting site soridraw is missing; aborting.');
+          if (!ids.includes(wanted)) throw new Error(`Isolated TEST site ${wanted} is missing; refusing automatic resource creation.`);
+          console.log(`[Firebase TEST] Isolated TEST site ${wanted}: PASS`);
           NODE
 
-      - name: Deploy current main build to Firebase test site only
+      - name: Deploy main build to Firebase TEST only
         shell: bash
-        working-directory: app
         run: |
           set -euo pipefail
           npx --yes firebase-tools@latest deploy \
@@ -197,45 +147,42 @@ jobs:
             --project "$HOSTING_PROJECT" \
             --config firebase.hosting-test.json \
             --non-interactive
-          echo '[Hosting Test Canary] Firebase test Hosting deploy: PASS'
+          echo '[Firebase TEST] Hosting-only deploy: PASS'
 
-      - name: Add Firebase test hosts to Auth authorized domains
+      - name: Ensure Firebase Auth TEST domains
         shell: bash
         run: |
           set -euo pipefail
           curl -fsS \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             "https://identitytoolkit.googleapis.com/admin/v2/projects/$BACKEND_PROJECT/config" \
-            -o "$RUNNER_TEMP/auth-config-before.json"
+            -o "$RUNNER_TEMP/auth-before.json"
 
-          python3 - "$RUNNER_TEMP/auth-config-before.json" "$RUNNER_TEMP/auth-domain-patch.json" "$TEST_WEB_HOST" "$TEST_FIREBASE_HOST" <<'PY'
+          python3 - "$RUNNER_TEMP/auth-before.json" "$RUNNER_TEMP/auth-patch.json" "$TEST_WEB_HOST" "$TEST_FIREBASE_HOST" "$TEST_CUSTOM_HOST" <<'PY'
           import json, sys
           source, target, *wanted = sys.argv[1:]
-          data = json.load(open(source, encoding='utf-8'))
-          domains = list(dict.fromkeys([str(v).strip() for v in data.get('authorizedDomains', []) if str(v).strip()] + wanted))
-          with open(target, 'w', encoding='utf-8') as f:
-              json.dump({'authorizedDomains': domains}, f, ensure_ascii=False)
-          print(f'[Hosting Test Canary] Auth domains staged: {wanted}')
+          data=json.load(open(source, encoding='utf-8'))
+          domains=list(dict.fromkeys([str(v).strip() for v in data.get('authorizedDomains', []) if str(v).strip()] + wanted))
+          json.dump({'authorizedDomains': domains}, open(target, 'w', encoding='utf-8'), ensure_ascii=False)
           PY
 
           curl -fsS -X PATCH \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H 'Content-Type: application/json' \
-            --data-binary "@$RUNNER_TEMP/auth-domain-patch.json" \
+            --data-binary "@$RUNNER_TEMP/auth-patch.json" \
             "https://identitytoolkit.googleapis.com/admin/v2/projects/$BACKEND_PROJECT/config?updateMask=authorizedDomains" \
-            -o "$RUNNER_TEMP/auth-config-after.json"
+            -o "$RUNNER_TEMP/auth-after.json"
 
-          python3 - "$RUNNER_TEMP/auth-config-after.json" "$TEST_WEB_HOST" "$TEST_FIREBASE_HOST" <<'PY'
+          python3 - "$RUNNER_TEMP/auth-after.json" "$TEST_WEB_HOST" "$TEST_FIREBASE_HOST" "$TEST_CUSTOM_HOST" <<'PY'
           import json, sys
-          data = json.load(open(sys.argv[1], encoding='utf-8'))
-          wanted = set(sys.argv[2:])
-          domains = set(data.get('authorizedDomains', []))
-          missing = sorted(wanted - domains)
-          if missing: raise SystemExit(f'Firebase Auth test domains missing: {missing}')
-          print('[Hosting Test Canary] Firebase Auth test domains: PASS')
+          data=json.load(open(sys.argv[1], encoding='utf-8'))
+          domains=set(data.get('authorizedDomains', []))
+          missing=[v for v in sys.argv[2:] if v not in domains]
+          if missing: raise SystemExit(f'Firebase Auth TEST domains missing: {missing}')
+          print('[Firebase TEST] Auth domains: PASS')
           PY
 
-      - name: Extend App Check reCAPTCHA domains when permitted
+      - name: Extend App Check reCAPTCHA TEST domains when permitted
         shell: bash
         run: |
           set -euo pipefail
@@ -244,23 +191,22 @@ jobs:
             "https://recaptchaenterprise.googleapis.com/v1/projects/$BACKEND_PROJECT/keys/$APP_CHECK_SITE_KEY")"
           if [ "$status" = '403' ]; then
             echo 'RECAPTCHA_POLICY_STATUS=permission-gated' >> "$GITHUB_ENV"
-            echo '[Hosting Test Canary] reCAPTCHA policy permission-gated; IAM unchanged.'
+            echo '[Firebase TEST] reCAPTCHA policy permission-gated; IAM unchanged.'
             exit 0
           fi
           test "$status" = '200' || { echo "reCAPTCHA key read HTTP $status"; cat "$RUNNER_TEMP/recaptcha-before.json"; exit 6; }
 
-          python3 - "$RUNNER_TEMP/recaptcha-before.json" "$RUNNER_TEMP/recaptcha-patch.json" "$TEST_WEB_HOST" "$TEST_FIREBASE_HOST" <<'PY'
+          python3 - "$RUNNER_TEMP/recaptcha-before.json" "$RUNNER_TEMP/recaptcha-patch.json" "$TEST_WEB_HOST" "$TEST_FIREBASE_HOST" "$TEST_CUSTOM_HOST" <<'PY'
           import json, sys
           source, target, *wanted = sys.argv[1:]
-          data = json.load(open(source, encoding='utf-8'))
-          web = data.get('webSettings') or {}
+          data=json.load(open(source, encoding='utf-8'))
+          web=data.get('webSettings') or {}
           if web.get('allowAllDomains') is True:
               open(target, 'w', encoding='utf-8').write('')
-              print('[Hosting Test Canary] reCAPTCHA allows all domains; patch not needed.')
+              print('[Firebase TEST] reCAPTCHA allows all domains; patch not needed.')
               raise SystemExit(0)
-          domains = list(dict.fromkeys([str(v).strip() for v in web.get('allowedDomains', []) if str(v).strip()] + wanted))
-          with open(target, 'w', encoding='utf-8') as f:
-              json.dump({'name': data.get('name'), 'webSettings': {'allowedDomains': domains}}, f, ensure_ascii=False)
+          domains=list(dict.fromkeys([str(v).strip() for v in web.get('allowedDomains', []) if str(v).strip()] + wanted))
+          json.dump({'name': data.get('name'), 'webSettings': {'allowedDomains': domains}}, open(target, 'w', encoding='utf-8'), ensure_ascii=False)
           PY
           echo 'RECAPTCHA_POLICY_STATUS=readable' >> "$GITHUB_ENV"
           if [ -s "$RUNNER_TEMP/recaptcha-patch.json" ]; then
@@ -270,59 +216,65 @@ jobs:
               --data-binary "@$RUNNER_TEMP/recaptcha-patch.json" \
               "https://recaptchaenterprise.googleapis.com/v1/projects/$BACKEND_PROJECT/keys/$APP_CHECK_SITE_KEY?updateMask=webSettings.allowedDomains" \
               -o "$RUNNER_TEMP/recaptcha-after.json"
-            echo '[Hosting Test Canary] reCAPTCHA test domains: PASS'
+            echo '[Firebase TEST] reCAPTCHA TEST domains: PASS'
           fi
 
-      - name: Smoke test Firebase test site
+      - name: Smoke TEST Firebase and custom domains
         shell: bash
         run: |
           set -euo pipefail
-          for url in "https://$TEST_WEB_HOST/" "https://$TEST_FIREBASE_HOST/"; do
+          for host in "$TEST_WEB_HOST" "$TEST_FIREBASE_HOST" "$TEST_CUSTOM_HOST"; do
             ok=''
             for attempt in $(seq 1 12); do
-              if curl -fsS --max-time 30 "$url" -o "$RUNNER_TEMP/test-smoke.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/test-smoke.html"; then
-                ok='yes'
-                echo "[Hosting Test Canary] Smoke PASS: $url"
+              if curl -fsS --max-time 30 "https://$host/" -o "$RUNNER_TEMP/test-$attempt.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/test-$attempt.html"; then
+                ok=yes
+                echo "[Firebase TEST] Smoke PASS: https://$host/"
                 break
               fi
               sleep 10
             done
-            test "$ok" = 'yes' || { echo "Firebase test smoke failed: $url"; exit 7; }
+            test "$ok" = yes || { echo "TEST smoke failed: https://$host/"; exit 7; }
           done
 
-      - name: Check shared backend boundaries from Firebase test origin
+      - name: Verify shared backend from custom TEST domain
         shell: bash
         run: |
           set -euo pipefail
-          function_status="$(curl -sS -o "$RUNNER_TEMP/function-cors.txt" -w '%{http_code}' -X OPTIONS \
-            -H "Origin: https://$TEST_WEB_HOST" \
-            -H 'Access-Control-Request-Method: POST' \
-            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
-            'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoApiKeyStatus' || true)"
-          echo "[Hosting Test Canary] Functions CORS preflight HTTP: ${function_status:-network-error}"
-          case "$function_status" in 200|204) ;; *) echo 'Functions CORS boundary is not ready for Firebase test origin.'; exit 8;; esac
+          check_function() {
+            local fn="$1"
+            local code allow
+            code="$(curl -sS -o /tmp/fn-body -D /tmp/fn-head -w '%{http_code}' -X OPTIONS \
+              -H "Origin: https://$TEST_CUSTOM_HOST" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "https://us-central1-$BACKEND_PROJECT.cloudfunctions.net/$fn" || true)"
+            allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/fn-head)"
+            echo "[Firebase TEST] $fn CORS=$code allow=${allow:-none}"
+            test "$code" = '204'
+            test "$allow" = "https://$TEST_CUSTOM_HOST"
+          }
+          check_function getSunoApiKeyStatus
+          check_function generateGeminiContent
 
-          explore_status="$(curl -sS -o "$RUNNER_TEMP/explore-cors.txt" -w '%{http_code}' \
-            -H "Origin: https://$TEST_WEB_HOST" \
+          code="$(curl -sS -o /tmp/explore-body -D /tmp/explore-head -w '%{http_code}' \
+            -H "Origin: https://$TEST_CUSTOM_HOST" \
             'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1' || true)"
-          echo "[Hosting Test Canary] Explore feed HTTP: ${explore_status:-network-error}"
-          case "$explore_status" in 200) ;; *) echo 'Explore boundary is not ready for Firebase test origin.'; exit 9;; esac
+          allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/explore-head)"
+          echo "[Firebase TEST] Explore CORS=$code allow=${allow:-none}"
+          test "$code" = '200'
+          test "$allow" = "https://$TEST_CUSTOM_HOST"
 
-      - name: Verify official Firebase production stayed unchanged
+      - name: Verify production unchanged
         shell: bash
         run: |
           set -euo pipefail
           curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/production-after.html"
           grep -q '<div id="root"></div>' "$RUNNER_TEMP/production-after.html"
           sha256sum "$RUNNER_TEMP/production-after.html" | awk '{print $1}' > "$RUNNER_TEMP/production-after.sha"
-          cmp "$RUNNER_TEMP/production-before.sha" "$RUNNER_TEMP/production-after.sha"
-          echo '[Hosting Test Canary] Official Firebase production unchanged: PASS'
-
-      - name: Canary result
-        run: |
-          echo 'Firebase Hosting test canary completed.'
-          echo 'Source baseline: current main (Vercel test app)'
-          echo "Firebase test URL: https://$TEST_WEB_HOST/"
-          echo "Backend remains: $BACKEND_PROJECT"
-          echo "App Check policy inspection: ${RECAPTCHA_POLICY_STATUS:-not-run}"
-          echo 'No Firestore/RTDB migration, Rules deploy, Functions deploy, production Hosting release, or main-branch commit was performed.'
+          diff -u "$RUNNER_TEMP/production-before.sha" "$RUNNER_TEMP/production-after.sha"
+          echo '[Firebase TEST] Production checksum unchanged: PASS'
+          echo 'FIREBASE_TEST_DEPLOY_COMPLETE=true'
+          echo 'NO_FUNCTIONS_DEPLOY=true'
+          echo 'NO_FIRESTORE_DEPLOY=true'
+          echo 'NO_RULES_DEPLOY=true'
+          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'

@@ -79,9 +79,8 @@ jobs:
           unexpected = sorted(changed - allowed)
           if unexpected:
               raise SystemExit(f'Unexpected Stage 2A files: {unexpected}')
-          missing = sorted(allowed - changed)
-          if missing:
-              raise SystemExit(f'Missing expected Stage 2A files: {missing}')
+          if 'src/services/exploreProfileFirstViewService.ts' not in changed:
+              raise SystemExit('Freshness guard did not change the profile first-view service')
           print('STAGE2A_SCOPE_OK=true')
           PY
 

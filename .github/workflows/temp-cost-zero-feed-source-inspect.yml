@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Print exact live feed functions read-only
+      - name: Print exact live feed and mutation functions read-only
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -36,15 +36,23 @@ jobs:
           node - <<'NODE'
           const fs=require('fs'); const src=fs.readFileSync('.remote-worker/worker.js','utf8');
           function fn(name){
-            const start=src.indexOf(`async function ${name}(`); if(start<0) throw new Error(`missing ${name}`);
+            const needles=[`async function ${name}(`,`function ${name}(`];
+            let start=-1;
+            for(const needle of needles){ const x=src.indexOf(needle); if(x>=0){start=x;break;} }
+            if(start<0) throw new Error(`missing ${name}`);
             const brace=src.indexOf('{',start); let depth=0,quote=null,escaped=false;
             for(let i=brace;i<src.length;i++){
               const c=src[i]; if(quote){if(escaped){escaped=false;continue;}if(c==='\\'){escaped=true;continue;}if(c===quote)quote=null;continue;}
               if(c==='"'||c==="'"||c==='`'){quote=c;continue;} if(c==='{')depth++; if(c==='}'&&--depth===0)return src.slice(start,i+1);
             } throw new Error(`unterminated ${name}`);
           }
-          for(const name of ['handleFeed','handleFeedWithEdgeCache']){
-            console.log(`===== ${name} =====`); console.log(fn(name));
+          const declared=[...src.matchAll(/(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(/g)].map(m=>m[1]);
+          const relevant=declared.filter(n=>/^(mapTrackRow|handleFeed|handleLike|refreshLikeCount|handlePublication|handlePublicationOptions|handleVisibility|handleMyProfileUpdate|handleProfileMediaUpload)$/.test(n)||/(Comment|PlayCount|TrackStats)/i.test(n));
+          console.log('RELEVANT_FUNCTION_NAMES='+JSON.stringify(relevant));
+          for(const name of [...new Set(relevant)]){
+            const text=fn(name);
+            if(text.length>14000){ console.log(`===== ${name} (SKIPPED length=${text.length}) =====`); continue; }
+            console.log(`===== ${name} =====`); console.log(text);
           }
           console.log('READ_ONLY_LIVE_SOURCE=true');
           NODE

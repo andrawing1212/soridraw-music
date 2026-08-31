@@ -91,7 +91,13 @@ const loadAdmins = useCallback(async (forceServer = false) => {
   }
 }, [applyAdminList]);
 
-useEffect(() => { void loadAdmins(false); }, [loadAdmins]);
+useEffect(() => {
+  if (activeTab !== 'admin-permissions') {
+    setIsLoading(false);
+    return;
+  }
+  void loadAdmins(false);
+}, [activeTab, loadAdmins]);
 
   const filteredAdmins = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();

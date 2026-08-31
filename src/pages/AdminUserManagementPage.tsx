@@ -636,7 +636,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
     if (!forceServer) {
       const cached = readAdminUserListCache(adminUid, sortBy);
-      if (cached && cached.users.length > 0) {
+      if (cached) {
         setUsers(cached.users);
         setLastUserDoc(null);
         setCachedLastUserUid(cached.lastUserUid);

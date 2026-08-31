@@ -15,15 +15,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Verify lazy snapshot materialization and second-request zero-read edge hit
+      - name: Verify materialized snapshot, edge hit, and steady edge miss cost
         shell: bash
         run: |
           set -euo pipefail
           base='https://soridraw-explore-api.andrawing1212.workers.dev'
-          origin='https://preview.soridraw.com'
+          preview_origin='https://preview.soridraw.com'
+          steady_origin='https://test.soridraw.com'
 
           curl -fsS --max-time 30 -D "$RUNNER_TEMP/feed.headers" -o "$RUNNER_TEMP/feed.json" \
-            -H "Origin: $origin" -H 'Accept: application/json' \
+            -H "Origin: $preview_origin" -H 'Accept: application/json' \
             "$base/v1/feed?sort=latest&limit=1"
           node - <<'NODE'
           const fs=require('fs');
@@ -38,37 +39,57 @@ jobs:
           uid="$(cat "$RUNNER_TEMP/profile-uid.txt")"
           url="$base/v1/profiles/$uid/first-view?limit=50"
 
-          for n in 1 2; do
+          request_profile() {
+            label="$1"
+            origin="$2"
             status="$(curl -sS --max-time 30 -w '%{http_code}' \
-              -D "$RUNNER_TEMP/first-view-$n.headers" \
-              -o "$RUNNER_TEMP/first-view-$n.json" \
+              -D "$RUNNER_TEMP/$label.headers" \
+              -o "$RUNNER_TEMP/$label.json" \
               -H "Origin: $origin" -H 'Accept: application/json' \
               "$url")"
-            echo "FIRST_VIEW_${n}_HTTP_STATUS=$status"
+            echo "${label}_HTTP_STATUS=$status"
             test "$status" = '200'
-            grep -iE '^(x-soridraw-profile-edge-cache|x-soridraw-d1-read|x-soridraw-d1-write|x-soridraw-cf-worker|cache-control):' "$RUNNER_TEMP/first-view-$n.headers" || true
-            node - "$n" "$uid" <<'NODE'
+            grep -iE '^(x-soridraw-profile-edge-cache|x-soridraw-d1-read|x-soridraw-d1-write|x-soridraw-cf-worker|cache-control):' "$RUNNER_TEMP/$label.headers" || true
+            node - "$label" "$uid" <<'NODE'
           const fs=require('fs');
-          const n=process.argv[2];
+          const label=process.argv[2];
           const uid=process.argv[3];
-          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+`/first-view-${n}.json`,'utf8'));
-          if(p?.ok!==true) throw new Error(`first-view ${n} not ok`);
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+`/${label}.json`,'utf8'));
+          if(p?.ok!==true) throw new Error(`${label} not ok`);
           const profile=p?.data?.profile;
           const items=Array.isArray(p?.data?.items)?p.data.items:[];
-          if(!profile?.uid) throw new Error(`first-view ${n} missing profile`);
-          if(String(profile.uid)!==String(uid)) throw new Error(`first-view ${n} profile uid mismatch`);
-          if(items.length>50) throw new Error(`first-view ${n} exceeded 50 item bound`);
-          console.log(`FIRST_VIEW_${n}_OK=true`);
-          console.log(`FIRST_VIEW_${n}_ITEM_COUNT=${items.length}`);
-          console.log(`FIRST_VIEW_${n}_TRACK_COUNT=${Number(profile.trackCount||0)}`);
-          console.log(`FIRST_VIEW_${n}_REVISION=${Number(p?.data?.revision||0)}`);
+          if(!profile?.uid) throw new Error(`${label} missing profile`);
+          if(String(profile.uid)!==String(uid)) throw new Error(`${label} profile uid mismatch`);
+          if(items.length>50) throw new Error(`${label} exceeded 50 item bound`);
+          console.log(`${label}_OK=true`);
+          console.log(`${label}_ITEM_COUNT=${items.length}`);
+          console.log(`${label}_TRACK_COUNT=${Number(profile.trackCount||0)}`);
+          console.log(`${label}_REVISION=${Number(p?.data?.revision||0)}`);
           NODE
-          done
+          }
 
-          grep -qi '^x-soridraw-profile-edge-cache: HIT' "$RUNNER_TEMP/first-view-2.headers"
-          grep -qi '^x-soridraw-d1-read: 0' "$RUNNER_TEMP/first-view-2.headers"
-          grep -qi '^x-soridraw-d1-write: 0' "$RUNNER_TEMP/first-view-2.headers"
+          request_profile PREVIEW_1 "$preview_origin"
+          request_profile PREVIEW_2 "$preview_origin"
+          grep -qi '^x-soridraw-profile-edge-cache: HIT' "$RUNNER_TEMP/PREVIEW_2.headers"
+          grep -qi '^x-soridraw-d1-read: 0' "$RUNNER_TEMP/PREVIEW_2.headers"
+          grep -qi '^x-soridraw-d1-write: 0' "$RUNNER_TEMP/PREVIEW_2.headers"
           echo 'SECOND_PROFILE_EDGE_HIT_D1_ZERO=PASS'
+
+          # Different allowed Origin gives a fresh edge key while reusing the same
+          # already materialized D1 row. This isolates steady snapshot MISS cost.
+          request_profile STEADY_MISS "$steady_origin"
+          grep -qi '^x-soridraw-profile-edge-cache: MISS' "$RUNNER_TEMP/STEADY_MISS.headers"
+          grep -qi '^x-soridraw-d1-write: 0' "$RUNNER_TEMP/STEADY_MISS.headers"
+          steady_reads="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r",""); print $2}' "$RUNNER_TEMP/STEADY_MISS.headers" | tail -n1)"
+          test -n "$steady_reads"
+          test "$steady_reads" -le 3
+          echo "STEADY_PROFILE_EDGE_MISS_D1_READS=$steady_reads"
+          echo 'STEADY_PROFILE_EDGE_MISS_BOUNDED=PASS'
+
+          request_profile STEADY_HIT "$steady_origin"
+          grep -qi '^x-soridraw-profile-edge-cache: HIT' "$RUNNER_TEMP/STEADY_HIT.headers"
+          grep -qi '^x-soridraw-d1-read: 0' "$RUNNER_TEMP/STEADY_HIT.headers"
+          grep -qi '^x-soridraw-d1-write: 0' "$RUNNER_TEMP/STEADY_HIT.headers"
+          echo 'STEADY_PROFILE_EDGE_HIT_D1_ZERO=PASS'
           echo 'BOUNDED_FIRST_VIEW_MAX_ITEMS=50'
-          echo 'DERIVED_SNAPSHOT_WRITE_ALLOWED=true'
           echo 'SOURCE_TABLE_DELETE_OR_MIGRATION=false'

@@ -1,0 +1,91 @@
+name: SORIDRAW 994 Suno WAV Rescue Deploy
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-suno-wav-rescue-994.yml'
+      - 'functions/scripts/apply-suno-wav-rescue-994.cjs'
+      - 'functions/package.json'
+
+concurrency:
+  group: soridraw-994-suno-wav-rescue
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-functions:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions ci --no-audit --no-fund
+
+      - name: Build Functions
+        run: npm --prefix functions run build
+
+      - name: Verify 994 rescue exports and boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'SORIDRAW_SUNO_WAV_RESCUE_994' functions/src/index.ts
+          grep -q 'export const rescueSunoTrackAudio = onRequest' functions/src/securedIndex.ts
+          grep -q 'export const sunoWavRescueCallback = onRequest' functions/src/securedIndex.ts
+          grep -q '/api/v1/wav/generate' functions/src/securedIndex.ts
+          grep -q '/api/v1/wav/record-info' functions/src/securedIndex.ts
+          grep -q 'verifyAppCheckForRequest(req, res,.*rescueSunoTrackAudio' functions/src/securedIndex.ts
+          test -f functions/lib/securedIndex.js
+          echo '[994] Functions build contract: PASS'
+
+      - name: Authenticate to Firebase backend project
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy only new rescue functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only functions:rescueSunoTrackAudio,functions:sunoWavRescueCallback \
+            --project soridraw-app-866a5 \
+            --non-interactive
+          echo '[994] New rescue Functions deploy: PASS'
+
+      - name: Smoke rescue CORS and callback
+        shell: bash
+        run: |
+          set -euo pipefail
+          rescue='https://us-central1-soridraw-app-866a5.cloudfunctions.net/rescueSunoTrackAudio'
+          callback='https://us-central1-soridraw-app-866a5.cloudfunctions.net/sunoWavRescueCallback'
+          status="$(curl -sS -o /tmp/rescue-options.txt -w '%{http_code}' -X OPTIONS \
+            -H 'Origin: https://preview.soridraw.com' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+            "$rescue")"
+          test "$status" = '204' || test "$status" = '200'
+          callback_status="$(curl -sS -o /tmp/callback.json -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' \
+            --data '{}' "$callback")"
+          test "$callback_status" = '200'
+          echo '[994] Rescue endpoint smoke: PASS'
+
+      - name: Result
+        run: |
+          echo 'SORIDRAW 994 Suno WAV rescue backend deployed.'
+          echo 'Only rescueSunoTrackAudio + sunoWavRescueCallback were deployed.'
+          echo 'No existing Function rollback, Rules deploy, data migration, Hosting deploy, main change, or Production deploy.'

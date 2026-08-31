@@ -1,0 +1,95 @@
+name: Cost Zero Stage 2A Worker Shape Readonly
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cost-zero-stage2a-worker-shape-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prepare exact live Worker source
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false
+          npm run cf:prepare
+          node --check .remote-worker/worker.js
+      - name: Print relevant live Worker shapes
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('fs');
+          const src = fs.readFileSync('.remote-worker/worker.js','utf8');
+          const names = [...src.matchAll(/async function\s+([A-Za-z0-9_$]+)/g)].map(m=>m[1]);
+          const picked = names.filter(n => /(Profile|Publication|Track|Follow|Like|Visibility|Pin)/i.test(n));
+          console.log('FUNCTION_NAMES_START');
+          for (const n of picked) console.log(n);
+          console.log('FUNCTION_NAMES_END');
+
+          function extract(name){
+            const needle = `async function ${name}`;
+            const start = src.indexOf(needle);
+            if(start < 0) return null;
+            const brace = src.indexOf('{', start);
+            if(brace < 0) return null;
+            let depth = 0, quote = null, esc = false, tmplDepth = 0;
+            for(let i=brace;i<src.length;i++){
+              const c=src[i], p=src[i-1];
+              if(quote){
+                if(esc){ esc=false; continue; }
+                if(c==='\\'){ esc=true; continue; }
+                if(quote==='`' && c==='$' && src[i+1]==='{'){ tmplDepth++; i++; depth++; continue; }
+                if(c===quote && tmplDepth===0){ quote=null; }
+                if(quote==='`' && c==='}' && tmplDepth>0){ tmplDepth--; depth--; }
+                continue;
+              }
+              if(c==='"'||c==="'"||c==='`'){ quote=c; continue; }
+              if(c==='{') depth++;
+              else if(c==='}'){
+                depth--;
+                if(depth===0) return src.slice(start,i+1);
+              }
+            }
+            return src.slice(start, Math.min(src.length,start+12000));
+          }
+          const wanted = [
+            'handlePublicProfile',
+            'handlePublicProfileTracks',
+            'handlePublicProfileFirstViewSnapshot',
+          ];
+          for(const n of picked){
+            if(/(update|profile|publication|visibility|follow|like|pin)/i.test(n)) wanted.push(n);
+          }
+          const seen = new Set();
+          for(const n of wanted){
+            if(seen.has(n)) continue; seen.add(n);
+            const body=extract(n);
+            if(!body) continue;
+            console.log(`FUNCTION_BODY_START ${n}`);
+            console.log(body.slice(0,16000));
+            console.log(`FUNCTION_BODY_END ${n}`);
+          }
+          NODE
+          echo 'READ_ONLY=true'
+          echo 'NO_D1_WRITE_REQUESTED=true'

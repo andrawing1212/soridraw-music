@@ -1,0 +1,39 @@
+name: SORIDRAW 994 Rescue Endpoint Diagnostic
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-suno-wav-rescue-994-endpoint-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Compare Firebase and Cloud Run endpoints
+        shell: bash
+        run: |
+          set -u
+          for url in \
+            'https://us-central1-soridraw-app-866a5.cloudfunctions.net/rescueSunoTrackAudio' \
+            'https://rescuesunotrackaudio-kg5gftakjq-uc.a.run.app'; do
+            status="$(curl -sS -o /tmp/body.txt -w '%{http_code}' -X OPTIONS \
+              -H 'Origin: https://preview.soridraw.com' \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "$url" || true)"
+            echo "[994 endpoint] OPTIONS $url -> $status"
+            head -c 240 /tmp/body.txt || true; echo
+          done
+          for url in \
+            'https://us-central1-soridraw-app-866a5.cloudfunctions.net/sunoWavRescueCallback' \
+            'https://sunowavrescuecallback-kg5gftakjq-uc.a.run.app'; do
+            status="$(curl -sS -o /tmp/body.txt -w '%{http_code}' -X POST \
+              -H 'Content-Type: application/json' --data '{}' "$url" || true)"
+            echo "[994 endpoint] POST $url -> $status"
+            head -c 240 /tmp/body.txt || true; echo
+          done

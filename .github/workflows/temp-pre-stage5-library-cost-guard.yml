@@ -1,0 +1,151 @@
+name: Pre Stage5 Library Cost Guard
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-pre-stage5-library-cost-guard.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply bounded bootstrap and no-idle-write guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('src/pages/SunoLibraryPage.tsx')
+          s = p.read_text(encoding='utf-8')
+
+          old = """      const snapshot = await getDocs(tracksRef);
+                if (libraryWorkspaceSession !== session || session.uid !== uid) return;
+                const list = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+                session.tracks = mergeLibraryWorkspaceSessionTracks(list, []);
+                libraryWorkspaceInMemoryCache.set(uid, session.tracks);
+                session.lastDoc = null;
+                session.hasMore = false;
+                session.paginationFallback = true;
+                session.ready = true;
+          """
+          new = """      // Cost guard: a cold/new-origin/schema bootstrap is always bounded.
+                // Never sweep the user's whole Library merely because local cache is absent.
+                const snapshot = await getDocs(query(
+                  tracksRef,
+                  orderBy('createdAt', 'desc'),
+                  limit(WORKSPACE_SERVER_FETCH_SIZE)
+                ));
+                if (libraryWorkspaceSession !== session || session.uid !== uid) return;
+                const docs = snapshot.docs;
+                const list = docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+                session.tracks = mergeLibraryWorkspaceSessionTracks(list, []);
+                libraryWorkspaceInMemoryCache.set(uid, session.tracks);
+                session.lastDoc = docs.length > 0 ? docs[docs.length - 1] : null;
+                session.hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
+                session.paginationFallback = false;
+                session.ready = true;
+          """
+          if old not in s:
+              raise SystemExit('bounded bootstrap anchor missing')
+          s = s.replace(old, new, 1)
+
+          old_hydrate = """        session.tracks = mergeLibraryWorkspaceSessionTracks(durableTracks, []);
+                  session.lastDoc = null;
+                  session.hasMore = false;
+                  session.paginationFallback = true;
+                  session.ready = true;
+          """
+          new_hydrate = """        session.tracks = mergeLibraryWorkspaceSessionTracks(durableTracks, []);
+                  const oldestCachedTrack = session.tracks[session.tracks.length - 1] || null;
+                  const cachedCursorMs = getLibraryWorkspaceTrackCreatedAtMs(oldestCachedTrack);
+                  // Reconstruct a bounded cursor from the durable cache so browser/app
+                  // restart never forces a full collection rebuild. At worst an exact
+                  // 10-item terminal cache can cause one bounded empty-page check.
+                  session.lastDoc = cachedCursorMs > 0 ? new Date(cachedCursorMs) : null;
+                  session.hasMore = session.tracks.length >= WORKSPACE_SERVER_PAGE_SIZE && cachedCursorMs > 0;
+                  session.paginationFallback = false;
+                  session.ready = true;
+          """
+          if old_hydrate not in s:
+              raise SystemExit('hydrate cursor anchor missing')
+          s = s.replace(old_hydrate, new_hydrate, 1)
+
+          s = s.replace("  const staleRecoveryAttemptedRef = useRef<Set<string>>(new Set());\n", "", 1)
+
+          pattern = re.compile(
+              r"\n  useEffect\(\(\) => \{\n    if \(!user \|\| isSharedView \|\| tracks\.length === 0\) return;\n\n    const staleTracks = tracks\.filter\(\(group\) => \{.*?\n  \}, \[tracks, user, isSharedView\]\);\n",
+              re.S,
+          )
+          replacement = """
+            // Cost guard: old/stale Suno rows are rendered as '상태 확인 필요' only.
+            // Page entry/reload must never fan out one Function call + one Firestore
+            // write per stale track. The existing explicit status-check action owns
+            // reconciliation; active in-progress generation polling remains separate.
+          """
+          s2, n = pattern.subn(replacement, s, count=1)
+          if n != 1:
+              raise SystemExit(f'stale auto-recovery effect anchor mismatch: {n}')
+          s = s2
+
+          required = [
+              "limit(WORKSPACE_SERVER_FETCH_SIZE)",
+              "session.hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;",
+              "cachedCursorMs > 0 ? new Date(cachedCursorMs) : null",
+              "Page entry/reload must never fan out one Function call",
+          ]
+          for needle in required:
+              if needle not in s:
+                  raise SystemExit(f'missing verification fragment: {needle}')
+          if "const snapshot = await getDocs(tracksRef);" in s:
+              raise SystemExit('unbounded Library bootstrap still present')
+          p.write_text(s, encoding='utf-8')
+
+          overlay = Path('src/components/CacheDiagnosticsOverlay.tsx')
+          t = overlay.read_text(encoding='utf-8')
+          t = t.replace(' · 캐시 ${state.cacheHits}`;', ' · 캐시HIT ${state.cacheHits}`;')
+          t = t.replace(' · 캐시 ${actual.cacheHits}`;', ' · 캐시HIT ${actual.cacheHits}`;')
+          if '캐시HIT ${state.cacheHits}' not in t or '캐시HIT ${actual.cacheHits}' not in t:
+              raise SystemExit('cache HIT label patch failed')
+          overlay.write_text(t, encoding='utf-8')
+
+          doc = Path('docs/SORIDRAW_LONG_TERM_DATA_PLAN.md')
+          d = doc.read_text(encoding='utf-8')
+          anchor = "- 앱 코드 업데이트만으로 정상 캐시를 지우지 않는다. `schemaVersion`이 실제로 호환되지 않을 때만 해당 캐시를 재구축한다.\n"
+          addition = (
+              "- `schemaVersion` 변경은 가능한 한 기존 IndexedDB 캐시를 **로컬에서 in-place 마이그레이션**한다. "
+              "schema 변경을 이유로 수천/수만 건 서버 전체 재조회하는 방식을 금지한다.\n"
+              "- 로컬 변환이 불가능해 캐시를 다시 만들어야 해도 최초 화면에 필요한 **고정 크기 묶음(기본 10~40건)**만 bootstrap하고, "
+              "나머지는 사용자가 실제로 요청한 다음 page/cursor만 추가한다.\n"
+              "- 새 도메인/새 브라우저/브라우저 저장소 삭제도 동일하다. 캐시가 없다는 이유만으로 개인 전체 컬렉션을 sweep하지 않는다.\n"
+          )
+          if addition not in d:
+              if anchor not in d:
+                  raise SystemExit('long-term plan anchor missing')
+              d = d.replace(anchor, anchor + addition, 1)
+          doc.write_text(d, encoding='utf-8')
+          PY
+      - name: Install, typecheck, build
+        run: |
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+      - name: Commit source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/pages/SunoLibraryPage.tsx src/components/CacheDiagnosticsOverlay.tsx docs/SORIDRAW_LONG_TERM_DATA_PLAN.md
+          git diff --cached --check
+          git commit -m 'fix(preview): bound Library cold bootstrap and idle writes'
+          git push origin HEAD:preview

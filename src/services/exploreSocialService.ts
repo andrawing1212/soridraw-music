@@ -1,8 +1,13 @@
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import { readSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
 
 const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
+const EXPLORE_FOLLOW_CACHE_SCHEMA_VERSION = 1;
+const EXPLORE_FOLLOW_CACHE_KEY = 'explore-follow-state';
+const EXPLORE_FOLLOW_CACHE_SOURCE_TYPE = 'explore_follow_state';
+const EXPLORE_FOLLOW_CACHE_TTL_MS = 5 * 60 * 1000; // temporary until shared social revision signal
 
 const readPayload = async (response: Response) => {
   try {
@@ -102,6 +107,48 @@ export type ExploreFollowState = {
   followingCount: number;
 };
 
+type ExploreFollowCacheData = Record<string, boolean>;
+
+const readExploreFollowCache = (viewerUid: string): ExploreFollowCacheData => {
+  const envelope = readSoridrawPersistentCache<ExploreFollowCacheData>({
+    cacheKey: EXPLORE_FOLLOW_CACHE_KEY,
+    sourceType: EXPLORE_FOLLOW_CACHE_SOURCE_TYPE,
+    schemaVersion: EXPLORE_FOLLOW_CACHE_SCHEMA_VERSION,
+    uid: viewerUid,
+  });
+  return envelope?.data && typeof envelope.data === 'object' && !Array.isArray(envelope.data)
+    ? envelope.data
+    : {};
+};
+
+const writeExploreFollowCache = (viewerUid: string, data: ExploreFollowCacheData) => {
+  writeSoridrawPersistentCache<ExploreFollowCacheData>({
+    cacheKey: EXPLORE_FOLLOW_CACHE_KEY,
+    sourceType: EXPLORE_FOLLOW_CACHE_SOURCE_TYPE,
+    schemaVersion: EXPLORE_FOLLOW_CACHE_SCHEMA_VERSION,
+    dataVersion: 0,
+    uid: viewerUid,
+    syncCursor: null,
+    serverRevision: null,
+    deletedIds: [],
+    expiresAt: Date.now() + EXPLORE_FOLLOW_CACHE_TTL_MS,
+    dirty: false,
+    pendingMutationId: null,
+    data,
+  });
+};
+
+const readCachedExploreFollowState = (viewerUid: string, targetUid: string): boolean | null => {
+  const data = readExploreFollowCache(viewerUid);
+  return Object.prototype.hasOwnProperty.call(data, targetUid) ? Boolean(data[targetUid]) : null;
+};
+
+const rememberExploreFollowState = (viewerUid: string, targetUid: string, isFollowing: boolean) => {
+  const data = readExploreFollowCache(viewerUid);
+  data[targetUid] = Boolean(isFollowing);
+  writeExploreFollowCache(viewerUid, data);
+};
+
 const toCount = (value: unknown) => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
@@ -142,13 +189,19 @@ export const getExplorePublicProfileTracks = async (profileRef: string): Promise
 export const getExploreFollowState = async (user: User, uid: string): Promise<ExploreFollowState> => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
+  const cached = readCachedExploreFollowState(user.uid, normalizedUid);
+  if (cached !== null) {
+    return { isFollowing: cached, followerCount: 0, followingCount: 0 };
+  }
   const payload = await requestAuthed(user, `/v1/profiles/${encodeURIComponent(normalizedUid)}/follow-state`);
   const row = payload?.data || {};
-  return {
+  const result = {
     isFollowing: Boolean(row?.isFollowing ?? row?.following ?? row?.followed),
     followerCount: toCount(row?.followerCount ?? row?.follower_count),
     followingCount: toCount(row?.followingCount ?? row?.following_count),
   };
+  rememberExploreFollowState(user.uid, normalizedUid, result.isFollowing);
+  return result;
 };
 
 export const setExploreFollow = async (user: User, uid: string, follow: boolean): Promise<ExploreFollowState> => {
@@ -160,11 +213,13 @@ export const setExploreFollow = async (user: User, uid: string, follow: boolean)
     { method: follow ? 'PUT' : 'DELETE' },
   );
   const row = payload?.data || {};
-  return {
+  const result = {
     isFollowing: Boolean(row?.isFollowing ?? row?.following ?? row?.followed ?? follow),
     followerCount: toCount(row?.followerCount ?? row?.follower_count),
     followingCount: toCount(row?.followingCount ?? row?.following_count),
   };
+  rememberExploreFollowState(user.uid, normalizedUid, result.isFollowing);
+  return result;
 };
 
 export const updateExplorePublicProfile = async (

@@ -1,0 +1,52 @@
+name: Cost Zero Stage 2A Live Profile Probe
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cost-zero-stage2a-live-profile-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read-only live first-view probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://soridraw-explore-api.andrawing1212.workers.dev'
+          origin='https://preview.soridraw.com'
+          curl -sS --max-time 30 -D "$RUNNER_TEMP/feed.headers" -o "$RUNNER_TEMP/feed.json" \
+            -H "Origin: $origin" -H 'Accept: application/json' \
+            "$base/v1/feed?sort=latest&limit=1"
+          node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/feed.json','utf8'));
+          const row=p?.data?.items?.[0];
+          if(!row) throw new Error('No public feed row available for profile probe');
+          const uid=String(row.ownerUid||row.owner_uid||'').trim();
+          if(!uid) throw new Error('Feed row has no owner uid');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/profile-uid.txt',uid);
+          console.log('PROFILE_UID_FOUND=true');
+          NODE
+          uid="$(cat "$RUNNER_TEMP/profile-uid.txt")"
+          status="$(curl -sS --max-time 30 -w '%{http_code}' -D "$RUNNER_TEMP/first-view.headers" -o "$RUNNER_TEMP/first-view.json" \
+            -H "Origin: $origin" -H 'Accept: application/json' \
+            "$base/v1/profiles/$uid/first-view?limit=50")"
+          echo "FIRST_VIEW_HTTP_STATUS=$status"
+          grep -iE '^(x-soridraw-d1-read|x-soridraw-d1-write|x-soridraw-cf-worker|cache-control):' "$RUNNER_TEMP/first-view.headers" || true
+          node - <<'NODE'
+          const fs=require('fs');
+          let p={}; try{p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/first-view.json','utf8'));}catch{}
+          console.log('FIRST_VIEW_OK='+String(p?.ok===true));
+          console.log('FIRST_VIEW_CODE='+String(p?.code||p?.error?.code||''));
+          const items=p?.data?.items||p?.data?.tracks?.items||p?.data?.snapshot?.items||[];
+          console.log('FIRST_VIEW_ITEM_COUNT='+String(Array.isArray(items)?items.length:0));
+          NODE
+          echo 'READ_ONLY=true'
+          echo 'NO_D1_WRITE_REQUESTED=true'

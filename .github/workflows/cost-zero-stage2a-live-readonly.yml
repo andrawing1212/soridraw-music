@@ -40,7 +40,15 @@ jobs:
           for patch in patches/*.mjs; do mv "$patch" "$RUNNER_TEMP/soridraw-worker-patches/"; done
           npm run cf:prepare
           echo '[Stage2A] profile/feed/social router anchors'
-          grep -nE "v1/feed|v1/profiles|follow-state|v1/me/likes|handleFeed|handleProfile|handleFollow|handleLike|profiles|tracks" .remote-worker/worker.js | head -n 520 || true
+          grep -nE "v1/feed|v1/profiles|follow-state|v1/me/likes|handleFeed|handleProfile|handleFollow|handleLike|public_profiles|tracks" .remote-worker/worker.js | head -n 520 || true
+          echo '[Stage2A] feed/profile implementation ranges'
+          sed -n '740,1060p' .remote-worker/worker.js
+          sed -n '1240,1425p' .remote-worker/worker.js
+          echo '[Stage2A] follow/like implementation ranges'
+          sed -n '2320,2420p' .remote-worker/worker.js
+          sed -n '4125,4205p' .remote-worker/worker.js
+          echo '[Stage2A] router range'
+          sed -n '4440,4650p' .remote-worker/worker.js
           echo 'READ_ONLY_WORKER_SOURCE=true'
           echo 'NO_WORKER_DEPLOY=true'
 
@@ -48,19 +56,31 @@ jobs:
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
-          set -euo pipefail
-          npx wrangler d1 execute soridraw-explore-db --remote --config .remote-worker/wrangler.jsonc --command "SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','index') ORDER BY type, name;" --json > "$RUNNER_TEMP/d1-schema.json"
-          node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/d1-schema.json','utf8')); console.log(JSON.stringify(x,null,2).slice(0,120000));"
-          echo '[Stage2A] bounded structural counts'
-          npx wrangler d1 execute soridraw-explore-db --remote --config .remote-worker/wrangler.jsonc --command "SELECT 'profiles' AS dataset, COUNT(*) AS count FROM profiles UNION ALL SELECT 'tracks', COUNT(*) FROM tracks UNION ALL SELECT 'follows', COUNT(*) FROM follows UNION ALL SELECT 'likes', COUNT(*) FROM likes;" --json || true
+          set -u
+          schema_ok=0
+          for target in DB soridraw-explore-db; do
+            echo "[Stage2A] trying D1 target=$target"
+            if npx wrangler d1 execute "$target" --remote --config .remote-worker/wrangler.jsonc --command "SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','index') ORDER BY type, name;" --json | tee "$RUNNER_TEMP/d1-schema.json"; then
+              schema_ok=1
+              break
+            fi
+          done
+          if [ "$schema_ok" != '1' ]; then
+            echo 'D1_SCHEMA_QUERY_UNAVAILABLE=true'
+          else
+            echo '[Stage2A] bounded structural counts'
+            npx wrangler d1 execute DB --remote --config .remote-worker/wrangler.jsonc --command "SELECT 'public_profiles' AS dataset, COUNT(*) AS count FROM public_profiles UNION ALL SELECT 'tracks', COUNT(*) FROM tracks UNION ALL SELECT 'follows', COUNT(*) FROM follows UNION ALL SELECT 'likes', COUNT(*) FROM likes;" --json || true
+          fi
           echo 'D1_READ_ONLY=true'
           echo 'NO_D1_WRITE=true'
 
       - name: Upload live source and schema artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cost-zero-stage2a-live-readonly
           path: |
             cloudflare/explore-worker/.remote-worker/worker.js
             ${{ runner.temp }}/d1-schema.json
+          if-no-files-found: warn
           retention-days: 1

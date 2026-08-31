@@ -1,0 +1,251 @@
+name: SORIDRAW 994 One-Track WAV Rescue Proof
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-suno-wav-rescue-994-live-proof.yml'
+
+concurrency:
+  group: soridraw-994-one-track-rescue-proof
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prove-one-track:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions ci --no-audit --no-fund
+
+      - name: Authenticate Google/Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Rescue exactly one aged master-library audio
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const admin = require('./functions/node_modules/firebase-admin');
+          const fs = require('fs');
+
+          admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+            storageBucket: 'soridraw-app-866a5.firebasestorage.app',
+          });
+
+          const db = admin.firestore();
+          const callbackUrl = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net/sunoWavRescueCallback';
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          const text = (...values) => {
+            for (const value of values) if (typeof value === 'string' && value.trim()) return value.trim();
+            return '';
+          };
+          const timestampMs = (value) => {
+            if (!value) return 0;
+            if (typeof value.toMillis === 'function') return value.toMillis();
+            if (typeof value.toDate === 'function') return value.toDate().getTime();
+            const n = Number(value);
+            if (Number.isFinite(n) && n > 0) return n < 1e12 ? n * 1000 : n;
+            const parsed = Date.parse(String(value));
+            return Number.isFinite(parsed) ? parsed : 0;
+          };
+          const getCredits = async (apiKey) => {
+            try {
+              const r = await fetch('https://api.sunoapi.org/api/v1/generate/credit', { headers: { Authorization: 'Bearer ' + apiKey } });
+              const p = await r.json().catch(() => null);
+              const candidates = [p?.data, p?.credits, p?.remainingCredits, p?.data?.credits, p?.data?.remainingCredits];
+              for (const v of candidates) {
+                const n = Number(v);
+                if (Number.isFinite(n) && n >= 0) return n;
+              }
+            } catch {}
+            return null;
+          };
+          const probe = async (url) => {
+            if (!url) return false;
+            try {
+              const controller = new AbortController();
+              const timer = setTimeout(() => controller.abort(), 12000);
+              const r = await fetch(url, { headers: { Range: 'bytes=0-65535', Accept: 'audio/*,*/*;q=0.8' }, signal: controller.signal });
+              clearTimeout(timer);
+              if (!r.ok && r.status !== 206) return false;
+              const b = Buffer.from(await r.arrayBuffer());
+              return b.length > 0;
+            } catch { return false; }
+          };
+          const wavUrl = (p) => text(p?.data?.response?.audioWavUrl, p?.data?.audioWavUrl, p?.response?.audioWavUrl, p?.audioWavUrl);
+          const taskIdFrom = (p) => text(p?.data?.taskId, p?.data?.task_id, p?.taskId, p?.task_id);
+
+          (async () => {
+            const user = await admin.auth().getUserByEmail('andrawing1212@gmail.com');
+            const uid = user.uid;
+            const snap = await db.collection('suno_tracks').doc(uid).collection('tracks').orderBy('createdAt', 'desc').limit(20).get();
+            const now = Date.now();
+            const candidates = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+            const candidate = candidates.find((row) => {
+              const age = now - timestampMs(row.createdAt);
+              const first = Array.isArray(row.sunoData) ? row.sunoData[0] : null;
+              return age > 30 * 24 * 60 * 60 * 1000 && text(row.taskId) && text(first?.id, first?.audioId, first?.audio_id);
+            });
+            if (!candidate) throw new Error('No aged track with taskId + audioId found in bounded 20-track window');
+
+            const trackId = candidate.id;
+            const sourceTaskId = text(candidate.taskId);
+            const first = Array.isArray(candidate.sunoData) ? candidate.sunoData[0] : {};
+            const audioId = text(first?.id, first?.audioId, first?.audio_id);
+            const title = text(first?.title, candidate.title) || 'Untitled';
+            const ageDays = Math.floor((now - timestampMs(candidate.createdAt)) / 86400000);
+            const keySnap = await db.collection('user_api_keys').doc(uid).get();
+            const keyData = keySnap.data() || {};
+            const apiKey = text(keyData.sunoApiKey, keyData.musicApiKey, keyData.suno_api_key, keyData.music_api_key);
+            if (!apiKey) throw new Error('Music API key missing');
+
+            const existing = candidate?.audioRescue?.['0'] || {};
+            if (text(existing.audioUrl) && await probe(text(existing.audioUrl))) {
+              console.log('[994 proof] existing durable rescue already playable', { title, ageDays, durable: Boolean(existing.durable) });
+              return;
+            }
+
+            const creditsBefore = await getCredits(apiKey);
+            const create = await fetch('https://api.sunoapi.org/api/v1/wav/generate', {
+              method: 'POST',
+              headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ taskId: sourceTaskId, audioId, callBackUrl: callbackUrl }),
+            });
+            const createPayload = await create.json().catch(() => null);
+            const providerCode = Number(createPayload?.code || create.status || 500);
+            console.log('[994 proof] WAV create response', { http: create.status, providerCode, title, ageDays });
+
+            if (!create.ok || providerCode >= 400) {
+              const creditsAfterFailure = await getCredits(apiKey);
+              console.log('[994 proof] RESULT', {
+                result: 'provider-create-failed',
+                title,
+                ageDays,
+                http: create.status,
+                providerCode,
+                providerMessage: String(createPayload?.msg || '').slice(0, 180),
+                creditsBefore,
+                creditsAfter: creditsAfterFailure,
+                creditDelta: creditsBefore != null && creditsAfterFailure != null ? creditsBefore - creditsAfterFailure : null,
+              });
+              return;
+            }
+
+            const wavTaskId = taskIdFrom(createPayload);
+            if (!wavTaskId) throw new Error('WAV task ID missing from provider success response');
+            await db.collection('suno_tracks').doc(uid).collection('tracks').doc(trackId).update({
+              'audioRescue.0': {
+                audioId,
+                wavTaskId,
+                status: 'processing',
+                requestedAt: admin.firestore.FieldValue.serverTimestamp(),
+              },
+              lastAudioRescueAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+            let providerAudioUrl = '';
+            for (let attempt = 0; attempt < 12; attempt += 1) {
+              if (attempt > 0) await sleep(5000);
+              const r = await fetch('https://api.sunoapi.org/api/v1/wav/record-info?taskId=' + encodeURIComponent(wavTaskId), {
+                headers: { Authorization: 'Bearer ' + apiKey },
+              });
+              const p = await r.json().catch(() => null);
+              const u = wavUrl(p);
+              if (u && await probe(u)) {
+                providerAudioUrl = u;
+                console.log('[994 proof] provider WAV bytes verified', { attempt: attempt + 1, host: new URL(u).hostname });
+                break;
+              }
+              const state = String(p?.data?.successFlag || p?.data?.status || p?.status || '').toUpperCase();
+              if (state.includes('FAILED') || state.includes('ERROR')) {
+                console.log('[994 proof] WAV task failed', { state, attempt: attempt + 1 });
+                break;
+              }
+            }
+
+            const creditsAfter = await getCredits(apiKey);
+            if (!providerAudioUrl) {
+              await db.collection('suno_tracks').doc(uid).collection('tracks').doc(trackId).update({
+                'audioRescue.0.status': 'failed_or_unavailable',
+                lastAudioRescueAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              console.log('[994 proof] RESULT', {
+                result: 'no-playable-wav-bytes',
+                title,
+                ageDays,
+                creditsBefore,
+                creditsAfter,
+                creditDelta: creditsBefore != null && creditsAfter != null ? creditsBefore - creditsAfter : null,
+              });
+              return;
+            }
+
+            const source = await fetch(providerAudioUrl);
+            if (!source.ok) throw new Error('Verified WAV failed during durable copy: ' + source.status);
+            const bytes = Buffer.from(await source.arrayBuffer());
+            if (!bytes.length) throw new Error('Verified WAV became zero bytes during durable copy');
+
+            const bucket = admin.storage().bucket('soridraw-app-866a5.firebasestorage.app');
+            const objectPath = 'suno-rescue/' + uid + '/' + trackId + '/0.wav';
+            const token = db.collection('_download_tokens').doc().id;
+            await bucket.file(objectPath).save(bytes, {
+              resumable: false,
+              contentType: String(source.headers.get('content-type') || 'audio/wav'),
+              metadata: {
+                cacheControl: 'public,max-age=31536000,immutable',
+                metadata: { firebaseStorageDownloadTokens: token },
+              },
+            });
+            const durableUrl = 'https://firebasestorage.googleapis.com/v0/b/' + encodeURIComponent(bucket.name)
+              + '/o/' + encodeURIComponent(objectPath) + '?alt=media&token=' + encodeURIComponent(token);
+            const durablePlayable = await probe(durableUrl);
+            if (!durablePlayable) throw new Error('Durable Firebase Storage rescue URL did not return bytes');
+
+            await db.collection('suno_tracks').doc(uid).collection('tracks').doc(trackId).update({
+              'audioRescue.0': {
+                audioId,
+                wavTaskId,
+                audioUrl: durableUrl,
+                providerAudioUrl,
+                durable: true,
+                status: 'completed',
+                recoveredAt: admin.firestore.FieldValue.serverTimestamp(),
+              },
+              lastAudioRescueAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+            console.log('[994 proof] RESULT', {
+              result: 'SUCCESS',
+              title,
+              ageDays,
+              durable: true,
+              bytes: bytes.length,
+              creditsBefore,
+              creditsAfter,
+              creditDelta: creditsBefore != null && creditsAfter != null ? creditsBefore - creditsAfter : null,
+              storageHost: new URL(durableUrl).hostname,
+            });
+          })().catch((error) => {
+            console.error('[994 proof] fatal:', error?.message || error);
+            process.exit(1);
+          });
+          NODE

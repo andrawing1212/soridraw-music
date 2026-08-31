@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 import { auth, db, functions } from '../firebase';
 import type { AdminPermissions, AppUserInfo, StaffRole } from '../types';
 import { getTimestampMs } from '../App';
+import { readAdminStaffListCache, writeAdminStaffListCache } from '../lib/adminStaffListCache';
 
 const parseUser = (uid: string, data: Record<string, any>): AppUserInfo => ({
   uid,
@@ -43,36 +44,54 @@ export default function MasterPermissionsPage() {
   const [savingUid, setSavingUid] = useState<string | null>(null);
   const [message, setMessage] = useState<{ success: boolean; text: string } | null>(null);
 
-  const loadAdmins = useCallback(async () => {
-    setIsLoading(true);
-    setMessage(null);
-    try {
-      const snapshot = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
-      const nextAdmins = snapshot.docs
-        .map((item) => parseUser(item.id, item.data()))
-        .filter((user) => normalizeStaffRole(user) !== null)
-        .sort((a, b) => {
-          const order = (role: StaffRole) => role === 'master' ? 0 : 1;
-          return order(a.staffRole || null) - order(b.staffRole || null)
-            || (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '', 'ko');
-        });
 
-      setAdmins(nextAdmins);
-      setDrafts(Object.fromEntries(nextAdmins.map((user) => [
-        user.uid,
-        user.staffRole === 'master'
-          ? { ...FULL_ADMIN_PERMISSIONS }
-          : { ...normalizeAdminPermissions(user) },
-      ])));
-    } catch (error: any) {
-      console.error('Failed to load admin permissions:', error);
-      setMessage({ success: false, text: error?.message || '관리자 권한 목록을 불러오지 못했습니다.' });
-    } finally {
+const applyAdminList = useCallback((nextAdmins: AppUserInfo[]) => {
+  setAdmins(nextAdmins);
+  setDrafts(Object.fromEntries(nextAdmins.map((user) => [
+    user.uid,
+    user.staffRole === 'master'
+      ? { ...FULL_ADMIN_PERMISSIONS }
+      : { ...normalizeAdminPermissions(user) },
+  ])));
+}, []);
+
+const loadAdmins = useCallback(async (forceServer = false) => {
+  const masterUid = auth.currentUser?.uid || '';
+  if (!masterUid) {
+    setIsLoading(false);
+    return;
+  }
+  if (!forceServer) {
+    const cached = readAdminStaffListCache(masterUid);
+    if (cached) {
+      applyAdminList(cached.admins);
       setIsLoading(false);
+      return;
     }
-  }, []);
+  }
+  setIsLoading(true);
+  setMessage(null);
+  try {
+    const snapshot = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
+    const nextAdmins = snapshot.docs
+      .map((item) => parseUser(item.id, item.data()))
+      .filter((user) => normalizeStaffRole(user) !== null)
+      .sort((a, b) => {
+        const order = (role: StaffRole) => role === 'master' ? 0 : 1;
+        return order(a.staffRole || null) - order(b.staffRole || null)
+          || (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '', 'ko');
+      });
+    applyAdminList(nextAdmins);
+    writeAdminStaffListCache(masterUid, nextAdmins);
+  } catch (error: any) {
+    console.error('Failed to load admin permissions:', error);
+    setMessage({ success: false, text: error?.message || '관리자 권한 목록을 불러오지 못했습니다.' });
+  } finally {
+    setIsLoading(false);
+  }
+}, [applyAdminList]);
 
-  useEffect(() => { void loadAdmins(); }, [loadAdmins]);
+useEffect(() => { void loadAdmins(false); }, [loadAdmins]);
 
   const filteredAdmins = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
@@ -97,8 +116,14 @@ export default function MasterPermissionsPage() {
     try {
       const callable = httpsCallable(functions, 'masterSetAdminAccess');
       await callable({ targetUid: user.uid, staffRole: 'admin', adminPermissions: permissions });
+      const nextAdmins: AppUserInfo[] = admins.map((item) => item.uid === user.uid
+        ? { ...item, staffRole: 'admin' as StaffRole, adminPermissions: { ...permissions } }
+        : item);
+      setAdmins(nextAdmins);
+      setDrafts((current) => ({ ...current, [user.uid]: { ...permissions } }));
+      const masterUid = auth.currentUser?.uid || '';
+      if (masterUid) writeAdminStaffListCache(masterUid, nextAdmins);
       setMessage({ success: true, text: `${user.displayName || user.email || '관리자'} 권한을 저장했습니다.` });
-      await loadAdmins();
     } catch (error: any) {
       console.error('masterSetAdminAccess failed:', error);
       setMessage({ success: false, text: error?.message || '권한 저장에 실패했습니다.' });
@@ -116,7 +141,7 @@ export default function MasterPermissionsPage() {
       actions={activeTab === 'admin-permissions' ? (
         <button
           type="button"
-          onClick={() => void loadAdmins()}
+          onClick={() => void loadAdmins(true)}
           disabled={isLoading}
           className="inline-flex h-10 items-center gap-2 rounded-xl bg-white/[0.06] px-3.5 text-xs font-black text-zinc-200 hover:bg-white/[0.10] disabled:opacity-40"
         >

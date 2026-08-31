@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, Crown, Home, Key, Mic2, SlidersHorizontal, Tags, Users } from 'lucide-react';
+import { Activity, Crown, Home, Key, SlidersHorizontal, Users } from 'lucide-react';
 
 import { useLocation, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
@@ -16,8 +16,6 @@ type AdminTab = { path: string; label: string; icon: React.ElementType; permissi
 const ADMIN_TABS: AdminTab[] = [
   { path: '/admin/master', label: '마스터 권한', icon: Crown, masterOnly: true },
   { path: '/admin/users', label: '회원 관리', icon: Users, permission: 'userManagement' },
-  { path: '/admin/vocals', label: '보컬 관리', icon: Mic2, permission: 'vocalManagement' },
-  { path: '/admin/tags', label: '섹션 태그', icon: Tags, permission: 'sectionTagManagement' },
   { path: '/admin/suno-api', label: 'Suno API', icon: Key, permission: 'sunoApiManagement' },
   { path: '/admin/app-settings', label: '앱 설정', icon: SlidersHorizontal, permission: 'appSettings' },
   { path: '/admin/gemini-audit', label: 'Gemini 호출', icon: Activity, permission: 'geminiAudit' },

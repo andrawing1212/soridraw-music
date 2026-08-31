@@ -4,7 +4,7 @@ import { Compass, FlaskConical, Heart, Home, Library, Loader2, ShieldAlert, Slid
 import AdminPageLayout from '../components/AdminPageLayout';
 import { auth, db } from '../firebase';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
-import { FIRESTORE_READ_CACHE_KEYS, writeFirestoreReadCache } from '../lib/firestoreReadCache';
+import { FIRESTORE_READ_CACHE_KEYS, FIRESTORE_READ_CACHE_TTL_MS, readFirestoreReadCache, writeFirestoreReadCache } from '../lib/firestoreReadCache';
 import { readCacheDiagnosticsEnabled, readCacheDiagnosticsGloballyEnabled, readCacheDiagnosticsOwnerUid, setCacheDiagnosticsEnabled } from '../lib/cacheDiagnostics';
 
 const SORIDRAW_898_CACHE_DIAGNOSTICS_LIVE_PANEL = true;
@@ -111,6 +111,18 @@ export default function AdminAppSettingsPage() {
     let isMounted = true;
 
     const loadSettings = async () => {
+      const cached = readFirestoreReadCache<NavigationVisibilitySettings>(
+        FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
+        FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
+      );
+      if (cached?.data) {
+        const nextSettings = normalizeNavigationVisibilitySettings(cached.data, readStoredNavigationVisibilitySettings());
+        setSavedSettings(nextSettings);
+        setDraftSettings(nextSettings);
+        writeStoredNavigationVisibilitySettings(nextSettings);
+        setIsLoading(false);
+        return;
+      }
       try {
         const snapshot = await getDoc(NAVIGATION_VISIBILITY_DOC);
         if (!isMounted) return;
@@ -144,6 +156,18 @@ export default function AdminAppSettingsPage() {
     let isMounted = true;
 
     const loadClicheGuard = async () => {
+      const cached = readFirestoreReadCache<{ hardBanTerms?: unknown; softBanTerms?: unknown }>(
+        FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
+        FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
+      );
+      if (cached?.data) {
+        setClicheDraft({
+          hardBanText: parseTerms(formatTerms(cached.data.hardBanTerms)).join('\n'),
+          softBanText: parseTerms(formatTerms(cached.data.softBanTerms)).join('\n'),
+        });
+        setIsClicheLoading(false);
+        return;
+      }
       try {
         const snapshot = await getDoc(LYRIC_CLICHE_GUARD_DOC);
         if (!isMounted) return;

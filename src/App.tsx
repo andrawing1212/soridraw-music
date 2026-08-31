@@ -2769,8 +2769,6 @@ function HistoryRouteWrapper({
     />
   );
 }
-const AdminVocalTonesPageLazy = lazy(() => import('./pages/AdminVocalTonesPage'));
-const AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage'));
 const AdminUserManagementPageLazy = lazy(() => import('./pages/AdminUserManagementPage'));
 const SunoLibraryPageLazy = lazy(() => import('./pages/SunoLibraryPage'));
 const SunoApiSettingsPageLazy = lazy(() => import('./pages/SunoApiSettingsPage'));
@@ -7177,7 +7175,7 @@ function App() {
         FIRESTORE_READ_CACHE_KEYS.sectionTags,
         FIRESTORE_READ_CACHE_TTL_MS.sectionTags,
       );
-      if (Array.isArray(cached?.data) && cached.data.length > 0) {
+      if (cached && Array.isArray(cached.data)) {
         setSectionTags(cached.data);
         if (cached.isFresh) return;
       }
@@ -18695,8 +18693,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <Route path="/admin" element={<Navigate to={firstAccessibleAdminPath} replace />} />
             <Route path="/admin/master" element={isMasterUser ? <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-amber-300 animate-spin" /></div>}><MasterPermissionsPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
             <Route path="/admin/users" element={canAccessAdminPage('userManagement') ? <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}><AdminUserManagementPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
-            <Route path="/admin/vocals" element={canAccessAdminPage('vocalManagement') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminVocalTonesPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
-            <Route path="/admin/tags" element={canAccessAdminPage('sectionTagManagement') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminSectionTagsPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/vocals" element={<Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/tags" element={<Navigate to={firstAccessibleAdminPath} replace />} />
             <Route path="/admin/suno-api" element={canAccessAdminPage('sunoApiManagement') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminSunoApiPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
             <Route path="/admin/app-settings" element={canAccessAdminPage('appSettings') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminAppSettingsPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
             <Route path="/admin/gemini-audit" element={canAccessAdminPage('geminiAudit') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminGeminiAuditPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />

@@ -53,6 +53,7 @@ import { FULL_ADMIN_PERMISSIONS, normalizeAdminPermissions, normalizeStaffRole }
 import { PRESENCE_DIAGNOSTIC_EVENT, readPresenceDiagnostic, type PresenceDiagnostic } from '../services/presenceService';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
 import { readAdminUserListCache, writeAdminUserListCache } from '../lib/adminUserListCache';
+import { removeAdminStaffListCache } from '../lib/adminStaffListCache';
 
 const SORIDRAW_929_SINGLE_USER_PROFILE_SOURCE = true;
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -962,6 +963,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           staffRole: promotedToAdmin ? 'admin' : null,
           adminPermissions: promotedToAdmin ? { ...FULL_ADMIN_PERMISSIONS } : {},
         });
+        const masterUid = auth.currentUser?.uid || '';
+        if (masterUid) removeAdminStaffListCache(masterUid);
       }
 
       const updates: Record<string, unknown> = {

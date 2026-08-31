@@ -24,20 +24,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== ADMIN RELATED FILES ==='
-          find src -type f \( -name '*Admin*' -o -name '*Master*' \) | sort
+          echo '=== APP SETTINGS STARTUP 5660-5795 ==='
+          sed -n '5660,5795p' src/App.tsx
           echo
-          echo '=== ADMIN ROUTES / MENU REFERENCES ==='
-          grep -RInE "(/admin/(users|api|app-settings|gemini-audit|sections|vocals|master)|Admin(User|Suno|App|Gemini|Section|Vocal)|MasterPermissions)" src --include='*.tsx' --include='*.ts' || true
+          echo '=== SECTION TAG STARTUP 7140-7225 ==='
+          sed -n '7140,7225p' src/App.tsx
           echo
-          echo '=== FIRESTORE READS/LISTENERS IN ADMIN FILES ==='
-          grep -RInE "\b(getDoc|getDocs|getDocFromServer|getDocsFromServer|onSnapshot|collection\(|query\()" src/pages src/components --include='*Admin*.tsx' --include='MasterPermissionsPage.tsx' || true
+          echo '=== USER AUTH/LISTENER 6720-6835 ==='
+          sed -n '6720,6835p' src/App.tsx
           echo
-          echo '=== FUNCTIONS/FETCH IN ADMIN FILES ==='
-          grep -RInE "httpsCallable|cloudfunctions|fetch\(" src/pages src/components --include='*Admin*.tsx' --include='MasterPermissionsPage.tsx' || true
+          echo '=== VOCAL TONES STARTUP 11480-11575 ==='
+          sed -n '11480,11575p' src/App.tsx
           echo
-          echo '=== APP STARTUP FIRESTORE READ/LISTENER CALLS ==='
-          grep -nE "\b(getDoc|getDocs|getDocFromServer|getDocsFromServer|onSnapshot|collection\(|query\()" src/App.tsx || true
+          echo '=== ADMIN LAZY IMPORTS 2755-2790 ==='
+          sed -n '2755,2790p' src/App.tsx
           echo
-          echo '=== APP STARTUP ADMIN/SETTINGS REFERENCES ==='
-          grep -nE "app_settings|user_structures|users|vocalTones|section_tags|navigation_visibility|lyric_cliche_guard" src/App.tsx || true
+          echo '=== ADMIN ROUTES 18670-18730 ==='
+          sed -n '18670,18730p' src/App.tsx
+          echo
+          echo '=== APP READ CACHE IMPORTS/USAGE ==='
+          grep -nE "readFirestoreReadCache|writeFirestoreReadCache|FIRESTORE_READ_CACHE_TTL_MS|FIRESTORE_READ_CACHE_KEYS" src/App.tsx || true
+          echo
+          echo '=== ALL ADMIN PERMISSION/MENU REFERENCES ==='
+          grep -RInE "vocalManagement|sectionTagManagement|/admin/(vocals|tags|sections)" src --include='*.tsx' --include='*.ts' || true

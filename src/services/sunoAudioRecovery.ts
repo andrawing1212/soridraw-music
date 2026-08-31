@@ -2,7 +2,8 @@ import { auth } from '../firebase';
 
 const SUNO_STATUS_ENDPOINT = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
 const RECOVERY_CACHE_PREFIX = 'soridraw.suno.audioRecovery.v2';
-const RECOVERY_NEGATIVE_CACHE_MS = 24 * 60 * 60 * 1000;
+const RECOVERY_NEGATIVE_CACHE_MS = 5 * 60 * 1000;
+// SORIDRAW_LIBRARY_AGED_AUDIO_RECOVERY_990
 const RECOVERY_CACHE_MAX_ENTRIES = 200;
 
 type RecoveryResult = {
@@ -12,6 +13,7 @@ type RecoveryResult = {
   index: number;
   sunoData: any[] | null;
   raw: any;
+  recoveredAt: number;
 };
 
 type DownloadRecoveryResult = {
@@ -198,7 +200,12 @@ const chooseRecoveredUrl = (payload: any, track: any, failedUrl = '') => {
   sunoData.forEach((item: any) => getAudioCandidates(item).forEach(push));
 
   const normalizedFailed = toText(failedUrl);
-  return ordered.find((url) => url !== normalizedFailed) || '';
+  const alternative = ordered.find((url) => !normalizedFailed || url !== normalizedFailed);
+  if (alternative) return alternative;
+  // The Function only exposes audioUrls after a byte probe succeeds. If the
+  // provider refreshed the resource behind the same URL, one retry is safe.
+  if (normalizedFailed && verified.includes(normalizedFailed)) return normalizedFailed;
+  return normalizedFailed ? '' : (ordered[0] || '');
 };
 
 const dispatchRecoveredAudioUrl = (result: RecoveryResult) => {
@@ -228,6 +235,7 @@ export const applyRecoveredSunoAudioUrl = (track: any, result: RecoveryResult | 
     parent.streamAudioUrl = url;
   }
   parent.audioValidationStatus = 'verified';
+  parent.lastAudioUrlRecoveredAt = result.recoveredAt || Date.now();
 
   return {
     ...track,
@@ -245,10 +253,11 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
 
   const cacheKey = `${context.trackId}:${context.taskId}:${context.index}`;
   const inFlightKey = `${user.uid}:${cacheKey}`;
-  const failedUrl = toText(options?.failedUrl || context.currentUrl);
+  const hasExplicitFailedUrl = Boolean(options && Object.prototype.hasOwnProperty.call(options, 'failedUrl'));
+  const failedUrl = hasExplicitFailedUrl ? toText(options?.failedUrl) : '';
   const cached = readRecoveryCacheEntry(user.uid, cacheKey);
 
-  if (cached?.audioUrl && cached.audioUrl !== failedUrl) {
+  if (cached?.audioUrl && (!hasExplicitFailedUrl || cached.audioUrl !== failedUrl)) {
     const result: RecoveryResult = {
       audioUrl: cached.audioUrl,
       trackId: context.trackId,
@@ -256,6 +265,7 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
       index: context.index,
       sunoData: null,
       raw: { cacheHit: true },
+      recoveredAt: Number(cached.updatedAt || Date.now()),
     };
     touchRecoverySuccess(user.uid, cacheKey, cached);
     dispatchRecoveredAudioUrl(result);
@@ -309,6 +319,7 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
         index: context.index,
         sunoData: getResponseSunoData(payload),
         raw: payload,
+        recoveredAt: Date.now(),
       };
 
       writeRecoverySuccess(user.uid, cacheKey, audioUrl);

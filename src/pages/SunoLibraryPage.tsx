@@ -16,7 +16,7 @@ import { auth, db } from '../firebase';
 import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter } from '../lib/firestoreMeasured';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
-import { downloadSunoAudioWithRecovery } from '../services/sunoAudioRecovery';
+import { applyRecoveredSunoAudioUrl, downloadSunoAudioWithRecovery, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
 import { ensureDefaultPlaylists, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, fetchTrackLikes, toggleTrackLike, fetchSharedTracksStatus } from '../services/playlistService';
 import { Playlist, PlaylistItem } from '../types';
@@ -50,6 +50,8 @@ const fallbackSharedPlaylists: Playlist[] = [
 ];
 
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
+const SUNO_AUDIO_URL_RECOVERY_AFTER_MS = 13 * 24 * 60 * 60 * 1000;
+// SORIDRAW_LIBRARY_AGED_AUDIO_RECOVERY_990
 const WORKSPACE_PAGE_SIZE = 10;
 const WORKSPACE_SERVER_PAGE_SIZE = 10;
 const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE;
@@ -3252,6 +3254,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       const trackId = String(detail.trackId || '').trim();
       const audioUrl = String(detail.audioUrl || '').trim();
       const index = Number(detail.index ?? 0);
+      const recoveredAt = Number(detail.recoveredAt || Date.now());
       if (!trackId || !audioUrl) return;
 
       patchWorkspaceTrackLocally(trackId, (current) => {
@@ -3260,6 +3263,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           audioValidationStatus: 'verified',
           reportedAudioUrls: Array.from(new Set([...(Array.isArray(current?.reportedAudioUrls) ? current.reportedAudioUrls : []), audioUrl])),
           audioUrls: Array.from(new Set([...(Array.isArray(current?.audioUrls) ? current.audioUrls : []), audioUrl])),
+          lastAudioUrlRecoveredAt: recoveredAt,
         };
         if (Array.isArray(current?.sunoData) && current.sunoData.length > 0) {
           next.sunoData = current.sunoData.map((entry: any, entryIndex: number) => entryIndex === index
@@ -3278,7 +3282,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         const itemIndexRaw = item?.sourceSubTrackIndex ?? item?.subTrackIndex ?? 0;
         const itemIndex = Number.isFinite(Number(itemIndexRaw)) ? Number(itemIndexRaw) : 0;
         if (sourceId !== trackId || itemIndex !== index) return item;
-        return { ...item, audioUrl, streamAudioUrl: audioUrl, url: audioUrl };
+        return { ...item, audioUrl, streamAudioUrl: audioUrl, url: audioUrl, lastAudioUrlRecoveredAt: recoveredAt };
       }));
     };
 
@@ -3345,46 +3349,118 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return list;
   }, [filteredTracks, filter, workspaceColorFilter]);
 
-  const handlePlayTrack = (track: any, subIndex: number = 0) => {
-    const items = extractSunoData(track);
-    const item = items[subIndex] || {};
-    const url = getAudioUrl(item, track);
-    const title = getTitle(item, track, subIndex);
-    const imageUrl = getImageUrl(item, track);
-    const creatorMeta = resolveCreatorSnapshot(track, item, { fallbackToCurrentUser: true });
-
-    if (url) {
-      markWorkspaceItemPlayed(track, subIndex);
-      const newQueue = allPlayables.map(p => {
-        const queuedCreatorMeta = resolveCreatorSnapshot(p.group, p.item, { fallbackToCurrentUser: true });
-        return {
-          url: p.url,
-          title: getTitle(p.item, p.group, p.idx),
-          imageUrl: getImageUrl(p.item, p.group),
-          parent: { ...p.group, ...queuedCreatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
-          index: p.idx,
-          creatorDisplayId: queuedCreatorMeta.creatorDisplayId,
-          ownerNickname: queuedCreatorMeta.ownerNickname,
-          creatorNickname: queuedCreatorMeta.creatorNickname,
-          ownerEmail: queuedCreatorMeta.ownerEmail,
-          creatorEmail: queuedCreatorMeta.creatorEmail,
-          lyrics: p.item?.lyrics || p.item?.lyricsText || p.group?.lyrics || p.group?.lyricsText || null
-        };
-      });
-      playTrack({
-        url,
-        title,
-        imageUrl,
-        parent: { ...track, ...creatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
-        index: subIndex,
-        creatorDisplayId: creatorMeta.creatorDisplayId,
-        ownerNickname: creatorMeta.ownerNickname,
-        creatorNickname: creatorMeta.creatorNickname,
-        ownerEmail: creatorMeta.ownerEmail,
-        creatorEmail: creatorMeta.creatorEmail,
-        lyrics: item?.lyrics || item?.lyricsText || track?.lyrics || track?.lyricsText || null
-      }, newQueue);
+  const toAudioRecoveryMillis = (value: any): number => {
+    if (!value) return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : 0;
     }
+    if (typeof value?.toMillis === 'function') {
+      const parsed = value.toMillis();
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    if (typeof value?.toDate === 'function') {
+      const parsed = value.toDate().getTime();
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    if (typeof value?.seconds === 'number') return value.seconds * 1000;
+    return 0;
+  };
+
+  const getAudioRecoveryBaseTime = (group: any): number => (
+    toAudioRecoveryMillis(group?.lastAudioUrlRecoveredAt)
+      || toAudioRecoveryMillis(group?.completedAt)
+      || toAudioRecoveryMillis(group?.createdAt)
+      || 0
+  );
+
+  const shouldRecoverAudioUrlBeforePlay = (group: any, item: any): boolean => {
+    if (isSharedView || !group?.taskId) return false;
+    const currentUrl = getAudioUrl(item, group);
+    if (!currentUrl) return true;
+    const baseTime = getAudioRecoveryBaseTime(group);
+    return baseTime > 0 && Date.now() - baseTime >= SUNO_AUDIO_URL_RECOVERY_AFTER_MS;
+  };
+
+  const handlePlayTrack = async (track: any, subIndex: number = 0) => {
+    let playGroup = track;
+    let items = extractSunoData(playGroup);
+    let item = items[subIndex] || {};
+    let url = getAudioUrl(item, playGroup);
+
+    if (shouldRecoverAudioUrlBeforePlay(playGroup, item)) {
+      const recovered = await recoverSunoAudioUrl({
+        url: url || '',
+        audioUrl: url || '',
+        parent: playGroup,
+        index: subIndex,
+        trackId: playGroup?.id || playGroup?.trackId || '',
+        taskId: playGroup?.taskId || '',
+      });
+      if (recovered?.audioUrl) {
+        const recoveredPlayable = applyRecoveredSunoAudioUrl({
+          url: url || '',
+          audioUrl: url || '',
+          parent: playGroup,
+          index: subIndex,
+        }, recovered);
+        playGroup = recoveredPlayable?.parent || playGroup;
+        items = extractSunoData(playGroup);
+        item = items[subIndex] || item;
+        url = recovered.audioUrl;
+      } else if (!url) {
+        showToast('Music API에서 현재 재생 가능한 음원 링크를 찾지 못했습니다.');
+        return;
+      }
+    }
+
+    if (!url) return;
+
+    const title = getTitle(item, playGroup, subIndex);
+    const imageUrl = getImageUrl(item, playGroup);
+    const creatorMeta = resolveCreatorSnapshot(playGroup, item, { fallbackToCurrentUser: true });
+    markWorkspaceItemPlayed(playGroup, subIndex);
+
+    let newQueue = allPlayables.map(p => {
+      const queuedCreatorMeta = resolveCreatorSnapshot(p.group, p.item, { fallbackToCurrentUser: true });
+      return {
+        url: p.url,
+        title: getTitle(p.item, p.group, p.idx),
+        imageUrl: getImageUrl(p.item, p.group),
+        parent: { ...p.group, ...queuedCreatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
+        index: p.idx,
+        creatorDisplayId: queuedCreatorMeta.creatorDisplayId,
+        ownerNickname: queuedCreatorMeta.ownerNickname,
+        creatorNickname: queuedCreatorMeta.creatorNickname,
+        ownerEmail: queuedCreatorMeta.ownerEmail,
+        creatorEmail: queuedCreatorMeta.creatorEmail,
+        lyrics: p.item?.lyrics || p.item?.lyricsText || p.group?.lyrics || p.group?.lyricsText || null
+      };
+    });
+
+    const parentId = String(playGroup?.id || playGroup?.trackId || '').trim();
+    const currentQueueIndex = newQueue.findIndex((queued: any) => (
+      String(queued?.parent?.id || queued?.parent?.trackId || '').trim() === parentId
+      && Number(queued?.index ?? 0) === Number(subIndex)
+    ));
+    const currentQueueTrack = {
+      url,
+      title,
+      imageUrl,
+      parent: { ...playGroup, ...creatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
+      index: subIndex,
+      creatorDisplayId: creatorMeta.creatorDisplayId,
+      ownerNickname: creatorMeta.ownerNickname,
+      creatorNickname: creatorMeta.creatorNickname,
+      ownerEmail: creatorMeta.ownerEmail,
+      creatorEmail: creatorMeta.creatorEmail,
+      lyrics: item?.lyrics || item?.lyricsText || playGroup?.lyrics || playGroup?.lyricsText || null
+    };
+    if (currentQueueIndex >= 0) newQueue[currentQueueIndex] = currentQueueTrack;
+    else newQueue = [currentQueueTrack, ...newQueue];
+
+    playTrack(currentQueueTrack, newQueue);
   };
 
   // Cost guard: old/stale Suno rows are rendered as '상태 확인 필요' only.
@@ -7032,6 +7108,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       const isCompletedStatus = ['completed', 'success', 'complete'].includes(normalizedGroupStatus);
                       const isPendingStatus = ['processing', 'submitted', 'pending', 'generating', 'queued'].includes(normalizedGroupStatus);
                       const isCompleted = Boolean(audioUrl && (isCompletedStatus || hasValidDuration));
+                      const canRecoverPlaybackUrl = !isSharedView && Boolean(group.taskId) && (isCompletedStatus || hasValidDuration);
+                      const canPlayOrRecover = Boolean(audioUrl) || canRecoverPlaybackUrl;
                       const isCompletedWithoutAudio = isCompletedStatus && !audioUrl;
                       const isStalePending = !isFailed && isPendingStatus && !audioUrl && isTrackPastAutoCheckWindow(group);
                       const isPending = !isFailed && isPendingStatus && !audioUrl && !isStalePending;
@@ -7108,9 +7186,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                resetLibraryDragSelectState();
                                return;
                              }
-                             if (audioUrl) {
-                               if (isCurrent) togglePlayPause();
-                               else handlePlayTrack(group, idx);
+                             if (canPlayOrRecover) {
+                               if (audioUrl && isCurrent) togglePlayPause();
+                               else void handlePlayTrack(group, idx);
                              }
                           }}
                         >
@@ -7118,7 +7196,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             imageUrl={getImageUrl(item, group)}
                             isActive={isCurrent}
                             isPlaying={isPlaying}
-                            disabled={!audioUrl}
+                            disabled={!canPlayOrRecover}
                             durationLabel={isCompleted && hasValidDuration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : undefined}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -7126,9 +7204,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                 toggleSelectedTrack(selection);
                                 return;
                               }
-                              if (audioUrl) {
-                                if (isCurrent) togglePlayPause();
-                                else handlePlayTrack(group, idx);
+                              if (canPlayOrRecover) {
+                                if (audioUrl && isCurrent) togglePlayPause();
+                                else void handlePlayTrack(group, idx);
                               }
                             }}
                           />

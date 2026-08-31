@@ -7,8 +7,8 @@ const workerPath = join(remoteDir, 'worker.js');
 let source = readFileSync(workerPath, 'utf8');
 
 const marker = 'SORIDRAW_COST_ZERO_PROFILE_PREBUILD_ON_MUTATION_006';
-if (source.includes(marker) || source.includes('prebuildPublicProfileFirstViewIfMissing')) {
-  console.log('[SORIDRAW Worker] Cost-Zero profile mutation prebuild already applied.');
+if (source.includes(marker) || source.includes('refreshOrPrebuildPublicProfileFirstView')) {
+  console.log('[SORIDRAW Worker] Cost-Zero selective profile mutation prebuild already applied.');
   process.exit(0);
 }
 
@@ -48,39 +48,63 @@ const replaceFunctionText = (name, transform) => {
 
 const helperAnchor = 'async function refreshPublicProfileFirstViewProfile(env, uid) {';
 if (!source.includes(helperAnchor)) throw new Error('006 refresh helper anchor missing');
-source = source.replace(helperAnchor, `// ${marker}\nasync function prebuildPublicProfileFirstViewIfMissing(env, uid, stored) {\n  if (stored) return stored;\n  const materializedRow = await materializePublicProfileFirstView(env, uid);\n  return parsePublicProfileFirstViewRow(materializedRow);\n}\n\n${helperAnchor}`);
+source = source.replace(helperAnchor, `// ${marker}\nasync function readOrMaterializePublicProfileFirstView(env, uid) {\n  let stored = parsePublicProfileFirstViewRow(await readPublicProfileFirstViewRow(env, uid));\n  if (stored) return { stored, created: false };\n  const materializedRow = await materializePublicProfileFirstView(env, uid);\n  stored = parsePublicProfileFirstViewRow(materializedRow);\n  return { stored, created: Boolean(stored) };\n}\n\nasync function refreshOrPrebuildPublicProfileFirstView(env, uid) {\n  const { stored, created } = await readOrMaterializePublicProfileFirstView(env, uid);\n  if (!stored) return [];\n  if (created) return [uid, stored.row.handle].filter(Boolean);\n  return await refreshPublicProfileFirstViewProfile(env, uid);\n}\n\nasync function refreshOrPrebuildPublicProfileTrackWindow(env, uid, trackCountDelta = 0) {\n  const { stored, created } = await readOrMaterializePublicProfileFirstView(env, uid);\n  if (!stored) return [];\n  if (created) return [uid, stored.row.handle].filter(Boolean);\n  return await refreshPublicProfileFirstViewTrackWindow(env, uid, trackCountDelta);\n}\n\n${helperAnchor}`);
 
-for (const name of [
-  'refreshPublicProfileFirstViewProfile',
-  'refreshPublicProfileFirstViewTrackWindow',
-  'patchPublicProfileFirstViewLikeCount',
-]) {
-  replaceFunctionText(name, (text) => {
-    const pattern = /const\s+stored\s*=\s*parsePublicProfileFirstViewRow\(await\s+readPublicProfileFirstViewRow\(env,\s*uid\)\);\s*if\s*\(!stored\)\s*return\s*\[\];/;
-    if (!pattern.test(text)) throw new Error(`006 missing empty-snapshot guard in ${name}`);
-    return text.replace(pattern, `let stored = parsePublicProfileFirstViewRow(await readPublicProfileFirstViewRow(env, uid));\n    if (!stored) {\n      stored = await prebuildPublicProfileFirstViewIfMissing(env, uid, stored);\n      if (!stored) return [];\n      return [uid, stored.row.handle].filter(Boolean);\n    }`);
+const replaceCall = (functionName, from, to) => {
+  replaceFunctionText(functionName, (text) => {
+    if (!text.includes(from)) throw new Error(`006 ${functionName} call anchor missing`);
+    return text.replace(from, to);
   });
-}
+};
+
+// Low-frequency/public-content mutations only. Do NOT prebuild from follow/like
+// paths: those social actions may be high-frequency and must stay lightweight.
+replaceCall(
+  'handleMyProfileUpdate',
+  'const firstViewRefs = await refreshPublicProfileFirstViewProfile(env, authContext.uid);',
+  'const firstViewRefs = await refreshOrPrebuildPublicProfileFirstView(env, authContext.uid);'
+);
+replaceCall(
+  'handleProfileMediaUpload',
+  'const firstViewRefs = await refreshPublicProfileFirstViewProfile(env, authContext.uid);',
+  'const firstViewRefs = await refreshOrPrebuildPublicProfileFirstView(env, authContext.uid);'
+);
+replaceCall(
+  'handlePublication',
+  'const firstViewRefs = await refreshPublicProfileFirstViewTrackWindow(env, authContext.uid, wasPublishedForFirstView ? 0 : 1);',
+  'const firstViewRefs = await refreshOrPrebuildPublicProfileTrackWindow(env, authContext.uid, wasPublishedForFirstView ? 0 : 1);'
+);
+replaceCall(
+  'handleVisibility',
+  'const firstViewRefs = await refreshPublicProfileFirstViewTrackWindow(env, authContext.uid, firstViewDelta);',
+  'const firstViewRefs = await refreshOrPrebuildPublicProfileTrackWindow(env, authContext.uid, firstViewDelta);'
+);
 
 const required = [
   marker,
-  'prebuildPublicProfileFirstViewIfMissing',
+  'readOrMaterializePublicProfileFirstView',
+  'refreshOrPrebuildPublicProfileFirstView',
+  'refreshOrPrebuildPublicProfileTrackWindow',
   'materializePublicProfileFirstView(env, uid)',
 ];
 for (const needle of required) {
   if (!source.includes(needle)) throw new Error(`006 verification failed: ${needle}`);
 }
-for (const name of [
-  'refreshPublicProfileFirstViewProfile',
-  'refreshPublicProfileFirstViewTrackWindow',
-  'patchPublicProfileFirstViewLikeCount',
-]) {
-  const range = functionRange(name);
-  const text = source.slice(range.start, range.end);
-  if (!text.includes('prebuildPublicProfileFirstViewIfMissing')) {
-    throw new Error(`006 prebuild call missing in ${name}`);
+
+for (const name of ['handleMyProfileUpdate', 'handleProfileMediaUpload']) {
+  const text = functionRange(name).text;
+  if (!text.includes('refreshOrPrebuildPublicProfileFirstView')) throw new Error(`006 selective profile prebuild missing in ${name}`);
+}
+for (const name of ['handlePublication', 'handleVisibility']) {
+  const text = functionRange(name).text;
+  if (!text.includes('refreshOrPrebuildPublicProfileTrackWindow')) throw new Error(`006 selective track prebuild missing in ${name}`);
+}
+for (const name of ['handleFollow', 'handleLike']) {
+  const text = functionRange(name).text;
+  if (text.includes('refreshOrPrebuildPublicProfileFirstView') || text.includes('refreshOrPrebuildPublicProfileTrackWindow')) {
+    throw new Error(`006 high-frequency social prebuild forbidden in ${name}`);
   }
 }
 
 writeFileSync(workerPath, source, 'utf8');
-console.log('[SORIDRAW Worker] Cost-Zero profile snapshot prebuild-on-mutation prepared.');
+console.log('[SORIDRAW Worker] Cost-Zero selective profile snapshot prebuild prepared.');

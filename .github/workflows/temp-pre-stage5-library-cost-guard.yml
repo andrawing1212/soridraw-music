@@ -112,9 +112,11 @@ jobs:
 
           overlay = Path('src/components/CacheDiagnosticsOverlay.tsx')
           t = overlay.read_text(encoding='utf-8')
-          t = t.replace(' · 캐시 ${state.cacheHits}`;', ' · 캐시HIT ${state.cacheHits}`;')
-          t = t.replace(' · 캐시 ${actual.cacheHits}`;', ' · 캐시HIT ${actual.cacheHits}`;')
-          if '캐시HIT ${state.cacheHits}' not in t or '캐시HIT ${actual.cacheHits}' not in t:
+          old_label = ' · 캐시 ${state.cacheHits}`;'
+          if t.count(old_label) != 2:
+              raise SystemExit(f'cache HIT label anchor mismatch: {t.count(old_label)}')
+          t = t.replace(old_label, ' · 캐시HIT ${state.cacheHits}`;')
+          if t.count('캐시HIT ${state.cacheHits}') != 2:
               raise SystemExit('cache HIT label patch failed')
           overlay.write_text(t, encoding='utf-8')
 

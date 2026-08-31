@@ -12,7 +12,7 @@ import {
   writeExploreFeedSessionCache,
 } from '../services/exploreSessionCache';
 import { getExploreLikedTrackIds, setExploreTrackLike } from '../services/exploreLikeService';
-import { getExplorePublicProfileFirstView } from '../services/exploreProfileFirstViewService';
+import { getExplorePublicProfileFirstView, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
 import {
   getExploreFollowState,
   getExplorePublicProfile,
@@ -410,6 +410,7 @@ export default function ExplorePage() {
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
       updateTrackLikeCount(track.id, result.likeCount);
       patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: result.likeCount });
+      patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: result.likeCount });
     } catch (reason) {
       console.error('Explore like failed:', reason);
       setSocialNotice(reason instanceof Error ? reason.message : '좋아요 처리에 실패했어요.');
@@ -430,6 +431,10 @@ export default function ExplorePage() {
     try {
       const result = await setExploreFollow(user, profile.uid, nextShouldFollow);
       setFollowState(result);
+      patchExplorePublicProfileFirstViewProfile(profile.uid, {
+        followerCount: result.followerCount || (nextShouldFollow ? profile.followerCount + 1 : Math.max(0, profile.followerCount - 1)),
+        followingCount: result.followingCount || profile.followingCount,
+      });
       setProfile((prev) => prev ? {
         ...prev,
         followerCount: result.followerCount || (nextShouldFollow ? prev.followerCount + 1 : Math.max(0, prev.followerCount - 1)),
@@ -536,6 +541,7 @@ export default function ExplorePage() {
                 onClose={() => setProfileEditOpen(false)}
                 onSaved={(nextProfile) => {
                   setProfile(nextProfile);
+                  rememberExplorePublicProfileFirstViewProfile(nextProfile);
                   if (nextProfile.handle) setSearchParams({ profile: `@${nextProfile.handle}` }, { replace: true });
                 }}
               />

@@ -116,6 +116,45 @@ const requestMaterializedFirstView = async (profileRef: string): Promise<Explore
   };
 };
 
+export const rememberExplorePublicProfileFirstViewProfile = (profile: ExplorePublicProfile) => {
+  const normalizedUid = normalizeProfileRef(profile.uid);
+  if (!normalizedUid) return;
+  const cached = readCache(normalizedUid)
+    || (profile.handle ? readCache(`@${profile.handle}`) : null);
+  if (!cached) return;
+  writeCache(normalizedUid, { ...cached, profile });
+};
+
+export const patchExplorePublicProfileFirstViewProfile = (
+  profileRef: string,
+  patch: Partial<ExplorePublicProfile>,
+) => {
+  const cached = readCache(profileRef);
+  if (!cached) return;
+  writeCache(cached.profile.uid || profileRef, {
+    ...cached,
+    profile: { ...cached.profile, ...patch },
+  });
+};
+
+export const patchExplorePublicProfileFirstViewTrack = (
+  profileRef: string,
+  trackId: string,
+  patch: Record<string, unknown>,
+) => {
+  const cached = readCache(profileRef);
+  if (!cached || !trackId) return;
+  let changed = false;
+  const tracks = cached.tracks.map((track) => {
+    const id = String(track?.id || track?.trackId || '').trim();
+    if (id !== trackId) return track;
+    changed = true;
+    return { ...track, ...patch };
+  });
+  if (!changed) return;
+  writeCache(cached.profile.uid || profileRef, { ...cached, tracks });
+};
+
 export const getExplorePublicProfileFirstView = async (profileRef: string): Promise<ExploreProfileFirstViewData> => {
   const normalizedRef = normalizeProfileRef(profileRef);
   if (!normalizedRef) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');

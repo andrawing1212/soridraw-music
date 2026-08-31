@@ -1,0 +1,99 @@
+name: Temp Suno Track Live Source Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-suno-track-live-source-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Authenticate Google read-only inspection
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Inspect deployed getSunoTrackStatus source
+        shell: bash
+        run: |
+          set -euo pipefail
+          project='soridraw-app-866a5'
+          region='us-central1'
+          fn='getSunoTrackStatus'
+
+          gcloud functions describe "$fn" --gen2 --region "$region" --project "$project" --format=json > "$RUNNER_TEMP/function.json"
+          python3 - "$RUNNER_TEMP/function.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1],encoding='utf-8'))
+          print('LIVE_UPDATE_TIME='+str(d.get('updateTime') or ''))
+          print('LIVE_RUNTIME='+str((d.get('buildConfig') or {}).get('runtime') or ''))
+          print('LIVE_ENTRYPOINT='+str((d.get('buildConfig') or {}).get('entryPoint') or ''))
+          print('LIVE_SERVICE='+str((d.get('serviceConfig') or {}).get('service') or ''))
+          PY
+
+          eval "$(python3 - "$RUNNER_TEMP/function.json" <<'PY'
+          import json,shlex,sys
+          d=json.load(open(sys.argv[1],encoding='utf-8'))
+          s=((d.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}
+          b=s.get('bucket'); o=s.get('object')
+          if not b or not o: raise SystemExit('source storage location missing')
+          print('SOURCE_BUCKET='+shlex.quote(str(b)))
+          print('SOURCE_OBJECT='+shlex.quote(str(o)))
+          PY
+          )"
+
+          gcloud storage cp "gs://$SOURCE_BUCKET/$SOURCE_OBJECT" "$RUNNER_TEMP/live-source.zip"
+          mkdir -p "$RUNNER_TEMP/live-source"
+          unzip -q "$RUNNER_TEMP/live-source.zip" -d "$RUNNER_TEMP/live-source"
+
+          echo 'LIVE_SOURCE_TRACK_STATUS_MATCHES:'
+          grep -R -l --exclude-dir=node_modules 'getSunoTrackStatus' "$RUNNER_TEMP/live-source" | sed "s#$RUNNER_TEMP/live-source/##" | sort | head -n 30 || true
+
+          python3 - "$RUNNER_TEMP/live-source" <<'PY'
+          from pathlib import Path
+          import hashlib,sys
+          root=Path(sys.argv[1])
+          repo=Path('functions/src/index.ts').read_text(encoding='utf-8')
+          markers=[
+            'export const getSunoTrackStatus',
+            'probeSunoAudioUrlHasBytes',
+            'findFirstUsableSunoAudioUrl',
+            'verifiedAudioUrls',
+            'finalAudioUrl = verifiedAudioUrls[0] || "";',
+          ]
+          files=[]
+          for p in root.rglob('*'):
+            if not p.is_file() or 'node_modules' in p.parts: continue
+            try: text=p.read_text(encoding='utf-8')
+            except: continue
+            if 'getSunoTrackStatus' in text:
+              files.append((p,text))
+          if not files: raise SystemExit('no live source containing getSunoTrackStatus')
+          print('REPO_INDEX_SHA256='+hashlib.sha256(repo.encode()).hexdigest())
+          for p,text in files:
+            rel=p.relative_to(root)
+            print('LIVE_FILE='+str(rel))
+            print('LIVE_SHA256='+hashlib.sha256(text.encode()).hexdigest())
+            for m in markers:
+              print('LIVE_HAS_'+m.replace(' ','_').replace('"','').replace("'",'')+'='+str(m in text).lower())
+            if p.name=='index.ts':
+              print('LIVE_INDEX_EQUALS_REPO='+str(text==repo).lower())
+          PY
+
+          echo 'READ_ONLY=true'
+          echo 'FUNCTION_DEPLOY=false'
+          echo 'FIRESTORE_WRITE=false'
+          echo 'DATA_DELETE=false'

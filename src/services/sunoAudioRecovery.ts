@@ -1,7 +1,8 @@
 import { auth } from '../firebase';
 
 const SUNO_STATUS_ENDPOINT = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
-const RECOVERY_CACHE_PREFIX = 'soridraw.suno.audioRecovery.v2';
+const RECOVERY_CACHE_PREFIX = 'soridraw.suno.audioRecovery.v3';
+// SORIDRAW_LIBRARY_PLAYBACK_FAILURE_RECOVERY_991
 const RECOVERY_NEGATIVE_CACHE_MS = 5 * 60 * 1000;
 // SORIDRAW_LIBRARY_AGED_AUDIO_RECOVERY_990
 const RECOVERY_CACHE_MAX_ENTRIES = 200;
@@ -200,12 +201,12 @@ const chooseRecoveredUrl = (payload: any, track: any, failedUrl = '') => {
   sunoData.forEach((item: any) => getAudioCandidates(item).forEach(push));
 
   const normalizedFailed = toText(failedUrl);
-  const alternative = ordered.find((url) => !normalizedFailed || url !== normalizedFailed);
-  if (alternative) return alternative;
-  // The Function only exposes audioUrls after a byte probe succeeds. If the
-  // provider refreshed the resource behind the same URL, one retry is safe.
-  if (normalizedFailed && verified.includes(normalizedFailed)) return normalizedFailed;
-  return normalizedFailed ? '' : (ordered[0] || '');
+  // Restore the proven Vercel contract: after an actual playback failure, the
+  // failed URL is never accepted as a recovery result. A different provider URL
+  // (stream/source/audio) must be returned. URL-less recovery may use the first
+  // verified/candidate URL because there is no failed source to exclude.
+  if (normalizedFailed) return ordered.find((url) => url !== normalizedFailed) || '';
+  return ordered[0] || '';
 };
 
 const dispatchRecoveredAudioUrl = (result: RecoveryResult) => {

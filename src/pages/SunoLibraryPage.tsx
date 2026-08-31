@@ -50,8 +50,7 @@ const fallbackSharedPlaylists: Playlist[] = [
 ];
 
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
-const SUNO_AUDIO_URL_RECOVERY_AFTER_MS = 13 * 24 * 60 * 60 * 1000;
-// SORIDRAW_LIBRARY_AGED_AUDIO_RECOVERY_990
+// SORIDRAW_LIBRARY_PLAYBACK_FAILURE_RECOVERY_991
 const WORKSPACE_PAGE_SIZE = 10;
 const WORKSPACE_SERVER_PAGE_SIZE = 10;
 const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE;
@@ -3349,38 +3348,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return list;
   }, [filteredTracks, filter, workspaceColorFilter]);
 
-  const toAudioRecoveryMillis = (value: any): number => {
-    if (!value) return 0;
-    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-    if (typeof value === 'string') {
-      const parsed = Date.parse(value);
-      return Number.isFinite(parsed) ? parsed : 0;
-    }
-    if (typeof value?.toMillis === 'function') {
-      const parsed = value.toMillis();
-      return Number.isFinite(parsed) ? parsed : 0;
-    }
-    if (typeof value?.toDate === 'function') {
-      const parsed = value.toDate().getTime();
-      return Number.isFinite(parsed) ? parsed : 0;
-    }
-    if (typeof value?.seconds === 'number') return value.seconds * 1000;
-    return 0;
-  };
-
-  const getAudioRecoveryBaseTime = (group: any): number => (
-    toAudioRecoveryMillis(group?.lastAudioUrlRecoveredAt)
-      || toAudioRecoveryMillis(group?.completedAt)
-      || toAudioRecoveryMillis(group?.createdAt)
-      || 0
-  );
-
+  // Match the last known-good Vercel behavior: when a stored URL exists, try it
+  // first and let GlobalPlayer recover only after a real playback failure. This
+  // preserves the failed URL so recovery can reject it and select a different
+  // verified provider URL. Only URL-less rows need pre-play recovery.
   const shouldRecoverAudioUrlBeforePlay = (group: any, item: any): boolean => {
     if (isSharedView || !group?.taskId) return false;
-    const currentUrl = getAudioUrl(item, group);
-    if (!currentUrl) return true;
-    const baseTime = getAudioRecoveryBaseTime(group);
-    return baseTime > 0 && Date.now() - baseTime >= SUNO_AUDIO_URL_RECOVERY_AFTER_MS;
+    return !getAudioUrl(item, group);
   };
 
   const handlePlayTrack = async (track: any, subIndex: number = 0) => {

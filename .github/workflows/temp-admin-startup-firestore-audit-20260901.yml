@@ -1,0 +1,36 @@
+name: Temp Admin Startup Firestore Audit 20260901
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-admin-startup-firestore-audit-20260901.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Print startup and admin Firestore callsites
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== APP FIRESTORE CALLS ==='
+          grep -nE '\b(getDoc|getDocs|getDocFromServer|onSnapshot)\s*\(' src/App.tsx || true
+          echo '=== ADMIN FIRESTORE CALLS ==='
+          grep -nE '\b(getDoc|getDocs|getDocFromServer|onSnapshot)\s*\(' src/pages/Admin*.tsx src/pages/MasterPermissionsPage.tsx src/components/AdminPageLayout.tsx 2>/dev/null || true
+          echo '=== ROOT USER LISTENER CONTEXT ==='
+          grep -n -B8 -A30 "onSnapshot(doc(db, 'users'" src/App.tsx || true
+          echo '=== USER STRUCTURE CONTEXT ==='
+          grep -n -B8 -A30 "user_structures" src/App.tsx || true
+          echo '=== APP SETTINGS CONTEXT ==='
+          grep -n -B10 -A25 "FIRESTORE_READ_CACHE_KEYS.navigationVisibility" src/App.tsx src/pages/AdminAppSettingsPage.tsx || true
+          grep -n -B10 -A25 "FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard" src/App.tsx src/pages/AdminAppSettingsPage.tsx || true
+          echo '=== SECTION TAG CONTEXT ==='
+          grep -n -B10 -A35 "FIRESTORE_READ_CACHE_KEYS.sectionTags" src/App.tsx || true

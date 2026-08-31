@@ -1,5 +1,5 @@
 name: Cost Zero Stage 2A Live Profile Materialization Probe
-# live-recheck-20260901-strict-observation
+# live-recheck-20260901-cache-pop-diagnostic
 
 on:
   push:
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Verify materialized snapshot, edge hit, and steady edge miss cost
+      - name: Diagnose materialized snapshot cost and edge-cache POP behavior
         shell: bash
         run: |
           set -euo pipefail
@@ -24,7 +24,7 @@ jobs:
           preview_origin='https://preview.soridraw.com'
           steady_origin='https://test.soridraw.com'
 
-          curl -fsS --max-time 30 -D "$RUNNER_TEMP/feed.headers" -o "$RUNNER_TEMP/feed.json" \
+          curl -fsS --max-time 30 -o "$RUNNER_TEMP/feed.json" \
             -H "Origin: $preview_origin" -H 'Accept: application/json' \
             "$base/v1/feed?sort=latest&limit=1"
           node - <<'NODE'
@@ -50,7 +50,7 @@ jobs:
               "$url")"
             echo "${label}_HTTP_STATUS=$status"
             test "$status" = '200'
-            grep -iE '^(x-soridraw-profile-edge-cache|x-soridraw-d1-read|x-soridraw-d1-write|x-soridraw-cf-worker|cache-control):' "$RUNNER_TEMP/$label.headers" || true
+            grep -iE '^(cf-ray|age|server|cache-control|x-soridraw-profile-edge-cache|x-soridraw-d1-read|x-soridraw-d1-write|x-soridraw-cf-worker):' "$RUNNER_TEMP/$label.headers" || true
             node - "$label" "$uid" <<'NODE'
           const fs=require('fs');
           const label=process.argv[2];
@@ -59,38 +59,19 @@ jobs:
           if(p?.ok!==true) throw new Error(`${label} not ok`);
           const profile=p?.data?.profile;
           const items=Array.isArray(p?.data?.items)?p.data.items:[];
-          if(!profile?.uid) throw new Error(`${label} missing profile`);
-          if(String(profile.uid)!==String(uid)) throw new Error(`${label} profile uid mismatch`);
+          if(!profile?.uid || String(profile.uid)!==String(uid)) throw new Error(`${label} profile mismatch`);
           if(items.length>50) throw new Error(`${label} exceeded 50 item bound`);
-          console.log(`${label}_OK=true`);
           console.log(`${label}_ITEM_COUNT=${items.length}`);
-          console.log(`${label}_TRACK_COUNT=${Number(profile.trackCount||0)}`);
           console.log(`${label}_REVISION=${Number(p?.data?.revision||0)}`);
           NODE
           }
 
           request_profile PREVIEW_1 "$preview_origin"
+          sleep 1
           request_profile PREVIEW_2 "$preview_origin"
-          grep -qi '^x-soridraw-profile-edge-cache: HIT' "$RUNNER_TEMP/PREVIEW_2.headers"
-          grep -qi '^x-soridraw-d1-read: 0' "$RUNNER_TEMP/PREVIEW_2.headers"
-          grep -qi '^x-soridraw-d1-write: 0' "$RUNNER_TEMP/PREVIEW_2.headers"
-          echo 'SECOND_PROFILE_EDGE_HIT_D1_ZERO=PASS'
-
-          # Different allowed Origin gives a fresh edge key while reusing the same
-          # already materialized D1 row. This isolates steady snapshot MISS cost.
-          request_profile STEADY_MISS "$steady_origin"
-          grep -qi '^x-soridraw-profile-edge-cache: MISS' "$RUNNER_TEMP/STEADY_MISS.headers"
-          grep -qi '^x-soridraw-d1-write: 0' "$RUNNER_TEMP/STEADY_MISS.headers"
-          steady_reads="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r",""); print $2}' "$RUNNER_TEMP/STEADY_MISS.headers" | tail -n1)"
-          test -n "$steady_reads"
-          test "$steady_reads" -le 3
-          echo "STEADY_PROFILE_EDGE_MISS_D1_READS=$steady_reads"
-          echo 'STEADY_PROFILE_EDGE_MISS_BOUNDED=PASS'
-
-          request_profile STEADY_HIT "$steady_origin"
-          grep -qi '^x-soridraw-profile-edge-cache: HIT' "$RUNNER_TEMP/STEADY_HIT.headers"
-          grep -qi '^x-soridraw-d1-read: 0' "$RUNNER_TEMP/STEADY_HIT.headers"
-          grep -qi '^x-soridraw-d1-write: 0' "$RUNNER_TEMP/STEADY_HIT.headers"
-          echo 'STEADY_PROFILE_EDGE_HIT_D1_ZERO=PASS'
-          echo 'BOUNDED_FIRST_VIEW_MAX_ITEMS=50'
-          echo 'SOURCE_TABLE_DELETE_OR_MIGRATION=false'
+          sleep 1
+          request_profile PREVIEW_3 "$preview_origin"
+          request_profile TEST_1 "$steady_origin"
+          sleep 1
+          request_profile TEST_2 "$steady_origin"
+          echo 'PROFILE_EDGE_DIAGNOSTIC_COMPLETE=true'

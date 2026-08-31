@@ -1,8 +1,8 @@
 import { auth } from '../firebase';
 
 const SUNO_STATUS_ENDPOINT = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
-const RECOVERY_CACHE_PREFIX = 'soridraw.suno.audioRecovery.v3';
-// SORIDRAW_LIBRARY_PLAYBACK_FAILURE_RECOVERY_991
+const RECOVERY_CACHE_PREFIX = 'soridraw.suno.audioRecovery.v4';
+// SORIDRAW_PROVEN_VERCEL_RECOVERY_992
 const RECOVERY_NEGATIVE_CACHE_MS = 5 * 60 * 1000;
 // SORIDRAW_LIBRARY_AGED_AUDIO_RECOVERY_990
 const RECOVERY_CACHE_MAX_ENTRIES = 200;
@@ -201,11 +201,11 @@ const chooseRecoveredUrl = (payload: any, track: any, failedUrl = '') => {
   sunoData.forEach((item: any) => getAudioCandidates(item).forEach(push));
 
   const normalizedFailed = toText(failedUrl);
-  // Restore the proven Vercel contract: after an actual playback failure, the
-  // failed URL is never accepted as a recovery result. A different provider URL
-  // (stream/source/audio) must be returned. URL-less recovery may use the first
-  // verified/candidate URL because there is no failed source to exclude.
-  if (normalizedFailed) return ordered.find((url) => url !== normalizedFailed) || '';
+  // Restore the August 28 Vercel behavior that actually recovered aged tracks:
+  // prefer a different provider URL, but if record-info only returns the same URL,
+  // allow one forced reload of that URL. The resource behind an identical URL may
+  // have been refreshed/revalidated by the provider/CDN.
+  if (normalizedFailed) return ordered.find((url) => url !== normalizedFailed) || ordered[0] || '';
   return ordered[0] || '';
 };
 
@@ -258,7 +258,9 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
   const failedUrl = hasExplicitFailedUrl ? toText(options?.failedUrl) : '';
   const cached = readRecoveryCacheEntry(user.uid, cacheKey);
 
-  if (cached?.audioUrl && (!hasExplicitFailedUrl || cached.audioUrl !== failedUrl)) {
+  // Explicit playback/download failure is a user-requested recovery attempt.
+  // Never satisfy it from a previous recovery cache entry: hit record-info again.
+  if (!hasExplicitFailedUrl && cached?.audioUrl) {
     const result: RecoveryResult = {
       audioUrl: cached.audioUrl,
       trackId: context.trackId,
@@ -273,7 +275,9 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
     return result;
   }
 
-  if (cached?.failedUntil && cached.failedUntil > Date.now()) {
+  // Negative cache is only for background/URL-less recovery. A user retry after
+  // an actual playback/download failure must be allowed immediately.
+  if (!hasExplicitFailedUrl && cached?.failedUntil && cached.failedUntil > Date.now()) {
     return null;
   }
 
@@ -289,10 +293,12 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
+        // Match the proven Vercel request contract: normal status refresh.
+        // This may refresh the provider/CDN state and lets the existing Function sync
+        // the single target track exactly as it did in the working deployment.
         body: JSON.stringify({
           trackId: context.trackId,
           taskId: context.taskId,
-          recoveryOnly: true,
         }),
       });
 

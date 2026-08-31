@@ -4,9 +4,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   orderBy,
   query,
   serverTimestamp,
+  startAfter,
   updateDoc,
 } from '../lib/firestoreMeasured';
 import { auth, db, functions, httpsCallable } from '../firebase';
@@ -120,18 +122,6 @@ type ProviderKind = 'google' | 'email' | 'linked' | 'unknown' | 'deleted';
 type ProviderFilter = 'all' | ProviderKind;
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'deleted';
 type AdminAction = 'setPresence' | 'forceLogout' | 'resetEmail' | 'deleteUser' | null;
-
-type AuthDirectoryEntry = {
-  uid: string;
-  email: string;
-  displayName: string;
-  photoURL: string;
-  providerIds: string[];
-  emailVerified: boolean;
-  disabled: boolean;
-  creationTime: string | null;
-  lastSignInTime: string | null;
-};
 
 type ConfirmState = {
   isOpen: boolean;
@@ -353,6 +343,11 @@ const parseUserDocument = (uid: string, data: Record<string, any>): AppUserInfo 
   providerIds: Array.isArray(data.providerIds) ? data.providerIds : [],
   emailVerified: typeof data.emailVerified === 'boolean' ? data.emailVerified : undefined,
   authDisabled: Boolean(data.authDisabled),
+  authLastSignInAt: data.authLastSignInAt
+    ? getTimestampMs(data.authLastSignInAt)
+    : data.lastLoginAt
+      ? getTimestampMs(data.lastLoginAt)
+      : undefined,
   authDeleted: Boolean(data.authDeleted),
   authDeletedAt: data.authDeletedAtMs
     ? Number(data.authDeletedAtMs)
@@ -528,10 +523,10 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(Boolean(isAdminProp));
   const [users, setUsers] = useState<AppUserInfo[]>([]);
-  const [authDirectory, setAuthDirectory] = useState<Record<string, AuthDirectoryEntry>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [isAuthSyncing, setIsAuthSyncing] = useState(false);
-  const [authSyncError, setAuthSyncError] = useState<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [lastUserDoc, setLastUserDoc] = useState<any | null>(null);
+  const [hasMoreUsers, setHasMoreUsers] = useState(false);
   const [isBackfillingUsers, setIsBackfillingUsers] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [providerFilter, setProviderFilter] = useState<ProviderFilter>('all');
@@ -617,48 +612,54 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     return () => window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
   }, [isAdminProp]);
 
-  const fetchAuthDirectory = useCallback(async () => {
-    if (!isAdmin || !auth.currentUser) return;
-    setIsAuthSyncing(true);
-    setAuthSyncError(null);
-    try {
-      const callable = httpsCallable(functions, 'getAdminAuthDirectory');
-      const directory: Record<string, AuthDirectoryEntry> = {};
-      let pageToken: string | null = null;
-      let pageCount = 0;
-      do {
-        const response = await callable({ maxResults: 1000, pageToken });
-        const payload: any = response.data || {};
-        const pageUsers = Array.isArray(payload.users) ? payload.users : [];
-        pageUsers.forEach((entry: AuthDirectoryEntry) => {
-          if (entry?.uid) directory[entry.uid] = entry;
-        });
-        pageToken = typeof payload.nextPageToken === 'string' && payload.nextPageToken ? payload.nextPageToken : null;
-        pageCount += 1;
-      } while (pageToken && pageCount < 20);
-      setAuthDirectory(directory);
-    } catch (error: any) {
-      console.error('Failed to load Firebase Auth directory:', error);
-      setAuthSyncError('Auth 관리 기능을 배포한 뒤 로그인 방식과 인증 상태가 실시간으로 표시됩니다.');
-    } finally {
-      setIsAuthSyncing(false);
-    }
-  }, [isAdmin]);
-
   const fetchUsers = useCallback(async () => {
     if (!isAdmin) return;
     setIsLoading(true);
     try {
-      const snapshot = await getDocs(query(collection(db, 'users'), orderBy(sortBy, 'desc')));
-      setUsers(snapshot.docs.map((item) => parseUserDocument(item.id, item.data())));
-      await fetchAuthDirectory();
+      const snapshot = await getDocs(query(
+        collection(db, 'users'),
+        orderBy(sortBy, 'desc'),
+        limit(ADMIN_PAGE_SIZE)
+      ));
+      const nextUsers = snapshot.docs.map((item) => parseUserDocument(item.id, item.data()));
+      setUsers(nextUsers);
+      setLastUserDoc(snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null);
+      setHasMoreUsers(snapshot.docs.length === ADMIN_PAGE_SIZE);
+      setVisibleCount(ADMIN_PAGE_SIZE);
     } catch (error: any) {
       console.error('Failed to fetch users:', error);
       if (error?.code === 'permission-denied') alert('사용자 정보를 불러올 관리자 권한이 없습니다.');
     } finally {
       setIsLoading(false);
     }
-  }, [fetchAuthDirectory, isAdmin, sortBy]);
+  }, [isAdmin, sortBy]);
+
+  const fetchMoreUsers = useCallback(async () => {
+    if (!isAdmin || !lastUserDoc || !hasMoreUsers || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const snapshot = await getDocs(query(
+        collection(db, 'users'),
+        orderBy(sortBy, 'desc'),
+        startAfter(lastUserDoc),
+        limit(ADMIN_PAGE_SIZE)
+      ));
+      const nextUsers = snapshot.docs.map((item) => parseUserDocument(item.id, item.data()));
+      setUsers((previous) => {
+        const merged = new Map(previous.map((user) => [user.uid, user]));
+        nextUsers.forEach((user) => merged.set(user.uid, user));
+        return Array.from(merged.values());
+      });
+      setLastUserDoc(snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : lastUserDoc);
+      setHasMoreUsers(snapshot.docs.length === ADMIN_PAGE_SIZE);
+      setVisibleCount((count) => count + ADMIN_PAGE_SIZE);
+    } catch (error: any) {
+      console.error('Failed to fetch more users:', error);
+      if (error?.code === 'permission-denied') alert('사용자 정보를 더 불러올 관리자 권한이 없습니다.');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [hasMoreUsers, isAdmin, isLoadingMore, lastUserDoc, sortBy]);
 
   useEffect(() => {
     void fetchUsers();
@@ -690,20 +691,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     };
   }, [isDetailOpen]);
 
-  const usersWithAuth = useMemo(() => users.map((user) => {
-    const entry = authDirectory[user.uid];
-    if (!entry) return user;
-    const lastSignInAt = entry.lastSignInTime ? new Date(entry.lastSignInTime).getTime() : undefined;
-    return {
-      ...user,
-      email: entry.email || user.email,
-      displayName: entry.displayName || user.displayName,
-      providerIds: entry.providerIds,
-      emailVerified: entry.emailVerified,
-      authDisabled: entry.disabled,
-      authLastSignInAt: Number.isFinite(lastSignInAt) ? lastSignInAt : user.authLastSignInAt,
-    };
-  }), [authDirectory, users]);
+  const usersWithAuth = useMemo(() => users, [users]);
 
   useEffect(() => {
     if (!selectedUser) return;
@@ -861,7 +849,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
   const currentAdminUid = auth.currentUser?.uid || '';
   const currentAdminUser = usersWithAuth.find((item) => item.uid === currentAdminUid);
-  const currentAdminIsMaster = normalizeStaffRole(currentAdminUser) === 'master';
+  const currentAdminCachedProfile = currentAdminUid ? readUserProfileCache(currentAdminUid) : null;
+  const currentAdminIsMaster = normalizeStaffRole(currentAdminCachedProfile || currentAdminUser) === 'master';
   const currentAdminLive = currentAdminUid ? livePresence[currentAdminUid] : undefined;
 
   const getBadgeInfo = (user: AppUserInfo) => {
@@ -893,17 +882,11 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   };
 
   const refreshAfterAction = async (targetUid: string) => {
-    await fetchUsers();
     const freshSnapshot = await getDoc(doc(db, 'users', targetUid));
     if (freshSnapshot.exists()) {
-      const base = parseUserDocument(targetUid, freshSnapshot.data());
-      const directory = authDirectory[targetUid];
-      setSelectedUser(directory ? {
-        ...base,
-        providerIds: directory.providerIds,
-        emailVerified: directory.emailVerified,
-        authDisabled: directory.disabled,
-      } : base);
+      const freshUser = parseUserDocument(targetUid, freshSnapshot.data());
+      setUsers((previous) => previous.map((user) => user.uid === targetUid ? freshUser : user));
+      setSelectedUser(freshUser);
     }
   };
 
@@ -1135,7 +1118,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   );
 
   const metricCards = [
-    { label: '전체 회원', value: stats.total, icon: Users, className: 'text-white' },
+    { label: '불러온 회원', value: stats.total, icon: Users, className: 'text-white' },
     { label: '현재 접속', value: stats.online, icon: Activity, className: 'text-emerald-300' },
     { label: 'Google 가입', value: stats.google, icon: BadgeCheck, className: 'text-sky-300' },
     { label: '이메일 가입', value: stats.email, icon: Mail, className: 'text-violet-300' },
@@ -1159,10 +1142,10 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           </button>
           <button
             onClick={() => { void fetchUsers(); void fetchPresence(); }}
-            disabled={isLoading || isAuthSyncing || isPresenceSyncing}
+            disabled={isLoading || isLoadingMore || isPresenceSyncing}
             className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-2.5 text-xs font-black text-[var(--text-primary)] hover:bg-white/[0.08] disabled:opacity-50"
           >
-            <RefreshCw className={cn('w-4 h-4', (isLoading || isAuthSyncing || isPresenceSyncing) && 'animate-spin')} />
+            <RefreshCw className={cn('w-4 h-4', (isLoading || isLoadingMore || isPresenceSyncing) && 'animate-spin')} />
             새로고침
           </button>
         </div>
@@ -1229,11 +1212,11 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           </div>
         </div>
         <div className="mt-3 grid gap-2 rounded-2xl border border-white/[0.08] bg-black/20 px-3 py-3 text-xs font-bold text-[var(--text-secondary)] md:grid-cols-[auto_1fr_auto] md:items-center">
-          <span>검색 결과 {filteredUsers.length}명</span>
+          <span>불러온 {usersWithAuth.length}명 중 검색 결과 {filteredUsers.length}명</span>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span className={cn('inline-flex items-center gap-2', authSyncError ? 'text-amber-300' : 'text-emerald-300')}>
-              {isAuthSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : authSyncError ? <AlertCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-              {isAuthSyncing ? 'Firebase Auth 확인 중' : authSyncError || 'Firebase Auth 연결됨'}
+            <span className="inline-flex items-center gap-2 text-emerald-300">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              회원 문서 인증정보 사용 · 전체 Auth 자동조회 없음
             </span>
             <span className={cn('inline-flex items-center gap-2', presenceSyncError ? 'text-amber-300' : hasPresenceSynced ? 'text-sky-300' : 'text-zinc-300')}>
               {isPresenceSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : presenceSyncError ? <AlertCircle className="w-3.5 h-3.5" /> : hasPresenceSynced ? <Activity className="w-3.5 h-3.5" /> : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -1327,13 +1310,24 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
             </button>
           );
         })}
-        {visibleCount < filteredUsers.length && (
+        {(visibleCount < filteredUsers.length || hasMoreUsers) && (
           <button
             type="button"
-            onClick={() => setVisibleCount((count) => count + ADMIN_PAGE_SIZE)}
-            className="w-full rounded-[20px] border border-white/10 bg-white/[0.025] py-3 text-xs font-black text-zinc-300 hover:border-brand-orange/30 hover:text-brand-orange"
+            onClick={() => {
+              if (visibleCount < filteredUsers.length) {
+                setVisibleCount((count) => count + ADMIN_PAGE_SIZE);
+                return;
+              }
+              void fetchMoreUsers();
+            }}
+            disabled={isLoadingMore}
+            className="w-full rounded-[20px] border border-white/10 bg-white/[0.025] py-3 text-xs font-black text-zinc-300 hover:border-brand-orange/30 hover:text-brand-orange disabled:opacity-50"
           >
-            다음 {Math.min(ADMIN_PAGE_SIZE, filteredUsers.length - visibleCount)}명 더 보기
+            {isLoadingMore
+              ? '다음 회원을 불러오는 중...'
+              : visibleCount < filteredUsers.length
+                ? `다음 ${Math.min(ADMIN_PAGE_SIZE, filteredUsers.length - visibleCount)}명 더 보기`
+                : `다음 ${ADMIN_PAGE_SIZE}명 서버에서 불러오기`}
           </button>
         )}
       </section>

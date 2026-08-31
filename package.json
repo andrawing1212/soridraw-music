@@ -4,12 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "python3 .deploy/apply-995-suno-existing-wav-reuse.py",
     "dev": "tsx server.ts",
+    "prebuild": "python3 .deploy/apply-995-suno-existing-wav-reuse.py",
     "build": "vite build",
     "deploy": "npm run build && firebase deploy --only hosting",
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
+    "prelint": "python3 .deploy/apply-995-suno-existing-wav-reuse.py",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

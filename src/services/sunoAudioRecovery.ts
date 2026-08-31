@@ -1,12 +1,6 @@
-import { auth, getFirebaseAppCheckToken } from '../firebase';
-// SORIDRAW_MEDIA_ERROR_RECOVERY_993
+import { auth } from '../firebase';
 
 const SUNO_STATUS_ENDPOINT = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
-const RECOVERY_CACHE_PREFIX = 'soridraw.suno.audioRecovery.v4';
-// SORIDRAW_PROVEN_VERCEL_RECOVERY_992
-const RECOVERY_NEGATIVE_CACHE_MS = 5 * 60 * 1000;
-// SORIDRAW_LIBRARY_AGED_AUDIO_RECOVERY_990
-const RECOVERY_CACHE_MAX_ENTRIES = 200;
 
 type RecoveryResult = {
   audioUrl: string;
@@ -15,7 +9,6 @@ type RecoveryResult = {
   index: number;
   sunoData: any[] | null;
   raw: any;
-  recoveredAt: number;
 };
 
 type DownloadRecoveryResult = {
@@ -24,15 +17,6 @@ type DownloadRecoveryResult = {
   directFallback: boolean;
   audioUrl: string;
 };
-
-type RecoveryCacheEntry = {
-  audioUrl?: string;
-  updatedAt: number;
-  failedUntil?: number;
-  failedUrl?: string;
-};
-
-type RecoveryCacheMap = Record<string, RecoveryCacheEntry>;
 
 const recoveryInFlight = new Map<string, Promise<RecoveryResult | null>>();
 
@@ -44,67 +28,6 @@ const firstText = (...values: unknown[]) => {
     if (text) return text;
   }
   return '';
-};
-
-const getRecoveryStorageKey = (uid: string) => `${RECOVERY_CACHE_PREFIX}:${uid}`;
-
-const readRecoveryCacheMap = (uid: string): RecoveryCacheMap => {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = window.localStorage.getItem(getRecoveryStorageKey(uid));
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-};
-
-const writeRecoveryCacheMap = (uid: string, cache: RecoveryCacheMap) => {
-  if (typeof window === 'undefined') return;
-  try {
-    const entries = Object.entries(cache)
-      .filter(([, value]) => value && typeof value === 'object')
-      .sort((a, b) => Number(b[1]?.updatedAt || 0) - Number(a[1]?.updatedAt || 0))
-      .slice(0, RECOVERY_CACHE_MAX_ENTRIES);
-    window.localStorage.setItem(getRecoveryStorageKey(uid), JSON.stringify(Object.fromEntries(entries)));
-  } catch {
-    // Recovery cache is best-effort only.
-  }
-};
-
-const readRecoveryCacheEntry = (uid: string, cacheKey: string): RecoveryCacheEntry | null => {
-  const entry = readRecoveryCacheMap(uid)[cacheKey];
-  return entry && typeof entry === 'object' ? entry : null;
-};
-
-const writeRecoverySuccess = (uid: string, cacheKey: string, audioUrl: string) => {
-  const cache = readRecoveryCacheMap(uid);
-  cache[cacheKey] = {
-    audioUrl,
-    updatedAt: Date.now(),
-  };
-  writeRecoveryCacheMap(uid, cache);
-};
-
-const writeRecoveryFailure = (uid: string, cacheKey: string, failedUrl: string) => {
-  const cache = readRecoveryCacheMap(uid);
-  cache[cacheKey] = {
-    updatedAt: Date.now(),
-    failedUntil: Date.now() + RECOVERY_NEGATIVE_CACHE_MS,
-    failedUrl,
-  };
-  writeRecoveryCacheMap(uid, cache);
-};
-
-const touchRecoverySuccess = (uid: string, cacheKey: string, entry: RecoveryCacheEntry) => {
-  if (!entry.audioUrl) return;
-  const cache = readRecoveryCacheMap(uid);
-  cache[cacheKey] = {
-    audioUrl: entry.audioUrl,
-    updatedAt: Date.now(),
-  };
-  writeRecoveryCacheMap(uid, cache);
 };
 
 const getAudioCandidates = (source: any): string[] => {
@@ -202,22 +125,7 @@ const chooseRecoveredUrl = (payload: any, track: any, failedUrl = '') => {
   sunoData.forEach((item: any) => getAudioCandidates(item).forEach(push));
 
   const normalizedFailed = toText(failedUrl);
-  // Restore the August 28 Vercel behavior that actually recovered aged tracks:
-  // prefer a different provider URL, but if record-info only returns the same URL,
-  // allow one forced reload of that URL. The resource behind an identical URL may
-  // have been refreshed/revalidated by the provider/CDN.
-  if (normalizedFailed) return ordered.find((url) => url !== normalizedFailed) || ordered[0] || '';
-  return ordered[0] || '';
-};
-
-const dispatchRecoveredAudioUrl = (result: RecoveryResult) => {
-  try {
-    window.dispatchEvent(new CustomEvent('soridraw:suno-audio-url-recovered', {
-      detail: result,
-    }));
-  } catch {
-    // UI/session sync is best-effort. Recovery persistence is local-first.
-  }
+  return ordered.find((url) => url !== normalizedFailed) || ordered[0] || '';
 };
 
 export const applyRecoveredSunoAudioUrl = (track: any, result: RecoveryResult | null) => {
@@ -237,7 +145,6 @@ export const applyRecoveredSunoAudioUrl = (track: any, result: RecoveryResult | 
     parent.streamAudioUrl = url;
   }
   parent.audioValidationStatus = 'verified';
-  parent.lastAudioUrlRecoveredAt = result.recoveredAt || Date.now();
 
   return {
     ...track,
@@ -253,56 +160,20 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
   const context = getTrackContext(track);
   if (!user || !context.trackId || !context.taskId) return null;
 
-  const cacheKey = `${context.trackId}:${context.taskId}:${context.index}`;
-  const inFlightKey = `${user.uid}:${cacheKey}`;
-  const hasExplicitFailedUrl = Boolean(options && Object.prototype.hasOwnProperty.call(options, 'failedUrl'));
-  const failedUrl = hasExplicitFailedUrl ? toText(options?.failedUrl) : '';
-  const cached = readRecoveryCacheEntry(user.uid, cacheKey);
-
-  // Explicit playback/download failure is a user-requested recovery attempt.
-  // Never satisfy it from a previous recovery cache entry: hit record-info again.
-  if (!hasExplicitFailedUrl && cached?.audioUrl) {
-    const result: RecoveryResult = {
-      audioUrl: cached.audioUrl,
-      trackId: context.trackId,
-      taskId: context.taskId,
-      index: context.index,
-      sunoData: null,
-      raw: { cacheHit: true },
-      recoveredAt: Number(cached.updatedAt || Date.now()),
-    };
-    touchRecoverySuccess(user.uid, cacheKey, cached);
-    dispatchRecoveredAudioUrl(result);
-    return result;
-  }
-
-  // Negative cache is only for background/URL-less recovery. A user retry after
-  // an actual playback/download failure must be allowed immediately.
-  if (!hasExplicitFailedUrl && cached?.failedUntil && cached.failedUntil > Date.now()) {
-    return null;
-  }
-
-  const existing = recoveryInFlight.get(inFlightKey);
+  const key = `${user.uid}:${context.trackId}:${context.taskId}:${context.index}`;
+  const existing = recoveryInFlight.get(key);
   if (existing) return existing;
 
   const promise = (async () => {
     try {
       const token = await user.getIdToken();
-      const appCheckToken = await getFirebaseAppCheckToken();
       const response = await fetch(SUNO_STATUS_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
-          ...(appCheckToken ? { 'X-Firebase-AppCheck': appCheckToken } : {}),
         },
-        // Match the proven Vercel request contract: normal status refresh.
-        // This may refresh the provider/CDN state and lets the existing Function sync
-        // the single target track exactly as it did in the working deployment.
-        body: JSON.stringify({
-          trackId: context.trackId,
-          taskId: context.taskId,
-        }),
+        body: JSON.stringify({ trackId: context.trackId, taskId: context.taskId }),
       });
 
       let payload: any = null;
@@ -311,16 +182,10 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
       } catch {
         payload = null;
       }
-      if (!response.ok || !payload) {
-        writeRecoveryFailure(user.uid, cacheKey, failedUrl);
-        return null;
-      }
+      if (!response.ok || !payload) return null;
 
-      const audioUrl = chooseRecoveredUrl(payload, track, failedUrl);
-      if (!audioUrl) {
-        writeRecoveryFailure(user.uid, cacheKey, failedUrl);
-        return null;
-      }
+      const audioUrl = chooseRecoveredUrl(payload, track, options?.failedUrl || context.currentUrl);
+      if (!audioUrl) return null;
 
       const result: RecoveryResult = {
         audioUrl,
@@ -329,22 +194,26 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
         index: context.index,
         sunoData: getResponseSunoData(payload),
         raw: payload,
-        recoveredAt: Date.now(),
       };
 
-      writeRecoverySuccess(user.uid, cacheKey, audioUrl);
-      dispatchRecoveredAudioUrl(result);
+      try {
+        window.dispatchEvent(new CustomEvent('soridraw:suno-audio-url-recovered', {
+          detail: result,
+        }));
+      } catch {
+        // UI event sync is best-effort; Firestore is already refreshed by the Function.
+      }
+
       return result;
     } catch (error) {
       console.warn('Suno audio URL recovery failed:', error);
-      writeRecoveryFailure(user.uid, cacheKey, failedUrl);
       return null;
     } finally {
-      recoveryInFlight.delete(inFlightKey);
+      recoveryInFlight.delete(key);
     }
   })();
 
-  recoveryInFlight.set(inFlightKey, promise);
+  recoveryInFlight.set(key, promise);
   return promise;
 };
 

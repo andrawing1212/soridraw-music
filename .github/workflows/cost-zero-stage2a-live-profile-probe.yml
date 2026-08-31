@@ -1,4 +1,5 @@
 name: Cost Zero Stage 2A Live Profile Materialization Probe
+# live-recheck-20260901-strict-observation
 
 on:
   push:

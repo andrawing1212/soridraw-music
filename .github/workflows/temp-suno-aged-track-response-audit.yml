@@ -1,0 +1,112 @@
+name: Temp Suno Aged Track Response Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-suno-aged-track-response-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Authenticate Firebase read-only audit
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Inspect aged completed tracks through recoveryOnly
+        working-directory: functions
+        env:
+          FIREBASE_PROJECT_ID: soridraw-app-866a5
+          FIREBASE_API_KEY: AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA
+          PREVIEW_ORIGIN: https://preview.soridraw.com
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund >/dev/null
+          node <<'NODE'
+          const admin=require('firebase-admin');
+          if(!admin.apps.length) admin.initializeApp({credential:admin.credential.applicationDefault(),projectId:process.env.FIREBASE_PROJECT_ID});
+          const db=admin.firestore();
+          const endpoint='https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
+          const toMs=(v)=>{ try { return v?.toMillis?.() || (typeof v==='number'?v:Date.parse(v||'')) || 0; } catch { return 0; } };
+          const oldCutoff=Date.parse('2026-08-15T00:00:00Z');
+          const recoveryWindowStart=admin.firestore.Timestamp.fromDate(new Date('2026-08-27T00:00:00Z'));
+          const recoveryWindowEnd=admin.firestore.Timestamp.fromDate(new Date('2026-08-29T23:59:59Z'));
+
+          const collectUrls=(value,out=[],depth=0)=>{
+            if(!value||depth>7) return out;
+            if(Array.isArray(value)){ value.slice(0,50).forEach(v=>collectUrls(v,out,depth+1)); return out; }
+            if(typeof value!=='object') return out;
+            for(const [k,v] of Object.entries(value)){
+              if(typeof v==='string' && /^https?:\/\//i.test(v) && /(audio|stream|source|url|mp3|media|download|play)/i.test(k)) out.push(v);
+              else if(v && typeof v==='object') collectUrls(v,out,depth+1);
+            }
+            return out;
+          };
+          const hosts=(urls)=>Array.from(new Set(urls.map(u=>{try{return new URL(u).host}catch{return 'invalid'}})));
+
+          (async()=>{
+            let docs=[];
+            try{
+              const snap=await db.collectionGroup('tracks')
+                .where('updatedAt','>=',recoveryWindowStart)
+                .where('updatedAt','<=',recoveryWindowEnd)
+                .limit(30).get();
+              docs=snap.docs;
+              console.log('CANDIDATE_QUERY=updatedAt-window');
+            }catch(e){
+              console.log('WINDOW_QUERY_FALLBACK='+String(e?.code||e?.message||e).slice(0,120));
+              const snap=await db.collectionGroup('tracks').orderBy('createdAt','asc').limit(30).get();
+              docs=snap.docs;
+              console.log('CANDIDATE_QUERY=oldest-createdAt');
+            }
+            const candidates=docs.map(doc=>({doc,data:doc.data()||{},uid:doc.ref.parent.parent?.id||''}))
+              .filter(x=>x.uid && x.data.taskId && toMs(x.data.createdAt)>0 && toMs(x.data.createdAt)<oldCutoff)
+              .filter(x=>['completed','complete','success','succeeded'].includes(String(x.data.status||'').toLowerCase()))
+              .slice(0,3);
+            console.log('AGED_CANDIDATES='+candidates.length);
+            if(!candidates.length) throw new Error('no aged completed candidate with taskId found');
+
+            let idx=0;
+            for(const chosen of candidates){
+              idx++;
+              const custom=await admin.auth().createCustomToken(chosen.uid);
+              const exchange=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(process.env.FIREBASE_API_KEY)}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:custom,returnSecureToken:true})});
+              const auth=await exchange.json();
+              if(!exchange.ok||!auth.idToken) throw new Error('ID token exchange failed '+exchange.status);
+              const response=await fetch(endpoint,{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${auth.idToken}`,'origin':process.env.PREVIEW_ORIGIN},body:JSON.stringify({trackId:chosen.doc.id,taskId:chosen.data.taskId,recoveryOnly:true})});
+              const text=await response.text(); let payload={}; try{payload=JSON.parse(text)}catch{}
+              const raw=payload?.apiStatusResponse||payload?.data||payload;
+              const rawUrls=Array.from(new Set(collectUrls(raw)));
+              const verified=Array.isArray(payload?.audioUrls)?payload.audioUrls.filter(Boolean):[];
+              const reported=Array.isArray(payload?.reportedAudioUrls)?payload.reportedAudioUrls.filter(Boolean):[];
+              console.log(`TRACK_${idx}_HTTP=${response.status}`);
+              console.log(`TRACK_${idx}_AGE_DAYS=${Math.floor((Date.now()-toMs(chosen.data.createdAt))/86400000)}`);
+              console.log(`TRACK_${idx}_STATUS=${String(payload?.status||'')}`);
+              console.log(`TRACK_${idx}_RECOVERY_ONLY=${String(payload?.recoveryOnly)}`);
+              console.log(`TRACK_${idx}_RAW_URL_COUNT=${rawUrls.length}`);
+              console.log(`TRACK_${idx}_RAW_URL_HOSTS=${JSON.stringify(hosts(rawUrls))}`);
+              console.log(`TRACK_${idx}_REPORTED_COUNT=${reported.length}`);
+              console.log(`TRACK_${idx}_REPORTED_HOSTS=${JSON.stringify(hosts(reported))}`);
+              console.log(`TRACK_${idx}_VERIFIED_COUNT=${verified.length}`);
+              console.log(`TRACK_${idx}_VERIFIED_HOSTS=${JSON.stringify(hosts(verified))}`);
+              console.log(`TRACK_${idx}_FINAL_AUDIO=${Boolean(payload?.audioUrl||payload?.streamAudioUrl)}`);
+              console.log(`TRACK_${idx}_VALIDATION=${String(payload?.audioValidationStatus||'')}`);
+              console.log(`TRACK_${idx}_PROVIDER_CODE=${String(payload?.code||payload?.apiStatusResponse?.code||'')}`);
+            }
+            console.log('FIRESTORE_WRITES=0_EXPECTED_RECOVERY_ONLY');
+            console.log('NEW_GENERATION=false');
+            console.log('CREDITS_USED=false');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE

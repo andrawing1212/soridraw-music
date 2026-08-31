@@ -33,7 +33,7 @@ jobs:
           npm install --no-audit --no-fund --package-lock=false
           npm run cf:prepare
           node --check .remote-worker/worker.js
-      - name: Print exact relevant live Worker shapes
+      - name: Print first-view live Worker materializer shapes
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -63,27 +63,32 @@ jobs:
                 if(depth===0) return src.slice(start,i+1);
               }
             }
-            return src.slice(start, Math.min(src.length,start+24000));
+            return src.slice(start, Math.min(src.length,start+32000));
           }
           const wanted = [
-            'handlePublicProfile',
-            'handleProfileTracks',
+            'ensurePublicProfileFirstViewTable',
+            'materializePublicProfileFirstView',
+            'refreshPublicProfileFirstViewProfile',
+            'refreshPublicProfileFirstViewTrackWindow',
+            'patchPublicProfileFirstViewLikeCount',
+            'handlePublicProfileFirstViewWithEdgeCache',
             'handlePublicProfileFirstViewSnapshot',
-            'handleMyProfileUpdate',
-            'handleProfileMediaUpload',
-            'handleFollow',
             'handlePublication',
-            'handlePublicationOptions',
             'handleVisibility',
             'handleLike',
           ];
+          console.log('MATERIALIZER_MARKER='+src.includes('SORIDRAW_COST_ZERO_PROFILE_FIRST_VIEW_MATERIALIZER_004'));
           for(const n of wanted){
             const body=extract(n);
             if(!body){ console.log(`FUNCTION_MISSING ${n}`); continue; }
             console.log(`FUNCTION_BODY_START ${n}`);
-            console.log(body.slice(0,24000));
+            console.log(body.slice(0,32000));
             console.log(`FUNCTION_BODY_END ${n}`);
           }
+          const routeLines = src.split('\n').filter(line => line.includes('first-view') || line.includes('handlePublicProfileFirstView'));
+          console.log('ROUTE_LINES_START');
+          console.log(routeLines.slice(-30).join('\n'));
+          console.log('ROUTE_LINES_END');
           NODE
           echo 'READ_ONLY=true'
           echo 'NO_D1_WRITE_REQUESTED=true'

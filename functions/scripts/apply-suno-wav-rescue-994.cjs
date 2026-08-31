@@ -42,8 +42,8 @@ const pollSunoWavRescue = async (apiKey: string, wavTaskId: string): Promise<{ a
     if (attempt > 0) await sleepSunoWavRescue(SUNO_WAV_RESCUE_POLL_MS);
 
     const response = await fetch(
-      `https://api.sunoapi.org/api/v1/wav/record-info?taskId=${encodeURIComponent(wavTaskId)}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } },
+      "https://api.sunoapi.org/api/v1/wav/record-info?taskId=" + encodeURIComponent(wavTaskId),
+      { headers: { Authorization: "Bearer " + apiKey } },
     );
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
@@ -70,12 +70,12 @@ const persistSunoWavRescueToStorage = async (
   sourceUrl: string,
 ): Promise<string> => {
   const sourceResponse = await fetch(sourceUrl, { method: 'GET', redirect: 'follow' });
-  if (!sourceResponse.ok) throw new Error(`WAV rescue source download failed (${sourceResponse.status})`);
+  if (!sourceResponse.ok) throw new Error('WAV rescue source download failed (' + sourceResponse.status + ')');
   const bytes = Buffer.from(await sourceResponse.arrayBuffer());
   if (bytes.byteLength <= 0) throw new Error('WAV rescue source returned zero bytes');
 
   const bucket = admin.storage().bucket(SUNO_WAV_RESCUE_BUCKET);
-  const objectPath = `suno-rescue/${uid}/${trackId}/${index}.wav`;
+  const objectPath = 'suno-rescue/' + uid + '/' + trackId + '/' + index + '.wav';
   const token = admin.firestore().collection('_download_tokens').doc().id;
   const file = bucket.file(objectPath);
   await file.save(bytes, {
@@ -87,7 +87,12 @@ const persistSunoWavRescueToStorage = async (
     },
   });
 
-  return `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket.name)}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(token)}`;
+  return 'https://firebasestorage.googleapis.com/v0/b/'
+    + encodeURIComponent(bucket.name)
+    + '/o/'
+    + encodeURIComponent(objectPath)
+    + '?alt=media&token='
+    + encodeURIComponent(token);
 };
 
 export const sunoWavRescueCallback = onRequest(
@@ -179,7 +184,7 @@ export const rescueSunoTrackAudio = onRequest(
       const createResponse = await fetch('https://api.sunoapi.org/api/v1/wav/generate', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: 'Bearer ' + apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -203,7 +208,7 @@ export const rescueSunoTrackAudio = onRequest(
         res.status(502).json({
           ok: false,
           code: 'SUNO_RESCUE_CREATE_FAILED',
-          error: String(createPayload?.msg || `Music API WAV rescue failed (${createResponse.status})`),
+          error: String(createPayload?.msg || ('Music API WAV rescue failed (' + createResponse.status + ')')),
         });
         return;
       }
@@ -215,7 +220,7 @@ export const rescueSunoTrackAudio = onRequest(
       }
 
       await trackRef.update({
-        [`audioRescue.${indexKey}`]: {
+        ['audioRescue.' + indexKey]: {
           audioId,
           wavTaskId,
           status: 'processing',
@@ -229,7 +234,7 @@ export const rescueSunoTrackAudio = onRequest(
 
     if (!providerResult?.audioUrl) {
       await trackRef.update({
-        [`audioRescue.${indexKey}.status`]: 'pending',
+        ['audioRescue.' + indexKey + '.status']: 'pending',
         lastAudioRescueAt: admin.firestore.FieldValue.serverTimestamp(),
       }).catch(() => undefined);
       res.status(202).json({ ok: false, pending: true, code: 'SUNO_RESCUE_PENDING', wavTaskId, index, audioId });
@@ -255,7 +260,7 @@ export const rescueSunoTrackAudio = onRequest(
     }
 
     await trackRef.update({
-      [`audioRescue.${indexKey}`]: {
+      ['audioRescue.' + indexKey]: {
         audioId,
         wavTaskId,
         audioUrl: finalUrl,
@@ -301,9 +306,9 @@ for (const expected of [
   'export const sunoWavRescueCallback = onRequest(',
   '/api/v1/wav/generate',
   '/api/v1/wav/record-info',
-  'audioRescue.${indexKey}',
+  "['audioRescue.' + indexKey]",
   'persistSunoWavRescueToStorage',
 ]) {
-  if (!verify.includes(expected)) throw new Error(`994 verification failed: ${expected}`);
+  if (!verify.includes(expected)) throw new Error('994 verification failed: ' + expected);
 }
 console.log('apply-suno-wav-rescue-994: guarded WAV rescue backend applied');

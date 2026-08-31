@@ -1,4 +1,5 @@
-import { auth } from '../firebase';
+import { auth, getFirebaseAppCheckToken } from '../firebase';
+// SORIDRAW_MEDIA_ERROR_RECOVERY_993
 
 const SUNO_STATUS_ENDPOINT = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
 const RECOVERY_CACHE_PREFIX = 'soridraw.suno.audioRecovery.v4';
@@ -287,11 +288,13 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
   const promise = (async () => {
     try {
       const token = await user.getIdToken();
+      const appCheckToken = await getFirebaseAppCheckToken();
       const response = await fetch(SUNO_STATUS_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
+          ...(appCheckToken ? { 'X-Firebase-AppCheck': appCheckToken } : {}),
         },
         // Match the proven Vercel request contract: normal status refresh.
         // This may refresh the provider/CDN state and lets the existing Function sync

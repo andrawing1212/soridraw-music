@@ -93,6 +93,8 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const isMutedRef = useRef(false);
   const wasClearedRef = useRef(false);
   const lastPlaybackErrorAtRef = useRef(0);
+  const playbackRecoveryAttemptedRef = useRef(false);
+  // SORIDRAW_MEDIA_ERROR_RECOVERY_993
 
   const notifyPlaybackUnavailable = useCallback((track: Track | null, error?: any) => {
     const now = Date.now();
@@ -236,8 +238,15 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     }
   }, [notifyPlaybackUnavailable, updateMediaSession]);
 
+  const attemptPlaybackRecovery = useCallback((track: Track | null, error?: any) => {
+    if (!track || playbackRecoveryAttemptedRef.current) return;
+    playbackRecoveryAttemptedRef.current = true;
+    void recoverAndRetryPlayback(track, error);
+  }, [recoverAndRetryPlayback]);
+
   const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
     if (!track?.url || !audioRef.current) return;
+    playbackRecoveryAttemptedRef.current = false;
 
     if (newQueue) {
       queueRef.current = newQueue;
@@ -272,7 +281,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
       if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch((err) => {
           console.error('Audio play failed; attempting Task ID URL recovery:', err);
-          void recoverAndRetryPlayback(track, err);
+          attemptPlaybackRecovery(track, err);
         });
       }
 
@@ -280,9 +289,9 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
       isPlayingRef.current = true;
     } catch (error) {
       console.error('Audio play failed; attempting Task ID URL recovery:', error);
-      void recoverAndRetryPlayback(track, error);
+      attemptPlaybackRecovery(track, error);
     }
-  }, [recoverAndRetryPlayback, updateMediaSession]);
+  }, [attemptPlaybackRecovery, updateMediaSession]);
 
   const findCurrentIndex = useCallback((current: Track | null, list: Track[]) => {
     if (!current || list.length === 0) return -1;
@@ -367,19 +376,19 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
       isPlayingRef.current = false;
       updateMediaSession(track, 'paused');
     } else {
+      playbackRecoveryAttemptedRef.current = false;
       updateMediaSession(track, 'playing');
       audio.play().then(() => {
         setIsPlaying(true);
         isPlayingRef.current = true;
       }).catch((err) => {
-        console.error('Play failed:', err);
+        console.error('Play failed; attempting Task ID URL recovery:', err);
         setIsPlaying(false);
         isPlayingRef.current = false;
-        notifyPlaybackUnavailable(track, err);
-        updateMediaSession(track, 'paused');
+        attemptPlaybackRecovery(track, err);
       });
     }
-  }, [notifyPlaybackUnavailable, updateMediaSession]);
+  }, [attemptPlaybackRecovery, updateMediaSession]);
 
   const seek = useCallback((time: number) => {
     if (audioRef.current) {
@@ -532,10 +541,10 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     const onDurationChange = () => handleTimeUpdate();
     const onError = () => {
       const track = currentTrackRef.current;
+      if (!track || wasClearedRef.current) return;
       setIsPlaying(false);
       isPlayingRef.current = false;
-      notifyPlaybackUnavailable(track, audio.error || new Error('audio element error'));
-      updateMediaSession(track, 'paused');
+      attemptPlaybackRecovery(track, audio.error || new Error('audio element error'));
     };
 
     audio.addEventListener('play', onPlay);
@@ -555,7 +564,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
       audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('error', onError);
     };
-  }, [handleEnded, handleTimeUpdate, notifyPlaybackUnavailable, updateMediaSession]);
+  }, [attemptPlaybackRecovery, handleEnded, handleTimeUpdate, updateMediaSession]);
 
   // Media Session action handlers for lock-screen controls.
   // Register these once only; each handler delegates to refs above.

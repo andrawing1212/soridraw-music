@@ -12,6 +12,7 @@ import {
   writeExploreFeedSessionCache,
 } from '../services/exploreSessionCache';
 import { getExploreLikedTrackIds, setExploreTrackLike } from '../services/exploreLikeService';
+import { getExplorePublicProfileFirstView } from '../services/exploreProfileFirstViewService';
 import {
   getExploreFollowState,
   getExplorePublicProfile,
@@ -294,11 +295,8 @@ export default function ExplorePage() {
     setProfileError('');
     setSocialNotice('');
 
-    Promise.all([
-      getExplorePublicProfile(profileUid),
-      getExplorePublicProfileTracks(profileUid),
-    ])
-      .then(async ([nextProfile, rows]) => {
+    getExplorePublicProfileFirstView(profileUid)
+      .then(async ({ profile: nextProfile, tracks: rows }) => {
         if (cancelled) return;
         const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
         normalizedTracks.sort((a, b) => Number(b.profilePinned) - Number(a.profilePinned));
@@ -384,7 +382,7 @@ export default function ExplorePage() {
 
   const openProfile = (track: ExploreTrack) => {
     if (!track.ownerUid) return;
-    setSearchParams({ profile: track.ownerHandle ? `@${track.ownerHandle}` : track.ownerUid });
+    setSearchParams({ profile: track.ownerUid });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

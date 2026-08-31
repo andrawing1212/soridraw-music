@@ -5,6 +5,7 @@ on:
     branches: [preview]
     paths:
       - '.deploy/apply-cost-zero-stage2a-profile-first-view.py'
+      - '.deploy/apply-cost-zero-stage2a-profile-cache-freshness.py'
       - '.github/workflows/cost-zero-stage2a-profile-first-view-apply.yml'
   workflow_dispatch:
 
@@ -30,7 +31,9 @@ jobs:
           node-version: 22
 
       - name: Apply Stage 2A source patch
-        run: python .deploy/apply-cost-zero-stage2a-profile-first-view.py
+        run: |
+          python .deploy/apply-cost-zero-stage2a-profile-first-view.py
+          python .deploy/apply-cost-zero-stage2a-profile-cache-freshness.py
 
       - name: Install app dependencies
         run: npm ci --no-audit --no-fund
@@ -89,5 +92,5 @@ jobs:
           git config user.name 'SORIDRAW Automation'
           git config user.email 'actions@users.noreply.github.com'
           git add src/services/exploreProfileFirstViewService.ts src/pages/ExplorePage.tsx cloudflare/explore/migrations/009_cost_zero_profile_first_view.sql cloudflare/explore-worker/patches/003-cost-zero-profile-first-view.mjs
-          git commit -m 'feat(preview): add cached public profile first-view snapshot path'
+          git commit -m 'feat(preview): harden cached public profile first-view snapshot path'
           git push origin HEAD:preview

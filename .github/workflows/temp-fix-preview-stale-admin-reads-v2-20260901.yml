@@ -1,0 +1,52 @@
+name: Temp Fix Preview Stale Admin Reads V2 20260901
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-fix-preview-stale-admin-reads-v2-20260901.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - name: Apply verified patch
+        run: python3 .deploy/temp-fix-preview-stale-admin-reads-20260901.py
+      - name: Assert contract
+        run: |
+          set -euo pipefail
+          ! grep -q "label: '보컬 관리'" src/components/AdminPageLayout.tsx
+          ! grep -q "label: '섹션 태그'" src/components/AdminPageLayout.tsx
+          test ! -f src/pages/AdminVocalTonesPage.tsx
+          test ! -f src/pages/AdminSectionTagsPage.tsx
+          grep -q "activeTab !== 'admin-permissions'" src/pages/MasterPermissionsPage.tsx
+          grep -q "if (cached)" src/pages/AdminUserManagementPage.tsx
+          grep -q 'no-cache, no-store, must-revalidate' firebase.hosting-preview.json
+          grep -q 'Live stale-shell prevention: PASS' .github/workflows/firebase-hosting-custom-preview.yml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm install --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Commit verified source and deployment fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/pages/MasterPermissionsPage.tsx src/pages/AdminUserManagementPage.tsx firebase.hosting-preview.json .deploy/check-firebase-custom-preview.mjs .github/workflows/firebase-hosting-custom-preview.yml
+          git diff --cached --check
+          git commit -m 'fix(preview): prevent stale admin bundles and repeat reads'
+          git push origin HEAD:preview

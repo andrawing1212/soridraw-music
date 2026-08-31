@@ -348,14 +348,21 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
     if (libraryFullBootstrapStarted) return;
     libraryFullBootstrapStarted = true;
     try {
-      const snapshot = await getDocs(tracksRef);
+      // Cost guard: a cold/new-origin/schema bootstrap is always bounded.
+      // Never sweep the user's whole Library merely because local cache is absent.
+      const snapshot = await getDocs(query(
+        tracksRef,
+        orderBy('createdAt', 'desc'),
+        limit(WORKSPACE_SERVER_FETCH_SIZE)
+      ));
       if (libraryWorkspaceSession !== session || session.uid !== uid) return;
-      const list = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      const docs = snapshot.docs;
+      const list = docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
       session.tracks = mergeLibraryWorkspaceSessionTracks(list, []);
       libraryWorkspaceInMemoryCache.set(uid, session.tracks);
-      session.lastDoc = null;
-      session.hasMore = false;
-      session.paginationFallback = true;
+      session.lastDoc = docs.length > 0 ? docs[docs.length - 1] : null;
+      session.hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
+      session.paginationFallback = false;
       session.ready = true;
       const persisted = await persistLibraryWorkspaceTrackCacheNow(uid, session.tracks);
       if (persisted) {
@@ -538,9 +545,14 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
       if (durableTracks !== null) {
         libraryWorkspaceInMemoryCache.set(uid, durableTracks);
         session.tracks = mergeLibraryWorkspaceSessionTracks(durableTracks, []);
-        session.lastDoc = null;
-        session.hasMore = false;
-        session.paginationFallback = true;
+        const oldestCachedTrack = session.tracks[session.tracks.length - 1] || null;
+        const cachedCursorMs = getLibraryWorkspaceTrackCreatedAtMs(oldestCachedTrack);
+        // Reconstruct a bounded cursor from the durable cache so browser/app
+        // restart never forces a full collection rebuild. At worst an exact
+        // 10-item terminal cache can cause one bounded empty-page check.
+        session.lastDoc = cachedCursorMs > 0 ? new Date(cachedCursorMs) : null;
+        session.hasMore = session.tracks.length >= WORKSPACE_SERVER_PAGE_SIZE && cachedCursorMs > 0;
+        session.paginationFallback = false;
         session.ready = true;
         markCacheDiagnostic('library', 'CACHE', 0);
         emitLibraryWorkspaceSession(session);
@@ -842,7 +854,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
-  const staleRecoveryAttemptedRef = useRef<Set<string>>(new Set());
   const [user, setUser] = useState<any>(() => appUser || auth.currentUser);
   const [remainingCredits, setRemainingCredits] = useState<number | null>(() => readStoredSunoCredits(auth.currentUser?.uid).credits);
   const [remainingCreditsUpdatedAt, setRemainingCreditsUpdatedAt] = useState<number | null>(() => readStoredSunoCredits(auth.currentUser?.uid).updatedAt);
@@ -3376,86 +3387,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
-  useEffect(() => {
-    if (!user || isSharedView || tracks.length === 0) return;
-
-    const staleTracks = tracks.filter((group) => {
-      const id = String(group?.id || '').trim();
-      return Boolean(id)
-        && isTrackPastAutoCheckWindow(group)
-        && !staleRecoveryAttemptedRef.current.has(id)
-        && !checkingIdsRef.current.has(id);
-    });
-
-    staleTracks.forEach((group) => {
-      const id = String(group.id || '').trim();
-      if (!id) return;
-
-      staleRecoveryAttemptedRef.current.add(id);
-      checkingIdsRef.current.add(id);
-
-      void (async () => {
-        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', id);
-        const markTimedOut = async (reason: string) => {
-          await updateDoc(trackRef, {
-            status: 'failed',
-            failedAt: serverTimestamp(),
-            failureReason: reason,
-            errorMessage: reason,
-            lastStatusRaw: 'timeout | stale_recovery',
-            lastStatusCheckedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        };
-
-        try {
-          if (!group.taskId) {
-            await markTimedOut('생성 상태 확인 불가 (10분 초과 · Task ID 없음)');
-            return;
-          }
-
-          const token = await user.getIdToken();
-          const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({ trackId: id, taskId: group.taskId }),
-          });
-
-          let data: any = null;
-          try {
-            data = await res.json();
-          } catch {
-            data = null;
-          }
-
-          if (!res.ok || !data) {
-            await markTimedOut('상태 조회 실패 및 생성 시간 초과 (10분 경과)');
-            return;
-          }
-
-          const resolved = await syncStatusResponseToFirestore(id, group.taskId, data);
-          const resolvedStatus = String(resolved?.status || '').toLowerCase();
-          if (['completed', 'success', 'failed', 'cancelled', 'canceled'].includes(resolvedStatus)) {
-            return;
-          }
-
-          await markTimedOut('생성 상태 장기 미확정 (10분 초과)');
-        } catch (error) {
-          console.warn(`[Suno stale recovery] ${id}`, error);
-          try {
-            await markTimedOut('상태 조회 실패 및 생성 시간 초과 (10분 경과)');
-          } catch (writeError) {
-            console.error('[Suno stale recovery] failed to finalize stale track:', writeError);
-          }
-        } finally {
-          checkingIdsRef.current.delete(id);
-        }
-      })();
-    });
-  }, [tracks, user, isSharedView]);
+  // Cost guard: old/stale Suno rows are rendered as '상태 확인 필요' only.
+  // Page entry/reload must never fan out one Function call + one Firestore
+  // write per stale track. The existing explicit status-check action owns
+  // reconciliation; active in-progress generation polling remains separate.
 
   useEffect(() => {
     if (isSharedView || !user) return;

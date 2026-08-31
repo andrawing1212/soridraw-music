@@ -72,12 +72,12 @@ const readAllStates = (): Record<CacheDiagnosticDomain, CacheDiagnosticState> =>
 
 const formatServerUsage = (state: Pick<CacheDiagnosticState, 'reads' | 'writes' | 'cacheHits'>) => {
   const server = state.reads + state.writes;
-  return `서버 ${server}(읽기 ${state.reads},쓰기 ${state.writes}) · 캐시 ${state.cacheHits}`;
+  return `서버 ${server}(읽기 ${state.reads},쓰기 ${state.writes}) · 캐시HIT ${state.cacheHits}`;
 };
 
 const formatActualUsage = (state: FirestoreActualState) => {
   const server = state.reads + state.writes;
-  return `브라우저 SDK ${server}(읽기 ${state.reads},쓰기 ${state.writes}) · 캐시 ${state.cacheHits}`;
+  return `브라우저 SDK ${server}(읽기 ${state.reads},쓰기 ${state.writes}) · 캐시HIT ${state.cacheHits}`;
 };
 
 const formatNumber = (value: number | undefined) => new Intl.NumberFormat('ko-KR').format(Math.max(0, Math.floor(Number(value || 0))));

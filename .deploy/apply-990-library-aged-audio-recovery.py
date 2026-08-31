@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 SERVICE = Path('src/services/sunoAudioRecovery.ts')
 LIBRARY = Path('src/pages/SunoLibraryPage.tsx')
@@ -226,11 +227,22 @@ if MARKER not in library:
         "                      const isCompleted = Boolean(audioUrl && (isCompletedStatus || hasValidDuration));\n                      const canRecoverPlaybackUrl = !isSharedView && Boolean(group.taskId) && (isCompletedStatus || hasValidDuration);\n                      const canPlayOrRecover = Boolean(audioUrl) || canRecoverPlaybackUrl;\n                      const isCompletedWithoutAudio = isCompletedStatus && !audioUrl;",
         'workspace recoverable state',
     )
-    old_click = """                             if (audioUrl) {\n                               if (isCurrent) togglePlayPause();\n                               else handlePlayTrack(group, idx);\n                             }"""
-    new_click = """                             if (canPlayOrRecover) {\n                               if (audioUrl && isCurrent) togglePlayPause();\n                               else void handlePlayTrack(group, idx);\n                             }"""
-    if library.count(old_click) < 2:
-        raise RuntimeError(f'990 expected two workspace play click anchors, found {library.count(old_click)}')
-    library = library.replace(old_click, new_click, 2)
+    click_pattern = re.compile(
+        r"(?m)^(?P<indent>[ ]+)if \(audioUrl\) \{\n[ ]+if \(isCurrent\) togglePlayPause\(\);\n[ ]+else handlePlayTrack\(group, idx\);\n[ ]+\}"
+    )
+
+    def replace_click(match: re.Match) -> str:
+        indent = match.group('indent')
+        return (
+            f"{indent}if (canPlayOrRecover) {{\n"
+            f"{indent}  if (audioUrl && isCurrent) togglePlayPause();\n"
+            f"{indent}  else void handlePlayTrack(group, idx);\n"
+            f"{indent}}}"
+        )
+
+    library, click_count = click_pattern.subn(replace_click, library)
+    if click_count != 2:
+        raise RuntimeError(f'990 expected exactly two workspace play click anchors, found {click_count}')
     library = replace_once(
         library,
         "                            disabled={!audioUrl}",

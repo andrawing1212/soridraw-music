@@ -25,7 +25,7 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Inspect aged track recovery stamps
+      - name: Inspect actual Library bundle recovery fields
         working-directory: functions
         env:
           FIREBASE_PROJECT_ID: soridraw-app-866a5
@@ -37,34 +37,33 @@ jobs:
           if(!admin.apps.length) admin.initializeApp({credential:admin.credential.applicationDefault(),projectId:process.env.FIREBASE_PROJECT_ID});
           const db=admin.firestore();
           const toMs=(v)=>{try{return v?.toMillis?.()||(typeof v==='number'?v:Date.parse(v||''))||0}catch{return 0}};
-          const minutesAgo=(v)=>{const ms=toMs(v);return ms?Math.round((Date.now()-ms)/60000):null};
-          const oldCutoff=Date.parse('2026-08-15T00:00:00Z');
+          const hasUrl=(d)=>Boolean(String(d?.audioUrl||d?.streamAudioUrl||'').trim()||(Array.isArray(d?.sunoData)&&d.sunoData.some(x=>String(x?.audioUrl||x?.streamAudioUrl||x?.sourceAudioUrl||x?.sourceStreamAudioUrl||'').trim())));
           (async()=>{
             const master=await db.collection('users').where('staffRole','==','master').limit(1).get();
             if(master.empty) throw new Error('master user not found');
             const uid=master.docs[0].id;
-            const snap=await db.collection('suno_tracks').doc(uid).collection('tracks').orderBy('createdAt','asc').limit(12).get();
-            const aged=snap.docs.map(d=>({data:d.data()||{}}))
-              .filter(x=>x.data.taskId&&toMs(x.data.createdAt)>0&&toMs(x.data.createdAt)<oldCutoff)
-              .filter(x=>['completed','complete','success','succeeded','processing'].includes(String(x.data.status||'').toLowerCase()));
-            console.log('AGED_ROWS='+aged.length);
+            const bundle=await db.collection('user_list_caches').doc(uid).collection('bundles').doc('library_latest_10_sets').get();
+            if(!bundle.exists) throw new Error('library bundle missing');
+            const data=bundle.data()||{};
+            const items=Array.isArray(data.items)?data.items:[];
+            console.log('BUNDLE_SCHEMA='+String(data.schemaVersion||''));
+            console.log('BUNDLE_ITEM_COUNT='+items.length);
+            console.log('BUNDLE_UPDATED_MIN_AGO='+(data.updatedAtMs?Math.round((Date.now()-Number(data.updatedAtMs))/60000):null));
             let i=0;
-            for(const x of aged){
-              i++; const d=x.data; const api=d.apiStatusResponse||{}; const apiData=api?.data||{}; const apiResp=apiData?.response||{};
-              console.log(`TRACK_${i}_AGE_DAYS=${Math.floor((Date.now()-toMs(d.createdAt))/86400000)}`);
-              console.log(`TRACK_${i}_UPDATED_MIN_AGO=${minutesAgo(d.updatedAt)}`);
-              console.log(`TRACK_${i}_RECOVERY_ATTEMPT_MIN_AGO=${minutesAgo(d.lastAudioUrlRecoveryAttemptAt)}`);
-              console.log(`TRACK_${i}_RECOVERED_MIN_AGO=${minutesAgo(d.lastAudioUrlRecoveredAt)}`);
-              console.log(`TRACK_${i}_STATUS=${String(d.status||'')}`);
-              console.log(`TRACK_${i}_VALIDATION=${String(d.audioValidationStatus||'')}`);
-              console.log(`TRACK_${i}_VERIFIED_COUNT=${Array.isArray(d.audioUrls)?d.audioUrls.filter(Boolean).length:0}`);
-              console.log(`TRACK_${i}_REPORTED_COUNT=${Array.isArray(d.reportedAudioUrls)?d.reportedAudioUrls.filter(Boolean).length:0}`);
-              console.log(`TRACK_${i}_API_CODE=${String(api?.code??apiData?.code??'')}`);
-              console.log(`TRACK_${i}_API_STATUS=${String(api?.status||apiData?.status||apiResp?.status||'')}`);
-              const msg=String(api?.msg||api?.message||apiData?.msg||apiData?.message||'').replace(/https?:\/\/\S+/g,'[URL]').slice(0,120);
-              console.log(`TRACK_${i}_API_MSG=${msg}`);
+            for(const item of items){
+              i++;
+              const created=Number(item?.createdAtMs||0)||toMs(item?.createdAt);
+              const taskId=String(item?.taskId||item?.requestPayload?.taskId||'').trim();
+              const id=String(item?.id||item?.trackId||'').trim();
+              console.log(`ITEM_${i}_HAS_ID=${Boolean(id)}`);
+              console.log(`ITEM_${i}_HAS_TASK_ID=${Boolean(taskId)}`);
+              console.log(`ITEM_${i}_TASK_ID_SOURCE=${item?.taskId?'top':item?.requestPayload?.taskId?'requestPayload':'none'}`);
+              console.log(`ITEM_${i}_AGE_DAYS=${created?Math.floor((Date.now()-created)/86400000):null}`);
+              console.log(`ITEM_${i}_STATUS=${String(item?.status||'')}`);
+              console.log(`ITEM_${i}_HAS_AUDIO_URL=${hasUrl(item)}`);
+              console.log(`ITEM_${i}_SUNO_DATA_COUNT=${Array.isArray(item?.sunoData)?item.sunoData.length:0}`);
             }
-            console.log('READ_MAX=13');
+            console.log('READ_MAX=2');
             console.log('WRITES=0');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE

@@ -52,6 +52,7 @@ import { getTimestampMs } from '../App';
 import { FULL_ADMIN_PERMISSIONS, normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';
 import { PRESENCE_DIAGNOSTIC_EVENT, readPresenceDiagnostic, type PresenceDiagnostic } from '../services/presenceService';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
+import { readAdminUserListCache, writeAdminUserListCache } from '../lib/adminUserListCache';
 
 const SORIDRAW_929_SINGLE_USER_PROFILE_SOURCE = true;
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -526,6 +527,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [lastUserDoc, setLastUserDoc] = useState<any | null>(null);
+  const [cachedLastUserUid, setCachedLastUserUid] = useState<string | null>(null);
   const [hasMoreUsers, setHasMoreUsers] = useState(false);
   const [isBackfillingUsers, setIsBackfillingUsers] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -612,8 +614,38 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     return () => window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
   }, [isAdminProp]);
 
-  const fetchUsers = useCallback(async () => {
+  const persistUserList = useCallback((
+    nextUsers: AppUserInfo[],
+    nextHasMoreUsers: boolean,
+    nextLastUserUid: string | null,
+  ) => {
+    const adminUid = auth.currentUser?.uid || '';
+    if (!adminUid) return;
+    writeAdminUserListCache(adminUid, sortBy, {
+      users: nextUsers,
+      hasMoreUsers: nextHasMoreUsers,
+      lastUserUid: nextLastUserUid,
+    });
+  }, [sortBy]);
+
+  const fetchUsers = useCallback(async (forceServer = false) => {
     if (!isAdmin) return;
+    const adminUid = auth.currentUser?.uid || '';
+    if (!adminUid) return;
+
+    if (!forceServer) {
+      const cached = readAdminUserListCache(adminUid, sortBy);
+      if (cached && cached.users.length > 0) {
+        setUsers(cached.users);
+        setLastUserDoc(null);
+        setCachedLastUserUid(cached.lastUserUid);
+        setHasMoreUsers(cached.hasMoreUsers);
+        setVisibleCount(ADMIN_PAGE_SIZE);
+        setIsLoading(false);
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
       const snapshot = await getDocs(query(
@@ -622,47 +654,68 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
         limit(ADMIN_PAGE_SIZE)
       ));
       const nextUsers = snapshot.docs.map((item) => parseUserDocument(item.id, item.data()));
+      const nextLastUserDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
+      const nextLastUserUid = nextLastUserDoc?.id || null;
+      const nextHasMoreUsers = snapshot.docs.length === ADMIN_PAGE_SIZE;
       setUsers(nextUsers);
-      setLastUserDoc(snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null);
-      setHasMoreUsers(snapshot.docs.length === ADMIN_PAGE_SIZE);
+      setLastUserDoc(nextLastUserDoc);
+      setCachedLastUserUid(nextLastUserUid);
+      setHasMoreUsers(nextHasMoreUsers);
       setVisibleCount(ADMIN_PAGE_SIZE);
+      persistUserList(nextUsers, nextHasMoreUsers, nextLastUserUid);
     } catch (error: any) {
       console.error('Failed to fetch users:', error);
       if (error?.code === 'permission-denied') alert('사용자 정보를 불러올 관리자 권한이 없습니다.');
     } finally {
       setIsLoading(false);
     }
-  }, [isAdmin, sortBy]);
+  }, [isAdmin, persistUserList, sortBy]);
 
   const fetchMoreUsers = useCallback(async () => {
-    if (!isAdmin || !lastUserDoc || !hasMoreUsers || isLoadingMore) return;
+    if (!isAdmin || !hasMoreUsers || isLoadingMore) return;
     setIsLoadingMore(true);
     try {
+      let cursorDoc = lastUserDoc;
+      if (!cursorDoc && cachedLastUserUid) {
+        const cursorSnapshot = await getDoc(doc(db, 'users', cachedLastUserUid));
+        if (!cursorSnapshot.exists()) {
+          await fetchUsers(true);
+          return;
+        }
+        cursorDoc = cursorSnapshot;
+        setLastUserDoc(cursorSnapshot);
+      }
+      if (!cursorDoc) return;
+
       const snapshot = await getDocs(query(
         collection(db, 'users'),
         orderBy(sortBy, 'desc'),
-        startAfter(lastUserDoc),
+        startAfter(cursorDoc),
         limit(ADMIN_PAGE_SIZE)
       ));
       const nextUsers = snapshot.docs.map((item) => parseUserDocument(item.id, item.data()));
-      setUsers((previous) => {
-        const merged = new Map(previous.map((user) => [user.uid, user]));
-        nextUsers.forEach((user) => merged.set(user.uid, user));
-        return Array.from(merged.values());
-      });
-      setLastUserDoc(snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : lastUserDoc);
-      setHasMoreUsers(snapshot.docs.length === ADMIN_PAGE_SIZE);
+      const merged = new Map(users.map((user) => [user.uid, user]));
+      nextUsers.forEach((user) => merged.set(user.uid, user));
+      const mergedUsers = Array.from(merged.values());
+      const nextLastUserDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : cursorDoc;
+      const nextLastUserUid = nextLastUserDoc?.id || cachedLastUserUid;
+      const nextHasMoreUsers = snapshot.docs.length === ADMIN_PAGE_SIZE;
+      setUsers(mergedUsers);
+      setLastUserDoc(nextLastUserDoc);
+      setCachedLastUserUid(nextLastUserUid);
+      setHasMoreUsers(nextHasMoreUsers);
       setVisibleCount((count) => count + ADMIN_PAGE_SIZE);
+      persistUserList(mergedUsers, nextHasMoreUsers, nextLastUserUid);
     } catch (error: any) {
       console.error('Failed to fetch more users:', error);
       if (error?.code === 'permission-denied') alert('사용자 정보를 더 불러올 관리자 권한이 없습니다.');
     } finally {
       setIsLoadingMore(false);
     }
-  }, [hasMoreUsers, isAdmin, isLoadingMore, lastUserDoc, sortBy]);
+  }, [cachedLastUserUid, fetchUsers, hasMoreUsers, isAdmin, isLoadingMore, lastUserDoc, persistUserList, sortBy, users]);
 
   useEffect(() => {
-    void fetchUsers();
+    void fetchUsers(false);
   }, [fetchUsers]);
 
   useEffect(() => {
@@ -885,7 +938,9 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     const freshSnapshot = await getDoc(doc(db, 'users', targetUid));
     if (freshSnapshot.exists()) {
       const freshUser = parseUserDocument(targetUid, freshSnapshot.data());
-      setUsers((previous) => previous.map((user) => user.uid === targetUid ? freshUser : user));
+      const nextUsers = users.map((user) => user.uid === targetUid ? freshUser : user);
+      setUsers(nextUsers);
+      persistUserList(nextUsers, hasMoreUsers, cachedLastUserUid);
       setSelectedUser(freshUser);
     }
   };
@@ -1083,7 +1138,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
             success: failedCount === 0,
             message: `누락 ${Number(data.missingUserDocs || 0)}명 중 ${Number(data.createdUserDocs || 0)}명을 복구했습니다. 실패 ${failedCount}명`,
           });
-          await fetchUsers();
+          await fetchUsers(true);
         } catch (error: any) {
           console.error('backfillMissingAuthUsers failed:', error);
           setActionResult({ success: false, message: error?.message || '누락회원 복구에 실패했습니다.' });
@@ -1141,7 +1196,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
             누락 복구
           </button>
           <button
-            onClick={() => { void fetchUsers(); void fetchPresence(); }}
+            onClick={() => { void fetchUsers(true); void fetchPresence(); }}
             disabled={isLoading || isLoadingMore || isPresenceSyncing}
             className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-2.5 text-xs font-black text-[var(--text-primary)] hover:bg-white/[0.08] disabled:opacity-50"
           >

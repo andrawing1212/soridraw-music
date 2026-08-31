@@ -130,7 +130,7 @@ SORIDRAW 데이터 구조의 장기 목표는 다음과 같다.
 
 ## 현재 단계
 
-2026-08-31 기준: **1~4단계 완료.**
+2026-08-31 기준: **1~4단계 완료, 5단계 진행 중.**
 
 - 1단계: Explore 30초 전체 재조회 제거 및 재진입 검증 완료.
 - 2단계: Explore/좋아요/Music Note 공개상태 영구 캐시 및 앱 재실행 후 서버 재조회 0 검증 완료.
@@ -139,5 +139,8 @@ SORIDRAW 데이터 구조의 장기 목표는 다음과 같다.
   - PREVIEW: `preview.soridraw.com` 정상.
   - TEST: `main → soridraw-test → test.soridraw.com` 빌드/배포/HTTPS/Hosting parity/Auth/Functions/Explore CORS 검증 완료.
   - PRODUCTION: `soridraw.com → soridraw` 및 `www.soridraw.com → soridraw.com` 연결/HTTPS/현재 Production Hosting parity/Auth/Functions/Explore CORS 검증 완료. 새 Production 앱 코드 배포는 수행하지 않음.
+- 5단계 선행 비용 가드: 새 도메인/캐시 손실 시 Library가 `suno_tracks` 전체를 읽던 cold bootstrap 경로를 발견해 최초 10곡 고정 묶음 + cursor 방식으로 변경했다. 페이지 진입만으로 stale 곡마다 Function 호출/Firestore 쓰기를 반복하던 자동 복구도 제거하고 명시적 상태 확인 경로만 유지한다.
+- 5단계 Version Signal 클라이언트: PREVIEW 전용 Firebase Remote Config real-time singleton 클라이언트를 구현하고 Firebase PREVIEW에 배포했다. 앱 전체에서 연결 1개만 사용하며 TEST/PRODUCTION에서는 비활성화한다.
+- 5단계 현재 게이트: CI 서비스계정은 Remote Config 템플릿 조회는 가능하지만 `UPDATE_TEMPLATE` 권한이 없어 canary 파라미터 publish가 403으로 차단됐다. IAM 권한은 임의 확대하지 않았으며, canary publish 후 실제 무새로고침 실시간 버전 변경 검증을 완료해야 5단계를 COMPLETE 처리한다.
 
-**다음 고정 작업은 5단계 `실시간 Version Signal 실험`이다.** 작은 관리자 설정 1종으로 먼저 검증한 뒤, 성공한 방식만 6단계 Delta Sync 공통 엔진으로 승격한다.
+**다음 고정 작업은 5단계 Remote Config canary publish 및 실시간 변경 검증 완료이며, 성공한 방식만 6단계 Delta Sync 공통 엔진으로 승격한다.**

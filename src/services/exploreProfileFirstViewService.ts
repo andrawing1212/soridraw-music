@@ -11,6 +11,7 @@ const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev
 const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 1;
 const PROFILE_FIRST_VIEW_SOURCE_TYPE = 'explore_profile_first_view';
 const PROFILE_FIRST_VIEW_LIMIT = 50;
+const PROFILE_FIRST_VIEW_COMPAT_TTL_MS = 5 * 60 * 1000; // temporary until shared revision signal activation
 
 type ExploreProfileFirstViewData = {
   profile: ExplorePublicProfile;
@@ -74,7 +75,9 @@ const writeCache = (profileRef: string, data: ExploreProfileFirstViewData) => {
       syncCursor: data.nextCursor,
       serverRevision: data.revision,
       deletedIds: [],
-      expiresAt: null,
+      // Cross-user profile changes cannot safely keep an unbounded local copy before
+      // the shared revision signal is activated. Immediate re-entry is still 0-read.
+      expiresAt: Date.now() + PROFILE_FIRST_VIEW_COMPAT_TTL_MS,
       dirty: false,
       pendingMutationId: null,
       data,

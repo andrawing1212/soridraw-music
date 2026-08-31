@@ -33,7 +33,7 @@ jobs:
           npm install --no-audit --no-fund --package-lock=false
           npm run cf:prepare
           node --check .remote-worker/worker.js
-      - name: Print relevant live Worker shapes
+      - name: Print exact relevant live Worker shapes
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -41,27 +41,19 @@ jobs:
           node - <<'NODE'
           const fs = require('fs');
           const src = fs.readFileSync('.remote-worker/worker.js','utf8');
-          const names = [...src.matchAll(/async function\s+([A-Za-z0-9_$]+)/g)].map(m=>m[1]);
-          const picked = names.filter(n => /(Profile|Publication|Track|Follow|Like|Visibility|Pin)/i.test(n));
-          console.log('FUNCTION_NAMES_START');
-          for (const n of picked) console.log(n);
-          console.log('FUNCTION_NAMES_END');
-
           function extract(name){
-            const needle = `async function ${name}`;
+            const needle = `async function ${name}(`;
             const start = src.indexOf(needle);
             if(start < 0) return null;
             const brace = src.indexOf('{', start);
             if(brace < 0) return null;
-            let depth = 0, quote = null, esc = false, tmplDepth = 0;
+            let depth = 0, quote = null, esc = false;
             for(let i=brace;i<src.length;i++){
-              const c=src[i], p=src[i-1];
+              const c=src[i];
               if(quote){
                 if(esc){ esc=false; continue; }
                 if(c==='\\'){ esc=true; continue; }
-                if(quote==='`' && c==='$' && src[i+1]==='{'){ tmplDepth++; i++; depth++; continue; }
-                if(c===quote && tmplDepth===0){ quote=null; }
-                if(quote==='`' && c==='}' && tmplDepth>0){ tmplDepth--; depth--; }
+                if(c===quote){ quote=null; }
                 continue;
               }
               if(c==='"'||c==="'"||c==='`'){ quote=c; continue; }
@@ -71,23 +63,25 @@ jobs:
                 if(depth===0) return src.slice(start,i+1);
               }
             }
-            return src.slice(start, Math.min(src.length,start+12000));
+            return src.slice(start, Math.min(src.length,start+24000));
           }
           const wanted = [
             'handlePublicProfile',
-            'handlePublicProfileTracks',
+            'handleProfileTracks',
             'handlePublicProfileFirstViewSnapshot',
+            'handleMyProfileUpdate',
+            'handleProfileMediaUpload',
+            'handleFollow',
+            'handlePublication',
+            'handlePublicationOptions',
+            'handleVisibility',
+            'handleLike',
           ];
-          for(const n of picked){
-            if(/(update|profile|publication|visibility|follow|like|pin)/i.test(n)) wanted.push(n);
-          }
-          const seen = new Set();
           for(const n of wanted){
-            if(seen.has(n)) continue; seen.add(n);
             const body=extract(n);
-            if(!body) continue;
+            if(!body){ console.log(`FUNCTION_MISSING ${n}`); continue; }
             console.log(`FUNCTION_BODY_START ${n}`);
-            console.log(body.slice(0,16000));
+            console.log(body.slice(0,24000));
             console.log(`FUNCTION_BODY_END ${n}`);
           }
           NODE

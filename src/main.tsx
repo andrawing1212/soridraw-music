@@ -6,6 +6,9 @@ import './index.css';
 import './components/studio/studioLayout.css';
 import './components/explore/exploreNavigation.css';
 import './components/studio/tabletTouchPacedContent';
+import { startPreviewVersionSignal } from './services/versionSignalService';
+
+void startPreviewVersionSignal();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

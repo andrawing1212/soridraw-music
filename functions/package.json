@@ -1,7 +1,7 @@
 {
   "name": "functions",
   "scripts": {
-    "prebuild": "node scripts/apply-suno-recovery-readonly-972.cjs && node scripts/apply-suno-wav-rescue-994.cjs && node scripts/apply-suno-wav-rescue-public-994b.cjs && node scripts/apply-suno-wav-rescue-preview-cors-994c.cjs && node scripts/apply-suno-wav-rescue-reuse-only-995.cjs && node scripts/build-secured-index.cjs && node scripts/apply-firestore-usage-export.cjs && node scripts/apply-gemini-latency.cjs",
+    "prebuild": "node scripts/apply-suno-wav-rescue-994.cjs && node scripts/apply-suno-wav-rescue-public-994b.cjs && node scripts/apply-suno-wav-rescue-preview-cors-994c.cjs && node scripts/apply-suno-wav-rescue-reuse-only-995.cjs && node scripts/build-secured-index.cjs && node scripts/apply-firestore-usage-export.cjs && node scripts/apply-gemini-latency.cjs",
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",

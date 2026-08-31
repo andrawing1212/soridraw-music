@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN unavailable'; exit 2; }
-          npm install --no-audit --no-fund
+          npm install --no-audit --no-fund --package-lock=false
           npm run cf:prepare
           node --check .remote-worker/worker.js
           grep -n "SORIDRAW_COST_ZERO_PROFILE_FIRST_VIEW_003" .remote-worker/worker.js
@@ -60,6 +60,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf dist
+          rm -f cloudflare/explore-worker/package-lock.json
           git status --short
           python - <<'PY'
           import subprocess
@@ -74,8 +76,7 @@ jobs:
           unexpected = sorted(changed - allowed)
           if unexpected:
               raise SystemExit(f'Unexpected Stage 2A files: {unexpected}')
-          required = allowed
-          missing = sorted(required - changed)
+          missing = sorted(allowed - changed)
           if missing:
               raise SystemExit(f'Missing expected Stage 2A files: {missing}')
           print('STAGE2A_SCOPE_OK=true')

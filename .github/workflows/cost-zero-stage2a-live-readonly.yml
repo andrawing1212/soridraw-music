@@ -1,0 +1,66 @@
+name: Cost Zero Stage 2A Live Readonly
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cost-zero-stage2a-live-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare exact live Worker without applying Git patches
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN unavailable'; exit 2; }
+          npm install --no-audit --no-fund
+          mkdir -p "$RUNNER_TEMP/soridraw-worker-patches"
+          shopt -s nullglob
+          for patch in patches/*.mjs; do mv "$patch" "$RUNNER_TEMP/soridraw-worker-patches/"; done
+          npm run cf:prepare
+          echo '[Stage2A] profile/feed/social router anchors'
+          grep -nE "v1/feed|v1/profiles|follow-state|v1/me/likes|handleFeed|handleProfile|handleFollow|handleLike|profiles|tracks" .remote-worker/worker.js | head -n 520 || true
+          echo 'READ_ONLY_WORKER_SOURCE=true'
+          echo 'NO_WORKER_DEPLOY=true'
+
+      - name: Inspect D1 schema read-only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute soridraw-explore-db --remote --config .remote-worker/wrangler.jsonc --command "SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','index') ORDER BY type, name;" --json > "$RUNNER_TEMP/d1-schema.json"
+          node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/d1-schema.json','utf8')); console.log(JSON.stringify(x,null,2).slice(0,120000));"
+          echo '[Stage2A] bounded structural counts'
+          npx wrangler d1 execute soridraw-explore-db --remote --config .remote-worker/wrangler.jsonc --command "SELECT 'profiles' AS dataset, COUNT(*) AS count FROM profiles UNION ALL SELECT 'tracks', COUNT(*) FROM tracks UNION ALL SELECT 'follows', COUNT(*) FROM follows UNION ALL SELECT 'likes', COUNT(*) FROM likes;" --json || true
+          echo 'D1_READ_ONLY=true'
+          echo 'NO_D1_WRITE=true'
+
+      - name: Upload live source and schema artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cost-zero-stage2a-live-readonly
+          path: |
+            cloudflare/explore-worker/.remote-worker/worker.js
+            ${{ runner.temp }}/d1-schema.json
+          retention-days: 1

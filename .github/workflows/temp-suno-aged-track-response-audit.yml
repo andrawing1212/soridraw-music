@@ -25,12 +25,10 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Inspect aged completed tracks through recoveryOnly
+      - name: Probe stored aged audio candidates
         working-directory: functions
         env:
           FIREBASE_PROJECT_ID: soridraw-app-866a5
-          FIREBASE_API_KEY: AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA
-          PREVIEW_ORIGIN: https://preview.soridraw.com
         run: |
           set -euo pipefail
           npm ci --no-audit --no-fund >/dev/null
@@ -38,71 +36,72 @@ jobs:
           const admin=require('firebase-admin');
           if(!admin.apps.length) admin.initializeApp({credential:admin.credential.applicationDefault(),projectId:process.env.FIREBASE_PROJECT_ID});
           const db=admin.firestore();
-          const endpoint='https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
           const toMs=(v)=>{ try { return v?.toMillis?.() || (typeof v==='number'?v:Date.parse(v||'')) || 0; } catch { return 0; } };
           const oldCutoff=Date.parse('2026-08-15T00:00:00Z');
-          const collectUrls=(value,out=[],depth=0)=>{
-            if(!value||depth>7) return out;
-            if(Array.isArray(value)){ value.slice(0,50).forEach(v=>collectUrls(v,out,depth+1)); return out; }
-            if(typeof value!=='object') return out;
-            for(const [k,v] of Object.entries(value)){
-              if(typeof v==='string' && /^https?:\/\//i.test(v) && /(audio|stream|source|url|mp3|media|download|play)/i.test(k)) out.push(v);
-              else if(v && typeof v==='object') collectUrls(v,out,depth+1);
-            }
+          const text=(v)=>typeof v==='string'?v.trim():'';
+          const collect=(source,out=[])=>{
+            if(!source||typeof source!=='object') return out;
+            const keys=['sourceAudioUrl','source_audio_url','sourceStreamAudioUrl','source_stream_audio_url','audioUrl','audio_url','streamAudioUrl','stream_audio_url','url','downloadUrl','download_url','playUrl','play_url','mediaUrl','media_url','mp3Url','mp3_url'];
+            for(const k of keys){ const u=text(source[k]); if(/^https?:\/\//i.test(u) && !out.includes(u)) out.push(u); }
             return out;
           };
-          const hosts=(urls)=>Array.from(new Set(urls.map(u=>{try{return new URL(u).host}catch{return 'invalid'}})));
+          const candidates=(track)=>{
+            const out=[]; collect(track,out);
+            if(Array.isArray(track?.audioUrls)) track.audioUrls.forEach(u=>{u=text(u);if(/^https?:\/\//i.test(u)&&!out.includes(u))out.push(u)});
+            if(Array.isArray(track?.reportedAudioUrls)) track.reportedAudioUrls.forEach(u=>{u=text(u);if(/^https?:\/\//i.test(u)&&!out.includes(u))out.push(u)});
+            if(Array.isArray(track?.sunoData)) track.sunoData.slice(0,10).forEach(x=>collect(x,out));
+            const raw=track?.apiStatusResponse;
+            if(raw&&typeof raw==='object'){
+              const walk=(v,d=0)=>{if(!v||d>6)return;if(Array.isArray(v)){v.slice(0,30).forEach(x=>walk(x,d+1));return;}if(typeof v!=='object')return;collect(v,out);Object.values(v).forEach(x=>{if(x&&typeof x==='object')walk(x,d+1)});};
+              walk(raw);
+            }
+            return out.slice(0,12);
+          };
+          const probe=async(url)=>{
+            let host='invalid'; try{host=new URL(url).host}catch{}
+            try{
+              const r=await fetch(url,{method:'GET',headers:{Range:'bytes=0-1023','Cache-Control':'no-cache'},redirect:'follow',signal:AbortSignal.timeout(12000)});
+              const buf=Buffer.from(await r.arrayBuffer());
+              const ct=String(r.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
+              const magic=buf.subarray(0,12).toString('hex');
+              const looksHtml=buf.subarray(0,128).toString('utf8').toLowerCase().includes('<html');
+              const hasBytes=buf.length>0 && !looksHtml;
+              return {host,http:r.status,ct,bytes:buf.length,hasBytes,magic:magic.slice(0,16)};
+            }catch(e){return {host,http:0,ct:'',bytes:0,hasBytes:false,error:String(e?.name||e?.code||'fetch_error').slice(0,60)};}
+          };
           (async()=>{
             const masterSnap=await db.collection('users').where('staffRole','==','master').limit(1).get();
             if(masterSnap.empty) throw new Error('master user not found');
             const uid=masterSnap.docs[0].id;
-            const tracksSnap=await db.collection('suno_tracks').doc(uid).collection('tracks').orderBy('createdAt','asc').limit(12).get();
-            const candidates=tracksSnap.docs.map(doc=>({doc,data:doc.data()||{},uid}))
+            const snap=await db.collection('suno_tracks').doc(uid).collection('tracks').orderBy('createdAt','asc').limit(12).get();
+            const aged=snap.docs.map(doc=>({doc,data:doc.data()||{}}))
               .filter(x=>x.data.taskId && toMs(x.data.createdAt)>0 && toMs(x.data.createdAt)<oldCutoff)
               .filter(x=>['completed','complete','success','succeeded'].includes(String(x.data.status||'').toLowerCase()))
               .slice(0,3);
             console.log('MASTER_LOOKUP_READ_MAX=1');
             console.log('TRACK_LOOKUP_READ_MAX=12');
-            console.log('AGED_CANDIDATES='+candidates.length);
-            if(!candidates.length) throw new Error('no aged completed candidate with taskId found in master library');
-
-            const custom=await admin.auth().createCustomToken(uid);
-            const exchange=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(process.env.FIREBASE_API_KEY)}`,{
-              method:'POST',
-              headers:{'content-type':'application/json','origin':process.env.PREVIEW_ORIGIN,'referer':process.env.PREVIEW_ORIGIN+'/'},
-              body:JSON.stringify({token:custom,returnSecureToken:true})
-            });
-            const auth=await exchange.json();
-            if(!exchange.ok||!auth.idToken){
-              console.log('AUTH_EXCHANGE_HTTP='+exchange.status);
-              console.log('AUTH_EXCHANGE_ERROR='+String(auth?.error?.message||auth?.error?.status||'unknown').slice(0,160));
-              throw new Error('ID token exchange failed');
+            console.log('AGED_CANDIDATES='+aged.length);
+            if(!aged.length) throw new Error('no aged candidate');
+            let ti=0;
+            for(const x of aged){
+              ti++;
+              const urls=candidates(x.data);
+              console.log(`TRACK_${ti}_AGE_DAYS=${Math.floor((Date.now()-toMs(x.data.createdAt))/86400000)}`);
+              console.log(`TRACK_${ti}_STORED_URL_COUNT=${urls.length}`);
+              let alive=0; let pi=0;
+              for(const u of urls){
+                pi++; const p=await probe(u); if(p.hasBytes&&p.http>=200&&p.http<400)alive++;
+                console.log(`TRACK_${ti}_URL_${pi}_HOST=${p.host}`);
+                console.log(`TRACK_${ti}_URL_${pi}_HTTP=${p.http}`);
+                console.log(`TRACK_${ti}_URL_${pi}_CONTENT_TYPE=${p.ct}`);
+                console.log(`TRACK_${ti}_URL_${pi}_BYTES=${p.bytes}`);
+                console.log(`TRACK_${ti}_URL_${pi}_HAS_BYTES=${p.hasBytes}`);
+                console.log(`TRACK_${ti}_URL_${pi}_MAGIC=${p.magic||''}`);
+              }
+              console.log(`TRACK_${ti}_ALIVE_STORED_URLS=${alive}`);
             }
-
-            let idx=0;
-            for(const chosen of candidates){
-              idx++;
-              const response=await fetch(endpoint,{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${auth.idToken}`,'origin':process.env.PREVIEW_ORIGIN},body:JSON.stringify({trackId:chosen.doc.id,taskId:chosen.data.taskId,recoveryOnly:true})});
-              const text=await response.text(); let payload={}; try{payload=JSON.parse(text)}catch{}
-              const raw=payload?.apiStatusResponse||payload?.data||payload;
-              const rawUrls=Array.from(new Set(collectUrls(raw)));
-              const verified=Array.isArray(payload?.audioUrls)?payload.audioUrls.filter(Boolean):[];
-              const reported=Array.isArray(payload?.reportedAudioUrls)?payload.reportedAudioUrls.filter(Boolean):[];
-              console.log(`TRACK_${idx}_HTTP=${response.status}`);
-              console.log(`TRACK_${idx}_AGE_DAYS=${Math.floor((Date.now()-toMs(chosen.data.createdAt))/86400000)}`);
-              console.log(`TRACK_${idx}_STATUS=${String(payload?.status||'')}`);
-              console.log(`TRACK_${idx}_RECOVERY_ONLY=${String(payload?.recoveryOnly)}`);
-              console.log(`TRACK_${idx}_RAW_URL_COUNT=${rawUrls.length}`);
-              console.log(`TRACK_${idx}_RAW_URL_HOSTS=${JSON.stringify(hosts(rawUrls))}`);
-              console.log(`TRACK_${idx}_REPORTED_COUNT=${reported.length}`);
-              console.log(`TRACK_${idx}_REPORTED_HOSTS=${JSON.stringify(hosts(reported))}`);
-              console.log(`TRACK_${idx}_VERIFIED_COUNT=${verified.length}`);
-              console.log(`TRACK_${idx}_VERIFIED_HOSTS=${JSON.stringify(hosts(verified))}`);
-              console.log(`TRACK_${idx}_FINAL_AUDIO=${Boolean(payload?.audioUrl||payload?.streamAudioUrl)}`);
-              console.log(`TRACK_${idx}_VALIDATION=${String(payload?.audioValidationStatus||'')}`);
-              console.log(`TRACK_${idx}_PROVIDER_CODE=${String(payload?.code||payload?.apiStatusResponse?.code||'')}`);
-            }
-            console.log('FIRESTORE_WRITES=0_EXPECTED_RECOVERY_ONLY');
+            console.log('FIRESTORE_WRITES=0');
+            console.log('FUNCTION_CALLS=0');
             console.log('NEW_GENERATION=false');
             console.log('CREDITS_USED=false');
           })().catch(e=>{console.error(e);process.exit(1)});

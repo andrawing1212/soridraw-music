@@ -1,0 +1,46 @@
+name: Temp Preview Index Cache Diagnostic 20260901
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-preview-index-cache-diagnostic-20260901.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm install --no-audit --no-fund
+      - name: Build current preview
+        run: npm run build
+      - name: Compare live index and cache headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOCAL_JS="$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' dist/index.html | head -1)"
+          echo "LOCAL_INDEX_JS=$LOCAL_JS"
+          curl -fsS -D "$RUNNER_TEMP/live.headers" 'https://preview.soridraw.com/' -o "$RUNNER_TEMP/live.html"
+          echo '--- LIVE HEADERS ---'
+          tr -d '\r' < "$RUNNER_TEMP/live.headers" | grep -Ei '^(HTTP/|cache-control:|age:|etag:|last-modified:|x-cache:|expires:)' || true
+          LIVE_JS="$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' "$RUNNER_TEMP/live.html" | head -1)"
+          echo "LIVE_INDEX_JS=$LIVE_JS"
+          test -n "$LOCAL_JS"
+          test -n "$LIVE_JS"
+          if [ "$LOCAL_JS" = "$LIVE_JS" ]; then echo 'LIVE_INDEX_MATCHES_CURRENT_BUILD=PASS'; else echo 'LIVE_INDEX_MATCHES_CURRENT_BUILD=FAIL'; exit 4; fi
+          BUST="https://preview.soridraw.com/?buildcheck=${GITHUB_SHA}"
+          curl -fsS -D "$RUNNER_TEMP/bust.headers" "$BUST" -o "$RUNNER_TEMP/bust.html"
+          BUST_JS="$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' "$RUNNER_TEMP/bust.html" | head -1)"
+          echo "BUST_INDEX_JS=$BUST_JS"
+          test "$LOCAL_JS" = "$BUST_JS"
+          echo 'CACHE_BUST_INDEX_MATCHES_CURRENT_BUILD=PASS'

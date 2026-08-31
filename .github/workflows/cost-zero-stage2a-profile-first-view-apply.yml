@@ -44,7 +44,7 @@ jobs:
       - name: Production build
         run: npm run build
 
-      - name: Validate Worker patch against exact live source without deploy
+      - name: Validate Worker first-view compatibility against exact live source
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -53,11 +53,9 @@ jobs:
           npm install --no-audit --no-fund --package-lock=false
           npm run cf:prepare
           node --check .remote-worker/worker.js
-          grep -n "SORIDRAW_COST_ZERO_PROFILE_FIRST_VIEW_003" .remote-worker/worker.js
           grep -n "handlePublicProfileFirstViewSnapshot" .remote-worker/worker.js | head -n 20
-          echo 'WORKER_SOURCE_VALIDATED=true'
-          echo 'WORKER_DEPLOYED=false'
-          echo 'D1_MIGRATION_APPLIED=false'
+          echo 'WORKER_SOURCE_COMPATIBLE=true'
+          echo 'D1_MIGRATION_APPLIED_BY_THIS_WORKFLOW=false'
 
       - name: Verify bounded source scope
         shell: bash

@@ -1,4 +1,5 @@
 name: Cost Zero Stage 2A D1 Readonly Probe
+# recheck-20260901
 
 on:
   push:

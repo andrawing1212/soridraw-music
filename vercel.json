@@ -2,6 +2,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "ignoreCommand": "node .deploy/vercel-ignore-cloudflare-only.cjs",
+  "git": {
+    "deploymentEnabled": false
+  },
   "rewrites": [
     {
       "source": "/(.*)",

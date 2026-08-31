@@ -41,7 +41,6 @@ jobs:
           const endpoint='https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
           const toMs=(v)=>{ try { return v?.toMillis?.() || (typeof v==='number'?v:Date.parse(v||'')) || 0; } catch { return 0; } };
           const oldCutoff=Date.parse('2026-08-15T00:00:00Z');
-
           const collectUrls=(value,out=[],depth=0)=>{
             if(!value||depth>7) return out;
             if(Array.isArray(value)){ value.slice(0,50).forEach(v=>collectUrls(v,out,depth+1)); return out; }
@@ -53,7 +52,6 @@ jobs:
             return out;
           };
           const hosts=(urls)=>Array.from(new Set(urls.map(u=>{try{return new URL(u).host}catch{return 'invalid'}})));
-
           (async()=>{
             const masterSnap=await db.collection('users').where('staffRole','==','master').limit(1).get();
             if(masterSnap.empty) throw new Error('master user not found');
@@ -69,9 +67,17 @@ jobs:
             if(!candidates.length) throw new Error('no aged completed candidate with taskId found in master library');
 
             const custom=await admin.auth().createCustomToken(uid);
-            const exchange=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(process.env.FIREBASE_API_KEY)}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:custom,returnSecureToken:true})});
+            const exchange=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(process.env.FIREBASE_API_KEY)}`,{
+              method:'POST',
+              headers:{'content-type':'application/json','origin':process.env.PREVIEW_ORIGIN,'referer':process.env.PREVIEW_ORIGIN+'/'},
+              body:JSON.stringify({token:custom,returnSecureToken:true})
+            });
             const auth=await exchange.json();
-            if(!exchange.ok||!auth.idToken) throw new Error('ID token exchange failed '+exchange.status);
+            if(!exchange.ok||!auth.idToken){
+              console.log('AUTH_EXCHANGE_HTTP='+exchange.status);
+              console.log('AUTH_EXCHANGE_ERROR='+String(auth?.error?.message||auth?.error?.status||'unknown').slice(0,160));
+              throw new Error('ID token exchange failed');
+            }
 
             let idx=0;
             for(const chosen of candidates){

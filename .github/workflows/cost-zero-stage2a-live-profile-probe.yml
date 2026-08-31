@@ -1,4 +1,4 @@
-name: Cost Zero Stage 2A Live Profile Probe
+name: Cost Zero Stage 2A Live Profile Materialization Probe
 
 on:
   push:
@@ -15,13 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Read-only live first-view probe
+      - name: Verify lazy snapshot materialization and second-request zero-read edge hit
         shell: bash
         run: |
           set -euo pipefail
           base='https://soridraw-explore-api.andrawing1212.workers.dev'
           origin='https://preview.soridraw.com'
-          curl -sS --max-time 30 -D "$RUNNER_TEMP/feed.headers" -o "$RUNNER_TEMP/feed.json" \
+
+          curl -fsS --max-time 30 -D "$RUNNER_TEMP/feed.headers" -o "$RUNNER_TEMP/feed.json" \
             -H "Origin: $origin" -H 'Accept: application/json' \
             "$base/v1/feed?sort=latest&limit=1"
           node - <<'NODE'
@@ -35,18 +36,39 @@ jobs:
           console.log('PROFILE_UID_FOUND=true');
           NODE
           uid="$(cat "$RUNNER_TEMP/profile-uid.txt")"
-          status="$(curl -sS --max-time 30 -w '%{http_code}' -D "$RUNNER_TEMP/first-view.headers" -o "$RUNNER_TEMP/first-view.json" \
-            -H "Origin: $origin" -H 'Accept: application/json' \
-            "$base/v1/profiles/$uid/first-view?limit=50")"
-          echo "FIRST_VIEW_HTTP_STATUS=$status"
-          grep -iE '^(x-soridraw-d1-read|x-soridraw-d1-write|x-soridraw-cf-worker|cache-control):' "$RUNNER_TEMP/first-view.headers" || true
-          node - <<'NODE'
+          url="$base/v1/profiles/$uid/first-view?limit=50"
+
+          for n in 1 2; do
+            status="$(curl -sS --max-time 30 -w '%{http_code}' \
+              -D "$RUNNER_TEMP/first-view-$n.headers" \
+              -o "$RUNNER_TEMP/first-view-$n.json" \
+              -H "Origin: $origin" -H 'Accept: application/json' \
+              "$url")"
+            echo "FIRST_VIEW_${n}_HTTP_STATUS=$status"
+            test "$status" = '200'
+            grep -iE '^(x-soridraw-profile-edge-cache|x-soridraw-d1-read|x-soridraw-d1-write|x-soridraw-cf-worker|cache-control):' "$RUNNER_TEMP/first-view-$n.headers" || true
+            node - "$n" "$uid" <<'NODE'
           const fs=require('fs');
-          let p={}; try{p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/first-view.json','utf8'));}catch{}
-          console.log('FIRST_VIEW_OK='+String(p?.ok===true));
-          console.log('FIRST_VIEW_CODE='+String(p?.code||p?.error?.code||''));
-          const items=p?.data?.items||p?.data?.tracks?.items||p?.data?.snapshot?.items||[];
-          console.log('FIRST_VIEW_ITEM_COUNT='+String(Array.isArray(items)?items.length:0));
+          const n=process.argv[2];
+          const uid=process.argv[3];
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+`/first-view-${n}.json`,'utf8'));
+          if(p?.ok!==true) throw new Error(`first-view ${n} not ok`);
+          const profile=p?.data?.profile;
+          const items=Array.isArray(p?.data?.items)?p.data.items:[];
+          if(!profile?.uid) throw new Error(`first-view ${n} missing profile`);
+          if(String(profile.uid)!==String(uid)) throw new Error(`first-view ${n} profile uid mismatch`);
+          if(items.length>50) throw new Error(`first-view ${n} exceeded 50 item bound`);
+          console.log(`FIRST_VIEW_${n}_OK=true`);
+          console.log(`FIRST_VIEW_${n}_ITEM_COUNT=${items.length}`);
+          console.log(`FIRST_VIEW_${n}_TRACK_COUNT=${Number(profile.trackCount||0)}`);
+          console.log(`FIRST_VIEW_${n}_REVISION=${Number(p?.data?.revision||0)}`);
           NODE
-          echo 'READ_ONLY=true'
-          echo 'NO_D1_WRITE_REQUESTED=true'
+          done
+
+          grep -qi '^x-soridraw-profile-edge-cache: HIT' "$RUNNER_TEMP/first-view-2.headers"
+          grep -qi '^x-soridraw-d1-read: 0' "$RUNNER_TEMP/first-view-2.headers"
+          grep -qi '^x-soridraw-d1-write: 0' "$RUNNER_TEMP/first-view-2.headers"
+          echo 'SECOND_PROFILE_EDGE_HIT_D1_ZERO=PASS'
+          echo 'BOUNDED_FIRST_VIEW_MAX_ITEMS=50'
+          echo 'DERIVED_SNAPSHOT_WRITE_ALLOWED=true'
+          echo 'SOURCE_TABLE_DELETE_OR_MIGRATION=false'

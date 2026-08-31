@@ -39,7 +39,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'SORIDRAW_COST_ZERO_PROFILE_FIRST_VIEW_MATERIALIZER_004' .remote-worker/worker.js
+          # Cloudflare compiles Worker source and strips comments, so runtime
+          # function anchors are the durable validation signal rather than a comment marker.
           grep -Fq 'materializePublicProfileFirstView' .remote-worker/worker.js
           grep -Fq 'ensurePublicProfileFirstViewTable' .remote-worker/worker.js
           grep -Fq 'handlePublicProfileFirstViewWithEdgeCache' .remote-worker/worker.js
@@ -61,5 +62,5 @@ jobs:
           }
           console.log('MATERIALIZER_SOURCE_VALIDATION=PASS');
           NODE
-          echo 'WORKER_DEPLOYED=false'
-          echo 'D1_WRITE_EXECUTED=false'
+          echo 'WORKER_DEPLOYED_BY_THIS_WORKFLOW=false'
+          echo 'D1_WRITE_EXECUTED_BY_THIS_WORKFLOW=false'

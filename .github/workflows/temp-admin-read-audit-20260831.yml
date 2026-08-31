@@ -28,10 +28,9 @@ jobs:
           grep -q "const snapshot = await getDoc(NAVIGATION_VISIBILITY_DOC);" src/pages/AdminAppSettingsPage.tsx
           grep -q "const AdminVocalTonesPageLazy" src/App.tsx
           grep -q "const AdminSectionTagsPageLazy" src/App.tsx
-          grep -q "path: '/admin/vocals'" src/components/AdminPageLayout.tsx
-          grep -q "path: '/admin/tags'" src/components/AdminPageLayout.tsx
           test -f src/pages/AdminVocalTonesPage.tsx
           test -f src/pages/AdminSectionTagsPage.tsx
+          test ! -f src/lib/adminStaffListCache.ts
           echo 'ADMIN_FULL_AUDIT_GUARD=PASS'
 
       - name: Apply full admin cache-first cleanup
@@ -40,6 +39,7 @@ jobs:
           set -euo pipefail
           python3 <<'PY'
           from pathlib import Path
+          from textwrap import dedent
 
           def replace_once(path: str, old: str, new: str, label: str):
               p = Path(path)
@@ -50,342 +50,207 @@ jobs:
               p.write_text(text.replace(old, new, 1), encoding='utf-8')
               print(f'{label}=PASS')
 
-          staff_cache = """import type { AppUserInfo } from '../types';
-import {
-  readSoridrawPersistentCache,
-  removeSoridrawPersistentCache,
-  writeSoridrawPersistentCache,
-} from './soridrawPersistentCache';
+          staff_cache = dedent('''
+          import type { AppUserInfo } from '../types';
+          import {
+            readSoridrawPersistentCache,
+            removeSoridrawPersistentCache,
+            writeSoridrawPersistentCache,
+          } from './soridrawPersistentCache';
 
-export type AdminStaffListCacheData = {
-  admins: AppUserInfo[];
-};
+          export type AdminStaffListCacheData = {
+            admins: AppUserInfo[];
+          };
 
-const ADMIN_STAFF_LIST_CACHE_SCHEMA_VERSION = 1;
-const ADMIN_STAFF_LIST_CACHE_DATA_VERSION = 1;
-const ADMIN_STAFF_LIST_CACHE_SOURCE_TYPE = 'admin-staff-list';
-const ADMIN_STAFF_LIST_CACHE_KEY = 'admin-staff-list';
+          const ADMIN_STAFF_LIST_CACHE_SCHEMA_VERSION = 1;
+          const ADMIN_STAFF_LIST_CACHE_DATA_VERSION = 1;
+          const ADMIN_STAFF_LIST_CACHE_SOURCE_TYPE = 'admin-staff-list';
+          const ADMIN_STAFF_LIST_CACHE_KEY = 'admin-staff-list';
 
-export const readAdminStaffListCache = (masterUid: string): AdminStaffListCacheData | null => {
-  if (!masterUid) return null;
-  const envelope = readSoridrawPersistentCache<AdminStaffListCacheData>({
-    cacheKey: ADMIN_STAFF_LIST_CACHE_KEY,
-    sourceType: ADMIN_STAFF_LIST_CACHE_SOURCE_TYPE,
-    schemaVersion: ADMIN_STAFF_LIST_CACHE_SCHEMA_VERSION,
-    uid: masterUid,
-  });
-  if (!envelope || !Array.isArray(envelope.data?.admins)) return null;
-  return { admins: envelope.data.admins };
-};
+          export const readAdminStaffListCache = (masterUid: string): AdminStaffListCacheData | null => {
+            if (!masterUid) return null;
+            const envelope = readSoridrawPersistentCache<AdminStaffListCacheData>({
+              cacheKey: ADMIN_STAFF_LIST_CACHE_KEY,
+              sourceType: ADMIN_STAFF_LIST_CACHE_SOURCE_TYPE,
+              schemaVersion: ADMIN_STAFF_LIST_CACHE_SCHEMA_VERSION,
+              uid: masterUid,
+            });
+            if (!envelope || !Array.isArray(envelope.data?.admins)) return null;
+            return { admins: envelope.data.admins };
+          };
 
-export const writeAdminStaffListCache = (masterUid: string, admins: AppUserInfo[]) => {
-  if (!masterUid) return;
-  writeSoridrawPersistentCache<AdminStaffListCacheData>({
-    cacheKey: ADMIN_STAFF_LIST_CACHE_KEY,
-    sourceType: ADMIN_STAFF_LIST_CACHE_SOURCE_TYPE,
-    schemaVersion: ADMIN_STAFF_LIST_CACHE_SCHEMA_VERSION,
-    dataVersion: ADMIN_STAFF_LIST_CACHE_DATA_VERSION,
-    uid: masterUid,
-    data: { admins: Array.isArray(admins) ? admins : [] },
-  });
-};
+          export const writeAdminStaffListCache = (masterUid: string, admins: AppUserInfo[]) => {
+            if (!masterUid) return;
+            writeSoridrawPersistentCache<AdminStaffListCacheData>({
+              cacheKey: ADMIN_STAFF_LIST_CACHE_KEY,
+              sourceType: ADMIN_STAFF_LIST_CACHE_SOURCE_TYPE,
+              schemaVersion: ADMIN_STAFF_LIST_CACHE_SCHEMA_VERSION,
+              dataVersion: ADMIN_STAFF_LIST_CACHE_DATA_VERSION,
+              uid: masterUid,
+              data: { admins: Array.isArray(admins) ? admins : [] },
+            });
+          };
 
-export const removeAdminStaffListCache = (masterUid: string) => {
-  if (!masterUid) return;
-  removeSoridrawPersistentCache(ADMIN_STAFF_LIST_CACHE_KEY, masterUid);
-};
-"""
-          staff_path = Path('src/lib/adminStaffListCache.ts')
-          if staff_path.exists():
-              raise SystemExit('adminStaffListCache.ts already exists; refusing double patch')
-          staff_path.write_text(staff_cache, encoding='utf-8')
+          export const removeAdminStaffListCache = (masterUid: string) => {
+            if (!masterUid) return;
+            removeSoridrawPersistentCache(ADMIN_STAFF_LIST_CACHE_KEY, masterUid);
+          };
+          ''').lstrip()
+          Path('src/lib/adminStaffListCache.ts').write_text(staff_cache, encoding='utf-8')
           print('ADD_ADMIN_STAFF_CACHE=PASS')
 
           replace_once(
               'src/lib/firestoreReadCache.ts',
-              """export const FIRESTORE_READ_CACHE_TTL_MS = {
-  navigationVisibility: 6 * 60 * 60 * 1000,
-  lyricClicheGuard: 6 * 60 * 60 * 1000,
-  sectionTags: 12 * 60 * 60 * 1000,
-} as const;
-""",
-              """// These shared configuration caches are version/mutation driven rather than
-// clock driven. Reopening the app must not create paid Firestore reads merely
-// because time passed; an explicit admin mutation or future Version Signal is
-// responsible for invalidation.
-export const FIRESTORE_READ_CACHE_TTL_MS = {
-  navigationVisibility: Number.POSITIVE_INFINITY,
-  lyricClicheGuard: Number.POSITIVE_INFINITY,
-  sectionTags: Number.POSITIVE_INFINITY,
-} as const;
-""",
+              "export const FIRESTORE_READ_CACHE_TTL_MS = {\n  navigationVisibility: 6 * 60 * 60 * 1000,\n  lyricClicheGuard: 6 * 60 * 60 * 1000,\n  sectionTags: 12 * 60 * 60 * 1000,\n} as const;\n",
+              "// Shared configuration caches are mutation/version driven. App restart or elapsed time must not create paid reads.\nexport const FIRESTORE_READ_CACHE_TTL_MS = {\n  navigationVisibility: Number.POSITIVE_INFINITY,\n  lyricClicheGuard: Number.POSITIVE_INFINITY,\n  sectionTags: Number.POSITIVE_INFINITY,\n} as const;\n",
               'MAKE_SHARED_CONFIG_CACHE_VERSION_DRIVEN',
           )
 
           replace_once(
               'src/pages/AdminAppSettingsPage.tsx',
-              """import { FIRESTORE_READ_CACHE_KEYS, writeFirestoreReadCache } from '../lib/firestoreReadCache';
-""",
-              """import { FIRESTORE_READ_CACHE_KEYS, FIRESTORE_READ_CACHE_TTL_MS, readFirestoreReadCache, writeFirestoreReadCache } from '../lib/firestoreReadCache';
-""",
+              "import { FIRESTORE_READ_CACHE_KEYS, writeFirestoreReadCache } from '../lib/firestoreReadCache';\n",
+              "import { FIRESTORE_READ_CACHE_KEYS, FIRESTORE_READ_CACHE_TTL_MS, readFirestoreReadCache, writeFirestoreReadCache } from '../lib/firestoreReadCache';\n",
               'APP_SETTINGS_CACHE_IMPORTS',
           )
-
           replace_once(
               'src/pages/AdminAppSettingsPage.tsx',
-              """    const loadSettings = async () => {
-      try {
-        const snapshot = await getDoc(NAVIGATION_VISIBILITY_DOC);
-""",
-              """    const loadSettings = async () => {
-      const cached = readFirestoreReadCache<NavigationVisibilitySettings>(
-        FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
-        FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
-      );
-      if (cached?.data) {
-        const nextSettings = normalizeNavigationVisibilitySettings(cached.data, readStoredNavigationVisibilitySettings());
-        setSavedSettings(nextSettings);
-        setDraftSettings(nextSettings);
-        writeStoredNavigationVisibilitySettings(nextSettings);
-        setIsLoading(false);
-        return;
-      }
-      try {
-        const snapshot = await getDoc(NAVIGATION_VISIBILITY_DOC);
-""",
+              "    const loadSettings = async () => {\n      try {\n        const snapshot = await getDoc(NAVIGATION_VISIBILITY_DOC);\n",
+              "    const loadSettings = async () => {\n      const cached = readFirestoreReadCache<NavigationVisibilitySettings>(\n        FIRESTORE_READ_CACHE_KEYS.navigationVisibility,\n        FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,\n      );\n      if (cached?.data) {\n        const nextSettings = normalizeNavigationVisibilitySettings(cached.data, readStoredNavigationVisibilitySettings());\n        setSavedSettings(nextSettings);\n        setDraftSettings(nextSettings);\n        writeStoredNavigationVisibilitySettings(nextSettings);\n        setIsLoading(false);\n        return;\n      }\n      try {\n        const snapshot = await getDoc(NAVIGATION_VISIBILITY_DOC);\n",
               'APP_SETTINGS_NAV_CACHE_FIRST',
           )
-
           replace_once(
               'src/pages/AdminAppSettingsPage.tsx',
-              """    const loadClicheGuard = async () => {
-      try {
-        const snapshot = await getDoc(LYRIC_CLICHE_GUARD_DOC);
-""",
-              """    const loadClicheGuard = async () => {
-      const cached = readFirestoreReadCache<{ hardBanTerms?: unknown; softBanTerms?: unknown }>(
-        FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
-        FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
-      );
-      if (cached?.data) {
-        setClicheDraft({
-          hardBanText: parseTerms(formatTerms(cached.data.hardBanTerms)).join('\\n'),
-          softBanText: parseTerms(formatTerms(cached.data.softBanTerms)).join('\\n'),
-        });
-        setIsClicheLoading(false);
-        return;
-      }
-      try {
-        const snapshot = await getDoc(LYRIC_CLICHE_GUARD_DOC);
-""",
+              "    const loadClicheGuard = async () => {\n      try {\n        const snapshot = await getDoc(LYRIC_CLICHE_GUARD_DOC);\n",
+              "    const loadClicheGuard = async () => {\n      const cached = readFirestoreReadCache<{ hardBanTerms?: unknown; softBanTerms?: unknown }>(\n        FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,\n        FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,\n      );\n      if (cached?.data) {\n        setClicheDraft({\n          hardBanText: parseTerms(formatTerms(cached.data.hardBanTerms)).join('\\n'),\n          softBanText: parseTerms(formatTerms(cached.data.softBanTerms)).join('\\n'),\n        });\n        setIsClicheLoading(false);\n        return;\n      }\n      try {\n        const snapshot = await getDoc(LYRIC_CLICHE_GUARD_DOC);\n",
               'APP_SETTINGS_CLICHE_CACHE_FIRST',
           )
 
           replace_once(
               'src/pages/MasterPermissionsPage.tsx',
-              """import { getTimestampMs } from '../App';
-""",
-              """import { getTimestampMs } from '../App';
-import { readAdminStaffListCache, writeAdminStaffListCache } from '../lib/adminStaffListCache';
-""",
+              "import { getTimestampMs } from '../App';\n",
+              "import { getTimestampMs } from '../App';\nimport { readAdminStaffListCache, writeAdminStaffListCache } from '../lib/adminStaffListCache';\n",
               'MASTER_STAFF_CACHE_IMPORT',
           )
 
-          old_master = """  const loadAdmins = useCallback(async () => {
-    setIsLoading(true);
-    setMessage(null);
-    try {
-      const snapshot = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
-      const nextAdmins = snapshot.docs
-        .map((item) => parseUser(item.id, item.data()))
-        .filter((user) => normalizeStaffRole(user) !== null)
-        .sort((a, b) => {
-          const order = (role: StaffRole) => role === 'master' ? 0 : 1;
-          return order(a.staffRole || null) - order(b.staffRole || null)
-            || (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '', 'ko');
-        });
+          master_path = Path('src/pages/MasterPermissionsPage.tsx')
+          master = master_path.read_text(encoding='utf-8')
+          start = master.index('  const loadAdmins = useCallback(async () => {')
+          end_marker = '  useEffect(() => { void loadAdmins(); }, [loadAdmins]);\n'
+          end = master.index(end_marker, start) + len(end_marker)
+          new_master = dedent('''
+            const applyAdminList = useCallback((nextAdmins: AppUserInfo[]) => {
+              setAdmins(nextAdmins);
+              setDrafts(Object.fromEntries(nextAdmins.map((user) => [
+                user.uid,
+                user.staffRole === 'master'
+                  ? { ...FULL_ADMIN_PERMISSIONS }
+                  : { ...normalizeAdminPermissions(user) },
+              ])));
+            }, []);
 
-      setAdmins(nextAdmins);
-      setDrafts(Object.fromEntries(nextAdmins.map((user) => [
-        user.uid,
-        user.staffRole === 'master'
-          ? { ...FULL_ADMIN_PERMISSIONS }
-          : { ...normalizeAdminPermissions(user) },
-      ])));
-    } catch (error: any) {
-      console.error('Failed to load admin permissions:', error);
-      setMessage({ success: false, text: error?.message || '관리자 권한 목록을 불러오지 못했습니다.' });
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+            const loadAdmins = useCallback(async (forceServer = false) => {
+              const masterUid = auth.currentUser?.uid || '';
+              if (!masterUid) {
+                setIsLoading(false);
+                return;
+              }
+              if (!forceServer) {
+                const cached = readAdminStaffListCache(masterUid);
+                if (cached) {
+                  applyAdminList(cached.admins);
+                  setIsLoading(false);
+                  return;
+                }
+              }
+              setIsLoading(true);
+              setMessage(null);
+              try {
+                const snapshot = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
+                const nextAdmins = snapshot.docs
+                  .map((item) => parseUser(item.id, item.data()))
+                  .filter((user) => normalizeStaffRole(user) !== null)
+                  .sort((a, b) => {
+                    const order = (role: StaffRole) => role === 'master' ? 0 : 1;
+                    return order(a.staffRole || null) - order(b.staffRole || null)
+                      || (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '', 'ko');
+                  });
+                applyAdminList(nextAdmins);
+                writeAdminStaffListCache(masterUid, nextAdmins);
+              } catch (error: any) {
+                console.error('Failed to load admin permissions:', error);
+                setMessage({ success: false, text: error?.message || '관리자 권한 목록을 불러오지 못했습니다.' });
+              } finally {
+                setIsLoading(false);
+              }
+            }, [applyAdminList]);
 
-  useEffect(() => { void loadAdmins(); }, [loadAdmins]);
-"""
-          new_master = """  const applyAdminList = useCallback((nextAdmins: AppUserInfo[]) => {
-    setAdmins(nextAdmins);
-    setDrafts(Object.fromEntries(nextAdmins.map((user) => [
-      user.uid,
-      user.staffRole === 'master'
-        ? { ...FULL_ADMIN_PERMISSIONS }
-        : { ...normalizeAdminPermissions(user) },
-    ])));
-  }, []);
-
-  const loadAdmins = useCallback(async (forceServer = false) => {
-    const masterUid = auth.currentUser?.uid || '';
-    if (!masterUid) {
-      setIsLoading(false);
-      return;
-    }
-
-    if (!forceServer) {
-      const cached = readAdminStaffListCache(masterUid);
-      if (cached) {
-        applyAdminList(cached.admins);
-        setIsLoading(false);
-        return;
-      }
-    }
-
-    setIsLoading(true);
-    setMessage(null);
-    try {
-      const snapshot = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
-      const nextAdmins = snapshot.docs
-        .map((item) => parseUser(item.id, item.data()))
-        .filter((user) => normalizeStaffRole(user) !== null)
-        .sort((a, b) => {
-          const order = (role: StaffRole) => role === 'master' ? 0 : 1;
-          return order(a.staffRole || null) - order(b.staffRole || null)
-            || (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '', 'ko');
-        });
-
-      applyAdminList(nextAdmins);
-      writeAdminStaffListCache(masterUid, nextAdmins);
-    } catch (error: any) {
-      console.error('Failed to load admin permissions:', error);
-      setMessage({ success: false, text: error?.message || '관리자 권한 목록을 불러오지 못했습니다.' });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [applyAdminList]);
-
-  useEffect(() => { void loadAdmins(false); }, [loadAdmins]);
-"""
-          replace_once('src/pages/MasterPermissionsPage.tsx', old_master, new_master, 'MASTER_CACHE_FIRST_FLOW')
+            useEffect(() => { void loadAdmins(false); }, [loadAdmins]);
+          ''').rstrip() + '\n'
+          master = master[:start] + new_master + master[end:]
+          master_path.write_text(master, encoding='utf-8')
+          print('MASTER_CACHE_FIRST_FLOW=PASS')
 
           replace_once(
               'src/pages/MasterPermissionsPage.tsx',
-              """      setMessage({ success: true, text: `${user.displayName || user.email || '관리자'} 권한을 저장했습니다.` });
-      await loadAdmins();
-""",
-              """      const nextAdmins = admins.map((item) => item.uid === user.uid
-        ? { ...item, staffRole: 'admin', adminPermissions: { ...permissions } }
-        : item);
-      setAdmins(nextAdmins);
-      setDrafts((current) => ({ ...current, [user.uid]: { ...permissions } }));
-      const masterUid = auth.currentUser?.uid || '';
-      if (masterUid) writeAdminStaffListCache(masterUid, nextAdmins);
-      setMessage({ success: true, text: `${user.displayName || user.email || '관리자'} 권한을 저장했습니다.` });
-""",
+              "      setMessage({ success: true, text: `${user.displayName || user.email || '관리자'} 권한을 저장했습니다.` });\n      await loadAdmins();\n",
+              "      const nextAdmins = admins.map((item) => item.uid === user.uid\n        ? { ...item, staffRole: 'admin', adminPermissions: { ...permissions } }\n        : item);\n      setAdmins(nextAdmins);\n      setDrafts((current) => ({ ...current, [user.uid]: { ...permissions } }));\n      const masterUid = auth.currentUser?.uid || '';\n      if (masterUid) writeAdminStaffListCache(masterUid, nextAdmins);\n      setMessage({ success: true, text: `${user.displayName || user.email || '관리자'} 권한을 저장했습니다.` });\n",
               'MASTER_SAVE_PATCH_CACHE_ONLY',
           )
-
           replace_once(
               'src/pages/MasterPermissionsPage.tsx',
-              """          onClick={() => void loadAdmins()}
-""",
-              """          onClick={() => void loadAdmins(true)}
-""",
+              "          onClick={() => void loadAdmins()}\n",
+              "          onClick={() => void loadAdmins(true)}\n",
               'MASTER_MANUAL_REFRESH_SERVER_ONLY',
           )
 
           replace_once(
               'src/pages/AdminUserManagementPage.tsx',
-              """import { readAdminUserListCache, writeAdminUserListCache } from '../lib/adminUserListCache';
-""",
-              """import { readAdminUserListCache, writeAdminUserListCache } from '../lib/adminUserListCache';
-import { removeAdminStaffListCache } from '../lib/adminStaffListCache';
-""",
+              "import { readAdminUserListCache, writeAdminUserListCache } from '../lib/adminUserListCache';\n",
+              "import { readAdminUserListCache, writeAdminUserListCache } from '../lib/adminUserListCache';\nimport { removeAdminStaffListCache } from '../lib/adminStaffListCache';\n",
               'USER_ADMIN_STAFF_CACHE_IMPORT',
           )
-
           replace_once(
               'src/pages/AdminUserManagementPage.tsx',
-              """        await callable({
-          targetUid: selectedUser.uid,
-          staffRole: promotedToAdmin ? 'admin' : null,
-          adminPermissions: promotedToAdmin ? { ...FULL_ADMIN_PERMISSIONS } : {},
-        });
-""",
-              """        await callable({
-          targetUid: selectedUser.uid,
-          staffRole: promotedToAdmin ? 'admin' : null,
-          adminPermissions: promotedToAdmin ? { ...FULL_ADMIN_PERMISSIONS } : {},
-        });
-        const masterUid = auth.currentUser?.uid || '';
-        if (masterUid) removeAdminStaffListCache(masterUid);
-""",
+              "        await callable({\n          targetUid: selectedUser.uid,\n          staffRole: promotedToAdmin ? 'admin' : null,\n          adminPermissions: promotedToAdmin ? { ...FULL_ADMIN_PERMISSIONS } : {},\n        });\n",
+              "        await callable({\n          targetUid: selectedUser.uid,\n          staffRole: promotedToAdmin ? 'admin' : null,\n          adminPermissions: promotedToAdmin ? { ...FULL_ADMIN_PERMISSIONS } : {},\n        });\n        const masterUid = auth.currentUser?.uid || '';\n        if (masterUid) removeAdminStaffListCache(masterUid);\n",
               'INVALIDATE_STAFF_CACHE_ON_ROLE_CHANGE',
           )
 
           replace_once(
               'src/components/AdminPageLayout.tsx',
-              """import { Activity, Crown, Home, Key, Mic2, SlidersHorizontal, Tags, Users } from 'lucide-react';
-""",
-              """import { Activity, Crown, Home, Key, SlidersHorizontal, Users } from 'lucide-react';
-""",
+              "import { Activity, Crown, Home, Key, Mic2, SlidersHorizontal, Tags, Users } from 'lucide-react';\n",
+              "import { Activity, Crown, Home, Key, SlidersHorizontal, Users } from 'lucide-react';\n",
               'REMOVE_OBSOLETE_ADMIN_ICONS',
           )
           replace_once(
               'src/components/AdminPageLayout.tsx',
-              """  { path: '/admin/vocals', label: '보컬 관리', icon: Mic2, permission: 'vocalManagement' },
-  { path: '/admin/tags', label: '섹션 태그', icon: Tags, permission: 'sectionTagManagement' },
-""",
-              """""",
+              "  { path: '/admin/vocals', label: '보컬 관리', icon: Mic2, permission: 'vocalManagement' },\n  { path: '/admin/tags', label: '섹션 태그', icon: Tags, permission: 'sectionTagManagement' },\n",
+              '',
               'REMOVE_OBSOLETE_ADMIN_TABS',
           )
-
           replace_once(
               'src/constants/adminPermissions.ts',
-              """  { key: 'vocalManagement', label: '보컬 관리', description: '보컬 톤 데이터 생성·수정·삭제', path: '/admin/vocals' },
-  { key: 'sectionTagManagement', label: '섹션 태그', description: '섹션 태그와 가창 큐 관리', path: '/admin/tags' },
-""",
-              """""",
+              "  { key: 'vocalManagement', label: '보컬 관리', description: '보컬 톤 데이터 생성·수정·삭제', path: '/admin/vocals' },\n  { key: 'sectionTagManagement', label: '섹션 태그', description: '섹션 태그와 가창 큐 관리', path: '/admin/tags' },\n",
+              '',
               'REMOVE_OBSOLETE_PERMISSION_DEFINITIONS',
           )
 
           replace_once(
               'src/App.tsx',
-              """const AdminVocalTonesPageLazy = lazy(() => import('./pages/AdminVocalTonesPage'));
-const AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage'));
-""",
-              """""",
+              "const AdminVocalTonesPageLazy = lazy(() => import('./pages/AdminVocalTonesPage'));\nconst AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage'));\n",
+              '',
               'REMOVE_OBSOLETE_ADMIN_LAZY_IMPORTS',
           )
           replace_once(
               'src/App.tsx',
-              """            <Route path=\"/admin/vocals\" element={canAccessAdminPage('vocalManagement') ? <Suspense fallback={<div className=\"min-h-screen flex items-center justify-center text-white\">불러오는 중...</div>}><AdminVocalTonesPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
-            <Route path=\"/admin/tags\" element={canAccessAdminPage('sectionTagManagement') ? <Suspense fallback={<div className=\"min-h-screen flex items-center justify-center text-white\">불러오는 중...</div>}><AdminSectionTagsPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
-""",
-              """            <Route path=\"/admin/vocals\" element={<Navigate to={firstAccessibleAdminPath} replace />} />
-            <Route path=\"/admin/tags\" element={<Navigate to={firstAccessibleAdminPath} replace />} />
-""",
+              "            <Route path=\"/admin/vocals\" element={canAccessAdminPage('vocalManagement') ? <Suspense fallback={<div className=\"min-h-screen flex items-center justify-center text-white\">불러오는 중...</div>}><AdminVocalTonesPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />\n            <Route path=\"/admin/tags\" element={canAccessAdminPage('sectionTagManagement') ? <Suspense fallback={<div className=\"min-h-screen flex items-center justify-center text-white\">불러오는 중...</div>}><AdminSectionTagsPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />\n",
+              "            <Route path=\"/admin/vocals\" element={<Navigate to={firstAccessibleAdminPath} replace />} />\n            <Route path=\"/admin/tags\" element={<Navigate to={firstAccessibleAdminPath} replace />} />\n",
               'REDIRECT_OBSOLETE_ADMIN_ROUTES',
           )
           replace_once(
               'src/App.tsx',
-              """      if (Array.isArray(cached?.data) && cached.data.length > 0) {
-        setSectionTags(cached.data);
-        if (cached.isFresh) return;
-      }
-""",
-              """      if (cached && Array.isArray(cached.data)) {
-        setSectionTags(cached.data);
-        if (cached.isFresh) return;
-      }
-""",
+              "      if (Array.isArray(cached?.data) && cached.data.length > 0) {\n        setSectionTags(cached.data);\n        if (cached.isFresh) return;\n      }\n",
+              "      if (cached && Array.isArray(cached.data)) {\n        setSectionTags(cached.data);\n        if (cached.isFresh) return;\n      }\n",
               'EMPTY_SECTION_TAG_CACHE_IS_VALID',
           )
 
@@ -415,7 +280,6 @@ const AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage
           ! grep -q "label: '섹션 태그'" src/constants/adminPermissions.ts
           test ! -e src/pages/AdminVocalTonesPage.tsx
           test ! -e src/pages/AdminSectionTagsPage.tsx
-          # Security boundary intentionally retained until Version Signal/Auth claims replace it.
           grep -q "onSnapshot(userRef" src/App.tsx
           echo 'ADMIN_REPEAT_READ_CLEANUP=PASS'
           echo 'SECURITY_USER_AUTHORITY_LISTENER=RETAINED'

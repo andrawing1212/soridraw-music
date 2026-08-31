@@ -1,0 +1,73 @@
+name: Cost Zero Stage 2A Profile Cache Mutations Apply
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-cost-zero-stage2a-profile-cache-mutations.py'
+      - '.github/workflows/cost-zero-stage2a-profile-cache-mutations-apply.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply cache mutation consistency patch
+        run: python .deploy/apply-cost-zero-stage2a-profile-cache-mutations.py
+
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Production build
+        run: npm run build
+
+      - name: Verify bounded source scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          git status --short
+          python - <<'PY'
+          import subprocess
+          allowed = {
+            'src/services/exploreProfileFirstViewService.ts',
+            'src/pages/ExplorePage.tsx',
+          }
+          lines = subprocess.check_output(['git','status','--porcelain'], text=True).splitlines()
+          changed = {line[3:] for line in lines if len(line) >= 4}
+          unexpected = sorted(changed - allowed)
+          if unexpected:
+              raise SystemExit(f'Unexpected cache-mutation files: {unexpected}')
+          missing = sorted(allowed - changed)
+          if missing:
+              raise SystemExit(f'Missing cache-mutation files: {missing}')
+          print('PROFILE_CACHE_MUTATION_SCOPE_OK=true')
+          PY
+
+      - name: Commit verified cache mutation consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/services/exploreProfileFirstViewService.ts src/pages/ExplorePage.tsx
+          git commit -m 'fix(preview): keep public-profile cache consistent after mutations'
+          git push origin HEAD:preview

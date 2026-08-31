@@ -1,0 +1,47 @@
+name: SORIDRAW 994 One-Track WAV Rescue Proof V2
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-suno-wav-rescue-994-live-proof-v2.yml'
+
+concurrency:
+  group: soridraw-994-one-track-rescue-proof-v2
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prove-one-track:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+      GCLOUD_PROJECT: soridraw-app-866a5
+      GCP_PROJECT: soridraw-app-866a5
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions ci --no-audit --no-fund
+
+      - name: Authenticate backend service account
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+
+      - name: Rescue exactly one aged track and verify bytes
+        run: node functions/scripts/prove-suno-wav-rescue-994.cjs

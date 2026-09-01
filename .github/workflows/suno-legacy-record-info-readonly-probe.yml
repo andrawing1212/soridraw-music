@@ -1,0 +1,161 @@
+name: SORIDRAW Legacy Record Info Read-only Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/suno-legacy-record-info-readonly-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Authenticate read-only probe
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Refresh one legacy task through Music API record-info without writes
+        working-directory: functions
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+        run: |
+          node <<'NODE'
+          const admin = require('firebase-admin');
+          admin.initializeApp({ projectId: 'soridraw-app-866a5' });
+          const db = admin.firestore();
+          const AUDIO_KEYS = new Set([
+            'audioUrl','audio_url','streamAudioUrl','stream_audio_url','sourceAudioUrl','source_audio_url',
+            'sourceStreamAudioUrl','source_stream_audio_url','musicUrl','music_url','downloadUrl','download_url',
+            'playUrl','play_url','mediaUrl','media_url','mp3Url','mp3_url','url'
+          ]);
+          const hasText = (v) => typeof v === 'string' && v.trim().length > 0;
+          const firstText = (...xs) => xs.find(hasText)?.trim() || '';
+          const toMs = (v) => {
+            if (!v) return 0;
+            if (typeof v.toMillis === 'function') return v.toMillis();
+            if (typeof v.seconds === 'number') return v.seconds * 1000;
+            if (v instanceof Date) return v.getTime();
+            if (typeof v === 'number' && Number.isFinite(v)) return v;
+            return 0;
+          };
+          const collect = (root) => {
+            const list = [];
+            const seen = new Set();
+            const walk = (value, path = '', depth = 0) => {
+              if (!value || depth > 9) return;
+              if (Array.isArray(value)) { value.forEach((child) => walk(child, path ? `${path}[]` : '[]', depth + 1)); return; }
+              if (typeof value !== 'object') return;
+              for (const [key, child] of Object.entries(value)) {
+                const next = path ? `${path}.${key}` : key;
+                if (AUDIO_KEYS.has(key) && hasText(child) && /^https?:\/\//i.test(child.trim())) {
+                  const url = child.trim();
+                  if (!seen.has(url)) {
+                    seen.add(url);
+                    let host = 'invalid';
+                    try { host = new URL(url).host; } catch {}
+                    list.push({ path: next, host, url });
+                  }
+                }
+                if (child && typeof child === 'object') walk(child, next, depth + 1);
+              }
+            };
+            walk(root);
+            return list;
+          };
+          const probe = async (candidate) => {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 12000);
+            const out = { fieldPath: candidate.path, host: candidate.host, status: null, finalHost: null, contentType: null, contentRange: null, bytes: 0, error: null };
+            try {
+              const res = await fetch(candidate.url, { method: 'GET', redirect: 'follow', signal: controller.signal, headers: { Range: 'bytes=0-63', 'User-Agent': 'SORIDRAW-record-info-readonly-probe/1.0' } });
+              out.status = res.status;
+              out.contentType = res.headers.get('content-type');
+              out.contentRange = res.headers.get('content-range');
+              try { out.finalHost = new URL(res.url).host; } catch {}
+              if (res.body?.getReader) {
+                const reader = res.body.getReader();
+                const first = await reader.read();
+                if (!first.done && first.value) out.bytes = first.value.byteLength || first.value.length || 0;
+                try { await reader.cancel(); } catch {}
+              }
+            } catch (error) { out.error = error?.name || 'request_error'; }
+            finally { clearTimeout(timer); }
+            return out;
+          };
+
+          (async () => {
+            const snapshot = await db.collectionGroup('tracks').get();
+            const cutoff = Date.now() - 90 * 86400000;
+            let selected = null;
+            for (const doc of snapshot.docs) {
+              const path = String(doc.ref.path || '');
+              if (!path.startsWith('suno_tracks/')) continue;
+              const data = doc.data() || {};
+              if (String(data.status || '').trim().toLowerCase() !== 'completed') continue;
+              const taskId = firstText(data.taskId, data?.apiResponse?.data?.taskId, data?.apiStatusResponse?.data?.taskId, data?.apiStatusResponse?.data?.response?.taskId);
+              if (!taskId) continue;
+              const activity = Math.max(toMs(data.createdAt), toMs(data.updatedAt));
+              if (!activity || activity >= cutoff) continue;
+              const parts = path.split('/');
+              const uid = parts.length >= 3 ? parts[1] : '';
+              if (!uid) continue;
+              if (!selected || activity < selected.activity) selected = { activity, uid, taskId };
+            }
+            if (!selected) throw new Error('No completed >=90d legacy task found');
+
+            const apiKeyDoc = await db.collection('user_api_keys').doc(selected.uid).get();
+            if (!apiKeyDoc.exists) throw new Error('Selected legacy track owner has no API key document');
+            const keyData = apiKeyDoc.data() || {};
+            const apiKey = firstText(keyData.sunoApiKey, keyData.musicApiKey, keyData.suno_api_key, keyData.music_api_key);
+            if (!apiKey) throw new Error('Selected legacy track owner API key is empty');
+
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 20000);
+            let response;
+            try {
+              response = await fetch(`https://api.sunoapi.org/api/v1/generate/record-info?taskId=${encodeURIComponent(selected.taskId)}`, {
+                method: 'GET',
+                signal: controller.signal,
+                headers: { Authorization: `Bearer ${apiKey}`, 'User-Agent': 'SORIDRAW-record-info-readonly-probe/1.0' }
+              });
+            } finally { clearTimeout(timer); }
+            const text = await response.text();
+            let payload = null;
+            try { payload = JSON.parse(text); } catch {}
+            const candidates = payload ? collect(payload) : [];
+            const results = [];
+            for (const candidate of candidates.slice(0, 16)) results.push(await probe(candidate));
+            console.log(JSON.stringify({
+              tool: 'legacy-record-info-readonly-probe',
+              projectId: 'soridraw-app-866a5',
+              safety: { firestoreWrites: 0, firestoreDeletes: 0, providerWrites: 0, identifiersPrinted: false, apiKeyPrinted: false, audioUrlsPrinted: false, maxProbeBytesRequested: 64 },
+              selectedAge: 'gte90d',
+              recordInfoHttpStatus: response.status,
+              recordInfoJson: Boolean(payload),
+              responseCode: payload && (payload.code ?? payload.statusCode ?? null),
+              candidateCount: candidates.length,
+              results
+            }, null, 2));
+          })().catch((error) => { console.error('legacy record-info read-only probe failed:', error?.message || String(error)); process.exit(1); });
+          NODE

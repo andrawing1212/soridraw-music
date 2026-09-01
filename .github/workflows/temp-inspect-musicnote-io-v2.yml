@@ -1,0 +1,62 @@
+name: TEMP Inspect Music Note IO V2
+
+on:
+  push:
+    branches: [preview-musicnote-save-unsave-io-v2]
+    paths:
+      - '.github/workflows/temp-inspect-musicnote-io-v2.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview-musicnote-save-unsave-io-v2
+      - name: Inspect favorite mutation hotpath
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('src/App.tsx').read_text(encoding='utf-8')
+          anchors=[
+            'const findServerMatchingFavorites = async',
+            'const findServerExistingFavorite = async',
+            'const toggleFavorite = async',
+            'const handleFavorite',
+            "showToast('저장되었습니다.')",
+            "showToast('보관함에 다시 저장되었습니다.')",
+          ]
+          for a in anchors:
+            i=s.find(a)
+            print('\n===== ANCHOR',a,'INDEX',i,'=====')
+            if i>=0:
+              print(s[max(0,i-3000):min(len(s),i+15000)])
+          print('\n===== favorite mutation IO calls nearby =====')
+          for idx,line in enumerate(s.splitlines(),1):
+            if any(k in line for k in ['findServerMatchingFavorites','findServerExistingFavorite','favoriteSyncSignal','favoriteCount','favoritesStore.setFavorites','writeFavoritesCache','scheduleListBundleWrite','markCacheDiagnosticWrite']):
+              if 8500 <= idx <= 11500:
+                print(f'{idx}: {line}')
+          PY
+      - name: Inspect favorite sync listeners and recent-song side effects
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('src/App.tsx').read_text(encoding='utf-8')
+          lines=s.splitlines()
+          for idx,line in enumerate(lines,1):
+            if any(k in line for k in [
+              'applyFavoriteSyncSignal(',
+              'MUSIC_NOTE_SYNC_VERSION_EVENT',
+              'favoriteSyncSignalUpdatedAt',
+              'syncMusicNoteIncrementalFromRemoteVersion',
+              'saveRecentSongsBatch(',
+              'persistRecentSongsDocument(',
+              'recentSongsRef',
+            ]):
+              lo=max(1,idx-8); hi=min(len(lines),idx+18)
+              print(f'\n--- {idx} {line.strip()} ---')
+              for n in range(lo,hi+1): print(f'{n}: {lines[n-1]}')
+          PY

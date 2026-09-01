@@ -1331,3 +1331,52 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
    * lower-specificity copy here was ineffective against the older `contain:strict`
    * / `overflow:hidden` owner and made the cascade harder to reason about. */
 }
+
+
+/* 1004 — native window resize leaf isolation.
+ * Reuse the already-proven drag-time browser-native containment only while the
+ * OS/browser window is actively resizing. Visible rows still reflow normally;
+ * off-screen Music Note/Library leaves may be skipped, and all resting styles
+ * are restored automatically when `soridraw-window-resizing` is removed. */
+@media (min-width: 1100px) {
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace
+  .soridraw-musicnote-song-card:not(.soridraw-list-perf-item--active) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 92px;
+  }
+
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace
+  .soridraw-library-playlist-row:not(.soridraw-list-perf-item--active),
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace
+  .soridraw-library-workspace-track-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 76px;
+  }
+
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace
+  :is(
+    .soridraw-musicnote-song-card:not(.soridraw-list-perf-item--active),
+    .soridraw-library-playlist-row:not(.soridraw-list-perf-item--active),
+    .soridraw-library-workspace-track-row
+  ) {
+    contain: layout style paint;
+  }
+
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace
+  :is(
+    .soridraw-musicnote-song-card,
+    .soridraw-library-playlist-row,
+    .soridraw-library-workspace-track-row,
+    .soridraw-studio-menu-card,
+    .soridraw-result-prompt-card,
+    .soridraw-result-lyrics-card
+  ) {
+    transition: none !important;
+    animation-play-state: paused !important;
+  }
+}

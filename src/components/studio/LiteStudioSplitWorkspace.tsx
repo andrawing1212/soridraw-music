@@ -1313,16 +1313,20 @@ export default function LiteStudioSplitWorkspace({
     const appliedPercent = applyPercent(percentRef.current, false);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? metricsRef.current.width : Math.round(metricsRef.current.width * (appliedPercent / 100));
     const resultWidth = Math.max(0, metricsRef.current.width - builderWidth);
-    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
+    // 1004 — Window resize already runs through one rAF owner. Do not force a
+    // second pane-width publication on every native resize frame; CSS/container
+    // width handles continuous geometry and the final resting refresh still
+    // performs the forced synchronization once after resize-end.
+    const nativeWindowResize = document.documentElement.classList.contains('soridraw-window-resizing');
+    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, !nativeWindowResize);
     const splitterLeft = metricsRef.current.left + builderWidth;
     commitRootMeasurements(builderWidth, splitterLeft);
 
-    const nativeWindowResize = document.documentElement.classList.contains('soridraw-window-resizing');
     if (nativeWindowResize) {
-      // 748 — The native-resize Generate bar consumes the builder geometry that
-      // was committed above. Do not publish a second pair of action-bar custom
-      // properties from JS on every frame.
-      clearLiveExternalGeometry();
+      // 1004 — Resize-start clears stale drag-only inline geometry once. Keeping
+      // the external cache stable during the live resize prevents repeated
+      // removeProperty/cache-reset work on every animation frame. Root geometry
+      // above remains the single live owner until the resize-end reconciliation.
     } else {
       readExternalControls();
       syncExternalGeometry(builderWidth, splitterLeft);
@@ -2070,6 +2074,10 @@ export default function LiteStudioSplitWorkspace({
           root.style.removeProperty('--soridraw-action-resize-measured-inset-left');
           root.style.removeProperty('--soridraw-action-resize-measured-inset-right');
         }
+        // Clear any drag-only external inline geometry once at native resize
+        // start. The live resize path then reuses the committed root variables
+        // without resetting these styles/caches every frame.
+        clearLiveExternalGeometry();
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }

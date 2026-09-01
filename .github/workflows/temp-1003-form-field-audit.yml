@@ -28,7 +28,6 @@ jobs:
           const fs = require('fs');
           const path = require('path');
           const ts = require('typescript');
-          const roots = ['src'];
           const files = [];
           const walkDir = (dir) => {
             for (const ent of fs.readdirSync(dir, {withFileTypes:true})) {
@@ -37,7 +36,7 @@ jobs:
               else if (/\.tsx$/i.test(ent.name)) files.push(p);
             }
           };
-          roots.forEach((r) => walkDir(r));
+          walkDir('src');
           const issues = [];
           for (const file of files) {
             const text = fs.readFileSync(file, 'utf8');
@@ -45,18 +44,17 @@ jobs:
             const visit = (node) => {
               let tagName = null;
               let attrs = null;
-              if (ts.isJsxSelfClosingElement(node)) {
-                tagName = node.tagName.getText(sf);
-                attrs = node.attributes;
-              } else if (ts.isJsxOpeningElement(node)) {
-                tagName = node.tagName.getText(sf);
-                attrs = node.attributes;
-              }
+              if (ts.isJsxSelfClosingElement(node)) { tagName = node.tagName.getText(sf); attrs = node.attributes; }
+              else if (ts.isJsxOpeningElement(node)) { tagName = node.tagName.getText(sf); attrs = node.attributes; }
               if (tagName && ['input','textarea','select'].includes(tagName)) {
-                const names = new Set(attrs.properties.filter(ts.isJsxAttribute).map((a) => a.name.getText(sf)));
-                if (!names.has('id') && !names.has('name')) {
+                const attrMap = new Map();
+                for (const a of attrs.properties.filter(ts.isJsxAttribute)) attrMap.set(a.name.getText(sf), a);
+                if (!attrMap.has('id') && !attrMap.has('name')) {
                   const pos = sf.getLineAndCharacterOfPosition(node.getStart(sf));
-                  issues.push(`${file}:${pos.line + 1}:${pos.character + 1} <${tagName}>`);
+                  let type = tagName;
+                  const typeAttr = attrMap.get('type');
+                  if (typeAttr && typeAttr.initializer) type = `${tagName}:${typeAttr.initializer.getText(sf).replace(/[\"']/g,'')}`;
+                  issues.push(`${file}:${pos.line + 1}:${pos.character + 1} <${type}>`);
                 }
               }
               ts.forEachChild(node, visit);

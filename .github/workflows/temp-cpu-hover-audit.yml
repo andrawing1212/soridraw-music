@@ -1,0 +1,30 @@
+name: TEMP CPU Hover Audit
+on:
+  push:
+    branches: [preview-cpu-hover-audit]
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect pointer and hover paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== App hover state references ==='
+          grep -nE 'hoveredItem|setHoveredItem|onHover=' src/App.tsx | head -n 120 || true
+          echo '=== App mouse/pointer handlers ==='
+          grep -nE 'onMouseEnter|onMouseLeave|onMouseMove|onPointerMove|pointermove|mousemove' src/App.tsx | head -n 240 || true
+          echo '=== Studio component mouse/pointer handlers ==='
+          grep -RInE 'onMouseEnter|onMouseLeave|onMouseMove|onPointerMove|addEventListener\(.?(pointermove|mousemove)' src/components/studio src/components/GenreHierarchySelector.tsx | head -n 320 || true
+          echo '=== Hover / transition counts ==='
+          printf 'App onMouseEnter='; grep -c 'onMouseEnter' src/App.tsx || true
+          printf 'App onMouseLeave='; grep -c 'onMouseLeave' src/App.tsx || true
+          printf 'Studio :hover selectors='; grep -RE ':hover' src/components/studio/*.css | wc -l || true
+          printf 'Studio transition refs='; grep -RE 'transition' src/components/studio/*.css | wc -l || true
+          printf 'Studio backdrop-filter refs='; grep -RE 'backdrop-filter' src/components/studio/*.css | wc -l || true
+          printf 'Studio filter refs='; grep -RE '(^|[^-])filter:' src/components/studio/*.css | wc -l || true
+          echo '=== global pointermove listeners ==='
+          grep -RIn "addEventListener('pointermove'\|addEventListener(\"pointermove\"\|addEventListener('mousemove'\|addEventListener(\"mousemove\"" src | head -n 160 || true
+          echo '=== split markers / broad selectors ==='
+          grep -RInE 'soridraw-(lite-)?split-dragging.*\*|body \*|\.is-dragging.*\*' src/components/studio src/index.css | head -n 220 || true

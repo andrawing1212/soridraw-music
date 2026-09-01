@@ -7,7 +7,7 @@ on:
       - '.github/workflows/temp-inspect-musicnote-io-v2.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   inspect:
@@ -16,48 +16,38 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: preview-musicnote-save-unsave-io-v2
-      - name: Inspect exact Music Note mutation and reactive paths
+          fetch-depth: 0
+      - name: Persist focused inspection
         run: |
           python3 - <<'PY'
           from pathlib import Path
           s=Path('src/App.tsx').read_text(encoding='utf-8')
           lines=s.splitlines()
-          def around(term, before=30, after=100):
-            hits=[i for i,l in enumerate(lines,1) if term in l]
-            print(f'\n===== {term} hits={hits} =====')
-            for idx in hits:
-              lo=max(1,idx-before); hi=min(len(lines),idx+after)
-              for n in range(lo,hi+1): print(f'{n}: {lines[n-1]}')
-          for term in [
+          terms=[
+            'const findServerMatchingFavorites = async',
+            'const findServerExistingFavorite = async',
+            "showToast('저장되었습니다.')",
+            'recentFavoriteDetachedAt',
             "scheduleListBundleWrite('musicNote'",
             "subscribeListBundle('musicNote'",
             'const syncMusicNoteIncrementalFromRemoteVersion',
-            'const applyFavoriteSyncSignal',
-            'function applyFavoriteSyncSignal',
-            'favoriteSyncSignalUpdatedAt',
-            'favoriteCount:',
-            'setFavorites((prev)',
-          ]:
-            around(term)
-          print('\n===== all favorite-related Firestore operations =====')
-          for idx,line in enumerate(lines,1):
-            if any(x in line for x in ["collection(db, 'favorites')", "doc(db, 'favorites'", "doc(db, 'users'", "user_list_caches"]):
-              print(f'{idx}: {line}')
+            'MUSIC_NOTE_SYNC_VERSION_EVENT',
+          ]
+          chunks=[]
+          seen=set()
+          for term in terms:
+            for idx,line in enumerate(lines,1):
+              if term in line:
+                lo=max(1,idx-80); hi=min(len(lines),idx+180)
+                key=(lo,hi)
+                if key in seen: continue
+                seen.add(key)
+                chunks.append(f'\n===== {term} @ {idx} =====\n')
+                chunks.extend(f'{n}: {lines[n-1]}\n' for n in range(lo,hi+1))
+          Path('.deploy/tmp-musicnote-io-inspect.txt').write_text(''.join(chunks),encoding='utf-8')
           PY
-      - name: Inspect supporting stores and bundle cache
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          for p in ['src/lib/listBundleCache.ts','src/lib/cacheDiagnostics.ts','src/lib/firestoreMeasured.ts']:
-            print(f'\n######## {p} ########')
-            s=Path(p).read_text(encoding='utf-8')
-            for idx,line in enumerate(s.splitlines(),1):
-              if any(x in line for x in ['scheduleListBundleWrite','subscribeListBundle','setDoc(','updateDoc(','onSnapshot(','hasPendingWrites','recordListenerSnapshot','writeListBundle','markFirestoreActual']):
-                lo=max(1,idx-8); hi=min(len(s.splitlines()),idx+28)
-                print(f'\n--- {idx}: {line.strip()} ---')
-                ss=s.splitlines()
-                for n in range(lo,hi+1): print(f'{n}: {ss[n-1]}')
-          PY
-      - name: Find favorites store implementation and subscriptions
-        run: |
-          grep -RIn --exclude-dir=node_modules -E "favoritesStore|favoriteSyncSignal|scheduleListBundleWrite\('musicNote'|subscribeListBundle\('musicNote'" src | head -n 600
+          git config user.name "SORIDRAW Preview Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add .deploy/tmp-musicnote-io-inspect.txt
+          git commit -m "chore(preview): persist Music Note IO inspection"
+          git push origin HEAD:preview-musicnote-save-unsave-io-v2

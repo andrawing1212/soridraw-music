@@ -27,7 +27,19 @@ if (!source.includes(MARKER)) {
 
   source = source.replace(
     createAnchor,
-    "    if (!providerResult && reuseOnly) {\n"
+    "    if (!providerResult && wavTaskId) {\n"
+      + "      res.status(202).json({\n"
+      + "        ok: false,\n"
+      + "        pending: true,\n"
+      + "        code: 'SUNO_RESCUE_EXISTING_TASK_PENDING',\n"
+      + "        error: 'An existing WAV rescue task is still unavailable; a second paid rescue will not be started.',\n"
+      + "        index,\n"
+      + "        audioId,\n"
+      + "        reuseOnly,\n"
+      + "      });\n"
+      + "      return;\n"
+      + "    }\n\n"
+      + "    if (!providerResult && reuseOnly) {\n"
       + "      res.status(404).json({\n"
       + "        ok: false,\n"
       + "        code: 'SUNO_RESCUE_NOT_PREVIOUSLY_RECOVERED',\n"
@@ -49,6 +61,8 @@ const verify = fs.readFileSync(sourcePath, 'utf8');
 for (const expected of [
   MARKER,
   'reuseOnly = body.reuseOnly === true',
+  "code: 'SUNO_RESCUE_EXISTING_TASK_PENDING'",
+  'if (!providerResult && wavTaskId)',
   "code: 'SUNO_RESCUE_NOT_PREVIOUSLY_RECOVERED'",
   'if (!providerResult && reuseOnly)',
 ]) {
@@ -57,4 +71,4 @@ for (const expected of [
   }
 }
 
-console.log('apply-suno-wav-rescue-reuse-only-995: no-new-credit reuse guard applied');
+console.log('apply-suno-wav-rescue-reuse-only-995: no-new-credit reuse guard + one-paid-attempt guard applied');

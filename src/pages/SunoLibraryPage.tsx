@@ -1308,9 +1308,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const libraryDragSelectActionRef = useRef<'select' | 'deselect'>('select');
   const libraryDragSelectVisitedKeysRef = useRef<Set<string>>(new Set());
   const libraryDragSelectSuppressClickRef = useRef(false);
+  // SORIDRAW_LIBRARY_IDLE_MOUSEMOVE_982
+  const [isLibraryMousePressTracking, setIsLibraryMousePressTracking] = useState(false);
 
   useEffect(() => {
-    const stopLibraryDragSelect = () => handleLibraryDragSelectEnd();
+    const stopLibraryDragSelect = () => {
+      handleLibraryDragSelectEnd();
+      setIsLibraryMousePressTracking(false);
+    };
     window.addEventListener('mouseup', stopLibraryDragSelect);
     return () => window.removeEventListener('mouseup', stopLibraryDragSelect);
   }, []);
@@ -7158,16 +7163,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           data-selection-keep="true"
                           className={`soridraw-library-workspace-track-row soridraw-perf-layout-region-item group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 transition-colors cursor-pointer ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onMouseDown={(event) => {
+                            setIsLibraryMousePressTracking(true);
                             handleLibraryDragSelectStart(event, selection);
                             handleLibraryCardLongPressStart(event, selection);
                           }}
-                          onMouseMove={(event) => {
+                          onMouseMove={(multiSelectMode || isLibraryMousePressTracking) ? ((event: React.MouseEvent<HTMLDivElement>) => {
                             handleLibraryDragSelectMove(event, selection);
                             handleLibraryCardLongPressMove(event);
-                          }}
+                          }) : undefined}
                           onMouseUp={() => {
                             handleLibraryDragSelectEnd();
                             handleLibraryCardLongPressEnd();
+                            setIsLibraryMousePressTracking(false);
                           }}
                           onTouchStart={(event) => handleLibraryCardLongPressStart(event, selection)}
                           onTouchMove={handleLibraryCardLongPressMove}
@@ -7603,16 +7610,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     <div 
                       key={item.id} 
                       onMouseDown={(event) => {
+                        setIsLibraryMousePressTracking(true);
                         handleLibraryDragSelectStart(event, selection);
                         handleLibraryCardLongPressStart(event, selection);
                       }}
-                      onMouseMove={(event) => {
+                      onMouseMove={(multiSelectMode || isLibraryMousePressTracking) ? ((event: React.MouseEvent<HTMLDivElement>) => {
                         handleLibraryDragSelectMove(event, selection);
                         handleLibraryCardLongPressMove(event);
-                      }}
+                      }) : undefined}
                       onMouseUp={() => {
                         handleLibraryDragSelectEnd();
                         handleLibraryCardLongPressEnd();
+                        setIsLibraryMousePressTracking(false);
                       }}
                       onMouseEnter={(event) => handleLibraryDragSelectEnter(event, selection)}
                       onMouseLeave={handleLibraryCardLongPressEnd}

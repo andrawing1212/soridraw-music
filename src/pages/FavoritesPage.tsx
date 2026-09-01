@@ -1490,6 +1490,8 @@ export default function FavoritesPage({
   const selectionDragStartSongIdRef = useRef<string | null>(null);
   const selectionDragActionRef = useRef<'select' | 'deselect'>('select');
   const selectionDragVisitedSongIdsRef = useRef<Set<string>>(new Set());
+  // SORIDRAW_MUSIC_NOTE_IDLE_MOUSEMOVE_982
+  const [isMusicNoteMousePressTracking, setIsMusicNoteMousePressTracking] = useState(false);
   const suppressSelectionDragClickRef = useRef(false);
   const selectionBeforeSelectAllRef = useRef<string[]>([]);
   const selectionHistoryPushedRef = useRef(false);
@@ -3444,7 +3446,10 @@ export default function FavoritesPage({
   }, []);
 
   useEffect(() => {
-    const stopSelectionDrag = () => handleSelectionDragEnd();
+    const stopSelectionDrag = () => {
+      handleSelectionDragEnd();
+      setIsMusicNoteMousePressTracking(false);
+    };
     window.addEventListener('mouseup', stopSelectionDrag);
     return () => window.removeEventListener('mouseup', stopSelectionDrag);
   }, []);
@@ -6172,16 +6177,18 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   key={song.id}
                   data-selection-keep="true"
                   onMouseDown={(event) => {
+                    setIsMusicNoteMousePressTracking(true);
                     handleSelectionDragStart(event, song.id);
                     handleCardLongPressStart(event, song);
                   }}
-                  onMouseMove={(event) => {
+                  onMouseMove={(isSelectionMode || isMusicNoteMousePressTracking) ? ((event: React.MouseEvent<HTMLDivElement>) => {
                     handleSelectionDragMove(event, song.id);
                     handleCardLongPressMove(event);
-                  }}
+                  }) : undefined}
                   onMouseUp={() => {
                     handleSelectionDragEnd();
                     handleCardLongPressEnd();
+                    setIsMusicNoteMousePressTracking(false);
                   }}
                   onTouchStart={(event) => handleCardLongPressStart(event, song)}
                   onTouchMove={handleCardLongPressMove}
@@ -6201,6 +6208,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   }}
                   onMouseLeave={(event) => {
                     handleCardLongPressEnd();
+                    setIsMusicNoteMousePressTracking(false);
                     event.currentTarget.style.backgroundColor = '';
                   }}
                   onClick={(e) => {

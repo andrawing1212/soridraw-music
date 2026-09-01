@@ -7471,6 +7471,9 @@ function App() {
     getDefaultStudioDescriptionPlacement,
   );
   const studioDescriptionPointerRef = useRef({ x: 0, y: 0 });
+  // SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_982
+  // Keep fast cursor sweeps from forcing App-level tooltip/layout work.
+  const studioDescriptionHoverTimerRef = useRef<number | null>(null);
   const [isTooltipHovered, setIsTooltipHovered] = useState(false);
 
   useEffect(() => {
@@ -7530,9 +7533,37 @@ function App() {
   }, [location.pathname]);
 
   const setHoveredItem = useCallback((item: CategoryItem | null) => {
-    setHoveredItemState(item);
-    if (item) setHoveredItemPlacement(resolveStudioDescriptionPlacement());
-  }, [resolveStudioDescriptionPlacement]);
+    if (studioDescriptionHoverTimerRef.current !== null) {
+      window.clearTimeout(studioDescriptionHoverTimerRef.current);
+      studioDescriptionHoverTimerRef.current = null;
+    }
+
+    const shouldStabilizeStudioHover = Boolean(
+      item
+      && location.pathname === '/studio'
+      && typeof window !== 'undefined'
+      && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    );
+
+    if (!shouldStabilizeStudioHover) {
+      setHoveredItemState((current) => (!item && !current ? current : item));
+      if (item) setHoveredItemPlacement(resolveStudioDescriptionPlacement());
+      return;
+    }
+
+    studioDescriptionHoverTimerRef.current = window.setTimeout(() => {
+      studioDescriptionHoverTimerRef.current = null;
+      setHoveredItemState(item);
+      setHoveredItemPlacement(resolveStudioDescriptionPlacement());
+    }, 60);
+  }, [location.pathname, resolveStudioDescriptionPlacement]);
+
+  useEffect(() => () => {
+    if (studioDescriptionHoverTimerRef.current !== null) {
+      window.clearTimeout(studioDescriptionHoverTimerRef.current);
+      studioDescriptionHoverTimerRef.current = null;
+    }
+  }, [location.pathname]);
   const appliedKeywordsRef = useRef<HTMLDivElement>(null);
   const [appliedKeywordsHeight, setAppliedKeywordsHeight] = useState<number | string>(0);
   const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);
@@ -8042,8 +8073,9 @@ const toggleCycleVariantSelection = (
     }
   }, [hoveredItem, setHoveredItem]);
 
+  const hasHoveredItem = hoveredItem !== null;
   useEffect(() => {
-    if (!hoveredItem) return;
+    if (!hasHoveredItem) return;
     const refreshPlacement = () => setHoveredItemPlacement(resolveStudioDescriptionPlacement());
     window.addEventListener('resize', refreshPlacement);
     window.addEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
@@ -8053,7 +8085,7 @@ const toggleCycleVariantSelection = (
       window.removeEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
       window.removeEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
     };
-  }, [hoveredItem, resolveStudioDescriptionPlacement]);
+  }, [hasHoveredItem, resolveStudioDescriptionPlacement]);
 
   const [exitCount, setExitCount] = useState(0);
   const exitTimerRef = useRef<NodeJS.Timeout | null>(null);

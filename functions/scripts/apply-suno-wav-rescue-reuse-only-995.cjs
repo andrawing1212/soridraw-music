@@ -16,6 +16,7 @@ if (!source.includes(MARKER)) {
     bodyAnchor,
     bodyAnchor
       + "    const reuseOnly = body.reuseOnly === true || body.data?.reuseOnly === true;\n"
+      + "    const explicitPaidWav = body.explicitPaidWav === true || body.data?.explicitPaidWav === true;\n"
       + `    ${MARKER}\n`,
     1,
   );
@@ -50,6 +51,16 @@ if (!source.includes(MARKER)) {
       + "      });\n"
       + "      return;\n"
       + "    }\n\n"
+      + "    if (!providerResult && !explicitPaidWav) {\n"
+      + "      res.status(409).json({\n"
+      + "        ok: false,\n"
+      + "        code: 'SUNO_RESCUE_EXPLICIT_CHOICE_REQUIRED',\n"
+      + "        error: 'Starting a paid WAV rescue requires an explicit user choice.',\n"
+      + "        index,\n"
+      + "        audioId,\n"
+      + "      });\n"
+      + "      return;\n"
+      + "    }\n\n"
       + createAnchor,
     1,
   );
@@ -61,14 +72,17 @@ const verify = fs.readFileSync(sourcePath, 'utf8');
 for (const expected of [
   MARKER,
   'reuseOnly = body.reuseOnly === true',
+  'explicitPaidWav = body.explicitPaidWav === true',
   "code: 'SUNO_RESCUE_EXISTING_TASK_PENDING'",
   'if (!providerResult && wavTaskId)',
   "code: 'SUNO_RESCUE_NOT_PREVIOUSLY_RECOVERED'",
   'if (!providerResult && reuseOnly)',
+  "code: 'SUNO_RESCUE_EXPLICIT_CHOICE_REQUIRED'",
+  'if (!providerResult && !explicitPaidWav)',
 ]) {
   if (!verify.includes(expected)) {
     throw new Error(`995 verification failed: ${expected}`);
   }
 }
 
-console.log('apply-suno-wav-rescue-reuse-only-995: no-new-credit reuse guard + one-paid-attempt guard applied');
+console.log('apply-suno-wav-rescue-reuse-only-995: reuse guard + explicit paid WAV choice + one-paid-attempt guard applied');

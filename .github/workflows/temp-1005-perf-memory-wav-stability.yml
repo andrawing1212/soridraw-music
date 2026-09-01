@@ -24,221 +24,11 @@ jobs:
           cache: npm
       - run: npm install --no-audit --no-fund
       - name: Apply conservative stability patch
-        run: |
-          python3 <<'PY'
-          from pathlib import Path
-          import re
-          from textwrap import dedent
-
-          split_path = Path('src/components/studio/LiteStudioSplitWorkspace.tsx')
-          css_path = Path('src/components/studio/liteSplitWorkspace.css')
-          lib_path = Path('src/pages/SunoLibraryPage.tsx')
-          recovery_path = Path('src/services/sunoAudioRecovery.ts')
-
-          split = split_path.read_text(encoding='utf-8')
-          css = css_path.read_text(encoding='utf-8')
-          lib = lib_path.read_text(encoding='utf-8')
-          recovery = recovery_path.read_text(encoding='utf-8')
-
-          # 1005-A: native window resize keeps the same visual geometry but avoids
-          # expensive non-live measurements and duplicate pane publication on every rAF.
-          old = """  const refreshMetrics = useCallback(() => {\n    const layout = layoutRef.current;\n    if (!layout) return;\n    refreshIsolationHeight();\n    syncModalHost();\n"""
-          new = """  const refreshMetrics = useCallback(() => {\n    const layout = layoutRef.current;\n    if (!layout) return;\n    const nativeWindowResize = document.documentElement.classList.contains('soridraw-window-resizing');\n    // 1005 — During a native window resize, width geometry is the only live owner.\n    // Isolation height/modal-host reconciliation is deferred to the existing resize-end\n    // refresh, removing two unrelated layout paths from every resize animation frame.\n    if (!nativeWindowResize) {\n      refreshIsolationHeight();\n      syncModalHost();\n    }\n"""
-          if split.count(old) != 1:
-            raise SystemExit(f'refreshMetrics prefix anchor count={split.count(old)}')
-          split = split.replace(old, new, 1)
-
-          old = """    const rect = layout.getBoundingClientRect();\n    const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');\n    const leftRailRect = leftRail?.getBoundingClientRect();\n    metricsRef.current = {\n      left: rect.left,\n      width: Math.max(1, rect.width),\n      leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,\n    };\n"""
-          new = """    const rect = layout.getBoundingClientRect();\n    // The center layout's left edge is already the live rail boundary. Avoid a\n    // second forced layout read from the sticky rail on every native resize frame;\n    // the resting refresh still captures the exact rail rect once.\n    const leftRail = nativeWindowResize ? null : document.querySelector<HTMLElement>('.soridraw-studio-left-panel');\n    const leftRailRect = leftRail?.getBoundingClientRect();\n    metricsRef.current = {\n      left: rect.left,\n      width: Math.max(1, rect.width),\n      leftRailEdge: nativeWindowResize\n        ? rect.left\n        : leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,\n    };\n"""
-          if split.count(old) != 1:
-            raise SystemExit(f'leftRail resize anchor count={split.count(old)}')
-          split = split.replace(old, new, 1)
-
-          old = """    // 1004 — Window resize already runs through one rAF owner. Do not force a\n    // second pane-width publication on every native resize frame; CSS/container\n    // width handles continuous geometry and the final resting refresh still\n    // performs the forced synchronization once after resize-end.\n    const nativeWindowResize = document.documentElement.classList.contains('soridraw-window-resizing');\n    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, !nativeWindowResize);\n"""
-          new = """    // 1005 — applyPercent() already publishes the live pane contract once.\n    // Do not publish the same widths a second time during native resize. The\n    // resize-end refresh below still performs one forced resting synchronization.\n    if (!nativeWindowResize) {\n      broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);\n    }\n"""
-          if split.count(old) != 1:
-            raise SystemExit(f'duplicate broadcast anchor count={split.count(old)}')
-          split = split.replace(old, new, 1)
-          split_path.write_text(split, encoding='utf-8')
-
-          # 1005-B: drag/window-resize isolation is CSS-only and exists only while
-          # geometry is actively changing. Resting design/responsive behavior is untouched.
-          marker = '/* 1005 — wide-PC drag + native-resize containment.'
-          if marker not in css:
-            css += dedent(r'''
-
-            /* 1005 — wide-PC drag + native-resize containment.
-             * The 661~1080 tablet fast-path already proved these boundaries safe.
-             * Apply the same browser-native containment to the expensive Studio menu
-             * cards and heavy Music Note/Library region roots for the duration of a
-             * drag/OS-window resize only. Visible content still reflows at its real
-             * width; off-screen subtrees can be skipped and reflow cannot cascade
-             * through the whole Studio frame. No resting style is changed. */
-            @media (min-width: 1100px) {
-              html.soridraw-lite-split-dragging[data-soridraw-theme="studio-black"]
-              .soridraw-lite-studio-split-workspace.is-dragging .soridraw-studio-menu-card,
-              html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
-              .soridraw-lite-studio-split-workspace .soridraw-studio-menu-card {
-                contain: layout style paint !important;
-                content-visibility: auto !important;
-                contain-intrinsic-size: auto 220px !important;
-              }
-
-              html.soridraw-lite-split-dragging[data-soridraw-theme="studio-black"][data-soridraw-lite-workspace="music-note"]
-              .soridraw-lite-studio-split-workspace.is-dragging :is(
-                .soridraw-studio-main,
-                .soridraw-responsive-content-page,
-                .soridraw-studio-result-content,
-                .soridraw-musicnote-region-top,
-                .soridraw-perf-layout-region-list,
-                .soridraw-perf-layout-region-group
-              ),
-              html.soridraw-lite-split-dragging[data-soridraw-theme="studio-black"][data-soridraw-lite-workspace="library"]
-              .soridraw-lite-studio-split-workspace.is-dragging :is(
-                .soridraw-studio-main,
-                .soridraw-responsive-content-page,
-                .soridraw-studio-result-content,
-                .soridraw-library-region-top,
-                .soridraw-perf-layout-region-list,
-                .soridraw-perf-layout-region-group
-              ),
-              html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-lite-workspace="music-note"]
-              .soridraw-lite-studio-split-workspace :is(
-                .soridraw-studio-main,
-                .soridraw-responsive-content-page,
-                .soridraw-studio-result-content,
-                .soridraw-musicnote-region-top,
-                .soridraw-perf-layout-region-list,
-                .soridraw-perf-layout-region-group
-              ),
-              html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-lite-workspace="library"]
-              .soridraw-lite-studio-split-workspace :is(
-                .soridraw-studio-main,
-                .soridraw-responsive-content-page,
-                .soridraw-studio-result-content,
-                .soridraw-library-region-top,
-                .soridraw-perf-layout-region-list,
-                .soridraw-perf-layout-region-group
-              ) {
-                contain: layout style !important;
-              }
-
-              html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
-              .soridraw-lite-studio-split-workspace :is(
-                .soridraw-studio-menu-card,
-                .soridraw-musicnote-song-card,
-                .soridraw-library-playlist-row,
-                .soridraw-library-workspace-track-row,
-                .soridraw-result-prompt-card,
-                .soridraw-result-lyrics-card
-              ) {
-                transition: none !important;
-                animation-play-state: paused !important;
-              }
-            }
-            ''')
-          css_path.write_text(css, encoding='utf-8')
-
-          # 1005-C: already-paid/durable WAV rescue is a valid local playback source.
-          # This reads only Firestore metadata already present on the track. It never
-          # calls the WAV generation endpoint and therefore cannot spend credits.
-          pattern = re.compile(
-              r"  const getPlayableUrlFromSource = \(source: any\) => \{.*?\n  \};\n\n  const getAudioUrl = \(item: any, group: any\) => \{.*?\n  \};\n",
-              re.S,
-          )
-          replacement = r'''  const getCompletedSunoRescueUrl = (source: any, preferredAudioId = '') => {
-    if (!source || typeof source !== 'object') return '';
-    const rescueMap = source.audioRescue;
-    if (!rescueMap || typeof rescueMap !== 'object') return '';
-
-    const entries = Object.values(rescueMap).filter((entry: any) => entry && typeof entry === 'object') as any[];
-    const normalizedAudioId = String(preferredAudioId || '').trim();
-    const eligible = normalizedAudioId
-      ? entries.filter((entry: any) => String(entry?.audioId || entry?.audio_id || '').trim() === normalizedAudioId)
-      : entries.length === 1 ? entries : [];
-
-    for (const entry of eligible) {
-      const status = String(entry?.status || '').trim().toLowerCase();
-      if (status && !['completed', 'success', 'complete'].includes(status)) continue;
-      const url = String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim();
-      if (url) return url;
-    }
-    return '';
-  };
-
-  const getPlayableUrlFromSource = (source: any, preferredAudioId = '') => {
-    if (!source || typeof source !== 'object') return '';
-
-    // A completed rescue is a durable file that has already been paid for and
-    // stored. Prefer it over an expired provider MP3 URL when the row/audio id
-    // matches. This is metadata-only reuse; no conversion/generation call occurs.
-    const completedRescueUrl = getCompletedSunoRescueUrl(source, preferredAudioId);
-    if (completedRescueUrl) return completedRescueUrl;
-
-    const candidates = [
-      source.audioUrl,
-      source.streamAudioUrl,
-      source.audio_url,
-      source.stream_audio_url,
-      source.url,
-      source.downloadUrl,
-      source.download_url,
-      source.playUrl,
-      source.play_url,
-      source.mediaUrl,
-      source.media_url,
-      source.mp3Url,
-      source.mp3_url,
-    ];
-    for (const candidate of candidates) {
-      const normalized = String(candidate || '').trim();
-      if (normalized) return normalized;
-    }
-    return '';
-  };
-
-  const getAudioUrl = (item: any, group: any) => {
-    const preferredAudioId = String(item?.id || item?.audioId || item?.audio_id || '').trim();
-    return getPlayableUrlFromSource(item, preferredAudioId)
-      || getPlayableUrlFromSource(group, preferredAudioId)
-      || '';
-  };
-'''
-          lib, count = pattern.subn(replacement, lib, count=1)
-          if count != 1:
-            raise SystemExit(f'library playable helper replacement count={count}')
-
-          old = """    switch (group.status) {\n"""
-          new = """    const rescueEntries = Object.values(group?.audioRescue || {}) as any[];\n    const hasCompletedRescue = rescueEntries.some((entry: any) => {\n      const rescueStatus = String(entry?.status || '').trim().toLowerCase();\n      const rescueUrl = String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim();\n      return Boolean(rescueUrl) && (!rescueStatus || ['completed', 'success', 'complete'].includes(rescueStatus));\n    });\n    const normalizedDisplayStatus = String(group.status || '').trim().toLowerCase();\n    const displayStatus = hasCompletedRescue\n      && ['processing', 'submitted', 'pending', 'generating', 'queued'].includes(normalizedDisplayStatus)\n      ? 'completed'\n      : normalizedDisplayStatus;\n    switch (displayStatus) {\n"""
-          if lib.count(old) != 1:
-            raise SystemExit(f'getStatusBadge switch anchor count={lib.count(old)}')
-          lib = lib.replace(old, new, 1)
-
-          old = """                      const isCompletedStatus = ['completed', 'success', 'complete'].includes(normalizedGroupStatus);\n                      const isPendingStatus = ['processing', 'submitted', 'pending', 'generating', 'queued'].includes(normalizedGroupStatus);\n                      const isCompleted = Boolean(audioUrl && (isCompletedStatus || hasValidDuration));\n                      const canRecoverPlaybackUrl = !isSharedView && Boolean(group.taskId) && (isCompletedStatus || hasValidDuration);\n"""
-          new = """                      const isCompletedStatus = ['completed', 'success', 'complete'].includes(normalizedGroupStatus);\n                      const isPendingStatus = ['processing', 'submitted', 'pending', 'generating', 'queued'].includes(normalizedGroupStatus);\n                      const rescueAudioId = String(item?.id || item?.audioId || item?.audio_id || '').trim();\n                      const completedRescueUrl = getCompletedSunoRescueUrl(group, rescueAudioId);\n                      const hasCompletedRescue = Boolean(completedRescueUrl);\n                      const isCompleted = Boolean(audioUrl && (isCompletedStatus || hasValidDuration || hasCompletedRescue));\n                      const canRecoverPlaybackUrl = !isSharedView && Boolean(group.taskId) && (isCompletedStatus || hasValidDuration || hasCompletedRescue);\n"""
-          if lib.count(old) != 1:
-            raise SystemExit(f'workspace completion anchor count={lib.count(old)}')
-          lib = lib.replace(old, new, 1)
-
-          old = """  useEffect(() => () => {\n    if (playlistPressTimerRef.current) window.clearTimeout(playlistPressTimerRef.current);\n    document.body.classList.remove('soridraw-folder-dragging');\n  }, []);\n"""
-          new = """  useEffect(() => () => {\n    if (playlistPressTimerRef.current) window.clearTimeout(playlistPressTimerRef.current);\n    playlistPressTimerRef.current = null;\n    // If Library unmounts while a folder long-press drag is active, remove the\n    // window-level handlers too. Previously only the timer/body class was cleaned,\n    // allowing a real listener leak on route changes during an active drag.\n    const drag = playlistDragRef.current;\n    if (drag?.windowMoveHandler) window.removeEventListener('pointermove', drag.windowMoveHandler);\n    if (drag?.windowEndHandler) {\n      window.removeEventListener('pointerup', drag.windowEndHandler);\n      window.removeEventListener('pointercancel', drag.windowEndHandler);\n    }\n    if (drag?.windowTouchMoveHandler) window.removeEventListener('touchmove', drag.windowTouchMoveHandler);\n    if (drag?.windowTouchEndHandler) {\n      window.removeEventListener('touchend', drag.windowTouchEndHandler);\n      window.removeEventListener('touchcancel', drag.windowTouchEndHandler);\n    }\n    playlistDragRef.current = null;\n    document.body.classList.remove('soridraw-folder-dragging');\n  }, []);\n"""
-          if lib.count(old) != 1:
-            raise SystemExit(f'playlist unmount cleanup anchor count={lib.count(old)}')
-          lib = lib.replace(old, new, 1)
-          lib_path.write_text(lib, encoding='utf-8')
-
-          # 1005-D: make the shared recovery/download service prefer the same
-          # completed Firestore rescue metadata. No WAV endpoint is added.
-          old = """  const rawIndex = track?.index ?? track?.subTrackIndex ?? track?.sourceSubTrackIndex ?? parent?.subTrackIndex ?? parent?.sourceSubTrackIndex;\n  const parsedIndex = Number(rawIndex);\n  const index = Number.isFinite(parsedIndex) && parsedIndex >= 0 ? parsedIndex : 0;\n  const currentUrl = firstText(track?.url, track?.audioUrl, track?.streamAudioUrl, ...getAudioCandidates(parent));\n  const currentSubItem = Array.isArray(parent?.sunoData) ? parent.sunoData[index] : null;\n  const subTrackId = firstText(\n    track?.subTrackId,\n    track?.sourceSubTrackId,\n    track?.audioId,\n    currentSubItem?.id,\n    currentSubItem?.audioId,\n  );\n  return { parent, trackId, taskId, index, currentUrl, subTrackId };\n"""
-          new = """  const rawIndex = track?.index ?? track?.subTrackIndex ?? track?.sourceSubTrackIndex ?? parent?.subTrackIndex ?? parent?.sourceSubTrackIndex;\n  const parsedIndex = Number(rawIndex);\n  const index = Number.isFinite(parsedIndex) && parsedIndex >= 0 ? parsedIndex : 0;\n  const currentSubItem = Array.isArray(parent?.sunoData) ? parent.sunoData[index] : null;\n  const subTrackId = firstText(\n    track?.subTrackId,\n    track?.sourceSubTrackId,\n    track?.audioId,\n    currentSubItem?.id,\n    currentSubItem?.audioId,\n  );\n  const rescueMap = parent?.audioRescue && typeof parent.audioRescue === 'object' ? parent.audioRescue : {};\n  const rescueEntry = rescueMap?.[String(index)] || {};\n  const rescueStatus = firstText(rescueEntry?.status).toLowerCase();\n  const existingRescueUrl = (!rescueStatus || ['completed', 'success', 'complete'].includes(rescueStatus))\n    ? firstText(rescueEntry?.audioUrl, rescueEntry?.audio_url, rescueEntry?.url)\n    : '';\n  const currentUrl = firstText(existingRescueUrl, track?.url, track?.audioUrl, track?.streamAudioUrl, ...getAudioCandidates(parent));\n  return { parent, trackId, taskId, index, currentUrl, subTrackId };\n"""
-          if recovery.count(old) != 1:
-            raise SystemExit(f'recovery currentUrl anchor count={recovery.count(old)}')
-          recovery = recovery.replace(old, new, 1)
-          recovery_path.write_text(recovery, encoding='utf-8')
-          PY
-
+        run: python3 .deploy/temp-1005-perf-memory-wav-stability.py
       - name: Verify patch scope and safety
+        shell: bash
         run: |
+          set -euo pipefail
           git diff --check
           changed="$(git diff --name-only | sort | tr '\n' ' ')"
           echo "changed=$changed"
@@ -248,21 +38,20 @@ jobs:
           grep -q "getCompletedSunoRescueUrl" src/pages/SunoLibraryPage.tsx
           grep -q "real listener leak on route changes" src/pages/SunoLibraryPage.tsx
           grep -q "existingRescueUrl" src/services/sunoAudioRecovery.ts
-          # Paid WAV creation must remain unreachable from normal playback/download.
-          ! grep -q "rescueSunoTrackAudio" src/services/sunoAudioRecovery.ts
-          ! grep -q "/api/v1/wav/generate" src/services/sunoAudioRecovery.ts
-          # Protect the existing split pointer/rAF owner; this patch may only touch refreshMetrics/CSS.
+          if grep -q "rescueSunoTrackAudio" src/services/sunoAudioRecovery.ts; then exit 1; fi
+          if grep -q "/api/v1/wav/generate" src/services/sunoAudioRecovery.ts; then exit 1; fi
           if git diff -U0 -- src/components/studio/LiteStudioSplitWorkspace.tsx | grep -E '^[-+].*(handlePointerMove|schedulePointer|flushPointer|purePaneHybridLive|writeLiveSplitGeometry\()'; then
             echo 'Unexpected split drag JS hotpath change detected' >&2
             exit 1
           fi
-
       - name: Build
         run: npm run build
       - name: TypeScript
         run: npx tsc --noEmit
       - name: Commit verified source changes
+        shell: bash
         run: |
+          set -euo pipefail
           git config user.name "SORIDRAW Preview Bot"
           git config user.email "actions@users.noreply.github.com"
           git add src/components/studio/LiteStudioSplitWorkspace.tsx src/components/studio/liteSplitWorkspace.css src/pages/SunoLibraryPage.tsx src/services/sunoAudioRecovery.ts

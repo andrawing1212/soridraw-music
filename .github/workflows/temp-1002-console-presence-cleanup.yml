@@ -14,11 +14,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  patch-build-rules:
+  patch-build-verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      BACKEND_PROJECT: soridraw-app-866a5
+    timeout-minutes: 25
     steps:
       - name: Checkout isolated branch
         uses: actions/checkout@v4
@@ -35,13 +33,13 @@ jobs:
       - name: Apply deterministic cleanup
         run: python3 .deploy/apply-1002-console-presence-cleanup.py
 
-      - name: Verify exact source scope and RTDB rules safety
+      - name: Verify exact source scope
         shell: bash
         run: |
           set -euo pipefail
           git diff --check
           changed="$(git diff --name-only | sort)"
-          expected=$'index.html\nsrc/firebase.js\nsrc/pages/SunoLibraryPage.tsx'
+          expected=$'index.html\nsrc/firebase.js\nsrc/pages/SunoLibraryPage.tsx\nsrc/services/presenceService.ts'
           if [ "$changed" != "$expected" ]; then
             echo 'Unexpected source files:'
             printf '%s\n' "$changed"
@@ -50,20 +48,9 @@ jobs:
           ! grep -q 'Shared page browser check:' src/pages/SunoLibraryPage.tsx
           ! grep -q 'token status: available' src/firebase.js
           grep -q '<meta name="mobile-web-app-capable" content="yes" />' index.html
-          python3 - <<'PY'
-          import json
-          data = json.load(open('database.rules.json', encoding='utf-8'))
-          rules = data['rules']
-          assert rules.get('.read') is False and rules.get('.write') is False
-          assert set(rules.keys()) == {'.read', '.write', 'presence'}
-          uid = rules['presence']['$uid']
-          assert uid['.read'] == 'auth != null && auth.uid === $uid'
-          assert uid['connections']['$sessionId']['.write'] == 'auth != null && auth.uid === $uid'
-          assert uid['devices']['$deviceId']['.write'] == 'auth != null && auth.uid === $uid'
-          assert uid['lastSeenAt']['.write'] == 'auth != null && auth.uid === $uid'
-          assert uid['$other']['.validate'] is False
-          print('[1002] RTDB rules safety boundary: PASS')
-          PY
+          grep -q 'const DEVICE_HISTORY_SYNC_ENABLED = false;' src/services/presenceService.ts
+          test "$(grep -c 'if (DEVICE_HISTORY_SYNC_ENABLED && !devicePresenceDenied)' src/services/presenceService.ts)" = '3'
+          echo '[1002] exact source scope and console/presence markers: PASS'
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
@@ -74,28 +61,12 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
-      - name: Authenticate Google/Firebase
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
-
-      - name: Deploy intended RTDB rules only
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes firebase-tools@latest deploy \
-            --only database \
-            --project "$BACKEND_PROJECT" \
-            --non-interactive
-          echo '[1002] RTDB rules-only deploy: PASS'
-          echo '[1002] firebase.json database target: database.rules.json'
-
       - name: Commit verified source changes
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'andrawing1212'
           git config user.email 'andrawing1212@gmail.com'
-          git add index.html src/firebase.js src/pages/SunoLibraryPage.tsx
-          git commit -m 'fix(preview): clean console noise and align PWA metadata'
+          git add index.html src/firebase.js src/pages/SunoLibraryPage.tsx src/services/presenceService.ts
+          git commit -m 'fix(preview): clean console noise and stop failing optional presence writes'
           git push origin HEAD:preview-console-presence-cleanup

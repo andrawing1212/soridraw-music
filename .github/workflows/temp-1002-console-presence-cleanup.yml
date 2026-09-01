@@ -1,0 +1,135 @@
+name: TEMP 1002 Console Presence Cleanup
+
+on:
+  push:
+    branches: [preview-console-presence-cleanup]
+    paths:
+      - '.github/workflows/temp-1002-console-presence-cleanup.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temp-1002-console-presence-cleanup
+  cancel-in-progress: false
+
+jobs:
+  patch-build-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BACKEND_PROJECT: soridraw-app-866a5
+      DATABASE_URL: https://soridraw-app-866a5-default-rtdb.firebaseio.com
+    steps:
+      - name: Checkout isolated branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview-console-presence-cleanup
+          fetch-depth: 1
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply deterministic cleanup
+        run: python3 .deploy/apply-1002-console-presence-cleanup.py
+
+      - name: Verify exact source scope and RTDB rules safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only | sort)"
+          expected=$'index.html\nsrc/firebase.js\nsrc/pages/SunoLibraryPage.tsx'
+          if [ "$changed" != "$expected" ]; then
+            echo 'Unexpected source files:'
+            printf '%s\n' "$changed"
+            exit 2
+          fi
+          ! grep -q 'Shared page browser check:' src/pages/SunoLibraryPage.tsx
+          ! grep -q 'token status: available' src/firebase.js
+          grep -q '<meta name="mobile-web-app-capable" content="yes" />' index.html
+          python3 - <<'PY'
+          import json
+          data = json.load(open('database.rules.json', encoding='utf-8'))
+          rules = data['rules']
+          assert rules.get('.read') is False and rules.get('.write') is False
+          assert set(rules.keys()) == {'.read', '.write', 'presence'}
+          uid = rules['presence']['$uid']
+          assert uid['.read'] == 'auth != null && auth.uid === $uid'
+          assert uid['connections']['$sessionId']['.write'] == 'auth != null && auth.uid === $uid'
+          assert uid['devices']['$deviceId']['.write'] == 'auth != null && auth.uid === $uid'
+          assert uid['lastSeenAt']['.write'] == 'auth != null && auth.uid === $uid'
+          assert uid['$other']['.validate'] is False
+          print('[1002] RTDB rules safety boundary: PASS')
+          PY
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Authenticate Google/Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Read currently deployed RTDB rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          status="$(curl -sS -o "$RUNNER_TEMP/rtdb-rules-before.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "$DATABASE_URL/.settings/rules.json")"
+          test "$status" = '200' || { echo "RTDB rules read failed HTTP $status"; cat "$RUNNER_TEMP/rtdb-rules-before.json"; exit 4; }
+          python3 - "$RUNNER_TEMP/rtdb-rules-before.json" <<'PY'
+          import json, sys
+          raw = json.load(open(sys.argv[1], encoding='utf-8'))
+          print('[1002] deployed RTDB rules read: PASS')
+          print('[1002] deployed top-level rule keys:', sorted(raw.get('rules', raw).keys()))
+          PY
+
+      - name: Deploy intended RTDB rules only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only database \
+            --project "$BACKEND_PROJECT" \
+            --non-interactive
+          echo '[1002] RTDB rules-only deploy: PASS'
+
+      - name: Verify deployed RTDB rules equal repository rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          status="$(curl -sS -o "$RUNNER_TEMP/rtdb-rules-after.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "$DATABASE_URL/.settings/rules.json")"
+          test "$status" = '200' || { echo "RTDB rules post-read failed HTTP $status"; cat "$RUNNER_TEMP/rtdb-rules-after.json"; exit 5; }
+          python3 - "$RUNNER_TEMP/rtdb-rules-after.json" <<'PY'
+          import json, sys
+          expected = json.load(open('database.rules.json', encoding='utf-8'))
+          actual = json.load(open(sys.argv[1], encoding='utf-8'))
+          if actual != expected:
+            raise SystemExit('Deployed RTDB rules do not match repository rules')
+          print('[1002] deployed RTDB rules exact match: PASS')
+          PY
+
+      - name: Commit verified source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add index.html src/firebase.js src/pages/SunoLibraryPage.tsx
+          git commit -m 'fix(preview): clean console noise and align PWA metadata'
+          git push origin HEAD:preview-console-presence-cleanup

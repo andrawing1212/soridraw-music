@@ -36,175 +36,32 @@ jobs:
           python3 <<'PY'
           from pathlib import Path
 
-          archive = r'''import { auth, getFirebaseAppCheckToken } from '../firebase';
-
-const R2_MEDIA_ENDPOINT = 'https://soridraw-media-preview.andrawing1212.workers.dev';
-const ARCHIVE_MIN_AGE_MS = 14 * 24 * 60 * 60 * 1000;
-
-type SunoR2ArchiveResult = {
-  audioUrl: string;
-  trackId: string;
-  taskId: string;
-  index: number;
-  sunoData: null;
-  raw: any;
-};
-
-const archiveInFlight = new Map<string, Promise<SunoR2ArchiveResult | null>>();
-
-const toText = (value: unknown) => typeof value === 'string' ? value.trim() : '';
-
-const firstText = (...values: unknown[]) => {
-  for (const value of values) {
-    const text = toText(value);
-    if (text) return text;
-  }
-  return '';
-};
-
-const timestampToMs = (value: any): number => {
-  if (!value) return 0;
-  if (typeof value?.toMillis === 'function') {
-    const ms = Number(value.toMillis());
-    return Number.isFinite(ms) ? ms : 0;
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value > 0 && value < 1_000_000_000_000 ? value * 1000 : value;
-  }
-  if (typeof value === 'string') {
-    const parsed = Date.parse(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  if (typeof value?.seconds === 'number') return value.seconds * 1000;
-  if (typeof value?._seconds === 'number') return value._seconds * 1000;
-  return 0;
-};
-
-const getTrackContext = (track: any) => {
-  const parent = track?.parent || {};
-  const trackId = firstText(
-    parent.id,
-    parent.trackId,
-    parent.sourceId,
-    track?.parentTrackId,
-    track?.sourceId,
-    track?.trackId,
-    track?.id,
-  );
-  const taskId = firstText(parent.taskId, track?.taskId, parent.requestPayload?.taskId, track?.requestPayload?.taskId);
-  const rawIndex = track?.index ?? track?.subTrackIndex ?? track?.sourceSubTrackIndex ?? parent?.subTrackIndex ?? parent?.sourceSubTrackIndex;
-  const parsedIndex = Number(rawIndex);
-  const index = Number.isFinite(parsedIndex) && parsedIndex >= 0 ? parsedIndex : 0;
-  const createdAtMs = timestampToMs(parent.createdAt) || timestampToMs(track?.createdAt);
-  const sourceType = firstText(track?.sourceType, parent?.sourceType).toLowerCase();
-  const ownerUid = firstText(track?.ownerUid, parent?.ownerUid, parent?.uid);
-  return { trackId, taskId, index, createdAtMs, sourceType, ownerUid };
-};
-
-export const isSunoR2ArchiveEligible = (track: any) => {
-  const user = auth.currentUser;
-  if (!user) return false;
-  const context = getTrackContext(track);
-  if (!context.trackId || !context.createdAtMs) return false;
-  if (context.ownerUid && context.ownerUid !== user.uid) return false;
-  if (context.sourceType === 'shared_track') return false;
-  return Date.now() - context.createdAtMs >= ARCHIVE_MIN_AGE_MS;
-};
-
-const dispatchArchivedAudio = (result: SunoR2ArchiveResult) => {
-  try {
-    window.dispatchEvent(new CustomEvent('soridraw:suno-audio-url-recovered', {
-      detail: result,
-    }));
-  } catch {
-    // Local UI/cache synchronization is best-effort.
-  }
-};
-
-export const archiveOldSunoMp3ToR2 = async (track: any): Promise<SunoR2ArchiveResult | null> => {
-  const user = auth.currentUser;
-  if (!user || !isSunoR2ArchiveEligible(track)) return null;
-
-  const context = getTrackContext(track);
-  const key = `${user.uid}:${context.trackId}:${context.index}`;
-  const existing = archiveInFlight.get(key);
-  if (existing) return existing;
-
-  const promise = (async () => {
-    try {
-      const [idToken, appCheckToken] = await Promise.all([
-        user.getIdToken(),
-        getFirebaseAppCheckToken(),
-      ]);
-      if (!appCheckToken) return null;
-
-      const response = await fetch(`${R2_MEDIA_ENDPOINT}/v1/archive/resolve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-          'X-Firebase-AppCheck': appCheckToken,
-        },
-        body: JSON.stringify({ trackId: context.trackId, index: context.index }),
-      });
-
-      let payload: any = null;
-      try {
-        payload = await response.json();
-      } catch {
-        payload = null;
-      }
-      if (!response.ok || !payload?.ok) return null;
-
-      const audioUrl = firstText(payload.playbackUrl, payload.audioUrl);
-      if (!audioUrl) return null;
-
-      const result: SunoR2ArchiveResult = {
-        audioUrl,
-        trackId: context.trackId,
-        taskId: context.taskId,
-        index: context.index,
-        sunoData: null,
-        raw: { ...payload, recoverySource: 'r2-lazy-mp3' },
-      };
-      dispatchArchivedAudio(result);
-      return result;
-    } catch (error) {
-      console.warn('SORIDRAW lazy R2 MP3 archive failed:', error);
-      return null;
-    } finally {
-      archiveInFlight.delete(key);
-    }
-  })();
-
-  archiveInFlight.set(key, promise);
-  return promise;
-};
-'''
-          Path('src/services/sunoR2Archive.ts').write_text(archive, encoding='utf-8')
+          archive_path = Path('src/services/sunoR2Archive.ts')
+          if not archive_path.exists():
+              raise SystemExit('sunoR2Archive.ts missing')
 
           recovery_path = Path('src/services/sunoAudioRecovery.ts')
           recovery = recovery_path.read_text(encoding='utf-8')
           import_anchor = "import { auth, getFirebaseAppCheckToken } from '../firebase';\n"
           import_line = import_anchor + "import { archiveOldSunoMp3ToR2 } from './sunoR2Archive';\n"
           if "from './sunoR2Archive'" not in recovery:
-            if import_anchor not in recovery:
-              raise SystemExit('sunoAudioRecovery import anchor missing')
-            recovery = recovery.replace(import_anchor, import_line, 1)
+              if import_anchor not in recovery:
+                  raise SystemExit('sunoAudioRecovery import anchor missing')
+              recovery = recovery.replace(import_anchor, import_line, 1)
 
           old_guard = "  const user = auth.currentUser;\n  const context = getTrackContext(track);\n  if (!user || !context.trackId || !context.taskId) return null;\n\n  const key = `${user.uid}:${context.trackId}:${context.taskId}:${context.index}`;"
-          new_guard = "  const user = auth.currentUser;\n  const context = getTrackContext(track);\n  if (!user || !context.trackId) return null;\n\n  // SORIDRAW_R2_LAZY_MP3_1000: on an actual click/recovery, old tracks first reuse\n  // or create a private R2 MP3 copy from existing provider bytes. This path never\n  // calls WAV generation or any paid Music API conversion.\n  const archived = await archiveOldSunoMp3ToR2(track);\n  if (archived?.audioUrl) return archived;\n  if (!context.taskId) return null;\n\n  const key = `${user.uid}:${context.trackId}:${context.taskId}:${context.index}`;"
+          new_guard = "  const user = auth.currentUser;\n  const context = getTrackContext(track);\n  if (!user || !context.trackId) return null;\n\n  // SORIDRAW_R2_LAZY_MP3_1000: old-track recovery first reuses or creates a private R2 MP3 copy from existing bytes.\n  // This path never calls WAV generation or any paid Music API conversion.\n  const archived = await archiveOldSunoMp3ToR2(track);\n  if (archived?.audioUrl) return archived;\n  if (!context.taskId) return null;\n\n  const key = `${user.uid}:${context.trackId}:${context.taskId}:${context.index}`;"
           if 'SORIDRAW_R2_LAZY_MP3_1000' not in recovery:
-            if old_guard not in recovery:
-              raise SystemExit('sunoAudioRecovery guard anchor missing')
-            recovery = recovery.replace(old_guard, new_guard, 1)
+              if old_guard not in recovery:
+                  raise SystemExit('sunoAudioRecovery guard anchor missing')
+              recovery = recovery.replace(old_guard, new_guard, 1)
 
           download_anchor = "  const context = getTrackContext(track);\n  const initialUrl = context.currentUrl;\n\n  if (initialUrl && await tryBlobDownload(initialUrl, title)) {"
-          download_replacement = "  const context = getTrackContext(track);\n  const initialUrl = context.currentUrl;\n\n  // A download is also an explicit revisit. Start the same 14-day lazy archive\n  // in parallel without delaying a still-working provider download.\n  void archiveOldSunoMp3ToR2(track);\n\n  if (initialUrl && await tryBlobDownload(initialUrl, title)) {"
+          download_replacement = "  const context = getTrackContext(track);\n  const initialUrl = context.currentUrl;\n\n  // A download is also an explicit revisit. Archive in parallel without delaying a still-working provider download.\n  void archiveOldSunoMp3ToR2(track);\n\n  if (initialUrl && await tryBlobDownload(initialUrl, title)) {"
           if 'A download is also an explicit revisit.' not in recovery:
-            if download_anchor not in recovery:
-              raise SystemExit('download archive anchor missing')
-            recovery = recovery.replace(download_anchor, download_replacement, 1)
+              if download_anchor not in recovery:
+                  raise SystemExit('download archive anchor missing')
+              recovery = recovery.replace(download_anchor, download_replacement, 1)
           recovery_path.write_text(recovery, encoding='utf-8')
 
           context_path = Path('src/contexts/GlobalPlayerContext.tsx')
@@ -212,40 +69,28 @@ export const archiveOldSunoMp3ToR2 = async (track: any): Promise<SunoR2ArchiveRe
           context_import_anchor = "import { applyRecoveredSunoAudioUrl, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';\n"
           context_import = context_import_anchor + "import { archiveOldSunoMp3ToR2 } from '../services/sunoR2Archive';\n"
           if "from '../services/sunoR2Archive'" not in context:
-            if context_import_anchor not in context:
-              raise SystemExit('GlobalPlayerContext import anchor missing')
-            context = context.replace(context_import_anchor, context_import, 1)
+              if context_import_anchor not in context:
+                  raise SystemExit('GlobalPlayerContext import anchor missing')
+              context = context.replace(context_import_anchor, context_import, 1)
 
           play_anchor = "  const playTrack = useCallback((track: Track, newQueue?: Track[]) => {\n    if (!track?.url || !audioRef.current) return;\n    playbackRecoveryAttemptedRef.current = false;\n"
-          play_replacement = play_anchor + "\n    // Only an actual user playback request starts lazy archival. The provider URL\n    // keeps playing immediately while the MP3 copy streams to private R2 in background.\n    void archiveOldSunoMp3ToR2(track);\n"
-          if 'Only an actual user playback request starts lazy archival.' not in context:
-            if play_anchor not in context:
-              raise SystemExit('GlobalPlayerContext playTrack anchor missing')
-            context = context.replace(play_anchor, play_replacement, 1)
+          play_replacement = play_anchor + "\n    // Only an actual playback request starts lazy archival; current provider playback is not delayed.\n    void archiveOldSunoMp3ToR2(track);\n"
+          if 'Only an actual playback request starts lazy archival' not in context:
+              if play_anchor not in context:
+                  raise SystemExit('GlobalPlayerContext playTrack anchor missing')
+              context = context.replace(play_anchor, play_replacement, 1)
           context_path.write_text(context, encoding='utf-8')
 
           checks = {
-            'src/services/sunoR2Archive.ts': [
-              'ARCHIVE_MIN_AGE_MS = 14 * 24 * 60 * 60 * 1000',
-              'X-Firebase-AppCheck',
-              'archiveOldSunoMp3ToR2',
-              "recoverySource: 'r2-lazy-mp3'",
-            ],
-            'src/services/sunoAudioRecovery.ts': [
-              'SORIDRAW_R2_LAZY_MP3_1000',
-              'await archiveOldSunoMp3ToR2(track)',
-              'void archiveOldSunoMp3ToR2(track)',
-            ],
-            'src/contexts/GlobalPlayerContext.tsx': [
-              "from '../services/sunoR2Archive'",
-              'void archiveOldSunoMp3ToR2(track)',
-            ],
+              'src/services/sunoR2Archive.ts': ['ARCHIVE_MIN_AGE_MS = 14 * 24 * 60 * 60 * 1000', 'X-Firebase-AppCheck', 'archiveOldSunoMp3ToR2'],
+              'src/services/sunoAudioRecovery.ts': ['SORIDRAW_R2_LAZY_MP3_1000', 'await archiveOldSunoMp3ToR2(track)', 'void archiveOldSunoMp3ToR2(track)'],
+              'src/contexts/GlobalPlayerContext.tsx': ["from '../services/sunoR2Archive'", 'void archiveOldSunoMp3ToR2(track)'],
           }
           for path, markers in checks.items():
-            body = Path(path).read_text(encoding='utf-8')
-            for marker in markers:
-              if marker not in body:
-                raise SystemExit(f'missing marker {marker!r} in {path}')
+              body = Path(path).read_text(encoding='utf-8')
+              for marker in markers:
+                  if marker not in body:
+                      raise SystemExit(f'missing marker {marker!r} in {path}')
           print('lazy R2 source wiring: PASS')
           PY
 
@@ -264,7 +109,7 @@ export const archiveOldSunoMp3ToR2 = async (track: any): Promise<SunoR2ArchiveRe
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/services/sunoR2Archive.ts src/services/sunoAudioRecovery.ts src/contexts/GlobalPlayerContext.tsx
+          git add src/services/sunoAudioRecovery.ts src/contexts/GlobalPlayerContext.tsx
           git commit -m 'feat(preview): lazy archive revisited old MP3s to private R2' || exit 0
           git pull --rebase origin preview
           git push origin HEAD:preview

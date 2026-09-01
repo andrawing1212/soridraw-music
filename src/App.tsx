@@ -8796,13 +8796,21 @@ const toggleCycleVariantSelection = (
             applyFavoriteSyncSignal(currentUser.uid, data.favoriteSyncSignal);
             const musicNoteRemoteVersion = Number(data?.syncVersions?.musicNote || data?.favoriteSyncSignalUpdatedAt || 0);
             if (musicNoteRemoteVersion > 0) {
+              const musicNoteOriginDeviceId = String(data?.favoriteSyncSignal?.originDeviceId || '');
               writeMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid, musicNoteRemoteVersion);
+              // 1010 — the latest Music Note mutation came from this browser, so its
+              // local cache already contains that mutation. Advance the local version
+              // immediately even while Studio is open; otherwise the next heart click
+              // performs a redundant favorites duplicate-check query.
+              if (musicNoteOriginDeviceId && musicNoteOriginDeviceId === getMusicNoteDeviceId()) {
+                writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, currentUser.uid, musicNoteRemoteVersion);
+              }
               if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent(MUSIC_NOTE_SYNC_VERSION_EVENT, {
                   detail: {
                     uid: currentUser.uid,
                     version: musicNoteRemoteVersion,
-                    originDeviceId: String(data?.favoriteSyncSignal?.originDeviceId || ''),
+                    originDeviceId: musicNoteOriginDeviceId,
                   },
                 }));
               }
@@ -9249,6 +9257,14 @@ const toggleCycleVariantSelection = (
     if (!currentUser?.uid || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
 
     const uid = currentUser.uid;
+    // 1010 — own-device invalidation does not need a server delta query and is
+    // safe to acknowledge on every route because the successful local mutation
+    // already updated the cache before publishing the sync signal.
+    if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
+      writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+      markCacheDiagnostic('musicNote', 'CACHE', 0);
+      return;
+    }
     if (typeof window !== 'undefined' && window.location.pathname !== '/history') {
       return;
     }
@@ -9261,12 +9277,6 @@ const toggleCycleVariantSelection = (
 
     if (musicNoteFreshBootstrapUids.has(uid)) {
       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
-      return;
-    }
-
-    if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
-      writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
-      markCacheDiagnostic('musicNote', 'CACHE', 0);
       return;
     }
 

@@ -1,0 +1,193 @@
+name: SORIDRAW Legacy Playback Read-only Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/suno-legacy-playback-readonly-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Authenticate read-only diagnostic session
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Inspect legacy playback metadata shape
+        working-directory: functions
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+        run: |
+          node <<'NODE'
+          const admin = require('firebase-admin');
+          admin.initializeApp({ projectId: 'soridraw-app-866a5' });
+          const db = admin.firestore();
+
+          const toMs = (v) => {
+            if (!v) return 0;
+            if (typeof v.toMillis === 'function') return v.toMillis();
+            if (typeof v.seconds === 'number') return v.seconds * 1000;
+            if (v instanceof Date) return v.getTime();
+            if (typeof v === 'number' && Number.isFinite(v)) return v;
+            const parsed = Date.parse(String(v));
+            return Number.isFinite(parsed) ? parsed : 0;
+          };
+          const hasText = (v) => typeof v === 'string' && v.trim().length > 0;
+          const AUDIO_KEYS = new Set([
+            'audioUrl','audio_url','streamAudioUrl','stream_audio_url','sourceAudioUrl','source_audio_url',
+            'sourceStreamAudioUrl','source_stream_audio_url','musicUrl','music_url','downloadUrl','download_url',
+            'playUrl','play_url','mediaUrl','media_url','mp3Url','mp3_url','url'
+          ]);
+          const taskPaths = (root) => {
+            const found = new Set();
+            const walk = (value, path = '', depth = 0) => {
+              if (!value || depth > 8) return;
+              if (Array.isArray(value)) {
+                value.forEach((child) => walk(child, path ? `${path}[]` : '[]', depth + 1));
+                return;
+              }
+              if (typeof value !== 'object') return;
+              for (const [key, child] of Object.entries(value)) {
+                const next = path ? `${path}.${key}` : key;
+                const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (normalized === 'taskid' && hasText(child)) found.add(next);
+                if (child && typeof child === 'object') walk(child, next, depth + 1);
+              }
+            };
+            walk(root);
+            return [...found].sort();
+          };
+          const audioMeta = (root) => {
+            let count = 0;
+            const hosts = new Set();
+            const walk = (value, depth = 0) => {
+              if (!value || depth > 8) return;
+              if (Array.isArray(value)) { value.forEach((child) => walk(child, depth + 1)); return; }
+              if (typeof value !== 'object') return;
+              for (const [key, child] of Object.entries(value)) {
+                if (AUDIO_KEYS.has(key) && hasText(child) && /^https?:\/\//i.test(child.trim())) {
+                  count += 1;
+                  try { hosts.add(new URL(child.trim()).host); } catch {}
+                }
+                if (child && typeof child === 'object') walk(child, depth + 1);
+              }
+            };
+            walk(root);
+            return { count, hosts: [...hosts].sort() };
+          };
+
+          (async () => {
+            const snapshot = await db.collectionGroup('tracks').get();
+            const now = Date.now();
+            const statusCounts = {};
+            const taskPathCounts = {};
+            const audioHostCounts = {};
+            const ageBuckets = { lt7d: 0, d7to30: 0, d30to90: 0, gte90d: 0, unknown: 0 };
+            let sunoDocs = 0;
+            let withTopLevelTaskId = 0;
+            let withRequestPayloadTaskId = 0;
+            let withAnyTaskId = 0;
+            let withAudio = 0;
+            let withAudioButNoTaskId = 0;
+            let completedWithAudioButNoTaskId = 0;
+            let gte90dWithAudioButNoTaskId = 0;
+            let withSunoData = 0;
+            let sunoDataItems = 0;
+            let sunoDataItemsWithId = 0;
+            let oldestMs = 0;
+            let newestMs = 0;
+
+            for (const doc of snapshot.docs) {
+              if (!String(doc.ref.path || '').startsWith('suno_tracks/')) continue;
+              sunoDocs += 1;
+              const data = doc.data() || {};
+              const status = String(data.status || '(empty)').trim().toLowerCase() || '(empty)';
+              statusCounts[status] = (statusCounts[status] || 0) + 1;
+              const created = toMs(data.createdAt);
+              const updated = toMs(data.updatedAt);
+              const activity = Math.max(created, updated);
+              if (activity) {
+                oldestMs = oldestMs ? Math.min(oldestMs, activity) : activity;
+                newestMs = Math.max(newestMs, activity);
+                const days = (now - activity) / 86400000;
+                if (days < 7) ageBuckets.lt7d += 1;
+                else if (days < 30) ageBuckets.d7to30 += 1;
+                else if (days < 90) ageBuckets.d30to90 += 1;
+                else ageBuckets.gte90d += 1;
+              } else ageBuckets.unknown += 1;
+
+              if (hasText(data.taskId)) withTopLevelTaskId += 1;
+              if (hasText(data?.requestPayload?.taskId)) withRequestPayloadTaskId += 1;
+              const paths = taskPaths(data);
+              if (paths.length) withAnyTaskId += 1;
+              for (const path of paths) taskPathCounts[path] = (taskPathCounts[path] || 0) + 1;
+
+              const audio = audioMeta(data);
+              if (audio.count > 0) withAudio += 1;
+              for (const host of audio.hosts) audioHostCounts[host] = (audioHostCounts[host] || 0) + 1;
+              if (audio.count > 0 && paths.length === 0) {
+                withAudioButNoTaskId += 1;
+                if (status === 'completed') completedWithAudioButNoTaskId += 1;
+                if (activity && (now - activity) >= 90 * 86400000) gte90dWithAudioButNoTaskId += 1;
+              }
+
+              if (Array.isArray(data.sunoData)) {
+                withSunoData += 1;
+                sunoDataItems += data.sunoData.length;
+                sunoDataItemsWithId += data.sunoData.filter((item) => item && typeof item === 'object' && hasText(item.id || item.audioId)).length;
+              }
+            }
+
+            const report = {
+              tool: 'suno-legacy-playback-readonly-diagnostic',
+              projectId: 'soridraw-app-866a5',
+              generatedAt: new Date().toISOString(),
+              safety: { firestoreWrites: 0, firestoreDeletes: 0, valuesPrinted: false, documentIdsPrinted: false, userIdsPrinted: false, audioUrlsPrinted: false },
+              reads: { collectionGroupDocumentsRead: snapshot.size, sunoTrackDocumentsScanned: sunoDocs },
+              statusCounts,
+              ageBuckets,
+              metadata: {
+                withTopLevelTaskId,
+                withRequestPayloadTaskId,
+                withAnyTaskId,
+                withAudio,
+                withAudioButNoTaskId,
+                completedWithAudioButNoTaskId,
+                gte90dWithAudioButNoTaskId,
+                withSunoData,
+                sunoDataItems,
+                sunoDataItemsWithId,
+                taskPathCounts,
+                audioHostCounts,
+                oldestActivityAt: oldestMs ? new Date(oldestMs).toISOString() : null,
+                newestActivityAt: newestMs ? new Date(newestMs).toISOString() : null
+              }
+            };
+            console.log(JSON.stringify(report, null, 2));
+          })().catch((error) => {
+            console.error('legacy playback read-only diagnostic failed:', error?.message || String(error));
+            process.exit(1);
+          });
+          NODE

@@ -1,4 +1,5 @@
 import { auth, getFirebaseAppCheckToken } from '../firebase';
+import { archiveOldSunoMp3ToR2 } from './sunoR2Archive';
 
 const SUNO_STATUS_ENDPOINT = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
 
@@ -202,7 +203,13 @@ export const applyRecoveredSunoAudioUrl = (track: any, result: RecoveryResult | 
 export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: string }): Promise<RecoveryResult | null> => {
   const user = auth.currentUser;
   const context = getTrackContext(track);
-  if (!user || !context.trackId || !context.taskId) return null;
+  if (!user || !context.trackId) return null;
+
+  // SORIDRAW_R2_LAZY_MP3_1000: old-track recovery first reuses or creates a private R2 MP3 copy from existing bytes.
+  // This path never calls WAV generation or any paid Music API conversion.
+  const archived = await archiveOldSunoMp3ToR2(track);
+  if (archived?.audioUrl) return archived;
+  if (!context.taskId) return null;
 
   const key = `${user.uid}:${context.trackId}:${context.taskId}:${context.index}`;
   const existing = recoveryInFlight.get(key);
@@ -304,6 +311,9 @@ const triggerDirectDownloadFallback = (url: string, title?: string) => {
 export const downloadSunoAudioWithRecovery = async (track: any, title?: string): Promise<DownloadRecoveryResult> => {
   const context = getTrackContext(track);
   const initialUrl = context.currentUrl;
+
+  // A download is also an explicit revisit. Archive in parallel without delaying a still-working provider download.
+  void archiveOldSunoMp3ToR2(track);
 
   if (initialUrl && await tryBlobDownload(initialUrl, title)) {
     return { ok: true, recovered: false, directFallback: false, audioUrl: initialUrl };

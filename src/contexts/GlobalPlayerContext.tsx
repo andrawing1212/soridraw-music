@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { applyRecoveredSunoAudioUrl, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
+import { archiveOldSunoMp3ToR2 } from '../services/sunoR2Archive';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
 
 export interface Track {
@@ -247,6 +248,9 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
     if (!track?.url || !audioRef.current) return;
     playbackRecoveryAttemptedRef.current = false;
+
+    // Only an actual playback request starts lazy archival; current provider playback is not delayed.
+    void archiveOldSunoMp3ToR2(track);
 
     if (newQueue) {
       queueRef.current = newQueue;

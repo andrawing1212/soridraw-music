@@ -7471,6 +7471,11 @@ function App() {
     getDefaultStudioDescriptionPlacement,
   );
   const studioDescriptionPointerRef = useRef({ x: 0, y: 0 });
+  // SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_981
+  // Fast cursor sweeps across the dense Studio control tree should not force the
+  // top-level App + tooltip placement geometry to re-render on every transient hover.
+  // Keep the approved tooltip behavior, but commit only after the pointer rests briefly.
+  const studioDescriptionHoverTimerRef = useRef<number | null>(null);
   const [isTooltipHovered, setIsTooltipHovered] = useState(false);
 
   useEffect(() => {
@@ -7530,9 +7535,40 @@ function App() {
   }, [location.pathname]);
 
   const setHoveredItem = useCallback((item: CategoryItem | null) => {
-    setHoveredItemState(item);
-    if (item) setHoveredItemPlacement(resolveStudioDescriptionPlacement());
-  }, [resolveStudioDescriptionPlacement]);
+    if (studioDescriptionHoverTimerRef.current !== null) {
+      window.clearTimeout(studioDescriptionHoverTimerRef.current);
+      studioDescriptionHoverTimerRef.current = null;
+    }
+
+    const shouldStabilizeStudioHover = Boolean(
+      item
+      && location.pathname === '/studio'
+      && typeof window !== 'undefined'
+      && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    );
+
+    if (!shouldStabilizeStudioHover) {
+      setHoveredItemState((current) => (!item && !current ? current : item));
+      if (item) setHoveredItemPlacement(resolveStudioDescriptionPlacement());
+      return;
+    }
+
+    // Three-to-four display frames is short enough to feel immediate, while a
+    // fast left/right sweep usually leaves the control before any App render or
+    // elementFromPoint/querySelector/getBoundingClientRect placement work starts.
+    studioDescriptionHoverTimerRef.current = window.setTimeout(() => {
+      studioDescriptionHoverTimerRef.current = null;
+      setHoveredItemState(item);
+      setHoveredItemPlacement(resolveStudioDescriptionPlacement());
+    }, 60);
+  }, [location.pathname, resolveStudioDescriptionPlacement]);
+
+  useEffect(() => () => {
+    if (studioDescriptionHoverTimerRef.current !== null) {
+      window.clearTimeout(studioDescriptionHoverTimerRef.current);
+      studioDescriptionHoverTimerRef.current = null;
+    }
+  }, [location.pathname]);
   const appliedKeywordsRef = useRef<HTMLDivElement>(null);
   const [appliedKeywordsHeight, setAppliedKeywordsHeight] = useState<number | string>(0);
   const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);

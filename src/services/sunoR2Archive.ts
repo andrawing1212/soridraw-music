@@ -1,4 +1,5 @@
 import { auth, getFirebaseAppCheckToken } from '../firebase';
+// SORIDRAW_R2_LAZY_MP3_PREVIEW_1000
 
 const R2_MEDIA_ENDPOINT = 'https://soridraw-media-preview.andrawing1212.workers.dev';
 const ARCHIVE_MIN_AGE_MS = 14 * 24 * 60 * 60 * 1000;

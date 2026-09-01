@@ -1,0 +1,2815 @@
+
+===== const toggleFavorite = async @ 9470 =====
+9330:   }, [user, syncMusicNoteIncrementalFromRemoteVersion]);
+9331: 
+9332:   const searchFavoritesOnServer = useCallback(async (rawSearchText: string): Promise<any[]> => {
+9333:     const currentUser = user || auth.currentUser;
+9334:     const normalizedSearch = normalizeFavoriteSearchValue(rawSearchText);
+9335:     if (!currentUser?.uid || normalizedSearch.length < FAVORITE_SERVER_SEARCH_MIN_LENGTH) return [];
+9336: 
+9337:     const cachedResult = favoriteServerSearchCacheRef.current[normalizedSearch];
+9338:     if (cachedResult) return cachedResult;
+9339: 
+9340:     const searchTokens = getFavoriteServerSearchTokens(normalizedSearch);
+9341:     if (searchTokens.length === 0) return [];
+9342: 
+9343:     try {
+9344:       const q = query(
+9345:         collection(db, 'favorites'),
+9346:         where('uid', '==', currentUser.uid),
+9347:         where('searchTokens', 'array-contains-any', searchTokens),
+9348:         orderBy('createdAt', 'desc'),
+9349:         limit(FAVORITE_SERVER_SEARCH_LIMIT)
+9350:       );
+9351:       const snapshot = await getDocs(q);
+9352:       const serverResults = sortFavoriteList(snapshot.docs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
+9353:       favoriteServerSearchCacheRef.current[normalizedSearch] = serverResults;
+9354:       if (serverResults.length > 0) {
+9355:         setFavorites((prev) => {
+9356:           const merged = mergeFavoritePages(prev || [], serverResults);
+9357:           writeFavoritesCache(currentUser.uid, merged);
+9358:           return merged;
+9359:         });
+9360:       }
+9361:       return serverResults;
+9362:     } catch (error) {
+9363:       console.warn('Favorite server search failed. Keeping local cache search only.', error);
+9364:       favoriteServerSearchCacheRef.current[normalizedSearch] = [];
+9365:       return [];
+9366:     }
+9367:   }, [user]);
+9368: 
+9369:   const refreshFavoritesFromServerFirstPage = useCallback(async (): Promise<{ ok: boolean; limited?: boolean; message?: string }> => {
+9370:     const currentUser = user || auth.currentUser;
+9371:     if (!currentUser?.uid) return { ok: false, message: '로그인이 필요합니다.' };
+9372: 
+9373:     const uid = currentUser.uid;
+9374:     const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
+9375:     const remoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, uid);
+9376:     if (remoteVersion > 0 && localVersion >= remoteVersion) {
+9377:       markCacheDiagnostic('musicNote', 'CACHE', 0);
+9378:       return { ok: true, message: '변경된 뮤직노트가 없습니다.' };
+9379:     }
+9380: 
+9381:     let timeoutId: number | null = null;
+9382:     try {
+9383:       const timeoutPromise = new Promise<null>((_, reject) => {
+9384:         timeoutId = window.setTimeout(() => reject(new Error('MUSIC_NOTE_SYNC_TIMEOUT')), 8000);
+9385:       });
+9386:       const bundle = await Promise.race([
+9387:         readListBundleFromServerOnce('musicNote', uid),
+9388:         timeoutPromise,
+9389:       ]);
+9390:       if (!bundle) return { ok: false, message: '뮤직노트 변경 캐시가 아직 준비되지 않았습니다.' };
+9391: 
+9392:       const localDeletedIds = getFavoriteDeletedTombstoneIds(uid);
+9393:       if (bundle.deletedIds.length > 0) {
+9394:         rememberFavoriteDeletedTombstones(uid, bundle.deletedIds);
+9395:         bundle.deletedIds.forEach((id) => localDeletedIds.add(id));
+9396:       }
+9397:       const incoming = (bundle.items || []).filter((favorite: any) => {
+9398:         if (isFavoriteSoftRemoved(favorite)) return false;
+9399:         const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+9400:         return !favoriteId || !localDeletedIds.has(favoriteId);
+9401:       });
+9402:       const previous = favoritesStore.getFavorites();
+9403:       const bundleVersion = Number(bundle.updatedAtMs || 0);
+9404:       const localNewer = (Array.isArray(previous) ? previous : []).filter((favorite: any) => {
+9405:         if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+9406:         const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+9407:         if (favoriteId && localDeletedIds.has(favoriteId)) return false;
+9408:         const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
+9409:           || getTimestampMs(favorite?.updatedAt)
+9410:           || getTimestampMs(favorite?.createdAt)
+9411:           || 0;
+9412:         return bundleVersion > 0 && favoriteVersion > bundleVersion;
+9413:       });
+9414:       const mergedFirstPage = mergeFavoritePages(localNewer, incoming);
+9415:       const merged = mergeFavoriteFirstPageWithCache(
+9416:         mergedFirstPage,
+9417:         Array.isArray(previous) ? previous : [],
+9418:         !bundle.hasMore,
+9419:       );
+9420:       setFavorites(merged);
+9421:       writeFavoritesCache(uid, merged);
+9422:       favoritesStore.setFavorites(merged);
+9423:       favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
+9424:       favoritePaginationExhaustedRef.current = !bundle.hasMore;
+9425:       favoritePaginationFallbackModeRef.current = false;
+9426:       setHasMoreFavorites(bundle.hasMore);
+9427:       const nextLocalVersion = Math.max(localVersion, bundleVersion);
+9428:       if (nextLocalVersion > 0) writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, nextLocalVersion);
+9429:       markCacheDiagnostic('musicNote', 'SYNC', 1);
+9430:       return { ok: true, message: '변경된 뮤직노트만 동기화했습니다.' };
+9431:     } catch (error: any) {
+9432:       if (String(error?.message || '').includes('MUSIC_NOTE_SYNC_TIMEOUT')) {
+9433:         return { ok: false, message: '동기화 응답이 지연되어 중단했습니다. 다시 시도해주세요.' };
+9434:       }
+9435:       console.warn('Music Note one-document sync failed.', error);
+9436:       return { ok: false, message: '변경분 동기화에 실패했습니다.' };
+9437:     } finally {
+9438:       if (timeoutId !== null) window.clearTimeout(timeoutId);
+9439:     }
+9440:   }, [user]);
+9441: 
+9442:   const showToast = useCallback((message: string) => {
+9443:     setToast({ message, visible: true });
+9444:     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2000);
+9445:   }, []);
+9446: 
+9447:   useEffect(() => {
+9448:     const movedStyleIds = selectedStyles.filter((id) => MOVED_STYLE_TO_SOUND_ID_SET.has(id));
+9449:     if (movedStyleIds.length === 0) return;
+9450:     const movedSoundIds = movedStyleIds
+9451:       .map((id) => MOVED_STYLE_TO_SOUND_ALIAS[id] || id)
+9452:       .filter((id) => Boolean(SOUND_VARIANT_LOOKUP[id]));
+9453: 
+9454:     // Backward compatibility for saved sessions created before Style/Sound roles were cleaned.
+9455:     setSelectedStyles((prev) => prev.filter((id) => !MOVED_STYLE_TO_SOUND_ID_SET.has(id)));
+9456:     setPinnedStyles((prev) => prev.filter((id) => !MOVED_STYLE_TO_SOUND_ID_SET.has(id)));
+9457:     setSelectedInstrumentSounds((prev) => Array.from(new Set([...prev, ...movedSoundIds])));
+9458:   }, [selectedStyles]);
+9459: 
+9460:   useEffect(() => {
+9461:     const normalizedStyles = limitHybridStyleIds(selectedStyles, maxHybridStyleSelections);
+9462:     if (normalizedStyles.length === selectedStyles.length && normalizedStyles.every((id, index) => id === selectedStyles[index])) return;
+9463: 
+9464:     setSelectedStyles(normalizedStyles);
+9465:     showToast(activeGenreIdentityCount >= 2
+9466:       ? '장르 2개 기준으로 하이브리드를 1개만 유지했습니다.'
+9467:       : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
+9468:   }, [activeGenreIdentityCount, maxHybridStyleSelections, selectedStyles, showToast]);
+9469: 
+9470:   const toggleFavorite = async (song: SongResult, options?: { trustedRecentStudio?: boolean }) => {
+9471:     song = normalizeFavoriteTitleFields(song as any) as SongResult;
+9472: 
+9473:     if (!user) {
+9474:       showToast('로그인이 필요합니다.');
+9475:       handleLogin();
+9476:       return;
+9477:     }
+9478: 
+9479:     const favoriteDeleteId = (song as any)?.favoriteFirestoreId || (song as any)?.firestoreId || (song as any)?.id;
+9480:     const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
+9481:     const songIdentityKey = buildFavoriteIdentityKey(song);
+9482:     const findLocalExistingFavorite = () => {
+9483:       if ((song as any)?.recentFavoriteDetachedAt) return null;
+9484:       const latestFavorites = favoritesStore.getFavorites();
+9485:       const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
+9486:       if (linkedFavoriteId) {
+9487:         const exactLinkedFavorite = latestFavorites.find((favorite: any) =>
+9488:           String(favorite?.firestoreId || favorite?.id || '').trim() === linkedFavoriteId,
+9489:         );
+9490:         if (exactLinkedFavorite) return exactLinkedFavorite;
+9491:       }
+9492:       const byId = favoriteDeleteId ? latestFavorites.find(f => f.id === favoriteDeleteId || f.firestoreId === favoriteDeleteId) : null;
+9493:       if (byId) return byId;
+9494:       return findBestMatchingFavorite(latestFavorites, song, songIdentityKey);
+9495:     };
+9496: 
+9497:     const findServerMatchingFavorites = async (_includeFullScan = false): Promise<any[]> => {
+9498:       const matches = new Map<string, any>();
+9499:       // 1007 — Recent-song saves already carry a stable SORIDRAW song id.
+9500:       // Use that exact identity first so a normal save needs only one bounded
+9501:       // server duplicate check instead of chaining favoriteKey + title lookups.
+9502:       const stableSongId = getLiveSoridrawSongId(song);
+9503:       const addCandidates = (candidates: any[]) => {
+9504:         candidates.forEach((candidate) => {
+9505:           if (!candidate?.id) return;
+9506:           if (isFavoriteServerDuplicateCandidate(candidate, song, songIdentityKey)) {
+9507:             matches.set(candidate.id, candidate);
+9508:           }
+9509:         });
+9510:       };
+9511: 
+9512:       const exactFavoriteId = String(
+9513:         (song as any)?.favoriteFirestoreId
+9514:         || (song as any)?.firestoreId
+9515:         || (forceDeleteFavoriteById ? favoriteDeleteId : '')
+9516:         || '',
+9517:       ).trim();
+9518:       if (exactFavoriteId) {
+9519:         try {
+9520:           const exactSnap = await getDoc(doc(db, 'favorites', exactFavoriteId));
+9521:           if (exactSnap.exists()) addCandidates([mapFavoriteFirestoreDoc(exactSnap)]);
+9522:         } catch (error) {
+9523:           console.warn('Exact favorite lookup failed.', error);
+9524:         }
+9525:       }
+9526: 
+9527:       if (matches.size === 0 && stableSongId) {
+9528:         let stableLookupSucceeded = false;
+9529:         try {
+9530:           const stableSnap = await getDocs(query(
+9531:             collection(db, 'favorites'),
+9532:             where('uid', '==', user.uid),
+9533:             where('soridrawSongId', '==', stableSongId),
+9534:             limit(2),
+9535:           ));
+9536:           stableLookupSucceeded = true;
+9537:           addCandidates(stableSnap.docs.map(mapFavoriteFirestoreDoc));
+9538:         } catch (error) {
+9539:           // Preserve the older bounded identity/title fallback only when the
+9540:           // stable-id query itself could not be completed.
+9541:           console.warn('Favorite stable song id lookup failed; using legacy bounded fallback.', error);
+9542:         }
+9543:         if (stableLookupSucceeded) return Array.from(matches.values());
+9544:       }
+9545: 
+9546:       if (matches.size === 0 && songIdentityKey) {
+9547:         try {
+9548:           const keySnap = await getDocs(query(
+9549:             collection(db, 'favorites'),
+9550:             where('uid', '==', user.uid),
+9551:             where('favoriteKey', '==', songIdentityKey),
+9552:             limit(5),
+9553:           ));
+9554:           addCandidates(keySnap.docs.map(mapFavoriteFirestoreDoc));
+9555:         } catch (error) {
+9556:           console.warn('Favorite identity lookup by key failed.', error);
+9557:         }
+9558:       }
+9559: 
+9560:       if (matches.size === 0) {
+9561:         const titleCandidate = String(song.title || song.koreanTitle || song.englishTitle || '').trim();
+9562:         if (titleCandidate) {
+9563:           try {
+9564:             const titleSnap = await getDocs(query(
+9565:               collection(db, 'favorites'),
+9566:               where('uid', '==', user.uid),
+9567:               where('title', '==', titleCandidate),
+9568:               limit(5),
+9569:             ));
+9570:             addCandidates(titleSnap.docs.map(mapFavoriteFirestoreDoc));
+9571:           } catch (error) {
+9572:             console.warn('Favorite bounded title lookup failed.', error);
+9573:           }
+9574:         }
+9575:       }
+9576: 
+9577:       return Array.from(matches.values());
+9578:     };
+9579: 
+9580:     const findServerExistingFavorite = async () => {
+9581:       const matches = await findServerMatchingFavorites(forceDeleteFavoriteById);
+9582:       return findBestMatchingFavorite(matches, song, songIdentityKey);
+9583:     };
+9584: 
+9585:     const patchLocalFavorite = (id: string, updates: Record<string, any>, fallbackFavorite?: any) => {
+9586:       setFavorites((prev) => {
+9587:         const exists = (prev || []).some((favorite) => favorite.id === id);
+9588:         const next = exists
+9589:           ? (prev || []).map((favorite) => favorite.id === id ? { ...favorite, ...updates } : favorite)
+9590:           : fallbackFavorite
+9591:             ? [{ ...fallbackFavorite, ...updates }, ...(prev || [])]
+9592:             : (prev || []);
+9593:         const sorted = sortFavoriteList(next);
+9594:         writeFavoritesCache(user.uid, sorted);
+9595:         return sorted;
+9596:       });
+9597:     };
+9598: 
+9599:     const removeLocalFavorite = (id: string, removeMatchingSong = false) => {
+9600:       setFavorites((prev) => {
+9601:         const next = (prev || []).filter((favorite) => {
+9602:           if (favorite.id === id) return false;
+9603:           if (removeMatchingSong && isSameFavoriteSong(favorite, song, songIdentityKey)) return false;
+9604:           return true;
+9605:         });
+9606:         writeFavoritesCache(user.uid, next);
+9607:         return next;
+9608:       });
+9609:     };
+9610: 
+9611:     try {
+9612:       const localExistingFav = findLocalExistingFavorite();
+9613:       const stableRecentSongId = getLiveSoridrawSongId(song);
+9614:       const localMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, user.uid);
+9615:       const remoteMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, user.uid);
+9616:       const canTrustRecentStudioLocalIdentity = Boolean(
+9617:         options?.trustedRecentStudio
+9618:         && stableRecentSongId
+9619:         && hasMusicNotePayloadCache(user.uid)
+9620:         && localMusicNoteVersion > 0
+9621:         && remoteMusicNoteVersion <= localMusicNoteVersion
+9622:       );
+9623:       const serverExistingFav = (
+9624:         localExistingFav
+9625:         || (song as any)?.recentFavoriteDetachedAt
+9626:         || canTrustRecentStudioLocalIdentity
+9627:       ) ? null : await findServerExistingFavorite().catch((error) => {
+9628:         console.warn('Favorite server confirmation failed. Using local favorite state as fallback.', error);
+9629:         return null;
+9630:       });
+9631:       const existingFav = localExistingFav || serverExistingFav;
+9632: 
+9633:       if (existingFav) {
+9634:         if (existingFav.isLocked && !forceDeleteFavoriteById) {
+9635:           showToast('잠긴 곡은 삭제할 수 없습니다.');
+9636:           return;
+9637:         }
+9638: 
+9639:         if (forceDeleteFavoriteById) {
+9640:           if (existingFav.isLocked) {
+9641:             await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', existingFav.id), { isLocked: false }));
+9642:           }
+9643:           await runV1MutationBoundary({ domain: 'musicNote', operation: 'permanent-delete', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([existingFav], 'recent-hide').map((target) => ({ ...target, operation: 'music-note-unsave' as const, sourceDocumentId: existingFav.id })) }, deleteDoc(doc(db, 'favorites', existingFav.id)));
+9644:           rememberFavoriteDeletedTombstones(user.uid, [existingFav.id]);
+9645:           removeLocalFavorite(existingFav.id);
+9646: 
+9647:           const deletedAt = Date.now();
+9648:           const favoriteKey = existingFav.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(existingFav);
+9649:           const deleteSignal = sanitizeForFirestore({
+9650:             id: `delete_${deletedAt}_${Math.random().toString(36).slice(2, 8)}`,
+9651:             action: 'delete',
+9652:             at: deletedAt,
+9653:             favoriteId: existingFav.id,
+9654:             favoriteIds: [existingFav.id],
+9655:             favoriteKey: favoriteKey || '',
+9656:             favoriteKeys: favoriteKey ? [favoriteKey] : [],
+9657:             title: existingFav.title || song.title || '',
+9658:             koreanTitle: existingFav.koreanTitle || song.koreanTitle || '',
+9659:             englishTitle: existingFav.englishTitle || song.englishTitle || '',
+9660:             titleFingerprint: getFavoriteTitleFingerprint(existingFav || song),
+9661:             genre: getResolvedGenre(existingFav) || getResolvedGenre(song) || existingFav.genre || (song as any).genre || '',
+9662:             favorite: {
+9663:               id: existingFav.id,
+9664:               uid: user.uid,
+9665:               title: existingFav.title || '',
+9666:               favoriteKey: favoriteKey || '',
+9667:             },
+9668:           });
+9669:           applyFavoriteSyncSignal(user.uid, deleteSignal);
+9670:           await updateDoc(doc(db, 'users', user.uid), {
+9671:             favoriteSyncSignal: deleteSignal,
+9672:             favoriteSyncSignalUpdatedAt: deletedAt,
+9673:             favoriteCount: increment(-1)
+9674:           }).catch(err => console.error("Failed to decrement favoriteCount or publish favorite delete signal:", err));
+9675:           showToast('곡이 삭제 되었습니다.');
+9676:           return;
+9677:         }
+9678: 
+9679:         if (isFavoriteHidden(existingFav)) {
+9680:           const restoredAt = Date.now();
+9681:           const restoreUpdates = {
+9682:             updatedAtMs: restoredAt,
+9683:             hidden: false,
+9684:             favoriteHidden: false,
+9685:             deletedAt: null,
+9686:             trashedAt: null,
+9687:             favoriteRemoved: false,
+9688:             favoriteRemovedAt: null,
+9689:             unlikedAt: null,
+9690:             unsavedAt: null,
+9691:             saved: true,
+9692:             restoredAt: Date.now(),
+9693:             favoriteKey: existingFav.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(existingFav),
+9694:             searchTokens: buildFavoriteSearchTokens({ ...existingFav, ...song }),
+9695:           };
+9696:           await runV1MutationBoundary({ domain: 'musicNote', operation: 'restore', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', existingFav.id), sanitizeForFirestore(restoreUpdates)));
+9697:           patchLocalFavorite(existingFav.id, restoreUpdates, existingFav);
+9698:           const saveSignal = buildFavoriteSyncSignal('save', { ...song, ...restoreUpdates }, [{ ...existingFav, ...restoreUpdates }], restoredAt);
+9699:           updateDoc(doc(db, 'users', user.uid), {
+9700:             favoriteSyncSignal: saveSignal,
+9701:             favoriteSyncSignalUpdatedAt: saveSignal.at,
+9702:           }).catch(err => console.error("Failed to publish favorite restore sync signal:", err));
+9703:           showToast('보관함에 다시 저장되었습니다.');
+9704:           return;
+9705:         }
+9706: 
+9707:         // Studio heart toggle means save / unsave.
+9708:         // Unsave must affect only the exact Music Note item connected to the current Studio snapshot.
+9709:         // Edited Studio saves are separate songs, so unsaving the edited version must not remove the original.
+9710:         const unsavedAt = Date.now();
+9711:         const unsaveTargets = existingFav?.id && !existingFav.isLocked
+9712:           && existingFav.hidden !== true
+9713:           && existingFav.favoriteHidden !== true
+9714:           && !existingFav.deletedAt
+9715:           && !existingFav.trashedAt
+9716:           ? [existingFav]
+9717:           : [];
+9718:         const unsaveSignal = buildFavoriteSyncSignal('unsave', song, unsaveTargets.length > 0 ? unsaveTargets : [existingFav], unsavedAt);
+9719:         const unsaveUpdates = sanitizeForFirestore({
+9720:           favoriteRemoved: true,
+9721:           favoriteRemovedAt: unsavedAt,
+9722:           unlikedAt: unsavedAt,
+9723:           unsavedAt,
+9724:           updatedAtMs: unsavedAt,
+9725:           saved: false,
+9726:           hidden: false,
+9727:           favoriteHidden: false,
+9728:           deletedAt: null,
+9729:           trashedAt: null,
+9730:           isPublic: false,
+9731:           createdAtMs: unsavedAt,
+9732:           createdAt: serverTimestamp(),
+9733:           updatedAt: serverTimestamp(),
+9734:         });
+9735:         try {
+9736:           if (unsaveTargets.length > 0) {
+9737:             await Promise.all(unsaveTargets.map((targetFavorite) => runV1MutationBoundary({ domain: 'musicNote', operation: 'unsave', uid: user.uid, documentIds: [targetFavorite.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', targetFavorite.id), sanitizeForFirestore({
+9738:               ...unsaveUpdates,
+9739:               favoriteKey: targetFavorite.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(targetFavorite),
+9740:             })))));
+9741:           } else if (existingFav?.id) {
+9742:             await runV1MutationBoundary({ domain: 'musicNote', operation: 'unsave', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates));
+9743:           }
+9744: 
+9745:           removeLocalFavorite(existingFav.id);
+9746:           applyFavoriteSyncSignal(user.uid, unsaveSignal);
+9747:           await updateDoc(doc(db, 'users', user.uid), {
+9748:             favoriteSyncSignal: unsaveSignal,
+9749:             favoriteSyncSignalUpdatedAt: unsavedAt,
+9750:             favoriteCount: increment(-1)
+9751:           }).catch(err => console.error("Failed to publish favorite unsave sync signal:", err));
+9752:           showToast('저장이 해제되었습니다.');
+9753:           return;
+9754:         } catch (unsaveError: any) {
+9755:           const code = String(unsaveError?.code || '');
+9756:           const message = String(unsaveError?.message || unsaveError || '');
+9757:           const looksLikeMissingOrBadLocalFavorite = code === 'not-found'
+9758:             || code === 'invalid-argument'
+9759:             || /No document to update|not[- ]found|Invalid document reference|even number of segments/i.test(message);
+9760:           if (looksLikeMissingOrBadLocalFavorite && !serverExistingFav) {
+9761:             removeLocalFavorite(existingFav.id);
+9762:             applyFavoriteSyncSignal(user.uid, unsaveSignal);
+9763:             await updateDoc(doc(db, 'users', user.uid), {
+9764:               favoriteSyncSignal: unsaveSignal,
+9765:               favoriteSyncSignalUpdatedAt: unsavedAt,
+9766:             }).catch(err => console.error("Failed to publish local favorite cleanup signal:", err));
+9767:             showToast('저장이 해제되었습니다.');
+9768:             return;
+9769:           }
+9770:           throw unsaveError;
+9771:         }
+9772:       }
+9773: 
+9774:       const createdAtMs = Date.now();
+9775:       song = ensureLiveSoridrawSongId(song as any) as SongResult;
+9776:       const favoriteSoridrawSongId = getLiveSoridrawSongId(song);
+9777:       const buildRecentFavoriteDocumentId = (uid: string, stableSongId: string): string => {
+9778:         const raw = `${uid}|${stableSongId}`;
+9779:         let hash = 2166136261;
+9780:         for (let index = 0; index < raw.length; index += 1) {
+9781:           hash ^= raw.charCodeAt(index);
+9782:           hash = Math.imul(hash, 16777619);
+9783:         }
+9784:         const safeSongId = stableSongId.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 72) || 'song';
+9785:         return `rs_${safeSongId}_${(hash >>> 0).toString(36)}`;
+9786:       };
+9787:       const resolvedGenre = getResolvedGenre(song);
+9788:       const favoritePayload = sanitizeForFirestore({
+9789:         uid: user.uid,
+9790:         soridrawSongId: favoriteSoridrawSongId,
+9791:         title: song.title,
+9792:         koreanTitle: song.koreanTitle ?? '',
+9793:         englishTitle: song.englishTitle ?? '',
+9794:         genre: resolvedGenre,
+9795:         lyrics: song.lyrics,
+9796:         prompt: song.prompt,
+9797:         appliedKeywords: song.appliedKeywords,
+9798:         userInput: song.userInput ?? (song.appliedKeywords as any)?.userInput ?? '',
+9799:         situationSummary: song.situationSummary || (song.appliedKeywords as any)?.situationSummary || '',
+9800:         isLocked: false,
+9801:         hidden: false,
+9802:         favoriteHidden: false,
+9803:         favoriteRemoved: false,
+9804:         favoriteRemovedAt: null,
+9805:         saved: true,
+9806:         createdAtMs,
+9807:         updatedAtMs: createdAtMs,
+9808:         createdAt: serverTimestamp(),
+9809:         favoriteKey: songIdentityKey,
+9810:         searchTokens: buildFavoriteSearchTokens(song)
+9811:       });
+9812:       const useDeterministicRecentFavoriteDoc = Boolean(
+9813:         canTrustRecentStudioLocalIdentity && favoriteSoridrawSongId
+9814:       );
+9815:       const favoriteDocRef = useDeterministicRecentFavoriteDoc
+9816:         ? doc(db, 'favorites', buildRecentFavoriteDocumentId(user.uid, favoriteSoridrawSongId))
+9817:         : null;
+9818:       if (favoriteDocRef) {
+9819:         await runV1MutationBoundary(
+9820:           { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1 },
+9821:           setDoc(favoriteDocRef, favoritePayload, { merge: false }),
+9822:         );
+9823:       }
+9824:       const createdFavoriteDocRef = favoriteDocRef || await runV1MutationBoundary(
+9825:         { domain: 'musicNote', operation: 'save', uid: user.uid, affectedCount: 1 },
+9826:         addDoc(collection(db, 'favorites'), favoritePayload),
+9827:       );
+9828: 
+9829:       const localFavorite = sanitizeForFirestore({
+9830:         ...song,
+9831:         ...favoritePayload,
+9832:         id: createdFavoriteDocRef.id,
+9833:         firestoreId: createdFavoriteDocRef.id,
+9834:         uid: user.uid,
+9835:         genre: resolvedGenre,
+9836:         createdAtMs,
+9837:         createdAt: createdAtMs,
+9838:         isLocked: false,
+9839:         hidden: false,
+9840:         favoriteHidden: false,
+9841:         favoriteRemoved: false,
+9842:         favoriteRemovedAt: null,
+9843:         saved: true,
+9844:       });
+9845:       setFavorites((prev) => {
+9846:         const merged = mergeFavoritePages([localFavorite], prev || []);
+9847:         writeFavoritesCache(user.uid, merged);
+9848:         return merged;
+9849:       });
+9850: 
+9851:       const saveSignal = buildFavoriteSyncSignal('save', localFavorite, [localFavorite], createdAtMs);
+9852:       await updateDoc(doc(db, 'users', user.uid), {
+9853:         favoriteSyncSignal: saveSignal,
+9854:         favoriteSyncSignalUpdatedAt: createdAtMs,
+9855:         favoriteCount: increment(1)
+9856:       }).catch(err => console.error("Failed to increment favoriteCount or publish save signal:", err));
+9857: 
+9858:       showToast('저장되었습니다.');
+9859:     } catch (error) {
+9860:       handleFirestoreError(error, OperationType.UPDATE, 'favorites');
+9861:       throw error;
+9862:     }
+9863:   };
+9864: 
+9865:   const updateFavorite = async (id: string, updates: Partial<any>) => {
+9866:     const currentFavorite = favoritesStore.getFavorites().find((favorite) => favorite.id === id);
+9867:     let sanitizedUpdates = sanitizeForFirestore(updates);
+9868:     if (currentFavorite && shouldRefreshFavoriteSearchTokens(updates)) {
+9869:       const mergedForSearch = {
+9870:         ...currentFavorite,
+9871:         ...updates,
+9872:         ...sanitizedUpdates,
+9873:         appliedKeywords: sanitizedUpdates.appliedKeywords
+9874:           ? { ...(currentFavorite.appliedKeywords || {}), ...(sanitizedUpdates.appliedKeywords || {}) }
+9875:           : currentFavorite.appliedKeywords,
+9876:       };
+9877:       sanitizedUpdates = {
+9878:         ...sanitizedUpdates,
+9879:         favoriteKey: currentFavorite.favoriteKey || buildFavoriteIdentityKey(mergedForSearch),
+9880:         searchTokens: buildFavoriteSearchTokens(mergedForSearch),
+9881:       };
+9882:     }
+9883: 
+9884:     const isRemovalLikeUpdate = Boolean(
+9885:       sanitizedUpdates.hidden === true
+9886:       || sanitizedUpdates.favoriteHidden === true
+9887:       || sanitizedUpdates.favoriteRemoved === true
+9888:       || sanitizedUpdates.saved === false
+9889:       || sanitizedUpdates.deletedAt
+9890:       || sanitizedUpdates.trashedAt
+
+===== const syncMusicNoteIncrementalFromRemoteVersion = useCallback @ 9240 =====
+9100:               });
+9101:               favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
+9102:               favoritePaginationExhaustedRef.current = !bundle.hasMore;
+9103:               favoritePaginationFallbackModeRef.current = false;
+9104:               setHasMoreFavorites(bundle.hasMore);
+9105:               setFavorites((prev) => {
+9106:                 const previous = Array.isArray(prev) ? prev : [];
+9107:                 const bundleVersion = Number(bundle.updatedAtMs || 0);
+9108:                 const localNewer = previous.filter((favorite: any) => {
+9109:                   if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+9110:                   const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+9111:                   if (favoriteId && localDeletedIds.has(favoriteId)) return false;
+9112:                   const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
+9113:                     || getTimestampMs(favorite?.updatedAt)
+9114:                     || getTimestampMs(favorite?.createdAt)
+9115:                     || 0;
+9116:                   return bundleVersion > 0 && favoriteVersion > bundleVersion;
+9117:                 });
+9118:                 const firstPageWithLocalNewer = mergeFavoritePages(localNewer, firstPageFavs);
+9119:                 const merged = mergeFavoriteFirstPageWithCache(firstPageWithLocalNewer, previous, !bundle.hasMore);
+9120:                 writeFavoritesCache(currentUser.uid, merged);
+9121:                 return merged;
+9122:               });
+9123:               if (bundle.updatedAtMs > 0) {
+9124:                 const currentLocalVersion = readMusicNoteSyncVersion(
+9125:                   MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,
+9126:                   currentUser.uid,
+9127:                 );
+9128:                 writeMusicNoteSyncVersion(
+9129:                   MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,
+9130:                   currentUser.uid,
+9131:                   Math.max(currentLocalVersion, Number(bundle.updatedAtMs || 0)),
+9132:                 );
+9133:               }
+9134:               markCacheDiagnostic('musicNote', meta.fromCache ? 'CACHE' : 'SYNC', meta.fromCache ? 0 : 1);
+9135:               setIsFavoritesLoading(false);
+9136:             },
+9137:             onMissing: (meta) => {
+9138:               musicNoteBundleActiveUids.delete(currentUser.uid);
+9139:               if (meta.fromCache) return;
+9140:               if (musicNoteBundleMissingHandled) return;
+9141:               musicNoteBundleMissingHandled = true;
+9142:               if (hasCachedMusicNote) {
+9143:                 scheduleListBundleWrite('musicNote', currentUser.uid, cachedFavs, {
+9144:                   limit: 20,
+9145:                   hasMore: cachedFavs.length >= 20,
+9146:                   deletedIds: Array.from(getFavoriteDeletedTombstoneIds(currentUser.uid)),
+9147:                 });
+9148:                 setIsFavoritesLoading(false);
+9149:                 return;
+9150:               }
+9151:               attachFavoritesSourceBootstrap902();
+9152:             },
+9153:             onError: (error) => {
+9154:               musicNoteBundleActiveUids.delete(currentUser.uid);
+9155:               console.warn('Music Note bundle unavailable; using legacy safe path.', error);
+9156:               if (!hasCachedMusicNote) attachFavoritesSourceBootstrap902();
+9157:             },
+9158:           });
+9159:         } else {
+9160:           // Cache is already current. Keep 901 delta sync available so a later
+9161:           // cross-device version event fetches only changed favorites.
+9162:           musicNoteBundleActiveUids.delete(currentUser.uid);
+9163:           markCacheDiagnostic('musicNote', 'CACHE', 0);
+9164:           setIsFavoritesLoading(false);
+9165:         }
+9166: 
+9167: 
+9168:         // 901: delayed full-list recovery disabled; manual Sync owns full reconciliation.
+9169:         favoriteFullCacheRecoveryTimer = null;
+9170:       } else {
+9171:         setFavorites([]);
+9172:         setHasMoreFavorites(false);
+9173:         setIsLoadingMoreFavorites(false);
+9174:         favoritePaginationCursorRef.current = null;
+9175:         favoritePaginationExhaustedRef.current = false;
+9176:         favoritePaginationLoadingRef.current = false;
+9177:         favoritePaginationFallbackModeRef.current = false;
+9178:         setIsFavoritesLoading(false);
+9179:         clearCachedUserRole();
+9180:         setCachedUserRoleHint(null);
+9181:         setUserRole('free');
+9182:       }
+9183:     });
+9184: 
+9185:     return () => {
+9186:       unsubscribe();
+9187:       if (unsubFavs) unsubFavs();
+9188:       if (unsubMusicNoteBundle) unsubMusicNoteBundle();
+9189:       if (unsubUserDoc) unsubUserDoc();
+9190:       if (favoritesRetryTimer !== null) window.clearTimeout(favoritesRetryTimer);
+9191:       if (userRoleRetryTimer !== null) window.clearTimeout(userRoleRetryTimer);
+9192:       if (favoriteFullCacheRecoveryTimer) window.clearTimeout(favoriteFullCacheRecoveryTimer);
+9193:     };
+9194:   }, []);
+9195: 
+9196:   const loadMoreFavorites = useCallback(async () => {
+9197:     const currentUser = user || auth.currentUser;
+9198:     if (!currentUser?.uid) return;
+9199:     if (favoritePaginationFallbackModeRef.current) return;
+9200:     if (favoritePaginationLoadingRef.current || favoritePaginationExhaustedRef.current) return;
+9201:     const cursor = favoritePaginationCursorRef.current;
+9202:     if (!cursor) return;
+9203: 
+9204:     favoritePaginationLoadingRef.current = true;
+9205:     setIsLoadingMoreFavorites(true);
+9206:     try {
+9207:       const q = query(
+9208:         collection(db, 'favorites'),
+9209:         where('uid', '==', currentUser.uid),
+9210:         orderBy('createdAt', 'desc'),
+9211:         startAfter(cursor),
+9212:         limit(FAVORITES_PAGE_SIZE)
+9213:       );
+9214:       const snapshot = await getDocs(q);
+9215:       const nextDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
+9216:       const nextFavs = nextDocs.map(mapFavoriteFirestoreDoc);
+9217:       if (nextDocs.length > 0) {
+9218:         favoritePaginationCursorRef.current = nextDocs[nextDocs.length - 1];
+9219:         writeMusicNotePaginationCursor(currentUser.uid, favoritePaginationCursorRef.current);
+9220:       } else {
+9221:         clearMusicNotePaginationCursor(currentUser.uid);
+9222:       }
+9223:       favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
+9224:       setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
+9225:       setFavorites((prev) => {
+9226:         const merged = mergeFavoritePages(prev || [], nextFavs);
+9227:         writeFavoritesCache(currentUser.uid, merged);
+9228:         return merged;
+9229:       });
+9230:     } catch (error) {
+9231:       console.warn('Favorites additional page load failed. Keeping the current list instead of crashing the page.', error);
+9232:       favoritePaginationExhaustedRef.current = true;
+9233:       setHasMoreFavorites(false);
+9234:     } finally {
+9235:       favoritePaginationLoadingRef.current = false;
+9236:       setIsLoadingMoreFavorites(false);
+9237:     }
+9238:   }, [user]);
+9239: 
+9240:   const syncMusicNoteIncrementalFromRemoteVersion = useCallback(async (
+9241:     remoteVersion: number,
+9242:     originDeviceId = '',
+9243:   ) => {
+9244:     const currentUser = user || auth.currentUser;
+9245:     if (!currentUser?.uid || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
+9246: 
+9247:     const uid = currentUser.uid;
+9248:     if (typeof window !== 'undefined' && window.location.pathname !== '/history') {
+9249:       return;
+9250:     }
+9251:     if (musicNoteBundleActiveUids.has(uid)) {
+9252:       markCacheDiagnostic('musicNote', 'CACHE', 0);
+9253:       return;
+9254:     }
+9255:     const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
+9256:     if (localVersion >= remoteVersion) return;
+9257: 
+9258:     if (musicNoteFreshBootstrapUids.has(uid)) {
+9259:       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+9260:       return;
+9261:     }
+9262: 
+9263:     if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
+9264:       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+9265:       markCacheDiagnostic('musicNote', 'CACHE', 0);
+9266:       return;
+9267:     }
+9268: 
+9269:     try {
+9270:       const q = query(
+9271:         collection(db, 'favorites'),
+9272:         where('uid', '==', uid),
+9273:         where('updatedAtMs', '>', localVersion),
+9274:         orderBy('updatedAtMs', 'asc'),
+9275:         limit(FAVORITES_PAGE_SIZE)
+9276:       );
+9277:       const snapshot = await getDocs(q);
+9278:       const changedFavorites = snapshot.docs.map(mapFavoriteFirestoreDoc);
+9279:       markCacheDiagnostic('musicNote', 'SYNC', snapshot.docs.length);
+9280: 
+9281:       if (changedFavorites.length > 0) {
+9282:         setFavorites((prev) => {
+9283:           let next = Array.isArray(prev) ? [...prev] : [];
+9284:           changedFavorites.forEach((favorite) => {
+9285:             next = next.filter((item) => item?.id !== favorite?.id);
+9286:             if (!isFavoriteSoftRemoved(favorite)) {
+9287:               next = mergeFavoritePages([favorite], next);
+9288:             }
+9289:           });
+9290:           const sorted = sortFavoriteList(next);
+9291:           writeFavoritesCache(uid, sorted);
+9292:           return sorted;
+9293:         });
+9294:       }
+9295: 
+9296:       const maxSeenVersion = changedFavorites.reduce(
+9297:         (maxValue, favorite) => Math.max(maxValue, Number(favorite?.updatedAtMs || 0)),
+9298:         localVersion,
+9299:       );
+9300: 
+9301:       if (snapshot.docs.length < FAVORITES_PAGE_SIZE || maxSeenVersion >= remoteVersion) {
+9302:         writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+9303:       } else if (maxSeenVersion > localVersion) {
+9304:         writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, maxSeenVersion);
+9305:       }
+9306:     } catch (error) {
+9307:       console.warn('Music Note incremental sync failed. Keeping cache + latest sync signal.', error);
+9308:     }
+9309:   }, [user]);
+9310: 
+9311:   useEffect(() => {
+9312:     const currentUser = user || auth.currentUser;
+9313:     if (!currentUser?.uid || typeof window === 'undefined') return;
+9314: 
+9315:     const handleMusicNoteSyncVersion = (event: Event) => {
+9316:       const detail = (event as CustomEvent<{ uid?: string; version?: number; originDeviceId?: string }>).detail;
+9317:       if (!detail || detail.uid !== currentUser.uid) return;
+9318:       void syncMusicNoteIncrementalFromRemoteVersion(
+9319:         Number(detail.version || 0),
+9320:         String(detail.originDeviceId || ''),
+9321:       );
+9322:     };
+9323: 
+9324:     window.addEventListener(MUSIC_NOTE_SYNC_VERSION_EVENT, handleMusicNoteSyncVersion as EventListener);
+9325:     const pendingRemoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);
+9326:     if (pendingRemoteVersion > 0) {
+9327:       void syncMusicNoteIncrementalFromRemoteVersion(pendingRemoteVersion);
+9328:     }
+9329:     return () => window.removeEventListener(MUSIC_NOTE_SYNC_VERSION_EVENT, handleMusicNoteSyncVersion as EventListener);
+9330:   }, [user, syncMusicNoteIncrementalFromRemoteVersion]);
+9331: 
+9332:   const searchFavoritesOnServer = useCallback(async (rawSearchText: string): Promise<any[]> => {
+9333:     const currentUser = user || auth.currentUser;
+9334:     const normalizedSearch = normalizeFavoriteSearchValue(rawSearchText);
+9335:     if (!currentUser?.uid || normalizedSearch.length < FAVORITE_SERVER_SEARCH_MIN_LENGTH) return [];
+9336: 
+9337:     const cachedResult = favoriteServerSearchCacheRef.current[normalizedSearch];
+9338:     if (cachedResult) return cachedResult;
+9339: 
+9340:     const searchTokens = getFavoriteServerSearchTokens(normalizedSearch);
+9341:     if (searchTokens.length === 0) return [];
+9342: 
+9343:     try {
+9344:       const q = query(
+9345:         collection(db, 'favorites'),
+9346:         where('uid', '==', currentUser.uid),
+9347:         where('searchTokens', 'array-contains-any', searchTokens),
+9348:         orderBy('createdAt', 'desc'),
+9349:         limit(FAVORITE_SERVER_SEARCH_LIMIT)
+9350:       );
+9351:       const snapshot = await getDocs(q);
+9352:       const serverResults = sortFavoriteList(snapshot.docs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
+9353:       favoriteServerSearchCacheRef.current[normalizedSearch] = serverResults;
+9354:       if (serverResults.length > 0) {
+9355:         setFavorites((prev) => {
+9356:           const merged = mergeFavoritePages(prev || [], serverResults);
+9357:           writeFavoritesCache(currentUser.uid, merged);
+9358:           return merged;
+9359:         });
+9360:       }
+9361:       return serverResults;
+9362:     } catch (error) {
+9363:       console.warn('Favorite server search failed. Keeping local cache search only.', error);
+9364:       favoriteServerSearchCacheRef.current[normalizedSearch] = [];
+9365:       return [];
+9366:     }
+9367:   }, [user]);
+9368: 
+9369:   const refreshFavoritesFromServerFirstPage = useCallback(async (): Promise<{ ok: boolean; limited?: boolean; message?: string }> => {
+9370:     const currentUser = user || auth.currentUser;
+9371:     if (!currentUser?.uid) return { ok: false, message: '로그인이 필요합니다.' };
+9372: 
+9373:     const uid = currentUser.uid;
+9374:     const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
+9375:     const remoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, uid);
+9376:     if (remoteVersion > 0 && localVersion >= remoteVersion) {
+9377:       markCacheDiagnostic('musicNote', 'CACHE', 0);
+9378:       return { ok: true, message: '변경된 뮤직노트가 없습니다.' };
+9379:     }
+9380: 
+9381:     let timeoutId: number | null = null;
+9382:     try {
+9383:       const timeoutPromise = new Promise<null>((_, reject) => {
+9384:         timeoutId = window.setTimeout(() => reject(new Error('MUSIC_NOTE_SYNC_TIMEOUT')), 8000);
+9385:       });
+9386:       const bundle = await Promise.race([
+9387:         readListBundleFromServerOnce('musicNote', uid),
+9388:         timeoutPromise,
+9389:       ]);
+9390:       if (!bundle) return { ok: false, message: '뮤직노트 변경 캐시가 아직 준비되지 않았습니다.' };
+9391: 
+9392:       const localDeletedIds = getFavoriteDeletedTombstoneIds(uid);
+9393:       if (bundle.deletedIds.length > 0) {
+9394:         rememberFavoriteDeletedTombstones(uid, bundle.deletedIds);
+9395:         bundle.deletedIds.forEach((id) => localDeletedIds.add(id));
+9396:       }
+9397:       const incoming = (bundle.items || []).filter((favorite: any) => {
+9398:         if (isFavoriteSoftRemoved(favorite)) return false;
+9399:         const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+9400:         return !favoriteId || !localDeletedIds.has(favoriteId);
+9401:       });
+9402:       const previous = favoritesStore.getFavorites();
+9403:       const bundleVersion = Number(bundle.updatedAtMs || 0);
+9404:       const localNewer = (Array.isArray(previous) ? previous : []).filter((favorite: any) => {
+9405:         if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+9406:         const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+9407:         if (favoriteId && localDeletedIds.has(favoriteId)) return false;
+9408:         const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
+9409:           || getTimestampMs(favorite?.updatedAt)
+9410:           || getTimestampMs(favorite?.createdAt)
+9411:           || 0;
+9412:         return bundleVersion > 0 && favoriteVersion > bundleVersion;
+9413:       });
+9414:       const mergedFirstPage = mergeFavoritePages(localNewer, incoming);
+9415:       const merged = mergeFavoriteFirstPageWithCache(
+9416:         mergedFirstPage,
+9417:         Array.isArray(previous) ? previous : [],
+9418:         !bundle.hasMore,
+9419:       );
+9420:       setFavorites(merged);
+9421:       writeFavoritesCache(uid, merged);
+9422:       favoritesStore.setFavorites(merged);
+9423:       favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
+9424:       favoritePaginationExhaustedRef.current = !bundle.hasMore;
+9425:       favoritePaginationFallbackModeRef.current = false;
+9426:       setHasMoreFavorites(bundle.hasMore);
+9427:       const nextLocalVersion = Math.max(localVersion, bundleVersion);
+9428:       if (nextLocalVersion > 0) writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, nextLocalVersion);
+9429:       markCacheDiagnostic('musicNote', 'SYNC', 1);
+9430:       return { ok: true, message: '변경된 뮤직노트만 동기화했습니다.' };
+9431:     } catch (error: any) {
+9432:       if (String(error?.message || '').includes('MUSIC_NOTE_SYNC_TIMEOUT')) {
+9433:         return { ok: false, message: '동기화 응답이 지연되어 중단했습니다. 다시 시도해주세요.' };
+9434:       }
+9435:       console.warn('Music Note one-document sync failed.', error);
+9436:       return { ok: false, message: '변경분 동기화에 실패했습니다.' };
+9437:     } finally {
+9438:       if (timeoutId !== null) window.clearTimeout(timeoutId);
+9439:     }
+9440:   }, [user]);
+9441: 
+9442:   const showToast = useCallback((message: string) => {
+9443:     setToast({ message, visible: true });
+9444:     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2000);
+9445:   }, []);
+9446: 
+9447:   useEffect(() => {
+9448:     const movedStyleIds = selectedStyles.filter((id) => MOVED_STYLE_TO_SOUND_ID_SET.has(id));
+9449:     if (movedStyleIds.length === 0) return;
+9450:     const movedSoundIds = movedStyleIds
+9451:       .map((id) => MOVED_STYLE_TO_SOUND_ALIAS[id] || id)
+9452:       .filter((id) => Boolean(SOUND_VARIANT_LOOKUP[id]));
+9453: 
+9454:     // Backward compatibility for saved sessions created before Style/Sound roles were cleaned.
+9455:     setSelectedStyles((prev) => prev.filter((id) => !MOVED_STYLE_TO_SOUND_ID_SET.has(id)));
+9456:     setPinnedStyles((prev) => prev.filter((id) => !MOVED_STYLE_TO_SOUND_ID_SET.has(id)));
+9457:     setSelectedInstrumentSounds((prev) => Array.from(new Set([...prev, ...movedSoundIds])));
+9458:   }, [selectedStyles]);
+9459: 
+9460:   useEffect(() => {
+9461:     const normalizedStyles = limitHybridStyleIds(selectedStyles, maxHybridStyleSelections);
+9462:     if (normalizedStyles.length === selectedStyles.length && normalizedStyles.every((id, index) => id === selectedStyles[index])) return;
+9463: 
+9464:     setSelectedStyles(normalizedStyles);
+9465:     showToast(activeGenreIdentityCount >= 2
+9466:       ? '장르 2개 기준으로 하이브리드를 1개만 유지했습니다.'
+9467:       : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
+9468:   }, [activeGenreIdentityCount, maxHybridStyleSelections, selectedStyles, showToast]);
+9469: 
+9470:   const toggleFavorite = async (song: SongResult, options?: { trustedRecentStudio?: boolean }) => {
+9471:     song = normalizeFavoriteTitleFields(song as any) as SongResult;
+9472: 
+9473:     if (!user) {
+9474:       showToast('로그인이 필요합니다.');
+9475:       handleLogin();
+9476:       return;
+9477:     }
+9478: 
+9479:     const favoriteDeleteId = (song as any)?.favoriteFirestoreId || (song as any)?.firestoreId || (song as any)?.id;
+9480:     const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
+9481:     const songIdentityKey = buildFavoriteIdentityKey(song);
+9482:     const findLocalExistingFavorite = () => {
+9483:       if ((song as any)?.recentFavoriteDetachedAt) return null;
+9484:       const latestFavorites = favoritesStore.getFavorites();
+9485:       const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
+9486:       if (linkedFavoriteId) {
+9487:         const exactLinkedFavorite = latestFavorites.find((favorite: any) =>
+9488:           String(favorite?.firestoreId || favorite?.id || '').trim() === linkedFavoriteId,
+9489:         );
+9490:         if (exactLinkedFavorite) return exactLinkedFavorite;
+9491:       }
+9492:       const byId = favoriteDeleteId ? latestFavorites.find(f => f.id === favoriteDeleteId || f.firestoreId === favoriteDeleteId) : null;
+9493:       if (byId) return byId;
+9494:       return findBestMatchingFavorite(latestFavorites, song, songIdentityKey);
+9495:     };
+9496: 
+9497:     const findServerMatchingFavorites = async (_includeFullScan = false): Promise<any[]> => {
+9498:       const matches = new Map<string, any>();
+9499:       // 1007 — Recent-song saves already carry a stable SORIDRAW song id.
+9500:       // Use that exact identity first so a normal save needs only one bounded
+9501:       // server duplicate check instead of chaining favoriteKey + title lookups.
+9502:       const stableSongId = getLiveSoridrawSongId(song);
+9503:       const addCandidates = (candidates: any[]) => {
+9504:         candidates.forEach((candidate) => {
+9505:           if (!candidate?.id) return;
+9506:           if (isFavoriteServerDuplicateCandidate(candidate, song, songIdentityKey)) {
+9507:             matches.set(candidate.id, candidate);
+9508:           }
+9509:         });
+9510:       };
+9511: 
+9512:       const exactFavoriteId = String(
+9513:         (song as any)?.favoriteFirestoreId
+9514:         || (song as any)?.firestoreId
+9515:         || (forceDeleteFavoriteById ? favoriteDeleteId : '')
+9516:         || '',
+9517:       ).trim();
+9518:       if (exactFavoriteId) {
+9519:         try {
+9520:           const exactSnap = await getDoc(doc(db, 'favorites', exactFavoriteId));
+9521:           if (exactSnap.exists()) addCandidates([mapFavoriteFirestoreDoc(exactSnap)]);
+9522:         } catch (error) {
+9523:           console.warn('Exact favorite lookup failed.', error);
+9524:         }
+9525:       }
+9526: 
+9527:       if (matches.size === 0 && stableSongId) {
+9528:         let stableLookupSucceeded = false;
+9529:         try {
+9530:           const stableSnap = await getDocs(query(
+9531:             collection(db, 'favorites'),
+9532:             where('uid', '==', user.uid),
+9533:             where('soridrawSongId', '==', stableSongId),
+9534:             limit(2),
+9535:           ));
+9536:           stableLookupSucceeded = true;
+9537:           addCandidates(stableSnap.docs.map(mapFavoriteFirestoreDoc));
+9538:         } catch (error) {
+9539:           // Preserve the older bounded identity/title fallback only when the
+9540:           // stable-id query itself could not be completed.
+9541:           console.warn('Favorite stable song id lookup failed; using legacy bounded fallback.', error);
+9542:         }
+9543:         if (stableLookupSucceeded) return Array.from(matches.values());
+9544:       }
+9545: 
+9546:       if (matches.size === 0 && songIdentityKey) {
+9547:         try {
+9548:           const keySnap = await getDocs(query(
+9549:             collection(db, 'favorites'),
+9550:             where('uid', '==', user.uid),
+9551:             where('favoriteKey', '==', songIdentityKey),
+9552:             limit(5),
+9553:           ));
+9554:           addCandidates(keySnap.docs.map(mapFavoriteFirestoreDoc));
+9555:         } catch (error) {
+9556:           console.warn('Favorite identity lookup by key failed.', error);
+9557:         }
+9558:       }
+9559: 
+9560:       if (matches.size === 0) {
+9561:         const titleCandidate = String(song.title || song.koreanTitle || song.englishTitle || '').trim();
+9562:         if (titleCandidate) {
+9563:           try {
+9564:             const titleSnap = await getDocs(query(
+9565:               collection(db, 'favorites'),
+9566:               where('uid', '==', user.uid),
+9567:               where('title', '==', titleCandidate),
+9568:               limit(5),
+9569:             ));
+9570:             addCandidates(titleSnap.docs.map(mapFavoriteFirestoreDoc));
+9571:           } catch (error) {
+9572:             console.warn('Favorite bounded title lookup failed.', error);
+9573:           }
+9574:         }
+9575:       }
+9576: 
+9577:       return Array.from(matches.values());
+9578:     };
+9579: 
+9580:     const findServerExistingFavorite = async () => {
+9581:       const matches = await findServerMatchingFavorites(forceDeleteFavoriteById);
+9582:       return findBestMatchingFavorite(matches, song, songIdentityKey);
+9583:     };
+9584: 
+9585:     const patchLocalFavorite = (id: string, updates: Record<string, any>, fallbackFavorite?: any) => {
+9586:       setFavorites((prev) => {
+9587:         const exists = (prev || []).some((favorite) => favorite.id === id);
+9588:         const next = exists
+9589:           ? (prev || []).map((favorite) => favorite.id === id ? { ...favorite, ...updates } : favorite)
+9590:           : fallbackFavorite
+9591:             ? [{ ...fallbackFavorite, ...updates }, ...(prev || [])]
+9592:             : (prev || []);
+9593:         const sorted = sortFavoriteList(next);
+9594:         writeFavoritesCache(user.uid, sorted);
+9595:         return sorted;
+9596:       });
+9597:     };
+9598: 
+9599:     const removeLocalFavorite = (id: string, removeMatchingSong = false) => {
+9600:       setFavorites((prev) => {
+9601:         const next = (prev || []).filter((favorite) => {
+9602:           if (favorite.id === id) return false;
+9603:           if (removeMatchingSong && isSameFavoriteSong(favorite, song, songIdentityKey)) return false;
+9604:           return true;
+9605:         });
+9606:         writeFavoritesCache(user.uid, next);
+9607:         return next;
+9608:       });
+9609:     };
+9610: 
+9611:     try {
+9612:       const localExistingFav = findLocalExistingFavorite();
+9613:       const stableRecentSongId = getLiveSoridrawSongId(song);
+9614:       const localMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, user.uid);
+9615:       const remoteMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, user.uid);
+9616:       const canTrustRecentStudioLocalIdentity = Boolean(
+9617:         options?.trustedRecentStudio
+9618:         && stableRecentSongId
+9619:         && hasMusicNotePayloadCache(user.uid)
+9620:         && localMusicNoteVersion > 0
+9621:         && remoteMusicNoteVersion <= localMusicNoteVersion
+9622:       );
+9623:       const serverExistingFav = (
+9624:         localExistingFav
+9625:         || (song as any)?.recentFavoriteDetachedAt
+9626:         || canTrustRecentStudioLocalIdentity
+9627:       ) ? null : await findServerExistingFavorite().catch((error) => {
+9628:         console.warn('Favorite server confirmation failed. Using local favorite state as fallback.', error);
+9629:         return null;
+9630:       });
+9631:       const existingFav = localExistingFav || serverExistingFav;
+9632: 
+9633:       if (existingFav) {
+9634:         if (existingFav.isLocked && !forceDeleteFavoriteById) {
+9635:           showToast('잠긴 곡은 삭제할 수 없습니다.');
+9636:           return;
+9637:         }
+9638: 
+9639:         if (forceDeleteFavoriteById) {
+9640:           if (existingFav.isLocked) {
+9641:             await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', existingFav.id), { isLocked: false }));
+9642:           }
+9643:           await runV1MutationBoundary({ domain: 'musicNote', operation: 'permanent-delete', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([existingFav], 'recent-hide').map((target) => ({ ...target, operation: 'music-note-unsave' as const, sourceDocumentId: existingFav.id })) }, deleteDoc(doc(db, 'favorites', existingFav.id)));
+9644:           rememberFavoriteDeletedTombstones(user.uid, [existingFav.id]);
+9645:           removeLocalFavorite(existingFav.id);
+9646: 
+9647:           const deletedAt = Date.now();
+9648:           const favoriteKey = existingFav.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(existingFav);
+9649:           const deleteSignal = sanitizeForFirestore({
+9650:             id: `delete_${deletedAt}_${Math.random().toString(36).slice(2, 8)}`,
+9651:             action: 'delete',
+9652:             at: deletedAt,
+9653:             favoriteId: existingFav.id,
+9654:             favoriteIds: [existingFav.id],
+9655:             favoriteKey: favoriteKey || '',
+9656:             favoriteKeys: favoriteKey ? [favoriteKey] : [],
+9657:             title: existingFav.title || song.title || '',
+9658:             koreanTitle: existingFav.koreanTitle || song.koreanTitle || '',
+9659:             englishTitle: existingFav.englishTitle || song.englishTitle || '',
+9660:             titleFingerprint: getFavoriteTitleFingerprint(existingFav || song),
+
+===== subscribeListBundle('musicNote' @ 9088 =====
+8948:               fallbackSnapshot.docs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite)),
+8949:             );
+8950:             favoritePaginationCursorRef.current = fallbackSnapshot.docs[fallbackSnapshot.docs.length - 1] || null;
+8951:             favoritePaginationExhaustedRef.current = fallbackSnapshot.docs.length < FAVORITES_PAGE_SIZE;
+8952:             favoritePaginationFallbackModeRef.current = true;
+8953:             setHasMoreFavorites(false);
+8954:             setFavorites(fallbackFavs);
+8955:             writeFavoritesCache(currentUser.uid, fallbackFavs);
+8956:             markCacheDiagnostic('musicNote', 'SYNC', Math.max(1, fallbackSnapshot.docs.length));
+8957:           } catch (fallbackError) {
+8958:             console.warn('Bounded Music Note fallback failed. Keeping local cache only.', fallbackError);
+8959:           } finally {
+8960:             setIsFavoritesLoading(false);
+8961:           }
+8962:         };
+8963: 
+8964:         // Cache migration/new-device bootstrap: one complete read is the
+8965:         // authoritative source. No orderBy/limit means legacy rows without
+8966:         // createdAt are included too. No server data is written by this path.
+8967:         const runFavoritesFullCacheRecoveryOnce = async () => {
+8968:           if (!musicNoteCacheNeedsFullBootstrap) return;
+8969:           try {
+8970:             const fullSnapshot = await getDocs(query(
+8971:               collection(db, 'favorites'),
+8972:               where('uid', '==', currentUser.uid),
+8973:             ));
+8974:             if (auth.currentUser?.uid !== currentUser.uid) return;
+8975:             const fullFavorites = sortFavoriteList(
+8976:               fullSnapshot.docs
+8977:                 .map(mapFavoriteFirestoreDoc)
+8978:                 .filter((favorite) => !isFavoriteSoftRemoved(favorite)),
+8979:             );
+8980:             favoritePaginationCursorRef.current = null;
+8981:             clearMusicNotePaginationCursor(currentUser.uid);
+8982:             favoritePaginationExhaustedRef.current = true;
+8983:             favoritePaginationLoadingRef.current = false;
+8984:             favoritePaginationFallbackModeRef.current = true;
+8985:             setHasMoreFavorites(false);
+8986:             setIsLoadingMoreFavorites(false);
+8987:             setFavorites(fullFavorites);
+8988:             writeFavoritesCache(currentUser.uid, fullFavorites);
+8989:             favoritesStore.setFavorites(fullFavorites);
+8990:             markMusicNoteCacheSchemaCurrent(currentUser.uid);
+8991:             musicNoteFreshBootstrapUids.delete(currentUser.uid);
+8992:             markCacheDiagnostic('musicNote', 'SYNC', fullSnapshot.docs.length);
+8993:           } catch (bootstrapError) {
+8994:             console.warn('Cacheless Music Note full bootstrap failed.', bootstrapError);
+8995:           } finally {
+8996:             setIsFavoritesLoading(false);
+8997:           }
+8998:         };
+8999: 
+9000:         const hasCachedMusicNote = !musicNoteCacheNeedsFullBootstrap
+9001:           && hasMusicNotePayloadCache(currentUser.uid);
+9002:         if (musicNoteCacheNeedsFullBootstrap) {
+9003:           void runFavoritesFullCacheRecoveryOnce();
+9004:         }
+9005:         if (hasCachedMusicNote) {
+9006:           const persistedCursor = readMusicNotePaginationCursor(currentUser.uid);
+9007:           favoritePaginationCursorRef.current = persistedCursor;
+9008:           favoritePaginationExhaustedRef.current = !persistedCursor;
+9009:           setHasMoreFavorites(Boolean(persistedCursor));
+9010:           setIsFavoritesLoading(false);
+9011:         }
+9012: 
+9013:         const attachFavoritesSourceBootstrap902 = () => {
+9014:           if (unsubFavs || hasCachedMusicNote || musicNoteCacheNeedsFullBootstrap) return;
+9015:           const q = query(
+9016:             collection(db, 'favorites'),
+9017:             where('uid', '==', currentUser.uid),
+9018:             orderBy('createdAt', 'desc'),
+9019:             limit(FAVORITES_PAGE_SIZE)
+9020:           );
+9021: 
+9022:           unsubFavs = onSnapshot(q, (snapshot) => {
+9023:             markCacheDiagnostic('musicNote', snapshot.metadata.fromCache ? 'CACHE' : 'SYNC', snapshot.metadata.fromCache ? 0 : Math.max(1, snapshot.docChanges().length));
+9024:             const firstPageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
+9025:             const firstPageFavs = firstPageDocs.map(mapFavoriteFirestoreDoc);
+9026:             favoritePaginationCursorRef.current = firstPageDocs[firstPageDocs.length - 1] || null;
+9027:             if (favoritePaginationCursorRef.current) {
+9028:               writeMusicNotePaginationCursor(currentUser.uid, favoritePaginationCursorRef.current);
+9029:             } else {
+9030:               clearMusicNotePaginationCursor(currentUser.uid);
+9031:             }
+9032:             favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
+9033:             favoritePaginationFallbackModeRef.current = false;
+9034:             setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
+9035:             setFavorites((prev) => {
+9036:               const merged = mergeFavoriteFirstPageWithCache(firstPageFavs, prev || [], favoritePaginationExhaustedRef.current);
+9037:               writeFavoritesCache(currentUser.uid, merged);
+9038:               return merged;
+9039:             });
+9040:             setIsFavoritesLoading(false);
+9041:             musicNoteFreshBootstrapUids.delete(currentUser.uid);
+9042:             const remoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);
+9043:             if (remoteVersion > 0) {
+9044:               writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, currentUser.uid, remoteVersion);
+9045:             }
+9046:             if (unsubFavs) {
+9047:               const detach = unsubFavs;
+9048:               unsubFavs = null;
+9049:               detach();
+9050:             }
+9051:           }, (error) => {
+9052:             console.warn('Favorites paged query failed. Falling back to the legacy full-list listener until the Firestore index is available.', error);
+9053:             // This query can fail before the composite index is deployed. Do not throw here;
+9054:             // falling back keeps Music Note usable while Firebase builds the index.
+9055:             if (favoritePaginationFallbackModeRef.current) {
+9056:               setIsFavoritesLoading(false);
+9057:               return;
+9058:             }
+9059:             if (unsubFavs) {
+9060:               try {
+9061:                 unsubFavs();
+9062:               } catch (unsubscribeError) {
+9063:                 console.warn('Failed to detach favorites paged listener before fallback:', unsubscribeError);
+9064:               }
+9065:               unsubFavs = null;
+9066:             }
+9067:             attachLegacyFavoritesFallback();
+9068:           });
+9069:         };
+9070: 
+9071:         let musicNoteBundleMissingHandled = false;
+9072:         // 909: Home/login startup must stay local-only. Do not mark the bundle
+9073:         // active until the real /history bundle read succeeds in 902 onData.
+9074:         const musicNoteLocalVersionAtBootstrap = readMusicNoteSyncVersion(
+9075:           MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,
+9076:           currentUser.uid,
+9077:         );
+9078:         const musicNoteRemoteVersionAtBootstrap = readMusicNoteSyncVersion(
+9079:           MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE,
+9080:           currentUser.uid,
+9081:         );
+9082:         const shouldVerifyMusicNoteBundle = hasCachedMusicNote && (
+9083:           musicNoteLocalVersionAtBootstrap <= 0
+9084:           || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap
+9085:         );
+9086: 
+9087:         if (shouldVerifyMusicNoteBundle) {
+9088:           unsubMusicNoteBundle = subscribeListBundle('musicNote', currentUser.uid, {
+9089:             onData: (bundle, meta) => {
+9090:               musicNoteBundleActiveUids.add(currentUser.uid);
+9091:               musicNoteFreshBootstrapUids.delete(currentUser.uid);
+9092:               if (bundle.deletedIds.length > 0) {
+9093:                 rememberFavoriteDeletedTombstones(currentUser.uid, bundle.deletedIds);
+9094:               }
+9095:               const localDeletedIds = getFavoriteDeletedTombstoneIds(currentUser.uid);
+9096:               const firstPageFavs = (bundle.items || []).filter((favorite: any) => {
+9097:                 if (isFavoriteSoftRemoved(favorite)) return false;
+9098:                 const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+9099:                 return !favoriteId || !localDeletedIds.has(favoriteId);
+9100:               });
+9101:               favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
+9102:               favoritePaginationExhaustedRef.current = !bundle.hasMore;
+9103:               favoritePaginationFallbackModeRef.current = false;
+9104:               setHasMoreFavorites(bundle.hasMore);
+9105:               setFavorites((prev) => {
+9106:                 const previous = Array.isArray(prev) ? prev : [];
+9107:                 const bundleVersion = Number(bundle.updatedAtMs || 0);
+9108:                 const localNewer = previous.filter((favorite: any) => {
+9109:                   if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+9110:                   const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+9111:                   if (favoriteId && localDeletedIds.has(favoriteId)) return false;
+9112:                   const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
+9113:                     || getTimestampMs(favorite?.updatedAt)
+9114:                     || getTimestampMs(favorite?.createdAt)
+9115:                     || 0;
+9116:                   return bundleVersion > 0 && favoriteVersion > bundleVersion;
+9117:                 });
+9118:                 const firstPageWithLocalNewer = mergeFavoritePages(localNewer, firstPageFavs);
+9119:                 const merged = mergeFavoriteFirstPageWithCache(firstPageWithLocalNewer, previous, !bundle.hasMore);
+9120:                 writeFavoritesCache(currentUser.uid, merged);
+9121:                 return merged;
+9122:               });
+9123:               if (bundle.updatedAtMs > 0) {
+9124:                 const currentLocalVersion = readMusicNoteSyncVersion(
+9125:                   MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,
+9126:                   currentUser.uid,
+9127:                 );
+9128:                 writeMusicNoteSyncVersion(
+9129:                   MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,
+9130:                   currentUser.uid,
+9131:                   Math.max(currentLocalVersion, Number(bundle.updatedAtMs || 0)),
+9132:                 );
+9133:               }
+9134:               markCacheDiagnostic('musicNote', meta.fromCache ? 'CACHE' : 'SYNC', meta.fromCache ? 0 : 1);
+9135:               setIsFavoritesLoading(false);
+9136:             },
+9137:             onMissing: (meta) => {
+9138:               musicNoteBundleActiveUids.delete(currentUser.uid);
+9139:               if (meta.fromCache) return;
+9140:               if (musicNoteBundleMissingHandled) return;
+9141:               musicNoteBundleMissingHandled = true;
+9142:               if (hasCachedMusicNote) {
+9143:                 scheduleListBundleWrite('musicNote', currentUser.uid, cachedFavs, {
+9144:                   limit: 20,
+9145:                   hasMore: cachedFavs.length >= 20,
+9146:                   deletedIds: Array.from(getFavoriteDeletedTombstoneIds(currentUser.uid)),
+9147:                 });
+9148:                 setIsFavoritesLoading(false);
+9149:                 return;
+9150:               }
+9151:               attachFavoritesSourceBootstrap902();
+9152:             },
+9153:             onError: (error) => {
+9154:               musicNoteBundleActiveUids.delete(currentUser.uid);
+9155:               console.warn('Music Note bundle unavailable; using legacy safe path.', error);
+9156:               if (!hasCachedMusicNote) attachFavoritesSourceBootstrap902();
+9157:             },
+9158:           });
+9159:         } else {
+9160:           // Cache is already current. Keep 901 delta sync available so a later
+9161:           // cross-device version event fetches only changed favorites.
+9162:           musicNoteBundleActiveUids.delete(currentUser.uid);
+9163:           markCacheDiagnostic('musicNote', 'CACHE', 0);
+9164:           setIsFavoritesLoading(false);
+9165:         }
+9166: 
+9167: 
+9168:         // 901: delayed full-list recovery disabled; manual Sync owns full reconciliation.
+9169:         favoriteFullCacheRecoveryTimer = null;
+9170:       } else {
+9171:         setFavorites([]);
+9172:         setHasMoreFavorites(false);
+9173:         setIsLoadingMoreFavorites(false);
+9174:         favoritePaginationCursorRef.current = null;
+9175:         favoritePaginationExhaustedRef.current = false;
+9176:         favoritePaginationLoadingRef.current = false;
+9177:         favoritePaginationFallbackModeRef.current = false;
+9178:         setIsFavoritesLoading(false);
+9179:         clearCachedUserRole();
+9180:         setCachedUserRoleHint(null);
+9181:         setUserRole('free');
+9182:       }
+9183:     });
+9184: 
+9185:     return () => {
+9186:       unsubscribe();
+9187:       if (unsubFavs) unsubFavs();
+9188:       if (unsubMusicNoteBundle) unsubMusicNoteBundle();
+9189:       if (unsubUserDoc) unsubUserDoc();
+9190:       if (favoritesRetryTimer !== null) window.clearTimeout(favoritesRetryTimer);
+9191:       if (userRoleRetryTimer !== null) window.clearTimeout(userRoleRetryTimer);
+9192:       if (favoriteFullCacheRecoveryTimer) window.clearTimeout(favoriteFullCacheRecoveryTimer);
+9193:     };
+9194:   }, []);
+9195: 
+9196:   const loadMoreFavorites = useCallback(async () => {
+9197:     const currentUser = user || auth.currentUser;
+9198:     if (!currentUser?.uid) return;
+9199:     if (favoritePaginationFallbackModeRef.current) return;
+9200:     if (favoritePaginationLoadingRef.current || favoritePaginationExhaustedRef.current) return;
+9201:     const cursor = favoritePaginationCursorRef.current;
+9202:     if (!cursor) return;
+9203: 
+9204:     favoritePaginationLoadingRef.current = true;
+9205:     setIsLoadingMoreFavorites(true);
+9206:     try {
+9207:       const q = query(
+9208:         collection(db, 'favorites'),
+9209:         where('uid', '==', currentUser.uid),
+9210:         orderBy('createdAt', 'desc'),
+9211:         startAfter(cursor),
+9212:         limit(FAVORITES_PAGE_SIZE)
+9213:       );
+9214:       const snapshot = await getDocs(q);
+9215:       const nextDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
+9216:       const nextFavs = nextDocs.map(mapFavoriteFirestoreDoc);
+9217:       if (nextDocs.length > 0) {
+9218:         favoritePaginationCursorRef.current = nextDocs[nextDocs.length - 1];
+9219:         writeMusicNotePaginationCursor(currentUser.uid, favoritePaginationCursorRef.current);
+9220:       } else {
+9221:         clearMusicNotePaginationCursor(currentUser.uid);
+9222:       }
+9223:       favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
+9224:       setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
+9225:       setFavorites((prev) => {
+9226:         const merged = mergeFavoritePages(prev || [], nextFavs);
+9227:         writeFavoritesCache(currentUser.uid, merged);
+9228:         return merged;
+9229:       });
+9230:     } catch (error) {
+9231:       console.warn('Favorites additional page load failed. Keeping the current list instead of crashing the page.', error);
+9232:       favoritePaginationExhaustedRef.current = true;
+9233:       setHasMoreFavorites(false);
+9234:     } finally {
+9235:       favoritePaginationLoadingRef.current = false;
+9236:       setIsLoadingMoreFavorites(false);
+9237:     }
+9238:   }, [user]);
+9239: 
+9240:   const syncMusicNoteIncrementalFromRemoteVersion = useCallback(async (
+9241:     remoteVersion: number,
+9242:     originDeviceId = '',
+9243:   ) => {
+9244:     const currentUser = user || auth.currentUser;
+9245:     if (!currentUser?.uid || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
+9246: 
+9247:     const uid = currentUser.uid;
+9248:     if (typeof window !== 'undefined' && window.location.pathname !== '/history') {
+9249:       return;
+9250:     }
+9251:     if (musicNoteBundleActiveUids.has(uid)) {
+9252:       markCacheDiagnostic('musicNote', 'CACHE', 0);
+9253:       return;
+9254:     }
+9255:     const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
+9256:     if (localVersion >= remoteVersion) return;
+9257: 
+9258:     if (musicNoteFreshBootstrapUids.has(uid)) {
+9259:       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+9260:       return;
+9261:     }
+9262: 
+9263:     if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
+9264:       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+9265:       markCacheDiagnostic('musicNote', 'CACHE', 0);
+9266:       return;
+9267:     }
+9268: 
+9269:     try {
+9270:       const q = query(
+9271:         collection(db, 'favorites'),
+9272:         where('uid', '==', uid),
+9273:         where('updatedAtMs', '>', localVersion),
+9274:         orderBy('updatedAtMs', 'asc'),
+9275:         limit(FAVORITES_PAGE_SIZE)
+9276:       );
+9277:       const snapshot = await getDocs(q);
+9278:       const changedFavorites = snapshot.docs.map(mapFavoriteFirestoreDoc);
+9279:       markCacheDiagnostic('musicNote', 'SYNC', snapshot.docs.length);
+9280: 
+9281:       if (changedFavorites.length > 0) {
+9282:         setFavorites((prev) => {
+9283:           let next = Array.isArray(prev) ? [...prev] : [];
+9284:           changedFavorites.forEach((favorite) => {
+9285:             next = next.filter((item) => item?.id !== favorite?.id);
+9286:             if (!isFavoriteSoftRemoved(favorite)) {
+9287:               next = mergeFavoritePages([favorite], next);
+9288:             }
+9289:           });
+9290:           const sorted = sortFavoriteList(next);
+9291:           writeFavoritesCache(uid, sorted);
+9292:           return sorted;
+9293:         });
+9294:       }
+9295: 
+9296:       const maxSeenVersion = changedFavorites.reduce(
+9297:         (maxValue, favorite) => Math.max(maxValue, Number(favorite?.updatedAtMs || 0)),
+9298:         localVersion,
+9299:       );
+9300: 
+9301:       if (snapshot.docs.length < FAVORITES_PAGE_SIZE || maxSeenVersion >= remoteVersion) {
+9302:         writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+9303:       } else if (maxSeenVersion > localVersion) {
+9304:         writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, maxSeenVersion);
+9305:       }
+9306:     } catch (error) {
+9307:       console.warn('Music Note incremental sync failed. Keeping cache + latest sync signal.', error);
+9308:     }
+9309:   }, [user]);
+9310: 
+9311:   useEffect(() => {
+9312:     const currentUser = user || auth.currentUser;
+9313:     if (!currentUser?.uid || typeof window === 'undefined') return;
+9314: 
+9315:     const handleMusicNoteSyncVersion = (event: Event) => {
+9316:       const detail = (event as CustomEvent<{ uid?: string; version?: number; originDeviceId?: string }>).detail;
+9317:       if (!detail || detail.uid !== currentUser.uid) return;
+9318:       void syncMusicNoteIncrementalFromRemoteVersion(
+9319:         Number(detail.version || 0),
+9320:         String(detail.originDeviceId || ''),
+9321:       );
+9322:     };
+9323: 
+9324:     window.addEventListener(MUSIC_NOTE_SYNC_VERSION_EVENT, handleMusicNoteSyncVersion as EventListener);
+9325:     const pendingRemoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);
+9326:     if (pendingRemoteVersion > 0) {
+9327:       void syncMusicNoteIncrementalFromRemoteVersion(pendingRemoteVersion);
+9328:     }
+9329:     return () => window.removeEventListener(MUSIC_NOTE_SYNC_VERSION_EVENT, handleMusicNoteSyncVersion as EventListener);
+9330:   }, [user, syncMusicNoteIncrementalFromRemoteVersion]);
+9331: 
+9332:   const searchFavoritesOnServer = useCallback(async (rawSearchText: string): Promise<any[]> => {
+9333:     const currentUser = user || auth.currentUser;
+9334:     const normalizedSearch = normalizeFavoriteSearchValue(rawSearchText);
+9335:     if (!currentUser?.uid || normalizedSearch.length < FAVORITE_SERVER_SEARCH_MIN_LENGTH) return [];
+9336: 
+9337:     const cachedResult = favoriteServerSearchCacheRef.current[normalizedSearch];
+9338:     if (cachedResult) return cachedResult;
+9339: 
+9340:     const searchTokens = getFavoriteServerSearchTokens(normalizedSearch);
+9341:     if (searchTokens.length === 0) return [];
+9342: 
+9343:     try {
+9344:       const q = query(
+9345:         collection(db, 'favorites'),
+9346:         where('uid', '==', currentUser.uid),
+9347:         where('searchTokens', 'array-contains-any', searchTokens),
+9348:         orderBy('createdAt', 'desc'),
+9349:         limit(FAVORITE_SERVER_SEARCH_LIMIT)
+9350:       );
+9351:       const snapshot = await getDocs(q);
+9352:       const serverResults = sortFavoriteList(snapshot.docs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
+9353:       favoriteServerSearchCacheRef.current[normalizedSearch] = serverResults;
+9354:       if (serverResults.length > 0) {
+9355:         setFavorites((prev) => {
+9356:           const merged = mergeFavoritePages(prev || [], serverResults);
+9357:           writeFavoritesCache(currentUser.uid, merged);
+9358:           return merged;
+9359:         });
+9360:       }
+9361:       return serverResults;
+9362:     } catch (error) {
+9363:       console.warn('Favorite server search failed. Keeping local cache search only.', error);
+9364:       favoriteServerSearchCacheRef.current[normalizedSearch] = [];
+9365:       return [];
+9366:     }
+9367:   }, [user]);
+9368: 
+9369:   const refreshFavoritesFromServerFirstPage = useCallback(async (): Promise<{ ok: boolean; limited?: boolean; message?: string }> => {
+9370:     const currentUser = user || auth.currentUser;
+9371:     if (!currentUser?.uid) return { ok: false, message: '로그인이 필요합니다.' };
+9372: 
+9373:     const uid = currentUser.uid;
+9374:     const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
+9375:     const remoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, uid);
+9376:     if (remoteVersion > 0 && localVersion >= remoteVersion) {
+9377:       markCacheDiagnostic('musicNote', 'CACHE', 0);
+9378:       return { ok: true, message: '변경된 뮤직노트가 없습니다.' };
+9379:     }
+9380: 
+9381:     let timeoutId: number | null = null;
+9382:     try {
+9383:       const timeoutPromise = new Promise<null>((_, reject) => {
+9384:         timeoutId = window.setTimeout(() => reject(new Error('MUSIC_NOTE_SYNC_TIMEOUT')), 8000);
+9385:       });
+9386:       const bundle = await Promise.race([
+9387:         readListBundleFromServerOnce('musicNote', uid),
+9388:         timeoutPromise,
+9389:       ]);
+9390:       if (!bundle) return { ok: false, message: '뮤직노트 변경 캐시가 아직 준비되지 않았습니다.' };
+9391: 
+9392:       const localDeletedIds = getFavoriteDeletedTombstoneIds(uid);
+9393:       if (bundle.deletedIds.length > 0) {
+9394:         rememberFavoriteDeletedTombstones(uid, bundle.deletedIds);
+9395:         bundle.deletedIds.forEach((id) => localDeletedIds.add(id));
+9396:       }
+9397:       const incoming = (bundle.items || []).filter((favorite: any) => {
+9398:         if (isFavoriteSoftRemoved(favorite)) return false;
+9399:         const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+9400:         return !favoriteId || !localDeletedIds.has(favoriteId);
+9401:       });
+9402:       const previous = favoritesStore.getFavorites();
+9403:       const bundleVersion = Number(bundle.updatedAtMs || 0);
+9404:       const localNewer = (Array.isArray(previous) ? previous : []).filter((favorite: any) => {
+9405:         if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+9406:         const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+9407:         if (favoriteId && localDeletedIds.has(favoriteId)) return false;
+9408:         const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
+9409:           || getTimestampMs(favorite?.updatedAt)
+9410:           || getTimestampMs(favorite?.createdAt)
+9411:           || 0;
+9412:         return bundleVersion > 0 && favoriteVersion > bundleVersion;
+9413:       });
+9414:       const mergedFirstPage = mergeFavoritePages(localNewer, incoming);
+9415:       const merged = mergeFavoriteFirstPageWithCache(
+9416:         mergedFirstPage,
+9417:         Array.isArray(previous) ? previous : [],
+9418:         !bundle.hasMore,
+9419:       );
+9420:       setFavorites(merged);
+9421:       writeFavoritesCache(uid, merged);
+9422:       favoritesStore.setFavorites(merged);
+9423:       favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
+9424:       favoritePaginationExhaustedRef.current = !bundle.hasMore;
+9425:       favoritePaginationFallbackModeRef.current = false;
+9426:       setHasMoreFavorites(bundle.hasMore);
+9427:       const nextLocalVersion = Math.max(localVersion, bundleVersion);
+9428:       if (nextLocalVersion > 0) writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, nextLocalVersion);
+9429:       markCacheDiagnostic('musicNote', 'SYNC', 1);
+9430:       return { ok: true, message: '변경된 뮤직노트만 동기화했습니다.' };
+9431:     } catch (error: any) {
+9432:       if (String(error?.message || '').includes('MUSIC_NOTE_SYNC_TIMEOUT')) {
+9433:         return { ok: false, message: '동기화 응답이 지연되어 중단했습니다. 다시 시도해주세요.' };
+9434:       }
+9435:       console.warn('Music Note one-document sync failed.', error);
+9436:       return { ok: false, message: '변경분 동기화에 실패했습니다.' };
+9437:     } finally {
+9438:       if (timeoutId !== null) window.clearTimeout(timeoutId);
+9439:     }
+9440:   }, [user]);
+9441: 
+9442:   const showToast = useCallback((message: string) => {
+9443:     setToast({ message, visible: true });
+9444:     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2000);
+9445:   }, []);
+9446: 
+9447:   useEffect(() => {
+9448:     const movedStyleIds = selectedStyles.filter((id) => MOVED_STYLE_TO_SOUND_ID_SET.has(id));
+9449:     if (movedStyleIds.length === 0) return;
+9450:     const movedSoundIds = movedStyleIds
+9451:       .map((id) => MOVED_STYLE_TO_SOUND_ALIAS[id] || id)
+9452:       .filter((id) => Boolean(SOUND_VARIANT_LOOKUP[id]));
+9453: 
+9454:     // Backward compatibility for saved sessions created before Style/Sound roles were cleaned.
+9455:     setSelectedStyles((prev) => prev.filter((id) => !MOVED_STYLE_TO_SOUND_ID_SET.has(id)));
+9456:     setPinnedStyles((prev) => prev.filter((id) => !MOVED_STYLE_TO_SOUND_ID_SET.has(id)));
+9457:     setSelectedInstrumentSounds((prev) => Array.from(new Set([...prev, ...movedSoundIds])));
+9458:   }, [selectedStyles]);
+9459: 
+9460:   useEffect(() => {
+9461:     const normalizedStyles = limitHybridStyleIds(selectedStyles, maxHybridStyleSelections);
+9462:     if (normalizedStyles.length === selectedStyles.length && normalizedStyles.every((id, index) => id === selectedStyles[index])) return;
+9463: 
+9464:     setSelectedStyles(normalizedStyles);
+9465:     showToast(activeGenreIdentityCount >= 2
+9466:       ? '장르 2개 기준으로 하이브리드를 1개만 유지했습니다.'
+9467:       : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
+9468:   }, [activeGenreIdentityCount, maxHybridStyleSelections, selectedStyles, showToast]);
+9469: 
+9470:   const toggleFavorite = async (song: SongResult, options?: { trustedRecentStudio?: boolean }) => {
+9471:     song = normalizeFavoriteTitleFields(song as any) as SongResult;
+9472: 
+9473:     if (!user) {
+9474:       showToast('로그인이 필요합니다.');
+9475:       handleLogin();
+9476:       return;
+9477:     }
+9478: 
+9479:     const favoriteDeleteId = (song as any)?.favoriteFirestoreId || (song as any)?.firestoreId || (song as any)?.id;
+9480:     const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
+9481:     const songIdentityKey = buildFavoriteIdentityKey(song);
+9482:     const findLocalExistingFavorite = () => {
+9483:       if ((song as any)?.recentFavoriteDetachedAt) return null;
+9484:       const latestFavorites = favoritesStore.getFavorites();
+9485:       const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
+9486:       if (linkedFavoriteId) {
+9487:         const exactLinkedFavorite = latestFavorites.find((favorite: any) =>
+9488:           String(favorite?.firestoreId || favorite?.id || '').trim() === linkedFavoriteId,
+9489:         );
+9490:         if (exactLinkedFavorite) return exactLinkedFavorite;
+9491:       }
+9492:       const byId = favoriteDeleteId ? latestFavorites.find(f => f.id === favoriteDeleteId || f.firestoreId === favoriteDeleteId) : null;
+9493:       if (byId) return byId;
+9494:       return findBestMatchingFavorite(latestFavorites, song, songIdentityKey);
+9495:     };
+9496: 
+9497:     const findServerMatchingFavorites = async (_includeFullScan = false): Promise<any[]> => {
+9498:       const matches = new Map<string, any>();
+9499:       // 1007 — Recent-song saves already carry a stable SORIDRAW song id.
+9500:       // Use that exact identity first so a normal save needs only one bounded
+9501:       // server duplicate check instead of chaining favoriteKey + title lookups.
+9502:       const stableSongId = getLiveSoridrawSongId(song);
+9503:       const addCandidates = (candidates: any[]) => {
+9504:         candidates.forEach((candidate) => {
+9505:           if (!candidate?.id) return;
+9506:           if (isFavoriteServerDuplicateCandidate(candidate, song, songIdentityKey)) {
+9507:             matches.set(candidate.id, candidate);
+9508:           }
+
+===== scheduleListBundleWrite('musicNote' @ 5468 =====
+5328:     if (isSameFavoriteSong(candidate, song, songIdentityKey)) return true;
+5329:     // Do not match favorites by title alone.
+5330:     // Studio titles can be edited before saving, and fuzzy title matching can connect the current result
+5331:     // to an unrelated older Music Note, causing prompt/lyrics from another song to appear after save.
+5332:     return false;
+5333:   };
+5334: 
+5335:   type FavoriteSyncAction = 'save' | 'update' | 'unsave' | 'delete';
+5336: 
+5337:   const buildFavoriteSyncSignalFavorite = (action: FavoriteSyncAction, song: any, relatedFavorites: any[] = [], at = Date.now()) => {
+5338:     const primaryFavorite = (relatedFavorites || []).find((favorite) => favorite?.id) || relatedFavorites?.[0] || song || {};
+5339:     const favoriteKey = primaryFavorite.favoriteKey || song?.favoriteKey || buildFavoriteIdentityKey(primaryFavorite) || buildFavoriteIdentityKey(song);
+5340:     const payload = sanitizeForFirestore({
+5341:       ...primaryFavorite,
+5342:       id: primaryFavorite.id || '',
+5343:       uid: primaryFavorite.uid || user?.uid || '',
+5344:       title: primaryFavorite.title || song?.title || '',
+5345:       koreanTitle: primaryFavorite.koreanTitle || song?.koreanTitle || '',
+5346:       englishTitle: primaryFavorite.englishTitle || song?.englishTitle || '',
+5347:       genre: getResolvedGenre(primaryFavorite) || getResolvedGenre(song) || primaryFavorite.genre || song?.genre || '',
+5348:       lyrics: primaryFavorite.lyrics || song?.lyrics || {},
+5349:       prompt: primaryFavorite.prompt || song?.prompt || '',
+5350:       appliedKeywords: primaryFavorite.appliedKeywords || song?.appliedKeywords || {},
+5351:       userInput: primaryFavorite.userInput ?? song?.userInput ?? '',
+5352:       situationSummary: primaryFavorite.situationSummary || song?.situationSummary || '',
+5353:       favoriteKey,
+5354:       searchTokens: primaryFavorite.searchTokens || buildFavoriteSearchTokens({ ...song, ...primaryFavorite, favoriteKey }),
+5355:       createdAtMs: Number(primaryFavorite.createdAtMs || 0) || getTimestampMs(primaryFavorite.createdAt) || at,
+5356:       updatedAtMs: at,
+5357:       hidden: action === 'save' ? false : primaryFavorite.hidden,
+5358:       favoriteHidden: action === 'save' ? false : primaryFavorite.favoriteHidden,
+5359:       favoriteRemoved: action === 'save' ? false : primaryFavorite.favoriteRemoved,
+5360:       favoriteRemovedAt: action === 'save' ? null : primaryFavorite.favoriteRemovedAt,
+5361:       saved: action === 'save' ? true : primaryFavorite.saved,
+5362:     });
+5363: 
+5364:     // User documents are used only as a light cross-device signal. Keep the snapshot compact
+5365:     // but sufficient for another open device to render the new row without a page refresh.
+5366:     const allowedKeys = [
+5367:       'id', 'uid', 'title', 'koreanTitle', 'englishTitle', 'genre', 'lyrics', 'prompt', 'appliedKeywords',
+5368:       'userInput', 'situationSummary', 'favoriteKey', 'searchTokens', 'createdAtMs', 'updatedAtMs',
+5369:       'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'isLocked',
+5370:       'color', 'colorTag', 'favoriteColorTag', 'isPublic', 'shareId', 'shareType',
+5371:       'coverUrl', 'imageUrl', 'thumbnailUrl', 'audioUrl', 'sunoUrl', 'sourceUrl',
+5372:       'sunoLinks', 'mainSunoIndex', 'sunoLinkCount', 'sunoShareUrl', 'sunoShareUrlUpdatedAt',
+5373:       'sunoAudioUrl', 'sunoCoverUrl', 'sunoTitle', 'sunoDurationSeconds', 'sunoDurationText', 'sunoCoverFetchedAt',
+5374:       'musicNoteMemo', 'noteMemo', 'memoUpdatedAt',
+5375:       'noteFolderId', 'noteFolderTitle', 'noteFolderUpdatedAt',
+5376:       'sharedNoteFolderId', 'sharedNoteFolderTitle', 'sharedNoteFolderUpdatedAt',
+5377:       'musicNoteShareId', 'musicNoteShareUpdatedAt'
+5378:     ];
+5379:     return Object.fromEntries(Object.entries(payload).filter(([key, value]) => allowedKeys.includes(key) && value !== undefined));
+5380:   };
+5381: 
+5382:   const buildFavoriteSyncSignal = (action: FavoriteSyncAction, song: any, relatedFavorites: any[] = [], at = Date.now()) => {
+5383:     const favoriteKeys = Array.from(new Set([
+5384:       buildFavoriteIdentityKey(song),
+5385:       song?.favoriteKey,
+5386:       ...(relatedFavorites || []).map((favorite) => favorite?.favoriteKey || buildFavoriteIdentityKey(favorite)),
+5387:     ].filter(Boolean))).slice(0, 20);
+5388:     const syncedFavorite = buildFavoriteSyncSignalFavorite(action, song, relatedFavorites, at);
+5389:     const signalUid = String(
+5390:       syncedFavorite?.uid || song?.uid || relatedFavorites?.[0]?.uid || auth.currentUser?.uid || ''
+5391:     ).trim();
+5392:     const rememberedDeleteIds = action === 'delete' && signalUid
+5393:       ? Array.from(getFavoriteDeletedTombstoneIds(signalUid))
+5394:       : [];
+5395:     const favoriteIds = Array.from(new Set([
+5396:       ...(relatedFavorites || []).map((favorite) => favorite?.id).filter(Boolean),
+5397:       ...rememberedDeleteIds,
+5398:     ])).slice(-450);
+5399:     return sanitizeForFirestore({
+5400:       id: `${action}_${at}_${Math.random().toString(36).slice(2, 8)}`,
+5401:       originDeviceId: getMusicNoteDeviceId(),
+5402:       action,
+5403:       at,
+5404:       favoriteKey: favoriteKeys[0] || syncedFavorite.favoriteKey || '',
+5405:       favoriteKeys,
+5406:       favoriteIds,
+5407:       title: song?.title || relatedFavorites?.[0]?.title || syncedFavorite.title || '',
+5408:       koreanTitle: song?.koreanTitle || relatedFavorites?.[0]?.koreanTitle || syncedFavorite.koreanTitle || '',
+5409:       englishTitle: song?.englishTitle || relatedFavorites?.[0]?.englishTitle || syncedFavorite.englishTitle || '',
+5410:       titleFingerprint: getFavoriteTitleFingerprint(song || relatedFavorites?.[0] || syncedFavorite),
+5411:       genre: getResolvedGenre(song) || song?.genre || relatedFavorites?.[0]?.genre || syncedFavorite.genre || '',
+5412:       favorite: syncedFavorite,
+5413:     });
+5414:   };
+5415: 
+5416:   const doesFavoriteUnsaveSignalMatchFavorite = (signal: any, favorite: any): boolean => {
+5417:     if (!signal || !favorite) return false;
+5418:     if (!(signal.action === 'unsave' || signal.action === 'delete' || isFavoriteSoftRemoved(signal))) return false;
+5419: 
+5420:     const signalIds = Array.isArray(signal.favoriteIds) ? signal.favoriteIds.filter(Boolean) : [];
+5421:     if (signalIds.length > 0) {
+5422:       return Boolean(favorite.id && signalIds.includes(favorite.id));
+5423:     }
+5424: 
+5425:     const favoriteKey = favorite.favoriteKey || buildFavoriteIdentityKey(favorite);
+5426:     const signalKeys = Array.from(new Set([
+5427:       signal.favoriteKey,
+5428:       ...(Array.isArray(signal.favoriteKeys) ? signal.favoriteKeys : []),
+5429:       signal.favoriteKey || buildFavoriteIdentityKey(signal.favorite || signal),
+5430:     ].filter(Boolean)));
+5431:     if (signalKeys.length > 0) {
+5432:       return Boolean(favoriteKey && signalKeys.includes(favoriteKey));
+5433:     }
+5434: 
+5435:     const signalFavorite = signal.favorite || signal;
+5436:     return isStrictSameFavoriteSongSnapshot(favorite, signalFavorite);
+5437:   };
+5438: 
+5439:   const mergeFavoriteFirstPageWithCache = (firstPageFavs: any[], previous: any[], allServerFavoritesLoaded = false) => {
+5440:     const firstPageIds = new Set(firstPageFavs.map((item: any) => item?.id).filter(Boolean));
+5441:     const firstPageKeys = new Set(firstPageFavs.map((item: any) => item?.favoriteKey || buildFavoriteIdentityKey(item)).filter(Boolean));
+5442:     const removalSignals = firstPageFavs.filter((item: any) => isFavoriteSoftRemoved(item));
+5443: 
+5444:     const retainedCached = (previous || []).filter((item: any) => {
+5445:       if (!item?.id) return false;
+5446:       if (firstPageIds.has(item.id)) return false;
+5447:       if (removalSignals.some((signal: any) => doesFavoriteUnsaveSignalMatchFavorite(signal, item))) return false;
+5448:       const itemKey = item.favoriteKey || buildFavoriteIdentityKey(item);
+5449:       if (itemKey && firstPageKeys.has(itemKey)) return false;
+5450:       if (firstPageFavs.some((serverItem: any) => isSameFavoriteSong(serverItem, item, itemKey))) return false;
+5451: 
+5452:       // A limited first-page query can prove what the latest server items are,
+5453:       // but it cannot prove that older cached items were deleted.
+5454:       // Never prune the full local Music Note cache from the 20-item listener.
+5455:       // Otherwise legacy favorites without createdAt can visually collapse from 400+ items to only the ordered-query subset.
+5456:       return true;
+5457:     });
+5458: 
+5459:     return mergeFavoritePages(firstPageFavs, retainedCached);
+5460:   };
+5461: 
+5462:   const writeFavoritesCache = (uid: string, list: any[]) => {
+5463:     const safeList = filterDeletedFavoriteTombstones(uid, Array.isArray(list) ? list : []);
+5464: 
+5465:     // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date
+5466:     favoritesInMemoryCache.set(uid, safeList);
+5467:     if (musicNoteBundleActiveUids.has(uid)) {
+5468:       scheduleListBundleWrite('musicNote', uid, safeList, {
+5469:         limit: 20,
+5470:         hasMore: safeList.length >= 20,
+5471:         deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
+5472:       });
+5473:     }
+5474: 
+5475:     // Debounce/Schedule the actual high-cost JSON.stringify and localStorage.setItem writes
+5476:     if (favoritesCacheWriteTimers.has(uid)) {
+5477:       const timer = favoritesCacheWriteTimers.get(uid);
+5478:       if (timer) {
+5479:         if (timer.type === 'idle' && typeof cancelIdleCallback !== 'undefined') {
+5480:           cancelIdleCallback(timer.id);
+5481:         } else {
+5482:           clearTimeout(timer.id);
+5483:         }
+5484:       }
+5485:       favoritesCacheWriteTimers.delete(uid);
+5486:     }
+5487: 
+5488:     const doDeferredWrite = () => {
+5489:       favoritesCacheWriteTimers.delete(uid);
+5490:       try {
+5491:         localStorage.setItem(`soridraw_favorites_cache_${uid}`, JSON.stringify(safeList));
+5492:         const maxCountKey = `soridraw_favorites_cache_max_count_${uid}`;
+5493:         const previousMax = Number(localStorage.getItem(maxCountKey) || '0') || 0;
+5494:         if ((safeList?.length || 0) > previousMax) {
+5495:           localStorage.setItem(maxCountKey, String(safeList.length));
+5496:         }
+5497:       } catch (e) {
+5498:         console.error('Failed to save favorites to cache in deferred write:', e);
+5499:       }
+5500:     };
+5501: 
+5502:     // Use requestIdleCallback with high timeout to run when main thread is totally free, or setTimeout as fallback
+5503:     if (typeof requestIdleCallback !== 'undefined') {
+5504:       const id = requestIdleCallback(doDeferredWrite, { timeout: 1500 });
+5505:       favoritesCacheWriteTimers.set(uid, { id, type: 'idle' });
+5506:     } else {
+5507:       const id = setTimeout(doDeferredWrite, 1000);
+5508:       favoritesCacheWriteTimers.set(uid, { id, type: 'timeout' });
+5509:     }
+5510:   };
+5511: 
+5512:   const patchFavoriteCacheImmediately = (uid: string, songId: string, updates: Partial<any>) => {
+5513:     if (!uid) return;
+5514:     try {
+5515:       const cacheKey = `soridraw_favorites_cache_${uid}`;
+5516:       const cachedRaw = localStorage.getItem(cacheKey);
+5517:       let list: any[] = [];
+5518:       if (cachedRaw) {
+5519:         const parsed = JSON.parse(cachedRaw);
+5520:         if (Array.isArray(parsed)) {
+5521:           list = parsed;
+5522:         }
+5523:       }
+5524: 
+5525:       if (list.length === 0 && favoritesInMemoryCache.has(uid)) {
+5526:         list = [...(favoritesInMemoryCache.get(uid) || [])];
+5527:       }
+5528: 
+5529:       let updated = false;
+5530:       const newList = list.map((item) => {
+5531:         if (item.id !== songId) return item;
+5532:         updated = true;
+5533: 
+5534:         const isSunoDeletion = Array.isArray(updates.sunoLinks) && updates.sunoLinks.length === 0 && updates.sunoShareUrl === null;
+5535: 
+5536:         const merged: any = { ...item };
+5537:         Object.entries(updates).forEach(([key, val]) => {
+5538:           if (isSunoDeletion) {
+5539:             merged[key] = val;
+5540:           } else {
+5541:             if (val !== undefined && val !== null && val !== '') {
+5542:               merged[key] = val;
+5543:             }
+5544:           }
+5545:         });
+5546: 
+5547:         return merged;
+5548:       });
+5549: 
+5550:       if (updated) {
+5551:         favoritesInMemoryCache.set(uid, newList);
+5552:         localStorage.setItem(cacheKey, JSON.stringify(newList));
+5553:       }
+5554:     } catch (e) {
+5555:       console.error('Failed to patch favorite cache immediately:', e);
+5556:     }
+5557:   };
+5558: 
+5559:   const applyFavoriteSyncSignal = (uid: string, signal: any) => {
+5560:     if (!uid || !signal?.id) return;
+5561:     if (lastFavoriteSyncSignalIdRef.current === signal.id) return;
+5562:     lastFavoriteSyncSignalIdRef.current = signal.id;
+5563: 
+5564:     const mergeSavedFavoriteIntoCache = (savedFavorite: any) => {
+5565:       if (!savedFavorite?.id) return;
+5566:       if (isFavoriteDeletedTombstoned(uid, String(savedFavorite.id))) return;
+5567:       const isExplicitSaveSignal = signal.action === 'save';
+5568:       const normalizedFavorite = sanitizeForFirestore({
+5569:         ...savedFavorite,
+5570:         uid: savedFavorite.uid || uid,
+5571:         ...(isExplicitSaveSignal ? {
+5572:           hidden: false,
+5573:           favoriteHidden: false,
+5574:           favoriteRemoved: false,
+5575:           favoriteRemovedAt: null,
+5576:           saved: true,
+5577:         } : {}),
+5578:         favoriteKey: savedFavorite.favoriteKey || signal.favoriteKey || buildFavoriteIdentityKey(savedFavorite),
+5579:         createdAtMs: Number(savedFavorite.createdAtMs || 0) || signal.at || Date.now(),
+5580:         updatedAtMs: signal.at || Date.now(),
+5581:         searchTokens: savedFavorite.searchTokens || buildFavoriteSearchTokens(savedFavorite),
+5582:       });
+5583: 
+5584:       try {
+5585:         const cachedList = getFavoritesCacheInMemoryOrLocalStorage(uid);
+5586:         const withoutSame = cachedList.filter((favorite) => {
+5587:           if (!favorite?.id) return false;
+5588:           if (favorite.id === normalizedFavorite.id) return false;
+5589:           if (signal.action === 'save' && isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
+5590:           return true;
+5591:         });
+5592:         writeFavoritesCache(uid, mergeFavoritePages([normalizedFavorite], withoutSame));
+5593:       } catch (cacheSaveError) {
+5594:         console.warn('Favorite save sync cache update failed:', cacheSaveError);
+5595:       }
+5596: 
+5597:       setFavorites((prev) => {
+5598:         const withoutSame = (prev || []).filter((favorite) => {
+5599:           if (!favorite?.id) return false;
+5600:           if (favorite.id === normalizedFavorite.id) return false;
+5601:           if (signal.action === 'save' && isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
+5602:           return true;
+5603:         });
+5604:         const next = mergeFavoritePages([normalizedFavorite], withoutSame);
+5605:         writeFavoritesCache(uid, next);
+5606:         return next;
+5607:       });
+5608:     };
+5609: 
+5610:     if (signal.action === 'save' || signal.action === 'update') {
+5611:       mergeSavedFavoriteIntoCache(signal.favorite || signal);
+5612:       return;
+5613:     }
+5614: 
+5615:     if (signal.action !== 'unsave' && signal.action !== 'delete') return;
+5616: 
+5617:     if (signal.action === 'delete') {
+5618:       const deletedIds = Array.isArray(signal.favoriteIds) ? signal.favoriteIds.filter(Boolean) : [];
+5619:       rememberFavoriteDeletedTombstones(uid, deletedIds);
+5620:     }
+5621: 
+5622:     // Clean localStorage directly as well as React state.
+5623:     // On refresh, the user-doc signal can arrive before/after the cached favorites are hydrated.
+5624:     // Direct cache cleanup prevents the old saved row from coming back after a page reload.
+5625:     try {
+5626:       const cachedList = getFavoritesCacheInMemoryOrLocalStorage(uid);
+5627:       const cleanedCache = cachedList.filter((favorite) => !doesFavoriteUnsaveSignalMatchFavorite(signal, favorite));
+5628:       if (cleanedCache.length !== cachedList.length) {
+5629:         writeFavoritesCache(uid, sortFavoriteList(cleanedCache));
+5630:       }
+5631:     } catch (cacheCleanupError) {
+5632:       console.warn('Favorite sync signal cache cleanup failed:', cacheCleanupError);
+5633:     }
+5634: 
+5635:     setFavorites((prev) => {
+5636:       const next = (prev || []).filter((favorite) => !doesFavoriteUnsaveSignalMatchFavorite(signal, favorite));
+5637:       if (next.length !== (prev || []).length) {
+5638:         writeFavoritesCache(uid, sortFavoriteList(next));
+5639:       }
+5640:       return next;
+5641:     });
+5642:   };
+5643:   const SUNO_LIBRARY_SIGNAL_KEY = 'soridraw_suno_library_signal';
+5644:   const SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY = 'soridraw_suno_library_signal_started_at';
+5645:   const SUNO_REMAINING_CREDITS_STORAGE_BASE = 'soridraw_suno_remaining_credits';
+5646:   const SUNO_REMAINING_CREDITS_UPDATED_AT_STORAGE_BASE = 'soridraw_suno_remaining_credits_updated_at';
+5647:   const SUNO_PENDING_CREDIT_TRACK_IDS_STORAGE_BASE = 'soridraw_suno_pending_credit_track_ids';
+5648:   const getScopedAppStorageKey = (base: string) => getUserScopedStorageKey(base, user?.uid);
+5649: 
+5650:   const [sunoLibrarySignal, setSunoLibrarySignalState] = useState<'generating' | 'completed' | null>(() => {
+5651:     try {
+5652:       const saved = localStorage.getItem(SUNO_LIBRARY_SIGNAL_KEY);
+5653:       return saved === 'generating' || saved === 'completed' ? saved : null;
+5654:     } catch {
+5655:       return null;
+5656:     }
+5657:   });
+5658: 
+5659:   const [sunoLibrarySignalStartedAt, setSunoLibrarySignalStartedAt] = useState<number | null>(() => {
+5660:     try {
+5661:       const saved = Number(localStorage.getItem(SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY) || '');
+5662:       return Number.isFinite(saved) && saved > 0 ? saved : null;
+5663:     } catch {
+5664:       return null;
+5665:     }
+5666:   });
+5667: 
+5668: 
+5669:   const cachedNavigationVisibility = readFirestoreReadCache<NavigationVisibilitySettings>(
+5670:     FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
+5671:     FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
+5672:   );
+5673:   const cachedGlobalLyricClicheGuard = readFirestoreReadCache<LyricClicheGuardSettings>(
+5674:     FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
+5675:     FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
+5676:   );
+5677:   const [navigationVisibilitySettings, setNavigationVisibilitySettings] = useState<NavigationVisibilitySettings>(() =>
+5678:     cachedNavigationVisibility?.data || readStoredNavigationVisibilitySettings(),
+5679:   );
+5680:   const menuVisibility = navigationVisibilitySettings.menuVisibility;
+5681:   const menuAdminOnly = navigationVisibilitySettings.menuAdminOnly;
+5682:   const [globalLyricClicheGuard, setGlobalLyricClicheGuard] = useState<LyricClicheGuardSettings>(() =>
+5683:     cachedGlobalLyricClicheGuard?.data || { hardBanTerms: [], softBanTerms: [] },
+5684:   );
+5685:   const [userLyricClicheGuard, setUserLyricClicheGuard] = useState<LyricClicheGuardSettings | null>(null);
+5686:   const [isGlobalLyricClicheGuardReady, setIsGlobalLyricClicheGuardReady] = useState(Boolean(cachedGlobalLyricClicheGuard));
+5687:   const [isUserLyricClicheGuardReady, setIsUserLyricClicheGuardReady] = useState(false);
+5688:   const isLyricClicheGuardReady = isGlobalLyricClicheGuardReady && isUserLyricClicheGuardReady;
+5689: 
+5690:   useEffect(() => {
+5691:     if (location.pathname !== '/studio') return;
+5692:     let isMounted = true;
+5693: 
+5694:     const loadGlobalLyricClicheGuard = async (force = false) => {
+5695:       const cached = readFirestoreReadCache<LyricClicheGuardSettings>(
+5696:         FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
+5697:         FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
+5698:       );
+5699:       if (cached?.data) {
+5700:         setGlobalLyricClicheGuard(cached.data);
+5701:         setIsGlobalLyricClicheGuardReady(true);
+5702:         if (cached.isFresh && !force) return;
+5703:       }
+5704: 
+5705:       try {
+5706:         const snapshot = await getDoc(doc(db, 'app_settings', 'lyric_cliche_guard'));
+5707:         if (!isMounted) return;
+5708:         const data = snapshot.exists() ? snapshot.data() : null;
+5709:         const nextSettings: LyricClicheGuardSettings = {
+5710:           hardBanTerms: Array.isArray(data?.hardBanTerms) ? data.hardBanTerms : [],
+5711:           softBanTerms: Array.isArray(data?.softBanTerms) ? data.softBanTerms : [],
+5712:         };
+5713:         setGlobalLyricClicheGuard(nextSettings);
+5714:         writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, nextSettings);
+5715:       } catch (error) {
+5716:         console.warn('Lyric cliche guard setting read failed. Keeping cached/built-in defaults:', error);
+5717:       } finally {
+5718:         if (isMounted) setIsGlobalLyricClicheGuardReady(true);
+5719:       }
+5720:     };
+5721: 
+5722:     const handleLocalClicheGuardUpdate = (event: Event) => {
+5723:       const detail = (event as CustomEvent<LyricClicheGuardSettings>).detail;
+5724:       if (!detail) return;
+5725:       setGlobalLyricClicheGuard(detail);
+5726:       setIsGlobalLyricClicheGuardReady(true);
+5727:       writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, detail);
+5728:     };
+5729: 
+5730:     window.addEventListener('soridraw:lyric-cliche-guard-updated', handleLocalClicheGuardUpdate as EventListener);
+5731:     void loadGlobalLyricClicheGuard();
+5732:     return () => {
+5733:       isMounted = false;
+5734:       window.removeEventListener('soridraw:lyric-cliche-guard-updated', handleLocalClicheGuardUpdate as EventListener);
+5735:     };
+5736:   }, [location.pathname]);
+5737: 
+5738:   useEffect(() => {
+5739:     let isMounted = true;
+5740: 
+5741:     const loadNavigationVisibility = async () => {
+5742:       const cached = readFirestoreReadCache<NavigationVisibilitySettings>(
+5743:         FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
+5744:         FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
+5745:       );
+5746:       if (cached?.data) {
+5747:         const nextCachedSettings = normalizeNavigationVisibilitySettings(
+5748:           cached.data,
+5749:           readStoredNavigationVisibilitySettings(),
+5750:         );
+5751:         setNavigationVisibilitySettings(nextCachedSettings);
+5752:         writeStoredNavigationVisibilitySettings(nextCachedSettings);
+5753:         if (cached.isFresh) return;
+5754:       }
+5755: 
+5756:       try {
+5757:         const snapshot = await getDoc(doc(db, 'app_settings', 'navigation_visibility'));
+5758:         if (!isMounted) return;
+5759: 
+5760:         const nextSettings = normalizeNavigationVisibilitySettings(
+5761:           snapshot.exists() ? snapshot.data() : null,
+5762:           readStoredNavigationVisibilitySettings(),
+5763:         );
+5764:         setNavigationVisibilitySettings(nextSettings);
+5765:         writeStoredNavigationVisibilitySettings(nextSettings);
+5766:         writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, nextSettings);
+5767:       } catch (error) {
+5768:         console.warn('Navigation visibility setting read failed. Keeping cached fallback:', error);
+5769:         if (isMounted) {
+5770:           setNavigationVisibilitySettings(readStoredNavigationVisibilitySettings());
+5771:         }
+5772:       }
+5773:     };
+5774: 
+5775:     const handleLocalVisibilityUpdate = (event: Event) => {
+5776:       const detail = (event as CustomEvent<NavigationVisibilitySettings>).detail;
+5777:       const nextSettings = normalizeNavigationVisibilitySettings(
+5778:         detail,
+5779:         readStoredNavigationVisibilitySettings(),
+5780:       );
+5781:       setNavigationVisibilitySettings(nextSettings);
+5782:       writeStoredNavigationVisibilitySettings(nextSettings);
+5783:       writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, nextSettings);
+5784:     };
+5785: 
+5786:     window.addEventListener('soridraw:navigation-visibility-updated', handleLocalVisibilityUpdate);
+5787:     void loadNavigationVisibility();
+5788: 
+5789:     return () => {
+5790:       isMounted = false;
+5791:       window.removeEventListener('soridraw:navigation-visibility-updated', handleLocalVisibilityUpdate);
+5792:     };
+5793:   }, []);
+5794: 
+5795:   const [sunoRemainingCredits, setSunoRemainingCredits] = useState<number | null>(() => {
+5796:     try {
+5797:       const saved = Number(localStorage.getItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_STORAGE_BASE)) || '');
+5798:       return Number.isFinite(saved) && saved >= 0 ? saved : null;
+5799:     } catch {
+5800:       return null;
+5801:     }
+5802:   });
+5803: 
+5804:   const [sunoRemainingCreditsUpdatedAt, setSunoRemainingCreditsUpdatedAt] = useState<number | null>(() => {
+5805:     try {
+5806:       const saved = Number(localStorage.getItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_UPDATED_AT_STORAGE_BASE)) || '');
+5807:       return Number.isFinite(saved) && saved > 0 ? saved : null;
+5808:     } catch {
+5809:       return null;
+5810:     }
+5811:   });
+5812: 
+5813:   const pendingSunoCreditCheckTrackIdsRef = useRef<Set<string>>(new Set());
+5814:   const [recentSunoTracksForPolling, setRecentSunoTracksForPolling] = useState<any[]>([]);
+5815:   const globalSunoStatusCheckingIdsRef = useRef<Set<string>>(new Set());
+5816:   const globalSunoStatusCheckCountsRef = useRef<Map<string, number>>(new Map());
+5817:   const globalSunoStatusLastRunAtRef = useRef<Map<string, number>>(new Map());
+5818: 
+5819:   const setSunoLibrarySignal = (value: 'generating' | 'completed' | null, startedAt?: number) => {
+5820:     const resolvedStartedAt = value === 'generating'
+5821:       ? (startedAt || Date.now())
+5822:       : (value === 'completed' ? sunoLibrarySignalStartedAt : null);
+5823: 
+5824:     setSunoLibrarySignalState(value);
+5825:     setSunoLibrarySignalStartedAt(resolvedStartedAt);
+5826: 
+5827:     try {
+5828:       if (value) {
+5829:         localStorage.setItem(SUNO_LIBRARY_SIGNAL_KEY, value);
+5830:         if (resolvedStartedAt) {
+5831:           localStorage.setItem(SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY, String(resolvedStartedAt));
+5832:         }
+5833:       } else {
+5834:         localStorage.removeItem(SUNO_LIBRARY_SIGNAL_KEY);
+5835:         localStorage.removeItem(SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY);
+5836:       }
+5837:     } catch {
+5838:       // localStorage may be unavailable in private browsing or restricted environments.
+5839:     }
+5840:   };
+5841: 
+5842:   const clearSunoLibrarySignal = () => setSunoLibrarySignal(null);
+5843: 
+5844:   const sunoLibrarySignalDotClass = sunoLibrarySignal === 'generating'
+5845:     ? 'bg-pink-400 shadow-[0_10px_24px_rgba(0,0,0,0.16)]'
+5846:     : 'bg-brand-orange shadow-[0_10px_24px_rgba(0,0,0,0.16)]';
+5847: 
+5848:   const updateSunoRemainingCreditsCache = useCallback((credits: number | null, updatedAt: number = Date.now()) => {
+5849:     setSunoRemainingCredits(credits);
+5850:     setSunoRemainingCreditsUpdatedAt(credits === null ? null : updatedAt);
+5851: 
+5852:     try {
+5853:       if (credits === null) {
+5854:         localStorage.removeItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_STORAGE_BASE));
+5855:         localStorage.removeItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_UPDATED_AT_STORAGE_BASE));
+5856:         window.dispatchEvent(new CustomEvent('soridraw:suno-credits-updated', {
+5857:           detail: { remainingCredits: null, updatedAt: null }
+5858:         }));
+5859:       } else {
+5860:         localStorage.setItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_STORAGE_BASE), String(credits));
+5861:         localStorage.setItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_UPDATED_AT_STORAGE_BASE), String(updatedAt));
+5862:         window.dispatchEvent(new CustomEvent('soridraw:suno-credits-updated', {
+5863:           detail: { remainingCredits: credits, updatedAt }
+5864:         }));
+5865:       }
+5866:     } catch {
+5867:       // localStorage may be unavailable in private browsing or restricted environments.
+5868:     }
+5869:   }, [user?.uid]);
+5870: 
+5871:   useEffect(() => {
+5872:     const readSunoRemainingCreditsCache = () => {
+5873:       try {
+5874:         const creditValue = Number(localStorage.getItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_STORAGE_BASE)) || '');
+5875:         setSunoRemainingCredits(Number.isFinite(creditValue) && creditValue >= 0 ? creditValue : null);
+5876:         const updatedValue = Number(localStorage.getItem(getScopedAppStorageKey(SUNO_REMAINING_CREDITS_UPDATED_AT_STORAGE_BASE)) || '');
+5877:         setSunoRemainingCreditsUpdatedAt(Number.isFinite(updatedValue) && updatedValue > 0 ? updatedValue : null);
+5878:       } catch {
+5879:         setSunoRemainingCredits(null);
+5880:         setSunoRemainingCreditsUpdatedAt(null);
+5881:       }
+5882:     };
+5883: 
+5884:     const handleCreditsUpdate = () => readSunoRemainingCreditsCache();
+5885:     let isCancelled = false;
+5886:     readSunoRemainingCreditsCache();
+5887:     setHasSunoApiKey(hasStoredSunoApiKey(user?.uid));
+5888:     fetchSunoApiKeyStatusFromServer(user).then((hasKey) => {
+
+===== const buildFavoriteSyncSignal @ 5337 =====
+5197:     const titleLanguages = (((applied.titleLanguages || applied.lyricLanguages || []) as LanguageCode[]) || [])
+5198:       .filter((lang) => Boolean(lang && (lang === 'ko' || (titlesByLanguage as any)[lang])));
+5199:     const dedupedTitleLanguages = Array.from(new Set(titleLanguages)) as LanguageCode[];
+5200: 
+5201:     next.appliedKeywords = {
+5202:       ...applied,
+5203:       titlesByLanguage,
+5204:       titleLanguages: dedupedTitleLanguages,
+5205:     };
+5206: 
+5207:     return next as T;
+5208:   };
+5209: 
+5210:   const buildFavoriteIdentityKey = (song: any): string => {
+5211:     const titlePart = normalizeFavoriteSearchValue([song?.title, song?.koreanTitle, song?.englishTitle].filter(Boolean).join(' '));
+5212:     const promptPart = normalizeFavoriteSearchValue(song?.prompt);
+5213:     const lyricPart = normalizeFavoriteSearchValue(`${song?.lyrics?.korean || ''} ${song?.lyrics?.english || ''}`);
+5214:     const sourceText = [promptPart, lyricPart, titlePart].filter(Boolean).join('|').slice(0, 6000);
+5215:     if (!sourceText) return '';
+5216: 
+5217:     let hash = 2166136261;
+5218:     for (let index = 0; index < sourceText.length; index += 1) {
+5219:       hash ^= sourceText.charCodeAt(index);
+5220:       hash = Math.imul(hash, 16777619);
+5221:     }
+5222:     return `song_${(hash >>> 0).toString(36)}`;
+5223:   };
+5224: 
+5225:   const getFavoriteComparableText = (song: any) => ({
+5226:     title: normalizeFavoriteSearchValue([song?.title, song?.koreanTitle, song?.englishTitle].filter(Boolean).join(' ')),
+5227:     prompt: normalizeFavoriteSearchValue(song?.prompt),
+5228:     lyrics: normalizeFavoriteSearchValue(`${song?.lyrics?.korean || ''} ${song?.lyrics?.english || ''}`),
+5229:   });
+5230: 
+5231:   const isStrictSameFavoriteSongSnapshot = (favorite: any, song: any): boolean => {
+5232:     if (!favorite || !song) return false;
+5233:     const favoriteComparable = getFavoriteComparableText(favorite);
+5234:     const songComparable = getFavoriteComparableText(song);
+5235: 
+5236:     // Studio -> Music Note save must treat a song as the same only when all three core fields match.
+5237:     // Title-only, prompt+lyrics-only, or prompt+title-only matching can connect an edited Studio result
+5238:     // to an older Music Note and make the saved lyrics/prompt look mixed up.
+5239:     return Boolean(
+5240:       favoriteComparable.title &&
+5241:       songComparable.title &&
+5242:       favoriteComparable.prompt &&
+5243:       songComparable.prompt &&
+5244:       favoriteComparable.lyrics &&
+5245:       songComparable.lyrics &&
+5246:       favoriteComparable.title === songComparable.title &&
+5247:       favoriteComparable.prompt === songComparable.prompt &&
+5248:       favoriteComparable.lyrics === songComparable.lyrics
+5249:     );
+5250:   };
+5251: 
+5252:   const isSameFavoriteSong = (favorite: any, song: any, songIdentityKey = buildFavoriteIdentityKey(song)) => {
+5253:     if (!favorite || !song) return false;
+5254:     if (song?.id && favorite?.id && song.id === favorite.id) return true;
+5255:     const favoriteIdentityKey = favorite?.favoriteKey || buildFavoriteIdentityKey(favorite);
+5256:     if (songIdentityKey && favoriteIdentityKey && songIdentityKey === favoriteIdentityKey) return true;
+5257: 
+5258:     return isStrictSameFavoriteSongSnapshot(favorite, song);
+5259:   };
+5260: 
+5261:   const isFavoriteHidden = (favorite: any) => Boolean(
+5262:     isFavoriteSoftRemoved(favorite)
+5263:     || favorite?.hidden === true
+5264:     || favorite?.favoriteHidden === true
+5265:     || favorite?.deletedAt
+5266:     || favorite?.trashedAt
+5267:   );
+5268: 
+5269:   const getFavoriteCreatedSortTime = (favorite: any): number => {
+5270:     return Number(favorite?.createdAtMs || 0)
+5271:       || getTimestampMs(favorite?.createdAt)
+5272:       || getTimestampMs(favorite?.updatedAt)
+5273:       || getTimestampMs(favorite?.restoredAt)
+5274:       || 0;
+5275:   };
+5276: 
+5277:   const findBestMatchingFavorite = (list: any[], song: any, songIdentityKey = buildFavoriteIdentityKey(song)) => {
+5278:     const matches = (list || []).filter((favorite) => isSameFavoriteSong(favorite, song, songIdentityKey));
+5279:     return matches.find((favorite) => !isFavoriteHidden(favorite)) || matches[0] || null;
+5280:   };
+5281: 
+5282:   const favoritesStatusMap = favoritesStore.getStatusMap();
+5283: 
+5284:   const favoritesRef = useRef(favorites);
+5285:   useEffect(() => {
+5286:     favoritesRef.current = favoritesStore.getFavorites();
+5287:   });
+5288: 
+5289:   const favoritesStatusMapRef = useRef(favoritesStatusMap);
+5290:   useEffect(() => {
+5291:     favoritesStatusMapRef.current = favoritesStore.getStatusMap();
+5292:   });
+5293: 
+5294:   const isSongFavorited = useCallback((song: any) => {
+5295:     if (!song) return false;
+5296:     if ((song as any)?.recentFavoriteDetachedAt) return false;
+5297:     const statusMap = favoritesStore.getStatusMap();
+5298:     const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
+5299:     if (linkedFavoriteId && statusMap.has(linkedFavoriteId)) return true;
+5300:     if (song.id && statusMap.has(song.id)) return true;
+5301:     const key = buildFavoriteIdentityKey(song);
+5302:     if (key && statusMap.has(key)) return true;
+5303:     return false;
+5304:   }, []);
+5305: 
+5306:   const getFavoriteTitleFingerprint = (song: any): string => normalizeFavoriteSearchValue([
+5307:     song?.title,
+5308:     song?.koreanTitle,
+5309:     song?.englishTitle,
+5310:   ].filter(Boolean).join(' '));
+5311: 
+5312:   const hasMatchingFavoriteTitleFingerprint = (a: any, b: any): boolean => {
+5313:     const aTitle = getFavoriteTitleFingerprint(a);
+5314:     const bTitle = getFavoriteTitleFingerprint(b);
+5315:     if (!aTitle || !bTitle) return false;
+5316:     if (aTitle === bTitle) return true;
+5317:     const aParts = new Set(aTitle.split(/\s+/).filter((part) => part.length >= 2));
+5318:     const bParts = new Set(bTitle.split(/\s+/).filter((part) => part.length >= 2));
+5319:     let overlap = 0;
+5320:     aParts.forEach((part) => { if (bParts.has(part)) overlap += 1; });
+5321:     return overlap >= 2 && Math.min(aParts.size, bParts.size) <= overlap + 1;
+5322:   };
+5323: 
+5324:   const isFavoriteServerDuplicateCandidate = (candidate: any, song: any, songIdentityKey = buildFavoriteIdentityKey(song)): boolean => {
+5325:     if (!candidate || !song) return false;
+5326:     const candidateKey = candidate.favoriteKey || buildFavoriteIdentityKey(candidate);
+5327:     if (songIdentityKey && candidateKey && songIdentityKey === candidateKey) return true;
+5328:     if (isSameFavoriteSong(candidate, song, songIdentityKey)) return true;
+5329:     // Do not match favorites by title alone.
+5330:     // Studio titles can be edited before saving, and fuzzy title matching can connect the current result
+5331:     // to an unrelated older Music Note, causing prompt/lyrics from another song to appear after save.
+5332:     return false;
+5333:   };
+5334: 
+5335:   type FavoriteSyncAction = 'save' | 'update' | 'unsave' | 'delete';
+5336: 
+5337:   const buildFavoriteSyncSignalFavorite = (action: FavoriteSyncAction, song: any, relatedFavorites: any[] = [], at = Date.now()) => {
+5338:     const primaryFavorite = (relatedFavorites || []).find((favorite) => favorite?.id) || relatedFavorites?.[0] || song || {};
+5339:     const favoriteKey = primaryFavorite.favoriteKey || song?.favoriteKey || buildFavoriteIdentityKey(primaryFavorite) || buildFavoriteIdentityKey(song);
+5340:     const payload = sanitizeForFirestore({
+5341:       ...primaryFavorite,
+5342:       id: primaryFavorite.id || '',
+5343:       uid: primaryFavorite.uid || user?.uid || '',
+5344:       title: primaryFavorite.title || song?.title || '',
+5345:       koreanTitle: primaryFavorite.koreanTitle || song?.koreanTitle || '',
+5346:       englishTitle: primaryFavorite.englishTitle || song?.englishTitle || '',
+5347:       genre: getResolvedGenre(primaryFavorite) || getResolvedGenre(song) || primaryFavorite.genre || song?.genre || '',
+5348:       lyrics: primaryFavorite.lyrics || song?.lyrics || {},
+5349:       prompt: primaryFavorite.prompt || song?.prompt || '',
+5350:       appliedKeywords: primaryFavorite.appliedKeywords || song?.appliedKeywords || {},
+5351:       userInput: primaryFavorite.userInput ?? song?.userInput ?? '',
+5352:       situationSummary: primaryFavorite.situationSummary || song?.situationSummary || '',
+5353:       favoriteKey,
+5354:       searchTokens: primaryFavorite.searchTokens || buildFavoriteSearchTokens({ ...song, ...primaryFavorite, favoriteKey }),
+5355:       createdAtMs: Number(primaryFavorite.createdAtMs || 0) || getTimestampMs(primaryFavorite.createdAt) || at,
+5356:       updatedAtMs: at,
+5357:       hidden: action === 'save' ? false : primaryFavorite.hidden,
+5358:       favoriteHidden: action === 'save' ? false : primaryFavorite.favoriteHidden,
+5359:       favoriteRemoved: action === 'save' ? false : primaryFavorite.favoriteRemoved,
+5360:       favoriteRemovedAt: action === 'save' ? null : primaryFavorite.favoriteRemovedAt,
+5361:       saved: action === 'save' ? true : primaryFavorite.saved,
+5362:     });
+5363: 
+5364:     // User documents are used only as a light cross-device signal. Keep the snapshot compact
+5365:     // but sufficient for another open device to render the new row without a page refresh.
+5366:     const allowedKeys = [
+5367:       'id', 'uid', 'title', 'koreanTitle', 'englishTitle', 'genre', 'lyrics', 'prompt', 'appliedKeywords',
+5368:       'userInput', 'situationSummary', 'favoriteKey', 'searchTokens', 'createdAtMs', 'updatedAtMs',
+5369:       'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'isLocked',
+5370:       'color', 'colorTag', 'favoriteColorTag', 'isPublic', 'shareId', 'shareType',
+5371:       'coverUrl', 'imageUrl', 'thumbnailUrl', 'audioUrl', 'sunoUrl', 'sourceUrl',
+5372:       'sunoLinks', 'mainSunoIndex', 'sunoLinkCount', 'sunoShareUrl', 'sunoShareUrlUpdatedAt',
+5373:       'sunoAudioUrl', 'sunoCoverUrl', 'sunoTitle', 'sunoDurationSeconds', 'sunoDurationText', 'sunoCoverFetchedAt',
+5374:       'musicNoteMemo', 'noteMemo', 'memoUpdatedAt',
+5375:       'noteFolderId', 'noteFolderTitle', 'noteFolderUpdatedAt',
+5376:       'sharedNoteFolderId', 'sharedNoteFolderTitle', 'sharedNoteFolderUpdatedAt',
+5377:       'musicNoteShareId', 'musicNoteShareUpdatedAt'
+5378:     ];
+5379:     return Object.fromEntries(Object.entries(payload).filter(([key, value]) => allowedKeys.includes(key) && value !== undefined));
+5380:   };
+5381: 
+5382:   const buildFavoriteSyncSignal = (action: FavoriteSyncAction, song: any, relatedFavorites: any[] = [], at = Date.now()) => {
+5383:     const favoriteKeys = Array.from(new Set([
+5384:       buildFavoriteIdentityKey(song),
+5385:       song?.favoriteKey,
+5386:       ...(relatedFavorites || []).map((favorite) => favorite?.favoriteKey || buildFavoriteIdentityKey(favorite)),
+5387:     ].filter(Boolean))).slice(0, 20);
+5388:     const syncedFavorite = buildFavoriteSyncSignalFavorite(action, song, relatedFavorites, at);
+5389:     const signalUid = String(
+5390:       syncedFavorite?.uid || song?.uid || relatedFavorites?.[0]?.uid || auth.currentUser?.uid || ''
+5391:     ).trim();
+5392:     const rememberedDeleteIds = action === 'delete' && signalUid
+5393:       ? Array.from(getFavoriteDeletedTombstoneIds(signalUid))
+5394:       : [];
+5395:     const favoriteIds = Array.from(new Set([
+5396:       ...(relatedFavorites || []).map((favorite) => favorite?.id).filter(Boolean),
+5397:       ...rememberedDeleteIds,
+5398:     ])).slice(-450);
+5399:     return sanitizeForFirestore({
+5400:       id: `${action}_${at}_${Math.random().toString(36).slice(2, 8)}`,
+5401:       originDeviceId: getMusicNoteDeviceId(),
+5402:       action,
+5403:       at,
+5404:       favoriteKey: favoriteKeys[0] || syncedFavorite.favoriteKey || '',
+5405:       favoriteKeys,
+5406:       favoriteIds,
+5407:       title: song?.title || relatedFavorites?.[0]?.title || syncedFavorite.title || '',
+5408:       koreanTitle: song?.koreanTitle || relatedFavorites?.[0]?.koreanTitle || syncedFavorite.koreanTitle || '',
+5409:       englishTitle: song?.englishTitle || relatedFavorites?.[0]?.englishTitle || syncedFavorite.englishTitle || '',
+5410:       titleFingerprint: getFavoriteTitleFingerprint(song || relatedFavorites?.[0] || syncedFavorite),
+5411:       genre: getResolvedGenre(song) || song?.genre || relatedFavorites?.[0]?.genre || syncedFavorite.genre || '',
+5412:       favorite: syncedFavorite,
+5413:     });
+5414:   };
+5415: 
+5416:   const doesFavoriteUnsaveSignalMatchFavorite = (signal: any, favorite: any): boolean => {
+5417:     if (!signal || !favorite) return false;
+5418:     if (!(signal.action === 'unsave' || signal.action === 'delete' || isFavoriteSoftRemoved(signal))) return false;
+5419: 
+5420:     const signalIds = Array.isArray(signal.favoriteIds) ? signal.favoriteIds.filter(Boolean) : [];
+5421:     if (signalIds.length > 0) {
+5422:       return Boolean(favorite.id && signalIds.includes(favorite.id));
+5423:     }
+5424: 
+5425:     const favoriteKey = favorite.favoriteKey || buildFavoriteIdentityKey(favorite);
+5426:     const signalKeys = Array.from(new Set([
+5427:       signal.favoriteKey,
+5428:       ...(Array.isArray(signal.favoriteKeys) ? signal.favoriteKeys : []),
+5429:       signal.favoriteKey || buildFavoriteIdentityKey(signal.favorite || signal),
+5430:     ].filter(Boolean)));
+5431:     if (signalKeys.length > 0) {
+5432:       return Boolean(favoriteKey && signalKeys.includes(favoriteKey));
+5433:     }
+5434: 
+5435:     const signalFavorite = signal.favorite || signal;
+5436:     return isStrictSameFavoriteSongSnapshot(favorite, signalFavorite);
+5437:   };
+5438: 
+5439:   const mergeFavoriteFirstPageWithCache = (firstPageFavs: any[], previous: any[], allServerFavoritesLoaded = false) => {
+5440:     const firstPageIds = new Set(firstPageFavs.map((item: any) => item?.id).filter(Boolean));
+5441:     const firstPageKeys = new Set(firstPageFavs.map((item: any) => item?.favoriteKey || buildFavoriteIdentityKey(item)).filter(Boolean));
+5442:     const removalSignals = firstPageFavs.filter((item: any) => isFavoriteSoftRemoved(item));
+5443: 
+5444:     const retainedCached = (previous || []).filter((item: any) => {
+5445:       if (!item?.id) return false;
+5446:       if (firstPageIds.has(item.id)) return false;
+5447:       if (removalSignals.some((signal: any) => doesFavoriteUnsaveSignalMatchFavorite(signal, item))) return false;
+5448:       const itemKey = item.favoriteKey || buildFavoriteIdentityKey(item);
+5449:       if (itemKey && firstPageKeys.has(itemKey)) return false;
+5450:       if (firstPageFavs.some((serverItem: any) => isSameFavoriteSong(serverItem, item, itemKey))) return false;
+5451: 
+5452:       // A limited first-page query can prove what the latest server items are,
+5453:       // but it cannot prove that older cached items were deleted.
+5454:       // Never prune the full local Music Note cache from the 20-item listener.
+5455:       // Otherwise legacy favorites without createdAt can visually collapse from 400+ items to only the ordered-query subset.
+5456:       return true;
+5457:     });
+5458: 
+5459:     return mergeFavoritePages(firstPageFavs, retainedCached);
+5460:   };
+5461: 
+5462:   const writeFavoritesCache = (uid: string, list: any[]) => {
+5463:     const safeList = filterDeletedFavoriteTombstones(uid, Array.isArray(list) ? list : []);
+5464: 
+5465:     // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date
+5466:     favoritesInMemoryCache.set(uid, safeList);
+5467:     if (musicNoteBundleActiveUids.has(uid)) {
+5468:       scheduleListBundleWrite('musicNote', uid, safeList, {
+5469:         limit: 20,
+5470:         hasMore: safeList.length >= 20,
+5471:         deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
+5472:       });
+5473:     }
+5474: 
+5475:     // Debounce/Schedule the actual high-cost JSON.stringify and localStorage.setItem writes
+5476:     if (favoritesCacheWriteTimers.has(uid)) {
+5477:       const timer = favoritesCacheWriteTimers.get(uid);
+5478:       if (timer) {
+5479:         if (timer.type === 'idle' && typeof cancelIdleCallback !== 'undefined') {
+5480:           cancelIdleCallback(timer.id);
+5481:         } else {
+5482:           clearTimeout(timer.id);
+5483:         }
+5484:       }
+5485:       favoritesCacheWriteTimers.delete(uid);
+5486:     }
+5487: 
+5488:     const doDeferredWrite = () => {
+5489:       favoritesCacheWriteTimers.delete(uid);
+5490:       try {
+5491:         localStorage.setItem(`soridraw_favorites_cache_${uid}`, JSON.stringify(safeList));
+5492:         const maxCountKey = `soridraw_favorites_cache_max_count_${uid}`;
+5493:         const previousMax = Number(localStorage.getItem(maxCountKey) || '0') || 0;
+5494:         if ((safeList?.length || 0) > previousMax) {
+5495:           localStorage.setItem(maxCountKey, String(safeList.length));
+5496:         }
+5497:       } catch (e) {
+5498:         console.error('Failed to save favorites to cache in deferred write:', e);
+5499:       }
+5500:     };
+5501: 
+5502:     // Use requestIdleCallback with high timeout to run when main thread is totally free, or setTimeout as fallback
+5503:     if (typeof requestIdleCallback !== 'undefined') {
+5504:       const id = requestIdleCallback(doDeferredWrite, { timeout: 1500 });
+5505:       favoritesCacheWriteTimers.set(uid, { id, type: 'idle' });
+5506:     } else {
+5507:       const id = setTimeout(doDeferredWrite, 1000);
+5508:       favoritesCacheWriteTimers.set(uid, { id, type: 'timeout' });
+5509:     }
+5510:   };
+5511: 
+5512:   const patchFavoriteCacheImmediately = (uid: string, songId: string, updates: Partial<any>) => {
+5513:     if (!uid) return;
+5514:     try {
+5515:       const cacheKey = `soridraw_favorites_cache_${uid}`;
+5516:       const cachedRaw = localStorage.getItem(cacheKey);
+5517:       let list: any[] = [];
+5518:       if (cachedRaw) {
+5519:         const parsed = JSON.parse(cachedRaw);
+5520:         if (Array.isArray(parsed)) {
+5521:           list = parsed;
+5522:         }
+5523:       }
+5524: 
+5525:       if (list.length === 0 && favoritesInMemoryCache.has(uid)) {
+5526:         list = [...(favoritesInMemoryCache.get(uid) || [])];
+5527:       }
+5528: 
+5529:       let updated = false;
+5530:       const newList = list.map((item) => {
+5531:         if (item.id !== songId) return item;
+5532:         updated = true;
+5533: 
+5534:         const isSunoDeletion = Array.isArray(updates.sunoLinks) && updates.sunoLinks.length === 0 && updates.sunoShareUrl === null;
+5535: 
+5536:         const merged: any = { ...item };
+5537:         Object.entries(updates).forEach(([key, val]) => {
+5538:           if (isSunoDeletion) {
+5539:             merged[key] = val;
+5540:           } else {
+5541:             if (val !== undefined && val !== null && val !== '') {
+5542:               merged[key] = val;
+5543:             }
+5544:           }
+5545:         });
+5546: 
+5547:         return merged;
+5548:       });
+5549: 
+5550:       if (updated) {
+5551:         favoritesInMemoryCache.set(uid, newList);
+5552:         localStorage.setItem(cacheKey, JSON.stringify(newList));
+5553:       }
+5554:     } catch (e) {
+5555:       console.error('Failed to patch favorite cache immediately:', e);
+5556:     }
+5557:   };
+5558: 
+5559:   const applyFavoriteSyncSignal = (uid: string, signal: any) => {
+5560:     if (!uid || !signal?.id) return;
+5561:     if (lastFavoriteSyncSignalIdRef.current === signal.id) return;
+5562:     lastFavoriteSyncSignalIdRef.current = signal.id;
+5563: 
+5564:     const mergeSavedFavoriteIntoCache = (savedFavorite: any) => {
+5565:       if (!savedFavorite?.id) return;
+5566:       if (isFavoriteDeletedTombstoned(uid, String(savedFavorite.id))) return;
+5567:       const isExplicitSaveSignal = signal.action === 'save';
+5568:       const normalizedFavorite = sanitizeForFirestore({
+5569:         ...savedFavorite,
+5570:         uid: savedFavorite.uid || uid,
+5571:         ...(isExplicitSaveSignal ? {
+5572:           hidden: false,
+5573:           favoriteHidden: false,
+5574:           favoriteRemoved: false,
+5575:           favoriteRemovedAt: null,
+5576:           saved: true,
+5577:         } : {}),
+5578:         favoriteKey: savedFavorite.favoriteKey || signal.favoriteKey || buildFavoriteIdentityKey(savedFavorite),
+5579:         createdAtMs: Number(savedFavorite.createdAtMs || 0) || signal.at || Date.now(),
+5580:         updatedAtMs: signal.at || Date.now(),
+5581:         searchTokens: savedFavorite.searchTokens || buildFavoriteSearchTokens(savedFavorite),
+5582:       });
+5583: 
+5584:       try {
+5585:         const cachedList = getFavoritesCacheInMemoryOrLocalStorage(uid);
+5586:         const withoutSame = cachedList.filter((favorite) => {
+5587:           if (!favorite?.id) return false;
+5588:           if (favorite.id === normalizedFavorite.id) return false;
+5589:           if (signal.action === 'save' && isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
+5590:           return true;
+5591:         });
+5592:         writeFavoritesCache(uid, mergeFavoritePages([normalizedFavorite], withoutSame));
+5593:       } catch (cacheSaveError) {
+5594:         console.warn('Favorite save sync cache update failed:', cacheSaveError);
+5595:       }
+5596: 
+5597:       setFavorites((prev) => {
+5598:         const withoutSame = (prev || []).filter((favorite) => {
+5599:           if (!favorite?.id) return false;
+5600:           if (favorite.id === normalizedFavorite.id) return false;
+5601:           if (signal.action === 'save' && isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
+5602:           return true;
+5603:         });
+5604:         const next = mergeFavoritePages([normalizedFavorite], withoutSame);
+5605:         writeFavoritesCache(uid, next);
+5606:         return next;
+5607:       });
+5608:     };
+5609: 
+5610:     if (signal.action === 'save' || signal.action === 'update') {
+5611:       mergeSavedFavoriteIntoCache(signal.favorite || signal);
+5612:       return;
+5613:     }
+5614: 
+5615:     if (signal.action !== 'unsave' && signal.action !== 'delete') return;
+5616: 
+5617:     if (signal.action === 'delete') {
+5618:       const deletedIds = Array.isArray(signal.favoriteIds) ? signal.favoriteIds.filter(Boolean) : [];
+5619:       rememberFavoriteDeletedTombstones(uid, deletedIds);
+5620:     }
+5621: 
+5622:     // Clean localStorage directly as well as React state.
+5623:     // On refresh, the user-doc signal can arrive before/after the cached favorites are hydrated.
+5624:     // Direct cache cleanup prevents the old saved row from coming back after a page reload.
+5625:     try {
+5626:       const cachedList = getFavoritesCacheInMemoryOrLocalStorage(uid);
+5627:       const cleanedCache = cachedList.filter((favorite) => !doesFavoriteUnsaveSignalMatchFavorite(signal, favorite));
+5628:       if (cleanedCache.length !== cachedList.length) {
+5629:         writeFavoritesCache(uid, sortFavoriteList(cleanedCache));
+5630:       }
+5631:     } catch (cacheCleanupError) {
+5632:       console.warn('Favorite sync signal cache cleanup failed:', cacheCleanupError);
+5633:     }
+5634: 
+5635:     setFavorites((prev) => {
+5636:       const next = (prev || []).filter((favorite) => !doesFavoriteUnsaveSignalMatchFavorite(signal, favorite));
+5637:       if (next.length !== (prev || []).length) {
+5638:         writeFavoritesCache(uid, sortFavoriteList(next));
+5639:       }
+5640:       return next;
+5641:     });
+5642:   };
+5643:   const SUNO_LIBRARY_SIGNAL_KEY = 'soridraw_suno_library_signal';
+5644:   const SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY = 'soridraw_suno_library_signal_started_at';
+5645:   const SUNO_REMAINING_CREDITS_STORAGE_BASE = 'soridraw_suno_remaining_credits';
+5646:   const SUNO_REMAINING_CREDITS_UPDATED_AT_STORAGE_BASE = 'soridraw_suno_remaining_credits_updated_at';
+5647:   const SUNO_PENDING_CREDIT_TRACK_IDS_STORAGE_BASE = 'soridraw_suno_pending_credit_track_ids';
+5648:   const getScopedAppStorageKey = (base: string) => getUserScopedStorageKey(base, user?.uid);
+5649: 
+5650:   const [sunoLibrarySignal, setSunoLibrarySignalState] = useState<'generating' | 'completed' | null>(() => {
+5651:     try {
+5652:       const saved = localStorage.getItem(SUNO_LIBRARY_SIGNAL_KEY);
+5653:       return saved === 'generating' || saved === 'completed' ? saved : null;
+5654:     } catch {
+5655:       return null;
+5656:     }
+5657:   });
+5658: 
+5659:   const [sunoLibrarySignalStartedAt, setSunoLibrarySignalStartedAt] = useState<number | null>(() => {
+5660:     try {
+5661:       const saved = Number(localStorage.getItem(SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY) || '');
+5662:       return Number.isFinite(saved) && saved > 0 ? saved : null;
+5663:     } catch {
+5664:       return null;
+5665:     }
+5666:   });
+5667: 
+5668: 
+5669:   const cachedNavigationVisibility = readFirestoreReadCache<NavigationVisibilitySettings>(
+5670:     FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
+5671:     FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
+5672:   );
+5673:   const cachedGlobalLyricClicheGuard = readFirestoreReadCache<LyricClicheGuardSettings>(
+5674:     FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
+5675:     FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
+5676:   );
+5677:   const [navigationVisibilitySettings, setNavigationVisibilitySettings] = useState<NavigationVisibilitySettings>(() =>
+5678:     cachedNavigationVisibility?.data || readStoredNavigationVisibilitySettings(),
+5679:   );
+5680:   const menuVisibility = navigationVisibilitySettings.menuVisibility;
+5681:   const menuAdminOnly = navigationVisibilitySettings.menuAdminOnly;
+5682:   const [globalLyricClicheGuard, setGlobalLyricClicheGuard] = useState<LyricClicheGuardSettings>(() =>
+5683:     cachedGlobalLyricClicheGuard?.data || { hardBanTerms: [], softBanTerms: [] },
+5684:   );
+5685:   const [userLyricClicheGuard, setUserLyricClicheGuard] = useState<LyricClicheGuardSettings | null>(null);
+5686:   const [isGlobalLyricClicheGuardReady, setIsGlobalLyricClicheGuardReady] = useState(Boolean(cachedGlobalLyricClicheGuard));
+5687:   const [isUserLyricClicheGuardReady, setIsUserLyricClicheGuardReady] = useState(false);
+5688:   const isLyricClicheGuardReady = isGlobalLyricClicheGuardReady && isUserLyricClicheGuardReady;
+5689: 
+5690:   useEffect(() => {
+5691:     if (location.pathname !== '/studio') return;
+5692:     let isMounted = true;
+5693: 
+5694:     const loadGlobalLyricClicheGuard = async (force = false) => {
+5695:       const cached = readFirestoreReadCache<LyricClicheGuardSettings>(
+5696:         FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
+5697:         FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
+5698:       );
+5699:       if (cached?.data) {
+5700:         setGlobalLyricClicheGuard(cached.data);
+5701:         setIsGlobalLyricClicheGuardReady(true);
+5702:         if (cached.isFresh && !force) return;
+5703:       }
+5704: 
+5705:       try {
+5706:         const snapshot = await getDoc(doc(db, 'app_settings', 'lyric_cliche_guard'));
+5707:         if (!isMounted) return;
+5708:         const data = snapshot.exists() ? snapshot.data() : null;
+5709:         const nextSettings: LyricClicheGuardSettings = {
+5710:           hardBanTerms: Array.isArray(data?.hardBanTerms) ? data.hardBanTerms : [],
+5711:           softBanTerms: Array.isArray(data?.softBanTerms) ? data.softBanTerms : [],
+5712:         };
+5713:         setGlobalLyricClicheGuard(nextSettings);
+5714:         writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, nextSettings);
+5715:       } catch (error) {
+5716:         console.warn('Lyric cliche guard setting read failed. Keeping cached/built-in defaults:', error);
+5717:       } finally {
+5718:         if (isMounted) setIsGlobalLyricClicheGuardReady(true);
+5719:       }
+5720:     };
+5721: 
+5722:     const handleLocalClicheGuardUpdate = (event: Event) => {
+5723:       const detail = (event as CustomEvent<LyricClicheGuardSettings>).detail;
+5724:       if (!detail) return;
+5725:       setGlobalLyricClicheGuard(detail);
+5726:       setIsGlobalLyricClicheGuardReady(true);
+5727:       writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, detail);
+5728:     };
+5729: 
+5730:     window.addEventListener('soridraw:lyric-cliche-guard-updated', handleLocalClicheGuardUpdate as EventListener);
+5731:     void loadGlobalLyricClicheGuard();
+5732:     return () => {
+5733:       isMounted = false;
+5734:       window.removeEventListener('soridraw:lyric-cliche-guard-updated', handleLocalClicheGuardUpdate as EventListener);
+5735:     };
+5736:   }, [location.pathname]);
+5737: 
+5738:   useEffect(() => {
+5739:     let isMounted = true;
+5740: 
+5741:     const loadNavigationVisibility = async () => {
+5742:       const cached = readFirestoreReadCache<NavigationVisibilitySettings>(
+5743:         FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
+5744:         FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
+5745:       );
+5746:       if (cached?.data) {
+5747:         const nextCachedSettings = normalizeNavigationVisibilitySettings(
+5748:           cached.data,
+5749:           readStoredNavigationVisibilitySettings(),
+5750:         );
+5751:         setNavigationVisibilitySettings(nextCachedSettings);
+5752:         writeStoredNavigationVisibilitySettings(nextCachedSettings);
+5753:         if (cached.isFresh) return;
+5754:       }
+5755: 
+5756:       try {
+5757:         const snapshot = await getDoc(doc(db, 'app_settings', 'navigation_visibility'));

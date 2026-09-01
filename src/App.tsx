@@ -9087,7 +9087,11 @@ const toggleCycleVariantSelection = (
         if (shouldVerifyMusicNoteBundle) {
           unsubMusicNoteBundle = subscribeListBundle('musicNote', currentUser.uid, {
             onData: (bundle, meta) => {
-              musicNoteBundleActiveUids.add(currentUser.uid);
+              // 1009 — this bundle subscription is a one-shot bootstrap read, not a live mirror.
+              // Keep it inactive after hydration so a plain save/unsave does not rewrite the
+              // server list-cache document. Cross-device changes still use the 901 version
+              // signal + updatedAtMs delta query, so data safety/sync stays intact.
+              musicNoteBundleActiveUids.delete(currentUser.uid);
               musicNoteFreshBootstrapUids.delete(currentUser.uid);
               if (bundle.deletedIds.length > 0) {
                 rememberFavoriteDeletedTombstones(currentUser.uid, bundle.deletedIds);

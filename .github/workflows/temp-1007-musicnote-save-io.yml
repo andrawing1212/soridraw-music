@@ -47,7 +47,7 @@ jobs:
           # Save still performs exactly one favorite document write plus the existing
           # user sync/count write; no new write path was added.
           save_i=s.index('const createdAtMs = Date.now();', j)
-          save_j=s.index("showToast('보관함에 저장되었습니다.')", save_i)
+          save_j=s.index("showToast('저장되었습니다.')", save_i)
           save=s[save_i:save_j]
           assert save.count("addDoc(collection(db, 'favorites')") == 1
           assert save.count("updateDoc(doc(db, 'users', user.uid)") == 1

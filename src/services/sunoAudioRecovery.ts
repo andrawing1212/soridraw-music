@@ -1,4 +1,4 @@
-import { auth } from '../firebase';
+import { auth, getFirebaseAppCheckToken } from '../firebase';
 
 const SUNO_STATUS_ENDPOINT = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
 
@@ -167,12 +167,16 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
   const promise = (async () => {
     try {
       const token = await user.getIdToken();
+      const appCheckToken = await getFirebaseAppCheckToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      };
+      if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
+
       const response = await fetch(SUNO_STATUS_ENDPOINT, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify({ trackId: context.trackId, taskId: context.taskId }),
       });
 

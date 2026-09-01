@@ -7482,10 +7482,10 @@ function App() {
     const rememberPointer = (event: PointerEvent) => {
       studioDescriptionPointerRef.current = { x: event.clientX, y: event.clientY };
     };
-    window.addEventListener('pointermove', rememberPointer, { capture: true, passive: true });
+    window.addEventListener('pointerover', rememberPointer, { capture: true, passive: true });
     window.addEventListener('pointerdown', rememberPointer, { capture: true, passive: true });
     return () => {
-      window.removeEventListener('pointermove', rememberPointer, true);
+      window.removeEventListener('pointerover', rememberPointer, { capture: true });
       window.removeEventListener('pointerdown', rememberPointer, true);
     };
   }, []);

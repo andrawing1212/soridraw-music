@@ -1043,24 +1043,23 @@ export default function LiteStudioSplitWorkspace({
       }
 
       if (purePaneHybridLive) {
-        // Preserve the proven Galaxy Tab containment marker even though Hybrid
-        // no longer runs the full content-responsive publisher. This is only a
-        // pair of already-known-width threshold comparisons; PC fine-pointer
-        // dragging does not enter this branch.
-        const touchLikePointer = activePointerTypeRef.current === 'touch'
-          || activePointerTypeRef.current === 'pen'
-          || (!activePointerTypeRef.current && !finePointerFastPathRef.current);
-        if (touchLikePointer) {
-          const syncHybridTabletFastPath = (pane: HTMLElement, paneWidth: number) => {
-            const shouldBeActive = paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
-            const isActive = pane.dataset.soridrawPaneTabletFastpath === 'true';
-            if (shouldBeActive === isActive) return;
-            if (shouldBeActive) pane.dataset.soridrawPaneTabletFastpath = 'true';
-            else delete pane.dataset.soridrawPaneTabletFastpath;
-          };
-          syncHybridTabletFastPath(builder, builderWidth);
-          syncHybridTabletFastPath(result, resultWidth);
-        }
+        // SORIDRAW_1001_SPLIT_DESKTOP_TABLET_CONTAINMENT
+        // The same 661~1080px pane band is expensive whether the pointer is touch,
+        // pen, or a desktop mouse. Legacy already used this containment for fine
+        // pointers; Pure Pane Hybrid only enabled it for touch-like input, leaving
+        // desktop Chrome to reflow the full Music Note/Library tree every frame.
+        // Reuse the existing drag-only CSS containment for every pointer type.
+        // This changes only a threshold dataset flag; there is no extra DOM read,
+        // observer, React state update, or resting-layout/design change.
+        const syncHybridTabletFastPath = (pane: HTMLElement, paneWidth: number) => {
+          const shouldBeActive = paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
+          const isActive = pane.dataset.soridrawPaneTabletFastpath === 'true';
+          if (shouldBeActive === isActive) return;
+          if (shouldBeActive) pane.dataset.soridrawPaneTabletFastpath = 'true';
+          else delete pane.dataset.soridrawPaneTabletFastpath;
+        };
+        syncHybridTabletFastPath(builder, builderWidth);
+        syncHybridTabletFastPath(result, resultWidth);
       }
 
       if (purePaneResponsiveLive || contentLeftFreezeLive || contentRightFreezeLive || contentFreezeLive) {

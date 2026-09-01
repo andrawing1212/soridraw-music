@@ -166,6 +166,18 @@ const safeNumber = (value: unknown) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
+// SORIDRAW_1001_PRESENCE_PERMISSION_STORM_GUARD
+// Realtime Database rules are configuration, not a transient network condition.
+// A permission-denied response must not create a 5-second retry loop that keeps
+// allocating promises/log entries and sending writes for as long as the app is open.
+const isPermissionDeniedError = (error: unknown) => {
+  const code = String((error as any)?.code || '').toUpperCase();
+  const message = String((error as any)?.message || error || '').toUpperCase();
+  return code.includes('PERMISSION_DENIED')
+    || message.includes('PERMISSION_DENIED')
+    || message.includes('PERMISSION DENIED');
+};
+
 export const startUserPresence = (uid: string, options: PresenceOptions = {}): PresenceController => {
   if (!uid || typeof window === 'undefined' || typeof document === 'undefined') {
     return { stop: async () => undefined, markActivity: () => undefined };
@@ -196,6 +208,10 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
   let connectedUnsubscribe: Unsubscribe | null = null;
   let checkTimer: number | null = null;
   let connectionSetupRetryTimer: number | null = null;
+  let presencePermissionDenied = false;
+  let devicePresenceDenied = false;
+  let devicePermissionWarningLogged = false;
+  let presencePermissionWarningLogged = false;
 
   const storedActivityAt = safeNumber(safeStorageGet(activityKey));
   const authLastSignInAt = safeNumber(options.authLastSignInAt);
@@ -213,7 +229,7 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
   };
 
   const writeSession = async (force = false) => {
-    if (stopped || !connected) return;
+    if (stopped || !connected || presencePermissionDenied) return;
     const now = Date.now();
     const nextState = getDesiredState(now);
     const stateChanged = currentState !== nextState;
@@ -233,15 +249,29 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
       lastActivityAt,
       updatedAt: serverTimestamp(),
     });
-    await update(deviceRef, {
-      deviceId,
-      label: deviceInfo.label,
-      platform: deviceInfo.platform,
-      browser: deviceInfo.browser,
-      deviceType: deviceInfo.deviceType,
-      lastActivityAt,
-      updatedAt: serverTimestamp(),
-    });
+    if (!devicePresenceDenied) {
+      try {
+        await update(deviceRef, {
+          deviceId,
+          label: deviceInfo.label,
+          platform: deviceInfo.platform,
+          browser: deviceInfo.browser,
+          deviceType: deviceInfo.deviceType,
+          lastActivityAt,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (error) {
+        if (isPermissionDeniedError(error)) {
+          devicePresenceDenied = true;
+          if (!devicePermissionWarningLogged) {
+            devicePermissionWarningLogged = true;
+            console.warn('[Presence] device history permission denied; device writes are disabled for this session.');
+          }
+        } else {
+          console.warn('[Presence] device history sync failed:', error);
+        }
+      }
+    }
     currentState = nextState;
     lastServerWriteAt = now;
     lastSyncedActivityAt = lastActivityAt;
@@ -328,7 +358,7 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
   };
 
   const scheduleConnectionSetupRetry = () => {
-    if (stopped || !connected || connectionSetupRetryTimer !== null) return;
+    if (stopped || !connected || presencePermissionDenied || connectionSetupRetryTimer !== null) return;
     connectionSetupRetryTimer = window.setTimeout(() => {
       connectionSetupRetryTimer = null;
       void setupConnection();
@@ -336,7 +366,7 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
   };
 
   const setupConnection = async () => {
-    if (stopped || !connected) return;
+    if (stopped || !connected || presencePermissionDenied) return;
     clearConnectionSetupRetry();
     try {
       // Register stale-session cleanup before announcing this tab as online.
@@ -344,10 +374,20 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
       await writeSession(true);
       // Device history is kept separately from live tab sessions so Chrome and Edge
       // on the same computer remain visible as separate browser environments.
-      try {
-        await onDisconnect(deviceLastSeenRef).set(serverTimestamp());
-      } catch (deviceLastSeenError) {
-        console.warn('[Presence] device lastSeen onDisconnect setup failed:', deviceLastSeenError);
+      if (!devicePresenceDenied) {
+        try {
+          await onDisconnect(deviceLastSeenRef).set(serverTimestamp());
+        } catch (deviceLastSeenError) {
+          if (isPermissionDeniedError(deviceLastSeenError)) {
+            devicePresenceDenied = true;
+            if (!devicePermissionWarningLogged) {
+              devicePermissionWarningLogged = true;
+              console.warn('[Presence] device history permission denied; device writes are disabled for this session.');
+            }
+          } else {
+            console.warn('[Presence] device lastSeen onDisconnect setup failed:', deviceLastSeenError);
+          }
+        }
       }
       // lastSeen registration is useful, but must not block the live session record.
       try {
@@ -357,6 +397,21 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
       }
     } catch (error: any) {
       currentState = null;
+      if (isPermissionDeniedError(error)) {
+        presencePermissionDenied = true;
+        clearConnectionSetupRetry();
+        if (!presencePermissionWarningLogged) {
+          presencePermissionWarningLogged = true;
+          console.warn('[Presence] permission denied; automatic presence retries are paused until reload.');
+        }
+        emitPresenceDiagnostic({
+          uid,
+          status: 'error',
+          message: '접속 상태 저장 권한이 거부되어 반복 재시도를 중지했습니다.',
+          updatedAt: Date.now(),
+        });
+        return;
+      }
       console.warn('[Presence] connection setup failed:', error);
       emitPresenceDiagnostic({
         uid,
@@ -400,7 +455,15 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
       // Do not cancel onDisconnect first: if Auth changes during cleanup, the
       // server-side disconnect hook must remain available as the fallback.
       await remove(sessionRef);
-      await update(deviceRef, { lastSeenAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      if (!devicePresenceDenied) {
+        try {
+          await update(deviceRef, { lastSeenAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        } catch (deviceCleanupError) {
+          if (!isPermissionDeniedError(deviceCleanupError)) {
+            console.warn('[Presence] device cleanup failed:', deviceCleanupError);
+          }
+        }
+      }
       await set(lastSeenRef, serverTimestamp());
       explicitCleanupSucceeded = true;
     } catch (error) {

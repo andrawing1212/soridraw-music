@@ -1380,3 +1380,74 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
     animation-play-state: paused !important;
   }
 }
+
+
+/* 1005 — wide-PC drag + native-resize containment.
+ * The 661~1080 tablet fast-path already proved these boundaries safe.
+ * Apply the same browser-native containment to the expensive Studio menu
+ * cards and heavy Music Note/Library region roots for the duration of a
+ * drag/OS-window resize only. Visible content still reflows at its real
+ * width; off-screen subtrees can be skipped and reflow cannot cascade
+ * through the whole Studio frame. No resting style is changed. */
+@media (min-width: 1100px) {
+  html.soridraw-lite-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging .soridraw-studio-menu-card,
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace .soridraw-studio-menu-card {
+    contain: layout style paint !important;
+    content-visibility: auto !important;
+    contain-intrinsic-size: auto 220px !important;
+  }
+
+  html.soridraw-lite-split-dragging[data-soridraw-theme="studio-black"][data-soridraw-lite-workspace="music-note"]
+  .soridraw-lite-studio-split-workspace.is-dragging :is(
+    .soridraw-studio-main,
+    .soridraw-responsive-content-page,
+    .soridraw-studio-result-content,
+    .soridraw-musicnote-region-top,
+    .soridraw-perf-layout-region-list,
+    .soridraw-perf-layout-region-group
+  ),
+  html.soridraw-lite-split-dragging[data-soridraw-theme="studio-black"][data-soridraw-lite-workspace="library"]
+  .soridraw-lite-studio-split-workspace.is-dragging :is(
+    .soridraw-studio-main,
+    .soridraw-responsive-content-page,
+    .soridraw-studio-result-content,
+    .soridraw-library-region-top,
+    .soridraw-perf-layout-region-list,
+    .soridraw-perf-layout-region-group
+  ),
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-lite-workspace="music-note"]
+  .soridraw-lite-studio-split-workspace :is(
+    .soridraw-studio-main,
+    .soridraw-responsive-content-page,
+    .soridraw-studio-result-content,
+    .soridraw-musicnote-region-top,
+    .soridraw-perf-layout-region-list,
+    .soridraw-perf-layout-region-group
+  ),
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-lite-workspace="library"]
+  .soridraw-lite-studio-split-workspace :is(
+    .soridraw-studio-main,
+    .soridraw-responsive-content-page,
+    .soridraw-studio-result-content,
+    .soridraw-library-region-top,
+    .soridraw-perf-layout-region-list,
+    .soridraw-perf-layout-region-group
+  ) {
+    contain: layout style !important;
+  }
+
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace :is(
+    .soridraw-studio-menu-card,
+    .soridraw-musicnote-song-card,
+    .soridraw-library-playlist-row,
+    .soridraw-library-workspace-track-row,
+    .soridraw-result-prompt-card,
+    .soridraw-result-lyrics-card
+  ) {
+    transition: none !important;
+    animation-play-state: paused !important;
+  }
+}

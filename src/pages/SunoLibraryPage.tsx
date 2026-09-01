@@ -1856,6 +1856,22 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   useEffect(() => () => {
     if (playlistPressTimerRef.current) window.clearTimeout(playlistPressTimerRef.current);
+    playlistPressTimerRef.current = null;
+    // If Library unmounts while a folder long-press drag is active, remove the
+    // window-level handlers too. Previously only the timer/body class was cleaned,
+    // allowing a real listener leak on route changes during an active drag.
+    const drag = playlistDragRef.current;
+    if (drag?.windowMoveHandler) window.removeEventListener('pointermove', drag.windowMoveHandler);
+    if (drag?.windowEndHandler) {
+      window.removeEventListener('pointerup', drag.windowEndHandler);
+      window.removeEventListener('pointercancel', drag.windowEndHandler);
+    }
+    if (drag?.windowTouchMoveHandler) window.removeEventListener('touchmove', drag.windowTouchMoveHandler);
+    if (drag?.windowTouchEndHandler) {
+      window.removeEventListener('touchend', drag.windowTouchEndHandler);
+      window.removeEventListener('touchcancel', drag.windowTouchEndHandler);
+    }
+    playlistDragRef.current = null;
     document.body.classList.remove('soridraw-folder-dragging');
   }, []);
 
@@ -2608,28 +2624,62 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
-  const getPlayableUrlFromSource = (source: any) => {
+  const getCompletedSunoRescueUrl = (source: any, preferredAudioId = '') => {
     if (!source || typeof source !== 'object') return '';
+    const rescueMap = source.audioRescue;
+    if (!rescueMap || typeof rescueMap !== 'object') return '';
+
+    const entries = Object.values(rescueMap).filter((entry: any) => entry && typeof entry === 'object') as any[];
+    const normalizedAudioId = String(preferredAudioId || '').trim();
+    const eligible = normalizedAudioId
+      ? entries.filter((entry: any) => String(entry?.audioId || entry?.audio_id || '').trim() === normalizedAudioId)
+      : entries.length === 1 ? entries : [];
+
+    for (const entry of eligible) {
+      const status = String(entry?.status || '').trim().toLowerCase();
+      if (status && !['completed', 'success', 'complete'].includes(status)) continue;
+      const url = String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim();
+      if (url) return url;
+    }
+    return '';
+  };
+
+  const getPlayableUrlFromSource = (source: any, preferredAudioId = '') => {
+    if (!source || typeof source !== 'object') return '';
+
+    // A completed rescue is a durable file that has already been paid for and
+    // stored. Prefer it over an expired provider MP3 URL when the row/audio id
+    // matches. This is metadata-only reuse; no conversion/generation call occurs.
+    const completedRescueUrl = getCompletedSunoRescueUrl(source, preferredAudioId);
+    if (completedRescueUrl) return completedRescueUrl;
+
     const candidates = [
       source.audioUrl,
       source.streamAudioUrl,
       source.audio_url,
       source.stream_audio_url,
       source.url,
-      source.sourceAudioUrl,
-      source.source_audio_url,
-      source.sourceStreamAudioUrl,
-      source.source_stream_audio_url,
+      source.downloadUrl,
+      source.download_url,
+      source.playUrl,
+      source.play_url,
+      source.mediaUrl,
+      source.media_url,
+      source.mp3Url,
+      source.mp3_url,
     ];
     for (const candidate of candidates) {
-      const normalized = typeof candidate === 'string' ? candidate.trim() : '';
+      const normalized = String(candidate || '').trim();
       if (normalized) return normalized;
     }
     return '';
   };
 
   const getAudioUrl = (item: any, group: any) => {
-    return getPlayableUrlFromSource(item) || getPlayableUrlFromSource(group) || '';
+    const preferredAudioId = String(item?.id || item?.audioId || item?.audio_id || '').trim();
+    return getPlayableUrlFromSource(item, preferredAudioId)
+      || getPlayableUrlFromSource(group, preferredAudioId)
+      || '';
   };
 
   const getTitle = (item: any, group: any, idx: number) => {
@@ -3727,7 +3777,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         </span>
       );
     }
-    switch (group.status) {
+    const rescueEntries = Object.values(group?.audioRescue || {}) as any[];
+    const hasCompletedRescue = rescueEntries.some((entry: any) => {
+      const rescueStatus = String(entry?.status || '').trim().toLowerCase();
+      const rescueUrl = String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim();
+      return Boolean(rescueUrl) && (!rescueStatus || ['completed', 'success', 'complete'].includes(rescueStatus));
+    });
+    const normalizedDisplayStatus = String(group.status || '').trim().toLowerCase();
+    const displayStatus = hasCompletedRescue
+      && ['processing', 'submitted', 'pending', 'generating', 'queued'].includes(normalizedDisplayStatus)
+      ? 'completed'
+      : normalizedDisplayStatus;
+    switch (displayStatus) {
       case 'failed':
       case 'cancelled':
       case 'canceled':
@@ -7075,8 +7136,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       const isFailed = ['failed', 'cancelled', 'canceled'].includes(normalizedGroupStatus);
                       const isCompletedStatus = ['completed', 'success', 'complete'].includes(normalizedGroupStatus);
                       const isPendingStatus = ['processing', 'submitted', 'pending', 'generating', 'queued'].includes(normalizedGroupStatus);
-                      const isCompleted = Boolean(audioUrl && (isCompletedStatus || hasValidDuration));
-                      const canRecoverPlaybackUrl = !isSharedView && Boolean(group.taskId) && (isCompletedStatus || hasValidDuration);
+                      const rescueAudioId = String(item?.id || item?.audioId || item?.audio_id || '').trim();
+                      const completedRescueUrl = getCompletedSunoRescueUrl(group, rescueAudioId);
+                      const hasCompletedRescue = Boolean(completedRescueUrl);
+                      const isCompleted = Boolean(audioUrl && (isCompletedStatus || hasValidDuration || hasCompletedRescue));
+                      const canRecoverPlaybackUrl = !isSharedView && Boolean(group.taskId) && (isCompletedStatus || hasValidDuration || hasCompletedRescue);
                       const canPlayOrRecover = Boolean(audioUrl) || canRecoverPlaybackUrl;
                       const isCompletedWithoutAudio = isCompletedStatus && !audioUrl;
                       const isStalePending = !isFailed && isPendingStatus && !audioUrl && isTrackPastAutoCheckWindow(group);

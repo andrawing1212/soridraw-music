@@ -1288,8 +1288,14 @@ export default function LiteStudioSplitWorkspace({
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
     if (!layout) return;
-    refreshIsolationHeight();
-    syncModalHost();
+    const nativeWindowResize = document.documentElement.classList.contains('soridraw-window-resizing');
+    // 1005 — During a native window resize, width geometry is the only live owner.
+    // Isolation height/modal-host reconciliation is deferred to the existing resize-end
+    // refresh, removing two unrelated layout paths from every resize animation frame.
+    if (!nativeWindowResize) {
+      refreshIsolationHeight();
+      syncModalHost();
+    }
     // 775: refresh is outside the drag hot path. Keep the tablet result scroll
     // shell extended through Studio main's 18px right gutter before any direct
     // geometry write runs, so the native scrollbar sits on the outer divider.
@@ -1297,12 +1303,17 @@ export default function LiteStudioSplitWorkspace({
       dragResultRightRef.current = '-18px';
     }
     const rect = layout.getBoundingClientRect();
-    const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
+    // The center layout's left edge is already the live rail boundary. Avoid a
+    // second forced layout read from the sticky rail on every native resize frame;
+    // the resting refresh still captures the exact rail rect once.
+    const leftRail = nativeWindowResize ? null : document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
     const leftRailRect = leftRail?.getBoundingClientRect();
     metricsRef.current = {
       left: rect.left,
       width: Math.max(1, rect.width),
-      leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
+      leftRailEdge: nativeWindowResize
+        ? rect.left
+        : leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
 
     const nextProfile = getSplitProfile();
@@ -1313,12 +1324,12 @@ export default function LiteStudioSplitWorkspace({
     const appliedPercent = applyPercent(percentRef.current, false);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? metricsRef.current.width : Math.round(metricsRef.current.width * (appliedPercent / 100));
     const resultWidth = Math.max(0, metricsRef.current.width - builderWidth);
-    // 1004 — Window resize already runs through one rAF owner. Do not force a
-    // second pane-width publication on every native resize frame; CSS/container
-    // width handles continuous geometry and the final resting refresh still
-    // performs the forced synchronization once after resize-end.
-    const nativeWindowResize = document.documentElement.classList.contains('soridraw-window-resizing');
-    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, !nativeWindowResize);
+    // 1005 — applyPercent() already publishes the live pane contract once.
+    // Do not publish the same widths a second time during native resize. The
+    // resize-end refresh below still performs one forced resting synchronization.
+    if (!nativeWindowResize) {
+      broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
+    }
     const splitterLeft = metricsRef.current.left + builderWidth;
     commitRootMeasurements(builderWidth, splitterLeft);
 

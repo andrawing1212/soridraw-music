@@ -83,7 +83,6 @@ const getTrackContext = (track: any) => {
   const rawIndex = track?.index ?? track?.subTrackIndex ?? track?.sourceSubTrackIndex ?? parent?.subTrackIndex ?? parent?.sourceSubTrackIndex;
   const parsedIndex = Number(rawIndex);
   const index = Number.isFinite(parsedIndex) && parsedIndex >= 0 ? parsedIndex : 0;
-  const currentUrl = firstText(track?.url, track?.audioUrl, track?.streamAudioUrl, ...getAudioCandidates(parent));
   const currentSubItem = Array.isArray(parent?.sunoData) ? parent.sunoData[index] : null;
   const subTrackId = firstText(
     track?.subTrackId,
@@ -92,6 +91,13 @@ const getTrackContext = (track: any) => {
     currentSubItem?.id,
     currentSubItem?.audioId,
   );
+  const rescueMap = parent?.audioRescue && typeof parent.audioRescue === 'object' ? parent.audioRescue : {};
+  const rescueEntry = rescueMap?.[String(index)] || {};
+  const rescueStatus = firstText(rescueEntry?.status).toLowerCase();
+  const existingRescueUrl = (!rescueStatus || ['completed', 'success', 'complete'].includes(rescueStatus))
+    ? firstText(rescueEntry?.audioUrl, rescueEntry?.audio_url, rescueEntry?.url)
+    : '';
+  const currentUrl = firstText(existingRescueUrl, track?.url, track?.audioUrl, track?.streamAudioUrl, ...getAudioCandidates(parent));
   return { parent, trackId, taskId, index, currentUrl, subTrackId };
 };
 

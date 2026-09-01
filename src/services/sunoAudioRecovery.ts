@@ -1,6 +1,7 @@
 import { auth, getFirebaseAppCheckToken } from '../firebase';
 
 const SUNO_STATUS_ENDPOINT = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
+const SUNO_REUSE_RESCUE_ENDPOINT = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net/rescueSunoTrackAudio';
 
 type RecoveryResult = {
   audioUrl: string;
@@ -19,6 +20,7 @@ type DownloadRecoveryResult = {
 };
 
 const recoveryInFlight = new Map<string, Promise<RecoveryResult | null>>();
+const rescueReuseInFlight = new Map<string, Promise<RecoveryResult | null>>();
 
 const toText = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 
@@ -100,6 +102,14 @@ const chooseRecoveredUrl = (payload: any, track: any, failedUrl = '') => {
   const verified = Array.isArray(payload?.audioUrls)
     ? payload.audioUrls.map(toText).filter(Boolean)
     : [];
+  const validationStatus = firstText(payload?.audioValidationStatus, payload?.data?.audioValidationStatus).toLowerCase();
+
+  // SORIDRAW_SUNO_VERIFIED_MP3_ONLY_999
+  // New getSunoTrackStatus responses already byte-probe every provider URL. When that
+  // validation explicitly says the provider audio is empty/missing, never fall back
+  // to the raw sunoData URL again: those raw URLs are exactly the expired 403/404/0-byte
+  // URLs that caused the old-track recovery loop.
+  if (validationStatus && validationStatus !== 'verified') return '';
 
   let matchedItem: any = null;
   if (subTrackId) {
@@ -113,19 +123,48 @@ const chooseRecoveredUrl = (payload: any, track: any, failedUrl = '') => {
     if (text && !ordered.includes(text)) ordered.push(text);
   };
 
-  if (verified.length > 0 && sunoData.length > 0 && verified.length === sunoData.length) {
-    push(verified[index]);
+  if (validationStatus === 'verified') {
+    // Prefer the exact indexed URL only when the backend could preserve one-to-one order.
+    if (verified.length > 0 && sunoData.length > 0 && verified.length === sunoData.length) {
+      push(verified[index]);
+    }
+
+    // For a matched sub-track, accept only candidates that the backend byte probe verified.
+    getAudioCandidates(matchedItem).forEach((candidate) => {
+      if (verified.includes(candidate)) push(candidate);
+    });
+
+    if (index === 0) {
+      push(payload?.audioUrl);
+      push(payload?.streamAudioUrl);
+    }
+    verified.forEach(push);
+  } else {
+    // Backward compatibility for an older Function response that predates audioValidationStatus.
+    if (verified.length > 0 && sunoData.length > 0 && verified.length === sunoData.length) {
+      push(verified[index]);
+    }
+    getAudioCandidates(matchedItem).forEach(push);
+    if (index === 0) {
+      push(payload?.audioUrl);
+      push(payload?.streamAudioUrl);
+    }
+    verified.forEach(push);
+    sunoData.forEach((item: any) => getAudioCandidates(item).forEach(push));
   }
-  getAudioCandidates(matchedItem).forEach(push);
-  if (index === 0) {
-    push(payload?.audioUrl);
-    push(payload?.streamAudioUrl);
-  }
-  verified.forEach(push);
-  sunoData.forEach((item: any) => getAudioCandidates(item).forEach(push));
 
   const normalizedFailed = toText(failedUrl);
   return ordered.find((url) => url !== normalizedFailed) || ordered[0] || '';
+};
+
+const dispatchRecoveredAudio = (result: RecoveryResult) => {
+  try {
+    window.dispatchEvent(new CustomEvent('soridraw:suno-audio-url-recovered', {
+      detail: result,
+    }));
+  } catch {
+    // UI event sync is best-effort.
+  }
 };
 
 export const applyRecoveredSunoAudioUrl = (track: any, result: RecoveryResult | null) => {
@@ -153,6 +192,75 @@ export const applyRecoveredSunoAudioUrl = (track: any, result: RecoveryResult | 
     streamAudioUrl: url,
     parent,
   };
+};
+
+// Reuse-only means this client path can consume an already completed/stored WAV rescue,
+// but it cannot start /api/v1/wav/generate and therefore cannot spend new Music API credits.
+export const recoverExistingSunoWav = async (track: any): Promise<RecoveryResult | null> => {
+  const user = auth.currentUser;
+  const context = getTrackContext(track);
+  if (!user || !context.trackId || !context.taskId) return null;
+
+  const key = `${user.uid}:${context.trackId}:${context.taskId}:${context.index}`;
+  const existing = rescueReuseInFlight.get(key);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    try {
+      const token = await user.getIdToken();
+      const appCheckToken = await getFirebaseAppCheckToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      };
+      if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
+
+      const body: Record<string, unknown> = {
+        trackId: context.trackId,
+        taskId: context.taskId,
+        index: context.index,
+        reuseOnly: true,
+      };
+      if (context.subTrackId) body.audioId = context.subTrackId;
+
+      const response = await fetch(SUNO_REUSE_RESCUE_ENDPOINT, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      let payload: any = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+
+      // 404 is the expected zero-credit result when this track has never been WAV-rescued.
+      if (!response.ok || !payload?.ok) return null;
+      const audioUrl = firstText(payload?.audioUrl, payload?.data?.audioUrl);
+      if (!audioUrl) return null;
+
+      const result: RecoveryResult = {
+        audioUrl,
+        trackId: context.trackId,
+        taskId: context.taskId,
+        index: context.index,
+        sunoData: null,
+        raw: payload,
+      };
+      dispatchRecoveredAudio(result);
+      return result;
+    } catch (error) {
+      console.warn('Existing Suno WAV rescue lookup failed:', error);
+      return null;
+    } finally {
+      rescueReuseInFlight.delete(key);
+    }
+  })();
+
+  rescueReuseInFlight.set(key, promise);
+  return promise;
 };
 
 export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: string }): Promise<RecoveryResult | null> => {
@@ -189,7 +297,11 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
       if (!response.ok || !payload) return null;
 
       const audioUrl = chooseRecoveredUrl(payload, track, options?.failedUrl || context.currentUrl);
-      if (!audioUrl) return null;
+      if (!audioUrl) {
+        // The live Music API may still report stale MP3 metadata after the files have expired.
+        // Only reuse an already-created WAV rescue here; never auto-spend new credits.
+        return await recoverExistingSunoWav(track);
+      }
 
       const result: RecoveryResult = {
         audioUrl,
@@ -200,14 +312,7 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
         raw: payload,
       };
 
-      try {
-        window.dispatchEvent(new CustomEvent('soridraw:suno-audio-url-recovered', {
-          detail: result,
-        }));
-      } catch {
-        // UI event sync is best-effort; Firestore is already refreshed by the Function.
-      }
-
+      dispatchRecoveredAudio(result);
       return result;
     } catch (error) {
       console.warn('Suno audio URL recovery failed:', error);

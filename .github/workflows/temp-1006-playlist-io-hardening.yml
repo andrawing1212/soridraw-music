@@ -59,3 +59,4 @@ jobs:
           git add src/components/GlobalPlayer.tsx src/services/playlistService.ts
           git commit -m "fix(preview): bound playlist save reads to constant cost"
           git push origin HEAD:preview-perf-memory-wav-stability
+      # rerun after 1006 TypeScript cast fix

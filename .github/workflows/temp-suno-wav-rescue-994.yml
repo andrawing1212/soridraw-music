@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/temp-suno-wav-rescue-994.yml'
       - 'functions/scripts/apply-suno-wav-rescue-994.cjs'
+      - 'functions/scripts/apply-suno-wav-rescue-reuse-only-995.cjs'
       - 'functions/package.json'
 
 concurrency:
@@ -43,13 +44,15 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'SORIDRAW_SUNO_WAV_RESCUE_994' functions/src/index.ts
+          grep -q 'SORIDRAW_SUNO_WAV_RESCUE_REUSE_ONLY_995' functions/src/index.ts
+          grep -q 'SUNO_RESCUE_EXISTING_TASK_PENDING' functions/src/index.ts
           grep -q 'export const rescueSunoTrackAudio = onRequest' functions/src/securedIndex.ts
           grep -q 'export const sunoWavRescueCallback = onRequest' functions/src/securedIndex.ts
           grep -q '/api/v1/wav/generate' functions/src/securedIndex.ts
           grep -q '/api/v1/wav/record-info' functions/src/securedIndex.ts
           grep -q 'verifyAppCheckForRequest(req, res,.*rescueSunoTrackAudio' functions/src/securedIndex.ts
           test -f functions/lib/securedIndex.js
-          echo '[994] Functions build contract: PASS'
+          echo '[994/995] Functions build contract + one-paid-attempt guard: PASS'
 
       - name: Authenticate to Firebase backend project
         uses: google-github-actions/auth@v2
@@ -64,7 +67,7 @@ jobs:
             --only functions:rescueSunoTrackAudio,functions:sunoWavRescueCallback \
             --project soridraw-app-866a5 \
             --non-interactive
-          echo '[994] New rescue Functions deploy: PASS'
+          echo '[994/995] Rescue Functions deploy: PASS'
 
       - name: Smoke rescue CORS and callback
         shell: bash
@@ -82,10 +85,11 @@ jobs:
             -H 'Content-Type: application/json' \
             --data '{}' "$callback")"
           test "$callback_status" = '200'
-          echo '[994] Rescue endpoint smoke: PASS'
+          echo '[994/995] Rescue endpoint smoke: PASS'
 
       - name: Result
         run: |
-          echo 'SORIDRAW 994 Suno WAV rescue backend deployed.'
+          echo 'SORIDRAW 994/995 Suno WAV rescue backend deployed.'
           echo 'Only rescueSunoTrackAudio + sunoWavRescueCallback were deployed.'
-          echo 'No existing Function rollback, Rules deploy, data migration, Hosting deploy, main change, or Production deploy.'
+          echo 'Existing rescue tasks cannot start a second paid WAV rescue.'
+          echo 'No Rules deploy, data migration, Hosting deploy, main change, or Production deploy.'

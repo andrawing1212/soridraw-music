@@ -7,34 +7,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Deep inspect pointer listener / portal paths
+      - name: Inspect tooltip and card render lifecycle
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== BRANCH / HEAD ==='
-          git rev-parse --abbrev-ref HEAD
-          git rev-parse HEAD
-          echo '=== Native listener totals by hot page ==='
-          for f in src/App.tsx src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx src/components/studio/StudioSplitWorkspace.tsx src/components/studio/LiteStudioSplitWorkspace.tsx; do
+          echo '=== App tooltip close / placement effects ==='
+          sed -n '8040,8110p' src/App.tsx
+          echo '=== App tooltip render ==='
+          sed -n '18815,18885p' src/App.tsx
+          echo '=== Favorites card render hover area ==='
+          sed -n '6150,6485p' src/pages/FavoritesPage.tsx
+          echo '=== Favorites list map / key / motion context ==='
+          sed -n '6030,6225p' src/pages/FavoritesPage.tsx
+          echo '=== Library card render hover area ==='
+          sed -n '7140,7665p' src/pages/SunoLibraryPage.tsx
+          echo '=== Animation presence / motion counts ==='
+          for f in src/App.tsx src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx; do
             echo "--- $f"
-            printf 'addEventListener='; grep -c 'addEventListener' "$f" || true
-            printf 'removeEventListener='; grep -c 'removeEventListener' "$f" || true
-            printf 'onMouseEnter='; grep -c 'onMouseEnter' "$f" || true
-            printf 'onMouseLeave='; grep -c 'onMouseLeave' "$f" || true
-            printf 'onPointerMove='; grep -c 'onPointerMove' "$f" || true
-            printf 'createPortal='; grep -c 'createPortal' "$f" || true
-            printf '<Portal='; grep -c '<Portal' "$f" || true
-            printf 'StudioCenterModalPortal='; grep -c 'StudioCenterModalPortal' "$f" || true
+            printf 'AnimatePresence='; grep -c 'AnimatePresence' "$f" || true
+            printf 'motion.='; grep -o 'motion\.[A-Za-z]*' "$f" | wc -l || true
+            printf 'key={='; grep -c 'key={' "$f" || true
           done
-          echo '=== Favorites native listener lines ==='
-          grep -nE 'addEventListener|removeEventListener|createPortal|<Portal|StudioCenterModalPortal|onMouseEnter|onMouseLeave|onPointerMove' src/pages/FavoritesPage.tsx | head -n 500 || true
-          echo '=== Library native listener lines ==='
-          grep -nE 'addEventListener|removeEventListener|createPortal|<Portal|StudioCenterModalPortal|onMouseEnter|onMouseLeave|onPointerMove' src/pages/SunoLibraryPage.tsx | head -n 500 || true
-          echo '=== App hoveredItem references ==='
-          grep -nE 'hoveredItem|setHoveredItem|studioDescriptionPointerRef|resolveStudioDescriptionPlacement' src/App.tsx | head -n 260 || true
-          echo '=== React event prop counts Favorites ==='
-          grep -oE 'on[A-Z][A-Za-z]+=' src/pages/FavoritesPage.tsx | sort | uniq -c | sort -nr | head -n 100 || true
-          echo '=== React event prop counts Library ==='
-          grep -oE 'on[A-Z][A-Za-z]+=' src/pages/SunoLibraryPage.tsx | sort | uniq -c | sort -nr | head -n 100 || true
-          echo '=== Portal component definitions / imports ==='
-          grep -RInE 'function Portal|const Portal|createPortal\(' src/App.tsx src/pages src/components | head -n 300 || true
+          echo '=== Stable height use sites ==='
+          grep -RIn 'useStableContentHeight' src/App.tsx src/pages src/components | head -n 200 || true
+          echo '=== per-card Date.now hover IDs ==='
+          grep -nE 'onMouseEnter.*Date\.now|onMouseMove.*setState|onPointerMove.*setState' src/App.tsx src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx | head -n 240 || true

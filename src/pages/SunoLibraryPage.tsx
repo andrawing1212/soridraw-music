@@ -1526,12 +1526,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   }, []);
 
   useEffect(() => {
-    console.log("Shared page browser check:", {
-      userAgent: navigator.userAgent,
-      isKakaoInAppBrowser,
-      isSharePage: isSharedView,
-    });
-
     if (isSharedView && isKakaoInAppBrowser) {
       setShowKakaoWarning(true);
     }

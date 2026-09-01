@@ -68,13 +68,11 @@ if (APP_CHECK_SITE_KEY && shouldInitializeAppCheck && typeof window !== "undefin
 
 export const getFirebaseAppCheckToken = async () => {
   if (!appCheck) {
-    console.info("[Firebase App Check] token status: disabled");
     return "";
   }
   try {
     const result = await getAppCheckToken(appCheck, false);
     const token = result?.token || "";
-    console.info(`[Firebase App Check] token status: ${token ? "available" : "missing"}`);
     return token;
   } catch (error) {
     console.warn("[Firebase App Check] token status: unavailable", error);

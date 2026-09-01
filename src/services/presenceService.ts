@@ -41,6 +41,7 @@ const HEARTBEAT_MS = 10 * 60 * 1000;
 const ACTIVITY_LOCAL_THROTTLE_MS = 15 * 1000;
 const IDLE_LOGOUT_LOCK_MS = 2 * 60 * 1000;
 const CONNECTION_SETUP_RETRY_MS = 5 * 1000;
+const DEVICE_HISTORY_SYNC_ENABLED = false;
 const PRESENCE_DIAGNOSTIC_KEY_PREFIX = 'soridraw_presence_diagnostic_';
 
 const buildSessionId = () => {
@@ -249,7 +250,7 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
       lastActivityAt,
       updatedAt: serverTimestamp(),
     });
-    if (!devicePresenceDenied) {
+    if (DEVICE_HISTORY_SYNC_ENABLED && !devicePresenceDenied) {
       try {
         await update(deviceRef, {
           deviceId,
@@ -374,7 +375,7 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
       await writeSession(true);
       // Device history is kept separately from live tab sessions so Chrome and Edge
       // on the same computer remain visible as separate browser environments.
-      if (!devicePresenceDenied) {
+      if (DEVICE_HISTORY_SYNC_ENABLED && !devicePresenceDenied) {
         try {
           await onDisconnect(deviceLastSeenRef).set(serverTimestamp());
         } catch (deviceLastSeenError) {
@@ -455,7 +456,7 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
       // Do not cancel onDisconnect first: if Auth changes during cleanup, the
       // server-side disconnect hook must remain available as the fallback.
       await remove(sessionRef);
-      if (!devicePresenceDenied) {
+      if (DEVICE_HISTORY_SYNC_ENABLED && !devicePresenceDenied) {
         try {
           await update(deviceRef, { lastSeenAt: serverTimestamp(), updatedAt: serverTimestamp() });
         } catch (deviceCleanupError) {

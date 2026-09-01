@@ -7,24 +7,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect pointer and hover paths
+      - name: Inspect idle pointer paths
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== App hover state references ==='
-          grep -nE 'hoveredItem|setHoveredItem|onHover=' src/App.tsx | head -n 120 || true
-          echo '=== App mouse/pointer handlers ==='
-          grep -nE 'onMouseEnter|onMouseLeave|onMouseMove|onPointerMove|pointermove|mousemove' src/App.tsx | head -n 240 || true
-          echo '=== Studio component mouse/pointer handlers ==='
-          grep -RInE 'onMouseEnter|onMouseLeave|onMouseMove|onPointerMove|addEventListener\(.?(pointermove|mousemove)' src/components/studio src/components/GenreHierarchySelector.tsx | head -n 320 || true
-          echo '=== Hover / transition counts ==='
-          printf 'App onMouseEnter='; grep -c 'onMouseEnter' src/App.tsx || true
-          printf 'App onMouseLeave='; grep -c 'onMouseLeave' src/App.tsx || true
-          printf 'Studio :hover selectors='; grep -RE ':hover' src/components/studio/*.css | wc -l || true
-          printf 'Studio transition refs='; grep -RE 'transition' src/components/studio/*.css | wc -l || true
-          printf 'Studio backdrop-filter refs='; grep -RE 'backdrop-filter' src/components/studio/*.css | wc -l || true
-          printf 'Studio filter refs='; grep -RE '(^|[^-])filter:' src/components/studio/*.css | wc -l || true
-          echo '=== global pointermove listeners ==='
-          grep -RIn "addEventListener('pointermove'\|addEventListener(\"pointermove\"\|addEventListener('mousemove'\|addEventListener(\"mousemove\"" src | head -n 160 || true
-          echo '=== split markers / broad selectors ==='
-          grep -RInE 'soridraw-(lite-)?split-dragging.*\*|body \*|\.is-dragging.*\*' src/components/studio src/index.css | head -n 220 || true
+          echo '=== App pointer tracker + hover setter ==='
+          sed -n '7440,7565p' src/App.tsx
+          echo '=== App document pointer listener around 21916 ==='
+          sed -n '21780,22020p' src/App.tsx
+          echo '=== App document pointer listener around 25731 ==='
+          sed -n '25570,25810p' src/App.tsx
+          echo '=== App mousemove around 26234 ==='
+          sed -n '26180,26265p' src/App.tsx
+          echo '=== Lite Studio pointer handler ==='
+          sed -n '2110,2245p' src/components/studio/LiteStudioSplitWorkspace.tsx
+          echo '=== Library/Favorites window pointer listeners ==='
+          sed -n '6460,6555p' src/pages/SunoLibraryPage.tsx
+          sed -n '5610,5705p' src/pages/FavoritesPage.tsx
+          echo '=== Studio hover CSS high-cost props ==='
+          grep -nE ':hover|backdrop-filter|filter:|box-shadow|transition' src/components/studio/studioLayout.css | head -n 420 || true

@@ -23,6 +23,7 @@ jobs:
           set -euo pipefail
           python3 <<'PY'
           from pathlib import Path
+          import re
 
           def replace_once(text, old, new, label):
               count = text.count(old)
@@ -40,12 +41,14 @@ jobs:
               "window.addEventListener('pointerover', rememberPointer, { capture: true, passive: true });",
               'App pointer add listener',
           )
-          s = replace_once(
-              s,
-              "window.removeEventListener('pointermove', rememberPointer, { capture: true });",
+          s, n = re.subn(
+              r"window\.removeEventListener\('pointermove',\s*rememberPointer(?:,\s*[^;]+)?\);",
               "window.removeEventListener('pointerover', rememberPointer, { capture: true });",
-              'App pointer remove listener',
+              s,
+              count=1,
           )
+          if n != 1:
+              raise SystemExit(f'App pointer remove listener: expected 1 occurrence, found {n}')
           p.write_text(s, encoding='utf-8')
 
           # 2) Idle-only off-screen render budget. This is deliberately disabled

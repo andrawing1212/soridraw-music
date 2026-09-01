@@ -9496,6 +9496,10 @@ const toggleCycleVariantSelection = (
 
     const findServerMatchingFavorites = async (_includeFullScan = false): Promise<any[]> => {
       const matches = new Map<string, any>();
+      // 1007 — Recent-song saves already carry a stable SORIDRAW song id.
+      // Use that exact identity first so a normal save needs only one bounded
+      // server duplicate check instead of chaining favoriteKey + title lookups.
+      const stableSongId = getLiveSoridrawSongId(song);
       const addCandidates = (candidates: any[]) => {
         candidates.forEach((candidate) => {
           if (!candidate?.id) return;
@@ -9518,6 +9522,25 @@ const toggleCycleVariantSelection = (
         } catch (error) {
           console.warn('Exact favorite lookup failed.', error);
         }
+      }
+
+      if (matches.size === 0 && stableSongId) {
+        let stableLookupSucceeded = false;
+        try {
+          const stableSnap = await getDocs(query(
+            collection(db, 'favorites'),
+            where('uid', '==', user.uid),
+            where('soridrawSongId', '==', stableSongId),
+            limit(2),
+          ));
+          stableLookupSucceeded = true;
+          addCandidates(stableSnap.docs.map(mapFavoriteFirestoreDoc));
+        } catch (error) {
+          // Preserve the older bounded identity/title fallback only when the
+          // stable-id query itself could not be completed.
+          console.warn('Favorite stable song id lookup failed; using legacy bounded fallback.', error);
+        }
+        if (stableLookupSucceeded) return Array.from(matches.values());
       }
 
       if (matches.size === 0 && songIdentityKey) {

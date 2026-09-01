@@ -33,7 +33,7 @@ const resolvePlaylistInsertOrder = async (itemsRef: any, itemData: Partial<Playl
   if (duplicate) throw new Error('DUPLICATE');
 
   const tailSnap = await getDocs(query(itemsRef, orderBy('order', 'desc'), limit(1)));
-  const highestOrder = tailSnap.empty ? 0 : Number(tailSnap.docs[0]?.data()?.order || 0);
+  const highestOrder = tailSnap.empty ? 0 : Number((tailSnap.docs[0]?.data() as any)?.order || 0);
   return (Number.isFinite(highestOrder) ? highestOrder : 0) + 1;
 };
 

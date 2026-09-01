@@ -1,0 +1,39 @@
+name: TEMP Inspect Music Note IO V4
+
+on:
+  push:
+    branches: [preview-musicnote-io-v4]
+    paths:
+      - '.github/workflows/temp-inspect-musicnote-io-v4.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview-musicnote-io-v4
+      - name: Inspect focused favorite flow
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('src/App.tsx').read_text(encoding='utf-8')
+          lines=s.splitlines()
+          terms=[
+            'const toggleFavorite = async',
+            'canTrustRecentStudioLocalIdentity',
+            'trustedRecentStudio: true',
+            'buildRecentFavoriteDocumentId',
+            'favoriteSyncSignalUpdatedAt',
+            'const syncMusicNoteIncrementalFromRemoteVersion = useCallback',
+          ]
+          for term in terms:
+            hits=[i for i,l in enumerate(lines,1) if term in l]
+            print(f'===== {term} hits={hits[:8]} =====')
+            for idx in hits[:3]:
+              lo=max(1,idx-40); hi=min(len(lines),idx+90)
+              for n in range(lo,hi+1): print(f'{n}: {lines[n-1]}')
+          PY

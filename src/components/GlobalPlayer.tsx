@@ -9,7 +9,7 @@ import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { auth, db } from '../firebase';
 import { doc, updateDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
-import { ensureDefaultPlaylists, getPlaylistsByType, addPlaylistItem } from '../services/playlistService';
+import { ensureDefaultPlaylists, getPrimaryNormalPlaylist, addPlaylistItem } from '../services/playlistService';
 import { downloadSunoAudioWithRecovery } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
 import SunoTrackDetailModal from './SunoTrackDetailModal';
@@ -744,9 +744,13 @@ export default function GlobalPlayer() {
 
     const group = currentTrack.parent || {};
     try {
-      await ensureDefaultPlaylists(user.uid);
-      const lists = await getPlaylistsByType(user.uid, 'normal');
-      const targetPlaylist = lists.find((p: any) => p?.id && !p?.isFallback) || lists[0];
+      // 1006 — Established users resolve only the one destination playlist.
+      // Default creation remains a one-time fallback for a genuinely empty account.
+      let targetPlaylist = await getPrimaryNormalPlaylist(user.uid);
+      if (!targetPlaylist?.id) {
+        await ensureDefaultPlaylists(user.uid);
+        targetPlaylist = await getPrimaryNormalPlaylist(user.uid);
+      }
 
       if (!targetPlaylist?.id || (targetPlaylist as any).isFallback) {
         alert('저장할 플레이리스트가 없습니다.');

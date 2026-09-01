@@ -1,0 +1,68 @@
+name: TEMP 1003 Form Field Audit
+
+on:
+  push:
+    branches: [preview-console-form-cleanup]
+    paths:
+      - '.github/workflows/temp-1003-form-field-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview-console-form-cleanup
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm install --no-audit --no-fund
+      - name: Audit JSX form fields missing id/name
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const ts = require('typescript');
+          const roots = ['src'];
+          const files = [];
+          const walkDir = (dir) => {
+            for (const ent of fs.readdirSync(dir, {withFileTypes:true})) {
+              const p = path.join(dir, ent.name);
+              if (ent.isDirectory()) walkDir(p);
+              else if (/\.tsx$/i.test(ent.name)) files.push(p);
+            }
+          };
+          roots.forEach((r) => walkDir(r));
+          const issues = [];
+          for (const file of files) {
+            const text = fs.readFileSync(file, 'utf8');
+            const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+            const visit = (node) => {
+              let tagName = null;
+              let attrs = null;
+              if (ts.isJsxSelfClosingElement(node)) {
+                tagName = node.tagName.getText(sf);
+                attrs = node.attributes;
+              } else if (ts.isJsxOpeningElement(node)) {
+                tagName = node.tagName.getText(sf);
+                attrs = node.attributes;
+              }
+              if (tagName && ['input','textarea','select'].includes(tagName)) {
+                const names = new Set(attrs.properties.filter(ts.isJsxAttribute).map((a) => a.name.getText(sf)));
+                if (!names.has('id') && !names.has('name')) {
+                  const pos = sf.getLineAndCharacterOfPosition(node.getStart(sf));
+                  issues.push(`${file}:${pos.line + 1}:${pos.character + 1} <${tagName}>`);
+                }
+              }
+              ts.forEachChild(node, visit);
+            };
+            visit(sf);
+          }
+          console.log(`[FORM-AUDIT] missing id/name static JSX fields: ${issues.length}`);
+          issues.forEach((v) => console.log(v));
+          NODE

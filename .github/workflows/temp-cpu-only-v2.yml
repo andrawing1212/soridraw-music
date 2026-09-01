@@ -1,0 +1,103 @@
+name: TEMP CPU Only V2
+permissions:
+  contents: write
+  actions: write
+on:
+  push:
+    branches: [preview-cpu-only-v2]
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview-cpu-only-v2
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply CPU-only pointer/render optimizations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 occurrence, found {count}')
+              return text.replace(old, new, 1)
+
+          # 1) App pointer bookkeeping: stop receiving every raw pointermove.
+          # Tooltip placement only needs the latest element-boundary/down position.
+          p = Path('src/App.tsx')
+          s = p.read_text(encoding='utf-8')
+          s = replace_once(
+              s,
+              "window.addEventListener('pointermove', rememberPointer, { capture: true, passive: true });",
+              "window.addEventListener('pointerover', rememberPointer, { capture: true, passive: true });",
+              'App pointer add listener',
+          )
+          s = replace_once(
+              s,
+              "window.removeEventListener('pointermove', rememberPointer, { capture: true });",
+              "window.removeEventListener('pointerover', rememberPointer, { capture: true });",
+              'App pointer remove listener',
+          )
+          p.write_text(s, encoding='utf-8')
+
+          # 2) Idle-only off-screen render budget. This is deliberately disabled
+          # during split dragging so the verified divider engine (A) is unchanged.
+          p = Path('src/components/studio/liteSplitWorkspace.css')
+          s = p.read_text(encoding='utf-8')
+          anchor = """  /* 576 — browser-native leaf isolation.\n"""
+          block = """  /* 983 — CPU-only idle pointer budget.\n   * Fast mouse sweeps were still forcing style/hit-test work through thousands\n   * of off-screen Music Note / Library descendants. Reuse the already verified\n   * browser-native row virtualization only while NOT dragging. Active rows are\n   * excluded so menus/popovers keep their existing overflow/stacking behavior.\n   * No split geometry, responsive rule, data path, or visual hover style changes. */\n  .soridraw-lite-studio-split-workspace:not(.is-dragging)\n  .soridraw-musicnote-song-card:not(.soridraw-list-perf-item--active) {\n    content-visibility: auto;\n    contain-intrinsic-size: auto 92px;\n  }\n\n  .soridraw-lite-studio-split-workspace:not(.is-dragging)\n  .soridraw-library-playlist-row:not(.soridraw-list-perf-item--active) {\n    content-visibility: auto;\n    contain-intrinsic-size: auto 76px;\n  }\n\n  .soridraw-lite-studio-split-workspace:not(.is-dragging)\n  .soridraw-library-workspace-group:not(.soridraw-list-perf-item--active) {\n    content-visibility: auto;\n    contain-intrinsic-size: auto 168px;\n  }\n\n"""
+          if '983 — CPU-only idle pointer budget.' in s:
+              raise SystemExit('CPU-only idle budget already present')
+          s = replace_once(s, anchor, block + anchor, 'Lite idle CPU anchor')
+          p.write_text(s, encoding='utf-8')
+          PY
+
+          git diff --check
+          git diff -- src/App.tsx src/components/studio/liteSplitWorkspace.css > /tmp/cpu-only-v2.patch
+          test -s /tmp/cpu-only-v2.patch
+          echo '=== changed files ==='
+          git diff --name-only
+          echo '=== CPU-only markers ==='
+          grep -n "pointerover.*rememberPointer\|983 — CPU-only idle pointer budget" src/App.tsx src/components/studio/liteSplitWorkspace.css
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Verify scope and preserve split engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/App.tsx src/components/studio/liteSplitWorkspace.css "
+          ! git diff --name-only | grep -E 'StudioSplitWorkspace\.tsx|LiteStudioSplitWorkspace\.tsx|FavoritesPage\.tsx|SunoLibraryPage\.tsx|firestore|functions|rules|firebase' || false
+          git diff --check
+      - name: Apply verified patch to preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_PREVIEW=540b0682c18e4d91b64ee22b1bf1ea7da3e72998
+          git reset --hard
+          git fetch origin preview
+          git checkout -B preview origin/preview
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PREVIEW"
+          git apply --check /tmp/cpu-only-v2.patch
+          git apply /tmp/cpu-only-v2.patch
+          git diff --check
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/App.tsx src/components/studio/liteSplitWorkspace.css
+          git commit -m 'perf(preview): reduce Studio pointer CPU'
+          git push origin HEAD:preview
+      - name: Dispatch Firebase PREVIEW deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run firebase-hosting-custom-preview.yml --ref preview

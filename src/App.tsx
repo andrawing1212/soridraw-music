@@ -9467,7 +9467,7 @@ const toggleCycleVariantSelection = (
       : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
   }, [activeGenreIdentityCount, maxHybridStyleSelections, selectedStyles, showToast]);
 
-  const toggleFavorite = async (song: SongResult) => {
+  const toggleFavorite = async (song: SongResult, options?: { trustedRecentStudio?: boolean }) => {
     song = normalizeFavoriteTitleFields(song as any) as SongResult;
 
     if (!user) {
@@ -9610,7 +9610,21 @@ const toggleCycleVariantSelection = (
 
     try {
       const localExistingFav = findLocalExistingFavorite();
-      const serverExistingFav = (localExistingFav || (song as any)?.recentFavoriteDetachedAt) ? null : await findServerExistingFavorite().catch((error) => {
+      const stableRecentSongId = getLiveSoridrawSongId(song);
+      const localMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, user.uid);
+      const remoteMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, user.uid);
+      const canTrustRecentStudioLocalIdentity = Boolean(
+        options?.trustedRecentStudio
+        && stableRecentSongId
+        && hasMusicNotePayloadCache(user.uid)
+        && localMusicNoteVersion > 0
+        && remoteMusicNoteVersion <= localMusicNoteVersion
+      );
+      const serverExistingFav = (
+        localExistingFav
+        || (song as any)?.recentFavoriteDetachedAt
+        || canTrustRecentStudioLocalIdentity
+      ) ? null : await findServerExistingFavorite().catch((error) => {
         console.warn('Favorite server confirmation failed. Using local favorite state as fallback.', error);
         return null;
       });
@@ -9760,6 +9774,16 @@ const toggleCycleVariantSelection = (
       const createdAtMs = Date.now();
       song = ensureLiveSoridrawSongId(song as any) as SongResult;
       const favoriteSoridrawSongId = getLiveSoridrawSongId(song);
+      const buildRecentFavoriteDocumentId = (uid: string, stableSongId: string): string => {
+        const raw = `${uid}|${stableSongId}`;
+        let hash = 2166136261;
+        for (let index = 0; index < raw.length; index += 1) {
+          hash ^= raw.charCodeAt(index);
+          hash = Math.imul(hash, 16777619);
+        }
+        const safeSongId = stableSongId.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 72) || 'song';
+        return `rs_${safeSongId}_${(hash >>> 0).toString(36)}`;
+      };
       const resolvedGenre = getResolvedGenre(song);
       const favoritePayload = sanitizeForFirestore({
         uid: user.uid,
@@ -9785,13 +9809,28 @@ const toggleCycleVariantSelection = (
         favoriteKey: songIdentityKey,
         searchTokens: buildFavoriteSearchTokens(song)
       });
-      const favoriteDocRef = await runV1MutationBoundary({ domain: 'musicNote', operation: 'save', uid: user.uid, affectedCount: 1 }, addDoc(collection(db, 'favorites'), favoritePayload));
+      const useDeterministicRecentFavoriteDoc = Boolean(
+        canTrustRecentStudioLocalIdentity && favoriteSoridrawSongId
+      );
+      const favoriteDocRef = useDeterministicRecentFavoriteDoc
+        ? doc(db, 'favorites', buildRecentFavoriteDocumentId(user.uid, favoriteSoridrawSongId))
+        : null;
+      if (favoriteDocRef) {
+        await runV1MutationBoundary(
+          { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1 },
+          setDoc(favoriteDocRef, favoritePayload, { merge: false }),
+        );
+      }
+      const createdFavoriteDocRef = favoriteDocRef || await runV1MutationBoundary(
+        { domain: 'musicNote', operation: 'save', uid: user.uid, affectedCount: 1 },
+        addDoc(collection(db, 'favorites'), favoritePayload),
+      );
 
       const localFavorite = sanitizeForFirestore({
         ...song,
         ...favoritePayload,
-        id: favoriteDocRef.id,
-        firestoreId: favoriteDocRef.id,
+        id: createdFavoriteDocRef.id,
+        firestoreId: createdFavoriteDocRef.id,
         uid: user.uid,
         genre: resolvedGenre,
         createdAtMs,
@@ -13740,7 +13779,7 @@ ${normalizePromptForDisplay(result.prompt)}
         ? false
         : isSongFavorited(heartSnapshot);
 
-      await toggleFavorite(heartSnapshot as SongResult);
+      await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true });
 
       const linkedFavorite = wasFavoritedBeforeToggle
         ? null
@@ -13784,13 +13823,19 @@ ${normalizePromptForDisplay(result.prompt)}
             historyIndex: currentIndex,
             latestGenerationBatchId: (nextCommittedHistory[0]?.appliedKeywords as any)?.generationBatchId || null,
           });
-          recentSongTextWritePendingRef.current = {
-            uid: user.uid,
-            songs: nextCommittedHistory,
-            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',
-            mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
-          };
-          await flushRecentSongTextWrite();
+          const pendingRecentTextWrite = recentSongTextWritePendingRef.current;
+          if (pendingRecentTextWrite) {
+            // A real title/lyrics edit was already waiting to be committed.
+            // Keep heart as that edit's commit boundary, but do not create a
+            // user_recent_songs write for a plain save/unsave click.
+            recentSongTextWritePendingRef.current = {
+              ...pendingRecentTextWrite,
+              uid: user.uid,
+              songs: nextCommittedHistory,
+              mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
+            };
+            await flushRecentSongTextWrite();
+          }
         }
       }
     } catch (error) {

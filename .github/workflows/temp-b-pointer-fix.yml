@@ -1,0 +1,120 @@
+name: TEMP B Pointer Fix
+permissions:
+  contents: write
+on:
+  push:
+    branches: [preview-b-pointer-leak-fix]
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview-b-pointer-leak-fix
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply B-only pointer optimizations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 occurrence, found {count}')
+              return text.replace(old, new, 1)
+
+          # App: transient Studio hover should not remount tooltip state + geometry on every cursor sweep.
+          p = Path('src/App.tsx')
+          s = p.read_text(encoding='utf-8')
+          anchor = "  const studioDescriptionPointerRef = useRef({ x: 0, y: 0 });\n"
+          s = replace_once(s, anchor, anchor + "  // SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_982\n  // Keep fast cursor sweeps from forcing App-level tooltip/layout work.\n  const studioDescriptionHoverTimerRef = useRef<number | null>(null);\n", 'App hover ref')
+          old = """  const setHoveredItem = useCallback((item: CategoryItem | null) => {\n    setHoveredItemState(item);\n    if (item) setHoveredItemPlacement(resolveStudioDescriptionPlacement());\n  }, [resolveStudioDescriptionPlacement]);\n"""
+          new = """  const setHoveredItem = useCallback((item: CategoryItem | null) => {\n    if (studioDescriptionHoverTimerRef.current !== null) {\n      window.clearTimeout(studioDescriptionHoverTimerRef.current);\n      studioDescriptionHoverTimerRef.current = null;\n    }\n\n    const shouldStabilizeStudioHover = Boolean(\n      item\n      && location.pathname === '/studio'\n      && typeof window !== 'undefined'\n      && window.matchMedia('(hover: hover) and (pointer: fine)').matches\n    );\n\n    if (!shouldStabilizeStudioHover) {\n      setHoveredItemState((current) => (!item && !current ? current : item));\n      if (item) setHoveredItemPlacement(resolveStudioDescriptionPlacement());\n      return;\n    }\n\n    studioDescriptionHoverTimerRef.current = window.setTimeout(() => {\n      studioDescriptionHoverTimerRef.current = null;\n      setHoveredItemState(item);\n      setHoveredItemPlacement(resolveStudioDescriptionPlacement());\n    }, 60);\n  }, [location.pathname, resolveStudioDescriptionPlacement]);\n\n  useEffect(() => () => {\n    if (studioDescriptionHoverTimerRef.current !== null) {\n      window.clearTimeout(studioDescriptionHoverTimerRef.current);\n      studioDescriptionHoverTimerRef.current = null;\n    }\n  }, [location.pathname]);\n"""
+          s = replace_once(s, old, new, 'App hover setter')
+          old_effect = """  useEffect(() => {\n    if (!hoveredItem) return;\n    const refreshPlacement = () => setHoveredItemPlacement(resolveStudioDescriptionPlacement());\n    window.addEventListener('resize', refreshPlacement);\n    window.addEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);\n    window.addEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);\n    return () => {\n      window.removeEventListener('resize', refreshPlacement);\n      window.removeEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);\n      window.removeEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);\n    };\n  }, [hoveredItem, resolveStudioDescriptionPlacement]);\n"""
+          new_effect = """  const hasHoveredItem = hoveredItem !== null;\n  useEffect(() => {\n    if (!hasHoveredItem) return;\n    const refreshPlacement = () => setHoveredItemPlacement(resolveStudioDescriptionPlacement());\n    window.addEventListener('resize', refreshPlacement);\n    window.addEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);\n    window.addEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);\n    return () => {\n      window.removeEventListener('resize', refreshPlacement);\n      window.removeEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);\n      window.removeEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);\n    };\n  }, [hasHoveredItem, resolveStudioDescriptionPlacement]);\n"""
+          s = replace_once(s, old_effect, new_effect, 'App hover lifecycle listeners')
+          p.write_text(s, encoding='utf-8')
+
+          # Music Note: card mousemove handlers exist only while selection mode or an actual mouse press is active.
+          p = Path('src/pages/FavoritesPage.tsx')
+          s = p.read_text(encoding='utf-8')
+          anchor = "  const selectionDragVisitedSongIdsRef = useRef<Set<string>>(new Set());\n"
+          s = replace_once(s, anchor, anchor + "  // SORIDRAW_MUSIC_NOTE_IDLE_MOUSEMOVE_982\n  const [isMusicNoteMousePressTracking, setIsMusicNoteMousePressTracking] = useState(false);\n", 'Music Note tracking state')
+          old = """  useEffect(() => {\n    const stopSelectionDrag = () => handleSelectionDragEnd();\n    window.addEventListener('mouseup', stopSelectionDrag);\n    return () => window.removeEventListener('mouseup', stopSelectionDrag);\n  }, []);\n"""
+          new = """  useEffect(() => {\n    const stopSelectionDrag = () => {\n      handleSelectionDragEnd();\n      setIsMusicNoteMousePressTracking(false);\n    };\n    window.addEventListener('mouseup', stopSelectionDrag);\n    return () => window.removeEventListener('mouseup', stopSelectionDrag);\n  }, []);\n"""
+          s = replace_once(s, old, new, 'Music Note global mouseup')
+          pattern = re.compile(r"(?P<i>\s+)onMouseDown=\{\(event\) => \{\n(?P=i)  handleSelectionDragStart\(event, song\.id\);\n(?P=i)  handleCardLongPressStart\(event, song\);\n(?P=i)\}\}\n(?P=i)onMouseMove=\{\(event\) => \{\n(?P=i)  handleSelectionDragMove\(event, song\.id\);\n(?P=i)  handleCardLongPressMove\(event\);\n(?P=i)\}\}\n(?P=i)onMouseUp=\{\(\) => \{\n(?P=i)  handleSelectionDragEnd\(\);\n(?P=i)  handleCardLongPressEnd\(\);\n(?P=i)\}\}")
+          def fav_repl(m):
+              i=m.group('i')
+              return (f"{i}onMouseDown={{(event) => {{\n{i}  setIsMusicNoteMousePressTracking(true);\n{i}  handleSelectionDragStart(event, song.id);\n{i}  handleCardLongPressStart(event, song);\n{i}}}}}\n"
+                      f"{i}onMouseMove={{(isSelectionMode || isMusicNoteMousePressTracking) ? ((event: React.MouseEvent<HTMLDivElement>) => {{\n{i}  handleSelectionDragMove(event, song.id);\n{i}  handleCardLongPressMove(event);\n{i}}}) : undefined}}\n"
+                      f"{i}onMouseUp={{() => {{\n{i}  handleSelectionDragEnd();\n{i}  handleCardLongPressEnd();\n{i}  setIsMusicNoteMousePressTracking(false);\n{i}}}}}")
+          s, n = pattern.subn(fav_repl, s)
+          if n != 1:
+              raise SystemExit(f'Music Note card mousemove block: expected 1, found {n}')
+          old_leave = """                  onMouseLeave={(event) => {\n                    handleCardLongPressEnd();\n                    event.currentTarget.style.backgroundColor = '';\n                  }}\n"""
+          new_leave = """                  onMouseLeave={(event) => {\n                    handleCardLongPressEnd();\n                    setIsMusicNoteMousePressTracking(false);\n                    event.currentTarget.style.backgroundColor = '';\n                  }}\n"""
+          s = replace_once(s, old_leave, new_leave, 'Music Note card leave')
+          p.write_text(s, encoding='utf-8')
+
+          # Library: same idle-move removal for workspace and playlist rows.
+          p = Path('src/pages/SunoLibraryPage.tsx')
+          s = p.read_text(encoding='utf-8')
+          anchor = "  const libraryDragSelectSuppressClickRef = useRef(false);\n"
+          s = replace_once(s, anchor, anchor + "  // SORIDRAW_LIBRARY_IDLE_MOUSEMOVE_982\n  const [isLibraryMousePressTracking, setIsLibraryMousePressTracking] = useState(false);\n", 'Library tracking state')
+          old = """  useEffect(() => {\n    const stopLibraryDragSelect = () => handleLibraryDragSelectEnd();\n    window.addEventListener('mouseup', stopLibraryDragSelect);\n    return () => window.removeEventListener('mouseup', stopLibraryDragSelect);\n  }, []);\n"""
+          new = """  useEffect(() => {\n    const stopLibraryDragSelect = () => {\n      handleLibraryDragSelectEnd();\n      setIsLibraryMousePressTracking(false);\n    };\n    window.addEventListener('mouseup', stopLibraryDragSelect);\n    return () => window.removeEventListener('mouseup', stopLibraryDragSelect);\n  }, []);\n"""
+          s = replace_once(s, old, new, 'Library global mouseup')
+          pattern = re.compile(r"(?P<i>\s+)onMouseDown=\{\(event\) => \{\n(?P=i)  handleLibraryDragSelectStart\(event, selection\);\n(?P=i)  handleLibraryCardLongPressStart\(event, selection\);\n(?P=i)\}\}\n(?P=i)onMouseMove=\{\(event\) => \{\n(?P=i)  handleLibraryDragSelectMove\(event, selection\);\n(?P=i)  handleLibraryCardLongPressMove\(event\);\n(?P=i)\}\}\n(?P=i)onMouseUp=\{\(\) => \{\n(?P=i)  handleLibraryDragSelectEnd\(\);\n(?P=i)  handleLibraryCardLongPressEnd\(\);\n(?P=i)\}\}")
+          def lib_repl(m):
+              i=m.group('i')
+              return (f"{i}onMouseDown={{(event) => {{\n{i}  setIsLibraryMousePressTracking(true);\n{i}  handleLibraryDragSelectStart(event, selection);\n{i}  handleLibraryCardLongPressStart(event, selection);\n{i}}}}}\n"
+                      f"{i}onMouseMove={{(multiSelectMode || isLibraryMousePressTracking) ? ((event: React.MouseEvent<HTMLDivElement>) => {{\n{i}  handleLibraryDragSelectMove(event, selection);\n{i}  handleLibraryCardLongPressMove(event);\n{i}}}) : undefined}}\n"
+                      f"{i}onMouseUp={{() => {{\n{i}  handleLibraryDragSelectEnd();\n{i}  handleLibraryCardLongPressEnd();\n{i}  setIsLibraryMousePressTracking(false);\n{i}}}}}")
+          s, n = pattern.subn(lib_repl, s)
+          if n != 2:
+              raise SystemExit(f'Library card mousemove blocks: expected 2, found {n}')
+          p.write_text(s, encoding='utf-8')
+          PY
+
+          git diff --check
+          git diff -- src/App.tsx src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx > /tmp/b-pointer-fix.patch
+          test -s /tmp/b-pointer-fix.patch
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Verify no splitbar or backend changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/App.tsx src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx "
+          ! git diff --name-only | grep -E 'StudioSplitWorkspace|LiteStudioSplitWorkspace|firestore|functions|rules|firebase' || false
+      - name: Apply verified patch to preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_PREVIEW=42d7e1aeadaccef34dbff45a9bb8a574ca0d8081
+          git reset --hard
+          git fetch origin preview
+          git checkout -B preview origin/preview
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PREVIEW"
+          git apply --check /tmp/b-pointer-fix.patch
+          git apply /tmp/b-pointer-fix.patch
+          git diff --check
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/App.tsx src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx
+          git commit -m 'perf(preview): reduce Studio idle pointer churn'
+          git push origin HEAD:preview

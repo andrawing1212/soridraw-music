@@ -1,61 +1,40 @@
 name: TEMP CPU Hover Audit
-permissions:
-  contents: write
 on:
   push:
     branches: [preview-cpu-hover-audit]
 jobs:
-  optimize:
+  audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: preview-cpu-hover-audit
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: Apply idle hover stabilization once
+      - name: Deep inspect pointer listener / portal paths
         shell: bash
         run: |
           set -euo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-          p = Path('src/App.tsx')
-          s = p.read_text(encoding='utf-8')
-          marker = 'SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_981'
-          if marker in s:
-              print('marker already present')
-              raise SystemExit(0)
-          anchor = "  const studioDescriptionPointerRef = useRef({ x: 0, y: 0 });\n"
-          if anchor not in s:
-              raise SystemExit('pointer ref anchor not found')
-          s = s.replace(anchor, anchor + "  // SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_981\n  // Fast cursor sweeps across the dense Studio control tree should not force the\n  // top-level App + tooltip placement geometry to re-render on every transient hover.\n  // Keep the approved tooltip behavior, but commit only after the pointer rests briefly.\n  const studioDescriptionHoverTimerRef = useRef<number | null>(null);\n", 1)
-          old = """  const setHoveredItem = useCallback((item: CategoryItem | null) => {\n    setHoveredItemState(item);\n    if (item) setHoveredItemPlacement(resolveStudioDescriptionPlacement());\n  }, [resolveStudioDescriptionPlacement]);\n"""
-          new = """  const setHoveredItem = useCallback((item: CategoryItem | null) => {\n    if (studioDescriptionHoverTimerRef.current !== null) {\n      window.clearTimeout(studioDescriptionHoverTimerRef.current);\n      studioDescriptionHoverTimerRef.current = null;\n    }\n\n    const shouldStabilizeStudioHover = Boolean(\n      item\n      && location.pathname === '/studio'\n      && typeof window !== 'undefined'\n      && window.matchMedia('(hover: hover) and (pointer: fine)').matches\n    );\n\n    if (!shouldStabilizeStudioHover) {\n      setHoveredItemState((current) => (!item && !current ? current : item));\n      if (item) setHoveredItemPlacement(resolveStudioDescriptionPlacement());\n      return;\n    }\n\n    // Three-to-four display frames is short enough to feel immediate, while a\n    // fast left/right sweep usually leaves the control before any App render or\n    // elementFromPoint/querySelector/getBoundingClientRect placement work starts.\n    studioDescriptionHoverTimerRef.current = window.setTimeout(() => {\n      studioDescriptionHoverTimerRef.current = null;\n      setHoveredItemState(item);\n      setHoveredItemPlacement(resolveStudioDescriptionPlacement());\n    }, 60);\n  }, [location.pathname, resolveStudioDescriptionPlacement]);\n\n  useEffect(() => () => {\n    if (studioDescriptionHoverTimerRef.current !== null) {\n      window.clearTimeout(studioDescriptionHoverTimerRef.current);\n      studioDescriptionHoverTimerRef.current = null;\n    }\n  }, [location.pathname]);\n"""
-          if old not in s:
-              raise SystemExit('hover setter block not found')
-          p.write_text(s.replace(old, new, 1), encoding='utf-8')
-          print('patched App.tsx')
-          PY
-          if git diff --quiet -- src/App.tsx; then
-            echo 'No source patch needed.'
-          else
-            git config user.name 'andrawing1212'
-            git config user.email 'andrawing1212@gmail.com'
-            git add src/App.tsx
-            git commit -m 'perf(preview): stabilize Studio idle hover work'
-            git push origin HEAD:preview-cpu-hover-audit
-          fi
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-      - name: Build
-        run: npm run build
-      - name: Type check
-        run: npx tsc --noEmit
-      - name: Verify scope
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -n 'SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_981' src/App.tsx
-          git status --short
+          echo '=== BRANCH / HEAD ==='
+          git rev-parse --abbrev-ref HEAD
+          git rev-parse HEAD
+          echo '=== Native listener totals by hot page ==='
+          for f in src/App.tsx src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx src/components/studio/StudioSplitWorkspace.tsx src/components/studio/LiteStudioSplitWorkspace.tsx; do
+            echo "--- $f"
+            printf 'addEventListener='; grep -c 'addEventListener' "$f" || true
+            printf 'removeEventListener='; grep -c 'removeEventListener' "$f" || true
+            printf 'onMouseEnter='; grep -c 'onMouseEnter' "$f" || true
+            printf 'onMouseLeave='; grep -c 'onMouseLeave' "$f" || true
+            printf 'onPointerMove='; grep -c 'onPointerMove' "$f" || true
+            printf 'createPortal='; grep -c 'createPortal' "$f" || true
+            printf '<Portal='; grep -c '<Portal' "$f" || true
+            printf 'StudioCenterModalPortal='; grep -c 'StudioCenterModalPortal' "$f" || true
+          done
+          echo '=== Favorites native listener lines ==='
+          grep -nE 'addEventListener|removeEventListener|createPortal|<Portal|StudioCenterModalPortal|onMouseEnter|onMouseLeave|onPointerMove' src/pages/FavoritesPage.tsx | head -n 500 || true
+          echo '=== Library native listener lines ==='
+          grep -nE 'addEventListener|removeEventListener|createPortal|<Portal|StudioCenterModalPortal|onMouseEnter|onMouseLeave|onPointerMove' src/pages/SunoLibraryPage.tsx | head -n 500 || true
+          echo '=== App hoveredItem references ==='
+          grep -nE 'hoveredItem|setHoveredItem|studioDescriptionPointerRef|resolveStudioDescriptionPlacement' src/App.tsx | head -n 260 || true
+          echo '=== React event prop counts Favorites ==='
+          grep -oE 'on[A-Z][A-Za-z]+=' src/pages/FavoritesPage.tsx | sort | uniq -c | sort -nr | head -n 100 || true
+          echo '=== React event prop counts Library ==='
+          grep -oE 'on[A-Z][A-Za-z]+=' src/pages/SunoLibraryPage.tsx | sort | uniq -c | sort -nr | head -n 100 || true
+          echo '=== Portal component definitions / imports ==='
+          grep -RInE 'function Portal|const Portal|createPortal\(' src/App.tsx src/pages src/components | head -n 300 || true

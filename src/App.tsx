@@ -133,6 +133,137 @@ function Portal({ children, enabled = true }: { children: React.ReactNode; enabl
   return enabled ? createPortal(children, document.body) : <>{children}</>;
 }
 
+// SORIDRAW_TOOLTIP_ISOLATED_HOST_984
+// Tooltip hover changes stay inside this tiny persistent host instead of
+// re-rendering the full Studio/App tree. The DOM node never unmounts;
+// visibility/content/placement alone change, which also keeps a future
+// per-user tooltip ON/OFF preference cheap to add.
+type StudioDescriptionOverlayPlacement = {
+  pane: 'builder' | 'result' | 'global';
+  left: number;
+  maxWidth: number;
+};
+
+type StudioDescriptionOverlayItem = {
+  id: string;
+  label: string;
+  description?: string;
+};
+
+type StudioDescriptionOverlayController = {
+  show: (item: StudioDescriptionOverlayItem, placement: StudioDescriptionOverlayPlacement) => void;
+  hide: () => void;
+};
+
+function StudioDescriptionOverlayHost({
+  controllerRef,
+  resolvePlacement,
+  locationPathname,
+  studioActionOwner,
+  isActionButtonsCollapsed,
+  shouldRenderActionButtons,
+}: {
+  controllerRef: { current: StudioDescriptionOverlayController | null };
+  resolvePlacement: () => StudioDescriptionOverlayPlacement;
+  locationPathname: string;
+  studioActionOwner: string;
+  isActionButtonsCollapsed: boolean;
+  shouldRenderActionButtons: boolean;
+}) {
+  const [item, setItem] = useState<StudioDescriptionOverlayItem | null>(null);
+  const [placement, setPlacement] = useState<StudioDescriptionOverlayPlacement>(() => ({
+    pane: 'global',
+    left: typeof window !== 'undefined' ? window.innerWidth / 2 : 0,
+    maxWidth: typeof window !== 'undefined' && window.innerWidth < 768 ? 200 : 400,
+  }));
+  const [isVisible, setIsVisible] = useState(false);
+  const [isTooltipHovered, setIsTooltipHovered] = useState(false);
+  const autoHideTimerRef = useRef<number | null>(null);
+
+  const clearAutoHideTimer = useCallback(() => {
+    if (autoHideTimerRef.current !== null) {
+      window.clearTimeout(autoHideTimerRef.current);
+      autoHideTimerRef.current = null;
+    }
+  }, []);
+
+  const hide = useCallback(() => {
+    clearAutoHideTimer();
+    setIsVisible(false);
+    setIsTooltipHovered(false);
+  }, [clearAutoHideTimer]);
+
+  const show = useCallback((nextItem: StudioDescriptionOverlayItem, nextPlacement: StudioDescriptionOverlayPlacement) => {
+    clearAutoHideTimer();
+    setItem(nextItem);
+    setPlacement(nextPlacement);
+    setIsVisible(true);
+    setIsTooltipHovered(false);
+    autoHideTimerRef.current = window.setTimeout(() => {
+      autoHideTimerRef.current = null;
+      setIsVisible(false);
+      setIsTooltipHovered(false);
+    }, 6000);
+  }, [clearAutoHideTimer]);
+
+  useLayoutEffect(() => {
+    const controller: StudioDescriptionOverlayController = { show, hide };
+    controllerRef.current = controller;
+    return () => {
+      if (controllerRef.current === controller) controllerRef.current = null;
+    };
+  }, [controllerRef, hide, show]);
+
+  useEffect(() => () => clearAutoHideTimer(), [clearAutoHideTimer]);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    const refreshPlacement = () => setPlacement(resolvePlacement());
+    window.addEventListener('resize', refreshPlacement);
+    window.addEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
+    window.addEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
+    return () => {
+      window.removeEventListener('resize', refreshPlacement);
+      window.removeEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
+      window.removeEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
+    };
+  }, [isVisible, resolvePlacement]);
+
+  const suppressInlineActionHint = Boolean(
+    item && studioActionOwner !== 'floating' && ['generate', 'random', 'clear-all'].includes(item.id)
+  );
+  const shouldShow = Boolean(isVisible && item && !suppressInlineActionHint);
+  const bottomClass = locationPathname === '/studio'
+    ? (!isActionButtonsCollapsed && shouldRenderActionButtons
+        ? 'bottom-[6.75rem] md:bottom-[8.5rem]'
+        : 'bottom-10')
+    : (typeof document !== 'undefined' && document.querySelector('[data-selection-action-bar="true"]')
+        ? 'bottom-[7.75rem] md:bottom-[8.75rem]'
+        : 'bottom-10');
+
+  return (
+    <div
+      aria-hidden={!shouldShow}
+      onMouseEnter={() => setIsTooltipHovered(true)}
+      onMouseLeave={() => setIsTooltipHovered(false)}
+      style={{
+        left: placement.left,
+        width: 'max-content',
+        maxWidth: placement.maxWidth,
+        opacity: shouldShow ? (isTooltipHovered ? 0.1 : 1) : 0,
+        visibility: shouldShow ? 'visible' : 'hidden',
+        pointerEvents: shouldShow ? 'auto' : 'none',
+        transform: 'translateX(-50%)',
+      }}
+      data-description-pane={placement.pane}
+      className={`soridraw-studio-description-overlay fixed z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300 ${bottomClass}`}
+    >
+      <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{item?.label || ''}</p>
+      <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">{item?.description || ''}</p>
+    </div>
+  );
+}
+
 const favoritesInMemoryCache = new Map<string, any[]>();
 const favoritesCacheWriteTimers = new Map<string, any>();
 const FAVORITE_DELETED_TOMBSTONE_LIMIT = 800;
@@ -7453,12 +7584,7 @@ function App() {
   const [isConfirmingDeleteHistory, setIsConfirmingDeleteHistory] = useState(false);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
-  type StudioDescriptionPane = 'builder' | 'result' | 'global';
-  type StudioDescriptionPlacement = {
-    pane: StudioDescriptionPane;
-    left: number;
-    maxWidth: number;
-  };
+  type StudioDescriptionPlacement = StudioDescriptionOverlayPlacement;
 
   const getDefaultStudioDescriptionPlacement = (): StudioDescriptionPlacement => ({
     pane: 'global',
@@ -7466,15 +7592,12 @@ function App() {
     maxWidth: typeof window !== 'undefined' && window.innerWidth < 768 ? 200 : 400,
   });
 
-  const [hoveredItem, setHoveredItemState] = useState<CategoryItem | null>(null);
-  const [hoveredItemPlacement, setHoveredItemPlacement] = useState<StudioDescriptionPlacement>(
-    getDefaultStudioDescriptionPlacement,
-  );
+  const studioDescriptionControllerRef = useRef<StudioDescriptionOverlayController | null>(null);
+  const studioDescriptionCurrentItemRef = useRef<CategoryItem | null>(null);
   const studioDescriptionPointerRef = useRef({ x: 0, y: 0 });
   // SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_982
-  // Keep fast cursor sweeps from forcing App-level tooltip/layout work.
+  // Keep fast cursor sweeps from forcing tooltip work for accidental flyovers.
   const studioDescriptionHoverTimerRef = useRef<number | null>(null);
-  const [isTooltipHovered, setIsTooltipHovered] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -7532,6 +7655,15 @@ function App() {
     return { pane, left, maxWidth };
   }, [location.pathname]);
 
+  const commitHoveredItem = useCallback((item: CategoryItem | null) => {
+    studioDescriptionCurrentItemRef.current = item;
+    if (!item) {
+      studioDescriptionControllerRef.current?.hide();
+      return;
+    }
+    studioDescriptionControllerRef.current?.show(item, resolveStudioDescriptionPlacement());
+  }, [resolveStudioDescriptionPlacement]);
+
   const setHoveredItem = useCallback((item: CategoryItem | null) => {
     if (studioDescriptionHoverTimerRef.current !== null) {
       window.clearTimeout(studioDescriptionHoverTimerRef.current);
@@ -7546,23 +7678,23 @@ function App() {
     );
 
     if (!shouldStabilizeStudioHover) {
-      setHoveredItemState((current) => (!item && !current ? current : item));
-      if (item) setHoveredItemPlacement(resolveStudioDescriptionPlacement());
+      commitHoveredItem(item);
       return;
     }
 
     studioDescriptionHoverTimerRef.current = window.setTimeout(() => {
       studioDescriptionHoverTimerRef.current = null;
-      setHoveredItemState(item);
-      setHoveredItemPlacement(resolveStudioDescriptionPlacement());
+      commitHoveredItem(item);
     }, 60);
-  }, [location.pathname, resolveStudioDescriptionPlacement]);
+  }, [commitHoveredItem, location.pathname]);
 
   useEffect(() => () => {
     if (studioDescriptionHoverTimerRef.current !== null) {
       window.clearTimeout(studioDescriptionHoverTimerRef.current);
       studioDescriptionHoverTimerRef.current = null;
     }
+    studioDescriptionCurrentItemRef.current = null;
+    studioDescriptionControllerRef.current?.hide();
   }, [location.pathname]);
   const appliedKeywordsRef = useRef<HTMLDivElement>(null);
   const [appliedKeywordsHeight, setAppliedKeywordsHeight] = useState<number | string>(0);
@@ -8062,31 +8194,6 @@ const toggleCycleVariantSelection = (
   }, [isStudioBlackActionMode, scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
 
 
-  useEffect(() => {
-    if (hoveredItem) {
-      const timer = setTimeout(() => {
-        setHoveredItem(null);
-      }, 6000);
-      return () => clearTimeout(timer);
-    } else {
-      setIsTooltipHovered(false);
-    }
-  }, [hoveredItem, setHoveredItem]);
-
-  const hasHoveredItem = hoveredItem !== null;
-  useEffect(() => {
-    if (!hasHoveredItem) return;
-    const refreshPlacement = () => setHoveredItemPlacement(resolveStudioDescriptionPlacement());
-    window.addEventListener('resize', refreshPlacement);
-    window.addEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
-    window.addEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
-    return () => {
-      window.removeEventListener('resize', refreshPlacement);
-      window.removeEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
-      window.removeEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
-    };
-  }, [hasHoveredItem, resolveStudioDescriptionPlacement]);
-
   const [exitCount, setExitCount] = useState(0);
   const exitTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -8192,8 +8299,9 @@ const toggleCycleVariantSelection = (
 
   useEffect(() => {
     if (studioActionOwner === 'floating') return;
-    setHoveredItemState((current) => (isActionButtonHintItem(current) ? null : current));
-  }, [studioActionOwner]);
+    const current = studioDescriptionCurrentItemRef.current;
+    if (isActionButtonHintItem(current)) setHoveredItem(null);
+  }, [studioActionOwner, setHoveredItem]);
 
   useEffect(() => () => {
     delete document.documentElement.dataset.soridrawActionOwner;
@@ -10239,7 +10347,6 @@ const toggleCycleVariantSelection = (
       longPressTimerRef.current = null;
     }
     setHoveredItem(null);
-    setIsTooltipHovered(false);
 
     const normalizeGenreKey = (value: string) => String(value || '')
       .replace(/\bcore\b/gi, '')
@@ -15032,7 +15139,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
   };
 
   const clearActionButtonHint = () => {
-    setHoveredItemState((current) => (isActionButtonHintItem(current) ? null : current));
+    const current = studioDescriptionCurrentItemRef.current;
+    if (isActionButtonHintItem(current)) setHoveredItem(null);
   };
 
   const renderActionButtonsContent = (placement: 'floating' | 'inline') => (
@@ -16492,7 +16600,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
-              hoveredItem={hoveredItem}
               isExpanded={isMoodExpanded}
               onToggleExpand={() => toggleSubSections('mood')}
               onHeightChange={setMoodHeight}
@@ -16521,7 +16628,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
-              hoveredItem={hoveredItem}
               isExpanded={isThemeExpanded}
               onToggleExpand={() => toggleSubSections('theme')}
               onHeightChange={setThemeHeight}
@@ -18827,40 +18933,15 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         )}      </Routes>
       <GlobalPlayer />
 
-      {/* Tooltip / Description Overlay */}
-      <AnimatePresence>
-        {hoveredItem && !(studioActionOwner !== 'floating' && isActionButtonHintItem(hoveredItem)) && (
-          <motion.div
-            initial={{ opacity: 0, x: '-50%' }}
-            animate={{ 
-              opacity: isTooltipHovered ? 0.1 : 1, 
-              x: '-50%'
-            }}
-            exit={{ opacity: 0, x: '-50%' }}
-            onMouseEnter={() => setIsTooltipHovered(true)}
-            onMouseLeave={() => setIsTooltipHovered(false)}
-            style={{
-              left: hoveredItemPlacement.left,
-              width: 'max-content',
-              maxWidth: hoveredItemPlacement.maxWidth,
-            }}
-            data-description-pane={hoveredItemPlacement.pane}
-            className={cn(
-              "soridraw-studio-description-overlay fixed z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
-              location.pathname === '/studio' 
-                ? (!isActionButtonsCollapsed && shouldRenderActionButtons
-                    ? "bottom-[6.75rem] md:bottom-[8.5rem]" 
-                    : "bottom-10")
-                : (typeof document !== 'undefined' && document.querySelector('[data-selection-action-bar="true"]')
-                    ? "bottom-[7.75rem] md:bottom-[8.75rem]"
-                    : "bottom-10")
-            )}
-          >
-            <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>
-            <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">{hoveredItem.description}</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Tooltip / Description Overlay — isolated persistent host */}
+      <StudioDescriptionOverlayHost
+        controllerRef={studioDescriptionControllerRef}
+        resolvePlacement={resolveStudioDescriptionPlacement}
+        locationPathname={location.pathname}
+        studioActionOwner={studioActionOwner}
+        isActionButtonsCollapsed={isActionButtonsCollapsed}
+        shouldRenderActionButtons={shouldRenderActionButtons}
+      />
 
       <AnimatePresence>
         {isRecentSongEditOpen && recentSongEditDraft && (
@@ -21173,7 +21254,6 @@ interface CategorySectionProps {
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
-  hoveredItem: CategoryItem | null;
   isExpanded: boolean;
   onToggleExpand: () => void;
   kpopMode?: 0 | 1 | 2;
@@ -21208,7 +21288,6 @@ function CategorySectionComponent({
   onHover,
   onLongPressStart,
   onLongPressEnd,
-  hoveredItem,
   isExpanded,
   onToggleExpand,
   kpopMode = 0,

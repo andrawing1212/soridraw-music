@@ -116,6 +116,35 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-
   color: #fff !important;
 }
 
+/* 1020 — Classic Light profile hero text must outrank the generic light-page
+   readability rules above whenever a background image is present. The previous
+   generic selectors had the same class-level specificity plus an extra element,
+   so their dark colors could win even though the white hero rules came later. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-name-line h1 {
+  color: rgba(255,255,255,.95) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-copy > p {
+  color: rgba(235,235,240,.52) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-handle {
+  color: rgba(235,235,240,.40) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-stats {
+  color: rgba(235,235,240,.48) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-stats strong {
+  color: rgba(255,255,255,.88) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-genres span {
+  color: rgba(255,255,255,.62) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-social-links a {
+  color: rgba(235,235,240,.48) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-social-links a:hover {
+  color: #fff !important;
+}
+
 /* Music Note: in Classic Light, inactive state controls use the same warm-light
    button surface as the selected keyword chips instead of the dark fallback.
    Active controls stay pure white with a dark glyph. */

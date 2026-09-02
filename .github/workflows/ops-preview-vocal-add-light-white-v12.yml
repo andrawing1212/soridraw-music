@@ -1,0 +1,94 @@
+name: OPS Preview Vocal Add Light White V12
+
+on:
+  push:
+    branches:
+      - ops-preview-vocal-add-light-white-v12
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply light-mode vocal add-member white background
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/components/studio/studioLayout.css')
+          text = path.read_text(encoding='utf-8')
+          marker = '/* 1013 — Light-mode vocal add-member white surface. */'
+          if marker in text:
+              raise SystemExit('marker already present')
+
+          block = r'''
+
+/* 1013 — Light-mode vocal add-member white surface. */
+html[data-soridraw-theme="light"] body #root .soridraw-app-root
+:is(
+  .soridraw-studio-split-workspace,
+  .soridraw-lite-studio-split-workspace,
+  .soridraw-studio-compact-mobile-workspace,
+  .soridraw-studio-compact-mobile-builder
+)
+.soridraw-studio-vocal-slot
+button:is([data-vocal-add-member="male"], [data-vocal-add-member="female"]):not(:disabled) {
+  background: #fff !important;
+  background-color: #fff !important;
+  background-image: none !important;
+  border: 0 !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="light"] body #root .soridraw-app-root
+  :is(
+    .soridraw-studio-split-workspace,
+    .soridraw-lite-studio-split-workspace,
+    .soridraw-studio-compact-mobile-workspace,
+    .soridraw-studio-compact-mobile-builder
+  )
+  .soridraw-studio-vocal-slot
+  button:is([data-vocal-add-member="male"], [data-vocal-add-member="female"]):not(:disabled):hover {
+    background: #fff !important;
+    background-color: #fff !important;
+    background-image: none !important;
+    border: 0 !important;
+  }
+}
+'''
+          path.write_text(text.rstrip() + block + '\n', encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Publish validated source branch
+        shell: bash
+        run: |
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git checkout -B preview-vocal-add-light-white-v12
+          git add src/components/studio/studioLayout.css
+          git commit -m "fix(preview): make light vocal add-member buttons white"
+          git push origin preview-vocal-add-light-white-v12 --force

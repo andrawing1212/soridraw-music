@@ -6,22 +6,97 @@ on:
       - ops-preview-classic-mobile-keywords-v16
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  inspect:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect classic keyword color and spacing owners
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply classic mobile keyword polish only
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== chip class function ==='
-          grep -n -C 20 'getAppliedSelectionKeywordChipClass' src/App.tsx || true
-          echo '=== selected keyword text class function ==='
-          grep -n -C 20 'getAppliedSelectionKeywordTextClass' src/App.tsx || true
-          echo '=== classic light keyword CSS ==='
-          sed -n '4825,4925p' src/index.css
-          echo '=== builder keyword CSS outside Studio Black ==='
-          grep -n -C 10 'soridraw-builder-live-keywords' src/index.css || true
+          git fetch origin preview
+          git switch --detach origin/preview
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/components/studio/studioLayout.css')
+          css = path.read_text(encoding='utf-8')
+          marker = '/* 1016 — Classic mobile keyword spacing, light divider and softer light chips. */'
+          if marker in css:
+              raise SystemExit('1016 already exists; refusing duplicate patch')
+          lines = [
+              '',
+              marker,
+              '@media (max-width: 767px) {',
+              '  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root',
+              '  .soridraw-builder-live-keywords {',
+              '    padding-bottom: 12px !important;',
+              '  }',
+              '',
+              '  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root',
+              '  .soridraw-builder-live-keywords {',
+              '    padding-bottom: 12px !important;',
+              '    border-bottom: 2px solid rgba(116, 89, 30, 0.38) !important;',
+              '  }',
+              '',
+              '  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root',
+              '  .soridraw-builder-live-keywords span[class*="bg-[#4A3510]/92"] {',
+              '    background-color: rgb(74 53 16 / 0.70) !important;',
+              '  }',
+              '',
+              '  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root',
+              '  .soridraw-builder-live-keywords span[class*="bg-[#3D2530]/92"] {',
+              '    background-color: rgb(61 37 48 / 0.70) !important;',
+              '  }',
+              '',
+              '  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root',
+              '  .soridraw-builder-live-keywords span[class*="bg-[#203546]/92"] {',
+              '    background-color: rgb(32 53 70 / 0.70) !important;',
+              '  }',
+              '',
+              '  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root',
+              '  .soridraw-builder-live-keywords span[class*="bg-[#30284C]/92"] {',
+              '    background-color: rgb(48 40 76 / 0.70) !important;',
+              '  }',
+              '',
+              '  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root',
+              '  .soridraw-builder-live-keywords span[class*="bg-[#233A2C]/92"] {',
+              '    background-color: rgb(35 58 44 / 0.70) !important;',
+              '  }',
+              '}',
+              ''
+          ]
+          path.write_text(css.rstrip() + '\n' + '\n'.join(lines), encoding='utf-8')
+          PY
+
+          git diff --check
+          test "$(git diff --name-only | wc -l)" -eq 1
+          test "$(git diff --name-only)" = 'src/components/studio/studioLayout.css'
+          grep -q '1016 — Classic mobile keyword spacing' src/components/studio/studioLayout.css
+          grep -q 'padding-bottom: 12px !important;' src/components/studio/studioLayout.css
+          grep -q 'rgb(74 53 16 / 0.70)' src/components/studio/studioLayout.css
+          git diff -- src/components/studio/studioLayout.css
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Publish validated source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git add src/components/studio/studioLayout.css
+          git commit -m "fix(preview): polish classic mobile keyword strip"
+          git branch -f preview-classic-mobile-keywords-v16 HEAD
+          git push origin preview-classic-mobile-keywords-v16 --force

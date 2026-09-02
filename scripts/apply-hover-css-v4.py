@@ -32,4 +32,4 @@ block = r'''
 }
 '''
 
-p.write_text(text.rstrip() + block + '\n', encoding='utf-8')
+p.write_text(text.rstrip() + block, encoding='utf-8')

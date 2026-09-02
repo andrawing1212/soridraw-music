@@ -203,7 +203,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   z-index: 521 !important;
 }
 '''
-css.write_text(css_text + css_block + '\n', encoding='utf-8')
+css.write_text(css_text + css_block, encoding='utf-8')
 
 print(f'App title states stabilized: {app_count}')
 print(f'App title AnimatePresence removed: {app_unwrapped}')

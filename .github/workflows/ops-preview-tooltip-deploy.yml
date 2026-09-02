@@ -1,0 +1,32 @@
+name: OPS Preview Tooltip Deploy
+permissions:
+  contents: write
+on:
+  push:
+    branches: [ops-preview-tooltip-deploy-20260902]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Verify source commit on clean preview base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git switch --detach origin/preview
+          git cherry-pick 4cfef7a3d8f1280d2a309fa31219fab73432c145
+          test "$(git diff --name-only origin/preview...HEAD | sort | tr '\n' ' ')" = "src/App.tsx src/components/studio/liteSplitWorkspace.css "
+          git diff --check origin/preview...HEAD
+          ! git diff --name-only origin/preview...HEAD | grep -E 'StudioSplitWorkspace\.tsx|LiteStudioSplitWorkspace\.tsx|FavoritesPage\.tsx|SunoLibraryPage\.tsx|firestore|functions|rules|firebase' || false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit

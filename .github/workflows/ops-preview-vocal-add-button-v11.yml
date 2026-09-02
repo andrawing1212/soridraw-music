@@ -5,16 +5,20 @@ on:
     branches: [ops-preview-vocal-add-button-v11]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  inspect:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Inspect current preview theme source
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply canonical vocal add-member button styling
         shell: bash
         run: |
           set -euo pipefail
@@ -22,11 +26,116 @@ jobs:
           git switch --detach origin/preview
           python - <<'PY'
           from pathlib import Path
-          for fn in ['src/App.tsx','src/index.css']:
-              p=Path(fn); lines=p.read_text(encoding='utf-8').splitlines()
-              print('\nFILE',fn)
-              keys=['data-soridraw-theme','isDarkMode','darkMode','themeMode','setAttribute','classList.add(\'dark\'','classList.remove(\'dark\'','theme === \'light\'','theme === \'dark\'','studio-black','classic']
-              for i,l in enumerate(lines):
-                  if any(k in l for k in keys):
-                      print(f'{i+1:06d}: {l}')
+
+          app_path = Path('src/App.tsx')
+          app = app_path.read_text(encoding='utf-8')
+
+          base_old = '"py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5"'
+          base_new = '"soridraw-vocal-add-member-button py-3 px-2 rounded-2xl text-[14px] font-bold transition-all flex items-center justify-center gap-2.5"'
+          if app.count(base_old) != 2:
+              raise SystemExit(f'Expected 2 vocal add-member base class occurrences, found {app.count(base_old)}')
+          app = app.replace(base_old, base_new)
+
+          male_old = '? "bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-600/20"'
+          male_new = '? "soridraw-vocal-add-member-button--male"'
+          if app.count(male_old) != 1:
+              raise SystemExit(f'Expected 1 male enabled class, found {app.count(male_old)}')
+          app = app.replace(male_old, male_new)
+
+          female_old = '? "bg-pink-600/10 border-pink-500/20 text-pink-400 hover:bg-pink-600/20"'
+          female_new = '? "soridraw-vocal-add-member-button--female"'
+          if app.count(female_old) != 1:
+              raise SystemExit(f'Expected 1 female enabled class, found {app.count(female_old)}')
+          app = app.replace(female_old, female_new)
+          app_path.write_text(app, encoding='utf-8')
+
+          css_path = Path('src/components/studio/studioLayout.css')
+          css = css_path.read_text(encoding='utf-8')
+          old_marker = '/* 1011 — Vocal add-member controls:'
+          if css.count(old_marker) != 1:
+              raise SystemExit(f'Expected one 1011 block, found {css.count(old_marker)}')
+          cut = css.index(old_marker)
+          css = css[:cut].rstrip()
+
+          canonical = r'''
+
+/* 1014 — Canonical vocal add-member button surfaces.
+ * The JSX no longer owns blue/pink backgrounds. This block is the single
+ * source of truth for light, classic dark, and split Studio presentation. */
+.soridraw-vocal-add-member-button {
+  border: 0;
+  background-image: none;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-vocal-add-member-button:not(:disabled) {
+  background: #ffffff;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-vocal-add-member-button--male:not(:disabled) {
+  color: rgb(96 165 250);
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-vocal-add-member-button--female:not(:disabled) {
+  color: rgb(244 114 182);
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
+.soridraw-vocal-add-member-button--male:not(:disabled),
+html[data-soridraw-theme="studio-black"]
+.soridraw-vocal-add-member-button--male:not(:disabled) {
+  background: rgb(37 99 235 / 0.10);
+  color: rgb(96 165 250);
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
+.soridraw-vocal-add-member-button--female:not(:disabled),
+html[data-soridraw-theme="studio-black"]
+.soridraw-vocal-add-member-button--female:not(:disabled) {
+  background: rgb(219 39 119 / 0.10);
+  color: rgb(244 114 182);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
+  .soridraw-vocal-add-member-button--male:not(:disabled):hover,
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-vocal-add-member-button--male:not(:disabled):hover {
+    background: rgb(37 99 235 / 0.20);
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
+  .soridraw-vocal-add-member-button--female:not(:disabled):hover,
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-vocal-add-member-button--female:not(:disabled):hover {
+    background: rgb(219 39 119 / 0.20);
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+  .soridraw-vocal-add-member-button:not(:disabled):hover {
+    background: #ffffff;
+  }
+}
+'''
+          css_path.write_text(css + canonical + '\n', encoding='utf-8')
           PY
+          git diff --check
+          git diff -- src/App.tsx src/components/studio/studioLayout.css
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Publish validated source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git add src/App.tsx src/components/studio/studioLayout.css
+          git commit -m "fix(preview): make light vocal add buttons truly white"
+          git branch -f preview-vocal-add-light-source-v13 HEAD
+          git push origin preview-vocal-add-light-source-v13 --force

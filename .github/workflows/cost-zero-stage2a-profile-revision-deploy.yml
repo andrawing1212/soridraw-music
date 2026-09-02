@@ -41,11 +41,11 @@ jobs:
           npm install --no-audit --no-fund
           npm run cf:prepare
           node --check .remote-worker/worker.js
-          grep -Fq 'SORIDRAW_PROFILE_REVISION_REVALIDATION_007' .remote-worker/worker.js
           grep -Fq 'readPublicProfileFirstViewRevisionOnly' .remote-worker/worker.js
+          grep -Fq 'makePublicProfileFirstViewNotModified' .remote-worker/worker.js
           grep -Fq 'knownRevision' .remote-worker/worker.js
           grep -Fq 'X-SORIDRAW-Profile-Revision' .remote-worker/worker.js
-          grep -Fq "headers.set('ETag'" .remote-worker/worker.js
+          grep -Fq 'soridraw-profile-' .remote-worker/worker.js
           echo 'PROFILE_REVISION_SOURCE_VALIDATION=PASS'
 
       - name: Deploy only prepared Explore Worker
@@ -64,9 +64,10 @@ jobs:
           rm -rf .remote-worker
           npm run cf:prepare
           node --check .remote-worker/worker.js
-          grep -Fq 'SORIDRAW_PROFILE_REVISION_REVALIDATION_007' .remote-worker/worker.js
           grep -Fq 'readPublicProfileFirstViewRevisionOnly' .remote-worker/worker.js
+          grep -Fq 'makePublicProfileFirstViewNotModified' .remote-worker/worker.js
           grep -Fq 'NOT_MODIFIED_D1_REVISION' .remote-worker/worker.js
+          grep -Fq 'X-SORIDRAW-Profile-Revision' .remote-worker/worker.js
           echo 'LIVE_PROFILE_REVISION_SOURCE=PASS'
 
       - name: Verify 200 revision plus conditional 304 without writes

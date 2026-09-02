@@ -1,0 +1,55 @@
+name: OPS Preview Vocal Mobile V8
+
+on:
+  push:
+    branches:
+      - ops-preview-vocal-mobile-v8
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply safe vocal UI patch on current preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "$GITHUB_SHA:scripts/apply-vocal-mobile-v8.py" > /tmp/apply-vocal-mobile-v8.py
+          git fetch origin preview
+          git switch --detach origin/preview
+          test "$(git rev-parse HEAD)" = "ae85bfd3c9ae50ec840a26cf70dec956b7f02dd5"
+          python3 /tmp/apply-vocal-mobile-v8.py
+          git diff --check
+          actual="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' src/App.tsx src/components/studio/studioLayout.css | sort)"
+          test "$actual" = "$expected"
+          grep -q 'data-vocal-add-member="male"' src/App.tsx
+          grep -q 'data-vocal-add-member="female"' src/App.tsx
+          grep -q '1008 — Vocal group mobile/split parity' src/components/studio/studioLayout.css
+          git diff -- src/components/studio/StudioSplitWorkspace.tsx --exit-code
+          git diff -- src/components/studio/LiteStudioSplitWorkspace.tsx --exit-code
+          git diff -- src/components/studio/liteSplitWorkspace.css --exit-code
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Publish validated source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git add src/App.tsx src/components/studio/studioLayout.css
+          git commit -m "fix(preview): align mobile vocal group layout"
+          git push origin HEAD:refs/heads/preview-vocal-mobile-v8 --force

@@ -19,7 +19,11 @@ jobs:
       - name: Prepare source patch script
         run: python3 .tmp/fix-tooltip-patch-script-v1.py
       - name: Apply source patch
-        run: python3 .tmp/apply-tooltip-perf-v1.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .tmp/apply-tooltip-perf-v1.py
+          git checkout -- .tmp/apply-tooltip-perf-v1.py
       - name: Verify source scope
         shell: bash
         run: |
@@ -29,6 +33,8 @@ jobs:
             echo 'No source diff to commit.'
             exit 0
           fi
+          echo '=== changed source files ==='
+          git diff --name-only
           test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/App.tsx src/components/studio/liteSplitWorkspace.css "
           grep -q 'SORIDRAW_TOOLTIP_ISOLATED_HOST_984' src/App.tsx
           ! grep -q 'setHoveredItemState' src/App.tsx

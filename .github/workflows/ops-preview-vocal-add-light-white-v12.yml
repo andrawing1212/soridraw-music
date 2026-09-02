@@ -1,4 +1,4 @@
-name: OPS Preview Vocal Add Light White V12
+name: OPS Inspect Vocal Add JSX
 
 on:
   push:
@@ -6,10 +6,10 @@ on:
       - ops-preview-vocal-add-light-white-v12
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  validate:
+  inspect:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout current preview
@@ -18,43 +18,27 @@ jobs:
           ref: preview
           fetch-depth: 0
 
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Apply light-mode vocal add-member white background
+      - name: Print actual vocal add-member JSX
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          import base64
-
-          path = Path('src/components/studio/studioLayout.css')
-          text = path.read_text(encoding='utf-8')
-          marker = '/* 1013 — Light-mode vocal add-member white surface. */'
-          if marker in text:
-              raise SystemExit('marker already present')
-          block = base64.b64decode('Ci8qIDEwMTMg4oCUIExpZ2h0LW1vZGUgdm9jYWwgYWRkLW1lbWJlciB3aGl0ZSBzdXJmYWNlLiAqLwpodG1sW2RhdGEtc29yaWRyYXctdGhlbWU9ImxpZ2h0Il0gYm9keSAjcm9vdCAuc29yaWRyYXctYXBwLXJvb3QKOmlzKAogIC5zb3JpZHJhdy1zdHVkaW8tc3BsaXQtd29ya3NwYWNlLAogIC5zb3JpZHJhdy1saXRlLXN0dWRpby1zcGxpdC13b3Jrc3BhY2UsCiAgLnNvcmlkcmF3LXN0dWRpby1jb21wYWN0LW1vYmlsZS13b3Jrc3BhY2UsCiAgLnNvcmlkcmF3LXN0dWRpby1jb21wYWN0LW1vYmlsZS1idWlsZGVyCikKLnNvcmlkcmF3LXN0dWRpby12b2NhbC1zbG90CmJ1dHRvbjppcyhbZGF0YS12b2NhbC1hZGQtbWVtYmVyPSJtYWxlIl0sIFtkYXRhLXZvY2FsLWFkZC1tZW1iZXI9ImZlbWFsZSJdKTpub3QoOmRpc2FibGVkKSB7CiAgYmFja2dyb3VuZDogI2ZmZiAhaW1wb3J0YW50OwogIGJhY2tncm91bmQtY29sb3I6ICNmZmYgIWltcG9ydGFudDsKICBiYWNrZ3JvdW5kLWltYWdlOiBub25lICFpbXBvcnRhbnQ7CiAgYm9yZGVyOiAwICFpbXBvcnRhbnQ7Cn0KCkBtZWRpYSAoaG92ZXI6IGhvdmVyKSBhbmQgKHBvaW50ZXI6IGZpbmUpIHsKICBodG1sW2RhdGEtc29yaWRyYXctdGhlbWU9ImxpZ2h0Il0gYm9keSAjcm9vdCAuc29yaWRyYXctYXBwLXJvb3QKICA6aXMoCiAgICAuc29yaWRyYXctc3R1ZGlvLXNwbGl0LXdvcmtzcGFjZSwKICAgIC5zb3JpZHJhdy1saXRlLXN0dWRpby1zcGxpdC13b3Jrc3BhY2UsCiAgICAuc29yaWRyYXctc3R1ZGlvLWNvbXBhY3QtbW9iaWxlLXdvcmtzcGFjZSwKICAgIC5zb3JpZHJhdy1zdHVkaW8tY29tcGFjdC1tb2JpbGUtYnVpbGRlcgogICkKICAuc29yaWRyYXctc3R1ZGlvLXZvY2FsLXNsb3QKICBidXR0b246aXMoW2RhdGEtdm9jYWwtYWRkLW1lbWJlcj0ibWFsZSJdLCBbZGF0YS12b2NhbC1hZGQtbWVtYmVyPSJmZW1hbGUiXSk6bm90KDpkaXNhYmxlZCk6aG92ZXIgewogICAgYmFja2dyb3VuZDogI2ZmZiAhaW1wb3J0YW50OwogICAgYmFja2dyb3VuZC1jb2xvcjogI2ZmZiAhaW1wb3J0YW50OwogICAgYmFja2dyb3VuZC1pbWFnZTogbm9uZSAhaW1wb3J0YW50OwogICAgYm9yZGVyOiAwICFpbXBvcnRhbnQ7CiAgfQp9Cg==').decode('utf-8')
-          path.write_text(text.rstrip() + block + '\n', encoding='utf-8')
+          p = Path('src/App.tsx')
+          lines = p.read_text(encoding='utf-8').splitlines()
+          hits = [i for i,l in enumerate(lines) if 'data-vocal-add-member' in l or '남성 멤버 추가' in l or '여성 멤버 추가' in l]
+          print('hits=', [i+1 for i in hits])
+          shown=set()
+          for i in hits:
+              start=max(0,i-25); end=min(len(lines),i+30)
+              key=(start,end)
+              if key in shown: continue
+              shown.add(key)
+              print(f'\n--- lines {start+1}-{end} ---')
+              for n in range(start,end):
+                  print(f'{n+1:06d}: {lines[n]}')
+          print('\n--- theme state candidates ---')
+          for i,l in enumerate(lines):
+              if any(k in l for k in ['isDarkMode', 'theme ===', 'currentTheme', 'data-soridraw-theme', 'studio-black']):
+                  if abs(i - hits[0]) < 1200 if hits else False:
+                      print(f'{i+1:06d}: {l}')
           PY
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Type check
-        run: npx tsc --noEmit
-
-      - name: Publish validated source branch
-        shell: bash
-        run: |
-          git config user.name "andrawing1212"
-          git config user.email "andrawing1212@gmail.com"
-          git checkout -B preview-vocal-add-light-white-v12
-          git add src/components/studio/studioLayout.css
-          git commit -m "fix(preview): make light vocal add-member buttons white"
-          git push origin preview-vocal-add-light-white-v12 --force

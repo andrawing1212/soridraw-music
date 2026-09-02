@@ -1,0 +1,48 @@
+name: OPS Preview Hover CSS V4
+permissions:
+  contents: write
+on:
+  push:
+    branches: [ops-preview-hover-css-v4]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply CSS isolation patch on clean preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "$GITHUB_SHA:scripts/apply-hover-css-v4.py" > /tmp/apply-hover-css-v4.py
+          git fetch origin preview
+          git switch --detach origin/preview
+          test "$(git rev-parse HEAD)" = "d678020651b6acd71ce19275092600e5f34621f1"
+          python3 /tmp/apply-hover-css-v4.py
+          git diff --check
+          test "$(git diff --name-only)" = "src/components/studio/studioLayout.css"
+          git diff -- src/components/studio/studioLayout.css | grep -q '986 — idle hover style/layout isolation'
+          if git diff -- src/components/studio/studioLayout.css | grep '^[-+].*soridraw-studio-splitter'; then
+            echo 'splitter rule changed unexpectedly'
+            exit 1
+          fi
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Publish validated source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git add src/components/studio/studioLayout.css
+          git commit -m "perf(preview): isolate Studio idle hover recalculation"
+          git push origin HEAD:refs/heads/preview-hover-css-v4 --force

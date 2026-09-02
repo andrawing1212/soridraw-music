@@ -1,0 +1,130 @@
+name: OPS Preview Vocal Add Button V11
+
+on:
+  push:
+    branches: [ops-preview-vocal-add-button-v11]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply vocal add-member style fix on current preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview
+          git switch --detach origin/preview
+          cat >> src/components/studio/studioLayout.css <<'CSS'
+
+          /* 1011 — Vocal add-member controls: borderless split + compact/mobile color parity.
+           * Keep semantic male/female tint when split Studio collapses into its compact
+           * mobile presentation. Scope only to the two add-member controls; no layout or
+           * vocal behavior changes. */
+          body #root .soridraw-app-root
+          :is(
+            .soridraw-studio-split-workspace,
+            .soridraw-lite-studio-split-workspace,
+            .soridraw-studio-compact-mobile-workspace,
+            .soridraw-studio-compact-mobile-builder
+          )
+          .soridraw-studio-vocal-slot button[data-vocal-add-member="male"]:not(:disabled) {
+            background: rgb(37 99 235 / 0.10) !important;
+            background-color: rgb(37 99 235 / 0.10) !important;
+            background-image: none !important;
+            border: 0 !important;
+            color: rgb(96 165 250) !important;
+            -webkit-text-fill-color: rgb(96 165 250) !important;
+          }
+
+          body #root .soridraw-app-root
+          :is(
+            .soridraw-studio-split-workspace,
+            .soridraw-lite-studio-split-workspace,
+            .soridraw-studio-compact-mobile-workspace,
+            .soridraw-studio-compact-mobile-builder
+          )
+          .soridraw-studio-vocal-slot button[data-vocal-add-member="female"]:not(:disabled) {
+            background: rgb(219 39 119 / 0.10) !important;
+            background-color: rgb(219 39 119 / 0.10) !important;
+            background-image: none !important;
+            border: 0 !important;
+            color: rgb(244 114 182) !important;
+            -webkit-text-fill-color: rgb(244 114 182) !important;
+          }
+
+          body #root .soridraw-app-root
+          :is(
+            .soridraw-studio-split-workspace,
+            .soridraw-lite-studio-split-workspace,
+            .soridraw-studio-compact-mobile-workspace,
+            .soridraw-studio-compact-mobile-builder
+          )
+          .soridraw-studio-vocal-slot button[data-vocal-add-member="male"]:not(:disabled) :where(svg, span),
+          body #root .soridraw-app-root
+          :is(
+            .soridraw-studio-split-workspace,
+            .soridraw-lite-studio-split-workspace,
+            .soridraw-studio-compact-mobile-workspace,
+            .soridraw-studio-compact-mobile-builder
+          )
+          .soridraw-studio-vocal-slot button[data-vocal-add-member="female"]:not(:disabled) :where(svg, span) {
+            color: inherit !important;
+            -webkit-text-fill-color: currentColor !important;
+          }
+
+          @media (hover: hover) and (pointer: fine) {
+            body #root .soridraw-app-root
+            :is(
+              .soridraw-studio-split-workspace,
+              .soridraw-lite-studio-split-workspace,
+              .soridraw-studio-compact-mobile-workspace,
+              .soridraw-studio-compact-mobile-builder
+            )
+            .soridraw-studio-vocal-slot button[data-vocal-add-member="male"]:not(:disabled):hover {
+              background: rgb(37 99 235 / 0.20) !important;
+              background-color: rgb(37 99 235 / 0.20) !important;
+              border: 0 !important;
+            }
+
+            body #root .soridraw-app-root
+            :is(
+              .soridraw-studio-split-workspace,
+              .soridraw-lite-studio-split-workspace,
+              .soridraw-studio-compact-mobile-workspace,
+              .soridraw-studio-compact-mobile-builder
+            )
+            .soridraw-studio-vocal-slot button[data-vocal-add-member="female"]:not(:disabled):hover {
+              background: rgb(219 39 119 / 0.20) !important;
+              background-color: rgb(219 39 119 / 0.20) !important;
+              border: 0 !important;
+            }
+          }
+          CSS
+          git diff --check
+          git diff -- src/components/studio/studioLayout.css
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Publish validated source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git add src/components/studio/studioLayout.css
+          git commit -m "fix(preview): keep vocal add-member colors in compact split"
+          git branch -f preview-vocal-add-button-v11 HEAD
+          git push origin preview-vocal-add-button-v11 --force

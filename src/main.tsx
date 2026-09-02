@@ -6,6 +6,7 @@ import './index.css';
 import './components/studio/studioLayout.css';
 import './components/explore/exploreNavigation.css';
 import './styles/classicLightVisualFixes.css';
+import './styles/exploreProfileHeroParity.css';
 import './components/studio/tabletTouchPacedContent';
 import { startPreviewVersionSignal } from './services/versionSignalService';
 

@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { resolveExpandedHeight, useStableContentHeight } from "../lib/stableContentHeight";
+import { useStableHoverTooltip } from "../lib/stableHoverTooltip";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -283,7 +284,7 @@ function GenreHierarchySelectorComponent({
   const [activeGroup, setActiveGroup] = useState<GroupItem | null>(null);
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>("main");
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
   const [directInputDraft, setDirectInputDraft] = useState(directInput?.selectedText || '');
   const [hoveredModalItem, setHoveredModalItem] = useState<{
@@ -1031,9 +1032,8 @@ function GenreHierarchySelectorComponent({
                   ({selectedCount}/{totalCount})
                 </span>
               </h3>
-              <AnimatePresence>
-                {showTitleTooltip && (
-                  <motion.div
+              {showTitleTooltip && (
+<motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
@@ -1044,8 +1044,7 @@ function GenreHierarchySelectorComponent({
                       곡의 핵심 장르와 세부 스타일을 결정합니다. 대분류와 세부 장르를 조합해 원하는 음악적 색깔을 만드세요.
                     </p>
                   </motion.div>
-                )}
-              </AnimatePresence>
+              )}
             </div>
           </div>
 

@@ -40,6 +40,7 @@ const SORIDRAW_898_CACHE_DIAGNOSTICS_LIVE_PANEL = true;
 const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from './lib/studioActionBarGeometry';
 import { resolveExpandedHeight, useStableContentHeight } from './lib/stableContentHeight';
+import { useStableHoverTooltip } from './lib/stableHoverTooltip';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -7376,7 +7377,7 @@ function App() {
   const storyboardModalBackdropMouseDownRef = useRef(false);
   const storyboardOpenTimerRef = useRef<number | null>(null);
   const [isStoryboardOpening, setIsStoryboardOpening] = useState(false);
-  const [showStoryboardTitleTooltip, setShowStoryboardTitleTooltip] = useState(false);
+  const [showStoryboardTitleTooltip, setShowStoryboardTitleTooltip] = useStableHoverTooltip(60);
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const [isGlobalSearchOpening, setIsGlobalSearchOpening] = useState(false);
   const globalSearchOpenTimerRef = useRef<number | null>(null);
@@ -16669,9 +16670,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           스토리보드
                         </h3>
                       </div>
-                      <AnimatePresence>
-                        {showStoryboardTitleTooltip && (
-                          <motion.div
+                      {showStoryboardTitleTooltip && (
+<motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 10 }}
@@ -16680,8 +16680,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             <p className="soridraw-card-title-tooltip-label hidden">스토리보드</p>
                             <p className="soridraw-card-title-tooltip-description text-[11px] leading-snug">캐릭터, 관계, 말투, 감정, 세계관과 이야기 전개를 설정합니다.</p>
                           </motion.div>
-                        )}
-                      </AnimatePresence>
+                      )}
                       <p className="text-xs md:text-sm text-[var(--text-secondary)] truncate">
                         {buildStoryboardSummary(situation)}
                       </p>
@@ -20037,7 +20036,7 @@ function GenreCategorySectionComponent({
   isExpanded = false,
   onToggleExpand,
 }: GenreCategorySectionProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(120);
 
@@ -20078,9 +20077,8 @@ function GenreCategorySectionComponent({
               {title}
               <span className="soridraw-menu-count text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedChild ? '1' : '0'}/1)</span>
             </h3>
-            <AnimatePresence>
-              {showTitleTooltip && (
-                <motion.div
+            {showTitleTooltip && (
+<motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
@@ -20089,8 +20087,7 @@ function GenreCategorySectionComponent({
                   <p className="soridraw-card-title-tooltip-label hidden">{title}</p>
                   <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
                 </motion.div>
-              )}
-            </AnimatePresence>
+            )}
           </div>
         </div>
 
@@ -20421,7 +20418,7 @@ function CycleSectionComponent({
   onModalStateChange,
   directInput
 }: CycleSectionProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(64);
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
@@ -20544,9 +20541,8 @@ function CycleSectionComponent({
                   <span className="soridraw-menu-count text-[15px] font-normal text-[var(--text-secondary)] ml-1.5 shrink-0">({countLabel})</span>
                 )}
               </h3>
-              <AnimatePresence>
-                {showTitleTooltip && (
-                  <motion.div
+              {showTitleTooltip && (
+<motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
@@ -20555,8 +20551,7 @@ function CycleSectionComponent({
                     <p className="soridraw-card-title-tooltip-label hidden">{titleKo || title}</p>
                     <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                   </motion.div>
-                )}
-              </AnimatePresence>
+              )}
             </div>
           </div>
 
@@ -21306,7 +21301,7 @@ function CategorySectionComponent({
   uniformKeywordGrid = false,
   directInput
 }: CategorySectionProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(84);
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
@@ -21368,9 +21363,8 @@ function CategorySectionComponent({
                 <span className="truncate">{titleKo || title}</span>
                 <span className="soridraw-menu-count text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selected.length}/{items.length})</span>
               </h3>
-              <AnimatePresence>
-                {showTitleTooltip && (
-                  <motion.div
+              {showTitleTooltip && (
+<motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
@@ -21379,8 +21373,7 @@ function CategorySectionComponent({
                     <p className="soridraw-card-title-tooltip-label hidden">{titleKo || title}</p>
                     <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                   </motion.div>
-                )}
-              </AnimatePresence>
+              )}
             </div>
           </div>
           <div className="soridraw-card-header-actions flex items-center gap-2">
@@ -21799,7 +21792,7 @@ function SongStructureIntegratedControlComponent({
   onModalStateChange,
   naturalResponsiveHeight = false
 }: SongStructureIntegratedControlProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const customModalHistoryPushedRef = useRef(false);
@@ -23134,9 +23127,8 @@ function SongStructureIntegratedControlComponent({
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
-          <AnimatePresence>
-            {showTitleTooltip && (
-              <motion.div
+          {showTitleTooltip && (
+<motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
@@ -23145,8 +23137,7 @@ function SongStructureIntegratedControlComponent({
                 <p className="soridraw-card-title-tooltip-label hidden">가사</p>
                 <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">가사 분량과 곡의 전개 방식을 통합적으로 설정합니다.</p>
               </motion.div>
-            )}
-          </AnimatePresence>
+          )}
         </div>
 
         <div className="flex flex-col flex-1 overflow-visible">
@@ -25360,7 +25351,7 @@ function VocalControlComponent({
   randomActivationKey = 0,
   naturalResponsiveHeight = false,
 }: VocalControlProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const [editingVocalMemberId, setEditingVocalMemberId] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -26068,9 +26059,8 @@ function VocalControlComponent({
           </button>
         </div>
 
-        <AnimatePresence>
-          {showTitleTooltip && (
-            <motion.div
+        {showTitleTooltip && (
+<motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
@@ -26079,8 +26069,7 @@ function VocalControlComponent({
               <p className="soridraw-card-title-tooltip-label hidden">보컬</p>
               <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{getCombinedDescription()}</p>
             </motion.div>
-          )}
-        </AnimatePresence>
+        )}
       </div>
 
       <div className={cn(
@@ -26745,7 +26734,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
   const pendingClientXRef = useRef<number | null>(null);
   const dragRafRef = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
 
   const bpmToPercent = useCallback((value: number) => (
     ((value - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100
@@ -26925,9 +26914,8 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                 <span className="w-1.5 h-6 bg-[#FFB400] rounded-full" />
                 템포(BPM)
               </h3>
-              <AnimatePresence>
-                {showTitleTooltip && (
-                  <motion.div
+              {showTitleTooltip && (
+<motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
@@ -26936,8 +26924,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                     <p className="soridraw-card-title-tooltip-label hidden">템포(BPM)</p>
                     <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">음악의 전체적인 속도를 설정합니다.</p>
                   </motion.div>
-                )}
-              </AnimatePresence>
+              )}
             </div>
 
             <div 

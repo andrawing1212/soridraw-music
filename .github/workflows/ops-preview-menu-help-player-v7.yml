@@ -1,0 +1,73 @@
+name: OPS Preview Menu Help Player V7
+
+on:
+  push:
+    branches: [ops-preview-menu-help-player-v7]
+    paths:
+      - 'scripts/apply-menu-help-player-v7.py'
+      - '.github/workflows/ops-preview-menu-help-player-v7.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply safe v7 patch on current preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "$GITHUB_SHA:scripts/apply-menu-help-player-v7.py" > /tmp/apply-menu-help-player-v7.py
+          git fetch origin preview
+          git switch --detach origin/preview
+          test "$(git rev-parse HEAD)" = "518fa7a29a68225ad6769d7e9e16981ab1d57135"
+          python3 /tmp/apply-menu-help-player-v7.py
+          git add -N src/components/studio/MenuTitleTooltipPortal.tsx src/lib/menuHelpPreference.ts
+          git diff --check
+          actual="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            src/App.tsx \
+            src/components/GenreHierarchySelector.tsx \
+            src/components/GlobalPlayer.tsx \
+            src/components/studio/MenuTitleTooltipPortal.tsx \
+            src/components/studio/studioLayout.css \
+            src/lib/menuHelpPreference.ts \
+            src/lib/stableHoverTooltip.ts \
+            src/pages/MyPage.tsx | sort)"
+          test "$actual" = "$expected"
+          test "$(grep -R -l 'data-soridraw-menu-title-tooltip-portal' src/components/studio/MenuTitleTooltipPortal.tsx | wc -l)" -eq 1
+          test "$(grep -o '<MenuTitleTooltipPortal>' src/App.tsx | wc -l)" -eq 7
+          test "$(grep -o '<MenuTitleTooltipPortal>' src/components/GenreHierarchySelector.tsx | wc -l)" -eq 1
+          grep -q "메뉴 설명 팁" src/pages/MyPage.tsx
+          grep -q "readMenuHelpTipsEnabled" src/App.tsx
+          grep -q "fixed z-\[240\] flex flex-col" src/components/GlobalPlayer.tsx
+          grep -q "z-\[235\] bg-transparent" src/components/GlobalPlayer.tsx
+          grep -q "z-\[250\]" src/components/GlobalPlayer.tsx
+          ! grep -q "988 — title tooltip sibling stacking only" src/components/studio/studioLayout.css
+          grep -q 'overflow-x: hidden' src/components/studio/liteSplitWorkspace.css
+          git diff -- src/components/studio/liteSplitWorkspace.css --exit-code
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Publish validated source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git add src/App.tsx src/components/GenreHierarchySelector.tsx src/components/GlobalPlayer.tsx src/components/studio/MenuTitleTooltipPortal.tsx src/components/studio/studioLayout.css src/lib/menuHelpPreference.ts src/lib/stableHoverTooltip.ts src/pages/MyPage.tsx
+          git commit -m "feat(preview): add menu help control and player layering"
+          git push --force origin HEAD:refs/heads/preview-menu-help-player-v7

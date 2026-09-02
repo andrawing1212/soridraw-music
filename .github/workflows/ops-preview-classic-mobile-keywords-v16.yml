@@ -1,0 +1,23 @@
+name: OPS Preview Classic Mobile Keywords V16
+
+on:
+  push:
+    branches:
+      - ops-preview-classic-mobile-keywords-v16
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect keyword DOM and CSS owners
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== builder live keywords ==='
+          grep -R -n -C 8 'soridraw-builder-live-keywords' src || true
+          echo '=== keyword chip candidates ==='
+          grep -R -n -C 5 -E 'live-keyword|keyword-chip|selected-keyword|keyword.*chip' src || true

@@ -5,53 +5,25 @@ on:
     branches: [ops-preview-vocal-mobile-v8]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  validate:
+  inspect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: Apply classic dark mobile vocal grid fix
+      - name: Inspect current preview vocal markup
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin preview
           git switch --detach origin/preview
-          test "$(git rev-parse HEAD)" = "b96524b38cf5d8ee77b917c5755e0abd142618f6"
-          cat >> src/components/studio/studioLayout.css <<'CSS'
-
-          /* 1009 — Classic Dark mobile vocal group one-card rows.
-           * 1008 correctly covered Studio Black split/mobile-pane, but the normal dark
-           * mobile Studio runs under the Classic theme. Scope this only to the compact
-           * mobile builder so desktop Classic and split geometry stay unchanged. */
-          html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
-          .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
-          .soridraw-studio-compact-mobile-builder .soridraw-vocal-member-grid {
-            grid-template-columns: minmax(0, 1fr) !important;
-          }
-          CSS
-          git diff --check
-          git diff -- src/components/studio/studioLayout.css
-      - name: Install dependencies
-        run: npm ci
-      - name: Build
-        run: npm run build
-      - name: Type check
-        run: npx tsc --noEmit
-      - name: Publish validated source branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "andrawing1212"
-          git config user.email "andrawing1212@gmail.com"
-          git add src/components/studio/studioLayout.css
-          git commit -m "fix(preview): make dark mobile vocal members single-column"
-          git branch -f preview-vocal-mobile-v9 HEAD
-          git push origin preview-vocal-mobile-v9 --force
+          echo "PREVIEW_HEAD=$(git rev-parse HEAD)"
+          echo '--- vocalMembers contexts ---'
+          grep -n -B 14 -A 44 'vocalMembers' src/App.tsx | head -n 700 || true
+          echo '--- vocal member grid class in App ---'
+          grep -n -B 8 -A 20 'soridraw-vocal-member-grid' src/App.tsx || true
+          echo '--- member count label contexts ---'
+          grep -n -B 10 -A 50 '멤버 (' src/App.tsx | head -n 300 || true

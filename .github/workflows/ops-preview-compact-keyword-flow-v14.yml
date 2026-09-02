@@ -1,0 +1,85 @@
+name: OPS Preview Compact Keyword Flow V14
+
+on:
+  push:
+    branches: [ops-preview-compact-keyword-flow-v14]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply compact outer-window keyword flow only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview
+          git switch --detach origin/preview
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/components/studio/studioLayout.css')
+          css = path.read_text(encoding='utf-8')
+          marker = '/* 1015 — Compact outer-window selected keywords follow native mobile flow.'
+          if marker in css:
+              raise SystemExit('1015 block already exists; refusing duplicate patch')
+          required = [
+              ':root[data-soridraw-theme="studio-black"] .soridraw-builder-live-keywords {',
+              ':root[data-soridraw-theme="studio-black"] .soridraw-live-keywords-fixed {',
+          ]
+          missing = [item for item in required if item not in css]
+          if missing:
+              raise SystemExit(f'Expected keyword baseline rules missing: {missing}')
+
+          patch = r'''
+
+/* 1015 — Compact outer-window selected keywords follow native mobile flow.
+ * Only the real Compact workspace, entered by shrinking the browser viewport,
+ * swaps Studio Black's fixed portal rail for the existing inline builder chips.
+ * Pane-only mobile states reached by dragging the split bar never set this
+ * data attribute, so their approved keyword placement stays untouched. */
+html[data-soridraw-theme="studio-black"][data-soridraw-compact-workspace="true"]
+.soridraw-builder-live-keywords {
+  display: block !important;
+}
+
+html[data-soridraw-theme="studio-black"][data-soridraw-compact-workspace="true"]
+body > .soridraw-live-keywords-fixed {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+'''
+          path.write_text(css.rstrip() + patch + '\n', encoding='utf-8')
+          PY
+
+          git diff --check
+          test "$(git diff --name-only | wc -l)" -eq 1
+          test "$(git diff --name-only)" = 'src/components/studio/studioLayout.css'
+          grep -q 'data-soridraw-compact-workspace="true"' src/components/studio/studioLayout.css
+          git diff -- src/components/studio/studioLayout.css
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Publish validated source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git add src/components/studio/studioLayout.css
+          git commit -m "fix(preview): move compact keywords below command"
+          git branch -f preview-compact-keyword-flow-v14 HEAD
+          git push origin preview-compact-keyword-flow-v14 --force

@@ -1,0 +1,23 @@
+name: TEMP Tooltip Usage Map
+permissions:
+  contents: read
+on:
+  push:
+    branches: [preview-tooltip-perf-v1]
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview-tooltip-perf-v1
+      - name: Map tooltip usages
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== hoveredItem usages ==='
+          grep -n "hoveredItem\|setHoveredItem\|isTooltipHovered\|setIsTooltipHovered" src/App.tsx
+          echo '=== CategoryItem type ==='
+          grep -n -A22 -B5 "interface CategoryItem\|type CategoryItem" src/App.tsx | head -n 80 || true
+          echo '=== action hint helper ==='
+          grep -n -A30 -B10 "isActionButtonHintItem" src/App.tsx | head -n 100

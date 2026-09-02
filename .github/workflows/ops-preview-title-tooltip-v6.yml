@@ -1,0 +1,68 @@
+name: OPS Preview Title Tooltip V6
+
+on:
+  push:
+    branches: [ops-preview-title-tooltip-v6]
+    paths:
+      - 'scripts/apply-title-tooltip-v6.py'
+      - '.github/workflows/ops-preview-title-tooltip-v6.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply safe title tooltip patch on rollback preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "$GITHUB_SHA:scripts/apply-title-tooltip-v6.py" > /tmp/apply-title-tooltip-v6.py
+          git fetch origin preview
+          git switch --detach origin/preview
+          test "$(git rev-parse HEAD)" = "05fce240107df33607d73a036744efaf3a8634f5"
+          python3 /tmp/apply-title-tooltip-v6.py
+          git add -N src/lib/stableHoverTooltip.ts
+          git diff --check
+          actual="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            .deploy/rollback-title-tooltip-v5.txt \
+            src/App.tsx \
+            src/components/GenreHierarchySelector.tsx \
+            src/components/studio/studioLayout.css \
+            src/lib/stableHoverTooltip.ts \
+            src/rollbackPreviewMarker.ts | sort)"
+          test "$actual" = "$expected"
+          grep -q "useStableHoverTooltip(60)" src/App.tsx
+          grep -q "useStableHoverTooltip(60)" src/components/GenreHierarchySelector.tsx
+          grep -q "988 — title tooltip sibling stacking only" src/components/studio/studioLayout.css
+          ! grep -q "soridraw-lite-split-pane.is-left:has(.soridraw-card-title-tooltip)" src/components/studio/studioLayout.css
+          ! grep -q "soridraw-studio-builder-pane:has(.soridraw-card-title-tooltip)" src/components/studio/studioLayout.css
+          test ! -e src/rollbackPreviewMarker.ts
+          test ! -e .deploy/rollback-title-tooltip-v5.txt
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Publish validated source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git add src/App.tsx src/components/GenreHierarchySelector.tsx src/components/studio/studioLayout.css src/lib/stableHoverTooltip.ts
+          git add -u .deploy/rollback-title-tooltip-v5.txt src/rollbackPreviewMarker.ts
+          git commit -m "fix(preview): stabilize unclipped title help"
+          git push --force origin HEAD:preview-title-tooltip-v6

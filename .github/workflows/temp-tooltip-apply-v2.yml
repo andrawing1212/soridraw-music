@@ -1,0 +1,55 @@
+name: TEMP Tooltip Apply V2
+permissions:
+  contents: write
+on:
+  push:
+    branches: [preview-tooltip-perf-v1]
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview-tooltip-perf-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply source patch
+        run: python3 .tmp/apply-tooltip-perf-v1.py
+      - name: Verify source scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          if git diff --quiet -- src/App.tsx src/components/studio/liteSplitWorkspace.css; then
+            echo 'No source diff to commit.'
+            exit 0
+          fi
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/App.tsx src/components/studio/liteSplitWorkspace.css "
+          grep -q 'SORIDRAW_TOOLTIP_ISOLATED_HOST_984' src/App.tsx
+          ! grep -q 'setHoveredItemState' src/App.tsx
+          ! grep -q '983 — CPU-only idle pointer budget' src/components/studio/liteSplitWorkspace.css
+          grep -q '576 — browser-native leaf isolation' src/components/studio/liteSplitWorkspace.css
+          grep -q "window.addEventListener('pointerover', rememberPointer" src/App.tsx
+          ! git diff --name-only | grep -E 'StudioSplitWorkspace\.tsx|LiteStudioSplitWorkspace\.tsx|FavoritesPage\.tsx|SunoLibraryPage\.tsx|firestore|functions|rules|firebase' || false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Commit source-only result when changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- src/App.tsx src/components/studio/liteSplitWorkspace.css; then
+            echo 'Source already committed.'
+            exit 0
+          fi
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/App.tsx src/components/studio/liteSplitWorkspace.css
+          git commit -m 'perf(temp): isolate Studio tooltip rendering'
+          git push origin HEAD:preview-tooltip-perf-v1

@@ -15012,3 +15012,13 @@ button[data-vocal-add-member="female"]:not(:disabled) :where(svg, span) {
     background-color: rgb(219 39 119 / 0.20) !important;
   }
 }
+
+/* 1009 — Classic Dark mobile vocal group one-card rows.
+ * 1008 correctly covered Studio Black split/mobile-pane, but the normal dark
+ * mobile Studio runs under the Classic theme. Scope this only to the compact
+ * mobile builder so desktop Classic and split geometry stay unchanged. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+.soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
+.soridraw-studio-compact-mobile-builder .soridraw-vocal-member-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}

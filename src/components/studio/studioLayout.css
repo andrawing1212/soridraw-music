@@ -15121,3 +15121,36 @@ body #root .soridraw-app-root
     border: 0 !important;
   }
 }
+/* 1013 — Light-mode vocal add-member white surface. */
+html[data-soridraw-theme="light"] body #root .soridraw-app-root
+:is(
+  .soridraw-studio-split-workspace,
+  .soridraw-lite-studio-split-workspace,
+  .soridraw-studio-compact-mobile-workspace,
+  .soridraw-studio-compact-mobile-builder
+)
+.soridraw-studio-vocal-slot
+button:is([data-vocal-add-member="male"], [data-vocal-add-member="female"]):not(:disabled) {
+  background: #fff !important;
+  background-color: #fff !important;
+  background-image: none !important;
+  border: 0 !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="light"] body #root .soridraw-app-root
+  :is(
+    .soridraw-studio-split-workspace,
+    .soridraw-lite-studio-split-workspace,
+    .soridraw-studio-compact-mobile-workspace,
+    .soridraw-studio-compact-mobile-builder
+  )
+  .soridraw-studio-vocal-slot
+  button:is([data-vocal-add-member="male"], [data-vocal-add-member="female"]):not(:disabled):hover {
+    background: #fff !important;
+    background-color: #fff !important;
+    background-image: none !important;
+    border: 0 !important;
+  }
+}
+

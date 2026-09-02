@@ -11,13 +11,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: preview-tooltip-perf-v1
-      - name: Show tooltip and CPU V2 blocks
+      - name: Show tooltip usage map
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== tooltip state block ==='
-          grep -n -A90 -B20 "SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_982" src/App.tsx | head -n 140
-          echo '=== tooltip render block ==='
-          grep -n -A100 -B10 "Tooltip / Description Overlay" src/App.tsx | head -n 140
-          echo '=== CPU-only CSS block ==='
-          grep -n -A45 -B5 "983 — CPU-only idle pointer budget" src/components/studio/liteSplitWorkspace.css | head -n 80
+          echo '=== hoveredItem usages ==='
+          grep -n "hoveredItem\|setHoveredItem\|isTooltipHovered\|setIsTooltipHovered" src/App.tsx
+          echo '=== CategoryItem type ==='
+          grep -n -A22 -B5 "interface CategoryItem\|type CategoryItem" src/App.tsx | head -n 80 || true
+          echo '=== action hint helper ==='
+          grep -n -A30 -B10 "isActionButtonHintItem" src/App.tsx | head -n 100
+          echo '=== tooltip render ==='
+          grep -n -A45 -B5 "Tooltip / Description Overlay" src/App.tsx | head -n 70

@@ -29,48 +29,14 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import base64
 
           path = Path('src/components/studio/studioLayout.css')
           text = path.read_text(encoding='utf-8')
           marker = '/* 1013 — Light-mode vocal add-member white surface. */'
           if marker in text:
               raise SystemExit('marker already present')
-
-          block = r'''
-
-/* 1013 — Light-mode vocal add-member white surface. */
-html[data-soridraw-theme="light"] body #root .soridraw-app-root
-:is(
-  .soridraw-studio-split-workspace,
-  .soridraw-lite-studio-split-workspace,
-  .soridraw-studio-compact-mobile-workspace,
-  .soridraw-studio-compact-mobile-builder
-)
-.soridraw-studio-vocal-slot
-button:is([data-vocal-add-member="male"], [data-vocal-add-member="female"]):not(:disabled) {
-  background: #fff !important;
-  background-color: #fff !important;
-  background-image: none !important;
-  border: 0 !important;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  html[data-soridraw-theme="light"] body #root .soridraw-app-root
-  :is(
-    .soridraw-studio-split-workspace,
-    .soridraw-lite-studio-split-workspace,
-    .soridraw-studio-compact-mobile-workspace,
-    .soridraw-studio-compact-mobile-builder
-  )
-  .soridraw-studio-vocal-slot
-  button:is([data-vocal-add-member="male"], [data-vocal-add-member="female"]):not(:disabled):hover {
-    background: #fff !important;
-    background-color: #fff !important;
-    background-image: none !important;
-    border: 0 !important;
-  }
-}
-'''
+          block = base64.b64decode('Ci8qIDEwMTMg4oCUIExpZ2h0LW1vZGUgdm9jYWwgYWRkLW1lbWJlciB3aGl0ZSBzdXJmYWNlLiAqLwpodG1sW2RhdGEtc29yaWRyYXctdGhlbWU9ImxpZ2h0Il0gYm9keSAjcm9vdCAuc29yaWRyYXctYXBwLXJvb3QKOmlzKAogIC5zb3JpZHJhdy1zdHVkaW8tc3BsaXQtd29ya3NwYWNlLAogIC5zb3JpZHJhdy1saXRlLXN0dWRpby1zcGxpdC13b3Jrc3BhY2UsCiAgLnNvcmlkcmF3LXN0dWRpby1jb21wYWN0LW1vYmlsZS13b3Jrc3BhY2UsCiAgLnNvcmlkcmF3LXN0dWRpby1jb21wYWN0LW1vYmlsZS1idWlsZGVyCikKLnNvcmlkcmF3LXN0dWRpby12b2NhbC1zbG90CmJ1dHRvbjppcyhbZGF0YS12b2NhbC1hZGQtbWVtYmVyPSJtYWxlIl0sIFtkYXRhLXZvY2FsLWFkZC1tZW1iZXI9ImZlbWFsZSJdKTpub3QoOmRpc2FibGVkKSB7CiAgYmFja2dyb3VuZDogI2ZmZiAhaW1wb3J0YW50OwogIGJhY2tncm91bmQtY29sb3I6ICNmZmYgIWltcG9ydGFudDsKICBiYWNrZ3JvdW5kLWltYWdlOiBub25lICFpbXBvcnRhbnQ7CiAgYm9yZGVyOiAwICFpbXBvcnRhbnQ7Cn0KCkBtZWRpYSAoaG92ZXI6IGhvdmVyKSBhbmQgKHBvaW50ZXI6IGZpbmUpIHsKICBodG1sW2RhdGEtc29yaWRyYXctdGhlbWU9ImxpZ2h0Il0gYm9keSAjcm9vdCAuc29yaWRyYXctYXBwLXJvb3QKICA6aXMoCiAgICAuc29yaWRyYXctc3R1ZGlvLXNwbGl0LXdvcmtzcGFjZSwKICAgIC5zb3JpZHJhdy1saXRlLXN0dWRpby1zcGxpdC13b3Jrc3BhY2UsCiAgICAuc29yaWRyYXctc3R1ZGlvLWNvbXBhY3QtbW9iaWxlLXdvcmtzcGFjZSwKICAgIC5zb3JpZHJhdy1zdHVkaW8tY29tcGFjdC1tb2JpbGUtYnVpbGRlcgogICkKICAuc29yaWRyYXctc3R1ZGlvLXZvY2FsLXNsb3QKICBidXR0b246aXMoW2RhdGEtdm9jYWwtYWRkLW1lbWJlcj0ibWFsZSJdLCBbZGF0YS12b2NhbC1hZGQtbWVtYmVyPSJmZW1hbGUiXSk6bm90KDpkaXNhYmxlZCk6aG92ZXIgewogICAgYmFja2dyb3VuZDogI2ZmZiAhaW1wb3J0YW50OwogICAgYmFja2dyb3VuZC1jb2xvcjogI2ZmZiAhaW1wb3J0YW50OwogICAgYmFja2dyb3VuZC1pbWFnZTogbm9uZSAhaW1wb3J0YW50OwogICAgYm9yZGVyOiAwICFpbXBvcnRhbnQ7CiAgfQp9Cg==').decode('utf-8')
           path.write_text(text.rstrip() + block + '\n', encoding='utf-8')
           PY
 

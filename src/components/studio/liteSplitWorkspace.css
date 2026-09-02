@@ -239,30 +239,6 @@
     will-change: auto !important;
   }
 
-  /* 983 — CPU-only idle pointer budget.
-   * Fast mouse sweeps were still forcing style/hit-test work through thousands
-   * of off-screen Music Note / Library descendants. Reuse the already verified
-   * browser-native row virtualization only while NOT dragging. Active rows are
-   * excluded so menus/popovers keep their existing overflow/stacking behavior.
-   * No split geometry, responsive rule, data path, or visual hover style changes. */
-  .soridraw-lite-studio-split-workspace:not(.is-dragging)
-  .soridraw-musicnote-song-card:not(.soridraw-list-perf-item--active) {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 92px;
-  }
-
-  .soridraw-lite-studio-split-workspace:not(.is-dragging)
-  .soridraw-library-playlist-row:not(.soridraw-list-perf-item--active) {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 76px;
-  }
-
-  .soridraw-lite-studio-split-workspace:not(.is-dragging)
-  .soridraw-library-workspace-group:not(.soridraw-list-perf-item--active) {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 168px;
-  }
-
   /* 576 — browser-native leaf isolation.
    * Do not swap React DOM and do not scan every row at pointer-down. While the
    * divider is held, the browser may skip off-screen leaf-card work and reuse

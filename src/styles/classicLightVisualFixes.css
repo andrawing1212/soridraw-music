@@ -79,37 +79,74 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-
   background: rgba(20, 20, 24, 0.055) !important;
 }
 
-/* Public profile hero is image-aware in Classic Light:
-   - with a background image, keep the same white-on-image contract as Dark/Split;
-   - without an image, the light-mode dark text rules above remain in force. */
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-name-line h1,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-stats strong {
-  color: rgba(255, 255, 255, 0.96) !important;
+/* 1018 — Public profile hero parity.
+   Split mode (studio-black) uses the base Explore hero contract, so whenever a
+   profile background image exists, force every mode to that same image/overlay
+   and text hierarchy. Without a background image, each mode keeps its normal
+   surface/text colors (Classic Light therefore remains dark text). */
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-background img {
+  opacity: 1 !important;
+  filter: saturate(.88) brightness(.58) !important;
 }
-
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-copy > p,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-handle,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-stats,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-genres span,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-social-links a,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-edit-button,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-own-profile {
-  color: rgba(255, 255, 255, 0.76) !important;
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-background span {
+  opacity: 1 !important;
+  background: linear-gradient(90deg, rgba(10,10,12,.86), rgba(10,10,12,.54), rgba(10,10,12,.3)) !important;
 }
-
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-social-links a:hover,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-edit-button:hover {
-  color: #ffffff !important;
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-name-line h1 {
+  color: rgba(255,255,255,.95) !important;
 }
-
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-avatar {
-  color: rgba(255, 255, 255, 0.82) !important;
-  background: rgba(10, 10, 12, 0.36) !important;
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-copy > p {
+  color: rgba(235,235,240,.52) !important;
 }
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-genres span,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-edit-button,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-own-profile {
-  background: rgba(255, 255, 255, 0.075) !important;
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-handle {
+  color: rgba(235,235,240,.40) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-stats {
+  color: rgba(235,235,240,.48) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-stats strong {
+  color: rgba(255,255,255,.88) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-genres span {
+  color: rgba(255,255,255,.62) !important;
+  background: rgba(255,255,255,.055) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-social-links a {
+  color: rgba(235,235,240,.48) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-social-links a:hover {
+  color: #fff !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-edit-button {
+  color: rgba(255,255,255,.74) !important;
+  background: rgba(255,255,255,.075) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-edit-button:hover {
+  color: #fff !important;
+  background: rgba(255,255,255,.12) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-own-profile {
+  color: rgba(255,255,255,.56) !important;
+  background: rgba(255,255,255,.055) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-avatar {
+  color: rgba(255,255,255,.72) !important;
+  background: rgba(255,255,255,.075) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-follow-button {
+  color: #171719 !important;
+  background: #f3f3f4 !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-follow-button:hover:not(:disabled) {
+  background: #fff !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-follow-button.is-following {
+  color: rgba(255,255,255,.76) !important;
+  background: rgba(255,255,255,.09) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-follow-button.is-following:hover:not(:disabled) {
+  color: #fff !important;
+  background: rgba(255,255,255,.13) !important;
 }
 
 /* Music Note: in Classic Light, inactive state controls use the same warm-light

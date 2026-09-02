@@ -7206,12 +7206,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               audioUrl,
                             });
                           }}
-                          onMouseEnter={(event) => {
+                          onMouseEnter={multiSelectMode ? ((event: React.MouseEvent<HTMLDivElement>) => {
                             handleLibraryDragSelectEnter(event, selection);
-                          }}
-                          onMouseLeave={() => {
-                            handleLibraryCardLongPressEnd();
-                          }}
+                          }) : undefined}
+                          onMouseLeave={isLibraryMousePressTracking ? handleLibraryCardLongPressEnd : undefined}
                           onClick={(e) => {
                              if (consumeLibrarySuppressedClick(e, selection.key)) return;
                              if (consumeLibraryDragSelectClick(e)) return;
@@ -7623,8 +7621,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         handleLibraryCardLongPressEnd();
                         setIsLibraryMousePressTracking(false);
                       }}
-                      onMouseEnter={(event) => handleLibraryDragSelectEnter(event, selection)}
-                      onMouseLeave={handleLibraryCardLongPressEnd}
+                      onMouseEnter={multiSelectMode ? ((event: React.MouseEvent<HTMLDivElement>) => handleLibraryDragSelectEnter(event, selection)) : undefined}
+                      onMouseLeave={isLibraryMousePressTracking ? handleLibraryCardLongPressEnd : undefined}
                       onTouchStart={(event) => handleLibraryCardLongPressStart(event, selection)}
                       onTouchMove={handleLibraryCardLongPressMove}
                       onTouchEnd={handleLibraryCardLongPressEnd}

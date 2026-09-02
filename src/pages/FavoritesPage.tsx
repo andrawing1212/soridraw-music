@@ -6202,15 +6202,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     if (consumeFavoriteSuppressedClick(event, song.id)) return;
                     if (consumeSelectionDragClick(event)) return;
                   }}
-                  onMouseEnter={(event) => {
+                  onMouseEnter={isSelectionMode ? ((event: React.MouseEvent<HTMLDivElement>) => {
                     handleSelectionDragEnter(event, song.id);
-                    event.currentTarget.style.backgroundColor = '#171717';
-                  }}
-                  onMouseLeave={(event) => {
+                  }) : undefined}
+                  onMouseLeave={isMusicNoteMousePressTracking ? (() => {
                     handleCardLongPressEnd();
                     setIsMusicNoteMousePressTracking(false);
-                    event.currentTarget.style.backgroundColor = '';
-                  }}
+                  }) : undefined}
                   onClick={(e) => {
                     if (consumeFavoriteSuppressedClick(e, song.id)) {
                       return;
@@ -6240,7 +6238,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     setSelectedSong(song);
                   }}
                   className={cn(
-                    "soridraw-musicnote-song-card soridraw-list-perf-item soridraw-perf-layout-region-item group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
+                    "soridraw-musicnote-song-card soridraw-list-perf-item soridraw-perf-layout-region-item group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] hover:bg-[#171717] select-none",
                     (activeFavoriteMenuId === song.id || activeFavoriteColorMenuId === song.id) ? "soridraw-list-perf-item--active z-[220]" : "z-0",
                     isSelectionMode ? "cursor-pointer" : "",
                     isFavoriteTrashMode ? "opacity-65 grayscale-[0.35] saturate-[0.45]" : ""

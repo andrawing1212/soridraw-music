@@ -7594,16 +7594,16 @@ function App() {
 
   const studioDescriptionControllerRef = useRef<StudioDescriptionOverlayController | null>(null);
   const studioDescriptionCurrentItemRef = useRef<CategoryItem | null>(null);
-  const studioDescriptionPointerRef = useRef({ x: 0, y: 0 });
+  const studioDescriptionPointerRef = useRef<{ x: number; y: number; target: EventTarget | null }>({ x: 0, y: 0, target: null });
   // SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_982
   // Keep fast cursor sweeps from forcing tooltip work for accidental flyovers.
   const studioDescriptionHoverTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    studioDescriptionPointerRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    studioDescriptionPointerRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2, target: null };
     const rememberPointer = (event: PointerEvent) => {
-      studioDescriptionPointerRef.current = { x: event.clientX, y: event.clientY };
+      studioDescriptionPointerRef.current = { x: event.clientX, y: event.clientY, target: event.target };
     };
     window.addEventListener('pointerover', rememberPointer, { capture: true, passive: true });
     window.addEventListener('pointerdown', rememberPointer, { capture: true, passive: true });
@@ -7627,17 +7627,24 @@ function App() {
       return fallback;
     }
 
-    const { x, y } = studioDescriptionPointerRef.current;
-    const hoveredElement = document.elementFromPoint(x, y) as HTMLElement | null;
-    const builderPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="builder"]');
-    const resultPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="result"]');
-    let paneElement = hoveredElement?.closest<HTMLElement>('[data-soridraw-studio-pane]') ?? null;
+    const { x, y, target } = studioDescriptionPointerRef.current;
+    // SORIDRAW_STUDIO_TOOLTIP_TARGET_REUSE_985
+    // pointerover already tells us the live DOM target. Reuse it instead of
+    // forcing elementFromPoint + two document queries on every tooltip hover.
+    const pointerTarget = target instanceof Element && target.isConnected ? target : null;
+    const hoveredElement = pointerTarget ?? document.elementFromPoint(x, y);
+    let paneElement = hoveredElement?.closest('[data-soridraw-studio-pane]') as HTMLElement | null;
+    let builderPane: HTMLElement | null = null;
+    let resultPane: HTMLElement | null = null;
 
     if (!paneElement && hoveredElement?.closest('.soridraw-studio-action-bar--tracking, .soridraw-studio-action-collapsed')) {
+      builderPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="builder"]');
       paneElement = builderPane;
     }
 
     if (!paneElement && y >= 58) {
+      builderPane ??= document.querySelector<HTMLElement>('[data-soridraw-studio-pane="builder"]');
+      resultPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="result"]');
       const builderRect = builderPane?.getBoundingClientRect();
       const resultRect = resultPane?.getBoundingClientRect();
       if (builderRect && x >= builderRect.left && x <= builderRect.right) paneElement = builderPane;

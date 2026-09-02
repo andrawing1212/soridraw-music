@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { resolveExpandedHeight, useStableContentHeight } from "../lib/stableContentHeight";
+import { useStableHoverTooltip } from "../lib/stableHoverTooltip";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -283,7 +284,7 @@ function GenreHierarchySelectorComponent({
   const [activeGroup, setActiveGroup] = useState<GroupItem | null>(null);
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>("main");
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
   const [directInputDraft, setDirectInputDraft] = useState(directInput?.selectedText || '');
   const [hoveredModalItem, setHoveredModalItem] = useState<{

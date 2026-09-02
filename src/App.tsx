@@ -40,6 +40,7 @@ const SORIDRAW_898_CACHE_DIAGNOSTICS_LIVE_PANEL = true;
 const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from './lib/studioActionBarGeometry';
 import { resolveExpandedHeight, useStableContentHeight } from './lib/stableContentHeight';
+import { useStableHoverTooltip } from './lib/stableHoverTooltip';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -7376,7 +7377,7 @@ function App() {
   const storyboardModalBackdropMouseDownRef = useRef(false);
   const storyboardOpenTimerRef = useRef<number | null>(null);
   const [isStoryboardOpening, setIsStoryboardOpening] = useState(false);
-  const [showStoryboardTitleTooltip, setShowStoryboardTitleTooltip] = useState(false);
+  const [showStoryboardTitleTooltip, setShowStoryboardTitleTooltip] = useStableHoverTooltip(60);
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const [isGlobalSearchOpening, setIsGlobalSearchOpening] = useState(false);
   const globalSearchOpenTimerRef = useRef<number | null>(null);
@@ -20037,7 +20038,7 @@ function GenreCategorySectionComponent({
   isExpanded = false,
   onToggleExpand,
 }: GenreCategorySectionProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(120);
 
@@ -20421,7 +20422,7 @@ function CycleSectionComponent({
   onModalStateChange,
   directInput
 }: CycleSectionProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(64);
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
@@ -21306,7 +21307,7 @@ function CategorySectionComponent({
   uniformKeywordGrid = false,
   directInput
 }: CategorySectionProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(84);
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
@@ -21799,7 +21800,7 @@ function SongStructureIntegratedControlComponent({
   onModalStateChange,
   naturalResponsiveHeight = false
 }: SongStructureIntegratedControlProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const customModalHistoryPushedRef = useRef(false);
@@ -25360,7 +25361,7 @@ function VocalControlComponent({
   randomActivationKey = 0,
   naturalResponsiveHeight = false,
 }: VocalControlProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const [editingVocalMemberId, setEditingVocalMemberId] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -26745,7 +26746,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
   const pendingClientXRef = useRef<number | null>(null);
   const dragRafRef = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
 
   const bpmToPercent = useCallback((value: number) => (
     ((value - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100

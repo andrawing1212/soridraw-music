@@ -16,6 +16,8 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Prepare source patch script
+        run: python3 .tmp/fix-tooltip-patch-script-v1.py
       - name: Apply source patch
         run: python3 .tmp/apply-tooltip-perf-v1.py
       - name: Verify source scope

@@ -13,11 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect keyword DOM and CSS owners
+      - name: Inspect classic keyword color and spacing owners
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== builder live keywords ==='
-          grep -R -n -C 8 'soridraw-builder-live-keywords' src || true
-          echo '=== keyword chip candidates ==='
-          grep -R -n -C 5 -E 'live-keyword|keyword-chip|selected-keyword|keyword.*chip' src || true
+          echo '=== chip class function ==='
+          grep -n -C 20 'getAppliedSelectionKeywordChipClass' src/App.tsx || true
+          echo '=== selected keyword text class function ==='
+          grep -n -C 20 'getAppliedSelectionKeywordTextClass' src/App.tsx || true
+          echo '=== classic light keyword CSS ==='
+          sed -n '4825,4925p' src/index.css
+          echo '=== builder keyword CSS outside Studio Black ==='
+          grep -n -C 10 'soridraw-builder-live-keywords' src/index.css || true

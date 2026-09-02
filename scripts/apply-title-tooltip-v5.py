@@ -146,7 +146,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   overflow: visible !important;
 }
 '''
-css.write_text(css_text + css_block + '\n', encoding='utf-8')
+css.write_text(css_text + css_block.rstrip('\n') + '\n', encoding='utf-8')
 
 print(f'App tooltip states stabilized: {app_count}')
 print(f'Genre tooltip states stabilized: {genre_count}')

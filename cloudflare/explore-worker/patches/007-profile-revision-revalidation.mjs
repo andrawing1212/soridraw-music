@@ -7,7 +7,13 @@ const workerPath = join(remoteDir, 'worker.js');
 let source = readFileSync(workerPath, 'utf8');
 
 const marker = 'SORIDRAW_PROFILE_REVISION_REVALIDATION_007';
-if (source.includes(marker)) {
+const revisionPatchAlreadyApplied = source.includes(marker) || (
+  source.includes('readPublicProfileFirstViewRevisionOnly') &&
+  source.includes('normalizePublicProfileRevision') &&
+  source.includes('X-SORIDRAW-Profile-Revision') &&
+  source.includes('knownRevision')
+);
+if (revisionPatchAlreadyApplied) {
   console.log('[SORIDRAW Worker] profile revision revalidation already applied.');
   process.exit(0);
 }

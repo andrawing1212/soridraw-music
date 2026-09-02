@@ -18,6 +18,11 @@ replace_once(
 )
 replace_once(
     app,
+    "    studioDescriptionPointerRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2 };",
+    "    studioDescriptionPointerRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2, target: null };",
+)
+replace_once(
+    app,
     """    const rememberPointer = (event: PointerEvent) => {
       studioDescriptionPointerRef.current = { x: event.clientX, y: event.clientY };
     };""",

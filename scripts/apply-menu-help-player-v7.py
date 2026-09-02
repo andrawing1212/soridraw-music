@@ -111,14 +111,14 @@ stable_path = Path('src/lib/stableHoverTooltip.ts')
 stable = stable_path.read_text(encoding='utf-8')
 stable = replace_once(
     stable,
-    "import { useCallback, useEffect, useRef, useState } from 'react';\n",
-    "import { useCallback, useEffect, useRef, useState } from 'react';\nimport { readMenuHelpTipsEnabled } from './menuHelpPreference';\n",
+    "import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';\n",
+    "import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';\nimport { readMenuHelpTipsEnabled } from './menuHelpPreference';\n",
     'stable hover preference import',
 )
 stable = replace_once(
     stable,
-    "    if (!nextVisible) {\n      hideNow();\n      return;\n    }\n    clearShowTimer();",
-    "    if (!nextVisible) {\n      hideNow();\n      return;\n    }\n    if (!readMenuHelpTipsEnabled()) {\n      hideNow();\n      return;\n    }\n    clearShowTimer();",
+    "    if (!resolved) {\n      hideNow();\n      return;\n    }\n\n    const activate = () => {",
+    "    if (!resolved) {\n      hideNow();\n      return;\n    }\n\n    if (!readMenuHelpTipsEnabled()) {\n      hideNow();\n      return;\n    }\n\n    const activate = () => {",
     'stable hover preference guard',
 )
 write(str(stable_path), stable)

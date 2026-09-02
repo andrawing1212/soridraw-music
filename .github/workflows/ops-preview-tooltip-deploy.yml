@@ -19,6 +19,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
           git switch --detach origin/preview
           git cherry-pick 4cfef7a3d8f1280d2a309fa31219fab73432c145
           test "$(git diff --name-only origin/preview...HEAD | sort | tr '\n' ' ')" = "src/App.tsx src/components/studio/liteSplitWorkspace.css "

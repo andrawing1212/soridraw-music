@@ -1,5 +1,6 @@
 // SORIDRAW_EXPLORE_8E5_SOCIAL_PUBLIC_PROFILE
 // SORIDRAW_EXPLORE_8E5_PROFILE_EDIT_UI_975
+// SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Compass, ExternalLink, Heart, Loader2, Music2, Pencil, Pin, Search, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
@@ -295,13 +296,29 @@ export default function ExplorePage() {
     setProfileError('');
     setSocialNotice('');
 
-    getExplorePublicProfileFirstView(profileUid)
+    const applyProfileFirstView = (nextProfile: ExplorePublicProfile, rows: Array<Record<string, unknown>>) => {
+      if (cancelled) return;
+      const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
+      normalizedTracks.sort((a, b) => Number(b.profilePinned) - Number(a.profilePinned));
+      setProfile(nextProfile);
+      setProfileTracks(normalizedTracks);
+    };
+
+    getExplorePublicProfileFirstView(profileUid, {
+      onRevalidated: ({ profile: refreshedProfile, tracks: refreshedRows }) => {
+        applyProfileFirstView(refreshedProfile, refreshedRows);
+      },
+      onInvalidated: (message) => {
+        if (cancelled) return;
+        setProfile(null);
+        setProfileTracks([]);
+        setFollowState(null);
+        setProfileError(message || '공개 프로필을 불러오지 못했어요.');
+      },
+    })
       .then(async ({ profile: nextProfile, tracks: rows }) => {
         if (cancelled) return;
-        const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
-        normalizedTracks.sort((a, b) => Number(b.profilePinned) - Number(a.profilePinned));
-        setProfile(nextProfile);
-        setProfileTracks(normalizedTracks);
+        applyProfileFirstView(nextProfile, rows);
 
         if (user && user.uid !== nextProfile.uid) {
           try {

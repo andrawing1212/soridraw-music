@@ -26163,9 +26163,9 @@ function VocalControlComponent({
                 onTouchEnd={onLongPressEnd}
                 onTouchCancel={onLongPressEnd}
                 className={cn(
-                  "py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5",
+                  "soridraw-vocal-add-member-button py-3 px-2 rounded-2xl text-[14px] font-bold transition-all flex items-center justify-center gap-2.5",
                   vocalMembers.length < MAX_GROUP_VOCAL_MEMBERS || vocalMembers.some((member) => member.gender === 'neutral')
-                    ? "bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-600/20"
+                    ? "soridraw-vocal-add-member-button--male"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                 )}
               >
@@ -26182,9 +26182,9 @@ function VocalControlComponent({
                 onTouchEnd={onLongPressEnd}
                 onTouchCancel={onLongPressEnd}
                 className={cn(
-                  "py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5",
+                  "soridraw-vocal-add-member-button py-3 px-2 rounded-2xl text-[14px] font-bold transition-all flex items-center justify-center gap-2.5",
                   vocalMembers.length < MAX_GROUP_VOCAL_MEMBERS || vocalMembers.some((member) => member.gender === 'neutral')
-                    ? "bg-pink-600/10 border-pink-500/20 text-pink-400 hover:bg-pink-600/20"
+                    ? "soridraw-vocal-add-member-button--female"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                 )}
               >

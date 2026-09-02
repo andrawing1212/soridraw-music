@@ -11,13 +11,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: preview-tooltip-perf-v1
-      - name: Map tooltip usages
+      - name: Inspect tooltip dependencies
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== hoveredItem usages ==='
-          grep -n "hoveredItem\|setHoveredItem\|isTooltipHovered\|setIsTooltipHovered" src/App.tsx
-          echo '=== CategoryItem type ==='
-          grep -n -A22 -B5 "interface CategoryItem\|type CategoryItem" src/App.tsx | head -n 80 || true
-          echo '=== action hint helper ==='
-          grep -n -A30 -B10 "isActionButtonHintItem" src/App.tsx | head -n 100
+          for range in '7680,7720' '8048,8095' '10190,10260' '16465,16540' '21150,21235'; do
+            echo "=== lines $range ==="
+            sed -n "${range}p" src/App.tsx
+          done

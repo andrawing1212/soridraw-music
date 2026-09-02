@@ -40,26 +40,25 @@ jobs:
           if missing:
               raise SystemExit(f'Expected keyword baseline rules missing: {missing}')
 
-          patch = r'''
-
-/* 1015 — Compact outer-window selected keywords follow native mobile flow.
- * Only the real Compact workspace, entered by shrinking the browser viewport,
- * swaps Studio Black's fixed portal rail for the existing inline builder chips.
- * Pane-only mobile states reached by dragging the split bar never set this
- * data attribute, so their approved keyword placement stays untouched. */
-html[data-soridraw-theme="studio-black"][data-soridraw-compact-workspace="true"]
-.soridraw-builder-live-keywords {
-  display: block !important;
-}
-
-html[data-soridraw-theme="studio-black"][data-soridraw-compact-workspace="true"]
-body > .soridraw-live-keywords-fixed {
-  display: none !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
-'''
-          path.write_text(css.rstrip() + patch + '\n', encoding='utf-8')
+          lines = [
+              '/* 1015 — Compact outer-window selected keywords follow native mobile flow.',
+              ' * Only the real Compact workspace, entered by shrinking the browser viewport,',
+              " * swaps Studio Black's fixed portal rail for the existing inline builder chips.",
+              ' * Pane-only mobile states reached by dragging the split bar never set this',
+              ' * data attribute, so their approved keyword placement stays untouched. */',
+              'html[data-soridraw-theme="studio-black"][data-soridraw-compact-workspace="true"]',
+              '.soridraw-builder-live-keywords {',
+              '  display: block !important;',
+              '}',
+              '',
+              'html[data-soridraw-theme="studio-black"][data-soridraw-compact-workspace="true"]',
+              'body > .soridraw-live-keywords-fixed {',
+              '  display: none !important;',
+              '  visibility: hidden !important;',
+              '  pointer-events: none !important;',
+              '}',
+          ]
+          path.write_text(css.rstrip() + '\n\n' + '\n'.join(lines) + '\n', encoding='utf-8')
           PY
 
           git diff --check

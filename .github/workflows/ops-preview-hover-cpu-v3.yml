@@ -1,0 +1,147 @@
+name: OPS Preview Hover CPU V3
+permissions:
+  contents: write
+on:
+  push:
+    branches: [ops-preview-hover-cpu-v3]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply safe idle-hover CPU patch on clean preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview
+          git switch --detach origin/preview
+          test "$(git rev-parse HEAD)" = "61881735e75ce6638e9a4eeab0c6d8920e36945e"
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected 1 exact match, found {count}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          app = 'src/App.tsx'
+          replace_once(app,
+          """  const studioDescriptionPointerRef = useRef({ x: 0, y: 0 });""",
+          """  const studioDescriptionPointerRef = useRef<{ x: number; y: number; target: EventTarget | null }>({ x: 0, y: 0, target: null });""")
+          replace_once(app,
+          """    const rememberPointer = (event: PointerEvent) => {
+      studioDescriptionPointerRef.current = { x: event.clientX, y: event.clientY };
+    };""",
+          """    const rememberPointer = (event: PointerEvent) => {
+      studioDescriptionPointerRef.current = { x: event.clientX, y: event.clientY, target: event.target };
+    };""")
+          replace_once(app,
+          """    const { x, y } = studioDescriptionPointerRef.current;
+    const hoveredElement = document.elementFromPoint(x, y) as HTMLElement | null;
+    const builderPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane=\"builder\"]');
+    const resultPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane=\"result\"]');
+    let paneElement = hoveredElement?.closest<HTMLElement>('[data-soridraw-studio-pane]') ?? null;
+
+    if (!paneElement && hoveredElement?.closest('.soridraw-studio-action-bar--tracking, .soridraw-studio-action-collapsed')) {
+      paneElement = builderPane;
+    }
+
+    if (!paneElement && y >= 58) {
+      const builderRect = builderPane?.getBoundingClientRect();
+      const resultRect = resultPane?.getBoundingClientRect();
+      if (builderRect && x >= builderRect.left && x <= builderRect.right) paneElement = builderPane;
+      else if (resultRect && x >= resultRect.left && x <= resultRect.right) paneElement = resultPane;
+    }""",
+          """    const { x, y, target } = studioDescriptionPointerRef.current;
+    // SORIDRAW_STUDIO_TOOLTIP_TARGET_REUSE_985
+    // pointerover already tells us the live DOM target. Reuse it instead of
+    // forcing elementFromPoint + two document queries on every tooltip hover.
+    const pointerTarget = target instanceof Element && target.isConnected ? target : null;
+    const hoveredElement = pointerTarget ?? document.elementFromPoint(x, y);
+    let paneElement = hoveredElement?.closest('[data-soridraw-studio-pane]') as HTMLElement | null;
+    let builderPane: HTMLElement | null = null;
+    let resultPane: HTMLElement | null = null;
+
+    if (!paneElement && hoveredElement?.closest('.soridraw-studio-action-bar--tracking, .soridraw-studio-action-collapsed')) {
+      builderPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane=\"builder\"]');
+      paneElement = builderPane;
+    }
+
+    if (!paneElement && y >= 58) {
+      builderPane ??= document.querySelector<HTMLElement>('[data-soridraw-studio-pane=\"builder\"]');
+      resultPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane=\"result\"]');
+      const builderRect = builderPane?.getBoundingClientRect();
+      const resultRect = resultPane?.getBoundingClientRect();
+      if (builderRect && x >= builderRect.left && x <= builderRect.right) paneElement = builderPane;
+      else if (resultRect && x >= resultRect.left && x <= resultRect.right) paneElement = resultPane;
+    }""")
+
+          fav = 'src/pages/FavoritesPage.tsx'
+          replace_once(fav,
+          """                  onMouseEnter={(event) => {
+                    handleSelectionDragEnter(event, song.id);
+                    event.currentTarget.style.backgroundColor = '#171717';
+                  }}
+                  onMouseLeave={(event) => {
+                    handleCardLongPressEnd();
+                    setIsMusicNoteMousePressTracking(false);
+                    event.currentTarget.style.backgroundColor = '';
+                  }}""",
+          """                  onMouseEnter={isSelectionMode ? ((event: React.MouseEvent<HTMLDivElement>) => {
+                    handleSelectionDragEnter(event, song.id);
+                  }) : undefined}
+                  onMouseLeave={isMusicNoteMousePressTracking ? (() => {
+                    handleCardLongPressEnd();
+                    setIsMusicNoteMousePressTracking(false);
+                  }) : undefined}""")
+          replace_once(fav,
+          """                    \"soridraw-musicnote-song-card soridraw-list-perf-item soridraw-perf-layout-region-item group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none\",""",
+          """                    \"soridraw-musicnote-song-card soridraw-list-perf-item soridraw-perf-layout-region-item group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] hover:bg-[#171717] select-none\",""")
+
+          lib = 'src/pages/SunoLibraryPage.tsx'
+          replace_once(lib,
+          """                          onMouseEnter={(event) => {
+                            handleLibraryDragSelectEnter(event, selection);
+                          }}
+                          onMouseLeave={() => {
+                            handleLibraryCardLongPressEnd();
+                          }}""",
+          """                          onMouseEnter={multiSelectMode ? ((event: React.MouseEvent<HTMLDivElement>) => {
+                            handleLibraryDragSelectEnter(event, selection);
+                          }) : undefined}
+                          onMouseLeave={isLibraryMousePressTracking ? handleLibraryCardLongPressEnd : undefined}""")
+          replace_once(lib,
+          """                      onMouseEnter={(event) => handleLibraryDragSelectEnter(event, selection)}
+                      onMouseLeave={handleLibraryCardLongPressEnd}""",
+          """                      onMouseEnter={multiSelectMode ? ((event: React.MouseEvent<HTMLDivElement>) => handleLibraryDragSelectEnter(event, selection)) : undefined}
+                      onMouseLeave={isLibraryMousePressTracking ? handleLibraryCardLongPressEnd : undefined}""")
+          PY
+
+          git diff --check
+          changed="$(git diff --name-only | sort | tr '\n' ' ')"
+          test "$changed" = "src/App.tsx src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx "
+          ! git diff --name-only | grep -E 'StudioSplitWorkspace\.tsx|LiteStudioSplitWorkspace\.tsx|studioLayout\.css|liteSplitWorkspace\.css|firestore|functions|rules|firebase' || false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Publish validated source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git add src/App.tsx src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx
+          git commit -m "perf(preview): reduce idle Studio hover CPU"
+          git push origin HEAD:refs/heads/preview-hover-cpu-v3 --force

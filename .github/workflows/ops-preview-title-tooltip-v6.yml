@@ -65,4 +65,4 @@ jobs:
           git add src/App.tsx src/components/GenreHierarchySelector.tsx src/components/studio/studioLayout.css src/lib/stableHoverTooltip.ts
           git add -u .deploy/rollback-title-tooltip-v5.txt src/rollbackPreviewMarker.ts
           git commit -m "fix(preview): stabilize unclipped title help"
-          git push --force origin HEAD:preview-title-tooltip-v6
+          git push --force origin HEAD:refs/heads/preview-title-tooltip-v6

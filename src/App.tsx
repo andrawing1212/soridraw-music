@@ -26154,6 +26154,7 @@ function VocalControlComponent({
           {vocalMode === 'group' ? (
             <div className="grid grid-cols-2 gap-2">
               <button
+                data-vocal-add-member="male"
                 onClick={() => handleAddMember('male')}
                 disabled={vocalMembers.length >= MAX_GROUP_VOCAL_MEMBERS && !vocalMembers.some((member) => member.gender === 'neutral')}
                 onMouseEnter={() => onHover({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: vocalMembers.some((member) => member.gender === 'neutral') ? '성별이 없는 기본 보컬에 남성 성별을 지정합니다.' : '남성 보컬 멤버를 1명 추가합니다.' })}
@@ -26172,6 +26173,7 @@ function VocalControlComponent({
                 남성 멤버 추가
               </button>
               <button
+                data-vocal-add-member="female"
                 onClick={() => handleAddMember('female')}
                 disabled={vocalMembers.length >= MAX_GROUP_VOCAL_MEMBERS && !vocalMembers.some((member) => member.gender === 'neutral')}
                 onMouseEnter={() => onHover({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: vocalMembers.some((member) => member.gender === 'neutral') ? '성별이 없는 기본 보컬에 여성 성별을 지정합니다.' : '여성 보컬 멤버를 1명 추가합니다.' })}

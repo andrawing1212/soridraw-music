@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+// Re-run marker: keep the live public-profile first-view path on the verified
+// UID primary-key lookup so first-view does not fall back to the legacy reads.
 const remoteDir = process.env.SORIDRAW_REMOTE_WORKER_DIR;
 if (!remoteDir) throw new Error('SORIDRAW_REMOTE_WORKER_DIR is required.');
 const workerPath = join(remoteDir, 'worker.js');

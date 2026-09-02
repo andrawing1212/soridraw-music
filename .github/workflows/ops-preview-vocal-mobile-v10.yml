@@ -22,48 +22,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "eb7cfcdcc0cba81f7c0beb131c09c779118496b8"
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('src/components/studio/studioLayout.css')
-          text = p.read_text()
-          old = '''/* 1009 — Classic Dark mobile vocal group one-card rows.
-           * 1008 correctly covered Studio Black split/mobile-pane, but the normal dark
-           * mobile Studio runs under the Classic theme. Scope this only to the compact
-           * mobile builder so desktop Classic and split geometry stay unchanged. */
-          html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
-          .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
-          .soridraw-studio-compact-mobile-builder .soridraw-vocal-member-grid {
+          cat >> src/components/studio/studioLayout.css <<'CSS'
+
+          /* 1010 — Real vocal member grid mobile override.
+           * Group mode owns grid-cols-2 in JSX, so target the real member-card grid
+           * directly on compact mobile, split mobile-pane, and narrow viewport.
+           * The separate male/female add-member button grid remains two columns. */
+          .soridraw-studio-compact-mobile-builder .soridraw-vocal-member-grid,
+          .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-vocal-member-grid {
             grid-template-columns: minmax(0, 1fr) !important;
           }
-'''
-          if old not in text:
-              raise SystemExit('expected 1009 block not found')
-          text = text.replace(old, '')
-          text += '''
 
-/* 1010 — Vocal member cards: target the real member grid, not a theme path.
- * Group mode intentionally owns grid-cols-2 in JSX. On compact/mobile Studio and
- * any split pane that has entered mobile mode, override only the member-card grid
- * to one full-width column. The separate male/female add-member button grid stays
- * two columns. The viewport fallback also covers narrow Classic Dark/Light Studio
- * even if theme/data wrapper attributes differ from the split path. */
-.soridraw-studio-compact-mobile-builder .soridraw-vocal-member-grid,
-.soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-vocal-member-grid {
-  grid-template-columns: minmax(0, 1fr) !important;
-}
-
-@media (max-width: 767px) {
-  body #root .soridraw-app-root .soridraw-studio-vocal-slot .soridraw-vocal-member-grid {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-}
-'''
-          p.write_text(text)
-          PY
+          @media (max-width: 767px) {
+            body #root .soridraw-app-root .soridraw-studio-vocal-slot .soridraw-vocal-member-grid {
+              grid-template-columns: minmax(0, 1fr) !important;
+            }
+          }
+          CSS
           git diff --check
           git diff -- src/components/studio/studioLayout.css
-          grep -n -A 18 '1010 — Vocal member cards' src/components/studio/studioLayout.css
+          grep -n -A 16 '1010 — Real vocal member grid' src/components/studio/studioLayout.css
       - name: Install dependencies
         run: npm ci
       - name: Build

@@ -15037,3 +15037,87 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+
+/* 1011 — Vocal add-member controls: borderless split + compact/mobile color parity.
+ * Keep semantic male/female tint when split Studio collapses into its compact
+ * mobile presentation. Scope only to the two add-member controls; no layout or
+ * vocal behavior changes. */
+body #root .soridraw-app-root
+:is(
+  .soridraw-studio-split-workspace,
+  .soridraw-lite-studio-split-workspace,
+  .soridraw-studio-compact-mobile-workspace,
+  .soridraw-studio-compact-mobile-builder
+)
+.soridraw-studio-vocal-slot button[data-vocal-add-member="male"]:not(:disabled) {
+  background: rgb(37 99 235 / 0.10) !important;
+  background-color: rgb(37 99 235 / 0.10) !important;
+  background-image: none !important;
+  border: 0 !important;
+  color: rgb(96 165 250) !important;
+  -webkit-text-fill-color: rgb(96 165 250) !important;
+}
+
+body #root .soridraw-app-root
+:is(
+  .soridraw-studio-split-workspace,
+  .soridraw-lite-studio-split-workspace,
+  .soridraw-studio-compact-mobile-workspace,
+  .soridraw-studio-compact-mobile-builder
+)
+.soridraw-studio-vocal-slot button[data-vocal-add-member="female"]:not(:disabled) {
+  background: rgb(219 39 119 / 0.10) !important;
+  background-color: rgb(219 39 119 / 0.10) !important;
+  background-image: none !important;
+  border: 0 !important;
+  color: rgb(244 114 182) !important;
+  -webkit-text-fill-color: rgb(244 114 182) !important;
+}
+
+body #root .soridraw-app-root
+:is(
+  .soridraw-studio-split-workspace,
+  .soridraw-lite-studio-split-workspace,
+  .soridraw-studio-compact-mobile-workspace,
+  .soridraw-studio-compact-mobile-builder
+)
+.soridraw-studio-vocal-slot button[data-vocal-add-member="male"]:not(:disabled) :where(svg, span),
+body #root .soridraw-app-root
+:is(
+  .soridraw-studio-split-workspace,
+  .soridraw-lite-studio-split-workspace,
+  .soridraw-studio-compact-mobile-workspace,
+  .soridraw-studio-compact-mobile-builder
+)
+.soridraw-studio-vocal-slot button[data-vocal-add-member="female"]:not(:disabled) :where(svg, span) {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body #root .soridraw-app-root
+  :is(
+    .soridraw-studio-split-workspace,
+    .soridraw-lite-studio-split-workspace,
+    .soridraw-studio-compact-mobile-workspace,
+    .soridraw-studio-compact-mobile-builder
+  )
+  .soridraw-studio-vocal-slot button[data-vocal-add-member="male"]:not(:disabled):hover {
+    background: rgb(37 99 235 / 0.20) !important;
+    background-color: rgb(37 99 235 / 0.20) !important;
+    border: 0 !important;
+  }
+
+  body #root .soridraw-app-root
+  :is(
+    .soridraw-studio-split-workspace,
+    .soridraw-lite-studio-split-workspace,
+    .soridraw-studio-compact-mobile-workspace,
+    .soridraw-studio-compact-mobile-builder
+  )
+  .soridraw-studio-vocal-slot button[data-vocal-add-member="female"]:not(:disabled):hover {
+    background: rgb(219 39 119 / 0.20) !important;
+    background-color: rgb(219 39 119 / 0.20) !important;
+    border: 0 !important;
+  }
+}

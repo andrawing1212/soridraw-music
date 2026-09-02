@@ -14950,25 +14950,3 @@ html:not(.dark) body #root .soridraw-app-root
     contain: layout style;
   }
 }
-
-/* 988 — title tooltip sibling stacking only.
- * Keep the baseline split containment/overflow engine untouched. The tooltip
- * already paints outside its own card; this only raises the active grid item
- * above adjacent menu cards, so the next card cannot cut the bubble in half.
- * The title anchor itself is also raised above controls inside the same card. */
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-builder-pane :is(
-  .soridraw-studio-selection-grid,
-  .soridraw-studio-secondary-grid,
-  .soridraw-studio-mood-theme-grid,
-  .soridraw-studio-vocal-lyrics-grid
-) > *:has(.soridraw-card-title-tooltip) {
-  position: relative !important;
-  z-index: 520 !important;
-}
-
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-menu-card :is(.soridraw-card-title-anchor, .relative):has(> .soridraw-card-title-tooltip) {
-  position: relative !important;
-  z-index: 521 !important;
-}

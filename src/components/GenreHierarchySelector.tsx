@@ -18,6 +18,7 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { resolveExpandedHeight, useStableContentHeight } from "../lib/stableContentHeight";
 import { useStableHoverTooltip } from "../lib/stableHoverTooltip";
+import MenuTitleTooltipPortal from './studio/MenuTitleTooltipPortal';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -1022,6 +1023,7 @@ function GenreHierarchySelectorComponent({
           <div className="flex items-center gap-3 min-w-0">
             <div className="soridraw-card-title-anchor relative min-w-0">
               <h3
+                data-soridraw-menu-title-tooltip-anchor
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help min-w-0"
@@ -1033,6 +1035,7 @@ function GenreHierarchySelectorComponent({
                 </span>
               </h3>
               {showTitleTooltip && (
+                <MenuTitleTooltipPortal>
 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1044,6 +1047,7 @@ function GenreHierarchySelectorComponent({
                       곡의 핵심 장르와 세부 스타일을 결정합니다. 대분류와 세부 장르를 조합해 원하는 음악적 색깔을 만드세요.
                     </p>
                   </motion.div>
+                </MenuTitleTooltipPortal>
               )}
             </div>
           </div>

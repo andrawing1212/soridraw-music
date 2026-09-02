@@ -41,6 +41,8 @@ const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from './lib/studioActionBarGeometry';
 import { resolveExpandedHeight, useStableContentHeight } from './lib/stableContentHeight';
 import { useStableHoverTooltip } from './lib/stableHoverTooltip';
+import MenuTitleTooltipPortal from './components/studio/MenuTitleTooltipPortal';
+import { MENU_HELP_TIPS_EVENT, MENU_HELP_TIPS_STORAGE_KEY, readMenuHelpTipsEnabled } from './lib/menuHelpPreference';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -7664,6 +7666,11 @@ function App() {
   }, [location.pathname]);
 
   const commitHoveredItem = useCallback((item: CategoryItem | null) => {
+    if (item && !readMenuHelpTipsEnabled()) {
+      studioDescriptionCurrentItemRef.current = null;
+      studioDescriptionControllerRef.current?.hide();
+      return;
+    }
     studioDescriptionCurrentItemRef.current = item;
     if (!item) {
       studioDescriptionControllerRef.current?.hide();
@@ -7695,6 +7702,21 @@ function App() {
       commitHoveredItem(item);
     }, 60);
   }, [commitHoveredItem, location.pathname]);
+
+  useEffect(() => {
+    const hideDisabledMenuHelp = () => {
+      if (!readMenuHelpTipsEnabled()) setHoveredItem(null);
+    };
+    const handleMenuHelpStorage = (event: StorageEvent) => {
+      if (event.key === MENU_HELP_TIPS_STORAGE_KEY) hideDisabledMenuHelp();
+    };
+    window.addEventListener(MENU_HELP_TIPS_EVENT, hideDisabledMenuHelp as EventListener);
+    window.addEventListener('storage', handleMenuHelpStorage);
+    return () => {
+      window.removeEventListener(MENU_HELP_TIPS_EVENT, hideDisabledMenuHelp as EventListener);
+      window.removeEventListener('storage', handleMenuHelpStorage);
+    };
+  }, [setHoveredItem]);
 
   useEffect(() => () => {
     if (studioDescriptionHoverTimerRef.current !== null) {
@@ -16663,6 +16685,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <div className="soridraw-card-title-anchor relative min-w-0">
                       <div className="flex items-center gap-2">
                         <h3
+                          data-soridraw-menu-title-tooltip-anchor
                           onMouseEnter={() => setShowStoryboardTitleTooltip(true)}
                           onMouseLeave={() => setShowStoryboardTitleTooltip(false)}
                           className="text-base md:text-lg font-black text-[var(--text-primary)] cursor-help"
@@ -16671,6 +16694,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         </h3>
                       </div>
                       {showStoryboardTitleTooltip && (
+                        <MenuTitleTooltipPortal>
 <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -16680,6 +16704,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             <p className="soridraw-card-title-tooltip-label hidden">스토리보드</p>
                             <p className="soridraw-card-title-tooltip-description text-[11px] leading-snug">캐릭터, 관계, 말투, 감정, 세계관과 이야기 전개를 설정합니다.</p>
                           </motion.div>
+                        </MenuTitleTooltipPortal>
                       )}
                       <p className="text-xs md:text-sm text-[var(--text-secondary)] truncate">
                         {buildStoryboardSummary(situation)}
@@ -20069,6 +20094,7 @@ function GenreCategorySectionComponent({
         <div className="flex items-center gap-3">
           <div className="relative">
             <h3
+              data-soridraw-menu-title-tooltip-anchor
               onMouseEnter={() => setShowTitleTooltip(true)}
               onMouseLeave={() => setShowTitleTooltip(false)}
               className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
@@ -20078,6 +20104,7 @@ function GenreCategorySectionComponent({
               <span className="soridraw-menu-count text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedChild ? '1' : '0'}/1)</span>
             </h3>
             {showTitleTooltip && (
+              <MenuTitleTooltipPortal>
 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -20087,6 +20114,7 @@ function GenreCategorySectionComponent({
                   <p className="soridraw-card-title-tooltip-label hidden">{title}</p>
                   <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
                 </motion.div>
+              </MenuTitleTooltipPortal>
             )}
           </div>
         </div>
@@ -20531,6 +20559,7 @@ function CycleSectionComponent({
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3
+                data-soridraw-menu-title-tooltip-anchor
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help min-w-0", titleClassName ?? "text-[22px]")}
@@ -20542,6 +20571,7 @@ function CycleSectionComponent({
                 )}
               </h3>
               {showTitleTooltip && (
+                <MenuTitleTooltipPortal>
 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -20551,6 +20581,7 @@ function CycleSectionComponent({
                     <p className="soridraw-card-title-tooltip-label hidden">{titleKo || title}</p>
                     <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                   </motion.div>
+                </MenuTitleTooltipPortal>
               )}
             </div>
           </div>
@@ -21355,6 +21386,7 @@ function CategorySectionComponent({
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3 
+                data-soridraw-menu-title-tooltip-anchor
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help min-w-0"
@@ -21364,6 +21396,7 @@ function CategorySectionComponent({
                 <span className="soridraw-menu-count text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selected.length}/{items.length})</span>
               </h3>
               {showTitleTooltip && (
+                <MenuTitleTooltipPortal>
 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -21373,6 +21406,7 @@ function CategorySectionComponent({
                     <p className="soridraw-card-title-tooltip-label hidden">{titleKo || title}</p>
                     <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                   </motion.div>
+                </MenuTitleTooltipPortal>
               )}
             </div>
           </div>
@@ -23086,6 +23120,7 @@ function SongStructureIntegratedControlComponent({
       <div data-studio-menu="lyrics" className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--home-card-border)] flex flex-col h-full relative pb-12 overflow-visible">
         <div className="soridraw-card-header soridraw-menu-card-header-slot relative mb-4 flex items-center justify-between">
           <h3 
+            data-soridraw-menu-title-tooltip-anchor
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
             className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
@@ -23128,6 +23163,7 @@ function SongStructureIntegratedControlComponent({
             </button>
           </div>
           {showTitleTooltip && (
+            <MenuTitleTooltipPortal>
 <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -23137,6 +23173,7 @@ function SongStructureIntegratedControlComponent({
                 <p className="soridraw-card-title-tooltip-label hidden">가사</p>
                 <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">가사 분량과 곡의 전개 방식을 통합적으로 설정합니다.</p>
               </motion.div>
+            </MenuTitleTooltipPortal>
           )}
         </div>
 
@@ -25958,6 +25995,7 @@ function VocalControlComponent({
       <div className="soridraw-card-header relative mb-4 flex items-center justify-between">
         <div className="soridraw-card-header-title flex items-center gap-2">
           <h3 
+            data-soridraw-menu-title-tooltip-anchor
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
             className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
@@ -26060,6 +26098,7 @@ function VocalControlComponent({
         </div>
 
         {showTitleTooltip && (
+          <MenuTitleTooltipPortal>
 <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -26069,6 +26108,7 @@ function VocalControlComponent({
               <p className="soridraw-card-title-tooltip-label hidden">보컬</p>
               <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{getCombinedDescription()}</p>
             </motion.div>
+          </MenuTitleTooltipPortal>
         )}
       </div>
 
@@ -26907,6 +26947,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           <div className="flex items-center gap-3">
             <div className="relative min-w-0">
               <h3 
+                data-soridraw-menu-title-tooltip-anchor
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
@@ -26915,6 +26956,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                 템포(BPM)
               </h3>
               {showTitleTooltip && (
+                <MenuTitleTooltipPortal>
 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -26924,6 +26966,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                     <p className="soridraw-card-title-tooltip-label hidden">템포(BPM)</p>
                     <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">음악의 전체적인 속도를 설정합니다.</p>
                   </motion.div>
+                </MenuTitleTooltipPortal>
               )}
             </div>
 

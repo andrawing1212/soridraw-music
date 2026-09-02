@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { readMenuHelpTipsEnabled } from './menuHelpPreference';
 
 let activeTooltipDismiss: (() => void) | null = null;
 
@@ -43,6 +44,11 @@ export function useStableHoverTooltip(
     clearTimer();
 
     if (!resolved) {
+      hideNow();
+      return;
+    }
+
+    if (!readMenuHelpTipsEnabled()) {
       hideNow();
       return;
     }

@@ -15022,3 +15022,18 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root 
 .soridraw-studio-compact-mobile-builder .soridraw-vocal-member-grid {
   grid-template-columns: minmax(0, 1fr) !important;
 }
+
+/* 1010 — Real vocal member grid mobile override.
+ * Group mode owns grid-cols-2 in JSX, so target the real member-card grid
+ * directly on compact mobile, split mobile-pane, and narrow viewport.
+ * The separate male/female add-member button grid remains two columns. */
+.soridraw-studio-compact-mobile-builder .soridraw-vocal-member-grid,
+.soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-vocal-member-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+@media (max-width: 767px) {
+  body #root .soridraw-app-root .soridraw-studio-vocal-slot .soridraw-vocal-member-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

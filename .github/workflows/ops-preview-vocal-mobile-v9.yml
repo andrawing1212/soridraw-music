@@ -2,7 +2,7 @@ name: OPS Preview Vocal Mobile V9
 
 on:
   push:
-    branches: [ops-preview-vocal-mobile-v9]
+    branches: [ops-preview-vocal-mobile-v8]
 
 permissions:
   contents: write

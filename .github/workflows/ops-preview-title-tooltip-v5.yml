@@ -1,0 +1,66 @@
+name: OPS Preview Title Tooltip V5
+
+on:
+  push:
+    branches:
+      - ops-preview-title-tooltip-v5
+    paths:
+      - scripts/apply-title-tooltip-v5.py
+      - .github/workflows/ops-preview-title-tooltip-v5.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply title tooltip patch on clean preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "$GITHUB_SHA:scripts/apply-title-tooltip-v5.py" > /tmp/apply-title-tooltip-v5.py
+          git fetch origin preview
+          git switch --detach origin/preview
+          test "$(git rev-parse HEAD)" = "d3c9b41b0d024c5d127a8b323e8a88261537a636"
+          python3 /tmp/apply-title-tooltip-v5.py
+          git add -N src/lib/stableHoverTooltip.ts
+          git diff --check
+          actual="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            src/App.tsx \
+            src/components/GenreHierarchySelector.tsx \
+            src/components/studio/studioLayout.css \
+            src/lib/stableHoverTooltip.ts | sort)"
+          test "$actual" = "$expected"
+          grep -q "useStableHoverTooltip(60)" src/App.tsx
+          grep -q "useStableHoverTooltip(60)" src/components/GenreHierarchySelector.tsx
+          grep -q "987 — title tooltip hover stabilization" src/components/studio/studioLayout.css
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Publish validated source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add src/App.tsx src/components/GenreHierarchySelector.tsx src/components/studio/studioLayout.css src/lib/stableHoverTooltip.ts
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git commit -m "perf(preview): stabilize title help hover"
+          git push origin HEAD:refs/heads/preview-title-tooltip-v5 --force

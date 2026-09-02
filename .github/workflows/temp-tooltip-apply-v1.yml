@@ -1,0 +1,424 @@
+name: TEMP Tooltip Apply V1
+permissions:
+  contents: write
+on:
+  push:
+    branches: [preview-tooltip-perf-v1]
+jobs:
+  apply-and-verify:
+    if: github.event.head_commit.message != 'perf(temp): isolate Studio tooltip rendering'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview-tooltip-perf-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply isolated persistent tooltip host and rollback idle CV experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          app_path = Path('src/App.tsx')
+          css_path = Path('src/components/studio/liteSplitWorkspace.css')
+          s = app_path.read_text(encoding='utf-8')
+          css = css_path.read_text(encoding='utf-8')
+
+          if 'SORIDRAW_TOOLTIP_ISOLATED_HOST_984' in s:
+              raise SystemExit('tooltip isolated host already applied')
+
+          portal = '''function Portal({ children, enabled = true }: { children: React.ReactNode; enabled?: boolean }) {
+            if (typeof document === 'undefined') return null;
+            return enabled ? createPortal(children, document.body) : <>{children}</>;
+          }
+          '''
+          if s.count(portal) != 1:
+              raise SystemExit(f'Portal anchor count mismatch: {s.count(portal)}')
+
+          host = portal + '''
+          // SORIDRAW_TOOLTIP_ISOLATED_HOST_984
+          // Tooltip hover changes stay inside this tiny persistent host instead of
+          // re-rendering the full Studio/App tree. The DOM node never unmounts;
+          // visibility/content/placement alone change, which also keeps a future
+          // per-user tooltip ON/OFF preference cheap to add.
+          type StudioDescriptionOverlayPlacement = {
+            pane: 'builder' | 'result' | 'global';
+            left: number;
+            maxWidth: number;
+          };
+
+          type StudioDescriptionOverlayItem = {
+            id: string;
+            label: string;
+            description?: string;
+          };
+
+          type StudioDescriptionOverlayController = {
+            show: (item: StudioDescriptionOverlayItem, placement: StudioDescriptionOverlayPlacement) => void;
+            hide: () => void;
+          };
+
+          function StudioDescriptionOverlayHost({
+            controllerRef,
+            resolvePlacement,
+            locationPathname,
+            studioActionOwner,
+            isActionButtonsCollapsed,
+            shouldRenderActionButtons,
+          }: {
+            controllerRef: { current: StudioDescriptionOverlayController | null };
+            resolvePlacement: () => StudioDescriptionOverlayPlacement;
+            locationPathname: string;
+            studioActionOwner: string;
+            isActionButtonsCollapsed: boolean;
+            shouldRenderActionButtons: boolean;
+          }) {
+            const [item, setItem] = useState<StudioDescriptionOverlayItem | null>(null);
+            const [placement, setPlacement] = useState<StudioDescriptionOverlayPlacement>(() => ({
+              pane: 'global',
+              left: typeof window !== 'undefined' ? window.innerWidth / 2 : 0,
+              maxWidth: typeof window !== 'undefined' && window.innerWidth < 768 ? 200 : 400,
+            }));
+            const [isVisible, setIsVisible] = useState(false);
+            const [isTooltipHovered, setIsTooltipHovered] = useState(false);
+            const autoHideTimerRef = useRef<number | null>(null);
+
+            const clearAutoHideTimer = useCallback(() => {
+              if (autoHideTimerRef.current !== null) {
+                window.clearTimeout(autoHideTimerRef.current);
+                autoHideTimerRef.current = null;
+              }
+            }, []);
+
+            const hide = useCallback(() => {
+              clearAutoHideTimer();
+              setIsVisible(false);
+              setIsTooltipHovered(false);
+            }, [clearAutoHideTimer]);
+
+            const show = useCallback((nextItem: StudioDescriptionOverlayItem, nextPlacement: StudioDescriptionOverlayPlacement) => {
+              clearAutoHideTimer();
+              setItem(nextItem);
+              setPlacement(nextPlacement);
+              setIsVisible(true);
+              setIsTooltipHovered(false);
+              autoHideTimerRef.current = window.setTimeout(() => {
+                autoHideTimerRef.current = null;
+                setIsVisible(false);
+                setIsTooltipHovered(false);
+              }, 6000);
+            }, [clearAutoHideTimer]);
+
+            useLayoutEffect(() => {
+              const controller: StudioDescriptionOverlayController = { show, hide };
+              controllerRef.current = controller;
+              return () => {
+                if (controllerRef.current === controller) controllerRef.current = null;
+              };
+            }, [controllerRef, hide, show]);
+
+            useEffect(() => () => clearAutoHideTimer(), [clearAutoHideTimer]);
+
+            useEffect(() => {
+              if (!isVisible) return;
+              const refreshPlacement = () => setPlacement(resolvePlacement());
+              window.addEventListener('resize', refreshPlacement);
+              window.addEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
+              window.addEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
+              return () => {
+                window.removeEventListener('resize', refreshPlacement);
+                window.removeEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
+                window.removeEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
+              };
+            }, [isVisible, resolvePlacement]);
+
+            const suppressInlineActionHint = Boolean(
+              item && studioActionOwner !== 'floating' && ['generate', 'random', 'clear-all'].includes(item.id)
+            );
+            const shouldShow = Boolean(isVisible && item && !suppressInlineActionHint);
+            const bottomClass = locationPathname === '/studio'
+              ? (!isActionButtonsCollapsed && shouldRenderActionButtons
+                  ? 'bottom-[6.75rem] md:bottom-[8.5rem]'
+                  : 'bottom-10')
+              : (typeof document !== 'undefined' && document.querySelector('[data-selection-action-bar="true"]')
+                  ? 'bottom-[7.75rem] md:bottom-[8.75rem]'
+                  : 'bottom-10');
+
+            return (
+              <div
+                aria-hidden={!shouldShow}
+                onMouseEnter={() => setIsTooltipHovered(true)}
+                onMouseLeave={() => setIsTooltipHovered(false)}
+                style={{
+                  left: placement.left,
+                  width: 'max-content',
+                  maxWidth: placement.maxWidth,
+                  opacity: shouldShow ? (isTooltipHovered ? 0.1 : 1) : 0,
+                  visibility: shouldShow ? 'visible' : 'hidden',
+                  pointerEvents: shouldShow ? 'auto' : 'none',
+                  transform: 'translateX(-50%)',
+                }}
+                data-description-pane={placement.pane}
+                className={`soridraw-studio-description-overlay fixed z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300 ${bottomClass}`}
+              >
+                <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{item?.label || ''}</p>
+                <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">{item?.description || ''}</p>
+              </div>
+            );
+          }
+          '''
+          s = s.replace(portal, host, 1)
+
+          old_state = '''  type StudioDescriptionPane = 'builder' | 'result' | 'global';
+          type StudioDescriptionPlacement = {
+            pane: StudioDescriptionPane;
+            left: number;
+            maxWidth: number;
+          };
+
+          const getDefaultStudioDescriptionPlacement = (): StudioDescriptionPlacement => ({
+            pane: 'global',
+            left: typeof window !== 'undefined' ? window.innerWidth / 2 : 0,
+            maxWidth: typeof window !== 'undefined' && window.innerWidth < 768 ? 200 : 400,
+          });
+
+          const [hoveredItem, setHoveredItemState] = useState<CategoryItem | null>(null);
+          const [hoveredItemPlacement, setHoveredItemPlacement] = useState<StudioDescriptionPlacement>(
+            getDefaultStudioDescriptionPlacement,
+          );
+          const studioDescriptionPointerRef = useRef({ x: 0, y: 0 });
+          // SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_982
+          // Keep fast cursor sweeps from forcing App-level tooltip/layout work.
+          const studioDescriptionHoverTimerRef = useRef<number | null>(null);
+          const [isTooltipHovered, setIsTooltipHovered] = useState(false);
+          '''
+          new_state = '''  type StudioDescriptionPlacement = StudioDescriptionOverlayPlacement;
+
+          const getDefaultStudioDescriptionPlacement = (): StudioDescriptionPlacement => ({
+            pane: 'global',
+            left: typeof window !== 'undefined' ? window.innerWidth / 2 : 0,
+            maxWidth: typeof window !== 'undefined' && window.innerWidth < 768 ? 200 : 400,
+          });
+
+          const studioDescriptionControllerRef = useRef<StudioDescriptionOverlayController | null>(null);
+          const studioDescriptionCurrentItemRef = useRef<CategoryItem | null>(null);
+          const studioDescriptionPointerRef = useRef({ x: 0, y: 0 });
+          // SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_982
+          // Keep fast cursor sweeps from forcing tooltip work for accidental flyovers.
+          const studioDescriptionHoverTimerRef = useRef<number | null>(null);
+          '''
+          if s.count(old_state) != 1:
+              raise SystemExit(f'tooltip state block count mismatch: {s.count(old_state)}')
+          s = s.replace(old_state, new_state, 1)
+
+          old_setter = '''  const setHoveredItem = useCallback((item: CategoryItem | null) => {
+            if (studioDescriptionHoverTimerRef.current !== null) {
+              window.clearTimeout(studioDescriptionHoverTimerRef.current);
+              studioDescriptionHoverTimerRef.current = null;
+            }
+
+            const shouldStabilizeStudioHover = Boolean(
+              item
+              && location.pathname === '/studio'
+              && typeof window !== 'undefined'
+              && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+            );
+
+            if (!shouldStabilizeStudioHover) {
+              setHoveredItemState((current) => (!item && !current ? current : item));
+              if (item) setHoveredItemPlacement(resolveStudioDescriptionPlacement());
+              return;
+            }
+
+            studioDescriptionHoverTimerRef.current = window.setTimeout(() => {
+              studioDescriptionHoverTimerRef.current = null;
+              setHoveredItemState(item);
+              setHoveredItemPlacement(resolveStudioDescriptionPlacement());
+            }, 60);
+          }, [location.pathname, resolveStudioDescriptionPlacement]);
+
+          useEffect(() => () => {
+            if (studioDescriptionHoverTimerRef.current !== null) {
+              window.clearTimeout(studioDescriptionHoverTimerRef.current);
+              studioDescriptionHoverTimerRef.current = null;
+            }
+          }, [location.pathname]);
+          '''
+          new_setter = '''  const commitHoveredItem = useCallback((item: CategoryItem | null) => {
+            studioDescriptionCurrentItemRef.current = item;
+            if (!item) {
+              studioDescriptionControllerRef.current?.hide();
+              return;
+            }
+            studioDescriptionControllerRef.current?.show(item, resolveStudioDescriptionPlacement());
+          }, [resolveStudioDescriptionPlacement]);
+
+          const setHoveredItem = useCallback((item: CategoryItem | null) => {
+            if (studioDescriptionHoverTimerRef.current !== null) {
+              window.clearTimeout(studioDescriptionHoverTimerRef.current);
+              studioDescriptionHoverTimerRef.current = null;
+            }
+
+            const shouldStabilizeStudioHover = Boolean(
+              item
+              && location.pathname === '/studio'
+              && typeof window !== 'undefined'
+              && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+            );
+
+            if (!shouldStabilizeStudioHover) {
+              commitHoveredItem(item);
+              return;
+            }
+
+            studioDescriptionHoverTimerRef.current = window.setTimeout(() => {
+              studioDescriptionHoverTimerRef.current = null;
+              commitHoveredItem(item);
+            }, 60);
+          }, [commitHoveredItem, location.pathname]);
+
+          useEffect(() => () => {
+            if (studioDescriptionHoverTimerRef.current !== null) {
+              window.clearTimeout(studioDescriptionHoverTimerRef.current);
+              studioDescriptionHoverTimerRef.current = null;
+            }
+            studioDescriptionCurrentItemRef.current = null;
+            studioDescriptionControllerRef.current?.hide();
+          }, [location.pathname]);
+          '''
+          if s.count(old_setter) != 1:
+              raise SystemExit(f'tooltip setter block count mismatch: {s.count(old_setter)}')
+          s = s.replace(old_setter, new_setter, 1)
+
+          old_effects = '''  useEffect(() => {
+            if (hoveredItem) {
+              const timer = setTimeout(() => {
+                setHoveredItem(null);
+              }, 6000);
+              return () => clearTimeout(timer);
+            } else {
+              setIsTooltipHovered(false);
+            }
+          }, [hoveredItem, setHoveredItem]);
+
+          const hasHoveredItem = hoveredItem !== null;
+          useEffect(() => {
+            if (!hasHoveredItem) return;
+            const refreshPlacement = () => setHoveredItemPlacement(resolveStudioDescriptionPlacement());
+            window.addEventListener('resize', refreshPlacement);
+            window.addEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
+            window.addEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
+            return () => {
+              window.removeEventListener('resize', refreshPlacement);
+              window.removeEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
+              window.removeEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
+            };
+          }, [hasHoveredItem, resolveStudioDescriptionPlacement]);
+
+          '''
+          if s.count(old_effects) != 1:
+              raise SystemExit(f'tooltip effect block count mismatch: {s.count(old_effects)}')
+          s = s.replace(old_effects, '', 1)
+
+          old_owner_clear = '''  useEffect(() => {
+            if (studioActionOwner === 'floating') return;
+            setHoveredItemState((current) => (isActionButtonHintItem(current) ? null : current));
+          }, [studioActionOwner]);
+          '''
+          new_owner_clear = '''  useEffect(() => {
+            if (studioActionOwner === 'floating') return;
+            const current = studioDescriptionCurrentItemRef.current;
+            if (isActionButtonHintItem(current)) setHoveredItem(null);
+          }, [studioActionOwner, setHoveredItem]);
+          '''
+          if s.count(old_owner_clear) != 1:
+              raise SystemExit(f'action owner clear block count mismatch: {s.count(old_owner_clear)}')
+          s = s.replace(old_owner_clear, new_owner_clear, 1)
+
+          if s.count('    setIsTooltipHovered(false);\n') != 1:
+              raise SystemExit(f'external tooltip hovered clear count mismatch: {s.count("    setIsTooltipHovered(false);\\n")}')
+          s = s.replace('    setIsTooltipHovered(false);\n', '', 1)
+
+          old_clear_action = '''  const clearActionButtonHint = () => {
+            setHoveredItemState((current) => (isActionButtonHintItem(current) ? null : current));
+          };
+          '''
+          new_clear_action = '''  const clearActionButtonHint = () => {
+            const current = studioDescriptionCurrentItemRef.current;
+            if (isActionButtonHintItem(current)) setHoveredItem(null);
+          };
+          '''
+          if s.count(old_clear_action) != 1:
+              raise SystemExit(f'clearActionButtonHint count mismatch: {s.count(old_clear_action)}')
+          s = s.replace(old_clear_action, new_clear_action, 1)
+
+          tooltip_start = s.index('      {/* Tooltip / Description Overlay */}')
+          next_presence = s.index('\n\n      <AnimatePresence>', tooltip_start + 20)
+          new_overlay = '''      {/* Tooltip / Description Overlay — isolated persistent host */}
+                <StudioDescriptionOverlayHost
+                  controllerRef={studioDescriptionControllerRef}
+                  resolvePlacement={resolveStudioDescriptionPlacement}
+                  locationPathname={location.pathname}
+                  studioActionOwner={studioActionOwner}
+                  isActionButtonsCollapsed={isActionButtonsCollapsed}
+                  shouldRenderActionButtons={shouldRenderActionButtons}
+                />'''
+          s = s[:tooltip_start] + new_overlay + s[next_presence:]
+
+          hovered_prop = '              hoveredItem={hoveredItem}\n'
+          if s.count(hovered_prop) != 2:
+              raise SystemExit(f'CategorySection hoveredItem callsite count mismatch: {s.count(hovered_prop)}')
+          s = s.replace(hovered_prop, '')
+
+          prop_line = '  hoveredItem: CategoryItem | null;\n'
+          if s.count(prop_line) != 1:
+              raise SystemExit(f'CategorySection hoveredItem prop count mismatch: {s.count(prop_line)}')
+          s = s.replace(prop_line, '', 1)
+
+          destructure_line = '  hoveredItem,\n'
+          if s.count(destructure_line) != 1:
+              raise SystemExit(f'CategorySection hoveredItem destructure count mismatch: {s.count(destructure_line)}')
+          s = s.replace(destructure_line, '', 1)
+
+          css_start_marker = '  /* 983 — CPU-only idle pointer budget.'
+          css_end_marker = '  /* 576 — browser-native leaf isolation.'
+          if css.count(css_start_marker) != 1 or css.count(css_end_marker) != 1:
+              raise SystemExit(f'CSS marker mismatch: 983={css.count(css_start_marker)} 576={css.count(css_end_marker)}')
+          css_start = css.index(css_start_marker)
+          css_end = css.index(css_end_marker, css_start)
+          css = css[:css_start] + css[css_end:]
+
+          app_path.write_text(s, encoding='utf-8')
+          css_path.write_text(css, encoding='utf-8')
+          PY
+
+          git diff --check
+          echo '=== changed files ==='
+          git diff --name-only
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/App.tsx src/components/studio/liteSplitWorkspace.css "
+          grep -n "SORIDRAW_TOOLTIP_ISOLATED_HOST_984" src/App.tsx
+          ! grep -q "setHoveredItemState" src/App.tsx
+          ! grep -q "983 — CPU-only idle pointer budget" src/components/studio/liteSplitWorkspace.css
+          grep -q "576 — browser-native leaf isolation" src/components/studio/liteSplitWorkspace.css
+          grep -q "window.addEventListener('pointerover', rememberPointer" src/App.tsx
+          ! git diff --name-only | grep -E 'StudioSplitWorkspace\.tsx|LiteStudioSplitWorkspace\.tsx|FavoritesPage\.tsx|SunoLibraryPage\.tsx|firestore|functions|rules|firebase' || false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Commit source-only temp result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/App.tsx src/components/studio/liteSplitWorkspace.css
+          git commit -m 'perf(temp): isolate Studio tooltip rendering'
+          git push origin HEAD:preview-tooltip-perf-v1

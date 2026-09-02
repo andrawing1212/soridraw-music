@@ -1,0 +1,27 @@
+name: OPS Preview Menu Help Player V7 Diag
+
+on:
+  push:
+    branches: [ops-preview-menu-help-player-v7]
+    paths:
+      - 'scripts/diag-menu-help-player-v7.sh'
+      - '.github/workflows/ops-preview-menu-help-player-v7-diag.yml'
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Inspect current preview source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview
+          git switch --detach origin/preview
+          test "$(git rev-parse HEAD)" = "518fa7a29a68225ad6769d7e9e16981ab1d57135"
+          git show "$GITHUB_SHA:scripts/diag-menu-help-player-v7.sh" > /tmp/diag-menu-help-player-v7.sh
+          bash /tmp/diag-menu-help-player-v7.sh

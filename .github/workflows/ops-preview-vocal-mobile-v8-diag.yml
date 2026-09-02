@@ -1,0 +1,26 @@
+name: OPS Preview Vocal Mobile V8 Diag
+
+on:
+  push:
+    branches:
+      - ops-preview-vocal-mobile-v8
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Inspect current preview vocal UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview
+          git switch --detach origin/preview
+          test "$(git rev-parse HEAD)" = "ae85bfd3c9ae50ec840a26cf70dec956b7f02dd5"
+          git show "$GITHUB_SHA:scripts/diag-vocal-mobile-v8.sh" > /tmp/diag-vocal-mobile-v8.sh
+          bash /tmp/diag-vocal-mobile-v8.sh

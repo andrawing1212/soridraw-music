@@ -79,11 +79,10 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-
   background: rgba(20, 20, 24, 0.055) !important;
 }
 
-/* 1018 — Public profile hero parity.
-   Split mode (studio-black) uses the base Explore hero contract, so whenever a
-   profile background image exists, force every mode to that same image/overlay
-   and text hierarchy. Without a background image, each mode keeps its normal
-   surface/text colors (Classic Light therefore remains dark text). */
+/* 1019 — Public profile hero tone parity without mode rollback.
+   Only the background image/overlay and profile text hierarchy are normalized to
+   Split. Interactive surfaces (avatar/edit/follow/own-profile/genre chip
+   backgrounds) remain owned by each mode so Classic Light keeps its current UI. */
 .soridraw-explore-profile-head.has-background .soridraw-explore-profile-background img {
   opacity: 1 !important;
   filter: saturate(.88) brightness(.58) !important;
@@ -109,44 +108,12 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-
 }
 .soridraw-explore-profile-head.has-background .soridraw-explore-profile-genres span {
   color: rgba(255,255,255,.62) !important;
-  background: rgba(255,255,255,.055) !important;
 }
 .soridraw-explore-profile-head.has-background .soridraw-explore-profile-social-links a {
   color: rgba(235,235,240,.48) !important;
 }
 .soridraw-explore-profile-head.has-background .soridraw-explore-profile-social-links a:hover {
   color: #fff !important;
-}
-.soridraw-explore-profile-head.has-background .soridraw-explore-profile-edit-button {
-  color: rgba(255,255,255,.74) !important;
-  background: rgba(255,255,255,.075) !important;
-}
-.soridraw-explore-profile-head.has-background .soridraw-explore-profile-edit-button:hover {
-  color: #fff !important;
-  background: rgba(255,255,255,.12) !important;
-}
-.soridraw-explore-profile-head.has-background .soridraw-explore-own-profile {
-  color: rgba(255,255,255,.56) !important;
-  background: rgba(255,255,255,.055) !important;
-}
-.soridraw-explore-profile-head.has-background .soridraw-explore-profile-avatar {
-  color: rgba(255,255,255,.72) !important;
-  background: rgba(255,255,255,.075) !important;
-}
-.soridraw-explore-profile-head.has-background .soridraw-explore-follow-button {
-  color: #171719 !important;
-  background: #f3f3f4 !important;
-}
-.soridraw-explore-profile-head.has-background .soridraw-explore-follow-button:hover:not(:disabled) {
-  background: #fff !important;
-}
-.soridraw-explore-profile-head.has-background .soridraw-explore-follow-button.is-following {
-  color: rgba(255,255,255,.76) !important;
-  background: rgba(255,255,255,.09) !important;
-}
-.soridraw-explore-profile-head.has-background .soridraw-explore-follow-button.is-following:hover:not(:disabled) {
-  color: #fff !important;
-  background: rgba(255,255,255,.13) !important;
 }
 
 /* Music Note: in Classic Light, inactive state controls use the same warm-light

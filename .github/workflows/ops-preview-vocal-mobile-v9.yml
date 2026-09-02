@@ -27,16 +27,16 @@ jobs:
           test "$(git rev-parse HEAD)" = "b96524b38cf5d8ee77b917c5755e0abd142618f6"
           cat >> src/components/studio/studioLayout.css <<'CSS'
 
-/* 1009 — Classic Dark mobile vocal group one-card rows.
- * 1008 correctly covered Studio Black split/mobile-pane, but the normal dark
- * mobile Studio runs under the Classic theme. Scope this only to the compact
- * mobile builder so desktop Classic and split geometry stay unchanged. */
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
-.soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
-.soridraw-studio-compact-mobile-builder .soridraw-vocal-member-grid {
-  grid-template-columns: minmax(0, 1fr) !important;
-}
-CSS
+          /* 1009 — Classic Dark mobile vocal group one-card rows.
+           * 1008 correctly covered Studio Black split/mobile-pane, but the normal dark
+           * mobile Studio runs under the Classic theme. Scope this only to the compact
+           * mobile builder so desktop Classic and split geometry stay unchanged. */
+          html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+          .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
+          .soridraw-studio-compact-mobile-builder .soridraw-vocal-member-grid {
+            grid-template-columns: minmax(0, 1fr) !important;
+          }
+          CSS
           git diff --check
           git diff -- src/components/studio/studioLayout.css
       - name: Install dependencies

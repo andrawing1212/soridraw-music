@@ -1,12 +1,9 @@
 name: OPS Preview Vocal Add Button V11
-
 on:
   push:
     branches: [ops-preview-vocal-add-button-v11]
-
 permissions:
   contents: write
-
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -18,109 +15,14 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Apply canonical vocal add-member button styling
+      - name: Apply exact source fix
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin preview
           git switch --detach origin/preview
-          python - <<'PY'
-          from pathlib import Path
-
-          app_path = Path('src/App.tsx')
-          app = app_path.read_text(encoding='utf-8')
-
-          base_old = '"py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5"'
-          base_new = '"soridraw-vocal-add-member-button py-3 px-2 rounded-2xl text-[14px] font-bold transition-all flex items-center justify-center gap-2.5"'
-          if app.count(base_old) != 2:
-              raise SystemExit(f'Expected 2 vocal add-member base class occurrences, found {app.count(base_old)}')
-          app = app.replace(base_old, base_new)
-
-          male_old = '? "bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-600/20"'
-          male_new = '? "soridraw-vocal-add-member-button--male"'
-          if app.count(male_old) != 1:
-              raise SystemExit(f'Expected 1 male enabled class, found {app.count(male_old)}')
-          app = app.replace(male_old, male_new)
-
-          female_old = '? "bg-pink-600/10 border-pink-500/20 text-pink-400 hover:bg-pink-600/20"'
-          female_new = '? "soridraw-vocal-add-member-button--female"'
-          if app.count(female_old) != 1:
-              raise SystemExit(f'Expected 1 female enabled class, found {app.count(female_old)}')
-          app = app.replace(female_old, female_new)
-          app_path.write_text(app, encoding='utf-8')
-
-          css_path = Path('src/components/studio/studioLayout.css')
-          css = css_path.read_text(encoding='utf-8')
-          old_marker = '/* 1011 — Vocal add-member controls:'
-          if css.count(old_marker) != 1:
-              raise SystemExit(f'Expected one 1011 block, found {css.count(old_marker)}')
-          cut = css.index(old_marker)
-          css = css[:cut].rstrip()
-
-          canonical = r'''
-
-/* 1014 — Canonical vocal add-member button surfaces.
- * The JSX no longer owns blue/pink backgrounds. This block is the single
- * source of truth for light, classic dark, and split Studio presentation. */
-.soridraw-vocal-add-member-button {
-  border: 0;
-  background-image: none;
-}
-
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
-.soridraw-vocal-add-member-button:not(:disabled) {
-  background: #ffffff;
-}
-
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
-.soridraw-vocal-add-member-button--male:not(:disabled) {
-  color: rgb(96 165 250);
-}
-
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
-.soridraw-vocal-add-member-button--female:not(:disabled) {
-  color: rgb(244 114 182);
-}
-
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
-.soridraw-vocal-add-member-button--male:not(:disabled),
-html[data-soridraw-theme="studio-black"]
-.soridraw-vocal-add-member-button--male:not(:disabled) {
-  background: rgb(37 99 235 / 0.10);
-  color: rgb(96 165 250);
-}
-
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
-.soridraw-vocal-add-member-button--female:not(:disabled),
-html[data-soridraw-theme="studio-black"]
-.soridraw-vocal-add-member-button--female:not(:disabled) {
-  background: rgb(219 39 119 / 0.10);
-  color: rgb(244 114 182);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
-  .soridraw-vocal-add-member-button--male:not(:disabled):hover,
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-vocal-add-member-button--male:not(:disabled):hover {
-    background: rgb(37 99 235 / 0.20);
-  }
-
-  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
-  .soridraw-vocal-add-member-button--female:not(:disabled):hover,
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-vocal-add-member-button--female:not(:disabled):hover {
-    background: rgb(219 39 119 / 0.20);
-  }
-
-  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
-  .soridraw-vocal-add-member-button:not(:disabled):hover {
-    background: #ffffff;
-  }
-}
-'''
-          css_path.write_text(css + canonical + '\n', encoding='utf-8')
-          PY
+          echo 'CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKYXBwX3BhdGggPSBQYXRoKCJzcmMvQXBwLnRzeCIpCmFwcCA9IGFwcF9wYXRoLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQoKYmFzZV9vbGQgPSAnInB5LTMgcHgtMiByb3VuZGVkLTJ4bCB0ZXh0LVsxNHB4XSBmb250LWJvbGQgdHJhbnNpdGlvbi1hbGwgYm9yZGVyIGZsZXggaXRlbXMtY2VudGVyIGp1c3RpZnktY2VudGVyIGdhcC0yLjUiJwpiYXNlX25ldyA9ICcic29yaWRyYXctdm9jYWwtYWRkLW1lbWJlci1idXR0b24gcHktMyBweC0yIHJvdW5kZWQtMnhsIHRleHQtWzE0cHhdIGZvbnQtYm9sZCB0cmFuc2l0aW9uLWFsbCBmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWNlbnRlciBnYXAtMi41IicKYXNzZXJ0IGFwcC5jb3VudChiYXNlX29sZCkgPT0gMiwgYXBwLmNvdW50KGJhc2Vfb2xkKQphcHAgPSBhcHAucmVwbGFjZShiYXNlX29sZCwgYmFzZV9uZXcpCgptYWxlX29sZCA9ICc/ICJiZy1ibHVlLTYwMC8xMCBib3JkZXItYmx1ZS01MDAvMjAgdGV4dC1ibHVlLTQwMCBob3ZlcjpiZy1ibHVlLTYwMC8yMCInCm1hbGVfbmV3ID0gJz8gInNvcmlkcmF3LXZvY2FsLWFkZC1tZW1iZXItYnV0dG9uLS1tYWxlIicKYXNzZXJ0IGFwcC5jb3VudChtYWxlX29sZCkgPT0gMSwgYXBwLmNvdW50KG1hbGVfb2xkKQphcHAgPSBhcHAucmVwbGFjZShtYWxlX29sZCwgbWFsZV9uZXcpCgpmZW1hbGVfb2xkID0gJz8gImJnLXBpbmstNjAwLzEwIGJvcmRlci1waW5rLTUwMC8yMCB0ZXh0LXBpbmstNDAwIGhvdmVyOmJnLXBpbmstNjAwLzIwIicKZmVtYWxlX25ldyA9ICc/ICJzb3JpZHJhdy12b2NhbC1hZGQtbWVtYmVyLWJ1dHRvbi0tZmVtYWxlIicKYXNzZXJ0IGFwcC5jb3VudChmZW1hbGVfb2xkKSA9PSAxLCBhcHAuY291bnQoZmVtYWxlX29sZCkKYXBwID0gYXBwLnJlcGxhY2UoZmVtYWxlX29sZCwgZmVtYWxlX25ldykKYXBwX3BhdGgud3JpdGVfdGV4dChhcHAsIGVuY29kaW5nPSJ1dGYtOCIpCgpjc3NfcGF0aCA9IFBhdGgoInNyYy9jb21wb25lbnRzL3N0dWRpby9zdHVkaW9MYXlvdXQuY3NzIikKY3NzID0gY3NzX3BhdGgucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCm9sZF9tYXJrZXIgPSAiLyogMTAxMSDigJQgVm9jYWwgYWRkLW1lbWJlciBjb250cm9sczoiCmFzc2VydCBjc3MuY291bnQob2xkX21hcmtlcikgPT0gMSwgY3NzLmNvdW50KG9sZF9tYXJrZXIpCmNzcyA9IGNzc1s6Y3NzLmluZGV4KG9sZF9tYXJrZXIpXS5yc3RyaXAoKQoKY2Fub25pY2FsID0gcicnJwovKiAxMDE0IOKAlCBDYW5vbmljYWwgdm9jYWwgYWRkLW1lbWJlciBidXR0b24gc3VyZmFjZXMuCiAqIFRoZSBKU1ggbm8gbG9uZ2VyIG93bnMgYmx1ZS9waW5rIGJhY2tncm91bmRzLiBUaGlzIGJsb2NrIGlzIHRoZSBzaW5nbGUKICogc291cmNlIG9mIHRydXRoIGZvciBsaWdodCwgY2xhc3NpYyBkYXJrLCBhbmQgc3BsaXQgU3R1ZGlvIHByZXNlbnRhdGlvbi4gKi8KLnNvcmlkcmF3LXZvY2FsLWFkZC1tZW1iZXItYnV0dG9uIHsKICBib3JkZXI6IDA7CiAgYmFja2dyb3VuZC1pbWFnZTogbm9uZTsKfQoKaHRtbFtkYXRhLXNvcmlkcmF3LXRoZW1lPSJjbGFzc2ljIl1bZGF0YS1zb3JpZHJhdy1jb2xvci1tb2RlPSJsaWdodCJdCi5zb3JpZHJhdy12b2NhbC1hZGQtbWVtYmVyLWJ1dHRvbjpub3QoOmRpc2FibGVkKSB7CiAgYmFja2dyb3VuZDogI2ZmZmZmZjsKfQoKaHRtbFtkYXRhLXNvcmlkcmF3LXRoZW1lPSJjbGFzc2ljIl1bZGF0YS1zb3JpZHJhdy1jb2xvci1tb2RlPSJsaWdodCJdCi5zb3JpZHJhdy12b2NhbC1hZGQtbWVtYmVyLWJ1dHRvbi0tbWFsZTpub3QoOmRpc2FibGVkKSB7CiAgY29sb3I6IHJnYig5NiAxNjUgMjUwKTsKfQoKaHRtbFtkYXRhLXNvcmlkcmF3LXRoZW1lPSJjbGFzc2ljIl1bZGF0YS1zb3JpZHJhdy1jb2xvci1tb2RlPSJsaWdodCJdCi5zb3JpZHJhdy12b2NhbC1hZGQtbWVtYmVyLWJ1dHRvbi0tZmVtYWxlOm5vdCg6ZGlzYWJsZWQpIHsKICBjb2xvcjogcmdiKDI0NCAxMTQgMTgyKTsKfQoKaHRtbFtkYXRhLXNvcmlkcmF3LXRoZW1lPSJjbGFzc2ljIl1bZGF0YS1zb3JpZHJhdy1jb2xvci1tb2RlPSJkYXJrIl0KLnNvcmlkcmF3LXZvY2FsLWFkZC1tZW1iZXItYnV0dG9uLS1tYWxlOm5vdCg6ZGlzYWJsZWQpLApodG1sW2RhdGEtc29yaWRyYXctdGhlbWU9InN0dWRpby1ibGFjayJdCi5zb3JpZHJhdy12b2NhbC1hZGQtbWVtYmVyLWJ1dHRvbi0tbWFsZTpub3QoOmRpc2FibGVkKSB7CiAgYmFja2dyb3VuZDogcmdiKDM3IDk5IDIzNSAvIDAuMTApOwogIGNvbG9yOiByZ2IoOTYgMTY1IDI1MCk7Cn0KCmh0bWxbZGF0YS1zb3JpZHJhdy10aGVtZT0iY2xhc3NpYyJdW2RhdGEtc29yaWRyYXctY29sb3ItbW9kZT0iZGFyayJdCi5zb3JpZHJhdy12b2NhbC1hZGQtbWVtYmVyLWJ1dHRvbi0tZmVtYWxlOm5vdCg6ZGlzYWJsZWQpLApodG1sW2RhdGEtc29yaWRyYXctdGhlbWU9InN0dWRpby1ibGFjayJdCi5zb3JpZHJhdy12b2NhbC1hZGQtbWVtYmVyLWJ1dHRvbi0tZmVtYWxlOm5vdCg6ZGlzYWJsZWQpIHsKICBiYWNrZ3JvdW5kOiByZ2IoMjE5IDM5IDExOSAvIDAuMTApOwogIGNvbG9yOiByZ2IoMjQ0IDExNCAxODIpOwp9CgpAbWVkaWEgKGhvdmVyOiBob3ZlcikgYW5kIChwb2ludGVyOiBmaW5lKSB7CiAgaHRtbFtkYXRhLXNvcmlkcmF3LXRoZW1lPSJjbGFzc2ljIl1bZGF0YS1zb3JpZHJhdy1jb2xvci1tb2RlPSJkYXJrIl0KICAuc29yaWRyYXctdm9jYWwtYWRkLW1lbWJlci1idXR0b24tLW1hbGU6bm90KDpkaXNhYmxlZCk6aG92ZXIsCiAgaHRtbFtkYXRhLXNvcmlkcmF3LXRoZW1lPSJzdHVkaW8tYmxhY2siXQogIC5zb3JpZHJhdy12b2NhbC1hZGQtbWVtYmVyLWJ1dHRvbi0tbWFsZTpub3QoOmRpc2FibGVkKTpob3ZlciB7CiAgICBiYWNrZ3JvdW5kOiByZ2IoMzcgOTkgMjM1IC8gMC4yMCk7CiAgfQoKICBodG1sW2RhdGEtc29yaWRyYXctdGhlbWU9ImNsYXNzaWMiXVtkYXRhLXNvcmlkcmF3LWNvbG9yLW1vZGU9ImRhcmsiXQogIC5zb3JpZHJhdy12b2NhbC1hZGQtbWVtYmVyLWJ1dHRvbi0tZmVtYWxlOm5vdCg6ZGlzYWJsZWQpOmhvdmVyLAogIGh0bWxbZGF0YS1zb3JpZHJhdy10aGVtZT0ic3R1ZGlvLWJsYWNrIl0KICAuc29yaWRyYXctdm9jYWwtYWRkLW1lbWJlci1idXR0b24tLWZlbWFsZTpub3QoOmRpc2FibGVkKTpob3ZlciB7CiAgICBiYWNrZ3JvdW5kOiByZ2IoMjE5IDM5IDExOSAvIDAuMjApOwogIH0KCiAgaHRtbFtkYXRhLXNvcmlkcmF3LXRoZW1lPSJjbGFzc2ljIl1bZGF0YS1zb3JpZHJhdy1jb2xvci1tb2RlPSJsaWdodCJdCiAgLnNvcmlkcmF3LXZvY2FsLWFkZC1tZW1iZXItYnV0dG9uOm5vdCg6ZGlzYWJsZWQpOmhvdmVyIHsKICAgIGJhY2tncm91bmQ6ICNmZmZmZmY7CiAgfQp9CicnJwpjc3NfcGF0aC53cml0ZV90ZXh0KGNzcyArICJcblxuIiArIGNhbm9uaWNhbCArICJcbiIsIGVuY29kaW5nPSJ1dGYtOCIpCg==' | base64 -d > /tmp/patch.py
+          python /tmp/patch.py
           git diff --check
           git diff -- src/App.tsx src/components/studio/studioLayout.css
       - name: Install dependencies
@@ -133,9 +35,9 @@ html[data-soridraw-theme="studio-black"]
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "andrawing1212"
-          git config user.email "andrawing1212@gmail.com"
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
           git add src/App.tsx src/components/studio/studioLayout.css
-          git commit -m "fix(preview): make light vocal add buttons truly white"
+          git commit -m 'fix(preview): make light vocal add buttons truly white'
           git branch -f preview-vocal-add-light-source-v13 HEAD
           git push origin preview-vocal-add-light-source-v13 --force

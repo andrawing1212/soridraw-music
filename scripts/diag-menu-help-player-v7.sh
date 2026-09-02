@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo '=== APP TOOLTIP HOST ==='
-grep -n -C 18 -E 'StudioDescriptionOverlayHost|setHoveredItem|hoveredItemPlacement|studioDescription' src/App.tsx | head -n 320 || true
+echo '=== APP HOST SOURCE ==='
+sed -n '130,285p' src/App.tsx
 
-echo '=== APP TITLE TOOLTIP SAMPLES ==='
-grep -n -C 8 'soridraw-card-title-tooltip' src/App.tsx | head -n 260 || true
+echo '=== APP HOST INVOCATION ==='
+grep -n -C 18 '<StudioDescriptionOverlayHost' src/App.tsx || true
 
-echo '=== MYPAGE AUTO MODEL UI ==='
-grep -n -C 35 -E 'autoModelFallback|대체 Gemini|기본 Gemini' src/pages/MyPage.tsx | tail -n 320 || true
+echo '=== TITLE HOVER HANDLERS ==='
+grep -n -E 'onMouseEnter=.*setShow.*TitleTooltip|onMouseLeave=.*setShow.*TitleTooltip' src/App.tsx src/components/GenreHierarchySelector.tsx || true
 
-echo '=== GLOBAL PLAYER LAYERS ==='
-grep -n -C 10 -E 'data-soridraw-global-player|z-\[100\]|z-\[99\]|z-\[140\]' src/components/GlobalPlayer.tsx || true
+echo '=== MYPAGE PERSONAL SETTINGS ==='
+sed -n '632,670p' src/pages/MyPage.tsx

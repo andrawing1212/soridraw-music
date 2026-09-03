@@ -1,0 +1,143 @@
+name: SORIDRAW Preview Library Bundle Deploy 2026-09-04
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-preview-library-bundle-deploy-20260904.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-preview-library-bundle-deploy-20260904
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Verify approved source baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 70f8c913ed27286af7a7607372258286b673e175 HEAD -- src functions package.json package-lock.json firebase.json firebase.hosting-preview.json
+          grep -q 'syncSunoLibraryLatest10Bundle' functions/src/index.ts
+          echo '[Preview deploy] Approved source baseline: PASS'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build preview app
+        run: npm run build
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions ci --no-audit --no-fund
+
+      - name: Build Functions
+        run: npm --prefix functions run build
+
+      - name: Run Library bundle contract tests
+        run: npm --prefix functions run test:library-bundle
+
+      - name: Verify secured Function export
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f functions/lib/securedIndex.js
+          grep -q 'syncSunoLibraryLatest10Bundle' functions/lib/securedIndex.js
+          grep -q 'suno_tracks/{uid}/tracks/{trackId}' functions/lib/securedIndex.js
+          echo '[Preview deploy] Secured Function export: PASS'
+
+      - name: Authenticate Google/Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy only Library freshness Function
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only functions:syncSunoLibraryLatest10Bundle \
+            --project soridraw-app-866a5 \
+            --non-interactive
+          echo '[Preview deploy] syncSunoLibraryLatest10Bundle: PASS'
+
+      - name: Verify Function inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest functions:list \
+            --project soridraw-app-866a5 \
+            --json > "$RUNNER_TEMP/functions-list.json"
+          grep -q 'syncSunoLibraryLatest10Bundle' "$RUNNER_TEMP/functions-list.json"
+          echo '[Preview deploy] Function inventory: PASS'
+
+      - name: Deploy Firebase PREVIEW Hosting only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project soridraw \
+            --config firebase.hosting-preview.json \
+            --non-interactive
+          echo '[Preview deploy] Firebase Hosting soridraw-preview: PASS'
+
+      - name: Smoke test PREVIEW addresses
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in 'https://soridraw-preview.web.app/' 'https://soridraw-preview.firebaseapp.com/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 "$url" -o "$RUNNER_TEMP/preview-index.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview-index.html"; then
+                ok='yes'
+                echo "[Preview deploy] Smoke PASS: $url"
+                break
+              fi
+              sleep 10
+            done
+            test "$ok" = 'yes' || { echo "Preview smoke failed: $url"; exit 7; }
+          done
+
+      - name: Verify production Hosting unchanged and Explore preview reachable
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o /dev/null
+          explore_status="$(curl -sS -o "$RUNNER_TEMP/explore.txt" -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1' || true)"
+          test "$explore_status" = '200'
+          echo '[Preview deploy] Production reachable; Explore PREVIEW HTTP 200.'
+
+      - name: Result
+        run: |
+          echo 'SORIDRAW PREVIEW Library bundle deployment completed.'
+          echo 'Source baseline: 70f8c913ed27286af7a7607372258286b673e175'
+          echo 'Function: syncSunoLibraryLatest10Bundle'
+          echo 'Preview URL: https://preview.soridraw.com/'
+          echo 'No Rules, migration, Cloudflare deploy, main, TEST, or PRODUCTION deployment performed.'

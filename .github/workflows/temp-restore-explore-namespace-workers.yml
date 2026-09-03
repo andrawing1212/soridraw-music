@@ -1,0 +1,40 @@
+name: Temp Restore Explore Namespace Workers
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-restore-explore-namespace-workers.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Restore stable isolated namespace Workers
+        run: node .deploy/cloudflare-explore-namespaced-env-split.mjs
+      - name: Smoke Preview and Test
+        shell: bash
+        run: |
+          set -euo pipefail
+          p="$(curl -sS -o /tmp/p.json -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          t="$(curl -sS -o /tmp/t.json -w '%{http_code}' -H 'Origin: https://test.soridraw.com' 'https://soridraw-explore-test.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          test "$p" = 200
+          test "$t" = 200
+          echo 'PREVIEW_NAMESPACE_RESTORE=PASS'
+          echo 'TEST_NAMESPACE_RESTORE=PASS'

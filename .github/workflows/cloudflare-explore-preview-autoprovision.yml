@@ -1,0 +1,87 @@
+name: Cloudflare Explore PREVIEW Autoprovision
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cloudflare-explore-preview-autoprovision.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Autoprovision isolated PREVIEW resources only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/bootstrap.mjs" <<'JS'
+          export default {
+            async fetch(request, env) {
+              const url = new URL(request.url);
+              if (url.pathname !== '/__soridraw_provision_probe') return new Response('not found', { status: 404 });
+              const d1 = await env.DB.prepare('SELECT 1 AS ok').first();
+              await env.PROFILE_MEDIA.put('__soridraw_probe', new TextEncoder().encode('ok'));
+              const r2 = await env.PROFILE_MEDIA.get('__soridraw_probe');
+              await env.PROFILE_MEDIA.delete('__soridraw_probe');
+              return Response.json({ ok: true, d1: Number(d1?.ok || 0), r2: Boolean(r2) });
+            }
+          };
+          JS
+          cat > "$RUNNER_TEMP/wrangler-preview.jsonc" <<JSON
+          {
+            "$schema": "${GITHUB_WORKSPACE}/cloudflare/explore-worker/node_modules/wrangler/config-schema.json",
+            "name": "soridraw-explore-preview",
+            "main": "./bootstrap.mjs",
+            "compatibility_date": "2026-08-28",
+            "workers_dev": true,
+            "d1_databases": [
+              { "binding": "DB" }
+            ],
+            "r2_buckets": [
+              { "binding": "PROFILE_MEDIA" }
+            ]
+          }
+          JSON
+          npx wrangler deploy --strict --config "$RUNNER_TEMP/wrangler-preview.jsonc"
+          echo 'AUTOPROVISION_DEPLOY=PASS'
+          echo 'AUTOPROVISION_CONFIG_AFTER:'
+          cat "$RUNNER_TEMP/wrangler-preview.jsonc"
+
+      - name: Verify PREVIEW resources are writable and production is untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 12); do
+            code="$(curl -sS --max-time 20 -o /tmp/preview-probe.json -w '%{http_code}' 'https://soridraw-explore-preview.andrawing1212.workers.dev/__soridraw_provision_probe' || true)"
+            if [ "$code" = '200' ] && grep -q '"ok":true' /tmp/preview-probe.json; then
+              echo "PREVIEW_AUTOPROVISION_SMOKE=PASS $(cat /tmp/preview-probe.json)"
+              break
+            fi
+            test "$i" != 12 || { echo "PREVIEW_AUTOPROVISION_SMOKE=FAIL HTTP=$code BODY=$(cat /tmp/preview-probe.json 2>/dev/null || true)"; exit 5; }
+            sleep 5
+          done
+          prod="$(curl -sS --max-time 20 -H 'Origin: https://soridraw.com' -o /tmp/prod.json -w '%{http_code}' 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          test "$prod" = '200'
+          echo 'PRODUCTION_EXPLORE_UNTOUCHED_SMOKE=PASS'

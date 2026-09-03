@@ -16,7 +16,7 @@ jobs:
         with: { ref: preview }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - name: Inspect active PREVIEW Worker source anchors
+      - name: Inspect active PREVIEW Worker bindings
         shell: bash
         run: |
           set -euo pipefail
@@ -25,13 +25,9 @@ jobs:
           const account='e1a30fc9ef497fda1d34f4ab3dc1da45';
           const name='soridraw-explore-preview';
           async function j(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(JSON.stringify(x).slice(0,1000));return x.result||x;}
-          const deps=await j(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);
-          const d=(deps.deployments||deps||[])[0]; const v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
-          const ver=await j(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${v.version_id}?include=modules`);
-          const mod=(ver.modules||[]).find(m=>m.name===ver.main_module)||(ver.modules||[])[0];
-          const src=Buffer.from(mod.content_base64,'base64').toString('utf8');
-          const lines=src.split(/\r?\n/);
-          const hits=[]; lines.forEach((line,i)=>{if(/me\/publications|handle.*Publication|publication-options|visibility/.test(line))hits.push(i)});
-          for(const i of hits){const a=Math.max(0,i-12),b=Math.min(lines.length,i+28); console.log(`--- ${a+1}-${b} ---`); console.log(lines.slice(a,b).join('\n'));}
-          console.log(`ACTIVE_VERSION=${v.version_id} SOURCE_BYTES=${Buffer.byteLength(src)}`);
+          const s=await j(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/settings`);
+          const safe=(s.bindings||[]).map(b=>({type:b.type,name:b.name,id:b.id||b.database_id||b.namespace_id||null,bucket_name:b.bucket_name||null,service:b.service||null,environment:b.environment||null}));
+          console.log('COMPAT='+s.compatibility_date);
+          console.log('FLAGS='+JSON.stringify(s.compatibility_flags||[]));
+          console.log('BINDINGS='+JSON.stringify(safe));
           NODE

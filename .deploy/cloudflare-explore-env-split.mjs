@@ -48,7 +48,8 @@ const run = (command, args, { cwd = ROOT, allowFailure = false, quiet = false } 
   if (!quiet && result.stdout) process.stdout.write(result.stdout);
   if (!quiet && result.stderr) process.stderr.write(result.stderr);
   if (result.status !== 0 && !allowFailure) {
-    throw new Error(`${command} ${args.join(' ')} failed with exit ${result.status}`);
+    const detail = [result.stderr, result.stdout].filter(Boolean).join('\n').slice(0, 2000);
+    throw new Error(`${command} ${args.join(' ')} failed with exit ${result.status}${detail ? `\n${detail}` : ''}`);
   }
   return { ok: result.status === 0, stdout: String(result.stdout || '').trim(), stderr: String(result.stderr || '').trim() };
 };
@@ -155,28 +156,28 @@ const ensureR2 = (name) => {
   return true;
 };
 
-const d1Rows = (db, sql) => {
+const d1Rows = (db, sql, configPath = remoteConfigPath) => {
   const raw = parseJson(
-    wrangler(['d1', 'execute', db, '--remote', '--command', sql, '--json'], { quiet: true }).stdout,
+    wrangler(['d1', 'execute', db, '--remote', '--command', sql, '--json', '--config', configPath], { quiet: true }).stdout,
     `d1 execute ${db}`,
   );
   const envelope = Array.isArray(raw) ? raw[0] : raw;
   return Array.isArray(envelope?.results) ? envelope.results : Array.isArray(envelope?.result?.[0]?.results) ? envelope.result[0].results : [];
 };
 
-const hasBootstrapMarker = (db) => {
-  const rows = d1Rows(db, "SELECT COUNT(*) AS n FROM sqlite_schema WHERE type='table' AND name='_soridraw_environment_meta';");
+const hasBootstrapMarker = (db, configPath) => {
+  const rows = d1Rows(db, "SELECT COUNT(*) AS n FROM sqlite_schema WHERE type='table' AND name='_soridraw_environment_meta';", configPath);
   return Number(rows?.[0]?.n || 0) > 0;
 };
 
-const hasCoreTables = (db) => {
-  const rows = d1Rows(db, "SELECT COUNT(*) AS n FROM sqlite_schema WHERE type='table' AND name IN ('public_profiles','tracks');");
+const hasCoreTables = (db, configPath) => {
+  const rows = d1Rows(db, "SELECT COUNT(*) AS n FROM sqlite_schema WHERE type='table' AND name IN ('public_profiles','tracks');", configPath);
   return Number(rows?.[0]?.n || 0) > 0;
 };
 
 const productionCounts = () => {
   const selects = CORE_TABLES.map((table) => `(SELECT COUNT(*) FROM ${table}) AS ${table}`).join(', ');
-  const rows = d1Rows(PROD.db, `SELECT ${selects};`);
+  const rows = d1Rows(PROD.db, `SELECT ${selects};`, remoteConfigPath);
   return rows[0] || {};
 };
 
@@ -188,13 +189,22 @@ const targetState = new Map();
 for (const target of TARGETS) {
   const db = ensureDb(target.db);
   const r2Created = ensureR2(target.r2);
-  targetState.set(target.env, { ...db, r2Created, bootstrappedNow: false });
+  const configPath = join(WORKER_DIR, '.remote-worker', `wrangler.${target.env}.jsonc`);
+  const cfg = {
+    ...baseConfig,
+    name: target.worker,
+    workers_dev: true,
+    d1_databases: [{ binding: 'DB', database_name: target.db, database_id: db.id }],
+    r2_buckets: [{ binding: 'PROFILE_MEDIA', bucket_name: target.r2 }],
+  };
+  writeFileSync(configPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+  targetState.set(target.env, { ...db, r2Created, bootstrappedNow: false, configPath });
   console.log(`${target.env.toUpperCase()}_D1_ID=${db.id}`);
   console.log(`${target.env.toUpperCase()}_R2=${target.r2}`);
 }
 
 const prodExport = join(TMP, 'production.sql');
-wrangler(['d1', 'export', PROD.db, '--remote', '--output', prodExport, '--skip-confirmation']);
+wrangler(['d1', 'export', PROD.db, '--remote', '--output', prodExport, '--skip-confirmation', '--config', remoteConfigPath]);
 const prodSql = readFileSync(prodExport, 'utf8');
 if (!prodSql.includes('CREATE TABLE') && !prodSql.includes('CREATE TABLE IF NOT EXISTS')) {
   throw new Error('Production D1 export did not contain schema; refusing bootstrap.');
@@ -202,24 +212,24 @@ if (!prodSql.includes('CREATE TABLE') && !prodSql.includes('CREATE TABLE IF NOT 
 
 for (const target of TARGETS) {
   const state = targetState.get(target.env);
-  if (hasBootstrapMarker(target.db)) {
+  if (hasBootstrapMarker(target.db, state.configPath)) {
     console.log(`${target.env.toUpperCase()}_D1_BOOTSTRAP=existing`);
     continue;
   }
-  if (hasCoreTables(target.db) && !state.created) {
+  if (hasCoreTables(target.db, state.configPath) && !state.created) {
     throw new Error(`${target.db} already has core tables but no SORIDRAW bootstrap marker; refusing to overwrite existing environment data.`);
   }
   const targetSqlPath = join(TMP, `${target.env}.sql`);
   writeFileSync(targetSqlPath, prodSql.split(PROD.base).join(target.base), 'utf8');
-  wrangler(['d1', 'execute', target.db, '--remote', '--file', targetSqlPath, '--yes']);
+  wrangler(['d1', 'execute', target.db, '--remote', '--file', targetSqlPath, '--yes', '--config', state.configPath]);
   const markerSql = `CREATE TABLE IF NOT EXISTS _soridraw_environment_meta (environment TEXT PRIMARY KEY, source TEXT NOT NULL, bootstrapped_at INTEGER NOT NULL); INSERT OR REPLACE INTO _soridraw_environment_meta(environment, source, bootstrapped_at) VALUES ('${target.env}', 'production-snapshot', ${Date.now()});`;
-  wrangler(['d1', 'execute', target.db, '--remote', '--command', markerSql, '--yes']);
+  wrangler(['d1', 'execute', target.db, '--remote', '--command', markerSql, '--yes', '--config', state.configPath]);
   state.bootstrappedNow = true;
   console.log(`${target.env.toUpperCase()}_D1_BOOTSTRAP=created-from-production-readonly-snapshot`);
 }
 
 console.log('=== 4. Copy only profile media referenced by the production snapshot ===');
-const mediaRows = d1Rows(PROD.db, "SELECT uid, avatar_url, background_url FROM public_profiles WHERE is_public=1 ORDER BY uid;");
+const mediaRows = d1Rows(PROD.db, "SELECT uid, avatar_url, background_url FROM public_profiles WHERE is_public=1 ORDER BY uid;", remoteConfigPath);
 let copiedObjects = 0;
 for (const row of mediaRows) {
   const uid = String(row?.uid || '').trim();
@@ -243,8 +253,9 @@ console.log(`PROFILE_MEDIA_COPIES=${copiedObjects}`);
 
 console.log('=== 5. Verify cloned data counts before Worker deployment ===');
 for (const target of TARGETS) {
+  const state = targetState.get(target.env);
   const selects = CORE_TABLES.map((table) => `(SELECT COUNT(*) FROM ${table}) AS ${table}`).join(', ');
-  const counts = d1Rows(target.db, `SELECT ${selects};`)[0] || {};
+  const counts = d1Rows(target.db, `SELECT ${selects};`, state.configPath)[0] || {};
   for (const table of CORE_TABLES) {
     if (Number(counts[table] || 0) !== Number(prodCountsBefore[table] || 0)) {
       throw new Error(`${target.env} D1 count mismatch for ${table}: target=${counts[table]} productionSnapshot=${prodCountsBefore[table]}`);
@@ -256,16 +267,7 @@ for (const target of TARGETS) {
 console.log('=== 6. Deploy only isolated PREVIEW and TEST Workers ===');
 for (const target of TARGETS) {
   const state = targetState.get(target.env);
-  const cfg = {
-    ...baseConfig,
-    name: target.worker,
-    workers_dev: true,
-    d1_databases: [{ binding: 'DB', database_name: target.db, database_id: state.id }],
-    r2_buckets: [{ binding: 'PROFILE_MEDIA', bucket_name: target.r2 }],
-  };
-  const cfgPath = join(WORKER_DIR, '.remote-worker', `wrangler.${target.env}.jsonc`);
-  writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
-  wrangler(['deploy', '--config', cfgPath]);
+  wrangler(['deploy', '--config', state.configPath]);
   console.log(`${target.env.toUpperCase()}_WORKER_DEPLOYED=${target.worker}`);
 }
 

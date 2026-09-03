@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process';
 
 const WORKER_NAME = 'soridraw-explore-api';
 const D1_DATABASE_NAME = 'soridraw-explore-db';
+const D1_DATABASE_ID = '217ef5b1-5d80-4f7c-afc7-9e07eb05c06b';
 const R2_BUCKET_NAME = 'soridraw-profile-media';
 const REMOTE_DIR = '.remote-worker';
 const PATCH_DIR = 'patches';
@@ -185,28 +186,19 @@ const settingsEnvelope = await (
 ).json();
 const settings = settingsEnvelope?.result || settingsEnvelope || {};
 
-// Prefer the live Worker's own D1 binding ID from /settings. This keeps the
-// sync path read-only and avoids requiring account-wide D1 list permission.
+// Prefer the live Worker's own D1 binding ID from /settings. Some restricted
+// deployment tokens redact the D1 ID even though the binding is valid. In that
+// case use SORIDRAW's explicitly verified production D1 ID instead of requiring
+// account-wide D1 list permission. This keeps preparation read-only.
 const settingsBindings = Array.isArray(settings.bindings) ? settings.bindings : [];
 const liveD1Binding = settingsBindings.find(
   (item) => item?.type === 'd1' && item?.name === 'DB'
 );
-let databaseId =
+const databaseId =
   liveD1Binding?.id ||
   liveD1Binding?.database_id ||
   liveD1Binding?.uuid ||
-  '';
-
-// Backward-compatible fallback for older Cloudflare settings payloads.
-if (!databaseId) {
-  const d1ListRaw = parseJson(
-    runCapture('npx', ['wrangler', 'd1', 'list', '--json']),
-    'wrangler d1 list'
-  );
-  const d1List = Array.isArray(d1ListRaw) ? d1ListRaw : d1ListRaw?.result || [];
-  const database = d1List.find((item) => item?.name === D1_DATABASE_NAME);
-  databaseId = database?.uuid || database?.id || database?.database_id || '';
-}
+  D1_DATABASE_ID;
 
 if (!databaseId) {
   throw new Error(`Existing D1 database binding not found: ${D1_DATABASE_NAME}`);

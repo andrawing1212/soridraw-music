@@ -23,11 +23,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: preview
+          fetch-depth: 5
 
       - name: Verify approved source baseline
         shell: bash
         run: |
           set -euo pipefail
+          git cat-file -e 70f8c913ed27286af7a7607372258286b673e175^{commit}
           git diff --quiet 70f8c913ed27286af7a7607372258286b673e175 HEAD -- src functions package.json package-lock.json firebase.json firebase.hosting-preview.json
           grep -q 'syncSunoLibraryLatest10Bundle' functions/src/index.ts
           echo '[Preview deploy] Approved source baseline: PASS'

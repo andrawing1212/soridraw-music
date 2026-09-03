@@ -1,0 +1,231 @@
+name: SORIDRAW Fix Section Tags Cold Read 2026-09-04
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-fix-section-tags-bundle-20260904.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-section-tags-bundle-20260904
+  cancel-in-progress: false
+
+jobs:
+  fix-and-deploy-preview:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 10
+
+      - name: Verify exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASELINE='ea5ca5d9b083c7df617b827c470f03956ca023d1'
+          git cat-file -e "${BASELINE}^{commit}"
+          git diff --quiet "$BASELINE" HEAD -- src functions firestore.rules package.json package-lock.json firebase.json firebase.hosting-preview.json
+          echo '[Section tags bundle] baseline PASS'
+
+      - name: Patch client, trigger and rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+
+          // 1) Client: local cache -> one aggregate doc -> legacy 76-doc fallback only if needed.
+          const appPath = 'src/App.tsx';
+          let app = fs.readFileSync(appPath, 'utf8');
+          const sectionMarker = "          collection(db, 'section_tags'),";
+          const markerIndex = app.indexOf(sectionMarker);
+          if (markerIndex < 0 || app.indexOf(sectionMarker, markerIndex + 1) >= 0) {
+            throw new Error('App section_tags bootstrap marker must exist exactly once');
+          }
+          const tryStart = app.lastIndexOf('      try {\n', markerIndex);
+          const catchStart = app.indexOf('      } catch (error) {', markerIndex);
+          if (tryStart < 0 || catchStart < 0 || catchStart <= tryStart) {
+            throw new Error('App section_tags bootstrap try/catch boundary not found');
+          }
+          const bodyStart = tryStart + '      try {\n'.length;
+          const legacyBody = app.slice(bodyStart, catchStart);
+          if (!legacyBody.includes("collection(db, 'section_tags')") || !legacyBody.includes("orderBy('label', 'asc')") || !legacyBody.includes('fetchedTags')) {
+            throw new Error('Unexpected section_tags legacy bootstrap body');
+          }
+          const bundleBody = `        let sectionTagsBundleHydrated = false;\n        try {\n          const bundleSnapshot = await getDoc(doc(db, 'app_settings', 'section_tags_bundle'));\n          if (bundleSnapshot.exists()) {\n            const bundle = bundleSnapshot.data() as any;\n            const items = Array.isArray(bundle?.items) ? bundle.items : [];\n            const ids = items.map((item: any) => String(item?.id || '').trim());\n            const uniqueIds = new Set(ids.filter(Boolean));\n            const isValidBundle = Number(bundle?.schemaVersion) === 1\n              && Number(bundle?.itemCount) === items.length\n              && items.every((item: any) => Boolean(item && typeof item === 'object'))\n              && uniqueIds.size === items.length;\n\n            if (isValidBundle) {\n              if (!isMounted) return;\n              writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.sectionTags, items);\n              setStudioSectionData(items);\n              sectionTagsBundleHydrated = true;\n            } else {\n              console.warn('[Section tags] aggregate bundle is invalid; using bounded legacy source fallback.');\n            }\n          }\n        } catch (bundleError) {\n          console.warn('[Section tags] aggregate bundle unavailable; using legacy source fallback.', bundleError);\n        }\n\n        if (sectionTagsBundleHydrated) return;\n\n${legacyBody}`;
+          app = app.slice(0, bodyStart) + bundleBody + app.slice(catchStart);
+          fs.writeFileSync(appPath, app);
+
+          // 2) Backend: rare admin mutation rebuilds one shared aggregate bundle.
+          const fnPath = 'functions/src/index.ts';
+          let fn = fs.readFileSync(fnPath, 'utf8');
+          const functionMarker = 'const SORIDRAW_LIBRARY_LIST_BUNDLE_SCHEMA_VERSION = 1;';
+          const functionMarkerIndex = fn.indexOf(functionMarker);
+          if (functionMarkerIndex < 0 || fn.indexOf(functionMarker, functionMarkerIndex + 1) >= 0) {
+            throw new Error('Functions insertion marker must exist exactly once');
+          }
+          const sectionTagsTrigger = `// SORIDRAW_SECTION_TAGS_SHARED_BUNDLE_20260904\n// Public Studio configuration is shared by every user. Rebuild the single aggregate\n// only when an admin actually mutates the canonical section_tags collection.\nconst SORIDRAW_SECTION_TAGS_BUNDLE_SCHEMA_VERSION = 1;\nconst SORIDRAW_SECTION_TAGS_BUNDLE_MAX_BYTES = 800_000;\n\nconst buildSectionTagsBundlePayload = async (sourceEventTimeMs: number, sourceEventId: string) => {\n  const snapshot = await admin.firestore().collection('section_tags').orderBy('label', 'asc').get();\n  const items = snapshot.docs.map((snapshotDoc) => ({\n    ...snapshotDoc.data(),\n    id: snapshotDoc.id,\n  }));\n  const ids = items.map((item: any) => String(item?.id || '').trim());\n  const uniqueIds = new Set(ids.filter(Boolean));\n  if (uniqueIds.size !== items.length) {\n    throw new Error('Section tags bundle contains missing or duplicate ids.');\n  }\n\n  const updatedAtMs = Date.now();\n  const stablePayload = {\n    schemaVersion: SORIDRAW_SECTION_TAGS_BUNDLE_SCHEMA_VERSION,\n    items,\n    itemCount: items.length,\n    updatedAtMs,\n    sourceEventTimeMs,\n    sourceEventId,\n  };\n  const byteSize = Buffer.byteLength(JSON.stringify(stablePayload), 'utf8');\n  if (byteSize > SORIDRAW_SECTION_TAGS_BUNDLE_MAX_BYTES) {\n    throw new Error(\`Section tags bundle too large: \${byteSize} bytes.\`);\n  }\n  return {\n    ...stablePayload,\n    updatedAt: admin.firestore.FieldValue.serverTimestamp(),\n  };\n};\n\nexport const syncSectionTagsBundle = onDocumentWritten(\n  {\n    document: 'section_tags/{tagId}',\n    region: 'asia-northeast3',\n    timeoutSeconds: 60,\n    memory: '256MiB',\n  },\n  async (event) => {\n    if (!event.data) return;\n    const sourceEventTimeMs = Date.parse(String(event.time || '')) || Date.now();\n    const sourceEventId = String(event.id || '');\n    const payload = await buildSectionTagsBundlePayload(sourceEventTimeMs, sourceEventId);\n    const bundleRef = admin.firestore().doc('app_settings/section_tags_bundle');\n\n    // Multiple admin edits can trigger concurrently. Older events may finish later,\n    // so only the newest event is allowed to replace the aggregate document.\n    await admin.firestore().runTransaction(async (transaction) => {\n      const currentSnapshot = await transaction.get(bundleRef);\n      if (currentSnapshot.exists) {\n        const current = currentSnapshot.data() || {};\n        const currentTime = Number(current.sourceEventTimeMs || 0);\n        const currentId = String(current.sourceEventId || '');\n        if (currentTime > sourceEventTimeMs || (currentTime === sourceEventTimeMs && currentId > sourceEventId)) {\n          return;\n        }\n      }\n      transaction.set(bundleRef, payload, { merge: false });\n    });\n  },\n);\n\n`;
+          fn = fn.slice(0, functionMarkerIndex) + sectionTagsTrigger + fn.slice(functionMarkerIndex);
+          fs.writeFileSync(fnPath, fn);
+
+          // 3) Public read only for the aggregate; all app_settings writes remain admin-only.
+          const rulesPath = 'firestore.rules';
+          let rules = fs.readFileSync(rulesPath, 'utf8');
+          const oldRule = "        || docId == 'lyric_cliche_guard';";
+          const matches = rules.split(oldRule).length - 1;
+          if (matches !== 1) throw new Error(`Expected one app_settings public-read rule, found ${matches}`);
+          rules = rules.replace(oldRule, "        || docId == 'lyric_cliche_guard'\n        || docId == 'section_tags_bundle';");
+          fs.writeFileSync(rulesPath, rules);
+          NODE
+
+          git diff --check
+          grep -q "app_settings', 'section_tags_bundle" src/App.tsx
+          grep -q 'if (sectionTagsBundleHydrated) return;' src/App.tsx
+          grep -q 'export const syncSectionTagsBundle = onDocumentWritten' functions/src/index.ts
+          grep -q "docId == 'section_tags_bundle'" firestore.rules
+          echo '[Section tags bundle] source guards PASS'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build preview app
+        run: npm run build
+
+      - name: Set up Node.js 22 for Functions
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions install --no-audit --no-fund
+
+      - name: Build Functions and verify secured export
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix functions run build
+          grep -q 'syncSectionTagsBundle' functions/src/securedIndex.ts
+          grep -q 'syncSectionTagsBundle' functions/lib/securedIndex.js
+          echo '[Section tags bundle] Functions secured build PASS'
+
+      - name: Commit and push source fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/App.tsx functions/src/index.ts firestore.rules
+          git commit -m 'perf(preview): collapse section tag cold load to one bundle read'
+          git push origin HEAD:preview
+          echo "[Section tags bundle] source commit: $(git rev-parse HEAD)"
+
+      - name: Authenticate Firebase PREVIEW
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy section tag trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only functions:syncSectionTagsBundle \
+            --project soridraw-app-866a5 \
+            --config firebase.json \
+            --non-interactive
+          echo '[Section tags bundle] Function deploy PASS'
+
+      - name: Deploy Firestore rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only firestore:rules \
+            --project soridraw-app-866a5 \
+            --config firebase.json \
+            --non-interactive
+          echo '[Section tags bundle] Rules deploy PASS'
+
+      - name: Seed and validate aggregate bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd functions
+          node <<'NODE'
+          const admin = require('firebase-admin');
+          admin.initializeApp({ projectId: 'soridraw-app-866a5' });
+          const db = admin.firestore();
+          (async () => {
+            const snapshot = await db.collection('section_tags').orderBy('label', 'asc').get();
+            const items = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
+            const ids = items.map((item) => String(item?.id || '').trim());
+            if (new Set(ids.filter(Boolean)).size !== items.length) throw new Error('seed ids invalid');
+            const now = Date.now();
+            const sourceEventId = `deploy_seed_${now}`;
+            const stable = {
+              schemaVersion: 1,
+              items,
+              itemCount: items.length,
+              updatedAtMs: now,
+              sourceEventTimeMs: now,
+              sourceEventId,
+            };
+            const bytes = Buffer.byteLength(JSON.stringify(stable), 'utf8');
+            if (bytes > 800000) throw new Error(`seed bundle too large: ${bytes}`);
+            await db.doc('app_settings/section_tags_bundle').set({
+              ...stable,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: false });
+            const verify = await db.doc('app_settings/section_tags_bundle').get();
+            const data = verify.data() || {};
+            if (!verify.exists || Number(data.schemaVersion) !== 1 || Number(data.itemCount) !== items.length || !Array.isArray(data.items) || data.items.length !== items.length) {
+              throw new Error('seed verification failed');
+            }
+            console.log(`[Section tags bundle] seed PASS count=${items.length} bytes=${bytes}`);
+          })().then(() => process.exit(0)).catch((error) => { console.error(error); process.exit(1); });
+          NODE
+
+      - name: Deploy Firebase PREVIEW Hosting only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project soridraw-app-866a5 \
+            --config firebase.hosting-preview.json \
+            --non-interactive
+          echo '[Section tags bundle] PREVIEW Hosting deploy PASS'
+
+      - name: Smoke PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in 'https://preview.soridraw.com/' 'https://soridraw-preview.web.app/' 'https://soridraw-preview.firebaseapp.com/'; do
+            curl -fsS --max-time 30 "$url" -o "$RUNNER_TEMP/index.html"
+            grep -q '<div id="root"></div>' "$RUNNER_TEMP/index.html"
+            echo "[Section tags bundle] Smoke PASS: $url"
+          done
+
+      - name: Result
+        run: |
+          echo 'Cold Studio section tags now use one aggregate Firestore document when local cache is empty.'
+          echo 'Legacy 76-doc query remains only as missing/corrupt bundle fallback.'
+          echo 'No main, TEST, PRODUCTION, Cloudflare, data migration, or canonical section_tags changes.'

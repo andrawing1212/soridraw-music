@@ -1,0 +1,25 @@
+name: SORIDRAW Inspect PREVIEW D1 Tracks 2026-09-04
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-inspect-d1-tracks-20260904.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Read PREVIEW D1 schema only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/wrangler.jsonc" <<'EOF'
+          {"name":"d1-readonly","compatibility_date":"2026-08-28","d1_databases":[{"binding":"DB","database_name":"soridraw-explore-preview","database_id":"aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f"}]}
+          EOF
+          npx --yes wrangler@4 d1 execute DB --remote --config "$RUNNER_TEMP/wrangler.jsonc" --command "PRAGMA table_info(tracks); SELECT name,sql FROM sqlite_master WHERE type='table' ORDER BY name;"

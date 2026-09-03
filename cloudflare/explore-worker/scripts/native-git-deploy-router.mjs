@@ -24,11 +24,11 @@ if (isNative) {
     console.log('[SORIDRAW Worker] TEST/PRODUCTION deploys require the SORIDRAW approval workflow.');
     process.exit(0);
   }
-  console.log('[SORIDRAW Worker] Cloudflare native preview physical split -> isolated PREVIEW/TEST D1/R2 only.');
-  run(process.execPath, ['.deploy/cloudflare-explore-env-split.mjs'], repoRoot);
+  console.log('[SORIDRAW Worker] Cloudflare native preview physical split v2 -> isolated PREVIEW/TEST D1/R2 only.');
+  run(process.execPath, ['.deploy/cloudflare-explore-physical-isolation-v2.mjs'], repoRoot);
   process.exit(0);
 }
 
 // Manual/approved non-native deploy path keeps the existing prepared deployment behavior.
 run(process.execPath, ['./scripts/deploy-prepared.mjs'], workerDir);
-// physical-isolation-final-trigger: 2026-09-03T11:20Z
+// physical-isolation-v2-trigger: 2026-09-03T11:45Z

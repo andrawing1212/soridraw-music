@@ -1,10 +1,100 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
+import {
+  buildRebuiltLibraryBundle,
+  getDeletedIdsForRebuild,
+  getNextLibraryBundleVersion,
+  hasLibraryBundleRelevantChange,
+  isLibraryBundleCoreCurrent,
+  planLibraryBundleMutation,
+  type LibraryListBundleCore,
+  type LibraryTrackMutation,
+} from "./libraryBundleFreshness";
 
 admin.initializeApp({
   databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com",
 });
+
+export const syncSunoLibraryLatest10Bundle = onDocumentWritten(
+  {
+    document: "suno_tracks/{uid}/tracks/{trackId}",
+    region: "us-central1",
+  },
+  async (event) => {
+    const change = event.data;
+    if (!change) return;
+
+    const mutation: LibraryTrackMutation = {
+      trackId: String(event.params.trackId || "").trim(),
+      before: change.before.exists ? (change.before.data() || {}) : null,
+      after: change.after.exists ? (change.after.data() || {}) : null,
+    };
+
+    // This guard intentionally runs before any Firestore operation. Provider raw
+    // responses, debug data, credit bookkeeping, and updatedAt-only writes never
+    // read or rewrite the Library bundle.
+    if (!mutation.trackId || !hasLibraryBundleRelevantChange(mutation)) return;
+
+    const uid = String(event.params.uid || "").trim();
+    if (!uid) return;
+
+    const firestore = admin.firestore();
+    const bundleRef = firestore
+      .collection("user_list_caches")
+      .doc(uid)
+      .collection("bundles")
+      .doc("library_latest_10_sets");
+    const userRef = firestore.collection("users").doc(uid);
+    const latestTracksQuery = firestore
+      .collection("suno_tracks")
+      .doc(uid)
+      .collection("tracks")
+      .orderBy("createdAt", "desc")
+      .limit(10);
+
+    await firestore.runTransaction(async (transaction) => {
+      // A transaction retry always re-reads the latest bundle and recalculates
+      // the incremental result, so concurrent track events cannot overwrite one
+      // another with a stale bundle snapshot.
+      const bundleSnapshot = await transaction.get(bundleRef);
+      const currentBundle = bundleSnapshot.exists ? bundleSnapshot.data() : null;
+      const plan = planLibraryBundleMutation(currentBundle, mutation);
+      let nextBundle: LibraryListBundleCore | null = null;
+
+      if (plan.action === "noop") return;
+      if (plan.action === "incremental") {
+        nextBundle = plan.bundle;
+      } else {
+        // Rebuilds are reserved for a missing/incompatible bundle, a latest-ten
+        // deletion, or ranking uncertainty. The query is always bounded to ten.
+        const latestTracksSnapshot = await transaction.get(latestTracksQuery);
+        nextBundle = buildRebuiltLibraryBundle(
+          latestTracksSnapshot.docs.map((trackSnapshot) => ({
+            id: trackSnapshot.id,
+            data: trackSnapshot.data(),
+          })),
+          getDeletedIdsForRebuild(currentBundle, mutation),
+        );
+        if (isLibraryBundleCoreCurrent(currentBundle, nextBundle)) return;
+      }
+
+      if (!nextBundle) return;
+      if (bundleSnapshot.exists && isLibraryBundleCoreCurrent(currentBundle, nextBundle)) return;
+
+      const version = getNextLibraryBundleVersion(currentBundle?.updatedAtMs);
+      const bundlePayload = {
+        ...nextBundle,
+        updatedAtMs: version,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      transaction.set(bundleRef, bundlePayload, { merge: false });
+      transaction.set(userRef, { syncVersions: { library: version } }, { merge: true });
+    });
+  },
+);
 
 const getAuthProviderIds = (user: admin.auth.UserRecord): string[] =>
   (user.providerData || [])

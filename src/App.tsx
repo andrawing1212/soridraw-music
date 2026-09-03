@@ -6181,10 +6181,6 @@ function App() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const tracks = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
       setRecentSunoTracksForPolling(tracks);
-      scheduleListBundleWrite('library', user.uid, tracks, {
-        limit: 10,
-        hasMore: tracks.length > 10,
-      });
       const pendingTrackIds = new Set(getPendingSunoCreditTrackIds());
 
       const completedPendingTrack = tracks.find((track) =>

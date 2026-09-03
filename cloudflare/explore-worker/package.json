@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "cf:prepare": "node ./scripts/prepare-from-dashboard.mjs",
-    "cf:deploy": "node ./scripts/deploy-prepared.mjs"
+    "cf:deploy": "node ./scripts/native-git-deploy-router.mjs"
   },
   "devDependencies": {
     "wrangler": "4.102.0"

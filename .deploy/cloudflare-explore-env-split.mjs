@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const ROOT = process.cwd();
 const WORKER_DIR = join(ROOT, 'cloudflare', 'explore-worker');
@@ -30,7 +30,6 @@ const TARGETS = [
     origin: 'https://test.soridraw.com',
   },
 ];
-const SENTINEL_BRANCH = '__soridraw_cloudflare_manual_only__';
 const CORE_TABLES = [
   'public_profiles', 'tracks', 'follows', 'likes', 'profile_stats', 'track_stats', 'public_profile_first_views',
 ];
@@ -108,34 +107,26 @@ const listWorkerScripts = async () => {
   return Array.isArray(result) ? result : [];
 };
 
-console.log('=== 1. Freeze shared production Worker Git auto-deploy ===');
+console.log('=== 1. Assert production native-Git deploy safety guard ===');
+const guardSource = readFileSync(join(WORKER_DIR, 'scripts', 'deploy-prepared.mjs'), 'utf8');
+if (!guardSource.includes('WORKERS_CI') || !guardSource.includes('SORIDRAW_ALLOW_PRODUCTION_WORKER_DEPLOY')) {
+  throw new Error('Production native Cloudflare Git deploy guard is missing; refusing environment split.');
+}
 const scriptsBefore = await listWorkerScripts();
 const prodScriptBefore = scriptsBefore.find((item) => item?.id === PROD.worker);
-if (!prodScriptBefore?.tag) throw new Error(`Production Worker not found: ${PROD.worker}`);
+if (!prodScriptBefore) throw new Error(`Production Worker not found: ${PROD.worker}`);
 const prodModifiedBefore = String(prodScriptBefore.modified_on || '');
-const triggers = await api('GET', `/builds/workers/${prodScriptBefore.tag}/triggers`);
-const triggerList = Array.isArray(triggers) ? triggers : [];
-for (const trigger of triggerList) {
-  if (!trigger?.trigger_uuid) continue;
-  await api('PATCH', `/builds/triggers/${trigger.trigger_uuid}`, {
-    branch_includes: [SENTINEL_BRANCH],
-    branch_excludes: [],
-  });
-}
-const triggerVerifyRaw = await api('GET', `/builds/workers/${prodScriptBefore.tag}/triggers`);
-const triggerVerify = Array.isArray(triggerVerifyRaw) ? triggerVerifyRaw : [];
-for (const trigger of triggerVerify) {
-  const includes = Array.isArray(trigger?.branch_includes) ? trigger.branch_includes : [];
-  if (includes.length !== 1 || includes[0] !== SENTINEL_BRANCH) {
-    throw new Error(`Production Cloudflare Git trigger is still active: ${trigger?.trigger_name || trigger?.trigger_uuid}`);
-  }
-}
-console.log(`PRODUCTION_NATIVE_GIT_TRIGGERS_FROZEN=${triggerVerify.length}`);
+console.log(`PRODUCTION_WORKER_MODIFIED_BEFORE=${prodModifiedBefore}`);
+console.log('NATIVE_GIT_PRODUCTION_DEPLOY_GUARD=true');
 
 console.log('=== 2. Prepare exact current Worker source without deploying production ===');
 run('npm', ['run', 'cf:prepare'], { cwd: WORKER_DIR });
 const remoteConfigPath = join(WORKER_DIR, '.remote-worker', 'wrangler.jsonc');
 const baseConfig = JSON.parse(readFileSync(remoteConfigPath, 'utf8'));
+const liveSource = readFileSync(join(WORKER_DIR, '.remote-worker', 'worker.js'), 'utf8');
+if (liveSource.includes('Git bootstrap placeholder') || !liveSource.includes('handleFollowState')) {
+  throw new Error('Production Worker source is not the expected live Explore runtime; refusing environment split.');
+}
 
 const d1List = () => {
   const raw = parseJson(wrangler(['d1', 'list', '--json'], { quiet: true }).stdout, 'wrangler d1 list');
@@ -320,6 +311,11 @@ if (prodModifiedBefore && prodModifiedAfter && prodModifiedBefore !== prodModifi
 const prodResponse = await fetch(`${PROD.base}/v1/feed?sort=latest&limit=1`, { headers: { Origin: 'https://soridraw.com' } });
 if (prodResponse.status !== 200) throw new Error(`Production Explore smoke failed after split: HTTP ${prodResponse.status}`);
 const prodCountsAfter = productionCounts();
+for (const table of CORE_TABLES) {
+  if (Number(prodCountsAfter[table] || 0) !== Number(prodCountsBefore[table] || 0)) {
+    throw new Error(`Production D1 changed during split for ${table}: before=${prodCountsBefore[table]} after=${prodCountsAfter[table]}`);
+  }
+}
 console.log('PRODUCTION_COUNTS_AFTER=' + JSON.stringify(prodCountsAfter));
 console.log(`PRODUCTION_WORKER_MODIFIED_UNCHANGED=${prodModifiedBefore === prodModifiedAfter}`);
 console.log('PRODUCTION_D1_MUTATION_BY_SPLIT=0');

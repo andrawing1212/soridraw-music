@@ -1,5 +1,6 @@
 name: Cloudflare Explore Environment Split
 
+# Final target: PREVIEW/TEST each use their own physical Worker + D1 + R2.
 on:
   push:
     branches: [preview]

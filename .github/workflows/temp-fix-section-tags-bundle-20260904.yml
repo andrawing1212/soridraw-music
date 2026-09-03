@@ -79,10 +79,10 @@ jobs:
           // 3) Public read only for the aggregate; all app_settings writes remain admin-only.
           const rulesPath = 'firestore.rules';
           let rules = fs.readFileSync(rulesPath, 'utf8');
-          const oldRule = "        || docId == 'lyric_cliche_guard';";
+          const oldRule = "      allow read: if docId in ['navigation_visibility', 'lyric_cliche_guard'] || isAdmin();";
           const matches = rules.split(oldRule).length - 1;
           if (matches !== 1) throw new Error(`Expected one app_settings public-read rule, found ${matches}`);
-          rules = rules.replace(oldRule, "        || docId == 'lyric_cliche_guard'\n        || docId == 'section_tags_bundle';");
+          rules = rules.replace(oldRule, "      allow read: if docId in ['navigation_visibility', 'lyric_cliche_guard', 'section_tags_bundle'] || isAdmin();");
           fs.writeFileSync(rulesPath, rules);
           NODE
 
@@ -91,7 +91,7 @@ jobs:
           grep -q 'if (sectionTagsBundleHydrated) return;' src/App.tsx
           grep -q 'export const syncSectionTagsBundle = functions' functions/src/index.ts
           grep -q 'firestore.document("section_tags/{tagId}")' functions/src/index.ts
-          grep -q "docId == 'section_tags_bundle'" firestore.rules
+          grep -q "'section_tags_bundle'" firestore.rules
           echo '[Section tags bundle] source guards PASS'
 
       - name: Set up Node.js 20

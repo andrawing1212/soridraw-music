@@ -1,9 +1,9 @@
+import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { readSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
 
-const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
 const EXPLORE_FOLLOW_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_FOLLOW_CACHE_KEY = 'explore-follow-state';
 const EXPLORE_FOLLOW_CACHE_SOURCE_TYPE = 'explore_follow_state';

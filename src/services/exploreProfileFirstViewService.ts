@@ -1,3 +1,4 @@
+import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import {
   readSoridrawPersistentCache,
   removeSoridrawPersistentCache,
@@ -13,7 +14,6 @@ import {
 // SORIDRAW_COST_ZERO_STAGE2A_PROFILE_FIRST_VIEW
 // SORIDRAW_PROFILE_REVISION_SWR_1000
 // SORIDRAW_PROFILE_REVISION_PREVIEW_DEPLOY_1001
-const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
 const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 1;
 const PROFILE_FIRST_VIEW_SOURCE_TYPE = 'explore_profile_first_view';
 const PROFILE_FIRST_VIEW_LIMIT = 50;

@@ -1,3 +1,4 @@
+import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
@@ -9,7 +10,6 @@ import {
 } from '../lib/soridrawPersistentCache';
 import { invalidateExploreFeedSessionCache } from './exploreSessionCache';
 
-const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
 const PUBLICATION_PAGE_SIZE = 50;
 const MAX_PUBLICATION_PAGES = 8;
 

@@ -1,3 +1,4 @@
+import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_8E5_SOCIAL_PUBLIC_PROFILE
 // SORIDRAW_EXPLORE_8E5_PROFILE_EDIT_UI_975
 // SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000
@@ -49,7 +50,6 @@ type ExploreApiResponse = {
   };
 };
 
-const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
 
 const safeText = (value: unknown, fallback = '') => {
   const normalized = String(value ?? '').trim();

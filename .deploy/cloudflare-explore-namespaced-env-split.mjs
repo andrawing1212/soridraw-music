@@ -151,7 +151,7 @@ const buildWrapper = (target, { bootstrapToken = '' } = {}) => {
   const tableJson = JSON.stringify(TABLES);
   const skipDataJson = JSON.stringify(['api_rate_limits']);
 
-  return `import baseWorker from './worker.js';
+  return String.raw`import baseWorker from './worker.js';
 
 const SORIDRAW_ENV = ${JSON.stringify(target.env)};
 const PROD_BASE = ${JSON.stringify(PROD.base)};
@@ -235,7 +235,7 @@ function wrapDb(db) {
 }
 
 function mapR2Key(key) {
-  return R2_PREFIX + String(key || '').replace(/^\\/+/, '');
+  return R2_PREFIX + String(key || '').replace(/^\/+/, '');
 }
 
 function wrapR2(bucket) {
@@ -309,7 +309,7 @@ function rewriteSchemaObjectName(sql, type, sourceName) {
   let next = rewriteSql(sql);
   if (type !== 'index' && type !== 'trigger') return next;
   const targetName = NS_PREFIX + 'obj_' + sourceName;
-  const rx = new RegExp('\\b' + sourceName + '\\b');
+  const rx = new RegExp('\\\\b' + sourceName + '\\\\b');
   return next.replace(rx, targetName);
 }
 
@@ -402,7 +402,7 @@ async function bootstrapEnvironment(env) {
     const targetName = TABLE_MAP[name];
     if (await tableExists(db, targetName)) continue;
     const createSql = rewriteSql(String(row.sql));
-    await db.exec(createSql);
+    await db.prepare(createSql).run();
     if (/^\\s*CREATE\\s+VIRTUAL\\s+TABLE/i.test(String(row.sql))) virtualTables.push(name);
   }
 
@@ -433,7 +433,7 @@ async function bootstrapEnvironment(env) {
   for (const row of schemaObjects) {
     const targetObjectName = NS_PREFIX + 'obj_' + String(row.name || '');
     if (await tableExists(db, targetObjectName)) continue;
-    await db.exec(rewriteSchemaObjectName(String(row.sql), String(row.type), String(row.name || '')));
+    await db.prepare(rewriteSchemaObjectName(String(row.sql), String(row.type), String(row.name || ''))).run();
   }
 
   for (const name of virtualTables) {

@@ -89,6 +89,7 @@ const getCloudflarePathLabel = (path: string) => {
   if (path === '/v1/feed') return '피드';
   if (path === '/v1/me/likes') return '좋아요 상태';
   if (path === '/v1/me/publications') return '뮤직노트 공개상태';
+  if (path === '/v1/me/music-note-publications-bundle') return '뮤직노트 공개상태';
   if (path === '/v1/tracks/:id/like') return '좋아요 변경';
   if (path === '/v1/tracks/:id/visibility') return '공개상태 변경';
   if (path === '/v1/profiles/:id/first-view') return '공개프로필';

@@ -1,0 +1,167 @@
+name: SORIDRAW Fix Cold Hydration Write Leak 2026-09-04
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-fix-cold-hydration-write-leak-20260904.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-cold-hydration-write-leak-20260904
+  cancel-in-progress: false
+
+jobs:
+  fix-and-deploy-preview:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 5
+
+      - name: Verify exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e 911aa2e5a3e00a180bf2715e679c5c1c68c24d66^{commit}
+          git diff --quiet 911aa2e5a3e00a180bf2715e679c5c1c68c24d66 HEAD -- src functions package.json package-lock.json firebase.json firebase.hosting-preview.json
+          echo '[Hydration write fix] baseline PASS'
+
+      - name: Patch Music Note and Library exit sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const mustReplace = (text, oldValue, newValue, label) => {
+            const count = text.split(oldValue).length - 1;
+            if (count !== 1) throw new Error(`${label}: expected exactly 1 match, found ${count}`);
+            return text.replace(oldValue, newValue);
+          };
+
+          const favPath = 'src/pages/FavoritesPage.tsx';
+          let fav = fs.readFileSync(favPath, 'utf8');
+          fav = mustReplace(
+            fav,
+            `  const favoriteColorDirtyRef = useRef(false);\n  const favoriteColorsAutoSyncingRef = useRef(false);`,
+            `  const favoriteColorDirtyRef = useRef(false);\n  const pendingFavoriteColorIdsRef = useRef<Set<string>>(new Set());\n  const favoriteColorsAutoSyncingRef = useRef(false);`,
+            'Favorites pending-id ref',
+          );
+          fav = mustReplace(
+            fav,
+            `    setFavoriteColorMap(prev => {\n      const next = { ...prev };\n      targetIds.forEach(id => { next[id] = color; });\n      writeLocalColorMap('soridraw.favoriteColorTags', next);\n      favoriteColorMapRef.current = next;\n      favoriteColorDirtyRef.current = serializeColorMap(next) !== favoriteColorBaselineRef.current;\n      return next;\n    });`,
+            `    targetIds.forEach((id) => { if (id) pendingFavoriteColorIdsRef.current.add(id); });\n    setFavoriteColorMap(prev => {\n      const next = { ...prev };\n      targetIds.forEach(id => { next[id] = color; });\n      writeLocalColorMap('soridraw.favoriteColorTags', next);\n      favoriteColorMapRef.current = next;\n      favoriteColorDirtyRef.current = serializeColorMap(next) !== favoriteColorBaselineRef.current;\n      return next;\n    });`,
+            'Favorites explicit color mutation tracking',
+          );
+          fav = mustReplace(
+            fav,
+            `    const currentMap = favoriteColorMapRef.current || {};\n    const currentSerialized = serializeColorMap(currentMap);\n    if (currentSerialized === favoriteColorBaselineRef.current) return;\n\n    const existingIds = new Set((favoritesRef.current || []).map(song => song?.id).filter(Boolean));\n    const entries = Object.entries(currentMap).filter(([id]) => existingIds.has(id));\n    if (entries.length === 0) {\n      favoriteColorBaselineRef.current = currentSerialized;\n      favoriteColorDirtyRef.current = false;\n      return;\n    }`,
+            `    // Page entry/exit, server hydration and cache restoration must never write.\n    // Only explicit color clicks are eligible for an exit sync.\n    if (!favoriteColorDirtyRef.current) return;\n\n    const currentMap = favoriteColorMapRef.current || {};\n    const currentSerialized = serializeColorMap(currentMap);\n    const existingIds = new Set((favoritesRef.current || []).map(song => song?.id).filter(Boolean));\n    const entries: [string, string][] = Array.from(pendingFavoriteColorIdsRef.current)\n      .filter((id) => existingIds.has(id))\n      .map((id): [string, string] => [id, currentMap[id] || 'gray']);\n    if (entries.length === 0) return;`,
+            'Favorites exit guard',
+          );
+          fav = mustReplace(
+            fav,
+            `      favoriteColorBaselineRef.current = currentSerialized;\n      favoriteColorDirtyRef.current = false;\n      if (!silent) showFavoriteToast('색상 변경사항을 저장했습니다.');`,
+            `      pendingFavoriteColorIdsRef.current.clear();\n      favoriteColorBaselineRef.current = currentSerialized;\n      favoriteColorDirtyRef.current = false;\n      if (!silent) showFavoriteToast('색상 변경사항을 저장했습니다.');`,
+            'Favorites clear pending ids after success',
+          );
+          fav = mustReplace(
+            fav,
+            `      favoriteColorBaselineRef.current = serializeColorMap(loaded);\n      favoriteColorDirtyRef.current = false;`,
+            `      favoriteColorBaselineRef.current = serializeColorMap(loaded);\n      pendingFavoriteColorIdsRef.current.clear();\n      favoriteColorDirtyRef.current = false;`,
+            'Favorites hydration reset pending ids',
+          );
+          fs.writeFileSync(favPath, fav);
+
+          const libPath = 'src/pages/SunoLibraryPage.tsx';
+          let lib = fs.readFileSync(libPath, 'utf8');
+          lib = mustReplace(
+            lib,
+            `    const workspaceMap = workspaceLocalColorMapRef.current || {};\n    const playlistMap = playlistLocalColorMapRef.current || {};\n    const workspaceSerialized = serializeColorMap(workspaceMap);\n    const playlistSerialized = serializeColorMap(playlistMap);\n    const workspaceChanged = workspaceSerialized !== workspaceColorBaselineRef.current;\n    const playlistChanged = playlistSerialized !== playlistColorBaselineRef.current;\n    if (!workspaceChanged && !playlistChanged) return;\n\n    const workspaceEntries = workspaceChanged ? Object.entries(workspaceMap) : [];\n    const playlistEntries = playlistChanged ? Object.entries(playlistMap) : [];`,
+            `    // Cache/server hydration can change the local maps while entering or leaving\n    // the page. Those changes are not user mutations and must stay write-free.\n    const workspaceChanged = workspaceColorDirtyRef.current;\n    const playlistChanged = playlistColorDirtyRef.current;\n    if (!workspaceChanged && !playlistChanged) return;\n\n    const workspaceMap = workspaceLocalColorMapRef.current || {};\n    const playlistMap = playlistLocalColorMapRef.current || {};\n    const workspaceSerialized = serializeColorMap(workspaceMap);\n    const playlistSerialized = serializeColorMap(playlistMap);\n    const workspaceEntries: [string, string][] = workspaceChanged\n      ? Array.from(pendingWorkspaceColorKeysRef.current).map((key): [string, string] => [key, workspaceMap[key] || 'gray'])\n      : [];\n    const playlistEntries: [string, string][] = playlistChanged\n      ? Array.from(pendingPlaylistColorKeysRef.current).map((key): [string, string] => [key, playlistMap[key] || 'gray'])\n      : [];`,
+            'Library dirty-key exit guard',
+          );
+          lib = mustReplace(
+            lib,
+            `    if (workspaceEntries.length === 0 && playlistEntries.length === 0) {\n      workspaceColorBaselineRef.current = workspaceSerialized;\n      playlistColorBaselineRef.current = playlistSerialized;\n      workspaceColorDirtyRef.current = false;\n      playlistColorDirtyRef.current = false;\n      return;\n    }`,
+            `    // A dirty flag without an explicit pending key is never enough to justify\n    // a server write. Preserve state and wait for an explicit mutation.\n    if (workspaceEntries.length === 0 && playlistEntries.length === 0) return;`,
+            'Library no implicit full-map write',
+          );
+          lib = mustReplace(
+            lib,
+            `      workspaceColorBaselineRef.current = serializeColorMap(loadedWorkspaceMap);\n      playlistColorBaselineRef.current = serializeColorMap(loadedPlaylistMap);\n      workspaceColorDirtyRef.current = false;\n      playlistColorDirtyRef.current = false;`,
+            `      workspaceColorBaselineRef.current = serializeColorMap(loadedWorkspaceMap);\n      playlistColorBaselineRef.current = serializeColorMap(loadedPlaylistMap);\n      pendingWorkspaceColorKeysRef.current.clear();\n      pendingPlaylistColorKeysRef.current.clear();\n      workspaceColorDirtyRef.current = false;\n      playlistColorDirtyRef.current = false;`,
+            'Library hydration reset pending keys',
+          );
+          fs.writeFileSync(libPath, lib);
+          NODE
+
+          git diff --check
+          grep -q 'if (!favoriteColorDirtyRef.current) return;' src/pages/FavoritesPage.tsx
+          grep -q 'pendingFavoriteColorIdsRef.current' src/pages/FavoritesPage.tsx
+          grep -q 'const workspaceChanged = workspaceColorDirtyRef.current;' src/pages/SunoLibraryPage.tsx
+          grep -q 'pendingWorkspaceColorKeysRef.current' src/pages/SunoLibraryPage.tsx
+          echo '[Hydration write fix] source guards PASS'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build preview app
+        run: npm run build
+
+      - name: Commit and push source fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx
+          git commit -m 'fix(preview): stop hydration-triggered color writes'
+          git push origin HEAD:preview
+          echo "[Hydration write fix] source commit: $(git rev-parse HEAD)"
+
+      - name: Authenticate Firebase PREVIEW
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW Hosting only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project soridraw \
+            --config firebase.hosting-preview.json \
+            --non-interactive
+          echo '[Hydration write fix] PREVIEW Hosting deploy PASS'
+
+      - name: Smoke PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in 'https://soridraw-preview.web.app/' 'https://soridraw-preview.firebaseapp.com/' 'https://preview.soridraw.com/'; do
+            curl -fsS --max-time 30 "$url" -o "$RUNNER_TEMP/index.html"
+            grep -q '<div id="root"></div>' "$RUNNER_TEMP/index.html"
+            echo "[Hydration write fix] Smoke PASS: $url"
+          done
+
+      - name: Result
+        run: |
+          echo 'Music Note/Library cold-hydration exit write leak fixed and PREVIEW deployed.'
+          echo 'No Functions, Rules, Cloudflare, main, TEST, or PRODUCTION changes.'

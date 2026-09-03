@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { functions, httpsCallable } from '../firebase';
+import { auth, functions, httpsCallable } from '../firebase';
 import {
   CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY,
+  CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY,
   CACHE_DIAGNOSTICS_TOGGLE_EVENT,
   CACHE_DIAGNOSTICS_UPDATE_EVENT,
   FIRESTORE_ACTUAL_UPDATE_EVENT,
   readCacheDiagnostic,
-  readCacheDiagnosticsGloballyEnabled,
+  readCacheDiagnosticsEnabled,
   readFirestoreActual,
   resetCacheDiagnostics,
   type CacheDiagnosticDomain,
@@ -19,7 +20,10 @@ import {
   resetCloudflareDiagnostics,
   type CloudflareDiagnosticState,
 } from '../lib/cloudflareDiagnostics';
+import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
+import { hasAdminPermission } from '../constants/adminPermissions';
 
+const SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000 = true;
 const SORIDRAW_CACHE_LIVE_CLOUDFLARE_MOBILE_DOCK_977 = true;
 
 const SORIDRAW_932_REFRESH_ROOT_WRITE_AND_SECTION_ROUTE_GATE = true;
@@ -38,7 +42,6 @@ const PANEL_DOCKED_STORAGE_KEY = 'soridraw_cache_live_docked_v1';
 const PANEL_MOBILE_BREAKPOINT = 767;
 const PANEL_MARGIN = 8;
 const PANEL_DEFAULT_WIDTH = 380;
-const CLOUD_REFRESH_MS = 60_000;
 const CLOUD_WINDOW_MINUTES = 10;
 
 type PanelPosition = { x: number; y: number };
@@ -72,12 +75,12 @@ const readAllStates = (): Record<CacheDiagnosticDomain, CacheDiagnosticState> =>
 
 const formatServerUsage = (state: Pick<CacheDiagnosticState, 'reads' | 'writes' | 'cacheHits'>) => {
   const server = state.reads + state.writes;
-  return `서버 ${server}(읽기 ${state.reads},쓰기 ${state.writes}) · 캐시 ${state.cacheHits}`;
+  return `서버 ${server}(읽기 ${state.reads},쓰기 ${state.writes}) · 캐시HIT ${state.cacheHits}`;
 };
 
 const formatActualUsage = (state: FirestoreActualState) => {
   const server = state.reads + state.writes;
-  return `브라우저 SDK ${server}(읽기 ${state.reads},쓰기 ${state.writes}) · 캐시 ${state.cacheHits}`;
+  return `브라우저 SDK ${server}(읽기 ${state.reads},쓰기 ${state.writes}) · 캐시HIT ${state.cacheHits}`;
 };
 
 const formatNumber = (value: number | undefined) => new Intl.NumberFormat('ko-KR').format(Math.max(0, Math.floor(Number(value || 0))));
@@ -88,6 +91,7 @@ const getCloudflarePathLabel = (path: string) => {
   if (path === '/v1/me/publications') return '뮤직노트 공개상태';
   if (path === '/v1/tracks/:id/like') return '좋아요 변경';
   if (path === '/v1/tracks/:id/visibility') return '공개상태 변경';
+  if (path === '/v1/profiles/:id/first-view') return '공개프로필';
   return path || '기타';
 };
 
@@ -136,7 +140,10 @@ const getCallableErrorMessage = (error: any) => {
 const SORIDRAW_925_CACHE_LIVE_LARGE_SOURCE_TRACE = true;
 
 export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean }) {
-  const [enabled, setEnabled] = useState(() => readCacheDiagnosticsGloballyEnabled());
+  const [, setAccessRevision] = useState(0);
+  const currentUid = String(auth.currentUser?.uid || '');
+  const canUseDiagnostics = isAdmin || hasAdminPermission(readUserProfileCache(currentUid), 'appSettings');
+  const [enabled, setEnabled] = useState(() => readCacheDiagnosticsEnabled(auth.currentUser?.uid));
   const [states, setStates] = useState<Record<CacheDiagnosticDomain, CacheDiagnosticState>>(() => readAllStates());
   const [actual, setActual] = useState<FirestoreActualState>(() => readFirestoreActual());
   const [position, setPosition] = useState<PanelPosition>(() => readInitialPosition());
@@ -173,7 +180,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
   }, []);
 
   const loadServerUsage = useCallback(async () => {
-    if (!isAdmin || !enabled || serverLoadingRef.current) return;
+    if (!canUseDiagnostics || !enabled || serverLoadingRef.current) return;
     serverLoadingRef.current = true;
     setServerLoading(true);
     setServerError('');
@@ -193,10 +200,10 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       serverLoadingRef.current = false;
       setServerLoading(false);
     }
-  }, [enabled, isAdmin]);
+  }, [canUseDiagnostics, enabled]);
 
   useEffect(() => {
-    const syncEnabled = () => setEnabled(readCacheDiagnosticsGloballyEnabled());
+    const syncEnabled = () => setEnabled(readCacheDiagnosticsEnabled(auth.currentUser?.uid));
     const onToggle = () => {
       syncEnabled();
       setStates(readAllStates());
@@ -217,8 +224,12 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       if (!detail) return;
       setCloudflare(detail);
     };
+    const onProfileCache = () => {
+      setAccessRevision((value) => value + 1);
+      syncEnabled();
+    };
     const onStorage = (event: StorageEvent) => {
-      if (event.key === CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY) syncEnabled();
+      if (event.key === CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY || event.key === CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY) syncEnabled();
     };
 
     syncEnabled();
@@ -229,24 +240,17 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
     window.addEventListener(CACHE_DIAGNOSTICS_UPDATE_EVENT, onUpdate as EventListener);
     window.addEventListener(FIRESTORE_ACTUAL_UPDATE_EVENT, onActualUpdate as EventListener);
     window.addEventListener(CLOUDFLARE_DIAGNOSTICS_UPDATE_EVENT, onCloudflareUpdate as EventListener);
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, onProfileCache as EventListener);
     window.addEventListener('storage', onStorage);
     return () => {
       window.removeEventListener(CACHE_DIAGNOSTICS_TOGGLE_EVENT, onToggle as EventListener);
       window.removeEventListener(CACHE_DIAGNOSTICS_UPDATE_EVENT, onUpdate as EventListener);
       window.removeEventListener(FIRESTORE_ACTUAL_UPDATE_EVENT, onActualUpdate as EventListener);
       window.removeEventListener(CLOUDFLARE_DIAGNOSTICS_UPDATE_EVENT, onCloudflareUpdate as EventListener);
+      window.removeEventListener(USER_PROFILE_CACHE_EVENT, onProfileCache as EventListener);
       window.removeEventListener('storage', onStorage);
     };
   }, []);
-
-  useEffect(() => {
-    if (!isAdmin || !enabled || collapsed) return;
-    void loadServerUsage();
-    const timer = window.setInterval(() => {
-      void loadServerUsage();
-    }, CLOUD_REFRESH_MS);
-    return () => window.clearInterval(timer);
-  }, [collapsed, enabled, isAdmin, loadServerUsage]);
 
   useEffect(() => {
     try { window.localStorage.setItem(PANEL_COLLAPSED_STORAGE_KEY, collapsed ? 'true' : 'false'); } catch {}
@@ -323,7 +327,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
     persistPosition(next);
   };
 
-  if (!isAdmin || !enabled) return null;
+  if (!canUseDiagnostics || !enabled) return null;
 
   const todayOps = serverUsage?.documentOps?.today;
   const recentOps = serverUsage?.documentOps?.recent;
@@ -339,10 +343,10 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
     .slice(0, 4);
   const cloudflareMetered = cloudflare.meteredResponses > 0;
   const cloudflarePathEntries = Object.entries(cloudflare.paths || {})
-    .filter(([, state]) => state.workerRequests > 0 || state.d1RowsRead > 0 || state.d1RowsWritten > 0)
+    .filter(([, state]) => state.localCacheHits > 0 || state.workerRequests > 0 || state.d1RowsRead > 0 || state.d1RowsWritten > 0)
     .sort((a, b) => {
-      const aScore = a[1].d1RowsRead + a[1].d1RowsWritten + a[1].workerRequests;
-      const bScore = b[1].d1RowsRead + b[1].d1RowsWritten + b[1].workerRequests;
+      const aScore = a[1].localCacheHits + a[1].d1RowsRead + a[1].d1RowsWritten + a[1].workerRequests;
+      const bScore = b[1].localCacheHits + b[1].d1RowsRead + b[1].d1RowsWritten + b[1].workerRequests;
       return bScore - aScore;
     })
     .slice(0, 5);
@@ -419,15 +423,23 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
           <div className="space-y-0.5">
             <div className="whitespace-nowrap text-[12px] font-bold text-white/76">{formatActualUsage(actual)}</div>
             <div className="whitespace-nowrap text-[12px] font-bold text-[#c6b5ff]">
-              Cloudflare 앱 · Worker {formatNumber(cloudflare.workerRequests)} · D1 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : '—'}
+              Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)} · Worker {formatNumber(cloudflare.workerRequests)} · D1 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : '—'}
             </div>
             {cloudflarePathEntries.length > 0 ? (
               <div className="mt-1 space-y-0.5 rounded-lg bg-[#c6b5ff]/[0.055] px-2 py-1.5">
                 <div className="mb-0.5 text-[10px] font-black tracking-[0.04em] text-[#c6b5ff]/70">CLOUDFLARE 발생처</div>
                 {cloudflarePathEntries.map(([path, state]) => (
-                  <div key={path} className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-bold text-[#c6b5ff]/82">
-                    <span className="truncate">{getCloudflarePathLabel(path)}</span>
-                    <span className="shrink-0 whitespace-nowrap tabular-nums">Worker {formatNumber(state.workerRequests)} · D1 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}</span>
+                  <div key={path} className="space-y-0.5">
+                    <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-bold text-[#c6b5ff]/82">
+                      <span className="truncate">{getCloudflarePathLabel(path)}</span>
+                      <span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)} · D1 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}</span>
+                    </div>
+                    {state.lastOutcome ? (
+                      <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/58">
+                        <span className="truncate">마지막 · {state.lastOutcome}{state.lastEdgeCache ? ` · ${state.lastEdgeCache}` : ''}</span>
+                        <span className="shrink-0 whitespace-nowrap tabular-nums">검증 {formatNumber(state.revisionChecks)} · 304 {formatNumber(state.notModifiedResponses)} · 200 {formatNumber(state.fullResponses)} · {formatNumber(state.lastDurationMs)}ms</span>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>

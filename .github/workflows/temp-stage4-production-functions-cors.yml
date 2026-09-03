@@ -1,0 +1,169 @@
+name: Stage4 Production Custom Domain Functions CORS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-stage4-production-functions-cors.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stage4-production-functions-cors
+  cancel-in-progress: false
+
+jobs:
+  exact-live-source-rollout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PROJECT: soridraw-app-866a5
+      REGION: us-central1
+      PROD_ORIGIN: https://soridraw.com
+
+    steps:
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Authenticate Google
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Add only production custom origin to active browser Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          functions=(
+            getSunoApiKeyStatus
+            saveGoogleGeminiApiKey
+            deleteGoogleGeminiApiKey
+            getGoogleGeminiApiKeyStatus
+            generateGeminiContent
+            saveSunoApiKey
+            deleteSunoApiKey
+            fetchSunoShareMetadata
+            getSunoRemainingCredits
+            getSunoRemainingCreditsAfterComplete
+            createSunoTrack
+            getSunoTrackStatus
+          )
+          required_origins=(
+            'https://soridraw-preview.web.app'
+            'https://soridraw-preview.firebaseapp.com'
+            'https://preview.soridraw.com'
+            'https://soridraw-test.web.app'
+            'https://soridraw-test.firebaseapp.com'
+            'https://test.soridraw.com'
+            "$PROD_ORIGIN"
+          )
+
+          cors_status() {
+            local fn="$1" origin="$2" url="https://us-central1-$PROJECT.cloudfunctions.net/$fn" code allow
+            code="$(curl -sS -o /tmp/cors-body -D /tmp/cors-head -w '%{http_code}' -X OPTIONS \
+              -H "Origin: $origin" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "$url" || true)"
+            allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/cors-head)"
+            printf '%s|%s' "$code" "$allow"
+          }
+
+          verify_options() {
+            python3 - "$1" "$2" <<'PY'
+          import json,sys
+          before=json.load(open(sys.argv[1],encoding='utf-8')); after=json.load(open(sys.argv[2],encoding='utf-8'))
+          def pick(d):
+              b=d.get('buildConfig') or {}; s=d.get('serviceConfig') or {}
+              return {
+                'runtime':b.get('runtime'),'entryPoint':b.get('entryPoint'),'environmentVariables':b.get('environmentVariables'),
+                'availableMemory':s.get('availableMemory'),'timeoutSeconds':s.get('timeoutSeconds'),'minInstanceCount':s.get('minInstanceCount'),
+                'maxInstanceCount':s.get('maxInstanceCount'),'maxInstanceRequestConcurrency':s.get('maxInstanceRequestConcurrency'),
+                'serviceAccountEmail':s.get('serviceAccountEmail'),'ingressSettings':s.get('ingressSettings'),
+                'secretEnvironmentVariables':s.get('secretEnvironmentVariables')}
+          if pick(before)!=pick(after):
+              print('BEFORE',json.dumps(pick(before),ensure_ascii=False,sort_keys=True)); print('AFTER',json.dumps(pick(after),ensure_ascii=False,sort_keys=True))
+              raise SystemExit('Critical runtime configuration changed')
+          PY
+          }
+
+          for fn in "${functions[@]}"; do
+            echo "========== $fn =========="
+            missing=()
+            for origin in "${required_origins[@]}"; do
+              result="$(cors_status "$fn" "$origin")"
+              if [ "${result%%|*}" != 204 ] || [ "${result#*|}" != "$origin" ]; then missing+=("$origin"); fi
+            done
+            if [ "${#missing[@]}" -eq 0 ]; then echo "[SKIP] $fn already healthy"; continue; fi
+
+            # Refuse to roll out if any previously validated PREVIEW/TEST origin regressed.
+            for origin in "${required_origins[@]:0:6}"; do
+              result="$(cors_status "$fn" "$origin")"
+              test "${result%%|*}" = 204 && test "${result#*|}" = "$origin" || { echo "$fn: validated origin unhealthy: $origin ($result)"; exit 11; }
+            done
+            legacy="$(cors_status "$fn" 'https://soridraw-music.vercel.app')"
+            test "${legacy%%|*}" = 204 || { echo "$fn: legacy CORS unhealthy ($legacy); refusing deploy"; exit 12; }
+
+            # Only the production custom origin may be missing in this stage.
+            test "${#missing[@]}" -eq 1 && test "${missing[0]}" = "$PROD_ORIGIN" || { printf 'Unexpected missing origins:'; printf ' %s' "${missing[@]}"; echo; exit 13; }
+
+            work="$RUNNER_TEMP/prod-cors-$fn"; rm -rf "$work"; mkdir -p "$work/source"
+            before="$work/before.json"
+            gcloud functions describe "$fn" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$before"
+            eval "$(python3 - "$before" <<'PY'
+          import json,shlex,sys
+          d=json.load(open(sys.argv[1],encoding='utf-8')); src=((d.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}
+          b=str(src.get('bucket') or ''); o=str(src.get('object') or '')
+          if not b or not o: raise SystemExit('Live source storage location unavailable')
+          print('B='+shlex.quote(b)); print('O='+shlex.quote(o))
+          PY
+            )"
+            gcloud storage cp "gs://$B/$O" "$work/live.zip" >/dev/null
+            unzip -q "$work/live.zip" -d "$work/source"
+            test -f "$work/source/src/index.ts"; test -f "$work/source/package.json"
+            cp "$work/source/src/index.ts" "$work/index.before.ts"
+            python3 - "$work/index.before.ts" "$work/source/src/index.ts" "$PROD_ORIGIN" <<'PY'
+          from pathlib import Path
+          import re,sys
+          source=Path(sys.argv[1]).read_text(encoding='utf-8'); target=Path(sys.argv[2]); wanted=sys.argv[3]
+          m=re.search(r'((?:const|var)\s+ALLOWED_ORIGINS\s*=\s*\[)(.*?)(\n\s*\];)',source,re.S)
+          if not m: raise SystemExit('ALLOWED_ORIGINS block not found')
+          body=m.group(2)
+          if f'"{wanted}"' in body: raise SystemExit('Runtime CORS unhealthy but production origin already exists in source')
+          addition=f'\n  "{wanted}",'
+          expected=source[:m.end(2)]+addition+source[m.end(2):]
+          if len(expected)-len(source)!=len(addition): raise SystemExit('Unexpected source delta')
+          target.write_text(expected,encoding='utf-8')
+          print('Added only:',wanted)
+          PY
+            (cd "$work/source" && npm ci --no-audit --no-fund && npm run build && grep -Fq "$PROD_ORIGIN" lib/index.js)
+            cat > "$work/firebase.json" <<JSON
+          {"functions":{"source":"$work/source"}}
+          JSON
+            npx --yes firebase-tools@latest deploy --project "$PROJECT" --config "$work/firebase.json" --only "functions:$fn" --non-interactive
+            after="$work/after.json"
+            gcloud functions describe "$fn" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$after"
+            verify_options "$before" "$after"
+
+            for origin in "${required_origins[@]}"; do
+              ok=''
+              for attempt in $(seq 1 15); do
+                result="$(cors_status "$fn" "$origin")"
+                if [ "${result%%|*}" = 204 ] && [ "${result#*|}" = "$origin" ]; then ok=yes; break; fi
+                sleep 10
+              done
+              echo "[AFTER] $fn $origin=$(cors_status "$fn" "$origin")"
+              test "$ok" = yes
+            done
+            legacy_after="$(cors_status "$fn" 'https://soridraw-music.vercel.app')"; test "${legacy_after%%|*}" = 204
+          done
+
+          echo 'PRODUCTION_CUSTOM_DOMAIN_FUNCTIONS_CORS_COMPLETE=true'
+          echo 'LEGACY_DIRECT_GEMINI_KEY_ENDPOINT_LEFT_RESTRICTED=true'
+          echo 'NO_FIRESTORE_MIGRATION=true'
+          echo 'NO_RULES_DEPLOY=true'
+          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'

@@ -1,0 +1,91 @@
+name: SORIDRAW 997 Restore Pre-972 MP3 Status
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-suno-mp3-baseline-restore-997.yml'
+      - 'functions/package.json'
+
+concurrency:
+  group: soridraw-997-mp3-status-baseline
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-status:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions ci --no-audit --no-fund
+
+      - name: Build exact pre-972 status behavior
+        run: npm --prefix functions run build
+
+      - name: Verify MP3 status baseline and WAV isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'export const getSunoTrackStatus = onRequest' functions/src/index.ts
+          if grep -q 'SORIDRAW_SUNO_RECOVERY_READONLY_972' functions/src/index.ts; then
+            echo 'ERROR: 972 recovery mutation still present in getSunoTrackStatus build'
+            exit 1
+          fi
+          if grep -q 'const recoveryOnly = req.body?.recoveryOnly' functions/src/index.ts; then
+            echo 'ERROR: recoveryOnly branch still present in getSunoTrackStatus build'
+            exit 1
+          fi
+          grep -q 'api/v1/generate/record-info' functions/src/index.ts
+          grep -q 'export const rescueSunoTrackAudio = onRequest' functions/src/index.ts
+          test -f functions/lib/securedIndex.js
+          echo '[997] Pre-972 getSunoTrackStatus contract: PASS'
+          echo '[997] WAV rescue remains a separate Function and is not part of MP3 status recovery.'
+
+      - name: Authenticate to Firebase backend project
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy only getSunoTrackStatus
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only functions:getSunoTrackStatus \
+            --project soridraw-app-866a5 \
+            --non-interactive
+          echo '[997] getSunoTrackStatus deploy: PASS'
+
+      - name: Smoke status CORS only
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus'
+          status="$(curl -sS -o /tmp/status-options.txt -w '%{http_code}' -X OPTIONS \
+            -H 'Origin: https://preview.soridraw.com' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+            "$url")"
+          test "$status" = '204' || test "$status" = '200'
+          echo '[997] getSunoTrackStatus CORS smoke: PASS'
+
+      - name: Result
+        run: |
+          echo 'SORIDRAW 997 pre-972 MP3 status backend restored.'
+          echo 'Only getSunoTrackStatus was deployed.'
+          echo 'No WAV generation was executed. No Music API generation credit was consumed by this workflow.'
+          echo 'No Rules, Hosting, data migration, main, TEST, or Production change.'

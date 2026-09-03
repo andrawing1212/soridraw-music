@@ -1,5 +1,7 @@
+import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_8E5_SOCIAL_PUBLIC_PROFILE
 // SORIDRAW_EXPLORE_8E5_PROFILE_EDIT_UI_975
+// SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Compass, ExternalLink, Heart, Loader2, Music2, Pencil, Pin, Search, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
@@ -12,6 +14,7 @@ import {
   writeExploreFeedSessionCache,
 } from '../services/exploreSessionCache';
 import { getExploreLikedTrackIds, setExploreTrackLike } from '../services/exploreLikeService';
+import { getExplorePublicProfileFirstView, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
 import {
   getExploreFollowState,
   getExplorePublicProfile,
@@ -47,7 +50,6 @@ type ExploreApiResponse = {
   };
 };
 
-const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
 
 const safeText = (value: unknown, fallback = '') => {
   const normalized = String(value ?? '').trim();
@@ -294,16 +296,29 @@ export default function ExplorePage() {
     setProfileError('');
     setSocialNotice('');
 
-    Promise.all([
-      getExplorePublicProfile(profileUid),
-      getExplorePublicProfileTracks(profileUid),
-    ])
-      .then(async ([nextProfile, rows]) => {
+    const applyProfileFirstView = (nextProfile: ExplorePublicProfile, rows: Array<Record<string, unknown>>) => {
+      if (cancelled) return;
+      const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
+      normalizedTracks.sort((a, b) => Number(b.profilePinned) - Number(a.profilePinned));
+      setProfile(nextProfile);
+      setProfileTracks(normalizedTracks);
+    };
+
+    getExplorePublicProfileFirstView(profileUid, {
+      onRevalidated: ({ profile: refreshedProfile, tracks: refreshedRows }) => {
+        applyProfileFirstView(refreshedProfile, refreshedRows);
+      },
+      onInvalidated: (message) => {
         if (cancelled) return;
-        const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
-        normalizedTracks.sort((a, b) => Number(b.profilePinned) - Number(a.profilePinned));
-        setProfile(nextProfile);
-        setProfileTracks(normalizedTracks);
+        setProfile(null);
+        setProfileTracks([]);
+        setFollowState(null);
+        setProfileError(message || '공개 프로필을 불러오지 못했어요.');
+      },
+    })
+      .then(async ({ profile: nextProfile, tracks: rows }) => {
+        if (cancelled) return;
+        applyProfileFirstView(nextProfile, rows);
 
         if (user && user.uid !== nextProfile.uid) {
           try {
@@ -384,7 +399,7 @@ export default function ExplorePage() {
 
   const openProfile = (track: ExploreTrack) => {
     if (!track.ownerUid) return;
-    setSearchParams({ profile: track.ownerHandle ? `@${track.ownerHandle}` : track.ownerUid });
+    setSearchParams({ profile: track.ownerUid });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -412,6 +427,7 @@ export default function ExplorePage() {
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
       updateTrackLikeCount(track.id, result.likeCount);
       patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: result.likeCount });
+      patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: result.likeCount });
     } catch (reason) {
       console.error('Explore like failed:', reason);
       setSocialNotice(reason instanceof Error ? reason.message : '좋아요 처리에 실패했어요.');
@@ -432,6 +448,10 @@ export default function ExplorePage() {
     try {
       const result = await setExploreFollow(user, profile.uid, nextShouldFollow);
       setFollowState(result);
+      patchExplorePublicProfileFirstViewProfile(profile.uid, {
+        followerCount: result.followerCount || (nextShouldFollow ? profile.followerCount + 1 : Math.max(0, profile.followerCount - 1)),
+        followingCount: result.followingCount || profile.followingCount,
+      });
       setProfile((prev) => prev ? {
         ...prev,
         followerCount: result.followerCount || (nextShouldFollow ? prev.followerCount + 1 : Math.max(0, prev.followerCount - 1)),
@@ -538,6 +558,7 @@ export default function ExplorePage() {
                 onClose={() => setProfileEditOpen(false)}
                 onSaved={(nextProfile) => {
                   setProfile(nextProfile);
+                  rememberExplorePublicProfileFirstViewProfile(nextProfile);
                   if (nextProfile.handle) setSearchParams({ profile: `@${nextProfile.handle}` }, { replace: true });
                 }}
               />

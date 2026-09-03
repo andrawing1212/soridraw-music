@@ -1,9 +1,9 @@
+import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { readSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
 
-const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
 
 
 // SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990

@@ -1,0 +1,39 @@
+name: Temp Cost Zero Feed Miss Probe
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-cost-zero-feed-miss-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Measure fresh feed edge miss and repeat hit
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed'
+          origin='https://preview.soridraw.com'
+          nonce="$(date +%s)-$RANDOM"
+          url="$base?sort=latest&limit=40&__soridraw_probe=$nonce"
+          for n in 1 2 3 4 5 6; do
+            curl -fsS --max-time 30 -D "$RUNNER_TEMP/f-$n.h" -o "$RUNNER_TEMP/f-$n.json" \
+              -H "Origin: $origin" -H 'Accept: application/json' "$url"
+            grep -q '"ok":true' "$RUNNER_TEMP/f-$n.json"
+            cache="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-edge-cache:/{gsub("\r",""); print toupper($2)}' "$RUNNER_TEMP/f-$n.h" | tail -n1)"
+            reads="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r",""); print $2}' "$RUNNER_TEMP/f-$n.h" | tail -n1)"
+            writes="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r",""); print $2}' "$RUNNER_TEMP/f-$n.h" | tail -n1)"
+            pop="$(awk 'BEGIN{IGNORECASE=1}/^cf-ray:/{gsub("\r",""); split($2,a,"-"); print a[2]}' "$RUNNER_TEMP/f-$n.h" | tail -n1)"
+            count="$(node -e "const p=require(process.argv[1]); console.log((p?.data?.items||[]).length)" "$RUNNER_TEMP/f-$n.json")"
+            echo "FEED_$n cache=$cache d1_read=$reads d1_write=$writes pop=$pop items=$count"
+            sleep 0.5
+          done
+          echo 'FEED_MISS_PROBE_COMPLETE=true'
+          echo 'WRITE_REQUESTED=false'

@@ -1,0 +1,14 @@
+/* SORIDRAW 1021 — Match Classic Light/Dark public-profile hero image luminance to Split.
+   The uploaded comparison video shows Classic Light/Dark rendering about 1.48x
+   darker in the visible hero than Split because the wider Classic crop exposes
+   a darker portion of the same source image. Keep Split as the reference and
+   compensate only the Classic background image; overlay/text/layout stay intact. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+  .soridraw-explore-profile-head.has-background
+  .soridraw-explore-profile-background img,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
+  .soridraw-explore-profile-head.has-background
+  .soridraw-explore-profile-background img {
+  opacity: 1 !important;
+  filter: saturate(.88) brightness(.86) !important;
+}

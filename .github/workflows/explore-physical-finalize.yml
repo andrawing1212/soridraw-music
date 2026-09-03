@@ -1,0 +1,353 @@
+name: Explore Physical Environment Finalize
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/explore-physical-finalize.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Finalize physical PREVIEW and TEST isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { spawnSync } = require('node:child_process');
+          const { readFileSync, writeFileSync } = require('node:fs');
+          const { join } = require('node:path');
+          const crypto = require('node:crypto');
+
+          const ROOT = process.cwd();
+          const WORKER_DIR = join(ROOT, 'cloudflare', 'explore-worker');
+          const REMOTE_DIR = join(WORKER_DIR, '.remote-worker');
+          const ACCOUNT_ID = 'e1a30fc9ef497fda1d34f4ab3dc1da45';
+          const PROD = {
+            worker: 'soridraw-explore-api',
+            dbName: 'soridraw-explore-db',
+            dbId: '217ef5b1-5d80-4f7c-afc7-9e07eb05c06b',
+            r2: 'soridraw-profile-media',
+            base: 'https://soridraw-explore-api.andrawing1212.workers.dev',
+          };
+          const TARGETS = [
+            {
+              env: 'preview',
+              worker: 'soridraw-explore-preview',
+              dbName: 'soridraw-explore-preview-db',
+              dbId: 'aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f',
+              r2: 'soridraw-profile-media-preview',
+              base: 'https://soridraw-explore-preview.andrawing1212.workers.dev',
+              origin: 'https://preview.soridraw.com',
+            },
+            {
+              env: 'test',
+              worker: 'soridraw-explore-test',
+              dbName: 'soridraw-explore-test-db',
+              dbId: '31817dbd-d06e-415e-9bc0-5553b0f5dc43',
+              r2: 'soridraw-profile-media-test',
+              base: 'https://soridraw-explore-test.andrawing1212.workers.dev',
+              origin: 'https://test.soridraw.com',
+            },
+          ];
+
+          function run(command, args, opts = {}) {
+            const result = spawnSync(command, args, {
+              cwd: opts.cwd || ROOT,
+              encoding: 'utf8',
+              shell: process.platform === 'win32',
+              env: process.env,
+              maxBuffer: 64 * 1024 * 1024,
+            });
+            if (!opts.quiet && result.stdout) process.stdout.write(result.stdout);
+            if (!opts.quiet && result.stderr) process.stderr.write(result.stderr);
+            if (result.status !== 0 && !opts.allowFailure) {
+              const detail = [result.stdout, result.stderr].filter(Boolean).join('\n').slice(-5000);
+              throw new Error(command + ' ' + args.join(' ') + ' failed with exit ' + result.status + (detail ? '\n' + detail : ''));
+            }
+            return { ok: result.status === 0, stdout: String(result.stdout || ''), stderr: String(result.stderr || '') };
+          }
+          const wrangler = (args, opts = {}) => run('npx', ['wrangler', ...args], { cwd: WORKER_DIR, ...opts });
+
+          async function workerModified(name) {
+            const response = await fetch('https://api.cloudflare.com/client/v4/accounts/' + ACCOUNT_ID + '/workers/scripts', {
+              headers: { Authorization: 'Bearer ' + process.env.CLOUDFLARE_API_TOKEN, Accept: 'application/json' },
+            });
+            const payload = await response.json();
+            if (!response.ok || payload.success === false) throw new Error('Could not read Worker metadata: ' + JSON.stringify(payload).slice(0, 1200));
+            const row = (payload.result || []).find((item) => item.id === name);
+            if (!row) throw new Error('Worker metadata missing for ' + name);
+            return String(row.modified_on || '');
+          }
+
+          async function fetchText(url, options = {}) {
+            const response = await fetch(url, options);
+            const text = await response.text();
+            return { response, text };
+          }
+
+          async function assertProductionFeed(label) {
+            const { response, text } = await fetchText(PROD.base + '/v1/feed?sort=latest&limit=1', { headers: { Accept: 'application/json' } });
+            if (response.status !== 200 || text.includes('"workersCi"') || !text.includes('"data"')) {
+              throw new Error(label + ' production feed is not healthy: HTTP=' + response.status + ' BODY=' + text.slice(0, 800));
+            }
+            console.log(label + '_PRODUCTION_FEED=PASS');
+            return text;
+          }
+
+          const BOOTSTRAP_SOURCE = String.raw`
+          const TABLES = ['api_rate_limits','comment_scores','comments','curated_picks','explore_curators','follows','like_scores','likes','profile_search_fts','profile_stats','public_folder_tracks','public_folders','public_profile_first_views','public_profiles','track_search_fts','track_stats','track_tags','tracks'];
+          const SKIP_DATA = new Set(['api_rate_limits']);
+          const FTS = new Set(TABLES.filter((name) => name.endsWith('_fts')));
+          function qi(v){ return '"' + String(v || '').replace(/"/g,'""') + '"'; }
+          function transform(v, env){ return typeof v === 'string' ? v.split(env.PROD_BASE).join(env.TARGET_BASE) : v; }
+          async function rows(db, sql, ...bind){ const r = await db.prepare(sql).bind(...bind).all(); return r.results || []; }
+          async function first(db, sql, ...bind){ return db.prepare(sql).bind(...bind).first(); }
+          async function tableExists(db, name){ const r = await first(db,"SELECT 1 AS ok FROM sqlite_schema WHERE type='table' AND name=? LIMIT 1",name); return Boolean(r && r.ok); }
+          async function objectExists(db, type, name){ const r = await first(db,"SELECT 1 AS ok FROM sqlite_schema WHERE type=? AND name=? LIMIT 1",type,name); return Boolean(r && r.ok); }
+          async function count(db, name){ if (!(await tableExists(db,name))) return 0; const r = await first(db,'SELECT COUNT(*) AS n FROM ' + qi(name)); return Number((r && r.n) || 0); }
+          async function columns(db,name){ const r = await rows(db,'PRAGMA table_xinfo(' + qi(name) + ')'); return r.filter((x)=>Number(x.hidden||0)===0).map((x)=>String(x.name||'')).filter(Boolean); }
+          async function depOrder(db,names){
+            const allowed=new Set(names), deps=new Map();
+            for(const name of names){ const fk=await rows(db,'PRAGMA foreign_key_list(' + qi(name) + ')'); deps.set(name,new Set(fk.map((x)=>String(x.table||'')).filter((d)=>allowed.has(d)))); }
+            const out=[],visiting=new Set(),done=new Set();
+            function visit(name){ if(done.has(name)||visiting.has(name))return; visiting.add(name); for(const d of deps.get(name)||[])visit(d); visiting.delete(name); done.add(name); out.push(name); }
+            for(const n of names)visit(n); return out;
+          }
+          async function copyTable(source,target,name,env){
+            const sourceCount=await count(source,name);
+            if(SKIP_DATA.has(name)) return {source:sourceCount,target:await count(target,name),skipped:true};
+            const cols=await columns(source,name);
+            if(!cols.length) return {source:sourceCount,target:await count(target,name),emptyColumns:true};
+            const colSql=cols.map(qi).join(',');
+            const insert='INSERT OR IGNORE INTO ' + qi(name) + ' (' + colSql + ') VALUES (' + cols.map(()=>'?').join(',') + ')';
+            let offset=0;
+            while(offset<sourceCount){
+              const page=await rows(source,'SELECT ' + colSql + ' FROM ' + qi(name) + ' LIMIT ? OFFSET ?',50,offset);
+              if(!page.length)break;
+              const stmts=page.map((row)=>target.prepare(insert).bind(...cols.map((c)=>transform(row[c],env))));
+              for(let i=0;i<stmts.length;i+=25) await target.batch(stmts.slice(i,i+25));
+              offset+=page.length;
+            }
+            return {source:sourceCount,target:await count(target,name)};
+          }
+          async function listAll(bucket,prefix){ const out=[]; let cursor; do{ const r=await bucket.list({prefix,limit:500,...(cursor?{cursor}:{})}); out.push(...(r.objects||[])); cursor=r.truncated?r.cursor:undefined; }while(cursor); return out; }
+          async function copyMedia(source,target){
+            const objects=await listAll(source,'profiles/');
+            for(const meta of objects){ const obj=await source.get(meta.key); if(!obj)throw new Error('Missing source media '+meta.key); await target.put(meta.key,obj.body,{httpMetadata:obj.httpMetadata,customMetadata:obj.customMetadata}); }
+            const after=await listAll(target,'profiles/');
+            const keys=new Set(after.map((x)=>x.key));
+            const missing=objects.filter((x)=>!keys.has(x.key)).map((x)=>x.key);
+            if(missing.length)throw new Error('Target R2 missing copied objects: '+missing.join(','));
+            return {sourceCount:objects.length,targetCount:after.length};
+          }
+          async function bootstrap(env){
+            const source=env.SOURCE_DB,target=env.DB;
+            if(await tableExists(target,'_soridraw_environment_meta')){
+              const marker=await first(target,"SELECT environment,source FROM _soridraw_environment_meta WHERE environment=? LIMIT 1",env.ENV_NAME);
+              if(marker && marker.environment===env.ENV_NAME) return {ok:true,environment:env.ENV_NAME,already:true};
+            }
+            const schema=await rows(source,"SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 WHEN 'trigger' THEN 2 ELSE 3 END,name");
+            const tableSql=new Map(schema.filter((x)=>x.type==='table').map((x)=>[String(x.name||''),String(x.sql||'')]));
+            const presentTables=TABLES.filter((name)=>tableSql.has(name));
+            for(const name of ['public_profiles','tracks','follows','likes','profile_stats','track_stats','public_profile_first_views']) {
+              if(!tableSql.has(name)) throw new Error('Source core schema missing '+name);
+            }
+            const regular=presentTables.filter((n)=>!FTS.has(n));
+            const virtual=presentTables.filter((n)=>FTS.has(n));
+            for(const name of regular){ if(!(await tableExists(target,name))) await target.prepare(tableSql.get(name)).run(); }
+            for(const name of virtual){ if(!(await tableExists(target,name))) await target.prepare(tableSql.get(name)).run(); }
+            const expected={};
+            for(const name of await depOrder(source,regular)){ const r=await copyTable(source,target,name,env); expected[name]=SKIP_DATA.has(name)?null:r.source; }
+            for(const name of virtual){
+              const sql=tableSql.get(name)||'';
+              if(/\bcontent\s*=\s*['"][^'"]+/i.test(sql)){
+                await target.prepare('INSERT INTO ' + qi(name) + ' (' + qi(name) + ') VALUES (?)').bind('rebuild').run();
+              }else if((await count(target,name))===0){
+                await copyTable(source,target,name,env);
+              }
+            }
+            for(const row of schema){
+              if((row.type!=='index'&&row.type!=='trigger')||!row.sql||!presentTables.includes(String(row.tbl_name||'')))continue;
+              if(await objectExists(target,row.type,String(row.name||'')))continue;
+              await target.prepare(String(row.sql)).run();
+            }
+            const mismatches=[];
+            const targetCounts={};
+            for(const name of regular){ const t=await count(target,name); targetCounts[name]=t; if(expected[name]!==null&&t!==expected[name])mismatches.push(name+':'+t+'!='+expected[name]); }
+            if(mismatches.length)throw new Error('D1 snapshot mismatch '+mismatches.join(','));
+            const r2=await copyMedia(env.SOURCE_MEDIA,env.PROFILE_MEDIA);
+            await target.prepare("CREATE TABLE IF NOT EXISTS _soridraw_environment_meta (environment TEXT PRIMARY KEY, source TEXT NOT NULL, bootstrapped_at INTEGER NOT NULL)").run();
+            await target.prepare("INSERT OR REPLACE INTO _soridraw_environment_meta(environment,source,bootstrapped_at) VALUES (?,?,?)").bind(env.ENV_NAME,'production-readonly-snapshot',Date.now()).run();
+            return {ok:true,environment:env.ENV_NAME,targetCounts,r2};
+          }
+          export default { async fetch(request,env){
+            const url=new URL(request.url);
+            if(url.pathname!=='/__soridraw_physical_bootstrap')return new Response('SORIDRAW physical bootstrap',{status:503});
+            if(request.headers.get('X-SORIDRAW-Bootstrap')!==env.BOOTSTRAP_TOKEN)return new Response('not found',{status:404});
+            try{return Response.json(await bootstrap(env));}catch(error){return Response.json({ok:false,error:String((error&&error.message)||error)},{status:500});}
+          }};
+          `;
+
+          function sanitize(base, name, main) {
+            const cfg = { ...base, name, main, workers_dev: true };
+            delete cfg.routes;
+            delete cfg.route;
+            delete cfg.d1_databases;
+            delete cfg.r2_buckets;
+            return cfg;
+          }
+
+          async function callBootstrap(target, token) {
+            let last = '';
+            for (let i = 0; i < 12; i += 1) {
+              try {
+                const { response, text } = await fetchText(target.base + '/__soridraw_physical_bootstrap', {
+                  headers: { 'X-SORIDRAW-Bootstrap': token, Accept: 'application/json' },
+                });
+                last = 'HTTP=' + response.status + ' BODY=' + text.slice(0, 3000);
+                if (response.status === 200) {
+                  const payload = JSON.parse(text);
+                  if (payload.ok) return payload;
+                }
+                if (response.status === 500) throw new Error(last);
+              } catch (error) {
+                last = String(error && error.message || error);
+                if (last.includes('HTTP=500')) throw error;
+              }
+              await new Promise((r) => setTimeout(r, 3000));
+            }
+            throw new Error(target.env + ' bootstrap did not succeed: ' + last);
+          }
+
+          async function smoke(target) {
+            let last = '';
+            for (let i = 0; i < 12; i += 1) {
+              const { response, text } = await fetchText(target.base + '/v1/feed?sort=latest&limit=1', {
+                headers: { Origin: target.origin, Accept: 'application/json' },
+              });
+              const allow = response.headers.get('access-control-allow-origin') || '';
+              last = 'HTTP=' + response.status + ' allow=' + (allow || 'none') + ' body=' + text.slice(0, 500);
+              if (response.status === 200 && allow === target.origin && text.includes('"data"')) {
+                const payload = JSON.parse(text);
+                const item = payload && payload.data && payload.data.items && payload.data.items[0];
+                if (item && item.ownerUid) {
+                  const profile = await fetchText(target.base + '/v1/profiles/' + encodeURIComponent(item.ownerUid) + '/first-view', {
+                    headers: { Origin: target.origin, Accept: 'application/json' },
+                  });
+                  const pAllow = profile.response.headers.get('access-control-allow-origin') || '';
+                  if (profile.response.status !== 200 || pAllow !== target.origin) {
+                    throw new Error(target.env + ' public profile smoke failed HTTP=' + profile.response.status + ' allow=' + pAllow + ' body=' + profile.text.slice(0, 800));
+                  }
+                  console.log(target.env.toUpperCase() + '_PUBLIC_PROFILE_SMOKE=PASS');
+                }
+                return;
+              }
+              await new Promise((r) => setTimeout(r, 3000));
+            }
+            throw new Error(target.env + ' feed smoke failed: ' + last);
+          }
+
+          (async () => {
+            console.log('=== SAFETY: production healthy before target work ===');
+            const prodModifiedBefore = await workerModified(PROD.worker);
+            const prodFeedBefore = await assertProductionFeed('BEFORE');
+            console.log('PRODUCTION_WORKER_MODIFIED_BEFORE=' + prodModifiedBefore);
+
+            console.log('=== PREPARE: read exact current production Worker source/settings only ===');
+            run('npm', ['run', 'cf:prepare'], { cwd: WORKER_DIR });
+            const baseConfig = JSON.parse(readFileSync(join(REMOTE_DIR, 'wrangler.jsonc'), 'utf8'));
+            const liveSource = readFileSync(join(REMOTE_DIR, 'worker.js'), 'utf8');
+            if (liveSource.includes('Git bootstrap placeholder') || !liveSource.includes('handleFollowState')) throw new Error('Prepared production source is not the expected Explore runtime.');
+            const prodDb = (baseConfig.d1_databases || []).find((x) => x.binding === 'DB');
+            const prodR2 = (baseConfig.r2_buckets || []).find((x) => x.binding === 'PROFILE_MEDIA');
+            if (!prodDb || prodDb.database_id !== PROD.dbId) throw new Error('Production D1 binding changed unexpectedly.');
+            if (!prodR2 || prodR2.bucket_name !== PROD.r2) throw new Error('Production R2 binding changed unexpectedly.');
+
+            console.log('=== VERIFY/CREATE isolated R2 buckets only ===');
+            for (const target of TARGETS) {
+              if (target.dbId === PROD.dbId || target.r2 === PROD.r2) throw new Error(target.env + ' target accidentally equals production resource.');
+              let info = wrangler(['r2', 'bucket', 'info', target.r2], { quiet: true, allowFailure: true });
+              if (!info.ok) {
+                console.log(target.env.toUpperCase() + '_R2_CREATE_REQUIRED=true');
+                wrangler(['r2', 'bucket', 'create', target.r2]);
+                info = wrangler(['r2', 'bucket', 'info', target.r2], { quiet: true });
+              }
+              console.log(target.env.toUpperCase() + '_R2_READY=' + target.r2);
+            }
+
+            writeFileSync(join(REMOTE_DIR, 'physical-bootstrap.js'), BOOTSTRAP_SOURCE, 'utf8');
+
+            for (const target of TARGETS) {
+              console.log('=== ' + target.env.toUpperCase() + ': bootstrap physical D1/R2 ===');
+              const token = crypto.randomBytes(32).toString('hex');
+              const configPath = join(REMOTE_DIR, 'wrangler.' + target.env + '.physical-final.jsonc');
+              const bootCfg = sanitize(baseConfig, target.worker, './physical-bootstrap.js');
+              bootCfg.d1_databases = [
+                { binding: 'SOURCE_DB', database_name: PROD.dbName, database_id: PROD.dbId },
+                { binding: 'DB', database_name: target.dbName, database_id: target.dbId },
+              ];
+              bootCfg.r2_buckets = [
+                { binding: 'SOURCE_MEDIA', bucket_name: PROD.r2 },
+                { binding: 'PROFILE_MEDIA', bucket_name: target.r2 },
+              ];
+              bootCfg.vars = { ...(baseConfig.vars || {}), ENV_NAME: target.env, PROD_BASE: PROD.base, TARGET_BASE: target.base, BOOTSTRAP_TOKEN: token };
+              writeFileSync(configPath, JSON.stringify(bootCfg, null, 2) + '\n', 'utf8');
+              wrangler(['deploy', '--config', configPath]);
+              const boot = await callBootstrap(target, token);
+              console.log(target.env.toUpperCase() + '_PHYSICAL_BOOTSTRAP=PASS ' + JSON.stringify(boot));
+
+              console.log('=== ' + target.env.toUpperCase() + ': deploy final Explore Worker on isolated resources ===');
+              const finalCfg = sanitize(baseConfig, target.worker, './worker.js');
+              finalCfg.d1_databases = [{ binding: 'DB', database_name: target.dbName, database_id: target.dbId }];
+              finalCfg.r2_buckets = [{ binding: 'PROFILE_MEDIA', bucket_name: target.r2 }];
+              writeFileSync(configPath, JSON.stringify(finalCfg, null, 2) + '\n', 'utf8');
+              wrangler(['deploy', '--config', configPath]);
+              await smoke(target);
+              console.log(target.env.toUpperCase() + '_FINAL_WORKER=PASS');
+            }
+
+            console.log('=== SAFETY: production Worker/runtime unchanged ===');
+            const prodModifiedAfter = await workerModified(PROD.worker);
+            await assertProductionFeed('AFTER');
+            if (prodModifiedAfter !== prodModifiedBefore) throw new Error('Production Worker modified during isolation: before=' + prodModifiedBefore + ' after=' + prodModifiedAfter);
+            console.log('PRODUCTION_WORKER_MODIFIED_AFTER=' + prodModifiedAfter);
+            console.log('PRODUCTION_WORKER_UNCHANGED=true');
+            console.log('PREVIEW_D1_ID=' + TARGETS[0].dbId);
+            console.log('TEST_D1_ID=' + TARGETS[1].dbId);
+            console.log('EXPLORE_PHYSICAL_ENVIRONMENT_ISOLATION_COMPLETE=true');
+          })().catch((error) => {
+            console.error(error && error.stack || error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Verify Firebase Preview frontend is reachable
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS --max-time 30 -o /tmp/preview.html -w '%{http_code}' 'https://preview.soridraw.com/')"
+          test "$code" = '200'
+          echo 'FIREBASE_PREVIEW_FRONTEND=PASS'

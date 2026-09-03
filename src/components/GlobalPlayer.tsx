@@ -9,7 +9,7 @@ import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { auth, db } from '../firebase';
 import { doc, updateDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
-import { ensureDefaultPlaylists, getPlaylistsByType, addPlaylistItem } from '../services/playlistService';
+import { ensureDefaultPlaylists, getPrimaryNormalPlaylist, addPlaylistItem } from '../services/playlistService';
 import { downloadSunoAudioWithRecovery } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
 import SunoTrackDetailModal from './SunoTrackDetailModal';
@@ -744,9 +744,13 @@ export default function GlobalPlayer() {
 
     const group = currentTrack.parent || {};
     try {
-      await ensureDefaultPlaylists(user.uid);
-      const lists = await getPlaylistsByType(user.uid, 'normal');
-      const targetPlaylist = lists.find((p: any) => p?.id && !p?.isFallback) || lists[0];
+      // 1006 — Established users resolve only the one destination playlist.
+      // Default creation remains a one-time fallback for a genuinely empty account.
+      let targetPlaylist = await getPrimaryNormalPlaylist(user.uid);
+      if (!targetPlaylist?.id) {
+        await ensureDefaultPlaylists(user.uid);
+        targetPlaylist = await getPrimaryNormalPlaylist(user.uid);
+      }
 
       if (!targetPlaylist?.id || (targetPlaylist as any).isFallback) {
         alert('저장할 플레이리스트가 없습니다.');
@@ -937,7 +941,7 @@ export default function GlobalPlayer() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="fixed left-1/2 top-16 z-[140] w-[calc(100vw-28px)] max-w-[460px] -translate-x-1/2 rounded-2xl border border-amber-300/20 bg-[#1c1509]/95 px-4 py-3 text-[12px] leading-relaxed text-amber-100/85 shadow-2xl backdrop-blur-xl"
+            className="fixed left-1/2 top-16 z-[250] w-[calc(100vw-28px)] max-w-[460px] -translate-x-1/2 rounded-2xl border border-amber-300/20 bg-[#1c1509]/95 px-4 py-3 text-[12px] leading-relaxed text-amber-100/85 shadow-2xl backdrop-blur-xl"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -958,7 +962,7 @@ export default function GlobalPlayer() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[99] bg-transparent"
+          className="fixed inset-0 z-[235] bg-transparent"
           onClick={() => handleModeChange('collapsed')}
           aria-hidden="true"
         />
@@ -976,7 +980,7 @@ export default function GlobalPlayer() {
           x: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.x) : (isMiniPlayerDocked && isCompactPlayer ? 0 : (isSharedPlayerMode || isCompactPlayer ? '-50%' : 0)),
           y: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.y) : 0
         }}
-        className={`fixed z-[100] flex flex-col ${
+        className={`fixed z-[240] flex flex-col ${
           mode === 'expanded'
             ? isMobile
               ? 'top-1/2 left-1/2 w-[calc(100vw-28px)] max-w-[400px]'

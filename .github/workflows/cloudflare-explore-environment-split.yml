@@ -1,0 +1,53 @@
+name: Cloudflare Explore Environment Split
+
+# Final target: PREVIEW/TEST each use their own physical Worker + D1 + R2.
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/cloudflare-explore-env-split.mjs'
+      - '.github/workflows/cloudflare-explore-environment-split.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-explore-environment-split
+  cancel-in-progress: false
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout exact preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Split Explore PREVIEW TEST PRODUCTION safely
+        run: node .deploy/cloudflare-explore-env-split.mjs
+
+      - name: Final source safety check
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'soridraw-explore-preview.andrawing1212.workers.dev' src/config/exploreEnvironment.ts
+          grep -Fq 'soridraw-explore-test.andrawing1212.workers.dev' src/config/exploreEnvironment.ts
+          grep -Fq 'soridraw-explore-api.andrawing1212.workers.dev' src/config/exploreEnvironment.ts
+          echo 'MAIN_UNCHANGED_BY_SPLIT=true'
+          echo 'NO_PRODUCTION_WORKER_DEPLOY=true'
+          echo 'NO_PRODUCTION_D1_WRITE=true'
+          echo 'NO_PRODUCTION_R2_WRITE=true'

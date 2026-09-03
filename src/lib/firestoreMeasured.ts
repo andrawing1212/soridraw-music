@@ -117,6 +117,9 @@ const snapshotFingerprint = (snapshot: any): string => {
 type ListenerState = { seenServer: boolean; fingerprint: string; source: string };
 
 const recordListenerSnapshot = (snapshot: any, state: ListenerState) => {
+  if (snapshot?.metadata?.hasPendingWrites === true) {
+    return;
+  }
   if (snapshot?.metadata?.fromCache === true) {
     markFirestoreActualCacheHit(1);
     return;

@@ -248,7 +248,7 @@ jobs:
 
           explore_status="$(curl -sS -o "$RUNNER_TEMP/explore-cors.txt" -w '%{http_code}' \
             -H 'Origin: https://preview.soridraw.com' \
-            'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1' || true)"
+            'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1' || true)"
           echo "[Custom Preview] Explore feed HTTP: ${explore_status:-network-error}"
           if [ -f "$RUNNER_TEMP/explore-cors.txt" ]; then head -c 400 "$RUNNER_TEMP/explore-cors.txt" || true; echo; fi
 
@@ -271,4 +271,4 @@ jobs:
           echo "App Check policy inspection: ${RECAPTCHA_POLICY_STATUS:-not-run}"
           echo 'No Functions deploy, Firestore/Database Rules update, user-data migration, main change, or production Hosting release was performed.'
 
-# Manual preview redeploy trigger: 2026-08-30T19:29Z
+# Manual preview redeploy trigger: 2026-08-31T11:25Z

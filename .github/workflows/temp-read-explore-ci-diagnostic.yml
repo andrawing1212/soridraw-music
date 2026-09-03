@@ -1,0 +1,36 @@
+name: Temp Read Explore CI Diagnostic
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-read-explore-ci-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read Explore endpoints
+        shell: bash
+        run: |
+          set -u
+          check() {
+            label="$1"
+            origin="$2"
+            url="$3"
+            body="/tmp/${label}.json"
+            code="$(curl -sS --max-time 20 -o "$body" -w '%{http_code}' ${origin:+-H "Origin: $origin"} "$url" || true)"
+            echo "=== $label ==="
+            echo "HTTP=$code"
+            cat "$body" 2>/dev/null || true
+            echo
+          }
+          check diagnostic '' 'https://soridraw-explore-ci-diagnostic.andrawing1212.workers.dev/'
+          check preview 'https://preview.soridraw.com' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1'
+          check test 'https://test.soridraw.com' 'https://soridraw-explore-test.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1'
+          check production 'https://soridraw.com' 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1'

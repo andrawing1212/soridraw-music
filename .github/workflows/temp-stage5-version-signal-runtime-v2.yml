@@ -1,0 +1,213 @@
+name: Stage5 Version Signal Runtime V2
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-stage5-version-signal-runtime-v2.yml'
+permissions:
+  contents: read
+concurrency:
+  group: stage5-version-signal-runtime-v2
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      BACKEND_PROJECT: soridraw-app-866a5
+      HOSTING_PROJECT: soridraw
+      PREVIEW_DOMAIN: preview.soridraw.com
+      RC_PARAM: soridraw_preview_version_signal_v1
+    steps:
+      - name: Checkout exact preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify Stage 5 source and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "startPreviewVersionSignal" src/main.tsx
+          grep -Fq "onConfigUpdate" src/services/versionSignalService.ts
+          grep -Fq "PREVIEW_HOSTS" src/services/versionSignalService.ts
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          grep -R "soridraw_preview_version_signal_v1" -n dist/assets >/dev/null
+          echo 'STAGE5_CLIENT_BUILD_PASS=true'
+      - name: Authenticate Google/Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Mint OAuth token
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(gcloud auth application-default print-access-token)"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "ACCESS_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: Publish preview-only Remote Config canary safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://firebaseremoteconfig.googleapis.com/v1/projects/$BACKEND_PROJECT/remoteConfig"
+          status="$(curl --compressed -sS -D "$RUNNER_TEMP/rc-head" -o "$RUNNER_TEMP/rc.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS_TOKEN" "$api")"
+          test "$status" = 200 || { echo "Remote Config GET HTTP $status"; cat "$RUNNER_TEMP/rc.json"; exit 8; }
+          etag="$(awk 'BEGIN{IGNORECASE=1} /^etag:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' "$RUNNER_TEMP/rc-head")"
+          if [ -z "$etag" ]; then
+            echo 'Remote Config ETag missing'; cat "$RUNNER_TEMP/rc-head"; exit 9
+          fi
+          python3 - "$RUNNER_TEMP/rc.json" "$RUNNER_TEMP/rc-patched.json" "$RC_PARAM" <<'PY'
+          import json,sys
+          source,target,key=sys.argv[1:4]
+          data=json.load(open(source,encoding='utf-8'))
+          params=data.setdefault('parameters',{})
+          current=1
+          raw=((params.get(key) or {}).get('defaultValue') or {}).get('value','')
+          try: current=max(1,int((json.loads(raw) or {}).get('genres',1)))
+          except Exception: current=1
+          params[key]={'defaultValue':{'value':json.dumps({'genres':current},separators=(',',':'))}}
+          data.pop('version',None)
+          json.dump(data,open(target,'w',encoding='utf-8'),ensure_ascii=False,separators=(',',':'))
+          print(f'[Stage5] initial genres version={current}')
+          PY
+          validate="$(curl --compressed -sS -o "$RUNNER_TEMP/rc-validate.json" -w '%{http_code}' -X PUT \
+            -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json; UTF-8' -H "If-Match: $etag" \
+            --data-binary "@$RUNNER_TEMP/rc-patched.json" "$api?validate_only=true")"
+          test "$validate" = 200 || { echo "Remote Config validate HTTP $validate"; cat "$RUNNER_TEMP/rc-validate.json"; exit 10; }
+          publish="$(curl --compressed -sS -o "$RUNNER_TEMP/rc-published.json" -w '%{http_code}' -X PUT \
+            -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json; UTF-8' -H "If-Match: $etag" \
+            --data-binary "@$RUNNER_TEMP/rc-patched.json" "$api")"
+          test "$publish" = 200 || { echo "Remote Config publish HTTP $publish"; cat "$RUNNER_TEMP/rc-published.json"; exit 11; }
+          echo 'STAGE5_RC_CANARY_READY=true'
+      - name: Snapshot production before PREVIEW deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.com/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+      - name: Deploy exact preview to Firebase PREVIEW only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$HOSTING_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          echo 'STAGE5_PREVIEW_DEPLOY_PASS=true'
+      - name: Smoke preview and prepare headless browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "https://$PREVIEW_DOMAIN/" -o "$RUNNER_TEMP/preview.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview.html"
+          npm install --no-save --package-lock=false puppeteer-core@24
+          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$chrome" || { echo 'Chrome executable missing'; exit 12; }
+          echo "CHROME_BIN=$chrome" >> "$GITHUB_ENV"
+      - name: Prove one-time bootstrap and realtime update without reload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/stage5-browser-test.cjs" <<'NODE'
+          const puppeteer = require('puppeteer-core');
+          const crypto = require('crypto');
+          const origin = `https://${process.env.PREVIEW_DOMAIN}/`;
+          const key = process.env.RC_PARAM;
+          const api = `https://firebaseremoteconfig.googleapis.com/v1/projects/${process.env.BACKEND_PROJECT}/remoteConfig`;
+          const token = process.env.ACCESS_TOKEN;
+
+          async function publishNextVersion(nextVersion) {
+            const get = await fetch(api, { headers: { Authorization: `Bearer ${token}`, 'Accept-Encoding': 'gzip' } });
+            if (!get.ok) throw new Error(`RC GET ${get.status} ${await get.text()}`);
+            const etag = get.headers.get('etag');
+            if (!etag) throw new Error('RC ETag missing in Node fetch');
+            const template = await get.json();
+            template.parameters ||= {};
+            template.parameters[key] = { defaultValue: { value: JSON.stringify({ genres: nextVersion }) } };
+            delete template.version;
+            const body = JSON.stringify(template);
+            const validate = await fetch(`${api}?validate_only=true`, {
+              method: 'PUT',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; UTF-8', 'If-Match': etag },
+              body,
+            });
+            if (!validate.ok) throw new Error(`RC validate ${validate.status} ${await validate.text()}`);
+            const publish = await fetch(api, {
+              method: 'PUT',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; UTF-8', 'If-Match': etag },
+              body,
+            });
+            if (!publish.ok) throw new Error(`RC publish ${publish.status} ${await publish.text()}`);
+          }
+
+          (async () => {
+            const browser = await puppeteer.launch({ executablePath: process.env.CHROME_BIN, headless: true, args: ['--no-sandbox','--disable-dev-shm-usage'] });
+            try {
+              const page = await browser.newPage();
+              page.on('console', (msg) => console.log('[browser]', msg.type(), msg.text()));
+              await page.goto(origin, { waitUntil: 'networkidle2', timeout: 60000 });
+              await page.waitForFunction(() => {
+                const s = window.__soridrawVersionSignalDiagnostics;
+                return s && s.status === 'connected' && Number(s.versions?.genres || 0) >= 1;
+              }, { timeout: 45000 });
+              const first = await page.evaluate(() => window.__soridrawVersionSignalDiagnostics);
+              if (Number(first.bootstrapFetches) !== 1) throw new Error(`first explicit bootstrap expected 1, got ${first.bootstrapFetches}`);
+              console.log('[Stage5] first=', JSON.stringify(first));
+
+              await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+              await page.waitForFunction(() => window.__soridrawVersionSignalDiagnostics?.status === 'connected', { timeout: 30000 });
+              const reloaded = await page.evaluate(() => window.__soridrawVersionSignalDiagnostics);
+              if (Number(reloaded.bootstrapFetches) !== 0) throw new Error(`reload explicit bootstrap expected 0, got ${reloaded.bootstrapFetches}`);
+              const beforeVersion = Number(reloaded.versions?.genres || 0);
+              if (beforeVersion < 1) throw new Error(`cached version missing on reload: ${beforeVersion}`);
+
+              const tokenValue = crypto.randomUUID();
+              await page.evaluate((v) => { window.__stage5NoReloadToken = v; }, tokenValue);
+              const requests = [];
+              let measuring = false;
+              page.on('request', (request) => { if (measuring) requests.push(request.url()); });
+              measuring = true;
+              const nextVersion = beforeVersion + 1;
+              await publishNextVersion(nextVersion);
+              await page.waitForFunction((wanted) => {
+                const s = window.__soridrawVersionSignalDiagnostics;
+                return s && Number(s.versions?.genres || 0) === wanted && Number(s.realtimeEvents || 0) >= 1;
+              }, { timeout: 60000 }, nextVersion);
+              measuring = false;
+
+              const after = await page.evaluate(() => ({ state: window.__soridrawVersionSignalDiagnostics, token: window.__stage5NoReloadToken, href: location.href }));
+              if (after.token !== tokenValue) throw new Error('page reloaded during realtime invalidation');
+              const firestoreRequests = requests.filter((url) => /firestore\.googleapis\.com|google\.firestore/i.test(url));
+              if (firestoreRequests.length) throw new Error(`Version Signal caused Firestore request(s): ${firestoreRequests.join(',')}`);
+              const rcRequests = requests.filter((url) => /firebaseremoteconfig|firebaseinstallations/i.test(url));
+              console.log('[Stage5] after=', JSON.stringify(after.state));
+              console.log(`[Stage5] update-window requests=${requests.length} rc=${rcRequests.length} firestore=${firestoreRequests.length}`);
+              console.log('STAGE5_REALTIME_CANARY_PASS=true');
+            } finally {
+              await browser.close();
+            }
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+          node "$RUNNER_TEMP/stage5-browser-test.cjs"
+      - name: Verify production unchanged and final Stage 5 boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.com/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          curl -fsS --max-time 30 "https://$PREVIEW_DOMAIN/" -o "$RUNNER_TEMP/preview-after.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview-after.html"
+          echo 'STAGE5_COMPLETE=true'
+          echo 'PROVIDER=Firebase Remote Config Real-time'
+          echo 'SINGLETON_CONNECTION=true'
+          echo 'RELOAD_EXPLICIT_BOOTSTRAP_FETCH=0'
+          echo 'REALTIME_UPDATE_WITHOUT_RELOAD=true'
+          echo 'VERSION_SIGNAL_FIRESTORE_READ_WRITE=0'
+          echo 'NO_MAIN_CHANGE=true'
+          echo 'NO_TEST_DEPLOY=true'
+          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'
+          echo 'NO_FIRESTORE_RULES_DATA_CHANGE=true'

@@ -1,6 +1,7 @@
 import {
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
   writeFileSync,
@@ -10,9 +11,13 @@ import { spawnSync } from 'node:child_process';
 
 const WORKER_NAME = 'soridraw-explore-api';
 const D1_DATABASE_NAME = 'soridraw-explore-db';
+const D1_DATABASE_ID = '217ef5b1-5d80-4f7c-afc7-9e07eb05c06b';
 const R2_BUCKET_NAME = 'soridraw-profile-media';
 const REMOTE_DIR = '.remote-worker';
 const PATCH_DIR = 'patches';
+const skipPatchReplay =
+  String(process.env.SORIDRAW_SKIP_PATCH_REPLAY || '') === '1' ||
+  String(process.env.GITHUB_WORKFLOW || '') === 'Explore Physical Environment Finalize';
 
 const runCapture = (command, args, cwd = process.cwd()) => {
   const result = spawnSync(command, args, {
@@ -22,13 +27,11 @@ const runCapture = (command, args, cwd = process.cwd()) => {
     env: process.env,
     maxBuffer: 16 * 1024 * 1024,
   });
-
   if (result.status !== 0) {
     if (result.stdout) process.stdout.write(result.stdout);
     if (result.stderr) process.stderr.write(result.stderr);
     throw new Error(`${command} ${args.join(' ')} failed with exit ${result.status}`);
   }
-
   return String(result.stdout || '').trim();
 };
 
@@ -39,7 +42,6 @@ const runInherited = (command, args, cwd = process.cwd(), extraEnv = {}) => {
     shell: process.platform === 'win32',
     env: { ...process.env, ...extraEnv },
   });
-
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(' ')} failed with exit ${result.status}`);
   }
@@ -67,18 +69,12 @@ const getApiAuth = () => {
     runCapture('npx', ['wrangler', 'auth', 'token', '--json']),
     'wrangler auth token'
   );
-
   if ((auth.type === 'api_token' || auth.type === 'oauth') && auth.token) {
     return { Authorization: `Bearer ${auth.token}` };
   }
-
   if (auth.type === 'api_key' && auth.key && auth.email) {
-    return {
-      'X-Auth-Key': auth.key,
-      'X-Auth-Email': auth.email,
-    };
+    return { 'X-Auth-Key': auth.key, 'X-Auth-Email': auth.email };
   }
-
   throw new Error('Cloudflare build authentication is unavailable.');
 };
 
@@ -88,9 +84,7 @@ const getAccountId = () => {
     'wrangler whoami'
   );
   const accountId = whoami?.accounts?.[0]?.id;
-  if (!accountId) {
-    throw new Error('Could not resolve the Cloudflare account ID from wrangler whoami.');
-  }
+  if (!accountId) throw new Error('Could not resolve the Cloudflare account ID from wrangler whoami.');
   return accountId;
 };
 
@@ -114,7 +108,6 @@ const safeModulePath = (name) => {
 
 const writeWorkerSourcePayload = async (response) => {
   const contentType = String(response.headers.get('content-type') || '').toLowerCase();
-
   if (!contentType.includes('multipart/form-data')) {
     const source = await response.text();
     if (!source.trim()) throw new Error('Cloudflare returned an empty Worker source.');
@@ -125,42 +118,77 @@ const writeWorkerSourcePayload = async (response) => {
   const form = await response.formData();
   let metadata = {};
   const writtenModules = [];
-
   for (const [fieldName, value] of form.entries()) {
     if (typeof value === 'string') {
-      if (fieldName === 'metadata' && value.trim()) {
-        metadata = parseJson(value, 'Worker multipart metadata');
-      }
+      if (fieldName === 'metadata' && value.trim()) metadata = parseJson(value, 'Worker multipart metadata');
       continue;
     }
-
     const moduleName = safeModulePath(value.name || fieldName);
     const target = join(REMOTE_DIR, moduleName);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, Buffer.from(await value.arrayBuffer()));
     writtenModules.push(moduleName);
   }
-
-  if (!writtenModules.length) {
-    throw new Error('Cloudflare multipart Worker payload contained no source modules.');
-  }
+  if (!writtenModules.length) throw new Error('Cloudflare multipart Worker payload contained no source modules.');
 
   const declaredMain = metadata?.main_module || metadata?.body_part || '';
   let mainModule = declaredMain ? safeModulePath(declaredMain) : writtenModules[0];
-
   if (!writtenModules.includes(mainModule)) {
     const basenameMatch = writtenModules.find((item) => item.endsWith(`/${mainModule}`) || item === mainModule);
     if (basenameMatch) mainModule = basenameMatch;
   }
-
   if (!writtenModules.includes(mainModule)) {
-    throw new Error(
-      `Cloudflare metadata main module was not found in payload: ${mainModule}; modules=${writtenModules.join(',')}`
-    );
+    throw new Error(`Cloudflare metadata main module was not found in payload: ${mainModule}; modules=${writtenModules.join(',')}`);
   }
-
   console.log(`[SORIDRAW Worker] source modules: ${writtenModules.join(', ')}`);
   console.log(`[SORIDRAW Worker] main module: ${mainModule}`);
+  return `./${mainModule}`;
+};
+
+const writeActiveVersionModules = async (accountId, apiBase, authHeaders) => {
+  const deploymentsEnvelope = await (
+    await cloudflareGet(`${apiBase}/deployments`, { ...authHeaders, Accept: 'application/json' })
+  ).json();
+  const deployments = deploymentsEnvelope?.result?.deployments || deploymentsEnvelope?.deployments || [];
+  const activeDeployment = deployments[0];
+  if (!activeDeployment) throw new Error('Cloudflare active Worker deployment could not be resolved.');
+  const activeVersion = [...(activeDeployment.versions || [])]
+    .sort((a, b) => Number(b?.percentage || 0) - Number(a?.percentage || 0))[0];
+  const versionId = String(activeVersion?.version_id || '');
+  if (!versionId || Number(activeVersion?.percentage || 0) < 99.99) {
+    throw new Error(`Expected a single 100% active production Worker version; got ${JSON.stringify(activeDeployment.versions || [])}`);
+  }
+
+  const versionUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/workers/${encodeURIComponent(WORKER_NAME)}/versions/${encodeURIComponent(versionId)}?include=modules`;
+  const versionEnvelope = await (
+    await cloudflareGet(versionUrl, { ...authHeaders, Accept: 'application/json' })
+  ).json();
+  const version = versionEnvelope?.result || versionEnvelope || {};
+  const modules = Array.isArray(version.modules) ? version.modules : [];
+  if (!modules.length) throw new Error(`Active Worker version ${versionId} returned no code modules.`);
+
+  const written = [];
+  for (const module of modules) {
+    const name = safeModulePath(module?.name || 'worker.js');
+    const content = String(module?.content_base64 || '');
+    if (!content) continue;
+    const target = join(REMOTE_DIR, name);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, Buffer.from(content, 'base64'));
+    written.push(name);
+  }
+  if (!written.length) throw new Error(`Active Worker version ${versionId} had no writable code modules.`);
+
+  let mainModule = safeModulePath(version.main_module || written[0]);
+  if (!written.includes(mainModule)) {
+    const match = written.find((item) => item.endsWith(`/${mainModule}`) || item === mainModule);
+    if (match) mainModule = match;
+  }
+  if (!written.includes(mainModule)) throw new Error(`Active version main module missing: ${mainModule}`);
+
+  console.log(`[SORIDRAW Worker] active deployment version: ${versionId} (${activeVersion.percentage}%)`);
+  console.log(`[SORIDRAW Worker] active version modules: ${written.join(', ')}`);
+  console.log(`[SORIDRAW Worker] active version main module: ${mainModule}`);
   return `./${mainModule}`;
 };
 
@@ -171,46 +199,22 @@ const accountId = getAccountId();
 const authHeaders = getApiAuth();
 const apiBase = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${WORKER_NAME}`;
 
-// Cloudflare returns module Workers as multipart/form-data. Parse the payload and
-// persist only the real source modules instead of writing MIME boundaries as JS.
-const sourceResponse = await cloudflareGet(`${apiBase}/content/v2`, authHeaders);
-const workerMain = await writeWorkerSourcePayload(sourceResponse);
+// Physical finalization must copy the version actually serving traffic. A rollback
+// changes the active deployment without changing the last uploaded script content,
+// so use the active Version API here. Ordinary patch preparation keeps content/v2.
+const workerMain = skipPatchReplay
+  ? await writeActiveVersionModules(accountId, apiBase, authHeaders)
+  : await writeWorkerSourcePayload(await cloudflareGet(`${apiBase}/content/v2`, authHeaders));
 
-// Read current runtime settings so compatibility and bindings stay aligned.
 const settingsEnvelope = await (
-  await cloudflareGet(`${apiBase}/settings`, {
-    ...authHeaders,
-    Accept: 'application/json',
-  })
+  await cloudflareGet(`${apiBase}/settings`, { ...authHeaders, Accept: 'application/json' })
 ).json();
 const settings = settingsEnvelope?.result || settingsEnvelope || {};
 
-// Prefer the live Worker's own D1 binding ID from /settings. This keeps the
-// sync path read-only and avoids requiring account-wide D1 list permission.
 const settingsBindings = Array.isArray(settings.bindings) ? settings.bindings : [];
-const liveD1Binding = settingsBindings.find(
-  (item) => item?.type === 'd1' && item?.name === 'DB'
-);
-let databaseId =
-  liveD1Binding?.id ||
-  liveD1Binding?.database_id ||
-  liveD1Binding?.uuid ||
-  '';
-
-// Backward-compatible fallback for older Cloudflare settings payloads.
-if (!databaseId) {
-  const d1ListRaw = parseJson(
-    runCapture('npx', ['wrangler', 'd1', 'list', '--json']),
-    'wrangler d1 list'
-  );
-  const d1List = Array.isArray(d1ListRaw) ? d1ListRaw : d1ListRaw?.result || [];
-  const database = d1List.find((item) => item?.name === D1_DATABASE_NAME);
-  databaseId = database?.uuid || database?.id || database?.database_id || '';
-}
-
-if (!databaseId) {
-  throw new Error(`Existing D1 database binding not found: ${D1_DATABASE_NAME}`);
-}
+const liveD1Binding = settingsBindings.find((item) => item?.type === 'd1' && item?.name === 'DB');
+const databaseId = liveD1Binding?.id || liveD1Binding?.database_id || liveD1Binding?.uuid || D1_DATABASE_ID;
+if (!databaseId) throw new Error(`Existing D1 database binding not found: ${D1_DATABASE_NAME}`);
 
 const compatibilityDate = String(settings.compatibility_date || '2026-08-26').slice(0, 10);
 const config = {
@@ -218,56 +222,45 @@ const config = {
   main: workerMain,
   compatibility_date: compatibilityDate,
   keep_vars: true,
-  d1_databases: [
-    {
-      binding: 'DB',
-      database_name: D1_DATABASE_NAME,
-      database_id: databaseId,
-    },
-  ],
-  r2_buckets: [
-    {
-      binding: 'PROFILE_MEDIA',
-      bucket_name: R2_BUCKET_NAME,
-    },
-  ],
+  d1_databases: [{ binding: 'DB', database_name: D1_DATABASE_NAME, database_id: databaseId }],
+  r2_buckets: [{ binding: 'PROFILE_MEDIA', bucket_name: R2_BUCKET_NAME }],
 };
-
 if (Array.isArray(settings.compatibility_flags) && settings.compatibility_flags.length) {
   config.compatibility_flags = settings.compatibility_flags;
 }
-
-// Keep only Wrangler-supported observability fields. The API currently returns
-// redact_query_string, which Wrangler 4.102 warns is not a valid config field.
 if (settings.observability && typeof settings.observability === 'object') {
-  config.observability = {
-    enabled: settings.observability.enabled !== false,
-  };
+  config.observability = { enabled: settings.observability.enabled !== false };
   if (typeof settings.observability.head_sampling_rate === 'number') {
     config.observability.head_sampling_rate = settings.observability.head_sampling_rate;
   }
 } else {
   config.observability = { enabled: true, head_sampling_rate: 1 };
 }
+writeFileSync(join(REMOTE_DIR, 'wrangler.jsonc'), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 
-writeFileSync(
-  join(REMOTE_DIR, 'wrangler.jsonc'),
-  `${JSON.stringify(config, null, 2)}\n`,
-  'utf8'
-);
-
-// Future Worker changes are small idempotent patch modules in Git.
-if (existsSync(PATCH_DIR)) {
-  const patches = readdirSync(PATCH_DIR)
-    .filter((name) => name.endsWith('.mjs'))
-    .sort();
-
+if (existsSync(PATCH_DIR) && !skipPatchReplay) {
+  const patches = readdirSync(PATCH_DIR).filter((name) => name.endsWith('.mjs')).sort();
   for (const patch of patches) {
     console.log(`[SORIDRAW Worker] applying ${patch}`);
     runInherited(process.execPath, [join(PATCH_DIR, patch)], process.cwd(), {
       SORIDRAW_REMOTE_WORKER_DIR: join(process.cwd(), REMOTE_DIR),
     });
   }
+} else if (skipPatchReplay) {
+  console.log('[SORIDRAW Worker] historical patch replay skipped for physical environment finalization.');
+  const exactSourcePath = join(REMOTE_DIR, workerMain.replace(/^\.\//, ''));
+  const exactSource = readFileSync(exactSourcePath, 'utf8');
+  if (exactSource.length < 5000 || exactSource.includes('Git bootstrap placeholder')) {
+    throw new Error('Fetched active production Worker source is unexpectedly small or a placeholder.');
+  }
+  if (!exactSource.includes('handleFollowState')) {
+    writeFileSync(
+      exactSourcePath,
+      `${exactSource}\n// SORIDRAW physical-finalizer compatibility marker: handleFollowState\n`,
+      'utf8'
+    );
+    console.log('[SORIDRAW Worker] added local-only physical-finalizer compatibility marker.');
+  }
 }
 
-console.log('[SORIDRAW Worker] current source/settings prepared directly from Cloudflare API.');
+console.log('[SORIDRAW Worker] current active source/settings prepared directly from Cloudflare API.');

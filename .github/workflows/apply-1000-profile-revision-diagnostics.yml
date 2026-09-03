@@ -1,0 +1,79 @@
+name: Apply Profile Revision Diagnostics 1000
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-1000-profile-revision-diagnostics.py'
+      - '.github/workflows/apply-1000-profile-revision-diagnostics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-profile-revision-diagnostics-1000
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Apply deterministic large-file edits
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .deploy/apply-1000-profile-revision-diagnostics.py
+          grep -Fq 'SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000' src/pages/ExplorePage.tsx
+          grep -Fq 'SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000' src/components/CacheDiagnosticsOverlay.tsx
+          grep -Fq 'getExplorePublicProfileFirstView(profileUid, {' src/pages/ExplorePage.tsx
+          grep -Fq "readCacheDiagnosticsEnabled(auth.currentUser?.uid)" src/components/CacheDiagnosticsOverlay.tsx
+          grep -Fq "hasAdminPermission(readUserProfileCache(currentUid), 'appSettings')" src/components/CacheDiagnosticsOverlay.tsx
+          if grep -Fq 'CLOUD_REFRESH_MS' src/components/CacheDiagnosticsOverlay.tsx; then
+            echo 'Automatic Cloud diagnostics polling unexpectedly remains.'
+            exit 1
+          fi
+          echo 'PROFILE_REVISION_DIAGNOSTICS_SOURCE=PASS'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify patch scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only | sort)"
+          printf '%s\n' "$changed"
+          expected=$'src/components/CacheDiagnosticsOverlay.tsx\nsrc/pages/ExplorePage.tsx'
+          test "$changed" = "$expected"
+
+      - name: Commit source changes to preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/CacheDiagnosticsOverlay.tsx src/pages/ExplorePage.tsx
+          git commit -m 'feat(preview): add profile revision cache diagnostics'
+          git push origin HEAD:preview
+          echo 'PROFILE_REVISION_DIAGNOSTICS_COMMIT=PASS'

@@ -34,6 +34,9 @@ SORIDRAW의 모든 데이터 기능은 **사용자 수와 데이터량이 커져
 
 - 작은 상태/메타는 영구 저장소를 사용하고, 큰 데이터는 IndexedDB 중심으로 유지한다.
 - 앱 코드 업데이트만으로 정상 캐시를 지우지 않는다. `schemaVersion`이 실제로 호환되지 않을 때만 해당 캐시를 재구축한다.
+- `schemaVersion` 변경은 가능한 한 기존 IndexedDB 캐시를 **로컬에서 in-place 마이그레이션**한다. schema 변경을 이유로 수천/수만 건 서버 전체 재조회하는 방식을 금지한다.
+- 로컬 변환이 불가능해 캐시를 다시 만들어야 해도 최초 화면에 필요한 **고정 크기 묶음(기본 10~40건)**만 bootstrap하고, 나머지는 사용자가 실제로 요청한 다음 page/cursor만 추가한다.
+- 새 도메인/새 브라우저/브라우저 저장소 삭제도 동일하다. 캐시가 없다는 이유만으로 개인 전체 컬렉션을 sweep하지 않는다.
 - 로그아웃 시에도 공개 공용 캐시는 유지할 수 있으며, UID 데이터는 계정별로 분리해 다른 사용자에게 절대 노출하지 않는다.
 - 브라우저/OS가 저장공간을 강제로 지우는 상황까지 100% 막을 수는 없다. 이 경우에도 서버 원본 전체 DB를 직접 훑지 않고 **Edge에 캐시된 snapshot/manifest 또는 최소 bootstrap endpoint**에서 복구하는 구조를 우선한다.
 - 복구 후 즉시 영구 캐시를 다시 만들고 이후에는 Delta Sync로 복귀한다.
@@ -127,4 +130,17 @@ SORIDRAW 데이터 구조의 장기 목표는 다음과 같다.
 
 ## 현재 단계
 
-2026-08-31 기준: **1~3단계 구현/프리뷰 배포 완료. 실제 사용자 검증 후 4단계 Firebase 이전 안정화로 복귀하며, 이후 5~8단계를 순서대로 진행한다.**
+2026-08-31 기준: **1~4단계 완료, 5단계 진행 중.**
+
+- 1단계: Explore 30초 전체 재조회 제거 및 재진입 검증 완료.
+- 2단계: Explore/좋아요/Music Note 공개상태 영구 캐시 및 앱 재실행 후 서버 재조회 0 검증 완료.
+- 3단계: 공통 Cache Envelope/version 기반 적용 완료.
+- 4단계: Firebase 도메인 이전 안정화 완료.
+  - PREVIEW: `preview.soridraw.com` 정상.
+  - TEST: `main → soridraw-test → test.soridraw.com` 빌드/배포/HTTPS/Hosting parity/Auth/Functions/Explore CORS 검증 완료.
+  - PRODUCTION: `soridraw.com → soridraw` 및 `www.soridraw.com → soridraw.com` 연결/HTTPS/현재 Production Hosting parity/Auth/Functions/Explore CORS 검증 완료. 새 Production 앱 코드 배포는 수행하지 않음.
+- 5단계 선행 비용 가드: 새 도메인/캐시 손실 시 Library가 `suno_tracks` 전체를 읽던 cold bootstrap 경로를 발견해 최초 10곡 고정 묶음 + cursor 방식으로 변경했다. 페이지 진입만으로 stale 곡마다 Function 호출/Firestore 쓰기를 반복하던 자동 복구도 제거하고 명시적 상태 확인 경로만 유지한다.
+- 5단계 Version Signal 클라이언트: PREVIEW 전용 Firebase Remote Config real-time singleton 클라이언트를 구현하고 Firebase PREVIEW에 배포했다. 앱 전체에서 연결 1개만 사용하며 TEST/PRODUCTION에서는 비활성화한다.
+- 5단계 현재 게이트: CI 서비스계정은 Remote Config 템플릿 조회는 가능하지만 `UPDATE_TEMPLATE` 권한이 없어 canary 파라미터 publish가 403으로 차단됐다. IAM 권한은 임의 확대하지 않았으며, canary publish 후 실제 무새로고침 실시간 버전 변경 검증을 완료해야 5단계를 COMPLETE 처리한다.
+
+**다음 고정 작업은 5단계 Remote Config canary publish 및 실시간 변경 검증 완료이며, 성공한 방식만 6단계 Delta Sync 공통 엔진으로 승격한다.**

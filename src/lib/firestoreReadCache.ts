@@ -4,10 +4,11 @@ export const FIRESTORE_READ_CACHE_KEYS = {
   sectionTags: 'soridraw_firestore_cache_section_tags_v1',
 } as const;
 
+// Shared configuration caches are mutation/version driven. App restart or elapsed time must not create paid reads.
 export const FIRESTORE_READ_CACHE_TTL_MS = {
-  navigationVisibility: 6 * 60 * 60 * 1000,
-  lyricClicheGuard: 6 * 60 * 60 * 1000,
-  sectionTags: 12 * 60 * 60 * 1000,
+  navigationVisibility: Number.POSITIVE_INFINITY,
+  lyricClicheGuard: Number.POSITIVE_INFINITY,
+  sectionTags: Number.POSITIVE_INFINITY,
 } as const;
 
 type CacheEnvelope<T> = {

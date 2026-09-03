@@ -31,6 +31,7 @@ import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 import SunoApiSettingsPanel from '../components/SunoApiSettingsPanel';
 import { readGeminiAutoModelFallback, writeGeminiAutoModelFallback } from '../services/geminiModelPreferences';
 import { USER_PROFILE_CACHE_EVENT, isUserProfileCacheStorageKey, readUserProfileCache } from '../lib/userProfileCache';
+import { MENU_HELP_TIPS_STORAGE_KEY, readMenuHelpTipsEnabled, writeMenuHelpTipsEnabled } from '../lib/menuHelpPreference';
 
 type FeatureState = boolean | 'partial';
 type FeatureKey =
@@ -266,6 +267,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  const [autoModelFallback, setAutoModelFallback] = useState(() => readGeminiAutoModelFallback(auth.currentUser?.uid));
  const [isSavingAutoModelFallback, setIsSavingAutoModelFallback] = useState(false);
  const [autoModelFallbackMessage, setAutoModelFallbackMessage] = useState<string | null>(null);
+ const [menuHelpTipsEnabled, setMenuHelpTipsEnabled] = useState(() => readMenuHelpTipsEnabled());
 
  useEffect(() => {
  const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -314,6 +316,14 @@ export default function MyPage({ onLogout }: MyPageProps) {
  setAutoModelFallback(nextValue);
  writeGeminiAutoModelFallback(nextValue, user.uid);
  }, [profile, user?.uid]);
+
+ useEffect(() => {
+ const handleMenuHelpStorage = (event: StorageEvent) => {
+ if (event.key === MENU_HELP_TIPS_STORAGE_KEY) setMenuHelpTipsEnabled(readMenuHelpTipsEnabled());
+ };
+ window.addEventListener('storage', handleMenuHelpStorage);
+ return () => window.removeEventListener('storage', handleMenuHelpStorage);
+ }, []);
 
  useEffect(() => {
  const refreshStatus = () => {
@@ -467,6 +477,12 @@ export default function MyPage({ onLogout }: MyPageProps) {
  setIsSavingAutoModelFallback(false);
  }
  }, [autoModelFallback, isSavingAutoModelFallback, user?.uid]);
+
+ const handleToggleMenuHelpTips = useCallback(() => {
+ const nextValue = !menuHelpTipsEnabled;
+ setMenuHelpTipsEnabled(nextValue);
+ writeMenuHelpTipsEnabled(nextValue);
+ }, [menuHelpTipsEnabled]);
 
  const handleLogout = useCallback(async () => {
  await onLogout();
@@ -661,6 +677,27 @@ export default function MyPage({ onLogout }: MyPageProps) {
  >
  <span
  className={`h-6 w-6 rounded-full shadow-sm transition-transform ${autoModelFallback ? 'translate-x-6 bg-zinc-950' : 'translate-x-0 bg-zinc-300'}`}
+ />
+ </button>
+ </div>
+
+ <div className="mt-6 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+ <div className="max-w-3xl">
+ <h3 className="text-sm font-black text-zinc-100">메뉴 설명 팁</h3>
+ <p className="mt-1 text-sm leading-relaxed text-white/56">
+ Studio의 메뉴 제목과 버튼 설명 팁을 표시합니다. 필요하지 않으면 꺼서 마우스 이동 시 도움말 팝업을 만들지 않습니다.
+ </p>
+ </div>
+ <button
+ type="button"
+ role="switch"
+ aria-checked={menuHelpTipsEnabled}
+ aria-label="메뉴 설명 팁"
+ onClick={handleToggleMenuHelpTips}
+ className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition-colors ${menuHelpTipsEnabled ? 'bg-zinc-100' : 'bg-white/[0.10]'}`}
+ >
+ <span
+ className={`h-6 w-6 rounded-full shadow-sm transition-transform ${menuHelpTipsEnabled ? 'translate-x-6 bg-zinc-950' : 'translate-x-0 bg-zinc-300'}`}
  />
  </button>
  </div>

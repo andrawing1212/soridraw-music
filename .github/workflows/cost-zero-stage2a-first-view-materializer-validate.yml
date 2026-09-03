@@ -1,0 +1,66 @@
+name: Cost Zero Stage 2A First View Materializer Validate
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'cloudflare/explore-worker/patches/004-cost-zero-profile-first-view-materializer.mjs'
+      - '.github/workflows/cost-zero-stage2a-first-view-materializer-validate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prepare exact live Worker plus materializer patch
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false
+          npm run cf:prepare
+          node --check .remote-worker/worker.js
+      - name: Verify lazy materializer and mutation refresh wiring
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Cloudflare compiles Worker source and strips comments, so runtime
+          # function anchors are the durable validation signal rather than a comment marker.
+          grep -Fq 'materializePublicProfileFirstView' .remote-worker/worker.js
+          grep -Fq 'ensurePublicProfileFirstViewTable' .remote-worker/worker.js
+          grep -Fq 'handlePublicProfileFirstViewWithEdgeCache' .remote-worker/worker.js
+          grep -Fq 'refreshPublicProfileFirstViewTrackWindow' .remote-worker/worker.js
+          grep -Fq 'patchPublicProfileFirstViewLikeCount' .remote-worker/worker.js
+          grep -Fq 'invalidatePublicProfileFirstViewEdgeCache' .remote-worker/worker.js
+          node - <<'NODE'
+          const fs=require('fs');
+          const src=fs.readFileSync('.remote-worker/worker.js','utf8');
+          const required=[
+            ['route wrapper', /handlePublicProfileFirstViewWithEdgeCache\(request,\s*decodeURIComponent\(segments\[2\]\),\s*env,\s*cors\)/],
+            ['profile refresh', /refreshPublicProfileFirstViewProfile\(env,\s*authContext\.uid\)/],
+            ['follow target refresh', /refreshPublicProfileFirstViewProfile\(env,\s*targetUid\)/],
+            ['publication window refresh', /refreshPublicProfileFirstViewTrackWindow\(env,\s*authContext\.uid/],
+            ['like patch', /patchPublicProfileFirstViewLikeCount\(env,/],
+          ];
+          for (const [label,re] of required) {
+            if (!re.test(src)) throw new Error('Missing '+label);
+          }
+          console.log('MATERIALIZER_SOURCE_VALIDATION=PASS');
+          NODE
+          echo 'WORKER_DEPLOYED_BY_THIS_WORKFLOW=false'
+          echo 'D1_WRITE_EXECUTED_BY_THIS_WORKFLOW=false'

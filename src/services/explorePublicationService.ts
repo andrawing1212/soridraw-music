@@ -1,3 +1,4 @@
+import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
@@ -8,8 +9,8 @@ import {
   writeSoridrawPersistentCache,
 } from '../lib/soridrawPersistentCache';
 import { invalidateExploreFeedSessionCache } from './exploreSessionCache';
+import { invalidateExplorePublicProfileFirstView } from './exploreProfileFirstViewService';
 
-const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
 const PUBLICATION_PAGE_SIZE = 50;
 const MAX_PUBLICATION_PAGES = 8;
 
@@ -342,6 +343,7 @@ export const publishMusicNoteToExplore = async (
   };
   patchPublicationStateBySourceId(user.uid, normalizedSourceId, nextState);
   invalidateExploreFeedSessionCache();
+  invalidateExplorePublicProfileFirstView(user.uid);
   return nextState;
 };
 
@@ -380,6 +382,7 @@ export const setExploreTrackVisibility = async (
   }
   patchPublicationStateByTrackId(user.uid, resolvedTrackId, (state) => ({ ...state, status }));
   invalidateExploreFeedSessionCache();
+  invalidateExplorePublicProfileFirstView(user.uid);
   return {
     status,
     trackId: resolvedTrackId,
@@ -414,6 +417,7 @@ export const setExploreTrackPublicationOptions = async (
   };
   patchPublicationStateByTrackId(user.uid, normalizedTrackId, (state) => ({ ...state, ...nextOptions }));
   invalidateExploreFeedSessionCache();
+  invalidateExplorePublicProfileFirstView(user.uid);
   return nextOptions;
 };
 

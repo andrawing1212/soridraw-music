@@ -1,0 +1,73 @@
+name: Temp Cloudflare Explore Worker Version Bindings
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-cloudflare-explore-worker-version-bindings.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Read version bindings through Workers API only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'JS'
+          const { spawnSync } = require('node:child_process');
+          const run = (args) => {
+            const r = spawnSync('npx', ['wrangler', ...args], { encoding:'utf8', env:process.env });
+            if (r.status !== 0) throw new Error(r.stderr || r.stdout);
+            return r.stdout.trim();
+          };
+          const parse = (s) => { try { return JSON.parse(s); } catch { const p=[s.indexOf('{'),s.indexOf('[')].filter(x=>x>=0); return JSON.parse(s.slice(Math.min(...p))); } };
+          const who = parse(run(['whoami','--json']));
+          const account = who.accounts?.[0]?.id;
+          const auth = parse(run(['auth','token','--json']));
+          const headers = auth.type === 'api_key' ? {'X-Auth-Key':auth.key,'X-Auth-Email':auth.email} : {Authorization:`Bearer ${auth.token}`};
+          const get = async (path) => {
+            const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}${path}`, {headers});
+            const text=await r.text(); if(!r.ok) throw new Error(`${r.status} ${text.slice(0,500)}`); return JSON.parse(text).result;
+          };
+          const summarize = (resources) => (resources?.bindings || resources || []).filter(Boolean).map(b => ({
+            name:b.name, type:b.type, id:b.id || b.database_id || b.uuid || null,
+            namespace:b.namespace || null, bucket_name:b.bucket_name || b.bucket || null
+          })).filter(b => b.name === 'DB' || b.name === 'PROFILE_MEDIA' || b.type === 'd1' || b.type === 'r2_bucket');
+          (async()=>{
+            for (const worker of ['soridraw-explore-preview','soridraw-explore-test']) {
+              const current = await get(`/workers/scripts/${worker}/settings`);
+              console.log(`CURRENT_${worker.toUpperCase().replaceAll('-','_')}=${JSON.stringify(summarize(current.bindings))}`);
+              const versions = await get(`/workers/scripts/${worker}/versions?per_page=100`);
+              const list = Array.isArray(versions) ? versions : versions?.result || [];
+              console.log(`VERSIONS_${worker}=${list.length}`);
+              for (const v of list.slice(0,100)) {
+                try {
+                  const detail = await get(`/workers/scripts/${worker}/versions/${v.id}`);
+                  const bindings = summarize(detail.resources?.bindings || detail.resources || detail.bindings || []);
+                  if (bindings.length) console.log(`VERSION_BINDINGS worker=${worker} number=${v.number} id=${v.id} created=${v.metadata?.created_on || ''} source=${v.metadata?.source || ''} bindings=${JSON.stringify(bindings)}`);
+                } catch (e) {
+                  console.log(`VERSION_DETAIL_SKIP worker=${worker} id=${v.id} error=${String(e.message).slice(0,180)}`);
+                }
+              }
+            }
+            console.log('WORKER_VERSION_BINDING_INSPECT=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS

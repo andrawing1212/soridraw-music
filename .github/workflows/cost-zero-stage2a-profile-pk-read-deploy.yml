@@ -1,0 +1,134 @@
+name: Cost Zero Stage 2A Profile PK Read Deploy
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'cloudflare/explore-worker/patches/005-cost-zero-profile-first-view-pk-read.mjs'
+      - '.github/workflows/cost-zero-stage2a-profile-pk-read-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cost-zero-stage2a-profile-pk-read-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare exact live Worker plus PK patch
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN unavailable'; exit 2; }
+          npm install --no-audit --no-fund
+          npm run cf:prepare
+          node --check .remote-worker/worker.js
+          grep -Fq 'readPublicProfileFirstViewRowByPrimaryKey' .remote-worker/worker.js
+          grep -Fq 'readPublicProfileFirstViewRowByHandle' .remote-worker/worker.js
+          node - <<'NODE'
+          const fs=require('fs');
+          const src=fs.readFileSync('.remote-worker/worker.js','utf8');
+          const start=src.indexOf('async function readPublicProfileFirstViewRow(');
+          if(start<0) throw new Error('active row reader missing');
+          const tail=src.slice(start, start+1400);
+          if(!tail.includes('readPublicProfileFirstViewRowByPrimaryKey')) throw new Error('PK-first call missing');
+          if(tail.includes('WHERE uid = ? OR handle = ?')) throw new Error('legacy OR lookup still active');
+          console.log('PROFILE_PK_SOURCE_VALIDATION=PASS');
+          NODE
+
+      - name: Deploy only prepared Explore Worker
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run cf:deploy
+          echo 'EXPLORE_WORKER_PROFILE_PK_DEPLOY=PASS'
+
+      - name: Re-read deployed Worker and verify persisted PK path
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .remote-worker
+          npm run cf:prepare
+          node --check .remote-worker/worker.js
+          grep -Fq 'readPublicProfileFirstViewRowByPrimaryKey' .remote-worker/worker.js
+          grep -Fq 'readPublicProfileFirstViewRowByHandle' .remote-worker/worker.js
+          echo 'LIVE_PROFILE_PK_SOURCE=PASS'
+
+      - name: Verify UID snapshot MISS is one D1 row and POP HIT is zero
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://soridraw-explore-api.andrawing1212.workers.dev'
+          origin='https://preview.soridraw.com'
+          curl -fsS --max-time 30 -o "$RUNNER_TEMP/feed.json" \
+            -H "Origin: $origin" -H 'Accept: application/json' \
+            "$base/v1/feed?sort=latest&limit=1"
+          node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/feed.json','utf8'));
+          const row=p?.data?.items?.[0];
+          const uid=String(row?.ownerUid||row?.owner_uid||'').trim();
+          if(!uid) throw new Error('No public owner UID for profile PK probe');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/uid.txt',uid);
+          NODE
+          uid="$(cat "$RUNNER_TEMP/uid.txt")"
+          url="$base/v1/profiles/$uid/first-view?limit=50"
+          misses=0
+          hits=0
+          for n in $(seq 1 12); do
+            curl -fsS --max-time 30 -D "$RUNNER_TEMP/p-$n.headers" -o "$RUNNER_TEMP/p-$n.json" \
+              -H "Origin: $origin" -H 'Accept: application/json' "$url"
+            grep -q '"ok":true' "$RUNNER_TEMP/p-$n.json"
+            cache="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-profile-edge-cache:/{gsub("\r",""); print toupper($2)}' "$RUNNER_TEMP/p-$n.headers" | tail -n1)"
+            reads="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r",""); print $2}' "$RUNNER_TEMP/p-$n.headers" | tail -n1)"
+            writes="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r",""); print $2}' "$RUNNER_TEMP/p-$n.headers" | tail -n1)"
+            pop="$(awk 'BEGIN{IGNORECASE=1}/^cf-ray:/{gsub("\r",""); split($2,a,"-"); print a[2]}' "$RUNNER_TEMP/p-$n.headers" | tail -n1)"
+            echo "PROFILE_PROBE_$n cache=$cache d1_read=$reads d1_write=$writes pop=$pop"
+            test "$writes" = '0'
+            if [ "$cache" = 'MISS' ]; then
+              test "$reads" = '1'
+              misses=$((misses+1))
+            elif [ "$cache" = 'HIT' ]; then
+              test "$reads" = '0'
+              hits=$((hits+1))
+            else
+              echo "Unexpected edge cache state: $cache"
+              exit 1
+            fi
+            sleep 0.4
+          done
+          test "$misses" -ge 1
+          test "$hits" -ge 1
+          echo "PROFILE_PK_MISSES=$misses"
+          echo "PROFILE_EDGE_HITS=$hits"
+          echo 'PROFILE_UID_EDGE_MISS_D1_ONE=PASS'
+          echo 'PROFILE_UID_EDGE_HIT_D1_ZERO=PASS'
+
+      - name: Safety result
+        run: |
+          echo 'D1_SCHEMA_MIGRATION=false'
+          echo 'D1_BACKFILL=false'
+          echo 'FIRESTORE_CHANGE=false'
+          echo 'FIREBASE_FUNCTIONS_DEPLOY=false'
+          echo 'FIREBASE_HOSTING_DEPLOY=false'
+          echo 'MAIN_CHANGE=false'

@@ -1,0 +1,164 @@
+/* SORIDRAW 1017 — Classic light Explore readability + Music Note state button tone. */
+
+/* Explore currently has legacy light selectors keyed to data-soridraw-theme="light".
+   Classic light uses theme="classic" + color-mode="light", so mirror only the
+   visual color contract here without changing layout or responsive behavior. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-page,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-app-shell {
+  color: #171719 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-head h1,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-card-copy h3,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-state--empty strong,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-search-result-label strong,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-name-line h1,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-stats strong {
+  color: rgba(20, 20, 22, 0.92) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-head p,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-creator,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-card-actions,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-state,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-search-result-label,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-toolbar,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-copy > p,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-stats,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-section-label {
+  color: rgba(25, 25, 28, 0.52) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-tabs button {
+  color: rgba(25, 25, 28, 0.52) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-tabs button:hover {
+  color: rgba(20, 20, 22, 0.84) !important;
+  background: rgba(20, 20, 24, 0.045) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-tabs button.is-active {
+  color: #b87c00 !important;
+  background: rgba(255, 180, 0, 0.10) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-search > button,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-search form {
+  color: rgba(20, 20, 24, 0.64) !important;
+  background: rgba(20, 20, 24, 0.055) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-search input::placeholder {
+  color: rgba(20, 20, 24, 0.38) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-search form button {
+  color: rgba(20, 20, 24, 0.52) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-like-button,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-open-button {
+  color: rgba(25, 25, 28, 0.50) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-like-button:hover:not(:disabled),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-open-button:hover:not(:disabled),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-creator:not(:disabled):hover {
+  color: rgba(20, 20, 22, 0.86) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-like-button.is-liked {
+  color: #d84b58 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-back-button {
+  color: rgba(20, 20, 22, 0.72) !important;
+  background: rgba(20, 20, 24, 0.055) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-avatar {
+  color: rgba(20, 20, 22, 0.68) !important;
+  background: rgba(20, 20, 24, 0.065) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-own-profile {
+  color: rgba(20, 20, 22, 0.60) !important;
+  background: rgba(20, 20, 24, 0.055) !important;
+}
+
+/* 1019 — Public profile hero tone parity without mode rollback.
+   Only the background image/overlay and profile text hierarchy are normalized to
+   Split. Interactive surfaces (avatar/edit/follow/own-profile/genre chip
+   backgrounds) remain owned by each mode so Classic Light keeps its current UI. */
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-background img {
+  opacity: 1 !important;
+  filter: saturate(.88) brightness(.58) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-background span {
+  opacity: 1 !important;
+  background: linear-gradient(90deg, rgba(10,10,12,.86), rgba(10,10,12,.54), rgba(10,10,12,.3)) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-name-line h1 {
+  color: rgba(255,255,255,.95) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-copy > p {
+  color: rgba(235,235,240,.52) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-handle {
+  color: rgba(235,235,240,.40) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-stats {
+  color: rgba(235,235,240,.48) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-stats strong {
+  color: rgba(255,255,255,.88) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-genres span {
+  color: rgba(255,255,255,.62) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-social-links a {
+  color: rgba(235,235,240,.48) !important;
+}
+.soridraw-explore-profile-head.has-background .soridraw-explore-profile-social-links a:hover {
+  color: #fff !important;
+}
+
+/* 1020 — Classic Light profile hero text must outrank the generic light-page
+   readability rules above whenever a background image is present. The previous
+   generic selectors had the same class-level specificity plus an extra element,
+   so their dark colors could win even though the white hero rules came later. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-name-line h1 {
+  color: rgba(255,255,255,.95) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-copy > p {
+  color: rgba(235,235,240,.52) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-handle {
+  color: rgba(235,235,240,.40) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-stats {
+  color: rgba(235,235,240,.48) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-stats strong {
+  color: rgba(255,255,255,.88) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-genres span {
+  color: rgba(255,255,255,.62) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-social-links a {
+  color: rgba(235,235,240,.48) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-profile-head.has-background .soridraw-explore-profile-social-links a:hover {
+  color: #fff !important;
+}
+
+/* Music Note: in Classic Light, inactive state controls use the same warm-light
+   button surface as the selected keyword chips instead of the dark fallback.
+   Active controls stay pure white with a dark glyph. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-musicnote-song-state-actions > button {
+  --soridraw-musicnote-state-bg: var(--button-bg, #f5f3f1) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-musicnote-song-state-actions > button:hover {
+  --soridraw-musicnote-state-bg: var(--button-hover-bg, #edeae7) !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-musicnote-song-state-actions > button svg {
+  color: #202024 !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-musicnote-song-state-actions > button[aria-label="좋아요 해제"] > span:first-child,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-musicnote-song-state-actions > button[aria-label="잠금 해제"] > span:first-child,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-musicnote-song-state-actions > button[aria-label="공개 설정"] > span:first-child {
+  background: #ffffff !important;
+}

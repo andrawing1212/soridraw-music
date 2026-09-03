@@ -40,6 +40,9 @@ const SORIDRAW_898_CACHE_DIAGNOSTICS_LIVE_PANEL = true;
 const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from './lib/studioActionBarGeometry';
 import { resolveExpandedHeight, useStableContentHeight } from './lib/stableContentHeight';
+import { useStableHoverTooltip } from './lib/stableHoverTooltip';
+import MenuTitleTooltipPortal from './components/studio/MenuTitleTooltipPortal';
+import { MENU_HELP_TIPS_EVENT, MENU_HELP_TIPS_STORAGE_KEY, readMenuHelpTipsEnabled } from './lib/menuHelpPreference';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -131,6 +134,137 @@ import StudioSplitEngineWorkspace, { type StudioGenerationBarPerfMode, type Stud
 function Portal({ children, enabled = true }: { children: React.ReactNode; enabled?: boolean }) {
   if (typeof document === 'undefined') return null;
   return enabled ? createPortal(children, document.body) : <>{children}</>;
+}
+
+// SORIDRAW_TOOLTIP_ISOLATED_HOST_984
+// Tooltip hover changes stay inside this tiny persistent host instead of
+// re-rendering the full Studio/App tree. The DOM node never unmounts;
+// visibility/content/placement alone change, which also keeps a future
+// per-user tooltip ON/OFF preference cheap to add.
+type StudioDescriptionOverlayPlacement = {
+  pane: 'builder' | 'result' | 'global';
+  left: number;
+  maxWidth: number;
+};
+
+type StudioDescriptionOverlayItem = {
+  id: string;
+  label: string;
+  description?: string;
+};
+
+type StudioDescriptionOverlayController = {
+  show: (item: StudioDescriptionOverlayItem, placement: StudioDescriptionOverlayPlacement) => void;
+  hide: () => void;
+};
+
+function StudioDescriptionOverlayHost({
+  controllerRef,
+  resolvePlacement,
+  locationPathname,
+  studioActionOwner,
+  isActionButtonsCollapsed,
+  shouldRenderActionButtons,
+}: {
+  controllerRef: { current: StudioDescriptionOverlayController | null };
+  resolvePlacement: () => StudioDescriptionOverlayPlacement;
+  locationPathname: string;
+  studioActionOwner: string;
+  isActionButtonsCollapsed: boolean;
+  shouldRenderActionButtons: boolean;
+}) {
+  const [item, setItem] = useState<StudioDescriptionOverlayItem | null>(null);
+  const [placement, setPlacement] = useState<StudioDescriptionOverlayPlacement>(() => ({
+    pane: 'global',
+    left: typeof window !== 'undefined' ? window.innerWidth / 2 : 0,
+    maxWidth: typeof window !== 'undefined' && window.innerWidth < 768 ? 200 : 400,
+  }));
+  const [isVisible, setIsVisible] = useState(false);
+  const [isTooltipHovered, setIsTooltipHovered] = useState(false);
+  const autoHideTimerRef = useRef<number | null>(null);
+
+  const clearAutoHideTimer = useCallback(() => {
+    if (autoHideTimerRef.current !== null) {
+      window.clearTimeout(autoHideTimerRef.current);
+      autoHideTimerRef.current = null;
+    }
+  }, []);
+
+  const hide = useCallback(() => {
+    clearAutoHideTimer();
+    setIsVisible(false);
+    setIsTooltipHovered(false);
+  }, [clearAutoHideTimer]);
+
+  const show = useCallback((nextItem: StudioDescriptionOverlayItem, nextPlacement: StudioDescriptionOverlayPlacement) => {
+    clearAutoHideTimer();
+    setItem(nextItem);
+    setPlacement(nextPlacement);
+    setIsVisible(true);
+    setIsTooltipHovered(false);
+    autoHideTimerRef.current = window.setTimeout(() => {
+      autoHideTimerRef.current = null;
+      setIsVisible(false);
+      setIsTooltipHovered(false);
+    }, 6000);
+  }, [clearAutoHideTimer]);
+
+  useLayoutEffect(() => {
+    const controller: StudioDescriptionOverlayController = { show, hide };
+    controllerRef.current = controller;
+    return () => {
+      if (controllerRef.current === controller) controllerRef.current = null;
+    };
+  }, [controllerRef, hide, show]);
+
+  useEffect(() => () => clearAutoHideTimer(), [clearAutoHideTimer]);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    const refreshPlacement = () => setPlacement(resolvePlacement());
+    window.addEventListener('resize', refreshPlacement);
+    window.addEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
+    window.addEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
+    return () => {
+      window.removeEventListener('resize', refreshPlacement);
+      window.removeEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
+      window.removeEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
+    };
+  }, [isVisible, resolvePlacement]);
+
+  const suppressInlineActionHint = Boolean(
+    item && studioActionOwner !== 'floating' && ['generate', 'random', 'clear-all'].includes(item.id)
+  );
+  const shouldShow = Boolean(isVisible && item && !suppressInlineActionHint);
+  const bottomClass = locationPathname === '/studio'
+    ? (!isActionButtonsCollapsed && shouldRenderActionButtons
+        ? 'bottom-[6.75rem] md:bottom-[8.5rem]'
+        : 'bottom-10')
+    : (typeof document !== 'undefined' && document.querySelector('[data-selection-action-bar="true"]')
+        ? 'bottom-[7.75rem] md:bottom-[8.75rem]'
+        : 'bottom-10');
+
+  return (
+    <div
+      aria-hidden={!shouldShow}
+      onMouseEnter={() => setIsTooltipHovered(true)}
+      onMouseLeave={() => setIsTooltipHovered(false)}
+      style={{
+        left: placement.left,
+        width: 'max-content',
+        maxWidth: placement.maxWidth,
+        opacity: shouldShow ? (isTooltipHovered ? 0.1 : 1) : 0,
+        visibility: shouldShow ? 'visible' : 'hidden',
+        pointerEvents: shouldShow ? 'auto' : 'none',
+        transform: 'translateX(-50%)',
+      }}
+      data-description-pane={placement.pane}
+      className={`soridraw-studio-description-overlay fixed z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300 ${bottomClass}`}
+    >
+      <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{item?.label || ''}</p>
+      <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">{item?.description || ''}</p>
+    </div>
+  );
 }
 
 const favoritesInMemoryCache = new Map<string, any[]>();
@@ -2769,8 +2903,6 @@ function HistoryRouteWrapper({
     />
   );
 }
-const AdminVocalTonesPageLazy = lazy(() => import('./pages/AdminVocalTonesPage'));
-const AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage'));
 const AdminUserManagementPageLazy = lazy(() => import('./pages/AdminUserManagementPage'));
 const SunoLibraryPageLazy = lazy(() => import('./pages/SunoLibraryPage'));
 const SunoApiSettingsPageLazy = lazy(() => import('./pages/SunoApiSettingsPage'));
@@ -7177,7 +7309,7 @@ function App() {
         FIRESTORE_READ_CACHE_KEYS.sectionTags,
         FIRESTORE_READ_CACHE_TTL_MS.sectionTags,
       );
-      if (Array.isArray(cached?.data) && cached.data.length > 0) {
+      if (cached && Array.isArray(cached.data)) {
         setSectionTags(cached.data);
         if (cached.isFresh) return;
       }
@@ -7247,7 +7379,7 @@ function App() {
   const storyboardModalBackdropMouseDownRef = useRef(false);
   const storyboardOpenTimerRef = useRef<number | null>(null);
   const [isStoryboardOpening, setIsStoryboardOpening] = useState(false);
-  const [showStoryboardTitleTooltip, setShowStoryboardTitleTooltip] = useState(false);
+  const [showStoryboardTitleTooltip, setShowStoryboardTitleTooltip] = useStableHoverTooltip(60);
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const [isGlobalSearchOpening, setIsGlobalSearchOpening] = useState(false);
   const globalSearchOpenTimerRef = useRef<number | null>(null);
@@ -7455,12 +7587,7 @@ function App() {
   const [isConfirmingDeleteHistory, setIsConfirmingDeleteHistory] = useState(false);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
-  type StudioDescriptionPane = 'builder' | 'result' | 'global';
-  type StudioDescriptionPlacement = {
-    pane: StudioDescriptionPane;
-    left: number;
-    maxWidth: number;
-  };
+  type StudioDescriptionPlacement = StudioDescriptionOverlayPlacement;
 
   const getDefaultStudioDescriptionPlacement = (): StudioDescriptionPlacement => ({
     pane: 'global',
@@ -7468,23 +7595,23 @@ function App() {
     maxWidth: typeof window !== 'undefined' && window.innerWidth < 768 ? 200 : 400,
   });
 
-  const [hoveredItem, setHoveredItemState] = useState<CategoryItem | null>(null);
-  const [hoveredItemPlacement, setHoveredItemPlacement] = useState<StudioDescriptionPlacement>(
-    getDefaultStudioDescriptionPlacement,
-  );
-  const studioDescriptionPointerRef = useRef({ x: 0, y: 0 });
-  const [isTooltipHovered, setIsTooltipHovered] = useState(false);
+  const studioDescriptionControllerRef = useRef<StudioDescriptionOverlayController | null>(null);
+  const studioDescriptionCurrentItemRef = useRef<CategoryItem | null>(null);
+  const studioDescriptionPointerRef = useRef<{ x: number; y: number; target: EventTarget | null }>({ x: 0, y: 0, target: null });
+  // SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_982
+  // Keep fast cursor sweeps from forcing tooltip work for accidental flyovers.
+  const studioDescriptionHoverTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    studioDescriptionPointerRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    studioDescriptionPointerRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2, target: null };
     const rememberPointer = (event: PointerEvent) => {
-      studioDescriptionPointerRef.current = { x: event.clientX, y: event.clientY };
+      studioDescriptionPointerRef.current = { x: event.clientX, y: event.clientY, target: event.target };
     };
-    window.addEventListener('pointermove', rememberPointer, { capture: true, passive: true });
+    window.addEventListener('pointerover', rememberPointer, { capture: true, passive: true });
     window.addEventListener('pointerdown', rememberPointer, { capture: true, passive: true });
     return () => {
-      window.removeEventListener('pointermove', rememberPointer, true);
+      window.removeEventListener('pointerover', rememberPointer, { capture: true });
       window.removeEventListener('pointerdown', rememberPointer, true);
     };
   }, []);
@@ -7503,17 +7630,24 @@ function App() {
       return fallback;
     }
 
-    const { x, y } = studioDescriptionPointerRef.current;
-    const hoveredElement = document.elementFromPoint(x, y) as HTMLElement | null;
-    const builderPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="builder"]');
-    const resultPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="result"]');
-    let paneElement = hoveredElement?.closest<HTMLElement>('[data-soridraw-studio-pane]') ?? null;
+    const { x, y, target } = studioDescriptionPointerRef.current;
+    // SORIDRAW_STUDIO_TOOLTIP_TARGET_REUSE_985
+    // pointerover already tells us the live DOM target. Reuse it instead of
+    // forcing elementFromPoint + two document queries on every tooltip hover.
+    const pointerTarget = target instanceof Element && target.isConnected ? target : null;
+    const hoveredElement = pointerTarget ?? document.elementFromPoint(x, y);
+    let paneElement = hoveredElement?.closest('[data-soridraw-studio-pane]') as HTMLElement | null;
+    let builderPane: HTMLElement | null = null;
+    let resultPane: HTMLElement | null = null;
 
     if (!paneElement && hoveredElement?.closest('.soridraw-studio-action-bar--tracking, .soridraw-studio-action-collapsed')) {
+      builderPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="builder"]');
       paneElement = builderPane;
     }
 
     if (!paneElement && y >= 58) {
+      builderPane ??= document.querySelector<HTMLElement>('[data-soridraw-studio-pane="builder"]');
+      resultPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="result"]');
       const builderRect = builderPane?.getBoundingClientRect();
       const resultRect = resultPane?.getBoundingClientRect();
       if (builderRect && x >= builderRect.left && x <= builderRect.right) paneElement = builderPane;
@@ -7531,10 +7665,67 @@ function App() {
     return { pane, left, maxWidth };
   }, [location.pathname]);
 
-  const setHoveredItem = useCallback((item: CategoryItem | null) => {
-    setHoveredItemState(item);
-    if (item) setHoveredItemPlacement(resolveStudioDescriptionPlacement());
+  const commitHoveredItem = useCallback((item: CategoryItem | null) => {
+    if (item && !readMenuHelpTipsEnabled()) {
+      studioDescriptionCurrentItemRef.current = null;
+      studioDescriptionControllerRef.current?.hide();
+      return;
+    }
+    studioDescriptionCurrentItemRef.current = item;
+    if (!item) {
+      studioDescriptionControllerRef.current?.hide();
+      return;
+    }
+    studioDescriptionControllerRef.current?.show(item, resolveStudioDescriptionPlacement());
   }, [resolveStudioDescriptionPlacement]);
+
+  const setHoveredItem = useCallback((item: CategoryItem | null) => {
+    if (studioDescriptionHoverTimerRef.current !== null) {
+      window.clearTimeout(studioDescriptionHoverTimerRef.current);
+      studioDescriptionHoverTimerRef.current = null;
+    }
+
+    const shouldStabilizeStudioHover = Boolean(
+      item
+      && location.pathname === '/studio'
+      && typeof window !== 'undefined'
+      && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    );
+
+    if (!shouldStabilizeStudioHover) {
+      commitHoveredItem(item);
+      return;
+    }
+
+    studioDescriptionHoverTimerRef.current = window.setTimeout(() => {
+      studioDescriptionHoverTimerRef.current = null;
+      commitHoveredItem(item);
+    }, 60);
+  }, [commitHoveredItem, location.pathname]);
+
+  useEffect(() => {
+    const hideDisabledMenuHelp = () => {
+      if (!readMenuHelpTipsEnabled()) setHoveredItem(null);
+    };
+    const handleMenuHelpStorage = (event: StorageEvent) => {
+      if (event.key === MENU_HELP_TIPS_STORAGE_KEY) hideDisabledMenuHelp();
+    };
+    window.addEventListener(MENU_HELP_TIPS_EVENT, hideDisabledMenuHelp as EventListener);
+    window.addEventListener('storage', handleMenuHelpStorage);
+    return () => {
+      window.removeEventListener(MENU_HELP_TIPS_EVENT, hideDisabledMenuHelp as EventListener);
+      window.removeEventListener('storage', handleMenuHelpStorage);
+    };
+  }, [setHoveredItem]);
+
+  useEffect(() => () => {
+    if (studioDescriptionHoverTimerRef.current !== null) {
+      window.clearTimeout(studioDescriptionHoverTimerRef.current);
+      studioDescriptionHoverTimerRef.current = null;
+    }
+    studioDescriptionCurrentItemRef.current = null;
+    studioDescriptionControllerRef.current?.hide();
+  }, [location.pathname]);
   const appliedKeywordsRef = useRef<HTMLDivElement>(null);
   const [appliedKeywordsHeight, setAppliedKeywordsHeight] = useState<number | string>(0);
   const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);
@@ -8033,30 +8224,6 @@ const toggleCycleVariantSelection = (
   }, [isStudioBlackActionMode, scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
 
 
-  useEffect(() => {
-    if (hoveredItem) {
-      const timer = setTimeout(() => {
-        setHoveredItem(null);
-      }, 6000);
-      return () => clearTimeout(timer);
-    } else {
-      setIsTooltipHovered(false);
-    }
-  }, [hoveredItem, setHoveredItem]);
-
-  useEffect(() => {
-    if (!hoveredItem) return;
-    const refreshPlacement = () => setHoveredItemPlacement(resolveStudioDescriptionPlacement());
-    window.addEventListener('resize', refreshPlacement);
-    window.addEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
-    window.addEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
-    return () => {
-      window.removeEventListener('resize', refreshPlacement);
-      window.removeEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
-      window.removeEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
-    };
-  }, [hoveredItem, resolveStudioDescriptionPlacement]);
-
   const [exitCount, setExitCount] = useState(0);
   const exitTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -8162,8 +8329,9 @@ const toggleCycleVariantSelection = (
 
   useEffect(() => {
     if (studioActionOwner === 'floating') return;
-    setHoveredItemState((current) => (isActionButtonHintItem(current) ? null : current));
-  }, [studioActionOwner]);
+    const current = studioDescriptionCurrentItemRef.current;
+    if (isActionButtonHintItem(current)) setHoveredItem(null);
+  }, [studioActionOwner, setHoveredItem]);
 
   useEffect(() => () => {
     delete document.documentElement.dataset.soridrawActionOwner;
@@ -8798,13 +8966,21 @@ const toggleCycleVariantSelection = (
             applyFavoriteSyncSignal(currentUser.uid, data.favoriteSyncSignal);
             const musicNoteRemoteVersion = Number(data?.syncVersions?.musicNote || data?.favoriteSyncSignalUpdatedAt || 0);
             if (musicNoteRemoteVersion > 0) {
+              const musicNoteOriginDeviceId = String(data?.favoriteSyncSignal?.originDeviceId || '');
               writeMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid, musicNoteRemoteVersion);
+              // 1010 — the latest Music Note mutation came from this browser, so its
+              // local cache already contains that mutation. Advance the local version
+              // immediately even while Studio is open; otherwise the next heart click
+              // performs a redundant favorites duplicate-check query.
+              if (musicNoteOriginDeviceId && musicNoteOriginDeviceId === getMusicNoteDeviceId()) {
+                writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, currentUser.uid, musicNoteRemoteVersion);
+              }
               if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent(MUSIC_NOTE_SYNC_VERSION_EVENT, {
                   detail: {
                     uid: currentUser.uid,
                     version: musicNoteRemoteVersion,
-                    originDeviceId: String(data?.favoriteSyncSignal?.originDeviceId || ''),
+                    originDeviceId: musicNoteOriginDeviceId,
                   },
                 }));
               }
@@ -9089,7 +9265,11 @@ const toggleCycleVariantSelection = (
         if (shouldVerifyMusicNoteBundle) {
           unsubMusicNoteBundle = subscribeListBundle('musicNote', currentUser.uid, {
             onData: (bundle, meta) => {
-              musicNoteBundleActiveUids.add(currentUser.uid);
+              // 1009 — this bundle subscription is a one-shot bootstrap read, not a live mirror.
+              // Keep it inactive after hydration so a plain save/unsave does not rewrite the
+              // server list-cache document. Cross-device changes still use the 901 version
+              // signal + updatedAtMs delta query, so data safety/sync stays intact.
+              musicNoteBundleActiveUids.delete(currentUser.uid);
               musicNoteFreshBootstrapUids.delete(currentUser.uid);
               if (bundle.deletedIds.length > 0) {
                 rememberFavoriteDeletedTombstones(currentUser.uid, bundle.deletedIds);
@@ -9247,6 +9427,14 @@ const toggleCycleVariantSelection = (
     if (!currentUser?.uid || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
 
     const uid = currentUser.uid;
+    // 1010 — own-device invalidation does not need a server delta query and is
+    // safe to acknowledge on every route because the successful local mutation
+    // already updated the cache before publishing the sync signal.
+    if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
+      writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+      markCacheDiagnostic('musicNote', 'CACHE', 0);
+      return;
+    }
     if (typeof window !== 'undefined' && window.location.pathname !== '/history') {
       return;
     }
@@ -9259,12 +9447,6 @@ const toggleCycleVariantSelection = (
 
     if (musicNoteFreshBootstrapUids.has(uid)) {
       writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
-      return;
-    }
-
-    if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
-      writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
-      markCacheDiagnostic('musicNote', 'CACHE', 0);
       return;
     }
 
@@ -9469,7 +9651,7 @@ const toggleCycleVariantSelection = (
       : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
   }, [activeGenreIdentityCount, maxHybridStyleSelections, selectedStyles, showToast]);
 
-  const toggleFavorite = async (song: SongResult) => {
+  const toggleFavorite = async (song: SongResult, options?: { trustedRecentStudio?: boolean }) => {
     song = normalizeFavoriteTitleFields(song as any) as SongResult;
 
     if (!user) {
@@ -9498,6 +9680,10 @@ const toggleCycleVariantSelection = (
 
     const findServerMatchingFavorites = async (_includeFullScan = false): Promise<any[]> => {
       const matches = new Map<string, any>();
+      // 1007 — Recent-song saves already carry a stable SORIDRAW song id.
+      // Use that exact identity first so a normal save needs only one bounded
+      // server duplicate check instead of chaining favoriteKey + title lookups.
+      const stableSongId = getLiveSoridrawSongId(song);
       const addCandidates = (candidates: any[]) => {
         candidates.forEach((candidate) => {
           if (!candidate?.id) return;
@@ -9520,6 +9706,25 @@ const toggleCycleVariantSelection = (
         } catch (error) {
           console.warn('Exact favorite lookup failed.', error);
         }
+      }
+
+      if (matches.size === 0 && stableSongId) {
+        let stableLookupSucceeded = false;
+        try {
+          const stableSnap = await getDocs(query(
+            collection(db, 'favorites'),
+            where('uid', '==', user.uid),
+            where('soridrawSongId', '==', stableSongId),
+            limit(2),
+          ));
+          stableLookupSucceeded = true;
+          addCandidates(stableSnap.docs.map(mapFavoriteFirestoreDoc));
+        } catch (error) {
+          // Preserve the older bounded identity/title fallback only when the
+          // stable-id query itself could not be completed.
+          console.warn('Favorite stable song id lookup failed; using legacy bounded fallback.', error);
+        }
+        if (stableLookupSucceeded) return Array.from(matches.values());
       }
 
       if (matches.size === 0 && songIdentityKey) {
@@ -9589,7 +9794,21 @@ const toggleCycleVariantSelection = (
 
     try {
       const localExistingFav = findLocalExistingFavorite();
-      const serverExistingFav = (localExistingFav || (song as any)?.recentFavoriteDetachedAt) ? null : await findServerExistingFavorite().catch((error) => {
+      const stableRecentSongId = getLiveSoridrawSongId(song);
+      const localMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, user.uid);
+      const remoteMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, user.uid);
+      const canTrustRecentStudioLocalIdentity = Boolean(
+        options?.trustedRecentStudio
+        && stableRecentSongId
+        && hasMusicNotePayloadCache(user.uid)
+        && localMusicNoteVersion > 0
+        && remoteMusicNoteVersion <= localMusicNoteVersion
+      );
+      const serverExistingFav = (
+        localExistingFav
+        || (song as any)?.recentFavoriteDetachedAt
+        || canTrustRecentStudioLocalIdentity
+      ) ? null : await findServerExistingFavorite().catch((error) => {
         console.warn('Favorite server confirmation failed. Using local favorite state as fallback.', error);
         return null;
       });
@@ -9739,6 +9958,16 @@ const toggleCycleVariantSelection = (
       const createdAtMs = Date.now();
       song = ensureLiveSoridrawSongId(song as any) as SongResult;
       const favoriteSoridrawSongId = getLiveSoridrawSongId(song);
+      const buildRecentFavoriteDocumentId = (uid: string, stableSongId: string): string => {
+        const raw = `${uid}|${stableSongId}`;
+        let hash = 2166136261;
+        for (let index = 0; index < raw.length; index += 1) {
+          hash ^= raw.charCodeAt(index);
+          hash = Math.imul(hash, 16777619);
+        }
+        const safeSongId = stableSongId.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 72) || 'song';
+        return `rs_${safeSongId}_${(hash >>> 0).toString(36)}`;
+      };
       const resolvedGenre = getResolvedGenre(song);
       const favoritePayload = sanitizeForFirestore({
         uid: user.uid,
@@ -9764,13 +9993,28 @@ const toggleCycleVariantSelection = (
         favoriteKey: songIdentityKey,
         searchTokens: buildFavoriteSearchTokens(song)
       });
-      const favoriteDocRef = await runV1MutationBoundary({ domain: 'musicNote', operation: 'save', uid: user.uid, affectedCount: 1 }, addDoc(collection(db, 'favorites'), favoritePayload));
+      const useDeterministicRecentFavoriteDoc = Boolean(
+        canTrustRecentStudioLocalIdentity && favoriteSoridrawSongId
+      );
+      const favoriteDocRef = useDeterministicRecentFavoriteDoc
+        ? doc(db, 'favorites', buildRecentFavoriteDocumentId(user.uid, favoriteSoridrawSongId))
+        : null;
+      if (favoriteDocRef) {
+        await runV1MutationBoundary(
+          { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1 },
+          setDoc(favoriteDocRef, favoritePayload, { merge: false }),
+        );
+      }
+      const createdFavoriteDocRef = favoriteDocRef || await runV1MutationBoundary(
+        { domain: 'musicNote', operation: 'save', uid: user.uid, affectedCount: 1 },
+        addDoc(collection(db, 'favorites'), favoritePayload),
+      );
 
       const localFavorite = sanitizeForFirestore({
         ...song,
         ...favoritePayload,
-        id: favoriteDocRef.id,
-        firestoreId: favoriteDocRef.id,
+        id: createdFavoriteDocRef.id,
+        firestoreId: createdFavoriteDocRef.id,
         uid: user.uid,
         genre: resolvedGenre,
         createdAtMs,
@@ -10133,7 +10377,6 @@ const toggleCycleVariantSelection = (
       longPressTimerRef.current = null;
     }
     setHoveredItem(null);
-    setIsTooltipHovered(false);
 
     const normalizeGenreKey = (value: string) => String(value || '')
       .replace(/\bcore\b/gi, '')
@@ -13719,7 +13962,7 @@ ${normalizePromptForDisplay(result.prompt)}
         ? false
         : isSongFavorited(heartSnapshot);
 
-      await toggleFavorite(heartSnapshot as SongResult);
+      await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true });
 
       const linkedFavorite = wasFavoritedBeforeToggle
         ? null
@@ -13763,13 +14006,19 @@ ${normalizePromptForDisplay(result.prompt)}
             historyIndex: currentIndex,
             latestGenerationBatchId: (nextCommittedHistory[0]?.appliedKeywords as any)?.generationBatchId || null,
           });
-          recentSongTextWritePendingRef.current = {
-            uid: user.uid,
-            songs: nextCommittedHistory,
-            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',
-            mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
-          };
-          await flushRecentSongTextWrite();
+          const pendingRecentTextWrite = recentSongTextWritePendingRef.current;
+          if (pendingRecentTextWrite) {
+            // A real title/lyrics edit was already waiting to be committed.
+            // Keep heart as that edit's commit boundary, but do not create a
+            // user_recent_songs write for a plain save/unsave click.
+            recentSongTextWritePendingRef.current = {
+              ...pendingRecentTextWrite,
+              uid: user.uid,
+              songs: nextCommittedHistory,
+              mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
+            };
+            await flushRecentSongTextWrite();
+          }
         }
       }
     } catch (error) {
@@ -14920,7 +15169,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
   };
 
   const clearActionButtonHint = () => {
-    setHoveredItemState((current) => (isActionButtonHintItem(current) ? null : current));
+    const current = studioDescriptionCurrentItemRef.current;
+    if (isActionButtonHintItem(current)) setHoveredItem(null);
   };
 
   const renderActionButtonsContent = (placement: 'floating' | 'inline') => (
@@ -16380,7 +16630,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
-              hoveredItem={hoveredItem}
               isExpanded={isMoodExpanded}
               onToggleExpand={() => toggleSubSections('mood')}
               onHeightChange={setMoodHeight}
@@ -16409,7 +16658,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
-              hoveredItem={hoveredItem}
               isExpanded={isThemeExpanded}
               onToggleExpand={() => toggleSubSections('theme')}
               onHeightChange={setThemeHeight}
@@ -16437,6 +16685,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <div className="soridraw-card-title-anchor relative min-w-0">
                       <div className="flex items-center gap-2">
                         <h3
+                          data-soridraw-menu-title-tooltip-anchor
                           onMouseEnter={() => setShowStoryboardTitleTooltip(true)}
                           onMouseLeave={() => setShowStoryboardTitleTooltip(false)}
                           className="text-base md:text-lg font-black text-[var(--text-primary)] cursor-help"
@@ -16444,9 +16693,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           스토리보드
                         </h3>
                       </div>
-                      <AnimatePresence>
-                        {showStoryboardTitleTooltip && (
-                          <motion.div
+                      {showStoryboardTitleTooltip && (
+                        <MenuTitleTooltipPortal>
+<motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 10 }}
@@ -16455,8 +16704,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             <p className="soridraw-card-title-tooltip-label hidden">스토리보드</p>
                             <p className="soridraw-card-title-tooltip-description text-[11px] leading-snug">캐릭터, 관계, 말투, 감정, 세계관과 이야기 전개를 설정합니다.</p>
                           </motion.div>
-                        )}
-                      </AnimatePresence>
+                        </MenuTitleTooltipPortal>
+                      )}
                       <p className="text-xs md:text-sm text-[var(--text-secondary)] truncate">
                         {buildStoryboardSummary(situation)}
                       </p>
@@ -18695,8 +18944,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <Route path="/admin" element={<Navigate to={firstAccessibleAdminPath} replace />} />
             <Route path="/admin/master" element={isMasterUser ? <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-amber-300 animate-spin" /></div>}><MasterPermissionsPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
             <Route path="/admin/users" element={canAccessAdminPage('userManagement') ? <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}><AdminUserManagementPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
-            <Route path="/admin/vocals" element={canAccessAdminPage('vocalManagement') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminVocalTonesPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
-            <Route path="/admin/tags" element={canAccessAdminPage('sectionTagManagement') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminSectionTagsPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/vocals" element={<Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/tags" element={<Navigate to={firstAccessibleAdminPath} replace />} />
             <Route path="/admin/suno-api" element={canAccessAdminPage('sunoApiManagement') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminSunoApiPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
             <Route path="/admin/app-settings" element={canAccessAdminPage('appSettings') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminAppSettingsPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
             <Route path="/admin/gemini-audit" element={canAccessAdminPage('geminiAudit') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminGeminiAuditPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
@@ -18715,40 +18964,15 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         )}      </Routes>
       <GlobalPlayer />
 
-      {/* Tooltip / Description Overlay */}
-      <AnimatePresence>
-        {hoveredItem && !(studioActionOwner !== 'floating' && isActionButtonHintItem(hoveredItem)) && (
-          <motion.div
-            initial={{ opacity: 0, x: '-50%' }}
-            animate={{ 
-              opacity: isTooltipHovered ? 0.1 : 1, 
-              x: '-50%'
-            }}
-            exit={{ opacity: 0, x: '-50%' }}
-            onMouseEnter={() => setIsTooltipHovered(true)}
-            onMouseLeave={() => setIsTooltipHovered(false)}
-            style={{
-              left: hoveredItemPlacement.left,
-              width: 'max-content',
-              maxWidth: hoveredItemPlacement.maxWidth,
-            }}
-            data-description-pane={hoveredItemPlacement.pane}
-            className={cn(
-              "soridraw-studio-description-overlay fixed z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
-              location.pathname === '/studio' 
-                ? (!isActionButtonsCollapsed && shouldRenderActionButtons
-                    ? "bottom-[6.75rem] md:bottom-[8.5rem]" 
-                    : "bottom-10")
-                : (typeof document !== 'undefined' && document.querySelector('[data-selection-action-bar="true"]')
-                    ? "bottom-[7.75rem] md:bottom-[8.75rem]"
-                    : "bottom-10")
-            )}
-          >
-            <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>
-            <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">{hoveredItem.description}</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Tooltip / Description Overlay — isolated persistent host */}
+      <StudioDescriptionOverlayHost
+        controllerRef={studioDescriptionControllerRef}
+        resolvePlacement={resolveStudioDescriptionPlacement}
+        locationPathname={location.pathname}
+        studioActionOwner={studioActionOwner}
+        isActionButtonsCollapsed={isActionButtonsCollapsed}
+        shouldRenderActionButtons={shouldRenderActionButtons}
+      />
 
       <AnimatePresence>
         {isRecentSongEditOpen && recentSongEditDraft && (
@@ -19837,7 +20061,7 @@ function GenreCategorySectionComponent({
   isExpanded = false,
   onToggleExpand,
 }: GenreCategorySectionProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(120);
 
@@ -19870,6 +20094,7 @@ function GenreCategorySectionComponent({
         <div className="flex items-center gap-3">
           <div className="relative">
             <h3
+              data-soridraw-menu-title-tooltip-anchor
               onMouseEnter={() => setShowTitleTooltip(true)}
               onMouseLeave={() => setShowTitleTooltip(false)}
               className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
@@ -19878,9 +20103,9 @@ function GenreCategorySectionComponent({
               {title}
               <span className="soridraw-menu-count text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedChild ? '1' : '0'}/1)</span>
             </h3>
-            <AnimatePresence>
-              {showTitleTooltip && (
-                <motion.div
+            {showTitleTooltip && (
+              <MenuTitleTooltipPortal>
+<motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
@@ -19889,8 +20114,8 @@ function GenreCategorySectionComponent({
                   <p className="soridraw-card-title-tooltip-label hidden">{title}</p>
                   <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
                 </motion.div>
-              )}
-            </AnimatePresence>
+              </MenuTitleTooltipPortal>
+            )}
           </div>
         </div>
 
@@ -20221,7 +20446,7 @@ function CycleSectionComponent({
   onModalStateChange,
   directInput
 }: CycleSectionProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(64);
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
@@ -20334,6 +20559,7 @@ function CycleSectionComponent({
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3
+                data-soridraw-menu-title-tooltip-anchor
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help min-w-0", titleClassName ?? "text-[22px]")}
@@ -20344,9 +20570,9 @@ function CycleSectionComponent({
                   <span className="soridraw-menu-count text-[15px] font-normal text-[var(--text-secondary)] ml-1.5 shrink-0">({countLabel})</span>
                 )}
               </h3>
-              <AnimatePresence>
-                {showTitleTooltip && (
-                  <motion.div
+              {showTitleTooltip && (
+                <MenuTitleTooltipPortal>
+<motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
@@ -20355,8 +20581,8 @@ function CycleSectionComponent({
                     <p className="soridraw-card-title-tooltip-label hidden">{titleKo || title}</p>
                     <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                   </motion.div>
-                )}
-              </AnimatePresence>
+                </MenuTitleTooltipPortal>
+              )}
             </div>
           </div>
 
@@ -21061,7 +21287,6 @@ interface CategorySectionProps {
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
-  hoveredItem: CategoryItem | null;
   isExpanded: boolean;
   onToggleExpand: () => void;
   kpopMode?: 0 | 1 | 2;
@@ -21096,7 +21321,6 @@ function CategorySectionComponent({
   onHover,
   onLongPressStart,
   onLongPressEnd,
-  hoveredItem,
   isExpanded,
   onToggleExpand,
   kpopMode = 0,
@@ -21108,7 +21332,7 @@ function CategorySectionComponent({
   uniformKeywordGrid = false,
   directInput
 }: CategorySectionProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(84);
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
@@ -21162,6 +21386,7 @@ function CategorySectionComponent({
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3 
+                data-soridraw-menu-title-tooltip-anchor
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help min-w-0"
@@ -21170,9 +21395,9 @@ function CategorySectionComponent({
                 <span className="truncate">{titleKo || title}</span>
                 <span className="soridraw-menu-count text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selected.length}/{items.length})</span>
               </h3>
-              <AnimatePresence>
-                {showTitleTooltip && (
-                  <motion.div
+              {showTitleTooltip && (
+                <MenuTitleTooltipPortal>
+<motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
@@ -21181,8 +21406,8 @@ function CategorySectionComponent({
                     <p className="soridraw-card-title-tooltip-label hidden">{titleKo || title}</p>
                     <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                   </motion.div>
-                )}
-              </AnimatePresence>
+                </MenuTitleTooltipPortal>
+              )}
             </div>
           </div>
           <div className="soridraw-card-header-actions flex items-center gap-2">
@@ -21601,7 +21826,7 @@ function SongStructureIntegratedControlComponent({
   onModalStateChange,
   naturalResponsiveHeight = false
 }: SongStructureIntegratedControlProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const customModalHistoryPushedRef = useRef(false);
@@ -22895,6 +23120,7 @@ function SongStructureIntegratedControlComponent({
       <div data-studio-menu="lyrics" className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--home-card-border)] flex flex-col h-full relative pb-12 overflow-visible">
         <div className="soridraw-card-header soridraw-menu-card-header-slot relative mb-4 flex items-center justify-between">
           <h3 
+            data-soridraw-menu-title-tooltip-anchor
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
             className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
@@ -22936,9 +23162,9 @@ function SongStructureIntegratedControlComponent({
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
-          <AnimatePresence>
-            {showTitleTooltip && (
-              <motion.div
+          {showTitleTooltip && (
+            <MenuTitleTooltipPortal>
+<motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
@@ -22947,8 +23173,8 @@ function SongStructureIntegratedControlComponent({
                 <p className="soridraw-card-title-tooltip-label hidden">가사</p>
                 <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">가사 분량과 곡의 전개 방식을 통합적으로 설정합니다.</p>
               </motion.div>
-            )}
-          </AnimatePresence>
+            </MenuTitleTooltipPortal>
+          )}
         </div>
 
         <div className="flex flex-col flex-1 overflow-visible">
@@ -25162,7 +25388,7 @@ function VocalControlComponent({
   randomActivationKey = 0,
   naturalResponsiveHeight = false,
 }: VocalControlProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const [editingVocalMemberId, setEditingVocalMemberId] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -25769,6 +25995,7 @@ function VocalControlComponent({
       <div className="soridraw-card-header relative mb-4 flex items-center justify-between">
         <div className="soridraw-card-header-title flex items-center gap-2">
           <h3 
+            data-soridraw-menu-title-tooltip-anchor
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
             className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
@@ -25870,9 +26097,9 @@ function VocalControlComponent({
           </button>
         </div>
 
-        <AnimatePresence>
-          {showTitleTooltip && (
-            <motion.div
+        {showTitleTooltip && (
+          <MenuTitleTooltipPortal>
+<motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
@@ -25881,8 +26108,8 @@ function VocalControlComponent({
               <p className="soridraw-card-title-tooltip-label hidden">보컬</p>
               <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{getCombinedDescription()}</p>
             </motion.div>
-          )}
-        </AnimatePresence>
+          </MenuTitleTooltipPortal>
+        )}
       </div>
 
       <div className={cn(
@@ -25927,6 +26154,7 @@ function VocalControlComponent({
           {vocalMode === 'group' ? (
             <div className="grid grid-cols-2 gap-2">
               <button
+                data-vocal-add-member="male"
                 onClick={() => handleAddMember('male')}
                 disabled={vocalMembers.length >= MAX_GROUP_VOCAL_MEMBERS && !vocalMembers.some((member) => member.gender === 'neutral')}
                 onMouseEnter={() => onHover({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: vocalMembers.some((member) => member.gender === 'neutral') ? '성별이 없는 기본 보컬에 남성 성별을 지정합니다.' : '남성 보컬 멤버를 1명 추가합니다.' })}
@@ -25935,9 +26163,9 @@ function VocalControlComponent({
                 onTouchEnd={onLongPressEnd}
                 onTouchCancel={onLongPressEnd}
                 className={cn(
-                  "py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5",
+                  "soridraw-vocal-add-member-button py-3 px-2 rounded-2xl text-[14px] font-bold transition-all flex items-center justify-center gap-2.5",
                   vocalMembers.length < MAX_GROUP_VOCAL_MEMBERS || vocalMembers.some((member) => member.gender === 'neutral')
-                    ? "bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-600/20"
+                    ? "soridraw-vocal-add-member-button--male"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                 )}
               >
@@ -25945,6 +26173,7 @@ function VocalControlComponent({
                 남성 멤버 추가
               </button>
               <button
+                data-vocal-add-member="female"
                 onClick={() => handleAddMember('female')}
                 disabled={vocalMembers.length >= MAX_GROUP_VOCAL_MEMBERS && !vocalMembers.some((member) => member.gender === 'neutral')}
                 onMouseEnter={() => onHover({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: vocalMembers.some((member) => member.gender === 'neutral') ? '성별이 없는 기본 보컬에 여성 성별을 지정합니다.' : '여성 보컬 멤버를 1명 추가합니다.' })}
@@ -25953,9 +26182,9 @@ function VocalControlComponent({
                 onTouchEnd={onLongPressEnd}
                 onTouchCancel={onLongPressEnd}
                 className={cn(
-                  "py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5",
+                  "soridraw-vocal-add-member-button py-3 px-2 rounded-2xl text-[14px] font-bold transition-all flex items-center justify-center gap-2.5",
                   vocalMembers.length < MAX_GROUP_VOCAL_MEMBERS || vocalMembers.some((member) => member.gender === 'neutral')
-                    ? "bg-pink-600/10 border-pink-500/20 text-pink-400 hover:bg-pink-600/20"
+                    ? "soridraw-vocal-add-member-button--female"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                 )}
               >
@@ -26547,7 +26776,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
   const pendingClientXRef = useRef<number | null>(null);
   const dragRafRef = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
 
   const bpmToPercent = useCallback((value: number) => (
     ((value - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100
@@ -26720,6 +26949,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           <div className="flex items-center gap-3">
             <div className="relative min-w-0">
               <h3 
+                data-soridraw-menu-title-tooltip-anchor
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
@@ -26727,9 +26957,9 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                 <span className="w-1.5 h-6 bg-[#FFB400] rounded-full" />
                 템포(BPM)
               </h3>
-              <AnimatePresence>
-                {showTitleTooltip && (
-                  <motion.div
+              {showTitleTooltip && (
+                <MenuTitleTooltipPortal>
+<motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
@@ -26738,8 +26968,8 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                     <p className="soridraw-card-title-tooltip-label hidden">템포(BPM)</p>
                     <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">음악의 전체적인 속도를 설정합니다.</p>
                   </motion.div>
-                )}
-              </AnimatePresence>
+                </MenuTitleTooltipPortal>
+              )}
             </div>
 
             <div 

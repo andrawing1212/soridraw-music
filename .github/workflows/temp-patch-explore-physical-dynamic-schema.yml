@@ -1,0 +1,46 @@
+name: Temp Patch Explore Physical Dynamic Schema
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-patch-explore-physical-dynamic-schema.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - name: Make physical bootstrap follow actual production schema
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('.github/workflows/explore-physical-finalize.yml')
+          text = path.read_text(encoding='utf-8')
+          old = """            for(const name of TABLES) if(!tableSql.has(name)) throw new Error('Source schema missing '+name);\n            const regular=TABLES.filter((n)=>!FTS.has(n));\n            const virtual=TABLES.filter((n)=>FTS.has(n));"""
+          new = """            const presentTables=TABLES.filter((name)=>tableSql.has(name));\n            for(const name of ['public_profiles','tracks','follows','likes','profile_stats','track_stats','public_profile_first_views']) {\n              if(!tableSql.has(name)) throw new Error('Source core schema missing '+name);\n            }\n            const regular=presentTables.filter((n)=>!FTS.has(n));\n            const virtual=presentTables.filter((n)=>FTS.has(n));"""
+          if old not in text:
+              raise SystemExit('dynamic-schema primary anchor missing')
+          text = text.replace(old, new, 1)
+          old2 = """              if((row.type!=='index'&&row.type!=='trigger')||!row.sql||!TABLES.includes(String(row.tbl_name||'')))continue;"""
+          new2 = """              if((row.type!=='index'&&row.type!=='trigger')||!row.sql||!presentTables.includes(String(row.tbl_name||'')))continue;"""
+          if old2 not in text:
+              raise SystemExit('dynamic-schema secondary anchor missing')
+          text = text.replace(old2, new2, 1)
+          path.write_text(text, encoding='utf-8')
+      - name: Commit safe bootstrap correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'soridraw-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add .github/workflows/explore-physical-finalize.yml
+          git diff --cached --check
+          git commit -m 'fix(preview): clone only actual Explore production schema'
+          git push origin HEAD:preview

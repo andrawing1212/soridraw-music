@@ -14927,3 +14927,232 @@ html:not(.dark) body #root .soridraw-app-root
   outline: 0 !important;
   box-shadow: none !important;
 }
+
+/* 986 — idle hover style/layout isolation.
+ * Keep the existing visuals and interactions, but give the browser smaller
+ * invalidation boundaries while the pointer moves across dense Studio UI.
+ * No paint/size containment is used, so menus, shadows and responsive sizes
+ * keep their current behavior. Active list rows stay uncontained for popovers. */
+@media (min-width: 1100px) {
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace:not(.is-dragging)
+  .soridraw-studio-builder-pane .soridraw-studio-menu-card {
+    contain: style;
+  }
+
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace:not(.is-dragging)
+  :is(
+    .soridraw-musicnote-song-card:not(.soridraw-list-perf-item--active),
+    .soridraw-library-playlist-row:not(.soridraw-list-perf-item--active),
+    .soridraw-library-workspace-track-row:not(.soridraw-list-perf-item--active)
+  ) {
+    contain: layout style;
+  }
+}
+
+
+/* 1008 — Vocal group mobile/split parity.
+ * 1) The compact mobile builder must show each group member as one full-width row,
+ *    matching the already-approved split/mobile-pane composition.
+ * 2) Group add-member controls keep the existing dark-mode semantic blue/pink
+ *    treatment inside split Studio Black instead of being flattened by generic
+ *    Studio button rules. No vocal behavior or split geometry changes. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
+.soridraw-studio-compact-mobile-builder .soridraw-vocal-member-grid,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-vocal-member-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-studio-split-workspace, .soridraw-lite-studio-split-workspace)
+button[data-vocal-add-member="male"]:not(:disabled) {
+  background: rgb(37 99 235 / 0.10) !important;
+  background-color: rgb(37 99 235 / 0.10) !important;
+  background-image: none !important;
+  border-color: rgb(59 130 246 / 0.20) !important;
+  color: rgb(96 165 250) !important;
+  -webkit-text-fill-color: rgb(96 165 250) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-studio-split-workspace, .soridraw-lite-studio-split-workspace)
+button[data-vocal-add-member="female"]:not(:disabled) {
+  background: rgb(219 39 119 / 0.10) !important;
+  background-color: rgb(219 39 119 / 0.10) !important;
+  background-image: none !important;
+  border-color: rgb(236 72 153 / 0.20) !important;
+  color: rgb(244 114 182) !important;
+  -webkit-text-fill-color: rgb(244 114 182) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-studio-split-workspace, .soridraw-lite-studio-split-workspace)
+button[data-vocal-add-member="male"]:not(:disabled) :where(svg, span),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-studio-split-workspace, .soridraw-lite-studio-split-workspace)
+button[data-vocal-add-member="female"]:not(:disabled) :where(svg, span) {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(.soridraw-studio-split-workspace, .soridraw-lite-studio-split-workspace)
+  button[data-vocal-add-member="male"]:not(:disabled):hover {
+    background: rgb(37 99 235 / 0.20) !important;
+    background-color: rgb(37 99 235 / 0.20) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(.soridraw-studio-split-workspace, .soridraw-lite-studio-split-workspace)
+  button[data-vocal-add-member="female"]:not(:disabled):hover {
+    background: rgb(219 39 119 / 0.20) !important;
+    background-color: rgb(219 39 119 / 0.20) !important;
+  }
+}
+
+/* 1009 — Classic Dark mobile vocal group one-card rows.
+ * 1008 correctly covered Studio Black split/mobile-pane, but the normal dark
+ * mobile Studio runs under the Classic theme. Scope this only to the compact
+ * mobile builder so desktop Classic and split geometry stay unchanged. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+.soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
+.soridraw-studio-compact-mobile-builder .soridraw-vocal-member-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+/* 1010 — Real vocal member grid mobile override.
+ * Group mode owns grid-cols-2 in JSX, so target the real member-card grid
+ * directly on compact mobile, split mobile-pane, and narrow viewport.
+ * The separate male/female add-member button grid remains two columns. */
+.soridraw-studio-compact-mobile-builder .soridraw-vocal-member-grid,
+.soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-vocal-member-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+@media (max-width: 767px) {
+  body #root .soridraw-app-root .soridraw-studio-vocal-slot .soridraw-vocal-member-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+
+/* 1014 — Canonical vocal add-member button surfaces.
+ * The JSX no longer owns blue/pink backgrounds. This block is the single
+ * source of truth for light, classic dark, and split Studio presentation. */
+.soridraw-vocal-add-member-button {
+  border: 0;
+  background-image: none;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-vocal-add-member-button:not(:disabled) {
+  background: #ffffff;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-vocal-add-member-button--male:not(:disabled) {
+  color: rgb(96 165 250);
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-vocal-add-member-button--female:not(:disabled) {
+  color: rgb(244 114 182);
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
+.soridraw-vocal-add-member-button--male:not(:disabled),
+html[data-soridraw-theme="studio-black"]
+.soridraw-vocal-add-member-button--male:not(:disabled) {
+  background: rgb(37 99 235 / 0.10);
+  color: rgb(96 165 250);
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
+.soridraw-vocal-add-member-button--female:not(:disabled),
+html[data-soridraw-theme="studio-black"]
+.soridraw-vocal-add-member-button--female:not(:disabled) {
+  background: rgb(219 39 119 / 0.10);
+  color: rgb(244 114 182);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
+  .soridraw-vocal-add-member-button--male:not(:disabled):hover,
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-vocal-add-member-button--male:not(:disabled):hover {
+    background: rgb(37 99 235 / 0.20);
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
+  .soridraw-vocal-add-member-button--female:not(:disabled):hover,
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-vocal-add-member-button--female:not(:disabled):hover {
+    background: rgb(219 39 119 / 0.20);
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+  .soridraw-vocal-add-member-button:not(:disabled):hover {
+    background: #ffffff;
+  }
+}
+
+/* 1015 — Compact outer-window selected keywords follow native mobile flow.
+ * Only the real Compact workspace, entered by shrinking the browser viewport,
+ * swaps Studio Black's fixed portal rail for the existing inline builder chips.
+ * Pane-only mobile states reached by dragging the split bar never set this
+ * data attribute, so their approved keyword placement stays untouched. */
+html[data-soridraw-theme="studio-black"][data-soridraw-compact-workspace="true"]
+.soridraw-builder-live-keywords {
+  display: block !important;
+  padding-bottom: 12px !important;
+  border-bottom: 2px solid #4f3b1c !important;
+}
+
+html[data-soridraw-theme="studio-black"][data-soridraw-compact-workspace="true"]
+body > .soridraw-live-keywords-fixed {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* 1016 — Classic mobile keyword spacing, light divider and softer light chips. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-builder-live-keywords {
+    padding-bottom: 12px !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-builder-live-keywords {
+    padding-bottom: 12px !important;
+    border-bottom: 2px solid rgba(116, 89, 30, 0.38) !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-builder-live-keywords span[class*="bg-[#4A3510]/92"] {
+    background-color: rgb(74 53 16 / 0.70) !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-builder-live-keywords span[class*="bg-[#3D2530]/92"] {
+    background-color: rgb(61 37 48 / 0.70) !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-builder-live-keywords span[class*="bg-[#203546]/92"] {
+    background-color: rgb(32 53 70 / 0.70) !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-builder-live-keywords span[class*="bg-[#30284C]/92"] {
+    background-color: rgb(48 40 76 / 0.70) !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-builder-live-keywords span[class*="bg-[#233A2C]/92"] {
+    background-color: rgb(35 58 44 / 0.70) !important;
+  }
+}

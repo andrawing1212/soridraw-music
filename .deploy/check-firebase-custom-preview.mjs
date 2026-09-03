@@ -15,6 +15,16 @@ if (hostingConfig.functions || hostingConfig.firestore || hostingConfig.database
   fail('preview hosting config must not contain backend resources');
 }
 pass('isolated soridraw-preview Hosting config');
+const previewHeaders = Array.isArray(hostingConfig.hosting.headers) ? hostingConfig.hosting.headers : [];
+const allPathHeaderRule = previewHeaders.find((rule) => rule?.source === '**');
+const cacheControlHeader = Array.isArray(allPathHeaderRule?.headers)
+  ? allPathHeaderRule.headers.find((header) => String(header?.key || '').toLowerCase() === 'cache-control')
+  : null;
+const previewCacheControl = String(cacheControlHeader?.value || '').toLowerCase();
+if (!previewCacheControl.includes('no-cache') || !previewCacheControl.includes('no-store') || !previewCacheControl.includes('must-revalidate')) {
+  fail('preview shell must disable stale browser caching');
+}
+pass('preview shell cache policy is no-cache/no-store');
 
 const firebaseSource = read('src/firebase.js');
 if (!firebaseSource.includes('projectId: "soridraw-app-866a5"')) fail('backend project changed');

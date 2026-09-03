@@ -2,8 +2,6 @@ import type { AdminPermissionKey, AdminPermissions, StaffRole, UserRole } from '
 
 export const ADMIN_PERMISSION_DEFINITIONS = [
   { key: 'userManagement', label: '회원 관리', description: '회원 정보, 접속 상태와 계정 관리', path: '/admin/users' },
-  { key: 'vocalManagement', label: '보컬 관리', description: '보컬 톤 데이터 생성·수정·삭제', path: '/admin/vocals' },
-  { key: 'sectionTagManagement', label: '섹션 태그', description: '섹션 태그와 가창 큐 관리', path: '/admin/tags' },
   { key: 'sunoApiManagement', label: 'Suno API', description: 'Suno API 설정과 테스트', path: '/admin/suno-api' },
   { key: 'appSettings', label: '앱 설정', description: '메뉴 노출과 전체 앱 설정', path: '/admin/app-settings' },
   { key: 'geminiAudit', label: 'Gemini 호출', description: '이 기기의 Gemini 호출 감사 기록', path: '/admin/gemini-audit' },

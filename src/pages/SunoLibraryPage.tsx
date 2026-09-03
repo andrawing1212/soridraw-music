@@ -16,7 +16,7 @@ import { auth, db } from '../firebase';
 import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter } from '../lib/firestoreMeasured';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
-import { downloadSunoAudioWithRecovery } from '../services/sunoAudioRecovery';
+import { applyRecoveredSunoAudioUrl, downloadSunoAudioWithRecovery, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
 import { ensureDefaultPlaylists, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, fetchTrackLikes, toggleTrackLike, fetchSharedTracksStatus } from '../services/playlistService';
 import { Playlist, PlaylistItem } from '../types';
@@ -50,6 +50,7 @@ const fallbackSharedPlaylists: Playlist[] = [
 ];
 
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
+// SORIDRAW_LIBRARY_PLAYBACK_FAILURE_RECOVERY_991
 const WORKSPACE_PAGE_SIZE = 10;
 const WORKSPACE_SERVER_PAGE_SIZE = 10;
 const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE;
@@ -348,14 +349,21 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
     if (libraryFullBootstrapStarted) return;
     libraryFullBootstrapStarted = true;
     try {
-      const snapshot = await getDocs(tracksRef);
+      // Cost guard: a cold/new-origin/schema bootstrap is always bounded.
+      // Never sweep the user's whole Library merely because local cache is absent.
+      const snapshot = await getDocs(query(
+        tracksRef,
+        orderBy('createdAt', 'desc'),
+        limit(WORKSPACE_SERVER_FETCH_SIZE)
+      ));
       if (libraryWorkspaceSession !== session || session.uid !== uid) return;
-      const list = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      const docs = snapshot.docs;
+      const list = docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
       session.tracks = mergeLibraryWorkspaceSessionTracks(list, []);
       libraryWorkspaceInMemoryCache.set(uid, session.tracks);
-      session.lastDoc = null;
-      session.hasMore = false;
-      session.paginationFallback = true;
+      session.lastDoc = docs.length > 0 ? docs[docs.length - 1] : null;
+      session.hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
+      session.paginationFallback = false;
       session.ready = true;
       const persisted = await persistLibraryWorkspaceTrackCacheNow(uid, session.tracks);
       if (persisted) {
@@ -538,9 +546,14 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
       if (durableTracks !== null) {
         libraryWorkspaceInMemoryCache.set(uid, durableTracks);
         session.tracks = mergeLibraryWorkspaceSessionTracks(durableTracks, []);
-        session.lastDoc = null;
-        session.hasMore = false;
-        session.paginationFallback = true;
+        const oldestCachedTrack = session.tracks[session.tracks.length - 1] || null;
+        const cachedCursorMs = getLibraryWorkspaceTrackCreatedAtMs(oldestCachedTrack);
+        // Reconstruct a bounded cursor from the durable cache so browser/app
+        // restart never forces a full collection rebuild. At worst an exact
+        // 10-item terminal cache can cause one bounded empty-page check.
+        session.lastDoc = cachedCursorMs > 0 ? new Date(cachedCursorMs) : null;
+        session.hasMore = session.tracks.length >= WORKSPACE_SERVER_PAGE_SIZE && cachedCursorMs > 0;
+        session.paginationFallback = false;
         session.ready = true;
         markCacheDiagnostic('library', 'CACHE', 0);
         emitLibraryWorkspaceSession(session);
@@ -842,7 +855,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
-  const staleRecoveryAttemptedRef = useRef<Set<string>>(new Set());
   const [user, setUser] = useState<any>(() => appUser || auth.currentUser);
   const [remainingCredits, setRemainingCredits] = useState<number | null>(() => readStoredSunoCredits(auth.currentUser?.uid).credits);
   const [remainingCreditsUpdatedAt, setRemainingCreditsUpdatedAt] = useState<number | null>(() => readStoredSunoCredits(auth.currentUser?.uid).updatedAt);
@@ -1296,9 +1308,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const libraryDragSelectActionRef = useRef<'select' | 'deselect'>('select');
   const libraryDragSelectVisitedKeysRef = useRef<Set<string>>(new Set());
   const libraryDragSelectSuppressClickRef = useRef(false);
+  // SORIDRAW_LIBRARY_IDLE_MOUSEMOVE_982
+  const [isLibraryMousePressTracking, setIsLibraryMousePressTracking] = useState(false);
 
   useEffect(() => {
-    const stopLibraryDragSelect = () => handleLibraryDragSelectEnd();
+    const stopLibraryDragSelect = () => {
+      handleLibraryDragSelectEnd();
+      setIsLibraryMousePressTracking(false);
+    };
     window.addEventListener('mouseup', stopLibraryDragSelect);
     return () => window.removeEventListener('mouseup', stopLibraryDragSelect);
   }, []);
@@ -1514,12 +1531,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   }, []);
 
   useEffect(() => {
-    console.log("Shared page browser check:", {
-      userAgent: navigator.userAgent,
-      isKakaoInAppBrowser,
-      isSharePage: isSharedView,
-    });
-
     if (isSharedView && isKakaoInAppBrowser) {
       setShowKakaoWarning(true);
     }
@@ -1850,6 +1861,22 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   useEffect(() => () => {
     if (playlistPressTimerRef.current) window.clearTimeout(playlistPressTimerRef.current);
+    playlistPressTimerRef.current = null;
+    // If Library unmounts while a folder long-press drag is active, remove the
+    // window-level handlers too. Previously only the timer/body class was cleaned,
+    // allowing a real listener leak on route changes during an active drag.
+    const drag = playlistDragRef.current;
+    if (drag?.windowMoveHandler) window.removeEventListener('pointermove', drag.windowMoveHandler);
+    if (drag?.windowEndHandler) {
+      window.removeEventListener('pointerup', drag.windowEndHandler);
+      window.removeEventListener('pointercancel', drag.windowEndHandler);
+    }
+    if (drag?.windowTouchMoveHandler) window.removeEventListener('touchmove', drag.windowTouchMoveHandler);
+    if (drag?.windowTouchEndHandler) {
+      window.removeEventListener('touchend', drag.windowTouchEndHandler);
+      window.removeEventListener('touchcancel', drag.windowTouchEndHandler);
+    }
+    playlistDragRef.current = null;
     document.body.classList.remove('soridraw-folder-dragging');
   }, []);
 
@@ -2602,28 +2629,62 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
-  const getPlayableUrlFromSource = (source: any) => {
+  const getCompletedSunoRescueUrl = (source: any, preferredAudioId = '') => {
     if (!source || typeof source !== 'object') return '';
+    const rescueMap = source.audioRescue;
+    if (!rescueMap || typeof rescueMap !== 'object') return '';
+
+    const entries = Object.values(rescueMap).filter((entry: any) => entry && typeof entry === 'object') as any[];
+    const normalizedAudioId = String(preferredAudioId || '').trim();
+    const eligible = normalizedAudioId
+      ? entries.filter((entry: any) => String(entry?.audioId || entry?.audio_id || '').trim() === normalizedAudioId)
+      : entries.length === 1 ? entries : [];
+
+    for (const entry of eligible) {
+      const status = String(entry?.status || '').trim().toLowerCase();
+      if (status && !['completed', 'success', 'complete'].includes(status)) continue;
+      const url = String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim();
+      if (url) return url;
+    }
+    return '';
+  };
+
+  const getPlayableUrlFromSource = (source: any, preferredAudioId = '') => {
+    if (!source || typeof source !== 'object') return '';
+
+    // A completed rescue is a durable file that has already been paid for and
+    // stored. Prefer it over an expired provider MP3 URL when the row/audio id
+    // matches. This is metadata-only reuse; no conversion/generation call occurs.
+    const completedRescueUrl = getCompletedSunoRescueUrl(source, preferredAudioId);
+    if (completedRescueUrl) return completedRescueUrl;
+
     const candidates = [
       source.audioUrl,
       source.streamAudioUrl,
       source.audio_url,
       source.stream_audio_url,
       source.url,
-      source.sourceAudioUrl,
-      source.source_audio_url,
-      source.sourceStreamAudioUrl,
-      source.source_stream_audio_url,
+      source.downloadUrl,
+      source.download_url,
+      source.playUrl,
+      source.play_url,
+      source.mediaUrl,
+      source.media_url,
+      source.mp3Url,
+      source.mp3_url,
     ];
     for (const candidate of candidates) {
-      const normalized = typeof candidate === 'string' ? candidate.trim() : '';
+      const normalized = String(candidate || '').trim();
       if (normalized) return normalized;
     }
     return '';
   };
 
   const getAudioUrl = (item: any, group: any) => {
-    return getPlayableUrlFromSource(item) || getPlayableUrlFromSource(group) || '';
+    const preferredAudioId = String(item?.id || item?.audioId || item?.audio_id || '').trim();
+    return getPlayableUrlFromSource(item, preferredAudioId)
+      || getPlayableUrlFromSource(group, preferredAudioId)
+      || '';
   };
 
   const getTitle = (item: any, group: any, idx: number) => {
@@ -3241,6 +3302,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       const trackId = String(detail.trackId || '').trim();
       const audioUrl = String(detail.audioUrl || '').trim();
       const index = Number(detail.index ?? 0);
+      const recoveredAt = Number(detail.recoveredAt || Date.now());
       if (!trackId || !audioUrl) return;
 
       patchWorkspaceTrackLocally(trackId, (current) => {
@@ -3249,6 +3311,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           audioValidationStatus: 'verified',
           reportedAudioUrls: Array.from(new Set([...(Array.isArray(current?.reportedAudioUrls) ? current.reportedAudioUrls : []), audioUrl])),
           audioUrls: Array.from(new Set([...(Array.isArray(current?.audioUrls) ? current.audioUrls : []), audioUrl])),
+          lastAudioUrlRecoveredAt: recoveredAt,
         };
         if (Array.isArray(current?.sunoData) && current.sunoData.length > 0) {
           next.sunoData = current.sunoData.map((entry: any, entryIndex: number) => entryIndex === index
@@ -3267,7 +3330,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         const itemIndexRaw = item?.sourceSubTrackIndex ?? item?.subTrackIndex ?? 0;
         const itemIndex = Number.isFinite(Number(itemIndexRaw)) ? Number(itemIndexRaw) : 0;
         if (sourceId !== trackId || itemIndex !== index) return item;
-        return { ...item, audioUrl, streamAudioUrl: audioUrl, url: audioUrl };
+        return { ...item, audioUrl, streamAudioUrl: audioUrl, url: audioUrl, lastAudioUrlRecoveredAt: recoveredAt };
       }));
     };
 
@@ -3334,128 +3397,99 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return list;
   }, [filteredTracks, filter, workspaceColorFilter]);
 
-  const handlePlayTrack = (track: any, subIndex: number = 0) => {
-    const items = extractSunoData(track);
-    const item = items[subIndex] || {};
-    const url = getAudioUrl(item, track);
-    const title = getTitle(item, track, subIndex);
-    const imageUrl = getImageUrl(item, track);
-    const creatorMeta = resolveCreatorSnapshot(track, item, { fallbackToCurrentUser: true });
-
-    if (url) {
-      markWorkspaceItemPlayed(track, subIndex);
-      const newQueue = allPlayables.map(p => {
-        const queuedCreatorMeta = resolveCreatorSnapshot(p.group, p.item, { fallbackToCurrentUser: true });
-        return {
-          url: p.url,
-          title: getTitle(p.item, p.group, p.idx),
-          imageUrl: getImageUrl(p.item, p.group),
-          parent: { ...p.group, ...queuedCreatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
-          index: p.idx,
-          creatorDisplayId: queuedCreatorMeta.creatorDisplayId,
-          ownerNickname: queuedCreatorMeta.ownerNickname,
-          creatorNickname: queuedCreatorMeta.creatorNickname,
-          ownerEmail: queuedCreatorMeta.ownerEmail,
-          creatorEmail: queuedCreatorMeta.creatorEmail,
-          lyrics: p.item?.lyrics || p.item?.lyricsText || p.group?.lyrics || p.group?.lyricsText || null
-        };
-      });
-      playTrack({
-        url,
-        title,
-        imageUrl,
-        parent: { ...track, ...creatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
-        index: subIndex,
-        creatorDisplayId: creatorMeta.creatorDisplayId,
-        ownerNickname: creatorMeta.ownerNickname,
-        creatorNickname: creatorMeta.creatorNickname,
-        ownerEmail: creatorMeta.ownerEmail,
-        creatorEmail: creatorMeta.creatorEmail,
-        lyrics: item?.lyrics || item?.lyricsText || track?.lyrics || track?.lyricsText || null
-      }, newQueue);
-    }
+  // Match the last known-good Vercel behavior: when a stored URL exists, try it
+  // first and let GlobalPlayer recover only after a real playback failure. This
+  // preserves the failed URL so recovery can reject it and select a different
+  // verified provider URL. Only URL-less rows need pre-play recovery.
+  const shouldRecoverAudioUrlBeforePlay = (group: any, item: any): boolean => {
+    if (isSharedView || !group?.taskId) return false;
+    return !getAudioUrl(item, group);
   };
 
-  useEffect(() => {
-    if (!user || isSharedView || tracks.length === 0) return;
+  const handlePlayTrack = async (track: any, subIndex: number = 0) => {
+    let playGroup = track;
+    let items = extractSunoData(playGroup);
+    let item = items[subIndex] || {};
+    let url = getAudioUrl(item, playGroup);
 
-    const staleTracks = tracks.filter((group) => {
-      const id = String(group?.id || '').trim();
-      return Boolean(id)
-        && isTrackPastAutoCheckWindow(group)
-        && !staleRecoveryAttemptedRef.current.has(id)
-        && !checkingIdsRef.current.has(id);
+    if (shouldRecoverAudioUrlBeforePlay(playGroup, item)) {
+      const recovered = await recoverSunoAudioUrl({
+        url: url || '',
+        audioUrl: url || '',
+        parent: playGroup,
+        index: subIndex,
+        trackId: playGroup?.id || playGroup?.trackId || '',
+        taskId: playGroup?.taskId || '',
+      });
+      if (recovered?.audioUrl) {
+        const recoveredPlayable = applyRecoveredSunoAudioUrl({
+          url: url || '',
+          audioUrl: url || '',
+          parent: playGroup,
+          index: subIndex,
+        }, recovered);
+        playGroup = recoveredPlayable?.parent || playGroup;
+        items = extractSunoData(playGroup);
+        item = items[subIndex] || item;
+        url = recovered.audioUrl;
+      } else if (!url) {
+        showToast('Music API에서 현재 재생 가능한 음원 링크를 찾지 못했습니다.');
+        return;
+      }
+    }
+
+    if (!url) return;
+
+    const title = getTitle(item, playGroup, subIndex);
+    const imageUrl = getImageUrl(item, playGroup);
+    const creatorMeta = resolveCreatorSnapshot(playGroup, item, { fallbackToCurrentUser: true });
+    markWorkspaceItemPlayed(playGroup, subIndex);
+
+    let newQueue = allPlayables.map(p => {
+      const queuedCreatorMeta = resolveCreatorSnapshot(p.group, p.item, { fallbackToCurrentUser: true });
+      return {
+        url: p.url,
+        title: getTitle(p.item, p.group, p.idx),
+        imageUrl: getImageUrl(p.item, p.group),
+        parent: { ...p.group, ...queuedCreatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
+        index: p.idx,
+        creatorDisplayId: queuedCreatorMeta.creatorDisplayId,
+        ownerNickname: queuedCreatorMeta.ownerNickname,
+        creatorNickname: queuedCreatorMeta.creatorNickname,
+        ownerEmail: queuedCreatorMeta.ownerEmail,
+        creatorEmail: queuedCreatorMeta.creatorEmail,
+        lyrics: p.item?.lyrics || p.item?.lyricsText || p.group?.lyrics || p.group?.lyricsText || null
+      };
     });
 
-    staleTracks.forEach((group) => {
-      const id = String(group.id || '').trim();
-      if (!id) return;
+    const parentId = String(playGroup?.id || playGroup?.trackId || '').trim();
+    const currentQueueIndex = newQueue.findIndex((queued: any) => (
+      String(queued?.parent?.id || queued?.parent?.trackId || '').trim() === parentId
+      && Number(queued?.index ?? 0) === Number(subIndex)
+    ));
+    const currentQueueTrack = {
+      url,
+      title,
+      imageUrl,
+      parent: { ...playGroup, ...creatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
+      index: subIndex,
+      creatorDisplayId: creatorMeta.creatorDisplayId,
+      ownerNickname: creatorMeta.ownerNickname,
+      creatorNickname: creatorMeta.creatorNickname,
+      ownerEmail: creatorMeta.ownerEmail,
+      creatorEmail: creatorMeta.creatorEmail,
+      lyrics: item?.lyrics || item?.lyricsText || playGroup?.lyrics || playGroup?.lyricsText || null
+    };
+    if (currentQueueIndex >= 0) newQueue[currentQueueIndex] = currentQueueTrack;
+    else newQueue = [currentQueueTrack, ...newQueue];
 
-      staleRecoveryAttemptedRef.current.add(id);
-      checkingIdsRef.current.add(id);
+    playTrack(currentQueueTrack, newQueue);
+  };
 
-      void (async () => {
-        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', id);
-        const markTimedOut = async (reason: string) => {
-          await updateDoc(trackRef, {
-            status: 'failed',
-            failedAt: serverTimestamp(),
-            failureReason: reason,
-            errorMessage: reason,
-            lastStatusRaw: 'timeout | stale_recovery',
-            lastStatusCheckedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        };
-
-        try {
-          if (!group.taskId) {
-            await markTimedOut('생성 상태 확인 불가 (10분 초과 · Task ID 없음)');
-            return;
-          }
-
-          const token = await user.getIdToken();
-          const res = await fetch('https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({ trackId: id, taskId: group.taskId }),
-          });
-
-          let data: any = null;
-          try {
-            data = await res.json();
-          } catch {
-            data = null;
-          }
-
-          if (!res.ok || !data) {
-            await markTimedOut('상태 조회 실패 및 생성 시간 초과 (10분 경과)');
-            return;
-          }
-
-          const resolved = await syncStatusResponseToFirestore(id, group.taskId, data);
-          const resolvedStatus = String(resolved?.status || '').toLowerCase();
-          if (['completed', 'success', 'failed', 'cancelled', 'canceled'].includes(resolvedStatus)) {
-            return;
-          }
-
-          await markTimedOut('생성 상태 장기 미확정 (10분 초과)');
-        } catch (error) {
-          console.warn(`[Suno stale recovery] ${id}`, error);
-          try {
-            await markTimedOut('상태 조회 실패 및 생성 시간 초과 (10분 경과)');
-          } catch (writeError) {
-            console.error('[Suno stale recovery] failed to finalize stale track:', writeError);
-          }
-        } finally {
-          checkingIdsRef.current.delete(id);
-        }
-      })();
-    });
-  }, [tracks, user, isSharedView]);
+  // Cost guard: old/stale Suno rows are rendered as '상태 확인 필요' only.
+  // Page entry/reload must never fan out one Function call + one Firestore
+  // write per stale track. The existing explicit status-check action owns
+  // reconciliation; active in-progress generation polling remains separate.
 
   useEffect(() => {
     if (isSharedView || !user) return;
@@ -3748,7 +3782,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         </span>
       );
     }
-    switch (group.status) {
+    const rescueEntries = Object.values(group?.audioRescue || {}) as any[];
+    const hasCompletedRescue = rescueEntries.some((entry: any) => {
+      const rescueStatus = String(entry?.status || '').trim().toLowerCase();
+      const rescueUrl = String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim();
+      return Boolean(rescueUrl) && (!rescueStatus || ['completed', 'success', 'complete'].includes(rescueStatus));
+    });
+    const normalizedDisplayStatus = String(group.status || '').trim().toLowerCase();
+    const displayStatus = hasCompletedRescue
+      && ['processing', 'submitted', 'pending', 'generating', 'queued'].includes(normalizedDisplayStatus)
+      ? 'completed'
+      : normalizedDisplayStatus;
+    switch (displayStatus) {
       case 'failed':
       case 'cancelled':
       case 'canceled':
@@ -7096,7 +7141,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       const isFailed = ['failed', 'cancelled', 'canceled'].includes(normalizedGroupStatus);
                       const isCompletedStatus = ['completed', 'success', 'complete'].includes(normalizedGroupStatus);
                       const isPendingStatus = ['processing', 'submitted', 'pending', 'generating', 'queued'].includes(normalizedGroupStatus);
-                      const isCompleted = Boolean(audioUrl && (isCompletedStatus || hasValidDuration));
+                      const rescueAudioId = String(item?.id || item?.audioId || item?.audio_id || '').trim();
+                      const completedRescueUrl = getCompletedSunoRescueUrl(group, rescueAudioId);
+                      const hasCompletedRescue = Boolean(completedRescueUrl);
+                      const isCompleted = Boolean(audioUrl && (isCompletedStatus || hasValidDuration || hasCompletedRescue));
+                      const canRecoverPlaybackUrl = !isSharedView && Boolean(group.taskId) && (isCompletedStatus || hasValidDuration || hasCompletedRescue);
+                      const canPlayOrRecover = Boolean(audioUrl) || canRecoverPlaybackUrl;
                       const isCompletedWithoutAudio = isCompletedStatus && !audioUrl;
                       const isStalePending = !isFailed && isPendingStatus && !audioUrl && isTrackPastAutoCheckWindow(group);
                       const isPending = !isFailed && isPendingStatus && !audioUrl && !isStalePending;
@@ -7113,16 +7163,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           data-selection-keep="true"
                           className={`soridraw-library-workspace-track-row soridraw-perf-layout-region-item group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 transition-colors cursor-pointer ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onMouseDown={(event) => {
+                            setIsLibraryMousePressTracking(true);
                             handleLibraryDragSelectStart(event, selection);
                             handleLibraryCardLongPressStart(event, selection);
                           }}
-                          onMouseMove={(event) => {
+                          onMouseMove={(multiSelectMode || isLibraryMousePressTracking) ? ((event: React.MouseEvent<HTMLDivElement>) => {
                             handleLibraryDragSelectMove(event, selection);
                             handleLibraryCardLongPressMove(event);
-                          }}
+                          }) : undefined}
                           onMouseUp={() => {
                             handleLibraryDragSelectEnd();
                             handleLibraryCardLongPressEnd();
+                            setIsLibraryMousePressTracking(false);
                           }}
                           onTouchStart={(event) => handleLibraryCardLongPressStart(event, selection)}
                           onTouchMove={handleLibraryCardLongPressMove}
@@ -7154,12 +7206,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               audioUrl,
                             });
                           }}
-                          onMouseEnter={(event) => {
+                          onMouseEnter={multiSelectMode ? ((event: React.MouseEvent<HTMLDivElement>) => {
                             handleLibraryDragSelectEnter(event, selection);
-                          }}
-                          onMouseLeave={() => {
-                            handleLibraryCardLongPressEnd();
-                          }}
+                          }) : undefined}
+                          onMouseLeave={isLibraryMousePressTracking ? handleLibraryCardLongPressEnd : undefined}
                           onClick={(e) => {
                              if (consumeLibrarySuppressedClick(e, selection.key)) return;
                              if (consumeLibraryDragSelectClick(e)) return;
@@ -7173,9 +7223,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                resetLibraryDragSelectState();
                                return;
                              }
-                             if (audioUrl) {
-                               if (isCurrent) togglePlayPause();
-                               else handlePlayTrack(group, idx);
+                             if (canPlayOrRecover) {
+                               if (audioUrl && isCurrent) togglePlayPause();
+                               else void handlePlayTrack(group, idx);
                              }
                           }}
                         >
@@ -7183,7 +7233,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             imageUrl={getImageUrl(item, group)}
                             isActive={isCurrent}
                             isPlaying={isPlaying}
-                            disabled={!audioUrl}
+                            disabled={!canPlayOrRecover}
                             durationLabel={isCompleted && hasValidDuration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : undefined}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -7191,9 +7241,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                 toggleSelectedTrack(selection);
                                 return;
                               }
-                              if (audioUrl) {
-                                if (isCurrent) togglePlayPause();
-                                else handlePlayTrack(group, idx);
+                              if (canPlayOrRecover) {
+                                if (audioUrl && isCurrent) togglePlayPause();
+                                else void handlePlayTrack(group, idx);
                               }
                             }}
                           />
@@ -7558,19 +7608,21 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     <div 
                       key={item.id} 
                       onMouseDown={(event) => {
+                        setIsLibraryMousePressTracking(true);
                         handleLibraryDragSelectStart(event, selection);
                         handleLibraryCardLongPressStart(event, selection);
                       }}
-                      onMouseMove={(event) => {
+                      onMouseMove={(multiSelectMode || isLibraryMousePressTracking) ? ((event: React.MouseEvent<HTMLDivElement>) => {
                         handleLibraryDragSelectMove(event, selection);
                         handleLibraryCardLongPressMove(event);
-                      }}
+                      }) : undefined}
                       onMouseUp={() => {
                         handleLibraryDragSelectEnd();
                         handleLibraryCardLongPressEnd();
+                        setIsLibraryMousePressTracking(false);
                       }}
-                      onMouseEnter={(event) => handleLibraryDragSelectEnter(event, selection)}
-                      onMouseLeave={handleLibraryCardLongPressEnd}
+                      onMouseEnter={multiSelectMode ? ((event: React.MouseEvent<HTMLDivElement>) => handleLibraryDragSelectEnter(event, selection)) : undefined}
+                      onMouseLeave={isLibraryMousePressTracking ? handleLibraryCardLongPressEnd : undefined}
                       onTouchStart={(event) => handleLibraryCardLongPressStart(event, selection)}
                       onTouchMove={handleLibraryCardLongPressMove}
                       onTouchEnd={handleLibraryCardLongPressEnd}

@@ -1,0 +1,50 @@
+name: Cost Zero Stage 2A D1 Readonly Probe
+# recheck-20260901
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cost-zero-stage2a-d1-readonly-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare exact live Worker settings
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false
+          npm run cf:prepare
+          node --check .remote-worker/worker.js
+
+      - name: Read-only D1 capability probe
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute soridraw-explore-db \
+            --remote \
+            --command 'SELECT 1 AS ok;' \
+            --config .remote-worker/wrangler.jsonc
+          echo 'D1_READONLY_EXECUTE=PASS'
+          echo 'D1_WRITE_REQUESTED=false'

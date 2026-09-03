@@ -1,0 +1,42 @@
+name: Temp Cloudflare Build Log Read
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-cloudflare-build-log-read.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read failed Workers Build logs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+          BUILD_UUID: 7a05fcbe-3c8c-478b-8d48-0108b9321640
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          url=f"https://api.cloudflare.com/client/v4/accounts/{os.environ['ACCOUNT_ID']}/builds/builds/{os.environ['BUILD_UUID']}/logs"
+          req=urllib.request.Request(url, headers={'Authorization':f"Bearer {os.environ['CLOUDFLARE_API_TOKEN']}"})
+          try:
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  data=json.load(r)
+          except urllib.error.HTTPError as e:
+              print('CLOUDFLARE_BUILD_LOG_HTTP='+str(e.code))
+              print(e.read().decode('utf-8','replace')[:2000])
+              raise
+          result=data.get('result') or {}
+          print('CLOUDFLARE_BUILD_LOG_READ=PASS')
+          for line in result.get('lines') or []:
+              if isinstance(line, list):
+                  print(' '.join(str(x) for x in line))
+              else:
+                  print(str(line))
+          print('TRUNCATED='+str(result.get('truncated', False)))
+          PY

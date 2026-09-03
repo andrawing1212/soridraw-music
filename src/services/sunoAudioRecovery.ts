@@ -1,9 +1,7 @@
-import { auth } from '../firebase';
+import { auth, getFirebaseAppCheckToken } from '../firebase';
+import { archiveOldSunoMp3ToR2 } from './sunoR2Archive';
 
 const SUNO_STATUS_ENDPOINT = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoTrackStatus';
-const RECOVERY_CACHE_PREFIX = 'soridraw.suno.audioRecovery.v2';
-const RECOVERY_NEGATIVE_CACHE_MS = 24 * 60 * 60 * 1000;
-const RECOVERY_CACHE_MAX_ENTRIES = 200;
 
 type RecoveryResult = {
   audioUrl: string;
@@ -21,15 +19,6 @@ type DownloadRecoveryResult = {
   audioUrl: string;
 };
 
-type RecoveryCacheEntry = {
-  audioUrl?: string;
-  updatedAt: number;
-  failedUntil?: number;
-  failedUrl?: string;
-};
-
-type RecoveryCacheMap = Record<string, RecoveryCacheEntry>;
-
 const recoveryInFlight = new Map<string, Promise<RecoveryResult | null>>();
 
 const toText = (value: unknown) => typeof value === 'string' ? value.trim() : '';
@@ -40,67 +29,6 @@ const firstText = (...values: unknown[]) => {
     if (text) return text;
   }
   return '';
-};
-
-const getRecoveryStorageKey = (uid: string) => `${RECOVERY_CACHE_PREFIX}:${uid}`;
-
-const readRecoveryCacheMap = (uid: string): RecoveryCacheMap => {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = window.localStorage.getItem(getRecoveryStorageKey(uid));
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-};
-
-const writeRecoveryCacheMap = (uid: string, cache: RecoveryCacheMap) => {
-  if (typeof window === 'undefined') return;
-  try {
-    const entries = Object.entries(cache)
-      .filter(([, value]) => value && typeof value === 'object')
-      .sort((a, b) => Number(b[1]?.updatedAt || 0) - Number(a[1]?.updatedAt || 0))
-      .slice(0, RECOVERY_CACHE_MAX_ENTRIES);
-    window.localStorage.setItem(getRecoveryStorageKey(uid), JSON.stringify(Object.fromEntries(entries)));
-  } catch {
-    // Recovery cache is best-effort only.
-  }
-};
-
-const readRecoveryCacheEntry = (uid: string, cacheKey: string): RecoveryCacheEntry | null => {
-  const entry = readRecoveryCacheMap(uid)[cacheKey];
-  return entry && typeof entry === 'object' ? entry : null;
-};
-
-const writeRecoverySuccess = (uid: string, cacheKey: string, audioUrl: string) => {
-  const cache = readRecoveryCacheMap(uid);
-  cache[cacheKey] = {
-    audioUrl,
-    updatedAt: Date.now(),
-  };
-  writeRecoveryCacheMap(uid, cache);
-};
-
-const writeRecoveryFailure = (uid: string, cacheKey: string, failedUrl: string) => {
-  const cache = readRecoveryCacheMap(uid);
-  cache[cacheKey] = {
-    updatedAt: Date.now(),
-    failedUntil: Date.now() + RECOVERY_NEGATIVE_CACHE_MS,
-    failedUrl,
-  };
-  writeRecoveryCacheMap(uid, cache);
-};
-
-const touchRecoverySuccess = (uid: string, cacheKey: string, entry: RecoveryCacheEntry) => {
-  if (!entry.audioUrl) return;
-  const cache = readRecoveryCacheMap(uid);
-  cache[cacheKey] = {
-    audioUrl: entry.audioUrl,
-    updatedAt: Date.now(),
-  };
-  writeRecoveryCacheMap(uid, cache);
 };
 
 const getAudioCandidates = (source: any): string[] => {
@@ -155,7 +83,6 @@ const getTrackContext = (track: any) => {
   const rawIndex = track?.index ?? track?.subTrackIndex ?? track?.sourceSubTrackIndex ?? parent?.subTrackIndex ?? parent?.sourceSubTrackIndex;
   const parsedIndex = Number(rawIndex);
   const index = Number.isFinite(parsedIndex) && parsedIndex >= 0 ? parsedIndex : 0;
-  const currentUrl = firstText(track?.url, track?.audioUrl, track?.streamAudioUrl, ...getAudioCandidates(parent));
   const currentSubItem = Array.isArray(parent?.sunoData) ? parent.sunoData[index] : null;
   const subTrackId = firstText(
     track?.subTrackId,
@@ -164,6 +91,13 @@ const getTrackContext = (track: any) => {
     currentSubItem?.id,
     currentSubItem?.audioId,
   );
+  const rescueMap = parent?.audioRescue && typeof parent.audioRescue === 'object' ? parent.audioRescue : {};
+  const rescueEntry = rescueMap?.[String(index)] || {};
+  const rescueStatus = firstText(rescueEntry?.status).toLowerCase();
+  const existingRescueUrl = (!rescueStatus || ['completed', 'success', 'complete'].includes(rescueStatus))
+    ? firstText(rescueEntry?.audioUrl, rescueEntry?.audio_url, rescueEntry?.url)
+    : '';
+  const currentUrl = firstText(existingRescueUrl, track?.url, track?.audioUrl, track?.streamAudioUrl, ...getAudioCandidates(parent));
   return { parent, trackId, taskId, index, currentUrl, subTrackId };
 };
 
@@ -173,6 +107,13 @@ const chooseRecoveredUrl = (payload: any, track: any, failedUrl = '') => {
   const verified = Array.isArray(payload?.audioUrls)
     ? payload.audioUrls.map(toText).filter(Boolean)
     : [];
+  const validationStatus = firstText(payload?.audioValidationStatus, payload?.data?.audioValidationStatus).toLowerCase();
+
+  // SORIDRAW_SUNO_VERIFIED_MP3_ONLY_999
+  // Normal playback/download stays MP3-only. getSunoTrackStatus byte-probes provider
+  // URLs first; when it reports pending/empty/missing, do not retry stale raw URLs and
+  // do not call any WAV conversion/recovery endpoint from this automatic path.
+  if (validationStatus && validationStatus !== 'verified') return '';
 
   let matchedItem: any = null;
   if (subTrackId) {
@@ -186,29 +127,56 @@ const chooseRecoveredUrl = (payload: any, track: any, failedUrl = '') => {
     if (text && !ordered.includes(text)) ordered.push(text);
   };
 
-  if (verified.length > 0 && sunoData.length > 0 && verified.length === sunoData.length) {
-    push(verified[index]);
+  if (validationStatus === 'verified') {
+    if (verified.length > 0 && sunoData.length > 0 && verified.length === sunoData.length) {
+      push(verified[index]);
+    }
+    getAudioCandidates(matchedItem).forEach((candidate) => {
+      if (verified.includes(candidate)) push(candidate);
+    });
+    if (index === 0) {
+      push(payload?.audioUrl);
+      push(payload?.streamAudioUrl);
+    }
+    verified.forEach(push);
+  } else {
+    // Compatibility only for older Function responses that do not expose
+    // audioValidationStatus yet. No WAV endpoint is reachable from this service.
+    if (verified.length > 0 && sunoData.length > 0 && verified.length === sunoData.length) {
+      push(verified[index]);
+    }
+    getAudioCandidates(matchedItem).forEach(push);
+    if (index === 0) {
+      push(payload?.audioUrl);
+      push(payload?.streamAudioUrl);
+    }
+    verified.forEach(push);
+    sunoData.forEach((item: any) => getAudioCandidates(item).forEach(push));
   }
-  getAudioCandidates(matchedItem).forEach(push);
-  if (index === 0) {
-    push(payload?.audioUrl);
-    push(payload?.streamAudioUrl);
-  }
-  verified.forEach(push);
-  sunoData.forEach((item: any) => getAudioCandidates(item).forEach(push));
 
   const normalizedFailed = toText(failedUrl);
-  return ordered.find((url) => url !== normalizedFailed) || '';
+  return ordered.find((url) => url !== normalizedFailed) || ordered[0] || '';
 };
 
-const dispatchRecoveredAudioUrl = (result: RecoveryResult) => {
+const dispatchRecoveredAudio = (result: RecoveryResult) => {
   try {
     window.dispatchEvent(new CustomEvent('soridraw:suno-audio-url-recovered', {
       detail: result,
     }));
   } catch {
-    // UI/session sync is best-effort. Recovery persistence is local-first.
+    // UI event sync is best-effort.
   }
+};
+
+const getRecoveryHeaders = async (user: NonNullable<typeof auth.currentUser>) => {
+  const token = await user.getIdToken();
+  const appCheckToken = await getFirebaseAppCheckToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`,
+  };
+  if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
+  return headers;
 };
 
 export const applyRecoveredSunoAudioUrl = (track: any, result: RecoveryResult | null) => {
@@ -241,48 +209,25 @@ export const applyRecoveredSunoAudioUrl = (track: any, result: RecoveryResult | 
 export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: string }): Promise<RecoveryResult | null> => {
   const user = auth.currentUser;
   const context = getTrackContext(track);
-  if (!user || !context.trackId || !context.taskId) return null;
+  if (!user || !context.trackId) return null;
 
-  const cacheKey = `${context.trackId}:${context.taskId}:${context.index}`;
-  const inFlightKey = `${user.uid}:${cacheKey}`;
-  const failedUrl = toText(options?.failedUrl || context.currentUrl);
-  const cached = readRecoveryCacheEntry(user.uid, cacheKey);
+  // SORIDRAW_R2_LAZY_MP3_1000: old-track recovery first reuses or creates a private R2 MP3 copy from existing bytes.
+  // This path never calls WAV generation or any paid Music API conversion.
+  const archived = await archiveOldSunoMp3ToR2(track);
+  if (archived?.audioUrl) return archived;
+  if (!context.taskId) return null;
 
-  if (cached?.audioUrl && cached.audioUrl !== failedUrl) {
-    const result: RecoveryResult = {
-      audioUrl: cached.audioUrl,
-      trackId: context.trackId,
-      taskId: context.taskId,
-      index: context.index,
-      sunoData: null,
-      raw: { cacheHit: true },
-    };
-    touchRecoverySuccess(user.uid, cacheKey, cached);
-    dispatchRecoveredAudioUrl(result);
-    return result;
-  }
-
-  if (cached?.failedUntil && cached.failedUntil > Date.now()) {
-    return null;
-  }
-
-  const existing = recoveryInFlight.get(inFlightKey);
+  const key = `${user.uid}:${context.trackId}:${context.taskId}:${context.index}`;
+  const existing = recoveryInFlight.get(key);
   if (existing) return existing;
 
   const promise = (async () => {
     try {
-      const token = await user.getIdToken();
+      const headers = await getRecoveryHeaders(user);
       const response = await fetch(SUNO_STATUS_ENDPOINT, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          trackId: context.trackId,
-          taskId: context.taskId,
-          recoveryOnly: true,
-        }),
+        headers,
+        body: JSON.stringify({ trackId: context.trackId, taskId: context.taskId }),
       });
 
       let payload: any = null;
@@ -291,16 +236,10 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
       } catch {
         payload = null;
       }
-      if (!response.ok || !payload) {
-        writeRecoveryFailure(user.uid, cacheKey, failedUrl);
-        return null;
-      }
+      if (!response.ok || !payload) return null;
 
-      const audioUrl = chooseRecoveredUrl(payload, track, failedUrl);
-      if (!audioUrl) {
-        writeRecoveryFailure(user.uid, cacheKey, failedUrl);
-        return null;
-      }
+      const audioUrl = chooseRecoveredUrl(payload, track, options?.failedUrl || context.currentUrl);
+      if (!audioUrl) return null;
 
       const result: RecoveryResult = {
         audioUrl,
@@ -311,19 +250,17 @@ export const recoverSunoAudioUrl = async (track: any, options?: { failedUrl?: st
         raw: payload,
       };
 
-      writeRecoverySuccess(user.uid, cacheKey, audioUrl);
-      dispatchRecoveredAudioUrl(result);
+      dispatchRecoveredAudio(result);
       return result;
     } catch (error) {
-      console.warn('Suno audio URL recovery failed:', error);
-      writeRecoveryFailure(user.uid, cacheKey, failedUrl);
+      console.warn('Suno MP3 URL recovery failed:', error);
       return null;
     } finally {
-      recoveryInFlight.delete(inFlightKey);
+      recoveryInFlight.delete(key);
     }
   })();
 
-  recoveryInFlight.set(inFlightKey, promise);
+  recoveryInFlight.set(key, promise);
   return promise;
 };
 
@@ -381,6 +318,9 @@ export const downloadSunoAudioWithRecovery = async (track: any, title?: string):
   const context = getTrackContext(track);
   const initialUrl = context.currentUrl;
 
+  // A download is also an explicit revisit. Archive in parallel without delaying a still-working provider download.
+  void archiveOldSunoMp3ToR2(track);
+
   if (initialUrl && await tryBlobDownload(initialUrl, title)) {
     return { ok: true, recovered: false, directFallback: false, audioUrl: initialUrl };
   }
@@ -395,7 +335,7 @@ export const downloadSunoAudioWithRecovery = async (track: any, title?: string):
     }
   }
 
-  // If no Task ID exists but the original URL is still directly accessible, allow the browser to open it.
+  // No automatic WAV conversion or WAV reuse here. WAV remains a separate explicit option.
   if (!context.taskId && initialUrl && triggerDirectDownloadFallback(initialUrl, title)) {
     return { ok: true, recovered: false, directFallback: true, audioUrl: initialUrl };
   }

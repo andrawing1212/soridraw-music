@@ -1,0 +1,501 @@
+name: Stage5 Version Signal Canary
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-stage5-version-signal-canary.yml'
+permissions:
+  contents: write
+concurrency:
+  group: stage5-version-signal-canary
+  cancel-in-progress: true
+jobs:
+  stage5:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      BACKEND_PROJECT: soridraw-app-866a5
+      HOSTING_PROJECT: soridraw
+      PREVIEW_DOMAIN: preview.soridraw.com
+      RC_PARAM: soridraw_preview_version_signal_v1
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply Stage 5 singleton Remote Config signal client
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > src/services/versionSignalService.ts <<'EOF'
+          import '../firebase';
+          import { getApp } from 'firebase/app';
+          import {
+            activate,
+            ensureInitialized,
+            fetchAndActivate,
+            getRemoteConfig,
+            getString,
+            isSupported,
+            onConfigUpdate,
+            type Unsubscribe,
+          } from 'firebase/remote-config';
+
+          export const VERSION_SIGNAL_DIAGNOSTICS_EVENT = 'soridraw:version-signal-diagnostics';
+          export const VERSION_SIGNAL_DATA_EVENT = 'soridraw:version-signal';
+          export const PREVIEW_VERSION_SIGNAL_PARAM = 'soridraw_preview_version_signal_v1';
+
+          export type VersionSignalDiagnostics = {
+            enabled: boolean;
+            provider: 'remote-config';
+            status: 'disabled' | 'connecting' | 'connected' | 'error';
+            bootstrapFetches: number;
+            realtimeEvents: number;
+            versions: Record<string, number>;
+            updatedKeys: string[];
+            lastEventAt: number;
+            error: string;
+          };
+
+          const PREVIEW_HOSTS = new Set([
+            'preview.soridraw.com',
+            'soridraw-preview.web.app',
+            'soridraw-preview.firebaseapp.com',
+          ]);
+          const BOOTSTRAP_STORAGE_KEY = 'soridraw_stage5_rc_bootstrap_complete_v1';
+          const VERSION_STORAGE_KEY = 'soridraw_stage5_rc_versions_v1';
+
+          let diagnostics: VersionSignalDiagnostics = {
+            enabled: false,
+            provider: 'remote-config',
+            status: 'disabled',
+            bootstrapFetches: 0,
+            realtimeEvents: 0,
+            versions: {},
+            updatedKeys: [],
+            lastEventAt: 0,
+            error: '',
+          };
+          let startPromise: Promise<void> | null = null;
+          let unsubscribe: Unsubscribe | null = null;
+
+          const normalizeVersions = (value: unknown): Record<string, number> => {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+            const result: Record<string, number> = {};
+            Object.entries(value as Record<string, unknown>).forEach(([key, raw]) => {
+              const numberValue = Number(raw || 0);
+              if (Number.isFinite(numberValue) && numberValue >= 0) {
+                result[String(key)] = Math.floor(numberValue);
+              }
+            });
+            return result;
+          };
+
+          const parseVersions = (raw: string): Record<string, number> => {
+            try {
+              return normalizeVersions(JSON.parse(String(raw || '{}')));
+            } catch {
+              return {};
+            }
+          };
+
+          const persistVersions = (versions: Record<string, number>) => {
+            if (typeof localStorage === 'undefined') return;
+            try { localStorage.setItem(VERSION_STORAGE_KEY, JSON.stringify(versions)); } catch {}
+          };
+
+          const publishDiagnostics = (patch: Partial<VersionSignalDiagnostics>) => {
+            diagnostics = { ...diagnostics, ...patch };
+            if (typeof window !== 'undefined') {
+              (window as any).__soridrawVersionSignalDiagnostics = { ...diagnostics };
+              window.dispatchEvent(new CustomEvent(VERSION_SIGNAL_DIAGNOSTICS_EVENT, {
+                detail: { ...diagnostics },
+              }));
+            }
+          };
+
+          export const readVersionSignalDiagnostics = (): VersionSignalDiagnostics => ({ ...diagnostics });
+
+          export const stopPreviewVersionSignal = () => {
+            try { unsubscribe?.(); } catch {}
+            unsubscribe = null;
+            startPromise = null;
+            publishDiagnostics({ status: diagnostics.enabled ? 'disabled' : diagnostics.status });
+          };
+
+          export const startPreviewVersionSignal = (): Promise<void> => {
+            if (startPromise) return startPromise;
+
+            startPromise = (async () => {
+              if (typeof window === 'undefined' || !PREVIEW_HOSTS.has(window.location.hostname.toLowerCase())) {
+                publishDiagnostics({ enabled: false, status: 'disabled' });
+                return;
+              }
+
+              publishDiagnostics({ enabled: true, status: 'connecting', error: '' });
+              if (!(await isSupported())) {
+                publishDiagnostics({ status: 'error', error: 'Remote Config IndexedDB unsupported' });
+                return;
+              }
+
+              const remoteConfig = getRemoteConfig(getApp());
+              remoteConfig.settings.fetchTimeoutMillis = 10_000;
+              remoteConfig.settings.minimumFetchIntervalMillis = 12 * 60 * 60 * 1000;
+              remoteConfig.defaultConfig = {
+                [PREVIEW_VERSION_SIGNAL_PARAM]: JSON.stringify({ genres: 0 }),
+              };
+
+              await ensureInitialized(remoteConfig);
+
+              let versions = parseVersions(getString(remoteConfig, PREVIEW_VERSION_SIGNAL_PARAM));
+              let needsBootstrap = true;
+              try { needsBootstrap = localStorage.getItem(BOOTSTRAP_STORAGE_KEY) !== 'true'; } catch {}
+
+              if (needsBootstrap) {
+                try {
+                  await fetchAndActivate(remoteConfig);
+                  versions = parseVersions(getString(remoteConfig, PREVIEW_VERSION_SIGNAL_PARAM));
+                  try { localStorage.setItem(BOOTSTRAP_STORAGE_KEY, 'true'); } catch {}
+                  publishDiagnostics({
+                    bootstrapFetches: diagnostics.bootstrapFetches + 1,
+                    versions,
+                  });
+                  persistVersions(versions);
+                } catch (error: any) {
+                  console.warn('[Version Signal] one-time bootstrap fetch failed; realtime listener will retry on invalidation.', error);
+                }
+              } else {
+                persistVersions(versions);
+              }
+
+              unsubscribe = onConfigUpdate(remoteConfig, {
+                next: (configUpdate) => {
+                  void (async () => {
+                    const updatedKeys = Array.from(configUpdate.getUpdatedKeys());
+                    if (!updatedKeys.includes(PREVIEW_VERSION_SIGNAL_PARAM)) {
+                      publishDiagnostics({ updatedKeys });
+                      return;
+                    }
+                    await activate(remoteConfig);
+                    const nextVersions = parseVersions(getString(remoteConfig, PREVIEW_VERSION_SIGNAL_PARAM));
+                    const lastEventAt = Date.now();
+                    persistVersions(nextVersions);
+                    publishDiagnostics({
+                      status: 'connected',
+                      versions: nextVersions,
+                      updatedKeys,
+                      realtimeEvents: diagnostics.realtimeEvents + 1,
+                      lastEventAt,
+                      error: '',
+                    });
+                    window.dispatchEvent(new CustomEvent(VERSION_SIGNAL_DATA_EVENT, {
+                      detail: { versions: nextVersions, updatedKeys, at: lastEventAt },
+                    }));
+                  })().catch((error: any) => {
+                    publishDiagnostics({ status: 'error', error: String(error?.message || error || 'activate failed') });
+                  });
+                },
+                error: (error) => {
+                  publishDiagnostics({ status: 'error', error: String(error?.message || error || 'realtime listener failed') });
+                },
+                complete: () => {},
+              });
+
+              publishDiagnostics({ status: 'connected', versions, error: '' });
+            })().catch((error: any) => {
+              publishDiagnostics({ status: 'error', error: String(error?.message || error || 'version signal init failed') });
+            });
+
+            return startPromise;
+          };
+          EOF
+
+          cat > src/components/VersionSignalDiagnosticLine.tsx <<'EOF'
+          import React, { useEffect, useState } from 'react';
+          import {
+            VERSION_SIGNAL_DIAGNOSTICS_EVENT,
+            readVersionSignalDiagnostics,
+            type VersionSignalDiagnostics,
+          } from '../services/versionSignalService';
+
+          const statusLabel = (state: VersionSignalDiagnostics) => {
+            if (state.status === 'connected') return '연결';
+            if (state.status === 'connecting') return '연결중';
+            if (state.status === 'error') return '오류';
+            return '대기';
+          };
+
+          export default function VersionSignalDiagnosticLine() {
+            const [state, setState] = useState<VersionSignalDiagnostics>(() => readVersionSignalDiagnostics());
+
+            useEffect(() => {
+              const handle = (event: Event) => {
+                const detail = (event as CustomEvent<VersionSignalDiagnostics>).detail;
+                if (detail) setState(detail);
+              };
+              window.addEventListener(VERSION_SIGNAL_DIAGNOSTICS_EVENT, handle as EventListener);
+              setState(readVersionSignalDiagnostics());
+              return () => window.removeEventListener(VERSION_SIGNAL_DIAGNOSTICS_EVENT, handle as EventListener);
+            }, []);
+
+            if (!state.enabled) return null;
+            const genreVersion = Number(state.versions?.genres || 0);
+            return (
+              <div className="whitespace-nowrap text-[10px] font-bold text-[#9fddb9]/80">
+                Version Signal · RC {statusLabel(state)} · 최초 {state.bootstrapFetches} · 실시간 {state.realtimeEvents} · genres v{genreVersion}
+              </div>
+            );
+          }
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          main = Path('src/main.tsx')
+          s = main.read_text(encoding='utf-8')
+          imp = "import { startPreviewVersionSignal } from './services/versionSignalService';\n"
+          if imp not in s:
+              anchor = "import './components/studio/tabletTouchPacedContent';\n"
+              if anchor not in s: raise SystemExit('main import anchor missing')
+              s = s.replace(anchor, anchor + imp, 1)
+          call = "\nvoid startPreviewVersionSignal();\n"
+          if call not in s:
+              anchor = "\ncreateRoot(document.getElementById('root')!).render("
+              if anchor not in s: raise SystemExit('main render anchor missing')
+              s = s.replace(anchor, call + anchor, 1)
+          main.write_text(s, encoding='utf-8')
+
+          overlay = Path('src/components/CacheDiagnosticsOverlay.tsx')
+          s = overlay.read_text(encoding='utf-8')
+          imp = "import VersionSignalDiagnosticLine from './VersionSignalDiagnosticLine';\n"
+          if imp not in s:
+              anchor = "import React, { useCallback, useEffect, useRef, useState } from 'react';\n"
+              if anchor not in s: raise SystemExit('overlay import anchor missing')
+              s = s.replace(anchor, anchor + imp, 1)
+          line = "            <VersionSignalDiagnosticLine />\n"
+          if line not in s:
+              anchor = "            {cloudflarePathEntries.length > 0 ? (\n"
+              if anchor not in s: raise SystemExit('overlay render anchor missing')
+              s = s.replace(anchor, line + anchor, 1)
+          overlay.write_text(s, encoding='utf-8')
+
+          doc = Path('docs/SORIDRAW_LONG_TERM_DATA_PLAN.md')
+          d = doc.read_text(encoding='utf-8')
+          marker = "## 5단계 실험 구현 기준\n"
+          if marker not in d:
+              d += """
+
+          ## 5단계 실험 구현 기준
+
+          - PREVIEW에서만 `Firebase Remote Config Real-time`을 공용 Version Signal 후보로 검증한다.
+          - 최초 브라우저 캐시가 없을 때만 Remote Config bootstrap fetch 1회를 허용한다.
+          - 재실행/새로고침은 SDK의 로컬 활성값을 먼저 사용하고 명시적 bootstrap fetch를 반복하지 않는다.
+          - `onConfigUpdate` 실시간 연결은 앱 전체 singleton 1개만 사용한다. 페이지/데이터 종류별 소켓·listener 증식을 금지한다.
+          - 실험 파라미터는 `soridraw_preview_version_signal_v1`이며 실제 장르 데이터가 아니라 `genres` 버전 숫자만 전달한다.
+          - 실시간 버전 변경 감지는 데이터 본문 Firestore 조회/쓰기를 수행하지 않는다. 실제 변경분 다운로드는 6단계 Delta Sync에서만 구현한다.
+          - TEST/PRODUCTION 클라이언트에서는 5단계 canary를 비활성화한다.
+          """
+          doc.write_text(d, encoding='utf-8')
+          PY
+      - name: Install, typecheck, build
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          grep -R "soridraw_preview_version_signal_v1" -n dist/assets >/dev/null
+          echo 'STAGE5_CLIENT_BUILD_PASS=true'
+      - name: Authenticate Google/Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Mint OAuth token
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(gcloud auth application-default print-access-token)"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "ACCESS_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: Ensure preview Remote Config canary parameter
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://firebaseremoteconfig.googleapis.com/v1/projects/$BACKEND_PROJECT/remoteConfig"
+          status="$(curl -sS -D "$RUNNER_TEMP/rc-head" -o "$RUNNER_TEMP/rc.json" -w '%{http_code}' -H "Authorization: Bearer $ACCESS_TOKEN" "$api")"
+          test "$status" = 200 || { echo "Remote Config GET HTTP $status"; cat "$RUNNER_TEMP/rc.json"; exit 8; }
+          etag="$(awk 'BEGIN{IGNORECASE=1} /^etag:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' "$RUNNER_TEMP/rc-head")"
+          test -n "$etag"
+          python3 - "$RUNNER_TEMP/rc.json" "$RUNNER_TEMP/rc-patched.json" "$RC_PARAM" <<'PY'
+          import json,sys
+          source,target,key=sys.argv[1:4]
+          data=json.load(open(source,encoding='utf-8'))
+          params=data.setdefault('parameters',{})
+          current=1
+          raw=((params.get(key) or {}).get('defaultValue') or {}).get('value','')
+          try:
+              current=max(1,int((json.loads(raw) or {}).get('genres',1)))
+          except Exception:
+              current=1
+          params[key]={'defaultValue':{'value':json.dumps({'genres':current},separators=(',',':'))}}
+          data.pop('version',None)
+          json.dump(data,open(target,'w',encoding='utf-8'),ensure_ascii=False,separators=(',',':'))
+          print(f'[Stage5] canary genres version prepared: {current}')
+          PY
+          validate="$(curl -sS -o "$RUNNER_TEMP/rc-validate.json" -w '%{http_code}' -X PUT \
+            -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json; UTF-8' -H "If-Match: $etag" \
+            --data-binary "@$RUNNER_TEMP/rc-patched.json" "$api?validate_only=true")"
+          test "$validate" = 200 || { echo "Remote Config validate HTTP $validate"; cat "$RUNNER_TEMP/rc-validate.json"; exit 9; }
+          publish="$(curl -sS -D "$RUNNER_TEMP/rc-publish-head" -o "$RUNNER_TEMP/rc-published.json" -w '%{http_code}' -X PUT \
+            -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json; UTF-8' -H "If-Match: $etag" \
+            --data-binary "@$RUNNER_TEMP/rc-patched.json" "$api")"
+          test "$publish" = 200 || { echo "Remote Config publish HTTP $publish"; cat "$RUNNER_TEMP/rc-published.json"; exit 10; }
+          echo 'STAGE5_RC_CANARY_READY=true'
+      - name: Snapshot production and commit Stage 5 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.com/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/services/versionSignalService.ts src/components/VersionSignalDiagnosticLine.tsx src/components/CacheDiagnosticsOverlay.tsx src/main.tsx docs/SORIDRAW_LONG_TERM_DATA_PLAN.md
+          git diff --cached --check
+          git commit -m 'feat(preview): add singleton realtime version signal canary'
+          git push origin HEAD:preview
+          echo "STAGE5_SOURCE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Deploy Firebase PREVIEW only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$HOSTING_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          echo 'STAGE5_PREVIEW_DEPLOY_PASS=true'
+      - name: Verify preview host and install browser driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "https://$PREVIEW_DOMAIN/" -o "$RUNNER_TEMP/preview.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview.html"
+          npm install --no-save --package-lock=false puppeteer-core@24
+          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$chrome" || { echo 'Chrome executable missing on runner'; exit 11; }
+          echo "CHROME_BIN=$chrome" >> "$GITHUB_ENV"
+      - name: Prove persistent bootstrap + realtime invalidation without page reload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/stage5-browser-test.cjs" <<'NODE'
+          const puppeteer = require('puppeteer-core');
+          const crypto = require('crypto');
+
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          const origin = `https://${process.env.PREVIEW_DOMAIN}/`;
+          const key = process.env.RC_PARAM;
+          const api = `https://firebaseremoteconfig.googleapis.com/v1/projects/${process.env.BACKEND_PROJECT}/remoteConfig`;
+          const token = process.env.ACCESS_TOKEN;
+
+          const publishNextVersion = async (nextVersion) => {
+            const get = await fetch(api, { headers: { Authorization: `Bearer ${token}` } });
+            if (!get.ok) throw new Error(`RC GET ${get.status} ${await get.text()}`);
+            const etag = get.headers.get('etag');
+            if (!etag) throw new Error('RC ETag missing');
+            const template = await get.json();
+            template.parameters ||= {};
+            template.parameters[key] = { defaultValue: { value: JSON.stringify({ genres: nextVersion }) } };
+            delete template.version;
+            const body = JSON.stringify(template);
+            const validate = await fetch(`${api}?validate_only=true`, {
+              method: 'PUT',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; UTF-8', 'If-Match': etag },
+              body,
+            });
+            if (!validate.ok) throw new Error(`RC validate ${validate.status} ${await validate.text()}`);
+            const publish = await fetch(api, {
+              method: 'PUT',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; UTF-8', 'If-Match': etag },
+              body,
+            });
+            if (!publish.ok) throw new Error(`RC publish ${publish.status} ${await publish.text()}`);
+          };
+
+          (async () => {
+            const browser = await puppeteer.launch({
+              executablePath: process.env.CHROME_BIN,
+              headless: true,
+              args: ['--no-sandbox', '--disable-dev-shm-usage'],
+            });
+            try {
+              const page = await browser.newPage();
+              await page.goto(origin, { waitUntil: 'networkidle2', timeout: 60000 });
+              await page.waitForFunction(() => {
+                const s = window.__soridrawVersionSignalDiagnostics;
+                return s && s.status === 'connected' && Number(s.versions?.genres || 0) >= 1;
+              }, { timeout: 45000 });
+              const first = await page.evaluate(() => window.__soridrawVersionSignalDiagnostics);
+              if (Number(first.bootstrapFetches) !== 1) throw new Error(`first bootstrap fetch count expected 1, got ${first.bootstrapFetches}`);
+              console.log('[Stage5 browser] first bootstrap:', JSON.stringify(first));
+
+              await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+              await page.waitForFunction(() => window.__soridrawVersionSignalDiagnostics?.status === 'connected', { timeout: 30000 });
+              const reloaded = await page.evaluate(() => window.__soridrawVersionSignalDiagnostics);
+              if (Number(reloaded.bootstrapFetches) !== 0) throw new Error(`reload explicit bootstrap expected 0, got ${reloaded.bootstrapFetches}`);
+              const beforeVersion = Number(reloaded.versions?.genres || 0);
+              if (beforeVersion < 1) throw new Error(`reload cached genres version invalid: ${beforeVersion}`);
+
+              const noReloadToken = crypto.randomUUID();
+              await page.evaluate((value) => { window.__stage5NoReloadToken = value; }, noReloadToken);
+              const requests = [];
+              let measure = false;
+              page.on('request', (request) => { if (measure) requests.push(request.url()); });
+              measure = true;
+              const nextVersion = beforeVersion + 1;
+              await publishNextVersion(nextVersion);
+
+              await page.waitForFunction((wanted) => {
+                const s = window.__soridrawVersionSignalDiagnostics;
+                return s && Number(s.versions?.genres || 0) === wanted && Number(s.realtimeEvents || 0) >= 1;
+              }, { timeout: 60000 }, nextVersion);
+              measure = false;
+              const after = await page.evaluate(() => ({
+                state: window.__soridrawVersionSignalDiagnostics,
+                token: window.__stage5NoReloadToken,
+                href: location.href,
+              }));
+              if (after.token !== noReloadToken) throw new Error('page reloaded during realtime update');
+              const firestoreRequests = requests.filter((url) => /firestore\.googleapis\.com|google\.firestore/i.test(url));
+              if (firestoreRequests.length) throw new Error(`Version Signal caused Firestore network request(s): ${firestoreRequests.join(', ')}`);
+              const remoteConfigRequests = requests.filter((url) => /firebaseremoteconfig|firebaseinstallations/i.test(url));
+              console.log('[Stage5 browser] realtime after:', JSON.stringify(after.state));
+              console.log(`[Stage5 browser] measured requests=${requests.length} remoteConfig=${remoteConfigRequests.length} firestore=${firestoreRequests.length}`);
+              console.log('STAGE5_REALTIME_CANARY_PASS=true');
+            } finally {
+              await browser.close();
+            }
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+          node "$RUNNER_TEMP/stage5-browser-test.cjs"
+      - name: Verify production unchanged and final boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.com/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          curl -fsS --max-time 30 "https://$PREVIEW_DOMAIN/" -o "$RUNNER_TEMP/preview-after.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview-after.html"
+          echo 'STAGE5_COMPLETE=true'
+          echo "STAGE5_SOURCE_SHA=$STAGE5_SOURCE_SHA"
+          echo 'PROVIDER=Firebase Remote Config Real-time'
+          echo 'SINGLETON_CONNECTION=true'
+          echo 'RELOAD_EXPLICIT_BOOTSTRAP_FETCH=0'
+          echo 'REALTIME_UPDATE_WITHOUT_RELOAD=true'
+          echo 'VERSION_SIGNAL_FIRESTORE_READ_WRITE=0'
+          echo 'NO_MAIN_CHANGE=true'
+          echo 'NO_TEST_DEPLOY=true'
+          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'
+          echo 'NO_FIRESTORE_RULES_DATA_CHANGE=true'

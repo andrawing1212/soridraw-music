@@ -1,0 +1,67 @@
+name: Temp Cloudflare Explore Existing DB Resolve
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-cloudflare-explore-existing-db-resolve.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Resolve existing databases through provisioning config
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .physical-resolve
+          for envname in preview test; do
+            dbname="soridraw-explore-${envname}-db"
+            worker="soridraw-explore-${envname}-physical-resolve"
+            cat > ".physical-resolve/probe-${envname}.mjs" <<'JS'
+          export default { async fetch(request, env) { const row=await env.TARGET_DB.prepare('SELECT 1 AS ok').first(); return Response.json({ok:Number(row?.ok||0)===1}); } };
+          JS
+            cat > ".physical-resolve/wrangler-${envname}.jsonc" <<JSON
+          {
+            "name":"${worker}",
+            "main":"./probe-${envname}.mjs",
+            "compatibility_date":"2026-08-28",
+            "workers_dev":true,
+            "d1_databases":[{"binding":"TARGET_DB","database_name":"${dbname}"}]
+          }
+          JSON
+            set +e
+            npx wrangler deploy --strict --config ".physical-resolve/wrangler-${envname}.jsonc" > ".physical-resolve/${envname}.out" 2>&1
+            rc=$?
+            set -e
+            cat ".physical-resolve/${envname}.out"
+            if [ "$rc" -ne 0 ]; then
+              echo "${envname^^}_EXISTING_DB_RESOLVE_DEPLOY_FAILED=true"
+              exit "$rc"
+            fi
+            node - ".physical-resolve/wrangler-${envname}.jsonc" "$envname" <<'JS'
+          const fs=require('fs'); const p=process.argv[2]; const envname=process.argv[3]; const x=JSON.parse(fs.readFileSync(p,'utf8'));
+          const d=x.d1_databases?.find(v=>v.binding==='TARGET_DB');
+          console.log(`${envname.toUpperCase()}_PHYSICAL_DB_NAME=${d?.database_name||''}`);
+          console.log(`${envname.toUpperCase()}_PHYSICAL_DB_ID=${d?.database_id||''}`);
+          if(!d?.database_id) process.exit(5);
+          JS
+          done
+          echo 'EXISTING_PHYSICAL_DB_RESOLVE=PASS'

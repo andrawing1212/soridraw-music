@@ -1,0 +1,44 @@
+name: Emergency Restore Explore Production Worker
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-rollback-explore-production.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Wait for native preview build to settle
+        run: sleep 60
+      - name: Roll back production Explore Worker only
+        working-directory: cloudflare/explore-worker
+        run: npx wrangler rollback 3501df73-0d5f-46ea-b048-3280282c20f6 --name soridraw-explore-api --message "SORIDRAW emergency restore after preview diagnostic overwrite"
+      - name: Verify production feed restored
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS --max-time 20 -o /tmp/prod.json -w '%{http_code}' 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          echo "PRODUCTION_HTTP=$code"
+          cat /tmp/prod.json
+          echo
+          test "$code" = '200'
+          ! grep -q '"workersCi"' /tmp/prod.json
+          echo 'PRODUCTION_EXPLORE_ROLLBACK=PASS'

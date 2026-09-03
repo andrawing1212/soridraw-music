@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, doc, writeBatch, serverTimestamp, getDocs, setDoc, updateDoc, deleteDoc, query, where } from '../lib/firestoreMeasured';
+import { collection, doc, writeBatch, serverTimestamp, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit } from '../lib/firestoreMeasured';
 import { Playlist, PlaylistItem } from '../types';
 import { v1UserDataReadAdapter } from './v1UserDataReadAdapter';
 
@@ -26,6 +26,51 @@ const isSamePlaylistSourceItem = (a: Partial<PlaylistItem> | any, b: Partial<Pla
   const keyA = getPlaylistItemUniqueKey(a);
   const keyB = getPlaylistItemUniqueKey(b);
   return Boolean(keyA && keyB && keyA === keyB);
+};
+
+
+// 1006 — A playlist insert must stay O(1) as a folder grows. The old path read
+// every item in the destination collection just to detect a duplicate and find
+// max order, so saving one song could cost hundreds/thousands of reads. Query
+// only the same source family (bounded) plus the single highest-order row.
+const resolvePlaylistInsertOrder = async (itemsRef: any, itemData: Partial<PlaylistItem> | any): Promise<number> => {
+  const sourceId = normalizeKeyPart(itemData?.sourceId || itemData?.trackId);
+  const uniqueKey = getPlaylistItemUniqueKey(itemData);
+
+  const duplicateSnap = sourceId
+    ? await getDocs(query(itemsRef, where('sourceId', '==', sourceId), limit(8)))
+    : await getDocs(query(itemsRef, where('playlistUniqueKey', '==', uniqueKey), limit(1)));
+
+  let duplicate = false;
+  duplicateSnap.forEach((entry) => {
+    if (isSamePlaylistSourceItem(entry.data() as PlaylistItem, itemData)) duplicate = true;
+  });
+  if (duplicate) throw new Error('DUPLICATE');
+
+  const tailSnap = await getDocs(query(itemsRef, orderBy('order', 'desc'), limit(1)));
+  const highestOrder = tailSnap.empty ? 0 : Number((tailSnap.docs[0]?.data() as any)?.order || 0);
+  return (Number.isFinite(highestOrder) ? highestOrder : 0) + 1;
+};
+
+// Saving from the global player only needs the fixed first Normal playlist.
+// Resolve that one document directly instead of loading every Normal playlist.
+export const getPrimaryNormalPlaylist = async (uid: string): Promise<Playlist | null> => {
+  if (!uid) return null;
+  const listsRef = collection(db, 'user_playlists', uid, 'lists');
+  try {
+    const snap = await getDocs(query(
+      listsRef,
+      where('type', '==', 'normal'),
+      where('order', '==', 1),
+      limit(1),
+    ));
+    const first = snap.docs[0];
+    if (first) return { id: first.id, ...first.data() } as Playlist;
+  } catch (error) {
+    console.warn('[Playlist] Primary Normal lookup fell back to typed list query.', error);
+  }
+  const lists = await getPlaylistsByType(uid, 'normal');
+  return lists[0] || null;
 };
 
 // 2-A3-R: default-playlist existence is a session bootstrap, not a tab-switch query.
@@ -166,29 +211,9 @@ export const renamePlaylist = async (uid: string, playlistId: string, title: str
 
 export const addPlaylistItem = async (uid: string, playlistId: string, itemData: Omit<PlaylistItem, 'id' | 'addedAt' | 'updatedAt'>) => {
   const itemsRef = collection(db, 'user_playlists', uid, 'lists', playlistId, 'items');
-  const itemsSnap = await getDocs(itemsRef);
-  
-  // Check for duplicates
-  let isDuplicate = false;
-  let maxOrder = 0;
-  
-  itemsSnap.forEach((doc) => {
-    const data = doc.data() as PlaylistItem;
-    if (isSamePlaylistSourceItem(data, itemData)) {
-      isDuplicate = true;
-    }
-    if (data.order > maxOrder) {
-      maxOrder = data.order;
-    }
-  });
-
-  if (isDuplicate) {
-    throw new Error('DUPLICATE');
-  }
-
-  const newOrder = maxOrder + 1;
+  const newOrder = await resolvePlaylistInsertOrder(itemsRef, itemData);
   const newItemRef = doc(itemsRef);
-  
+
   await setDoc(newItemRef, {
     ...itemData,
     playlistUniqueKey: getPlaylistItemUniqueKey(itemData),
@@ -207,30 +232,12 @@ export const deletePlaylistItem = async (uid: string, playlistId: string, itemId
 
 export const movePlaylistItem = async (uid: string, fromPlaylistId: string, toPlaylistId: string, item: PlaylistItem) => {
   const toItemsRef = collection(db, 'user_playlists', uid, 'lists', toPlaylistId, 'items');
-  const toItemsSnap = await getDocs(toItemsRef);
-  
-  let isDuplicate = false;
-  let maxOrder = 0;
-  
-  toItemsSnap.forEach((doc) => {
-    const data = doc.data() as PlaylistItem;
-    if (isSamePlaylistSourceItem(data, item)) {
-      isDuplicate = true;
-    }
-    if (data.order > maxOrder) {
-      maxOrder = data.order;
-    }
-  });
-
-  if (isDuplicate) {
-    throw new Error('DUPLICATE');
-  }
-
+  const newOrder = await resolvePlaylistInsertOrder(toItemsRef, item);
   const batch = writeBatch(db);
-  
+
   // Add to new playlist
   const newItemRef = doc(toItemsRef);
-  
+
   if (!item.id) {
     throw new Error("MISSING_ITEM_ID");
   }
@@ -239,7 +246,7 @@ export const movePlaylistItem = async (uid: string, fromPlaylistId: string, toPl
   const newItemData = {
     ...itemWithoutId,
     playlistUniqueKey: getPlaylistItemUniqueKey(itemWithoutId),
-    order: maxOrder + 1,
+    order: newOrder,
     addedAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   };

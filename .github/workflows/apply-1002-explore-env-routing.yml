@@ -1,0 +1,64 @@
+name: Apply Explore Environment Routing
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-1002-explore-env-routing.py'
+      - '.github/workflows/apply-1002-explore-env-routing.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply routing changes
+        run: python3 .deploy/apply-1002-explore-env-routing.py
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify only environment routing changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test -z "$(grep -RIl 'https://soridraw-explore-api.andrawing1212.workers.dev' src --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' | grep -v 'src/config/exploreEnvironment.ts' || true)"
+          grep -Fq 'https://soridraw-explore-preview.andrawing1212.workers.dev' src/config/exploreEnvironment.ts
+          grep -Fq 'https://soridraw-explore-test.andrawing1212.workers.dev' src/config/exploreEnvironment.ts
+          echo 'EXPLORE_ENV_ROUTING_VERIFY=true'
+
+      - name: Commit routing changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'No routing changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src .github/workflows/firebase-hosting-custom-preview.yml .github/workflows/firebase-hosting-main-test-canary-v2.yml
+          git commit -m 'feat(preview): isolate Explore API by runtime environment'
+          git push origin HEAD:preview

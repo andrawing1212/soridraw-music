@@ -3,11 +3,17 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {
+  buildLibraryOversizeFallbackMarker,
   buildRebuiltLibraryBundle,
   getDeletedIdsForRebuild,
+  getLibraryBundlePayloadByteSize,
+  getLibraryBundleSourceFingerprint,
+  getLibraryMutationFingerprint,
   getNextLibraryBundleVersion,
   hasLibraryBundleRelevantChange,
   isLibraryBundleCoreCurrent,
+  isMatchingLibraryOversizeFallbackMarker,
+  LIBRARY_LIST_BUNDLE_MAX_BYTES,
   planLibraryBundleMutation,
   type LibraryListBundleCore,
   type LibraryTrackMutation,
@@ -39,6 +45,7 @@ export const syncSunoLibraryLatest10Bundle = onDocumentWritten(
 
     const uid = String(event.params.uid || "").trim();
     if (!uid) return;
+    const mutationFingerprint = getLibraryMutationFingerprint(mutation);
 
     const firestore = admin.firestore();
     const bundleRef = firestore
@@ -60,6 +67,7 @@ export const syncSunoLibraryLatest10Bundle = onDocumentWritten(
       // another with a stale bundle snapshot.
       const bundleSnapshot = await transaction.get(bundleRef);
       const currentBundle = bundleSnapshot.exists ? bundleSnapshot.data() : null;
+      if (isMatchingLibraryOversizeFallbackMarker(currentBundle, { mutation: mutationFingerprint })) return;
       const plan = planLibraryBundleMutation(currentBundle, mutation);
       let nextBundle: LibraryListBundleCore | null = null;
 
@@ -84,6 +92,28 @@ export const syncSunoLibraryLatest10Bundle = onDocumentWritten(
       if (bundleSnapshot.exists && isLibraryBundleCoreCurrent(currentBundle, nextBundle)) return;
 
       const version = getNextLibraryBundleVersion(currentBundle?.updatedAtMs);
+      const measuredBundlePayload = {
+        ...nextBundle,
+        updatedAtMs: version,
+        // A numeric timestamp placeholder slightly overestimates the serialized
+        // size needed by the final server timestamp field.
+        updatedAt: version,
+      };
+      if (getLibraryBundlePayloadByteSize(measuredBundlePayload) > LIBRARY_LIST_BUNDLE_MAX_BYTES) {
+        const sourceFingerprint = getLibraryBundleSourceFingerprint(nextBundle);
+        if (isMatchingLibraryOversizeFallbackMarker(currentBundle, { source: sourceFingerprint })) return;
+        const fallbackPayload = {
+          ...buildLibraryOversizeFallbackMarker(sourceFingerprint, mutationFingerprint, version),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        // The derived cache is replaced by a small, intentionally incompatible
+        // marker. Clients then use the existing bounded latest-ten source query;
+        // canonical suno_tracks documents are never truncated or modified.
+        transaction.set(bundleRef, fallbackPayload, { merge: false });
+        transaction.set(userRef, { syncVersions: { library: version } }, { merge: true });
+        return;
+      }
+
       const bundlePayload = {
         ...nextBundle,
         updatedAtMs: version,

@@ -1,5 +1,8 @@
+import { createHash } from "node:crypto";
+
 export const LIBRARY_LIST_BUNDLE_SCHEMA_VERSION = 1;
 export const LIBRARY_LIST_BUNDLE_LIMIT = 10;
+export const LIBRARY_LIST_BUNDLE_MAX_BYTES = 850_000;
 
 export type LibraryListBundleCore = {
   schemaVersion: number;
@@ -32,6 +35,9 @@ const NON_LIBRARY_FIELD_NAMES = new Set([
   "updatedAtMs",
   "creditCheckedAfterComplete",
   "creditCheckedAt",
+  "remainingCreditsAfterComplete",
+  "reportedAudioUrls",
+  "audioValidationStatus",
 ]);
 
 const isRecord = (value: unknown): value is Record<string, any> => (
@@ -119,6 +125,64 @@ export const getLibraryComparableHash = (value: unknown): string => (
   JSON.stringify(normalizeForComparison(value))
 );
 
+export const getLibraryBundlePayloadByteSize = (value: unknown): number => {
+  try {
+    const serialized = JSON.stringify(value, (_key, entry) => {
+      if (entry instanceof Date) return entry.getTime();
+      if (entry && typeof entry?.toMillis === "function") return entry.toMillis();
+      return entry;
+    });
+    return Buffer.byteLength(serialized, "utf8");
+  } catch {
+    return Number.MAX_SAFE_INTEGER;
+  }
+};
+
+export const getLibraryBundleSourceFingerprint = (bundle: LibraryListBundleCore): string => (
+  createHash("sha256").update(getLibraryComparableHash(bundle), "utf8").digest("hex")
+);
+
+export const getLibraryMutationFingerprint = (mutation: LibraryTrackMutation): string => (
+  createHash("sha256").update(getLibraryComparableHash({
+    trackId: mutation.trackId,
+    before: buildLibraryBundleTrackItem(mutation.trackId, mutation.before),
+    after: buildLibraryBundleTrackItem(mutation.trackId, mutation.after),
+  }), "utf8").digest("hex")
+);
+
+export const buildLibraryOversizeFallbackMarker = (
+  sourceFingerprint: string,
+  mutationFingerprint: string,
+  version: number,
+) => ({
+  schemaVersion: LIBRARY_LIST_BUNDLE_SCHEMA_VERSION,
+  kind: "library" as const,
+  items: [],
+  itemCount: 0,
+  cursorCreatedAtMs: 0,
+  hasMore: false,
+  deletedIds: [],
+  oversizeFallback: true,
+  sourceFingerprint,
+  mutationFingerprint,
+  updatedAtMs: version,
+});
+
+export const isMatchingLibraryOversizeFallbackMarker = (
+  value: unknown,
+  fingerprints: { source?: string; mutation?: string },
+): boolean => (
+  isRecord(value)
+  && value.oversizeFallback === true
+  && value.kind === "library"
+  && value.schemaVersion === LIBRARY_LIST_BUNDLE_SCHEMA_VERSION
+  && (!fingerprints.source || value.sourceFingerprint === fingerprints.source)
+  && (!fingerprints.mutation || value.mutationFingerprint === fingerprints.mutation)
+  && Boolean(fingerprints.source || fingerprints.mutation)
+  && Number.isInteger(value.updatedAtMs)
+  && value.updatedAtMs > 0
+);
+
 export const hasLibraryBundleRelevantChange = (mutation: LibraryTrackMutation): boolean => {
   const beforeItem = buildLibraryBundleTrackItem(mutation.trackId, mutation.before);
   const afterItem = buildLibraryBundleTrackItem(mutation.trackId, mutation.after);
@@ -169,6 +233,7 @@ const buildLibraryBundleCore = (
 
 export const isCompatibleLibraryBundle = (value: unknown): value is LibraryListBundleCore & { updatedAtMs: number } => {
   if (!isRecord(value)) return false;
+  if (value.oversizeFallback === true) return false;
   if (value.schemaVersion !== LIBRARY_LIST_BUNDLE_SCHEMA_VERSION || value.kind !== "library") return false;
   if (!Array.isArray(value.items) || value.items.length > LIBRARY_LIST_BUNDLE_LIMIT) return false;
   if (!Number.isInteger(value.itemCount) || value.itemCount !== value.items.length) return false;

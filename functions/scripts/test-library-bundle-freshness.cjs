@@ -6,11 +6,17 @@ const functionsRoot = path.resolve(__dirname, '..');
 const freshness = require(path.join(functionsRoot, 'lib', 'libraryBundleFreshness.js'));
 
 const {
+  buildLibraryOversizeFallbackMarker,
   buildRebuiltLibraryBundle,
+  getLibraryBundlePayloadByteSize,
+  getLibraryBundleSourceFingerprint,
+  getLibraryMutationFingerprint,
   getNextLibraryBundleVersion,
   hasLibraryBundleRelevantChange,
   isCompatibleLibraryBundle,
   isLibraryBundleCoreCurrent,
+  isMatchingLibraryOversizeFallbackMarker,
+  LIBRARY_LIST_BUNDLE_MAX_BYTES,
   planLibraryBundleMutation,
 } = freshness;
 
@@ -62,6 +68,69 @@ test('1. non-bundle field update exits before bundle I/O', () => {
     creditCheckedAt: 12_345,
   };
   assert.equal(hasLibraryBundleRelevantChange({ trackId: 'track-0', before, after }), false);
+});
+
+test('remainingCreditsAfterComplete alone is not Library-relevant', () => {
+  const before = makeTrack('track-credit', 9_000).data;
+  const after = { ...before, remainingCreditsAfterComplete: 321 };
+  assert.equal(hasLibraryBundleRelevantChange({ trackId: 'track-credit', before, after }), false);
+});
+
+test('all three credit bookkeeping fields together are not Library-relevant', () => {
+  const before = makeTrack('track-credit', 9_000).data;
+  const after = {
+    ...before,
+    creditCheckedAfterComplete: true,
+    creditCheckedAt: 12_345,
+    remainingCreditsAfterComplete: 321,
+  };
+  assert.equal(hasLibraryBundleRelevantChange({ trackId: 'track-credit', before, after }), false);
+});
+
+test('provider diagnostics are ignored while playable status fields stay relevant', () => {
+  const before = makeTrack('track-status', 9_000).data;
+  const diagnosticsOnly = {
+    ...before,
+    apiStatusResponse: { requestId: 'next-poll' },
+    reportedAudioUrls: ['https://provider.invalid/raw.mp3'],
+    audioValidationStatus: 'pending_or_empty',
+  };
+  assert.equal(hasLibraryBundleRelevantChange({ trackId: 'track-status', before, after: diagnosticsOnly }), false);
+
+  for (const [field, value] of [
+    ['status', 'processing'],
+    ['audioUrl', 'https://cdn.example/audio.mp3'],
+    ['imageUrl', 'https://cdn.example/cover.jpg'],
+    ['duration', 183],
+  ]) {
+    assert.equal(
+      hasLibraryBundleRelevantChange({ trackId: 'track-status', before, after: { ...before, [field]: value } }),
+      true,
+      `${field} must remain Library-relevant`,
+    );
+  }
+});
+
+test('oversized bundle becomes a small incompatible fallback marker', () => {
+  const mutation = {
+    trackId: 'track-oversized',
+    before: null,
+    after: makeTrack('track-oversized', 20_000, {
+      lyrics: '가'.repeat(LIBRARY_LIST_BUNDLE_MAX_BYTES),
+    }).data,
+  };
+  const oversizedBundle = buildRebuiltLibraryBundle([{ id: mutation.trackId, data: mutation.after }]);
+  const version = 3_000;
+  const measuredPayload = { ...oversizedBundle, updatedAtMs: version, updatedAt: version };
+  assert.ok(getLibraryBundlePayloadByteSize(measuredPayload) > LIBRARY_LIST_BUNDLE_MAX_BYTES);
+
+  const sourceFingerprint = getLibraryBundleSourceFingerprint(oversizedBundle);
+  const mutationFingerprint = getLibraryMutationFingerprint(mutation);
+  const marker = buildLibraryOversizeFallbackMarker(sourceFingerprint, mutationFingerprint, version);
+  assert.ok(getLibraryBundlePayloadByteSize(marker) < LIBRARY_LIST_BUNDLE_MAX_BYTES);
+  assert.equal(isCompatibleLibraryBundle(marker), false);
+  assert.equal(isMatchingLibraryOversizeFallbackMarker(marker, { source: sourceFingerprint }), true);
+  assert.equal(isMatchingLibraryOversizeFallbackMarker(marker, { mutation: mutationFingerprint }), true);
 });
 
 test('2. latest-ten item update is incremental', () => {
@@ -188,6 +257,9 @@ test('trigger contract keeps reads after the relevance guard and writes atomical
   assert.ok(trigger.includes('transaction.set(bundleRef'));
   assert.ok(trigger.includes('transaction.set(userRef, { syncVersions: { library: version } }'));
   assert.ok(trigger.includes('updatedAtMs: version'));
+  assert.ok(trigger.includes('getLibraryBundlePayloadByteSize(measuredBundlePayload) > LIBRARY_LIST_BUNDLE_MAX_BYTES'));
+  assert.ok(trigger.includes('buildLibraryOversizeFallbackMarker(sourceFingerprint, mutationFingerprint, version)'));
+  assert.ok(trigger.indexOf('getLibraryBundlePayloadByteSize(measuredBundlePayload)') < trigger.lastIndexOf('const bundlePayload ='));
 
   const appSource = fs.readFileSync(path.resolve(functionsRoot, '..', 'src', 'App.tsx'), 'utf8');
   assert.equal(appSource.includes("scheduleListBundleWrite('library'"), false);
@@ -203,6 +275,7 @@ test('trigger contract keeps reads after the relevance guard and writes atomical
   assert.equal(subscriptionSource.includes('getDocs('), false);
   assert.equal(subscriptionSource.includes('setDoc('), false);
   assert.equal(subscriptionSource.includes('updateDoc('), false);
+  assert.ok(listBundleSource.includes('if (bundle.oversizeFallback === true) return false;'));
 
   const builtEntry = path.join(functionsRoot, 'lib', 'securedIndex.js');
   if (fs.existsSync(builtEntry)) {

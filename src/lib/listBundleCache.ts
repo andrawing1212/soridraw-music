@@ -123,6 +123,7 @@ const getItemCreatedAtMs = (item: any): number => (
 export const isCompatibleLibraryListBundle = (value: unknown): boolean => {
   if (!value || typeof value !== 'object') return false;
   const bundle = value as Record<string, any>;
+  if (bundle.oversizeFallback === true) return false;
   if (bundle.schemaVersion !== LIST_BUNDLE_SCHEMA_VERSION || bundle.kind !== 'library') return false;
   if (!Array.isArray(bundle.items) || bundle.items.length > 10) return false;
   if (!Number.isInteger(bundle.itemCount) || bundle.itemCount !== bundle.items.length) return false;
@@ -165,9 +166,17 @@ const HISTORY_KEYS = new Set([
 
 const HEAVY_LIBRARY_KEYS = new Set([
   'apiResponse',
+  'apiStatusResponse',
   'rawApiResponse',
   'callbackPayload',
   'debugPayload',
+  'updatedAt',
+  'updatedAtMs',
+  'creditCheckedAfterComplete',
+  'creditCheckedAt',
+  'remainingCreditsAfterComplete',
+  'reportedAudioUrls',
+  'audioValidationStatus',
 ]);
 
 const cleanValue = (value: any, kind: ListBundleKind, depth = 0): any => {

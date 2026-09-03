@@ -31,3 +31,4 @@ if (isNative) {
 
 // Manual/approved non-native deploy path keeps the existing prepared deployment behavior.
 run(process.execPath, ['./scripts/deploy-prepared.mjs'], workerDir);
+// physical-isolation-final-trigger: 2026-09-03T11:20Z

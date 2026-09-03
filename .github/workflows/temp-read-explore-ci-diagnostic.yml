@@ -15,18 +15,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Read diagnostic worker
+      - name: Read Explore endpoints
         shell: bash
         run: |
-          set -euo pipefail
-          echo '=== DIAGNOSTIC ==='
-          curl -fsS --max-time 20 'https://soridraw-explore-ci-diagnostic.andrawing1212.workers.dev/'
-          echo
-          echo '=== PREVIEW FEED ==='
-          curl -sS -o /tmp/p.json -w 'HTTP=%{http_code}\n' -H 'Origin: https://preview.soridraw.com' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1'
-          cat /tmp/p.json
-          echo
-          echo '=== TEST FEED ==='
-          curl -sS -o /tmp/t.json -w 'HTTP=%{http_code}\n' -H 'Origin: https://test.soridraw.com' 'https://soridraw-explore-test.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1'
-          cat /tmp/t.json
-          echo
+          set -u
+          check() {
+            label="$1"
+            origin="$2"
+            url="$3"
+            body="/tmp/${label}.json"
+            code="$(curl -sS --max-time 20 -o "$body" -w '%{http_code}' ${origin:+-H "Origin: $origin"} "$url" || true)"
+            echo "=== $label ==="
+            echo "HTTP=$code"
+            cat "$body" 2>/dev/null || true
+            echo
+          }
+          check diagnostic '' 'https://soridraw-explore-ci-diagnostic.andrawing1212.workers.dev/'
+          check preview 'https://preview.soridraw.com' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1'
+          check test 'https://test.soridraw.com' 'https://soridraw-explore-test.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1'
+          check production 'https://soridraw.com' 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1'

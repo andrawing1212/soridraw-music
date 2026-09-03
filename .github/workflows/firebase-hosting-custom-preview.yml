@@ -94,7 +94,7 @@ jobs:
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
               body: new URLSearchParams({
-                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                grant_type: 'urn:ietf:params:oauth-type:jwt-bearer',
                 assertion,
               }),
             });
@@ -248,7 +248,7 @@ jobs:
 
           explore_status="$(curl -sS -o "$RUNNER_TEMP/explore-cors.txt" -w '%{http_code}' \
             -H 'Origin: https://preview.soridraw.com' \
-            'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1' || true)"
+            'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1' || true)"
           echo "[Custom Preview] Explore feed HTTP: ${explore_status:-network-error}"
           if [ -f "$RUNNER_TEMP/explore-cors.txt" ]; then head -c 400 "$RUNNER_TEMP/explore-cors.txt" || true; echo; fi
 

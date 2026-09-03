@@ -49,9 +49,8 @@ jobs:
             }
           };
           JS
-          cat > "$RUNNER_TEMP/wrangler-preview.jsonc" <<JSON
+          cat > "$RUNNER_TEMP/wrangler-preview.jsonc" <<'JSON'
           {
-            "$schema": "${GITHUB_WORKSPACE}/cloudflare/explore-worker/node_modules/wrangler/config-schema.json",
             "name": "soridraw-explore-preview",
             "main": "./bootstrap.mjs",
             "compatibility_date": "2026-08-28",

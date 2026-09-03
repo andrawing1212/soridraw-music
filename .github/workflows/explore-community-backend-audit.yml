@@ -45,8 +45,9 @@ jobs:
           const fs = require('fs');
           const src = fs.readFileSync('.remote-worker/worker.js','utf8');
           function extract(name){
-            const needle = `async function ${name}(`;
-            const start = src.indexOf(needle);
+            const needles = [`async function ${name}(`, `function ${name}(`];
+            let start = -1;
+            for(const needle of needles){ start = src.indexOf(needle); if(start >= 0) break; }
             if(start < 0) return null;
             const brace = src.indexOf('{', start);
             let depth = 0, quote = null, esc = false;
@@ -67,20 +68,33 @@ jobs:
           const wanted = [
             'handleFollowState',
             'handleFollow',
+            'refreshFollowStats',
             'handleLike',
+            'refreshLikeCount',
+            'getPublicTrackForWrite',
             'patchPublicProfileFirstViewLikeCount',
             'refreshPublicProfileFirstViewProfile',
-            'handlePublicProfileFirstViewSnapshot'
+            'handlePublicProfileFirstViewSnapshot',
+            'handleMyFollowing',
+            'handleFollowing',
+            'handleFollowingFeed',
+            'enforceUserRateLimit'
           ];
           for(const name of wanted){
             const body = extract(name);
             console.log(`=== ${name} ===`);
             console.log(body || 'MISSING');
           }
-          console.log('=== SOCIAL ROUTES ===');
-          console.log(src.split('\n').filter((line) => /follow|like|followers|following/.test(line) && /pathname|handle|\/v1\//.test(line)).slice(-120).join('\n'));
+          console.log('=== SOCIAL ROUTE CONTEXT ===');
+          const lines = src.split('\n');
+          lines.forEach((line, idx) => {
+            if(/\/v1\/me\/following|follow-state|\/follow\b|\/like\b|\/v1\/me\/likes/.test(line)) {
+              console.log(`--- route line ${idx+1} ---`);
+              console.log(lines.slice(Math.max(0, idx-4), Math.min(lines.length, idx+8)).join('\n'));
+            }
+          });
           console.log('=== TABLE TOKENS ===');
-          const tables = [...new Set([...src.matchAll(/(?:FROM|INTO|UPDATE|TABLE IF NOT EXISTS)\s+([a-zA-Z0-9_]+)/g)].map(m=>m[1]))].filter(t=>/follow|like|profile|track/.test(t));
+          const tables = [...new Set([...src.matchAll(/(?:FROM|INTO|UPDATE|TABLE IF NOT EXISTS)\s+([a-zA-Z0-9_]+)/g)].map(m=>m[1]))].filter(t=>/follow|like|profile|track|rate/.test(t));
           console.log(tables.sort().join('\n'));
           NODE
           echo 'READ_ONLY=true'

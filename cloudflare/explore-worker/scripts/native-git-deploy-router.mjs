@@ -24,7 +24,7 @@ if (isNative) {
     console.log('[SORIDRAW Worker] TEST/PRODUCTION deploys require the SORIDRAW approval workflow.');
     process.exit(0);
   }
-  console.log('[SORIDRAW Worker] Cloudflare native preview bootstrap -> isolated PREVIEW/TEST resources only.');
+  console.log('[SORIDRAW Worker] Cloudflare native preview physical split -> isolated PREVIEW/TEST D1/R2 only.');
   run(process.execPath, ['.deploy/cloudflare-explore-env-split.mjs'], repoRoot);
   process.exit(0);
 }

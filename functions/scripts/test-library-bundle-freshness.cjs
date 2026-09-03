@@ -245,12 +245,13 @@ test('9. identical event retry does not rewrite', () => {
 test('trigger contract keeps reads after the relevance guard and writes atomically', () => {
   const sourcePath = path.join(functionsRoot, 'src', 'index.ts');
   const source = fs.readFileSync(sourcePath, 'utf8');
-  const start = source.indexOf('export const syncSunoLibraryLatest10Bundle = onDocumentWritten(');
+  const start = source.indexOf('export const syncSunoLibraryLatest10Bundle = functions');
   const end = source.indexOf('\nconst getAuthProviderIds', start);
   assert.ok(start >= 0 && end > start, 'trigger export must exist in src/index.ts');
   const trigger = source.slice(start, end);
-  assert.ok(trigger.includes('document: "suno_tracks/{uid}/tracks/{trackId}"'));
-  assert.ok(trigger.includes('region: "us-central1"'));
+  assert.ok(trigger.includes('.region("asia-northeast3")'));
+  assert.ok(trigger.includes('.firestore.document("suno_tracks/{uid}/tracks/{trackId}")'));
+  assert.ok(trigger.includes('.onWrite(async (change, context) => {'));
   assert.ok(trigger.indexOf('hasLibraryBundleRelevantChange(mutation)') < trigger.indexOf('runTransaction'));
   assert.ok(trigger.includes('.orderBy("createdAt", "desc")'));
   assert.ok(trigger.includes('.limit(10)'));

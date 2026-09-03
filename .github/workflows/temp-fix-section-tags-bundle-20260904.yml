@@ -1,4 +1,4 @@
-name: SORIDRAW Finish Section Tags Bundle Deploy 2026-09-04
+name: SORIDRAW Finish Section Tags PREVIEW Hosting 2026-09-04
 
 on:
   push:
@@ -14,10 +14,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  finish-preview-deploy:
+  finish-preview-hosting:
     if: github.actor == 'andrawing1212'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 25
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
@@ -25,7 +25,7 @@ jobs:
           ref: preview
           fetch-depth: 8
 
-      - name: Verify source commit unchanged
+      - name: Verify source and deployed backend baseline
         shell: bash
         run: |
           set -euo pipefail
@@ -50,24 +50,15 @@ jobs:
           npm install --no-audit --no-fund
           npx tsc --noEmit
           npm run build
-          echo '[Section tags bundle] app TypeScript + build PASS'
-
-      - name: Set up Node.js 22 for seed
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: functions/package-lock.json
-
-      - name: Install Functions dependencies
-        run: npm --prefix functions install --no-audit --no-fund
+          test -f dist/index.html
+          echo '[Section tags bundle] TypeScript + build PASS'
 
       - name: Authenticate Firebase PREVIEW
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Verify deployed section tag trigger
+      - name: Verify deployed Function still exists
         shell: bash
         run: |
           set -euo pipefail
@@ -75,82 +66,15 @@ jobs:
             --project soridraw-app-866a5 \
             --json > "$RUNNER_TEMP/functions.json"
           grep -q 'syncSectionTagsBundle' "$RUNNER_TEMP/functions.json"
-          echo '[Section tags bundle] deployed Function exists PASS'
-
-      - name: Configure low-cost Functions artifact cleanup
-        shell: bash
-        run: |
-          set +e
-          npx --yes firebase-tools@latest functions:artifacts:setpolicy \
-            --location asia-northeast3 \
-            --days 1 \
-            --project soridraw-app-866a5 \
-            --force \
-            --non-interactive
-          status=$?
-          if [ "$status" -eq 0 ]; then
-            echo '[Section tags bundle] Artifact cleanup policy PASS: 1 day'
-          else
-            echo '[Section tags bundle] WARNING: Artifact cleanup policy could not be configured; continuing required PREVIEW deployment.'
-          fi
-          exit 0
-
-      - name: Deploy Firestore rules
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes firebase-tools@latest deploy \
-            --only firestore:rules \
-            --project soridraw-app-866a5 \
-            --config firebase.json \
-            --non-interactive
-          echo '[Section tags bundle] Rules deploy PASS'
-
-      - name: Seed and validate aggregate bundle
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd functions
-          node <<'NODE'
-          const admin = require('firebase-admin');
-          admin.initializeApp({ projectId: 'soridraw-app-866a5' });
-          const db = admin.firestore();
-          (async () => {
-            const snapshot = await db.collection('section_tags').orderBy('label', 'asc').get();
-            const items = snapshot.docs.map((d) => d.data());
-            if (!items.every((item) => item && typeof item === 'object' && !Array.isArray(item))) {
-              throw new Error('seed item invalid');
-            }
-            const now = Date.now();
-            const sourceEventId = `deploy_seed_${now}`;
-            const stable = {
-              schemaVersion: 1,
-              items,
-              itemCount: items.length,
-              updatedAtMs: now,
-              sourceEventTimeMs: now,
-              sourceEventId,
-            };
-            const bytes = Buffer.byteLength(JSON.stringify(stable), 'utf8');
-            if (bytes > 800000) throw new Error(`seed bundle too large: ${bytes}`);
-            await db.doc('app_settings/section_tags_bundle').set({
-              ...stable,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: false });
-            const verify = await db.doc('app_settings/section_tags_bundle').get();
-            const data = verify.data() || {};
-            if (!verify.exists || Number(data.schemaVersion) !== 1 || Number(data.itemCount) !== items.length || !Array.isArray(data.items) || data.items.length !== items.length) {
-              throw new Error('seed verification failed');
-            }
-            console.log(`[Section tags bundle] seed PASS count=${items.length} bytes=${bytes}`);
-          })().then(() => process.exit(0)).catch((error) => { console.error(error); process.exit(1); });
-          NODE
+          echo '[Section tags bundle] deployed Function PASS'
 
       - name: Deploy Firebase PREVIEW Hosting only
         shell: bash
         run: |
           set -euo pipefail
-          cd ..
+          pwd
+          test -f firebase.hosting-preview.json
+          test -f dist/index.html
           npx --yes firebase-tools@latest deploy \
             --only hosting \
             --project soridraw-app-866a5 \
@@ -170,6 +94,7 @@ jobs:
 
       - name: Result
         run: |
-          echo 'Section tags aggregate bundle deployment COMPLETE for Firebase PREVIEW.'
+          echo 'Section tags aggregate bundle Firebase PREVIEW deployment COMPLETE.'
+          echo 'Backend Function exists, Rules and 76-item aggregate were deployed/seeded in the prior continuation run.'
           echo 'Expected cold browser path: app_settings:getDoc 1 instead of section_tags:getDocs 76.'
           echo 'No main, TEST, PRODUCTION, Cloudflare, migration, or canonical section_tags changes.'

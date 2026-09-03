@@ -1,13 +1,14 @@
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
-import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { readSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
 
 const EXPLORE_API_BASE = 'https://soridraw-explore-api.andrawing1212.workers.dev';
 const EXPLORE_FOLLOW_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_FOLLOW_CACHE_KEY = 'explore-follow-state';
 const EXPLORE_FOLLOW_CACHE_SOURCE_TYPE = 'explore_follow_state';
-const EXPLORE_FOLLOW_CACHE_TTL_MS = 5 * 60 * 1000; // temporary until shared social revision signal
+const EXPLORE_FOLLOW_CACHE_TTL_MS = 10 * 60 * 1000;
+const EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH = '/v1/profiles/:id/follow-state';
 
 const readPayload = async (response: Response) => {
   try {
@@ -191,6 +192,7 @@ export const getExploreFollowState = async (user: User, uid: string): Promise<Ex
   if (!normalizedUid) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
   const cached = readCachedExploreFollowState(user.uid, normalizedUid);
   if (cached !== null) {
+    recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL HIT · 팔로우 상태 10분 캐시');
     return { isFollowing: cached, followerCount: 0, followingCount: 0 };
   }
   const payload = await requestAuthed(user, `/v1/profiles/${encodeURIComponent(normalizedUid)}/follow-state`);

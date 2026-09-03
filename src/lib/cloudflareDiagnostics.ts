@@ -100,6 +100,10 @@ const normalizeDiagnosticPath = (value: string) => {
   if (/^\/v1\/tracks\/[^/]+\/like$/.test(pathname)) return '/v1/tracks/:id/like';
   if (/^\/v1\/tracks\/[^/]+\/visibility$/.test(pathname)) return '/v1/tracks/:id/visibility';
   if (/^\/v1\/profiles\/[^/]+\/first-view$/.test(pathname)) return '/v1/profiles/:id/first-view';
+  if (/^\/v1\/profiles\/[^/]+\/follow-state$/.test(pathname)) return '팔로우 상태 확인';
+  if (/^\/v1\/profiles\/[^/]+\/follow$/.test(pathname)) return '팔로우 변경';
+  if (/^\/v1\/profiles\/[^/]+\/tracks$/.test(pathname)) return '공개프로필 곡';
+  if (/^\/v1\/profiles\/[^/]+$/.test(pathname)) return '공개프로필 정보';
   return pathname.slice(0, 120);
 };
 

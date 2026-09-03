@@ -2,7 +2,7 @@ import fs from 'node:fs';
 
 const path = '.remote-worker/worker.js';
 let src = fs.readFileSync(path, 'utf8');
-const MARKER = 'SORIDRAW_MUSIC_NOTE_PUBLICATION_BUNDLE_20260904';
+const MARKER = 'SORIDRAW_MUSIC_NOTE_PUBLICATION_BUNDLE_WORKER_20260904';
 const includeBootstrap = process.env.SORIDRAW_INCLUDE_PUBLICATION_BOOTSTRAP === '1';
 const migrationSql = includeBootstrap
   ? fs.readFileSync('migrations/20260904_music_note_publication_bundle.sql', 'utf8')

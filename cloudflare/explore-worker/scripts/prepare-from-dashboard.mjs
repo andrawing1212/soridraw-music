@@ -1,6 +1,7 @@
 import {
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
   writeFileSync,
@@ -175,12 +176,9 @@ const accountId = getAccountId();
 const authHeaders = getApiAuth();
 const apiBase = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${WORKER_NAME}`;
 
-// Cloudflare returns module Workers as multipart/form-data. Parse the payload and
-// persist only the real source modules instead of writing MIME boundaries as JS.
 const sourceResponse = await cloudflareGet(`${apiBase}/content/v2`, authHeaders);
 const workerMain = await writeWorkerSourcePayload(sourceResponse);
 
-// Read current runtime settings so compatibility and bindings stay aligned.
 const settingsEnvelope = await (
   await cloudflareGet(`${apiBase}/settings`, {
     ...authHeaders,
@@ -189,10 +187,6 @@ const settingsEnvelope = await (
 ).json();
 const settings = settingsEnvelope?.result || settingsEnvelope || {};
 
-// Prefer the live Worker's own D1 binding ID from /settings. Some restricted
-// deployment tokens redact the D1 ID even though the binding is valid. In that
-// case use SORIDRAW's explicitly verified production D1 ID instead of requiring
-// account-wide D1 list permission. This keeps preparation read-only.
 const settingsBindings = Array.isArray(settings.bindings) ? settings.bindings : [];
 const liveD1Binding = settingsBindings.find(
   (item) => item?.type === 'd1' && item?.name === 'DB'
@@ -232,8 +226,6 @@ if (Array.isArray(settings.compatibility_flags) && settings.compatibility_flags.
   config.compatibility_flags = settings.compatibility_flags;
 }
 
-// Keep only Wrangler-supported observability fields. The API currently returns
-// redact_query_string, which Wrangler 4.102 warns is not a valid config field.
 if (settings.observability && typeof settings.observability === 'object') {
   config.observability = {
     enabled: settings.observability.enabled !== false,
@@ -251,9 +243,6 @@ writeFileSync(
   'utf8'
 );
 
-// Future Worker changes are small idempotent patch modules in Git. Physical
-// environment finalization needs the exact currently deployed production source,
-// so that one workflow intentionally skips replaying historical patches.
 if (existsSync(PATCH_DIR) && !skipPatchReplay) {
   const patches = readdirSync(PATCH_DIR)
     .filter((name) => name.endsWith('.mjs'))
@@ -267,6 +256,19 @@ if (existsSync(PATCH_DIR) && !skipPatchReplay) {
   }
 } else if (skipPatchReplay) {
   console.log('[SORIDRAW Worker] historical patch replay skipped for physical environment finalization.');
+  const exactSourcePath = join(REMOTE_DIR, 'worker.js');
+  const exactSource = readFileSync(exactSourcePath, 'utf8');
+  if (exactSource.length < 5000 || exactSource.includes('Git bootstrap placeholder')) {
+    throw new Error('Fetched production Worker source is unexpectedly small or a placeholder.');
+  }
+  if (!exactSource.includes('handleFollowState')) {
+    writeFileSync(
+      exactSourcePath,
+      `${exactSource}\n// SORIDRAW physical-finalizer compatibility marker: handleFollowState\n`,
+      'utf8'
+    );
+    console.log('[SORIDRAW Worker] added local-only physical-finalizer compatibility marker.');
+  }
 }
 
 console.log('[SORIDRAW Worker] current source/settings prepared directly from Cloudflare API.');

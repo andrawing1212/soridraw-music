@@ -1,0 +1,80 @@
+name: Temp Cloudflare Explore Runtime Schema Inspect
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-cloudflare-explore-runtime-schema-inspect.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Deploy read-only schema inspector
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/schema-inspect.mjs" <<'JS'
+          export default {
+            async fetch(request, env) {
+              const url = new URL(request.url);
+              if (url.pathname !== '/__schema') return new Response('not found',{status:404});
+              const schema = await env.SOURCE_DB.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 WHEN 'trigger' THEN 2 ELSE 3 END,name").all();
+              const tables = (schema.results || []).filter(r=>r.type==='table').map(r=>r.name);
+              const counts = {};
+              for (const name of tables) {
+                if (/_fts_(data|idx|content|docsize|config)$/.test(name)) continue;
+                try { const row=await env.SOURCE_DB.prepare(`SELECT COUNT(*) AS n FROM "${String(name).replaceAll('"','""')}"`).first(); counts[name]=Number(row?.n||0); } catch {}
+              }
+              const media = await env.SOURCE_MEDIA.list({limit:1000});
+              return Response.json({ok:true,schema:schema.results||[],counts,mediaCount:(media.objects||[]).length,mediaTruncated:Boolean(media.truncated)});
+            }
+          };
+          JS
+          cat > "$RUNNER_TEMP/wrangler-schema.jsonc" <<'JSON'
+          {
+            "name":"soridraw-explore-migration-inspect",
+            "main":"./schema-inspect.mjs",
+            "compatibility_date":"2026-08-28",
+            "workers_dev":true,
+            "d1_databases":[{"binding":"SOURCE_DB","database_name":"soridraw-explore-db","database_id":"217ef5b1-5d80-4f7c-afc7-9e07eb05c06b"}],
+            "r2_buckets":[{"binding":"SOURCE_MEDIA","bucket_name":"soridraw-profile-media"}]
+          }
+          JSON
+          cp "$RUNNER_TEMP/schema-inspect.mjs" "$RUNNER_TEMP/../schema-inspect.mjs" 2>/dev/null || true
+          npx wrangler deploy --config "$RUNNER_TEMP/wrangler-schema.jsonc"
+      - name: Read schema through Worker runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 12); do
+            code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/schema.json" -w '%{http_code}' 'https://soridraw-explore-migration-inspect.andrawing1212.workers.dev/__schema' || true)"
+            [ "$code" = 200 ] && break
+            [ "$i" != 12 ] || { echo "SCHEMA_INSPECT_FAIL HTTP=$code"; exit 4; }
+            sleep 3
+          done
+          node - "$RUNNER_TEMP/schema.json" <<'JS'
+          const fs=require('fs'); const x=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(!x.ok) process.exit(2);
+          console.log('SOURCE_COUNTS='+JSON.stringify(x.counts));
+          console.log('SOURCE_MEDIA_COUNT='+x.mediaCount+' truncated='+x.mediaTruncated);
+          for(const r of x.schema) console.log(`SCHEMA type=${r.type} name=${r.name} tbl=${r.tbl_name} sql=${String(r.sql).replace(/\s+/g,' ').slice(0,1200)}`);
+          console.log('RUNTIME_SCHEMA_INSPECT=PASS');
+          JS

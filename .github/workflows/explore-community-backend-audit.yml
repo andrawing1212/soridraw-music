@@ -78,13 +78,32 @@ jobs:
           const wanted = [
             'handleFollowState','handleFollow','refreshFollowStats','handleLike','refreshLikeCount',
             'getPublicTrackForWrite','patchPublicProfileFirstViewLikeCount','refreshPublicProfileFirstViewProfile',
-            'handlePublicProfileFirstViewSnapshot','handleMyFollowing','handleFollowingFeed','enforceUserRateLimit'
+            'handlePublicProfileFirstViewSnapshot','handleMyFollowing','handleFollowingFeed','enforceUserRateLimit',
+            'handleProfileMediaUpload','handleProfileMedia','buildProfileMediaUrl'
           ];
           for(const name of wanted){
             const body = extract(name);
-            console.log(`=== ${name} ===`);
-            console.log(body || 'MISSING');
+            if (body) {
+              console.log(`=== ${name} ===`);
+              console.log(body);
+            }
           }
+          console.log('=== ENV REFERENCES ===');
+          console.log([...new Set([...src.matchAll(/env\.([A-Z0-9_]+)/g)].map((m)=>m[1]))].sort().join('\n'));
+          console.log('=== MEDIA CONSTANT LINES ===');
+          src.split('\n').forEach((line, index) => {
+            if (/PROFILE_MEDIA|r2\.dev|media/i.test(line) && !/console\.log/.test(line)) {
+              console.log(`${index+1}: ${line.slice(0,500)}`);
+            }
+          });
+          console.log('=== PREPARED WRANGLER CONFIG ===');
+          const cfg = JSON.parse(fs.readFileSync('.remote-worker/wrangler.jsonc','utf8'));
+          console.log(JSON.stringify({
+            name: cfg.name,
+            compatibility_date: cfg.compatibility_date,
+            d1_databases: cfg.d1_databases,
+            r2_buckets: cfg.r2_buckets,
+          }, null, 2));
           console.log('READ_ONLY=true');
           console.log('NO_DEPLOY=true');
           console.log('NO_D1_MUTATION=true');

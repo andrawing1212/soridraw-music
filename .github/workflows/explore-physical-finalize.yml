@@ -171,9 +171,12 @@ jobs:
             }
             const schema=await rows(source,"SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 WHEN 'trigger' THEN 2 ELSE 3 END,name");
             const tableSql=new Map(schema.filter((x)=>x.type==='table').map((x)=>[String(x.name||''),String(x.sql||'')]));
-            for(const name of TABLES) if(!tableSql.has(name)) throw new Error('Source schema missing '+name);
-            const regular=TABLES.filter((n)=>!FTS.has(n));
-            const virtual=TABLES.filter((n)=>FTS.has(n));
+            const presentTables=TABLES.filter((name)=>tableSql.has(name));
+            for(const name of ['public_profiles','tracks','follows','likes','profile_stats','track_stats','public_profile_first_views']) {
+              if(!tableSql.has(name)) throw new Error('Source core schema missing '+name);
+            }
+            const regular=presentTables.filter((n)=>!FTS.has(n));
+            const virtual=presentTables.filter((n)=>FTS.has(n));
             for(const name of regular){ if(!(await tableExists(target,name))) await target.prepare(tableSql.get(name)).run(); }
             for(const name of virtual){ if(!(await tableExists(target,name))) await target.prepare(tableSql.get(name)).run(); }
             const expected={};
@@ -187,7 +190,7 @@ jobs:
               }
             }
             for(const row of schema){
-              if((row.type!=='index'&&row.type!=='trigger')||!row.sql||!TABLES.includes(String(row.tbl_name||'')))continue;
+              if((row.type!=='index'&&row.type!=='trigger')||!row.sql||!presentTables.includes(String(row.tbl_name||'')))continue;
               if(await objectExists(target,row.type,String(row.name||'')))continue;
               await target.prepare(String(row.sql)).run();
             }

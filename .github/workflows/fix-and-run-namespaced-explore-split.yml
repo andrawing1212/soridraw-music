@@ -42,6 +42,12 @@ jobs:
               s = s.replace(old_rx, new_rx, 1)
           elif new_rx not in s:
               raise SystemExit('schema object regex anchor missing')
+          old_map = r"  return R2_PREFIX + String(key || '').replace(/^\\/+/, '');"
+          new_map = r"  return R2_PREFIX + String(key || '').replace(/^\/+/, '');"
+          if old_map in s:
+              s = s.replace(old_map, new_map, 1)
+          elif new_map not in s:
+              raise SystemExit('R2 key regex anchor missing')
           p.write_text(s, encoding='utf-8')
           print('NAMESPACE_WRAPPER_ESCAPE_FIX=APPLIED')
           PY
@@ -67,6 +73,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add .deploy/cloudflare-explore-namespaced-env-split.mjs
-          git commit -m 'fix(preview): preserve SQL regex escapes in Explore namespace wrapper'
+          git commit -m 'fix(preview): preserve SQL and R2 regex escapes in Explore namespace wrapper'
           git push origin HEAD:preview
           echo 'VERIFIED_SOURCE_FIX_PUSHED=true'

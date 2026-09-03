@@ -14,6 +14,9 @@ const D1_DATABASE_ID = '217ef5b1-5d80-4f7c-afc7-9e07eb05c06b';
 const R2_BUCKET_NAME = 'soridraw-profile-media';
 const REMOTE_DIR = '.remote-worker';
 const PATCH_DIR = 'patches';
+const skipPatchReplay =
+  String(process.env.SORIDRAW_SKIP_PATCH_REPLAY || '') === '1' ||
+  String(process.env.GITHUB_WORKFLOW || '') === 'Explore Physical Environment Finalize';
 
 const runCapture = (command, args, cwd = process.cwd()) => {
   const result = spawnSync(command, args, {
@@ -248,8 +251,10 @@ writeFileSync(
   'utf8'
 );
 
-// Future Worker changes are small idempotent patch modules in Git.
-if (existsSync(PATCH_DIR)) {
+// Future Worker changes are small idempotent patch modules in Git. Physical
+// environment finalization needs the exact currently deployed production source,
+// so that one workflow intentionally skips replaying historical patches.
+if (existsSync(PATCH_DIR) && !skipPatchReplay) {
   const patches = readdirSync(PATCH_DIR)
     .filter((name) => name.endsWith('.mjs'))
     .sort();
@@ -260,6 +265,8 @@ if (existsSync(PATCH_DIR)) {
       SORIDRAW_REMOTE_WORKER_DIR: join(process.cwd(), REMOTE_DIR),
     });
   }
+} else if (skipPatchReplay) {
+  console.log('[SORIDRAW Worker] historical patch replay skipped for physical environment finalization.');
 }
 
 console.log('[SORIDRAW Worker] current source/settings prepared directly from Cloudflare API.');

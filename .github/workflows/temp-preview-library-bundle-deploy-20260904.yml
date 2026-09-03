@@ -25,14 +25,20 @@ jobs:
           ref: preview
           fetch-depth: 5
 
-      - name: Verify approved source baseline
+      - name: Verify corrected approved source baseline
         shell: bash
         run: |
           set -euo pipefail
-          git cat-file -e 70f8c913ed27286af7a7607372258286b673e175^{commit}
-          git diff --quiet 70f8c913ed27286af7a7607372258286b673e175 HEAD -- src functions package.json package-lock.json firebase.json firebase.hosting-preview.json
+          git cat-file -e 873e1626a9c2c0f92160d46df2a97df126adad20^{commit}
+          git diff --quiet 873e1626a9c2c0f92160d46df2a97df126adad20 HEAD -- src functions package.json package-lock.json firebase.json firebase.hosting-preview.json
           grep -q 'syncSunoLibraryLatest10Bundle' functions/src/index.ts
-          echo '[Preview deploy] Approved source baseline: PASS'
+          grep -q '.region("asia-northeast3")' functions/src/index.ts
+          grep -q '.firestore.document("suno_tracks/{uid}/tracks/{trackId}")' functions/src/index.ts
+          if grep -q 'firebase-functions/v2/firestore' functions/src/index.ts; then
+            echo 'ERROR: v2 Firestore trigger import remains'
+            exit 1
+          fi
+          echo '[Preview deploy] Corrected source baseline: PASS'
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -65,21 +71,22 @@ jobs:
       - name: Run Library bundle contract tests
         run: npm --prefix functions run test:library-bundle
 
-      - name: Verify secured Function export
+      - name: Verify secured Function export and region
         shell: bash
         run: |
           set -euo pipefail
           test -f functions/lib/securedIndex.js
           grep -q 'syncSunoLibraryLatest10Bundle' functions/lib/securedIndex.js
           grep -q 'suno_tracks/{uid}/tracks/{trackId}' functions/lib/securedIndex.js
-          echo '[Preview deploy] Secured Function export: PASS'
+          grep -q 'asia-northeast3' functions/lib/securedIndex.js
+          echo '[Preview deploy] Secured Function export/region: PASS'
 
       - name: Authenticate Google/Firebase
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Deploy only Library freshness Function
+      - name: Deploy only corrected Library freshness Function
         shell: bash
         run: |
           set -euo pipefail
@@ -97,7 +104,8 @@ jobs:
             --project soridraw-app-866a5 \
             --json > "$RUNNER_TEMP/functions-list.json"
           grep -q 'syncSunoLibraryLatest10Bundle' "$RUNNER_TEMP/functions-list.json"
-          echo '[Preview deploy] Function inventory: PASS'
+          grep -q 'asia-northeast3' "$RUNNER_TEMP/functions-list.json"
+          echo '[Preview deploy] Function inventory/region: PASS'
 
       - name: Deploy Firebase PREVIEW Hosting only
         shell: bash
@@ -139,7 +147,7 @@ jobs:
       - name: Result
         run: |
           echo 'SORIDRAW PREVIEW Library bundle deployment completed.'
-          echo 'Source baseline: 70f8c913ed27286af7a7607372258286b673e175'
-          echo 'Function: syncSunoLibraryLatest10Bundle'
+          echo 'Corrected source baseline: 873e1626a9c2c0f92160d46df2a97df126adad20'
+          echo 'Function: syncSunoLibraryLatest10Bundle @ asia-northeast3 (1st gen Firestore onWrite)'
           echo 'Preview URL: https://preview.soridraw.com/'
-          echo 'No Rules, migration, Cloudflare deploy, main, TEST, or PRODUCTION deployment performed.'
+          echo 'No IAM widening, Rules, migration, Cloudflare deploy, main, TEST, or PRODUCTION deployment performed.'

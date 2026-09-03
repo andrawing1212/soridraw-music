@@ -27,6 +27,16 @@ jobs:
         with:
           node-version: 22
 
+      - name: Probe currently deployed social route before local patch replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://soridraw-explore-api.andrawing1212.workers.dev'
+          status="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/live-follow-batch.json" -w '%{http_code}' "$base/v1/me/follows?uids=probe")"
+          echo "LIVE_FOLLOW_BATCH_STATUS=$status"
+          head -c 400 "$RUNNER_TEMP/live-follow-batch.json" || true
+          echo
+
       - name: Prepare exact live Worker source
         working-directory: cloudflare/explore-worker
         shell: bash
@@ -66,37 +76,16 @@ jobs:
             return null;
           }
           const wanted = [
-            'handleFollowState',
-            'handleFollow',
-            'refreshFollowStats',
-            'handleLike',
-            'refreshLikeCount',
-            'getPublicTrackForWrite',
-            'patchPublicProfileFirstViewLikeCount',
-            'refreshPublicProfileFirstViewProfile',
-            'handlePublicProfileFirstViewSnapshot',
-            'handleMyFollowing',
-            'handleFollowing',
-            'handleFollowingFeed',
-            'enforceUserRateLimit'
+            'handleFollowState','handleFollow','refreshFollowStats','handleLike','refreshLikeCount',
+            'getPublicTrackForWrite','patchPublicProfileFirstViewLikeCount','refreshPublicProfileFirstViewProfile',
+            'handlePublicProfileFirstViewSnapshot','handleMyFollowing','handleFollowingFeed','enforceUserRateLimit'
           ];
           for(const name of wanted){
             const body = extract(name);
             console.log(`=== ${name} ===`);
             console.log(body || 'MISSING');
           }
-          console.log('=== SOCIAL ROUTE CONTEXT ===');
-          const lines = src.split('\n');
-          lines.forEach((line, idx) => {
-            if(/\/v1\/me\/following|follow-state|\/follow\b|\/like\b|\/v1\/me\/likes/.test(line)) {
-              console.log(`--- route line ${idx+1} ---`);
-              console.log(lines.slice(Math.max(0, idx-4), Math.min(lines.length, idx+8)).join('\n'));
-            }
-          });
-          console.log('=== TABLE TOKENS ===');
-          const tables = [...new Set([...src.matchAll(/(?:FROM|INTO|UPDATE|TABLE IF NOT EXISTS)\s+([a-zA-Z0-9_]+)/g)].map(m=>m[1]))].filter(t=>/follow|like|profile|track|rate/.test(t));
-          console.log(tables.sort().join('\n'));
+          console.log('READ_ONLY=true');
+          console.log('NO_DEPLOY=true');
+          console.log('NO_D1_MUTATION=true');
           NODE
-          echo 'READ_ONLY=true'
-          echo 'NO_DEPLOY=true'
-          echo 'NO_D1_MUTATION=true'

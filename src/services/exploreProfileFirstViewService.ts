@@ -14,11 +14,10 @@ import {
 // SORIDRAW_COST_ZERO_STAGE2A_PROFILE_FIRST_VIEW
 // SORIDRAW_PROFILE_REVISION_SWR_1000
 // SORIDRAW_PROFILE_REVISION_PREVIEW_DEPLOY_1001
-const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 1;
+// SORIDRAW_PROFILE_EVENT_DRIVEN_CACHE_1003
+const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 2;
 const PROFILE_FIRST_VIEW_SOURCE_TYPE = 'explore_profile_first_view';
 const PROFILE_FIRST_VIEW_LIMIT = 50;
-const PROFILE_FIRST_VIEW_VALIDATION_TTL_MS = 10 * 60 * 1000;
-const PROFILE_FIRST_VIEW_STORAGE_TTL_MS = 60 * 60 * 1000;
 const PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH = '/v1/profiles/:id/first-view';
 
 type ExploreProfileFirstViewData = {
@@ -41,7 +40,7 @@ type MaterializedRequestResult =
   | { kind: 'not-found'; message: string }
   | { kind: 'unavailable' };
 
-const revalidationInflight = new Map<string, Promise<MaterializedRequestResult>>();
+const coldLoadInflight = new Map<string, Promise<ExploreProfileFirstViewData>>();
 
 const normalizeProfileRef = (value: string) => String(value || '').trim();
 const cacheKeyForRef = (profileRef: string) => `explore-profile-first-view:${normalizeProfileRef(profileRef).toLowerCase()}`;
@@ -106,10 +105,9 @@ const writeCache = (profileRef: string, data: ExploreProfileFirstViewData) => {
       syncCursor: normalizedData.nextCursor,
       serverRevision: normalizedData.revision,
       deletedIds: [],
-      // Storage lifetime and freshness are deliberately separate. The cached profile
-      // may stay available for instant rendering for one hour, while revision
-      // validation happens at most every ten minutes when the user revisits it.
-      expiresAt: Date.now() + PROFILE_FIRST_VIEW_STORAGE_TTL_MS,
+      // Public profile first-view is change-driven. Routine reopen/revisit must stay
+      // entirely local; known mutations patch or invalidate this cache explicitly.
+      expiresAt: null,
       dirty: false,
       pendingMutationId: null,
       data: normalizedData,
@@ -215,19 +213,17 @@ const requestMaterializedFirstView = async (
   };
 };
 
-const revalidateCachedFirstView = (
-  profileRef: string,
-  cached: ExploreProfileFirstViewData,
-): Promise<MaterializedRequestResult> => {
-  const key = `${normalizeProfileRef(profileRef).toLowerCase()}:${cached.revision || 'none'}`;
-  const existing = revalidationInflight.get(key);
-  if (existing) return existing;
-  const promise = requestMaterializedFirstView(profileRef, cached.revision)
-    .finally(() => {
-      if (revalidationInflight.get(key) === promise) revalidationInflight.delete(key);
-    });
-  revalidationInflight.set(key, promise);
-  return promise;
+export const invalidateExplorePublicProfileFirstView = (profileRef: string) => {
+  const normalizedRef = normalizeProfileRef(profileRef);
+  if (!normalizedRef) return;
+  const cached = readCache(normalizedRef);
+  const refs = new Set<string>([
+    normalizedRef,
+    cached?.profile?.uid || '',
+    cached?.profile?.handle ? `@${cached.profile.handle}` : '',
+  ].filter(Boolean));
+  clearCache(normalizedRef, cached);
+  refs.forEach((ref) => coldLoadInflight.delete(normalizeProfileRef(ref).toLowerCase()));
 };
 
 export const rememberExplorePublicProfileFirstViewProfile = (profile: ExplorePublicProfile) => {
@@ -236,6 +232,11 @@ export const rememberExplorePublicProfileFirstViewProfile = (profile: ExplorePub
   const cached = readCache(normalizedUid)
     || (profile.handle ? readCache(`@${profile.handle}`) : null);
   if (!cached) return;
+  const previousHandle = normalizeProfileRef(cached.profile.handle).replace(/^@+/, '');
+  const nextHandle = normalizeProfileRef(profile.handle).replace(/^@+/, '');
+  if (previousHandle && previousHandle.toLowerCase() !== nextHandle.toLowerCase()) {
+    removeSoridrawPersistentCache(cacheKeyForRef(`@${previousHandle}`), null);
+  }
   writeCache(normalizedUid, { ...cached, profile });
 };
 
@@ -271,74 +272,63 @@ export const patchExplorePublicProfileFirstViewTrack = (
 
 export const getExplorePublicProfileFirstView = async (
   profileRef: string,
-  options: ExploreProfileFirstViewOptions = {},
+  _options: ExploreProfileFirstViewOptions = {},
 ): Promise<ExploreProfileFirstViewData> => {
   const normalizedRef = normalizeProfileRef(profileRef);
   if (!normalizedRef) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
 
   const cached = readCache(normalizedRef);
   if (cached) {
-    const isFresh = cached.validatedAt > 0 && Date.now() - cached.validatedAt < PROFILE_FIRST_VIEW_VALIDATION_TTL_MS;
     recordCloudflareLocalCacheHit(
       PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH,
-      isFresh ? 'LOCAL HIT · 10분 검증 생략' : 'LOCAL STALE · 즉시 표시 후 revision 검증',
+      'LOCAL HIT · 변경 이벤트 전까지 서버 읽기 0',
     );
-
-    if (!isFresh) {
-      void revalidateCachedFirstView(normalizedRef, cached)
-        .then((result) => {
-          if (result.kind === 'not-modified') {
-            writeCache(normalizedRef, {
-              ...cached,
-              revision: result.revision || cached.revision,
-              etag: result.etag || cached.etag,
-              validatedAt: Date.now(),
-            });
-            return;
-          }
-          if (result.kind === 'updated') {
-            writeCache(normalizedRef, result.data);
-            options.onRevalidated?.(result.data);
-            return;
-          }
-          if (result.kind === 'not-found') {
-            clearCache(normalizedRef, cached);
-            options.onInvalidated?.(result.message);
-          }
-        })
-        .catch((error) => {
-          console.warn('[Explore profile first-view] background revision validation failed; stale cache kept.', error);
-        });
-    }
     return cached;
   }
 
-  try {
-    const materialized = await requestMaterializedFirstView(normalizedRef);
-    if (materialized.kind === 'updated') {
-      writeCache(normalizedRef, materialized.data);
-      return materialized.data;
-    }
-    if (materialized.kind === 'not-found') throw new Error(materialized.message);
-  } catch (error) {
-    if (error instanceof Error && /찾을 수 없습니다/.test(error.message)) throw error;
-    console.warn('[Explore profile first-view] materialized snapshot unavailable; compatibility fallback used.', error);
+  const inflightKey = normalizedRef.toLowerCase();
+  const existing = coldLoadInflight.get(inflightKey);
+  if (existing) {
+    recordCloudflareLocalCacheHit(
+      PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH,
+      'LOCAL INFLIGHT · 최초 조회 중복 방지',
+    );
+    return existing;
   }
 
-  // Compatibility fallback remains only for a true cold load when the materialized
-  // endpoint is unavailable. Cached profiles never fan out into two legacy reads.
-  const [profile, tracks] = await Promise.all([
-    getExplorePublicProfile(normalizedRef),
-    getExplorePublicProfileTracks(normalizedRef),
-  ]);
-  const fallback: ExploreProfileFirstViewData = {
-    profile,
-    tracks: tracks.slice(0, PROFILE_FIRST_VIEW_LIMIT),
-    nextCursor: null,
-    revision: null,
-    etag: null,
-    validatedAt: Date.now(),
-  };
-  writeCache(normalizedRef, fallback);
-  return fallback;
+  const task = (async () => {
+    try {
+      const materialized = await requestMaterializedFirstView(normalizedRef);
+      if (materialized.kind === 'updated') {
+        writeCache(normalizedRef, materialized.data);
+        return materialized.data;
+      }
+      if (materialized.kind === 'not-found') throw new Error(materialized.message);
+    } catch (error) {
+      if (error instanceof Error && /찾을 수 없습니다/.test(error.message)) throw error;
+      console.warn('[Explore profile first-view] materialized snapshot unavailable; compatibility fallback used.', error);
+    }
+
+    // Compatibility fallback remains only for a true cold load when the materialized
+    // endpoint is unavailable. Cached profiles never fan out into two legacy reads.
+    const [profile, tracks] = await Promise.all([
+      getExplorePublicProfile(normalizedRef),
+      getExplorePublicProfileTracks(normalizedRef),
+    ]);
+    const fallback: ExploreProfileFirstViewData = {
+      profile,
+      tracks: tracks.slice(0, PROFILE_FIRST_VIEW_LIMIT),
+      nextCursor: null,
+      revision: null,
+      etag: null,
+      validatedAt: Date.now(),
+    };
+    writeCache(normalizedRef, fallback);
+    return fallback;
+  })().finally(() => {
+    if (coldLoadInflight.get(inflightKey) === task) coldLoadInflight.delete(inflightKey);
+  });
+
+  coldLoadInflight.set(inflightKey, task);
+  return task;
 };

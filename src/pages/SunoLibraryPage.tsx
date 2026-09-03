@@ -928,6 +928,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       playlistLocalColorMapRef.current = loadedPlaylistMap;
       workspaceColorBaselineRef.current = serializeColorMap(loadedWorkspaceMap);
       playlistColorBaselineRef.current = serializeColorMap(loadedPlaylistMap);
+      pendingWorkspaceColorKeysRef.current.clear();
+      pendingPlaylistColorKeysRef.current.clear();
       workspaceColorDirtyRef.current = false;
       playlistColorDirtyRef.current = false;
     } catch (error) {
@@ -2338,23 +2340,25 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const currentUser = libraryUserRef.current;
     if (!currentUser || libraryColorsAutoSyncingRef.current) return;
 
+    // Cache/server hydration can change the local maps while entering or leaving
+    // the page. Those changes are not user mutations and must stay write-free.
+    const workspaceChanged = workspaceColorDirtyRef.current;
+    const playlistChanged = playlistColorDirtyRef.current;
+    if (!workspaceChanged && !playlistChanged) return;
+
     const workspaceMap = workspaceLocalColorMapRef.current || {};
     const playlistMap = playlistLocalColorMapRef.current || {};
     const workspaceSerialized = serializeColorMap(workspaceMap);
     const playlistSerialized = serializeColorMap(playlistMap);
-    const workspaceChanged = workspaceSerialized !== workspaceColorBaselineRef.current;
-    const playlistChanged = playlistSerialized !== playlistColorBaselineRef.current;
-    if (!workspaceChanged && !playlistChanged) return;
-
-    const workspaceEntries = workspaceChanged ? Object.entries(workspaceMap) : [];
-    const playlistEntries = playlistChanged ? Object.entries(playlistMap) : [];
-    if (workspaceEntries.length === 0 && playlistEntries.length === 0) {
-      workspaceColorBaselineRef.current = workspaceSerialized;
-      playlistColorBaselineRef.current = playlistSerialized;
-      workspaceColorDirtyRef.current = false;
-      playlistColorDirtyRef.current = false;
-      return;
-    }
+    const workspaceEntries: [string, string][] = workspaceChanged
+      ? Array.from(pendingWorkspaceColorKeysRef.current).map((key): [string, string] => [key, workspaceMap[key] || 'gray'])
+      : [];
+    const playlistEntries: [string, string][] = playlistChanged
+      ? Array.from(pendingPlaylistColorKeysRef.current).map((key): [string, string] => [key, playlistMap[key] || 'gray'])
+      : [];
+    // A dirty flag without an explicit pending key is never enough to justify
+    // a server write. Preserve state and wait for an explicit mutation.
+    if (workspaceEntries.length === 0 && playlistEntries.length === 0) return;
 
     libraryColorsAutoSyncingRef.current = true;
     try {

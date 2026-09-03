@@ -1462,6 +1462,7 @@ export default function FavoritesPage({
   const favoriteColorMapRef = useRef<Record<string, string>>({});
   const favoriteColorBaselineRef = useRef<string>('{}');
   const favoriteColorDirtyRef = useRef(false);
+  const pendingFavoriteColorIdsRef = useRef<Set<string>>(new Set());
   const favoriteColorsAutoSyncingRef = useRef(false);
   const favoritesRef = useRef<any[]>(favorites || []);
   const favoriteUserRef = useRef<User | null>(user);
@@ -2748,21 +2749,22 @@ export default function FavoritesPage({
     const currentUser = favoriteUserRef.current;
     if (!currentUser || favoriteColorsAutoSyncingRef.current) return;
 
+    // Page entry/exit, server hydration and cache restoration must never write.
+    // Only explicit color clicks are eligible for an exit sync.
+    if (!favoriteColorDirtyRef.current) return;
+
     const currentMap = favoriteColorMapRef.current || {};
     const currentSerialized = serializeColorMap(currentMap);
-    if (currentSerialized === favoriteColorBaselineRef.current) return;
-
     const existingIds = new Set((favoritesRef.current || []).map(song => song?.id).filter(Boolean));
-    const entries = Object.entries(currentMap).filter(([id]) => existingIds.has(id));
-    if (entries.length === 0) {
-      favoriteColorBaselineRef.current = currentSerialized;
-      favoriteColorDirtyRef.current = false;
-      return;
-    }
+    const entries: [string, string][] = Array.from(pendingFavoriteColorIdsRef.current)
+      .filter((id) => existingIds.has(id))
+      .map((id): [string, string] => [id, currentMap[id] || 'gray']);
+    if (entries.length === 0) return;
 
     favoriteColorsAutoSyncingRef.current = true;
     try {
       await Promise.all(entries.map(([id, color]) => updateFavorite(id, { favoriteColorTag: color === 'gray' ? null : color } as any)));
+      pendingFavoriteColorIdsRef.current.clear();
       favoriteColorBaselineRef.current = currentSerialized;
       favoriteColorDirtyRef.current = false;
       if (!silent) showFavoriteToast('색상 변경사항을 저장했습니다.');
@@ -2830,6 +2832,7 @@ export default function FavoritesPage({
       setFavoriteColorMap(loaded);
       favoriteColorMapRef.current = loaded;
       favoriteColorBaselineRef.current = serializeColorMap(loaded);
+      pendingFavoriteColorIdsRef.current.clear();
       favoriteColorDirtyRef.current = false;
     } catch (error) {
       console.warn('favorite color map load failed', error);
@@ -4429,6 +4432,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       ? selectedSongIds
       : [song.id];
 
+    targetIds.forEach((id) => { if (id) pendingFavoriteColorIdsRef.current.add(id); });
     setFavoriteColorMap(prev => {
       const next = { ...prev };
       targetIds.forEach(id => { next[id] = color; });

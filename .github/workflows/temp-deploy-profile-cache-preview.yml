@@ -1,0 +1,90 @@
+name: TEMP Deploy Explore Profile Cache Preview
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-deploy-profile-cache-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Authenticate Google/Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot production hosting before
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+
+      - name: Deploy Firebase PREVIEW only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project soridraw \
+            --config firebase.hosting-preview.json \
+            --non-interactive
+
+      - name: Smoke preview hosts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 "$url" -o "$RUNNER_TEMP/preview.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview.html"; then
+                echo "PASS $url"
+                ok='yes'
+                break
+              fi
+              sleep 10
+            done
+            test "$ok" = 'yes'
+          done
+
+      - name: Verify production hosting unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo 'Production hosting unchanged: PASS'
+
+      - name: Result
+        run: |
+          echo 'Firebase PREVIEW deployment completed.'
+          echo 'Target: https://preview.soridraw.com/'
+          echo 'main/prod hosting not changed.'

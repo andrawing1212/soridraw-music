@@ -1,0 +1,130 @@
+name: TEMP Release Firebase PRODUCTION 20260904
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/temp-release-production-20260904.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      HOSTING_PROJECT: soridraw
+      PROD_WEB_HOST: soridraw.web.app
+      PROD_FIREBASE_HOST: soridraw.firebaseapp.com
+      PROD_EXPLORE_ORIGIN: https://soridraw-explore-api.andrawing1212.workers.dev
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build exact main
+        run: npm run build
+
+      - name: Verify production Explore routing source
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "https://soridraw-explore-api.andrawing1212.workers.dev" src/config/exploreEnvironment.ts
+          grep -Fq "? EXPLORE_API_PREVIEW" src/config/exploreEnvironment.ts
+          grep -Fq ": EXPLORE_API_PRODUCTION" src/config/exploreEnvironment.ts
+          echo '[PROD] Explore routing source: PASS'
+
+      - name: Authenticate Google and Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Assert production Hosting site exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest hosting:sites:list --project "$HOSTING_PROJECT" --json > "$RUNNER_TEMP/sites.json"
+          node - "$RUNNER_TEMP/sites.json" <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const candidates = [payload?.result?.sites, payload?.result, payload?.sites, payload];
+          const sites = candidates.find(Array.isArray) || [];
+          const ids = sites.map((site) => {
+            const raw = String(site?.site || site?.siteId || site?.id || site?.name || '');
+            return raw.includes('/') ? raw.split('/').filter(Boolean).pop() : raw;
+          }).filter(Boolean);
+          if (!ids.includes('soridraw')) throw new Error('Missing Hosting site: soridraw');
+          console.log('[PROD] Hosting site: PASS');
+          NODE
+
+      - name: Deploy main to Firebase PRODUCTION Hosting only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project "$HOSTING_PROJECT" \
+            --config firebase.json \
+            --non-interactive
+          echo '[PROD] Firebase Hosting deploy: PASS'
+
+      - name: Smoke production Firebase hosts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in "$PROD_WEB_HOST" "$PROD_FIREBASE_HOST"; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 "https://$host/" -o "$RUNNER_TEMP/prod-$attempt.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/prod-$attempt.html"; then
+                echo "[PROD] Smoke PASS: https://$host/"
+                ok=yes
+                break
+              fi
+              sleep 10
+            done
+            test "$ok" = yes
+          done
+
+      - name: Verify production Explore Worker route
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o "$RUNNER_TEMP/explore.json" -D "$RUNNER_TEMP/explore.headers" -w '%{http_code}' \
+            -H "Origin: https://$PROD_WEB_HOST" \
+            "$PROD_EXPLORE_ORIGIN/v1/feed?sort=latest&limit=1" || true)"
+          allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' "$RUNNER_TEMP/explore.headers")"
+          echo "[PROD] Explore HTTP=$code allow=${allow:-none}"
+          test "$code" = '200'
+          grep -q 'data' "$RUNNER_TEMP/explore.json"
+          echo '[PROD] Explore Worker/D1/R2 route smoke: PASS'
+
+      - name: Check custom domain status without changing DNS
+        shell: bash
+        run: |
+          set +e
+          code="$(curl -LsS -o "$RUNNER_TEMP/custom.html" -w '%{http_code}' --max-time 20 https://soridraw.com/ 2>/dev/null)"
+          echo "[PROD] soridraw.com HTTP=${code:-unreachable} (informational only; DNS unchanged)"
+          exit 0
+
+      - name: Result
+        run: |
+          echo 'FIREBASE_PRODUCTION_DEPLOY_COMPLETE=true'
+          echo 'PRODUCTION_URL=https://soridraw.web.app/'
+          echo 'NO_FUNCTIONS_DEPLOY=true'
+          echo 'NO_FIRESTORE_OR_RULES_DEPLOY=true'
+          echo 'NO_CLOUDFLARE_DEPLOY=true'

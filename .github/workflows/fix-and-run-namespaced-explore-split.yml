@@ -22,7 +22,7 @@ jobs:
         with:
           ref: preview
 
-      - name: Repair generated-wrapper escaping
+      - name: Repair generated-wrapper escaping and DDL execution
         shell: bash
         run: |
           set -euo pipefail
@@ -30,26 +30,40 @@ jobs:
           from pathlib import Path
           p = Path('.deploy/cloudflare-explore-namespaced-env-split.mjs')
           s = p.read_text(encoding='utf-8')
-          old = "  return `import baseWorker from './worker.js';"
-          new = "  return String.raw`import baseWorker from './worker.js';"
-          if old in s:
-              s = s.replace(old, new, 1)
-          elif new not in s:
-              raise SystemExit('outer wrapper template anchor missing')
-          old_rx = "  const rx = new RegExp('\\\\b' + sourceName + '\\\\b');"
-          new_rx = "  const rx = new RegExp('\\\\\\\\b' + sourceName + '\\\\\\\\b');"
-          if old_rx in s:
-              s = s.replace(old_rx, new_rx, 1)
-          elif new_rx not in s:
-              raise SystemExit('schema object regex anchor missing')
-          old_map = r"  return R2_PREFIX + String(key || '').replace(/^\\/+/, '');"
-          new_map = r"  return R2_PREFIX + String(key || '').replace(/^\/+/, '');"
-          if old_map in s:
-              s = s.replace(old_map, new_map, 1)
-          elif new_map not in s:
-              raise SystemExit('R2 key regex anchor missing')
+          replacements = [
+              (
+                  "  return `import baseWorker from './worker.js';",
+                  "  return String.raw`import baseWorker from './worker.js';",
+                  'outer wrapper template',
+              ),
+              (
+                  "  const rx = new RegExp('\\\\b' + sourceName + '\\\\b');",
+                  "  const rx = new RegExp('\\\\\\\\b' + sourceName + '\\\\\\\\b');",
+                  'schema object regex',
+              ),
+              (
+                  r"  return R2_PREFIX + String(key || '').replace(/^\\/+/, '');",
+                  r"  return R2_PREFIX + String(key || '').replace(/^\/+/, '');",
+                  'R2 key regex',
+              ),
+              (
+                  '    await db.exec(createSql);',
+                  '    await db.prepare(createSql).run();',
+                  'table DDL execution',
+              ),
+              (
+                  "    await db.exec(rewriteSchemaObjectName(String(row.sql), String(row.type), String(row.name || '')));",
+                  "    await db.prepare(rewriteSchemaObjectName(String(row.sql), String(row.type), String(row.name || ''))).run();",
+                  'index trigger DDL execution',
+              ),
+          ]
+          for old, new, label in replacements:
+              if old in s:
+                  s = s.replace(old, new, 1)
+              elif new not in s:
+                  raise SystemExit(f'{label} anchor missing')
           p.write_text(s, encoding='utf-8')
-          print('NAMESPACE_WRAPPER_ESCAPE_FIX=APPLIED')
+          print('NAMESPACE_WRAPPER_REPAIR=APPLIED')
           PY
           git diff --check
           git diff -- .deploy/cloudflare-explore-namespaced-env-split.mjs
@@ -73,6 +87,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add .deploy/cloudflare-explore-namespaced-env-split.mjs
-          git commit -m 'fix(preview): preserve SQL and R2 regex escapes in Explore namespace wrapper'
+          git commit -m 'fix(preview): harden namespaced Explore bootstrap execution'
           git push origin HEAD:preview
           echo 'VERIFIED_SOURCE_FIX_PUSHED=true'

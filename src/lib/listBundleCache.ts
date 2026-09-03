@@ -120,6 +120,41 @@ const getItemCreatedAtMs = (item: any): number => (
   || 0
 );
 
+export const isCompatibleLibraryListBundle = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object') return false;
+  const bundle = value as Record<string, any>;
+  if (bundle.schemaVersion !== LIST_BUNDLE_SCHEMA_VERSION || bundle.kind !== 'library') return false;
+  if (!Array.isArray(bundle.items) || bundle.items.length > 10) return false;
+  if (!Number.isInteger(bundle.itemCount) || bundle.itemCount !== bundle.items.length) return false;
+  if (!Number.isInteger(bundle.cursorCreatedAtMs) || bundle.cursorCreatedAtMs < 0) return false;
+  if (typeof bundle.hasMore !== 'boolean') return false;
+  if (!Array.isArray(bundle.deletedIds) || bundle.deletedIds.some((id: unknown) => (
+    typeof id !== 'string' || !id.trim()
+  ))) return false;
+  if (!Number.isInteger(bundle.updatedAtMs) || bundle.updatedAtMs <= 0) return false;
+
+  if (bundle.items.length === 0) {
+    return bundle.cursorCreatedAtMs === 0 && bundle.hasMore === false;
+  }
+  if (bundle.hasMore && bundle.items.length < 10) return false;
+
+  const itemIds = new Set<string>();
+  const itemTimes: number[] = [];
+  for (const item of bundle.items) {
+    if (!item || typeof item !== 'object') return false;
+    const id = String(item.id || '').trim();
+    const createdAtMs = getItemCreatedAtMs(item);
+    if (!id || itemIds.has(id) || !Number.isFinite(createdAtMs) || createdAtMs <= 0) return false;
+    itemIds.add(id);
+    itemTimes.push(createdAtMs);
+  }
+
+  for (let index = 1; index < itemTimes.length; index += 1) {
+    if (itemTimes[index] > itemTimes[index - 1]) return false;
+  }
+  return bundle.cursorCreatedAtMs === itemTimes[itemTimes.length - 1];
+};
+
 const HISTORY_KEYS = new Set([
   'lyricRevisions',
   'lyricsHistory',
@@ -309,6 +344,10 @@ export const subscribeListBundle = (
         }
 
         const data = snapshot.data() || {};
+        if (kind === 'library' && !isCompatibleLibraryListBundle(data)) {
+          callbacks.onError?.(new Error('Library list bundle is incompatible or corrupted.'));
+          return;
+        }
         const items = Array.isArray(data.items) ? data.items : [];
         const bundle: ListBundleSnapshot = {
           schemaVersion: Number(data.schemaVersion || 0),

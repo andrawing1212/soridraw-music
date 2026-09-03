@@ -24,7 +24,7 @@ import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache }
 import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
 import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
 import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
-import { scheduleListBundleWrite, subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
+import { subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
 
 const SORIDRAW_923_FINAL_FIRESTORE_GUARD = true;
 const SORIDRAW_936_LIBRARY_VERSION_SYNC_ONLY = true;
@@ -359,7 +359,12 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
       if (libraryWorkspaceSession !== session || session.uid !== uid) return;
       const docs = snapshot.docs;
       const list = docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      session.tracks = mergeLibraryWorkspaceSessionTracks(list, []);
+      session.tracks = mergeLibraryLatestBundleWithCache(
+        list,
+        session.tracks,
+        docs.length > 0 ? getLibraryWorkspaceTrackCreatedAtMs(list[list.length - 1]) : 0,
+        docs.length >= WORKSPACE_SERVER_PAGE_SIZE,
+      );
       libraryWorkspaceInMemoryCache.set(uid, session.tracks);
       session.lastDoc = docs.length > 0 ? docs[docs.length - 1] : null;
       session.hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
@@ -379,102 +384,6 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
       console.warn('Cacheless Library full bootstrap failed.', bootstrapError);
       session.ready = true;
       emitLibraryWorkspaceSession(session);
-    }
-  };
-
-  const pageQuery = query(
-    tracksRef,
-    orderBy('createdAt', 'desc'),
-    limit(WORKSPACE_SERVER_FETCH_SIZE)
-  );
-
-  const startLegacyFullFallback = () => {
-    if (session.unsubscribeFallback) return;
-    session.paginationFallback = true;
-    session.hasMore = false;
-    session.unsubscribeFallback = () => {};
-    const boundedFallbackQuery = query(tracksRef, limit(WORKSPACE_SERVER_FETCH_SIZE));
-    void getDocs(boundedFallbackQuery)
-      .then((snapshot) => {
-        const list = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-        session.tracks = mergeLibraryWorkspaceSessionTracks(list, session.tracks);
-        session.lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
-        session.hasMore = false;
-        session.ready = true;
-        saveLibraryWorkspaceTrackCache(uid, session.tracks);
-        markCacheDiagnostic('library', 'SYNC', Math.max(1, snapshot.docs.length));
-        emitLibraryWorkspaceSession(session);
-      })
-      .catch((error) => {
-        console.error('Bounded library fallback failed; keeping local cache.', error);
-        session.ready = true;
-        emitLibraryWorkspaceSession(session);
-      });
-    emitLibraryWorkspaceSession(session);
-  };
-
-  const startPagedSourceFallback = () => {
-    try { session.unsubscribe?.(); } catch {}
-    session.unsubscribe = null;
-    session.paginationFallback = false;
-    session.unsubscribe = onSnapshot(pageQuery, (snapshot) => {
-      const docs = snapshot.docs;
-      const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
-      const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
-      const list = visibleDocs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      session.lastDoc = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : null;
-      session.hasMore = hasMore;
-      session.paginationFallback = false;
-      session.tracks = mergeLibraryLatestBundleWithCache(
-        list,
-        session.tracks,
-        visibleDocs.length > 0 ? getLibraryWorkspaceTrackCreatedAtMs(list[list.length - 1]) : 0,
-        hasMore,
-      );
-      session.ready = true;
-      saveLibraryWorkspaceTrackCache(uid, session.tracks);
-      scheduleListBundleWrite('library', uid, session.tracks, { limit: 10, hasMore });
-      markCacheDiagnostic(
-        'library',
-        snapshot.metadata.fromCache ? 'CACHE' : 'SYNC',
-        snapshot.metadata.fromCache ? 0 : Math.max(1, snapshot.docChanges().length)
-      );
-      emitLibraryWorkspaceSession(session);
-    }, (error) => {
-      console.error('Error fetching paged tracks:', error);
-      session.ready = true;
-      emitLibraryWorkspaceSession(session);
-      startLegacyFullFallback();
-    });
-  };
-
-  let bundleBootstrapStarted = false;
-  const bootstrapBundleFromSourceOnce = async () => {
-    if (bundleBootstrapStarted) return;
-    bundleBootstrapStarted = true;
-    try {
-      const snapshot = await getDocs(pageQuery);
-      const docs = snapshot.docs;
-      const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
-      const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
-      const list = visibleDocs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      session.lastDoc = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : null;
-      session.hasMore = hasMore;
-      session.paginationFallback = false;
-      session.tracks = mergeLibraryLatestBundleWithCache(
-        list,
-        session.tracks,
-        visibleDocs.length > 0 ? getLibraryWorkspaceTrackCreatedAtMs(list[list.length - 1]) : 0,
-        hasMore,
-      );
-      session.ready = true;
-      saveLibraryWorkspaceTrackCache(uid, session.tracks);
-      scheduleListBundleWrite('library', uid, session.tracks, { limit: 10, hasMore });
-      markCacheDiagnostic('library', 'SYNC', snapshot.docs.length);
-      emitLibraryWorkspaceSession(session);
-    } catch (error) {
-      console.warn('Library bundle bootstrap unavailable; using legacy safe listener.', error);
-      startPagedSourceFallback();
     }
   };
 
@@ -518,12 +427,12 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
       onMissing: (meta) => {
         libraryBundleReadInFlight = false;
         if (meta.fromCache) return;
-        void bootstrapBundleFromSourceOnce();
+        void bootstrapCachelessLibraryFromServerOnce();
       },
       onError: (error) => {
         libraryBundleReadInFlight = false;
-        console.warn('Library bundle unavailable; using legacy safe listener.', error);
-        startPagedSourceFallback();
+        console.warn('Library bundle unavailable; using bounded source fallback.', error);
+        void bootstrapCachelessLibraryFromServerOnce();
       },
     });
   };
@@ -564,7 +473,7 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
       }
     }
 
-    await bootstrapCachelessLibraryFromServerOnce();
+    startLibraryBundleVerification();
   };
 
   const handleLibraryProfileVersion = (event: Event) => {

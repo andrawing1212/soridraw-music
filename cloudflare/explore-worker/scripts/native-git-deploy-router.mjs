@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const workerDir = resolve(here, '..');
-const repoRoot = resolve(workerDir, '..', '..');
 const isNative = String(process.env.WORKERS_CI || '') === '1';
 
 const run = (command, args, cwd) => {
@@ -18,11 +17,10 @@ const run = (command, args, cwd) => {
 };
 
 if (isNative) {
-  console.log('[SORIDRAW Worker] Cloudflare native diagnostic only; production deploy is blocked.');
-  run(process.execPath, ['.deploy/cloudflare-native-resource-diagnostic.mjs'], repoRoot);
+  console.log('[SORIDRAW Worker] Cloudflare native Git deploy blocked.');
+  console.log('[SORIDRAW Worker] PREVIEW/TEST deployments run only through explicit SORIDRAW workflows; PRODUCTION requires explicit approval.');
   process.exit(0);
 }
 
 // Manual/approved non-native deploy path keeps the existing prepared deployment behavior.
 run(process.execPath, ['./scripts/deploy-prepared.mjs'], workerDir);
-// native-resource-diagnostic-trigger: 2026-09-03T11:56Z

@@ -1,0 +1,84 @@
+name: Explore Community Backend Preview Validate
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'cloudflare/explore-worker/patches/008-explore-community-lightweight-social.mjs'
+      - '.github/workflows/explore-community-backend-preview-validate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare live Worker plus 008 without deploying
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false
+          npm run cf:prepare
+          node --check .remote-worker/worker.js
+          grep -Fq 'adjustExploreFollowCountersDelta' .remote-worker/worker.js
+          grep -Fq 'adjustExploreLikeCounterDelta' .remote-worker/worker.js
+          grep -Fq 'handleMyFollowStates' .remote-worker/worker.js
+          grep -Fq 'handleProfileConnections' .remote-worker/worker.js
+          grep -Fq '/v1/me/follows' .remote-worker/worker.js
+          echo 'EXPLORE_SOCIAL_008_SOURCE=PASS'
+
+      - name: Verify heavy mutation paths removed
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const src=fs.readFileSync('.remote-worker/worker.js','utf8');
+          function extract(name){
+            const start=src.indexOf(`async function ${name}(`);
+            if(start<0) throw new Error(`missing ${name}`);
+            const brace=src.indexOf('{',start);
+            let d=0,q=null,e=false;
+            for(let i=brace;i<src.length;i++){
+              const c=src[i];
+              if(q){if(e){e=false;continue;} if(c==='\\'){e=true;continue;} if(c===q)q=null; continue;}
+              if(c==='"'||c==="'"||c==='`'){q=c;continue;}
+              if(c==='{')d++;
+              else if(c==='}'&&--d===0)return src.slice(start,i+1);
+            }
+            throw new Error(`unterminated ${name}`);
+          }
+          const follow=extract('handleFollow');
+          const like=extract('handleLike');
+          if(/refreshFollowStats|refreshPublicProfileFirstViewProfile/.test(follow)) throw new Error('heavy follow path remains');
+          if(/refreshLikeCount|patchPublicProfileFirstViewLikeCount\(/.test(like)) throw new Error('heavy like path remains');
+          if(!follow.includes('adjustExploreFollowCountersDelta')) throw new Error('delta follow missing');
+          if(!like.includes('adjustExploreLikeCounterDelta')) throw new Error('delta like missing');
+          console.log('SOCIAL_MUTATION_BOUNDARY=PASS');
+          NODE
+
+      - name: Safety result
+        run: |
+          echo 'WORKER_DEPLOY=false'
+          echo 'D1_SCHEMA_MIGRATION=false'
+          echo 'D1_BACKFILL=false'
+          echo 'FIREBASE_DEPLOY=false'
+          echo 'FIRESTORE_CHANGE=false'
+          echo 'MAIN_CHANGE=false'

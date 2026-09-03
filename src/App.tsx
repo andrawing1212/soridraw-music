@@ -7311,6 +7311,32 @@ function App() {
       }
 
       try {
+        let sectionTagsBundleHydrated = false;
+        try {
+          const bundleSnapshot = await getDoc(doc(db, 'app_settings', 'section_tags_bundle'));
+          if (bundleSnapshot.exists()) {
+            const bundle = bundleSnapshot.data() as any;
+            const items = Array.isArray(bundle?.items) ? bundle.items : [];
+            const isValidBundle = Number(bundle?.schemaVersion) === 1
+              && Number(bundle?.itemCount) === items.length
+              && items.every((item: any) => Boolean(item && typeof item === 'object' && !Array.isArray(item)));
+
+            if (isValidBundle) {
+              if (!isMounted) return;
+              const bundledTags = items as SectionTag[];
+              setSectionTags(bundledTags);
+              writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.sectionTags, bundledTags);
+              sectionTagsBundleHydrated = true;
+            } else {
+              console.warn('[Section tags] aggregate bundle is invalid; using legacy source fallback.');
+            }
+          }
+        } catch (bundleError) {
+          console.warn('[Section tags] aggregate bundle unavailable; using legacy source fallback.', bundleError);
+        }
+
+        if (sectionTagsBundleHydrated) return;
+
         const snapshot = await getDocs(query(
           collection(db, 'section_tags'),
           orderBy('label', 'asc'),

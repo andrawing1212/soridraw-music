@@ -22,6 +22,63 @@ admin.initializeApp({
   databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com",
 });
 
+// SORIDRAW_SECTION_TAGS_SHARED_BUNDLE_20260904
+// Public Studio configuration is shared by every user. Rebuild the single aggregate
+// only when an admin actually mutates the canonical section_tags collection.
+const SORIDRAW_SECTION_TAGS_BUNDLE_SCHEMA_VERSION = 1;
+const SORIDRAW_SECTION_TAGS_BUNDLE_MAX_BYTES = 800_000;
+
+const buildSectionTagsBundlePayload = async (sourceEventTimeMs: number, sourceEventId: string) => {
+  const snapshot = await admin.firestore().collection("section_tags").orderBy("label", "asc").get();
+  const items = snapshot.docs.map((snapshotDoc) => snapshotDoc.data());
+  if (!items.every((item) => Boolean(item && typeof item === "object" && !Array.isArray(item)))) {
+    throw new Error("Section tags bundle contains an invalid item.");
+  }
+
+  const updatedAtMs = Date.now();
+  const stablePayload = {
+    schemaVersion: SORIDRAW_SECTION_TAGS_BUNDLE_SCHEMA_VERSION,
+    items,
+    itemCount: items.length,
+    updatedAtMs,
+    sourceEventTimeMs,
+    sourceEventId,
+  };
+  const byteSize = Buffer.byteLength(JSON.stringify(stablePayload), "utf8");
+  if (byteSize > SORIDRAW_SECTION_TAGS_BUNDLE_MAX_BYTES) {
+    throw new Error(`Section tags bundle too large: ${byteSize} bytes.`);
+  }
+  return {
+    ...stablePayload,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+};
+
+export const syncSectionTagsBundle = functions
+  .region("asia-northeast3")
+  .firestore.document("section_tags/{tagId}")
+  .onWrite(async (_change, context) => {
+    const sourceEventTimeMs = Date.parse(String(context.timestamp || "")) || Date.now();
+    const sourceEventId = String(context.eventId || "");
+    const payload = await buildSectionTagsBundlePayload(sourceEventTimeMs, sourceEventId);
+    const bundleRef = admin.firestore().doc("app_settings/section_tags_bundle");
+
+    // Multiple admin edits can trigger concurrently. Older events may finish later,
+    // so only the newest event is allowed to replace the aggregate document.
+    await admin.firestore().runTransaction(async (transaction) => {
+      const currentSnapshot = await transaction.get(bundleRef);
+      if (currentSnapshot.exists) {
+        const current = currentSnapshot.data() || {};
+        const currentTime = Number(current.sourceEventTimeMs || 0);
+        const currentId = String(current.sourceEventId || "");
+        if (currentTime > sourceEventTimeMs || (currentTime === sourceEventTimeMs && currentId > sourceEventId)) {
+          return;
+        }
+      }
+      transaction.set(bundleRef, payload, { merge: false });
+    });
+  });
+
 export const syncSunoLibraryLatest10Bundle = functions
   .region("asia-northeast3")
   .firestore.document("suno_tracks/{uid}/tracks/{trackId}")

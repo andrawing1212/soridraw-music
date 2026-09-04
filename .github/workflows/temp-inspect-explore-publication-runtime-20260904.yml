@@ -1,4 +1,4 @@
-name: SORIDRAW Inspect Explore Publication Core SQL 2026-09-04
+name: SORIDRAW Inspect Explore Publication Stored Row 2026-09-04
 
 on:
   push:
@@ -27,21 +27,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Capture publication core SQL anchors only
+      - name: Capture publication stored-row anchor only
         run: |
           set -euo pipefail
           mkdir -p .deploy
-          node <<'NODE' > .deploy/explore-publication-core-sql-20260904.json
+          node <<'NODE' > .deploy/explore-publication-stored-row-20260904.json
           const A=process.env.ACCOUNT,W=process.env.WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
           async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,'Content-Type':'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,700)}`);return x.result||x}
           function fn(src,name){const start=src.indexOf(`async function ${name}(`);if(start<0)throw new Error(name+' missing');const brace=src.indexOf('{',start);let d=0,q=null,e=false;for(let i=brace;i<src.length;i++){const c=src[i],n=src[i+1];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='/'&&n==='/'){const z=src.indexOf('\n',i);i=z<0?src.length:z;continue}if(c==='/'&&n==='*'){const z=src.indexOf('*/',i+2);i=z<0?src.length:z+1;continue}if(c==='{')d++;if(c==='}'&&--d===0)return src.slice(start,i+1)}throw new Error(name+' unterminated')}
-          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;const ds=await g(`${base}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];if(v.version_id!==process.env.EXPECTED_ACTIVE)throw new Error(`active Worker changed: ${v.version_id}`);const ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`);const mod=(ver.modules||[]).find(m=>(m.name||'')==='worker.js')||(ver.modules||[])[0];const src=Buffer.from(mod.content_base64,'base64').toString('utf8');const core=fn(src,'handlePublicationR2Core');const lines=core.split('\n');const hits=[];for(let i=0;i<lines.length;i++){if(/INSERT INTO tracks|UPDATE tracks|ON CONFLICT|published_at|created_at|is_public|status/.test(lines[i]))hits.push({line:i+1,text:lines[i].trim(),before:lines.slice(Math.max(0,i-2),i).map(s=>s.trim()),after:lines.slice(i+1,i+3).map(s=>s.trim())});}console.log(JSON.stringify({activeVersion:v.version_id,hits},null,2));})().catch(e=>{console.error(e);process.exit(1)});
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;const ds=await g(`${base}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];if(v.version_id!==process.env.EXPECTED_ACTIVE)throw new Error(`active Worker changed: ${v.version_id}`);const ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`);const mod=(ver.modules||[]).find(m=>(m.name||'')==='worker.js')||(ver.modules||[])[0];const src=Buffer.from(mod.content_base64,'base64').toString('utf8');const core=fn(src,'handlePublicationR2Core');const lines=core.split('\n');const idx=lines.findIndex(line=>line.includes('const storedOptions'));if(idx<0)throw new Error('storedOptions anchor missing');console.log(JSON.stringify({activeVersion:v.version_id,startLine:idx+1,lines:lines.slice(Math.max(0,idx-3),Math.min(lines.length,idx+20)).map((text,i)=>({line:Math.max(0,idx-3)+i+1,text:text.trim()}))},null,2));})().catch(e=>{console.error(e);process.exit(1)});
           NODE
-      - name: Commit SQL anchor snapshot
+      - name: Commit stored-row snapshot
         run: |
           set -euo pipefail
           git config user.name 'andrawing1212'
           git config user.email 'andrawing1212@gmail.com'
-          git add .deploy/explore-publication-core-sql-20260904.json
-          git commit -m 'chore(preview): record Explore publication SQL anchors'
+          git add .deploy/explore-publication-stored-row-20260904.json
+          git commit -m 'chore(preview): record Explore publication stored row anchor'
           git push origin HEAD:preview

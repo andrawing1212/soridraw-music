@@ -271,4 +271,4 @@ jobs:
           echo "App Check policy inspection: ${RECAPTCHA_POLICY_STATUS:-not-run}"
           echo 'No Functions deploy, Firestore/Database Rules update, user-data migration, main change, or production Hosting release was performed.'
 
-# Manual preview redeploy trigger: 2026-08-31T11:25Z
+# Manual preview redeploy trigger: 2026-09-05T20:22Z

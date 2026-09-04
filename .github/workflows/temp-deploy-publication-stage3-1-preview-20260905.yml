@@ -84,7 +84,6 @@ jobs:
           node <<'NODE'
           const fs=require('fs'),s=fs.readFileSync('.remote-worker/worker.js','utf8');
           function fn(name){const ns=[`async function ${name}(`,`function ${name}(`];let st=-1;for(const n of ns){st=s.indexOf(n);if(st>=0)break;}if(st<0)throw new Error('missing '+name);const b=s.indexOf('{',st);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue;}if(c==='\\'){e=true;continue;}if(c===q)q=null;continue;}if(c==='"'||c==="'"||c==='`'){q=c;continue;}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(st,i+1);}throw new Error('unterminated '+name)}
-          if(!s.includes('SORIDRAW_PUBLICATION_POSTWRITE_500_RETRY_COST_018_20260905'))throw new Error('018 marker missing');
           const feedInv=fn('invalidateExploreFeedEdgeCache');
           const profileInv=fn('invalidatePublicProfileFirstViewEdgeCache');
           const readState=fn('publicationReadState016');
@@ -96,7 +95,7 @@ jobs:
           const idem=hot.indexOf('mutation: "idempotent"');
           const r2=hot.indexOf('syncExploreFeedR2Publication012');
           if(idem<0||r2<0||idem>r2)throw new Error('idempotent retry does not exit before derived work');
-          console.log('[Stage3.1 deploy] invariants PASS');
+          console.log('[Stage3.1 deploy] predeploy invariants PASS');
           NODE
 
           deployed=0
@@ -119,6 +118,7 @@ jobs:
           const fs=require('fs');
           const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
           async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);return x.result||x;}
+          function fn(s,name){const ns=[`async function ${name}(`,`function ${name}(`];let st=-1;for(const n of ns){st=s.indexOf(n);if(st>=0)break;}if(st<0)throw new Error('deployed function missing '+name);const b=s.indexOf('{',st);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue;}if(c==='\\'){e=true;continue;}if(c===q)q=null;continue;}if(c==='"'||c==="'"||c==='`'){q=c;continue;}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(st,i+1);}throw new Error('unterminated '+name)}
           (async()=>{
             const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;
             const deps=await get(`${base}/deployments`);const d=(deps.deployments||deps||[])[0];
@@ -128,8 +128,16 @@ jobs:
             if(active.version_id===before)throw new Error('active PREVIEW version did not change');
             const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);
             const mods=ver.modules||[];const main=mods.find(m=>m.name===(ver.main_module||mods[0]?.name))||mods[0];const src=Buffer.from(main.content_base64,'base64').toString('utf8');
-            if(!src.includes('SORIDRAW_PUBLICATION_POSTWRITE_500_RETRY_COST_018_20260905'))throw new Error('deployed 018 marker missing');
-            console.log(`[Stage3.1 deploy] active after=${active.version_id}`);
+            const feedInv=fn(src,'invalidateExploreFeedEdgeCache');
+            const profileInv=fn(src,'invalidatePublicProfileFirstViewEdgeCache');
+            const readState=fn(src,'publicationReadState016');
+            const hot=fn(src,'handleMusicNotePublicationSingleWrite016');
+            if(feedInv.includes('ALLOWED_ORIGINS')||profileInv.includes('ALLOWED_ORIGINS'))throw new Error('deployed cross-origin cache fan-out remains');
+            if(!feedInv.includes('Promise.allSettled')||!profileInv.includes('Promise.allSettled'))throw new Error('deployed cache invalidation is not best-effort');
+            if(readState.includes('track_stats')||!readState.includes('env.DB.batch'))throw new Error('deployed publication read path is not 018');
+            const idem=hot.indexOf('mutation: "idempotent"');const r2=hot.indexOf('syncExploreFeedR2Publication012');
+            if(idem<0||r2<0||idem>r2)throw new Error('deployed idempotent path is not 018');
+            console.log(`[Stage3.1 deploy] active after=${active.version_id}; runtime behavior verification PASS`);
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
 

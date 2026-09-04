@@ -334,7 +334,7 @@ if (handler.includes('handlePublicProfileFirstViewWithEdgeCacheR2Core') || handl
 const sync = functionRange('syncExploreProfileR2FromD1').text;
 if (sync.includes('public_profile_first_views') || sync.includes('materializePublicProfileFirstView')) throw new Error('[020] R2 sync still copies legacy D1 snapshot');
 const repair = functionRange('rebuildExploreProfileR2Bounded020').text;
-if (repair.includes('COUNT(') || repair.includes('collection(db') || repair.includes('favorites')) throw new Error('[020] bounded repair contains forbidden scan');
+if (repair.includes('env.DB.') || repair.includes('materializePublicProfileFirstView')) throw new Error('[020] bounded repair contains forbidden direct/unbounded DB path');
 
 writeFileSync(workerPath, source, 'utf8');
 console.log('[020] Public profile first-view now uses UID-canonical R2 + handle alias; stale/missing bundles repair from a bounded first page only.');

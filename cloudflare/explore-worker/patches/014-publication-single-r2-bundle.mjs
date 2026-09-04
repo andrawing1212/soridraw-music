@@ -43,13 +43,13 @@ const functionRange = (name) => {
   throw new Error(`[014] unterminated function: ${name}`);
 };
 
+const hasFunction = (name) => source.includes(`async function ${name}(`) || source.includes(`function ${name}(`);
 const replaceFunction = (name, nextText) => {
   const range = functionRange(name);
   source = source.slice(0, range.start) + nextText + source.slice(range.end);
 };
 
 for (const required of [
-  'handleMusicNotePublicationBundle',
   'handleMusicNotePublicationR2Bundle',
   'syncMusicNotePublicationR2AfterMutation',
   'readMusicNotePublicationR2Payload',
@@ -59,19 +59,21 @@ for (const required of [
   if (!source.includes(required)) throw new Error(`[014] required publication bundle helper missing: ${required}`);
 }
 
-// 007 and 008 historically introduced two implementations and two route clauses
-// for the same endpoint. Keep the legacy helper as a compatibility delegate, but
-// remove its route so there is exactly one public endpoint contract: the R2 path.
-replaceFunction('handleMusicNotePublicationBundle', `async function handleMusicNotePublicationBundle(request, env, cors) {
+// Some historical Worker versions also contain the older D1 bundle helper/route.
+// If present, collapse it into the R2 implementation. Current PREVIEW may already
+// have only the R2 route, which is the desired state and must remain supported.
+if (hasFunction('handleMusicNotePublicationBundle')) {
+  replaceFunction('handleMusicNotePublicationBundle', `async function handleMusicNotePublicationBundle(request, env, cors) {
   return await handleMusicNotePublicationR2Bundle(request, env, cors);
 }`);
 
-const legacyRoutePattern = /\n\s*if\s*\(url\.pathname\s*===\s*["']\/v1\/me\/music-note-publications-bundle["']\s*&&\s*request\.method\s*===\s*["']GET["']\s*\)\s*\{\s*return\s+await\s+handleMusicNotePublicationBundle\(request,\s*env,\s*cors\);\s*\}/g;
-const legacyRouteMatches = source.match(legacyRoutePattern) || [];
-if (legacyRouteMatches.length !== 1) {
-  throw new Error(`[014] legacy D1 publication bundle route count=${legacyRouteMatches.length}`);
+  const legacyRoutePattern = /\n\s*if\s*\(url\.pathname\s*===\s*["']\/v1\/me\/music-note-publications-bundle["']\s*&&\s*request\.method\s*===\s*["']GET["']\s*\)\s*\{\s*return\s+await\s+handleMusicNotePublicationBundle\(request,\s*env,\s*cors\);\s*\}/g;
+  const legacyRouteMatches = source.match(legacyRoutePattern) || [];
+  if (legacyRouteMatches.length > 1) {
+    throw new Error(`[014] duplicate legacy D1 publication bundle routes count=${legacyRouteMatches.length}`);
+  }
+  if (legacyRouteMatches.length === 1) source = source.replace(legacyRoutePattern, '');
 }
-source = source.replace(legacyRoutePattern, '');
 
 // Mutation hot path must never rebuild every music-note row for the owner.
 // A missing R2 object is a repair condition, not permission to issue an owner-wide
@@ -103,11 +105,7 @@ replaceFunction('syncMusicNotePublicationR2AfterMutation', `async function syncM
   }
 }`);
 
-const finalLegacyHandler = functionRange('handleMusicNotePublicationBundle').text;
 const finalMutationSync = functionRange('syncMusicNotePublicationR2AfterMutation').text;
-if (!finalLegacyHandler.includes('handleMusicNotePublicationR2Bundle')) {
-  throw new Error('[014] legacy D1 bundle handler was not redirected to R2');
-}
 if (finalMutationSync.includes('buildMusicNotePublicationR2Payload')) {
   throw new Error('[014] owner-wide D1 bundle rebuild still exists in mutation sync');
 }
@@ -115,10 +113,12 @@ const publicRouteCount = (source.match(/url\.pathname\s*===\s*["']\/v1\/me\/musi
 if (publicRouteCount !== 1) {
   throw new Error(`[014] publication bundle public route count=${publicRouteCount}`);
 }
-if (!source.includes(marker)) {
-  const insertAt = functionRange('handleMusicNotePublicationBundle').start;
-  source = source.slice(0, insertAt) + `// ${marker}\n` + source.slice(insertAt);
+if (!source.includes('handleMusicNotePublicationR2Bundle(request, env, cors)')) {
+  throw new Error('[014] R2 publication bundle route is not active');
 }
 
+const markerAnchor = functionRange('syncMusicNotePublicationR2AfterMutation').start;
+source = source.slice(0, markerAnchor) + `// ${marker}\n` + source.slice(markerAnchor);
+
 writeFileSync(workerPath, source, 'utf8');
-console.log('[014] Publication bundle now has one R2-backed route, and mutation cache misses no longer trigger owner-wide D1 rebuilds.');
+console.log('[014] Publication bundle has one R2-backed route, and mutation cache misses cannot trigger owner-wide D1 rebuilds.');

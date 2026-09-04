@@ -1,14 +1,18 @@
-name: SORIDRAW Inspect Publication Stage2 2026-09-05
+name: SORIDRAW Validate Publication Stage2 2026-09-05
 on:
   push:
     branches: [preview]
-    paths: ['.github/workflows/temp-inspect-publication-stage2-20260905.yml']
+    paths:
+      - '.github/workflows/temp-inspect-publication-stage2-20260905.yml'
+      - 'cloudflare/explore-worker/patches/014-publication-single-r2-bundle.mjs'
+      - 'cloudflare/explore-worker/patches/015-publication-share-bundle-v1.mjs'
+      - 'cloudflare/explore-worker/migrations/20260905_public_share_bundle_v1.sql'
 permissions:
   contents: read
 jobs:
-  inspect:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
@@ -17,21 +21,35 @@ jobs:
       - uses: actions/checkout@v4
         with: { ref: preview, fetch-depth: 2 }
       - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - name: Read exact active PREVIEW publication functions
+        with: { node-version: 22, cache: npm }
+
+      - name: Validate share schema migration locally
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/stage2-worker"
+          python3 <<'PY'
+          import sqlite3
+          from pathlib import Path
+          db=sqlite3.connect(':memory:')
+          db.execute('CREATE TABLE tracks(id TEXT PRIMARY KEY, title TEXT, is_public INTEGER NOT NULL DEFAULT 0)')
+          db.executescript(Path('cloudflare/explore-worker/migrations/20260905_public_share_bundle_v1.sql').read_text())
+          cols={row[1]: row for row in db.execute('PRAGMA table_info(tracks)')}
+          assert 'share_schema_version' in cols
+          assert 'share_payload_json' in cols
+          assert cols['share_schema_version'][4] == '0'
+          print('[Stage2] local migration PASS share_schema_version + share_payload_json')
+          PY
+
+      - name: Fetch exact active PREVIEW Worker and dry-run patches 014-015
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          rm -rf .remote-worker && mkdir -p .remote-worker
           node <<'NODE'
+          const fs=require('fs'),path=require('path');
           const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
           async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);return x.result||x;}
-          function functionRange(src,name){
-            const needles=[`async function ${name}(`,`function ${name}(`]; let start=-1;
-            for(const needle of needles){start=src.indexOf(needle);if(start>=0)break;}
-            if(start<0)return null; const brace=src.indexOf('{',start); let depth=0,quote=null,escaped=false;
-            for(let i=brace;i<src.length;i++){const c=src[i]; if(quote){if(escaped){escaped=false;continue;} if(c==='\\'){escaped=true;continue;} if(c===quote)quote=null;continue;} if(c==='"'||c==="'"||c==='`'){quote=c;continue;} if(c==='{')depth++; if(c==='}'&&--depth===0)return src.slice(start,i+1);} return null;
-          }
           (async()=>{
             const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;
             const deps=await get(`${base}/deployments`); const d=(deps.deployments||deps||[])[0];
@@ -40,10 +58,33 @@ jobs:
             const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);
             const mods=ver.modules||[]; if(!mods.length)throw new Error('No active modules');
             const mainName=ver.main_module||mods[0].name||'worker.js'; const main=mods.find(m=>m.name===mainName)||mods[0];
-            const src=Buffer.from(main.content_base64,'base64').toString('utf8');
-            console.log(`[Stage2 inspect] active=${active.version_id} main=${mainName}`);
-            for(const fn of ['buildMusicNoteExploreSource','resolvePublicationSource','normalizePublicationOptions','handlePublicationR2Core','mapTrackRow']){
-              const body=functionRange(src,fn); console.log(`\n===== ${fn} =====\n${body||'[MISSING]'}\n===== END ${fn} =====`);
-            }
+            const target=path.join('.remote-worker','worker.js');
+            fs.writeFileSync(target,Buffer.from(main.content_base64,'base64'));
+            console.log(`[Stage2] active=${active.version_id} main=${mainName}`);
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/014-publication-single-r2-bundle.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/015-publication-share-bundle-v1.mjs
+          node --check .remote-worker/worker.js
+          node <<'NODE'
+          const fs=require('fs');const s=fs.readFileSync('.remote-worker/worker.js','utf8');
+          for(const token of [
+            'SORIDRAW_PUBLICATION_SINGLE_R2_BUNDLE_014_20260905',
+            'SORIDRAW_PUBLICATION_SHARE_BUNDLE_V1_015_20260905',
+            'share_schema_version, share_payload_json',
+            'share_schema_version = excluded.share_schema_version',
+            'shareBundle: readPublicShareBundle015(row)',
+            'const publicShare = buildMusicNoteShareBundle015(note);'
+          ]) if(!s.includes(token)) throw new Error(`missing ${token}`);
+          const syncStart=s.indexOf('async function syncMusicNotePublicationR2AfterMutation(');
+          const syncEnd=s.indexOf('\n}',syncStart)+2;
+          if(s.slice(syncStart,syncEnd).includes('buildMusicNotePublicationR2Payload')) throw new Error('owner-wide mutation rebuild returned');
+          console.log('[Stage2] active-worker dry-run PASS one-row share bundle + no owner-wide mutation rebuild');
+          NODE
+
+      - name: App TypeScript and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build

@@ -33,6 +33,7 @@ const SORIDRAW_902_LIST_BUNDLE_CACHE = true;
 const SORIDRAW_922_NO_UNBOUNDED_BOOTSTRAP_READS = true;
 const SORIDRAW_921_FIRESTORE_COST_HARDENING = true;
 const SORIDRAW_900_LIBRARY_SESSION_CACHE = true;
+// SORIDRAW_LIBRARY_STATUS_MONOTONIC_20260904
 const SORIDRAW_897_CACHE_DIAGNOSTICS_READ_ACCURACY = true;
 const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 
@@ -2920,6 +2921,26 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }];
   };
 
+  const hasStableLibraryResult = (group: any) => {
+    if (!group) return false;
+    const normalizedStatus = String(group.status || '').trim().toLowerCase();
+    if (['completed', 'success', 'complete'].includes(normalizedStatus)) return true;
+
+    const items = extractSunoData(group);
+    const hasFullyPlayableItems = items.length > 0 && items.every((item: any) => {
+      const audioUrl = String(getAudioUrl(item, group) || '').trim();
+      return Boolean(audioUrl) && getDuration(item, group) !== null;
+    });
+    if (hasFullyPlayableItems) return true;
+
+    const rescueEntries = Object.values(group?.audioRescue || {}) as any[];
+    return rescueEntries.some((entry: any) => {
+      const rescueStatus = String(entry?.status || '').trim().toLowerCase();
+      const rescueUrl = String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim();
+      return Boolean(rescueUrl) && (!rescueStatus || ['completed', 'success', 'complete'].includes(rescueStatus));
+    });
+  };
+
   const isTrackStuck = (group: any) => {
     if (!group || !group.id) return false;
 
@@ -3138,6 +3159,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (!currentUser || !trackId) return { status: null as string | null, raw: '' };
 
     const resolved = resolveSunoStatusFromResponse(data);
+    const currentTrack = tracks.find((track: any) => String(track?.id || '') === String(trackId));
+    if (currentTrack && hasStableLibraryResult(currentTrack) && resolved.status !== 'completed') {
+      return { status: 'completed' as string | null, raw: resolved.raw || '' };
+    }
+
     const updatePayload: any = {
       apiStatusResponse: data || null,
       lastStatusCheckedAt: serverTimestamp(),
@@ -3417,9 +3443,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (count >= 30) return false;
 
         const items = extractSunoData(group);
-        const isFullyCompleted = group.status === 'completed' && items.every((item: any) => !!getAudioUrl(item, group) && getDuration(item, group) !== null);
+        if (hasStableLibraryResult(group)) return false;
 
-        if (isFullyCompleted) return false;
+        const normalizedStatus = String(group.status || '').trim().toLowerCase();
+        const isExplicitPending = !normalizedStatus || ['processing', 'submitted', 'pending', 'generating', 'queued', 'queue', 'running', 'in_progress'].includes(normalizedStatus);
+        if (!isExplicitPending) return false;
 
         if (!group.taskId) return false;
 
@@ -7030,7 +7058,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     </div>
                     <div className="flex shrink-0 items-start md:items-center justify-end gap-1.5 md:gap-3 flex-nowrap max-w-[112px] md:max-w-none">
                       {getStatusBadge(group)}
-                      {group.status !== 'completed' && (
+                      {!isSharedView && group.taskId && !hasStableLibraryResult(group) && (isTrackStuck(group) || ['failed', 'cancelled', 'canceled'].includes(String(group.status || '').trim().toLowerCase())) && (
                         <button
                           onClick={() => checkStatus(group.id, group.taskId)}
                           disabled={statusChecking === group.id || !group.taskId}
@@ -7057,12 +7085,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       const rescueAudioId = String(item?.id || item?.audioId || item?.audio_id || '').trim();
                       const completedRescueUrl = getCompletedSunoRescueUrl(group, rescueAudioId);
                       const hasCompletedRescue = Boolean(completedRescueUrl);
-                      const isCompleted = Boolean(audioUrl && (isCompletedStatus || hasValidDuration || hasCompletedRescue));
+                      const isCompleted = Boolean((audioUrl || hasCompletedRescue) && (isCompletedStatus || hasValidDuration || hasCompletedRescue));
                       const canRecoverPlaybackUrl = !isSharedView && Boolean(group.taskId) && (isCompletedStatus || hasValidDuration || hasCompletedRescue);
                       const canPlayOrRecover = Boolean(audioUrl) || canRecoverPlaybackUrl;
-                      const isCompletedWithoutAudio = isCompletedStatus && !audioUrl;
-                      const isStalePending = !isFailed && isPendingStatus && !audioUrl && isTrackPastAutoCheckWindow(group);
-                      const isPending = !isFailed && isPendingStatus && !audioUrl && !isStalePending;
+                      const isCompletedWithoutAudio = isCompletedStatus && !audioUrl && !hasCompletedRescue;
+                      const isStalePending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && isTrackPastAutoCheckWindow(group);
+                      const isPending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && !isStalePending;
                       const sunoVersionLabel = getSunoModelVersionLabel(item, group);
                       const itemTitleParts = splitSunoDisplayTitleParts(getTitle(item, group, idx));
                       

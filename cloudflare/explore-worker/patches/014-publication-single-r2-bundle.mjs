@@ -59,11 +59,19 @@ for (const required of [
   if (!source.includes(required)) throw new Error(`[014] required publication bundle helper missing: ${required}`);
 }
 
-// 007 and 008 historically introduced two implementations for the same endpoint.
-// Keep one public route contract and make the older D1 handler delegate to R2.
+// 007 and 008 historically introduced two implementations and two route clauses
+// for the same endpoint. Keep the legacy helper as a compatibility delegate, but
+// remove its route so there is exactly one public endpoint contract: the R2 path.
 replaceFunction('handleMusicNotePublicationBundle', `async function handleMusicNotePublicationBundle(request, env, cors) {
   return await handleMusicNotePublicationR2Bundle(request, env, cors);
 }`);
+
+const legacyRoutePattern = /\n\s*if\s*\(url\.pathname\s*===\s*["']\/v1\/me\/music-note-publications-bundle["']\s*&&\s*request\.method\s*===\s*["']GET["']\s*\)\s*\{\s*return\s+await\s+handleMusicNotePublicationBundle\(request,\s*env,\s*cors\);\s*\}/g;
+const legacyRouteMatches = source.match(legacyRoutePattern) || [];
+if (legacyRouteMatches.length !== 1) {
+  throw new Error(`[014] legacy D1 publication bundle route count=${legacyRouteMatches.length}`);
+}
+source = source.replace(legacyRoutePattern, '');
 
 // Mutation hot path must never rebuild every music-note row for the owner.
 // A missing R2 object is a repair condition, not permission to issue an owner-wide
@@ -103,10 +111,14 @@ if (!finalLegacyHandler.includes('handleMusicNotePublicationR2Bundle')) {
 if (finalMutationSync.includes('buildMusicNotePublicationR2Payload')) {
   throw new Error('[014] owner-wide D1 bundle rebuild still exists in mutation sync');
 }
+const publicRouteCount = (source.match(/url\.pathname\s*===\s*["']\/v1\/me\/music-note-publications-bundle["']/g) || []).length;
+if (publicRouteCount !== 1) {
+  throw new Error(`[014] publication bundle public route count=${publicRouteCount}`);
+}
 if (!source.includes(marker)) {
   const insertAt = functionRange('handleMusicNotePublicationBundle').start;
   source = source.slice(0, insertAt) + `// ${marker}\n` + source.slice(insertAt);
 }
 
 writeFileSync(workerPath, source, 'utf8');
-console.log('[014] Publication bundle reads now use one R2-backed path, and mutation cache misses no longer trigger owner-wide D1 rebuilds.');
+console.log('[014] Publication bundle now has one R2-backed route, and mutation cache misses no longer trigger owner-wide D1 rebuilds.');

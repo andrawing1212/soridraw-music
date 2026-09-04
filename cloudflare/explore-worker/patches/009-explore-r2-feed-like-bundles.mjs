@@ -43,6 +43,11 @@ const functionRange = (name) => {
   throw new Error(`009 unterminated function: ${name}`);
 };
 
+const replaceFunction = (name, nextText) => {
+  const range = functionRange(name);
+  source = source.slice(0, range.start) + nextText + source.slice(range.end);
+};
+
 const replaceFunctionWithWrapper = (name, wrapperText, coreSuffix = 'D1Core') => {
   const range = functionRange(name);
   const coreName = `${name}${coreSuffix}`;
@@ -204,6 +209,25 @@ async function safelyRefreshExploreFeedR2Bundles(env, reason) {
 
 `;
 source = source.replace(helperAnchor, helpers + helperAnchor);
+
+// Cached responses used to retain the D1/R2 metering headers from the original MISS.
+// A cache HIT performs no D1/R2 operation, so reset those headers and expose a common edge status.
+replaceFunction('withExploreEdgeCacheHeader', `function withExploreEdgeCacheHeader(response, status) {
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', \`public, max-age=0, s-maxage=\${EXPLORE_FEED_EDGE_TTL_SECONDS}\`);
+  headers.set('X-SORIDRAW-Edge-Cache', status);
+  headers.set('X-SORIDRAW-Profile-Edge-Cache', status);
+  if (status === 'HIT') {
+    headers.set('X-SORIDRAW-D1-Read', '0');
+    headers.set('X-SORIDRAW-D1-Write', '0');
+    headers.set('X-SORIDRAW-R2-A', '0');
+    headers.set('X-SORIDRAW-R2-B', '0');
+  }
+  const expose = new Set(String(headers.get('Access-Control-Expose-Headers') || '').split(',').map((item) => item.trim()).filter(Boolean));
+  for (const name of ['X-SORIDRAW-Edge-Cache', 'X-SORIDRAW-Profile-Edge-Cache', 'X-SORIDRAW-D1-Read', 'X-SORIDRAW-D1-Write', 'X-SORIDRAW-R2-A', 'X-SORIDRAW-R2-B']) expose.add(name);
+  headers.set('Access-Control-Expose-Headers', Array.from(expose).join(', '));
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}`);
 
 replaceFunctionWithWrapper('handleFeedWithEdgeCache', (coreName) => `async function handleFeedWithEdgeCache(request, url, env, cors) {
   const cursor = url.searchParams.get('cursor');

@@ -1,0 +1,148 @@
+name: SORIDRAW Deploy Publication Stage3.1 PREVIEW 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-deploy-publication-stage3-1-preview-20260905.yml']
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+      PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_R2: soridraw-profile-media-preview
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: preview, fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+
+      - name: TypeScript and app build
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+
+      - name: Install pinned Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Deploy Stage3.1 PREVIEW Worker with rollback guard
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          rm -rf .remote-worker && mkdir -p .remote-worker
+
+          node <<'NODE'
+          const fs=require('fs');
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);return x.result||x;}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;
+            const deps=await get(`${base}/deployments`);const d=(deps.deployments||deps||[])[0];
+            const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(!active?.version_id||Number(active.percentage||0)<99.99)throw new Error('No single active PREVIEW version');
+            fs.writeFileSync('.remote-worker/before-version.txt',String(active.version_id));
+            const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);
+            const mods=ver.modules||[];if(!mods.length)throw new Error('No active modules');
+            const mainName=ver.main_module||mods[0].name||'worker.js';const main=mods.find(m=>m.name===mainName)||mods[0];
+            const src=Buffer.from(main.content_base64,'base64').toString('utf8');
+            for(const marker of ['SORIDRAW_PUBLICATION_SINGLE_R2_BUNDLE_014_20260905','SORIDRAW_PUBLICATION_SHARE_BUNDLE_V1_015_20260905','SORIDRAW_PUBLICATION_SINGLE_WRITE_HOTPATH_016_20260905','SORIDRAW_PUBLICATION_MUTATION_COMPANIONS_017_20260905']) {
+              if(!src.includes(marker)) throw new Error('Required deployed Stage3 marker missing: '+marker);
+            }
+            fs.writeFileSync('.remote-worker/original.js',src);
+            fs.writeFileSync('.remote-worker/worker.js',src);
+            const settings=await get(`${base}/settings`);
+            const cfg={
+              name,
+              main:'./worker.js',
+              compatibility_date:String(settings.compatibility_date||'2026-09-04').slice(0,10),
+              workers_dev:true,
+              keep_vars:true,
+              d1_databases:[{binding:'DB',database_name:process.env.PREVIEW_DB_NAME,database_id:process.env.PREVIEW_DB_ID}],
+              r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.PREVIEW_R2}],
+              observability: settings.observability && typeof settings.observability==='object' ? {enabled:settings.observability.enabled!==false,...(typeof settings.observability.head_sampling_rate==='number'?{head_sampling_rate:settings.observability.head_sampling_rate}:{})} : {enabled:true}
+            };
+            if(Array.isArray(settings.compatibility_flags)&&settings.compatibility_flags.length)cfg.compatibility_flags=settings.compatibility_flags;
+            fs.writeFileSync('.remote-worker/wrangler.jsonc',JSON.stringify(cfg,null,2));
+            console.log(`[Stage3.1 deploy] active before=${active.version_id}`);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/018-publication-postwrite-500-and-retry-cost.mjs
+          node --check .remote-worker/worker.js
+
+          node <<'NODE'
+          const fs=require('fs'),s=fs.readFileSync('.remote-worker/worker.js','utf8');
+          function fn(name){const ns=[`async function ${name}(`,`function ${name}(`];let st=-1;for(const n of ns){st=s.indexOf(n);if(st>=0)break;}if(st<0)throw new Error('missing '+name);const b=s.indexOf('{',st);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue;}if(c==='\\'){e=true;continue;}if(c===q)q=null;continue;}if(c==='"'||c==="'"||c==='`'){q=c;continue;}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(st,i+1);}throw new Error('unterminated '+name)}
+          if(!s.includes('SORIDRAW_PUBLICATION_POSTWRITE_500_RETRY_COST_018_20260905'))throw new Error('018 marker missing');
+          const feedInv=fn('invalidateExploreFeedEdgeCache');
+          const profileInv=fn('invalidatePublicProfileFirstViewEdgeCache');
+          const readState=fn('publicationReadState016');
+          const hot=fn('handleMusicNotePublicationSingleWrite016');
+          if(feedInv.includes('ALLOWED_ORIGINS')||profileInv.includes('ALLOWED_ORIGINS'))throw new Error('cross-origin cache fan-out remains');
+          if(!feedInv.includes('Promise.allSettled')||!profileInv.includes('Promise.allSettled'))throw new Error('cache invalidation is not best-effort');
+          if(readState.includes('track_stats'))throw new Error('publication read still touches track_stats');
+          if(!readState.includes('env.DB.batch'))throw new Error('publication reads are not batched');
+          const idem=hot.indexOf('mutation: "idempotent"');
+          const r2=hot.indexOf('syncExploreFeedR2Publication012');
+          if(idem<0||r2<0||idem>r2)throw new Error('idempotent retry does not exit before derived work');
+          console.log('[Stage3.1 deploy] invariants PASS');
+          NODE
+
+          deployed=0
+          rollback() {
+            status=$?
+            if [ "$status" -ne 0 ] && [ "$deployed" = "1" ]; then
+              echo '[Stage3.1 deploy] failure after deployment; restoring previous Worker source'
+              cp .remote-worker/original.js .remote-worker/worker.js
+              npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc || true
+            fi
+            exit "$status"
+          }
+          trap rollback EXIT
+
+          npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc
+          deployed=1
+          sleep 3
+
+          node <<'NODE'
+          const fs=require('fs');
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);return x.result||x;}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;
+            const deps=await get(`${base}/deployments`);const d=(deps.deployments||deps||[])[0];
+            const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(!active?.version_id||Number(active.percentage||0)<99.99)throw new Error('active final version missing');
+            const before=fs.readFileSync('.remote-worker/before-version.txt','utf8').trim();
+            if(active.version_id===before)throw new Error('active PREVIEW version did not change');
+            const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);
+            const mods=ver.modules||[];const main=mods.find(m=>m.name===(ver.main_module||mods[0]?.name))||mods[0];const src=Buffer.from(main.content_base64,'base64').toString('utf8');
+            if(!src.includes('SORIDRAW_PUBLICATION_POSTWRITE_500_RETRY_COST_018_20260905'))throw new Error('deployed 018 marker missing');
+            console.log(`[Stage3.1 deploy] active after=${active.version_id}`);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+          feed_code="$(curl -sS -o /tmp/feed.json -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=1")"
+          test "$feed_code" = "200"
+          grep -q '"data"' /tmp/feed.json
+          genres_code="$(curl -sS -o /tmp/genres.json -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/genres")"
+          test "$genres_code" = "200"
+          grep -q '"data"' /tmp/genres.json
+          auth_code="$(curl -sS -o /tmp/pub401.json -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" -H 'Content-Type: application/json' -X POST --data '{}' "${PREVIEW_BASE}/v1/publications")"
+          test "$auth_code" = "401"
+          site_code="$(curl -sS -o /tmp/site.html -w '%{http_code}' "${PREVIEW_ORIGIN}")"
+          test "$site_code" = "200"
+          echo '[Stage3.1 deploy] PREVIEW Worker/public smoke PASS'
+
+          trap - EXIT

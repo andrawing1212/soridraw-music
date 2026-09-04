@@ -8,18 +8,63 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PREVIEW_D1_NAME: soridraw-explore-preview
+      PREVIEW_D1_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
     steps:
+      - uses: actions/checkout@v4
+        with: { ref: preview, fetch-depth: 4 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - name: Read PREVIEW D1 schema only
+      - name: Read PREVIEW D1 tracks and publication triggers only
         shell: bash
         run: |
           set -euo pipefail
           cat > "$RUNNER_TEMP/wrangler.jsonc" <<'EOF'
           {"name":"d1-readonly","compatibility_date":"2026-08-28","d1_databases":[{"binding":"DB","database_name":"soridraw-explore-preview","database_id":"aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f"}]}
           EOF
-          npx --yes wrangler@4 d1 execute DB --remote --config "$RUNNER_TEMP/wrangler.jsonc" --command "PRAGMA table_info(tracks); SELECT name,sql FROM sqlite_master WHERE type='table' ORDER BY name;"
+          npx --yes wrangler@4 d1 execute DB --remote --config "$RUNNER_TEMP/wrangler.jsonc" --command "PRAGMA table_info(tracks); SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_music_note_publication_bundle_%' ORDER BY name; SELECT COUNT(*) AS track_rows FROM tracks; SELECT COUNT(*) AS music_note_rows FROM tracks WHERE source_type='music_note';"
+      - name: Dry-run stage 1 patch against active PREVIEW Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          rm -rf .remote-worker && mkdir -p .remote-worker
+          node <<'NODE'
+          const fs=require('fs'),path=require('path');
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);return x.result||x;}
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;const deps=await get(`${base}/deployments`);const d=(deps.deployments||deps||[])[0];const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];if(!active?.version_id||Number(active.percentage||0)<99.99)throw new Error('No single active PREVIEW version');const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);const mods=ver.modules||[];if(!mods.length)throw new Error('No active modules');for(const mod of mods){const target=path.join('.remote-worker',mod.name||'worker.js');fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,Buffer.from(mod.content_base64,'base64'));}const main=ver.main_module||mods[0].name||'worker.js';if(main!=='worker.js'){fs.copyFileSync(path.join('.remote-worker',main),'.remote-worker/worker.js');}console.log(`[Stage1 readonly] active=${active.version_id} main=${main}`);})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/014-publication-single-r2-bundle.mjs
+          node --check .remote-worker/worker.js
+          node <<'NODE'
+          const fs=require('fs');const s=fs.readFileSync('.remote-worker/worker.js','utf8');
+          const routes=(s.match(/url\.pathname\s*===\s*["']\/v1\/me\/music-note-publications-bundle["']/g)||[]).length;
+          if(routes!==1) throw new Error(`bundle route count=${routes}`);
+          const start=s.indexOf('async function syncMusicNotePublicationR2AfterMutation('); const end=s.indexOf('\n}',start)+2; const fn=s.slice(start,end);
+          if(fn.includes('buildMusicNotePublicationR2Payload')) throw new Error('owner-wide D1 rebuild remains in mutation sync');
+          if(!s.includes('SORIDRAW_PUBLICATION_SINGLE_R2_BUNDLE_014_20260905')) throw new Error('014 marker missing');
+          console.log('[Stage1 readonly] patch014 PASS route=1 ownerWideMutationRebuild=0');
+          NODE
+      - name: Validate trigger cleanup migration locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import sqlite3
+          from pathlib import Path
+          db=sqlite3.connect(':memory:')
+          db.executescript('CREATE TABLE tracks(id TEXT PRIMARY KEY, owner_uid TEXT, source_type TEXT, source_id TEXT, is_public INTEGER, allow_next_song_apply INTEGER, allow_follower_save INTEGER, profile_pinned INTEGER, updated_at INTEGER);')
+          db.executescript(Path('cloudflare/explore-worker/migrations/20260904_music_note_publication_bundle.sql').read_text())
+          before=db.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_music_note_publication_bundle_%'").fetchone()[0]
+          assert before==4, before
+          db.executescript(Path('cloudflare/explore-worker/migrations/20260905_publication_bundle_trigger_cleanup.sql').read_text())
+          after=db.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_music_note_publication_bundle_%'").fetchone()[0]
+          assert after==0, after
+          print('[Stage1 readonly] cleanup migration PASS before=4 after=0')
+          PY

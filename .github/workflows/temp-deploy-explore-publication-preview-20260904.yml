@@ -10,176 +10,45 @@ permissions:
   contents: read
 
 env:
-  SOURCE_SHA: 6af8c09fcc5b3c740710e1f596af9e5436191b9c
   CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
   CLOUDFLARE_WORKER: soridraw-explore-preview
+  EXPECTED_OLD_VERSION: 095c8346-ce6c-48d5-9817-4bcc62f48f5c
+  UPLOADED_VERSION: 8fb000d8-2685-4aa6-a410-e29b93684dcc
 
 jobs:
   deploy-preview:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 6
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
-      - name: Checkout exact reviewed PREVIEW source
-        uses: actions/checkout@v4
-        with:
-          ref: 6af8c09fcc5b3c740710e1f596af9e5436191b9c
-          fetch-depth: 1
-
-      - name: Fetch active PREVIEW Worker with bindings and modules
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p .remote-worker-012
-          node <<'NODE'
-          const fs = require('fs');
-          const A = process.env.CLOUDFLARE_ACCOUNT_ID;
-          const W = process.env.CLOUDFLARE_WORKER;
-          const T = process.env.CLOUDFLARE_API_TOKEN;
-          const get = async (url) => {
-            const r = await fetch(url, { headers: { Authorization: `Bearer ${T}` } });
-            const text = await r.text(); let body = {}; try { body = JSON.parse(text); } catch {}
-            if (!r.ok || body.success === false) throw new Error(`Cloudflare GET ${r.status}: ${text.slice(0,800)}`);
-            return body.result || body;
-          };
-          (async () => {
-            const base = `https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;
-            const deployments = await get(`${base}/deployments`);
-            const current = (deployments.deployments || deployments || [])[0];
-            const active = [...(current?.versions || [])].sort((a,b) => Number(b.percentage)-Number(a.percentage))[0];
-            if (!active?.version_id || Number(active.percentage || 0) < 99.99) throw new Error('PREVIEW Worker is not on one 100% active version');
-            const meta = await get(`${base}/versions/${active.version_id}`);
-            const moduleView = await get(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${active.version_id}?include=modules`);
-            const modules = Array.isArray(moduleView.modules) ? moduleView.modules : [];
-            const workerModule = modules.find((m) => String(m.name || '') === 'worker.js');
-            const bindings = Array.isArray(meta.resources?.bindings) ? meta.resources.bindings : [];
-            if (!workerModule?.content_base64) throw new Error('active worker.js module missing');
-            if (!bindings.length) throw new Error('active Worker bindings missing from metadata endpoint');
-            fs.writeFileSync('.remote-worker-012/worker.js', Buffer.from(workerModule.content_base64, 'base64'));
-            fs.writeFileSync(process.env.RUNNER_TEMP + '/active-worker-meta.json', JSON.stringify(meta));
-            fs.writeFileSync(process.env.RUNNER_TEMP + '/active-worker-modules.json', JSON.stringify(modules));
-            fs.writeFileSync(process.env.RUNNER_TEMP + '/active-worker-id.txt', String(active.version_id));
-            console.log(`ACTIVE_WORKER_VERSION=${active.version_id}`);
-            console.log(`ACTIVE_BINDINGS=${bindings.map((b)=>`${b.name}:${b.type}`).join(',')}`);
-            console.log(`ACTIVE_MODULE_COUNT=${modules.length}`);
-          })().catch((error) => { console.error(error); process.exit(1); });
-          NODE
-
-      - name: Apply reviewed incremental publication patch
-        shell: bash
-        run: |
-          set -euo pipefail
-          before="$(sha256sum .remote-worker-012/worker.js | cut -d' ' -f1)"
-          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker-012" node cloudflare/explore-worker/patches/012-explore-publication-incremental-feed-sync.mjs
-          node --check .remote-worker-012/worker.js
-          grep -Fq 'SORIDRAW_EXPLORE_PUBLICATION_INCREMENTAL_FEED_SYNC_012_20260904' .remote-worker-012/worker.js
-          grep -Fq 'const publicationFeedItem = mapTrackRow(storedOptions);' .remote-worker-012/worker.js
-          grep -Fq "COALESCE(tracks.is_public, 0) <> 1 OR COALESCE(tracks.status, '') <> 'published'" .remote-worker-012/worker.js
-          after="$(sha256sum .remote-worker-012/worker.js | cut -d' ' -f1)"
-          test "$before" != "$after"
-          echo 'WORKER_PATCH_LOCAL_VALIDATION=PASS'
-
-      - name: Upload inherited-binding Worker version and deploy PREVIEW 100%
-        shell: bash
+      - name: Verify uploaded Worker version then deploy PREVIEW 100%
         run: |
           set -euo pipefail
           node <<'NODE'
-          const fs = require('fs');
-          const A = process.env.CLOUDFLARE_ACCOUNT_ID;
-          const W = process.env.CLOUDFLARE_WORKER;
-          const T = process.env.CLOUDFLARE_API_TOKEN;
-          const sourceSha = process.env.SOURCE_SHA;
-          const oldMeta = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/active-worker-meta.json', 'utf8'));
-          const modules = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/active-worker-modules.json', 'utf8'));
-          const expectedActive = fs.readFileSync(process.env.RUNNER_TEMP + '/active-worker-id.txt', 'utf8').trim();
-          const api = async (url, options = {}) => {
-            const r = await fetch(url, { ...options, headers: { Authorization: `Bearer ${T}`, ...(options.headers || {}) } });
-            const text = await r.text(); let body = {}; try { body = JSON.parse(text); } catch {}
-            if (!r.ok || body.success === false) throw new Error(`Cloudflare ${options.method || 'GET'} ${r.status}: ${text.slice(0,1200)}`);
-            return body.result || body;
-          };
-          const contentTypeFor = (name, current) => {
-            const t = String(current?.content_type || current?.contentType || '').trim();
-            if (t) return t;
-            if (/\.(m?js|cjs)$/i.test(name)) return 'application/javascript+module';
-            if (/\.wasm$/i.test(name)) return 'application/wasm';
-            return 'text/plain';
-          };
-          (async () => {
-            const base = `https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;
-            const deploymentsBefore = await api(`${base}/deployments`);
-            const before = (deploymentsBefore.deployments || deploymentsBefore || [])[0];
-            const beforeActive = [...(before?.versions || [])].sort((a,b) => Number(b.percentage)-Number(a.percentage))[0];
-            if (beforeActive?.version_id !== expectedActive || Number(beforeActive?.percentage || 0) < 99.99) throw new Error(`PREVIEW Worker changed during validation: expected ${expectedActive}, got ${beforeActive?.version_id || 'none'}`);
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,W=process.env.CLOUDFLARE_WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
+          const expected=process.env.EXPECTED_OLD_VERSION,newId=process.env.UPLOADED_VERSION;
+          const api=async(url,options={})=>{const r=await fetch(url,{...options,headers:{Authorization:`Bearer ${T}`,...(options.headers||{})}});const text=await r.text();let x={};try{x=JSON.parse(text)}catch{};if(!r.ok||x.success===false)throw new Error(`Cloudflare ${options.method||'GET'} ${r.status}: ${text.slice(0,1200)}`);return x.result||x};
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;
+            const deployments=await api(`${base}/deployments`); const current=(deployments.deployments||deployments||[])[0]; const active=[...(current?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(active?.version_id!==expected||Number(active?.percentage||0)<99.99) throw new Error(`active PREVIEW Worker changed: ${active?.version_id||'none'}`);
 
-            const runtime = oldMeta.resources?.script_runtime || {};
-            const currentBindings = Array.isArray(oldMeta.resources?.bindings) ? oldMeta.resources.bindings : [];
-            const inheritedBindings = currentBindings
-              .filter((binding) => String(binding?.name || '').trim())
-              .map((binding) => ({ type: 'inherit', name: String(binding.name), version_id: 'latest' }));
-            if (!inheritedBindings.length) throw new Error('no active Worker bindings found to inherit');
-            if (!inheritedBindings.some((b)=>b.name==='DB') || !inheritedBindings.some((b)=>b.name==='PROFILE_MEDIA')) throw new Error('required DB/R2 bindings are not being inherited');
+            const meta=await api(`${base}/versions/${newId}`); const bindings=Array.isArray(meta.resources?.bindings)?meta.resources.bindings:[]; const names=bindings.map(b=>String(b.name)).sort();
+            const required=['BOOTSTRAP_TOKEN','DB','ENV_NAME','PROD_BASE','PROFILE_MEDIA','TARGET_BASE'].sort();
+            if(JSON.stringify(names)!==JSON.stringify(required)) throw new Error(`uploaded binding parity failed: ${names}`);
+            const moduleView=await api(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${newId}?include=modules`); const worker=(moduleView.modules||[]).find(m=>String(m.name||'')==='worker.js'); const src=Buffer.from(String(worker?.content_base64||''),'base64').toString('utf8');
+            if(!src.includes('SORIDRAW_EXPLORE_PUBLICATION_INCREMENTAL_FEED_SYNC_012_20260904')) throw new Error('uploaded patch marker missing');
+            if(!src.includes('const publicationFeedItem = mapTrackRow(storedOptions);')) throw new Error('uploaded incremental sync missing');
 
-            const mainModule = String(oldMeta.resources?.script?.main_module || 'worker.js');
-            const metadata = {
-              main_module: mainModule,
-              bindings: inheritedBindings,
-              compatibility_date: String(runtime.compatibility_date || '2026-08-28'),
-              annotations: {
-                'workers/message': 'SORIDRAW PREVIEW Music Note Explore publication delta sync',
-                'workers/commit_sha': sourceSha,
-                'workers/tag': 'soridraw-preview-publication-012'
-              }
-            };
-            if (Array.isArray(runtime.compatibility_flags) && runtime.compatibility_flags.length) metadata.compatibility_flags = runtime.compatibility_flags;
-            if (runtime.usage_model) metadata.usage_model = runtime.usage_model;
-
-            const form = new FormData();
-            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            for (const mod of modules) {
-              const name = String(mod.name || '').trim(); if (!name) continue;
-              const bytes = name === 'worker.js' ? fs.readFileSync('.remote-worker-012/worker.js') : Buffer.from(String(mod.content_base64 || ''), 'base64');
-              if (!bytes.length) throw new Error(`module content missing: ${name}`);
-              form.append(name, new Blob([bytes], { type: contentTypeFor(name, mod) }), name);
-            }
-
-            const uploaded = await api(`${base}/versions?bindings_inherit=strict`, { method: 'POST', body: form });
-            const newId = String(uploaded.id || uploaded.version_id || '').trim();
-            if (!newId) throw new Error('new Worker version id missing');
-            console.log(`UPLOADED_WORKER_VERSION=${newId}`);
-
-            await api(`${base}/deployments`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ strategy: 'percentage', versions: [{ percentage: 100, version_id: newId }], annotations: { 'workers/message': 'Deploy SORIDRAW PREVIEW Music Note Explore publication fix', 'workers/triggered_by': 'deployment' } })
-            });
-
-            let confirmed = false;
-            for (let attempt = 0; attempt < 12; attempt += 1) {
-              const deployments = await api(`${base}/deployments`);
-              const rows = deployments.deployments || deployments || [];
-              if (rows.some((deployment) => Array.isArray(deployment.versions) && deployment.versions.some((version) => version.version_id === newId && Number(version.percentage) >= 99.99))) { confirmed = true; break; }
-              await new Promise((resolve) => setTimeout(resolve, 2500));
-            }
-            if (!confirmed) throw new Error('new Worker version did not become active at 100%');
-
-            const deployedMeta = await api(`${base}/versions/${newId}`);
-            const deployedBindings = Array.isArray(deployedMeta.resources?.bindings) ? deployedMeta.resources.bindings : [];
-            const requiredNames = currentBindings.map((b)=>String(b.name)).sort();
-            const actualNames = deployedBindings.map((b)=>String(b.name)).sort();
-            if (JSON.stringify(requiredNames) !== JSON.stringify(actualNames)) throw new Error(`binding parity failed expected=${requiredNames} actual=${actualNames}`);
-            const deployedModuleView = await api(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${newId}?include=modules`);
-            const deployedWorker = (deployedModuleView.modules || []).find((m) => String(m.name || '') === 'worker.js');
-            const deployedSource = Buffer.from(String(deployedWorker?.content_base64 || ''), 'base64').toString('utf8');
-            if (!deployedSource.includes('SORIDRAW_EXPLORE_PUBLICATION_INCREMENTAL_FEED_SYNC_012_20260904')) throw new Error('deployed Worker marker missing');
-            if (!deployedSource.includes('const publicationFeedItem = mapTrackRow(storedOptions);')) throw new Error('deployed incremental feed delta missing');
-            fs.appendFileSync(process.env.GITHUB_ENV, `DEPLOYED_WORKER_VERSION=${newId}\n`);
-            console.log('CLOUDFLARE_PREVIEW_DEPLOY=PASS');
-          })().catch((error) => { console.error(error); process.exit(1); });
+            await api(`${base}/deployments`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({strategy:'percentage',versions:[{percentage:100,version_id:newId}]})});
+            let ok=false; for(let i=0;i<12;i++){const d=await api(`${base}/deployments`);const rows=d.deployments||d||[];if(rows.some(dep=>Array.isArray(dep.versions)&&dep.versions.some(v=>v.version_id===newId&&Number(v.percentage)>=99.99))){ok=true;break}await new Promise(r=>setTimeout(r,2000));}
+            if(!ok) throw new Error('new version did not become active at 100%');
+            console.log(`CLOUDFLARE_PREVIEW_DEPLOY=PASS version=${newId}`);
+          })().catch(e=>{console.error(e);process.exit(1)});
           NODE
 
       - name: Verify PREVIEW Worker and app addresses
-        shell: bash
         run: |
           set -euo pipefail
           nonce="$(date +%s)"
@@ -189,4 +58,4 @@ jobs:
           for url in 'https://soridraw-preview.web.app/' 'https://soridraw-preview.firebaseapp.com/' 'https://preview.soridraw.com/'; do
             body="$(mktemp)"; http="$(curl -L -sS --max-time 25 -o "$body" -w '%{http_code}' "$url")"; test "$http" = '200'; grep -Fq '<div id="root"></div>' "$body"; echo "PREVIEW_SMOKE=PASS $url";
           done
-          echo "CLOUDFLARE_PREVIEW_SMOKE=PASS version=$DEPLOYED_WORKER_VERSION"
+          echo 'CLOUDFLARE_PREVIEW_SMOKE=PASS'

@@ -32,7 +32,7 @@ jobs:
               let depth=0,quote=null,escaped=false,end=-1;
               for(let i=brace;i<src.length;i++){
                 const c=src[i];
-                if(quote){if(escaped){escaped=false;continue;} if(c==='\\\\'){escaped=true;continue;} if(c===quote)quote=null;continue;}
+                if(quote){if(escaped){escaped=false;continue;} if(c==='\\'){escaped=true;continue;} if(c===quote)quote=null;continue;}
                 if(c==='"'||c==="'"||c==='`'){quote=c;continue;}
                 if(c==='{')depth++; else if(c==='}'&&--depth===0){end=i+1;break;}
               }
@@ -51,15 +51,11 @@ jobs:
             const src=Buffer.from(main.content_base64,'base64').toString('utf8');
             const fns=functions(src); const byName=new Map(fns.map(f=>[f.name,f.text]));
             console.log(`[Stage3 audit] active=${active.version_id} functions=${fns.length}`);
-            const wanted=['handlePublicationR2Core','enforceUserRateLimit','applyPublicationOptions','getOrEnsurePublicationOwnerProfile013','upsertPublicProfileFromFirebase','refreshProfileSearchIndex','syncExploreFeedR2Publication012','refreshOrPrebuildPublicProfileTrackWindow','materializePublicProfileFirstView','refreshPublicProfileFirstViewTrackWindow','syncMusicNotePublicationR2AfterMutation','refreshPublicationTrackSearchIndex013'];
+            const wanted=['handlePublicationR2Core','enforceUserRateLimit','applyPublicationOptions','getOrEnsurePublicationOwnerProfile013','upsertPublicProfileFromFirebase','refreshProfileSearchIndex','syncExploreFeedR2Publication012','refreshOrPrebuildPublicProfileTrackWindow','readOrMaterializePublicProfileFirstView','materializePublicProfileFirstView','refreshPublicProfileFirstViewTrackWindow','writePublicProfileFirstViewSnapshot','invalidatePublicProfileFirstViewEdgeCache','syncMusicNotePublicationR2AfterMutation','refreshPublicationTrackSearchIndex013','adjustExploreLikeCounterDelta','refreshLikeCount','refreshCommentCount'];
             for(const n of wanted){console.log(`\n===== ${n} =====\n${byName.get(n)||'[MISSING]'}\n===== END ${n} =====`);}
-            const needles=['track_stats','track_tags','rate_limit','profile_search_fts','track_search_fts','INSERT INTO tracks','UPDATE tracks'];
-            console.log('\n===== RELATED MUTATION FUNCTIONS =====');
-            for(const f of fns){
-              if(needles.some(n=>f.text.includes(n))){
-                const sql=(f.text.match(/\b(?:INSERT|UPDATE|DELETE|REPLACE)\b[^`\n]*/gi)||[]).slice(0,20);
-                console.log(`[related] ${f.name}: ${sql.join(' | ')}`);
-              }
+            for(const needle of ['play_count','track_tags']){
+              console.log(`\n===== FUNCTIONS CONTAINING ${needle} =====`);
+              for(const f of fns){if(f.text.includes(needle)) console.log(`\n--- ${f.name} ---\n${f.text}`);}
             }
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE

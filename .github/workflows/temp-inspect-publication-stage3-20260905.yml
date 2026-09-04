@@ -7,6 +7,7 @@ on:
       - 'cloudflare/explore-worker/patches/014-publication-single-r2-bundle.mjs'
       - 'cloudflare/explore-worker/patches/015-publication-share-bundle-v1.mjs'
       - 'cloudflare/explore-worker/patches/016-publication-single-write-hotpath.mjs'
+      - 'cloudflare/explore-worker/patches/017-publication-mutation-companions.mjs'
       - 'cloudflare/explore-worker/migrations/20260905_public_share_bundle_v1.sql'
       - 'cloudflare/explore-worker/migrations/20260905_publication_hotpath_primary_genre.sql'
 permissions:
@@ -50,7 +51,7 @@ jobs:
           print('[Stage3] local schema PASS share bundle + primary genre index')
           PY
 
-      - name: Fetch exact active PREVIEW Worker and dry-run patches 014-016
+      - name: Fetch exact active PREVIEW Worker and dry-run patches 014-017
         shell: bash
         run: |
           set -euo pipefail
@@ -75,6 +76,7 @@ jobs:
           SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/014-publication-single-r2-bundle.mjs
           SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/015-publication-share-bundle-v1.mjs
           SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/016-publication-single-write-hotpath.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/017-publication-mutation-companions.mjs
           node --check .remote-worker/worker.js
 
       - name: Assert Stage3 hot-path invariants
@@ -93,23 +95,36 @@ jobs:
           }
           for(const token of [
             'SORIDRAW_PUBLICATION_SINGLE_WRITE_HOTPATH_016_20260905',
+            'SORIDRAW_PUBLICATION_MUTATION_COMPANIONS_017_20260905',
             'primary_genre',
             "mutation: unchanged ? 'idempotent' : 'written'",
             'D1 rebuild intentionally skipped',
-            'handlePublicationR2CoreLegacy016'
+            'handlePublicationR2CoreLegacy016',
+            'handlePublicationOptionsR2CoreLegacy017',
+            'handleVisibilityR2CoreLegacy017'
           ]) if(!s.includes(token)) throw new Error(`missing ${token}`);
           const hot=fn('handleMusicNotePublicationSingleWrite016');
           for(const forbidden of ['enforceUserRateLimit(','track_stats (','track_tags','applyPublicationOptions(','refreshPublicationTrackSearchIndex013(','refreshOrPrebuildPublicProfileTrackWindow(','safelyRefreshExploreFeedR2Bundles(']) {
             if(hot.includes(forbidden)) throw new Error(`hot-path forbidden ${forbidden}`);
           }
           if((hot.match(/INSERT INTO tracks/g)||[]).length!==1) throw new Error('canonical tracks write is not exactly one statement');
+          const options=fn('handleMusicNotePublicationOptions017');
+          const privateFn=fn('handleMusicNotePrivate017');
+          for(const [name,text] of [['options',options],['private',privateFn]]) {
+            for(const forbidden of ['enforceUserRateLimit(','track_tags','applyPublicationOptions(','refreshOrPrebuildPublicProfileTrackWindow(','refreshTrackSearchIndex(']) {
+              if(text.includes(forbidden)) throw new Error(`${name} forbidden ${forbidden}`);
+            }
+          }
+          if((options.match(/UPDATE tracks/g)||[]).length!==1) throw new Error('options path is not one conditional tracks update');
+          if((privateFn.match(/UPDATE tracks/g)||[]).length!==1) throw new Error('private path is not one conditional tracks update');
+          if(!fn('invalidatePublicationProfileCaches017').includes('PROFILE_MEDIA.delete(exploreProfileR2Key(uid))')) throw new Error('profile R2 invalidation missing');
           const feed=fn('syncExploreFeedR2Publication012');
           if(feed.includes('safelyRefreshExploreFeedR2Bundles')) throw new Error('publication feed still has D1 rebuild fallback');
           if(!fn('handleTrackApplySource').includes('shareBundleTags016')) throw new Error('apply route does not use share bundle');
           if(!fn('handleTrackDetail').includes('shareBundleTags016')) throw new Error('detail route does not use share bundle');
           if(!fn('handleGenreTracks').includes('primary_genre')) throw new Error('genre tracks route missing canonical genre');
           if(!fn('handleGenres').includes('primary_genre')) throw new Error('genres route missing canonical genre');
-          console.log('[Stage3] invariants PASS: Music Note one canonical track write, no sync D1 rebuild/tag/stats/FTS writes');
+          console.log('[Stage3] invariants PASS: publish/options/private are bounded 0/1-write Music Note paths; derived failures cannot convert canonical publish to 500');
           NODE
 
       - name: App TypeScript and build

@@ -353,7 +353,7 @@ const MUSIC_NOTE_DEVICE_ID_STORAGE_KEY = 'soridraw_music_note_device_id_v1';
 const MUSIC_NOTE_SYNC_VERSION_EVENT = 'soridraw:music-note-sync-version';
 const musicNoteFreshBootstrapUids = new Set<string>();
 
-const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '4'; // SORIDRAW_MUSIC_NOTE_EMPTY_CACHE_RECOVERY_1021
+const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '4'; // SORIDRAW_MUSIC_NOTE_NO_FULLSCAN_BOOTSTRAP_1022
 const MUSIC_NOTE_CACHE_SCHEMA_STORAGE_BASE = 'soridraw_music_note_cache_schema_v3';
 let musicNoteActiveUiUid: string | null = null;
 
@@ -381,30 +381,17 @@ const isMusicNoteCacheSchemaCurrent = (uid: string): boolean => {
 };
 
 const prepareMusicNoteCacheForUser = (uid: string): boolean => {
-  if (!uid) return true;
-  const schemaCurrent = isMusicNoteCacheSchemaCurrent(uid);
-  if (!schemaCurrent) {
-    favoritesInMemoryCache.delete(uid);
-    const pendingTimer = favoritesCacheWriteTimers.get(uid);
-    if (pendingTimer) {
-      try { clearTimeout(pendingTimer); } catch {}
-      favoritesCacheWriteTimers.delete(uid);
-    }
-    if (typeof localStorage !== 'undefined') {
-      try {
-        localStorage.removeItem(getMusicNotePayloadCacheKey(uid));
-        localStorage.removeItem(`soridraw_favorites_cache_max_count_${uid}`);
-        localStorage.removeItem(`${MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE}_${uid}`);
-        localStorage.removeItem(`${MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE}_${uid}`);
-        localStorage.removeItem(`${MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE}_${uid}`);
-        localStorage.removeItem(`soridraw_favorites_full_cache_recovery_v3_${uid}`);
-      } catch (error) {
-        console.warn('Music Note legacy cache invalidation failed:', error);
-      }
-    }
+  if (!uid) return false;
+  // Cache schema changes must never invalidate a user's complete Music Note
+  // payload and trigger an unbounded collection scan. Existing UID-scoped
+  // payloads remain usable; truly missing payloads fall through to the
+  // existing bounded/paged bootstrap path.
+  if (!isMusicNoteCacheSchemaCurrent(uid) && hasMusicNotePayloadCache(uid)) {
+    try {
+      localStorage.setItem(getMusicNoteCacheSchemaKey(uid), MUSIC_NOTE_CACHE_SCHEMA_VERSION);
+    } catch {}
   }
-  // Stored [] is a valid zero-item payload. Missing payload always rebuilds.
-  return !schemaCurrent || !hasMusicNotePayloadCache(uid);
+  return false;
 };
 
 const markMusicNoteCacheSchemaCurrent = (uid: string) => {
@@ -9164,38 +9151,11 @@ const toggleCycleVariantSelection = (
         // Cache migration/new-device bootstrap: one complete read is the
         // authoritative source. No orderBy/limit means legacy rows without
         // createdAt are included too. No server data is written by this path.
-        const runFavoritesFullCacheRecoveryOnce = async () => {
-          if (!musicNoteCacheNeedsFullBootstrap) return;
-          try {
-            const fullSnapshot = await getDocs(query(
-              collection(db, 'favorites'),
-              where('uid', '==', currentUser.uid),
-            ));
-            if (auth.currentUser?.uid !== currentUser.uid) return;
-            const fullFavorites = sortFavoriteList(
-              fullSnapshot.docs
-                .map(mapFavoriteFirestoreDoc)
-                .filter((favorite) => !isFavoriteSoftRemoved(favorite)),
-            );
-            favoritePaginationCursorRef.current = null;
-            clearMusicNotePaginationCursor(currentUser.uid);
-            favoritePaginationExhaustedRef.current = true;
-            favoritePaginationLoadingRef.current = false;
-            favoritePaginationFallbackModeRef.current = true;
-            setHasMoreFavorites(false);
-            setIsLoadingMoreFavorites(false);
-            setFavorites(fullFavorites);
-            writeFavoritesCache(currentUser.uid, fullFavorites);
-            favoritesStore.setFavorites(fullFavorites);
-            markMusicNoteCacheSchemaCurrent(currentUser.uid);
-            musicNoteFreshBootstrapUids.delete(currentUser.uid);
-            markCacheDiagnostic('musicNote', 'SYNC', fullSnapshot.docs.length);
-          } catch (bootstrapError) {
-            console.warn('Cacheless Music Note full bootstrap failed.', bootstrapError);
-          } finally {
-            setIsFavoritesLoading(false);
-          }
-        };
+        // SORIDRAW_MUSIC_NOTE_NO_UNBOUNDED_RECOVERY_1022
+// Normal app entry, reload, schema migration, and cache repair must never
+// read the entire favorites collection. A missing payload is restored only
+// through the existing bounded/paged bootstrap below.
+const runFavoritesFullCacheRecoveryOnce = async () => {};
 
         const hasCachedMusicNote = !musicNoteCacheNeedsFullBootstrap
           && hasMusicNotePayloadCache(currentUser.uid);

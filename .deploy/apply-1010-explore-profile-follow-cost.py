@@ -86,11 +86,11 @@ const loadExploreFollowingBundle = async (user: User): Promise<ExploreFollowCach
   const task = (async () => {
     const payload = await requestAuthed(user, EXPLORE_FOLLOW_BUNDLE_DIAGNOSTIC_PATH);
     const rawUids = Array.isArray(payload?.data?.followingUids) ? payload.data.followingUids : [];
-    const states = rawUids.reduce<Record<string, boolean>>((acc: Record<string, boolean>, value: unknown) => {
+    const states: Record<string, boolean> = rawUids.reduce((acc: Record<string, boolean>, value: unknown) => {
       const uid = String(value || '').trim();
       if (uid) acc[uid] = true;
       return acc;
-    }, {});
+    }, {} as Record<string, boolean>);
     const next: ExploreFollowCacheData = { complete: true, states };
     writeExploreFollowCache(user.uid, next);
     return next;

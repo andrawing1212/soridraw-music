@@ -19,9 +19,18 @@ jobs:
           set -euo pipefail
           base='https://soridraw-explore-preview.andrawing1212.workers.dev'
           origin='https://preview.soridraw.com'
-          ref='SORIDRAW.'
-          enc='SORIDRAW.'
-          curl -fsS -D /tmp/profile-head -H "Origin: $origin" "$base/v1/profiles/$enc/first-view?limit=50" -o /tmp/profile.json
+          : > /tmp/chosen-ref
+          for enc in 'SORIDRAW' '%40SORIDRAW' 'SORIDRAW.' '%40SORIDRAW.'; do
+            code="$(curl -sS -D /tmp/probe-head -H "Origin: $origin" -o /tmp/probe.json -w '%{http_code}' "$base/v1/profiles/$enc/first-view?limit=50")"
+            echo "PROFILE_REF_PROBE_${enc}=$code"
+            if [ "$code" = '200' ] && [ ! -s /tmp/chosen-ref ]; then
+              cp /tmp/probe.json /tmp/profile.json
+              cp /tmp/probe-head /tmp/profile-head
+              printf '%s' "$enc" > /tmp/chosen-ref
+            fi
+          done
+          enc="$(cat /tmp/chosen-ref)"
+          test -n "$enc"
           node <<'NODE'
           const fs=require('fs');
           const p=JSON.parse(fs.readFileSync('/tmp/profile.json','utf8'));

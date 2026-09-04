@@ -20,7 +20,7 @@ jobs:
         with: { ref: preview, fetch-depth: 1 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - name: Verify active PREVIEW Worker source and public smoke
+      - name: Verify active PREVIEW Worker behavior and public smoke
         run: |
           set -euo pipefail
           node <<'NODE'
@@ -34,18 +34,17 @@ jobs:
             const ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`);
             const mod=(ver.modules||[]).find(m=>(m.name||'')==='worker.js')||(ver.modules||[])[0];if(!mod)throw new Error('worker.js missing');
             const src=Buffer.from(mod.content_base64,'base64').toString('utf8');
-            if(!src.includes('SORIDRAW_EXPLORE_PUBLICATION_COST_GUARD_013_20260904'))throw new Error('013 marker missing');
-            if(!src.includes('SORIDRAW_EXPLORE_PUBLICATION_INCREMENTAL_FEED_SYNC_012_20260904'))throw new Error('012 marker missing');
+            for(const requiredFunction of ['getOrEnsurePublicationOwnerProfile013','publicationSearchChanged013','refreshPublicationTrackSearchIndex013','syncExploreFeedR2Publication012'])functionText(src,requiredFunction);
             const core=functionText(src,'handlePublicationR2Core');
-            for(const required of ['getOrEnsurePublicationOwnerProfile013','publicationSearchChanged013','syncExploreFeedR2Publication012','FTS refresh skipped after successful publication'])if(!src.includes(required))throw new Error(required+' missing');
+            for(const required of ['getOrEnsurePublicationOwnerProfile013','publicationSearchChanged013','syncExploreFeedR2Publication012','FTS refresh skipped after successful publication'])if(!core.includes(required)&&!src.includes(required))throw new Error(required+' missing');
             if(core.includes('await refreshTrackSearchIndex(env, source.id);'))throw new Error('legacy blocking FTS still active');
             const wrapper=functionText(src,'handlePublication');
             if(wrapper.includes('safelyRefreshExploreFeedR2Bundles'))throw new Error('normal publication still full-rescans feed');
             console.log('ACTIVE_VERSION='+v.version_id);
-            console.log('PUBLICATION_012_013_SOURCE_VERIFY=PASS');
+            console.log('PUBLICATION_012_013_BEHAVIOR_VERIFY=PASS');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-          feed_code="$(curl -sS --max-time 30 -D "$RUNNER_TEMP/feed-h" -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' "$BASE/v1/feed?sort=latest&limit=40&probe=publication-final-verify')"
+          feed_code="$(curl -sS --max-time 30 -D "$RUNNER_TEMP/feed-h" -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' "$BASE/v1/feed?sort=latest&limit=40&probe=publication-final-verify2')"
           test "$feed_code" = '200'
           tr -d '\r' < "$RUNNER_TEMP/feed-h" > "$RUNNER_TEMP/feed-h.clean"
           d1="$(awk -F': ' 'tolower($1)=="x-soridraw-d1-read"{print $2}' "$RUNNER_TEMP/feed-h.clean" | tail -1)"

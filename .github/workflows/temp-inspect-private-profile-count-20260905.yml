@@ -1,0 +1,57 @@
+name: SORIDRAW Inspect Private Cost and Profile Count 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-inspect-private-profile-count-20260905.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+      PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      SOUL_UID: 99rbjBuypFUkWELPbZ9uUDoqEna2
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: preview, fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Install Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Inspect active Worker mutation/profile paths
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1000)}`);return x.result||x;}
+          function functions(src){
+            const out=[];const re=/(async\s+)?function\s+([A-Za-z0-9_$]+)\s*\(/g;let m;
+            while((m=re.exec(src))){const st=m.index,b=src.indexOf('{',re.lastIndex);if(b<0)continue;let d=0,q=null,e=false,end=-1;for(let i=b;i<src.length;i++){const c=src[i];if(q){if(e){e=false;continue;}if(c==='\\'){e=true;continue;}if(c===q)q=null;continue;}if(c==='"'||c==="'"||c==='`'){q=c;continue;}if(c==='{')d++;else if(c==='}'&&--d===0){end=i+1;break;}}if(end>st)out.push({name:m[2],text:src.slice(st,end)});}return out;
+          }
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;const deps=await get(`${base}/deployments`);const d=(deps.deployments||deps||[])[0];const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];console.log('[active]',active.version_id);const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);const mods=ver.modules||[];const main=mods.find(m=>m.name===(ver.main_module||mods[0]?.name))||mods[0];const src=Buffer.from(main.content_base64,'base64').toString('utf8');const map=new Map(functions(src).map(f=>[f.name,f.text]));for(const n of ['handleVisibilityR2Core','handleMusicNotePrivate017','syncMusicNotePublicationR2AfterMutation','readMusicNotePublicationR2Payload','buildMusicNotePublicationR2Payload','invalidatePublicationProfileCaches017','handlePublicProfileFirstView','readPublicProfileFirstViewR2','readPublicProfileFirstViewRow','materializePublicProfileFirstView','refreshPublicProfileFirstViewTrackWindow']){console.log(`\n===== ${n} =====\n${map.get(n)||'[MISSING]'}`);} })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Inspect PREVIEW D1 triggers and Soulforce rows
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          echo '===== TRIGGERS ====='
+          npx wrangler d1 execute "$PREVIEW_DB_NAME" --remote --command "SELECT name, tbl_name, sql FROM sqlite_master WHERE type='trigger' ORDER BY name;"
+          echo '===== TRACK INDEXES ====='
+          npx wrangler d1 execute "$PREVIEW_DB_NAME" --remote --command "SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='tracks' ORDER BY name;"
+          echo '===== SOUL COUNTS ====='
+          npx wrangler d1 execute "$PREVIEW_DB_NAME" --remote --command "SELECT owner_uid, COUNT(*) AS total, SUM(CASE WHEN is_public=1 AND status='published' THEN 1 ELSE 0 END) AS public_count, SUM(CASE WHEN source_type='music_note' AND is_public=1 AND status='published' THEN 1 ELSE 0 END) AS public_music_note FROM tracks WHERE owner_uid='$SOUL_UID' GROUP BY owner_uid;"
+          echo '===== SOUL TRACKS ====='
+          npx wrangler d1 execute "$PREVIEW_DB_NAME" --remote --command "SELECT id, source_type, source_id, title, is_public, status, profile_pinned, published_at, updated_at FROM tracks WHERE owner_uid='$SOUL_UID' ORDER BY published_at DESC, id DESC;"
+          echo '===== PROFILE TABLES ====='
+          npx wrangler d1 execute "$PREVIEW_DB_NAME" --remote --command "SELECT name, sql FROM sqlite_master WHERE type='table' AND (name LIKE '%profile%' OR name LIKE '%first_view%') ORDER BY name;"
+          echo '===== SOUL PROFILE ROW ====='
+          npx wrangler d1 execute "$PREVIEW_DB_NAME" --remote --command "SELECT * FROM public_profiles WHERE uid='$SOUL_UID';"

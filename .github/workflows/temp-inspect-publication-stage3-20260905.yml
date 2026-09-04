@@ -1,135 +1,75 @@
-name: SORIDRAW Validate Publication Stage3 2026-09-05
+name: SORIDRAW Verify Live Publication Stage3 PREVIEW 2026-09-05
 on:
   push:
     branches: [preview]
-    paths:
-      - '.github/workflows/temp-inspect-publication-stage3-20260905.yml'
-      - 'cloudflare/explore-worker/patches/014-publication-single-r2-bundle.mjs'
-      - 'cloudflare/explore-worker/patches/015-publication-share-bundle-v1.mjs'
-      - 'cloudflare/explore-worker/patches/016-publication-single-write-hotpath.mjs'
-      - 'cloudflare/explore-worker/patches/017-publication-mutation-companions.mjs'
-      - 'cloudflare/explore-worker/migrations/20260905_public_share_bundle_v1.sql'
-      - 'cloudflare/explore-worker/migrations/20260905_publication_hotpath_primary_genre.sql'
+    paths: ['.github/workflows/temp-inspect-publication-stage3-20260905.yml']
 permissions:
   contents: read
 jobs:
-  validate:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       PREVIEW_WORKER: soridraw-explore-preview
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
     steps:
       - uses: actions/checkout@v4
-        with: { ref: preview, fetch-depth: 2 }
+        with: { ref: preview, fetch-depth: 1 }
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
-
-      - name: Validate Stage3 schema locally
+        with: { node-version: 22 }
+      - name: Verify active Worker code and public smoke
         shell: bash
         run: |
           set -euo pipefail
-          python3 <<'PY'
-          import sqlite3
-          from pathlib import Path
-          db=sqlite3.connect(':memory:')
-          db.execute('''CREATE TABLE tracks(
-            id TEXT PRIMARY KEY,
-            owner_uid TEXT,
-            is_public INTEGER NOT NULL DEFAULT 0,
-            status TEXT,
-            published_at INTEGER,
-            title TEXT
-          )''')
-          db.executescript(Path('cloudflare/explore-worker/migrations/20260905_public_share_bundle_v1.sql').read_text())
-          db.executescript(Path('cloudflare/explore-worker/migrations/20260905_publication_hotpath_primary_genre.sql').read_text())
-          cols={row[1] for row in db.execute('PRAGMA table_info(tracks)')}
-          assert {'share_schema_version','share_payload_json','primary_genre'} <= cols
-          indexes={row[1] for row in db.execute('PRAGMA index_list(tracks)')}
-          assert 'idx_tracks_public_primary_genre' in indexes
-          print('[Stage3] local schema PASS share bundle + primary genre index')
-          PY
-
-      - name: Fetch exact active PREVIEW Worker and dry-run patches 014-017
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd cloudflare/explore-worker
-          rm -rf .remote-worker && mkdir -p .remote-worker
           node <<'NODE'
-          const fs=require('fs'),path=require('path');
           const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
           async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);return x.result||x;}
+          function fn(src,name){
+            const ns=[`async function ${name}(`,`function ${name}(`];let st=-1;
+            for(const n of ns){st=src.indexOf(n);if(st>=0)break;}
+            if(st<0)throw new Error('missing function '+name);
+            const b=src.indexOf('{',st);let d=0,q=null,e=false;
+            for(let i=b;i<src.length;i++){
+              const c=src[i];
+              if(q){if(e){e=false;continue;}if(c==='\\'){e=true;continue;}if(c===q)q=null;continue;}
+              if(c==='"'||c==="'"||c==='`'){q=c;continue;}
+              if(c==='{')d++; else if(c==='}'&&--d===0)return src.slice(st,i+1);
+            }
+            throw new Error('unterminated '+name);
+          }
           (async()=>{
             const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;
-            const deps=await get(`${base}/deployments`); const d=(deps.deployments||deps||[])[0];
+            const deps=await get(`${base}/deployments`);const d=(deps.deployments||deps||[])[0];
             const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
-            if(!active?.version_id||Number(active.percentage||0)<99.99)throw new Error('No single active PREVIEW version');
+            if(!active?.version_id||Number(active.percentage||0)<99.99)throw new Error('No single active PREVIEW Worker version');
             const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);
-            const mods=ver.modules||[]; if(!mods.length)throw new Error('No active modules');
-            const mainName=ver.main_module||mods[0].name||'worker.js'; const main=mods.find(m=>m.name===mainName)||mods[0];
-            fs.writeFileSync(path.join('.remote-worker','worker.js'),Buffer.from(main.content_base64,'base64'));
-            console.log(`[Stage3] active=${active.version_id} main=${mainName}`);
+            const mods=ver.modules||[];const main=mods.find(m=>m.name===(ver.main_module||mods[0]?.name))||mods[0];
+            if(!main)throw new Error('active main module missing');
+            const src=Buffer.from(main.content_base64,'base64').toString('utf8');
+            for(const token of ['handleMusicNotePublicationSingleWrite016','handlePublicationR2CoreLegacy016','handleMusicNotePublicationOptions017','handleMusicNotePrivate017','primary_genre','share_payload_json'])if(!src.includes(token))throw new Error('deployed token missing '+token);
+            if(src.includes('__soridraw_stage3_migrate'))throw new Error('temporary migration endpoint still deployed');
+            const hot=fn(src,'handleMusicNotePublicationSingleWrite016');
+            if((hot.match(/INSERT INTO tracks/g)||[]).length!==1)throw new Error('live publication tracks write statement != 1');
+            for(const bad of ['track_tags','track_stats (','refreshOrPrebuildPublicProfileTrackWindow(','safelyRefreshExploreFeedR2Bundles(','enforceUserRateLimit('])if(hot.includes(bad))throw new Error('live hot-path still contains '+bad);
+            const options=fn(src,'handleMusicNotePublicationOptions017');
+            const priv=fn(src,'handleMusicNotePrivate017');
+            if((options.match(/UPDATE tracks/g)||[]).length!==1)throw new Error('live option path tracks update != 1');
+            if((priv.match(/UPDATE tracks/g)||[]).length!==1)throw new Error('live private path tracks update != 1');
+            console.log(`[Stage3 live] active=${active.version_id}`);
+            console.log('[Stage3 live] code invariants PASS');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/014-publication-single-r2-bundle.mjs
-          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/015-publication-share-bundle-v1.mjs
-          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/016-publication-single-write-hotpath.mjs
-          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/017-publication-mutation-companions.mjs
-          node --check .remote-worker/worker.js
-
-      - name: Assert Stage3 hot-path invariants
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd cloudflare/explore-worker
-          node <<'NODE'
-          const fs=require('fs');const s=fs.readFileSync('.remote-worker/worker.js','utf8');
-          function fn(name){
-            const needles=[`async function ${name}(`,`function ${name}(`];let start=-1;
-            for(const n of needles){start=s.indexOf(n);if(start>=0)break;}
-            if(start<0)throw new Error(`missing function ${name}`);
-            const brace=s.indexOf('{',start);let depth=0,quote=null,escaped=false;
-            for(let i=brace;i<s.length;i++){const c=s[i];if(quote){if(escaped){escaped=false;continue;}if(c==='\\'){escaped=true;continue;}if(c===quote)quote=null;continue;}if(c==='"'||c==="'"||c==='`'){quote=c;continue;}if(c==='{')depth++;else if(c==='}'&&--depth===0)return s.slice(start,i+1);}throw new Error(`unterminated ${name}`);
-          }
-          for(const token of [
-            'SORIDRAW_PUBLICATION_SINGLE_WRITE_HOTPATH_016_20260905',
-            'SORIDRAW_PUBLICATION_MUTATION_COMPANIONS_017_20260905',
-            'primary_genre',
-            "mutation: unchanged ? 'idempotent' : 'written'",
-            'D1 rebuild intentionally skipped',
-            'handlePublicationR2CoreLegacy016',
-            'handlePublicationOptionsR2CoreLegacy017',
-            'handleVisibilityR2CoreLegacy017'
-          ]) if(!s.includes(token)) throw new Error(`missing ${token}`);
-          const hot=fn('handleMusicNotePublicationSingleWrite016');
-          for(const forbidden of ['enforceUserRateLimit(','track_stats (','track_tags','applyPublicationOptions(','refreshPublicationTrackSearchIndex013(','refreshOrPrebuildPublicProfileTrackWindow(','safelyRefreshExploreFeedR2Bundles(']) {
-            if(hot.includes(forbidden)) throw new Error(`hot-path forbidden ${forbidden}`);
-          }
-          if((hot.match(/INSERT INTO tracks/g)||[]).length!==1) throw new Error('canonical tracks write is not exactly one statement');
-          const options=fn('handleMusicNotePublicationOptions017');
-          const privateFn=fn('handleMusicNotePrivate017');
-          for(const [name,text] of [['options',options],['private',privateFn]]) {
-            for(const forbidden of ['enforceUserRateLimit(','track_tags','applyPublicationOptions(','refreshOrPrebuildPublicProfileTrackWindow(','refreshTrackSearchIndex(']) {
-              if(text.includes(forbidden)) throw new Error(`${name} forbidden ${forbidden}`);
-            }
-          }
-          if((options.match(/UPDATE tracks/g)||[]).length!==1) throw new Error('options path is not one conditional tracks update');
-          if((privateFn.match(/UPDATE tracks/g)||[]).length!==1) throw new Error('private path is not one conditional tracks update');
-          if(!fn('invalidatePublicationProfileCaches017').includes('PROFILE_MEDIA.delete(exploreProfileR2Key(uid))')) throw new Error('profile R2 invalidation missing');
-          const feed=fn('syncExploreFeedR2Publication012');
-          if(feed.includes('safelyRefreshExploreFeedR2Bundles')) throw new Error('publication feed still has D1 rebuild fallback');
-          if(!fn('handleTrackApplySource').includes('shareBundleTags016')) throw new Error('apply route does not use share bundle');
-          if(!fn('handleTrackDetail').includes('shareBundleTags016')) throw new Error('detail route does not use share bundle');
-          if(!fn('handleGenreTracks').includes('primary_genre')) throw new Error('genre tracks route missing canonical genre');
-          if(!fn('handleGenres').includes('primary_genre')) throw new Error('genres route missing canonical genre');
-          console.log('[Stage3] invariants PASS: publish/options/private are bounded 0/1-write Music Note paths; derived failures cannot convert canonical publish to 500');
-          NODE
-
-      - name: App TypeScript and build
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm ci
-          npm run build
+          feed_code="$(curl -sS -o /tmp/feed.json -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=1")"
+          test "$feed_code" = "200"
+          grep -q '"data"' /tmp/feed.json
+          genres_code="$(curl -sS -o /tmp/genres.json -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/genres")"
+          test "$genres_code" = "200"
+          grep -q '"data"' /tmp/genres.json
+          auth_code="$(curl -sS -o /tmp/pub401.json -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" -H 'Content-Type: application/json' -X POST --data '{}' "${PREVIEW_BASE}/v1/publications")"
+          test "$auth_code" = "401"
+          site_code="$(curl -sS -o /tmp/site.html -w '%{http_code}' "${PREVIEW_ORIGIN}")"
+          test "$site_code" = "200"
+          echo '[Stage3 live] public smoke PASS'

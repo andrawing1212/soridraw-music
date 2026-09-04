@@ -24,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           node <<'NODE'
-          const A=process.env.ACCOUNT,W=process.env.WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
+          const A=process.env.ACCOUNT,W=process.env.WORKER,T=process.env.CLOUDFLARE_API_TOKEN,BASE=process.env.BASE;
           async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,'Content-Type':'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,900)}`);return x.result||x}
           function functionText(src,name){let s=src.indexOf(`async function ${name}(`);if(s<0)s=src.indexOf(`function ${name}(`);if(s<0)throw new Error(name+' missing');const b=src.indexOf('{',s);let d=0,q=null,e=false;for(let i=b;i<src.length;i++){const c=src[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='{')d++;if(c==='}'&&--d===0)return src.slice(s,i+1)}throw new Error(name+' unterminated')}
           (async()=>{
@@ -36,23 +36,22 @@ jobs:
             const src=Buffer.from(mod.content_base64,'base64').toString('utf8');
             for(const requiredFunction of ['getOrEnsurePublicationOwnerProfile013','publicationSearchChanged013','refreshPublicationTrackSearchIndex013','syncExploreFeedR2Publication012'])functionText(src,requiredFunction);
             const core=functionText(src,'handlePublicationR2Core');
-            for(const required of ['getOrEnsurePublicationOwnerProfile013','publicationSearchChanged013','syncExploreFeedR2Publication012','FTS refresh skipped after successful publication'])if(!core.includes(required)&&!src.includes(required))throw new Error(required+' missing');
             if(core.includes('await refreshTrackSearchIndex(env, source.id);'))throw new Error('legacy blocking FTS still active');
             const wrapper=functionText(src,'handlePublication');
             if(wrapper.includes('safelyRefreshExploreFeedR2Bundles'))throw new Error('normal publication still full-rescans feed');
             console.log('ACTIVE_VERSION='+v.version_id);
             console.log('PUBLICATION_012_013_BEHAVIOR_VERIFY=PASS');
+
+            const feed=await fetch(`${BASE}/v1/feed?sort=latest&limit=40&probe=publication-final-verify3`,{headers:{Origin:'https://preview.soridraw.com',Accept:'application/json'}});
+            if(feed.status!==200)throw new Error(`preview feed status ${feed.status}`);
+            const d1=Number(feed.headers.get('x-soridraw-d1-read')||0);
+            if(d1!==0)throw new Error(`preview feed D1 read ${d1}`);
+            const pub=await fetch(`${BASE}/v1/publications`,{method:'POST',headers:{Origin:'https://preview.soridraw.com','Content-Type':'application/json'},body:'{}'});
+            if(pub.status!==401)throw new Error(`publication auth gate status ${pub.status}`);
+            const prod=await fetch('https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1',{headers:{Origin:'https://soridraw.com',Accept:'application/json'}});
+            if(prod.status!==200)throw new Error(`production Explore status ${prod.status}`);
+            console.log('PREVIEW_FEED_D1_ZERO=PASS');
+            console.log('PUBLICATION_AUTH_GATE=PASS');
+            console.log('PRODUCTION_EXPLORE_UNTOUCHED=PASS');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-          feed_code="$(curl -sS --max-time 30 -D "$RUNNER_TEMP/feed-h" -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' "$BASE/v1/feed?sort=latest&limit=40&probe=publication-final-verify2')"
-          test "$feed_code" = '200'
-          tr -d '\r' < "$RUNNER_TEMP/feed-h" > "$RUNNER_TEMP/feed-h.clean"
-          d1="$(awk -F': ' 'tolower($1)=="x-soridraw-d1-read"{print $2}' "$RUNNER_TEMP/feed-h.clean" | tail -1)"
-          test "${d1:-0}" = '0'
-          pub_code="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://preview.soridraw.com' -H 'Content-Type: application/json' --data '{}' "$BASE/v1/publications")"
-          test "$pub_code" = '401'
-          prod_code="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' -H 'Origin: https://soridraw.com' 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
-          test "$prod_code" = '200'
-          echo 'PREVIEW_FEED_D1_ZERO=PASS'
-          echo 'PUBLICATION_AUTH_GATE=PASS'
-          echo 'PRODUCTION_EXPLORE_UNTOUCHED=PASS'

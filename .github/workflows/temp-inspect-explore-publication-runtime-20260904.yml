@@ -11,7 +11,6 @@ permissions:
 env:
   ACCOUNT: e1a30fc9ef497fda1d34f4ab3dc1da45
   DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
-  FEED_URL: https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=40
 
 jobs:
   inspect:
@@ -32,24 +31,27 @@ jobs:
           set -euo pipefail
           mkdir -p .deploy
           node <<'NODE' > .deploy/explore-live-publication-inspection-20260904.json
-          const A=process.env.ACCOUNT,DB=process.env.DB_ID,T=process.env.CLOUDFLARE_API_TOKEN,FEED=process.env.FEED_URL;
+          const A=process.env.ACCOUNT,DB=process.env.DB_ID,T=process.env.CLOUDFLARE_API_TOKEN;
+          const out={inspectedAt:new Date().toISOString()};
           async function cfQuery(sql,params=[]){
             const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${DB}/query`,{method:'POST',headers:{Authorization:`Bearer ${T}`,'Content-Type':'application/json'},body:JSON.stringify({sql,params})});
-            const x=await r.json(); if(!r.ok||x.success===false) throw new Error(`D1 ${r.status}: ${JSON.stringify(x).slice(0,800)}`);
+            const text=await r.text(); let x={}; try{x=JSON.parse(text)}catch{};
+            if(!r.ok||x.success===false) throw new Error(`D1 ${r.status}: ${text.slice(0,800)}`);
             const result=Array.isArray(x.result)?x.result[0]:x.result; return Array.isArray(result?.results)?result.results:[];
           }
           async function feed(){
-            const r=await fetch(FEED,{headers:{Origin:'https://preview.soridraw.com',Accept:'application/json','Cache-Control':'no-cache'}}); const text=await r.text(); let x={}; try{x=JSON.parse(text)}catch{};
+            const u='https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=40';
+            const r=await fetch(u,{headers:{Origin:'https://preview.soridraw.com',Accept:'application/json','Cache-Control':'no-cache'}}); const text=await r.text(); let x={}; try{x=JSON.parse(text)}catch{};
             if(!r.ok) throw new Error(`feed ${r.status}: ${text.slice(0,800)}`);
             const items=Array.isArray(x?.data?.items)?x.data.items:[];
             return {status:r.status,cache:r.headers.get('x-soridraw-cache')||r.headers.get('cf-cache-status')||null,count:items.length,match:items.filter(i=>String(i?.title||'').includes('골목길 탐험대')).map(i=>({id:i.id,title:i.title,publishedAt:i.publishedAt||i.published_at,ownerUid:i.ownerUid||i.owner_uid})),top10:items.slice(0,10).map(i=>({id:i.id,title:i.title,publishedAt:i.publishedAt||i.published_at}))};
           }
           (async()=>{
-            const rows=await cfQuery(`SELECT t.id,t.owner_uid,t.source_type,t.source_id,t.title,t.is_public,t.status,t.published_at,p.is_public AS profile_is_public,p.nickname FROM tracks t LEFT JOIN public_profiles p ON p.uid=t.owner_uid WHERE t.title LIKE ? ORDER BY t.published_at DESC LIMIT 20`,['%골목길 탐험대%']);
-            const allRecent=await cfQuery(`SELECT id,title,is_public,status,published_at FROM tracks WHERE source_type='music_note' ORDER BY published_at DESC LIMIT 10`);
-            const latest=await feed();
-            console.log(JSON.stringify({inspectedAt:new Date().toISOString(),d1Matches:rows,recentMusicNoteTracks:allRecent,latestFeed:latest},null,2));
-          })().catch(e=>{console.error(e);process.exit(1)});
+            try{out.d1Matches=await cfQuery(`SELECT t.id,t.owner_uid,t.source_type,t.source_id,t.title,t.is_public,t.status,t.published_at,p.is_public AS profile_is_public,p.nickname FROM tracks t LEFT JOIN public_profiles p ON p.uid=t.owner_uid WHERE t.title LIKE ? ORDER BY t.published_at DESC LIMIT 20`,['%골목길 탐험대%']);}catch(e){out.d1Error=String(e?.message||e)}
+            try{out.recentMusicNoteTracks=await cfQuery(`SELECT id,title,is_public,status,published_at FROM tracks WHERE source_type='music_note' ORDER BY published_at DESC LIMIT 10`);}catch(e){out.d1RecentError=String(e?.message||e)}
+            try{out.latestFeed=await feed();}catch(e){out.feedError=String(e?.message||e)}
+            console.log(JSON.stringify(out,null,2));
+          })();
           NODE
       - name: Commit live inspection result
         run: |

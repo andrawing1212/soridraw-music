@@ -1,0 +1,50 @@
+name: SORIDRAW Inspect Publication Stage2 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-inspect-publication-stage2-20260905.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: preview, fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Read exact active PREVIEW publication functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/stage2-worker"
+          node <<'NODE'
+          const fs=require('fs'),path=require('path');
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);return x.result||x;}
+          function functionRange(src,name){
+            const needles=[`async function ${name}(`,`function ${name}(`]; let start=-1;
+            for(const needle of needles){start=src.indexOf(needle);if(start>=0)break;}
+            if(start<0)return null; const brace=src.indexOf('{',start); let depth=0,quote=null,escaped=false;
+            for(let i=brace;i<src.length;i++){const c=src[i]; if(quote){if(escaped){escaped=false;continue;} if(c==='\\'){escaped=true;continue;} if(c===quote)quote=null;continue;} if(c==='"'||c==="'"||c==='`'){quote=c;continue;} if(c==='{')depth++; if(c==='}'&&--depth===0)return src.slice(start,i+1);} return null;
+          }
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;
+            const deps=await get(`${base}/deployments`); const d=(deps.deployments||deps||[])[0];
+            const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(!active?.version_id||Number(active.percentage||0)<99.99)throw new Error('No single active PREVIEW version');
+            const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);
+            const mods=ver.modules||[]; if(!mods.length)throw new Error('No active modules');
+            const mainName=ver.main_module||mods[0].name||'worker.js'; const main=mods.find(m=>m.name===mainName)||mods[0];
+            const src=Buffer.from(main.content_base64,'base64').toString('utf8');
+            console.log(`[Stage2 inspect] active=${active.version_id} main=${mainName}`);
+            for(const fn of ['resolvePublicationSource','normalizePublicationOptions','handlePublicationR2Core','mapTrackRow']){
+              const body=functionRange(src,fn); console.log(`\n===== ${fn} =====\n${body||'[MISSING]'}\n===== END ${fn} =====`);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE

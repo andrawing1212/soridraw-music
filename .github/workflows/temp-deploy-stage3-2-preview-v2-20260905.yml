@@ -1,0 +1,118 @@
+name: SORIDRAW Deploy Stage3.2 PREVIEW v2 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-deploy-stage3-2-preview-v2-20260905.yml']
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+      PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_R2: soridraw-profile-media-preview
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+      SOUL_UID: 99rbjBuypFUkWELPbZ9uUDoqEna2
+      MAINT_WORKER: soridraw-preview-trigger-cleanup-20260905
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: preview, fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+
+      - name: Validate source and app build
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'SORIDRAW_ROOT_USER_REFRESH_ZERO_1020' src/App.tsx
+          grep -Fq 'SORIDRAW_USER_PROFILE_REFRESH_ZERO_1020' src/lib/userProfileCache.ts
+          grep -Fq 'SORIDRAW_PROFILE_CACHE_SWR_1020' src/services/exploreProfileFirstViewService.ts
+          grep -Fq 'patchExploreProfileR2Mutation019' cloudflare/explore-worker/patches/019-publication-profile-r2-delta.mjs
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          npm install --no-audit --no-fund --package-lock=false wrangler@4.102.0
+
+      - name: Remove exact legacy publication triggers via isolated PREVIEW maintenance Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .trigger-cleanup && mkdir .trigger-cleanup
+          cat > .trigger-cleanup/worker.js <<'WORKER'
+          const N=['trg_music_note_publication_bundle_insert','trg_music_note_publication_bundle_update_new','trg_music_note_publication_bundle_update_old','trg_music_note_publication_bundle_delete'];
+          async function list(env){const r=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name IN (?,?,?,?) ORDER BY name").bind(...N).all();return (r.results||[]).map(x=>String(x.name||''));}
+          export default {async fetch(req,env){const u=new URL(req.url);if(req.method!=='POST'||u.pathname!=='/cleanup')return new Response('not found',{status:404});const before=await list(env);for(const n of N)await env.DB.prepare(`DROP TRIGGER IF EXISTS ${n}`).run();const after=await list(env);return Response.json({ok:after.length===0,beforeCount:before.length,afterCount:after.length,removed:before.filter(x=>!after.includes(x))});}};
+          WORKER
+          cat > .trigger-cleanup/wrangler.jsonc <<EOF
+          {"name":"$MAINT_WORKER","main":"./worker.js","compatibility_date":"2026-09-04","workers_dev":true,"d1_databases":[{"binding":"DB","database_name":"$PREVIEW_DB_NAME","database_id":"$PREVIEW_DB_ID"}]}
+          EOF
+          delete_maint(){ curl -sS -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$MAINT_WORKER" >/tmp/maint-delete.json || true; }
+          trap delete_maint EXIT
+          npx wrangler deploy --strict --config .trigger-cleanup/wrangler.jsonc
+          success=''
+          for i in $(seq 1 15); do
+            code="$(curl -sS -o /tmp/triggers.json -w '%{http_code}' -X POST "https://$MAINT_WORKER.andrawing1212.workers.dev/cleanup" || true)"
+            if [ "$code" = 200 ]; then success=1; break; fi
+            sleep 2
+          done
+          test "$success" = 1
+          node -e "const x=require('/tmp/triggers.json'); console.log('[triggers] before='+x.beforeCount+' after='+x.afterCount+' removed='+(x.removed||[]).length); if(!x.ok||x.afterCount!==0) process.exit(1)"
+          delete_maint
+          trap - EXIT
+
+      - name: Patch and deploy exact active PREVIEW Worker
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          rm -rf .remote-worker && mkdir .remote-worker
+          node <<'NODE'
+          const fs=require('fs');const A=process.env.CLOUDFLARE_ACCOUNT_ID,N=process.env.PREVIEW_WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
+          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status+' '+JSON.stringify(x).slice(0,900));return x.result||x}
+          (async()=>{const b=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;const ds=await g(b+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];if(!a?.version_id)throw Error('active version missing');fs.writeFileSync('.remote-worker/before.txt',a.version_id);const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');if(!s.includes('handleMusicNotePublicationSingleWrite016')||!s.includes('env.DB.batch')||!s.includes('Promise.allSettled'))throw Error('Stage3.1 runtime missing');fs.writeFileSync('.remote-worker/original.js',s);fs.writeFileSync('.remote-worker/worker.js',s);const set=await g(b+'/settings');const c={name:N,main:'./worker.js',compatibility_date:String(set.compatibility_date||'2026-09-04').slice(0,10),workers_dev:true,keep_vars:true,d1_databases:[{binding:'DB',database_name:process.env.PREVIEW_DB_NAME,database_id:process.env.PREVIEW_DB_ID}],r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.PREVIEW_R2}],observability:set.observability&&typeof set.observability==='object'?{enabled:set.observability.enabled!==false}:{enabled:true}};if(Array.isArray(set.compatibility_flags)&&set.compatibility_flags.length)c.compatibility_flags=set.compatibility_flags;fs.writeFileSync('.remote-worker/wrangler.jsonc',JSON.stringify(c,null,2));console.log('[worker-before]',a.version_id)})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/019-publication-profile-r2-delta.mjs
+          node --check .remote-worker/worker.js
+          node <<'NODE'
+          const fs=require('fs'),s=fs.readFileSync('.remote-worker/worker.js','utf8');function f(n){let p=s.indexOf('async function '+n+'(');if(p<0)p=s.indexOf('function '+n+'(');if(p<0)throw Error('missing '+n);const b=s.indexOf('{',p);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(p,i+1)}throw Error('unterminated '+n)};if(f('invalidatePublicationProfileCaches017').includes('PROFILE_MEDIA.delete'))throw Error('R2 delete remains');if(f('patchExploreProfileR2Mutation019').includes('env.DB'))throw Error('profile delta touches D1');for(const n of ['handleMusicNotePublicationSingleWrite016','handleMusicNotePrivate017','handleMusicNotePublicationOptions017'])if(!f(n).includes('patchExploreProfileR2Mutation019'))throw Error('delta missing '+n);console.log('[worker] patch019 invariant PASS');
+          NODE
+          deployed=0
+          rollback(){ st=$?; if [ "$st" -ne 0 ] && [ "$deployed" = 1 ]; then cp .remote-worker/original.js .remote-worker/worker.js; npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc || true; fi; exit "$st"; }
+          trap rollback EXIT
+          npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc
+          deployed=1
+          sleep 3
+          node <<'NODE'
+          const fs=require('fs');const A=process.env.CLOUDFLARE_ACCOUNT_ID,N=process.env.PREVIEW_WORKER,T=process.env.CLOUDFLARE_API_TOKEN;async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status);return x.result||x}function f(s,n){let p=s.indexOf('async function '+n+'(');if(p<0)p=s.indexOf('function '+n+'(');if(p<0)throw Error('missing '+n);const b=s.indexOf('{',p);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(p,i+1)}throw Error('unterminated')} (async()=>{const b=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,ds=await g(b+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0],before=fs.readFileSync('.remote-worker/before.txt','utf8');if(!a?.version_id||a.version_id===before)throw Error('worker version unchanged');const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');if(f(s,'invalidatePublicationProfileCaches017').includes('PROFILE_MEDIA.delete'))throw Error('deployed R2 delete remains');if(f(s,'patchExploreProfileR2Mutation019').includes('env.DB'))throw Error('deployed delta D1');console.log('[worker-after]',a.version_id)})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          curl -fsS -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=latest&limit=1" >/tmp/feed.json
+          curl -fsS -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/genres" >/tmp/genres.json
+          trap - EXIT
+
+      - name: Verify Soulforce public server parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const B=process.env.PREVIEW_BASE,U=process.env.SOUL_UID,O=process.env.PREVIEW_ORIGIN;async function j(p){const r=await fetch(B+p,{headers:{Origin:O}}),x=await r.json();if(!r.ok)throw Error(p+' '+r.status);return{r,x}}const items=x=>Array.isArray(x?.data?.items)?x.data.items:[];const owner=i=>String(i?.ownerUid||i?.owner?.uid||i?.owner_uid||'');(async()=>{const p=await j(`/v1/profiles/${encodeURIComponent(U)}/first-view?limit=50`),pc=Number(p.x?.data?.profile?.trackCount??-1),pi=items(p.x).length,f=await j('/v1/feed?sort=latest&limit=100'),fc=items(f.x).filter(i=>owner(i)===U).length;console.log(`[parity] profile=${pc}/${pi} feed=${fc} profileD1R=${p.r.headers.get('X-SORIDRAW-D1-Reads')}`);if(pc!==10||pi!==10||fc!==10)throw Error('server parity mismatch')})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW Hosting only and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          for host in soridraw-preview.web.app preview.soridraw.com; do
+            ok=''; for i in $(seq 1 18); do if curl -fsS --max-time 30 "https://$host/" -o "/tmp/${host//./_}.html" && grep -q '<div id="root"></div>' "/tmp/${host//./_}.html"; then ok=1; break; fi; sleep 5; done; test "$ok" = 1;
+          done
+          a="$(grep -oE 'src="/assets/index-[^"]+\.js"' /tmp/soridraw-preview_web_app.html | head -n1)"; b="$(grep -oE 'src="/assets/index-[^"]+\.js"' /tmp/preview_soridraw_com.html | head -n1)"; test -n "$a"; test "$a" = "$b"; echo "PREVIEW_ASSET=$a"; echo 'FIREBASE_PREVIEW=PASS'; echo 'FUNCTIONS_DEPLOYED=false'; echo 'MAIN_CHANGED=false';

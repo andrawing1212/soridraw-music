@@ -1,0 +1,83 @@
+name: SORIDRAW Library Active Generation PREVIEW Deploy 2026-09-04
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-deploy-library-active-generation-20260904.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Verify source fix is present
+        run: |
+          set -euo pipefail
+          grep -Fq 'SORIDRAW_LIBRARY_ACTIVE_GENERATION_WINDOW_20260904' src/pages/SunoLibraryPage.tsx
+          grep -Fq 'const isLibraryActiveGeneration = (group: any): boolean => {' src/pages/SunoLibraryPage.tsx
+          grep -Fq 'elapsedMs <= 10 * 60 * 1000' src/pages/SunoLibraryPage.tsx
+          echo 'SOURCE_FIX_CHECK=PASS'
+
+      - name: Install, typecheck and build
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node .deploy/check-firebase-hosting-migration-phase1.mjs
+          node .deploy/check-firebase-hosting-migration-phase2.mjs
+          node .deploy/check-firebase-hosting-migration-phase3.mjs
+          node .deploy/check-firebase-custom-preview.mjs
+          echo 'BUILD_CHECK=PASS'
+
+      - name: Snapshot production Hosting
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-before.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW Hosting
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_DEPLOY=PASS'
+
+      - name: Verify PREVIEW and production isolation
+        run: |
+          set -euo pipefail
+          for url in 'https://soridraw-preview.web.app/' 'https://soridraw-preview.firebaseapp.com/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 "$url" -o "$RUNNER_TEMP/preview.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview.html"; then ok=yes; break; fi
+              sleep 6
+            done
+            test "$ok" = yes
+            echo "PREVIEW_SMOKE_PASS $url"
+          done
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-after.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo 'PRODUCTION_UNCHANGED=PASS'

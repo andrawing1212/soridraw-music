@@ -1,4 +1,4 @@
-name: SORIDRAW Inspect Publication Cost PREVIEW 2026-09-04
+name: SORIDRAW Verify Publication Cost Guard PREVIEW 2026-09-04
 on:
   push:
     branches: [preview]
@@ -6,24 +6,54 @@ on:
 permissions:
   contents: read
 jobs:
-  inspect:
+  verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       ACCOUNT: e1a30fc9ef497fda1d34f4ab3dc1da45
       WORKER: soridraw-explore-preview
+      EXPECTED_ACTIVE: 39032e65-f53e-4de7-8925-b7f842b4efa4
+      BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
     steps:
       - uses: actions/checkout@v4
         with: { ref: preview, fetch-depth: 1 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - name: Inspect active worker publication cost helpers
+      - name: Verify active PREVIEW Worker source and public smoke
         run: |
           set -euo pipefail
           node <<'NODE'
           const A=process.env.ACCOUNT,W=process.env.WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
-          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,'Content-Type':'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,800)}`);return x.result||x}
-          function extract(src,name){const n1=`async function ${name}(`,n2=`function ${name}(`;let s=src.indexOf(n1);if(s<0)s=src.indexOf(n2);if(s<0)return 'MISSING';const b=src.indexOf('{',s);let d=0,q=null,e=false;for(let i=b;i<src.length;i++){const c=src[i],n=src[i+1];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='/'&&n==='/'){const z=src.indexOf('\n',i);i=z<0?src.length:z;continue}if(c==='/'&&n==='*'){const z=src.indexOf('*/',i+2);i=z<0?src.length:z+1;continue}if(c==='{')d++;if(c==='}'&&--d===0)return src.slice(s,i+1)}return 'UNTERMINATED'}
-          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;const ds=await g(`${base}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];const ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`);const mod=(ver.modules||[]).find(m=>(m.name||'')==='worker.js')||(ver.modules||[])[0];const src=Buffer.from(mod.content_base64,'base64').toString('utf8');console.log('ACTIVE_VERSION='+v.version_id);for(const name of ['applyPublicationOptions','readOrMaterializePublicProfileFirstView','refreshPublicProfileFirstViewTrackWindow','materializePublicProfileFirstView','buildMusicNotePublicationR2Payload','enforceUserRateLimit','invalidatePublicProfileFirstViewEdgeCache','syncExploreFeedR2Publication012']){console.log(`\n===== ${name} =====\n${extract(src,name)}`)}})().catch(e=>{console.error(e);process.exit(1)});
+          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,'Content-Type':'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,900)}`);return x.result||x}
+          function functionText(src,name){let s=src.indexOf(`async function ${name}(`);if(s<0)s=src.indexOf(`function ${name}(`);if(s<0)throw new Error(name+' missing');const b=src.indexOf('{',s);let d=0,q=null,e=false;for(let i=b;i<src.length;i++){const c=src[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='{')d++;if(c==='}'&&--d===0)return src.slice(s,i+1)}throw new Error(name+' unterminated')}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;
+            const ds=await g(`${base}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(v?.version_id!==process.env.EXPECTED_ACTIVE||Number(v.percentage||0)<99.99)throw new Error(`unexpected active ${v?.version_id} ${v?.percentage}`);
+            const ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`);
+            const mod=(ver.modules||[]).find(m=>(m.name||'')==='worker.js')||(ver.modules||[])[0];if(!mod)throw new Error('worker.js missing');
+            const src=Buffer.from(mod.content_base64,'base64').toString('utf8');
+            if(!src.includes('SORIDRAW_EXPLORE_PUBLICATION_COST_GUARD_013_20260904'))throw new Error('013 marker missing');
+            if(!src.includes('SORIDRAW_EXPLORE_PUBLICATION_INCREMENTAL_FEED_SYNC_012_20260904'))throw new Error('012 marker missing');
+            const core=functionText(src,'handlePublicationR2Core');
+            for(const required of ['getOrEnsurePublicationOwnerProfile013','publicationSearchChanged013','syncExploreFeedR2Publication012','FTS refresh skipped after successful publication'])if(!src.includes(required))throw new Error(required+' missing');
+            if(core.includes('await refreshTrackSearchIndex(env, source.id);'))throw new Error('legacy blocking FTS still active');
+            const wrapper=functionText(src,'handlePublication');
+            if(wrapper.includes('safelyRefreshExploreFeedR2Bundles'))throw new Error('normal publication still full-rescans feed');
+            console.log('ACTIVE_VERSION='+v.version_id);
+            console.log('PUBLICATION_012_013_SOURCE_VERIFY=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
           NODE
+          feed_code="$(curl -sS --max-time 30 -D "$RUNNER_TEMP/feed-h" -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' "$BASE/v1/feed?sort=latest&limit=40&probe=publication-final-verify')"
+          test "$feed_code" = '200'
+          tr -d '\r' < "$RUNNER_TEMP/feed-h" > "$RUNNER_TEMP/feed-h.clean"
+          d1="$(awk -F': ' 'tolower($1)=="x-soridraw-d1-read"{print $2}' "$RUNNER_TEMP/feed-h.clean" | tail -1)"
+          test "${d1:-0}" = '0'
+          pub_code="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://preview.soridraw.com' -H 'Content-Type: application/json' --data '{}' "$BASE/v1/publications")"
+          test "$pub_code" = '401'
+          prod_code="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' -H 'Origin: https://soridraw.com' 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          test "$prod_code" = '200'
+          echo 'PREVIEW_FEED_D1_ZERO=PASS'
+          echo 'PUBLICATION_AUTH_GATE=PASS'
+          echo 'PRODUCTION_EXPLORE_UNTOUCHED=PASS'

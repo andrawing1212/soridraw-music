@@ -1,0 +1,63 @@
+name: SORIDRAW API Settings Zero Server Entry PREVIEW 2026-09-04
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-fix-api-settings-zero-server-entry-20260904.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 2
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply page-entry zero-server patch
+        run: |
+          set -euo pipefail
+          python3 .deploy/temp-fix-api-settings-zero-server-entry-20260904.py
+          git diff --check
+          grep -Fq 'SORIDRAW_API_SETTINGS_ENTRY_ZERO_SERVER_20260904' src/components/SunoApiSettingsPanel.tsx
+          grep -Fq 'SORIDRAW_API_SETTINGS_ENTRY_ZERO_SERVER_20260904' src/pages/MyPage.tsx
+          ! grep -Fq 'loadGoogleApiKeyStatus(false);' src/components/SunoApiSettingsPanel.tsx
+          ! grep -Fq 'loadSunoApiKeyStatus(false);' src/components/SunoApiSettingsPanel.tsx
+          ! grep -Fq 'loadSunoApiKeyStatus(true);' src/components/SunoApiSettingsPanel.tsx
+          ! grep -Fq 'fetchSunoApiStatus' src/pages/MyPage.tsx
+          ! grep -Fq 'getSunoApiKeyStatus' src/pages/MyPage.tsx
+          echo 'ZERO_SERVER_STATIC_CHECK=PASS'
+
+      - name: Install, typecheck and build
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node .deploy/check-firebase-hosting-migration-phase1.mjs
+          node .deploy/check-firebase-hosting-migration-phase2.mjs
+          node .deploy/check-firebase-hosting-migration-phase3.mjs
+          node .deploy/check-firebase-custom-preview.mjs
+          echo 'BUILD_CHECK=PASS'
+
+      - name: Commit source changes to preview
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/components/SunoApiSettingsPanel.tsx src/pages/MyPage.tsx
+          git diff --cached --check
+          git commit -m 'perf(preview): make API settings entry cache-only'
+          git push origin HEAD:preview
+          echo "SOURCE_COMMIT=$(git rev-parse HEAD)"

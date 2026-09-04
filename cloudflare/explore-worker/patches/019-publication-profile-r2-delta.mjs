@@ -7,7 +7,7 @@ const workerPath = join(remoteDir, 'worker.js');
 let source = readFileSync(workerPath, 'utf8');
 
 const marker = 'SORIDRAW_PUBLICATION_PROFILE_R2_DELTA_019_20260905';
-if (source.includes(marker)) {
+if (source.includes('patchExploreProfileR2Mutation019')) {
   console.log('[019] publication profile R2 delta already applied.');
   process.exit(0);
 }
@@ -60,9 +60,10 @@ for (const required of [
   'writeExploreR2Json',
   'exploreProfileR2Key',
   'invalidatePublicationProfileCaches017',
-  'SORIDRAW_PUBLICATION_POSTWRITE_500_RETRY_COST_018_20260905',
+  'env.DB.batch',
+  'Promise.allSettled',
 ]) {
-  if (!source.includes(required)) throw new Error(`[019] required runtime missing: ${required}`);
+  if (!source.includes(required)) throw new Error(`[019] required Stage3.1 runtime behavior missing: ${required}`);
 }
 
 const helperSource = `// ${marker}

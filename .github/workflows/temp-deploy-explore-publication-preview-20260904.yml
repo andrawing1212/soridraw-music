@@ -117,7 +117,7 @@ jobs:
             const currentBindings = Array.isArray(oldMeta.resources?.bindings) ? oldMeta.resources.bindings : [];
             const inheritedBindings = currentBindings
               .filter((binding) => String(binding?.name || '').trim())
-              .map((binding) => ({ type: 'inherit', name: String(binding.name), version_id: expectedActive }));
+              .map((binding) => ({ type: 'inherit', name: String(binding.name), version_id: 'latest' }));
             if (!inheritedBindings.length) throw new Error('no active Worker bindings found to inherit');
             if (!inheritedBindings.some((b)=>b.name==='DB') || !inheritedBindings.some((b)=>b.name==='PROFILE_MEDIA')) throw new Error('required DB/R2 bindings are not being inherited');
 

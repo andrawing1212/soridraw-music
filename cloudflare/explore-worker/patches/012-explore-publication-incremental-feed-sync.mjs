@@ -56,6 +56,15 @@ const replaceOnceInFunction = (name, before, after, label) => {
   source = source.slice(0, range.start) + nextText + source.slice(range.end);
 };
 
+const replaceRegexOnceInFunction = (name, pattern, replacement, label) => {
+  const range = functionRange(name);
+  const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+  const matches = range.text.match(new RegExp(pattern.source, flags)) || [];
+  if (matches.length !== 1) throw new Error(`[012] ${label} regex count=${matches.length}`);
+  const nextText = range.text.replace(pattern, replacement);
+  source = source.slice(0, range.start) + nextText + source.slice(range.end);
+};
+
 for (const required of [
   'readExploreR2Json',
   'writeExploreR2Json',
@@ -76,6 +85,10 @@ function getExploreFeedItemLikeCount012(item) {
   return Math.max(0, Number(item?.likeCount ?? item?.stats?.likeCount ?? 0) || 0);
 }
 
+function getExploreFeedItemId012(item) {
+  return String(item?.id || item?.trackId || "").trim();
+}
+
 function sortExploreFeedItems012(items, sort) {
   return [...items].sort((a, b) => {
     if (sort === "popular") {
@@ -84,15 +97,15 @@ function sortExploreFeedItems012(items, sort) {
     }
     const publishedDelta = Number(b?.publishedAt || 0) - Number(a?.publishedAt || 0);
     if (publishedDelta) return publishedDelta;
-    return String(b?.id || b?.trackId || "").localeCompare(String(a?.id || a?.trackId || ""));
+    return getExploreFeedItemId012(b).localeCompare(getExploreFeedItemId012(a));
   });
 }
 
-function buildExploreFeedCursor012(sort, items, previousCursor) {
+function buildExploreFeedCursor012(sort, items, previousCursor, overflowed) {
   if (!items.length) return null;
-  if (!previousCursor && items.length < EXPLORE_R2_FEED_LIMIT) return null;
+  if (!previousCursor && !overflowed) return null;
   const last = items[items.length - 1];
-  const id = String(last?.id || last?.trackId || "");
+  const id = getExploreFeedItemId012(last);
   const publishedAt = Number(last?.publishedAt || 0);
   if (!id || !Number.isFinite(publishedAt)) return previousCursor || null;
   return encodeCursor(sort === "popular"
@@ -101,7 +114,7 @@ function buildExploreFeedCursor012(sort, items, previousCursor) {
 }
 
 async function syncExploreFeedR2Publication012(env, incomingItem) {
-  const trackId = String(incomingItem?.id || incomingItem?.trackId || "").trim();
+  const trackId = getExploreFeedItemId012(incomingItem);
   if (!trackId) throw new Error("publication feed item is missing track id");
 
   try {
@@ -118,7 +131,7 @@ async function syncExploreFeedR2Publication012(env, incomingItem) {
     await Promise.all(["latest", "popular"].map(async (sort, index) => {
       const bundle = bundles[index];
       const previousItems = bundle.payload.data.items;
-      const existing = previousItems.find((item) => String(item?.id || item?.trackId || "") === trackId) || null;
+      const existing = previousItems.find((item) => getExploreFeedItemId012(item) === trackId) || null;
       const merged = existing
         ? {
             ...existing,
@@ -127,12 +140,19 @@ async function syncExploreFeedR2Publication012(env, incomingItem) {
             likeCount: existing?.likeCount ?? incomingItem?.likeCount ?? incomingItem?.stats?.likeCount ?? 0
           }
         : incomingItem;
-      const withoutCurrent = previousItems.filter((item) => String(item?.id || item?.trackId || "") !== trackId);
-      const items = sortExploreFeedItems012([merged, ...withoutCurrent], sort).slice(0, EXPLORE_R2_FEED_LIMIT);
+      const withoutCurrent = previousItems.filter((item) => getExploreFeedItemId012(item) !== trackId);
       const previousCursor = bundle.payload.data.nextCursor ?? null;
+      const overflowed = !existing && previousItems.length >= EXPLORE_R2_FEED_LIMIT;
+      let items = sortExploreFeedItems012([merged, ...withoutCurrent], sort).slice(0, EXPLORE_R2_FEED_LIMIT);
+
+      if (sort === "popular" && !existing && previousItems.length >= EXPLORE_R2_FEED_LIMIT) {
+        const included = items.some((item) => getExploreFeedItemId012(item) === trackId);
+        if (!included) return;
+      }
+
       bundle.payload.data.items = items;
       bundle.payload.data.sort = sort;
-      bundle.payload.data.nextCursor = buildExploreFeedCursor012(sort, items, previousCursor);
+      bundle.payload.data.nextCursor = buildExploreFeedCursor012(sort, items, previousCursor, overflowed);
       bundle.updatedAt = Date.now();
       await writeExploreR2Json(env, exploreFeedR2Key(sort), bundle);
     }));
@@ -145,58 +165,41 @@ async function syncExploreFeedR2Publication012(env, incomingItem) {
 `;
 source = source.replace(helperAnchor, helpers + helperAnchor);
 
-replaceOnceInFunction(
+replaceRegexOnceInFunction(
   'handlePublicationR2Core',
-  '    SELECT is_public, status FROM tracks WHERE id = ? AND owner_uid = ? LIMIT 1',
-  '    SELECT is_public, status, published_at, created_at FROM tracks WHERE id = ? AND owner_uid = ? LIMIT 1',
-  'previous publication timestamp select',
+  /published_at\s*=\s*CASE\s*\n\s*WHEN tracks\.published_at IS NULL OR tracks\.published_at = 0 THEN excluded\.published_at\s*\n\s*ELSE tracks\.published_at\s*\n\s*END,/,
+  `published_at = CASE
+        WHEN COALESCE(tracks.is_public, 0) <> 1 OR COALESCE(tracks.status, '') <> 'published' THEN excluded.published_at
+        WHEN tracks.published_at IS NULL OR tracks.published_at = 0 THEN excluded.published_at
+        ELSE tracks.published_at
+      END,`,
+  'republish timestamp reset',
 );
 
 replaceOnceInFunction(
   'handlePublicationR2Core',
-  '  await upsertPublicProfileFromFirebase(env, authContext, now);',
-  '  const publicationOwnerProfile = await upsertPublicProfileFromFirebase(env, authContext, now);',
-  'capture publication owner profile',
+  `    SELECT allow_next_song_apply, allow_follower_save, profile_pinned
+    FROM tracks
+    WHERE id = ? AND owner_uid = ?
+    LIMIT 1`,
+  `    SELECT
+      t.*,
+      p.nickname AS owner_nickname,
+      p.avatar_url AS owner_avatar_url,
+      COALESCE(s.like_count, 0) AS like_count,
+      COALESCE(s.comment_count, 0) AS comment_count,
+      COALESCE(s.play_count, 0) AS play_count
+    FROM tracks t
+    LEFT JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1
+    LEFT JOIN track_stats s ON s.track_id = t.id
+    WHERE t.id = ? AND t.owner_uid = ?
+    LIMIT 1`,
+  'reuse stored publication row for feed delta',
 );
 
 const feedSyncAnchor = `  const wasPublishedForFirstView = Number(previousFirstViewTrack?.is_public || 0) === 1 && String(previousFirstViewTrack?.status || "") === "published";`;
-const feedSyncBlock = `  const publicationPublishedAt = Number(previousFirstViewTrack?.published_at || 0) > 0
-    ? Number(previousFirstViewTrack.published_at)
-    : now;
-  const publicationCreatedAt = Number(previousFirstViewTrack?.created_at || 0) > 0
-    ? Number(previousFirstViewTrack.created_at)
-    : now;
-  const publicationFeedItem = mapTrackRow({
-    id: source.id,
-    owner_uid: authContext.uid,
-    owner_nickname: publicationOwnerProfile?.nickname || "",
-    owner_avatar_url: publicationOwnerProfile?.avatarUrl || "",
-    source_type: source.sourceType,
-    source_id: source.sourceId,
-    source_parent_id: source.sourceParentId,
-    legacy_global_id: source.legacyGlobalId,
-    source_subtrack_key: source.sourceSubTrackKey,
-    source_subtrack_index: source.sourceSubTrackIndex,
-    source_subtrack_id: source.sourceSubTrackId,
-    title: source.title,
-    description: source.description,
-    cover_url: source.coverUrl,
-    duration_seconds: source.durationSeconds,
-    lyrics: source.lyrics,
-    style: source.style,
-    suno_url_primary: source.sunoUrlPrimary,
-    suno_url_secondary: source.sunoUrlSecondary,
-    status: "published",
-    published_at: publicationPublishedAt,
-    created_at: publicationCreatedAt,
-    updated_at: now,
-    allow_next_song_apply: Number(storedOptions?.allow_next_song_apply || 0),
-    allow_follower_save: Number(storedOptions?.allow_follower_save || 0),
-    profile_pinned: Number(storedOptions?.profile_pinned || 0),
-    like_count: 0,
-    comment_count: 0,
-    play_count: 0
-  });
+const feedSyncBlock = `  if (!storedOptions) throw new Error("published track row missing after mutation");
+  const publicationFeedItem = mapTrackRow(storedOptions);
   await syncExploreFeedR2Publication012(env, publicationFeedItem);
 
 ${feedSyncAnchor}`;
@@ -210,16 +213,18 @@ replaceOnceInFunction(
 const publicationWrapper = functionRange('handlePublication').text;
 if (!publicationWrapper.includes('handlePublicationR2Core')) throw new Error('[012] publication wrapper core call missing');
 replaceFunction('handlePublication', `async function handlePublication(request, env, cors, ...args) {
-  // R2 first-page bundles are synchronized inside the mutation core from the
-  // just-written publication payload. Do not immediately rescan the feed in D1:
-  // that both costs more and can overwrite R2 with a stale post-write snapshot.
+  // The normal publication mutation updates the already-materialized R2 first
+  // page directly from the single stored row. A full D1 feed rescan is kept only
+  // as bounded recovery when an R2 bundle is missing or invalid.
   return await handlePublicationR2Core(request, env, cors, ...args);
 }`);
 
 if (!source.includes(marker)) throw new Error('[012] marker missing after patch');
 if (!source.includes('await syncExploreFeedR2Publication012(env, publicationFeedItem);')) throw new Error('[012] incremental publication sync missing');
+if (!source.includes("COALESCE(tracks.is_public, 0) <> 1 OR COALESCE(tracks.status, '') <> 'published'")) throw new Error('[012] republish timestamp rule missing');
+if (!source.includes('const publicationFeedItem = mapTrackRow(storedOptions);')) throw new Error('[012] stored publication row reuse missing');
 const finalWrapper = functionRange('handlePublication').text;
 if (finalWrapper.includes('safelyRefreshExploreFeedR2Bundles')) throw new Error('[012] full feed rebuild still attached to publication wrapper');
 
 writeFileSync(workerPath, source, 'utf8');
-console.log('[012] Explore publication now syncs R2 first-page feeds incrementally; D1 full-feed rescan removed from normal publish mutation.');
+console.log('[012] Explore publication uses current republish time and incrementally syncs R2 feed bundles without normal-path full D1 feed rescans.');

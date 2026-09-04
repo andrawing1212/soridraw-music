@@ -1,4 +1,4 @@
-name: SORIDRAW Inspect Explore Publication Runtime 2026-09-04
+name: SORIDRAW Validate Explore Publication Incremental Feed Patch 2026-09-04
 
 on:
   push:
@@ -6,14 +6,15 @@ on:
     paths: ['.github/workflows/temp-inspect-explore-publication-runtime-20260904.yml']
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   ACCOUNT: e1a30fc9ef497fda1d34f4ab3dc1da45
-  DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+  WORKER: soridraw-explore-preview
+  EXPECTED_ACTIVE: 095c8346-ce6c-48d5-9817-4bcc62f48f5c
 
 jobs:
-  inspect:
+  validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -26,38 +27,41 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Inspect live PREVIEW D1 and latest Explore feed
+      - name: Fetch active PREVIEW Worker and apply 012 locally only
         run: |
           set -euo pipefail
-          mkdir -p .deploy
-          node <<'NODE' > .deploy/explore-live-publication-inspection-20260904.json
-          const A=process.env.ACCOUNT,DB=process.env.DB_ID,T=process.env.CLOUDFLARE_API_TOKEN;
-          const out={inspectedAt:new Date().toISOString()};
-          async function cfQuery(sql,params=[]){
-            const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${DB}/query`,{method:'POST',headers:{Authorization:`Bearer ${T}`,'Content-Type':'application/json'},body:JSON.stringify({sql,params})});
-            const text=await r.text(); let x={}; try{x=JSON.parse(text)}catch{};
-            if(!r.ok||x.success===false) throw new Error(`D1 ${r.status}: ${text.slice(0,800)}`);
-            const result=Array.isArray(x.result)?x.result[0]:x.result; return Array.isArray(result?.results)?result.results:[];
-          }
-          async function feed(){
-            const u='https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=40';
-            const r=await fetch(u,{headers:{Origin:'https://preview.soridraw.com',Accept:'application/json','Cache-Control':'no-cache'}}); const text=await r.text(); let x={}; try{x=JSON.parse(text)}catch{};
-            if(!r.ok) throw new Error(`feed ${r.status}: ${text.slice(0,800)}`);
-            const items=Array.isArray(x?.data?.items)?x.data.items:[];
-            return {status:r.status,cache:r.headers.get('x-soridraw-cache')||r.headers.get('cf-cache-status')||null,count:items.length,match:items.filter(i=>String(i?.title||'').includes('골목길 탐험대')).map(i=>({id:i.id,title:i.title,publishedAt:i.publishedAt||i.published_at,ownerUid:i.ownerUid||i.owner_uid})),top10:items.slice(0,10).map(i=>({id:i.id,title:i.title,publishedAt:i.publishedAt||i.published_at}))};
-          }
+          rm -rf .remote-worker-012
+          mkdir -p .remote-worker-012
+          node <<'NODE'
+          const fs=require('fs');
+          const A=process.env.ACCOUNT,W=process.env.WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
+          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,'Content-Type':'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,700)}`);return x.result||x}
           (async()=>{
-            try{out.d1Matches=await cfQuery(`SELECT t.id,t.owner_uid,t.source_type,t.source_id,t.title,t.is_public,t.status,t.published_at,p.is_public AS profile_is_public,p.nickname FROM tracks t LEFT JOIN public_profiles p ON p.uid=t.owner_uid WHERE t.title LIKE ? ORDER BY t.published_at DESC LIMIT 20`,['%골목길 탐험대%']);}catch(e){out.d1Error=String(e?.message||e)}
-            try{out.recentMusicNoteTracks=await cfQuery(`SELECT id,title,is_public,status,published_at FROM tracks WHERE source_type='music_note' ORDER BY published_at DESC LIMIT 10`);}catch(e){out.d1RecentError=String(e?.message||e)}
-            try{out.latestFeed=await feed();}catch(e){out.feedError=String(e?.message||e)}
-            console.log(JSON.stringify(out,null,2));
-          })();
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;
+            const ds=await g(`${base}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(!v?.version_id||Number(v.percentage||0)<99.99) throw new Error('active PREVIEW Worker is not 100%');
+            if(v.version_id!==process.env.EXPECTED_ACTIVE) throw new Error(`active Worker changed: ${v.version_id}`);
+            const ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`);
+            const mod=(ver.modules||[]).find(m=>(m.name||'')==='worker.js')||(ver.modules||[])[0];
+            if(!mod) throw new Error('worker.js missing');
+            fs.writeFileSync('.remote-worker-012/worker.js',Buffer.from(mod.content_base64,'base64'));
+            console.log('ACTIVE_BASELINE='+v.version_id);
+          })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-      - name: Commit live inspection result
-        run: |
-          set -euo pipefail
-          git config user.name 'andrawing1212'
-          git config user.email 'andrawing1212@gmail.com'
-          git add .deploy/explore-live-publication-inspection-20260904.json
-          git commit -m 'chore(preview): record live Explore publication state'
-          git push origin HEAD:preview
+          cp .remote-worker-012/worker.js .remote-worker-012/before.js
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker-012" node cloudflare/explore-worker/patches/012-explore-publication-incremental-feed-sync.mjs
+          node --check .remote-worker-012/worker.js
+          grep -Fq 'SORIDRAW_EXPLORE_PUBLICATION_INCREMENTAL_FEED_SYNC_012_20260904' .remote-worker-012/worker.js
+          grep -Fq 'await syncExploreFeedR2Publication012(env, publicationFeedItem);' .remote-worker-012/worker.js
+          node <<'NODE'
+          const fs=require('fs'); const src=fs.readFileSync('.remote-worker-012/worker.js','utf8');
+          function fn(name){const start=src.indexOf(`async function ${name}(`);if(start<0)throw new Error(name+' missing');const brace=src.indexOf('{',start);let d=0,q=null,e=false;for(let i=brace;i<src.length;i++){const c=src[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='{')d++;if(c==='}'&&--d===0)return src.slice(start,i+1)}throw new Error(name+' unterminated')}
+          const wrapper=fn('handlePublication'); const core=fn('handlePublicationR2Core');
+          if(wrapper.includes('safelyRefreshExploreFeedR2Bundles')) throw new Error('publication still does full feed rebuild');
+          if(!core.includes('syncExploreFeedR2Publication012')) throw new Error('incremental sync missing from publication core');
+          if(!core.includes('published_at, created_at')) throw new Error('stable publish timestamps not preserved');
+          console.log('PUBLICATION_NORMAL_PATH_D1_FEED_RESCAN=0');
+          console.log('PUBLICATION_R2_INCREMENTAL_SYNC=PASS');
+          NODE
+          test "$(sha256sum .remote-worker-012/before.js | cut -d' ' -f1)" != "$(sha256sum .remote-worker-012/worker.js | cut -d' ' -f1)"
+          echo 'LOCAL_ONLY_VALIDATION=PASS'

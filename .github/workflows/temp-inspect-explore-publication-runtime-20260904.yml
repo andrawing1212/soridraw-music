@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Inspect active PREVIEW Worker publication/feed core
+      - name: Inspect active PREVIEW Worker publication source mapping
         run: |
           set -euo pipefail
           node <<'NODE'
@@ -46,7 +46,7 @@ jobs:
             const mod=(ver.modules||[]).find(m=>(m.name||'')==='worker.js')||(ver.modules||[])[0]; if(!mod)throw new Error('worker module missing');
             const src=Buffer.from(mod.content_base64,'base64').toString('utf8');
             console.log('ACTIVE_VERSION='+v.version_id);
-            for(const name of ['handlePublicationR2Core','handlePublication','handleFeed','handleFeedWithEdgeCacheD1Core','buildExploreFeedR2Payload','refreshExploreFeedR2Bundles','syncMusicNotePublicationR2AfterMutation']){
+            for(const name of ['resolvePublicationSource','mapTrackRow','requireExploreAuth','upsertPublicProfileFromFirebase','mapPublicProfileRow','readPublicProfileR2Bundle']){
               const f=extractFunction(src,name); console.log(`\n===== ${name} =====\n`+(f||'MISSING'));
             }
           })().catch(e=>{console.error(e);process.exit(1)});

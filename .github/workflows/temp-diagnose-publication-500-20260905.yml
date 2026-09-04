@@ -14,11 +14,9 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       PREVIEW_WORKER: soridraw-explore-preview
     steps:
-      - uses: actions/checkout@v4
-        with: { ref: preview, fetch-depth: 2 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - name: Print active publication failure candidates
+      - name: Print exact active publication identity and invalidation paths
         shell: bash
         run: |
           set -euo pipefail
@@ -35,10 +33,10 @@ jobs:
             const deps=await get(`${base}/deployments`);const d=(deps.deployments||deps||[])[0];const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
             const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);const mods=ver.modules||[];const main=mods.find(m=>m.name===(ver.main_module||mods[0]?.name))||mods[0];const src=Buffer.from(main.content_base64,'base64').toString('utf8');
             const fns=functions(src),by=new Map(fns.map(f=>[f.name,f.text]));
-            console.log(`[500 audit] active=${active.version_id} funcs=${fns.length}`);
-            const wanted=['handleMusicNotePublicationSingleWrite016','publicationReadState016','publicationEnsureProfile016','publicationBuildFeedItem016','mapTrackRow','resolvePublicationSource','normalizePublicationOptions','syncExploreFeedR2Publication012','syncMusicNotePublicationR2AfterMutation','invalidatePublicationProfileCaches017','handlePublicationR2Core','handleExploreRequest','json','apiError','throwApi'];
+            console.log(`[audit] active=${active.version_id} funcs=${fns.length}`);
+            const wanted=['buildMusicNoteExploreSource','stableTrackId','buildTrackId','publicationCanonicalUnchanged016','publicationReadState016','invalidateExploreFeedEdgeCache','invalidatePublicProfileFirstViewEdgeCache','handleMusicNotePublicationSingleWrite016','handlePublicationR2Core','handleExploreRequest'];
             for(const n of wanted) console.log(`\n===== ${n} =====\n${by.get(n)||'[MISSING]'}\n===== END ${n} =====`);
-            console.log('\n===== FUNCTIONS REFERENCING D1 DIAGNOSTICS =====');
-            for(const f of fns){if(/D1-Read|D1-Write|d1Read|d1Write|diagnostic/i.test(f.text)) console.log(`\n--- ${f.name} ---\n${f.text}`)}
+            console.log('\n===== FUNCTIONS CONTAINING sourceId/id SHA/UUID =====');
+            for(const f of fns){if(/randomUUID|crypto\.subtle|sourceId.*id|track.*hash|stable.*id/i.test(f.text)) console.log(`\n--- ${f.name} ---\n${f.text}`)}
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE

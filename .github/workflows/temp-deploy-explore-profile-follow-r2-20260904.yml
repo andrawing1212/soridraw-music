@@ -1,0 +1,220 @@
+name: SORIDRAW Explore Profile Follow R2 PREVIEW 2026-09-04
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-deploy-explore-profile-follow-r2-20260904.yml']
+
+permissions:
+  contents: write
+
+env:
+  ACCOUNT: e1a30fc9ef497fda1d34f4ab3dc1da45
+  WORKER: soridraw-explore-preview
+  D1_NAME: soridraw-explore-preview
+  D1_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+  R2_BUCKET: soridraw-profile-media-preview
+  BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+  SEED_PATH: /__soridraw_seed_profile_follow_r2_20260904_4a7d
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 2
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply client cost patch
+        run: |
+          set -euo pipefail
+          python3 .deploy/apply-1010-explore-profile-follow-cost.py
+          git diff --check
+          grep -Fq 'SORIDRAW_EXPLORE_PROFILE_FOLLOW_COST_1010_20260904' src/services/exploreSocialService.ts
+          grep -Fq '/v1/me/following-bundle' src/services/exploreSocialService.ts
+          grep -Fq "팔로우 상태 묶음" src/components/CacheDiagnosticsOverlay.tsx
+
+      - name: Install, typecheck and build
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node .deploy/check-firebase-hosting-migration-phase1.mjs
+          node .deploy/check-firebase-hosting-migration-phase2.mjs
+          node .deploy/check-firebase-hosting-migration-phase3.mjs
+          node .deploy/check-firebase-custom-preview.mjs
+
+      - name: Commit client changes to preview
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/services/exploreSocialService.ts src/components/CacheDiagnosticsOverlay.tsx
+          if git diff --cached --quiet; then
+            echo 'CLIENT_COMMIT=unchanged' >> "$GITHUB_ENV"
+          else
+            git commit -m 'perf(preview): bundle Explore follow state on cold start'
+            git push origin HEAD:preview
+            echo "CLIENT_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          fi
+
+      - name: Snapshot production hosting
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-before.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+
+      - name: Prepare seed and final Workers from active PREVIEW
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          seed_token="$(openssl rand -hex 24)"
+          echo "::add-mask::$seed_token"
+          echo "SEED_TOKEN=$seed_token" >> "$GITHUB_ENV"
+          rm -rf cloudflare/explore-worker/.profile-follow-temp cloudflare/explore-worker/.profile-follow-final
+          mkdir -p cloudflare/explore-worker/.profile-follow-temp cloudflare/explore-worker/.profile-follow-final
+          node <<'NODE'
+          const fs=require('fs'),path=require('path');
+          const A=process.env.ACCOUNT,W=process.env.WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
+          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,'Content-Type':'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,900)}`);return x.result||x}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;
+            const ds=await g(`${base}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(!v?.version_id||Number(v.percentage||0)<99.99)throw new Error('active PREVIEW Worker is not 100%');
+            const ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`),mods=ver.modules||[];
+            const settings=await g(`${base}/settings`),bindings=settings.bindings||[];
+            const d1=bindings.find(b=>b.type==='d1'&&b.name==='DB'),r2=bindings.find(b=>b.type==='r2_bucket'&&b.name==='PROFILE_MEDIA');
+            if(!d1||(d1.id||d1.database_id)!==process.env.D1_ID)throw new Error('PREVIEW D1 binding mismatch');
+            if(!r2||r2.bucket_name!==process.env.R2_BUCKET)throw new Error('PREVIEW R2 binding mismatch');
+            for(const dir of ['cloudflare/explore-worker/.profile-follow-temp','cloudflare/explore-worker/.profile-follow-final']){
+              for(const m of mods){const p=path.join(dir,m.name||'worker.js');fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,Buffer.from(m.content_base64,'base64'))}
+              const main=ver.main_module||mods[0]?.name||'worker.js'; if(main!=='worker.js')throw new Error(`unexpected main ${main}`);
+              const cfg={name:W,main:'./worker.js',compatibility_date:String(settings.compatibility_date||'2026-08-28').slice(0,10),keep_vars:true,d1_databases:[{binding:'DB',database_name:process.env.D1_NAME,database_id:process.env.D1_ID}],r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.R2_BUCKET}]};
+              if(settings.compatibility_flags?.length)cfg.compatibility_flags=settings.compatibility_flags;
+              fs.writeFileSync(path.join(dir,'wrangler.jsonc'),JSON.stringify(cfg,null,2)+'\n');
+            }
+            console.log('BASELINE_VERSION='+v.version_id);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/cloudflare/explore-worker/.profile-follow-temp" \
+          SORIDRAW_EXPLORE_PROFILE_FOLLOW_SEED_PATH="$SEED_PATH" \
+          SORIDRAW_EXPLORE_PROFILE_FOLLOW_SEED_TOKEN="$seed_token" \
+          node cloudflare/explore-worker/patches/010-explore-r2-profile-follow-bundles.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/cloudflare/explore-worker/.profile-follow-final" \
+          node cloudflare/explore-worker/patches/010-explore-r2-profile-follow-bundles.mjs
+          node --check cloudflare/explore-worker/.profile-follow-temp/worker.js
+          node --check cloudflare/explore-worker/.profile-follow-final/worker.js
+          grep -Fq 'SORIDRAW_EXPLORE_R2_PROFILE_FOLLOW_BUNDLES_010_20260904' cloudflare/explore-worker/.profile-follow-final/worker.js
+          grep -Fq '/v1/me/following-bundle' cloudflare/explore-worker/.profile-follow-final/worker.js
+          grep -Fq 'readExploreProfileR2Bundle' cloudflare/explore-worker/.profile-follow-final/worker.js
+          if grep -Fq "$SEED_PATH" cloudflare/explore-worker/.profile-follow-final/worker.js; then echo 'seed path leaked into final source'; exit 1; fi
+          echo 'SOURCE_PATCH_CHECK=PASS'
+
+      - name: Seed R2, deploy final Worker and verify
+        run: |
+          set -euo pipefail
+          temp_deployed='no'
+          cleanup() {
+            if [ "$temp_deployed" = 'yes' ]; then
+              echo '[cleanup] restoring final PREVIEW Worker without seed route'
+              npx --yes wrangler@4 deploy --cwd cloudflare/explore-worker/.profile-follow-final --keep-vars >/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          npx --yes wrangler@4 deploy --cwd cloudflare/explore-worker/.profile-follow-temp --keep-vars
+          temp_deployed='yes'
+          ok=''
+          for attempt in $(seq 1 15); do
+            code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/seed.json" -w '%{http_code}' -X POST -H "X-SORIDRAW-Seed: $SEED_TOKEN" -H 'Origin: https://preview.soridraw.com' "$BASE$SEED_PATH" || true)"
+            echo "seed attempt=$attempt status=$code"
+            if [ "$code" = '200' ]; then ok=yes; break; fi
+            sleep 4
+          done
+          test "$ok" = yes
+          node -e "const x=require(process.env.RUNNER_TEMP+'/seed.json');if(!x.ok)process.exit(1);if(Number(x.data?.profileBundles||0)<1)process.exit(2);if(Number(x.data?.followBundles||0)<1)process.exit(3);console.log('SEED_PASS profileBundles='+x.data.profileBundles+' followBundles='+x.data.followBundles)"
+
+          npx --yes wrangler@4 deploy --cwd cloudflare/explore-worker/.profile-follow-final --keep-vars
+          temp_deployed='no'
+          trap - EXIT
+
+          ok=''
+          for attempt in $(seq 1 15); do
+            seed_status="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' -X POST "$BASE$SEED_PATH" || true)"
+            feed_status="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' "$BASE/v1/feed?sort=latest&limit=40" || true)"
+            if [ "$seed_status" = '404' ] && [ "$feed_status" = '200' ]; then ok=yes; break; fi
+            echo "final propagation attempt=$attempt seed=$seed_status feed=$feed_status"
+            sleep 4
+          done
+          test "$ok" = yes
+
+          PROFILE_UID="$(node -e "const x=require(process.env.RUNNER_TEMP+'/feed.json');const i=(x.data?.items||[]).find(v=>v&&v.ownerUid);if(!i)process.exit(2);process.stdout.write(String(i.ownerUid))")"
+          test -n "$PROFILE_UID"
+          echo '::add-mask::'$PROFILE_UID
+          curl -fsS --max-time 20 -D "$RUNNER_TEMP/profile-h1" -o "$RUNNER_TEMP/profile-b1" -H 'Origin: https://preview.soridraw.com' "$BASE/v1/profiles/$(python3 -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["PROFILE_UID"]))')/first-view?limit=50"
+          tr -d '\r' < "$RUNNER_TEMP/profile-h1" > "$RUNNER_TEMP/profile-h1.clean"
+          pd1="$(awk -F': ' 'tolower($1)=="x-soridraw-d1-read"{print $2}' "$RUNNER_TEMP/profile-h1.clean" | tail -1)"
+          pr2="$(awk -F': ' 'tolower($1)=="x-soridraw-r2-b"{print $2}' "$RUNNER_TEMP/profile-h1.clean" | tail -1)"
+          pedge="$(awk -F': ' 'tolower($1)=="x-soridraw-profile-edge-cache"{print $2}' "$RUNNER_TEMP/profile-h1.clean" | tail -1)"
+          echo "PROFILE_FIRST d1=${pd1:-0} r2b=${pr2:-0} edge=${pedge:-none}"
+          test "${pd1:-0}" = '0'
+          test "$pedge" = 'R2' -o "$pedge" = 'HIT'
+
+          curl -fsS --max-time 20 -D "$RUNNER_TEMP/profile-h2" -o /dev/null -H 'Origin: https://preview.soridraw.com' "$BASE/v1/profiles/$(python3 -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["PROFILE_UID"]))')/first-view?limit=50"
+          tr -d '\r' < "$RUNNER_TEMP/profile-h2" > "$RUNNER_TEMP/profile-h2.clean"
+          pd12="$(awk -F': ' 'tolower($1)=="x-soridraw-d1-read"{print $2}' "$RUNNER_TEMP/profile-h2.clean" | tail -1)"
+          pr22="$(awk -F': ' 'tolower($1)=="x-soridraw-r2-b"{print $2}' "$RUNNER_TEMP/profile-h2.clean" | tail -1)"
+          pedge2="$(awk -F': ' 'tolower($1)=="x-soridraw-profile-edge-cache"{print $2}' "$RUNNER_TEMP/profile-h2.clean" | tail -1)"
+          echo "PROFILE_SECOND d1=${pd12:-0} r2b=${pr22:-0} edge=${pedge2:-none}"
+          test "${pd12:-0}" = '0'
+          test "${pr22:-0}" = '0'
+          test "$pedge2" = 'HIT'
+
+          follow_status="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/follow-unauth.json" -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' "$BASE/v1/me/following-bundle" || true)"
+          test "$follow_status" = '401'
+          echo 'FINAL_WORKER_PROFILE_ZERO_D1_VERIFY=PASS'
+          echo 'FOLLOW_BUNDLE_ROUTE_AUTH_GATE=PASS'
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW Hosting
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_DEPLOY=PASS'
+
+      - name: Verify preview and production isolation
+        run: |
+          set -euo pipefail
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 "$url" -o "$RUNNER_TEMP/preview.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview.html"; then ok=yes; break; fi
+              sleep 8
+            done
+            test "$ok" = yes
+            echo "PREVIEW_SMOKE_PASS $url"
+          done
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-after.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo 'PRODUCTION_UNCHANGED=PASS'
+          echo "CLIENT_COMMIT=${CLIENT_COMMIT:-unknown}"

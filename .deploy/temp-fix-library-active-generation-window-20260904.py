@@ -65,7 +65,6 @@ if old_display not in text:
     raise RuntimeError('status badge display anchor missing')
 text = text.replace(old_display, new_display, 1)
 
-# In the group-level status badge, only a recent task can show the blue spinner.
 old_badge = """      case 'pending':
         if (isTrackPastAutoCheckWindow(group)) {"""
 new_badge = """      case 'pending':
@@ -74,15 +73,13 @@ if old_badge not in text:
     raise RuntimeError('status badge pending anchor missing')
 text = text.replace(old_badge, new_badge, 1)
 
-# In each row, use the same active-generation predicate so old partial records
-# cannot retain a blue spinner simply because another item in the group has audio.
-old_row = """                      const isCompletedWithoutAudio = isCompletedStatus && !audioUrl;
-                      const isStalePending = !isFailed && isPendingStatus && !audioUrl && isTrackPastAutoCheckWindow(group);
-                      const isPending = !isFailed && isPendingStatus && !audioUrl && !isStalePending;"""
-new_row = """                      const isCompletedWithoutAudio = isCompletedStatus && !audioUrl;
+old_row = """                      const isCompletedWithoutAudio = isCompletedStatus && !audioUrl && !hasCompletedRescue;
+                      const isStalePending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && isTrackPastAutoCheckWindow(group);
+                      const isPending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && !isStalePending;"""
+new_row = """                      const isCompletedWithoutAudio = isCompletedStatus && !audioUrl && !hasCompletedRescue;
                       const isActiveGeneration = isPendingStatus && isLibraryActiveGeneration(group);
-                      const isStalePending = !isFailed && isPendingStatus && !audioUrl && !isActiveGeneration;
-                      const isPending = !isFailed && isPendingStatus && !audioUrl && isActiveGeneration;"""
+                      const isStalePending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && !isActiveGeneration;
+                      const isPending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && isActiveGeneration;"""
 if old_row not in text:
     raise RuntimeError('row pending display anchor missing')
 text = text.replace(old_row, new_row, 1)

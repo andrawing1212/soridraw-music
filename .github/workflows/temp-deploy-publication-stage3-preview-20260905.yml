@@ -34,104 +34,15 @@ jobs:
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
 
-      - name: Apply PREVIEW D1 schema safely
-        shell: bash
-        working-directory: cloudflare/explore-worker
-        run: |
-          set -euo pipefail
-          cat > /tmp/soridraw-preview-d1.jsonc <<JSON
-          {
-            "name": "${PREVIEW_WORKER}",
-            "main": "./placeholder.js",
-            "compatibility_date": "2026-09-04",
-            "d1_databases": [{"binding":"DB","database_name":"${PREVIEW_DB_NAME}","database_id":"${PREVIEW_DB_ID}"}]
-          }
-          JSON
-
-          direct_ok=1
-          run_sql() {
-            local sql="$1"
-            if ! npx wrangler d1 execute "$PREVIEW_DB_NAME" --remote --config /tmp/soridraw-preview-d1.jsonc --command "$sql"; then
-              direct_ok=0
-              return 1
-            fi
-          }
-
-          if run_sql "SELECT 1 AS ok"; then
-            echo '[Stage3 deploy] direct D1 API available'
-            cols="$(npx wrangler d1 execute "$PREVIEW_DB_NAME" --remote --config /tmp/soridraw-preview-d1.jsonc --command "PRAGMA table_info(tracks)" --json)"
-            if ! grep -q 'share_schema_version' <<<"$cols"; then run_sql "ALTER TABLE tracks ADD COLUMN share_schema_version INTEGER NOT NULL DEFAULT 0"; fi
-            if ! grep -q 'share_payload_json' <<<"$cols"; then run_sql "ALTER TABLE tracks ADD COLUMN share_payload_json TEXT"; fi
-            if ! grep -q 'primary_genre' <<<"$cols"; then run_sql "ALTER TABLE tracks ADD COLUMN primary_genre TEXT"; fi
-            run_sql "CREATE INDEX IF NOT EXISTS idx_tracks_public_primary_genre ON tracks(is_public, status, primary_genre, published_at DESC, id DESC)"
-            run_sql "DROP TRIGGER IF EXISTS trg_music_note_publication_bundle_insert"
-            run_sql "DROP TRIGGER IF EXISTS trg_music_note_publication_bundle_update_new"
-            run_sql "DROP TRIGGER IF EXISTS trg_music_note_publication_bundle_update_old"
-            run_sql "DROP TRIGGER IF EXISTS trg_music_note_publication_bundle_delete"
-          else
-            echo '[Stage3 deploy] direct D1 API unavailable; using temporary Worker bound only to PREVIEW D1'
-            suffix="$(printf '%s' "$GITHUB_SHA" | cut -c1-8)"
-            migrator="soridraw-preview-migrator-${suffix}"
-            token="$(openssl rand -hex 24)"
-            tmp="$(mktemp -d)"
-            cleanup() {
-              npx wrangler delete --name "$migrator" --force >/dev/null 2>&1 || true
-              rm -rf "$tmp"
-            }
-            trap cleanup EXIT
-            cat > "$tmp/worker.mjs" <<'JS'
-          export default {
-            async fetch(request, env) {
-              if (request.headers.get('X-SORIDRAW-Migrate') !== env.MIGRATE_TOKEN) return new Response('not found', {status:404});
-              try {
-                const info = await env.DB.prepare('PRAGMA table_info(tracks)').all();
-                const cols = new Set((info.results || []).map((r) => String(r.name || '')));
-                if (!cols.has('share_schema_version')) await env.DB.prepare('ALTER TABLE tracks ADD COLUMN share_schema_version INTEGER NOT NULL DEFAULT 0').run();
-                if (!cols.has('share_payload_json')) await env.DB.prepare('ALTER TABLE tracks ADD COLUMN share_payload_json TEXT').run();
-                if (!cols.has('primary_genre')) await env.DB.prepare('ALTER TABLE tracks ADD COLUMN primary_genre TEXT').run();
-                await env.DB.batch([
-                  env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_tracks_public_primary_genre ON tracks(is_public, status, primary_genre, published_at DESC, id DESC)'),
-                  env.DB.prepare('DROP TRIGGER IF EXISTS trg_music_note_publication_bundle_insert'),
-                  env.DB.prepare('DROP TRIGGER IF EXISTS trg_music_note_publication_bundle_update_new'),
-                  env.DB.prepare('DROP TRIGGER IF EXISTS trg_music_note_publication_bundle_update_old'),
-                  env.DB.prepare('DROP TRIGGER IF EXISTS trg_music_note_publication_bundle_delete')
-                ]);
-                const verifyInfo = await env.DB.prepare('PRAGMA table_info(tracks)').all();
-                const verifyCols = new Set((verifyInfo.results || []).map((r) => String(r.name || '')));
-                const triggers = await env.DB.prepare("SELECT name FROM sqlite_schema WHERE type='trigger' AND name LIKE 'trg_music_note_publication_bundle_%'").all();
-                const ok = ['share_schema_version','share_payload_json','primary_genre'].every((c) => verifyCols.has(c)) && (triggers.results || []).length === 0;
-                return Response.json({ok, columns:[...verifyCols].filter((c)=>['share_schema_version','share_payload_json','primary_genre'].includes(c)), triggerCount:(triggers.results||[]).length});
-              } catch (error) {
-                return Response.json({ok:false,error:String(error?.message || error)}, {status:500});
-              }
-            }
-          };
-          JS
-            cat > "$tmp/wrangler.jsonc" <<JSON
-          {
-            "name": "$migrator",
-            "main": "./worker.mjs",
-            "compatibility_date": "2026-09-04",
-            "workers_dev": true,
-            "vars": {"MIGRATE_TOKEN": "$token"},
-            "d1_databases": [{"binding":"DB","database_name":"${PREVIEW_DB_NAME}","database_id":"${PREVIEW_DB_ID}"}]
-          }
-          JSON
-            npx wrangler deploy --config "$tmp/wrangler.jsonc"
-            code="$(curl -sS -o /tmp/migrate.json -w '%{http_code}' -H "X-SORIDRAW-Migrate: $token" "https://${migrator}.andrawing1212.workers.dev/")"
-            cat /tmp/migrate.json
-            test "$code" = "200"
-            grep -q '"ok":true' /tmp/migrate.json
-          fi
-
-      - name: Prepare exact active PREVIEW Worker and apply patches 014-017
+      - name: Deploy PREVIEW schema and Worker with rollback guard
         shell: bash
         working-directory: cloudflare/explore-worker
         run: |
           set -euo pipefail
           rm -rf .remote-worker && mkdir -p .remote-worker
+
           node <<'NODE'
-          const fs=require('fs'),path=require('path');
+          const fs=require('fs');
           const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
           async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);return x.result||x;}
           (async()=>{
@@ -143,7 +54,9 @@ jobs:
             const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);
             const mods=ver.modules||[]; if(!mods.length)throw new Error('No active modules');
             const mainName=ver.main_module||mods[0].name||'worker.js'; const main=mods.find(m=>m.name===mainName)||mods[0];
-            fs.writeFileSync(path.join('.remote-worker','worker.js'),Buffer.from(main.content_base64,'base64'));
+            const src=Buffer.from(main.content_base64,'base64').toString('utf8');
+            fs.writeFileSync('.remote-worker/original.js',src);
+            fs.writeFileSync('.remote-worker/worker.js',src);
             const settings=await get(`${base}/settings`);
             const cfg={
               name,
@@ -160,13 +73,16 @@ jobs:
             console.log(`[Stage3 deploy] active before=${active.version_id}`);
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
+
           SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/014-publication-single-r2-bundle.mjs
           SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/015-publication-share-bundle-v1.mjs
           SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/016-publication-single-write-hotpath.mjs
           SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/017-publication-mutation-companions.mjs
-          node --check .remote-worker/worker.js
+          cp .remote-worker/worker.js .remote-worker/patched-clean.js
+          node --check .remote-worker/patched-clean.js
+
           node <<'NODE'
-          const fs=require('fs'),s=fs.readFileSync('.remote-worker/worker.js','utf8');
+          const fs=require('fs'),s=fs.readFileSync('.remote-worker/patched-clean.js','utf8');
           function fn(name){const ns=[`async function ${name}(`,`function ${name}(`];let st=-1;for(const n of ns){st=s.indexOf(n);if(st>=0)break;}if(st<0)throw new Error('missing '+name);const b=s.indexOf('{',st);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue;}if(c==='\\'){e=true;continue;}if(c===q)q=null;continue;}if(c==='"'||c==="'"||c==='`'){q=c;continue;}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(st,i+1);}throw new Error('unterminated '+name)}
           const hot=fn('handleMusicNotePublicationSingleWrite016');
           if((hot.match(/INSERT INTO tracks/g)||[]).length!==1)throw new Error('publication canonical tracks write != 1');
@@ -175,37 +91,72 @@ jobs:
           console.log('[Stage3 deploy] patched worker invariants PASS');
           NODE
 
-      - name: Deploy PREVIEW Worker
-        shell: bash
-        working-directory: cloudflare/explore-worker
-        run: |
-          set -euo pipefail
-          npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc
+          migrate_token="$(openssl rand -hex 24)"
+          MIGRATE_TOKEN="$migrate_token" node <<'NODE'
+          const fs=require('fs');
+          let s=fs.readFileSync('.remote-worker/patched-clean.js','utf8');
+          const token=JSON.stringify(process.env.MIGRATE_TOKEN);
+          const marker='SORIDRAW_STAGE3_TEMP_MIGRATION_ENDPOINT_20260905';
+          const anchor='async function handleExploreRequest(request, env) {\n  const url = new URL(request.url);';
+          if(!s.includes(anchor))throw new Error('handleExploreRequest migration anchor missing');
+          const block=`async function handleExploreRequest(request, env) {\n  const url = new URL(request.url);\n  // ${marker}\n  if (url.pathname === "/__soridraw_stage3_migrate" && request.method === "POST") {\n    if (request.headers.get("X-SORIDRAW-Migrate") !== ${token}) return new Response("not found", { status: 404 });\n    try {\n      const info = await env.DB.prepare("PRAGMA table_info(tracks)").all();\n      const cols = new Set((info.results || []).map((row) => String(row.name || "")));\n      if (!cols.has("share_schema_version")) await env.DB.prepare("ALTER TABLE tracks ADD COLUMN share_schema_version INTEGER NOT NULL DEFAULT 0").run();\n      if (!cols.has("share_payload_json")) await env.DB.prepare("ALTER TABLE tracks ADD COLUMN share_payload_json TEXT").run();\n      if (!cols.has("primary_genre")) await env.DB.prepare("ALTER TABLE tracks ADD COLUMN primary_genre TEXT").run();\n      await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_tracks_public_primary_genre ON tracks(is_public, status, primary_genre, published_at DESC, id DESC)").run();\n      const verifyInfo = await env.DB.prepare("PRAGMA table_info(tracks)").all();\n      const verifyCols = new Set((verifyInfo.results || []).map((row) => String(row.name || "")));\n      const columnsOk = ["share_schema_version", "share_payload_json", "primary_genre"].every((name) => verifyCols.has(name));\n      if (!columnsOk) throw new Error("stage3 columns missing after migration");\n      await env.DB.batch([\n        env.DB.prepare("DROP TRIGGER IF EXISTS trg_music_note_publication_bundle_insert"),\n        env.DB.prepare("DROP TRIGGER IF EXISTS trg_music_note_publication_bundle_update_new"),\n        env.DB.prepare("DROP TRIGGER IF EXISTS trg_music_note_publication_bundle_update_old"),\n        env.DB.prepare("DROP TRIGGER IF EXISTS trg_music_note_publication_bundle_delete")\n      ]);\n      const triggers = await env.DB.prepare("SELECT name FROM sqlite_schema WHERE type='trigger' AND name LIKE 'trg_music_note_publication_bundle_%'").all();\n      return Response.json({ ok: (triggers.results || []).length === 0, columns: ["share_schema_version", "share_payload_json", "primary_genre"], triggerCount: (triggers.results || []).length });\n    } catch (error) {\n      return Response.json({ ok: false, error: String(error?.message || error) }, { status: 500 });\n    }\n  }`;
+          s=s.replace(anchor,block);
+          fs.writeFileSync('.remote-worker/worker.js',s);
+          NODE
+          node --check .remote-worker/worker.js
 
-      - name: Verify deployed PREVIEW Worker and public integration
-        shell: bash
-        working-directory: cloudflare/explore-worker
-        run: |
-          set -euo pipefail
+          stage_deployed=0
+          migration_done=0
+          rollback() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo '[Stage3 deploy] failure detected; recovery starting'
+              if [ "$migration_done" = "1" ]; then
+                cp .remote-worker/patched-clean.js .remote-worker/worker.js
+                npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc || true
+                echo '[Stage3 deploy] recovery target=patched clean Worker'
+              elif [ "$stage_deployed" = "1" ]; then
+                cp .remote-worker/original.js .remote-worker/worker.js
+                npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc || true
+                echo '[Stage3 deploy] recovery target=original Worker'
+              fi
+            fi
+            exit "$status"
+          }
+          trap rollback EXIT
+
+          echo '[Stage3 deploy] deploying short-lived patched migration version'
+          npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc
+          stage_deployed=1
+          sleep 2
+          migrate_code="$(curl -sS -o /tmp/stage3-migrate.json -w '%{http_code}' -H "X-SORIDRAW-Migrate: ${migrate_token}" -X POST "${PREVIEW_BASE}/__soridraw_stage3_migrate")"
+          cat /tmp/stage3-migrate.json
+          test "$migrate_code" = "200"
+          grep -q '"ok":true' /tmp/stage3-migrate.json
+          grep -q '"triggerCount":0' /tmp/stage3-migrate.json
+          migration_done=1
+          echo '[Stage3 deploy] PREVIEW D1 schema + trigger cleanup PASS'
+
+          cp .remote-worker/patched-clean.js .remote-worker/worker.js
+          echo '[Stage3 deploy] deploying clean patched Worker'
+          npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc
+          sleep 2
+
           node <<'NODE'
           const fs=require('fs');
           const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
           async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);return x.result||x;}
           (async()=>{
             const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;
-            let active=null;
-            for(let i=0;i<12;i++){
-              const deps=await get(`${base}/deployments`); const d=(deps.deployments||deps||[])[0];
-              active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
-              if(active?.version_id&&Number(active.percentage||0)>=99.99)break;
-              await new Promise(r=>setTimeout(r,2500));
-            }
-            if(!active?.version_id)throw new Error('active deployed version missing');
+            const deps=await get(`${base}/deployments`); const d=(deps.deployments||deps||[])[0];
+            const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(!active?.version_id||Number(active.percentage||0)<99.99)throw new Error('active final version missing');
             const before=fs.readFileSync('.remote-worker/before-version.txt','utf8').trim();
-            if(active.version_id===before)throw new Error('PREVIEW Worker active version did not change');
+            if(active.version_id===before)throw new Error('active PREVIEW version did not change');
             const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);
             const mods=ver.modules||[];const main=mods.find(m=>m.name===(ver.main_module||mods[0]?.name))||mods[0];const src=Buffer.from(main.content_base64,'base64').toString('utf8');
             for(const marker of ['SORIDRAW_PUBLICATION_SINGLE_R2_BUNDLE_014_20260905','SORIDRAW_PUBLICATION_SHARE_BUNDLE_V1_015_20260905','SORIDRAW_PUBLICATION_SINGLE_WRITE_HOTPATH_016_20260905','SORIDRAW_PUBLICATION_MUTATION_COMPANIONS_017_20260905'])if(!src.includes(marker))throw new Error('deployed marker missing '+marker);
+            if(src.includes('SORIDRAW_STAGE3_TEMP_MIGRATION_ENDPOINT_20260905'))throw new Error('temporary migration endpoint still deployed');
             console.log(`[Stage3 deploy] active after=${active.version_id}`);
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
@@ -213,14 +164,13 @@ jobs:
           feed_code="$(curl -sS -o /tmp/feed.json -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=1")"
           test "$feed_code" = "200"
           grep -q '"data"' /tmp/feed.json
-
           genres_code="$(curl -sS -o /tmp/genres.json -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/genres")"
           test "$genres_code" = "200"
           grep -q '"data"' /tmp/genres.json
-
           auth_code="$(curl -sS -o /tmp/pub401.json -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" -H 'Content-Type: application/json' -X POST --data '{}' "${PREVIEW_BASE}/v1/publications")"
           test "$auth_code" = "401"
-
           site_code="$(curl -sS -o /tmp/site.html -w '%{http_code}' "${PREVIEW_ORIGIN}")"
           test "$site_code" = "200"
           echo '[Stage3 deploy] PREVIEW public smoke PASS'
+
+          trap - EXIT

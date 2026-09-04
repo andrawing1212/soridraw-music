@@ -11,8 +11,8 @@ if (source.includes(marker)) {
   console.log('[011] profile edge storage TTL already applied.');
   process.exit(0);
 }
-if (!source.includes('SORIDRAW_EXPLORE_R2_PROFILE_FOLLOW_BUNDLES_010_20260904')) {
-  throw new Error('011 requires patch 010 on active PREVIEW Worker.');
+if (!source.includes('readExploreProfileR2Bundle')) {
+  throw new Error('011 requires the active R2 public-profile path.');
 }
 
 const functionRange = (name) => {

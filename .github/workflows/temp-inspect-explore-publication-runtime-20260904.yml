@@ -6,7 +6,7 @@ on:
     paths: ['.github/workflows/temp-inspect-explore-publication-runtime-20260904.yml']
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   ACCOUNT: e1a30fc9ef497fda1d34f4ab3dc1da45
@@ -26,16 +26,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Inspect active PREVIEW Worker publication source mapping
+      - name: Inspect active PREVIEW Worker publication/feed core
         run: |
           set -euo pipefail
-          node <<'NODE'
+          mkdir -p .deploy
+          node <<'NODE' > .deploy/explore-runtime-inspection-20260904.json
           const A=process.env.ACCOUNT,W=process.env.WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
           async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,'Content-Type':'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,600)}`);return x.result||x}
           function extractFunction(src,name){
             const needles=[`async function ${name}(`,`function ${name}(`]; let start=-1; for(const n of needles){start=src.indexOf(n);if(start>=0)break;} if(start<0)return null;
             const brace=src.indexOf('{',start); let d=0,q=null,e=false;
-            for(let i=brace;i<src.length;i++){const c=src[i]; if(q){if(e){e=false;continue} if(c==='\\'){e=true;continue} if(c===q)q=null; continue;} if(c==='"'||c==="'"||c==='`'){q=c;continue} if(c==='{')d++; if(c==='}'&&--d===0)return src.slice(start,i+1);}
+            for(let i=brace;i<src.length;i++){const c=src[i],n=src[i+1]; if(q){if(e){e=false;continue} if(c==='\\'){e=true;continue} if(c===q)q=null; continue;} if(c==='"'||c==="'"||c==='`'){q=c;continue} if(c==='/'&&n==='/'){const z=src.indexOf('\n',i);i=z<0?src.length:z;continue} if(c==='/'&&n==='*'){const z=src.indexOf('*/',i+2);i=z<0?src.length:z+1;continue} if(c==='{')d++; if(c==='}'&&--d===0)return src.slice(start,i+1);}
             return null;
           }
           (async()=>{
@@ -45,9 +46,39 @@ jobs:
             const ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`);
             const mod=(ver.modules||[]).find(m=>(m.name||'')==='worker.js')||(ver.modules||[])[0]; if(!mod)throw new Error('worker module missing');
             const src=Buffer.from(mod.content_base64,'base64').toString('utf8');
-            console.log('ACTIVE_VERSION='+v.version_id);
-            for(const name of ['resolvePublicationSource','mapTrackRow','requireExploreAuth','upsertPublicProfileFromFirebase','mapPublicProfileRow','readPublicProfileR2Bundle']){
-              const f=extractFunction(src,name); console.log(`\n===== ${name} =====\n`+(f||'MISSING'));
-            }
+            const names=['handlePublicationR2Core','handlePublication','handleVisibilityR2Core','handleVisibility','handlePublicationOptionsR2Core','handlePublicationOptions','handleFeedWithEdgeCacheD1Core','handleFeedWithEdgeCache','refreshExploreFeedR2Bundles','safelyRefreshExploreFeedR2Bundles','syncMusicNotePublicationR2AfterMutation'];
+            const fn=Object.fromEntries(names.map(n=>[n,extractFunction(src,n)]));
+            const summarize=(text)=>text?{
+              exists:true,
+              callsR2Core:text.includes('R2Core('),
+              callsFullFeedRefresh:text.includes('safelyRefreshExploreFeedR2Bundles')||text.includes('refreshExploreFeedR2Bundles'),
+              callsPublicationBundleSync:text.includes('syncMusicNotePublicationR2AfterMutation'),
+              readsFeedR2:text.includes('readExploreFeedR2Bundle'),
+              writesFeedR2:text.includes('writeExploreR2Json'),
+              queriesHandleFeed:text.includes('handleFeed('),
+              length:text.length
+            }:{exists:false};
+            const routeNeedle='url.pathname === "/v1/publications"'; const ix=src.indexOf(routeNeedle); const route=ix>=0?src.slice(Math.max(0,ix-900),ix+2200):'';
+            console.log(JSON.stringify({
+              activeVersion:v.version_id,
+              activePercent:Number(v.percentage||0),
+              markers:{
+                edge002:src.includes('SORIDRAW_EXPLORE_FEED_EDGE_CACHE_002'),
+                publicationR2_008:src.includes('SORIDRAW_MUSIC_NOTE_PUBLICATION_R2_BUNDLE_20260904'),
+                feedR2_009:src.includes('SORIDRAW_EXPLORE_R2_FEED_LIKE_BUNDLES_009_20260904')
+              },
+              functions:Object.fromEntries(names.map(n=>[n,summarize(fn[n])])),
+              router:{publicationFound:Boolean(route),invalidatesFeedEdge:route.includes('invalidateExploreFeedEdgeCache'),callsHandlePublication:route.includes('handlePublication(')},
+              sourceLength:src.length,
+              inspectedAt:new Date().toISOString()
+            },null,2));
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
+      - name: Commit inspection result
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add .deploy/explore-runtime-inspection-20260904.json
+          git commit -m 'chore(preview): record Explore publication runtime inspection'
+          git push origin HEAD:preview

@@ -56,8 +56,8 @@ jobs:
             const mods=ver.modules||[];if(!mods.length)throw new Error('No active modules');
             const mainName=ver.main_module||mods[0].name||'worker.js';const main=mods.find(m=>m.name===mainName)||mods[0];
             const src=Buffer.from(main.content_base64,'base64').toString('utf8');
-            for(const marker of ['SORIDRAW_PUBLICATION_SINGLE_R2_BUNDLE_014_20260905','SORIDRAW_PUBLICATION_SHARE_BUNDLE_V1_015_20260905','SORIDRAW_PUBLICATION_SINGLE_WRITE_HOTPATH_016_20260905','SORIDRAW_PUBLICATION_MUTATION_COMPANIONS_017_20260905']) {
-              if(!src.includes(marker)) throw new Error('Required deployed Stage3 marker missing: '+marker);
+            for(const fn of ['handleMusicNotePublicationSingleWrite016','publicationReadState016','invalidateExploreFeedEdgeCache','invalidatePublicProfileFirstViewEdgeCache','syncExploreFeedR2Publication012']) {
+              if(!src.includes(fn)) throw new Error('Required active Stage3 runtime missing: '+fn);
             }
             fs.writeFileSync('.remote-worker/original.js',src);
             fs.writeFileSync('.remote-worker/worker.js',src);

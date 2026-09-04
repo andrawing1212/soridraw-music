@@ -15,7 +15,9 @@ import {
 // SORIDRAW_PROFILE_REVISION_SWR_1000
 // SORIDRAW_PROFILE_REVISION_PREVIEW_DEPLOY_1001
 // SORIDRAW_PROFILE_EVENT_DRIVEN_CACHE_1003
-const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 2;
+// SORIDRAW_PROFILE_CACHE_SWR_1020
+const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 3;
+const PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS = 60_000;
 const PROFILE_FIRST_VIEW_SOURCE_TYPE = 'explore_profile_first_view';
 const PROFILE_FIRST_VIEW_LIMIT = 50;
 const PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH = '/v1/profiles/:id/first-view';
@@ -41,6 +43,7 @@ type MaterializedRequestResult =
   | { kind: 'unavailable' };
 
 const coldLoadInflight = new Map<string, Promise<ExploreProfileFirstViewData>>();
+const profileRevalidationInflight = new Map<string, Promise<void>>();
 
 const normalizeProfileRef = (value: string) => String(value || '').trim();
 const cacheKeyForRef = (profileRef: string) => `explore-profile-first-view:${normalizeProfileRef(profileRef).toLowerCase()}`;
@@ -272,7 +275,7 @@ export const patchExplorePublicProfileFirstViewTrack = (
 
 export const getExplorePublicProfileFirstView = async (
   profileRef: string,
-  _options: ExploreProfileFirstViewOptions = {},
+  options: ExploreProfileFirstViewOptions = {},
 ): Promise<ExploreProfileFirstViewData> => {
   const normalizedRef = normalizeProfileRef(profileRef);
   if (!normalizedRef) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
@@ -281,8 +284,43 @@ export const getExplorePublicProfileFirstView = async (
   if (cached) {
     recordCloudflareLocalCacheHit(
       PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH,
-      'LOCAL HIT · 변경 이벤트 전까지 서버 읽기 0',
+      'LOCAL HIT · 서버 D1 읽기 0',
     );
+
+    const ageMs = Math.max(0, Date.now() - Number(cached.validatedAt || 0));
+    const revalidationKey = normalizedRef.toLowerCase();
+    if (ageMs >= PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS && !profileRevalidationInflight.has(revalidationKey)) {
+      const task = (async () => {
+        try {
+          const materialized = await requestMaterializedFirstView(normalizedRef, cached.revision);
+          if (materialized.kind === 'updated') {
+            writeCache(normalizedRef, materialized.data);
+            options.onRevalidated?.(materialized.data);
+            return;
+          }
+          if (materialized.kind === 'not-modified') {
+            writeCache(normalizedRef, {
+              ...cached,
+              revision: materialized.revision || cached.revision,
+              etag: materialized.etag || cached.etag,
+              validatedAt: Date.now(),
+            });
+            return;
+          }
+          if (materialized.kind === 'not-found') {
+            clearCache(normalizedRef, cached);
+            options.onInvalidated?.(materialized.message);
+            return;
+          }
+          writeCache(normalizedRef, { ...cached, validatedAt: Date.now() });
+        } catch (error) {
+          console.warn('[Explore profile first-view] background revision check failed; keeping local cache.', error);
+        }
+      })().finally(() => {
+        if (profileRevalidationInflight.get(revalidationKey) === task) profileRevalidationInflight.delete(revalidationKey);
+      });
+      profileRevalidationInflight.set(revalidationKey, task);
+    }
     return cached;
   }
 

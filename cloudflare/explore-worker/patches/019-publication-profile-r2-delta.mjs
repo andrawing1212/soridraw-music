@@ -143,20 +143,20 @@ replaceFunction('invalidatePublicationProfileCaches017', `async function invalid
 
 replaceOnceInFunction(
   'handleMusicNotePublicationSingleWrite016',
-  "  await invalidatePublicationProfileCaches017(request, env, authContext.uid, profile?.handle || '');",
+  '  await invalidatePublicationProfileCaches017(request, env, authContext.uid, profile?.handle || "");',
   `  await patchExploreProfileR2Mutation019(env, authContext.uid, {
     trackId: source.id,
     item: feedItem,
     remove: false,
     trackCountDelta: wasPublic ? 0 : 1
   });
-  await invalidatePublicationProfileCaches017(request, env, authContext.uid, profile?.handle || '');`,
+  await invalidatePublicationProfileCaches017(request, env, authContext.uid, profile?.handle || "");`,
   'publish profile R2 delta',
 );
 
 replaceOnceInFunction(
   'handleMusicNotePrivate017',
-  "  await invalidatePublicationProfileCaches017(request, env, authContext.uid, row.profile_handle || '');",
+  '  await invalidatePublicationProfileCaches017(request, env, authContext.uid, row.profile_handle || "");',
   `  if (changed) {
     await patchExploreProfileR2Mutation019(env, authContext.uid, {
       trackId: row.id,
@@ -164,14 +164,14 @@ replaceOnceInFunction(
       trackCountDelta: -1
     });
   }
-  await invalidatePublicationProfileCaches017(request, env, authContext.uid, row.profile_handle || '');`,
+  await invalidatePublicationProfileCaches017(request, env, authContext.uid, row.profile_handle || "");`,
   'private profile R2 delta',
 );
 
 replaceOnceInFunction(
   'handleMusicNotePublicationOptions017',
   `  if (changed && Number(row.profile_pinned || 0) !== next.profilePinned) {
-    await invalidatePublicationProfileCaches017(request, env, authContext.uid, row.profile_handle || '');
+    await invalidatePublicationProfileCaches017(request, env, authContext.uid, row.profile_handle || "");
   }`,
   `  if (changed) {
     await patchExploreProfileR2Mutation019(env, authContext.uid, {
@@ -184,7 +184,7 @@ replaceOnceInFunction(
         profilePinned: next.profilePinned === 1
       }
     });
-    await invalidatePublicationProfileCaches017(request, env, authContext.uid, row.profile_handle || '');
+    await invalidatePublicationProfileCaches017(request, env, authContext.uid, row.profile_handle || "");
   }`,
   'option profile R2 delta',
 );

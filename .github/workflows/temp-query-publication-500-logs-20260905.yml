@@ -1,0 +1,58 @@
+name: SORIDRAW Query Publication 500 Logs PREVIEW 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-query-publication-500-logs-20260905.yml']
+permissions:
+  contents: read
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Query recent PREVIEW Worker errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_API_TOKEN;
+          const now=Date.now();
+          const body={
+            queryId:'soridraw-stage3-publication-500-adhoc',
+            timeframe:{from:now-30*60*1000,to:now},
+            dry:true,
+            limit:500,
+            view:'events',
+            parameters:{
+              datasets:[],
+              filterCombination:'and',
+              filters:[{key:'$metadata.service',operation:'eq',type:'string',value:'soridraw-explore-preview'}]
+            }
+          };
+          (async()=>{
+            const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/observability/telemetry/query`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
+            const text=await r.text();
+            console.log(`[observability] HTTP=${r.status}`);
+            if(!r.ok){console.log(text.slice(0,5000));process.exit(2)}
+            const x=JSON.parse(text);const events=x?.result?.events||[];
+            console.log(`[observability] events=${events.length}`);
+            const picked=events.filter((e)=>{
+              const m=e?.$metadata||{};const s=JSON.stringify(e);
+              return Number(m.statusCode||m.responseStatus||0)>=500 || m.error || /Explore API|INTERNAL_ERROR|D1_ERROR|SQLITE|constraint|publication|stage3/i.test(s);
+            }).slice(0,120);
+            for(const e of picked){
+              const m=e?.$metadata||{};
+              console.log('\n--- EVENT ---');
+              console.log(JSON.stringify({timestamp:e?.timestamp||m?.timestamp||null,level:e?.level||m?.level||null,message:e?.message||m?.message||null,error:m?.error||e?.error||null,statusCode:m?.statusCode||m?.responseStatus||null,requestId:m?.requestId||m?.$workers?.requestId||null,workers:m?.$workers||null,source:e?.source||null},null,2).slice(0,12000));
+            }
+            if(!picked.length){
+              console.log('[observability] no picked errors; sample keys:');
+              for(const e of events.slice(0,5)) console.log(JSON.stringify(e).slice(0,3000));
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE

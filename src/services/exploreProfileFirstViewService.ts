@@ -16,7 +16,8 @@ import {
 // SORIDRAW_PROFILE_REVISION_PREVIEW_DEPLOY_1001
 // SORIDRAW_PROFILE_EVENT_DRIVEN_CACHE_1003
 // SORIDRAW_PROFILE_CACHE_SWR_1020
-const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 3;
+// SORIDRAW_PROFILE_ALIAS_PARITY_020
+const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 4;
 const PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS = 60_000;
 const PROFILE_FIRST_VIEW_SOURCE_TYPE = 'explore_profile_first_view';
 const PROFILE_FIRST_VIEW_LIMIT = 50;
@@ -96,6 +97,7 @@ const writeCache = (profileRef: string, data: ExploreProfileFirstViewData) => {
   const refs = new Set<string>([
     normalizeProfileRef(profileRef),
     normalizedData.profile.uid,
+    normalizedData.profile.handle || '',
     normalizedData.profile.handle ? `@${normalizedData.profile.handle}` : '',
   ].filter(Boolean));
   refs.forEach((ref) => {
@@ -122,6 +124,7 @@ const clearCache = (profileRef: string, cached?: ExploreProfileFirstViewData | n
   const refs = new Set<string>([
     normalizeProfileRef(profileRef),
     cached?.profile?.uid || '',
+    cached?.profile?.handle || '',
     cached?.profile?.handle ? `@${cached.profile.handle}` : '',
   ].filter(Boolean));
   refs.forEach((ref) => removeSoridrawPersistentCache(cacheKeyForRef(ref), null));
@@ -223,6 +226,7 @@ export const invalidateExplorePublicProfileFirstView = (profileRef: string) => {
   const refs = new Set<string>([
     normalizedRef,
     cached?.profile?.uid || '',
+    cached?.profile?.handle || '',
     cached?.profile?.handle ? `@${cached.profile.handle}` : '',
   ].filter(Boolean));
   clearCache(normalizedRef, cached);
@@ -233,11 +237,13 @@ export const rememberExplorePublicProfileFirstViewProfile = (profile: ExplorePub
   const normalizedUid = normalizeProfileRef(profile.uid);
   if (!normalizedUid) return;
   const cached = readCache(normalizedUid)
+    || (profile.handle ? readCache(profile.handle) : null)
     || (profile.handle ? readCache(`@${profile.handle}`) : null);
   if (!cached) return;
   const previousHandle = normalizeProfileRef(cached.profile.handle).replace(/^@+/, '');
   const nextHandle = normalizeProfileRef(profile.handle).replace(/^@+/, '');
   if (previousHandle && previousHandle.toLowerCase() !== nextHandle.toLowerCase()) {
+    removeSoridrawPersistentCache(cacheKeyForRef(previousHandle), null);
     removeSoridrawPersistentCache(cacheKeyForRef(`@${previousHandle}`), null);
   }
   writeCache(normalizedUid, { ...cached, profile });

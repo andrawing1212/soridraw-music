@@ -1,0 +1,40 @@
+name: SORIDRAW Audit Refresh Read Decouple 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-audit-refresh-read-decouple-20260905.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: preview }
+      - name: Inspect root user listener and Music Note sync coupling
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          s=Path('src/App.tsx').read_text(encoding='utf-8')
+          needles=['const attachUserRoleListener','applyFavoriteSyncSignal','favoriteSyncSignal','attachUserRoleListener();','// Fetch favorites for the user.','onAuthStateChanged(auth']
+          for n in needles:
+              print('\n===== '+n+' =====')
+              start=0; count=0
+              while True:
+                  i=s.find(n,start)
+                  if i<0: break
+                  count+=1
+                  a=max(0,i-2200); b=min(len(s),i+4200)
+                  print(f'--- OCCURRENCE {count} @ {i} ---')
+                  print(s[a:b])
+                  start=i+len(n)
+                  if count>=6: break
+              print('COUNT',count)
+          PY
+      - name: Inspect measured Firestore user reads and profile cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -RIn --exclude-dir=node_modules -E "users:onSnapshot|doc\(db, ['\"]users|onSnapshot\(.*user|readUserProfileCache|USER_PROFILE_CACHE" src | head -n 240 || true

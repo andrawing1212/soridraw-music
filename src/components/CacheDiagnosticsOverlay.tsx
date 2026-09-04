@@ -88,6 +88,7 @@ const formatNumber = (value: number | undefined) => new Intl.NumberFormat('ko-KR
 const getCloudflarePathLabel = (path: string) => {
   if (path === '/v1/feed') return '피드';
   if (path === '/v1/me/likes') return '좋아요 상태';
+  if (path === '/v1/me/following-bundle') return '팔로우 상태 묶음';
   if (path === '/v1/me/publications') return '뮤직노트 공개상태';
   if (path === '/v1/me/music-note-publications-bundle') return '뮤직노트 공개상태';
   if (path === '/v1/tracks/:id/like') return '좋아요 변경';

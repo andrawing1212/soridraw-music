@@ -1,0 +1,36 @@
+name: SORIDRAW Inspect Explore Hotpaths 2026-09-04
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-inspect-explore-hotpaths-20260904.yml']
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ACCOUNT: e1a30fc9ef497fda1d34f4ab3dc1da45
+      WORKER: soridraw-explore-preview
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: preview }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Inspect active worker hotpaths
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const A=process.env.ACCOUNT,W=process.env.WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
+          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,500)}`);return x.result||x}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;
+            const ds=await g(`${base}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            const ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`),m=(ver.modules||[]).find(x=>x.name===ver.main_module)||(ver.modules||[])[0];
+            const src=Buffer.from(m.content_base64,'base64').toString('utf8');
+            console.log('ACTIVE_VERSION='+v.version_id+' bytes='+src.length);
+            for(const needle of ['/v1/feed','/v1/me/likes','function handleFeed','function handleMyLikeStates','function handleLike','function handlePublication','function handleVisibility','/visibility']){
+              let from=0,count=0; console.log('\n=== '+needle+' ===');
+              while(count<4){const i=src.indexOf(needle,from);if(i<0)break; console.log(src.slice(Math.max(0,i-1200),Math.min(src.length,i+2600))); from=i+needle.length; count++;}
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE

@@ -24,7 +24,7 @@ jobs:
           const now=Date.now();
           const body={
             queryId:'soridraw-stage3-publication-500-adhoc',
-            timeframe:{from:now-30*60*1000,to:now},
+            timeframe:{from:now-45*60*1000,to:now},
             dry:true,
             limit:500,
             view:'events',
@@ -38,21 +38,28 @@ jobs:
             const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/observability/telemetry/query`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
             const text=await r.text();
             console.log(`[observability] HTTP=${r.status}`);
-            if(!r.ok){console.log(text.slice(0,5000));process.exit(2)}
-            const x=JSON.parse(text);const events=x?.result?.events||[];
-            console.log(`[observability] events=${events.length}`);
+            if(!r.ok){console.log(text.slice(0,12000));process.exit(2)}
+            const x=JSON.parse(text);const result=x?.result||{};
+            console.log('[observability] result keys='+Object.keys(result).join(','));
+            console.log('[observability] events raw type='+typeof result.events+' array='+Array.isArray(result.events));
+            if(!Array.isArray(result.events)) console.log(JSON.stringify(result.events,null,2).slice(0,12000));
+            let events=[];
+            if(Array.isArray(result.events)) events=result.events;
+            else if(Array.isArray(result.events?.events)) events=result.events.events;
+            else if(Array.isArray(result.events?.data)) events=result.events.data;
+            else if(Array.isArray(result.invocations)) events=result.invocations;
+            console.log(`[observability] normalized events=${events.length}`);
             const picked=events.filter((e)=>{
               const m=e?.$metadata||{};const s=JSON.stringify(e);
-              return Number(m.statusCode||m.responseStatus||0)>=500 || m.error || /Explore API|INTERNAL_ERROR|D1_ERROR|SQLITE|constraint|publication|stage3/i.test(s);
-            }).slice(0,120);
+              return Number(m.statusCode||m.responseStatus||0)>=500 || m.error || /Explore API|INTERNAL_ERROR|D1_ERROR|SQLITE|constraint|publication|stage3|500/i.test(s);
+            }).slice(0,150);
             for(const e of picked){
-              const m=e?.$metadata||{};
               console.log('\n--- EVENT ---');
-              console.log(JSON.stringify({timestamp:e?.timestamp||m?.timestamp||null,level:e?.level||m?.level||null,message:e?.message||m?.message||null,error:m?.error||e?.error||null,statusCode:m?.statusCode||m?.responseStatus||null,requestId:m?.requestId||m?.$workers?.requestId||null,workers:m?.$workers||null,source:e?.source||null},null,2).slice(0,12000));
+              console.log(JSON.stringify(e,null,2).slice(0,20000));
             }
             if(!picked.length){
-              console.log('[observability] no picked errors; sample keys:');
-              for(const e of events.slice(0,5)) console.log(JSON.stringify(e).slice(0,3000));
+              console.log('[observability] no picked errors; sample events:');
+              for(const e of events.slice(0,10)) console.log(JSON.stringify(e).slice(0,5000));
             }
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE

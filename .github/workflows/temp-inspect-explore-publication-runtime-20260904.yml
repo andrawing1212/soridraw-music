@@ -10,7 +10,8 @@ permissions:
 
 env:
   ACCOUNT: e1a30fc9ef497fda1d34f4ab3dc1da45
-  WORKER: soridraw-explore-preview
+  DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+  FEED_URL: https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=40
 
 jobs:
   inspect:
@@ -26,59 +27,35 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Inspect active PREVIEW Worker publication/feed core
+      - name: Inspect live PREVIEW D1 and latest Explore feed
         run: |
           set -euo pipefail
           mkdir -p .deploy
-          node <<'NODE' > .deploy/explore-runtime-inspection-20260904.json
-          const A=process.env.ACCOUNT,W=process.env.WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
-          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,'Content-Type':'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,600)}`);return x.result||x}
-          function extractFunction(src,name){
-            const needles=[`async function ${name}(`,`function ${name}(`]; let start=-1; for(const n of needles){start=src.indexOf(n);if(start>=0)break;} if(start<0)return null;
-            const brace=src.indexOf('{',start); let d=0,q=null,e=false;
-            for(let i=brace;i<src.length;i++){const c=src[i],n=src[i+1]; if(q){if(e){e=false;continue} if(c==='\\'){e=true;continue} if(c===q)q=null; continue;} if(c==='"'||c==="'"||c==='`'){q=c;continue} if(c==='/'&&n==='/'){const z=src.indexOf('\n',i);i=z<0?src.length:z;continue} if(c==='/'&&n==='*'){const z=src.indexOf('*/',i+2);i=z<0?src.length:z+1;continue} if(c==='{')d++; if(c==='}'&&--d===0)return src.slice(start,i+1);}
-            return null;
+          node <<'NODE' > .deploy/explore-live-publication-inspection-20260904.json
+          const A=process.env.ACCOUNT,DB=process.env.DB_ID,T=process.env.CLOUDFLARE_API_TOKEN,FEED=process.env.FEED_URL;
+          async function cfQuery(sql,params=[]){
+            const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${DB}/query`,{method:'POST',headers:{Authorization:`Bearer ${T}`,'Content-Type':'application/json'},body:JSON.stringify({sql,params})});
+            const x=await r.json(); if(!r.ok||x.success===false) throw new Error(`D1 ${r.status}: ${JSON.stringify(x).slice(0,800)}`);
+            const result=Array.isArray(x.result)?x.result[0]:x.result; return Array.isArray(result?.results)?result.results:[];
+          }
+          async function feed(){
+            const r=await fetch(FEED,{headers:{Origin:'https://preview.soridraw.com',Accept:'application/json','Cache-Control':'no-cache'}}); const text=await r.text(); let x={}; try{x=JSON.parse(text)}catch{};
+            if(!r.ok) throw new Error(`feed ${r.status}: ${text.slice(0,800)}`);
+            const items=Array.isArray(x?.data?.items)?x.data.items:[];
+            return {status:r.status,cache:r.headers.get('x-soridraw-cache')||r.headers.get('cf-cache-status')||null,count:items.length,match:items.filter(i=>String(i?.title||'').includes('골목길 탐험대')).map(i=>({id:i.id,title:i.title,publishedAt:i.publishedAt||i.published_at,ownerUid:i.ownerUid||i.owner_uid})),top10:items.slice(0,10).map(i=>({id:i.id,title:i.title,publishedAt:i.publishedAt||i.published_at}))};
           }
           (async()=>{
-            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;
-            const ds=await g(`${base}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
-            if(!v?.version_id)throw new Error('active version missing');
-            const ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`);
-            const mod=(ver.modules||[]).find(m=>(m.name||'')==='worker.js')||(ver.modules||[])[0]; if(!mod)throw new Error('worker module missing');
-            const src=Buffer.from(mod.content_base64,'base64').toString('utf8');
-            const names=['handlePublicationR2Core','handlePublication','handleVisibilityR2Core','handleVisibility','handlePublicationOptionsR2Core','handlePublicationOptions','handleFeedWithEdgeCacheD1Core','handleFeedWithEdgeCache','refreshExploreFeedR2Bundles','safelyRefreshExploreFeedR2Bundles','syncMusicNotePublicationR2AfterMutation'];
-            const fn=Object.fromEntries(names.map(n=>[n,extractFunction(src,n)]));
-            const summarize=(text)=>text?{
-              exists:true,
-              callsR2Core:text.includes('R2Core('),
-              callsFullFeedRefresh:text.includes('safelyRefreshExploreFeedR2Bundles')||text.includes('refreshExploreFeedR2Bundles'),
-              callsPublicationBundleSync:text.includes('syncMusicNotePublicationR2AfterMutation'),
-              readsFeedR2:text.includes('readExploreFeedR2Bundle'),
-              writesFeedR2:text.includes('writeExploreR2Json'),
-              queriesHandleFeed:text.includes('handleFeed('),
-              length:text.length
-            }:{exists:false};
-            const routeNeedle='url.pathname === "/v1/publications"'; const ix=src.indexOf(routeNeedle); const route=ix>=0?src.slice(Math.max(0,ix-900),ix+2200):'';
-            console.log(JSON.stringify({
-              activeVersion:v.version_id,
-              activePercent:Number(v.percentage||0),
-              markers:{
-                edge002:src.includes('SORIDRAW_EXPLORE_FEED_EDGE_CACHE_002'),
-                publicationR2_008:src.includes('SORIDRAW_MUSIC_NOTE_PUBLICATION_R2_BUNDLE_20260904'),
-                feedR2_009:src.includes('SORIDRAW_EXPLORE_R2_FEED_LIKE_BUNDLES_009_20260904')
-              },
-              functions:Object.fromEntries(names.map(n=>[n,summarize(fn[n])])),
-              router:{publicationFound:Boolean(route),invalidatesFeedEdge:route.includes('invalidateExploreFeedEdgeCache'),callsHandlePublication:route.includes('handlePublication(')},
-              sourceLength:src.length,
-              inspectedAt:new Date().toISOString()
-            },null,2));
+            const rows=await cfQuery(`SELECT t.id,t.owner_uid,t.source_type,t.source_id,t.title,t.is_public,t.status,t.published_at,p.is_public AS profile_is_public,p.nickname FROM tracks t LEFT JOIN public_profiles p ON p.uid=t.owner_uid WHERE t.title LIKE ? ORDER BY t.published_at DESC LIMIT 20`,['%골목길 탐험대%']);
+            const allRecent=await cfQuery(`SELECT id,title,is_public,status,published_at FROM tracks WHERE source_type='music_note' ORDER BY published_at DESC LIMIT 10`);
+            const latest=await feed();
+            console.log(JSON.stringify({inspectedAt:new Date().toISOString(),d1Matches:rows,recentMusicNoteTracks:allRecent,latestFeed:latest},null,2));
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-      - name: Commit inspection result
+      - name: Commit live inspection result
         run: |
           set -euo pipefail
           git config user.name 'andrawing1212'
           git config user.email 'andrawing1212@gmail.com'
-          git add .deploy/explore-runtime-inspection-20260904.json
-          git commit -m 'chore(preview): record Explore publication runtime inspection'
+          git add .deploy/explore-live-publication-inspection-20260904.json
+          git commit -m 'chore(preview): record live Explore publication state'
           git push origin HEAD:preview

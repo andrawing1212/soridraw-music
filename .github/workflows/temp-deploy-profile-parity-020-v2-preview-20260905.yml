@@ -1,0 +1,111 @@
+name: SORIDRAW Deploy Profile Parity 020 v2 PREVIEW 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-deploy-profile-parity-020-v2-preview-20260905.yml']
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+      PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_R2: soridraw-profile-media-preview
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+      PROFILE_REF: SORIDRAW
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Safety guard, TypeScript and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-no-unbounded-user-song-bootstrap.mjs
+          grep -Fq 'SORIDRAW_PROFILE_ALIAS_PARITY_020' src/services/exploreProfileFirstViewService.ts
+          grep -Fq 'PROFILE_FIRST_VIEW_SCHEMA_VERSION = 4' src/services/exploreProfileFirstViewService.ts
+          npm ci
+          npx tsc --noEmit
+          npm run build
+
+      - name: Patch exact active PREVIEW Worker and deploy with rollback
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false wrangler@4.102.0
+          rm -rf .remote-worker && mkdir .remote-worker
+          node <<'NODE'
+          const fs=require('fs');const A=process.env.CLOUDFLARE_ACCOUNT_ID,N=process.env.PREVIEW_WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
+          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status+' '+JSON.stringify(x).slice(0,900));return x.result||x}
+          (async()=>{const b=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;const ds=await g(b+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];if(!a?.version_id)throw Error('active version missing');fs.writeFileSync('.remote-worker/before.txt',a.version_id);const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');if(!s.includes('patchExploreProfileR2Mutation019'))throw Error('active patch019 missing');fs.writeFileSync('.remote-worker/original.js',s);fs.writeFileSync('.remote-worker/worker.js',s);const set=await g(b+'/settings');const c={name:N,main:'./worker.js',compatibility_date:String(set.compatibility_date||'2026-09-04').slice(0,10),workers_dev:true,keep_vars:true,d1_databases:[{binding:'DB',database_name:process.env.PREVIEW_DB_NAME,database_id:process.env.PREVIEW_DB_ID}],r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.PREVIEW_R2}],observability:set.observability&&typeof set.observability==='object'?{enabled:set.observability.enabled!==false}:{enabled:true}};if(Array.isArray(set.compatibility_flags)&&set.compatibility_flags.length)c.compatibility_flags=set.compatibility_flags;fs.writeFileSync('.remote-worker/wrangler.jsonc',JSON.stringify(c,null,2));console.log('WORKER_BEFORE='+a.version_id)})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/020-profile-r2-alias-bounded-repair.mjs
+          node --check .remote-worker/worker.js
+          node <<'NODE'
+          const fs=require('fs'),s=fs.readFileSync('.remote-worker/worker.js','utf8');
+          function f(n){let p=s.indexOf('async function '+n+'(');if(p<0)p=s.indexOf('function '+n+'(');if(p<0)throw Error('missing '+n);const b=s.indexOf('{',p);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(p,i+1)}throw Error('unterminated '+n)}
+          const h=f('handlePublicProfileFirstViewWithEdgeCache'),r=f('rebuildExploreProfileR2Bounded020'),sync=f('syncExploreProfileR2FromD1');
+          if(h.includes('handlePublicProfileFirstViewWithEdgeCacheR2Core')||h.includes('handlePublicProfileFirstViewSnapshot')||h.includes('materializePublicProfileFirstView'))throw Error('legacy first-view fallback reachable');
+          if(r.includes('env.DB.')||r.includes('materializePublicProfileFirstView'))throw Error('repair has direct/unbounded DB path');
+          if(!r.includes('readPublicProfileFirstViewTrackWindow'))throw Error('bounded first page missing');
+          if(sync.includes('public_profile_first_views'))throw Error('legacy D1 snapshot copied to R2');
+          if(!s.includes('__soridraw_profile_schema')||!s.includes('exploreProfileHandleAliasR2Key020'))throw Error('version/alias missing');
+          console.log('PATCH020_PREDEPLOY=PASS');
+          NODE
+          deployed=0
+          rollback(){ st=$?; if [ "$st" -ne 0 ] && [ "$deployed" = 1 ]; then echo 'ROLLBACK_WORKER=START'; cp .remote-worker/original.js .remote-worker/worker.js; npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc || true; fi; exit "$st"; }
+          trap rollback EXIT
+          npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc
+          deployed=1
+          sleep 3
+          node <<'NODE'
+          const fs=require('fs'),A=process.env.CLOUDFLARE_ACCOUNT_ID,N=process.env.PREVIEW_WORKER,T=process.env.CLOUDFLARE_API_TOKEN;async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status);return x.result||x}(async()=>{const b=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,ds=await g(b+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0],before=fs.readFileSync('.remote-worker/before.txt','utf8');if(!a?.version_id||a.version_id===before)throw Error('worker version unchanged');const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');if(!s.includes('rebuildExploreProfileR2Bounded020')||!s.includes('exploreProfileHandleAliasR2Key020'))throw Error('patch020 missing after deploy');console.log('WORKER_AFTER='+a.version_id)})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+          code="$(curl -sS -D /tmp/profile-head -H "Origin: $PREVIEW_ORIGIN" -o /tmp/profile.json -w '%{http_code}' "$PREVIEW_BASE/v1/profiles/$PROFILE_REF/first-view?limit=50")"
+          test "$code" = '200'
+          curl -fsS -D /tmp/profile2-head -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/profiles/$PROFILE_REF/first-view?limit=50" -o /tmp/profile2.json
+          curl -fsS -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=latest&limit=100" -o /tmp/feed.json
+          node <<'NODE'
+          const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/profile.json','utf8')),p2=JSON.parse(fs.readFileSync('/tmp/profile2.json','utf8')),f=JSON.parse(fs.readFileSync('/tmp/feed.json','utf8'));
+          const d=p?.data||{},d2=p2?.data||{};const profile=d.profile||{};const items=Array.isArray(d.items)?d.items:[];const items2=Array.isArray(d2.items)?d2.items:[];const uid=String(profile.uid||'');const feed=Array.isArray(f?.data?.items)?f.data.items:[];const owner=x=>String(x?.ownerUid||x?.owner_uid||x?.owner?.uid||x?.profile?.uid||'');const owned=feed.filter(x=>owner(x)===uid);const ids=a=>a.map(x=>String(x?.id||x?.trackId||'')).filter(Boolean).sort();
+          console.log(`PROFILE_PARITY profileCount=${profile.trackCount} profileItems=${items.length} second=${items2.length} feedOwner=${owned.length} repairVersion=${d.repairVersion}`);
+          if(!uid)throw Error('profile uid missing');
+          if(Number(profile.trackCount)!==6||items.length!==6||items2.length!==6||owned.length!==6)throw Error('SORIDRAW profile/feed count parity is not 6');
+          if(JSON.stringify(ids(items))!==JSON.stringify(ids(owned)))throw Error('profile/feed song id parity mismatch');
+          if(Number(d.repairVersion||0)<2)throw Error('bounded repair version missing');
+          NODE
+          echo 'FIRST_PROFILE_HEADERS:'; grep -iE '^(x-soridraw-d1|x-soridraw-r2|x-soridraw-profile|etag:)' /tmp/profile-head || true
+          echo 'SECOND_PROFILE_HEADERS:'; grep -iE '^(x-soridraw-d1|x-soridraw-r2|x-soridraw-profile|etag:)' /tmp/profile2-head || true
+          trap - EXIT
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW Hosting and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          for host in soridraw-preview.web.app preview.soridraw.com; do
+            ok=''; for i in $(seq 1 18); do if curl -fsS --max-time 30 "https://$host/" -o "/tmp/${host//./_}.html" && grep -q '<div id="root"></div>' "/tmp/${host//./_}.html"; then ok=1; break; fi; sleep 5; done; test "$ok" = 1;
+          done
+          a="$(grep -oE 'src="/assets/index-[^"]+\.js"' /tmp/soridraw-preview_web_app.html | head -n1)"; b="$(grep -oE 'src="/assets/index-[^"]+\.js"' /tmp/preview_soridraw_com.html | head -n1)"; test -n "$a"; test "$a" = "$b";
+          echo "PREVIEW_ASSET=$a"
+          echo 'FIREBASE_PREVIEW=PASS'
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'MAIN_CHANGED=false'

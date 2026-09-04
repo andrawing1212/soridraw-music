@@ -1,14 +1,20 @@
-name: SORIDRAW Inspect Publication Stage3 2026-09-05
+name: SORIDRAW Validate Publication Stage3 2026-09-05
 on:
   push:
     branches: [preview]
-    paths: ['.github/workflows/temp-inspect-publication-stage3-20260905.yml']
+    paths:
+      - '.github/workflows/temp-inspect-publication-stage3-20260905.yml'
+      - 'cloudflare/explore-worker/patches/014-publication-single-r2-bundle.mjs'
+      - 'cloudflare/explore-worker/patches/015-publication-share-bundle-v1.mjs'
+      - 'cloudflare/explore-worker/patches/016-publication-single-write-hotpath.mjs'
+      - 'cloudflare/explore-worker/migrations/20260905_public_share_bundle_v1.sql'
+      - 'cloudflare/explore-worker/migrations/20260905_publication_hotpath_primary_genre.sql'
 permissions:
   contents: read
 jobs:
-  inspect:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
@@ -17,29 +23,43 @@ jobs:
       - uses: actions/checkout@v4
         with: { ref: preview, fetch-depth: 2 }
       - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - name: Inspect exact active PREVIEW publication write path
+        with: { node-version: 22, cache: npm }
+
+      - name: Validate Stage3 schema locally
         shell: bash
         run: |
           set -euo pipefail
+          python3 <<'PY'
+          import sqlite3
+          from pathlib import Path
+          db=sqlite3.connect(':memory:')
+          db.execute('''CREATE TABLE tracks(
+            id TEXT PRIMARY KEY,
+            owner_uid TEXT,
+            is_public INTEGER NOT NULL DEFAULT 0,
+            status TEXT,
+            published_at INTEGER,
+            title TEXT
+          )''')
+          db.executescript(Path('cloudflare/explore-worker/migrations/20260905_public_share_bundle_v1.sql').read_text())
+          db.executescript(Path('cloudflare/explore-worker/migrations/20260905_publication_hotpath_primary_genre.sql').read_text())
+          cols={row[1] for row in db.execute('PRAGMA table_info(tracks)')}
+          assert {'share_schema_version','share_payload_json','primary_genre'} <= cols
+          indexes={row[1] for row in db.execute('PRAGMA index_list(tracks)')}
+          assert 'idx_tracks_public_primary_genre' in indexes
+          print('[Stage3] local schema PASS share bundle + primary genre index')
+          PY
+
+      - name: Fetch exact active PREVIEW Worker and dry-run patches 014-016
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          rm -rf .remote-worker && mkdir -p .remote-worker
           node <<'NODE'
+          const fs=require('fs'),path=require('path');
           const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
           async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);return x.result||x;}
-          function functions(src){
-            const out=[]; const re=/(async\s+)?function\s+([A-Za-z0-9_$]+)\s*\(/g; let m;
-            while((m=re.exec(src))){
-              const start=m.index, brace=src.indexOf('{', re.lastIndex); if(brace<0) continue;
-              let depth=0,quote=null,escaped=false,end=-1;
-              for(let i=brace;i<src.length;i++){
-                const c=src[i];
-                if(quote){if(escaped){escaped=false;continue;} if(c==='\\'){escaped=true;continue;} if(c===quote)quote=null;continue;}
-                if(c==='"'||c==="'"||c==='`'){quote=c;continue;}
-                if(c==='{')depth++; else if(c==='}'&&--depth===0){end=i+1;break;}
-              }
-              if(end>start) out.push({name:m[2],text:src.slice(start,end)});
-            }
-            return out;
-          }
           (async()=>{
             const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;
             const deps=await get(`${base}/deployments`); const d=(deps.deployments||deps||[])[0];
@@ -48,12 +68,53 @@ jobs:
             const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);
             const mods=ver.modules||[]; if(!mods.length)throw new Error('No active modules');
             const mainName=ver.main_module||mods[0].name||'worker.js'; const main=mods.find(m=>m.name===mainName)||mods[0];
-            const src=Buffer.from(main.content_base64,'base64').toString('utf8');
-            const fns=functions(src); const byName=new Map(fns.map(f=>[f.name,f.text]));
-            console.log(`[Stage3 audit] active=${active.version_id} functions=${fns.length}`);
-            const wanted=['readPublicProfileFirstViewRow','writePublicProfileFirstViewSnapshotR2Core','publicProfileFirstViewR2Key','readExploreR2Json','writeExploreR2Json','syncExploreProfileR2FromD1','handlePublicProfileFirstView','readPublicProfileFirstViewR2','writePublicProfileFirstViewR2'];
-            for(const n of wanted){console.log(`\n===== ${n} =====\n${byName.get(n)||'[MISSING]'}\n===== END ${n} =====`);}
-            console.log('\n===== FUNCTIONS CONTAINING first-view/r2 profile keys =====');
-            for(const f of fns){if(/firstView|first-view|FIRST_VIEW|profile.*R2|R2.*profile/i.test(f.text)) console.log(`\n--- ${f.name} ---\n${f.text}`);}
+            fs.writeFileSync(path.join('.remote-worker','worker.js'),Buffer.from(main.content_base64,'base64'));
+            console.log(`[Stage3] active=${active.version_id} main=${mainName}`);
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/014-publication-single-r2-bundle.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/015-publication-share-bundle-v1.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/016-publication-single-write-hotpath.mjs
+          node --check .remote-worker/worker.js
+
+      - name: Assert Stage3 hot-path invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          node <<'NODE'
+          const fs=require('fs');const s=fs.readFileSync('.remote-worker/worker.js','utf8');
+          function fn(name){
+            const needles=[`async function ${name}(`,`function ${name}(`];let start=-1;
+            for(const n of needles){start=s.indexOf(n);if(start>=0)break;}
+            if(start<0)throw new Error(`missing function ${name}`);
+            const brace=s.indexOf('{',start);let depth=0,quote=null,escaped=false;
+            for(let i=brace;i<s.length;i++){const c=s[i];if(quote){if(escaped){escaped=false;continue;}if(c==='\\'){escaped=true;continue;}if(c===quote)quote=null;continue;}if(c==='"'||c==="'"||c==='`'){quote=c;continue;}if(c==='{')depth++;else if(c==='}'&&--depth===0)return s.slice(start,i+1);}throw new Error(`unterminated ${name}`);
+          }
+          for(const token of [
+            'SORIDRAW_PUBLICATION_SINGLE_WRITE_HOTPATH_016_20260905',
+            'primary_genre',
+            "mutation: unchanged ? 'idempotent' : 'written'",
+            'D1 rebuild intentionally skipped',
+            'handlePublicationR2CoreLegacy016'
+          ]) if(!s.includes(token)) throw new Error(`missing ${token}`);
+          const hot=fn('handleMusicNotePublicationSingleWrite016');
+          for(const forbidden of ['enforceUserRateLimit(','track_stats (','track_tags','applyPublicationOptions(','refreshPublicationTrackSearchIndex013(','refreshOrPrebuildPublicProfileTrackWindow(','safelyRefreshExploreFeedR2Bundles(']) {
+            if(hot.includes(forbidden)) throw new Error(`hot-path forbidden ${forbidden}`);
+          }
+          if((hot.match(/INSERT INTO tracks/g)||[]).length!==1) throw new Error('canonical tracks write is not exactly one statement');
+          const feed=fn('syncExploreFeedR2Publication012');
+          if(feed.includes('safelyRefreshExploreFeedR2Bundles')) throw new Error('publication feed still has D1 rebuild fallback');
+          if(!fn('handleTrackApplySource').includes('shareBundleTags016')) throw new Error('apply route does not use share bundle');
+          if(!fn('handleTrackDetail').includes('shareBundleTags016')) throw new Error('detail route does not use share bundle');
+          if(!fn('handleGenreTracks').includes('primary_genre')) throw new Error('genre tracks route missing canonical genre');
+          if(!fn('handleGenres').includes('primary_genre')) throw new Error('genres route missing canonical genre');
+          console.log('[Stage3] invariants PASS: Music Note one canonical track write, no sync D1 rebuild/tag/stats/FTS writes');
+          NODE
+
+      - name: App TypeScript and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build

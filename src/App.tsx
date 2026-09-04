@@ -120,12 +120,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { buildPreviewSongIntent, renderPreviewCards } from './services/songPreviewEngine';
 import { favoritesStore, useFavorites, useIsSongFavorited } from './hooks/useFavoritesStore';
-import {
-  readUserProfileCache,
-  readUserProfileServerVerifiedAt,
-  writeUserProfileCache,
-  writeUserProfileServerVerifiedAt,
-} from './lib/userProfileCache';
+import { readUserProfileCache, writeUserProfileCache } from './lib/userProfileCache';
 import StudioPageFrame from './components/studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/StudioLeftRail';
 import StudioRightRail from './components/studio/StudioRightRail';
@@ -8962,7 +8957,6 @@ const toggleCycleVariantSelection = (
           if (docSnap.exists()) {
             const data = docSnap.data();
             writeUserProfileCache(currentUser.uid, data);
-            writeUserProfileServerVerifiedAt(currentUser.uid);
             const recentSongsVersion = Number(data?.syncVersions?.recentSongs || 0);
             if (recentSongsVersion > 0 && typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_VERSION_EVENT, {
@@ -9099,63 +9093,7 @@ const toggleCycleVariantSelection = (
           });
         };
 
-        // SORIDRAW_ROOT_USER_REFRESH_ZERO_1020
-        // Hard refresh is not a data mutation and must not bill one users/{uid}
-        // read every time. Hydrate the last server-verified user document locally,
-        // then reattach the live listener only after a short persistent lease.
-        // Privileged backend operations remain server/rules enforced; this cache is
-        // only the current client's UI/sync hydration source during the lease.
-        const cachedUserProfileForRefresh = readUserProfileCache(currentUser.uid) as any;
-        const USER_PROFILE_SERVER_REVERIFY_MS = 5 * 60 * 1000;
-        const verifiedAt = readUserProfileServerVerifiedAt(currentUser.uid);
-        const verifiedAgeMs = verifiedAt > 0 ? Math.max(0, Date.now() - verifiedAt) : Number.POSITIVE_INFINITY;
-
-        if (cachedUserProfileForRefresh) {
-          const cachedVerifiedRole = (cachedUserProfileForRefresh.role || cachedRole?.role || 'free') as UserRole;
-          setUserRole(cachedVerifiedRole);
-          setStaffRole(normalizeStaffRole(cachedUserProfileForRefresh));
-          setAdminPermissions(normalizeAdminPermissions(cachedUserProfileForRefresh));
-          setIsUserRoleReady(true);
-          setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser, cachedUserProfileForRefresh));
-          setIsEmailVerificationCycleReady(true);
-          setUserLyricClicheGuard({
-            hardBanTerms: Array.isArray(cachedUserProfileForRefresh.lyricClicheGuard?.hardBanTerms)
-              ? cachedUserProfileForRefresh.lyricClicheGuard.hardBanTerms
-              : [],
-            softBanTerms: Array.isArray(cachedUserProfileForRefresh.lyricClicheGuard?.softBanTerms)
-              ? cachedUserProfileForRefresh.lyricClicheGuard.softBanTerms
-              : [],
-          });
-          writeGeminiAutoModelFallback(cachedUserProfileForRefresh.generationPreferences?.autoModelFallback !== false, currentUser.uid);
-          setIsUserLyricClicheGuardReady(true);
-          applyFavoriteSyncSignal(currentUser.uid, cachedUserProfileForRefresh.favoriteSyncSignal);
-          if (cachedUserProfileForRefresh.accountStatus) {
-            const cachedStatus = cachedUserProfileForRefresh.accountStatus as AccountStatus;
-            setUserStatus(cachedStatus);
-            if (cachedStatus === 'banned') setIsBanModalOpen(true);
-          }
-          if (shouldProcessForceLogout(cachedUserProfileForRefresh, currentUser)) {
-            hasCompletedForceLogoutReentryCheckRef.current = true;
-            void performForcedLogout({ silent: true });
-          }
-        }
-
-        if (cachedUserProfileForRefresh && verifiedAgeMs < USER_PROFILE_SERVER_REVERIFY_MS) {
-          // A server-verified profile is already on this device. Repeated reloads in
-          // this lease stay at Firestore read 0; one live listener resumes when the
-          // lease expires and then receives only real changes.
-          hasVerifiedCurrentUserRoleFromServerRef.current = true;
-          if (!hasCompletedForceLogoutReentryCheckRef.current) {
-            hasCompletedForceLogoutReentryCheckRef.current = true;
-          }
-          const remainingMs = Math.max(1_000, USER_PROFILE_SERVER_REVERIFY_MS - verifiedAgeMs);
-          userRoleRetryTimer = window.setTimeout(() => {
-            userRoleRetryTimer = null;
-            attachUserRoleListener();
-          }, remainingMs);
-        } else {
-          attachUserRoleListener();
-        }
+        attachUserRoleListener();
 
         // Fetch favorites for the user.
         // A cache is trusted only when both its UID-scoped schema and payload are

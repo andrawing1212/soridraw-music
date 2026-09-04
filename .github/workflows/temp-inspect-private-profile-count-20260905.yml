@@ -1,4 +1,4 @@
-name: SORIDRAW Inspect Private Cost Profile Count Refresh 2026-09-05
+name: SORIDRAW Inspect App Listener Tail 2026-09-05
 on:
   push:
     branches: [preview]
@@ -8,62 +8,16 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
-      PREVIEW_WORKER: soridraw-explore-preview
-      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
-      SOUL_UID: 99rbjBuypFUkWELPbZ9uUDoqEna2
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with: { ref: preview, fetch-depth: 2 }
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - name: Inspect current App user-profile listener
+      - name: Inspect listener tail
         shell: bash
         run: |
           set -euo pipefail
           python3 <<'PY'
           from pathlib import Path
-          text=Path('src/App.tsx').read_text(encoding='utf-8')
-          lines=text.splitlines()
-          for a,b in [(8880,9055)]:
-              print(f'===== App.tsx {a}-{b} =====')
-              for i in range(a-1,min(b,len(lines))): print(f'{i+1:05d}: {lines[i]}')
+          lines=Path('src/App.tsx').read_text(encoding='utf-8').splitlines()
+          for i in range(9047,min(9145,len(lines))): print(f'{i+1:05d}: {lines[i]}')
           PY
-      - name: Inspect active Worker profile R2 and first-view route
-        shell: bash
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
-          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1000)}`);return x.result||x;}
-          function functions(src){const out=[];const re=/(async\s+)?function\s+([A-Za-z0-9_$]+)\s*\(/g;let m;while((m=re.exec(src))){const st=m.index,b=src.indexOf('{',re.lastIndex);if(b<0)continue;let d=0,q=null,e=false,end=-1;for(let i=b;i<src.length;i++){const c=src[i];if(q){if(e){e=false;continue;}if(c==='\\'){e=true;continue;}if(c===q)q=null;continue;}if(c==='"'||c==="'"||c==='`'){q=c;continue;}if(c==='{')d++;else if(c==='}'&&--d===0){end=i+1;break;}}if(end>st)out.push({name:m[2],text:src.slice(st,end)});}return out;}
-          (async()=>{
-            const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;
-            const deps=await get(`${base}/deployments`);const d=(deps.deployments||deps||[])[0];const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];console.log('[active]',active.version_id);
-            const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);const mods=ver.modules||[];const main=mods.find(m=>m.name===(ver.main_module||mods[0]?.name))||mods[0];const src=Buffer.from(main.content_base64,'base64').toString('utf8');const fns=functions(src);
-            console.log('===== PROFILE/FIRSTVIEW/R2 FUNCTION NAMES =====');
-            for(const f of fns){if(/profile|firstview|first_view|r2/i.test(f.name) && /profile|first/i.test(f.name)) console.log(f.name)}
-            console.log('===== RELEVANT FUNCTION BODIES =====');
-            for(const f of fns){if(/(handle.*First|read.*First|write.*First|readExploreProfile|writeExploreProfile|syncExploreProfile|resolvePublicProfileRef)/i.test(f.name)) console.log(`\n===== ${f.name} =====\n${f.text}`)}
-            const lines=src.split('\n');
-            console.log('===== ROUTE CONTEXT =====');
-            lines.forEach((line,i)=>{if(line.includes('segments[3] === "first-view"')){for(let j=Math.max(0,i-12);j<Math.min(lines.length,i+18);j++)console.log(`${j+1}: ${lines[j]}`)}});
-          })().catch(e=>{console.error(e);process.exit(1)});
-          NODE
-      - name: Compare current public profile count with Explore feed for Soulforce
-        shell: bash
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          const base=process.env.PREVIEW_BASE, uid=process.env.SOUL_UID;
-          async function j(path){const r=await fetch(base+path,{headers:{Origin:'https://preview.soridraw.com'}});const text=await r.text();let x=null;try{x=JSON.parse(text)}catch{};console.log(path,'HTTP',r.status,'D1R',r.headers.get('X-SORIDRAW-D1-Reads'),'D1W',r.headers.get('X-SORIDRAW-D1-Writes'),'R2A',r.headers.get('X-SORIDRAW-R2-Class-A'),'R2B',r.headers.get('X-SORIDRAW-R2-Class-B'));return {r,x,text};}
-          const getItems=x=>Array.isArray(x?.data?.items)?x.data.items:Array.isArray(x?.items)?x.items:[];
-          const ownerUid=item=>String(item?.ownerUid||item?.owner?.uid||item?.owner_uid||'');
-          (async()=>{
-            const {r:pr,x:px}=await j(`/v1/profiles/${encodeURIComponent(uid)}/first-view?limit=50`);if(pr.ok){const items=getItems(px);const count=px?.data?.profile?.trackCount??px?.data?.trackCount??px?.profile?.trackCount??null;console.log('[profile-first-view] trackCount=',count,'items=',items.length,'revision=',pr.headers.get('X-SORIDRAW-Profile-Revision'),'etag=',pr.headers.get('ETag'));}
-            const {r,x}=await j('/v1/feed?sort=latest&limit=100');if(r.ok){const items=getItems(x);const owned=items.filter(it=>ownerUid(it)===uid);console.log('[feed] total=',items.length,'soulforce=',owned.length);}
-          })().catch(e=>{console.error(e);process.exit(1)});
-          NODE

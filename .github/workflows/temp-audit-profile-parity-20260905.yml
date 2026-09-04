@@ -1,0 +1,76 @@
+name: SORIDRAW Audit Public Profile Parity 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-audit-profile-parity-20260905.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Audit PREVIEW profile and feed without private or unbounded reads
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://soridraw-explore-preview.andrawing1212.workers.dev'
+          origin='https://preview.soridraw.com'
+          ref='SORIDRAW.'
+          enc='SORIDRAW.'
+          curl -fsS -D /tmp/profile-head -H "Origin: $origin" "$base/v1/profiles/$enc/first-view?limit=50" -o /tmp/profile.json
+          node <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync('/tmp/profile.json','utf8'));
+          const d=p?.data||{};
+          const profile=d.profile||d.snapshot?.profile||{};
+          const items=Array.isArray(d.items)?d.items:Array.isArray(d.snapshot?.items)?d.snapshot.items:[];
+          console.log('PROFILE_HANDLE='+String(profile.handle||''));
+          console.log('PROFILE_UID_PRESENT='+Boolean(profile.uid));
+          console.log('PROFILE_TRACK_COUNT_FIELD='+String(profile.trackCount ?? profile.track_count ?? ''));
+          console.log('PROFILE_ITEMS_LENGTH='+items.length);
+          console.log('PROFILE_ITEM_IDS='+items.map(x=>String(x?.id||x?.trackId||'')).filter(Boolean).join(','));
+          console.log('PROFILE_REVISION='+String(d.revision ?? d.snapshot?.revision ?? ''));
+          fs.writeFileSync('/tmp/profile-uid',String(profile.uid||''));
+          NODE
+          uid="$(cat /tmp/profile-uid)"
+          test -n "$uid"
+          curl -fsS -H "Origin: $origin" "$base/v1/profiles/$uid/first-view?limit=50" -o /tmp/profile-uid.json
+          curl -fsS -H "Origin: $origin" "$base/v1/feed?sort=latest&limit=40" -o /tmp/feed.json
+          UID_VALUE="$uid" node <<'NODE'
+          const fs=require('fs');
+          const uid=process.env.UID_VALUE;
+          const byHandle=JSON.parse(fs.readFileSync('/tmp/profile.json','utf8'))?.data||{};
+          const byUid=JSON.parse(fs.readFileSync('/tmp/profile-uid.json','utf8'))?.data||{};
+          const items=(d)=>Array.isArray(d.items)?d.items:Array.isArray(d.snapshot?.items)?d.snapshot.items:[];
+          const h=items(byHandle), u=items(byUid);
+          const feedJson=JSON.parse(fs.readFileSync('/tmp/feed.json','utf8'));
+          const feed=Array.isArray(feedJson?.data?.items)?feedJson.data.items:Array.isArray(feedJson?.items)?feedJson.items:[];
+          const owned=feed.filter(x=>String(x?.ownerUid||x?.owner_uid||x?.profile?.uid||'')===uid);
+          console.log('PROFILE_HANDLE_ITEMS='+h.length);
+          console.log('PROFILE_UID_ITEMS='+u.length);
+          console.log('PROFILE_ALIAS_IDS_EQUAL='+ (h.map(x=>x.id||x.trackId).join('|')===u.map(x=>x.id||x.trackId).join('|')));
+          console.log('FEED_OWNER_ITEMS_IN_LATEST40='+owned.length);
+          console.log('FEED_OWNER_IDS='+owned.map(x=>String(x?.id||x?.trackId||'')).join(','));
+          NODE
+          echo 'PROFILE_HEADERS:'
+          grep -iE '^(HTTP/|etag:|x-soridraw-profile-revision:|x-soridraw-cache:|x-soridraw-d1)' /tmp/profile-head || true
+      - name: Verify source has no automatic unbounded Music Note recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          s=Path('src/App.tsx').read_text(encoding='utf-8')
+          marker='const runFavoritesFullCacheRecoveryOnce = async () => {'
+          pos=s.find(marker)
+          if pos < 0: raise SystemExit('Music Note recovery guard anchor missing')
+          end=s.find('};', pos)
+          body=s[pos:end+2]
+          if 'getDocs(' in body or "collection(db, 'favorites')" in body or 'collection(db, "favorites")' in body:
+              raise SystemExit('FORBIDDEN: automatic Music Note full collection recovery detected')
+          print('NO_UNBOUNDED_MUSIC_NOTE_RECOVERY=PASS')
+          PY

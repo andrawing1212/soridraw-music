@@ -51,11 +51,9 @@ jobs:
             const src=Buffer.from(main.content_base64,'base64').toString('utf8');
             const fns=functions(src); const byName=new Map(fns.map(f=>[f.name,f.text]));
             console.log(`[Stage3 audit] active=${active.version_id} functions=${fns.length}`);
-            const wanted=['handlePublicationR2Core','enforceUserRateLimit','applyPublicationOptions','getOrEnsurePublicationOwnerProfile013','upsertPublicProfileFromFirebase','refreshProfileSearchIndex','syncExploreFeedR2Publication012','refreshOrPrebuildPublicProfileTrackWindow','readOrMaterializePublicProfileFirstView','materializePublicProfileFirstView','refreshPublicProfileFirstViewTrackWindow','writePublicProfileFirstViewSnapshot','invalidatePublicProfileFirstViewEdgeCache','syncMusicNotePublicationR2AfterMutation','refreshPublicationTrackSearchIndex013','adjustExploreLikeCounterDelta','refreshLikeCount','refreshCommentCount'];
+            const wanted=['readPublicProfileFirstViewRow','writePublicProfileFirstViewSnapshotR2Core','publicProfileFirstViewR2Key','readExploreR2Json','writeExploreR2Json','syncExploreProfileR2FromD1','handlePublicProfileFirstView','readPublicProfileFirstViewR2','writePublicProfileFirstViewR2'];
             for(const n of wanted){console.log(`\n===== ${n} =====\n${byName.get(n)||'[MISSING]'}\n===== END ${n} =====`);}
-            for(const needle of ['play_count','track_tags']){
-              console.log(`\n===== FUNCTIONS CONTAINING ${needle} =====`);
-              for(const f of fns){if(f.text.includes(needle)) console.log(`\n--- ${f.name} ---\n${f.text}`);}
-            }
+            console.log('\n===== FUNCTIONS CONTAINING first-view/r2 profile keys =====');
+            for(const f of fns){if(/firstView|first-view|FIRST_VIEW|profile.*R2|R2.*profile/i.test(f.text)) console.log(`\n--- ${f.name} ---\n${f.text}`);}
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE

@@ -353,7 +353,7 @@ const MUSIC_NOTE_DEVICE_ID_STORAGE_KEY = 'soridraw_music_note_device_id_v1';
 const MUSIC_NOTE_SYNC_VERSION_EVENT = 'soridraw:music-note-sync-version';
 const musicNoteFreshBootstrapUids = new Set<string>();
 
-const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '3';
+const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '4'; // SORIDRAW_MUSIC_NOTE_EMPTY_CACHE_RECOVERY_1021
 const MUSIC_NOTE_CACHE_SCHEMA_STORAGE_BASE = 'soridraw_music_note_cache_schema_v3';
 let musicNoteActiveUiUid: string | null = null;
 

@@ -51,7 +51,7 @@ const cachePut = '    await cache.put(key, response.clone());';
 if (!fn.includes(cachePut)) throw new Error('011 expected R2 cache.put anchor missing.');
 fn = fn.replace(
   cachePut,
-  `    const edgeStoredHeaders = new Headers(response.headers);\n    edgeStoredHeaders.set('Cache-Control', \\`public, max-age=\\${PUBLIC_PROFILE_FIRST_VIEW_EDGE_TTL_SECONDS}, s-maxage=\\${PUBLIC_PROFILE_FIRST_VIEW_EDGE_TTL_SECONDS}\\`);\n    const edgeStored = new Response(response.clone().body, { status: response.status, statusText: response.statusText, headers: edgeStoredHeaders });\n    await cache.put(key, edgeStored);`
+  "    const edgeStoredHeaders = new Headers(response.headers);\n    edgeStoredHeaders.set('Cache-Control', 'public, max-age=' + PUBLIC_PROFILE_FIRST_VIEW_EDGE_TTL_SECONDS + ', s-maxage=' + PUBLIC_PROFILE_FIRST_VIEW_EDGE_TTL_SECONDS);\n    const edgeStored = new Response(response.clone().body, { status: response.status, statusText: response.statusText, headers: edgeStoredHeaders });\n    await cache.put(key, edgeStored);"
 );
 source = source.slice(0, range.start) + fn + source.slice(range.end);
 

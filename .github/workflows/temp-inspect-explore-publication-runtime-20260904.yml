@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Inspect active PREVIEW Worker publication freshness path
+      - name: Inspect active PREVIEW Worker publication/feed core
         run: |
           set -euo pipefail
           node <<'NODE'
@@ -46,10 +46,8 @@ jobs:
             const mod=(ver.modules||[]).find(m=>(m.name||'')==='worker.js')||(ver.modules||[])[0]; if(!mod)throw new Error('worker module missing');
             const src=Buffer.from(mod.content_base64,'base64').toString('utf8');
             console.log('ACTIVE_VERSION='+v.version_id);
-            for(const marker of ['SORIDRAW_EXPLORE_FEED_EDGE_CACHE_002','SORIDRAW_MUSIC_NOTE_PUBLICATION_R2_BUNDLE_20260904','SORIDRAW_EXPLORE_R2_FEED_LIKE_BUNDLES_009_20260904']) console.log(marker+'='+(src.includes(marker)?'YES':'NO'));
-            for(const name of ['handlePublication','handleVisibility','handlePublicationOptions','handleFeedWithEdgeCache','invalidateExploreFeedEdgeCache','safelyRefreshExploreFeedR2Bundles']){
+            for(const name of ['handlePublicationR2Core','handlePublication','handleFeed','handleFeedWithEdgeCacheD1Core','buildExploreFeedR2Payload','refreshExploreFeedR2Bundles','syncMusicNotePublicationR2AfterMutation']){
               const f=extractFunction(src,name); console.log(`\n===== ${name} =====\n`+(f||'MISSING'));
             }
-            const routeNeedle='url.pathname === "/v1/publications"'; const ix=src.indexOf(routeNeedle); console.log('\n===== publication router =====\n'+(ix>=0?src.slice(Math.max(0,ix-700),ix+1600):'MISSING'));
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE

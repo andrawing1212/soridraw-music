@@ -2,7 +2,9 @@ name: SORIDRAW Apply Stage3.2 Cost Cache Fixes 2026-09-05
 on:
   push:
     branches: [preview]
-    paths: ['.github/workflows/temp-apply-stage3-2-fixes-20260905.yml']
+    paths:
+      - '.github/workflows/temp-apply-stage3-2-fixes-20260905.yml'
+      - 'cloudflare/explore-worker/patches/019-publication-profile-r2-delta.mjs'
 permissions:
   contents: write
 jobs:
@@ -46,7 +48,7 @@ jobs:
           const fs=require('fs'),path=require('path');
           const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
           async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);return x.result||x;}
-          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;const deps=await get(`${base}/deployments`);const d=(deps.deployments||deps||[])[0];const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];if(!active?.version_id||Number(active.percentage||0)<99.99)throw new Error('No single active PREVIEW version');const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);const mods=ver.modules||[];const main=mods.find(m=>m.name===(ver.main_module||mods[0]?.name))||mods[0];const src=Buffer.from(main.content_base64,'base64').toString('utf8');if(!src.includes('handleMusicNotePublicationSingleWrite016')||!src.includes('Promise.allSettled'))throw new Error('Stage3.1 active runtime missing');fs.writeFileSync(path.join('.remote-worker','worker.js'),src);console.log('[Stage3.2] active PREVIEW',active.version_id);})().catch(e=>{console.error(e);process.exit(1)});
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;const deps=await get(`${base}/deployments`);const d=(deps.deployments||deps||[])[0];const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];if(!active?.version_id||Number(active.percentage||0)<99.99)throw new Error('No single active PREVIEW version');const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);const mods=ver.modules||[];const main=mods.find(m=>m.name===(ver.main_module||mods[0]?.name))||mods[0];const src=Buffer.from(main.content_base64,'base64').toString('utf8');if(!src.includes('handleMusicNotePublicationSingleWrite016')||!src.includes('Promise.allSettled')||!src.includes('env.DB.batch'))throw new Error('Stage3.1 active runtime behavior missing');fs.writeFileSync(path.join('.remote-worker','worker.js'),src);console.log('[Stage3.2] active PREVIEW',active.version_id);})().catch(e=>{console.error(e);process.exit(1)});
           NODE
           SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/019-publication-profile-r2-delta.mjs
           node --check .remote-worker/worker.js

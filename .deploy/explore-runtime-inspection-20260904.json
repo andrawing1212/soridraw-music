@@ -1,0 +1,128 @@
+{
+  "activeVersion": "095c8346-ce6c-48d5-9817-4bcc62f48f5c",
+  "activePercent": 100,
+  "markers": {
+    "edge002": false,
+    "publicationR2_008": false,
+    "feedR2_009": false
+  },
+  "functions": {
+    "handlePublicationR2Core": {
+      "exists": true,
+      "callsR2Core": true,
+      "callsFullFeedRefresh": false,
+      "callsPublicationBundleSync": true,
+      "readsFeedR2": false,
+      "writesFeedR2": false,
+      "queriesHandleFeed": false,
+      "length": 5201
+    },
+    "handlePublication": {
+      "exists": true,
+      "callsR2Core": true,
+      "callsFullFeedRefresh": true,
+      "callsPublicationBundleSync": false,
+      "readsFeedR2": false,
+      "writesFeedR2": false,
+      "queriesHandleFeed": false,
+      "length": 249
+    },
+    "handleVisibilityR2Core": {
+      "exists": true,
+      "callsR2Core": true,
+      "callsFullFeedRefresh": false,
+      "callsPublicationBundleSync": true,
+      "readsFeedR2": false,
+      "writesFeedR2": false,
+      "queriesHandleFeed": false,
+      "length": 2435
+    },
+    "handleVisibility": {
+      "exists": true,
+      "callsR2Core": true,
+      "callsFullFeedRefresh": true,
+      "callsPublicationBundleSync": false,
+      "readsFeedR2": false,
+      "writesFeedR2": false,
+      "queriesHandleFeed": false,
+      "length": 246
+    },
+    "handlePublicationOptionsR2Core": {
+      "exists": true,
+      "callsR2Core": true,
+      "callsFullFeedRefresh": false,
+      "callsPublicationBundleSync": true,
+      "readsFeedR2": false,
+      "writesFeedR2": false,
+      "queriesHandleFeed": false,
+      "length": 1800
+    },
+    "handlePublicationOptions": {
+      "exists": true,
+      "callsR2Core": true,
+      "callsFullFeedRefresh": true,
+      "callsPublicationBundleSync": false,
+      "readsFeedR2": false,
+      "writesFeedR2": false,
+      "queriesHandleFeed": false,
+      "length": 270
+    },
+    "handleFeedWithEdgeCacheD1Core": {
+      "exists": true,
+      "callsR2Core": false,
+      "callsFullFeedRefresh": false,
+      "callsPublicationBundleSync": false,
+      "readsFeedR2": false,
+      "writesFeedR2": false,
+      "queriesHandleFeed": true,
+      "length": 522
+    },
+    "handleFeedWithEdgeCache": {
+      "exists": true,
+      "callsR2Core": false,
+      "callsFullFeedRefresh": false,
+      "callsPublicationBundleSync": false,
+      "readsFeedR2": true,
+      "writesFeedR2": false,
+      "queriesHandleFeed": false,
+      "length": 851
+    },
+    "refreshExploreFeedR2Bundles": {
+      "exists": true,
+      "callsR2Core": false,
+      "callsFullFeedRefresh": true,
+      "callsPublicationBundleSync": false,
+      "readsFeedR2": false,
+      "writesFeedR2": true,
+      "queriesHandleFeed": false,
+      "length": 471
+    },
+    "safelyRefreshExploreFeedR2Bundles": {
+      "exists": true,
+      "callsR2Core": false,
+      "callsFullFeedRefresh": true,
+      "callsPublicationBundleSync": false,
+      "readsFeedR2": false,
+      "writesFeedR2": false,
+      "queriesHandleFeed": false,
+      "length": 315
+    },
+    "syncMusicNotePublicationR2AfterMutation": {
+      "exists": true,
+      "callsR2Core": false,
+      "callsFullFeedRefresh": false,
+      "callsPublicationBundleSync": true,
+      "readsFeedR2": false,
+      "writesFeedR2": false,
+      "queriesHandleFeed": false,
+      "length": 783
+    }
+  },
+  "router": {
+    "publicationFound": true,
+    "invalidatesFeedEdge": true,
+    "callsHandlePublication": true
+  },
+  "sourceLength": 538710,
+  "inspectedAt": "2026-09-04T10:05:46.616Z"
+}

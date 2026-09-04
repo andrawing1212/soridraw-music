@@ -34,6 +34,7 @@ const SORIDRAW_922_NO_UNBOUNDED_BOOTSTRAP_READS = true;
 const SORIDRAW_921_FIRESTORE_COST_HARDENING = true;
 const SORIDRAW_900_LIBRARY_SESSION_CACHE = true;
 // SORIDRAW_LIBRARY_STATUS_MONOTONIC_20260904
+// SORIDRAW_LIBRARY_ACTIVE_GENERATION_WINDOW_20260904
 const SORIDRAW_897_CACHE_DIAGNOSTICS_READ_ACCURACY = true;
 const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 
@@ -2941,6 +2942,43 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     });
   };
 
+  const getLibraryGenerationCreatedAtMs = (group: any): number => {
+    const createdAt = group?.createdAt;
+    if (!createdAt) return 0;
+    try {
+      if (typeof createdAt?.toMillis === 'function') return createdAt.toMillis();
+      if (typeof createdAt?.seconds === 'number') return createdAt.seconds * 1000;
+      if (typeof createdAt?._seconds === 'number') return createdAt._seconds * 1000;
+      if (typeof createdAt?.toDate === 'function') return createdAt.toDate().getTime();
+      if (typeof createdAt === 'string' || typeof createdAt === 'number') {
+        const parsed = new Date(createdAt).getTime();
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+    } catch {}
+    return 0;
+  };
+
+  const hasAnyPlayableLibraryOutput = (group: any): boolean => {
+    const items = extractSunoData(group);
+    const hasDirectOutput = items.some((item: any) => Boolean(String(getAudioUrl(item, group) || '').trim()));
+    if (hasDirectOutput) return true;
+    const rescueEntries = Object.values(group?.audioRescue || {}) as any[];
+    return rescueEntries.some((entry: any) => Boolean(String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim()));
+  };
+
+  // Only a genuinely recent pending task may be labelled `생성 중`.
+  // Old/cache-restored pending records are historical reconciliation states,
+  // not active generation. Missing timestamps are treated as non-active too.
+  const isLibraryActiveGeneration = (group: any): boolean => {
+    if (!group?.taskId) return false;
+    const status = String(group?.status || '').trim().toLowerCase();
+    if (!['processing', 'submitted', 'pending', 'generating', 'queued', 'queue', 'running', 'in_progress'].includes(status)) return false;
+    const createdAtMs = getLibraryGenerationCreatedAtMs(group);
+    if (!createdAtMs) return false;
+    const elapsedMs = Date.now() - createdAtMs;
+    return elapsedMs >= 0 && elapsedMs <= 10 * 60 * 1000;
+  };
+
   const isTrackStuck = (group: any) => {
     if (!group || !group.id) return false;
 
@@ -3730,8 +3768,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return Boolean(rescueUrl) && (!rescueStatus || ['completed', 'success', 'complete'].includes(rescueStatus));
     });
     const normalizedDisplayStatus = String(group.status || '').trim().toLowerCase();
-    const displayStatus = hasCompletedRescue
-      && ['processing', 'submitted', 'pending', 'generating', 'queued'].includes(normalizedDisplayStatus)
+    const isPendingDisplayStatus = ['processing', 'submitted', 'pending', 'generating', 'queued', 'queue', 'running', 'in_progress'].includes(normalizedDisplayStatus);
+    const hasAnyPlayableOutput = hasAnyPlayableLibraryOutput(group);
+    const displayStatus = isPendingDisplayStatus && !isLibraryActiveGeneration(group) && (hasCompletedRescue || hasAnyPlayableOutput)
       ? 'completed'
       : normalizedDisplayStatus;
     switch (displayStatus) {
@@ -3743,7 +3782,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       case 'processing':
       case 'submitted':
       case 'pending':
-        if (isTrackPastAutoCheckWindow(group)) {
+        if (!isLibraryActiveGeneration(group)) {
           badges.push(
             <span key="stale-processing" className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/12 text-amber-300">
               <RefreshCw className="w-3 h-3" />
@@ -7089,8 +7128,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       const canRecoverPlaybackUrl = !isSharedView && Boolean(group.taskId) && (isCompletedStatus || hasValidDuration || hasCompletedRescue);
                       const canPlayOrRecover = Boolean(audioUrl) || canRecoverPlaybackUrl;
                       const isCompletedWithoutAudio = isCompletedStatus && !audioUrl && !hasCompletedRescue;
-                      const isStalePending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && isTrackPastAutoCheckWindow(group);
-                      const isPending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && !isStalePending;
+                      const isActiveGeneration = isPendingStatus && isLibraryActiveGeneration(group);
+                      const isStalePending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && !isActiveGeneration;
+                      const isPending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && isActiveGeneration;
                       const sunoVersionLabel = getSunoModelVersionLabel(item, group);
                       const itemTitleParts = splitSunoDisplayTitleParts(getTitle(item, group, idx));
                       

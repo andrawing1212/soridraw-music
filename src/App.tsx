@@ -409,6 +409,7 @@ const getMusicNotePayloadCacheKey = (uid: string) => `soridraw_favorites_cache_$
 const SORIDRAW_MUSIC_NOTE_CACHE_INTEGRITY_1028 = true;
 const SORIDRAW_MUSIC_NOTE_NORMALIZATION_STAGE1_1030 = true;
 const SORIDRAW_MUSIC_NOTE_STAGE1_PAGE_SIZED_CACHE_REUSE_1030B = true;
+const SORIDRAW_MUSIC_NOTE_CLEAN_BOOTSTRAP_LEGACY_AXIS_1031 = true;
 
 const hasMusicNotePayloadCache = (uid: string): boolean => {
   if (!uid) return false;
@@ -9151,9 +9152,8 @@ const toggleCycleVariantSelection = (
         // trusted forever and hiding the user's saved songs. Once a full 20-item
         // page is cached, keep it: knownFavoriteCount only keeps More available for
         // older history and must not force the same latest 20 reads on every reload.
-        const musicNoteCacheNeedsBoundedVerification = !musicNoteCacheNeedsFullBootstrap
-          && hasAnyMusicNotePayload
-          && cachedFavoriteCount < FAVORITES_PAGE_SIZE;
+        const musicNoteCacheNeedsBoundedVerification = musicNoteCacheNeedsFullBootstrap
+          || (hasAnyMusicNotePayload && cachedFavoriteCount < FAVORITES_PAGE_SIZE);
         if (!musicNoteCacheNeedsFullBootstrap && hasAnyMusicNotePayload) {
           musicNoteFreshBootstrapUids.delete(currentUser.uid);
         } else {
@@ -9196,7 +9196,7 @@ const toggleCycleVariantSelection = (
             const fallbackSnapshot = await getDocs(query(
               collection(db, 'favorites'),
               where('uid', '==', currentUser.uid),
-              orderBy('createdAtMs', 'desc'),
+              orderBy('createdAt', 'desc'),
               limit(FAVORITES_PAGE_SIZE),
             ));
             const fallbackFavs = sortFavoriteList(
@@ -9253,11 +9253,13 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
         }
 
         const attachFavoritesSourceBootstrap902 = (allowCachedRepair = false) => {
-          if (unsubFavs || (!allowCachedRepair && hasCachedMusicNote) || musicNoteCacheNeedsFullBootstrap) return;
+          // 1031: a clean browser has no valid Music Note payload. That state must
+          // be allowed to perform exactly one bounded first-page bootstrap.
+          if (unsubFavs || (!allowCachedRepair && hasCachedMusicNote)) return;
           const q = query(
             collection(db, 'favorites'),
             where('uid', '==', currentUser.uid),
-            orderBy('createdAtMs', 'desc'),
+            orderBy('createdAt', 'desc'),
             limit(FAVORITES_PAGE_SIZE)
           );
 
@@ -9458,7 +9460,9 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
     const cursorData = cursorValue && typeof cursorValue?.data === 'function' ? cursorValue.data() : null;
     let cursorMs = cursorValue instanceof Date
       ? cursorValue.getTime()
-      : Number(cursorData?.createdAtMs || cursorValue?.createdAtMs || 0);
+      : Number(cursorData?.createdAtMs || cursorValue?.createdAtMs || 0)
+        || getTimestampMs(cursorData?.createdAt)
+        || getTimestampMs(cursorValue?.createdAt);
 
     if (!Number.isFinite(cursorMs) || cursorMs <= 0) {
       cursorMs = currentFavorites.reduce((oldest: number, favorite: any) => {
@@ -9482,8 +9486,8 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
       const snapshot = await getDocs(query(
         collection(db, 'favorites'),
         where('uid', '==', uid),
-        orderBy('createdAtMs', 'desc'),
-        startAfter(cursorMs),
+        orderBy('createdAt', 'desc'),
+        startAfter(new Date(cursorMs)),
         limit(FAVORITES_PAGE_SIZE),
       ));
       const docs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);

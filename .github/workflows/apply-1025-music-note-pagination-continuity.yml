@@ -1,0 +1,96 @@
+name: Apply 1025 Music Note Pagination Continuity
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/apply-1025-music-note-pagination-continuity.yml'
+      - '.deploy/apply-1025-music-note-pagination-continuity.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-1025-music-note-pagination-continuity
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Apply continuous Music Note pagination patch
+        run: python3 .deploy/apply-1025-music-note-pagination-continuity.py
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Production build
+        run: npm run build
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Verify regression guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          app = Path('src/App.tsx').read_text(encoding='utf-8')
+          fav = Path('src/pages/FavoritesPage.tsx').read_text(encoding='utf-8')
+
+          assert 'SORIDRAW_MUSIC_NOTE_PAGINATION_CONTINUITY_1025 = true' in app
+          assert "JSON.stringify({ version: 2, id: cursorId" in app
+          assert 'bundle.cursorCreatedAtMs > 0 ? new Date' not in app
+          assert 'totalFavoritesCount={favoriteTotalCount}' in app
+          assert '전체 ${musicNoteTotalCount}곡' in fav
+
+          match = re.search(
+              r"const loadMoreFavorites = useCallback\(async \(\) => \{(.*?)\n  \}, \[user, favoriteTotalCount\]\);",
+              app,
+              re.S,
+          )
+          assert match, 'loadMoreFavorites 1025 block not found'
+          block = match.group(1)
+          assert "orderBy('createdAt', 'desc')" in block
+          assert 'startAfter(scanCursor)' in block
+          assert "where('uid', '==', currentUser.uid)" in block
+          assert "favoritePaginationCursorRef.current = scanCursor" in block
+          print('1025 regression guards passed')
+          PY
+
+      - name: Verify changed scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short
+          changed="$(git diff --name-only)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/App\.tsx|src/pages/FavoritesPage\.tsx)$' || true)"
+          if [ -n "$bad" ]; then
+            echo "Unexpected files changed:"
+            echo "$bad"
+            exit 1
+          fi
+
+      - name: Commit patched source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo '1025 source is already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.tsx src/pages/FavoritesPage.tsx
+          git commit -m 'fix(music-note): restore continuous More pagination and total count'
+          git push origin HEAD:preview

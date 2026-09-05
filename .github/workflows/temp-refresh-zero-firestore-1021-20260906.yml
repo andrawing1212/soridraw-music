@@ -1,0 +1,81 @@
+name: SORIDRAW Refresh Zero Firestore 1021 2026-09-06
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-refresh-zero-firestore-1021-20260906.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 5
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply refresh-zero patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .deploy/apply-1021-refresh-zero-firestore-listeners.py
+          git diff --check
+
+      - name: Static cost-safety guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'SORIDRAW_ROOT_USER_REFRESH_ZERO_1021' src/App.tsx
+          grep -Fq 'subscribeUserControlRevision(' src/App.tsx
+          grep -Fq 'subscribeMusicNoteStructureCache(uid' src/pages/FavoritesPage.tsx
+          grep -Fq 'getDocFromCache(ref)' src/services/musicNoteStructureCache.ts
+          if grep -Fq "targetSession.unsubscribe = onSnapshot(" src/pages/FavoritesPage.tsx; then
+            echo 'Billed user_structures onSnapshot still present' >&2
+            exit 11
+          fi
+          if grep -Fq "        attachUserRoleListener();" src/App.tsx && grep -Fq "// Fetch favorites for the user." src/App.tsx; then
+            python3 - <<'PY'
+          from pathlib import Path
+          s=Path('src/App.tsx').read_text(encoding='utf-8')
+          bad="        attachUserRoleListener();\n\n        // Fetch favorites for the user."
+          if bad in s:
+              raise SystemExit('Unconditional root users listener remains')
+          PY
+          fi
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit source-only implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add \
+            src/App.tsx \
+            src/pages/FavoritesPage.tsx \
+            src/services/musicNoteStructureCache.ts \
+            src/services/userDomainSyncService.ts \
+            src/data/v1MutationBoundary.ts
+          git diff --cached --check
+          git commit -m 'fix(cost): make refresh Firestore reads cache-driven'
+          git push origin HEAD:preview

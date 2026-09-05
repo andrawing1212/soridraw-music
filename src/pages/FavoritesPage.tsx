@@ -893,7 +893,6 @@ export default function FavoritesPage({
   onLongPressEnd,
   isFavoritesLoading = false,
   hasMoreFavorites = false,
-  totalFavoritesCount = null,
   isLoadingMoreFavorites = false,
   onLoadMoreFavorites,
   onServerSearchFavorites,
@@ -913,7 +912,6 @@ export default function FavoritesPage({
   onLongPressEnd: () => void;
   isFavoritesLoading?: boolean;
   hasMoreFavorites?: boolean;
-  totalFavoritesCount?: number | null;
   isLoadingMoreFavorites?: boolean;
   onLoadMoreFavorites?: () => Promise<void> | void;
   onServerSearchFavorites?: (searchText: string) => Promise<any[]>;
@@ -5392,15 +5390,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   });
 
-  const cachedProfileFavoriteCount = Number(
-    user?.uid ? readUserProfileCache(user.uid)?.favoriteCount : Number.NaN,
-  );
-  const preferredMusicNoteTotalCount = typeof totalFavoritesCount === 'number' && Number.isFinite(totalFavoritesCount)
-    ? totalFavoritesCount
-    : cachedProfileFavoriteCount;
-  const musicNoteTotalCount = Number.isFinite(preferredMusicNoteTotalCount) && preferredMusicNoteTotalCount >= 0
-    ? Math.max(Math.floor(preferredMusicNoteTotalCount), favorites.length)
-    : favorites.length;
   const canShowCachedMusicNoteMore = visibleCount < filteredFavorites.length;
   const canRequestMoreMusicNotePage = Boolean(
     !isMusicNoteSharedView &&
@@ -5408,7 +5397,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     favoriteColorFilter === 'all' &&
     !favoriteTrashView &&
     hasMoreFavorites &&
-    filteredFavorites.length > 0
+    filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE
   );
   const shouldShowMusicNoteMoreButton = canShowCachedMusicNoteMore || canRequestMoreMusicNotePage;
 
@@ -6635,12 +6624,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               >
                 <Plus className="w-5 h-5 text-[#FF7A72] group-hover:rotate-90 transition-transform" />
                 {isLoadingMoreFavorites
-                  ? `불러오는 중... (전체 ${musicNoteTotalCount}곡)`
+                  ? '불러오는 중...'
                   : canShowCachedMusicNoteMore
-                    ? `더보기 (${filteredFavorites.length - visibleCount}개 남음 · 전체 ${musicNoteTotalCount}곡)`
+                    ? `더보기 (${filteredFavorites.length - visibleCount}개 남음)`
                     : musicNoteViewMode === 'noteSpace'
-                      ? `더보기 (20개 더 불러오기 · 전체 ${musicNoteTotalCount}곡)`
-                      : `더보기 (전체 ${musicNoteTotalCount}곡)`}
+                      ? '더보기 (20개 더 불러오기)'
+                      : '더보기'}
               </button>
             </div>
           )}

@@ -407,50 +407,6 @@ let musicNoteActiveUiUid: string | null = null;
 const getMusicNoteCacheSchemaKey = (uid: string) => `${MUSIC_NOTE_CACHE_SCHEMA_STORAGE_BASE}_${uid}`;
 const getMusicNotePayloadCacheKey = (uid: string) => `soridraw_favorites_cache_${uid}`;
 
-
-// SORIDRAW_MUSIC_NOTE_BOUNDED_MORE_RECOVERY_1024
-const SORIDRAW_MUSIC_NOTE_PAGINATION_CONTINUITY_1025 = true;
-const SORIDRAW_MUSIC_NOTE_ORDER_AXIS_REPAIR_1026 = true;
-const SORIDRAW_MUSIC_NOTE_CACHE_FIRST_BOUNDED_MORE_1027 = true;
-const readFavoritesHistoricalMaxCount = (uid: string): number => {
-  if (!uid || typeof localStorage === 'undefined') return 0;
-  try {
-    const value = Number(localStorage.getItem(`soridraw_favorites_cache_max_count_${uid}`) || 0);
-    return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-  } catch {
-    return 0;
-  }
-};
-
-
-// SORIDRAW_MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_1023
-// A failed Preview build could leave a partial durable Music Note payload in the
-// browser. Never delete that payload. On Preview only, reopen the existing
-// bounded first-page source once and merge authoritative server rows into the
-// current cache. After a real server snapshot succeeds, later reloads return to
-// the normal cache-first path.
-const MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_STORAGE_BASE = 'soridraw_music_note_preview_cache_recovery_20260906_v1';
-const getMusicNotePreviewCacheRecoveryKey = (uid: string) => `${MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_STORAGE_BASE}_${uid}`;
-const isMusicNotePreviewHost = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  const host = String(window.location.hostname || '').toLowerCase();
-  return host === 'preview.soridraw.com'
-    || host === 'soridraw-preview.web.app'
-    || host === 'soridraw-preview.firebaseapp.com';
-};
-const needsMusicNotePreviewCacheRecovery = (uid: string): boolean => {
-  if (!uid || !isMusicNotePreviewHost() || typeof localStorage === 'undefined') return false;
-  try {
-    return localStorage.getItem(getMusicNotePreviewCacheRecoveryKey(uid)) !== 'done';
-  } catch {
-    return true;
-  }
-};
-const markMusicNotePreviewCacheRecoveryComplete = (uid: string) => {
-  if (!uid || typeof localStorage === 'undefined') return;
-  try { localStorage.setItem(getMusicNotePreviewCacheRecoveryKey(uid), 'done'); } catch {}
-};
-
 const hasMusicNotePayloadCache = (uid: string): boolean => {
   if (!uid) return false;
   if (favoritesInMemoryCache.has(uid)) return true;
@@ -523,37 +479,11 @@ const getMusicNoteDeviceId = (): string => {
   }
 };
 
-type MusicNotePaginationCursorHint = {
-  id: string;
-  createdAtMs: number;
-  legacy: boolean;
-};
-
-const readMusicNotePaginationCursor = (uid: string): MusicNotePaginationCursorHint | null => {
+const readMusicNotePaginationCursor = (uid: string): Date | null => {
   if (!uid || typeof localStorage === 'undefined') return null;
   try {
-    const raw = String(
-      localStorage.getItem(getMusicNoteScopedStorageKey(MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE, uid)) || '',
-    ).trim();
-    if (!raw) return null;
-
-    if (raw.startsWith('{')) {
-      const parsed = JSON.parse(raw);
-      const cursorId = String(parsed?.id || '').trim();
-      const createdAtMs = Number(parsed?.createdAtMs || 0);
-      if (cursorId) {
-        return {
-          id: cursorId,
-          createdAtMs: Number.isFinite(createdAtMs) && createdAtMs > 0 ? createdAtMs : 0,
-          legacy: false,
-        };
-      }
-    }
-
-    const legacyMs = Number(raw);
-    return Number.isFinite(legacyMs) && legacyMs > 0
-      ? { id: '', createdAtMs: legacyMs, legacy: true }
-      : null;
+    const ms = Number(localStorage.getItem(getMusicNoteScopedStorageKey(MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE, uid)) || 0);
+    return Number.isFinite(ms) && ms > 0 ? new Date(ms) : null;
   } catch {
     return null;
   }
@@ -562,14 +492,11 @@ const readMusicNotePaginationCursor = (uid: string): MusicNotePaginationCursorHi
 const writeMusicNotePaginationCursor = (uid: string, docSnap: any | null) => {
   if (!uid || !docSnap || typeof localStorage === 'undefined') return;
   try {
-    const cursorId = String(docSnap?.id || '').trim();
-    if (!cursorId) return;
     const data = typeof docSnap.data === 'function' ? docSnap.data() : null;
-    const createdAtMs = Number(data?.createdAtMs || 0) || getTimestampMs(data?.createdAt);
-    localStorage.setItem(
-      getMusicNoteScopedStorageKey(MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE, uid),
-      JSON.stringify({ version: 2, id: cursorId, createdAtMs: createdAtMs > 0 ? createdAtMs : 0 }),
-    );
+    const ms = Number(data?.createdAtMs || 0) || getTimestampMs(data?.createdAt);
+    if (ms > 0) {
+      localStorage.setItem(getMusicNoteScopedStorageKey(MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE, uid), String(ms));
+    }
   } catch {}
 };
 
@@ -5255,13 +5182,8 @@ function App() {
   const favoritePaginationExhaustedRef = useRef(false);
   const favoritePaginationLoadingRef = useRef(false);
   const favoritePaginationFallbackModeRef = useRef(false);
-  const favoriteLegacyPaginationCursorRef = useRef<any>(null);
-  const favoriteLegacyPaginationExhaustedRef = useRef(false);
-  const favoriteLegacyPaginationBufferRef = useRef<any[]>([]);
-  const favoritePaginationNeedsServerAnchorRef = useRef(false);
   const [hasMoreFavorites, setHasMoreFavorites] = useState(false);
   const [isLoadingMoreFavorites, setIsLoadingMoreFavorites] = useState(false);
-  const [favoriteTotalCount, setFavoriteTotalCount] = useState<number | null>(null);
   const isFavoriteSoftRemoved = (favorite: any) => Boolean(
     favorite?.favoriteRemoved === true
     || favorite?.saved === false
@@ -9068,12 +8990,6 @@ const toggleCycleVariantSelection = (
 
           if (docSnap.exists()) {
             const data = docSnap.data();
-            const profileFavoriteCount = Number(data?.favoriteCount);
-            setFavoriteTotalCount(
-              Number.isFinite(profileFavoriteCount) && profileFavoriteCount >= 0
-                ? Math.floor(profileFavoriteCount)
-                : null,
-            );
             writeUserProfileCache(currentUser.uid, data);
             const recentSongsVersion = Number(data?.syncVersions?.recentSongs || 0);
             if (recentSongsVersion > 0 && typeof window !== 'undefined') {
@@ -9216,7 +9132,6 @@ const toggleCycleVariantSelection = (
         // Fetch favorites for the user.
         // A cache is trusted only when both its UID-scoped schema and payload are
         // current. Old/partial caches are discarded for this UID only.
-        const musicNotePreviewCacheRecoveryNeeded = needsMusicNotePreviewCacheRecovery(currentUser.uid);
         const musicNoteCacheNeedsFullBootstrap = prepareMusicNoteCacheForUser(currentUser.uid);
         const cachedFavs = getFavoritesCacheInMemoryOrLocalStorage(currentUser.uid);
         if (!musicNoteCacheNeedsFullBootstrap && hasMusicNotePayloadCache(currentUser.uid)) {
@@ -9238,11 +9153,6 @@ const toggleCycleVariantSelection = (
         favoritePaginationExhaustedRef.current = false;
         favoritePaginationLoadingRef.current = false;
         favoritePaginationFallbackModeRef.current = false;
-        favoriteLegacyPaginationCursorRef.current = null;
-        favoriteLegacyPaginationExhaustedRef.current = false;
-        favoriteLegacyPaginationBufferRef.current = [];
-        favoritePaginationNeedsServerAnchorRef.current = false;
-        setFavoriteTotalCount(null);
         setHasMoreFavorites(false);
         setIsLoadingMoreFavorites(false);
 
@@ -9253,7 +9163,6 @@ const toggleCycleVariantSelection = (
           favoritePaginationExhaustedRef.current = true;
           favoritePaginationLoadingRef.current = false;
           favoritePaginationFallbackModeRef.current = true;
-          favoritePaginationNeedsServerAnchorRef.current = false;
           setHasMoreFavorites(false);
           setIsLoadingMoreFavorites(false);
 
@@ -9267,7 +9176,6 @@ const toggleCycleVariantSelection = (
             const fallbackSnapshot = await getDocs(query(
               collection(db, 'favorites'),
               where('uid', '==', currentUser.uid),
-              orderBy('createdAtMs', 'desc'),
               limit(FAVORITES_PAGE_SIZE),
             ));
             const fallbackFavs = sortFavoriteList(
@@ -9279,7 +9187,6 @@ const toggleCycleVariantSelection = (
             setHasMoreFavorites(false);
             setFavorites(fallbackFavs);
             writeFavoritesCache(currentUser.uid, fallbackFavs);
-            markMusicNotePreviewCacheRecoveryComplete(currentUser.uid);
             markCacheDiagnostic('musicNote', 'SYNC', Math.max(1, fallbackSnapshot.docs.length));
           } catch (fallbackError) {
             console.warn('Bounded Music Note fallback failed. Keeping local cache only.', fallbackError);
@@ -9304,23 +9211,18 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
         }
         if (hasCachedMusicNote) {
           const persistedCursor = readMusicNotePaginationCursor(currentUser.uid);
-          const historicalMaxCount = readFavoritesHistoricalMaxCount(currentUser.uid);
-          const cachedCount = Array.isArray(cachedFavs) ? cachedFavs.length : 0;
-          const mayHaveMoreCachedHistory = historicalMaxCount > cachedCount || cachedCount >= FAVORITES_PAGE_SIZE;
-          const hasCachedContinuationHint = Boolean(persistedCursor) || mayHaveMoreCachedHistory;
           favoritePaginationCursorRef.current = persistedCursor;
-          favoritePaginationExhaustedRef.current = !hasCachedContinuationHint;
-          favoritePaginationNeedsServerAnchorRef.current = Boolean(hasCachedContinuationHint && !persistedCursor?.id);
-          setHasMoreFavorites(hasCachedContinuationHint);
+          favoritePaginationExhaustedRef.current = !persistedCursor;
+          setHasMoreFavorites(Boolean(persistedCursor));
           setIsFavoritesLoading(false);
         }
 
         const attachFavoritesSourceBootstrap902 = () => {
-          if (unsubFavs || (hasCachedMusicNote && !musicNotePreviewCacheRecoveryNeeded) || musicNoteCacheNeedsFullBootstrap) return;
+          if (unsubFavs || hasCachedMusicNote || musicNoteCacheNeedsFullBootstrap) return;
           const q = query(
             collection(db, 'favorites'),
             where('uid', '==', currentUser.uid),
-            orderBy('createdAtMs', 'desc'),
+            orderBy('createdAt', 'desc'),
             limit(FAVORITES_PAGE_SIZE)
           );
 
@@ -9336,11 +9238,7 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
             }
             favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
             favoritePaginationFallbackModeRef.current = false;
-            favoritePaginationNeedsServerAnchorRef.current = false;
             setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
-            if (!snapshot.metadata.fromCache) {
-              markMusicNotePreviewCacheRecoveryComplete(currentUser.uid);
-            }
             setFavorites((prev) => {
               const merged = mergeFavoriteFirstPageWithCache(firstPageFavs, prev || [], favoritePaginationExhaustedRef.current);
               writeFavoritesCache(currentUser.uid, merged);
@@ -9388,7 +9286,7 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
           MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE,
           currentUser.uid,
         );
-        const shouldVerifyMusicNoteBundle = !musicNotePreviewCacheRecoveryNeeded && hasCachedMusicNote && (
+        const shouldVerifyMusicNoteBundle = hasCachedMusicNote && (
           musicNoteLocalVersionAtBootstrap <= 0
           || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap
         );
@@ -9411,30 +9309,10 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
                 const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
                 return !favoriteId || !localDeletedIds.has(favoriteId);
               });
-              const bundleCursorFavorite = firstPageFavs[firstPageFavs.length - 1];
-              const bundleCursorId = String(bundleCursorFavorite?.id || bundleCursorFavorite?.firestoreId || '').trim();
-              const bundleCursorMs = Number(bundle.cursorCreatedAtMs || 0);
-              const existingCursor = favoritePaginationCursorRef.current;
-              const existingCursorData = typeof existingCursor?.data === 'function' ? existingCursor.data() : null;
-              const existingCursorId = String(existingCursor?.id || '').trim();
-              const existingCursorMs = Number(existingCursor?.createdAtMs || existingCursorData?.createdAtMs || 0);
-              if (
-                bundle.hasMore
-                && bundleCursorId
-                && bundleCursorMs > 0
-                && (!existingCursorId || existingCursorMs <= 0 || bundleCursorMs < existingCursorMs)
-              ) {
-                favoritePaginationCursorRef.current = {
-                  id: bundleCursorId,
-                  createdAtMs: bundleCursorMs,
-                  legacy: false,
-                };
-              }
-              const effectiveCursorId = String(favoritePaginationCursorRef.current?.id || '').trim();
-              favoritePaginationExhaustedRef.current = !bundle.hasMore && !effectiveCursorId;
+              favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
+              favoritePaginationExhaustedRef.current = !bundle.hasMore;
               favoritePaginationFallbackModeRef.current = false;
-              favoritePaginationNeedsServerAnchorRef.current = Boolean(bundle.hasMore && !effectiveCursorId);
-              setHasMoreFavorites(Boolean(bundle.hasMore || effectiveCursorId));
+              setHasMoreFavorites(bundle.hasMore);
               setFavorites((prev) => {
                 const previous = Array.isArray(prev) ? prev : [];
                 const bundleVersion = Number(bundle.updatedAtMs || 0);
@@ -9493,14 +9371,8 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
           // Cache is already current. Keep 901 delta sync available so a later
           // cross-device version event fetches only changed favorites.
           musicNoteBundleActiveUids.delete(currentUser.uid);
-          if (musicNotePreviewCacheRecoveryNeeded) {
-            // One bounded verification only on Preview. Existing cached rows stay
-            // visible and are merged with the authoritative first server page.
-            attachFavoritesSourceBootstrap902();
-          } else {
-            markCacheDiagnostic('musicNote', 'CACHE', 0);
-            setIsFavoritesLoading(false);
-          }
+          markCacheDiagnostic('musicNote', 'CACHE', 0);
+          setIsFavoritesLoading(false);
         }
 
 
@@ -9514,8 +9386,6 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
         favoritePaginationExhaustedRef.current = false;
         favoritePaginationLoadingRef.current = false;
         favoritePaginationFallbackModeRef.current = false;
-        favoritePaginationNeedsServerAnchorRef.current = false;
-        setFavoriteTotalCount(null);
         setIsFavoritesLoading(false);
         clearCachedUserRole();
         setCachedUserRoleHint(null);
@@ -9537,158 +9407,46 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
   const loadMoreFavorites = useCallback(async () => {
     const currentUser = user || auth.currentUser;
     if (!currentUser?.uid) return;
-    if (favoritePaginationLoadingRef.current) return;
-
-    const uid = currentUser.uid;
-    const getFavoriteId = (favorite: any) =>
-      String(favorite?.id || favorite?.firestoreId || '').trim();
-    const getFavoriteCreatedAtMsForPagination = (favorite: any) => {
-      const explicitMs = Number(favorite?.createdAtMs || 0);
-      if (Number.isFinite(explicitMs) && explicitMs > 0) return explicitMs;
-      return getTimestampMs(favorite?.createdAt);
-    };
-
-    const currentFavorites = (favoritesStore.getFavorites() || [])
-      .filter((favorite: any) => !isFavoriteSoftRemoved(favorite));
-    const loadedIds = new Set(currentFavorites.map(getFavoriteId).filter(Boolean));
-
-    const cachedProfile = readUserProfileCache(uid) as any;
-    const stateTotal = Number(favoriteTotalCount);
-    const cachedTotal = Number(cachedProfile?.favoriteCount);
-    const trustedTotalCount = Number.isFinite(stateTotal) && stateTotal >= loadedIds.size
-      ? Math.floor(stateTotal)
-      : Number.isFinite(cachedTotal) && cachedTotal >= loadedIds.size
-        ? Math.floor(cachedTotal)
-        : null;
-
-    if (trustedTotalCount !== null && loadedIds.size >= trustedTotalCount) {
-      favoritePaginationExhaustedRef.current = true;
-      setHasMoreFavorites(false);
-      clearMusicNotePaginationCursor(uid);
-      return;
-    }
-
-    // 1027: legacy compatibility scanning is intentionally disabled. One click
-    // may issue at most one bounded page query (plus one exact cursor rehydrate).
-    if (favoritePaginationFallbackModeRef.current) {
-      // The old mode flag may be left by the safe bounded first-page recovery.
-      // Continue from its canonical createdAtMs cursor, but never revive the
-      // historical multi-page compatibility scanner.
-      favoritePaginationFallbackModeRef.current = false;
-      favoriteLegacyPaginationCursorRef.current = null;
-      favoriteLegacyPaginationExhaustedRef.current = true;
-      favoriteLegacyPaginationBufferRef.current = [];
-    }
-
-    let cursor: any = favoritePaginationCursorRef.current;
-    let cursorId = String(cursor?.id || '').trim();
-
-    // One-time local migration for devices that have a persistent history cache
-    // but no v2 cursor. Use the oldest cached createdAtMs row as the continuation
-    // anchor instead of replaying all already-cached pages from the server.
-    if (!cursorId) {
-      const localCursorCandidates = currentFavorites
-        .map((favorite: any) => ({
-          favorite,
-          id: getFavoriteId(favorite),
-          createdAtMs: getFavoriteCreatedAtMsForPagination(favorite),
-        }))
-        .filter((item: any) => item.id && item.createdAtMs > 0)
-        .sort((a: any, b: any) => b.createdAtMs - a.createdAtMs);
-      const oldestCached = localCursorCandidates[localCursorCandidates.length - 1];
-      if (oldestCached) {
-        cursor = { id: oldestCached.id, createdAtMs: oldestCached.createdAtMs, legacy: false };
-        cursorId = oldestCached.id;
-        favoritePaginationCursorRef.current = cursor;
-      }
-    }
-
-    if (!cursorId) {
-      favoritePaginationExhaustedRef.current = true;
-      setHasMoreFavorites(false);
-      console.warn('Music Note continuation cursor is unavailable; refusing an unbounded recovery scan.');
-      return;
-    }
+    if (favoritePaginationFallbackModeRef.current) return;
+    if (favoritePaginationLoadingRef.current || favoritePaginationExhaustedRef.current) return;
+    const cursor = favoritePaginationCursorRef.current;
+    if (!cursor) return;
 
     favoritePaginationLoadingRef.current = true;
     setIsLoadingMoreFavorites(true);
     try {
-      let cursorSnapshot = cursor && typeof cursor.data === 'function' ? cursor : null;
-      if (!cursorSnapshot) {
-        const exactCursor = await getDoc(doc(db, 'favorites', cursorId));
-        if (!exactCursor.exists()) {
-          favoritePaginationExhaustedRef.current = true;
-          setHasMoreFavorites(false);
-          clearMusicNotePaginationCursor(uid);
-          return;
-        }
-        const cursorData = exactCursor.data();
-        if (String(cursorData?.uid || '') !== uid || Number(cursorData?.createdAtMs || 0) <= 0) {
-          favoritePaginationExhaustedRef.current = true;
-          setHasMoreFavorites(false);
-          clearMusicNotePaginationCursor(uid);
-          return;
-        }
-        cursorSnapshot = exactCursor;
-      }
-
-      const snapshot = await getDocs(query(
+      const q = query(
         collection(db, 'favorites'),
-        where('uid', '==', uid),
-        orderBy('createdAtMs', 'desc'),
-        startAfter(cursorSnapshot),
-        limit(FAVORITES_PAGE_SIZE),
-      ));
-      const docs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-      const page: any[] = [];
-
-      for (const docSnap of docs) {
-        const favorite = mapFavoriteFirestoreDoc(docSnap);
-        if (isFavoriteSoftRemoved(favorite)) continue;
-        const favoriteId = getFavoriteId(favorite);
-        if (favoriteId && isFavoriteDeletedTombstoned(uid, favoriteId)) continue;
-        if (favoriteId && loadedIds.has(favoriteId)) continue;
-        if (favoriteId) loadedIds.add(favoriteId);
-        page.push(favorite);
+        where('uid', '==', currentUser.uid),
+        orderBy('createdAt', 'desc'),
+        startAfter(cursor),
+        limit(FAVORITES_PAGE_SIZE)
+      );
+      const snapshot = await getDocs(q);
+      const nextDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
+      const nextFavs = nextDocs.map(mapFavoriteFirestoreDoc);
+      if (nextDocs.length > 0) {
+        favoritePaginationCursorRef.current = nextDocs[nextDocs.length - 1];
+        writeMusicNotePaginationCursor(currentUser.uid, favoritePaginationCursorRef.current);
+      } else {
+        clearMusicNotePaginationCursor(currentUser.uid);
       }
-
-      if (page.length > 0) {
-        setFavorites((prev) => {
-          const merged = mergeFavoritePages(prev || [], page);
-          writeFavoritesCache(uid, merged);
-          return merged;
-        });
-      }
-
-      if (docs.length > 0) {
-        const lastDoc = docs[docs.length - 1];
-        favoritePaginationCursorRef.current = lastDoc;
-        writeMusicNotePaginationCursor(uid, lastDoc);
-      }
-
-      const exhausted = docs.length < FAVORITES_PAGE_SIZE;
-      favoritePaginationExhaustedRef.current = exhausted;
-      const hasMoreByCount = trustedTotalCount === null || loadedIds.size < trustedTotalCount;
-      const hasMore = !exhausted && hasMoreByCount;
-      setHasMoreFavorites(hasMore);
-
-      if (!hasMore) {
-        clearMusicNotePaginationCursor(uid);
-      }
-      if (exhausted && trustedTotalCount !== null && loadedIds.size < trustedTotalCount) {
-        console.warn(
-          `Music Note createdAtMs pagination ended at ${loadedIds.size}/${trustedTotalCount}; `
-          + 'legacy full-scan recovery remains disabled for cost safety.',
-        );
-      }
+      favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
+      setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
+      setFavorites((prev) => {
+        const merged = mergeFavoritePages(prev || [], nextFavs);
+        writeFavoritesCache(currentUser.uid, merged);
+        return merged;
+      });
     } catch (error) {
-      console.warn('Favorites bounded additional page load failed. Keeping cache and retry affordance.', error);
-      setHasMoreFavorites(true);
+      console.warn('Favorites additional page load failed. Keeping the current list instead of crashing the page.', error);
+      favoritePaginationExhaustedRef.current = true;
+      setHasMoreFavorites(false);
     } finally {
       favoritePaginationLoadingRef.current = false;
       setIsLoadingMoreFavorites(false);
     }
-  }, [user, favoriteTotalCount]);
+  }, [user]);
 
   const syncMusicNoteIncrementalFromRemoteVersion = useCallback(async (
     remoteVersion: number,
@@ -9875,15 +9633,7 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
       setFavorites(merged);
       writeFavoritesCache(uid, merged);
       favoritesStore.setFavorites(merged);
-      favoritePaginationCursorRef.current = (() => {
-        const cursorFavorite = Array.isArray(bundle.items) && bundle.items.length > 0
-          ? bundle.items[bundle.items.length - 1]
-          : null;
-        const cursorId = String(cursorFavorite?.id || cursorFavorite?.firestoreId || '').trim();
-        return bundle.hasMore && cursorId
-          ? { id: cursorId, createdAtMs: Number(bundle.cursorCreatedAtMs || 0), legacy: false }
-          : null;
-      })();
+      favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
       favoritePaginationExhaustedRef.current = !bundle.hasMore;
       favoritePaginationFallbackModeRef.current = false;
       setHasMoreFavorites(bundle.hasMore);

@@ -291,6 +291,27 @@ const RECENT_SONGS_LOCAL_SYNC_VERSION_STORAGE_BASE = 'soridraw_recent_songs_loca
 const RECENT_SONGS_SYNC_VERSION_EVENT = 'soridraw:recent-songs-sync-version-v2';
 
 const getRecentSongsVersionStorageKey = (uid: string) => `${RECENT_SONGS_LOCAL_SYNC_VERSION_STORAGE_BASE}_${uid}`;
+const RECENT_SONGS_MUTATION_EPOCH_STORAGE_BASE = 'soridraw_recent_songs_mutation_epoch_v1';
+const recentSongsWriteQueues = new Map<string, Promise<any>>();
+
+const getRecentSongsMutationEpochStorageKey = (uid: string) => `${RECENT_SONGS_MUTATION_EPOCH_STORAGE_BASE}_${uid}`;
+const readRecentSongsMutationEpoch = (uid: string): number => {
+  if (!uid || typeof localStorage === 'undefined') return 0;
+  try {
+    const value = Number(localStorage.getItem(getRecentSongsMutationEpochStorageKey(uid)) || 0);
+    return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+  } catch {
+    return 0;
+  }
+};
+const bumpRecentSongsMutationEpoch = (uid: string): number => {
+  if (!uid) return 0;
+  const next = Math.max(Date.now(), readRecentSongsMutationEpoch(uid) + 1);
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.setItem(getRecentSongsMutationEpochStorageKey(uid), String(next)); } catch {}
+  }
+  return next;
+};
 const readRecentSongsLocalVersion = (uid: string): number => {
   if (!uid || typeof localStorage === 'undefined') return 0;
   try {
@@ -308,37 +329,63 @@ const writeRecentSongsLocalVersion = (uid: string, version: number) => {
   } catch {}
 };
 
-const persistRecentSongsDocument = async (ref: any, songs: any[]) => {
+const persistRecentSongsDocument = async (
+  ref: any,
+  songs: any[],
+  expectedMutationEpoch?: number,
+): Promise<number | null> => {
   const uid = String(ref?.id || '').trim();
-  const previousVersion = uid ? readRecentSongsLocalVersion(uid) : 0;
-  const syncVersion = Math.max(Date.now(), previousVersion + 1);
 
-  await setDoc(ref, sanitizeForFirestore({ songs, syncVersion }), { merge: true });
-  markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
-
-  if (!uid) return syncVersion;
-  // Advance this device before publishing the remote signal so the root users
-  // listener never causes a same-device reread.
-  writeRecentSongsLocalVersion(uid, syncVersion);
-
-  try {
-    await updateDoc(doc(db, 'users', uid), { 'syncVersions.recentSongs': syncVersion });
-    const cachedProfile = readUserProfileCache(uid);
-    if (cachedProfile) {
-      writeUserProfileCache(uid, {
-        ...(cachedProfile as any),
-        syncVersions: {
-          ...((cachedProfile as any)?.syncVersions || {}),
-          recentSongs: syncVersion,
-        },
-      });
+  const writeLatest = async (): Promise<number | null> => {
+    if (
+      uid
+      && Number.isFinite(expectedMutationEpoch)
+      && Number(expectedMutationEpoch) !== readRecentSongsMutationEpoch(uid)
+    ) {
+      return null;
     }
-  } catch (error) {
-    // Recent-song data is already safely saved. A failed invalidation signal must
-    // never roll back or duplicate the content write.
-    console.warn('Recent songs version signal publish failed.', error);
+
+    const previousVersion = uid ? readRecentSongsLocalVersion(uid) : 0;
+    const syncVersion = Math.max(Date.now(), previousVersion + 1);
+
+    await setDoc(ref, sanitizeForFirestore({ songs, syncVersion }), { merge: true });
+    markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
+
+    if (!uid) return syncVersion;
+    writeRecentSongsLocalVersion(uid, syncVersion);
+
+    try {
+      await updateDoc(doc(db, 'users', uid), { 'syncVersions.recentSongs': syncVersion });
+      const cachedProfile = readUserProfileCache(uid);
+      if (cachedProfile) {
+        writeUserProfileCache(uid, {
+          ...(cachedProfile as any),
+          syncVersions: {
+            ...((cachedProfile as any)?.syncVersions || {}),
+            recentSongs: syncVersion,
+          },
+        });
+      }
+    } catch (error) {
+      console.warn('Recent songs version signal publish failed.', error);
+    }
+    return syncVersion;
+  };
+
+  if (!uid) return writeLatest();
+
+  const previousWrite = recentSongsWriteQueues.get(uid) || Promise.resolve();
+  const queuedWrite = previousWrite
+    .catch(() => undefined)
+    .then(writeLatest);
+  recentSongsWriteQueues.set(uid, queuedWrite);
+  try {
+    return await queuedWrite;
+  } finally {
+    if (recentSongsWriteQueues.get(uid) === queuedWrite) {
+      recentSongsWriteQueues.delete(uid);
+    }
   }
-  return syncVersion;
 };
 const SORIDRAW_904_MUSIC_NOTE_LAZY_BUNDLE_ENTRY_RUNTIME = true;
 const SORIDRAW_903_LIST_BUNDLE_ONE_SHOT_RUNTIME = true;
@@ -931,7 +978,7 @@ import {
   deleteField,
   query as firestoreQuery
 } from './lib/firestoreMeasured';
-import { auth, googleProvider, db, getFirebaseAppCheckToken } from './firebase';
+import { auth, googleProvider, db, functions, httpsCallable, getFirebaseAppCheckToken } from './firebase';
 import { startUserPresence } from './services/presenceService';
 import { writeGeminiAutoModelFallback } from './services/geminiModelPreferences';
 import { buildEmailVerificationActionSettings } from './constants/emailVerification';
@@ -10223,90 +10270,115 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
     }
   };
 
-  const clearAllFavorites = async () => {
-    if (!user) return;
+  type MusicNoteBulkOperation = 'clear-unlocked' | 'lock-all' | 'unlock-all';
 
-    if (userStatus === 'banned' && !isAdminUser) {
-      showToast('차단된 계정입니다. 기능을 사용할 수 없습니다.');
+const runMusicNoteBulkOperation = async (operation: MusicNoteBulkOperation) => {
+  if (!user?.uid) return { changedCount: 0, changedIds: [] as string[], version: 0 };
+
+  const callable = httpsCallable(functions, 'processMusicNoteBulkPage');
+  const changedIds = new Set<string>();
+  let cursor: string | null = null;
+  let latestVersion = 0;
+  let pageCount = 0;
+
+  while (pageCount < 1000) {
+    const response: any = await callable({ operation, cursor, limit: 120 });
+    const payload = (response?.data || {}) as any;
+    const pageChangedIds = Array.isArray(payload.changedIds)
+      ? payload.changedIds.map((value: unknown) => String(value || '').trim()).filter(Boolean)
+      : [];
+    pageChangedIds.forEach((id: string) => changedIds.add(id));
+    latestVersion = Math.max(latestVersion, Number(payload.version || 0));
+
+    if (payload.done === true) break;
+    const nextCursor = String(payload.nextCursor || '').trim();
+    if (!nextCursor || nextCursor === cursor) {
+      throw new Error('Music Note bulk pagination did not advance.');
+    }
+    cursor = nextCursor;
+    pageCount += 1;
+  }
+
+  if (pageCount >= 1000) {
+    throw new Error('Music Note bulk pagination safety limit reached.');
+  }
+
+  if (latestVersion > 0) {
+    writeMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, user.uid, latestVersion);
+    writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, user.uid, latestVersion);
+  }
+
+  return { changedCount: changedIds.size, changedIds: Array.from(changedIds), version: latestVersion };
+};
+
+const clearAllFavorites = async () => {
+  if (!user) return;
+  if (userStatus === 'banned' && !isAdminUser) {
+    showToast('차단된 계정입니다. 기능을 사용할 수 없습니다.');
+    return;
+  }
+
+  try {
+    const result = await runMusicNoteBulkOperation('clear-unlocked');
+    if (result.changedCount === 0) {
+      showToast('삭제할 수 있는 곡이 없습니다.');
       return;
     }
 
-    try {
-      // In paged loading mode, never rely on the currently visible 10-item slice for destructive all-item actions.
-      const allFavoritesSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
-      const unlockedDocs = allFavoritesSnap.docs.filter((docSnap) => !docSnap.data()?.isLocked);
-      if (unlockedDocs.length === 0) {
-        showToast('삭제할 수 있는 곡이 없습니다.');
-        return;
-      }
+    const removedIds = new Set(result.changedIds);
+    rememberFavoriteDeletedTombstones(user.uid, result.changedIds);
+    setFavorites((previous) => {
+      const next = (previous || []).filter((favorite) => !removedIds.has(String(favorite?.id || '')));
+      writeFavoritesCache(user.uid, next);
+      return next;
+    });
+    showToast(`${result.changedCount}개의 곡이 삭제되었습니다.`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'favorites');
+  }
+};
 
-      const batch = writeBatch(db);
-      unlockedDocs.forEach((docSnap) => {
-        batch.delete(doc(db, 'favorites', docSnap.id));
-      });
-      
-      // Update favoriteCount
-      batch.update(doc(db, 'users', user.uid), {
-        favoriteCount: increment(-unlockedDocs.length)
-      });
-
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'bulk-delete', uid: user.uid, documentIds: unlockedDocs.map((docSnap) => docSnap.id), affectedCount: unlockedDocs.length }, batch.commit());
-      const deletedAt = Date.now();
-      const deletedFavorites = unlockedDocs.map(mapFavoriteFirestoreDoc);
-      rememberFavoriteDeletedTombstones(user.uid, deletedFavorites.map((favorite) => favorite.id).filter(Boolean));
-      const deleteSignal = buildFavoriteSyncSignal('delete', deletedFavorites[0] || {}, deletedFavorites, deletedAt);
-      applyFavoriteSyncSignal(user.uid, deleteSignal);
-      await updateDoc(doc(db, 'users', user.uid), {
-        favoriteSyncSignal: deleteSignal,
-        favoriteSyncSignalUpdatedAt: deletedAt,
-      });
-      showToast(`${unlockedDocs.length}개의 곡이 삭제되었습니다.`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'favorites');
+const lockAllFavorites = async () => {
+  if (!user) return;
+  try {
+    const result = await runMusicNoteBulkOperation('lock-all');
+    if (result.changedCount === 0) {
+      showToast('이미 모든 곡이 잠겨 있습니다.');
+      return;
     }
-  };
 
-  const lockAllFavorites = async () => {
-    if (!user) return;
-    try {
-      const allFavoritesSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
-      const unlockedDocs = allFavoritesSnap.docs.filter((docSnap) => !docSnap.data()?.isLocked);
-      if (unlockedDocs.length === 0) {
-        showToast('이미 모든 곡이 잠겨 있습니다.');
-        return;
-      }
+    const changedIds = new Set(result.changedIds);
+    setFavorites((previous) => {
+      const next = (previous || []).map((favorite) => changedIds.has(String(favorite?.id || '')) ? { ...favorite, isLocked: true } : favorite);
+      writeFavoritesCache(user.uid, next);
+      return next;
+    });
+    showToast(`${result.changedCount}개의 곡이 잠금 설정되었습니다.`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'favorites');
+  }
+};
 
-      const batch = writeBatch(db);
-      unlockedDocs.forEach((docSnap) => {
-        batch.update(doc(db, 'favorites', docSnap.id), { isLocked: true });
-      });
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'bulk-lock', uid: user.uid, documentIds: unlockedDocs.map((docSnap) => docSnap.id), affectedCount: unlockedDocs.length }, batch.commit());
-      showToast(`${unlockedDocs.length}개의 곡이 잠금 설정되었습니다.`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'favorites');
+const unlockAllFavorites = async () => {
+  if (!user) return;
+  try {
+    const result = await runMusicNoteBulkOperation('unlock-all');
+    if (result.changedCount === 0) {
+      showToast('잠긴 곡이 없습니다.');
+      return;
     }
-  };
 
-  const unlockAllFavorites = async () => {
-    if (!user) return;
-    try {
-      const allFavoritesSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
-      const lockedDocs = allFavoritesSnap.docs.filter((docSnap) => docSnap.data()?.isLocked);
-      if (lockedDocs.length === 0) {
-        showToast('잠긴 곡이 없습니다.');
-        return;
-      }
-
-      const batch = writeBatch(db);
-      lockedDocs.forEach((docSnap) => {
-        batch.update(doc(db, 'favorites', docSnap.id), { isLocked: false });
-      });
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'bulk-unlock', uid: user.uid, documentIds: lockedDocs.map((docSnap) => docSnap.id), affectedCount: lockedDocs.length }, batch.commit());
-      showToast(`${lockedDocs.length}개의 곡이 잠금 해제되었습니다.`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'favorites');
-    }
-  };
+    const changedIds = new Set(result.changedIds);
+    setFavorites((previous) => {
+      const next = (previous || []).map((favorite) => changedIds.has(String(favorite?.id || '')) ? { ...favorite, isLocked: false } : favorite);
+      writeFavoritesCache(user.uid, next);
+      return next;
+    });
+    showToast(`${result.changedCount}개의 곡이 잠금 해제되었습니다.`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'favorites');
+  }
+};
 
   // Scroll to top on mount
   useEffect(() => {
@@ -10904,11 +10976,13 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
       }
       if (recentSongsSessionReadInFlightUids.has(user.uid)) return;
       recentSongsSessionReadInFlightUids.add(user.uid);
+      const recentReadMutationEpoch = readRecentSongsMutationEpoch(user.uid);
 
       void getDocFromServer(ref)
         .then((snap) => {
           recentSongsSessionReadInFlightUids.delete(user.uid);
           if (cancelledRecentSongsRead) return;
+          if (recentReadMutationEpoch !== readRecentSongsMutationEpoch(user.uid)) return;
           recentSongsSessionVerifiedUids.add(user.uid);
           const documentVersion = Number(snap.exists() ? (snap.data() as any)?.syncVersion || 0 : 0);
           const verifiedVersion = Math.max(remoteVersion, localVersion, documentVersion);
@@ -11490,8 +11564,17 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
     
     if (user) {
       try {
+        const recentMutationEpoch = bumpRecentSongsMutationEpoch(user.uid);
+        recentSongTextWritePendingRef.current = null;
+        if (recentSongTextWriteTimerRef.current !== null) {
+          window.clearTimeout(recentSongTextWriteTimerRef.current);
+          recentSongTextWriteTimerRef.current = null;
+        }
         const ref = doc(db, "user_recent_songs", user.uid);
-        await runV1MutationBoundary({ domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([history[index]], 'recent-hide') }, persistRecentSongsDocument(ref, newHistory));
+        await runV1MutationBoundary(
+          { domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([history[index]], 'recent-hide') },
+          persistRecentSongsDocument(ref, newHistory, recentMutationEpoch),
+        );
         markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
       } catch (e) {
         console.error("Failed to update history in Firestore:", e);
@@ -11514,8 +11597,17 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
     if (window.confirm('모든 히스토리를 삭제하시겠습니까?')) {
       if (user) {
         try {
+          const recentMutationEpoch = bumpRecentSongsMutationEpoch(user.uid);
+          recentSongTextWritePendingRef.current = null;
+          if (recentSongTextWriteTimerRef.current !== null) {
+            window.clearTimeout(recentSongTextWriteTimerRef.current);
+            recentSongTextWriteTimerRef.current = null;
+          }
           const ref = doc(db, "user_recent_songs", user.uid);
-          await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: 0, mirrorTargets: buildRecentMirrorTargets(history, 'recent-hide') }, setDoc(ref, { songs: [] }, { merge: true }));
+          await runV1MutationBoundary(
+            { domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: history.length, mirrorTargets: buildRecentMirrorTargets(history, 'recent-hide') },
+            persistRecentSongsDocument(ref, [], recentMutationEpoch),
+          );
           markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
         } catch (e) {
           console.error("Failed to clear history in Firestore:", e);
@@ -11714,6 +11806,7 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
   if (!user || !Array.isArray(newSongs) || newSongs.length === 0) return;
 
   const canonicalNewSongs = newSongs.map((song) => ensureLiveSoridrawSongId(song));
+  const recentMutationEpoch = readRecentSongsMutationEpoch(user.uid);
 
   const saveOperation = async () => {
     try {
@@ -11730,8 +11823,12 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
         ...buildRecentMirrorTargets(firestoreSongs.filter((song: any) => { const stableId = getLiveSoridrawSongId(song); return Boolean(stableId && !updatedStableIds.has(stableId)); }), 'recent-hide', mirrorAtMs),
       ].slice(0, 10);
 
-      await runV1MutationBoundary({ domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: canonicalNewSongs.length, mirrorTargets }, persistRecentSongsDocument(ref, updatedSongs));
-      markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
+      const persistedVersion = await runV1MutationBoundary(
+      { domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: canonicalNewSongs.length, mirrorTargets },
+      persistRecentSongsDocument(ref, updatedSongs, recentMutationEpoch),
+    );
+    if (!persistedVersion) return;
+    markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
       recentSongsReadyToCacheRef.current = true;
       applyRecentSongsState(updatedSongs, {
         preferredIndex: 0,
@@ -13363,7 +13460,7 @@ ${normalizePromptForDisplay(result.prompt)}
   };
 
   const recentSongTextWriteTimerRef = useRef<number | null>(null);
-  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[] } | null>(null);
+  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[]; mutationEpoch: number } | null>(null);
 
   const flushRecentSongTextWrite = useCallback(async () => {
     const pending = recentSongTextWritePendingRef.current;
@@ -13376,8 +13473,13 @@ ${normalizePromptForDisplay(result.prompt)}
     }
 
     try {
+      if (pending.mutationEpoch !== readRecentSongsMutationEpoch(pending.uid)) return;
       const ref = doc(db, "user_recent_songs", pending.uid);
-      await runV1MutationBoundary({ domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets }, persistRecentSongsDocument(ref, pending.songs));
+      const persistedVersion = await runV1MutationBoundary(
+        { domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets },
+        persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch),
+      );
+      if (!persistedVersion) return;
       markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
     } catch (error) {
       // Keep the newest pending value so a later edit/flush can retry instead of
@@ -13412,7 +13514,7 @@ ${normalizePromptForDisplay(result.prompt)}
       historyIndex: activeIndex,
       latestGenerationBatchId: (nextSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
     });
-    recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets };
+    recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets, mutationEpoch: readRecentSongsMutationEpoch(uid) };
   }, []);
 
   const persistRegeneratedCurrentSong = async (nextSong: SongResult) => {
@@ -13692,8 +13794,8 @@ ${normalizePromptForDisplay(result.prompt)}
         if (currentHistoryIndex < 0) return prev;
         if (user) {
           const ref = doc(db, "user_recent_songs", user.uid);
-          runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, persistRecentSongsDocument(ref, next))
-            .then(() => markCacheDiagnostic('recentSongs', 'SYNC', 0, 1))
+          runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, persistRecentSongsDocument(ref, next, readRecentSongsMutationEpoch(user.uid)))
+            .then((version) => { if (version) markCacheDiagnostic('recentSongs', 'SYNC', 0, 1); })
             .catch((error) => {
             console.error('Failed to persist added lyric language:', error);
           });

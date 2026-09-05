@@ -3716,3 +3716,76 @@ export const getSunoTrackStatus = onRequest(
     }
   }
 );
+
+
+// SORIDRAW_MUSIC_NOTE_BOUNDED_BULK_20260905
+type MusicNoteBulkOperation = 'clear-unlocked' | 'lock-all' | 'unlock-all';
+const MUSIC_NOTE_BULK_PAGE_LIMIT = 120;
+
+export const processMusicNoteBulkPage = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const uid = String(request.auth?.uid || '').trim();
+    if (!uid) throw new HttpsError('unauthenticated', 'Authentication is required.');
+
+    const operation = String(request.data?.operation || '').trim() as MusicNoteBulkOperation;
+    if (!['clear-unlocked', 'lock-all', 'unlock-all'].includes(operation)) {
+      throw new HttpsError('invalid-argument', 'Unsupported Music Note bulk operation.');
+    }
+
+    const requestedLimit = Math.floor(Number(request.data?.limit || MUSIC_NOTE_BULK_PAGE_LIMIT));
+    const pageSize = Math.max(1, Math.min(MUSIC_NOTE_BULK_PAGE_LIMIT, Number.isFinite(requestedLimit) ? requestedLimit : MUSIC_NOTE_BULK_PAGE_LIMIT));
+    const cursor = String(request.data?.cursor || '').trim();
+
+    const firestore = admin.firestore();
+    let pageQuery = firestore.collection('favorites').where('uid', '==', uid).orderBy(admin.firestore.FieldPath.documentId()).limit(pageSize);
+    if (cursor) pageQuery = pageQuery.startAfter(cursor);
+
+    const snapshot = await pageQuery.get();
+    const changedIds: string[] = [];
+    const batch = firestore.batch();
+
+    for (const snapshotDoc of snapshot.docs) {
+      const data = snapshotDoc.data() || {};
+      const isLocked = data.isLocked === true;
+      if (operation === 'clear-unlocked') {
+        if (isLocked) continue;
+        batch.delete(snapshotDoc.ref);
+        changedIds.push(snapshotDoc.id);
+      } else if (operation === 'lock-all') {
+        if (isLocked) continue;
+        batch.update(snapshotDoc.ref, { isLocked: true, updatedAtMs: Date.now() });
+        changedIds.push(snapshotDoc.id);
+      } else {
+        if (!isLocked) continue;
+        batch.update(snapshotDoc.ref, { isLocked: false, updatedAtMs: Date.now() });
+        changedIds.push(snapshotDoc.id);
+      }
+    }
+
+    let version = 0;
+    if (changedIds.length > 0) {
+      version = Date.now();
+      const userRef = firestore.collection('users').doc(uid);
+      const userPatch: Record<string, any> = { syncVersions: { musicNote: version }, favoriteSyncSignalUpdatedAt: version };
+      if (operation === 'clear-unlocked') {
+        userPatch.favoriteCount = admin.firestore.FieldValue.increment(-changedIds.length);
+      }
+      batch.set(userRef, userPatch, { merge: true });
+      await batch.commit();
+    }
+
+    const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+    const hasAnotherPage = snapshot.size === pageSize;
+    return {
+      ok: true,
+      operation,
+      processedCount: snapshot.size,
+      changedCount: changedIds.length,
+      changedIds,
+      version,
+      nextCursor: hasAnotherPage && lastDoc ? lastDoc.id : null,
+      done: !hasAnotherPage,
+    };
+  },
+);

@@ -30,146 +30,29 @@ jobs:
           set -euo pipefail
           SAFE_BASE='e8a4ff777d99852f8e0a98111b5eb4c44f9800bb'
           git merge-base --is-ancestor "$SAFE_BASE" HEAD
-          if ! git diff --quiet "$SAFE_BASE"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json; then
-            echo 'Application source changed after the rollback baseline.'
-            git diff --name-only "$SAFE_BASE"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json
-            exit 2
+          git diff --quiet "$SAFE_BASE"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json
+          echo '[Music Note Recovery] app baseline unchanged since rollback: PASS'
+
+      - name: Apply non-destructive recovery patch
+        run: python3 .deploy/apply-music-note-cache-recovery-1023.py
+
+      - name: Static safety guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'SORIDRAW_MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_1023' src/App.tsx
+          grep -q "host === 'preview.soridraw.com'" src/App.tsx
+          grep -q '(hasCachedMusicNote && !musicNotePreviewCacheRecoveryNeeded)' src/App.tsx
+          grep -q '!musicNotePreviewCacheRecoveryNeeded && hasCachedMusicNote' src/App.tsx
+          grep -q 'markMusicNotePreviewCacheRecoveryComplete(currentUser.uid)' src/App.tsx
+          git diff -U0 -- src/App.tsx > "$RUNNER_TEMP/recovery.diff"
+          if grep -E '^\+.*(deleteDoc\(|writeBatch\(|setDoc\(|updateDoc\(|removeItem\(getMusicNotePayloadCacheKey)' "$RUNNER_TEMP/recovery.diff"; then
+            echo '[Music Note Recovery] destructive/server mutation added by recovery patch'
+            exit 4
           fi
-
-      - name: Apply non-destructive cache recovery gate
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-
-          path = Path('src/App.tsx')
-          text = path.read_text(encoding='utf-8')
-
-          def replace_once(old, new, label):
-              global text
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected 1 anchor, found {count}')
-              text = text.replace(old, new, 1)
-
-          payload_anchor = "const getMusicNotePayloadCacheKey = (uid: string) => `soridraw_favorites_cache_${uid}`;\n"
-          payload_insert = payload_anchor + r'''
-
-// SORIDRAW_MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_1023
-// The failed refresh-zero preview build could leave a partial durable Music Note
-// payload in the browser. Do not delete it. On preview only, verify it once by
-// reopening the existing bounded first-page server source and merge server rows
-// into the cache. A successful server snapshot marks the repair complete so
-// later reloads return to the normal cache-first/zero-read path.
-const MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_STORAGE_BASE = 'soridraw_music_note_preview_cache_recovery_20260906_v1';
-const getMusicNotePreviewCacheRecoveryKey = (uid: string) => `${MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_STORAGE_BASE}_${uid}`;
-const isMusicNotePreviewHost = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  const host = String(window.location.hostname || '').toLowerCase();
-  return host === 'preview.soridraw.com'
-    || host === 'soridraw-preview.web.app'
-    || host === 'soridraw-preview.firebaseapp.com';
-};
-const needsMusicNotePreviewCacheRecovery = (uid: string): boolean => {
-  if (!uid || !isMusicNotePreviewHost() || typeof localStorage === 'undefined') return false;
-  try {
-    return localStorage.getItem(getMusicNotePreviewCacheRecoveryKey(uid)) !== 'done';
-  } catch {
-    return true;
-  }
-};
-const markMusicNotePreviewCacheRecoveryComplete = (uid: string) => {
-  if (!uid || typeof localStorage === 'undefined') return;
-  try { localStorage.setItem(getMusicNotePreviewCacheRecoveryKey(uid), 'done'); } catch {}
-};
-'''
-          replace_once(payload_anchor, payload_insert, 'recovery-helper')
-
-          bootstrap_anchor = "        const musicNoteCacheNeedsFullBootstrap = prepareMusicNoteCacheForUser(currentUser.uid);\n        const cachedFavs = getFavoritesCacheInMemoryOrLocalStorage(currentUser.uid);\n"
-          bootstrap_replacement = "        const musicNotePreviewCacheRecoveryNeeded = needsMusicNotePreviewCacheRecovery(currentUser.uid);\n        const musicNoteCacheNeedsFullBootstrap = prepareMusicNoteCacheForUser(currentUser.uid);\n        const cachedFavs = getFavoritesCacheInMemoryOrLocalStorage(currentUser.uid);\n"
-          replace_once(bootstrap_anchor, bootstrap_replacement, 'recovery-bootstrap-flag')
-
-          guard_anchor = "          if (unsubFavs || hasCachedMusicNote || musicNoteCacheNeedsFullBootstrap) return;\n"
-          guard_replacement = "          if (unsubFavs || (hasCachedMusicNote && !musicNotePreviewCacheRecoveryNeeded) || musicNoteCacheNeedsFullBootstrap) return;\n"
-          replace_once(guard_anchor, guard_replacement, 'recovery-source-guard')
-
-          bundle_anchor = "        const shouldVerifyMusicNoteBundle = hasCachedMusicNote && (\n"
-          bundle_replacement = "        const shouldVerifyMusicNoteBundle = !musicNotePreviewCacheRecoveryNeeded && hasCachedMusicNote && (\n"
-          replace_once(bundle_anchor, bundle_replacement, 'recovery-skip-bundle')
-
-          else_anchor = """        } else {
-          // Cache is already current. Keep 901 delta sync available so a later
-          // cross-device version event fetches only changed favorites.
-          musicNoteBundleActiveUids.delete(currentUser.uid);
-          markCacheDiagnostic('musicNote', 'CACHE', 0);
-          setIsFavoritesLoading(false);
-        }
-"""
-          else_replacement = """        } else {
-          // Cache is already current. Keep 901 delta sync available so a later
-          // cross-device version event fetches only changed favorites.
-          musicNoteBundleActiveUids.delete(currentUser.uid);
-          if (musicNotePreviewCacheRecoveryNeeded) {
-            // One bounded verification only on preview. Existing cached rows stay
-            // visible and are merged with the authoritative first server page.
-            attachFavoritesSourceBootstrap902();
-          } else {
-            markCacheDiagnostic('musicNote', 'CACHE', 0);
-            setIsFavoritesLoading(false);
-          }
-        }
-"""
-          replace_once(else_anchor, else_replacement, 'recovery-cache-current-branch')
-
-          server_anchor = """            favoritePaginationFallbackModeRef.current = false;
-            setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
-            setFavorites((prev) => {
-"""
-          server_replacement = """            favoritePaginationFallbackModeRef.current = false;
-            setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
-            if (!snapshot.metadata.fromCache) {
-              markMusicNotePreviewCacheRecoveryComplete(currentUser.uid);
-            }
-            setFavorites((prev) => {
-"""
-          replace_once(server_anchor, server_replacement, 'recovery-server-ack')
-
-          fallback_anchor = """            writeFavoritesCache(currentUser.uid, fallbackFavs);
-            markCacheDiagnostic('musicNote', 'SYNC', Math.max(1, fallbackSnapshot.docs.length));
-"""
-          fallback_replacement = """            writeFavoritesCache(currentUser.uid, fallbackFavs);
-            markMusicNotePreviewCacheRecoveryComplete(currentUser.uid);
-            markCacheDiagnostic('musicNote', 'SYNC', Math.max(1, fallbackSnapshot.docs.length));
-"""
-          replace_once(fallback_anchor, fallback_replacement, 'recovery-fallback-ack')
-
-          path.write_text(text, encoding='utf-8')
-          PY
-
-      - name: Recovery static guards
-        shell: bash
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          const fs = require('fs');
-          const app = fs.readFileSync('src/App.tsx', 'utf8');
-          const fail = (m) => { console.error(`[Music Note Recovery] FAIL: ${m}`); process.exit(1); };
-          const required = [
-            'SORIDRAW_MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_1023',
-            "host === 'preview.soridraw.com'",
-            'musicNotePreviewCacheRecoveryNeeded',
-            '(hasCachedMusicNote && !musicNotePreviewCacheRecoveryNeeded)',
-            '!musicNotePreviewCacheRecoveryNeeded && hasCachedMusicNote',
-            'markMusicNotePreviewCacheRecoveryComplete(currentUser.uid)',
-          ];
-          for (const marker of required) if (!app.includes(marker)) fail(`missing ${marker}`);
-          const recoveryBlock = app.slice(app.indexOf('SORIDRAW_MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_1023'), app.indexOf('const markMusicNoteCacheSchemaCurrent'));
-          for (const forbidden of ['removeItem(getMusicNotePayloadCacheKey', 'deleteDoc(', 'writeBatch(', 'setDoc(', 'updateDoc(']) {
-            if (recoveryBlock.includes(forbidden)) fail(`recovery must not mutate/delete server or payload: ${forbidden}`);
-          }
-          console.log('[Music Note Recovery] non-destructive preview-only bounded merge: PASS');
-          NODE
+          changed="$(git diff --name-only)"
+          test "$changed" = 'src/App.tsx'
+          echo '[Music Note Recovery] preview-only merge recovery, no payload/server deletion: PASS'
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -186,7 +69,7 @@ const markMusicNotePreviewCacheRecoveryComplete = (uid: string) => {
       - name: Build
         run: npm run build
 
-      - name: Commit validated hotfix
+      - name: Commit validated source
         shell: bash
         run: |
           set -euo pipefail
@@ -215,7 +98,7 @@ const markMusicNotePreviewCacheRecoveryComplete = (uid: string) => {
           set -euo pipefail
           npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
 
-      - name: Verify deployed build
+      - name: Verify exact deployed build
         shell: bash
         run: |
           set -euo pipefail
@@ -225,7 +108,11 @@ const markMusicNotePreviewCacheRecoveryComplete = (uid: string) => {
             for attempt in $(seq 1 12); do
               if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
                 remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
-                if [ "$remote_sha" = "$local_sha" ]; then ok='yes'; echo "[Music Note Recovery] exact build PASS: $url"; break; fi
+                if [ "$remote_sha" = "$local_sha" ]; then
+                  ok='yes'
+                  echo "[Music Note Recovery] exact build PASS: $url"
+                  break
+                fi
               fi
               sleep 10
             done
@@ -241,11 +128,11 @@ const markMusicNotePreviewCacheRecoveryComplete = (uid: string) => {
           cmp "$RUNNER_TEMP/production-before.sha" "$RUNNER_TEMP/production-after.sha"
           echo '[Music Note Recovery] production unchanged: PASS'
 
-      - name: Cleanup temporary workflow
+      - name: Cleanup temporary recovery files
         shell: bash
         run: |
           set -euo pipefail
           git pull --ff-only origin preview
-          git rm .github/workflows/music-note-cache-recovery-hotfix.yml
-          git commit -m 'chore(preview): remove temporary Music Note recovery runner'
+          git rm .github/workflows/music-note-cache-recovery-hotfix.yml .deploy/apply-music-note-cache-recovery-1023.py
+          git commit -m 'chore(preview): remove temporary Music Note recovery tools'
           git push origin HEAD:preview

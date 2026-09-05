@@ -1,0 +1,46 @@
+name: SORIDRAW Audit Refresh Zero Stage2 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-audit-refresh-zero-stage2-20260905.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Inspect only Music Note and recent-song sync paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          s=Path('src/App.tsx').read_text(encoding='utf-8')
+          needles=[
+            'const writeRecentSongsSyncVersion',
+            'const writeMusicNoteSyncVersion',
+            'MUSIC_NOTE_SYNC_VERSION_EVENT',
+            'RECENT_SONGS_SYNC_VERSION_EVENT',
+            'favoriteSyncSignal:',
+            'syncVersions.musicNote',
+            "'syncVersions.recentSongs'",
+            'favoriteSyncSignalUpdatedAt',
+            'loadMoreFavorites',
+            'runFavoritesFullCacheRecoveryOnce',
+          ]
+          for needle in needles:
+            print('\n===== '+needle+' =====')
+            start=0
+            for occurrence in range(12):
+              i=s.find(needle,start)
+              if i<0: break
+              print(f'--- {occurrence+1} @ {i} ---')
+              print(s[max(0,i-1800):min(len(s),i+3600)])
+              start=i+len(needle)
+          PY
+          echo '=== DOMAIN SERVICES ==='
+          grep -RIn --exclude-dir=node_modules -E "favoriteSyncSignal|MUSIC_NOTE_SYNC_VERSION|RECENT_SONGS_SYNC_VERSION|syncVersions\.musicNote|syncVersions\.recentSongs" src/services src/pages src/lib | head -n 350 || true

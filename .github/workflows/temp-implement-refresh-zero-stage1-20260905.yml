@@ -1,0 +1,245 @@
+name: SORIDRAW Implement Refresh Zero Stage1 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-implement-refresh-zero-stage1-20260905.yml'
+permissions:
+  contents: write
+jobs:
+  implement:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply stage1 bounded control revision foundation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import json
+
+          # 1) RTDB rules: tiny read-only per-user control revision. Admin SDK bypasses client rules.
+          rules_path = Path('database.rules.json')
+          data = json.loads(rules_path.read_text(encoding='utf-8'))
+          root = data.setdefault('rules', {})
+          if 'userControls' in root:
+              raise SystemExit('userControls rules already exist; inspect before reapplying')
+          root['userControls'] = {
+              '$uid': {
+                  '.read': 'auth != null && auth.uid === $uid',
+                  '.write': False,
+                  'revision': {'.validate': 'data.isString()'},
+                  'updatedAt': {'.validate': 'data.isNumber()'},
+                  'reason': {'.validate': 'data.isString() && data.val().length <= 64'},
+                  '$other': {'.validate': False},
+              }
+          }
+          rules_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          # 2) Client service is foundation only in Stage1; root Firestore listener remains authoritative.
+          service_path = Path('src/services/userControlRevisionService.ts')
+          if service_path.exists():
+              raise SystemExit('userControlRevisionService.ts already exists; inspect before reapplying')
+          service_path.write_text(r'''import { onValue, ref, type Unsubscribe } from 'firebase/database';
+          import { realtimeDb } from '../firebase';
+
+          export type UserControlRevision = {
+            revision: string;
+            updatedAt: number;
+            reason: string;
+          };
+
+          const STORAGE_PREFIX = 'soridraw_user_control_revision_v1_';
+
+          const storageKey = (uid: string) => `${STORAGE_PREFIX}${uid}`;
+
+          export const readSeenUserControlRevision = (uid: string): string => {
+            if (!uid || typeof window === 'undefined') return '';
+            try {
+              return String(window.localStorage.getItem(storageKey(uid)) || '');
+            } catch {
+              return '';
+            }
+          };
+
+          export const writeSeenUserControlRevision = (uid: string, revision: string) => {
+            if (!uid || !revision || typeof window === 'undefined') return;
+            try {
+              window.localStorage.setItem(storageKey(uid), revision);
+            } catch {
+              // A storage-restricted browser can still use the live RTDB listener.
+            }
+          };
+
+          const normalizeRevision = (raw: unknown): UserControlRevision | null => {
+            if (!raw || typeof raw !== 'object') return null;
+            const value = raw as Record<string, unknown>;
+            const revision = String(value.revision || '').trim();
+            if (!revision) return null;
+            return {
+              revision,
+              updatedAt: Math.max(0, Number(value.updatedAt || 0) || 0),
+              reason: String(value.reason || '').slice(0, 64),
+            };
+          };
+
+          // SORIDRAW_USER_CONTROL_REVISION_STAGE1_20260905
+          // This listener reads one tiny RTDB node only. It never reads Firestore song
+          // collections and never performs a server write. Stage2 will consume revisions
+          // to invalidate the cached user-control document without restoring a global
+          // Firestore users/{uid} listener on every reload.
+          export const subscribeUserControlRevision = (
+            uid: string,
+            onRevision: (value: UserControlRevision | null) => void,
+            onError?: (error: unknown) => void,
+          ): Unsubscribe => {
+            if (!uid) return () => undefined;
+            return onValue(
+              ref(realtimeDb, `userControls/${uid}`),
+              (snapshot) => onRevision(normalizeRevision(snapshot.val())),
+              (error) => onError?.(error),
+            );
+          };
+          '''.replace('          ', ''), encoding='utf-8')
+
+          # 3) Functions: one tiny RTDB write only when an admin/control mutation occurs.
+          fn_path = Path('functions/src/index.ts')
+          s = fn_path.read_text(encoding='utf-8')
+          marker = 'SORIDRAW_USER_CONTROL_REVISION_STAGE1_20260905'
+          if marker in s:
+              raise SystemExit('Stage1 function marker already exists; inspect before reapplying')
+          anchor = 'const requireAdminCaller = async (request: CallableRequestLike, requiredPermission?: AdminPermissionKey) => {'
+          if anchor not in s:
+              raise SystemExit('requireAdminCaller anchor missing')
+          helper = r'''
+          // SORIDRAW_USER_CONTROL_REVISION_STAGE1_20260905
+          // Security/admin changes are rare. Publish only a tiny revision marker to RTDB;
+          // never copy user content or song lists into this control channel.
+          const writeUserControlRevision = async (targetUid: string, rawReason: string) => {
+            const safeUid = String(targetUid || "").trim();
+            if (!safeUid) throw new Error("user control target uid is required");
+            const now = Date.now();
+            const reason = String(rawReason || "control-change").slice(0, 64);
+            const revision = `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+            await admin.database().ref(`userControls/${safeUid}`).set({ revision, updatedAt: now, reason });
+            return { revision, updatedAt: now };
+          };
+
+          const writeUserControlRevisionBestEffort = async (targetUid: string, reason: string) => {
+            try {
+              return await writeUserControlRevision(targetUid, reason);
+            } catch (error) {
+              // Stage1 keeps the existing Firestore user listener as fallback, so a
+              // temporary RTDB outage must never make an already-successful admin action fail.
+              console.error("[user-control-revision] RTDB signal failed; Firestore fallback remains active.", error);
+              return null;
+            }
+          };
+
+          '''.replace('          ', '')
+          s = s.replace(anchor, helper + anchor, 1)
+
+          def block_bounds(source: str, name: str):
+              start = source.find(f'export const {name} =')
+              if start < 0:
+                  raise SystemExit(f'{name} missing')
+              nxt = source.find('\nexport const ', start + 1)
+              end = len(source) if nxt < 0 else nxt
+              return start, end
+
+          def inject_before_success_return(source: str, name: str, reason: str):
+              start, end = block_bounds(source, name)
+              block = source[start:end]
+              if 'writeUserControlRevisionBestEffort' in block:
+                  raise SystemExit(f'{name} already patched')
+              pos = block.rfind('    return { ok: true')
+              if pos < 0:
+                  pos = block.rfind('    return {')
+              if pos < 0:
+                  raise SystemExit(f'{name} success return anchor missing')
+              insertion = f'    await writeUserControlRevisionBestEffort(targetUid, "{reason}");\n'
+              block = block[:pos] + insertion + block[pos:]
+              return source[:start] + block + source[end:]
+
+          for name, reason in [
+              ('adminForceLogoutUser', 'force-logout'),
+              ('adminResetEmailVerification', 'email-verification-reset'),
+              ('masterSetAdminAccess', 'admin-access'),
+              ('adminDeleteUserAccount', 'account-deleted'),
+          ]:
+              s = inject_before_success_return(s, name, reason)
+
+          # Strict signal callable for direct admin Firestore settings updates.
+          insert_before = 'export const adminForceLogoutUser = onCall('
+          if insert_before not in s:
+              raise SystemExit('adminForceLogoutUser insert anchor missing')
+          callable_code = r'''
+          export const adminSignalUserControlRevision = onCall(
+            { region: "us-central1" },
+            async (request) => {
+              const { db, requesterUid } = await requireAdminCaller(request, "userManagement");
+              const targetUid = String(request.data?.targetUid || "").trim();
+              await assertManageableTarget(db, requesterUid, targetUid);
+              const reason = String(request.data?.reason || "admin-user-settings").slice(0, 64);
+              const signal = await writeUserControlRevision(targetUid, reason);
+              return { ok: true, targetUid, ...signal };
+            }
+          );
+
+          '''.replace('          ', '')
+          s = s.replace(insert_before, callable_code + insert_before, 1)
+          fn_path.write_text(s, encoding='utf-8')
+
+          # 4) Existing direct admin settings update emits the parallel revision only
+          # when role/account status changes. It is best-effort until Stage2 validation.
+          page_path = Path('src/pages/AdminUserManagementPage.tsx')
+          p = page_path.read_text(encoding='utf-8')
+          old = """      await updateDoc(doc(db, 'users', selectedUser.uid), updates);\n      setSaveStatus('success');"""
+          new = """      const userControlChanged = editRole !== selectedUser.role || editStatus !== selectedUser.accountStatus;\n      await updateDoc(doc(db, 'users', selectedUser.uid), updates);\n      if (userControlChanged) {\n        const signalControlRevision = httpsCallable(functions, 'adminSignalUserControlRevision');\n        void signalControlRevision({ targetUid: selectedUser.uid, reason: 'admin-user-settings' }).catch((error) => {\n          // Stage1 only: existing Firestore listener is still authoritative fallback.\n          console.warn('User control revision signal failed; Firestore listener fallback remains active.', error);\n        });\n      }\n      setSaveStatus('success');"""
+          if old not in p:
+              raise SystemExit('AdminUserManagementPage update anchor missing')
+          p = p.replace(old, new, 1)
+          page_path.write_text(p, encoding='utf-8')
+
+          # 5) Permanent static guard for the control channel.
+          guard = Path('scripts/verify-user-control-revision-foundation.mjs')
+          guard.write_text(r'''import fs from 'node:fs';
+          const service = fs.readFileSync('src/services/userControlRevisionService.ts', 'utf8');
+          const rules = fs.readFileSync('database.rules.json', 'utf8');
+          const functions = fs.readFileSync('functions/src/index.ts', 'utf8');
+          if (!service.includes('SORIDRAW_USER_CONTROL_REVISION_STAGE1_20260905')) throw new Error('control service marker missing');
+          if (!service.includes('userControls/${uid}')) throw new Error('bounded uid control path missing');
+          if (/collection\(|getDocs\(|onSnapshot\(|firestore/i.test(service)) throw new Error('control service must never touch Firestore/song collections');
+          if (!rules.includes('"userControls"') || !rules.includes('auth.uid === $uid')) throw new Error('owner-only RTDB read rule missing');
+          if (!functions.includes('writeUserControlRevisionBestEffort')) throw new Error('functions control writer missing');
+          if (!functions.includes('adminSignalUserControlRevision')) throw new Error('admin control signal callable missing');
+          console.log('SORIDRAW USER CONTROL REVISION FOUNDATION: PASS');
+          console.log('Invariant: control invalidation is one tiny UID-scoped RTDB node; no song collection read/write is allowed.');
+          '''.replace('          ', ''), encoding='utf-8')
+          PY
+
+          node scripts/verify-no-unbounded-user-song-bootstrap.mjs
+          node scripts/verify-user-control-revision-foundation.mjs
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          (cd functions && npm ci && npm run build)
+
+      - name: Commit stage1 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add database.rules.json src/services/userControlRevisionService.ts functions/src/index.ts src/pages/AdminUserManagementPage.tsx scripts/verify-user-control-revision-foundation.mjs
+          git diff --cached --check
+          git commit -m 'refactor(preview): add bounded user control revision channel'
+          git push origin preview

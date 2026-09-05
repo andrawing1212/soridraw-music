@@ -269,7 +269,6 @@ const mergeLibraryLatestBundleWithCache = (
   const retained = (previous || []).filter((track: any) => {
     const id = String(track?.id || '');
     if (!id || incomingIds.has(id)) return false;
-    if (!hasMore) return false;
     const createdAtMs = getLibraryWorkspaceTrackCreatedAtMs(track);
     return cursorCreatedAtMs <= 0 || createdAtMs < cursorCreatedAtMs;
   });
@@ -419,7 +418,8 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
           bundle.hasMore,
         );
         session.lastDoc = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
-        session.hasMore = bundle.hasMore;
+        const hasOlderCachedRows = session.tracks.length > list.length;
+        session.hasMore = Boolean(bundle.hasMore || hasOlderCachedRows || list.length >= WORKSPACE_SERVER_PAGE_SIZE);
         session.paginationFallback = false;
         session.ready = true;
         saveLibraryWorkspaceTrackCache(uid, session.tracks);

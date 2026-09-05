@@ -225,6 +225,14 @@ const normalizeDeletedIds = (value?: string[]) => Array.from(new Set(
 const prepareItems = (kind: ListBundleKind, sourceItems: any[], limit: number): any[] => {
   const sorted = [...(Array.isArray(sourceItems) ? sourceItems : [])]
     .filter(Boolean)
+    .filter((item) => kind !== 'musicNote' || !(
+      item?.favoriteRemoved === true
+      || item?.saved === false
+      || item?.hidden === true
+      || item?.favoriteHidden === true
+      || item?.deletedAt
+      || item?.trashedAt
+    ))
     .sort((a, b) => getItemCreatedAtMs(b) - getItemCreatedAtMs(a))
     .slice(0, Math.max(1, limit));
 

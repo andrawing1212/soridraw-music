@@ -21,8 +21,11 @@ jobs:
     env:
       EXPECTED_SOURCE_COMMIT: 61a91645d03327b708f68c2b5037f28b364422e5
       SAFE_SOURCE_BASELINE: f89cfcf8a1c7843c444b6d9cf5371fa211f701db
+      BACKEND_PROJECT: soridraw-app-866a5
       PREVIEW_SITE: soridraw-preview
       PREVIEW_DOMAIN: preview.soridraw.com
+      PREVIEW_WEB_APP: soridraw-preview.web.app
+      PREVIEW_FIREBASE_APP: soridraw-preview.firebaseapp.com
 
     steps:
       - name: Checkout preview

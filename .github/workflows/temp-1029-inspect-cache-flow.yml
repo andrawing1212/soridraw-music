@@ -13,20 +13,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { ref: preview }
-      - name: Print exact Music Note count and cache-trust blocks
+      - name: Print favoriteCount/profile blocks
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           s=Path('src/App.tsx').read_text()
-          for n in ['favoriteTotalCount', 'setFavoriteTotalCount', 'historicalMaxCount', 'readUserProfileCache(currentUser.uid)', 'hasCachedMusicNote', 'shouldVerifyMusicNoteBundle']:
+          for n in ['favoriteCount', 'readUserProfileCache(', 'writeUserProfileCache(', 'syncVersions.musicNote', 'syncVersions.favorites']:
             print('\n###',n)
             pos=0; count=0
             while True:
               i=s.find(n,pos)
               if i<0: break
               print('\nINDEX',i)
-              print(s[max(0,i-2200):i+5200])
+              print(s[max(0,i-1800):i+4000])
               pos=i+len(n); count+=1
-              if count>=10: break
+              if count>=12: break
           PY

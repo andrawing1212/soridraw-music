@@ -42,9 +42,11 @@ const replaceFunction = (name, text) => {
 
 const helperAnchor = 'async function refreshPublicProfileFirstViewTrackWindow(env, uid, trackCountDelta = 0) {';
 if (!source.includes(helperAnchor)) throw new Error('009 first-view helper missing');
-const helper = `// ${marker}\nasync function readLatestOwnerTrackForFirstViewMutation(env, uid) {\n  return await env.DB.prepare(\`\n    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,\n      COALESCE(s.like_count,0) AS like_count,\n      COALESCE(s.comment_count,0) AS comment_count,\n      COALESCE(s.play_count,0) AS play_count\n    FROM tracks t\n    LEFT JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1\n    LEFT JOIN track_stats s ON s.track_id = t.id\n    WHERE t.owner_uid = ?\n    ORDER BY COALESCE(t.updated_at, t.published_at, t.created_at, 0) DESC, t.id DESC\n    LIMIT 1\n  \`).bind(uid).first();\n}\n\nfunction sortPublicProfileFirstViewMutationItems(items) {\n  return [...items].sort((a, b) => {\n    const pin = Number(b?.profilePinned || 0) - Number(a?.profilePinned || 0);\n    if (pin) return pin;\n    const published = Number(b?.publishedAt || 0) - Number(a?.publishedAt || 0);\n    if (published) return published;\n    return String(b?.id || '').localeCompare(String(a?.id || ''));\n  });\n}\n\n`;
+const helper = `// ${marker}\nasync function readLatestOwnerTrackForFirstViewMutation(env, uid) {\n  return await env.DB.prepare(\`\n    SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,\n      COALESCE(s.like_count,0) AS like_count,\n      COALESCE(s.comment_count,0) AS comment_count,\n      COALESCE(s.play_count,0) AS play_count\n    FROM tracks t\n    LEFT JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1\n    LEFT JOIN track_stats s ON s.track_id = t.id\n    WHERE t.owner_uid = ?\n    ORDER BY COALESCE(t.updated_at, t.published_at, t.created_at, 0) DESC, t.id DESC\n    LIMIT 1\n  \`).bind(uid).first();\n}\n\nasync function syncExploreFeedR2PublicVisibility1028(env, trackId) {\n  try {\n    const row = await env.DB.prepare(\`\n      SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,\n        COALESCE(s.like_count,0) AS like_count,\n        COALESCE(s.comment_count,0) AS comment_count,\n        COALESCE(s.play_count,0) AS play_count\n      FROM tracks t\n      LEFT JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1\n      LEFT JOIN track_stats s ON s.track_id = t.id\n      WHERE t.id = ? AND t.is_public = 1 AND t.status = 'published'\n      LIMIT 1\n    \`).bind(trackId).first();\n    if (!row) {\n      await syncExploreFeedR2Private017(env, trackId);\n      return;\n    }\n    await syncExploreFeedR2Publication012(env, mapTrackRow(row));\n  } catch (error) {\n    console.warn('[SORIDRAW visibility] bounded feed delta skipped:', String(error?.message || error || 'unknown'));\n  }\n}\n\nfunction sortPublicProfileFirstViewMutationItems(items) {\n  return [...items].sort((a, b) => {\n    const pin = Number(b?.profilePinned || 0) - Number(a?.profilePinned || 0);\n    if (pin) return pin;\n    const published = Number(b?.publishedAt || 0) - Number(a?.publishedAt || 0);\n    if (published) return published;\n    return String(b?.id || '').localeCompare(String(a?.id || ''));\n  });\n}\n\n`;
 source = source.replace(helperAnchor, helper + helperAnchor, 1);
 
+// A visibility write must patch the already-materialized first-view snapshot from
+// one changed/latest track, never rebuild a 51-row window.
 replaceFunction('refreshPublicProfileFirstViewTrackWindow', `async function refreshPublicProfileFirstViewTrackWindow(env, uid, trackCountDelta = 0) {
   try {
     const stored = parsePublicProfileFirstViewRow(await readPublicProfileFirstViewRow(env, uid));
@@ -84,59 +86,47 @@ replaceFunction('refreshPublicProfileFirstViewTrackWindow', `async function refr
   }
 }`);
 
-// Never materialize the full 51-track profile window from a write action.
 replaceFunction('refreshOrPrebuildPublicProfileTrackWindow', `async function refreshOrPrebuildPublicProfileTrackWindow(env, uid, trackCountDelta = 0) {
   const stored = parsePublicProfileFirstViewRow(await readPublicProfileFirstViewRow(env, uid));
   if (!stored) return [];
   return await refreshPublicProfileFirstViewTrackWindow(env, uid, trackCountDelta);
 }`);
 
-// Publication-state mutation: if the R2 bundle is cold, seed from the existing
-// one-row D1 derived bundle, never from a full tracks scan.
-replaceFunction('syncMusicNotePublicationR2AfterMutation', `async function syncMusicNotePublicationR2AfterMutation(env, uid, sourceId, nextState) {
-  if (!env.PROFILE_MEDIA || !uid || !sourceId) return null;
-  let existing = await readMusicNotePublicationR2Bundle(env, uid);
-  let states = {};
-  if (existing && Number(existing.schemaVersion || 0) === MUSIC_NOTE_PUBLICATION_R2_SCHEMA_VERSION && existing.states && typeof existing.states === 'object') {
-    states = { ...existing.states };
-  } else {
-    try {
-      const row = await env.DB.prepare(
-        'SELECT states_json FROM music_note_publication_bundles WHERE uid = ? LIMIT 1'
-      ).bind(uid).first();
-      const parsed = row?.states_json ? JSON.parse(String(row.states_json)) : null;
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) states = { ...parsed };
-    } catch (error) {
-      console.warn('[Music Note publication R2] one-row seed unavailable:', String(error?.message || error || 'unknown'));
-    }
-  }
-  states[String(sourceId)] = {
-    status: nextState?.status === 'public' ? 'public' : 'private',
-    trackId: String(nextState?.trackId || getMusicNotePublicationTrackId(uid, sourceId)),
-    allowNextSongApply: Boolean(nextState?.allowNextSongApply),
-    allowFollowerSave: Boolean(nextState?.allowFollowerSave),
-    profilePinned: Boolean(nextState?.profilePinned)
-  };
-  return await writeMusicNotePublicationR2Payload(env, {
-    schemaVersion: MUSIC_NOTE_PUBLICATION_R2_SCHEMA_VERSION,
-    uid,
-    revision: Math.max(1, Number(existing?.revision || 0) + 1),
-    updatedAtMs: Date.now(),
-    itemCount: Object.keys(states).length,
-    states
-  });
+// The current Music Note private path already patches feed/profile/publication R2
+// incrementally. The old outer wrapper then rebuilt latest+popular from D1 anyway;
+// remove that redundant full-feed rebuild.
+replaceFunction('handleVisibility', `async function handleVisibility(request, env, cors, ...args) {
+  return await handleVisibilityR2Core(request, env, cors, ...args);
 }`);
 
-// Static contract: publication/visibility write paths must not rebuild the 51-row window.
-for (const name of ['handlePublication', 'handleVisibility']) {
-  const text = functionRange(name).text;
-  if (!text.includes('refreshOrPrebuildPublicProfileTrackWindow')) throw new Error(`009 ${name} mutation hook missing`);
-  if (text.includes('readPublicProfileFirstViewTrackWindow')) throw new Error(`009 ${name} still rebuilds profile window`);
+// Public/non-Music-Note visibility still uses the legacy core. Patch its feed
+// bundle incrementally from one exact track row; private removes by id from R2.
+{
+  const r = functionRange('handleVisibilityR2CoreLegacy017');
+  const anchor = '  await refreshTrackSearchIndex(env, trackId);';
+  if (!r.text.includes(anchor)) throw new Error('009 legacy visibility search-index anchor missing');
+  const patched = r.text.replace(
+    anchor,
+    `${anchor}\n  if (body.isPublic) await syncExploreFeedR2PublicVisibility1028(env, trackId);\n  else await syncExploreFeedR2Private017(env, trackId);`,
+  );
+  source = source.slice(0, r.start) + patched + source.slice(r.end);
+}
+
+// Static cost contracts.
+const wrapper = functionRange('handleVisibility').text;
+if (wrapper.includes('safelyRefreshExploreFeedR2Bundles')) throw new Error('009 visibility still rebuilds whole feed');
+const legacy = functionRange('handleVisibilityR2CoreLegacy017').text;
+if (!legacy.includes('syncExploreFeedR2PublicVisibility1028') || !legacy.includes('syncExploreFeedR2Private017')) {
+  throw new Error('009 bounded visibility feed delta missing');
 }
 const refreshText = functionRange('refreshPublicProfileFirstViewTrackWindow').text;
 if (refreshText.includes('readPublicProfileFirstViewTrackWindow')) throw new Error('009 full 51-row refresh remains');
-const r2Text = functionRange('syncMusicNotePublicationR2AfterMutation').text;
-if (r2Text.includes('buildMusicNotePublicationR2Payload')) throw new Error('009 R2 mutation can still full-scan tracks');
+const prebuildText = functionRange('refreshOrPrebuildPublicProfileTrackWindow').text;
+if (prebuildText.includes('readOrMaterializePublicProfileFirstView') || prebuildText.includes('prebuildPublicProfileFirstViewIfMissing')) {
+  throw new Error('009 mutation can still materialize full first-view snapshot');
+}
+const publicationSync = functionRange('syncMusicNotePublicationR2AfterMutation').text;
+if (publicationSync.includes('buildMusicNotePublicationR2Payload')) throw new Error('009 publication mutation can full-scan tracks');
 
 writeFileSync(workerPath, source, 'utf8');
 console.log('PUBLICATION_MUTATION_O1_009=PASS');

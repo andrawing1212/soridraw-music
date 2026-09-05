@@ -1,0 +1,42 @@
+name: Temp 1031 Inspect Cache Repair Anchors
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-1031-inspect.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: preview }
+      - name: Print exact anchors
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          cases = [
+            ('src/App.tsx', [
+              'const cachedFavs = getFavoritesCacheInMemoryOrLocalStorage',
+              'const attachFavoritesSourceBootstrap902',
+              'const shouldVerifyMusicNoteBundle',
+              'const firstPageFavs = (bundle.items || [])',
+              'const unsaveUpdates =',
+            ]),
+            ('src/pages/SunoLibraryPage.tsx', [
+              "subscribeListBundle('library'",
+              'const persisted = await persistLibraryWorkspaceTrackCacheNow',
+            ]),
+            ('src/pages/FavoritesPage.tsx', ['개 남음']),
+          ]
+          for path, needles in cases:
+            s=Path(path).read_text()
+            print('\n### FILE', path)
+            for n in needles:
+              i=s.find(n)
+              print('\n@@',n,'INDEX',i)
+              if i>=0: print(s[max(0,i-1500):i+5000])
+          PY

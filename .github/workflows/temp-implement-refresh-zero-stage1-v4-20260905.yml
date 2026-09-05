@@ -60,4 +60,4 @@ jobs:
           git commit -m 'fix(cost): make refresh Firestore reads cache-driven'
           git push origin HEAD:preview
 
-# retry 2026-09-06T01:20+09:00
+# retry folder-anchor 2026-09-06

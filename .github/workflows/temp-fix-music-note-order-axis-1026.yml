@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
-      EXPECTED_BASE: 1394af09071e2184f407d24cf38ac07085310ee0
+      EXPECTED_BASE: 4767946b69dd2ff45d5f864a0ac6dbcfb64a2ccd
       HOSTING_PROJECT: soridraw
       PREVIEW_SITE: soridraw-preview
       PREVIEW_DEFAULT_HOST: soridraw-preview.web.app
@@ -47,150 +47,116 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          import json
+          import re
 
           app_path = Path('src/App.tsx')
           text = app_path.read_text(encoding='utf-8')
           marker = 'SORIDRAW_MUSIC_NOTE_ORDER_AXIS_REPAIR_1026'
 
-          def replace_once(source: str, before: str, after: str, label: str) -> str:
-              count = source.count(before)
-              if count != 1:
-                  raise SystemExit(f'1026 {label} anchor mismatch: {count}')
-              return source.replace(before, after, 1)
-
           if marker not in text:
-              text = replace_once(
-                  text,
-                  'const SORIDRAW_MUSIC_NOTE_PAGINATION_CONTINUITY_1025 = true;\n',
-                  'const SORIDRAW_MUSIC_NOTE_PAGINATION_CONTINUITY_1025 = true;\nconst SORIDRAW_MUSIC_NOTE_ORDER_AXIS_REPAIR_1026 = true;\n',
-                  'marker',
-              )
+              anchor = 'const SORIDRAW_MUSIC_NOTE_PAGINATION_CONTINUITY_1025 = true;\n'
+              if text.count(anchor) != 1:
+                  raise SystemExit(f'1026 marker anchor mismatch: {text.count(anchor)}')
+              text = text.replace(anchor, anchor + 'const SORIDRAW_MUSIC_NOTE_ORDER_AXIS_REPAIR_1026 = true;\n', 1)
 
-          # Cold/cache-repair first page must use the same numeric chronology as display sorting.
-          fallback_before = """            const fallbackSnapshot = await getDocs(query(
-              collection(db, 'favorites'),
-              where('uid', '==', currentUser.uid),
-              limit(FAVORITES_PAGE_SIZE),
-            ));"""
-          fallback_after = """            const fallbackSnapshot = await getDocs(query(
-              collection(db, 'favorites'),
-              where('uid', '==', currentUser.uid),
-              orderBy('createdAtMs', 'desc'),
-              limit(FAVORITES_PAGE_SIZE),
-            ));"""
-          if fallback_before in text:
-              text = replace_once(text, fallback_before, fallback_after, 'bounded fallback first page')
-          elif fallback_after not in text:
-              raise SystemExit('1026 bounded fallback first-page anchor missing')
+          def insert_created_at_ms_order(snippet: str, label: str) -> str:
+              if "orderBy('createdAtMs', 'desc')" in snippet:
+                  return snippet
+              if "orderBy('createdAt', 'desc')" in snippet:
+                  return snippet.replace("orderBy('createdAt', 'desc')", "orderBy('createdAtMs', 'desc')")
+              pattern = re.compile(r"(?m)^(?P<indent>[ \t]*)where\('uid', '==', currentUser\.uid\),\n")
+              match = pattern.search(snippet)
+              if not match:
+                  raise SystemExit(f'1026 {label}: uid query anchor missing')
+              insertion = match.group(0) + match.group('indent') + "orderBy('createdAtMs', 'desc'),\n"
+              return snippet[:match.start()] + insertion + snippet[match.end():]
 
-          bootstrap_before = """          const q = query(
-            collection(db, 'favorites'),
-            where('uid', '==', currentUser.uid),
-            orderBy('createdAt', 'desc'),
-            limit(FAVORITES_PAGE_SIZE)
-          );"""
-          bootstrap_after = """          const q = query(
-            collection(db, 'favorites'),
-            where('uid', '==', currentUser.uid),
-            orderBy('createdAtMs', 'desc'),
-            limit(FAVORITES_PAGE_SIZE)
-          );"""
-          if bootstrap_before in text:
-              text = replace_once(text, bootstrap_before, bootstrap_after, 'first-page bootstrap')
-          elif bootstrap_after not in text:
-              raise SystemExit('1026 first-page bootstrap anchor missing')
+          # 1) One-time bounded cache/bootstrap recovery: deterministic newest 20.
+          fallback_start = text.find('const fallbackSnapshot = await getDocs(query(')
+          if fallback_start < 0:
+              raise SystemExit('1026 fallbackSnapshot start missing')
+          fallback_end = text.find('));', fallback_start)
+          if fallback_end < 0:
+              raise SystemExit('1026 fallbackSnapshot end missing')
+          fallback_end += 3
+          fallback = text[fallback_start:fallback_end]
+          fallback = insert_created_at_ms_order(fallback, 'fallbackSnapshot')
+          text = text[:fallback_start] + fallback + text[fallback_end:]
 
-          start_anchor = '  const loadMoreFavorites = useCallback(async () => {'
-          end_anchor = '  const syncMusicNoteIncrementalFromRemoteVersion = useCallback'
-          start = text.find(start_anchor)
-          end = text.find(end_anchor, start)
-          if start < 0 or end < 0:
-              raise SystemExit(f'1026 loadMore block anchors missing: start={start} end={end}')
-          block = text[start:end]
+          # 2) Normal first-page listener: same axis as rendering.
+          bootstrap_start = text.find('const attachFavoritesSourceBootstrap902 = () => {')
+          if bootstrap_start < 0:
+              raise SystemExit('1026 bootstrap start missing')
+          bootstrap_end = text.find('let musicNoteBundleMissingHandled', bootstrap_start)
+          if bootstrap_end < 0:
+              raise SystemExit('1026 bootstrap end missing')
+          bootstrap = text[bootstrap_start:bootstrap_end]
+          if "orderBy('createdAt', 'desc')" in bootstrap:
+              bootstrap = bootstrap.replace("orderBy('createdAt', 'desc')", "orderBy('createdAtMs', 'desc')")
+          if "orderBy('createdAtMs', 'desc')" not in bootstrap:
+              raise SystemExit('1026 bootstrap createdAtMs order missing after patch')
+          if "orderBy('createdAt', 'desc')" in bootstrap:
+              raise SystemExit('1026 bootstrap mixed createdAt order remains')
+          text = text[:bootstrap_start] + bootstrap + text[bootstrap_end:]
 
-          # 1025 accidentally mixed three axes: unordered fallback, createdAt fetch, createdAtMs display.
-          # Make every page-selection path use the already-live uid + createdAtMs composite index.
+          # 3) More paging: both compatibility and ordered paths use createdAtMs.
+          load_start = text.find('  const loadMoreFavorites = useCallback(async () => {')
+          load_end = text.find('  const syncMusicNoteIncrementalFromRemoteVersion = useCallback', load_start)
+          if load_start < 0 or load_end < 0:
+              raise SystemExit(f'1026 loadMore anchors missing: {load_start}, {load_end}')
+          block = text[load_start:load_end]
+
+          fb_start = block.find('const fallbackQuery = scanCursor')
+          fb_end = block.find('const snapshot = await getDocs(fallbackQuery)', fb_start)
+          if fb_start < 0 or fb_end < 0:
+              raise SystemExit('1026 compatibility fallback block missing')
+          fb = block[fb_start:fb_end]
+          fb_pattern = re.compile(
+              r"(?m)^(?P<indent>[ \t]*)where\('uid', '==', currentUser\.uid\),\n(?P<next>[ \t]*)(?=(?:startAfter\(scanCursor\)|limit\(FAVORITES_PAGE_SIZE\)))"
+          )
+          def add_fb_order(match):
+              return match.group(0) + match.group('indent') + "orderBy('createdAtMs', 'desc'),\n" + match.group('next')
+          fb, inserted = fb_pattern.subn(add_fb_order, fb)
+          if inserted not in (0, 2):
+              raise SystemExit(f'1026 compatibility order insertion count={inserted}')
+          if fb.count("orderBy('createdAtMs', 'desc')") != 2:
+              raise SystemExit(f'1026 compatibility createdAtMs count={fb.count("orderBy(\'createdAtMs\', \'desc\')") }')
+          block = block[:fb_start] + fb + block[fb_end:]
           block = block.replace("orderBy('createdAt', 'desc')", "orderBy('createdAtMs', 'desc')")
-
-          compat_cursor_before = """              where('uid', '==', currentUser.uid),
-              startAfter(scanCursor),
-              limit(FAVORITES_PAGE_SIZE),"""
-          compat_cursor_after = """              where('uid', '==', currentUser.uid),
-              orderBy('createdAtMs', 'desc'),
-              startAfter(scanCursor),
-              limit(FAVORITES_PAGE_SIZE),"""
-          if compat_cursor_before in block:
-              if block.count(compat_cursor_before) != 1:
-                  raise SystemExit(f'1026 compatibility cursor anchor ambiguous: {block.count(compat_cursor_before)}')
-              block = block.replace(compat_cursor_before, compat_cursor_after, 1)
-          elif compat_cursor_after not in block:
-              raise SystemExit('1026 compatibility cursor anchor missing')
-
-          compat_first_before = """              where('uid', '==', currentUser.uid),
-              limit(FAVORITES_PAGE_SIZE),
-            );"""
-          compat_first_after = """              where('uid', '==', currentUser.uid),
-              orderBy('createdAtMs', 'desc'),
-              limit(FAVORITES_PAGE_SIZE),
-            );"""
-          if compat_first_before in block:
-              if block.count(compat_first_before) != 1:
-                  raise SystemExit(f'1026 compatibility first-page anchor ambiguous: {block.count(compat_first_before)}')
-              block = block.replace(compat_first_before, compat_first_after, 1)
-          elif compat_first_after not in block:
-              raise SystemExit('1026 compatibility first-page anchor missing')
 
           if "orderBy('createdAt', 'desc')" in block:
               raise SystemExit('1026 mixed createdAt axis remains in loadMore')
           if block.count("orderBy('createdAtMs', 'desc')") < 4:
-              raise SystemExit('1026 expected createdAtMs on compatibility + ordered page paths')
-          text = text[:start] + block + text[end:]
-          app_path.write_text(text, encoding='utf-8')
+              raise SystemExit(f'1026 loadMore createdAtMs count={block.count("orderBy(\'createdAtMs\', \'desc\')")}')
+          text = text[:load_start] + block + text[load_end:]
 
-          # Keep repository index config aligned with the already-live READY index.
-          indexes_path = Path('firestore.indexes.json')
-          data = json.loads(indexes_path.read_text(encoding='utf-8'))
-          indexes = data.setdefault('indexes', [])
-          def is_target(idx):
-              return (
-                  idx.get('collectionGroup') == 'favorites'
-                  and idx.get('queryScope') == 'COLLECTION'
-                  and any(f.get('fieldPath') == 'uid' and f.get('order') == 'ASCENDING' for f in idx.get('fields', []))
-                  and any(f.get('fieldPath') == 'createdAtMs' and f.get('order') == 'DESCENDING' for f in idx.get('fields', []))
-              )
-          if not any(is_target(idx) for idx in indexes):
-              insert_at = next((i + 1 for i, idx in enumerate(indexes) if idx.get('collectionGroup') == 'favorites' and any(f.get('fieldPath') == 'createdAt' for f in idx.get('fields', []))), len(indexes))
-              indexes.insert(insert_at, {
-                  'collectionGroup': 'favorites',
-                  'queryScope': 'COLLECTION',
-                  'fields': [
-                      {'fieldPath': 'uid', 'order': 'ASCENDING'},
-                      {'fieldPath': 'createdAtMs', 'order': 'DESCENDING'},
-                  ],
-              })
-          indexes_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-          print('Applied 1026: Music Note server page selection now uses createdAtMs end-to-end.')
+          app_path.write_text(text, encoding='utf-8')
+          print('Applied 1026: first page, compatibility paging, ordered paging all use createdAtMs.')
           PY
 
           cat > scripts/verify-music-note-pagination-order.mjs <<'NODE'
           import fs from 'node:fs';
           const app = fs.readFileSync('src/App.tsx', 'utf8');
-          const indexes = JSON.parse(fs.readFileSync('firestore.indexes.json', 'utf8'));
-          const start = app.indexOf('  const loadMoreFavorites = useCallback(async () => {');
-          const end = app.indexOf('  const syncMusicNoteIncrementalFromRemoteVersion = useCallback', start);
-          if (start < 0 || end < 0) throw new Error('loadMoreFavorites block missing');
-          const block = app.slice(start, end);
           if (!app.includes('SORIDRAW_MUSIC_NOTE_ORDER_AXIS_REPAIR_1026')) throw new Error('1026 marker missing');
-          if (block.includes("orderBy('createdAt', 'desc')")) throw new Error('mixed createdAt order remains in loadMore');
-          if ((block.match(/orderBy\('createdAtMs', 'desc'\)/g) || []).length < 4) throw new Error('not all More paths use createdAtMs');
-          const bootstrapStart = app.indexOf('const attachFavoritesSourceBootstrap902');
+
+          const fallbackStart = app.indexOf('const fallbackSnapshot = await getDocs(query(');
+          const fallbackEnd = app.indexOf('));', fallbackStart) + 3;
+          const fallback = app.slice(fallbackStart, fallbackEnd);
+          if (!fallback.includes("orderBy('createdAtMs', 'desc')")) throw new Error('bounded first-page fallback is unordered');
+
+          const bootstrapStart = app.indexOf('const attachFavoritesSourceBootstrap902 = () => {');
           const bootstrapEnd = app.indexOf('let musicNoteBundleMissingHandled', bootstrapStart);
           const bootstrap = app.slice(bootstrapStart, bootstrapEnd);
           if (!bootstrap.includes("orderBy('createdAtMs', 'desc')")) throw new Error('bootstrap not createdAtMs ordered');
           if (bootstrap.includes("orderBy('createdAt', 'desc')")) throw new Error('bootstrap still uses createdAt');
-          const target = (indexes.indexes || []).filter((idx) => idx.collectionGroup === 'favorites' && (idx.fields || []).some((f) => f.fieldPath === 'uid' && f.order === 'ASCENDING') && (idx.fields || []).some((f) => f.fieldPath === 'createdAtMs' && f.order === 'DESCENDING'));
-          if (target.length !== 1) throw new Error(`expected one uid+createdAtMs index definition, got ${target.length}`);
+
+          const loadStart = app.indexOf('  const loadMoreFavorites = useCallback(async () => {');
+          const loadEnd = app.indexOf('  const syncMusicNoteIncrementalFromRemoteVersion = useCallback', loadStart);
+          if (loadStart < 0 || loadEnd < 0) throw new Error('loadMoreFavorites block missing');
+          const block = app.slice(loadStart, loadEnd);
+          if (block.includes("orderBy('createdAt', 'desc')")) throw new Error('mixed createdAt order remains in loadMore');
+          const count = (block.match(/orderBy\('createdAtMs', 'desc'\)/g) || []).length;
+          if (count < 4) throw new Error(`expected >=4 createdAtMs order clauses in loadMore, got ${count}`);
           console.log('MUSIC_NOTE_PAGINATION_ORDER_GUARD=PASS');
           NODE
 
@@ -213,7 +179,7 @@ jobs:
           changed="$(git diff --name-only)"
           echo "$changed"
           test -n "$changed"
-          unexpected="$(printf '%s\n' "$changed" | grep -Ev '^(src/App\.tsx|firestore\.indexes\.json|scripts/verify-music-note-pagination-order\.mjs)$' || true)"
+          unexpected="$(printf '%s\n' "$changed" | grep -Ev '^(src/App\.tsx|scripts/verify-music-note-pagination-order\.mjs)$' || true)"
           test -z "$unexpected" || { echo "Unexpected changed files:"; echo "$unexpected"; exit 3; }
           git diff --check
 
@@ -252,7 +218,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/App.tsx firestore.indexes.json scripts/verify-music-note-pagination-order.mjs
+          git add src/App.tsx scripts/verify-music-note-pagination-order.mjs
           git commit -m 'fix(music-note): restore chronological pagination axis'
           git push origin HEAD:preview
           echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"

@@ -1,0 +1,31 @@
+name: SORIDRAW Validate Refresh Zero Stage2A 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-validate-refresh-zero-stage2a-20260905.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Static safety guards
+        run: |
+          set -euo pipefail
+          node scripts/verify-no-unbounded-user-song-bootstrap.mjs
+          node scripts/verify-user-control-revision-foundation.mjs
+          node scripts/verify-user-domain-sync-stage2a.mjs
+      - name: TypeScript and build
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build

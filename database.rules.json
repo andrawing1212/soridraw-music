@@ -43,6 +43,37 @@
           ".validate": false
         }
       }
+    },
+    "userSync": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "musicNote": {
+          ".validate": "newData.hasChildren(['version','at','originDeviceId','operation','affectedCount','truncated']) && newData.child('version').isNumber() && newData.child('at').isNumber() && newData.child('originDeviceId').isString() && newData.child('originDeviceId').val().length <= 96 && newData.child('operation').isString() && newData.child('operation').val().length <= 48 && newData.child('affectedCount').isNumber() && newData.child('affectedCount').val() >= 0 && newData.child('affectedCount').val() <= 1000000 && newData.child('truncated').isBoolean() && (!newData.hasChild('documentIds') || newData.child('documentIds').numChildren() <= 10)",
+          "documentIds": {
+            "$index": {
+              ".validate": "newData.isString() && newData.val().length <= 256"
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "recentSongs": {
+          ".validate": "newData.hasChildren(['version','at','originDeviceId','operation','affectedCount','truncated']) && newData.child('version').isNumber() && newData.child('at').isNumber() && newData.child('originDeviceId').isString() && newData.child('originDeviceId').val().length <= 96 && newData.child('operation').isString() && newData.child('operation').val().length <= 48 && newData.child('affectedCount').isNumber() && newData.child('affectedCount').val() >= 0 && newData.child('affectedCount').val() <= 1000000 && newData.child('truncated').isBoolean() && (!newData.hasChild('documentIds') || newData.child('documentIds').numChildren() <= 10)",
+          "documentIds": {
+            "$index": {
+              ".validate": "newData.isString() && newData.val().length <= 256"
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
     }
   }
 }

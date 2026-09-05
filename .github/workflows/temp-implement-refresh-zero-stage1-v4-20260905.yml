@@ -23,6 +23,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 .deploy/fix-1021-card-anchor.py
           python3 .deploy/apply-1021-refresh-zero-firestore-listeners.py
           git diff --check
       - name: Static guards

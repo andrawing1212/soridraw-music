@@ -16,32 +16,16 @@ for old, new, expected in checks:
         raise SystemExit(f'fix-1021 card anchor {old!r}: expected {expected}, found {count}')
     s = s.replace(old, new)
 
-old_folder_definition = r'''old_folder_write = r\'''    await setDoc(doc(db, 'user_structures', user.uid), {
-      musicNoteFolders: {
-        [mode]: normalized.map((folder, index) => ({
-          id: folder.id,
-          title: folder.title,
-          order: folder.order || index + 1,
-        })),
-      },
-      updatedAt: serverTimestamp(),
-    }, { merge: true });\'''
-new_folder_write = r\'''    const folderItems = normalized.map((folder, index) => ({
-      id: folder.id,
-      title: folder.title,
-      order: folder.order || index + 1,
-    }));
-    const folderPatch = { musicNoteFolders: { [mode]: folderItems } };
-    await runV1MutationBoundary(
-      { domain: 'musicNote', operation: 'structure-update', uid: user.uid, affectedCount: folderItems.length },
-      setDoc(doc(db, 'user_structures', user.uid), {
-        ...folderPatch,
-        updatedAt: serverTimestamp(),
-      }, { merge: true }),
-    );
-    patchMusicNoteStructureCache(user.uid, folderPatch);\''' '''
+# Replace only the patch-script definition block. This avoids coupling the
+# runner to an older FavoritesPage folder implementation.
+start_token = "old_folder_write = r'''"
+end_token = "page = replace_once(page, old_folder_write, new_folder_write, 'folder structure write')"
+start = s.find(start_token)
+end = s.find(end_token)
+if start < 0 or end < 0 or end <= start:
+    raise SystemExit(f'fix-1021 folder block not found: start={start}, end={end}')
 
-new_folder_definition = r'''old_folder_write = r\'''const persistMusicNoteFolders = async (
+folder_definition = r'''old_folder_write = r''' + "'''" + r'''const persistMusicNoteFolders = async (
   uid: string,
   mode: FavoriteMode,
   folders: Folder[],
@@ -64,8 +48,8 @@ new_folder_definition = r'''old_folder_write = r\'''const persistMusicNoteFolder
       updatedAt: serverTimestamp(),
     }, { merge: true }),
   );
-};\'''
-new_folder_write = r\'''const persistMusicNoteFolders = async (
+};''' + "'''" + r'''
+new_folder_write = r''' + "'''" + r'''const persistMusicNoteFolders = async (
   uid: string,
   mode: FavoriteMode,
   folders: Folder[],
@@ -94,12 +78,8 @@ new_folder_write = r\'''const persistMusicNoteFolders = async (
       [mode]: folderItems,
     },
   });
-};\''' '''
+};''' + "'''" + "\n"
 
-count = s.count(old_folder_definition)
-if count != 1:
-    raise SystemExit(f'fix-1021 folder definition: expected 1 stale definition, found {count}')
-s = s.replace(old_folder_definition, new_folder_definition, 1)
-
+s = s[:start] + folder_definition + s[end:]
 p.write_text(s, encoding='utf-8')
 print('fix-1021: card-state and current folder anchors aligned')

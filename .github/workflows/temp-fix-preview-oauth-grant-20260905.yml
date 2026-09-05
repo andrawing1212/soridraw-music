@@ -1,0 +1,37 @@
+name: SORIDRAW Fix Preview OAuth Grant 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-fix-preview-oauth-grant-20260905.yml'
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 5
+      - name: Restore preview OAuth grant type and retrigger hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/firebase-hosting-custom-preview.yml')
+          s = p.read_text(encoding='utf-8')
+          bad = "grant_type: 'urn:ietf:params:ietf:params:oauth:grant-type:jwt-bearer'"
+          good = "grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer'"
+          if s.count(bad) != 1:
+              raise SystemExit(f'preview OAuth bad grant anchor count={s.count(bad)}')
+          p.write_text(s.replace(bad, good, 1), encoding='utf-8')
+          PY
+          git diff --check
+          grep -Fq "grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer'" .github/workflows/firebase-hosting-custom-preview.yml
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add .github/workflows/firebase-hosting-custom-preview.yml
+          git commit -m 'chore(preview): restore Firebase preview OAuth grant'
+          git push origin HEAD:preview

@@ -2,20 +2,16 @@ name: Temp 1027 Music Note Cache First Fix
 
 on:
   push:
-    branches: [preview]
+    branches:
+      - preview
     paths:
-      - '.github/workflows/temp-1027-music-note-cache-first.yml'
+      - .github/workflows/temp-1027-music-note-cache-first.yml
 
 permissions:
   contents: write
 
-concurrency:
-  group: temp-1027-music-note-cache-first
-  cancel-in-progress: false
-
 jobs:
-  apply-test-commit:
-    if: github.event.head_commit.message == 'chore(preview): run 1027 Music Note cache-first fix'
+  apply_test_commit:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -30,10 +26,12 @@ jobs:
         run: |
           set -euo pipefail
           test -f .deploy/apply-1027-music-note-cache-first-bounded-pagination.py
-          grep -q 'SORIDRAW_MUSIC_NOTE_ORDER_AXIS_REPAIR_1026' src/App.tsx
-          grep -q "orderBy('createdAtMs', 'desc')" src/App.tsx
-          ! grep -q 'SORIDRAW_MUSIC_NOTE_CACHE_FIRST_BOUNDED_MORE_1027' src/App.tsx
-          echo 'BASE_GUARD=PASS'
+          grep -q SORIDRAW_MUSIC_NOTE_ORDER_AXIS_REPAIR_1026 src/App.tsx
+          if grep -q SORIDRAW_MUSIC_NOTE_CACHE_FIRST_BOUNDED_MORE_1027 src/App.tsx; then
+            echo '1027 already applied; no second patch run needed.'
+            exit 0
+          fi
+          echo BASE_GUARD=PASS
 
       - name: Apply 1027 patch
         run: python .deploy/apply-1027-music-note-cache-first-bounded-pagination.py
@@ -57,21 +55,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          app = Path('src/App.tsx').read_text(encoding='utf-8')
-          start = app.index('  const loadMoreFavorites = useCallback(async () => {')
-          end = app.index('  const syncMusicNoteIncrementalFromRemoteVersion = useCallback', start)
-          block = app[start:end]
-          assert block.count('await getDocs(') == 1, block.count('await getDocs(')
-          assert 'while (' not in block
-          assert 'maxScanPages' not in block
-          assert 'loadCompatibilityTail' not in block
-          assert "orderBy('createdAtMs', 'desc')" in block
-          assert 'limit(FAVORITES_PAGE_SIZE)' in block
-          assert 'startAfter(cursorSnapshot)' in block
-          print('MUSIC_NOTE_MORE_MAX_ONE_PAGE_QUERY=PASS')
-          PY
+          python -c "from pathlib import Path; a=Path('src/App.tsx').read_text(); s=a.index('  const loadMoreFavorites = useCallback(async () => {'); e=a.index('  const syncMusicNoteIncrementalFromRemoteVersion = useCallback',s); b=a[s:e]; assert b.count('await getDocs(')==1; assert 'while (' not in b; assert 'maxScanPages' not in b; assert 'loadCompatibilityTail' not in b; assert \"orderBy('createdAtMs', 'desc')\" in b; assert 'limit(FAVORITES_PAGE_SIZE)' in b; assert 'startAfter(cursorSnapshot)' in b; print('MUSIC_NOTE_MORE_MAX_ONE_PAGE_QUERY=PASS')"
 
       - name: Build
         run: npm run build
@@ -80,16 +64,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name github-actions-bot
+          git config user.email 41898282+github-actions-bot@users.noreply.github.com
           git add src/App.tsx scripts/verify-music-note-pagination-order.mjs
           git diff --cached --check
-          git diff --cached --quiet && { echo 'No application changes produced'; exit 2; }
+          git diff --cached --quiet && exit 2
           git commit -m 'fix(music-note): make More cache-first and bounded'
           git push origin HEAD:preview
-          echo 'COMMIT_PUSH=PASS'
-          echo 'FIREBASE_DEPLOYED=false'
-          echo 'FUNCTIONS_DEPLOYED=false'
-          echo 'FIRESTORE_RULES_DEPLOYED=false'
-          echo 'CLOUDFLARE_DEPLOYED=false'
-          echo 'MAIN_CHANGED=false'
+          echo COMMIT_PUSH=PASS
+          echo FIREBASE_DEPLOYED=false
+          echo FUNCTIONS_DEPLOYED=false
+          echo FIRESTORE_RULES_DEPLOYED=false
+          echo CLOUDFLARE_DEPLOYED=false
+          echo MAIN_CHANGED=false

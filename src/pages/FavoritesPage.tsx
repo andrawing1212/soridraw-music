@@ -5397,7 +5397,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     favoriteColorFilter === 'all' &&
     !favoriteTrashView &&
     hasMoreFavorites &&
-    filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE
+    filteredFavorites.length > 0
   );
   const shouldShowMusicNoteMoreButton = canShowCachedMusicNoteMore || canRequestMoreMusicNotePage;
 

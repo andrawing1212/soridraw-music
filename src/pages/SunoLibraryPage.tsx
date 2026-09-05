@@ -54,6 +54,7 @@ const fallbackSharedPlaylists: Playlist[] = [
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
 // SORIDRAW_LIBRARY_PLAYBACK_FAILURE_RECOVERY_991
 const WORKSPACE_PAGE_SIZE = 10;
+const SORIDRAW_LIBRARY_MORE_VISIBILITY_1032 = true;
 const WORKSPACE_SERVER_PAGE_SIZE = 10;
 const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE;
 const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
@@ -3353,8 +3354,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     !deferredSearchTerm.trim() &&
     filter === 'all' &&
     workspaceColorFilter === 'all' &&
-    hasMoreWorkspaceServerTracks &&
-    filteredTracks.length >= WORKSPACE_PAGE_SIZE
+    hasMoreWorkspaceServerTracks
   );
   const hasMoreWorkspaceTracks = libraryViewMode === 'workspace' && (canShowCachedWorkspaceMore || canRequestMoreWorkspacePage);
 

@@ -83,6 +83,7 @@ const REGION = 'us-central1';
 const BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
 const SUNO_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_suno_api_key_registered';
 const MUSIC_NOTE_VISIBLE_BATCH_SIZE = 20;
+const SORIDRAW_MUSIC_NOTE_MORE_VISIBILITY_1032 = true;
 const SORIDRAW_901_MUSIC_NOTE_10_INCREMENTAL_SYNC = true;
 const MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT = 450;
 let musicNoteVisibleCountMemory = MUSIC_NOTE_VISIBLE_BATCH_SIZE;
@@ -5396,8 +5397,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     !searchQuery.trim() &&
     favoriteColorFilter === 'all' &&
     !favoriteTrashView &&
-    hasMoreFavorites &&
-    filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE
+    hasMoreFavorites
   );
   const shouldShowMusicNoteMoreButton = canShowCachedMusicNoteMore || canRequestMoreMusicNotePage;
 

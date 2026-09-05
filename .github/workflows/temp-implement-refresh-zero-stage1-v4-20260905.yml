@@ -34,14 +34,20 @@ jobs:
           grep -Fq 'subscribeUserControlRevision(' src/App.tsx
           grep -Fq 'subscribeMusicNoteStructureCache(uid' src/pages/FavoritesPage.tsx
           grep -Fq 'getDocFromCache(ref)' src/services/musicNoteStructureCache.ts
+          grep -Fq "operation: 'structure-update'" src/pages/FavoritesPage.tsx
           python3 - <<'PY'
           from pathlib import Path
           app=Path('src/App.tsx').read_text(encoding='utf-8')
           page=Path('src/pages/FavoritesPage.tsx').read_text(encoding='utf-8')
+          structure=Path('src/services/musicNoteStructureCache.ts').read_text(encoding='utf-8')
           if "        attachUserRoleListener();\n\n        // Fetch favorites for the user." in app:
               raise SystemExit('unconditional users listener remains')
           if "targetSession.unsubscribe = onSnapshot(\n      doc(db, 'user_structures', uid)" in page:
               raise SystemExit('billed user_structures listener remains')
+          if "...(patch.musicNoteCardState?.items || {})" in structure:
+              raise SystemExit('card state cache still deep-merges deleted entries')
+          if "User control revision unavailable; attaching Firestore safety fallback." not in app:
+              raise SystemExit('RTDB control failure lacks immediate Firestore safety fallback')
           PY
       - name: Install dependencies
         run: npm install --no-audit --no-fund
@@ -60,4 +66,4 @@ jobs:
           git commit -m 'fix(cost): make refresh Firestore reads cache-driven'
           git push origin HEAD:preview
 
-# retry folder-anchor 2026-09-06
+# hardened rerun 2026-09-06

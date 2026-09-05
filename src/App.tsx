@@ -407,6 +407,7 @@ let musicNoteActiveUiUid: string | null = null;
 const getMusicNoteCacheSchemaKey = (uid: string) => `${MUSIC_NOTE_CACHE_SCHEMA_STORAGE_BASE}_${uid}`;
 const getMusicNotePayloadCacheKey = (uid: string) => `soridraw_favorites_cache_${uid}`;
 const SORIDRAW_MUSIC_NOTE_CACHE_INTEGRITY_1028 = true;
+const SORIDRAW_MUSIC_NOTE_NORMALIZATION_STAGE1_1030 = true;
 
 const hasMusicNotePayloadCache = (uid: string): boolean => {
   if (!uid) return false;
@@ -9135,7 +9136,22 @@ const toggleCycleVariantSelection = (
         // current. Old/partial caches are discarded for this UID only.
         const musicNoteCacheNeedsFullBootstrap = prepareMusicNoteCacheForUser(currentUser.uid);
         const cachedFavs = getFavoritesCacheInMemoryOrLocalStorage(currentUser.uid);
-        if (!musicNoteCacheNeedsFullBootstrap && hasMusicNotePayloadCache(currentUser.uid)) {
+        const cachedFavoriteCount = Array.isArray(cachedFavs)
+          ? cachedFavs.filter((favorite) => !isFavoriteSoftRemoved(favorite)).length
+          : 0;
+        const cachedMusicNoteProfile = readUserProfileCache(currentUser.uid) as any;
+        const knownFavoriteCount = Math.max(
+          0,
+          Math.floor(Number(cachedMusicNoteProfile?.favoriteCount || 0) || 0),
+        );
+        const hasAnyMusicNotePayload = hasMusicNotePayloadCache(currentUser.uid);
+        // 1030 Stage 1: cache is an instant-paint layer, not proof of completeness.
+        // A tiny/under-count payload must get exactly one bounded first-page repair
+        // instead of being trusted forever and hiding the user's saved songs.
+        const musicNoteCacheNeedsBoundedVerification = !musicNoteCacheNeedsFullBootstrap
+          && hasAnyMusicNotePayload
+          && (cachedFavoriteCount < FAVORITES_PAGE_SIZE || knownFavoriteCount > cachedFavoriteCount);
+        if (!musicNoteCacheNeedsFullBootstrap && hasAnyMusicNotePayload) {
           musicNoteFreshBootstrapUids.delete(currentUser.uid);
         } else {
           musicNoteFreshBootstrapUids.add(currentUser.uid);
@@ -9207,7 +9223,7 @@ const toggleCycleVariantSelection = (
 const runFavoritesFullCacheRecoveryOnce = async () => {};
 
         const hasCachedMusicNote = !musicNoteCacheNeedsFullBootstrap
-          && hasMusicNotePayloadCache(currentUser.uid);
+          && hasAnyMusicNotePayload;
         if (musicNoteCacheNeedsFullBootstrap) {
           void runFavoritesFullCacheRecoveryOnce();
         }
@@ -9221,15 +9237,20 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
               Number(localStorage.getItem(`soridraw_favorites_cache_max_count_${currentUser.uid}`) || 0) || 0,
             );
           } catch {}
-          const mayHaveCachedHistory = historicalMaxCount > cachedCount || cachedCount >= FAVORITES_PAGE_SIZE;
+          const mayHaveCachedHistory = musicNoteCacheNeedsBoundedVerification
+            || knownFavoriteCount > cachedCount
+            || historicalMaxCount > cachedCount
+            || cachedCount >= FAVORITES_PAGE_SIZE;
           favoritePaginationCursorRef.current = persistedCursor;
-          favoritePaginationExhaustedRef.current = !persistedCursor && !mayHaveCachedHistory;
+          favoritePaginationExhaustedRef.current = !musicNoteCacheNeedsBoundedVerification
+            && !persistedCursor
+            && !mayHaveCachedHistory;
           setHasMoreFavorites(Boolean(persistedCursor) || mayHaveCachedHistory);
-          setIsFavoritesLoading(false);
+          if (!musicNoteCacheNeedsBoundedVerification) setIsFavoritesLoading(false);
         }
 
-        const attachFavoritesSourceBootstrap902 = () => {
-          if (unsubFavs || hasCachedMusicNote || musicNoteCacheNeedsFullBootstrap) return;
+        const attachFavoritesSourceBootstrap902 = (allowCachedRepair = false) => {
+          if (unsubFavs || (!allowCachedRepair && hasCachedMusicNote) || musicNoteCacheNeedsFullBootstrap) return;
           const q = query(
             collection(db, 'favorites'),
             where('uid', '==', currentUser.uid),
@@ -9297,12 +9318,18 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
           MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE,
           currentUser.uid,
         );
-        const shouldVerifyMusicNoteBundle = hasCachedMusicNote && (
-          musicNoteLocalVersionAtBootstrap <= 0
-          || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap
-        );
+        const shouldVerifyMusicNoteBundle = hasCachedMusicNote
+          && !musicNoteCacheNeedsBoundedVerification
+          && (
+            musicNoteLocalVersionAtBootstrap <= 0
+            || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap
+          );
 
-        if (shouldVerifyMusicNoteBundle) {
+        if (musicNoteCacheNeedsBoundedVerification) {
+          // Normalization first: one latest-page read repairs a suspicious local payload.
+          // Skip the bundle read here so this recovery never stacks two server reads.
+          attachFavoritesSourceBootstrap902(true);
+        } else if (shouldVerifyMusicNoteBundle) {
           unsubMusicNoteBundle = subscribeListBundle('musicNote', currentUser.uid, {
             onData: (bundle, meta) => {
               // 1009 — this bundle subscription is a one-shot bootstrap read, not a live mirror.
@@ -9362,11 +9389,10 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
               if (musicNoteBundleMissingHandled) return;
               musicNoteBundleMissingHandled = true;
               if (hasCachedMusicNote) {
-                scheduleListBundleWrite('musicNote', currentUser.uid, cachedFavs, {
-                  limit: 20,
-                  hasMore: cachedFavs.length >= 20,
-                  deletedIds: Array.from(getFavoriteDeletedTombstoneIds(currentUser.uid)),
-                });
+                // 1030: page entry/cache hydration is read-only. Never publish a local
+                // cache as the server bundle merely because that bundle is missing.
+                // A partial cache could otherwise become the new shared bad baseline.
+                markCacheDiagnostic('musicNote', 'CACHE', 0);
                 setIsFavoritesLoading(false);
                 return;
               }

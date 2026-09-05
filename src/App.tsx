@@ -407,6 +407,35 @@ let musicNoteActiveUiUid: string | null = null;
 const getMusicNoteCacheSchemaKey = (uid: string) => `${MUSIC_NOTE_CACHE_SCHEMA_STORAGE_BASE}_${uid}`;
 const getMusicNotePayloadCacheKey = (uid: string) => `soridraw_favorites_cache_${uid}`;
 
+
+// SORIDRAW_MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_1023
+// A failed Preview build could leave a partial durable Music Note payload in the
+// browser. Never delete that payload. On Preview only, reopen the existing
+// bounded first-page source once and merge authoritative server rows into the
+// current cache. After a real server snapshot succeeds, later reloads return to
+// the normal cache-first path.
+const MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_STORAGE_BASE = 'soridraw_music_note_preview_cache_recovery_20260906_v1';
+const getMusicNotePreviewCacheRecoveryKey = (uid: string) => `${MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_STORAGE_BASE}_${uid}`;
+const isMusicNotePreviewHost = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const host = String(window.location.hostname || '').toLowerCase();
+  return host === 'preview.soridraw.com'
+    || host === 'soridraw-preview.web.app'
+    || host === 'soridraw-preview.firebaseapp.com';
+};
+const needsMusicNotePreviewCacheRecovery = (uid: string): boolean => {
+  if (!uid || !isMusicNotePreviewHost() || typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem(getMusicNotePreviewCacheRecoveryKey(uid)) !== 'done';
+  } catch {
+    return true;
+  }
+};
+const markMusicNotePreviewCacheRecoveryComplete = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try { localStorage.setItem(getMusicNotePreviewCacheRecoveryKey(uid), 'done'); } catch {}
+};
+
 const hasMusicNotePayloadCache = (uid: string): boolean => {
   if (!uid) return false;
   if (favoritesInMemoryCache.has(uid)) return true;
@@ -9132,6 +9161,7 @@ const toggleCycleVariantSelection = (
         // Fetch favorites for the user.
         // A cache is trusted only when both its UID-scoped schema and payload are
         // current. Old/partial caches are discarded for this UID only.
+        const musicNotePreviewCacheRecoveryNeeded = needsMusicNotePreviewCacheRecovery(currentUser.uid);
         const musicNoteCacheNeedsFullBootstrap = prepareMusicNoteCacheForUser(currentUser.uid);
         const cachedFavs = getFavoritesCacheInMemoryOrLocalStorage(currentUser.uid);
         if (!musicNoteCacheNeedsFullBootstrap && hasMusicNotePayloadCache(currentUser.uid)) {
@@ -9187,6 +9217,7 @@ const toggleCycleVariantSelection = (
             setHasMoreFavorites(false);
             setFavorites(fallbackFavs);
             writeFavoritesCache(currentUser.uid, fallbackFavs);
+            markMusicNotePreviewCacheRecoveryComplete(currentUser.uid);
             markCacheDiagnostic('musicNote', 'SYNC', Math.max(1, fallbackSnapshot.docs.length));
           } catch (fallbackError) {
             console.warn('Bounded Music Note fallback failed. Keeping local cache only.', fallbackError);
@@ -9218,7 +9249,7 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
         }
 
         const attachFavoritesSourceBootstrap902 = () => {
-          if (unsubFavs || hasCachedMusicNote || musicNoteCacheNeedsFullBootstrap) return;
+          if (unsubFavs || (hasCachedMusicNote && !musicNotePreviewCacheRecoveryNeeded) || musicNoteCacheNeedsFullBootstrap) return;
           const q = query(
             collection(db, 'favorites'),
             where('uid', '==', currentUser.uid),
@@ -9239,6 +9270,9 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
             favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
             favoritePaginationFallbackModeRef.current = false;
             setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
+            if (!snapshot.metadata.fromCache) {
+              markMusicNotePreviewCacheRecoveryComplete(currentUser.uid);
+            }
             setFavorites((prev) => {
               const merged = mergeFavoriteFirstPageWithCache(firstPageFavs, prev || [], favoritePaginationExhaustedRef.current);
               writeFavoritesCache(currentUser.uid, merged);
@@ -9286,7 +9320,7 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
           MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE,
           currentUser.uid,
         );
-        const shouldVerifyMusicNoteBundle = hasCachedMusicNote && (
+        const shouldVerifyMusicNoteBundle = !musicNotePreviewCacheRecoveryNeeded && hasCachedMusicNote && (
           musicNoteLocalVersionAtBootstrap <= 0
           || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap
         );
@@ -9371,8 +9405,14 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
           // Cache is already current. Keep 901 delta sync available so a later
           // cross-device version event fetches only changed favorites.
           musicNoteBundleActiveUids.delete(currentUser.uid);
-          markCacheDiagnostic('musicNote', 'CACHE', 0);
-          setIsFavoritesLoading(false);
+          if (musicNotePreviewCacheRecoveryNeeded) {
+            // One bounded verification only on Preview. Existing cached rows stay
+            // visible and are merged with the authoritative first server page.
+            attachFavoritesSourceBootstrap902();
+          } else {
+            markCacheDiagnostic('musicNote', 'CACHE', 0);
+            setIsFavoritesLoading(false);
+          }
         }
 
 

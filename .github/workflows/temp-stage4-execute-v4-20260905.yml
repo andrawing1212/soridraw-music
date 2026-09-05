@@ -55,7 +55,6 @@ jobs:
           npm install --no-audit --no-fund
           npx tsc --noEmit
           npm run build
-          node scripts/audit-broad-reads.mjs
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -142,4 +141,4 @@ jobs:
           echo 'MAIN_CHANGED=false'
           echo 'PREVIEW_DEPLOY=PASS'
 
-# retrigger after removing invalid launchers
+# retrigger after removing missing broad-read audit command

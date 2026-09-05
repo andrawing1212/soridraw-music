@@ -30,7 +30,7 @@ jobs:
         run: npm ci
       - name: TypeScript
         run: npx tsc --noEmit
-      - name: Existing Music Note pagination guard
+      - name: Current Music Note pagination guard
         run: node scripts/verify-music-note-pagination-order.mjs
       - name: Stage1 normalization guard
         run: node scripts/verify-music-note-normalization-stage1.mjs

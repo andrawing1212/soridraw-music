@@ -1,0 +1,97 @@
+name: SORIDRAW Audit Cost Holes and Recent Resurrection 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-audit-cost-holes-and-recent-resurrection-20260905.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Audit targeted cost paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          roots=[Path('src'),Path('functions/src')]
+          files=[p for root in roots if root.exists() for p in root.rglob('*') if p.suffix in {'.ts','.tsx','.js','.mjs'}]
+          terms={
+            'ADMIN':['admin','AdminPage','users','onSnapshot','getDocs','collectionGroup','listUsers','usage'],
+            'SECTION_CUSTOM':['sectionCustom','section custom','SECTION_CUSTOM','section-custom'],
+            'LYRICS_TITLE':['lyrics','lyric','title','updateDoc','saveTitle','editTitle','editLyrics'],
+            'RECENT_DELETE':['recent-hide','delete-item','clear','recentSongs','user_recent_songs','RECENT_SONGS_SYNC_VERSION_EVENT','merge','cache'],
+          }
+          def snippets(path, needles, maxhits=60):
+            text=path.read_text(encoding='utf-8',errors='ignore')
+            lines=text.splitlines()
+            hits=[]
+            for i,line in enumerate(lines):
+              low=line.lower()
+              if any(n.lower() in low for n in needles):
+                hits.append(i)
+            if not hits: return
+            print(f'\n### {path} hits={len(hits)}')
+            used=[]
+            for i in hits[:maxhits]:
+              if any(abs(i-j)<5 for j in used): continue
+              used.append(i)
+              lo=max(0,i-3); hi=min(len(lines),i+5)
+              print(f'--- L{i+1} ---')
+              for n in range(lo,hi): print(f'{n+1}: {lines[n]}')
+          for label, needles in terms.items():
+            print(f'\n\n================ {label} ================')
+            for p in files:
+              snippets(p, needles)
+
+          # Explicit high-risk server operations summary.
+          print('\n\n================ HIGH RISK FIRESTORE OPS ================')
+          patterns=[
+            r'getDocs\s*\(', r'onSnapshot\s*\(', r'collectionGroup\s*\(', r'writeBatch\s*\(',
+            r'runTransaction\s*\(', r'updateDoc\s*\(', r'setDoc\s*\(', r'deleteDoc\s*\('
+          ]
+          for p in files:
+            text=p.read_text(encoding='utf-8',errors='ignore')
+            for i,line in enumerate(text.splitlines(),1):
+              if any(re.search(pat,line) for pat in patterns):
+                if any(k in text.lower() for k in ['admin','sectioncustom','recent','lyric','title']):
+                  print(f'{p}:{i}: {line.strip()}')
+
+          # App exact blocks relevant to resurrection and mutation costs.
+          app=Path('src/App.tsx').read_text(encoding='utf-8',errors='ignore')
+          needles=[
+            'const runRecentSongsServerSyncIfNeeded',
+            'const handleRecentSongsVersionSignal',
+            'const persistRecentSongsDocument',
+            'recent-hide',
+            "operation: 'delete-item'",
+            "operation: 'clear'",
+            'sectionCustom',
+            'updateSongTitle',
+            'updateLyrics',
+            'editLyrics',
+            'title',
+          ]
+          print('\n\n================ APP EXACT BLOCKS ================')
+          for needle in needles:
+            start=0; count=0
+            while True:
+              i=app.find(needle,start)
+              if i<0 or count>=8: break
+              print(f'\n===== {needle} occurrence {count+1} =====')
+              print(app[max(0,i-1800):min(len(app),i+5500)])
+              start=i+len(needle); count+=1
+
+          # Files likely dedicated admin / section custom.
+          print('\n\n================ TARGET FILE LIST ================')
+          for p in files:
+            n=str(p).lower()
+            if any(k in n for k in ['admin','section','lyric','recent','favorite','musicnote']): print(p)
+          PY

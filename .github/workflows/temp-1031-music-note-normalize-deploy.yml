@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
-      EXPECTED_BASE: c919ee80efad7f4f8aa9158c6addbabd679f9ed2
+      EXPECTED_BASE: a555019c43577f38f8326263c716ab9df0928ba0
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4

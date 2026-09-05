@@ -9571,10 +9571,13 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
     // 1027: legacy compatibility scanning is intentionally disabled. One click
     // may issue at most one bounded page query (plus one exact cursor rehydrate).
     if (favoritePaginationFallbackModeRef.current) {
-      console.warn('Music Note legacy compatibility scanner is disabled; keeping persistent cache only.');
-      favoritePaginationExhaustedRef.current = true;
-      setHasMoreFavorites(false);
-      return;
+      // The old mode flag may be left by the safe bounded first-page recovery.
+      // Continue from its canonical createdAtMs cursor, but never revive the
+      // historical multi-page compatibility scanner.
+      favoritePaginationFallbackModeRef.current = false;
+      favoriteLegacyPaginationCursorRef.current = null;
+      favoriteLegacyPaginationExhaustedRef.current = true;
+      favoriteLegacyPaginationBufferRef.current = [];
     }
 
     let cursor: any = favoritePaginationCursorRef.current;

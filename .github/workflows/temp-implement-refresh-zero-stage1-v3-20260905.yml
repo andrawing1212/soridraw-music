@@ -1,0 +1,57 @@
+name: SORIDRAW Implement Refresh Zero Stage1 V3 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-implement-refresh-zero-stage1-v3-20260905.yml'
+permissions:
+  contents: write
+jobs:
+  implement:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply corrected stage1 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'WRAP'
+          from pathlib import Path
+          import subprocess, textwrap
+          workflow = Path('.github/workflows/temp-implement-refresh-zero-stage1-20260905.yml').read_text(encoding='utf-8')
+          prefix = "          python3 <<'PY'\n"
+          suffix = "\n          PY\n\n          node scripts/verify-no-unbounded-user-song-bootstrap.mjs"
+          start = workflow.index(prefix) + len(prefix)
+          end = workflow.index(suffix, start)
+          script = textwrap.dedent(workflow[start:end])
+          old = "if (/collection\\(|getDocs\\(|onSnapshot\\(|firestore/i.test(service)) throw new Error('control service must never touch Firestore/song collections');"
+          new = "if (/collection\\(|getDocs\\(|onSnapshot\\(|firebase\\/firestore/.test(service)) throw new Error('control service must never touch Firestore/song collections');"
+          if old not in script:
+              raise SystemExit('original guard line not found')
+          script = script.replace(old, new, 1)
+          Path('/tmp/soridraw-stage1.py').write_text(script, encoding='utf-8')
+          subprocess.run(['python3', '/tmp/soridraw-stage1.py'], check=True)
+          WRAP
+          node scripts/verify-no-unbounded-user-song-bootstrap.mjs
+          node scripts/verify-user-control-revision-foundation.mjs
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          (cd functions && npm ci && npm run build)
+      - name: Commit stage1 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add database.rules.json src/services/userControlRevisionService.ts functions/src/index.ts src/pages/AdminUserManagementPage.tsx scripts/verify-user-control-revision-foundation.mjs
+          git diff --cached --check
+          git commit -m 'refactor(preview): add bounded user control revision channel'
+          git push origin preview

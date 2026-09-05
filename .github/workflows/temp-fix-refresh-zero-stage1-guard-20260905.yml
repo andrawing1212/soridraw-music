@@ -1,0 +1,36 @@
+name: SORIDRAW Fix Refresh Zero Stage1 Guard 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-fix-refresh-zero-stage1-guard-20260905.yml'
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 2
+      - name: Narrow static guard and retrigger implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/temp-implement-refresh-zero-stage1-20260905.yml')
+          s=p.read_text(encoding='utf-8')
+          old="if (/collection\\(|getDocs\\(|onSnapshot\\(|firestore/i.test(service)) throw new Error('control service must never touch Firestore/song collections');"
+          new="if (/collection\\(|getDocs\\(|onSnapshot\\(|firebase\\/firestore/.test(service)) throw new Error('control service must never touch Firestore/song collections');"
+          if s.count(old) != 1:
+              raise SystemExit(f'guard anchor count={s.count(old)}')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add .github/workflows/temp-implement-refresh-zero-stage1-20260905.yml
+          git diff --cached --check
+          git commit -m 'test(preview): narrow user-control guard to actual firestore calls'
+          git push origin preview

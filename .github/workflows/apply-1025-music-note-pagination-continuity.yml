@@ -24,7 +24,7 @@ jobs:
           ref: preview
           fetch-depth: 0
 
-      - name: Normalize 1025 staging marker anchor
+      - name: Normalize 1025 staging compatibility
         shell: bash
         run: |
           set -euo pipefail
@@ -37,6 +37,11 @@ jobs:
               '"// SORIDRAW_MUSIC_NOTE_BOUNDED_MORE_RECOVERY_1024",\n    "// SORIDRAW_MUSIC_NOTE_BOUNDED_MORE_RECOVERY_1024\\n"',
               1,
           )
+          needle = '    "bundle cursor id",\n)\n\nload_more_pattern'
+          replacement = '    "bundle cursor id",\n)\n# App contains two equivalent bootstrap branches; normalize any remaining timestamp-only branch too.\napp = app.replace(bundle_old, bundle_new)\n\nload_more_pattern'
+          if needle not in s:
+              raise SystemExit('1025 workflow normalizer: bundle insertion anchor missing')
+          s = s.replace(needle, replacement, 1)
           p.write_text(s, encoding='utf-8')
           PY
 
@@ -107,7 +112,7 @@ jobs:
             exit 0
           fi
           git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.email '4189824+github-actions[bot]@users.noreply.github.com'
           git add src/App.tsx src/pages/FavoritesPage.tsx
           git commit -m 'fix(music-note): restore continuous More pagination and total count'
           git push origin HEAD:preview

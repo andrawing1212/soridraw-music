@@ -54,9 +54,7 @@ jobs:
             echo '[Music Note More] unexpected server mutation added'
             exit 4
           fi
-          if grep -E '^\+.*where\(.uid.*\)' "$RUNNER_TEMP/more.diff" >/dev/null; then
-            grep -q 'limit(FAVORITES_PAGE_SIZE)' src/App.tsx
-          fi
+          grep -q 'limit(FAVORITES_PAGE_SIZE)' src/App.tsx
           echo '[Music Note More] bounded reads only, no server writes/deletes: PASS'
 
       - name: Set up Node.js 20

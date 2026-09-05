@@ -9,7 +9,7 @@ concurrency:
   group: soridraw-1028-cache-worker-cost-fix
   cancel-in-progress: false
 jobs:
-  fix_test_deploy:
+  verify_deploy:
     if: github.actor == 'andrawing1212'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -27,20 +27,17 @@ jobs:
           ref: preview
           fetch-depth: 80
 
-      - name: Lock 1028 baseline
+      - name: Lock validated client source
         shell: bash
         run: |
           set -euo pipefail
-          BASE='6101eb4575ab2e0979e1734eb09515f725128e99'
-          git merge-base --is-ancestor "$BASE" HEAD
-          test -f .deploy/apply-1028-cache-integrity-and-library-more.py
+          CLIENT='eed84dd69a14b9255669f24900c1d08d1b85fc5f'
+          git merge-base --is-ancestor "$CLIENT" HEAD
+          git diff --quiet "$CLIENT"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json
           test -f cloudflare/explore-worker/patches/009-publication-mutation-o1.mjs
-          echo 'BASELINE_1028=PASS'
+          echo 'VALIDATED_CLIENT_LINEAGE=PASS'
 
-      - name: Apply client cache integrity fix
-        run: python3 .deploy/apply-1028-cache-integrity-and-library-more.py
-
-      - name: Client cost safety guards
+      - name: Client cost guards
         shell: bash
         run: |
           set -euo pipefail
@@ -53,9 +50,8 @@ jobs:
           e=app.index('  const syncMusicNoteIncrementalFromRemoteVersion',s)
           block=app[s:e]
           assert block.count('await getDocs(')==1
-          assert 'while (' not in block and 'maxScanPages' not in block
-          assert "orderBy('createdAtMs', 'desc')" in block
-          assert 'limit(FAVORITES_PAGE_SIZE)' in block
+          assert 'while (' not in block and 'maxScanPages' not in block and 'loadCompatibilityTail' not in block
+          assert "orderBy('createdAtMs', 'desc')" in block and 'limit(FAVORITES_PAGE_SIZE)' in block
           assert 'SORIDRAW_MUSIC_NOTE_CACHE_INTEGRITY_1028' in app
           assert 'hasOlderCachedRows' in lib
           assert "kind !== 'musicNote'" in bundle
@@ -68,29 +64,15 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: TypeScript
-        run: npx tsc --noEmit
-
-      - name: Build
-        run: npm run build
-
-      - name: Commit validated client source
+      - name: Install and test app
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'SORIDRAW Automation'
-          git config user.email 'actions@users.noreply.github.com'
-          git add src/App.tsx src/pages/SunoLibraryPage.tsx src/lib/listBundleCache.ts
-          if ! git diff --cached --quiet; then
-            git commit -m 'fix(cache): restore bounded Music Note and Library continuation'
-            git push origin HEAD:preview
-          fi
-          echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
 
-      - name: Build current PREVIEW Worker payload
+      - name: Build bounded PREVIEW Worker payload
         shell: bash
         run: |
           set -euo pipefail
@@ -116,14 +98,13 @@ jobs:
             console.log('WORKER_BASELINE='+v.version_id);
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-          grep -q 'refreshOrPrebuildPublicProfileTrackWindow' .remote-worker/worker.js
-          grep -q 'syncMusicNotePublicationR2AfterMutation' .remote-worker/worker.js
           SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/009-publication-mutation-o1.mjs
           node --check .remote-worker/worker.js
           grep -q 'SORIDRAW_PUBLICATION_MUTATION_O1_009' .remote-worker/worker.js
+          grep -q 'syncExploreFeedR2PublicVisibility1028' .remote-worker/worker.js
           echo 'WORKER_O1_STATIC_GUARD=PASS'
 
-      - name: Deploy Cloudflare PREVIEW Worker only
+      - name: Deploy Cloudflare PREVIEW Worker
         shell: bash
         run: |
           set -euo pipefail
@@ -133,7 +114,7 @@ jobs:
           node <<'NODE'
           const A=process.env.ACCOUNT,W=process.env.WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
           async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(JSON.stringify(x).slice(0,900));return x.result||x}
-          (async()=>{const ds=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0],ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`),m=(ver.modules||[]).find(x=>x.name===ver.main_module)||(ver.modules||[])[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');if(!s.includes('SORIDRAW_PUBLICATION_MUTATION_O1_009'))throw new Error('009 marker missing after deploy');console.log('WORKER_DEPLOYED_VERSION='+v.version_id)})().catch(e=>{console.error(e);process.exit(1)});
+          (async()=>{const ds=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0],ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`),m=(ver.modules||[]).find(x=>x.name===ver.main_module)||(ver.modules||[])[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');if(!s.includes('SORIDRAW_PUBLICATION_MUTATION_O1_009')||!s.includes('syncExploreFeedR2PublicVisibility1028'))throw new Error('1028 worker marker missing after deploy');console.log('WORKER_DEPLOYED_VERSION='+v.version_id)})().catch(e=>{console.error(e);process.exit(1)});
           NODE
           code="$(curl -sS -o "$RUNNER_TEMP/worker-noauth.json" -w '%{http_code}' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/me/music-note-publications-bundle')"
           echo "WORKER_NOAUTH_HTTP=$code"
@@ -145,7 +126,7 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Deploy Firebase PREVIEW and verify exact build
+      - name: Deploy Firebase PREVIEW and verify
         shell: bash
         run: |
           set -euo pipefail
@@ -169,11 +150,11 @@ jobs:
           cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
           echo 'PRODUCTION_UNCHANGED=PASS'
 
-      - name: Cleanup temporary workflow
+      - name: Cleanup temporary workflows
         shell: bash
         run: |
           set -euo pipefail
           git pull --ff-only origin preview
-          git rm .github/workflows/temp-1028-cache-worker-cost-fix.yml
-          git commit -m 'chore(preview): remove temporary 1028 workflow'
+          git rm .github/workflows/temp-1028-cache-worker-cost-fix.yml .github/workflows/temp-inspect-preview-worker-1028.yml
+          git commit -m 'chore(preview): remove temporary 1028 workflows'
           git push origin HEAD:preview

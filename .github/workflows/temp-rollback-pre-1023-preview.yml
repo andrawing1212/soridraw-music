@@ -1,0 +1,155 @@
+name: Temp Rollback Pre-1023 Preview
+
+on:
+  push:
+    branches:
+      - preview
+    paths:
+      - .github/workflows/temp-rollback-pre-1023-preview.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rollback-pre-1023-preview
+  cancel-in-progress: false
+
+jobs:
+  rollback_test_deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      EXPECTED_HEAD: 7d6018afa90b402f5beb3adcd87ef9e0d4cd9b8d
+      ROLLBACK_SOURCE: e8a4ff777d99852f8e0a98111b5eb4c44f9800bb
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 100
+
+      - name: Lock current application source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_HEAD" HEAD
+          git diff --quiet "$EXPECTED_HEAD"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json
+          echo '[Rollback] current app source lock: PASS'
+
+      - name: Restore exact pre-1023 Music Note source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout "$ROLLBACK_SOURCE" -- src/App.tsx src/pages/FavoritesPage.tsx
+          git diff --quiet "$ROLLBACK_SOURCE"..HEAD -- src/pages/SunoLibraryPage.tsx
+          echo '[Rollback] Library source already matches pre-1023 baseline: PASS'
+
+      - name: Cost-safety guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'SORIDRAW_917_MUSIC_NOTE_DELTA_SYNC_NO_FULLSCAN' src/App.tsx
+          grep -q 'SORIDRAW_921_FIRESTORE_COST_HARDENING' src/App.tsx
+          grep -q 'SORIDRAW_922_NO_UNBOUNDED_BOOTSTRAP_READS' src/App.tsx
+          grep -q 'SORIDRAW_902_LIST_BUNDLE_CACHE' src/App.tsx
+          ! grep -q 'SORIDRAW_MUSIC_NOTE_PREVIEW_CACHE_RECOVERY_1023' src/App.tsx
+          ! grep -q 'SORIDRAW_MUSIC_NOTE_BOUNDED_MORE_RECOVERY_1024' src/App.tsx
+          ! grep -q 'SORIDRAW_MUSIC_NOTE_PAGINATION_CONTINUITY_1025' src/App.tsx
+          ! grep -q 'SORIDRAW_MUSIC_NOTE_ORDER_AXIS_REPAIR_1026' src/App.tsx
+          ! grep -q 'SORIDRAW_MUSIC_NOTE_CACHE_FIRST_BOUNDED_MORE_1027' src/App.tsx
+          git diff --check
+          echo '[Rollback] pre-regression cost guards: PASS'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit restored source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/App.tsx src/pages/FavoritesPage.tsx
+          git diff --cached --check
+          git diff --cached --quiet && { echo 'No rollback source diff'; exit 2; }
+          git commit -m 'fix(music-note): rollback to pre-1023 cache-first baseline'
+          git push origin HEAD:preview
+          echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Authenticate Google/Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot production before preview deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/production-before.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/production-before.html"
+          sha256sum "$RUNNER_TEMP/production-before.html" | awk '{print $1}' > "$RUNNER_TEMP/production-before.sha"
+
+      - name: Deploy Firebase PREVIEW hosting only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo '[Rollback] Firebase PREVIEW hosting: PASS'
+
+      - name: Verify exact deployed build
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then
+                  ok='yes'
+                  echo "[Rollback] exact build PASS: $url"
+                  break
+                fi
+              fi
+              sleep 10
+            done
+            test "$ok" = 'yes'
+          done
+
+      - name: Verify production stayed unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/production-after.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/production-after.html"
+          sha256sum "$RUNNER_TEMP/production-after.html" | awk '{print $1}' > "$RUNNER_TEMP/production-after.sha"
+          cmp "$RUNNER_TEMP/production-before.sha" "$RUNNER_TEMP/production-after.sha"
+          echo '[Rollback] production unchanged: PASS'
+
+      - name: Cleanup temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin preview
+          git rm .github/workflows/temp-rollback-pre-1023-preview.yml
+          git commit -m 'chore(preview): remove temporary rollback workflow'
+          git push origin HEAD:preview
+
+      - name: Result
+        run: |
+          echo "Rollback source commit: $SOURCE_COMMIT"
+          echo 'Preview URL: https://preview.soridraw.com/'
+          echo 'No Functions, Firestore/Database rules, Cloudflare, main, TEST, or PRODUCTION deployment was performed.'

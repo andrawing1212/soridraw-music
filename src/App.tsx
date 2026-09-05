@@ -408,6 +408,7 @@ const getMusicNoteCacheSchemaKey = (uid: string) => `${MUSIC_NOTE_CACHE_SCHEMA_S
 const getMusicNotePayloadCacheKey = (uid: string) => `soridraw_favorites_cache_${uid}`;
 const SORIDRAW_MUSIC_NOTE_CACHE_INTEGRITY_1028 = true;
 const SORIDRAW_MUSIC_NOTE_NORMALIZATION_STAGE1_1030 = true;
+const SORIDRAW_MUSIC_NOTE_STAGE1_PAGE_SIZED_CACHE_REUSE_1030B = true;
 
 const hasMusicNotePayloadCache = (uid: string): boolean => {
   if (!uid) return false;
@@ -9146,11 +9147,13 @@ const toggleCycleVariantSelection = (
         );
         const hasAnyMusicNotePayload = hasMusicNotePayloadCache(currentUser.uid);
         // 1030 Stage 1: cache is an instant-paint layer, not proof of completeness.
-        // A tiny/under-count payload must get exactly one bounded first-page repair
-        // instead of being trusted forever and hiding the user's saved songs.
+        // A tiny payload must get one bounded first-page repair instead of being
+        // trusted forever and hiding the user's saved songs. Once a full 20-item
+        // page is cached, keep it: knownFavoriteCount only keeps More available for
+        // older history and must not force the same latest 20 reads on every reload.
         const musicNoteCacheNeedsBoundedVerification = !musicNoteCacheNeedsFullBootstrap
           && hasAnyMusicNotePayload
-          && (cachedFavoriteCount < FAVORITES_PAGE_SIZE || knownFavoriteCount > cachedFavoriteCount);
+          && cachedFavoriteCount < FAVORITES_PAGE_SIZE;
         if (!musicNoteCacheNeedsFullBootstrap && hasAnyMusicNotePayload) {
           musicNoteFreshBootstrapUids.delete(currentUser.uid);
         } else {

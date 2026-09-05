@@ -94,7 +94,7 @@ jobs:
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
               body: new URLSearchParams({
-                grant_type: 'urn:ietf:params:ietf:params:oauth:grant-type:jwt-bearer',
+                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
                 assertion,
               }),
             });
@@ -153,7 +153,7 @@ jobs:
               json.dump({'authorizedDomains': domains}, f, ensure_ascii=False)
           missing = [v for v in wanted if v not in domains]
           if missing:
-            raise SystemExit(f'Could not stage Auth domains: {missing}')
+              raise SystemExit(f'Could not stage Auth domains: {missing}')
           print(f'[Custom Preview] Auth authorizedDomains staged: {wanted}')
           PY
 
@@ -171,7 +171,7 @@ jobs:
           domains = set(data.get('authorizedDomains', []))
           missing = sorted(wanted - domains)
           if missing:
-            raise SystemExit(f'Firebase Auth domains missing after PATCH: {missing}')
+              raise SystemExit(f'Firebase Auth domains missing after PATCH: {missing}')
           print('[Custom Preview] Firebase Auth fixed preview domains: PASS')
           PY
 
@@ -196,13 +196,13 @@ jobs:
           data = json.load(open(source, encoding='utf-8'))
           web = data.get('webSettings') or {}
           if web.get('allowAllDomains') is True:
-            open(target, 'w', encoding='utf-8').write('')
-            print('[Custom Preview] reCAPTCHA allows all domains; patch not needed.')
-            raise SystemExit(0)
+              open(target, 'w', encoding='utf-8').write('')
+              print('[Custom Preview] reCAPTCHA allows all domains; patch not needed.')
+              raise SystemExit(0)
           wanted = ['preview.soridraw.com', 'soridraw-preview.web.app', 'soridraw-preview.firebaseapp.com']
           domains = list(dict.fromkeys([str(v).strip() for v in web.get('allowedDomains', []) if str(v).strip()] + wanted))
           with open(target, 'w', encoding='utf-8') as f:
-            json.dump({'name': data.get('name'), 'webSettings': {'allowedDomains': domains}}, f, ensure_ascii=False)
+              json.dump({'name': data.get('name'), 'webSettings': {'allowedDomains': domains}}, f, ensure_ascii=False)
           print(f'[Custom Preview] reCAPTCHA preview domains staged: {wanted}')
           PY
           echo 'RECAPTCHA_POLICY_STATUS=readable' >> "$GITHUB_ENV"
@@ -271,4 +271,4 @@ jobs:
           echo "App Check policy inspection: ${RECAPTCHA_POLICY_STATUS:-not-run}"
           echo 'No Functions deploy, Firestore/Database Rules update, user-data migration, main change, or production Hosting release was performed.'
 
-# Manual preview redeploy trigger: 2026-09-05T21:19Z
+# Manual preview redeploy trigger: 2026-09-05T20:22Z

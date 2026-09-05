@@ -54,7 +54,9 @@ jobs:
           assert 'SORIDRAW_MUSIC_NOTE_PAGINATION_CONTINUITY_1025 = true' in app
           assert "JSON.stringify({ version: 2, id: cursorId" in app
           assert 'bundle.cursorCreatedAtMs > 0 ? new Date' not in app
-          assert 'totalFavoritesCount={favoriteTotalCount}' in app
+          assert 'totalFavoritesCount={favoriteTotalCount}' not in app
+          assert 'cachedProfileFavoriteCount' in fav
+          assert 'readUserProfileCache(user.uid)?.favoriteCount' in fav
           assert '전체 ${musicNoteTotalCount}곡' in fav
 
           match = re.search(
@@ -68,6 +70,7 @@ jobs:
           assert 'startAfter(scanCursor)' in block
           assert "where('uid', '==', currentUser.uid)" in block
           assert "favoritePaginationCursorRef.current = scanCursor" in block
+          assert "where('uid', '==', currentUser.uid)\n        ));" not in block
           print('1025 regression guards passed')
           PY
 

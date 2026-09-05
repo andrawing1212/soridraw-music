@@ -1,0 +1,150 @@
+name: Temp Deploy 1025 Music Note Firebase Preview
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-deploy-1025-music-note-preview.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temp-deploy-1025-music-note-preview
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_SOURCE_COMMIT: 55d67356b496823d47699e98ba86a3de1a466ef9
+      HOSTING_PROJECT: soridraw
+      PREVIEW_SITE: soridraw-preview
+      PREVIEW_DEFAULT_HOST: soridraw-preview.web.app
+      PREVIEW_CUSTOM_HOST: preview.soridraw.com
+      PRODUCTION_HOST: soridraw.web.app
+
+    steps:
+      - name: Checkout exact preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - name: Lock application source to verified 1025 commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_SOURCE_COMMIT" HEAD
+          if ! git diff --quiet "$EXPECTED_SOURCE_COMMIT"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json; then
+            echo 'Application source changed after verified 1025 commit; aborting preview deploy.'
+            git diff --name-only "$EXPECTED_SOURCE_COMMIT"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json
+            exit 2
+          fi
+          grep -q 'SORIDRAW_MUSIC_NOTE_PAGINATION_CONTINUITY_1025 = true' src/App.tsx
+          grep -q 'JSON.stringify({ version: 2, id: cursorId' src/App.tsx
+          ! grep -q 'bundle.cursorCreatedAtMs > 0 ? new Date' src/App.tsx
+          grep -q 'cachedProfileFavoriteCount' src/pages/FavoritesPage.tsx
+          grep -q '전체 ${musicNoteTotalCount}곡' src/pages/FavoritesPage.tsx
+          grep -q '"site": "soridraw-preview"' firebase.hosting-preview.json
+          echo 'SOURCE_LOCK=PASS'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build exact preview
+        run: npm run build
+
+      - name: Authenticate Google and Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Assert isolated Firebase preview site exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest hosting:sites:list --project "$HOSTING_PROJECT" --json > "$RUNNER_TEMP/sites.json"
+          node - "$RUNNER_TEMP/sites.json" "$PREVIEW_SITE" <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const wanted = process.argv[3];
+          const candidates = [payload?.result?.sites, payload?.result, payload?.sites, payload];
+          const sites = candidates.find(Array.isArray) || [];
+          const ids = sites.map((site) => {
+            const raw = String(site?.site || site?.siteId || site?.id || site?.name || '');
+            return raw.includes('/') ? raw.split('/').filter(Boolean).pop() : raw;
+          }).filter(Boolean);
+          console.log(`HOSTING_SITES=${ids.join(',')}`);
+          if (!ids.includes('soridraw')) throw new Error('Production site soridraw missing; abort.');
+          if (!ids.includes(wanted)) throw new Error(`Preview site ${wanted} missing; abort.`);
+          console.log('PREVIEW_SITE_EXISTS=PASS');
+          NODE
+
+      - name: Snapshot production before preview deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "https://$PRODUCTION_HOST/" -o "$RUNNER_TEMP/prod-before.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+          echo 'PRODUCTION_BEFORE=PASS'
+
+      - name: Deploy Firebase preview hosting only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project "$HOSTING_PROJECT" \
+            --config firebase.hosting-preview.json \
+            --non-interactive
+          echo 'FIREBASE_PREVIEW_HOSTING_DEPLOY=PASS'
+
+      - name: Verify exact deployed preview build
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          local_asset="$(grep -oE 'src="/assets/index-[^"]+\.js"' dist/index.html | head -n1 || true)"
+          test -n "$local_asset"
+          for host in "$PREVIEW_DEFAULT_HOST" "$PREVIEW_CUSTOM_HOST"; do
+            ok=''
+            for attempt in $(seq 1 18); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://$host/?verify1025=${GITHUB_RUN_ID}-${attempt}" -o "$RUNNER_TEMP/${host//./_}.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/${host//./_}.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/${host//./_}.html" | awk '{print $1}')"
+                remote_asset="$(grep -oE 'src="/assets/index-[^"]+\.js"' "$RUNNER_TEMP/${host//./_}.html" | head -n1 || true)"
+                if [ "$remote_sha" = "$local_sha" ] && [ "$remote_asset" = "$local_asset" ]; then
+                  ok='yes'
+                  echo "PREVIEW_EXACT_BUILD_PASS=https://$host/ ASSET=$remote_asset"
+                  break
+                fi
+              fi
+              sleep 10
+            done
+            test "$ok" = 'yes' || { echo "Exact preview verification failed: $host"; exit 7; }
+          done
+
+      - name: Verify production stayed unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "https://$PRODUCTION_HOST/" -o "$RUNNER_TEMP/prod-after.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo 'PRODUCTION_UNCHANGED=PASS'
+          echo 'FUNCTIONS_DEPLOYED=false'
+          echo 'FIRESTORE_RULES_DEPLOYED=false'
+          echo 'CLOUDFLARE_DEPLOYED=false'
+          echo 'MAIN_CHANGED=false'

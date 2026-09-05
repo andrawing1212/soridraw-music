@@ -141,3 +141,5 @@ jobs:
           echo "SOURCE_COMMIT=$(cat /tmp/source.sha)"
           echo 'MAIN_CHANGED=false'
           echo 'PREVIEW_DEPLOY=PASS'
+
+# retrigger after removing invalid launchers

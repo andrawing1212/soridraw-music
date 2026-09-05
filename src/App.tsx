@@ -410,6 +410,7 @@ const getMusicNotePayloadCacheKey = (uid: string) => `soridraw_favorites_cache_$
 
 // SORIDRAW_MUSIC_NOTE_BOUNDED_MORE_RECOVERY_1024
 const SORIDRAW_MUSIC_NOTE_PAGINATION_CONTINUITY_1025 = true;
+const SORIDRAW_MUSIC_NOTE_ORDER_AXIS_REPAIR_1026 = true;
 const readFavoritesHistoricalMaxCount = (uid: string): number => {
   if (!uid || typeof localStorage === 'undefined') return 0;
   try {
@@ -9265,6 +9266,7 @@ const toggleCycleVariantSelection = (
             const fallbackSnapshot = await getDocs(query(
               collection(db, 'favorites'),
               where('uid', '==', currentUser.uid),
+              orderBy('createdAtMs', 'desc'),
               limit(FAVORITES_PAGE_SIZE),
             ));
             const fallbackFavs = sortFavoriteList(
@@ -9317,7 +9319,7 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
           const q = query(
             collection(db, 'favorites'),
             where('uid', '==', currentUser.uid),
-            orderBy('createdAt', 'desc'),
+            orderBy('createdAtMs', 'desc'),
             limit(FAVORITES_PAGE_SIZE)
           );
 
@@ -9580,12 +9582,14 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
           ? query(
               collection(db, 'favorites'),
               where('uid', '==', currentUser.uid),
+                            orderBy('createdAtMs', 'desc'),
               startAfter(scanCursor),
               limit(FAVORITES_PAGE_SIZE),
             )
           : query(
               collection(db, 'favorites'),
               where('uid', '==', currentUser.uid),
+                            orderBy('createdAtMs', 'desc'),
               limit(FAVORITES_PAGE_SIZE),
             );
         const snapshot = await getDocs(fallbackQuery);
@@ -9667,14 +9671,14 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
           ? query(
               collection(db, 'favorites'),
               where('uid', '==', currentUser.uid),
-              orderBy('createdAt', 'desc'),
+              orderBy('createdAtMs', 'desc'),
               startAfter(scanCursor),
               limit(FAVORITES_PAGE_SIZE),
             )
           : query(
               collection(db, 'favorites'),
               where('uid', '==', currentUser.uid),
-              orderBy('createdAt', 'desc'),
+              orderBy('createdAtMs', 'desc'),
               limit(FAVORITES_PAGE_SIZE),
             );
 

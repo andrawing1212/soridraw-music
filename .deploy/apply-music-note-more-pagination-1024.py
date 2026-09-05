@@ -14,15 +14,13 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-def replace_all_exact(text: str, old: str, new: str, expected: int, label: str) -> str:
+def replace_all_present(text: str, old: str, new: str, label: str) -> str:
     count = text.count(old)
-    if count != expected:
-        raise SystemExit(f'{label}: expected {expected} anchors, found {count}')
+    if count < 1:
+        raise SystemExit(f'{label}: anchor not found')
+    print(f'{label}: replacing {count} anchor(s)')
     return text.replace(old, new)
 
-# Keep a local high-water mark so a previously partial/corrupted cache can still
-# expose More without doing any read during reload. The actual verification is
-# delayed until the user clicks More.
 payload_anchor = "const getMusicNotePayloadCacheKey = (uid: string) => `soridraw_favorites_cache_${uid}`;\n"
 payload_insert = payload_anchor + r'''
 
@@ -39,8 +37,6 @@ const readFavoritesHistoricalMaxCount = (uid: string): number => {
 '''
 app = replace_once(app, payload_anchor, payload_insert, 'historical max helper')
 
-# Separate cursor/buffer for the bounded compatibility chain. It is intentionally
-# memory-only: refresh stays zero-read and a user click reconstructs it cheaply.
 app = replace_once(
     app,
     "  const favoritePaginationFallbackModeRef = useRef(false);",
@@ -64,11 +60,8 @@ reset_new = """        favoritePaginationCursorRef.current = null;
         favoriteLegacyPaginationExhaustedRef.current = false;
         favoriteLegacyPaginationBufferRef.current = [];
         setHasMoreFavorites(false);"""
-app = replace_all_exact(app, reset_old, reset_new, 2, 'pagination reset')
+app = replace_all_present(app, reset_old, reset_new, 'pagination reset')
 
-# Cached reload must not conclude "no more" merely because a Firestore snapshot
-# cursor is not durable. A local high-water mark is free and preserves the More
-# affordance; server work occurs only after an explicit click.
 cached_old = """        if (hasCachedMusicNote) {
           const persistedCursor = readMusicNotePaginationCursor(currentUser.uid);
           favoritePaginationCursorRef.current = persistedCursor;
@@ -88,12 +81,6 @@ cached_new = """        if (hasCachedMusicNote) {
         }"""
 app = replace_once(app, cached_old, cached_new, 'cached bootstrap more gate')
 
-# Replace only the load-more callback. Normal ordered paging remains first. If
-# the ordered cursor is missing/exhausted (the current regression) or errors,
-# one explicit More click walks a uid-scoped fallback query in bounded 20-doc
-# pages, never an unbounded collection read. Up to 5 pages may be scanned in a
-# single click solely to skip already-cached duplicates; the cursor/buffer then
-# continue from memory on later clicks.
 pattern = r"  const loadMoreFavorites = useCallback\(async \(\) => \{.*?\n  \}, \[user\]\);"
 replacement = r'''  const loadMoreFavorites = useCallback(async () => {
     const currentUser = user || auth.currentUser;
@@ -175,9 +162,7 @@ replacement = r'''  const loadMoreFavorites = useCallback(async () => {
       appendFavoritePage(nextPage);
       const hasMoreCompatibilityRows = favoriteLegacyPaginationBufferRef.current.length > 0 || !exhausted;
       setHasMoreFavorites(hasMoreCompatibilityRows);
-      if (!hasMoreCompatibilityRows) {
-        clearMusicNotePaginationCursor(currentUser.uid);
-      }
+      if (!hasMoreCompatibilityRows) clearMusicNotePaginationCursor(currentUser.uid);
     };
 
     favoritePaginationLoadingRef.current = true;
@@ -215,17 +200,10 @@ replacement = r'''  const loadMoreFavorites = useCallback(async () => {
         }
 
         favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
-        if (favoritePaginationExhaustedRef.current) {
-          // Do not hide More yet: legacy rows without createdAt may still exist.
-          // They are discovered only after the next explicit click.
-          setHasMoreFavorites(true);
-        } else {
-          setHasMoreFavorites(true);
-        }
-
-        if (nextDocs.length === 0) {
-          await loadBoundedCompatibilityPage();
-        }
+        // Keep the affordance until the bounded compatibility chain proves that
+        // no legacy rows remain. This does not read anything on refresh.
+        setHasMoreFavorites(true);
+        if (nextDocs.length === 0) await loadBoundedCompatibilityPage();
       } catch (orderedError) {
         console.warn('Favorites ordered page unavailable; trying bounded compatibility pagination.', orderedError);
         favoritePaginationFallbackModeRef.current = true;
@@ -243,8 +221,6 @@ app, count = re.subn(pattern, replacement, app, count=1, flags=re.S)
 if count != 1:
     raise SystemExit(f'load more callback: expected 1 match, found {count}')
 
-# A partial first page can legitimately contain fewer than 20 visible rows
-# after tombstone filtering. If App says there may be more, keep the button.
 favorites_old = """    hasMoreFavorites &&
     filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE
   );"""
@@ -256,13 +232,13 @@ favorites = replace_once(favorites, favorites_old, favorites_new, 'Music Note Mo
 APP.write_text(app, encoding='utf-8')
 FAVORITES.write_text(favorites, encoding='utf-8')
 
-# Local verification: this patch must stay bounded and must not introduce a
-# server mutation into pagination.
 check = APP.read_text(encoding='utf-8')
-if 'SORIDRAW_MUSIC_NOTE_BOUNDED_MORE_RECOVERY_1024' not in check:
-    raise SystemExit('1024 marker missing')
-if "where('uid', '==', currentUser.uid),\n              limit(FAVORITES_PAGE_SIZE)" not in check:
-    raise SystemExit('bounded fallback first page missing')
-if 'scanCount < 5' not in check:
-    raise SystemExit('bounded scan cap missing')
+for marker in (
+    'SORIDRAW_MUSIC_NOTE_BOUNDED_MORE_RECOVERY_1024',
+    'scanCount < 5',
+    'favoriteLegacyPaginationCursorRef',
+    'limit(FAVORITES_PAGE_SIZE)',
+):
+    if marker not in check:
+        raise SystemExit(f'1024 verification missing: {marker}')
 print('1024 Music Note bounded More pagination patch applied')

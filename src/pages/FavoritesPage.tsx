@@ -61,7 +61,8 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { User } from 'firebase/auth';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc, setDoc, deleteDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot } from '../lib/firestoreMeasured';
+import { doc, getDoc, updateDoc, setDoc, deleteDoc, addDoc, collection, serverTimestamp, writeBatch } from '../lib/firestoreMeasured';
+import { patchMusicNoteStructureCache, subscribeMusicNoteStructureCache } from '../services/musicNoteStructureCache';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import {
@@ -113,18 +114,10 @@ const subscribeMusicNoteFolderDocument = (uid: string, listener: (data: any) => 
 
   if (!session.unsubscribe) {
     const targetSession = session;
-    targetSession.unsubscribe = onSnapshot(
-      doc(db, 'user_structures', uid),
-      (snapshot) => {
-        const nextData: any = snapshot.exists() ? snapshot.data() : {};
-        targetSession.data = nextData;
-        targetSession.listeners.forEach((subscriber) => subscriber(nextData));
-      },
-      (error) => {
-        console.warn('music note folder shared listener failed:', error);
-        targetSession.unsubscribe = null;
-      },
-    );
+    targetSession.unsubscribe = subscribeMusicNoteStructureCache(uid, (nextData) => {
+      targetSession.data = nextData;
+      targetSession.listeners.forEach((subscriber) => subscriber(nextData));
+    });
   }
 
   return () => {
@@ -256,14 +249,23 @@ const flushMusicNoteCardStateServerWrite = (uid: string): Promise<boolean> => {
   const snapshot = readMusicNoteCardStateLocal(uid);
   const task = (async () => {
     try {
-      await setDoc(doc(db, 'user_structures', uid), {
+      const cardStatePatch = {
         musicNoteCardState: {
           schemaVersion: 1,
           items: snapshot.items,
           updatedAtMs: snapshot.updatedAtMs,
-          updatedAt: serverTimestamp(),
         },
-      }, { merge: true });
+      };
+      await runV1MutationBoundary(
+        { domain: 'musicNote', operation: 'structure-update', uid, affectedCount: Object.keys(snapshot.items).length },
+        setDoc(doc(db, 'user_structures', uid), {
+          musicNoteCardState: {
+            ...cardStatePatch.musicNoteCardState,
+            updatedAt: serverTimestamp(),
+          },
+        }, { merge: true }),
+      );
+      patchMusicNoteStructureCache(uid, cardStatePatch);
       clearMusicNoteCardStateDirty(uid);
       return true;
     } catch (error) {
@@ -1939,19 +1941,25 @@ export default function FavoritesPage({
   const persistMusicNoteFolders = async (mode: MusicNoteFolderMode, folders: MusicNoteFolder[]) => {
     if (!user?.uid) return;
     const normalized = normalizeMusicNoteFolders(folders, mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS);
-    await setDoc(doc(db, 'user_structures', user.uid), {
+    const folderItems = normalized.map((folder, index) => ({
+      id: folder.id,
+      title: folder.title,
+      order: folder.order || index + 1,
+      isDefault: Boolean(folder.isDefault || folder.id === 'default'),
+      createdAt: folder.createdAt || Date.now(),
+      updatedAt: Date.now(),
+    }));
+    const folderPatch = {
       musicNoteFolders: {
-        [mode]: normalized.map((folder, index) => ({
-          id: folder.id,
-          title: folder.title,
-          order: folder.order || index + 1,
-          isDefault: Boolean(folder.isDefault || folder.id === 'default'),
-          createdAt: folder.createdAt || Date.now(),
-          updatedAt: Date.now(),
-        })),
+        [mode]: folderItems,
         updatedAt: Date.now(),
       },
-    }, { merge: true });
+    };
+    await runV1MutationBoundary(
+      { domain: 'musicNote', operation: 'structure-update', uid: user.uid, affectedCount: Math.max(1, folderItems.length) },
+      setDoc(doc(db, 'user_structures', user.uid), folderPatch, { merge: true }),
+    );
+    patchMusicNoteStructureCache(user.uid, folderPatch);
   };
 
   const openMusicNoteFolderPicker = (songIds: string[], preferredMode?: MusicNoteFolderMode) => {

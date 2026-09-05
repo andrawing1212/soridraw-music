@@ -120,7 +120,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { buildPreviewSongIntent, renderPreviewCards } from './services/songPreviewEngine';
 import { favoritesStore, useFavorites, useIsSongFavorited } from './hooks/useFavoritesStore';
-import { readUserProfileCache, writeUserProfileCache } from './lib/userProfileCache';
+import {
+  readUserProfileCache,
+  readUserProfileCacheStoredAt,
+  readUserProfileServerVerifiedAt,
+  writeUserProfileCache,
+  writeUserProfileServerVerifiedAt,
+} from './lib/userProfileCache';
+import {
+  readSeenUserControlRevision,
+  subscribeUserControlRevision,
+  writeSeenUserControlRevision,
+} from './services/userControlRevisionService';
 import StudioPageFrame from './components/studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/StudioLeftRail';
 import StudioRightRail from './components/studio/StudioRightRail';
@@ -8800,6 +8811,8 @@ const toggleCycleVariantSelection = (
     let unsubFavs: (() => void) | null = null;
     let unsubMusicNoteBundle: (() => void) | null = null;
     let unsubUserDoc: (() => void) | null = null;
+    let unsubUserControlRevision: (() => void) | null = null;
+    let userProfileSafetyReverifyTimer: number | null = null;
     let favoritesRetryTimer: number | null = null;
     let favoritesRetryAttempt = 0;
     let userRoleRetryTimer: number | null = null;
@@ -8896,6 +8909,14 @@ const toggleCycleVariantSelection = (
         unsubUserDoc();
         unsubUserDoc = null;
       }
+      if (unsubUserControlRevision) {
+        unsubUserControlRevision();
+        unsubUserControlRevision = null;
+      }
+      if (userProfileSafetyReverifyTimer !== null) {
+        window.clearTimeout(userProfileSafetyReverifyTimer);
+        userProfileSafetyReverifyTimer = null;
+      }
       if (favoritesRetryTimer !== null) {
         window.clearTimeout(favoritesRetryTimer);
         favoritesRetryTimer = null;
@@ -8966,6 +8987,8 @@ const toggleCycleVariantSelection = (
           }
         };
 
+        let activeUserControlRevision = readSeenUserControlRevision(currentUser.uid);
+
         // One listener is now the single source for role/status/force-logout. Its
         // first server snapshot replaces the two extra getDoc(userRef) calls that
         // previously ran on every login/reload. Cached snapshots may hydrate the UI
@@ -8991,6 +9014,12 @@ const toggleCycleVariantSelection = (
           if (docSnap.exists()) {
             const data = docSnap.data();
             writeUserProfileCache(currentUser.uid, data);
+            if (isServerSnapshot) {
+              writeUserProfileServerVerifiedAt(currentUser.uid);
+              if (activeUserControlRevision) {
+                writeSeenUserControlRevision(currentUser.uid, activeUserControlRevision);
+              }
+            }
             const recentSongsVersion = Number(data?.syncVersions?.recentSongs || 0);
             if (recentSongsVersion > 0 && typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_VERSION_EVENT, {
@@ -9127,7 +9156,106 @@ const toggleCycleVariantSelection = (
           });
         };
 
-        attachUserRoleListener();
+        // SORIDRAW_ROOT_USER_REFRESH_ZERO_1021
+        // Normal hard refresh hydrates the last server profile locally and checks
+        // only the tiny RTDB control revision. Firestore users/{uid} is reopened
+        // only for a cache miss, an actual admin/security change, or a bounded
+        // 24-hour safety verification. Reload/cache hydration themselves write 0.
+        const cachedUserProfileForRefresh = readUserProfileCache(currentUser.uid) as any;
+        if (cachedUserProfileForRefresh) {
+          const cachedVerifiedRole = (cachedUserProfileForRefresh.role || 'free') as UserRole;
+          setUserRole(cachedVerifiedRole);
+          setStaffRole(normalizeStaffRole(cachedUserProfileForRefresh));
+          setAdminPermissions(normalizeAdminPermissions(cachedUserProfileForRefresh));
+          setIsUserRoleReady(true);
+          setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser, cachedUserProfileForRefresh));
+          setIsEmailVerificationCycleReady(true);
+          setUserLyricClicheGuard({
+            hardBanTerms: Array.isArray(cachedUserProfileForRefresh.lyricClicheGuard?.hardBanTerms)
+              ? cachedUserProfileForRefresh.lyricClicheGuard.hardBanTerms
+              : [],
+            softBanTerms: Array.isArray(cachedUserProfileForRefresh.lyricClicheGuard?.softBanTerms)
+              ? cachedUserProfileForRefresh.lyricClicheGuard.softBanTerms
+              : [],
+          });
+          writeGeminiAutoModelFallback(cachedUserProfileForRefresh.generationPreferences?.autoModelFallback !== false, currentUser.uid);
+          setIsUserLyricClicheGuardReady(true);
+          applyFavoriteSyncSignal(currentUser.uid, cachedUserProfileForRefresh.favoriteSyncSignal);
+          if (cachedUserProfileForRefresh.accountStatus) {
+            const cachedStatus = cachedUserProfileForRefresh.accountStatus as AccountStatus;
+            setUserStatus(cachedStatus);
+            if (cachedStatus === 'banned') setIsBanModalOpen(true);
+          }
+          if (shouldProcessForceLogout(cachedUserProfileForRefresh, currentUser)) {
+            hasCompletedForceLogoutReentryCheckRef.current = true;
+            void performForcedLogout({ silent: true });
+          } else if (!hasCompletedForceLogoutReentryCheckRef.current) {
+            hasCompletedForceLogoutReentryCheckRef.current = true;
+          }
+        }
+
+        const attachUserRoleListenerFromGate = () => {
+          if (userProfileSafetyReverifyTimer !== null) {
+            window.clearTimeout(userProfileSafetyReverifyTimer);
+            userProfileSafetyReverifyTimer = null;
+          }
+          attachUserRoleListener();
+        };
+
+        const scheduleProfileSafetyVerification = () => {
+          if (!cachedUserProfileForRefresh || userProfileSafetyReverifyTimer !== null || unsubUserDoc) return;
+          const verifiedAt = readUserProfileServerVerifiedAt(currentUser.uid);
+          const PROFILE_SAFETY_REVERIFY_MS = 24 * 60 * 60 * 1000;
+          const age = verifiedAt > 0 ? Math.max(0, Date.now() - verifiedAt) : Number.POSITIVE_INFINITY;
+          if (age >= PROFILE_SAFETY_REVERIFY_MS) {
+            attachUserRoleListenerFromGate();
+            return;
+          }
+          userProfileSafetyReverifyTimer = window.setTimeout(() => {
+            userProfileSafetyReverifyTimer = null;
+            attachUserRoleListener();
+          }, Math.max(1_000, PROFILE_SAFETY_REVERIFY_MS - age));
+        };
+
+        if (!cachedUserProfileForRefresh) {
+          attachUserRoleListenerFromGate();
+        } else {
+          scheduleProfileSafetyVerification();
+        }
+
+        unsubUserControlRevision = subscribeUserControlRevision(
+          currentUser.uid,
+          (revision) => {
+            if (auth.currentUser?.uid !== currentUser.uid) return;
+            const nextRevision = String(revision?.revision || '').trim();
+            const revisionUpdatedAt = Math.max(0, Number(revision?.updatedAt || 0) || 0);
+            activeUserControlRevision = nextRevision;
+
+            const currentCache = readUserProfileCache(currentUser.uid);
+            if (!currentCache) {
+              attachUserRoleListenerFromGate();
+              return;
+            }
+            if (!nextRevision) return;
+
+            const seenRevision = readSeenUserControlRevision(currentUser.uid);
+            if (seenRevision === nextRevision) return;
+
+            // Safe one-time migration: if the cached Firestore profile was written
+            // after this control signal, the old listener already observed it.
+            const cachedAt = readUserProfileCacheStoredAt(currentUser.uid);
+            if (revisionUpdatedAt > 0 && cachedAt >= revisionUpdatedAt) {
+              writeSeenUserControlRevision(currentUser.uid, nextRevision);
+              return;
+            }
+
+            attachUserRoleListenerFromGate();
+          },
+          (error) => {
+            console.warn('User control revision unavailable; attaching Firestore safety fallback.', error);
+            attachUserRoleListenerFromGate();
+          },
+        );
 
         // Fetch favorites for the user.
         // A cache is trusted only when both its UID-scoped schema and payload are
@@ -9398,6 +9526,8 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
       if (unsubFavs) unsubFavs();
       if (unsubMusicNoteBundle) unsubMusicNoteBundle();
       if (unsubUserDoc) unsubUserDoc();
+      if (unsubUserControlRevision) unsubUserControlRevision();
+      if (userProfileSafetyReverifyTimer !== null) window.clearTimeout(userProfileSafetyReverifyTimer);
       if (favoritesRetryTimer !== null) window.clearTimeout(favoritesRetryTimer);
       if (userRoleRetryTimer !== null) window.clearTimeout(userRoleRetryTimer);
       if (favoriteFullCacheRecoveryTimer) window.clearTimeout(favoriteFullCacheRecoveryTimer);

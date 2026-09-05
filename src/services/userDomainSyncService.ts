@@ -20,10 +20,10 @@ export type UserDomainSyncSignal = {
 
 const GENERIC_DEVICE_STORAGE_KEY = 'soridraw_user_domain_sync_device_v1';
 const MUSIC_NOTE_DEVICE_STORAGE_KEY = 'soridraw_music_note_device_id_v1';
-const MUSIC_NOTE_REMOTE_VERSION_BASE = 'soridraw_music_note_remote_sync_version_v1';
-const MUSIC_NOTE_LOCAL_VERSION_BASE = 'soridraw_music_note_local_sync_version_v1';
+export const MUSIC_NOTE_REMOTE_VERSION_BASE = 'soridraw_music_note_remote_sync_version_v1';
+export const MUSIC_NOTE_LOCAL_VERSION_BASE = 'soridraw_music_note_local_sync_version_v1';
 const RECENT_LOCAL_VERSION_BASE = 'soridraw_recent_songs_local_sync_version_v2';
-const MUSIC_NOTE_SYNC_EVENT = 'soridraw:music-note-sync-version';
+export const MUSIC_NOTE_SYNC_EVENT = 'soridraw:music-note-sync-version';
 const RECENT_SONGS_SYNC_EVENT = 'soridraw:recent-songs-sync-version-v2';
 const MAX_DOCUMENT_IDS = 10;
 

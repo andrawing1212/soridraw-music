@@ -32,7 +32,8 @@ export type V1MusicNoteMutationOperation =
   | 'shared-note-save'
   | 'folder-rename'
   | 'folder-delete'
-  | 'color-sync';
+  | 'color-sync'
+  | 'structure-update';
 
 export type V1MutationOperation = V1RecentMutationOperation | V1MusicNoteMutationOperation;
 

@@ -411,6 +411,7 @@ const getMusicNotePayloadCacheKey = (uid: string) => `soridraw_favorites_cache_$
 // SORIDRAW_MUSIC_NOTE_BOUNDED_MORE_RECOVERY_1024
 const SORIDRAW_MUSIC_NOTE_PAGINATION_CONTINUITY_1025 = true;
 const SORIDRAW_MUSIC_NOTE_ORDER_AXIS_REPAIR_1026 = true;
+const SORIDRAW_MUSIC_NOTE_CACHE_FIRST_BOUNDED_MORE_1027 = true;
 const readFavoritesHistoricalMaxCount = (uid: string): number => {
   if (!uid || typeof localStorage === 'undefined') return 0;
   try {
@@ -9412,13 +9413,28 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
               });
               const bundleCursorFavorite = firstPageFavs[firstPageFavs.length - 1];
               const bundleCursorId = String(bundleCursorFavorite?.id || bundleCursorFavorite?.firestoreId || '').trim();
-              favoritePaginationCursorRef.current = bundle.hasMore && bundleCursorId
-                ? { id: bundleCursorId, createdAtMs: Number(bundle.cursorCreatedAtMs || 0), legacy: false }
-                : null;
-              favoritePaginationExhaustedRef.current = !bundle.hasMore;
+              const bundleCursorMs = Number(bundle.cursorCreatedAtMs || 0);
+              const existingCursor = favoritePaginationCursorRef.current;
+              const existingCursorData = typeof existingCursor?.data === 'function' ? existingCursor.data() : null;
+              const existingCursorId = String(existingCursor?.id || '').trim();
+              const existingCursorMs = Number(existingCursor?.createdAtMs || existingCursorData?.createdAtMs || 0);
+              if (
+                bundle.hasMore
+                && bundleCursorId
+                && bundleCursorMs > 0
+                && (!existingCursorId || existingCursorMs <= 0 || bundleCursorMs < existingCursorMs)
+              ) {
+                favoritePaginationCursorRef.current = {
+                  id: bundleCursorId,
+                  createdAtMs: bundleCursorMs,
+                  legacy: false,
+                };
+              }
+              const effectiveCursorId = String(favoritePaginationCursorRef.current?.id || '').trim();
+              favoritePaginationExhaustedRef.current = !bundle.hasMore && !effectiveCursorId;
               favoritePaginationFallbackModeRef.current = false;
-              favoritePaginationNeedsServerAnchorRef.current = Boolean(bundle.hasMore && !bundleCursorId);
-              setHasMoreFavorites(bundle.hasMore);
+              favoritePaginationNeedsServerAnchorRef.current = Boolean(bundle.hasMore && !effectiveCursorId);
+              setHasMoreFavorites(Boolean(bundle.hasMore || effectiveCursorId));
               setFavorites((prev) => {
                 const previous = Array.isArray(prev) ? prev : [];
                 const bundleVersion = Number(bundle.updatedAtMs || 0);
@@ -9523,238 +9539,147 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
     if (!currentUser?.uid) return;
     if (favoritePaginationLoadingRef.current) return;
 
+    const uid = currentUser.uid;
     const getFavoriteId = (favorite: any) =>
       String(favorite?.id || favorite?.firestoreId || '').trim();
-
-    const loadedIds = new Set(
-      (favoritesStore.getFavorites() || [])
-        .filter((favorite: any) => !isFavoriteSoftRemoved(favorite))
-        .map(getFavoriteId)
-        .filter(Boolean),
-    );
-
-    const getTrustedTotalCount = () => {
-      if (
-        typeof favoriteTotalCount !== 'number'
-        || !Number.isFinite(favoriteTotalCount)
-        || favoriteTotalCount < loadedIds.size
-      ) {
-        return null;
-      }
-      return Math.max(0, Math.floor(favoriteTotalCount));
+    const getFavoriteCreatedAtMsForPagination = (favorite: any) => {
+      const explicitMs = Number(favorite?.createdAtMs || 0);
+      if (Number.isFinite(explicitMs) && explicitMs > 0) return explicitMs;
+      return getTimestampMs(favorite?.createdAt);
     };
 
-    const appendFavoritePage = (page: any[]) => {
-      if (!Array.isArray(page) || page.length === 0) return;
-      page.forEach((favorite) => {
-        const favoriteId = getFavoriteId(favorite);
-        if (favoriteId) loadedIds.add(favoriteId);
-      });
-      setFavorites((prev) => {
-        const merged = mergeFavoritePages(prev || [], page);
-        writeFavoritesCache(currentUser.uid, merged);
-        return merged;
-      });
-    };
+    const currentFavorites = (favoritesStore.getFavorites() || [])
+      .filter((favorite: any) => !isFavoriteSoftRemoved(favorite));
+    const loadedIds = new Set(currentFavorites.map(getFavoriteId).filter(Boolean));
 
-    const loadCompatibilityTail = async () => {
-      const trustedTotalCount = getTrustedTotalCount();
-      if (trustedTotalCount !== null && loadedIds.size >= trustedTotalCount) {
-        favoriteLegacyPaginationExhaustedRef.current = true;
-        setHasMoreFavorites(false);
-        clearMusicNotePaginationCursor(currentUser.uid);
-        return;
+    const cachedProfile = readUserProfileCache(uid) as any;
+    const stateTotal = Number(favoriteTotalCount);
+    const cachedTotal = Number(cachedProfile?.favoriteCount);
+    const trustedTotalCount = Number.isFinite(stateTotal) && stateTotal >= loadedIds.size
+      ? Math.floor(stateTotal)
+      : Number.isFinite(cachedTotal) && cachedTotal >= loadedIds.size
+        ? Math.floor(cachedTotal)
+        : null;
+
+    if (trustedTotalCount !== null && loadedIds.size >= trustedTotalCount) {
+      favoritePaginationExhaustedRef.current = true;
+      setHasMoreFavorites(false);
+      clearMusicNotePaginationCursor(uid);
+      return;
+    }
+
+    // 1027: legacy compatibility scanning is intentionally disabled. One click
+    // may issue at most one bounded page query (plus one exact cursor rehydrate).
+    if (favoritePaginationFallbackModeRef.current) {
+      console.warn('Music Note legacy compatibility scanner is disabled; keeping persistent cache only.');
+      favoritePaginationExhaustedRef.current = true;
+      setHasMoreFavorites(false);
+      return;
+    }
+
+    let cursor: any = favoritePaginationCursorRef.current;
+    let cursorId = String(cursor?.id || '').trim();
+
+    // One-time local migration for devices that have a persistent history cache
+    // but no v2 cursor. Use the oldest cached createdAtMs row as the continuation
+    // anchor instead of replaying all already-cached pages from the server.
+    if (!cursorId) {
+      const localCursorCandidates = currentFavorites
+        .map((favorite: any) => ({
+          favorite,
+          id: getFavoriteId(favorite),
+          createdAtMs: getFavoriteCreatedAtMsForPagination(favorite),
+        }))
+        .filter((item: any) => item.id && item.createdAtMs > 0)
+        .sort((a: any, b: any) => b.createdAtMs - a.createdAtMs);
+      const oldestCached = localCursorCandidates[localCursorCandidates.length - 1];
+      if (oldestCached) {
+        cursor = { id: oldestCached.id, createdAtMs: oldestCached.createdAtMs, legacy: false };
+        cursorId = oldestCached.id;
+        favoritePaginationCursorRef.current = cursor;
       }
+    }
 
-      favoritePaginationFallbackModeRef.current = true;
-      const collected: any[] = [];
-      let scanCursor = favoriteLegacyPaginationCursorRef.current;
-      let exhausted = favoriteLegacyPaginationExhaustedRef.current;
-      const maxScanPages = Math.min(
-        50,
-        Math.max(5, Math.ceil((loadedIds.size + FAVORITES_PAGE_SIZE) / FAVORITES_PAGE_SIZE) + 1),
-      );
-      let scanCount = 0;
-      let targetReached = false;
-
-      while (!exhausted && !targetReached && scanCount < maxScanPages) {
-        const fallbackQuery = scanCursor
-          ? query(
-              collection(db, 'favorites'),
-              where('uid', '==', currentUser.uid),
-                            orderBy('createdAtMs', 'desc'),
-              startAfter(scanCursor),
-              limit(FAVORITES_PAGE_SIZE),
-            )
-          : query(
-              collection(db, 'favorites'),
-              where('uid', '==', currentUser.uid),
-                            orderBy('createdAtMs', 'desc'),
-              limit(FAVORITES_PAGE_SIZE),
-            );
-        const snapshot = await getDocs(fallbackQuery);
-        const docs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-        scanCount += 1;
-
-        if (docs.length === 0) {
-          exhausted = true;
-          break;
-        }
-
-        for (const docSnap of docs) {
-          scanCursor = docSnap;
-          favoriteLegacyPaginationCursorRef.current = docSnap;
-          const favorite = mapFavoriteFirestoreDoc(docSnap);
-          if (isFavoriteSoftRemoved(favorite)) continue;
-          if (isFavoriteDeletedTombstoned(currentUser.uid, getFavoriteId(favorite))) continue;
-          const favoriteId = getFavoriteId(favorite);
-          if (favoriteId && loadedIds.has(favoriteId)) continue;
-          if (favoriteId) loadedIds.add(favoriteId);
-          collected.push(favorite);
-          if (collected.length >= FAVORITES_PAGE_SIZE) {
-            targetReached = true;
-            break;
-          }
-        }
-
-        if (!targetReached && docs.length < FAVORITES_PAGE_SIZE) {
-          exhausted = true;
-        }
-      }
-
-      favoriteLegacyPaginationExhaustedRef.current = exhausted;
-      appendFavoritePage(collected);
-
-      const totalAfter = getTrustedTotalCount();
-      const hasMoreByCount = totalAfter !== null ? loadedIds.size < totalAfter : !exhausted;
-      const hasMore = targetReached || hasMoreByCount || !exhausted;
-      setHasMoreFavorites(hasMore);
-      if (!hasMore) clearMusicNotePaginationCursor(currentUser.uid);
-    };
-
-    const rehydrateCursorSnapshot = async (): Promise<any | null> => {
-      const cursor = favoritePaginationCursorRef.current;
-      if (cursor && typeof cursor.data === 'function' && String(cursor?.id || '').trim()) {
-        return cursor;
-      }
-
-      const cursorId = String(cursor?.id || '').trim();
-      if (!cursorId) return null;
-
-      try {
-        const snapshot = await getDoc(doc(db, 'favorites', cursorId));
-        if (!snapshot.exists()) return null;
-        const data = snapshot.data();
-        if (String(data?.uid || '') !== currentUser.uid) return null;
-        favoritePaginationCursorRef.current = snapshot;
-        favoritePaginationNeedsServerAnchorRef.current = false;
-        return snapshot;
-      } catch (error) {
-        console.warn('Favorite pagination cursor rehydrate failed; rebuilding ordered cursor.', error);
-        return null;
-      }
-    };
-
-    const loadOrderedUnseenPage = async (initialCursor: any | null) => {
-      const collected: any[] = [];
-      let scanCursor = initialCursor;
-      let orderedExhausted = false;
-      let targetReached = false;
-      const maxScanPages = Math.min(
-        50,
-        Math.max(2, Math.ceil((loadedIds.size + FAVORITES_PAGE_SIZE) / FAVORITES_PAGE_SIZE) + 2),
-      );
-      let scanCount = 0;
-
-      while (!orderedExhausted && !targetReached && scanCount < maxScanPages) {
-        const orderedQuery = scanCursor
-          ? query(
-              collection(db, 'favorites'),
-              where('uid', '==', currentUser.uid),
-              orderBy('createdAtMs', 'desc'),
-              startAfter(scanCursor),
-              limit(FAVORITES_PAGE_SIZE),
-            )
-          : query(
-              collection(db, 'favorites'),
-              where('uid', '==', currentUser.uid),
-              orderBy('createdAtMs', 'desc'),
-              limit(FAVORITES_PAGE_SIZE),
-            );
-
-        const snapshot = await getDocs(orderedQuery);
-        const docs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-        scanCount += 1;
-
-        if (docs.length === 0) {
-          orderedExhausted = true;
-          break;
-        }
-
-        for (const docSnap of docs) {
-          scanCursor = docSnap;
-          const favorite = mapFavoriteFirestoreDoc(docSnap);
-          if (isFavoriteSoftRemoved(favorite)) continue;
-          if (isFavoriteDeletedTombstoned(currentUser.uid, getFavoriteId(favorite))) continue;
-          const favoriteId = getFavoriteId(favorite);
-          if (favoriteId && loadedIds.has(favoriteId)) continue;
-          if (favoriteId) loadedIds.add(favoriteId);
-          collected.push(favorite);
-          if (collected.length >= FAVORITES_PAGE_SIZE) {
-            targetReached = true;
-            break;
-          }
-        }
-
-        if (!targetReached && docs.length < FAVORITES_PAGE_SIZE) {
-          orderedExhausted = true;
-        }
-      }
-
-      if (scanCursor) {
-        favoritePaginationCursorRef.current = scanCursor;
-        writeMusicNotePaginationCursor(currentUser.uid, scanCursor);
-        favoritePaginationNeedsServerAnchorRef.current = false;
-      }
-
-      appendFavoritePage(collected);
-      favoritePaginationExhaustedRef.current = orderedExhausted;
-
-      if (!orderedExhausted) {
-        setHasMoreFavorites(true);
-        return;
-      }
-
-      const trustedTotalCount = getTrustedTotalCount();
-      if (trustedTotalCount !== null && loadedIds.size >= trustedTotalCount) {
-        setHasMoreFavorites(false);
-        clearMusicNotePaginationCursor(currentUser.uid);
-        return;
-      }
-
-      if (collected.length === 0) {
-        await loadCompatibilityTail();
-        return;
-      }
-
-      setHasMoreFavorites(true);
-    };
+    if (!cursorId) {
+      favoritePaginationExhaustedRef.current = true;
+      setHasMoreFavorites(false);
+      console.warn('Music Note continuation cursor is unavailable; refusing an unbounded recovery scan.');
+      return;
+    }
 
     favoritePaginationLoadingRef.current = true;
     setIsLoadingMoreFavorites(true);
     try {
-      if (favoritePaginationFallbackModeRef.current) {
-        await loadCompatibilityTail();
-        return;
+      let cursorSnapshot = cursor && typeof cursor.data === 'function' ? cursor : null;
+      if (!cursorSnapshot) {
+        const exactCursor = await getDoc(doc(db, 'favorites', cursorId));
+        if (!exactCursor.exists()) {
+          favoritePaginationExhaustedRef.current = true;
+          setHasMoreFavorites(false);
+          clearMusicNotePaginationCursor(uid);
+          return;
+        }
+        const cursorData = exactCursor.data();
+        if (String(cursorData?.uid || '') !== uid || Number(cursorData?.createdAtMs || 0) <= 0) {
+          favoritePaginationExhaustedRef.current = true;
+          setHasMoreFavorites(false);
+          clearMusicNotePaginationCursor(uid);
+          return;
+        }
+        cursorSnapshot = exactCursor;
       }
 
-      const cursorSnapshot = await rehydrateCursorSnapshot();
-      if (!cursorSnapshot) {
-        favoritePaginationNeedsServerAnchorRef.current = true;
+      const snapshot = await getDocs(query(
+        collection(db, 'favorites'),
+        where('uid', '==', uid),
+        orderBy('createdAtMs', 'desc'),
+        startAfter(cursorSnapshot),
+        limit(FAVORITES_PAGE_SIZE),
+      ));
+      const docs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
+      const page: any[] = [];
+
+      for (const docSnap of docs) {
+        const favorite = mapFavoriteFirestoreDoc(docSnap);
+        if (isFavoriteSoftRemoved(favorite)) continue;
+        const favoriteId = getFavoriteId(favorite);
+        if (favoriteId && isFavoriteDeletedTombstoned(uid, favoriteId)) continue;
+        if (favoriteId && loadedIds.has(favoriteId)) continue;
+        if (favoriteId) loadedIds.add(favoriteId);
+        page.push(favorite);
       }
-      await loadOrderedUnseenPage(cursorSnapshot);
+
+      if (page.length > 0) {
+        setFavorites((prev) => {
+          const merged = mergeFavoritePages(prev || [], page);
+          writeFavoritesCache(uid, merged);
+          return merged;
+        });
+      }
+
+      if (docs.length > 0) {
+        const lastDoc = docs[docs.length - 1];
+        favoritePaginationCursorRef.current = lastDoc;
+        writeMusicNotePaginationCursor(uid, lastDoc);
+      }
+
+      const exhausted = docs.length < FAVORITES_PAGE_SIZE;
+      favoritePaginationExhaustedRef.current = exhausted;
+      const hasMoreByCount = trustedTotalCount === null || loadedIds.size < trustedTotalCount;
+      const hasMore = !exhausted && hasMoreByCount;
+      setHasMoreFavorites(hasMore);
+
+      if (!hasMore) {
+        clearMusicNotePaginationCursor(uid);
+      }
+      if (exhausted && trustedTotalCount !== null && loadedIds.size < trustedTotalCount) {
+        console.warn(
+          `Music Note createdAtMs pagination ended at ${loadedIds.size}/${trustedTotalCount}; `
+          + 'legacy full-scan recovery remains disabled for cost safety.',
+        );
+      }
     } catch (error) {
-      console.warn('Favorites additional page load failed. Keeping the current list and retry affordance.', error);
+      console.warn('Favorites bounded additional page load failed. Keeping cache and retry affordance.', error);
       setHasMoreFavorites(true);
     } finally {
       favoritePaginationLoadingRef.current = false;

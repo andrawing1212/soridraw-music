@@ -1,0 +1,46 @@
+name: Temp 1030b Music Note Cache Reuse
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-1030b-music-note-normalization.yml']
+permissions:
+  contents: write
+jobs:
+  refine:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 2
+      - name: Guard current Stage1 source
+        shell: bash
+        run: |
+          grep -q 'SORIDRAW_MUSIC_NOTE_NORMALIZATION_STAGE1_1030' src/App.tsx
+          test -f .deploy/apply-1030b-music-note-stage1-page-cache-reuse.py
+      - name: Apply 1030b refinement
+        run: python3 .deploy/apply-1030b-music-note-stage1-page-cache-reuse.py
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Pagination guard
+        run: node scripts/verify-music-note-pagination-order.mjs
+      - name: Stage1 guard
+        run: node scripts/verify-music-note-normalization-stage1.mjs
+      - name: Build
+        run: npm run build
+      - name: Commit and push App source
+        shell: bash
+        run: |
+          if git diff --quiet -- src/App.tsx; then
+            echo 'No App.tsx changes to commit.'
+            exit 0
+          fi
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/App.tsx
+          git commit -m 'fix(music-note): reuse repaired page-sized cache'
+          git push origin HEAD:preview

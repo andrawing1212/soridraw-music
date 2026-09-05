@@ -1,0 +1,32 @@
+name: Temp 1029 Inspect Cache Flow
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-1029-inspect-cache-flow.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Print targeted cache flow
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for path, needles in [
+            ('src/App.tsx', ["subscribeListBundle('musicNote'", 'const attachFavoritesSourceBootstrap902', 'const loadMoreFavorites = useCallback']),
+            ('src/pages/SunoLibraryPage.tsx', ["subscribeListBundle('library'", 'const mergeLibraryLatestBundleWithCache', 'loadMore']),
+          ]:
+            s=Path(path).read_text()
+            print('\n###',path)
+            for n in needles:
+              i=s.find(n)
+              print('\n---',n,'@',i,'---')
+              if i>=0: print(s[max(0,i-2500):i+7000])
+          PY

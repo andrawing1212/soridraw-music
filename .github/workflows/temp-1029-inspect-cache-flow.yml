@@ -12,22 +12,26 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: preview
-      - name: Print targeted cache schema and mutation flow
+        with: { ref: preview }
+      - name: Print exact Music Note bundle blocks
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          for path, needles in [
-            ('src/App.tsx', ['MUSIC_NOTE_CACHE_SCHEMA', 'prepareMusicNoteCacheForUser', "const latestFavoritesForBundle = favoritesStore", 'const attachLegacyFavoritesFallback']),
-            ('src/pages/SunoLibraryPage.tsx', ['LIBRARY_WORKSPACE_CACHE_SCHEMA', 'prepareLibraryWorkspaceCacheForUser', 'const bootstrapCachelessLibraryFromServerOnce']),
-            ('src/lib/listBundleCache.ts', ['LIST_BUNDLE_SCHEMA_VERSION', 'const prepareItems', 'export const subscribeListBundle']),
-          ]:
-            s=Path(path).read_text()
-            print('\n###',path)
-            for n in needles:
-              i=s.find(n)
-              print('\n---',n,'@',i,'---')
-              if i>=0: print(s[max(0,i-2200):i+6500])
+          s=Path('src/App.tsx').read_text()
+          for n in ['const shouldVerifyMusicNoteBundle', "scheduleListBundleWrite('musicNote'", 'musicNoteBundleActiveUids.add']:
+            print('\n###',n)
+            pos=0; count=0
+            while True:
+              i=s.find(n,pos)
+              if i<0: break
+              print('\nINDEX',i)
+              print(s[max(0,i-1800):i+7000])
+              pos=i+len(n); count+=1
+              if count>=8: break
+          f=Path('src/pages/FavoritesPage.tsx').read_text()
+          for n in ['개 남음', 'canShowCachedMusicNoteMore']:
+            i=f.find(n)
+            print('\n### FAVORITES',n,i)
+            if i>=0: print(f[max(0,i-1800):i+3200])
           PY

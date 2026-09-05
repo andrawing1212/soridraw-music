@@ -45,15 +45,13 @@ jobs:
             echo 'Billed user_structures onSnapshot still present' >&2
             exit 11
           fi
-          if grep -Fq "        attachUserRoleListener();" src/App.tsx && grep -Fq "// Fetch favorites for the user." src/App.tsx; then
-            python3 - <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
           s=Path('src/App.tsx').read_text(encoding='utf-8')
           bad="        attachUserRoleListener();\n\n        // Fetch favorites for the user."
           if bad in s:
               raise SystemExit('Unconditional root users listener remains')
           PY
-          fi
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
@@ -79,3 +77,5 @@ jobs:
           git diff --cached --check
           git commit -m 'fix(cost): make refresh Firestore reads cache-driven'
           git push origin HEAD:preview
+
+# trigger 2026-09-06 refresh-zero-1021

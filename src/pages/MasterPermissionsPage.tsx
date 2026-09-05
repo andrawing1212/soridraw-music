@@ -122,6 +122,10 @@ useEffect(() => {
     try {
       const callable = httpsCallable(functions, 'masterSetAdminAccess');
       await callable({ targetUid: user.uid, staffRole: 'admin', adminPermissions: permissions });
+      const signalControlRevision = httpsCallable(functions, 'adminSignalUserControlRevision');
+      void signalControlRevision({ targetUid: user.uid, reason: 'admin-permissions' }).catch((error) => {
+        console.warn('Admin permission revision signal failed; Firestore listener fallback remains active.', error);
+      });
       const nextAdmins: AppUserInfo[] = admins.map((item) => item.uid === user.uid
         ? { ...item, staffRole: 'admin' as StaffRole, adminPermissions: { ...permissions } }
         : item);

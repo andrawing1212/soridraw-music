@@ -25,6 +25,24 @@
           ".validate": false
         }
       }
+    },
+    "userControls": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false,
+        "revision": {
+          ".validate": "data.isString()"
+        },
+        "updatedAt": {
+          ".validate": "data.isNumber()"
+        },
+        "reason": {
+          ".validate": "data.isString() && data.val().length <= 64"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
     }
   }
 }

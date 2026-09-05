@@ -218,6 +218,19 @@ const getAdminPermissions = (data: Record<string, any> | undefined | null) => {
   return Object.fromEntries(Object.keys(FULL_ADMIN_PERMISSIONS).map((key) => [key, raw[key] === true])) as Record<AdminPermissionKey, boolean>;
 };
 
+// SORIDRAW_USER_CONTROL_REVISION_STAGE1_20260905
+// Admin/security changes are rare. Publish only a tiny invalidation marker to RTDB.
+// No profile payload and no song/list data is copied into this channel.
+const writeUserControlRevision = async (targetUid: string, rawReason: string) => {
+  const safeUid = String(targetUid || "").trim();
+  if (!safeUid) throw new HttpsError("invalid-argument", "대상 회원 UID가 필요합니다.");
+  const now = Date.now();
+  const reason = String(rawReason || "control-change").slice(0, 64);
+  const revision = `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  await admin.database().ref(`userControls/${safeUid}`).set({ revision, updatedAt: now, reason });
+  return { revision, updatedAt: now };
+};
+
 const requireAdminCaller = async (request: CallableRequestLike, requiredPermission?: AdminPermissionKey) => {
   const requesterUid = request.auth?.uid;
   if (!requesterUid) throw new HttpsError("unauthenticated", "관리자 로그인이 필요합니다.");
@@ -659,6 +672,18 @@ export const getAdminPresence = onCall(
       checkedAt: Date.now(),
       presence,
     };
+  }
+);
+
+export const adminSignalUserControlRevision = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { db, requesterUid } = await requireAdminCaller(request, "userManagement");
+    const targetUid = String(request.data?.targetUid || "").trim();
+    await assertManageableTarget(db, requesterUid, targetUid);
+    const reason = String(request.data?.reason || "admin-user-settings").slice(0, 64);
+    const signal = await writeUserControlRevision(targetUid, reason);
+    return { ok: true, targetUid, ...signal };
   }
 );
 

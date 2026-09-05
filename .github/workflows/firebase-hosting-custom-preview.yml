@@ -5,14 +5,6 @@ on:
   push:
     branches: [preview]
     paths:
-      - 'src/**'
-      - 'public/**'
-      - 'index.html'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'vite.config.*'
-      - 'firebase.hosting-preview.json'
-      - '.deploy/check-firebase-custom-preview.mjs'
       - '.github/workflows/firebase-hosting-custom-preview.yml'
 
 permissions:
@@ -24,20 +16,35 @@ concurrency:
 
 jobs:
   deploy-preview:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
+      EXPECTED_SOURCE_COMMIT: e0a7e573a5f0b0f10e4ea7504ce16abee5a81155
       BACKEND_PROJECT: soridraw-app-866a5
       HOSTING_PROJECT: soridraw
       PREVIEW_SITE: soridraw-preview
       PREVIEW_DOMAIN: preview.soridraw.com
-      APP_CHECK_SITE_KEY: 6Le6bGEtAAAAAOVROhuXew0lxJcpVNVwPZN0ZWKO
+      PREVIEW_WEB_APP: soridraw-preview.web.app
+      PREVIEW_FIREBASE_APP: soridraw-preview.firebaseapp.com
 
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
         with:
           ref: preview
+          fetch-depth: 10
+
+      - name: Lock deployment to validated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_SOURCE_COMMIT" HEAD
+          if ! git diff --quiet "$EXPECTED_SOURCE_COMMIT"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json; then
+            echo 'Application source changed after the validated refresh-zero commit.'
+            git diff --name-only "$EXPECTED_SOURCE_COMMIT"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json
+            exit 2
+          fi
+          echo '[Preview Deploy] Validated source lineage: PASS'
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -48,25 +55,71 @@ jobs:
       - name: Install app dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Re-run migration safety checks
+      - name: Refresh-zero regression contracts
+        shell: bash
         run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const read = (p) => fs.readFileSync(p, 'utf8');
+          const fail = (m) => { console.error(`[Refresh Zero] FAIL: ${m}`); process.exit(1); };
+          const pass = (m) => console.log(`[Refresh Zero] ${m}: PASS`);
+          const app = read('src/App.tsx');
+          const page = read('src/pages/FavoritesPage.tsx');
+          const structure = read('src/services/musicNoteStructureCache.ts');
+          const sync = read('src/services/userDomainSyncService.ts');
+          const control = read('src/services/userControlRevisionService.ts');
+          const adminPage = read('src/pages/AdminUserManagementPage.tsx');
+
+          if (!app.includes('SORIDRAW_ROOT_USER_REFRESH_ZERO_1021')) fail('root refresh-zero marker missing');
+          if (app.includes('        attachUserRoleListener();\n\n        // Fetch favorites for the user.')) fail('root users listener still attaches unconditionally on refresh');
+          if (!app.includes('subscribeUserControlRevision(')) fail('UID-scoped admin/security revision gate missing');
+          if (!app.includes('PROFILE_SAFETY_REVERIFY_MS = 24 * 60 * 60 * 1000')) fail('bounded profile safety verification missing');
+          if (!app.includes('User control revision unavailable; attaching Firestore safety fallback.')) fail('RTDB control failure does not restore Firestore safety listener');
+          pass('root users/{uid} normal refresh cache/revision path');
+
+          if (!page.includes('subscribeMusicNoteStructureCache(uid')) fail('Music Note persistent structure transport missing');
+          if (/onSnapshot\s*\(\s*doc\(db,\s*['\"]user_structures['\"]/.test(page)) fail('billed user_structures onSnapshot remains');
+          if (!page.includes("operation: 'structure-update'")) fail('structure mutation revision signal missing');
+          if (!page.includes('patchMusicNoteStructureCache(uid, cardStatePatch)')) fail('card-state success does not patch persistent cache');
+          if (!page.includes('patchMusicNoteStructureCache(user.uid, folderPatch)')) fail('folder success does not patch persistent cache');
+          pass('Music Note user_structures normal refresh persistent-cache path');
+
+          if (!structure.includes("const STORAGE_BASE = 'soridraw_music_note_structure_cache_v1'")) fail('persistent Music Note cache key missing');
+          if (!structure.includes('getDocFromCache(ref)')) fail('zero-bill migration cache seed missing');
+          if (!structure.includes('SAFETY_REVERIFY_MS = 24 * 60 * 60 * 1000')) fail('bounded structure safety verify missing');
+          if (structure.includes('...(patch.musicNoteCardState?.items || {})')) fail('deleted card state can be resurrected by cache merge');
+          pass('Music Note deletion/cache and bounded verify contracts');
+
+          for (const marker of ['export const MUSIC_NOTE_REMOTE_VERSION_BASE', 'export const MUSIC_NOTE_LOCAL_VERSION_BASE', 'export const MUSIC_NOTE_SYNC_EVENT']) {
+            if (!sync.includes(marker)) fail(`Music Note revision export missing: ${marker}`);
+          }
+          if (!control.includes('ref(realtimeDb, `userControls/${uid}`)')) fail('user control revision is not UID-scoped');
+          const signalCalls = (adminPage.match(/adminSignalUserControlRevision/g) || []).length;
+          if (signalCalls < 3) fail(`admin/security invalidation coverage too small: ${signalCalls}`);
+          pass('cross-device/admin invalidation wiring');
+          NODE
+
+      - name: Re-run Firebase preview safety checks
+        run: |
+          set -euo pipefail
           node .deploy/check-firebase-hosting-migration-phase1.mjs
           node .deploy/check-firebase-hosting-migration-phase2.mjs
           node .deploy/check-firebase-hosting-migration-phase3.mjs
           node .deploy/check-firebase-custom-preview.mjs
 
+      - name: TypeScript
+        run: npx tsc --noEmit
+
       - name: Build preview app
         run: npm run build
-
-      - name: Type check preview app
-        run: npx tsc --noEmit
 
       - name: Authenticate Google/Firebase
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Mint direct Google OAuth token
+      - name: Mint verification OAuth token
         shell: bash
         run: |
           set -euo pipefail
@@ -76,10 +129,10 @@ jobs:
           const credentialPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
           if (!credentialPath) throw new Error('GOOGLE_APPLICATION_CREDENTIALS is missing');
           const serviceAccount = JSON.parse(fs.readFileSync(credentialPath, 'utf8'));
-          const base64url = (input) => Buffer.from(input).toString('base64url');
+          const b64 = (v) => Buffer.from(v).toString('base64url');
           const now = Math.floor(Date.now() / 1000);
-          const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-          const payload = base64url(JSON.stringify({
+          const header = b64(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+          const payload = b64(JSON.stringify({
             iss: serviceAccount.client_email,
             scope: 'https://www.googleapis.com/auth/cloud-platform',
             aud: 'https://oauth2.googleapis.com/token',
@@ -88,28 +141,42 @@ jobs:
           }));
           const unsigned = `${header}.${payload}`;
           const signature = crypto.sign('RSA-SHA256', Buffer.from(unsigned), serviceAccount.private_key).toString('base64url');
-          const assertion = `${unsigned}.${signature}`;
           (async () => {
             const response = await fetch('https://oauth2.googleapis.com/token', {
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({
-                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                assertion,
-              }),
+              body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth-grant-type:jwt-bearer', assertion: `${unsigned}.${signature}` }),
             });
-            const body = await response.json();
+            let body = await response.json();
             if (!response.ok || !body.access_token) {
-              throw new Error(`OAuth token exchange failed: HTTP ${response.status} ${JSON.stringify(body)}`);
+              const retry = await fetch('https://oauth2.googleapis.com/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: `${unsigned}.${signature}` }),
+              });
+              body = await retry.json();
+              if (!retry.ok || !body.access_token) throw new Error(`OAuth exchange failed: HTTP ${retry.status}`);
             }
             console.log(`::add-mask::${body.access_token}`);
             fs.appendFileSync(process.env.GITHUB_ENV, `ACCESS_TOKEN=${body.access_token}\n`);
-            console.log('[Custom Preview] Direct OAuth token: PASS');
-          })().catch((error) => {
-            console.error(error?.message || error);
-            process.exit(1);
-          });
+          })().catch((error) => { console.error(error); process.exit(1); });
           NODE
+
+      - name: Verify Firebase Auth preview domains without changing settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://identitytoolkit.googleapis.com/admin/v2/projects/soridraw-app-866a5/config" \
+            -o "$RUNNER_TEMP/auth-config.json"
+          python3 - "$RUNNER_TEMP/auth-config.json" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8'))
+          wanted={'preview.soridraw.com','soridraw-preview.web.app','soridraw-preview.firebaseapp.com'}
+          missing=sorted(wanted-set(data.get('authorizedDomains', [])))
+          if missing: raise SystemExit(f'Firebase Auth preview domains missing: {missing}')
+          print('[Preview Deploy] Firebase Auth preview domains: PASS')
+          PY
 
       - name: Snapshot official production before preview deploy
         shell: bash
@@ -128,129 +195,32 @@ jobs:
             --project soridraw \
             --config firebase.hosting-preview.json \
             --non-interactive
-          echo '[Custom Preview] Hosting deploy to soridraw-preview: PASS'
+          echo '[Preview Deploy] Firebase Hosting soridraw-preview: PASS'
 
-      - name: Add fixed preview hosts to Firebase Auth authorized domains
+      - name: Verify exact deployed build and preview hosts
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
-            "https://identitytoolkit.googleapis.com/admin/v2/projects/soridraw-app-866a5/config" \
-            -o "$RUNNER_TEMP/auth-config-before.json"
-
-          python3 - "$RUNNER_TEMP/auth-config-before.json" "$RUNNER_TEMP/auth-domain-patch.json" <<'PY'
-          import json, sys
-          source, target = sys.argv[1:3]
-          data = json.load(open(source, encoding='utf-8'))
-          wanted = [
-              'preview.soridraw.com',
-              'soridraw-preview.web.app',
-              'soridraw-preview.firebaseapp.com',
-          ]
-          domains = list(dict.fromkeys([str(v).strip() for v in data.get('authorizedDomains', []) if str(v).strip()] + wanted))
-          with open(target, 'w', encoding='utf-8') as f:
-              json.dump({'authorizedDomains': domains}, f, ensure_ascii=False)
-          missing = [v for v in wanted if v not in domains]
-          if missing:
-              raise SystemExit(f'Could not stage Auth domains: {missing}')
-          print(f'[Custom Preview] Auth authorizedDomains staged: {wanted}')
-          PY
-
-          curl -fsS -X PATCH \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data-binary "@$RUNNER_TEMP/auth-domain-patch.json" \
-            "https://identitytoolkit.googleapis.com/admin/v2/projects/soridraw-app-866a5/config?updateMask=authorizedDomains" \
-            -o "$RUNNER_TEMP/auth-config-after.json"
-
-          python3 - "$RUNNER_TEMP/auth-config-after.json" <<'PY'
-          import json, sys
-          data = json.load(open(sys.argv[1], encoding='utf-8'))
-          wanted = {'preview.soridraw.com', 'soridraw-preview.web.app', 'soridraw-preview.firebaseapp.com'}
-          domains = set(data.get('authorizedDomains', []))
-          missing = sorted(wanted - domains)
-          if missing:
-              raise SystemExit(f'Firebase Auth domains missing after PATCH: {missing}')
-          print('[Custom Preview] Firebase Auth fixed preview domains: PASS')
-          PY
-
-      - name: Extend reCAPTCHA Enterprise preview domains when permitted
-        shell: bash
-        run: |
-          set -euo pipefail
-          status="$(curl -sS -o "$RUNNER_TEMP/recaptcha-before.json" -w '%{http_code}' \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
-            "https://recaptchaenterprise.googleapis.com/v1/projects/soridraw-app-866a5/keys/$APP_CHECK_SITE_KEY")"
-
-          if [ "$status" = '403' ]; then
-            echo 'RECAPTCHA_POLICY_STATUS=permission-gated' >> "$GITHUB_ENV"
-            echo '[Custom Preview] reCAPTCHA Enterprise policy remains permission-gated; no IAM role widened and no policy changed.'
-            exit 0
-          fi
-          test "$status" = '200' || { echo "reCAPTCHA key read HTTP $status"; cat "$RUNNER_TEMP/recaptcha-before.json"; exit 6; }
-
-          python3 - "$RUNNER_TEMP/recaptcha-before.json" "$RUNNER_TEMP/recaptcha-patch.json" <<'PY'
-          import json, sys
-          source, target = sys.argv[1:3]
-          data = json.load(open(source, encoding='utf-8'))
-          web = data.get('webSettings') or {}
-          if web.get('allowAllDomains') is True:
-              open(target, 'w', encoding='utf-8').write('')
-              print('[Custom Preview] reCAPTCHA allows all domains; patch not needed.')
-              raise SystemExit(0)
-          wanted = ['preview.soridraw.com', 'soridraw-preview.web.app', 'soridraw-preview.firebaseapp.com']
-          domains = list(dict.fromkeys([str(v).strip() for v in web.get('allowedDomains', []) if str(v).strip()] + wanted))
-          with open(target, 'w', encoding='utf-8') as f:
-              json.dump({'name': data.get('name'), 'webSettings': {'allowedDomains': domains}}, f, ensure_ascii=False)
-          print(f'[Custom Preview] reCAPTCHA preview domains staged: {wanted}')
-          PY
-          echo 'RECAPTCHA_POLICY_STATUS=readable' >> "$GITHUB_ENV"
-
-          if [ -s "$RUNNER_TEMP/recaptcha-patch.json" ]; then
-            curl -fsS -X PATCH \
-              -H "Authorization: Bearer $ACCESS_TOKEN" \
-              -H 'Content-Type: application/json' \
-              --data-binary "@$RUNNER_TEMP/recaptcha-patch.json" \
-              "https://recaptchaenterprise.googleapis.com/v1/projects/soridraw-app-866a5/keys/$APP_CHECK_SITE_KEY?updateMask=webSettings.allowedDomains" \
-              -o "$RUNNER_TEMP/recaptcha-after.json"
-            echo '[Custom Preview] reCAPTCHA Enterprise preview domains: PASS'
-          fi
-
-      - name: Smoke test Firebase preview site and custom domain
-        shell: bash
-        run: |
-          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
           for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
             ok=''
             for attempt in $(seq 1 12); do
-              if curl -fsS --max-time 30 "$url" -o "$RUNNER_TEMP/preview-smoke.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview-smoke.html"; then
-                ok='yes'
-                echo "[Custom Preview] Smoke PASS: $url"
-                break
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then
+                  ok='yes'
+                  echo "[Preview Deploy] Exact build smoke PASS: $url"
+                  break
+                fi
               fi
               sleep 10
             done
-            test "$ok" = 'yes' || { echo "Preview smoke failed: $url"; exit 7; }
+            test "$ok" = 'yes' || { echo "Exact preview build verification failed: $url"; exit 7; }
           done
-
-      - name: Diagnose shared backend origin boundaries
-        shell: bash
-        run: |
-          set -euo pipefail
-          function_status="$(curl -sS -o "$RUNNER_TEMP/function-cors.txt" -w '%{http_code}' -X OPTIONS \
-            -H 'Origin: https://preview.soridraw.com' \
-            -H 'Access-Control-Request-Method: POST' \
-            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
-            'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoApiKeyStatus' || true)"
-          echo "[Custom Preview] Functions CORS preflight HTTP: ${function_status:-network-error}"
-          if [ -f "$RUNNER_TEMP/function-cors.txt" ]; then head -c 400 "$RUNNER_TEMP/function-cors.txt" || true; echo; fi
-
-          explore_status="$(curl -sS -o "$RUNNER_TEMP/explore-cors.txt" -w '%{http_code}' \
-            -H 'Origin: https://preview.soridraw.com' \
-            'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1' || true)"
-          echo "[Custom Preview] Explore feed HTTP: ${explore_status:-network-error}"
-          if [ -f "$RUNNER_TEMP/explore-cors.txt" ]; then head -c 400 "$RUNNER_TEMP/explore-cors.txt" || true; echo; fi
+          headers="$(curl -fsSI --max-time 30 https://preview.soridraw.com/ | tr -d '\r' | tr '[:upper:]' '[:lower:]')"
+          echo "$headers" | grep -q 'cache-control:.*no-cache'
+          echo "$headers" | grep -q 'cache-control:.*no-store'
+          echo '[Preview Deploy] custom-domain no-store policy: PASS'
 
       - name: Verify official Firebase production stayed unchanged
         shell: bash
@@ -260,15 +230,12 @@ jobs:
           grep -q '<div id="root"></div>' "$RUNNER_TEMP/production-after.html"
           sha256sum "$RUNNER_TEMP/production-after.html" | awk '{print $1}' > "$RUNNER_TEMP/production-after.sha"
           cmp "$RUNNER_TEMP/production-before.sha" "$RUNNER_TEMP/production-after.sha"
-          echo '[Custom Preview] Official Firebase production unchanged: PASS'
+          echo '[Preview Deploy] Official Firebase production unchanged: PASS'
 
-      - name: Custom preview result
+      - name: Preview deployment result
         run: |
-          echo 'Custom Firebase preview deployment completed.'
+          echo 'Firebase PREVIEW deployment completed.'
           echo 'Preview URL: https://preview.soridraw.com/'
           echo 'Firebase site: soridraw-preview'
           echo 'Backend remains soridraw-app-866a5.'
-          echo "App Check policy inspection: ${RECAPTCHA_POLICY_STATUS:-not-run}"
-          echo 'No Functions deploy, Firestore/Database Rules update, user-data migration, main change, or production Hosting release was performed.'
-
-# Manual preview redeploy trigger: 2026-09-05T20:22Z
+          echo 'No Functions, Firestore/Database rules, Cloudflare, main, TEST, or PRODUCTION deployment was performed.'

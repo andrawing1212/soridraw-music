@@ -1,0 +1,38 @@
+name: SORIDRAW Audit Music Note Unbounded Ops 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-audit-musicnote-unbounded-ops-20260905.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Inspect exact current operations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          s=Path('src/App.tsx').read_text(encoding='utf-8')
+          needles=[
+            'const refreshFavoritesFromServerFirstPage',
+            'const clearAllFavorites',
+            'const lockAllFavorites',
+            'const unlockAllFavorites',
+            'const syncMusicNoteIncrementalFromRemoteVersion',
+            'const handleMusicNoteSyncVersion',
+          ]
+          for needle in needles:
+            print('\n===== '+needle+' =====')
+            i=s.find(needle)
+            if i < 0:
+              print('MISSING')
+              continue
+            print(s[i:min(len(s),i+9000)])
+          PY

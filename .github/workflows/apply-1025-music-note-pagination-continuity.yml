@@ -24,6 +24,22 @@ jobs:
           ref: preview
           fetch-depth: 0
 
+      - name: Normalize 1025 staging marker anchor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.deploy/apply-1025-music-note-pagination-continuity.py')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace(
+              '"const SORIDRAW_MUSIC_NOTE_BOUNDED_MORE_RECOVERY_1024 = true;",\n    "const SORIDRAW_MUSIC_NOTE_BOUNDED_MORE_RECOVERY_1024 = true;\\n"',
+              '"// SORIDRAW_MUSIC_NOTE_BOUNDED_MORE_RECOVERY_1024",\n    "// SORIDRAW_MUSIC_NOTE_BOUNDED_MORE_RECOVERY_1024\\n"',
+              1,
+          )
+          p.write_text(s, encoding='utf-8')
+          PY
+
       - name: Apply continuous Music Note pagination patch
         run: python3 .deploy/apply-1025-music-note-pagination-continuity.py
 
@@ -71,6 +87,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git checkout -- .deploy/apply-1025-music-note-pagination-continuity.py
           git status --short
           changed="$(git diff --name-only)"
           echo "$changed"

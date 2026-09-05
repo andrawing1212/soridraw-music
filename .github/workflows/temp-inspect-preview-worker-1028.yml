@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { ref: preview }
-      - name: Inspect active Worker functions
+      - name: Inspect active Worker core mutation functions
         shell: bash
         run: |
           set -euo pipefail
@@ -25,5 +25,5 @@ jobs:
           const A=process.env.ACCOUNT,W=process.env.WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
           async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(JSON.stringify(x).slice(0,900));return x.result||x}
           function fn(src,name){const needle=`async function ${name}(`;const s=src.indexOf(needle);if(s<0)return `MISSING ${name}`;const b=src.indexOf('{',s);let d=0,q=null,e=false;for(let i=b;i<src.length;i++){const c=src[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='{')d++;if(c==='}'){d--;if(d===0)return src.slice(s,i+1)}}return `UNTERMINATED ${name}`}
-          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`,ds=await g(`${base}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0],ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`),m=(ver.modules||[]).find(x=>x.name===ver.main_module)||(ver.modules||[])[0],src=Buffer.from(m.content_base64,'base64').toString('utf8');console.log('VERSION='+v.version_id);for(const n of ['handlePublication','handleVisibility','refreshOrPrebuildPublicProfileTrackWindow','refreshPublicProfileFirstViewTrackWindow','syncMusicNotePublicationR2AfterMutation']){console.log(`\n===== ${n} =====\n${fn(src,n)}\n===== END ${n} =====`)}})().catch(e=>{console.error(e);process.exit(1)});
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`,ds=await g(`${base}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0],ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`),m=(ver.modules||[]).find(x=>x.name===ver.main_module)||(ver.modules||[])[0],src=Buffer.from(m.content_base64,'base64').toString('utf8');console.log('VERSION='+v.version_id);for(const n of ['handlePublicationR2Core','handleVisibilityR2Core','safelyRefreshExploreFeedR2Bundles','refreshExploreFeedR2Bundles','refreshOrPrebuildPublicProfileTrackWindow','syncMusicNotePublicationR2AfterMutation']){console.log(`\n===== ${n} =====\n${fn(src,n)}\n===== END ${n} =====`)}})().catch(e=>{console.error(e);process.exit(1)});
           NODE

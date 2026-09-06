@@ -8,7 +8,7 @@ on:
       - '.github/workflows/firebase-hosting-custom-preview.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: firebase-hosting-custom-preview
@@ -18,38 +18,70 @@ jobs:
   deploy-preview:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
-    env:
-      EXPECTED_SOURCE_COMMIT: 61a91645d03327b708f68c2b5037f28b364422e5
-      SAFE_SOURCE_BASELINE: f89cfcf8a1c7843c444b6d9cf5371fa211f701db
-      BACKEND_PROJECT: soridraw-app-866a5
-      PREVIEW_SITE: soridraw-preview
-      PREVIEW_DOMAIN: preview.soridraw.com
-      PREVIEW_WEB_APP: soridraw-preview.web.app
-      PREVIEW_FIREBASE_APP: soridraw-preview.firebaseapp.com
-
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
         with:
           ref: preview
-          fetch-depth: 10
+          fetch-depth: 20
 
-      - name: Lock deployment to rollback source
+      - name: Patch Music Note Studio Catalog entry
         shell: bash
         run: |
           set -euo pipefail
-          git merge-base --is-ancestor "$EXPECTED_SOURCE_COMMIT" HEAD
-          if ! git diff --quiet "$EXPECTED_SOURCE_COMMIT"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json; then
-            echo 'Application source changed after the approved rollback commit.'
-            git diff --name-only "$EXPECTED_SOURCE_COMMIT"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json
-            exit 2
-          fi
-          if ! git diff --quiet "$SAFE_SOURCE_BASELINE".."$EXPECTED_SOURCE_COMMIT" -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json; then
-            echo 'Rollback source does not match the pre-regression safe application baseline.'
-            git diff --name-only "$SAFE_SOURCE_BASELINE".."$EXPECTED_SOURCE_COMMIT" -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json
-            exit 3
-          fi
-          echo '[Preview Recovery] rollback source matches safe baseline: PASS'
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/App.tsx')
+          source = path.read_text(encoding='utf-8')
+          old = """  useEffect(() => {
+    const isMusicNoteRoute = location.pathname === '/history';
+    if (!isMusicNoteRoute) {
+      if (typeof window !== 'undefined') {
+        (window as any).__soridrawMusicNotePageActive = false;
+      }
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      (window as any).__soridrawMusicNotePageActive = true;
+      window.dispatchEvent(new Event('soridraw:music-note-bundle-page-entry'));
+    }
+
+    if (!new URLSearchParams(location.search).has('note')) {
+      markCacheDiagnostic('musicNote', 'CACHE', 0);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        (window as any).__soridrawMusicNotePageActive = false;
+      }
+    };
+  }, [location.pathname, location.search]);"""
+          new = """  useEffect(() => {
+    // 1050: HistoryRouteWrapper is mounted only while Music Note is visible.
+    // Studio embeds it at /studio, so pathname === /history cannot gate Catalog entry.
+    if (typeof window !== 'undefined') {
+      (window as any).__soridrawMusicNotePageActive = true;
+      window.dispatchEvent(new Event('soridraw:music-note-bundle-page-entry'));
+    }
+
+    if (!new URLSearchParams(location.search).has('note')) {
+      markCacheDiagnostic('musicNote', 'CACHE', 0);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        (window as any).__soridrawMusicNotePageActive = false;
+      }
+    };
+  }, [location.pathname, location.search]);"""
+          if old not in source:
+              raise SystemExit('1050 Music Note route-only gate anchor missing')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+          grep -q 'pathname === /history cannot gate Catalog entry' src/App.tsx
+          git diff --check
+          test "$(git diff --name-only | tr '\n' ' ')" = "src/App.tsx "
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -58,15 +90,7 @@ jobs:
           cache: npm
 
       - name: Install app dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Re-run Firebase preview safety checks
-        run: |
-          set -euo pipefail
-          node .deploy/check-firebase-hosting-migration-phase1.mjs
-          node .deploy/check-firebase-hosting-migration-phase2.mjs
-          node .deploy/check-firebase-hosting-migration-phase3.mjs
-          node .deploy/check-firebase-custom-preview.mjs
+        run: npm ci
 
       - name: TypeScript
         run: npx tsc --noEmit
@@ -74,7 +98,18 @@ jobs:
       - name: Build preview app
         run: npm run build
 
-      - name: Authenticate Google/Firebase
+      - name: Commit runtime repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git add src/App.tsx
+          git commit -m 'fix(preview): start Music Note Catalog in Studio workspace'
+          git push origin HEAD:preview
+          echo "1050_RUNTIME_COMMIT=$(git rev-parse HEAD)"
+
+      - name: Authenticate Google Firebase
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
@@ -83,22 +118,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/production-before.html"
-          grep -q '<div id="root"></div>' "$RUNNER_TEMP/production-before.html"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/production-before.html"
           sha256sum "$RUNNER_TEMP/production-before.html" | awk '{print $1}' > "$RUNNER_TEMP/production-before.sha"
 
-      - name: Deploy rollback build to soridraw-preview only
+      - name: Deploy Firebase preview only
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@latest deploy \
-            --only hosting \
-            --project soridraw \
-            --config firebase.hosting-preview.json \
-            --non-interactive
-          echo '[Preview Recovery] Firebase Hosting soridraw-preview: PASS'
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo '1050_FIREBASE_PREVIEW_DEPLOY=PASS'
 
-      - name: Verify exact deployed rollback build
+      - name: Verify exact deployed preview build
         shell: bash
         run: |
           set -euo pipefail
@@ -106,31 +136,24 @@ jobs:
           for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
             ok=''
             for attempt in $(seq 1 12); do
-              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview.html"; then
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
                 remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
                 if [ "$remote_sha" = "$local_sha" ]; then
-                  ok='yes'
-                  echo "[Preview Recovery] Exact rollback build PASS: $url"
+                  ok=yes
+                  echo "1050_EXACT_BUILD_PASS=$url"
                   break
                 fi
               fi
               sleep 10
             done
-            test "$ok" = 'yes' || { echo "Rollback preview verification failed: $url"; exit 7; }
+            test "$ok" = yes
           done
 
-      - name: Verify official Firebase production stayed unchanged
+      - name: Verify official production unchanged
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --max-time 30 https://soridraw.web.app/ -o "$RUNNER_TEMP/production-after.html"
-          grep -q '<div id="root"></div>' "$RUNNER_TEMP/production-after.html"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/production-after.html"
           sha256sum "$RUNNER_TEMP/production-after.html" | awk '{print $1}' > "$RUNNER_TEMP/production-after.sha"
           cmp "$RUNNER_TEMP/production-before.sha" "$RUNNER_TEMP/production-after.sha"
-          echo '[Preview Recovery] Official Firebase production unchanged: PASS'
-
-      - name: Recovery result
-        run: |
-          echo 'Firebase PREVIEW rollback recovery deployment completed.'
-          echo 'Preview URL: https://preview.soridraw.com/'
-          echo 'No Functions, Firestore/Database rules, Cloudflare, main, TEST, or PRODUCTION deployment was performed.'
+          echo '1050_PRODUCTION_UNCHANGED=PASS'

@@ -67,10 +67,10 @@ jobs:
           from pathlib import Path
           p = Path('src/App.tsx')
           lines = p.read_text(encoding='utf-8').splitlines()
-          needles = ['loadMoreFavorites =','firstPageFavs','mergeFavoriteFirstPageWithCache','favoritePaginationCursorRef']
+          needles = ['loadMoreFavorites =','firstPageFavs','mergeFavoriteFirstPageWithCache','favoritePaginationCursorRef','subscribeListBundle']
           hits = sorted({i for i,line in enumerate(lines) if any(n in line for n in needles)})
           for i in hits:
-            lo=max(0,i-35); hi=min(len(lines),i+100)
+            lo=max(0,i-45); hi=min(len(lines),i+120)
             print(f'--- GENERATED APP CONTEXT {i+1} ---')
             for j in range(lo,hi): print(f'{j+1:06d}: {lines[j]}')
           PY

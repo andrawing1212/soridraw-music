@@ -254,6 +254,7 @@ const handleCatalog = async (request, env, origin, url) => {
 # The source file itself is deleted in the cleanup commit after verification.
 # ---------------------------------------------------------------------------
 functions_index = functions_index.replace('\nexport { publishPreviewAdaptiveListIndexV2 } from "./previewAdaptiveListIndex";\n', '\n')
+functions_index = functions_index.rstrip() + '\n'
 
 APP.write_text(app, encoding='utf-8')
 LIB.write_text(lib, encoding='utf-8')

@@ -61,7 +61,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { User } from 'firebase/auth';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc, setDoc, deleteDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot } from '../lib/firestoreMeasured';
+import { doc, getDoc, getDocFromServer, updateDoc, setDoc, deleteDoc, addDoc, collection, serverTimestamp, writeBatch } from '../lib/firestoreMeasured';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import {
@@ -75,7 +75,7 @@ import {
   type ExplorePublicationOptions,
 } from '../services/explorePublicationService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
-import { readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
+import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 
 
 const PROJECT_ID = 'soridraw-app-866a5';
@@ -89,19 +89,167 @@ const MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT = 450;
 let musicNoteVisibleCountMemory = MUSIC_NOTE_VISIBLE_BATCH_SIZE;
 
 
-type MusicNoteFolderSharedSession = {
+type MusicNoteStructureSharedSession = {
   data: any | null;
+  version: number;
+  verified: boolean;
   listeners: Set<(data: any) => void>;
-  unsubscribe: (() => void) | null;
+  syncInFlight: Promise<void> | null;
+  profileListenerAttached: boolean;
 };
 
-const musicNoteFolderSharedSessions = new Map<string, MusicNoteFolderSharedSession>();
+type MusicNoteStructureCacheEnvelope = {
+  schemaVersion: 1;
+  version: number;
+  verified: boolean;
+  updatedAtMs: number;
+  data: any;
+};
 
-const subscribeMusicNoteFolderDocument = (uid: string, listener: (data: any) => void) => {
-  let session = musicNoteFolderSharedSessions.get(uid);
+const MUSIC_NOTE_STRUCTURE_CACHE_STORAGE_BASE = 'soridraw_music_note_structure_cache_v1';
+const musicNoteStructureSharedSessions = new Map<string, MusicNoteStructureSharedSession>();
+
+const getMusicNoteStructureCacheStorageKey = (uid: string) => `${MUSIC_NOTE_STRUCTURE_CACHE_STORAGE_BASE}_${uid}`;
+
+const projectMusicNoteStructureData = (value: any) => {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    ...(source.musicNoteFolders && typeof source.musicNoteFolders === 'object' ? { musicNoteFolders: source.musicNoteFolders } : {}),
+    ...(source.myNoteFolders !== undefined ? { myNoteFolders: source.myNoteFolders } : {}),
+    ...(source.sharedNoteFolders !== undefined ? { sharedNoteFolders: source.sharedNoteFolders } : {}),
+    ...(source.musicNoteCardState && typeof source.musicNoteCardState === 'object' ? { musicNoteCardState: source.musicNoteCardState } : {}),
+    ...(Number.isFinite(Number(source.musicNoteStructureVersion)) ? { musicNoteStructureVersion: Number(source.musicNoteStructureVersion) } : {}),
+  };
+};
+
+const getMusicNoteStructureProfileVersion = (uid: string): number => {
+  const value = Number((readUserProfileCache(uid) as any)?.syncVersions?.musicNoteStructure || 0);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+};
+
+const readMusicNoteStructureCache = (uid: string): MusicNoteStructureCacheEnvelope | null => {
+  if (!uid || typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(getMusicNoteStructureCacheStorageKey(uid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Number(parsed?.schemaVersion || 0) !== 1 || !parsed?.data || typeof parsed.data !== 'object') return null;
+    return {
+      schemaVersion: 1,
+      version: Math.max(0, Math.floor(Number(parsed?.version || 0))),
+      verified: parsed?.verified === true,
+      updatedAtMs: Math.max(0, Math.floor(Number(parsed?.updatedAtMs || 0))),
+      data: parsed.data,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const mergeMusicNoteStructureData = (base: any, patch: any) => {
+  const previous = base && typeof base === 'object' ? base : {};
+  const nextPatch = patch && typeof patch === 'object' ? patch : {};
+  const hasFolderPatch = nextPatch.musicNoteFolders && typeof nextPatch.musicNoteFolders === 'object';
+  return {
+    ...previous,
+    ...nextPatch,
+    ...(hasFolderPatch ? {
+      musicNoteFolders: {
+        ...(previous.musicNoteFolders || {}),
+        ...nextPatch.musicNoteFolders,
+      },
+    } : {}),
+  };
+};
+
+const writeMusicNoteStructureCache = (
+  uid: string,
+  patch: any,
+  version: number,
+  verified = true,
+): MusicNoteStructureCacheEnvelope => {
+  const previous = readMusicNoteStructureCache(uid);
+  const next: MusicNoteStructureCacheEnvelope = {
+    schemaVersion: 1,
+    version: Math.max(Number(previous?.version || 0), Math.max(0, Math.floor(Number(version || 0)))),
+    verified: verified || previous?.verified === true,
+    updatedAtMs: Date.now(),
+    data: mergeMusicNoteStructureData(previous?.data, patch),
+  };
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.setItem(getMusicNoteStructureCacheStorageKey(uid), JSON.stringify(next)); } catch {}
+  }
+  return next;
+};
+
+const publishMusicNoteStructureSession = (
+  uid: string,
+  patch: any,
+  version: number,
+  verified = true,
+) => {
+  const cached = writeMusicNoteStructureCache(uid, patch, version, verified);
+  let session = musicNoteStructureSharedSessions.get(uid);
   if (!session) {
-    session = { data: null, listeners: new Set(), unsubscribe: null };
-    musicNoteFolderSharedSessions.set(uid, session);
+    session = {
+      data: cached.data,
+      version: cached.version,
+      verified: cached.verified,
+      listeners: new Set(),
+      syncInFlight: null,
+      profileListenerAttached: false,
+    };
+    musicNoteStructureSharedSessions.set(uid, session);
+  } else {
+    session.data = cached.data;
+    session.version = cached.version;
+    session.verified = cached.verified;
+  }
+  session.listeners.forEach((subscriber) => subscriber(cached.data));
+};
+
+const getNextMusicNoteStructureVersion = (uid: string): number => {
+  const localVersion = Number(readMusicNoteStructureCache(uid)?.version || 0);
+  const profileVersion = getMusicNoteStructureProfileVersion(uid);
+  return Math.max(Date.now(), localVersion + 1, profileVersion + 1);
+};
+
+const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureSharedSession): Promise<void> => {
+  const profileVersion = getMusicNoteStructureProfileVersion(uid);
+  if (session.data !== null && session.verified && profileVersion <= session.version) {
+    return Promise.resolve();
+  }
+  if (session.syncInFlight) return session.syncInFlight;
+
+  session.syncInFlight = (async () => {
+    try {
+      const snapshot = await getDocFromServer(doc(db, 'user_structures', uid));
+      const data: any = snapshot.exists() ? snapshot.data() : {};
+      const serverDocumentVersion = Number(data?.musicNoteStructureVersion || 0);
+      const resolvedVersion = Math.max(profileVersion, Number.isFinite(serverDocumentVersion) ? serverDocumentVersion : 0);
+      publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(data), resolvedVersion, true);
+    } catch (error) {
+      console.warn('Music Note structure refresh failed; keeping verified local cache when available.', error);
+    } finally {
+      session.syncInFlight = null;
+    }
+  })();
+  return session.syncInFlight;
+};
+
+const subscribeMusicNoteStructureDocument = (uid: string, listener: (data: any) => void) => {
+  let session = musicNoteStructureSharedSessions.get(uid);
+  if (!session) {
+    const cached = readMusicNoteStructureCache(uid);
+    session = {
+      data: cached?.data || null,
+      version: Number(cached?.version || 0),
+      verified: cached?.verified === true,
+      listeners: new Set(),
+      syncInFlight: null,
+      profileListenerAttached: false,
+    };
+    musicNoteStructureSharedSessions.set(uid, session);
   }
 
   session.listeners.add(listener);
@@ -112,30 +260,27 @@ const subscribeMusicNoteFolderDocument = (uid: string, listener: (data: any) => 
     });
   }
 
-  if (!session.unsubscribe) {
-    const targetSession = session;
-    targetSession.unsubscribe = onSnapshot(
-      doc(db, 'user_structures', uid),
-      (snapshot) => {
-        const nextData: any = snapshot.exists() ? snapshot.data() : {};
-        targetSession.data = nextData;
-        targetSession.listeners.forEach((subscriber) => subscriber(nextData));
-      },
-      (error) => {
-        console.warn('music note folder shared listener failed:', error);
-        targetSession.unsubscribe = null;
-      },
-    );
+  if (!session.profileListenerAttached && typeof window !== 'undefined') {
+    session.profileListenerAttached = true;
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, ((event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string }>).detail;
+      if (String(detail?.uid || '') !== uid) return;
+      const current = musicNoteStructureSharedSessions.get(uid);
+      if (!current) return;
+      const nextRemoteVersion = getMusicNoteStructureProfileVersion(uid);
+      if (nextRemoteVersion > current.version) void ensureMusicNoteStructureFresh(uid, current);
+    }) as EventListener);
   }
+
+  void ensureMusicNoteStructureFresh(uid, session);
 
   return () => {
     session?.listeners.delete(listener);
-    // Intentionally keep the single Firestore listener alive for this SPA session.
-    // Re-subscribing on every route mount would recreate the original read leak.
+    // Keep only local memory/event wiring for this SPA session. No Firestore listener remains alive.
   };
 };
 
-const SORIDRAW_934_MUSIC_NOTE_FOLDER_SHARED_LISTENER = true;
+const SORIDRAW_MUSIC_NOTE_STRUCTURE_SIGNAL_1056 = true;
 
 
 type MusicNoteCardStateItem = {
@@ -257,14 +402,25 @@ const flushMusicNoteCardStateServerWrite = (uid: string): Promise<boolean> => {
   const snapshot = readMusicNoteCardStateLocal(uid);
   const task = (async () => {
     try {
-      await setDoc(doc(db, 'user_structures', uid), {
+      const structureVersion = getNextMusicNoteStructureVersion(uid);
+      const structurePatch = {
         musicNoteCardState: {
           schemaVersion: 1,
           items: snapshot.items,
           updatedAtMs: snapshot.updatedAtMs,
           updatedAt: serverTimestamp(),
         },
-      }, { merge: true });
+        musicNoteStructureVersion: structureVersion,
+      };
+      await setDoc(doc(db, 'user_structures', uid), structurePatch, { merge: true });
+      publishMusicNoteStructureSession(uid, {
+        musicNoteCardState: {
+          schemaVersion: 1,
+          items: snapshot.items,
+          updatedAtMs: snapshot.updatedAtMs,
+        },
+        musicNoteStructureVersion: structureVersion,
+      }, structureVersion, true);
       clearMusicNoteCardStateDirty(uid);
       return true;
     } catch (error) {
@@ -1427,7 +1583,7 @@ export default function FavoritesPage({
     setMusicNoteCardState(localState);
 
     let active = true;
-    const unsubscribe = subscribeMusicNoteFolderDocument(uid, (data: any) => {
+    const unsubscribe = subscribeMusicNoteStructureDocument(uid, (data: any) => {
       if (!active) return;
       const serverState = normalizeMusicNoteCardState(data?.musicNoteCardState);
       const currentLocal = musicNoteCardStateRef.current;
@@ -1917,7 +2073,7 @@ export default function FavoritesPage({
       setSelectedSharedNoteFolderId((prev) => nextShared.some((folder) => folder.id === prev) ? prev : 'default');
     };
 
-    const unsubscribe = subscribeMusicNoteFolderDocument(user.uid, applyFolderData);
+    const unsubscribe = subscribeMusicNoteStructureDocument(user.uid, applyFolderData);
     return () => {
       active = false;
       unsubscribe();
@@ -1940,19 +2096,26 @@ export default function FavoritesPage({
   const persistMusicNoteFolders = async (mode: MusicNoteFolderMode, folders: MusicNoteFolder[]) => {
     if (!user?.uid) return;
     const normalized = normalizeMusicNoteFolders(folders, mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS);
-    await setDoc(doc(db, 'user_structures', user.uid), {
-      musicNoteFolders: {
-        [mode]: normalized.map((folder, index) => ({
-          id: folder.id,
-          title: folder.title,
-          order: folder.order || index + 1,
-          isDefault: Boolean(folder.isDefault || folder.id === 'default'),
-          createdAt: folder.createdAt || Date.now(),
-          updatedAt: Date.now(),
-        })),
+    const structureVersion = getNextMusicNoteStructureVersion(user.uid);
+    const folderPatch = {
+      [mode]: normalized.map((folder, index) => ({
+        id: folder.id,
+        title: folder.title,
+        order: folder.order || index + 1,
+        isDefault: Boolean(folder.isDefault || folder.id === 'default'),
+        createdAt: folder.createdAt || Date.now(),
         updatedAt: Date.now(),
-      },
+      })),
+      updatedAt: Date.now(),
+    };
+    await setDoc(doc(db, 'user_structures', user.uid), {
+      musicNoteFolders: folderPatch,
+      musicNoteStructureVersion: structureVersion,
     }, { merge: true });
+    publishMusicNoteStructureSession(user.uid, {
+      musicNoteFolders: folderPatch,
+      musicNoteStructureVersion: structureVersion,
+    }, structureVersion, true);
   };
 
   const openMusicNoteFolderPicker = (songIds: string[], preferredMode?: MusicNoteFolderMode) => {

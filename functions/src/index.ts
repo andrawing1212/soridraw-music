@@ -17,10 +17,39 @@ import {
   type LibraryListBundleCore,
   type LibraryTrackMutation,
 } from "./libraryBundleFreshness";
+import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion } from "./musicNoteStructureSync";
 
 admin.initializeApp({
   databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com",
 });
+
+// SORIDRAW_MUSIC_NOTE_STRUCTURE_SIGNAL_1056
+// user_structures remains the canonical small private structure document. Only an
+// actual folder or Like/Lock mutation publishes a tiny version signal into users/{uid}.
+// Warm page entry/reload performs no Function work and no user_structures read.
+export const syncMusicNoteStructureVersion = functions
+  .region("asia-northeast3")
+  .firestore.document("user_structures/{uid}")
+  .onWrite(async (change, context) => {
+    const before = change.before.exists ? (change.before.data() || {}) : null;
+    const after = change.after.exists ? (change.after.data() || {}) : null;
+    if (!hasMusicNoteStructureRelevantChange(before, after)) return;
+
+    const uid = String(context.params.uid || "").trim();
+    if (!uid) return;
+    const eventTimeMs = Date.parse(String(context.timestamp || "")) || Date.now();
+    const firestore = admin.firestore();
+    const userRef = firestore.collection("users").doc(uid);
+
+    await firestore.runTransaction(async (transaction) => {
+      const userSnapshot = await transaction.get(userRef);
+      if (!userSnapshot.exists) return;
+      const currentVersion = Number(userSnapshot.data()?.syncVersions?.musicNoteStructure || 0);
+      const nextVersion = getMusicNoteStructureSignalVersion(after, eventTimeMs, currentVersion);
+      if (nextVersion <= currentVersion) return;
+      transaction.set(userRef, { syncVersions: { musicNoteStructure: nextVersion } }, { merge: true });
+    });
+  });
 
 // SORIDRAW_SECTION_TAGS_SHARED_BUNDLE_20260904
 // Public Studio configuration is shared by every user. Rebuild the single aggregate

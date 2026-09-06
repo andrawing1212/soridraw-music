@@ -352,7 +352,7 @@ const buildCompleteSnapshot = (
   const snapshot: SoridrawCatalogSnapshot = {
     schemaVersion: CATALOG_SCHEMA_VERSION,
     kind,
-    revision: Math.max(1, Math.floor(revision)),
+    revision: Math.max(Date.now(), Math.floor(revision)),
     items,
     itemCount: items.length,
     complete: true,

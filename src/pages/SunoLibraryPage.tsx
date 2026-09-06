@@ -423,7 +423,10 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
         );
         session.lastDoc = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
         const hasOlderCachedRows = session.tracks.length > list.length;
-        session.hasMore = Boolean(bundle.hasMore || hasOlderCachedRows || list.length >= WORKSPACE_SERVER_PAGE_SIZE);
+        const isFullCatalogSnapshot = bundle.schemaVersion === 1001;
+        session.hasMore = isFullCatalogSnapshot
+          ? false
+          : Boolean(bundle.hasMore || hasOlderCachedRows || list.length >= WORKSPACE_SERVER_PAGE_SIZE);
         session.paginationFallback = false;
         session.ready = true;
         saveLibraryWorkspaceTrackCache(uid, session.tracks);
@@ -1490,8 +1493,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const saveWorkspaceTrackCache = (uid: string, list: any[]) => {
     saveLibraryWorkspaceTrackCache(uid, list);
+    const activeSession = libraryWorkspaceSession?.uid === uid ? libraryWorkspaceSession : null;
+    const sessionComplete = Boolean(activeSession?.ready && activeSession?.hasMore === false);
     schedulePreviewAdaptiveListIndexPublishIfDirty('library', uid, list, {
-      hasMore: list.length >= WORKSPACE_SERVER_PAGE_SIZE,
+      hasMore: activeSession ? activeSession.hasMore : true,
+      complete: sessionComplete,
     });
   };
 

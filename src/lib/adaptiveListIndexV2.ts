@@ -69,14 +69,14 @@ export const readPreviewAdaptiveListIndexV2 = async (
   if (!snapshot) return null;
   const finalItem = snapshot.items[snapshot.items.length - 1];
   return {
-    schemaVersion: snapshot.schemaVersion,
+    schemaVersion: 1001,
     kind,
     items: snapshot.items,
     itemCount: snapshot.itemCount,
     cursorCreatedAtMs: finalItem ? getItemCreatedAtMs(finalItem) : 0,
     hasMore: false,
     deletedIds: [],
-    updatedAtMs: snapshot.revision,
+    updatedAtMs: snapshot.generatedAtMs,
   };
 };
 

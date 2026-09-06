@@ -35,6 +35,7 @@ import { markCacheDiagnostic } from './lib/cacheDiagnostics';
 import { scheduleListBundleWrite, subscribeListBundle, readListBundleFromServerOnce } from './lib/listBundleCache';
 import { schedulePreviewAdaptiveListIndexPublishIfDirty } from './lib/adaptiveListIndexV2';
 const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
+const SORIDRAW_COMMON_USER_DATA_ENGINE_1033 = true;
 
 const SORIDRAW_897_CACHE_DIAGNOSTICS_READ_ACCURACY = true;
 const SORIDRAW_899_CACHE_DIAGNOSTICS_PERSISTENCE_MUSICNOTE = true;
@@ -9158,8 +9159,8 @@ const toggleCycleVariantSelection = (
         // trusted forever and hiding the user's saved songs. Once a full 20-item
         // page is cached, keep it: knownFavoriteCount only keeps More available for
         // older history and must not force the same latest 20 reads on every reload.
-        const musicNoteCacheNeedsBoundedVerification = musicNoteCacheNeedsFullBootstrap
-          || (hasAnyMusicNotePayload && cachedFavoriteCount < FAVORITES_PAGE_SIZE);
+        const musicNoteCacheNeedsBoundedVerification = hasAnyMusicNotePayload
+          && cachedFavoriteCount < FAVORITES_PAGE_SIZE;
         if (!musicNoteCacheNeedsFullBootstrap && hasAnyMusicNotePayload) {
           musicNoteFreshBootstrapUids.delete(currentUser.uid);
         } else {
@@ -9329,12 +9330,13 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
           MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE,
           currentUser.uid,
         );
-        const shouldVerifyMusicNoteBundle = hasCachedMusicNote
-          && !musicNoteCacheNeedsBoundedVerification
+        const shouldVerifyMusicNoteBundle = !hasCachedMusicNote || (
+          !musicNoteCacheNeedsBoundedVerification
           && (
             musicNoteLocalVersionAtBootstrap <= 0
             || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap
-          );
+          )
+        );
 
         if (musicNoteCacheNeedsBoundedVerification) {
           // Normalization first: one latest-page read repairs a suspicious local payload.
@@ -10030,8 +10032,8 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
           deletedAt: null,
           trashedAt: null,
           isPublic: false,
-          createdAtMs: unsavedAt,
-          createdAt: serverTimestamp(),
+          // 1033: preserve the immutable creation axis on save release.
+          // Recent Songs <-> Music Note linking stays unchanged; only mutation time advances.
           updatedAt: serverTimestamp(),
         });
         try {

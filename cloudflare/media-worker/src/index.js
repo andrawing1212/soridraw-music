@@ -430,6 +430,104 @@ const handleArchiveResolve = async (request, env, origin) => {
   }, 201, origin);
 };
 
+
+// SORIDRAW_COMMON_USER_DATA_ENGINE_1033
+const CATALOG_SCHEMA_VERSION = 1;
+const CATALOG_MAX_ITEMS = 100000;
+const CATALOG_MAX_BYTES = 24 * 1024 * 1024;
+const CATALOG_KINDS = new Set(['musicNote', 'library']);
+
+const catalogKindFromPath = (pathname) => {
+  const match = String(pathname || '').match(/^\/v1\/catalog\/(musicNote|library)$/);
+  return match ? match[1] : '';
+};
+
+const catalogObjectKey = (uid, kind) => `catalog/v1/${encodeURIComponent(uid)}/${kind}.json`;
+
+const validateCatalogPayload = (payload, kind) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+  if (payload.schemaVersion !== CATALOG_SCHEMA_VERSION || payload.kind !== kind || payload.complete !== true) return false;
+  if (!Number.isInteger(payload.revision) || payload.revision <= 0) return false;
+  if (!Number.isInteger(payload.generatedAtMs) || payload.generatedAtMs <= 0) return false;
+  if (!Array.isArray(payload.items) || payload.items.length > CATALOG_MAX_ITEMS) return false;
+  if (!Number.isInteger(payload.itemCount) || payload.itemCount !== payload.items.length) return false;
+
+  const ids = new Set();
+  let previousCreatedAtMs = Number.MAX_SAFE_INTEGER;
+  for (const item of payload.items) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    const id = text(item.id);
+    const createdAtMs = Number(item.createdAtMs || 0);
+    if (!id || ids.has(id) || !Number.isInteger(createdAtMs) || createdAtMs <= 0 || createdAtMs > previousCreatedAtMs) return false;
+    ids.add(id);
+    previousCreatedAtMs = createdAtMs;
+  }
+  return true;
+};
+
+const handleCatalog = async (request, env, origin, url) => {
+  const kind = catalogKindFromPath(url.pathname);
+  if (!CATALOG_KINDS.has(kind)) return jsonResponse({ ok: false, code: 'INVALID_CATALOG_KIND' }, 404, origin);
+
+  let identity;
+  try {
+    identity = await requireClientIdentity(request, env);
+  } catch (error) {
+    return jsonResponse({ ok: false, code: text(error?.message) || 'UNAUTHENTICATED' }, 401, origin);
+  }
+
+  const key = catalogObjectKey(identity.uid, kind);
+  if (request.method === 'GET') {
+    const object = await env.MEDIA.get(key);
+    if (!object) return jsonResponse({ ok: false, code: 'CATALOG_NOT_FOUND' }, 404, origin);
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set('Content-Type', 'application/json; charset=utf-8');
+    headers.set('Content-Length', String(object.size));
+    headers.set('ETag', object.httpEtag);
+    headers.set('Cache-Control', 'private, no-store');
+    applyCors(headers, origin);
+    return new Response(object.body, { status: 200, headers });
+  }
+
+  if (request.method !== 'POST') return jsonResponse({ ok: false, code: 'METHOD_NOT_ALLOWED' }, 405, origin);
+  const declaredLength = Number(request.headers.get('content-length') || 0);
+  if (declaredLength > CATALOG_MAX_BYTES) return jsonResponse({ ok: false, code: 'CATALOG_TOO_LARGE' }, 413, origin);
+
+  let payload;
+  try {
+    payload = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, code: 'INVALID_JSON' }, 400, origin);
+  }
+  if (!validateCatalogPayload(payload, kind)) return jsonResponse({ ok: false, code: 'INVALID_CATALOG' }, 400, origin);
+
+  const encoded = JSON.stringify(payload);
+  if (new TextEncoder().encode(encoded).length > CATALOG_MAX_BYTES) {
+    return jsonResponse({ ok: false, code: 'CATALOG_TOO_LARGE' }, 413, origin);
+  }
+
+  const current = await env.MEDIA.head(key);
+  const currentRevision = Number(current?.customMetadata?.revision || 0);
+  if (currentRevision > Number(payload.revision)) {
+    return jsonResponse({ ok: false, code: 'STALE_CATALOG_REVISION', currentRevision }, 409, origin);
+  }
+
+  await env.MEDIA.put(key, encoded, {
+    httpMetadata: {
+      contentType: 'application/json; charset=utf-8',
+      cacheControl: 'private, no-store',
+    },
+    customMetadata: {
+      uid: identity.uid,
+      kind,
+      revision: String(payload.revision),
+      itemCount: String(payload.itemCount),
+    },
+  });
+  return jsonResponse({ ok: true, kind, revision: payload.revision, itemCount: payload.itemCount }, 200, origin);
+};
+
 const handleMedia = async (request, env, origin, url) => {
   const prefix = '/v1/media/';
   const key = decodeURIComponent(url.pathname.slice(prefix.length));
@@ -504,6 +602,10 @@ export default {
 
     if (request.method === 'POST' && url.pathname === '/v1/archive/resolve') {
       return handleArchiveResolve(request, env, origin);
+    }
+
+    if ((request.method === 'GET' || request.method === 'POST') && url.pathname.startsWith('/v1/catalog/')) {
+      return handleCatalog(request, env, origin, url);
     }
 
     if ((request.method === 'GET' || request.method === 'HEAD') && url.pathname.startsWith('/v1/media/')) {

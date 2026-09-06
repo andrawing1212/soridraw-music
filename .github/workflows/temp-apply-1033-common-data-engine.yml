@@ -1,0 +1,82 @@
+name: Temp Apply 1033 Common Data Engine
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-apply-1033-common-data-engine.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  apply_test_commit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 5
+
+      - name: Apply 1033 integration
+        run: python3 .deploy/apply-1033-common-user-data-engine.py
+
+      - name: Static recent-link and cost guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -A20 -F 'const unsaveUpdates = sanitizeForFirestore({' src/App.tsx | grep -F 'createdAtMs: unsavedAt'
+          grep -F 'persistRecentSongsDocument' src/App.tsx >/dev/null
+          grep -F "operation: 'music-note-unsave'" src/App.tsx >/dev/null
+          grep -F 'SORIDRAW_USER_DATA_ENGINE_V1_20260906' src/lib/userDataEngine.ts >/dev/null
+          grep -F "bundle.schemaVersion === 1001" src/pages/SunoLibraryPage.tsx >/dev/null
+          grep -F "url.pathname.startsWith('/v1/catalog/')" cloudflare/media-worker/src/index.js >/dev/null
+          echo 'STATIC_DATA_ENGINE_GUARDS=PASS'
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: App build
+        run: npm run build
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Functions build
+        working-directory: functions
+        run: |
+          npm ci
+          npm run build
+
+      - name: Cloudflare Worker dry run
+        working-directory: cloudflare/media-worker
+        run: |
+          npm ci
+          npm run check
+          rm -rf .dry-run
+
+      - name: Commit verified source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/App.tsx src/pages/SunoLibraryPage.tsx src/lib/userDataEngine.ts src/lib/adaptiveListIndexV2.ts cloudflare/media-worker/src/index.js functions/src/index.ts
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'NO_SOURCE_CHANGES'
+            exit 0
+          fi
+          git commit -m 'feat(preview): integrate common catalog data engine'
+          git push origin HEAD:preview

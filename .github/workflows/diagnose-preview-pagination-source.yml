@@ -17,11 +17,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: preview
-      - name: Print targeted Music Note source
+      - name: Inspect catalog publish callers
         shell: bash
         run: |
           set -euo pipefail
-          echo '===MERGE_FUNCTION==='; sed -n '5605,5645p' src/App.tsx
-          echo '===BUNDLE_BOOTSTRAP==='; sed -n '9175,9315p' src/App.tsx
-          echo '===SECOND_BUNDLE_PATH==='; sed -n '9490,9545p' src/App.tsx
-          echo '===VISIBLE_MORE==='; sed -n '5405,5435p' src/pages/FavoritesPage.tsx; sed -n '6615,6650p' src/pages/FavoritesPage.tsx
+          grep -R -n -B 8 -A 18 "schedulePreviewAdaptiveListIndexPublishIfDirty" src/App.tsx src/pages/SunoLibraryPage.tsx src | head -320

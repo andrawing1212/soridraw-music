@@ -69,11 +69,11 @@ jobs:
       - name: Install Functions dependencies
         run: npm --prefix functions ci
 
-      - name: Existing Library materialized-view test
-        run: npm --prefix functions run test:library-bundle
-
       - name: Functions build
         run: npm --prefix functions run build
+
+      - name: Existing Library materialized-view test
+        run: npm --prefix functions run test:library-bundle
 
       - name: Commit validated source
         shell: bash

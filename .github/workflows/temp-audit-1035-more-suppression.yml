@@ -1,0 +1,42 @@
+name: Temp Audit 1035 More Suppression
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-audit-1035-more-suppression.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Audit Music Note full catalog to More state
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/App.tsx')
+          lines=p.read_text(encoding='utf-8').splitlines()
+          needles=['readPreviewAdaptiveListIndexV2','subscribeListBundle','setHasMoreFavorites','hasMoreFavorites','knownFavoriteCount','loadMoreFavorites','schemaVersion === 1001','bundle.hasMore']
+          hit=[]
+          for i,line in enumerate(lines):
+              if any(n in line for n in needles):
+                  hit.append(i)
+          ranges=[]
+          for i in hit:
+              a=max(0,i-30); b=min(len(lines),i+55)
+              if ranges and a <= ranges[-1][1]: ranges[-1]=(ranges[-1][0],max(ranges[-1][1],b))
+              else: ranges.append((a,b))
+          for a,b in ranges:
+              print(f'--- lines {a+1}-{b} ---')
+              for j in range(a,b): print(f'{j+1}: {lines[j]}')
+          PY
+          echo '=== Favorites page More rendering ==='
+          grep -n -C 20 -E '더보기|onLoadMore|hasMore|showMore|visibleCount' src/pages/FavoritesPage.tsx | head -n 500 || true

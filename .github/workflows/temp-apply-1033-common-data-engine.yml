@@ -62,9 +62,9 @@ jobs:
       - name: Cloudflare Worker dry run
         working-directory: cloudflare/media-worker
         run: |
-          npm ci
+          npm install --no-package-lock
           npm run check
-          rm -rf .dry-run
+          rm -rf .dry-run node_modules
 
       - name: Commit verified source changes
         shell: bash

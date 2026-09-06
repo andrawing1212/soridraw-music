@@ -1,0 +1,69 @@
+name: Temp 1041 Catalog Count Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-1041-catalog-count-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    env:
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install audit dependencies
+        run: |
+          npm --prefix functions ci
+          cd cloudflare/media-worker && npm install --no-audit --no-fund
+      - name: Build canonical active counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const admin = require('./functions/node_modules/firebase-admin');
+          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+          admin.initializeApp({credential: admin.credential.cert(serviceAccount), projectId:'soridraw-app-866a5'});
+          const db=admin.firestore();
+          const active=(d)=>!(d.favoriteRemoved===true||d.saved===false||d.hidden===true||d.favoriteHidden===true||d.deletedAt||d.trashedAt);
+          (async()=>{
+            const snap=await db.collection('favorites').get();
+            const by=new Map();
+            for(const doc of snap.docs){const d=doc.data()||{}; const uid=String(d.uid||''); if(!uid||!active(d)) continue; by.set(uid,(by.get(uid)||0)+1);}
+            const rows=[...by.entries()].map(([uid,count])=>({uid,count,label:crypto.createHash('sha256').update(uid).digest('hex').slice(0,10)})).sort((a,b)=>b.count-a.count);
+            fs.writeFileSync('/tmp/canonical.json',JSON.stringify(rows));
+            console.log('CANONICAL_USERS='+rows.length+' TOTAL_ACTIVE='+rows.reduce((n,r)=>n+r.count,0));
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Compare R2 V4 objects read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE' > /tmp/rows.tsv
+          const rows=JSON.parse(require('fs').readFileSync('/tmp/canonical.json','utf8'));
+          for(const r of rows) console.log([r.uid,r.count,r.label].join('\t'));
+          NODE
+          cd cloudflare/media-worker
+          while IFS=$'\t' read -r uid canonical label; do
+            out="/tmp/r2-${label}.json"
+            if npx wrangler r2 object get "soridraw-media-preview/catalog/v4/${uid}/musicNote.json" --remote --file "$out" >/tmp/wrangler-${label}.log 2>&1; then
+              r2count="$(node -e "const p=JSON.parse(require('fs').readFileSync('$out','utf8'));process.stdout.write(String(p.itemCount??'INVALID'))")"
+              schema="$(node -e "const p=JSON.parse(require('fs').readFileSync('$out','utf8'));process.stdout.write(String(p.schemaVersion??'INVALID'))")"
+              auth="$(node -e "const p=JSON.parse(require('fs').readFileSync('$out','utf8'));process.stdout.write(String(p.authority??'INVALID'))")"
+              printf 'ACCOUNT_%s CANONICAL=%s R2=%s SCHEMA=%s AUTH=%s MATCH=%s\n' "$label" "$canonical" "$r2count" "$schema" "$auth" "$([ "$canonical" = "$r2count" ] && echo yes || echo no)"
+            else
+              printf 'ACCOUNT_%s CANONICAL=%s R2=MISSING\n' "$label" "$canonical"
+            fi
+          done < /tmp/rows.tsv

@@ -109,6 +109,13 @@ const LIBRARY_SUMMARY_KEYS = new Set([
 
 const catalogMemory = new Map<string, SoridrawCatalogSnapshot>();
 const catalogReadInFlight = new Map<string, Promise<SoridrawCatalogSnapshot | null>>();
+type CatalogReadSource = 'cache' | 'remote' | 'none';
+const catalogLastReadSources = new Map<string, CatalogReadSource>();
+
+export const readLastCatalogReadSource = (
+  kind: SoridrawCatalogKind,
+  uid: string,
+): CatalogReadSource => catalogLastReadSources.get(catalogKey(kind, uid)) || 'none';
 // Local IndexedDB is instant paint only until this browser session has actually
 // received a server-authoritative Catalog response for the UID/kind.
 const catalogRemoteValidatedSessionKeys = new Set<string>();
@@ -550,18 +557,29 @@ export const readCatalogSnapshotCacheFirst = async (
       profileRevision: knownRemoteRevision,
       sessionValidated,
     })) {
+      catalogLastReadSources.set(key, 'cache');
       return local;
     }
 
     // Missing/stale/unknown proof still validates against the R2 Catalog.
     // Do not pass the profile sync signal as a hard Worker rebuild requirement.
     const remote = await readRemoteCatalogSnapshot(kind, uid, 0, local);
-    if (remote) return remote;
+    if (remote) {
+      catalogLastReadSources.set(key, 'remote');
+      return remote;
+    }
 
     // A server-unvalidated local snapshot must not masquerade as complete Catalog.
     // The caller can keep its legacy localStorage list as provisional paint/error fallback.
-    if (!sessionValidated) return null;
-    if (local && knownRemoteRevision > local.revision) return null;
+    if (!sessionValidated) {
+      catalogLastReadSources.set(key, 'none');
+      return null;
+    }
+    if (local && knownRemoteRevision > local.revision) {
+      catalogLastReadSources.set(key, 'none');
+      return null;
+    }
+    catalogLastReadSources.set(key, local ? 'cache' : 'none');
     return local;
   })().finally(() => catalogReadInFlight.delete(key));
   catalogReadInFlight.set(key, promise);

@@ -1,5 +1,6 @@
 import {
   readCatalogSnapshotCacheFirst,
+  readLastCatalogReadSource,
   scheduleCatalogSnapshotPublishIfDirty,
   type SoridrawCatalogKind,
 } from './userDataEngine';
@@ -16,6 +17,7 @@ export type AdaptiveListIndexSnapshot = {
   deletedIds: string[];
   updatedAtMs: number;
   catalogRevision: number;
+  fromCache: boolean;
 };
 
 type AdaptivePublishOptions = {
@@ -81,6 +83,7 @@ export const readPreviewAdaptiveListIndexV2 = async (
     deletedIds: [],
     updatedAtMs: snapshot.generatedAtMs,
     catalogRevision: snapshot.revision,
+    fromCache: readLastCatalogReadSource(kind, uid) === 'cache',
   };
 };
 

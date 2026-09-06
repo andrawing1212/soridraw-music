@@ -19,6 +19,7 @@ export type ListBundleSnapshot = {
   deletedIds: string[];
   updatedAtMs: number;
   catalogRevision?: number;
+  fromCache?: boolean;
 };
 
 type BundleWriteOptions = {
@@ -428,7 +429,7 @@ export const subscribeListBundle = (
         const bundle = await readPreviewAdaptiveListIndexV2(kind, uid);
         if (cancelled || !bundle) continue;
         const revision = Math.max(0, Math.floor(Number(bundle.catalogRevision || 0)));
-        if (revision > latestCatalogRevision) deliverAdaptiveBundle(bundle, { fromCache: false }, true);
+        if (revision > latestCatalogRevision) deliverAdaptiveBundle(bundle, { fromCache: bundle.fromCache === true }, true);
         if (revision >= profileRevision) return;
       }
     } finally {
@@ -452,7 +453,7 @@ export const subscribeListBundle = (
       const adaptiveBundle = await readPreviewCatalogWithStartupRetry();
       if (cancelled) return;
       if (adaptiveBundle) {
-        deliverAdaptiveBundle(adaptiveBundle, { fromCache: false });
+        deliverAdaptiveBundle(adaptiveBundle, { fromCache: adaptiveBundle.fromCache === true });
         return;
       }
       if (isPreviewAdaptiveListIndexEnabled()) {

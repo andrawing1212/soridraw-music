@@ -35,7 +35,20 @@ jobs:
           echo 'BASE_GUARD=PASS'
 
       - name: Apply adaptive list index
-        run: python3 .deploy/apply-adaptive-list-index-v2.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .deploy/apply-adaptive-list-index-v2.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('functions/src/previewAdaptiveListIndex.ts')
+          s = p.read_text(encoding='utf-8')
+          old = 'const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;'
+          new = '// SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906'
+          if old not in s:
+              raise SystemExit('adaptive backend marker anchor missing')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
 
       - name: Static cost and safety guards
         shell: bash

@@ -6,7 +6,6 @@ on:
       - preview
     paths:
       - '.github/workflows/diagnose-preview-pagination-source.yml'
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,11 +17,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: preview
-      - name: Print exact line anchors only
+      - name: Print targeted Music Note source
         shell: bash
         run: |
           set -euo pipefail
-          echo 'APP_ANCHORS'
-          grep -n -E "mergeFavoriteFirstPageWithCache|subscribeListBundle\('musicNote'|firstPageFavs|favoritePaginationExhaustedRef|setHasMoreFavorites" src/App.tsx | head -80
-          echo 'FAVORITES_ANCHORS'
-          grep -n -E "MUSIC_NOTE_VISIBLE_BATCH_SIZE|남음|canShowCachedMusicNoteMore|visibleCount|hasMoreFavorites" src/pages/FavoritesPage.tsx | head -120
+          echo '===MERGE_FUNCTION==='; sed -n '5605,5645p' src/App.tsx
+          echo '===BUNDLE_BOOTSTRAP==='; sed -n '9175,9315p' src/App.tsx
+          echo '===SECOND_BUNDLE_PATH==='; sed -n '9490,9545p' src/App.tsx
+          echo '===VISIBLE_MORE==='; sed -n '5405,5435p' src/pages/FavoritesPage.tsx; sed -n '6615,6650p' src/pages/FavoritesPage.tsx

@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      BUCKET: soridraw-media-preview
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,51 +22,47 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install Firebase Admin
-        run: npm --prefix functions ci
-      - name: Compare Worker-active and App-visible Music Note counts
+      - name: Install dependencies
+        run: |
+          npm --prefix functions ci
+          npm --prefix cloudflare/media-worker install --no-audit --no-fund
+      - name: Resolve largest Music Note UID and inspect its private R2 Catalog
         shell: bash
         run: |
           set -euo pipefail
-          node <<'NODE'
+          node <<'NODE' > "$RUNNER_TEMP/top.env"
           const admin = require('./functions/node_modules/firebase-admin');
           const crypto = require('crypto');
           const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
           admin.initializeApp({ credential: admin.credential.cert(sa), projectId:'soridraw-app-866a5' });
           const db = admin.firestore();
-          const workerActive = d => !(
-            d.favoriteRemoved === true || d.saved === false || d.hidden === true ||
-            d.favoriteHidden === true || d.deletedAt || d.trashedAt
-          );
-          const appSoftRemoved = d => Boolean(
-            d.favoriteRemoved === true || d.saved === false || d.favoriteRemovedAt ||
-            d.unlikedAt || d.unsavedAt
-          );
-          const appVisible = d => workerActive(d) && !appSoftRemoved(d);
+          const active = d => !(d.favoriteRemoved===true || d.saved===false || d.hidden===true || d.favoriteHidden===true || d.deletedAt || d.trashedAt);
           (async()=>{
-            const snap = await db.collection('favorites').get();
-            const by = new Map();
-            for (const doc of snap.docs) {
-              const d = doc.data() || {};
-              const uid = String(d.uid || '');
-              if (!uid) continue;
-              if (!by.has(uid)) by.set(uid,{total:0,worker:0,app:0,removedAt:0,unlikedAt:0,unsavedAt:0});
-              const x=by.get(uid); x.total++;
-              if (workerActive(d)) x.worker++;
-              if (appVisible(d)) x.app++;
-              if (workerActive(d) && d.favoriteRemovedAt) x.removedAt++;
-              if (workerActive(d) && d.unlikedAt) x.unlikedAt++;
-              if (workerActive(d) && d.unsavedAt) x.unsavedAt++;
-            }
-            const rows=[...by.entries()].map(([uid,x])=>({
-              account: crypto.createHash('sha256').update(uid).digest('hex').slice(0,10),
-              ...x,
-              delta:x.worker-x.app,
-            })).sort((a,b)=>b.worker-a.worker);
-            console.log('ACCOUNT_COUNTS');
-            for (const r of rows.slice(0,20)) console.log(JSON.stringify(r));
-            console.log('MATCH_WORKER_506', rows.filter(r=>r.worker===506).map(r=>JSON.stringify(r)).join('\n') || 'NONE');
-            console.log('MATCH_APP_57', rows.filter(r=>r.app===57).map(r=>JSON.stringify(r)).join('\n') || 'NONE');
-            console.log('MATCH_APP_37', rows.filter(r=>r.app===37).map(r=>JSON.stringify(r)).join('\n') || 'NONE');
+            const snap=await db.collection('favorites').get();
+            const by=new Map();
+            for(const doc of snap.docs){ const d=doc.data()||{}; const uid=String(d.uid||''); if(uid&&active(d)) by.set(uid,(by.get(uid)||0)+1); }
+            const [uid,count]=[...by.entries()].sort((a,b)=>b[1]-a[1])[0]||[];
+            if(!uid) throw new Error('NO_UID');
+            const label=crypto.createHash('sha256').update(uid).digest('hex').slice(0,10);
+            console.log(`TOP_UID=${uid}`);
+            console.log(`TOP_LABEL=${label}`);
+            console.log(`CANONICAL_COUNT=${count}`);
           })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          source "$RUNNER_TEMP/top.env"
+          echo "ACCOUNT=$TOP_LABEL CANONICAL_COUNT=$CANONICAL_COUNT"
+          cd cloudflare/media-worker
+          npx wrangler r2 object get "$BUCKET/catalog/v4/$TOP_UID/musicNote.json" --file "$RUNNER_TEMP/catalog.json" --remote
+          node - "$RUNNER_TEMP/catalog.json" "$TOP_LABEL" "$CANONICAL_COUNT" <<'NODE'
+          const fs=require('fs');
+          const [file,label,count]=process.argv.slice(2);
+          const p=JSON.parse(fs.readFileSync(file,'utf8'));
+          console.log(`R2_ACCOUNT=${label}`);
+          console.log(`R2_SCHEMA=${p.schemaVersion}`);
+          console.log(`R2_AUTHORITY=${p.authority}`);
+          console.log(`R2_COMPLETE=${p.complete}`);
+          console.log(`R2_ITEMCOUNT=${p.itemCount}`);
+          console.log(`R2_ITEMS_LENGTH=${Array.isArray(p.items)?p.items.length:'NA'}`);
+          console.log(`R2_REVISION=${p.revision}`);
+          console.log(`CANONICAL_MATCH=${Number(p.itemCount)===Number(count)}`);
           NODE

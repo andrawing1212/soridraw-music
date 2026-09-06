@@ -22,6 +22,8 @@ import {
 } from '../lib/cloudflareDiagnostics';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
 import { hasAdminPermission } from '../constants/adminPermissions';
+import { favoritesStore } from '../hooks/useFavoritesStore';
+import { CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, readCatalogRuntimeDiagnostic, resetCatalogRuntimeDiagnostics, type CatalogRuntimeDiagnosticKind, type CatalogRuntimeDiagnosticState } from '../lib/catalogRuntimeDiagnostics';
 
 const SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000 = true;
 const SORIDRAW_CACHE_LIVE_CLOUDFLARE_MOBILE_DOCK_977 = true;
@@ -153,6 +155,8 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
   const [docked, setDocked] = useState(() => readInitialDocked());
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= PANEL_MOBILE_BREAKPOINT);
   const [cloudflare, setCloudflare] = useState<CloudflareDiagnosticState>(() => readCloudflareDiagnostics());
+  const [catalogRuntime, setCatalogRuntime] = useState<Record<CatalogRuntimeDiagnosticKind, CatalogRuntimeDiagnosticState>>(() => ({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') }));
+  const [favoriteStoreCount, setFavoriteStoreCount] = useState(() => favoritesStore.getFavorites().length);
   const [serverUsage, setServerUsage] = useState<FirestoreServerUsage | null>(null);
   const [serverLoading, setServerLoading] = useState(false);
   const [serverError, setServerError] = useState('');
@@ -252,6 +256,20 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       window.removeEventListener(USER_PROFILE_CACHE_EVENT, onProfileCache as EventListener);
       window.removeEventListener('storage', onStorage);
     };
+  }, []);
+
+  useEffect(() => {
+    const syncFavorites = () => setFavoriteStoreCount(favoritesStore.getFavorites().length);
+    const onCatalogRuntime = (event: Event) => {
+      const detail = (event as CustomEvent<{ kind?: CatalogRuntimeDiagnosticKind; state?: CatalogRuntimeDiagnosticState }>).detail;
+      if (!detail?.kind || !detail.state) return;
+      setCatalogRuntime((prev) => ({ ...prev, [detail.kind as CatalogRuntimeDiagnosticKind]: detail.state as CatalogRuntimeDiagnosticState }));
+    };
+    syncFavorites();
+    setCatalogRuntime({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') });
+    const unsubscribeFavorites = favoritesStore.subscribe(syncFavorites);
+    window.addEventListener(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, onCatalogRuntime as EventListener);
+    return () => { unsubscribeFavorites(); window.removeEventListener(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, onCatalogRuntime as EventListener); };
   }, []);
 
   useEffect(() => {
@@ -507,6 +525,18 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             ) : null}
           </div>
 
+          <div className="mt-2 rounded-xl bg-[#ffbf66]/[0.07] px-2.5 py-2">
+            <div className="mb-1 text-[10px] font-black tracking-[0.05em] text-[#ffbf66]/75">CATALOG BROWSER PATH</div>
+            <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-bold text-white/72">
+              <span>뮤직노트 · {catalogRuntime.musicNote.stage}</span>
+              <span className="shrink-0 tabular-nums">HTTP {catalogRuntime.musicNote.httpStatus || '—'} · R2 {catalogRuntime.musicNote.remoteItemCount || '—'} · Store {favoriteStoreCount}</span>
+            </div>
+            <div className="mt-0.5 flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-white/45">
+              <span className="truncate">{catalogRuntime.musicNote.errorCode || '오류 없음'}</span>
+              <span className="shrink-0 tabular-nums">시도 {catalogRuntime.musicNote.attempt || 0} · rev {catalogRuntime.musicNote.revision || '—'}</span>
+            </div>
+          </div>
+
           <div className="mt-2 space-y-1">
             {rows.map(({ domain, label }) => {
               const state = states[domain];
@@ -527,6 +557,9 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
               onClick={() => {
                 resetCacheDiagnostics();
                 resetCloudflareDiagnostics();
+                resetCatalogRuntimeDiagnostics();
+                setCatalogRuntime({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') });
+                setFavoriteStoreCount(favoritesStore.getFavorites().length);
                 setStates(readAllStates());
                 setActual(readFirestoreActual());
                 setCloudflare(readCloudflareDiagnostics());

@@ -4,6 +4,7 @@ import {
   clearAdaptiveListIndexDirtyRevision,
   readAdaptiveListIndexDirtyRevision,
 } from './firestoreMeasured';
+import { markCatalogRuntimeDiagnostic } from './catalogRuntimeDiagnostics';
 
 export const SORIDRAW_USER_DATA_ENGINE_V2_20260906 = true;
 export const SORIDRAW_USER_DATA_ENGINE_DELTA_SYNC_1035 = true;
@@ -384,13 +385,18 @@ const readRemoteCatalogSnapshot = async (
 ): Promise<SoridrawCatalogSnapshot | null> => {
   if (!uid || !isPreviewCatalogEnabled()) return null;
   const user = auth.currentUser;
-  if (!user || user.uid !== uid) return null;
+  if (!user || user.uid !== uid) {
+    markCatalogRuntimeDiagnostic(kind, { stage: 'ERROR', errorCode: 'AUTH_USER_NOT_READY' });
+    return null;
+  }
 
+  markCatalogRuntimeDiagnostic(kind, { stage: 'START', attempt: 0, httpStatus: 0, remoteItemCount: 0, revision: 0, errorCode: '' });
   const retryDelays = [0, 350, 1000];
   let lastError: unknown = null;
   for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
     if (retryDelays[attempt] > 0) await catalogWait(retryDelays[attempt]);
     try {
+      markCatalogRuntimeDiagnostic(kind, { stage: 'AUTH', attempt: attempt + 1, errorCode: '' });
       // Catalog GET is owner-authorized by Firebase Auth. App Check is attached
       // when available, but a transient attestation failure cannot downgrade PREVIEW
       // into the old partial-list path.
@@ -402,11 +408,13 @@ const readRemoteCatalogSnapshot = async (
       // maintenance/mutation callers may pass a hard minimumRevision.
       const hardMinimumRevision = Math.max(0, Math.floor(minimumRevision || 0));
       if (hardMinimumRevision > 0) headers['X-Soridraw-Known-Revision'] = String(hardMinimumRevision);
+      markCatalogRuntimeDiagnostic(kind, { stage: 'REQUEST', attempt: attempt + 1 });
       const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${kind}`, {
         method: 'GET',
         headers,
         cache: 'no-store',
       });
+      markCatalogRuntimeDiagnostic(kind, { stage: 'HTTP', attempt: attempt + 1, httpStatus: response.status });
       if (response.status === 404) throw new Error('CATALOG_NOT_MATERIALIZED');
       if (!response.ok) {
         let detail = '';
@@ -415,14 +423,17 @@ const readRemoteCatalogSnapshot = async (
       }
       const payload = await response.json();
       if (!isValidSnapshot(kind, payload)) throw new Error('CATALOG_PAYLOAD_INVALID');
+      markCatalogRuntimeDiagnostic(kind, { stage: 'SNAPSHOT', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(payload.itemCount || 0), revision: Number(payload.revision || 0), errorCode: '' });
       if (hardMinimumRevision > 0 && payload.revision < hardMinimumRevision) {
         throw new Error('CATALOG_REVISION_STALE');
       }
       await writeCatalogSnapshotToLocalCache(kind, uid, payload);
       catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));
+      markCatalogRuntimeDiagnostic(kind, { stage: 'ACCEPTED', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(payload.itemCount || 0), revision: Number(payload.revision || 0), errorCode: '' });
       return payload;
     } catch (error) {
       lastError = error;
+      markCatalogRuntimeDiagnostic(kind, { stage: 'ERROR', attempt: attempt + 1, errorCode: String((error as any)?.message || error || 'CATALOG_UNKNOWN_ERROR') });
     }
   }
   console.warn(`[userDataEngine] ${kind} catalog snapshot read unavailable after retry.`, lastError);

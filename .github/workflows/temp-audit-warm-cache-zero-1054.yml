@@ -15,15 +15,25 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: preview
-      - name: Trace profile version and Catalog refresh wiring
+      - name: Print compact warm-cache findings
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== userDataEngine warm read ==='
-          grep -n -B 18 -A 75 -E "readCatalogSnapshotCacheFirst|readKnownRemoteCatalogRevision|catalogRemoteValidatedSessionKeys|USER_PROFILE_CACHE_EVENT" src/lib/userDataEngine.ts | head -1400 || true
-          echo '=== profile cache writers/listeners ==='
-          grep -R -n -B 20 -A 60 -E "writeUserProfileCache|USER_PROFILE_CACHE_EVENT|syncVersions|favoriteSyncSignalUpdatedAt|favoriteSyncSignal" src | head -2600 || true
-          echo '=== list bundle triggers ==='
-          grep -R -n -B 20 -A 70 -E "subscribeListBundle\(|music-note-bundle-page-entry|library-bundle|readCatalogSnapshotCacheFirst|readPreviewAdaptiveListIndexV2" src | head -2600 || true
-          echo '=== dirty revision writers ==='
-          grep -R -n -B 15 -A 45 -E "markAdaptiveListIndexDirty|setAdaptiveListIndexDirty|syncVersions.*musicNote|syncVersions.*library" src | head -2200 || true
+          python3 <<'PY'
+          from pathlib import Path
+          files=['src/App.tsx','src/lib/userDataEngine.ts','src/lib/userProfileCache.ts','src/lib/listBundleCache.ts','src/lib/firestoreMeasured.ts']
+          needles=['writeUserProfileCache','USER_PROFILE_CACHE_EVENT','syncVersions','favoriteSyncSignalUpdatedAt','favoriteSyncSignal','markAdaptiveListIndexDirty','readAdaptiveListIndexDirtyRevision','readCatalogSnapshotCacheFirst','catalogRemoteValidatedSessionKeys','subscribeListBundle']
+          for f in files:
+              p=Path(f)
+              if not p.exists(): continue
+              lines=p.read_text(encoding='utf-8').splitlines()
+              hits=[]
+              for i,line in enumerate(lines,1):
+                  if any(n in line for n in needles): hits.append(i)
+              if not hits: continue
+              print(f'FILE {f}')
+              for i in hits[:100]:
+                  lo=max(1,i-3); hi=min(len(lines),i+7)
+                  print(f'-- {lo}:{hi} around {i} --')
+                  for n in range(lo,hi+1): print(f'{n}: {lines[n-1]}')
+          PY

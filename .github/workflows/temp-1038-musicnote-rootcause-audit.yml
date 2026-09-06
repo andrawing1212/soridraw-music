@@ -1,0 +1,188 @@
+name: Temp 1038 Music Note Root Cause Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-1038-musicnote-rootcause-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      BUCKET: soridraw-media-preview
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - name: Prove exact runtime wiring locations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          checks = {
+            'src/App.tsx': [
+              "subscribeListBundle('musicNote'",
+              'bundle.schemaVersion === 1001',
+              'musicNoteFullCatalogReadyUids',
+            ],
+            'src/lib/listBundleCache.ts': [
+              'readPreviewAdaptiveListIndexV2(kind, uid)',
+              'callbacks.onData(adaptiveBundle',
+            ],
+            'src/lib/adaptiveListIndexV2.ts': [
+              'const snapshot = await readCatalogSnapshotCacheFirst(kind, uid)',
+              "if (!snapshot)",
+              "if (kind === 'musicNote') return recoverMusicNoteCatalogFromCanonicalFirestore(uid)",
+            ],
+            'src/lib/userDataEngine.ts': [
+              'const local = await readCatalogSnapshotFromLocalCache(kind, uid)',
+              'if (local && (knownRemoteRevision <= 0 || local.revision >= knownRemoteRevision)) return local',
+              'const remote = await readRemoteCatalogSnapshot(kind, uid, knownRemoteRevision)',
+            ],
+            'cloudflare/media-worker/src/index.js': [
+              'const current = await readCatalogObject(env, identity.uid, kind)',
+              'if (current && current.revision >= minimumRevision) return current',
+              'const rebuilt = await buildCanonicalCatalog(identity, kind, minimumRevision, env)',
+            ],
+          }
+          for path, needles in checks.items():
+            text = Path(path).read_text(encoding='utf-8')
+            lines = text.splitlines()
+            print(f'FILE={path}')
+            for needle in needles:
+              hits = [i+1 for i,line in enumerate(lines) if needle in line]
+              print(f'  {needle} -> {hits}')
+              if not hits:
+                raise SystemExit(f'MISSING:{path}:{needle}')
+          print('RUNTIME_WIRING_AUDIT=PASS')
+          PY
+
+      - name: Build and prove recovery code is inside shipped bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          grep -R -q "one-time canonical Music Note recovery failed" dist/assets
+          echo '1037_RECOVERY_PRESENT_IN_BUILD=YES'
+
+      - name: Authenticate Firebase read-only audit
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install Functions admin SDK
+        working-directory: functions
+        run: npm ci
+
+      - name: Read-only Firestore Music Note ownership/count audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const crypto = require('crypto');
+          const fs = require('fs');
+          const admin = require('./functions/node_modules/firebase-admin');
+          admin.initializeApp({ credential: admin.credential.applicationDefault(), projectId: 'soridraw-app-866a5' });
+          const db = admin.firestore();
+          const hashUid = (uid) => crypto.createHash('sha256').update(uid).digest('hex').slice(0, 10);
+          const active = (d) => !(
+            d.favoriteRemoved === true || d.saved === false || d.hidden === true ||
+            d.favoriteHidden === true || d.deletedAt || d.trashedAt
+          );
+          (async () => {
+            const snap = await db.collection('favorites')
+              .select('uid','saved','favoriteRemoved','hidden','favoriteHidden','deletedAt','trashedAt','soridrawSongId')
+              .get();
+            const groups = new Map();
+            for (const doc of snap.docs) {
+              const d = doc.data() || {};
+              const uid = String(d.uid || '').trim();
+              const key = uid || '__missing__';
+              const g = groups.get(key) || { uid:key, total:0, active:0, inactive:0, stable:0, legacy:0 };
+              g.total += 1;
+              if (active(d)) g.active += 1; else g.inactive += 1;
+              if (String(d.soridrawSongId || '').startsWith('sd_')) g.stable += 1; else g.legacy += 1;
+              groups.set(key, g);
+            }
+            const rows = [...groups.values()].sort((a,b)=>b.active-a.active || b.total-a.total);
+            const uidRows = [];
+            console.log(`FIRESTORE_FAVORITES_TOTAL=${snap.size}`);
+            for (const g of rows) {
+              if (g.uid === '__missing__') {
+                console.log(`OWNER=missing_uid total=${g.total} active=${g.active} inactive=${g.inactive}`);
+                continue;
+              }
+              let v2MusicNote = -1;
+              let profileFavoriteCount = -1;
+              let syncMusicNote = 0;
+              try {
+                const countSnap = await db.collection('users').doc(g.uid).collection('songs').where('musicNote','==',true).count().get();
+                v2MusicNote = Number(countSnap.data().count || 0);
+              } catch (e) {}
+              try {
+                const profile = await db.collection('users').doc(g.uid).get();
+                if (profile.exists) {
+                  const p = profile.data() || {};
+                  profileFavoriteCount = Number(p.favoriteCount ?? -1);
+                  syncMusicNote = Number(p?.syncVersions?.musicNote || p?.favoriteSyncSignalUpdatedAt || p?.favoriteSyncSignal?.at || 0);
+                }
+              } catch (e) {}
+              const h = hashUid(g.uid);
+              console.log(`OWNER=${h} v1_total=${g.total} v1_active=${g.active} v1_inactive=${g.inactive} stable=${g.stable} legacy=${g.legacy} v2_musicNote=${v2MusicNote} profileFavoriteCount=${profileFavoriteCount} syncMusicNote=${syncMusicNote}`);
+              uidRows.push({ uid:g.uid, hash:h, v1Total:g.total, v1Active:g.active, v2MusicNote, syncMusicNote });
+            }
+            fs.writeFileSync(process.env.RUNNER_TEMP + '/musicnote-uids.json', JSON.stringify(uidRows));
+            console.log('FIRESTORE_READONLY_AUDIT=PASS');
+          })().catch((e)=>{ console.error(e); process.exit(1); });
+          NODE
+
+      - name: Install Worker tooling
+        working-directory: cloudflare/media-worker
+        run: npm install --no-audit --no-fund
+
+      - name: Read-only R2 V3 catalog audit for same owners
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          node - "$RUNNER_TEMP/musicnote-uids.json" <<'NODE' > "$RUNNER_TEMP/r2-targets.tsv"
+          const fs=require('fs'); const rows=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          for (const r of rows) console.log(`${r.uid}\t${r.hash}\t${r.v1Active}\t${r.v2MusicNote}\t${r.syncMusicNote}`);
+          NODE
+          while IFS=$'\t' read -r uid hash v1active v2count syncver; do
+            [ -n "$uid" ] || continue
+            encoded="$(node -p "encodeURIComponent(process.argv[1])" "$uid")"
+            target="$RUNNER_TEMP/catalog-${hash}.json"
+            if (cd cloudflare/media-worker && npx wrangler r2 object get "$BUCKET/catalog/v3/$encoded/musicNote.json" --file "$target" --remote >/dev/null 2>&1); then
+              node - "$target" "$hash" "$v1active" "$v2count" "$syncver" <<'NODE'
+              const fs=require('fs');
+              const p=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+              console.log(`R2_OWNER=${process.argv[3]} r2_itemCount=${p.itemCount} r2_revision=${p.revision} r2_complete=${p.complete} v1_active=${process.argv[4]} v2_musicNote=${process.argv[5]} syncMusicNote=${process.argv[6]}`);
+              NODE
+            else
+              echo "R2_OWNER=$hash r2=MISSING v1_active=$v1active v2_musicNote=$v2count syncMusicNote=$syncver"
+            fi
+          done < "$RUNNER_TEMP/r2-targets.tsv"
+          echo 'R2_READONLY_AUDIT=PASS'
+
+      - name: Safety result
+        run: |
+          echo 'AUDIT_ONLY=YES'
+          echo 'FIRESTORE_WRITES=0'
+          echo 'R2_WRITES=0'
+          echo 'HOSTING_DEPLOY=0'
+          echo 'FUNCTIONS_DEPLOY=0'
+          echo 'WORKER_DEPLOY=0'
+          echo 'MAIN_PRODUCTION=UNTOUCHED'

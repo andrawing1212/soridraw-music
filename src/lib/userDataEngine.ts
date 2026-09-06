@@ -11,6 +11,7 @@ export const SORIDRAW_USER_DATA_ENGINE_DELTA_SYNC_1035 = true;
 export const SORIDRAW_USER_DATA_ENGINE_SERVER_AUTHORITY_V4_20260906 = true;
 export const SORIDRAW_USER_DATA_ENGINE_LOCAL_CACHE_V5_20260906 = true;
 export const SORIDRAW_USER_DATA_ENGINE_REMOTE_AUTHORITY_1047 = true;
+export const SORIDRAW_CATALOG_BASE_DELTA_JOURNAL_1053 = true;
 
 export type SoridrawCatalogKind = 'musicNote' | 'library';
 export type SoridrawHotSetKind = 'recentSongs';
@@ -43,10 +44,25 @@ type CatalogPublishOptions = {
 type CatalogDelta = {
   schemaVersion: 4;
   kind: SoridrawCatalogKind;
+  mutationId: string;
   baseRevision: number;
+  baseItemCount: number;
   revision: number;
+  nextItemCount: number;
   upserts: any[];
   deletedIds: string[];
+};
+
+type CatalogSyncResponse = {
+  schemaVersion: 4;
+  authority: 'server';
+  kind: SoridrawCatalogKind;
+  mode: 'delta' | 'unchanged';
+  baseRevision: number;
+  revision: number;
+  itemCount: number;
+  deltas: CatalogDelta[];
+  generatedAtMs: number;
 };
 
 const CATALOG_ENDPOINT = 'https://soridraw-media-preview.andrawing1212.workers.dev';
@@ -378,10 +394,81 @@ const authenticatedHeaders = async (
   return null;
 };
 
+const makeCatalogMutationId = (): string => {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  } catch {}
+  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+};
+
+const isCatalogSyncResponse = (kind: SoridrawCatalogKind, value: any): value is CatalogSyncResponse => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  if (value.schemaVersion !== CATALOG_SCHEMA_VERSION || value.authority !== 'server' || value.kind !== kind) return false;
+  if (value.mode !== 'delta' && value.mode !== 'unchanged') return false;
+  if (!Number.isInteger(value.baseRevision) || value.baseRevision <= 0) return false;
+  if (!Number.isInteger(value.revision) || value.revision < value.baseRevision) return false;
+  if (!Number.isInteger(value.itemCount) || value.itemCount < 0) return false;
+  if (!Number.isInteger(value.generatedAtMs) || value.generatedAtMs <= 0) return false;
+  if (!Array.isArray(value.deltas)) return false;
+  if (value.mode === 'unchanged' && value.deltas.length !== 0) return false;
+  return value.deltas.every((entry: any) => (
+    entry && typeof entry === 'object' && !Array.isArray(entry)
+    && typeof entry.mutationId === 'string' && entry.mutationId.trim()
+    && Number.isInteger(entry.baseRevision) && entry.baseRevision > 0
+    && Number.isInteger(entry.revision) && entry.revision > entry.baseRevision
+    && Number.isInteger(entry.baseItemCount) && entry.baseItemCount >= 0
+    && Number.isInteger(entry.nextItemCount) && entry.nextItemCount >= 0
+    && Array.isArray(entry.upserts) && Array.isArray(entry.deletedIds)
+  ));
+};
+
+const applyCatalogSyncResponse = (
+  kind: SoridrawCatalogKind,
+  local: SoridrawCatalogSnapshot | null,
+  payload: CatalogSyncResponse,
+): SoridrawCatalogSnapshot | null => {
+  if (!local || !isValidSnapshot(kind, local) || !isCatalogSyncResponse(kind, payload)) return null;
+  if (payload.baseRevision !== local.revision) return null;
+  if (payload.mode === 'unchanged') {
+    return payload.revision === local.revision && payload.itemCount === local.itemCount ? local : null;
+  }
+  const byId = new Map(local.items.map((item) => [String(item.id), item]));
+  let cursorRevision = local.revision;
+  let cursorCount = local.itemCount;
+  for (const entry of payload.deltas) {
+    if (entry.baseRevision !== cursorRevision || entry.baseItemCount !== cursorCount) return null;
+    entry.deletedIds.forEach((id) => byId.delete(String(id || '').trim()));
+    for (const rawItem of entry.upserts) {
+      const id = String(rawItem?.id || rawItem?.firestoreId || '').trim();
+      if (!id) return null;
+      const projected = projectCatalogItem(kind, rawItem);
+      if (!projected) byId.delete(id);
+      else byId.set(id, projected);
+    }
+    if (byId.size !== entry.nextItemCount) return null;
+    cursorRevision = entry.revision;
+    cursorCount = entry.nextItemCount;
+  }
+  if (cursorRevision !== payload.revision || cursorCount !== payload.itemCount) return null;
+  const items = normalizeCatalogItems(kind, Array.from(byId.values()));
+  const next: SoridrawCatalogSnapshot = {
+    schemaVersion: CATALOG_SCHEMA_VERSION,
+    authority: 'server',
+    kind,
+    revision: payload.revision,
+    items,
+    itemCount: items.length,
+    complete: true,
+    generatedAtMs: payload.generatedAtMs,
+  };
+  return isValidSnapshot(kind, next) && next.itemCount === payload.itemCount ? next : null;
+};
+
 const readRemoteCatalogSnapshot = async (
   kind: SoridrawCatalogKind,
   uid: string,
   minimumRevision = 0,
+  localSnapshot: SoridrawCatalogSnapshot | null = null,
 ): Promise<SoridrawCatalogSnapshot | null> => {
   if (!uid || !isPreviewCatalogEnabled()) return null;
   const user = auth.currentUser;
@@ -393,6 +480,7 @@ const readRemoteCatalogSnapshot = async (
   markCatalogRuntimeDiagnostic(kind, { stage: 'START', attempt: 0, httpStatus: 0, remoteItemCount: 0, revision: 0, errorCode: '' });
   const retryDelays = [0, 350, 1000];
   let lastError: unknown = null;
+  let allowDeltaSync = Boolean(localSnapshot && minimumRevision <= 0);
   for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
     if (retryDelays[attempt] > 0) await catalogWait(retryDelays[attempt]);
     try {
@@ -407,7 +495,8 @@ const readRemoteCatalogSnapshot = async (
       // an expensive Firestore full rebuild on every browser entry. Only explicit
       // maintenance/mutation callers may pass a hard minimumRevision.
       const hardMinimumRevision = Math.max(0, Math.floor(minimumRevision || 0));
-      if (hardMinimumRevision > 0) headers['X-Soridraw-Known-Revision'] = String(hardMinimumRevision);
+      if (hardMinimumRevision > 0) headers['X-Soridraw-Require-Revision'] = String(hardMinimumRevision);
+      else if (allowDeltaSync && localSnapshot) headers['X-Soridraw-Known-Revision'] = String(localSnapshot.revision);
       markCatalogRuntimeDiagnostic(kind, { stage: 'REQUEST', attempt: attempt + 1 });
       const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${kind}`, {
         method: 'GET',
@@ -422,15 +511,25 @@ const readRemoteCatalogSnapshot = async (
         throw new Error(`CATALOG_READ_${response.status}${detail ? `:${detail}` : ''}`);
       }
       const payload = await response.json();
-      if (!isValidSnapshot(kind, payload)) throw new Error('CATALOG_PAYLOAD_INVALID');
-      markCatalogRuntimeDiagnostic(kind, { stage: 'SNAPSHOT', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(payload.itemCount || 0), revision: Number(payload.revision || 0), errorCode: '' });
-      if (hardMinimumRevision > 0 && payload.revision < hardMinimumRevision) {
+      let resolved: SoridrawCatalogSnapshot | null = null;
+      if (isValidSnapshot(kind, payload)) resolved = payload;
+      else if (allowDeltaSync && localSnapshot && isCatalogSyncResponse(kind, payload)) {
+        resolved = applyCatalogSyncResponse(kind, localSnapshot, payload);
+        if (!resolved) {
+          allowDeltaSync = false;
+          throw new Error('CATALOG_SYNC_INVALID');
+        }
+      } else {
+        throw new Error('CATALOG_PAYLOAD_INVALID');
+      }
+      markCatalogRuntimeDiagnostic(kind, { stage: 'SNAPSHOT', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(resolved.itemCount || 0), revision: Number(resolved.revision || 0), errorCode: '' });
+      if (hardMinimumRevision > 0 && resolved.revision < hardMinimumRevision) {
         throw new Error('CATALOG_REVISION_STALE');
       }
-      await writeCatalogSnapshotToLocalCache(kind, uid, payload);
+      await writeCatalogSnapshotToLocalCache(kind, uid, resolved);
       catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));
-      markCatalogRuntimeDiagnostic(kind, { stage: 'ACCEPTED', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(payload.itemCount || 0), revision: Number(payload.revision || 0), errorCode: '' });
-      return payload;
+      markCatalogRuntimeDiagnostic(kind, { stage: 'ACCEPTED', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(resolved.itemCount || 0), revision: Number(resolved.revision || 0), errorCode: '' });
+      return resolved;
     } catch (error) {
       lastError = error;
       markCatalogRuntimeDiagnostic(kind, { stage: 'ERROR', attempt: attempt + 1, errorCode: String((error as any)?.message || error || 'CATALOG_UNKNOWN_ERROR') });
@@ -462,7 +561,7 @@ export const readCatalogSnapshotCacheFirst = async (
 
     // Normal entry always validates against the already-materialized R2 object.
     // Do not pass the profile sync signal as a hard Worker rebuild requirement.
-    const remote = await readRemoteCatalogSnapshot(kind, uid, 0);
+    const remote = await readRemoteCatalogSnapshot(kind, uid, 0, local);
     if (remote) return remote;
 
     // A server-unvalidated local snapshot must not masquerade as complete Catalog.
@@ -526,8 +625,11 @@ const buildCatalogDelta = (
     delta: {
       schemaVersion: CATALOG_SCHEMA_VERSION,
       kind,
+      mutationId: makeCatalogMutationId(),
       baseRevision: previous.revision,
+      baseItemCount: previous.itemCount,
       revision: nextRevision,
+      nextItemCount: nextSnapshot.itemCount,
       upserts,
       deletedIds,
     },
@@ -538,7 +640,7 @@ const buildCatalogDelta = (
 const publishRemoteCatalogDelta = async (
   uid: string,
   delta: CatalogDelta,
-): Promise<{ revision: number; itemCount: number } | null> => {
+): Promise<{ revision: number; itemCount: number; conflict?: boolean } | null> => {
   if (!isPreviewCatalogEnabled()) return null;
   const user = auth.currentUser;
   if (!user || user.uid !== uid) return null;
@@ -551,6 +653,14 @@ const publishRemoteCatalogDelta = async (
       body: JSON.stringify(delta),
       cache: 'no-store',
     });
+    if (response.status === 409) {
+      const conflictPayload = await response.json().catch(() => ({}));
+      return {
+        revision: Math.floor(Number(conflictPayload?.revision || 0)),
+        itemCount: Math.max(0, Math.floor(Number(conflictPayload?.itemCount || 0))),
+        conflict: true,
+      };
+    }
     if (!response.ok) throw new Error(`CATALOG_DELTA_${response.status}`);
     const payload = await response.json();
     const revision = Math.floor(Number(payload?.revision || 0));
@@ -595,7 +705,7 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
       // "complete" object from a 10/20-row compatibility page. Force the Worker
       // to materialize the canonical catalog server-side once instead.
       if (!previous) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, currentDirtyRevision);
+        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(Date.now(), previous?.revision ? previous.revision + 1 : 1));
         if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
         return;
       }
@@ -611,7 +721,7 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
       const unexplainedMissingFromCompleteSource = explicitComplete
         && projectedCount + explicitDeletedIds.length < previous.itemCount;
       if ((!explicitComplete && !looksCompleteAgainstPrevious) || unexplainedMissingFromCompleteSource) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, currentDirtyRevision);
+        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(Date.now(), previous?.revision ? previous.revision + 1 : 1));
         if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
         return;
       }
@@ -620,7 +730,7 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
         kind, previous, pending.sourceItems, currentDirtyRevision, explicitDeletedIds,
       );
       if (!built) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, currentDirtyRevision);
+        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(Date.now(), previous?.revision ? previous.revision + 1 : 1));
         if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
         return;
       }
@@ -631,7 +741,11 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
       }
 
       const published = await publishRemoteCatalogDelta(uid, built.delta);
-      if (!published) return;
+      if (!published || published.conflict) {
+        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(Date.now(), previous.revision + 1));
+        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
+        return;
+      }
       if (published.itemCount !== built.nextSnapshot.itemCount) {
         const rebuilt = await readRemoteCatalogSnapshot(kind, uid, published.revision);
         if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);

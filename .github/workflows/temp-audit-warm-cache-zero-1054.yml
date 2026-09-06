@@ -1,4 +1,4 @@
-name: Temp Audit Warm Cache Zero 1054
+name: Temp Warm Catalog Zero 1054
 
 on:
   push:
@@ -6,34 +6,416 @@ on:
     paths: ['.github/workflows/temp-audit-warm-cache-zero-1054.yml']
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  implement-test-deploy:
     runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      RUNTIME_BASE: 2c9a430aa6a5f53be28a1f976b836f46fcec7e29
+      MAIN_BASE: 49c799cbb46d137539f74a48c261f7256762336f
     steps:
       - uses: actions/checkout@v4
         with:
           ref: preview
-      - name: Print compact warm-cache findings
+          fetch-depth: 30
+
+      - name: Guard runtime baseline
         shell: bash
         run: |
           set -euo pipefail
+          git merge-base --is-ancestor "$RUNTIME_BASE" HEAD
+          git diff --exit-code "$RUNTIME_BASE"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json functions cloudflare firestore.rules
+          main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$main_sha" = "$MAIN_BASE"
+
+      - name: Apply warm-cache zero Worker policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > src/lib/catalogWarmCachePolicy.ts <<'EOF'
+          export type CatalogWarmCacheKind = 'musicNote' | 'library';
+
+          const positiveInt = (value: unknown): number => {
+            const number = Number(value || 0);
+            return Number.isFinite(number) && number > 0 ? Math.floor(number) : 0;
+          };
+
+          export const readCatalogProfileRevision = (
+            kind: CatalogWarmCacheKind,
+            profile: any,
+          ): number => {
+            if (!profile || typeof profile !== 'object') return 0;
+            if (kind === 'library') return positiveInt(profile?.syncVersions?.library);
+            return Math.max(
+              positiveInt(profile?.syncVersions?.musicNote),
+              positiveInt(profile?.favoriteSyncSignalUpdatedAt),
+              positiveInt(profile?.favoriteSyncSignal?.at),
+            );
+          };
+
+          export const canUseWarmCatalogWithoutRemote = ({
+            localRevision,
+            profileRevision,
+            sessionValidated,
+          }: {
+            localRevision: number;
+            profileRevision: number;
+            sessionValidated: boolean;
+          }): boolean => {
+            const local = positiveInt(localRevision);
+            const remote = positiveInt(profileRevision);
+            if (local <= 0) return false;
+            if (sessionValidated) return remote <= 0 || local >= remote;
+            // Across app restarts, a server-authored IndexedDB Catalog may skip the
+            // Worker only when the existing user-profile invalidation token proves
+            // that the Catalog revision is current. Unknown profile state stays fail-safe.
+            return remote > 0 && local >= remote;
+          };
+
+          export const shouldRefreshCatalogForProfile = ({
+            catalogRevision,
+            profileRevision,
+          }: {
+            catalogRevision: number;
+            profileRevision: number;
+          }): boolean => {
+            const local = positiveInt(catalogRevision);
+            const remote = positiveInt(profileRevision);
+            return remote > 0 && (local <= 0 || remote > local);
+          };
+          EOF
+
+          mkdir -p test
+          cat > test/catalogWarmCachePolicy.test.mjs <<'EOF'
+          import test from 'node:test';
+          import assert from 'node:assert/strict';
+          import {
+            canUseWarmCatalogWithoutRemote,
+            readCatalogProfileRevision,
+            shouldRefreshCatalogForProfile,
+          } from '../src/lib/catalogWarmCachePolicy.ts';
+
+          test('warm restart skips Worker when profile proves local Catalog current', () => {
+            assert.equal(canUseWarmCatalogWithoutRemote({ localRevision: 500, profileRevision: 500, sessionValidated: false }), true);
+            assert.equal(canUseWarmCatalogWithoutRemote({ localRevision: 510, profileRevision: 500, sessionValidated: false }), true);
+          });
+
+          test('unknown profile never promotes cross-session local Catalog by itself', () => {
+            assert.equal(canUseWarmCatalogWithoutRemote({ localRevision: 500, profileRevision: 0, sessionValidated: false }), false);
+          });
+
+          test('newer profile invalidates warm Catalog', () => {
+            assert.equal(canUseWarmCatalogWithoutRemote({ localRevision: 500, profileRevision: 501, sessionValidated: false }), false);
+            assert.equal(shouldRefreshCatalogForProfile({ catalogRevision: 500, profileRevision: 501 }), true);
+          });
+
+          test('same profile version causes no background Catalog request', () => {
+            assert.equal(shouldRefreshCatalogForProfile({ catalogRevision: 500, profileRevision: 500 }), false);
+            assert.equal(shouldRefreshCatalogForProfile({ catalogRevision: 510, profileRevision: 500 }), false);
+          });
+
+          test('session-validated local still works when profile token is unavailable', () => {
+            assert.equal(canUseWarmCatalogWithoutRemote({ localRevision: 500, profileRevision: 0, sessionValidated: true }), true);
+          });
+
+          test('Music Note revision uses strongest existing invalidation token', () => {
+            assert.equal(readCatalogProfileRevision('musicNote', {
+              syncVersions: { musicNote: 100 },
+              favoriteSyncSignalUpdatedAt: 120,
+              favoriteSyncSignal: { at: 110 },
+            }), 120);
+          });
+
+          test('Library revision uses library syncVersion only', () => {
+            assert.equal(readCatalogProfileRevision('library', {
+              syncVersions: { library: 230, musicNote: 999 },
+              favoriteSyncSignalUpdatedAt: 888,
+            }), 230);
+          });
+          EOF
+
           python3 <<'PY'
           from pathlib import Path
-          files=['src/App.tsx','src/lib/userDataEngine.ts','src/lib/userProfileCache.ts','src/lib/listBundleCache.ts','src/lib/firestoreMeasured.ts']
-          needles=['writeUserProfileCache','USER_PROFILE_CACHE_EVENT','syncVersions','favoriteSyncSignalUpdatedAt','favoriteSyncSignal','markAdaptiveListIndexDirty','readAdaptiveListIndexDirtyRevision','readCatalogSnapshotCacheFirst','catalogRemoteValidatedSessionKeys','subscribeListBundle']
-          for f in files:
-              p=Path(f)
-              if not p.exists(): continue
-              lines=p.read_text(encoding='utf-8').splitlines()
-              hits=[]
-              for i,line in enumerate(lines,1):
-                  if any(n in line for n in needles): hits.append(i)
-              if not hits: continue
-              print(f'FILE {f}')
-              for i in hits[:100]:
-                  lo=max(1,i-3); hi=min(len(lines),i+7)
-                  print(f'-- {lo}:{hi} around {i} --')
-                  for n in range(lo,hi+1): print(f'{n}: {lines[n-1]}')
+
+          def once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'{label}: anchor missing')
+              return text.replace(old, new, 1)
+
+          # userDataEngine: replace mandatory per-session Worker validation with
+          # profile-version-proven warm-cache trust.
+          p = Path('src/lib/userDataEngine.ts')
+          s = p.read_text(encoding='utf-8')
+          s = once(
+              s,
+              "import { markCatalogRuntimeDiagnostic } from './catalogRuntimeDiagnostics';\n",
+              "import { markCatalogRuntimeDiagnostic } from './catalogRuntimeDiagnostics';\nimport { canUseWarmCatalogWithoutRemote, readCatalogProfileRevision } from './catalogWarmCachePolicy';\n",
+              'userDataEngine policy import',
+          )
+          old_fn = """const readKnownRemoteCatalogRevision = (kind: SoridrawCatalogKind, uid: string): number => {
+  const profile = readUserProfileCache(uid) as any;
+  if (!profile || typeof profile !== 'object') return 0;
+  if (kind === 'library') {
+    const libraryVersion = Number(profile?.syncVersions?.library || 0);
+    return Number.isFinite(libraryVersion) && libraryVersion > 0 ? Math.floor(libraryVersion) : 0;
+  }
+  const candidates = [
+    Number(profile?.syncVersions?.musicNote || 0),
+    Number(profile?.favoriteSyncSignalUpdatedAt || 0),
+    Number(profile?.favoriteSyncSignal?.at || 0),
+  ].filter((value) => Number.isFinite(value) && value > 0);
+  return candidates.length > 0 ? Math.floor(Math.max(...candidates)) : 0;
+};"""
+          new_fn = """const readKnownRemoteCatalogRevision = (kind: SoridrawCatalogKind, uid: string): number => (
+  readCatalogProfileRevision(kind, readUserProfileCache(uid))
+);"""
+          s = once(s, old_fn, new_fn, 'userDataEngine revision helper')
+          old_block = """    // Local cache may paint instantly, but it is never promoted to full-list
+    // authority before one successful server Catalog response in this session.
+    // This prevents an old 37-row cache from permanently masking a 500+ row R2 Catalog.
+    if (local && sessionValidated && (knownRemoteRevision <= 0 || local.revision >= knownRemoteRevision)) {
+      return local;
+    }
+
+    // Normal entry always validates against the already-materialized R2 object."""
+          new_block = """    // 1054: a V5 Catalog is server-authored and may survive app restarts without
+    // a redundant Worker GET when the already-paid users profile invalidation token
+    // proves it is current. Unknown profile state remains fail-safe and validates remotely.
+    if (local && canUseWarmCatalogWithoutRemote({
+      localRevision: local.revision,
+      profileRevision: knownRemoteRevision,
+      sessionValidated,
+    })) {
+      return local;
+    }
+
+    // Missing/stale/unknown proof still validates against the R2 Catalog."""
+          s = once(s, old_block, new_block, 'userDataEngine warm condition')
+          p.write_text(s, encoding='utf-8')
+
+          # Adaptive bridge carries the authoritative Catalog revision to the subscription layer.
+          p = Path('src/lib/adaptiveListIndexV2.ts')
+          s = p.read_text(encoding='utf-8')
+          s = once(s, "  updatedAtMs: number;\n};", "  updatedAtMs: number;\n  catalogRevision: number;\n};", 'adaptive type revision')
+          s = once(s, "    updatedAtMs: snapshot.generatedAtMs,\n  };", "    updatedAtMs: snapshot.generatedAtMs,\n    catalogRevision: snapshot.revision,\n  };", 'adaptive return revision')
+          p.write_text(s, encoding='utf-8')
+
+          # List subscription reuses the existing users:onSnapshot profile event.
+          # Same version = zero Worker. Newer version = delayed Delta sync only then.
+          p = Path('src/lib/listBundleCache.ts')
+          s = p.read_text(encoding='utf-8')
+          s = once(
+              s,
+              "import { isPreviewAdaptiveListIndexEnabled, readPreviewAdaptiveListIndexV2 } from './adaptiveListIndexV2';\n",
+              "import { isPreviewAdaptiveListIndexEnabled, readPreviewAdaptiveListIndexV2 } from './adaptiveListIndexV2';\nimport { USER_PROFILE_CACHE_EVENT } from './userProfileCache';\nimport { readCatalogProfileRevision, shouldRefreshCatalogForProfile } from './catalogWarmCachePolicy';\n",
+              'list bundle imports',
+          )
+          s = once(s, "  updatedAtMs: number;\n};", "  updatedAtMs: number;\n  catalogRevision?: number;\n};", 'list bundle revision type')
+          s = once(
+              s,
+              "  let cancelled = false;\n  let started = false;\n",
+              "  let cancelled = false;\n  let started = false;\n  let latestCatalogRevision = 0;\n  let profileRefreshInFlight = false;\n",
+              'list bundle state',
+          )
+          anchor = """  const runOneShotRead = () => {
+    if (cancelled || started) return;"""
+          helper = """  const deliverAdaptiveBundle = (
+    bundle: ListBundleSnapshot,
+    meta: { fromCache: boolean },
+    onlyIfNewer = false,
+  ) => {
+    const revision = Math.max(0, Math.floor(Number(bundle.catalogRevision || 0)));
+    if (onlyIfNewer && revision > 0 && revision <= latestCatalogRevision) return;
+    if (revision > 0) latestCatalogRevision = Math.max(latestCatalogRevision, revision);
+    callbacks.onData(bundle, meta);
+  };
+
+  const refreshCatalogAfterProfileAdvance = async (profileRevision: number) => {
+    if (profileRefreshInFlight || cancelled || !started) return;
+    profileRefreshInFlight = true;
+    try {
+      // Mutation publication is debounced by ~1.2s. Give the journal time to land,
+      // then retry only while the already-paid profile token proves Catalog is stale.
+      const retryDelays = [1400, 900, 1800];
+      for (const delay of retryDelays) {
+        if (cancelled) return;
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+        const bundle = await readPreviewAdaptiveListIndexV2(kind, uid);
+        if (cancelled || !bundle) continue;
+        const revision = Math.max(0, Math.floor(Number(bundle.catalogRevision || 0)));
+        if (revision > latestCatalogRevision) deliverAdaptiveBundle(bundle, { fromCache: false }, true);
+        if (revision >= profileRevision) return;
+      }
+    } finally {
+      profileRefreshInFlight = false;
+    }
+  };
+
+  const handleUserProfileCacheUpdate = (event: Event) => {
+    if (cancelled || !started || !isPreviewAdaptiveListIndexEnabled()) return;
+    const detail = (event as CustomEvent<{ uid?: string; profile?: any }>).detail;
+    if (String(detail?.uid || '') !== uid) return;
+    const profileRevision = readCatalogProfileRevision(kind, detail?.profile);
+    if (!shouldRefreshCatalogForProfile({ catalogRevision: latestCatalogRevision, profileRevision })) return;
+    void refreshCatalogAfterProfileAdvance(profileRevision);
+  };
+
+""" + anchor
+          s = once(s, anchor, helper, 'list bundle profile refresh helper')
+          s = once(
+              s,
+              "        callbacks.onData(adaptiveBundle, { fromCache: false });\n        return;",
+              "        deliverAdaptiveBundle(adaptiveBundle, { fromCache: false });\n        return;",
+              'list bundle initial delivery',
+          )
+          add_listener_anchor = """  const handleMusicNotePageEntry = () => runOneShotRead();
+
+  if (kind === 'musicNote') {"""
+          add_listener_new = """  const handleMusicNotePageEntry = () => runOneShotRead();
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, handleUserProfileCacheUpdate as EventListener);
+  }
+
+  if (kind === 'musicNote') {"""
+          s = once(s, add_listener_anchor, add_listener_new, 'profile listener add')
+          cleanup_anchor = """  return () => {
+    cancelled = true;
+    if (kind === 'musicNote' && typeof window !== 'undefined') {
+      window.removeEventListener(MUSIC_NOTE_BUNDLE_PAGE_ENTRY_EVENT, handleMusicNotePageEntry as EventListener);
+    }
+  };"""
+          cleanup_new = """  return () => {
+    cancelled = true;
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleUserProfileCacheUpdate as EventListener);
+      if (kind === 'musicNote') {
+        window.removeEventListener(MUSIC_NOTE_BUNDLE_PAGE_ENTRY_EVENT, handleMusicNotePageEntry as EventListener);
+      }
+    }
+  };"""
+          s = once(s, cleanup_anchor, cleanup_new, 'profile listener cleanup')
+          p.write_text(s, encoding='utf-8')
           PY
+
+      - name: Static safety guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'canUseWarmCatalogWithoutRemote' src/lib/userDataEngine.ts
+          grep -q 'USER_PROFILE_CACHE_EVENT' src/lib/listBundleCache.ts
+          grep -q 'catalogRevision: snapshot.revision' src/lib/adaptiveListIndexV2.ts
+          grep -q 'profileRevision: knownRemoteRevision' src/lib/userDataEngine.ts
+          ! grep -q 'local && sessionValidated && (knownRemoteRevision <= 0' src/lib/userDataEngine.ts
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/lib/adaptiveListIndexV2.ts src/lib/listBundleCache.ts src/lib/userDataEngine.ts "
+          test "$(git status --porcelain -- src/lib/catalogWarmCachePolicy.ts test/catalogWarmCachePolicy.test.mjs | wc -l)" -eq 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Unit tests TypeScript and app Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --test test/catalogWarmCachePolicy.test.mjs
+          npx tsc --noEmit
+          npm run build
+          test -s dist/index.html
+          echo 'WARM_CACHE_POLICY_TESTS=PASS'
+          echo 'APP_TYPESCRIPT_BUILD=PASS'
+
+      - name: Functions and Library regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix functions ci
+          npm --prefix functions run build
+          npm --prefix functions run test:library-bundle
+          echo 'FUNCTIONS_BUILD_LIBRARY_REGRESSION=PASS'
+
+      - name: Commit feature to preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git add src/lib/catalogWarmCachePolicy.ts test/catalogWarmCachePolicy.test.mjs src/lib/userDataEngine.ts src/lib/adaptiveListIndexV2.ts src/lib/listBundleCache.ts
+          test "$(git diff --cached --name-only | wc -l)" -eq 5
+          git commit -m 'perf(preview): skip Catalog Worker on proven warm cache'
+          git push origin HEAD:preview
+          echo "FEATURE_COMMIT=$(git rev-parse HEAD)"
+
+      - name: Verify unchanged Cloudflare Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw-media-preview.andrawing1212.workers.dev/health -o "$RUNNER_TEMP/worker-health.json"
+          grep -q '"catalogDeltaMode":"base+journal"' "$RUNNER_TEMP/worker-health.json"
+          grep -q '"catalogCompactionAfter":200' "$RUNNER_TEMP/worker-health.json"
+          echo 'CLOUDFLARE_UNCHANGED_HEALTH=PASS'
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot production before PREVIEW deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+
+      - name: Deploy Firebase PREVIEW Hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_DEPLOY=PASS'
+
+      - name: Verify exact PREVIEW build
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          echo "LOCAL_INDEX_SHA=$local_sha"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then
+                  ok=yes; echo "EXACT_BUILD_PASS=$url:$remote_sha"; break
+                fi
+              fi
+              sleep 10
+            done
+            test "$ok" = yes
+          done
+
+      - name: Verify main and Production unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$main_sha" = "$MAIN_BASE"
+          echo 'PRODUCTION_MAIN_UNCHANGED=PASS'
+
+      - name: Cleanup temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git rm .github/workflows/temp-audit-warm-cache-zero-1054.yml
+          git commit -m 'chore(preview): remove temporary warm-cache deploy workflow'
+          git push origin HEAD:preview
+          echo "FINAL_PREVIEW_HEAD=$(git rev-parse HEAD)"

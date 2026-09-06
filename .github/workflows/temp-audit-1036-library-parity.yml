@@ -1,0 +1,30 @@
+name: Temp Audit 1036 Library Parity
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-audit-1036-library-parity.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Audit catalog paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== USER DATA ENGINE ==='
+          sed -n '1,360p' src/lib/userDataEngine.ts
+          echo '=== ADAPTIVE BRIDGE ==='
+          sed -n '1,320p' src/lib/adaptiveListIndexV2.ts
+          echo '=== MUSIC NOTE BOOTSTRAP/MORE ==='
+          grep -n -C 35 -E 'subscribeListBundle|readPreviewAdaptiveListIndexV2|attachFavoritesSourceBootstrap902|runFavoritesFullCacheRecoveryOnce|loadMoreFavorites|setHasMoreFavorites|favoritePagination' src/App.tsx | head -n 1100 || true
+          echo '=== LIBRARY CATALOG ==='
+          grep -n -C 40 -E 'adaptive|catalog|bundle|hasMore|loadMore|visible|IndexedDB|readPreviewAdaptiveListIndexV2|schedulePreviewAdaptiveListIndexPublishIfDirty' src/pages/SunoLibraryPage.tsx | head -n 1300 || true

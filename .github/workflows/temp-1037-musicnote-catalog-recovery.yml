@@ -1,0 +1,98 @@
+name: Temp 1037 Music Note Catalog Recovery
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-1037-musicnote-catalog-recovery.yml'
+permissions:
+  contents: write
+concurrency:
+  group: soridraw-1037-musicnote-catalog-recovery
+  cancel-in-progress: false
+jobs:
+  validate_commit_cleanup:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXPECTED_RUNTIME_BASE: d4d80664cfdee7e8bf0066dc9d76b59ec0c110f6
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - name: Guard runtime baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_RUNTIME_BASE" HEAD
+          git diff --exit-code "$EXPECTED_RUNTIME_BASE"..HEAD -- src functions/src cloudflare package.json package-lock.json firebase.json firebase.hosting-preview.json firestore.rules firestore.indexes.json
+
+      - name: Apply 1037 recovery repair
+        run: python3 .deploy/apply-1037-musicnote-catalog-recovery.py
+
+      - name: Structural safety guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('src/lib/adaptiveListIndexV2.ts').read_text(encoding='utf-8')
+          assert 'recoverMusicNoteCatalogFromCanonicalFirestore' in s
+          assert "collection(db, 'favorites')" in s
+          assert "where('uid', '==', uid)" in s
+          block = s[s.index('const recoverMusicNoteCatalogFromCanonicalFirestore'):s.index('// Compatibility bridge')]
+          assert 'limit(' not in block and 'orderBy(' not in block and 'startAfter(' not in block
+          assert "writeCatalogSnapshotToLocalCache('musicNote', uid, localSnapshot)" in block
+          assert "schemaVersion: 1001" in block and "hasMore: false" in block
+          assert "if (kind === 'musicNote') return recoverMusicNoteCatalogFromCanonicalFirestore(uid);" in s
+          assert "kind === 'library'" not in block
+          print('1037_STRUCTURAL_GUARDS=PASS')
+          PY
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: App build
+        run: npm run build
+
+      - name: Commit validated runtime source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/lib/adaptiveListIndexV2.ts
+          git diff --cached --stat
+          test -n "$(git diff --cached --name-only)"
+          git commit -m 'fix(preview): recover Music Note when catalog is unavailable'
+          git push origin HEAD:preview
+          echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Cleanup temporary 1037 tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin preview
+          git rm -f .deploy/apply-1037-musicnote-catalog-recovery.py .github/workflows/temp-1037-musicnote-catalog-recovery.yml
+          git commit -m 'chore(preview): remove temporary 1037 tooling'
+          git push origin HEAD:preview
+
+      - name: Final result
+        run: |
+          echo "SOURCE_COMMIT=$SOURCE_COMMIT"
+          echo 'TYPESCRIPT=PASS'
+          echo 'BUILD=PASS'
+          echo 'DEPLOYMENT=NOT_REQUESTED'
+          echo 'MAIN_PRODUCTION=UNTOUCHED'

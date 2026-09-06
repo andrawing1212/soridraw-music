@@ -92,10 +92,16 @@ jobs:
           grep -Fq "syncMusicNoteStructureVersion" functions/src/securedIndex.ts
           echo 'FUNCTIONS_STRUCTURE_AND_LIBRARY_TESTS=PASS'
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Firestore rules local compile
         shell: bash
         run: |
           set -euo pipefail
+          java -version
           npx --yes firebase-tools@latest emulators:exec --only firestore --project demo-soridraw --config firebase.json "echo FIRESTORE_RULES_EMULATOR=PASS"
 
       - name: Commit validated work tree and remove temp files

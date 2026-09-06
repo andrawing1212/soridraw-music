@@ -1,0 +1,74 @@
+name: Temp 1045 Worker Auth Revision Audit
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-1045-worker-auth-revision-audit.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    env:
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install firebase admin
+        run: npm --prefix functions ci
+      - name: Reproduce browser Catalog GET with real Firebase user token
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const admin = require('./functions/node_modules/firebase-admin');
+          const crypto = require('crypto');
+          const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+          admin.initializeApp({credential: admin.credential.cert(sa), projectId:'soridraw-app-866a5'});
+          const db = admin.firestore();
+          const active = d => !(d.favoriteRemoved===true || d.saved===false || d.hidden===true || d.favoriteHidden===true || d.deletedAt || d.trashedAt);
+          const num = v => Number.isFinite(Number(v)) ? Number(v) : 0;
+          (async()=>{
+            const favs = await db.collection('favorites').get();
+            const by = new Map();
+            for (const doc of favs.docs) {
+              const d=doc.data()||{}; const uid=String(d.uid||'');
+              if (!uid || !active(d)) continue;
+              by.set(uid,(by.get(uid)||0)+1);
+            }
+            const [uid,count] = [...by.entries()].sort((a,b)=>b[1]-a[1])[0] || [];
+            if (!uid) throw new Error('NO_UID');
+            const profileSnap = await db.collection('users').doc(uid).get();
+            const p = profileSnap.data() || {};
+            const known = Math.floor(Math.max(
+              num(p?.syncVersions?.musicNote),
+              num(p?.favoriteSyncSignalUpdatedAt),
+              num(p?.favoriteSyncSignal?.at)
+            ));
+            const customToken = await admin.auth().createCustomToken(uid);
+            const apiKey = 'AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA';
+            const exchange = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`, {
+              method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token:customToken,returnSecureToken:true})
+            });
+            if (!exchange.ok) throw new Error(`TOKEN_EXCHANGE_${exchange.status}:${await exchange.text()}`);
+            const idToken = (await exchange.json()).idToken;
+            const endpoint='https://soridraw-media-preview.andrawing1212.workers.dev/v1/catalog/musicNote';
+            const label=crypto.createHash('sha256').update(uid).digest('hex').slice(0,10);
+            async function hit(name, withRevision) {
+              const headers={Authorization:`Bearer ${idToken}`,Origin:'https://preview.soridraw.com'};
+              if (withRevision && known>0) headers['X-Soridraw-Known-Revision']=String(known);
+              const r=await fetch(endpoint,{headers,cache:'no-store'});
+              const text=await r.text();
+              let body={}; try{body=JSON.parse(text)}catch{}
+              console.log(`${name} ACCOUNT=${label} CANONICAL=${count} KNOWN=${known} STATUS=${r.status} ITEMCOUNT=${body.itemCount??'NA'} REV=${body.revision??'NA'} CODE=${body.code??'NA'}`);
+            }
+            await hit('NO_REV',false);
+            await hit('WITH_REV',true);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE

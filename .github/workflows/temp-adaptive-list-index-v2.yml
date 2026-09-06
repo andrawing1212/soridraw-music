@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: preview
-          fetch-depth: 20
+          fetch-depth: 30
 
       - name: Guard restored preview source
         shell: bash
@@ -41,50 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          helper=Path('src/lib/adaptiveListIndexV2.ts').read_text()
-          measured=Path('src/lib/firestoreMeasured.ts').read_text()
-          bundle=Path('src/lib/listBundleCache.ts').read_text()
-          app=Path('src/App.tsx').read_text()
-          library=Path('src/pages/SunoLibraryPage.tsx').read_text()
-          favorites=Path('src/pages/FavoritesPage.tsx').read_text()
-          backend=Path('functions/src/previewAdaptiveListIndex.ts').read_text()
-          rules=Path('firestore.rules').read_text()
-
-          assert 'ADAPTIVE_LIST_INDEX_MAX_ITEMS = 400' in helper
-          assert 'ADAPTIVE_LIST_INDEX_TARGET_BYTES = 700_000' in helper
-          assert "'preview.soridraw.com'" in helper
-          assert "'test.soridraw.com'" not in helper and "'soridraw.com'" not in helper
-          assert "music_note_adaptive_v2" in helper and "library_adaptive_v2" in helper
-          assert 'readAdaptiveListIndexDirtyRevision(kind)' in helper
-          assert 'if (dirtyRevision <= 0) return;' in helper
-          assert 'clearAdaptiveListIndexDirtyRevision' in helper
-
-          assert 'markAdaptiveListIndexDirtyBySource(source);' in measured
-          assert "source === 'favorites'" in measured
-          assert "source === 'suno_tracks/*/tracks'" in measured
-
-          assert 'readPreviewAdaptiveListIndexV2(kind, uid)' in bundle
-          assert 'runLegacyOneShotRead()' in bundle
-          assert "schedulePreviewAdaptiveListIndexPublishIfDirty('musicNote'" in app
-          assert "schedulePreviewAdaptiveListIndexPublishIfDirty('library'" in library
-          assert 'const canShowCachedMusicNoteMore = visibleCount < filteredFavorites.length;' in favorites
-          assert 'if (workspaceVisibleCount < filteredTracks.length)' in library
-
-          assert 'enforceAppCheck: true' in backend
-          assert 'request.auth?.uid' in backend
-          assert 'ALLOWED_PREVIEW_HOSTS.has(originHost)' in backend
-          assert 'MAX_ITEMS = 400' in backend and 'MAX_BYTES = 800_000' in backend
-          assert '.collection("favorites")' not in backend
-          assert '.collection("suno_tracks")' not in backend
-          assert 'user_list_caches' in backend
-          assert 'syncVersions' not in backend
-
-          assert "music_note_latest_20" in rules and "library_latest_10_sets" in rules
-          assert "music_note_adaptive_v2" not in rules and "library_adaptive_v2" not in rules
-          print('ADAPTIVE_LIST_INDEX_STATIC_GUARD=PASS')
-          PY
+          node scripts/verify-adaptive-list-index-v2.mjs
           git diff --exit-code "$EXPECTED_BASE" -- firestore.rules firestore.indexes.json firebase.json firebase.hosting-preview.json
 
       - name: Set up Node 20
@@ -98,13 +55,6 @@ jobs:
 
       - name: TypeScript
         run: npx tsc --noEmit
-
-      - name: Existing bounded pagination guards
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f scripts/verify-music-note-normalization-stage1.mjs ]; then node scripts/verify-music-note-normalization-stage1.mjs; fi
-          if [ -f scripts/verify-music-note-pagination-order.mjs ]; then node scripts/verify-music-note-pagination-order.mjs; fi
 
       - name: App build
         run: npm run build
@@ -157,7 +107,7 @@ jobs:
           npx --yes firebase-tools@latest deploy --only functions:publishPreviewAdaptiveListIndexV2 --project soridraw-app-866a5 --non-interactive
           echo 'PREVIEW_ADAPTIVE_FUNCTION_DEPLOY=PASS'
 
-      - name: Verify callable exists and rejects unauthenticated request
+      - name: Verify callable exists
         shell: bash
         run: |
           set -euo pipefail

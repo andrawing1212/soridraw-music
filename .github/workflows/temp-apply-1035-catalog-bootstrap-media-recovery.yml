@@ -1,0 +1,94 @@
+name: Temp Apply 1035 Catalog Bootstrap Media Recovery
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-apply-1035-catalog-bootstrap-media-recovery.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  apply_verify_commit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 12
+
+      - name: Apply 1035 recovery
+        run: python3 .deploy/apply-1035-catalog-bootstrap-media-recovery.py
+
+      - name: Static correctness and regression guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'SORIDRAW_USER_DATA_ENGINE_V2_20260906' src/lib/userDataEngine.ts >/dev/null
+          grep -F 'SORIDRAW_USER_DATA_ENGINE_DELTA_SYNC_1035' src/lib/userDataEngine.ts >/dev/null
+          grep -F "CATALOG_DB_NAME = 'soridraw_user_data_engine_v2'" src/lib/userDataEngine.ts >/dev/null
+          grep -F '/delta' src/lib/userDataEngine.ts >/dev/null
+          grep -F 'SORIDRAW_COMMON_USER_DATA_ENGINE_1035' cloudflare/media-worker/src/index.js >/dev/null
+          grep -F 'firestoreCatalogQuery' cloudflare/media-worker/src/index.js >/dev/null
+          grep -F 'X-Soridraw-Known-Revision' cloudflare/media-worker/src/index.js >/dev/null
+          grep -F 'favoriteMediaPayload' src/App.tsx >/dev/null
+          grep -F 'setDoc(favoriteDocRef, favoritePayload, { merge: true })' src/App.tsx >/dev/null
+          ! grep -A22 -F 'const unsaveUpdates = sanitizeForFirestore({' src/App.tsx | grep -E 'createdAtMs: unsavedAt|createdAt: serverTimestamp'
+          grep -F 'persistRecentSongsDocument' src/App.tsx >/dev/null
+          grep -F "operation: 'music-note-unsave'" src/App.tsx >/dev/null
+          grep -F 'hydrateCatalogFavorite' src/pages/FavoritesPage.tsx >/dev/null
+          grep -F 'void openFavoriteDetail(song)' src/pages/FavoritesPage.tsx >/dev/null
+          echo 'STATIC_1035_GUARDS=PASS'
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: App build
+        run: npm run build
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Functions build
+        run: |
+          npm --prefix functions ci
+          npm --prefix functions run build
+
+      - name: Existing library backend test
+        run: npm --prefix functions run test:library-bundle
+
+      - name: Cloudflare Worker dry run
+        working-directory: cloudflare/media-worker
+        run: |
+          npm install --no-audit --no-fund
+          npm run check
+
+      - name: Commit verified source and remove temporary artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git rm -f \
+            .deploy/apply-1035-catalog-bootstrap-media-recovery.py \
+            .github/workflows/temp-audit-catalog-regression-1035.yml \
+            .github/workflows/temp-audit-catalog-regression-1035b.yml \
+            .github/workflows/temp-apply-1035-catalog-bootstrap-media-recovery.yml
+          git add src/App.tsx src/pages/FavoritesPage.tsx src/lib/userDataEngine.ts cloudflare/media-worker/src/index.js
+          git diff --cached --check
+          git commit -m 'fix(preview): recover snapshot bootstrap and Music Note media metadata'
+          git push origin HEAD:preview

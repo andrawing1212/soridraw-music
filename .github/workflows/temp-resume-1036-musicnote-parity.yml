@@ -1,0 +1,219 @@
+name: Temp Resume 1036 Music Note Parity
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-resume-1036-musicnote-parity.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-1036-musicnote-parity-resume
+  cancel-in-progress: false
+
+jobs:
+  validate_deploy_cleanup:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      EXPECTED_RUNTIME_BASE: 4791c721aa54a25798721c8437c7f685b121ea8f
+      WORKER_URL: https://soridraw-media-preview.andrawing1212.workers.dev
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 40
+
+      - name: Guard runtime baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_RUNTIME_BASE" HEAD
+          git diff --exit-code "$EXPECTED_RUNTIME_BASE"..HEAD -- src functions/src cloudflare/media-worker package.json package-lock.json firebase.json firebase.hosting-preview.json firestore.rules firestore.indexes.json
+
+      - name: Apply and normalize 1036
+        run: |
+          python3 .deploy/apply-1036-musicnote-library-parity.py
+          python3 .deploy/fix-1036-generated-syntax.py
+
+      - name: Structural guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          app=Path('src/App.tsx').read_text(encoding='utf-8')
+          fav=Path('src/pages/FavoritesPage.tsx').read_text(encoding='utf-8')
+          eng=Path('src/lib/userDataEngine.ts').read_text(encoding='utf-8')
+          worker=Path('cloudflare/media-worker/src/index.js').read_text(encoding='utf-8')
+          assert 'attachFavoritesSourceBootstrap902' not in app
+          assert 'attachLegacyFavoritesFallback' not in app
+          a=app.index('const loadMoreFavorites = useCallback')
+          b=app.index('const syncMusicNoteIncrementalFromRemoteVersion',a)
+          assert 'getDocs' not in app[a:b]
+          assert "bundle.schemaVersion === 1001" in app
+          assert 'musicNoteFullCatalogReadyUids' in app
+          assert 'canRequestMoreMusicNotePage' not in fav
+          assert 'onLoadMoreFavorites?.' not in fav
+          assert '더보기 (20개 더 불러오기)' not in fav
+          assert "const CATALOG_SCHEMA_VERSION = 3 as const;" in eng
+          assert 'soridraw_user_data_engine_v3' in eng
+          assert 'catalog auth headers unavailable after retry' in eng
+          assert 'catalog snapshot read unavailable after retry' in eng
+          assert 'const CATALOG_SCHEMA_VERSION = 3;' in worker
+          assert 'catalog/v3/' in worker
+          assert 'catalogSchemaVersion: CATALOG_SCHEMA_VERSION' in worker
+          for marker in ['buildRecentMirrorTargets','favoriteSyncSignal','music-note-unsave']:
+              assert marker in app, marker
+          for media in ['audioUrl','coverUrl','imageUrl','sunoAudioUrl','sunoCoverUrl']:
+              assert media in app, media
+          print('STRUCTURAL_GUARDS=PASS')
+          PY
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: App build
+        run: npm run build
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Functions validation
+        run: |
+          npm --prefix functions ci
+          npm --prefix functions run build
+          npm --prefix functions run test:library-bundle
+
+      - name: Worker dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/media-worker
+          npm install --no-audit --no-fund --package-lock=false
+          npm run check
+
+      - name: Commit validated runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/App.tsx src/pages/FavoritesPage.tsx src/lib/userDataEngine.ts cloudflare/media-worker/src/index.js
+          git diff --cached --stat
+          test -n "$(git diff --cached --name-only)"
+          git commit -m 'fix(preview): make Music Note follow full catalog path'
+          git push origin HEAD:preview
+          echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Snapshot main and production
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-remote origin refs/heads/main | awk '{print $1}' > "$RUNNER_TEMP/main-before.sha"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+
+      - name: Deploy Cloudflare PREVIEW first
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          cd cloudflare/media-worker
+          npm run deploy
+
+      - name: Verify Worker V3
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=''
+          for attempt in $(seq 1 10); do
+            if curl -fsS --max-time 30 "$WORKER_URL/health" -o "$RUNNER_TEMP/health.json"; then
+              cat "$RUNNER_TEMP/health.json"
+              if grep -q '"r2Binding":true' "$RUNNER_TEMP/health.json" && grep -q '"catalogSchemaVersion":3' "$RUNNER_TEMP/health.json"; then ok=yes; break; fi
+            fi
+            sleep 6
+          done
+          test "$ok" = yes
+          code="$(curl -sS -o "$RUNNER_TEMP/unauth.json" -w '%{http_code}' --max-time 30 -H 'Origin: https://preview.soridraw.com' "$WORKER_URL/v1/catalog/musicNote")"
+          test "$code" = 401
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW hosting
+        run: npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+
+      - name: Verify exact PREVIEW build
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          for url in https://soridraw-preview.web.app/ https://preview.soridraw.com/; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/site.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/site.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then ok=yes; echo "EXACT_BUILD_PASS=$url"; break; fi
+              fi
+              sleep 10
+            done
+            test "$ok" = yes
+          done
+
+      - name: Verify main production unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-remote origin refs/heads/main | awk '{print $1}' > "$RUNNER_TEMP/main-after.sha"
+          cmp "$RUNNER_TEMP/main-before.sha" "$RUNNER_TEMP/main-after.sha"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+
+      - name: Cleanup 1036 temporary files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin preview
+          git rm -f \
+            .github/workflows/temp-audit-1036-library-parity.yml \
+            .github/workflows/temp-audit-1036-parity-details.yml \
+            .github/workflows/temp-apply-deploy-1036-musicnote-parity.yml \
+            .github/workflows/temp-resume-1036-musicnote-parity.yml \
+            .deploy/apply-1036-musicnote-library-parity.py \
+            .deploy/fix-1036-generated-syntax.py
+          git commit -m 'chore(preview): remove temporary 1036 tooling'
+          git push origin HEAD:preview
+
+      - name: Final result
+        run: |
+          echo "SOURCE_COMMIT=$SOURCE_COMMIT"
+          echo 'MUSIC_NOTE_MORE=LOCAL_ONLY'
+          echo 'CATALOG=V3_AUTHORITATIVE'
+          echo 'CLOUDFLARE_PREVIEW=DEPLOYED'
+          echo 'FIREBASE_PREVIEW=DEPLOYED'
+          echo 'FUNCTIONS=UNCHANGED'
+          echo 'MAIN_PRODUCTION=UNCHANGED'

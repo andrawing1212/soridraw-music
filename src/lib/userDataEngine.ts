@@ -335,30 +335,31 @@ const readKnownRemoteCatalogRevision = (kind: SoridrawCatalogKind, uid: string):
 
 const catalogWait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-const authenticatedHeaders = async (): Promise<Record<string, string> | null> => {
+const authenticatedHeaders = async (
+  requireAppCheck = true,
+): Promise<Record<string, string> | null> => {
   const user = auth.currentUser;
   if (!user) return null;
-  const retryDelays = [0, 250, 800, 1600];
+  const retryDelays = requireAppCheck ? [0, 250, 800, 1600] : [0, 250, 800];
+  let lastError: unknown = null;
   for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
     if (retryDelays[attempt] > 0) await catalogWait(retryDelays[attempt]);
     try {
-      const [idToken, appCheckToken] = await Promise.all([
-        user.getIdToken(attempt >= 2),
-        getFirebaseAppCheckToken(),
-      ]);
-      if (idToken && appCheckToken) {
-        return {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-          'X-Firebase-AppCheck': appCheckToken,
-        };
-      }
+      const idToken = await user.getIdToken(attempt >= 2);
+      if (!idToken) throw new Error('CATALOG_ID_TOKEN_MISSING');
+      const appCheckToken = await getFirebaseAppCheckToken();
+      if (requireAppCheck && !appCheckToken) throw new Error('CATALOG_APP_CHECK_NOT_READY');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
+      };
+      if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
+      return headers;
     } catch (error) {
-      if (attempt === retryDelays.length - 1) {
-        console.warn('[userDataEngine] catalog auth headers unavailable after retry.', error);
-      }
+      lastError = error;
     }
   }
+  console.warn('[userDataEngine] catalog auth headers unavailable after retry.', lastError);
   return null;
 };
 
@@ -376,7 +377,10 @@ const readRemoteCatalogSnapshot = async (
   for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
     if (retryDelays[attempt] > 0) await catalogWait(retryDelays[attempt]);
     try {
-      const headers = await authenticatedHeaders();
+      // Catalog GET is owner-authorized by Firebase Auth. App Check is attached
+      // when available, but a transient attestation failure cannot downgrade PREVIEW
+      // into the old partial-list path.
+      const headers = await authenticatedHeaders(false);
       if (!headers) throw new Error('CATALOG_AUTH_NOT_READY');
       const knownRemoteRevision = Math.max(readKnownRemoteCatalogRevision(kind, uid), Math.floor(minimumRevision || 0));
       if (knownRemoteRevision > 0) headers['X-Soridraw-Known-Revision'] = String(knownRemoteRevision);

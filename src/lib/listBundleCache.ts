@@ -1,7 +1,7 @@
 import { doc, getDocFromServer, serverTimestamp, setDoc, updateDoc } from './firestoreMeasured';
 import { db } from '../firebase';
 import { markCacheDiagnosticWrite } from './cacheDiagnostics';
-import { readPreviewAdaptiveListIndexV2 } from './adaptiveListIndexV2';
+import { isPreviewAdaptiveListIndexEnabled, readPreviewAdaptiveListIndexV2 } from './adaptiveListIndexV2';
 
 const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 
@@ -384,19 +384,44 @@ export const subscribeListBundle = (
       });
   };
 
+  const readPreviewCatalogWithStartupRetry = async (): Promise<ListBundleSnapshot | null> => {
+    const retryDelays = [0, 300, 800, 1600, 3200, 5000];
+    for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+      if (cancelled) return null;
+      if (retryDelays[attempt] > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, retryDelays[attempt]));
+      }
+      try {
+        const adaptiveBundle = await readPreviewAdaptiveListIndexV2(kind, uid);
+        if (adaptiveBundle) return adaptiveBundle;
+      } catch {}
+    }
+    return null;
+  };
+
   const runOneShotRead = () => {
     if (cancelled || started) return;
     started = true;
-    void readPreviewAdaptiveListIndexV2(kind, uid)
-      .then((adaptiveBundle) => {
-        if (cancelled) return;
-        if (adaptiveBundle) {
-          callbacks.onData(adaptiveBundle, { fromCache: false });
-          return;
-        }
-        runLegacyOneShotRead();
-      })
-      .catch(() => runLegacyOneShotRead());
+    void (async () => {
+      const adaptiveBundle = await readPreviewCatalogWithStartupRetry();
+      if (cancelled) return;
+      if (adaptiveBundle) {
+        callbacks.onData(adaptiveBundle, { fromCache: false });
+        return;
+      }
+      if (isPreviewAdaptiveListIndexEnabled()) {
+        console.warn(`[listBundleCache] ${kind} V4 catalog unavailable after startup retry; legacy partial fallback blocked.`);
+        return;
+      }
+      runLegacyOneShotRead();
+    })().catch((error) => {
+      if (cancelled) return;
+      if (isPreviewAdaptiveListIndexEnabled()) {
+        console.warn(`[listBundleCache] ${kind} V4 catalog startup failed; legacy partial fallback blocked.`, error);
+        return;
+      }
+      runLegacyOneShotRead();
+    });
   };
 
   const handleMusicNotePageEntry = () => runOneShotRead();
@@ -431,6 +456,7 @@ export const readListBundleFromServerOnce = async (
   if (!uid) return null;
   const adaptiveBundle = await readPreviewAdaptiveListIndexV2(kind, uid);
   if (adaptiveBundle) return adaptiveBundle;
+  if (isPreviewAdaptiveListIndexEnabled()) return null;
   const snapshot = await getDocFromServer(getBundleRef(kind, uid));
   if (!snapshot.exists()) return null;
   const data = snapshot.data() || {};

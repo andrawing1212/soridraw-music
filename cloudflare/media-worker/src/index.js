@@ -137,6 +137,24 @@ const requireClientIdentity = async (request, env) => {
   return { uid: auth.uid, idToken, appCheckToken };
 };
 
+const requireCatalogReadIdentity = async (request, env) => {
+  const idToken = extractBearer(request);
+  const auth = await verifyFirebaseIdToken(idToken, env);
+  const suppliedAppCheckToken = text(request.headers.get('X-Firebase-AppCheck'));
+  let appCheckToken = '';
+  if (suppliedAppCheckToken) {
+    try {
+      await verifyAppCheckToken(suppliedAppCheckToken, env);
+      appCheckToken = suppliedAppCheckToken;
+    } catch {
+      // Existing private R2 catalogs remain readable by their authenticated owner.
+      // An invalid App Check token is never forwarded to canonical Firestore rebuilds.
+      appCheckToken = '';
+    }
+  }
+  return { uid: auth.uid, idToken, appCheckToken };
+};
+
 const decodeFirestoreValue = (value) => {
   if (!value || typeof value !== 'object') return null;
   if ('nullValue' in value) return null;
@@ -751,7 +769,10 @@ const handleCatalog = async (request, env, origin, url) => {
   if (!route || !CATALOG_KINDS.has(route.kind)) return jsonResponse({ ok: false, code: 'INVALID_CATALOG_KIND' }, 404, origin);
   let identity;
   try {
-    identity = await requireClientIdentity(request, env);
+    const isCatalogRead = request.method === 'GET' && route.action === 'base';
+    identity = isCatalogRead
+      ? await requireCatalogReadIdentity(request, env)
+      : await requireClientIdentity(request, env);
   } catch (error) {
     return jsonResponse({ ok: false, code: text(error?.message) || 'UNAUTHENTICATED' }, 401, origin);
   }

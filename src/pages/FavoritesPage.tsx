@@ -5085,6 +5085,31 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   };
 
+  const hydrateCatalogFavorite = async (song: any): Promise<any> => {
+    if (!song?.__catalogSummary || !user?.uid || isSharedMusicNoteItem(song) || isMusicNoteSharedView) return song;
+    const sourceId = getFavoriteDocumentId(song);
+    if (!sourceId) return song;
+    try {
+      const snapshot = await getDoc(doc(db, 'favorites', sourceId));
+      if (!snapshot.exists()) return song;
+      return {
+        ...song,
+        ...(snapshot.data() || {}),
+        id: sourceId,
+        firestoreId: sourceId,
+        __catalogSummary: false,
+      };
+    } catch (error) {
+      console.warn('music note detail hydration failed:', error);
+      return song;
+    }
+  };
+
+  const openFavoriteDetail = async (song: any) => {
+    const hydrated = await hydrateCatalogFavorite(song);
+    setSelectedSong(hydrated);
+  };
+
   const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'sunoOpen' | 'sunoUrl' | 'sunoRemove' | 'favorite' | 'folder' | 'saveSharedNote' | 'delete' | 'restore' | 'permanentDelete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected' | 'restoreSelected' | 'permanentDeleteSelected', song: any) => {
     setActiveFavoriteMenuId(null);
 
@@ -5094,7 +5119,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'details') {
-      setSelectedSong(song);
+      void openFavoriteDetail(song);
       return;
     }
 
@@ -5174,12 +5199,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'apply') {
-      applyKeywordsToNext(song);
+      void hydrateCatalogFavorite(song).then((hydrated) => applyKeywordsToNext(hydrated));
       return;
     }
 
     if (action === 'share') {
-      shareFavoriteSong(song);
+      void hydrateCatalogFavorite(song).then((hydrated) => shareFavoriteSong(hydrated));
       return;
     }
 
@@ -6239,7 +6264,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       return;
                     }
 
-                    setSelectedSong(song);
+                    void openFavoriteDetail(song);
                   }}
                   className={cn(
                     "soridraw-musicnote-song-card soridraw-list-perf-item soridraw-perf-layout-region-item group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] hover:bg-[#171717] select-none",

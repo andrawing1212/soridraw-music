@@ -10089,6 +10089,22 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
         return `rs_${safeSongId}_${(hash >>> 0).toString(36)}`;
       };
       const resolvedGenre = getResolvedGenre(song);
+      const favoriteMediaKeys = [
+        'audioUrl', 'audio_url', 'streamAudioUrl', 'stream_audio_url', 'sourceAudioUrl', 'sourceStreamAudioUrl',
+        'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl', 'audioUrls',
+        'sunoAudioUrl', 'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
+        'sunoLinks', 'sunoShareLinks', 'mainSunoIndex',
+        'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
+        'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
+      ] as const;
+      const favoriteMediaPayload = Object.fromEntries(
+        favoriteMediaKeys
+          .filter((key) => {
+            const value = (song as any)?.[key];
+            return value !== undefined && value !== null && value !== '';
+          })
+          .map((key) => [key, (song as any)[key]]),
+      );
       const favoritePayload = sanitizeForFirestore({
         uid: user.uid,
         soridrawSongId: favoriteSoridrawSongId,
@@ -10101,6 +10117,7 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
         appliedKeywords: song.appliedKeywords,
         userInput: song.userInput ?? (song.appliedKeywords as any)?.userInput ?? '',
         situationSummary: song.situationSummary || (song.appliedKeywords as any)?.situationSummary || '',
+        ...favoriteMediaPayload,
         isLocked: false,
         hidden: false,
         favoriteHidden: false,
@@ -10122,7 +10139,7 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
       if (favoriteDocRef) {
         await runV1MutationBoundary(
           { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1 },
-          setDoc(favoriteDocRef, favoritePayload, { merge: false }),
+          setDoc(favoriteDocRef, favoritePayload, { merge: true }),
         );
       }
       const createdFavoriteDocRef = favoriteDocRef || await runV1MutationBoundary(

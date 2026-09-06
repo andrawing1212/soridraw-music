@@ -1,0 +1,209 @@
+name: Temp Adaptive List Index Preview
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-adaptive-list-index-v2.yml']
+permissions:
+  contents: write
+concurrency:
+  group: soridraw-adaptive-list-index-preview
+  cancel-in-progress: false
+jobs:
+  build_test_deploy:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_BASE: c10a601b89962fb1c7e99ef4530938660c7ea777
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - name: Guard restored preview source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_BASE" HEAD
+          if ! git diff --quiet "$EXPECTED_BASE"..HEAD -- src functions/src functions/package.json package.json package-lock.json firebase.json firebase.hosting-preview.json firestore.rules firestore.indexes.json; then
+            echo 'Runtime/backend source changed after audited baseline.'
+            git diff --name-only "$EXPECTED_BASE"..HEAD -- src functions/src functions/package.json package.json package-lock.json firebase.json firebase.hosting-preview.json firestore.rules firestore.indexes.json
+            exit 2
+          fi
+          echo 'BASE_GUARD=PASS'
+
+      - name: Apply adaptive list index
+        run: python3 .deploy/apply-adaptive-list-index-v2.py
+
+      - name: Static cost and safety guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          helper=Path('src/lib/adaptiveListIndexV2.ts').read_text()
+          measured=Path('src/lib/firestoreMeasured.ts').read_text()
+          bundle=Path('src/lib/listBundleCache.ts').read_text()
+          app=Path('src/App.tsx').read_text()
+          library=Path('src/pages/SunoLibraryPage.tsx').read_text()
+          backend=Path('functions/src/previewAdaptiveListIndex.ts').read_text()
+          rules=Path('firestore.rules').read_text()
+
+          assert 'ADAPTIVE_LIST_INDEX_MAX_ITEMS = 400' in helper
+          assert 'ADAPTIVE_LIST_INDEX_TARGET_BYTES = 700_000' in helper
+          assert "'preview.soridraw.com'" in helper
+          assert "'test.soridraw.com'" not in helper and "'soridraw.com'" not in helper
+          assert "music_note_adaptive_v2" in helper and "library_adaptive_v2" in helper
+          assert 'readAdaptiveListIndexDirtyRevision(kind)' in helper
+          assert 'if (dirtyRevision <= 0) return;' in helper
+          assert 'clearAdaptiveListIndexDirtyRevision' in helper
+
+          assert 'markAdaptiveListIndexDirtyBySource(source);' in measured
+          assert "source === 'favorites'" in measured
+          assert "source === 'suno_tracks/*/tracks'" in measured
+
+          assert 'readPreviewAdaptiveListIndexV2(kind, uid)' in bundle
+          assert 'runLegacyOneShotRead()' in bundle
+          assert "schedulePreviewAdaptiveListIndexPublishIfDirty('musicNote'" in app
+          assert "schedulePreviewAdaptiveListIndexPublishIfDirty('library'" in library
+          assert 'if (visibleCount < filteredFavorites.length)' in Path('src/pages/FavoritesPage.tsx').read_text()
+          assert 'if (workspaceVisibleCount < filteredTracks.length)' in library
+
+          assert 'enforceAppCheck: true' in backend
+          assert 'request.auth?.uid' in backend
+          assert 'ALLOWED_PREVIEW_HOSTS.has(originHost)' in backend
+          assert 'MAX_ITEMS = 400' in backend and 'MAX_BYTES = 800_000' in backend
+          assert '.collection("favorites")' not in backend
+          assert '.collection("suno_tracks")' not in backend
+          assert 'user_list_caches' in backend
+          assert 'syncVersions' not in backend
+
+          # Existing Rules stay untouched; the new preview callable uses Admin SDK only.
+          assert "music_note_latest_20" in rules and "library_latest_10_sets" in rules
+          assert "music_note_adaptive_v2" not in rules and "library_adaptive_v2" not in rules
+          print('ADAPTIVE_LIST_INDEX_STATIC_GUARD=PASS')
+          PY
+          git diff --exit-code "$EXPECTED_BASE" -- firestore.rules firestore.indexes.json firebase.json firebase.hosting-preview.json
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Existing bounded pagination guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f scripts/verify-music-note-normalization-stage1.mjs ]; then node scripts/verify-music-note-normalization-stage1.mjs; fi
+          if [ -f scripts/verify-music-note-pagination-order.mjs ]; then node scripts/verify-music-note-pagination-order.mjs; fi
+
+      - name: App build
+        run: npm run build
+
+      - name: Set up Node 22 for Functions
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions ci
+
+      - name: Existing Library materialized-view test
+        run: npm --prefix functions run test:library-bundle
+
+      - name: Functions build
+        run: npm --prefix functions run build
+
+      - name: Commit validated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src functions/src .deploy/apply-adaptive-list-index-v2.py
+          if ! git diff --cached --quiet; then
+            git commit -m 'feat(preview): add adaptive materialized list index'
+            git push origin HEAD:preview
+          fi
+          echo "APP_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot production hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+
+      - name: Deploy only preview adaptive callable
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only functions:publishPreviewAdaptiveListIndexV2 --project soridraw-app-866a5 --non-interactive
+          echo 'PREVIEW_ADAPTIVE_FUNCTION_DEPLOY=PASS'
+
+      - name: Verify callable exists and rejects unauthenticated request
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://us-central1-soridraw-app-866a5.cloudfunctions.net/publishPreviewAdaptiveListIndexV2'
+          code="$(curl -sS -o "$RUNNER_TEMP/callable.txt" -w '%{http_code}' --max-time 30 -X POST -H 'Content-Type: application/json' -H 'Origin: https://preview.soridraw.com' --data '{"data":{"kind":"musicNote","schemaVersion":2,"items":[],"itemCount":0,"cursorCreatedAtMs":0,"hasMore":false,"deletedIds":[]}}' "$url" || true)"
+          echo "CALLABLE_HTTP=$code"
+          test "$code" != '404'
+
+      - name: Deploy Firebase PREVIEW hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_DEPLOY=PASS'
+
+      - name: Verify exact deployed preview build
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then ok=yes; echo "EXACT_BUILD_PASS=$url"; break; fi
+              fi
+              sleep 10
+            done
+            test "$ok" = yes
+          done
+
+      - name: Verify production hosting unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo 'PRODUCTION_HOSTING_UNCHANGED=PASS'
+
+      - name: Cleanup temporary workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin preview
+          git rm -f .github/workflows/temp-adaptive-list-index-v2.yml .github/workflows/temp-list-index-audit.yml
+          git commit -m 'chore(preview): remove temporary adaptive index workflows'
+          git push origin HEAD:preview

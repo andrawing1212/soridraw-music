@@ -435,7 +435,7 @@ const handleArchiveResolve = async (request, env, origin) => {
 // V2: R2 holds one compact private catalog object per user/kind. A missing or
 // stale object is materialized server-side from canonical Firestore exactly when
 // needed; normal devices then read R2/IndexedDB and mutations send only deltas.
-const CATALOG_SCHEMA_VERSION = 3;
+const CATALOG_SCHEMA_VERSION = 4;
 const CATALOG_MAX_ITEMS = 100000;
 const CATALOG_MAX_BYTES = 24 * 1024 * 1024;
 const CATALOG_DELTA_MAX_CHANGES = 5000;
@@ -481,7 +481,7 @@ const catalogRouteFromPath = (pathname) => {
   return match ? { kind: match[1], action: match[2] || 'base' } : null;
 };
 
-const catalogObjectKey = (uid, kind) => `catalog/v3/${encodeURIComponent(uid)}/${kind}.json`;
+const catalogObjectKey = (uid, kind) => `catalog/v4/${encodeURIComponent(uid)}/${kind}.json`;
 
 const catalogKnownRevision = (request) => {
   const value = Math.floor(Number(request.headers.get('X-Soridraw-Known-Revision') || 0));
@@ -541,7 +541,7 @@ const sortCatalogItems = (items) => items.sort((left, right) => {
 
 const validateCatalogPayload = (payload, kind) => {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
-  if (payload.schemaVersion !== CATALOG_SCHEMA_VERSION || payload.kind !== kind || payload.complete !== true) return false;
+  if (payload.schemaVersion !== CATALOG_SCHEMA_VERSION || payload.authority !== 'server' || payload.kind !== kind || payload.complete !== true) return false;
   if (!Number.isInteger(payload.revision) || payload.revision <= 0) return false;
   if (!Number.isInteger(payload.generatedAtMs) || payload.generatedAtMs <= 0) return false;
   if (!Array.isArray(payload.items) || payload.items.length > CATALOG_MAX_ITEMS) return false;
@@ -656,6 +656,7 @@ const buildCanonicalCatalog = async (identity, kind, minimumRevision, env) => {
   const generatedAtMs = Date.now();
   const payload = {
     schemaVersion: CATALOG_SCHEMA_VERSION,
+    authority: 'server',
     kind,
     revision: Math.max(generatedAtMs, Math.floor(minimumRevision || 0)),
     items,
@@ -680,6 +681,7 @@ const putCatalogObject = async (env, uid, payload) => {
       revision: String(payload.revision),
       itemCount: String(payload.itemCount),
       schemaVersion: String(payload.schemaVersion),
+      authority: 'server',
     },
   });
 };
@@ -731,6 +733,7 @@ const applyCatalogDelta = async (identity, kind, delta, env) => {
   const generatedAtMs = Date.now();
   const payload = {
     schemaVersion: CATALOG_SCHEMA_VERSION,
+    authority: 'server',
     kind,
     revision: Math.max(generatedAtMs, Number(delta.revision || 0), Number(current.revision || 0) + 1),
     items,
@@ -774,13 +777,9 @@ const handleCatalog = async (request, env, origin, url) => {
       return jsonResponse({ ok: true, kind: route.kind, revision: next.revision, itemCount: next.itemCount }, 200, origin);
     }
 
-    // Compatibility only: accept a full V2 object, but V2 clients normally use delta.
+    // 1039: a browser may publish only deltas. It can never self-declare a complete catalog.
     if (request.method === 'POST' && route.action === 'base') {
-      const payload = await request.json();
-      if (!validateCatalogPayload(payload, route.kind)) return jsonResponse({ ok: false, code: 'INVALID_CATALOG' }, 400, origin);
-      if (catalogEncodedSize(payload) > CATALOG_MAX_BYTES) return jsonResponse({ ok: false, code: 'CATALOG_TOO_LARGE' }, 413, origin);
-      await putCatalogObject(env, identity.uid, payload);
-      return jsonResponse({ ok: true, kind: route.kind, revision: payload.revision, itemCount: payload.itemCount }, 200, origin);
+      return jsonResponse({ ok: false, code: 'CLIENT_FULL_CATALOG_DISABLED' }, 405, origin);
     }
 
     return jsonResponse({ ok: false, code: 'METHOD_NOT_ALLOWED' }, 405, origin);

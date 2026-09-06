@@ -7,6 +7,7 @@ import {
 
 export const SORIDRAW_USER_DATA_ENGINE_V2_20260906 = true;
 export const SORIDRAW_USER_DATA_ENGINE_DELTA_SYNC_1035 = true;
+export const SORIDRAW_USER_DATA_ENGINE_SERVER_AUTHORITY_V4_20260906 = true;
 
 export type SoridrawCatalogKind = 'musicNote' | 'library';
 export type SoridrawHotSetKind = 'recentSongs';
@@ -19,7 +20,8 @@ export const SORIDRAW_USER_DATA_STRATEGIES = {
 } as const;
 
 export type SoridrawCatalogSnapshot = {
-  schemaVersion: 3;
+  schemaVersion: 4;
+  authority: 'server';
   kind: SoridrawCatalogKind;
   revision: number;
   items: any[];
@@ -35,7 +37,7 @@ type CatalogPublishOptions = {
 };
 
 type CatalogDelta = {
-  schemaVersion: 3;
+  schemaVersion: 4;
   kind: SoridrawCatalogKind;
   baseRevision: number;
   revision: number;
@@ -44,12 +46,12 @@ type CatalogDelta = {
 };
 
 const CATALOG_ENDPOINT = 'https://soridraw-media-preview.andrawing1212.workers.dev';
-const CATALOG_SCHEMA_VERSION = 3 as const;
+const CATALOG_SCHEMA_VERSION = 4 as const;
 const CATALOG_MAX_ITEMS = 100_000;
 const CATALOG_MAX_BYTES = 24 * 1024 * 1024;
 const CATALOG_DELTA_MAX_CHANGES = 5_000;
-const CATALOG_DB_NAME = 'soridraw_user_data_engine_v3';
-const LEGACY_CATALOG_DB_NAMES = ['soridraw_user_data_engine_v2', 'soridraw_user_data_engine_v1'];
+const CATALOG_DB_NAME = 'soridraw_user_data_engine_v4';
+const LEGACY_CATALOG_DB_NAMES = ['soridraw_user_data_engine_v3', 'soridraw_user_data_engine_v2', 'soridraw_user_data_engine_v1'];
 const CATALOG_DB_STORE = 'catalogs';
 const CATALOG_PREVIEW_HOSTS = new Set([
   'preview.soridraw.com',
@@ -201,7 +203,7 @@ const utf8Size = (text: string): number => {
 const isValidSnapshot = (kind: SoridrawCatalogKind, value: unknown): value is SoridrawCatalogSnapshot => {
   if (!value || typeof value !== 'object') return false;
   const data = value as Record<string, any>;
-  if (data.schemaVersion !== CATALOG_SCHEMA_VERSION || data.kind !== kind || data.complete !== true) return false;
+  if (data.schemaVersion !== CATALOG_SCHEMA_VERSION || data.authority !== 'server' || data.kind !== kind || data.complete !== true) return false;
   if (!Number.isInteger(data.revision) || data.revision <= 0) return false;
   if (!Array.isArray(data.items) || data.items.length > CATALOG_MAX_ITEMS) return false;
   if (!Number.isInteger(data.itemCount) || data.itemCount !== data.items.length) return false;
@@ -448,6 +450,7 @@ const buildCatalogDelta = (
   const nextRevision = Math.max(Date.now(), Math.floor(revision || 0), previous.revision + 1);
   const nextSnapshot: SoridrawCatalogSnapshot = {
     schemaVersion: CATALOG_SCHEMA_VERSION,
+    authority: 'server',
     kind,
     revision: nextRevision,
     items,
@@ -472,13 +475,13 @@ const buildCatalogDelta = (
 const publishRemoteCatalogDelta = async (
   uid: string,
   delta: CatalogDelta,
-): Promise<boolean> => {
-  if (!isPreviewCatalogEnabled()) return false;
+): Promise<{ revision: number; itemCount: number } | null> => {
+  if (!isPreviewCatalogEnabled()) return null;
   const user = auth.currentUser;
-  if (!user || user.uid !== uid) return false;
+  if (!user || user.uid !== uid) return null;
   try {
     const headers = await authenticatedHeaders();
-    if (!headers) return false;
+    if (!headers) return null;
     const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${delta.kind}/delta`, {
       method: 'POST',
       headers,
@@ -486,10 +489,16 @@ const publishRemoteCatalogDelta = async (
       cache: 'no-store',
     });
     if (!response.ok) throw new Error(`CATALOG_DELTA_${response.status}`);
-    return true;
+    const payload = await response.json();
+    const revision = Math.floor(Number(payload?.revision || 0));
+    const itemCount = Math.floor(Number(payload?.itemCount));
+    if (!Number.isFinite(revision) || revision <= 0 || !Number.isFinite(itemCount) || itemCount < 0) {
+      throw new Error('CATALOG_DELTA_ACK_INVALID');
+    }
+    return { revision, itemCount };
   } catch (error) {
     console.warn(`[userDataEngine] ${delta.kind} catalog delta publish failed.`, error);
-    return false;
+    return null;
   }
 };
 
@@ -529,7 +538,7 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
       }
 
       const projectedCount = normalizeCatalogItems(kind, pending.sourceItems).length;
-      const explicitComplete = pending.options.complete === true || pending.options.hasMore === false;
+      const explicitComplete = pending.options.complete === true;
       const looksCompleteAgainstPrevious = projectedCount >= Math.max(0, previous.itemCount - 2);
       if (!explicitComplete && !looksCompleteAgainstPrevious) {
         const rebuilt = await readRemoteCatalogSnapshot(kind, uid, currentDirtyRevision);
@@ -551,7 +560,16 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
 
       const published = await publishRemoteCatalogDelta(uid, built.delta);
       if (!published) return;
-      await writeCatalogSnapshotToLocalCache(kind, uid, built.nextSnapshot);
+      if (published.itemCount !== built.nextSnapshot.itemCount) {
+        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, published.revision);
+        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
+        return;
+      }
+      const confirmedSnapshot: SoridrawCatalogSnapshot = {
+        ...built.nextSnapshot,
+        revision: published.revision,
+      };
+      await writeCatalogSnapshotToLocalCache(kind, uid, confirmedSnapshot);
       clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
     })();
   }, 1200));

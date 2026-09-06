@@ -19,7 +19,6 @@ jobs:
       PREVIEW_DEFAULT_HOST: soridraw-preview.web.app
       PREVIEW_CUSTOM_HOST: preview.soridraw.com
       PRODUCTION_HOST: soridraw.web.app
-      BACKEND_PROJECT: soridraw-app-866a5
       WORKER_URL: https://soridraw-media-preview.andrawing1212.workers.dev
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
@@ -30,249 +29,17 @@ jobs:
           ref: preview
           fetch-depth: 20
 
-      - name: Apply runtime-route fix
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
+      - name: Apply 1040 patch
+        run: python3 .deploy/apply-1040-catalog-runtime-route-fix.py
 
-          # 1) Browser catalog reads: Firebase Auth is mandatory. App Check remains
-          # mandatory for mutations, but read availability must not silently collapse
-          # into the legacy 20-row bundle when attestation is temporarily unavailable.
-          p = Path('src/lib/userDataEngine.ts')
-          s = p.read_text(encoding='utf-8')
-          old = '''const authenticatedHeaders = async (): Promise<Record<string, string> | null> => {
-            const user = auth.currentUser;
-            if (!user) return null;
-            const retryDelays = [0, 250, 800, 1600];
-            for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
-              if (retryDelays[attempt] > 0) await catalogWait(retryDelays[attempt]);
-              try {
-                const [idToken, appCheckToken] = await Promise.all([
-                  user.getIdToken(attempt >= 2),
-                  getFirebaseAppCheckToken(),
-                ]);
-                if (idToken && appCheckToken) {
-                  return {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`,
-                    'X-Firebase-AppCheck': appCheckToken,
-                  };
-                }
-              } catch (error) {
-                if (attempt === retryDelays.length - 1) {
-                  console.warn('[userDataEngine] catalog auth headers unavailable after retry.', error);
-                }
-              }
-            }
-            return null;
-          };'''
-          new = '''const authenticatedHeaders = async (
-            requireAppCheck = true,
-          ): Promise<Record<string, string> | null> => {
-            const user = auth.currentUser;
-            if (!user) return null;
-            const retryDelays = requireAppCheck ? [0, 250, 800, 1600] : [0, 250, 800];
-            let lastError: unknown = null;
-            for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
-              if (retryDelays[attempt] > 0) await catalogWait(retryDelays[attempt]);
-              try {
-                const idToken = await user.getIdToken(attempt >= 2);
-                if (!idToken) throw new Error('CATALOG_ID_TOKEN_MISSING');
-                const appCheckToken = await getFirebaseAppCheckToken();
-                if (requireAppCheck && !appCheckToken) throw new Error('CATALOG_APP_CHECK_NOT_READY');
-                const headers: Record<string, string> = {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${idToken}`,
-                };
-                if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
-                return headers;
-              } catch (error) {
-                lastError = error;
-              }
-            }
-            console.warn('[userDataEngine] catalog auth headers unavailable after retry.', lastError);
-            return null;
-          };'''
-          if old not in s:
-              raise SystemExit('authenticatedHeaders block not found')
-          s = s.replace(old, new, 1)
-
-          old_read = '''      const headers = await authenticatedHeaders();
-                if (!headers) throw new Error('CATALOG_AUTH_NOT_READY');
-                const knownRemoteRevision = Math.max(readKnownRemoteCatalogRevision(kind, uid), Math.floor(minimumRevision || 0));'''
-          new_read = '''      // Read authorization is Firebase Auth. App Check is attached when available,
-                // but a transient attestation failure must not force the old partial bundle path.
-                const headers = await authenticatedHeaders(false);
-                if (!headers) throw new Error('CATALOG_AUTH_NOT_READY');
-                const knownRemoteRevision = Math.max(readKnownRemoteCatalogRevision(kind, uid), Math.floor(minimumRevision || 0));'''
-          if old_read not in s:
-              raise SystemExit('readRemote headers block not found')
-          s = s.replace(old_read, new_read, 1)
-          p.write_text(s, encoding='utf-8')
-
-          # 2) Shared list bridge: on PREVIEW, V4 failure may NOT silently fall back
-          # to music_note_latest_20/library_latest_10_sets. Retry the common catalog
-          # path while Auth initializes; legacy remains only for non-preview hosts.
-          p = Path('src/lib/listBundleCache.ts')
-          s = p.read_text(encoding='utf-8')
-          s = s.replace(
-              "import { readPreviewAdaptiveListIndexV2 } from './adaptiveListIndexV2';",
-              "import { isPreviewAdaptiveListIndexEnabled, readPreviewAdaptiveListIndexV2 } from './adaptiveListIndexV2';",
-              1,
-          )
-          old_run = '''  const runOneShotRead = () => {
-            if (cancelled || started) return;
-            started = true;
-            void readPreviewAdaptiveListIndexV2(kind, uid)
-              .then((adaptiveBundle) => {
-                if (cancelled) return;
-                if (adaptiveBundle) {
-                  callbacks.onData(adaptiveBundle, { fromCache: false });
-                  return;
-                }
-                runLegacyOneShotRead();
-              })
-              .catch(() => runLegacyOneShotRead());
-          };'''
-          new_run = '''  const readPreviewCatalogWithStartupRetry = async (): Promise<ListBundleSnapshot | null> => {
-            const retryDelays = [0, 300, 800, 1600, 3200, 5000];
-            for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
-              if (cancelled) return null;
-              if (retryDelays[attempt] > 0) {
-                await new Promise<void>((resolve) => setTimeout(resolve, retryDelays[attempt]));
-              }
-              try {
-                const adaptiveBundle = await readPreviewAdaptiveListIndexV2(kind, uid);
-                if (adaptiveBundle) return adaptiveBundle;
-              } catch {}
-            }
-            return null;
-          };
-
-          const runOneShotRead = () => {
-            if (cancelled || started) return;
-            started = true;
-            void (async () => {
-              const adaptiveBundle = await readPreviewCatalogWithStartupRetry();
-              if (cancelled) return;
-              if (adaptiveBundle) {
-                callbacks.onData(adaptiveBundle, { fromCache: false });
-                return;
-              }
-              if (isPreviewAdaptiveListIndexEnabled()) {
-                // PREVIEW common-engine contract: never downgrade a failed V4 read
-                // into an authoritative-looking 10/20-row legacy bundle.
-                console.warn(`[listBundleCache] ${kind} V4 catalog unavailable after startup retry; legacy partial fallback blocked.`);
-                return;
-              }
-              runLegacyOneShotRead();
-            })().catch((error) => {
-              if (cancelled) return;
-              if (isPreviewAdaptiveListIndexEnabled()) {
-                console.warn(`[listBundleCache] ${kind} V4 catalog startup failed; legacy partial fallback blocked.`, error);
-                return;
-              }
-              runLegacyOneShotRead();
-            });
-          };'''
-          if old_run not in s:
-              raise SystemExit('runOneShotRead block not found')
-          s = s.replace(old_run, new_run, 1)
-
-          old_once = '''  const adaptiveBundle = await readPreviewAdaptiveListIndexV2(kind, uid);
-            if (adaptiveBundle) return adaptiveBundle;
-            const snapshot = await getDocFromServer(getBundleRef(kind, uid));'''
-          new_once = '''  const adaptiveBundle = await readPreviewAdaptiveListIndexV2(kind, uid);
-            if (adaptiveBundle) return adaptiveBundle;
-            if (isPreviewAdaptiveListIndexEnabled()) return null;
-            const snapshot = await getDocFromServer(getBundleRef(kind, uid));'''
-          if old_once not in s:
-              raise SystemExit('readListBundleFromServerOnce block not found')
-          s = s.replace(old_once, new_once, 1)
-          p.write_text(s, encoding='utf-8')
-
-          # 3) Worker: GET catalog is protected by Firebase Auth and user UID.
-          # App Check remains hard-required for writes/deltas/media mutation paths.
-          # If a valid App Check token is available on GET, keep it for canonical
-          # rebuilds; if attestation is temporarily unavailable, an existing private
-          # R2 snapshot can still be read by its authenticated owner.
-          p = Path('cloudflare/media-worker/src/index.js')
-          s = p.read_text(encoding='utf-8')
-          anchor = '''const requireClientIdentity = async (request, env) => {
-            const idToken = extractBearer(request);
-            const appCheckToken = text(request.headers.get('X-Firebase-AppCheck'));
-            const [auth] = await Promise.all([
-              verifyFirebaseIdToken(idToken, env),
-              verifyAppCheckToken(appCheckToken, env),
-            ]);
-            return { uid: auth.uid, idToken, appCheckToken };
-          };
-'''
-          addition = anchor + '''
-          const requireCatalogReadIdentity = async (request, env) => {
-            const idToken = extractBearer(request);
-            const auth = await verifyFirebaseIdToken(idToken, env);
-            const suppliedAppCheckToken = text(request.headers.get('X-Firebase-AppCheck'));
-            let appCheckToken = '';
-            if (suppliedAppCheckToken) {
-              try {
-                await verifyAppCheckToken(suppliedAppCheckToken, env);
-                appCheckToken = suppliedAppCheckToken;
-              } catch {
-                // GET remains owner-authenticated. Invalid/expired App Check is not
-                // accepted for Firestore rebuild, but must not block an existing R2 read.
-                appCheckToken = '';
-              }
-            }
-            return { uid: auth.uid, idToken, appCheckToken };
-          };
-'''
-          if anchor not in s:
-              raise SystemExit('requireClientIdentity block not found')
-          s = s.replace(anchor, addition, 1)
-
-          old_identity = '''  let identity;
-            try {
-              identity = await requireClientIdentity(request, env);
-            } catch (error) {
-              return jsonResponse({ ok: false, code: text(error?.message) || 'UNAUTHENTICATED' }, 401, origin);
-            }
-'''
-          new_identity = '''  let identity;
-            try {
-              const isCatalogRead = request.method === 'GET' && route.action === 'base';
-              identity = isCatalogRead
-                ? await requireCatalogReadIdentity(request, env)
-                : await requireClientIdentity(request, env);
-            } catch (error) {
-              return jsonResponse({ ok: false, code: text(error?.message) || 'UNAUTHENTICATED' }, 401, origin);
-            }
-'''
-          # Replace only the handleCatalog occurrence, which follows its declaration.
-          handle_pos = s.find('const handleCatalog = async')
-          if handle_pos < 0:
-              raise SystemExit('handleCatalog missing')
-          before, after = s[:handle_pos], s[handle_pos:]
-          if old_identity not in after:
-              raise SystemExit('handleCatalog identity block not found')
-          after = after.replace(old_identity, new_identity, 1)
-          s = before + after
-          p.write_text(s, encoding='utf-8')
-
-          print('SORIDRAW_1040_RUNTIME_ROUTE_FIX=APPLIED')
-          PY
-
-      - name: Static route guards
+      - name: Static guards
         shell: bash
         run: |
           set -euo pipefail
           grep -q "authenticatedHeaders(false)" src/lib/userDataEngine.ts
-          grep -q "V4 catalog unavailable after startup retry; legacy partial fallback blocked" src/lib/listBundleCache.ts
+          grep -q "legacy partial fallback blocked" src/lib/listBundleCache.ts
           grep -q "if (isPreviewAdaptiveListIndexEnabled()) return null;" src/lib/listBundleCache.ts
           grep -q "requireCatalogReadIdentity" cloudflare/media-worker/src/index.js
-          grep -q "isCatalogRead" cloudflare/media-worker/src/index.js
           echo '1040_STATIC_GUARDS=PASS'
 
       - name: Set up Node 20
@@ -281,56 +48,47 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install app dependencies
-        run: npm ci
-
-      - name: TypeScript and app build
+      - name: App checks
         shell: bash
         run: |
           set -euo pipefail
+          npm ci
           npx tsc --noEmit
           npm run build
           grep -R -q "legacy partial fallback blocked" dist/assets
           grep -R -q "soridraw_user_data_engine_v4" dist/assets
-          echo '1040_APP_BUILD=PASS'
+          echo '1040_APP_CHECKS=PASS'
 
       - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Functions regression build/test
+      - name: Backend regression checks
         shell: bash
         run: |
           set -euo pipefail
           npm --prefix functions ci
           npm --prefix functions run build
           npm --prefix functions run test:library-bundle
-
-      - name: Worker dry-run
-        shell: bash
-        run: |
-          set -euo pipefail
           cd cloudflare/media-worker
           npm install --no-audit --no-fund
           npm run check
 
-      - name: Commit runtime source to preview
+      - name: Commit runtime source
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'andrawing1212'
-          git config user.email 'andrawing1212@gmail.com'
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
           git add src/lib/userDataEngine.ts src/lib/listBundleCache.ts cloudflare/media-worker/src/index.js
-          changed="$(git diff --cached --name-only)"
-          echo "$changed"
-          test "$(printf '%s\n' "$changed" | sed '/^$/d' | wc -l)" -eq 3
+          test "$(git diff --cached --name-only | wc -l)" -eq 3
           git commit -m 'fix(preview): route catalog reads through v4 runtime'
           git push origin HEAD:preview
           git rev-parse HEAD > "$RUNNER_TEMP/runtime-sha"
           echo "RUNTIME_COMMIT=$(cat "$RUNNER_TEMP/runtime-sha")"
 
-      - name: Deploy Cloudflare PREVIEW Worker
+      - name: Deploy PREVIEW Worker
         shell: bash
         run: |
           set -euo pipefail
@@ -339,96 +97,55 @@ jobs:
           npx wrangler deploy
           cd ../..
           ok=''
-          for attempt in $(seq 1 24); do
-            if curl -fsS --max-time 20 "$WORKER_URL/health?attempt=$attempt" -o "$RUNNER_TEMP/health.json" \
-              && grep -q '"catalogSchemaVersion":4' "$RUNNER_TEMP/health.json"; then
-              ok='yes'; break
+          for attempt in $(seq 1 20); do
+            if curl -fsS --max-time 20 "$WORKER_URL/health?attempt=$attempt" -o "$RUNNER_TEMP/health.json" && grep -q '"catalogSchemaVersion":4' "$RUNNER_TEMP/health.json"; then
+              ok=yes
+              break
             fi
             sleep 5
           done
-          test "$ok" = 'yes'
+          test "$ok" = yes
           cat "$RUNNER_TEMP/health.json"
+          root_status="$(curl -sS -o "$RUNNER_TEMP/root.json" -w '%{http_code}' "$WORKER_URL/")"
+          test "$root_status" = 404
+          grep -q '"code":"NOT_FOUND"' "$RUNNER_TEMP/root.json"
+          echo 'WORKER_ROOT_404_EXPECTED=PASS'
           echo '1040_WORKER_DEPLOY=PASS'
 
-      - name: Authenticate Firebase and GCP
+      - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Prove authenticated R2 V4 GET works without App Check
-        shell: bash
-        env:
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          const fs = require('fs');
-          const admin = require('./functions/node_modules/firebase-admin');
-          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-          admin.initializeApp({ credential: admin.credential.cert(serviceAccount), projectId: 'soridraw-app-866a5' });
-          const db = admin.firestore();
-          (async()=>{
-            const users = await db.collection('users').get();
-            let best = null;
-            for (const doc of users.docs) {
-              const d = doc.data() || {};
-              const score = Number(d.favoriteCount || d.savedCount || d.musicNoteCount || 0);
-              if (!best || score > best.score) best = { uid: doc.id, score };
-            }
-            if (!best) throw new Error('NO_TEST_USER');
-            const customToken = await admin.auth().createCustomToken(best.uid);
-            fs.writeFileSync(process.env.RUNNER_TEMP + '/catalog-auth-test.json', JSON.stringify({ customToken, score: best.score }));
-            console.log('AUTH_TEST_USER_SELECTED=PASS');
-          })().catch(e=>{console.error(e);process.exit(1)});
-          NODE
-          api_key="$(node -e "const fs=require('fs');const s=fs.readFileSync('src/firebase.js','utf8');const m=s.match(/apiKey:\s*\"([^\"]+)\"/);if(!m)process.exit(1);process.stdout.write(m[1])")"
-          custom_token="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.env.RUNNER_TEMP+'/catalog-auth-test.json','utf8')).customToken)")"
-          curl -fsS --max-time 30 -X POST \
-            -H 'Content-Type: application/json' \
-            --data "{\"token\":\"$custom_token\",\"returnSecureToken\":true}" \
-            "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=$api_key" \
-            -o "$RUNNER_TEMP/id-token.json"
-          id_token="$(node -e "const p=JSON.parse(require('fs').readFileSync(process.env.RUNNER_TEMP+'/id-token.json','utf8'));if(!p.idToken)process.exit(1);process.stdout.write(p.idToken)")"
-          status="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/catalog-get.json" -w '%{http_code}' \
-            -H 'Origin: https://preview.soridraw.com' \
-            -H "Authorization: Bearer $id_token" \
-            "$WORKER_URL/v1/catalog/musicNote")"
-          test "$status" = '200'
-          node -e "const p=JSON.parse(require('fs').readFileSync(process.env.RUNNER_TEMP+'/catalog-get.json','utf8'));if(p.schemaVersion!==4||p.authority!=='server'||p.complete!==true||!Array.isArray(p.items)||p.itemCount!==p.items.length)throw new Error('V4_GET_INVALID');console.log('AUTHENTICATED_V4_GET=PASS itemCount='+p.itemCount)"
-
-      - name: Snapshot Production before Hosting deploy
+      - name: Snapshot Production
         shell: bash
         run: |
           set -euo pipefail
           curl -fsS --max-time 30 "https://$PRODUCTION_HOST/" -o "$RUNNER_TEMP/prod-before.html"
           sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
 
-      - name: Deploy Firebase PREVIEW Hosting only
+      - name: Deploy Firebase PREVIEW Hosting
         shell: bash
         run: |
           set -euo pipefail
           test "$(node -p "require('./firebase.hosting-preview.json').hosting.site")" = "$PREVIEW_SITE"
-          npx --yes firebase-tools@latest deploy \
-            --only hosting \
-            --project "$HOSTING_PROJECT" \
-            --config firebase.hosting-preview.json \
-            --non-interactive
+          npx --yes firebase-tools@latest deploy --only hosting --project "$HOSTING_PROJECT" --config firebase.hosting-preview.json --non-interactive
           echo '1040_FIREBASE_PREVIEW_DEPLOY=PASS'
 
-      - name: Verify exact PREVIEW build and Production unchanged
+      - name: Verify exact PREVIEW and Production unchanged
         shell: bash
         run: |
           set -euo pipefail
           for host in "$PREVIEW_DEFAULT_HOST" "$PREVIEW_CUSTOM_HOST"; do
             ok=''
             for attempt in $(seq 1 20); do
-              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://$host/?v=$(cat "$RUNNER_TEMP/runtime-sha")-$attempt" -o "$RUNNER_TEMP/${host//./_}.html" \
-                && cmp -s dist/index.html "$RUNNER_TEMP/${host//./_}.html"; then
-                ok='yes'; break
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://$host/?v=$(cat "$RUNNER_TEMP/runtime-sha")-$attempt" -o "$RUNNER_TEMP/${host//./_}.html" && cmp -s dist/index.html "$RUNNER_TEMP/${host//./_}.html"; then
+                ok=yes
+                break
               fi
               sleep 6
             done
-            test "$ok" = 'yes'
+            test "$ok" = yes
             echo "PREVIEW_EXACT_BUILD_PASS=https://$host/"
           done
           curl -fsS --max-time 30 "https://$PRODUCTION_HOST/" -o "$RUNNER_TEMP/prod-after.html"

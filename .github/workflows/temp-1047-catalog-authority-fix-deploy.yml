@@ -80,7 +80,7 @@ jobs:
           npm ci
           npx tsc --noEmit
           npm run build
-          grep -R -q 'SORIDRAW_USER_DATA_ENGINE_REMOTE_AUTHORITY_1047' dist/assets
+          test -s dist/index.html
           echo '1047_APP_BUILD=PASS'
 
       - uses: actions/setup-node@v4

@@ -54,8 +54,9 @@ jobs:
       - name: Journal unit tests and Worker dry-run
         run: |
           node cloudflare/media-worker/scripts/test-catalog-journal-1053.mjs
-          npm --prefix cloudflare/media-worker install --no-audit --no-fund
-          npx --prefix cloudflare/media-worker wrangler deploy --dry-run
+          cd cloudflare/media-worker
+          npm install --no-audit --no-fund
+          npx wrangler deploy --dry-run
           echo '1053_WORKER=PASS'
 
       - uses: actions/setup-node@v4
@@ -82,5 +83,3 @@ jobs:
           git commit -m 'feat(preview): add shared Catalog Base+Delta journal'
           git push origin HEAD:preview-catalog-delta-impl
           echo "FEATURE_COMMIT=$(git rev-parse HEAD)"
-
-# retrigger: 2026-09-07 clean CI after worker cache fix

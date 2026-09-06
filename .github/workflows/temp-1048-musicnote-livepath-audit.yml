@@ -11,19 +11,60 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-24.04
+    env:
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: preview
-      - name: Trace Music Note render and overwrite path
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Firebase Admin
+        run: npm --prefix functions ci
+      - name: Compare Worker-active and App-visible Music Note counts
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== FAVORITES PAGE ALL COUNT/SLICE/MORE MARKERS ==='
-          grep -n -E "favorites|filtered|visible|display|slice\(|더보기|남음|더 불러오기|PAGE_SIZE|renderBatch|visibleCount|showCount|limitCount" src/pages/FavoritesPage.tsx | head -2600
-          echo '=== FAVORITES PAGE CONTEXT AROUND KOREAN MORE LABELS ==='
-          grep -n -B 80 -A 100 -E "더보기|남음|더 불러오기" src/pages/FavoritesPage.tsx | head -2200 || true
-          echo '=== APP ALL FAVORITES STORE WRITES ==='
-          grep -n -B 18 -A 40 -E "favoritesStore\.setFavorites|setFavorites\(" src/App.tsx | head -2800
-          echo '=== STORE IMPLEMENTATION ==='
-          grep -R -n -B 15 -A 80 -E "class.*Favorites|favoritesStore|setFavorites" src | grep -v "src/App.tsx" | head -1800 || true
+          node <<'NODE'
+          const admin = require('./functions/node_modules/firebase-admin');
+          const crypto = require('crypto');
+          const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+          admin.initializeApp({ credential: admin.credential.cert(sa), projectId:'soridraw-app-866a5' });
+          const db = admin.firestore();
+          const workerActive = d => !(
+            d.favoriteRemoved === true || d.saved === false || d.hidden === true ||
+            d.favoriteHidden === true || d.deletedAt || d.trashedAt
+          );
+          const appSoftRemoved = d => Boolean(
+            d.favoriteRemoved === true || d.saved === false || d.favoriteRemovedAt ||
+            d.unlikedAt || d.unsavedAt
+          );
+          const appVisible = d => workerActive(d) && !appSoftRemoved(d);
+          (async()=>{
+            const snap = await db.collection('favorites').get();
+            const by = new Map();
+            for (const doc of snap.docs) {
+              const d = doc.data() || {};
+              const uid = String(d.uid || '');
+              if (!uid) continue;
+              if (!by.has(uid)) by.set(uid,{total:0,worker:0,app:0,removedAt:0,unlikedAt:0,unsavedAt:0});
+              const x=by.get(uid); x.total++;
+              if (workerActive(d)) x.worker++;
+              if (appVisible(d)) x.app++;
+              if (workerActive(d) && d.favoriteRemovedAt) x.removedAt++;
+              if (workerActive(d) && d.unlikedAt) x.unlikedAt++;
+              if (workerActive(d) && d.unsavedAt) x.unsavedAt++;
+            }
+            const rows=[...by.entries()].map(([uid,x])=>({
+              account: crypto.createHash('sha256').update(uid).digest('hex').slice(0,10),
+              ...x,
+              delta:x.worker-x.app,
+            })).sort((a,b)=>b.worker-a.worker);
+            console.log('ACCOUNT_COUNTS');
+            for (const r of rows.slice(0,20)) console.log(JSON.stringify(r));
+            console.log('MATCH_WORKER_506', rows.filter(r=>r.worker===506).map(r=>JSON.stringify(r)).join('\n') || 'NONE');
+            console.log('MATCH_APP_57', rows.filter(r=>r.app===57).map(r=>JSON.stringify(r)).join('\n') || 'NONE');
+            console.log('MATCH_APP_37', rows.filter(r=>r.app===37).map(r=>JSON.stringify(r)).join('\n') || 'NONE');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE

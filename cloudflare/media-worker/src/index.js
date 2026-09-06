@@ -435,7 +435,7 @@ const handleArchiveResolve = async (request, env, origin) => {
 // V2: R2 holds one compact private catalog object per user/kind. A missing or
 // stale object is materialized server-side from canonical Firestore exactly when
 // needed; normal devices then read R2/IndexedDB and mutations send only deltas.
-const CATALOG_SCHEMA_VERSION = 2;
+const CATALOG_SCHEMA_VERSION = 3;
 const CATALOG_MAX_ITEMS = 100000;
 const CATALOG_MAX_BYTES = 24 * 1024 * 1024;
 const CATALOG_DELTA_MAX_CHANGES = 5000;
@@ -481,7 +481,7 @@ const catalogRouteFromPath = (pathname) => {
   return match ? { kind: match[1], action: match[2] || 'base' } : null;
 };
 
-const catalogObjectKey = (uid, kind) => `catalog/v2/${encodeURIComponent(uid)}/${kind}.json`;
+const catalogObjectKey = (uid, kind) => `catalog/v3/${encodeURIComponent(uid)}/${kind}.json`;
 
 const catalogKnownRevision = (request) => {
   const value = Math.floor(Number(request.headers.get('X-Soridraw-Known-Revision') || 0));
@@ -859,6 +859,7 @@ export default {
         r2Binding: Boolean(env.MEDIA),
         archiveMinAgeDays: Number(env.ARCHIVE_MIN_AGE_DAYS) || 14,
         automaticWavGeneration: false,
+        catalogSchemaVersion: CATALOG_SCHEMA_VERSION,
       }, 200, origin);
     }
 

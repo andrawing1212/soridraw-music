@@ -402,6 +402,7 @@ const MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE = 'soridraw_music_note_paginatio
 const MUSIC_NOTE_DEVICE_ID_STORAGE_KEY = 'soridraw_music_note_device_id_v1';
 const MUSIC_NOTE_SYNC_VERSION_EVENT = 'soridraw:music-note-sync-version';
 const musicNoteFreshBootstrapUids = new Set<string>();
+const musicNoteFullCatalogReadyUids = new Set<string>(); // 1036: schema-1001 catalog is authoritative
 
 const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '4'; // SORIDRAW_MUSIC_NOTE_NO_FULLSCAN_BOOTSTRAP_1022
 const MUSIC_NOTE_CACHE_SCHEMA_STORAGE_BASE = 'soridraw_music_note_cache_schema_v3';
@@ -5612,6 +5613,9 @@ function App() {
   };
 
   const mergeFavoriteFirstPageWithCache = (firstPageFavs: any[], previous: any[], allServerFavoritesLoaded = false) => {
+    // A schema-1001 catalog is the complete authority. Never preserve arbitrary
+    // stale rows from a partial/legacy local cache once that catalog arrives.
+    if (allServerFavoritesLoaded) return mergeFavoritePages([], firstPageFavs);
     const firstPageIds = new Set(firstPageFavs.map((item: any) => item?.id).filter(Boolean));
     const firstPageKeys = new Set(firstPageFavs.map((item: any) => item?.favoriteKey || buildFavoriteIdentityKey(item)).filter(Boolean));
     const removalSignals = firstPageFavs.filter((item: any) => isFavoriteSoftRemoved(item));
@@ -5639,8 +5643,10 @@ function App() {
 
     // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date
     favoritesInMemoryCache.set(uid, safeList);
+    const fullCatalogReady = musicNoteFullCatalogReadyUids.has(uid);
     schedulePreviewAdaptiveListIndexPublishIfDirty('musicNote', uid, safeList, {
-      hasMore: safeList.length >= 20,
+      hasMore: fullCatalogReady ? false : undefined,
+      complete: fullCatalogReady,
       deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
     });
     if (musicNoteBundleActiveUids.has(uid)) {
@@ -9183,141 +9189,21 @@ const toggleCycleVariantSelection = (
         setHasMoreFavorites(false);
         setIsLoadingMoreFavorites(false);
 
-        const attachLegacyFavoritesFallback = async () => {
-          // 921: Never attach an unbounded favorites listener. If local cache exists,
-          // keep it. Otherwise perform at most one bounded 20-document recovery read.
-          favoritePaginationCursorRef.current = null;
-          favoritePaginationExhaustedRef.current = true;
-          favoritePaginationLoadingRef.current = false;
-          favoritePaginationFallbackModeRef.current = true;
-          setHasMoreFavorites(false);
-          setIsLoadingMoreFavorites(false);
-
-          if (Array.isArray(cachedFavs) && cachedFavs.length > 0) {
-            setIsFavoritesLoading(false);
-            markCacheDiagnostic('musicNote', 'CACHE', 0);
-            return;
-          }
-
-          try {
-            const fallbackSnapshot = await getDocs(query(
-              collection(db, 'favorites'),
-              where('uid', '==', currentUser.uid),
-              orderBy('createdAt', 'desc'),
-              limit(FAVORITES_PAGE_SIZE),
-            ));
-            const fallbackFavs = sortFavoriteList(
-              fallbackSnapshot.docs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite)),
-            );
-            favoritePaginationCursorRef.current = fallbackSnapshot.docs[fallbackSnapshot.docs.length - 1] || null;
-            favoritePaginationExhaustedRef.current = fallbackSnapshot.docs.length < FAVORITES_PAGE_SIZE;
-            favoritePaginationFallbackModeRef.current = true;
-            setHasMoreFavorites(false);
-            setFavorites(fallbackFavs);
-            writeFavoritesCache(currentUser.uid, fallbackFavs);
-            markCacheDiagnostic('musicNote', 'SYNC', Math.max(1, fallbackSnapshot.docs.length));
-          } catch (fallbackError) {
-            console.warn('Bounded Music Note fallback failed. Keeping local cache only.', fallbackError);
-          } finally {
-            setIsFavoritesLoading(false);
-          }
-        };
-
-        // Cache migration/new-device bootstrap: one complete read is the
-        // authoritative source. No orderBy/limit means legacy rows without
-        // createdAt are included too. No server data is written by this path.
-        // SORIDRAW_MUSIC_NOTE_NO_UNBOUNDED_RECOVERY_1022
-// Normal app entry, reload, schema migration, and cache repair must never
-// read the entire favorites collection. A missing payload is restored only
-// through the existing bounded/paged bootstrap below.
-const runFavoritesFullCacheRecoveryOnce = async () => {};
+        // 1036: legacy 20-row Music Note recovery was removed. Cold/stale
+        // devices use the private full catalog; navigation itself never scans or pages favorites.
 
         const hasCachedMusicNote = !musicNoteCacheNeedsFullBootstrap
           && hasAnyMusicNotePayload;
-        if (musicNoteCacheNeedsFullBootstrap) {
-          void runFavoritesFullCacheRecoveryOnce();
-        }
         if (hasCachedMusicNote) {
-          const persistedCursor = readMusicNotePaginationCursor(currentUser.uid);
-          const cachedCount = Array.isArray(cachedFavs) ? cachedFavs.length : 0;
-          let historicalMaxCount = cachedCount;
-          try {
-            historicalMaxCount = Math.max(
-              cachedCount,
-              Number(localStorage.getItem(`soridraw_favorites_cache_max_count_${currentUser.uid}`) || 0) || 0,
-            );
-          } catch {}
-          const mayHaveCachedHistory = musicNoteCacheNeedsBoundedVerification
-            || knownFavoriteCount > cachedCount
-            || historicalMaxCount > cachedCount
-            || cachedCount >= FAVORITES_PAGE_SIZE;
-          favoritePaginationCursorRef.current = persistedCursor;
-          favoritePaginationExhaustedRef.current = !musicNoteCacheNeedsBoundedVerification
-            && !persistedCursor
-            && !mayHaveCachedHistory;
-          setHasMoreFavorites(Boolean(persistedCursor) || mayHaveCachedHistory);
-          if (!musicNoteCacheNeedsBoundedVerification) setIsFavoritesLoading(false);
+          favoritePaginationCursorRef.current = null;
+          favoritePaginationExhaustedRef.current = true;
+          favoritePaginationFallbackModeRef.current = false;
+          clearMusicNotePaginationCursor(currentUser.uid);
+          setHasMoreFavorites(false);
+          setIsFavoritesLoading(false);
         }
 
-        const attachFavoritesSourceBootstrap902 = (allowCachedRepair = false) => {
-          // 1031: a clean browser has no valid Music Note payload. That state must
-          // be allowed to perform exactly one bounded first-page bootstrap.
-          if (unsubFavs || (!allowCachedRepair && hasCachedMusicNote)) return;
-          const q = query(
-            collection(db, 'favorites'),
-            where('uid', '==', currentUser.uid),
-            orderBy('createdAt', 'desc'),
-            limit(FAVORITES_PAGE_SIZE)
-          );
-
-          unsubFavs = onSnapshot(q, (snapshot) => {
-            markCacheDiagnostic('musicNote', snapshot.metadata.fromCache ? 'CACHE' : 'SYNC', snapshot.metadata.fromCache ? 0 : Math.max(1, snapshot.docChanges().length));
-            const firstPageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-            const firstPageFavs = firstPageDocs.map(mapFavoriteFirestoreDoc);
-            favoritePaginationCursorRef.current = firstPageDocs[firstPageDocs.length - 1] || null;
-            if (favoritePaginationCursorRef.current) {
-              writeMusicNotePaginationCursor(currentUser.uid, favoritePaginationCursorRef.current);
-            } else {
-              clearMusicNotePaginationCursor(currentUser.uid);
-            }
-            favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
-            favoritePaginationFallbackModeRef.current = false;
-            setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
-            setFavorites((prev) => {
-              const merged = mergeFavoriteFirstPageWithCache(firstPageFavs, prev || [], favoritePaginationExhaustedRef.current);
-              writeFavoritesCache(currentUser.uid, merged);
-              return merged;
-            });
-            setIsFavoritesLoading(false);
-            musicNoteFreshBootstrapUids.delete(currentUser.uid);
-            const remoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);
-            if (remoteVersion > 0) {
-              writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, currentUser.uid, remoteVersion);
-            }
-            if (unsubFavs) {
-              const detach = unsubFavs;
-              unsubFavs = null;
-              detach();
-            }
-          }, (error) => {
-            console.warn('Favorites paged query failed. Falling back to the legacy full-list listener until the Firestore index is available.', error);
-            // This query can fail before the composite index is deployed. Do not throw here;
-            // falling back keeps Music Note usable while Firebase builds the index.
-            if (favoritePaginationFallbackModeRef.current) {
-              setIsFavoritesLoading(false);
-              return;
-            }
-            if (unsubFavs) {
-              try {
-                unsubFavs();
-              } catch (unsubscribeError) {
-                console.warn('Failed to detach favorites paged listener before fallback:', unsubscribeError);
-              }
-              unsubFavs = null;
-            }
-            attachLegacyFavoritesFallback();
-          });
-        };
+        // 1036: paged favorites onSnapshot removed; full catalog is the bootstrap source.
 
         let musicNoteBundleMissingHandled = false;
         // 909: Home/login startup must stay local-only. Do not mark the bundle
@@ -9330,40 +9216,38 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
           MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE,
           currentUser.uid,
         );
-        const shouldVerifyMusicNoteBundle = !hasCachedMusicNote || (
-          !musicNoteCacheNeedsBoundedVerification
-          && (
-            musicNoteLocalVersionAtBootstrap <= 0
-            || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap
-          )
-        );
+        // 1036: always prepare the catalog reader. subscribeListBundle itself stays
+        // route-gated and readCatalogSnapshotCacheFirst returns IndexedDB without network
+        // when its revision is current, so page re-entry remains cache-first.
+        const shouldVerifyMusicNoteBundle = true;
 
-        if (musicNoteCacheNeedsBoundedVerification) {
-          // Normalization first: one latest-page read repairs a suspicious local payload.
-          // Skip the bundle read here so this recovery never stacks two server reads.
-          attachFavoritesSourceBootstrap902(true);
-        } else if (shouldVerifyMusicNoteBundle) {
+        if (shouldVerifyMusicNoteBundle) {
           unsubMusicNoteBundle = subscribeListBundle('musicNote', currentUser.uid, {
             onData: (bundle, meta) => {
-              // 1009 — this bundle subscription is a one-shot bootstrap read, not a live mirror.
-              // Keep it inactive after hydration so a plain save/unsave does not rewrite the
-              // server list-cache document. Cross-device changes still use the 901 version
-              // signal + updatedAtMs delta query, so data safety/sync stays intact.
+              const isFullMusicNoteCatalog = bundle.schemaVersion === 1001;
               musicNoteBundleActiveUids.delete(currentUser.uid);
               musicNoteFreshBootstrapUids.delete(currentUser.uid);
+              if (isFullMusicNoteCatalog) musicNoteFullCatalogReadyUids.add(currentUser.uid);
+              else musicNoteFullCatalogReadyUids.delete(currentUser.uid);
+
               if (bundle.deletedIds.length > 0) {
                 rememberFavoriteDeletedTombstones(currentUser.uid, bundle.deletedIds);
               }
               const localDeletedIds = getFavoriteDeletedTombstoneIds(currentUser.uid);
-              const firstPageFavs = (bundle.items || []).filter((favorite: any) => {
+              const catalogFavorites = (bundle.items || []).filter((favorite: any) => {
                 if (isFavoriteSoftRemoved(favorite)) return false;
                 const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
                 return !favoriteId || !localDeletedIds.has(favoriteId);
               });
-              favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
-              favoritePaginationExhaustedRef.current = !bundle.hasMore;
+
+              // Full catalog follows the same contract as Library: no server cursor,
+              // no 20-row More, and all subsequent More clicks are local rendering only.
+              favoritePaginationCursorRef.current = null;
+              favoritePaginationExhaustedRef.current = true;
               favoritePaginationFallbackModeRef.current = false;
-              setHasMoreFavorites(bundle.hasMore);
+              clearMusicNotePaginationCursor(currentUser.uid);
+              setHasMoreFavorites(false);
+
               setFavorites((prev) => {
                 const previous = Array.isArray(prev) ? prev : [];
                 const bundleVersion = Number(bundle.updatedAtMs || 0);
@@ -9377,11 +9261,13 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
                     || 0;
                   return bundleVersion > 0 && favoriteVersion > bundleVersion;
                 });
-                const firstPageWithLocalNewer = mergeFavoritePages(localNewer, firstPageFavs);
-                const merged = mergeFavoriteFirstPageWithCache(firstPageWithLocalNewer, previous, !bundle.hasMore);
-                writeFavoritesCache(currentUser.uid, merged);
-                return merged;
+                const authoritative = isFullMusicNoteCatalog
+                  ? mergeFavoritePages(catalogFavorites, localNewer)
+                  : mergeFavoriteFirstPageWithCache(catalogFavorites, previous, false);
+                writeFavoritesCache(currentUser.uid, authoritative);
+                return authoritative;
               });
+
               if (bundle.updatedAtMs > 0) {
                 const currentLocalVersion = readMusicNoteSyncVersion(
                   MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,
@@ -9397,32 +9283,22 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
               setIsFavoritesLoading(false);
             },
             onMissing: (meta) => {
-              musicNoteBundleActiveUids.delete(currentUser.uid);
               if (meta.fromCache) return;
-              if (musicNoteBundleMissingHandled) return;
               musicNoteBundleMissingHandled = true;
-              if (hasCachedMusicNote) {
-                // 1030: page entry/cache hydration is read-only. Never publish a local
-                // cache as the server bundle merely because that bundle is missing.
-                // A partial cache could otherwise become the new shared bad baseline.
-                markCacheDiagnostic('musicNote', 'CACHE', 0);
-                setIsFavoritesLoading(false);
-                return;
-              }
-              attachFavoritesSourceBootstrap902();
+              musicNoteFullCatalogReadyUids.delete(currentUser.uid);
+              setHasMoreFavorites(false);
+              setIsFavoritesLoading(false);
+              markCacheDiagnostic('musicNote', hasCachedMusicNote ? 'CACHE' : 'ERROR', 0);
+              console.warn('Music Note catalog unavailable; refusing legacy 20-row server pagination.');
             },
             onError: (error) => {
-              musicNoteBundleActiveUids.delete(currentUser.uid);
-              console.warn('Music Note bundle unavailable; using legacy safe path.', error);
-              if (!hasCachedMusicNote) attachFavoritesSourceBootstrap902();
+              musicNoteFullCatalogReadyUids.delete(currentUser.uid);
+              setHasMoreFavorites(false);
+              setIsFavoritesLoading(false);
+              markCacheDiagnostic('musicNote', hasCachedMusicNote ? 'CACHE' : 'ERROR', 0);
+              console.warn('Music Note catalog read failed; keeping local cache and refusing legacy pagination.', error);
             },
           });
-        } else {
-          // Cache is already current. Keep 901 delta sync available so a later
-          // cross-device version event fetches only changed favorites.
-          musicNoteBundleActiveUids.delete(currentUser.uid);
-          markCacheDiagnostic('musicNote', 'CACHE', 0);
-          setIsFavoritesLoading(false);
         }
 
 
@@ -9455,89 +9331,10 @@ const runFavoritesFullCacheRecoveryOnce = async () => {};
   }, []);
 
   const loadMoreFavorites = useCallback(async () => {
-    const currentUser = user || auth.currentUser;
-    if (!currentUser?.uid) return;
-    if (favoritePaginationLoadingRef.current) return;
-
-    const uid = currentUser.uid;
-    const getFavoriteId = (favorite: any) => String(favorite?.id || favorite?.firestoreId || '').trim();
-    const currentFavorites = (favoritesStore.getFavorites() || []).filter((favorite: any) => !isFavoriteSoftRemoved(favorite));
-    const loadedIds = new Set(currentFavorites.map(getFavoriteId).filter(Boolean));
-
-    const cursorValue: any = favoritePaginationCursorRef.current;
-    const cursorData = cursorValue && typeof cursorValue?.data === 'function' ? cursorValue.data() : null;
-    let cursorMs = cursorValue instanceof Date
-      ? cursorValue.getTime()
-      : Number(cursorData?.createdAtMs || cursorValue?.createdAtMs || 0)
-        || getTimestampMs(cursorData?.createdAt)
-        || getTimestampMs(cursorValue?.createdAt);
-
-    if (!Number.isFinite(cursorMs) || cursorMs <= 0) {
-      cursorMs = currentFavorites.reduce((oldest: number, favorite: any) => {
-        const explicit = Number(favorite?.createdAtMs || 0);
-        const value = Number.isFinite(explicit) && explicit > 0 ? explicit : getTimestampMs(favorite?.createdAt);
-        if (!Number.isFinite(value) || value <= 0) return oldest;
-        return oldest <= 0 ? value : Math.min(oldest, value);
-      }, 0);
-    }
-
-    if (!Number.isFinite(cursorMs) || cursorMs <= 0) {
-      favoritePaginationExhaustedRef.current = true;
-      setHasMoreFavorites(false);
-      console.warn('Music Note 1028: no safe chronological cursor; refusing recovery scan.');
-      return;
-    }
-
-    favoritePaginationLoadingRef.current = true;
-    setIsLoadingMoreFavorites(true);
-    try {
-      const snapshot = await getDocs(query(
-        collection(db, 'favorites'),
-        where('uid', '==', uid),
-        orderBy('createdAt', 'desc'),
-        startAfter(new Date(cursorMs)),
-        limit(FAVORITES_PAGE_SIZE),
-      ));
-      const docs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-      const page: any[] = [];
-      for (const docSnap of docs) {
-        const favorite = mapFavoriteFirestoreDoc(docSnap);
-        if (isFavoriteSoftRemoved(favorite)) continue;
-        const favoriteId = getFavoriteId(favorite);
-        if (favoriteId && isFavoriteDeletedTombstoned(uid, favoriteId)) continue;
-        if (favoriteId && loadedIds.has(favoriteId)) continue;
-        if (favoriteId) loadedIds.add(favoriteId);
-        page.push(favorite);
-      }
-
-      if (page.length > 0) {
-        setFavorites((prev) => {
-          const merged = mergeFavoritePages(prev || [], page);
-          writeFavoritesCache(uid, merged);
-          return merged;
-        });
-      }
-
-      if (docs.length > 0) {
-        const lastDoc = docs[docs.length - 1];
-        const lastData = lastDoc.data();
-        const lastMs = Number(lastData?.createdAtMs || 0) || getTimestampMs(lastData?.createdAt);
-        if (lastMs > 0) favoritePaginationCursorRef.current = new Date(lastMs);
-        writeMusicNotePaginationCursor(uid, lastDoc);
-      }
-
-      const exhausted = docs.length < FAVORITES_PAGE_SIZE;
-      favoritePaginationExhaustedRef.current = exhausted;
-      setHasMoreFavorites(!exhausted);
-      if (exhausted) clearMusicNotePaginationCursor(uid);
-    } catch (error) {
-      console.warn('Music Note 1028 bounded More failed; keeping cache.', error);
-      setHasMoreFavorites(true);
-    } finally {
-      favoritePaginationLoadingRef.current = false;
-      setIsLoadingMoreFavorites(false);
-    }
-  }, [user]);
+    // 1036: 20 is a render batch only. A Music Note More click must never read Firestore.
+    setHasMoreFavorites(false);
+    markCacheDiagnostic('musicNote', 'CACHE', 0);
+  }, []);
 
   const syncMusicNoteIncrementalFromRemoteVersion = useCallback(async (
     remoteVersion: number,

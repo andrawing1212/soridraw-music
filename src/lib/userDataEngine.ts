@@ -19,7 +19,7 @@ export const SORIDRAW_USER_DATA_STRATEGIES = {
 } as const;
 
 export type SoridrawCatalogSnapshot = {
-  schemaVersion: 2;
+  schemaVersion: 3;
   kind: SoridrawCatalogKind;
   revision: number;
   items: any[];
@@ -35,7 +35,7 @@ type CatalogPublishOptions = {
 };
 
 type CatalogDelta = {
-  schemaVersion: 2;
+  schemaVersion: 3;
   kind: SoridrawCatalogKind;
   baseRevision: number;
   revision: number;
@@ -44,12 +44,12 @@ type CatalogDelta = {
 };
 
 const CATALOG_ENDPOINT = 'https://soridraw-media-preview.andrawing1212.workers.dev';
-const CATALOG_SCHEMA_VERSION = 2 as const;
+const CATALOG_SCHEMA_VERSION = 3 as const;
 const CATALOG_MAX_ITEMS = 100_000;
 const CATALOG_MAX_BYTES = 24 * 1024 * 1024;
 const CATALOG_DELTA_MAX_CHANGES = 5_000;
-const CATALOG_DB_NAME = 'soridraw_user_data_engine_v2';
-const LEGACY_CATALOG_DB_NAME = 'soridraw_user_data_engine_v1';
+const CATALOG_DB_NAME = 'soridraw_user_data_engine_v3';
+const LEGACY_CATALOG_DB_NAMES = ['soridraw_user_data_engine_v2', 'soridraw_user_data_engine_v1'];
 const CATALOG_DB_STORE = 'catalogs';
 const CATALOG_PREVIEW_HOSTS = new Set([
   'preview.soridraw.com',
@@ -222,10 +222,12 @@ const isValidSnapshot = (kind: SoridrawCatalogKind, value: unknown): value is So
 const requestLegacyDbCleanup = () => {
   if (legacyDbCleanupRequested || typeof indexedDB === 'undefined') return;
   legacyDbCleanupRequested = true;
-  try {
-    indexedDB.deleteDatabase(LEGACY_CATALOG_DB_NAME);
-  } catch {
-    // Best-effort cleanup only. The old DB is never read by V2.
+  for (const databaseName of LEGACY_CATALOG_DB_NAMES) {
+    try {
+      indexedDB.deleteDatabase(databaseName);
+    } catch {
+      // Best-effort cleanup only. Old catalog DBs are never read by V3.
+    }
   }
 };
 
@@ -329,19 +331,33 @@ const readKnownRemoteCatalogRevision = (kind: SoridrawCatalogKind, uid: string):
   return candidates.length > 0 ? Math.floor(Math.max(...candidates)) : 0;
 };
 
+const catalogWait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 const authenticatedHeaders = async (): Promise<Record<string, string> | null> => {
   const user = auth.currentUser;
   if (!user) return null;
-  const [idToken, appCheckToken] = await Promise.all([
-    user.getIdToken(),
-    getFirebaseAppCheckToken(),
-  ]);
-  if (!appCheckToken) return null;
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${idToken}`,
-    'X-Firebase-AppCheck': appCheckToken,
-  };
+  const retryDelays = [0, 250, 800, 1600];
+  for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+    if (retryDelays[attempt] > 0) await catalogWait(retryDelays[attempt]);
+    try {
+      const [idToken, appCheckToken] = await Promise.all([
+        user.getIdToken(attempt >= 2),
+        getFirebaseAppCheckToken(),
+      ]);
+      if (idToken && appCheckToken) {
+        return {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+          'X-Firebase-AppCheck': appCheckToken,
+        };
+      }
+    } catch (error) {
+      if (attempt === retryDelays.length - 1) {
+        console.warn('[userDataEngine] catalog auth headers unavailable after retry.', error);
+      }
+    }
+  }
+  return null;
 };
 
 const readRemoteCatalogSnapshot = async (
@@ -352,29 +368,36 @@ const readRemoteCatalogSnapshot = async (
   if (!uid || !isPreviewCatalogEnabled()) return null;
   const user = auth.currentUser;
   if (!user || user.uid !== uid) return null;
-  try {
-    const headers = await authenticatedHeaders();
-    if (!headers) return null;
-    const knownRemoteRevision = Math.max(readKnownRemoteCatalogRevision(kind, uid), Math.floor(minimumRevision || 0));
-    if (knownRemoteRevision > 0) headers['X-Soridraw-Known-Revision'] = String(knownRemoteRevision);
-    const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${kind}`, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    });
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error(`CATALOG_READ_${response.status}`);
-    const payload = await response.json();
-    if (!isValidSnapshot(kind, payload)) throw new Error('CATALOG_PAYLOAD_INVALID');
-    if (knownRemoteRevision > 0 && payload.revision < knownRemoteRevision) {
-      throw new Error('CATALOG_REVISION_STALE');
+
+  const retryDelays = [0, 350, 1000];
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+    if (retryDelays[attempt] > 0) await catalogWait(retryDelays[attempt]);
+    try {
+      const headers = await authenticatedHeaders();
+      if (!headers) throw new Error('CATALOG_AUTH_NOT_READY');
+      const knownRemoteRevision = Math.max(readKnownRemoteCatalogRevision(kind, uid), Math.floor(minimumRevision || 0));
+      if (knownRemoteRevision > 0) headers['X-Soridraw-Known-Revision'] = String(knownRemoteRevision);
+      const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${kind}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      if (response.status === 404) throw new Error('CATALOG_NOT_MATERIALIZED');
+      if (!response.ok) throw new Error(`CATALOG_READ_${response.status}`);
+      const payload = await response.json();
+      if (!isValidSnapshot(kind, payload)) throw new Error('CATALOG_PAYLOAD_INVALID');
+      if (knownRemoteRevision > 0 && payload.revision < knownRemoteRevision) {
+        throw new Error('CATALOG_REVISION_STALE');
+      }
+      await writeCatalogSnapshotToLocalCache(kind, uid, payload);
+      return payload;
+    } catch (error) {
+      lastError = error;
     }
-    await writeCatalogSnapshotToLocalCache(kind, uid, payload);
-    return payload;
-  } catch (error) {
-    console.warn(`[userDataEngine] ${kind} catalog snapshot read unavailable.`, error);
-    return null;
   }
+  console.warn(`[userDataEngine] ${kind} catalog snapshot read unavailable after retry.`, lastError);
+  return null;
 };
 
 export const readCatalogSnapshotCacheFirst = async (

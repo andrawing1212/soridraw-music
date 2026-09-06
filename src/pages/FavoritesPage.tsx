@@ -5417,14 +5417,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   });
 
   const canShowCachedMusicNoteMore = visibleCount < filteredFavorites.length;
-  const canRequestMoreMusicNotePage = Boolean(
-    !isMusicNoteSharedView &&
-    !searchQuery.trim() &&
-    favoriteColorFilter === 'all' &&
-    !favoriteTrashView &&
-    hasMoreFavorites
-  );
-  const shouldShowMusicNoteMoreButton = canShowCachedMusicNoteMore || canRequestMoreMusicNotePage;
+  // 1036: Music Note mirrors Library full-catalog behavior. More is local-only.
+  const shouldShowMusicNoteMoreButton = canShowCachedMusicNoteMore;
 
   const musicNoteFilterCount = (sortBy !== 'latest' ? 1 : 0) + (favoriteTrashView ? 1 : 0);
 
@@ -6635,12 +6629,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE);
                     return;
                   }
-                  if (canRequestMoreMusicNotePage) {
-                    await onLoadMoreFavorites?.();
-                    setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE);
-                  }
+                  // Full catalog already contains every row; no server fallback exists here.
                 }}
-                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 20개 더 불러오거나 보여줍니다.' })}
+                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '저장된 곡을 20개 더 보여줍니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
                   "px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-black/20 flex items-center gap-2 group shadow-[var(--shadow-md)]",
@@ -6648,13 +6639,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 )}
               >
                 <Plus className="w-5 h-5 text-[#FF7A72] group-hover:rotate-90 transition-transform" />
-                {isLoadingMoreFavorites
-                  ? '불러오는 중...'
-                  : canShowCachedMusicNoteMore
-                    ? `더보기 (${filteredFavorites.length - visibleCount}개 남음)`
-                    : musicNoteViewMode === 'noteSpace'
-                      ? '더보기 (20개 더 불러오기)'
-                      : '더보기'}
+                {`더보기 (${Math.max(0, filteredFavorites.length - visibleCount)}개 남음)`}
               </button>
             </div>
           )}

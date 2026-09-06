@@ -1,0 +1,88 @@
+name: Temp 1050A MusicNote Entry Patch
+on:
+  push:
+    branches:
+      - preview
+    paths:
+      - .github/workflows/temp-1050a-musicnote-entry-patch.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Patch Studio Music Note entry
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/App.tsx')
+          s = p.read_text(encoding='utf-8')
+          old = """  useEffect(() => {
+    const isMusicNoteRoute = location.pathname === '/history';
+    if (!isMusicNoteRoute) {
+      if (typeof window !== 'undefined') {
+        (window as any).__soridrawMusicNotePageActive = false;
+      }
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      (window as any).__soridrawMusicNotePageActive = true;
+      window.dispatchEvent(new Event('soridraw:music-note-bundle-page-entry'));
+    }
+
+    if (!new URLSearchParams(location.search).has('note')) {
+      markCacheDiagnostic('musicNote', 'CACHE', 0);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        (window as any).__soridrawMusicNotePageActive = false;
+      }
+    };
+  }, [location.pathname, location.search]);"""
+          new = """  useEffect(() => {
+    // 1050: this wrapper is mounted only while Music Note is visible. Studio embeds
+    // it at /studio, so pathname === /history cannot be the Catalog-entry authority.
+    if (typeof window !== 'undefined') {
+      (window as any).__soridrawMusicNotePageActive = true;
+      window.dispatchEvent(new Event('soridraw:music-note-bundle-page-entry'));
+    }
+
+    if (!new URLSearchParams(location.search).has('note')) {
+      markCacheDiagnostic('musicNote', 'CACHE', 0);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        (window as any).__soridrawMusicNotePageActive = false;
+      }
+    };
+  }, [location.pathname, location.search]);"""
+          if old not in s:
+              raise SystemExit('Music Note entry anchor not found')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+          grep -q 'Studio embeds' src/App.tsx
+          git diff --check
+      - name: TypeScript and build
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run build
+      - name: Commit and push runtime fix
+        shell: bash
+        run: |
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git add src/App.tsx
+          git commit -m 'fix(preview): start Music Note catalog inside Studio'
+          git push origin HEAD:preview

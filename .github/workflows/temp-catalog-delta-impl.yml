@@ -1,0 +1,27 @@
+name: Temp Catalog Delta Implementation
+
+on:
+  push:
+    branches: [preview-catalog-delta-impl]
+    paths: ['.github/workflows/temp-catalog-delta-impl.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview-catalog-delta-impl
+          fetch-depth: 20
+      - name: Audit mutation wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== DIRTY/PUBLISH CALLS ==='
+          grep -R -n -B 6 -A 12 -E 'schedulePreviewAdaptiveListIndexPublishIfDirty|markAdaptiveListIndexDirty|deletedIds|favoriteSyncSignal' src/App.tsx src/pages/SunoLibraryPage.tsx src/lib | head -2200 || true
+          echo '=== WORKER CURRENT DELTA ==='
+          grep -n -B 20 -A 100 -E 'applyCatalogDelta|validateCatalogDelta|catalogObjectKey|handleCatalog' cloudflare/media-worker/src/index.js | head -1200 || true

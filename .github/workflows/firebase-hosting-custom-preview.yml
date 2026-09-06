@@ -2,13 +2,9 @@ name: Firebase Hosting Custom Preview
 
 on:
   workflow_dispatch:
-  push:
-    branches: [preview]
-    paths:
-      - '.github/workflows/firebase-hosting-custom-preview.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: firebase-hosting-custom-preview
@@ -19,20 +15,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
-      - name: Checkout preview
+      - name: Checkout latest preview
         uses: actions/checkout@v4
         with:
           ref: preview
-          fetch-depth: 20
-
-      - name: Apply Music Note Studio Catalog entry repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 .deploy/apply-1050-music-note-studio-catalog-entry.py
-          grep -q 'pathname === /history cannot gate Catalog entry' src/App.tsx
-          git diff --check
-          test "$(git diff --name-only | tr '\n' ' ')" = "src/App.tsx "
+          fetch-depth: 10
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -48,17 +35,6 @@ jobs:
 
       - name: Build preview app
         run: npm run build
-
-      - name: Commit runtime repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name andrawing1212
-          git config user.email andrawing1212@gmail.com
-          git add src/App.tsx
-          git commit -m 'fix(preview): start Music Note Catalog in Studio workspace'
-          git push origin HEAD:preview
-          echo "1050_RUNTIME_COMMIT=$(git rev-parse HEAD)"
 
       - name: Authenticate Google Firebase
         uses: google-github-actions/auth@v2
@@ -77,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
-          echo '1050_FIREBASE_PREVIEW_DEPLOY=PASS'
+          echo 'FIREBASE_PREVIEW_DEPLOY=PASS'
 
       - name: Verify exact deployed preview build
         shell: bash
@@ -91,7 +67,7 @@ jobs:
                 remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
                 if [ "$remote_sha" = "$local_sha" ]; then
                   ok=yes
-                  echo "1050_EXACT_BUILD_PASS=$url"
+                  echo "EXACT_BUILD_PASS=$url"
                   break
                 fi
               fi
@@ -107,4 +83,4 @@ jobs:
           curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/production-after.html"
           sha256sum "$RUNNER_TEMP/production-after.html" | awk '{print $1}' > "$RUNNER_TEMP/production-after.sha"
           cmp "$RUNNER_TEMP/production-before.sha" "$RUNNER_TEMP/production-after.sha"
-          echo '1050_PRODUCTION_UNCHANGED=PASS'
+          echo 'PRODUCTION_UNCHANGED=PASS'

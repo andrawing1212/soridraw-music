@@ -1,4 +1,4 @@
-name: Temp Deploy 1035 Catalog Recovery Preview
+name: Temp Resume 1035 Catalog Recovery Preview
 
 on:
   push:
@@ -9,12 +9,11 @@ permissions:
   contents: read
 
 jobs:
-  deploy_cloudflare_then_firebase:
+  verify_worker_then_deploy_firebase:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 35
     env:
       SOURCE_COMMIT: 6cb9d454a835815459dc98e0c5fff41552d24cea
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       WORKER_URL: https://soridraw-media-preview.andrawing1212.workers.dev
     steps:
       - name: Checkout preview
@@ -29,56 +28,44 @@ jobs:
           set -euo pipefail
           git merge-base --is-ancestor "$SOURCE_COMMIT" HEAD
           git diff --exit-code "$SOURCE_COMMIT"..HEAD -- \
-            src functions/src cloudflare/media-worker package.json package-lock.json \
-            firebase.hosting-preview.json
+            src functions/src cloudflare/media-worker package.json package-lock.json firebase.hosting-preview.json
           grep -F 'SORIDRAW_USER_DATA_ENGINE_V2_20260906' src/lib/userDataEngine.ts >/dev/null
           grep -F 'SORIDRAW_COMMON_USER_DATA_ENGINE_1035' cloudflare/media-worker/src/index.js >/dev/null
           echo 'SOURCE_GUARD=PASS'
 
-      - name: Set up Node 22 for Cloudflare
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install and validate Cloudflare Worker
-        working-directory: cloudflare/media-worker
-        run: |
-          npm install --no-audit --no-fund
-          npm run check
-
-      - name: Deploy Cloudflare PREVIEW catalog Worker
-        working-directory: cloudflare/media-worker
-        run: |
-          set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}"
-          npm run deploy
-          echo 'CLOUDFLARE_PREVIEW_DEPLOY=PASS'
-
-      - name: Verify Cloudflare PREVIEW routes and CORS
+      - name: Diagnose and verify deployed Cloudflare PREVIEW Worker
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --max-time 30 "$WORKER_URL/health" -o "$RUNNER_TEMP/health.json"
+          curl -sS --max-time 30 -D "$RUNNER_TEMP/health-head" "$WORKER_URL/health" -o "$RUNNER_TEMP/health.json"
+          echo '--- HEALTH BODY ---'
+          cat "$RUNNER_TEMP/health.json"
           grep -q '"ok":true' "$RUNNER_TEMP/health.json"
           grep -q '"r2Binding":true' "$RUNNER_TEMP/health.json"
 
-          code="$(curl -sS -o "$RUNNER_TEMP/catalog-unauth.json" -w '%{http_code}' --max-time 30 \
+          unauth_code="$(curl -sS -o "$RUNNER_TEMP/catalog-unauth.json" -D "$RUNNER_TEMP/catalog-unauth.head" -w '%{http_code}' --max-time 30 \
             -H 'Origin: https://preview.soridraw.com' \
             "$WORKER_URL/v1/catalog/musicNote")"
-          test "$code" = '401'
-          grep -q 'APP_CHECK_TOKEN_MISSING\|AUTH_TOKEN_MISSING' "$RUNNER_TEMP/catalog-unauth.json"
+          echo "CATALOG_UNAUTH_HTTP=$unauth_code"
+          echo '--- CATALOG UNAUTH BODY ---'
+          cat "$RUNNER_TEMP/catalog-unauth.json"
+          test "$unauth_code" = '401'
+          grep -Eq 'AUTH_TOKEN_MISSING|APP_CHECK_TOKEN_MISSING' "$RUNNER_TEMP/catalog-unauth.json"
 
-          code="$(curl -sS -o "$RUNNER_TEMP/options-body" -D "$RUNNER_TEMP/options-head" -w '%{http_code}' --max-time 30 -X OPTIONS \
+          options_code="$(curl -sS -o "$RUNNER_TEMP/options-body" -D "$RUNNER_TEMP/options-head" -w '%{http_code}' --max-time 30 -X OPTIONS \
             -H 'Origin: https://preview.soridraw.com' \
             -H 'Access-Control-Request-Method: GET' \
             -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck,x-soridraw-known-revision' \
             "$WORKER_URL/v1/catalog/musicNote")"
-          test "$code" = '204'
+          echo "CATALOG_OPTIONS_HTTP=$options_code"
+          echo '--- OPTIONS HEADERS ---'
+          cat "$RUNNER_TEMP/options-head"
+          test "$options_code" = '204'
           grep -qi '^access-control-allow-origin: https://preview.soridraw.com' "$RUNNER_TEMP/options-head"
-          grep -qi 'x-soridraw-known-revision' "$RUNNER_TEMP/options-head"
+          grep -qi '^access-control-allow-headers: .*X-Soridraw-Known-Revision' "$RUNNER_TEMP/options-head"
           echo 'CLOUDFLARE_CATALOG_ROUTE_CORS=PASS'
 
-      - name: Set up Node 20 for app build
+      - name: Set up Node 20
         uses: actions/setup-node@v4
         with:
           node-version: 20

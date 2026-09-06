@@ -35,16 +35,7 @@ jobs:
           import { readCacheDiagnosticsGloballyEnabled } from './cacheDiagnostics';
 
           export type CatalogRuntimeDiagnosticKind = 'musicNote' | 'library';
-          export type CatalogRuntimeDiagnosticStage =
-            | 'IDLE'
-            | 'START'
-            | 'AUTH'
-            | 'REQUEST'
-            | 'HTTP'
-            | 'SNAPSHOT'
-            | 'ACCEPTED'
-            | 'ERROR';
-
+          export type CatalogRuntimeDiagnosticStage = 'IDLE' | 'START' | 'AUTH' | 'REQUEST' | 'HTTP' | 'SNAPSHOT' | 'ACCEPTED' | 'ERROR';
           export type CatalogRuntimeDiagnosticState = {
             stage: CatalogRuntimeDiagnosticStage;
             attempt: number;
@@ -54,21 +45,11 @@ jobs:
             errorCode: string;
             updatedAt: number;
           };
-
           export const CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT = 'soridraw:catalog-runtime-diagnostics-update';
           const STORAGE_BASE = 'soridraw_catalog_runtime_diagnostics_v1';
           const kinds: CatalogRuntimeDiagnosticKind[] = ['musicNote', 'library'];
           const storageKey = (kind: CatalogRuntimeDiagnosticKind) => `${STORAGE_BASE}_${kind}`;
-          const emptyState = (): CatalogRuntimeDiagnosticState => ({
-            stage: 'IDLE',
-            attempt: 0,
-            httpStatus: 0,
-            remoteItemCount: 0,
-            revision: 0,
-            errorCode: '',
-            updatedAt: 0,
-          });
-
+          const emptyState = (): CatalogRuntimeDiagnosticState => ({ stage: 'IDLE', attempt: 0, httpStatus: 0, remoteItemCount: 0, revision: 0, errorCode: '', updatedAt: 0 });
           const cleanError = (value: unknown) => String(value || '')
             .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]')
             .replace(/[A-Za-z0-9_-]{80,}/g, '[redacted]')
@@ -100,10 +81,7 @@ jobs:
             }
           }
 
-          export function markCatalogRuntimeDiagnostic(
-            kind: CatalogRuntimeDiagnosticKind,
-            patch: Partial<CatalogRuntimeDiagnosticState>,
-          ): void {
+          export function markCatalogRuntimeDiagnostic(kind: CatalogRuntimeDiagnosticKind, patch: Partial<CatalogRuntimeDiagnosticState>): void {
             if (!readCacheDiagnosticsGloballyEnabled()) return;
             const previous = readCatalogRuntimeDiagnostic(kind);
             const next: CatalogRuntimeDiagnosticState = {
@@ -114,9 +92,7 @@ jobs:
             };
             try { sessionStorage.setItem(storageKey(kind), JSON.stringify(next)); } catch {}
             if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, {
-                detail: { kind, state: next },
-              }));
+              window.dispatchEvent(new CustomEvent(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, { detail: { kind, state: next } }));
             }
           }
 
@@ -124,9 +100,7 @@ jobs:
             for (const kind of kinds) {
               try { sessionStorage.removeItem(storageKey(kind)); } catch {}
               if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, {
-                  detail: { kind, state: emptyState() },
-                }));
+                window.dispatchEvent(new CustomEvent(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, { detail: { kind, state: emptyState() } }));
               }
             }
           }
@@ -142,99 +116,75 @@ jobs:
 
           p = Path('src/lib/userDataEngine.ts')
           s = p.read_text(encoding='utf-8')
-          s = once(
-              s,
-              "} from './firestoreMeasured';\n",
-              "} from './firestoreMeasured';\nimport { markCatalogRuntimeDiagnostic } from './catalogRuntimeDiagnostics';\n",
-              'userDataEngine diagnostic import',
-          )
-          s = once(
-              s,
+          s = once(s, "} from './firestoreMeasured';\n", "} from './firestoreMeasured';\nimport { markCatalogRuntimeDiagnostic } from './catalogRuntimeDiagnostics';\n", 'userDataEngine import')
+          s = once(s,
               "  if (!uid || !isPreviewCatalogEnabled()) return null;\n  const user = auth.currentUser;\n  if (!user || user.uid !== uid) return null;\n\n  const retryDelays = [0, 350, 1000];",
-              "  if (!uid || !isPreviewCatalogEnabled()) return null;\n  const user = auth.currentUser;\n  if (!user || user.uid !== uid) {\n    markCatalogRuntimeDiagnostic(kind, { stage: 'ERROR', errorCode: 'AUTH_USER_NOT_READY' });\n    return null;\n  }\n\n  markCatalogRuntimeDiagnostic(kind, {\n    stage: 'START', attempt: 0, httpStatus: 0, remoteItemCount: 0, revision: 0, errorCode: '',\n  });\n  const retryDelays = [0, 350, 1000];",
-              'userDataEngine start diagnostic',
-          )
-          s = once(
-              s,
+              "  if (!uid || !isPreviewCatalogEnabled()) return null;\n  const user = auth.currentUser;\n  if (!user || user.uid !== uid) {\n    markCatalogRuntimeDiagnostic(kind, { stage: 'ERROR', errorCode: 'AUTH_USER_NOT_READY' });\n    return null;\n  }\n\n  markCatalogRuntimeDiagnostic(kind, { stage: 'START', attempt: 0, httpStatus: 0, remoteItemCount: 0, revision: 0, errorCode: '' });\n  const retryDelays = [0, 350, 1000];",
+              'userDataEngine start')
+          s = once(s,
               "    try {\n      // Catalog GET is owner-authorized by Firebase Auth.",
               "    try {\n      markCatalogRuntimeDiagnostic(kind, { stage: 'AUTH', attempt: attempt + 1, errorCode: '' });\n      // Catalog GET is owner-authorized by Firebase Auth.",
-              'userDataEngine auth stage',
-          )
-          s = once(
-              s,
+              'userDataEngine auth')
+          s = once(s,
               "      const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${kind}`, {\n        method: 'GET',\n        headers,\n        cache: 'no-store',\n      });\n      if (response.status === 404)",
               "      markCatalogRuntimeDiagnostic(kind, { stage: 'REQUEST', attempt: attempt + 1 });\n      const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${kind}`, {\n        method: 'GET',\n        headers,\n        cache: 'no-store',\n      });\n      markCatalogRuntimeDiagnostic(kind, { stage: 'HTTP', attempt: attempt + 1, httpStatus: response.status });\n      if (response.status === 404)",
-              'userDataEngine HTTP stage',
-          )
-          s = once(
-              s,
+              'userDataEngine http')
+          s = once(s,
               "      const payload = await response.json();\n      if (!isValidSnapshot(kind, payload)) throw new Error('CATALOG_PAYLOAD_INVALID');",
-              "      const payload = await response.json();\n      if (!isValidSnapshot(kind, payload)) throw new Error('CATALOG_PAYLOAD_INVALID');\n      markCatalogRuntimeDiagnostic(kind, {\n        stage: 'SNAPSHOT', attempt: attempt + 1, httpStatus: response.status,\n        remoteItemCount: Number(payload.itemCount || 0), revision: Number(payload.revision || 0), errorCode: '',\n      });",
-              'userDataEngine snapshot stage',
-          )
-          s = once(
-              s,
+              "      const payload = await response.json();\n      if (!isValidSnapshot(kind, payload)) throw new Error('CATALOG_PAYLOAD_INVALID');\n      markCatalogRuntimeDiagnostic(kind, { stage: 'SNAPSHOT', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(payload.itemCount || 0), revision: Number(payload.revision || 0), errorCode: '' });",
+              'userDataEngine snapshot')
+          s = once(s,
               "      await writeCatalogSnapshotToLocalCache(kind, uid, payload);\n      catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));\n      return payload;\n    } catch (error) {\n      lastError = error;\n    }",
-              "      await writeCatalogSnapshotToLocalCache(kind, uid, payload);\n      catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));\n      markCatalogRuntimeDiagnostic(kind, {\n        stage: 'ACCEPTED', attempt: attempt + 1, httpStatus: response.status,\n        remoteItemCount: Number(payload.itemCount || 0), revision: Number(payload.revision || 0), errorCode: '',\n      });\n      return payload;\n    } catch (error) {\n      lastError = error;\n      markCatalogRuntimeDiagnostic(kind, {\n        stage: 'ERROR', attempt: attempt + 1,\n        errorCode: String((error as any)?.message || error || 'CATALOG_UNKNOWN_ERROR'),\n      });\n    }",
-              'userDataEngine accepted/error stages',
-          )
+              "      await writeCatalogSnapshotToLocalCache(kind, uid, payload);\n      catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));\n      markCatalogRuntimeDiagnostic(kind, { stage: 'ACCEPTED', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(payload.itemCount || 0), revision: Number(payload.revision || 0), errorCode: '' });\n      return payload;\n    } catch (error) {\n      lastError = error;\n      markCatalogRuntimeDiagnostic(kind, { stage: 'ERROR', attempt: attempt + 1, errorCode: String((error as any)?.message || error || 'CATALOG_UNKNOWN_ERROR') });\n    }",
+              'userDataEngine accepted')
           p.write_text(s, encoding='utf-8')
 
           p = Path('src/components/CacheDiagnosticsOverlay.tsx')
           s = p.read_text(encoding='utf-8')
-          s = once(
-              s,
+          s = once(s,
               "import { hasAdminPermission } from '../constants/adminPermissions';\n",
-              "import { hasAdminPermission } from '../constants/adminPermissions';\nimport { favoritesStore } from '../hooks/useFavoritesStore';\nimport {\n  CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT,\n  readCatalogRuntimeDiagnostic,\n  resetCatalogRuntimeDiagnostics,\n  type CatalogRuntimeDiagnosticKind,\n  type CatalogRuntimeDiagnosticState,\n} from '../lib/catalogRuntimeDiagnostics';\n",
-              'overlay imports',
-          )
-          s = once(
-              s,
+              "import { hasAdminPermission } from '../constants/adminPermissions';\nimport { favoritesStore } from '../hooks/useFavoritesStore';\nimport { CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, readCatalogRuntimeDiagnostic, resetCatalogRuntimeDiagnostics, type CatalogRuntimeDiagnosticKind, type CatalogRuntimeDiagnosticState } from '../lib/catalogRuntimeDiagnostics';\n",
+              'overlay imports')
+          s = once(s,
               "  const [cloudflare, setCloudflare] = useState<CloudflareDiagnosticState>(() => readCloudflareDiagnostics());\n",
-              "  const [cloudflare, setCloudflare] = useState<CloudflareDiagnosticState>(() => readCloudflareDiagnostics());\n  const [catalogRuntime, setCatalogRuntime] = useState<Record<CatalogRuntimeDiagnosticKind, CatalogRuntimeDiagnosticState>>(() => ({\n    musicNote: readCatalogRuntimeDiagnostic('musicNote'),\n    library: readCatalogRuntimeDiagnostic('library'),\n  }));\n  const [favoriteStoreCount, setFavoriteStoreCount] = useState(() => favoritesStore.getFavorites().length);\n",
-              'overlay catalog state',
-          )
+              "  const [cloudflare, setCloudflare] = useState<CloudflareDiagnosticState>(() => readCloudflareDiagnostics());\n  const [catalogRuntime, setCatalogRuntime] = useState<Record<CatalogRuntimeDiagnosticKind, CatalogRuntimeDiagnosticState>>(() => ({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') }));\n  const [favoriteStoreCount, setFavoriteStoreCount] = useState(() => favoritesStore.getFavorites().length);\n",
+              'overlay state')
           anchor = "  useEffect(() => {\n    try { window.localStorage.setItem(PANEL_COLLAPSED_STORAGE_KEY, collapsed ? 'true' : 'false'); } catch {}"
-          insert = """  useEffect(() => {
-    const syncFavorites = () => setFavoriteStoreCount(favoritesStore.getFavorites().length);
-    const onCatalogRuntime = (event: Event) => {
-      const detail = (event as CustomEvent<{ kind?: CatalogRuntimeDiagnosticKind; state?: CatalogRuntimeDiagnosticState }>).detail;
-      if (!detail?.kind || !detail.state) return;
-      setCatalogRuntime((prev) => ({ ...prev, [detail.kind as CatalogRuntimeDiagnosticKind]: detail.state as CatalogRuntimeDiagnosticState }));
-    };
-    syncFavorites();
-    setCatalogRuntime({
-      musicNote: readCatalogRuntimeDiagnostic('musicNote'),
-      library: readCatalogRuntimeDiagnostic('library'),
-    });
-    const unsubscribeFavorites = favoritesStore.subscribe(syncFavorites);
-    window.addEventListener(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, onCatalogRuntime as EventListener);
-    return () => {
-      unsubscribeFavorites();
-      window.removeEventListener(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, onCatalogRuntime as EventListener);
-    };
-  }, []);
-
-""" + anchor
-          s = once(s, anchor, insert, 'overlay runtime listener')
+          listener = (
+              "  useEffect(() => {\n"
+              "    const syncFavorites = () => setFavoriteStoreCount(favoritesStore.getFavorites().length);\n"
+              "    const onCatalogRuntime = (event: Event) => {\n"
+              "      const detail = (event as CustomEvent<{ kind?: CatalogRuntimeDiagnosticKind; state?: CatalogRuntimeDiagnosticState }>).detail;\n"
+              "      if (!detail?.kind || !detail.state) return;\n"
+              "      setCatalogRuntime((prev) => ({ ...prev, [detail.kind as CatalogRuntimeDiagnosticKind]: detail.state as CatalogRuntimeDiagnosticState }));\n"
+              "    };\n"
+              "    syncFavorites();\n"
+              "    setCatalogRuntime({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') });\n"
+              "    const unsubscribeFavorites = favoritesStore.subscribe(syncFavorites);\n"
+              "    window.addEventListener(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, onCatalogRuntime as EventListener);\n"
+              "    return () => { unsubscribeFavorites(); window.removeEventListener(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, onCatalogRuntime as EventListener); };\n"
+              "  }, []);\n\n"
+          )
+          s = once(s, anchor, listener + anchor, 'overlay listener')
           rows_anchor = "          <div className=\"mt-2 space-y-1\">\n            {rows.map(({ domain, label }) => {"
-          rows_insert = """          <div className="mt-2 rounded-xl bg-[#ffbf66]/[0.07] px-2.5 py-2">
-            <div className="mb-1 text-[10px] font-black tracking-[0.05em] text-[#ffbf66]/75">CATALOG BROWSER PATH</div>
-            <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-bold text-white/72">
-              <span>뮤직노트 · {catalogRuntime.musicNote.stage}</span>
-              <span className="shrink-0 tabular-nums">HTTP {catalogRuntime.musicNote.httpStatus || '—'} · R2 {catalogRuntime.musicNote.remoteItemCount || '—'} · Store {favoriteStoreCount}</span>
-            </div>
-            <div className="mt-0.5 flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-white/45">
-              <span className="truncate">{catalogRuntime.musicNote.errorCode || '오류 없음'}</span>
-              <span className="shrink-0 tabular-nums">시도 {catalogRuntime.musicNote.attempt || 0} · rev {catalogRuntime.musicNote.revision || '—'}</span>
-            </div>
-          </div>
-
-""" + rows_anchor
-          s = once(s, rows_anchor, rows_insert, 'overlay catalog block')
-          reset_anchor = "                resetCacheDiagnostics();\n                resetCloudflareDiagnostics();\n                setStates(readAllStates());"
-          reset_new = "                resetCacheDiagnostics();\n                resetCloudflareDiagnostics();\n                resetCatalogRuntimeDiagnostics();\n                setCatalogRuntime({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') });\n                setFavoriteStoreCount(favoritesStore.getFavorites().length);\n                setStates(readAllStates());"
-          s = once(s, reset_anchor, reset_new, 'overlay reset catalog diagnostics')
+          block = (
+              "          <div className=\"mt-2 rounded-xl bg-[#ffbf66]/[0.07] px-2.5 py-2\">\n"
+              "            <div className=\"mb-1 text-[10px] font-black tracking-[0.05em] text-[#ffbf66]/75\">CATALOG BROWSER PATH</div>\n"
+              "            <div className=\"flex min-w-0 items-center justify-between gap-2 text-[11px] font-bold text-white/72\">\n"
+              "              <span>뮤직노트 · {catalogRuntime.musicNote.stage}</span>\n"
+              "              <span className=\"shrink-0 tabular-nums\">HTTP {catalogRuntime.musicNote.httpStatus || '—'} · R2 {catalogRuntime.musicNote.remoteItemCount || '—'} · Store {favoriteStoreCount}</span>\n"
+              "            </div>\n"
+              "            <div className=\"mt-0.5 flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-white/45\">\n"
+              "              <span className=\"truncate\">{catalogRuntime.musicNote.errorCode || '오류 없음'}</span>\n"
+              "              <span className=\"shrink-0 tabular-nums\">시도 {catalogRuntime.musicNote.attempt || 0} · rev {catalogRuntime.musicNote.revision || '—'}</span>\n"
+              "            </div>\n"
+              "          </div>\n\n"
+          )
+          s = once(s, rows_anchor, block + rows_anchor, 'overlay block')
+          s = once(s,
+              "                resetCacheDiagnostics();\n                resetCloudflareDiagnostics();\n                setStates(readAllStates());",
+              "                resetCacheDiagnostics();\n                resetCloudflareDiagnostics();\n                resetCatalogRuntimeDiagnostics();\n                setCatalogRuntime({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') });\n                setFavoriteStoreCount(favoritesStore.getFavorites().length);\n                setStates(readAllStates());",
+              'overlay reset')
           p.write_text(s, encoding='utf-8')
           PY
 

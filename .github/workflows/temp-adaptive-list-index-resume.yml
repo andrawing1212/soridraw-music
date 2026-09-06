@@ -1,0 +1,131 @@
+name: Temp Adaptive List Index Resume
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-adaptive-list-index-resume.yml']
+permissions:
+  contents: write
+jobs:
+  verify_and_deploy:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      APP_BASE: e8972d0b905c228ea745ad5fbaad1381ea1235ae
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - name: Guard validated app source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$APP_BASE" HEAD
+          git diff --exit-code "$APP_BASE"..HEAD -- src functions/src functions/package.json package.json package-lock.json firebase.json firebase.hosting-preview.json firestore.rules firestore.indexes.json
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Adaptive cost guard
+        run: node scripts/verify-adaptive-list-index-v2.mjs
+
+      - name: App build
+        run: npm run build
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions ci
+
+      - name: Functions build
+        run: npm --prefix functions run build
+
+      - name: Library materialized-view test
+        run: npm --prefix functions run test:library-bundle
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot production hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+
+      - name: Finish preview Function deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only functions:publishPreviewAdaptiveListIndexV2 --project soridraw-app-866a5 --non-interactive --force
+          echo 'PREVIEW_FUNCTION_DEPLOY=PASS'
+
+      - name: Verify Function exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://us-central1-soridraw-app-866a5.cloudfunctions.net/publishPreviewAdaptiveListIndexV2'
+          code="$(curl -sS -o "$RUNNER_TEMP/callable.txt" -w '%{http_code}' --max-time 30 -X POST -H 'Content-Type: application/json' -H 'Origin: https://preview.soridraw.com' --data '{"data":{"kind":"musicNote","schemaVersion":2,"items":[],"itemCount":0,"cursorCreatedAtMs":0,"hasMore":false,"deletedIds":[]}}' "$url" || true)"
+          echo "CALLABLE_HTTP=$code"
+          test "$code" != '404'
+
+      - name: Deploy Firebase PREVIEW hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_DEPLOY=PASS'
+
+      - name: Verify exact deployed preview build
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then ok=yes; echo "EXACT_BUILD_PASS=$url"; break; fi
+              fi
+              sleep 10
+            done
+            test "$ok" = yes
+          done
+
+      - name: Verify production hosting unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo 'PRODUCTION_UNCHANGED=PASS'
+
+      - name: Cleanup temporary workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin preview
+          git rm -f .github/workflows/temp-adaptive-list-index-resume.yml .github/workflows/temp-adaptive-list-index-v2.yml .github/workflows/temp-list-index-audit.yml
+          git commit -m 'chore(preview): remove temporary adaptive deployment workflows'
+          git push origin HEAD:preview

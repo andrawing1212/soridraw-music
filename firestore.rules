@@ -91,13 +91,14 @@ service cloud.firestore {
         return !('syncVersions' in request.resource.data) ||
           (request.resource.data.syncVersions is map &&
             request.resource.data.syncVersions.keys().hasOnly([
-              'googleGeminiApiKey', 'sectionCustom', 'recentSongs', 'musicNote', 'library'
+              'googleGeminiApiKey', 'sectionCustom', 'recentSongs', 'musicNote', 'library', 'musicNoteStructure'
             ]) &&
             (!('googleGeminiApiKey' in request.resource.data.syncVersions) || request.resource.data.syncVersions.googleGeminiApiKey is int) &&
             (!('sectionCustom' in request.resource.data.syncVersions) || request.resource.data.syncVersions.sectionCustom is int) &&
             (!('recentSongs' in request.resource.data.syncVersions) || request.resource.data.syncVersions.recentSongs is int) &&
             (!('musicNote' in request.resource.data.syncVersions) || request.resource.data.syncVersions.musicNote is int) &&
-            (!('library' in request.resource.data.syncVersions) || request.resource.data.syncVersions.library is int));
+            (!('library' in request.resource.data.syncVersions) || request.resource.data.syncVersions.library is int) &&
+            (!('musicNoteStructure' in request.resource.data.syncVersions) || request.resource.data.syncVersions.musicNoteStructure is int));
       }
 
       function isValidSelfUpdate() {

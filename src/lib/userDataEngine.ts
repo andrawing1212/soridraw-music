@@ -5,8 +5,8 @@ import {
   readAdaptiveListIndexDirtyRevision,
 } from './firestoreMeasured';
 
-export const SORIDRAW_USER_DATA_ENGINE_V1_20260906 = true;
-export const SORIDRAW_USER_DATA_ENGINE_REVISION_PROOF_1034 = true;
+export const SORIDRAW_USER_DATA_ENGINE_V2_20260906 = true;
+export const SORIDRAW_USER_DATA_ENGINE_DELTA_SYNC_1035 = true;
 
 export type SoridrawCatalogKind = 'musicNote' | 'library';
 export type SoridrawHotSetKind = 'recentSongs';
@@ -19,7 +19,7 @@ export const SORIDRAW_USER_DATA_STRATEGIES = {
 } as const;
 
 export type SoridrawCatalogSnapshot = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   kind: SoridrawCatalogKind;
   revision: number;
   items: any[];
@@ -34,16 +34,53 @@ type CatalogPublishOptions = {
   expectedItemCount?: number | null;
 };
 
+type CatalogDelta = {
+  schemaVersion: 2;
+  kind: SoridrawCatalogKind;
+  baseRevision: number;
+  revision: number;
+  upserts: any[];
+  deletedIds: string[];
+};
+
 const CATALOG_ENDPOINT = 'https://soridraw-media-preview.andrawing1212.workers.dev';
-const CATALOG_SCHEMA_VERSION = 1;
+const CATALOG_SCHEMA_VERSION = 2 as const;
 const CATALOG_MAX_ITEMS = 100_000;
 const CATALOG_MAX_BYTES = 24 * 1024 * 1024;
-const CATALOG_DB_NAME = 'soridraw_user_data_engine_v1';
+const CATALOG_DELTA_MAX_CHANGES = 5_000;
+const CATALOG_DB_NAME = 'soridraw_user_data_engine_v2';
+const LEGACY_CATALOG_DB_NAME = 'soridraw_user_data_engine_v1';
 const CATALOG_DB_STORE = 'catalogs';
 const CATALOG_PREVIEW_HOSTS = new Set([
   'preview.soridraw.com',
   'soridraw-preview.web.app',
   'soridraw-preview.firebaseapp.com',
+]);
+
+const MUSIC_NOTE_SUMMARY_KEYS = new Set([
+  'uid', 'soridrawSongId', 'favoriteKey',
+  'title', 'koreanTitle', 'englishTitle', 'genre', 'appliedKeywords', 'searchTokens',
+  'isLocked', 'liked', 'isLiked', 'personalLiked', 'favoriteLiked', 'isFavorite',
+  'isPublic', 'exploreTrackId', 'explorePublicationId',
+  'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'deletedAt', 'trashedAt',
+  'color', 'favoriteColor', 'noteColor', 'folderId', 'folderIds', 'musicNoteFolderIds',
+  'createdAtMs', 'createdAt', 'updatedAtMs', 'updatedAt',
+  'sunoLinks', 'sunoShareLinks', 'mainSunoIndex',
+  'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
+  'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
+  'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
+  'audioUrl', 'audio_url', 'streamAudioUrl', 'stream_audio_url', 'sourceAudioUrl', 'sourceStreamAudioUrl',
+  'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl', 'sunoAudioUrl',
+  'creatorNickname', 'ownerNickname', 'ownerUid', 'nickname',
+]);
+
+const LIBRARY_SUMMARY_KEYS = new Set([
+  'uid', 'taskId', 'sourceTrackId', 'sourceTaskId', 'status', 'model', 'modelVersion',
+  'title', 'koreanTitle', 'englishTitle', 'genre', 'style', 'tags', 'prompt',
+  'createdAtMs', 'createdAt', 'updatedAtMs', 'updatedAt',
+  'audioUrl', 'audio_url', 'streamAudioUrl', 'stream_audio_url', 'sourceAudioUrl', 'sourceStreamAudioUrl',
+  'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl', 'audioUrls', 'duration', 'durationSeconds',
+  'sunoData', 'isPublic', 'hidden', 'deletedAt', 'trashedAt', 'favoriteColor', 'color',
 ]);
 
 const catalogMemory = new Map<string, SoridrawCatalogSnapshot>();
@@ -55,8 +92,8 @@ const catalogPendingPublishes = new Map<string, {
   sourceItems: any[];
   options: CatalogPublishOptions;
 }>();
-const catalogLastPublishedHashes = new Map<string, string>();
 let catalogDbPromise: Promise<IDBDatabase | null> | null = null;
+let legacyDbCleanupRequested = false;
 
 const isPreviewCatalogEnabled = () => {
   if (typeof window === 'undefined') return false;
@@ -86,17 +123,8 @@ const itemCreatedAtMs = (item: any): number => (
   || toTimestampMs(item?.createdAt)
   || Number(item?.updatedAtMs || 0)
   || toTimestampMs(item?.updatedAt)
-  || 0
+  || 1
 );
-
-const OMIT_KEYS = new Set([
-  'lyricRevisions', 'lyricsHistory', 'lyricHistory', 'revisionHistory', 'editHistory',
-  'apiResponse', 'apiStatusResponse', 'rawApiResponse', 'callbackPayload', 'debugPayload',
-  'creditCheckedAfterComplete', 'creditCheckedAt', 'remainingCreditsAfterComplete',
-  'reportedAudioUrls', 'audioValidationStatus',
-  'googleGeminiApiKey', 'geminiApiKey', 'apiKey', 'accessToken', 'idToken',
-  'refreshToken', 'authorization', 'password', 'secret',
-]);
 
 const cleanValue = (value: any, depth = 0): any => {
   if (value === null) return null;
@@ -108,10 +136,9 @@ const cleanValue = (value: any, depth = 0): any => {
   if (Array.isArray(value)) {
     return value.map((entry) => cleanValue(entry, depth + 1)).filter((entry) => entry !== undefined);
   }
-  if (typeof value !== 'object' || depth > 12) return undefined;
+  if (typeof value !== 'object' || depth > 10) return undefined;
   const next: Record<string, any> = {};
   Object.entries(value).forEach(([key, entry]) => {
-    if (OMIT_KEYS.has(key)) return;
     const cleaned = cleanValue(entry, depth + 1);
     if (cleaned !== undefined) next[key] = cleaned;
   });
@@ -127,30 +154,42 @@ const isMusicNoteCatalogItem = (item: any) => !(
   || item?.trashedAt
 );
 
+const projectCatalogItem = (kind: SoridrawCatalogKind, sourceItem: any): any | null => {
+  if (!sourceItem || typeof sourceItem !== 'object' || Array.isArray(sourceItem)) return null;
+  if (kind === 'musicNote' && !isMusicNoteCatalogItem(sourceItem)) return null;
+  const id = String(sourceItem?.id || sourceItem?.firestoreId || '').trim();
+  if (!id) return null;
+  const allowed = kind === 'musicNote' ? MUSIC_NOTE_SUMMARY_KEYS : LIBRARY_SUMMARY_KEYS;
+  const projected: Record<string, any> = {
+    id,
+    firestoreId: String(sourceItem?.firestoreId || id),
+    createdAtMs: itemCreatedAtMs(sourceItem),
+    __catalogSummary: true,
+  };
+  for (const key of allowed) {
+    if (!(key in sourceItem)) continue;
+    const cleaned = cleanValue(sourceItem[key]);
+    if (cleaned !== undefined) projected[key] = cleaned;
+  }
+  projected.createdAtMs = itemCreatedAtMs(projected);
+  return projected;
+};
+
 const normalizeCatalogItems = (kind: SoridrawCatalogKind, sourceItems: any[]): any[] => {
   const seen = new Set<string>();
   const normalized: any[] = [];
-
-  [...(Array.isArray(sourceItems) ? sourceItems : [])]
-    .filter(Boolean)
-    .filter((item) => kind !== 'musicNote' || isMusicNoteCatalogItem(item))
-    .sort((left, right) => {
-      const timeDiff = itemCreatedAtMs(right) - itemCreatedAtMs(left);
-      if (timeDiff !== 0) return timeDiff;
-      return String(left?.id || left?.firestoreId || '').localeCompare(String(right?.id || right?.firestoreId || ''));
-    })
-    .forEach((sourceItem) => {
-      if (normalized.length >= CATALOG_MAX_ITEMS) return;
-      const id = String(sourceItem?.id || sourceItem?.firestoreId || '').trim();
-      if (!id || seen.has(id)) return;
-      const createdAtMs = itemCreatedAtMs(sourceItem);
-      if (createdAtMs <= 0) return;
-      const cleaned = cleanValue(sourceItem);
-      if (!cleaned || typeof cleaned !== 'object' || Array.isArray(cleaned)) return;
-      normalized.push({ ...cleaned, id, createdAtMs });
-      seen.add(id);
-    });
-
+  for (const sourceItem of Array.isArray(sourceItems) ? sourceItems : []) {
+    if (normalized.length >= CATALOG_MAX_ITEMS) break;
+    const projected = projectCatalogItem(kind, sourceItem);
+    if (!projected || seen.has(projected.id)) continue;
+    seen.add(projected.id);
+    normalized.push(projected);
+  }
+  normalized.sort((left, right) => {
+    const timeDiff = Number(right.createdAtMs || 1) - Number(left.createdAtMs || 1);
+    if (timeDiff !== 0) return timeDiff;
+    return String(left.id).localeCompare(String(right.id));
+  });
   return normalized;
 };
 
@@ -173,15 +212,26 @@ const isValidSnapshot = (kind: SoridrawCatalogKind, value: unknown): value is So
     if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
     const id = String(item.id || '').trim();
     const createdAtMs = Number(item.createdAtMs || 0);
-    if (!id || ids.has(id) || !Number.isInteger(createdAtMs) || createdAtMs <= 0 || createdAtMs > previousTime) return false;
+    if (!id || ids.has(id) || !Number.isFinite(createdAtMs) || createdAtMs <= 0 || createdAtMs > previousTime) return false;
     ids.add(id);
     previousTime = createdAtMs;
   }
-  return true;
+  return utf8Size(JSON.stringify(data)) <= CATALOG_MAX_BYTES;
+};
+
+const requestLegacyDbCleanup = () => {
+  if (legacyDbCleanupRequested || typeof indexedDB === 'undefined') return;
+  legacyDbCleanupRequested = true;
+  try {
+    indexedDB.deleteDatabase(LEGACY_CATALOG_DB_NAME);
+  } catch {
+    // Best-effort cleanup only. The old DB is never read by V2.
+  }
 };
 
 const openCatalogDb = (): Promise<IDBDatabase | null> => {
   if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+  requestLegacyDbCleanup();
   if (catalogDbPromise) return catalogDbPromise;
   catalogDbPromise = new Promise((resolve) => {
     let settled = false;
@@ -297,6 +347,7 @@ const authenticatedHeaders = async (): Promise<Record<string, string> | null> =>
 const readRemoteCatalogSnapshot = async (
   kind: SoridrawCatalogKind,
   uid: string,
+  minimumRevision = 0,
 ): Promise<SoridrawCatalogSnapshot | null> => {
   if (!uid || !isPreviewCatalogEnabled()) return null;
   const user = auth.currentUser;
@@ -304,6 +355,8 @@ const readRemoteCatalogSnapshot = async (
   try {
     const headers = await authenticatedHeaders();
     if (!headers) return null;
+    const knownRemoteRevision = Math.max(readKnownRemoteCatalogRevision(kind, uid), Math.floor(minimumRevision || 0));
+    if (knownRemoteRevision > 0) headers['X-Soridraw-Known-Revision'] = String(knownRemoteRevision);
     const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${kind}`, {
       method: 'GET',
       headers,
@@ -313,12 +366,8 @@ const readRemoteCatalogSnapshot = async (
     if (!response.ok) throw new Error(`CATALOG_READ_${response.status}`);
     const payload = await response.json();
     if (!isValidSnapshot(kind, payload)) throw new Error('CATALOG_PAYLOAD_INVALID');
-    const knownRemoteRevision = readKnownRemoteCatalogRevision(kind, uid);
-    if (knownRemoteRevision > 0 && payload.generatedAtMs < knownRemoteRevision) {
-      // Projection is older than a mutation signal already known by the client.
-      // Never overwrite a newer local view with a stale R2 object.
-      console.warn(`[userDataEngine] ${kind} catalog snapshot is stale versus cached sync revision.`);
-      return null;
+    if (knownRemoteRevision > 0 && payload.revision < knownRemoteRevision) {
+      throw new Error('CATALOG_REVISION_STALE');
     }
     await writeCatalogSnapshotToLocalCache(kind, uid, payload);
     return payload;
@@ -339,67 +388,67 @@ export const readCatalogSnapshotCacheFirst = async (
   const promise = (async () => {
     const local = await readCatalogSnapshotFromLocalCache(kind, uid);
     const knownRemoteRevision = readKnownRemoteCatalogRevision(kind, uid);
-    if (local && (knownRemoteRevision <= 0 || local.generatedAtMs >= knownRemoteRevision)) {
-      return local;
-    }
-    const remote = await readRemoteCatalogSnapshot(kind, uid);
+    if (local && (knownRemoteRevision <= 0 || local.revision >= knownRemoteRevision)) return local;
+    const remote = await readRemoteCatalogSnapshot(kind, uid, knownRemoteRevision);
     if (remote) return remote;
-    // If the cached users/{uid} signal proves a local projection stale, return
-    // null so the existing bounded compatibility path can recover correctness.
-    if (local && knownRemoteRevision > local.generatedAtMs) return null;
+    if (local && knownRemoteRevision > local.revision) return null;
     return local;
   })().finally(() => catalogReadInFlight.delete(key));
   catalogReadInFlight.set(key, promise);
   return promise;
 };
 
-const resolveExpectedMusicNoteCount = (uid: string, explicit?: number | null): number | null => {
-  if (typeof explicit === 'number' && Number.isFinite(explicit) && explicit >= 0) return Math.floor(explicit);
-  const cachedProfile = readUserProfileCache(uid) as any;
-  const favoriteCount = Number(cachedProfile?.favoriteCount);
-  return Number.isFinite(favoriteCount) && favoriteCount >= 0 ? Math.floor(favoriteCount) : null;
-};
+const stableItemHash = (item: any): string => JSON.stringify(item);
 
-const buildCompleteSnapshot = (
+const buildCatalogDelta = (
   kind: SoridrawCatalogKind,
-  uid: string,
+  previous: SoridrawCatalogSnapshot,
   sourceItems: any[],
   revision: number,
-  options: CatalogPublishOptions,
-): SoridrawCatalogSnapshot | null => {
+): { delta: CatalogDelta; nextSnapshot: SoridrawCatalogSnapshot } | null => {
   const items = normalizeCatalogItems(kind, sourceItems);
-  if (sourceItems.length > 0 && items.length === 0) return null;
+  if (items.length > CATALOG_MAX_ITEMS) return null;
+  const nextById = new Map(items.map((item) => [String(item.id), item]));
+  const previousById = new Map(previous.items.map((item) => [String(item.id), item]));
+  const upserts: any[] = [];
+  const deletedIds: string[] = [];
 
-  let complete = options.complete === true;
-  if (kind === 'musicNote') {
-    const expectedCount = resolveExpectedMusicNoteCount(uid, options.expectedItemCount);
-    if (expectedCount !== null) complete = complete || items.length >= expectedCount;
-    else if (options.hasMore === false) complete = true;
-  } else if (!complete) {
-    complete = options.hasMore === false;
-  }
-  if (!complete) return null;
+  nextById.forEach((item, id) => {
+    const prior = previousById.get(id);
+    if (!prior || stableItemHash(prior) !== stableItemHash(item)) upserts.push(item);
+  });
+  previousById.forEach((_item, id) => {
+    if (!nextById.has(id)) deletedIds.push(id);
+  });
 
-  const snapshot: SoridrawCatalogSnapshot = {
+  if (upserts.length + deletedIds.length > CATALOG_DELTA_MAX_CHANGES) return null;
+  const nextRevision = Math.max(Date.now(), Math.floor(revision || 0), previous.revision + 1);
+  const nextSnapshot: SoridrawCatalogSnapshot = {
     schemaVersion: CATALOG_SCHEMA_VERSION,
     kind,
-    revision: Math.max(Date.now(), Math.floor(revision)),
+    revision: nextRevision,
     items,
     itemCount: items.length,
     complete: true,
     generatedAtMs: Date.now(),
   };
-  const encoded = JSON.stringify(snapshot);
-  if (items.length > CATALOG_MAX_ITEMS || utf8Size(encoded) > CATALOG_MAX_BYTES) {
-    console.warn(`[userDataEngine] ${kind} catalog snapshot exceeds client safety budget.`);
-    return null;
-  }
-  return snapshot;
+  if (!isValidSnapshot(kind, nextSnapshot)) return null;
+  return {
+    delta: {
+      schemaVersion: CATALOG_SCHEMA_VERSION,
+      kind,
+      baseRevision: previous.revision,
+      revision: nextRevision,
+      upserts,
+      deletedIds,
+    },
+    nextSnapshot,
+  };
 };
 
-const publishRemoteCatalogSnapshot = async (
+const publishRemoteCatalogDelta = async (
   uid: string,
-  snapshot: SoridrawCatalogSnapshot,
+  delta: CatalogDelta,
 ): Promise<boolean> => {
   if (!isPreviewCatalogEnabled()) return false;
   const user = auth.currentUser;
@@ -407,18 +456,16 @@ const publishRemoteCatalogSnapshot = async (
   try {
     const headers = await authenticatedHeaders();
     if (!headers) return false;
-    const body = JSON.stringify(snapshot);
-    const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${snapshot.kind}`, {
+    const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${delta.kind}/delta`, {
       method: 'POST',
       headers,
-      body,
+      body: JSON.stringify(delta),
       cache: 'no-store',
     });
-    if (!response.ok) throw new Error(`CATALOG_WRITE_${response.status}`);
-    await writeCatalogSnapshotToLocalCache(snapshot.kind, uid, snapshot);
+    if (!response.ok) throw new Error(`CATALOG_DELTA_${response.status}`);
     return true;
   } catch (error) {
-    console.warn(`[userDataEngine] ${snapshot.kind} catalog snapshot publish failed.`, error);
+    console.warn(`[userDataEngine] ${delta.kind} catalog delta publish failed.`, error);
     return false;
   }
 };
@@ -447,33 +494,44 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
     void (async () => {
       const currentDirtyRevision = readAdaptiveListIndexDirtyRevision(kind);
       if (currentDirtyRevision <= 0) return;
+      const previous = await readCatalogSnapshotFromLocalCache(kind, uid);
 
-      const previousCompleteSnapshot = await readCatalogSnapshotFromLocalCache(kind, uid);
-      const effectiveOptions: CatalogPublishOptions = {
-        ...pending.options,
-        complete: pending.options.complete === true || Boolean(previousCompleteSnapshot),
-      };
-      const snapshot = buildCompleteSnapshot(
-        kind,
-        uid,
-        pending.sourceItems,
-        currentDirtyRevision,
-        effectiveOptions,
-      );
-      if (!snapshot) return;
+      // No proven full local catalog means this device must never manufacture a
+      // "complete" object from a 10/20-row compatibility page. Force the Worker
+      // to materialize the canonical catalog server-side once instead.
+      if (!previous) {
+        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, currentDirtyRevision);
+        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
+        return;
+      }
 
-      const stableHash = JSON.stringify({ ...snapshot, revision: 0, generatedAtMs: 0 });
-      if (catalogLastPublishedHashes.get(key) === stableHash) {
+      const projectedCount = normalizeCatalogItems(kind, pending.sourceItems).length;
+      const explicitComplete = pending.options.complete === true || pending.options.hasMore === false;
+      const looksCompleteAgainstPrevious = projectedCount >= Math.max(0, previous.itemCount - 2);
+      if (!explicitComplete && !looksCompleteAgainstPrevious) {
+        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, currentDirtyRevision);
+        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
+        return;
+      }
+
+      const built = buildCatalogDelta(kind, previous, pending.sourceItems, currentDirtyRevision);
+      if (!built) {
+        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, currentDirtyRevision);
+        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
+        return;
+      }
+
+      if (built.delta.upserts.length === 0 && built.delta.deletedIds.length === 0) {
         clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
         return;
       }
 
-      const published = await publishRemoteCatalogSnapshot(uid, snapshot);
+      const published = await publishRemoteCatalogDelta(uid, built.delta);
       if (!published) return;
-      catalogLastPublishedHashes.set(key, stableHash);
+      await writeCatalogSnapshotToLocalCache(kind, uid, built.nextSnapshot);
       clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
     })();
-  }, 1500));
+  }, 1200));
 };
 
 export const getCatalogRenderBatchSize = (kind: SoridrawCatalogKind): number => (

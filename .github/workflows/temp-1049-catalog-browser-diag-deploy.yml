@@ -1,0 +1,320 @@
+name: Temp 1049 Catalog Browser Diagnostics Deploy
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-1049-catalog-browser-diag-deploy.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  instrument-test-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_RUNTIME_COMMIT: 34aa1fa7c4f622353e2fde775e25a95455537996
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 40
+
+      - name: Guard runtime baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_RUNTIME_COMMIT" HEAD
+          git diff --exit-code "$EXPECTED_RUNTIME_COMMIT"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json functions cloudflare firestore.rules
+
+      - name: Add safe Catalog browser runtime diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > src/lib/catalogRuntimeDiagnostics.ts <<'EOF'
+          import { readCacheDiagnosticsGloballyEnabled } from './cacheDiagnostics';
+
+          export type CatalogRuntimeDiagnosticKind = 'musicNote' | 'library';
+          export type CatalogRuntimeDiagnosticStage =
+            | 'IDLE'
+            | 'START'
+            | 'AUTH'
+            | 'REQUEST'
+            | 'HTTP'
+            | 'SNAPSHOT'
+            | 'ACCEPTED'
+            | 'ERROR';
+
+          export type CatalogRuntimeDiagnosticState = {
+            stage: CatalogRuntimeDiagnosticStage;
+            attempt: number;
+            httpStatus: number;
+            remoteItemCount: number;
+            revision: number;
+            errorCode: string;
+            updatedAt: number;
+          };
+
+          export const CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT = 'soridraw:catalog-runtime-diagnostics-update';
+          const STORAGE_BASE = 'soridraw_catalog_runtime_diagnostics_v1';
+          const kinds: CatalogRuntimeDiagnosticKind[] = ['musicNote', 'library'];
+          const storageKey = (kind: CatalogRuntimeDiagnosticKind) => `${STORAGE_BASE}_${kind}`;
+          const emptyState = (): CatalogRuntimeDiagnosticState => ({
+            stage: 'IDLE',
+            attempt: 0,
+            httpStatus: 0,
+            remoteItemCount: 0,
+            revision: 0,
+            errorCode: '',
+            updatedAt: 0,
+          });
+
+          const cleanError = (value: unknown) => String(value || '')
+            .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]')
+            .replace(/[A-Za-z0-9_-]{80,}/g, '[redacted]')
+            .slice(0, 180);
+
+          export function readCatalogRuntimeDiagnostic(kind: CatalogRuntimeDiagnosticKind): CatalogRuntimeDiagnosticState {
+            const fallback = emptyState();
+            if (typeof sessionStorage === 'undefined') return fallback;
+            try {
+              const raw = sessionStorage.getItem(storageKey(kind));
+              if (!raw) return fallback;
+              const value = JSON.parse(raw) || {};
+              const allowedStages: CatalogRuntimeDiagnosticStage[] = ['IDLE', 'START', 'AUTH', 'REQUEST', 'HTTP', 'SNAPSHOT', 'ACCEPTED', 'ERROR'];
+              const numberValue = (input: unknown) => {
+                const n = Number(input || 0);
+                return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+              };
+              return {
+                stage: allowedStages.includes(value.stage) ? value.stage : 'IDLE',
+                attempt: numberValue(value.attempt),
+                httpStatus: numberValue(value.httpStatus),
+                remoteItemCount: numberValue(value.remoteItemCount),
+                revision: numberValue(value.revision),
+                errorCode: cleanError(value.errorCode),
+                updatedAt: numberValue(value.updatedAt),
+              };
+            } catch {
+              return fallback;
+            }
+          }
+
+          export function markCatalogRuntimeDiagnostic(
+            kind: CatalogRuntimeDiagnosticKind,
+            patch: Partial<CatalogRuntimeDiagnosticState>,
+          ): void {
+            if (!readCacheDiagnosticsGloballyEnabled()) return;
+            const previous = readCatalogRuntimeDiagnostic(kind);
+            const next: CatalogRuntimeDiagnosticState = {
+              ...previous,
+              ...patch,
+              errorCode: patch.errorCode === undefined ? previous.errorCode : cleanError(patch.errorCode),
+              updatedAt: Date.now(),
+            };
+            try { sessionStorage.setItem(storageKey(kind), JSON.stringify(next)); } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, {
+                detail: { kind, state: next },
+              }));
+            }
+          }
+
+          export function resetCatalogRuntimeDiagnostics(): void {
+            for (const kind of kinds) {
+              try { sessionStorage.removeItem(storageKey(kind)); } catch {}
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, {
+                  detail: { kind, state: emptyState() },
+                }));
+              }
+            }
+          }
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'{label}: anchor missing')
+              return text.replace(old, new, 1)
+
+          p = Path('src/lib/userDataEngine.ts')
+          s = p.read_text(encoding='utf-8')
+          s = once(
+              s,
+              "} from './firestoreMeasured';\n",
+              "} from './firestoreMeasured';\nimport { markCatalogRuntimeDiagnostic } from './catalogRuntimeDiagnostics';\n",
+              'userDataEngine diagnostic import',
+          )
+          s = once(
+              s,
+              "  if (!uid || !isPreviewCatalogEnabled()) return null;\n  const user = auth.currentUser;\n  if (!user || user.uid !== uid) return null;\n\n  const retryDelays = [0, 350, 1000];",
+              "  if (!uid || !isPreviewCatalogEnabled()) return null;\n  const user = auth.currentUser;\n  if (!user || user.uid !== uid) {\n    markCatalogRuntimeDiagnostic(kind, { stage: 'ERROR', errorCode: 'AUTH_USER_NOT_READY' });\n    return null;\n  }\n\n  markCatalogRuntimeDiagnostic(kind, {\n    stage: 'START', attempt: 0, httpStatus: 0, remoteItemCount: 0, revision: 0, errorCode: '',\n  });\n  const retryDelays = [0, 350, 1000];",
+              'userDataEngine start diagnostic',
+          )
+          s = once(
+              s,
+              "    try {\n      // Catalog GET is owner-authorized by Firebase Auth.",
+              "    try {\n      markCatalogRuntimeDiagnostic(kind, { stage: 'AUTH', attempt: attempt + 1, errorCode: '' });\n      // Catalog GET is owner-authorized by Firebase Auth.",
+              'userDataEngine auth stage',
+          )
+          s = once(
+              s,
+              "      const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${kind}`, {\n        method: 'GET',\n        headers,\n        cache: 'no-store',\n      });\n      if (response.status === 404)",
+              "      markCatalogRuntimeDiagnostic(kind, { stage: 'REQUEST', attempt: attempt + 1 });\n      const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${kind}`, {\n        method: 'GET',\n        headers,\n        cache: 'no-store',\n      });\n      markCatalogRuntimeDiagnostic(kind, { stage: 'HTTP', attempt: attempt + 1, httpStatus: response.status });\n      if (response.status === 404)",
+              'userDataEngine HTTP stage',
+          )
+          s = once(
+              s,
+              "      const payload = await response.json();\n      if (!isValidSnapshot(kind, payload)) throw new Error('CATALOG_PAYLOAD_INVALID');",
+              "      const payload = await response.json();\n      if (!isValidSnapshot(kind, payload)) throw new Error('CATALOG_PAYLOAD_INVALID');\n      markCatalogRuntimeDiagnostic(kind, {\n        stage: 'SNAPSHOT', attempt: attempt + 1, httpStatus: response.status,\n        remoteItemCount: Number(payload.itemCount || 0), revision: Number(payload.revision || 0), errorCode: '',\n      });",
+              'userDataEngine snapshot stage',
+          )
+          s = once(
+              s,
+              "      await writeCatalogSnapshotToLocalCache(kind, uid, payload);\n      catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));\n      return payload;\n    } catch (error) {\n      lastError = error;\n    }",
+              "      await writeCatalogSnapshotToLocalCache(kind, uid, payload);\n      catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));\n      markCatalogRuntimeDiagnostic(kind, {\n        stage: 'ACCEPTED', attempt: attempt + 1, httpStatus: response.status,\n        remoteItemCount: Number(payload.itemCount || 0), revision: Number(payload.revision || 0), errorCode: '',\n      });\n      return payload;\n    } catch (error) {\n      lastError = error;\n      markCatalogRuntimeDiagnostic(kind, {\n        stage: 'ERROR', attempt: attempt + 1,\n        errorCode: String((error as any)?.message || error || 'CATALOG_UNKNOWN_ERROR'),\n      });\n    }",
+              'userDataEngine accepted/error stages',
+          )
+          p.write_text(s, encoding='utf-8')
+
+          p = Path('src/components/CacheDiagnosticsOverlay.tsx')
+          s = p.read_text(encoding='utf-8')
+          s = once(
+              s,
+              "import { hasAdminPermission } from '../constants/adminPermissions';\n",
+              "import { hasAdminPermission } from '../constants/adminPermissions';\nimport { favoritesStore } from '../hooks/useFavoritesStore';\nimport {\n  CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT,\n  readCatalogRuntimeDiagnostic,\n  resetCatalogRuntimeDiagnostics,\n  type CatalogRuntimeDiagnosticKind,\n  type CatalogRuntimeDiagnosticState,\n} from '../lib/catalogRuntimeDiagnostics';\n",
+              'overlay imports',
+          )
+          s = once(
+              s,
+              "  const [cloudflare, setCloudflare] = useState<CloudflareDiagnosticState>(() => readCloudflareDiagnostics());\n",
+              "  const [cloudflare, setCloudflare] = useState<CloudflareDiagnosticState>(() => readCloudflareDiagnostics());\n  const [catalogRuntime, setCatalogRuntime] = useState<Record<CatalogRuntimeDiagnosticKind, CatalogRuntimeDiagnosticState>>(() => ({\n    musicNote: readCatalogRuntimeDiagnostic('musicNote'),\n    library: readCatalogRuntimeDiagnostic('library'),\n  }));\n  const [favoriteStoreCount, setFavoriteStoreCount] = useState(() => favoritesStore.getFavorites().length);\n",
+              'overlay catalog state',
+          )
+          anchor = "  useEffect(() => {\n    try { window.localStorage.setItem(PANEL_COLLAPSED_STORAGE_KEY, collapsed ? 'true' : 'false'); } catch {}"
+          insert = """  useEffect(() => {
+    const syncFavorites = () => setFavoriteStoreCount(favoritesStore.getFavorites().length);
+    const onCatalogRuntime = (event: Event) => {
+      const detail = (event as CustomEvent<{ kind?: CatalogRuntimeDiagnosticKind; state?: CatalogRuntimeDiagnosticState }>).detail;
+      if (!detail?.kind || !detail.state) return;
+      setCatalogRuntime((prev) => ({ ...prev, [detail.kind as CatalogRuntimeDiagnosticKind]: detail.state as CatalogRuntimeDiagnosticState }));
+    };
+    syncFavorites();
+    setCatalogRuntime({
+      musicNote: readCatalogRuntimeDiagnostic('musicNote'),
+      library: readCatalogRuntimeDiagnostic('library'),
+    });
+    const unsubscribeFavorites = favoritesStore.subscribe(syncFavorites);
+    window.addEventListener(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, onCatalogRuntime as EventListener);
+    return () => {
+      unsubscribeFavorites();
+      window.removeEventListener(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, onCatalogRuntime as EventListener);
+    };
+  }, []);
+
+""" + anchor
+          s = once(s, anchor, insert, 'overlay runtime listener')
+          rows_anchor = "          <div className=\"mt-2 space-y-1\">\n            {rows.map(({ domain, label }) => {"
+          rows_insert = """          <div className="mt-2 rounded-xl bg-[#ffbf66]/[0.07] px-2.5 py-2">
+            <div className="mb-1 text-[10px] font-black tracking-[0.05em] text-[#ffbf66]/75">CATALOG BROWSER PATH</div>
+            <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-bold text-white/72">
+              <span>뮤직노트 · {catalogRuntime.musicNote.stage}</span>
+              <span className="shrink-0 tabular-nums">HTTP {catalogRuntime.musicNote.httpStatus || '—'} · R2 {catalogRuntime.musicNote.remoteItemCount || '—'} · Store {favoriteStoreCount}</span>
+            </div>
+            <div className="mt-0.5 flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-white/45">
+              <span className="truncate">{catalogRuntime.musicNote.errorCode || '오류 없음'}</span>
+              <span className="shrink-0 tabular-nums">시도 {catalogRuntime.musicNote.attempt || 0} · rev {catalogRuntime.musicNote.revision || '—'}</span>
+            </div>
+          </div>
+
+""" + rows_anchor
+          s = once(s, rows_anchor, rows_insert, 'overlay catalog block')
+          reset_anchor = "                resetCacheDiagnostics();\n                resetCloudflareDiagnostics();\n                setStates(readAllStates());"
+          reset_new = "                resetCacheDiagnostics();\n                resetCloudflareDiagnostics();\n                resetCatalogRuntimeDiagnostics();\n                setCatalogRuntime({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') });\n                setFavoriteStoreCount(favoritesStore.getFavorites().length);\n                setStates(readAllStates());"
+          s = once(s, reset_anchor, reset_new, 'overlay reset catalog diagnostics')
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Static guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s src/lib/catalogRuntimeDiagnostics.ts
+          grep -q "stage: 'ACCEPTED'" src/lib/userDataEngine.ts
+          grep -q 'CATALOG BROWSER PATH' src/components/CacheDiagnosticsOverlay.tsx
+          grep -q 'favoriteStoreCount' src/components/CacheDiagnosticsOverlay.tsx
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/components/CacheDiagnosticsOverlay.tsx src/lib/catalogRuntimeDiagnostics.ts src/lib/userDataEngine.ts "
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: TypeScript and Build
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          test -s dist/index.html
+          echo '1049_APP_BUILD=PASS'
+
+      - name: Commit runtime diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git add src/lib/catalogRuntimeDiagnostics.ts src/lib/userDataEngine.ts src/components/CacheDiagnosticsOverlay.tsx
+          test "$(git diff --cached --name-only | wc -l)" -eq 3
+          git commit -m 'diag(preview): expose Catalog browser delivery path'
+          git push origin HEAD:preview
+          echo "RUNTIME_COMMIT=$(git rev-parse HEAD)"
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot production
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+
+      - name: Deploy Firebase PREVIEW hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo '1049_FIREBASE_PREVIEW_DEPLOY=PASS'
+
+      - name: Verify exact deployed preview build
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then
+                  ok=yes; echo "1049_EXACT_BUILD_PASS=$url"; break
+                fi
+              fi
+              sleep 10
+            done
+            test "$ok" = yes
+          done
+
+      - name: Verify production unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo '1049_PRODUCTION_UNCHANGED=PASS'

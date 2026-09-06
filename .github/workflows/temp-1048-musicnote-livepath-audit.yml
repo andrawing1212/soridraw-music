@@ -1,0 +1,48 @@
+name: Temp 1048 MusicNote Livepath Audit
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-1048-musicnote-livepath-audit.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Trace current Music Note wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== APP MUSIC NOTE EVENT / SUBSCRIBE ==='
+          grep -n -B 20 -A 45 -E "music-note-bundle-page-entry|subscribeListBundle\(['\"]musicNote|readPreviewAdaptiveListIndexV2|favoriteTotalCount|soridraw_favorites_cache" src/App.tsx | head -1200 || true
+          echo '=== FAVORITES PAGE MORE / COUNTS ==='
+          grep -n -B 20 -A 40 -E "더보기|개 남음|favoriteTotalCount|hasMoreFavorites|filteredFavorites|favorites\.length|onLoadMore|loadMore" src/pages/FavoritesPage.tsx | head -1400 || true
+          echo '=== LIST BUNDLE CATALOG BRIDGE ==='
+          grep -n -B 15 -A 60 -E "readPreviewCatalogWithStartupRetry|readPreviewAdaptiveListIndexV2|legacy partial fallback blocked|runOneShotRead" src/lib/listBundleCache.ts | head -800 || true
+          echo '=== USER DATA ENGINE READ CONTRACT ==='
+          grep -n -B 20 -A 90 -E "readRemoteCatalogSnapshot|readCatalogSnapshotCacheFirst|catalogRemoteValidatedSessionKeys|CATALOG_ENDPOINT" src/lib/userDataEngine.ts | head -1200 || true
+      - name: Probe deployed Worker health and Catalog CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORKER='https://soridraw-media-preview.andrawing1212.workers.dev'
+          echo '=== HEALTH ==='
+          curl -fsS --max-time 30 "$WORKER/health"
+          echo
+          echo '=== CATALOG PREFLIGHT ==='
+          curl -sS --max-time 30 -D - -o /dev/null -X OPTIONS \
+            -H 'Origin: https://preview.soridraw.com' \
+            -H 'Access-Control-Request-Method: GET' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck,x-soridraw-known-revision' \
+            "$WORKER/v1/catalog/musicNote"
+          echo '=== UNAUTH CATALOG RESPONSE ==='
+          curl -sS --max-time 30 -D - -o "$RUNNER_TEMP/catalog.json" \
+            -H 'Origin: https://preview.soridraw.com' \
+            "$WORKER/v1/catalog/musicNote" || true
+          cat "$RUNNER_TEMP/catalog.json" || true

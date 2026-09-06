@@ -1,0 +1,45 @@
+name: Temp List Index Audit
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-list-index-audit.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 2
+      - name: Inspect list bundle and pagination paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          targets = [Path('src/App.tsx'), Path('src/lib/listBundleCache.ts'), Path('src/pages/FavoritesPage.tsx'), Path('src/pages/SunoLibraryPage.tsx')]
+          needles = [
+            'scheduleListBundleWrite(', 'subscribeListBundle(', 'FAVORITES_PAGE_SIZE',
+            'loadMoreFavorites', 'handleLoadMoreFavorites', 'setHasMoreFavorites',
+            'LIBRARY_PAGE_SIZE', 'loadMore', 'setHasMoreLibrary', 'fetchNext',
+            'music_note_latest_20', 'library_latest_10_sets'
+          ]
+          for p in targets:
+            if not p.exists():
+              continue
+            lines = p.read_text(encoding='utf-8').splitlines()
+            print(f'===== {p} =====')
+            shown=set()
+            for i,line in enumerate(lines):
+              if any(n in line for n in needles):
+                a=max(0,i-7); b=min(len(lines),i+12)
+                key=(a,b)
+                if key in shown: continue
+                shown.add(key)
+                print(f'--- lines {a+1}-{b} ---')
+                for j in range(a,b): print(f'{j+1:06d}: {lines[j]}')
+          PY

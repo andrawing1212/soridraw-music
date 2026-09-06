@@ -1,0 +1,159 @@
+name: Temp 1050 MusicNote Workspace Catalog Entry Fix
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-1050-musicnote-workspace-catalog-entry-fix.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  fix-test-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_PREVIEW_HEAD: 95c8ac2269a3ded3a785e337d1749d7cad06d318
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - name: Guard baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PREVIEW_HEAD"
+
+      - name: Fix Music Note workspace Catalog page-entry trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/App.tsx')
+          s = p.read_text(encoding='utf-8')
+          old = '''  useEffect(() => {
+    const isMusicNoteRoute = location.pathname === '/history';
+    if (!isMusicNoteRoute) {
+      if (typeof window !== 'undefined') {
+        (window as any).__soridrawMusicNotePageActive = false;
+      }
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      (window as any).__soridrawMusicNotePageActive = true;
+      window.dispatchEvent(new Event('soridraw:music-note-bundle-page-entry'));
+    }
+
+    if (!new URLSearchParams(location.search).has('note')) {
+      markCacheDiagnostic('musicNote', 'CACHE', 0);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        (window as any).__soridrawMusicNotePageActive = false;
+      }
+    };
+  }, [location.pathname, location.search]);'''
+          new = '''  useEffect(() => {
+    // 1050: HistoryRouteWrapper itself is the visibility authority. Music Note can
+    // render both at /history and inside the Studio workspace while the URL remains
+    // /studio. Route-only gating left the Studio Music Note Catalog reader IDLE.
+    // Mount = visible, so announce page entry regardless of the outer route.
+    if (typeof window !== 'undefined') {
+      (window as any).__soridrawMusicNotePageActive = true;
+      window.dispatchEvent(new Event('soridraw:music-note-bundle-page-entry'));
+    }
+
+    if (!new URLSearchParams(location.search).has('note')) {
+      markCacheDiagnostic('musicNote', 'CACHE', 0);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        (window as any).__soridrawMusicNotePageActive = false;
+      }
+    };
+  }, [location.pathname, location.search]);'''
+          if old not in s:
+              raise SystemExit('1050 HistoryRouteWrapper anchor missing')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+          git diff -- src/App.tsx
+          grep -q 'HistoryRouteWrapper itself is the visibility authority' src/App.tsx
+          test "$(git diff --name-only | tr '\n' ' ')" = "src/App.tsx "
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: TypeScript and Build
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          test -s dist/index.html
+          echo '1050_TYPESCRIPT_BUILD=PASS'
+
+      - name: Commit runtime fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git add src/App.tsx
+          git commit -m 'fix(preview): start Music Note Catalog in Studio workspace'
+          git push origin HEAD:preview
+          echo "RUNTIME_COMMIT=$(git rev-parse HEAD)"
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot production
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+
+      - name: Deploy Firebase PREVIEW hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo '1050_FIREBASE_PREVIEW_DEPLOY=PASS'
+
+      - name: Verify exact deployed preview build
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then
+                  ok=yes; echo "1050_EXACT_BUILD_PASS=$url"; break
+                fi
+              fi
+              sleep 10
+            done
+            test "$ok" = yes
+          done
+
+      - name: Verify production unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo '1050_PRODUCTION_UNCHANGED=PASS'

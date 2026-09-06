@@ -1,0 +1,35 @@
+name: Temp Inspect Data Engine Anchors
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-inspect-data-engine.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Inspect current data paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== ADAPTIVE CALLS APP ==='
+          grep -n -C 10 "schedulePreviewAdaptiveListIndexPublishIfDirty" src/App.tsx || true
+          echo '=== BUNDLE CALLS APP ==='
+          grep -n -C 8 "scheduleListBundleWrite('musicNote'" src/App.tsx || true
+          echo '=== SUBSCRIBE APP ==='
+          grep -n -C 12 "subscribeListBundle('musicNote'" src/App.tsx || true
+          echo '=== ADAPTIVE CALLS LIBRARY ==='
+          grep -n -C 10 "schedulePreviewAdaptiveListIndexPublishIfDirty" src/pages/SunoLibraryPage.tsx || true
+          echo '=== SUBSCRIBE LIBRARY ==='
+          grep -n -C 12 "subscribeListBundle('library'" src/pages/SunoLibraryPage.tsx || true
+          echo '=== RECENT SAVE / UNSAVE LINKS ==='
+          grep -n -C 8 -E "persistRecentSongsDocument|handleHeart|unsave|favoriteRemoved|setIsLiked|toggleFavorite" src/App.tsx | head -n 420 || true
+          echo '=== MEDIA ROUTES TAIL ==='
+          tail -n 180 cloudflare/media-worker/src/index.js

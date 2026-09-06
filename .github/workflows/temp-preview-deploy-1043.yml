@@ -1,0 +1,109 @@
+name: Temp Preview Deploy 1043 Catalog V5
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-preview-deploy-1043.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_APP_COMMIT: 774e4e3e06716b01549ee4681c2b01372ec41182
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - name: Guard exact Catalog V5 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_APP_COMMIT" HEAD
+          git diff --exit-code "$EXPECTED_APP_COMMIT"..HEAD -- src public index.html package.json package-lock.json vite.config.ts vite.config.js firebase.hosting-preview.json functions cloudflare
+          grep -q "soridraw_user_data_engine_v5" src/lib/userDataEngine.ts
+          grep -q "cacheGeneration !== CATALOG_LOCAL_CACHE_GENERATION" src/lib/userDataEngine.ts
+          grep -q "A UI/cache list is never deletion authority" src/lib/userDataEngine.ts
+          grep -q "deletedIds: options.deletedIds" src/lib/adaptiveListIndexV2.ts
+          echo 'CATALOG_V5_SOURCE_GUARD=PASS'
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build app
+        run: |
+          npm run build
+          grep -R -q "soridraw_user_data_engine_v5" dist/assets
+          echo 'CATALOG_V5_BUILD_MARKER=PASS'
+
+      - name: Functions regression safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix functions ci
+          npm --prefix functions run build
+          npm --prefix functions run test:library-bundle
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot production
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+
+      - name: Deploy Firebase PREVIEW hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_DEPLOY=PASS'
+
+      - name: Verify exact deployed preview build
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then
+                  ok=yes
+                  echo "EXACT_BUILD_PASS=$url"
+                  break
+                fi
+              fi
+              sleep 10
+            done
+            test "$ok" = yes
+          done
+
+      - name: Verify production unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo 'PRODUCTION_UNCHANGED=PASS'

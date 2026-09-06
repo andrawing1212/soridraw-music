@@ -4,6 +4,15 @@ import {
   importX509,
   jwtVerify,
 } from 'jose';
+import {
+  appendCatalogJournalDelta,
+  buildCatalogJournalSyncResponse,
+  createCompactedCatalogJournal,
+  createEmptyCatalogJournal,
+  isValidCatalogJournal,
+  materializeCatalogJournal,
+  shouldCompactCatalogJournal,
+} from './catalogJournal.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AUTH_CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
@@ -47,7 +56,7 @@ const handleOptions = (request, env) => {
   if (!isAllowedOrigin(env, origin)) return new Response(null, { status: 403 });
   const headers = new Headers({
     'Access-Control-Allow-Methods': 'GET,HEAD,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization,Content-Type,X-Firebase-AppCheck,X-Soridraw-Known-Revision',
+    'Access-Control-Allow-Headers': 'Authorization,Content-Type,X-Firebase-AppCheck,X-Soridraw-Known-Revision,X-Soridraw-Require-Revision',
     'Access-Control-Max-Age': '86400',
   });
   applyCors(headers, origin);
@@ -457,6 +466,7 @@ const CATALOG_SCHEMA_VERSION = 4;
 const CATALOG_MAX_ITEMS = 100000;
 const CATALOG_MAX_BYTES = 24 * 1024 * 1024;
 const CATALOG_DELTA_MAX_CHANGES = 5000;
+const CATALOG_JOURNAL_ENGINE_1053 = true;
 const CATALOG_KINDS = new Set(['musicNote', 'library']);
 
 const MUSIC_NOTE_CATALOG_FIELDS = [
@@ -500,9 +510,16 @@ const catalogRouteFromPath = (pathname) => {
 };
 
 const catalogObjectKey = (uid, kind) => `catalog/v4/${encodeURIComponent(uid)}/${kind}.json`;
+const catalogJournalKey = (uid, kind) => `catalog/v4/${encodeURIComponent(uid)}/${kind}/journal.json`;
+const catalogCompactedBaseKey = (uid, kind, revision) => `catalog/v4/${encodeURIComponent(uid)}/${kind}/bases/${revision}.json`;
 
 const catalogKnownRevision = (request) => {
   const value = Math.floor(Number(request.headers.get('X-Soridraw-Known-Revision') || 0));
+  return Number.isFinite(value) && value > 0 ? value : 0;
+};
+
+const catalogRequiredRevision = (request) => {
+  const value = Math.floor(Number(request.headers.get('X-Soridraw-Require-Revision') || 0));
   return Number.isFinite(value) && value > 0 ? value : 0;
 };
 
@@ -687,11 +704,10 @@ const buildCanonicalCatalog = async (identity, kind, minimumRevision, env) => {
   return payload;
 };
 
-const putCatalogObject = async (env, uid, payload) => {
-  const key = catalogObjectKey(uid, payload.kind);
+const putCatalogObjectAtKey = async (env, key, uid, payload) => {
   const encoded = JSON.stringify(payload);
   if (new TextEncoder().encode(encoded).length > CATALOG_MAX_BYTES) throw new Error('CATALOG_TOO_LARGE');
-  await env.MEDIA.put(key, encoded, {
+  return env.MEDIA.put(key, encoded, {
     httpMetadata: { contentType: 'application/json; charset=utf-8', cacheControl: 'private, no-store' },
     customMetadata: {
       uid,
@@ -704,8 +720,12 @@ const putCatalogObject = async (env, uid, payload) => {
   });
 };
 
-const readCatalogObject = async (env, uid, kind) => {
-  const object = await env.MEDIA.get(catalogObjectKey(uid, kind));
+const putCatalogObject = async (env, uid, payload) => (
+  putCatalogObjectAtKey(env, catalogObjectKey(uid, payload.kind), uid, payload)
+);
+
+const readCatalogObjectAtKey = async (env, key, kind) => {
+  const object = await env.MEDIA.get(key);
   if (!object) return null;
   try {
     const payload = JSON.parse(await object.text());
@@ -715,56 +735,169 @@ const readCatalogObject = async (env, uid, kind) => {
   }
 };
 
-const getOrBuildCatalog = async (identity, kind, minimumRevision, env) => {
-  const current = await readCatalogObject(env, identity.uid, kind);
-  if (current && current.revision >= minimumRevision) return current;
-  const rebuilt = await buildCanonicalCatalog(identity, kind, minimumRevision, env);
+const readCatalogObject = async (env, uid, kind) => (
+  readCatalogObjectAtKey(env, catalogObjectKey(uid, kind), kind)
+);
+
+const readCatalogJournalObject = async (env, uid, kind) => {
+  const object = await env.MEDIA.get(catalogJournalKey(uid, kind));
+  if (!object) return null;
+  try {
+    const payload = JSON.parse(await object.text());
+    return isValidCatalogJournal(payload, kind) ? { object, payload } : null;
+  } catch {
+    return null;
+  }
+};
+
+const putCatalogJournalHead = async (env, uid, kind, head, currentObject = null) => {
+  const encoded = JSON.stringify(head);
+  const options = {
+    httpMetadata: { contentType: 'application/json; charset=utf-8', cacheControl: 'private, no-store' },
+    customMetadata: {
+      uid,
+      kind,
+      baseRevision: String(head.baseRevision),
+      revision: String(head.headRevision),
+      itemCount: String(head.itemCount),
+      deltaCount: String(head.deltas.length),
+      authority: 'server',
+    },
+    onlyIf: currentObject?.etag
+      ? { etagMatches: currentObject.etag }
+      : { etagDoesNotMatch: '*' },
+  };
+  return env.MEDIA.put(catalogJournalKey(uid, kind), encoded, options);
+};
+
+const getCatalogState = async (identity, kind, requiredRevision, env) => {
+  const journalRecord = await readCatalogJournalObject(env, identity.uid, kind);
+  if (journalRecord) {
+    const base = await readCatalogObjectAtKey(env, journalRecord.payload.baseKey, kind);
+    if (base && base.revision === journalRecord.payload.baseRevision && base.itemCount === journalRecord.payload.baseItemCount) {
+      if (journalRecord.payload.headRevision >= requiredRevision) {
+        return { base, head: journalRecord.payload, journalObject: journalRecord.object };
+      }
+    }
+  }
+
+  const legacyBase = await readCatalogObject(env, identity.uid, kind);
+  if (legacyBase && legacyBase.revision >= requiredRevision && !journalRecord) {
+    return {
+      base: legacyBase,
+      head: createEmptyCatalogJournal({
+        kind,
+        baseKey: catalogObjectKey(identity.uid, kind),
+        baseRevision: legacyBase.revision,
+        itemCount: legacyBase.itemCount,
+      }),
+      journalObject: null,
+    };
+  }
+
+  const rebuilt = await buildCanonicalCatalog(identity, kind, requiredRevision, env);
   await putCatalogObject(env, identity.uid, rebuilt);
-  return rebuilt;
+  try { await env.MEDIA.delete(catalogJournalKey(identity.uid, kind)); } catch {}
+  return {
+    base: rebuilt,
+    head: createEmptyCatalogJournal({
+      kind,
+      baseKey: catalogObjectKey(identity.uid, kind),
+      baseRevision: rebuilt.revision,
+      itemCount: rebuilt.itemCount,
+    }),
+    journalObject: null,
+  };
+};
+
+const materializeCatalogState = (state, kind) => {
+  const payload = materializeCatalogJournal({
+    baseSnapshot: state.base,
+    head: state.head,
+    projectItem: (item, id) => projectCatalogFields(kind, item, id),
+    sortItems: sortCatalogItems,
+  });
+  if (!payload || !validateCatalogPayload(payload, kind)) throw new Error('CATALOG_JOURNAL_MATERIALIZE_INVALID');
+  return payload;
+};
+
+const getOrBuildCatalog = async (identity, kind, requiredRevision, env) => {
+  const state = await getCatalogState(identity, kind, requiredRevision, env);
+  return materializeCatalogState(state, kind);
 };
 
 const validateCatalogDelta = (payload, kind) => {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
   if (payload.schemaVersion !== CATALOG_SCHEMA_VERSION || payload.kind !== kind) return false;
-  if (!Number.isInteger(payload.revision) || payload.revision <= 0) return false;
+  if (!text(payload.mutationId)) return false;
+  if (!Number.isInteger(payload.baseRevision) || payload.baseRevision <= 0) return false;
+  if (!Number.isInteger(payload.revision) || payload.revision <= payload.baseRevision) return false;
+  if (!Number.isInteger(payload.baseItemCount) || payload.baseItemCount < 0) return false;
+  if (!Number.isInteger(payload.nextItemCount) || payload.nextItemCount < 0) return false;
   if (!Array.isArray(payload.upserts) || !Array.isArray(payload.deletedIds)) return false;
   if (payload.upserts.length + payload.deletedIds.length > CATALOG_DELTA_MAX_CHANGES) return false;
   return payload.deletedIds.every((id) => Boolean(text(id)))
     && payload.upserts.every((item) => Boolean(item && typeof item === 'object' && text(item.id)));
 };
 
-const applyCatalogDelta = async (identity, kind, delta, env) => {
-  const current = await getOrBuildCatalog(identity, kind, 0, env);
-  const byId = new Map(current.items.map((item) => [text(item.id), item]));
-  for (const idValue of delta.deletedIds) byId.delete(text(idValue));
-  for (const rawItem of delta.upserts) {
-    const id = text(rawItem?.id);
-    if (!id) continue;
-    const projected = projectCatalogFields(kind, rawItem, id);
-    if (!projected) {
-      byId.delete(id);
-      continue;
-    }
-    byId.set(id, projected);
-  }
-  const items = sortCatalogItems(Array.from(byId.values()));
-  const generatedAtMs = Date.now();
-  const payload = {
-    schemaVersion: CATALOG_SCHEMA_VERSION,
-    authority: 'server',
-    kind,
-    revision: Math.max(generatedAtMs, Number(delta.revision || 0), Number(current.revision || 0) + 1),
-    items,
-    itemCount: items.length,
-    complete: true,
-    generatedAtMs,
-  };
-  if (!validateCatalogPayload(payload, kind)) throw new Error('CATALOG_DELTA_RESULT_INVALID');
-  await putCatalogObject(env, identity.uid, payload);
-  return payload;
+const compactCatalogJournal = async (env, uid, kind) => {
+  const journalRecord = await readCatalogJournalObject(env, uid, kind);
+  if (!journalRecord || journalRecord.payload.deltas.length === 0) return false;
+  const base = await readCatalogObjectAtKey(env, journalRecord.payload.baseKey, kind);
+  if (!base) return false;
+  const materialized = materializeCatalogState({ base, head: journalRecord.payload }, kind);
+  const newBaseKey = catalogCompactedBaseKey(uid, kind, materialized.revision);
+  await putCatalogObjectAtKey(env, newBaseKey, uid, materialized);
+  const compactedHead = createCompactedCatalogJournal({ head: journalRecord.payload, baseKey: newBaseKey });
+  const stored = await putCatalogJournalHead(env, uid, kind, compactedHead, journalRecord.object);
+  return Boolean(stored);
 };
 
-const handleCatalog = async (request, env, origin, url) => {
+const applyCatalogDelta = async (identity, kind, delta, env, executionCtx = null) => {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const state = await getCatalogState(identity, kind, 0, env);
+    const head = state.head;
+    const sanitizedDeletedIds = new Set(delta.deletedIds.map((id) => text(id)).filter(Boolean));
+    const sanitizedUpserts = [];
+    for (const rawItem of delta.upserts) {
+      const id = text(rawItem?.id);
+      if (!id) continue;
+      const projected = projectCatalogFields(kind, rawItem, id);
+      if (!projected) sanitizedDeletedIds.add(id);
+      else sanitizedUpserts.push(projected);
+    }
+    const normalizedDelta = { ...delta, upserts: sanitizedUpserts, deletedIds: Array.from(sanitizedDeletedIds) };
+    const serverRevision = Math.max(Date.now(), Number(delta.revision || 0), Number(head.headRevision || 0) + 1);
+    const appended = appendCatalogJournalDelta({ head, delta: normalizedDelta, serverRevision });
+    if (appended.ok && appended.duplicate) {
+      return { conflict: false, duplicate: true, revision: appended.revision, itemCount: appended.itemCount, deltaCount: head.deltas.length };
+    }
+    if (!appended.ok && appended.reason === 'CONFLICT') {
+      return { conflict: true, revision: head.headRevision, itemCount: head.itemCount, deltaCount: head.deltas.length };
+    }
+    if (!appended.ok && appended.reason === 'COMPACT_REQUIRED') {
+      const compacted = await compactCatalogJournal(env, identity.uid, kind);
+      if (compacted) continue;
+      return { conflict: true, revision: head.headRevision, itemCount: head.itemCount, deltaCount: head.deltas.length };
+    }
+    if (!appended.ok) throw new Error(`CATALOG_DELTA_${appended.reason || 'INVALID'}`);
+    const stored = await putCatalogJournalHead(env, identity.uid, kind, appended.head, state.journalObject);
+    if (!stored) continue;
+    if (shouldCompactCatalogJournal(appended.head)) {
+      const compaction = compactCatalogJournal(env, identity.uid, kind).catch((error) => {
+        console.warn('catalog journal compaction deferred', { kind, error: String(error?.message || error) });
+        return false;
+      });
+      if (executionCtx?.waitUntil) executionCtx.waitUntil(compaction);
+      else await compaction;
+    }
+    return { conflict: false, duplicate: false, revision: appended.revision, itemCount: appended.itemCount, deltaCount: appended.head.deltas.length };
+  }
+  const latest = await getCatalogState(identity, kind, 0, env);
+  return { conflict: true, revision: latest.head.headRevision, itemCount: latest.head.itemCount, deltaCount: latest.head.deltas.length };
+};
+
+const handleCatalog = async (request, env, origin, url, executionCtx = null) => {
   const route = catalogRouteFromPath(url.pathname);
   if (!route || !CATALOG_KINDS.has(route.kind)) return jsonResponse({ ok: false, code: 'INVALID_CATALOG_KIND' }, 404, origin);
   let identity;
@@ -779,11 +912,15 @@ const handleCatalog = async (request, env, origin, url) => {
 
   try {
     if (request.method === 'GET' && route.action === 'base') {
-      const payload = await getOrBuildCatalog(identity, route.kind, catalogKnownRevision(request), env);
+      const state = await getCatalogState(identity, route.kind, catalogRequiredRevision(request), env);
+      const knownRevision = catalogKnownRevision(request);
+      const syncPayload = knownRevision > 0 ? buildCatalogJournalSyncResponse({ head: state.head, knownRevision }) : null;
+      const payload = syncPayload || materializeCatalogState(state, route.kind);
       const headers = new Headers({
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'private, no-store',
         'X-Soridraw-Catalog-Revision': String(payload.revision),
+        'X-Soridraw-Catalog-Mode': String(payload.mode || 'full'),
       });
       applyCors(headers, origin);
       return new Response(JSON.stringify(payload), { status: 200, headers });
@@ -794,8 +931,11 @@ const handleCatalog = async (request, env, origin, url) => {
       if (declaredLength > 2 * 1024 * 1024) return jsonResponse({ ok: false, code: 'CATALOG_DELTA_TOO_LARGE' }, 413, origin);
       const delta = await request.json();
       if (!validateCatalogDelta(delta, route.kind)) return jsonResponse({ ok: false, code: 'INVALID_CATALOG_DELTA' }, 400, origin);
-      const next = await applyCatalogDelta(identity, route.kind, delta, env);
-      return jsonResponse({ ok: true, kind: route.kind, revision: next.revision, itemCount: next.itemCount }, 200, origin);
+      const next = await applyCatalogDelta(identity, route.kind, delta, env, executionCtx);
+      if (next.conflict) {
+        return jsonResponse({ ok: false, code: 'CATALOG_DELTA_CONFLICT', kind: route.kind, revision: next.revision, itemCount: next.itemCount }, 409, origin);
+      }
+      return jsonResponse({ ok: true, kind: route.kind, revision: next.revision, itemCount: next.itemCount, deltaCount: next.deltaCount, duplicate: next.duplicate === true }, 200, origin);
     }
 
     // 1039: a browser may publish only deltas. It can never self-declare a complete catalog.
@@ -865,7 +1005,7 @@ const handleMedia = async (request, env, origin, url) => {
 };
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, executionCtx) {
     const url = new URL(request.url);
     const origin = text(request.headers.get('Origin'));
 
@@ -880,6 +1020,8 @@ export default {
         archiveMinAgeDays: Number(env.ARCHIVE_MIN_AGE_DAYS) || 14,
         automaticWavGeneration: false,
         catalogSchemaVersion: CATALOG_SCHEMA_VERSION,
+        catalogDeltaMode: 'base+journal',
+        catalogCompactionAfter: 200,
       }, 200, origin);
     }
 
@@ -888,7 +1030,7 @@ export default {
     }
 
     if ((request.method === 'GET' || request.method === 'POST') && url.pathname.startsWith('/v1/catalog/')) {
-      return handleCatalog(request, env, origin, url);
+      return handleCatalog(request, env, origin, url, executionCtx);
     }
 
     if ((request.method === 'GET' || request.method === 'HEAD') && url.pathname.startsWith('/v1/media/')) {

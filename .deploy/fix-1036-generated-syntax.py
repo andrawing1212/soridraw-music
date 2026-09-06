@@ -40,4 +40,21 @@ replace_exact(
     'catalog cache-first boundary',
 )
 
-print('1036 generated boundary syntax normalized')
+# The old full-recovery function was intentionally deleted with the 20-row pager.
+# Remove its now-dead call site too.
+replace_exact(
+    'src/App.tsx',
+    "        if (musicNoteCacheNeedsFullBootstrap) {\n          void runFavoritesFullCacheRecoveryOnce();\n        }\n",
+    '',
+    'dead full recovery call',
+)
+
+# Cache diagnostics supports IDLE/CACHE/SYNC/ERROR, not WAIT.
+p = Path('src/App.tsx')
+s = p.read_text(encoding='utf-8')
+s = s.replace("markCacheDiagnostic('musicNote', hasCachedMusicNote ? 'CACHE' : 'WAIT', 0);", "markCacheDiagnostic('musicNote', hasCachedMusicNote ? 'CACHE' : 'ERROR', 0);")
+if "'WAIT'" in s[s.find('const shouldVerifyMusicNoteBundle'):s.find('// 901: delayed full-list recovery disabled')]:
+    raise SystemExit('WAIT diagnostic remained in 1036 catalog branch')
+p.write_text(s, encoding='utf-8')
+
+print('1036 generated boundary/source normalization complete')

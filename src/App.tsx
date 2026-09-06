@@ -33,6 +33,8 @@ import CacheDiagnosticBadge from './components/CacheDiagnosticBadge';
 import CacheDiagnosticsOverlay from './components/CacheDiagnosticsOverlay';
 import { markCacheDiagnostic } from './lib/cacheDiagnostics';
 import { scheduleListBundleWrite, subscribeListBundle, readListBundleFromServerOnce } from './lib/listBundleCache';
+import { schedulePreviewAdaptiveListIndexPublishIfDirty } from './lib/adaptiveListIndexV2';
+const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 
 const SORIDRAW_897_CACHE_DIAGNOSTICS_READ_ACCURACY = true;
 const SORIDRAW_899_CACHE_DIAGNOSTICS_PERSISTENCE_MUSICNOTE = true;
@@ -5636,6 +5638,10 @@ function App() {
 
     // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date
     favoritesInMemoryCache.set(uid, safeList);
+    schedulePreviewAdaptiveListIndexPublishIfDirty('musicNote', uid, safeList, {
+      hasMore: safeList.length >= 20,
+      deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
+    });
     if (musicNoteBundleActiveUids.has(uid)) {
       scheduleListBundleWrite('musicNote', uid, safeList, {
         limit: 20,

@@ -25,6 +25,9 @@ import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
 import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
 import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
 import { subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
+import { schedulePreviewAdaptiveListIndexPublishIfDirty } from '../lib/adaptiveListIndexV2';
+
+const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 
 const SORIDRAW_923_FINAL_FIRESTORE_GUARD = true;
 const SORIDRAW_936_LIBRARY_VERSION_SYNC_ONLY = true;
@@ -1487,6 +1490,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const saveWorkspaceTrackCache = (uid: string, list: any[]) => {
     saveLibraryWorkspaceTrackCache(uid, list);
+    schedulePreviewAdaptiveListIndexPublishIfDirty('library', uid, list, {
+      hasMore: list.length >= WORKSPACE_SERVER_PAGE_SIZE,
+    });
   };
 
   const syncLibraryWorkspaceSessionTracks = (uid: string, nextTracks: any[]) => {

@@ -1,6 +1,9 @@
 import { doc, getDocFromServer, serverTimestamp, setDoc, updateDoc } from './firestoreMeasured';
 import { db } from '../firebase';
 import { markCacheDiagnosticWrite } from './cacheDiagnostics';
+import { readPreviewAdaptiveListIndexV2 } from './adaptiveListIndexV2';
+
+const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 
 export type ListBundleKind = 'musicNote' | 'library';
 
@@ -347,10 +350,7 @@ export const subscribeListBundle = (
   let cancelled = false;
   let started = false;
 
-  const runOneShotRead = () => {
-    if (cancelled || started) return;
-    started = true;
-
+  const runLegacyOneShotRead = () => {
     void getDocFromServer(getBundleRef(kind, uid))
       .then((snapshot) => {
         if (cancelled) return;
@@ -366,7 +366,7 @@ export const subscribeListBundle = (
           return;
         }
         const items = Array.isArray(data.items) ? data.items : [];
-        const bundle: ListBundleSnapshot = {
+        const legacyBundle: ListBundleSnapshot = {
           schemaVersion: Number(data.schemaVersion || 0),
           kind,
           items,
@@ -376,13 +376,27 @@ export const subscribeListBundle = (
           deletedIds: normalizeDeletedIds(data.deletedIds),
           updatedAtMs: Number(data.updatedAtMs || 0),
         };
-
-        rememberListBundleSnapshot(kind, uid, bundle, kind === 'musicNote' ? 20 : 10);
-        callbacks.onData(bundle, meta);
+        rememberListBundleSnapshot(kind, uid, legacyBundle, kind === 'musicNote' ? 20 : 10);
+        callbacks.onData(legacyBundle, meta);
       })
       .catch((error) => {
         if (!cancelled) callbacks.onError?.(error);
       });
+  };
+
+  const runOneShotRead = () => {
+    if (cancelled || started) return;
+    started = true;
+    void readPreviewAdaptiveListIndexV2(kind, uid)
+      .then((adaptiveBundle) => {
+        if (cancelled) return;
+        if (adaptiveBundle) {
+          callbacks.onData(adaptiveBundle, { fromCache: false });
+          return;
+        }
+        runLegacyOneShotRead();
+      })
+      .catch(() => runLegacyOneShotRead());
   };
 
   const handleMusicNotePageEntry = () => runOneShotRead();
@@ -415,11 +429,13 @@ export const readListBundleFromServerOnce = async (
   uid: string,
 ): Promise<ListBundleSnapshot | null> => {
   if (!uid) return null;
+  const adaptiveBundle = await readPreviewAdaptiveListIndexV2(kind, uid);
+  if (adaptiveBundle) return adaptiveBundle;
   const snapshot = await getDocFromServer(getBundleRef(kind, uid));
   if (!snapshot.exists()) return null;
   const data = snapshot.data() || {};
   const items = Array.isArray(data.items) ? data.items : [];
-  const bundle: ListBundleSnapshot = {
+  const legacyBundle: ListBundleSnapshot = {
     schemaVersion: Number(data.schemaVersion || 0),
     kind,
     items,
@@ -429,8 +445,8 @@ export const readListBundleFromServerOnce = async (
     deletedIds: normalizeDeletedIds(data.deletedIds),
     updatedAtMs: Number(data.updatedAtMs || 0),
   };
-  rememberListBundleSnapshot(kind, uid, bundle, kind === 'musicNote' ? 20 : 10);
-  return bundle;
+  rememberListBundleSnapshot(kind, uid, legacyBundle, kind === 'musicNote' ? 20 : 10);
+  return legacyBundle;
 };
 
 const SORIDRAW_921_FIRESTORE_COST_HARDENING = true;

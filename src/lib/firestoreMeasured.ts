@@ -10,6 +10,33 @@ export * from 'firebase/firestore';
 const SORIDRAW_927_MONOTONIC_SECTION_VERSION_AND_OP_TRACE = true;
 const SORIDRAW_925_CACHE_LIVE_LARGE_SOURCE_TRACE = true;
 
+const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
+export type AdaptiveListIndexDirtyKind = 'musicNote' | 'library';
+const adaptiveListIndexDirtyRevisions: Record<AdaptiveListIndexDirtyKind, number> = { musicNote: 0, library: 0 };
+const isAdaptiveListPreviewHost = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const hostname = window.location.hostname.toLowerCase();
+  return hostname === 'preview.soridraw.com'
+    || hostname === 'soridraw-preview.web.app'
+    || hostname === 'soridraw-preview.firebaseapp.com';
+};
+const markAdaptiveListIndexDirtyBySource = (source: string): void => {
+  if (!isAdaptiveListPreviewHost()) return;
+  if (source === 'favorites' || source.startsWith('favorites:')) {
+    adaptiveListIndexDirtyRevisions.musicNote += 1;
+  } else if (source === 'suno_tracks/*/tracks' || source.startsWith('suno_tracks/*/tracks:')) {
+    adaptiveListIndexDirtyRevisions.library += 1;
+  }
+};
+export const readAdaptiveListIndexDirtyRevision = (kind: AdaptiveListIndexDirtyKind): number => (
+  adaptiveListIndexDirtyRevisions[kind] || 0
+);
+export const clearAdaptiveListIndexDirtyRevision = (kind: AdaptiveListIndexDirtyKind, revision: number): void => {
+  if (revision > 0 && adaptiveListIndexDirtyRevisions[kind] === revision) {
+    adaptiveListIndexDirtyRevisions[kind] = 0;
+  }
+};
+
 const normalizeSourcePath = (value: unknown): string => {
   const raw = String(value || '').trim().replace(/^\/+|\/+$/g, '');
   if (!raw) return 'unknown';
@@ -78,6 +105,7 @@ export const getDocs = (async (...args: any[]) => {
 export const setDoc = (async (...args: any[]) => {
   const source = getSourceLabel(args[0]);
   const result = await (Firestore.setDoc as any)(...args);
+  markAdaptiveListIndexDirtyBySource(source);
   markFirestoreActualWrite(1, `${source}:write`);
   return result;
 }) as typeof Firestore.setDoc;
@@ -85,6 +113,7 @@ export const setDoc = (async (...args: any[]) => {
 export const updateDoc = (async (...args: any[]) => {
   const source = getSourceLabel(args[0]);
   const result = await (Firestore.updateDoc as any)(...args);
+  markAdaptiveListIndexDirtyBySource(source);
   markFirestoreActualWrite(1, `${source}:write`);
   return result;
 }) as typeof Firestore.updateDoc;
@@ -92,6 +121,7 @@ export const updateDoc = (async (...args: any[]) => {
 export const deleteDoc = (async (...args: any[]) => {
   const source = getSourceLabel(args[0]);
   const result = await (Firestore.deleteDoc as any)(...args);
+  markAdaptiveListIndexDirtyBySource(source);
   markFirestoreActualWrite(1, `${source}:write`);
   return result;
 }) as typeof Firestore.deleteDoc;
@@ -99,6 +129,7 @@ export const deleteDoc = (async (...args: any[]) => {
 export const addDoc = (async (...args: any[]) => {
   const source = getSourceLabel(args[0]);
   const result = await (Firestore.addDoc as any)(...args);
+  markAdaptiveListIndexDirtyBySource(source);
   markFirestoreActualWrite(1, `${source}:write`);
   return result;
 }) as typeof Firestore.addDoc;
@@ -202,7 +233,10 @@ export const writeBatch = ((...args: any[]) => {
   measured.delete = (...deleteArgs: any[]) => { rememberWrite(deleteArgs[0]); batch.delete(...deleteArgs); return measured; };
   measured.commit = async () => {
     const result = await batch.commit();
-    Object.entries(sourceWrites).forEach(([source, count]) => markFirestoreActualWrite(count, source));
+    Object.entries(sourceWrites).forEach(([source, count]) => {
+      markAdaptiveListIndexDirtyBySource(source);
+      markFirestoreActualWrite(count, source);
+    });
     return result;
   };
   return measured;
@@ -233,6 +267,9 @@ export const runTransaction = (async (...rawArgs: any[]) => {
   const result = options === undefined
     ? await (Firestore.runTransaction as any)(db, measuredUpdate)
     : await (Firestore.runTransaction as any)(db, measuredUpdate, options);
-  Object.entries(committedWrites).forEach(([source, count]) => markFirestoreActualWrite(count, source));
+  Object.entries(committedWrites).forEach(([source, count]) => {
+    markAdaptiveListIndexDirtyBySource(source);
+    markFirestoreActualWrite(count, source);
+  });
   return result;
 }) as typeof Firestore.runTransaction;

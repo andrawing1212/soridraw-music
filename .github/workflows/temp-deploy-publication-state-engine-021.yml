@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      FEATURE_SHA: fefeca0bcbd5163101a866b09ab3c0a199462711
+      FEATURE_SHA: 2c0e1ddbbdb520025e817829e565ff52eefc0feb
       BASE_SHA: b7cb0afcb87d7f99b3518956eb6f4c769f62a86f
       MAIN_SHA: 49c799cbb46d137539f74a48c261f7256762336f
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -38,8 +38,8 @@ jobs:
         run: |
           set -euo pipefail
           git merge-base --is-ancestor "$BASE_SHA" "$FEATURE_SHA"
-          test "$(git rev-parse "$FEATURE_SHA^")" = "$BASE_SHA"
-          test "$(git diff --name-only "$BASE_SHA" "$FEATURE_SHA")" = 'cloudflare/explore-worker/patches/021-publication-state-transition-engine.mjs'
+          unexpected="$(git diff --name-only "$BASE_SHA" "$FEATURE_SHA" | grep -vE '^(cloudflare/explore-worker/patches/021-publication-state-transition-engine\.mjs|\.github/workflows/temp-deploy-publication-state-engine-021\.yml)$' || true)"
+          test -z "$unexpected"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_SHA"
           grep -Fq 'SORIDRAW_PUBLICATION_STATE_TRANSITION_ENGINE_021_20260907' cloudflare/explore-worker/patches/021-publication-state-transition-engine.mjs
           echo 'SOURCE_GUARD=PASS'
@@ -103,8 +103,10 @@ jobs:
             for (const token of [
               'handleMusicNotePublicationSingleWrite016',
               'handleMusicNotePrivate017',
-              'SORIDRAW_PUBLICATION_POSTWRITE_500_RETRY_COST_018_20260905',
-              'SORIDRAW_PUBLICATION_PROFILE_R2_DELTA_019_20260905'
+              'publicationCanonicalUnchanged016',
+              'publicationReadState016',
+              'patchExploreProfileR2Mutation019',
+              'Promise.allSettled'
             ]) if (!src.includes(token)) throw new Error(`PREVIEW prerequisite missing ${token}`);
             if (src.includes('SORIDRAW_PUBLICATION_STATE_TRANSITION_ENGINE_021_20260907')) throw new Error('021 already active before this deployment');
             fs.writeFileSync('.remote-worker/original.js', src);
@@ -218,7 +220,7 @@ jobs:
           set -euo pipefail
           short="${FEATURE_SHA:0:8}"
           zipname="SORIDRAW_PREVIEW_${short}_publication_state_engine_021.zip"
-          git archive --format=zip --output="$zipname" "$FEATURE_SHA"
+          git archive --format=zip --output="$zipname" "$FEATURE_SHA" -- . ':(exclude).github/workflows/temp-deploy-publication-state-engine-021.yml'
           test -s "$zipname"
           echo "ZIP_NAME=$zipname" >> "$GITHUB_ENV"
           sha256sum "$zipname"

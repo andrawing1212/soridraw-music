@@ -1,0 +1,450 @@
+name: Temp 1039 Catalog V4 Authority Deploy
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-1039-catalog-v4-authority-deploy.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      HOSTING_PROJECT: soridraw
+      PREVIEW_SITE: soridraw-preview
+      PREVIEW_DEFAULT_HOST: soridraw-preview.web.app
+      PREVIEW_CUSTOM_HOST: preview.soridraw.com
+      PRODUCTION_HOST: soridraw.web.app
+      BACKEND_PROJECT: soridraw-app-866a5
+      WORKER_URL: https://soridraw-media-preview.andrawing1212.workers.dev
+      BUCKET: soridraw-media-preview
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - name: Apply server-authoritative V4 catalog patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # 1) Common user data engine: V4 + server authority only.
+          p = Path('src/lib/userDataEngine.ts')
+          s = p.read_text(encoding='utf-8')
+          original = s
+          s = s.replace(
+              "export const SORIDRAW_USER_DATA_ENGINE_DELTA_SYNC_1035 = true;\n",
+              "export const SORIDRAW_USER_DATA_ENGINE_DELTA_SYNC_1035 = true;\nexport const SORIDRAW_USER_DATA_ENGINE_SERVER_AUTHORITY_V4_20260906 = true;\n",
+          )
+          s = s.replace(
+              "export type SoridrawCatalogSnapshot = {\n  schemaVersion: 3;\n  kind: SoridrawCatalogKind;",
+              "export type SoridrawCatalogSnapshot = {\n  schemaVersion: 4;\n  authority: 'server';\n  kind: SoridrawCatalogKind;",
+          )
+          s = s.replace(
+              "type CatalogDelta = {\n  schemaVersion: 3;\n  kind: SoridrawCatalogKind;",
+              "type CatalogDelta = {\n  schemaVersion: 4;\n  kind: SoridrawCatalogKind;",
+          )
+          s = s.replace("const CATALOG_SCHEMA_VERSION = 3 as const;", "const CATALOG_SCHEMA_VERSION = 4 as const;")
+          s = s.replace("const CATALOG_DB_NAME = 'soridraw_user_data_engine_v3';", "const CATALOG_DB_NAME = 'soridraw_user_data_engine_v4';")
+          s = s.replace(
+              "const LEGACY_CATALOG_DB_NAMES = ['soridraw_user_data_engine_v2', 'soridraw_user_data_engine_v1'];",
+              "const LEGACY_CATALOG_DB_NAMES = ['soridraw_user_data_engine_v3', 'soridraw_user_data_engine_v2', 'soridraw_user_data_engine_v1'];",
+          )
+          s = s.replace(
+              "if (data.schemaVersion !== CATALOG_SCHEMA_VERSION || data.kind !== kind || data.complete !== true) return false;",
+              "if (data.schemaVersion !== CATALOG_SCHEMA_VERSION || data.authority !== 'server' || data.kind !== kind || data.complete !== true) return false;",
+          )
+          s = s.replace(
+              "    schemaVersion: CATALOG_SCHEMA_VERSION,\n    kind,\n    revision: nextRevision,",
+              "    schemaVersion: CATALOG_SCHEMA_VERSION,\n    authority: 'server',\n    kind,\n    revision: nextRevision,",
+              1,
+          )
+          s = s.replace(
+              "      schemaVersion: CATALOG_SCHEMA_VERSION,\n      kind,\n      baseRevision: previous.revision,",
+              "      schemaVersion: CATALOG_SCHEMA_VERSION,\n      kind,\n      baseRevision: previous.revision,",
+              1,
+          )
+          # Never infer completeness from hasMore=false; only the server-authoritative full-catalog path may set complete.
+          s = s.replace(
+              "const explicitComplete = pending.options.complete === true || pending.options.hasMore === false;",
+              "const explicitComplete = pending.options.complete === true;",
+          )
+
+          old_publish = '''const publishRemoteCatalogDelta = async (\n  uid: string,\n  delta: CatalogDelta,\n): Promise<boolean> => {\n  if (!isPreviewCatalogEnabled()) return false;\n  const user = auth.currentUser;\n  if (!user || user.uid !== uid) return false;\n  try {\n    const headers = await authenticatedHeaders();\n    if (!headers) return false;\n    const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${delta.kind}/delta`, {\n      method: 'POST',\n      headers,\n      body: JSON.stringify(delta),\n      cache: 'no-store',\n    });\n    if (!response.ok) throw new Error(`CATALOG_DELTA_${response.status}`);\n    return true;\n  } catch (error) {\n    console.warn(`[userDataEngine] ${delta.kind} catalog delta publish failed.`, error);\n    return false;\n  }\n};'''
+          new_publish = '''const publishRemoteCatalogDelta = async (\n  uid: string,\n  delta: CatalogDelta,\n): Promise<{ revision: number; itemCount: number } | null> => {\n  if (!isPreviewCatalogEnabled()) return null;\n  const user = auth.currentUser;\n  if (!user || user.uid !== uid) return null;\n  try {\n    const headers = await authenticatedHeaders();\n    if (!headers) return null;\n    const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${delta.kind}/delta`, {\n      method: 'POST',\n      headers,\n      body: JSON.stringify(delta),\n      cache: 'no-store',\n    });\n    if (!response.ok) throw new Error(`CATALOG_DELTA_${response.status}`);\n    const payload = await response.json();\n    const revision = Math.floor(Number(payload?.revision || 0));\n    const itemCount = Math.floor(Number(payload?.itemCount));\n    if (!Number.isFinite(revision) || revision <= 0 || !Number.isFinite(itemCount) || itemCount < 0) {\n      throw new Error('CATALOG_DELTA_ACK_INVALID');\n    }\n    return { revision, itemCount };\n  } catch (error) {\n    console.warn(`[userDataEngine] ${delta.kind} catalog delta publish failed.`, error);\n    return null;\n  }\n};'''
+          if old_publish not in s:
+              raise SystemExit('publishRemoteCatalogDelta block not found')
+          s = s.replace(old_publish, new_publish)
+
+          old_write = '''      const published = await publishRemoteCatalogDelta(uid, built.delta);\n      if (!published) return;\n      await writeCatalogSnapshotToLocalCache(kind, uid, built.nextSnapshot);\n      clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);'''
+          new_write = '''      const published = await publishRemoteCatalogDelta(uid, built.delta);\n      if (!published) return;\n      if (published.itemCount !== built.nextSnapshot.itemCount) {\n        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, published.revision);\n        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);\n        return;\n      }\n      const confirmedSnapshot: SoridrawCatalogSnapshot = {\n        ...built.nextSnapshot,\n        revision: published.revision,\n      };\n      await writeCatalogSnapshotToLocalCache(kind, uid, confirmedSnapshot);\n      clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);'''
+          if old_write not in s:
+              raise SystemExit('delta local write block not found')
+          s = s.replace(old_write, new_write)
+          if s == original:
+              raise SystemExit('userDataEngine patch produced no changes')
+          p.write_text(s, encoding='utf-8')
+
+          # 2) Adaptive compatibility bridge: remove the client-side full Firestore recovery entirely.
+          p = Path('src/lib/adaptiveListIndexV2.ts')
+          s = p.read_text(encoding='utf-8')
+          original = s
+          s = s.replace(
+              "import {\n  readCatalogSnapshotCacheFirst,\n  scheduleCatalogSnapshotPublishIfDirty,\n  writeCatalogSnapshotToLocalCache,\n  type SoridrawCatalogKind,\n  type SoridrawCatalogSnapshot,\n} from './userDataEngine';\nimport { db } from '../firebase';\nimport { collection, getDocs, query, where } from './firestoreMeasured';",
+              "import {\n  readCatalogSnapshotCacheFirst,\n  scheduleCatalogSnapshotPublishIfDirty,\n  type SoridrawCatalogKind,\n} from './userDataEngine';",
+          )
+          start = s.find('// 1037: safety recovery for a cold Music Note device')
+          end = s.find('// Compatibility bridge for existing Music Note / Library bootstrap callers.')
+          if start < 0 or end < 0 or end <= start:
+              raise SystemExit('1037 recovery block bounds not found')
+          s = s[:start] + "// 1039: completeness is server authority only. The browser never manufactures a full catalog.\n\n" + s[end:]
+          s = s.replace(
+              "  if (!snapshot) {\n    if (kind === 'musicNote') return recoverMusicNoteCatalogFromCanonicalFirestore(uid);\n    return null;\n  }",
+              "  if (!snapshot) return null;",
+          )
+          if s == original:
+              raise SystemExit('adaptive bridge patch produced no changes')
+          p.write_text(s, encoding='utf-8')
+
+          # 3) Worker: V4 namespace + server authority + disable client full-object POST.
+          p = Path('cloudflare/media-worker/src/index.js')
+          s = p.read_text(encoding='utf-8')
+          original = s
+          s = s.replace('const CATALOG_SCHEMA_VERSION = 3;', 'const CATALOG_SCHEMA_VERSION = 4;')
+          s = s.replace('`catalog/v3/${encodeURIComponent(uid)}/${kind}.json`', '`catalog/v4/${encodeURIComponent(uid)}/${kind}.json`')
+          s = s.replace(
+              "if (payload.schemaVersion !== CATALOG_SCHEMA_VERSION || payload.kind !== kind || payload.complete !== true) return false;",
+              "if (payload.schemaVersion !== CATALOG_SCHEMA_VERSION || payload.authority !== 'server' || payload.kind !== kind || payload.complete !== true) return false;",
+          )
+          # Both canonical build and delta result are trusted server materializations.
+          s = s.replace(
+              "    schemaVersion: CATALOG_SCHEMA_VERSION,\n    kind,\n    revision: Math.max(generatedAtMs, Math.floor(minimumRevision || 0)),",
+              "    schemaVersion: CATALOG_SCHEMA_VERSION,\n    authority: 'server',\n    kind,\n    revision: Math.max(generatedAtMs, Math.floor(minimumRevision || 0)),",
+          )
+          s = s.replace(
+              "    schemaVersion: CATALOG_SCHEMA_VERSION,\n    kind,\n    revision: Math.max(generatedAtMs, Number(delta.revision || 0), Number(current.revision || 0) + 1),",
+              "    schemaVersion: CATALOG_SCHEMA_VERSION,\n    authority: 'server',\n    kind,\n    revision: Math.max(generatedAtMs, Number(delta.revision || 0), Number(current.revision || 0) + 1),",
+          )
+          s = s.replace(
+              "      schemaVersion: String(payload.schemaVersion),\n",
+              "      schemaVersion: String(payload.schemaVersion),\n      authority: 'server',\n",
+          )
+          old_full = '''    // Compatibility only: accept a full V2 object, but V2 clients normally use delta.\n    if (request.method === 'POST' && route.action === 'base') {\n      const payload = await request.json();\n      if (!validateCatalogPayload(payload, route.kind)) return jsonResponse({ ok: false, code: 'INVALID_CATALOG' }, 400, origin);\n      if (catalogEncodedSize(payload) > CATALOG_MAX_BYTES) return jsonResponse({ ok: false, code: 'CATALOG_TOO_LARGE' }, 413, origin);\n      await putCatalogObject(env, identity.uid, payload);\n      return jsonResponse({ ok: true, kind: route.kind, revision: payload.revision, itemCount: payload.itemCount }, 200, origin);\n    }'''
+          new_full = '''    // 1039: a browser may publish only deltas. It can never self-declare a complete catalog.\n    if (request.method === 'POST' && route.action === 'base') {\n      return jsonResponse({ ok: false, code: 'CLIENT_FULL_CATALOG_DISABLED' }, 405, origin);\n    }'''
+          if old_full not in s:
+              raise SystemExit('worker full catalog POST block not found')
+          s = s.replace(old_full, new_full)
+          if s == original:
+              raise SystemExit('worker patch produced no changes')
+          p.write_text(s, encoding='utf-8')
+
+          print('CATALOG_V4_PATCH=APPLIED')
+          PY
+
+      - name: Static authority and cleanup guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "CATALOG_SCHEMA_VERSION = 4 as const" src/lib/userDataEngine.ts
+          grep -q "CATALOG_DB_NAME = 'soridraw_user_data_engine_v4'" src/lib/userDataEngine.ts
+          grep -q "data.authority !== 'server'" src/lib/userDataEngine.ts
+          grep -q "const explicitComplete = pending.options.complete === true;" src/lib/userDataEngine.ts
+          grep -q "if (!snapshot) return null;" src/lib/adaptiveListIndexV2.ts
+          ! grep -q "recoverMusicNoteCatalogFromCanonicalFirestore" src/lib/adaptiveListIndexV2.ts
+          ! grep -q "collection(db, 'favorites')" src/lib/adaptiveListIndexV2.ts
+          grep -q "const CATALOG_SCHEMA_VERSION = 4;" cloudflare/media-worker/src/index.js
+          grep -q "catalog/v4/" cloudflare/media-worker/src/index.js
+          grep -q "CLIENT_FULL_CATALOG_DISABLED" cloudflare/media-worker/src/index.js
+          grep -q "authority: 'server'" cloudflare/media-worker/src/index.js
+          echo 'CATALOG_V4_STATIC_GUARDS=PASS'
+
+      - name: Set up Node 20 for app
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build app
+        run: npm run build
+
+      - name: Prove V4 logic is in shipped app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -R -q "soridraw_user_data_engine_v4" dist/assets
+          grep -R -q "CLIENT_FULL_CATALOG_DISABLED" cloudflare/media-worker/src/index.js
+          ! grep -R -q "one-time canonical Music Note recovery failed" dist/assets
+          echo 'CATALOG_V4_IN_APP_BUILD=PASS'
+
+      - name: Set up Node 22 for backend checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Functions build and existing Library test
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix functions ci
+          npm --prefix functions run build
+          npm --prefix functions run test:library-bundle
+
+      - name: Worker check
+        working-directory: cloudflare/media-worker
+        run: |
+          npm install --no-audit --no-fund
+          npm run check
+
+      - name: Commit and push runtime source to preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add src/lib/userDataEngine.ts src/lib/adaptiveListIndexV2.ts cloudflare/media-worker/src/index.js
+          changed="$(git diff --cached --name-only)"
+          echo "$changed"
+          test "$(printf '%s\n' "$changed" | sed '/^$/d' | wc -l)" -eq 3
+          git commit -m 'fix(preview): enforce server-authoritative catalog v4'
+          git push origin HEAD:preview
+          git rev-parse HEAD > "$RUNNER_TEMP/runtime-sha"
+          echo "RUNTIME_COMMIT=$(cat "$RUNNER_TEMP/runtime-sha")"
+
+      - name: Wait for automatic Cloudflare PREVIEW Worker deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=''
+          for attempt in $(seq 1 40); do
+            if curl -fsS --max-time 20 "$WORKER_URL/health?attempt=$attempt" -o "$RUNNER_TEMP/health.json"; then
+              if grep -q '"ok":true' "$RUNNER_TEMP/health.json" \
+                && grep -q '"r2Binding":true' "$RUNNER_TEMP/health.json" \
+                && grep -q '"catalogSchemaVersion":4' "$RUNNER_TEMP/health.json"; then
+                ok='yes'
+                cat "$RUNNER_TEMP/health.json"
+                break
+              fi
+            fi
+            sleep 8
+          done
+          test "$ok" = 'yes' || { echo 'Cloudflare Preview Worker V4 did not become active'; cat "$RUNNER_TEMP/health.json" 2>/dev/null || true; exit 10; }
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -X OPTIONS \
+            -H 'Origin: https://preview.soridraw.com' \
+            -H 'Access-Control-Request-Method: GET' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck,x-soridraw-known-revision' \
+            "$WORKER_URL/v1/catalog/musicNote")"
+          test "$code" = '204'
+          echo 'CLOUDFLARE_PREVIEW_V4=PASS'
+
+      - name: Authenticate Firebase for controlled V4 materialization and Hosting
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Build trusted V4 catalogs from canonical Firestore read-only source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const crypto = require('crypto');
+          const fs = require('fs');
+          const path = require('path');
+          const admin = require('./functions/node_modules/firebase-admin');
+          admin.initializeApp({ credential: admin.credential.applicationDefault(), projectId: 'soridraw-app-866a5' });
+          const db = admin.firestore();
+          const outDir = path.join(process.env.RUNNER_TEMP, 'catalog-v4-seed');
+          fs.mkdirSync(outDir, { recursive: true });
+
+          const MUSIC_FIELDS = new Set([
+            'uid','soridrawSongId','favoriteKey','title','koreanTitle','englishTitle','genre','appliedKeywords','searchTokens',
+            'isLocked','liked','isLiked','personalLiked','favoriteLiked','isFavorite','isPublic','exploreTrackId','explorePublicationId',
+            'hidden','favoriteHidden','favoriteRemoved','favoriteRemovedAt','saved','deletedAt','trashedAt','color','favoriteColor','noteColor',
+            'folderId','folderIds','musicNoteFolderIds','createdAtMs','createdAt','updatedAtMs','updatedAt','sunoLinks','sunoShareLinks','mainSunoIndex',
+            'sunoShareUrl','sunoUrl','sunoSongUrl','sunoTitle','sunoCoverUrl','sunoImageUrl','sunoArtworkUrl','sunoDurationSeconds','sunoDurationText',
+            'sunoShareUrlUpdatedAt','sunoCoverFetchedAt','audioUrl','audio_url','streamAudioUrl','stream_audio_url','sourceAudioUrl','sourceStreamAudioUrl',
+            'imageUrl','image_url','coverUrl','thumbnailUrl','sunoAudioUrl','creatorNickname','ownerNickname','ownerUid','nickname'
+          ]);
+          const LIB_FIELDS = new Set([
+            'uid','taskId','sourceTrackId','sourceTaskId','status','model','modelVersion','title','koreanTitle','englishTitle','genre','style','tags','prompt',
+            'createdAtMs','createdAt','updatedAtMs','updatedAt','audioUrl','audio_url','streamAudioUrl','stream_audio_url','sourceAudioUrl','sourceStreamAudioUrl',
+            'imageUrl','image_url','coverUrl','thumbnailUrl','audioUrls','duration','durationSeconds','sunoData','isPublic','hidden','deletedAt','trashedAt','favoriteColor','color'
+          ]);
+          const MEDIA_FIELDS = [
+            'sunoLinks','sunoShareLinks','mainSunoIndex','sunoShareUrl','sunoUrl','sunoSongUrl','sunoTitle','sunoCoverUrl','sunoImageUrl','sunoArtworkUrl',
+            'sunoDurationSeconds','sunoDurationText','sunoShareUrlUpdatedAt','sunoCoverFetchedAt','audioUrl','audio_url','streamAudioUrl','stream_audio_url',
+            'sourceAudioUrl','sourceStreamAudioUrl','imageUrl','image_url','coverUrl','thumbnailUrl','sunoAudioUrl'
+          ];
+          const toMs = (v) => {
+            if (!v) return 0;
+            if (typeof v === 'number' && Number.isFinite(v)) return Math.floor(v);
+            if (typeof v?.toMillis === 'function') return Math.floor(v.toMillis());
+            if (typeof v?.seconds === 'number') return Math.floor(v.seconds * 1000 + Number(v.nanoseconds || 0) / 1e6);
+            const n = new Date(v).getTime(); return Number.isFinite(n) ? Math.floor(n) : 0;
+          };
+          const clean = (v, depth=0) => {
+            if (v === null) return null;
+            if (v === undefined) return undefined;
+            if (typeof v === 'string' || typeof v === 'boolean') return v;
+            if (typeof v === 'number') return Number.isFinite(v) ? v : undefined;
+            if (typeof v?.toMillis === 'function') return v.toMillis();
+            if (Array.isArray(v)) return v.map(x=>clean(x, depth+1)).filter(x=>x!==undefined);
+            if (typeof v !== 'object' || depth > 10) return undefined;
+            const o={}; for (const [k,x] of Object.entries(v)) { const c=clean(x,depth+1); if(c!==undefined)o[k]=c; } return o;
+          };
+          const activeMusic = (d) => !(d?.favoriteRemoved===true || d?.saved===false || d?.hidden===true || d?.favoriteHidden===true || d?.deletedAt || d?.trashedAt);
+          const createdAtMs = (d, doc) => Math.max(1, Number(d?.createdAtMs||0) || toMs(d?.createdAt) || Number(d?.updatedAtMs||0) || toMs(d?.updatedAt) || toMs(doc?.createTime) || toMs(doc?.updateTime) || 1);
+          const project = (kind, data, doc) => {
+            if (kind==='musicNote' && !activeMusic(data)) return null;
+            const id=String(doc.id||'').trim(); if(!id) return null;
+            const allowed=kind==='musicNote'?MUSIC_FIELDS:LIB_FIELDS;
+            const o={id,firestoreId:String(data?.firestoreId||id),createdAtMs:createdAtMs(data,doc),__catalogSummary:true};
+            for(const k of allowed){ if(!(k in data)) continue; const c=clean(data[k]); if(c!==undefined)o[k]=c; }
+            o.createdAtMs=createdAtMs(o,doc); return o;
+          };
+          const sortItems = (a) => a.sort((x,y)=>Number(y.createdAtMs||1)-Number(x.createdAtMs||1)||String(x.id).localeCompare(String(y.id)));
+          const identityKeys = (x) => [x?.soridrawSongId,x?.favoriteKey,x?.id].map(v=>String(v||'').trim()).filter(Boolean);
+          const hashUid = (uid) => crypto.createHash('sha256').update(uid).digest('hex').slice(0,10);
+
+          (async()=>{
+            const users = await db.collection('users').get();
+            const manifest=[];
+            for(const userDoc of users.docs){
+              const uid=userDoc.id;
+              const profile=userDoc.data()||{};
+              const hash=hashUid(uid);
+              const now=Date.now();
+
+              const [favSnap,recentSnap,libSnap]=await Promise.all([
+                db.collection('favorites').where('uid','==',uid).get(),
+                db.collection('user_recent_songs').doc(uid).get(),
+                db.collection('suno_tracks').doc(uid).collection('tracks').get(),
+              ]);
+
+              let music=sortItems(favSnap.docs.map(d=>project('musicNote',d.data()||{},d)).filter(Boolean));
+              const recentData=recentSnap.exists?(recentSnap.data()||{}):{};
+              const recent=Array.isArray(recentData.songs)?recentData.songs:[];
+              const byIdentity=new Map();
+              for(const song of recent){ for(const k of identityKeys(song)) if(!byIdentity.has(k)) byIdentity.set(k,song); }
+              for(const item of music){
+                const source=identityKeys(item).map(k=>byIdentity.get(k)).find(Boolean);
+                if(!source) continue;
+                const first=Array.isArray(source?.sunoData)?source.sunoData.find(Boolean):null;
+                for(const k of MEDIA_FIELDS){
+                  if(item[k]!==undefined && item[k]!==null && item[k]!=='') continue;
+                  const v=source?.[k] ?? first?.[k]; if(v!==undefined && v!==null && v!=='') item[k]=clean(v);
+                }
+              }
+              sortItems(music);
+              const musicRevision=Math.max(now,Number(profile?.syncVersions?.musicNote||0),Number(profile?.favoriteSyncSignalUpdatedAt||0),Number(profile?.favoriteSyncSignal?.at||0));
+              const musicPayload={schemaVersion:4,authority:'server',kind:'musicNote',revision:Math.floor(musicRevision||now),items:music,itemCount:music.length,complete:true,generatedAtMs:now};
+
+              const library=sortItems(libSnap.docs.map(d=>project('library',d.data()||{},d)).filter(Boolean));
+              const libraryRevision=Math.max(now,Number(profile?.syncVersions?.library||0));
+              const libraryPayload={schemaVersion:4,authority:'server',kind:'library',revision:Math.floor(libraryRevision||now),items:library,itemCount:library.length,complete:true,generatedAtMs:now};
+
+              for(const [kind,payload] of [['musicNote',musicPayload],['library',libraryPayload]]){
+                const json=JSON.stringify(payload);
+                if(Buffer.byteLength(json,'utf8')>24*1024*1024) throw new Error(`CATALOG_TOO_LARGE:${hash}:${kind}`);
+                const file=path.join(outDir,`${hash}-${kind}.json`);
+                fs.writeFileSync(file,json);
+                manifest.push({uid,hash,kind,file,expected:payload.itemCount,revision:payload.revision});
+              }
+              console.log(`SEED_SOURCE_OWNER=${hash} musicNote=${music.length} library=${library.length}`);
+            }
+            fs.writeFileSync(path.join(outDir,'manifest.json'),JSON.stringify(manifest));
+            console.log(`CATALOG_V4_SEED_SOURCE_USERS=${users.size}`);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Write trusted V4 catalogs to private PREVIEW R2 and verify exact counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          manifest="$RUNNER_TEMP/catalog-v4-seed/manifest.json"
+          node - "$manifest" <<'NODE' > "$RUNNER_TEMP/catalog-v4-seed/manifest.tsv"
+          const fs=require('fs');const rows=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          for(const r of rows) process.stdout.write([r.uid,r.hash,r.kind,r.file,r.expected,r.revision].join('\t')+'\n');
+          NODE
+          while IFS=$'\t' read -r uid hash kind file expected revision; do
+            [ -n "$uid" ] || continue
+            encoded="$(node -p "encodeURIComponent(process.argv[1])" "$uid")"
+            key="catalog/v4/$encoded/$kind.json"
+            (cd cloudflare/media-worker && npx wrangler r2 object put "$BUCKET/$key" --file "$file" --content-type 'application/json' --remote --force >/dev/null)
+            verify="$RUNNER_TEMP/catalog-v4-seed/verify-$hash-$kind.json"
+            (cd cloudflare/media-worker && npx wrangler r2 object get "$BUCKET/$key" --file "$verify" --remote >/dev/null)
+            node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const exp=Number(process.argv[2]);if(p.schemaVersion!==4||p.authority!=='server'||p.complete!==true||p.itemCount!==exp||p.items.length!==exp)throw new Error('R2_V4_VERIFY_FAIL');console.log('R2_V4_OWNER='+process.argv[3]+' kind='+process.argv[4]+' itemCount='+p.itemCount+' revision='+p.revision)" "$verify" "$expected" "$hash" "$kind"
+          done < "$RUNNER_TEMP/catalog-v4-seed/manifest.tsv"
+          echo 'R2_V4_MATERIALIZATION_VERIFY=PASS'
+
+      - name: Snapshot Production before PREVIEW Hosting deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "https://$PRODUCTION_HOST/" -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+          echo 'PRODUCTION_BEFORE=PASS'
+
+      - name: Deploy exact build to Firebase PREVIEW Hosting only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./firebase.hosting-preview.json').hosting.site")" = "$PREVIEW_SITE"
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project "$HOSTING_PROJECT" \
+            --config firebase.hosting-preview.json \
+            --non-interactive
+          echo 'FIREBASE_PREVIEW_HOSTING_DEPLOY=PASS'
+
+      - name: Verify PREVIEW default/custom hosts are exact current build
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in "$PREVIEW_DEFAULT_HOST" "$PREVIEW_CUSTOM_HOST"; do
+            ok=''
+            for attempt in $(seq 1 24); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://$host/?v=$(cat "$RUNNER_TEMP/runtime-sha")-$attempt" -o "$RUNNER_TEMP/${host//./_}.html"; then
+                if cmp -s dist/index.html "$RUNNER_TEMP/${host//./_}.html"; then ok='yes'; break; fi
+              fi
+              sleep 8
+            done
+            test "$ok" = 'yes' || { echo "Exact PREVIEW build verification failed: $host"; exit 11; }
+            echo "PREVIEW_EXACT_BUILD_PASS=https://$host/"
+          done
+
+      - name: Verify Production unchanged and final safety result
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "https://$PRODUCTION_HOST/" -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          diff -u "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo 'PRODUCTION_UNCHANGED=PASS'
+          echo 'BRANCH=preview'
+          echo "RUNTIME_COMMIT=$(cat "$RUNNER_TEMP/runtime-sha")"
+          echo 'CATALOG_SCHEMA=4'
+          echo 'CATALOG_AUTHORITY=server'
+          echo 'MUSIC_NOTE_CLIENT_FULLSCAN=REMOVED'
+          echo 'R2_V4_MATERIALIZED=YES'
+          echo 'FUNCTIONS_DEPLOYED=false'
+          echo 'FIRESTORE_RULES_DEPLOYED=false'
+          echo 'MAIN_CHANGED=false'
+          echo 'PRODUCTION_DEPLOYED=false'

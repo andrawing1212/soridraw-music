@@ -1,0 +1,126 @@
+name: Temp Deploy Catalog Delta 1053
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-deploy-catalog-delta-1053.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temp-deploy-catalog-delta-1053
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout latest preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - name: Guard feature and main
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'SORIDRAW_CATALOG_BASE_DELTA_JOURNAL_1053' src/lib/userDataEngine.ts
+          grep -q 'CATALOG_JOURNAL_ENGINE_1053' cloudflare/media-worker/src/index.js
+          main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$main_sha" = '49c799cbb46d137539f74a48c261f7256762336f'
+          echo "MAIN_BEFORE=$main_sha"
+
+      - name: Verify deployed Cloudflare PREVIEW Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 'https://soridraw-media-preview.andrawing1212.workers.dev/health' -o "$RUNNER_TEMP/worker-health.json"
+          cat "$RUNNER_TEMP/worker-health.json"
+          grep -q '"ok":true' "$RUNNER_TEMP/worker-health.json"
+          grep -q '"r2Binding":true' "$RUNNER_TEMP/worker-health.json"
+          grep -q '"catalogSchemaVersion":4' "$RUNNER_TEMP/worker-health.json"
+          grep -q '"catalogDeltaMode":"base+journal"' "$RUNNER_TEMP/worker-health.json"
+          echo 'CLOUDFLARE_BASE_DELTA_HEALTH=PASS'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: TypeScript and Build
+        run: |
+          npx tsc --noEmit
+          npm run build
+          echo 'APP_BUILD=PASS'
+
+      - name: Authenticate Google Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot official production before preview deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/production-before.html"
+          sha256sum "$RUNNER_TEMP/production-before.html" | awk '{print $1}' > "$RUNNER_TEMP/production-before.sha"
+
+      - name: Deploy Firebase PREVIEW Hosting only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_DEPLOY=PASS'
+
+      - name: Verify exact deployed PREVIEW build
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          echo "LOCAL_INDEX_SHA=$local_sha"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then
+                  ok=yes
+                  echo "EXACT_BUILD_PASS=$url:$remote_sha"
+                  break
+                fi
+              fi
+              sleep 10
+            done
+            test "$ok" = yes
+          done
+
+      - name: Verify production and main unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/production-after.html"
+          sha256sum "$RUNNER_TEMP/production-after.html" | awk '{print $1}' > "$RUNNER_TEMP/production-after.sha"
+          cmp "$RUNNER_TEMP/production-before.sha" "$RUNNER_TEMP/production-after.sha"
+          main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$main_sha" = '49c799cbb46d137539f74a48c261f7256762336f'
+          echo 'PRODUCTION_UNCHANGED=PASS'
+          echo "MAIN_AFTER=$main_sha"
+
+      - name: Cleanup temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git rm .github/workflows/temp-deploy-catalog-delta-1053.yml
+          git commit -m 'chore(preview): remove temporary Catalog delta deploy workflow'
+          git push origin HEAD:preview
+          echo "FINAL_PREVIEW_HEAD=$(git rev-parse HEAD)"

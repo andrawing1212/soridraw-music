@@ -1,0 +1,37 @@
+name: Temp Audit Catalog Regression 1035B
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-audit-catalog-regression-1035b.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 8
+      - name: Audit recent/library/catalog sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== RECENT FIRESTORE PATHS ==='
+          grep -nE "user_recent|recent_songs|recentSongs|recentSong" src/App.tsx | grep -E "doc\(|collection\(|setDoc|updateDoc|getDoc|getDocs|onSnapshot" | head -n 240 || true
+          echo '=== LIBRARY FIRESTORE PATHS CLIENT ==='
+          grep -nE "collection\(db|doc\(db|query\(" src/pages/SunoLibraryPage.tsx | head -n 260 || true
+          echo '=== LIBRARY FIRESTORE PATHS FUNCTIONS ==='
+          grep -R -nE "library|suno.*track|track.*bundle|collection\(" functions/src | head -n 360 || true
+          echo '=== FAVORITE SAVE PAYLOAD ==='
+          nl -ba src/App.tsx | sed -n '10070,10170p'
+          echo '=== MEDIA RESOLUTION HELPERS ==='
+          nl -ba src/App.tsx | sed -n '6100,6185p'
+          echo '=== FAVORITES PAGE LIST MEDIA/DETAIL USAGE ==='
+          grep -nE "audioUrl|audio_url|sunoAudioUrl|coverUrl|imageUrl|thumbnailUrl|sunoCoverUrl|selected.*song|detail|on.*Select|onClick" src/pages/FavoritesPage.tsx | head -n 360 || true
+          echo '=== LIST BUNDLE READ ORDER ==='
+          nl -ba src/lib/listBundleCache.ts | sed -n '350,470p'

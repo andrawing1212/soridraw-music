@@ -15,16 +15,25 @@ jobs:
         with:
           ref: preview
           fetch-depth: 2
-      - name: Exact list mutation hooks
+      - name: Capture patch anchors
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          for name in ['src/App.tsx','src/pages/SunoLibraryPage.tsx']:
-            p=Path(name); lines=p.read_text(encoding='utf-8').splitlines()
+          specs={
+            'src/App.tsx':['listBundleCache','const writeFavoritesCache ='],
+            'src/pages/SunoLibraryPage.tsx':['listBundleCache','const saveWorkspaceTrackCache ='],
+            'src/lib/firestoreMeasured.ts':['export const setDoc =','export const writeBatch =','export const runTransaction ='],
+          }
+          for name, needles in specs.items():
+            lines=Path(name).read_text(encoding='utf-8').splitlines()
             print('===== '+name+' =====')
-            for i,line in enumerate(lines,1):
-              if any(x in line for x in ["scheduleListBundleWrite('library'", "scheduleListBundleWrite('musicNote'", 'runV1MutationBoundary(', "updateDoc(doc(db, 'suno_tracks'", 'saveWorkspaceCache(', 'writeWorkspace', 'setTracks(', 'setAllTracks(']):
-                print(f'{i:06d}: {line}')
+            for needle in needles:
+              for i,line in enumerate(lines):
+                if needle in line:
+                  a=max(0,i-8); b=min(len(lines),i+24)
+                  print(f'--- {needle} lines {a+1}-{b} ---')
+                  for j in range(a,b): print(f'{j+1:06d}: {lines[j]}')
+                  break
           PY

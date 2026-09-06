@@ -15,31 +15,30 @@ jobs:
         with:
           ref: preview
           fetch-depth: 2
-      - name: Inspect list bundle and pagination paths
+      - name: Inspect mutations and local paging
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          targets = [Path('src/App.tsx'), Path('src/lib/listBundleCache.ts'), Path('src/pages/FavoritesPage.tsx'), Path('src/pages/SunoLibraryPage.tsx')]
+          targets = [Path('src/App.tsx'), Path('src/pages/FavoritesPage.tsx'), Path('src/pages/SunoLibraryPage.tsx')]
           needles = [
-            'scheduleListBundleWrite(', 'subscribeListBundle(', 'FAVORITES_PAGE_SIZE',
-            'loadMoreFavorites', 'handleLoadMoreFavorites', 'setHasMoreFavorites',
-            'LIBRARY_PAGE_SIZE', 'loadMore', 'setHasMoreLibrary', 'fetchNext',
-            'music_note_latest_20', 'library_latest_10_sets'
+            'const toggleFavorite', 'function toggleFavorite', 'const updateFavorite', 'function updateFavorite',
+            'writeFavoritesCache(', 'scheduleListBundleWrite(',
+            'musicNoteVisibleCountMemory', 'visibleCount', 'setVisibleCount', 'MUSIC_NOTE_VISIBLE_BATCH_SIZE',
+            'WORKSPACE_PAGE_SIZE', 'workspaceVisibleCount', 'setWorkspaceVisibleCount',
+            'scheduleLibraryBundle', 'writeLibrary', 'setDoc(', 'updateDoc('
           ]
           for p in targets:
-            if not p.exists():
-              continue
-            lines = p.read_text(encoding='utf-8').splitlines()
+            if not p.exists(): continue
+            lines=p.read_text(encoding='utf-8').splitlines()
             print(f'===== {p} =====')
-            shown=set()
+            emitted=[]
             for i,line in enumerate(lines):
               if any(n in line for n in needles):
-                a=max(0,i-7); b=min(len(lines),i+12)
-                key=(a,b)
-                if key in shown: continue
-                shown.add(key)
+                a=max(0,i-10); b=min(len(lines),i+22)
+                if any(not (b<=x or a>=y) for x,y in emitted): continue
+                emitted.append((a,b))
                 print(f'--- lines {a+1}-{b} ---')
                 for j in range(a,b): print(f'{j+1:06d}: {lines[j]}')
           PY

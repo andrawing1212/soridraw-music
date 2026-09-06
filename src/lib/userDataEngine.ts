@@ -9,6 +9,7 @@ export const SORIDRAW_USER_DATA_ENGINE_V2_20260906 = true;
 export const SORIDRAW_USER_DATA_ENGINE_DELTA_SYNC_1035 = true;
 export const SORIDRAW_USER_DATA_ENGINE_SERVER_AUTHORITY_V4_20260906 = true;
 export const SORIDRAW_USER_DATA_ENGINE_LOCAL_CACHE_V5_20260906 = true;
+export const SORIDRAW_USER_DATA_ENGINE_REMOTE_AUTHORITY_1047 = true;
 
 export type SoridrawCatalogKind = 'musicNote' | 'library';
 export type SoridrawHotSetKind = 'recentSongs';
@@ -90,6 +91,9 @@ const LIBRARY_SUMMARY_KEYS = new Set([
 
 const catalogMemory = new Map<string, SoridrawCatalogSnapshot>();
 const catalogReadInFlight = new Map<string, Promise<SoridrawCatalogSnapshot | null>>();
+// Local IndexedDB is instant paint only until this browser session has actually
+// received a server-authoritative Catalog response for the UID/kind.
+const catalogRemoteValidatedSessionKeys = new Set<string>();
 const catalogPublishTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const catalogPendingPublishes = new Map<string, {
   kind: SoridrawCatalogKind;
@@ -392,21 +396,30 @@ const readRemoteCatalogSnapshot = async (
       // into the old partial-list path.
       const headers = await authenticatedHeaders(false);
       if (!headers) throw new Error('CATALOG_AUTH_NOT_READY');
-      const knownRemoteRevision = Math.max(readKnownRemoteCatalogRevision(kind, uid), Math.floor(minimumRevision || 0));
-      if (knownRemoteRevision > 0) headers['X-Soridraw-Known-Revision'] = String(knownRemoteRevision);
+      // A normal Catalog read asks for the already-materialized full R2 snapshot.
+      // Profile sync signals are cache-invalidation hints, not permission to force
+      // an expensive Firestore full rebuild on every browser entry. Only explicit
+      // maintenance/mutation callers may pass a hard minimumRevision.
+      const hardMinimumRevision = Math.max(0, Math.floor(minimumRevision || 0));
+      if (hardMinimumRevision > 0) headers['X-Soridraw-Known-Revision'] = String(hardMinimumRevision);
       const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${kind}`, {
         method: 'GET',
         headers,
         cache: 'no-store',
       });
       if (response.status === 404) throw new Error('CATALOG_NOT_MATERIALIZED');
-      if (!response.ok) throw new Error(`CATALOG_READ_${response.status}`);
+      if (!response.ok) {
+        let detail = '';
+        try { detail = String(await response.text()).slice(0, 180); } catch {}
+        throw new Error(`CATALOG_READ_${response.status}${detail ? `:${detail}` : ''}`);
+      }
       const payload = await response.json();
       if (!isValidSnapshot(kind, payload)) throw new Error('CATALOG_PAYLOAD_INVALID');
-      if (knownRemoteRevision > 0 && payload.revision < knownRemoteRevision) {
+      if (hardMinimumRevision > 0 && payload.revision < hardMinimumRevision) {
         throw new Error('CATALOG_REVISION_STALE');
       }
       await writeCatalogSnapshotToLocalCache(kind, uid, payload);
+      catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));
       return payload;
     } catch (error) {
       lastError = error;
@@ -427,9 +440,23 @@ export const readCatalogSnapshotCacheFirst = async (
   const promise = (async () => {
     const local = await readCatalogSnapshotFromLocalCache(kind, uid);
     const knownRemoteRevision = readKnownRemoteCatalogRevision(kind, uid);
-    if (local && (knownRemoteRevision <= 0 || local.revision >= knownRemoteRevision)) return local;
-    const remote = await readRemoteCatalogSnapshot(kind, uid, knownRemoteRevision);
+    const sessionValidated = catalogRemoteValidatedSessionKeys.has(key);
+
+    // Local cache may paint instantly, but it is never promoted to full-list
+    // authority before one successful server Catalog response in this session.
+    // This prevents an old 37-row cache from permanently masking a 500+ row R2 Catalog.
+    if (local && sessionValidated && (knownRemoteRevision <= 0 || local.revision >= knownRemoteRevision)) {
+      return local;
+    }
+
+    // Normal entry always validates against the already-materialized R2 object.
+    // Do not pass the profile sync signal as a hard Worker rebuild requirement.
+    const remote = await readRemoteCatalogSnapshot(kind, uid, 0);
     if (remote) return remote;
+
+    // A server-unvalidated local snapshot must not masquerade as complete Catalog.
+    // The caller can keep its legacy localStorage list as provisional paint/error fallback.
+    if (!sessionValidated) return null;
     if (local && knownRemoteRevision > local.revision) return null;
     return local;
   })().finally(() => catalogReadInFlight.delete(key));

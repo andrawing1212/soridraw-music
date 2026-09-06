@@ -45,6 +45,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git add -N functions/scripts/test-music-note-structure-sync.cjs functions/src/musicNoteStructureSync.ts
           changed="$(git diff --name-only | sort | tr '\n' ' ')"
           expected="firestore.rules functions/package.json functions/scripts/test-music-note-structure-sync.cjs functions/src/index.ts functions/src/musicNoteStructureSync.ts src/pages/FavoritesPage.tsx "
           test "$changed" = "$expected"

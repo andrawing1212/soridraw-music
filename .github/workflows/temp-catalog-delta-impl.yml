@@ -82,3 +82,5 @@ jobs:
           git commit -m 'feat(preview): add shared Catalog Base+Delta journal'
           git push origin HEAD:preview-catalog-delta-impl
           echo "FEATURE_COMMIT=$(git rev-parse HEAD)"
+
+# retrigger: 2026-09-07 clean CI after worker cache fix

@@ -15,54 +15,14 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout preview
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: preview
-
-      - name: Inspect current Music Note runtime
+      - name: Print exact line anchors only
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('src/App.tsx')
-          lines = p.read_text(encoding='utf-8').splitlines()
-          needles = [
-            'mergeFavoriteFirstPageWithCache',
-            "subscribeListBundle('musicNote'",
-            'firstPageFavs',
-            'setFavorites((prev)',
-            'favoritePaginationExhaustedRef',
-            'setHasMoreFavorites',
-            'writeFavoritesCache',
-          ]
-          hits = sorted({i for i,line in enumerate(lines) if any(n in line for n in needles)})
-          covered=[]
-          for i in hits:
-            lo=max(0,i-40); hi=min(len(lines),i+100)
-            if any(lo >= a and hi <= b for a,b in covered):
-              continue
-            covered.append((lo,hi))
-            print(f'--- APP CONTEXT {i+1} ({lo+1}-{hi}) ---')
-            for j in range(lo,hi): print(f'{j+1:06d}: {lines[j]}')
-          PY
-
-      - name: Inspect current Favorites Page reveal logic
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('src/pages/FavoritesPage.tsx')
-          lines=p.read_text(encoding='utf-8').splitlines()
-          needles=['MUSIC_NOTE_VISIBLE_BATCH_SIZE','remaining','남음','visibleCount','canShowCachedMusicNoteMore','hasMoreFavorites']
-          hits=sorted({i for i,line in enumerate(lines) if any(n in line for n in needles)})
-          covered=[]
-          for i in hits:
-            lo=max(0,i-25); hi=min(len(lines),i+70)
-            if any(lo >= a and hi <= b for a,b in covered): continue
-            covered.append((lo,hi))
-            print(f'--- FAVORITES CONTEXT {i+1} ({lo+1}-{hi}) ---')
-            for j in range(lo,hi): print(f'{j+1:06d}: {lines[j]}')
-          PY
+          echo 'APP_ANCHORS'
+          grep -n -E "mergeFavoriteFirstPageWithCache|subscribeListBundle\('musicNote'|firstPageFavs|favoritePaginationExhaustedRef|setHasMoreFavorites" src/App.tsx | head -80
+          echo 'FAVORITES_ANCHORS'
+          grep -n -E "MUSIC_NOTE_VISIBLE_BATCH_SIZE|남음|canShowCachedMusicNoteMore|visibleCount|hasMoreFavorites" src/pages/FavoritesPage.tsx | head -120

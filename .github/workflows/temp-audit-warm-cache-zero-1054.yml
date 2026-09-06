@@ -1,0 +1,29 @@
+name: Temp Audit Warm Cache Zero 1054
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-audit-warm-cache-zero-1054.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Trace profile version and Catalog refresh wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== userDataEngine warm read ==='
+          grep -n -B 18 -A 75 -E "readCatalogSnapshotCacheFirst|readKnownRemoteCatalogRevision|catalogRemoteValidatedSessionKeys|USER_PROFILE_CACHE_EVENT" src/lib/userDataEngine.ts | head -1400 || true
+          echo '=== profile cache writers/listeners ==='
+          grep -R -n -B 20 -A 60 -E "writeUserProfileCache|USER_PROFILE_CACHE_EVENT|syncVersions|favoriteSyncSignalUpdatedAt|favoriteSyncSignal" src | head -2600 || true
+          echo '=== list bundle triggers ==='
+          grep -R -n -B 20 -A 70 -E "subscribeListBundle\(|music-note-bundle-page-entry|library-bundle|readCatalogSnapshotCacheFirst|readPreviewAdaptiveListIndexV2" src | head -2600 || true
+          echo '=== dirty revision writers ==='
+          grep -R -n -B 15 -A 45 -E "markAdaptiveListIndexDirty|setAdaptiveListIndexDirty|syncVersions.*musicNote|syncVersions.*library" src | head -2200 || true

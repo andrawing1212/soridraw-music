@@ -30,6 +30,7 @@ import { schedulePreviewAdaptiveListIndexPublishIfDirty } from '../lib/adaptiveL
 const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 
 const SORIDRAW_923_FINAL_FIRESTORE_GUARD = true;
+const SORIDRAW_LIBRARY_FULL_CATALOG_AUTHORITY_1051 = true;
 const SORIDRAW_936_LIBRARY_VERSION_SYNC_ONLY = true;
 const SORIDRAW_930_ROUTE_USER_READ_CACHE = true;
 const SORIDRAW_902_LIST_BUNDLE_CACHE = true;
@@ -58,8 +59,6 @@ const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
 // SORIDRAW_LIBRARY_PLAYBACK_FAILURE_RECOVERY_991
 const WORKSPACE_PAGE_SIZE = 10;
 const SORIDRAW_LIBRARY_MORE_VISIBILITY_1032 = true;
-const WORKSPACE_SERVER_PAGE_SIZE = 10;
-const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE;
 const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
 const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
 const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
@@ -348,49 +347,8 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
   };
   libraryWorkspaceSession = session;
 
-  const tracksRef = collection(db, 'suno_tracks', uid, 'tracks');
-  let libraryFullBootstrapStarted = false;
-  const bootstrapCachelessLibraryFromServerOnce = async () => {
-    if (libraryFullBootstrapStarted) return;
-    libraryFullBootstrapStarted = true;
-    try {
-      // Cost guard: a cold/new-origin/schema bootstrap is always bounded.
-      // Never sweep the user's whole Library merely because local cache is absent.
-      const snapshot = await getDocs(query(
-        tracksRef,
-        orderBy('createdAt', 'desc'),
-        limit(WORKSPACE_SERVER_FETCH_SIZE)
-      ));
-      if (libraryWorkspaceSession !== session || session.uid !== uid) return;
-      const docs = snapshot.docs;
-      const list = docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      session.tracks = mergeLibraryLatestBundleWithCache(
-        list,
-        session.tracks,
-        docs.length > 0 ? getLibraryWorkspaceTrackCreatedAtMs(list[list.length - 1]) : 0,
-        docs.length >= WORKSPACE_SERVER_PAGE_SIZE,
-      );
-      libraryWorkspaceInMemoryCache.set(uid, session.tracks);
-      session.lastDoc = docs.length > 0 ? docs[docs.length - 1] : null;
-      session.hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
-      session.paginationFallback = false;
-      session.ready = true;
-      const persisted = await persistLibraryWorkspaceTrackCacheNow(uid, session.tracks);
-      if (persisted) {
-        markLibraryWorkspaceCacheSchemaCurrent(uid);
-        const remoteVersion = readRemoteLibraryVersion();
-        if (remoteVersion > 0) writeLibraryBundleLocalSyncVersion(uid, remoteVersion);
-      } else {
-        console.warn('Library full bootstrap loaded server data but IndexedDB persistence failed.');
-      }
-      markCacheDiagnostic('library', 'SYNC', snapshot.docs.length);
-      emitLibraryWorkspaceSession(session);
-    } catch (bootstrapError) {
-      console.warn('Cacheless Library full bootstrap failed.', bootstrapError);
-      session.ready = true;
-      emitLibraryWorkspaceSession(session);
-    }
-  };
+  // 1051: Library workspace no longer owns a Firestore page bootstrap.
+  // The shared server-authoritative Catalog is the only list source; durable cache is instant paint only.
 
   let libraryBundleReadInFlight = false;
 
@@ -415,18 +373,12 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
         );
         writeLibraryBundleLocalSyncVersion(uid, verifiedVersion);
         const list = Array.isArray(bundle.items) ? bundle.items : [];
-        session.tracks = mergeLibraryLatestBundleWithCache(
-          list,
-          session.tracks,
-          bundle.cursorCreatedAtMs,
-          bundle.hasMore,
-        );
-        session.lastDoc = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
-        const hasOlderCachedRows = session.tracks.length > list.length;
         const isFullCatalogSnapshot = bundle.schemaVersion === 1001;
-        session.hasMore = isFullCatalogSnapshot
-          ? false
-          : Boolean(bundle.hasMore || hasOlderCachedRows || list.length >= WORKSPACE_SERVER_PAGE_SIZE);
+        session.tracks = isFullCatalogSnapshot
+          ? mergeLibraryWorkspaceSessionTracks(list, [])
+          : mergeLibraryLatestBundleWithCache(list, session.tracks, bundle.cursorCreatedAtMs, bundle.hasMore);
+        session.lastDoc = null;
+        session.hasMore = isFullCatalogSnapshot ? false : Boolean(bundle.hasMore);
         session.paginationFallback = false;
         session.ready = true;
         saveLibraryWorkspaceTrackCache(uid, session.tracks);
@@ -436,20 +388,20 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
       onMissing: (meta) => {
         libraryBundleReadInFlight = false;
         if (meta.fromCache) return;
-        void bootstrapCachelessLibraryFromServerOnce();
+        session.hasMore = false;
+        session.paginationFallback = false;
+        session.ready = true;
+        emitLibraryWorkspaceSession(session);
       },
       onError: (error) => {
         libraryBundleReadInFlight = false;
-        console.warn('Library bundle unavailable; using bounded source fallback.', error);
-        void bootstrapCachelessLibraryFromServerOnce();
+        console.warn('Library Catalog unavailable; keeping local cache without Firestore paging.', error);
+        session.hasMore = false;
+        session.paginationFallback = false;
+        session.ready = true;
+        emitLibraryWorkspaceSession(session);
       },
     });
-  };
-
-  const shouldVerifyLibraryBundle = () => {
-    const localVersion = readLibraryBundleLocalSyncVersion(uid);
-    const remoteVersion = readRemoteLibraryVersion();
-    return session.tracks.length === 0 || remoteVersion > localVersion;
   };
 
   let libraryHydrationStarted = false;
@@ -464,20 +416,15 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
       if (durableTracks !== null) {
         libraryWorkspaceInMemoryCache.set(uid, durableTracks);
         session.tracks = mergeLibraryWorkspaceSessionTracks(durableTracks, []);
-        const oldestCachedTrack = session.tracks[session.tracks.length - 1] || null;
-        const cachedCursorMs = getLibraryWorkspaceTrackCreatedAtMs(oldestCachedTrack);
-        // Reconstruct a bounded cursor from the durable cache so browser/app
-        // restart never forces a full collection rebuild. At worst an exact
-        // 10-item terminal cache can cause one bounded empty-page check.
-        session.lastDoc = cachedCursorMs > 0 ? new Date(cachedCursorMs) : null;
-        session.hasMore = session.tracks.length >= WORKSPACE_SERVER_PAGE_SIZE && cachedCursorMs > 0;
+        // Durable cache never manufactures a Firestore cursor or server-more state.
+        session.lastDoc = null;
+        session.hasMore = false;
         session.paginationFallback = false;
         session.ready = true;
         markCacheDiagnostic('library', 'CACHE', 0);
         emitLibraryWorkspaceSession(session);
-        if (shouldVerifyLibraryBundle() && readRemoteLibraryVersion() > readLibraryBundleLocalSyncVersion(uid)) {
-          startLibraryBundleVerification();
-        }
+        // Durable cache is paint-only until the shared Catalog verifies completeness.
+        startLibraryBundleVerification();
         return;
       }
     }
@@ -1697,53 +1644,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
 
   const loadMoreWorkspaceTracks = async () => {
-    if (!user || isSharedView || workspacePaginationFallbackRef.current) {
-      setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
-      return;
-    }
-
-    if (workspaceVisibleCount < filteredTracks.length) {
-      setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
-      return;
-    }
-
-    if (!hasMoreWorkspaceServerTracks || !workspaceLastTrackDocRef.current || isLoadingMoreWorkspaceTracks) return;
-
-    setIsLoadingMoreWorkspaceTracks(true);
-    try {
-      const tracksRef = collection(db, 'suno_tracks', user.uid, 'tracks');
-      const nextQuery = query(
-        tracksRef,
-        orderBy('createdAt', 'desc'),
-        startAfter(workspaceLastTrackDocRef.current),
-        limit(WORKSPACE_SERVER_FETCH_SIZE)
-      );
-      const snapshot = await getDocs(nextQuery);
-      const docs = snapshot.docs;
-      const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
-      const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
-      workspaceLastTrackDocRef.current = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : workspaceLastTrackDocRef.current;
-      setHasMoreWorkspaceServerTracks(hasMore);
-
-      const list = visibleDocs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      mergeLibraryWorkspaceSessionPage(user.uid, list, workspaceLastTrackDocRef.current, hasMore);
-      setTracks((prev) => {
-        const merged = mergeWorkspaceTracks(list, Array.isArray(prev) ? prev : []);
-        saveWorkspaceTrackCache(user.uid, merged);
-        return merged;
-      });
-      setWorkspaceVisibleCount((prev) => prev + WORKSPACE_PAGE_SIZE);
-    } catch (error) {
-      console.error('load more workspace tracks failed:', error);
-      workspacePaginationFallbackRef.current = true;
-      setHasMoreWorkspaceServerTracks(false);
-    } finally {
-      setIsLoadingMoreWorkspaceTracks(false);
-    }
+    // 1051: UI pagination only. The full Library Catalog is already local.
+    setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
   };
 
   const playlistLiveModeActive = libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist';

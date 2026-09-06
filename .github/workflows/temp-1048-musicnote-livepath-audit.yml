@@ -15,34 +15,29 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: preview
-      - name: Trace current Music Note wiring
+      - name: Trace current Music Note bootstrap and Catalog callback
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== APP MUSIC NOTE EVENT / SUBSCRIBE ==='
-          grep -n -B 20 -A 45 -E "music-note-bundle-page-entry|subscribeListBundle\(['\"]musicNote|readPreviewAdaptiveListIndexV2|favoriteTotalCount|soridraw_favorites_cache" src/App.tsx | head -1200 || true
-          echo '=== FAVORITES PAGE MORE / COUNTS ==='
-          grep -n -B 20 -A 40 -E "더보기|개 남음|favoriteTotalCount|hasMoreFavorites|filteredFavorites|favorites\.length|onLoadMore|loadMore" src/pages/FavoritesPage.tsx | head -1400 || true
-          echo '=== LIST BUNDLE CATALOG BRIDGE ==='
-          grep -n -B 15 -A 60 -E "readPreviewCatalogWithStartupRetry|readPreviewAdaptiveListIndexV2|legacy partial fallback blocked|runOneShotRead" src/lib/listBundleCache.ts | head -800 || true
-          echo '=== USER DATA ENGINE READ CONTRACT ==='
-          grep -n -B 20 -A 90 -E "readRemoteCatalogSnapshot|readCatalogSnapshotCacheFirst|catalogRemoteValidatedSessionKeys|CATALOG_ENDPOINT" src/lib/userDataEngine.ts | head -1200 || true
+          echo '=== APP BOOTSTRAP 8950-9335 ==='
+          sed -n '8950,9335p' src/App.tsx
+          echo '=== APP COLD/PAGED QUERY MARKERS ==='
+          grep -n -B 25 -A 55 -E "FAVORITES_PAGE_SIZE|MUSIC_NOTE_COLD|cold repair|cold bootstrap|limit\(60\)|limit\(FAVORITES|refreshFavoritesFromServerFirstPage|loadMoreFavorites|favoritePagination" src/App.tsx | head -1800 || true
+          echo '=== AUTH STATE SETUP ==='
+          grep -n -B 25 -A 50 -E "onAuthStateChanged|setUser\(|currentUser\.uid|subscribeListBundle\('musicNote'" src/App.tsx | head -1400 || true
+          echo '=== ADAPTIVE BRIDGE ==='
+          cat src/lib/adaptiveListIndexV2.ts
       - name: Probe deployed Worker health and Catalog CORS
         shell: bash
         run: |
           set -euo pipefail
           WORKER='https://soridraw-media-preview.andrawing1212.workers.dev'
-          echo '=== HEALTH ==='
           curl -fsS --max-time 30 "$WORKER/health"
           echo
-          echo '=== CATALOG PREFLIGHT ==='
-          curl -sS --max-time 30 -D - -o /dev/null -X OPTIONS \
+          code="$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' -X OPTIONS \
             -H 'Origin: https://preview.soridraw.com' \
             -H 'Access-Control-Request-Method: GET' \
             -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck,x-soridraw-known-revision' \
-            "$WORKER/v1/catalog/musicNote"
-          echo '=== UNAUTH CATALOG RESPONSE ==='
-          curl -sS --max-time 30 -D - -o "$RUNNER_TEMP/catalog.json" \
-            -H 'Origin: https://preview.soridraw.com' \
-            "$WORKER/v1/catalog/musicNote" || true
-          cat "$RUNNER_TEMP/catalog.json" || true
+            "$WORKER/v1/catalog/musicNote")"
+          echo "CATALOG_PREFLIGHT=$code"
+          test "$code" = '204'

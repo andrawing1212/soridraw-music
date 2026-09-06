@@ -6,6 +6,7 @@ import {
 } from './firestoreMeasured';
 
 export const SORIDRAW_USER_DATA_ENGINE_V1_20260906 = true;
+export const SORIDRAW_USER_DATA_ENGINE_REVISION_PROOF_1034 = true;
 
 export type SoridrawCatalogKind = 'musicNote' | 'library';
 export type SoridrawHotSetKind = 'recentSongs';
@@ -263,6 +264,21 @@ export const readCatalogSnapshotFromLocalCache = async (
   return indexedSnapshot;
 };
 
+const readKnownRemoteCatalogRevision = (kind: SoridrawCatalogKind, uid: string): number => {
+  const profile = readUserProfileCache(uid) as any;
+  if (!profile || typeof profile !== 'object') return 0;
+  if (kind === 'library') {
+    const libraryVersion = Number(profile?.syncVersions?.library || 0);
+    return Number.isFinite(libraryVersion) && libraryVersion > 0 ? Math.floor(libraryVersion) : 0;
+  }
+  const candidates = [
+    Number(profile?.syncVersions?.musicNote || 0),
+    Number(profile?.favoriteSyncSignalUpdatedAt || 0),
+    Number(profile?.favoriteSyncSignal?.at || 0),
+  ].filter((value) => Number.isFinite(value) && value > 0);
+  return candidates.length > 0 ? Math.floor(Math.max(...candidates)) : 0;
+};
+
 const authenticatedHeaders = async (): Promise<Record<string, string> | null> => {
   const user = auth.currentUser;
   if (!user) return null;
@@ -297,6 +313,13 @@ const readRemoteCatalogSnapshot = async (
     if (!response.ok) throw new Error(`CATALOG_READ_${response.status}`);
     const payload = await response.json();
     if (!isValidSnapshot(kind, payload)) throw new Error('CATALOG_PAYLOAD_INVALID');
+    const knownRemoteRevision = readKnownRemoteCatalogRevision(kind, uid);
+    if (knownRemoteRevision > 0 && payload.generatedAtMs < knownRemoteRevision) {
+      // Projection is older than a mutation signal already known by the client.
+      // Never overwrite a newer local view with a stale R2 object.
+      console.warn(`[userDataEngine] ${kind} catalog snapshot is stale versus cached sync revision.`);
+      return null;
+    }
     await writeCatalogSnapshotToLocalCache(kind, uid, payload);
     return payload;
   } catch (error) {
@@ -315,8 +338,16 @@ export const readCatalogSnapshotCacheFirst = async (
   if (existingRead) return existingRead;
   const promise = (async () => {
     const local = await readCatalogSnapshotFromLocalCache(kind, uid);
-    if (local) return local;
-    return readRemoteCatalogSnapshot(kind, uid);
+    const knownRemoteRevision = readKnownRemoteCatalogRevision(kind, uid);
+    if (local && (knownRemoteRevision <= 0 || local.generatedAtMs >= knownRemoteRevision)) {
+      return local;
+    }
+    const remote = await readRemoteCatalogSnapshot(kind, uid);
+    if (remote) return remote;
+    // If the cached users/{uid} signal proves a local projection stale, return
+    // null so the existing bounded compatibility path can recover correctness.
+    if (local && knownRemoteRevision > local.generatedAtMs) return null;
+    return local;
   })().finally(() => catalogReadInFlight.delete(key));
   catalogReadInFlight.set(key, promise);
   return promise;
@@ -342,9 +373,9 @@ const buildCompleteSnapshot = (
   let complete = options.complete === true;
   if (kind === 'musicNote') {
     const expectedCount = resolveExpectedMusicNoteCount(uid, options.expectedItemCount);
-    if (expectedCount !== null) complete = items.length >= expectedCount;
+    if (expectedCount !== null) complete = complete || items.length >= expectedCount;
     else if (options.hasMore === false) complete = true;
-  } else if (options.complete !== true) {
+  } else if (!complete) {
     complete = options.hasMore === false;
   }
   if (!complete) return null;
@@ -413,28 +444,35 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
     catalogPendingPublishes.delete(key);
     if (!pending) return;
 
-    const currentDirtyRevision = readAdaptiveListIndexDirtyRevision(kind);
-    if (currentDirtyRevision <= 0) return;
-    const snapshot = buildCompleteSnapshot(
-      kind,
-      uid,
-      pending.sourceItems,
-      currentDirtyRevision,
-      pending.options,
-    );
-    if (!snapshot) return;
+    void (async () => {
+      const currentDirtyRevision = readAdaptiveListIndexDirtyRevision(kind);
+      if (currentDirtyRevision <= 0) return;
 
-    const stableHash = JSON.stringify({ ...snapshot, revision: 0, generatedAtMs: 0 });
-    if (catalogLastPublishedHashes.get(key) === stableHash) {
-      clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-      return;
-    }
+      const previousCompleteSnapshot = await readCatalogSnapshotFromLocalCache(kind, uid);
+      const effectiveOptions: CatalogPublishOptions = {
+        ...pending.options,
+        complete: pending.options.complete === true || Boolean(previousCompleteSnapshot),
+      };
+      const snapshot = buildCompleteSnapshot(
+        kind,
+        uid,
+        pending.sourceItems,
+        currentDirtyRevision,
+        effectiveOptions,
+      );
+      if (!snapshot) return;
 
-    void publishRemoteCatalogSnapshot(uid, snapshot).then((published) => {
+      const stableHash = JSON.stringify({ ...snapshot, revision: 0, generatedAtMs: 0 });
+      if (catalogLastPublishedHashes.get(key) === stableHash) {
+        clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
+        return;
+      }
+
+      const published = await publishRemoteCatalogSnapshot(uid, snapshot);
       if (!published) return;
       catalogLastPublishedHashes.set(key, stableHash);
       clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-    });
+    })();
   }, 1500));
 };
 

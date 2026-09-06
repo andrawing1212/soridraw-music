@@ -1,0 +1,156 @@
+name: Temp Deploy 1035 Catalog Recovery Preview
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-deploy-1035-catalog-recovery-preview.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  deploy_cloudflare_then_firebase:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      SOURCE_COMMIT: 6cb9d454a835815459dc98e0c5fff41552d24cea
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      WORKER_URL: https://soridraw-media-preview.andrawing1212.workers.dev
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 8
+
+      - name: Guard exact verified source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$SOURCE_COMMIT" HEAD
+          git diff --exit-code "$SOURCE_COMMIT"..HEAD -- \
+            src functions/src cloudflare/media-worker package.json package-lock.json \
+            firebase.hosting-preview.json
+          grep -F 'SORIDRAW_USER_DATA_ENGINE_V2_20260906' src/lib/userDataEngine.ts >/dev/null
+          grep -F 'SORIDRAW_COMMON_USER_DATA_ENGINE_1035' cloudflare/media-worker/src/index.js >/dev/null
+          echo 'SOURCE_GUARD=PASS'
+
+      - name: Set up Node 22 for Cloudflare
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install and validate Cloudflare Worker
+        working-directory: cloudflare/media-worker
+        run: |
+          npm install --no-audit --no-fund
+          npm run check
+
+      - name: Deploy Cloudflare PREVIEW catalog Worker
+        working-directory: cloudflare/media-worker
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          npm run deploy
+          echo 'CLOUDFLARE_PREVIEW_DEPLOY=PASS'
+
+      - name: Verify Cloudflare PREVIEW routes and CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "$WORKER_URL/health" -o "$RUNNER_TEMP/health.json"
+          grep -q '"ok":true' "$RUNNER_TEMP/health.json"
+          grep -q '"r2Binding":true' "$RUNNER_TEMP/health.json"
+
+          code="$(curl -sS -o "$RUNNER_TEMP/catalog-unauth.json" -w '%{http_code}' --max-time 30 \
+            -H 'Origin: https://preview.soridraw.com' \
+            "$WORKER_URL/v1/catalog/musicNote")"
+          test "$code" = '401'
+          grep -q 'APP_CHECK_TOKEN_MISSING\|AUTH_TOKEN_MISSING' "$RUNNER_TEMP/catalog-unauth.json"
+
+          code="$(curl -sS -o "$RUNNER_TEMP/options-body" -D "$RUNNER_TEMP/options-head" -w '%{http_code}' --max-time 30 -X OPTIONS \
+            -H 'Origin: https://preview.soridraw.com' \
+            -H 'Access-Control-Request-Method: GET' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck,x-soridraw-known-revision' \
+            "$WORKER_URL/v1/catalog/musicNote")"
+          test "$code" = '204'
+          grep -qi '^access-control-allow-origin: https://preview.soridraw.com' "$RUNNER_TEMP/options-head"
+          grep -qi 'x-soridraw-known-revision' "$RUNNER_TEMP/options-head"
+          echo 'CLOUDFLARE_CATALOG_ROUTE_CORS=PASS'
+
+      - name: Set up Node 20 for app build
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build exact PREVIEW app
+        run: npm run build
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot main and production
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-remote origin refs/heads/main | awk '{print $1}' > "$RUNNER_TEMP/main-before.sha"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+
+      - name: Deploy Firebase PREVIEW hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_DEPLOY=PASS'
+
+      - name: Verify exact deployed PREVIEW build
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then
+                  ok=yes
+                  echo "EXACT_BUILD_PASS=$url"
+                  break
+                fi
+              fi
+              sleep 10
+            done
+            test "$ok" = yes
+          done
+
+      - name: Verify main and production unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-remote origin refs/heads/main | awk '{print $1}' > "$RUNNER_TEMP/main-after.sha"
+          cmp "$RUNNER_TEMP/main-before.sha" "$RUNNER_TEMP/main-after.sha"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo 'MAIN_UNCHANGED=PASS'
+          echo 'PRODUCTION_UNCHANGED=PASS'
+
+      - name: Final deployment result
+        run: |
+          echo 'TARGET=PREVIEW'
+          echo 'CLOUDFLARE=DEPLOYED_AND_ROUTE_VERIFIED'
+          echo 'FIREBASE_FUNCTIONS=NO_SOURCE_CHANGE_NO_REDEPLOY'
+          echo 'FIREBASE_HOSTING=DEPLOYED_AND_EXACT_BUILD_VERIFIED'
+          echo 'MAIN=UNCHANGED'
+          echo 'PRODUCTION=UNCHANGED'

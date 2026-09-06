@@ -19,7 +19,9 @@ jobs:
           fetch-depth: 30
 
       - name: Apply shared Base plus Delta implementation
-        run: python3 .deploy/apply-catalog-delta-1053.py
+        run: |
+          python3 .deploy/apply-catalog-delta-1053.py
+          python3 .deploy/fix-catalog-delta-1053.py
 
       - name: Structural guards
         shell: bash
@@ -76,7 +78,7 @@ jobs:
           set -euo pipefail
           git config user.name andrawing1212
           git config user.email andrawing1212@gmail.com
-          git rm .github/workflows/temp-catalog-delta-impl.yml .deploy/apply-catalog-delta-1053.py
+          git rm .github/workflows/temp-catalog-delta-impl.yml .deploy/apply-catalog-delta-1053.py .deploy/fix-catalog-delta-1053.py
           git add src/lib/userDataEngine.ts cloudflare/media-worker/src/index.js cloudflare/media-worker/src/catalogJournal.js cloudflare/media-worker/scripts/test-catalog-journal-1053.mjs
           git diff --cached --check
           git commit -m 'feat(preview): add shared Catalog Base+Delta journal'

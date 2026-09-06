@@ -12,14 +12,15 @@ if (source.includes(marker)) {
   process.exit(0);
 }
 
+// Validate the active runtime shape rather than historical patch comments. Cloudflare
+// may preserve the functions while dropping old marker comments during later rebuilds.
 for (const required of [
-  'SORIDRAW_PUBLICATION_SINGLE_WRITE_HOTPATH_016_20260905',
-  'SORIDRAW_PUBLICATION_MUTATION_COMPANIONS_017_20260905',
-  'SORIDRAW_PUBLICATION_POSTWRITE_500_RETRY_COST_018_20260905',
-  'SORIDRAW_PUBLICATION_PROFILE_R2_DELTA_019_20260905',
   'handleMusicNotePublicationSingleWrite016',
   'handleMusicNotePrivate017',
   'publicationCanonicalUnchanged016',
+  'publicationReadState016',
+  'patchExploreProfileR2Mutation019',
+  'Promise.allSettled',
 ]) {
   if (!source.includes(required)) throw new Error(`[021] prerequisite missing: ${required}`);
 }

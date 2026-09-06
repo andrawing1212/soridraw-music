@@ -1,0 +1,232 @@
+name: SORIDRAW Deploy Publication State Engine 021 PREVIEW
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-deploy-publication-state-engine-021.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FEATURE_SHA: fefeca0bcbd5163101a866b09ab3c0a199462711
+      BASE_SHA: b7cb0afcb87d7f99b3518956eb6f4c769f62a86f
+      MAIN_SHA: 49c799cbb46d137539f74a48c261f7256762336f
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PROD_WORKER: soridraw-explore-api
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+      PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_R2: soridraw-profile-media-preview
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Guard exact source lineage and main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$BASE_SHA" "$FEATURE_SHA"
+          test "$(git rev-parse "$FEATURE_SHA^")" = "$BASE_SHA"
+          git diff --exit-code "$BASE_SHA" "$FEATURE_SHA" -- cloudflare/explore-worker/patches/021-publication-state-transition-engine.mjs >/dev/null
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_SHA"
+          grep -Fq 'SORIDRAW_PUBLICATION_STATE_TRANSITION_ENGINE_021_20260907' cloudflare/explore-worker/patches/021-publication-state-transition-engine.mjs
+          echo 'SOURCE_GUARD=PASS'
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate app and patch syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          node --check cloudflare/explore-worker/patches/021-publication-state-transition-engine.mjs
+          echo 'APP_VALIDATE=PASS'
+
+      - name: Install pinned Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Fetch active PREVIEW Worker and snapshot production
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .remote-worker && mkdir .remote-worker
+          node <<'NODE'
+          const fs = require('fs');
+          const A = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const T = process.env.CLOUDFLARE_API_TOKEN;
+          const P = process.env.PREVIEW_WORKER;
+          const PROD = process.env.PROD_WORKER;
+          async function get(url) {
+            const r = await fetch(url, { headers: { Authorization: `Bearer ${T}`, Accept: 'application/json' } });
+            const x = await r.json();
+            if (!r.ok || x.success === false) throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,900)}`);
+            return x.result || x;
+          }
+          async function active(name) {
+            const base = `https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${name}`;
+            const ds = await get(`${base}/deployments`);
+            const d = (ds.deployments || ds || [])[0];
+            const a = [...(d?.versions || [])].sort((x,y) => Number(y?.percentage || 0) - Number(x?.percentage || 0))[0];
+            if (!a?.version_id || Number(a?.percentage || 0) < 99.99) throw new Error(`single active version missing for ${name}`);
+            return { base, version: a.version_id };
+          }
+          (async () => {
+            const preview = await active(P);
+            const prod = await active(PROD);
+            fs.writeFileSync('.remote-worker/preview-before.txt', preview.version);
+            fs.writeFileSync('.remote-worker/prod-before.txt', prod.version);
+            const v = await get(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${P}/versions/${preview.version}?include=modules`);
+            const mods = v.modules || [];
+            const main = mods.find((m) => m.name === (v.main_module || mods[0]?.name)) || mods[0];
+            if (!main?.content_base64) throw new Error('PREVIEW main module missing');
+            const src = Buffer.from(main.content_base64, 'base64').toString('utf8');
+            for (const token of [
+              'handleMusicNotePublicationSingleWrite016',
+              'handleMusicNotePrivate017',
+              'SORIDRAW_PUBLICATION_POSTWRITE_500_RETRY_COST_018_20260905',
+              'SORIDRAW_PUBLICATION_PROFILE_R2_DELTA_019_20260905'
+            ]) if (!src.includes(token)) throw new Error(`PREVIEW prerequisite missing ${token}`);
+            if (src.includes('SORIDRAW_PUBLICATION_STATE_TRANSITION_ENGINE_021_20260907')) throw new Error('021 already active before this deployment');
+            fs.writeFileSync('.remote-worker/original.js', src);
+            fs.writeFileSync('.remote-worker/worker.js', src);
+            const settings = await get(`${preview.base}/settings`);
+            const config = {
+              name: P,
+              main: './worker.js',
+              compatibility_date: String(settings.compatibility_date || '2026-09-04').slice(0,10),
+              workers_dev: true,
+              keep_vars: true,
+              d1_databases: [{ binding: 'DB', database_name: process.env.PREVIEW_DB_NAME, database_id: process.env.PREVIEW_DB_ID }],
+              r2_buckets: [{ binding: 'PROFILE_MEDIA', bucket_name: process.env.PREVIEW_R2 }],
+              observability: settings.observability && typeof settings.observability === 'object'
+                ? { enabled: settings.observability.enabled !== false }
+                : { enabled: true }
+            };
+            if (Array.isArray(settings.compatibility_flags) && settings.compatibility_flags.length) config.compatibility_flags = settings.compatibility_flags;
+            fs.writeFileSync('.remote-worker/wrangler.jsonc', JSON.stringify(config, null, 2));
+            console.log(`[before] preview=${preview.version} production=${prod.version}`);
+          })().catch((e) => { console.error(e); process.exit(1); });
+          NODE
+
+      - name: Apply and validate shared publication transition engine
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/021-publication-state-transition-engine.mjs
+          node --check .remote-worker/worker.js
+          node <<'NODE'
+          const fs = require('fs');
+          const s = fs.readFileSync('.remote-worker/worker.js', 'utf8');
+          function fn(name) {
+            let p = s.indexOf(`async function ${name}(`); if (p < 0) p = s.indexOf(`function ${name}(`);
+            if (p < 0) throw new Error('missing '+name);
+            const b = s.indexOf('{', p); let d = 0, q = null, esc = false;
+            for (let i=b; i<s.length; i++) { const c=s[i];
+              if (q) { if (esc) { esc=false; continue; } if (c==='\\') { esc=true; continue; } if (c===q) q=null; continue; }
+              if (c==='"'||c==="'"||c==='`') { q=c; continue; }
+              if (c==='{') d++; else if (c==='}' && --d===0) return s.slice(p,i+1);
+            } throw new Error('unterminated '+name);
+          }
+          const hot = fn('handleMusicNotePublicationSingleWrite016');
+          const priv = fn('handleMusicNotePrivate017');
+          const engine = fn('applyPublicationVisibilityTransition021');
+          if (!s.includes('SORIDRAW_PUBLICATION_STATE_TRANSITION_ENGINE_021_20260907')) throw new Error('021 marker missing');
+          if (!hot.includes('visibilityTransitionOnly021')) throw new Error('re-publication transition probe missing');
+          if (!hot.includes('applyPublicationVisibilityTransition021')) throw new Error('publish path not using transition engine');
+          if ((hot.match(/INSERT INTO tracks/g)||[]).length !== 1) throw new Error('full create/upsert count changed');
+          if (!priv.includes('applyPublicationVisibilityTransition021')) throw new Error('private path not using transition engine');
+          if (priv.includes('UPDATE tracks SET is_public = 0')) throw new Error('legacy private update remains');
+          for (const bad of ['SELECT ','INSERT INTO','DELETE FROM','track_tags','track_stats']) if (engine.includes(bad)) throw new Error('transition engine contains '+bad);
+          if ((engine.match(/UPDATE tracks/g)||[]).length !== 3) throw new Error('transition engine branch count changed');
+          console.log('TRANSITION_ENGINE_VALIDATE=PASS');
+          NODE
+
+      - name: Deploy PREVIEW Worker with rollback guard
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployed=0
+          rollback() {
+            status=$?
+            if [ "$status" -ne 0 ] && [ "$deployed" = 1 ]; then
+              echo '[rollback] restoring previous PREVIEW Worker'
+              cp .remote-worker/original.js .remote-worker/worker.js
+              npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc || true
+            fi
+            exit "$status"
+          }
+          trap rollback EXIT
+          npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc
+          deployed=1
+          sleep 4
+          node <<'NODE'
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PREVIEW_WORKER;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}`);return x.result||x;}
+          function fn(s,name){let p=s.indexOf(`async function ${name}(`);if(p<0)p=s.indexOf(`function ${name}(`);if(p<0)throw new Error('missing '+name);const b=s.indexOf('{',p);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(p,i+1)}throw new Error('unterminated '+name)}
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;const ds=await get(base+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];if(!a?.version_id)throw new Error('active missing');const fs=require('fs'),before=fs.readFileSync('.remote-worker/preview-before.txt','utf8').trim();if(a.version_id===before)throw new Error('PREVIEW version unchanged');const v=await get(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');if(!s.includes('SORIDRAW_PUBLICATION_STATE_TRANSITION_ENGINE_021_20260907'))throw new Error('deployed marker missing');const hot=fn(s,'handleMusicNotePublicationSingleWrite016'),priv=fn(s,'handleMusicNotePrivate017'),engine=fn(s,'applyPublicationVisibilityTransition021');if(!hot.includes('visibilityTransitionOnly021')||!priv.includes('applyPublicationVisibilityTransition021'))throw new Error('deployed routing invariant failed');for(const bad of ['SELECT ','INSERT INTO','DELETE FROM','track_tags','track_stats'])if(engine.includes(bad))throw new Error('deployed engine contains '+bad);console.log('[after] preview='+a.version_id)})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          feed_code="$(curl -sS -o /tmp/feed.json -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=latest&limit=1")"
+          test "$feed_code" = '200'
+          genres_code="$(curl -sS -o /tmp/genres.json -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/genres")"
+          test "$genres_code" = '200'
+          auth_code="$(curl -sS -o /tmp/pub401.json -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" -H 'Content-Type: application/json' -X POST --data '{}' "$PREVIEW_BASE/v1/publications")"
+          test "$auth_code" = '401'
+          site_code="$(curl -sS -o /tmp/site.html -w '%{http_code}' "$PREVIEW_ORIGIN")"
+          test "$site_code" = '200'
+          trap - EXIT
+          echo 'PREVIEW_WORKER_DEPLOY=PASS'
+          echo 'FIREBASE_HOSTING_CHANGED=false'
+          echo 'FUNCTIONS_CHANGED=false'
+
+      - name: Verify main and production unchanged
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_SHA"
+          node <<'NODE'
+          const fs=require('fs'),A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PROD_WORKER;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}`);return x.result||x;}
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,ds=await get(base+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0],before=fs.readFileSync('.remote-worker/prod-before.txt','utf8').trim();if(a?.version_id!==before)throw new Error(`production worker changed ${before} -> ${a?.version_id}`);console.log('PRODUCTION_UNCHANGED=PASS')})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Package deployed source ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          short="${FEATURE_SHA:0:8}"
+          zipname="SORIDRAW_PREVIEW_${short}_publication_state_engine_021.zip"
+          git archive --format=zip --output="$zipname" "$FEATURE_SHA"
+          test -s "$zipname"
+          echo "ZIP_NAME=$zipname" >> "$GITHUB_ENV"
+          sha256sum "$zipname"
+
+      - name: Upload deployed source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_PREVIEW_publication_state_engine_021
+          path: ${{ env.ZIP_NAME }}
+          if-no-files-found: error
+          retention-days: 30

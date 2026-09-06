@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
           git merge-base --is-ancestor "$BASE_SHA" "$FEATURE_SHA"
           test "$(git rev-parse "$FEATURE_SHA^")" = "$BASE_SHA"
-          git diff --exit-code "$BASE_SHA" "$FEATURE_SHA" -- cloudflare/explore-worker/patches/021-publication-state-transition-engine.mjs >/dev/null
+          test "$(git diff --name-only "$BASE_SHA" "$FEATURE_SHA")" = 'cloudflare/explore-worker/patches/021-publication-state-transition-engine.mjs'
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_SHA"
           grep -Fq 'SORIDRAW_PUBLICATION_STATE_TRANSITION_ENGINE_021_20260907' cloudflare/explore-worker/patches/021-publication-state-transition-engine.mjs
           echo 'SOURCE_GUARD=PASS'

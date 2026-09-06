@@ -15,30 +15,16 @@ jobs:
         with:
           ref: preview
           fetch-depth: 2
-      - name: Inspect mutations and local paging
+      - name: Exact list mutation hooks
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          targets = [Path('src/App.tsx'), Path('src/pages/FavoritesPage.tsx'), Path('src/pages/SunoLibraryPage.tsx')]
-          needles = [
-            'const toggleFavorite', 'function toggleFavorite', 'const updateFavorite', 'function updateFavorite',
-            'writeFavoritesCache(', 'scheduleListBundleWrite(',
-            'musicNoteVisibleCountMemory', 'visibleCount', 'setVisibleCount', 'MUSIC_NOTE_VISIBLE_BATCH_SIZE',
-            'WORKSPACE_PAGE_SIZE', 'workspaceVisibleCount', 'setWorkspaceVisibleCount',
-            'scheduleLibraryBundle', 'writeLibrary', 'setDoc(', 'updateDoc('
-          ]
-          for p in targets:
-            if not p.exists(): continue
-            lines=p.read_text(encoding='utf-8').splitlines()
-            print(f'===== {p} =====')
-            emitted=[]
-            for i,line in enumerate(lines):
-              if any(n in line for n in needles):
-                a=max(0,i-10); b=min(len(lines),i+22)
-                if any(not (b<=x or a>=y) for x,y in emitted): continue
-                emitted.append((a,b))
-                print(f'--- lines {a+1}-{b} ---')
-                for j in range(a,b): print(f'{j+1:06d}: {lines[j]}')
+          for name in ['src/App.tsx','src/pages/SunoLibraryPage.tsx']:
+            p=Path(name); lines=p.read_text(encoding='utf-8').splitlines()
+            print('===== '+name+' =====')
+            for i,line in enumerate(lines,1):
+              if any(x in line for x in ["scheduleListBundleWrite('library'", "scheduleListBundleWrite('musicNote'", 'runV1MutationBoundary(', "updateDoc(doc(db, 'suno_tracks'", 'saveWorkspaceCache(', 'writeWorkspace', 'setTracks(', 'setAllTracks(']):
+                print(f'{i:06d}: {line}')
           PY

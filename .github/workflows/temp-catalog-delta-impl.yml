@@ -51,8 +51,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: cloudflare/media-worker/package-lock.json
       - name: Journal unit tests and Worker dry-run
         run: |
           node cloudflare/media-worker/scripts/test-catalog-journal-1053.mjs

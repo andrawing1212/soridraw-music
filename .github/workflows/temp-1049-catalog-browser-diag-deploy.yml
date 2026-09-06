@@ -196,7 +196,8 @@ jobs:
           grep -q "stage: 'ACCEPTED'" src/lib/userDataEngine.ts
           grep -q 'CATALOG BROWSER PATH' src/components/CacheDiagnosticsOverlay.tsx
           grep -q 'favoriteStoreCount' src/components/CacheDiagnosticsOverlay.tsx
-          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/components/CacheDiagnosticsOverlay.tsx src/lib/catalogRuntimeDiagnostics.ts src/lib/userDataEngine.ts "
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/components/CacheDiagnosticsOverlay.tsx src/lib/userDataEngine.ts "
+          test "$(git status --porcelain -- src/lib/catalogRuntimeDiagnostics.ts | wc -l)" -eq 1
 
       - uses: actions/setup-node@v4
         with:

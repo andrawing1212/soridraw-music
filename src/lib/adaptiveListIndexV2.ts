@@ -92,5 +92,6 @@ export const schedulePreviewAdaptiveListIndexPublishIfDirty = (
     hasMore: options.hasMore,
     complete: options.complete,
     expectedItemCount: options.expectedItemCount,
+    deletedIds: options.deletedIds,
   });
 };

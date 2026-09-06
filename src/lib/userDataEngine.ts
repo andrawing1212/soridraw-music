@@ -8,6 +8,7 @@ import {
 export const SORIDRAW_USER_DATA_ENGINE_V2_20260906 = true;
 export const SORIDRAW_USER_DATA_ENGINE_DELTA_SYNC_1035 = true;
 export const SORIDRAW_USER_DATA_ENGINE_SERVER_AUTHORITY_V4_20260906 = true;
+export const SORIDRAW_USER_DATA_ENGINE_LOCAL_CACHE_V5_20260906 = true;
 
 export type SoridrawCatalogKind = 'musicNote' | 'library';
 export type SoridrawHotSetKind = 'recentSongs';
@@ -34,6 +35,7 @@ type CatalogPublishOptions = {
   hasMore?: boolean;
   complete?: boolean;
   expectedItemCount?: number | null;
+  deletedIds?: string[];
 };
 
 type CatalogDelta = {
@@ -50,8 +52,9 @@ const CATALOG_SCHEMA_VERSION = 4 as const;
 const CATALOG_MAX_ITEMS = 100_000;
 const CATALOG_MAX_BYTES = 24 * 1024 * 1024;
 const CATALOG_DELTA_MAX_CHANGES = 5_000;
-const CATALOG_DB_NAME = 'soridraw_user_data_engine_v4';
-const LEGACY_CATALOG_DB_NAMES = ['soridraw_user_data_engine_v3', 'soridraw_user_data_engine_v2', 'soridraw_user_data_engine_v1'];
+const CATALOG_LOCAL_CACHE_GENERATION = 5 as const;
+const CATALOG_DB_NAME = 'soridraw_user_data_engine_v5';
+const LEGACY_CATALOG_DB_NAMES = ['soridraw_user_data_engine_v4', 'soridraw_user_data_engine_v3', 'soridraw_user_data_engine_v2', 'soridraw_user_data_engine_v1'];
 const CATALOG_DB_STORE = 'catalogs';
 const CATALOG_PREVIEW_HOSTS = new Set([
   'preview.soridraw.com',
@@ -228,7 +231,7 @@ const requestLegacyDbCleanup = () => {
     try {
       indexedDB.deleteDatabase(databaseName);
     } catch {
-      // Best-effort cleanup only. Old catalog DBs are never read by V3.
+      // Best-effort cleanup only. Old catalog DBs are never read by the current cache generation.
     }
   }
 };
@@ -272,7 +275,12 @@ const readCatalogFromIndexedDb = async (
       const transaction = database.transaction(CATALOG_DB_STORE, 'readonly');
       const request = transaction.objectStore(CATALOG_DB_STORE).get(catalogKey(kind, uid));
       request.onsuccess = () => {
-        const snapshot = request.result?.snapshot;
+        const record = request.result;
+        if (record?.cacheGeneration !== CATALOG_LOCAL_CACHE_GENERATION) {
+          resolve(null);
+          return;
+        }
+        const snapshot = record?.snapshot;
         resolve(isValidSnapshot(kind, snapshot) ? snapshot : null);
       };
       request.onerror = () => resolve(null);
@@ -298,7 +306,9 @@ export const writeCatalogSnapshotToLocalCache = async (
       transaction.oncomplete = () => resolve(true);
       transaction.onerror = () => resolve(false);
       transaction.onabort = () => resolve(false);
-      transaction.objectStore(CATALOG_DB_STORE).put({ key, uid, kind, snapshot });
+      transaction.objectStore(CATALOG_DB_STORE).put({
+        key, uid, kind, cacheGeneration: CATALOG_LOCAL_CACHE_GENERATION, snapshot,
+      });
     });
   } catch {
     return false;
@@ -434,23 +444,34 @@ const buildCatalogDelta = (
   previous: SoridrawCatalogSnapshot,
   sourceItems: any[],
   revision: number,
+  explicitDeletedIds: string[] = [],
 ): { delta: CatalogDelta; nextSnapshot: SoridrawCatalogSnapshot } | null => {
-  const items = normalizeCatalogItems(kind, sourceItems);
-  if (items.length > CATALOG_MAX_ITEMS) return null;
-  const nextById = new Map(items.map((item) => [String(item.id), item]));
+  const projectedItems = normalizeCatalogItems(kind, sourceItems);
+  if (projectedItems.length > CATALOG_MAX_ITEMS) return null;
   const previousById = new Map(previous.items.map((item) => [String(item.id), item]));
+  const nextById = new Map(previous.items.map((item) => [String(item.id), item]));
   const upserts: any[] = [];
-  const deletedIds: string[] = [];
 
-  nextById.forEach((item, id) => {
+  // A UI/cache list is never deletion authority. It may be partial. Only explicit
+  // mutation tombstones may remove rows from the full server-proven catalog.
+  for (const item of projectedItems) {
+    const id = String(item.id);
     const prior = previousById.get(id);
-    if (!prior || stableItemHash(prior) !== stableItemHash(item)) upserts.push(item);
-  });
-  previousById.forEach((_item, id) => {
-    if (!nextById.has(id)) deletedIds.push(id);
-  });
+    if (!prior || stableItemHash(prior) !== stableItemHash(item)) {
+      upserts.push(item);
+      nextById.set(id, item);
+    }
+  }
+
+  const deletedIds = Array.from(new Set(
+    (Array.isArray(explicitDeletedIds) ? explicitDeletedIds : [])
+      .map((id) => String(id || '').trim())
+      .filter((id) => id && previousById.has(id))
+  ));
+  deletedIds.forEach((id) => nextById.delete(id));
 
   if (upserts.length + deletedIds.length > CATALOG_DELTA_MAX_CHANGES) return null;
+  const items = normalizeCatalogItems(kind, Array.from(nextById.values()));
   const nextRevision = Math.max(Date.now(), Math.floor(revision || 0), previous.revision + 1);
   const nextSnapshot: SoridrawCatalogSnapshot = {
     schemaVersion: CATALOG_SCHEMA_VERSION,
@@ -543,14 +564,23 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
 
       const projectedCount = normalizeCatalogItems(kind, pending.sourceItems).length;
       const explicitComplete = pending.options.complete === true;
+      const explicitDeletedIds = Array.from(new Set(
+        (Array.isArray(pending.options.deletedIds) ? pending.options.deletedIds : [])
+          .map((id) => String(id || '').trim())
+          .filter(Boolean)
+      ));
       const looksCompleteAgainstPrevious = projectedCount >= Math.max(0, previous.itemCount - 2);
-      if (!explicitComplete && !looksCompleteAgainstPrevious) {
+      const unexplainedMissingFromCompleteSource = explicitComplete
+        && projectedCount + explicitDeletedIds.length < previous.itemCount;
+      if ((!explicitComplete && !looksCompleteAgainstPrevious) || unexplainedMissingFromCompleteSource) {
         const rebuilt = await readRemoteCatalogSnapshot(kind, uid, currentDirtyRevision);
         if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
         return;
       }
 
-      const built = buildCatalogDelta(kind, previous, pending.sourceItems, currentDirtyRevision);
+      const built = buildCatalogDelta(
+        kind, previous, pending.sourceItems, currentDirtyRevision, explicitDeletedIds,
+      );
       if (!built) {
         const rebuilt = await readRemoteCatalogSnapshot(kind, uid, currentDirtyRevision);
         if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);

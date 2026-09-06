@@ -1,0 +1,62 @@
+name: Temp Audit Catalog Regression 1035
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-audit-catalog-regression-1035.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 10
+
+      - name: Show current source anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== PREVIEW HEAD ==='
+          git rev-parse HEAD
+          echo '=== USER DATA ENGINE REFERENCES ==='
+          grep -nE "readPreviewAdaptiveListIndexV2|schedulePreviewAdaptiveListIndexPublishIfDirty|readCatalogSnapshotCacheFirst|scheduleCatalogSnapshotPublishIfDirty" src/App.tsx src/pages/SunoLibraryPage.tsx src/lib/*.ts || true
+          echo '=== MUSIC NOTE BOOTSTRAP / PAGINATION ==='
+          grep -nE "musicNoteCacheNeeds|shouldVerifyMusicNoteBundle|FAVORITES_PAGE_SIZE|favorites:getDocs|runFavorites|hasMoreFavorites|loadMoreFavorites|favorite.*getDocs|getDocs.*favorite" src/App.tsx | head -n 180 || true
+          echo '=== MUSIC NOTE PUBLISH ==='
+          grep -n -C 12 "schedulePreviewAdaptiveListIndexPublishIfDirty('musicNote'" src/App.tsx || true
+          echo '=== LIBRARY PUBLISH ==='
+          grep -n -C 14 "schedulePreviewAdaptiveListIndexPublishIfDirty('library'" src/pages/SunoLibraryPage.tsx || true
+          echo '=== MEDIA URL FIELD REFERENCES ==='
+          grep -nE "audioUrl|audio_url|imageUrl|image_url|coverUrl|cover_url|thumbnail|sourceUrl|streamUrl|videoUrl" src/App.tsx | head -n 240 || true
+          echo '=== FAVORITE DOCUMENT MAPPING NEAR QUERY ==='
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/App.tsx')
+          lines=p.read_text(encoding='utf-8').splitlines()
+          needles=['favorites:getDocs','musicNoteCacheNeedsBoundedVerification','shouldVerifyMusicNoteBundle','schedulePreviewAdaptiveListIndexPublishIfDirty(\'musicNote\'','favoriteRemoved']
+          shown=set()
+          for needle in needles:
+              for i,line in enumerate(lines):
+                  if needle in line:
+                      a=max(0,i-35); b=min(len(lines),i+70)
+                      key=(a,b)
+                      if key in shown: continue
+                      shown.add(key)
+                      print(f'--- {needle} @ {i+1} lines {a+1}-{b} ---')
+                      for j in range(a,b): print(f'{j+1}: {lines[j]}')
+                      print()
+          PY
+
+      - name: Show engine completeness rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          nl -ba src/lib/userDataEngine.ts | sed -n '250,520p'
+          echo '=== ADAPTIVE BRIDGE ==='
+          nl -ba src/lib/adaptiveListIndexV2.ts | sed -n '1,180p'

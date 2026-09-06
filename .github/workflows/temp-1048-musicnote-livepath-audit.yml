@@ -15,29 +15,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: preview
-      - name: Trace current Music Note bootstrap and Catalog callback
+      - name: Trace Music Note render and overwrite path
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== APP BOOTSTRAP 8950-9335 ==='
-          sed -n '8950,9335p' src/App.tsx
-          echo '=== APP COLD/PAGED QUERY MARKERS ==='
-          grep -n -B 25 -A 55 -E "FAVORITES_PAGE_SIZE|MUSIC_NOTE_COLD|cold repair|cold bootstrap|limit\(60\)|limit\(FAVORITES|refreshFavoritesFromServerFirstPage|loadMoreFavorites|favoritePagination" src/App.tsx | head -1800 || true
-          echo '=== AUTH STATE SETUP ==='
-          grep -n -B 25 -A 50 -E "onAuthStateChanged|setUser\(|currentUser\.uid|subscribeListBundle\('musicNote'" src/App.tsx | head -1400 || true
-          echo '=== ADAPTIVE BRIDGE ==='
-          cat src/lib/adaptiveListIndexV2.ts
-      - name: Probe deployed Worker health and Catalog CORS
-        shell: bash
-        run: |
-          set -euo pipefail
-          WORKER='https://soridraw-media-preview.andrawing1212.workers.dev'
-          curl -fsS --max-time 30 "$WORKER/health"
-          echo
-          code="$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' -X OPTIONS \
-            -H 'Origin: https://preview.soridraw.com' \
-            -H 'Access-Control-Request-Method: GET' \
-            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck,x-soridraw-known-revision' \
-            "$WORKER/v1/catalog/musicNote")"
-          echo "CATALOG_PREFLIGHT=$code"
-          test "$code" = '204'
+          echo '=== FAVORITES PAGE ALL COUNT/SLICE/MORE MARKERS ==='
+          grep -n -E "favorites|filtered|visible|display|slice\(|더보기|남음|더 불러오기|PAGE_SIZE|renderBatch|visibleCount|showCount|limitCount" src/pages/FavoritesPage.tsx | head -2600
+          echo '=== FAVORITES PAGE CONTEXT AROUND KOREAN MORE LABELS ==='
+          grep -n -B 80 -A 100 -E "더보기|남음|더 불러오기" src/pages/FavoritesPage.tsx | head -2200 || true
+          echo '=== APP ALL FAVORITES STORE WRITES ==='
+          grep -n -B 18 -A 40 -E "favoritesStore\.setFavorites|setFavorites\(" src/App.tsx | head -2800
+          echo '=== STORE IMPLEMENTATION ==='
+          grep -R -n -B 15 -A 80 -E "class.*Favorites|favoritesStore|setFavorites" src | grep -v "src/App.tsx" | head -1800 || true

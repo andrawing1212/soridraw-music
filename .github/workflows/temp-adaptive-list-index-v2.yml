@@ -48,6 +48,7 @@ jobs:
           bundle=Path('src/lib/listBundleCache.ts').read_text()
           app=Path('src/App.tsx').read_text()
           library=Path('src/pages/SunoLibraryPage.tsx').read_text()
+          favorites=Path('src/pages/FavoritesPage.tsx').read_text()
           backend=Path('functions/src/previewAdaptiveListIndex.ts').read_text()
           rules=Path('firestore.rules').read_text()
 
@@ -68,7 +69,7 @@ jobs:
           assert 'runLegacyOneShotRead()' in bundle
           assert "schedulePreviewAdaptiveListIndexPublishIfDirty('musicNote'" in app
           assert "schedulePreviewAdaptiveListIndexPublishIfDirty('library'" in library
-          assert 'if (visibleCount < filteredFavorites.length)' in Path('src/pages/FavoritesPage.tsx').read_text()
+          assert 'const canShowCachedMusicNoteMore = visibleCount < filteredFavorites.length;' in favorites
           assert 'if (workspaceVisibleCount < filteredTracks.length)' in library
 
           assert 'enforceAppCheck: true' in backend
@@ -80,7 +81,6 @@ jobs:
           assert 'user_list_caches' in backend
           assert 'syncVersions' not in backend
 
-          # Existing Rules stay untouched; the new preview callable uses Admin SDK only.
           assert "music_note_latest_20" in rules and "library_latest_10_sets" in rules
           assert "music_note_adaptive_v2" not in rules and "library_adaptive_v2" not in rules
           print('ADAPTIVE_LIST_INDEX_STATIC_GUARD=PASS')

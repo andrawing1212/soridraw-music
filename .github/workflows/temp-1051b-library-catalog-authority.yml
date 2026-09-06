@@ -1,0 +1,50 @@
+name: Temp 1051B Library Catalog Authority
+on:
+  push:
+    branches:
+      - preview
+    paths:
+      - .github/workflows/temp-1051b-library-catalog-authority.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Patch Library workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .deploy/apply-1051-library-catalog-authority.py
+          grep -q 'SORIDRAW_LIBRARY_FULL_CATALOG_AUTHORITY_1051' src/pages/SunoLibraryPage.tsx
+          grep -q 'UI pagination only' src/pages/SunoLibraryPage.tsx
+          ! grep -q 'bootstrapCachelessLibraryFromServerOnce' src/pages/SunoLibraryPage.tsx
+          ! grep -q 'WORKSPACE_SERVER_PAGE_SIZE' src/pages/SunoLibraryPage.tsx
+          ! grep -q 'WORKSPACE_SERVER_FETCH_SIZE' src/pages/SunoLibraryPage.tsx
+          git diff --check
+      - name: TypeScript and build
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run build
+      - name: Functions and Library regression tests
+        run: |
+          npm --prefix functions ci
+          npm --prefix functions run build
+          npm --prefix functions run test:library-bundle
+      - name: Commit runtime fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git add src/pages/SunoLibraryPage.tsx
+          git commit -m 'fix(preview): make Library Catalog authoritative'
+          git push origin HEAD:preview

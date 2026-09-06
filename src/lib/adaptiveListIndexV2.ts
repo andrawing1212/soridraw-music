@@ -15,6 +15,7 @@ export type AdaptiveListIndexSnapshot = {
   hasMore: boolean;
   deletedIds: string[];
   updatedAtMs: number;
+  catalogRevision: number;
 };
 
 type AdaptivePublishOptions = {
@@ -79,6 +80,7 @@ export const readPreviewAdaptiveListIndexV2 = async (
     hasMore: false,
     deletedIds: [],
     updatedAtMs: snapshot.generatedAtMs,
+    catalogRevision: snapshot.revision,
   };
 };
 

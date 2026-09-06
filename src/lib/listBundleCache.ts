@@ -2,6 +2,8 @@ import { doc, getDocFromServer, serverTimestamp, setDoc, updateDoc } from './fir
 import { db } from '../firebase';
 import { markCacheDiagnosticWrite } from './cacheDiagnostics';
 import { isPreviewAdaptiveListIndexEnabled, readPreviewAdaptiveListIndexV2 } from './adaptiveListIndexV2';
+import { USER_PROFILE_CACHE_EVENT } from './userProfileCache';
+import { readCatalogProfileRevision, shouldRefreshCatalogForProfile } from './catalogWarmCachePolicy';
 
 const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 
@@ -16,6 +18,7 @@ export type ListBundleSnapshot = {
   hasMore: boolean;
   deletedIds: string[];
   updatedAtMs: number;
+  catalogRevision?: number;
 };
 
 type BundleWriteOptions = {
@@ -349,6 +352,8 @@ export const subscribeListBundle = (
 
   let cancelled = false;
   let started = false;
+  let latestCatalogRevision = 0;
+  let profileRefreshInFlight = false;
 
   const runLegacyOneShotRead = () => {
     void getDocFromServer(getBundleRef(kind, uid))
@@ -399,6 +404,47 @@ export const subscribeListBundle = (
     return null;
   };
 
+  const deliverAdaptiveBundle = (
+    bundle: ListBundleSnapshot,
+    meta: { fromCache: boolean },
+    onlyIfNewer = false,
+  ) => {
+    const revision = Math.max(0, Math.floor(Number(bundle.catalogRevision || 0)));
+    if (onlyIfNewer && revision > 0 && revision <= latestCatalogRevision) return;
+    if (revision > 0) latestCatalogRevision = Math.max(latestCatalogRevision, revision);
+    callbacks.onData(bundle, meta);
+  };
+
+  const refreshCatalogAfterProfileAdvance = async (profileRevision: number) => {
+    if (profileRefreshInFlight || cancelled || !started) return;
+    profileRefreshInFlight = true;
+    try {
+      // Mutation publication is debounced by ~1.2s. Give the journal time to land,
+      // then retry only while the already-paid profile token proves Catalog is stale.
+      const retryDelays = [1400, 900, 1800];
+      for (const delay of retryDelays) {
+        if (cancelled) return;
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+        const bundle = await readPreviewAdaptiveListIndexV2(kind, uid);
+        if (cancelled || !bundle) continue;
+        const revision = Math.max(0, Math.floor(Number(bundle.catalogRevision || 0)));
+        if (revision > latestCatalogRevision) deliverAdaptiveBundle(bundle, { fromCache: false }, true);
+        if (revision >= profileRevision) return;
+      }
+    } finally {
+      profileRefreshInFlight = false;
+    }
+  };
+
+  const handleUserProfileCacheUpdate = (event: Event) => {
+    if (cancelled || !started || !isPreviewAdaptiveListIndexEnabled()) return;
+    const detail = (event as CustomEvent<{ uid?: string; profile?: any }>).detail;
+    if (String(detail?.uid || '') !== uid) return;
+    const profileRevision = readCatalogProfileRevision(kind, detail?.profile);
+    if (!shouldRefreshCatalogForProfile({ catalogRevision: latestCatalogRevision, profileRevision })) return;
+    void refreshCatalogAfterProfileAdvance(profileRevision);
+  };
+
   const runOneShotRead = () => {
     if (cancelled || started) return;
     started = true;
@@ -406,7 +452,7 @@ export const subscribeListBundle = (
       const adaptiveBundle = await readPreviewCatalogWithStartupRetry();
       if (cancelled) return;
       if (adaptiveBundle) {
-        callbacks.onData(adaptiveBundle, { fromCache: false });
+        deliverAdaptiveBundle(adaptiveBundle, { fromCache: false });
         return;
       }
       if (isPreviewAdaptiveListIndexEnabled()) {
@@ -426,6 +472,10 @@ export const subscribeListBundle = (
 
   const handleMusicNotePageEntry = () => runOneShotRead();
 
+  if (typeof window !== 'undefined') {
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, handleUserProfileCacheUpdate as EventListener);
+  }
+
   if (kind === 'musicNote') {
     // 904: Home/login startup only prepares this callback. No Firestore read happens
     // until the Music Note route explicitly announces that it is actually visible.
@@ -442,8 +492,11 @@ export const subscribeListBundle = (
 
   return () => {
     cancelled = true;
-    if (kind === 'musicNote' && typeof window !== 'undefined') {
-      window.removeEventListener(MUSIC_NOTE_BUNDLE_PAGE_ENTRY_EVENT, handleMusicNotePageEntry as EventListener);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleUserProfileCacheUpdate as EventListener);
+      if (kind === 'musicNote') {
+        window.removeEventListener(MUSIC_NOTE_BUNDLE_PAGE_ENTRY_EVENT, handleMusicNotePageEntry as EventListener);
+      }
     }
   };
 };

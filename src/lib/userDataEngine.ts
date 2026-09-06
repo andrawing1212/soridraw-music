@@ -5,6 +5,7 @@ import {
   readAdaptiveListIndexDirtyRevision,
 } from './firestoreMeasured';
 import { markCatalogRuntimeDiagnostic } from './catalogRuntimeDiagnostics';
+import { canUseWarmCatalogWithoutRemote, readCatalogProfileRevision } from './catalogWarmCachePolicy';
 
 export const SORIDRAW_USER_DATA_ENGINE_V2_20260906 = true;
 export const SORIDRAW_USER_DATA_ENGINE_DELTA_SYNC_1035 = true;
@@ -349,20 +350,9 @@ export const readCatalogSnapshotFromLocalCache = async (
   return indexedSnapshot;
 };
 
-const readKnownRemoteCatalogRevision = (kind: SoridrawCatalogKind, uid: string): number => {
-  const profile = readUserProfileCache(uid) as any;
-  if (!profile || typeof profile !== 'object') return 0;
-  if (kind === 'library') {
-    const libraryVersion = Number(profile?.syncVersions?.library || 0);
-    return Number.isFinite(libraryVersion) && libraryVersion > 0 ? Math.floor(libraryVersion) : 0;
-  }
-  const candidates = [
-    Number(profile?.syncVersions?.musicNote || 0),
-    Number(profile?.favoriteSyncSignalUpdatedAt || 0),
-    Number(profile?.favoriteSyncSignal?.at || 0),
-  ].filter((value) => Number.isFinite(value) && value > 0);
-  return candidates.length > 0 ? Math.floor(Math.max(...candidates)) : 0;
-};
+const readKnownRemoteCatalogRevision = (kind: SoridrawCatalogKind, uid: string): number => (
+  readCatalogProfileRevision(kind, readUserProfileCache(uid))
+);
 
 const catalogWait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -552,14 +542,18 @@ export const readCatalogSnapshotCacheFirst = async (
     const knownRemoteRevision = readKnownRemoteCatalogRevision(kind, uid);
     const sessionValidated = catalogRemoteValidatedSessionKeys.has(key);
 
-    // Local cache may paint instantly, but it is never promoted to full-list
-    // authority before one successful server Catalog response in this session.
-    // This prevents an old 37-row cache from permanently masking a 500+ row R2 Catalog.
-    if (local && sessionValidated && (knownRemoteRevision <= 0 || local.revision >= knownRemoteRevision)) {
+    // 1054: a V5 Catalog is server-authored and may survive app restarts without
+    // a redundant Worker GET when the already-paid users profile invalidation token
+    // proves it is current. Unknown profile state remains fail-safe and validates remotely.
+    if (local && canUseWarmCatalogWithoutRemote({
+      localRevision: local.revision,
+      profileRevision: knownRemoteRevision,
+      sessionValidated,
+    })) {
       return local;
     }
 
-    // Normal entry always validates against the already-materialized R2 object.
+    // Missing/stale/unknown proof still validates against the R2 Catalog.
     // Do not pass the profile sync signal as a hard Worker rebuild requirement.
     const remote = await readRemoteCatalogSnapshot(kind, uid, 0, local);
     if (remote) return remote;

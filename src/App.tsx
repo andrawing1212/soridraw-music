@@ -2898,14 +2898,8 @@ function HistoryRouteWrapper({
   const location = useLocation();
 
   useEffect(() => {
-    const isMusicNoteRoute = location.pathname === '/history';
-    if (!isMusicNoteRoute) {
-      if (typeof window !== 'undefined') {
-        (window as any).__soridrawMusicNotePageActive = false;
-      }
-      return;
-    }
-
+    // 1050: HistoryRouteWrapper is mounted only while Music Note is visible.
+    // Studio embeds it at /studio, so pathname === /history cannot gate Catalog entry.
     if (typeof window !== 'undefined') {
       (window as any).__soridrawMusicNotePageActive = true;
       window.dispatchEvent(new Event('soridraw:music-note-bundle-page-entry'));

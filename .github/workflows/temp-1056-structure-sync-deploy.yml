@@ -1,0 +1,197 @@
+name: Temp 1056 Music Note Structure Sync Deploy
+
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-1056-structure-sync-deploy.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-1056-structure-sync-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      FEATURE_SHA: 'd95a44313727803e9d6e61bcdba26f432bc36d88'
+      ROLLBACK_SHA: '50854d13fbc00e2e8af8c06b8bc1e621b91cb470'
+      MAIN_SHA: '49c799cbb46d137539f74a48c261f7256762336f'
+      BACKEND_PROJECT: 'soridraw-app-866a5'
+      HOSTING_PROJECT: 'soridraw'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - name: Guard exact feature and rollback lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$ROLLBACK_SHA" "$FEATURE_SHA"
+          git merge-base --is-ancestor "$FEATURE_SHA" HEAD
+          test "$(git diff --name-only "$FEATURE_SHA"..HEAD -- src functions firestore.rules package.json package-lock.json firebase.json firebase.hosting-preview.json | wc -l)" -eq 0
+          main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$main_sha" = "$MAIN_SHA"
+          grep -Fq 'SORIDRAW_MUSIC_NOTE_STRUCTURE_SIGNAL_1056' src/pages/FavoritesPage.tsx
+          ! grep -Fq "onSnapshot(" src/pages/FavoritesPage.tsx
+          grep -Fq 'syncMusicNoteStructureVersion' functions/src/index.ts
+          grep -Fq 'musicNoteStructure' firestore.rules
+          echo 'DEPLOY_GUARD=PASS'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Validate app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          test -s dist/index.html
+          echo 'APP_VALIDATION=PASS'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Validate Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix functions ci
+          npm --prefix functions run build
+          npm --prefix functions run test:music-note-structure-sync
+          npm --prefix functions run test:library-bundle
+          grep -Fq 'syncMusicNoteStructureVersion' functions/src/securedIndex.ts
+          echo 'FUNCTIONS_VALIDATION=PASS'
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot Production Hosting before deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+
+      - name: Deploy Firestore Rules first
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only firestore:rules \
+            --project "$BACKEND_PROJECT" \
+            --config firebase.json \
+            --non-interactive
+          echo 'FIRESTORE_RULES_DEPLOY=PASS'
+
+      - name: Deploy only Music Note structure Function
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only functions:syncMusicNoteStructureVersion \
+            --project "$BACKEND_PROJECT" \
+            --config firebase.json \
+            --non-interactive
+          echo 'MUSIC_NOTE_STRUCTURE_FUNCTION_DEPLOY=PASS'
+
+      - name: Verify deployed Function
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest functions:list --project "$BACKEND_PROJECT" --json > "$RUNNER_TEMP/functions.json"
+          grep -Fq 'syncMusicNoteStructureVersion' "$RUNNER_TEMP/functions.json"
+          echo 'MUSIC_NOTE_STRUCTURE_FUNCTION_PRESENT=PASS'
+
+      - name: Verify Cloudflare unchanged health
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw-media-preview.andrawing1212.workers.dev/health -o "$RUNNER_TEMP/worker-health.json"
+          grep -Fq '"catalogDeltaMode":"base+journal"' "$RUNNER_TEMP/worker-health.json"
+          echo 'CLOUDFLARE_UNCHANGED_HEALTH=PASS'
+
+      - name: Deploy Firebase PREVIEW Hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project "$HOSTING_PROJECT" \
+            --config firebase.hosting-preview.json \
+            --non-interactive
+          echo 'FIREBASE_PREVIEW_HOSTING_DEPLOY=PASS'
+
+      - name: Verify exact PREVIEW build
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          echo "LOCAL_INDEX_SHA=$local_sha"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then
+                  echo "EXACT_PREVIEW_BUILD_PASS=$url:$remote_sha"
+                  ok=yes
+                  break
+                fi
+              fi
+              sleep 10
+            done
+            test "$ok" = yes
+          done
+
+      - name: Verify main and Production unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$main_sha" = "$MAIN_SHA"
+          echo 'PRODUCTION_MAIN_UNCHANGED=PASS'
+
+      - name: Cleanup workflow and package clean deployed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git rm .github/workflows/temp-1056-structure-sync-deploy.yml
+          git commit -m 'chore(preview): remove temporary 1056 deploy workflow'
+          git push origin HEAD:preview
+          final_head="$(git rev-parse HEAD)"
+          echo "FINAL_PREVIEW_HEAD=$final_head"
+          test "$(git diff --name-only "$FEATURE_SHA".."$final_head" -- src functions firestore.rules package.json package-lock.json firebase.json firebase.hosting-preview.json | wc -l)" -eq 0
+          zip_name="SORIDRAW_PREVIEW_${final_head:0:8}_music_note_structure_signal.zip"
+          git archive --format=zip --prefix="SORIDRAW_PREVIEW_${final_head:0:8}/" -o "$zip_name" "$final_head"
+          test -s "$zip_name"
+          sha256sum "$zip_name"
+          echo "ZIP_PATH=$zip_name" >> "$GITHUB_ENV"
+
+      - name: Upload deployed source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_PREVIEW_music_note_structure_signal
+          path: ${{ env.ZIP_PATH }}
+          if-no-files-found: error
+          retention-days: 7

@@ -1,3 +1,4 @@
+# 030 retry: regression verifier now checks Library catalog fields at userDataEngine source.
 name: SORIDRAW PREVIEW 030 Library Warm Cache Zero Read
 
 on:

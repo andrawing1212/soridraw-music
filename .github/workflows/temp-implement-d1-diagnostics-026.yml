@@ -65,32 +65,51 @@ jobs:
 
           p = Path('src/components/CacheDiagnosticsOverlay.tsx')
           s = p.read_text()
-          top_old = '''            <div className="whitespace-nowrap text-[12px] font-bold text-[#c6b5ff]">
-              Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)} · Worker {formatNumber(cloudflare.workerRequests)} · D1 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : '—'}
-            </div>'''
-          top_new = '''            <div className="whitespace-nowrap text-[12px] font-bold text-[#c6b5ff]">
-              Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)} · Worker {formatNumber(cloudflare.workerRequests)}
-            </div>
-            <div className="whitespace-nowrap text-[11px] font-bold text-[#c6b5ff]/80">
-              D1 쿼리 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1ReadQueries) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1WriteQueries) : '—'} · 행 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : '—'}
-            </div>'''
-          s = replace_exact(s, top_old, top_new, 1, 'overlay total')
-          path_old = '''                      <span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)} · D1 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}</span>
-                    </div>
-                    {state.lastOutcome ? ('''
-          path_new = '''                      <span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)}</span>
-                    </div>
+          top_needle = 'Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)} · Worker {formatNumber(cloudflare.workerRequests)} · D1 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : \'—\'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : \'—\'}'
+          at = s.find(top_needle)
+          if at < 0: raise SystemExit('overlay total needle missing')
+          start = s.rfind('<div', 0, at)
+          end = s.find('</div>', at)
+          if start < 0 or end < 0: raise SystemExit('overlay total div missing')
+          end += len('</div>')
+          indent_start = s.rfind('\n', 0, start) + 1
+          indent = s[indent_start:start]
+          top_new = f'''<div className="whitespace-nowrap text-[12px] font-bold text-[#c6b5ff]">
+{indent}  Cloudflare 앱 · LOCAL {{formatNumber(cloudflare.localCacheHits)}} · Worker {{formatNumber(cloudflare.workerRequests)}}
+{indent}</div>
+{indent}<div className="whitespace-nowrap text-[11px] font-bold text-[#c6b5ff]/80">
+{indent}  D1 쿼리 읽기 {{cloudflareMetered ? formatNumber(cloudflare.d1ReadQueries) : '—'}} · 쓰기 {{cloudflareMetered ? formatNumber(cloudflare.d1WriteQueries) : '—'}} · 행 읽기 {{cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : '—'}} · 쓰기 {{cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : '—'}}
+{indent}</div>'''
+          s = s[:start] + top_new + s[end:]
+
+          path_needle = 'LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)} · D1 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}'
+          at = s.find(path_needle)
+          if at < 0: raise SystemExit('overlay path needle missing')
+          span_start = s.rfind('<span', 0, at)
+          span_end = s.find('</span>', at)
+          if span_start < 0 or span_end < 0: raise SystemExit('overlay path span missing')
+          span_end += len('</span>')
+          old_span = s[span_start:span_end]
+          new_span = '<span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)}</span>'
+          s = s[:span_start] + new_span + s[span_end:]
+          parent_end = s.find('</div>', span_start + len(new_span))
+          if parent_end < 0: raise SystemExit('overlay path parent div missing')
+          parent_end += len('</div>')
+          line_start = s.rfind('\n', 0, parent_end) + 1
+          parent_indent = s[line_start:parent_end - len('</div>')]
+          if '<' in parent_indent: parent_indent = '                    '
+          extra = '''
                     <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/68">
                       <span className="shrink-0 whitespace-nowrap tabular-nums">D1 쿼리 읽기 {formatNumber(state.d1ReadQueries)} · 쓰기 {formatNumber(state.d1WriteQueries)}</span>
                       <span className="shrink-0 whitespace-nowrap tabular-nums">행 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}</span>
-                    </div>
-                    {state.lastOutcome ? ('''
-          s = replace_exact(s, path_old, path_new, 1, 'overlay path')
+                    </div>'''
+          s = s[:parent_end] + extra + s[parent_end:]
           p.write_text(s)
           PY
           node --check cloudflare/explore-worker/patches/026-d1-query-vs-row-diagnostics.mjs
           git diff --check
-          git diff -- src/lib/cloudflareDiagnostics.ts src/components/CacheDiagnosticsOverlay.tsx
+          grep -Fq 'D1 쿼리 읽기' src/components/CacheDiagnosticsOverlay.tsx
+          grep -Fq "X-SORIDRAW-D1-Read-Queries" src/lib/cloudflareDiagnostics.ts
       - name: Validate app
         run: |
           set -euo pipefail

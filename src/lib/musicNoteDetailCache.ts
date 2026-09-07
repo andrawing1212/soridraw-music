@@ -208,3 +208,40 @@ export const getOrLoadMusicNoteDetail = async ({
   inFlightLoads.set(flightKey, task);
   return task;
 };
+
+
+export const patchMusicNoteDetailCache = async ({
+  uid,
+  sourceId,
+  sourceVersion,
+  updates,
+}: {
+  uid: string;
+  sourceId: string;
+  sourceVersion: number;
+  updates: Record<string, any>;
+}): Promise<void> => {
+  const safeUid = String(uid || '').trim();
+  const safeSourceId = String(sourceId || '').trim();
+  if (!safeUid || !safeSourceId || !updates || typeof updates !== 'object') return;
+  const key = cacheKey(safeUid, safeSourceId);
+  const memory = memoryCache.get(key);
+  const persistent = memory || await readPersistent(key);
+  if (!persistent?.data || typeof persistent.data !== 'object') return;
+  const merged = {
+    ...persistent.data,
+    ...updates,
+    ...(updates.lyrics ? { lyrics: { ...(persistent.data.lyrics || {}), ...(updates.lyrics || {}) } } : {}),
+    ...(updates.appliedKeywords ? { appliedKeywords: { ...(persistent.data.appliedKeywords || {}), ...(updates.appliedKeywords || {}) } } : {}),
+  };
+  const record: MusicNoteDetailCacheRecord = {
+    key,
+    uid: safeUid,
+    sourceId: safeSourceId,
+    sourceVersion: Math.max(0, Math.floor(Number(sourceVersion || persistent.sourceVersion || 0))),
+    savedAtMs: Date.now(),
+    data: merged,
+  };
+  remember(record);
+  await writePersistent(record);
+};

@@ -59,7 +59,7 @@ async function fanoutExploreMirror023(env, changedTrackId, fullSnapshot) {
       throw new Error(target.environment + " Explore mirror service binding missing");
     }
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2500);
+    const timeout = setTimeout(() => controller.abort(), fullSnapshot ? 20000 : 2500);
     try {
       const request = new Request("https://soridraw-mirror.internal" + EXPLORE_MIRROR_ROUTE_020, {
         method: "POST",

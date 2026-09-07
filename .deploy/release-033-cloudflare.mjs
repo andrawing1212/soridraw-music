@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -12,6 +12,10 @@ const ACCOUNT_ID = 'e1a30fc9ef497fda1d34f4ab3dc1da45';
 const TOKEN = String(process.env.CLOUDFLARE_API_TOKEN || '').trim();
 if (!TOKEN) throw new Error('CLOUDFLARE_API_TOKEN is required');
 
+const PREVIEW = {
+  worker: 'soridraw-explore-preview',
+  expectedVersion: 'e3f26209-addc-4151-9058-3c95a7361f67',
+};
 const TARGETS = {
   test: {
     worker: 'soridraw-explore-test',
@@ -34,11 +38,11 @@ const target = TARGETS[mode];
 const authHeaders = { Authorization: `Bearer ${TOKEN}`, Accept: 'application/json' };
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 
-const run = (command, args, cwd = WORKER_DIR, extraEnv = {}) => {
+const run = (command, args, cwd = WORKER_DIR) => {
   const result = spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, ...extraEnv },
+    env: process.env,
     maxBuffer: 64 * 1024 * 1024,
   });
   if (result.stdout) process.stdout.write(result.stdout);
@@ -75,7 +79,21 @@ async function settings(worker) {
   return cfGet(`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/workers/scripts/${worker}/settings`);
 }
 
+function guardTargetBindings(current) {
+  const bindings = Array.isArray(current?.bindings) ? current.bindings : [];
+  const unexpected = bindings.filter((binding) => {
+    const type = String(binding?.type || '');
+    const name = String(binding?.name || '');
+    if (['plain_text', 'secret_text'].includes(type)) return false;
+    if (name === 'DB' && (type === 'd1' || type === 'd1_database')) return false;
+    if (name === 'PROFILE_MEDIA' && (type === 'r2_bucket' || type === 'r2')) return false;
+    return true;
+  });
+  if (unexpected.length) throw new Error(`${mode} Worker has unsupported bindings; refusing deploy: ${JSON.stringify(unexpected).slice(0, 1200)}`);
+}
+
 function configFrom(current) {
+  guardTargetBindings(current);
   const cfg = {
     name: target.worker,
     main: './worker.js',
@@ -92,9 +110,20 @@ function configFrom(current) {
   return cfg;
 }
 
-function validateBase(source) {
-  for (const token of ['handleFeedWithEdgeCache', 'invalidateExploreFeedEdgeCache', 'exploreFeedR2Key', 'handleMusicNotePublicationSingleWrite016', 'SORIDRAW_PUBLICATION_POSTWRITE_500_RETRY_COST_018_20260905']) {
-    if (!source.includes(token)) throw new Error(`${mode} Worker missing required validated runtime token: ${token}`);
+function validatePreviewRuntime(source) {
+  for (const token of [
+    'SORIDRAW_PUBLICATION_POSTWRITE_500_RETRY_COST_018_20260905',
+    'SORIDRAW_EXPLORE_FEED_REVISION_019_20260908',
+    'handleMusicNotePublicationSingleWrite016',
+    'publicationReadState016',
+    'syncExploreFeedR2Publication012',
+    'PROFILE_MEDIA.head(exploreFeedR2Key(sort))',
+    'url.pathname === "/v1/feed-revision"',
+  ]) {
+    if (!source.includes(token)) throw new Error(`validated PREVIEW runtime missing: ${token}`);
+  }
+  if (source.includes('soridraw-explore-preview.andrawing1212.workers.dev')) {
+    throw new Error('validated PREVIEW runtime contains a preview Worker self URL; refusing cross-environment mirror');
   }
 }
 
@@ -121,20 +150,19 @@ async function smoke() {
 
 rmSync(RELEASE_DIR, { recursive: true, force: true });
 mkdirSync(RELEASE_DIR, { recursive: true });
+
+const previewVersion = await activeVersion(PREVIEW.worker);
+if (previewVersion !== PREVIEW.expectedVersion) throw new Error(`PREVIEW Worker changed since 033 validation: ${previewVersion} != ${PREVIEW.expectedVersion}`);
+const validatedPreviewSource = await activeSource(PREVIEW.worker, previewVersion);
+validatePreviewRuntime(validatedPreviewSource);
+
 const beforeVersion = await activeVersion(target.worker);
 const original = await activeSource(target.worker, beforeVersion);
-validateBase(original);
 const currentSettings = await settings(target.worker);
 writeFileSync(join(RELEASE_DIR, 'original.js'), original, 'utf8');
-writeFileSync(join(RELEASE_DIR, 'worker.js'), original, 'utf8');
+writeFileSync(join(RELEASE_DIR, 'worker.js'), validatedPreviewSource, 'utf8');
 writeFileSync(join(RELEASE_DIR, 'wrangler.jsonc'), JSON.stringify(configFrom(currentSettings), null, 2), 'utf8');
-
-run('node', [join(ROOT, 'cloudflare', 'explore-worker', 'patches', '019-explore-feed-revision-sync.mjs')], WORKER_DIR, { SORIDRAW_REMOTE_WORKER_DIR: RELEASE_DIR });
 run('node', ['--check', join(RELEASE_DIR, 'worker.js')], WORKER_DIR);
-const patched = readFileSync(join(RELEASE_DIR, 'worker.js'), 'utf8');
-for (const token of ['SORIDRAW_EXPLORE_FEED_REVISION_019_20260908', 'PROFILE_MEDIA.head(exploreFeedR2Key(sort))', 'url.pathname === "/v1/feed-revision"']) {
-  if (!patched.includes(token)) throw new Error(`${mode} patched Worker missing ${token}`);
-}
 
 let deployed = false;
 try {
@@ -143,8 +171,10 @@ try {
   await sleep(3500);
   const afterVersion = await activeVersion(target.worker);
   if (afterVersion === beforeVersion) throw new Error(`${mode} active Worker version did not change`);
+  const deployedSource = await activeSource(target.worker, afterVersion);
+  if (deployedSource !== validatedPreviewSource) throw new Error(`${mode} deployed Worker source is not byte-identical to validated PREVIEW runtime`);
   await smoke();
-  console.log(`CLOUDFLARE_${mode.toUpperCase()}_033=PASS before=${beforeVersion} after=${afterVersion}`);
+  console.log(`CLOUDFLARE_${mode.toUpperCase()}_033=PASS preview=${previewVersion} before=${beforeVersion} after=${afterVersion}`);
 } catch (error) {
   if (deployed) {
     console.error(`[033] ${mode} Worker verification failed; restoring previous source`);

@@ -1,0 +1,204 @@
+name: SORIDRAW Release Active PREVIEW 027 TEST PRODUCTION v2
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-release-current-preview-027-test-production-v2.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-release-active-preview-027-v2
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MAIN_RELEASE_SHA: c64b13248d4024338345c67091fea8ecdeb58e69
+      VALIDATED_PREVIEW_SHA: 8c2410578617ab103628dadee401e40135c07e7a
+      VALIDATED_PREVIEW_WORKER: 0ceae670-adc9-4b5f-9b81-ba6be225087b
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      FIREBASE_PROJECT: soridraw
+      TEST_ORIGIN: https://test.soridraw.com
+      PROD_ORIGIN: https://soridraw.com
+
+    steps:
+      - name: Checkout PREVIEW release controls
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Guard release baseline and main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_RELEASE_SHA"
+          test "$(git rev-parse "$VALIDATED_PREVIEW_SHA^{tree}")" = "$(git rev-parse "$MAIN_RELEASE_SHA^{tree}")"
+          node --check .deploy/temp-release-027-cloudflare.mjs
+          echo 'RELEASE_V2_GUARD=PASS'
+
+      - name: Checkout exact main release tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/soridraw-main-release"
+          git worktree add --detach "$RUNNER_TEMP/soridraw-main-release" "$MAIN_RELEASE_SHA"
+          cd "$RUNNER_TEMP/soridraw-main-release"
+          test "$(git rev-parse HEAD)" = "$MAIN_RELEASE_SHA"
+          test "$(git rev-parse 'HEAD^{tree}')" = "$(git rev-parse "$VALIDATED_PREVIEW_SHA^{tree}")"
+          echo "RELEASE_ROOT=$RUNNER_TEMP/soridraw-main-release" >> "$GITHUB_ENV"
+          echo 'EXACT_MAIN_RELEASE_TREE=PASS'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: TypeScript and build exact main release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_ROOT"
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/release-index.sha"
+          echo 'MAIN_BUILD_V2=PASS'
+
+      - name: Set up Node.js 22 for Cloudflare
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_ROOT/cloudflare/explore-worker"
+          npm install --no-audit --no-fund --package-lock=false
+
+      - name: Verify active PREVIEW Worker is still validated 027
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const A='e1a30fc9ef497fda1d34f4ab3dc1da45',T=process.env.CLOUDFLARE_API_TOKEN,N='soridraw-explore-preview';
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw new Error('CF '+r.status);return x.result||x;}
+          (async()=>{const ds=await get(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}/deployments`),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];if(a?.version_id!==process.env.VALIDATED_PREVIEW_WORKER)throw new Error(`PREVIEW Worker changed: ${a?.version_id}`);console.log('PREVIEW_WORKER_BASELINE_V2=PASS')})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Deploy exact PREVIEW Worker logic to TEST
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_RELEASE_ROOT="$RELEASE_ROOT" node .deploy/temp-release-027-cloudflare.mjs test
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy exact main build to Firebase TEST
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_ROOT"
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive
+          echo 'FIREBASE_TEST_027=PASS'
+
+      - name: Verify TEST application and Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/release-index.sha")"
+          for origin in 'https://soridraw-test.web.app' 'https://test.soridraw.com'; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/test-index.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/test-index.html" | awk '{print $1}')"
+                if [ "$actual" = "$expected" ]; then ok=yes; break; fi
+              fi
+              sleep 6
+            done
+            test "$ok" = yes
+            echo "TEST_HOST_027_PASS=$origin"
+          done
+          code="$(curl -sS -o "$RUNNER_TEMP/test-feed.json" -D "$RUNNER_TEMP/test-feed.headers" -w '%{http_code}' -H "Origin: $TEST_ORIGIN" 'https://soridraw-explore-test.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          test "$code" = 200
+          grep -qi "access-control-allow-origin: $TEST_ORIGIN" "$RUNNER_TEMP/test-feed.headers"
+          echo 'TEST_FULL_STACK_027=PASS'
+
+      - name: Snapshot production immediately before approved production release
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 'https://soridraw.web.app/' -o "$RUNNER_TEMP/prod-before.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/prod-before.html"
+          echo 'PRODUCTION_PRE_RELEASE_HEALTH=PASS'
+
+      - name: Deploy exact PREVIEW Worker logic to PRODUCTION
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_RELEASE_ROOT="$RELEASE_ROOT" node .deploy/temp-release-027-cloudflare.mjs production
+
+      - name: Deploy exact main build to Firebase PRODUCTION
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_ROOT"
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.json --non-interactive
+          echo 'FIREBASE_PRODUCTION_027=PASS'
+
+      - name: Verify PRODUCTION application and Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/release-index.sha")"
+          for origin in 'https://soridraw.web.app' 'https://soridraw.com'; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/prod-index.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/prod-index.html" | awk '{print $1}')"
+                if [ "$actual" = "$expected" ]; then ok=yes; break; fi
+              fi
+              sleep 6
+            done
+            test "$ok" = yes
+            echo "PRODUCTION_HOST_027_PASS=$origin"
+          done
+          code="$(curl -sS -o "$RUNNER_TEMP/prod-feed.json" -D "$RUNNER_TEMP/prod-feed.headers" -w '%{http_code}' -H "Origin: $PROD_ORIGIN" 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          test "$code" = 200
+          grep -qi "access-control-allow-origin: $PROD_ORIGIN" "$RUNNER_TEMP/prod-feed.headers"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_RELEASE_SHA"
+          echo 'PRODUCTION_FULL_STACK_027=PASS'
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'FIRESTORE_RULES_CHANGED=false'
+
+      - name: Package TEST and PRODUCTION release ZIPs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_ROOT"
+          git archive --format=zip --output="SORIDRAW_TEST_027_c64b1324.zip" HEAD
+          cp "SORIDRAW_TEST_027_c64b1324.zip" "SORIDRAW_PRODUCTION_027_c64b1324.zip"
+          unzip -t "SORIDRAW_TEST_027_c64b1324.zip" >/dev/null
+          unzip -t "SORIDRAW_PRODUCTION_027_c64b1324.zip" >/dev/null
+          sha256sum SORIDRAW_TEST_027_c64b1324.zip SORIDRAW_PRODUCTION_027_c64b1324.zip
+          echo "TEST_ZIP=$RELEASE_ROOT/SORIDRAW_TEST_027_c64b1324.zip" >> "$GITHUB_ENV"
+          echo "PROD_ZIP=$RELEASE_ROOT/SORIDRAW_PRODUCTION_027_c64b1324.zip" >> "$GITHUB_ENV"
+
+      - name: Upload release ZIPs
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_027_TEST_PRODUCTION_FINAL
+          path: |
+            ${{ env.TEST_ZIP }}
+            ${{ env.PROD_ZIP }}
+          retention-days: 30

@@ -1,0 +1,149 @@
+name: SORIDRAW Deploy Publication Stable 027 PREVIEW
+on:
+  push:
+    branches: [preview]
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    env:
+      BASE_026_SHA: d0f8caa3c8a45274e35208ee22fd8981858379db
+      FEATURE_SHA: 9994f6ed2f1e766802e6a3ac34d7fa414ded613c
+      MAIN_SHA: 49c799cbb46d137539f74a48c261f7256762336f
+      PREVIEW_BEFORE_VERSION: e6bb6376-b6a5-4658-8ccf-d0a85c50b56e
+      PROD_BEFORE_VERSION: aa0ba4a0-6f27-47c5-b4a1-a5214c5f2690
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PROD_WORKER: soridraw-explore-api
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+      PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_R2: soridraw-profile-media-preview
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Guard exact 027 source scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$FEATURE_SHA" HEAD
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_SHA"
+          actual="$(git diff --name-only "$BASE_026_SHA" HEAD | grep -v '^.github/workflows/temp-deploy-publication-stable-027.yml$' | sort)"
+          test "$actual" = 'cloudflare/explore-worker/patches/027-publication-stable-semantic-republish.mjs'
+          test ! -e cloudflare/explore-worker/patches/025-publication-update-returning-hotpath.mjs
+          node --check cloudflare/explore-worker/patches/027-publication-stable-semantic-republish.mjs
+          echo 'SOURCE_SCOPE_027=PASS'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: TypeScript and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          echo 'APP_VALIDATE=PASS'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Prepare and validate 027 Worker
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .deploy027 && mkdir .deploy027
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,P=process.env.PREVIEW_WORKER,PROD=process.env.PROD_WORKER;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,900)}`);return x.result||x;}
+          async function active(name){const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${name}`,ds=await get(base+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y?.percentage||0)-Number(x?.percentage||0))[0];if(!a?.version_id||Number(a?.percentage||0)<99.99)throw new Error('active version missing '+name);return {base,version:a.version_id};}
+          function fn(s,name){let p=s.indexOf(`async function ${name}(`);if(p<0)p=s.indexOf(`function ${name}(`);if(p<0)throw new Error('missing '+name);const b=s.indexOf('{',p);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i],n=s[i+1];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='/'&&n==='/'){const z=s.indexOf('\n',i+2);i=z<0?s.length:z;continue}if(c==='/'&&n==='*'){const z=s.indexOf('*/',i+2);i=z<0?s.length:z+1;continue}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(p,i+1)}throw new Error('unterminated '+name)}
+          const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
+          (async()=>{const preview=await active(P),prod=await active(PROD);if(preview.version!==process.env.PREVIEW_BEFORE_VERSION)throw new Error(`unexpected PREVIEW version ${preview.version}`);if(prod.version!==process.env.PROD_BEFORE_VERSION)throw new Error(`unexpected PRODUCTION version ${prod.version}`);fs.writeFileSync('.deploy027/prod-before.txt',prod.version);const v=await get(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${P}/versions/${preview.version}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0];if(!m?.content_base64)throw new Error('PREVIEW main module missing');const src=Buffer.from(m.content_base64,'base64').toString('utf8');for(const t of ['publicationRepublishSemanticUnchanged022','visibilityTransitionOnly022','applyPublicationVisibilityTransition021','X-SORIDRAW-D1-Read-Queries','X-SORIDRAW-D1-Write-Queries'])if(!src.includes(t))throw new Error('PREVIEW prerequisite missing '+t);for(const bad of ['finalizeMusicNotePublic025','handleVisibilityR2CoreLegacy025','publicationStableShareValue027'])if(src.includes(bad))throw new Error('unexpected pre-027 token '+bad);fs.writeFileSync('.deploy027/original.js',src);fs.writeFileSync('.deploy027/worker.js',src);const stableFns=['publicationReadState016','handleMusicNotePublicationSingleWrite016','applyPublicationVisibilityTransition021','handleMusicNotePrivate017','patchExploreProfileR2Mutation019'];fs.writeFileSync('.deploy027/stable-before.json',JSON.stringify(Object.fromEntries(stableFns.map(n=>[n,hash(fn(src,n))])),null,2));const settings=await get(`${preview.base}/settings`);const config={name:P,main:'./worker.js',compatibility_date:String(settings.compatibility_date||'2026-09-04').slice(0,10),workers_dev:true,keep_vars:true,d1_databases:[{binding:'DB',database_name:process.env.PREVIEW_DB_NAME,database_id:process.env.PREVIEW_DB_ID}],r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.PREVIEW_R2}],observability:settings.observability&&typeof settings.observability==='object'?{enabled:settings.observability.enabled!==false}:{enabled:true}};if(Array.isArray(settings.compatibility_flags)&&settings.compatibility_flags.length)config.compatibility_flags=settings.compatibility_flags;fs.writeFileSync('.deploy027/wrangler.jsonc',JSON.stringify(config,null,2));console.log(`[snapshot] preview=${preview.version} production=${prod.version}`)})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.deploy027" node patches/027-publication-stable-semantic-republish.mjs
+          node --check .deploy027/worker.js
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto'),vm=require('vm'),s=fs.readFileSync('.deploy027/worker.js','utf8');
+          function fn(name){let p=s.indexOf(`async function ${name}(`);if(p<0)p=s.indexOf(`function ${name}(`);if(p<0)throw new Error('missing '+name);const b=s.indexOf('{',p);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i],n=s[i+1];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='/'&&n==='/'){const z=s.indexOf('\n',i+2);i=z<0?s.length:z;continue}if(c==='/'&&n==='*'){const z=s.indexOf('*/',i+2);i=z<0?s.length:z+1;continue}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(p,i+1)}throw new Error('unterminated '+name)}
+          const hash=x=>crypto.createHash('sha256').update(x).digest('hex'),before=JSON.parse(fs.readFileSync('.deploy027/stable-before.json','utf8'));
+          for(const [name,h] of Object.entries(before))if(hash(fn(name))!==h)throw new Error('027 changed protected function '+name);
+          const names=['publicationStableShareValue027','publicationShareEquivalent027','publicationGenreSet027','publicationPrimaryGenreEquivalent027'];
+          const ctx={Set,JSON,String,Array,Object,Number};vm.createContext(ctx);vm.runInContext(names.map(fn).join('\n\n'),ctx);
+          const oldPayload=JSON.stringify({schemaVersion:1,selectedKeywords:{genres:['Breakbeat','Bass'],styles:['Dark','Dry'],sounds:['Kick','Bass'],moods:['Cold'],themes:['Night']},nextSong:{genre:['Breakbeat','Bass'],subGenreIds:['g2','g1'],sectionCueOptions:[{id:'A'},{id:'B'}]}});
+          const reordered=JSON.stringify({selectedKeywords:{themes:['Night'],moods:['Cold'],sounds:['Bass','Kick'],styles:['Dry','Dark'],genres:['Bass','Breakbeat']},nextSong:{sectionCueOptions:[{id:'A'},{id:'B'}],subGenreIds:['g1','g2'],genre:['Bass','Breakbeat']},schemaVersion:1});
+          if(!ctx.publicationShareEquivalent027(oldPayload,reordered))throw new Error('set-like reorder should be equivalent');
+          const orderedChanged=JSON.stringify({schemaVersion:1,selectedKeywords:{genres:['Breakbeat','Bass'],styles:['Dark','Dry'],sounds:['Kick','Bass'],moods:['Cold'],themes:['Night']},nextSong:{genre:['Breakbeat','Bass'],subGenreIds:['g2','g1'],sectionCueOptions:[{id:'B'},{id:'A'}]}});
+          if(ctx.publicationShareEquivalent027(oldPayload,orderedChanged))throw new Error('ordered advanced array change was ignored');
+          const row={primary_genre:'Breakbeat',share_payload_json:oldPayload};const src={sharePayloadJson:reordered};
+          if(!ctx.publicationPrimaryGenreEquivalent027(row,src,'Bass'))throw new Error('primary genre reorder should be equivalent when genre set is identical');
+          const semantic=fn('publicationRepublishSemanticUnchanged022');
+          for(const t of ['sameText(row.title, source.title)','sameText(row.lyrics, source.lyrics)','publicationShareEquivalent027','publicationPrimaryGenreEquivalent027'])if(!semantic.includes(t))throw new Error('semantic guard missing '+t);
+          console.log('SEMANTIC_REPUBLISH_027=PASS');
+          console.log('PROTECTED_PUBLICATION_FUNCTIONS_UNCHANGED=PASS');
+          NODE
+
+      - name: Deploy PREVIEW Worker 027 with rollback guard
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployed=0
+          rollback(){ status=$?; if [ "$status" -ne 0 ] && [ "$deployed" = 1 ]; then echo '[rollback] restoring PREVIEW 026'; npx wrangler versions deploy "$PREVIEW_BEFORE_VERSION@100%" --name "$PREVIEW_WORKER" --yes || true; fi; exit "$status"; }
+          trap rollback EXIT
+          npx wrangler deploy --strict --config .deploy027/wrangler.jsonc
+          deployed=1
+          sleep 4
+          node <<'NODE'
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PREVIEW_WORKER,fs=require('fs');async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw new Error('CF '+r.status);return x.result||x;}(async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,ds=await get(base+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];if(!a?.version_id||a.version_id===process.env.PREVIEW_BEFORE_VERSION)throw new Error('PREVIEW version unchanged');const v=await get(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');for(const t of ['publicationStableShareValue027','publicationShareEquivalent027','publicationPrimaryGenreEquivalent027','visibilityTransitionOnly022','X-SORIDRAW-D1-Read-Queries'])if(!s.includes(t))throw new Error('deployed 027 missing '+t);for(const bad of ['finalizeMusicNotePublic025','handleVisibilityR2CoreLegacy025'])if(s.includes(bad))throw new Error('025 token returned');fs.writeFileSync('.deploy027/preview-after.txt',a.version_id);console.log('PREVIEW_WORKER_VERSION='+a.version_id)})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          test "$(curl -sS -o /tmp/027-feed.json -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=latest&limit=1")" = 200
+          test "$(curl -sS -o /tmp/027-genres.json -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/genres")" = 200
+          test "$(curl -sS -o /tmp/027-pub.json -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" -H 'content-type: application/json' -X POST --data '{}' "$PREVIEW_BASE/v1/publications")" = 401
+          test "$(curl -sS -o /tmp/027-site.html -w '%{http_code}' -H 'Cache-Control: no-cache' "$PREVIEW_ORIGIN")" = 200
+          trap - EXIT
+          echo 'PREVIEW_WORKER_027_DEPLOY=PASS'
+          echo 'FIREBASE_HOSTING_CHANGED=false'
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'FIRESTORE_RULES_CHANGED=false'
+
+      - name: Verify main and production unchanged
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_SHA"
+          node <<'NODE'
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PROD_WORKER;async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw new Error('CF '+r.status);return x.result||x;}(async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,ds=await get(base+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];if(a?.version_id!==process.env.PROD_BEFORE_VERSION)throw new Error('production Worker changed');console.log('MAIN_PRODUCTION_UNCHANGED=PASS')})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Package deployed source ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipname="SORIDRAW_PREVIEW_027_stable_republish_$(git rev-parse --short=8 HEAD).zip"
+          git archive --format=zip --output="$zipname" HEAD -- . ':(exclude).github/workflows/temp-deploy-publication-stable-027.yml'
+          test -s "$zipname"
+          echo "ZIP_NAME=$zipname" >> "$GITHUB_ENV"
+          sha256sum "$zipname"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_PREVIEW_027_stable_republish
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 30

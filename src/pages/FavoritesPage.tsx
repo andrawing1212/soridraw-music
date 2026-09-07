@@ -1566,6 +1566,7 @@ export default function FavoritesPage({
   const favoriteDetailFlushTimerRef = useRef<number | null>(null);
   const favoriteDetailFlushInFlightRef = useRef<Promise<void> | null>(null);
   const favoriteDetailDraftPersistInFlightRef = useRef<Promise<void> | null>(null);
+  const [favoriteDetailSaveStatus, setFavoriteDetailSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved'>('idle');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
@@ -1672,6 +1673,7 @@ export default function FavoritesPage({
       await favoriteDetailDraftPersistInFlightRef.current;
     }
     favoriteDetailPendingPatchRef.current = null;
+    setFavoriteDetailSaveStatus('saving');
 
     const task = (async () => {
       try {
@@ -1715,6 +1717,7 @@ export default function FavoritesPage({
         } else {
           await clearMusicNoteDetailDraft(user.uid, pending.songId);
         }
+        setFavoriteDetailSaveStatus(favoriteDetailPendingPatchRef.current ? 'pending' : 'saved');
       } catch (error) {
         console.error(`music note detail draft flush failed (${reason})`, error);
         const newerPending = favoriteDetailPendingPatchRef.current;
@@ -1727,6 +1730,7 @@ export default function FavoritesPage({
         if (Object.keys(restoredUpdates).length === 0) {
           favoriteDetailPendingPatchRef.current = null;
           await clearMusicNoteDetailDraft(user.uid, pending.songId);
+          setFavoriteDetailSaveStatus('idle');
           return;
         }
         const restored: MusicNoteDetailPendingPatch = {
@@ -1736,6 +1740,7 @@ export default function FavoritesPage({
           updates: restoredUpdates,
         };
         favoriteDetailPendingPatchRef.current = restored;
+        setFavoriteDetailSaveStatus('pending');
         await writeMusicNoteDetailDraft(user.uid, restored.songId, restored.baseVersion, restored.updates);
         clearFavoriteDetailFlushTimer();
         favoriteDetailFlushTimerRef.current = window.setTimeout(() => {
@@ -1783,6 +1788,7 @@ export default function FavoritesPage({
 
     if (Object.keys(updates).length === 0) {
       favoriteDetailPendingPatchRef.current = null;
+      setFavoriteDetailSaveStatus(favoriteDetailFlushInFlightRef.current ? 'saving' : 'idle');
       clearFavoriteDetailFlushTimer();
       const clearTask = clearMusicNoteDetailDraft(user.uid, safeSongId);
       const trackedClearTask = clearTask.finally(() => {
@@ -1801,6 +1807,7 @@ export default function FavoritesPage({
       updates,
     };
     favoriteDetailPendingPatchRef.current = pending;
+    setFavoriteDetailSaveStatus('pending');
 
     const persistTask = writeMusicNoteDetailDraft(user.uid, safeSongId, baseVersion, updates);
     const trackedPersistTask = persistTask.finally(() => {
@@ -3390,6 +3397,7 @@ export default function FavoritesPage({
       activeFavoriteEditorSongIdRef.current = selectedSongId;
       favoriteEditorReadySongIdRef.current = selectedSongId;
       popupOpenedSongIdRef.current = selectedSongId;
+      setFavoriteDetailSaveStatus(favoriteDetailPendingPatchRef.current?.songId === selectedSongId ? 'pending' : 'idle');
       skipNextFavoriteDraftSaveRef.current = false;
 
       setOriginalLyricsKo(sourceKorean);
@@ -3435,6 +3443,7 @@ export default function FavoritesPage({
       activeFavoriteEditorSongIdRef.current = null;
       favoriteEditorReadySongIdRef.current = null;
       favoriteDetailServerBaselineRef.current = null;
+      setFavoriteDetailSaveStatus('idle');
       skipNextFavoriteDraftSaveRef.current = false;
       setActiveEditSection(null);
       setForeignTargetLanguage('English');
@@ -7975,7 +7984,20 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
               <div className="relative flex items-center justify-between gap-4 border-b border-black/20 px-5 py-4 md:px-8 md:py-5">
                 <div className="min-w-0">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-[#FF8C85]">music note detail</div>
+                  <div className="flex min-w-0 items-center gap-2 text-[11px] font-bold uppercase tracking-[0.32em] text-[#FF8C85]">
+                    <span className="shrink-0">music note detail</span>
+                    {!isSelectedSongReadOnly && favoriteDetailSaveStatus !== 'idle' && (
+                      <span
+                        data-music-note-detail-save-status={favoriteDetailSaveStatus}
+                        className={cn(
+                          'min-w-0 truncate text-[10px] font-semibold normal-case tracking-normal',
+                          favoriteDetailSaveStatus === 'saved' ? 'text-emerald-300/70' : 'text-white/45'
+                        )}
+                      >
+                        {favoriteDetailSaveStatus === 'pending' ? '저장 대기' : favoriteDetailSaveStatus === 'saving' ? '저장 중…' : '저장됨'}
+                      </span>
+                    )}
+                  </div>
                   <h3 className="mt-1 text-[27px] font-bold tracking-tight text-white md:text-[32px]">{isSelectedSongReadOnly ? '디테일' : '디테일 & Edit'}</h3>
                 </div>
                 <div className="flex shrink-0 items-center gap-4">

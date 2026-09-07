@@ -136,8 +136,10 @@ source = source.replace(
 );
 
 replaceFunctionText('handleMusicNotePublicationSingleWrite016', (text) => {
-  const oldProbe = `  const visibilityTransitionOnly021 = Boolean(previous?.id)\n    && !unchanged\n    && publicationCanonicalUnchanged016(\n      { ...previous, is_public: 1, status: 'published' },\n      source,\n      resolvedOptions,\n      primaryGenre\n    );`;
-  if (!text.includes(oldProbe)) throw new Error('[022] 021 transition probe anchor missing');
+  const oldProbeSingle = `  const visibilityTransitionOnly021 = Boolean(previous?.id)\n    && !unchanged\n    && publicationCanonicalUnchanged016(\n      { ...previous, is_public: 1, status: 'published' },\n      source,\n      resolvedOptions,\n      primaryGenre\n    );`;
+  const oldProbeDouble = `  const visibilityTransitionOnly021 = Boolean(previous?.id) && !unchanged && publicationCanonicalUnchanged016(\n    { ...previous, is_public: 1, status: "published" },\n    source,\n    resolvedOptions,\n    primaryGenre\n  );`;
+  const oldProbe = text.includes(oldProbeSingle) ? oldProbeSingle : (text.includes(oldProbeDouble) ? oldProbeDouble : null);
+  if (!oldProbe) throw new Error('[022] 021 transition probe anchor missing');
   let next = text.replace(
     oldProbe,
     `  const visibilityTransitionOnly022 = Boolean(previous?.id)\n    && !unchanged\n    && publicationRepublishSemanticUnchanged022(previous, source, resolvedOptions, primaryGenre);`,
@@ -147,8 +149,13 @@ replaceFunctionText('handleMusicNotePublicationSingleWrite016', (text) => {
     `      mutation: unchanged ? 'idempotent' : 'written'`,
     `      mutation: visibilityTransitionOnly022 ? 'visibility-transition' : (unchanged ? 'idempotent' : 'written')`,
   );
+  next = next.replace(
+    `      mutation: unchanged ? "idempotent" : "written"`,
+    `      mutation: visibilityTransitionOnly022 ? "visibility-transition" : unchanged ? "idempotent" : "written"`,
+  );
   if (!next.includes('visibilityTransitionOnly022')) throw new Error('[022] transition flag missing after transform');
   if (next.includes('visibilityTransitionOnly021')) throw new Error('[022] legacy 021 transition flag remains');
+  if (!next.includes('visibility-transition')) throw new Error('[022] mutation diagnostic missing');
   return next;
 });
 
@@ -157,7 +164,7 @@ const semantic = functionRange('publicationRepublishSemanticUnchanged022').text;
 for (const required of [
   'visibilityTransitionOnly022',
   'publicationRepublishSemanticUnchanged022(',
-  "'visibility-transition'",
+  'visibility-transition',
   'applyPublicationVisibilityTransition021(',
 ]) {
   if (!hot.includes(required)) throw new Error(`[022] publish invariant missing: ${required}`);

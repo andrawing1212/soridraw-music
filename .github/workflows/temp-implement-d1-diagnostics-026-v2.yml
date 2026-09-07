@@ -1,0 +1,103 @@
+name: SORIDRAW Implement D1 Diagnostics 026 v2
+on:
+  push:
+    branches:
+      - preview
+permissions:
+  contents: write
+jobs:
+  implement:
+    if: "${{ github.actor != 'github-actions[bot]' }}"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 5
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply diagnostic client patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def once(s, old, new, label):
+              n=s.count(old)
+              if n != 1:
+                  raise SystemExit(f'{label}: expected 1 found {n}')
+              return s.replace(old,new,1)
+
+          p=Path('src/lib/cloudflareDiagnostics.ts')
+          s=p.read_text()
+          old='  d1RowsWritten: number;\n  r2ClassA: number;'
+          if s.count(old) != 2: raise SystemExit(f'types count={s.count(old)}')
+          s=s.replace(old,'  d1RowsWritten: number;\n  d1ReadQueries: number;\n  d1WriteQueries: number;\n  r2ClassA: number;')
+          old='  d1RowsWritten: 0,\n  r2ClassA: 0,'
+          if s.count(old) != 2: raise SystemExit(f'empty count={s.count(old)}')
+          s=s.replace(old,'  d1RowsWritten: 0,\n  d1ReadQueries: 0,\n  d1WriteQueries: 0,\n  r2ClassA: 0,')
+          s=once(s,'        d1RowsWritten: normalizeCount(state?.d1RowsWritten),\n        r2ClassA: normalizeCount(state?.r2ClassA),','        d1RowsWritten: normalizeCount(state?.d1RowsWritten),\n        d1ReadQueries: normalizeCount(state?.d1ReadQueries),\n        d1WriteQueries: normalizeCount(state?.d1WriteQueries),\n        r2ClassA: normalizeCount(state?.r2ClassA),','stored path')
+          s=once(s,'      d1RowsWritten: normalizeCount(parsed?.d1RowsWritten),\n      r2ClassA: normalizeCount(parsed?.r2ClassA),','      d1RowsWritten: normalizeCount(parsed?.d1RowsWritten),\n      d1ReadQueries: normalizeCount(parsed?.d1ReadQueries),\n      d1WriteQueries: normalizeCount(parsed?.d1WriteQueries),\n      r2ClassA: normalizeCount(parsed?.r2ClassA),','stored total')
+          s=once(s,"  const d1RowsWritten = metered ? readUsageHeader(response, 'X-SORIDRAW-D1-Write') : 0;\n  const r2ClassA = metered ? readUsageHeader(response, 'X-SORIDRAW-R2-A') : 0;","  const d1RowsWritten = metered ? readUsageHeader(response, 'X-SORIDRAW-D1-Write') : 0;\n  const d1ReadQueries = metered ? readUsageHeader(response, 'X-SORIDRAW-D1-Read-Queries') : 0;\n  const d1WriteQueries = metered ? readUsageHeader(response, 'X-SORIDRAW-D1-Write-Queries') : 0;\n  const r2ClassA = metered ? readUsageHeader(response, 'X-SORIDRAW-R2-A') : 0;",'headers')
+          s=once(s,'    d1RowsWritten: previous.d1RowsWritten + d1RowsWritten,\n    r2ClassA: previous.r2ClassA + r2ClassA,','    d1RowsWritten: previous.d1RowsWritten + d1RowsWritten,\n    d1ReadQueries: previous.d1ReadQueries + d1ReadQueries,\n    d1WriteQueries: previous.d1WriteQueries + d1WriteQueries,\n    r2ClassA: previous.r2ClassA + r2ClassA,','total accumulate')
+          s=once(s,'        d1RowsWritten: previousPath.d1RowsWritten + d1RowsWritten,\n        r2ClassA: previousPath.r2ClassA + r2ClassA,','        d1RowsWritten: previousPath.d1RowsWritten + d1RowsWritten,\n        d1ReadQueries: previousPath.d1ReadQueries + d1ReadQueries,\n        d1WriteQueries: previousPath.d1WriteQueries + d1WriteQueries,\n        r2ClassA: previousPath.r2ClassA + r2ClassA,','path accumulate')
+          p.write_text(s)
+
+          p=Path('src/components/CacheDiagnosticsOverlay.tsx')
+          s=p.read_text()
+          needle='Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)}'
+          at=s.find(needle)
+          if at < 0: raise SystemExit('top needle missing')
+          start=s.rfind('<div',0,at); end=s.find('</div>',at)
+          if start<0 or end<0: raise SystemExit('top div missing')
+          end+=6
+          indent=s[s.rfind('\n',0,start)+1:start]
+          top=(f'<div className="whitespace-nowrap text-[12px] font-bold text-[#c6b5ff]">\n'
+               f'{indent}  Cloudflare 앱 · LOCAL {{formatNumber(cloudflare.localCacheHits)}} · Worker {{formatNumber(cloudflare.workerRequests)}}\n'
+               f'{indent}</div>\n'
+               f'{indent}<div className="whitespace-nowrap text-[11px] font-bold text-[#c6b5ff]/80">\n'
+               f'{indent}  D1 쿼리 읽기 {{cloudflareMetered ? formatNumber(cloudflare.d1ReadQueries) : \'—\'}} · 쓰기 {{cloudflareMetered ? formatNumber(cloudflare.d1WriteQueries) : \'—\'}} · 행 읽기 {{cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : \'—\'}} · 쓰기 {{cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : \'—\'}}\n'
+               f'{indent}</div>')
+          s=s[:start]+top+s[end:]
+
+          needle='LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)} · D1 읽기'
+          at=s.find(needle)
+          if at<0: raise SystemExit('path needle missing')
+          ss=s.rfind('<span',0,at); se=s.find('</span>',at)
+          if ss<0 or se<0: raise SystemExit('path span missing')
+          se+=7
+          s=s[:ss]+'<span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)}</span>'+s[se:]
+          parent=s.find('</div>',ss)
+          if parent<0: raise SystemExit('path parent missing')
+          parent+=6
+          extra='''
+                    <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/68">
+                      <span className="shrink-0 whitespace-nowrap tabular-nums">D1 쿼리 읽기 {formatNumber(state.d1ReadQueries)} · 쓰기 {formatNumber(state.d1WriteQueries)}</span>
+                      <span className="shrink-0 whitespace-nowrap tabular-nums">행 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}</span>
+                    </div>'''
+          s=s[:parent]+extra+s[parent:]
+          p.write_text(s)
+          PY
+          node --check cloudflare/explore-worker/patches/026-d1-query-vs-row-diagnostics.mjs
+          git diff --check
+          grep -Fq 'D1 쿼리 읽기' src/components/CacheDiagnosticsOverlay.tsx
+          grep -Fq 'X-SORIDRAW-D1-Read-Queries' src/lib/cloudflareDiagnostics.ts
+      - name: Validate app
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+      - name: Commit client implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/cloudflareDiagnostics.ts src/components/CacheDiagnosticsOverlay.tsx
+          git commit -m 'feat(preview): split D1 query counts from row billing'
+          git push origin HEAD:preview

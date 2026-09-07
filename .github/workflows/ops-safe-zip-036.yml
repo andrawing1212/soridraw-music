@@ -1,0 +1,65 @@
+name: Package SORIDRAW 036 ZIPs
+
+on:
+  push:
+    branches:
+      - ops-safe-zip-036-20260908
+    paths:
+      - .github/workflows/ops-safe-zip-036.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-preview:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact PREVIEW 036
+        uses: actions/checkout@v4
+        with:
+          ref: 10c88f9cacb7ba6fb8a0130946c83c014f6824f4
+          fetch-depth: 1
+
+      - name: Verify and ZIP PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "10c88f9cacb7ba6fb8a0130946c83c014f6824f4"
+          rm -rf .git
+          zip -qr "$RUNNER_TEMP/SORIDRAW_036_PREVIEW_10c88f9c_2026-09-08.zip" .
+          sha256sum "$RUNNER_TEMP/SORIDRAW_036_PREVIEW_10c88f9c_2026-09-08.zip"
+
+      - name: Upload PREVIEW ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_036_PREVIEW_10c88f9c_2026-09-08
+          path: ${{ runner.temp }}/SORIDRAW_036_PREVIEW_10c88f9c_2026-09-08.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  package-test-production:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact TEST PRODUCTION 036
+        uses: actions/checkout@v4
+        with:
+          ref: edae66666b88f4fa80d2a80e49c2b42c55e71214
+          fetch-depth: 1
+
+      - name: Verify and ZIP TEST PRODUCTION
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "edae66666b88f4fa80d2a80e49c2b42c55e71214"
+          rm -rf .git
+          zip -qr "$RUNNER_TEMP/SORIDRAW_036_TEST_PRODUCTION_edae6666_2026-09-08.zip" .
+          sha256sum "$RUNNER_TEMP/SORIDRAW_036_TEST_PRODUCTION_edae6666_2026-09-08.zip"
+
+      - name: Upload TEST PRODUCTION ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_036_TEST_PRODUCTION_edae6666_2026-09-08
+          path: ${{ runner.temp }}/SORIDRAW_036_TEST_PRODUCTION_edae6666_2026-09-08.zip
+          if-no-files-found: error
+          retention-days: 30

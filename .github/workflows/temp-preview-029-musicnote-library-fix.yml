@@ -135,6 +135,8 @@ jobs:
           git config user.email 'soridraw-preview@users.noreply.github.com'
           rm -f .deploy/apply-029-musicnote-library-fix.py
           rm -f .github/workflows/temp-preview-029-musicnote-library-fix.yml
+          rm -rf cloudflare/media-worker/.dry-run
+          git restore --worktree -- cloudflare/media-worker/package-lock.json 2>/dev/null || true
           git add -A
           tree_sha="$(git write-tree)"
           clean_sha="$(printf '%s\n' 'fix(preview): cache Music Note details and restore Library next-song apply' | git commit-tree "$tree_sha" -p "$BASE_PREVIEW_SHA")"
@@ -148,6 +150,10 @@ jobs:
             'src/lib/userDataEngine.ts' \
             'src/pages/FavoritesPage.tsx' \
             'src/pages/SunoLibraryPage.tsx' | sort > "$RUNNER_TEMP/runtime-expected.txt"
+          echo '--- expected runtime files ---'
+          cat "$RUNNER_TEMP/runtime-expected.txt"
+          echo '--- actual runtime files ---'
+          cat "$RUNNER_TEMP/runtime-files.txt"
           cmp "$RUNNER_TEMP/runtime-expected.txt" "$RUNNER_TEMP/runtime-files.txt"
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$BASE_PREVIEW_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"

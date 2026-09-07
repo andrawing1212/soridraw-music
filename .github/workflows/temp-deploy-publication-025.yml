@@ -1,0 +1,165 @@
+name: SORIDRAW Publication UPDATE RETURNING 025 PREVIEW
+
+on:
+  push:
+    branches: [preview]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      BASE_SHA: 81c016731e3621e387cbfc99c73f2b3a492e6ac1
+      FEATURE_SHA: 0a7bf379972825aece20553ff518e1730d390c92
+      MAIN_SHA: 49c799cbb46d137539f74a48c261f7256762336f
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PROD_WORKER: soridraw-explore-api
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+      PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_R2: soridraw-profile-media-preview
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Guard exact feature and main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$FEATURE_SHA" HEAD
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_SHA"
+          actual="$(git diff --name-only "$BASE_SHA" HEAD | grep -v '^.github/workflows/temp-deploy-publication-025.yml$' | sort)"
+          test "$actual" = 'cloudflare/explore-worker/patches/025-publication-update-returning-hotpath.mjs'
+          node --check cloudflare/explore-worker/patches/025-publication-update-returning-hotpath.mjs
+          echo 'SOURCE_GUARD=PASS'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: TypeScript and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          echo 'APP_VALIDATE=PASS'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Validate D1 schema and prepare Worker
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .deploy025 && mkdir .deploy025
+          node <<'NODE'
+          const fs=require('fs');
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,P=process.env.PREVIEW_WORKER,PROD=process.env.PROD_WORKER;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,'content-type':'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,800)}`);return x.result||x;}
+          async function active(name){const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${name}`,ds=await get(base+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y?.percentage||0)-Number(x?.percentage||0))[0];if(!a?.version_id||Number(a?.percentage||0)<99.99)throw new Error('active version missing '+name);return {base,version:a.version_id};}
+          (async()=>{
+            const preview=await active(P),prod=await active(PROD);
+            fs.writeFileSync('.deploy025/preview-before.txt',preview.version);
+            fs.writeFileSync('.deploy025/prod-before.txt',prod.version);
+            const v=await get(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${P}/versions/${preview.version}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0];
+            if(!m?.content_base64)throw new Error('PREVIEW main module missing');
+            const src=Buffer.from(m.content_base64,'base64').toString('utf8');
+            for(const token of ['publicationReadProfileR2024','publicationReadState016','publicationRepublishSemanticUnchanged022','handleVisibilityR2Core','AND is_public <> 1','AND is_public <> 0'])if(!src.includes(token))throw new Error('024 runtime prerequisite missing '+token);
+            if(src.includes('finalizeMusicNotePublic025')||src.includes('handleVisibilityR2CoreLegacy025'))throw new Error('025 unexpectedly active before deployment');
+            fs.writeFileSync('.deploy025/original.js',src);fs.writeFileSync('.deploy025/worker.js',src);
+            const settings=await get(`${preview.base}/settings`);
+            const config={name:P,main:'./worker.js',compatibility_date:String(settings.compatibility_date||'2026-09-04').slice(0,10),workers_dev:true,keep_vars:true,d1_databases:[{binding:'DB',database_name:process.env.PREVIEW_DB_NAME,database_id:process.env.PREVIEW_DB_ID}],r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.PREVIEW_R2}],observability:settings.observability&&typeof settings.observability==='object'?{enabled:settings.observability.enabled!==false}:{enabled:true}};
+            if(Array.isArray(settings.compatibility_flags)&&settings.compatibility_flags.length)config.compatibility_flags=settings.compatibility_flags;
+            fs.writeFileSync('.deploy025/wrangler.jsonc',JSON.stringify(config,null,2));
+            const qr=await fetch(`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${process.env.PREVIEW_DB_ID}/query`,{method:'POST',headers:{Authorization:`Bearer ${T}`,'content-type':'application/json'},body:JSON.stringify({sql:"SELECT type,name,sql FROM sqlite_master WHERE tbl_name='tracks' AND type IN ('index','trigger') ORDER BY type,name"})});
+            const qx=await qr.json();if(!qr.ok||qx.success===false)throw new Error('D1 schema audit failed '+qr.status);
+            const rows=(Array.isArray(qx.result)?qx.result[0]?.results:qx.result?.results)||[];
+            const isPublicIndexes=rows.filter(r=>r.type==='index'&&/\\bis_public\\b/i.test(String(r.sql||'')));
+            const triggers=rows.filter(r=>r.type==='trigger');
+            if(isPublicIndexes.length)throw new Error('is_public index returned: '+JSON.stringify(isPublicIndexes));
+            if(triggers.length)throw new Error('tracks trigger returned: '+JSON.stringify(triggers));
+            console.log(`[snapshot] preview=${preview.version} production=${prod.version}`);
+            console.log('D1_INDEX_NEUTRAL_025=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.deploy025" node patches/025-publication-update-returning-hotpath.mjs
+          node --check .deploy025/worker.js
+          node <<'NODE'
+          const fs=require('fs'),s=fs.readFileSync('.deploy025/worker.js','utf8');
+          function fn(name){let p=s.indexOf(`async function ${name}(`);if(p<0)p=s.indexOf(`function ${name}(`);if(p<0)throw new Error('missing '+name);const b=s.indexOf('{',p);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i],n=s[i+1];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='/'&&n==='/'){const z=s.indexOf('\n',i+2);i=z<0?s.length:z;continue}if(c==='/'&&n==='*'){const z=s.indexOf('*/',i+2);i=z<0?s.length:z+1;continue}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(p,i+1)}throw new Error('unterminated '+name)}
+          const pub=fn('handleMusicNotePublicationSingleWrite016'),priv=fn('handleVisibilityR2Core'),pubFinal=fn('finalizeMusicNotePublic025'),privFinal=fn('finalizeMusicNotePrivate025'),meter=fn('createMeteredD1');
+          if((pub.match(/env\.DB\.prepare/g)||[]).length!==1||pub.includes('publicationReadState016(')||!pub.includes('UPDATE tracks')||!pub.includes('RETURNING *'))throw new Error('public 1-statement fast path invalid');
+          if((priv.match(/env\.DB\.prepare/g)||[]).length!==1||!priv.includes('SET is_public = 0, updated_at = ?')||!priv.includes('RETURNING id, owner_uid'))throw new Error('private 1-statement fast path invalid');
+          if(pubFinal.includes('env.DB.')||privFinal.includes('env.DB.'))throw new Error('derived finalizer touches D1');
+          if(!meter.includes('const result = await target.all()')||!meter.includes('addD1UsageMeta(usage, result)'))throw new Error('first() metering cannot preserve UPDATE RETURNING meta');
+          if(!s.includes('handleMusicNotePublicationSingleWrite016Legacy025')||!s.includes('handleVisibilityR2CoreLegacy025'))throw new Error('safe fallbacks missing');
+          console.log('WORKER_SOURCE_025=PASS');
+          NODE
+
+      - name: Deploy and verify PREVIEW Worker 025
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployed=0
+          recover(){
+            status=$?
+            if [ "$status" -ne 0 ] && [ "$deployed" = 1 ]; then
+              echo "[025 recovery] restoring previous PREVIEW Worker"
+              cp .deploy025/original.js .deploy025/worker.js
+              npx wrangler deploy --strict --config .deploy025/wrangler.jsonc >/tmp/025-recover.log 2>&1 || cat /tmp/025-recover.log
+            fi
+            exit "$status"
+          }
+          trap recover EXIT
+          npx wrangler deploy --strict --config .deploy025/wrangler.jsonc
+          deployed=1
+          sleep 4
+          node <<'NODE'
+          const fs=require('fs');const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PREVIEW_WORKER;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`}}),x=await r.json();if(!r.ok||x.success===false)throw new Error('CF '+r.status);return x.result||x;}
+          function fn(s,name){let p=s.indexOf(`async function ${name}(`);if(p<0)p=s.indexOf(`function ${name}(`);if(p<0)throw new Error('missing '+name);const b=s.indexOf('{',p);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i],n=s[i+1];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='/'&&n==='/'){const z=s.indexOf('\n',i+2);i=z<0?s.length:z;continue}if(c==='/'&&n==='*'){const z=s.indexOf('*/',i+2);i=z<0?s.length:z+1;continue}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(p,i+1)}throw new Error('unterminated '+name)}
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,ds=await get(base+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0],v=await get(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');const pub=fn(s,'handleMusicNotePublicationSingleWrite016'),priv=fn(s,'handleVisibilityR2Core');if((pub.match(/env\.DB\.prepare/g)||[]).length!==1||pub.includes('publicationReadState016(')||!pub.includes('RETURNING *'))throw new Error('deployed public fast path invalid');if((priv.match(/env\.DB\.prepare/g)||[]).length!==1||!priv.includes('RETURNING id, owner_uid'))throw new Error('deployed private fast path invalid');if(!s.includes('finalizeMusicNotePublic025')||!s.includes('handleVisibilityR2CoreLegacy025'))throw new Error('deployed 025 helpers missing');fs.writeFileSync('.deploy025/preview-after.txt',a.version_id);console.log('PREVIEW_VERSION='+a.version_id);console.log('DEPLOYED_RUNTIME_025=PASS');})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          test "$(curl -sS -o /tmp/025-feed.json -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=latest&limit=1")" = 200
+          test "$(curl -sS -o /tmp/025-genres.json -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/genres")" = 200
+          test "$(curl -sS -o /tmp/025-publication.json -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" -H 'content-type: application/json' -X POST --data '{}' "$PREVIEW_BASE/v1/publications")" = 401
+          test "$(curl -sS -o /tmp/025-site.html -w '%{http_code}' -H 'Cache-Control: no-cache' "$PREVIEW_ORIGIN")" = 200
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_SHA"
+          node <<'NODE'
+          const fs=require('fs'),A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PROD_WORKER,before=fs.readFileSync('.deploy025/prod-before.txt','utf8').trim();async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`}}),x=await r.json();if(!r.ok||x.success===false)throw new Error('CF '+r.status);return x.result||x;}(async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,ds=await get(base+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];if(a?.version_id!==before)throw new Error('PRODUCTION Worker changed');console.log('MAIN_PRODUCTION_UNCHANGED=PASS')})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          trap - EXIT
+          echo 'PREVIEW_025_DEPLOY=PASS'
+          echo 'FIREBASE_HOSTING_CHANGED=false'
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'FIRESTORE_RULES_CHANGED=false'
+
+      - name: Package deployed source ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipname="SORIDRAW_PREVIEW_025_publication_update_returning_$(git rev-parse --short=8 HEAD).zip"
+          git archive --format=zip --output="$zipname" HEAD -- . ':(exclude).github/workflows/temp-deploy-publication-025.yml'
+          test -s "$zipname"
+          echo "ZIP_NAME=$zipname" >> "$GITHUB_ENV"
+          sha256sum "$zipname"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_PREVIEW_025_publication_update_returning
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 30

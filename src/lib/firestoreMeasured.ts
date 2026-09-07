@@ -18,7 +18,16 @@ const isAdaptiveListPreviewHost = (): boolean => {
   const hostname = window.location.hostname.toLowerCase();
   return hostname === 'preview.soridraw.com'
     || hostname === 'soridraw-preview.web.app'
-    || hostname === 'soridraw-preview.firebaseapp.com';
+    || hostname === 'soridraw-preview.firebaseapp.com'
+    || hostname === 'test.soridraw.com'
+    || hostname === 'soridraw-test.web.app'
+    || hostname === 'soridraw-test.firebaseapp.com'
+    || hostname === 'soridraw.com'
+    || hostname === 'www.soridraw.com'
+    || hostname === 'soridraw.web.app'
+    || hostname === 'soridraw.firebaseapp.com'
+    || hostname === 'soridraw-app-866a5.web.app'
+    || hostname === 'soridraw-app-866a5.firebaseapp.com';
 };
 const markAdaptiveListIndexDirtyBySource = (source: string): void => {
   if (!isAdaptiveListPreviewHost()) return;

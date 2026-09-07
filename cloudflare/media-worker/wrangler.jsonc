@@ -17,5 +17,43 @@
       "binding": "MEDIA",
       "bucket_name": "soridraw-media-preview"
     }
-  ]
+  ],
+  "env": {
+    "test": {
+      "name": "soridraw-media-test",
+      "keep_vars": true,
+      "vars": {
+        "FIREBASE_PROJECT_ID": "soridraw-app-866a5",
+        "FIREBASE_PROJECT_NUMBER": "91309780603",
+        "FIREBASE_WEB_APP_ID": "1:91309780603:web:cde703895e2cf31ecffcde",
+        "ARCHIVE_MIN_AGE_DAYS": "14",
+        "SIGNED_URL_TTL_SECONDS": "1800",
+        "ALLOWED_ORIGINS": "https://test.soridraw.com,https://soridraw-test.web.app,https://soridraw-test.firebaseapp.com"
+      },
+      "r2_buckets": [
+        {
+          "binding": "MEDIA",
+          "bucket_name": "soridraw-media-test"
+        }
+      ]
+    },
+    "production": {
+      "name": "soridraw-media",
+      "keep_vars": true,
+      "vars": {
+        "FIREBASE_PROJECT_ID": "soridraw-app-866a5",
+        "FIREBASE_PROJECT_NUMBER": "91309780603",
+        "FIREBASE_WEB_APP_ID": "1:91309780603:web:cde703895e2cf31ecffcde",
+        "ARCHIVE_MIN_AGE_DAYS": "14",
+        "SIGNED_URL_TTL_SECONDS": "1800",
+        "ALLOWED_ORIGINS": "https://soridraw.com,https://www.soridraw.com,https://soridraw.web.app,https://soridraw.firebaseapp.com,https://soridraw-app-866a5.web.app,https://soridraw-app-866a5.firebaseapp.com"
+      },
+      "r2_buckets": [
+        {
+          "binding": "MEDIA",
+          "bucket_name": "soridraw-media"
+        }
+      ]
+    }
+  }
 }

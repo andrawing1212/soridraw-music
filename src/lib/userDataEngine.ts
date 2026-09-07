@@ -66,7 +66,24 @@ type CatalogSyncResponse = {
   generatedAtMs: number;
 };
 
-const CATALOG_ENDPOINT = 'https://soridraw-media-preview.andrawing1212.workers.dev';
+const CATALOG_ENDPOINTS = {
+  preview: 'https://soridraw-media-preview.andrawing1212.workers.dev',
+  test: 'https://soridraw-media-test.andrawing1212.workers.dev',
+  production: 'https://soridraw-media.andrawing1212.workers.dev',
+} as const;
+const resolveCatalogEndpoint = (): string => {
+  if (typeof window === 'undefined') return CATALOG_ENDPOINTS.preview;
+  const host = window.location.hostname.toLowerCase();
+  if (host === 'test.soridraw.com' || host === 'soridraw-test.web.app' || host === 'soridraw-test.firebaseapp.com') {
+    return CATALOG_ENDPOINTS.test;
+  }
+  if (
+    host === 'soridraw.com' || host === 'www.soridraw.com'
+    || host === 'soridraw.web.app' || host === 'soridraw.firebaseapp.com'
+    || host === 'soridraw-app-866a5.web.app' || host === 'soridraw-app-866a5.firebaseapp.com'
+  ) return CATALOG_ENDPOINTS.production;
+  return CATALOG_ENDPOINTS.preview;
+};
 const CATALOG_SCHEMA_VERSION = 4 as const;
 const CATALOG_MAX_ITEMS = 100_000;
 const CATALOG_MAX_BYTES = 24 * 1024 * 1024;
@@ -79,6 +96,15 @@ const CATALOG_PREVIEW_HOSTS = new Set([
   'preview.soridraw.com',
   'soridraw-preview.web.app',
   'soridraw-preview.firebaseapp.com',
+  'test.soridraw.com',
+  'soridraw-test.web.app',
+  'soridraw-test.firebaseapp.com',
+  'soridraw.com',
+  'www.soridraw.com',
+  'soridraw.web.app',
+  'soridraw.firebaseapp.com',
+  'soridraw-app-866a5.web.app',
+  'soridraw-app-866a5.firebaseapp.com',
 ]);
 
 const MUSIC_NOTE_SUMMARY_KEYS = new Set([
@@ -495,7 +521,7 @@ const readRemoteCatalogSnapshot = async (
       if (hardMinimumRevision > 0) headers['X-Soridraw-Require-Revision'] = String(hardMinimumRevision);
       else if (allowDeltaSync && localSnapshot) headers['X-Soridraw-Known-Revision'] = String(localSnapshot.revision);
       markCatalogRuntimeDiagnostic(kind, { stage: 'REQUEST', attempt: attempt + 1 });
-      const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${kind}`, {
+      const response = await fetch(`${resolveCatalogEndpoint()}/v1/catalog/${kind}`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -659,7 +685,7 @@ const publishRemoteCatalogDelta = async (
   try {
     const headers = await authenticatedHeaders();
     if (!headers) return null;
-    const response = await fetch(`${CATALOG_ENDPOINT}/v1/catalog/${delta.kind}/delta`, {
+    const response = await fetch(`${resolveCatalogEndpoint()}/v1/catalog/${delta.kind}/delta`, {
       method: 'POST',
       headers,
       body: JSON.stringify(delta),

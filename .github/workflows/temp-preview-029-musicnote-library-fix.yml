@@ -113,7 +113,7 @@ jobs:
             -H 'Origin: https://preview.soridraw.com' \
             -H 'Access-Control-Request-Method: POST' \
             -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
-            "$MEDIA_WORKER_URL/v1/catalog/library)"
+            "$MEDIA_WORKER_URL/v1/catalog/library")"
           test "$code" = '204'
           grep -qi '^access-control-allow-origin: https://preview.soridraw.com' "$RUNNER_TEMP/media-options-head"
           echo 'MEDIA_WORKER_PREVIEW_029=PASS'

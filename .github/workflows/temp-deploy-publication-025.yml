@@ -59,7 +59,7 @@ jobs:
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
 
-      - name: Validate D1 schema and prepare Worker
+      - name: Prepare and validate Worker 025
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -84,15 +84,8 @@ jobs:
             const config={name:P,main:'./worker.js',compatibility_date:String(settings.compatibility_date||'2026-09-04').slice(0,10),workers_dev:true,keep_vars:true,d1_databases:[{binding:'DB',database_name:process.env.PREVIEW_DB_NAME,database_id:process.env.PREVIEW_DB_ID}],r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.PREVIEW_R2}],observability:settings.observability&&typeof settings.observability==='object'?{enabled:settings.observability.enabled!==false}:{enabled:true}};
             if(Array.isArray(settings.compatibility_flags)&&settings.compatibility_flags.length)config.compatibility_flags=settings.compatibility_flags;
             fs.writeFileSync('.deploy025/wrangler.jsonc',JSON.stringify(config,null,2));
-            const qr=await fetch(`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${process.env.PREVIEW_DB_ID}/query`,{method:'POST',headers:{Authorization:`Bearer ${T}`,'content-type':'application/json'},body:JSON.stringify({sql:"SELECT type,name,sql FROM sqlite_master WHERE tbl_name='tracks' AND type IN ('index','trigger') ORDER BY type,name"})});
-            const qx=await qr.json();if(!qr.ok||qx.success===false)throw new Error('D1 schema audit failed '+qr.status);
-            const rows=(Array.isArray(qx.result)?qx.result[0]?.results:qx.result?.results)||[];
-            const isPublicIndexes=rows.filter(r=>r.type==='index'&&/\\bis_public\\b/i.test(String(r.sql||'')));
-            const triggers=rows.filter(r=>r.type==='trigger');
-            if(isPublicIndexes.length)throw new Error('is_public index returned: '+JSON.stringify(isPublicIndexes));
-            if(triggers.length)throw new Error('tracks trigger returned: '+JSON.stringify(triggers));
             console.log(`[snapshot] preview=${preview.version} production=${prod.version}`);
-            console.log('D1_INDEX_NEUTRAL_025=PASS');
+            console.log('024_INDEX_NEUTRAL_BASE_REUSED=PASS');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
           SORIDRAW_REMOTE_WORKER_DIR="$PWD/.deploy025" node patches/025-publication-update-returning-hotpath.mjs

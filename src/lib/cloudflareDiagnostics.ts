@@ -4,6 +4,8 @@ export type CloudflarePathDiagnosticState = {
   workerRequests: number;
   d1RowsRead: number;
   d1RowsWritten: number;
+  d1ReadQueries: number;
+  d1WriteQueries: number;
   r2ClassA: number;
   r2ClassB: number;
   meteredResponses: number;
@@ -23,6 +25,8 @@ export type CloudflareDiagnosticState = {
   workerRequests: number;
   d1RowsRead: number;
   d1RowsWritten: number;
+  d1ReadQueries: number;
+  d1WriteQueries: number;
   r2ClassA: number;
   r2ClassB: number;
   meteredResponses: number;
@@ -52,6 +56,8 @@ const emptyPathState = (): CloudflarePathDiagnosticState => ({
   workerRequests: 0,
   d1RowsRead: 0,
   d1RowsWritten: 0,
+  d1ReadQueries: 0,
+  d1WriteQueries: 0,
   r2ClassA: 0,
   r2ClassB: 0,
   meteredResponses: 0,
@@ -71,6 +77,8 @@ const emptyState = (updatedAt = 0): CloudflareDiagnosticState => ({
   workerRequests: 0,
   d1RowsRead: 0,
   d1RowsWritten: 0,
+  d1ReadQueries: 0,
+  d1WriteQueries: 0,
   r2ClassA: 0,
   r2ClassB: 0,
   meteredResponses: 0,
@@ -118,6 +126,8 @@ const readStoredPaths = (value: unknown): Record<string, CloudflarePathDiagnosti
         workerRequests: normalizeCount(state?.workerRequests),
         d1RowsRead: normalizeCount(state?.d1RowsRead),
         d1RowsWritten: normalizeCount(state?.d1RowsWritten),
+        d1ReadQueries: normalizeCount(state?.d1ReadQueries),
+        d1WriteQueries: normalizeCount(state?.d1WriteQueries),
         r2ClassA: normalizeCount(state?.r2ClassA),
         r2ClassB: normalizeCount(state?.r2ClassB),
         meteredResponses: normalizeCount(state?.meteredResponses),
@@ -147,6 +157,8 @@ export function readCloudflareDiagnostics(): CloudflareDiagnosticState {
       workerRequests: normalizeCount(parsed?.workerRequests),
       d1RowsRead: normalizeCount(parsed?.d1RowsRead),
       d1RowsWritten: normalizeCount(parsed?.d1RowsWritten),
+      d1ReadQueries: normalizeCount(parsed?.d1ReadQueries),
+      d1WriteQueries: normalizeCount(parsed?.d1WriteQueries),
       r2ClassA: normalizeCount(parsed?.r2ClassA),
       r2ClassB: normalizeCount(parsed?.r2ClassB),
       meteredResponses: normalizeCount(parsed?.meteredResponses),
@@ -220,6 +232,8 @@ export function recordCloudflareResponse(
   const workerRequests = readUsageHeader(response, 'X-SORIDRAW-CF-Worker') || 1;
   const d1RowsRead = metered ? readUsageHeader(response, 'X-SORIDRAW-D1-Read') : 0;
   const d1RowsWritten = metered ? readUsageHeader(response, 'X-SORIDRAW-D1-Write') : 0;
+  const d1ReadQueries = metered ? readUsageHeader(response, 'X-SORIDRAW-D1-Read-Queries') : 0;
+  const d1WriteQueries = metered ? readUsageHeader(response, 'X-SORIDRAW-D1-Write-Queries') : 0;
   const r2ClassA = metered ? readUsageHeader(response, 'X-SORIDRAW-R2-A') : 0;
   const r2ClassB = metered ? readUsageHeader(response, 'X-SORIDRAW-R2-B') : 0;
   const conditional = Boolean(meta.conditional);
@@ -239,6 +253,8 @@ export function recordCloudflareResponse(
     workerRequests: previous.workerRequests + workerRequests,
     d1RowsRead: previous.d1RowsRead + d1RowsRead,
     d1RowsWritten: previous.d1RowsWritten + d1RowsWritten,
+    d1ReadQueries: previous.d1ReadQueries + d1ReadQueries,
+    d1WriteQueries: previous.d1WriteQueries + d1WriteQueries,
     r2ClassA: previous.r2ClassA + r2ClassA,
     r2ClassB: previous.r2ClassB + r2ClassB,
     meteredResponses: previous.meteredResponses + (metered ? 1 : 0),
@@ -255,6 +271,8 @@ export function recordCloudflareResponse(
         workerRequests: previousPath.workerRequests + workerRequests,
         d1RowsRead: previousPath.d1RowsRead + d1RowsRead,
         d1RowsWritten: previousPath.d1RowsWritten + d1RowsWritten,
+        d1ReadQueries: previousPath.d1ReadQueries + d1ReadQueries,
+        d1WriteQueries: previousPath.d1WriteQueries + d1WriteQueries,
         r2ClassA: previousPath.r2ClassA + r2ClassA,
         r2ClassB: previousPath.r2ClassB + r2ClassB,
         meteredResponses: previousPath.meteredResponses + (metered ? 1 : 0),

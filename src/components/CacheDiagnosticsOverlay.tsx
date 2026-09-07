@@ -444,7 +444,10 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
           <div className="space-y-0.5">
             <div className="whitespace-nowrap text-[12px] font-bold text-white/76">{formatActualUsage(actual)}</div>
             <div className="whitespace-nowrap text-[12px] font-bold text-[#c6b5ff]">
-              Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)} · Worker {formatNumber(cloudflare.workerRequests)} · D1 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : '—'}
+              Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)} · Worker {formatNumber(cloudflare.workerRequests)}
+            </div>
+            <div className="whitespace-nowrap text-[11px] font-bold text-[#c6b5ff]/80">
+              D1 쿼리 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1ReadQueries) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1WriteQueries) : '—'} · 행 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : '—'}
             </div>
             {cloudflarePathEntries.length > 0 ? (
               <div className="mt-1 space-y-0.5 rounded-lg bg-[#c6b5ff]/[0.055] px-2 py-1.5">
@@ -453,8 +456,12 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
                   <div key={path} className="space-y-0.5">
                     <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-bold text-[#c6b5ff]/82">
                       <span className="truncate">{getCloudflarePathLabel(path)}</span>
-                      <span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)} · D1 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}</span>
+                      <span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)}</span>
                     </div>
+          <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/68">
+            <span className="shrink-0 whitespace-nowrap tabular-nums">D1 쿼리 읽기 {formatNumber(state.d1ReadQueries)} · 쓰기 {formatNumber(state.d1WriteQueries)}</span>
+            <span className="shrink-0 whitespace-nowrap tabular-nums">행 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}</span>
+          </div>
                     {state.lastOutcome ? (
                       <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/58">
                         <span className="truncate">마지막 · {state.lastOutcome}{state.lastEdgeCache ? ` · ${state.lastEdgeCache}` : ''}</span>

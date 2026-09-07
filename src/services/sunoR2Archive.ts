@@ -1,7 +1,24 @@
 import { auth, getFirebaseAppCheckToken } from '../firebase';
 // SORIDRAW_R2_LAZY_MP3_PREVIEW_1000
 
-const R2_MEDIA_ENDPOINT = 'https://soridraw-media-preview.andrawing1212.workers.dev';
+const R2_MEDIA_ENDPOINTS = {
+  preview: 'https://soridraw-media-preview.andrawing1212.workers.dev',
+  test: 'https://soridraw-media-test.andrawing1212.workers.dev',
+  production: 'https://soridraw-media.andrawing1212.workers.dev',
+} as const;
+const resolveR2MediaEndpoint = (): string => {
+  if (typeof window === 'undefined') return R2_MEDIA_ENDPOINTS.preview;
+  const host = window.location.hostname.toLowerCase();
+  if (host === 'test.soridraw.com' || host === 'soridraw-test.web.app' || host === 'soridraw-test.firebaseapp.com') {
+    return R2_MEDIA_ENDPOINTS.test;
+  }
+  if (
+    host === 'soridraw.com' || host === 'www.soridraw.com'
+    || host === 'soridraw.web.app' || host === 'soridraw.firebaseapp.com'
+    || host === 'soridraw-app-866a5.web.app' || host === 'soridraw-app-866a5.firebaseapp.com'
+  ) return R2_MEDIA_ENDPOINTS.production;
+  return R2_MEDIA_ENDPOINTS.preview;
+};
 const ARCHIVE_MIN_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 type SunoR2ArchiveResult = {
@@ -101,7 +118,7 @@ export const archiveOldSunoMp3ToR2 = async (track: any): Promise<SunoR2ArchiveRe
       ]);
       if (!appCheckToken) return null;
 
-      const response = await fetch(`${R2_MEDIA_ENDPOINT}/v1/archive/resolve`, {
+      const response = await fetch(`${resolveR2MediaEndpoint()}/v1/archive/resolve`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

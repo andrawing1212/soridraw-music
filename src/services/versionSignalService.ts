@@ -31,6 +31,15 @@ const PREVIEW_HOSTS = new Set([
   'preview.soridraw.com',
   'soridraw-preview.web.app',
   'soridraw-preview.firebaseapp.com',
+  'test.soridraw.com',
+  'soridraw-test.web.app',
+  'soridraw-test.firebaseapp.com',
+  'soridraw.com',
+  'www.soridraw.com',
+  'soridraw.web.app',
+  'soridraw.firebaseapp.com',
+  'soridraw-app-866a5.web.app',
+  'soridraw-app-866a5.firebaseapp.com',
 ]);
 const BOOTSTRAP_STORAGE_KEY = 'soridraw_stage5_rc_bootstrap_complete_v1';
 const VERSION_STORAGE_KEY = 'soridraw_stage5_rc_versions_v1';

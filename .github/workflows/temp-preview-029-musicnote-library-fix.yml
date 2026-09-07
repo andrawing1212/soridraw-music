@@ -14,352 +14,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  fix-test-promote-deploy:
+  fix-test-deploy:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       BASE_PREVIEW_SHA: 46174546a813b81641bac6050794c32969ec714d
       BASE_MAIN_SHA: da3f70ca3e8574f20a5eabf96a4c517c51b4038c
       FIREBASE_PROJECT: soridraw
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
-      - name: Checkout isolated 029 work branch
+      - name: Checkout isolated work branch
         uses: actions/checkout@v4
         with:
           ref: preview-029-fix
           fetch-depth: 0
 
-      - name: Guard exact baselines
+      - name: Guard exact PREVIEW and MAIN baselines
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$BASE_PREVIEW_SHA"
-          changed="$(git diff --name-only HEAD^ HEAD)"
-          test "$changed" = '.github/workflows/temp-preview-029-musicnote-library-fix.yml'
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$BASE_PREVIEW_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
+          git diff --name-only "$BASE_PREVIEW_SHA" HEAD | sort > "$RUNNER_TEMP/bootstrap-files.txt"
+          printf '%s\n' \
+            '.deploy/apply-029-musicnote-library-fix.py' \
+            '.github/workflows/temp-preview-029-musicnote-library-fix.yml' | sort > "$RUNNER_TEMP/bootstrap-expected.txt"
+          cmp "$RUNNER_TEMP/bootstrap-expected.txt" "$RUNNER_TEMP/bootstrap-files.txt"
           echo 'BASELINE_GUARD_029=PASS'
 
-      - name: Apply focused 029 fixes
+      - name: Apply focused runtime fixes
         shell: bash
         run: |
           set -euo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-
-          def replace_once(path, old, new, label):
-              p = Path(path)
-              text = p.read_text(encoding='utf-8')
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected 1 anchor, got {count}')
-              p.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          detail_cache = r'''export const SORIDRAW_MUSIC_NOTE_DETAIL_CACHE_029 = true;
-
-type MusicNoteDetailCacheRecord = {
-  key: string;
-  uid: string;
-  sourceId: string;
-  sourceVersion: number;
-  savedAtMs: number;
-  data: any;
-};
-
-type MusicNoteDetailLoadArgs = {
-  uid: string;
-  sourceId: string;
-  sourceVersion: number;
-  loader: () => Promise<any | null>;
-};
-
-const DB_NAME = 'soridraw_music_note_detail_cache_v1';
-const DB_STORE = 'details';
-const DB_VERSION = 1;
-const UNKNOWN_VERSION_TTL_MS = 10 * 60 * 1000;
-const MEMORY_MAX = 80;
-
-let dbPromise: Promise<IDBDatabase | null> | null = null;
-const memoryCache = new Map<string, MusicNoteDetailCacheRecord>();
-const inFlightLoads = new Map<string, Promise<any | null>>();
-
-const cacheKey = (uid: string, sourceId: string) => `${uid}:${sourceId}`;
-
-const toTimestampMs = (value: any): number => {
-  if (!value) return 0;
-  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.floor(value));
-  if (value instanceof Date) return Math.max(0, value.getTime());
-  if (typeof value?.toMillis === 'function') {
-    const next = Number(value.toMillis());
-    return Number.isFinite(next) ? Math.max(0, Math.floor(next)) : 0;
-  }
-  if (typeof value?.seconds === 'number') {
-    const next = Number(value.seconds) * 1000 + Math.floor(Number(value.nanoseconds || 0) / 1_000_000);
-    return Number.isFinite(next) ? Math.max(0, Math.floor(next)) : 0;
-  }
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
-};
-
-export const getMusicNoteDetailSourceVersion = (source: any): number => {
-  const candidates = [
-    source?.updatedAtMs,
-    source?.updatedAt,
-    source?.modifiedAtMs,
-    source?.modifiedAt,
-    source?.createdAtMs,
-    source?.createdAt,
-  ];
-  for (const candidate of candidates) {
-    const value = toTimestampMs(candidate);
-    if (value > 0) return value;
-  }
-  return 0;
-};
-
-const cacheRecordIsFresh = (record: MusicNoteDetailCacheRecord, sourceVersion: number): boolean => {
-  if (sourceVersion > 0) return Number(record.sourceVersion || 0) === sourceVersion;
-  return Date.now() - Number(record.savedAtMs || 0) <= UNKNOWN_VERSION_TTL_MS;
-};
-
-const remember = (record: MusicNoteDetailCacheRecord) => {
-  if (memoryCache.has(record.key)) memoryCache.delete(record.key);
-  memoryCache.set(record.key, record);
-  while (memoryCache.size > MEMORY_MAX) {
-    const oldestKey = memoryCache.keys().next().value as string | undefined;
-    if (!oldestKey) break;
-    memoryCache.delete(oldestKey);
-  }
-};
-
-const cleanForPersistence = (value: any, depth = 0): any => {
-  if (value === null) return null;
-  if (value === undefined) return undefined;
-  if (typeof value === 'string' || typeof value === 'boolean') return value;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
-  if (value instanceof Date) return value.getTime();
-  if (typeof value?.toMillis === 'function') return toTimestampMs(value);
-  if (Array.isArray(value)) {
-    if (depth > 14) return [];
-    return value.map((entry) => cleanForPersistence(entry, depth + 1)).filter((entry) => entry !== undefined);
-  }
-  if (typeof value !== 'object' || depth > 14) return undefined;
-  const next: Record<string, any> = {};
-  Object.entries(value).forEach(([key, entry]) => {
-    const cleaned = cleanForPersistence(entry, depth + 1);
-    if (cleaned !== undefined) next[key] = cleaned;
-  });
-  return next;
-};
-
-const openDb = (): Promise<IDBDatabase | null> => {
-  if (typeof indexedDB === 'undefined') return Promise.resolve(null);
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve) => {
-    let settled = false;
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains(DB_STORE)) {
-        database.createObjectStore(DB_STORE, { keyPath: 'key' });
-      }
-    };
-    request.onsuccess = () => {
-      settled = true;
-      const database = request.result;
-      database.onversionchange = () => {
-        database.close();
-        dbPromise = null;
-      };
-      resolve(database);
-    };
-    request.onerror = () => {
-      if (!settled) resolve(null);
-    };
-    request.onblocked = () => {
-      if (!settled) resolve(null);
-    };
-  });
-  return dbPromise;
-};
-
-const readPersistent = async (key: string): Promise<MusicNoteDetailCacheRecord | null> => {
-  const database = await openDb();
-  if (!database) return null;
-  try {
-    return await new Promise((resolve) => {
-      const transaction = database.transaction(DB_STORE, 'readonly');
-      const request = transaction.objectStore(DB_STORE).get(key);
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => resolve(null);
-    });
-  } catch {
-    return null;
-  }
-};
-
-const writePersistent = async (record: MusicNoteDetailCacheRecord): Promise<void> => {
-  const database = await openDb();
-  if (!database) return;
-  const data = cleanForPersistence(record.data);
-  if (!data || typeof data !== 'object') return;
-  try {
-    await new Promise<void>((resolve) => {
-      const transaction = database.transaction(DB_STORE, 'readwrite');
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => resolve();
-      transaction.onabort = () => resolve();
-      transaction.objectStore(DB_STORE).put({ ...record, data });
-    });
-  } catch {
-    // IndexedDB is an optimization. The in-memory cache still prevents repeat reads.
-  }
-};
-
-export const getOrLoadMusicNoteDetail = async ({
-  uid,
-  sourceId,
-  sourceVersion,
-  loader,
-}: MusicNoteDetailLoadArgs): Promise<any | null> => {
-  const safeUid = String(uid || '').trim();
-  const safeSourceId = String(sourceId || '').trim();
-  if (!safeUid || !safeSourceId) return null;
-
-  const version = Math.max(0, Math.floor(Number(sourceVersion || 0)));
-  const key = cacheKey(safeUid, safeSourceId);
-  const memory = memoryCache.get(key);
-  if (memory && cacheRecordIsFresh(memory, version)) {
-    remember(memory);
-    return memory.data;
-  }
-
-  const persistent = await readPersistent(key);
-  if (persistent && cacheRecordIsFresh(persistent, version)) {
-    remember(persistent);
-    return persistent.data;
-  }
-
-  const flightKey = `${key}:${version}`;
-  const existing = inFlightLoads.get(flightKey);
-  if (existing) return existing;
-
-  const task = (async () => {
-    const loaded = await loader();
-    if (!loaded || typeof loaded !== 'object') return null;
-    const record: MusicNoteDetailCacheRecord = {
-      key,
-      uid: safeUid,
-      sourceId: safeSourceId,
-      sourceVersion: version,
-      savedAtMs: Date.now(),
-      data: loaded,
-    };
-    remember(record);
-    void writePersistent(record);
-    return loaded;
-  })().finally(() => {
-    inFlightLoads.delete(flightKey);
-  });
-
-  inFlightLoads.set(flightKey, task);
-  return task;
-};
-'''
-          Path('src/lib/musicNoteDetailCache.ts').write_text(detail_cache, encoding='utf-8')
-
-          replace_once(
-              'src/pages/FavoritesPage.tsx',
-              "import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';\n",
-              "import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';\nimport { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail } from '../lib/musicNoteDetailCache';\n",
-              'FavoritesPage detail cache import',
-          )
-
-          old_hydrate = '''  const hydrateCatalogFavorite = async (song: any): Promise<any> => {\n    if (!song?.__catalogSummary || !user?.uid || isSharedMusicNoteItem(song) || isMusicNoteSharedView) return song;\n    const sourceId = getFavoriteDocumentId(song);\n    if (!sourceId) return song;\n    try {\n      const snapshot = await getDoc(doc(db, 'favorites', sourceId));\n      if (!snapshot.exists()) return song;\n      return {\n        ...song,\n        ...(snapshot.data() || {}),\n        id: sourceId,\n        firestoreId: sourceId,\n        __catalogSummary: false,\n      };\n    } catch (error) {\n      console.warn('music note detail hydration failed:', error);\n      return song;\n    }\n  };'''
-          new_hydrate = '''  const hydrateCatalogFavorite = async (song: any): Promise<any> => {\n    if (!song?.__catalogSummary || !user?.uid || isSharedMusicNoteItem(song) || isMusicNoteSharedView) return song;\n    const sourceId = getFavoriteDocumentId(song);\n    if (!sourceId) return song;\n    const sourceVersion = getMusicNoteDetailSourceVersion(song);\n    try {\n      const detail = await getOrLoadMusicNoteDetail({\n        uid: user.uid,\n        sourceId,\n        sourceVersion,\n        loader: async () => {\n          const snapshot = await getDoc(doc(db, 'favorites', sourceId));\n          return snapshot.exists() ? (snapshot.data() || {}) : null;\n        },\n      });\n      if (!detail) return song;\n      return {\n        ...song,\n        ...detail,\n        id: sourceId,\n        firestoreId: sourceId,\n        __catalogSummary: false,\n      };\n    } catch (error) {\n      console.warn('music note detail hydration failed:', error);\n      return song;\n    }\n  };'''
-          replace_once('src/pages/FavoritesPage.tsx', old_hydrate, new_hydrate, 'FavoritesPage hydrate cache')
-
-          replace_once(
-              'src/pages/SunoLibraryPage.tsx',
-              "const scopedCreditStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;\n",
-              "const scopedCreditStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;\nconst libraryAppliedKeywordsSessionCache = new Map<string, any>();\n",
-              'Library apply keyword session cache',
-          )
-
-          old_library_apply = '''  const handleApplyNext = (group: any, item: any) => {\n    if (!group && !item) return;\n\n    const appliedKeywords = resolveSunoAppliedKeywords(\n      item,\n      group,\n      group?.item,\n      group?.track,\n      group?.shareData,\n      group?.tracks?.[0]\n    );\n\n    console.log("Shared/Library apply source:", {\n      group,\n      item,\n      resolvedAppliedKeywords: appliedKeywords,\n    });\n\n    if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {\n      showToast("이 곡은 키워드 정보가 없어 적용할 수 없습니다.");\n      return;\n    }\n\n    const serialized = JSON.stringify(appliedKeywords);\n    sessionStorage.setItem("pendingAppliedKeywords", serialized);\n    localStorage.setItem("pendingAppliedKeywordsBackup", serialized);\n\n    console.log("Saved pendingAppliedKeywords:", {\n      appliedKeywords,\n      sessionValue: sessionStorage.getItem("pendingAppliedKeywords"),\n      localBackup: localStorage.getItem("pendingAppliedKeywordsBackup"),\n    });\n\n    showToast("다음 곡에 곡 설정이 복원되었습니다.");\n\n    setTimeout(() => {\n      navigate(`/studio?applyPending=1&t=${Date.now()}`);\n    }, 700);\n  };'''
-          new_library_apply = '''  const handleApplyNext = async (group: any, item: any) => {\n    if (!group && !item) return;\n\n    let appliedKeywords = resolveSunoAppliedKeywords(\n      item,\n      group,\n      group?.item,\n      group?.track,\n      group?.shareData,\n      group?.tracks?.[0]\n    );\n\n    const activeUid = String(user?.uid || auth.currentUser?.uid || '').trim();\n    const isPlaylistSource = Boolean(\n      group?.isPlaylistItem || item?.isPlaylistItem ||\n      group?.sourceType === 'suno_track' || item?.sourceType === 'suno_track'\n    );\n    const isSharedSource = Boolean(\n      isSharedView || group?.sourceType === 'shared_track' || item?.sourceType === 'shared_track'\n    );\n    const sourceTrackId = String(\n      isPlaylistSource\n        ? (group?.sourceId || item?.sourceId || group?.trackId || item?.trackId || group?.id || '')\n        : (group?.id || group?.trackId || item?.sourceId || item?.trackId || '')\n    ).trim();\n    const cacheKey = activeUid && sourceTrackId ? `${activeUid}:${sourceTrackId}` : '';\n\n    if ((!appliedKeywords || Object.keys(appliedKeywords).length === 0) && cacheKey) {\n      appliedKeywords = libraryAppliedKeywordsSessionCache.get(cacheKey) || null;\n    }\n\n    if ((!appliedKeywords || Object.keys(appliedKeywords).length === 0) && activeUid && sourceTrackId && !isSharedSource) {\n      try {\n        const sourceSnapshot = await getDoc(doc(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId));\n        if (sourceSnapshot.exists()) {\n          const fullTrack: any = { id: sourceTrackId, ...(sourceSnapshot.data() || {}) };\n          appliedKeywords = resolveSunoAppliedKeywords(\n            item,\n            fullTrack,\n            fullTrack?.item,\n            fullTrack?.track,\n            fullTrack?.shareData,\n            fullTrack?.tracks?.[0]\n          );\n          if (appliedKeywords && Object.keys(appliedKeywords).length > 0) {\n            libraryAppliedKeywordsSessionCache.set(cacheKey, appliedKeywords);\n            patchWorkspaceTrackLocally(sourceTrackId, (current) => ({\n              ...current,\n              appliedKeywords,\n              requestPayload: current?.requestPayload || fullTrack?.requestPayload || null,\n            }));\n          }\n        }\n      } catch (error) {\n        console.warn('Library next-song keyword hydration failed:', error);\n      }\n    }\n\n    if (appliedKeywords && Object.keys(appliedKeywords).length > 0 && cacheKey) {\n      libraryAppliedKeywordsSessionCache.set(cacheKey, appliedKeywords);\n    }\n\n    console.log("Shared/Library apply source:", {\n      group,\n      item,\n      resolvedAppliedKeywords: appliedKeywords,\n    });\n\n    if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {\n      showToast("이 곡은 키워드 정보가 없어 적용할 수 없습니다.");\n      return;\n    }\n\n    const serialized = JSON.stringify(appliedKeywords);\n    sessionStorage.setItem("pendingAppliedKeywords", serialized);\n    localStorage.setItem("pendingAppliedKeywordsBackup", serialized);\n\n    console.log("Saved pendingAppliedKeywords:", {\n      appliedKeywords,\n      sessionValue: sessionStorage.getItem("pendingAppliedKeywords"),\n      localBackup: localStorage.getItem("pendingAppliedKeywordsBackup"),\n    });\n\n    showToast("다음 곡에 곡 설정이 복원되었습니다.");\n\n    setTimeout(() => {\n      navigate(`/studio?applyPending=1&t=${Date.now()}`);\n    }, 700);\n  };'''
-          replace_once('src/pages/SunoLibraryPage.tsx', old_library_apply, new_library_apply, 'Library next-song apply fallback')
-
-          summary_anchor = "  'title', 'koreanTitle', 'englishTitle', 'genre', 'style', 'tags', 'prompt',\n"
-          summary_replacement = "  'title', 'koreanTitle', 'englishTitle', 'genre', 'style', 'tags', 'prompt', 'appliedKeywords',\n"
-          replace_once('src/lib/userDataEngine.ts', summary_anchor, summary_replacement, 'client Library summary appliedKeywords')
-          replace_once('cloudflare/media-worker/src/index.js', summary_anchor, summary_replacement, 'Worker Library summary appliedKeywords')
-
-          replace_once(
-              'src/components/GlobalPlayer.tsx',
-              "import { doc, updateDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';\n",
-              "import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';\n",
-              'GlobalPlayer getDoc import',
-          )
-
-          old_global_apply = '''  const handleApplyNext = () => {\n    if (dispatchLibraryAction('applyNext')) return;\n    if (!currentTrack) return;\n    const group = currentTrack.parent || {};\n\n    const appliedKeywords = group.appliedKeywords;\n    \n    if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {\n      alert('이 곡은 키워드 정보가 없어 적용할 수 없습니다.');\n      return;\n    }\n\n    const serialized = JSON.stringify(appliedKeywords);\n    sessionStorage.setItem('pendingAppliedKeywords', serialized);\n    localStorage.setItem('pendingAppliedKeywordsBackup', serialized);\n\n    if (!auth.currentUser) {\n      if (confirm('로그인 후 다음 곡에 설정이 적용됩니다. 로그인 화면으로 이동할까요?')) {\n        handleModeChange('collapsed');\n        navigate('/');\n      }\n      return;\n    }\n\n    alert('다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.');\n    handleModeChange('collapsed');\n    navigate('/studio?applyPending=1');\n  };'''
-          new_global_apply = '''  const handleApplyNext = async () => {\n    if (dispatchLibraryAction('applyNext')) return;\n    if (!currentTrack) return;\n    const group = currentTrack.parent || {};\n\n    let appliedKeywords =\n      group.appliedKeywords ||\n      group?.requestPayload?.appliedKeywords ||\n      (currentTrack as any)?.appliedKeywords ||\n      null;\n\n    if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {\n      const currentUser = auth.currentUser;\n      const sourceTrackId = String(\n        isPlaylistTrack\n          ? (group?.sourceId || group?.trackId || (currentTrack as any)?.sourceId || (currentTrack as any)?.trackId || '')\n          : (group?.id || group?.trackId || group?.taskId || '')\n      ).trim();\n\n      if (currentUser && sourceTrackId && !isSharedPlaylistTrack) {\n        try {\n          const sourceSnapshot = await getDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', sourceTrackId));\n          if (sourceSnapshot.exists()) {\n            const sourceData: any = sourceSnapshot.data() || {};\n            appliedKeywords = sourceData?.appliedKeywords || sourceData?.requestPayload?.appliedKeywords || null;\n            if (appliedKeywords && Object.keys(appliedKeywords).length > 0) {\n              group.appliedKeywords = appliedKeywords;\n            }\n          }\n        } catch (error) {\n          console.warn('Global player next-song keyword hydration failed:', error);\n        }\n      }\n    }\n    \n    if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {\n      alert('이 곡은 키워드 정보가 없어 적용할 수 없습니다.');\n      return;\n    }\n\n    const serialized = JSON.stringify(appliedKeywords);\n    sessionStorage.setItem('pendingAppliedKeywords', serialized);\n    localStorage.setItem('pendingAppliedKeywordsBackup', serialized);\n\n    if (!auth.currentUser) {\n      if (confirm('로그인 후 다음 곡에 설정이 적용됩니다. 로그인 화면으로 이동할까요?')) {\n        handleModeChange('collapsed');\n        navigate('/');\n      }\n      return;\n    }\n\n    alert('다음 곡에 곡 설정이 복원되었습니다. 홈으로 이동합니다.');\n    handleModeChange('collapsed');\n    navigate('/studio?applyPending=1');\n  };'''
-          replace_once('src/components/GlobalPlayer.tsx', old_global_apply, new_global_apply, 'GlobalPlayer next-song fallback')
-
-          verify = r'''import fs from 'node:fs';
-import assert from 'node:assert/strict';
-
-const read = (path) => fs.readFileSync(path, 'utf8');
-
-const favorites = read('src/pages/FavoritesPage.tsx');
-assert.ok(favorites.includes("from '../lib/musicNoteDetailCache'"));
-const hydrateStart = favorites.indexOf('const hydrateCatalogFavorite = async');
-const hydrateEnd = favorites.indexOf('const openFavoriteDetail', hydrateStart);
-assert.ok(hydrateStart >= 0 && hydrateEnd > hydrateStart);
-const hydrate = favorites.slice(hydrateStart, hydrateEnd);
-assert.ok(hydrate.includes('getOrLoadMusicNoteDetail'));
-assert.ok(hydrate.includes('getMusicNoteDetailSourceVersion'));
-assert.ok(hydrate.includes("getDoc(doc(db, 'favorites', sourceId))"));
-
-const detailCache = read('src/lib/musicNoteDetailCache.ts');
-assert.ok(detailCache.includes('SORIDRAW_MUSIC_NOTE_DETAIL_CACHE_029'));
-assert.ok(detailCache.includes('indexedDB.open'));
-assert.ok(detailCache.includes('inFlightLoads'));
-assert.ok(detailCache.includes('cacheRecordIsFresh'));
-
-const library = read('src/pages/SunoLibraryPage.tsx');
-const applyStart = library.indexOf('const handleApplyNext = async');
-const applyEnd = library.indexOf('const getPlaylistSaveIsShared', applyStart);
-assert.ok(applyStart >= 0 && applyEnd > applyStart);
-const apply = library.slice(applyStart, applyEnd);
-assert.ok(apply.includes("getDoc(doc(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId))"));
-assert.ok(apply.includes('libraryAppliedKeywordsSessionCache'));
-assert.ok(apply.includes('patchWorkspaceTrackLocally'));
-
-const engine = read('src/lib/userDataEngine.ts');
-const engineLibraryStart = engine.indexOf('const LIBRARY_SUMMARY_KEYS');
-const engineLibraryEnd = engine.indexOf(']);', engineLibraryStart);
-assert.ok(engineLibraryStart >= 0 && engineLibraryEnd > engineLibraryStart);
-assert.ok(engine.slice(engineLibraryStart, engineLibraryEnd).includes("'appliedKeywords'"));
-
-const worker = read('cloudflare/media-worker/src/index.js');
-const workerLibraryStart = worker.indexOf('const LIBRARY_SUMMARY_KEYS');
-const workerLibraryEnd = worker.indexOf(']);', workerLibraryStart);
-assert.ok(workerLibraryStart >= 0 && workerLibraryEnd > workerLibraryStart);
-assert.ok(worker.slice(workerLibraryStart, workerLibraryEnd).includes("'appliedKeywords'"));
-
-const player = read('src/components/GlobalPlayer.tsx');
-assert.ok(player.includes("doc, getDoc, updateDoc"));
-const playerApplyStart = player.indexOf('const handleApplyNext = async');
-const playerApplyEnd = player.indexOf('const handleSaveOrMovePlaylist', playerApplyStart);
-assert.ok(playerApplyStart >= 0 && playerApplyEnd > playerApplyStart);
-assert.ok(player.slice(playerApplyStart, playerApplyEnd).includes("getDoc(doc(db, 'suno_tracks'"));
-
-console.log('VERIFY_029_MUSIC_NOTE_LIBRARY=PASS');
-'''
-          Path('scripts/verify-029-music-note-library.mjs').write_text(verify, encoding='utf-8')
-          PY
-
+          python3 .deploy/apply-029-musicnote-library-fix.py
           git diff --check
           node scripts/verify-029-music-note-library.mjs
           echo 'PATCH_029=PASS'
@@ -370,7 +56,7 @@ console.log('VERIFY_029_MUSIC_NOTE_LIBRARY=PASS');
           node-version: 20
           cache: npm
 
-      - name: TypeScript build and focused regressions
+      - name: TypeScript build and regression checks
         shell: bash
         run: |
           set -euo pipefail
@@ -380,9 +66,10 @@ console.log('VERIFY_029_MUSIC_NOTE_LIBRARY=PASS');
           if [ -f scripts/verify-adaptive-list-index-v2.mjs ]; then node scripts/verify-adaptive-list-index-v2.mjs; fi
           if [ -f scripts/verify-runtime-environment-parity-028.mjs ]; then node scripts/verify-runtime-environment-parity-028.mjs; fi
           npm run build
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/local-index.sha"
           echo 'APP_BUILD_029=PASS'
 
-      - name: Validate preview media Worker build
+      - name: Validate changed PREVIEW media Worker
         shell: bash
         run: |
           set -euo pipefail
@@ -391,58 +78,46 @@ console.log('VERIFY_029_MUSIC_NOTE_LIBRARY=PASS');
           npm run check
           echo 'MEDIA_WORKER_DRYRUN_029=PASS'
 
-      - name: Commit validated runtime changes and clean temporary workflow
+      - name: Build clean PREVIEW commit without temporary runner files
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'SORIDRAW Preview Bot'
           git config user.email 'soridraw-preview@users.noreply.github.com'
-          git add src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx src/components/GlobalPlayer.tsx src/lib/userDataEngine.ts src/lib/musicNoteDetailCache.ts cloudflare/media-worker/src/index.js scripts/verify-029-music-note-library.mjs
-          git commit -m 'fix(preview): cache Music Note details and restore Library next-song apply'
-          FEATURE_SHA="$(git rev-parse HEAD)"
-          echo "FEATURE_SHA=$FEATURE_SHA" | tee "$RUNNER_TEMP/feature.env"
+          rm -f .deploy/apply-029-musicnote-library-fix.py
+          rm -f .github/workflows/temp-preview-029-musicnote-library-fix.yml
+          git add -A
+          tree_sha="$(git write-tree)"
+          clean_sha="$(printf '%s\n' 'fix(preview): cache Music Note details and restore Library next-song apply' | git commit-tree "$tree_sha" -p "$BASE_PREVIEW_SHA")"
+          echo "CLEAN_SHA=$clean_sha" >> "$GITHUB_ENV"
 
-          git rm .github/workflows/temp-preview-029-musicnote-library-fix.yml
-          git commit -m 'chore(preview): remove temporary 029 workflow'
-          CLEAN_SHA="$(git rev-parse HEAD)"
-          echo "CLEAN_SHA=$CLEAN_SHA" | tee "$RUNNER_TEMP/clean.env"
-
-          expected='cloudflare/media-worker/src/index.js
-          scripts/verify-029-music-note-library.mjs
-          src/components/GlobalPlayer.tsx
-          src/lib/musicNoteDetailCache.ts
-          src/lib/userDataEngine.ts
-          src/pages/FavoritesPage.tsx
-          src/pages/SunoLibraryPage.tsx'
-          actual="$(git diff --name-only "$BASE_PREVIEW_SHA" "$CLEAN_SHA")"
-          test "$actual" = "$expected"
+          git diff --name-only "$BASE_PREVIEW_SHA" "$clean_sha" | sort > "$RUNNER_TEMP/runtime-files.txt"
+          printf '%s\n' \
+            'cloudflare/media-worker/src/index.js' \
+            'scripts/verify-029-music-note-library.mjs' \
+            'src/components/GlobalPlayer.tsx' \
+            'src/lib/musicNoteDetailCache.ts' \
+            'src/lib/userDataEngine.ts' \
+            'src/pages/FavoritesPage.tsx' \
+            'src/pages/SunoLibraryPage.tsx' | sort > "$RUNNER_TEMP/runtime-expected.txt"
+          cmp "$RUNNER_TEMP/runtime-expected.txt" "$RUNNER_TEMP/runtime-files.txt"
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$BASE_PREVIEW_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
-          git push origin HEAD:preview-029-fix
-          echo 'CLEAN_WORKTREE_029=PASS'
-
-      - name: Promote exact validated tree to PREVIEW only
-        shell: bash
-        run: |
-          set -euo pipefail
-          source "$RUNNER_TEMP/clean.env"
-          git push origin "$CLEAN_SHA":refs/heads/preview
-          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$CLEAN_SHA"
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
-          echo 'PREVIEW_PROMOTION_029=PASS'
+          echo "CLEAN_PREVIEW_SHA=$clean_sha"
+          echo 'CLEAN_TREE_029=PASS'
 
       - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Deploy exact validated frontend to Firebase PREVIEW
+      - name: Deploy validated frontend to Firebase PREVIEW
         shell: bash
         run: |
           set -euo pipefail
-          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
-          echo "$local_sha" > "$RUNNER_TEMP/local-index.sha"
+          production_before="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ | sha256sum | awk '{print $1}')"
           npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          local_sha="$(cat "$RUNNER_TEMP/local-index.sha")"
           for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
             ok=''
             for attempt in $(seq 1 15); do
@@ -458,42 +133,30 @@ console.log('VERIFY_029_MUSIC_NOTE_LIBRARY=PASS');
             done
             test "$ok" = yes
           done
+          production_after="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ | sha256sum | awk '{print $1}')"
+          test "$production_before" = "$production_after"
           echo 'FIREBASE_PREVIEW_029=PASS'
+          echo 'PRODUCTION_HOSTING_UNCHANGED_029=PASS'
 
-      - name: Verify PREVIEW media endpoint and safety boundaries
+      - name: Promote exact clean commit to PREVIEW only
         shell: bash
         run: |
           set -euo pipefail
-          worker='https://soridraw-media-preview.andrawing1212.workers.dev'
-          ok=''
-          for attempt in $(seq 1 18); do
-            if curl -fsS --max-time 30 "$worker/health" -o "$RUNNER_TEMP/media-health.json" \
-              && grep -q '"ok":true' "$RUNNER_TEMP/media-health.json"; then
-              ok=yes
-              break
-            fi
-            sleep 6
-          done
-          test "$ok" = yes
-          code="$(curl -sS -o /dev/null -D "$RUNNER_TEMP/media-options.headers" -w '%{http_code}' -X OPTIONS \
-            -H 'Origin: https://preview.soridraw.com' \
-            -H 'Access-Control-Request-Method: GET' \
-            "$worker/v1/catalog/library')"
-          test "$code" = '204'
-          grep -qi '^access-control-allow-origin: https://preview.soridraw.com' "$RUNNER_TEMP/media-options.headers"
+          git push origin "$CLEAN_SHA":refs/heads/preview
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$CLEAN_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
-          echo 'PREVIEW_MEDIA_HEALTH_029=PASS'
+          echo 'PREVIEW_PROMOTION_029=PASS'
           echo 'MAIN_UNCHANGED_029=PASS'
 
-      - name: Package clean PREVIEW source ZIP
+      - name: Package clean PREVIEW ZIP
         shell: bash
         run: |
           set -euo pipefail
-          source "$RUNNER_TEMP/clean.env"
           short="$(git rev-parse --short=8 "$CLEAN_SHA")"
-          git archive --format=zip --output="$RUNNER_TEMP/SORIDRAW_PREVIEW_029_${short}.zip" "$CLEAN_SHA"
-          sha256sum "$RUNNER_TEMP/SORIDRAW_PREVIEW_029_${short}.zip"
-          echo "ZIP_PATH=$RUNNER_TEMP/SORIDRAW_PREVIEW_029_${short}.zip" >> "$GITHUB_ENV"
+          zip_path="$RUNNER_TEMP/SORIDRAW_PREVIEW_029_${short}.zip"
+          git archive --format=zip --output="$zip_path" "$CLEAN_SHA"
+          sha256sum "$zip_path"
+          echo "ZIP_PATH=$zip_path" >> "$GITHUB_ENV"
           echo 'PREVIEW_ZIP_029=PASS'
 
       - name: Upload PREVIEW ZIP
@@ -508,15 +171,12 @@ console.log('VERIFY_029_MUSIC_NOTE_LIBRARY=PASS');
         shell: bash
         run: |
           set -euo pipefail
-          source "$RUNNER_TEMP/feature.env"
-          source "$RUNNER_TEMP/clean.env"
-          echo "FEATURE_SHA=$FEATURE_SHA"
           echo "CLEAN_PREVIEW_SHA=$CLEAN_SHA"
-          echo 'FIREBASE_CHANGED=true'
+          echo 'FIREBASE_HOSTING_CHANGED=true'
+          echo 'CLOUDFLARE_MEDIA_SOURCE_CHANGED=true'
           echo 'FUNCTIONS_CHANGED=false'
           echo 'FIRESTORE_RULES_CHANGED=false'
-          echo 'CLOUDFLARE_MEDIA_SOURCE_CHANGED=true'
           echo 'EXPLORE_WORKER_CHANGED=false'
           echo 'TEST_CHANGED=false'
           echo 'PRODUCTION_CHANGED=false'
-          echo 'SORIDRAW_PREVIEW_029=PASS'
+          echo 'SORIDRAW_PREVIEW_029_FRONTEND=PASS'

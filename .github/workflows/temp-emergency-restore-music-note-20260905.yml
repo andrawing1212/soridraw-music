@@ -1,0 +1,95 @@
+name: SORIDRAW Emergency Restore Music Note 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-emergency-restore-music-note-20260905.yml']
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Restore root user listener without touching Music Note bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('src/App.tsx')
+          s=p.read_text(encoding='utf-8')
+          old_import="""import {
+            readUserProfileCache,
+            readUserProfileServerVerifiedAt,
+            writeUserProfileCache,
+            writeUserProfileServerVerifiedAt,
+          } from './lib/userProfileCache';"""
+          new_import="import { readUserProfileCache, writeUserProfileCache } from './lib/userProfileCache';"
+          if s.count(old_import) != 1:
+              raise SystemExit(f'import anchor mismatch: {s.count(old_import)}')
+          s=s.replace(old_import,new_import,1)
+          old_verified="            writeUserProfileServerVerifiedAt(currentUser.uid);\n"
+          if s.count(old_verified) != 1:
+              raise SystemExit(f'verified write anchor mismatch: {s.count(old_verified)}')
+          s=s.replace(old_verified,'',1)
+          start=s.find('        // SORIDRAW_ROOT_USER_REFRESH_ZERO_1020')
+          if start < 0:
+              raise SystemExit('refresh-zero block start missing')
+          end=s.find('\n\n        // Fetch favorites for the user.', start)
+          if end < 0:
+              raise SystemExit('favorites boundary missing')
+          replacement='        attachUserRoleListener();'
+          s=s[:start]+replacement+s[end:]
+          p.write_text(s,encoding='utf-8')
+          print('APP_EMERGENCY_RESTORE=PASS')
+          PY
+          grep -Fq 'attachUserRoleListener();' src/App.tsx
+          ! grep -Fq 'SORIDRAW_ROOT_USER_REFRESH_ZERO_1020' src/App.tsx
+          grep -Fq 'prepareMusicNoteCacheForUser' src/App.tsx
+          grep -Fq 'runFavoritesFullCacheRecoveryOnce' src/App.tsx
+      - name: TypeScript and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+      - name: Commit emergency restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/App.tsx
+          git commit -m 'fix(preview): restore Music Note after refresh cache regression'
+          git push origin HEAD:preview
+      - name: Authenticate Firebase PREVIEW
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Deploy Firebase PREVIEW Hosting only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          for host in soridraw-preview.web.app preview.soridraw.com; do
+            code=$(curl -sS -L --max-time 30 -o /tmp/${host//./_}.html -w '%{http_code}' https://$host/)
+            test "$code" = '200'
+            grep -q '/assets/index-' /tmp/${host//./_}.html
+          done
+          a=$(grep -oE '/assets/index-[^" ]+\.js' /tmp/soridraw-preview_web_app.html | head -n1)
+          b=$(grep -oE '/assets/index-[^" ]+\.js' /tmp/preview_soridraw_com.html | head -n1)
+          test -n "$a"
+          test "$a" = "$b"
+          echo "PREVIEW_ASSET=$a"
+          echo 'FIREBASE_PREVIEW_RESTORE=PASS'
+          echo 'MAIN_CHANGED=false'
+          echo 'FUNCTIONS_CHANGED=false'

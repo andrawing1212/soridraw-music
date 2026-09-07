@@ -1,0 +1,54 @@
+name: SORIDRAW Apply Profile Cache Alias 020 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-apply-profile-cache-alias-020-20260905.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: preview, fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - name: Apply alias-safe profile cache patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('src/services/exploreProfileFirstViewService.ts')
+          s=p.read_text(encoding='utf-8')
+          def once(old,new,label):
+              global s
+              c=s.count(old)
+              if c!=1: raise SystemExit(f'{label}: anchor count={c}')
+              s=s.replace(old,new,1)
+          once("// SORIDRAW_PROFILE_CACHE_SWR_1020\nconst PROFILE_FIRST_VIEW_SCHEMA_VERSION = 3;","// SORIDRAW_PROFILE_CACHE_SWR_1020\n// SORIDRAW_PROFILE_ALIAS_PARITY_020\nconst PROFILE_FIRST_VIEW_SCHEMA_VERSION = 4;",'schema')
+          once("    normalizedData.profile.uid,\n    normalizedData.profile.handle ? `@${normalizedData.profile.handle}` : '',","    normalizedData.profile.uid,\n    normalizedData.profile.handle || '',\n    normalizedData.profile.handle ? `@${normalizedData.profile.handle}` : '',",'write aliases')
+          pair="    cached?.profile?.uid || '',\n    cached?.profile?.handle ? `@${cached.profile.handle}` : '',"
+          pair_next="    cached?.profile?.uid || '',\n    cached?.profile?.handle || '',\n    cached?.profile?.handle ? `@${cached.profile.handle}` : '',"
+          if s.count(pair)!=2: raise SystemExit(f'clear/invalidate aliases: anchor count={s.count(pair)}')
+          s=s.replace(pair,pair_next)
+          once("  const cached = readCache(normalizedUid)\n    || (profile.handle ? readCache(`@${profile.handle}`) : null);","  const cached = readCache(normalizedUid)\n    || (profile.handle ? readCache(profile.handle) : null)\n    || (profile.handle ? readCache(`@${profile.handle}`) : null);",'remember handle')
+          once("    removeSoridrawPersistentCache(cacheKeyForRef(`@${previousHandle}`), null);","    removeSoridrawPersistentCache(cacheKeyForRef(previousHandle), null);\n    removeSoridrawPersistentCache(cacheKeyForRef(`@${previousHandle}`), null);",'old handle')
+          p.write_text(s,encoding='utf-8')
+          PY
+          git diff --check
+          node scripts/verify-no-unbounded-user-song-bootstrap.mjs
+          npm ci
+          npx tsc --noEmit
+          npm run build
+      - name: Commit frontend parity patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/services/exploreProfileFirstViewService.ts
+          git commit -m 'fix(preview): keep public profile aliases on one cache truth'
+          git push origin HEAD:preview
+          echo "PROFILE_ALIAS_COMMIT=$(git rev-parse HEAD)"

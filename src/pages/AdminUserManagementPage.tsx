@@ -963,6 +963,10 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           staffRole: promotedToAdmin ? 'admin' : null,
           adminPermissions: promotedToAdmin ? { ...FULL_ADMIN_PERMISSIONS } : {},
         });
+        const signalControlRevision = httpsCallable(functions, 'adminSignalUserControlRevision');
+        void signalControlRevision({ targetUid: selectedUser.uid, reason: 'admin-access' }).catch((error) => {
+          console.warn('Admin access revision signal failed; Firestore listener fallback remains active.', error);
+        });
         const masterUid = auth.currentUser?.uid || '';
         if (masterUid) removeAdminStaffListCache(masterUid);
       }
@@ -975,7 +979,14 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       };
       if (!promotedToAdmin) updates.role = editRole;
 
+      const userControlChanged = editRole !== selectedUser.role || editStatus !== selectedUser.accountStatus;
       await updateDoc(doc(db, 'users', selectedUser.uid), updates);
+      if (userControlChanged) {
+        const signalControlRevision = httpsCallable(functions, 'adminSignalUserControlRevision');
+        void signalControlRevision({ targetUid: selectedUser.uid, reason: 'admin-user-settings' }).catch((error) => {
+          console.warn('User control revision signal failed; Firestore listener fallback remains active.', error);
+        });
+      }
       setSaveStatus('success');
       await refreshAfterAction(selectedUser.uid);
     } catch (error) {
@@ -1034,6 +1045,12 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     try {
       const callable = httpsCallable(functions, functionName);
       await callable(payload);
+      if (action === 'forceLogout' || action === 'resetEmail' || action === 'deleteUser') {
+        const signalControlRevision = httpsCallable(functions, 'adminSignalUserControlRevision');
+        void signalControlRevision({ targetUid: selectedUser.uid, reason: action }).catch((error) => {
+          console.warn('User control revision signal failed; Firestore listener fallback remains active.', error);
+        });
+      }
       setActionResult({ success: true, message: successMessage });
       await refreshAfterAction(selectedUser.uid);
     } catch (error: any) {

@@ -255,6 +255,51 @@ export const getExploreMusicNotePublicationStates = async (
   if (inFlight) return inFlight;
 
   const task = (async () => {
+    // SORIDRAW_MUSIC_NOTE_PUBLICATION_BUNDLE_20260904
+    // Cold browsers read one per-user D1 bundle row. The owner-wide paged sweep is
+    // retained only as a recovery fallback for an unavailable/corrupt derived cache.
+    try {
+      const payload = await requestExplore(user, '/v1/me/music-note-publications-bundle');
+      const data = payload?.data;
+      const rawStates = data?.states;
+      const entries = rawStates && typeof rawStates === 'object' && !Array.isArray(rawStates)
+        ? Object.entries(rawStates as Record<string, any>)
+        : [];
+      const isValidBundle = Number(data?.schemaVersion || 0) === 1
+        && rawStates
+        && typeof rawStates === 'object'
+        && !Array.isArray(rawStates)
+        && Number(data?.itemCount ?? -1) === entries.length
+        && entries.every(([sourceId, value]) => Boolean(
+          String(sourceId || '').trim()
+          && String((value as any)?.trackId || '').trim(),
+        ));
+
+      if (!isValidBundle) {
+        throw new ExploreApiError(
+          'MUSIC_NOTE_PUBLICATION_BUNDLE_INVALID',
+          '뮤직노트 공개상태 번들을 확인하지 못했습니다.',
+        );
+      }
+
+      const bundledStates: Record<string, ExploreMusicNotePublicationState> = {};
+      entries.forEach(([sourceId, value]) => {
+        const state = value as any;
+        bundledStates[sourceId] = {
+          status: state?.status === 'public' ? 'public' : 'private',
+          trackId: String(state?.trackId || '').trim(),
+          allowNextSongApply: Boolean(state?.allowNextSongApply),
+          allowFollowerSave: Boolean(state?.allowFollowerSave),
+          profilePinned: Boolean(state?.profilePinned),
+        };
+      });
+
+      writePublicationStateCache(user.uid, bundledStates);
+      return clonePublicationStates(bundledStates);
+    } catch (bundleError) {
+      console.warn('[Explore publication] one-row bundle unavailable; using legacy recovery sweep.', bundleError);
+    }
+
     const result: Record<string, ExploreMusicNotePublicationState> = {};
     let cursor = '';
 

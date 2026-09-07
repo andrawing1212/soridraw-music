@@ -8,6 +8,7 @@ import './components/explore/exploreNavigation.css';
 import './styles/classicLightVisualFixes.css';
 import './styles/exploreProfileHeroParity.css';
 import './components/studio/tabletTouchPacedContent';
+import './services/userDomainSyncService';
 import { startPreviewVersionSignal } from './services/versionSignalService';
 
 void startPreviewVersionSignal();

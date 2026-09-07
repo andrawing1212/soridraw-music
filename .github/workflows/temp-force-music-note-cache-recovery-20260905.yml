@@ -1,0 +1,84 @@
+name: SORIDRAW Force Music Note Cache Recovery 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-force-music-note-cache-recovery-20260905.yml']
+permissions:
+  contents: write
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Force one authoritative Music Note cache rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('src/App.tsx')
+          s=p.read_text(encoding='utf-8')
+          old="const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '3';"
+          new="const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '4'; // SORIDRAW_MUSIC_NOTE_EMPTY_CACHE_RECOVERY_1021"
+          if s.count(old) != 1:
+              raise SystemExit(f'Music Note schema anchor mismatch: {s.count(old)}')
+          s=s.replace(old,new,1)
+          required=[
+            'prepareMusicNoteCacheForUser',
+            'runFavoritesFullCacheRecoveryOnce',
+            "collection(db, 'favorites')",
+            "where('uid', '==', currentUser.uid)",
+            'markMusicNoteCacheSchemaCurrent(currentUser.uid)',
+          ]
+          for token in required:
+              if token not in s: raise SystemExit('missing recovery invariant: '+token)
+          p.write_text(s,encoding='utf-8')
+          print('MUSIC_NOTE_CACHE_RECOVERY_V4=PASS')
+          PY
+      - name: TypeScript and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+      - name: Commit recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/App.tsx
+          git commit -m 'fix(preview): rebuild Music Note cache after empty payload regression'
+          git push origin HEAD:preview
+      - name: Authenticate Firebase PREVIEW
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Deploy Firebase PREVIEW Hosting and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          for host in soridraw-preview.web.app preview.soridraw.com; do
+            code=$(curl -sS -L --max-time 30 -o /tmp/${host//./_}.html -w '%{http_code}' https://$host/)
+            test "$code" = '200'
+            grep -q '/assets/index-' /tmp/${host//./_}.html
+          done
+          a=$(grep -oE '/assets/index-[^" ]+\.js' /tmp/soridraw-preview_web_app.html | head -n1)
+          b=$(grep -oE '/assets/index-[^" ]+\.js' /tmp/preview_soridraw_com.html | head -n1)
+          test -n "$a"
+          test "$a" = "$b"
+          echo "PREVIEW_ASSET=$a"
+          echo 'MUSIC_NOTE_RECOVERY_DEPLOY=PASS'
+          echo 'MAIN_CHANGED=false'
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'CLOUDFLARE_CHANGED=false'

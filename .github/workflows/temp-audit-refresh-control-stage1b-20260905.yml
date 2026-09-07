@@ -1,0 +1,38 @@
+name: SORIDRAW Audit Refresh Control Stage1B 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-audit-refresh-control-stage1b-20260905.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Inspect realtime database control options
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== RTDB IMPORTS / PRESENCE ==='
+          grep -RIn --exclude-dir=node_modules -E "firebase/database|getDatabase\(|onValue\(|onDisconnect\(|databaseRef|presence|isOnline|lastSeenAt" src | head -n 400 || true
+          echo '=== ADMIN CONTROL WRITES ==='
+          python3 <<'PY'
+          from pathlib import Path
+          for path in ['src/pages/AdminUserManagementPage.tsx','src/App.tsx','src/lib/firebase.ts','src/firebase.ts']:
+              p=Path(path)
+              if not p.exists(): continue
+              s=p.read_text(encoding='utf-8')
+              print('\n###', path)
+              for needle in ['forceLogoutAt','accountStatus','role:',"updateDoc(doc(db, 'users'",'isOnline','presence']:
+                  start=0
+                  for _ in range(8):
+                      i=s.find(needle,start)
+                      if i<0: break
+                      print('\n--',needle,'@',i,'--')
+                      print(s[max(0,i-1200):min(len(s),i+2400)])
+                      start=i+len(needle)
+          PY

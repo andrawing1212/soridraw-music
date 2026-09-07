@@ -1,6 +1,11 @@
 import { doc, getDocFromServer, serverTimestamp, setDoc, updateDoc } from './firestoreMeasured';
 import { db } from '../firebase';
 import { markCacheDiagnosticWrite } from './cacheDiagnostics';
+import { isPreviewAdaptiveListIndexEnabled, readPreviewAdaptiveListIndexV2 } from './adaptiveListIndexV2';
+import { USER_PROFILE_CACHE_EVENT } from './userProfileCache';
+import { readCatalogProfileRevision, shouldRefreshCatalogForProfile } from './catalogWarmCachePolicy';
+
+const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 
 export type ListBundleKind = 'musicNote' | 'library';
 
@@ -13,6 +18,8 @@ export type ListBundleSnapshot = {
   hasMore: boolean;
   deletedIds: string[];
   updatedAtMs: number;
+  catalogRevision?: number;
+  fromCache?: boolean;
 };
 
 type BundleWriteOptions = {
@@ -120,6 +127,42 @@ const getItemCreatedAtMs = (item: any): number => (
   || 0
 );
 
+export const isCompatibleLibraryListBundle = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object') return false;
+  const bundle = value as Record<string, any>;
+  if (bundle.oversizeFallback === true) return false;
+  if (bundle.schemaVersion !== LIST_BUNDLE_SCHEMA_VERSION || bundle.kind !== 'library') return false;
+  if (!Array.isArray(bundle.items) || bundle.items.length > 10) return false;
+  if (!Number.isInteger(bundle.itemCount) || bundle.itemCount !== bundle.items.length) return false;
+  if (!Number.isInteger(bundle.cursorCreatedAtMs) || bundle.cursorCreatedAtMs < 0) return false;
+  if (typeof bundle.hasMore !== 'boolean') return false;
+  if (!Array.isArray(bundle.deletedIds) || bundle.deletedIds.some((id: unknown) => (
+    typeof id !== 'string' || !id.trim()
+  ))) return false;
+  if (!Number.isInteger(bundle.updatedAtMs) || bundle.updatedAtMs <= 0) return false;
+
+  if (bundle.items.length === 0) {
+    return bundle.cursorCreatedAtMs === 0 && bundle.hasMore === false;
+  }
+  if (bundle.hasMore && bundle.items.length < 10) return false;
+
+  const itemIds = new Set<string>();
+  const itemTimes: number[] = [];
+  for (const item of bundle.items) {
+    if (!item || typeof item !== 'object') return false;
+    const id = String(item.id || '').trim();
+    const createdAtMs = getItemCreatedAtMs(item);
+    if (!id || itemIds.has(id) || !Number.isFinite(createdAtMs) || createdAtMs <= 0) return false;
+    itemIds.add(id);
+    itemTimes.push(createdAtMs);
+  }
+
+  for (let index = 1; index < itemTimes.length; index += 1) {
+    if (itemTimes[index] > itemTimes[index - 1]) return false;
+  }
+  return bundle.cursorCreatedAtMs === itemTimes[itemTimes.length - 1];
+};
+
 const HISTORY_KEYS = new Set([
   'lyricRevisions',
   'lyricsHistory',
@@ -130,9 +173,17 @@ const HISTORY_KEYS = new Set([
 
 const HEAVY_LIBRARY_KEYS = new Set([
   'apiResponse',
+  'apiStatusResponse',
   'rawApiResponse',
   'callbackPayload',
   'debugPayload',
+  'updatedAt',
+  'updatedAtMs',
+  'creditCheckedAfterComplete',
+  'creditCheckedAt',
+  'remainingCreditsAfterComplete',
+  'reportedAudioUrls',
+  'audioValidationStatus',
 ]);
 
 const cleanValue = (value: any, kind: ListBundleKind, depth = 0): any => {
@@ -181,6 +232,14 @@ const normalizeDeletedIds = (value?: string[]) => Array.from(new Set(
 const prepareItems = (kind: ListBundleKind, sourceItems: any[], limit: number): any[] => {
   const sorted = [...(Array.isArray(sourceItems) ? sourceItems : [])]
     .filter(Boolean)
+    .filter((item) => kind !== 'musicNote' || !(
+      item?.favoriteRemoved === true
+      || item?.saved === false
+      || item?.hidden === true
+      || item?.favoriteHidden === true
+      || item?.deletedAt
+      || item?.trashedAt
+    ))
     .sort((a, b) => getItemCreatedAtMs(b) - getItemCreatedAtMs(a))
     .slice(0, Math.max(1, limit));
 
@@ -294,11 +353,10 @@ export const subscribeListBundle = (
 
   let cancelled = false;
   let started = false;
+  let latestCatalogRevision = 0;
+  let profileRefreshInFlight = false;
 
-  const runOneShotRead = () => {
-    if (cancelled || started) return;
-    started = true;
-
+  const runLegacyOneShotRead = () => {
     void getDocFromServer(getBundleRef(kind, uid))
       .then((snapshot) => {
         if (cancelled) return;
@@ -309,8 +367,12 @@ export const subscribeListBundle = (
         }
 
         const data = snapshot.data() || {};
+        if (kind === 'library' && !isCompatibleLibraryListBundle(data)) {
+          callbacks.onError?.(new Error('Library list bundle is incompatible or corrupted.'));
+          return;
+        }
         const items = Array.isArray(data.items) ? data.items : [];
-        const bundle: ListBundleSnapshot = {
+        const legacyBundle: ListBundleSnapshot = {
           schemaVersion: Number(data.schemaVersion || 0),
           kind,
           items,
@@ -320,16 +382,100 @@ export const subscribeListBundle = (
           deletedIds: normalizeDeletedIds(data.deletedIds),
           updatedAtMs: Number(data.updatedAtMs || 0),
         };
-
-        rememberListBundleSnapshot(kind, uid, bundle, kind === 'musicNote' ? 20 : 10);
-        callbacks.onData(bundle, meta);
+        rememberListBundleSnapshot(kind, uid, legacyBundle, kind === 'musicNote' ? 20 : 10);
+        callbacks.onData(legacyBundle, meta);
       })
       .catch((error) => {
         if (!cancelled) callbacks.onError?.(error);
       });
   };
 
+  const readPreviewCatalogWithStartupRetry = async (): Promise<ListBundleSnapshot | null> => {
+    const retryDelays = [0, 300, 800, 1600, 3200, 5000];
+    for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+      if (cancelled) return null;
+      if (retryDelays[attempt] > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, retryDelays[attempt]));
+      }
+      try {
+        const adaptiveBundle = await readPreviewAdaptiveListIndexV2(kind, uid);
+        if (adaptiveBundle) return adaptiveBundle;
+      } catch {}
+    }
+    return null;
+  };
+
+  const deliverAdaptiveBundle = (
+    bundle: ListBundleSnapshot,
+    meta: { fromCache: boolean },
+    onlyIfNewer = false,
+  ) => {
+    const revision = Math.max(0, Math.floor(Number(bundle.catalogRevision || 0)));
+    if (onlyIfNewer && revision > 0 && revision <= latestCatalogRevision) return;
+    if (revision > 0) latestCatalogRevision = Math.max(latestCatalogRevision, revision);
+    callbacks.onData(bundle, meta);
+  };
+
+  const refreshCatalogAfterProfileAdvance = async (profileRevision: number) => {
+    if (profileRefreshInFlight || cancelled || !started) return;
+    profileRefreshInFlight = true;
+    try {
+      // Mutation publication is debounced by ~1.2s. Give the journal time to land,
+      // then retry only while the already-paid profile token proves Catalog is stale.
+      const retryDelays = [1400, 900, 1800];
+      for (const delay of retryDelays) {
+        if (cancelled) return;
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+        const bundle = await readPreviewAdaptiveListIndexV2(kind, uid);
+        if (cancelled || !bundle) continue;
+        const revision = Math.max(0, Math.floor(Number(bundle.catalogRevision || 0)));
+        if (revision > latestCatalogRevision) deliverAdaptiveBundle(bundle, { fromCache: bundle.fromCache === true }, true);
+        if (revision >= profileRevision) return;
+      }
+    } finally {
+      profileRefreshInFlight = false;
+    }
+  };
+
+  const handleUserProfileCacheUpdate = (event: Event) => {
+    if (cancelled || !started || !isPreviewAdaptiveListIndexEnabled()) return;
+    const detail = (event as CustomEvent<{ uid?: string; profile?: any }>).detail;
+    if (String(detail?.uid || '') !== uid) return;
+    const profileRevision = readCatalogProfileRevision(kind, detail?.profile);
+    if (!shouldRefreshCatalogForProfile({ catalogRevision: latestCatalogRevision, profileRevision })) return;
+    void refreshCatalogAfterProfileAdvance(profileRevision);
+  };
+
+  const runOneShotRead = () => {
+    if (cancelled || started) return;
+    started = true;
+    void (async () => {
+      const adaptiveBundle = await readPreviewCatalogWithStartupRetry();
+      if (cancelled) return;
+      if (adaptiveBundle) {
+        deliverAdaptiveBundle(adaptiveBundle, { fromCache: adaptiveBundle.fromCache === true });
+        return;
+      }
+      if (isPreviewAdaptiveListIndexEnabled()) {
+        console.warn(`[listBundleCache] ${kind} V4 catalog unavailable after startup retry; legacy partial fallback blocked.`);
+        return;
+      }
+      runLegacyOneShotRead();
+    })().catch((error) => {
+      if (cancelled) return;
+      if (isPreviewAdaptiveListIndexEnabled()) {
+        console.warn(`[listBundleCache] ${kind} V4 catalog startup failed; legacy partial fallback blocked.`, error);
+        return;
+      }
+      runLegacyOneShotRead();
+    });
+  };
+
   const handleMusicNotePageEntry = () => runOneShotRead();
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, handleUserProfileCacheUpdate as EventListener);
+  }
 
   if (kind === 'musicNote') {
     // 904: Home/login startup only prepares this callback. No Firestore read happens
@@ -347,8 +493,11 @@ export const subscribeListBundle = (
 
   return () => {
     cancelled = true;
-    if (kind === 'musicNote' && typeof window !== 'undefined') {
-      window.removeEventListener(MUSIC_NOTE_BUNDLE_PAGE_ENTRY_EVENT, handleMusicNotePageEntry as EventListener);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleUserProfileCacheUpdate as EventListener);
+      if (kind === 'musicNote') {
+        window.removeEventListener(MUSIC_NOTE_BUNDLE_PAGE_ENTRY_EVENT, handleMusicNotePageEntry as EventListener);
+      }
     }
   };
 };
@@ -359,11 +508,14 @@ export const readListBundleFromServerOnce = async (
   uid: string,
 ): Promise<ListBundleSnapshot | null> => {
   if (!uid) return null;
+  const adaptiveBundle = await readPreviewAdaptiveListIndexV2(kind, uid);
+  if (adaptiveBundle) return adaptiveBundle;
+  if (isPreviewAdaptiveListIndexEnabled()) return null;
   const snapshot = await getDocFromServer(getBundleRef(kind, uid));
   if (!snapshot.exists()) return null;
   const data = snapshot.data() || {};
   const items = Array.isArray(data.items) ? data.items : [];
-  const bundle: ListBundleSnapshot = {
+  const legacyBundle: ListBundleSnapshot = {
     schemaVersion: Number(data.schemaVersion || 0),
     kind,
     items,
@@ -373,8 +525,8 @@ export const readListBundleFromServerOnce = async (
     deletedIds: normalizeDeletedIds(data.deletedIds),
     updatedAtMs: Number(data.updatedAtMs || 0),
   };
-  rememberListBundleSnapshot(kind, uid, bundle, kind === 'musicNote' ? 20 : 10);
-  return bundle;
+  rememberListBundleSnapshot(kind, uid, legacyBundle, kind === 'musicNote' ? 20 : 10);
+  return legacyBundle;
 };
 
 const SORIDRAW_921_FIRESTORE_COST_HARDENING = true;

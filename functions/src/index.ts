@@ -1,10 +1,209 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
+import {
+  buildLibraryOversizeFallbackMarker,
+  buildRebuiltLibraryBundle,
+  getDeletedIdsForRebuild,
+  getLibraryBundlePayloadByteSize,
+  getLibraryBundleSourceFingerprint,
+  getLibraryMutationFingerprint,
+  getNextLibraryBundleVersion,
+  hasLibraryBundleRelevantChange,
+  isLibraryBundleCoreCurrent,
+  isMatchingLibraryOversizeFallbackMarker,
+  LIBRARY_LIST_BUNDLE_MAX_BYTES,
+  planLibraryBundleMutation,
+  type LibraryListBundleCore,
+  type LibraryTrackMutation,
+} from "./libraryBundleFreshness";
+import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion } from "./musicNoteStructureSync";
 
 admin.initializeApp({
   databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com",
 });
+
+// SORIDRAW_MUSIC_NOTE_STRUCTURE_SIGNAL_1056
+// user_structures remains the canonical small private structure document. Only an
+// actual folder or Like/Lock mutation publishes a tiny version signal into users/{uid}.
+// Warm page entry/reload performs no Function work and no user_structures read.
+export const syncMusicNoteStructureVersion = functions
+  .region("asia-northeast3")
+  .firestore.document("user_structures/{uid}")
+  .onWrite(async (change, context) => {
+    const before = change.before.exists ? (change.before.data() || {}) : null;
+    const after = change.after.exists ? (change.after.data() || {}) : null;
+    if (!hasMusicNoteStructureRelevantChange(before, after)) return;
+
+    const uid = String(context.params.uid || "").trim();
+    if (!uid) return;
+    const eventTimeMs = Date.parse(String(context.timestamp || "")) || Date.now();
+    const firestore = admin.firestore();
+    const userRef = firestore.collection("users").doc(uid);
+
+    await firestore.runTransaction(async (transaction) => {
+      const userSnapshot = await transaction.get(userRef);
+      if (!userSnapshot.exists) return;
+      const currentVersion = Number(userSnapshot.data()?.syncVersions?.musicNoteStructure || 0);
+      const nextVersion = getMusicNoteStructureSignalVersion(after, eventTimeMs, currentVersion);
+      if (nextVersion <= currentVersion) return;
+      transaction.set(userRef, { syncVersions: { musicNoteStructure: nextVersion } }, { merge: true });
+    });
+  });
+
+// SORIDRAW_SECTION_TAGS_SHARED_BUNDLE_20260904
+// Public Studio configuration is shared by every user. Rebuild the single aggregate
+// only when an admin actually mutates the canonical section_tags collection.
+const SORIDRAW_SECTION_TAGS_BUNDLE_SCHEMA_VERSION = 1;
+const SORIDRAW_SECTION_TAGS_BUNDLE_MAX_BYTES = 800_000;
+
+const buildSectionTagsBundlePayload = async (sourceEventTimeMs: number, sourceEventId: string) => {
+  const snapshot = await admin.firestore().collection("section_tags").orderBy("label", "asc").get();
+  const items = snapshot.docs.map((snapshotDoc) => snapshotDoc.data());
+  if (!items.every((item) => Boolean(item && typeof item === "object" && !Array.isArray(item)))) {
+    throw new Error("Section tags bundle contains an invalid item.");
+  }
+
+  const updatedAtMs = Date.now();
+  const stablePayload = {
+    schemaVersion: SORIDRAW_SECTION_TAGS_BUNDLE_SCHEMA_VERSION,
+    items,
+    itemCount: items.length,
+    updatedAtMs,
+    sourceEventTimeMs,
+    sourceEventId,
+  };
+  const byteSize = Buffer.byteLength(JSON.stringify(stablePayload), "utf8");
+  if (byteSize > SORIDRAW_SECTION_TAGS_BUNDLE_MAX_BYTES) {
+    throw new Error(`Section tags bundle too large: ${byteSize} bytes.`);
+  }
+  return {
+    ...stablePayload,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+};
+
+export const syncSectionTagsBundle = functions
+  .region("asia-northeast3")
+  .firestore.document("section_tags/{tagId}")
+  .onWrite(async (_change, context) => {
+    const sourceEventTimeMs = Date.parse(String(context.timestamp || "")) || Date.now();
+    const sourceEventId = String(context.eventId || "");
+    const payload = await buildSectionTagsBundlePayload(sourceEventTimeMs, sourceEventId);
+    const bundleRef = admin.firestore().doc("app_settings/section_tags_bundle");
+
+    // Multiple admin edits can trigger concurrently. Older events may finish later,
+    // so only the newest event is allowed to replace the aggregate document.
+    await admin.firestore().runTransaction(async (transaction) => {
+      const currentSnapshot = await transaction.get(bundleRef);
+      if (currentSnapshot.exists) {
+        const current = currentSnapshot.data() || {};
+        const currentTime = Number(current.sourceEventTimeMs || 0);
+        const currentId = String(current.sourceEventId || "");
+        if (currentTime > sourceEventTimeMs || (currentTime === sourceEventTimeMs && currentId > sourceEventId)) {
+          return;
+        }
+      }
+      transaction.set(bundleRef, payload, { merge: false });
+    });
+  });
+
+export const syncSunoLibraryLatest10Bundle = functions
+  .region("asia-northeast3")
+  .firestore.document("suno_tracks/{uid}/tracks/{trackId}")
+  .onWrite(async (change, context) => {
+    const mutation: LibraryTrackMutation = {
+      trackId: String(context.params.trackId || "").trim(),
+      before: change.before.exists ? (change.before.data() || {}) : null,
+      after: change.after.exists ? (change.after.data() || {}) : null,
+    };
+
+    // This guard intentionally runs before any Firestore operation. Provider raw
+    // responses, debug data, credit bookkeeping, and updatedAt-only writes never
+    // read or rewrite the Library bundle.
+    if (!mutation.trackId || !hasLibraryBundleRelevantChange(mutation)) return;
+
+    const uid = String(context.params.uid || "").trim();
+    if (!uid) return;
+    const mutationFingerprint = getLibraryMutationFingerprint(mutation);
+
+    const firestore = admin.firestore();
+    const bundleRef = firestore
+      .collection("user_list_caches")
+      .doc(uid)
+      .collection("bundles")
+      .doc("library_latest_10_sets");
+    const userRef = firestore.collection("users").doc(uid);
+    const latestTracksQuery = firestore
+      .collection("suno_tracks")
+      .doc(uid)
+      .collection("tracks")
+      .orderBy("createdAt", "desc")
+      .limit(10);
+
+    await firestore.runTransaction(async (transaction) => {
+      // A transaction retry always re-reads the latest bundle and recalculates
+      // the incremental result, so concurrent track events cannot overwrite one
+      // another with a stale bundle snapshot.
+      const bundleSnapshot = await transaction.get(bundleRef);
+      const currentBundle = bundleSnapshot.exists ? bundleSnapshot.data() : null;
+      if (isMatchingLibraryOversizeFallbackMarker(currentBundle, { mutation: mutationFingerprint })) return;
+      const plan = planLibraryBundleMutation(currentBundle, mutation);
+      let nextBundle: LibraryListBundleCore | null = null;
+
+      if (plan.action === "noop") return;
+      if (plan.action === "incremental") {
+        nextBundle = plan.bundle;
+      } else {
+        // Rebuilds are reserved for a missing/incompatible bundle, a latest-ten
+        // deletion, or ranking uncertainty. The query is always bounded to ten.
+        const latestTracksSnapshot = await transaction.get(latestTracksQuery);
+        nextBundle = buildRebuiltLibraryBundle(
+          latestTracksSnapshot.docs.map((trackSnapshot) => ({
+            id: trackSnapshot.id,
+            data: trackSnapshot.data(),
+          })),
+          getDeletedIdsForRebuild(currentBundle, mutation),
+        );
+        if (isLibraryBundleCoreCurrent(currentBundle, nextBundle)) return;
+      }
+
+      if (!nextBundle) return;
+      if (bundleSnapshot.exists && isLibraryBundleCoreCurrent(currentBundle, nextBundle)) return;
+
+      const version = getNextLibraryBundleVersion(currentBundle?.updatedAtMs);
+      const measuredBundlePayload = {
+        ...nextBundle,
+        updatedAtMs: version,
+        // A numeric timestamp placeholder slightly overestimates the serialized
+        // size needed by the final server timestamp field.
+        updatedAt: version,
+      };
+      if (getLibraryBundlePayloadByteSize(measuredBundlePayload) > LIBRARY_LIST_BUNDLE_MAX_BYTES) {
+        const sourceFingerprint = getLibraryBundleSourceFingerprint(nextBundle);
+        if (isMatchingLibraryOversizeFallbackMarker(currentBundle, { source: sourceFingerprint })) return;
+        const fallbackPayload = {
+          ...buildLibraryOversizeFallbackMarker(sourceFingerprint, mutationFingerprint, version),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        // The derived cache is replaced by a small, intentionally incompatible
+        // marker. Clients then use the existing bounded latest-ten source query;
+        // canonical suno_tracks documents are never truncated or modified.
+        transaction.set(bundleRef, fallbackPayload, { merge: false });
+        transaction.set(userRef, { syncVersions: { library: version } }, { merge: true });
+        return;
+      }
+
+      const bundlePayload = {
+        ...nextBundle,
+        updatedAtMs: version,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      transaction.set(bundleRef, bundlePayload, { merge: false });
+      transaction.set(userRef, { syncVersions: { library: version } }, { merge: true });
+    });
+  });
 
 const getAuthProviderIds = (user: admin.auth.UserRecord): string[] =>
   (user.providerData || [])
@@ -46,6 +245,19 @@ const getAdminPermissions = (data: Record<string, any> | undefined | null) => {
   if (data?.role === "admin" && !data?.staffRole) return { ...FULL_ADMIN_PERMISSIONS };
   const raw = data?.adminPermissions || {};
   return Object.fromEntries(Object.keys(FULL_ADMIN_PERMISSIONS).map((key) => [key, raw[key] === true])) as Record<AdminPermissionKey, boolean>;
+};
+
+// SORIDRAW_USER_CONTROL_REVISION_STAGE1_20260905
+// Admin/security changes are rare. Publish only a tiny invalidation marker to RTDB.
+// No profile payload and no song/list data is copied into this channel.
+const writeUserControlRevision = async (targetUid: string, rawReason: string) => {
+  const safeUid = String(targetUid || "").trim();
+  if (!safeUid) throw new HttpsError("invalid-argument", "대상 회원 UID가 필요합니다.");
+  const now = Date.now();
+  const reason = String(rawReason || "control-change").slice(0, 64);
+  const revision = `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  await admin.database().ref(`userControls/${safeUid}`).set({ revision, updatedAt: now, reason });
+  return { revision, updatedAt: now };
 };
 
 const requireAdminCaller = async (request: CallableRequestLike, requiredPermission?: AdminPermissionKey) => {
@@ -492,6 +704,18 @@ export const getAdminPresence = onCall(
   }
 );
 
+export const adminSignalUserControlRevision = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { db, requesterUid } = await requireAdminCaller(request, "userManagement");
+    const targetUid = String(request.data?.targetUid || "").trim();
+    await assertManageableTarget(db, requesterUid, targetUid);
+    const reason = String(request.data?.reason || "admin-user-settings").slice(0, 64);
+    const signal = await writeUserControlRevision(targetUid, reason);
+    return { ok: true, targetUid, ...signal };
+  }
+);
+
 export const adminForceLogoutUser = onCall(
   { region: "us-central1" },
   async (request) => {
@@ -641,6 +865,13 @@ export const adminDeleteUserAccount = onCall(
 const APP_CHECK_STATUS_HEADER = "X-SORIDRAW-App-Check-Status";
 
 const ALLOWED_ORIGINS = [
+  "https://preview.soridraw.com",
+  "https://soridraw-preview.web.app",
+  "https://soridraw-preview.firebaseapp.com",
+  "https://test.soridraw.com",
+  "https://soridraw-test.web.app",
+  "https://soridraw-test.firebaseapp.com",
+  "https://soridraw.com",
   "https://soridraw-music-git-preview-andrawing1212.vercel.app",
   "https://soridraw-music.vercel.app",
   "https://soridraw.web.app",
@@ -2916,6 +3147,329 @@ const findFirstUsableSunoAudioUrl = async (item: any): Promise<string> => {
   return "";
 };
 
+
+// SORIDRAW_SUNO_WAV_RESCUE_994
+const SUNO_WAV_RESCUE_CALLBACK_URL = "https://us-central1-soridraw-app-866a5.cloudfunctions.net/sunoWavRescueCallback";
+const SUNO_WAV_RESCUE_BUCKET = "soridraw-app-866a5.firebasestorage.app";
+const SUNO_WAV_RESCUE_MAX_POLLS = 12;
+const SUNO_WAV_RESCUE_POLL_MS = 5000;
+
+const sleepSunoWavRescue = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getSunoWavRescueUrl = (payload: any): string => pickFirstString(
+  payload?.data?.response?.audioWavUrl,
+  payload?.data?.response?.audio_wav_url,
+  payload?.data?.audioWavUrl,
+  payload?.data?.audio_wav_url,
+  payload?.response?.audioWavUrl,
+  payload?.response?.audio_wav_url,
+  payload?.audioWavUrl,
+  payload?.audio_wav_url,
+);
+
+const getSunoWavRescueTaskId = (payload: any): string => pickFirstString(
+  payload?.data?.taskId,
+  payload?.data?.task_id,
+  payload?.taskId,
+  payload?.task_id,
+);
+
+const pollSunoWavRescue = async (apiKey: string, wavTaskId: string): Promise<{ audioUrl: string; payload: any } | null> => {
+  for (let attempt = 0; attempt < SUNO_WAV_RESCUE_MAX_POLLS; attempt += 1) {
+    if (attempt > 0) await sleepSunoWavRescue(SUNO_WAV_RESCUE_POLL_MS);
+
+    const response = await fetch(
+      "https://api.sunoapi.org/api/v1/wav/record-info?taskId=" + encodeURIComponent(wavTaskId),
+      { headers: { Authorization: "Bearer " + apiKey } },
+    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      console.warn('[Suno WAV Rescue] record-info HTTP', { status: response.status, attempt });
+      continue;
+    }
+
+    const providerCode = Number(payload?.code || 200);
+    const status = String(payload?.data?.successFlag || payload?.data?.status || payload?.status || '').toUpperCase();
+    if (providerCode >= 400 || status.includes('FAILED') || status.includes('ERROR')) return null;
+
+    const audioUrl = getSunoWavRescueUrl(payload);
+    if (audioUrl && await probeSunoAudioUrlHasBytes(audioUrl)) {
+      return { audioUrl, payload };
+    }
+  }
+  return null;
+};
+
+const persistSunoWavRescueToStorage = async (
+  uid: string,
+  trackId: string,
+  index: number,
+  sourceUrl: string,
+): Promise<string> => {
+  const sourceResponse = await fetch(sourceUrl, { method: 'GET', redirect: 'follow' });
+  if (!sourceResponse.ok) throw new Error('WAV rescue source download failed (' + sourceResponse.status + ')');
+  const bytes = Buffer.from(await sourceResponse.arrayBuffer());
+  if (bytes.byteLength <= 0) throw new Error('WAV rescue source returned zero bytes');
+
+  const bucket = admin.storage().bucket(SUNO_WAV_RESCUE_BUCKET);
+  const objectPath = 'suno-rescue/' + uid + '/' + trackId + '/' + index + '.wav';
+  const token = admin.firestore().collection('_download_tokens').doc().id;
+  const file = bucket.file(objectPath);
+  await file.save(bytes, {
+    resumable: false,
+    contentType: String(sourceResponse.headers.get('content-type') || 'audio/wav'),
+    metadata: {
+      cacheControl: 'public,max-age=31536000,immutable',
+      metadata: { firebaseStorageDownloadTokens: token },
+    },
+  });
+
+  return 'https://firebasestorage.googleapis.com/v0/b/'
+    + encodeURIComponent(bucket.name)
+    + '/o/'
+    + encodeURIComponent(objectPath)
+    + '?alt=media&token='
+    + encodeURIComponent(token);
+};
+
+export const sunoWavRescueCallback = onRequest(
+  { region: "us-central1", invoker: "public" },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ ok: false, error: 'Method Not Allowed' });
+      return;
+    }
+    res.status(200).json({ ok: true });
+  },
+);
+
+export const rescueSunoTrackAudio = onRequest(
+  {
+    region: "us-central1",
+    invoker: "public",
+    timeoutSeconds: 120,
+    memory: "512MiB",
+    concurrency: 10,
+    maxInstances: 10,
+  },
+  async (req, res) => {
+    if (handleCors(req, res)) return;
+    if (req.method !== 'POST') {
+      res.status(405).json({ ok: false, error: 'Method Not Allowed' });
+      return;
+    }
+
+    const uid = await verifyAuth(req, res);
+    if (!uid) return;
+    if (!(await verifyAppCheckForRequest(req, res, 'rescueSunoTrackAudio'))) return;
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const reuseOnly = body.reuseOnly === true || body.data?.reuseOnly === true;
+    const explicitPaidWav = body.explicitPaidWav === true || body.data?.explicitPaidWav === true;
+    // SORIDRAW_SUNO_WAV_RESCUE_REUSE_ONLY_995
+    const trackId = pickFirstString(body.trackId, body.data?.trackId);
+    const taskId = pickFirstString(body.taskId, body.data?.taskId);
+    const requestedAudioId = pickFirstString(body.audioId, body.data?.audioId);
+    const rawIndex = Number(body.index ?? body.data?.index ?? 0);
+    const index = Number.isFinite(rawIndex) && rawIndex >= 0 && rawIndex <= 10 ? Math.floor(rawIndex) : 0;
+    const indexKey = String(index);
+
+    if (!trackId || !taskId) {
+      res.status(400).json({ ok: false, error: 'trackId and taskId are required', code: 'SUNO_RESCUE_INVALID_INPUT' });
+      return;
+    }
+
+    const db = admin.firestore();
+    const trackRef = db.collection('suno_tracks').doc(uid).collection('tracks').doc(trackId);
+    const trackSnap = await trackRef.get();
+    if (!trackSnap.exists) {
+      res.status(404).json({ ok: false, error: 'Track not found', code: 'SUNO_RESCUE_TRACK_NOT_FOUND' });
+      return;
+    }
+
+    const trackData = trackSnap.data() || {};
+    if (pickFirstString(trackData.taskId) !== taskId) {
+      res.status(400).json({ ok: false, error: 'Task ID mismatch', code: 'SUNO_RESCUE_TASK_MISMATCH' });
+      return;
+    }
+
+    const item = Array.isArray(trackData.sunoData) ? (trackData.sunoData[index] || {}) : {};
+    const audioId = pickFirstString(requestedAudioId, item?.id, item?.audioId, item?.audio_id);
+    if (!audioId) {
+      res.status(409).json({ ok: false, error: 'Audio ID is unavailable for this track', code: 'SUNO_RESCUE_AUDIO_ID_MISSING' });
+      return;
+    }
+
+    const apiKeySnap = await db.collection('user_api_keys').doc(uid).get();
+    const apiKey = getStoredSunoApiKeyFromDoc(apiKeySnap.data() || {});
+    if (!apiKey) {
+      res.status(400).json({ ok: false, error: 'Music API Key is unavailable', code: 'SUNO_RESCUE_API_KEY_MISSING' });
+      return;
+    }
+
+    const existing = trackData?.audioRescue?.[indexKey] || {};
+    const existingStoredUrl = pickFirstString(existing?.audioUrl);
+    if (existingStoredUrl && await probeSunoAudioUrlHasBytes(existingStoredUrl)) {
+      res.json({ ok: true, audioUrl: existingStoredUrl, index, audioId, source: 'stored-rescue', reused: true });
+      return;
+    }
+
+    let wavTaskId = pickFirstString(existing?.wavTaskId);
+    let providerResult: { audioUrl: string; payload: any } | null = null;
+
+    if (wavTaskId) {
+      providerResult = await pollSunoWavRescue(apiKey, wavTaskId);
+    }
+
+    if (!providerResult && wavTaskId) {
+      res.status(202).json({
+        ok: false,
+        pending: true,
+        code: 'SUNO_RESCUE_EXISTING_TASK_PENDING',
+        error: 'An existing WAV rescue task is still unavailable; a second paid rescue will not be started.',
+        index,
+        audioId,
+        reuseOnly,
+      });
+      return;
+    }
+
+    if (!providerResult && reuseOnly) {
+      res.status(404).json({
+        ok: false,
+        code: 'SUNO_RESCUE_NOT_PREVIOUSLY_RECOVERED',
+        error: 'No existing recovered audio is available for this track.',
+        index,
+        audioId,
+        reuseOnly: true,
+      });
+      return;
+    }
+
+    if (!providerResult && !explicitPaidWav) {
+      res.status(409).json({
+        ok: false,
+        code: 'SUNO_RESCUE_EXPLICIT_CHOICE_REQUIRED',
+        error: 'Starting a paid WAV rescue requires an explicit user choice.',
+        index,
+        audioId,
+      });
+      return;
+    }
+
+    if (!providerResult) {
+      const createResponse = await fetch('https://api.sunoapi.org/api/v1/wav/generate', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          taskId,
+          audioId,
+          callBackUrl: SUNO_WAV_RESCUE_CALLBACK_URL,
+        }),
+      });
+      const createPayload = await createResponse.json().catch(() => null);
+      const providerCode = Number(createPayload?.code || createResponse.status || 500);
+
+      if (providerCode === 429 || providerCode === 402 || createResponse.status === 429 || createResponse.status === 402) {
+        res.status(402).json({ ok: false, code: 'SUNO_RESCUE_INSUFFICIENT_CREDITS', error: 'Music API credits are insufficient for WAV rescue.' });
+        return;
+      }
+      if (providerCode === 451) {
+        res.status(410).json({ ok: false, code: 'SUNO_RESCUE_SOURCE_UNAVAILABLE', error: 'Music API source audio is no longer available.' });
+        return;
+      }
+      if (!createResponse.ok || providerCode >= 400) {
+        res.status(502).json({
+          ok: false,
+          code: 'SUNO_RESCUE_CREATE_FAILED',
+          error: String(createPayload?.msg || ('Music API WAV rescue failed (' + createResponse.status + ')')),
+        });
+        return;
+      }
+
+      wavTaskId = getSunoWavRescueTaskId(createPayload);
+      if (!wavTaskId) {
+        res.status(502).json({ ok: false, code: 'SUNO_RESCUE_TASK_ID_MISSING', error: 'Music API did not return a WAV rescue task ID.' });
+        return;
+      }
+
+      await trackRef.update({
+        ['audioRescue.' + indexKey]: {
+          audioId,
+          wavTaskId,
+          status: 'processing',
+          requestedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        lastAudioRescueAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      providerResult = await pollSunoWavRescue(apiKey, wavTaskId);
+    }
+
+    if (!providerResult?.audioUrl) {
+      await trackRef.update({
+        ['audioRescue.' + indexKey + '.status']: 'pending',
+        lastAudioRescueAt: admin.firestore.FieldValue.serverTimestamp(),
+      }).catch(() => undefined);
+      res.status(202).json({ ok: false, pending: true, code: 'SUNO_RESCUE_PENDING', wavTaskId, index, audioId });
+      return;
+    }
+
+    let durableUrl = '';
+    try {
+      durableUrl = await persistSunoWavRescueToStorage(uid, trackId, index, providerResult.audioUrl);
+    } catch (storageError: any) {
+      console.error('[Suno WAV Rescue] durable storage copy failed', {
+        uid,
+        trackId,
+        index,
+        message: storageError?.message || String(storageError),
+      });
+    }
+
+    const finalUrl = durableUrl || providerResult.audioUrl;
+    if (!(await probeSunoAudioUrlHasBytes(finalUrl))) {
+      res.status(502).json({ ok: false, code: 'SUNO_RESCUE_ZERO_BYTES', error: 'Recovered audio URL did not return playable bytes.' });
+      return;
+    }
+
+    await trackRef.update({
+      ['audioRescue.' + indexKey]: {
+        audioId,
+        wavTaskId,
+        audioUrl: finalUrl,
+        providerAudioUrl: providerResult.audioUrl,
+        durable: Boolean(durableUrl),
+        status: 'completed',
+        recoveredAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      lastAudioRescueAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log('[Suno WAV Rescue] success', {
+      uid,
+      trackId,
+      index,
+      durable: Boolean(durableUrl),
+      host: (() => { try { return new URL(finalUrl).hostname; } catch { return 'invalid'; } })(),
+    });
+
+    res.json({
+      ok: true,
+      audioUrl: finalUrl,
+      index,
+      audioId,
+      wavTaskId,
+      source: durableUrl ? 'firebase-storage-wav-rescue' : 'provider-wav-rescue',
+      durable: Boolean(durableUrl),
+      reused: false,
+    });
+  },
+);
+
 export const getSunoTrackStatus = onRequest(
   { region: "us-central1" },
   async (req, res) => {
@@ -3190,4 +3744,77 @@ export const getSunoTrackStatus = onRequest(
       res.status(500).json({ error: "Failed to fetch track status", details: error.message });
     }
   }
+);
+
+
+// SORIDRAW_MUSIC_NOTE_BOUNDED_BULK_20260905
+type MusicNoteBulkOperation = 'clear-unlocked' | 'lock-all' | 'unlock-all';
+const MUSIC_NOTE_BULK_PAGE_LIMIT = 120;
+
+export const processMusicNoteBulkPage = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const uid = String(request.auth?.uid || '').trim();
+    if (!uid) throw new HttpsError('unauthenticated', 'Authentication is required.');
+
+    const operation = String(request.data?.operation || '').trim() as MusicNoteBulkOperation;
+    if (!['clear-unlocked', 'lock-all', 'unlock-all'].includes(operation)) {
+      throw new HttpsError('invalid-argument', 'Unsupported Music Note bulk operation.');
+    }
+
+    const requestedLimit = Math.floor(Number(request.data?.limit || MUSIC_NOTE_BULK_PAGE_LIMIT));
+    const pageSize = Math.max(1, Math.min(MUSIC_NOTE_BULK_PAGE_LIMIT, Number.isFinite(requestedLimit) ? requestedLimit : MUSIC_NOTE_BULK_PAGE_LIMIT));
+    const cursor = String(request.data?.cursor || '').trim();
+
+    const firestore = admin.firestore();
+    let pageQuery = firestore.collection('favorites').where('uid', '==', uid).orderBy(admin.firestore.FieldPath.documentId()).limit(pageSize);
+    if (cursor) pageQuery = pageQuery.startAfter(cursor);
+
+    const snapshot = await pageQuery.get();
+    const changedIds: string[] = [];
+    const batch = firestore.batch();
+
+    for (const snapshotDoc of snapshot.docs) {
+      const data = snapshotDoc.data() || {};
+      const isLocked = data.isLocked === true;
+      if (operation === 'clear-unlocked') {
+        if (isLocked) continue;
+        batch.delete(snapshotDoc.ref);
+        changedIds.push(snapshotDoc.id);
+      } else if (operation === 'lock-all') {
+        if (isLocked) continue;
+        batch.update(snapshotDoc.ref, { isLocked: true, updatedAtMs: Date.now() });
+        changedIds.push(snapshotDoc.id);
+      } else {
+        if (!isLocked) continue;
+        batch.update(snapshotDoc.ref, { isLocked: false, updatedAtMs: Date.now() });
+        changedIds.push(snapshotDoc.id);
+      }
+    }
+
+    let version = 0;
+    if (changedIds.length > 0) {
+      version = Date.now();
+      const userRef = firestore.collection('users').doc(uid);
+      const userPatch: Record<string, any> = { syncVersions: { musicNote: version }, favoriteSyncSignalUpdatedAt: version };
+      if (operation === 'clear-unlocked') {
+        userPatch.favoriteCount = admin.firestore.FieldValue.increment(-changedIds.length);
+      }
+      batch.set(userRef, userPatch, { merge: true });
+      await batch.commit();
+    }
+
+    const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+    const hasAnotherPage = snapshot.size === pageSize;
+    return {
+      ok: true,
+      operation,
+      processedCount: snapshot.size,
+      changedCount: changedIds.length,
+      changedIds,
+      version,
+      nextCursor: hasAnotherPage && lastDoc ? lastDoc.id : null,
+      done: !hasAnotherPage,
+    };
+  },
 );

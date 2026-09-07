@@ -1,0 +1,37 @@
+name: SORIDRAW Fix Patch020 Static Assertion 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-fix-patch020-static-20260905.yml']
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Remove comment false-positive from bounded assertion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('cloudflare/explore-worker/patches/020-profile-r2-alias-bounded-repair.mjs')
+          s=p.read_text(encoding='utf-8')
+          old="if (repair.includes('COUNT(') || repair.includes('collection(db') || repair.includes('favorites')) throw new Error('[020] bounded repair contains forbidden scan');"
+          new="if (repair.includes('env.DB.') || repair.includes('materializePublicProfileFirstView')) throw new Error('[020] bounded repair contains forbidden direct/unbounded DB path');"
+          if s.count(old)!=1: raise SystemExit(f'patch020 assertion anchor count={s.count(old)}')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
+          git diff --check
+      - name: Commit fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add cloudflare/explore-worker/patches/020-profile-r2-alias-bounded-repair.mjs
+          git commit -m 'fix(preview): correct patch020 safety assertion'
+          git push origin HEAD:preview

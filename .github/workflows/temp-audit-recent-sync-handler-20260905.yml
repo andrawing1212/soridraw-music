@@ -1,0 +1,29 @@
+name: SORIDRAW Audit Recent Sync Handler 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-audit-recent-sync-handler-20260905.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Inspect recent sync version consumers
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          s=Path('src/App.tsx').read_text(encoding='utf-8')
+          for needle in ['RECENT_SONGS_SYNC_VERSION_EVENT', 'readRecentSongsSyncVersion(', 'writeRecentSongsLocalSyncVersion(']:
+            print('\n===',needle,'===')
+            start=0
+            for n in range(12):
+              i=s.find(needle,start)
+              if i<0: break
+              print(s[max(0,i-1000):min(len(s),i+2600)])
+              start=i+len(needle)
+          PY

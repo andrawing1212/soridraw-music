@@ -24,15 +24,21 @@ import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache }
 import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
 import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
 import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
-import { scheduleListBundleWrite, subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
+import { subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
+import { schedulePreviewAdaptiveListIndexPublishIfDirty } from '../lib/adaptiveListIndexV2';
+
+const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 
 const SORIDRAW_923_FINAL_FIRESTORE_GUARD = true;
+const SORIDRAW_LIBRARY_FULL_CATALOG_AUTHORITY_1051 = true;
 const SORIDRAW_936_LIBRARY_VERSION_SYNC_ONLY = true;
 const SORIDRAW_930_ROUTE_USER_READ_CACHE = true;
 const SORIDRAW_902_LIST_BUNDLE_CACHE = true;
 const SORIDRAW_922_NO_UNBOUNDED_BOOTSTRAP_READS = true;
 const SORIDRAW_921_FIRESTORE_COST_HARDENING = true;
 const SORIDRAW_900_LIBRARY_SESSION_CACHE = true;
+// SORIDRAW_LIBRARY_STATUS_MONOTONIC_20260904
+// SORIDRAW_LIBRARY_ACTIVE_GENERATION_WINDOW_20260904
 const SORIDRAW_897_CACHE_DIAGNOSTICS_READ_ACCURACY = true;
 const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 
@@ -52,8 +58,7 @@ const fallbackSharedPlaylists: Playlist[] = [
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
 // SORIDRAW_LIBRARY_PLAYBACK_FAILURE_RECOVERY_991
 const WORKSPACE_PAGE_SIZE = 10;
-const WORKSPACE_SERVER_PAGE_SIZE = 10;
-const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE;
+const SORIDRAW_LIBRARY_MORE_VISIBILITY_1032 = true;
 const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
 const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
 const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
@@ -267,7 +272,6 @@ const mergeLibraryLatestBundleWithCache = (
   const retained = (previous || []).filter((track: any) => {
     const id = String(track?.id || '');
     if (!id || incomingIds.has(id)) return false;
-    if (!hasMore) return false;
     const createdAtMs = getLibraryWorkspaceTrackCreatedAtMs(track);
     return cursorCreatedAtMs <= 0 || createdAtMs < cursorCreatedAtMs;
   });
@@ -343,140 +347,8 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
   };
   libraryWorkspaceSession = session;
 
-  const tracksRef = collection(db, 'suno_tracks', uid, 'tracks');
-  let libraryFullBootstrapStarted = false;
-  const bootstrapCachelessLibraryFromServerOnce = async () => {
-    if (libraryFullBootstrapStarted) return;
-    libraryFullBootstrapStarted = true;
-    try {
-      // Cost guard: a cold/new-origin/schema bootstrap is always bounded.
-      // Never sweep the user's whole Library merely because local cache is absent.
-      const snapshot = await getDocs(query(
-        tracksRef,
-        orderBy('createdAt', 'desc'),
-        limit(WORKSPACE_SERVER_FETCH_SIZE)
-      ));
-      if (libraryWorkspaceSession !== session || session.uid !== uid) return;
-      const docs = snapshot.docs;
-      const list = docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      session.tracks = mergeLibraryWorkspaceSessionTracks(list, []);
-      libraryWorkspaceInMemoryCache.set(uid, session.tracks);
-      session.lastDoc = docs.length > 0 ? docs[docs.length - 1] : null;
-      session.hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
-      session.paginationFallback = false;
-      session.ready = true;
-      const persisted = await persistLibraryWorkspaceTrackCacheNow(uid, session.tracks);
-      if (persisted) {
-        markLibraryWorkspaceCacheSchemaCurrent(uid);
-        const remoteVersion = readRemoteLibraryVersion();
-        if (remoteVersion > 0) writeLibraryBundleLocalSyncVersion(uid, remoteVersion);
-      } else {
-        console.warn('Library full bootstrap loaded server data but IndexedDB persistence failed.');
-      }
-      markCacheDiagnostic('library', 'SYNC', snapshot.docs.length);
-      emitLibraryWorkspaceSession(session);
-    } catch (bootstrapError) {
-      console.warn('Cacheless Library full bootstrap failed.', bootstrapError);
-      session.ready = true;
-      emitLibraryWorkspaceSession(session);
-    }
-  };
-
-  const pageQuery = query(
-    tracksRef,
-    orderBy('createdAt', 'desc'),
-    limit(WORKSPACE_SERVER_FETCH_SIZE)
-  );
-
-  const startLegacyFullFallback = () => {
-    if (session.unsubscribeFallback) return;
-    session.paginationFallback = true;
-    session.hasMore = false;
-    session.unsubscribeFallback = () => {};
-    const boundedFallbackQuery = query(tracksRef, limit(WORKSPACE_SERVER_FETCH_SIZE));
-    void getDocs(boundedFallbackQuery)
-      .then((snapshot) => {
-        const list = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-        session.tracks = mergeLibraryWorkspaceSessionTracks(list, session.tracks);
-        session.lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
-        session.hasMore = false;
-        session.ready = true;
-        saveLibraryWorkspaceTrackCache(uid, session.tracks);
-        markCacheDiagnostic('library', 'SYNC', Math.max(1, snapshot.docs.length));
-        emitLibraryWorkspaceSession(session);
-      })
-      .catch((error) => {
-        console.error('Bounded library fallback failed; keeping local cache.', error);
-        session.ready = true;
-        emitLibraryWorkspaceSession(session);
-      });
-    emitLibraryWorkspaceSession(session);
-  };
-
-  const startPagedSourceFallback = () => {
-    try { session.unsubscribe?.(); } catch {}
-    session.unsubscribe = null;
-    session.paginationFallback = false;
-    session.unsubscribe = onSnapshot(pageQuery, (snapshot) => {
-      const docs = snapshot.docs;
-      const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
-      const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
-      const list = visibleDocs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      session.lastDoc = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : null;
-      session.hasMore = hasMore;
-      session.paginationFallback = false;
-      session.tracks = mergeLibraryLatestBundleWithCache(
-        list,
-        session.tracks,
-        visibleDocs.length > 0 ? getLibraryWorkspaceTrackCreatedAtMs(list[list.length - 1]) : 0,
-        hasMore,
-      );
-      session.ready = true;
-      saveLibraryWorkspaceTrackCache(uid, session.tracks);
-      scheduleListBundleWrite('library', uid, session.tracks, { limit: 10, hasMore });
-      markCacheDiagnostic(
-        'library',
-        snapshot.metadata.fromCache ? 'CACHE' : 'SYNC',
-        snapshot.metadata.fromCache ? 0 : Math.max(1, snapshot.docChanges().length)
-      );
-      emitLibraryWorkspaceSession(session);
-    }, (error) => {
-      console.error('Error fetching paged tracks:', error);
-      session.ready = true;
-      emitLibraryWorkspaceSession(session);
-      startLegacyFullFallback();
-    });
-  };
-
-  let bundleBootstrapStarted = false;
-  const bootstrapBundleFromSourceOnce = async () => {
-    if (bundleBootstrapStarted) return;
-    bundleBootstrapStarted = true;
-    try {
-      const snapshot = await getDocs(pageQuery);
-      const docs = snapshot.docs;
-      const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
-      const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
-      const list = visibleDocs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      session.lastDoc = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : null;
-      session.hasMore = hasMore;
-      session.paginationFallback = false;
-      session.tracks = mergeLibraryLatestBundleWithCache(
-        list,
-        session.tracks,
-        visibleDocs.length > 0 ? getLibraryWorkspaceTrackCreatedAtMs(list[list.length - 1]) : 0,
-        hasMore,
-      );
-      session.ready = true;
-      saveLibraryWorkspaceTrackCache(uid, session.tracks);
-      scheduleListBundleWrite('library', uid, session.tracks, { limit: 10, hasMore });
-      markCacheDiagnostic('library', 'SYNC', snapshot.docs.length);
-      emitLibraryWorkspaceSession(session);
-    } catch (error) {
-      console.warn('Library bundle bootstrap unavailable; using legacy safe listener.', error);
-      startPagedSourceFallback();
-    }
-  };
+  // 1051: Library workspace no longer owns a Firestore page bootstrap.
+  // The shared server-authoritative Catalog is the only list source; durable cache is instant paint only.
 
   let libraryBundleReadInFlight = false;
 
@@ -501,14 +373,12 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
         );
         writeLibraryBundleLocalSyncVersion(uid, verifiedVersion);
         const list = Array.isArray(bundle.items) ? bundle.items : [];
-        session.tracks = mergeLibraryLatestBundleWithCache(
-          list,
-          session.tracks,
-          bundle.cursorCreatedAtMs,
-          bundle.hasMore,
-        );
-        session.lastDoc = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
-        session.hasMore = bundle.hasMore;
+        const isFullCatalogSnapshot = bundle.schemaVersion === 1001;
+        session.tracks = isFullCatalogSnapshot
+          ? mergeLibraryWorkspaceSessionTracks(list, [])
+          : mergeLibraryLatestBundleWithCache(list, session.tracks, bundle.cursorCreatedAtMs, bundle.hasMore);
+        session.lastDoc = null;
+        session.hasMore = isFullCatalogSnapshot ? false : Boolean(bundle.hasMore);
         session.paginationFallback = false;
         session.ready = true;
         saveLibraryWorkspaceTrackCache(uid, session.tracks);
@@ -518,20 +388,20 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
       onMissing: (meta) => {
         libraryBundleReadInFlight = false;
         if (meta.fromCache) return;
-        void bootstrapBundleFromSourceOnce();
+        session.hasMore = false;
+        session.paginationFallback = false;
+        session.ready = true;
+        emitLibraryWorkspaceSession(session);
       },
       onError: (error) => {
         libraryBundleReadInFlight = false;
-        console.warn('Library bundle unavailable; using legacy safe listener.', error);
-        startPagedSourceFallback();
+        console.warn('Library Catalog unavailable; keeping local cache without Firestore paging.', error);
+        session.hasMore = false;
+        session.paginationFallback = false;
+        session.ready = true;
+        emitLibraryWorkspaceSession(session);
       },
     });
-  };
-
-  const shouldVerifyLibraryBundle = () => {
-    const localVersion = readLibraryBundleLocalSyncVersion(uid);
-    const remoteVersion = readRemoteLibraryVersion();
-    return session.tracks.length === 0 || remoteVersion > localVersion;
   };
 
   let libraryHydrationStarted = false;
@@ -546,25 +416,20 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
       if (durableTracks !== null) {
         libraryWorkspaceInMemoryCache.set(uid, durableTracks);
         session.tracks = mergeLibraryWorkspaceSessionTracks(durableTracks, []);
-        const oldestCachedTrack = session.tracks[session.tracks.length - 1] || null;
-        const cachedCursorMs = getLibraryWorkspaceTrackCreatedAtMs(oldestCachedTrack);
-        // Reconstruct a bounded cursor from the durable cache so browser/app
-        // restart never forces a full collection rebuild. At worst an exact
-        // 10-item terminal cache can cause one bounded empty-page check.
-        session.lastDoc = cachedCursorMs > 0 ? new Date(cachedCursorMs) : null;
-        session.hasMore = session.tracks.length >= WORKSPACE_SERVER_PAGE_SIZE && cachedCursorMs > 0;
+        // Durable cache never manufactures a Firestore cursor or server-more state.
+        session.lastDoc = null;
+        session.hasMore = false;
         session.paginationFallback = false;
         session.ready = true;
         markCacheDiagnostic('library', 'CACHE', 0);
         emitLibraryWorkspaceSession(session);
-        if (shouldVerifyLibraryBundle() && readRemoteLibraryVersion() > readLibraryBundleLocalSyncVersion(uid)) {
-          startLibraryBundleVerification();
-        }
+        // Durable cache is paint-only until the shared Catalog verifies completeness.
+        startLibraryBundleVerification();
         return;
       }
     }
 
-    await bootstrapCachelessLibraryFromServerOnce();
+    startLibraryBundleVerification();
   };
 
   const handleLibraryProfileVersion = (event: Event) => {
@@ -1019,6 +884,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       playlistLocalColorMapRef.current = loadedPlaylistMap;
       workspaceColorBaselineRef.current = serializeColorMap(loadedWorkspaceMap);
       playlistColorBaselineRef.current = serializeColorMap(loadedPlaylistMap);
+      pendingWorkspaceColorKeysRef.current.clear();
+      pendingPlaylistColorKeysRef.current.clear();
       workspaceColorDirtyRef.current = false;
       playlistColorDirtyRef.current = false;
     } catch (error) {
@@ -1573,6 +1440,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const saveWorkspaceTrackCache = (uid: string, list: any[]) => {
     saveLibraryWorkspaceTrackCache(uid, list);
+    const activeSession = libraryWorkspaceSession?.uid === uid ? libraryWorkspaceSession : null;
+    const sessionComplete = Boolean(activeSession?.ready && activeSession?.hasMore === false);
+    schedulePreviewAdaptiveListIndexPublishIfDirty('library', uid, list, {
+      hasMore: activeSession ? activeSession.hasMore : true,
+      complete: sessionComplete,
+    });
   };
 
   const syncLibraryWorkspaceSessionTracks = (uid: string, nextTracks: any[]) => {
@@ -1771,53 +1644,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
 
   const loadMoreWorkspaceTracks = async () => {
-    if (!user || isSharedView || workspacePaginationFallbackRef.current) {
-      setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
-      return;
-    }
-
-    if (workspaceVisibleCount < filteredTracks.length) {
-      setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
-      return;
-    }
-
-    if (!hasMoreWorkspaceServerTracks || !workspaceLastTrackDocRef.current || isLoadingMoreWorkspaceTracks) return;
-
-    setIsLoadingMoreWorkspaceTracks(true);
-    try {
-      const tracksRef = collection(db, 'suno_tracks', user.uid, 'tracks');
-      const nextQuery = query(
-        tracksRef,
-        orderBy('createdAt', 'desc'),
-        startAfter(workspaceLastTrackDocRef.current),
-        limit(WORKSPACE_SERVER_FETCH_SIZE)
-      );
-      const snapshot = await getDocs(nextQuery);
-      const docs = snapshot.docs;
-      const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
-      const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
-      workspaceLastTrackDocRef.current = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : workspaceLastTrackDocRef.current;
-      setHasMoreWorkspaceServerTracks(hasMore);
-
-      const list = visibleDocs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      mergeLibraryWorkspaceSessionPage(user.uid, list, workspaceLastTrackDocRef.current, hasMore);
-      setTracks((prev) => {
-        const merged = mergeWorkspaceTracks(list, Array.isArray(prev) ? prev : []);
-        saveWorkspaceTrackCache(user.uid, merged);
-        return merged;
-      });
-      setWorkspaceVisibleCount((prev) => prev + WORKSPACE_PAGE_SIZE);
-    } catch (error) {
-      console.error('load more workspace tracks failed:', error);
-      workspacePaginationFallbackRef.current = true;
-      setHasMoreWorkspaceServerTracks(false);
-    } finally {
-      setIsLoadingMoreWorkspaceTracks(false);
-    }
+    // 1051: UI pagination only. The full Library Catalog is already local.
+    setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
   };
 
   const playlistLiveModeActive = libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist';
@@ -2429,23 +2257,25 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const currentUser = libraryUserRef.current;
     if (!currentUser || libraryColorsAutoSyncingRef.current) return;
 
+    // Cache/server hydration can change the local maps while entering or leaving
+    // the page. Those changes are not user mutations and must stay write-free.
+    const workspaceChanged = workspaceColorDirtyRef.current;
+    const playlistChanged = playlistColorDirtyRef.current;
+    if (!workspaceChanged && !playlistChanged) return;
+
     const workspaceMap = workspaceLocalColorMapRef.current || {};
     const playlistMap = playlistLocalColorMapRef.current || {};
     const workspaceSerialized = serializeColorMap(workspaceMap);
     const playlistSerialized = serializeColorMap(playlistMap);
-    const workspaceChanged = workspaceSerialized !== workspaceColorBaselineRef.current;
-    const playlistChanged = playlistSerialized !== playlistColorBaselineRef.current;
-    if (!workspaceChanged && !playlistChanged) return;
-
-    const workspaceEntries = workspaceChanged ? Object.entries(workspaceMap) : [];
-    const playlistEntries = playlistChanged ? Object.entries(playlistMap) : [];
-    if (workspaceEntries.length === 0 && playlistEntries.length === 0) {
-      workspaceColorBaselineRef.current = workspaceSerialized;
-      playlistColorBaselineRef.current = playlistSerialized;
-      workspaceColorDirtyRef.current = false;
-      playlistColorDirtyRef.current = false;
-      return;
-    }
+    const workspaceEntries: [string, string][] = workspaceChanged
+      ? Array.from(pendingWorkspaceColorKeysRef.current).map((key): [string, string] => [key, workspaceMap[key] || 'gray'])
+      : [];
+    const playlistEntries: [string, string][] = playlistChanged
+      ? Array.from(pendingPlaylistColorKeysRef.current).map((key): [string, string] => [key, playlistMap[key] || 'gray'])
+      : [];
+    // A dirty flag without an explicit pending key is never enough to justify
+    // a server write. Preserve state and wait for an explicit mutation.
+    if (workspaceEntries.length === 0 && playlistEntries.length === 0) return;
 
     libraryColorsAutoSyncingRef.current = true;
     try {
@@ -3007,6 +2837,63 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }];
   };
 
+  const hasStableLibraryResult = (group: any) => {
+    if (!group) return false;
+    const normalizedStatus = String(group.status || '').trim().toLowerCase();
+    if (['completed', 'success', 'complete'].includes(normalizedStatus)) return true;
+
+    const items = extractSunoData(group);
+    const hasFullyPlayableItems = items.length > 0 && items.every((item: any) => {
+      const audioUrl = String(getAudioUrl(item, group) || '').trim();
+      return Boolean(audioUrl) && getDuration(item, group) !== null;
+    });
+    if (hasFullyPlayableItems) return true;
+
+    const rescueEntries = Object.values(group?.audioRescue || {}) as any[];
+    return rescueEntries.some((entry: any) => {
+      const rescueStatus = String(entry?.status || '').trim().toLowerCase();
+      const rescueUrl = String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim();
+      return Boolean(rescueUrl) && (!rescueStatus || ['completed', 'success', 'complete'].includes(rescueStatus));
+    });
+  };
+
+  const getLibraryGenerationCreatedAtMs = (group: any): number => {
+    const createdAt = group?.createdAt;
+    if (!createdAt) return 0;
+    try {
+      if (typeof createdAt?.toMillis === 'function') return createdAt.toMillis();
+      if (typeof createdAt?.seconds === 'number') return createdAt.seconds * 1000;
+      if (typeof createdAt?._seconds === 'number') return createdAt._seconds * 1000;
+      if (typeof createdAt?.toDate === 'function') return createdAt.toDate().getTime();
+      if (typeof createdAt === 'string' || typeof createdAt === 'number') {
+        const parsed = new Date(createdAt).getTime();
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+    } catch {}
+    return 0;
+  };
+
+  const hasAnyPlayableLibraryOutput = (group: any): boolean => {
+    const items = extractSunoData(group);
+    const hasDirectOutput = items.some((item: any) => Boolean(String(getAudioUrl(item, group) || '').trim()));
+    if (hasDirectOutput) return true;
+    const rescueEntries = Object.values(group?.audioRescue || {}) as any[];
+    return rescueEntries.some((entry: any) => Boolean(String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim()));
+  };
+
+  // Only a genuinely recent pending task may be labelled `생성 중`.
+  // Old/cache-restored pending records are historical reconciliation states,
+  // not active generation. Missing timestamps are treated as non-active too.
+  const isLibraryActiveGeneration = (group: any): boolean => {
+    if (!group?.taskId) return false;
+    const status = String(group?.status || '').trim().toLowerCase();
+    if (!['processing', 'submitted', 'pending', 'generating', 'queued', 'queue', 'running', 'in_progress'].includes(status)) return false;
+    const createdAtMs = getLibraryGenerationCreatedAtMs(group);
+    if (!createdAtMs) return false;
+    const elapsedMs = Date.now() - createdAtMs;
+    return elapsedMs >= 0 && elapsedMs <= 10 * 60 * 1000;
+  };
+
   const isTrackStuck = (group: any) => {
     if (!group || !group.id) return false;
 
@@ -3225,6 +3112,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (!currentUser || !trackId) return { status: null as string | null, raw: '' };
 
     const resolved = resolveSunoStatusFromResponse(data);
+    const currentTrack = tracks.find((track: any) => String(track?.id || '') === String(trackId));
+    if (currentTrack && hasStableLibraryResult(currentTrack) && resolved.status !== 'completed') {
+      return { status: 'completed' as string | null, raw: resolved.raw || '' };
+    }
+
     const updatePayload: any = {
       apiStatusResponse: data || null,
       lastStatusCheckedAt: serverTimestamp(),
@@ -3376,8 +3268,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     !deferredSearchTerm.trim() &&
     filter === 'all' &&
     workspaceColorFilter === 'all' &&
-    hasMoreWorkspaceServerTracks &&
-    filteredTracks.length >= WORKSPACE_PAGE_SIZE
+    hasMoreWorkspaceServerTracks
   );
   const hasMoreWorkspaceTracks = libraryViewMode === 'workspace' && (canShowCachedWorkspaceMore || canRequestMoreWorkspacePage);
 
@@ -3504,9 +3395,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (count >= 30) return false;
 
         const items = extractSunoData(group);
-        const isFullyCompleted = group.status === 'completed' && items.every((item: any) => !!getAudioUrl(item, group) && getDuration(item, group) !== null);
+        if (hasStableLibraryResult(group)) return false;
 
-        if (isFullyCompleted) return false;
+        const normalizedStatus = String(group.status || '').trim().toLowerCase();
+        const isExplicitPending = !normalizedStatus || ['processing', 'submitted', 'pending', 'generating', 'queued', 'queue', 'running', 'in_progress'].includes(normalizedStatus);
+        if (!isExplicitPending) return false;
 
         if (!group.taskId) return false;
 
@@ -3789,8 +3682,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return Boolean(rescueUrl) && (!rescueStatus || ['completed', 'success', 'complete'].includes(rescueStatus));
     });
     const normalizedDisplayStatus = String(group.status || '').trim().toLowerCase();
-    const displayStatus = hasCompletedRescue
-      && ['processing', 'submitted', 'pending', 'generating', 'queued'].includes(normalizedDisplayStatus)
+    const isPendingDisplayStatus = ['processing', 'submitted', 'pending', 'generating', 'queued', 'queue', 'running', 'in_progress'].includes(normalizedDisplayStatus);
+    const hasAnyPlayableOutput = hasAnyPlayableLibraryOutput(group);
+    const displayStatus = isPendingDisplayStatus && !isLibraryActiveGeneration(group) && (hasCompletedRescue || hasAnyPlayableOutput)
       ? 'completed'
       : normalizedDisplayStatus;
     switch (displayStatus) {
@@ -3802,7 +3696,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       case 'processing':
       case 'submitted':
       case 'pending':
-        if (isTrackPastAutoCheckWindow(group)) {
+        if (!isLibraryActiveGeneration(group)) {
           badges.push(
             <span key="stale-processing" className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/12 text-amber-300">
               <RefreshCw className="w-3 h-3" />
@@ -7117,7 +7011,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     </div>
                     <div className="flex shrink-0 items-start md:items-center justify-end gap-1.5 md:gap-3 flex-nowrap max-w-[112px] md:max-w-none">
                       {getStatusBadge(group)}
-                      {group.status !== 'completed' && (
+                      {!isSharedView && group.taskId && !hasStableLibraryResult(group) && (isTrackStuck(group) || ['failed', 'cancelled', 'canceled'].includes(String(group.status || '').trim().toLowerCase())) && (
                         <button
                           onClick={() => checkStatus(group.id, group.taskId)}
                           disabled={statusChecking === group.id || !group.taskId}
@@ -7144,12 +7038,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       const rescueAudioId = String(item?.id || item?.audioId || item?.audio_id || '').trim();
                       const completedRescueUrl = getCompletedSunoRescueUrl(group, rescueAudioId);
                       const hasCompletedRescue = Boolean(completedRescueUrl);
-                      const isCompleted = Boolean(audioUrl && (isCompletedStatus || hasValidDuration || hasCompletedRescue));
+                      const isCompleted = Boolean((audioUrl || hasCompletedRescue) && (isCompletedStatus || hasValidDuration || hasCompletedRescue));
                       const canRecoverPlaybackUrl = !isSharedView && Boolean(group.taskId) && (isCompletedStatus || hasValidDuration || hasCompletedRescue);
                       const canPlayOrRecover = Boolean(audioUrl) || canRecoverPlaybackUrl;
-                      const isCompletedWithoutAudio = isCompletedStatus && !audioUrl;
-                      const isStalePending = !isFailed && isPendingStatus && !audioUrl && isTrackPastAutoCheckWindow(group);
-                      const isPending = !isFailed && isPendingStatus && !audioUrl && !isStalePending;
+                      const isCompletedWithoutAudio = isCompletedStatus && !audioUrl && !hasCompletedRescue;
+                      const isActiveGeneration = isPendingStatus && isLibraryActiveGeneration(group);
+                      const isStalePending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && !isActiveGeneration;
+                      const isPending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && isActiveGeneration;
                       const sunoVersionLabel = getSunoModelVersionLabel(item, group);
                       const itemTitleParts = splitSunoDisplayTitleParts(getTitle(item, group, idx));
                       

@@ -4,7 +4,9 @@ import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { readSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
 
-const EXPLORE_FOLLOW_CACHE_SCHEMA_VERSION = 1;
+const EXPLORE_FOLLOW_CACHE_SCHEMA_VERSION = 2;
+const EXPLORE_FOLLOW_BUNDLE_DIAGNOSTIC_PATH = '/v1/me/following-bundle';
+// SORIDRAW_EXPLORE_PROFILE_FOLLOW_COST_1010_20260904
 const EXPLORE_FOLLOW_CACHE_KEY = 'explore-follow-state';
 const EXPLORE_FOLLOW_CACHE_SOURCE_TYPE = 'explore_follow_state';
 const EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH = '/v1/profiles/:id/follow-state';
@@ -107,7 +109,24 @@ export type ExploreFollowState = {
   followingCount: number;
 };
 
-type ExploreFollowCacheData = Record<string, boolean>;
+type ExploreFollowCacheData = {
+  complete: boolean;
+  states: Record<string, boolean>;
+};
+
+const exploreFollowBundleInflight = new Map<string, Promise<ExploreFollowCacheData>>();
+
+const normalizeExploreFollowCache = (value: unknown): ExploreFollowCacheData => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { complete: false, states: {} };
+  const row = value as any;
+  const rawStates = row?.states && typeof row.states === 'object' && !Array.isArray(row.states) ? row.states : {};
+  const states = Object.entries(rawStates as Record<string, unknown>).reduce<Record<string, boolean>>((acc, [uid, state]) => {
+    const normalizedUid = String(uid || '').trim();
+    if (normalizedUid) acc[normalizedUid] = Boolean(state);
+    return acc;
+  }, {});
+  return { complete: Boolean(row?.complete), states };
+};
 
 const readExploreFollowCache = (viewerUid: string): ExploreFollowCacheData => {
   const envelope = readSoridrawPersistentCache<ExploreFollowCacheData>({
@@ -116,12 +135,11 @@ const readExploreFollowCache = (viewerUid: string): ExploreFollowCacheData => {
     schemaVersion: EXPLORE_FOLLOW_CACHE_SCHEMA_VERSION,
     uid: viewerUid,
   });
-  return envelope?.data && typeof envelope.data === 'object' && !Array.isArray(envelope.data)
-    ? envelope.data
-    : {};
+  return normalizeExploreFollowCache(envelope?.data);
 };
 
 const writeExploreFollowCache = (viewerUid: string, data: ExploreFollowCacheData) => {
+  const normalized = normalizeExploreFollowCache(data);
   writeSoridrawPersistentCache<ExploreFollowCacheData>({
     cacheKey: EXPLORE_FOLLOW_CACHE_KEY,
     sourceType: EXPLORE_FOLLOW_CACHE_SOURCE_TYPE,
@@ -131,25 +149,49 @@ const writeExploreFollowCache = (viewerUid: string, data: ExploreFollowCacheData
     syncCursor: null,
     serverRevision: null,
     deletedIds: [],
-    // Global cost rule: social state is mutation-driven. The same user's own
-    // follow/unfollow action updates this cache, so routine TTL polling only
-    // creates repeated Worker/D1 reads without improving normal-device UX.
     expiresAt: null,
     dirty: false,
     pendingMutationId: null,
-    data,
+    data: normalized,
   });
 };
 
 const readCachedExploreFollowState = (viewerUid: string, targetUid: string): boolean | null => {
   const data = readExploreFollowCache(viewerUid);
-  return Object.prototype.hasOwnProperty.call(data, targetUid) ? Boolean(data[targetUid]) : null;
+  if (Object.prototype.hasOwnProperty.call(data.states, targetUid)) return Boolean(data.states[targetUid]);
+  return data.complete ? false : null;
 };
 
 const rememberExploreFollowState = (viewerUid: string, targetUid: string, isFollowing: boolean) => {
   const data = readExploreFollowCache(viewerUid);
-  data[targetUid] = Boolean(isFollowing);
+  data.states[targetUid] = Boolean(isFollowing);
   writeExploreFollowCache(viewerUid, data);
+};
+
+const loadExploreFollowingBundle = async (user: User): Promise<ExploreFollowCacheData> => {
+  const cached = readExploreFollowCache(user.uid);
+  if (cached.complete) return cached;
+
+  const existing = exploreFollowBundleInflight.get(user.uid);
+  if (existing) return existing;
+
+  const task = (async () => {
+    const payload = await requestAuthed(user, EXPLORE_FOLLOW_BUNDLE_DIAGNOSTIC_PATH);
+    const rawUids = Array.isArray(payload?.data?.followingUids) ? payload.data.followingUids : [];
+    const states: Record<string, boolean> = rawUids.reduce((acc: Record<string, boolean>, value: unknown) => {
+      const uid = String(value || '').trim();
+      if (uid) acc[uid] = true;
+      return acc;
+    }, {} as Record<string, boolean>);
+    const next: ExploreFollowCacheData = { complete: true, states };
+    writeExploreFollowCache(user.uid, next);
+    return next;
+  })().finally(() => {
+    if (exploreFollowBundleInflight.get(user.uid) === task) exploreFollowBundleInflight.delete(user.uid);
+  });
+
+  exploreFollowBundleInflight.set(user.uid, task);
+  return task;
 };
 
 const toCount = (value: unknown) => {
@@ -192,11 +234,22 @@ export const getExplorePublicProfileTracks = async (profileRef: string): Promise
 export const getExploreFollowState = async (user: User, uid: string): Promise<ExploreFollowState> => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) throw new Error('공개 프로필 ID를 확인하지 못했습니다.');
+
   const cached = readCachedExploreFollowState(user.uid, normalizedUid);
   if (cached !== null) {
-    recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL HIT · 변경기반 팔로우 캐시');
+    recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL HIT · 전체 팔로우 묶음');
     return { isFollowing: cached, followerCount: 0, followingCount: 0 };
   }
+
+  try {
+    const bundle = await loadExploreFollowingBundle(user);
+    const isFollowing = Boolean(bundle.states[normalizedUid]);
+    recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL RESOLVE · 팔로우 묶음 1회 로드');
+    return { isFollowing, followerCount: 0, followingCount: 0 };
+  } catch (bundleError) {
+    console.warn('[Explore follow] following bundle unavailable; using per-target recovery.', bundleError);
+  }
+
   const payload = await requestAuthed(user, `/v1/profiles/${encodeURIComponent(normalizedUid)}/follow-state`);
   const row = payload?.data || {};
   const result = {

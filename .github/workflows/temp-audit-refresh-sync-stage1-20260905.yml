@@ -1,0 +1,40 @@
+name: SORIDRAW Audit Refresh Sync Stage1 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-audit-refresh-sync-stage1-20260905.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Inspect sync coupling and auth bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== SYNC CONSTANTS / EVENTS ==='
+          grep -RIn --exclude-dir=node_modules -E "MUSIC_NOTE_SYNC_VERSION_EVENT|RECENT_SONGS_SYNC_VERSION_EVENT|favoriteSyncSignal|syncVersions\.(musicNote|recentSongs|library|sectionCustom)" src | head -n 400 || true
+          echo '=== USER PROFILE CACHE ==='
+          sed -n '1,180p' src/lib/userProfileCache.ts
+          echo '=== AUTH ENSURE CONTEXT ==='
+          python3 <<'PY'
+          from pathlib import Path
+          s=Path('src/App.tsx').read_text(encoding='utf-8')
+          for needle in ['ensureAuthUserDocument', 'const attachUserRoleListener', 'MUSIC_NOTE_SYNC_VERSION_EVENT', 'RECENT_SONGS_SYNC_VERSION_EVENT']:
+              print('\n===== '+needle+' =====')
+              start=0
+              for n in range(6):
+                  i=s.find(needle,start)
+                  if i<0: break
+                  print(s[max(0,i-1800):min(len(s),i+3200)])
+                  start=i+len(needle)
+          PY
+          echo '=== MUSIC NOTE PAGE LISTENERS ==='
+          grep -RIn --exclude-dir=node_modules -E "addEventListener\(.*MUSIC_NOTE|MUSIC_NOTE_SYNC_VERSION|musicNoteRemoteVersion|musicNoteLocalVersion" src/pages src/components src/services | head -n 300 || true
+          echo '=== RECENT SONG PAGE LISTENERS ==='
+          grep -RIn --exclude-dir=node_modules -E "RECENT_SONGS_SYNC_VERSION_EVENT|syncVersions\.recentSongs" src/pages src/components src/services src/App.tsx | head -n 300 || true

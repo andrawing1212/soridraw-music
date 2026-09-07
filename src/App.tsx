@@ -33,6 +33,9 @@ import CacheDiagnosticBadge from './components/CacheDiagnosticBadge';
 import CacheDiagnosticsOverlay from './components/CacheDiagnosticsOverlay';
 import { markCacheDiagnostic } from './lib/cacheDiagnostics';
 import { scheduleListBundleWrite, subscribeListBundle, readListBundleFromServerOnce } from './lib/listBundleCache';
+import { schedulePreviewAdaptiveListIndexPublishIfDirty } from './lib/adaptiveListIndexV2';
+const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
+const SORIDRAW_COMMON_USER_DATA_ENGINE_1033 = true;
 
 const SORIDRAW_897_CACHE_DIAGNOSTICS_READ_ACCURACY = true;
 const SORIDRAW_899_CACHE_DIAGNOSTICS_PERSISTENCE_MUSICNOTE = true;
@@ -291,6 +294,27 @@ const RECENT_SONGS_LOCAL_SYNC_VERSION_STORAGE_BASE = 'soridraw_recent_songs_loca
 const RECENT_SONGS_SYNC_VERSION_EVENT = 'soridraw:recent-songs-sync-version-v2';
 
 const getRecentSongsVersionStorageKey = (uid: string) => `${RECENT_SONGS_LOCAL_SYNC_VERSION_STORAGE_BASE}_${uid}`;
+const RECENT_SONGS_MUTATION_EPOCH_STORAGE_BASE = 'soridraw_recent_songs_mutation_epoch_v1';
+const recentSongsWriteQueues = new Map<string, Promise<any>>();
+
+const getRecentSongsMutationEpochStorageKey = (uid: string) => `${RECENT_SONGS_MUTATION_EPOCH_STORAGE_BASE}_${uid}`;
+const readRecentSongsMutationEpoch = (uid: string): number => {
+  if (!uid || typeof localStorage === 'undefined') return 0;
+  try {
+    const value = Number(localStorage.getItem(getRecentSongsMutationEpochStorageKey(uid)) || 0);
+    return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+  } catch {
+    return 0;
+  }
+};
+const bumpRecentSongsMutationEpoch = (uid: string): number => {
+  if (!uid) return 0;
+  const next = Math.max(Date.now(), readRecentSongsMutationEpoch(uid) + 1);
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.setItem(getRecentSongsMutationEpochStorageKey(uid), String(next)); } catch {}
+  }
+  return next;
+};
 const readRecentSongsLocalVersion = (uid: string): number => {
   if (!uid || typeof localStorage === 'undefined') return 0;
   try {
@@ -308,37 +332,63 @@ const writeRecentSongsLocalVersion = (uid: string, version: number) => {
   } catch {}
 };
 
-const persistRecentSongsDocument = async (ref: any, songs: any[]) => {
+const persistRecentSongsDocument = async (
+  ref: any,
+  songs: any[],
+  expectedMutationEpoch?: number,
+): Promise<number | null> => {
   const uid = String(ref?.id || '').trim();
-  const previousVersion = uid ? readRecentSongsLocalVersion(uid) : 0;
-  const syncVersion = Math.max(Date.now(), previousVersion + 1);
 
-  await setDoc(ref, sanitizeForFirestore({ songs, syncVersion }), { merge: true });
-  markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
-
-  if (!uid) return syncVersion;
-  // Advance this device before publishing the remote signal so the root users
-  // listener never causes a same-device reread.
-  writeRecentSongsLocalVersion(uid, syncVersion);
-
-  try {
-    await updateDoc(doc(db, 'users', uid), { 'syncVersions.recentSongs': syncVersion });
-    const cachedProfile = readUserProfileCache(uid);
-    if (cachedProfile) {
-      writeUserProfileCache(uid, {
-        ...(cachedProfile as any),
-        syncVersions: {
-          ...((cachedProfile as any)?.syncVersions || {}),
-          recentSongs: syncVersion,
-        },
-      });
+  const writeLatest = async (): Promise<number | null> => {
+    if (
+      uid
+      && Number.isFinite(expectedMutationEpoch)
+      && Number(expectedMutationEpoch) !== readRecentSongsMutationEpoch(uid)
+    ) {
+      return null;
     }
-  } catch (error) {
-    // Recent-song data is already safely saved. A failed invalidation signal must
-    // never roll back or duplicate the content write.
-    console.warn('Recent songs version signal publish failed.', error);
+
+    const previousVersion = uid ? readRecentSongsLocalVersion(uid) : 0;
+    const syncVersion = Math.max(Date.now(), previousVersion + 1);
+
+    await setDoc(ref, sanitizeForFirestore({ songs, syncVersion }), { merge: true });
+    markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
+
+    if (!uid) return syncVersion;
+    writeRecentSongsLocalVersion(uid, syncVersion);
+
+    try {
+      await updateDoc(doc(db, 'users', uid), { 'syncVersions.recentSongs': syncVersion });
+      const cachedProfile = readUserProfileCache(uid);
+      if (cachedProfile) {
+        writeUserProfileCache(uid, {
+          ...(cachedProfile as any),
+          syncVersions: {
+            ...((cachedProfile as any)?.syncVersions || {}),
+            recentSongs: syncVersion,
+          },
+        });
+      }
+    } catch (error) {
+      console.warn('Recent songs version signal publish failed.', error);
+    }
+    return syncVersion;
+  };
+
+  if (!uid) return writeLatest();
+
+  const previousWrite = recentSongsWriteQueues.get(uid) || Promise.resolve();
+  const queuedWrite = previousWrite
+    .catch(() => undefined)
+    .then(writeLatest);
+  recentSongsWriteQueues.set(uid, queuedWrite);
+  try {
+    return await queuedWrite;
+  } finally {
+    if (recentSongsWriteQueues.get(uid) === queuedWrite) {
+      recentSongsWriteQueues.delete(uid);
+    }
   }
-  return syncVersion;
 };
 const SORIDRAW_904_MUSIC_NOTE_LAZY_BUNDLE_ENTRY_RUNTIME = true;
 const SORIDRAW_903_LIST_BUNDLE_ONE_SHOT_RUNTIME = true;
@@ -352,13 +402,18 @@ const MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE = 'soridraw_music_note_paginatio
 const MUSIC_NOTE_DEVICE_ID_STORAGE_KEY = 'soridraw_music_note_device_id_v1';
 const MUSIC_NOTE_SYNC_VERSION_EVENT = 'soridraw:music-note-sync-version';
 const musicNoteFreshBootstrapUids = new Set<string>();
+const musicNoteFullCatalogReadyUids = new Set<string>(); // 1036: schema-1001 catalog is authoritative
 
-const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '3';
+const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '4'; // SORIDRAW_MUSIC_NOTE_NO_FULLSCAN_BOOTSTRAP_1022
 const MUSIC_NOTE_CACHE_SCHEMA_STORAGE_BASE = 'soridraw_music_note_cache_schema_v3';
 let musicNoteActiveUiUid: string | null = null;
 
 const getMusicNoteCacheSchemaKey = (uid: string) => `${MUSIC_NOTE_CACHE_SCHEMA_STORAGE_BASE}_${uid}`;
 const getMusicNotePayloadCacheKey = (uid: string) => `soridraw_favorites_cache_${uid}`;
+const SORIDRAW_MUSIC_NOTE_CACHE_INTEGRITY_1028 = true;
+const SORIDRAW_MUSIC_NOTE_NORMALIZATION_STAGE1_1030 = true;
+const SORIDRAW_MUSIC_NOTE_STAGE1_PAGE_SIZED_CACHE_REUSE_1030B = true;
+const SORIDRAW_MUSIC_NOTE_CLEAN_BOOTSTRAP_LEGACY_AXIS_1031 = true;
 
 const hasMusicNotePayloadCache = (uid: string): boolean => {
   if (!uid) return false;
@@ -381,30 +436,17 @@ const isMusicNoteCacheSchemaCurrent = (uid: string): boolean => {
 };
 
 const prepareMusicNoteCacheForUser = (uid: string): boolean => {
-  if (!uid) return true;
-  const schemaCurrent = isMusicNoteCacheSchemaCurrent(uid);
-  if (!schemaCurrent) {
-    favoritesInMemoryCache.delete(uid);
-    const pendingTimer = favoritesCacheWriteTimers.get(uid);
-    if (pendingTimer) {
-      try { clearTimeout(pendingTimer); } catch {}
-      favoritesCacheWriteTimers.delete(uid);
-    }
-    if (typeof localStorage !== 'undefined') {
-      try {
-        localStorage.removeItem(getMusicNotePayloadCacheKey(uid));
-        localStorage.removeItem(`soridraw_favorites_cache_max_count_${uid}`);
-        localStorage.removeItem(`${MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE}_${uid}`);
-        localStorage.removeItem(`${MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE}_${uid}`);
-        localStorage.removeItem(`${MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE}_${uid}`);
-        localStorage.removeItem(`soridraw_favorites_full_cache_recovery_v3_${uid}`);
-      } catch (error) {
-        console.warn('Music Note legacy cache invalidation failed:', error);
-      }
-    }
+  if (!uid) return false;
+  // Cache schema changes must never invalidate a user's complete Music Note
+  // payload and trigger an unbounded collection scan. Existing UID-scoped
+  // payloads remain usable; truly missing payloads fall through to the
+  // existing bounded/paged bootstrap path.
+  if (!isMusicNoteCacheSchemaCurrent(uid) && hasMusicNotePayloadCache(uid)) {
+    try {
+      localStorage.setItem(getMusicNoteCacheSchemaKey(uid), MUSIC_NOTE_CACHE_SCHEMA_VERSION);
+    } catch {}
   }
-  // Stored [] is a valid zero-item payload. Missing payload always rebuilds.
-  return !schemaCurrent || !hasMusicNotePayloadCache(uid);
+  return false;
 };
 
 const markMusicNoteCacheSchemaCurrent = (uid: string) => {
@@ -944,7 +986,7 @@ import {
   deleteField,
   query as firestoreQuery
 } from './lib/firestoreMeasured';
-import { auth, googleProvider, db, getFirebaseAppCheckToken } from './firebase';
+import { auth, googleProvider, db, functions, httpsCallable, getFirebaseAppCheckToken } from './firebase';
 import { startUserPresence } from './services/presenceService';
 import { writeGeminiAutoModelFallback } from './services/geminiModelPreferences';
 import { buildEmailVerificationActionSettings } from './constants/emailVerification';
@@ -2856,14 +2898,8 @@ function HistoryRouteWrapper({
   const location = useLocation();
 
   useEffect(() => {
-    const isMusicNoteRoute = location.pathname === '/history';
-    if (!isMusicNoteRoute) {
-      if (typeof window !== 'undefined') {
-        (window as any).__soridrawMusicNotePageActive = false;
-      }
-      return;
-    }
-
+    // 1050: HistoryRouteWrapper is mounted only while Music Note is visible.
+    // Studio embeds it at /studio, so pathname === /history cannot gate Catalog entry.
     if (typeof window !== 'undefined') {
       (window as any).__soridrawMusicNotePageActive = true;
       window.dispatchEvent(new Event('soridraw:music-note-bundle-page-entry'));
@@ -5571,6 +5607,9 @@ function App() {
   };
 
   const mergeFavoriteFirstPageWithCache = (firstPageFavs: any[], previous: any[], allServerFavoritesLoaded = false) => {
+    // A schema-1001 catalog is the complete authority. Never preserve arbitrary
+    // stale rows from a partial/legacy local cache once that catalog arrives.
+    if (allServerFavoritesLoaded) return mergeFavoritePages([], firstPageFavs);
     const firstPageIds = new Set(firstPageFavs.map((item: any) => item?.id).filter(Boolean));
     const firstPageKeys = new Set(firstPageFavs.map((item: any) => item?.favoriteKey || buildFavoriteIdentityKey(item)).filter(Boolean));
     const removalSignals = firstPageFavs.filter((item: any) => isFavoriteSoftRemoved(item));
@@ -5598,6 +5637,12 @@ function App() {
 
     // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date
     favoritesInMemoryCache.set(uid, safeList);
+    const fullCatalogReady = musicNoteFullCatalogReadyUids.has(uid);
+    schedulePreviewAdaptiveListIndexPublishIfDirty('musicNote', uid, safeList, {
+      hasMore: fullCatalogReady ? false : undefined,
+      complete: fullCatalogReady,
+      deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
+    });
     if (musicNoteBundleActiveUids.has(uid)) {
       scheduleListBundleWrite('musicNote', uid, safeList, {
         limit: 20,
@@ -6181,10 +6226,6 @@ function App() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const tracks = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
       setRecentSunoTracksForPolling(tracks);
-      scheduleListBundleWrite('library', user.uid, tracks, {
-        limit: 10,
-        hasMore: tracks.length > 10,
-      });
       const pendingTrackIds = new Set(getPendingSunoCreditTrackIds());
 
       const completedPendingTrack = tracks.find((track) =>
@@ -7315,6 +7356,32 @@ function App() {
       }
 
       try {
+        let sectionTagsBundleHydrated = false;
+        try {
+          const bundleSnapshot = await getDoc(doc(db, 'app_settings', 'section_tags_bundle'));
+          if (bundleSnapshot.exists()) {
+            const bundle = bundleSnapshot.data() as any;
+            const items = Array.isArray(bundle?.items) ? bundle.items : [];
+            const isValidBundle = Number(bundle?.schemaVersion) === 1
+              && Number(bundle?.itemCount) === items.length
+              && items.every((item: any) => Boolean(item && typeof item === 'object' && !Array.isArray(item)));
+
+            if (isValidBundle) {
+              if (!isMounted) return;
+              const bundledTags = items as SectionTag[];
+              setSectionTags(bundledTags);
+              writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.sectionTags, bundledTags);
+              sectionTagsBundleHydrated = true;
+            } else {
+              console.warn('[Section tags] aggregate bundle is invalid; using legacy source fallback.');
+            }
+          }
+        } catch (bundleError) {
+          console.warn('[Section tags] aggregate bundle unavailable; using legacy source fallback.', bundleError);
+        }
+
+        if (sectionTagsBundleHydrated) return;
+
         const snapshot = await getDocs(query(
           collection(db, 'section_tags'),
           orderBy('label', 'asc'),
@@ -9078,7 +9145,23 @@ const toggleCycleVariantSelection = (
         // current. Old/partial caches are discarded for this UID only.
         const musicNoteCacheNeedsFullBootstrap = prepareMusicNoteCacheForUser(currentUser.uid);
         const cachedFavs = getFavoritesCacheInMemoryOrLocalStorage(currentUser.uid);
-        if (!musicNoteCacheNeedsFullBootstrap && hasMusicNotePayloadCache(currentUser.uid)) {
+        const cachedFavoriteCount = Array.isArray(cachedFavs)
+          ? cachedFavs.filter((favorite) => !isFavoriteSoftRemoved(favorite)).length
+          : 0;
+        const cachedMusicNoteProfile = readUserProfileCache(currentUser.uid) as any;
+        const knownFavoriteCount = Math.max(
+          0,
+          Math.floor(Number(cachedMusicNoteProfile?.favoriteCount || 0) || 0),
+        );
+        const hasAnyMusicNotePayload = hasMusicNotePayloadCache(currentUser.uid);
+        // 1030 Stage 1: cache is an instant-paint layer, not proof of completeness.
+        // A tiny payload must get one bounded first-page repair instead of being
+        // trusted forever and hiding the user's saved songs. Once a full 20-item
+        // page is cached, keep it: knownFavoriteCount only keeps More available for
+        // older history and must not force the same latest 20 reads on every reload.
+        const musicNoteCacheNeedsBoundedVerification = hasAnyMusicNotePayload
+          && cachedFavoriteCount < FAVORITES_PAGE_SIZE;
+        if (!musicNoteCacheNeedsFullBootstrap && hasAnyMusicNotePayload) {
           musicNoteFreshBootstrapUids.delete(currentUser.uid);
         } else {
           musicNoteFreshBootstrapUids.add(currentUser.uid);
@@ -9100,151 +9183,21 @@ const toggleCycleVariantSelection = (
         setHasMoreFavorites(false);
         setIsLoadingMoreFavorites(false);
 
-        const attachLegacyFavoritesFallback = async () => {
-          // 921: Never attach an unbounded favorites listener. If local cache exists,
-          // keep it. Otherwise perform at most one bounded 20-document recovery read.
-          favoritePaginationCursorRef.current = null;
-          favoritePaginationExhaustedRef.current = true;
-          favoritePaginationLoadingRef.current = false;
-          favoritePaginationFallbackModeRef.current = true;
-          setHasMoreFavorites(false);
-          setIsLoadingMoreFavorites(false);
-
-          if (Array.isArray(cachedFavs) && cachedFavs.length > 0) {
-            setIsFavoritesLoading(false);
-            markCacheDiagnostic('musicNote', 'CACHE', 0);
-            return;
-          }
-
-          try {
-            const fallbackSnapshot = await getDocs(query(
-              collection(db, 'favorites'),
-              where('uid', '==', currentUser.uid),
-              limit(FAVORITES_PAGE_SIZE),
-            ));
-            const fallbackFavs = sortFavoriteList(
-              fallbackSnapshot.docs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite)),
-            );
-            favoritePaginationCursorRef.current = fallbackSnapshot.docs[fallbackSnapshot.docs.length - 1] || null;
-            favoritePaginationExhaustedRef.current = fallbackSnapshot.docs.length < FAVORITES_PAGE_SIZE;
-            favoritePaginationFallbackModeRef.current = true;
-            setHasMoreFavorites(false);
-            setFavorites(fallbackFavs);
-            writeFavoritesCache(currentUser.uid, fallbackFavs);
-            markCacheDiagnostic('musicNote', 'SYNC', Math.max(1, fallbackSnapshot.docs.length));
-          } catch (fallbackError) {
-            console.warn('Bounded Music Note fallback failed. Keeping local cache only.', fallbackError);
-          } finally {
-            setIsFavoritesLoading(false);
-          }
-        };
-
-        // Cache migration/new-device bootstrap: one complete read is the
-        // authoritative source. No orderBy/limit means legacy rows without
-        // createdAt are included too. No server data is written by this path.
-        const runFavoritesFullCacheRecoveryOnce = async () => {
-          if (!musicNoteCacheNeedsFullBootstrap) return;
-          try {
-            const fullSnapshot = await getDocs(query(
-              collection(db, 'favorites'),
-              where('uid', '==', currentUser.uid),
-            ));
-            if (auth.currentUser?.uid !== currentUser.uid) return;
-            const fullFavorites = sortFavoriteList(
-              fullSnapshot.docs
-                .map(mapFavoriteFirestoreDoc)
-                .filter((favorite) => !isFavoriteSoftRemoved(favorite)),
-            );
-            favoritePaginationCursorRef.current = null;
-            clearMusicNotePaginationCursor(currentUser.uid);
-            favoritePaginationExhaustedRef.current = true;
-            favoritePaginationLoadingRef.current = false;
-            favoritePaginationFallbackModeRef.current = true;
-            setHasMoreFavorites(false);
-            setIsLoadingMoreFavorites(false);
-            setFavorites(fullFavorites);
-            writeFavoritesCache(currentUser.uid, fullFavorites);
-            favoritesStore.setFavorites(fullFavorites);
-            markMusicNoteCacheSchemaCurrent(currentUser.uid);
-            musicNoteFreshBootstrapUids.delete(currentUser.uid);
-            markCacheDiagnostic('musicNote', 'SYNC', fullSnapshot.docs.length);
-          } catch (bootstrapError) {
-            console.warn('Cacheless Music Note full bootstrap failed.', bootstrapError);
-          } finally {
-            setIsFavoritesLoading(false);
-          }
-        };
+        // 1036: legacy 20-row Music Note recovery was removed. Cold/stale
+        // devices use the private full catalog; navigation itself never scans or pages favorites.
 
         const hasCachedMusicNote = !musicNoteCacheNeedsFullBootstrap
-          && hasMusicNotePayloadCache(currentUser.uid);
-        if (musicNoteCacheNeedsFullBootstrap) {
-          void runFavoritesFullCacheRecoveryOnce();
-        }
+          && hasAnyMusicNotePayload;
         if (hasCachedMusicNote) {
-          const persistedCursor = readMusicNotePaginationCursor(currentUser.uid);
-          favoritePaginationCursorRef.current = persistedCursor;
-          favoritePaginationExhaustedRef.current = !persistedCursor;
-          setHasMoreFavorites(Boolean(persistedCursor));
+          favoritePaginationCursorRef.current = null;
+          favoritePaginationExhaustedRef.current = true;
+          favoritePaginationFallbackModeRef.current = false;
+          clearMusicNotePaginationCursor(currentUser.uid);
+          setHasMoreFavorites(false);
           setIsFavoritesLoading(false);
         }
 
-        const attachFavoritesSourceBootstrap902 = () => {
-          if (unsubFavs || hasCachedMusicNote || musicNoteCacheNeedsFullBootstrap) return;
-          const q = query(
-            collection(db, 'favorites'),
-            where('uid', '==', currentUser.uid),
-            orderBy('createdAt', 'desc'),
-            limit(FAVORITES_PAGE_SIZE)
-          );
-
-          unsubFavs = onSnapshot(q, (snapshot) => {
-            markCacheDiagnostic('musicNote', snapshot.metadata.fromCache ? 'CACHE' : 'SYNC', snapshot.metadata.fromCache ? 0 : Math.max(1, snapshot.docChanges().length));
-            const firstPageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-            const firstPageFavs = firstPageDocs.map(mapFavoriteFirestoreDoc);
-            favoritePaginationCursorRef.current = firstPageDocs[firstPageDocs.length - 1] || null;
-            if (favoritePaginationCursorRef.current) {
-              writeMusicNotePaginationCursor(currentUser.uid, favoritePaginationCursorRef.current);
-            } else {
-              clearMusicNotePaginationCursor(currentUser.uid);
-            }
-            favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
-            favoritePaginationFallbackModeRef.current = false;
-            setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
-            setFavorites((prev) => {
-              const merged = mergeFavoriteFirstPageWithCache(firstPageFavs, prev || [], favoritePaginationExhaustedRef.current);
-              writeFavoritesCache(currentUser.uid, merged);
-              return merged;
-            });
-            setIsFavoritesLoading(false);
-            musicNoteFreshBootstrapUids.delete(currentUser.uid);
-            const remoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);
-            if (remoteVersion > 0) {
-              writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, currentUser.uid, remoteVersion);
-            }
-            if (unsubFavs) {
-              const detach = unsubFavs;
-              unsubFavs = null;
-              detach();
-            }
-          }, (error) => {
-            console.warn('Favorites paged query failed. Falling back to the legacy full-list listener until the Firestore index is available.', error);
-            // This query can fail before the composite index is deployed. Do not throw here;
-            // falling back keeps Music Note usable while Firebase builds the index.
-            if (favoritePaginationFallbackModeRef.current) {
-              setIsFavoritesLoading(false);
-              return;
-            }
-            if (unsubFavs) {
-              try {
-                unsubFavs();
-              } catch (unsubscribeError) {
-                console.warn('Failed to detach favorites paged listener before fallback:', unsubscribeError);
-              }
-              unsubFavs = null;
-            }
-            attachLegacyFavoritesFallback();
-          });
-        };
+        // 1036: paged favorites onSnapshot removed; full catalog is the bootstrap source.
 
         let musicNoteBundleMissingHandled = false;
         // 909: Home/login startup must stay local-only. Do not mark the bundle
@@ -9257,33 +9210,38 @@ const toggleCycleVariantSelection = (
           MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE,
           currentUser.uid,
         );
-        const shouldVerifyMusicNoteBundle = hasCachedMusicNote && (
-          musicNoteLocalVersionAtBootstrap <= 0
-          || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap
-        );
+        // 1036: always prepare the catalog reader. subscribeListBundle itself stays
+        // route-gated and readCatalogSnapshotCacheFirst returns IndexedDB without network
+        // when its revision is current, so page re-entry remains cache-first.
+        const shouldVerifyMusicNoteBundle = true;
 
         if (shouldVerifyMusicNoteBundle) {
           unsubMusicNoteBundle = subscribeListBundle('musicNote', currentUser.uid, {
             onData: (bundle, meta) => {
-              // 1009 — this bundle subscription is a one-shot bootstrap read, not a live mirror.
-              // Keep it inactive after hydration so a plain save/unsave does not rewrite the
-              // server list-cache document. Cross-device changes still use the 901 version
-              // signal + updatedAtMs delta query, so data safety/sync stays intact.
+              const isFullMusicNoteCatalog = bundle.schemaVersion === 1001;
               musicNoteBundleActiveUids.delete(currentUser.uid);
               musicNoteFreshBootstrapUids.delete(currentUser.uid);
+              if (isFullMusicNoteCatalog) musicNoteFullCatalogReadyUids.add(currentUser.uid);
+              else musicNoteFullCatalogReadyUids.delete(currentUser.uid);
+
               if (bundle.deletedIds.length > 0) {
                 rememberFavoriteDeletedTombstones(currentUser.uid, bundle.deletedIds);
               }
               const localDeletedIds = getFavoriteDeletedTombstoneIds(currentUser.uid);
-              const firstPageFavs = (bundle.items || []).filter((favorite: any) => {
+              const catalogFavorites = (bundle.items || []).filter((favorite: any) => {
                 if (isFavoriteSoftRemoved(favorite)) return false;
                 const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
                 return !favoriteId || !localDeletedIds.has(favoriteId);
               });
-              favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
-              favoritePaginationExhaustedRef.current = !bundle.hasMore;
+
+              // Full catalog follows the same contract as Library: no server cursor,
+              // no 20-row More, and all subsequent More clicks are local rendering only.
+              favoritePaginationCursorRef.current = null;
+              favoritePaginationExhaustedRef.current = true;
               favoritePaginationFallbackModeRef.current = false;
-              setHasMoreFavorites(bundle.hasMore);
+              clearMusicNotePaginationCursor(currentUser.uid);
+              setHasMoreFavorites(false);
+
               setFavorites((prev) => {
                 const previous = Array.isArray(prev) ? prev : [];
                 const bundleVersion = Number(bundle.updatedAtMs || 0);
@@ -9297,11 +9255,13 @@ const toggleCycleVariantSelection = (
                     || 0;
                   return bundleVersion > 0 && favoriteVersion > bundleVersion;
                 });
-                const firstPageWithLocalNewer = mergeFavoritePages(localNewer, firstPageFavs);
-                const merged = mergeFavoriteFirstPageWithCache(firstPageWithLocalNewer, previous, !bundle.hasMore);
-                writeFavoritesCache(currentUser.uid, merged);
-                return merged;
+                const authoritative = isFullMusicNoteCatalog
+                  ? mergeFavoritePages(catalogFavorites, localNewer)
+                  : mergeFavoriteFirstPageWithCache(catalogFavorites, previous, false);
+                writeFavoritesCache(currentUser.uid, authoritative);
+                return authoritative;
               });
+
               if (bundle.updatedAtMs > 0) {
                 const currentLocalVersion = readMusicNoteSyncVersion(
                   MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,
@@ -9317,33 +9277,22 @@ const toggleCycleVariantSelection = (
               setIsFavoritesLoading(false);
             },
             onMissing: (meta) => {
-              musicNoteBundleActiveUids.delete(currentUser.uid);
               if (meta.fromCache) return;
-              if (musicNoteBundleMissingHandled) return;
               musicNoteBundleMissingHandled = true;
-              if (hasCachedMusicNote) {
-                scheduleListBundleWrite('musicNote', currentUser.uid, cachedFavs, {
-                  limit: 20,
-                  hasMore: cachedFavs.length >= 20,
-                  deletedIds: Array.from(getFavoriteDeletedTombstoneIds(currentUser.uid)),
-                });
-                setIsFavoritesLoading(false);
-                return;
-              }
-              attachFavoritesSourceBootstrap902();
+              musicNoteFullCatalogReadyUids.delete(currentUser.uid);
+              setHasMoreFavorites(false);
+              setIsFavoritesLoading(false);
+              markCacheDiagnostic('musicNote', hasCachedMusicNote ? 'CACHE' : 'ERROR', 0);
+              console.warn('Music Note catalog unavailable; refusing legacy 20-row server pagination.');
             },
             onError: (error) => {
-              musicNoteBundleActiveUids.delete(currentUser.uid);
-              console.warn('Music Note bundle unavailable; using legacy safe path.', error);
-              if (!hasCachedMusicNote) attachFavoritesSourceBootstrap902();
+              musicNoteFullCatalogReadyUids.delete(currentUser.uid);
+              setHasMoreFavorites(false);
+              setIsFavoritesLoading(false);
+              markCacheDiagnostic('musicNote', hasCachedMusicNote ? 'CACHE' : 'ERROR', 0);
+              console.warn('Music Note catalog read failed; keeping local cache and refusing legacy pagination.', error);
             },
           });
-        } else {
-          // Cache is already current. Keep 901 delta sync available so a later
-          // cross-device version event fetches only changed favorites.
-          musicNoteBundleActiveUids.delete(currentUser.uid);
-          markCacheDiagnostic('musicNote', 'CACHE', 0);
-          setIsFavoritesLoading(false);
         }
 
 
@@ -9376,48 +9325,10 @@ const toggleCycleVariantSelection = (
   }, []);
 
   const loadMoreFavorites = useCallback(async () => {
-    const currentUser = user || auth.currentUser;
-    if (!currentUser?.uid) return;
-    if (favoritePaginationFallbackModeRef.current) return;
-    if (favoritePaginationLoadingRef.current || favoritePaginationExhaustedRef.current) return;
-    const cursor = favoritePaginationCursorRef.current;
-    if (!cursor) return;
-
-    favoritePaginationLoadingRef.current = true;
-    setIsLoadingMoreFavorites(true);
-    try {
-      const q = query(
-        collection(db, 'favorites'),
-        where('uid', '==', currentUser.uid),
-        orderBy('createdAt', 'desc'),
-        startAfter(cursor),
-        limit(FAVORITES_PAGE_SIZE)
-      );
-      const snapshot = await getDocs(q);
-      const nextDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-      const nextFavs = nextDocs.map(mapFavoriteFirestoreDoc);
-      if (nextDocs.length > 0) {
-        favoritePaginationCursorRef.current = nextDocs[nextDocs.length - 1];
-        writeMusicNotePaginationCursor(currentUser.uid, favoritePaginationCursorRef.current);
-      } else {
-        clearMusicNotePaginationCursor(currentUser.uid);
-      }
-      favoritePaginationExhaustedRef.current = snapshot.docs.length < FAVORITES_PAGE_SIZE;
-      setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
-      setFavorites((prev) => {
-        const merged = mergeFavoritePages(prev || [], nextFavs);
-        writeFavoritesCache(currentUser.uid, merged);
-        return merged;
-      });
-    } catch (error) {
-      console.warn('Favorites additional page load failed. Keeping the current list instead of crashing the page.', error);
-      favoritePaginationExhaustedRef.current = true;
-      setHasMoreFavorites(false);
-    } finally {
-      favoritePaginationLoadingRef.current = false;
-      setIsLoadingMoreFavorites(false);
-    }
-  }, [user]);
+    // 1036: 20 is a render batch only. A Music Note More click must never read Firestore.
+    setHasMoreFavorites(false);
+    markCacheDiagnostic('musicNote', 'CACHE', 0);
+  }, []);
 
   const syncMusicNoteIncrementalFromRemoteVersion = useCallback(async (
     remoteVersion: number,
@@ -9912,8 +9823,8 @@ const toggleCycleVariantSelection = (
           deletedAt: null,
           trashedAt: null,
           isPublic: false,
-          createdAtMs: unsavedAt,
-          createdAt: serverTimestamp(),
+          // 1033: preserve the immutable creation axis on save release.
+          // Recent Songs <-> Music Note linking stays unchanged; only mutation time advances.
           updatedAt: serverTimestamp(),
         });
         try {
@@ -9969,6 +9880,22 @@ const toggleCycleVariantSelection = (
         return `rs_${safeSongId}_${(hash >>> 0).toString(36)}`;
       };
       const resolvedGenre = getResolvedGenre(song);
+      const favoriteMediaKeys = [
+        'audioUrl', 'audio_url', 'streamAudioUrl', 'stream_audio_url', 'sourceAudioUrl', 'sourceStreamAudioUrl',
+        'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl', 'audioUrls',
+        'sunoAudioUrl', 'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
+        'sunoLinks', 'sunoShareLinks', 'mainSunoIndex',
+        'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
+        'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
+      ] as const;
+      const favoriteMediaPayload = Object.fromEntries(
+        favoriteMediaKeys
+          .filter((key) => {
+            const value = (song as any)?.[key];
+            return value !== undefined && value !== null && value !== '';
+          })
+          .map((key) => [key, (song as any)[key]]),
+      );
       const favoritePayload = sanitizeForFirestore({
         uid: user.uid,
         soridrawSongId: favoriteSoridrawSongId,
@@ -9981,6 +9908,7 @@ const toggleCycleVariantSelection = (
         appliedKeywords: song.appliedKeywords,
         userInput: song.userInput ?? (song.appliedKeywords as any)?.userInput ?? '',
         situationSummary: song.situationSummary || (song.appliedKeywords as any)?.situationSummary || '',
+        ...favoriteMediaPayload,
         isLocked: false,
         hidden: false,
         favoriteHidden: false,
@@ -10002,7 +9930,7 @@ const toggleCycleVariantSelection = (
       if (favoriteDocRef) {
         await runV1MutationBoundary(
           { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1 },
-          setDoc(favoriteDocRef, favoritePayload, { merge: false }),
+          setDoc(favoriteDocRef, favoritePayload, { merge: true }),
         );
       }
       const createdFavoriteDocRef = favoriteDocRef || await runV1MutationBoundary(
@@ -10241,90 +10169,115 @@ const toggleCycleVariantSelection = (
     }
   };
 
-  const clearAllFavorites = async () => {
-    if (!user) return;
+  type MusicNoteBulkOperation = 'clear-unlocked' | 'lock-all' | 'unlock-all';
 
-    if (userStatus === 'banned' && !isAdminUser) {
-      showToast('차단된 계정입니다. 기능을 사용할 수 없습니다.');
+const runMusicNoteBulkOperation = async (operation: MusicNoteBulkOperation) => {
+  if (!user?.uid) return { changedCount: 0, changedIds: [] as string[], version: 0 };
+
+  const callable = httpsCallable(functions, 'processMusicNoteBulkPage');
+  const changedIds = new Set<string>();
+  let cursor: string | null = null;
+  let latestVersion = 0;
+  let pageCount = 0;
+
+  while (pageCount < 1000) {
+    const response: any = await callable({ operation, cursor, limit: 120 });
+    const payload = (response?.data || {}) as any;
+    const pageChangedIds = Array.isArray(payload.changedIds)
+      ? payload.changedIds.map((value: unknown) => String(value || '').trim()).filter(Boolean)
+      : [];
+    pageChangedIds.forEach((id: string) => changedIds.add(id));
+    latestVersion = Math.max(latestVersion, Number(payload.version || 0));
+
+    if (payload.done === true) break;
+    const nextCursor = String(payload.nextCursor || '').trim();
+    if (!nextCursor || nextCursor === cursor) {
+      throw new Error('Music Note bulk pagination did not advance.');
+    }
+    cursor = nextCursor;
+    pageCount += 1;
+  }
+
+  if (pageCount >= 1000) {
+    throw new Error('Music Note bulk pagination safety limit reached.');
+  }
+
+  if (latestVersion > 0) {
+    writeMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, user.uid, latestVersion);
+    writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, user.uid, latestVersion);
+  }
+
+  return { changedCount: changedIds.size, changedIds: Array.from(changedIds), version: latestVersion };
+};
+
+const clearAllFavorites = async () => {
+  if (!user) return;
+  if (userStatus === 'banned' && !isAdminUser) {
+    showToast('차단된 계정입니다. 기능을 사용할 수 없습니다.');
+    return;
+  }
+
+  try {
+    const result = await runMusicNoteBulkOperation('clear-unlocked');
+    if (result.changedCount === 0) {
+      showToast('삭제할 수 있는 곡이 없습니다.');
       return;
     }
 
-    try {
-      // In paged loading mode, never rely on the currently visible 10-item slice for destructive all-item actions.
-      const allFavoritesSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
-      const unlockedDocs = allFavoritesSnap.docs.filter((docSnap) => !docSnap.data()?.isLocked);
-      if (unlockedDocs.length === 0) {
-        showToast('삭제할 수 있는 곡이 없습니다.');
-        return;
-      }
+    const removedIds = new Set(result.changedIds);
+    rememberFavoriteDeletedTombstones(user.uid, result.changedIds);
+    setFavorites((previous) => {
+      const next = (previous || []).filter((favorite) => !removedIds.has(String(favorite?.id || '')));
+      writeFavoritesCache(user.uid, next);
+      return next;
+    });
+    showToast(`${result.changedCount}개의 곡이 삭제되었습니다.`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'favorites');
+  }
+};
 
-      const batch = writeBatch(db);
-      unlockedDocs.forEach((docSnap) => {
-        batch.delete(doc(db, 'favorites', docSnap.id));
-      });
-      
-      // Update favoriteCount
-      batch.update(doc(db, 'users', user.uid), {
-        favoriteCount: increment(-unlockedDocs.length)
-      });
-
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'bulk-delete', uid: user.uid, documentIds: unlockedDocs.map((docSnap) => docSnap.id), affectedCount: unlockedDocs.length }, batch.commit());
-      const deletedAt = Date.now();
-      const deletedFavorites = unlockedDocs.map(mapFavoriteFirestoreDoc);
-      rememberFavoriteDeletedTombstones(user.uid, deletedFavorites.map((favorite) => favorite.id).filter(Boolean));
-      const deleteSignal = buildFavoriteSyncSignal('delete', deletedFavorites[0] || {}, deletedFavorites, deletedAt);
-      applyFavoriteSyncSignal(user.uid, deleteSignal);
-      await updateDoc(doc(db, 'users', user.uid), {
-        favoriteSyncSignal: deleteSignal,
-        favoriteSyncSignalUpdatedAt: deletedAt,
-      });
-      showToast(`${unlockedDocs.length}개의 곡이 삭제되었습니다.`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'favorites');
+const lockAllFavorites = async () => {
+  if (!user) return;
+  try {
+    const result = await runMusicNoteBulkOperation('lock-all');
+    if (result.changedCount === 0) {
+      showToast('이미 모든 곡이 잠겨 있습니다.');
+      return;
     }
-  };
 
-  const lockAllFavorites = async () => {
-    if (!user) return;
-    try {
-      const allFavoritesSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
-      const unlockedDocs = allFavoritesSnap.docs.filter((docSnap) => !docSnap.data()?.isLocked);
-      if (unlockedDocs.length === 0) {
-        showToast('이미 모든 곡이 잠겨 있습니다.');
-        return;
-      }
+    const changedIds = new Set(result.changedIds);
+    setFavorites((previous) => {
+      const next = (previous || []).map((favorite) => changedIds.has(String(favorite?.id || '')) ? { ...favorite, isLocked: true } : favorite);
+      writeFavoritesCache(user.uid, next);
+      return next;
+    });
+    showToast(`${result.changedCount}개의 곡이 잠금 설정되었습니다.`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'favorites');
+  }
+};
 
-      const batch = writeBatch(db);
-      unlockedDocs.forEach((docSnap) => {
-        batch.update(doc(db, 'favorites', docSnap.id), { isLocked: true });
-      });
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'bulk-lock', uid: user.uid, documentIds: unlockedDocs.map((docSnap) => docSnap.id), affectedCount: unlockedDocs.length }, batch.commit());
-      showToast(`${unlockedDocs.length}개의 곡이 잠금 설정되었습니다.`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'favorites');
+const unlockAllFavorites = async () => {
+  if (!user) return;
+  try {
+    const result = await runMusicNoteBulkOperation('unlock-all');
+    if (result.changedCount === 0) {
+      showToast('잠긴 곡이 없습니다.');
+      return;
     }
-  };
 
-  const unlockAllFavorites = async () => {
-    if (!user) return;
-    try {
-      const allFavoritesSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
-      const lockedDocs = allFavoritesSnap.docs.filter((docSnap) => docSnap.data()?.isLocked);
-      if (lockedDocs.length === 0) {
-        showToast('잠긴 곡이 없습니다.');
-        return;
-      }
-
-      const batch = writeBatch(db);
-      lockedDocs.forEach((docSnap) => {
-        batch.update(doc(db, 'favorites', docSnap.id), { isLocked: false });
-      });
-      await runV1MutationBoundary({ domain: 'musicNote', operation: 'bulk-unlock', uid: user.uid, documentIds: lockedDocs.map((docSnap) => docSnap.id), affectedCount: lockedDocs.length }, batch.commit());
-      showToast(`${lockedDocs.length}개의 곡이 잠금 해제되었습니다.`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'favorites');
-    }
-  };
+    const changedIds = new Set(result.changedIds);
+    setFavorites((previous) => {
+      const next = (previous || []).map((favorite) => changedIds.has(String(favorite?.id || '')) ? { ...favorite, isLocked: false } : favorite);
+      writeFavoritesCache(user.uid, next);
+      return next;
+    });
+    showToast(`${result.changedCount}개의 곡이 잠금 해제되었습니다.`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'favorites');
+  }
+};
 
   // Scroll to top on mount
   useEffect(() => {
@@ -10922,11 +10875,13 @@ const toggleCycleVariantSelection = (
       }
       if (recentSongsSessionReadInFlightUids.has(user.uid)) return;
       recentSongsSessionReadInFlightUids.add(user.uid);
+      const recentReadMutationEpoch = readRecentSongsMutationEpoch(user.uid);
 
       void getDocFromServer(ref)
         .then((snap) => {
           recentSongsSessionReadInFlightUids.delete(user.uid);
           if (cancelledRecentSongsRead) return;
+          if (recentReadMutationEpoch !== readRecentSongsMutationEpoch(user.uid)) return;
           recentSongsSessionVerifiedUids.add(user.uid);
           const documentVersion = Number(snap.exists() ? (snap.data() as any)?.syncVersion || 0 : 0);
           const verifiedVersion = Math.max(remoteVersion, localVersion, documentVersion);
@@ -11508,8 +11463,17 @@ const toggleCycleVariantSelection = (
     
     if (user) {
       try {
+        const recentMutationEpoch = bumpRecentSongsMutationEpoch(user.uid);
+        recentSongTextWritePendingRef.current = null;
+        if (recentSongTextWriteTimerRef.current !== null) {
+          window.clearTimeout(recentSongTextWriteTimerRef.current);
+          recentSongTextWriteTimerRef.current = null;
+        }
         const ref = doc(db, "user_recent_songs", user.uid);
-        await runV1MutationBoundary({ domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([history[index]], 'recent-hide') }, persistRecentSongsDocument(ref, newHistory));
+        await runV1MutationBoundary(
+          { domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([history[index]], 'recent-hide') },
+          persistRecentSongsDocument(ref, newHistory, recentMutationEpoch),
+        );
         markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
       } catch (e) {
         console.error("Failed to update history in Firestore:", e);
@@ -11532,8 +11496,17 @@ const toggleCycleVariantSelection = (
     if (window.confirm('모든 히스토리를 삭제하시겠습니까?')) {
       if (user) {
         try {
+          const recentMutationEpoch = bumpRecentSongsMutationEpoch(user.uid);
+          recentSongTextWritePendingRef.current = null;
+          if (recentSongTextWriteTimerRef.current !== null) {
+            window.clearTimeout(recentSongTextWriteTimerRef.current);
+            recentSongTextWriteTimerRef.current = null;
+          }
           const ref = doc(db, "user_recent_songs", user.uid);
-          await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: 0, mirrorTargets: buildRecentMirrorTargets(history, 'recent-hide') }, setDoc(ref, { songs: [] }, { merge: true }));
+          await runV1MutationBoundary(
+            { domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: history.length, mirrorTargets: buildRecentMirrorTargets(history, 'recent-hide') },
+            persistRecentSongsDocument(ref, [], recentMutationEpoch),
+          );
           markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
         } catch (e) {
           console.error("Failed to clear history in Firestore:", e);
@@ -11732,6 +11705,7 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
   if (!user || !Array.isArray(newSongs) || newSongs.length === 0) return;
 
   const canonicalNewSongs = newSongs.map((song) => ensureLiveSoridrawSongId(song));
+  const recentMutationEpoch = readRecentSongsMutationEpoch(user.uid);
 
   const saveOperation = async () => {
     try {
@@ -11748,8 +11722,12 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
         ...buildRecentMirrorTargets(firestoreSongs.filter((song: any) => { const stableId = getLiveSoridrawSongId(song); return Boolean(stableId && !updatedStableIds.has(stableId)); }), 'recent-hide', mirrorAtMs),
       ].slice(0, 10);
 
-      await runV1MutationBoundary({ domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: canonicalNewSongs.length, mirrorTargets }, persistRecentSongsDocument(ref, updatedSongs));
-      markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
+      const persistedVersion = await runV1MutationBoundary(
+      { domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: canonicalNewSongs.length, mirrorTargets },
+      persistRecentSongsDocument(ref, updatedSongs, recentMutationEpoch),
+    );
+    if (!persistedVersion) return;
+    markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
       recentSongsReadyToCacheRef.current = true;
       applyRecentSongsState(updatedSongs, {
         preferredIndex: 0,
@@ -13381,7 +13359,7 @@ ${normalizePromptForDisplay(result.prompt)}
   };
 
   const recentSongTextWriteTimerRef = useRef<number | null>(null);
-  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[] } | null>(null);
+  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[]; mutationEpoch: number } | null>(null);
 
   const flushRecentSongTextWrite = useCallback(async () => {
     const pending = recentSongTextWritePendingRef.current;
@@ -13394,8 +13372,13 @@ ${normalizePromptForDisplay(result.prompt)}
     }
 
     try {
+      if (pending.mutationEpoch !== readRecentSongsMutationEpoch(pending.uid)) return;
       const ref = doc(db, "user_recent_songs", pending.uid);
-      await runV1MutationBoundary({ domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets }, persistRecentSongsDocument(ref, pending.songs));
+      const persistedVersion = await runV1MutationBoundary(
+        { domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets },
+        persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch),
+      );
+      if (!persistedVersion) return;
       markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
     } catch (error) {
       // Keep the newest pending value so a later edit/flush can retry instead of
@@ -13430,7 +13413,7 @@ ${normalizePromptForDisplay(result.prompt)}
       historyIndex: activeIndex,
       latestGenerationBatchId: (nextSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
     });
-    recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets };
+    recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets, mutationEpoch: readRecentSongsMutationEpoch(uid) };
   }, []);
 
   const persistRegeneratedCurrentSong = async (nextSong: SongResult) => {
@@ -13710,8 +13693,8 @@ ${normalizePromptForDisplay(result.prompt)}
         if (currentHistoryIndex < 0) return prev;
         if (user) {
           const ref = doc(db, "user_recent_songs", user.uid);
-          runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, persistRecentSongsDocument(ref, next))
-            .then(() => markCacheDiagnostic('recentSongs', 'SYNC', 0, 1))
+          runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, persistRecentSongsDocument(ref, next, readRecentSongsMutationEpoch(user.uid)))
+            .then((version) => { if (version) markCacheDiagnostic('recentSongs', 'SYNC', 0, 1); })
             .catch((error) => {
             console.error('Failed to persist added lyric language:', error);
           });

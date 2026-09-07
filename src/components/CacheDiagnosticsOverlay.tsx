@@ -22,6 +22,8 @@ import {
 } from '../lib/cloudflareDiagnostics';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfileCache';
 import { hasAdminPermission } from '../constants/adminPermissions';
+import { favoritesStore } from '../hooks/useFavoritesStore';
+import { CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, readCatalogRuntimeDiagnostic, resetCatalogRuntimeDiagnostics, type CatalogRuntimeDiagnosticKind, type CatalogRuntimeDiagnosticState } from '../lib/catalogRuntimeDiagnostics';
 
 const SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000 = true;
 const SORIDRAW_CACHE_LIVE_CLOUDFLARE_MOBILE_DOCK_977 = true;
@@ -86,9 +88,12 @@ const formatActualUsage = (state: FirestoreActualState) => {
 const formatNumber = (value: number | undefined) => new Intl.NumberFormat('ko-KR').format(Math.max(0, Math.floor(Number(value || 0))));
 
 const getCloudflarePathLabel = (path: string) => {
+  if (path === '/v1/publications') return '뮤직노트 공개 등록';
   if (path === '/v1/feed') return '피드';
   if (path === '/v1/me/likes') return '좋아요 상태';
+  if (path === '/v1/me/following-bundle') return '팔로우 상태 묶음';
   if (path === '/v1/me/publications') return '뮤직노트 공개상태';
+  if (path === '/v1/me/music-note-publications-bundle') return '뮤직노트 공개상태';
   if (path === '/v1/tracks/:id/like') return '좋아요 변경';
   if (path === '/v1/tracks/:id/visibility') return '공개상태 변경';
   if (path === '/v1/profiles/:id/first-view') return '공개프로필';
@@ -151,6 +156,8 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
   const [docked, setDocked] = useState(() => readInitialDocked());
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= PANEL_MOBILE_BREAKPOINT);
   const [cloudflare, setCloudflare] = useState<CloudflareDiagnosticState>(() => readCloudflareDiagnostics());
+  const [catalogRuntime, setCatalogRuntime] = useState<Record<CatalogRuntimeDiagnosticKind, CatalogRuntimeDiagnosticState>>(() => ({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') }));
+  const [favoriteStoreCount, setFavoriteStoreCount] = useState(() => favoritesStore.getFavorites().length);
   const [serverUsage, setServerUsage] = useState<FirestoreServerUsage | null>(null);
   const [serverLoading, setServerLoading] = useState(false);
   const [serverError, setServerError] = useState('');
@@ -250,6 +257,20 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       window.removeEventListener(USER_PROFILE_CACHE_EVENT, onProfileCache as EventListener);
       window.removeEventListener('storage', onStorage);
     };
+  }, []);
+
+  useEffect(() => {
+    const syncFavorites = () => setFavoriteStoreCount(favoritesStore.getFavorites().length);
+    const onCatalogRuntime = (event: Event) => {
+      const detail = (event as CustomEvent<{ kind?: CatalogRuntimeDiagnosticKind; state?: CatalogRuntimeDiagnosticState }>).detail;
+      if (!detail?.kind || !detail.state) return;
+      setCatalogRuntime((prev) => ({ ...prev, [detail.kind as CatalogRuntimeDiagnosticKind]: detail.state as CatalogRuntimeDiagnosticState }));
+    };
+    syncFavorites();
+    setCatalogRuntime({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') });
+    const unsubscribeFavorites = favoritesStore.subscribe(syncFavorites);
+    window.addEventListener(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, onCatalogRuntime as EventListener);
+    return () => { unsubscribeFavorites(); window.removeEventListener(CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, onCatalogRuntime as EventListener); };
   }, []);
 
   useEffect(() => {
@@ -423,7 +444,10 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
           <div className="space-y-0.5">
             <div className="whitespace-nowrap text-[12px] font-bold text-white/76">{formatActualUsage(actual)}</div>
             <div className="whitespace-nowrap text-[12px] font-bold text-[#c6b5ff]">
-              Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)} · Worker {formatNumber(cloudflare.workerRequests)} · D1 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : '—'}
+              Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)} · Worker {formatNumber(cloudflare.workerRequests)}
+            </div>
+            <div className="whitespace-nowrap text-[11px] font-bold text-[#c6b5ff]/80">
+              D1 쿼리 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1ReadQueries) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1WriteQueries) : '—'} · 행 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : '—'}
             </div>
             {cloudflarePathEntries.length > 0 ? (
               <div className="mt-1 space-y-0.5 rounded-lg bg-[#c6b5ff]/[0.055] px-2 py-1.5">
@@ -432,8 +456,12 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
                   <div key={path} className="space-y-0.5">
                     <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-bold text-[#c6b5ff]/82">
                       <span className="truncate">{getCloudflarePathLabel(path)}</span>
-                      <span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)} · D1 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}</span>
+                      <span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)}</span>
                     </div>
+          <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/68">
+            <span className="shrink-0 whitespace-nowrap tabular-nums">D1 쿼리 읽기 {formatNumber(state.d1ReadQueries)} · 쓰기 {formatNumber(state.d1WriteQueries)}</span>
+            <span className="shrink-0 whitespace-nowrap tabular-nums">행 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}</span>
+          </div>
                     {state.lastOutcome ? (
                       <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/58">
                         <span className="truncate">마지막 · {state.lastOutcome}{state.lastEdgeCache ? ` · ${state.lastEdgeCache}` : ''}</span>
@@ -505,6 +533,18 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             ) : null}
           </div>
 
+          <div className="mt-2 rounded-xl bg-[#ffbf66]/[0.07] px-2.5 py-2">
+            <div className="mb-1 text-[10px] font-black tracking-[0.05em] text-[#ffbf66]/75">CATALOG BROWSER PATH</div>
+            <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-bold text-white/72">
+              <span>뮤직노트 · {catalogRuntime.musicNote.stage}</span>
+              <span className="shrink-0 tabular-nums">HTTP {catalogRuntime.musicNote.httpStatus || '—'} · R2 {catalogRuntime.musicNote.remoteItemCount || '—'} · Store {favoriteStoreCount}</span>
+            </div>
+            <div className="mt-0.5 flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-white/45">
+              <span className="truncate">{catalogRuntime.musicNote.errorCode || '오류 없음'}</span>
+              <span className="shrink-0 tabular-nums">시도 {catalogRuntime.musicNote.attempt || 0} · rev {catalogRuntime.musicNote.revision || '—'}</span>
+            </div>
+          </div>
+
           <div className="mt-2 space-y-1">
             {rows.map(({ domain, label }) => {
               const state = states[domain];
@@ -525,6 +565,9 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
               onClick={() => {
                 resetCacheDiagnostics();
                 resetCloudflareDiagnostics();
+                resetCatalogRuntimeDiagnostics();
+                setCatalogRuntime({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') });
+                setFavoriteStoreCount(favoritesStore.getFavorites().length);
                 setStates(readAllStates());
                 setActual(readFirestoreActual());
                 setCloudflare(readCloudflareDiagnostics());

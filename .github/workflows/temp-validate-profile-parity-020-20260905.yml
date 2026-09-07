@@ -1,0 +1,64 @@
+name: SORIDRAW Validate Profile Parity 020 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-validate-profile-parity-020-20260905.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+      PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_R2: soridraw-profile-media-preview
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Permanent no-full-song-read guard
+        run: node scripts/verify-no-unbounded-user-song-bootstrap.mjs
+      - name: Fetch exact active PREVIEW Worker and dry-run patch020
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          rm -rf .remote-worker && mkdir .remote-worker
+          node <<'NODE'
+          const fs=require('fs');
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,N=process.env.PREVIEW_WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
+          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status+' '+JSON.stringify(x).slice(0,900));return x.result||x}
+          (async()=>{const b=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;const ds=await g(b+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];if(!a?.version_id)throw Error('active version missing');fs.writeFileSync('.remote-worker/before.txt',a.version_id);const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');if(!s.includes('patchExploreProfileR2Mutation019'))throw Error('active patch019 missing');fs.writeFileSync('.remote-worker/worker.js',s);console.log('ACTIVE_WORKER='+a.version_id)})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/020-profile-r2-alias-bounded-repair.mjs
+          node --check .remote-worker/worker.js
+          node <<'NODE'
+          const fs=require('fs'),s=fs.readFileSync('.remote-worker/worker.js','utf8');
+          function f(n){let p=s.indexOf('async function '+n+'(');if(p<0)p=s.indexOf('function '+n+'(');if(p<0)throw Error('missing '+n);const b=s.indexOf('{',p);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(p,i+1)}throw Error('unterminated '+n)}
+          const h=f('handlePublicProfileFirstViewWithEdgeCache');
+          const r=f('rebuildExploreProfileR2Bounded020');
+          const sync=f('syncExploreProfileR2FromD1');
+          if(h.includes('handlePublicProfileFirstViewWithEdgeCacheR2Core')||h.includes('handlePublicProfileFirstViewSnapshot')||h.includes('materializePublicProfileFirstView'))throw Error('legacy profile fallback reachable');
+          if(r.includes('COUNT(')||r.includes('favorites')||r.includes('collection(db'))throw Error('repair not bounded');
+          if(!r.includes('readPublicProfileFirstViewTrackWindow'))throw Error('bounded window missing');
+          if(sync.includes('public_profile_first_views'))throw Error('legacy D1 snapshot copied to R2');
+          if(!s.includes('__soridraw_profile_schema'))throw Error('edge schema version missing');
+          if(!s.includes('exploreProfileHandleAliasR2Key020'))throw Error('handle alias missing');
+          console.log('PATCH020_STATIC=PASS');
+          NODE
+      - name: TypeScript and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build

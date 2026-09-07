@@ -1,0 +1,270 @@
+name: SORIDRAW Deploy Music Note Publication Bundle PREVIEW 2026-09-04
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-deploy-music-note-publication-bundle-20260904.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-music-note-publication-bundle-preview-20260904
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PREVIEW_D1_NAME: soridraw-explore-preview
+      PREVIEW_D1_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_R2_BUCKET: soridraw-profile-media-preview
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Apply client cold-bundle patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .deploy/apply-1003-music-note-publication-bundle.py
+          grep -q 'SORIDRAW_MUSIC_NOTE_PUBLICATION_BUNDLE_20260904' src/services/explorePublicationService.ts
+          grep -q '/v1/me/music-note-publications-bundle' src/services/explorePublicationService.ts
+          grep -q "/v1/me/music-note-publications-bundle') return '뮤직노트 공개상태'" src/components/CacheDiagnosticsOverlay.tsx
+
+      - name: Set up Node.js 20 for app
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Verify app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          grep -q 'SORIDRAW_MUSIC_NOTE_PUBLICATION_BUNDLE_20260904' src/services/explorePublicationService.ts
+          grep -q '/v1/me/music-note-publications-bundle' src/services/explorePublicationService.ts
+          test -f dist/index.html
+          echo '[Publication bundle] app TypeScript + build PASS'
+
+      - name: Commit actual client source
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/explorePublicationService\.ts|src/components/CacheDiagnosticsOverlay\.tsx)$' || true)"
+          if [ -n "$bad" ]; then
+            echo "Unexpected generated changes:"
+            echo "$bad"
+            exit 1
+          fi
+          if ! git diff --quiet -- src/services/explorePublicationService.ts src/components/CacheDiagnosticsOverlay.tsx; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add src/services/explorePublicationService.ts src/components/CacheDiagnosticsOverlay.tsx
+            git commit -m 'perf(preview): cold-load publication state from one D1 row'
+            git push origin HEAD:preview
+          fi
+          echo "CLIENT_SOURCE_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js 22 for Cloudflare
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate derived D1 migration locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import sqlite3, json
+          from pathlib import Path
+          db = sqlite3.connect(':memory:')
+          db.executescript('''
+          CREATE TABLE tracks (
+            id TEXT PRIMARY KEY, owner_uid TEXT, source_type TEXT, source_id TEXT,
+            is_public INTEGER, allow_next_song_apply INTEGER, allow_follower_save INTEGER,
+            profile_pinned INTEGER, updated_at INTEGER
+          );
+          INSERT INTO tracks VALUES
+            ('m1','u1','music_note','n1',1,0,1,0,100),
+            ('m2','u1','music_note','n2',0,1,0,1,90),
+            ('s1','u1','suno','s1',1,0,0,0,80);
+          ''')
+          db.executescript(Path('cloudflare/explore-worker/migrations/20260904_music_note_publication_bundle.sql').read_text())
+          row = db.execute("SELECT states_json,item_count FROM music_note_publication_bundles WHERE owner_uid='u1'").fetchone()
+          states = json.loads(row[0])
+          assert row[1] == 2 and set(states) == {'n1','n2'} and isinstance(states['n1'], dict)
+          db.execute("UPDATE tracks SET is_public=0 WHERE id='m1'")
+          states = json.loads(db.execute("SELECT states_json FROM music_note_publication_bundles WHERE owner_uid='u1'").fetchone()[0])
+          assert states['n1']['status'] == 'private'
+          db.execute("DELETE FROM tracks WHERE id='m2'")
+          row = db.execute("SELECT states_json,item_count FROM music_note_publication_bundles WHERE owner_uid='u1'").fetchone()
+          assert row[1] == 1 and set(json.loads(row[0])) == {'n1'}
+          print('[Publication bundle] local D1 migration/trigger contract PASS')
+          PY
+
+      - name: Fetch exact active PREVIEW Worker and preserve bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf cloudflare/explore-worker/.remote-worker
+          mkdir -p cloudflare/explore-worker/.remote-worker
+          cd cloudflare/explore-worker
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const name = process.env.PREVIEW_WORKER;
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+          async function get(url) {
+            const r = await fetch(url, { headers });
+            const x = await r.json();
+            if (!r.ok || x.success === false) throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);
+            return x.result || x;
+          }
+          (async () => {
+            const base = `https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;
+            const deps = await get(`${base}/deployments`);
+            const d = (deps.deployments || deps || [])[0];
+            const active = [...(d?.versions || [])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if (!active?.version_id || Number(active.percentage || 0) < 99.99) throw new Error('PREVIEW Worker does not have one 100% active version');
+            const ver = await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);
+            const modules = ver.modules || [];
+            if (!modules.length) throw new Error('active PREVIEW Worker returned no modules');
+            for (const mod of modules) {
+              const target = path.join('.remote-worker', mod.name || 'worker.js');
+              fs.mkdirSync(path.dirname(target), { recursive: true });
+              fs.writeFileSync(target, Buffer.from(mod.content_base64, 'base64'));
+            }
+            const main = ver.main_module || modules[0].name || 'worker.js';
+            const settings = await get(`${base}/settings`);
+            const bindings = settings.bindings || [];
+            const unknown = bindings.filter(b => !['plain_text','secret_text','d1','r2_bucket'].includes(b.type));
+            if (unknown.length) throw new Error(`unsupported active binding types: ${JSON.stringify(unknown.map(b=>({type:b.type,name:b.name})))}`);
+            const d1 = bindings.find(b => b.type === 'd1' && b.name === 'DB');
+            const r2 = bindings.find(b => b.type === 'r2_bucket' && b.name === 'PROFILE_MEDIA');
+            if (!d1 || (d1.id || d1.database_id) !== process.env.PREVIEW_D1_ID) throw new Error(`PREVIEW D1 binding mismatch: ${JSON.stringify(d1)}`);
+            if (!r2 || r2.bucket_name !== process.env.PREVIEW_R2_BUCKET) throw new Error(`PREVIEW R2 binding mismatch: ${JSON.stringify(r2)}`);
+            const config = {
+              name,
+              main: `./${main}`,
+              compatibility_date: String(settings.compatibility_date || '2026-08-28').slice(0,10),
+              keep_vars: true,
+              d1_databases: [{ binding: 'DB', database_name: process.env.PREVIEW_D1_NAME, database_id: process.env.PREVIEW_D1_ID }],
+              r2_buckets: [{ binding: 'PROFILE_MEDIA', bucket_name: process.env.PREVIEW_R2_BUCKET }],
+            };
+            if (Array.isArray(settings.compatibility_flags) && settings.compatibility_flags.length) config.compatibility_flags = settings.compatibility_flags;
+            fs.writeFileSync('.remote-worker/wrangler.jsonc', JSON.stringify(config, null, 2) + '\n');
+            fs.writeFileSync('.remote-worker/baseline-version.txt', String(active.version_id));
+            console.log(`[Publication bundle] active PREVIEW baseline=${active.version_id}, main=${main}`);
+          })().catch(e => { console.error(e); process.exit(1); });
+          NODE
+          test -s .remote-worker/worker.js
+          node patches/007-music-note-publication-bundle.mjs
+          grep -q 'SORIDRAW_MUSIC_NOTE_PUBLICATION_BUNDLE_20260904' .remote-worker/worker.js
+          grep -q '/v1/me/music-note-publications-bundle' .remote-worker/worker.js
+          echo '[Publication bundle] exact active PREVIEW Worker patched PASS'
+
+      - name: Apply D1 derived bundle schema and seed PREVIEW only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npx --yes wrangler@4 d1 execute DB --remote \
+            --config .remote-worker/wrangler.jsonc \
+            --file migrations/20260904_music_note_publication_bundle.sql
+          echo '[Publication bundle] PREVIEW D1 derived table + triggers + seed PASS'
+
+      - name: Verify PREVIEW D1 bundle parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npx --yes wrangler@4 d1 execute DB --remote --config .remote-worker/wrangler.jsonc \
+            --command "SELECT (SELECT COUNT(DISTINCT owner_uid) FROM tracks WHERE owner_uid IS NOT NULL AND owner_uid <> '') AS canonical_owners, (SELECT COUNT(*) FROM music_note_publication_bundles) AS bundle_owners, (SELECT COUNT(*) FROM tracks WHERE source_type='music_note' AND source_id IS NOT NULL AND source_id <> '') AS canonical_music_notes, (SELECT COALESCE(SUM(item_count),0) FROM music_note_publication_bundles) AS bundled_music_notes, (SELECT COUNT(*) FROM music_note_publication_bundles b WHERE json_valid(b.states_json)=0 OR b.item_count <> (SELECT COUNT(*) FROM json_each(b.states_json))) AS invalid_bundles;" > "$RUNNER_TEMP/d1-parity.txt"
+          cat "$RUNNER_TEMP/d1-parity.txt"
+          python3 - "$RUNNER_TEMP/d1-parity.txt" <<'PY'
+          import re, sys
+          text=open(sys.argv[1],encoding='utf-8').read()
+          nums=[int(x) for x in re.findall(r'"(?:canonical_owners|bundle_owners|canonical_music_notes|bundled_music_notes|invalid_bundles)"\s*:\s*(\d+)',text)]
+          if len(nums) < 5:
+              raise SystemExit('Could not parse D1 parity output')
+          a,b,c,d,e=nums[-5:]
+          if a != b or c != d or e != 0:
+              raise SystemExit(f'D1 bundle parity failed: owners {a}/{b}, music_notes {c}/{d}, invalid {e}')
+          print(f'[Publication bundle] D1 parity PASS owners={a}, music_notes={c}, invalid={e}')
+          PY
+
+      - name: Deploy patched PREVIEW Worker only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npx --yes wrangler@4 deploy --cwd .remote-worker --keep-vars
+          echo '[Publication bundle] PREVIEW Worker deploy PASS'
+
+      - name: Verify PREVIEW Worker version contains route
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const token=process.env.CLOUDFLARE_API_TOKEN, account=process.env.CLOUDFLARE_ACCOUNT_ID, name=process.env.PREVIEW_WORKER;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(JSON.stringify(x).slice(0,1000));return x.result||x;}
+          (async()=>{const deps=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);const d=(deps.deployments||deps||[])[0];const v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${v.version_id}?include=modules`);const mod=(ver.modules||[]).find(m=>m.name===ver.main_module)||(ver.modules||[])[0];const src=Buffer.from(mod.content_base64,'base64').toString('utf8');if(!src.includes('SORIDRAW_MUSIC_NOTE_PUBLICATION_BUNDLE_20260904')||!src.includes('/v1/me/music-note-publications-bundle'))throw new Error('deployed PREVIEW Worker route missing');console.log(`[Publication bundle] deployed PREVIEW Worker version=${v.version_id} PASS`);})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          status="$(curl -sS -o "$RUNNER_TEMP/bundle-noauth.json" -w '%{http_code}' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/me/music-note-publications-bundle')"
+          echo "[Publication bundle] unauth route HTTP=$status"
+          test "$status" != '404'
+
+      - name: Authenticate Firebase Hosting
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW Hosting only
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 'https://soridraw.web.app/' -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project soridraw \
+            --config firebase.hosting-preview.json \
+            --non-interactive
+          for url in 'https://preview.soridraw.com/' 'https://soridraw-preview.web.app/' 'https://soridraw-preview.firebaseapp.com/'; do
+            curl -fsS --max-time 30 "$url" -o "$RUNNER_TEMP/preview.html"
+            grep -q '<div id="root"></div>' "$RUNNER_TEMP/preview.html"
+            echo "[Publication bundle] PREVIEW smoke PASS: $url"
+          done
+          curl -fsS --max-time 30 'https://soridraw.web.app/' -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo '[Publication bundle] PRODUCTION Hosting unchanged PASS'
+
+      - name: Final contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '/v1/me/music-note-publications-bundle' src/services/explorePublicationService.ts
+          grep -q 'publicationMemoryCache' src/services/explorePublicationService.ts
+          grep -q 'expiresAt: null' src/services/explorePublicationService.ts
+          echo 'EXPECTED_COLD=Worker 1 / D1 read 1'
+          echo 'EXPECTED_WARM=Worker 0 / D1 read 0'
+          echo 'NO_MAIN_TEST_PRODUCTION_CHANGE=true'

@@ -13,6 +13,7 @@ import CacheDiagnosticBadge from './CacheDiagnosticBadge';
 import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
 
 const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
+// SORIDRAW_API_SETTINGS_ENTRY_ZERO_SERVER_20260904
 
 const PROJECT_ID = "soridraw-app-866a5";
 const REGION = "us-central1";
@@ -554,7 +555,6 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  setMusicApiKey('');
  setActiveModal(null);
  setMessage('Music API Key가 안전하게 등록되었습니다.');
- loadSunoApiKeyStatus(true);
  } else {
  setMessage('Music API Key 저장에 실패했습니다.');
  }
@@ -590,7 +590,6 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  setMusicApiKey('');
  setActiveModal(null);
  setMessage('Music API Key가 삭제되었습니다.');
- loadSunoApiKeyStatus(true);
  } else {
  setMessage('Music API Key 삭제에 실패했습니다.');
  }
@@ -634,9 +633,27 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  };
 
  useEffect(() => {
- loadGoogleApiKeyStatus(false);
- loadSunoApiKeyStatus(false);
- }, [loadGoogleApiKeyStatus, loadSunoApiKeyStatus]);
+ if (!user?.uid) return;
+
+ // Normal page entry is cache-only. API status Functions are reserved for real
+ // mutations/manual checks so reopening My Page or API Settings stays server 0.
+ const storedGoogleKeyMeta = getStoredGoogleKeyMeta(user.uid);
+ const cachedGoogleRegistered = getStoredGoogleApiKeyStatus(user.uid)
+ || Boolean(storedGoogleKeyMeta?.registered && storedGoogleKeyMeta.last6);
+ setGoogleRegistered(cachedGoogleRegistered);
+ setGoogleKeyMeta(storedGoogleKeyMeta);
+ markCacheDiagnostic('googleGeminiApiKey', 'CACHE', 0);
+
+ let cachedMusicRegistered = false;
+ try {
+ cachedMusicRegistered = localStorage.getItem(scopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid)) === 'true';
+ } catch {
+ cachedMusicRegistered = false;
+ }
+ setStatusText(cachedMusicRegistered ? '등록됨' : '미등록');
+ setRemainingCredits(readStoredCredits(user.uid));
+ setRemainingCreditsUpdatedAt(readStoredCreditsUpdatedAt(user.uid));
+ }, [user?.uid]);
 
  const openGoogleApiModal = () => {
  const storedGoogleKeyMeta = getStoredGoogleKeyMeta(user?.uid);

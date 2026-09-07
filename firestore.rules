@@ -91,13 +91,14 @@ service cloud.firestore {
         return !('syncVersions' in request.resource.data) ||
           (request.resource.data.syncVersions is map &&
             request.resource.data.syncVersions.keys().hasOnly([
-              'googleGeminiApiKey', 'sectionCustom', 'recentSongs', 'musicNote', 'library'
+              'googleGeminiApiKey', 'sectionCustom', 'recentSongs', 'musicNote', 'library', 'musicNoteStructure'
             ]) &&
             (!('googleGeminiApiKey' in request.resource.data.syncVersions) || request.resource.data.syncVersions.googleGeminiApiKey is int) &&
             (!('sectionCustom' in request.resource.data.syncVersions) || request.resource.data.syncVersions.sectionCustom is int) &&
             (!('recentSongs' in request.resource.data.syncVersions) || request.resource.data.syncVersions.recentSongs is int) &&
             (!('musicNote' in request.resource.data.syncVersions) || request.resource.data.syncVersions.musicNote is int) &&
-            (!('library' in request.resource.data.syncVersions) || request.resource.data.syncVersions.library is int));
+            (!('library' in request.resource.data.syncVersions) || request.resource.data.syncVersions.library is int) &&
+            (!('musicNoteStructure' in request.resource.data.syncVersions) || request.resource.data.syncVersions.musicNoteStructure is int));
       }
 
       function isValidSelfUpdate() {
@@ -269,7 +270,7 @@ service cloud.firestore {
     // navigation_visibility is read by the app so the public menu can react to admin toggles.
     // Writes remain admin-only.
     match /app_settings/{docId} {
-      allow read: if docId in ['navigation_visibility', 'lyric_cliche_guard'] || isAdmin();
+      allow read: if docId in ['navigation_visibility', 'lyric_cliche_guard', 'section_tags_bundle'] || isAdmin();
       allow write: if hasAdminPermission('appSettings');
     }
 

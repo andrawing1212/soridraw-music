@@ -1,0 +1,108 @@
+name: SORIDRAW Remove Unbounded Music Note Recovery 2026-09-05
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-remove-unbounded-musicnote-recovery-20260905.yml']
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Remove full collection recovery from normal bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('src/App.tsx')
+          s=p.read_text(encoding='utf-8')
+
+          s=s.replace("const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '4'; // SORIDRAW_MUSIC_NOTE_EMPTY_CACHE_RECOVERY_1021", "const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '4'; // SORIDRAW_MUSIC_NOTE_NO_FULLSCAN_BOOTSTRAP_1022")
+
+          a='const prepareMusicNoteCacheForUser = (uid: string): boolean => {'
+          b='\n\nconst markMusicNoteCacheSchemaCurrent = (uid: string) => {'
+          i=s.find(a)
+          j=s.find(b,i)
+          if i<0 or j<0: raise SystemExit('prepareMusicNoteCacheForUser block not found')
+          safe="""const prepareMusicNoteCacheForUser = (uid: string): boolean => {
+            if (!uid) return false;
+            // Cache schema changes must never invalidate a user's complete Music Note
+            // payload and trigger an unbounded collection scan. Existing UID-scoped
+            // payloads remain usable; truly missing payloads fall through to the
+            // existing bounded/paged bootstrap path.
+            if (!isMusicNoteCacheSchemaCurrent(uid) && hasMusicNotePayloadCache(uid)) {
+              try {
+                localStorage.setItem(getMusicNoteCacheSchemaKey(uid), MUSIC_NOTE_CACHE_SCHEMA_VERSION);
+              } catch {}
+            }
+            return false;
+          };"""
+          s=s[:i]+safe+s[j:]
+
+          a2='        const runFavoritesFullCacheRecoveryOnce = async () => {'
+          b2='\n\n        const hasCachedMusicNote ='
+          i=s.find(a2)
+          j=s.find(b2,i)
+          if i<0 or j<0: raise SystemExit('full recovery block not found')
+          noop="""        // SORIDRAW_MUSIC_NOTE_NO_UNBOUNDED_RECOVERY_1022
+          // Normal app entry, reload, schema migration, and cache repair must never
+          // read the entire favorites collection. A missing payload is restored only
+          // through the existing bounded/paged bootstrap below.
+          const runFavoritesFullCacheRecoveryOnce = async () => {};"""
+          s=s[:i]+noop+s[j:]
+
+          p.write_text(s,encoding='utf-8')
+          print('MUSIC_NOTE_UNBOUNDED_RECOVERY_REMOVED=PASS')
+          PY
+          grep -Fq 'SORIDRAW_MUSIC_NOTE_NO_FULLSCAN_BOOTSTRAP_1022' src/App.tsx
+          grep -Fq 'SORIDRAW_MUSIC_NOTE_NO_UNBOUNDED_RECOVERY_1022' src/App.tsx
+          ! grep -Fq 'Cacheless Music Note full bootstrap failed.' src/App.tsx
+          ! grep -Fq 'SORIDRAW_MUSIC_NOTE_EMPTY_CACHE_RECOVERY_1021' src/App.tsx
+      - name: TypeScript and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+      - name: Commit safe bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/App.tsx
+          git commit -m 'fix(preview): prohibit unbounded Music Note recovery reads'
+          git push origin HEAD:preview
+      - name: Authenticate Firebase PREVIEW
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Deploy Firebase PREVIEW Hosting and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          for host in soridraw-preview.web.app preview.soridraw.com; do
+            code=$(curl -sS -L --max-time 30 -o /tmp/${host//./_}.html -w '%{http_code}' https://$host/)
+            test "$code" = '200'
+            grep -q '/assets/index-' /tmp/${host//./_}.html
+          done
+          a=$(grep -oE '/assets/index-[^" ]+\.js' /tmp/soridraw-preview_web_app.html | head -n1)
+          b=$(grep -oE '/assets/index-[^" ]+\.js' /tmp/preview_soridraw_com.html | head -n1)
+          test -n "$a"
+          test "$a" = "$b"
+          echo "PREVIEW_ASSET=$a"
+          echo 'UNBOUNDED_RECOVERY_DISABLED=true'
+          echo 'MAIN_CHANGED=false'
+          echo 'FUNCTIONS_CHANGED=false'

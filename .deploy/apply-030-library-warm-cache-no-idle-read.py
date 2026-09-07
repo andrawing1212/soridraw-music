@@ -21,6 +21,7 @@ verify.write_text(r'''import fs from 'node:fs';
 
 const read = (path) => fs.readFileSync(path, 'utf8');
 const library = read('src/pages/SunoLibraryPage.tsx');
+const userDataEngine = read('src/lib/userDataEngine.ts');
 const detailCache = read('src/lib/musicNoteDetailCache.ts');
 const favorites = read('src/pages/FavoritesPage.tsx');
 const functions = read('functions/src/index.ts');
@@ -42,7 +43,7 @@ assert(library.includes("markCacheDiagnostic('library', 'CACHE', 0);"), 'Library
 assert(detailCache.includes('getOrLoadMusicNoteDetail'), 'Music Note detail cache removed');
 assert(favorites.includes('const hydrated = await hydrateCatalogFavorite(song);'), 'Music Note detail hydration removed');
 assert(favorites.includes("void hydrateCatalogFavorite(song).then((hydrated) => applyKeywordsToNext(hydrated));"), 'Music Note apply hydration removed');
-assert(library.includes("'title', 'koreanTitle', 'englishTitle', 'genre', 'style', 'tags', 'prompt', 'appliedKeywords'"), 'Library appliedKeywords catalog field missing');
+assert(userDataEngine.includes("'title', 'koreanTitle', 'englishTitle', 'genre', 'style', 'tags', 'prompt', 'appliedKeywords'"), 'Library appliedKeywords catalog field missing');
 
 // Library invalidation remains server-authoritative through the existing trigger.
 assert(functions.includes("transaction.set(userRef, { syncVersions: { library: version } }, { merge: true });"), 'Library syncVersions trigger missing');

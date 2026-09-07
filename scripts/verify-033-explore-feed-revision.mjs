@@ -18,7 +18,7 @@ for (const [needle, label] of [
 
 for (const [needle, label] of [
   [marker, 'ExplorePage marker'],
-  ["'/v1/feed-revision'", 'revision endpoint'],
+  ['/v1/feed-revision?sort=', 'revision endpoint'],
   ["'__soridraw_revision'", 'revision-versioned feed key'],
   ['const cachedRows = readExploreFeedSessionCache(requestUrl);', 'cache-first render'],
   ['if (cachedRows) {', 'cached branch'],

@@ -1,0 +1,39 @@
+name: SORIDRAW Audit Publication Index 024 PREVIEW
+
+on:
+  push:
+    branches: [preview]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read-only D1 index and query-plan audit
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false
+          echo '=== TRACK INDEXES ==='
+          npx wrangler d1 execute "$PREVIEW_DB_NAME" --remote --command "SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='tracks' ORDER BY name;"
+          echo '=== TRACK TRIGGERS ==='
+          npx wrangler d1 execute "$PREVIEW_DB_NAME" --remote --command "SELECT name, sql FROM sqlite_master WHERE type='trigger' AND tbl_name='tracks' ORDER BY name;"
+          echo '=== PROFILE QUERY PLAN ==='
+          npx wrangler d1 execute "$PREVIEW_DB_NAME" --remote --command "EXPLAIN QUERY PLAN SELECT id FROM tracks WHERE owner_uid='audit_uid' AND is_public=1 ORDER BY profile_pinned DESC, published_at DESC, id DESC LIMIT 24;"
+          echo '=== OWNER PUBLICATION QUERY PLAN ==='
+          npx wrangler d1 execute "$PREVIEW_DB_NAME" --remote --command "EXPLAIN QUERY PLAN SELECT id FROM tracks WHERE owner_uid='audit_uid' AND is_public=1 ORDER BY published_at DESC, id DESC LIMIT 50;"
+          echo 'READ_ONLY_D1_AUDIT_024=PASS'

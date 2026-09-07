@@ -1,0 +1,65 @@
+name: SORIDRAW 034 Explore Public Feed Mirror
+
+on:
+  push:
+    branches:
+      - preview-034-explore-public-feed-mirror
+    paths:
+      - cloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs
+      - .deploy/release-034-explore-mirror.mjs
+      - .github/workflows/preview-034-explore-public-feed-mirror.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-034-explore-public-feed-mirror
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      EXPECTED_PREVIEW_SHA: a51bc4032a68eafaba9a730dad9e124b204d99a7
+      EXPECTED_MAIN_SHA: b1980b0f7f01eb3488173cdb67ff4bb5e30950b1
+
+    steps:
+      - name: Checkout 034 control branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview-034-explore-public-feed-mirror
+          fetch-depth: 0
+
+      - name: Guard current app baselines and 034 scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$EXPECTED_PREVIEW_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_MAIN_SHA"
+          changed="$(git diff --name-only "$EXPECTED_PREVIEW_SHA" HEAD | sort)"
+          expected=$'.deploy/release-034-explore-mirror.mjs\n.github/workflows/preview-034-explore-public-feed-mirror.yml\ncloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs'
+          test "$changed" = "$expected"
+          node --check .deploy/release-034-explore-mirror.mjs
+          node --check cloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs
+          echo 'SORIDRAW_034_SCOPE_GUARD=PASS'
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Cloudflare tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npm install --no-audit --no-fund --package-lock=false
+          npx wrangler --version
+
+      - name: Deploy identical Worker runtime and mirror production public feed
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .deploy/release-034-explore-mirror.mjs

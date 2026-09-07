@@ -78,9 +78,8 @@ const transformFunction = (name, transform) => {
 };
 
 async function publicationReadState024(env, uid, trackId) {
-  // Hot publish/re-publish needs only the canonical track row. Engagement counters
-  // and public-profile identity are already materialized in R2 and must not add D1
-  // rows-read to every visibility mutation.
+  // Existing publish/re-publish needs one canonical row only. Engagement and
+  // profile identity are already materialized in R2 and must not add D1 reads.
   return await env.DB.prepare(`
     SELECT *
     FROM tracks
@@ -120,6 +119,67 @@ async function publicationResolveProfileHandle024(env, uid, preferredHandle) {
   }
 }
 
+async function patchExploreProfileR2Mutation024(env, uid, change) {
+  try {
+    const normalizedUid = String(uid || '').trim();
+    const trackId = String(change?.trackId || '').trim();
+    if (!normalizedUid || !trackId) return { ok: false, skipped: true, handle: '' };
+
+    const bundle = await readExploreR2Json(env, exploreProfileR2Key(normalizedUid));
+    if (!validExploreProfileR2Bundle020(bundle)) {
+      console.warn('[SORIDRAW 024] canonical profile R2 bundle missing; repair deferred to profile access.');
+      return { ok: false, repairNeeded: true, handle: '' };
+    }
+
+    const previousData = bundle.body.data;
+    let items = previousData.items.filter((item) => getProfileTrackId019(item) !== trackId);
+    if (!change?.remove) {
+      const previous = previousData.items.find((item) => getProfileTrackId019(item) === trackId) || {};
+      const nextItem = change?.item
+        ? {
+            ...previous,
+            ...change.item,
+            // The canonical D1 hot read intentionally no longer joins track_stats.
+            // Preserve any already-materialized engagement values from R2.
+            stats: { ...(change.item?.stats || {}), ...(previous?.stats || {}) },
+            likeCount: previous?.likeCount ?? change.item?.likeCount ?? change.item?.stats?.likeCount ?? 0,
+            commentCount: previous?.commentCount ?? change.item?.commentCount ?? change.item?.stats?.commentCount ?? 0,
+            playCount: previous?.playCount ?? change.item?.playCount ?? change.item?.stats?.playCount ?? 0
+          }
+        : { ...previous, ...(change?.patch || {}) };
+      items.push(nextItem);
+    }
+    items = sortProfileTracks019(items).slice(0, PUBLIC_PROFILE_FIRST_VIEW_LIMIT);
+
+    const previousCount = Number(previousData.profile?.trackCount ?? previousData.profile?.track_count ?? 0);
+    const nextCount = Math.max(0, previousCount + Number(change?.trackCountDelta || 0));
+    const nextRevision = Math.max(1, Number(bundle.revision || previousData.revision || 0) + 1);
+    const nextData = {
+      ...previousData,
+      profile: { ...previousData.profile, trackCount: nextCount },
+      items,
+      revision: nextRevision,
+      updatedAt: Date.now()
+    };
+    const nextBundle = {
+      ...bundle,
+      revision: nextRevision,
+      updatedAt: Date.now(),
+      body: { ...bundle.body, data: nextData }
+    };
+    await writeExploreR2Json(env, exploreProfileR2Key(normalizedUid), nextBundle);
+    return {
+      ok: true,
+      repairNeeded: false,
+      revision: nextRevision,
+      handle: String(nextData.profile?.handle || bundle.handle || '').trim().replace(/^@+/, '')
+    };
+  } catch (error) {
+    console.warn('[SORIDRAW 024] profile R2 delta skipped:', String(error?.message || error || 'unknown'));
+    return { ok: false, repairNeeded: true, handle: '' };
+  }
+}
+
 replaceFunction(
   'publicationReadState016',
   publicationReadState024.toString().replace('publicationReadState024', 'publicationReadState016'),
@@ -127,6 +187,10 @@ replaceFunction(
 replaceFunction(
   'publicationResolveProfileHandle023',
   publicationResolveProfileHandle024.toString().replace('publicationResolveProfileHandle024', 'publicationResolveProfileHandle023'),
+);
+replaceFunction(
+  'patchExploreProfileR2Mutation019',
+  patchExploreProfileR2Mutation024.toString().replace('patchExploreProfileR2Mutation024', 'patchExploreProfileR2Mutation019'),
 );
 
 const helperAnchor = functionRange('handleMusicNotePublicationSingleWrite016').start;
@@ -138,12 +202,6 @@ transformFunction('handleMusicNotePublicationSingleWrite016', (text) => {
   const pattern = /const\s+profile\s*=\s*await\s+publicationEnsureProfile016\(env,\s*authContext,\s*previous,\s*now\);/;
   if (!pattern.test(text)) throw new Error('[024] publish profile ensure anchor missing');
   return text.replace(pattern, `let profile = await publicationReadProfileR2024(env, authContext);\n  if (!profile && !previous?.id) {\n    profile = await publicationEnsureProfile016(env, authContext, previous, now);\n  }\n  if (!profile) {\n    profile = {\n      nickname: String(authContext?.displayName || ''),\n      avatarUrl: String(authContext?.picture || ''),\n      handle: ''\n    };\n  }`);
-});
-
-transformFunction('patchExploreProfileR2Mutation019', (text) => {
-  const pattern = /const\s+nextItem\s*=\s*change\?\.item\s*\?\s*\{\s*\.\.\.previous,\s*\.\.\.change\.item\s*\}\s*:\s*\{\s*\.\.\.previous,\s*\.\.\.\(change\?\.patch\s*\|\|\s*\{\}\)\s*\};/;
-  if (!pattern.test(text)) throw new Error('[024] profile item merge anchor missing');
-  return text.replace(pattern, `const nextItem = change?.item\n        ? {\n            ...previous,\n            ...change.item,\n            stats: { ...(change.item?.stats || {}), ...(previous?.stats || {}) },\n            likeCount: previous?.likeCount ?? change.item?.likeCount ?? change.item?.stats?.likeCount ?? 0,\n            commentCount: previous?.commentCount ?? change.item?.commentCount ?? change.item?.stats?.commentCount ?? 0,\n            playCount: previous?.playCount ?? change.item?.playCount ?? change.item?.stats?.playCount ?? 0\n          }\n        : { ...previous, ...(change?.patch || {}) };`);
 });
 
 const readState = functionRange('publicationReadState016').text;
@@ -171,9 +229,16 @@ const newOnlyIndex = publish.indexOf('if (!profile && !previous?.id)');
 if (ensureIndex < newOnlyIndex) throw new Error('[024] profile ensure is not bounded to first publication');
 
 const profilePatch = functionRange('patchExploreProfileR2Mutation019').text;
-if (!profilePatch.includes('stats: { ...(change.item?.stats || {}), ...(previous?.stats || {}) }')) {
-  throw new Error('[024] R2 engagement preservation missing');
+for (const required of [
+  'previous?.stats',
+  'previous?.likeCount',
+  'previous?.commentCount',
+  'previous?.playCount',
+  'readExploreR2Json(env, exploreProfileR2Key(normalizedUid))'
+]) {
+  if (!profilePatch.includes(required)) throw new Error(`[024] R2 profile invariant missing: ${required}`);
 }
+if (profilePatch.includes('env.DB')) throw new Error('[024] profile R2 delta must not touch D1');
 
 writeFileSync(workerPath, source, 'utf8');
-console.log('[024] Existing Music Note publish/private hot paths use one canonical D1 read, R2 profile identity, and index-neutral visibility writes.');
+console.log('[024] Existing Music Note public/private transitions now target one canonical D1 read and one index-neutral D1 write.');

@@ -52,11 +52,15 @@ jobs:
           from pathlib import Path
           p = Path('scripts/verify-029-music-note-library.mjs')
           s = p.read_text(encoding='utf-8')
-          old = "const workerLibraryStart = worker.indexOf('const LIBRARY_SUMMARY_KEYS');"
-          new = "const workerLibraryStart = worker.indexOf('const LIBRARY_CATALOG_FIELDS');"
-          if s.count(old) != 1:
-              raise SystemExit(f'worker verifier anchor mismatch: {s.count(old)}')
-          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          replacements = [
+            ("const workerLibraryStart = worker.indexOf('const LIBRARY_SUMMARY_KEYS');", "const workerLibraryStart = worker.indexOf('const LIBRARY_CATALOG_FIELDS');"),
+            ("const workerLibraryEnd = worker.indexOf(']);', workerLibraryStart);", "const workerLibraryEnd = worker.indexOf('];', workerLibraryStart);"),
+          ]
+          for old, new in replacements:
+            if s.count(old) != 1:
+              raise SystemExit(f'worker verifier anchor mismatch: {old} => {s.count(old)}')
+            s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
           PY
           git diff --check
           node scripts/verify-029-music-note-library.mjs
@@ -111,7 +115,7 @@ jobs:
           test "$ok" = yes
           code="$(curl -sS -o "$RUNNER_TEMP/media-options-body" -D "$RUNNER_TEMP/media-options-head" -w '%{http_code}' -X OPTIONS \
             -H 'Origin: https://preview.soridraw.com' \
-            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Method: GET' \
             -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
             "$MEDIA_WORKER_URL/v1/catalog/library")"
           test "$code" = '204'
@@ -130,7 +134,6 @@ jobs:
           tree_sha="$(git write-tree)"
           clean_sha="$(printf '%s\n' 'fix(preview): cache Music Note details and restore Library next-song apply' | git commit-tree "$tree_sha" -p "$BASE_PREVIEW_SHA")"
           echo "CLEAN_SHA=$clean_sha" >> "$GITHUB_ENV"
-
           git diff --name-only "$BASE_PREVIEW_SHA" "$clean_sha" | sort > "$RUNNER_TEMP/runtime-files.txt"
           printf '%s\n' \
             'cloudflare/media-worker/src/index.js' \

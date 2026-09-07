@@ -1,0 +1,108 @@
+name: SORIDRAW Implement D1 Diagnostics 026
+on:
+  push:
+    branches: [preview]
+permissions:
+  contents: write
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 5
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply client diagnostic split
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_exact(text, old, new, expected=1, label='replace'):
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(f'{label}: expected {expected}, found {count}')
+              return text.replace(old, new)
+
+          p = Path('src/lib/cloudflareDiagnostics.ts')
+          s = p.read_text()
+          s = replace_exact(s,
+              '  d1RowsWritten: number;\n  r2ClassA: number;',
+              '  d1RowsWritten: number;\n  d1ReadQueries: number;\n  d1WriteQueries: number;\n  r2ClassA: number;',
+              2, 'types')
+          s = replace_exact(s,
+              '  d1RowsWritten: 0,\n  r2ClassA: 0,',
+              '  d1RowsWritten: 0,\n  d1ReadQueries: 0,\n  d1WriteQueries: 0,\n  r2ClassA: 0,',
+              2, 'empty states')
+          s = replace_exact(s,
+              '        d1RowsWritten: normalizeCount(state?.d1RowsWritten),\n        r2ClassA: normalizeCount(state?.r2ClassA),',
+              '        d1RowsWritten: normalizeCount(state?.d1RowsWritten),\n        d1ReadQueries: normalizeCount(state?.d1ReadQueries),\n        d1WriteQueries: normalizeCount(state?.d1WriteQueries),\n        r2ClassA: normalizeCount(state?.r2ClassA),',
+              1, 'stored path')
+          s = replace_exact(s,
+              '      d1RowsWritten: normalizeCount(parsed?.d1RowsWritten),\n      r2ClassA: normalizeCount(parsed?.r2ClassA),',
+              '      d1RowsWritten: normalizeCount(parsed?.d1RowsWritten),\n      d1ReadQueries: normalizeCount(parsed?.d1ReadQueries),\n      d1WriteQueries: normalizeCount(parsed?.d1WriteQueries),\n      r2ClassA: normalizeCount(parsed?.r2ClassA),',
+              1, 'stored total')
+          s = replace_exact(s,
+              "  const d1RowsWritten = metered ? readUsageHeader(response, 'X-SORIDRAW-D1-Write') : 0;\n  const r2ClassA = metered ? readUsageHeader(response, 'X-SORIDRAW-R2-A') : 0;",
+              "  const d1RowsWritten = metered ? readUsageHeader(response, 'X-SORIDRAW-D1-Write') : 0;\n  const d1ReadQueries = metered ? readUsageHeader(response, 'X-SORIDRAW-D1-Read-Queries') : 0;\n  const d1WriteQueries = metered ? readUsageHeader(response, 'X-SORIDRAW-D1-Write-Queries') : 0;\n  const r2ClassA = metered ? readUsageHeader(response, 'X-SORIDRAW-R2-A') : 0;",
+              1, 'headers')
+          s = replace_exact(s,
+              '    d1RowsWritten: previous.d1RowsWritten + d1RowsWritten,\n    r2ClassA: previous.r2ClassA + r2ClassA,',
+              '    d1RowsWritten: previous.d1RowsWritten + d1RowsWritten,\n    d1ReadQueries: previous.d1ReadQueries + d1ReadQueries,\n    d1WriteQueries: previous.d1WriteQueries + d1WriteQueries,\n    r2ClassA: previous.r2ClassA + r2ClassA,',
+              1, 'total accumulate')
+          s = replace_exact(s,
+              '        d1RowsWritten: previousPath.d1RowsWritten + d1RowsWritten,\n        r2ClassA: previousPath.r2ClassA + r2ClassA,',
+              '        d1RowsWritten: previousPath.d1RowsWritten + d1RowsWritten,\n        d1ReadQueries: previousPath.d1ReadQueries + d1ReadQueries,\n        d1WriteQueries: previousPath.d1WriteQueries + d1WriteQueries,\n        r2ClassA: previousPath.r2ClassA + r2ClassA,',
+              1, 'path accumulate')
+          p.write_text(s)
+
+          p = Path('src/components/CacheDiagnosticsOverlay.tsx')
+          s = p.read_text()
+          top_old = '''            <div className="whitespace-nowrap text-[12px] font-bold text-[#c6b5ff]">
+              Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)} · Worker {formatNumber(cloudflare.workerRequests)} · D1 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : '—'}
+            </div>'''
+          top_new = '''            <div className="whitespace-nowrap text-[12px] font-bold text-[#c6b5ff]">
+              Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)} · Worker {formatNumber(cloudflare.workerRequests)}
+            </div>
+            <div className="whitespace-nowrap text-[11px] font-bold text-[#c6b5ff]/80">
+              D1 쿼리 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1ReadQueries) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1WriteQueries) : '—'} · 행 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : '—'}
+            </div>'''
+          s = replace_exact(s, top_old, top_new, 1, 'overlay total')
+          path_old = '''                      <span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)} · D1 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}</span>
+                    </div>
+                    {state.lastOutcome ? ('''
+          path_new = '''                      <span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)}</span>
+                    </div>
+                    <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/68">
+                      <span className="shrink-0 whitespace-nowrap tabular-nums">D1 쿼리 읽기 {formatNumber(state.d1ReadQueries)} · 쓰기 {formatNumber(state.d1WriteQueries)}</span>
+                      <span className="shrink-0 whitespace-nowrap tabular-nums">행 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}</span>
+                    </div>
+                    {state.lastOutcome ? ('''
+          s = replace_exact(s, path_old, path_new, 1, 'overlay path')
+          p.write_text(s)
+          PY
+          node --check cloudflare/explore-worker/patches/026-d1-query-vs-row-diagnostics.mjs
+          git diff --check
+          git diff -- src/lib/cloudflareDiagnostics.ts src/components/CacheDiagnosticsOverlay.tsx
+      - name: Validate app
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+      - name: Commit implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/cloudflareDiagnostics.ts src/components/CacheDiagnosticsOverlay.tsx
+          git commit -m 'feat(preview): split D1 query counts from row billing'
+          git push origin HEAD:preview

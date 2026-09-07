@@ -79,6 +79,33 @@ async function settings(worker) {
   return cfGet(`https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/workers/scripts/${worker}/settings`);
 }
 
+function functionText(source, name) {
+  const needles = [`async function ${name}(`, `function ${name}(`];
+  let start = -1;
+  for (const needle of needles) {
+    start = source.indexOf(needle);
+    if (start >= 0) break;
+  }
+  if (start < 0) throw new Error(`runtime function missing: ${name}`);
+  const brace = source.indexOf('{', start);
+  let depth = 0;
+  let quote = null;
+  let escaped = false;
+  for (let i = brace; i < source.length; i += 1) {
+    const c = source[i];
+    if (quote) {
+      if (escaped) { escaped = false; continue; }
+      if (c === '\\') { escaped = true; continue; }
+      if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { quote = c; continue; }
+    if (c === '{') depth += 1;
+    else if (c === '}' && --depth === 0) return source.slice(start, i + 1);
+  }
+  throw new Error(`runtime function unterminated: ${name}`);
+}
+
 function guardTargetBindings(current) {
   const bindings = Array.isArray(current?.bindings) ? current.bindings : [];
   const unexpected = bindings.filter((binding) => {
@@ -112,7 +139,6 @@ function configFrom(current) {
 
 function validatePreviewRuntime(source) {
   for (const token of [
-    'SORIDRAW_PUBLICATION_POSTWRITE_500_RETRY_COST_018_20260905',
     'SORIDRAW_EXPLORE_FEED_REVISION_019_20260908',
     'handleMusicNotePublicationSingleWrite016',
     'publicationReadState016',
@@ -122,6 +148,22 @@ function validatePreviewRuntime(source) {
   ]) {
     if (!source.includes(token)) throw new Error(`validated PREVIEW runtime missing: ${token}`);
   }
+
+  const feedInvalidation = functionText(source, 'invalidateExploreFeedEdgeCache');
+  if (feedInvalidation.includes('ALLOWED_ORIGINS')) throw new Error('validated PREVIEW feed invalidation still fans out across origins');
+  if (!feedInvalidation.includes('Promise.allSettled')) throw new Error('validated PREVIEW feed invalidation is not best-effort');
+
+  const readState = functionText(source, 'publicationReadState016');
+  if (!readState.includes('env.DB.batch')) throw new Error('validated PREVIEW publication reads are not batched');
+  if (readState.includes('track_stats')) throw new Error('validated PREVIEW publication read still touches track_stats');
+
+  const hot = functionText(source, 'handleMusicNotePublicationSingleWrite016');
+  const idempotentIndex = hot.indexOf('mutation: "idempotent"');
+  const feedSyncIndex = hot.indexOf('syncExploreFeedR2Publication012');
+  if (idempotentIndex < 0 || feedSyncIndex < 0 || idempotentIndex > feedSyncIndex) {
+    throw new Error('validated PREVIEW idempotent publication path is not before derived R2 work');
+  }
+
   if (source.includes('soridraw-explore-preview.andrawing1212.workers.dev')) {
     throw new Error('validated PREVIEW runtime contains a preview Worker self URL; refusing cross-environment mirror');
   }
@@ -173,6 +215,7 @@ try {
   if (afterVersion === beforeVersion) throw new Error(`${mode} active Worker version did not change`);
   const deployedSource = await activeSource(target.worker, afterVersion);
   if (deployedSource !== validatedPreviewSource) throw new Error(`${mode} deployed Worker source is not byte-identical to validated PREVIEW runtime`);
+  validatePreviewRuntime(deployedSource);
   await smoke();
   console.log(`CLOUDFLARE_${mode.toUpperCase()}_033=PASS preview=${previewVersion} before=${beforeVersion} after=${afterVersion}`);
 } catch (error) {

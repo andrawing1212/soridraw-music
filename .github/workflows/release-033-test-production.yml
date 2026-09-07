@@ -9,7 +9,7 @@ on:
       - .github/workflows/release-033-test-production.yml
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: soridraw-release-033-test-production
@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 70
     env:
       PREVIEW_BASELINE_SHA: a51bc4032a68eafaba9a730dad9e124b204d99a7
-      EXPECTED_MAIN_SHA: 77d57c5dd0af4f529f9bd0bd37b00e36f5b8b72c
+      EXPECTED_MAIN_SHA: b1980b0f7f01eb3488173cdb67ff4bb5e30950b1
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       FIREBASE_PROJECT: soridraw
       TEST_ORIGIN: https://test.soridraw.com
@@ -36,7 +36,7 @@ jobs:
           ref: release-033-test-production
           fetch-depth: 0
 
-      - name: Guard validated PREVIEW 033 and current main
+      - name: Guard validated PREVIEW 033 and promoted main
         shell: bash
         run: |
           set -euo pipefail
@@ -46,30 +46,22 @@ jobs:
           changed="$(git diff --name-only "$PREVIEW_BASELINE_SHA" HEAD | sort)"
           expected=$'.deploy/release-033-cloudflare.mjs\n.github/workflows/release-033-test-production.yml'
           test "$changed" = "$expected"
-          echo 'RELEASE_033_GUARD=PASS'
+          git fetch origin main preview
+          test "$(git rev-parse 'origin/main^{tree}')" = "$(git rev-parse "$PREVIEW_BASELINE_SHA^{tree}")"
+          echo 'RELEASE_033_RESUME_GUARD=PASS'
 
-      - name: Promote exact validated PREVIEW 033 tree to main
+      - name: Prepare exact main release worktree
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'SORIDRAW Release Bot'
-          git config user.email 'soridraw-release@users.noreply.github.com'
-          git fetch origin main preview
           release_root="$RUNNER_TEMP/soridraw-main-033"
           rm -rf "$release_root"
-          git worktree add -b release-main-033 "$release_root" origin/main
+          git worktree add --detach "$release_root" origin/main
           cd "$release_root"
-          git read-tree --reset -u "$PREVIEW_BASELINE_SHA"
-          git add -A
-          git commit -m 'release: promote validated PREVIEW 033 snapshot'
-          release_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
           test "$(git rev-parse 'HEAD^{tree}')" = "$(git rev-parse "$PREVIEW_BASELINE_SHA^{tree}")"
-          git push origin HEAD:main
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$release_sha"
           echo "RELEASE_ROOT=$release_root" >> "$GITHUB_ENV"
-          echo "MAIN_RELEASE_SHA=$release_sha" >> "$GITHUB_ENV"
-          echo "MAIN_RELEASE_SHORT=$(git rev-parse --short=8 HEAD)" >> "$GITHUB_ENV"
-          echo "MAIN_RELEASE_SHA=$release_sha"
+          echo "MAIN_RELEASE_SHA=$EXPECTED_MAIN_SHA" >> "$GITHUB_ENV"
           echo 'MAIN_TREE_EQUALS_PREVIEW_033=PASS'
 
       - name: Set up Node.js 20
@@ -118,11 +110,11 @@ jobs:
           sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
           echo 'PRODUCTION_SNAPSHOT_BEFORE_TEST=PASS'
 
-      - name: Deploy Explore TEST Worker 033
+      - name: Deploy Explore TEST Worker from validated PREVIEW runtime
         shell: bash
         run: |
           set -euo pipefail
-          SORIDRAW_RELEASE_ROOT="$RELEASE_ROOT" node .deploy/release-033-cloudflare.mjs test
+          SORIDRAW_RELEASE_ROOT="$RELEASE_ROOT" node "$GITHUB_WORKSPACE/.deploy/release-033-cloudflare.mjs" test
 
       - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
@@ -169,11 +161,11 @@ jobs:
           cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-mid.sha"
           echo 'PRODUCTION_UNCHANGED_AFTER_TEST=PASS'
 
-      - name: Deploy Explore PRODUCTION Worker 033
+      - name: Deploy Explore PRODUCTION Worker from validated PREVIEW runtime
         shell: bash
         run: |
           set -euo pipefail
-          SORIDRAW_RELEASE_ROOT="$RELEASE_ROOT" node .deploy/release-033-cloudflare.mjs production
+          SORIDRAW_RELEASE_ROOT="$RELEASE_ROOT" node "$GITHUB_WORKSPACE/.deploy/release-033-cloudflare.mjs" production
 
       - name: Deploy Firebase PRODUCTION Hosting
         shell: bash

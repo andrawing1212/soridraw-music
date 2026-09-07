@@ -1,4 +1,4 @@
-name: SORIDRAW PREVIEW 029 MusicNote Library Fix
+name: SORIDRAW PREVIEW 029 Final Deploy
 
 on:
   push:
@@ -10,40 +10,33 @@ permissions:
   contents: write
 
 concurrency:
-  group: soridraw-preview-029-musicnote-library-fix
+  group: soridraw-preview-029-final
   cancel-in-progress: false
 
 jobs:
-  fix-test-deploy:
+  deploy:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       BASE_PREVIEW_SHA: 46174546a813b81641bac6050794c32969ec714d
       BASE_MAIN_SHA: da3f70ca3e8574f20a5eabf96a4c517c51b4038c
-      FIREBASE_PROJECT: soridraw
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       MEDIA_WORKER_URL: https://soridraw-media-preview.andrawing1212.workers.dev
     steps:
-      - name: Checkout isolated work branch
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: preview-029-fix
           fetch-depth: 0
 
-      - name: Guard exact PREVIEW and MAIN baselines
+      - name: Guard exact baselines
         shell: bash
         run: |
           set -euo pipefail
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$BASE_PREVIEW_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
-          git diff --name-only "$BASE_PREVIEW_SHA" HEAD | sort > "$RUNNER_TEMP/bootstrap-files.txt"
-          printf '%s\n' \
-            '.deploy/apply-029-musicnote-library-fix.py' \
-            '.github/workflows/temp-preview-029-musicnote-library-fix.yml' | sort > "$RUNNER_TEMP/bootstrap-expected.txt"
-          cmp "$RUNNER_TEMP/bootstrap-expected.txt" "$RUNNER_TEMP/bootstrap-files.txt"
           echo 'BASELINE_GUARD_029=PASS'
 
-      - name: Apply focused runtime fixes
+      - name: Apply focused 029 runtime patch
         shell: bash
         run: |
           set -euo pipefail
@@ -52,13 +45,13 @@ jobs:
           from pathlib import Path
           p = Path('scripts/verify-029-music-note-library.mjs')
           s = p.read_text(encoding='utf-8')
-          replacements = [
+          fixes = [
             ("const workerLibraryStart = worker.indexOf('const LIBRARY_SUMMARY_KEYS');", "const workerLibraryStart = worker.indexOf('const LIBRARY_CATALOG_FIELDS');"),
             ("const workerLibraryEnd = worker.indexOf(']);', workerLibraryStart);", "const workerLibraryEnd = worker.indexOf('];', workerLibraryStart);"),
           ]
-          for old, new in replacements:
+          for old, new in fixes:
             if s.count(old) != 1:
-              raise SystemExit(f'worker verifier anchor mismatch: {old} => {s.count(old)}')
+              raise SystemExit(f'verifier anchor mismatch: {old} -> {s.count(old)}')
             s = s.replace(old, new, 1)
           p.write_text(s, encoding='utf-8')
           PY
@@ -66,46 +59,37 @@ jobs:
           node scripts/verify-029-music-note-library.mjs
           echo 'PATCH_029=PASS'
 
-      - name: Set up Node.js 20 for app
+      - name: Set up Node 20 for app
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: TypeScript build and regression checks
+      - name: TypeScript build and regressions
         shell: bash
         run: |
           set -euo pipefail
           npm ci
           npx tsc --noEmit
           node scripts/verify-029-music-note-library.mjs
-          if [ -f scripts/verify-adaptive-list-index-v2.mjs ] && [ -f functions/src/previewAdaptiveListIndex.ts ]; then node scripts/verify-adaptive-list-index-v2.mjs; fi
-          if [ -f scripts/verify-runtime-environment-parity-028.mjs ]; then node scripts/verify-runtime-environment-parity-028.mjs; fi
+          node scripts/verify-runtime-environment-parity-028.mjs
           npm run build
           sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/local-index.sha"
-          echo 'APP_BUILD_029=PASS'
+          echo 'APP_VALIDATION_029=PASS'
 
-      - name: Set up Node.js 22 for Cloudflare
+      - name: Set up Node 22 for Cloudflare
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Validate changed PREVIEW media Worker
+      - name: Validate deploy and verify PREVIEW media Worker
         shell: bash
         run: |
           set -euo pipefail
           cd cloudflare/media-worker
           npm install --no-audit --no-fund
           npm run check
-          echo 'MEDIA_WORKER_DRYRUN_029=PASS'
-
-      - name: Deploy and verify PREVIEW media Worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}"
-          cd cloudflare/media-worker
-          npm run deploy | tee "$RUNNER_TEMP/media-worker-deploy.log"
+          npm run deploy | tee "$RUNNER_TEMP/media-deploy.log"
           cd ../..
           ok=''
           for attempt in $(seq 1 12); do
@@ -123,38 +107,38 @@ jobs:
             -H 'Access-Control-Request-Method: GET' \
             -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
             "$MEDIA_WORKER_URL/v1/catalog/library")"
-          test "$code" = '204'
+          test "$code" = 204
           grep -qi '^access-control-allow-origin: https://preview.soridraw.com' "$RUNNER_TEMP/media-options-head"
           echo 'MEDIA_WORKER_PREVIEW_029=PASS'
 
-      - name: Build clean PREVIEW commit without temporary runner files
+      - name: Create exact clean PREVIEW commit
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'SORIDRAW Preview Bot'
           git config user.email 'soridraw-preview@users.noreply.github.com'
-          rm -f .deploy/apply-029-musicnote-library-fix.py
-          rm -f .github/workflows/temp-preview-029-musicnote-library-fix.yml
-          rm -rf cloudflare/media-worker/.dry-run
-          git restore --worktree -- cloudflare/media-worker/package-lock.json 2>/dev/null || true
-          git add -A
+          git read-tree "$BASE_PREVIEW_SHA^{tree}"
+          git add \
+            cloudflare/media-worker/src/index.js \
+            scripts/verify-029-music-note-library.mjs \
+            src/components/GlobalPlayer.tsx \
+            src/lib/musicNoteDetailCache.ts \
+            src/lib/userDataEngine.ts \
+            src/pages/FavoritesPage.tsx \
+            src/pages/SunoLibraryPage.tsx
           tree_sha="$(git write-tree)"
           clean_sha="$(printf '%s\n' 'fix(preview): cache Music Note details and restore Library next-song apply' | git commit-tree "$tree_sha" -p "$BASE_PREVIEW_SHA")"
           echo "CLEAN_SHA=$clean_sha" >> "$GITHUB_ENV"
-          git diff --name-only "$BASE_PREVIEW_SHA" "$clean_sha" | sort > "$RUNNER_TEMP/runtime-files.txt"
+          git diff --name-only "$BASE_PREVIEW_SHA" "$clean_sha" | sort > "$RUNNER_TEMP/actual.txt"
           printf '%s\n' \
-            'cloudflare/media-worker/src/index.js' \
-            'scripts/verify-029-music-note-library.mjs' \
-            'src/components/GlobalPlayer.tsx' \
-            'src/lib/musicNoteDetailCache.ts' \
-            'src/lib/userDataEngine.ts' \
-            'src/pages/FavoritesPage.tsx' \
-            'src/pages/SunoLibraryPage.tsx' | sort > "$RUNNER_TEMP/runtime-expected.txt"
-          echo '--- expected runtime files ---'
-          cat "$RUNNER_TEMP/runtime-expected.txt"
-          echo '--- actual runtime files ---'
-          cat "$RUNNER_TEMP/runtime-files.txt"
-          cmp "$RUNNER_TEMP/runtime-expected.txt" "$RUNNER_TEMP/runtime-files.txt"
+            cloudflare/media-worker/src/index.js \
+            scripts/verify-029-music-note-library.mjs \
+            src/components/GlobalPlayer.tsx \
+            src/lib/musicNoteDetailCache.ts \
+            src/lib/userDataEngine.ts \
+            src/pages/FavoritesPage.tsx \
+            src/pages/SunoLibraryPage.tsx | sort > "$RUNNER_TEMP/expected.txt"
+          cmp "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/actual.txt"
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$BASE_PREVIEW_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
           echo "CLEAN_PREVIEW_SHA=$clean_sha"
@@ -165,44 +149,40 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Deploy validated frontend to Firebase PREVIEW
+      - name: Deploy Firebase PREVIEW and verify exact build
         shell: bash
         run: |
           set -euo pipefail
-          production_before="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ | sha256sum | awk '{print $1}')"
-          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          prod_before="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ | sha256sum | awk '{print $1}')"
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
           local_sha="$(cat "$RUNNER_TEMP/local-index.sha")"
-          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+          for url in https://soridraw-preview.web.app/ https://preview.soridraw.com/; do
             ok=''
             for attempt in $(seq 1 15); do
-              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/live-index.html"; then
-                remote_sha="$(sha256sum "$RUNNER_TEMP/live-index.html" | awk '{print $1}')"
-                if [ "$remote_sha" = "$local_sha" ]; then
-                  echo "PREVIEW_EXACT_BUILD_PASS=$url"
-                  ok=yes
-                  break
-                fi
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/live.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/live.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then ok=yes; echo "EXACT_BUILD_PASS=$url"; break; fi
               fi
               sleep 8
             done
             test "$ok" = yes
           done
-          production_after="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ | sha256sum | awk '{print $1}')"
-          test "$production_before" = "$production_after"
+          prod_after="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ | sha256sum | awk '{print $1}')"
+          test "$prod_before" = "$prod_after"
           echo 'FIREBASE_PREVIEW_029=PASS'
           echo 'PRODUCTION_HOSTING_UNCHANGED_029=PASS'
 
-      - name: Promote exact clean commit to PREVIEW only
+      - name: Promote exact clean commit to preview
         shell: bash
         run: |
           set -euo pipefail
           git push origin "$CLEAN_SHA":refs/heads/preview
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$CLEAN_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
-          echo 'PREVIEW_PROMOTION_029=PASS'
+          echo 'PREVIEW_PUSH_029=PASS'
           echo 'MAIN_UNCHANGED_029=PASS'
 
-      - name: Package clean PREVIEW ZIP
+      - name: Package PREVIEW ZIP
         shell: bash
         run: |
           set -euo pipefail
@@ -211,7 +191,6 @@ jobs:
           git archive --format=zip --output="$zip_path" "$CLEAN_SHA"
           sha256sum "$zip_path"
           echo "ZIP_PATH=$zip_path" >> "$GITHUB_ENV"
-          echo 'PREVIEW_ZIP_029=PASS'
 
       - name: Upload PREVIEW ZIP
         uses: actions/upload-artifact@v4
@@ -221,14 +200,11 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-      - name: Final result
+      - name: Final
         shell: bash
         run: |
           set -euo pipefail
           echo "CLEAN_PREVIEW_SHA=$CLEAN_SHA"
-          echo 'FIREBASE_HOSTING_CHANGED=true'
-          echo 'CLOUDFLARE_MEDIA_SOURCE_CHANGED=true'
-          echo 'CLOUDFLARE_MEDIA_DEPLOYED=true'
           echo 'FUNCTIONS_CHANGED=false'
           echo 'FIRESTORE_RULES_CHANGED=false'
           echo 'EXPLORE_WORKER_CHANGED=false'

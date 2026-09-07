@@ -1,0 +1,70 @@
+name: SORIDRAW Restore Publication 024 PREVIEW
+on:
+  push:
+    branches: [preview]
+permissions:
+  contents: read
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    env:
+      BASE_024_SHA: 81c016731e3621e387cbfc99c73f2b3a492e6ac1
+      RESTORE_SHA: cf7084957140a3f19c9231e1de41a5cdb60eb63d
+      MAIN_SHA: 49c799cbb46d137539f74a48c261f7256762336f
+      TARGET_024_VERSION: 2593eda0-d810-4938-ad38-90614123339f
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - name: Guard exact 024 tree
+        run: |
+          set -euo pipefail
+          git diff --exit-code "$BASE_024_SHA" "$RESTORE_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_SHA"
+          test ! -e cloudflare/explore-worker/patches/025-publication-update-returning-hotpath.mjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Validate source
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        run: npm install --no-save wrangler@4.102.0
+      - name: Restore exact 024 Worker version
+        run: |
+          set -euo pipefail
+          npx wrangler versions deploy "$TARGET_024_VERSION@100%" --name "$PREVIEW_WORKER" --yes
+          sleep 4
+          npx wrangler deployments status --name "$PREVIEW_WORKER" | tee /tmp/deploy-status.txt
+          grep -Fq "$TARGET_024_VERSION" /tmp/deploy-status.txt
+          test "$(curl -sS -o /tmp/feed.json -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=latest&limit=1")" = 200
+          test "$(curl -sS -o /tmp/genres.json -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/genres")" = 200
+          test "$(curl -sS -o /tmp/publication.json -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" -H 'content-type: application/json' -X POST --data '{}' "$PREVIEW_BASE/v1/publications")" = 401
+          test "$(curl -sS -o /tmp/site.html -w '%{http_code}' -H 'Cache-Control: no-cache' "$PREVIEW_ORIGIN")" = 200
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_SHA"
+          echo 'PREVIEW_024_RESTORE=PASS'
+      - name: Package restored source
+        run: |
+          set -euo pipefail
+          zipname="SORIDRAW_PREVIEW_024_restored_cf708495.zip"
+          git archive --format=zip --output="$zipname" "$RESTORE_SHA"
+          echo "ZIP_NAME=$zipname" >> "$GITHUB_ENV"
+          sha256sum "$zipname"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_PREVIEW_024_restored
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 30

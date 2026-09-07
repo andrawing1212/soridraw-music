@@ -1,0 +1,166 @@
+name: SORIDRAW PREVIEW 030 Library Warm Cache Zero Read
+
+on:
+  push:
+    branches: [preview-030-library-warm-cache]
+    paths:
+      - '.github/workflows/temp-preview-030-library-warm-cache.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-preview-030-library-warm-cache
+  cancel-in-progress: false
+
+jobs:
+  validate-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      BASE_PREVIEW_SHA: fa3073d3f64afb31727780a7e3dece06143d3860
+      BASE_MAIN_SHA: da3f70ca3e8574f20a5eabf96a4c517c51b4038c
+      FIREBASE_PROJECT: soridraw
+    steps:
+      - name: Checkout isolated 030 branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview-030-library-warm-cache
+          fetch-depth: 0
+
+      - name: Guard exact PREVIEW and MAIN baselines
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$BASE_PREVIEW_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
+          git diff --name-only "$BASE_PREVIEW_SHA" HEAD | sort > "$RUNNER_TEMP/bootstrap-actual.txt"
+          printf '%s\n' \
+            '.deploy/apply-030-library-warm-cache-no-idle-read.py' \
+            '.github/workflows/temp-preview-030-library-warm-cache.yml' | sort > "$RUNNER_TEMP/bootstrap-expected.txt"
+          cmp "$RUNNER_TEMP/bootstrap-expected.txt" "$RUNNER_TEMP/bootstrap-actual.txt"
+          echo 'BASELINE_GUARD_030=PASS'
+
+      - name: Apply focused 030 fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .deploy/apply-030-library-warm-cache-no-idle-read.py
+          git diff --check
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          echo 'PATCH_030=PASS'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: TypeScript build and regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-runtime-environment-parity-028.mjs
+          npm run build
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/local-index.sha"
+          echo 'APP_VALIDATION_030=PASS'
+
+      - name: Create exact clean PREVIEW commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Preview Bot'
+          git config user.email 'soridraw-preview@users.noreply.github.com'
+          git read-tree "$BASE_PREVIEW_SHA^{tree}"
+          git add \
+            src/pages/SunoLibraryPage.tsx \
+            scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          tree_sha="$(git write-tree)"
+          clean_sha="$(printf '%s\n' 'fix(preview): keep warm Library cache at server zero' | git commit-tree "$tree_sha" -p "$BASE_PREVIEW_SHA")"
+          echo "CLEAN_SHA=$clean_sha" >> "$GITHUB_ENV"
+          git diff --name-only "$BASE_PREVIEW_SHA" "$clean_sha" | sort > "$RUNNER_TEMP/clean-actual.txt"
+          printf '%s\n' \
+            'scripts/verify-030-library-warm-cache-no-idle-read.mjs' \
+            'src/pages/SunoLibraryPage.tsx' | sort > "$RUNNER_TEMP/clean-expected.txt"
+          cmp "$RUNNER_TEMP/clean-expected.txt" "$RUNNER_TEMP/clean-actual.txt"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$BASE_PREVIEW_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
+          echo "CLEAN_PREVIEW_SHA=$clean_sha"
+          echo 'CLEAN_TREE_030=PASS'
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW and verify exact build
+        shell: bash
+        run: |
+          set -euo pipefail
+          production_before="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ | sha256sum | awk '{print $1}')"
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          local_sha="$(cat "$RUNNER_TEMP/local-index.sha")"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/live-index.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/live-index.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then
+                  echo "PREVIEW_EXACT_BUILD_PASS=$url"
+                  ok=yes
+                  break
+                fi
+              fi
+              sleep 8
+            done
+            test "$ok" = yes
+          done
+          production_after="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ | sha256sum | awk '{print $1}')"
+          test "$production_before" = "$production_after"
+          echo 'FIREBASE_PREVIEW_030=PASS'
+          echo 'PRODUCTION_HOSTING_UNCHANGED_030=PASS'
+
+      - name: Promote exact clean commit to PREVIEW only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "$CLEAN_SHA":refs/heads/preview
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$CLEAN_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
+          echo 'PREVIEW_PUSH_030=PASS'
+          echo 'MAIN_UNCHANGED_030=PASS'
+
+      - name: Package PREVIEW ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          short="$(git rev-parse --short=8 "$CLEAN_SHA")"
+          zip_path="$RUNNER_TEMP/SORIDRAW_PREVIEW_030_${short}.zip"
+          git archive --format=zip --output="$zip_path" "$CLEAN_SHA"
+          sha256sum "$zip_path"
+          echo "ZIP_PATH=$zip_path" >> "$GITHUB_ENV"
+          echo 'PREVIEW_ZIP_030=PASS'
+
+      - name: Upload PREVIEW ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_PREVIEW_030
+          path: ${{ env.ZIP_PATH }}
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Final result
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "CLEAN_PREVIEW_SHA=$CLEAN_SHA"
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'FIRESTORE_RULES_CHANGED=false'
+          echo 'CLOUDFLARE_CHANGED=false'
+          echo 'TEST_CHANGED=false'
+          echo 'PRODUCTION_CHANGED=false'
+          echo 'SORIDRAW_PREVIEW_030=PASS'

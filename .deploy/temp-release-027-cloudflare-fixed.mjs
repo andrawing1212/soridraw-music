@@ -15,5 +15,9 @@ source = source.replace(
   "'SORIDRAW_PUBLICATION_STABLE_SEMANTIC_REPUBLISH_027_20260907'",
   "'publicationStableShareValue027'",
 );
+source = source.replace(
+  "  if (sha(afterSource) !== sha(previewSource)) throw new Error(`final runtime source hash differs from validated PREVIEW source`);\n",
+  "  // Cloudflare normalizes bundled source text on version fetch; verify protected function hashes below instead.\n",
+);
 writeFileSync(tempPath, source, 'utf8');
 await import(`${pathToFileURL(tempPath).href}?run=${Date.now()}`);

@@ -11,6 +11,7 @@ import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
   patchExploreFeedSessionCacheRow,
   readExploreFeedSessionCache,
+  readExploreFeedSessionCacheRevision,
   writeExploreFeedSessionCache,
 } from '../services/exploreSessionCache';
 import { getExploreLikedTrackIds, setExploreTrackLike } from '../services/exploreLikeService';
@@ -48,6 +49,37 @@ type ExploreApiResponse = {
     items?: Array<Record<string, unknown>>;
     nextCursor?: string | null;
   };
+};
+
+// SORIDRAW_EXPLORE_FEED_REVISION_033_20260908
+type ExploreFeedRevisionResponse = {
+  ok?: boolean;
+  data?: {
+    sort?: string | null;
+    revision?: string | null;
+  };
+};
+
+const EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 1000;
+
+const isExploreFeedRequest = (value: string) => {
+  try {
+    return new URL(value).pathname === '/v1/feed';
+  } catch {
+    return false;
+  }
+};
+
+const buildExploreFeedRevisionUrl = (feedUrl: string) => {
+  const parsed = new URL(feedUrl);
+  const sort = parsed.searchParams.get('sort') === 'popular' ? 'popular' : 'latest';
+  return `${parsed.origin}/v1/feed-revision?sort=${sort}`;
+};
+
+const buildExploreVersionedFeedUrl = (feedUrl: string, revision: string) => {
+  const parsed = new URL(feedUrl);
+  parsed.searchParams.set('__soridraw_revision', revision);
+  return parsed.toString();
 };
 
 
@@ -223,6 +255,8 @@ export default function ExplorePage() {
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const likeHydrationKeyRef = useRef('');
+  const [feedRevisionSignal, setFeedRevisionSignal] = useState(0);
+  const feedRevisionEventAtRef = useRef(0);
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
     setUser(currentUser);
@@ -242,44 +276,125 @@ export default function ExplorePage() {
 
   useEffect(() => {
     const cachedRows = readExploreFeedSessionCache(requestUrl);
+    const feedRequest = isExploreFeedRequest(requestUrl);
+    const controller = new AbortController();
+
+    const fetchPayload = async (url: string): Promise<ExploreApiResponse> => {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      recordCloudflareResponse(response);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json() as Promise<ExploreApiResponse>;
+    };
+
+    const fetchRevision = async (): Promise<string | null> => {
+      if (!feedRequest) return null;
+      const response = await fetch(buildExploreFeedRevisionUrl(requestUrl), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      recordCloudflareResponse(response);
+      if (!response.ok) throw new Error(`revision HTTP ${response.status}`);
+      const payload = await response.json() as ExploreFeedRevisionResponse;
+      return safeText(payload?.data?.revision) || null;
+    };
+
+    const applyPayload = (payload: ExploreApiResponse, serverRevision: string | null) => {
+      const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+      if (feedRequest) {
+        writeExploreFeedSessionCache(
+          requestUrl,
+          rows,
+          safeText(payload?.data?.nextCursor) || null,
+          serverRevision,
+        );
+      }
+      setTracks(rows.map(normalizeTrack).filter((track) => track.id));
+    };
+
     if (cachedRows) {
       setError('');
       setTracks(cachedRows.map(normalizeTrack).filter((track) => track.id));
       setLoading(false);
-      return;
+
+      if (feedRequest) {
+        void (async () => {
+          try {
+            const serverRevision = await fetchRevision();
+            if (!serverRevision || controller.signal.aborted) return;
+            const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
+            if (cachedRevision === serverRevision) return;
+            const payload = await fetchPayload(buildExploreVersionedFeedUrl(requestUrl, serverRevision));
+            if (controller.signal.aborted) return;
+            applyPayload(payload, serverRevision);
+          } catch (reason) {
+            if (!controller.signal.aborted) {
+              console.warn('Explore feed revision revalidation failed; keeping cached feed:', reason);
+            }
+          }
+        })();
+      }
+
+      return () => controller.abort();
     }
 
-    const controller = new AbortController();
     setLoading(true);
     setError('');
 
-    fetch(requestUrl, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        recordCloudflareResponse(response);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<ExploreApiResponse>;
-      })
-      .then((payload) => {
-        const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
-        writeExploreFeedSessionCache(requestUrl, rows, safeText(payload?.data?.nextCursor) || null);
-        setTracks(rows.map(normalizeTrack).filter((track) => track.id));
-      })
-      .catch((reason: unknown) => {
+    void (async () => {
+      try {
+        if (feedRequest) {
+          const revisionTask = fetchRevision().catch((reason) => {
+            if (!controller.signal.aborted) {
+              console.warn('Explore feed revision bootstrap failed; continuing with feed:', reason);
+            }
+            return null;
+          });
+          const payload = await fetchPayload(requestUrl);
+          const serverRevision = await revisionTask;
+          if (controller.signal.aborted) return;
+          applyPayload(payload, serverRevision);
+          return;
+        }
+
+        const payload = await fetchPayload(requestUrl);
+        if (controller.signal.aborted) return;
+        applyPayload(payload, null);
+      } catch (reason: unknown) {
         if (controller.signal.aborted) return;
         console.error('Explore feed load failed:', reason);
         setError('Explore 곡을 불러오지 못했어요.');
         setTracks([]);
-      })
-      .finally(() => {
+      } finally {
         if (!controller.signal.aborted) setLoading(false);
-      });
+      }
+    })();
 
     return () => controller.abort();
-  }, [requestUrl]);
+  }, [requestUrl, feedRevisionSignal]);
+
+  useEffect(() => {
+    if (!isExploreFeedRequest(requestUrl) || profileUid) return;
+
+    const requestRevisionCheck = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - feedRevisionEventAtRef.current < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
+      feedRevisionEventAtRef.current = now;
+      setFeedRevisionSignal((value) => value + 1);
+    };
+
+    window.addEventListener('focus', requestRevisionCheck);
+    document.addEventListener('visibilitychange', requestRevisionCheck);
+    return () => {
+      window.removeEventListener('focus', requestRevisionCheck);
+      document.removeEventListener('visibilitychange', requestRevisionCheck);
+    };
+  }, [requestUrl, profileUid]);
 
   useEffect(() => {
     if (!profileUid) {

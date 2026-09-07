@@ -1,0 +1,269 @@
+name: SORIDRAW 033 Explore Feed Revision PREVIEW
+
+on:
+  push:
+    branches:
+      - preview-033-explore-feed-revision
+      - preview
+    paths:
+      - .github/workflows/preview-033-explore-feed-revision.yml
+      - .deploy/apply-033-explore-feed-revision.mjs
+      - cloudflare/explore-worker/patches/019-explore-feed-revision-sync.mjs
+      - scripts/verify-033-explore-feed-revision.mjs
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-033-explore-feed-revision-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  verify-materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 10
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install exact app dependencies
+        run: npm ci
+
+      - name: Apply 033 source patch
+        run: node .deploy/apply-033-explore-feed-revision.mjs
+
+      - name: TypeScript and regression checks
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          echo 'REGRESSION_029_033=PASS'
+
+      - name: Build
+        run: npm run build
+
+      - name: Materialize verified 033 source on work branch
+        if: github.ref_name == 'preview-033-explore-feed-revision'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- src/pages/ExplorePage.tsx src/services/exploreSessionCache.ts; then
+            echo 'SOURCE_ALREADY_MATERIALIZED=PASS'
+            exit 0
+          fi
+          git config user.name 'SORIDRAW Preview Bot'
+          git config user.email 'soridraw-preview@users.noreply.github.com'
+          git add src/pages/ExplorePage.tsx src/services/exploreSessionCache.ts
+          git commit -m 'feat(preview): apply Explore feed revision sync'
+          git push origin HEAD:preview-033-explore-feed-revision
+          echo 'SOURCE_MATERIALIZED=PASS'
+
+      - name: Require clean generated source on preview
+        if: github.ref_name == 'preview'
+        run: git diff --exit-code -- src/pages/ExplorePage.tsx src/services/exploreSessionCache.ts
+
+  deploy-preview:
+    if: github.ref_name == 'preview'
+    needs: verify-materialize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+      PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_R2: soridraw-profile-media-preview
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - name: Checkout verified preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 10
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install, verify and build exact preview
+        run: |
+          set -euo pipefail
+          npm ci
+          node .deploy/apply-033-explore-feed-revision.mjs
+          git diff --exit-code -- src/pages/ExplorePage.tsx src/services/exploreSessionCache.ts
+          npx tsc --noEmit
+          node scripts/verify-033-explore-feed-revision.mjs
+          npm run build
+          grep -R -q '/v1/feed-revision' dist/assets
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/preview-index.sha"
+          echo 'APP_033_BUILD=PASS'
+
+      - name: Set up Node.js 22 for Cloudflare
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker dependencies
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Prepare and patch current PREVIEW Explore Worker
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          rm -rf .remote-worker && mkdir -p .remote-worker
+          node <<'NODE'
+          const fs=require('fs');
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID,name=process.env.PREVIEW_WORKER,token=process.env.CLOUDFLARE_API_TOKEN;
+          async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${JSON.stringify(x).slice(0,1200)}`);return x.result||x;}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}`;
+            const deps=await get(`${base}/deployments`);const d=(deps.deployments||deps||[])[0];
+            const active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(!active?.version_id||Number(active.percentage||0)<99.99)throw new Error('No single active PREVIEW Explore version');
+            fs.writeFileSync('.remote-worker/before-version.txt',String(active.version_id));
+            const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${active.version_id}?include=modules`);
+            const mods=ver.modules||[];if(!mods.length)throw new Error('No active Worker modules');
+            const mainName=ver.main_module||mods[0].name||'worker.js';const main=mods.find(m=>m.name===mainName)||mods[0];
+            const src=Buffer.from(main.content_base64,'base64').toString('utf8');
+            for(const fn of ['handleFeedWithEdgeCache','invalidateExploreFeedEdgeCache','exploreFeedR2Key','handleMusicNotePublicationSingleWrite016']) {
+              if(!src.includes(fn)) throw new Error('Required active Explore runtime missing: '+fn);
+            }
+            fs.writeFileSync('.remote-worker/original.js',src);
+            fs.writeFileSync('.remote-worker/worker.js',src);
+            const settings=await get(`${base}/settings`);
+            const cfg={
+              name,
+              main:'./worker.js',
+              compatibility_date:String(settings.compatibility_date||'2026-09-04').slice(0,10),
+              workers_dev:true,
+              keep_vars:true,
+              d1_databases:[{binding:'DB',database_name:process.env.PREVIEW_DB_NAME,database_id:process.env.PREVIEW_DB_ID}],
+              r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.PREVIEW_R2}],
+              observability:settings.observability&&typeof settings.observability==='object'?{enabled:settings.observability.enabled!==false,...(typeof settings.observability.head_sampling_rate==='number'?{head_sampling_rate:settings.observability.head_sampling_rate}:{})}:{enabled:true}
+            };
+            if(Array.isArray(settings.compatibility_flags)&&settings.compatibility_flags.length)cfg.compatibility_flags=settings.compatibility_flags;
+            fs.writeFileSync('.remote-worker/wrangler.jsonc',JSON.stringify(cfg,null,2));
+            console.log(`WORKER_BEFORE=${active.version_id}`);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker" node patches/019-explore-feed-revision-sync.mjs
+          node --check .remote-worker/worker.js
+          grep -q 'SORIDRAW_EXPLORE_FEED_REVISION_019_20260908' .remote-worker/worker.js
+          grep -q 'PROFILE_MEDIA.head(exploreFeedR2Key(sort))' .remote-worker/worker.js
+          grep -q 'url.pathname === "/v1/feed-revision"' .remote-worker/worker.js
+          echo 'WORKER_019_PREDEPLOY=PASS'
+
+      - name: Deploy and verify PREVIEW Explore Worker only
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          deployed=0
+          rollback() {
+            status=$?
+            if [ "$status" -ne 0 ] && [ "$deployed" = "1" ]; then
+              echo '[033] Worker verification failed; restoring previous PREVIEW Worker source'
+              cp .remote-worker/original.js .remote-worker/worker.js
+              npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc || true
+            fi
+            exit "$status"
+          }
+          trap rollback EXIT
+
+          npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc
+          deployed=1
+          sleep 3
+
+          code="$(curl -sS -D /tmp/rev-head -o /tmp/rev-body -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=latest")"
+          test "$code" = '200'
+          grep -q '"revision"' /tmp/rev-body
+          grep -qi '^x-soridraw-feed-revision:' /tmp/rev-head
+          grep -qi '^x-soridraw-revision-cache:' /tmp/rev-head
+          grep -qi '^x-soridraw-d1-read: 0' /tmp/rev-head
+          grep -qi '^x-soridraw-d1-write: 0' /tmp/rev-head
+
+          feed_code="$(curl -sS -o /tmp/versioned-feed -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__soridraw_revision=033-smoke")"
+          test "$feed_code" = '200'
+          grep -q '"data"' /tmp/versioned-feed
+
+          auth_code="$(curl -sS -o /tmp/pub401 -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" -H 'Content-Type: application/json' -X POST --data '{}' "${PREVIEW_BASE}/v1/publications")"
+          test "$auth_code" = '401'
+
+          trap - EXIT
+          echo 'CLOUDFLARE_PREVIEW_033=PASS'
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot production before PREVIEW deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/production-before.html"
+          sha256sum "$RUNNER_TEMP/production-before.html" | awk '{print $1}' > "$RUNNER_TEMP/production-before.sha"
+
+      - name: Deploy Firebase PREVIEW Hosting only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_033_DEPLOY=PASS'
+
+      - name: Verify exact PREVIEW build and integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/preview-index.sha")"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "${url}?release=033-${attempt}" -o "$RUNNER_TEMP/preview-live.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/preview-live.html" | awk '{print $1}')"
+                if [ "$actual" = "$expected" ]; then ok=yes; break; fi
+              fi
+              sleep 8
+            done
+            test "$ok" = yes
+            echo "EXACT_PREVIEW_BUILD_PASS=$url"
+          done
+          curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=latest" | grep -q '"revision"'
+          echo 'PREVIEW_033_INTEGRATION=PASS'
+
+      - name: Verify production unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/production-after.html"
+          sha256sum "$RUNNER_TEMP/production-after.html" | awk '{print $1}' > "$RUNNER_TEMP/production-after.sha"
+          cmp "$RUNNER_TEMP/production-before.sha" "$RUNNER_TEMP/production-after.sha"
+          echo 'PRODUCTION_UNCHANGED=PASS'
+
+      - name: Final 033 PREVIEW result
+        run: |
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'RULES_CHANGED=false'
+          echo 'FIRESTORE_CHANGED=false'
+          echo 'EXPLORE_PREVIEW_WORKER_CHANGED=true'
+          echo 'SORIDRAW_033_PREVIEW=PASS'

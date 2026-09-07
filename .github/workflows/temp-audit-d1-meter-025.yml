@@ -13,10 +13,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - name: Inspect D1 metering wrapper
+      - name: Inspect D1 first and run metering wrapper
         run: |
           node <<'NODE'
           const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PREVIEW_WORKER;
           async function get(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`}}),x=await r.json();if(!r.ok||x.success===false)throw new Error('CF '+r.status);return x.result||x;}
-          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,ds=await get(base+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y?.percentage||0)-Number(x?.percentage||0))[0],v=await get(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');for(const needle of ['X-SORIDRAW-D1-Read','rows_read','d1RowsRead','meterD1','instrumentD1']){let p=0,n=0;while((p=s.indexOf(needle,p))>=0&&n<8){console.log(`\n--- ${needle} @${p} ---\n`+s.slice(Math.max(0,p-1400),Math.min(s.length,p+2400)));p+=needle.length;n++}}})().catch(e=>{console.error(e);process.exit(1)});
+          function fn(s,name){let p=s.indexOf(`function ${name}(`);if(p<0)p=s.indexOf(`async function ${name}(`);if(p<0)throw new Error('missing '+name);const b=s.indexOf('{',p);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i],n=s[i+1];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='/'&&n==='/'){const z=s.indexOf('\n',i+2);i=z<0?s.length:z;continue}if(c==='/'&&n==='*'){const z=s.indexOf('*/',i+2);i=z<0?s.length:z+1;continue}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(p,i+1)}throw new Error('unterminated '+name)}
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,ds=await get(base+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y?.percentage||0)-Number(x?.percentage||0))[0],v=await get(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');console.log(fn(s,'createMeteredEnv'));})().catch(e=>{console.error(e);process.exit(1)});
           NODE

@@ -1,0 +1,39 @@
+name: Package SORIDRAW Safe 034 ZIP
+
+on:
+  push:
+    branches:
+      - ops-safe-zip-034-20260908
+    paths:
+      - .github/workflows/ops-safe-zip-034.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact safe baseline
+        uses: actions/checkout@v4
+        with:
+          ref: fcfe6a931bd7fc7e2d05bc4c10c96fb7acf9a48d
+          fetch-depth: 1
+
+      - name: Verify baseline and create ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "fcfe6a931bd7fc7e2d05bc4c10c96fb7acf9a48d"
+          rm -rf .git
+          zip -qr "$RUNNER_TEMP/SORIDRAW_SAFE_034_fcfe6a93_2026-09-08.zip" .
+          sha256sum "$RUNNER_TEMP/SORIDRAW_SAFE_034_fcfe6a93_2026-09-08.zip"
+
+      - name: Upload safe baseline ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_SAFE_034_fcfe6a93_2026-09-08
+          path: ${{ runner.temp }}/SORIDRAW_SAFE_034_fcfe6a93_2026-09-08.zip
+          if-no-files-found: error
+          retention-days: 30

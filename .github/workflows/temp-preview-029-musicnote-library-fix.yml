@@ -66,7 +66,7 @@ jobs:
           node scripts/verify-029-music-note-library.mjs
           echo 'PATCH_029=PASS'
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 20 for app
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -84,6 +84,11 @@ jobs:
           npm run build
           sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/local-index.sha"
           echo 'APP_BUILD_029=PASS'
+
+      - name: Set up Node.js 22 for Cloudflare
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Validate changed PREVIEW media Worker
         shell: bash

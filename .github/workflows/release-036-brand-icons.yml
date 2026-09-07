@@ -1,0 +1,369 @@
+name: SORIDRAW 036 Environment Brand Icons
+
+on:
+  push:
+    branches:
+      - release-036-brand-icons
+    paths:
+      - '.github/workflows/release-036-brand-icons.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-036-brand-icons-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PREVIEW_BASE: e8268812e35161539e9aa3b2c4cf6f8209fab41f
+      FEATURE_SHA: 10c88f9cacb7ba6fb8a0130946c83c014f6824f4
+      MAIN_BASE: b1980b0f7f01eb3488173cdb67ff4bb5e30950b1
+      FIREBASE_PROJECT: soridraw
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      EXPECTED_EXPLORE_PREVIEW_VERSION: a58a1823-aa21-4d35-afe6-fe2a9f3bc093
+      EXPECTED_EXPLORE_TEST_VERSION: 162be148-177e-49d0-a7cd-251735156983
+      EXPECTED_EXPLORE_PRODUCTION_VERSION: 2926df94-7f2e-4dc9-9dd0-1f4b03091123
+
+    steps:
+      - name: Checkout release control branch
+        uses: actions/checkout@v4
+        with:
+          ref: release-036-brand-icons
+          fetch-depth: 0
+
+      - name: Guard PREVIEW MAIN and feature source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main preview-036-brand-icons --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          test "$(git rev-parse origin/preview-036-brand-icons)" = "$FEATURE_SHA"
+          test "$(git rev-parse "$FEATURE_SHA^")" = "$PREVIEW_BASE"
+          echo 'SOURCE_GUARD_036=PASS'
+
+      - name: Verify branding-only feature scope and assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          allowed="$RUNNER_TEMP/allowed.txt"
+          actual="$RUNNER_TEMP/actual.txt"
+          cat > "$allowed" <<'EOF'
+          index.html
+          public/brand/soridraw-app-preview.png
+          public/brand/soridraw-app-preview.svg
+          public/brand/soridraw-app-production.png
+          public/brand/soridraw-app-production.svg
+          public/brand/soridraw-app-test.png
+          public/brand/soridraw-app-test.svg
+          public/brand/soridraw-favicon-preview.png
+          public/brand/soridraw-favicon-production.svg
+          public/brand/soridraw-favicon-test.png
+          public/manifest.preview.json
+          public/manifest.production.json
+          public/manifest.test.json
+          EOF
+          git diff --name-only "$PREVIEW_BASE" "$FEATURE_SHA" | sort > "$actual"
+          sort -o "$allowed" "$allowed"
+          diff -u "$allowed" "$actual"
+          git checkout --detach "$FEATURE_SHA"
+          test "$(git hash-object public/brand/soridraw-app-production.png)" = '82d7b06dc53f37996eced17bdf37e3aa914c21ed'
+          test "$(git hash-object public/brand/soridraw-app-test.png)" = '766404724082eca5e52ca6dd1605327410d5c900'
+          test "$(git hash-object public/brand/soridraw-app-preview.png)" = '2136f18ca3d07fc4f466bd7c85ae8ff092fed827'
+          test "$(git hash-object public/brand/soridraw-favicon-production.svg)" = 'e13597ac7c448b0f4d2bff1b28b25daeb5a4a7ef'
+          test "$(git hash-object public/brand/soridraw-favicon-test.png)" = 'bb5e69afc7428f2fb64ba2f33878a0bcf27d8e6d'
+          test "$(git hash-object public/brand/soridraw-favicon-preview.png)" = 'd1abd613cf7ccb4930bf98f71ad1fe44748d6617'
+          python - <<'PY'
+          from pathlib import Path
+          import json, struct
+          index = Path('index.html').read_text(encoding='utf-8')
+          assert "host === 'soridraw.com'" in index
+          assert "host === 'test.soridraw.com'" in index
+          assert "environment = 'preview'" in index
+          assert '/brand/soridraw-favicon-production.svg?v=036' in index
+          assert '/brand/soridraw-favicon-preview.png?v=036' in index
+          assert '/manifest.' in index
+          for env in ('preview','test','production'):
+              manifest = json.loads(Path(f'public/manifest.{env}.json').read_text(encoding='utf-8'))
+              refs = [item['src'] for item in manifest['icons']]
+              assert f'/brand/soridraw-app-{env}.svg?v=036' in refs
+              assert f'/brand/soridraw-app-{env}.png?v=036' in refs
+          for path, size in [
+              ('public/brand/soridraw-app-production.png',(192,192)),
+              ('public/brand/soridraw-app-test.png',(192,192)),
+              ('public/brand/soridraw-app-preview.png',(192,192)),
+              ('public/brand/soridraw-favicon-test.png',(96,96)),
+              ('public/brand/soridraw-favicon-preview.png',(96,96)),
+          ]:
+              data = Path(path).read_bytes()
+              assert data[:8] == b'\x89PNG\r\n\x1a\n'
+              assert struct.unpack('>II', data[16:24]) == size
+          assert b'tRNS' in Path('public/brand/soridraw-favicon-preview.png').read_bytes()
+          print('BRAND_ASSET_CONTRACT_036=PASS')
+          PY
+          echo 'BRANDING_ONLY_SCOPE_036=PASS'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate PREVIEW 036 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/preview-index.sha"
+          echo 'PREVIEW_BUILD_036=PASS'
+
+      - name: Verify 034 Explore Workers unchanged before deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const targets = [
+            ['soridraw-explore-preview', process.env.EXPECTED_EXPLORE_PREVIEW_VERSION],
+            ['soridraw-explore-test', process.env.EXPECTED_EXPLORE_TEST_VERSION],
+            ['soridraw-explore-api', process.env.EXPECTED_EXPLORE_PRODUCTION_VERSION],
+          ];
+          if (!token) throw new Error('CLOUDFLARE_API_TOKEN missing');
+          for (const [worker, expected] of targets) {
+            const url = `https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${worker}/deployments`;
+            const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+            const payload = await response.json();
+            if (!response.ok || payload?.success === false) throw new Error(`${worker} deployment read failed`);
+            const deployments = payload?.result?.deployments || payload?.result || [];
+            const active = deployments[0]?.versions?.slice().sort((a,b) => Number(b.percentage||0)-Number(a.percentage||0))[0];
+            if (!active?.version_id || Number(active.percentage || 0) < 99.99) throw new Error(`${worker} active version unresolved`);
+            if (String(active.version_id) !== String(expected)) throw new Error(`${worker} drift: ${active.version_id} != ${expected}`);
+            console.log(`WORKER_034_UNCHANGED=${worker}@${active.version_id}`);
+          }
+          NODE
+          echo 'WORKER_034_PREDEPLOY_GUARD=PASS'
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot TEST and PRODUCTION before PREVIEW deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pair in 'test|https://soridraw-test.web.app/' 'prod|https://soridraw.web.app/'; do
+            key="${pair%%|*}"; url="${pair#*|}"
+            curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url?before=036" -o "$RUNNER_TEMP/$key-before.html"
+            sha256sum "$RUNNER_TEMP/$key-before.html" | awk '{print $1}' > "$RUNNER_TEMP/$key-before.sha"
+          done
+          echo 'NON_PREVIEW_SNAPSHOT_036=PASS'
+
+      - name: Promote and deploy PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          git push origin "$FEATURE_SHA:refs/heads/preview"
+          git checkout --detach "$FEATURE_SHA"
+          rm -rf dist
+          npm run build
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_DEPLOY_036=PASS'
+
+      - name: Verify PREVIEW icon favicon manifest and exact build
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/preview-index.sha")"
+          for origin in 'https://soridraw-preview.web.app' 'https://preview.soridraw.com'; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/?release=036-$attempt" -o "$RUNNER_TEMP/preview-live.html" || true
+              actual="$(sha256sum "$RUNNER_TEMP/preview-live.html" 2>/dev/null | awk '{print $1}' || true)"
+              if [ "$actual" = "$expected" ]; then ok=yes; break; fi
+              sleep 5
+            done
+            test "$ok" = yes
+            curl -fsS --max-time 30 "$origin/manifest.preview.json?v=036-verify" -o "$RUNNER_TEMP/manifest-preview.json"
+            cmp public/manifest.preview.json "$RUNNER_TEMP/manifest-preview.json"
+            curl -fsS --max-time 30 "$origin/brand/soridraw-app-preview.png?v=036-verify" -o "$RUNNER_TEMP/app-preview.png"
+            cmp public/brand/soridraw-app-preview.png "$RUNNER_TEMP/app-preview.png"
+            curl -fsS --max-time 30 "$origin/brand/soridraw-favicon-preview.png?v=036-verify" -o "$RUNNER_TEMP/favicon-preview.png"
+            cmp public/brand/soridraw-favicon-preview.png "$RUNNER_TEMP/favicon-preview.png"
+            echo "PREVIEW_BRAND_VERIFY_PASS=$origin"
+          done
+          for pair in 'test|https://soridraw-test.web.app/' 'prod|https://soridraw.web.app/'; do
+            key="${pair%%|*}"; url="${pair#*|}"
+            curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url?after-preview=036" -o "$RUNNER_TEMP/$key-after-preview.html"
+            sha256sum "$RUNNER_TEMP/$key-after-preview.html" | awk '{print $1}' > "$RUNNER_TEMP/$key-after-preview.sha"
+            cmp "$RUNNER_TEMP/$key-before.sha" "$RUNNER_TEMP/$key-after-preview.sha"
+          done
+          echo 'PREVIEW_036_ISOLATED_DEPLOY=PASS'
+
+      - name: Create branding-only MAIN release commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git fetch origin main --quiet
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          git checkout -B release-036-main origin/main
+          git cherry-pick "$FEATURE_SHA"
+          main_release_sha="$(git rev-parse HEAD)"
+          git diff --quiet "$MAIN_BASE" HEAD -- src/App.tsx
+          allowed="$RUNNER_TEMP/allowed-main.txt"
+          actual="$RUNNER_TEMP/actual-main.txt"
+          cat > "$allowed" <<'EOF'
+          index.html
+          public/brand/soridraw-app-preview.png
+          public/brand/soridraw-app-preview.svg
+          public/brand/soridraw-app-production.png
+          public/brand/soridraw-app-production.svg
+          public/brand/soridraw-app-test.png
+          public/brand/soridraw-app-test.svg
+          public/brand/soridraw-favicon-preview.png
+          public/brand/soridraw-favicon-production.svg
+          public/brand/soridraw-favicon-test.png
+          public/manifest.preview.json
+          public/manifest.production.json
+          public/manifest.test.json
+          EOF
+          git diff --name-only "$MAIN_BASE" HEAD | sort > "$actual"
+          sort -o "$allowed" "$allowed"
+          diff -u "$allowed" "$actual"
+          echo "MAIN_RELEASE_SHA=$main_release_sha" >> "$GITHUB_ENV"
+          echo "MAIN_BRANDING_ONLY_036=PASS sha=$main_release_sha"
+
+      - name: Validate MAIN without PREVIEW-only 035 promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          rm -rf dist
+          npm run build
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/main-index.sha"
+          echo 'MAIN_BUILD_036=PASS'
+
+      - name: Push branding-only MAIN release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          git push origin "HEAD:refs/heads/main"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_RELEASE_SHA"
+          echo 'MAIN_PUSH_036=PASS'
+
+      - name: Deploy Firebase TEST
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive
+          echo 'FIREBASE_TEST_DEPLOY_036=PASS'
+
+      - name: Verify TEST dark icon favicon manifest and exact build
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/main-index.sha")"
+          for origin in 'https://soridraw-test.web.app' 'https://test.soridraw.com'; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/?release=036-$attempt" -o "$RUNNER_TEMP/test-live.html" || true
+              actual="$(sha256sum "$RUNNER_TEMP/test-live.html" 2>/dev/null | awk '{print $1}' || true)"
+              if [ "$actual" = "$expected" ]; then ok=yes; break; fi
+              sleep 5
+            done
+            test "$ok" = yes
+            curl -fsS --max-time 30 "$origin/manifest.test.json?v=036-verify" -o "$RUNNER_TEMP/manifest-test.json"
+            cmp public/manifest.test.json "$RUNNER_TEMP/manifest-test.json"
+            curl -fsS --max-time 30 "$origin/brand/soridraw-app-test.png?v=036-verify" -o "$RUNNER_TEMP/app-test.png"
+            cmp public/brand/soridraw-app-test.png "$RUNNER_TEMP/app-test.png"
+            curl -fsS --max-time 30 "$origin/brand/soridraw-favicon-test.png?v=036-verify" -o "$RUNNER_TEMP/favicon-test.png"
+            cmp public/brand/soridraw-favicon-test.png "$RUNNER_TEMP/favicon-test.png"
+            echo "TEST_BRAND_VERIFY_PASS=$origin"
+          done
+          echo 'TEST_036=PASS'
+
+      - name: Deploy Firebase PRODUCTION
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.json --non-interactive
+          echo 'FIREBASE_PRODUCTION_DEPLOY_036=PASS'
+
+      - name: Verify PRODUCTION gradient icon favicon manifest and exact build
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/main-index.sha")"
+          for origin in 'https://soridraw.web.app' 'https://soridraw.com'; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/?release=036-$attempt" -o "$RUNNER_TEMP/prod-live.html" || true
+              actual="$(sha256sum "$RUNNER_TEMP/prod-live.html" 2>/dev/null | awk '{print $1}' || true)"
+              if [ "$actual" = "$expected" ]; then ok=yes; break; fi
+              sleep 5
+            done
+            test "$ok" = yes
+            curl -fsS --max-time 30 "$origin/manifest.production.json?v=036-verify" -o "$RUNNER_TEMP/manifest-production.json"
+            cmp public/manifest.production.json "$RUNNER_TEMP/manifest-production.json"
+            curl -fsS --max-time 30 "$origin/brand/soridraw-app-production.png?v=036-verify" -o "$RUNNER_TEMP/app-production.png"
+            cmp public/brand/soridraw-app-production.png "$RUNNER_TEMP/app-production.png"
+            curl -fsS --max-time 30 "$origin/brand/soridraw-favicon-production.svg?v=036-verify" -o "$RUNNER_TEMP/favicon-production.svg"
+            cmp public/brand/soridraw-favicon-production.svg "$RUNNER_TEMP/favicon-production.svg"
+            echo "PRODUCTION_BRAND_VERIFY_PASS=$origin"
+          done
+          echo 'PRODUCTION_036=PASS'
+
+      - name: Verify Workers still unchanged and final release result
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const targets = [
+            ['soridraw-explore-preview', process.env.EXPECTED_EXPLORE_PREVIEW_VERSION],
+            ['soridraw-explore-test', process.env.EXPECTED_EXPLORE_TEST_VERSION],
+            ['soridraw-explore-api', process.env.EXPECTED_EXPLORE_PRODUCTION_VERSION],
+          ];
+          for (const [worker, expected] of targets) {
+            const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${worker}/deployments`, { headers: { Authorization: `Bearer ${token}` } });
+            const payload = await response.json();
+            const deployments = payload?.result?.deployments || payload?.result || [];
+            const active = deployments[0]?.versions?.slice().sort((a,b) => Number(b.percentage||0)-Number(a.percentage||0))[0];
+            if (!response.ok || String(active?.version_id) !== String(expected) || Number(active?.percentage || 0) < 99.99) throw new Error(`${worker} changed`);
+            console.log(`WORKER_034_FINAL_UNCHANGED=${worker}@${active.version_id}`);
+          }
+          NODE
+          echo "PREVIEW_RELEASE_SHA=$FEATURE_SHA"
+          echo "MAIN_RELEASE_SHA=$MAIN_RELEASE_SHA"
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'RULES_CHANGED=false'
+          echo 'WORKERS_CHANGED=false'
+          echo 'AI_MUSIC_PROMPT_STUDIO_TEXT_CHANGED=false'
+          echo 'SORIDRAW_036_BRAND_ICONS_RELEASE=PASS'

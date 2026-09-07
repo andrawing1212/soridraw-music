@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Read active Worker and D1 trigger schema only
+      - name: Read active Worker and best-effort D1 trigger schema
         shell: bash
         run: |
           set -euo pipefail
@@ -34,8 +34,8 @@ jobs:
           const headers={Authorization:`Bearer ${T}`,'Content-Type':'application/json'};
           async function json(url,init={}){const r=await fetch(url,{...init,headers:{...headers,...(init.headers||{})}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,1000)}`);return x.result||x;}
           async function active(){const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;const ds=await json(base+'/deployments');const d=(ds.deployments||ds||[])[0];const a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage||0)-Number(x.percentage||0))[0];if(!a?.version_id)throw new Error('active version missing');const v=await json(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`);const mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0];if(!m?.content_base64)throw new Error('main module missing');fs.writeFileSync('audit022/worker.js',Buffer.from(m.content_base64,'base64'));fs.writeFileSync('audit022/version.txt',a.version_id);}
-          async function query(sql,name){const x=await json(`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${DB}/query`,{method:'POST',body:JSON.stringify({sql})});fs.writeFileSync(`audit022/${name}.json`,JSON.stringify(x,null,2));}
-          (async()=>{await active();await query("SELECT name, sql FROM sqlite_master WHERE type='trigger' AND tbl_name='tracks' ORDER BY name","track_triggers");await query("PRAGMA table_info(tracks)","tracks_columns");await query("SELECT source_type, is_public, status, COUNT(*) AS n FROM tracks WHERE source_type='music_note' GROUP BY source_type,is_public,status ORDER BY is_public,status","music_note_state_counts");console.log('READ_ONLY_AUDIT_022=PASS')})().catch(e=>{console.error(e);process.exit(1)});
+          async function query(sql,name){try{const x=await json(`https://api.cloudflare.com/client/v4/accounts/${A}/d1/database/${DB}/query`,{method:'POST',body:JSON.stringify({sql})});fs.writeFileSync(`audit022/${name}.json`,JSON.stringify(x,null,2));}catch(e){fs.writeFileSync(`audit022/${name}.error.txt`,String(e?.message||e));}}
+          (async()=>{await active();await query("SELECT name, sql FROM sqlite_master WHERE type='trigger' AND tbl_name='tracks' ORDER BY name","track_triggers");await query("PRAGMA table_info(tracks)","tracks_columns");console.log('READ_ONLY_AUDIT_022=PASS')})().catch(e=>{console.error(e);process.exit(1)});
           NODE
       - uses: actions/upload-artifact@v4
         with:

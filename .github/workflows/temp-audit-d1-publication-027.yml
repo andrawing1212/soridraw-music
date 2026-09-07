@@ -1,0 +1,43 @@
+name: SORIDRAW Audit D1 Publication 027 PREVIEW
+on:
+  push:
+    branches: [preview]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      DB_NAME: soridraw-explore-preview-db
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Read-only D1 schema audit
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== TRACK INDEX LIST ==='
+          npx wrangler d1 execute "$DB_NAME" --remote --command "PRAGMA index_list('tracks');"
+          echo '=== TRACK INDEX SQL ==='
+          npx wrangler d1 execute "$DB_NAME" --remote --command "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE (type='index' AND tbl_name='tracks') ORDER BY name;"
+          echo '=== TRACK TRIGGERS ==='
+          npx wrangler d1 execute "$DB_NAME" --remote --command "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name='tracks' ORDER BY name;"
+          echo '=== RELATED TRIGGERS ==='
+          npx wrangler d1 execute "$DB_NAME" --remote --command "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE type='trigger' AND sql LIKE '%tracks%' ORDER BY name;"
+          echo '=== TRACK TABLE SQL ==='
+          npx wrangler d1 execute "$DB_NAME" --remote --command "SELECT sql FROM sqlite_master WHERE type='table' AND name='tracks';"
+          echo '=== QUERY PLANS ==='
+          npx wrangler d1 execute "$DB_NAME" --remote --command "EXPLAIN QUERY PLAN SELECT * FROM tracks WHERE id='__audit__' AND owner_uid='__audit__' LIMIT 1;"
+          npx wrangler d1 execute "$DB_NAME" --remote --command "EXPLAIN QUERY PLAN SELECT id FROM tracks WHERE is_public=1 ORDER BY published_at DESC LIMIT 20;"
+          npx wrangler d1 execute "$DB_NAME" --remote --command "EXPLAIN QUERY PLAN SELECT id FROM tracks WHERE owner_uid='__audit__' AND is_public=1 ORDER BY published_at DESC LIMIT 20;"
+          echo 'READ_ONLY_D1_AUDIT_027=PASS'

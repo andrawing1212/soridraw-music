@@ -155,11 +155,12 @@ function validatePreviewRuntime(source) {
   if (!feedInvalidation.includes('Promise.allSettled')) throw new Error('validated PREVIEW feed invalidation is not best-effort');
 
   const readState = functionText(source, 'publicationReadState016');
-  if (!readState.includes('env.DB.batch')) throw new Error('validated PREVIEW publication reads are not batched');
+  if (!/\.DB\.batch\s*\(/.test(readState)) throw new Error('validated PREVIEW publication reads are not batched');
   if (readState.includes('track_stats')) throw new Error('validated PREVIEW publication read still touches track_stats');
 
   const hot = functionText(source, 'handleMusicNotePublicationSingleWrite016');
-  const idempotentIndex = hot.indexOf('mutation: "idempotent"');
+  const idempotentMatch = hot.match(/mutation\s*:\s*["']idempotent["']/);
+  const idempotentIndex = idempotentMatch ? hot.indexOf(idempotentMatch[0]) : -1;
   const feedSyncIndex = hot.indexOf('syncExploreFeedR2Publication012');
   if (idempotentIndex < 0 || feedSyncIndex < 0 || idempotentIndex > feedSyncIndex) {
     throw new Error('validated PREVIEW idempotent publication path is not before derived R2 work');

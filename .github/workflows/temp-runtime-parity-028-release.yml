@@ -1,4 +1,4 @@
-name: SORIDRAW Runtime Parity 028 PREVIEW TEST PRODUCTION
+name: SORIDRAW Runtime Parity 028 CONTINUE TEST PRODUCTION
 
 on:
   push:
@@ -18,194 +18,32 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
-      BASE_PREVIEW_SHA: a6ddae183c53991202549e30ce9a86a77e248134
+      FEATURE_SHA: 32b1f7088a4bf4003c52c3a4884b6f5023af15bf
+      EXPECTED_MAIN_BEFORE: c64b13248d4024338345c67091fea8ecdeb58e69
       FIREBASE_PROJECT: soridraw
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      PREVIEW_MEDIA_BUCKET: soridraw-media-preview
-      TEST_MEDIA_BUCKET: soridraw-media-test
-      PROD_MEDIA_BUCKET: soridraw-media
       PREVIEW_MEDIA_URL: https://soridraw-media-preview.andrawing1212.workers.dev
       TEST_MEDIA_URL: https://soridraw-media-test.andrawing1212.workers.dev
       PROD_MEDIA_URL: https://soridraw-media.andrawing1212.workers.dev
+      TEST_MEDIA_BUCKET: soridraw-media-test
+      PROD_MEDIA_BUCKET: soridraw-media
     steps:
-      - name: Checkout exact PREVIEW baseline
+      - name: Checkout PREVIEW continuation control
         uses: actions/checkout@v4
         with:
           ref: preview
           fetch-depth: 0
 
-      - name: Guard baseline and apply runtime parity 028
+      - name: Guard exact validated 028 feature and unchanged MAIN
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$BASE_PREVIEW_SHA"
-          test "$(git diff --name-only HEAD^ HEAD)" = '.github/workflows/temp-runtime-parity-028-release.yml'
-          python3 <<'PY'
-          from pathlib import Path
-          import json
-
-          def replace(path, old, new):
-              p = Path(path)
-              s = p.read_text(encoding='utf-8')
-              if old not in s:
-                  raise SystemExit(f'anchor missing: {path}: {old[:80]!r}')
-              p.write_text(s.replace(old, new, 1), encoding='utf-8')
-
-          hosts = """  'preview.soridraw.com',
-            'soridraw-preview.web.app',
-            'soridraw-preview.firebaseapp.com',
-            'test.soridraw.com',
-            'soridraw-test.web.app',
-            'soridraw-test.firebaseapp.com',
-            'soridraw.com',
-            'www.soridraw.com',
-            'soridraw.web.app',
-            'soridraw.firebaseapp.com',
-            'soridraw-app-866a5.web.app',
-            'soridraw-app-866a5.firebaseapp.com',"""
-
-          old_set = """const PREVIEW_HOSTS = new Set([
-            'preview.soridraw.com',
-            'soridraw-preview.web.app',
-            'soridraw-preview.firebaseapp.com',
-          ]);"""
-          new_set = "const PREVIEW_HOSTS = new Set([\n" + hosts + "\n]);"
-          replace('src/lib/adaptiveListIndexV2.ts', old_set, new_set)
-          replace('src/services/versionSignalService.ts', old_set, new_set)
-
-          old_measured = """const isAdaptiveListPreviewHost = (): boolean => {
-            if (typeof window === 'undefined') return false;
-            const hostname = window.location.hostname.toLowerCase();
-            return hostname === 'preview.soridraw.com'
-              || hostname === 'soridraw-preview.web.app'
-              || hostname === 'soridraw-preview.firebaseapp.com';
-          };"""
-          new_measured = """const isAdaptiveListPreviewHost = (): boolean => {
-            if (typeof window === 'undefined') return false;
-            const hostname = window.location.hostname.toLowerCase();
-            return hostname === 'preview.soridraw.com'
-              || hostname === 'soridraw-preview.web.app'
-              || hostname === 'soridraw-preview.firebaseapp.com'
-              || hostname === 'test.soridraw.com'
-              || hostname === 'soridraw-test.web.app'
-              || hostname === 'soridraw-test.firebaseapp.com'
-              || hostname === 'soridraw.com'
-              || hostname === 'www.soridraw.com'
-              || hostname === 'soridraw.web.app'
-              || hostname === 'soridraw.firebaseapp.com'
-              || hostname === 'soridraw-app-866a5.web.app'
-              || hostname === 'soridraw-app-866a5.firebaseapp.com';
-          };"""
-          replace('src/lib/firestoreMeasured.ts', old_measured, new_measured)
-
-          old_endpoint = "const CATALOG_ENDPOINT = 'https://soridraw-media-preview.andrawing1212.workers.dev';"
-          new_endpoint = """const CATALOG_ENDPOINTS = {
-            preview: 'https://soridraw-media-preview.andrawing1212.workers.dev',
-            test: 'https://soridraw-media-test.andrawing1212.workers.dev',
-            production: 'https://soridraw-media.andrawing1212.workers.dev',
-          } as const;
-          const resolveCatalogEndpoint = (): string => {
-            if (typeof window === 'undefined') return CATALOG_ENDPOINTS.preview;
-            const host = window.location.hostname.toLowerCase();
-            if (host === 'test.soridraw.com' || host === 'soridraw-test.web.app' || host === 'soridraw-test.firebaseapp.com') {
-              return CATALOG_ENDPOINTS.test;
-            }
-            if (
-              host === 'soridraw.com' || host === 'www.soridraw.com'
-              || host === 'soridraw.web.app' || host === 'soridraw.firebaseapp.com'
-              || host === 'soridraw-app-866a5.web.app' || host === 'soridraw-app-866a5.firebaseapp.com'
-            ) return CATALOG_ENDPOINTS.production;
-            return CATALOG_ENDPOINTS.preview;
-          };"""
-          replace('src/lib/userDataEngine.ts', old_endpoint, new_endpoint)
-          old_catalog_hosts = """const CATALOG_PREVIEW_HOSTS = new Set([
-            'preview.soridraw.com',
-            'soridraw-preview.web.app',
-            'soridraw-preview.firebaseapp.com',
-          ]);"""
-          new_catalog_hosts = "const CATALOG_PREVIEW_HOSTS = new Set([\n" + hosts + "\n]);"
-          replace('src/lib/userDataEngine.ts', old_catalog_hosts, new_catalog_hosts)
-          p = Path('src/lib/userDataEngine.ts')
-          s = p.read_text(encoding='utf-8')
-          if s.count('${CATALOG_ENDPOINT}') != 2:
-              raise SystemExit(f'unexpected catalog endpoint references: {s.count("${CATALOG_ENDPOINT}")}')
-          p.write_text(s.replace('${CATALOG_ENDPOINT}', '${resolveCatalogEndpoint()}'), encoding='utf-8')
-
-          old_r2 = "const R2_MEDIA_ENDPOINT = 'https://soridraw-media-preview.andrawing1212.workers.dev';"
-          new_r2 = """const R2_MEDIA_ENDPOINTS = {
-            preview: 'https://soridraw-media-preview.andrawing1212.workers.dev',
-            test: 'https://soridraw-media-test.andrawing1212.workers.dev',
-            production: 'https://soridraw-media.andrawing1212.workers.dev',
-          } as const;
-          const resolveR2MediaEndpoint = (): string => {
-            if (typeof window === 'undefined') return R2_MEDIA_ENDPOINTS.preview;
-            const host = window.location.hostname.toLowerCase();
-            if (host === 'test.soridraw.com' || host === 'soridraw-test.web.app' || host === 'soridraw-test.firebaseapp.com') {
-              return R2_MEDIA_ENDPOINTS.test;
-            }
-            if (
-              host === 'soridraw.com' || host === 'www.soridraw.com'
-              || host === 'soridraw.web.app' || host === 'soridraw.firebaseapp.com'
-              || host === 'soridraw-app-866a5.web.app' || host === 'soridraw-app-866a5.firebaseapp.com'
-            ) return R2_MEDIA_ENDPOINTS.production;
-            return R2_MEDIA_ENDPOINTS.preview;
-          };"""
-          replace('src/services/sunoR2Archive.ts', old_r2, new_r2)
-          p = Path('src/services/sunoR2Archive.ts')
-          s = p.read_text(encoding='utf-8')
-          if s.count('${R2_MEDIA_ENDPOINT}') != 1:
-              raise SystemExit('unexpected R2 endpoint reference count')
-          p.write_text(s.replace('${R2_MEDIA_ENDPOINT}', '${resolveR2MediaEndpoint()}'), encoding='utf-8')
-
-          cfg_path = Path('cloudflare/media-worker/wrangler.jsonc')
-          cfg = json.loads(cfg_path.read_text(encoding='utf-8'))
-          common = {
-            'FIREBASE_PROJECT_ID': 'soridraw-app-866a5',
-            'FIREBASE_PROJECT_NUMBER': '91309780603',
-            'FIREBASE_WEB_APP_ID': '1:91309780603:web:cde703895e2cf31ecffcde',
-            'ARCHIVE_MIN_AGE_DAYS': '14',
-            'SIGNED_URL_TTL_SECONDS': '1800',
-          }
-          cfg['env'] = {
-            'test': {
-              'name': 'soridraw-media-test',
-              'keep_vars': True,
-              'vars': {**common, 'ALLOWED_ORIGINS': 'https://test.soridraw.com,https://soridraw-test.web.app,https://soridraw-test.firebaseapp.com'},
-              'r2_buckets': [{'binding': 'MEDIA', 'bucket_name': 'soridraw-media-test'}],
-            },
-            'production': {
-              'name': 'soridraw-media',
-              'keep_vars': True,
-              'vars': {**common, 'ALLOWED_ORIGINS': 'https://soridraw.com,https://www.soridraw.com,https://soridraw.web.app,https://soridraw.firebaseapp.com,https://soridraw-app-866a5.web.app,https://soridraw-app-866a5.firebaseapp.com'},
-              'r2_buckets': [{'binding': 'MEDIA', 'bucket_name': 'soridraw-media'}],
-            },
-          }
-          cfg_path.write_text(json.dumps(cfg, indent=2) + '\n', encoding='utf-8')
-
-          verify = r'''import fs from 'node:fs';
-          const read = (p) => fs.readFileSync(p, 'utf8');
-          const hosts = ['preview.soridraw.com','test.soridraw.com','soridraw.com'];
-          for (const p of ['src/lib/adaptiveListIndexV2.ts','src/lib/firestoreMeasured.ts','src/lib/userDataEngine.ts','src/services/versionSignalService.ts']) {
-            const s = read(p);
-            for (const host of hosts) if (!s.includes(host)) throw new Error(`${p} missing ${host}`);
-          }
-          const engine = read('src/lib/userDataEngine.ts');
-          const archive = read('src/services/sunoR2Archive.ts');
-          for (const endpoint of ['soridraw-media-preview.andrawing1212.workers.dev','soridraw-media-test.andrawing1212.workers.dev','soridraw-media.andrawing1212.workers.dev']) {
-            if (!engine.includes(endpoint)) throw new Error(`catalog endpoint missing ${endpoint}`);
-            if (!archive.includes(endpoint)) throw new Error(`archive endpoint missing ${endpoint}`);
-          }
-          const cfg = JSON.parse(read('cloudflare/media-worker/wrangler.jsonc'));
-          if (cfg?.env?.test?.name !== 'soridraw-media-test') throw new Error('test media worker config missing');
-          if (cfg?.env?.production?.name !== 'soridraw-media') throw new Error('production media worker config missing');
-          if (cfg?.env?.test?.r2_buckets?.[0]?.bucket_name !== 'soridraw-media-test') throw new Error('test media bucket config missing');
-          if (cfg?.env?.production?.r2_buckets?.[0]?.bucket_name !== 'soridraw-media') throw new Error('production media bucket config missing');
-          console.log('RUNTIME_ENVIRONMENT_PARITY_028=PASS');
-          '''
-          Path('scripts/verify-runtime-environment-parity-028.mjs').write_text(verify, encoding='utf-8')
-          PY
+          test "$(git rev-parse HEAD^)" = "$FEATURE_SHA"
+          changed="$(git diff --name-only "$FEATURE_SHA" HEAD)"
+          test "$changed" = '.github/workflows/temp-runtime-parity-028-release.yml'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_MAIN_BEFORE"
           node scripts/verify-runtime-environment-parity-028.mjs
-          echo 'PARITY_PATCH_028=PASS'
+          echo 'CONTINUATION_GUARD_028=PASS'
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -213,25 +51,97 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Validate app TypeScript and build
+      - name: Revalidate exact feature app
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf "$RUNNER_TEMP/feature-028"
+          git worktree add --detach "$RUNNER_TEMP/feature-028" "$FEATURE_SHA"
+          cd "$RUNNER_TEMP/feature-028"
           npm ci
           npx tsc --noEmit
           npm run build
           sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/release-index.sha"
-          echo 'APP_028_BUILD=PASS'
+          node scripts/verify-runtime-environment-parity-028.mjs
+          echo 'FEATURE_APP_028=PASS'
+
+      - name: Verify live PREVIEW frontend and media runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/release-index.sha")"
+          for origin in 'https://soridraw-preview.web.app' 'https://preview.soridraw.com'; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/preview-live.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/preview-live.html" | awk '{print $1}')"
+                if [ "$actual" = "$expected" ]; then ok=yes; break; fi
+              fi
+              sleep 5
+            done
+            test "$ok" = yes
+            echo "PREVIEW_FRONTEND_PASS=$origin"
+          done
+          curl -fsS --max-time 30 "$PREVIEW_MEDIA_URL/health" -o "$RUNNER_TEMP/preview-media-health.json"
+          grep -q '"ok":true' "$RUNNER_TEMP/preview-media-health.json"
+          code="$(curl -sS -o /dev/null -D "$RUNNER_TEMP/preview-media-options.headers" -w '%{http_code}' -X OPTIONS -H 'Origin: https://preview.soridraw.com' -H 'Access-Control-Request-Method: GET' "$PREVIEW_MEDIA_URL/v1/catalog/musicNote")"
+          test "$code" = '204'
+          grep -qi '^access-control-allow-origin: https://preview.soridraw.com' "$RUNNER_TEMP/preview-media-options.headers"
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' "$PREVIEW_MEDIA_URL/v1/catalog/musicNote")"
+          test "$code" = '401'
+          echo 'PREVIEW_LIVE_028=PASS'
+
+      - name: Create exact approved MAIN snapshot from PREVIEW feature
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_BEFORE"
+          rm -rf "$RUNNER_TEMP/main-028"
+          git worktree add --detach "$RUNNER_TEMP/main-028" origin/main
+          cd "$RUNNER_TEMP/main-028"
+          git read-tree --reset -u "$FEATURE_SHA"
+          rm -rf .github/workflows
+          git checkout origin/main -- .github/workflows
+          git add -A
+          if ! git diff --cached --quiet "$FEATURE_SHA" -- . ':(exclude).github/workflows/**'; then
+            echo 'MAIN candidate differs from validated PREVIEW outside workflow controls:'
+            git diff --cached --name-only "$FEATURE_SHA" -- . ':(exclude).github/workflows/**'
+            exit 1
+          fi
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git commit -m 'release: promote full PREVIEW runtime parity 028'
+          MAIN_RELEASE_SHA="$(git rev-parse HEAD)"
+          echo "MAIN_RELEASE_SHA=$MAIN_RELEASE_SHA" >> "$GITHUB_ENV"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_MAIN_BEFORE"
+          git push origin HEAD:main
+          echo "MAIN_RELEASE_SHA=$MAIN_RELEASE_SHA"
+
+      - name: Validate exact MAIN release source and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/main-028"
+          node scripts/verify-runtime-environment-parity-028.mjs
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          expected="$(cat "$RUNNER_TEMP/release-index.sha")"
+          actual="$(sha256sum dist/index.html | awk '{print $1}')"
+          test "$actual" = "$expected"
+          echo 'MAIN_APP_028=PASS'
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Validate Functions and media Worker
+      - name: Validate MAIN Functions and media Worker source
         shell: bash
         run: |
           set -euo pipefail
+          cd "$RUNNER_TEMP/main-028"
           npm --prefix functions ci
           npm --prefix functions run build
           npm --prefix functions run test:library-bundle
@@ -242,217 +152,153 @@ jobs:
           node scripts/test-catalog-journal-1053.mjs
           npx wrangler deploy --dry-run --env test --outdir .dry-run-test
           npx wrangler deploy --dry-run --env production --outdir .dry-run-production
-          cd ../..
-          node scripts/verify-runtime-environment-parity-028.mjs
-          echo 'BACKENDS_028_VALIDATE=PASS'
-
-      - name: Commit validated parity source to PREVIEW
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'SORIDRAW Release Bot'
-          git config user.email 'soridraw-release@users.noreply.github.com'
-          git add \
-            src/lib/adaptiveListIndexV2.ts \
-            src/lib/firestoreMeasured.ts \
-            src/lib/userDataEngine.ts \
-            src/services/versionSignalService.ts \
-            src/services/sunoR2Archive.ts \
-            cloudflare/media-worker/wrangler.jsonc \
-            scripts/verify-runtime-environment-parity-028.mjs
-          git commit -m 'fix(runtime): align preview test production data engine'
-          FEATURE_SHA="$(git rev-parse HEAD)"
-          echo "FEATURE_SHA=$FEATURE_SHA" >> "$GITHUB_ENV"
-          git push origin HEAD:preview
-          echo "PREVIEW_FEATURE_SHA=$FEATURE_SHA"
+          echo 'MAIN_BACKEND_SOURCE_028=PASS'
 
       - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Deploy and verify Firebase PREVIEW
+      - name: Ensure and deploy TEST media runtime
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
-          expected="$(cat "$RUNNER_TEMP/release-index.sha")"
-          for origin in 'https://soridraw-preview.web.app' 'https://preview.soridraw.com'; do
-            ok=''
-            for attempt in $(seq 1 15); do
-              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/preview-index.html"; then
-                actual="$(sha256sum "$RUNNER_TEMP/preview-index.html" | awk '{print $1}')"
-                if [ "$actual" = "$expected" ]; then ok=yes; break; fi
-              fi
-              sleep 5
-            done
-            test "$ok" = yes
-            echo "PREVIEW_HOST_PASS=$origin"
-          done
-          echo 'FIREBASE_PREVIEW_028=PASS'
-
-      - name: Deploy and verify PREVIEW media Worker unchanged behavior
-        working-directory: cloudflare/media-worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}"
-          npx wrangler deploy
-          curl -fsS --max-time 30 "$PREVIEW_MEDIA_URL/health" -o "$RUNNER_TEMP/preview-media-health.json"
-          grep -q '"ok":true' "$RUNNER_TEMP/preview-media-health.json"
-          code="$(curl -sS -o /dev/null -D "$RUNNER_TEMP/preview-media-options" -w '%{http_code}' -X OPTIONS -H 'Origin: https://preview.soridraw.com' -H 'Access-Control-Request-Method: GET' "$PREVIEW_MEDIA_URL/v1/catalog/musicNote')"
-          test "$code" = 204
-          grep -qi '^access-control-allow-origin: https://preview.soridraw.com' "$RUNNER_TEMP/preview-media-options"
-          echo 'PREVIEW_MEDIA_028=PASS'
-
-      - name: Create exact approved MAIN snapshot from PREVIEW runtime
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin main preview
-          MAIN_BEFORE="$(git rev-parse origin/main)"
-          echo "MAIN_BEFORE=$MAIN_BEFORE" >> "$GITHUB_ENV"
-          rm -rf "$RUNNER_TEMP/soridraw-main-028"
-          git worktree add --detach "$RUNNER_TEMP/soridraw-main-028" origin/main
-          cd "$RUNNER_TEMP/soridraw-main-028"
-          git read-tree --reset -u "$FEATURE_SHA"
-          rm -rf .github/workflows
-          git checkout origin/main -- .github/workflows
-          git add -A
-          if ! git diff --cached --quiet "$FEATURE_SHA" -- . ':(exclude).github/workflows/**'; then
-            echo 'MAIN snapshot differs from PREVIEW outside workflow controls'
-            git diff --cached --name-only "$FEATURE_SHA" -- . ':(exclude).github/workflows/**'
-            exit 1
+          cd "$RUNNER_TEMP/main-028/cloudflare/media-worker"
+          if npx wrangler r2 bucket info "$TEST_MEDIA_BUCKET" --json > "$RUNNER_TEMP/test-r2.json" 2>/dev/null; then
+            echo "R2_BUCKET_EXISTS=$TEST_MEDIA_BUCKET"
+          else
+            npx wrangler r2 bucket create "$TEST_MEDIA_BUCKET" --location apac --storage-class Standard
+            npx wrangler r2 bucket info "$TEST_MEDIA_BUCKET" --json > "$RUNNER_TEMP/test-r2.json"
+            echo "R2_BUCKET_CREATED=$TEST_MEDIA_BUCKET"
           fi
-          git config user.name 'SORIDRAW Release Bot'
-          git config user.email 'soridraw-release@users.noreply.github.com'
-          git commit -m 'release: promote full PREVIEW runtime parity 028'
-          MAIN_RELEASE_SHA="$(git rev-parse HEAD)"
-          echo "MAIN_RELEASE_SHA=$MAIN_RELEASE_SHA" >> "$GITHUB_ENV"
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BEFORE"
-          git push origin HEAD:main
-          echo "MAIN_RELEASE_SHA=$MAIN_RELEASE_SHA"
-
-      - name: Validate exact MAIN release snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$RUNNER_TEMP/soridraw-main-028"
-          npm ci
-          npx tsc --noEmit
-          npm run build
-          expected="$(cat "$RUNNER_TEMP/release-index.sha")"
-          actual="$(sha256sum dist/index.html | awk '{print $1}')"
-          test "$actual" = "$expected"
-          npm --prefix functions ci
-          npm --prefix functions run build
-          node scripts/verify-runtime-environment-parity-028.mjs
-          echo 'MAIN_RELEASE_028_BUILD=PASS'
-
-      - name: Deploy shared Firebase backend from approved MAIN
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$RUNNER_TEMP/soridraw-main-028"
-          npx --yes firebase-tools@latest deploy --only functions,firestore:rules,database --project "$FIREBASE_PROJECT" --config firebase.json --non-interactive
-          echo 'FIREBASE_SHARED_BACKEND_028=PASS'
-
-      - name: Ensure TEST and PRODUCTION media buckets and Workers
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$RUNNER_TEMP/soridraw-main-028/cloudflare/media-worker"
-          ensure_bucket() {
-            local bucket="$1"
-            if npx wrangler r2 bucket info "$bucket" --json > "$RUNNER_TEMP/${bucket}.json" 2>/dev/null; then
-              echo "R2_BUCKET_EXISTS=$bucket"
-            else
-              npx wrangler r2 bucket create "$bucket" --location apac --storage-class Standard
-              npx wrangler r2 bucket info "$bucket" --json > "$RUNNER_TEMP/${bucket}.json"
-              echo "R2_BUCKET_CREATED=$bucket"
-            fi
-          }
-          ensure_secret() {
-            local env_name="$1"
-            npx wrangler secret list --env "$env_name" --format json > "$RUNNER_TEMP/media-secrets-${env_name}.json" || printf '[]' > "$RUNNER_TEMP/media-secrets-${env_name}.json"
-            if node - "$RUNNER_TEMP/media-secrets-${env_name}.json" <<'NODE'
-          const fs=require('fs'); const p=JSON.parse(fs.readFileSync(process.argv[2],'utf8')); process.exit(Array.isArray(p)&&p.some(x=>x?.name==='MEDIA_SIGNING_SECRET')?0:1);
-          NODE
-            then
-              echo "MEDIA_SECRET_EXISTS=$env_name"
-            else
-              openssl rand -hex 32 | npx wrangler secret put MEDIA_SIGNING_SECRET --env "$env_name"
-              echo "MEDIA_SECRET_CREATED=$env_name"
-            fi
-          }
-          ensure_bucket "$TEST_MEDIA_BUCKET"
-          ensure_bucket "$PROD_MEDIA_BUCKET"
           npx wrangler deploy --env test
-          ensure_secret test
-          npx wrangler deploy --env production
-          ensure_secret production
-
+          npx wrangler secret list --env test --format json > "$RUNNER_TEMP/test-media-secrets.json" || printf '[]' > "$RUNNER_TEMP/test-media-secrets.json"
+          if node - "$RUNNER_TEMP/test-media-secrets.json" <<'NODE'
+          const fs=require('fs');
+          const list=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          process.exit(Array.isArray(list)&&list.some((item)=>item?.name==='MEDIA_SIGNING_SECRET')?0:1);
+          NODE
+          then
+            echo 'TEST_MEDIA_SECRET_EXISTS=true'
+          else
+            openssl rand -hex 32 | npx wrangler secret put MEDIA_SIGNING_SECRET --env test
+            echo 'TEST_MEDIA_SECRET_CREATED=true'
+          fi
           curl -fsS --max-time 30 "$TEST_MEDIA_URL/health" -o "$RUNNER_TEMP/test-media-health.json"
-          curl -fsS --max-time 30 "$PROD_MEDIA_URL/health" -o "$RUNNER_TEMP/prod-media-health.json"
           grep -q '"ok":true' "$RUNNER_TEMP/test-media-health.json"
-          grep -q '"ok":true' "$RUNNER_TEMP/prod-media-health.json"
-          test "$(curl -sS -o /dev/null -w '%{http_code}' -X OPTIONS -H 'Origin: https://test.soridraw.com' -H 'Access-Control-Request-Method: GET' "$TEST_MEDIA_URL/v1/catalog/musicNote')" = 204
-          test "$(curl -sS -o /dev/null -w '%{http_code}' -X OPTIONS -H 'Origin: https://soridraw.com' -H 'Access-Control-Request-Method: GET' "$PROD_MEDIA_URL/v1/catalog/musicNote')" = 204
-          test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Origin: https://test.soridraw.com' "$TEST_MEDIA_URL/v1/catalog/musicNote')" = 401
-          test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Origin: https://soridraw.com' "$PROD_MEDIA_URL/v1/catalog/musicNote')" = 401
-          echo 'MEDIA_TEST_PRODUCTION_028=PASS'
+          code="$(curl -sS -o /dev/null -D "$RUNNER_TEMP/test-media-options.headers" -w '%{http_code}' -X OPTIONS -H 'Origin: https://test.soridraw.com' -H 'Access-Control-Request-Method: GET' "$TEST_MEDIA_URL/v1/catalog/musicNote")"
+          test "$code" = '204'
+          grep -qi '^access-control-allow-origin: https://test.soridraw.com' "$RUNNER_TEMP/test-media-options.headers"
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Origin: https://test.soridraw.com' "$TEST_MEDIA_URL/v1/catalog/musicNote")"
+          test "$code" = '401'
+          echo 'TEST_MEDIA_028=PASS'
 
       - name: Deploy and verify Firebase TEST
         shell: bash
         run: |
           set -euo pipefail
-          cd "$RUNNER_TEMP/soridraw-main-028"
+          cd "$RUNNER_TEMP/main-028"
           npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive
           expected="$(cat "$RUNNER_TEMP/release-index.sha")"
           for origin in 'https://soridraw-test.web.app' 'https://test.soridraw.com'; do
             ok=''
             for attempt in $(seq 1 15); do
-              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/test-index.html"; then
-                actual="$(sha256sum "$RUNNER_TEMP/test-index.html" | awk '{print $1}')"
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/test-live.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/test-live.html" | awk '{print $1}')"
                 if [ "$actual" = "$expected" ]; then ok=yes; break; fi
               fi
               sleep 5
             done
             test "$ok" = yes
-            echo "TEST_HOST_PASS=$origin"
+            echo "TEST_FRONTEND_PASS=$origin"
           done
           echo 'FIREBASE_TEST_028=PASS'
+
+      - name: TEST full-stack parity gate before PRODUCTION
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 'https://test.soridraw.com/' -o /dev/null
+          curl -fsS --max-time 30 "$TEST_MEDIA_URL/health" -o "$RUNNER_TEMP/test-health-gate.json"
+          grep -q '"ok":true' "$RUNNER_TEMP/test-health-gate.json"
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -X OPTIONS -H 'Origin: https://test.soridraw.com' -H 'Access-Control-Request-Method: GET' "$TEST_MEDIA_URL/v1/catalog/library")"
+          test "$code" = '204'
+          echo 'TEST_FULL_STACK_028=PASS'
+
+      - name: Ensure and deploy PRODUCTION media runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/main-028/cloudflare/media-worker"
+          if npx wrangler r2 bucket info "$PROD_MEDIA_BUCKET" --json > "$RUNNER_TEMP/prod-r2.json" 2>/dev/null; then
+            echo "R2_BUCKET_EXISTS=$PROD_MEDIA_BUCKET"
+          else
+            npx wrangler r2 bucket create "$PROD_MEDIA_BUCKET" --location apac --storage-class Standard
+            npx wrangler r2 bucket info "$PROD_MEDIA_BUCKET" --json > "$RUNNER_TEMP/prod-r2.json"
+            echo "R2_BUCKET_CREATED=$PROD_MEDIA_BUCKET"
+          fi
+          npx wrangler deploy --env production
+          npx wrangler secret list --env production --format json > "$RUNNER_TEMP/prod-media-secrets.json" || printf '[]' > "$RUNNER_TEMP/prod-media-secrets.json"
+          if node - "$RUNNER_TEMP/prod-media-secrets.json" <<'NODE'
+          const fs=require('fs');
+          const list=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          process.exit(Array.isArray(list)&&list.some((item)=>item?.name==='MEDIA_SIGNING_SECRET')?0:1);
+          NODE
+          then
+            echo 'PROD_MEDIA_SECRET_EXISTS=true'
+          else
+            openssl rand -hex 32 | npx wrangler secret put MEDIA_SIGNING_SECRET --env production
+            echo 'PROD_MEDIA_SECRET_CREATED=true'
+          fi
+          curl -fsS --max-time 30 "$PROD_MEDIA_URL/health" -o "$RUNNER_TEMP/prod-media-health.json"
+          grep -q '"ok":true' "$RUNNER_TEMP/prod-media-health.json"
+          code="$(curl -sS -o /dev/null -D "$RUNNER_TEMP/prod-media-options.headers" -w '%{http_code}' -X OPTIONS -H 'Origin: https://soridraw.com' -H 'Access-Control-Request-Method: GET' "$PROD_MEDIA_URL/v1/catalog/musicNote")"
+          test "$code" = '204'
+          grep -qi '^access-control-allow-origin: https://soridraw.com' "$RUNNER_TEMP/prod-media-options.headers"
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Origin: https://soridraw.com' "$PROD_MEDIA_URL/v1/catalog/musicNote")"
+          test "$code" = '401'
+          echo 'PRODUCTION_MEDIA_028=PASS'
 
       - name: Deploy and verify Firebase PRODUCTION
         shell: bash
         run: |
           set -euo pipefail
-          cd "$RUNNER_TEMP/soridraw-main-028"
+          cd "$RUNNER_TEMP/main-028"
           npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.json --non-interactive
           expected="$(cat "$RUNNER_TEMP/release-index.sha")"
           for origin in 'https://soridraw.web.app' 'https://soridraw.com'; do
             ok=''
             for attempt in $(seq 1 15); do
-              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/prod-index.html"; then
-                actual="$(sha256sum "$RUNNER_TEMP/prod-index.html" | awk '{print $1}')"
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/prod-live.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/prod-live.html" | awk '{print $1}')"
                 if [ "$actual" = "$expected" ]; then ok=yes; break; fi
               fi
               sleep 5
             done
             test "$ok" = yes
-            echo "PRODUCTION_HOST_PASS=$origin"
+            echo "PRODUCTION_FRONTEND_PASS=$origin"
           done
           echo 'FIREBASE_PRODUCTION_028=PASS'
 
-      - name: Package TEST and PRODUCTION release ZIPs
+      - name: PRODUCTION full-stack verification
         shell: bash
         run: |
           set -euo pipefail
-          cd "$RUNNER_TEMP/soridraw-main-028"
+          curl -fsS --max-time 30 'https://soridraw.com/' -o /dev/null
+          curl -fsS --max-time 30 "$PROD_MEDIA_URL/health" -o "$RUNNER_TEMP/prod-health-gate.json"
+          grep -q '"ok":true' "$RUNNER_TEMP/prod-health-gate.json"
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -X OPTIONS -H 'Origin: https://soridraw.com' -H 'Access-Control-Request-Method: GET' "$PROD_MEDIA_URL/v1/catalog/library")"
+          test "$code" = '204'
+          echo 'PRODUCTION_FULL_STACK_028=PASS'
+
+      - name: Package exact TEST and PRODUCTION release ZIPs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/main-028"
           short="$(git rev-parse --short=8 HEAD)"
           git archive --format=zip --output="$RUNNER_TEMP/SORIDRAW_TEST_028_${short}.zip" HEAD
           cp "$RUNNER_TEMP/SORIDRAW_TEST_028_${short}.zip" "$RUNNER_TEMP/SORIDRAW_PRODUCTION_028_${short}.zip"
-          printf '%s\n' "$short" > "$RUNNER_TEMP/release-short.txt"
           sha256sum "$RUNNER_TEMP/SORIDRAW_TEST_028_${short}.zip"
           sha256sum "$RUNNER_TEMP/SORIDRAW_PRODUCTION_028_${short}.zip"
           echo 'RELEASE_ZIPS_028=PASS'
@@ -477,7 +323,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "PREVIEW_FEATURE_SHA=$FEATURE_SHA"
+          echo "FEATURE_SHA=$FEATURE_SHA"
           echo "MAIN_RELEASE_SHA=$MAIN_RELEASE_SHA"
           echo 'PREVIEW_RUNTIME_PARITY=PASS'
           echo 'TEST_RUNTIME_PARITY=PASS'

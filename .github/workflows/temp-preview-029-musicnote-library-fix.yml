@@ -21,6 +21,8 @@ jobs:
       BASE_PREVIEW_SHA: 46174546a813b81641bac6050794c32969ec714d
       BASE_MAIN_SHA: da3f70ca3e8574f20a5eabf96a4c517c51b4038c
       FIREBASE_PROJECT: soridraw
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      MEDIA_WORKER_URL: https://soridraw-media-preview.andrawing1212.workers.dev
     steps:
       - name: Checkout isolated work branch
         uses: actions/checkout@v4
@@ -46,6 +48,16 @@ jobs:
         run: |
           set -euo pipefail
           python3 .deploy/apply-029-musicnote-library-fix.py
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('scripts/verify-029-music-note-library.mjs')
+          s = p.read_text(encoding='utf-8')
+          old = "const workerLibraryStart = worker.indexOf('const LIBRARY_SUMMARY_KEYS');"
+          new = "const workerLibraryStart = worker.indexOf('const LIBRARY_CATALOG_FIELDS');"
+          if s.count(old) != 1:
+              raise SystemExit(f'worker verifier anchor mismatch: {s.count(old)}')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
           git diff --check
           node scripts/verify-029-music-note-library.mjs
           echo 'PATCH_029=PASS'
@@ -77,6 +89,34 @@ jobs:
           npm install --no-audit --no-fund
           npm run check
           echo 'MEDIA_WORKER_DRYRUN_029=PASS'
+
+      - name: Deploy and verify PREVIEW media Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          cd cloudflare/media-worker
+          npm run deploy | tee "$RUNNER_TEMP/media-worker-deploy.log"
+          cd ../..
+          ok=''
+          for attempt in $(seq 1 12); do
+            if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$MEDIA_WORKER_URL/health" -o "$RUNNER_TEMP/media-health.json" \
+              && grep -q '"ok":true' "$RUNNER_TEMP/media-health.json" \
+              && grep -q '"r2Binding":true' "$RUNNER_TEMP/media-health.json"; then
+              ok=yes
+              break
+            fi
+            sleep 5
+          done
+          test "$ok" = yes
+          code="$(curl -sS -o "$RUNNER_TEMP/media-options-body" -D "$RUNNER_TEMP/media-options-head" -w '%{http_code}' -X OPTIONS \
+            -H 'Origin: https://preview.soridraw.com' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+            "$MEDIA_WORKER_URL/v1/catalog/library)"
+          test "$code" = '204'
+          grep -qi '^access-control-allow-origin: https://preview.soridraw.com' "$RUNNER_TEMP/media-options-head"
+          echo 'MEDIA_WORKER_PREVIEW_029=PASS'
 
       - name: Build clean PREVIEW commit without temporary runner files
         shell: bash
@@ -174,9 +214,10 @@ jobs:
           echo "CLEAN_PREVIEW_SHA=$CLEAN_SHA"
           echo 'FIREBASE_HOSTING_CHANGED=true'
           echo 'CLOUDFLARE_MEDIA_SOURCE_CHANGED=true'
+          echo 'CLOUDFLARE_MEDIA_DEPLOYED=true'
           echo 'FUNCTIONS_CHANGED=false'
           echo 'FIRESTORE_RULES_CHANGED=false'
           echo 'EXPLORE_WORKER_CHANGED=false'
           echo 'TEST_CHANGED=false'
           echo 'PRODUCTION_CHANGED=false'
-          echo 'SORIDRAW_PREVIEW_029_FRONTEND=PASS'
+          echo 'SORIDRAW_PREVIEW_029=PASS'

@@ -14,15 +14,21 @@ const mustReplace = (from, to, label) => {
 
 mustReplace(
   "const PATCH = join(WORKER_DIR, 'patches', '020-explore-production-feed-mirror.mjs');",
-  "const PATCH = join(WORKER_DIR, 'patches', '020-explore-production-feed-mirror.mjs');\nconst PATCH_STRICT = join(WORKER_DIR, 'patches', '022-explore-mirror-strict-sync.mjs');",
-  'strict patch constant',
+  "const PATCH = join(WORKER_DIR, 'patches', '020-explore-production-feed-mirror.mjs');\nconst PATCH_STRICT = join(WORKER_DIR, 'patches', '022-explore-mirror-strict-sync.mjs');\nconst PATCH_SERVICE = join(WORKER_DIR, 'patches', '023-explore-mirror-service-bindings.mjs');",
+  'strict/service patch constants',
 );
 mustReplace(
   "run(process.execPath, [PATCH], { cwd: ROOT, env: { ...process.env, SORIDRAW_REMOTE_WORKER_DIR: patchedDir } });\nrun(process.execPath, ['--check', join(patchedDir, 'worker.js')], { cwd: ROOT });",
-  "run(process.execPath, [PATCH], { cwd: ROOT, env: { ...process.env, SORIDRAW_REMOTE_WORKER_DIR: patchedDir } });\nrun(process.execPath, [PATCH_STRICT], { cwd: ROOT, env: { ...process.env, SORIDRAW_REMOTE_WORKER_DIR: patchedDir } });\nrun(process.execPath, ['--check', join(patchedDir, 'worker.js')], { cwd: ROOT });",
-  'strict patch apply',
+  "run(process.execPath, [PATCH], { cwd: ROOT, env: { ...process.env, SORIDRAW_REMOTE_WORKER_DIR: patchedDir } });\nrun(process.execPath, [PATCH_STRICT], { cwd: ROOT, env: { ...process.env, SORIDRAW_REMOTE_WORKER_DIR: patchedDir } });\nrun(process.execPath, [PATCH_SERVICE], { cwd: ROOT, env: { ...process.env, SORIDRAW_REMOTE_WORKER_DIR: patchedDir } });\nrun(process.execPath, ['--check', join(patchedDir, 'worker.js')], { cwd: ROOT });",
+  'strict/service patch apply',
 );
 mustReplace("const RELEASE_DIR = join(WORKER_DIR, '.release034v2');", "const RELEASE_DIR = join(WORKER_DIR, '.release034v5');", 'release dir');
+
+mustReplace(
+  "  if (Array.isArray(current?.compatibility_flags) && current.compatibility_flags.length) cfg.compatibility_flags = current.compatibility_flags;\n  return cfg;",
+  "  if (Array.isArray(current?.compatibility_flags) && current.compatibility_flags.length) cfg.compatibility_flags = current.compatibility_flags;\n  if (target.env === 'production') {\n    cfg.services = [\n      { binding: 'EXPLORE_MIRROR_PREVIEW', service: 'soridraw-explore-preview' },\n      { binding: 'EXPLORE_MIRROR_TEST', service: 'soridraw-explore-test' },\n    ];\n  }\n  return cfg;",
+  'production service bindings',
+);
 
 mustReplace(
   "  if (version !== target.expectedVersion) throw new Error(`${target.env} Worker changed since 033 baseline: ${version} != ${target.expectedVersion}`);",
@@ -49,12 +55,12 @@ source = source.slice(0, rowStart) + `  // Strict sync returns 200 only after BO
 
 mustReplace(
   "for (const token of ['SORIDRAW_EXPLORE_PRODUCTION_FEED_MIRROR_020_20260908', 'fanoutExploreMirror020', 'EXPLORE_MIRROR_SYNC_ROUTE_020']) {",
-  "for (const token of ['SORIDRAW_EXPLORE_PRODUCTION_FEED_MIRROR_020_20260908', 'SORIDRAW_EXPLORE_MIRROR_STRICT_SYNC_022_20260908', 'fanoutExploreMirror020', 'EXPLORE_MIRROR_SYNC_ROUTE_020']) {",
+  "for (const token of ['SORIDRAW_EXPLORE_PRODUCTION_FEED_MIRROR_020_20260908', 'SORIDRAW_EXPLORE_MIRROR_STRICT_SYNC_022_20260908', 'SORIDRAW_EXPLORE_MIRROR_SERVICE_BINDINGS_023_20260908', 'fanoutExploreMirror020', 'EXPLORE_MIRROR_SYNC_ROUTE_020', 'EXPLORE_MIRROR_PREVIEW', 'EXPLORE_MIRROR_TEST']) {",
   'canonical tokens',
 );
 mustReplace(
   "  if (!source.includes('SORIDRAW_EXPLORE_PRODUCTION_FEED_MIRROR_020_20260908')) throw new Error(`${target.env} 034 marker missing after deploy`);",
-  "  if (!source.includes('fanoutExploreMirror020') || !source.includes('EXPLORE_MIRROR_ROUTE_020') || !source.includes('EXPLORE_MIRROR_SYNC_ROUTE_020')) throw new Error(`${target.env} 034 runtime contract missing after deploy`);",
+  "  if (!source.includes('fanoutExploreMirror020') || !source.includes('EXPLORE_MIRROR_ROUTE_020') || !source.includes('EXPLORE_MIRROR_SYNC_ROUTE_020') || !source.includes('EXPLORE_MIRROR_PREVIEW') || !source.includes('EXPLORE_MIRROR_TEST')) throw new Error(`${target.env} 034 runtime contract missing after deploy`);",
   'post deploy runtime contract',
 );
 mustReplace(
@@ -77,7 +83,12 @@ mustReplace(
   "  writeFileSync(join(dir, 'worker.js'), await activeSource(target.worker, target.expectedVersion), 'utf8');",
   'rollback immutable 033 source',
 );
+mustReplace(
+  "  const configPath = join(dir, 'wrangler.jsonc');\n  writeFileSync(configPath, JSON.stringify(configFrom(target, before.get(target.env).settings), null, 2), 'utf8');\n  run('npx', ['wrangler', 'deploy', '--strict', '--config', configPath]);",
+  "  const configPath = join(dir, 'wrangler.jsonc');\n  const rollbackConfig = configFrom(target, before.get(target.env).settings);\n  delete rollbackConfig.services;\n  writeFileSync(configPath, JSON.stringify(rollbackConfig, null, 2), 'utf8');\n  run('npx', ['wrangler', 'deploy', '--strict', '--config', configPath]);",
+  'rollback service binding cleanup',
+);
 
 writeFileSync(runtimePath, source, 'utf8');
-console.log('[034-v5] Recovery mode: immutable 033 source + patches 020/022, runtime-contract verification, immutable 033 rollback on any failure.');
+console.log('[034-v5] Recovery mode: immutable 033 source + patches 020/022/023, Service Binding fanout, runtime-contract verification, immutable 033 rollback on any failure.');
 await import(`${pathToFileURL(runtimePath).href}?v=${Date.now()}`);

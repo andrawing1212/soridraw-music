@@ -7,6 +7,7 @@ on:
     paths:
       - cloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs
       - cloudflare/explore-worker/patches/022-explore-mirror-strict-sync.mjs
+      - cloudflare/explore-worker/patches/023-explore-mirror-service-bindings.mjs
       - .deploy/release-034-explore-mirror-v5.mjs
       - .github/workflows/preview-034-explore-public-feed-mirror.yml
 
@@ -40,7 +41,7 @@ jobs:
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$EXPECTED_PREVIEW_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_MAIN_SHA"
           changed="$(git diff --name-only "$EXPECTED_PREVIEW_SHA" HEAD | sort)"
-          expected=$'.deploy/release-034-explore-mirror-v2.mjs\n.deploy/release-034-explore-mirror-v3.mjs\n.deploy/release-034-explore-mirror-v4.mjs\n.deploy/release-034-explore-mirror-v5.mjs\n.deploy/release-034-explore-mirror.mjs\n.github/workflows/preview-034-explore-public-feed-mirror.yml\ncloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs\ncloudflare/explore-worker/patches/022-explore-mirror-strict-sync.mjs'
+          expected=$'.deploy/release-034-explore-mirror-v2.mjs\n.deploy/release-034-explore-mirror-v3.mjs\n.deploy/release-034-explore-mirror-v4.mjs\n.deploy/release-034-explore-mirror-v5.mjs\n.deploy/release-034-explore-mirror.mjs\n.github/workflows/preview-034-explore-public-feed-mirror.yml\ncloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs\ncloudflare/explore-worker/patches/022-explore-mirror-strict-sync.mjs\ncloudflare/explore-worker/patches/023-explore-mirror-service-bindings.mjs'
           test "$changed" = "$expected"
           node --check .deploy/release-034-explore-mirror-v2.mjs
           node --check .deploy/release-034-explore-mirror-v3.mjs
@@ -48,6 +49,7 @@ jobs:
           node --check .deploy/release-034-explore-mirror-v5.mjs
           node --check cloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs
           node --check cloudflare/explore-worker/patches/022-explore-mirror-strict-sync.mjs
+          node --check cloudflare/explore-worker/patches/023-explore-mirror-service-bindings.mjs
           echo 'SORIDRAW_034_SCOPE_GUARD=PASS'
 
       - name: Set up Node.js 22
@@ -63,7 +65,7 @@ jobs:
           npm install --no-audit --no-fund --package-lock=false
           npx wrangler --version
 
-      - name: Recover partial 034, deploy identical Worker runtime, and mirror production public feed
+      - name: Recover 033 baseline, deploy 034 to all Workers, and mirror production public feed
         shell: bash
         run: |
           set -euo pipefail

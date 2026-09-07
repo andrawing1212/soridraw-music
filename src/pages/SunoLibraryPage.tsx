@@ -63,6 +63,7 @@ const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
 const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
 const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
 const scopedCreditStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
+const libraryAppliedKeywordsSessionCache = new Map<string, any>();
 
 
 // 900: Keep the workspace Firestore listener alive once per authenticated app
@@ -4767,10 +4768,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return null;
   };
 
-  const handleApplyNext = (group: any, item: any) => {
+  const handleApplyNext = async (group: any, item: any) => {
     if (!group && !item) return;
 
-    const appliedKeywords = resolveSunoAppliedKeywords(
+    let appliedKeywords = resolveSunoAppliedKeywords(
       item,
       group,
       group?.item,
@@ -4778,6 +4779,56 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       group?.shareData,
       group?.tracks?.[0]
     );
+
+    const activeUid = String(user?.uid || auth.currentUser?.uid || '').trim();
+    const isPlaylistSource = Boolean(
+      group?.isPlaylistItem || item?.isPlaylistItem ||
+      group?.sourceType === 'suno_track' || item?.sourceType === 'suno_track'
+    );
+    const isSharedSource = Boolean(
+      isSharedView || group?.sourceType === 'shared_track' || item?.sourceType === 'shared_track'
+    );
+    const sourceTrackId = String(
+      isPlaylistSource
+        ? (group?.sourceId || item?.sourceId || group?.trackId || item?.trackId || group?.id || '')
+        : (group?.id || group?.trackId || item?.sourceId || item?.trackId || '')
+    ).trim();
+    const keywordCacheKey = activeUid && sourceTrackId ? `${activeUid}:${sourceTrackId}` : '';
+
+    if ((!appliedKeywords || Object.keys(appliedKeywords).length === 0) && keywordCacheKey) {
+      appliedKeywords = libraryAppliedKeywordsSessionCache.get(keywordCacheKey) || null;
+    }
+
+    if ((!appliedKeywords || Object.keys(appliedKeywords).length === 0) && activeUid && sourceTrackId && !isSharedSource) {
+      try {
+        const sourceSnapshot = await getDoc(doc(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId));
+        if (sourceSnapshot.exists()) {
+          const fullTrack: any = { id: sourceTrackId, ...(sourceSnapshot.data() || {}) };
+          appliedKeywords = resolveSunoAppliedKeywords(
+            item,
+            fullTrack,
+            fullTrack?.item,
+            fullTrack?.track,
+            fullTrack?.shareData,
+            fullTrack?.tracks?.[0]
+          );
+          if (appliedKeywords && Object.keys(appliedKeywords).length > 0) {
+            libraryAppliedKeywordsSessionCache.set(keywordCacheKey, appliedKeywords);
+            patchWorkspaceTrackLocally(sourceTrackId, (current) => ({
+              ...current,
+              appliedKeywords,
+              requestPayload: current?.requestPayload || fullTrack?.requestPayload || null,
+            }));
+          }
+        }
+      } catch (error) {
+        console.warn('Library next-song keyword hydration failed:', error);
+      }
+    }
+
+    if (appliedKeywords && Object.keys(appliedKeywords).length > 0 && keywordCacheKey) {
+      libraryAppliedKeywordsSessionCache.set(keywordCacheKey, appliedKeywords);
+    }
 
     console.log("Shared/Library apply source:", {
       group,

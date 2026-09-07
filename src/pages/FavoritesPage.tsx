@@ -76,6 +76,7 @@ import {
 } from '../services/explorePublicationService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
+import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail } from '../lib/musicNoteDetailCache';
 
 
 const PROJECT_ID = 'soridraw-app-866a5';
@@ -5252,12 +5253,21 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     if (!song?.__catalogSummary || !user?.uid || isSharedMusicNoteItem(song) || isMusicNoteSharedView) return song;
     const sourceId = getFavoriteDocumentId(song);
     if (!sourceId) return song;
+    const sourceVersion = getMusicNoteDetailSourceVersion(song);
     try {
-      const snapshot = await getDoc(doc(db, 'favorites', sourceId));
-      if (!snapshot.exists()) return song;
+      const detail = await getOrLoadMusicNoteDetail({
+        uid: user.uid,
+        sourceId,
+        sourceVersion,
+        loader: async () => {
+          const snapshot = await getDoc(doc(db, 'favorites', sourceId));
+          return snapshot.exists() ? (snapshot.data() || {}) : null;
+        },
+      });
+      if (!detail) return song;
       return {
         ...song,
-        ...(snapshot.data() || {}),
+        ...detail,
         id: sourceId,
         firestoreId: sourceId,
         __catalogSummary: false,

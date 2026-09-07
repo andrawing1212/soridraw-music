@@ -488,7 +488,7 @@ const MUSIC_NOTE_CATALOG_FIELDS = [
 
 const LIBRARY_CATALOG_FIELDS = [
   'uid', 'taskId', 'sourceTrackId', 'sourceTaskId', 'status', 'model', 'modelVersion',
-  'title', 'koreanTitle', 'englishTitle', 'genre', 'style', 'tags', 'prompt',
+  'title', 'koreanTitle', 'englishTitle', 'genre', 'style', 'tags', 'prompt', 'appliedKeywords',
   'createdAtMs', 'createdAt', 'updatedAtMs', 'updatedAt',
   'audioUrl', 'audio_url', 'streamAudioUrl', 'stream_audio_url', 'sourceAudioUrl', 'sourceStreamAudioUrl',
   'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl', 'audioUrls', 'duration', 'durationSeconds',

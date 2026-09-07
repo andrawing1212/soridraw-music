@@ -11,12 +11,41 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="SORIDRAW" />
 
-    <!-- 아이콘 -->
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="apple-touch-icon" href="/icon.svg" />
+    <!-- 036: environment-specific app icon / favicon -->
+    <link id="soridraw-favicon" rel="icon" type="image/png" href="/brand/soridraw-favicon-preview.png?v=036" />
+    <link id="soridraw-apple-touch-icon" rel="apple-touch-icon" href="/brand/soridraw-app-preview.png?v=036" />
+    <link id="soridraw-manifest" rel="manifest" href="/manifest.preview.json?v=036" crossorigin="use-credentials" />
+    <script>
+      (function() {
+        var host = String(window.location.hostname || '').toLowerCase();
+        var environment = 'preview';
+        if (host === 'soridraw.com' || host === 'www.soridraw.com' || host === 'soridraw.web.app') {
+          environment = 'production';
+        } else if (host === 'test.soridraw.com' || host === 'soridraw-test.web.app') {
+          environment = 'test';
+        }
 
-    <!-- PWA -->
-    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
+        var favicon = document.getElementById('soridraw-favicon');
+        var appleTouchIcon = document.getElementById('soridraw-apple-touch-icon');
+        var manifest = document.getElementById('soridraw-manifest');
+        if (favicon) {
+          if (environment === 'production') {
+            favicon.type = 'image/svg+xml';
+            favicon.href = '/brand/soridraw-favicon-production.svg?v=036';
+          } else {
+            favicon.type = 'image/png';
+            favicon.href = '/brand/soridraw-favicon-' + environment + '.png?v=036';
+          }
+        }
+        if (appleTouchIcon) {
+          appleTouchIcon.href = '/brand/soridraw-app-' + environment + '.png?v=036';
+        }
+        if (manifest) {
+          manifest.href = '/manifest.' + environment + '.json?v=036';
+        }
+        document.documentElement.dataset.soridrawEnvironment = environment;
+      })();
+    </script>
     <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
 
     <style>

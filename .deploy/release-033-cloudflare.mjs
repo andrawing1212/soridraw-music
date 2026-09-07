@@ -139,12 +139,13 @@ function configFrom(current) {
 
 function validatePreviewRuntime(source) {
   for (const token of [
-    'SORIDRAW_EXPLORE_FEED_REVISION_019_20260908',
     'handleMusicNotePublicationSingleWrite016',
     'publicationReadState016',
     'syncExploreFeedR2Publication012',
     'PROFILE_MEDIA.head(exploreFeedR2Key(sort))',
     'url.pathname === "/v1/feed-revision"',
+    'X-SORIDRAW-Feed-Revision',
+    'X-SORIDRAW-Revision-Cache',
   ]) {
     if (!source.includes(token)) throw new Error(`validated PREVIEW runtime missing: ${token}`);
   }

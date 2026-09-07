@@ -32,6 +32,7 @@ const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 const SORIDRAW_923_FINAL_FIRESTORE_GUARD = true;
 const SORIDRAW_LIBRARY_FULL_CATALOG_AUTHORITY_1051 = true;
 const SORIDRAW_936_LIBRARY_VERSION_SYNC_ONLY = true;
+const SORIDRAW_030_LIBRARY_WARM_CACHE_ZERO_REMOTE = true;
 const SORIDRAW_930_ROUTE_USER_READ_CACHE = true;
 const SORIDRAW_902_LIST_BUNDLE_CACHE = true;
 const SORIDRAW_922_NO_UNBOUNDED_BOOTSTRAP_READS = true;
@@ -424,7 +425,18 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
         session.ready = true;
         markCacheDiagnostic('library', 'CACHE', 0);
         emitLibraryWorkspaceSession(session);
-        // Durable cache is paint-only until the shared Catalog verifies completeness.
+
+        // 030: A durable Library cache that already has a local sync version must not
+        // pay a background Catalog request on every normal page entry. The already-paid
+        // users authority listener carries syncVersions.library. If that token later
+        // advances, handleLibraryProfileVersion performs exactly one verification.
+        const localVersion = readLibraryBundleLocalSyncVersion(uid);
+        const remoteVersion = readRemoteLibraryVersion();
+        const warmCacheIsCurrent = localVersion > 0 && (remoteVersion <= 0 || localVersion >= remoteVersion);
+        if (warmCacheIsCurrent) return;
+
+        // Missing version proof or a known newer remote version still uses one bounded
+        // Catalog verification so first bootstrap and true cross-device changes remain safe.
         startLibraryBundleVerification();
         return;
       }

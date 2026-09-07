@@ -1,0 +1,39 @@
+name: Package SORIDRAW Safe 035 ZIP
+
+on:
+  push:
+    branches:
+      - ops-safe-zip-035-20260908
+    paths:
+      - .github/workflows/ops-safe-zip-035.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact deployed PREVIEW baseline
+        uses: actions/checkout@v4
+        with:
+          ref: e8268812e35161539e9aa3b2c4cf6f8209fab41f
+          fetch-depth: 1
+
+      - name: Verify baseline and create ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "e8268812e35161539e9aa3b2c4cf6f8209fab41f"
+          rm -rf .git
+          zip -qr "$RUNNER_TEMP/SORIDRAW_035_PREVIEW_e8268812_2026-09-08.zip" .
+          sha256sum "$RUNNER_TEMP/SORIDRAW_035_PREVIEW_e8268812_2026-09-08.zip"
+
+      - name: Upload deployed PREVIEW ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_035_PREVIEW_e8268812_2026-09-08
+          path: ${{ runner.temp }}/SORIDRAW_035_PREVIEW_e8268812_2026-09-08.zip
+          if-no-files-found: error
+          retention-days: 30

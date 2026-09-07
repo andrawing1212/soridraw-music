@@ -8,7 +8,7 @@ import {
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { auth, db } from '../firebase';
-import { doc, updateDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
+import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
 import { ensureDefaultPlaylists, getPrimaryNormalPlaylist, addPlaylistItem } from '../services/playlistService';
 import { downloadSunoAudioWithRecovery } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
@@ -699,12 +699,40 @@ export default function GlobalPlayer() {
     setLocalDetailsOpen(true);
   };
 
-  const handleApplyNext = () => {
+  const handleApplyNext = async () => {
     if (dispatchLibraryAction('applyNext')) return;
     if (!currentTrack) return;
     const group = currentTrack.parent || {};
 
-    const appliedKeywords = group.appliedKeywords;
+    let appliedKeywords =
+      group.appliedKeywords ||
+      group?.requestPayload?.appliedKeywords ||
+      (currentTrack as any)?.appliedKeywords ||
+      null;
+
+    if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
+      const currentUser = auth.currentUser;
+      const sourceTrackId = String(
+        isPlaylistTrack
+          ? (group?.sourceId || group?.trackId || (currentTrack as any)?.sourceId || (currentTrack as any)?.trackId || '')
+          : (group?.id || group?.trackId || group?.taskId || '')
+      ).trim();
+
+      if (currentUser && sourceTrackId && !isSharedPlaylistTrack) {
+        try {
+          const sourceSnapshot = await getDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', sourceTrackId));
+          if (sourceSnapshot.exists()) {
+            const sourceData: any = sourceSnapshot.data() || {};
+            appliedKeywords = sourceData?.appliedKeywords || sourceData?.requestPayload?.appliedKeywords || null;
+            if (appliedKeywords && Object.keys(appliedKeywords).length > 0) {
+              group.appliedKeywords = appliedKeywords;
+            }
+          }
+        } catch (error) {
+          console.warn('Global player next-song keyword hydration failed:', error);
+        }
+      }
+    }
     
     if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
       alert('이 곡은 키워드 정보가 없어 적용할 수 없습니다.');

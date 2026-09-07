@@ -32,6 +32,7 @@ const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 const SORIDRAW_923_FINAL_FIRESTORE_GUARD = true;
 const SORIDRAW_LIBRARY_FULL_CATALOG_AUTHORITY_1051 = true;
 const SORIDRAW_936_LIBRARY_VERSION_SYNC_ONLY = true;
+const SORIDRAW_030_LIBRARY_WARM_CACHE_ZERO_REMOTE = true;
 const SORIDRAW_930_ROUTE_USER_READ_CACHE = true;
 const SORIDRAW_902_LIST_BUNDLE_CACHE = true;
 const SORIDRAW_922_NO_UNBOUNDED_BOOTSTRAP_READS = true;
@@ -63,6 +64,7 @@ const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
 const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
 const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
 const scopedCreditStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
+const libraryAppliedKeywordsSessionCache = new Map<string, any>();
 
 
 // 900: Keep the workspace Firestore listener alive once per authenticated app
@@ -423,7 +425,18 @@ const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
         session.ready = true;
         markCacheDiagnostic('library', 'CACHE', 0);
         emitLibraryWorkspaceSession(session);
-        // Durable cache is paint-only until the shared Catalog verifies completeness.
+
+        // 030: A durable Library cache that already has a local sync version must not
+        // pay a background Catalog request on every normal page entry. The already-paid
+        // users authority listener carries syncVersions.library. If that token later
+        // advances, handleLibraryProfileVersion performs exactly one verification.
+        const localVersion = readLibraryBundleLocalSyncVersion(uid);
+        const remoteVersion = readRemoteLibraryVersion();
+        const warmCacheIsCurrent = localVersion > 0 && (remoteVersion <= 0 || localVersion >= remoteVersion);
+        if (warmCacheIsCurrent) return;
+
+        // Missing version proof or a known newer remote version still uses one bounded
+        // Catalog verification so first bootstrap and true cross-device changes remain safe.
         startLibraryBundleVerification();
         return;
       }
@@ -4767,10 +4780,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return null;
   };
 
-  const handleApplyNext = (group: any, item: any) => {
+  const handleApplyNext = async (group: any, item: any) => {
     if (!group && !item) return;
 
-    const appliedKeywords = resolveSunoAppliedKeywords(
+    let appliedKeywords = resolveSunoAppliedKeywords(
       item,
       group,
       group?.item,
@@ -4778,6 +4791,56 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       group?.shareData,
       group?.tracks?.[0]
     );
+
+    const activeUid = String(user?.uid || auth.currentUser?.uid || '').trim();
+    const isPlaylistSource = Boolean(
+      group?.isPlaylistItem || item?.isPlaylistItem ||
+      group?.sourceType === 'suno_track' || item?.sourceType === 'suno_track'
+    );
+    const isSharedSource = Boolean(
+      isSharedView || group?.sourceType === 'shared_track' || item?.sourceType === 'shared_track'
+    );
+    const sourceTrackId = String(
+      isPlaylistSource
+        ? (group?.sourceId || item?.sourceId || group?.trackId || item?.trackId || group?.id || '')
+        : (group?.id || group?.trackId || item?.sourceId || item?.trackId || '')
+    ).trim();
+    const keywordCacheKey = activeUid && sourceTrackId ? `${activeUid}:${sourceTrackId}` : '';
+
+    if ((!appliedKeywords || Object.keys(appliedKeywords).length === 0) && keywordCacheKey) {
+      appliedKeywords = libraryAppliedKeywordsSessionCache.get(keywordCacheKey) || null;
+    }
+
+    if ((!appliedKeywords || Object.keys(appliedKeywords).length === 0) && activeUid && sourceTrackId && !isSharedSource) {
+      try {
+        const sourceSnapshot = await getDoc(doc(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId));
+        if (sourceSnapshot.exists()) {
+          const fullTrack: any = { id: sourceTrackId, ...(sourceSnapshot.data() || {}) };
+          appliedKeywords = resolveSunoAppliedKeywords(
+            item,
+            fullTrack,
+            fullTrack?.item,
+            fullTrack?.track,
+            fullTrack?.shareData,
+            fullTrack?.tracks?.[0]
+          );
+          if (appliedKeywords && Object.keys(appliedKeywords).length > 0) {
+            libraryAppliedKeywordsSessionCache.set(keywordCacheKey, appliedKeywords);
+            patchWorkspaceTrackLocally(sourceTrackId, (current) => ({
+              ...current,
+              appliedKeywords,
+              requestPayload: current?.requestPayload || fullTrack?.requestPayload || null,
+            }));
+          }
+        }
+      } catch (error) {
+        console.warn('Library next-song keyword hydration failed:', error);
+      }
+    }
+
+    if (appliedKeywords && Object.keys(appliedKeywords).length > 0 && keywordCacheKey) {
+      libraryAppliedKeywordsSessionCache.set(keywordCacheKey, appliedKeywords);
+    }
 
     console.log("Shared/Library apply source:", {
       group,

@@ -76,6 +76,8 @@ import {
 } from '../services/explorePublicationService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
+import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
+import { clearMusicNoteDetailDraft, mergeMusicNoteDetailDraft, readMusicNoteDetailDraft, writeMusicNoteDetailDraft } from '../lib/musicNoteDetailDraft';
 
 
 const PROJECT_ID = 'soridraw-app-866a5';
@@ -86,7 +88,22 @@ const MUSIC_NOTE_VISIBLE_BATCH_SIZE = 20;
 const SORIDRAW_MUSIC_NOTE_MORE_VISIBILITY_1032 = true;
 const SORIDRAW_901_MUSIC_NOTE_10_INCREMENTAL_SYNC = true;
 const MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT = 450;
+const MUSIC_NOTE_DETAIL_IDLE_FLUSH_MS = 60_000;
 let musicNoteVisibleCountMemory = MUSIC_NOTE_VISIBLE_BATCH_SIZE;
+
+type MusicNoteDetailPendingPatch = {
+  songId: string;
+  baseVersion: number;
+  updatedAtMs: number;
+  updates: Record<string, any>;
+};
+
+const mergeMusicNoteDetailPatch = (base: Record<string, any>, patch: Record<string, any>) => ({
+  ...(base || {}),
+  ...(patch || {}),
+  ...(patch?.lyrics ? { lyrics: { ...(base?.lyrics || {}), ...(patch.lyrics || {}) } } : {}),
+  ...(patch?.appliedKeywords ? { appliedKeywords: { ...(base?.appliedKeywords || {}), ...(patch.appliedKeywords || {}) } } : {}),
+});
 
 
 type MusicNoteStructureSharedSession = {
@@ -1544,6 +1561,12 @@ export default function FavoritesPage({
   const deleteTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; prompt: string; isEditing: boolean; activeEditSection: 'title' | 'lyrics-ko' | 'lyrics-en' | 'prompt' | null; foreignTargetLanguage?: string }>>({});
   const favoriteDraftCommitRef = useRef(false);
+  const favoriteDetailPendingPatchRef = useRef<MusicNoteDetailPendingPatch | null>(null);
+  const favoriteDetailServerBaselineRef = useRef<{ songId: string; data: any } | null>(null);
+  const favoriteDetailFlushTimerRef = useRef<number | null>(null);
+  const favoriteDetailFlushInFlightRef = useRef<Promise<void> | null>(null);
+  const favoriteDetailDraftPersistInFlightRef = useRef<Promise<void> | null>(null);
+  const [favoriteDetailSaveStatus, setFavoriteDetailSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved'>('idle');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
@@ -1569,6 +1592,242 @@ export default function FavoritesPage({
   const explorePublicationHydratedUidRef = useRef<string | null>(null);
   const [musicNoteCardState, setMusicNoteCardState] = useState<MusicNoteCardStateSnapshot>(EMPTY_MUSIC_NOTE_CARD_STATE);
   const musicNoteCardStateRef = useRef<MusicNoteCardStateSnapshot>(EMPTY_MUSIC_NOTE_CARD_STATE);
+
+  const clearFavoriteDetailFlushTimer = () => {
+    if (favoriteDetailFlushTimerRef.current !== null) {
+      window.clearTimeout(favoriteDetailFlushTimerRef.current);
+      favoriteDetailFlushTimerRef.current = null;
+    }
+  };
+
+  const getComparableFavoriteSunoState = (song: any) => {
+    const state = buildFavoriteSunoEditorState(song);
+    const links = getFavoriteSunoLinks(song)
+      .map((link) => ({
+        url: String(link?.url || ''),
+        title: String(link?.title || ''),
+        coverUrl: String(link?.coverUrl || ''),
+        durationSeconds: Number(link?.durationSeconds || 0),
+        durationText: String(link?.durationText || ''),
+        rank: Number(link?.rank || 0),
+      }))
+      .sort((a, b) => a.rank - b.rank || a.url.localeCompare(b.url));
+    return JSON.stringify({ inputs: state.inputs, mainIndex: state.mainIndex, links });
+  };
+
+  const pruneFavoriteDetailPatchAgainstBaseline = (songId: string, updates: Record<string, any>) => {
+    const baselineEntry = favoriteDetailServerBaselineRef.current;
+    if (!baselineEntry || baselineEntry.songId !== songId) return updates;
+
+    const baseline = baselineEntry.data || {};
+    const projected = mergeMusicNoteDetailDraft(baseline, updates);
+    const next: Record<string, any> = mergeMusicNoteDetailPatch({}, updates);
+
+    const titleKeys = ['title', 'displayGenre', 'koreanTitle', 'englishTitle'];
+    if (titleKeys.some((key) => key in next)) {
+      const titleSame = (
+        cleanEditableTitleGenre(getEditableFavoriteTitleGenre(projected)) === cleanEditableTitleGenre(getEditableFavoriteTitleGenre(baseline)) &&
+        cleanTitlePart(getNormalizedTitles(projected).korean) === cleanTitlePart(getNormalizedTitles(baseline).korean) &&
+        cleanTitlePart(getNormalizedTitles(projected).english) === cleanTitlePart(getNormalizedTitles(baseline).english)
+      );
+      if (titleSame) titleKeys.forEach((key) => delete next[key]);
+    }
+
+    if ('prompt' in next) {
+      const projectedPrompt = normalizeFavoritePromptForDisplay(String(projected?.prompt || ''));
+      const baselinePrompt = normalizeFavoritePromptForDisplay(String(baseline?.prompt || ''));
+      if (projectedPrompt === baselinePrompt) delete next.prompt;
+    }
+
+    if ('lyrics' in next) {
+      const projectedKo = normalizeFavoriteLyricsForDisplay(String(projected?.lyrics?.korean || ''));
+      const projectedEn = normalizeFavoriteLyricsForDisplay(String(projected?.lyrics?.english || ''));
+      const baselineKo = normalizeFavoriteLyricsForDisplay(String(baseline?.lyrics?.korean || ''));
+      const baselineEn = normalizeFavoriteLyricsForDisplay(String(baseline?.lyrics?.english || ''));
+      if (projectedKo === baselineKo && projectedEn === baselineEn) delete next.lyrics;
+    }
+
+    const memoKeys = ['musicNoteMemo', 'noteMemo', 'memoUpdatedAt'];
+    if (memoKeys.some((key) => key in next) && getMusicNoteMemo(projected) === getMusicNoteMemo(baseline)) {
+      memoKeys.forEach((key) => delete next[key]);
+    }
+
+    const sunoKeys = [
+      'sunoLinks', 'mainSunoIndex', 'sunoLinkCount', 'sunoShareUrl', 'sunoShareUrlUpdatedAt',
+      'sunoCoverUrl', 'sunoTitle', 'sunoDurationSeconds', 'sunoDurationText', 'sunoCoverFetchedAt',
+    ];
+    if (sunoKeys.some((key) => key in next) && getComparableFavoriteSunoState(projected) === getComparableFavoriteSunoState(baseline)) {
+      sunoKeys.forEach((key) => delete next[key]);
+    }
+
+    return next;
+  };
+
+  const flushFavoriteDetailPendingPatch = async (reason: 'idle' | 'detail-close' | 'page-exit' | 'manual' = 'manual') => {
+    if (favoriteDetailFlushInFlightRef.current) return favoriteDetailFlushInFlightRef.current;
+    const pending = favoriteDetailPendingPatchRef.current;
+    if (!pending || !user?.uid || Object.keys(pending.updates || {}).length === 0) return;
+
+    clearFavoriteDetailFlushTimer();
+    if (favoriteDetailDraftPersistInFlightRef.current) {
+      await favoriteDetailDraftPersistInFlightRef.current;
+    }
+    favoriteDetailPendingPatchRef.current = null;
+    setFavoriteDetailSaveStatus('saving');
+
+    const task = (async () => {
+      try {
+        await updateFavorite(pending.songId, pending.updates);
+        const latest = favoritesStore.getFavorites().find((song: any) => String(song?.id || '') === pending.songId);
+        const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
+        await patchMusicNoteDetailCache({
+          uid: user.uid,
+          sourceId: pending.songId,
+          sourceVersion: committedVersion,
+          updates: pending.updates,
+        });
+
+        const baselineEntry = favoriteDetailServerBaselineRef.current;
+        if (baselineEntry?.songId === pending.songId) {
+          favoriteDetailServerBaselineRef.current = {
+            songId: pending.songId,
+            data: mergeMusicNoteDetailDraft(baselineEntry.data, {
+              ...pending.updates,
+              updatedAtMs: committedVersion,
+            }),
+          };
+        }
+
+        const newerPending = favoriteDetailPendingPatchRef.current;
+        if (newerPending && newerPending.songId === pending.songId) {
+          const rebasedUpdates = pruneFavoriteDetailPatchAgainstBaseline(pending.songId, newerPending.updates);
+          if (Object.keys(rebasedUpdates).length === 0) {
+            favoriteDetailPendingPatchRef.current = null;
+            await clearMusicNoteDetailDraft(user.uid, pending.songId);
+          } else {
+            const rebasedPending: MusicNoteDetailPendingPatch = {
+              ...newerPending,
+              baseVersion: committedVersion,
+              updatedAtMs: Date.now(),
+              updates: rebasedUpdates,
+            };
+            favoriteDetailPendingPatchRef.current = rebasedPending;
+            await writeMusicNoteDetailDraft(user.uid, rebasedPending.songId, rebasedPending.baseVersion, rebasedPending.updates);
+          }
+        } else {
+          await clearMusicNoteDetailDraft(user.uid, pending.songId);
+        }
+        setFavoriteDetailSaveStatus(favoriteDetailPendingPatchRef.current ? 'pending' : 'saved');
+      } catch (error) {
+        console.error(`music note detail draft flush failed (${reason})`, error);
+        const newerPending = favoriteDetailPendingPatchRef.current;
+        const restoredUpdates = pruneFavoriteDetailPatchAgainstBaseline(
+          pending.songId,
+          newerPending && newerPending.songId === pending.songId
+            ? mergeMusicNoteDetailPatch(pending.updates, newerPending.updates)
+            : pending.updates,
+        );
+        if (Object.keys(restoredUpdates).length === 0) {
+          favoriteDetailPendingPatchRef.current = null;
+          await clearMusicNoteDetailDraft(user.uid, pending.songId);
+          setFavoriteDetailSaveStatus('idle');
+          return;
+        }
+        const restored: MusicNoteDetailPendingPatch = {
+          songId: pending.songId,
+          baseVersion: pending.baseVersion || newerPending?.baseVersion || 0,
+          updatedAtMs: Date.now(),
+          updates: restoredUpdates,
+        };
+        favoriteDetailPendingPatchRef.current = restored;
+        setFavoriteDetailSaveStatus('pending');
+        await writeMusicNoteDetailDraft(user.uid, restored.songId, restored.baseVersion, restored.updates);
+        clearFavoriteDetailFlushTimer();
+        favoriteDetailFlushTimerRef.current = window.setTimeout(() => {
+          favoriteDetailFlushTimerRef.current = null;
+          void flushFavoriteDetailPendingPatch('idle');
+        }, MUSIC_NOTE_DETAIL_IDLE_FLUSH_MS);
+      } finally {
+        favoriteDetailFlushInFlightRef.current = null;
+      }
+    })();
+
+    favoriteDetailFlushInFlightRef.current = task;
+    return task;
+  };
+
+  const scheduleFavoriteDetailFlush = () => {
+    clearFavoriteDetailFlushTimer();
+    favoriteDetailFlushTimerRef.current = window.setTimeout(() => {
+      favoriteDetailFlushTimerRef.current = null;
+      void flushFavoriteDetailPendingPatch('idle');
+    }, MUSIC_NOTE_DETAIL_IDLE_FLUSH_MS);
+  };
+
+  const queueFavoriteDetailPatch = (songId: string, patch: Record<string, any>) => {
+    const safeSongId = String(songId || '').trim();
+    if (!safeSongId || !user?.uid || !patch || Object.keys(patch).length === 0) return;
+
+    const existing = favoriteDetailPendingPatchRef.current;
+    const baselineEntry = favoriteDetailServerBaselineRef.current;
+    const currentSong = selectedSong?.id === safeSongId
+      ? selectedSong
+      : favoritesStore.getFavorites().find((song: any) => String(song?.id || '') === safeSongId);
+    const baseVersion = existing?.songId === safeSongId
+      ? existing.baseVersion
+      : getMusicNoteDetailSourceVersion(baselineEntry?.songId === safeSongId ? baselineEntry.data : currentSong);
+    const mergedUpdates = existing?.songId === safeSongId
+      ? mergeMusicNoteDetailPatch(existing.updates, patch)
+      : mergeMusicNoteDetailPatch({}, patch);
+    const updates = pruneFavoriteDetailPatchAgainstBaseline(safeSongId, mergedUpdates);
+
+    setSelectedSong((current: any) => {
+      if (!current || String(current.id || '') !== safeSongId) return current;
+      return mergeMusicNoteDetailDraft(current, patch);
+    });
+
+    if (Object.keys(updates).length === 0) {
+      favoriteDetailPendingPatchRef.current = null;
+      setFavoriteDetailSaveStatus(favoriteDetailFlushInFlightRef.current ? 'saving' : 'idle');
+      clearFavoriteDetailFlushTimer();
+      const clearTask = clearMusicNoteDetailDraft(user.uid, safeSongId);
+      const trackedClearTask = clearTask.finally(() => {
+        if (favoriteDetailDraftPersistInFlightRef.current === trackedClearTask) {
+          favoriteDetailDraftPersistInFlightRef.current = null;
+        }
+      });
+      favoriteDetailDraftPersistInFlightRef.current = trackedClearTask;
+      return;
+    }
+
+    const pending: MusicNoteDetailPendingPatch = {
+      songId: safeSongId,
+      baseVersion,
+      updatedAtMs: Date.now(),
+      updates,
+    };
+    favoriteDetailPendingPatchRef.current = pending;
+    setFavoriteDetailSaveStatus('pending');
+
+    const persistTask = writeMusicNoteDetailDraft(user.uid, safeSongId, baseVersion, updates);
+    const trackedPersistTask = persistTask.finally(() => {
+      if (favoriteDetailDraftPersistInFlightRef.current === trackedPersistTask) {
+        favoriteDetailDraftPersistInFlightRef.current = null;
+      }
+    });
+    favoriteDetailDraftPersistInFlightRef.current = trackedPersistTask;
+    scheduleFavoriteDetailFlush();
+  };
+
+  useEffect(() => {
+    const flushOnPageExit = () => { void flushFavoriteDetailPendingPatch('page-exit'); };
+    window.addEventListener('pagehide', flushOnPageExit);
+    return () => {
+      window.removeEventListener('pagehide', flushOnPageExit);
+      clearFavoriteDetailFlushTimer();
+      void flushFavoriteDetailPendingPatch('page-exit');
+    };
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -1909,23 +2168,21 @@ export default function FavoritesPage({
 
     setFavoriteMemoSavingIds(prev => ({ ...prev, [song.id]: true }));
     try {
-      await Promise.resolve(updateFavorite(song.id, {
+      const now = Date.now();
+      queueFavoriteDetailPatch(song.id, {
         musicNoteMemo: nextMemo,
         noteMemo: nextMemo,
-        memoUpdatedAt: Date.now(),
-      } as any));
-      if (selectedSong?.id === song.id) {
-        setSelectedSong({ ...(selectedSong || {}), musicNoteMemo: nextMemo, noteMemo: nextMemo, memoUpdatedAt: Date.now() });
-      }
+        memoUpdatedAt: now,
+      });
       setFavoriteMemoDrafts(prev => {
         const next = { ...prev };
         delete next[song.id];
         return next;
       });
-      showFavoriteToast('메모를 저장했습니다.');
+      showFavoriteToast('메모 변경을 반영했습니다.');
     } catch (error) {
-      console.error('music note memo save failed:', error);
-      showFavoriteToast('메모 저장에 실패했습니다.');
+      console.error('music note memo draft save failed:', error);
+      showFavoriteToast('메모 반영에 실패했습니다.');
     } finally {
       setFavoriteMemoSavingIds(prev => {
         const next = { ...prev };
@@ -2582,7 +2839,7 @@ export default function FavoritesPage({
     // Open Detail & Edit and move to the embedded SUNO URL section instead.
     pendingDetailSunoUrlScrollRef.current = true;
     setIsDetailSunoUrlHighlighted(true);
-    setSelectedSong(song);
+    void openFavoriteDetail(song);
     setSunoUrlEditorSong(null);
     setSunoUrlError('');
     setSunoUrlSaveStatus('idle');
@@ -2723,7 +2980,8 @@ export default function FavoritesPage({
         sunoCoverFetchedAt: now,
       };
 
-      await updateFavorite(song.id, updates);
+      if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);
+      else await updateFavorite(song.id, updates);
 
       const targetSongId = String(song.id || '');
       const detailSessionStillOpen = source === 'detail'
@@ -2782,7 +3040,8 @@ export default function FavoritesPage({
         sunoDurationText: null,
         sunoCoverFetchedAt: null,
       };
-      await updateFavorite(song.id, updates);
+      if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);
+      else await updateFavorite(song.id, updates);
       const targetSongId = String(song.id || '');
       const detailSessionStillOpen = source === 'detail'
         && activeFavoriteEditorSongIdRef.current === targetSongId
@@ -2973,9 +3232,16 @@ export default function FavoritesPage({
 
     setSelectedSong((prev: any) => {
       if (!prev || prev.id !== latestSong.id) return prev;
-      return {
+      const catalogSummary = latestSong?.__catalogSummary === true;
+      const pending = favoriteDetailPendingPatchRef.current;
+      const merged = {
         ...prev,
         ...latestSong,
+        // Catalog rows intentionally omit large detail fields. Never let a list refresh
+        // replace an already hydrated editor value with an absent/empty summary value.
+        prompt: catalogSummary ? prev.prompt : (latestSong.prompt ?? prev.prompt),
+        musicNoteMemo: catalogSummary ? prev.musicNoteMemo : (latestSong.musicNoteMemo ?? prev.musicNoteMemo),
+        noteMemo: catalogSummary ? prev.noteMemo : (latestSong.noteMemo ?? prev.noteMemo),
         lyrics: latestSong.lyrics
           ? { ...(prev.lyrics || {}), ...(latestSong.lyrics || {}) }
           : prev.lyrics,
@@ -2983,6 +3249,9 @@ export default function FavoritesPage({
           ? { ...(prev.appliedKeywords || {}), ...(latestSong.appliedKeywords || {}) }
           : prev.appliedKeywords,
       };
+      return pending?.songId === String(prev.id || '')
+        ? mergeMusicNoteDetailDraft(merged, pending.updates)
+        : merged;
     });
   }, [favorites, selectedSong?.id, isMusicNoteSharedView]);
 
@@ -3104,6 +3373,15 @@ export default function FavoritesPage({
   useEffect(() => {
     if (selectedSong) {
       const selectedSongId = String(selectedSong.id || '');
+      if (!favoriteDetailServerBaselineRef.current || favoriteDetailServerBaselineRef.current.songId !== selectedSongId) {
+        favoriteDetailServerBaselineRef.current = { songId: selectedSongId, data: selectedSong };
+      }
+      if (
+        favoriteEditorReadySongIdRef.current === selectedSongId &&
+        popupOpenedSongIdRef.current === selectedSongId
+      ) {
+        return;
+      }
       const sourceTitle = selectedSong.title || '';
       const sourceTitles = getNormalizedTitles(selectedSong);
       const sourceTitleGenre = getEditableFavoriteTitleGenre(selectedSong);
@@ -3119,6 +3397,7 @@ export default function FavoritesPage({
       activeFavoriteEditorSongIdRef.current = selectedSongId;
       favoriteEditorReadySongIdRef.current = selectedSongId;
       popupOpenedSongIdRef.current = selectedSongId;
+      setFavoriteDetailSaveStatus(favoriteDetailPendingPatchRef.current?.songId === selectedSongId ? 'pending' : 'idle');
       skipNextFavoriteDraftSaveRef.current = false;
 
       setOriginalLyricsKo(sourceKorean);
@@ -3163,6 +3442,8 @@ export default function FavoritesPage({
       popupOpenedSongIdRef.current = null;
       activeFavoriteEditorSongIdRef.current = null;
       favoriteEditorReadySongIdRef.current = null;
+      favoriteDetailServerBaselineRef.current = null;
+      setFavoriteDetailSaveStatus('idle');
       skipNextFavoriteDraftSaveRef.current = false;
       setActiveEditSection(null);
       setForeignTargetLanguage('English');
@@ -3303,7 +3584,9 @@ export default function FavoritesPage({
 
     favoriteDraftCommitRef.current = true;
     try {
-      await updateFavorite(payload.targetSongId, payload.updates);
+      // 031: Detail edits are local-first. Multiple section saves are merged into one
+      // pending patch and only flushed after 60s idle or when the detail/page exits.
+      queueFavoriteDetailPatch(payload.targetSongId, payload.updates);
 
       setSelectedSong(payload.nextSong);
       setOriginalTitle(payload.nextSong.title);
@@ -4013,17 +4296,21 @@ export default function FavoritesPage({
   const closeSelectedSong = async (source: 'ui' | 'history' = 'ui') => {
     const shouldPopOverlayHistory = source === 'ui' && detailHistoryPushedRef.current;
 
-    // End the detail session synchronously before any pending URL save can resolve. This keeps the
-    // server save alive, but prevents its late completion from restoring a window the user closed.
+    // 031: a completed local edit session is flushed once when Detail exits. If the
+    // network write fails, the IndexedDB draft remains available for recovery.
+    await flushFavoriteDetailPendingPatch('detail-close');
+    if (favoriteDetailPendingPatchRef.current) {
+      await flushFavoriteDetailPendingPatch('detail-close');
+    }
+
+    // End the detail session only after the bounded flush attempt so async completion
+    // can never reopen or attach to another song.
     popupOpenedSongIdRef.current = null;
     activeFavoriteEditorSongIdRef.current = null;
     favoriteEditorReadySongIdRef.current = null;
     clearFavoriteSunoSaveTimer('detail');
     setDetailSunoUrlSaveStatus('idle');
 
-    // Closing with the browser/app back button must never write to Firestore.
-    // Only the explicit check/save button commits edits. This protects existing
-    // Music Note data from cross-song overwrites during history navigation.
     setDrafts(prev => {
       if (!selectedSong?.id || !prev[selectedSong.id]) return prev;
       const next = { ...prev };
@@ -5252,12 +5539,21 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     if (!song?.__catalogSummary || !user?.uid || isSharedMusicNoteItem(song) || isMusicNoteSharedView) return song;
     const sourceId = getFavoriteDocumentId(song);
     if (!sourceId) return song;
+    const sourceVersion = getMusicNoteDetailSourceVersion(song);
     try {
-      const snapshot = await getDoc(doc(db, 'favorites', sourceId));
-      if (!snapshot.exists()) return song;
+      const detail = await getOrLoadMusicNoteDetail({
+        uid: user.uid,
+        sourceId,
+        sourceVersion,
+        loader: async () => {
+          const snapshot = await getDoc(doc(db, 'favorites', sourceId));
+          return snapshot.exists() ? (snapshot.data() || {}) : null;
+        },
+      });
+      if (!detail) return song;
       return {
         ...song,
-        ...(snapshot.data() || {}),
+        ...detail,
         id: sourceId,
         firestoreId: sourceId,
         __catalogSummary: false,
@@ -5270,7 +5566,40 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   const openFavoriteDetail = async (song: any) => {
     const hydrated = await hydrateCatalogFavorite(song);
-    setSelectedSong(hydrated);
+    let nextSong = hydrated;
+    const sourceId = getFavoriteDocumentId(hydrated || song);
+    const currentVersion = getMusicNoteDetailSourceVersion(hydrated);
+
+    if (sourceId) {
+      favoriteDetailServerBaselineRef.current = { songId: sourceId, data: hydrated };
+    }
+
+    if (user?.uid && sourceId && !isMusicNoteSharedView && !isSharedMusicNoteItem(hydrated)) {
+      const recovered = await readMusicNoteDetailDraft(user.uid, sourceId);
+      if (recovered?.updates && Object.keys(recovered.updates).length > 0) {
+        const compatible = recovered.baseVersion <= 0 || currentVersion <= 0 || currentVersion <= recovered.baseVersion;
+        if (compatible) {
+          const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);
+          if (Object.keys(recoveredUpdates).length > 0) {
+            nextSong = mergeMusicNoteDetailDraft(hydrated, recoveredUpdates);
+            favoriteDetailPendingPatchRef.current = {
+              songId: sourceId,
+              baseVersion: recovered.baseVersion || currentVersion,
+              updatedAtMs: recovered.updatedAtMs || Date.now(),
+              updates: recoveredUpdates,
+            };
+            scheduleFavoriteDetailFlush();
+          } else {
+            favoriteDetailPendingPatchRef.current = null;
+            void clearMusicNoteDetailDraft(user.uid, sourceId);
+          }
+        } else {
+          console.warn('music note detail recovery kept pending because server version advanced', { sourceId });
+        }
+      }
+    }
+
+    setSelectedSong(nextSong);
   };
 
   const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'sunoOpen' | 'sunoUrl' | 'sunoRemove' | 'favorite' | 'folder' | 'saveSharedNote' | 'delete' | 'restore' | 'permanentDelete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected' | 'restoreSelected' | 'permanentDeleteSelected', song: any) => {
@@ -7655,7 +7984,20 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
               <div className="relative flex items-center justify-between gap-4 border-b border-black/20 px-5 py-4 md:px-8 md:py-5">
                 <div className="min-w-0">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-[#FF8C85]">music note detail</div>
+                  <div className="flex min-w-0 items-center gap-2 text-[11px] font-bold uppercase tracking-[0.32em] text-[#FF8C85]">
+                    <span className="shrink-0">music note detail</span>
+                    {!isSelectedSongReadOnly && favoriteDetailSaveStatus !== 'idle' && (
+                      <span
+                        data-music-note-detail-save-status={favoriteDetailSaveStatus}
+                        className={cn(
+                          'min-w-0 truncate text-[10px] font-semibold normal-case tracking-normal',
+                          favoriteDetailSaveStatus === 'saved' ? 'text-emerald-300/70' : 'text-white/45'
+                        )}
+                      >
+                        {favoriteDetailSaveStatus === 'pending' ? '저장 대기' : favoriteDetailSaveStatus === 'saving' ? '저장 중…' : '저장됨'}
+                      </span>
+                    )}
+                  </div>
                   <h3 className="mt-1 text-[27px] font-bold tracking-tight text-white md:text-[32px]">{isSelectedSongReadOnly ? '디테일' : '디테일 & Edit'}</h3>
                 </div>
                 <div className="flex shrink-0 items-center gap-4">

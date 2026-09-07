@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       PREVIEW_WORKER: soridraw-explore-preview
       PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
     steps:

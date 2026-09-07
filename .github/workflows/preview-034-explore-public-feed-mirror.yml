@@ -6,7 +6,8 @@ on:
       - preview-034-explore-public-feed-mirror
     paths:
       - cloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs
-      - .deploy/release-034-explore-mirror-v3.mjs
+      - cloudflare/explore-worker/patches/022-explore-mirror-strict-sync.mjs
+      - .deploy/release-034-explore-mirror-v4.mjs
       - .github/workflows/preview-034-explore-public-feed-mirror.yml
 
 permissions:
@@ -39,11 +40,13 @@ jobs:
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$EXPECTED_PREVIEW_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_MAIN_SHA"
           changed="$(git diff --name-only "$EXPECTED_PREVIEW_SHA" HEAD | sort)"
-          expected=$'.deploy/release-034-explore-mirror-v2.mjs\n.deploy/release-034-explore-mirror-v3.mjs\n.deploy/release-034-explore-mirror.mjs\n.github/workflows/preview-034-explore-public-feed-mirror.yml\ncloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs'
+          expected=$'.deploy/release-034-explore-mirror-v2.mjs\n.deploy/release-034-explore-mirror-v3.mjs\n.deploy/release-034-explore-mirror-v4.mjs\n.deploy/release-034-explore-mirror.mjs\n.github/workflows/preview-034-explore-public-feed-mirror.yml\ncloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs\ncloudflare/explore-worker/patches/022-explore-mirror-strict-sync.mjs'
           test "$changed" = "$expected"
           node --check .deploy/release-034-explore-mirror-v2.mjs
           node --check .deploy/release-034-explore-mirror-v3.mjs
+          node --check .deploy/release-034-explore-mirror-v4.mjs
           node --check cloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs
+          node --check cloudflare/explore-worker/patches/022-explore-mirror-strict-sync.mjs
           echo 'SORIDRAW_034_SCOPE_GUARD=PASS'
 
       - name: Set up Node.js 22
@@ -63,4 +66,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node .deploy/release-034-explore-mirror-v3.mjs
+          node .deploy/release-034-explore-mirror-v4.mjs

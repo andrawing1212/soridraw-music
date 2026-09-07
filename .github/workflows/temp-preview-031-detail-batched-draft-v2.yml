@@ -1,0 +1,180 @@
+name: SORIDRAW PREVIEW 031 Detail Batched Draft V2
+
+on:
+  push:
+    branches: [preview-031-detail-batched-draft]
+    paths:
+      - '.github/workflows/temp-preview-031-detail-batched-draft-v2.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-preview-031-detail-batched-draft-v2
+  cancel-in-progress: false
+
+jobs:
+  validate-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      BASE_PREVIEW_SHA: caf7e7a8b26a1582d7c4e504ca418749c4f62a25
+      BASE_MAIN_SHA: da3f70ca3e8574f20a5eabf96a4c517c51b4038c
+      FIREBASE_PROJECT: soridraw
+    steps:
+      - name: Checkout isolated 031 branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview-031-detail-batched-draft
+          fetch-depth: 0
+
+      - name: Guard exact PREVIEW and MAIN baselines
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$BASE_PREVIEW_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
+          git diff --name-only "$BASE_PREVIEW_SHA" HEAD | sort > "$RUNNER_TEMP/bootstrap-actual.txt"
+          printf '%s\n' \
+            '.deploy/031-detail-batched-draft.patch.gz.b64' \
+            '.github/workflows/temp-preview-031-detail-batched-draft.yml' \
+            '.github/workflows/temp-preview-031-detail-batched-draft-v2.yml' | sort > "$RUNNER_TEMP/bootstrap-expected.txt"
+          cmp "$RUNNER_TEMP/bootstrap-expected.txt" "$RUNNER_TEMP/bootstrap-actual.txt"
+          echo 'BASELINE_GUARD_031_V2=PASS'
+
+      - name: Apply reviewed 031 patch and normalize EOF
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d .deploy/031-detail-batched-draft.patch.gz.b64 | gzip -d > "$RUNNER_TEMP/031.patch"
+          git apply --check "$RUNNER_TEMP/031.patch"
+          git apply "$RUNNER_TEMP/031.patch"
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/lib/musicNoteDetailCache.ts')
+          text = path.read_text()
+          path.write_text(text.rstrip('\n') + '\n')
+          PY
+          git diff --check
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          echo 'PATCH_031_V2=PASS'
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: TypeScript build and regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-runtime-environment-parity-028.mjs
+          npm run build
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/local-index.sha"
+          echo 'APP_VALIDATION_031_V2=PASS'
+
+      - name: Create exact clean PREVIEW commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Preview Bot'
+          git config user.email 'soridraw-preview@users.noreply.github.com'
+          git read-tree "$BASE_PREVIEW_SHA^{tree}"
+          git add \
+            src/pages/FavoritesPage.tsx \
+            src/lib/musicNoteDetailCache.ts \
+            src/lib/musicNoteDetailDraft.ts \
+            scripts/verify-031-music-note-detail-batched-draft.mjs
+          tree_sha="$(git write-tree)"
+          clean_sha="$(printf '%s\n' 'fix(preview): batch Music Note detail edits safely' | git commit-tree "$tree_sha" -p "$BASE_PREVIEW_SHA")"
+          echo "CLEAN_SHA=$clean_sha" >> "$GITHUB_ENV"
+          git diff --name-only "$BASE_PREVIEW_SHA" "$clean_sha" | sort > "$RUNNER_TEMP/clean-actual.txt"
+          printf '%s\n' \
+            'scripts/verify-031-music-note-detail-batched-draft.mjs' \
+            'src/lib/musicNoteDetailCache.ts' \
+            'src/lib/musicNoteDetailDraft.ts' \
+            'src/pages/FavoritesPage.tsx' | sort > "$RUNNER_TEMP/clean-expected.txt"
+          cmp "$RUNNER_TEMP/clean-expected.txt" "$RUNNER_TEMP/clean-actual.txt"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$BASE_PREVIEW_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
+          echo "CLEAN_PREVIEW_SHA=$clean_sha"
+          echo 'CLEAN_TREE_031_V2=PASS'
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW and verify exact build
+        shell: bash
+        run: |
+          set -euo pipefail
+          production_before="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ | sha256sum | awk '{print $1}')"
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          local_sha="$(cat "$RUNNER_TEMP/local-index.sha")"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/live-index.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/live-index.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then
+                  echo "PREVIEW_EXACT_BUILD_PASS=$url"
+                  ok=yes
+                  break
+                fi
+              fi
+              sleep 8
+            done
+            test "$ok" = yes
+          done
+          production_after="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ | sha256sum | awk '{print $1}')"
+          test "$production_before" = "$production_after"
+          echo 'FIREBASE_PREVIEW_031_V2=PASS'
+          echo 'PRODUCTION_HOSTING_UNCHANGED_031_V2=PASS'
+
+      - name: Promote exact clean commit to PREVIEW only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "$CLEAN_SHA":refs/heads/preview
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$CLEAN_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$BASE_MAIN_SHA"
+          echo 'PREVIEW_PUSH_031_V2=PASS'
+          echo 'MAIN_UNCHANGED_031_V2=PASS'
+
+      - name: Package PREVIEW ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          short="$(git rev-parse --short=8 "$CLEAN_SHA")"
+          zip_path="$RUNNER_TEMP/SORIDRAW_PREVIEW_031_${short}.zip"
+          git archive --format=zip --output="$zip_path" "$CLEAN_SHA"
+          sha256sum "$zip_path"
+          echo "ZIP_PATH=$zip_path" >> "$GITHUB_ENV"
+          echo 'PREVIEW_ZIP_031_V2=PASS'
+
+      - name: Upload PREVIEW ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_PREVIEW_031
+          path: ${{ env.ZIP_PATH }}
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Final result
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "CLEAN_PREVIEW_SHA=$CLEAN_SHA"
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'FIRESTORE_RULES_CHANGED=false'
+          echo 'CLOUDFLARE_CHANGED=false'
+          echo 'TEST_CHANGED=false'
+          echo 'PRODUCTION_CHANGED=false'
+          echo 'SORIDRAW_PREVIEW_031_V2=PASS'

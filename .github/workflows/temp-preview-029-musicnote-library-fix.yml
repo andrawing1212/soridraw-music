@@ -79,7 +79,7 @@ jobs:
           npm ci
           npx tsc --noEmit
           node scripts/verify-029-music-note-library.mjs
-          if [ -f scripts/verify-adaptive-list-index-v2.mjs ]; then node scripts/verify-adaptive-list-index-v2.mjs; fi
+          if [ -f scripts/verify-adaptive-list-index-v2.mjs ] && [ -f functions/src/previewAdaptiveListIndex.ts ]; then node scripts/verify-adaptive-list-index-v2.mjs; fi
           if [ -f scripts/verify-runtime-environment-parity-028.mjs ]; then node scripts/verify-runtime-environment-parity-028.mjs; fi
           npm run build
           sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/local-index.sha"

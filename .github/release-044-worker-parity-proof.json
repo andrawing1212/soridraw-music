@@ -1,0 +1,23 @@
+{
+  "checkedAt": "2026-09-08T09:42:45.249Z",
+  "workers": {
+    "preview": {
+      "worker": "soridraw-explore-preview",
+      "versionId": "b69ace61-b752-4073-99e5-f63ce8e4be0a",
+      "sourceSha256": "5442a9eb9e4fb863558b2c717f26779d6765295dbd2675e5a598b3fdf683da38"
+    },
+    "test": {
+      "worker": "soridraw-explore-test",
+      "versionId": "7ce9e2d6-6846-4fbc-a1a7-1cf2760f6b10",
+      "sourceSha256": "5442a9eb9e4fb863558b2c717f26779d6765295dbd2675e5a598b3fdf683da38"
+    },
+    "production": {
+      "worker": "soridraw-explore-api",
+      "versionId": "3602abe5-a684-4a6f-b029-784ad0e5591b",
+      "sourceSha256": "5442a9eb9e4fb863558b2c717f26779d6765295dbd2675e5a598b3fdf683da38"
+    }
+  },
+  "commonSourceSha256": "5442a9eb9e4fb863558b2c717f26779d6765295dbd2675e5a598b3fdf683da38",
+  "sameSource": true,
+  "returning044": true
+}

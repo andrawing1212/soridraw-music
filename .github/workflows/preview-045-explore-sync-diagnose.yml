@@ -1,0 +1,80 @@
+name: SORIDRAW 045 Explore Sync Diagnose
+
+on:
+  push:
+    branches: [preview-045-explore-sync-recovery]
+    paths: ['.github/workflows/preview-045-explore-sync-diagnose.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+      - name: Inspect live Worker source markers and feeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const crypto = require('crypto');
+          const A = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const T = process.env.CLOUDFLARE_API_TOKEN;
+          const envs = {
+            preview: { worker:'soridraw-explore-preview', base:'https://soridraw-explore-preview.andrawing1212.workers.dev', origin:'https://preview.soridraw.com' },
+            test: { worker:'soridraw-explore-test', base:'https://soridraw-explore-test.andrawing1212.workers.dev', origin:'https://test.soridraw.com' },
+            production: { worker:'soridraw-explore-api', base:'https://soridraw-explore-api.andrawing1212.workers.dev', origin:'https://soridraw.com' },
+          };
+          const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
+          async function cf(url){
+            const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});
+            const x=await r.json();
+            if(!r.ok||x.success===false) throw new Error(`CF ${r.status} ${JSON.stringify(x).slice(0,500)}`);
+            return x.result||x;
+          }
+          async function active(worker){
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${worker}`;
+            const ds=await cf(`${base}/deployments`);
+            const d=[...(ds.deployments||ds||[])].sort((a,b)=>Date.parse(b.created_on||0)-Date.parse(a.created_on||0))[0];
+            const a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];
+            const v=await cf(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${worker}/versions/${a.version_id}?include=modules`);
+            const mods=v.modules||[]; const m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0];
+            const source=Buffer.from(m.content_base64,'base64').toString('utf8');
+            return {version:a.version_id,source};
+          }
+          function ids(payload){
+            const list=payload?.data?.items||payload?.items||payload?.data||[];
+            return Array.isArray(list)?list.map(x=>String(x?.id||x?.trackId||'')).filter(Boolean):[];
+          }
+          (async()=>{
+            const feeds={};
+            for(const [name,e] of Object.entries(envs)){
+              const a=await active(e.worker);
+              const markers={
+                like044:a.source.includes('RETURNING count')&&a.source.includes('RETURNING like_count'),
+                mirror020:a.source.includes('SORIDRAW_EXPLORE_PRODUCTION_FEED_MIRROR_020_20260908'),
+                mirror022:a.source.includes('SORIDRAW_EXPLORE_MIRROR_STRICT_SYNC_022_20260908'),
+                mirror023:a.source.includes('SORIDRAW_EXPLORE_MIRROR_SERVICE_BINDINGS_023_20260908'),
+              };
+              console.log(`LIVE_${name.toUpperCase()}_WORKER_SHA=${sha(a.source)}`);
+              console.log(`LIVE_${name.toUpperCase()}_MARKERS=${JSON.stringify(markers)}`);
+              const r=await fetch(`${e.base}/v1/feed?sort=latest&limit=50`,{headers:{Origin:e.origin,Accept:'application/json','Cache-Control':'no-cache'}});
+              const text=await r.text(); let body={}; try{body=JSON.parse(text)}catch{}
+              if(!r.ok) throw new Error(`${name} feed HTTP ${r.status}: ${text.slice(0,300)}`);
+              feeds[name]=ids(body);
+              console.log(`LIVE_${name.toUpperCase()}_FEED_IDS=${JSON.stringify(feeds[name])}`);
+            }
+            const p=feeds.production||[], t=feeds.test||[], v=feeds.preview||[];
+            const diff=(a,b)=>({onlyA:a.filter(x=>!b.includes(x)),onlyB:b.filter(x=>!a.includes(x))});
+            console.log(`PROD_VS_TEST=${JSON.stringify(diff(p,t))}`);
+            console.log(`PROD_VS_PREVIEW=${JSON.stringify(diff(p,v))}`);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE

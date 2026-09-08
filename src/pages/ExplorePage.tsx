@@ -2,6 +2,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_8E5_SOCIAL_PUBLIC_PROFILE
 // SORIDRAW_EXPLORE_8E5_PROFILE_EDIT_UI_975
 // SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000
+// SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Compass, ExternalLink, Heart, Loader2, Music2, Pencil, Pin, Search, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
@@ -40,6 +41,7 @@ type ExploreTrack = {
   sunoUrlPrimary?: string | null;
   openUrl?: string | null;
   likeCount: number;
+  publishedAt: number;
   profilePinned: boolean;
 };
 
@@ -110,8 +112,16 @@ const normalizeTrack = (row: Record<string, unknown>): ExploreTrack => ({
   sunoUrlPrimary: safeText(row.sunoUrlPrimary) || null,
   openUrl: safeText(row.openUrl) || null,
   likeCount: readNestedCount(row, 'likeCount'),
+  publishedAt: safeCount(row.publishedAt ?? row.published_at),
   profilePinned: Boolean(row.profilePinned ?? row.profile_pinned ?? (row.options as Record<string, unknown> | undefined)?.profilePinned),
 });
+
+const comparePublicProfileTracks = (a: ExploreTrack, b: ExploreTrack) => {
+  const pinnedOrder = Number(b.profilePinned) - Number(a.profilePinned);
+  if (pinnedOrder !== 0) return pinnedOrder;
+  if (a.publishedAt !== b.publishedAt) return b.publishedAt - a.publishedAt;
+  return b.id.localeCompare(a.id);
+};
 
 const isOpenableUrl = (value?: string | null) => {
   if (!value) return false;
@@ -431,7 +441,7 @@ export default function ExplorePage() {
     const applyProfileFirstView = (nextProfile: ExplorePublicProfile, rows: Array<Record<string, unknown>>) => {
       if (cancelled) return;
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
-      normalizedTracks.sort((a, b) => Number(b.profilePinned) - Number(a.profilePinned));
+      normalizedTracks.sort(comparePublicProfileTracks);
       setProfile(nextProfile);
       setProfileTracks(normalizedTracks);
     };

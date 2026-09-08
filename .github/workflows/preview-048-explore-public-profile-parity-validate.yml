@@ -1,0 +1,246 @@
+name: SORIDRAW 048 Explore Public Profile Parity Validate
+
+on:
+  push:
+    branches: [preview-048-explore-public-profile-parity]
+    paths:
+      - '.github/workflows/preview-048-explore-public-profile-parity-validate.yml'
+      - 'src/pages/ExplorePage.tsx'
+      - 'src/services/exploreProfileFirstViewService.ts'
+      - 'cloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs'
+      - 'cloudflare/explore-worker/patches/022-explore-mirror-strict-sync.mjs'
+      - 'cloudflare/explore-worker/patches/023-explore-mirror-service-bindings.mjs'
+      - 'cloudflare/explore-worker/patches/029-explore-public-profile-r2-mirror-parity.mjs'
+      - 'scripts/verify-048-explore-public-profile-parity.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply_and_validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout 048 work branch
+        uses: actions/checkout@v4
+        with:
+          ref: preview-048-explore-public-profile-parity
+          fetch-depth: 0
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+
+      - name: Apply 048 source fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin diag-045-full-stack-parity-20260908 --quiet
+          for file in \
+            cloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs \
+            cloudflare/explore-worker/patches/022-explore-mirror-strict-sync.mjs \
+            cloudflare/explore-worker/patches/023-explore-mirror-service-bindings.mjs; do
+            git show origin/diag-045-full-stack-parity-20260908:"$file" > "$file"
+          done
+
+          python - <<'PY'
+          from pathlib import Path
+
+          page = Path('src/pages/ExplorePage.tsx')
+          text = page.read_text(encoding='utf-8')
+          marker = '// SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048'
+          if marker not in text:
+              text = text.replace("// SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000\n", "// SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000\n" + marker + "\n", 1)
+              text = text.replace("  likeCount: number;\n  profilePinned: boolean;", "  likeCount: number;\n  publishedAt: number;\n  profilePinned: boolean;", 1)
+              text = text.replace("  likeCount: readNestedCount(row, 'likeCount'),\n  profilePinned:", "  likeCount: readNestedCount(row, 'likeCount'),\n  publishedAt: safeCount(row.publishedAt ?? row.published_at),\n  profilePinned:", 1)
+              anchor = "const isOpenableUrl = (value?: string | null) => {"
+              comparator = """const comparePublicProfileTracks = (a: ExploreTrack, b: ExploreTrack) => {\n  const pinnedOrder = Number(b.profilePinned) - Number(a.profilePinned);\n  if (pinnedOrder !== 0) return pinnedOrder;\n  if (a.publishedAt !== b.publishedAt) return b.publishedAt - a.publishedAt;\n  return b.id.localeCompare(a.id);\n};\n\n"""
+              if anchor not in text:
+                  raise SystemExit('ExplorePage comparator anchor missing')
+              text = text.replace(anchor, comparator + anchor, 1)
+              old_sort = "normalizedTracks.sort((a, b) => Number(b.profilePinned) - Number(a.profilePinned));"
+              if old_sort not in text:
+                  raise SystemExit('ExplorePage profile sort anchor missing')
+              text = text.replace(old_sort, "normalizedTracks.sort(comparePublicProfileTracks);", 1)
+              page.write_text(text, encoding='utf-8')
+
+          service = Path('src/services/exploreProfileFirstViewService.ts')
+          text = service.read_text(encoding='utf-8')
+          marker = '// SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048'
+          if marker not in text:
+              text = text.replace("// SORIDRAW_PROFILE_ALIAS_PARITY_020\n", "// SORIDRAW_PROFILE_ALIAS_PARITY_020\n" + marker + "\n", 1)
+              text = text.replace("const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 4;", "const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 5;", 1)
+              anchor = "  const revision = String(knownRevision || '').trim();\n  if (revision) url.searchParams.set('knownRevision', revision);"
+              replacement = "  const revision = String(knownRevision || '').trim();\n  if (revision) {\n    url.searchParams.set('knownRevision', revision);\n  } else {\n    // One cold request after 048 may repair an old per-environment Profile R2 snapshot.\n    // Warm revision checks do not carry this flag, so normal revisits add no new D1 read.\n    url.searchParams.set('__soridraw_profile_parity', '48');\n  }"
+              if anchor not in text:
+                  raise SystemExit('profile first-view revision anchor missing')
+              text = text.replace(anchor, replacement, 1)
+              service.write_text(text, encoding='utf-8')
+          PY
+
+          cat > cloudflare/explore-worker/patches/029-explore-public-profile-r2-mirror-parity.mjs <<'EOF'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+
+          const remoteDir = process.env.SORIDRAW_REMOTE_WORKER_DIR;
+          if (!remoteDir) throw new Error('SORIDRAW_REMOTE_WORKER_DIR is required.');
+          const workerPath = join(remoteDir, 'worker.js');
+          let source = readFileSync(workerPath, 'utf8');
+
+          const marker = 'SORIDRAW_EXPLORE_PUBLIC_PROFILE_R2_MIRROR_PARITY_029_20260909';
+          if (source.includes(marker)) {
+            console.log('[029] Explore public-profile R2 mirror parity already applied.');
+            process.exit(0);
+          }
+
+          for (const required of [
+            'applyExploreMirrorPayload020',
+            'readExploreProfileR2Bundle',
+            'readPublicProfileFirstViewRow',
+            'parseExploreProfileSnapshotRow',
+            'writeExploreR2Json',
+            'exploreProfileR2Key',
+            'invalidatePublicProfileFirstViewEdgeCache',
+            'handlePublicProfileFirstViewWithEdgeCache',
+          ]) {
+            if (!source.includes(required)) throw new Error(`[029] prerequisite missing: ${required}`);
+          }
+
+          const functionRange = (name) => {
+            const needles = [`async function ${name}(`, `function ${name}(`];
+            let start = -1;
+            for (const needle of needles) {
+              start = source.indexOf(needle);
+              if (start >= 0) break;
+            }
+            if (start < 0) throw new Error(`[029] function missing: ${name}`);
+            const brace = source.indexOf('{', start);
+            let depth = 0;
+            let quote = null;
+            let escaped = false;
+            for (let i = brace; i < source.length; i += 1) {
+              const c = source[i];
+              if (quote) {
+                if (escaped) { escaped = false; continue; }
+                if (c === '\\') { escaped = true; continue; }
+                if (c === quote) quote = null;
+                continue;
+              }
+              if (c === '"' || c === "'" || c === '`') { quote = c; continue; }
+              if (c === '{') depth += 1;
+              else if (c === '}' && --depth === 0) return { start, end: i + 1, text: source.slice(start, i + 1) };
+            }
+            throw new Error(`[029] unterminated function: ${name}`);
+          };
+
+          const renameFunction = (name, suffix) => {
+            const range = functionRange(name);
+            const renamedName = `${name}${suffix}`;
+            const renamed = range.text.replace(new RegExp(`^(async\\s+)?function\\s+${name}\\(`), (full) => full.replace(`${name}(`, `${renamedName}(`));
+            if (renamed === range.text) throw new Error(`[029] could not rename ${name}`);
+            source = source.slice(0, range.start) + renamed + source.slice(range.end);
+            return renamedName;
+          };
+
+          const helperAnchor = functionRange('applyExploreMirrorPayload020').start;
+          const helpers = `// ${marker}\nconst EXPLORE_PUBLIC_PROFILE_PARITY_VERSION_029 = 48;\nconst EXPLORE_PUBLIC_PROFILE_PARITY_QUERY_029 = "__soridraw_profile_parity";\n\nfunction exploreProfileBase029(env) {\n  const name = exploreMirrorEnvironment020(env);\n  if (name === "preview") return "https://soridraw-explore-preview.andrawing1212.workers.dev";\n  if (name === "test") return "https://soridraw-explore-test.andrawing1212.workers.dev";\n  return "https://soridraw-explore-api.andrawing1212.workers.dev";\n}\n\nasync function writeExploreProfileParityBundle029(env, row) {\n  const bundle = parseExploreProfileSnapshotRow(row);\n  if (!bundle?.uid) return false;\n  await writeExploreR2Json(env, exploreProfileR2Key(bundle.uid), {\n    ...bundle,\n    profileParityVersion: EXPLORE_PUBLIC_PROFILE_PARITY_VERSION_029\n  });\n  return true;\n}\n\nasync function syncMirroredProfileR2029(request, env, payload) {\n  const firstViews = payload?.tables?.public_profile_first_views;\n  const rows = Array.isArray(firstViews?.rows) ? firstViews.rows : [];\n  if (!rows.length) return 0;\n  let written = 0;\n  const refs = [];\n  for (const row of rows) {\n    if (await writeExploreProfileParityBundle029(env, row)) written += 1;\n    if (row?.uid) refs.push(String(row.uid));\n    if (row?.handle) refs.push(String(row.handle));\n  }\n  if (refs.length) {\n    const base = exploreProfileBase029(env);\n    const cacheRequest = new Request(base + "/v1/profiles/__parity_invalidate__");\n    await invalidatePublicProfileFirstViewEdgeCache(cacheRequest, refs).catch(() => {});\n  }\n  return written;\n}\n\nasync function repairPublicProfileParityOnColdRead029(request, env, profileRef) {\n  const url = new URL(request.url);\n  if (url.searchParams.get(EXPLORE_PUBLIC_PROFILE_PARITY_QUERY_029) !== String(EXPLORE_PUBLIC_PROFILE_PARITY_VERSION_029)) return false;\n  const existing = await readExploreProfileR2Bundle(env, profileRef).catch(() => null);\n  if (Number(existing?.profileParityVersion || 0) >= EXPLORE_PUBLIC_PROFILE_PARITY_VERSION_029) return false;\n  const row = await readPublicProfileFirstViewRow(env, profileRef).catch(() => null);\n  if (!row?.uid) return false;\n  await writeExploreProfileParityBundle029(env, row);\n  const refs = [row.uid, row.handle].filter(Boolean);\n  const base = exploreProfileBase029(env);\n  const cacheRequest = new Request(base + "/v1/profiles/" + encodeURIComponent(String(row.uid)));\n  await invalidatePublicProfileFirstViewEdgeCache(cacheRequest, refs).catch(() => {});\n  return true;\n}\n\n`;
+          source = source.slice(0, helperAnchor) + helpers + source.slice(helperAnchor);
+
+          const mirrorCore = renameFunction('applyExploreMirrorPayload020', 'Core029');
+          const mirrorCoreRange = functionRange(mirrorCore);
+          const mirrorWrapper = `\n\nasync function applyExploreMirrorPayload020(request, env, payload) {\n  const applied = await ${mirrorCore}(request, env, payload);\n  const profileR2 = await syncMirroredProfileR2029(request, env, payload);\n  return { ...applied, profileR2 };\n}`;
+          source = source.slice(0, mirrorCoreRange.end) + mirrorWrapper + source.slice(mirrorCoreRange.end);
+
+          const profileCore = renameFunction('handlePublicProfileFirstViewWithEdgeCache', 'Core029');
+          const profileCoreRange = functionRange(profileCore);
+          const profileWrapper = `\n\nasync function handlePublicProfileFirstViewWithEdgeCache(request, profileRef, env, cors) {\n  await repairPublicProfileParityOnColdRead029(request, env, profileRef);\n  return await ${profileCore}(request, profileRef, env, cors);\n}`;
+          source = source.slice(0, profileCoreRange.end) + profileWrapper + source.slice(profileCoreRange.end);
+
+          for (const required of [
+            marker,
+            'profileParityVersion',
+            'syncMirroredProfileR2029',
+            'repairPublicProfileParityOnColdRead029',
+            'applyExploreMirrorPayload020Core029',
+            'handlePublicProfileFirstViewWithEdgeCacheCore029',
+          ]) {
+            if (!source.includes(required)) throw new Error(`[029] final runtime missing: ${required}`);
+          }
+
+          writeFileSync(workerPath, source, 'utf8');
+          console.log('[029] mirrored public-profile D1 rows now refresh target Profile R2; one cold 048 read repairs legacy per-environment Profile R2 without recurring D1 reads.');
+          EOF
+
+          cat > scripts/verify-048-explore-public-profile-parity.mjs <<'EOF'
+          import { readFileSync } from 'node:fs';
+
+          const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
+          const service = readFileSync('src/services/exploreProfileFirstViewService.ts', 'utf8');
+          const patch = readFileSync('cloudflare/explore-worker/patches/029-explore-public-profile-r2-mirror-parity.mjs', 'utf8');
+
+          const requireText = (source, needle, label) => {
+            if (!source.includes(needle)) throw new Error(`${label} missing: ${needle}`);
+          };
+
+          requireText(page, 'SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048', 'page marker');
+          requireText(page, 'publishedAt: number;', 'published timestamp type');
+          requireText(page, 'publishedAt: safeCount(row.publishedAt ?? row.published_at)', 'published timestamp normalization');
+          requireText(page, 'const comparePublicProfileTracks', 'profile comparator');
+          requireText(page, 'Number(b.profilePinned) - Number(a.profilePinned)', 'pin ordering');
+          requireText(page, 'b.publishedAt - a.publishedAt', 'published ordering');
+          requireText(page, 'b.id.localeCompare(a.id)', 'stable id ordering');
+          requireText(page, 'normalizedTracks.sort(comparePublicProfileTracks)', 'profile sort use');
+
+          requireText(service, 'PROFILE_FIRST_VIEW_SCHEMA_VERSION = 5', 'cache schema bump');
+          requireText(service, "url.searchParams.set('__soridraw_profile_parity', '48')", 'cold parity flag');
+          requireText(service, "if (revision) {", 'warm revision branch');
+
+          requireText(patch, 'SORIDRAW_EXPLORE_PUBLIC_PROFILE_R2_MIRROR_PARITY_029_20260909', 'worker marker');
+          requireText(patch, 'syncMirroredProfileR2029', 'mirror R2 sync');
+          requireText(patch, 'repairPublicProfileParityOnColdRead029', 'cold repair');
+          requireText(patch, 'profileParityVersion', 'repair version marker');
+          requireText(patch, 'readPublicProfileFirstViewRow', 'bounded D1 repair');
+          requireText(patch, 'applyExploreMirrorPayload020Core029', 'mirror wrapper');
+          requireText(patch, 'handlePublicProfileFirstViewWithEdgeCacheCore029', 'profile wrapper');
+          if (patch.includes('setInterval(') || patch.includes('setTimeout(')) throw new Error('048 must not add polling/timers');
+
+          console.log('VERIFY_048_EXPLORE_PUBLIC_PROFILE_PARITY=PASS');
+          EOF
+
+      - name: Validate 048
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/patches/029-explore-public-profile-r2-mirror-parity.mjs
+          node scripts/verify-048-explore-public-profile-parity.mjs
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-045-explore-active-revalidation.mjs
+          node scripts/verify-046-catalog-stale-revision-rebuild.mjs
+          node scripts/verify-047-stale-chunk-recovery.mjs
+          node scripts/verify-runtime-environment-parity-028.mjs
+          npm run build
+          echo 'SORIDRAW_048_SOURCE_VALIDATION=PASS'
+
+      - name: Commit validated 048 source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'NO_SOURCE_CHANGES_TO_COMMIT=PASS'
+            exit 0
+          fi
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add src/pages/ExplorePage.tsx src/services/exploreProfileFirstViewService.ts \
+            cloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs \
+            cloudflare/explore-worker/patches/022-explore-mirror-strict-sync.mjs \
+            cloudflare/explore-worker/patches/023-explore-mirror-service-bindings.mjs \
+            cloudflare/explore-worker/patches/029-explore-public-profile-r2-mirror-parity.mjs \
+            scripts/verify-048-explore-public-profile-parity.mjs
+          git commit -m 'fix(preview): align Explore public profile parity 048'
+          git push origin HEAD:preview-048-explore-public-profile-parity

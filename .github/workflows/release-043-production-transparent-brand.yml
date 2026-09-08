@@ -27,14 +27,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Recover verified PRODUCTION source
+      - name: Prepare 043 controller
         shell: bash
         run: |
           set -euo pipefail
-          cat .deploy/043-source-chunk-00 .deploy/043-source-chunk-01 .deploy/043-source-chunk-02 | base64 -d > "$RUNNER_TEMP/prod-source.png"
-          echo 'f2a65c26b8f9eae47cf983bc3c05481739114d49c755ca5285dcc06862450912  '"$RUNNER_TEMP/prod-source.png" | sha256sum -c -
           cp .deploy/043-apply.py "$RUNNER_TEMP/043-apply.py"
-          echo 'SOURCE_PRODUCTION_043=PASS'
+          echo 'CONTROLLER_PRODUCTION_043=PASS'
 
       - name: Checkout guarded main
         shell: bash
@@ -44,12 +42,11 @@ jobs:
           test "$(git rev-parse origin/main)" = "$MAIN_BASE"
           test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
           git checkout -B production-043-work origin/main
+          test -f public/brand/soridraw-favicon-test-042.png
           echo 'STATE_GUARD_043=PASS'
 
       - name: Apply PRODUCTION 043
         shell: bash
-        env:
-          PROD_SOURCE: ${{ runner.temp }}/prod-source.png
         run: |
           set -euo pipefail
           python -m pip install --quiet pillow

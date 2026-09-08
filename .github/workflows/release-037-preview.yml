@@ -1,0 +1,130 @@
+name: SORIDRAW 037 PREVIEW Branding
+
+on:
+  push:
+    branches:
+      - release-037-favicon-refresh
+    paths:
+      - '.github/workflows/release-037-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-037-preview-branding
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      FEATURE_SHA: c20d219f565c9e17f09be19ab3dc32d63cc7b626
+      PREVIEW_BASE: 10c88f9cacb7ba6fb8a0130946c83c014f6824f4
+      MAIN_GUARD: edae66666b88f4fa80d2a80e49c2b42c55e71214
+      FIREBASE_PROJECT: soridraw
+    steps:
+      - name: Checkout feature
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_SHA }}
+          fetch-depth: 0
+
+      - name: Guard branch state and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          test "$(git rev-parse origin/main)" = "$MAIN_GUARD"
+          test "$(git rev-parse "$FEATURE_SHA^")" = "$PREVIEW_BASE"
+          allowed="$RUNNER_TEMP/allowed.txt"
+          actual="$RUNNER_TEMP/actual.txt"
+          cat > "$allowed" <<'EOF'
+          firebase.hosting-preview.json
+          index.html
+          public/brand/soridraw-app-preview-512.png
+          public/brand/soridraw-app-preview.png
+          public/brand/soridraw-favicon-preview.png
+          public/manifest.preview.json
+          EOF
+          git diff --name-only "$PREVIEW_BASE" "$FEATURE_SHA" | sort > "$actual"
+          sort -o "$allowed" "$allowed"
+          diff -u "$allowed" "$actual"
+          grep -q 'SORIDRAW(P)' index.html
+          grep -q 'v=037' index.html
+          grep -q '"name": "SORIDRAW(P)"' public/manifest.preview.json
+          echo 'SCOPE_037_PREVIEW=PASS'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          echo 'BUILD_037_PREVIEW=PASS'
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Promote and deploy PREVIEW only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_GUARD"
+          git push origin "$FEATURE_SHA:refs/heads/preview"
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_037=PASS'
+
+      - name: Verify live PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          for origin in 'https://soridraw-preview.web.app' 'https://preview.soridraw.com'; do
+            ok=''
+            for i in $(seq 1 15); do
+              curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/?release=037-$i" -o "$RUNNER_TEMP/live.html" || true
+              if grep -q '<title>SORIDRAW(P)</title>' "$RUNNER_TEMP/live.html" && grep -q 'v=037' "$RUNNER_TEMP/live.html"; then ok=yes; break; fi
+              sleep 4
+            done
+            test "$ok" = yes
+            curl -fsS --max-time 30 "$origin/manifest.preview.json?v=037-verify" -o "$RUNNER_TEMP/manifest.json"
+            cmp public/manifest.preview.json "$RUNNER_TEMP/manifest.json"
+            curl -fsS --max-time 30 "$origin/brand/soridraw-app-preview.png?v=037-verify" -o "$RUNNER_TEMP/app.png"
+            cmp public/brand/soridraw-app-preview.png "$RUNNER_TEMP/app.png"
+            curl -fsS --max-time 30 "$origin/brand/soridraw-favicon-preview.png?v=037-verify" -o "$RUNNER_TEMP/favicon.png"
+            cmp public/brand/soridraw-favicon-preview.png "$RUNNER_TEMP/favicon.png"
+            echo "LIVE_037_PREVIEW=PASS $origin"
+          done
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_GUARD"
+          echo 'MAIN_UNCHANGED_037_PREVIEW=PASS'
+
+      - name: Package deployed PREVIEW ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip --output="SORIDRAW_037_PREVIEW_c20d219f_2026-09-08.zip" "$FEATURE_SHA"
+
+      - name: Upload PREVIEW ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_037_PREVIEW_c20d219f_2026-09-08
+          path: SORIDRAW_037_PREVIEW_c20d219f_2026-09-08.zip
+          if-no-files-found: error

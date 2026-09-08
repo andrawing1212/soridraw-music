@@ -1,16 +1,23 @@
 import { writeFile } from 'node:fs/promises';
 import { initializeApp, applicationDefault, deleteApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getAppCheck } from 'firebase-admin/app-check';
 import { chromium } from 'playwright';
 
 const envName = String(process.env.SORIDRAW_PROBE_ENV || '').trim();
 const origin = String(process.env.SORIDRAW_PROBE_ORIGIN || '').replace(/\/+$/, '');
 const workerBase = String(process.env.SORIDRAW_PROBE_WORKER || '').replace(/\/+$/, '');
 const outputPath = String(process.env.SORIDRAW_PROBE_OUTPUT || `release044-probe-${envName || 'unknown'}.json`);
+const statePath = String(process.env.SORIDRAW_PROBE_STATE || `release044-probe-${envName || 'unknown'}-state.json`);
 const firebaseProjectId = 'soridraw-app-866a5';
-const firebaseApiKey = 'AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA';
-const firebaseAppId = '1:91309780603:web:cde703895e2cf31ecffcde';
+const firebaseConfig = {
+  apiKey: 'AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA',
+  authDomain: 'soridraw-app-866a5.firebaseapp.com',
+  projectId: firebaseProjectId,
+  storageBucket: 'soridraw-app-866a5.firebasestorage.app',
+  messagingSenderId: '91309780603',
+  appId: '1:91309780603:web:cde703895e2cf31ecffcde',
+};
+const appCheckSiteKey = '6Le6bGEtAAAAAOVROhuXew0lxJcpVNVwPZN0ZWKO';
 
 if (!envName || !origin || !workerBase) throw new Error('SORIDRAW probe environment/origin/worker are required.');
 
@@ -31,7 +38,10 @@ const likeCountOf = (item) => {
   return Number.isFinite(count) ? count : null;
 };
 
-const uid = `soridraw044_${envName}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
+const runNonce = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const uid = `soridraw044_${envName}_${runNonce}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
+const email = `soridraw044-${envName}-${runNonce.replace(/_/g, '-')}@example.invalid`;
+const password = `Sd044!${Math.random().toString(36).slice(2)}A9#`;
 const adminApp = initializeApp({ credential: applicationDefault(), projectId: firebaseProjectId }, `soridraw044-${envName}-${Date.now()}`);
 let browser;
 let page;
@@ -39,17 +49,12 @@ let idToken = '';
 let appCheckToken = '';
 let targetTrackId = '';
 let likedActive = false;
-let finalResult = null;
+let userCreated = false;
 
-const exchangeCustomToken = async (customToken) => {
-  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${firebaseApiKey}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ token: customToken, returnSecureToken: true }),
-  });
-  const payload = await response.json();
-  if (!response.ok || !payload?.idToken) throw new Error(`Firebase custom-token exchange failed: ${response.status} ${JSON.stringify(payload).slice(0, 600)}`);
-  return String(payload.idToken);
+await writeFile(statePath, `${JSON.stringify({ uid, email, environment: envName, targetTrackId: '', likedActive: false }, null, 2)}\n`, 'utf8');
+
+const persistState = async () => {
+  await writeFile(statePath, `${JSON.stringify({ uid, email, environment: envName, targetTrackId, likedActive }, null, 2)}\n`, 'utf8');
 };
 
 const browserFetch = async (method, path, { auth = false, cacheBust = false } = {}) => {
@@ -88,6 +93,7 @@ const performLikeCycle = async (cycle) => {
   const put = await browserFetch('PUT', `/v1/tracks/${encodeURIComponent(targetTrackId)}/like`, { auth: true });
   if (put.status < 200 || put.status >= 300 || put.payload?.ok !== true) throw new Error(`PUT like failed: ${put.status} ${JSON.stringify(put.payload).slice(0, 500)}`);
   likedActive = true;
+  await persistState();
   const putCount = Number(put.payload?.data?.likeCount);
   if (!Number.isFinite(putCount)) throw new Error('PUT likeCount missing.');
   const putReads = numberHeader(put.headers, 'x-soridraw-d1-read-queries');
@@ -100,6 +106,7 @@ const performLikeCycle = async (cycle) => {
   const del = await browserFetch('DELETE', `/v1/tracks/${encodeURIComponent(targetTrackId)}/like`, { auth: true });
   if (del.status < 200 || del.status >= 300 || del.payload?.ok !== true) throw new Error(`DELETE like failed: ${del.status} ${JSON.stringify(del.payload).slice(0, 500)}`);
   likedActive = false;
+  await persistState();
   const delCount = Number(del.payload?.data?.likeCount);
   if (!Number.isFinite(delCount)) throw new Error('DELETE likeCount missing.');
   if (delCount !== Math.max(0, putCount - 1)) throw new Error(`Like/unlike count roundtrip mismatch: PUT=${putCount} DELETE=${delCount}`);
@@ -118,35 +125,53 @@ const performLikeCycle = async (cycle) => {
 
 try {
   const adminAuth = getAuth(adminApp);
-  await adminAuth.createUser({ uid, displayName: `SORIDRAW 044 ${envName} Probe`, disabled: false });
-  const customToken = await adminAuth.createCustomToken(uid);
-  idToken = await exchangeCustomToken(customToken);
-  const appCheck = await getAppCheck(adminApp).createToken(firebaseAppId, { ttlMillis: 30 * 60 * 1000 });
-  appCheckToken = String(appCheck?.token || '');
-  if (!appCheckToken) throw new Error('Firebase Admin App Check token creation failed.');
+  await adminAuth.createUser({ uid, email, password, displayName: `SORIDRAW 044 ${envName} Probe`, emailVerified: true, disabled: false });
+  userCreated = true;
+  await persistState();
 
   browser = await chromium.launch({ headless: true });
   page = await browser.newPage();
   await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   if (new URL(page.url()).origin !== new URL(origin).origin) throw new Error(`Unexpected probe origin: ${page.url()}`);
 
+  const tokenBundle = await page.evaluate(async ({ config, siteKey, email, password, nonce }) => {
+    const appMod = await import('https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js');
+    const authMod = await import('https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js');
+    const appCheckMod = await import('https://www.gstatic.com/firebasejs/12.11.0/firebase-app-check.js');
+    const app = appMod.initializeApp(config, `soridraw044-probe-${nonce}`);
+    const auth = authMod.getAuth(app);
+    const appCheck = appCheckMod.initializeAppCheck(app, {
+      provider: new appCheckMod.ReCaptchaEnterpriseProvider(siteKey),
+      isTokenAutoRefreshEnabled: false,
+    });
+    const credential = await authMod.signInWithEmailAndPassword(auth, email, password);
+    const [idToken, appCheckResult] = await Promise.all([
+      credential.user.getIdToken(true),
+      appCheckMod.getToken(appCheck, true),
+    ]);
+    return { idToken, appCheckToken: appCheckResult?.token || '' };
+  }, { config: firebaseConfig, siteKey: appCheckSiteKey, email, password, nonce: runNonce });
+
+  idToken = String(tokenBundle?.idToken || '');
+  appCheckToken = String(tokenBundle?.appCheckToken || '');
+  if (!idToken) throw new Error('Browser Firebase ID token missing.');
+  if (!appCheckToken) throw new Error('Browser Firebase App Check token missing.');
+
   const initialFeed = await browserFetch('GET', '/v1/feed?sort=latest&limit=40', { cacheBust: true });
   if (initialFeed.status !== 200 || initialFeed.payload?.ok !== true) throw new Error(`Initial feed failed: ${initialFeed.status}`);
   const target = extractItems(initialFeed.payload).find((item) => trackIdOf(item));
   if (!target) throw new Error('No public Explore track available for authenticated like probe.');
   targetTrackId = trackIdOf(target);
+  await persistState();
   const initialCount = likeCountOf(target);
 
   const cycles = [];
   cycles.push(await performLikeCycle(1));
-  // The rate-limit maintenance cleanup is intentionally rare. If it happened on
-  // the first fresh diagnostic UID, run one additional restored cycle so the
-  // ordinary steady-state PUT cost is measured directly as 1 read / 3 writes.
   if (cycles[0].put.writes === 4) cycles.push(await performLikeCycle(2));
   const normal = cycles.find((entry) => entry.put.reads === 1 && entry.put.writes === 3);
   if (!normal) throw new Error(`No normal 1-read/3-write like cycle observed: ${JSON.stringify(cycles)}`);
 
-  finalResult = {
+  const finalResult = {
     ok: true,
     environment: envName,
     origin,
@@ -171,13 +196,19 @@ try {
   if (page && likedActive && targetTrackId && idToken && appCheckToken) {
     try {
       const cleanup = await browserFetch('DELETE', `/v1/tracks/${encodeURIComponent(targetTrackId)}/like`, { auth: true });
-      if (cleanup.status >= 200 && cleanup.status < 300) likedActive = false;
+      if (cleanup.status >= 200 && cleanup.status < 300 && cleanup.payload?.ok === true) {
+        likedActive = false;
+        await persistState();
+      }
     } catch (error) {
       console.error('Emergency unlike cleanup failed:', error);
     }
   }
   if (browser) await browser.close().catch(() => {});
-  try { await getAuth(adminApp).deleteUser(uid); } catch (error) { console.error('Temporary Firebase user cleanup failed:', error); }
+  if (userCreated) {
+    try { await getAuth(adminApp).deleteUser(uid); } catch (error) { console.error('Temporary Firebase user cleanup failed:', error); }
+  }
   await deleteApp(adminApp).catch(() => {});
+  await persistState().catch(() => {});
   if (likedActive) throw new Error('Diagnostic like cleanup did not complete; promotion must stop.');
 }

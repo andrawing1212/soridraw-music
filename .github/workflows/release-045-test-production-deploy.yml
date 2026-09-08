@@ -1,0 +1,182 @@
+name: SORIDRAW 045 TEST + PRODUCTION Deploy
+
+on:
+  push:
+    branches: [release-045-test-production-deploy]
+    paths: ['.github/workflows/release-045-test-production-deploy.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-045-test-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy_test_and_production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      MAIN_BASE: 6d970b0acd182206307b49de23e91cc44c31163c
+      PREVIEW_BASE: 5008e9ba81fe3b1469e31dae15ee7384c6ecdcbc
+      FIREBASE_PROJECT: soridraw
+    steps:
+      - name: Checkout deployment controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+
+      - name: Guard exact approved deployment state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main preview --quiet
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=045-deploy-guard' | tr -d '\r\n ')" = '{"version":"045"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://test.soridraw.com/app-version.json?t=045-deploy-guard' | tr -d '\r\n ')" = '{"version":"042"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://soridraw.com/app-version.json?t=045-deploy-guard' | tr -d '\r\n ')" = '{"version":"043"}'
+          echo 'DEPLOYMENT_STATE_GUARD=PASS'
+
+      - name: Checkout exact main 045 and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --detach "$MAIN_BASE"
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          node scripts/verify-045-explore-active-revalidation.mjs
+          node scripts/verify-runtime-environment-parity-028.mjs
+          node --test test/catalogWarmCachePolicy.test.mjs
+          test "$(cat dist/app-version.json | tr -d '\r\n ')" = '{"version":"045"}'
+          grep -Fq "SORIDRAW(T)" dist/index.html
+          grep -Fq "soridraw-favicon-test-042.png" dist/index.html
+          grep -Fq "soridraw-favicon-production-043.png" dist/index.html
+          grep -Fq '"name": "SORIDRAW(T)"' dist/manifest.test.json
+          grep -Fq '"name": "SORIDRAW"' dist/manifest.production.json
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/dist-index.sha"
+          find dist -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}' > "$RUNNER_TEMP/dist-tree.sha"
+          echo 'MAIN_045_BUILD_VALIDATION=PASS'
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase TEST 045
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive
+          echo 'FIREBASE_TEST_045_DEPLOY=PASS'
+
+      - name: Verify live TEST 045
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_index="$(cat "$RUNNER_TEMP/dist-index.sha")"
+          for origin in 'https://soridraw-test.web.app' 'https://test.soridraw.com'; do
+            ok=''
+            for attempt in $(seq 1 18); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/?t=045-$attempt" -o "$RUNNER_TEMP/test-live-index.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/test-live-index.html" | awk '{print $1}')"
+                if [ "$actual" = "$expected_index" ]; then ok=yes; break; fi
+              fi
+              sleep 4
+            done
+            test "$ok" = yes
+            echo "TEST_INDEX_045_PASS=$origin"
+          done
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' 'https://test.soridraw.com/app-version.json?t=045-live' -o "$RUNNER_TEMP/test-version.json"
+          cmp dist/app-version.json "$RUNNER_TEMP/test-version.json"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' 'https://test.soridraw.com/manifest.test.json?t=045-live' -o "$RUNNER_TEMP/test-manifest.json"
+          cmp dist/manifest.test.json "$RUNNER_TEMP/test-manifest.json"
+          grep -Fq '"name": "SORIDRAW(T)"' "$RUNNER_TEMP/test-manifest.json"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' 'https://test.soridraw.com/brand/soridraw-favicon-test-042.png?t=045-live' -o "$RUNNER_TEMP/test-favicon.png"
+          cmp dist/brand/soridraw-favicon-test-042.png "$RUNNER_TEMP/test-favicon.png"
+          test "$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' 'https://soridraw.com/app-version.json?t=045-before-prod' | tr -d '\r\n ')" = '{"version":"043"}'
+          echo 'LIVE_TEST_045=PASS'
+          echo 'PRODUCTION_STILL_043_BEFORE_DEPLOY=PASS'
+
+      - name: Confirm exact same dist before PRODUCTION
+        shell: bash
+        run: |
+          set -euo pipefail
+          find dist -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}' > "$RUNNER_TEMP/dist-tree-before-prod.sha"
+          cmp "$RUNNER_TEMP/dist-tree.sha" "$RUNNER_TEMP/dist-tree-before-prod.sha"
+          test "$(git rev-parse HEAD)" = "$MAIN_BASE"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          echo 'SAME_DIST_FOR_PRODUCTION=PASS'
+
+      - name: Deploy Firebase PRODUCTION 045
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.json --non-interactive
+          echo 'FIREBASE_PRODUCTION_045_DEPLOY=PASS'
+
+      - name: Verify live PRODUCTION and final parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_index="$(cat "$RUNNER_TEMP/dist-index.sha")"
+          for origin in 'https://soridraw.web.app' 'https://soridraw.com'; do
+            ok=''
+            for attempt in $(seq 1 18); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/?t=045-$attempt" -o "$RUNNER_TEMP/prod-live-index.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/prod-live-index.html" | awk '{print $1}')"
+                if [ "$actual" = "$expected_index" ]; then ok=yes; break; fi
+              fi
+              sleep 4
+            done
+            test "$ok" = yes
+            echo "PRODUCTION_INDEX_045_PASS=$origin"
+          done
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' 'https://soridraw.com/app-version.json?t=045-live' -o "$RUNNER_TEMP/prod-version.json"
+          cmp dist/app-version.json "$RUNNER_TEMP/prod-version.json"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' 'https://soridraw.com/manifest.production.json?t=045-live' -o "$RUNNER_TEMP/prod-manifest.json"
+          cmp dist/manifest.production.json "$RUNNER_TEMP/prod-manifest.json"
+          grep -Fq '"name": "SORIDRAW"' "$RUNNER_TEMP/prod-manifest.json"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' 'https://soridraw.com/brand/soridraw-favicon-production-043.png?t=045-live' -o "$RUNNER_TEMP/prod-favicon.png"
+          cmp dist/brand/soridraw-favicon-production-043.png "$RUNNER_TEMP/prod-favicon.png"
+
+          test "$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=045-final' | tr -d '\r\n ')" = '{"version":"045"}'
+          test "$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' 'https://test.soridraw.com/app-version.json?t=045-final' | tr -d '\r\n ')" = '{"version":"045"}'
+          test "$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' 'https://soridraw.com/app-version.json?t=045-final' | tr -d '\r\n ')" = '{"version":"045"}'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          echo 'PREVIEW_TEST_PRODUCTION_045=PASS'
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'FIRESTORE_RULES_CHANGED=false'
+          echo 'CLOUDFLARE_CHANGED=false'
+          echo 'PRODUCTION_LIVE_045=PASS'
+
+      - name: Package exact PREVIEW and main deployment ZIPs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deployment-zips"
+          git archive --format=zip --output="$RUNNER_TEMP/deployment-zips/SORIDRAW_045_PREVIEW_${PREVIEW_BASE:0:8}_2026-09-08.zip" "$PREVIEW_BASE"
+          git archive --format=zip --output="$RUNNER_TEMP/deployment-zips/SORIDRAW_045_MAIN_${MAIN_BASE:0:8}_2026-09-08.zip" "$MAIN_BASE"
+          unzip -t "$RUNNER_TEMP/deployment-zips/SORIDRAW_045_PREVIEW_${PREVIEW_BASE:0:8}_2026-09-08.zip" >/dev/null
+          unzip -t "$RUNNER_TEMP/deployment-zips/SORIDRAW_045_MAIN_${MAIN_BASE:0:8}_2026-09-08.zip" >/dev/null
+          echo 'DEPLOYMENT_ZIPS=PASS'
+
+      - name: Upload exact deployment ZIPs
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_045_DEPLOYMENT_ZIPS
+          path: ${{ runner.temp }}/deployment-zips/*.zip
+          if-no-files-found: error

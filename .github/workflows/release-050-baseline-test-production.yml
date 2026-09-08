@@ -1,0 +1,420 @@
+name: SORIDRAW 050 Baseline TEST then PRODUCTION
+
+on:
+  push:
+    branches: [release-050-baseline-control]
+    paths:
+      - '.github/workflows/release-050-baseline-test-production.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-release-050-baseline-test-production
+  cancel-in-progress: false
+
+env:
+  PREVIEW_SHA: b8e9a5c8237bd56e7847ed48483315d777b2252b
+  OLD_MAIN_SHA: 431ea22dfa238bfc89b6bde1fd7f3082cdfe10cf
+  CONTROL_BRANCH: release-050-baseline-control
+  CANDIDATE_BRANCH: release-050-main-candidate
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  FIREBASE_HOSTING_PROJECT: soridraw
+  FIREBASE_BACKEND_PROJECT: soridraw-app-866a5
+
+jobs:
+  prepare_release_candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      candidate_sha: ${{ steps.candidate.outputs.candidate_sha }}
+    steps:
+      - name: Checkout release control
+        uses: actions/checkout@v4
+        with:
+          ref: release-050-baseline-control
+          fetch-depth: 0
+
+      - name: Lock exact PREVIEW 050 and current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_SHA"
+          test "$(git rev-parse origin/main)" = "$OLD_MAIN_SHA"
+          test "$(git show "$PREVIEW_SHA:public/app-version.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version)))")" = '050'
+          echo 'RELEASE_050_SOURCE_LOCK=PASS'
+
+      - name: Create main candidate with exact PREVIEW tree
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/main-candidate"
+          rm -rf "$root"
+          git worktree add --detach "$root" "$OLD_MAIN_SHA"
+          cd "$root"
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git read-tree --reset -u "$PREVIEW_SHA"
+          git commit -m 'release(main): promote validated PREVIEW 050 baseline'
+          candidate="$(git rev-parse HEAD)"
+          test "$(git rev-parse "$candidate^{tree}")" = "$(git rev-parse "$PREVIEW_SHA^{tree}")"
+          git push --force origin "$candidate:refs/heads/$CANDIDATE_BRANCH"
+          echo "candidate_sha=$candidate" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_050_CANDIDATE_SHA=$candidate"
+          echo 'RELEASE_050_TREE_EQUALS_PREVIEW=PASS'
+
+  deploy_and_verify_test:
+    needs: prepare_release_candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    outputs:
+      main_release_sha: ${{ steps.promote_main.outputs.main_release_sha }}
+    steps:
+      - name: Checkout release control helper
+        uses: actions/checkout@v4
+        with:
+          ref: release-050-baseline-control
+          path: control
+          fetch-depth: 0
+
+      - name: Checkout exact release candidate
+        uses: actions/checkout@v4
+        with:
+          ref: release-050-main-candidate
+          path: app
+          fetch-depth: 0
+
+      - name: Guard candidate and PREVIEW source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app
+          git fetch origin preview main
+          test "$(git rev-parse HEAD)" = '${{ needs.prepare_release_candidate.outputs.candidate_sha }}'
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_SHA"
+          test "$(git rev-parse origin/main)" = "$OLD_MAIN_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$(git rev-parse "$PREVIEW_SHA^{tree}")"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' 'https://soridraw.com/' -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+          echo 'TEST_STAGE_SOURCE_GUARD=PASS'
+
+      - name: Set up Node.js 20 for app
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.5'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Validate and build exact 050 app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          node scripts/verify-046-catalog-stale-revision-rebuild.mjs
+          node scripts/verify-047-stale-chunk-recovery.mjs
+          node scripts/verify-048-explore-public-profile-parity.mjs
+          sed -e "s/String(version.version) !== '049'/String(version.version) !== '050'/" -e "s/CURRENT_APP_VERSION = '049'/CURRENT_APP_VERSION = '050'/" scripts/verify-049-explore-feed-integrity.mjs > "$RUNNER_TEMP/verify-049-on-050.mjs"
+          node "$RUNNER_TEMP/verify-049-on-050.mjs"
+          node scripts/verify-050-musicnote-folder-catalog-recovery.mjs
+          npm run build
+          test "$(node -p "require('./dist/app-version.json').version")" = '050'
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/tested-index.sha"
+          tar -czf "$RUNNER_TEMP/SORIDRAW_050_TESTED_DIST.tar.gz" dist
+          sha256sum "$RUNNER_TEMP/SORIDRAW_050_TESTED_DIST.tar.gz" > "$RUNNER_TEMP/SORIDRAW_050_TESTED_DIST.sha256"
+          echo 'APP_050_TYPESCRIPT_BUILD_REGRESSION=PASS'
+
+      - name: Set up Node.js 22 for backend validation
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate Functions and Media Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app/functions
+          npm ci --no-audit --no-fund
+          npm run build
+          npm run test:library-bundle
+          npm run test:music-note-structure-sync
+          cd ../cloudflare/media-worker
+          npm install --no-audit --no-fund
+          npx wrangler deploy --dry-run --env test --outdir "$RUNNER_TEMP/media-test-dry"
+          npx wrangler deploy --dry-run --env production --outdir "$RUNNER_TEMP/media-prod-dry"
+          echo 'BACKEND_050_BUILD_TEST_DRYRUN=PASS'
+
+      - name: Verify active PREVIEW Explore 050 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          node control/.release/release-050-copy-explore.mjs verify-preview
+
+      - name: Deploy exact PREVIEW Explore runtime to TEST
+        shell: bash
+        run: |
+          set -euo pipefail
+          node control/.release/release-050-copy-explore.mjs test
+
+      - name: Deploy Media Worker 050 to TEST
+        working-directory: app/cloudflare/media-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler secret list --env test --format json > "$RUNNER_TEMP/media-test-secrets-before.json"
+          npx wrangler deploy --env test
+          npx wrangler secret list --env test --format json > "$RUNNER_TEMP/media-test-secrets-after.json"
+          node - "$RUNNER_TEMP/media-test-secrets-before.json" "$RUNNER_TEMP/media-test-secrets-after.json" <<'NODE'
+          const fs=require('fs');const names=p=>JSON.parse(fs.readFileSync(p,'utf8')).map(x=>String(x.name||'')).filter(Boolean).sort();const a=names(process.argv[2]),b=names(process.argv[3]);if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(`Media TEST secrets changed ${JSON.stringify(a)} -> ${JSON.stringify(b)}`);if(!b.includes('MEDIA_SIGNING_SECRET'))throw new Error('Media TEST signing secret missing');console.log('MEDIA_TEST_SECRETS_PRESERVED=PASS');
+          NODE
+          curl -fsS --max-time 30 'https://soridraw-media-test.andrawing1212.workers.dev/health' -o "$RUNNER_TEMP/media-test-health.json"
+          grep -q '"ok":true' "$RUNNER_TEMP/media-test-health.json"
+          grep -q '"r2Binding":true' "$RUNNER_TEMP/media-test-health.json"
+          code="$(curl -sS -o /tmp/media-test-options -D /tmp/media-test-head -w '%{http_code}' -X OPTIONS -H 'Origin: https://test.soridraw.com' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization,x-firebase-appcheck' 'https://soridraw-media-test.andrawing1212.workers.dev/v1/catalog/musicNote')"
+          test "$code" = '204'
+          grep -qi '^access-control-allow-origin: https://test.soridraw.com' /tmp/media-test-head
+          echo 'MEDIA_TEST_050=PASS'
+
+      - name: Authenticate Firebase projects
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy exact 050 Hosting to TEST
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_HOSTING_PROJECT" --config firebase.hosting-test.json --non-interactive
+          echo 'FIREBASE_TEST_HOSTING_050_DEPLOY=PASS'
+
+      - name: Deploy shared Firebase Functions without deleting live functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app
+          python3 - <<'PY' > "$RUNNER_TEMP/function-names.txt"
+          import re
+          text=open('functions/src/securedIndex.ts',encoding='utf-8').read()
+          matches=list(re.finditer(r'export\s+const\s+([A-Za-z_$][\w$]*)\s*=',text))
+          names=[]
+          triggers=('onRequest(', 'onCall(', '.onWrite(', '.onCreate(', '.onUpdate(', '.onDelete(', '.onRun(', '.onPublish(', '.onFinalize(', '.onArchive(', '.onMetadataUpdate(')
+          for i,m in enumerate(matches):
+              end=matches[i+1].start() if i+1 < len(matches) else len(text)
+              segment=text[m.start():end]
+              if any(t in segment for t in triggers) or ('functions' in segment and '.region(' in segment):
+                  names.append(m.group(1))
+          if not names: raise SystemExit('No Cloud Functions exports detected')
+          print('\n'.join(dict.fromkeys(names)))
+          PY
+          echo "FUNCTION_EXPORT_COUNT=$(wc -l < "$RUNNER_TEMP/function-names.txt")"
+          targets="$(sed 's/^/functions:/' "$RUNNER_TEMP/function-names.txt" | paste -sd, -)"
+          test -n "$targets"
+          npx --yes firebase-tools@latest deploy --only "$targets" --project "$FIREBASE_BACKEND_PROJECT" --config firebase.json --non-interactive
+          echo 'FIREBASE_SHARED_FUNCTIONS_050=PASS'
+
+      - name: Deploy shared Firestore and Realtime Database rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app
+          npx --yes firebase-tools@latest deploy --only firestore:rules,database --project "$FIREBASE_BACKEND_PROJECT" --config firebase.json --non-interactive
+          echo 'FIREBASE_SHARED_RULES_050=PASS'
+
+      - name: Verify complete TEST release after shared backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/tested-index.sha")"
+          for origin in 'https://soridraw-test.web.app' 'https://test.soridraw.com'; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "${origin}/?release050=$(date +%s)" -o "$RUNNER_TEMP/test-live.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/test-live.html" | awk '{print $1}')"
+                if [ "$actual" = "$expected" ]; then ok=yes; break; fi
+              fi
+              sleep 6
+            done
+            test "$ok" = yes
+            echo "TEST_EXACT_BUILD_PASS=$origin"
+          done
+          test "$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://test.soridraw.com/app-version.json?t=$(date +%s)" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version)))")" = '050'
+          test "$(curl -sS -o /tmp/test-feed -w '%{http_code}' -H 'Origin: https://test.soridraw.com' 'https://soridraw-explore-test.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')" = '200'
+          test "$(curl -sS -o /tmp/test-rev -w '%{http_code}' -H 'Origin: https://test.soridraw.com' 'https://soridraw-explore-test.andrawing1212.workers.dev/v1/feed-revision?sort=latest')" = '200'
+          curl -fsS --max-time 30 'https://soridraw-media-test.andrawing1212.workers.dev/health' | grep -q '"ok":true'
+          test "$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://preview.soridraw.com/app-version.json?t=$(date +%s)" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version)))")" = '050'
+          echo 'TEST_050_COMPLETE_RELEASE=PASS'
+
+      - name: Promote TEST-validated candidate to main
+        id: promote_main
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app
+          candidate="$(git rev-parse HEAD)"
+          git fetch origin main preview
+          test "$(git rev-parse origin/main)" = "$OLD_MAIN_SHA"
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$(git rev-parse "$PREVIEW_SHA^{tree}")"
+          git push origin "$candidate:refs/heads/main"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$candidate"
+          echo "main_release_sha=$candidate" >> "$GITHUB_OUTPUT"
+          echo "MAIN_050_RELEASE_SHA=$candidate"
+          echo 'MAIN_PROMOTED_AFTER_TEST_PASS=PASS'
+
+      - name: Upload exact TEST-validated build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_050_TESTED_BUILD
+          path: |
+            ${{ runner.temp }}/SORIDRAW_050_TESTED_DIST.tar.gz
+            ${{ runner.temp }}/SORIDRAW_050_TESTED_DIST.sha256
+          retention-days: 90
+
+  deploy_and_verify_production:
+    needs: [prepare_release_candidate, deploy_and_verify_test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - name: Checkout release control helper
+        uses: actions/checkout@v4
+        with:
+          ref: release-050-baseline-control
+          path: control
+          fetch-depth: 0
+
+      - name: Checkout exact main 050 release
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: app
+          fetch-depth: 0
+
+      - name: Guard TEST-approved main and unchanged PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app
+          git fetch origin main preview
+          test "$(git rev-parse HEAD)" = '${{ needs.deploy_and_verify_test.outputs.main_release_sha }}'
+          test "$(git rev-parse origin/main)" = '${{ needs.deploy_and_verify_test.outputs.main_release_sha }}'
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$(git rev-parse "$PREVIEW_SHA^{tree}")"
+          test "$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://test.soridraw.com/app-version.json?t=$(date +%s)" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version)))")" = '050'
+          echo 'PRODUCTION_RELEASE_SOURCE_GUARD=PASS'
+
+      - name: Download exact TEST-validated build
+        uses: actions/download-artifact@v4
+        with:
+          name: SORIDRAW_050_TESTED_BUILD
+          path: ${{ runner.temp }}/tested
+
+      - name: Restore exact TEST-validated dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/tested"
+          sha256sum -c SORIDRAW_050_TESTED_DIST.sha256
+          cd "$GITHUB_WORKSPACE/app"
+          rm -rf dist
+          tar -xzf "$RUNNER_TEMP/tested/SORIDRAW_050_TESTED_DIST.tar.gz"
+          test "$(node -p "require('./dist/app-version.json').version")" = '050'
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/prod-expected-index.sha"
+          echo 'EXACT_TESTED_BUILD_RESTORED=PASS'
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Deploy exact PREVIEW Explore runtime to PRODUCTION
+        shell: bash
+        run: |
+          set -euo pipefail
+          node control/.release/release-050-copy-explore.mjs production
+
+      - name: Deploy Media Worker 050 to PRODUCTION
+        working-directory: app/cloudflare/media-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npx wrangler secret list --env production --format json > "$RUNNER_TEMP/media-prod-secrets-before.json"
+          npx wrangler deploy --env production
+          npx wrangler secret list --env production --format json > "$RUNNER_TEMP/media-prod-secrets-after.json"
+          node - "$RUNNER_TEMP/media-prod-secrets-before.json" "$RUNNER_TEMP/media-prod-secrets-after.json" <<'NODE'
+          const fs=require('fs');const names=p=>JSON.parse(fs.readFileSync(p,'utf8')).map(x=>String(x.name||'')).filter(Boolean).sort();const a=names(process.argv[2]),b=names(process.argv[3]);if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(`Media PROD secrets changed ${JSON.stringify(a)} -> ${JSON.stringify(b)}`);if(!b.includes('MEDIA_SIGNING_SECRET'))throw new Error('Media PROD signing secret missing');console.log('MEDIA_PROD_SECRETS_PRESERVED=PASS');
+          NODE
+          curl -fsS --max-time 30 'https://soridraw-media.andrawing1212.workers.dev/health' -o "$RUNNER_TEMP/media-prod-health.json"
+          grep -q '"ok":true' "$RUNNER_TEMP/media-prod-health.json"
+          grep -q '"r2Binding":true' "$RUNNER_TEMP/media-prod-health.json"
+          code="$(curl -sS -o /tmp/media-prod-options -D /tmp/media-prod-head -w '%{http_code}' -X OPTIONS -H 'Origin: https://soridraw.com' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization,x-firebase-appcheck' 'https://soridraw-media.andrawing1212.workers.dev/v1/catalog/musicNote')"
+          test "$code" = '204'
+          grep -qi '^access-control-allow-origin: https://soridraw.com' /tmp/media-prod-head
+          echo 'MEDIA_PRODUCTION_050=PASS'
+
+      - name: Authenticate Firebase Hosting
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy exact TEST-validated Hosting to PRODUCTION
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_HOSTING_PROJECT" --config firebase.json --non-interactive
+          echo 'FIREBASE_PRODUCTION_HOSTING_050_DEPLOY=PASS'
+
+      - name: Verify complete PRODUCTION release and all environments
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/prod-expected-index.sha")"
+          for origin in 'https://soridraw.web.app' 'https://soridraw.com'; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "${origin}/?release050=$(date +%s)" -o "$RUNNER_TEMP/prod-live.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/prod-live.html" | awk '{print $1}')"
+                if [ "$actual" = "$expected" ]; then ok=yes; break; fi
+              fi
+              sleep 6
+            done
+            test "$ok" = yes
+            echo "PRODUCTION_EXACT_BUILD_PASS=$origin"
+          done
+          test "$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://soridraw.com/app-version.json?t=$(date +%s)" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version)))")" = '050'
+          test "$(curl -sS -o /tmp/prod-feed -w '%{http_code}' -H 'Origin: https://soridraw.com' 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')" = '200'
+          test "$(curl -sS -o /tmp/prod-rev -w '%{http_code}' -H 'Origin: https://soridraw.com' 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed-revision?sort=latest')" = '200'
+          curl -fsS --max-time 30 'https://soridraw-media.andrawing1212.workers.dev/health' | grep -q '"ok":true'
+          for origin in 'https://preview.soridraw.com' 'https://test.soridraw.com' 'https://soridraw.com'; do
+            version="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "${origin}/app-version.json?t=$(date +%s)" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version)))")"
+            test "$version" = '050'
+            echo "ENV_VERSION_050_PASS=$origin"
+          done
+          cd app
+          git fetch origin main preview
+          test "$(git rev-parse origin/main)" = '${{ needs.deploy_and_verify_test.outputs.main_release_sha }}'
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_SHA"
+          test "$(git rev-parse origin/main^{tree})" = "$(git rev-parse "$PREVIEW_SHA^{tree}")"
+          echo 'SORIDRAW_050_TEST_PRODUCTION_BASELINE=PASS'
+
+      - name: Package baseline source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app
+          short="$(git rev-parse --short=12 HEAD)"
+          git archive --format=zip --output="$RUNNER_TEMP/SORIDRAW_BASELINE_050_${short}.zip" HEAD
+          unzip -t "$RUNNER_TEMP/SORIDRAW_BASELINE_050_${short}.zip" >/dev/null
+          sha256sum "$RUNNER_TEMP/SORIDRAW_BASELINE_050_${short}.zip"
+
+      - name: Upload baseline source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_050_TEST_PRODUCTION_BASELINE_SOURCE
+          path: ${{ runner.temp }}/SORIDRAW_BASELINE_050_*.zip
+          retention-days: 90

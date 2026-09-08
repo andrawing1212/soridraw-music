@@ -1,0 +1,42 @@
+name: SORIDRAW 044 D1 Wrangler Preflight
+on:
+  push:
+    branches: [release-044-explore-like-cost-parity]
+    paths: ['.github/workflows/release-044-d1-wrangler-preflight.yml']
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test D1 RETURNING via Wrangler on PREVIEW only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/wrangler.jsonc" <<'JSON'
+          {
+            "name": "soridraw-044-d1-preflight",
+            "compatibility_date": "2026-09-04",
+            "d1_databases": [{
+              "binding": "DB",
+              "database_name": "soridraw-explore-preview-db",
+              "database_id": "aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f"
+            }]
+          }
+          JSON
+          now=$(date +%s%3N)
+          ws=$(( (now / 60000) * 60000 ))
+          cleanup(){ npx --yes wrangler@4.102.0 d1 execute soridraw-explore-preview-db --remote --config "$RUNNER_TEMP/wrangler.jsonc" --command "DELETE FROM api_rate_limits WHERE subject='__soridraw_044_probe__' AND action='like044probe'" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          npx --yes wrangler@4.102.0 d1 execute soridraw-explore-preview-db --remote --config "$RUNNER_TEMP/wrangler.jsonc" --command "INSERT INTO api_rate_limits (scope, subject, action, window_start, count, updated_at) VALUES ('user','__soridraw_044_probe__','like044probe',$ws,1,$now) ON CONFLICT(scope,subject,action,window_start) DO UPDATE SET count=api_rate_limits.count+1,updated_at=excluded.updated_at RETURNING count" --json | tee "$RUNNER_TEMP/returning.json"
+          grep -Eq '"count"[[:space:]]*:[[:space:]]*1' "$RUNNER_TEMP/returning.json"
+          npx --yes wrangler@4.102.0 d1 execute soridraw-explore-preview-db --remote --config "$RUNNER_TEMP/wrangler.jsonc" --command "EXPLAIN INSERT INTO track_stats (track_id, like_count, comment_count, play_count, updated_at) VALUES ('__soridraw_044_probe__',1,0,0,0) ON CONFLICT(track_id) DO UPDATE SET like_count=MAX(0,track_stats.like_count+1),updated_at=excluded.updated_at RETURNING like_count" --json > "$RUNNER_TEMP/explain.json"
+          test -s "$RUNNER_TEMP/explain.json"
+          cleanup
+          trap - EXIT
+          echo 'D1_RETURNING_WRANGLER_PREFLIGHT_044=PASS'

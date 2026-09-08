@@ -22,6 +22,20 @@ jobs:
       MAIN_BASE: edae66666b88f4fa80d2a80e49c2b42c55e71214
       FIREBASE_PROJECT: soridraw
     steps:
+      - name: Checkout release controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify transparent source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .deploy/041-src/preview-favicon.png
+          echo 'f2311dcefc7ada83c4ad16a8ebb231a259b222a8bff39683cc3aa0c325a0310c  .deploy/041-src/preview-favicon.png' | sha256sum -c -
+          cp .deploy/041-src/preview-favicon.png "$RUNNER_TEMP/preview-favicon-041.png"
+          echo 'SOURCE_041=PASS'
+
       - name: Checkout PREVIEW
         uses: actions/checkout@v4
         with:
@@ -47,18 +61,17 @@ jobs:
           python - <<'PY'
           from PIL import Image
           from pathlib import Path
-          import json
+          import json, os
 
           brand = Path('public/brand')
-          src_path = brand / 'soridraw-favicon-preview.png'
+          src_path = Path(os.environ['RUNNER_TEMP']) / 'preview-favicon-041.png'
           src = Image.open(src_path).convert('RGBA')
           alpha = src.getchannel('A')
           bbox = alpha.getbbox()
           if not bbox:
-              raise SystemExit('preview favicon source has no visible pixels')
+              raise SystemExit('source has no visible pixels')
           if alpha.getpixel((0, 0)) != 0:
-              raise SystemExit('preview favicon source is not transparent')
-
+              raise SystemExit('source corner is not transparent')
           crop = src.crop(bbox)
 
           def render(size: int, fill: float = 0.94):
@@ -68,9 +81,7 @@ jobs:
               h = max(1, int(round(crop.height * scale)))
               piece = crop.resize((w, h), Image.Resampling.LANCZOS)
               canvas = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-              x = (size - w) // 2
-              y = (size - h) // 2
-              canvas.alpha_composite(piece, (x, y))
+              canvas.alpha_composite(piece, ((size - w)//2, (size - h)//2))
               return canvas
 
           outputs = {
@@ -89,8 +100,7 @@ jobs:
               if not b or max(b[2]-b[0], b[3]-b[1]) < int(size * 0.90):
                   raise SystemExit(f'symbol not large enough: {name} bbox={b}')
 
-          ico_base = render(256)
-          ico_base.save(
+          render(256).save(
               brand / 'soridraw-preview-041.ico',
               format='ICO',
               sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)],

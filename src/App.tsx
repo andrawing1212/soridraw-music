@@ -124,6 +124,7 @@ import { createPortal } from 'react-dom';
 import { buildPreviewSongIntent, renderPreviewCards } from './services/songPreviewEngine';
 import { favoritesStore, useFavorites, useIsSongFavorited } from './hooks/useFavoritesStore';
 import { readUserProfileCache, writeUserProfileCache } from './lib/userProfileCache';
+import { recoverFromStaleChunkError } from './services/chunkLoadRecovery';
 import StudioPageFrame from './components/studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/StudioLeftRail';
 import StudioRightRail from './components/studio/StudioRightRail';
@@ -1148,6 +1149,7 @@ class ErrorBoundary extends Component<any, any> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    if (recoverFromStaleChunkError(error)) return;
     console.error("ErrorBoundary caught an error", error, errorInfo);
   }
 

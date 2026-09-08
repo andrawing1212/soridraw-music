@@ -1,23 +1,30 @@
-import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
-import { initializeApp, applicationDefault, deleteApp } from 'firebase-admin/app';
+import { initializeApp, cert, deleteApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { getAppCheck } from 'firebase-admin/app-check';
 
 const envName = String(process.env.SORIDRAW_PROBE_ENV || '').trim();
 const origin = String(process.env.SORIDRAW_PROBE_ORIGIN || '').replace(/\/+$/, '');
 const workerBase = String(process.env.SORIDRAW_PROBE_WORKER || '').replace(/\/+$/, '');
 const outputPath = String(process.env.SORIDRAW_PROBE_OUTPUT || `release044-probe-${envName || 'unknown'}.json`);
 const statePath = String(process.env.SORIDRAW_PROBE_STATE || `release044-probe-${envName || 'unknown'}-state.json`);
-const oauthAccessToken = String(process.env.GOOGLE_OAUTH_ACCESS_TOKEN || '').trim();
-
+const serviceAccountJson = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
 const firebaseProjectId = 'soridraw-app-866a5';
-const firebaseProjectNumber = '91309780603';
 const firebaseApiKey = 'AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA';
 const firebaseAppId = '1:91309780603:web:cde703895e2cf31ecffcde';
-const appResource = `projects/${firebaseProjectNumber}/apps/${firebaseAppId}`;
 
 if (!envName || !origin || !workerBase) throw new Error('SORIDRAW probe environment/origin/worker are required.');
-if (!oauthAccessToken) throw new Error('GOOGLE_OAUTH_ACCESS_TOKEN is required for temporary App Check debug-token registration.');
+if (!serviceAccountJson) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is required.');
+
+let serviceAccount;
+try {
+  serviceAccount = JSON.parse(serviceAccountJson);
+} catch {
+  throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON.');
+}
+if (!serviceAccount?.project_id || !serviceAccount?.client_email || !serviceAccount?.private_key) {
+  throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is missing required service-account fields.');
+}
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const safeJson = async (response) => {
@@ -44,10 +51,9 @@ const runNonce = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const uid = `soridraw044_${envName}_${runNonce}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
 const email = `soridraw044-${envName}-${runNonce.replace(/_/g, '-')}@example.invalid`;
 const password = `Sd044!${Math.random().toString(36).slice(2)}A9#`;
-const adminApp = initializeApp({ credential: applicationDefault(), projectId: firebaseProjectId }, `soridraw044-${envName}-${Date.now()}`);
+const adminApp = initializeApp({ credential: cert(serviceAccount), projectId: firebaseProjectId }, `soridraw044-${envName}-${Date.now()}`);
 let idToken = '';
 let appCheckToken = '';
-let debugTokenName = '';
 let targetTrackId = '';
 let likedActive = false;
 let userCreated = false;
@@ -56,53 +62,6 @@ await writeFile(statePath, `${JSON.stringify({ uid, email, environment: envName,
 
 const persistState = async () => {
   await writeFile(statePath, `${JSON.stringify({ uid, email, environment: envName, targetTrackId, likedActive }, null, 2)}\n`, 'utf8');
-};
-
-const registerDebugToken = async () => {
-  const secret = randomUUID();
-  const response = await fetch(`https://firebaseappcheck.googleapis.com/v1/${appResource}/debugTokens`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${oauthAccessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      displayName: `SORIDRAW 044 ${envName} CI probe ${Date.now()}`,
-      token: secret,
-    }),
-  });
-  const payload = await safeJson(response);
-  if (!response.ok || !payload?.name) {
-    throw new Error(`Temporary App Check debug-token registration failed: ${response.status} ${JSON.stringify(payload).slice(0, 700)}`);
-  }
-  debugTokenName = String(payload.name);
-  return secret;
-};
-
-const revokeDebugToken = async () => {
-  if (!debugTokenName) return;
-  const response = await fetch(`https://firebaseappcheck.googleapis.com/v1/${debugTokenName}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${oauthAccessToken}` },
-  });
-  if (!response.ok && response.status !== 404) {
-    const payload = await safeJson(response);
-    throw new Error(`Temporary App Check debug-token revocation failed: ${response.status} ${JSON.stringify(payload).slice(0, 700)}`);
-  }
-  debugTokenName = '';
-};
-
-const exchangeDebugToken = async (debugToken) => {
-  const response = await fetch(`https://firebaseappcheck.googleapis.com/v1/${appResource}:exchangeDebugToken?key=${encodeURIComponent(firebaseApiKey)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ debugToken, limitedUse: false }),
-  });
-  const payload = await safeJson(response);
-  if (!response.ok || !payload?.token) {
-    throw new Error(`Temporary App Check debug-token exchange failed: ${response.status} ${JSON.stringify(payload).slice(0, 700)}`);
-  }
-  return String(payload.token);
 };
 
 const signInTemporaryUser = async () => {
@@ -190,8 +149,9 @@ try {
   await persistState();
 
   idToken = await signInTemporaryUser();
-  const debugToken = await registerDebugToken();
-  appCheckToken = await exchangeDebugToken(debugToken);
+  const appCheckResult = await getAppCheck(adminApp).createToken(firebaseAppId, { ttlMillis: 30 * 60 * 1000 });
+  appCheckToken = String(appCheckResult?.token || '');
+  if (!appCheckToken) throw new Error('Firebase Admin App Check token creation failed.');
 
   const initialFeed = await workerFetch('GET', '/v1/feed?sort=latest&limit=40', { cacheBust: true });
   if (initialFeed.status !== 200 || initialFeed.payload?.ok !== true) throw new Error(`Initial feed failed: ${initialFeed.status}`);
@@ -221,7 +181,7 @@ try {
     restoredToUnliked: true,
     firebaseAuth: true,
     appCheck: true,
-    appCheckMode: 'temporary-debug-token-ci',
+    appCheckMode: 'firebase-admin-local-key',
     measuredAt: new Date().toISOString(),
   };
   await writeFile(outputPath, `${JSON.stringify(finalResult, null, 2)}\n`, 'utf8');
@@ -241,7 +201,6 @@ try {
       console.error('Emergency unlike cleanup failed:', error);
     }
   }
-  try { await revokeDebugToken(); } catch (error) { console.error(error); throw error; }
   if (userCreated) {
     try { await getAuth(adminApp).deleteUser(uid); } catch (error) { console.error('Temporary Firebase user cleanup failed:', error); }
   }

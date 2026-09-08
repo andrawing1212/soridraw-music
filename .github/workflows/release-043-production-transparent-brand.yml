@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 -d .deploy/043-production-source.b64 > "$RUNNER_TEMP/prod-source.png"
+          cat .deploy/043-source-chunk-00 .deploy/043-source-chunk-01 .deploy/043-source-chunk-02 | base64 -d > "$RUNNER_TEMP/prod-source.png"
           echo 'f2a65c26b8f9eae47cf983bc3c05481739114d49c755ca5285dcc06862450912  '"$RUNNER_TEMP/prod-source.png" | sha256sum -c -
           cp .deploy/043-apply.py "$RUNNER_TEMP/043-apply.py"
           echo 'SOURCE_PRODUCTION_043=PASS'

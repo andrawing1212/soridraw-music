@@ -3,18 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <title>SORIDRAW's Studio</title>
+    <title>SORIDRAW(T)</title>
     <!-- VERIFICATION COMMENT: IF YOU SEE THIS IN SOURCE, THIS FILE IS BEING SERVED -->
     <meta name="theme-color" content="#0f0f0f" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="SORIDRAW" />
-
-    <!-- 036: environment-specific app icon / favicon -->
-    <link id="soridraw-favicon" rel="icon" type="image/png" href="/brand/soridraw-favicon-preview.png?v=036" />
-    <link id="soridraw-apple-touch-icon" rel="apple-touch-icon" href="/brand/soridraw-app-preview.png?v=036" />
-    <link id="soridraw-manifest" rel="manifest" href="/manifest.preview.json?v=036" crossorigin="use-credentials" />
+    <meta id="soridraw-apple-app-title" name="apple-mobile-web-app-title" content="SORIDRAW(T)" />
+    <meta id="soridraw-application-name" name="application-name" content="SORIDRAW(T)" />
+    <!-- 042: TEST transparent app icon / favicon + environment names -->
+    <link id="soridraw-favicon" rel="icon" type="image/png" sizes="96x96" href="/brand/soridraw-favicon-test-042.png" />
+    <link id="soridraw-shortcut-icon" rel="shortcut icon" type="image/x-icon" href="/brand/soridraw-test-042.ico" />
+    <link id="soridraw-apple-touch-icon" rel="apple-touch-icon" sizes="192x192" href="/brand/soridraw-app-test-042.png" />
+    <link id="soridraw-manifest" rel="manifest" href="/manifest.test.json" crossorigin="use-credentials" />
     <script>
       (function() {
         var host = String(window.location.hostname || '').toLowerCase();
@@ -24,26 +25,31 @@
         } else if (host === 'test.soridraw.com' || host === 'soridraw-test.web.app') {
           environment = 'test';
         }
-
+        var appName = environment === 'production' ? 'SORIDRAW' : environment === 'test' ? 'SORIDRAW(T)' : 'SORIDRAW(P)';
+        document.title = appName;
+        var appleTitle = document.getElementById('soridraw-apple-app-title');
+        var applicationName = document.getElementById('soridraw-application-name');
+        if (appleTitle) appleTitle.setAttribute('content', appName);
+        if (applicationName) applicationName.setAttribute('content', appName);
         var favicon = document.getElementById('soridraw-favicon');
+        var shortcutIcon = document.getElementById('soridraw-shortcut-icon');
         var appleTouchIcon = document.getElementById('soridraw-apple-touch-icon');
         var manifest = document.getElementById('soridraw-manifest');
-        if (favicon) {
-          if (environment === 'production') {
-            favicon.type = 'image/svg+xml';
-            favicon.href = '/brand/soridraw-favicon-production.svg?v=036';
-          } else {
-            favicon.type = 'image/png';
-            favicon.href = '/brand/soridraw-favicon-' + environment + '.png?v=036';
-          }
-        }
-        if (appleTouchIcon) {
-          appleTouchIcon.href = '/brand/soridraw-app-' + environment + '.png?v=036';
-        }
-        if (manifest) {
-          manifest.href = '/manifest.' + environment + '.json?v=036';
+        if (environment === 'test') {
+          if (favicon) { favicon.type = 'image/png'; favicon.href = '/brand/soridraw-favicon-test-042.png'; }
+          if (shortcutIcon) { shortcutIcon.type = 'image/x-icon'; shortcutIcon.href = '/brand/soridraw-test-042.ico'; }
+          if (appleTouchIcon) appleTouchIcon.href = '/brand/soridraw-app-test-042.png';
+          if (manifest) manifest.href = '/manifest.test.json';
+        } else {
+          var fallbackFavicon = environment === 'production' ? '/brand/soridraw-favicon-production.svg?v=036' : '/brand/soridraw-favicon-preview.png?v=036';
+          var fallbackType = environment === 'production' ? 'image/svg+xml' : 'image/png';
+          if (favicon) { favicon.type = fallbackType; favicon.href = fallbackFavicon; }
+          if (shortcutIcon) { shortcutIcon.type = fallbackType; shortcutIcon.href = fallbackFavicon; }
+          if (appleTouchIcon) appleTouchIcon.href = '/brand/soridraw-app-' + environment + '.png?v=036';
+          if (manifest) manifest.href = '/manifest.' + environment + '.json?v=036';
         }
         document.documentElement.dataset.soridrawEnvironment = environment;
+        document.documentElement.dataset.soridrawAppName = appName;
       })();
     </script>
     <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>

@@ -38,7 +38,7 @@ jobs:
           git fetch origin preview main --quiet
           test "$(git rev-parse origin/preview)" = "$PREVIEW_EXPECTED"
           test "$(git rev-parse origin/main)" = "$MAIN_EXPECTED"
-          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=044-stage-b4' | tr -d '\r\n ')" = '{"version":"044"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=044-stage-b5' | tr -d '\r\n ')" = '{"version":"044"}'
           curl -fsS -H 'Origin: https://preview.soridraw.com' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed-revision?sort=latest' -D "$RUNNER_TEMP/rev.head" -o "$RUNNER_TEMP/rev.json"
           grep -qi '^x-soridraw-d1-read-queries: 0' "$RUNNER_TEMP/rev.head"
           grep -qi '^x-soridraw-d1-write-queries: 0' "$RUNNER_TEMP/rev.head"
@@ -62,7 +62,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/release-044-auth-like-probe.mjs
-          node -e "const x=require('./release-044-preview-like-proof.json'); if(!x.ok||x.measuredNormalLike.reads!==1||x.measuredNormalLike.writes!==3||!x.feedR2RoundTrip||!x.restoredToUnliked||!x.firebaseAuth||!x.appCheck||x.appCheckMode!=='firebase-admin-local-key') process.exit(1)"
+          node -e "const x=require('./release-044-preview-like-proof.json'); if(!x.ok||x.measuredNormalLike.reads!==1||x.measuredNormalLike.writes!==3||!x.feedR2RoundTrip||!x.restoredToUnliked||!x.firebaseAuth||!x.appCheck||x.appCheckMode!=='direct-exchange-quota-backend') process.exit(1)"
           echo 'STAGE_B_PREVIEW_LIKE_MEASUREMENT=PASS'
 
       - uses: actions/setup-node@v4
@@ -119,7 +119,17 @@ jobs:
           cleanup_worker(){ npx wrangler delete --config "$CLEAN_DIR/wrangler.jsonc" --force >/dev/null 2>&1 || true; }
           trap cleanup_worker EXIT
           npx wrangler deploy --strict --config "$CLEAN_DIR/wrangler.jsonc"
-          RESULT="$(curl -fsS -X POST -H "Authorization: Bearer $CLEAN_TOKEN" -H 'Content-Type: application/json' --data "{\"uid\":\"$UID_VALUE\"}" "https://${CLEAN_NAME}.andrawing1212.workers.dev")"
+          CLEAN_URL="https://${CLEAN_NAME}.andrawing1212.workers.dev"
+          RESULT=''
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            HTTP_CODE="$(curl -sS -o "$RUNNER_TEMP/cleanup-response.json" -w '%{http_code}' -X POST -H "Authorization: Bearer $CLEAN_TOKEN" -H 'Content-Type: application/json' --data "{\"uid\":\"$UID_VALUE\"}" "$CLEAN_URL" || true)"
+            if [ "$HTTP_CODE" = 200 ]; then
+              RESULT="$(cat "$RUNNER_TEMP/cleanup-response.json")"
+              break
+            fi
+            sleep 2
+          done
+          test -n "$RESULT"
           node -e "const x=JSON.parse(process.argv[1]); if(!x.ok) process.exit(1)" "$RESULT"
           cleanup_worker
           trap - EXIT

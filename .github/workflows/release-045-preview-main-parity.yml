@@ -59,15 +59,12 @@ jobs:
             git show "origin/preview:$f" > "$f"
           done
 
-          # Track intent-to-add so the new 028 patch participates in tree parity checks.
           git add -N cloudflare/explore-worker/patches/028-explore-like-o1.mjs \
             scripts/verify-035-auth-nav-readiness.mjs \
             scripts/verify-045-explore-active-revalidation.mjs 2>/dev/null || true
 
-          # Runtime/application trees must match PREVIEW exactly. Environment branding/index/manifest remain main-owned.
           git diff --quiet origin/preview -- src functions cloudflare firestore.rules database.rules.json
 
-          # Only the expected promotion set may differ from current main.
           git diff --name-only origin/main -- > "$RUNNER_TEMP/candidate-files.txt"
           cat > "$RUNNER_TEMP/expected-files.txt" <<'EOF'
           cloudflare/explore-worker/patches/028-explore-like-o1.mjs
@@ -102,7 +99,37 @@ jobs:
           node scripts/verify-035-auth-nav-readiness.mjs
           node scripts/verify-045-explore-active-revalidation.mjs
           node scripts/verify-runtime-environment-parity-028.mjs
-          node scripts/verify-no-unbounded-user-song-bootstrap.mjs
+          node --test test/catalogWarmCachePolicy.test.mjs
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          const app = fs.readFileSync('src/App.tsx', 'utf8');
+          const listBundle = fs.readFileSync('src/lib/listBundleCache.ts', 'utf8');
+          const engine = fs.readFileSync('src/lib/userDataEngine.ts', 'utf8');
+          const adaptive = fs.readFileSync('src/lib/adaptiveListIndexV2.ts', 'utf8');
+          const library = fs.readFileSync('src/pages/SunoLibraryPage.tsx', 'utf8');
+
+          // Current 1036+ architecture intentionally removed the retired Favorites full-recovery function.
+          assert.equal(app.includes('const runFavoritesFullCacheRecoveryOnce = async () =>'), false);
+          assert.equal(app.includes('Cacheless Music Note full bootstrap failed'), false);
+          assert.ok(app.includes("subscribeListBundle('musicNote'"));
+          assert.ok(app.includes('bundle.schemaVersion === 1001'));
+
+          // Music Note bootstrap is route-gated and uses the shared private Catalog cache path.
+          assert.ok(listBundle.includes('MUSIC_NOTE_BUNDLE_PAGE_ENTRY_EVENT'));
+          assert.ok(listBundle.includes('readPreviewAdaptiveListIndexV2'));
+          assert.ok(listBundle.includes("if (kind === 'musicNote')"));
+          assert.ok(adaptive.includes('readCatalogSnapshotCacheFirst'));
+
+          // Warm refresh may return IndexedDB directly when the already-paid profile revision proves freshness.
+          assert.ok(engine.includes('canUseWarmCatalogWithoutRemote'));
+          assert.ok(engine.includes("catalogLastReadSources.set(key, 'cache')"));
+          assert.ok(engine.includes('const remote = await readRemoteCatalogSnapshot(kind, uid, 0, local)'));
+
+          // Keep the separate Library cold-read invariant too.
+          assert.equal(/const\s+snapshot\s*=\s*await\s+getDocs\(tracksRef\)\s*;/.test(library), false);
+          console.log('CURRENT_MUSIC_NOTE_CATALOG_SAFETY=PASS');
+          NODE
           grep -F 'RETURNING count' cloudflare/explore-worker/patches/028-explore-like-o1.mjs
           grep -F 'RETURNING like_count' cloudflare/explore-worker/patches/028-explore-like-o1.mjs
           git diff --check

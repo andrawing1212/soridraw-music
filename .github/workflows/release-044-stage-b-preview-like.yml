@@ -21,6 +21,7 @@ jobs:
       MAIN_EXPECTED: 2fadb2dc666fadecbbbd93e92cfb104ed567f233
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      APPCHECK_STATE: release-044-appcheck-debug-state.json
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,7 +39,7 @@ jobs:
           git fetch origin preview main --quiet
           test "$(git rev-parse origin/preview)" = "$PREVIEW_EXPECTED"
           test "$(git rev-parse origin/main)" = "$MAIN_EXPECTED"
-          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=044-stage-b5' | tr -d '\r\n ')" = '{"version":"044"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=044-stage-b6' | tr -d '\r\n ')" = '{"version":"044"}'
           curl -fsS -H 'Origin: https://preview.soridraw.com' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed-revision?sort=latest' -D "$RUNNER_TEMP/rev.head" -o "$RUNNER_TEMP/rev.json"
           grep -qi '^x-soridraw-d1-read-queries: 0' "$RUNNER_TEMP/rev.head"
           grep -qi '^x-soridraw-d1-write-queries: 0' "$RUNNER_TEMP/rev.head"
@@ -49,6 +50,17 @@ jobs:
         run: |
           set -euo pipefail
           npm ci --no-audit --no-fund
+
+      - name: Create temporary App Check debug token
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          SORIDRAW_APPCHECK_DEBUG_STATE: ${{ env.APPCHECK_STATE }}
+        run: |
+          set -euo pipefail
+          node scripts/release-044-appcheck-debug-token.mjs create
+          test -s "$APPCHECK_STATE"
+          echo 'STAGE_B_TEMP_APPCHECK_DEBUG=PASS'
 
       - name: Measure PREVIEW like cost with temporary Auth/App Check identity
         shell: bash
@@ -61,9 +73,35 @@ jobs:
           SORIDRAW_PROBE_STATE: release-044-preview-like-state.json
         run: |
           set -euo pipefail
-          node scripts/release-044-auth-like-probe.mjs
-          node -e "const x=require('./release-044-preview-like-proof.json'); if(!x.ok||x.measuredNormalLike.reads!==1||x.measuredNormalLike.writes!==3||!x.feedR2RoundTrip||!x.restoredToUnliked||!x.firebaseAuth||!x.appCheck||x.appCheckMode!=='direct-exchange-quota-backend') process.exit(1)"
+          node <<'NODE'
+          const fs = require('fs');
+          const p = 'scripts/release-044-auth-like-probe.mjs';
+          let s = fs.readFileSync(p, 'utf8');
+          s = s.replace(
+            'appCheckToken = await createAppCheckToken();',
+            "appCheckToken = String(process.env.SORIDRAW_PROBE_APPCHECK_TOKEN || '') || await createAppCheckToken();"
+          );
+          s = s.replace(
+            "appCheckMode: 'direct-exchange-quota-backend',",
+            "appCheckMode: process.env.SORIDRAW_PROBE_APPCHECK_TOKEN ? 'temporary-debug-token-ci' : 'direct-exchange-quota-backend',"
+          );
+          fs.writeFileSync(p, s);
+          NODE
+          APPCHECK_TOKEN="$(node -p "require('./${APPCHECK_STATE}').appCheckToken || ''")"
+          test -n "$APPCHECK_TOKEN"
+          SORIDRAW_PROBE_APPCHECK_TOKEN="$APPCHECK_TOKEN" node scripts/release-044-auth-like-probe.mjs
+          node -e "const x=require('./release-044-preview-like-proof.json'); if(!x.ok||x.measuredNormalLike.reads!==1||x.measuredNormalLike.writes!==3||!x.feedR2RoundTrip||!x.restoredToUnliked||!x.firebaseAuth||!x.appCheck||x.appCheckMode!=='temporary-debug-token-ci') process.exit(1)"
           echo 'STAGE_B_PREVIEW_LIKE_MEASUREMENT=PASS'
+
+      - name: Revoke temporary App Check debug token
+        if: always()
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          SORIDRAW_APPCHECK_DEBUG_STATE: ${{ env.APPCHECK_STATE }}
+        run: |
+          set -euo pipefail
+          node scripts/release-044-appcheck-debug-token.mjs delete
 
       - uses: actions/setup-node@v4
         if: always()

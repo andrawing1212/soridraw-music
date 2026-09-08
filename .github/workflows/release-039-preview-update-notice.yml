@@ -1,0 +1,224 @@
+name: SORIDRAW 039 PREVIEW Update Notice
+
+on:
+  push:
+    branches: [release-039-preview-update-notice]
+    paths: ['.github/workflows/release-039-preview-update-notice.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-039-preview-update-notice
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PREVIEW_BASE: a126f989e13448cc54d16a9e6fc67baec38108e9
+      MAIN_BASE: edae66666b88f4fa80d2a80e49c2b42c55e71214
+      FIREBASE_PROJECT: soridraw
+    steps:
+      - name: Checkout release controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Recover approved PREVIEW icon source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .deploy/039-preview-icon/chunk_* | base64 -d > "$RUNNER_TEMP/preview-icon-source.png"
+          echo '301a5d4edd9247720859de52a0fb59c8e703740cb6189b432adb49e263ac05a5  '"$RUNNER_TEMP/preview-icon-source.png" | sha256sum -c -
+          echo 'ICON_SOURCE_039=PASS'
+
+      - name: Checkout guarded PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          git checkout -B preview-039-work origin/preview
+
+      - name: Generate correct icons and update notice
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet pillow
+          python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          import json
+
+          src = Image.open(Path('/tmp') / 'no-file') if False else Image.open(Path(__import__('os').environ['RUNNER_TEMP']) / 'preview-icon-source.png').convert('RGBA')
+          brand = Path('public/brand')
+          brand.mkdir(parents=True, exist_ok=True)
+          for size, name in [(192, 'soridraw-app-preview-039.png'), (512, 'soridraw-app-preview-039-512.png')]:
+              out = src.resize((size, size), Image.Resampling.LANCZOS)
+              out.save(brand / name, format='PNG', optimize=False)
+
+          manifest_path = Path('public/manifest.preview.json')
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          manifest['name'] = 'SORIDRAW(P)'
+          manifest['short_name'] = 'SORIDRAW(P)'
+          manifest['icons'] = [
+              {'src':'/brand/soridraw-app-preview-039.png','sizes':'192x192','type':'image/png','purpose':'any'},
+              {'src':'/brand/soridraw-app-preview-039-512.png','sizes':'512x512','type':'image/png','purpose':'any'},
+          ]
+          manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          Path('public/app-version.json').write_text(json.dumps({'version':'039'}, indent=2) + '\n', encoding='utf-8')
+
+          index = Path('index.html')
+          text = index.read_text(encoding='utf-8')
+          text = text.replace('/brand/soridraw-app-preview-038.png', '/brand/soridraw-app-preview-039.png')
+          text = text.replace('/manifest.preview.038.json', '/manifest.preview.json')
+          index.write_text(text, encoding='utf-8')
+          PY
+
+          cat > src/services/appUpdateNotice.ts <<'TS'
+          const CURRENT_APP_VERSION = '039';
+          const VERSION_URL = '/app-version.json';
+          const NOTICE_ID = 'soridraw-app-update-notice';
+          const MIN_CHECK_INTERVAL_MS = 30_000;
+          let started = false;
+          let lastCheckedAt = 0;
+
+          const showUpdateNotice = () => {
+            if (document.getElementById(NOTICE_ID)) return;
+            const button = document.createElement('button');
+            button.id = NOTICE_ID;
+            button.type = 'button';
+            button.textContent = '새 업데이트 · 적용';
+            button.setAttribute('aria-label', '새 업데이트 적용');
+            Object.assign(button.style, {
+              position: 'fixed', top: 'max(12px, env(safe-area-inset-top))', right: '12px',
+              zIndex: '2147483646', border: '0', borderRadius: '999px', padding: '9px 13px',
+              background: '#ffb400', color: '#151515', fontSize: '12px', fontWeight: '700',
+              lineHeight: '1', cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,.22)'
+            });
+            button.addEventListener('click', () => window.location.reload());
+            document.body.appendChild(button);
+          };
+
+          const checkForUpdate = async (force = false) => {
+            const now = Date.now();
+            if (!force && now - lastCheckedAt < MIN_CHECK_INTERVAL_MS) return;
+            lastCheckedAt = now;
+            try {
+              const response = await fetch(`${VERSION_URL}?t=${now}`, { cache: 'no-store' });
+              if (!response.ok) return;
+              const payload = await response.json() as { version?: string | number };
+              const remoteVersion = String(payload?.version || '').trim();
+              if (remoteVersion && remoteVersion !== CURRENT_APP_VERSION) showUpdateNotice();
+            } catch {
+              // Offline/network errors stay silent and retry on the next app return.
+            }
+          };
+
+          export const startAppUpdateNotice = () => {
+            if (started || typeof window === 'undefined') return;
+            started = true;
+            void checkForUpdate(true);
+            document.addEventListener('visibilitychange', () => {
+              if (document.visibilityState === 'visible') void checkForUpdate();
+            });
+            window.addEventListener('focus', () => void checkForUpdate());
+          };
+          TS
+
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/main.tsx')
+          t = p.read_text(encoding='utf-8')
+          anchor = "import { startPreviewVersionSignal } from './services/versionSignalService';\n"
+          if "startAppUpdateNotice" not in t:
+              if anchor not in t: raise SystemExit('main import anchor missing')
+              t = t.replace(anchor, anchor + "import { startAppUpdateNotice } from './services/appUpdateNotice';\n", 1)
+              t = t.replace('void startPreviewVersionSignal();\n', 'void startPreviewVersionSignal();\nstartAppUpdateNotice();\n', 1)
+          p.write_text(t, encoding='utf-8')
+          PY
+
+          grep -F 'soridraw-app-preview-039.png' public/manifest.preview.json
+          grep -F '/manifest.preview.json' index.html
+          grep -F "CURRENT_APP_VERSION = '039'" src/services/appUpdateNotice.ts
+          echo 'APPLY_039=PASS'
+
+      - name: Validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          echo 'VALIDATE_039=PASS'
+
+      - name: Commit and push PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add index.html src/main.tsx src/services/appUpdateNotice.ts public/app-version.json public/manifest.preview.json public/brand/soridraw-app-preview-039.png public/brand/soridraw-app-preview-039-512.png
+          git commit -m 'feat(preview): add update notice and correct app icon'
+          FINAL_SHA="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          git push origin HEAD:refs/heads/preview
+          echo "FINAL_SHA=$FINAL_SHA" >> "$GITHUB_ENV"
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
+
+      - name: Verify live PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin='https://preview.soridraw.com'
+          for attempt in $(seq 1 15); do
+            curl -fsS -H 'Cache-Control: no-cache' "$origin/app-version.json?t=$attempt" -o "$RUNNER_TEMP/version.json" || true
+            grep -Fq '039' "$RUNNER_TEMP/version.json" && break
+            sleep 4
+          done
+          grep -Fq '039' "$RUNNER_TEMP/version.json"
+          curl -fsS -H 'Cache-Control: no-cache' "$origin/manifest.preview.json?t=039" -o "$RUNNER_TEMP/live-manifest.json"
+          cmp public/manifest.preview.json "$RUNNER_TEMP/live-manifest.json"
+          curl -fsS -H 'Cache-Control: no-cache' "$origin/brand/soridraw-app-preview-039.png?t=039" -o "$RUNNER_TEMP/live192.png"
+          curl -fsS -H 'Cache-Control: no-cache' "$origin/brand/soridraw-app-preview-039-512.png?t=039" -o "$RUNNER_TEMP/live512.png"
+          cmp public/brand/soridraw-app-preview-039.png "$RUNNER_TEMP/live192.png"
+          cmp public/brand/soridraw-app-preview-039-512.png "$RUNNER_TEMP/live512.png"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          echo 'LIVE_PREVIEW_039=PASS'
+
+      - name: Package deployed PREVIEW ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipname="SORIDRAW_039_PREVIEW_${FINAL_SHA:0:8}_2026-09-08.zip"
+          git archive --format=zip --output="$RUNNER_TEMP/$zipname" "$FINAL_SHA"
+          unzip -t "$RUNNER_TEMP/$zipname" >/dev/null
+          echo "ZIP_PATH=$RUNNER_TEMP/$zipname" >> "$GITHUB_ENV"
+
+      - name: Upload PREVIEW ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_039_PREVIEW_${{ env.FINAL_SHA }}
+          path: ${{ env.ZIP_PATH }}
+          if-no-files-found: error

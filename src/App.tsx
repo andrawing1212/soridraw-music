@@ -3765,12 +3765,32 @@ function Navigation({
   }, [menuVisibility, menuAdminOnly, isAdminUser]);
 
 
-  const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {
-    if (!isAuthReady) return;
+  // SORIDRAW_AUTH_NAV_READINESS_035
+  // Route taps must stay responsive while Firebase restores the persisted session.
+  // Authorization still waits for isAuthReady: if the restore resolves signed-out,
+  // the login modal is opened after the navigation intent has already been reflected.
+  const pendingAuthNavigationRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthReady || !pendingAuthNavigationRef.current) return;
+    pendingAuthNavigationRef.current = false;
+    if (!user) handleLogin();
+  }, [handleLogin, isAuthReady, user]);
+
+  const canContinueTopNavigation = () => {
+    if (!isAuthReady) {
+      pendingAuthNavigationRef.current = true;
+      return true;
+    }
     if (!user) {
       handleLogin();
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {
+    if (!canContinueTopNavigation()) return;
     if (options?.clearSuno) clearSunoLibrarySignal();
     if (location.pathname === path) {
       scrollToTop();
@@ -3810,11 +3830,7 @@ function Navigation({
   };
 
   const goToCompactMobileNav = (item: (typeof allTopNavItems)[number]) => {
-    if (!isAuthReady) return;
-    if (!user) {
-      handleLogin();
-      return;
-    }
+    if (!canContinueTopNavigation()) return;
     if (!shouldUseStudioWorkspaceMobileNavigation || !onStudioWorkspaceSelect) {
       goToTopNav(item.path, { clearSuno: item.clearSuno });
       return;
@@ -18901,6 +18917,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         <Route path="/my-page" element={
           !canAccessNavigationMenu('myPage') ? (
             <FeatureUnavailablePage label="마이페이지" fallbackPath={navigationFallbackPath} />
+          ) : !isAuthReady ? (
+            <div className="min-h-screen flex items-center justify-center text-[var(--text-primary)] bg-[var(--bg-primary)]">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="w-8 h-8 animate-spin text-sky-300" />
+                <p className="text-sm font-medium text-gray-400">사용자 정보를 불러오는 중...</p>
+              </div>
+            </div>
           ) : user ? (
             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-sky-300 animate-spin" /></div>}>
               <MyPageLazy onLogout={handleLogout} />
@@ -18912,6 +18935,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         <Route path="/lab" element={
           !canAccessNavigationMenu('lab') ? (
             <FeatureUnavailablePage label="실험실" fallbackPath={navigationFallbackPath} />
+          ) : !isAuthReady ? (
+            <div className="min-h-screen flex items-center justify-center text-[var(--text-primary)] bg-[var(--bg-primary)]">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="w-8 h-8 animate-spin text-[#BBA8CA]" />
+                <p className="text-sm font-medium text-gray-400">사용자 정보를 불러오는 중...</p>
+              </div>
+            </div>
           ) : user ? (
             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-[#BBA8CA] animate-spin" /></div>}>
               <LabPageLazy />

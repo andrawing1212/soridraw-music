@@ -89,6 +89,7 @@ const CATALOG_MAX_ITEMS = 100_000;
 const CATALOG_MAX_BYTES = 24 * 1024 * 1024;
 const CATALOG_DELTA_MAX_CHANGES = 5_000;
 const CATALOG_LOCAL_CACHE_GENERATION = 5 as const;
+const MUSIC_NOTE_LOCAL_CACHE_GENERATION_050 = 6 as const;
 const CATALOG_DB_NAME = 'soridraw_user_data_engine_v5';
 const LEGACY_CATALOG_DB_NAMES = ['soridraw_user_data_engine_v4', 'soridraw_user_data_engine_v3', 'soridraw_user_data_engine_v2', 'soridraw_user_data_engine_v1'];
 const CATALOG_DB_STORE = 'catalogs';
@@ -114,6 +115,8 @@ const MUSIC_NOTE_SUMMARY_KEYS = new Set([
   'isPublic', 'exploreTrackId', 'explorePublicationId',
   'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'deletedAt', 'trashedAt',
   'color', 'favoriteColor', 'noteColor', 'folderId', 'folderIds', 'musicNoteFolderIds',
+  'noteFolderId', 'myNoteFolderId', 'favoriteFolderId', 'sharedNoteFolderId', 'sharedNoteFolder', 'noteSharedFolderId',
+  'sharedNoteShareId', 'isSharedMusicNote', 'sharedReadOnly', 'sourceType', 'originalFavoriteId',
   'createdAtMs', 'createdAt', 'updatedAtMs', 'updatedAt',
   'sunoLinks', 'sunoShareLinks', 'mainSunoIndex',
   'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
@@ -331,7 +334,7 @@ const readCatalogFromIndexedDb = async (
       const request = transaction.objectStore(CATALOG_DB_STORE).get(catalogKey(kind, uid));
       request.onsuccess = () => {
         const record = request.result;
-        if (record?.cacheGeneration !== CATALOG_LOCAL_CACHE_GENERATION) {
+        if (record?.cacheGeneration !== (kind === 'musicNote' ? MUSIC_NOTE_LOCAL_CACHE_GENERATION_050 : CATALOG_LOCAL_CACHE_GENERATION)) {
           resolve(null);
           return;
         }
@@ -362,7 +365,7 @@ export const writeCatalogSnapshotToLocalCache = async (
       transaction.onerror = () => resolve(false);
       transaction.onabort = () => resolve(false);
       transaction.objectStore(CATALOG_DB_STORE).put({
-        key, uid, kind, cacheGeneration: CATALOG_LOCAL_CACHE_GENERATION, snapshot,
+        key, uid, kind, cacheGeneration: kind === 'musicNote' ? MUSIC_NOTE_LOCAL_CACHE_GENERATION_050 : CATALOG_LOCAL_CACHE_GENERATION, snapshot,
       });
     });
   } catch {

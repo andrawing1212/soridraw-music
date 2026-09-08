@@ -33,7 +33,7 @@ jobs:
           echo '=== LIVE_APP_VERSIONS ==='
           for spec in 'preview|https://preview.soridraw.com' 'test|https://test.soridraw.com' 'production|https://soridraw.com'; do
             IFS='|' read -r env host <<< "$spec"
-            body="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "$host/app-version.json?audit=045-full-stack")"
+            body="$(curl -fsS --retry 3 --retry-delay 1 --max-time 20 -H 'Cache-Control: no-cache' "$host/app-version.json?audit=045-full-stack")"
             printf '%s=%s\n' "$env" "$(echo "$body" | tr -d '\n ')"
           done
 
@@ -60,11 +60,20 @@ jobs:
             {family:'media',env:'production',name:'soridraw-media'},
           ];
           const headers={Authorization:`Bearer ${token}`,Accept:'application/json'};
+          const wait=ms=>new Promise(r=>setTimeout(r,ms));
           async function api(path){
-            const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}${path}`,{headers});
-            const j=await r.json();
-            if(!r.ok||j.success===false) throw new Error(`${path} HTTP ${r.status}: ${JSON.stringify(j.errors||j).slice(0,500)}`);
-            return j.result;
+            let last='';
+            for(let attempt=1;attempt<=6;attempt++){
+              try{
+                const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}${path}`,{headers});
+                const text=await r.text();
+                last=`HTTP ${r.status} ${text.slice(0,250)}`;
+                let j=null; try{j=JSON.parse(text)}catch{}
+                if(r.ok&&j&&j.success!==false) return j.result;
+              }catch(e){last=String(e?.message||e)}
+              await wait(attempt*750);
+            }
+            throw new Error(`${path} failed after retries: ${last}`);
           }
           const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
           function bindingSummary(settings){
@@ -85,11 +94,12 @@ jobs:
               const main=mods.find(x=>x.name===(d.main_module||mods[0]?.name))||mods[0];
               const text=main?.content_base64?Buffer.from(main.content_base64,'base64').toString('utf8'):'';
               return text?sha(text):'';
-            }catch{return '';}
+            }catch(e){console.log(`SOURCE_HASH_UNAVAILABLE ${name} ${String(e?.message||e).slice(0,180)}`);return '';}
           }
           const results=[];
           for(const w of workers){
-            const [settings,version]=await Promise.all([api(`/workers/scripts/${w.name}/settings`),activeVersion(w.name)]);
+            const settings=await api(`/workers/scripts/${w.name}/settings`);
+            const version=await activeVersion(w.name);
             const sourceSha=await sourceHash(w.name,version);
             results.push({...w,version,sourceSha,bindings:bindingSummary(settings)});
           }
@@ -101,7 +111,7 @@ jobs:
           for(const family of ['explore','media']){
             const rows=results.filter(x=>x.family===family);
             const hashes=new Set(rows.map(x=>x.sourceSha).filter(Boolean));
-            console.log(`${family.toUpperCase()}_SOURCE_HASH_PARITY=${hashes.size===1?'PASS':'FAIL'}`);
+            console.log(`${family.toUpperCase()}_SOURCE_HASH_PARITY=${hashes.size===1&&hashes.size>0?'PASS':'FAIL_OR_UNAVAILABLE'}`);
           }
           const prodExplore=results.find(x=>x.family==='explore'&&x.env==='production');
           const names=new Set(prodExplore?.bindings.map(x=>x.name)||[]);
@@ -120,8 +130,8 @@ jobs:
             'test|https://soridraw-explore-test.andrawing1212.workers.dev|https://test.soridraw.com' \
             'production|https://soridraw-explore-api.andrawing1212.workers.dev|https://soridraw.com'; do
             IFS='|' read -r env base origin <<< "$spec"
-            rev_code="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/$env-rev.json" -w '%{http_code}' -H "Origin: $origin" -H 'Cache-Control: no-cache' "$base/v1/feed/revision?audit=045")"
-            feed_code="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/$env-feed.json" -w '%{http_code}' -H "Origin: $origin" -H 'Cache-Control: no-cache' "$base/v1/feed?sort=latest&limit=3&audit=045")"
+            rev_code="$(curl -sS --retry 3 --retry-delay 1 --max-time 20 -o "$RUNNER_TEMP/$env-rev.json" -w '%{http_code}' -H "Origin: $origin" -H 'Cache-Control: no-cache' "$base/v1/feed/revision?audit=045")"
+            feed_code="$(curl -sS --retry 3 --retry-delay 1 --max-time 20 -o "$RUNNER_TEMP/$env-feed.json" -w '%{http_code}' -H "Origin: $origin" -H 'Cache-Control: no-cache' "$base/v1/feed?sort=latest&limit=3&audit=045")"
             echo "$env revision_http=$rev_code revision=$(tr -d '\n ' < "$RUNNER_TEMP/$env-rev.json" | head -c 500)"
             echo "$env feed_http=$feed_code feed_sha=$(sha256sum "$RUNNER_TEMP/$env-feed.json" | awk '{print $1}') bytes=$(wc -c < "$RUNNER_TEMP/$env-feed.json")"
           done

@@ -1,0 +1,27 @@
+name: SORIDRAW 044 Explore Like Audit
+on:
+  push:
+    branches: [release-044-explore-like-cost-parity]
+    paths: ['.github/workflows/release-044-like-audit.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      WORKER: soridraw-explore-preview
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect active PREVIEW like path
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,N=process.env.WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
+          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status+' '+JSON.stringify(x).slice(0,900));return x.result||x}
+          function fn(s,n){let p=s.indexOf('async function '+n+'(');if(p<0)p=s.indexOf('function '+n+'(');if(p<0)return 'MISSING '+n;const b=s.indexOf('{',p);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(p,i+1)}return 'UNTERMINATED '+n}
+          (async()=>{const b=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;const ds=await g(b+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];if(!a?.version_id)throw Error('active version missing');const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');console.log('VERSION='+a.version_id);for(const n of ['enforceUserRateLimit','handleLikeD1Core','handleLike','adjustExploreLikeCounterDelta','patchExploreFirstViewLikeCount']){console.log('\n===== '+n+' =====\n'+fn(s,n));}})().catch(e=>{console.error(e);process.exit(1)});
+          NODE

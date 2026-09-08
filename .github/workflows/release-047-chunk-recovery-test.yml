@@ -1,0 +1,258 @@
+name: SORIDRAW 047 Stale Chunk Recovery TEST
+
+on:
+  push:
+    branches: [diag-045-full-stack-parity-20260908]
+    paths: ['.github/workflows/release-047-chunk-recovery-test.yml']
+
+permissions:
+  contents: write
+
+env:
+  PREVIEW_BASE: f685863eee6e611dea611acfb3107ed962dea3f0
+  MAIN_BASE: 5ca4c7b0c1d126992d1e6b81c74af431f7ca4db7
+  FIREBASE_PROJECT: soridraw
+
+jobs:
+  recover-stale-chunk-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard exact current baselines
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          echo BASELINE_047_GUARD=PASS
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build and validate PREVIEW 047 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -B release-047-preview-work origin/preview
+          cat > src/services/chunkLoadRecovery.ts <<'TS'
+          const SORIDRAW_CHUNK_LOAD_RECOVERY_047 = true;
+          const RECOVERY_STORAGE_KEY = 'soridraw_chunk_load_recovery_v1';
+          const RECOVERY_COOLDOWN_MS = 60_000;
+          let installed = false;
+
+          const errorMessage = (value: unknown): string => {
+            if (value instanceof Error) return String(value.message || value.name || '');
+            if (typeof value === 'string') return value;
+            if (value && typeof value === 'object' && 'message' in value) {
+              return String((value as { message?: unknown }).message || '');
+            }
+            return '';
+          };
+
+          export const isStaleChunkLoadError = (value: unknown): boolean => {
+            const message = errorMessage(value).toLowerCase();
+            if (!message) return false;
+            return message.includes('failed to fetch dynamically imported module')
+              || message.includes('error loading dynamically imported module')
+              || message.includes('importing a module script failed')
+              || message.includes('chunkloaderror')
+              || (/loading chunk\s+.+\s+failed/.test(message));
+          };
+
+          const recoverySignature = (value: unknown): string => errorMessage(value).trim().slice(0, 800);
+
+          export const recoverFromStaleChunkError = (value: unknown): boolean => {
+            if (typeof window === 'undefined' || !isStaleChunkLoadError(value)) return false;
+            const signature = recoverySignature(value);
+            const now = Date.now();
+            try {
+              const raw = window.sessionStorage.getItem(RECOVERY_STORAGE_KEY);
+              if (raw) {
+                const previous = JSON.parse(raw) as { signature?: string; at?: number };
+                if (previous?.signature === signature && now - Number(previous?.at || 0) < RECOVERY_COOLDOWN_MS) {
+                  return false;
+                }
+              }
+              window.sessionStorage.setItem(RECOVERY_STORAGE_KEY, JSON.stringify({ signature, at: now }));
+            } catch {
+              // Storage can be blocked. A reload is still safer than leaving a stale chunk fatal screen.
+            }
+            window.location.reload();
+            return true;
+          };
+
+          export const installChunkLoadRecovery = (): void => {
+            if (typeof window === 'undefined' || installed) return;
+            installed = true;
+            window.addEventListener('unhandledrejection', (event) => {
+              void recoverFromStaleChunkError(event.reason);
+            });
+            window.addEventListener('error', (event) => {
+              const errorEvent = event as ErrorEvent;
+              void recoverFromStaleChunkError(errorEvent.error || errorEvent.message);
+            });
+          };
+
+          void SORIDRAW_CHUNK_LOAD_RECOVERY_047;
+          TS
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('src/main.tsx'); s=p.read_text()
+          old="import { startAppUpdateNotice } from './services/appUpdateNotice';\n\nvoid startPreviewVersionSignal();\nstartAppUpdateNotice();"
+          new="import { startAppUpdateNotice } from './services/appUpdateNotice';\nimport { installChunkLoadRecovery } from './services/chunkLoadRecovery';\n\ninstallChunkLoadRecovery();\nvoid startPreviewVersionSignal();\nstartAppUpdateNotice();"
+          if old not in s: raise SystemExit('main.tsx chunk recovery anchor missing')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('src/App.tsx'); s=p.read_text()
+          import_anchor="import { readUserProfileCache, writeUserProfileCache } from './lib/userProfileCache';"
+          if import_anchor not in s: raise SystemExit('App import anchor missing')
+          s=s.replace(import_anchor, import_anchor+"\nimport { recoverFromStaleChunkError } from './services/chunkLoadRecovery';",1)
+          old='''  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {\n    console.error("ErrorBoundary caught an error", error, errorInfo);\n  }'''
+          new='''  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {\n    if (recoverFromStaleChunkError(error)) return;\n    console.error("ErrorBoundary caught an error", error, errorInfo);\n  }'''
+          if old not in s: raise SystemExit('ErrorBoundary componentDidCatch anchor missing')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('src/services/appUpdateNotice.ts'); s=p.read_text()
+          if "CURRENT_APP_VERSION = '046'" not in s: raise SystemExit('app version 046 anchor missing')
+          p.write_text(s.replace("CURRENT_APP_VERSION = '046'","CURRENT_APP_VERSION = '047'",1))
+          p=Path('public/app-version.json'); s=p.read_text()
+          if '"version": "046"' not in s: raise SystemExit('public version 046 anchor missing')
+          p.write_text(s.replace('"version": "046"','"version": "047"',1))
+          PY
+
+          cat > scripts/verify-047-stale-chunk-recovery.mjs <<'NODE'
+          import fs from 'node:fs';
+          const read=(p)=>fs.readFileSync(p,'utf8');
+          const service=read('src/services/chunkLoadRecovery.ts');
+          const app=read('src/App.tsx');
+          const main=read('src/main.tsx');
+          for (const token of [
+            'SORIDRAW_CHUNK_LOAD_RECOVERY_047',
+            'failed to fetch dynamically imported module',
+            'importing a module script failed',
+            'chunkloaderror',
+            'RECOVERY_COOLDOWN_MS = 60_000',
+            'window.sessionStorage.setItem',
+            'window.location.reload()',
+            "window.addEventListener('unhandledrejection'",
+            "window.addEventListener('error'",
+          ]) if(!service.toLowerCase().includes(token.toLowerCase())) throw new Error(`047 service token missing: ${token}`);
+          if(!app.includes('if (recoverFromStaleChunkError(error)) return;')) throw new Error('047 ErrorBoundary recovery hook missing');
+          if(!main.includes('installChunkLoadRecovery();')) throw new Error('047 global recovery install missing');
+          if(!main.includes("from './services/chunkLoadRecovery'")) throw new Error('047 main import missing');
+          console.log('STALE_CHUNK_RECOVERY_047=PASS');
+          NODE
+
+          npm ci
+          npx tsc --noEmit
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          node scripts/verify-045-explore-active-revalidation.mjs
+          node scripts/verify-046-catalog-stale-revision-rebuild.mjs
+          node scripts/verify-047-stale-chunk-recovery.mjs
+          npm run build
+          echo PREVIEW_047_VALIDATION=PASS
+
+      - name: Commit validated 047 to PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add src/services/chunkLoadRecovery.ts src/main.tsx src/App.tsx src/services/appUpdateNotice.ts public/app-version.json scripts/verify-047-stale-chunk-recovery.mjs
+          git commit -m 'fix(preview): recover stale lazy chunks once 047'
+          PREVIEW_047_SHA=$(git rev-parse HEAD)
+          git push origin HEAD:preview
+          echo "PREVIEW_047_SHA=$PREVIEW_047_SHA" >> "$GITHUB_ENV"
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy and verify PREVIEW 047
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          for i in $(seq 1 15); do
+            body=$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "https://preview.soridraw.com/app-version.json?release=047-$i" || true)
+            echo "$body" | grep -q '"047"' && break
+            sleep 4
+          done
+          echo "$body" | grep -q '"047"'
+          echo PREVIEW_047_LIVE=PASS
+
+      - name: Prepare clean MAIN 047 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git restore --staged --worktree dist 2>/dev/null || true
+          git clean -fd -- dist
+          git checkout -B release-047-main-work origin/main
+          for f in src/services/chunkLoadRecovery.ts src/main.tsx src/App.tsx src/services/appUpdateNotice.ts public/app-version.json scripts/verify-047-stale-chunk-recovery.mjs; do
+            mkdir -p "$(dirname "$f")"
+            git show "$PREVIEW_047_SHA:$f" > "$f"
+          done
+          grep -F 'SORIDRAW(T)' index.html
+          grep -F 'soridraw-favicon-test-042.png' index.html
+          grep -F 'soridraw-favicon-production-043.png' index.html
+          npx tsc --noEmit
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          node scripts/verify-045-explore-active-revalidation.mjs
+          node scripts/verify-046-catalog-stale-revision-rebuild.mjs
+          node scripts/verify-047-stale-chunk-recovery.mjs
+          npm run build
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/main047-index.sha"
+          echo MAIN_047_CANDIDATE=PASS
+
+      - name: Commit validated 047 to MAIN
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add src/services/chunkLoadRecovery.ts src/main.tsx src/App.tsx src/services/appUpdateNotice.ts public/app-version.json scripts/verify-047-stale-chunk-recovery.mjs
+          git commit -m 'release(main): promote stale chunk recovery 047'
+          MAIN_047_SHA=$(git rev-parse HEAD)
+          git push origin HEAD:main
+          echo "MAIN_047_SHA=$MAIN_047_SHA" >> "$GITHUB_ENV"
+
+      - name: Deploy exact MAIN 047 build to TEST only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive
+          expected=$(cat "$RUNNER_TEMP/main047-index.sha")
+          for origin in 'https://soridraw-test.web.app' 'https://test.soridraw.com'; do
+            ok=''
+            for i in $(seq 1 15); do
+              if curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "$origin/?release=047-$i" -o "$RUNNER_TEMP/test047.html"; then
+                actual=$(sha256sum "$RUNNER_TEMP/test047.html" | awk '{print $1}')
+                if [ "$actual" = "$expected" ]; then ok=yes; break; fi
+              fi
+              sleep 4
+            done
+            test "$ok" = yes
+          done
+          body=$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' 'https://test.soridraw.com/app-version.json?release=047-final')
+          echo "$body" | grep -q '"047"'
+          prod=$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' 'https://soridraw.com/app-version.json?release=047-guard')
+          echo "$prod" | grep -q '"045"'
+          echo TEST_047_LIVE=PASS
+          echo PRODUCTION_045_UNCHANGED=PASS

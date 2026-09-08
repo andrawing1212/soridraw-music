@@ -1,15 +1,45 @@
 from PIL import Image
 from pathlib import Path
-import json, os, re
+import json, re
 
 root = Path('.')
-src = Image.open(os.environ['PROD_SOURCE']).convert('RGBA')
-alpha = src.getchannel('A')
+brand = root / 'public/brand'
+mask_source = Image.open(brand / 'soridraw-favicon-test-042.png').convert('RGBA')
+alpha = mask_source.getchannel('A')
 bbox = alpha.getbbox()
 if not bbox or alpha.getpixel((0, 0)) != 0:
-    raise SystemExit('invalid transparent PRODUCTION source')
-crop = src.crop(bbox)
+    raise SystemExit('invalid TEST transparent source')
+mask_crop = alpha.crop(bbox)
 
+# Reuse the already-verified SORIDRAW transparent shape from TEST 042.
+# Only recolor it to the production yellow -> coral -> pink identity.
+def lerp(a, b, t):
+    return int(round(a + (b - a) * t))
+
+def production_color(t):
+    top = (255, 198, 0)
+    mid = (255, 125, 72)
+    bottom = (255, 48, 145)
+    if t <= 0.52:
+        u = t / 0.52
+        return tuple(lerp(top[i], mid[i], u) for i in range(3))
+    u = (t - 0.52) / 0.48
+    return tuple(lerp(mid[i], bottom[i], u) for i in range(3))
+
+def colored_crop():
+    w, h = mask_crop.size
+    out = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    pix = out.load()
+    a = mask_crop.load()
+    for y in range(h):
+        rgb = production_color(0 if h <= 1 else y / (h - 1))
+        for x in range(w):
+            av = a[x, y]
+            if av:
+                pix[x, y] = (rgb[0], rgb[1], rgb[2], av)
+    return out
+
+crop = colored_crop()
 
 def render(size: int, fill: float = 0.94):
     max_side = int(round(size * fill))
@@ -21,7 +51,6 @@ def render(size: int, fill: float = 0.94):
     canvas.alpha_composite(piece, ((size - w) // 2, (size - h) // 2))
     return canvas
 
-brand = root / 'public/brand'
 outputs = {
     'soridraw-favicon-production-043.png': 96,
     'soridraw-app-production-043.png': 192,

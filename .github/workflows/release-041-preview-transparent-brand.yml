@@ -1,1 +1,224 @@
-placeholder
+name: SORIDRAW 041 PREVIEW Transparent Brand
+
+on:
+  push:
+    branches: [release-041-preview-transparent-brand]
+    paths: ['.github/workflows/release-041-preview-transparent-brand.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-041-preview-transparent-brand
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PREVIEW_BASE: 8ccce1cce0e3f320e4b4caf881784525435d8804
+      MAIN_BASE: edae66666b88f4fa80d2a80e49c2b42c55e71214
+      FIREBASE_PROJECT: soridraw
+    steps:
+      - name: Checkout PREVIEW
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Guard branch state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          echo 'STATE_GUARD_041=PASS'
+
+      - name: Build transparent brand assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/release-040-preview-icon-transparency.yml
+          rm -f .github/workflows/release-041-preview-transparent-brand.yml
+          python -m pip install --quiet pillow
+          python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          import json
+
+          brand = Path('public/brand')
+          src_path = brand / 'soridraw-favicon-preview.png'
+          src = Image.open(src_path).convert('RGBA')
+          alpha = src.getchannel('A')
+          bbox = alpha.getbbox()
+          if not bbox:
+              raise SystemExit('preview favicon source has no visible pixels')
+          if alpha.getpixel((0, 0)) != 0:
+              raise SystemExit('preview favicon source is not transparent')
+
+          crop = src.crop(bbox)
+
+          def render(size: int, fill: float = 0.94):
+              max_side = int(round(size * fill))
+              scale = min(max_side / crop.width, max_side / crop.height)
+              w = max(1, int(round(crop.width * scale)))
+              h = max(1, int(round(crop.height * scale)))
+              piece = crop.resize((w, h), Image.Resampling.LANCZOS)
+              canvas = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+              x = (size - w) // 2
+              y = (size - h) // 2
+              canvas.alpha_composite(piece, (x, y))
+              return canvas
+
+          outputs = {
+              'soridraw-favicon-preview-041.png': 96,
+              'soridraw-app-preview-041.png': 192,
+              'soridraw-app-preview-041-256.png': 256,
+              'soridraw-app-preview-041-512.png': 512,
+          }
+          for name, size in outputs.items():
+              im = render(size)
+              im.save(brand / name, format='PNG', optimize=False)
+              a = im.getchannel('A')
+              b = a.getbbox()
+              if a.getpixel((0,0)) != 0:
+                  raise SystemExit(f'corner not transparent: {name}')
+              if not b or max(b[2]-b[0], b[3]-b[1]) < int(size * 0.90):
+                  raise SystemExit(f'symbol not large enough: {name} bbox={b}')
+
+          ico_base = render(256)
+          ico_base.save(
+              brand / 'soridraw-preview-041.ico',
+              format='ICO',
+              sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)],
+          )
+
+          manifest_path = Path('public/manifest.preview.json')
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          manifest['name'] = 'SORIDRAW(P)'
+          manifest['short_name'] = 'SORIDRAW(P)'
+          manifest['icons'] = [
+              {'src':'/brand/soridraw-app-preview-041.png','sizes':'192x192','type':'image/png','purpose':'any'},
+              {'src':'/brand/soridraw-app-preview-041-256.png','sizes':'256x256','type':'image/png','purpose':'any'},
+              {'src':'/brand/soridraw-app-preview-041-512.png','sizes':'512x512','type':'image/png','purpose':'any'},
+          ]
+          manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          Path('public/app-version.json').write_text(json.dumps({'version':'041'}, indent=2) + '\n', encoding='utf-8')
+
+          index_path = Path('index.html')
+          text = index_path.read_text(encoding='utf-8')
+          text = text.replace('href="/brand/soridraw-favicon-preview.png?v=037"', 'href="/brand/soridraw-favicon-preview-041.png"')
+          text = text.replace('href="/brand/soridraw-app-preview-039.png"', 'href="/brand/soridraw-app-preview-041.png"')
+          text = text.replace("var faviconHref = '/brand/soridraw-favicon-' + environment + '.png?v=037';", "var faviconHref = environment === 'preview' ? '/brand/soridraw-favicon-preview-041.png' : '/brand/soridraw-favicon-' + environment + '.png?v=037';")
+          text = text.replace("if (shortcutIcon) shortcutIcon.href = faviconHref;", "if (shortcutIcon) shortcutIcon.href = environment === 'preview' ? '/brand/soridraw-preview-041.ico' : faviconHref;")
+          text = text.replace("environment === 'preview' ? '/brand/soridraw-app-preview-039.png'", "environment === 'preview' ? '/brand/soridraw-app-preview-041.png'")
+          index_path.write_text(text, encoding='utf-8')
+
+          update_path = Path('src/services/appUpdateNotice.ts')
+          update_text = update_path.read_text(encoding='utf-8')
+          if "CURRENT_APP_VERSION = '039'" not in update_text:
+              raise SystemExit('039 update version anchor missing')
+          update_path.write_text(update_text.replace("CURRENT_APP_VERSION = '039'", "CURRENT_APP_VERSION = '041'", 1), encoding='utf-8')
+          PY
+
+          grep -F 'soridraw-app-preview-041.png' public/manifest.preview.json
+          grep -F 'soridraw-app-preview-041-256.png' public/manifest.preview.json
+          grep -F 'soridraw-app-preview-041-512.png' public/manifest.preview.json
+          grep -F 'soridraw-favicon-preview-041.png' index.html
+          grep -F 'soridraw-preview-041.ico' index.html
+          grep -F '"041"' public/app-version.json
+          grep -F "CURRENT_APP_VERSION = '041'" src/services/appUpdateNotice.ts
+          test ! -e .github/workflows/release-040-preview-icon-transparency.yml
+          test ! -e .github/workflows/release-041-preview-transparent-brand.yml
+          echo 'TRANSPARENT_BRAND_041=PASS'
+
+      - name: Validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          echo 'VALIDATE_041=PASS'
+
+      - name: Commit and push PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(preview): use large transparent icons and favicons'
+          FINAL_SHA="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          git push origin HEAD:refs/heads/preview
+          echo "FINAL_SHA=$FINAL_SHA" >> "$GITHUB_ENV"
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_DEPLOY_041=PASS'
+
+      - name: Verify live PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin='https://preview.soridraw.com'
+          for attempt in $(seq 1 15); do
+            curl -fsS -H 'Cache-Control: no-cache' "$origin/app-version.json?t=041-$attempt" -o "$RUNNER_TEMP/version.json" || true
+            grep -Fq '041' "$RUNNER_TEMP/version.json" && break
+            sleep 4
+          done
+          grep -Fq '041' "$RUNNER_TEMP/version.json"
+          curl -fsS -H 'Cache-Control: no-cache' "$origin/manifest.preview.json?t=041" -o "$RUNNER_TEMP/live-manifest.json"
+          cmp public/manifest.preview.json "$RUNNER_TEMP/live-manifest.json"
+          for f in soridraw-favicon-preview-041.png soridraw-app-preview-041.png soridraw-app-preview-041-256.png soridraw-app-preview-041-512.png soridraw-preview-041.ico; do
+            curl -fsS -H 'Cache-Control: no-cache' "$origin/brand/$f?t=041" -o "$RUNNER_TEMP/$f"
+            cmp "public/brand/$f" "$RUNNER_TEMP/$f"
+          done
+          python - <<'PY'
+          from PIL import Image
+          import os
+          for name in ['soridraw-favicon-preview-041.png','soridraw-app-preview-041.png','soridraw-app-preview-041-256.png','soridraw-app-preview-041-512.png']:
+              im = Image.open(os.path.join(os.environ['RUNNER_TEMP'], name)).convert('RGBA')
+              a = im.getchannel('A')
+              b = a.getbbox()
+              assert a.getpixel((0,0)) == 0, name
+              assert b and max(b[2]-b[0], b[3]-b[1]) >= int(im.width * 0.90), (name,b)
+          print('LIVE_TRANSPARENT_BRAND_041=PASS')
+          PY
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          echo 'LIVE_PREVIEW_041=PASS'
+
+      - name: Package deployed PREVIEW ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipname="SORIDRAW_041_PREVIEW_${FINAL_SHA:0:8}_2026-09-08.zip"
+          git archive --format=zip --output="$RUNNER_TEMP/$zipname" "$FINAL_SHA"
+          unzip -t "$RUNNER_TEMP/$zipname" >/dev/null
+          echo "ZIP_PATH=$RUNNER_TEMP/$zipname" >> "$GITHUB_ENV"
+
+      - name: Upload PREVIEW ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_041_PREVIEW_${{ env.FINAL_SHA }}
+          path: ${{ env.ZIP_PATH }}
+          if-no-files-found: error

@@ -1,30 +1,32 @@
+import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { initializeApp, applicationDefault, deleteApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { chromium } from 'playwright';
 
 const envName = String(process.env.SORIDRAW_PROBE_ENV || '').trim();
 const origin = String(process.env.SORIDRAW_PROBE_ORIGIN || '').replace(/\/+$/, '');
 const workerBase = String(process.env.SORIDRAW_PROBE_WORKER || '').replace(/\/+$/, '');
 const outputPath = String(process.env.SORIDRAW_PROBE_OUTPUT || `release044-probe-${envName || 'unknown'}.json`);
 const statePath = String(process.env.SORIDRAW_PROBE_STATE || `release044-probe-${envName || 'unknown'}-state.json`);
+const oauthAccessToken = String(process.env.GOOGLE_OAUTH_ACCESS_TOKEN || '').trim();
+
 const firebaseProjectId = 'soridraw-app-866a5';
-const firebaseConfig = {
-  apiKey: 'AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA',
-  authDomain: 'soridraw-app-866a5.firebaseapp.com',
-  projectId: firebaseProjectId,
-  storageBucket: 'soridraw-app-866a5.firebasestorage.app',
-  messagingSenderId: '91309780603',
-  appId: '1:91309780603:web:cde703895e2cf31ecffcde',
-};
-const appCheckSiteKey = '6Le6bGEtAAAAAOVROhuXew0lxJcpVNVwPZN0ZWKO';
+const firebaseProjectNumber = '91309780603';
+const firebaseApiKey = 'AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA';
+const firebaseAppId = '1:91309780603:web:cde703895e2cf31ecffcde';
+const appResource = `projects/${firebaseProjectNumber}/apps/${firebaseAppId}`;
 
 if (!envName || !origin || !workerBase) throw new Error('SORIDRAW probe environment/origin/worker are required.');
+if (!oauthAccessToken) throw new Error('GOOGLE_OAUTH_ACCESS_TOKEN is required for temporary App Check debug-token registration.');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const safeJson = async (response) => {
+  const text = await response.text();
+  try { return JSON.parse(text); } catch { return text; }
+};
 const numberHeader = (headers, key) => {
-  const value = headers[String(key).toLowerCase()];
-  if (value === undefined) return Number.NaN;
+  const value = headers.get(String(key));
+  if (value === null) return Number.NaN;
   return Number(value);
 };
 const extractItems = (payload) => {
@@ -43,10 +45,9 @@ const uid = `soridraw044_${envName}_${runNonce}`.replace(/[^a-zA-Z0-9_-]/g, '_')
 const email = `soridraw044-${envName}-${runNonce.replace(/_/g, '-')}@example.invalid`;
 const password = `Sd044!${Math.random().toString(36).slice(2)}A9#`;
 const adminApp = initializeApp({ credential: applicationDefault(), projectId: firebaseProjectId }, `soridraw044-${envName}-${Date.now()}`);
-let browser;
-let page;
 let idToken = '';
 let appCheckToken = '';
+let debugTokenName = '';
 let targetTrackId = '';
 let likedActive = false;
 let userCreated = false;
@@ -57,54 +58,113 @@ const persistState = async () => {
   await writeFile(statePath, `${JSON.stringify({ uid, email, environment: envName, targetTrackId, likedActive }, null, 2)}\n`, 'utf8');
 };
 
-const browserFetch = async (method, path, { auth = false, cacheBust = false } = {}) => {
+const registerDebugToken = async () => {
+  const secret = randomUUID();
+  const response = await fetch(`https://firebaseappcheck.googleapis.com/v1/${appResource}/debugTokens`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${oauthAccessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      displayName: `SORIDRAW 044 ${envName} CI probe ${Date.now()}`,
+      token: secret,
+    }),
+  });
+  const payload = await safeJson(response);
+  if (!response.ok || !payload?.name) {
+    throw new Error(`Temporary App Check debug-token registration failed: ${response.status} ${JSON.stringify(payload).slice(0, 700)}`);
+  }
+  debugTokenName = String(payload.name);
+  return secret;
+};
+
+const revokeDebugToken = async () => {
+  if (!debugTokenName) return;
+  const response = await fetch(`https://firebaseappcheck.googleapis.com/v1/${debugTokenName}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${oauthAccessToken}` },
+  });
+  if (!response.ok && response.status !== 404) {
+    const payload = await safeJson(response);
+    throw new Error(`Temporary App Check debug-token revocation failed: ${response.status} ${JSON.stringify(payload).slice(0, 700)}`);
+  }
+  debugTokenName = '';
+};
+
+const exchangeDebugToken = async (debugToken) => {
+  const response = await fetch(`https://firebaseappcheck.googleapis.com/v1/${appResource}:exchangeDebugToken?key=${encodeURIComponent(firebaseApiKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ debugToken, limitedUse: false }),
+  });
+  const payload = await safeJson(response);
+  if (!response.ok || !payload?.token) {
+    throw new Error(`Temporary App Check debug-token exchange failed: ${response.status} ${JSON.stringify(payload).slice(0, 700)}`);
+  }
+  return String(payload.token);
+};
+
+const signInTemporaryUser = async () => {
+  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(firebaseApiKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, returnSecureToken: true }),
+  });
+  const payload = await safeJson(response);
+  if (!response.ok || !payload?.idToken) {
+    throw new Error(`Temporary Firebase Auth sign-in failed: ${response.status} ${JSON.stringify(payload).slice(0, 700)}`);
+  }
+  return String(payload.idToken);
+};
+
+const workerFetch = async (method, path, { auth = false, cacheBust = false } = {}) => {
   const suffix = cacheBust ? `${path.includes('?') ? '&' : '?'}__soridraw044=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
   const url = `${workerBase}${path}${suffix}`;
-  const wait = page.waitForResponse((response) => response.url() === url && response.request().method() === method, { timeout: 30_000 });
-  const client = await page.evaluate(async ({ url, method, idToken, appCheckToken, auth }) => {
-    const headers = {};
-    if (auth) {
-      headers.Authorization = `Bearer ${idToken}`;
-      headers['X-Firebase-AppCheck'] = appCheckToken;
-    }
-    const response = await fetch(url, { method, headers, cache: 'no-store' });
-    const text = await response.text();
-    return { status: response.status, text };
-  }, { url, method, idToken, appCheckToken, auth });
-  const network = await wait;
-  const headers = await network.allHeaders();
-  let payload = null;
-  try { payload = JSON.parse(client.text); } catch { payload = client.text; }
-  return { status: client.status, payload, headers, url };
+  const headers = {
+    Origin: origin,
+    'Cache-Control': 'no-cache',
+  };
+  if (auth) {
+    headers.Authorization = `Bearer ${idToken}`;
+    headers['X-Firebase-AppCheck'] = appCheckToken;
+  }
+  const response = await fetch(url, { method, headers, cache: 'no-store' });
+  const payload = await safeJson(response);
+  return { status: response.status, payload, headers: response.headers, url };
 };
 
 const pollFeedCount = async (expected, label) => {
   for (let attempt = 1; attempt <= 15; attempt += 1) {
-    const response = await browserFetch('GET', '/v1/feed?sort=latest&limit=40', { cacheBust: true });
+    const response = await workerFetch('GET', '/v1/feed?sort=latest&limit=40', { cacheBust: true });
     if (response.status !== 200 || response.payload?.ok !== true) throw new Error(`${label} feed read failed: ${response.status}`);
     const item = extractItems(response.payload).find((candidate) => trackIdOf(candidate) === targetTrackId);
-    if (item && likeCountOf(item) === expected) return { attempt, headers: response.headers };
+    if (item && likeCountOf(item) === expected) return { attempt };
     await sleep(800);
   }
   throw new Error(`${label} feed/R2 likeCount did not converge to ${expected}`);
 };
 
 const performLikeCycle = async (cycle) => {
-  const put = await browserFetch('PUT', `/v1/tracks/${encodeURIComponent(targetTrackId)}/like`, { auth: true });
-  if (put.status < 200 || put.status >= 300 || put.payload?.ok !== true) throw new Error(`PUT like failed: ${put.status} ${JSON.stringify(put.payload).slice(0, 500)}`);
+  const put = await workerFetch('PUT', `/v1/tracks/${encodeURIComponent(targetTrackId)}/like`, { auth: true });
+  if (put.status < 200 || put.status >= 300 || put.payload?.ok !== true) {
+    throw new Error(`PUT like failed: ${put.status} ${JSON.stringify(put.payload).slice(0, 700)}`);
+  }
   likedActive = true;
   await persistState();
   const putCount = Number(put.payload?.data?.likeCount);
   if (!Number.isFinite(putCount)) throw new Error('PUT likeCount missing.');
   const putReads = numberHeader(put.headers, 'x-soridraw-d1-read-queries');
   const putWrites = numberHeader(put.headers, 'x-soridraw-d1-write-queries');
-  if (!Number.isFinite(putReads) || !Number.isFinite(putWrites)) throw new Error(`D1 query diagnostics headers missing: ${JSON.stringify(put.headers)}`);
+  if (!Number.isFinite(putReads) || !Number.isFinite(putWrites)) throw new Error('D1 query diagnostics headers missing on PUT like.');
   if (putReads !== 1) throw new Error(`Like D1 reads expected 1, got ${putReads}`);
   if (![3, 4].includes(putWrites)) throw new Error(`Like D1 writes expected 3 (or rare bounded cleanup 4), got ${putWrites}`);
   const putFeed = await pollFeedCount(putCount, `cycle ${cycle} PUT`);
 
-  const del = await browserFetch('DELETE', `/v1/tracks/${encodeURIComponent(targetTrackId)}/like`, { auth: true });
-  if (del.status < 200 || del.status >= 300 || del.payload?.ok !== true) throw new Error(`DELETE like failed: ${del.status} ${JSON.stringify(del.payload).slice(0, 500)}`);
+  const del = await workerFetch('DELETE', `/v1/tracks/${encodeURIComponent(targetTrackId)}/like`, { auth: true });
+  if (del.status < 200 || del.status >= 300 || del.payload?.ok !== true) {
+    throw new Error(`DELETE like failed: ${del.status} ${JSON.stringify(del.payload).slice(0, 700)}`);
+  }
   likedActive = false;
   await persistState();
   const delCount = Number(del.payload?.data?.likeCount);
@@ -129,35 +189,11 @@ try {
   userCreated = true;
   await persistState();
 
-  browser = await chromium.launch({ headless: true });
-  page = await browser.newPage();
-  await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-  if (new URL(page.url()).origin !== new URL(origin).origin) throw new Error(`Unexpected probe origin: ${page.url()}`);
+  idToken = await signInTemporaryUser();
+  const debugToken = await registerDebugToken();
+  appCheckToken = await exchangeDebugToken(debugToken);
 
-  const tokenBundle = await page.evaluate(async ({ config, siteKey, email, password, nonce }) => {
-    const appMod = await import('https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js');
-    const authMod = await import('https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js');
-    const appCheckMod = await import('https://www.gstatic.com/firebasejs/12.11.0/firebase-app-check.js');
-    const app = appMod.initializeApp(config, `soridraw044-probe-${nonce}`);
-    const auth = authMod.getAuth(app);
-    const appCheck = appCheckMod.initializeAppCheck(app, {
-      provider: new appCheckMod.ReCaptchaEnterpriseProvider(siteKey),
-      isTokenAutoRefreshEnabled: false,
-    });
-    const credential = await authMod.signInWithEmailAndPassword(auth, email, password);
-    const [idToken, appCheckResult] = await Promise.all([
-      credential.user.getIdToken(true),
-      appCheckMod.getToken(appCheck, true),
-    ]);
-    return { idToken, appCheckToken: appCheckResult?.token || '' };
-  }, { config: firebaseConfig, siteKey: appCheckSiteKey, email, password, nonce: runNonce });
-
-  idToken = String(tokenBundle?.idToken || '');
-  appCheckToken = String(tokenBundle?.appCheckToken || '');
-  if (!idToken) throw new Error('Browser Firebase ID token missing.');
-  if (!appCheckToken) throw new Error('Browser Firebase App Check token missing.');
-
-  const initialFeed = await browserFetch('GET', '/v1/feed?sort=latest&limit=40', { cacheBust: true });
+  const initialFeed = await workerFetch('GET', '/v1/feed?sort=latest&limit=40', { cacheBust: true });
   if (initialFeed.status !== 200 || initialFeed.payload?.ok !== true) throw new Error(`Initial feed failed: ${initialFeed.status}`);
   const target = extractItems(initialFeed.payload).find((item) => trackIdOf(item));
   if (!target) throw new Error('No public Explore track available for authenticated like probe.');
@@ -185,6 +221,7 @@ try {
     restoredToUnliked: true,
     firebaseAuth: true,
     appCheck: true,
+    appCheckMode: 'temporary-debug-token-ci',
     measuredAt: new Date().toISOString(),
   };
   await writeFile(outputPath, `${JSON.stringify(finalResult, null, 2)}\n`, 'utf8');
@@ -193,9 +230,9 @@ try {
   console.log(`SORIDRAW_044_${envName.toUpperCase()}_LIKE_D1_WRITES=${normal.put.writes}`);
   console.log(`SORIDRAW_044_${envName.toUpperCase()}_FEED_R2_ROUNDTRIP=PASS`);
 } finally {
-  if (page && likedActive && targetTrackId && idToken && appCheckToken) {
+  if (likedActive && targetTrackId && idToken && appCheckToken) {
     try {
-      const cleanup = await browserFetch('DELETE', `/v1/tracks/${encodeURIComponent(targetTrackId)}/like`, { auth: true });
+      const cleanup = await workerFetch('DELETE', `/v1/tracks/${encodeURIComponent(targetTrackId)}/like`, { auth: true });
       if (cleanup.status >= 200 && cleanup.status < 300 && cleanup.payload?.ok === true) {
         likedActive = false;
         await persistState();
@@ -204,7 +241,7 @@ try {
       console.error('Emergency unlike cleanup failed:', error);
     }
   }
-  if (browser) await browser.close().catch(() => {});
+  try { await revokeDebugToken(); } catch (error) { console.error(error); throw error; }
   if (userCreated) {
     try { await getAuth(adminApp).deleteUser(uid); } catch (error) { console.error('Temporary Firebase user cleanup failed:', error); }
   }

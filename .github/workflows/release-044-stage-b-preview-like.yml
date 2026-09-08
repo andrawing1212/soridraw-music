@@ -1,0 +1,78 @@
+name: SORIDRAW 044 Stage B PREVIEW Like Measurement
+
+on:
+  push:
+    branches: [release-044-explore-like-cost-parity]
+    paths: ['.github/workflows/release-044-stage-b-preview-like.yml']
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: soridraw-044-stage-b-preview-like
+  cancel-in-progress: false
+
+jobs:
+  preview-like-measurement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PREVIEW_EXPECTED: 4ba0e692a533a3bad0d1eee9950d25bc21934626
+      MAIN_EXPECTED: 2fadb2dc666fadecbbbd93e92cfb104ed567f233
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard Stage A exact state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_EXPECTED"
+          test "$(git rev-parse origin/main)" = "$MAIN_EXPECTED"
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=044-stage-b' | tr -d '\r\n ')" = '{"version":"044"}'
+          curl -fsS -H 'Origin: https://preview.soridraw.com' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed-revision?sort=latest' -D "$RUNNER_TEMP/rev.head" -o "$RUNNER_TEMP/rev.json"
+          grep -qi '^x-soridraw-d1-read-queries: 0' "$RUNNER_TEMP/rev.head"
+          grep -qi '^x-soridraw-d1-write-queries: 0' "$RUNNER_TEMP/rev.head"
+          echo 'STAGE_B_GUARD=PASS'
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+
+      - name: Install probe runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm install --no-save --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Measure one real PREVIEW like cycle and restore state
+        shell: bash
+        env:
+          SORIDRAW_PROBE_ENV: preview
+          SORIDRAW_PROBE_ORIGIN: https://preview.soridraw.com
+          SORIDRAW_PROBE_WORKER: https://soridraw-explore-preview.andrawing1212.workers.dev
+          SORIDRAW_PROBE_OUTPUT: release-044-preview-like-proof.json
+        run: |
+          set -euo pipefail
+          node scripts/release-044-auth-like-probe.mjs
+          node -e "const x=require('./release-044-preview-like-proof.json'); if(!x.ok||x.measuredNormalLike.reads!==1||x.measuredNormalLike.writes!==3||!x.feedR2RoundTrip||!x.restoredToUnliked) process.exit(1)"
+          echo 'STAGE_B_PREVIEW_LIKE_MEASUREMENT=PASS'
+
+      - name: Preserve verified PREVIEW measurement proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .github
+          cp release-044-preview-like-proof.json .github/release-044-preview-like-proof.json
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add .github/release-044-preview-like-proof.json
+          git commit -m 'test: record 044 PREVIEW like cost proof'
+          git push origin HEAD:release-044-explore-like-cost-parity
+          echo 'STAGE_B_PROOF_PUSH=PASS'

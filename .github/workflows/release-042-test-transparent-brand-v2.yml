@@ -1,0 +1,158 @@
+name: SORIDRAW 042 TEST Transparent Brand v2
+
+on:
+  push:
+    branches: [release-042-test-transparent-brand]
+    paths:
+      - '.github/workflows/release-042-test-transparent-brand-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-042-test-transparent-brand
+  cancel-in-progress: false
+
+jobs:
+  deploy-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MAIN_BASE: edae66666b88f4fa80d2a80e49c2b42c55e71214
+      PREVIEW_BASE: 3a7de5fe6afa90833acbda233aff78c549eb9183
+      FIREBASE_PROJECT: soridraw
+    steps:
+      - name: Checkout release controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Recover verified TEST source
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d .deploy/042-test-source.b64 > "$RUNNER_TEMP/test-blue-source.png"
+          echo 'e8598062a9ca0322a1c29c05790617435487c2f8c93abbf828d54b0fd780db8d  '"$RUNNER_TEMP/test-blue-source.png" | sha256sum -c -
+          cp .deploy/042-apply.py "$RUNNER_TEMP/042-apply.py"
+          echo 'SOURCE_TEST_042=PASS'
+
+      - name: Checkout guarded main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main preview --quiet
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          git checkout -B test-042-work origin/main
+
+      - name: Apply TEST 042
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet pillow
+          python "$RUNNER_TEMP/042-apply.py"
+          grep -F 'SORIDRAW(T)' public/manifest.test.json
+          grep -F 'soridraw-app-test-042-512.png' public/manifest.test.json
+          grep -F 'soridraw-favicon-test-042.png' index.html
+          grep -F 'soridraw-test-042.ico' index.html
+          grep -F '"042"' public/app-version.json
+          grep -F "CURRENT_APP_VERSION = '042'" src/services/appUpdateNotice.ts
+
+      - name: Validate TEST 042
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet "$MAIN_BASE" -- src/App.tsx
+          git add index.html src/main.tsx src/services/appUpdateNotice.ts public/app-version.json public/manifest.test.json public/brand/soridraw-app-test-042.png public/brand/soridraw-app-test-042-256.png public/brand/soridraw-app-test-042-512.png public/brand/soridraw-favicon-test-042.png public/brand/soridraw-test-042.ico
+          git diff --cached --name-only | sort > "$RUNNER_TEMP/changed.txt"
+          printf '%s\n' \
+            index.html \
+            public/app-version.json \
+            public/brand/soridraw-app-test-042-256.png \
+            public/brand/soridraw-app-test-042-512.png \
+            public/brand/soridraw-app-test-042.png \
+            public/brand/soridraw-favicon-test-042.png \
+            public/brand/soridraw-test-042.ico \
+            public/manifest.test.json \
+            src/main.tsx \
+            src/services/appUpdateNotice.ts | sort > "$RUNNER_TEMP/allowed.txt"
+          diff -u "$RUNNER_TEMP/allowed.txt" "$RUNNER_TEMP/changed.txt"
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          echo 'VALIDATE_TEST_042=PASS'
+
+      - name: Commit main for TEST
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git commit -m 'feat(test): add update notice and transparent blue brand'
+          FINAL_SHA="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          git push origin HEAD:refs/heads/main
+          echo "FINAL_SHA=$FINAL_SHA" >> "$GITHUB_ENV"
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase TEST
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive
+          echo 'FIREBASE_TEST_042=PASS'
+
+      - name: Verify live TEST
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin='https://test.soridraw.com'
+          for attempt in $(seq 1 15); do
+            curl -fsS -H 'Cache-Control: no-cache' "$origin/app-version.json?t=$attempt" -o "$RUNNER_TEMP/version.json" || true
+            grep -Fq '042' "$RUNNER_TEMP/version.json" && break
+            sleep 4
+          done
+          grep -Fq '042' "$RUNNER_TEMP/version.json"
+          curl -fsS -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/live-index.html"
+          grep -Fq 'SORIDRAW(T)' "$RUNNER_TEMP/live-index.html"
+          grep -Fq 'soridraw-favicon-test-042.png' "$RUNNER_TEMP/live-index.html"
+          curl -fsS -H 'Cache-Control: no-cache' "$origin/manifest.test.json?t=042" -o "$RUNNER_TEMP/live-manifest.json"
+          cmp public/manifest.test.json "$RUNNER_TEMP/live-manifest.json"
+          for f in soridraw-app-test-042.png soridraw-app-test-042-256.png soridraw-app-test-042-512.png soridraw-favicon-test-042.png soridraw-test-042.ico; do
+            curl -fsS -H 'Cache-Control: no-cache' "$origin/brand/$f?t=042" -o "$RUNNER_TEMP/$f"
+            cmp "public/brand/$f" "$RUNNER_TEMP/$f"
+          done
+          curl -fsS -H 'Cache-Control: no-cache' 'https://soridraw.com/' -o "$RUNNER_TEMP/prod-index.html"
+          if grep -Fq 'soridraw-app-test-042' "$RUNNER_TEMP/prod-index.html"; then
+            echo 'PRODUCTION_CHANGED_UNEXPECTEDLY' >&2
+            exit 1
+          fi
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          echo 'LIVE_TEST_042=PASS'
+
+      - name: Package TEST ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipname="SORIDRAW_042_TEST_${FINAL_SHA:0:8}_2026-09-08.zip"
+          git archive --format=zip --output="$RUNNER_TEMP/$zipname" "$FINAL_SHA"
+          unzip -t "$RUNNER_TEMP/$zipname" >/dev/null
+          echo "ZIP_PATH=$RUNNER_TEMP/$zipname" >> "$GITHUB_ENV"
+
+      - name: Upload TEST ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_042_TEST_${{ env.FINAL_SHA }}
+          path: ${{ env.ZIP_PATH }}
+          if-no-files-found: error

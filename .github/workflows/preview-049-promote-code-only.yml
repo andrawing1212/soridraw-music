@@ -1,0 +1,89 @@
+name: SORIDRAW 049 Promote Validated Code to PREVIEW
+
+on:
+  push:
+    branches:
+      - preview-049-explore-feed-integrity-final2
+    paths:
+      - .github/workflows/preview-049-promote-code-only.yml
+
+permissions:
+  contents: write
+
+jobs:
+  promote_preview_code:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 20
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Guard exact PREVIEW baseline
+        run: |
+          set -euo pipefail
+          git fetch origin preview preview-049-explore-feed-integrity-final2
+          test "$(git rev-parse origin/preview)" = "0bbbad0c26a986041e0d260ff49b3bb023892928"
+          test "$(git rev-parse origin/preview-049-explore-feed-integrity-final2)" = "$(git rev-parse HEAD)"
+          echo 'PREVIEW_BASELINE_GUARD=PASS'
+
+      - name: Build exact PREVIEW 049 candidate
+        run: |
+          set -euo pipefail
+          work_ref="origin/preview-049-explore-feed-integrity-final2"
+          git checkout -B preview-candidate origin/preview
+          for path in \
+            src/pages/ExplorePage.tsx \
+            src/services/exploreSessionCache.ts \
+            src/components/explore/explore.css \
+            src/services/appUpdateNotice.ts \
+            public/app-version.json \
+            cloudflare/explore-worker/patches/030-explore-feed-integrity-self-heal.mjs \
+            scripts/verify-049-explore-feed-integrity.mjs
+          do
+            mkdir -p "$(dirname "$path")"
+            git show "$work_ref:$path" > "$path"
+          done
+          test "$(node -p "require('./public/app-version.json').version")" = '049'
+          echo 'PREVIEW_049_CANDIDATE=PASS'
+
+      - name: Install and validate
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          node --check cloudflare/explore-worker/patches/030-explore-feed-integrity-self-heal.mjs
+          npx tsc --noEmit
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-045-explore-active-revalidation.mjs
+          node scripts/verify-046-catalog-stale-revision-rebuild.mjs
+          node scripts/verify-047-stale-chunk-recovery.mjs
+          node scripts/verify-048-explore-public-profile-parity.mjs
+          node scripts/verify-049-explore-feed-integrity.mjs
+          node scripts/verify-runtime-environment-parity-028.mjs
+          npm run build
+          echo 'PREVIEW_049_VALIDATION=PASS'
+
+      - name: Commit and push PREVIEW code only
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Preview Bot'
+          git config user.email 'soridraw-preview@users.noreply.github.com'
+          git add \
+            src/pages/ExplorePage.tsx \
+            src/services/exploreSessionCache.ts \
+            src/components/explore/explore.css \
+            src/services/appUpdateNotice.ts \
+            public/app-version.json \
+            cloudflare/explore-worker/patches/030-explore-feed-integrity-self-heal.mjs \
+            scripts/verify-049-explore-feed-integrity.mjs
+          git commit -m 'feat(preview): Explore feed integrity self-heal 049'
+          git push origin HEAD:preview
+          echo "PREVIEW_049_COMMIT=$(git rev-parse HEAD)"
+          echo 'FIREBASE_DEPLOY=false'
+          echo 'CLOUDFLARE_DEPLOY=false'
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'FIRESTORE_RULES_CHANGED=false'

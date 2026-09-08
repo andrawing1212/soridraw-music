@@ -1,0 +1,70 @@
+name: SORIDRAW 049 Explore Feed Integrity Validate
+
+on:
+  push:
+    branches:
+      - preview-049-explore-feed-integrity-final2
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preview-049-explore-feed-integrity
+  cancel-in-progress: false
+
+jobs:
+  validate_and_apply:
+    if: ${{ !contains(github.event.head_commit.message, '[049-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview-049-explore-feed-integrity-final2
+          fetch-depth: 5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply 049 client changes
+        run: |
+          set -euo pipefail
+          node scripts/apply-049-explore-feed-integrity-client.mjs
+          node --check cloudflare/explore-worker/patches/030-explore-feed-integrity-self-heal.mjs
+          node --check scripts/verify-049-explore-feed-integrity.mjs
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-045-explore-active-revalidation.mjs
+          node scripts/verify-046-catalog-stale-revision-rebuild.mjs
+          node scripts/verify-047-stale-chunk-recovery.mjs
+          node scripts/verify-048-explore-public-profile-parity.mjs
+          node scripts/verify-049-explore-feed-integrity.mjs
+          node scripts/verify-runtime-environment-parity-028.mjs
+          npm run build
+          echo 'SORIDRAW_049_VALIDATION=PASS'
+
+      - name: Commit validated 049 work branch
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Preview Bot'
+          git config user.email 'soridraw-preview@users.noreply.github.com'
+          git add \
+            src/pages/ExplorePage.tsx \
+            src/services/exploreSessionCache.ts \
+            src/components/explore/explore.css \
+            src/services/appUpdateNotice.ts \
+            public/app-version.json
+          if git diff --cached --quiet; then
+            echo 'NO_SOURCE_CHANGES_TO_COMMIT=true'
+            exit 0
+          fi
+          git commit -m 'feat(preview): complete Explore feed integrity 049 [049-applied]'
+          git push origin HEAD:preview-049-explore-feed-integrity-final2

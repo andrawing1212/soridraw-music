@@ -4,27 +4,18 @@
   "description": "세상에 단 하나뿐인 노래의 완성!",
   "start_url": "/",
   "display": "standalone",
-  "display_override": [
-    "window-controls-overlay",
-    "standalone"
-  ],
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#0f0f0f",
   "theme_color": "#0f0f0f",
   "icons": [
     {
-      "src": "/brand/soridraw-app-preview-041.png",
+      "src": "/brand/soridraw-app-preview-038.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/brand/soridraw-app-preview-041-256.png",
-      "sizes": "256x256",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/brand/soridraw-app-preview-041-512.png",
+      "src": "/brand/soridraw-app-preview-038-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"

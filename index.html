@@ -15,8 +15,8 @@
     <!-- 037: environment-specific names and cache-busted PNG brand assets -->
     <link id="soridraw-favicon" rel="icon" type="image/png" sizes="96x96" href="/brand/soridraw-favicon-preview.png?v=037" />
     <link id="soridraw-shortcut-icon" rel="shortcut icon" type="image/png" href="/brand/soridraw-favicon-preview.png?v=037" />
-    <link id="soridraw-apple-touch-icon" rel="apple-touch-icon" sizes="192x192" href="/brand/soridraw-app-preview-038.png" />
-    <link id="soridraw-manifest" rel="manifest" href="/manifest.preview.038.json" crossorigin="use-credentials" />
+    <link id="soridraw-apple-touch-icon" rel="apple-touch-icon" sizes="192x192" href="/brand/soridraw-app-preview-039.png" />
+    <link id="soridraw-manifest" rel="manifest" href="/manifest.preview.json" crossorigin="use-credentials" />
     <script>
       (function() {
         var host = String(window.location.hostname || '').toLowerCase();
@@ -47,8 +47,8 @@
         var faviconHref = '/brand/soridraw-favicon-' + environment + '.png?v=037';
         if (favicon) favicon.href = faviconHref;
         if (shortcutIcon) shortcutIcon.href = faviconHref;
-        if (appleTouchIcon) appleTouchIcon.href = environment === 'preview' ? '/brand/soridraw-app-preview-038.png' : '/brand/soridraw-app-' + environment + '.png?v=037';
-        if (manifest) manifest.href = environment === 'preview' ? '/manifest.preview.038.json' : '/manifest.' + environment + '.json?v=037';
+        if (appleTouchIcon) appleTouchIcon.href = environment === 'preview' ? '/brand/soridraw-app-preview-039.png' : '/brand/soridraw-app-' + environment + '.png?v=037';
+        if (manifest) manifest.href = environment === 'preview' ? '/manifest.preview.json' : '/manifest.' + environment + '.json?v=037';
 
         document.documentElement.dataset.soridrawEnvironment = environment;
         document.documentElement.dataset.soridrawAppName = appName;

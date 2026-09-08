@@ -41,10 +41,12 @@ jobs:
               const subject = `__soridraw_044_runtime_probe_${suffix}__`;
               const action = 'like044runtimeprobe';
               const trackId = `__soridraw_044_runtime_track_${suffix}__`;
+              const ownerUid = `__soridraw_044_runtime_owner_${suffix}__`;
               const now = Date.now();
               const windowStart = Math.floor(now / 60000) * 60000;
               let rateCount = null;
               let likeCount = null;
+              let parentCreated = false;
               let failure = null;
 
               try {
@@ -59,6 +61,31 @@ jobs:
                 rateCount = Number(rate?.results?.[0]?.count || 0);
                 if (rateCount !== 1) throw new Error(`rate RETURNING count=${rateCount}`);
 
+                await env.DB.prepare(`
+                  INSERT INTO tracks (
+                    id, owner_uid,
+                    source_type, source_id, source_parent_id, legacy_global_id,
+                    source_subtrack_key, source_subtrack_index, source_subtrack_id,
+                    title, description, cover_url, duration_seconds,
+                    lyrics, style, prompt,
+                    suno_url_primary, suno_url_secondary, search_text,
+                    allow_next_song_apply, allow_follower_save, profile_pinned,
+                    share_schema_version, share_payload_json, primary_genre,
+                    is_public, status, published_at, created_at, updated_at
+                  ) VALUES (
+                    ?, ?,
+                    'diagnostic', ?, NULL, NULL,
+                    NULL, NULL, NULL,
+                    'SORIDRAW 044 runtime probe', '', '', 0,
+                    '', '', '',
+                    '', '', 'soridraw 044 runtime probe',
+                    0, 0, 0,
+                    0, NULL, NULL,
+                    0, 'private', NULL, ?, ?
+                  )
+                `).bind(trackId, ownerUid, trackId, now, now).run();
+                parentCreated = true;
+
                 const stats = await env.DB.prepare(`
                   INSERT INTO track_stats (track_id, like_count, comment_count, play_count, updated_at)
                   VALUES (?, ?, 0, 0, ?)
@@ -72,15 +99,17 @@ jobs:
               } catch (error) {
                 failure = String(error?.stack || error?.message || error);
               } finally {
-                await env.DB.prepare(`DELETE FROM api_rate_limits WHERE subject = ? AND action = ?`).bind(subject, action).run().catch(() => {});
                 await env.DB.prepare(`DELETE FROM track_stats WHERE track_id = ?`).bind(trackId).run().catch(() => {});
+                await env.DB.prepare(`DELETE FROM tracks WHERE id = ? AND owner_uid = ?`).bind(trackId, ownerUid).run().catch(() => {});
+                await env.DB.prepare(`DELETE FROM api_rate_limits WHERE subject = ? AND action = ?`).bind(subject, action).run().catch(() => {});
               }
 
               const rateLeft = await env.DB.prepare(`SELECT COUNT(*) AS n FROM api_rate_limits WHERE subject = ? AND action = ?`).bind(subject, action).first();
               const statsLeft = await env.DB.prepare(`SELECT COUNT(*) AS n FROM track_stats WHERE track_id = ?`).bind(trackId).first();
-              const cleanupOk = Number(rateLeft?.n || 0) === 0 && Number(statsLeft?.n || 0) === 0;
-              const ok = !failure && rateCount === 1 && likeCount === 1 && cleanupOk;
-              return json({ ok, rateCount, likeCount, cleanupOk, failure }, ok ? 200 : 500);
+              const trackLeft = await env.DB.prepare(`SELECT COUNT(*) AS n FROM tracks WHERE id = ?`).bind(trackId).first();
+              const cleanupOk = Number(rateLeft?.n || 0) === 0 && Number(statsLeft?.n || 0) === 0 && Number(trackLeft?.n || 0) === 0;
+              const ok = !failure && rateCount === 1 && parentCreated && likeCount === 1 && cleanupOk;
+              return json({ ok, rateCount, parentCreated, likeCount, cleanupOk, failure }, ok ? 200 : 500);
             },
           };
           WORKER
@@ -118,7 +147,7 @@ jobs:
             sleep 2
           done
           test "$success" = 1
-          node -e "const x=require(process.env.RUNNER_TEMP+'/runtime044.json'); console.log('[runtime044]',JSON.stringify(x)); if(!x.ok||x.rateCount!==1||x.likeCount!==1||!x.cleanupOk) process.exit(1)"
+          node -e "const x=require(process.env.RUNNER_TEMP+'/runtime044.json'); console.log('[runtime044]',JSON.stringify(x)); if(!x.ok||x.rateCount!==1||!x.parentCreated||x.likeCount!==1||!x.cleanupOk) process.exit(1)"
 
           cleanup_worker
           trap - EXIT

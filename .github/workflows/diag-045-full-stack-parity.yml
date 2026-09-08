@@ -1,0 +1,159 @@
+name: SORIDRAW 045 Full Stack Parity Audit
+
+on:
+  push:
+    branches: [diag-045-full-stack-parity-20260908]
+    paths: ['.github/workflows/diag-045-full-stack-parity.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CF_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      FIREBASE_PROJECT: soridraw
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Source and live app parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          echo "PREVIEW_HEAD=$(git rev-parse origin/preview)"
+          echo "MAIN_HEAD=$(git rev-parse origin/main)"
+          echo '=== RUNTIME_SOURCE_DIFF ==='
+          git diff --name-only origin/main origin/preview -- src functions cloudflare firestore.rules database.rules.json | sort || true
+          echo '=== LIVE_APP_VERSIONS ==='
+          for spec in 'preview|https://preview.soridraw.com' 'test|https://test.soridraw.com' 'production|https://soridraw.com'; do
+            IFS='|' read -r env host <<< "$spec"
+            body="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "$host/app-version.json?audit=045-full-stack")"
+            printf '%s=%s\n' "$env" "$(echo "$body" | tr -d '\n ')"
+          done
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Inspect Cloudflare live workers and bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          cat > "$RUNNER_TEMP/cf-audit.mjs" <<'NODE'
+          import crypto from 'node:crypto';
+          const account=process.env.CF_ACCOUNT_ID;
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          const workers=[
+            {family:'explore',env:'preview',name:'soridraw-explore-preview'},
+            {family:'explore',env:'test',name:'soridraw-explore-test'},
+            {family:'explore',env:'production',name:'soridraw-explore-api'},
+            {family:'media',env:'preview',name:'soridraw-media-preview'},
+            {family:'media',env:'test',name:'soridraw-media-test'},
+            {family:'media',env:'production',name:'soridraw-media'},
+          ];
+          const headers={Authorization:`Bearer ${token}`,Accept:'application/json'};
+          async function api(path){
+            const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}${path}`,{headers});
+            const j=await r.json();
+            if(!r.ok||j.success===false) throw new Error(`${path} HTTP ${r.status}: ${JSON.stringify(j.errors||j).slice(0,500)}`);
+            return j.result;
+          }
+          const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
+          function bindingSummary(settings){
+            const arr=Array.isArray(settings?.bindings)?settings.bindings:[];
+            return arr.map(b=>({name:String(b.name||''),type:String(b.type||''),target:String(b.service||b.bucket_name||b.database_name||b.namespace_id||b.id||'')})).sort((a,b)=>a.name.localeCompare(b.name));
+          }
+          async function activeVersion(name){
+            const d=await api(`/workers/scripts/${name}/deployments`);
+            const dep=(d?.deployments||d||[])[0];
+            const v=[...(dep?.versions||[])].sort((a,b)=>Number(b?.percentage||0)-Number(a?.percentage||0))[0];
+            return String(v?.version_id||'');
+          }
+          async function sourceHash(name,version){
+            if(!version) return '';
+            try{
+              const d=await api(`/workers/workers/${name}/versions/${version}?include=modules`);
+              const mods=Array.isArray(d?.modules)?d.modules:[];
+              const main=mods.find(x=>x.name===(d.main_module||mods[0]?.name))||mods[0];
+              const text=main?.content_base64?Buffer.from(main.content_base64,'base64').toString('utf8'):'';
+              return text?sha(text):'';
+            }catch{return '';}
+          }
+          const results=[];
+          for(const w of workers){
+            const [settings,version]=await Promise.all([api(`/workers/scripts/${w.name}/settings`),activeVersion(w.name)]);
+            const sourceSha=await sourceHash(w.name,version);
+            results.push({...w,version,sourceSha,bindings:bindingSummary(settings)});
+          }
+          console.log('=== CLOUDFLARE_WORKERS ===');
+          for(const r of results){
+            console.log(`${r.family}/${r.env} worker=${r.name} version=${r.version} source_sha=${r.sourceSha||'unavailable'}`);
+            for(const b of r.bindings) console.log(`  binding ${b.name} type=${b.type} target=${b.target}`);
+          }
+          for(const family of ['explore','media']){
+            const rows=results.filter(x=>x.family===family);
+            const hashes=new Set(rows.map(x=>x.sourceSha).filter(Boolean));
+            console.log(`${family.toUpperCase()}_SOURCE_HASH_PARITY=${hashes.size===1?'PASS':'FAIL'}`);
+          }
+          const prodExplore=results.find(x=>x.family==='explore'&&x.env==='production');
+          const names=new Set(prodExplore?.bindings.map(x=>x.name)||[]);
+          console.log(`EXPLORE_PROD_MIRROR_TEST=${names.has('EXPLORE_MIRROR_TEST')?'PRESENT':'MISSING'}`);
+          console.log(`EXPLORE_PROD_MIRROR_PREVIEW=${names.has('EXPLORE_MIRROR_PREVIEW')?'PRESENT':'MISSING'}`);
+          NODE
+          node "$RUNNER_TEMP/cf-audit.mjs"
+
+      - name: Inspect Explore public runtime divergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== EXPLORE_PUBLIC_RUNTIME ==='
+          for spec in \
+            'preview|https://soridraw-explore-preview.andrawing1212.workers.dev|https://preview.soridraw.com' \
+            'test|https://soridraw-explore-test.andrawing1212.workers.dev|https://test.soridraw.com' \
+            'production|https://soridraw-explore-api.andrawing1212.workers.dev|https://soridraw.com'; do
+            IFS='|' read -r env base origin <<< "$spec"
+            rev_code="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/$env-rev.json" -w '%{http_code}' -H "Origin: $origin" -H 'Cache-Control: no-cache' "$base/v1/feed/revision?audit=045")"
+            feed_code="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/$env-feed.json" -w '%{http_code}' -H "Origin: $origin" -H 'Cache-Control: no-cache' "$base/v1/feed?sort=latest&limit=3&audit=045")"
+            echo "$env revision_http=$rev_code revision=$(tr -d '\n ' < "$RUNNER_TEMP/$env-rev.json" | head -c 500)"
+            echo "$env feed_http=$feed_code feed_sha=$(sha256sum "$RUNNER_TEMP/$env-feed.json" | awk '{print $1}') bytes=$(wc -c < "$RUNNER_TEMP/$env-feed.json")"
+          done
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Firebase topology audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== FIREBASE_HOSTING_SITES ==='
+          npx --yes firebase-tools@latest hosting:sites:list --project "$FIREBASE_PROJECT" --json > "$RUNNER_TEMP/sites.json"
+          node - "$RUNNER_TEMP/sites.json" <<'NODE'
+          const fs=require('fs'); const p=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const arrays=[p?.result?.sites,p?.result,p?.sites,p]; const sites=arrays.find(Array.isArray)||[];
+          for(const s of sites){const raw=String(s?.site||s?.siteId||s?.id||s?.name||''); const id=raw.includes('/')?raw.split('/').filter(Boolean).pop():raw; console.log(`site=${id}`)}
+          NODE
+          echo '=== FIREBASE_FUNCTIONS ==='
+          npx --yes firebase-tools@latest functions:list --project "$FIREBASE_PROJECT" --json > "$RUNNER_TEMP/functions.json" || true
+          node - "$RUNNER_TEMP/functions.json" <<'NODE'
+          const fs=require('fs'); let p={}; try{p=JSON.parse(fs.readFileSync(process.argv[2],'utf8'))}catch{}
+          const arr=p?.result||p?.functions||[]; if(Array.isArray(arr)) for(const f of arr) console.log(`function=${f?.id||f?.name||f?.entryPoint||'unknown'}`)
+          NODE
+          echo 'FIREBASE_PROJECT_SHARED=soridraw'
+
+      - name: Static parity guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-runtime-environment-parity-028.mjs
+          echo 'STATIC_RUNTIME_ENV_PARITY=PASS'
+          echo 'AUDIT_READ_ONLY=PASS'

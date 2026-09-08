@@ -1,0 +1,125 @@
+name: SORIDRAW 045 PREVIEW Explore Active Revalidation
+
+on:
+  push:
+    branches: [preview-045-explore-sync-recovery]
+    paths: ['.github/workflows/preview-045-explore-active-revalidation.yml']
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: soridraw-045-preview-active-revalidation
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PREVIEW_BASE: 4ba0e692a533a3bad0d1eee9950d25bc21934626
+      MAIN_BASE: 2fadb2dc666fadecbbbd93e92cfb104ed567f233
+      FIREBASE_PROJECT: soridraw
+    steps:
+      - name: Checkout 045 controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve 045 patch and verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .deploy/apply-045-explore-active-revalidation.py "$RUNNER_TEMP/apply-045.py"
+          cp scripts/verify-045-explore-active-revalidation.mjs "$RUNNER_TEMP/verify-045.mjs"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: npm
+
+      - name: Guard exact PREVIEW and main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=045-guard' | tr -d '\r\n ')" = '{"version":"044"}'
+          echo 'GUARD_045=PASS'
+
+      - name: Apply and validate PREVIEW 045
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -B preview-045-work origin/preview
+          python3 "$RUNNER_TEMP/apply-045.py"
+          cp "$RUNNER_TEMP/verify-045.mjs" scripts/verify-045-explore-active-revalidation.mjs
+          git diff --name-only "$PREVIEW_BASE" | sort > "$RUNNER_TEMP/changed.txt"
+          printf '%s\n' \
+            public/app-version.json \
+            scripts/verify-045-explore-active-revalidation.mjs \
+            src/pages/ExplorePage.tsx \
+            src/services/appUpdateNotice.ts | sort > "$RUNNER_TEMP/allowed.txt"
+          diff -u "$RUNNER_TEMP/allowed.txt" "$RUNNER_TEMP/changed.txt"
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          node scripts/verify-045-explore-active-revalidation.mjs
+          grep -R -q 'pointerdown' dist/assets
+          grep -R -q '/v1/feed-revision' dist/assets
+          git diff --check
+          echo 'VALIDATE_045=PASS'
+
+      - name: Commit and push PREVIEW 045
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add public/app-version.json scripts/verify-045-explore-active-revalidation.mjs src/pages/ExplorePage.tsx src/services/appUpdateNotice.ts
+          git commit -m 'fix(preview): revalidate active Explore cache on user activity 045'
+          FINAL_SHA="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          git push origin HEAD:refs/heads/preview
+          echo "FINAL_SHA=$FINAL_SHA" >> "$GITHUB_ENV"
+          echo "PREVIEW_045_PUSH=PASS SHA=$FINAL_SHA"
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW and verify live
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          for host in https://soridraw-preview.web.app https://preview.soridraw.com; do
+            ok=''
+            for i in $(seq 1 20); do
+              curl -fsS -H 'Cache-Control: no-cache' "$host/app-version.json?t=045-$i" -o "$RUNNER_TEMP/version.json" || true
+              if grep -Fq '045' "$RUNNER_TEMP/version.json"; then ok=yes; break; fi
+              sleep 3
+            done
+            test "$ok" = yes
+          done
+          curl -fsS -D "$RUNNER_TEMP/revision.head" -H 'Origin: https://preview.soridraw.com' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed-revision?sort=latest' -o "$RUNNER_TEMP/revision.json"
+          grep -qi '^x-soridraw-d1-read-queries: 0' "$RUNNER_TEMP/revision.head"
+          grep -qi '^x-soridraw-d1-write-queries: 0' "$RUNNER_TEMP/revision.head"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$FINAL_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          echo 'PREVIEW_LIVE_045=PASS'
+          echo 'REVISION_D1_ZERO=PASS'
+          echo 'MAIN_UNCHANGED=PASS'
+          echo 'WORKER_CHANGED=false'
+          echo 'FUNCTIONS_CHANGED=false'

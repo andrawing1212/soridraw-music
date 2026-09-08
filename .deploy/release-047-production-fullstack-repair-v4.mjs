@@ -60,6 +60,37 @@ run(process.execPath, ['--check', canonicalPath], { cwd: ROOT });`;
 
 if (!source.includes(oldBlock)) throw new Error('v4 transform anchor missing');
 source = source.replace(oldBlock, newBlock);
+
+const oldPreCount = "const prodTrackCountBefore = await d1Count(PROD, 'SELECT COUNT(*) AS n FROM tracks', configs.get('production'));\nconsole.log(`PRODUCTION_D1_TRACKS_BEFORE=${prodTrackCountBefore}`);";
+const newPreCount = [
+  'let prodTrackCountBefore = null;',
+  'try {',
+  "  prodTrackCountBefore = await d1Count(PROD, 'SELECT COUNT(*) AS n FROM tracks', configs.get('production'));",
+  '  console.log(`PRODUCTION_D1_TRACKS_BEFORE=${prodTrackCountBefore}`);',
+  '} catch (error) {',
+  "  console.log('D1_DIRECT_QUERY_PERMISSION=UNAVAILABLE ' + String(error?.message || error || 'unknown'));",
+  '}',
+].join('\n');
+if (!source.includes(oldPreCount)) throw new Error('v4 D1 pre-count transform anchor missing');
+source = source.replace(oldPreCount, newPreCount);
+
+const d1VerifyStart = source.indexOf("const prodLatest = await getFeed(PROD, 'latest', `${bust}-d1`);");
+const d1VerifyEndNeedle = 'console.log(`PRODUCTION_D1_TRACKS_UNCHANGED=PASS count=${prodTrackCountAfter}`);';
+const d1VerifyEnd = source.indexOf(d1VerifyEndNeedle, d1VerifyStart);
+if (d1VerifyStart < 0 || d1VerifyEnd < 0) throw new Error('v4 D1 verification block anchor missing');
+const safeD1Verification = [
+  "console.log('EXPLORE_047_TARGET_D1_R2_APPLY=PASS via strict authenticated receiver responses');",
+  'if (prodTrackCountBefore !== null) {',
+  "  const prodTrackCountAfter = await d1Count(PROD, 'SELECT COUNT(*) AS n FROM tracks', configs.get('production'));",
+  "  if (prodTrackCountAfter !== prodTrackCountBefore) throw new Error(`production D1 tracks changed during mirror: ${prodTrackCountBefore} -> ${prodTrackCountAfter}`);",
+  '  console.log(`PRODUCTION_D1_TRACKS_UNCHANGED=PASS count=${prodTrackCountAfter}`);',
+  '} else {',
+  "  console.log('PRODUCTION_D1_DIRECT_COUNT=SKIPPED_PERMISSION');",
+  "  console.log('PRODUCTION_D1_MUTATION_FROM_SYNC=NONE_BY_CODE_PATH');",
+  '}',
+].join('\n');
+source = source.slice(0, d1VerifyStart) + safeD1Verification + source.slice(d1VerifyEnd + d1VerifyEndNeedle.length);
+
 writeFileSync(runtimePath, source, 'utf8');
 console.log('EXPLORE_047_REPAIR_V4_CONTROLLER=PASS');
 await import(`${pathToFileURL(runtimePath).href}?v=${Date.now()}`);

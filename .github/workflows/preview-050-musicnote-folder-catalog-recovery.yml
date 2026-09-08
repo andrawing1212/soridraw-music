@@ -1,0 +1,172 @@
+name: SORIDRAW 050 Music Note Folder Catalog Recovery
+
+on:
+  push:
+    branches: [preview-050-musicnote-folder-catalog-recovery]
+    paths:
+      - '.github/workflows/preview-050-musicnote-folder-catalog-recovery.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  recover_preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Guard exact PREVIEW baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main
+          test "$(git rev-parse HEAD)" = "0c19b23abfa074f69aa40aec4ba9a6069b8cdbf6"
+          test "$(git rev-parse origin/preview)" = "0c19b23abfa074f69aa40aec4ba9a6069b8cdbf6"
+          test "$(node -p "require('./public/app-version.json').version")" = "049"
+          echo 'PREVIEW_050_BASELINE_GUARD=PASS'
+
+      - name: Apply minimal 050 recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          required_fields = [
+              'noteFolderId', 'myNoteFolderId', 'favoriteFolderId',
+              'sharedNoteFolderId', 'sharedNoteFolder', 'noteSharedFolderId',
+              'sharedNoteShareId', 'isSharedMusicNote', 'sharedReadOnly',
+              'sourceType', 'originalFavoriteId',
+          ]
+          field_line = "  'noteFolderId', 'myNoteFolderId', 'favoriteFolderId', 'sharedNoteFolderId', 'sharedNoteFolder', 'noteSharedFolderId',\n  'sharedNoteShareId', 'isSharedMusicNote', 'sharedReadOnly', 'sourceType', 'originalFavoriteId',\n"
+
+          client_path = Path('src/lib/userDataEngine.ts')
+          client = client_path.read_text(encoding='utf-8')
+          anchor = "  'color', 'favoriteColor', 'noteColor', 'folderId', 'folderIds', 'musicNoteFolderIds',\n"
+          assert client.count(anchor) == 1, 'client catalog field anchor changed'
+          assert not any((f"'{field}'" in client[client.index('const MUSIC_NOTE_SUMMARY_KEYS'):client.index('const LIBRARY_SUMMARY_KEYS')]) for field in required_fields), '050 fields already partially present in client catalog block'
+          client = client.replace(anchor, anchor + field_line, 1)
+
+          old_const = "const CATALOG_LOCAL_CACHE_GENERATION = 5 as const;\n"
+          new_const = old_const + "const MUSIC_NOTE_LOCAL_CACHE_GENERATION_050 = 6 as const;\n"
+          assert client.count(old_const) == 1 and 'MUSIC_NOTE_LOCAL_CACHE_GENERATION_050' not in client
+          client = client.replace(old_const, new_const, 1)
+
+          old_read = "if (record?.cacheGeneration !== CATALOG_LOCAL_CACHE_GENERATION) {"
+          new_read = "if (record?.cacheGeneration !== (kind === 'musicNote' ? MUSIC_NOTE_LOCAL_CACHE_GENERATION_050 : CATALOG_LOCAL_CACHE_GENERATION)) {"
+          assert client.count(old_read) == 1
+          client = client.replace(old_read, new_read, 1)
+
+          old_write = "key, uid, kind, cacheGeneration: CATALOG_LOCAL_CACHE_GENERATION, snapshot,"
+          new_write = "key, uid, kind, cacheGeneration: kind === 'musicNote' ? MUSIC_NOTE_LOCAL_CACHE_GENERATION_050 : CATALOG_LOCAL_CACHE_GENERATION, snapshot,"
+          assert client.count(old_write) == 1
+          client = client.replace(old_write, new_write, 1)
+          client_path.write_text(client, encoding='utf-8')
+
+          worker_path = Path('cloudflare/media-worker/src/index.js')
+          worker = worker_path.read_text(encoding='utf-8')
+          assert worker.count(anchor) == 1, 'worker catalog field anchor changed'
+          worker_block = worker[worker.index('const MUSIC_NOTE_CATALOG_FIELDS'):worker.index('const LIBRARY_CATALOG_FIELDS')]
+          assert not any((f"'{field}'" in worker_block) for field in required_fields), '050 fields already partially present in worker catalog block'
+          worker = worker.replace(anchor, anchor + field_line, 1)
+
+          old_keys = "const catalogObjectKey = (uid, kind) => `catalog/v4/${encodeURIComponent(uid)}/${kind}.json`;\nconst catalogJournalKey = (uid, kind) => `catalog/v4/${encodeURIComponent(uid)}/${kind}/journal.json`;\nconst catalogCompactedBaseKey = (uid, kind, revision) => `catalog/v4/${encodeURIComponent(uid)}/${kind}/bases/${revision}.json`;"
+          new_keys = "const MUSIC_NOTE_CATALOG_STORAGE_GENERATION_050 = 'v5';\nconst catalogStorageGeneration = (kind) => kind === 'musicNote' ? MUSIC_NOTE_CATALOG_STORAGE_GENERATION_050 : 'v4';\nconst catalogObjectKey = (uid, kind) => `catalog/${catalogStorageGeneration(kind)}/${encodeURIComponent(uid)}/${kind}.json`;\nconst catalogJournalKey = (uid, kind) => `catalog/${catalogStorageGeneration(kind)}/${encodeURIComponent(uid)}/${kind}/journal.json`;\nconst catalogCompactedBaseKey = (uid, kind, revision) => `catalog/${catalogStorageGeneration(kind)}/${encodeURIComponent(uid)}/${kind}/bases/${revision}.json`;"
+          assert worker.count(old_keys) == 1 and 'MUSIC_NOTE_CATALOG_STORAGE_GENERATION_050' not in worker
+          worker = worker.replace(old_keys, new_keys, 1)
+          worker_path.write_text(worker, encoding='utf-8')
+
+          notice_path = Path('src/services/appUpdateNotice.ts')
+          notice = notice_path.read_text(encoding='utf-8')
+          assert notice.count("const CURRENT_APP_VERSION = '049';") == 1
+          notice_path.write_text(notice.replace("const CURRENT_APP_VERSION = '049';", "const CURRENT_APP_VERSION = '050';", 1), encoding='utf-8')
+
+          version_path = Path('public/app-version.json')
+          version = version_path.read_text(encoding='utf-8')
+          assert '"049"' in version and '"050"' not in version
+          version_path.write_text(version.replace('"049"', '"050"', 1), encoding='utf-8')
+
+          verify_path = Path('scripts/verify-050-musicnote-folder-catalog-recovery.mjs')
+          verify_path.write_text(r'''import fs from 'node:fs';
+
+const client = fs.readFileSync('src/lib/userDataEngine.ts', 'utf8');
+const worker = fs.readFileSync('cloudflare/media-worker/src/index.js', 'utf8');
+const favorites = fs.readFileSync('src/pages/FavoritesPage.tsx', 'utf8');
+const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8'));
+const required = [
+  'noteFolderId', 'myNoteFolderId', 'favoriteFolderId',
+  'sharedNoteFolderId', 'sharedNoteFolder', 'noteSharedFolderId',
+  'sharedNoteShareId', 'isSharedMusicNote', 'sharedReadOnly', 'sourceType', 'originalFavoriteId',
+];
+const clientBlock = client.slice(client.indexOf('const MUSIC_NOTE_SUMMARY_KEYS'), client.indexOf('const LIBRARY_SUMMARY_KEYS'));
+const workerBlock = worker.slice(worker.indexOf('const MUSIC_NOTE_CATALOG_FIELDS'), worker.indexOf('const LIBRARY_CATALOG_FIELDS'));
+for (const key of required) {
+  if (!clientBlock.includes(`'${key}'`)) throw new Error(`client missing ${key}`);
+  if (!workerBlock.includes(`'${key}'`)) throw new Error(`worker missing ${key}`);
+}
+for (const signal of ['noteFolderId || song.myNoteFolderId || song.favoriteFolderId || song.folderId', 'song.sharedNoteFolderId || song.sharedNoteFolder || song.noteSharedFolderId', 'song?.sharedReadOnly', 'song?.isSharedMusicNote', "song?.sourceType === 'shared_music_note'", 'song?.sharedNoteShareId']) {
+  if (!favorites.includes(signal)) throw new Error(`FavoritesPage filter contract changed: ${signal}`);
+}
+if (!client.includes('MUSIC_NOTE_LOCAL_CACHE_GENERATION_050 = 6')) throw new Error('client Music Note cache generation not isolated');
+if (!client.includes("kind === 'musicNote' ? MUSIC_NOTE_LOCAL_CACHE_GENERATION_050 : CATALOG_LOCAL_CACHE_GENERATION")) throw new Error('client per-kind cache generation missing');
+if (!worker.includes("MUSIC_NOTE_CATALOG_STORAGE_GENERATION_050 = 'v5'")) throw new Error('worker Music Note R2 generation missing');
+if (!worker.includes("kind === 'musicNote' ? MUSIC_NOTE_CATALOG_STORAGE_GENERATION_050 : 'v4'")) throw new Error('library R2 generation must remain v4');
+if (version.version !== '050') throw new Error('app version is not 050');
+console.log('VERIFY_050_MUSICNOTE_FOLDER_CATALOG_RECOVERY=PASS');
+console.log('MY_NOTE_CLASSIFICATION_FIELDS=PASS');
+console.log('SHARED_NOTE_CLASSIFICATION_FIELDS=PASS');
+console.log('MUSICNOTE_ONLY_LOCAL_CACHE_INVALIDATION=PASS');
+console.log('MUSICNOTE_ONLY_R2_REBUILD_NAMESPACE=PASS');
+console.log('LIBRARY_CATALOG_UNCHANGED=PASS');
+console.log('FAVORITES_PAGE_FILTER_LOGIC_UNCHANGED=PASS');
+''', encoding='utf-8')
+          PY
+
+          expected="cloudflare/media-worker/src/index.js
+public/app-version.json
+scripts/verify-050-musicnote-folder-catalog-recovery.mjs
+src/lib/userDataEngine.ts
+src/services/appUpdateNotice.ts"
+          actual="$(git diff --name-only | sort)"
+          test "$actual" = "$expected"
+          echo '050_MINIMAL_FILE_SCOPE=PASS'
+
+      - name: Validate 050 and regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          node --check cloudflare/media-worker/src/index.js
+          npx tsc --noEmit
+          node scripts/verify-046-catalog-stale-revision-rebuild.mjs
+          node scripts/verify-047-stale-chunk-recovery.mjs
+          node scripts/verify-048-explore-public-profile-parity.mjs
+          node scripts/verify-049-explore-feed-integrity.mjs
+          node scripts/verify-050-musicnote-folder-catalog-recovery.mjs
+          npm run build
+          test "$(node -p "require('./public/app-version.json').version")" = "050"
+          echo 'PREVIEW_050_VALIDATION=PASS'
+
+      - name: Commit exact recovery to PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff -- src/pages/FavoritesPage.tsx --exit-code
+          git diff -- functions --exit-code
+          git config user.name 'SORIDRAW Preview Bot'
+          git config user.email 'soridraw-preview@users.noreply.github.com'
+          git add cloudflare/media-worker/src/index.js public/app-version.json scripts/verify-050-musicnote-folder-catalog-recovery.mjs src/lib/userDataEngine.ts src/services/appUpdateNotice.ts
+          git diff --cached --check
+          git commit -m 'fix(preview): restore Music Note folder catalog fields 050'
+          git push origin HEAD:preview
+          echo "PREVIEW_050_COMMIT=$(git rev-parse HEAD)"
+          echo 'NO_DEPLOYMENT_PERFORMED=PASS'

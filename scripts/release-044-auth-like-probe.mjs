@@ -1,7 +1,7 @@
+import { sign as cryptoSign } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { initializeApp, cert, deleteApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getAppCheck } from 'firebase-admin/app-check';
 
 const envName = String(process.env.SORIDRAW_PROBE_ENV || '').trim();
 const origin = String(process.env.SORIDRAW_PROBE_ORIGIN || '').replace(/\/+$/, '');
@@ -12,6 +12,7 @@ const serviceAccountJson = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '
 const firebaseProjectId = 'soridraw-app-866a5';
 const firebaseApiKey = 'AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA';
 const firebaseAppId = '1:91309780603:web:cde703895e2cf31ecffcde';
+const appCheckAudience = 'https://firebaseappcheck.googleapis.com/google.firebase.appcheck.v1.TokenExchangeService';
 
 if (!envName || !origin || !workerBase) throw new Error('SORIDRAW probe environment/origin/worker are required.');
 if (!serviceAccountJson) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is required.');
@@ -31,6 +32,13 @@ const safeJson = async (response) => {
   const text = await response.text();
   try { return JSON.parse(text); } catch { return text; }
 };
+const b64url = (value) => Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)).toString('base64url');
+const signJwt = (payload) => {
+  const header = { alg: 'RS256', typ: 'JWT' };
+  const unsigned = `${b64url(header)}.${b64url(payload)}`;
+  const signature = cryptoSign('RSA-SHA256', Buffer.from(unsigned), serviceAccount.private_key).toString('base64url');
+  return `${unsigned}.${signature}`;
+};
 const numberHeader = (headers, key) => {
   const value = headers.get(String(key));
   if (value === null) return Number.NaN;
@@ -45,6 +53,61 @@ const likeCountOf = (item) => {
   const value = item?.likeCount ?? item?.like_count ?? item?.stats?.likeCount ?? item?.stats?.like_count;
   const count = Number(value);
   return Number.isFinite(count) ? count : null;
+};
+
+const createGoogleAccessToken = async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const assertion = signJwt({
+    iss: serviceAccount.client_email,
+    sub: serviceAccount.client_email,
+    scope: 'https://www.googleapis.com/auth/cloud-platform',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+  });
+  const body = new URLSearchParams({
+    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    assertion,
+  });
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  const payload = await safeJson(response);
+  if (!response.ok || !payload?.access_token) {
+    throw new Error(`Google OAuth local-key exchange failed: ${response.status} ${JSON.stringify(payload).slice(0, 700)}`);
+  }
+  return String(payload.access_token);
+};
+
+const createAppCheckToken = async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const customToken = signJwt({
+    iss: serviceAccount.client_email,
+    sub: serviceAccount.client_email,
+    app_id: firebaseAppId,
+    aud: appCheckAudience,
+    exp: now + 5 * 60,
+    iat: now,
+    ttl: '1800s',
+  });
+  const accessToken = await createGoogleAccessToken();
+  const url = `https://firebaseappcheck.googleapis.com/v1/projects/${firebaseProjectId}/apps/${firebaseAppId}:exchangeCustomToken`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'x-goog-user-project': firebaseProjectId,
+    },
+    body: JSON.stringify({ customToken, limitedUse: false }),
+  });
+  const payload = await safeJson(response);
+  if (!response.ok || !payload?.token) {
+    throw new Error(`Firebase App Check direct exchange failed: ${response.status} ${JSON.stringify(payload).slice(0, 900)}`);
+  }
+  return String(payload.token);
 };
 
 const runNonce = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -149,9 +212,8 @@ try {
   await persistState();
 
   idToken = await signInTemporaryUser();
-  const appCheckResult = await getAppCheck(adminApp).createToken(firebaseAppId, { ttlMillis: 30 * 60 * 1000 });
-  appCheckToken = String(appCheckResult?.token || '');
-  if (!appCheckToken) throw new Error('Firebase Admin App Check token creation failed.');
+  appCheckToken = await createAppCheckToken();
+  if (!appCheckToken) throw new Error('Firebase App Check token missing.');
 
   const initialFeed = await workerFetch('GET', '/v1/feed?sort=latest&limit=40', { cacheBust: true });
   if (initialFeed.status !== 200 || initialFeed.payload?.ok !== true) throw new Error(`Initial feed failed: ${initialFeed.status}`);
@@ -181,7 +243,7 @@ try {
     restoredToUnliked: true,
     firebaseAuth: true,
     appCheck: true,
-    appCheckMode: 'firebase-admin-local-key',
+    appCheckMode: 'direct-exchange-quota-backend',
     measuredAt: new Date().toISOString(),
   };
   await writeFile(outputPath, `${JSON.stringify(finalResult, null, 2)}\n`, 'utf8');

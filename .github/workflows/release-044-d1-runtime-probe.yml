@@ -74,16 +74,16 @@ jobs:
                     is_public, status, published_at, created_at, updated_at
                   ) VALUES (
                     ?, ?,
-                    'diagnostic', ?, NULL, NULL,
-                    NULL, NULL, NULL,
+                    'diagnostic', ?, '', '',
+                    ?, 0, ?,
                     'SORIDRAW 044 runtime probe', '', '', 0,
                     '', '', '',
                     '', '', 'soridraw 044 runtime probe',
                     0, 0, 0,
-                    0, NULL, NULL,
-                    0, 'private', NULL, ?, ?
+                    0, '{}', '',
+                    0, 'private', 0, ?, ?
                   )
-                `).bind(trackId, ownerUid, trackId, now, now).run();
+                `).bind(trackId, ownerUid, trackId, trackId, trackId, now, now).run();
                 parentCreated = true;
 
                 const stats = await env.DB.prepare(`

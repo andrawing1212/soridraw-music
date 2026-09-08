@@ -1,0 +1,159 @@
+name: SORIDRAW 038 PREVIEW Icon Path Refresh
+
+on:
+  push:
+    branches:
+      - release-038-preview-icon-refresh
+    paths:
+      - '.github/workflows/release-038-preview-icon-refresh.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-038-preview-icon-refresh
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PREVIEW_BASE: 2994ed345a0a97f45aabac13d116a052a3da0d2f
+      MAIN_BASE: edae66666b88f4fa80d2a80e49c2b42c55e71214
+      FIREBASE_PROJECT: soridraw
+    steps:
+      - name: Checkout PREVIEW
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Guard branch state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          echo 'STATE_GUARD_038=PASS'
+
+      - name: Apply physical icon path refresh only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp public/brand/soridraw-app-preview.png public/brand/soridraw-app-preview-038.png
+          cp public/brand/soridraw-app-preview-512.png public/brand/soridraw-app-preview-038-512.png
+
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+            'href="/brand/soridraw-app-preview.png?v=037"': 'href="/brand/soridraw-app-preview-038.png"',
+            'href="/manifest.preview.json?v=037"': 'href="/manifest.preview.038.json"',
+            "if (appleTouchIcon) appleTouchIcon.href = '/brand/soridraw-app-' + environment + '.png?v=037';": "if (appleTouchIcon) appleTouchIcon.href = environment === 'preview' ? '/brand/soridraw-app-preview-038.png' : '/brand/soridraw-app-' + environment + '.png?v=037';",
+            "if (manifest) manifest.href = '/manifest.' + environment + '.json?v=037';": "if (manifest) manifest.href = environment === 'preview' ? '/manifest.preview.038.json' : '/manifest.' + environment + '.json?v=037';",
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'missing expected source: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          cmp public/brand/soridraw-app-preview.png public/brand/soridraw-app-preview-038.png
+          cmp public/brand/soridraw-app-preview-512.png public/brand/soridraw-app-preview-038-512.png
+          grep -F '/brand/soridraw-app-preview-038.png' index.html
+          grep -F '/manifest.preview.038.json' index.html
+          grep -F '/brand/soridraw-app-preview-038.png' public/manifest.preview.038.json
+          grep -F '/brand/soridraw-app-preview-038-512.png' public/manifest.preview.038.json
+          echo 'PHYSICAL_ICON_PATH_038=PASS'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          echo 'VALIDATE_038=PASS'
+
+      - name: Commit and push PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add index.html public/manifest.preview.038.json public/brand/soridraw-app-preview-038.png public/brand/soridraw-app-preview-038-512.png
+          git commit -m 'fix(preview): force new physical PWA icon paths'
+          FINAL_SHA="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          git push origin HEAD:refs/heads/preview
+          echo "FINAL_SHA=$FINAL_SHA" >> "$GITHUB_ENV"
+          echo "PREVIEW_PUSH_038=PASS sha=$FINAL_SHA"
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_DEPLOY_038=PASS'
+
+      - name: Verify live PREVIEW physical paths and bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for origin in 'https://soridraw-preview.web.app' 'https://preview.soridraw.com'; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/?release=038-$attempt" -o "$RUNNER_TEMP/live.html" || true
+              if grep -Fq '/manifest.preview.038.json' "$RUNNER_TEMP/live.html" && grep -Fq '/brand/soridraw-app-preview-038.png' "$RUNNER_TEMP/live.html"; then ok=yes; break; fi
+              sleep 4
+            done
+            test "$ok" = yes
+            curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/manifest.preview.038.json?verify=038" -o "$RUNNER_TEMP/manifest.json"
+            cmp public/manifest.preview.038.json "$RUNNER_TEMP/manifest.json"
+            curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/brand/soridraw-app-preview-038.png?verify=038" -o "$RUNNER_TEMP/icon192.png"
+            curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/brand/soridraw-app-preview-038-512.png?verify=038" -o "$RUNNER_TEMP/icon512.png"
+            cmp public/brand/soridraw-app-preview.png "$RUNNER_TEMP/icon192.png"
+            cmp public/brand/soridraw-app-preview-512.png "$RUNNER_TEMP/icon512.png"
+            echo "LIVE_PREVIEW_038_PASS=$origin"
+          done
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          echo 'MAIN_UNCHANGED_038=PASS'
+
+      - name: Package deployed PREVIEW ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipname="SORIDRAW_038_PREVIEW_${FINAL_SHA:0:8}_2026-09-08.zip"
+          git archive --format=zip --output="$RUNNER_TEMP/$zipname" "$FINAL_SHA"
+          unzip -t "$RUNNER_TEMP/$zipname" >/dev/null
+          echo "ZIP_PATH=$RUNNER_TEMP/$zipname" >> "$GITHUB_ENV"
+          echo "ZIP_NAME=$zipname" >> "$GITHUB_ENV"
+
+      - name: Upload PREVIEW ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_038_PREVIEW_${{ env.FINAL_SHA }}
+          path: ${{ env.ZIP_PATH }}
+          if-no-files-found: error

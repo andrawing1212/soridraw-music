@@ -1,0 +1,105 @@
+name: SORIDRAW 046 MAIN TEST Resume
+
+on:
+  push:
+    branches: [diag-045-full-stack-parity-20260908]
+    paths: ['.github/workflows/release-046-main-test-resume.yml']
+
+permissions:
+  contents: write
+
+env:
+  PREVIEW_046_SHA: f685863eee6e611dea611acfb3107ed962dea3f0
+  MAIN_BASE: 6d970b0acd182206307b49de23e91cc44c31163c
+  FIREBASE_PROJECT: soridraw
+
+jobs:
+  resume-main-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Guard validated PREVIEW and current MAIN
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_046_SHA"
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          echo RESUME_BASELINE_GUARD=PASS
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prepare clean MAIN 046 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git reset --hard
+          git clean -fdx
+          git checkout -B release-046-main-work origin/main
+          for f in src/lib/userDataEngine.ts src/services/appUpdateNotice.ts public/app-version.json scripts/verify-046-catalog-stale-revision-rebuild.mjs; do
+            mkdir -p "$(dirname "$f")"
+            git show "$PREVIEW_046_SHA:$f" > "$f"
+          done
+          grep -F 'SORIDRAW(T)' index.html
+          grep -F 'soridraw-favicon-test-042.png' index.html
+          grep -F 'soridraw-favicon-production-043.png' index.html
+          npm ci
+          npx tsc --noEmit
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          node scripts/verify-045-explore-active-revalidation.mjs
+          node scripts/verify-046-catalog-stale-revision-rebuild.mjs
+          npm run build
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/main046-index.sha"
+          echo MAIN_046_CANDIDATE=PASS
+      - name: Commit validated 046 to MAIN
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add src/lib/userDataEngine.ts src/services/appUpdateNotice.ts public/app-version.json scripts/verify-046-catalog-stale-revision-rebuild.mjs
+          git commit -m 'release(main): promote Music Note stale-catalog recovery 046'
+          MAIN_046_SHA=$(git rev-parse HEAD)
+          git push origin HEAD:main
+          echo "MAIN_046_SHA=$MAIN_046_SHA" >> "$GITHUB_ENV"
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Deploy exact MAIN 046 build to TEST only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive
+          expected=$(cat "$RUNNER_TEMP/main046-index.sha")
+          for origin in 'https://soridraw-test.web.app' 'https://test.soridraw.com'; do
+            ok=''
+            for i in $(seq 1 15); do
+              if curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "$origin/?release=046-$i" -o "$RUNNER_TEMP/test046.html"; then
+                actual=$(sha256sum "$RUNNER_TEMP/test046.html" | awk '{print $1}')
+                if [ "$actual" = "$expected" ]; then ok=yes; break; fi
+              fi
+              sleep 4
+            done
+            test "$ok" = yes
+          done
+          body=$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' 'https://test.soridraw.com/app-version.json?release=046-final')
+          echo "$body" | grep -q '"046"'
+          echo TEST_046_LIVE=PASS
+      - name: Verify Explore TEST receiver and no PRODUCTION change
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --max-time 20 -o "$RUNNER_TEMP/explore-test-receiver.txt" -w '%{http_code}' -X POST -H 'Origin: https://test.soridraw.com' 'https://soridraw-explore-test.andrawing1212.workers.dev/__soridraw_explore_feed_mirror_020')
+          test "$code" = 404
+          echo EXPLORE_TEST_RECEIVER_AUTH_GUARD=PASS
+          prod=$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' 'https://soridraw.com/app-version.json?release=046-guard')
+          echo "$prod" | grep -q '"045"'
+          echo PRODUCTION_UNCHANGED_045=PASS

@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 concurrency:
   group: soridraw-044-stage-b-preview-like
@@ -16,7 +15,7 @@ concurrency:
 jobs:
   preview-like-measurement:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       PREVIEW_EXPECTED: 4ba0e692a533a3bad0d1eee9950d25bc21934626
       MAIN_EXPECTED: 2fadb2dc666fadecbbbd93e92cfb104ed567f233
@@ -27,6 +26,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: npm
+
       - name: Guard Stage A exact state
         shell: bash
         run: |
@@ -34,31 +38,22 @@ jobs:
           git fetch origin preview main --quiet
           test "$(git rev-parse origin/preview)" = "$PREVIEW_EXPECTED"
           test "$(git rev-parse origin/main)" = "$MAIN_EXPECTED"
-          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=044-stage-b3' | tr -d '\r\n ')" = '{"version":"044"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=044-stage-b4' | tr -d '\r\n ')" = '{"version":"044"}'
           curl -fsS -H 'Origin: https://preview.soridraw.com' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed-revision?sort=latest' -D "$RUNNER_TEMP/rev.head" -o "$RUNNER_TEMP/rev.json"
           grep -qi '^x-soridraw-d1-read-queries: 0' "$RUNNER_TEMP/rev.head"
           grep -qi '^x-soridraw-d1-write-queries: 0' "$RUNNER_TEMP/rev.head"
           echo 'STAGE_B_GUARD=PASS'
 
-      - id: gcp_auth
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
-          project_id: soridraw-app-866a5
-          token_format: access_token
-          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
-
       - name: Install probe runtime
         shell: bash
         run: |
           set -euo pipefail
-          node --version
           npm ci --no-audit --no-fund
 
       - name: Measure PREVIEW like cost with temporary Auth/App Check identity
         shell: bash
         env:
-          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.gcp_auth.outputs.access_token }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           SORIDRAW_PROBE_ENV: preview
           SORIDRAW_PROBE_ORIGIN: https://preview.soridraw.com
           SORIDRAW_PROBE_WORKER: https://soridraw-explore-preview.andrawing1212.workers.dev
@@ -67,8 +62,13 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/release-044-auth-like-probe.mjs
-          node -e "const x=require('./release-044-preview-like-proof.json'); if(!x.ok||x.measuredNormalLike.reads!==1||x.measuredNormalLike.writes!==3||!x.feedR2RoundTrip||!x.restoredToUnliked||!x.firebaseAuth||!x.appCheck||x.appCheckMode!=='temporary-debug-token-ci') process.exit(1)"
+          node -e "const x=require('./release-044-preview-like-proof.json'); if(!x.ok||x.measuredNormalLike.reads!==1||x.measuredNormalLike.writes!==3||!x.feedR2RoundTrip||!x.restoredToUnliked||!x.firebaseAuth||!x.appCheck||x.appCheckMode!=='firebase-admin-local-key') process.exit(1)"
           echo 'STAGE_B_PREVIEW_LIKE_MEASUREMENT=PASS'
+
+      - uses: actions/setup-node@v4
+        if: always()
+        with:
+          node-version: '24.x'
 
       - name: Remove temporary PREVIEW diagnostic residue
         if: always()

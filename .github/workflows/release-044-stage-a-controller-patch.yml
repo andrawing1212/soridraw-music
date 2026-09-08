@@ -16,62 +16,56 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Replace blocked D1 management preflight with verified runtime probe and add PREVIEW gate
+      - name: Patch release controller for verified runtime preflight and PREVIEW gate
         shell: bash
         run: |
           set -euo pipefail
           python3 <<'PY'
           from pathlib import Path
           import re
-
           p = Path('.github/workflows/release-044-explore-like-cost-parity.yml')
           s = p.read_text(encoding='utf-8')
-
           anchor = '          test -s "$RUNNER_TEMP/soridraw044/028-explore-like-o1.mjs"\n'
-          addition = anchor + '          cp .github/release-044-runtime-probe-pass.txt "$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt"\n          test -s "$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt"\n'
           if 'runtime-probe-pass.txt' not in s:
               if anchor not in s:
                   raise SystemExit('probe marker copy anchor missing')
-              s = s.replace(anchor, addition, 1)
-
-          direct = re.compile(
-              r"          node <<'NODE'\n          const A=process\.env\.CLOUDFLARE_ACCOUNT_ID,T=process\.env\.CLOUDFLARE_API_TOKEN,DB='aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f';\n.*?console\.log\('D1_RETURNING_PREFLIGHT_044=PASS'\).*?\n          NODE\n",
-              re.S,
-          )
-          replacement = '''          test -s "$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt"
-          grep -Fq 'verified_run_id=34197373670' "$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt"
-          grep -Fq 'verified_job_id=101968007250' "$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt"
-          grep -Fq 'rate_returning_count=1' "$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt"
-          grep -Fq 'track_stats_returning_like_count=1' "$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt"
-          grep -Fq 'cleanup_ok=true' "$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt"
-          echo 'D1_RETURNING_RUNTIME_PREFLIGHT_044=PASS'
-'''
+              s = s.replace(anchor, anchor + '          cp .github/release-044-runtime-probe-pass.txt "$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt"\n          test -s "$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt"\n', 1)
+          direct = re.compile(r"          node <<'NODE'\n          const A=process\.env\.CLOUDFLARE_ACCOUNT_ID,T=process\.env\.CLOUDFLARE_API_TOKEN,DB='aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f';\n.*?console\.log\('D1_RETURNING_PREFLIGHT_044=PASS'\).*?\n          NODE\n", re.S)
+          replacement = '\n'.join([
+              '          test -s "$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt"',
+              "          grep -Fq 'verified_run_id=34197373670' \"$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt\"",
+              "          grep -Fq 'verified_job_id=101968007250' \"$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt\"",
+              "          grep -Fq 'rate_returning_count=1' \"$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt\"",
+              "          grep -Fq 'track_stats_returning_like_count=1' \"$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt\"",
+              "          grep -Fq 'cleanup_ok=true' \"$RUNNER_TEMP/soridraw044/runtime-probe-pass.txt\"",
+              "          echo 'D1_RETURNING_RUNTIME_PREFLIGHT_044=PASS'",
+              '',
+          ])
           s2, n = direct.subn(replacement, s, count=1)
           if n == 1:
               s = s2
           elif 'D1_RETURNING_RUNTIME_PREFLIGHT_044=PASS' not in s:
               raise SystemExit(f'direct D1 preflight replacement count={n}')
-
           gate_anchor = "          echo 'FIREBASE_PREVIEW_044=PASS'\n\n      - name: Promote exact PREVIEW runtime to main and validate\n"
-          gate = """          echo 'FIREBASE_PREVIEW_044=PASS'
-
-      - name: PREVIEW authenticated like measurement gate
-        shell: bash
-        run: |
-          echo 'PREVIEW_044_STAGE_A=PASS'
-          echo 'MAIN_PROMOTION_BLOCKED_UNTIL_AUTHENTICATED_LIKE_MEASUREMENT=YES'
-          exit 78
-
-      - name: Promote exact PREVIEW runtime to main and validate
-"""
           if 'MAIN_PROMOTION_BLOCKED_UNTIL_AUTHENTICATED_LIKE_MEASUREMENT=YES' not in s:
               if gate_anchor not in s:
                   raise SystemExit('preview gate anchor missing')
-              s = s.replace(gate_anchor, gate, 1)
-
+              gate_lines = [
+                  "          echo 'FIREBASE_PREVIEW_044=PASS'",
+                  '',
+                  '      - name: PREVIEW authenticated like measurement gate',
+                  '        shell: bash',
+                  '        run: |',
+                  "          echo 'PREVIEW_044_STAGE_A=PASS'",
+                  "          echo 'MAIN_PROMOTION_BLOCKED_UNTIL_AUTHENTICATED_LIKE_MEASUREMENT=YES'",
+                  '          exit 78',
+                  '',
+                  '      - name: Promote exact PREVIEW runtime to main and validate',
+                  '',
+              ]
+              s = s.replace(gate_anchor, '\n'.join(gate_lines), 1)
           p.write_text(s, encoding='utf-8')
           PY
-
           grep -Fq 'D1_RETURNING_RUNTIME_PREFLIGHT_044=PASS' .github/workflows/release-044-explore-like-cost-parity.yml
           grep -Fq 'MAIN_PROMOTION_BLOCKED_UNTIL_AUTHENTICATED_LIKE_MEASUREMENT=YES' .github/workflows/release-044-explore-like-cost-parity.yml
           git diff --check

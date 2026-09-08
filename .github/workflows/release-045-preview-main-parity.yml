@@ -1,0 +1,177 @@
+name: SORIDRAW 045 PREVIEW Main Parity Release
+
+on:
+  push:
+    branches: [release-045-preview-main-parity]
+    paths: ['.github/workflows/release-045-preview-main-parity.yml']
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: soridraw-045-preview-main-parity
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PREVIEW_BASE: 5008e9ba81fe3b1469e31dae15ee7384c6ecdcbc
+      MAIN_BASE: 2fadb2dc666fadecbbbd93e92cfb104ed567f233
+      FIREBASE_PROJECT: soridraw
+    steps:
+      - name: Checkout release controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+
+      - name: Guard exact live baselines
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=045-parity-guard' | tr -d '\r\n ')" = '{"version":"045"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://test.soridraw.com/app-version.json?t=045-parity-guard' | tr -d '\r\n ')" = '{"version":"042"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://soridraw.com/app-version.json?t=045-parity-guard' | tr -d '\r\n ')" = '{"version":"043"}'
+          echo 'PARITY_BASELINE_GUARD=PASS'
+
+      - name: Promote PREVIEW functional content onto main history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -B release-045-main-work origin/main
+          for f in \
+            src/App.tsx \
+            src/pages/ExplorePage.tsx \
+            src/services/appUpdateNotice.ts \
+            public/app-version.json \
+            scripts/verify-035-auth-nav-readiness.mjs \
+            scripts/verify-045-explore-active-revalidation.mjs \
+            cloudflare/explore-worker/patches/028-explore-like-o1.mjs; do
+            mkdir -p "$(dirname "$f")"
+            git show "origin/preview:$f" > "$f"
+          done
+          # Functional trees must now match PREVIEW exactly. Brand/index/manifest files remain main-owned.
+          git diff --quiet origin/preview -- src functions cloudflare firestore.rules database.rules.json
+          grep -F "CURRENT_APP_VERSION = '045'" src/services/appUpdateNotice.ts
+          grep -F '"version": "045"' public/app-version.json
+          grep -F 'SORIDRAW(T)' index.html
+          grep -F 'soridraw-favicon-test-042.png' index.html
+          grep -F 'soridraw-favicon-production-043.png' index.html
+          echo 'FUNCTIONAL_PARITY_WITH_PREVIEW=PASS'
+          echo 'ENVIRONMENT_BRAND_ROUTING_PRESERVED=PASS'
+
+      - name: Validate candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          node scripts/verify-045-explore-active-revalidation.mjs
+          git diff --check
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/dist-index.sha"
+          echo 'VALIDATE_MAIN_045=PASS'
+
+      - name: Commit and push main 045
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add src/App.tsx src/pages/ExplorePage.tsx src/services/appUpdateNotice.ts public/app-version.json \
+            scripts/verify-035-auth-nav-readiness.mjs scripts/verify-045-explore-active-revalidation.mjs \
+            cloudflare/explore-worker/patches/028-explore-like-o1.mjs
+          git diff --cached --quiet && { echo 'No parity changes to commit' >&2; exit 1; } || true
+          git commit -m 'release(main): promote validated PREVIEW functional parity 045'
+          FINAL_SHA="$(git rev-parse HEAD)"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          git push origin HEAD:refs/heads/main
+          echo "FINAL_SHA=$FINAL_SHA" >> "$GITHUB_ENV"
+          echo "MAIN_045_PUSH=PASS SHA=$FINAL_SHA"
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy exact main build to TEST
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive
+          origin='https://test.soridraw.com'
+          ok=''
+          for attempt in $(seq 1 20); do
+            if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/app-version.json?t=045-test-$attempt" -o "$RUNNER_TEMP/test-version.json" && grep -Fq '045' "$RUNNER_TEMP/test-version.json"; then ok=yes; break; fi
+            sleep 3
+          done
+          test "$ok" = yes
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/test-index.html"
+          test "$(sha256sum "$RUNNER_TEMP/test-index.html" | awk '{print $1}')" = "$(cat "$RUNNER_TEMP/dist-index.sha")"
+          grep -Fq 'SORIDRAW(T)' "$RUNNER_TEMP/test-index.html"
+          grep -Fq 'soridraw-favicon-test-042.png' "$RUNNER_TEMP/test-index.html"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$FINAL_SHA"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          echo 'TEST_LIVE_045=PASS'
+
+      - name: Deploy same main build to PRODUCTION
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No file mutation is allowed between TEST and PRODUCTION deploys.
+          test -z "$(git status --porcelain)"
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.json --non-interactive
+          origin='https://soridraw.com'
+          ok=''
+          for attempt in $(seq 1 20); do
+            if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/app-version.json?t=045-prod-$attempt" -o "$RUNNER_TEMP/prod-version.json" && grep -Fq '045' "$RUNNER_TEMP/prod-version.json"; then ok=yes; break; fi
+            sleep 3
+          done
+          test "$ok" = yes
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/prod-index.html"
+          test "$(sha256sum "$RUNNER_TEMP/prod-index.html" | awk '{print $1}')" = "$(cat "$RUNNER_TEMP/dist-index.sha")"
+          grep -Fq 'soridraw-favicon-production-043.png' "$RUNNER_TEMP/prod-index.html"
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=045-final' | tr -d '\r\n ')" = '{"version":"045"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://test.soridraw.com/app-version.json?t=045-final' | tr -d '\r\n ')" = '{"version":"045"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://soridraw.com/app-version.json?t=045-final' | tr -d '\r\n ')" = '{"version":"045"}'
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$FINAL_SHA"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          echo 'PRODUCTION_LIVE_045=PASS'
+          echo 'ALL_APP_VERSIONS_045=PASS'
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'WORKER_CHANGED=false'
+          echo 'FIRESTORE_RULES_CHANGED=false'
+
+      - name: Package exact main commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="SORIDRAW_045_MAIN_${FINAL_SHA:0:8}_2026-09-08.zip"
+          git archive --format=zip --output="$RUNNER_TEMP/$ZIP" "$FINAL_SHA"
+          unzip -t "$RUNNER_TEMP/$ZIP" >/dev/null
+          echo "ZIP=$RUNNER_TEMP/$ZIP" >> "$GITHUB_ENV"
+
+      - name: Upload exact main ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_045_MAIN_${{ env.FINAL_SHA }}
+          path: ${{ env.ZIP }}
+          if-no-files-found: error

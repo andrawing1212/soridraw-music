@@ -1,0 +1,30 @@
+name: SORIDRAW 044 Runtime Parity Audit
+on:
+  push:
+    branches: [release-044-explore-like-cost-parity]
+    paths: ['.github/workflows/release-044-runtime-parity-audit.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Audit exact current runtime differences
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          echo "PREVIEW=$(git rev-parse origin/preview)"
+          echo "MAIN=$(git rev-parse origin/main)"
+          echo '=== SRC ==='
+          git diff --name-status origin/main origin/preview -- src || true
+          echo '=== FUNCTIONS ==='
+          git diff --name-status origin/main origin/preview -- functions || true
+          echo '=== CLOUDFLARE ==='
+          git diff --name-status origin/main origin/preview -- cloudflare || true
+          echo '=== RUNTIME CONFIG ==='
+          git diff --name-status origin/main origin/preview -- package.json package-lock.json vite.config.* tsconfig*.json firebase*.json firestore.rules database.rules.json || true

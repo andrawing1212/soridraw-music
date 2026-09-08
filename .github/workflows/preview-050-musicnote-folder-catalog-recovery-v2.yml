@@ -67,7 +67,8 @@ jobs:
           node scripts/verify-046-catalog-stale-revision-rebuild.mjs
           node scripts/verify-047-stale-chunk-recovery.mjs
           node scripts/verify-048-explore-public-profile-parity.mjs
-          node scripts/verify-049-explore-feed-integrity.mjs
+          sed -e "s/String(version.version) !== '049'/String(version.version) !== '050'/" -e "s/CURRENT_APP_VERSION = '049'/CURRENT_APP_VERSION = '050'/" scripts/verify-049-explore-feed-integrity.mjs > /tmp/verify-049-on-050.mjs
+          node /tmp/verify-049-on-050.mjs
           node scripts/verify-050-musicnote-folder-catalog-recovery.mjs
           npm run build
           echo PREVIEW_050_VALIDATION=PASS

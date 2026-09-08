@@ -74,7 +74,7 @@ jobs:
                     is_public, status, published_at, created_at, updated_at
                   ) VALUES (
                     ?, ?,
-                    'diagnostic', ?, '', '',
+                    'suno_library', ?, '', '',
                     ?, 0, ?,
                     'SORIDRAW 044 runtime probe', '', '', 0,
                     '', '', '',

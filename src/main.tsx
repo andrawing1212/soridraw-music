@@ -11,7 +11,9 @@ import './components/studio/tabletTouchPacedContent';
 import './services/userDomainSyncService';
 import { startPreviewVersionSignal } from './services/versionSignalService';
 import { startAppUpdateNotice } from './services/appUpdateNotice';
+import { installChunkLoadRecovery } from './services/chunkLoadRecovery';
 
+installChunkLoadRecovery();
 void startPreviewVersionSignal();
 startAppUpdateNotice();
 

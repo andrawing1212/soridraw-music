@@ -1,0 +1,85 @@
+name: SORIDRAW 050 Music Note Folder Catalog Recovery v2
+
+on:
+  push:
+    branches:
+      - preview-050-musicnote-folder-catalog-recovery-v2
+
+permissions:
+  contents: write
+
+jobs:
+  apply_050:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PREVIEW
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - name: Load exact 050 patch script
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview-050-musicnote-folder-catalog-recovery-v2
+          git show origin/preview-050-musicnote-folder-catalog-recovery-v2:.deploy/apply-050-musicnote-folder-catalog-recovery.py > /tmp/apply-050.py
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Guard PREVIEW baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "0c19b23abfa074f69aa40aec4ba9a6069b8cdbf6"
+          test "$(node -p "require('./public/app-version.json').version")" = "049"
+          echo PREVIEW_050_BASELINE_GUARD=PASS
+
+      - name: Apply minimal 050 recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          python /tmp/apply-050.py
+          git diff -- src/pages/FavoritesPage.tsx --exit-code
+          git diff -- functions --exit-code
+          printf '%s\n' \
+            cloudflare/media-worker/src/index.js \
+            public/app-version.json \
+            scripts/verify-050-musicnote-folder-catalog-recovery.mjs \
+            src/lib/userDataEngine.ts \
+            src/services/appUpdateNotice.ts > /tmp/expected-files.txt
+          git diff --name-only | sort > /tmp/actual-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+          echo PREVIEW_050_MINIMAL_SCOPE=PASS
+
+      - name: Validate 050 and regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          node --check cloudflare/media-worker/src/index.js
+          npx tsc --noEmit
+          node scripts/verify-046-catalog-stale-revision-rebuild.mjs
+          node scripts/verify-047-stale-chunk-recovery.mjs
+          node scripts/verify-048-explore-public-profile-parity.mjs
+          node scripts/verify-049-explore-feed-integrity.mjs
+          node scripts/verify-050-musicnote-folder-catalog-recovery.mjs
+          npm run build
+          echo PREVIEW_050_VALIDATION=PASS
+
+      - name: Commit to PREVIEW only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Preview Bot'
+          git config user.email 'soridraw-preview@users.noreply.github.com'
+          git add cloudflare/media-worker/src/index.js public/app-version.json scripts/verify-050-musicnote-folder-catalog-recovery.mjs src/lib/userDataEngine.ts src/services/appUpdateNotice.ts
+          git diff --cached --check
+          git commit -m 'fix(preview): restore Music Note folder catalog fields 050'
+          git push origin HEAD:preview
+          echo PREVIEW_050_COMMIT=$(git rev-parse HEAD)
+          echo NO_DEPLOYMENT_PERFORMED=PASS

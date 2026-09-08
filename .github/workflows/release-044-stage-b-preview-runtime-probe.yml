@@ -1,0 +1,189 @@
+name: SORIDRAW 044 Stage B PREVIEW Runtime Cost Probe
+
+on:
+  push:
+    branches: [release-044-explore-like-cost-parity]
+    paths: ['.github/workflows/release-044-stage-b-preview-runtime-probe.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-044-stage-b-preview-runtime-probe
+  cancel-in-progress: false
+
+jobs:
+  preview-runtime-cost-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PREVIEW_EXPECTED: 4ba0e692a533a3bad0d1eee9950d25bc21934626
+      MAIN_EXPECTED: 2fadb2dc666fadecbbbd93e92cfb104ed567f233
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+
+      - name: Guard PREVIEW 044 and main baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_EXPECTED"
+          test "$(git rev-parse origin/main)" = "$MAIN_EXPECTED"
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=044-runtime-probe' | tr -d '\r\n ')" = '{"version":"044"}'
+          echo 'RUNTIME_PROBE_GUARD=PASS'
+
+      - name: Verify all three live Workers are identical 044 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const A = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const T = process.env.CLOUDFLARE_API_TOKEN;
+          const names = {
+            preview: 'soridraw-explore-preview',
+            test: 'soridraw-explore-test',
+            production: 'soridraw-explore-api',
+          };
+          const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
+          async function get(url) {
+            const r = await fetch(url, { headers: { Authorization: `Bearer ${T}`, Accept: 'application/json' } });
+            const x = await r.json();
+            if (!r.ok || x.success === false) throw new Error(`Cloudflare ${r.status} ${JSON.stringify(x).slice(0,700)}`);
+            return x.result || x;
+          }
+          async function active(worker) {
+            const base = `https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${worker}`;
+            const ds = await get(`${base}/deployments`);
+            const deployments = [...(ds.deployments || ds || [])].sort((a,b) => Date.parse(b.created_on || 0) - Date.parse(a.created_on || 0));
+            const d = deployments[0];
+            const a = [...(d?.versions || [])].sort((x,y) => Number(y.percentage) - Number(x.percentage))[0];
+            if (!a?.version_id || Number(a.percentage || 0) < 99.99) throw new Error(`single active version missing ${worker}`);
+            const v = await get(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${worker}/versions/${a.version_id}?include=modules`);
+            const mods = v.modules || [];
+            const m = mods.find((x) => x.name === (v.main_module || mods[0]?.name)) || mods[0];
+            if (!m?.content_base64) throw new Error(`module missing ${worker}`);
+            const source = Buffer.from(m.content_base64, 'base64').toString('utf8');
+            return { versionId: a.version_id, source, sha256: sha(source) };
+          }
+          (async () => {
+            const proof = { checkedAt: new Date().toISOString(), workers: {} };
+            let common = '';
+            for (const [env, worker] of Object.entries(names)) {
+              const a = await active(worker);
+              if (!a.source.includes('RETURNING count')) throw new Error(`044 RETURNING count missing ${env}`);
+              if (!a.source.includes('RETURNING like_count')) throw new Error(`044 RETURNING like_count missing ${env}`);
+              if (/SELECT\s+count\s+FROM\s+api_rate_limits/i.test(a.source)) throw new Error(`old rate SELECT remains ${env}`);
+              if (!a.source.includes('patchExploreProfileR2Like020')) throw new Error(`profile R2 like sync missing ${env}`);
+              if (!a.source.includes('syncExploreLikeR2AfterMutation')) throw new Error(`like R2 sync missing ${env}`);
+              if (!a.source.includes('patchExploreFeedR2LikeCount')) throw new Error(`feed R2 sync missing ${env}`);
+              if (!common) common = a.sha256;
+              else if (common !== a.sha256) throw new Error(`Worker source parity mismatch: ${env}`);
+              proof.workers[env] = { worker, versionId: a.versionId, sourceSha256: a.sha256 };
+            }
+            proof.commonSourceSha256 = common;
+            proof.sameSource = true;
+            proof.returning044 = true;
+            fs.writeFileSync(process.env.RUNNER_TEMP + '/worker-parity.json', JSON.stringify(proof, null, 2) + '\n');
+            console.log('WORKER_3ENV_044_SOURCE_PARITY=PASS');
+            console.log('WORKER_3ENV_044_COMMON_SHA=' + common);
+          })().catch((e) => { console.error(e); process.exit(1); });
+          NODE
+
+          for spec in \
+            'preview|https://soridraw-explore-preview.andrawing1212.workers.dev|https://preview.soridraw.com' \
+            'test|https://soridraw-explore-test.andrawing1212.workers.dev|https://test.soridraw.com' \
+            'production|https://soridraw-explore-api.andrawing1212.workers.dev|https://soridraw.com'; do
+            IFS='|' read -r env base origin <<< "$spec"
+            curl -fsS -D "$RUNNER_TEMP/${env}.head" -H "Origin: $origin" "$base/v1/feed-revision?sort=latest" -o "$RUNNER_TEMP/${env}.json"
+            grep -qi '^x-soridraw-d1-read-queries: 0' "$RUNNER_TEMP/${env}.head"
+            grep -qi '^x-soridraw-d1-write-queries: 0' "$RUNNER_TEMP/${env}.head"
+          done
+          echo 'WORKER_3ENV_SMOKE=PASS'
+
+      - name: Install Wrangler
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund wrangler@4.102.0
+
+      - name: Deploy isolated PREVIEW cost probe and measure like roundtrip
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROBE_DIR="$RUNNER_TEMP/release044-runtime-probe"
+          mkdir -p "$PROBE_DIR"
+          cp scripts/release-044-preview-cost-probe-worker.js "$PROBE_DIR/worker.js"
+          PROBE_NAME="soridraw-044-preview-cost-probe-${GITHUB_RUN_ID}"
+          PROBE_TOKEN="$(openssl rand -hex 32)"
+          cat > "$PROBE_DIR/wrangler.jsonc" <<JSON
+          {
+            "name": "$PROBE_NAME",
+            "main": "./worker.js",
+            "compatibility_date": "2026-09-04",
+            "workers_dev": true,
+            "vars": { "PROBE_TOKEN": "$PROBE_TOKEN" },
+            "d1_databases": [{ "binding": "DB", "database_name": "soridraw-explore-preview-db", "database_id": "aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f" }],
+            "r2_buckets": [{ "binding": "PROFILE_MEDIA", "bucket_name": "soridraw-profile-media-preview" }]
+          }
+          JSON
+          cleanup_worker(){ npx wrangler delete --config "$PROBE_DIR/wrangler.jsonc" --force >/dev/null 2>&1 || true; }
+          trap cleanup_worker EXIT
+          npx wrangler deploy --strict --config "$PROBE_DIR/wrangler.jsonc"
+          PROBE_URL="https://${PROBE_NAME}.andrawing1212.workers.dev"
+          NONCE="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"
+          RESULT=''
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            HTTP_CODE="$(curl -sS -o "$RUNNER_TEMP/runtime-probe.json" -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer $PROBE_TOKEN" -H 'Content-Type: application/json' \
+              --data "{\"nonce\":\"$NONCE\"}" "$PROBE_URL" || true)"
+            if [ "$HTTP_CODE" = 200 ]; then
+              RESULT="$(cat "$RUNNER_TEMP/runtime-probe.json")"
+              break
+            fi
+            if [ "$HTTP_CODE" = 500 ]; then
+              cat "$RUNNER_TEMP/runtime-probe.json" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          test -n "$RESULT"
+          node - <<'NODE'
+          const fs = require('fs');
+          const x = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/runtime-probe.json', 'utf8'));
+          if (!x.ok) throw new Error(JSON.stringify(x));
+          if (x.mode !== 'temporary-worker-auth-bypass-cost-probe') throw new Error('unexpected probe mode');
+          if (x.measuredNormalLike?.reads !== 1 || x.measuredNormalLike?.writes !== 3) throw new Error('normal like is not 1 read / 3 writes');
+          if (x.measuredNormalUnlike?.reads !== 1 || x.measuredNormalUnlike?.writes !== 3) throw new Error('normal unlike is not 1 read / 3 writes');
+          if (!x.feedR2RoundTrip || !x.restoredToUnliked || x.authAppCheckChanged !== false) throw new Error('roundtrip/cleanup proof failed');
+          console.log('SORIDRAW_044_PREVIEW_RUNTIME_LIKE_COST=PASS');
+          console.log('SORIDRAW_044_PREVIEW_RUNTIME_LIKE_D1_READS=' + x.measuredNormalLike.reads);
+          console.log('SORIDRAW_044_PREVIEW_RUNTIME_LIKE_D1_WRITES=' + x.measuredNormalLike.writes);
+          console.log('SORIDRAW_044_PREVIEW_RUNTIME_R2_FEED=PASS');
+          NODE
+          cleanup_worker
+          trap - EXIT
+          echo 'SORIDRAW_044_PREVIEW_RUNTIME_PROBE_CLEANUP=PASS'
+
+      - name: Preserve runtime and 3-environment parity proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .github
+          cp "$RUNNER_TEMP/runtime-probe.json" .github/release-044-preview-like-proof.json
+          cp "$RUNNER_TEMP/worker-parity.json" .github/release-044-worker-parity-proof.json
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add .github/release-044-preview-like-proof.json .github/release-044-worker-parity-proof.json
+          git commit -m 'test: record 044 PREVIEW runtime cost and Worker parity proof'
+          git push origin HEAD:release-044-explore-like-cost-parity
+          echo 'SORIDRAW_044_RUNTIME_PROOF_PUSH=PASS'

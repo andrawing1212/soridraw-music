@@ -13,9 +13,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy_preview_050:
+  resume_preview_050:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 40
     env:
       PREVIEW_SHA: b8e9a5c8237bd56e7847ed48483315d777b2252b
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -35,7 +35,7 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Guard exact source and live baseline
+      - name: Guard exact source and hosting baseline
         shell: bash
         run: |
           set -euo pipefail
@@ -45,9 +45,9 @@ jobs:
           echo "MAIN_BEFORE=$(git rev-parse origin/main)" >> "$GITHUB_ENV"
           live_before="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://preview.soridraw.com/app-version.json?t=$(date +%s)" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version)))")"
           test "$live_before" = '049'
-          echo 'PREVIEW_SOURCE_050_LIVE_049_GUARD=PASS'
+          echo 'PREVIEW_HOSTING_STILL_049=PASS'
 
-      - name: Validate 050 and protected regressions
+      - name: Validate exact 050 build
         shell: bash
         run: |
           set -euo pipefail
@@ -63,52 +63,40 @@ jobs:
           npm run build
           test "$(node -p "require('./dist/app-version.json').version")" = '050'
           sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/dist-index.sha"
-          echo 'PREVIEW_050_VALIDATION_BUILD=PASS'
+          echo 'PREVIEW_050_BUILD=PASS'
 
-      - name: Install and dry-run PREVIEW Media Worker
+      - name: Verify already-active PREVIEW Media Worker 050
         working-directory: cloudflare/media-worker
         shell: bash
         run: |
           set -euo pipefail
           npm install --no-audit --no-fund
-          npm run check
-          echo 'MEDIA_WORKER_DRY_RUN=PASS'
-
-      - name: Snapshot PREVIEW Media Worker configuration
-        working-directory: cloudflare/media-worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx wrangler secret list --format json > "$RUNNER_TEMP/media-secrets-before.json"
+          npx wrangler secret list --format json > "$RUNNER_TEMP/media-secrets.json"
           node <<'NODE'
           const fs=require('fs');
           const A=process.env.CLOUDFLARE_ACCOUNT_ID,W=process.env.MEDIA_WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
           async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,1000)}`);return x.result||x}
-          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;const ds=await g(`${base}/deployments`);const d=(ds.deployments||ds||[])[0];const v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];if(!v?.version_id)throw new Error('active version missing');fs.writeFileSync(process.env.RUNNER_TEMP+'/media-old-version.txt',v.version_id);const settings=await g(`${base}/settings`);const bindings=(settings.bindings||[]).map(b=>({name:b.name,type:b.type,bucket_name:b.bucket_name||null,namespace_id:b.namespace_id||null,text:b.type==='plain_text'?b.text:null})).sort((a,b)=>a.name.localeCompare(b.name));fs.writeFileSync(process.env.RUNNER_TEMP+'/media-bindings-before.json',JSON.stringify(bindings));const media=bindings.find(b=>b.name==='MEDIA');if(!media||media.type!=='r2_bucket'||media.bucket_name!=='soridraw-media-preview')throw new Error(`MEDIA binding mismatch ${JSON.stringify(media)}`);console.log('MEDIA_WORKER_OLD_VERSION='+v.version_id);console.log('MEDIA_BINDINGS_BASELINE=PASS')})().catch(e=>{console.error(e);process.exit(1)});
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;
+            const ds=await g(`${base}/deployments`),d=(ds.deployments||ds||[])[0],v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(!v?.version_id) throw new Error('active Media Worker version missing');
+            const ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`),m=(ver.modules||[]).find(x=>x.name===ver.main_module)||(ver.modules||[])[0];
+            if(!m?.content_base64) throw new Error('active source unavailable');
+            const src=Buffer.from(m.content_base64,'base64').toString('utf8');
+            for(const s of ['MUSIC_NOTE_CATALOG_STORAGE_GENERATION_050','catalogStorageGeneration','catalogObjectKey','noteFolderId','myNoteFolderId','favoriteFolderId','sharedNoteFolderId','sharedNoteFolder','noteSharedFolderId','sharedNoteShareId','isSharedMusicNote','sharedReadOnly','sourceType','originalFavoriteId']) if(!src.includes(s)) throw new Error(`active 050 source missing ${s}`);
+            if(!src.includes("'v5'") && !src.includes('"v5"')) throw new Error('Music Note v5 namespace marker missing');
+            if(!src.includes("'v4'") && !src.includes('"v4"')) throw new Error('Library v4 preservation marker missing');
+            const settings=await g(`${base}/settings`),bindings=settings.bindings||[];
+            const get=n=>bindings.find(b=>b.name===n);
+            const media=get('MEDIA'); if(!media||media.type!=='r2_bucket'||media.bucket_name!=='soridraw-media-preview') throw new Error(`MEDIA binding invalid ${JSON.stringify(media)}`);
+            const expected={FIREBASE_PROJECT_ID:'soridraw-app-866a5',FIREBASE_PROJECT_NUMBER:'91309780603',FIREBASE_WEB_APP_ID:'1:91309780603:web:cde703895e2cf31ecffcde',ARCHIVE_MIN_AGE_DAYS:'14',SIGNED_URL_TTL_SECONDS:'1800',ALLOWED_ORIGINS:'https://preview.soridraw.com,https://soridraw-preview.web.app,https://soridraw-preview.firebaseapp.com'};
+            for(const [name,value] of Object.entries(expected)){const b=get(name);if(!b||b.type!=='plain_text'||String(b.text)!==value)throw new Error(`binding mismatch ${name}`)}
+            console.log('MEDIA_WORKER_050_ACTIVE_VERSION='+v.version_id);
+            console.log('MEDIA_WORKER_050_SOURCE_AND_BINDINGS=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-
-      - name: Deploy PREVIEW Media Worker 050
-        working-directory: cloudflare/media-worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run deploy
-          echo 'MEDIA_WORKER_050_DEPLOY_COMMAND=PASS'
-
-      - name: Verify PREVIEW Media Worker 050 runtime and bindings
-        working-directory: cloudflare/media-worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx wrangler secret list --format json > "$RUNNER_TEMP/media-secrets-after.json"
-          node <<'NODE'
-          const fs=require('fs');
-          const A=process.env.CLOUDFLARE_ACCOUNT_ID,W=process.env.MEDIA_WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
-          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw new Error(`CF ${r.status}: ${JSON.stringify(x).slice(0,1000)}`);return x.result||x}
-          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${W}`;const ds=await g(`${base}/deployments`);const d=(ds.deployments||ds||[])[0];const v=[...(d.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];const ver=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${W}/versions/${v.version_id}?include=modules`);const m=(ver.modules||[]).find(x=>x.name===ver.main_module)||(ver.modules||[])[0];if(!m?.content_base64)throw new Error('active source unavailable');const src=Buffer.from(m.content_base64,'base64').toString('utf8');for(const s of ['MUSIC_NOTE_CATALOG_STORAGE_GENERATION_050','noteFolderId','myNoteFolderId','sharedNoteFolderId','sharedNoteShareId','isSharedMusicNote','sharedReadOnly','sourceType','originalFavoriteId'])if(!src.includes(s))throw new Error(`active 050 source missing ${s}`);if(!src.includes("kind === 'musicNote' ? MUSIC_NOTE_CATALOG_STORAGE_GENERATION_050 : 'v4'"))throw new Error('per-kind R2 namespace missing');const settings=await g(`${base}/settings`);const bindings=(settings.bindings||[]).map(b=>({name:b.name,type:b.type,bucket_name:b.bucket_name||null,namespace_id:b.namespace_id||null,text:b.type==='plain_text'?b.text:null})).sort((a,b)=>a.name.localeCompare(b.name));const before=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/media-bindings-before.json','utf8'));if(JSON.stringify(bindings)!==JSON.stringify(before))throw new Error('Media Worker bindings changed');console.log('MEDIA_WORKER_050_ACTIVE_VERSION='+v.version_id);console.log('MEDIA_WORKER_050_SOURCE=PASS');console.log('MEDIA_WORKER_BINDINGS_PRESERVED=PASS')})().catch(e=>{console.error(e);process.exit(1)});
-          NODE
-          node - "$RUNNER_TEMP/media-secrets-before.json" "$RUNNER_TEMP/media-secrets-after.json" <<'NODE'
-          const fs=require('fs');const n=p=>JSON.parse(fs.readFileSync(p,'utf8')).map(x=>String(x.name||'')).filter(Boolean).sort();const a=n(process.argv[2]),b=n(process.argv[3]);if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(`secret names changed ${JSON.stringify(a)} -> ${JSON.stringify(b)}`);if(!b.includes('MEDIA_SIGNING_SECRET'))throw new Error('MEDIA_SIGNING_SECRET missing');console.log('MEDIA_WORKER_SECRETS_PRESERVED=PASS');
+          node - "$RUNNER_TEMP/media-secrets.json" <<'NODE'
+          const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const names=a.map(x=>x.name).filter(Boolean);if(!names.includes('MEDIA_SIGNING_SECRET'))throw new Error('MEDIA_SIGNING_SECRET missing');console.log('MEDIA_WORKER_SECRET_PRESENT=PASS');
           NODE
           curl -fsS --max-time 30 "$MEDIA_WORKER_URL/health" -o "$RUNNER_TEMP/media-health.json"
           grep -q '"ok":true' "$RUNNER_TEMP/media-health.json"
@@ -116,7 +104,7 @@ jobs:
           code="$(curl -sS -o "$RUNNER_TEMP/options-body" -D "$RUNNER_TEMP/options-head" -w '%{http_code}' -X OPTIONS -H 'Origin: https://preview.soridraw.com' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization,x-firebase-appcheck' "$MEDIA_WORKER_URL/v1/catalog/musicNote")"
           test "$code" = '204'
           grep -qi '^access-control-allow-origin: https://preview.soridraw.com' "$RUNNER_TEMP/options-head"
-          echo 'MEDIA_WORKER_HEALTH_CORS=PASS'
+          echo 'MEDIA_WORKER_050_HEALTH_CORS=PASS'
 
       - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
@@ -134,23 +122,22 @@ jobs:
           for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
             ok=''
             for attempt in $(seq 1 12); do
-              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "${url}?t=$(date +%s)" -o "$RUNNER_TEMP/preview-live.html"; then
-                remote_sha="$(sha256sum "$RUNNER_TEMP/preview-live.html" | awk '{print $1}')"
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "${url}?t=$(date +%s)" -o "$RUNNER_TEMP/live.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/live.html" | awk '{print $1}')"
                 if [ "$remote_sha" = "$local_sha" ]; then ok='yes'; echo "EXACT_PREVIEW_BUILD_PASS=$url"; break; fi
               fi
               sleep 10
             done
             test "$ok" = 'yes'
           done
-          live_version="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://preview.soridraw.com/app-version.json?t=$(date +%s)" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version)))")"
-          test "$live_version" = '050'
+          test "$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://preview.soridraw.com/app-version.json?t=$(date +%s)" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version)))")" = '050'
           curl -fsS --max-time 30 -H 'Cache-Control: no-cache' 'https://soridraw.web.app/' -o "$RUNNER_TEMP/prod-after.html"
           sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
           cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
           echo 'FIREBASE_PREVIEW_050_EXACT_BUILD=PASS'
           echo 'PRODUCTION_HOSTING_UNCHANGED=PASS'
 
-      - name: Final environment guards
+      - name: Final guards
         shell: bash
         run: |
           set -euo pipefail

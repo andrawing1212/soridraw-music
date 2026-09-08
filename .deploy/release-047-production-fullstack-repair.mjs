@@ -5,7 +5,13 @@ import { spawnSync } from 'node:child_process';
 
 const ROOT = resolve(process.cwd());
 const WORKER_DIR = join(ROOT, 'cloudflare', 'explore-worker');
-const RELEASE_DIR = join(WORKER_DIR, '.release047-fullstack');
+const RELEASE_DIR = join(WORKER_DIR, '.release047-fullstack-v2');
+const PATCH_DIR = resolve(process.env.SORIDRAW_REPAIR_PATCH_DIR || join(WORKER_DIR, 'patches'));
+const PATCHES = [
+  join(PATCH_DIR, '020-explore-production-feed-mirror.mjs'),
+  join(PATCH_DIR, '022-explore-mirror-strict-sync.mjs'),
+  join(PATCH_DIR, '023-explore-mirror-service-bindings.mjs'),
+];
 const ACCOUNT_ID = 'e1a30fc9ef497fda1d34f4ab3dc1da45';
 const API_TOKEN = String(process.env.CLOUDFLARE_API_TOKEN || '').trim();
 if (!API_TOKEN) throw new Error('CLOUDFLARE_API_TOKEN is required');
@@ -15,6 +21,7 @@ const TARGETS = [
   { env: 'test', worker: 'soridraw-explore-test', dbName: 'soridraw-explore-test-db', dbId: '31817dbd-d06e-415e-9bc0-5553b0f5dc43', r2: 'soridraw-profile-media-test', base: 'https://soridraw-explore-test.andrawing1212.workers.dev', origin: 'https://test.soridraw.com' },
   { env: 'production', worker: 'soridraw-explore-api', dbName: 'soridraw-explore-db', dbId: '217ef5b1-5d80-4f7c-afc7-9e07eb05c06b', r2: 'soridraw-profile-media', base: 'https://soridraw-explore-api.andrawing1212.workers.dev', origin: 'https://soridraw.com' },
 ];
+const PREVIEW = TARGETS[0];
 const PROD = TARGETS[2];
 const authHeaders = { Authorization: `Bearer ${API_TOKEN}`, Accept: 'application/json' };
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
@@ -108,20 +115,25 @@ function configFrom(target, current, main = './worker.js', { repairMirrors = fal
       : { enabled: true },
   };
   if (Array.isArray(current?.compatibility_flags) && current.compatibility_flags.length) cfg.compatibility_flags = current.compatibility_flags;
-  const services = serviceBindings(current);
+  const services = serviceBindings(current).filter((row) => !['EXPLORE_MIRROR_PREVIEW', 'EXPLORE_MIRROR_TEST'].includes(row.binding));
   if (repairMirrors) {
-    const required = [
+    services.push(
       { binding: 'EXPLORE_MIRROR_PREVIEW', service: 'soridraw-explore-preview' },
       { binding: 'EXPLORE_MIRROR_TEST', service: 'soridraw-explore-test' },
-    ];
-    for (const item of required) {
-      const existing = services.find((row) => row.binding === item.binding);
-      if (existing) Object.assign(existing, item);
-      else services.push(item);
-    }
+    );
   }
   if (services.length) cfg.services = services;
   return cfg;
+}
+
+function validateCurrentRuntime(source, label) {
+  for (const token of [
+    'SORIDRAW_EXPLORE_LIKE_O1_028_20260908',
+    'handleMusicNotePublicationSingleWrite016',
+    'handleFeedWithEdgeCache',
+    'X-SORIDRAW-Feed-Revision',
+    '/v1/feed-revision',
+  ]) if (!source.includes(token)) throw new Error(`${label} current runtime missing ${token}`);
 }
 
 function validateMirrorRuntime(source, label) {
@@ -192,112 +204,192 @@ async function d1Count(target, sql, configPath) {
 rmSync(RELEASE_DIR, { recursive: true, force: true });
 mkdirSync(RELEASE_DIR, { recursive: true });
 
+for (const patch of PATCHES) {
+  readFileSync(patch, 'utf8');
+  run(process.execPath, ['--check', patch], { cwd: ROOT });
+}
+console.log('EXPLORE_MIRROR_PATCH_FILES=PASS');
+
 const before = new Map();
 for (const target of TARGETS) {
   const version = await activeVersion(target.worker);
   const source = await activeSource(target.worker, version);
   const currentSettings = await settings(target.worker);
   guardBindings(target, currentSettings);
-  validateMirrorRuntime(source, target.env);
+  validateCurrentRuntime(source, target.env);
   before.set(target.env, { version, source, settings: currentSettings });
-  console.log(`WORKER_${target.env.toUpperCase()}_RUNTIME_CONTRACT=PASS version=${version} sha256=${sha256(source)}`);
+  console.log(`WORKER_${target.env.toUpperCase()}_CURRENT_RUNTIME=PASS version=${version} sha256=${sha256(source)}`);
 }
 
-const prodServicesBefore = serviceBindings(before.get('production').settings);
-const mirrorPreviewBefore = prodServicesBefore.find((row) => row.binding === 'EXPLORE_MIRROR_PREVIEW');
-const mirrorTestBefore = prodServicesBefore.find((row) => row.binding === 'EXPLORE_MIRROR_TEST');
-console.log(`PRODUCTION_MIRROR_BINDING_BEFORE preview=${mirrorPreviewBefore?.service || 'MISSING'} test=${mirrorTestBefore?.service || 'MISSING'}`);
+const sourceShas = TARGETS.map((target) => sha256(before.get(target.env).source));
+if (!(sourceShas[0] === sourceShas[1] && sourceShas[1] === sourceShas[2])) {
+  throw new Error(`current Explore Worker source parity failed: ${sourceShas.join(',')}`);
+}
+console.log(`WORKER_CURRENT_ALL_ENV_SOURCE_PARITY=PASS sha256=${sourceShas[0]}`);
 
+// PREVIEW is the validated development baseline. Add only the historical 034 mirror runtime on top of the exact active PREVIEW source.
+const canonicalDir = join(RELEASE_DIR, 'canonical');
+mkdirSync(canonicalDir, { recursive: true });
+writeFileSync(join(canonicalDir, 'worker.js'), before.get(PREVIEW.env).source, 'utf8');
+for (const patch of PATCHES) {
+  run(process.execPath, [patch], { cwd: ROOT, env: { ...process.env, SORIDRAW_REMOTE_WORKER_DIR: canonicalDir } });
+}
+run(process.execPath, ['--check', join(canonicalDir, 'worker.js')], { cwd: ROOT });
+const canonicalSource = readFileSync(join(canonicalDir, 'worker.js'), 'utf8');
+validateCurrentRuntime(canonicalSource, 'canonical');
+validateMirrorRuntime(canonicalSource, 'canonical');
+console.log(`WORKER_047_CANONICAL_MIRROR_RUNTIME=PASS sha256=${sha256(canonicalSource)} bytes=${Buffer.byteLength(canonicalSource)}`);
+
+const configs = new Map();
 for (const target of TARGETS) {
   const dir = join(RELEASE_DIR, target.env);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'worker.js'), before.get(target.env).source, 'utf8');
+  writeFileSync(join(dir, 'worker.js'), canonicalSource, 'utf8');
   const cfg = configFrom(target, before.get(target.env).settings, './worker.js', { repairMirrors: target.env === 'production' });
-  writeFileSync(join(dir, 'wrangler.jsonc'), JSON.stringify(cfg, null, 2), 'utf8');
+  const configPath = join(dir, 'wrangler.jsonc');
+  writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8');
+  configs.set(target.env, configPath);
 }
 
-const prodConfig = join(RELEASE_DIR, 'production', 'wrangler.jsonc');
-const prodTrackCountBefore = await d1Count(PROD, 'SELECT COUNT(*) AS n FROM tracks', prodConfig);
+const prodTrackCountBefore = await d1Count(PROD, 'SELECT COUNT(*) AS n FROM tracks', configs.get('production'));
 console.log(`PRODUCTION_D1_TRACKS_BEFORE=${prodTrackCountBefore}`);
 
-const needsBindingRepair = mirrorPreviewBefore?.service !== 'soridraw-explore-preview' || mirrorTestBefore?.service !== 'soridraw-explore-test';
-if (needsBindingRepair) {
-  // Upload the exact currently-active production source. Only wrangler binding metadata changes.
-  run('npx', ['wrangler', 'deploy', '--strict', '--config', prodConfig]);
+const deployed = [];
+async function deployTarget(target) {
+  run('npx', ['wrangler', 'deploy', '--strict', '--config', configs.get(target.env)]);
+  deployed.push(target.env);
   await sleep(2500);
-  console.log('PRODUCTION_EXPLORE_SERVICE_BINDING_REPAIR_DEPLOY=PASS');
-} else {
-  console.log('PRODUCTION_EXPLORE_SERVICE_BINDING_REPAIR_DEPLOY=SKIP_ALREADY_CORRECT');
+  const version = await activeVersion(target.worker);
+  const source = await activeSource(target.worker, version);
+  validateCurrentRuntime(source, `${target.env} after repair`);
+  validateMirrorRuntime(source, `${target.env} after repair`);
+  const currentSettings = await settings(target.worker);
+  guardBindings(target, currentSettings);
+  if (target.env === 'production') {
+    const services = serviceBindings(currentSettings);
+    const previewBinding = services.find((row) => row.binding === 'EXPLORE_MIRROR_PREVIEW');
+    const testBinding = services.find((row) => row.binding === 'EXPLORE_MIRROR_TEST');
+    if (previewBinding?.service !== 'soridraw-explore-preview') throw new Error('production EXPLORE_MIRROR_PREVIEW binding missing after deploy');
+    if (testBinding?.service !== 'soridraw-explore-test') throw new Error('production EXPLORE_MIRROR_TEST binding missing after deploy');
+  }
+  console.log(`WORKER_${target.env.toUpperCase()}_047_REPAIR_DEPLOY=PASS version=${version} sha256=${sha256(source)}`);
 }
 
-const prodSettingsAfterBinding = await settings(PROD.worker);
-guardBindings(PROD, prodSettingsAfterBinding);
-const prodServicesAfter = serviceBindings(prodSettingsAfterBinding);
-const mirrorPreviewAfter = prodServicesAfter.find((row) => row.binding === 'EXPLORE_MIRROR_PREVIEW');
-const mirrorTestAfter = prodServicesAfter.find((row) => row.binding === 'EXPLORE_MIRROR_TEST');
-if (mirrorPreviewAfter?.service !== 'soridraw-explore-preview') throw new Error('production EXPLORE_MIRROR_PREVIEW binding repair failed');
-if (mirrorTestAfter?.service !== 'soridraw-explore-test') throw new Error('production EXPLORE_MIRROR_TEST binding repair failed');
-const prodVersionAfter = await activeVersion(PROD.worker);
-const prodSourceAfter = await activeSource(PROD.worker, prodVersionAfter);
-validateMirrorRuntime(prodSourceAfter, 'production after binding repair');
-console.log(`PRODUCTION_EXPLORE_SERVICE_BINDINGS=PASS version=${prodVersionAfter} sourceSha256=${sha256(prodSourceAfter)}`);
+async function rollbackTarget(target) {
+  const dir = join(RELEASE_DIR, `rollback-${target.env}`);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'worker.js'), before.get(target.env).source, 'utf8');
+  const configPath = join(dir, 'wrangler.jsonc');
+  const cfg = configFrom(target, before.get(target.env).settings, './worker.js', { repairMirrors: false });
+  // Preserve the exact previous service bindings on rollback.
+  const previousServices = serviceBindings(before.get(target.env).settings);
+  if (previousServices.length) cfg.services = previousServices;
+  else delete cfg.services;
+  writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8');
+  run('npx', ['wrangler', 'deploy', '--strict', '--config', configPath]);
+  console.log(`WORKER_${target.env.toUpperCase()}_ROLLBACK=PASS`);
+}
 
-// Historical 034 design intentionally used one rotating internal token shared by all 3 Workers.
-// Receivers first, canonical production last, minimizing any mismatch window.
+async function rollbackDeployed() {
+  for (const envName of [...deployed].reverse()) {
+    const target = TARGETS.find((row) => row.env === envName);
+    try { await rollbackTarget(target); } catch (error) { console.error(`ROLLBACK_FAILED_${envName}=`, error); }
+  }
+}
+
+let codeDeployPassed = false;
+try {
+  // Receivers first. Production starts fanout only after both receivers have the mirror route.
+  await deployTarget(TARGETS[0]);
+  await deployTarget(TARGETS[1]);
+  await deployTarget(TARGETS[2]);
+  codeDeployPassed = true;
+} catch (error) {
+  console.error('EXPLORE_047_CODE_OR_BINDING_REPAIR_FAILED=', error);
+  await rollbackDeployed();
+  throw error;
+}
+if (!codeDeployPassed) throw new Error('Explore repair deployment did not complete');
+
+// Rotate the dedicated internal mirror secret to one shared value after all three receivers are ready.
 const mirrorToken = randomBytes(32).toString('hex');
 for (const target of TARGETS) {
-  const configPath = join(RELEASE_DIR, target.env, 'wrangler.jsonc');
-  run('npx', ['wrangler', 'secret', 'put', 'EXPLORE_MIRROR_TOKEN', '--config', configPath], { input: `${mirrorToken}\n` });
+  run('npx', ['wrangler', 'secret', 'put', 'EXPLORE_MIRROR_TOKEN', '--config', configs.get(target.env)], { input: `${mirrorToken}\n` });
 }
-console.log('EXPLORE_047_SHARED_INTERNAL_MIRROR_SECRET=PASS');
+console.log('EXPLORE_047_SHARED_MIRROR_SECRET=PASS');
+
+// Secret updates create fresh versions; verify code + bindings again before any sync write to Preview/Test.
+for (const target of TARGETS) {
+  await sleep(700);
+  const version = await activeVersion(target.worker);
+  const source = await activeSource(target.worker, version);
+  validateCurrentRuntime(source, `${target.env} after secret`);
+  validateMirrorRuntime(source, `${target.env} after secret`);
+  const currentSettings = await settings(target.worker);
+  guardBindings(target, currentSettings);
+  if (target.env === 'production') {
+    const services = serviceBindings(currentSettings);
+    if (services.find((row) => row.binding === 'EXPLORE_MIRROR_PREVIEW')?.service !== 'soridraw-explore-preview') throw new Error('production preview service binding lost after secret update');
+    if (services.find((row) => row.binding === 'EXPLORE_MIRROR_TEST')?.service !== 'soridraw-explore-test') throw new Error('production test service binding lost after secret update');
+  }
+}
+console.log('EXPLORE_047_POST_SECRET_RUNTIME_GUARD=PASS');
 
 let syncPassed = false;
 let lastSync = '';
 for (let attempt = 1; attempt <= 3; attempt += 1) {
   const { response, text, payload } = await fetchJson(`${PROD.base}/__soridraw_explore_feed_sync_020`, {
     method: 'POST',
-    headers: { 'X-SORIDRAW-Explore-Mirror': mirrorToken, Origin: PROD.origin, Accept: 'application/json' },
+    headers: {
+      'X-SORIDRAW-Explore-Mirror': mirrorToken,
+      Origin: PROD.origin,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
   });
-  lastSync = `${response.status} ${text.slice(0, 700)}`;
-  if (response.ok && payload?.ok === true && Number(payload?.targetCount || 0) === 2) { syncPassed = true; break; }
-  await sleep(1500);
+  lastSync = `${response.status} ${text.slice(0, 800)}`;
+  if (response.ok && payload?.ok === true && Number(payload?.targetCount || 0) === 2) {
+    syncPassed = true;
+    break;
+  }
+  await sleep(1500 * attempt);
 }
-if (!syncPassed) throw new Error(`production Explore strict full sync failed: ${lastSync}`);
-console.log('EXPLORE_047_STRICT_FULL_SYNC=PASS targetCount=2');
+if (!syncPassed) throw new Error(`strict production Explore mirror sync failed: ${lastSync}`);
+console.log('EXPLORE_047_STRICT_FULL_SYNC=PASS targets=2');
 
 await sleep(1500);
 const bust = `047-${Date.now()}`;
 for (const sort of ['latest', 'popular']) {
-  const results = [];
-  for (const target of TARGETS) results.push(await getFeed(target, sort, bust));
-  const canonical = JSON.stringify(normalizeFeed(feedItems(results[2])));
-  for (let index = 0; index < 2; index += 1) {
-    const actual = JSON.stringify(normalizeFeed(feedItems(results[index])));
-    if (actual !== canonical) throw new Error(`${TARGETS[index].env} ${sort} public feed differs from production after 047 repair`);
+  const feeds = [];
+  const revisions = [];
+  for (const target of TARGETS) {
+    feeds.push(await getFeed(target, sort, bust));
+    revisions.push(await getRevision(target, sort));
   }
-  console.log(`EXPLORE_047_${sort.toUpperCase()}_FEED_PARITY=PASS items=${feedItems(results[2]).length}`);
+  const canonical = JSON.stringify(normalizeFeed(feedItems(feeds[2])));
+  for (let index = 0; index < 2; index += 1) {
+    const actual = JSON.stringify(normalizeFeed(feedItems(feeds[index])));
+    if (actual !== canonical) throw new Error(`${TARGETS[index].env} ${sort} feed differs from production after strict sync`);
+  }
+  if (!(revisions[0] === revisions[1] && revisions[1] === revisions[2])) {
+    throw new Error(`${sort} feed revision parity failed: ${revisions.join(',')}`);
+  }
+  console.log(`EXPLORE_047_${sort.toUpperCase()}_FEED_PARITY=PASS items=${feedItems(feeds[2]).length} revision=${revisions[2]}`);
 }
 
-for (const target of TARGETS) {
-  await getRevision(target, 'latest');
-  await getRevision(target, 'popular');
-}
-console.log('EXPLORE_047_REVISION_D1_ZERO_ALL_ENVS=PASS');
-
-const prodLatest = await getFeed(PROD, 'latest', `${bust}-rows`);
+const prodLatest = await getFeed(PROD, 'latest', `${bust}-d1`);
 const topIds = feedItems(prodLatest).slice(0, 10).map((item) => String(item?.id || item?.trackId || '')).filter(Boolean);
 if (topIds.length) {
   const quoted = topIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
   for (const target of TARGETS.slice(0, 2)) {
-    const configPath = join(RELEASE_DIR, target.env, 'wrangler.jsonc');
-    const count = await d1Count(target, `SELECT COUNT(*) AS n FROM tracks WHERE id IN (${quoted})`, configPath);
-    if (count !== topIds.length) throw new Error(`${target.env} visible canonical tracks missing in isolated D1: ${count}/${topIds.length}`);
+    const count = await d1Count(target, `SELECT COUNT(*) AS n FROM tracks WHERE id IN (${quoted})`, configs.get(target.env));
+    if (count !== topIds.length) throw new Error(`${target.env} mirrored visible rows missing in D1: ${count}/${topIds.length}`);
     console.log(`EXPLORE_047_${target.env.toUpperCase()}_D1_VISIBLE_ROWS=PASS count=${count}`);
   }
 }
 
-const prodTrackCountAfter = await d1Count(PROD, 'SELECT COUNT(*) AS n FROM tracks', prodConfig);
-if (prodTrackCountAfter !== prodTrackCountBefore) throw new Error(`production tracks changed during mirror: ${prodTrackCountBefore} -> ${prodTrackCountAfter}`);
+const prodTrackCountAfter = await d1Count(PROD, 'SELECT COUNT(*) AS n FROM tracks', configs.get('production'));
+if (prodTrackCountAfter !== prodTrackCountBefore) throw new Error(`production D1 tracks changed during mirror: ${prodTrackCountBefore} -> ${prodTrackCountAfter}`);
 console.log(`PRODUCTION_D1_TRACKS_UNCHANGED=PASS count=${prodTrackCountAfter}`);
 
 for (const target of TARGETS.slice(0, 2)) {

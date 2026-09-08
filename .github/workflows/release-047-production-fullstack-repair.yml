@@ -5,6 +5,10 @@ on:
     branches: [diag-045-full-stack-parity-20260908]
     paths:
       - .github/workflows/release-047-production-fullstack-repair.yml
+      - .deploy/release-047-production-fullstack-repair.mjs
+      - cloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs
+      - cloudflare/explore-worker/patches/022-explore-mirror-strict-sync.mjs
+      - cloudflare/explore-worker/patches/023-explore-mirror-service-bindings.mjs
 
 permissions:
   contents: read
@@ -23,7 +27,7 @@ env:
 jobs:
   repair_and_release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
       - name: Checkout release controller
         uses: actions/checkout@v4
@@ -34,7 +38,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/repair-patches"
           cp .deploy/release-047-production-fullstack-repair.mjs "$RUNNER_TEMP/release-047-production-fullstack-repair.mjs"
+          cp cloudflare/explore-worker/patches/020-explore-production-feed-mirror.mjs "$RUNNER_TEMP/repair-patches/020-explore-production-feed-mirror.mjs"
+          cp cloudflare/explore-worker/patches/022-explore-mirror-strict-sync.mjs "$RUNNER_TEMP/repair-patches/022-explore-mirror-strict-sync.mjs"
+          cp cloudflare/explore-worker/patches/023-explore-mirror-service-bindings.mjs "$RUNNER_TEMP/repair-patches/023-explore-mirror-service-bindings.mjs"
           git fetch origin main preview --quiet
           test "$(git rev-parse origin/main)" = "$MAIN_BASE"
           test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
@@ -54,6 +62,9 @@ jobs:
           set -euo pipefail
           git checkout --detach "$MAIN_BASE"
           node --check "$RUNNER_TEMP/release-047-production-fullstack-repair.mjs"
+          node --check "$RUNNER_TEMP/repair-patches/020-explore-production-feed-mirror.mjs"
+          node --check "$RUNNER_TEMP/repair-patches/022-explore-mirror-strict-sync.mjs"
+          node --check "$RUNNER_TEMP/repair-patches/023-explore-mirror-service-bindings.mjs"
           npm ci --no-audit --no-fund
           npx tsc --noEmit
           node scripts/verify-029-music-note-library.mjs
@@ -78,7 +89,7 @@ jobs:
           find dist -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}' > "$RUNNER_TEMP/dist-tree.sha"
           echo 'MAIN_047_PRODUCTION_BUILD_VALIDATION=PASS'
 
-      - name: Install pinned Cloudflare tooling
+      - name: Install Cloudflare tooling
         shell: bash
         run: |
           set -euo pipefail
@@ -87,12 +98,12 @@ jobs:
           npx wrangler --version
           echo 'CLOUDFLARE_TOOLING_READY=PASS'
 
-      - name: Restore production Explore Service Bindings and strict full sync
+      - name: Restore full Explore mirror runtime, bindings, and strict sync
         shell: bash
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
-          node "$RUNNER_TEMP/release-047-production-fullstack-repair.mjs"
+          SORIDRAW_REPAIR_PATCH_DIR="$RUNNER_TEMP/repair-patches" node "$RUNNER_TEMP/release-047-production-fullstack-repair.mjs"
 
       - name: Confirm exact MAIN dist remained unchanged
         shell: bash
@@ -145,8 +156,26 @@ jobs:
           cmp dist/brand/soridraw-favicon-production-043.png "$RUNNER_TEMP/prod-favicon.png"
           test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=047-final' | tr -d '\r\n ')" = '{"version":"047"}'
           test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://test.soridraw.com/app-version.json?t=047-final' | tr -d '\r\n ')" = '{"version":"047"}'
-          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://soridraw.com/app-version.json?t=047-final-2' | tr -d '\r\n ')" = '{"version":"047"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://soridraw.com/app-version.json?t=047-final' | tr -d '\r\n ')" = '{"version":"047"}'
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
           test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
           echo 'PREVIEW_TEST_PRODUCTION_047=PASS'
           echo 'PRODUCTION_LIVE_047=PASS'
+
+      - name: Package exact PREVIEW and main 047 deployment ZIPs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deployment-zips"
+          git archive --format=zip --output="$RUNNER_TEMP/deployment-zips/SORIDRAW_047_PREVIEW_${PREVIEW_BASE:0:8}_2026-09-08.zip" "$PREVIEW_BASE"
+          git archive --format=zip --output="$RUNNER_TEMP/deployment-zips/SORIDRAW_047_MAIN_${MAIN_BASE:0:8}_2026-09-08.zip" "$MAIN_BASE"
+          unzip -t "$RUNNER_TEMP/deployment-zips/SORIDRAW_047_PREVIEW_${PREVIEW_BASE:0:8}_2026-09-08.zip" >/dev/null
+          unzip -t "$RUNNER_TEMP/deployment-zips/SORIDRAW_047_MAIN_${MAIN_BASE:0:8}_2026-09-08.zip" >/dev/null
+          echo 'DEPLOYMENT_ZIPS_047=PASS'
+
+      - name: Upload exact 047 deployment ZIPs
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_047_DEPLOYMENT_ZIPS
+          path: ${{ runner.temp }}/deployment-zips/*.zip
+          if-no-files-found: error

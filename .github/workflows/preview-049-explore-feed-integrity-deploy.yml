@@ -1,0 +1,224 @@
+name: SORIDRAW 049 Explore Feed Integrity PREVIEW Deploy
+
+on:
+  push:
+    branches: [preview-049-explore-feed-integrity-deploy]
+    paths:
+      - '.github/workflows/preview-049-explore-feed-integrity-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-049-explore-feed-integrity-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy_preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_PREVIEW_SHA: 0c19b23abfa074f69aa40aec4ba9a6069b8cdbf6
+      EXPECTED_MAIN_SHA: 431ea22dfa238bfc89b6bde1fd7f3082cdfe10cf
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+      PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_R2: soridraw-profile-media-preview
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Guard exact PREVIEW and untouched main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main
+          test "$(git rev-parse origin/preview)" = "$EXPECTED_PREVIEW_SHA"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PREVIEW_SHA"
+          test "$(node -p "require('./public/app-version.json').version")" = '049'
+          echo 'PREVIEW_049_SOURCE_GUARD=PASS'
+          echo 'MAIN_UNCHANGED_GUARD=PASS'
+
+      - name: Validate exact 049 preview source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          node --check cloudflare/explore-worker/patches/030-explore-feed-integrity-self-heal.mjs
+          npx tsc --noEmit
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-045-explore-active-revalidation.mjs
+          node scripts/verify-046-catalog-stale-revision-rebuild.mjs
+          node scripts/verify-047-stale-chunk-recovery.mjs
+          node scripts/verify-048-explore-public-profile-parity.mjs
+          node scripts/verify-049-explore-feed-integrity.mjs
+          node scripts/verify-runtime-environment-parity-028.mjs
+          npm run build
+          echo 'SORIDRAW_049_PREDEPLOY_VALIDATION=PASS'
+
+      - name: Snapshot TEST and PRODUCTION
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in test.soridraw.com soridraw.com; do
+            curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://$host/" -o "$RUNNER_TEMP/${host}.before.html"
+            sha256sum "$RUNNER_TEMP/${host}.before.html" | awk '{print $1}' > "$RUNNER_TEMP/${host}.before.sha"
+            curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://$host/app-version.json" -o "$RUNNER_TEMP/${host}.before.version.json"
+          done
+
+      - name: Patch and deploy PREVIEW Explore Worker 030
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false wrangler@4.102.0
+          rm -rf .remote-worker && mkdir .remote-worker
+
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,N=process.env.PREVIEW_WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('Cloudflare '+r.status+' '+JSON.stringify(x).slice(0,1000));return x.result||x;}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;
+            const ds=await g(base+'/deployments'),d=(ds.deployments||ds||[])[0],active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(!active?.version_id)throw Error('active PREVIEW version missing');
+            const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${active.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0];
+            if(!m?.content_base64)throw Error('active PREVIEW source missing');
+            const s=Buffer.from(m.content_base64,'base64').toString('utf8');
+            for(const required of ['syncMirroredProfileR2029','repairPublicProfileParityOnColdRead029','profileParityVersion','applyExploreMirrorPayload020Core029','handlePublicProfileFirstViewWithEdgeCacheCore029','handleExploreFeedRevision019','buildExploreFeedR2Payload','readExploreR2Json','writeExploreR2Json','exploreFeedR2Key','invalidateExploreFeedEdgeCache']) if(!s.includes(required)) throw Error('live PREVIEW prerequisite missing: '+required);
+            if(s.includes('SORIDRAW_EXPLORE_FEED_INTEGRITY_SELF_HEAL_030_20260909')||s.includes('ensureExploreFeedIntegrity030')) throw Error('030 runtime already active unexpectedly');
+            fs.writeFileSync('.remote-worker/before-version.txt',active.version_id);
+            fs.writeFileSync('.remote-worker/before-source.sha',crypto.createHash('sha256').update(s).digest('hex'));
+            fs.writeFileSync('.remote-worker/original.js',s);
+            fs.writeFileSync('.remote-worker/worker.js',s);
+            const settings=await g(base+'/settings');
+            const bindings=Array.isArray(settings.bindings)?settings.bindings:[];
+            const requiredBindings=new Map([['BOOTSTRAP_TOKEN','plain_text'],['DB','d1'],['ENV_NAME','plain_text'],['EXPLORE_MIRROR_TOKEN','secret_text'],['PROD_BASE','plain_text'],['PROFILE_MEDIA','r2_bucket'],['SORIDRAW_ENVIRONMENT','plain_text'],['TARGET_BASE','plain_text']]);
+            for(const [name,type] of requiredBindings){const b=bindings.find(x=>x.name===name);if(!b||b.type!==type)throw Error(`PREVIEW binding mismatch ${name}:${b?.type||'missing'} expected ${type}`);}
+            const services=bindings.filter(b=>String(b.type||'').toLowerCase().includes('service'));
+            if(services.length) throw Error('unexpected PREVIEW service bindings: '+services.map(b=>b.name).join(','));
+            fs.writeFileSync('.remote-worker/bindings-before.json',JSON.stringify(bindings.map(b=>({name:b.name,type:b.type})).sort((a,b)=>a.name.localeCompare(b.name))));
+            const cfg={name:N,main:'./worker.js',compatibility_date:String(settings.compatibility_date||'2026-08-28').slice(0,10),workers_dev:true,keep_vars:true,d1_databases:[{binding:'DB',database_name:process.env.PREVIEW_DB_NAME,database_id:process.env.PREVIEW_DB_ID}],r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.PREVIEW_R2}],observability:settings.observability&&typeof settings.observability==='object'?{enabled:settings.observability.enabled!==false}:{enabled:true}};
+            if(Array.isArray(settings.compatibility_flags)&&settings.compatibility_flags.length)cfg.compatibility_flags=settings.compatibility_flags;
+            fs.writeFileSync('.remote-worker/wrangler.jsonc',JSON.stringify(cfg,null,2));
+            console.log('PREVIEW_WORKER_BEFORE='+active.version_id);
+            console.log('PREVIEW_BINDINGS_BEFORE=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+          export SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker"
+          node patches/030-explore-feed-integrity-self-heal.mjs
+          node --check .remote-worker/worker.js
+          for required in SORIDRAW_EXPLORE_FEED_INTEGRITY_SELF_HEAL_030_20260909 ensureExploreFeedIntegrity030 EXPLORE_FEED_INTEGRITY_CHECK_INTERVAL_MS_030 handleExploreFeedRevision019Core030 syncMirroredProfileR2029 repairPublicProfileParityOnColdRead029; do grep -Fq "$required" .remote-worker/worker.js; done
+          echo 'PATCH_030_DRY_RUN=PASS'
+
+          deployed=0
+          rollback(){ status=$?; if [ "$status" -ne 0 ] && [ "$deployed" = 1 ]; then echo 'PREVIEW_WORKER_ROLLBACK=START'; cp .remote-worker/original.js .remote-worker/worker.js; npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc || true; fi; exit "$status"; }
+          trap rollback EXIT
+          npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc
+          deployed=1
+          sleep 4
+
+          node <<'NODE'
+          const fs=require('fs');const A=process.env.CLOUDFLARE_ACCOUNT_ID,N=process.env.PREVIEW_WORKER,T=process.env.CLOUDFLARE_API_TOKEN;
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('Cloudflare '+r.status+' '+JSON.stringify(x).slice(0,800));return x.result||x;}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;
+            const ds=await g(base+'/deployments'),d=(ds.deployments||ds||[])[0],active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0],before=fs.readFileSync('.remote-worker/before-version.txt','utf8').trim();
+            if(!active?.version_id||active.version_id===before)throw Error('PREVIEW Worker version unchanged');
+            const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${active.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8');
+            for(const required of ['SORIDRAW_EXPLORE_FEED_INTEGRITY_SELF_HEAL_030_20260909','ensureExploreFeedIntegrity030','EXPLORE_FEED_INTEGRITY_CHECK_INTERVAL_MS_030','handleExploreFeedRevision019Core030','syncMirroredProfileR2029','repairPublicProfileParityOnColdRead029']) if(!s.includes(required)) throw Error('deployed runtime missing: '+required);
+            const settings=await g(base+'/settings');
+            const bindings=Array.isArray(settings.bindings)?settings.bindings:[];
+            const beforeBindings=JSON.parse(fs.readFileSync('.remote-worker/bindings-before.json','utf8'));
+            const afterBindings=bindings.map(b=>({name:b.name,type:b.type})).sort((a,b)=>a.name.localeCompare(b.name));
+            if(JSON.stringify(afterBindings)!==JSON.stringify(beforeBindings))throw Error('PREVIEW bindings changed unexpectedly: '+JSON.stringify(afterBindings));
+            console.log('PREVIEW_WORKER_AFTER='+active.version_id);
+            console.log('PREVIEW_WORKER_030_FUNCTIONAL_SHAPE=PASS');
+            console.log('PREVIEW_029_RUNTIME_PRESERVED=PASS');
+            console.log('PREVIEW_BINDINGS_PRESERVED=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+          curl -fsS --max-time 30 -H "Origin: $PREVIEW_ORIGIN" -H 'Cache-Control: no-cache' "$PREVIEW_BASE/v1/feed-revision?sort=latest&__deploy=049" -o /tmp/rev-latest.json
+          curl -fsS --max-time 30 -H "Origin: $PREVIEW_ORIGIN" -H 'Cache-Control: no-cache' "$PREVIEW_BASE/v1/feed-revision?sort=popular&__deploy=049" -o /tmp/rev-popular.json
+          node -e "for(const f of ['/tmp/rev-latest.json','/tmp/rev-popular.json']){const p=require(f);if(!p?.data?.revision)process.exit(1)}"
+          echo 'EXPLORE_030_INTEGRITY_TRIGGER=PASS'
+
+          for sort in latest popular; do
+            curl -fsS --max-time 30 -H "Origin: $PREVIEW_ORIGIN" -H 'Cache-Control: no-cache' "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40&__deploy=049" -o "/tmp/$sort-r2.json"
+            curl -fsS --max-time 30 -H "Origin: $PREVIEW_ORIGIN" -H 'Cache-Control: no-cache' "$PREVIEW_BASE/v1/feed?sort=$sort&limit=39&__deploy=049" -o "/tmp/$sort-d1.json"
+            SORT="$sort" node <<'NODE'
+            const fs=require('fs');const sort=process.env.SORT;
+            const r2p=JSON.parse(fs.readFileSync(`/tmp/${sort}-r2.json`,'utf8')),d1p=JSON.parse(fs.readFileSync(`/tmp/${sort}-d1.json`,'utf8'));
+            const r2=r2p?.data?.items||[],d1=d1p?.data?.items||[];const id=x=>String(x?.id||x?.trackId||'');
+            const left=r2.slice(0,d1.length).map(id),right=d1.map(id);
+            if(!r2.length || JSON.stringify(left)!==JSON.stringify(right)){console.error(sort,'R2/D1 top-order mismatch',{r2:left,d1:right});process.exit(1);}
+            console.log(`EXPLORE_${sort.toUpperCase()}_R2_D1_PARITY=PASS count=${d1.length}`);
+            console.log(`EXPLORE_${sort.toUpperCase()}_NEXT_CURSOR=${Boolean(r2p?.data?.nextCursor)}`);
+            NODE
+          done
+          trap - EXIT
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW Hosting 049
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_DEPLOY=PASS'
+
+      - name: Verify PREVIEW exact build and version 049
+        shell: bash
+        run: |
+          set -euo pipefail
+          local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$local_sha" ]; then ok=yes; echo "EXACT_BUILD_PASS=$url"; break; fi
+              fi
+              sleep 8
+            done
+            test "$ok" = yes
+          done
+          version="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://preview.soridraw.com/app-version.json | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).version")"
+          test "$version" = '049'
+          echo 'PREVIEW_VERSION_049=PASS'
+
+      - name: Verify TEST PRODUCTION and main unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main preview
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse origin/preview)" = "$EXPECTED_PREVIEW_SHA"
+          for host in test.soridraw.com soridraw.com; do
+            curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://$host/" -o "$RUNNER_TEMP/${host}.after.html"
+            sha256sum "$RUNNER_TEMP/${host}.after.html" | awk '{print $1}' > "$RUNNER_TEMP/${host}.after.sha"
+            cmp "$RUNNER_TEMP/${host}.before.sha" "$RUNNER_TEMP/${host}.after.sha"
+            curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://$host/app-version.json" -o "$RUNNER_TEMP/${host}.after.version.json"
+            cmp "$RUNNER_TEMP/${host}.before.version.json" "$RUNNER_TEMP/${host}.after.version.json"
+          done
+          echo 'TEST_UNCHANGED=PASS'
+          echo 'PRODUCTION_UNCHANGED=PASS'
+          echo 'MAIN_UNCHANGED=PASS'
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'FIRESTORE_RULES_CHANGED=false'

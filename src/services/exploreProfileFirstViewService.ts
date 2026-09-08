@@ -17,7 +17,8 @@ import {
 // SORIDRAW_PROFILE_EVENT_DRIVEN_CACHE_1003
 // SORIDRAW_PROFILE_CACHE_SWR_1020
 // SORIDRAW_PROFILE_ALIAS_PARITY_020
-const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 4;
+// SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048
+const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 5;
 const PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS = 60_000;
 const PROFILE_FIRST_VIEW_SOURCE_TYPE = 'explore_profile_first_view';
 const PROFILE_FIRST_VIEW_LIMIT = 50;
@@ -152,7 +153,13 @@ const requestMaterializedFirstView = async (
   const url = new URL(`${EXPLORE_API_BASE}/v1/profiles/${encodeURIComponent(normalizedRef)}/first-view`);
   url.searchParams.set('limit', String(PROFILE_FIRST_VIEW_LIMIT));
   const revision = String(knownRevision || '').trim();
-  if (revision) url.searchParams.set('knownRevision', revision);
+  if (revision) {
+    url.searchParams.set('knownRevision', revision);
+  } else {
+    // One cold request after 048 may repair an old per-environment Profile R2 snapshot.
+    // Warm revision checks do not carry this flag, so normal revisits add no new D1 read.
+    url.searchParams.set('__soridraw_profile_parity', '48');
+  }
 
   const startedAt = typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
   const response = await fetch(url.toString(), { method: 'GET', headers: { Accept: 'application/json' } });

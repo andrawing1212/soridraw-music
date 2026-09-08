@@ -65,6 +65,11 @@ export const readExploreFeedSessionCacheRevision = (url: string): string | null 
   return normalizeRevision(readFeedEnvelope(url)?.serverRevision);
 };
 
+export const readExploreFeedSessionCacheCursor = (url: string): string | null => {
+  if (!isFeedRequest(url)) return null;
+  return normalizeRevision(readFeedEnvelope(url)?.syncCursor);
+};
+
 export const writeExploreFeedSessionCache = (
   url: string,
   rows: Array<Record<string, unknown>>,

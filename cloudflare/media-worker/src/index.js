@@ -476,6 +476,8 @@ const MUSIC_NOTE_CATALOG_FIELDS = [
   'isPublic', 'exploreTrackId', 'explorePublicationId',
   'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'deletedAt', 'trashedAt',
   'color', 'favoriteColor', 'noteColor', 'folderId', 'folderIds', 'musicNoteFolderIds',
+  'noteFolderId', 'myNoteFolderId', 'favoriteFolderId', 'sharedNoteFolderId', 'sharedNoteFolder', 'noteSharedFolderId',
+  'sharedNoteShareId', 'isSharedMusicNote', 'sharedReadOnly', 'sourceType', 'originalFavoriteId',
   'createdAtMs', 'createdAt', 'updatedAtMs', 'updatedAt',
   'sunoLinks', 'sunoShareLinks', 'mainSunoIndex',
   'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
@@ -509,9 +511,11 @@ const catalogRouteFromPath = (pathname) => {
   return match ? { kind: match[1], action: match[2] || 'base' } : null;
 };
 
-const catalogObjectKey = (uid, kind) => `catalog/v4/${encodeURIComponent(uid)}/${kind}.json`;
-const catalogJournalKey = (uid, kind) => `catalog/v4/${encodeURIComponent(uid)}/${kind}/journal.json`;
-const catalogCompactedBaseKey = (uid, kind, revision) => `catalog/v4/${encodeURIComponent(uid)}/${kind}/bases/${revision}.json`;
+const MUSIC_NOTE_CATALOG_STORAGE_GENERATION_050 = 'v5';
+const catalogStorageGeneration = (kind) => kind === 'musicNote' ? MUSIC_NOTE_CATALOG_STORAGE_GENERATION_050 : 'v4';
+const catalogObjectKey = (uid, kind) => `catalog/${catalogStorageGeneration(kind)}/${encodeURIComponent(uid)}/${kind}.json`;
+const catalogJournalKey = (uid, kind) => `catalog/${catalogStorageGeneration(kind)}/${encodeURIComponent(uid)}/${kind}/journal.json`;
+const catalogCompactedBaseKey = (uid, kind, revision) => `catalog/${catalogStorageGeneration(kind)}/${encodeURIComponent(uid)}/${kind}/bases/${revision}.json`;
 
 const catalogKnownRevision = (request) => {
   const value = Math.floor(Number(request.headers.get('X-Soridraw-Known-Revision') || 0));

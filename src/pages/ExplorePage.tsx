@@ -2,6 +2,8 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_EXPLORE_8E5_SOCIAL_PUBLIC_PROFILE
 // SORIDRAW_EXPLORE_8E5_PROFILE_EDIT_UI_975
 // SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000
+// SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048
+// SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Compass, ExternalLink, Heart, Loader2, Music2, Pencil, Pin, Search, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
@@ -11,6 +13,7 @@ import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
   patchExploreFeedSessionCacheRow,
   readExploreFeedSessionCache,
+  readExploreFeedSessionCacheCursor,
   readExploreFeedSessionCacheRevision,
   writeExploreFeedSessionCache,
 } from '../services/exploreSessionCache';
@@ -40,6 +43,7 @@ type ExploreTrack = {
   sunoUrlPrimary?: string | null;
   openUrl?: string | null;
   likeCount: number;
+  publishedAt: number;
   profilePinned: boolean;
 };
 
@@ -110,8 +114,16 @@ const normalizeTrack = (row: Record<string, unknown>): ExploreTrack => ({
   sunoUrlPrimary: safeText(row.sunoUrlPrimary) || null,
   openUrl: safeText(row.openUrl) || null,
   likeCount: readNestedCount(row, 'likeCount'),
+  publishedAt: safeCount(row.publishedAt ?? row.published_at),
   profilePinned: Boolean(row.profilePinned ?? row.profile_pinned ?? (row.options as Record<string, unknown> | undefined)?.profilePinned),
 });
+
+const comparePublicProfileTracks = (a: ExploreTrack, b: ExploreTrack) => {
+  const pinnedOrder = Number(b.profilePinned) - Number(a.profilePinned);
+  if (pinnedOrder !== 0) return pinnedOrder;
+  if (a.publishedAt !== b.publishedAt) return b.publishedAt - a.publishedAt;
+  return b.id.localeCompare(a.id);
+};
 
 const isOpenableUrl = (value?: string | null) => {
   if (!value) return false;
@@ -242,6 +254,9 @@ export default function ExplorePage() {
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [tracks, setTracks] = useState<ExploreTrack[]>([]);
+  const [feedNextCursor, setFeedNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [likedTrackIds, setLikedTrackIds] = useState<Record<string, boolean>>({});
@@ -307,19 +322,24 @@ export default function ExplorePage() {
 
     const applyPayload = (payload: ExploreApiResponse, serverRevision: string | null) => {
       const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+      const nextCursor = feedRequest ? (safeText(payload?.data?.nextCursor) || null) : null;
       if (feedRequest) {
         writeExploreFeedSessionCache(
           requestUrl,
           rows,
-          safeText(payload?.data?.nextCursor) || null,
+          nextCursor,
           serverRevision,
         );
       }
+      setFeedNextCursor(nextCursor);
+      setLoadMoreError('');
       setTracks(rows.map(normalizeTrack).filter((track) => track.id));
     };
 
     if (cachedRows) {
       setError('');
+      setFeedNextCursor(feedRequest ? readExploreFeedSessionCacheCursor(requestUrl) : null);
+      setLoadMoreError('');
       setTracks(cachedRows.map(normalizeTrack).filter((track) => track.id));
       setLoading(false);
 
@@ -370,6 +390,8 @@ export default function ExplorePage() {
         if (controller.signal.aborted) return;
         console.error('Explore feed load failed:', reason);
         setError('Explore 곡을 불러오지 못했어요.');
+        setFeedNextCursor(null);
+        setLoadMoreError('');
         setTracks([]);
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -431,7 +453,7 @@ export default function ExplorePage() {
     const applyProfileFirstView = (nextProfile: ExplorePublicProfile, rows: Array<Record<string, unknown>>) => {
       if (cancelled) return;
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
-      normalizedTracks.sort((a, b) => Number(b.profilePinned) - Number(a.profilePinned));
+      normalizedTracks.sort(comparePublicProfileTracks);
       setProfile(nextProfile);
       setProfileTracks(normalizedTracks);
     };
@@ -538,6 +560,35 @@ export default function ExplorePage() {
   const closeProfile = () => {
     setSearchParams({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const loadMoreFeed = async () => {
+    if (profileUid || submittedQuery || !feedNextCursor || loadingMore) return;
+    const apiSort = sort === 'popular' ? 'popular' : 'latest';
+    const params = new URLSearchParams({ sort: apiSort, limit: '40', cursor: feedNextCursor });
+    setLoadingMore(true);
+    setLoadMoreError('');
+    try {
+      const response = await fetch(EXPLORE_API_BASE + '/v1/feed?' + params.toString(), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      recordCloudflareResponse(response);
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const payload = await response.json() as ExploreApiResponse;
+      const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+      const normalized = rows.map(normalizeTrack).filter((track) => track.id);
+      setTracks((previous) => {
+        const seen = new Set(previous.map((track) => track.id));
+        return [...previous, ...normalized.filter((track) => !seen.has(track.id))];
+      });
+      setFeedNextCursor(safeText(payload?.data?.nextCursor) || null);
+    } catch (reason) {
+      console.warn('Explore feed load-more failed:', reason);
+      setLoadMoreError('이전 공개곡을 불러오지 못했어요. 다시 시도해주세요.');
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const updateTrackLikeCount = (trackId: string, likeCount: number) => {
@@ -788,7 +839,19 @@ export default function ExplorePage() {
           <strong>{submittedQuery ? '검색 결과가 없어요.' : '아직 공개된 곡이 없어요.'}</strong>
           <span>{submittedQuery ? '다른 검색어로 찾아보세요.' : '공개된 곡이 생기면 이곳에 표시됩니다.'}</span>
         </div>
-      ) : renderTrackGrid(tracks, 'Explore 곡 목록')}
+      ) : (
+        <>
+          {renderTrackGrid(tracks, 'Explore 곡 목록')}
+          {!submittedQuery && feedNextCursor && (
+            <div className="soridraw-explore-load-more">
+              <button type="button" onClick={loadMoreFeed} disabled={loadingMore}>
+                {loadingMore ? <><Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 불러오는 중</> : '더 보기'}
+              </button>
+            </div>
+          )}
+          {loadMoreError && <div className="soridraw-explore-load-more-error" role="status">{loadMoreError}</div>}
+        </>
+      )}
     </main>
   );
 }

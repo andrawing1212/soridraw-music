@@ -1,4 +1,4 @@
-const CURRENT_APP_VERSION = '047';
+const CURRENT_APP_VERSION = '050';
 const VERSION_URL = '/app-version.json';
 const NOTICE_ID = 'soridraw-app-update-notice';
 const MIN_CHECK_INTERVAL_MS = 30_000;

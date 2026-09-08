@@ -1,0 +1,173 @@
+name: SORIDRAW 044 Stage A PREVIEW
+
+on:
+  push:
+    branches: [release-044-explore-like-cost-parity]
+    paths: ['.github/workflows/release-044-stage-a-preview.yml']
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: soridraw-044-stage-a-preview
+  cancel-in-progress: false
+
+jobs:
+  stage-a:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PREVIEW_BASE: 3a7de5fe6afa90833acbda233aff78c549eb9183
+      MAIN_BASE: 2fadb2dc666fadecbbbd93e92cfb104ed567f233
+      FIREBASE_PROJECT: soridraw
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard baseline and prepare PREVIEW 044
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          git diff --quiet origin/main origin/preview -- functions
+          git diff --quiet origin/main origin/preview -- cloudflare
+          git diff --name-only origin/main origin/preview -- src | sort > "$RUNNER_TEMP/src-before.txt"
+          printf '%s\n' src/App.tsx src/services/appUpdateNotice.ts | sort > "$RUNNER_TEMP/src-expected.txt"
+          diff -u "$RUNNER_TEMP/src-expected.txt" "$RUNNER_TEMP/src-before.txt"
+          grep -Fq 'verified_run_id=34197373670' .github/release-044-runtime-probe-pass.txt
+          grep -Fq 'rate_returning_count=1' .github/release-044-runtime-probe-pass.txt
+          grep -Fq 'track_stats_returning_like_count=1' .github/release-044-runtime-probe-pass.txt
+          grep -Fq 'cleanup_ok=true' .github/release-044-runtime-probe-pass.txt
+          cp cloudflare/explore-worker/patches/028-explore-like-o1.mjs "$RUNNER_TEMP/028-explore-like-o1.mjs"
+          git checkout -B preview-044-work origin/preview
+          cp "$RUNNER_TEMP/028-explore-like-o1.mjs" cloudflare/explore-worker/patches/028-explore-like-o1.mjs
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('src/services/appUpdateNotice.ts')
+          s=p.read_text(encoding='utf-8')
+          s,n=re.subn(r"const CURRENT_APP_VERSION = '[^']+';", "const CURRENT_APP_VERSION = '044';", s, count=1)
+          if n != 1: raise SystemExit('appUpdateNotice version anchor missing')
+          p.write_text(s,encoding='utf-8')
+          Path('public/app-version.json').write_text('{\n  "version": "044"\n}\n',encoding='utf-8')
+          PY
+          node --check cloudflare/explore-worker/patches/028-explore-like-o1.mjs
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          git diff --check
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add src/services/appUpdateNotice.ts public/app-version.json cloudflare/explore-worker/patches/028-explore-like-o1.mjs
+          git commit -m 'fix(preview): reduce Explore like cost and bump 044'
+          PREVIEW_FINAL_SHA="$(git rev-parse HEAD)"
+          echo "PREVIEW_FINAL_SHA=$PREVIEW_FINAL_SHA" >> "$GITHUB_ENV"
+          echo "PREVIEW_044_VALIDATION=PASS SHA=$PREVIEW_FINAL_SHA"
+
+      - name: Prepare identical 044 Workers from active runtime
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false wrangler@4.102.0
+          rm -rf .release044 && mkdir -p .release044/{preview,test,production,common}
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN;
+          const targets={
+            preview:{worker:'soridraw-explore-preview',dbName:'soridraw-explore-preview-db',dbId:'aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f',r2:'soridraw-profile-media-preview'},
+            test:{worker:'soridraw-explore-test',dbName:'soridraw-explore-test-db',dbId:'31817dbd-d06e-415e-9bc0-5553b0f5dc43',r2:'soridraw-profile-media-test'},
+            production:{worker:'soridraw-explore-api',dbName:'soridraw-explore-db',dbId:'217ef5b1-5d80-4f7c-afc7-9e07eb05c06b',r2:'soridraw-profile-media'}
+          };
+          const h=s=>crypto.createHash('sha256').update(s).digest('hex');
+          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status+' '+JSON.stringify(x).slice(0,800));return x.result||x}
+          async function active(worker){const b=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${worker}`;const ds=await g(b+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];if(!a?.version_id||Number(a.percentage||0)<99.99)throw Error('single active version missing '+worker);const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${worker}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0];if(!m?.content_base64)throw Error('module missing '+worker);const source=Buffer.from(m.content_base64,'base64').toString('utf8');const settings=await g(b+'/settings');return {version:a.version_id,source,settings}}
+          (async()=>{let commonSha='';for(const [name,t] of Object.entries(targets)){const a=await active(t.worker),dir='.release044/'+name;fs.writeFileSync(dir+'/original.js',a.source);fs.writeFileSync(dir+'/before.txt',a.version);const sha=h(a.source);console.log(`WORKER_BEFORE_${name.toUpperCase()}=${a.version} SHA=${sha}`);if(!commonSha)commonSha=sha;else if(sha!==commonSha)throw Error('active Worker sources differ before 044');const c={name:t.worker,main:'./worker.js',compatibility_date:String(a.settings.compatibility_date||'2026-09-04').slice(0,10),workers_dev:true,keep_vars:true,d1_databases:[{binding:'DB',database_name:t.dbName,database_id:t.dbId}],r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:t.r2}],observability:a.settings.observability&&typeof a.settings.observability==='object'?{enabled:a.settings.observability.enabled!==false}:{enabled:true}};if(Array.isArray(a.settings.compatibility_flags)&&a.settings.compatibility_flags.length)c.compatibility_flags=a.settings.compatibility_flags;fs.writeFileSync(dir+'/wrangler.jsonc',JSON.stringify(c,null,2));}fs.copyFileSync('.release044/preview/original.js','.release044/common/worker.js');console.log('WORKER_SOURCE_PARITY_BEFORE_044=PASS')})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.release044/common" node "$RUNNER_TEMP/028-explore-like-o1.mjs"
+          node --check .release044/common/worker.js
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_O1_028_20260908' .release044/common/worker.js
+          node <<'NODE'
+          const fs=require('fs'),s=fs.readFileSync('.release044/common/worker.js','utf8');
+          function f(n){let p=s.indexOf('async function '+n+'(');if(p<0)p=s.indexOf('function '+n+'(');if(p<0)throw Error('missing '+n);const b=s.indexOf('{',p);let d=0,q=null,e=false;for(let i=b;i<s.length;i++){const c=s[i];if(q){if(e){e=false;continue}if(c==='\\'){e=true;continue}if(c===q)q=null;continue}if(c==='"'||c==="'"||c==='`'){q=c;continue}if(c==='{')d++;else if(c==='}'&&--d===0)return s.slice(p,i+1)}throw Error('unterminated '+n)}
+          const rate=f('enforceUserRateLimit'),like=f('adjustExploreLikeCounterDelta'),core=f('handleLikeD1Core');
+          if(!rate.includes('RETURNING count')||/SELECT\s+count\s+FROM\s+api_rate_limits/i.test(rate))throw Error('rate limit not reduced');
+          if(!like.includes('RETURNING like_count')||like.includes('env.DB.batch'))throw Error('like counter not reduced');
+          if(!core.includes('getPublicTrackForWrite')||!core.includes('patchExploreFirstViewLikeCount'))throw Error('like safety/profile sync lost');
+          console.log('WORKER_PATCH_044_STATIC=PASS');
+          NODE
+          for env in preview test production; do cp .release044/common/worker.js ".release044/$env/worker.js"; done
+
+      - name: Deploy identical 044 Workers with rollback
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          deployed=''
+          rollback(){ st=$?; if [ "$st" -ne 0 ]; then echo 'WORKER_044_ROLLBACK=START'; for env in $deployed; do cp ".release044/$env/original.js" ".release044/$env/worker.js"; npx wrangler deploy --strict --config ".release044/$env/wrangler.jsonc" || true; done; fi; exit "$st"; }
+          trap rollback EXIT
+          for env in preview test production; do
+            npx wrangler deploy --strict --config ".release044/$env/wrangler.jsonc"
+            deployed="$deployed $env"
+          done
+          sleep 4
+          node <<'NODE'
+          const crypto=require('crypto'),A=process.env.CLOUDFLARE_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN;
+          const names={preview:'soridraw-explore-preview',test:'soridraw-explore-test',production:'soridraw-explore-api'},h=s=>crypto.createHash('sha256').update(s).digest('hex');
+          async function g(u){const r=await fetch(u,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}}),x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status);return x.result||x}
+          (async()=>{let sha='';for(const [env,n] of Object.entries(names)){const b=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${n}`,ds=await g(b+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0],v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${n}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64,'base64').toString('utf8'),x=h(s);if(!s.includes('SORIDRAW_EXPLORE_LIKE_O1_028_20260908'))throw Error('028 marker missing '+env);if(!sha)sha=x;else if(x!==sha)throw Error('Worker source parity lost '+env);console.log(`WORKER_AFTER_${env.toUpperCase()}=${a.version_id} SHA=${x}`)}console.log('WORKER_SOURCE_PARITY_AFTER_044=PASS')})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          for spec in \
+            'preview|https://soridraw-explore-preview.andrawing1212.workers.dev|https://preview.soridraw.com' \
+            'test|https://soridraw-explore-test.andrawing1212.workers.dev|https://test.soridraw.com' \
+            'production|https://soridraw-explore-api.andrawing1212.workers.dev|https://soridraw.com'; do
+            IFS='|' read -r env base origin <<< "$spec"
+            curl -fsS -D "$RUNNER_TEMP/${env}-rev.head" -H "Origin: $origin" "$base/v1/feed-revision?sort=latest" -o "$RUNNER_TEMP/${env}-rev.json"
+            grep -qi '^x-soridraw-d1-read-queries: 0' "$RUNNER_TEMP/${env}-rev.head"
+            grep -qi '^x-soridraw-d1-write-queries: 0' "$RUNNER_TEMP/${env}-rev.head"
+            curl -fsS -H "Origin: $origin" "$base/v1/feed?sort=latest&limit=40" -o "$RUNNER_TEMP/${env}-feed.json"
+            grep -q '"ok":true' "$RUNNER_TEMP/${env}-feed.json"
+          done
+          trap - EXIT
+          echo 'WORKERS_044_DEPLOY_AND_SMOKE=PASS'
+
+      - name: Push exact PREVIEW 044 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PREVIEW_FINAL_SHA"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          git push origin HEAD:refs/heads/preview
+          echo 'PREVIEW_SOURCE_044_PUSH=PASS'
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy and verify Firebase PREVIEW 044
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-preview.json --non-interactive
+          for host in https://soridraw-preview.web.app https://preview.soridraw.com; do
+            ok=''; for i in $(seq 1 15); do curl -fsS -H 'Cache-Control: no-cache' "$host/app-version.json?t=$i" -o "$RUNNER_TEMP/pv.json" || true; if grep -Fq '044' "$RUNNER_TEMP/pv.json"; then ok=yes; break; fi; sleep 4; done; test "$ok" = yes
+          done
+          curl -fsS -H 'Cache-Control: no-cache' https://preview.soridraw.com/manifest.preview.json -o "$RUNNER_TEMP/preview-manifest.json"
+          grep -Fq 'SORIDRAW(P)' "$RUNNER_TEMP/preview-manifest.json"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          echo "STAGE_A_PREVIEW_044=PASS SHA=$PREVIEW_FINAL_SHA"
+          echo 'MAIN_TEST_PRODUCTION_HOSTING_UNCHANGED=PASS'

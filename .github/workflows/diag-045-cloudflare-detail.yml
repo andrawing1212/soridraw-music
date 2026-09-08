@@ -1,0 +1,77 @@
+name: SORIDRAW 045 Cloudflare Detail Audit
+
+on:
+  push:
+    branches: [diag-045-full-stack-parity-20260908]
+    paths: ['.github/workflows/diag-045-cloudflare-detail.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CF_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect mirror tokens and D1 schemas read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/detail.mjs" <<'NODE'
+          import crypto from 'node:crypto';
+          const account=process.env.CF_ACCOUNT_ID, token=process.env.CLOUDFLARE_API_TOKEN;
+          const headers={Authorization:`Bearer ${token}`,Accept:'application/json'};
+          const wait=ms=>new Promise(r=>setTimeout(r,ms));
+          async function api(path,init={}){
+            let last='';
+            for(let a=1;a<=5;a++){
+              try{
+                const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}${path}`,{...init,headers:{...headers,...(init.headers||{})}});
+                const t=await r.text(); last=`HTTP ${r.status} ${t.slice(0,200)}`;
+                let j=null; try{j=JSON.parse(t)}catch{}
+                if(r.ok&&j&&j.success!==false) return j.result;
+              }catch(e){last=String(e?.message||e)}
+              await wait(a*600);
+            }
+            throw new Error(`${path} ${last}`);
+          }
+          const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
+          async function activeSource(name){
+            const d=await api(`/workers/scripts/${name}/deployments`);
+            const dep=(d?.deployments||d||[])[0];
+            const v=[...(dep?.versions||[])].sort((a,b)=>Number(b?.percentage||0)-Number(a?.percentage||0))[0];
+            const id=String(v?.version_id||'');
+            const data=await api(`/workers/workers/${name}/versions/${id}?include=modules`);
+            const mods=Array.isArray(data?.modules)?data.modules:[];
+            const main=mods.find(x=>x.name===(data.main_module||mods[0]?.name))||mods[0];
+            const text=main?.content_base64?Buffer.from(main.content_base64,'base64').toString('utf8'):'';
+            return {id,text};
+          }
+          const prod=await activeSource('soridraw-explore-api');
+          console.log(`EXPLORE_LIVE_HAS_MIRROR_TEST_TOKEN=${prod.text.includes('EXPLORE_MIRROR_TEST')}`);
+          console.log(`EXPLORE_LIVE_HAS_MIRROR_PREVIEW_TOKEN=${prod.text.includes('EXPLORE_MIRROR_PREVIEW')}`);
+          console.log(`EXPLORE_LIVE_HAS_SERVICE_FETCH=${/EXPLORE_MIRROR_(TEST|PREVIEW)[\s\S]{0,800}\.fetch\(/.test(prod.text)}`);
+          const dbs=[
+            ['preview','aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f'],
+            ['test','31817dbd-d06e-415e-9bc0-5553b0f5dc43'],
+            ['production','217ef5b1-5d80-4f7c-afc7-9e07eb05c06b'],
+          ];
+          const schemaHashes=[];
+          for(const [env,id] of dbs){
+            const result=await api(`/d1/database/${id}/query`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sql:"SELECT type,name,sql FROM sqlite_master WHERE type IN ('table','index','trigger') AND name NOT LIKE 'sqlite_%' ORDER BY type,name"})});
+            const rows=Array.isArray(result)?(result[0]?.results||[]):(result?.results||[]);
+            const normalized=rows.map(r=>({type:r.type,name:r.name,sql:String(r.sql||'').replace(/\\s+/g,' ').trim()}));
+            const h=sha(JSON.stringify(normalized)); schemaHashes.push(h);
+            console.log(`D1_${env.toUpperCase()}_SCHEMA_SHA=${h} OBJECTS=${normalized.length}`);
+          }
+          console.log(`D1_SCHEMA_PARITY=${new Set(schemaHashes).size===1?'PASS':'FAIL'}`);
+          console.log('READ_ONLY_DETAIL_AUDIT=PASS');
+          NODE
+          node "$RUNNER_TEMP/detail.mjs"

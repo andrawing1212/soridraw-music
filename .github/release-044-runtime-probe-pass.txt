@@ -1,0 +1,9 @@
+SORIDRAW 044 PREVIEW D1 runtime RETURNING probe: PASS
+verified_run_id=34197373670
+verified_job_id=101968007250
+verified_commit=a53827192e6f1d8b664de4d7129088a2be52e492
+rate_returning_count=1
+track_stats_returning_like_count=1
+fake_parent_created=true
+cleanup_ok=true
+temporary_worker_deleted_by_workflow=true

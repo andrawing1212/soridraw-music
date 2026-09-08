@@ -16,14 +16,21 @@ concurrency:
 jobs:
   preview-like-measurement:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       PREVIEW_EXPECTED: 4ba0e692a533a3bad0d1eee9950d25bc21934626
       MAIN_EXPECTED: 2fadb2dc666fadecbbbd93e92cfb104ed567f233
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: npm
 
       - name: Guard Stage A exact state
         shell: bash
@@ -58,16 +65,73 @@ jobs:
           SORIDRAW_PROBE_ORIGIN: https://preview.soridraw.com
           SORIDRAW_PROBE_WORKER: https://soridraw-explore-preview.andrawing1212.workers.dev
           SORIDRAW_PROBE_OUTPUT: release-044-preview-like-proof.json
+          SORIDRAW_PROBE_STATE: release-044-preview-like-state.json
         run: |
           set -euo pipefail
           node scripts/release-044-auth-like-probe.mjs
-          node -e "const x=require('./release-044-preview-like-proof.json'); if(!x.ok||x.measuredNormalLike.reads!==1||x.measuredNormalLike.writes!==3||!x.feedR2RoundTrip||!x.restoredToUnliked) process.exit(1)"
+          node -e "const x=require('./release-044-preview-like-proof.json'); if(!x.ok||x.measuredNormalLike.reads!==1||x.measuredNormalLike.writes!==3||!x.feedR2RoundTrip||!x.restoredToUnliked||!x.firebaseAuth||!x.appCheck) process.exit(1)"
           echo 'STAGE_B_PREVIEW_LIKE_MEASUREMENT=PASS'
+
+      - name: Remove temporary PREVIEW diagnostic residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f release-044-preview-like-state.json ]; then
+            echo 'No diagnostic state was created.'
+            exit 0
+          fi
+          UID_VALUE="$(node -p "require('./release-044-preview-like-state.json').uid || ''")"
+          LIKED_ACTIVE="$(node -p "String(Boolean(require('./release-044-preview-like-state.json').likedActive))")"
+          test -n "$UID_VALUE"
+          if [ "$LIKED_ACTIVE" = true ]; then
+            echo 'Diagnostic user still has an active like; automatic D1/R2 residue cleanup is blocked to avoid counter drift.' >&2
+            exit 1
+          fi
+          npm install --no-save --no-audit --no-fund wrangler@4.102.0
+          CLEAN_DIR="$RUNNER_TEMP/release044-cleanup"
+          mkdir -p "$CLEAN_DIR"
+          CLEAN_NAME="soridraw-044-preview-cleanup-${GITHUB_RUN_ID}"
+          CLEAN_TOKEN="$(openssl rand -hex 32)"
+          cat > "$CLEAN_DIR/worker.js" <<'JS'
+          export default {
+            async fetch(request, env) {
+              if (request.method !== 'POST') return new Response('not found', { status: 404 });
+              if (request.headers.get('Authorization') !== `Bearer ${env.CLEANUP_TOKEN}`) return new Response('forbidden', { status: 403 });
+              const body = await request.json().catch(() => ({}));
+              const uid = String(body?.uid || '').trim();
+              if (!uid.startsWith('soridraw044_preview_')) return new Response('bad uid', { status: 400 });
+              const result = await env.DB.prepare("DELETE FROM api_rate_limits WHERE scope = 'user' AND subject = ?").bind(uid).run();
+              await env.PROFILE_MEDIA.delete(`internal/explore/likes-v1/${encodeURIComponent(uid)}.json`);
+              return Response.json({ ok: true, deletedRateRows: Number(result?.meta?.changes || 0) });
+            }
+          };
+          JS
+          cat > "$CLEAN_DIR/wrangler.jsonc" <<JSON
+          {
+            "name": "$CLEAN_NAME",
+            "main": "./worker.js",
+            "compatibility_date": "2026-09-04",
+            "workers_dev": true,
+            "vars": { "CLEANUP_TOKEN": "$CLEAN_TOKEN" },
+            "d1_databases": [{ "binding": "DB", "database_name": "soridraw-explore-preview-db", "database_id": "aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f" }],
+            "r2_buckets": [{ "binding": "PROFILE_MEDIA", "bucket_name": "soridraw-profile-media-preview" }]
+          }
+          JSON
+          cleanup_worker(){ npx wrangler delete --config "$CLEAN_DIR/wrangler.jsonc" --force >/dev/null 2>&1 || true; }
+          trap cleanup_worker EXIT
+          npx wrangler deploy --strict --config "$CLEAN_DIR/wrangler.jsonc"
+          RESULT="$(curl -fsS -X POST -H "Authorization: Bearer $CLEAN_TOKEN" -H 'Content-Type: application/json' --data "{\"uid\":\"$UID_VALUE\"}" "https://${CLEAN_NAME}.andrawing1212.workers.dev")"
+          node -e "const x=JSON.parse(process.argv[1]); if(!x.ok) process.exit(1)" "$RESULT"
+          cleanup_worker
+          trap - EXIT
+          echo 'STAGE_B_DIAGNOSTIC_RESIDUE_CLEANUP=PASS'
 
       - name: Preserve verified PREVIEW measurement proof
         shell: bash
         run: |
           set -euo pipefail
+          test -f release-044-preview-like-proof.json
           mkdir -p .github
           cp release-044-preview-like-proof.json .github/release-044-preview-like-proof.json
           git config user.name 'SORIDRAW Release Bot'

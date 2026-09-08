@@ -36,7 +36,7 @@ jobs:
               const settings=await get(`${base}/settings`);
               const bindings=(settings.bindings||[]).map(x=>({name:x.name,type:x.type,service:x.service||null}));
               console.log(`BINDINGS_${env.toUpperCase()}=${JSON.stringify(bindings)}`);
-              const mirrorCode=s.includes('EXPLORE_MIRROR_ROUTE_020')&&s.includes('fanoutProductionExploreFeedMirror020');
+              const mirrorCode=s.includes('EXPLORE_MIRROR_ROUTE_020')&&s.includes('fanoutExploreMirror020');
               console.log(`MIRROR_CODE_${env.toUpperCase()}=${mirrorCode}`);
               if(!s.includes('RETURNING count')||!s.includes('RETURNING like_count'))throw new Error(`044 like optimization missing ${env}`);
               if(env==='production'){

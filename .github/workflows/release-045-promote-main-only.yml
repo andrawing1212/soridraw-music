@@ -1,0 +1,165 @@
+name: SORIDRAW 045 Promote Main Only
+
+on:
+  push:
+    branches: [release-045-preview-main-parity]
+    paths: ['.github/workflows/release-045-promote-main-only.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-045-promote-main-only
+  cancel-in-progress: false
+
+jobs:
+  promote_main_only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PREVIEW_BASE: 5008e9ba81fe3b1469e31dae15ee7384c6ecdcbc
+      MAIN_BASE: 2fadb2dc666fadecbbbd93e92cfb104ed567f233
+    steps:
+      - name: Checkout release controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+
+      - name: Guard exact approved state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          test "$(git rev-parse origin/main)" = "$MAIN_BASE"
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=045-main-promote-guard' | tr -d '\r\n ')" = '{"version":"045"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://test.soridraw.com/app-version.json?t=045-main-promote-guard' | tr -d '\r\n ')" = '{"version":"042"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://soridraw.com/app-version.json?t=045-main-promote-guard' | tr -d '\r\n ')" = '{"version":"043"}'
+          echo 'APPROVED_STATE_GUARD=PASS'
+
+      - name: Prepare exact validated 045 main candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -B main-045-work origin/main
+
+          for f in \
+            src/App.tsx \
+            src/pages/ExplorePage.tsx \
+            src/services/appUpdateNotice.ts \
+            public/app-version.json \
+            scripts/verify-035-auth-nav-readiness.mjs \
+            scripts/verify-045-explore-active-revalidation.mjs \
+            cloudflare/explore-worker/patches/028-explore-like-o1.mjs; do
+            mkdir -p "$(dirname "$f")"
+            git show "origin/preview:$f" > "$f"
+          done
+
+          git add -A
+          git diff --cached --name-only > "$RUNNER_TEMP/candidate-files.txt"
+          cat > "$RUNNER_TEMP/expected-files.txt" <<'EOF'
+          cloudflare/explore-worker/patches/028-explore-like-o1.mjs
+          public/app-version.json
+          scripts/verify-035-auth-nav-readiness.mjs
+          scripts/verify-045-explore-active-revalidation.mjs
+          src/App.tsx
+          src/pages/ExplorePage.tsx
+          src/services/appUpdateNotice.ts
+          EOF
+          sort -o "$RUNNER_TEMP/candidate-files.txt" "$RUNNER_TEMP/candidate-files.txt"
+          sort -o "$RUNNER_TEMP/expected-files.txt" "$RUNNER_TEMP/expected-files.txt"
+          diff -u "$RUNNER_TEMP/expected-files.txt" "$RUNNER_TEMP/candidate-files.txt"
+
+          git diff --quiet origin/preview -- src functions cloudflare firestore.rules database.rules.json
+          grep -F "CURRENT_APP_VERSION = '045'" src/services/appUpdateNotice.ts
+          grep -F '"version": "045"' public/app-version.json
+
+          # Branding/index/manifest remain main-owned and untouched.
+          test "$(git rev-parse origin/main:index.html)" = "$(git rev-parse HEAD:index.html)"
+          if git cat-file -e origin/main:public/manifest.webmanifest 2>/dev/null; then
+            test "$(git rev-parse origin/main:public/manifest.webmanifest)" = "$(git rev-parse HEAD:public/manifest.webmanifest)"
+          fi
+          if git cat-file -e origin/main:public/manifest.json 2>/dev/null; then
+            test "$(git rev-parse origin/main:public/manifest.json)" = "$(git rev-parse HEAD:public/manifest.json)"
+          fi
+          echo 'MAIN_CANDIDATE_SCOPE=PASS'
+          echo 'MAIN_BRANDING_PRESERVED=PASS'
+
+      - name: Revalidate before main push
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          node scripts/verify-045-explore-active-revalidation.mjs
+          node scripts/verify-runtime-environment-parity-028.mjs
+          node --test test/catalogWarmCachePolicy.test.mjs
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          const app = fs.readFileSync('src/App.tsx', 'utf8');
+          const listBundle = fs.readFileSync('src/lib/listBundleCache.ts', 'utf8');
+          const engine = fs.readFileSync('src/lib/userDataEngine.ts', 'utf8');
+          const adaptive = fs.readFileSync('src/lib/adaptiveListIndexV2.ts', 'utf8');
+          const library = fs.readFileSync('src/pages/SunoLibraryPage.tsx', 'utf8');
+          assert.equal(app.includes('const runFavoritesFullCacheRecoveryOnce = async () =>'), false);
+          assert.equal(app.includes('Cacheless Music Note full bootstrap failed'), false);
+          assert.ok(app.includes("subscribeListBundle('musicNote'"));
+          assert.ok(app.includes('bundle.schemaVersion === 1001'));
+          assert.ok(listBundle.includes('MUSIC_NOTE_BUNDLE_PAGE_ENTRY_EVENT'));
+          assert.ok(listBundle.includes('readPreviewAdaptiveListIndexV2'));
+          assert.ok(adaptive.includes('readCatalogSnapshotCacheFirst'));
+          assert.ok(engine.includes('canUseWarmCatalogWithoutRemote'));
+          assert.ok(engine.includes("catalogLastReadSources.set(key, 'cache')"));
+          assert.ok(engine.includes('const remote = await readRemoteCatalogSnapshot(kind, uid, 0, local)'));
+          assert.equal(/const\s+snapshot\s*=\s*await\s+getDocs\(tracksRef\)\s*;/.test(library), false);
+          console.log('CURRENT_MUSIC_NOTE_CATALOG_SAFETY=PASS');
+          NODE
+          grep -F 'RETURNING count' cloudflare/explore-worker/patches/028-explore-like-o1.mjs
+          grep -F 'RETURNING like_count' cloudflare/explore-worker/patches/028-explore-like-o1.mjs
+          git diff --check
+          echo 'MAIN_PREPUSH_VALIDATION=PASS'
+
+      - name: Commit and push main only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$MAIN_BASE"
+          test "$(git ls-remote origin refs/heads/preview | cut -f1)" = "$PREVIEW_BASE"
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'release(main): promote validated 045 runtime parity'
+          NEW_MAIN="$(git rev-parse HEAD)"
+          echo "NEW_MAIN=$NEW_MAIN" >> "$GITHUB_ENV"
+          git push origin HEAD:main
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$NEW_MAIN"
+          echo "MAIN_045_PUSH=PASS sha=$NEW_MAIN"
+
+      - name: Verify main code parity and no deployment occurred
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          test "$(git rev-parse origin/main)" = "$NEW_MAIN"
+          test "$(git rev-parse origin/preview)" = "$PREVIEW_BASE"
+          git diff --quiet origin/preview origin/main -- src functions cloudflare firestore.rules database.rules.json
+          test "$(git show origin/main:public/app-version.json | tr -d '\r\n ')" = '{"version":"045"}'
+
+          # This operation is code promotion only: hosting must remain exactly where it was.
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://preview.soridraw.com/app-version.json?t=045-main-only-post' | tr -d '\r\n ')" = '{"version":"045"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://test.soridraw.com/app-version.json?t=045-main-only-post' | tr -d '\r\n ')" = '{"version":"042"}'
+          test "$(curl -fsS -H 'Cache-Control: no-cache' 'https://soridraw.com/app-version.json?t=045-main-only-post' | tr -d '\r\n ')" = '{"version":"043"}'
+          echo 'MAIN_RUNTIME_TREE_PARITY=PASS'
+          echo 'NO_TEST_OR_PRODUCTION_DEPLOYMENT=PASS'

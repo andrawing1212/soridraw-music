@@ -46,6 +46,7 @@ jobs:
           python /tmp/apply-050.py
           git diff -- src/pages/FavoritesPage.tsx --exit-code
           git diff -- functions --exit-code
+          git add -N scripts/verify-050-musicnote-folder-catalog-recovery.mjs
           printf '%s\n' \
             cloudflare/media-worker/src/index.js \
             public/app-version.json \

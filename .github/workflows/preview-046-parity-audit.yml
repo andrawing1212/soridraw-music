@@ -1,0 +1,42 @@
+name: SORIDRAW 046 PREVIEW Main Parity Audit
+
+on:
+  push:
+    branches: [preview-046-explore-mirror-binding-recovery]
+    paths: ['.github/workflows/preview-046-parity-audit.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Audit exact tree and live versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main --quiet
+          echo "PREVIEW_HEAD=$(git rev-parse origin/preview)"
+          echo "MAIN_HEAD=$(git rev-parse origin/main)"
+          echo '=== FUNCTIONAL_DIFF ==='
+          git diff --name-only origin/main origin/preview -- src functions cloudflare firestore.rules database.rules.json | sort
+          echo '=== SRC_DIFF ==='
+          git diff --name-only origin/main origin/preview -- src | sort
+          echo '=== MUSIC_NOTE_CORE_BLOBS ==='
+          for f in src/pages/FavoritesPage.tsx src/lib/userDataEngine.ts src/lib/listBundleCache.ts src/services/v1UserDataReadAdapter.ts src/lib/firestoreMeasured.ts src/lib/userProfileCache.ts src/main.tsx; do
+            printf '%s preview=' "$f"
+            git rev-parse "origin/preview:$f"
+            printf '%s main=' "$f"
+            git rev-parse "origin/main:$f"
+          done
+          echo '=== LIVE_VERSIONS ==='
+          for spec in 'preview|https://preview.soridraw.com' 'test|https://test.soridraw.com' 'production|https://soridraw.com'; do
+            IFS='|' read -r env host <<< "$spec"
+            body="$(curl -fsS -H 'Cache-Control: no-cache' "$host/app-version.json?t=046-audit")"
+            echo "$env=$body"
+          done

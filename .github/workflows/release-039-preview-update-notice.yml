@@ -31,7 +31,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .deploy/039-preview-icon/chunk_* | base64 -d > "$RUNNER_TEMP/preview-icon-source.png"
+          cat \
+            .deploy/039-preview-icon-v3/p_00 \
+            .deploy/039-preview-icon-v3/p_01 \
+            .deploy/039-preview-icon-v4/q_00 \
+            .deploy/039-preview-icon-v4/q_01 \
+            .deploy/039-preview-icon-v2/part_01 \
+            .deploy/039-preview-icon/chunk_01 \
+            .deploy/039-preview-icon/chunk_02 \
+            | base64 -d > "$RUNNER_TEMP/preview-icon-source.png"
           echo '301a5d4edd9247720859de52a0fb59c8e703740cb6189b432adb49e263ac05a5  '"$RUNNER_TEMP/preview-icon-source.png" | sha256sum -c -
           echo 'ICON_SOURCE_039=PASS'
 
@@ -52,9 +60,9 @@ jobs:
           python - <<'PY'
           from PIL import Image
           from pathlib import Path
-          import json
+          import json, os
 
-          src = Image.open(Path('/tmp') / 'no-file') if False else Image.open(Path(__import__('os').environ['RUNNER_TEMP']) / 'preview-icon-source.png').convert('RGBA')
+          src = Image.open(Path(os.environ['RUNNER_TEMP']) / 'preview-icon-source.png').convert('RGBA')
           brand = Path('public/brand')
           brand.mkdir(parents=True, exist_ok=True)
           for size, name in [(192, 'soridraw-app-preview-039.png'), (512, 'soridraw-app-preview-039-512.png')]:

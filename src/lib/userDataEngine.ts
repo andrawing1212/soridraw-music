@@ -587,9 +587,14 @@ export const readCatalogSnapshotCacheFirst = async (
       return local;
     }
 
-    // Missing/stale/unknown proof still validates against the R2 Catalog.
-    // Do not pass the profile sync signal as a hard Worker rebuild requirement.
-    const remote = await readRemoteCatalogSnapshot(kind, uid, 0, local);
+    // If the existing user-profile invalidation token proves this browser Catalog is stale,
+    // require that exact revision once. The Worker rebuilds only when its environment R2 is
+    // actually behind; after that, the warm-cache path returns CACHE with no Worker GET.
+    const hardRequiredRevision = knownRemoteRevision > 0
+      && (!local || knownRemoteRevision > local.revision)
+      ? knownRemoteRevision
+      : 0;
+    const remote = await readRemoteCatalogSnapshot(kind, uid, hardRequiredRevision, local);
     if (remote) {
       catalogLastReadSources.set(key, 'remote');
       return remote;

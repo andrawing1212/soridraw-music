@@ -1,0 +1,125 @@
+name: SORIDRAW 044 D1 Runtime RETURNING Probe
+
+on:
+  push:
+    branches: [release-044-explore-like-cost-parity]
+    paths: ['.github/workflows/release-044-d1-runtime-probe.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PROBE_WORKER: soridraw-044-d1-runtime-probe
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+      PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy isolated PREVIEW D1 runtime probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .runtime044 && mkdir .runtime044
+          cat > .runtime044/worker.js <<'WORKER'
+          const json = (body, status = 200) => new Response(JSON.stringify(body), {
+            status,
+            headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+          });
+
+          export default {
+            async fetch(request, env) {
+              const url = new URL(request.url);
+              if (request.method !== 'POST' || url.pathname !== '/probe') return new Response('not found', { status: 404 });
+
+              const suffix = `${Date.now()}_${crypto.randomUUID().replaceAll('-', '')}`;
+              const subject = `__soridraw_044_runtime_probe_${suffix}__`;
+              const action = 'like044runtimeprobe';
+              const trackId = `__soridraw_044_runtime_track_${suffix}__`;
+              const now = Date.now();
+              const windowStart = Math.floor(now / 60000) * 60000;
+              let rateCount = null;
+              let likeCount = null;
+              let failure = null;
+
+              try {
+                const rate = await env.DB.prepare(`
+                  INSERT INTO api_rate_limits (scope, subject, action, window_start, count, updated_at)
+                  VALUES ('user', ?, ?, ?, 1, ?)
+                  ON CONFLICT(scope, subject, action, window_start) DO UPDATE SET
+                    count = api_rate_limits.count + 1,
+                    updated_at = excluded.updated_at
+                  RETURNING count
+                `).bind(subject, action, windowStart, now).all();
+                rateCount = Number(rate?.results?.[0]?.count || 0);
+                if (rateCount !== 1) throw new Error(`rate RETURNING count=${rateCount}`);
+
+                const stats = await env.DB.prepare(`
+                  INSERT INTO track_stats (track_id, like_count, comment_count, play_count, updated_at)
+                  VALUES (?, ?, 0, 0, ?)
+                  ON CONFLICT(track_id) DO UPDATE SET
+                    like_count = MAX(0, track_stats.like_count + ?),
+                    updated_at = excluded.updated_at
+                  RETURNING like_count
+                `).bind(trackId, 1, now, 1).all();
+                likeCount = Number(stats?.results?.[0]?.like_count || 0);
+                if (likeCount !== 1) throw new Error(`track_stats RETURNING like_count=${likeCount}`);
+              } catch (error) {
+                failure = String(error?.stack || error?.message || error);
+              } finally {
+                await env.DB.prepare(`DELETE FROM api_rate_limits WHERE subject = ? AND action = ?`).bind(subject, action).run().catch(() => {});
+                await env.DB.prepare(`DELETE FROM track_stats WHERE track_id = ?`).bind(trackId).run().catch(() => {});
+              }
+
+              const rateLeft = await env.DB.prepare(`SELECT COUNT(*) AS n FROM api_rate_limits WHERE subject = ? AND action = ?`).bind(subject, action).first();
+              const statsLeft = await env.DB.prepare(`SELECT COUNT(*) AS n FROM track_stats WHERE track_id = ?`).bind(trackId).first();
+              const cleanupOk = Number(rateLeft?.n || 0) === 0 && Number(statsLeft?.n || 0) === 0;
+              const ok = !failure && rateCount === 1 && likeCount === 1 && cleanupOk;
+              return json({ ok, rateCount, likeCount, cleanupOk, failure }, ok ? 200 : 500);
+            },
+          };
+          WORKER
+
+          cat > .runtime044/wrangler.jsonc <<EOF
+          {
+            "name": "$PROBE_WORKER",
+            "main": "./worker.js",
+            "compatibility_date": "2026-09-04",
+            "workers_dev": true,
+            "d1_databases": [{
+              "binding": "DB",
+              "database_name": "$PREVIEW_DB_NAME",
+              "database_id": "$PREVIEW_DB_ID"
+            }]
+          }
+          EOF
+
+          cleanup_worker(){
+            curl -sS -X DELETE \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PROBE_WORKER" \
+              > "$RUNNER_TEMP/runtime044-delete.json" || true
+          }
+          trap cleanup_worker EXIT
+
+          npm install --no-audit --no-fund --package-lock=false wrangler@4.102.0
+          npx wrangler deploy --strict --config .runtime044/wrangler.jsonc
+
+          success=''
+          for i in $(seq 1 15); do
+            code="$(curl -sS -o "$RUNNER_TEMP/runtime044.json" -w '%{http_code}' -X POST "https://$PROBE_WORKER.andrawing1212.workers.dev/probe" || true)"
+            if [ "$code" = 200 ]; then success=1; break; fi
+            if [ "$code" = 500 ]; then cat "$RUNNER_TEMP/runtime044.json"; exit 1; fi
+            sleep 2
+          done
+          test "$success" = 1
+          node -e "const x=require(process.env.RUNNER_TEMP+'/runtime044.json'); console.log('[runtime044]',JSON.stringify(x)); if(!x.ok||x.rateCount!==1||x.likeCount!==1||!x.cleanupOk) process.exit(1)"
+
+          cleanup_worker
+          trap - EXIT
+          echo 'D1_RETURNING_RUNTIME_PROBE_044=PASS'

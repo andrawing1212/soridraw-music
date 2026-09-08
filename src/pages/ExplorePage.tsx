@@ -61,6 +61,7 @@ type ExploreFeedRevisionResponse = {
 };
 
 const EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 1000;
+const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 30_000;
 
 const isExploreFeedRequest = (value: string) => {
   try {
@@ -257,6 +258,7 @@ export default function ExplorePage() {
   const likeHydrationKeyRef = useRef('');
   const [feedRevisionSignal, setFeedRevisionSignal] = useState(0);
   const feedRevisionEventAtRef = useRef(0);
+  const feedRevisionActivityAtRef = useRef(0);
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
     setUser(currentUser);
@@ -388,10 +390,25 @@ export default function ExplorePage() {
       setFeedRevisionSignal((value) => value + 1);
     };
 
+    // SORIDRAW_EXPLORE_ACTIVE_REVALIDATION_045_20260908
+    // A tab can remain visible for a long time without focus/visibility events.
+    // Re-check only the zero-D1 revision endpoint on real user interaction, throttled.
+    const requestActivityRevisionCheck = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - feedRevisionActivityAtRef.current < EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS) return;
+      feedRevisionActivityAtRef.current = now;
+      requestRevisionCheck();
+    };
+
     window.addEventListener('focus', requestRevisionCheck);
+    window.addEventListener('pageshow', requestRevisionCheck);
+    window.addEventListener('pointerdown', requestActivityRevisionCheck, { passive: true });
     document.addEventListener('visibilitychange', requestRevisionCheck);
     return () => {
       window.removeEventListener('focus', requestRevisionCheck);
+      window.removeEventListener('pageshow', requestRevisionCheck);
+      window.removeEventListener('pointerdown', requestActivityRevisionCheck);
       document.removeEventListener('visibilitychange', requestRevisionCheck);
     };
   }, [requestUrl, profileUid]);

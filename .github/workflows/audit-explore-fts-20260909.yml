@@ -1,0 +1,54 @@
+name: Audit Explore FTS 20260909
+on:
+  push:
+    branches:
+      - release/test-050-sync-20260909
+    paths:
+      - '.github/workflows/audit-explore-fts-20260909.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Audit FTS schema and rows read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir audit && cd audit
+          cat > worker.js <<'JS'
+          const qi=v=>'"'+String(v).replace(/"/g,'""')+'"';
+          async function all(db,sql,...b){const r=await db.prepare(sql).bind(...b).all();return r.results||[]}
+          async function inspect(db){
+            const schema=await all(db,"SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE (name IN ('track_search_fts','profile_search_fts') OR tbl_name IN ('tracks','public_profiles')) AND sql IS NOT NULL ORDER BY type,name");
+            const out={schema, trackCount:(await db.prepare('SELECT COUNT(*) n FROM tracks').first()).n, ftsCount:(await db.prepare('SELECT COUNT(*) n FROM track_search_fts').first()).n};
+            const cols=await all(db,'PRAGMA table_xinfo(track_search_fts)');
+            out.columns=cols;
+            out.ftsRows=await all(db,'SELECT rowid,* FROM track_search_fts ORDER BY rowid LIMIT 100');
+            out.tracks=await all(db,'SELECT id,title,is_public,user_id FROM tracks ORDER BY id LIMIT 100');
+            return out;
+          }
+          export default {async fetch(req,env){return Response.json({preview:await inspect(env.PDB),test:await inspect(env.TDB)})}};
+          JS
+          cat > wrangler.jsonc <<'JSON'
+          {"name":"soridraw-explore-release-audit-fts","main":"./worker.js","compatibility_date":"2026-08-28","workers_dev":true,"d1_databases":[{"binding":"PDB","database_name":"soridraw-explore-preview-db","database_id":"aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f"},{"binding":"TDB","database_name":"soridraw-explore-test-db","database_id":"31817dbd-d06e-415e-9bc0-5553b0f5dc43"}]}
+          JSON
+          npx --yes wrangler@4.102.0 deploy --strict --config wrangler.jsonc
+          for i in $(seq 1 10); do
+            code="$(curl -sS -o audit.json -w '%{http_code}' https://soridraw-explore-release-audit-fts.andrawing1212.workers.dev/ || true)"
+            [ "$code" = 200 ] && break
+            sleep 4
+          done
+          test "$code" = 200
+          cat audit.json
+      - name: Remove auditor
+        if: always()
+        shell: bash
+        run: npx --yes wrangler@4.102.0 delete --name soridraw-explore-release-audit-fts --force || true

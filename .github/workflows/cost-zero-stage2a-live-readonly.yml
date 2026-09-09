@@ -1,10 +1,6 @@
 name: Cost Zero Stage 2A Live Readonly
 
 on:
-  push:
-    branches: [preview]
-    paths:
-      - '.github/workflows/cost-zero-stage2a-live-readonly.yml'
   workflow_dispatch:
 
 permissions:
@@ -15,7 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # Dedicated read-only Cloudflare token. Do not reuse deployment credentials.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_READONLY_TOKEN }}
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
@@ -33,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN unavailable'; exit 2; }
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_READONLY_TOKEN unavailable'; exit 2; }
           npm install --no-audit --no-fund
           mkdir -p "$RUNNER_TEMP/soridraw-worker-patches"
           shopt -s nullglob
@@ -56,21 +53,25 @@ jobs:
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
-          set -u
+          set -euo pipefail
           schema_ok=0
           for target in DB soridraw-explore-db; do
             echo "[Stage2A] trying D1 target=$target"
-            if npx wrangler d1 execute "$target" --remote --config .remote-worker/wrangler.jsonc --command "SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','index') ORDER BY type, name;" --json | tee "$RUNNER_TEMP/d1-schema.json"; then
+            if npx wrangler d1 execute "$target" --remote --config .remote-worker/wrangler.jsonc --command "SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','index','trigger') ORDER BY type, name;" --json | tee "$RUNNER_TEMP/d1-schema.json"; then
               schema_ok=1
               break
             fi
           done
           if [ "$schema_ok" != '1' ]; then
             echo 'D1_SCHEMA_QUERY_UNAVAILABLE=true'
-          else
-            echo '[Stage2A] bounded structural counts'
-            npx wrangler d1 execute DB --remote --config .remote-worker/wrangler.jsonc --command "SELECT 'public_profiles' AS dataset, COUNT(*) AS count FROM public_profiles UNION ALL SELECT 'tracks', COUNT(*) FROM tracks UNION ALL SELECT 'follows', COUNT(*) FROM follows UNION ALL SELECT 'likes', COUNT(*) FROM likes;" --json || true
+            echo 'D1_READ_ONLY=true'
+            echo 'NO_D1_WRITE=true'
+            exit 5
           fi
+
+          echo '[Stage2A] bounded structural counts'
+          npx wrangler d1 execute DB --remote --config .remote-worker/wrangler.jsonc --command "SELECT 'public_profiles' AS dataset, COUNT(*) AS count FROM public_profiles UNION ALL SELECT 'tracks', COUNT(*) FROM tracks UNION ALL SELECT 'follows', COUNT(*) FROM follows UNION ALL SELECT 'likes', COUNT(*) FROM likes;" --json
+          echo 'D1_SCHEMA_QUERY_UNAVAILABLE=false'
           echo 'D1_READ_ONLY=true'
           echo 'NO_D1_WRITE=true'
 

@@ -1,4 +1,4 @@
-name: TEMP Recover TEST 051 from content source
+name: TEMP Recover TEST 051 from proven TEST runtime
 
 on:
   push:
@@ -27,7 +27,6 @@ jobs:
       TEST_DB_ID: 31817dbd-d06e-415e-9bc0-5553b0f5dc43
       PROD_R2: soridraw-profile-media
       TEST_R2: soridraw-profile-media-test
-      PREVIEW_WORKER: soridraw-explore-preview
       TEST_WORKER: soridraw-explore-test
       PROD_WORKER: soridraw-explore-api
       PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
@@ -35,7 +34,6 @@ jobs:
       PREVIEW_ORIGIN: https://preview.soridraw.com
       TEST_ORIGIN: https://test.soridraw.com
       EXPECTED_MAIN_SHA: cb03e2eefcf6eaf2bc286668a2cc6b41414f1c5f
-      EXPECTED_PREVIEW_WORKER_VERSION: f3f6747c-dbb7-4ba1-8cea-356dc4d79d99
       EXPECTED_PROD_WORKER_VERSION: 07c11e5e-47a6-458b-a3a0-6e47b6c331e6
       BRAND_SHA: 644e785c20df6b2c1f833e87a464423caceaa721
 
@@ -59,6 +57,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
           test "$(node -p "require('./public/app-version.json').version")" = '051'
           node scripts/verify-051-explore-shared-canonical-data.mjs
+          node --check cloudflare/explore-worker/patches/031-explore-shared-canonical-data.mjs
           npm ci --no-audit --no-fund
           npx tsc --noEmit
           npm run build
@@ -76,7 +75,7 @@ jobs:
           (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;const ds=await g(base+'/deployments');const d=(ds.deployments||ds||[])[0];const a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];if(a?.version_id!==process.env.EXPECTED_PROD_WORKER_VERSION)throw Error('PRODUCTION worker changed: '+a?.version_id);console.log('PRODUCTION_WORKER_LOCK=PASS '+a.version_id);})().catch(e=>{console.error(e);process.exit(1)});
           NODE
 
-      - name: Extract exact PREVIEW 051 upload from Cloudflare content API
+      - name: Patch proven TEST runtime to 051 shared-data runtime
         shell: bash
         working-directory: cloudflare/explore-worker
         run: |
@@ -85,38 +84,45 @@ jobs:
           rm -rf .remote-test && mkdir .remote-test
           node <<'NODE'
           const fs=require('fs'),path=require('path');
-          const A=process.env.CF_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PREVIEW_WORKER;
-          const headers={Authorization:`Bearer ${T}`};
+          const A=process.env.CF_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.TEST_WORKER,headers={Authorization:`Bearer ${T}`};
           async function json(url){const r=await fetch(url,{headers:{...headers,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status+' '+JSON.stringify(x).slice(0,800));return x.result||x;}
           function safe(name){const s=String(name||'').replaceAll('\\','/').replace(/^\/+/, '');if(!s||s.includes('../'))throw Error('unsafe module '+name);return s;}
           (async()=>{
             const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;
-            const ds=await json(base+'/deployments'),d=(ds.deployments||ds||[])[0],active=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];
-            if(active?.version_id!==process.env.EXPECTED_PREVIEW_WORKER_VERSION)throw Error('unexpected PREVIEW active version '+active?.version_id);
-            const r=await fetch(base+'/content/v2',{headers});if(!r.ok)throw Error('content/v2 '+r.status+' '+(await r.text()).slice(0,500));
-            const ct=String(r.headers.get('content-type')||'').toLowerCase();let main='worker.js',markerFound=false;
+            const r=await fetch(base+'/content/v2',{headers});if(!r.ok)throw Error('TEST content/v2 '+r.status+' '+(await r.text()).slice(0,500));
+            const ct=String(r.headers.get('content-type')||'').toLowerCase();let main='worker.js';
             if(ct.includes('multipart/form-data')){
               const form=await r.formData();let metadata={};const written=[];
               for(const [field,value] of form.entries()){
                 if(typeof value==='string'){if(field==='metadata'&&value.trim())metadata=JSON.parse(value);continue;}
-                const name=safe(value.name||field);const target=path.join('.remote-test',name);fs.mkdirSync(path.dirname(target),{recursive:true});const buf=Buffer.from(await value.arrayBuffer());fs.writeFileSync(target,buf);written.push(name);if(buf.toString('utf8').includes('SORIDRAW_EXPLORE_SHARED_CANONICAL_DATA_031_20260909'))markerFound=true;
+                const name=safe(value.name||field);const target=path.join('.remote-test',name);fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,Buffer.from(await value.arrayBuffer()));written.push(name);
               }
               main=safe(metadata.main_module||metadata.body_part||written[0]);
               if(!written.includes(main)){const m=written.find(x=>x.endsWith('/'+main));if(m)main=m;}
-              if(!written.includes(main))throw Error('main module missing '+main+' modules='+written.join(','));
-              console.log('PREVIEW_CONTENT_MODULES='+written.length+' main='+main);
+              if(written.length!==1||!written.includes(main))throw Error('expected one proven TEST runtime module, got '+JSON.stringify(written)+' main='+main);
+              if(main!=='worker.js')fs.copyFileSync(path.join('.remote-test',main),'.remote-test/worker.js');
+              console.log('TEST_BASE_RUNTIME_MODULE='+main);
             } else {
-              const source=await r.text();fs.writeFileSync('.remote-test/worker.js',source);markerFound=source.includes('SORIDRAW_EXPLORE_SHARED_CANONICAL_DATA_031_20260909');console.log('PREVIEW_CONTENT_SINGLE bytes='+source.length);
+              fs.writeFileSync('.remote-test/worker.js',await r.text());
             }
-            if(!markerFound)throw Error('content/v2 missing 051 runtime marker');
-            fs.writeFileSync('.remote-test/main-module.txt',main);
-            const testBase=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${process.env.TEST_WORKER}`;
-            const settings=await json(testBase+'/settings');
-            const cfg={name:process.env.TEST_WORKER,main:'./'+main,compatibility_date:String(settings.compatibility_date||'2026-08-28').slice(0,10),workers_dev:true,keep_vars:true,d1_databases:[{binding:'DB',database_name:process.env.PROD_DB_NAME,database_id:process.env.PROD_DB_ID},{binding:'RATE_DB',database_name:process.env.TEST_DB_NAME,database_id:process.env.TEST_DB_ID}],r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.PROD_R2},{binding:'EXPLORE_CACHE',bucket_name:process.env.TEST_R2}],observability:settings.observability&&typeof settings.observability==='object'?{enabled:settings.observability.enabled!==false}:{enabled:true}};
-            if(Array.isArray(settings.compatibility_flags)&&settings.compatibility_flags.length)cfg.compatibility_flags=settings.compatibility_flags;
-            fs.writeFileSync('.remote-test/wrangler-test.jsonc',JSON.stringify(cfg,null,2));
-            console.log('PREVIEW_CONTENT_051=PASS version='+active.version_id);
+            const s=fs.readFileSync('.remote-test/worker.js','utf8');
+            for(const required of ['handleExploreFeedRevision019','handlePublicProfileFirstViewWithEdgeCache','fanoutExploreMirror020','enforceUserRateLimit'])if(!s.includes(required))throw Error('TEST baseline prerequisite missing '+required);
+            if(s.includes('SORIDRAW_EXPLORE_SHARED_CANONICAL_DATA_031_20260909'))throw Error('TEST baseline unexpectedly already 051');
+            const settings=await json(base+'/settings');
+            fs.writeFileSync('.remote-test/settings.json',JSON.stringify(settings));
+            console.log('TEST_PROVEN_BASELINE=PASS bytes='+s.length);
           })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          export SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-test"
+          node patches/031-explore-shared-canonical-data.mjs
+          node --check .remote-test/worker.js
+          grep -Fq 'SORIDRAW_EXPLORE_SHARED_CANONICAL_DATA_031_20260909' .remote-test/worker.js
+          node <<'NODE'
+          const fs=require('fs');const settings=JSON.parse(fs.readFileSync('.remote-test/settings.json','utf8'));
+          const cfg={name:process.env.TEST_WORKER,main:'./worker.js',compatibility_date:String(settings.compatibility_date||'2026-08-28').slice(0,10),workers_dev:true,keep_vars:true,d1_databases:[{binding:'DB',database_name:process.env.PROD_DB_NAME,database_id:process.env.PROD_DB_ID},{binding:'RATE_DB',database_name:process.env.TEST_DB_NAME,database_id:process.env.TEST_DB_ID}],r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.PROD_R2},{binding:'EXPLORE_CACHE',bucket_name:process.env.TEST_R2}],observability:settings.observability&&typeof settings.observability==='object'?{enabled:settings.observability.enabled!==false}:{enabled:true}};
+          if(Array.isArray(settings.compatibility_flags)&&settings.compatibility_flags.length)cfg.compatibility_flags=settings.compatibility_flags;
+          fs.writeFileSync('.remote-test/wrangler-test.jsonc',JSON.stringify(cfg,null,2));
+          console.log('TEST_RUNTIME_051_PATCH=PASS');
           NODE
 
       - name: Deploy TEST Worker with shared canonical data
@@ -129,7 +135,7 @@ jobs:
           node <<'NODE'
           const A=process.env.CF_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.TEST_WORKER;
           async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status+' '+JSON.stringify(x).slice(0,800));return x.result||x;}
-          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;const s=await g(base+'/settings'),b=s.bindings||[];const check=(n,t,id)=>{const x=b.find(v=>v.name===n);if(!x||x.type!==t)throw Error('binding '+n+' '+JSON.stringify(x));if(id&&String(x.id||x.database_id||x.bucket_name||x.bucket||'')!==id)throw Error('target '+n+' '+JSON.stringify(x));};check('DB','d1',process.env.PROD_DB_ID);check('RATE_DB','d1',process.env.TEST_DB_ID);check('PROFILE_MEDIA','r2_bucket',process.env.PROD_R2);check('EXPLORE_CACHE','r2_bucket',process.env.TEST_R2);console.log('TEST_SHARED_BINDINGS=PASS');})().catch(e=>{console.error(e);process.exit(1)});
+          (async()=>{const s=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}/settings`),b=s.bindings||[];const check=(n,t,id)=>{const x=b.find(v=>v.name===n);if(!x||x.type!==t)throw Error('binding '+n+' '+JSON.stringify(x));if(id&&String(x.id||x.database_id||x.bucket_name||x.bucket||'')!==id)throw Error('target '+n+' '+JSON.stringify(x));};check('DB','d1',process.env.PROD_DB_ID);check('RATE_DB','d1',process.env.TEST_DB_ID);check('PROFILE_MEDIA','r2_bucket',process.env.PROD_R2);check('EXPLORE_CACHE','r2_bucket',process.env.TEST_R2);console.log('TEST_SHARED_BINDINGS=PASS');})().catch(e=>{console.error(e);process.exit(1)});
           NODE
 
       - name: Verify PREVIEW and TEST Explore parity

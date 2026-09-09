@@ -155,10 +155,6 @@ const requestMaterializedFirstView = async (
   const revision = String(knownRevision || '').trim();
   if (revision) {
     url.searchParams.set('knownRevision', revision);
-  } else {
-    // 051: one cold request after the cache-contract bump re-materializes the
-    // public profile from the single shared canonical D1. Warm revision checks stay cheap.
-    url.searchParams.set('__soridraw_shared_profile', '51');
   }
 
   const startedAt = typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();

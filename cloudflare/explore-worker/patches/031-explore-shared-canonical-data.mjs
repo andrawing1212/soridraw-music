@@ -8,7 +8,7 @@ const workerPath = join(remoteDir, 'worker.js');
 let source = readFileSync(workerPath, 'utf8');
 
 const marker = 'SORIDRAW_EXPLORE_SHARED_CANONICAL_DATA_031_20260909';
-if (source.includes(marker)) {
+if (source.includes(marker) || source.includes('function exploreCacheBucket031(')) {
   writeFileSync(workerPath, applyCacheMutationSafety(source), 'utf8');
   console.log('[031] Shared canonical runtime retained; cache mutation safety upgraded.');
   process.exit(0);

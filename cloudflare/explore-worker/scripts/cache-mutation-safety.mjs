@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 // Keep runtime source separate from string-replacement mechanics so tests execute it.
 export function applyCacheMutationSafety(source) {
   const marker = 'SORIDRAW_CACHE_MUTATION_CAS_052';
-  if (source.includes(marker)) return source;
+  if (source.includes(marker) || source.includes('async function mutateExploreR2Cache052(')) return source;
   source = source.replaceAll('\r\n', '\n');
   for (const name of ['buildExploreFeedR2Payload', 'writeExploreR2Json']) {
     if (!source.includes('async function ' + name + '(')) throw new Error('Missing snapshot writer: ' + name);
@@ -13,9 +13,12 @@ export function applyCacheMutationSafety(source) {
   const profileAnchor = 'async function rebuildExploreProfileR2Bounded020(env, profileRef, knownBundle = null) {';
   if (source.includes(profileAnchor)) {
     source = source.replace(profileAnchor, profileAnchor + '\n  let cacheBaseline052 = null;');
-    const anchor = '  if (!uid) return null;\n\n  // HARD COST RULE:';
-    if (!source.includes(anchor)) throw new Error('Profile repair baseline anchor missing');
-    source = source.replace(anchor, '  if (!uid) return null;\n  cacheBaseline052 = await exploreCacheBucket031(env).get(exploreProfileR2Key(uid));\n  if (cacheBaseline052) { try { knownBundle = JSON.parse(await cacheBaseline052.text()); } catch {} }\n\n  // HARD COST RULE:');
+    // Dashboard bundles remove comments. Locate the executable guard inside this function.
+    const bodyStart = source.indexOf(profileAnchor);
+    const guard = '  if (!uid) return null;';
+    const at = source.indexOf(guard, bodyStart);
+    if (at < 0) throw new Error('Profile repair UID guard missing');
+    source = source.slice(0, at + guard.length) + '\n  cacheBaseline052 = await exploreCacheBucket031(env).get(exploreProfileR2Key(uid));\n  if (cacheBaseline052) { try { knownBundle = JSON.parse(await cacheBaseline052.text()); } catch {} }' + source.slice(at + guard.length);
     const write = '  await writeExploreR2Json(env, exploreProfileR2Key(uid), bundle);';
     if (!source.includes(write)) throw new Error('Profile repair write anchor missing');
     source = source.replace(write, '  bundle[EXPLORE_CACHE_SNAPSHOT_052] = { etag: cacheBaseline052?.etag };\n' + write);

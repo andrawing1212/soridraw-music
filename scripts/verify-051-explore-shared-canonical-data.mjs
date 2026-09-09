@@ -13,7 +13,8 @@ const need = (source, text, label) => {
 
 need(service, 'PROFILE_FIRST_VIEW_SCHEMA_VERSION = 6', 'profile cache schema');
 need(service, 'PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS = 10_000', 'profile revalidate window');
-need(service, "url.searchParams.set('__soridraw_shared_profile', '51')", 'shared profile cold repair');
+if (service.includes('__soridraw_shared_profile')) throw new Error('version-driven profile materialize must remain removed');
+need(readFileSync('cloudflare/explore-worker/runtime/derived-cache.js','utf8'), 'syncDerivedCache032', 'trigger-backed freshness');
 if (service.includes("url.searchParams.set('__soridraw_profile_parity', '48')")) throw new Error('old 048 cold repair request still active');
 
 need(page, 'const serverRevision = await fetchRevision().catch', 'feed revision-first bootstrap');

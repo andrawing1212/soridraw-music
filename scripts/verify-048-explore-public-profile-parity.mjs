@@ -19,7 +19,7 @@ requireText(page, 'b.id.localeCompare(a.id)', 'stable id ordering');
 requireText(page, 'normalizedTracks.sort(comparePublicProfileTracks)', 'profile sort use');
 
 requireText(service, 'PROFILE_FIRST_VIEW_SCHEMA_VERSION = 6', 'cache schema bump');
-requireText(service, "url.searchParams.set('__soridraw_shared_profile', '51')", 'cold parity flag');
+if (service.includes('__soridraw_shared_profile')) throw new Error('cold materialize flag returned');
 requireText(service, "if (revision) {", 'warm revision branch');
 
 

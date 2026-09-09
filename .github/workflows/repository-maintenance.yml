@@ -13,7 +13,7 @@ permissions:
 jobs:
   cleanup-merged-branches:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
@@ -21,86 +21,62 @@ jobs:
           ref: preview
           fetch-depth: 0
 
-      - name: Safely prune approved merged branches
+      - name: Prune merged temporary branches safely
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin --prune
 
-          branches=(
-            _noop_849_temp
-            _noop_849_temp2
-            _noop_849_temp3
-            _noop_849_temp4
-            _noop_849_temp5
-            _noop_849_temp6
-            preview-catalog-delta-audit
-            preview-catalog-delta-impl2
-            preview-catalog-delta-real
-            preview-catalog-delta-real2
-            preview-catalog-delta-real3
-            preview-catalog-delta-work
-            preview-catalog-delta-work2
-            preview-catalog-delta-work3
-            preview-catalog-delta-work4
-            preview-catalog-delta-work5
-            preview-catalog-delta-work6
-            preview-catalog-delta-work7
-            preview-catalog-delta-work8
-            preview-catalog-delta-work9
-            preview-catalog-delta-work10
-            preview-catalog-delta-work11
-            preview-catalog-delta-work-final
-            preview-catalog-delta-work-final2
-            preview-catalog-delta-work-final3
-            preview-deploy-1037-exec
-            preview-deploy-1037-exec2
-            preview-deploy-1037-run
-            preview-deploy-1037-workflow
-            preview-deploy-temp-1037-cleanup
-            preview-deploy-temp-1037
-            preview-fix-temp
-            preview-fix-temp2
-            preview-fix-temp3
-            preview-fix-temp4
-            preview-fix-temp5
-            maintenance/repository-cleanup-20260910
-          )
+          # Permanent/history refs are intentionally kept. Everything else is
+          # considered a temporary work/diagnostic branch, but is deleted ONLY
+          # when its tip is already reachable from preview or main.
+          is_preserved() {
+            case "$1" in
+              main|preview|production|backup*|release-*|release/*|production-*|deployed-snapshot-*|test-*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
 
-          protected=(main preview production)
-          for b in "${branches[@]}"; do
-            for p in "${protected[@]}"; do
-              if [[ "$b" == "$p" ]]; then
-                echo "REFUSE_PROTECTED=$b"
-                exit 2
-              fi
-            done
-          done
+          safe_file="$RUNNER_TEMP/safe-merged-branches.txt"
+          keep_file="$RUNNER_TEMP/unmerged-branches.txt"
+          : > "$safe_file"
+          : > "$keep_file"
 
-          # Preflight everything first. Nothing is deleted unless every existing
-          # candidate is already contained in preview or main.
-          for b in "${branches[@]}"; do
-            if ! git show-ref --verify --quiet "refs/remotes/origin/$b"; then
-              echo "SKIP_MISSING=$b"
+          while IFS= read -r ref; do
+            b="${ref#origin/}"
+            [[ "$b" == "HEAD" ]] && continue
+            if is_preserved "$b"; then
+              echo "PRESERVE=$b"
               continue
             fi
+
             if git merge-base --is-ancestor "refs/remotes/origin/$b" refs/remotes/origin/preview; then
+              echo "$b" >> "$safe_file"
               echo "SAFE_PREVIEW=$b"
-              continue
-            fi
-            if git merge-base --is-ancestor "refs/remotes/origin/$b" refs/remotes/origin/main; then
+            elif git merge-base --is-ancestor "refs/remotes/origin/$b" refs/remotes/origin/main; then
+              echo "$b" >> "$safe_file"
               echo "SAFE_MAIN=$b"
-              continue
+            else
+              echo "$b" >> "$keep_file"
+              echo "KEEP_UNMERGED=$b"
             fi
-            echo "REFUSE_UNMERGED=$b"
-            exit 3
-          done
+          done < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin | sort)
 
-          for b in "${branches[@]}"; do
-            if git show-ref --verify --quiet "refs/remotes/origin/$b"; then
-              git push origin --delete "$b"
-              echo "DELETED=$b"
-            fi
-          done
+          safe_count=$(grep -c . "$safe_file" || true)
+          keep_count=$(grep -c . "$keep_file" || true)
+          echo "SAFE_DELETE_COUNT=$safe_count"
+          echo "UNMERGED_KEEP_COUNT=$keep_count"
+
+          while IFS= read -r b; do
+            [[ -z "$b" ]] && continue
+            case "$b" in
+              main|preview|production|backup*|release-*|release/*|production-*|deployed-snapshot-*|test-*)
+                echo "REFUSE_PRESERVED=$b"
+                exit 2
+                ;;
+            esac
+            git push origin --delete "$b"
+            echo "DELETED=$b"
+          done < "$safe_file"
 
           echo "BRANCH_CLEANUP_PASS=true"

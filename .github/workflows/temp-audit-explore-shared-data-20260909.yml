@@ -107,25 +107,29 @@ jobs:
             "name": "soridraw-explore-audit-temp",
             "main": "worker.mjs",
             "compatibility_date": "2026-09-09",
-            "workers_dev": true,
             "d1_databases": [
-              {"binding":"PROD_DB","database_name":"soridraw-explore-db","database_id":"217ef5b1-5d80-4f7c-afc7-9e07eb05c06b"},
-              {"binding":"PREVIEW_DB","database_name":"soridraw-explore-preview-db","database_id":"aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f"},
-              {"binding":"TEST_DB","database_name":"soridraw-explore-test-db","database_id":"31817dbd-d06e-415e-9bc0-5553b0f5dc43"}
+              {"binding":"PROD_DB","database_name":"soridraw-explore-db","database_id":"217ef5b1-5d80-4f7c-afc7-9e07eb05c06b","remote":true},
+              {"binding":"PREVIEW_DB","database_name":"soridraw-explore-preview-db","database_id":"aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f","remote":true},
+              {"binding":"TEST_DB","database_name":"soridraw-explore-test-db","database_id":"31817dbd-d06e-415e-9bc0-5553b0f5dc43","remote":true}
             ],
             "r2_buckets": [
-              {"binding":"PROD_R2","bucket_name":"soridraw-profile-media"},
-              {"binding":"PREVIEW_R2","bucket_name":"soridraw-profile-media-preview"},
-              {"binding":"TEST_R2","bucket_name":"soridraw-profile-media-test"}
+              {"binding":"PROD_R2","bucket_name":"soridraw-profile-media","remote":true},
+              {"binding":"PREVIEW_R2","bucket_name":"soridraw-profile-media-preview","remote":true},
+              {"binding":"TEST_R2","bucket_name":"soridraw-profile-media-test","remote":true}
             ],
             "vars": {"AUDIT_KEY":"soridraw-audit-20260909-shared-data"}
           }
           JSON
           cd "$RUNNER_TEMP/explore-audit"
-          npx --yes wrangler@4.102.0 deploy --config wrangler.jsonc
-          trap 'npx --yes wrangler@4.102.0 delete soridraw-explore-audit-temp --force >/dev/null 2>&1 || true' EXIT
-          sleep 4
-          curl -fsS -H 'X-Audit: soridraw-audit-20260909-shared-data' https://soridraw-explore-audit-temp.andrawing1212.workers.dev/audit | tee audit.json
+          npx --yes wrangler@4.102.0 dev --config wrangler.jsonc --port 8787 --ip 127.0.0.1 > wrangler-dev.log 2>&1 &
+          pid=$!
+          trap 'kill $pid >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS -H 'X-Audit: soridraw-audit-20260909-shared-data' http://127.0.0.1:8787/audit -o audit.json; then break; fi
+            sleep 2
+          done
+          test -s audit.json || { cat wrangler-dev.log; exit 1; }
+          cat audit.json
           node - <<'NODE'
           const fs=require('fs'); const a=JSON.parse(fs.readFileSync('audit.json','utf8'));
           for (const name of ['production','preview','test']) {

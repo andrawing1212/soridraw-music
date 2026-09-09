@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { applyCacheMutationSafety } from '../scripts/cache-mutation-safety.mjs';
 
 const remoteDir = process.env.SORIDRAW_REMOTE_WORKER_DIR;
 if (!remoteDir) throw new Error('SORIDRAW_REMOTE_WORKER_DIR is required.');
@@ -8,7 +9,8 @@ let source = readFileSync(workerPath, 'utf8');
 
 const marker = 'SORIDRAW_EXPLORE_SHARED_CANONICAL_DATA_031_20260909';
 if (source.includes(marker)) {
-  console.log('[031] Explore shared canonical-data runtime already applied.');
+  writeFileSync(workerPath, applyCacheMutationSafety(source), 'utf8');
+  console.log('[031] Shared canonical runtime retained; cache mutation safety upgraded.');
   process.exit(0);
 }
 
@@ -277,5 +279,5 @@ for (const required of [
   if (!source.includes(required)) throw new Error(`[031] final runtime missing: ${required}`);
 }
 
-writeFileSync(workerPath, source, 'utf8');
+writeFileSync(workerPath, applyCacheMutationSafety(source), 'utf8');
 console.log('[031] Explore now supports one shared canonical D1/user-media source with environment-local derived cache/rate limits; old cross-environment DB mirroring is retired.');

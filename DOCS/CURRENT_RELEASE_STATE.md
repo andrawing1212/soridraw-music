@@ -149,3 +149,46 @@ CACHE LIVE 실사용에서 좋아요/공개프로필 조작 후 D1 행 읽기가
 - 메모리 mock 결함 재현 3건: 모두 재현됨. 이는 비용/정합성 합격을 뜻하지 않는다.
 - 전체 TypeScript/build, 최종 Worker patch replay, 실제 D1 비용/환경 간 기능 검증: 미실행. 구현 중단 및 문서만 변경했으므로 최종 후보 검증을 수행하지 않았다.
 - Firebase/Cloudflare 배포, DB 변경, main/Production 수정: 없음. 실제 주소 smoke test 없음.
+
+## 11. 2026-09-10 후속 승인 범위 구현 — 코드 반영, 배포 전
+
+기준: `preview @ b67fc4b36d05f4b600d8ca6f4b38ab1a3f09eca1`. 위 10절은 당시 중단 기록이며, 이번 후속 요청은 verifier 정리 / mutation 충돌 보호 / 변경 곡의 인기순 진입 / 최소 회귀 검사 네 범위만 승인했다. NEXT_CODEX_TASK의 전체 비용 과제를 모두 끝낸 것으로 해석하지 않는다.
+
+### 이번/누적 변경 파일
+- `cloudflare/explore-worker/patches/031-explore-shared-canonical-data.mjs`
+- `cloudflare/explore-worker/scripts/cache-mutation-safety.mjs`
+- `cloudflare/explore-worker/runtime/cache-mutations.js`
+- `scripts/assert-app-version-source.mjs`
+- `scripts/verify-048-explore-public-profile-parity.mjs`
+- `scripts/verify-049-explore-feed-integrity.mjs`
+- `scripts/verify-051-explore-shared-canonical-data.mjs`
+- `scripts/verify-explore-cache-mutations.mjs`
+- `DOCS/CURRENT_RELEASE_STATE.md`
+
+### 변경 계약
+- 048/049/051은 `public/app-version.json` → Vite define → update notice의 단일 버전 원본 계약을 공통 검사한다. 구형 schema 5, 앱 049/051 고정 조건과 폐기된 029 mirror 검사 제거. 기존 정렬/pagination 및 현재 schema 6 검사는 유지. 실제 cold-repair 프로토콜 값 `51`은 앱 버전과 별개이므로 유지했다.
+- 기존 031의 초기 적용과 이미 적용된 Worker의 재실행 모두 같은 CAS 업그레이더를 호출한다. 새로운 번호의 임시 patch는 추가하지 않았다. 대체된 mutation 함수 본문은 생성 Worker에서 제거한다.
+- R2 snapshot ETag를 조건으로 저장하고, 충돌 시 최신 bundle을 읽어 해당 변경을 다시 적용한다. 최대 8회, 이후 오류를 내며 무조건 overwrite로 전환하지 않는다.
+- feed like/publication/private/options, profile publication/private/options/counters/edit, 사용자 like-ID bundle에 공통 보호를 적용했다. CAS 재시도 자체가 profile count delta를 이중 반영하지 않으며 revision은 성공한 최신 bundle 기준으로 증가한다.
+- 오래된 like/publication/private 응답이 최신 canonical 상태를 되돌리지 않도록 변경 ID로만 조회한다. 같은 곡 ID의 like membership도 기존 likes의 복합 키로 확인한다.
+- 목록 밖 인기순 후보는 변경된 곡 ID 하나만 조회하여 기존 정렬/cursor helper로 병합하고 40개로 자른다. publication 함수 전체를 우회 호출하지 않는다. 이 mutation 경로는 전체 feed builder, COUNT, OFFSET, ranking 전체 조회를 호출하지 않는다.
+- 전체 snapshot builder도 canonical 조회 전 ETag를 확보해 그 사이 성공한 delta를 덮어쓰지 못한다. snapshot 충돌 때 정상 bundle 삭제를 피하며, shared revision 상태는 두 snapshot 저장 성공 뒤에만 기록한다.
+- profile 편집은 기존 R2 항목과 trackCount를 유지하며 profile row만 갱신한다. 기존 profile cold repair는 유지한다.
+- bundle 없음/손상 시 mutation에서 원본 scan/rebuild를 하지 않는다. 기존 cold/repair 경로가 복구를 맡는다.
+
+### 최종 검증
+- root TypeScript `--noEmit`: PASS (Node 20).
+- root `npm run build`: PASS (Node 20). 기존 dynamic/static import 및 큰 chunk 경고만 발생.
+- 033/045/048/049/051 Explore verifier: 모두 PASS.
+- 새 `verify-explore-cache-mutations.mjs`: PASS. 실제 patch template 기반 메모리 fixture로 동시 like, publication/private/options 충돌, profile delta와 revision, 외부 후보 진입/탈락, 늦은 like/중복 no-op, missing/corrupt, 충돌 소진, 늦은 전체 snapshot, profile edit/like, like-ID 동시 변경을 검사한다.
+- 이미 031이 적용된 fixture에 실제 031 스크립트 실행 → 생성 Worker syntax → 2회 적용의 동일 결과: PASS.
+- 외부 후보 진입 fixture: D1 ID query 1회 / latest write 0 / popular write 1 / 결과 최대 40개. 이는 query 호출 수이며 실제 D1 rows_read 측정값은 아니다.
+- 최종 후보의 전체 TypeScript/Build/관련 verifier 실행은 한 번 수행했다. G 드라이브 설치 제약 때문에 NTFS 임시 복사본에서 npm install로 의존성을 준비했다. 저장소 package-lock 및 tracked dist는 변경하지 않았다.
+
+### 남은 위험 / 범위 밖 항목
+- 실제 배포 Worker 원본에 대한 전체 historical patch replay 및 실서버 D1 실행계획/rows_read/고부하 검증은 미실행. 현재 검증은 저장소의 관련 실제 template을 조합한 fixture 기준이다.
+- 인기순 하락/삭제 후 목록 밖의 다른 후보를 찾아 정확한 40곡을 보충하는 문제는 이번 '변경 곡 진입' 범위에 포함하지 않았다. 순위용 추가 인덱스/구조의 필요성도 확정하지 않았다.
+- 기존 030/031 `/feed-revision`의 전체 snapshot 재구축 비용과 환경 간 변경 전달 구조는 남아 있다. 이번에는 그 snapshot이 동시 mutation을 덮어쓰지 않도록 보호했으며, 전체 초저비용 구조 완료를 주장하지 않는다.
+- CAS는 bundle별 보호이며 여러 bundle/DB를 하나의 transaction으로 묶지 않는다. R2 장애·8회 충돌 소진 시 일부 cache 반영이 늦어질 수 있다. 새 queue/영구 재시도 구조는 만들지 않았다.
+- DB schema/migration/backfill, Music Note/Library, UI, app version 052, 환경 선택/binding, main/PRODUCTION, Firebase/Cloudflare 설정: 변경 없음.
+- 배포/push/실제 사용자 데이터 smoke test: 수행하지 않음. 별도 배포 승인 전이다.

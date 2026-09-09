@@ -1,16 +1,16 @@
+import { assertAppVersionSource } from './assert-app-version-source.mjs';
+assertAppVersionSource();
 import { readFileSync } from 'node:fs';
 
 const service = readFileSync('src/services/exploreProfileFirstViewService.ts', 'utf8');
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const patch = readFileSync('cloudflare/explore-worker/patches/031-explore-shared-canonical-data.mjs', 'utf8');
 const prepare = readFileSync('cloudflare/explore-worker/scripts/prepare-from-dashboard.mjs', 'utf8');
-const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 
 const need = (source, text, label) => {
   if (!source.includes(text)) throw new Error(`${label} missing: ${text}`);
 };
 
-if (String(version.version) !== '051') throw new Error(`app version must be 051, got ${version.version}`);
 need(service, 'PROFILE_FIRST_VIEW_SCHEMA_VERSION = 6', 'profile cache schema');
 need(service, 'PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS = 10_000', 'profile revalidate window');
 need(service, "url.searchParams.set('__soridraw_shared_profile', '51')", 'shared profile cold repair');

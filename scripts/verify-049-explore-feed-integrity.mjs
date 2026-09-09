@@ -1,11 +1,11 @@
+import { assertAppVersionSource } from './assert-app-version-source.mjs';
+assertAppVersionSource();
 import { readFileSync } from 'node:fs';
 
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const cache = readFileSync('src/services/exploreSessionCache.ts', 'utf8');
 const css = readFileSync('src/components/explore/explore.css', 'utf8');
 const workerPatch = readFileSync('cloudflare/explore-worker/patches/030-explore-feed-integrity-self-heal.mjs', 'utf8');
-const notice = readFileSync('src/services/appUpdateNotice.ts', 'utf8');
-const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 
 const requireText = (name, text, needle) => {
   if (!text.includes(needle)) throw new Error(`[049] ${name} missing: ${needle}`);
@@ -44,8 +44,6 @@ if (/firebase|firestore/i.test(workerPatch)) {
 if (!workerPatch.includes('caches.default.match') || !workerPatch.includes('verifiedAt')) {
   throw new Error('[049] global/edge cost guard missing');
 }
-if (String(version.version) !== '049') throw new Error('[049] public app version mismatch');
-requireText('notice', notice, `CURRENT_APP_VERSION = '049'`);
 
 console.log('VERIFY_049_EXPLORE_FEED_INTEGRITY=PASS');
 console.log('FIRST_PAGE_CACHE_FIRST_40=PASS');

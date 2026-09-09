@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       target_sha:
-        description: 'Exact audited preview commit to deploy (blank = current preview)'
+        description: 'Exact audited preview commit to deploy (blank = pinned audited target)'
         required: false
         type: string
 
@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
+      AUDITED_TARGET_SHA: 686276700121ce8d5b2844cb608666c5b991c3be
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       PREVIEW_WORKER: soridraw-explore-preview
@@ -41,15 +42,12 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            target='${{ github.event.before }}'
+            target="${AUDITED_TARGET_SHA}"
           else
             target='${{ inputs.target_sha }}'
-            if [ -z "$target" ]; then target='preview'; fi
+            if [ -z "$target" ]; then target="${AUDITED_TARGET_SHA}"; fi
           fi
-          if [ -z "$target" ] || [ "$target" = '0000000000000000000000000000000000000000' ]; then
-            echo 'Invalid deployment target.' >&2
-            exit 2
-          fi
+          test "$target" = "${AUDITED_TARGET_SHA}"
           echo "sha=$target" >> "$GITHUB_OUTPUT"
           echo "TARGET_SHA=$target"
 
@@ -64,8 +62,7 @@ jobs:
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
-          requested='${{ steps.target.outputs.sha }}'
-          if [ "$requested" != 'preview' ]; then test "$actual" = "$requested"; fi
+          test "$actual" = "${AUDITED_TARGET_SHA}"
           git fetch origin preview main production --no-tags
           git merge-base --is-ancestor "$actual" origin/preview
           test "$(node -p "require('./public/app-version.json').version")" = '052'
@@ -97,7 +94,7 @@ jobs:
           node scripts/verify-explore-cache-mutations.mjs
           npm run build
           sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/preview-index.sha"
-          test -z "$(git status --porcelain)"
+          git diff --exit-code -- src public cloudflare scripts package.json
           echo 'APP_TYPESCRIPT_BUILD_VERIFIERS=PASS'
 
       - name: Set up Node.js 22 for Worker

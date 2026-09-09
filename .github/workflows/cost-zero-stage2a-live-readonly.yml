@@ -1,10 +1,6 @@
 name: Cost Zero Stage 2A Live Readonly
 
 on:
-  push:
-    branches: [preview]
-    paths:
-      - '.github/workflows/cost-zero-stage2a-live-readonly.yml'
   workflow_dispatch:
 
 permissions:

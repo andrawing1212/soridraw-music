@@ -1,0 +1,324 @@
+name: TEMP Apply and deploy Explore shared data 051
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-apply-deploy-051-shared-explore.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temp-explore-shared-data-051
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CF_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      PROD_DB_NAME: soridraw-explore-db
+      PROD_DB_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+      PREVIEW_DB_NAME: soridraw-explore-preview-db
+      PREVIEW_DB_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      TEST_DB_NAME: soridraw-explore-test-db
+      TEST_DB_ID: 31817dbd-d06e-415e-9bc0-5553b0f5dc43
+      PROD_R2: soridraw-profile-media
+      PREVIEW_R2: soridraw-profile-media-preview
+      TEST_R2: soridraw-profile-media-test
+      PREVIEW_WORKER: soridraw-explore-preview
+      TEST_WORKER: soridraw-explore-test
+      PROD_WORKER: soridraw-explore-api
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      TEST_BASE: https://soridraw-explore-test.andrawing1212.workers.dev
+      PROD_BASE: https://soridraw-explore-api.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+      TEST_ORIGIN: https://test.soridraw.com
+      PROD_ORIGIN: https://soridraw.com
+      BRAND_SHA: 644e785c20df6b2c1f833e87a464423caceaa721
+
+    steps:
+      - name: Checkout PREVIEW
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate 050 baseline then apply 051 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./public/app-version.json').version")" = '050'
+          node scripts/verify-050-musicnote-folder-catalog-recovery.mjs
+          python3 .deploy/apply-051-explore-shared-data.py
+          node scripts/verify-051-explore-shared-canonical-data.mjs
+          node --check cloudflare/explore-worker/patches/031-explore-shared-canonical-data.mjs
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          test "$(node -p "require('./public/app-version.json').version")" = '051'
+          echo 'SOURCE_051_VALIDATION=PASS'
+
+      - name: Commit 051 source to PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release@users.noreply.github.com'
+          git add src/services/exploreProfileFirstViewService.ts src/pages/ExplorePage.tsx public/app-version.json cloudflare/explore-worker/scripts/prepare-from-dashboard.mjs
+          git diff --cached --quiet && { echo 'Expected 051 source diff missing'; exit 1; } || true
+          git commit -m 'feat(preview): unify Explore canonical user data 051'
+          git push origin HEAD:preview
+          echo "SOURCE_051_SHA=$(git rev-parse HEAD)" | tee "$RUNNER_TEMP/source-sha.env"
+
+      - name: Snapshot PRODUCTION code and hosting before data migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.com/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+          node <<'NODE'
+          const fs=require('fs');
+          const A=process.env.CF_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PROD_WORKER;
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('Cloudflare '+r.status+' '+JSON.stringify(x).slice(0,800));return x.result||x;}
+          (async()=>{
+            const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`;
+            const ds=await g(base+'/deployments'),d=(ds.deployments||ds||[])[0],active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];
+            if(!active?.version_id)throw Error('production active worker missing');
+            const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${active.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0];
+            const s=Buffer.from(m.content_base64||'','base64').toString('utf8');
+            fs.writeFileSync(process.env.RUNNER_TEMP+'/prod-worker-version.txt',active.version_id);
+            fs.writeFileSync(process.env.RUNNER_TEMP+'/prod-worker-source.sha',require('crypto').createHash('sha256').update(s).digest('hex'));
+            console.log('PRODUCTION_WORKER_BEFORE='+active.version_id);
+            console.log('PRODUCTION_HAS_030='+String(s.includes('ensureExploreFeedIntegrity030')));
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Backup and migrate PREVIEW canonical user data into shared PRODUCTION D1/R2
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/shared-migrate"
+          cat > "$RUNNER_TEMP/shared-migrate/worker.mjs" <<'JS'
+          const TABLE_KEYS = {
+            tracks:['id'], comments:['id'], curated_picks:['collection_key','track_id'], explore_curators:['uid'],
+            follows:['follower_uid','following_uid'], likes:['track_id','user_uid'], profile_stats:['uid'],
+            public_folders:['id'], public_folder_tracks:['folder_id','track_id'], public_profiles:['uid'],
+            track_stats:['track_id'], track_tags:['track_id','kind','value']
+          };
+          const TABLES=Object.keys(TABLE_KEYS);
+          const qi=v=>'"'+String(v).replaceAll('"','""')+'"';
+          const keyOf=(r,ks)=>ks.map(k=>JSON.stringify(r[k]??null)).join('|');
+          async function rows(db,t){const r=await db.prepare('SELECT * FROM '+qi(t)).all();return r.results||[];}
+          async function cols(db,t){const r=await db.prepare('PRAGMA table_info('+qi(t)+')').all();return (r.results||[]).map(x=>String(x.name));}
+          async function relation(src,dst,t){const ks=TABLE_KEYS[t],a=new Set((await rows(src,t)).map(r=>keyOf(r,ks))),b=new Set((await rows(dst,t)).map(r=>keyOf(r,ks)));let sourceOnly=0,targetOnly=0;for(const k of a)if(!b.has(k))sourceOnly++;for(const k of b)if(!a.has(k))targetOnly++;return{source:a.size,target:b.size,sourceOnly,targetOnly};}
+          async function backupTable(db,bucket,prefix,t){const data=await rows(db,t);await bucket.put(prefix+'d1/'+t+'.json',JSON.stringify(data),{httpMetadata:{contentType:'application/json'},customMetadata:{soridrawBackup:'051'}});return data.length;}
+          async function upsertTable(src,dst,t){const data=await rows(src,t);if(!data.length)return 0;const columns=await cols(src,t),keys=TABLE_KEYS[t],updates=columns.filter(c=>!keys.includes(c));const sql='INSERT INTO '+qi(t)+' ('+columns.map(qi).join(',')+') VALUES ('+columns.map(()=>'?').join(',')+') ON CONFLICT ('+keys.map(qi).join(',')+') '+(updates.length?'DO UPDATE SET '+updates.map(c=>qi(c)+'=excluded.'+qi(c)).join(','):'DO NOTHING');for(let i=0;i<data.length;i+=20){const page=data.slice(i,i+20);await dst.batch(page.map(r=>dst.prepare(sql).bind(...columns.map(c=>r[c]??null))));}return data.length;}
+          async function list(bucket,prefix){let cursor,all=[];do{const r=await bucket.list({prefix,cursor,limit:1000});all.push(...(r.objects||[]));cursor=r.truncated?r.cursor:undefined;}while(cursor);return all;}
+          async function backupProfiles(bucket,prefix){const objects=await list(bucket,'profiles/');for(const o of objects){const x=await bucket.get(o.key);if(!x)continue;await bucket.put(prefix+'r2/'+o.key,x.body,{httpMetadata:x.httpMetadata,customMetadata:x.customMetadata});}return objects.length;}
+          async function copyProfiles(src,dst){const so=await list(src,'profiles/'),to=await list(dst,'profiles/'),sk=new Set(so.map(x=>x.key)),tk=new Set(to.map(x=>x.key));const targetOnly=[...tk].filter(k=>!sk.has(k));if(targetOnly.length)throw new Error('production-only profile media objects='+targetOnly.length);for(const o of so){const x=await src.get(o.key);if(!x)continue;await dst.put(o.key,x.body,{httpMetadata:x.httpMetadata,customMetadata:x.customMetadata});}return{source:so.length,targetBefore:to.length,copied:so.length};}
+          async function installRevision(db){await db.exec("CREATE TABLE IF NOT EXISTS explore_shared_revision (scope TEXT PRIMARY KEY, revision INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL DEFAULT 0)");await db.prepare("INSERT OR IGNORE INTO explore_shared_revision(scope,revision,updated_at) VALUES ('global',1,?)").bind(Date.now()).run();for(const t of TABLES){for(const [suffix,op] of [['ai','INSERT'],['au','UPDATE'],['ad','DELETE']]){const name='soridraw_shared_rev_'+t+'_'+suffix+'_051';await db.exec('CREATE TRIGGER IF NOT EXISTS '+qi(name)+' AFTER '+op+' ON '+qi(t)+" BEGIN UPDATE explore_shared_revision SET revision=revision+1,updated_at=CAST(strftime('%s','now') AS INTEGER)*1000 WHERE scope='global'; END");}}await db.prepare("UPDATE explore_shared_revision SET revision=revision+1,updated_at=? WHERE scope='global'").bind(Date.now()).run();const r=await db.prepare("SELECT revision FROM explore_shared_revision WHERE scope='global'").first();return String(r?.revision||'0');}
+          async function summary(db){const v=await db.prepare("SELECT COUNT(*) AS n FROM tracks WHERE is_public=1 AND status='published'").first();const p=await db.prepare("SELECT uid FROM public_profiles WHERE is_public=1 ORDER BY uid").all();const counts={};for(const row of p.results||[]){const c=await db.prepare("SELECT COUNT(*) AS n FROM tracks WHERE owner_uid=? AND is_public=1 AND status='published'").bind(row.uid).first();counts[String(row.uid)]=Number(c?.n||0);}return{visible:Number(v?.n||0),profileRefs:(p.results||[]).map(x=>String(x.uid)),profileCounts:counts};}
+          export default {async fetch(req,env){if(new URL(req.url).pathname!='/migrate'||req.headers.get('X-Migrate')!==env.KEY)return new Response('not found',{status:404});try{const relations={};for(const t of TABLES){relations[t]=await relation(env.SOURCE_DB,env.TARGET_DB,t);if(relations[t].targetOnly)throw new Error('PRODUCTION-only canonical rows in '+t+': '+relations[t].targetOnly);}const prefix='backups/shared-explore-051/'+env.RUN_ID+'/';for(const t of [...TABLES,'public_profile_first_views','api_rate_limits'])await backupTable(env.TARGET_DB,env.TARGET_MEDIA,prefix,t);await backupProfiles(env.TARGET_MEDIA,prefix);for(const t of TABLES)await upsertTable(env.SOURCE_DB,env.TARGET_DB,t);for(const t of TABLES){const r=await relation(env.SOURCE_DB,env.TARGET_DB,t);if(r.sourceOnly||r.targetOnly)throw new Error('post-migrate key mismatch '+t+' '+JSON.stringify(r));}const media=await copyProfiles(env.SOURCE_MEDIA,env.TARGET_MEDIA);const revision=await installRevision(env.TARGET_DB);const s=await summary(env.TARGET_DB);return Response.json({ok:true,backupPrefix:prefix,relations,media,revision,...s});}catch(e){return Response.json({ok:false,error:String(e?.stack||e)},{status:500});}}};
+          JS
+          cat > "$RUNNER_TEMP/shared-migrate/wrangler.jsonc" <<JSON
+          {
+            "name":"soridraw-shared-migrate-051",
+            "main":"worker.mjs",
+            "compatibility_date":"2026-06-24",
+            "d1_databases":[
+              {"binding":"SOURCE_DB","database_name":"$PREVIEW_DB_NAME","database_id":"$PREVIEW_DB_ID","remote":true},
+              {"binding":"TARGET_DB","database_name":"$PROD_DB_NAME","database_id":"$PROD_DB_ID","remote":true}
+            ],
+            "r2_buckets":[
+              {"binding":"SOURCE_MEDIA","bucket_name":"$PREVIEW_R2","remote":true},
+              {"binding":"TARGET_MEDIA","bucket_name":"$PROD_R2","remote":true}
+            ],
+            "vars":{"KEY":"shared-migrate-051","RUN_ID":"$GITHUB_RUN_ID"}
+          }
+          JSON
+          cd "$RUNNER_TEMP/shared-migrate"
+          npx --yes wrangler@4.102.0 dev --config wrangler.jsonc --port 8787 --ip 127.0.0.1 > wrangler-dev.log 2>&1 &
+          pid=$!; trap 'kill $pid >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 45); do
+            if curl -fsS -H 'X-Migrate: shared-migrate-051' http://127.0.0.1:8787/migrate -o migrate.json; then break; fi
+            sleep 2
+          done
+          test -s migrate.json || { cat wrangler-dev.log; exit 1; }
+          node - <<'NODE'
+          const fs=require('fs'),m=JSON.parse(fs.readFileSync('migrate.json','utf8'));if(!m.ok)throw Error(m.error||'migration failed');
+          if(Object.values(m.relations||{}).some(x=>Number(x.targetOnly||0)!==0))throw Error('production-only rows detected');
+          console.log('SHARED_DATA_BACKUP=PASS');
+          console.log('PREVIEW_TO_CANONICAL_D1=PASS visible='+m.visible);
+          console.log('SHARED_PROFILE_MEDIA=PASS copied='+m.media.copied);
+          console.log('SHARED_REVISION_TRIGGER=PASS revision='+m.revision);
+          NODE
+          cp migrate.json "$RUNNER_TEMP/migrate.json"
+          trap - EXIT
+          kill $pid >/dev/null 2>&1 || true
+
+      - name: Patch and deploy PREVIEW Worker on shared D1 with local cache/rate DB
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false wrangler@4.102.0
+          rm -rf .remote-worker && mkdir .remote-worker
+          node <<'NODE'
+          const fs=require('fs');const A=process.env.CF_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PREVIEW_WORKER;
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('Cloudflare '+r.status+' '+JSON.stringify(x).slice(0,900));return x.result||x;}
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,ds=await g(base+'/deployments'),d=(ds.deployments||ds||[])[0],active=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage)-Number(a.percentage))[0];if(!active?.version_id)throw Error('PREVIEW active version missing');const v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${active.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64||'','base64').toString('utf8');for(const q of ['ensureExploreFeedIntegrity030','fanoutExploreMirror020','handleExploreMirrorRoute020','handlePublicProfileFirstViewWithEdgeCache','enforceUserRateLimit'])if(!s.includes(q))throw Error('PREVIEW prerequisite missing '+q);fs.writeFileSync('.remote-worker/worker.js',s);fs.writeFileSync('.remote-worker/before-version.txt',active.version_id);const settings=await g(base+'/settings');fs.writeFileSync('.remote-worker/settings.json',JSON.stringify(settings));const services=(settings.bindings||[]).filter(b=>String(b.type||'').toLowerCase().includes('service'));if(services.length)throw Error('unexpected PREVIEW service bindings '+services.map(x=>x.name));const cfg={name:N,main:'./worker.js',compatibility_date:String(settings.compatibility_date||'2026-08-28').slice(0,10),workers_dev:true,keep_vars:true,d1_databases:[{binding:'DB',database_name:process.env.PROD_DB_NAME,database_id:process.env.PROD_DB_ID},{binding:'RATE_DB',database_name:process.env.PREVIEW_DB_NAME,database_id:process.env.PREVIEW_DB_ID}],r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.PROD_R2},{binding:'EXPLORE_CACHE',bucket_name:process.env.PREVIEW_R2}],observability:settings.observability&&typeof settings.observability==='object'?{enabled:settings.observability.enabled!==false}:{enabled:true}};if(Array.isArray(settings.compatibility_flags)&&settings.compatibility_flags.length)cfg.compatibility_flags=settings.compatibility_flags;fs.writeFileSync('.remote-worker/wrangler.jsonc',JSON.stringify(cfg,null,2));console.log('PREVIEW_WORKER_BEFORE='+active.version_id);})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          export SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker"
+          node patches/031-explore-shared-canonical-data.mjs
+          node --check .remote-worker/worker.js
+          for m in SORIDRAW_EXPLORE_SHARED_CANONICAL_DATA_031_20260909 ensureExploreSharedFeedCache031 handleExploreFeedRevision019Core031 handlePublicProfileFirstViewWithEdgeCacheCore031; do grep -Fq "$m" .remote-worker/worker.js; done
+          npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc
+          sleep 4
+          node <<'NODE'
+          const A=process.env.CF_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PREVIEW_WORKER;
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status);return x.result||x;}
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,settings=await g(base+'/settings'),b=settings.bindings||[];const must=(n,t,id)=>{const x=b.find(v=>v.name===n);if(!x||x.type!==t)throw Error('binding '+n+' '+JSON.stringify(x));if(id&&String(x.id||x.database_id||x.bucket_name||x.bucket||'')!==id)throw Error('binding target '+n+' '+JSON.stringify(x));};must('DB','d1',process.env.PROD_DB_ID);must('RATE_DB','d1',process.env.PREVIEW_DB_ID);must('PROFILE_MEDIA','r2_bucket',process.env.PROD_R2);must('EXPLORE_CACHE','r2_bucket',process.env.PREVIEW_R2);console.log('PREVIEW_SHARED_BINDINGS=PASS');})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Re-materialize shared public profiles and verify PREVIEW
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');const m=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/migrate.json','utf8'));
+          (async()=>{for(const ref of m.profileRefs){const u=new URL(process.env.PREVIEW_BASE+'/v1/profiles/'+encodeURIComponent(ref)+'/first-view');u.searchParams.set('limit','50');u.searchParams.set('__soridraw_shared_profile','51');const r=await fetch(u,{headers:{Origin:process.env.PREVIEW_ORIGIN,Accept:'application/json'}});if(!r.ok)throw Error('profile '+r.status);const p=await r.json(),items=p?.data?.items||[],count=Number(p?.data?.profile?.trackCount??p?.data?.profile?.track_count??0),expected=Number(m.profileCounts[ref]||0);if(count!==expected||items.length!==expected)throw Error('profile parity mismatch expected='+expected+' count='+count+' items='+items.length);}console.log('PREVIEW_PROFILE_SHARED_PARITY=PASS counts='+JSON.stringify(Object.values(m.profileCounts).sort((a,b)=>b-a)));const rev=await fetch(process.env.PREVIEW_BASE+'/v1/feed-revision?sort=latest',{headers:{Origin:process.env.PREVIEW_ORIGIN}});if(!rev.ok)throw Error('revision '+rev.status);const rv=(await rev.json())?.data?.revision||'';const f=await fetch(process.env.PREVIEW_BASE+'/v1/feed?sort=latest&limit=40&__soridraw_revision='+encodeURIComponent(rv),{headers:{Origin:process.env.PREVIEW_ORIGIN}});if(!f.ok)throw Error('feed '+f.status);const items=(await f.json())?.data?.items||[];if(items.length!==Number(m.visible))throw Error('feed count '+items.length+' expected '+m.visible);console.log('PREVIEW_SHARED_FEED=PASS items='+items.length);})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firebase PREVIEW 051
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          for i in $(seq 1 15); do v="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://preview.soridraw.com/app-version.json?r=$GITHUB_RUN_ID" | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).version" || true)"; [ "$v" = 051 ] && break; sleep 5; done
+          test "$v" = 051
+          echo 'FIREBASE_PREVIEW_051=PASS'
+
+      - name: Clean obsolete isolation runners and finalize PREVIEW source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --porcelain
+          git restore . || true
+          for f in \
+            .github/workflows/temp-audit-explore-shared-data-20260909.yml \
+            .github/workflows/temp-apply-deploy-051-shared-explore.yml \
+            .github/workflows/cloudflare-explore-environment-split.yml \
+            .deploy/cloudflare-explore-env-split.mjs \
+            .github/workflows/explore-physical-finalize.yml \
+            .deploy/cloudflare-explore-physical-isolation-v2.mjs; do
+            [ -e "$f" ] && git rm -f "$f"
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'chore(preview): retire obsolete Explore isolation runners'
+            git push origin HEAD:preview
+          fi
+          echo "FINAL_PREVIEW_SHA=$(git rev-parse HEAD)" | tee "$RUNNER_TEMP/final-preview.env"
+
+      - name: Promote validated 051 source to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main preview
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/preview)"
+          git push origin HEAD:main
+          echo 'MAIN_PROMOTION_051=PASS'
+
+      - name: Deploy exact PREVIEW 051 runtime to TEST with shared D1
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');const A=process.env.CF_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PREVIEW_WORKER;
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status);return x.result||x;}
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,ds=await g(base+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0],v=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/workers/${N}/versions/${a.version_id}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],s=Buffer.from(m.content_base64||'','base64').toString('utf8');if(!s.includes('SORIDRAW_EXPLORE_SHARED_CANONICAL_DATA_031_20260909'))throw Error('preview 051 runtime marker missing');fs.writeFileSync('.remote-worker/test-worker.js',s);const tb=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${process.env.TEST_WORKER}`,settings=await g(tb+'/settings');const cfg={name:process.env.TEST_WORKER,main:'./test-worker.js',compatibility_date:String(settings.compatibility_date||'2026-08-28').slice(0,10),workers_dev:true,keep_vars:true,d1_databases:[{binding:'DB',database_name:process.env.PROD_DB_NAME,database_id:process.env.PROD_DB_ID},{binding:'RATE_DB',database_name:process.env.TEST_DB_NAME,database_id:process.env.TEST_DB_ID}],r2_buckets:[{binding:'PROFILE_MEDIA',bucket_name:process.env.PROD_R2},{binding:'EXPLORE_CACHE',bucket_name:process.env.TEST_R2}],observability:settings.observability&&typeof settings.observability==='object'?{enabled:settings.observability.enabled!==false}:{enabled:true}};if(Array.isArray(settings.compatibility_flags)&&settings.compatibility_flags.length)cfg.compatibility_flags=settings.compatibility_flags;fs.writeFileSync('.remote-worker/wrangler-test.jsonc',JSON.stringify(cfg,null,2));})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          npx wrangler deploy --strict --config .remote-worker/wrangler-test.jsonc
+          sleep 4
+          node <<'NODE'
+          const A=process.env.CF_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.TEST_WORKER;
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status);return x.result||x;}
+          (async()=>{const s=await g(`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}/settings`),b=s.bindings||[];const assert=(n,t,id)=>{const x=b.find(v=>v.name===n);if(!x||x.type!==t)throw Error('binding '+n);if(id&&String(x.id||x.database_id||x.bucket_name||x.bucket||'')!==id)throw Error('target '+n+' '+JSON.stringify(x));};assert('DB','d1',process.env.PROD_DB_ID);assert('RATE_DB','d1',process.env.TEST_DB_ID);assert('PROFILE_MEDIA','r2_bucket',process.env.PROD_R2);assert('EXPLORE_CACHE','r2_bucket',process.env.TEST_R2);console.log('TEST_SHARED_BINDINGS=PASS');})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Verify PREVIEW and TEST Explore data parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs'),m=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/migrate.json','utf8'));
+          async function feed(base,origin,sort){const rr=await fetch(base+'/v1/feed-revision?sort='+sort,{headers:{Origin:origin}});if(!rr.ok)throw Error('rev '+base+' '+rr.status);const rev=(await rr.json())?.data?.revision||'';const r=await fetch(base+'/v1/feed?sort='+sort+'&limit=40&__soridraw_revision='+encodeURIComponent(rev),{headers:{Origin:origin}});if(!r.ok)throw Error('feed '+base+' '+r.status);return (await r.json())?.data?.items||[];}
+          async function profile(base,origin,ref){const u=new URL(base+'/v1/profiles/'+encodeURIComponent(ref)+'/first-view');u.searchParams.set('limit','50');u.searchParams.set('__soridraw_shared_profile','51');const r=await fetch(u,{headers:{Origin:origin}});if(!r.ok)throw Error('profile '+r.status);return (await r.json())?.data||{};}
+          (async()=>{for(const sort of ['latest','popular']){const [p,t]=await Promise.all([feed(process.env.PREVIEW_BASE,process.env.PREVIEW_ORIGIN,sort),feed(process.env.TEST_BASE,process.env.TEST_ORIGIN,sort)]);const ids=x=>x.map(v=>String(v.id||v.trackId||''));if(JSON.stringify(ids(p))!==JSON.stringify(ids(t)))throw Error(sort+' feed mismatch '+p.length+'/'+t.length);if(p.length!==Number(m.visible))throw Error(sort+' count '+p.length+' expected '+m.visible);console.log('EXPLORE_'+sort.toUpperCase()+'_PREVIEW_TEST=PASS items='+p.length);}for(const ref of m.profileRefs){const [p,t]=await Promise.all([profile(process.env.PREVIEW_BASE,process.env.PREVIEW_ORIGIN,ref),profile(process.env.TEST_BASE,process.env.TEST_ORIGIN,ref)]);const pi=p.items||[],ti=t.items||[];if(Number(p.profile?.trackCount||0)!==Number(t.profile?.trackCount||0)||JSON.stringify(pi.map(x=>x.id))!==JSON.stringify(ti.map(x=>x.id)))throw Error('profile preview/test mismatch');const exp=Number(m.profileCounts[ref]||0);if(pi.length!==exp)throw Error('profile expected '+exp+' got '+pi.length);}console.log('PUBLIC_PROFILE_PREVIEW_TEST=PASS counts='+JSON.stringify(Object.values(m.profileCounts).sort((a,b)=>b-a)));})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Build TEST 051 with approved TEST 042 branding
+        shell: bash
+        run: |
+          set -euo pipefail
+          git restore .
+          base="https://raw.githubusercontent.com/andrawing1212/soridraw-music/$BRAND_SHA"
+          curl -fsSL "$base/public/manifest.test.json" -o public/manifest.test.json
+          for file in soridraw-app-test-042.png soridraw-app-test-042-256.png soridraw-app-test-042-512.png soridraw-favicon-test-042.png soridraw-test-042.ico; do curl -fsSL "$base/public/brand/$file" -o "public/brand/$file"; done
+          node <<'NODE'
+          const fs=require('fs');let s=fs.readFileSync('index.html','utf8');const must=(a,b)=>{if(!s.includes(a))throw Error('brand anchor '+a);s=s.replace(a,b)};must('<title>SORIDRAW(P)</title>','<title>SORIDRAW(T)</title>');s=s.replaceAll('content="SORIDRAW(P)"','content="SORIDRAW(T)"');must('href="/brand/soridraw-favicon-preview-041.png"','href="/brand/soridraw-favicon-test-042.png"');must('href="/brand/soridraw-favicon-preview-041.png"','href="/brand/soridraw-test-042.ico"');must('href="/brand/soridraw-app-preview-041.png"','href="/brand/soridraw-app-test-042.png"');must('href="/manifest.preview.json"','href="/manifest.test.json"');must("        var faviconHref = environment === 'preview' ? '/brand/soridraw-favicon-preview-041.png' : '/brand/soridraw-favicon-' + environment + '.png?v=037';","        var faviconHref = environment === 'test' ? '/brand/soridraw-favicon-test-042.png' : environment === 'preview' ? '/brand/soridraw-favicon-preview-041.png' : '/brand/soridraw-favicon-' + environment + '.png?v=037';");must("        if (shortcutIcon) shortcutIcon.href = environment === 'preview' ? '/brand/soridraw-preview-041.ico' : faviconHref;","        if (shortcutIcon) shortcutIcon.href = environment === 'test' ? '/brand/soridraw-test-042.ico' : environment === 'preview' ? '/brand/soridraw-preview-041.ico' : faviconHref;");must("        if (appleTouchIcon) appleTouchIcon.href = environment === 'preview' ? '/brand/soridraw-app-preview-041.png' : '/brand/soridraw-app-' + environment + '.png?v=037';","        if (appleTouchIcon) appleTouchIcon.href = environment === 'test' ? '/brand/soridraw-app-test-042.png' : environment === 'preview' ? '/brand/soridraw-app-preview-041.png' : '/brand/soridraw-app-' + environment + '.png?v=037';");must("        if (manifest) manifest.href = environment === 'preview' ? '/manifest.preview.json' : '/manifest.' + environment + '.json?v=037';","        if (manifest) manifest.href = environment === 'test' ? '/manifest.test.json' : environment === 'preview' ? '/manifest.preview.json' : '/manifest.' + environment + '.json?v=037';");fs.writeFileSync('index.html',s);
+          NODE
+          npm run build
+          grep -Fq 'soridraw-app-test-042.png' dist/index.html
+          grep -Fq 'soridraw-app-test-042-512.png' dist/manifest.test.json
+          echo 'TEST_051_042_BRAND_BUILD=PASS'
+
+      - name: Deploy Firebase TEST 051
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-test.json --non-interactive
+          for i in $(seq 1 15); do v="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://test.soridraw.com/app-version.json?r=$GITHUB_RUN_ID" | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).version" || true)"; [ "$v" = 051 ] && break; sleep 5; done
+          test "$v" = 051
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://test.soridraw.com/?r=$GITHUB_RUN_ID" -o "$RUNNER_TEMP/test.html"
+          grep -Fq 'soridraw-app-test-042.png' "$RUNNER_TEMP/test.html"
+          echo 'FIREBASE_TEST_051=PASS'
+          echo 'TEST_ICON_042_PRESERVED=PASS'
+
+      - name: Verify PRODUCTION code unchanged and report release
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.com/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          node <<'NODE'
+          const fs=require('fs');const A=process.env.CF_ACCOUNT_ID,T=process.env.CLOUDFLARE_API_TOKEN,N=process.env.PROD_WORKER;
+          async function g(url){const r=await fetch(url,{headers:{Authorization:`Bearer ${T}`,Accept:'application/json'}});const x=await r.json();if(!r.ok||x.success===false)throw Error('CF '+r.status);return x.result||x;}
+          (async()=>{const base=`https://api.cloudflare.com/client/v4/accounts/${A}/workers/scripts/${N}`,ds=await g(base+'/deployments'),d=(ds.deployments||ds||[])[0],a=[...(d?.versions||[])].sort((x,y)=>Number(y.percentage)-Number(x.percentage))[0];if(a.version_id!==fs.readFileSync(process.env.RUNNER_TEMP+'/prod-worker-version.txt','utf8').trim())throw Error('PRODUCTION worker changed');console.log('PRODUCTION_WORKER_UNCHANGED=PASS '+a.version_id);})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          echo 'PRODUCTION_HOSTING_UNCHANGED=PASS'
+          echo 'TEST_RELEASE_051_COMPLETE=true'
+          echo "PREVIEW_SHA=$(git ls-remote origin refs/heads/preview | awk '{print $1}')"
+          echo "MAIN_SHA=$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          echo 'SHARED_EXPLORE_CANONICAL_D1=true'
+          echo 'PREVIEW_TEST_ENV_CACHE_SEPARATE=true'
+          echo 'PRODUCTION_CODE_DEPLOY=false'
+          echo 'PREVIEW_URL=https://preview.soridraw.com/'
+          echo 'TEST_URL=https://test.soridraw.com/'

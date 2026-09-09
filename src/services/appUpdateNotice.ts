@@ -1,9 +1,13 @@
-const CURRENT_APP_VERSION = '050';
+const CURRENT_APP_VERSION = __SORIDRAW_APP_VERSION__;
 const VERSION_URL = '/app-version.json';
 const NOTICE_ID = 'soridraw-app-update-notice';
 const MIN_CHECK_INTERVAL_MS = 30_000;
 let started = false;
 let lastCheckedAt = 0;
+
+const hideUpdateNotice = () => {
+  document.getElementById(NOTICE_ID)?.remove();
+};
 
 const showUpdateNotice = () => {
   if (document.getElementById(NOTICE_ID)) return;
@@ -31,7 +35,9 @@ const checkForUpdate = async (force = false) => {
     if (!response.ok) return;
     const payload = await response.json() as { version?: string | number };
     const remoteVersion = String(payload?.version || '').trim();
-    if (remoteVersion && remoteVersion !== CURRENT_APP_VERSION) showUpdateNotice();
+    if (!remoteVersion) return;
+    if (remoteVersion !== CURRENT_APP_VERSION) showUpdateNotice();
+    else hideUpdateNotice();
   } catch {
     // Offline/network errors stay silent and retry on the next app return.
   }

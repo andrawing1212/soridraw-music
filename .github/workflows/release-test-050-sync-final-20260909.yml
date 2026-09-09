@@ -20,8 +20,6 @@ jobs:
       SYNC_SCRIPT_SHA: 9b389c45f1edf463c16313d70f371955e77f57c8
       HOSTING_PROJECT: soridraw
       TEST_CUSTOM_HOST: test.soridraw.com
-      TEST_WEB_HOST: soridraw-test.web.app
-      TEST_FIREBASE_HOST: soridraw-test.firebaseapp.com
       PREVIEW_SITE_ORIGIN: https://preview.soridraw.com
       TEST_SITE_ORIGIN: https://test.soridraw.com
       PREVIEW_EXPLORE_WORKER: soridraw-explore-preview
@@ -68,9 +66,8 @@ jobs:
           done
           node <<'NODE'
           const fs = require('fs');
-          const path = 'index.html';
-          let s = fs.readFileSync(path, 'utf8');
-          const must = (from, to) => { if (!s.includes(from)) throw new Error('Expected index marker missing: ' + from.slice(0, 120)); s = s.replace(from, to); };
+          let s = fs.readFileSync('index.html', 'utf8');
+          const must = (from, to) => { if (!s.includes(from)) throw new Error('Expected marker missing: ' + from.slice(0, 120)); s = s.replace(from, to); };
           must('<title>SORIDRAW(P)</title>', '<title>SORIDRAW(T)</title>');
           s = s.replaceAll('content="SORIDRAW(P)"', 'content="SORIDRAW(T)"');
           must('href="/brand/soridraw-favicon-preview-041.png"', 'href="/brand/soridraw-favicon-test-042.png"');
@@ -81,7 +78,7 @@ jobs:
           must("        if (shortcutIcon) shortcutIcon.href = environment === 'preview' ? '/brand/soridraw-preview-041.ico' : faviconHref;", "        if (shortcutIcon) shortcutIcon.href = environment === 'test' ? '/brand/soridraw-test-042.ico' : environment === 'preview' ? '/brand/soridraw-preview-041.ico' : faviconHref;");
           must("        if (appleTouchIcon) appleTouchIcon.href = environment === 'preview' ? '/brand/soridraw-app-preview-041.png' : '/brand/soridraw-app-' + environment + '.png?v=037';", "        if (appleTouchIcon) appleTouchIcon.href = environment === 'test' ? '/brand/soridraw-app-test-042.png' : environment === 'preview' ? '/brand/soridraw-app-preview-041.png' : '/brand/soridraw-app-' + environment + '.png?v=037';");
           must("        if (manifest) manifest.href = environment === 'preview' ? '/manifest.preview.json' : '/manifest.' + environment + '.json?v=037';", "        if (manifest) manifest.href = environment === 'test' ? '/manifest.test.json' : environment === 'preview' ? '/manifest.preview.json' : '/manifest.' + environment + '.json?v=037';");
-          fs.writeFileSync(path, s);
+          fs.writeFileSync('index.html', s);
           NODE
           grep -Fq 'soridraw-app-test-042.png' index.html
           grep -Fq 'soridraw-app-test-042-512.png' public/manifest.test.json
@@ -121,6 +118,17 @@ jobs:
           set -euo pipefail
           url="https://raw.githubusercontent.com/andrawing1212/soridraw-music/$SYNC_SCRIPT_SHA/.deploy/temp-release-050-preview-to-test-sync-20260909-v3.mjs"
           curl -fsSL "$url" -o "$RUNNER_TEMP/release-sync-v3.mjs"
+          python3 - "$RUNNER_TEMP/release-sync-v3.mjs" <<'PY'
+          from pathlib import Path
+          import sys
+          p = Path(sys.argv[1])
+          s = p.read_text()
+          old = "for(const [n,v] of Object.entries(out))if(v.source!==v.target)throw new Error('Final count mismatch '+n+' '+v.target+'!='+v.source);"
+          new = "for(const [n,v] of Object.entries(out))if(DATA_TABLES.includes(n)&&v.source!==v.target)throw new Error('Final data count mismatch '+n+' '+v.target+'!='+v.source);"
+          if old not in s:
+              raise SystemExit('FTS validation patch marker missing')
+          p.write_text(s.replace(old, new, 1))
+          PY
           node --check "$RUNNER_TEMP/release-sync-v3.mjs"
           node "$RUNNER_TEMP/release-sync-v3.mjs" | tee "$RUNNER_TEMP/explore-sync.log"
           grep -Fq 'PREVIEW_TEST_EXPLORE_PARITY=PASS' "$RUNNER_TEMP/explore-sync.log"

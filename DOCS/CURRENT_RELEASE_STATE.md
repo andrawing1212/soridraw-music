@@ -104,3 +104,48 @@ CACHE LIVE 실사용에서 좋아요/공개프로필 조작 후 D1 행 읽기가
 작업 완료/실패/롤백/배포로 상태가 달라지면 **같은 작업 안에서 이 파일을 갱신하고 commit**한다.
 문서에 적힌 commit이 문서-only commit 때문에 실제 HEAD보다 과거일 수 있으므로, `마지막 앱 코드 변경 기준`과 `실제 preview HEAD`를 구분한다.
 새 채팅에서 사용자가 과거 작업을 다시 설명하게 하지 않는다.
+
+## 10. 2026-09-10 Codex 비용 경로 감사 — 구현 중단, 배포 전
+
+- 작업 기준: `preview @ 35a036040bcc704352cb999baea08d25a505d638`.
+- `NEXT_CODEX_TASK.md`의 복잡한 동시성 안전성 검토/중단 조건 적용. 비용 수정은 미완료이며 다음 배포 승인 대상으로 취급하지 않는다.
+- 이번/누적 변경 파일: `DOCS/CURRENT_RELEASE_STATE.md`만. 실행 코드, 버전 052, 캐시 schema 6, 환경 선택 및 공유 binding은 변경하지 않았다.
+
+### 확인한 호출 흐름
+
+| 경로 | 현재 동작 / 문제 |
+|---|---|
+| `/feed-revision` | 031 shared revision 비교 → 불일치 시 latest/popular build + 상태 저장 → 030 integrity 검사 → 019 R2 HEAD. 030은 현재도 실행 가능한 중첩 경로다. |
+| profile cold request | frontend가 `__soridraw_shared_profile=51` 전송 → 031 materialize → 020 R2/Edge first-view. 앱 버전 자체는 캐시 키에 포함되지 않지만 cold 요청마다 복구가 강제된다. |
+| like | 028 D1 관계/카운터 변경 → 020 profile R2 부분 갱신 + 009 feed R2 부분 갱신. feed는 현재 목록에 있는 ID만 수정한다. |
+| publish/private/options | 019/020 profile R2 부분 갱신 존재. 조건 없는 read-modify-write이며 profile 카운트도 이전 bundle에서 계산한다. |
+| profile snapshot write | 010 writePublicProfileFirstViewSnapshot wrapper → 020 syncExploreProfileR2FromD1 → bounded profile window 재조회. 함수 이름과 달리 항상 부분 갱신인 것은 아니다. |
+| 환경 간 변경 | 031은 global revision 값만 읽고 환경별 EXPLORE_CACHE를 재구축한다. 020 mirror fanout/route는 031에서 no-op 처리되어 변경 ID 전달 경로로 쓸 수 없다. |
+
+### 중단 근거와 재현 결과
+
+실제 저장소 patch의 `helpers` template을 Node VM에서 평가하고 R2/D1을 메모리 mock으로 대체했다. 실제 서버/사용자 데이터에는 접근하지 않았다.
+
+1. `patchExploreFeedR2LikeCount`에 서로 다른 두 ID의 좋아요 변경을 `Promise.all`로 실행: 최초 `[a:0,b:0]`가 `[a:0,b:1]`로 끝났다. 두 변경 중 하나가 파생 cache에서 유실된다. canonical 좋아요 데이터 삭제를 재현한 것은 아니다.
+2. 현재 popular snapshot 밖 ID에 likeCount 100 적용: 인기 목록에 진입하지 않았다. 기존 목록의 정렬만으로 경계 밖 순위 진입/경계 안 하락 후 refill을 보장할 수 없다.
+3. `ensureExploreSharedFeedCache031`의 state revision 1 / canonical revision 2 조건: revision SELECT 1회, feed builder 2회, R2 write 3회 재현. 실제 feed SQL의 rows_read 수는 mock에서 측정하지 않았다.
+
+따라서 030/031 재구축만 지우고 기존 R2 delta를 유지하는 변경은 승인된 데이터 일관성 조건을 충족하지 못한다. 특히 preview 코드만 변경하는 동안 기존 TEST/PRODUCTION writer가 공유 canonical을 변경하는 경우까지 포함한 안전한 변경 전달 계약을 먼저 결정해야 한다. 새 schema나 인프라가 반드시 필요하다고 단정한 것은 아니며, 이번 범위에서 이를 임의로 추가하지 않았다.
+
+필요한 최소 후속 설계 검토:
+- 기존 writer까지 포함하는 durable 변경 ID/version 전달 방식과 환경별 cache 소비 cursor. 기존 global revision 하나만으로는 바뀐 ID를 알아낼 수 없다.
+- R2 delta의 충돌 검출/재시도 및 오래된 mutation 응답 덮어쓰기 방지. 단순 무조건 put 금지.
+- popular 경계 밖 진입 및 삭제/하락 refill에 사용할 bounded indexed 조회 계약. `LIMIT`만 붙여 실제 rows_read가 제한된다고 간주하지 않는다.
+- 위 계약이 정해진 뒤 read 경로 재구축 제거, 정상 profile snapshot 재사용, mutation snapshot 부분 갱신을 함께 검증한다. migration/backfill이나 TEST/PRODUCTION 수정이 필요해지면 별도 검토한다.
+
+### 실행 검증
+
+- `verify-033-explore-feed-revision.mjs`: PASS.
+- `verify-045-explore-active-revalidation.mjs`: PASS.
+- `verify-048-explore-public-profile-parity.mjs`: FAIL — schema 5를 요구하지만 현재 6.
+- `verify-049-explore-feed-integrity.mjs`: FAIL — 앱 049를 요구하지만 현재 052.
+- `verify-051-explore-shared-canonical-data.mjs`: FAIL — 앱 051을 요구하지만 현재 052.
+- 019 revision / 019 publication delta / 020 profile repair / 030 / 031 patch `node --check`: 모두 PASS.
+- 메모리 mock 결함 재현 3건: 모두 재현됨. 이는 비용/정합성 합격을 뜻하지 않는다.
+- 전체 TypeScript/build, 최종 Worker patch replay, 실제 D1 비용/환경 간 기능 검증: 미실행. 구현 중단 및 문서만 변경했으므로 최종 후보 검증을 수행하지 않았다.
+- Firebase/Cloudflare 배포, DB 변경, main/Production 수정: 없음. 실제 주소 smoke test 없음.

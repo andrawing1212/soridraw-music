@@ -98,3 +98,14 @@
 ## 10. 작업 종료 기록
 큰 구현/검증/배포 후에는 `DOCS/CURRENT_RELEASE_STATE.md`를 반드시 갱신한다.
 기록에는 기준 commit, 완료/미완료, 데이터/비용 결정, 배포 상태, 남은 위험, 다음 작업을 남긴다.
+
+## 11. GitHub 저장소 유지보수
+- 장기 운영 브랜치는 `preview`, `main`, `production`을 중심으로 유지한다. `release/*`, `backup*`은 실제 릴리스/복구 기준이 있을 때만 보존한다.
+- 작업용 `temp/tmp/work/audit/diag/deploy/fix/final` 브랜치는 작업 종료 후 `preview`/`main` 포함 여부를 확인하고, 이미 포함된 경우 정리한다.
+- 병합되지 않은 고유 commit이 있는 브랜치는 자동 삭제하지 않는다. 먼저 고유 변경을 감사한다.
+- 한 문제를 재시도할 때 새 브랜치/Workflow를 `v2/v3/final2/work10` 식으로 계속 쌓지 않는다. 기존 작업 기준을 고정하고 필요한 최소 수정만 이어간다.
+- `.github/workflows/temp-*`는 일회성 작업이 끝나면 저장소에서 제거한다. 반복 작업은 이름과 목적이 명확한 공용 Workflow로 통합한다.
+- 저장소 정리용 Workflow는 자동 push trigger를 두지 않고 수동 `workflow_dispatch`만 사용한다.
+- D1/schema/security 등 다음 승격 판단에 필요한 필수 감사가 실패했다면 Workflow 최상위 결과도 실패해야 한다. 내부 실패를 기록만 하고 `Success`로 끝내는 false-green 금지.
+- `preview`, `main`, `production`은 force-push와 삭제를 막는 보호 규칙을 두는 것이 기준이다. 보호가 실제로 꺼져 있으면 위험으로 기록하고 해결 전까지 완료로 보고하지 않는다.
+- 큰 작업 종료 보고에는 생성/삭제 브랜치, 남은 미병합 브랜치, 추가/삭제 Workflow를 함께 기록한다.

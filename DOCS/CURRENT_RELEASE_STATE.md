@@ -7,12 +7,14 @@
 ## 1. 현재 소스 기준
 - Repository: `andrawing1212/soridraw-music`
 - PREVIEW branch: `preview`
-- PREVIEW 기준 commit: `2819dcf57904a8db7222a89c18965c28b94da60a`
+- PREVIEW 마지막 앱 코드 변경 기준 commit: `2819dcf57904a8db7222a89c18965c28b94da60a`
+- 이후 `preview`에는 인수인계/비용 가드레일 문서 commit이 추가되어 있으므로 **작업 시작 시 실제 `preview` HEAD를 반드시 다시 고정**한다.
 - TEST branch: `main`
-- TEST 기준 commit: `3b574c05589230f077eceff98190edd4b5195f75`
-- 두 commit의 source tree: `8a41bf58041edf6ba304295e0a364595494baae5` — 동일
+- TEST 앱 코드 기준 commit: `3b574c05589230f077eceff98190edd4b5195f75`
+- 052 앱 코드 source tree: `8a41bf58041edf6ba304295e0a364595494baae5` — PREVIEW/TEST 동일
 - 앱 버전: `052`
 - 앱 버전 원본은 `public/app-version.json` 하나로 통일됨. `appUpdateNotice.ts` 하드코딩 버전 제거 완료.
+- 현재 문서 정리 commit들은 앱 실행 코드를 변경하지 않는다.
 
 ## 2. 현재 배포 상태
 - PREVIEW 052: Firebase 배포/검증 완료
@@ -76,17 +78,29 @@ CACHE LIVE 실사용에서 좋아요/공개프로필 조작 후 D1 행 읽기가
 2. Codex가 TypeScript/Build/관련 테스트 후 commit SHA 제출
 3. Work가 `DOCS/WORK_AUDIT_CHECKLIST.md` 기준으로 그 commit을 수정 없이 독립 감사
 4. ChatGPT가 GitHub + 실제 PREVIEW 상태를 최종 확인
-5. 사용자 실사용 PREVIEW 테스트
-6. 통과하면 TEST 승격
-7. PRODUCTION은 별도 명확한 승인 전 금지
+5. 사용자가 PREVIEW 배포를 승인하면 ChatGPT가 PREVIEW 배포/실주소 검증
+6. 사용자 실사용 PREVIEW 테스트
+7. 통과하면 사용자 요청으로 TEST 승격
+8. PRODUCTION은 별도 명확한 승인 전 금지
 
-## 8. 이번 단계에서 건드리면 안 되는 것
+## 8. 현재 Codex 실행 기준
+- 권장: **GPT-6 Astra Medium**
+- 배포 금지
+- 분석 → 구현 → 관련 검증 → 최종 TypeScript/Build/Test → commit
+- 사용량 절약 규칙: `DOCS/CODEX_USAGE_BUDGET.md`
+- 같은 저장소 전체/과거 로그를 반복 재분석하지 않는다.
+- FCM/WebSocket/새 외부 서비스는 이번 작업에 도입하지 않는다.
+- migration/데이터 손실/하위호환 불가/반복 실패가 나오면 높은 추론으로 밀어붙이지 말고 중단 후 보고한다.
+
+## 9. 이번 단계에서 건드리면 안 되는 것
 - Music Note 60초 묶음 저장 정상 경로
 - 기존 UI/반응형/간격/색상
 - 공유 Canonical 사용자 데이터 자체의 삭제/대량변환
 - PRODUCTION 앱/Hosting/Worker
 - 필요 없는 Functions/Rules 재배포
+- 신규 실시간 인프라(FCM/WebSocket 등)
 
-## 9. 문서 유지 규칙
+## 10. 문서 유지 규칙
 작업 완료/실패/롤백/배포로 상태가 달라지면 **같은 작업 안에서 이 파일을 갱신하고 commit**한다.
+문서에 적힌 commit이 문서-only commit 때문에 실제 HEAD보다 과거일 수 있으므로, `마지막 앱 코드 변경 기준`과 `실제 preview HEAD`를 구분한다.
 새 채팅에서 사용자가 과거 작업을 다시 설명하게 하지 않는다.

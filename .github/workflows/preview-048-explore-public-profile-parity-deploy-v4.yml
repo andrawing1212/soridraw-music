@@ -111,9 +111,9 @@ jobs:
           echo 'PATCH_029_DRY_RUN=PASS'
 
           deployed=0
-          rollback(){ status=$?; if [ "$status" -ne 0 ] && [ "$deployed" = 1 ]; then echo 'PREVIEW_WORKER_ROLLBACK=START'; cp .remote-worker/original.js .remote-worker/worker.js; npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc || true; fi; exit "$status"; }
+          rollback(){ status=$?; if [ "$status" -ne 0 ] && [ "$deployed" = 1 ]; then echo 'PREVIEW_WORKER_ROLLBACK=START'; cp .remote-worker/original.js .remote-worker/worker.js; node scripts/derived-deploy-preflight.mjs --config .remote-worker/wrangler.jsonc || true; fi; exit "$status"; }
           trap rollback EXIT
-          npx wrangler deploy --strict --config .remote-worker/wrangler.jsonc
+          node scripts/derived-deploy-preflight.mjs --config .remote-worker/wrangler.jsonc
           deployed=1
           sleep 4
 

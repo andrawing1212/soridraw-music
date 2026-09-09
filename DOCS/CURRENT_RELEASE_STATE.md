@@ -231,3 +231,31 @@ UI:
 - scripts/verify-051-explore-shared-canonical-data.mjs
 - scripts/verify-explore-derived-cache.mjs
 - src/services/exploreProfileFirstViewService.ts
+
+## 15. Work FAIL 1 — 배포 전 read-only D1 preflight 보완
+- 기준 commit: 633a0d72e1ad560389eba861889a28fcdf8f4e7f. 이번 문서를 포함한 preview commit이 guard 보완본이다.
+- 공통 guard: cloudflare/explore-worker/scripts/derived-deploy-preflight.mjs.
+- 실제 배포 config의 DB binding에 SELECT만 실행한다. 필수 4개 table, migration에 정의된 explore032_* trigger 18개, id=1의 seeded=1을 모두 확인해야 Wrangler deploy에 진입한다.
+- table/trigger 누락, seeded=0, 조회 실패 또는 잘못된 응답이면 deploy 전에 즉시 예외로 종료한다. 자동 migration/seed/D1 write는 없다.
+- cf:deploy → deploy-prepared, 직접 PREVIEW workflow(rollback 포함), TEST/PRODUCTION release helper 및 환경분리 helper가 같은 guard를 사용한다. 기존 native Git/production 승인 차단은 유지한다.
+- 기존 Explore/Public Profile runtime, 원본 데이터 구조, package-lock은 변경하지 않았다.
+- preflight 자체 5종 mock 검사: PASS. 정상 schema/seeded=1은 허용; seeded=0, 각 table/trigger 누락, 두 SELECT 각각의 실패는 모두 deploy 호출 0.
+- TypeScript: PASS. 배포 연결 verifier 및 수정 script 문법: PASS.
+- 이전 Windows 프로세스 종료 0xC0000409 이후 사용자 승인에 따라 기존 NTFS 임시 작업공간에서 Build만 정확히 1회 재실행했다. Node v20.20.2, 명령 npm exec --yes --package=node@20 -c "npm run build", 종료 코드 0 / PASS. 같은 비정상 종료는 재현되지 않았으며 코드 수정은 하지 않았다.
+- stdout/stderr: 기존 임시 작업공간의 preflight-build-once.stdout.log / preflight-build-once.stderr.log. 기존 Vite chunk 크기 및 혼합 import 경고만 남음.
+- 실제 D1 preflight/SQL/seed/Worker 또는 Hosting 배포: 실행하지 않음. 실제 원격 readiness는 아직 미검증이다.
+- commit에 [skip ci]를 사용해 수정된 배포 workflow가 이번 push로 자동 실행되는 것을 방지한다. main/production 브랜치는 변경하지 않는다.
+
+이번/누적 변경 파일(새 기준 633a0d72 이후):
+- DOCS/CURRENT_RELEASE_STATE.md
+- cloudflare/explore-worker/scripts/derived-deploy-preflight.mjs
+- cloudflare/explore-worker/scripts/deploy-prepared.mjs
+- scripts/verify-explore-deploy-preflight.mjs
+- .deploy/cloudflare-explore-namespaced-env-split.mjs
+- .deploy/temp-release-027-cloudflare.mjs
+- .github/workflows/cloudflare-explore-preview-autoprovision.yml
+- .github/workflows/preview-033-explore-feed-revision.yml
+- .github/workflows/preview-048-explore-public-profile-parity-deploy.yml
+- .github/workflows/preview-048-explore-public-profile-parity-deploy-v2.yml
+- .github/workflows/preview-048-explore-public-profile-parity-deploy-v3.yml
+- .github/workflows/preview-048-explore-public-profile-parity-deploy-v4.yml

@@ -1,0 +1,92 @@
+# SORIDRAW CURRENT RELEASE STATE
+
+최종 갱신: 2026-09-10 KST
+
+> **새 채팅의 현재 기준 문서. 과거 채팅 설명보다 이 문서 + GitHub/실제 배포 상태를 우선한다.**
+
+## 1. 현재 소스 기준
+- Repository: `andrawing1212/soridraw-music`
+- PREVIEW branch: `preview`
+- PREVIEW 기준 commit: `2819dcf57904a8db7222a89c18965c28b94da60a`
+- TEST branch: `main`
+- TEST 기준 commit: `3b574c05589230f077eceff98190edd4b5195f75`
+- 두 commit의 source tree: `8a41bf58041edf6ba304295e0a364595494baae5` — 동일
+- 앱 버전: `052`
+- 앱 버전 원본은 `public/app-version.json` 하나로 통일됨. `appUpdateNotice.ts` 하드코딩 버전 제거 완료.
+
+## 2. 현재 배포 상태
+- PREVIEW 052: Firebase 배포/검증 완료
+- TEST 052: Firebase 배포/실제 번들 검증 완료
+- TEST 브랜딩/아이콘: 승인된 TEST 042 브랜딩 유지
+- Explore PREVIEW/TEST: 최신 Feed 30곡 일치 검증됨
+- PRODUCTION: 051/052 작업으로 앱/Hosting/Worker를 승격하지 않음. 정식배포 승인 없음.
+- Functions / Firestore Rules: 052 업데이트 알림 수정에서 변경 없음
+
+## 3. 현재 데이터 운영 구조
+사용자 의도는 **데이터 공유 + 기능 코드 단계별 승격**이다.
+
+- PREVIEW / TEST / PRODUCTION: 코드/Worker/Hosting 버전은 분리
+- Music Note 사용자 데이터: 같은 사용자 데이터 공유
+- Explore 사용자 원본 데이터: 공유 Canonical D1/R2 기준으로 전환됨
+- Explore 환경별: Worker/Feed 파생 Cache/속도제한/진단은 분리
+- PREVIEW→TEST→PRODUCTION 승격의 핵심은 데이터 복제가 아니라 **기능 코드 승격**
+
+## 4. 현재 확인된 중요 문제 — 다음 최우선
+### A. Explore Feed 비용 문제
+CACHE LIVE 실사용에서 좋아요/공개프로필 조작 후 D1 행 읽기가 크게 증가함.
+관찰 예: 전체 449행 읽기 중 `/v1/feed-revision`이 421행을 차지.
+
+현재 원인:
+- 공유 데이터 전환용 `031-explore-shared-canonical-data.mjs`가 `/feed-revision` 앞에서 공유 revision과 환경별 Feed Cache 상태를 비교함.
+- 상태가 다르면 `latest + popular` Feed를 D1에서 다시 만들어 R2에 저장함.
+- 따라서 작은 좋아요 변경도 다음 revision 확인에서 전체 Feed 재생성으로 이어질 수 있음.
+
+판정: **비용 구조 버그. 수정 필요.**
+
+### B. 공개프로필 업데이트 후 최초 읽기 문제
+`exploreProfileFirstViewService.ts`의 캐시 스키마 6 전환 후 캐시가 없으면 `__soridraw_shared_profile=51`을 붙여 공유 D1에서 공개프로필을 다시 materialize하도록 되어 있음.
+
+판정:
+- 과거 PC/모바일 공개프로필 숫자 불일치를 복구하기 위해 051에서 넣은 일회성 안전장치였음.
+- 그러나 10만 사용자가 앱 업데이트 후 각자 최초 1회 DB 읽기를 일으키는 방식은 장기 운영 기준에 맞지 않음.
+- **앱 버전 업데이트와 데이터 캐시 재생성을 분리해야 함.**
+
+## 5. 다음 구조의 절대 목표
+사용자가 앱을 열거나 업데이트했다는 이유만으로 서버 데이터 비용이 생기지 않게 한다.
+
+합격 기준:
+- 앱 업데이트 후 기존 정상 캐시 사용자: D1 data read 0 / Firestore data read 0
+- Explore 재진입, 데이터 변경 없음: D1 data read 0 목표
+- 공개프로필 재진입, 데이터 변경 없음: D1 data read 0 목표
+- 좋아요 1회: 전체 Feed scan/rebuild 0, 관련 항목만 처리
+- 공개/비공개 1곡: 전체 Feed/전체 공개프로필 scan 0, 관련 항목만 처리
+- 사용자 수/전체 곡 수가 늘어날수록 한 mutation 비용이 함께 커지는 구조 금지
+
+## 6. Music Note 현재 보호 기준
+현재 정상 동작을 보호한다.
+- 사용자 편집은 로컬 즉시 반영
+- 여러 필드 수정은 약 60초 동안 묶어서 서버 반영
+- 종료/백그라운드 시 남은 변경을 안전하게 마무리
+- 페이지 이동/재진입만으로 불필요한 서버 write 금지
+
+향후 기기간 빠른 동기화는 적용 가능하지만 **이번 Explore 비용 수정과 섞지 않는다.** 별도 단계에서 '변경 있음 신호 → 변경분만 가져오기' 방식으로 설계한다.
+
+## 7. 지금부터의 작업 순서
+1. Codex가 `DOCS/NEXT_CODEX_TASK.md` 기준으로 PREVIEW에서 Explore/공개프로필 비용 구조를 수정
+2. Codex가 TypeScript/Build/관련 테스트 후 commit SHA 제출
+3. Work가 `DOCS/WORK_AUDIT_CHECKLIST.md` 기준으로 그 commit을 수정 없이 독립 감사
+4. ChatGPT가 GitHub + 실제 PREVIEW 상태를 최종 확인
+5. 사용자 실사용 PREVIEW 테스트
+6. 통과하면 TEST 승격
+7. PRODUCTION은 별도 명확한 승인 전 금지
+
+## 8. 이번 단계에서 건드리면 안 되는 것
+- Music Note 60초 묶음 저장 정상 경로
+- 기존 UI/반응형/간격/색상
+- 공유 Canonical 사용자 데이터 자체의 삭제/대량변환
+- PRODUCTION 앱/Hosting/Worker
+- 필요 없는 Functions/Rules 재배포
+
+## 9. 문서 유지 규칙
+작업 완료/실패/롤백/배포로 상태가 달라지면 **같은 작업 안에서 이 파일을 갱신하고 commit**한다.
+새 채팅에서 사용자가 과거 작업을 다시 설명하게 하지 않는다.

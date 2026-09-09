@@ -11,9 +11,9 @@ permissions:
   contents: write
 
 jobs:
-  cleanup-merged-branches:
+  repository-cleanup:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
@@ -27,9 +27,8 @@ jobs:
           set -euo pipefail
           git fetch origin --prune
 
-          # Permanent/history refs are intentionally kept. Everything else is
-          # considered a temporary work/diagnostic branch, but is deleted ONLY
-          # when its tip is already reachable from preview or main.
+          # Long-lived/history refs are intentionally preserved. Other refs are
+          # deleted only when their tips are already reachable from preview/main.
           is_preserved() {
             case "$1" in
               main|preview|production|backup*|release-*|release/*|production-*|deployed-snapshot-*|test-*) return 0 ;;
@@ -80,3 +79,33 @@ jobs:
           done < "$safe_file"
 
           echo "BRANCH_CLEANUP_PASS=true"
+
+      - name: Remove obsolete temp workflow sources
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # A current workflow must never depend on a temp workflow before the
+          # one-off sources are removed.
+          if grep -R --exclude='temp-*' -nE '(uses:.*\.github/workflows/temp-|\.github/workflows/temp-)' .github/workflows; then
+            echo 'REFUSE_TEMP_WORKFLOW_DEPENDENCY=true'
+            exit 4
+          fi
+
+          mapfile -d '' temp_files < <(find .github/workflows -maxdepth 1 -type f -name 'temp-*' -print0 | sort -z)
+          echo "TEMP_WORKFLOW_DELETE_COUNT=${#temp_files[@]}"
+
+          if (( ${#temp_files[@]} == 0 )); then
+            echo 'TEMP_WORKFLOW_CLEANUP_PASS=true'
+            exit 0
+          fi
+
+          git rm -- "${temp_files[@]}"
+          git config user.name 'soridraw-maintenance'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'chore(preview): remove obsolete temporary workflows'
+
+          # Never rewrite history. If preview moved during this run, the push
+          # fails and nothing is forced.
+          git push origin HEAD:preview
+          echo 'TEMP_WORKFLOW_CLEANUP_PASS=true'

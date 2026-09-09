@@ -120,6 +120,7 @@ jobs:
           const token = process.env.CLOUDFLARE_API_TOKEN;
           const preview = process.env.PREVIEW_WORKER;
           const sharedId = process.env.SHARED_D1_ID;
+          const sharedName = process.env.SHARED_D1_NAME;
           const auth = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
           async function get(url) {
             const r = await fetch(url, { headers: auth });
@@ -165,22 +166,20 @@ jobs:
             const allowed = new Set(['d1','r2_bucket','plain_text','secret_text']);
             const unsupported = bindings.filter(b=>!allowed.has(String(b.type||'')));
             if (unsupported.length) throw new Error(`Unsupported PREVIEW bindings: ${unsupported.map(b=>`${b.name}:${b.type}`).join(',')}`);
-            const dbBinding = bindings.find(b=>b.name==='DB' && b.type==='d1');
-            const dbId = String(dbBinding?.id || dbBinding?.database_id || dbBinding?.uuid || '');
-            if (dbId !== sharedId) throw new Error(`PREVIEW DB is not approved shared canonical D1: ${dbId || 'missing'}`);
-            for (const required of [['RATE_DB','d1'],['PROFILE_MEDIA','r2_bucket'],['EXPLORE_CACHE','r2_bucket']]) {
+            const expectedD1 = new Set(['DB','RATE_DB']);
+            const d1Bindings = bindings.filter(b=>b.type==='d1');
+            if (d1Bindings.length !== expectedD1.size) throw new Error(`Unexpected D1 binding count: ${d1Bindings.map(b=>b.name).join(',')}`);
+            for (const name of expectedD1) {
+              const b = d1Bindings.find(x=>x.name===name);
+              const id = String(b?.id || b?.database_id || b?.uuid || '');
+              if (id !== sharedId) throw new Error(`${name} is not approved shared canonical D1: ${id || 'missing'}`);
+            }
+            for (const required of [['PROFILE_MEDIA','r2_bucket'],['EXPLORE_CACHE','r2_bucket']]) {
               const b = bindings.find(x=>x.name===required[0] && x.type===required[1]);
               if (!b) throw new Error(`Required PREVIEW binding missing: ${required[0]}:${required[1]}`);
             }
 
-            const d1 = [];
-            for (const b of bindings.filter(x=>x.type==='d1')) {
-              const id = String(b.id || b.database_id || b.uuid || '');
-              if (!id) throw new Error(`D1 binding id missing: ${b.name}`);
-              const meta = await get(`https://api.cloudflare.com/client/v4/accounts/${account}/d1/database/${id}`);
-              if (!meta?.name) throw new Error(`D1 database name missing for ${b.name}`);
-              d1.push({ binding: b.name, database_name: meta.name, database_id: id });
-            }
+            const d1 = ['DB','RATE_DB'].map(binding=>({ binding, database_name: sharedName, database_id: sharedId }));
             const r2 = bindings.filter(x=>x.type==='r2_bucket').map(b=>{
               const bucket = String(b.bucket_name || b.bucket || '');
               if (!bucket) throw new Error(`R2 bucket name missing: ${b.name}`);

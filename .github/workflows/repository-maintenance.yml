@@ -1,0 +1,106 @@
+name: Repository Maintenance
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/repository-maintenance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup-merged-branches:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Safely prune approved merged branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin --prune
+
+          branches=(
+            _noop_849_temp
+            _noop_849_temp2
+            _noop_849_temp3
+            _noop_849_temp4
+            _noop_849_temp5
+            _noop_849_temp6
+            preview-catalog-delta-audit
+            preview-catalog-delta-impl2
+            preview-catalog-delta-real
+            preview-catalog-delta-real2
+            preview-catalog-delta-real3
+            preview-catalog-delta-work
+            preview-catalog-delta-work2
+            preview-catalog-delta-work3
+            preview-catalog-delta-work4
+            preview-catalog-delta-work5
+            preview-catalog-delta-work6
+            preview-catalog-delta-work7
+            preview-catalog-delta-work8
+            preview-catalog-delta-work9
+            preview-catalog-delta-work10
+            preview-catalog-delta-work11
+            preview-catalog-delta-work-final
+            preview-catalog-delta-work-final2
+            preview-catalog-delta-work-final3
+            preview-deploy-1037-exec
+            preview-deploy-1037-exec2
+            preview-deploy-1037-run
+            preview-deploy-1037-workflow
+            preview-deploy-temp-1037-cleanup
+            preview-deploy-temp-1037
+            preview-fix-temp
+            preview-fix-temp2
+            preview-fix-temp3
+            preview-fix-temp4
+            preview-fix-temp5
+            maintenance/repository-cleanup-20260910
+          )
+
+          protected=(main preview production)
+          for b in "${branches[@]}"; do
+            for p in "${protected[@]}"; do
+              if [[ "$b" == "$p" ]]; then
+                echo "REFUSE_PROTECTED=$b"
+                exit 2
+              fi
+            done
+          done
+
+          # Preflight everything first. Nothing is deleted unless every existing
+          # candidate is already contained in preview or main.
+          for b in "${branches[@]}"; do
+            if ! git show-ref --verify --quiet "refs/remotes/origin/$b"; then
+              echo "SKIP_MISSING=$b"
+              continue
+            fi
+            if git merge-base --is-ancestor "refs/remotes/origin/$b" refs/remotes/origin/preview; then
+              echo "SAFE_PREVIEW=$b"
+              continue
+            fi
+            if git merge-base --is-ancestor "refs/remotes/origin/$b" refs/remotes/origin/main; then
+              echo "SAFE_MAIN=$b"
+              continue
+            fi
+            echo "REFUSE_UNMERGED=$b"
+            exit 3
+          done
+
+          for b in "${branches[@]}"; do
+            if git show-ref --verify --quiet "refs/remotes/origin/$b"; then
+              git push origin --delete "$b"
+              echo "DELETED=$b"
+            fi
+          done
+
+          echo "BRANCH_CLEANUP_PASS=true"

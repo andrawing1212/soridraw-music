@@ -42,5 +42,16 @@
 - 작은 수정마다 전체 Build를 반복하지 않고, 최종 후보에서 전체 TypeScript/Build/필수 Test를 수행한다.
 - 같은 접근이 반복 실패하거나 migration/데이터 손실 위험/복잡한 동시성 변경이 필요해지면 사용량을 소모하며 밀어붙이지 말고 중단 후 보고한다.
 
+## 저장소 유지보수 원칙
+- 장기 기준 브랜치는 `preview`, `main`, `production`으로 제한한다. 릴리스/백업 브랜치는 실제 복구 근거가 있을 때만 보존한다.
+- 작업용 `temp/tmp/work/audit/diag/deploy/fix/final` 브랜치는 작업 종료 후 `preview` 또는 `main`에 이미 포함됐는지 확인하고 포함됐으면 같은 유지보수 흐름에서 삭제한다.
+- 고유 commit이 남은 미병합 브랜치는 이름만 보고 삭제하지 않는다. 별도 감사 전까지 보존한다.
+- `-v2`, `-final3`, `-work11`처럼 재시도 브랜치/Workflow를 계속 쌓는 방식을 금지한다. 기존 것을 수정·재사용하고 작업이 끝나면 정리한다.
+- 일회성 `.github/workflows/temp-*` Workflow는 완료 후 제거한다. 반복 사용 검사는 목적이 명확한 공용 Workflow로 유지한다.
+- 저장소 유지보수 Workflow는 자동 실행하지 않고 `workflow_dispatch` 수동 실행을 기본으로 한다.
+- 필수 감사 항목이 실패했는데 최상위 Action을 `Success`로 처리하는 false-green을 금지한다. D1/schema/security처럼 다음 판단에 필요한 검사는 실패 시 전체 감사도 실패해야 한다.
+- 큰 작업 완료 보고에는 생성/삭제 브랜치, 남은 임시·미병합 브랜치, 추가/삭제 Workflow를 포함한다.
+- `preview`, `main`, `production`은 force-push/삭제 방지 보호를 유지해야 한다. 실제 GitHub 보호 상태가 꺼져 있으면 완료로 취급하지 말고 위험으로 기록한다.
+
 ## 작업 종료 시 반드시 갱신
 코드/백엔드/배포 상태가 달라지면 같은 작업 안에서 `DOCS/CURRENT_RELEASE_STATE.md`를 갱신한다. 새 채팅은 이 문서를 기준으로 이어간다.

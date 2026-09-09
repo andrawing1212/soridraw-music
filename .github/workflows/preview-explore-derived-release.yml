@@ -225,9 +225,12 @@ jobs:
           node cloudflare/explore-worker/patches/031-explore-shared-canonical-data.mjs
           node cloudflare/explore-worker/patches/032-derived-change-cache.mjs
           node --check cloudflare/explore-worker/.remote-worker/worker.js
-          grep -Fq 'SORIDRAW_EXPLORE_SHARED_CANONICAL_DATA_031_20260909' cloudflare/explore-worker/.remote-worker/worker.js
+          echo 'GENERATED_WORKER_SYNTAX=PASS'
+          grep -Fq 'function exploreCacheBucket031(' cloudflare/explore-worker/.remote-worker/worker.js
+          echo 'GENERATED_WORKER_031_RUNTIME=PASS'
           grep -Fq 'SORIDRAW_DERIVED_CHANGE_CACHE_032' cloudflare/explore-worker/.remote-worker/worker.js
           grep -Fq 'async function derivedNext032(' cloudflare/explore-worker/.remote-worker/worker.js
+          echo 'GENERATED_WORKER_032_RUNTIME=PASS'
           SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/.remote-worker/worker.js" node scripts/verify-explore-derived-cache.mjs
           node scripts/verify-explore-deploy-preflight.mjs
           echo 'GENERATED_PREVIEW_WORKER_032=PASS'

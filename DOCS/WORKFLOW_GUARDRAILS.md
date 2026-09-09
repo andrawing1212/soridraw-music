@@ -31,6 +31,7 @@
 - 공개/비공개 한 곡 때문에 공개프로필 전체를 다시 읽거나 전체 Feed를 재생성하는 구조 금지.
 - 서버에서 전체 목록이 필요한 최초 사용자는 가능하면 이미 만들어진 공용 캐시/번들을 받아야 하며, 사용자마다 원본 DB 전체 조회를 반복하지 않는다.
 - 실시간성은 비용보다 우선하지 않는다. 수 초 단위 즉시 갱신이 필요하지 않은 공용 화면은 변경분을 묶고 캐시를 우선한다.
+- 앱 버전과 데이터 버전/캐시 상태를 분리한다. 코드 업데이트만으로 정상 데이터 캐시를 무효화하지 않는다.
 
 ## 4. Music Note 보호
 - 현재 검증된 원칙: 사용자 편집은 로컬 즉시 반영, 여러 수정은 60초 동안 묶어서 서버 저장, 종료/백그라운드 시 남은 변경을 안전하게 마무리.
@@ -42,16 +43,29 @@
 - 기존 Firestore/Auth/Functions/Rules/App Check/CORS/Secrets/Cloudflare D1/R2 호환성을 먼저 확인한다.
 - 기존 데이터를 못 읽거나 덮어쓸 위험이 있으면 작업을 중단하고 보고한다.
 - 데이터 삭제·대량수정·migration·PRODUCTION 변환은 승인 없이 금지.
+- PREVIEW도 공유 사용자 원본을 사용하므로 실제 데이터 검증은 관리자/테스트 계정과 제한된 데이터로 수행한다.
 - 사용자 요청 없이 외곽선, 위치, 크기, 간격, 반응형, 테마를 바꾸지 않는다.
 
 ## 6. 구현/검증 분리
 - 설계가 확정되면 Codex가 `preview`에서 구현한다.
-- Codex 권장: High. 데이터 migration/손실 위험/동시성 문제가 실제로 필요해지는 경우에만 Extra High로 올린다.
+- 현재 대형 백엔드 작업 권장: **GPT-6 Astra Medium**. 세부 사용량 규칙은 `DOCS/CODEX_USAGE_BUDGET.md`를 따른다.
+- 데이터 migration/손실 위험/복잡한 동시성 문제가 실제로 필요해지는 경우 높은 추론으로 무작정 진행하지 말고 먼저 중단/보고한다.
 - Codex 결과는 commit SHA로 고정한다.
+- Codex는 배포하지 않는다.
 - Work는 그 commit을 독립적으로 감사한다. 기본적으로 코드를 수정하지 않는다.
 - 감사에서 실패하면 TEST 승격을 중단한다.
+- 같은 기능을 ChatGPT/Codex/Work가 동시에 수정하지 않는다.
 
-## 7. 배포 완료 기준
+## 7. 현재 Explore 비용 작업의 범위 제한
+현재 `NEXT_CODEX_TASK.md`가 Explore/Public Profile 비용 수정인 동안 아래 새 인프라는 임의 도입하지 않는다.
+- FCM/푸시
+- WebSocket
+- 새 외부 서비스
+- Music Note/Library 동기화 구조 개편
+
+필요성이 보이면 제안만 남기고 별도 작업으로 분리한다.
+
+## 8. 배포 완료 기준
 완료 보고 전 최소 확인:
 - 대상 commit 고정
 - TypeScript 성공
@@ -62,14 +76,25 @@
 - 필요한 D1/R2/Firestore 상태 확인
 - 실제 목표 주소 확인
 - PREVIEW/TEST 결과 비교
+- PC/모바일 결과 일관성 확인
 - 다음 환경/PRODUCTION 비의도 변경 없음 확인
 
 하나라도 실패하면 다음 승격을 중단하고 '미완료'로 보고한다.
 
-## 8. 새 채팅 인수인계
+## 9. 새 채팅 인수인계
 새 채팅에서 과거 대화를 재구성하지 않는다.
+반드시 다음 순서로 확인한다.
 1. `AGENTS.md`
-2. `CURRENT_RELEASE_STATE.md`
-3. 현재 branch HEAD와 최근 commit
-4. 필요 시 실제 Firebase/Cloudflare 상태
-만 확인한 뒤 이어간다.
+2. `DOCS/CURRENT_RELEASE_STATE.md`
+3. `DOCS/NEXT_CODEX_TASK.md`
+4. `DOCS/WORK_AUDIT_CHECKLIST.md`
+5. 실제 `preview` HEAD와 최근 commit
+6. 필요 시 `DOCS/DEPLOYMENT_PROGRESS.md`
+7. 과거 원인이 필요할 때만 `DOCS/WORK_LOG.md`
+8. 필요 시 실제 Firebase/Cloudflare 상태
+
+문서와 실제 GitHub 상태가 다르면 실제 GitHub를 우선 확인하고 문서를 갱신한다.
+
+## 10. 작업 종료 기록
+큰 구현/검증/배포 후에는 `DOCS/CURRENT_RELEASE_STATE.md`를 반드시 갱신한다.
+기록에는 기준 commit, 완료/미완료, 데이터/비용 결정, 배포 상태, 남은 위험, 다음 작업을 남긴다.

@@ -5,9 +5,10 @@
 최종 갱신: 2026-09-10 KST
 
 ## 현재 릴리스
-- PREVIEW: 052 배포/검증 완료 — source `preview@2819dcf57904a8db7222a89c18965c28b94da60a`
-- TEST: 052 배포/검증 완료 — source `main@3b574c05589230f077eceff98190edd4b5195f75`
-- PREVIEW/TEST source tree 동일: `8a41bf58041edf6ba304295e0a364595494baae5`
+- PREVIEW: 052 배포/검증 완료 — 마지막 앱 코드 변경 기준 `preview@2819dcf57904a8db7222a89c18965c28b94da60a`
+- TEST: 052 배포/검증 완료 — 앱 코드 기준 `main@3b574c05589230f077eceff98190edd4b5195f75`
+- 052 앱 source tree 동일: `8a41bf58041edf6ba304295e0a364595494baae5`
+- `preview`에는 이후 인수인계/비용 가드레일 문서 commit이 추가되어 있으므로 작업 시작 시 실제 HEAD를 다시 고정한다.
 - PRODUCTION: 051/052 작업으로 승격하지 않음
 
 ## 최근 완료
@@ -16,6 +17,7 @@
 - 공개프로필 기기별 오래된 캐시 문제 완화용 051 복구 반영
 - 앱 업데이트 버전 소스를 `public/app-version.json` 하나로 통일
 - TEST 042 아이콘/브랜딩 유지
+- 새 채팅 인수인계 문서/AI 작업분담/비용 가드레일 정리
 
 ## 현재 최우선 문제
 배포 기능 문제보다 **백엔드 비용 구조**가 우선이다.
@@ -25,15 +27,18 @@
 - 10만 사용자 기준으로 업데이트/첫 진입이 원본 DB read 폭증으로 이어질 수 있으므로 현 구조를 장기 운영 기준으로 승인하지 않음
 
 ## 다음 단계
-1. Codex High — PREVIEW에서 Explore/Public Profile 초저비용 구조 구현, 배포 금지
-2. Work — 대상 commit 독립 감사, 수정 금지
-3. ChatGPT — GitHub/실제 환경 최종 확인
-4. 사용자 PREVIEW 실사용 테스트
-5. 통과 시 TEST 승격
-6. PRODUCTION은 별도 승인 필요
+1. Codex **GPT-6 Astra Medium** — PREVIEW에서 Explore/Public Profile 초저비용 구조 구현, 배포 금지
+2. Codex 사용량은 `DOCS/CODEX_USAGE_BUDGET.md` 기준으로 제한
+3. Work — 대상 commit 독립 감사, 수정 금지
+4. ChatGPT — GitHub/실제 환경 최종 확인
+5. 사용자 승인 시 PREVIEW 배포
+6. 사용자 PREVIEW 실사용 테스트
+7. 통과 시 TEST 승격
+8. PRODUCTION은 별도 승인 필요
 
 ## 이번 단계 배포 정책
 - PREVIEW 코드 수정은 가능
 - Codex 구현 단계에서는 배포하지 않음
-- TEST는 Work + 사용자 검증 전 승격 금지
+- ChatGPT 최종 확인 후 사용자 `프리뷰배포` 승인 전 배포하지 않음
+- TEST는 Work + PREVIEW 실사용 검증 전 승격 금지
 - PRODUCTION 변경 금지

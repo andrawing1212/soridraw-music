@@ -94,6 +94,26 @@ jobs:
           fi
           echo 'DERIVED_STATE_READ_ONLY_AUDIT=PASS'
 
+      - name: Probe existing release token D1 read capability without writes
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        env:
+          RELEASE_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -u
+          if [ -z "${RELEASE_TOKEN:-}" ]; then
+            echo 'RELEASE_TOKEN_D1_READ_EXIT=missing'
+            exit 0
+          fi
+          set +e
+          CLOUDFLARE_API_TOKEN="$RELEASE_TOKEN" npx wrangler d1 execute DB --remote --config .remote-worker/wrangler.jsonc --command "SELECT 1 AS ok;" --json > "$RUNNER_TEMP/release-token-d1-probe.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/release-token-d1-probe.log"
+          echo "RELEASE_TOKEN_D1_READ_EXIT=$status"
+          echo 'RELEASE_TOKEN_D1_PROBE_WRITE=false'
+          exit 0
+
       - name: Upload live source and schema artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -104,5 +124,6 @@ jobs:
             ${{ runner.temp }}/d1-schema.json
             ${{ runner.temp }}/canonical-counts.json
             ${{ runner.temp }}/derived-state.json
+            ${{ runner.temp }}/release-token-d1-probe.log
           if-no-files-found: warn
           retention-days: 1

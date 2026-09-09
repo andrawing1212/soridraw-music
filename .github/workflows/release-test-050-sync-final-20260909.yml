@@ -62,12 +62,7 @@ jobs:
           set -euo pipefail
           base="https://raw.githubusercontent.com/andrawing1212/soridraw-music/$BRAND_SHA"
           curl -fsSL "$base/public/manifest.test.json" -o public/manifest.test.json
-          for file in \
-            soridraw-app-test-042.png \
-            soridraw-app-test-042-256.png \
-            soridraw-app-test-042-512.png \
-            soridraw-favicon-test-042.png \
-            soridraw-test-042.ico; do
+          for file in soridraw-app-test-042.png soridraw-app-test-042-256.png soridraw-app-test-042-512.png soridraw-favicon-test-042.png soridraw-test-042.ico; do
             curl -fsSL "$base/public/brand/$file" -o "public/brand/$file"
             test -s "public/brand/$file"
           done
@@ -75,34 +70,17 @@ jobs:
           const fs = require('fs');
           const path = 'index.html';
           let s = fs.readFileSync(path, 'utf8');
-          const must = (from, to) => {
-            if (!s.includes(from)) throw new Error('Expected index marker missing: ' + from.slice(0, 120));
-            s = s.replace(from, to);
-          };
+          const must = (from, to) => { if (!s.includes(from)) throw new Error('Expected index marker missing: ' + from.slice(0, 120)); s = s.replace(from, to); };
           must('<title>SORIDRAW(P)</title>', '<title>SORIDRAW(T)</title>');
           s = s.replaceAll('content="SORIDRAW(P)"', 'content="SORIDRAW(T)"');
           must('href="/brand/soridraw-favicon-preview-041.png"', 'href="/brand/soridraw-favicon-test-042.png"');
           must('href="/brand/soridraw-preview-041.ico"', 'href="/brand/soridraw-test-042.ico"');
           must('href="/brand/soridraw-app-preview-041.png"', 'href="/brand/soridraw-app-test-042.png"');
           must('href="/manifest.preview.json"', 'href="/manifest.test.json"');
-          const oldBlock = `        var faviconHref = environment === 'preview' ? '/brand/soridraw-favicon-preview-041.png' : '/brand/soridraw-favicon-' + environment + '.png?v=037';
-        if (favicon) favicon.href = faviconHref;
-        if (shortcutIcon) shortcutIcon.href = environment === 'preview' ? '/brand/soridraw-preview-041.ico' : faviconHref;
-        if (appleTouchIcon) appleTouchIcon.href = environment === 'preview' ? '/brand/soridraw-app-preview-041.png' : '/brand/soridraw-app-' + environment + '.png?v=037';
-        if (manifest) manifest.href = environment === 'preview' ? '/manifest.preview.json' : '/manifest.' + environment + '.json?v=037';`;
-          const newBlock = `        if (environment === 'test') {
-          if (favicon) { favicon.type = 'image/png'; favicon.href = '/brand/soridraw-favicon-test-042.png'; }
-          if (shortcutIcon) { shortcutIcon.type = 'image/x-icon'; shortcutIcon.href = '/brand/soridraw-test-042.ico'; }
-          if (appleTouchIcon) appleTouchIcon.href = '/brand/soridraw-app-test-042.png';
-          if (manifest) manifest.href = '/manifest.test.json';
-        } else {
-          var faviconHref = environment === 'preview' ? '/brand/soridraw-favicon-preview-041.png' : '/brand/soridraw-favicon-' + environment + '.png?v=037';
-          if (favicon) favicon.href = faviconHref;
-          if (shortcutIcon) shortcutIcon.href = environment === 'preview' ? '/brand/soridraw-preview-041.ico' : faviconHref;
-          if (appleTouchIcon) appleTouchIcon.href = environment === 'preview' ? '/brand/soridraw-app-preview-041.png' : '/brand/soridraw-app-' + environment + '.png?v=037';
-          if (manifest) manifest.href = environment === 'preview' ? '/manifest.preview.json' : '/manifest.' + environment + '.json?v=037';
-        }`;
-          must(oldBlock, newBlock);
+          must("        var faviconHref = environment === 'preview' ? '/brand/soridraw-favicon-preview-041.png' : '/brand/soridraw-favicon-' + environment + '.png?v=037';", "        var faviconHref = environment === 'test' ? '/brand/soridraw-favicon-test-042.png' : environment === 'preview' ? '/brand/soridraw-favicon-preview-041.png' : '/brand/soridraw-favicon-' + environment + '.png?v=037';");
+          must("        if (shortcutIcon) shortcutIcon.href = environment === 'preview' ? '/brand/soridraw-preview-041.ico' : faviconHref;", "        if (shortcutIcon) shortcutIcon.href = environment === 'test' ? '/brand/soridraw-test-042.ico' : environment === 'preview' ? '/brand/soridraw-preview-041.ico' : faviconHref;");
+          must("        if (appleTouchIcon) appleTouchIcon.href = environment === 'preview' ? '/brand/soridraw-app-preview-041.png' : '/brand/soridraw-app-' + environment + '.png?v=037';", "        if (appleTouchIcon) appleTouchIcon.href = environment === 'test' ? '/brand/soridraw-app-test-042.png' : environment === 'preview' ? '/brand/soridraw-app-preview-041.png' : '/brand/soridraw-app-' + environment + '.png?v=037';");
+          must("        if (manifest) manifest.href = environment === 'preview' ? '/manifest.preview.json' : '/manifest.' + environment + '.json?v=037';", "        if (manifest) manifest.href = environment === 'test' ? '/manifest.test.json' : environment === 'preview' ? '/manifest.preview.json' : '/manifest.' + environment + '.json?v=037';");
           fs.writeFileSync(path, s);
           NODE
           grep -Fq 'soridraw-app-test-042.png' index.html
@@ -172,7 +150,7 @@ jobs:
           npx --yes firebase-tools@latest deploy --only hosting --project "$HOSTING_PROJECT" --config firebase.hosting-test.json --non-interactive
           echo 'FIREBASE_TEST_HOSTING=PASS'
 
-      - name: Verify TEST live artifact, icon and Explore
+      - name: Verify TEST live artifact icon and Explore
         shell: bash
         run: |
           set -euo pipefail

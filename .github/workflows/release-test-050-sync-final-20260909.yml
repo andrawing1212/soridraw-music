@@ -74,7 +74,7 @@ jobs:
           must('<title>SORIDRAW(P)</title>', '<title>SORIDRAW(T)</title>');
           s = s.replaceAll('content="SORIDRAW(P)"', 'content="SORIDRAW(T)"');
           must('href="/brand/soridraw-favicon-preview-041.png"', 'href="/brand/soridraw-favicon-test-042.png"');
-          must('href="/brand/soridraw-preview-041.ico"', 'href="/brand/soridraw-test-042.ico"');
+          must('href="/brand/soridraw-favicon-preview-041.png"', 'href="/brand/soridraw-test-042.ico"');
           must('href="/brand/soridraw-app-preview-041.png"', 'href="/brand/soridraw-app-test-042.png"');
           must('href="/manifest.preview.json"', 'href="/manifest.test.json"');
           must("        var faviconHref = environment === 'preview' ? '/brand/soridraw-favicon-preview-041.png' : '/brand/soridraw-favicon-' + environment + '.png?v=037';", "        var faviconHref = environment === 'test' ? '/brand/soridraw-favicon-test-042.png' : environment === 'preview' ? '/brand/soridraw-favicon-preview-041.png' : '/brand/soridraw-favicon-' + environment + '.png?v=037';");

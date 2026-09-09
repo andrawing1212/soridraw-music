@@ -43,7 +43,7 @@ jobs:
 
           while IFS= read -r ref; do
             b="${ref#origin/}"
-            [[ "$b" == "HEAD" ]] && continue
+            [[ "$b" == "HEAD" || "$b" == "origin" ]] && continue
             if is_preserved "$b"; then
               echo "PRESERVE=$b"
               continue
@@ -85,9 +85,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          # A current workflow must never depend on a temp workflow before the
-          # one-off sources are removed.
-          if grep -R --exclude='temp-*' -nE '(uses:.*\.github/workflows/temp-|\.github/workflows/temp-)' .github/workflows; then
+          # Refuse cleanup only when another active workflow actually calls a
+          # temp workflow as a reusable workflow.
+          if grep -R --exclude='temp-*' --exclude='repository-maintenance.yml' -nE 'uses:.*\.github/workflows/temp-' .github/workflows; then
             echo 'REFUSE_TEMP_WORKFLOW_DEPENDENCY=true'
             exit 4
           fi

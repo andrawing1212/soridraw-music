@@ -32,6 +32,8 @@ jobs:
       PRODUCTION_WORKER: soridraw-explore-api
       SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
       SHARED_D1_NAME: soridraw-explore-db
+      PREVIEW_RATE_D1_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_RATE_D1_NAME: soridraw-explore-preview-db
       PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
       PREVIEW_ORIGIN: https://preview.soridraw.com
 
@@ -121,6 +123,8 @@ jobs:
           const preview = process.env.PREVIEW_WORKER;
           const sharedId = process.env.SHARED_D1_ID;
           const sharedName = process.env.SHARED_D1_NAME;
+          const rateId = process.env.PREVIEW_RATE_D1_ID;
+          const rateName = process.env.PREVIEW_RATE_D1_NAME;
           const auth = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
           async function get(url) {
             const r = await fetch(url, { headers: auth });
@@ -169,17 +173,21 @@ jobs:
             const expectedD1 = new Set(['DB','RATE_DB']);
             const d1Bindings = bindings.filter(b=>b.type==='d1');
             if (d1Bindings.length !== expectedD1.size) throw new Error(`Unexpected D1 binding count: ${d1Bindings.map(b=>b.name).join(',')}`);
-            for (const name of expectedD1) {
-              const b = d1Bindings.find(x=>x.name===name);
-              const id = String(b?.id || b?.database_id || b?.uuid || '');
-              if (id !== sharedId) throw new Error(`${name} is not approved shared canonical D1: ${id || 'missing'}`);
-            }
+            const db = d1Bindings.find(x=>x.name==='DB');
+            const dbId = String(db?.id || db?.database_id || db?.uuid || '');
+            if (dbId !== sharedId) throw new Error(`DB is not approved shared canonical D1: ${dbId || 'missing'}`);
+            const rate = d1Bindings.find(x=>x.name==='RATE_DB');
+            const actualRateId = String(rate?.id || rate?.database_id || rate?.uuid || '');
+            if (actualRateId !== rateId) throw new Error(`RATE_DB is not approved PREVIEW rate D1: ${actualRateId || 'missing'}`);
             for (const required of [['PROFILE_MEDIA','r2_bucket'],['EXPLORE_CACHE','r2_bucket']]) {
               const b = bindings.find(x=>x.name===required[0] && x.type===required[1]);
               if (!b) throw new Error(`Required PREVIEW binding missing: ${required[0]}:${required[1]}`);
             }
 
-            const d1 = ['DB','RATE_DB'].map(binding=>({ binding, database_name: sharedName, database_id: sharedId }));
+            const d1 = [
+              { binding: 'DB', database_name: sharedName, database_id: sharedId },
+              { binding: 'RATE_DB', database_name: rateName, database_id: rateId },
+            ];
             const r2 = bindings.filter(x=>x.type==='r2_bucket').map(b=>{
               const bucket = String(b.bucket_name || b.bucket || '');
               if (!bucket) throw new Error(`R2 bucket name missing: ${b.name}`);
@@ -204,6 +212,7 @@ jobs:
             console.log(`TEST_WORKER_BEFORE=${testBefore}`);
             console.log(`PRODUCTION_WORKER_BEFORE=${prodBefore}`);
             console.log('PREVIEW_SHARED_D1_BINDING=PASS');
+            console.log('PREVIEW_RATE_D1_BINDING=PASS');
             console.log('PREVIEW_BINDINGS_CAPTURED=PASS');
           })().catch(e=>{ console.error(e); process.exit(1); });
           NODE

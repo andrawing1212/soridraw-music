@@ -1,0 +1,217 @@
+name: Release TEST 050 snapshot final 20260909
+
+on:
+  push:
+    branches:
+      - release/test-050-sync-20260909
+    paths:
+      - '.github/workflows/release-test-050-sync-final-20260909.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  release-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SOURCE_SHA: b8e9a5c8237bd56e7847ed48483315d777b2252b
+      BRAND_SHA: 644e785c20df6b2c1f833e87a464423caceaa721
+      SYNC_SCRIPT_SHA: 9b389c45f1edf463c16313d70f371955e77f57c8
+      HOSTING_PROJECT: soridraw
+      TEST_CUSTOM_HOST: test.soridraw.com
+      TEST_WEB_HOST: soridraw-test.web.app
+      TEST_FIREBASE_HOST: soridraw-test.firebaseapp.com
+      PREVIEW_SITE_ORIGIN: https://preview.soridraw.com
+      TEST_SITE_ORIGIN: https://test.soridraw.com
+      PREVIEW_EXPLORE_WORKER: soridraw-explore-preview
+      TEST_EXPLORE_WORKER: soridraw-explore-test
+      PREVIEW_EXPLORE_ORIGIN: https://soridraw-explore-preview.andrawing1212.workers.dev
+      TEST_EXPLORE_ORIGIN: https://soridraw-explore-test.andrawing1212.workers.dev
+      TEST_MEDIA_ORIGIN: https://soridraw-media-test.andrawing1212.workers.dev
+      CF_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+    steps:
+      - name: Checkout exact PREVIEW 050
+        uses: actions/checkout@v4
+        with:
+          ref: b8e9a5c8237bd56e7847ed48483315d777b2252b
+          fetch-depth: 1
+
+      - name: Lock PREVIEW release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/preview | awk '{print $1}')" = "$SOURCE_SHA"
+          echo "PREVIEW_RELEASE_SHA_LOCK=PASS $SOURCE_SHA"
+
+      - name: Snapshot PRODUCTION before release
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.com/ -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+          echo 'PRODUCTION_SNAPSHOT_BEFORE=PASS'
+
+      - name: Restore approved TEST 042 app branding only
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://raw.githubusercontent.com/andrawing1212/soridraw-music/$BRAND_SHA"
+          curl -fsSL "$base/public/manifest.test.json" -o public/manifest.test.json
+          for file in \
+            soridraw-app-test-042.png \
+            soridraw-app-test-042-256.png \
+            soridraw-app-test-042-512.png \
+            soridraw-favicon-test-042.png \
+            soridraw-test-042.ico; do
+            curl -fsSL "$base/public/brand/$file" -o "public/brand/$file"
+            test -s "public/brand/$file"
+          done
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'index.html';
+          let s = fs.readFileSync(path, 'utf8');
+          const must = (from, to) => {
+            if (!s.includes(from)) throw new Error('Expected index marker missing: ' + from.slice(0, 120));
+            s = s.replace(from, to);
+          };
+          must('<title>SORIDRAW(P)</title>', '<title>SORIDRAW(T)</title>');
+          s = s.replaceAll('content="SORIDRAW(P)"', 'content="SORIDRAW(T)"');
+          must('href="/brand/soridraw-favicon-preview-041.png"', 'href="/brand/soridraw-favicon-test-042.png"');
+          must('href="/brand/soridraw-preview-041.ico"', 'href="/brand/soridraw-test-042.ico"');
+          must('href="/brand/soridraw-app-preview-041.png"', 'href="/brand/soridraw-app-test-042.png"');
+          must('href="/manifest.preview.json"', 'href="/manifest.test.json"');
+          const oldBlock = `        var faviconHref = environment === 'preview' ? '/brand/soridraw-favicon-preview-041.png' : '/brand/soridraw-favicon-' + environment + '.png?v=037';
+        if (favicon) favicon.href = faviconHref;
+        if (shortcutIcon) shortcutIcon.href = environment === 'preview' ? '/brand/soridraw-preview-041.ico' : faviconHref;
+        if (appleTouchIcon) appleTouchIcon.href = environment === 'preview' ? '/brand/soridraw-app-preview-041.png' : '/brand/soridraw-app-' + environment + '.png?v=037';
+        if (manifest) manifest.href = environment === 'preview' ? '/manifest.preview.json' : '/manifest.' + environment + '.json?v=037';`;
+          const newBlock = `        if (environment === 'test') {
+          if (favicon) { favicon.type = 'image/png'; favicon.href = '/brand/soridraw-favicon-test-042.png'; }
+          if (shortcutIcon) { shortcutIcon.type = 'image/x-icon'; shortcutIcon.href = '/brand/soridraw-test-042.ico'; }
+          if (appleTouchIcon) appleTouchIcon.href = '/brand/soridraw-app-test-042.png';
+          if (manifest) manifest.href = '/manifest.test.json';
+        } else {
+          var faviconHref = environment === 'preview' ? '/brand/soridraw-favicon-preview-041.png' : '/brand/soridraw-favicon-' + environment + '.png?v=037';
+          if (favicon) favicon.href = faviconHref;
+          if (shortcutIcon) shortcutIcon.href = environment === 'preview' ? '/brand/soridraw-preview-041.ico' : faviconHref;
+          if (appleTouchIcon) appleTouchIcon.href = environment === 'preview' ? '/brand/soridraw-app-preview-041.png' : '/brand/soridraw-app-' + environment + '.png?v=037';
+          if (manifest) manifest.href = environment === 'preview' ? '/manifest.preview.json' : '/manifest.' + environment + '.json?v=037';
+        }`;
+          must(oldBlock, newBlock);
+          fs.writeFileSync(path, s);
+          NODE
+          grep -Fq 'soridraw-app-test-042.png' index.html
+          grep -Fq 'soridraw-app-test-042-512.png' public/manifest.test.json
+          echo 'TEST_042_BRANDING_RESTORED=PASS'
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate and build PREVIEW 050 TEST artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          node scripts/verify-050-musicnote-folder-catalog-recovery.mjs
+          node scripts/verify-runtime-environment-parity-028.mjs
+          node --check cloudflare/explore-worker/patches/030-explore-feed-integrity-self-heal.mjs
+          npx tsc --noEmit
+          npm run build
+          test "$(node -p "require('./public/app-version.json').version")" = '050'
+          grep -Fq 'soridraw-app-test-042.png' dist/index.html
+          grep -Fq 'soridraw-app-test-042-512.png' dist/manifest.test.json
+          echo 'TYPESCRIPT=PASS'
+          echo 'BUILD=PASS'
+          echo 'TEST_ARTIFACT_050_WITH_042_BRAND=PASS'
+
+      - name: Install Explore Worker dependencies
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Backup and sync PREVIEW Explore D1 R2 snapshot to TEST
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://raw.githubusercontent.com/andrawing1212/soridraw-music/$SYNC_SCRIPT_SHA/.deploy/temp-release-050-preview-to-test-sync-20260909-v3.mjs"
+          curl -fsSL "$url" -o "$RUNNER_TEMP/release-sync-v3.mjs"
+          node --check "$RUNNER_TEMP/release-sync-v3.mjs"
+          node "$RUNNER_TEMP/release-sync-v3.mjs" | tee "$RUNNER_TEMP/explore-sync.log"
+          grep -Fq 'PREVIEW_TEST_EXPLORE_PARITY=PASS' "$RUNNER_TEMP/explore-sync.log"
+          grep -Fq 'TEST_EXPLORE_REVISION_CACHE_REBUILT=PASS' "$RUNNER_TEMP/explore-sync.log"
+          echo 'TEST_EXPLORE_FULL_SNAPSHOT_SYNC=PASS'
+
+      - name: Verify unchanged TEST media Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/media-health.json" -w '%{http_code}' "$TEST_MEDIA_ORIGIN/health")"
+          test "$code" = '200'
+          grep -q '"ok":true' "$RUNNER_TEMP/media-health.json"
+          grep -q '"r2Binding":true' "$RUNNER_TEMP/media-health.json"
+          echo 'TEST_MEDIA_WORKER_UNCHANGED_HEALTH=PASS'
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy TEST Firebase Hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '"site": "soridraw-test"' firebase.hosting-test.json
+          npx --yes firebase-tools@latest deploy --only hosting --project "$HOSTING_PROJECT" --config firebase.hosting-test.json --non-interactive
+          echo 'FIREBASE_TEST_HOSTING=PASS'
+
+      - name: Verify TEST live artifact, icon and Explore
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=''
+          for attempt in $(seq 1 15); do
+            version="$(curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://$TEST_CUSTOM_HOST/app-version.json?release=$GITHUB_RUN_ID" | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).version" || true)"
+            [ "$version" = '050' ] && break
+            sleep 6
+          done
+          test "$version" = '050'
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://$TEST_CUSTOM_HOST/?release=$GITHUB_RUN_ID" -o "$RUNNER_TEMP/test-live.html"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "https://$TEST_CUSTOM_HOST/manifest.test.json?release=$GITHUB_RUN_ID" -o "$RUNNER_TEMP/test-manifest.json"
+          grep -Fq 'soridraw-app-test-042.png' "$RUNNER_TEMP/test-live.html"
+          grep -Fq 'soridraw-app-test-042-512.png' "$RUNNER_TEMP/test-manifest.json"
+          for asset in soridraw-app-test-042.png soridraw-app-test-042-256.png soridraw-app-test-042-512.png soridraw-favicon-test-042.png soridraw-test-042.ico; do
+            code="$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' "https://$TEST_CUSTOM_HOST/brand/$asset?release=$GITHUB_RUN_ID")"
+            test "$code" = '200'
+          done
+          feed="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/test-feed.json" -w '%{http_code}' -H "Origin: $TEST_SITE_ORIGIN" "$TEST_EXPLORE_ORIGIN/v1/feed?sort=latest&limit=100")"
+          test "$feed" = '200'
+          echo 'TEST_LIVE_VERSION_050=PASS'
+          echo 'TEST_LIVE_042_ICON=PASS'
+          echo 'TEST_LIVE_EXPLORE=PASS'
+
+      - name: Verify PRODUCTION unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.com/ -o "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          cmp "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo 'PRODUCTION_UNCHANGED=PASS'
+
+      - name: Release result
+        shell: bash
+        run: |
+          echo 'TEST_RELEASE_COMPLETE=true'
+          echo "SOURCE_PREVIEW_SHA=$SOURCE_SHA"
+          echo 'PREVIEW_TEST_EXPLORE_DATA_PARITY=true'
+          echo 'TEST_042_BRANDING=true'
+          echo 'TEST_URL=https://test.soridraw.com/'
+          echo 'PRODUCTION_DEPLOY=false'

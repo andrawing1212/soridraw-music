@@ -4,10 +4,13 @@
 
 ## 필수 확인 순서
 1. `DOCS/CURRENT_RELEASE_STATE.md` — 현재 실제 기준/배포 상태/알려진 문제/다음 작업
-2. `DOCS/WORKFLOW_GUARDRAILS.md` — 브랜치·배포·데이터·비용·안전 고정 규칙
-3. `DOCS/NEXT_CODEX_TASK.md` — 현재 구현 작업이 있을 때 실행 기준
-4. `DOCS/WORK_AUDIT_CHECKLIST.md` — 구현 완료 후 독립 검증 기준
-5. 과거 원인이 필요할 때만 `DOCS/WORK_LOG.md`
+2. `DOCS/NEXT_CODEX_TASK.md` — 현재 구현 작업이 있을 때 범위/합격선/중단 조건
+3. `DOCS/WORK_AUDIT_CHECKLIST.md` — 구현 완료 후 독립 검증 기준
+4. `DOCS/WORKFLOW_GUARDRAILS.md` — 브랜치·배포·데이터·비용·안전 고정 규칙
+5. `DOCS/CODEX_USAGE_BUDGET.md` — Codex 사용량 절약 규칙
+6. 필요 시 `DOCS/DEPLOYMENT_PROGRESS.md`
+7. 과거 원인이 정말 필요할 때만 `DOCS/WORK_LOG.md`
+8. 실제 `preview` HEAD와 최근 commit을 확인해 문서와 실제 GitHub가 일치하는지 확인
 
 ## 절대 원칙
 - 현재 사용자 지시 → `CURRENT_RELEASE_STATE.md` → GitHub/Firebase/Cloudflare 실제 상태 순으로 판단한다.
@@ -26,11 +29,18 @@
 - 데이터 삭제·대량수정·migration·PRODUCTION 데이터 변환은 승인 없이 실행하지 않는다.
 
 ## AI 작업 분담
-- ChatGPT: 설계, 범위 결정, 비용/데이터 위험 판단, 승격 통제.
-- Codex: `preview`에서 실제 구현. 분석 → 구현 → 테스트 → commit까지 한 흐름으로 끝낸다.
+- ChatGPT: 설계, 범위 결정, 비용/데이터 위험 판단, GitHub 상태 문서 관리, 승격 통제.
+- Codex: `preview`에서 실제 구현. 분석 → 구현 → 테스트 → commit까지 한 흐름으로 끝낸다. 배포는 하지 않는다.
 - Work: Codex commit을 독립 검증한다. 기본은 **수정하지 않고 감사**한다.
-- ChatGPT: GitHub/실제 환경을 다시 확인한 뒤 TEST/PRODUCTION 승격 여부를 판단한다.
+- ChatGPT: GitHub/실제 환경을 다시 확인한 뒤 PREVIEW 배포 가능 여부와 TEST/PRODUCTION 승격 여부를 판단한다.
 - 여러 AI가 동시에 같은 코드를 수정하지 않는다.
+
+## Codex 사용량 원칙
+- 대형 백엔드 작업의 현재 권장값은 `DOCS/CODEX_USAGE_BUDGET.md`를 따른다.
+- 같은 저장소 전체/WORK_LOG 전체를 반복 분석하지 않는다.
+- 필요한 소유 파일과 호출 경로를 찾은 뒤 좁혀서 작업한다.
+- 작은 수정마다 전체 Build를 반복하지 않고, 최종 후보에서 전체 TypeScript/Build/필수 Test를 수행한다.
+- 같은 접근이 반복 실패하거나 migration/데이터 손실 위험/복잡한 동시성 변경이 필요해지면 사용량을 소모하며 밀어붙이지 말고 중단 후 보고한다.
 
 ## 작업 종료 시 반드시 갱신
 코드/백엔드/배포 상태가 달라지면 같은 작업 안에서 `DOCS/CURRENT_RELEASE_STATE.md`를 갱신한다. 새 채팅은 이 문서를 기준으로 이어간다.

@@ -1,10 +1,6 @@
 name: Repository Maintenance
 
 on:
-  push:
-    branches: [preview]
-    paths:
-      - '.github/workflows/repository-maintenance.yml'
   workflow_dispatch:
 
 permissions:
@@ -85,8 +81,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Refuse cleanup only when another active workflow actually calls a
-          # temp workflow as a reusable workflow.
           if grep -R --exclude='temp-*' --exclude='repository-maintenance.yml' -nE 'uses:.*\.github/workflows/temp-' .github/workflows; then
             echo 'REFUSE_TEMP_WORKFLOW_DEPENDENCY=true'
             exit 4
@@ -104,8 +98,5 @@ jobs:
           git config user.name 'soridraw-maintenance'
           git config user.email 'actions@users.noreply.github.com'
           git commit -m 'chore(preview): remove obsolete temporary workflows'
-
-          # Never rewrite history. If preview moved during this run, the push
-          # fails and nothing is forced.
           git push origin HEAD:preview
           echo 'TEMP_WORKFLOW_CLEANUP_PASS=true'

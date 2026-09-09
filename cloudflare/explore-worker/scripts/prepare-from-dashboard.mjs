@@ -222,8 +222,14 @@ const config = {
   main: workerMain,
   compatibility_date: compatibilityDate,
   keep_vars: true,
-  d1_databases: [{ binding: 'DB', database_name: D1_DATABASE_NAME, database_id: databaseId }],
-  r2_buckets: [{ binding: 'PROFILE_MEDIA', bucket_name: R2_BUCKET_NAME }],
+  d1_databases: [
+    { binding: 'DB', database_name: D1_DATABASE_NAME, database_id: databaseId },
+    { binding: 'RATE_DB', database_name: D1_DATABASE_NAME, database_id: databaseId },
+  ],
+  r2_buckets: [
+    { binding: 'PROFILE_MEDIA', bucket_name: R2_BUCKET_NAME },
+    { binding: 'EXPLORE_CACHE', bucket_name: R2_BUCKET_NAME },
+  ],
 };
 if (Array.isArray(settings.compatibility_flags) && settings.compatibility_flags.length) {
   config.compatibility_flags = settings.compatibility_flags;

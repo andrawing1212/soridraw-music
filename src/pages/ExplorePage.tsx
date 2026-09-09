@@ -370,14 +370,15 @@ export default function ExplorePage() {
     void (async () => {
       try {
         if (feedRequest) {
-          const revisionTask = fetchRevision().catch((reason) => {
+          const serverRevision = await fetchRevision().catch((reason) => {
             if (!controller.signal.aborted) {
               console.warn('Explore feed revision bootstrap failed; continuing with feed:', reason);
             }
             return null;
           });
-          const payload = await fetchPayload(requestUrl);
-          const serverRevision = await revisionTask;
+          const payload = await fetchPayload(
+            serverRevision ? buildExploreVersionedFeedUrl(requestUrl, serverRevision) : requestUrl,
+          );
           if (controller.signal.aborted) return;
           applyPayload(payload, serverRevision);
           return;

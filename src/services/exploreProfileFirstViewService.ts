@@ -18,8 +18,8 @@ import {
 // SORIDRAW_PROFILE_CACHE_SWR_1020
 // SORIDRAW_PROFILE_ALIAS_PARITY_020
 // SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048
-const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 5;
-const PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS = 60_000;
+const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 6;
+const PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS = 10_000;
 const PROFILE_FIRST_VIEW_SOURCE_TYPE = 'explore_profile_first_view';
 const PROFILE_FIRST_VIEW_LIMIT = 50;
 const PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH = '/v1/profiles/:id/first-view';
@@ -156,9 +156,9 @@ const requestMaterializedFirstView = async (
   if (revision) {
     url.searchParams.set('knownRevision', revision);
   } else {
-    // One cold request after 048 may repair an old per-environment Profile R2 snapshot.
-    // Warm revision checks do not carry this flag, so normal revisits add no new D1 read.
-    url.searchParams.set('__soridraw_profile_parity', '48');
+    // 051: one cold request after the cache-contract bump re-materializes the
+    // public profile from the single shared canonical D1. Warm revision checks stay cheap.
+    url.searchParams.set('__soridraw_shared_profile', '51');
   }
 
   const startedAt = typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();

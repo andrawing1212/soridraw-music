@@ -1,0 +1,139 @@
+name: TEMP Audit Explore shared data 20260909
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-audit-explore-shared-data-20260909.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Audit D1/R2 without modifying data
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/explore-audit"
+          cat > "$RUNNER_TEMP/explore-audit/worker.mjs" <<'JS'
+          const TABLES = [
+            'tracks','comments','curated_picks','explore_curators','follows','likes','profile_stats',
+            'public_folders','public_folder_tracks','public_profiles','track_stats','track_tags'
+          ];
+          const DERIVED = ['public_profile_first_views','api_rate_limits'];
+          const qi = (v) => '"' + String(v).replaceAll('"','""') + '"';
+          async function columns(db, table) {
+            const r = await db.prepare('PRAGMA table_info(' + qi(table) + ')').all();
+            return (r.results || []).map(x => String(x.name));
+          }
+          async function rows(db, sql) { const r = await db.prepare(sql).all(); return r.results || []; }
+          async function digest(value) {
+            const bytes = new TextEncoder().encode(value);
+            const hash = await crypto.subtle.digest('SHA-256', bytes);
+            return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2,'0')).join('');
+          }
+          async function tableInfo(db, table) {
+            const cols = await columns(db, table);
+            if (!cols.length) return { missing: true };
+            const raw = await rows(db, 'SELECT * FROM ' + qi(table));
+            const stable = raw.map(r => Object.fromEntries(cols.map(c => [c, r[c]])))
+              .sort((a,b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+            const info = { count: stable.length, hash: await digest(JSON.stringify(stable)), columns: cols };
+            if (cols.includes('updated_at')) {
+              const m = await db.prepare('SELECT MAX(updated_at) AS v FROM ' + qi(table)).first();
+              info.maxUpdatedAt = Number(m?.v || 0);
+            }
+            if (table === 'tracks') {
+              const v = await db.prepare("SELECT COUNT(*) AS n FROM tracks WHERE is_public=1 AND status='published'").first();
+              info.visiblePublished = Number(v?.n || 0);
+              const dist = await rows(db, "SELECT COUNT(*) AS n FROM tracks WHERE is_public=1 AND status='published' GROUP BY owner_uid ORDER BY n DESC");
+              info.visiblePerOwner = dist.map(x => Number(x.n || 0));
+            }
+            if (table === 'public_profile_first_views') {
+              const snap = [];
+              for (const row of stable) {
+                try {
+                  const p = JSON.parse(String(row.payload_json || '{}'));
+                  snap.push({ trackCount: Number(p?.profile?.trackCount ?? p?.profile?.track_count ?? 0), items: Array.isArray(p?.items) ? p.items.length : 0, revision: Number(row.revision || 0) });
+                } catch {}
+              }
+              info.snapshotCounts = snap.sort((a,b) => b.trackCount-a.trackCount || b.items-a.items);
+            }
+            return info;
+          }
+          async function bucketInfo(bucket) {
+            let cursor = undefined, profileObjects = 0, internalObjects = 0, total = 0;
+            do {
+              const r = await bucket.list({ cursor, limit: 1000 });
+              for (const o of r.objects || []) {
+                total++;
+                if (o.key.startsWith('profiles/')) profileObjects++;
+                if (o.key.startsWith('internal/explore/')) internalObjects++;
+              }
+              cursor = r.truncated ? r.cursor : undefined;
+            } while (cursor);
+            return { total, profileObjects, internalObjects };
+          }
+          async function envInfo(db, bucket) {
+            const tables = {};
+            for (const t of [...TABLES, ...DERIVED]) tables[t] = await tableInfo(db, t);
+            return { tables, r2: await bucketInfo(bucket) };
+          }
+          export default {
+            async fetch(req, env) {
+              if (new URL(req.url).pathname !== '/audit' || req.headers.get('X-Audit') !== env.AUDIT_KEY) return new Response('not found',{status:404});
+              const [production, preview, test] = await Promise.all([
+                envInfo(env.PROD_DB, env.PROD_R2), envInfo(env.PREVIEW_DB, env.PREVIEW_R2), envInfo(env.TEST_DB, env.TEST_R2)
+              ]);
+              const same = {};
+              for (const t of TABLES) same[t] = production.tables[t]?.hash === preview.tables[t]?.hash && production.tables[t]?.hash === test.tables[t]?.hash;
+              return Response.json({ production, preview, test, same });
+            }
+          };
+          JS
+          cat > "$RUNNER_TEMP/explore-audit/wrangler.jsonc" <<'JSON'
+          {
+            "name": "soridraw-explore-audit-temp",
+            "main": "worker.mjs",
+            "compatibility_date": "2026-09-09",
+            "workers_dev": true,
+            "d1_databases": [
+              {"binding":"PROD_DB","database_name":"soridraw-explore-db","database_id":"217ef5b1-5d80-4f7c-afc7-9e07eb05c06b"},
+              {"binding":"PREVIEW_DB","database_name":"soridraw-explore-preview-db","database_id":"aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f"},
+              {"binding":"TEST_DB","database_name":"soridraw-explore-test-db","database_id":"31817dbd-d06e-415e-9bc0-5553b0f5dc43"}
+            ],
+            "r2_buckets": [
+              {"binding":"PROD_R2","bucket_name":"soridraw-profile-media"},
+              {"binding":"PREVIEW_R2","bucket_name":"soridraw-profile-media-preview"},
+              {"binding":"TEST_R2","bucket_name":"soridraw-profile-media-test"}
+            ],
+            "vars": {"AUDIT_KEY":"soridraw-audit-20260909-shared-data"}
+          }
+          JSON
+          cd "$RUNNER_TEMP/explore-audit"
+          npx --yes wrangler@4.102.0 deploy --config wrangler.jsonc
+          trap 'npx --yes wrangler@4.102.0 delete soridraw-explore-audit-temp --force >/dev/null 2>&1 || true' EXIT
+          sleep 4
+          curl -fsS -H 'X-Audit: soridraw-audit-20260909-shared-data' https://soridraw-explore-audit-temp.andrawing1212.workers.dev/audit | tee audit.json
+          node - <<'NODE'
+          const fs=require('fs'); const a=JSON.parse(fs.readFileSync('audit.json','utf8'));
+          for (const name of ['production','preview','test']) {
+            const e=a[name];
+            console.log(name.toUpperCase()+'_TRACKS='+e.tables.tracks.count+' visible='+e.tables.tracks.visiblePublished+' perOwner='+JSON.stringify(e.tables.tracks.visiblePerOwner));
+            console.log(name.toUpperCase()+'_PROFILES='+e.tables.public_profiles.count+' LIKES='+e.tables.likes.count+' FOLLOWS='+e.tables.follows.count+' TAGS='+e.tables.track_tags.count);
+            console.log(name.toUpperCase()+'_FIRST_VIEW='+JSON.stringify(e.tables.public_profile_first_views.snapshotCounts||[]));
+            console.log(name.toUpperCase()+'_R2='+JSON.stringify(e.r2));
+          }
+          console.log('CANONICAL_TABLE_EQUALITY='+JSON.stringify(a.same));
+          NODE

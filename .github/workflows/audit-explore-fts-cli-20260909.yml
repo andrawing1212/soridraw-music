@@ -1,0 +1,39 @@
+name: Audit Explore FTS CLI 20260909
+on:
+  push:
+    branches:
+      - release/test-050-sync-20260909
+    paths:
+      - '.github/workflows/audit-explore-fts-cli-20260909.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - name: Query PREVIEW and TEST FTS read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > preview.jsonc <<'JSON'
+          {"name":"audit-preview","compatibility_date":"2026-08-28","d1_databases":[{"binding":"DB","database_name":"soridraw-explore-preview-db","database_id":"aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f"}]}
+          JSON
+          cat > test.jsonc <<'JSON'
+          {"name":"audit-test","compatibility_date":"2026-08-28","d1_databases":[{"binding":"DB","database_name":"soridraw-explore-test-db","database_id":"31817dbd-d06e-415e-9bc0-5553b0f5dc43"}]}
+          JSON
+          echo '=== PREVIEW FTS SCHEMA ==='
+          npx --yes wrangler@4.102.0 d1 execute soridraw-explore-preview-db --remote --config preview.jsonc --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name='track_search_fts' OR (type='trigger' AND tbl_name='tracks') ORDER BY type,name;"
+          echo '=== PREVIEW FTS ROWIDS ==='
+          npx --yes wrangler@4.102.0 d1 execute soridraw-explore-preview-db --remote --config preview.jsonc --command "SELECT rowid,* FROM track_search_fts ORDER BY rowid;"
+          echo '=== PREVIEW COUNTS ==='
+          npx --yes wrangler@4.102.0 d1 execute soridraw-explore-preview-db --remote --config preview.jsonc --command "SELECT (SELECT COUNT(*) FROM tracks) AS tracks_count,(SELECT COUNT(*) FROM track_search_fts) AS fts_count;"
+          echo '=== TEST FTS SCHEMA ==='
+          npx --yes wrangler@4.102.0 d1 execute soridraw-explore-test-db --remote --config test.jsonc --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name='track_search_fts' OR (type='trigger' AND tbl_name='tracks') ORDER BY type,name;"
+          echo '=== TEST FTS ROWIDS ==='
+          npx --yes wrangler@4.102.0 d1 execute soridraw-explore-test-db --remote --config test.jsonc --command "SELECT rowid,* FROM track_search_fts ORDER BY rowid;"
+          echo '=== TEST COUNTS ==='
+          npx --yes wrangler@4.102.0 d1 execute soridraw-explore-test-db --remote --config test.jsonc --command "SELECT (SELECT COUNT(*) FROM tracks) AS tracks_count,(SELECT COUNT(*) FROM track_search_fts) AS fts_count;"

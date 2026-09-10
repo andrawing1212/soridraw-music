@@ -5,7 +5,9 @@ import { deployWithDerivedPreflight, requiredTables, requiredTriggers, requiredL
 
 if (process.argv.includes('--connections')) {
   const prepared=readFileSync('cloudflare/explore-worker/scripts/deploy-prepared.mjs','utf8');
-  assert.ok(prepared.indexOf('if (isCloudflareNativeBuild && !allowProductionDeploy)') < prepared.indexOf('deployWithDerivedPreflight(`${REMOTE_DIR}')));
+  const productionGuardIndex=prepared.indexOf('if (isCloudflareNativeBuild && !allowProductionDeploy)');
+  const guardedDeployIndex=prepared.indexOf('deployWithDerivedPreflight');
+  assert.ok(productionGuardIndex >= 0 && guardedDeployIndex >= 0 && productionGuardIndex < guardedDeployIndex);
   assert.match(prepared,/SORIDRAW_ALLOW_PRODUCTION_WORKER_DEPLOY/);
   assert.doesNotMatch(prepared,/spawnSync/);
   const router=readFileSync('cloudflare/explore-worker/scripts/native-git-deploy-router.mjs','utf8');

@@ -165,16 +165,7 @@ jobs:
           state="$(cat .shared-d1-release/baseline-state.txt)"
           if [ "$state" = existing035 ]; then
             node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --command "SELECT id,lease_until,owner FROM explore_like_processor_035 WHERE id=1; SELECT COUNT(*) AS pending FROM explore_like_batches_035" --json > .shared-d1-release/existing-state.json
-            node <<'NODE'
-            const fs=require('fs');
-            const raw=JSON.parse(fs.readFileSync('.shared-d1-release/existing-state.json','utf8'));
-            const sets=raw.flatMap(x=>Array.isArray(x?.results)?[x.results]:[]);
-            const processor=sets.find(x=>x.some(r=>'lease_until' in r))?.[0];
-            const pending=sets.find(x=>x.some(r=>'pending' in r))?.[0];
-            if(Number(processor?.id)!==1) throw new Error('Existing 035 processor row invalid');
-            if(Number(pending?.pending||0)!==0) throw new Error('Existing 035 queue is not empty before Worker activation');
-            console.log('EXISTING_035_SCHEMA_EMPTY_QUEUE=PASS');
-            NODE
+            node -e "const fs=require('fs');const raw=JSON.parse(fs.readFileSync('.shared-d1-release/existing-state.json','utf8'));const sets=raw.flatMap(x=>Array.isArray(x?.results)?[x.results]:[]);const processor=sets.find(x=>x.some(r=>'lease_until' in r))?.[0];const pending=sets.find(x=>x.some(r=>'pending' in r))?.[0];if(Number(processor?.id)!==1)throw new Error('Existing 035 processor row invalid');if(Number(pending?.pending||0)!==0)throw new Error('Existing 035 queue is not empty before Worker activation');console.log('EXISTING_035_SCHEMA_EMPTY_QUEUE=PASS');"
           fi
 
       - name: Apply approved additive 035 migration with rollback guard

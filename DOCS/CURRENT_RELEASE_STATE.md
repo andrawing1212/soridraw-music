@@ -55,18 +55,21 @@
 - `20260910_03_explore_like_write_optimization.sql`은 verifier/fixture에는 존재하지만 공유 D1에 실제 적용하지 않았다.
 - canonical 사용자 원본 삭제/대량변환/덮어쓰기 없음.
 
-## 4. 현재 좋아요 비용 구조
+## 4. 현재 좋아요 비용 구조 및 실제 PREVIEW 계측
 - Client: 클릭 즉시 표시, 동일 곡은 5초 idle 후 최종 상태만 서버 전송, pending 상태는 persistent outbox로 보존.
 - Worker 033: 좋아요 요청에서 eager Feed/Profile derived cache 동기화 제거.
 - 032 changed-ID journal/revision 구조는 유지.
 - warm `/feed-revision` 두 번째 호출 실제 D1 read/write 0 유지.
-- verifier PASS:
-  - client optimistic + durable 5s outbox
-  - generated Worker에서 Feed/Profile eager derived I/O 없음
-  - local D1 fixture에서 like-only update는 global derived seq +1, feed + owner journal 유지, logical track_count 불변
-  - derived-cache regression suite PASS
-- **아직 미확정:** 인증된 실제 좋아요 1회 CACHE LIVE의 최종 D1 rows read/write 수치. 기존 약 `172 read / 20 write` 대비 개선량은 PREVIEW 실사용 계측 후 확정한다.
-- 공유 D1 trigger write 최적화는 위 실제 계측에서 write가 여전히 높을 때만 별도 승인/감사 후 판단한다.
+- 2026-09-10 사용자 PREVIEW CACHE LIVE 영상 계측에서 브라우저 SDK는 전체 구간 `읽기 0 / 쓰기 0` 유지.
+- 첫 좋아요 클릭은 UI에 즉시 반영되고 약 5초 동안 서버 write가 발생하지 않아 debounce 동작 PASS.
+- 첫 서버 좋아요 mutation 1회: 좋아요 변경 Worker 1회, D1 query `R2 / W2`, D1 rows `R19 / W20`.
+- 같은 곡 좋아요 해제 후 다음 5초 idle 서버 mutation까지 포함한 좋아요 변경 누적 2회: D1 rows `R38 / W37`.
+  - 따라서 두 번째 mutation 증분은 `R19 / W17`.
+- 영상 종료 시 좋아요 변경 구간은 `R38 / W37`에서 더 증가하지 않아 runaway 반복 write는 관찰되지 않음.
+- 이후 Feed 변경 확인 / 공개프로필 진입에서 발생한 D1 read는 좋아요 mutation과 별도 항목으로 계측됨.
+- 이전에 사용한 `약 172 read / 20 write`는 한 번의 좋아요 비용이 아니라 여러 동작이 섞인 누적값이므로 단일 좋아요 baseline에서 제외한다.
+- 현재 판정: **Worker 033 배포/기능은 PASS지만 좋아요 D1 비용은 아직 FAIL.** 단일 mutation당 약 17~20 rows write가 남아 있어 최종 비용 합격선에 도달하지 못했다.
+- 원인 후보는 shared D1에 아직 남아 있는 032 `explore032_derived_track_update` trigger의 write amplification이며, `20260910_03_explore_like_write_optimization.sql`이 이를 1회 seq bump + 조건부 owner/count 처리로 줄이는 후보이다.
 
 ## 5. PREVIEW 배포 경로
 ### 앱
@@ -106,11 +109,12 @@
 - `preview`, `main`, `production` branch protection이 현재 꺼져 있어 별도 운영 위험으로 남아 있다.
 
 ## 9. 다음 작업
-1. PREVIEW에서 인증된 좋아요 1회를 CACHE LIVE 동일 조건으로 실측한다.
-2. 033 적용 후 D1 rows read/write를 기존 약 172/20과 비교한다.
-3. read가 충분히 감소하고 write만 높으면 공유 D1 trigger 최적화를 별도 고위험 작업으로 감사/승인 후 진행한다.
-4. PREVIEW 기능·비용 검증 완료 후 사용자 요청이 있을 때만 TEST 승격한다.
-5. PRODUCTION은 별도 명확한 승인 전 변경하지 않는다.
+1. `20260910_03_explore_like_write_optimization.sql`을 shared D1에 적용하기 전 독립 안전 감사한다.
+2. canonical 사용자 원본 비변경, 기존 TEST/PRODUCTION Worker 호환, cursor/concurrency 누락 없음, rollback 가능성을 확인한다.
+3. shared D1 변경은 사용자 명확한 승인 후에만 적용한다.
+4. 적용 시 PREVIEW에서 같은 CACHE LIVE 절차로 좋아요/해제 각각 1회 비용을 다시 계측한다.
+5. PREVIEW 기능·비용 검증 완료 후 사용자 요청이 있을 때만 TEST 승격한다.
+6. PRODUCTION은 별도 명확한 승인 전 변경하지 않는다.
 
 ## 10. 현재 완료 판정
 - Firebase PREVIEW 앱 052: **PASS** — Run `34436451189`.
@@ -123,4 +127,5 @@
 - 새 D1 migration/seed: **미실행**.
 - 사용자 원본 데이터 변경: **없음**.
 - Functions / Firestore Rules 변경: **없음**.
-- 실제 좋아요 1회 CACHE LIVE 비용: **실사용 계측 전**.
+- 좋아요 5초 debounce: **실사용 PASS**.
+- 좋아요 D1 비용: **FAIL — 1차 mutation R19/W20, 2차 해제 증분 R19/W17**.

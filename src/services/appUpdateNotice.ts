@@ -2,9 +2,25 @@ const CURRENT_APP_VERSION = __SORIDRAW_APP_VERSION__;
 const VERSION_URL = '/app-version.json';
 const NOTICE_ID = 'soridraw-app-update-notice';
 const MIN_CHECK_INTERVAL_MS = 30_000;
+const PREVIEW_UPDATE_HOSTS = new Set([
+  'preview.soridraw.com',
+  'soridraw-preview.web.app',
+  'soridraw-preview.firebaseapp.com',
+  'localhost',
+  '127.0.0.1',
+]);
 let started = false;
 let lastCheckedAt = 0;
 let updateAvailable = false;
+
+const isPreviewUpdateHost = () => {
+  if (typeof window === 'undefined') return false;
+  return PREVIEW_UPDATE_HOSTS.has(window.location.hostname.toLowerCase());
+};
+
+const removeUpdateNotice = () => {
+  document.getElementById(NOTICE_ID)?.remove();
+};
 
 const applyButtonState = (button: HTMLButtonElement, hasUpdate: boolean, status: 'ready' | 'checking' | 'error' = 'ready') => {
   updateAvailable = hasUpdate;
@@ -30,6 +46,11 @@ const applyButtonState = (button: HTMLButtonElement, hasUpdate: boolean, status:
 };
 
 const ensureUpdateNotice = () => {
+  if (!isPreviewUpdateHost()) {
+    removeUpdateNotice();
+    return null;
+  }
+
   const existing = document.getElementById(NOTICE_ID) as HTMLButtonElement | null;
   if (existing) return existing;
 
@@ -56,10 +77,16 @@ const ensureUpdateNotice = () => {
 };
 
 const checkForUpdate = async (force = false) => {
+  if (!isPreviewUpdateHost()) {
+    removeUpdateNotice();
+    return;
+  }
+
   const now = Date.now();
   if (!force && now - lastCheckedAt < MIN_CHECK_INTERVAL_MS) return;
   lastCheckedAt = now;
   const button = ensureUpdateNotice();
+  if (!button) return;
   applyButtonState(button, updateAvailable, 'checking');
   try {
     const response = await fetch(`${VERSION_URL}?t=${now}`, { cache: 'no-store' });
@@ -75,7 +102,6 @@ const checkForUpdate = async (force = false) => {
     }
     applyButtonState(button, remoteVersion !== CURRENT_APP_VERSION);
   } catch {
-    // Keep the small control visible even when offline; retry on focus/return or click.
     applyButtonState(button, updateAvailable, 'error');
   }
 };
@@ -83,6 +109,12 @@ const checkForUpdate = async (force = false) => {
 export const startAppUpdateNotice = () => {
   if (started || typeof window === 'undefined') return;
   started = true;
+
+  if (!isPreviewUpdateHost()) {
+    removeUpdateNotice();
+    return;
+  }
+
   ensureUpdateNotice();
   void checkForUpdate(true);
   document.addEventListener('visibilitychange', () => {

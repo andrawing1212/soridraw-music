@@ -25,4 +25,14 @@ for (const patch of manifest.patches) {
   if (result.status !== 0) throw new Error(`Release patch failed: ${patch}`);
 }
 
+const generatedWorker = join(remoteDir, 'worker.js');
+const likeVerifier = join(process.cwd(), '..', '..', 'scripts', 'verify-explore-like-cost-optimization.mjs');
+if (!existsSync(likeVerifier)) throw new Error('Explore like cost verifier is missing.');
+const verifyResult = spawnSync(process.execPath, [likeVerifier], {
+  cwd: join(process.cwd(), '..', '..'),
+  stdio: 'inherit',
+  env: { ...process.env, SORIDRAW_GENERATED_WORKER: generatedWorker },
+});
+if (verifyResult.status !== 0) throw new Error('Explore like cost verifier failed.');
+
 console.log(`[SORIDRAW Worker release] ${manifest.patches.length} repository-owned patch(es) verified.`);

@@ -1,6 +1,6 @@
 # SORIDRAW CURRENT RELEASE STATE
 
-최종 갱신: 2026-09-10 KST
+최종 갱신: 2026-09-11 KST
 
 > 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다.
 
@@ -82,13 +82,29 @@
 - Worker 033: 좋아요 요청에서 eager Feed/Profile derived cache 동기화 제거.
 - 032 changed-ID journal/revision 구조 유지.
 - warm `/feed-revision` D1 `0/0` 유지.
-- **trigger 최적화 적용 전 실제 baseline**:
-  - 첫 좋아요 server mutation: `R19 / W20`
-  - 같은 곡 해제 server mutation 증분: `R19 / W17`
-  - 2회 누적: `R38 / W37`
+
+### trigger 최적화 적용 전 baseline
+- 첫 좋아요 server mutation: `R19 / W20`
+- 같은 곡 해제 server mutation 증분: `R19 / W17`
+- 2회 누적: `R38 / W37`
 - 이전 `약 172 read / 20 write`는 여러 동작이 섞인 누적값이므로 단일 좋아요 baseline에서 제외.
-- 20260910_03 trigger 최적화는 적용 완료됐지만, **적용 후 인증된 실제 좋아요 1회 CACHE LIVE 비용은 아직 미측정**.
-- 따라서 현재 비용 판정은 `개선 적용 완료 / 최종 수치 검증 전`이며, 예상 수치를 완료값으로 주장하지 않는다.
+
+### trigger 최적화 적용 후 실제 CACHE LIVE 영상 계측 — 2026-09-11
+- 측정은 진단 패널의 `좋아요 변경` 구간을 기준으로 분리했다. 초기 Feed 변경 확인의 R4/W0은 좋아요 비용에 포함하지 않는다.
+- 좋아요 클릭 후 약 5초 동안 즉시 서버 write가 발생하지 않고 최종 상태 1회만 전송됨 PASS.
+- 첫 좋아요 server mutation:
+  - Worker `1`
+  - D1 query `R2 / W2`
+  - D1 rows 누적 `R16 / W17`
+- 같은 곡 좋아요 해제 후 다시 약 5초 idle 뒤 두 번째 server mutation:
+  - Worker 누적 `2`
+  - D1 query 누적 `R4 / W4`
+  - D1 rows 누적 `R33 / W30`
+  - 따라서 두 번째 mutation 증분은 `R17 / W13`
+- 영상 종료까지 좋아요 변경 Worker가 `2`에서 더 증가하지 않아 runaway 반복 mutation 없음 PASS.
+- 적용 전 2회 누적 `R38/W37` → 적용 후 `R33/W30`: read 5행, write 7행 감소를 실제 확인.
+- 각 mutation 비용은 현재 공개곡/사용자 전체 크기에 비례하지 않는 O(1) 경로이며, 관련 verifier/fixture도 같은 방향을 확인한다.
+- 현재 판정: **Shared D1 trigger 비용 최적화 실사용 PASS**. 다만 TEST 승격 전 Feed 최신/인기·공개프로필 최종 수렴과 PC↔모바일 동일 상태 확인은 남아 있다.
 
 ## 5. 고정 배포/변경 경로
 ### 앱 PREVIEW
@@ -129,13 +145,12 @@
 - `preview`, `main`, `production` branch protection이 현재 꺼져 있어 별도 운영 위험으로 남아 있다.
 
 ## 9. 다음 작업
-1. PREVIEW CACHE LIVE에서 같은 절차로 좋아요 1회 → 5초 idle → 비용 기록.
-2. 같은 곡 좋아요 해제 1회 → 5초 idle → 증분 비용 기록.
-3. Feed 최신/인기 및 공개프로필 likeCount 최종 수렴 확인.
-4. 같은 계정 PC/모바일 최종 상태 일치 확인.
-5. 비용이 O(1)이고 W20/W17 대비 명확히 감소했는지 판정.
-6. PREVIEW 기능·비용 검증 완료 후 사용자 요청이 있을 때만 TEST 승격.
-7. PRODUCTION은 별도 명확한 승인 전 변경하지 않는다.
+1. PREVIEW에서 좋아요 후 Feed 최신/인기 likeCount가 정상 수렴하는지 확인.
+2. 공개프로필 likeCount가 정상 수렴하는지 확인.
+3. 같은 계정 PC/모바일 최종 좋아요 상태 일치 확인.
+4. 이 3개가 PASS면 Explore 좋아요 033 + shared D1 low-write trigger를 PREVIEW 최종 합격 후보로 고정.
+5. 사용자 `테스트배포` 요청이 있을 때만 main/TEST로 승격.
+6. PRODUCTION은 별도 명확한 승인 전 변경하지 않는다.
 
 ## 10. 현재 완료 판정
 - Firebase PREVIEW 앱 052: **PASS** — Run `34436451189`.
@@ -148,5 +163,6 @@
 - 사용자 canonical row 변경: **없음**.
 - Functions / Firestore Rules / Hosting 변경: **없음**.
 - 좋아요 5초 debounce: **실사용 PASS**.
-- trigger 최적화 전 비용 baseline: 좋아요 `R19/W20`, 해제 `R19/W17`.
-- trigger 최적화 후 실제 좋아요 1회 비용: **실사용 계측 전**.
+- trigger 최적화 전 비용 baseline: 좋아요 `R19/W20`, 해제 `R19/W17`, 누적 `R38/W37`.
+- trigger 최적화 후 실사용 비용: 좋아요 `R16/W17`, 해제 증분 `R17/W13`, 누적 `R33/W30` — **PASS**.
+- 남은 미검증: Feed 최신/인기·공개프로필 수렴, PC↔모바일 최종 상태 일치.

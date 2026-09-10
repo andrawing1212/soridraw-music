@@ -27,23 +27,29 @@
 - 배포 파이프라인 변경은 별도 작업으로 수정·검증·고정한 뒤 사용한다.
 - 검증된 commit을 고정하고 필요한 서비스만 배포한다.
 - 앱만 바뀌면 Hosting만, Worker만 바뀌면 Worker만 배포한다.
-- DB migration/seed는 평상시 배포에 포함하지 않는다.
+- DB migration/seed는 평상시 앱/Worker 배포에 포함하지 않는다.
 - 같은 실패가 반복되면 재배포를 계속하지 않고 CI/CD 문제로 분리한다.
 - 실패 시 다음 환경 승격을 즉시 중단한다.
 - `v2`, `final2`, `stage3`, `diagnostic-release` 식 일회성 배포 Workflow 누적을 금지한다.
 
 ### PREVIEW canonical release path
 - 앱: `.github/workflows/firebase-hosting-custom-preview.yml`
+  - 명시적 `.deploy/preview-app-release.trigger` 변경 또는 수동 dispatch에서만 실행.
 - Explore Worker: `.github/workflows/cloudflare-explore-preview-release.yml`
-- 두 Workflow 모두 수동 `workflow_dispatch`가 기준.
-- push만으로 자동 배포하지 않는다.
-- D1 schema/seed는 별도 승인 작업.
-- 배포 Workflow 안에서 사용자 원본 데이터를 변경하지 않는다.
+  - 명시적 `.deploy/preview-worker-release.trigger` 변경 또는 수동 dispatch에서만 실행.
+- Shared Explore D1 구조 변경: `.github/workflows/cloudflare-explore-shared-d1-release.yml`
+  - 명시적 `.deploy/shared-d1-release.trigger` 변경에서만 실행.
+  - exact preview target SHA + 승인 migration filename + blob SHA를 고정한다.
+  - live D1 read-only preflight, 현재 trigger baseline, PREVIEW/TEST/PRODUCTION Worker 호환을 확인한 뒤에만 schema 변경을 허용한다.
+  - 적용 후 postflight/API/Worker 및 main/production 비변경 검사가 실패하면 이전 trigger 복구를 시도한다.
+- 일반 코드 push만으로 앱/Worker/D1을 배포·변경하지 않는다.
+- DB migration/seed는 별도 승인 작업이며 앱/Worker release와 묶지 않는다.
+- 배포 Workflow 안에서 사용자 원본 데이터를 대량변경하지 않는다.
 
 ### 릴리스 중 금지
-- Workflow 파일 수정
+- 활성 릴리스 실패를 우회하려고 Workflow 파일을 즉흥 수정
 - 임의 migration/seed 추가
-- TEST/PRODUCTION 동시 변경
+- TEST/PRODUCTION 동시 코드 승격
 - 원인 미확정 상태의 반복 재배포
 
 ## 4. 사용자 데이터 운영

@@ -1,0 +1,38 @@
+{
+  "name": "soridraw-explore-preview",
+  "main": "./preview-worker.js",
+  "compatibility_date": "2026-08-28",
+  "workers_dev": true,
+  "keep_vars": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "soridraw-explore-db",
+      "database_id": "217ef5b1-5d80-4f7c-afc7-9e07eb05c06b"
+    },
+    {
+      "binding": "RATE_DB",
+      "database_name": "soridraw-explore-preview-db",
+      "database_id": "aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PROFILE_MEDIA",
+      "bucket_name": "soridraw-profile-media"
+    },
+    {
+      "binding": "EXPLORE_CACHE",
+      "bucket_name": "soridraw-profile-media-preview"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "*/10 * * * *"
+    ]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

@@ -46,6 +46,14 @@ const PANEL_MARGIN = 8;
 const PANEL_DEFAULT_WIDTH = 380;
 const CLOUD_WINDOW_MINUTES = 10;
 
+// Official free-tier quotas checked 2026-09-10.
+const D1_FREE_DAILY_READS = 5_000_000;
+const D1_FREE_DAILY_WRITES = 100_000;
+const FIRESTORE_FREE_DAILY_READS = 50_000;
+const FIRESTORE_FREE_DAILY_WRITES = 20_000;
+const FIRESTORE_FREE_DAILY_DELETES = 20_000;
+const THIRTY_DAYS = 30;
+
 type PanelPosition = { x: number; y: number };
 type UsageCounts = { reads: number; writes: number; deletes?: number; realtimeReads?: number };
 type FirestoreServerUsage = {
@@ -87,9 +95,43 @@ const formatActualUsage = (state: FirestoreActualState) => {
 
 const formatNumber = (value: number | undefined) => new Intl.NumberFormat('ko-KR').format(Math.max(0, Math.floor(Number(value || 0))));
 
+const formatActionCount = (value: number) => {
+  const safe = Math.max(0, Math.floor(Number(value || 0)));
+  if (safe >= 100_000_000) {
+    return `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(safe / 100_000_000)}억`;
+  }
+  if (safe >= 10_000) {
+    return `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(safe / 10_000)}만`;
+  }
+  return formatNumber(safe);
+};
+
+const formatQuotaPercent = (value: number | undefined, limit: number) => {
+  const safe = Math.max(0, Number(value || 0));
+  if (!safe) return '0%';
+  const percent = (safe / limit) * 100;
+  if (percent < 0.01) return '<0.01%';
+  if (percent < 1) return `${percent.toFixed(2)}%`;
+  return `${percent.toFixed(1)}%`;
+};
+
+const estimateD1FreeActions = (readsPerAction: number, writesPerAction: number) => {
+  const readCapacity = readsPerAction > 0 ? Math.floor(D1_FREE_DAILY_READS / readsPerAction) : Number.POSITIVE_INFINITY;
+  const writeCapacity = writesPerAction > 0 ? Math.floor(D1_FREE_DAILY_WRITES / writesPerAction) : Number.POSITIVE_INFINITY;
+  const daily = Math.min(readCapacity, writeCapacity);
+  return Number.isFinite(daily) ? Math.max(0, daily) : null;
+};
+
+const getFreeCapacityTone = (daily: number | null) => {
+  if (daily === null || daily >= 10_000) return 'text-[#9fddb9]';
+  if (daily >= 1_000) return 'text-[#ffcf7f]';
+  return 'text-[#ff9d9d]';
+};
+
 const getCloudflarePathLabel = (path: string) => {
   if (path === '/v1/publications') return '뮤직노트 공개 등록';
   if (path === '/v1/feed') return '피드';
+  if (path === '/v1/feed-revision') return '피드 변경 확인';
   if (path === '/v1/me/likes') return '좋아요 상태';
   if (path === '/v1/me/following-bundle') return '팔로우 상태 묶음';
   if (path === '/v1/me/publications') return '뮤직노트 공개상태';
@@ -388,11 +430,10 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
     );
   }
 
-
   return (
     <div
       ref={panelRef}
-      className="fixed z-[9998] w-[380px] max-w-[calc(100vw-16px)] rounded-2xl bg-black px-4 py-3.5 text-white/85 shadow-2xl"
+      className="fixed z-[9998] max-h-[calc(100vh-16px)] w-[380px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-2xl bg-black px-4 py-3.5 text-white/85 shadow-2xl"
       style={{ left: position.x, top: position.y }}
     >
       <div
@@ -442,6 +483,17 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       {!collapsed ? (
         <>
           <div className="space-y-0.5">
+            <div className="mb-1.5 rounded-xl bg-[#9fddb9]/[0.07] px-2.5 py-2">
+              <div className="mb-1 text-[10px] font-black tracking-[0.05em] text-[#9fddb9]/80">무료한도 기준 · 30일 값은 단순 환산</div>
+              <div className="text-[11px] font-bold leading-4 text-white/72">
+                D1 하루 · 읽기 500만 · 쓰기 10만 <span className="text-white/42">/ 30일 읽기 1.5억 · 쓰기 300만</span>
+              </div>
+              <div className="text-[11px] font-bold leading-4 text-white/72">
+                Firestore 하루 · 읽기 5만 · 쓰기 2만 · 삭제 2만 <span className="text-white/42">/ 30일 150만 · 60만 · 60만</span>
+              </div>
+              <div className="mt-0.5 text-[9px] font-bold text-white/35">실제 무료한도는 매일 초기화되며 30일 한도가 따로 있는 것은 아님</div>
+            </div>
+
             <div className="whitespace-nowrap text-[12px] font-bold text-white/76">{formatActualUsage(actual)}</div>
             <div className="whitespace-nowrap text-[12px] font-bold text-[#c6b5ff]">
               Cloudflare 앱 · LOCAL {formatNumber(cloudflare.localCacheHits)} · Worker {formatNumber(cloudflare.workerRequests)}
@@ -449,27 +501,47 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             <div className="whitespace-nowrap text-[11px] font-bold text-[#c6b5ff]/80">
               D1 쿼리 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1ReadQueries) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1WriteQueries) : '—'} · 행 읽기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsRead) : '—'} · 쓰기 {cloudflareMetered ? formatNumber(cloudflare.d1RowsWritten) : '—'}
             </div>
+            {cloudflareMetered ? (
+              <div className="whitespace-nowrap text-[10px] font-bold text-[#c6b5ff]/62">
+                현재 진단 누적 · D1 읽기 무료한도의 {formatQuotaPercent(cloudflare.d1RowsRead, D1_FREE_DAILY_READS)} · 쓰기 {formatQuotaPercent(cloudflare.d1RowsWritten, D1_FREE_DAILY_WRITES)}
+              </div>
+            ) : null}
             {cloudflarePathEntries.length > 0 ? (
-              <div className="mt-1 space-y-0.5 rounded-lg bg-[#c6b5ff]/[0.055] px-2 py-1.5">
-                <div className="mb-0.5 text-[10px] font-black tracking-[0.04em] text-[#c6b5ff]/70">CLOUDFLARE 발생처</div>
-                {cloudflarePathEntries.map(([path, state]) => (
-                  <div key={path} className="space-y-0.5">
-                    <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-bold text-[#c6b5ff]/82">
-                      <span className="truncate">{getCloudflarePathLabel(path)}</span>
-                      <span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)}</span>
-                    </div>
-          <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/68">
-            <span className="shrink-0 whitespace-nowrap tabular-nums">D1 쿼리 읽기 {formatNumber(state.d1ReadQueries)} · 쓰기 {formatNumber(state.d1WriteQueries)}</span>
-            <span className="shrink-0 whitespace-nowrap tabular-nums">행 읽기 {formatNumber(state.d1RowsRead)} · 쓰기 {formatNumber(state.d1RowsWritten)}</span>
-          </div>
-                    {state.lastOutcome ? (
-                      <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/58">
-                        <span className="truncate">마지막 · {state.lastOutcome}{state.lastEdgeCache ? ` · ${state.lastEdgeCache}` : ''}</span>
-                        <span className="shrink-0 whitespace-nowrap tabular-nums">검증 {formatNumber(state.revisionChecks)} · 304 {formatNumber(state.notModifiedResponses)} · 200 {formatNumber(state.fullResponses)} · {formatNumber(state.lastDurationMs)}ms</span>
+              <div className="mt-1 space-y-1 rounded-lg bg-[#c6b5ff]/[0.055] px-2 py-1.5">
+                <div className="mb-0.5 text-[10px] font-black tracking-[0.04em] text-[#c6b5ff]/70">CLOUDFLARE 발생처 · 요청당 평균 무료 가능 횟수</div>
+                {cloudflarePathEntries.map(([path, state]) => {
+                  const requestCount = Math.max(1, state.workerRequests);
+                  const avgRead = Math.ceil(state.d1RowsRead / requestCount);
+                  const avgWrite = Math.ceil(state.d1RowsWritten / requestCount);
+                  const freeDaily = estimateD1FreeActions(avgRead, avgWrite);
+                  const freeThirtyDays = freeDaily === null ? null : freeDaily * THIRTY_DAYS;
+                  return (
+                    <div key={path} className="space-y-0.5 border-t border-white/[0.04] pt-1 first:border-t-0 first:pt-0">
+                      <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] font-bold text-[#c6b5ff]/82">
+                        <span className="truncate">{getCloudflarePathLabel(path)}</span>
+                        <span className="shrink-0 whitespace-nowrap tabular-nums">LOCAL {formatNumber(state.localCacheHits)} · Worker {formatNumber(state.workerRequests)}</span>
                       </div>
-                    ) : null}
-                  </div>
-                ))}
+                      <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/68">
+                        <span className="shrink-0 whitespace-nowrap tabular-nums">D1 쿼리 R {formatNumber(state.d1ReadQueries)} · W {formatNumber(state.d1WriteQueries)}</span>
+                        <span className="shrink-0 whitespace-nowrap tabular-nums">누적 행 R {formatNumber(state.d1RowsRead)} · W {formatNumber(state.d1RowsWritten)}</span>
+                      </div>
+                      <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-black">
+                        <span className="shrink-0 whitespace-nowrap tabular-nums text-white/52">요청당 평균 R {formatNumber(avgRead)} · W {formatNumber(avgWrite)}</span>
+                        <span className={`shrink-0 whitespace-nowrap tabular-nums ${getFreeCapacityTone(freeDaily)}`}>
+                          {freeDaily === null
+                            ? 'D1 비용 0 · 무료한도 영향 없음'
+                            : `무료 약 ${formatActionCount(freeDaily)}회/일 · ${formatActionCount(freeThirtyDays || 0)}회/30일`}
+                        </span>
+                      </div>
+                      {state.lastOutcome ? (
+                        <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-bold text-[#c6b5ff]/58">
+                          <span className="truncate">마지막 · {state.lastOutcome}{state.lastEdgeCache ? ` · ${state.lastEdgeCache}` : ''}</span>
+                          <span className="shrink-0 whitespace-nowrap tabular-nums">검증 {formatNumber(state.revisionChecks)} · 304 {formatNumber(state.notModifiedResponses)} · 200 {formatNumber(state.fullResponses)} · {formatNumber(state.lastDurationMs)}ms</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             ) : null}
             {hasR2Usage ? (
@@ -510,11 +582,11 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
             ) : null}
             {serverUsage ? (
               <>
-                <div className="whitespace-nowrap text-[12px] font-bold text-[#9fc7ff]">
-                  Cloud 오늘 · 읽기 {formatNumber(todayOps?.reads)} · 쓰기 {formatNumber(todayOps?.writes)} · 삭제 {formatNumber(todayOps?.deletes)}
+                <div className="text-[12px] font-bold text-[#9fc7ff]">
+                  Firestore 오늘 · 읽기 {formatNumber(todayOps?.reads)} / 5만 ({formatQuotaPercent(todayOps?.reads, FIRESTORE_FREE_DAILY_READS)}) · 쓰기 {formatNumber(todayOps?.writes)} / 2만 ({formatQuotaPercent(todayOps?.writes, FIRESTORE_FREE_DAILY_WRITES)})
                 </div>
-                <div className="whitespace-nowrap text-[11px] font-bold text-[#9fc7ff]/78">
-                  Cloud {serverUsage.windowMinutes}분 · 읽기 {formatNumber(recentOps?.reads)} · 쓰기 {formatNumber(recentOps?.writes)} · 삭제 {formatNumber(recentOps?.deletes)}
+                <div className="text-[11px] font-bold text-[#9fc7ff]/78">
+                  삭제 {formatNumber(todayOps?.deletes)} / 2만 ({formatQuotaPercent(todayOps?.deletes, FIRESTORE_FREE_DAILY_DELETES)}) · 최근 {serverUsage.windowMinutes}분 R {formatNumber(recentOps?.reads)} / W {formatNumber(recentOps?.writes)} / D {formatNumber(recentOps?.deletes)}
                 </div>
                 <div className="whitespace-nowrap text-[10px] font-bold text-white/48">
                   과금단위 {serverUsage.windowMinutes}분 · 읽기 {formatNumber(recentBillable?.reads)} · 실시간 {formatNumber(recentBillable?.realtimeReads)} · 쓰기 {formatNumber(recentBillable?.writes)}

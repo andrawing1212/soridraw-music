@@ -1,5 +1,6 @@
 name: Cloudflare Explore Cache Live Source Readonly
 
+# Infrastructure bootstrap: capture the exact active PREVIEW Worker as a read-only artifact.
 on:
   push:
     branches: [preview]

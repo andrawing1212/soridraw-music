@@ -51,8 +51,10 @@ const replaceFunction = (name, nextText) => {
   source = source.slice(0, range.start) + nextText + source.slice(range.end);
 };
 
+if (!source.includes('SORIDRAW_DERIVED_CHANGE_CACHE_032') && !source.includes('async function derivedNext032(')) {
+  throw new Error('[033] required 032 derived runtime behavior missing');
+}
 for (const required of [
-  'SORIDRAW_DERIVED_CHANGE_CACHE_032',
   'syncExploreLikeR2AfterMutation',
   'patchExploreFeedR2LikeCount',
   'patchExploreProfileR2Like020',

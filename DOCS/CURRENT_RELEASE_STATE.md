@@ -10,17 +10,19 @@
 - TEST branch: `main`
 - PRODUCTION branch: `production`
 - 앱 버전: `052`
-- 034 사용자 4분 multi-track like batch 구현 시작 기준: `421281da89c46fdd7c620b2f1b664d8796f886d0`
-- 034 최종 코드 포함 기준: `a2277ff258ab02223187e7f075d9d60d21a141ed`
-- PREVIEW Worker 034 배포 source: `a2277ff258ab02223187e7f075d9d60d21a141ed`
-- PREVIEW Worker 034 성공 release Run: `34506266106`
-- PREVIEW Worker 활성 Version ID: `27cc6139-a59c-41d1-9674-4c710d687050`
-- PREVIEW 앱 034 배포 checkout SHA: `2c069c7a20ad82bb21380f05f282f5ac4cc6cfee`
-- PREVIEW 앱 성공 release Run: `34506474866`
-- Shared D1 low-write trigger release: Run `34496512024`, PASS
+- PREVIEW 앱: 034 client 4분 user-level like batch 배포 상태 유지
+- PREVIEW 앱 Run: `34506474866` — PASS
+- PREVIEW Worker: **035 deferred aggregate 활성**
+- PREVIEW Worker Run: `34519328112` — PASS
+- PREVIEW Worker 활성 Version ID: `8fe58486-91c6-43dc-af7c-eb7945448054`
+- PREVIEW Worker release target: `e6ae6a17933d25c3ae3db1475d8c5bfabbc78ed0`
+- release trigger commit: `b16306f409fa4115e58ca353cd264efb8f6c4f6d`
+- canonical complete Worker SHA256: `5e05eba6dde4886553bd1923a3da2caa78bcfb22378221f8b25eb44abde64fe3`
+- Shared D1 035 additive schema Run: `34511788949` — PASS
+- TEST Worker: `0b9cfe5c-1e29-4485-ac97-36f87832b41e` — 비변경
+- PRODUCTION Worker: `07c11e5e-47a6-458b-a3a0-6e47b6c331e6` — 비변경
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75`
-- PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe`
-- TEST / PRODUCTION 코드·Hosting·Worker는 이번 034 PREVIEW 배포에서 변경하지 않았다.
+- PRODUCTION branch: `a8971fae1014ce107927fcfb5491d202d4c68fbe`
 
 ## 2. PREVIEW 실제 배포 상태
 
@@ -28,143 +30,157 @@
 - URL: `https://preview.soridraw.com/`
 - 앱 버전: `052`
 - Run: `34506474866` — PASS
-- checkout SHA: `2c069c7a20ad82bb21380f05f282f5ac4cc6cfee`
-- `npm ci`: PASS
-- TypeScript `npx tsc --noEmit`: PASS
+- TypeScript: PASS
 - Vite Build: PASS
-- Firebase PREVIEW Hosting deploy: PASS
-- 실제 `preview.soridraw.com`의 `index.html`이 배포 산출물과 정확히 일치: PASS
-- 실제 `app-version.json` = `052`: PASS
-- TEST / PRODUCTION branch와 실제 HTML 전후 동일: PASS
-- 034 client 4분 user-level multi-track outbox가 실제 PREVIEW 앱에 포함됐다.
+- Firebase Hosting: PASS
+- 실제 `preview.soridraw.com` exact build/version: PASS
+- 034 client 4분 user-level multi-track persistent outbox 포함.
+- 035 Worker 작업에서 앱 Hosting은 재배포하지 않았다.
 
-### Cloudflare PREVIEW Worker
+### Cloudflare PREVIEW Worker 035
 - Worker: `soridraw-explore-preview`
-- Run: `34506266106` — PASS
-- source SHA: `a2277ff258ab02223187e7f075d9d60d21a141ed`
-- 활성 Version ID: `27cc6139-a59c-41d1-9674-4c710d687050`
-- release patches: `031 → 032 → 033 → 034`
-- 034 `POST /v1/me/likes/batch` route 포함 정적/generated Worker 검증: PASS
+- Run: `34519328112` — **PASS**
+- 활성 Version: `8fe58486-91c6-43dc-af7c-eb7945448054`
+- 이전 034 Version: `27cc6139-a59c-41d1-9674-4c710d687050`
 - Feed HTTP 200: PASS
 - Public Profile first-view HTTP 200: PASS
-- 배포 직후 첫 warm revision 검사 `R2/W0`, 두 번째 재검사 `R0/W0`: PASS
-- 최종 warm `/v1/feed-revision`: D1 rows `R0/W0`: PASS
+- `POST /v1/me/likes/batch` route: 인증 없는 smoke에서 HTTP 401, route 존재 PASS
+- warm `/v1/feed-revision`: 1차 `R2/W0` → 2차 `R0/W0`, 최종 PASS
+- 035 scheduled aggregate cron: `*/10 * * * *` — PASS
 - TEST Worker / PRODUCTION Worker 비변경: PASS
-- main / production refs 비변경: PASS
 
-### Worker 배포 검증 보정
-- 첫 034 배포 Run `34505799291`은 기존 one-shot warm-cache 검사에서 배포 직후 아직 cache warm-up 중인 응답을 만나 두 번 모두 안전 rollback 됐다.
-- 실제 034 코드/정적 verifier 실패가 아니라 postdeploy warm timing 문제로 확인했다.
-- canonical PREVIEW Worker workflow를 commit `7ffa85244ae003bc142c8cdca3caaab75afd16b6`에서 수정했다.
-- 합격선을 낮추지 않고 `R0/W0`가 나올 때까지 최대 5회 짧게 재검사하도록 변경했다.
-- 성공 Run `34506266106`에서 1차 `R2/W0` → 2차 `R0/W0`로 정상 warm convergence를 실제 확인했다.
+## 3. PREVIEW Worker 배포 구조 정상화
 
-## 3. 공유 D1 상태
+### 폐기한 방식
+일반 PREVIEW Worker 배포에서 아래 경로를 더 이상 사용하지 않는다.
+- Cloudflare의 현재 Worker source를 매번 다시 다운로드
+- `031 → 032 → 033 → 034 → 035` patch 누적 재적용
+- 배포 때마다 config를 동적으로 재조립
+- 기능 배포 도중 release workflow를 즉흥 수정하며 재시도
+
+### 현재 고정 방식
+- 완성 Worker source: `cloudflare/explore-worker/canonical/preview-worker.js`
+- 고정 PREVIEW config: `cloudflare/explore-worker/canonical/wrangler.preview.jsonc`
+- source hash: `cloudflare/explore-worker/canonical/source-sha256.txt`
+- 일반 PREVIEW release workflow: `.github/workflows/cloudflare-explore-preview-release.yml`
+- trigger: `.deploy/preview-worker-release.trigger`
+- 흐름: **완성 source 1개 → one-shot preflight → PREVIEW deploy 1회 → live smoke**
+- Worker release에는 D1 migration을 섞지 않는다. D1 schema가 필요한 release는 read-only preflight에서 먼저 차단한다.
+- smoke 실패 시 직전 PREVIEW Worker Version으로 rollback하도록 고정.
+- TEST/PRODUCTION Worker는 release 전후 Version을 비교해 비변경을 강제한다.
+
+### 실제 속도 검증
+Run `34519328112`:
+- Action 생성: `19:15:34Z`
+- 전체 완료: `19:16:17Z`
+- **총 약 43초**
+- runner 시작 후 실제 release 작업: 약 34초
+- npm tooling 설치: 약 6초
+- one-shot preflight(035 verifier + D1 read-only check + dry-run): 약 4초
+- Cloudflare Worker upload: 약 4.27초
+- trigger deploy: 약 1.05초
+- live smoke/warm/보호환경 확인까지 포함해 1분 미만 PASS
+
+이 43초를 PREVIEW Worker 배포 속도의 현재 실제 기준점으로 사용한다. 기능 수정 때문에 이 경로를 다시 복잡하게 만들지 않는다.
+
+## 4. 공유 D1 035 상태
 - canonical D1: `soridraw-explore-db`
-- 기존 migration `20260910_03_explore_like_write_optimization.sql` 적용 상태 유지.
-- 기존 `explore032_derived_track_update` low-write trigger 유지.
-- 034에는 새 D1 migration / seed / schema 변경 없음.
-- 034 PREVIEW 배포 과정에서 canonical 사용자 row 삭제·백필·대량변환·덮어쓰기 없음.
-- 기존 single-track like endpoint는 구버전/TEST/PRODUCTION 호환을 위해 유지한다.
+- 033 low-write trigger 구조 유지.
+- 035 additive migration: `20260911_01_explore_like_deferred_batches.sql`
+- Shared D1 release Run `34511788949`: PASS
+- 035 필수 objects live preflight: PASS
+  - `explore_like_batches_035`
+  - `idx_explore_like_batches_035_created`
+  - `explore_like_processor_035`
+  - processor seed row `id=1`
+- Worker 035 활성 직전 pending queue `0`: PASS
+- 기존 canonical 사용자 row 삭제/백필/대량변환/덮어쓰기 없음.
+- 기존 034/single-track 호환 경로는 구버전/TEST/PRODUCTION 호환을 위해 유지.
 
-## 4. 034 사용자 원본 좋아요 4분 batch 구조
+## 5. 현재 좋아요 동작 구조
 
-### Client
+### 사용자 기기 / Client 034
 - 좋아요 UI는 클릭 즉시 optimistic 반영.
-- Explore와 공개프로필이 동일 `exploreLikeService` / 동일 persistent outbox를 사용.
-- 기존 곡별 5초 timer를 제거하고 사용자당 공통 timer 1개 사용.
-- 첫 pending 변경 시점부터 고정 4분 window. 이후 다른 곡 클릭이 들어와도 첫 4분 마감이 계속 밀리지 않는다.
-- 한 batch 최대 50곡의 최종 상태를 `POST /v1/me/likes/batch` 한 요청으로 보낸다.
-- 같은 곡을 4분 안에 좋아요→해제해서 서버 기준 원상태로 돌아오면 해당 pending은 서버 전송 전에 제거될 수 있다.
-- outbox schema version 1 유지 + `queuedAt` additive fallback으로 기존 pending과 하위호환.
-- 앱/탭 종료 시 pending은 persistent outbox에 남고 다음 실행에서 이어서 처리.
-- batch 실패 시 bounded retry.
+- Explore와 공개프로필이 동일 persistent like outbox 사용.
+- 사용자당 첫 pending 시점 기준 고정 4분 window.
+- 여러 곡을 눌러도 4분 마감을 계속 뒤로 밀지 않음.
+- 한 user batch 최대 50곡 최종 상태.
+- 같은 곡 좋아요→해제가 원상태로 돌아오면 서버 전송 전에 제거 가능.
+- 앱/탭 종료 시 pending은 로컬에 남고 다음 실행에서 이어서 처리.
 
-### Worker 034
-- batch 인증/App Check 1회.
-- unique track 최대 50.
-- 같은 trackId 중복 입력은 마지막 최종 상태로 collapse.
-- canonical mutation 전에 모든 target public track을 먼저 검증.
-- 기존 idempotent canonical like relation/stat 경로 재사용.
-- rate limit은 batch 요청 1회로 축소하더라도 실제 unique mutation 수만큼 가중해 보호 강도 유지.
-- 사용자 liked-state R2 bundle은 per-track GET/PUT 대신 batch 종료 후 1회 read + 1회 write.
-- mutation 안에서 Feed/Profile eager rebuild/patch 없음.
-- 032 changed-ID journal/revision 경로가 이후 정상 Feed/Profile 접근에서 수렴.
-
-## 5. 034 배포 전 검증
-- Client TypeScript 5.8.3 strict isolated compile: PASS.
-- 축소된 4분 runtime simulation: PASS.
-  - 서로 다른 3곡 → Worker batch 1회.
-  - 같은 곡 좋아요→해제 상쇄 → server request 0.
-  - 두 번째 클릭이 첫 4분 window를 리셋하지 않음.
-  - 55곡 pending → 50 + 5 두 batch로 drain.
-- Worker 034 patch `node --check`: PASS.
-- mock active Worker에 034 patch 적용 + generated Worker syntax: PASS.
-- Worker release generated verifier: PASS.
-- derived-cache regression suite / deploy preflight: PASS.
-- 실제 앱 전체 TypeScript / Build: PASS — Run `34506474866`.
+### Worker 035
+- 4분마다 들어온 사용자 batch를 곡별 공개 집계까지 즉시 반복 처리하지 않고 deferred batch로 받는다.
+- canonical `(uid, track)` 관계 정확성은 유지한다.
+- 여러 사용자/여러 변경을 scheduled processor가 묶어서 곡별 delta로 계산한다.
+- 같은 곡에 많은 변화가 몰리면 public like count / derived Feed/Profile 갱신을 여러 사용자별이 아니라 변경곡 단위로 합친다.
+- net-zero aggregate는 불필요한 공개 count/derived 갱신을 만들지 않는다.
+- scheduled processor 주기: 10분.
+- 로컬 fixture: 100 same-track likes → 공개 count/derived update 1회 PASS.
+- net-zero cohort → 공개 count/derived update 0회 PASS.
+- 한 aggregate wave 최대 50,000 logical mutations, bounded waves.
 
 ## 6. 비용 기준과 현재 판정
 사용자 스트레스 기준:
 - 100,000 DAU
 - 1인 하루 좋아요 30곡
-- 하루 3,000,000 논리 좋아요
-- 30일 90,000,000 논리 좋아요
+- 하루 3,000,000 logical likes
+- 30일 90,000,000 logical likes
 
-기존 033 실제 측정 baseline:
-- 좋아요 1회 `R16/W17`
-- 같은 곡 해제 증분 `R17/W13`
-- 두 번 누적 `R33/W30`
+034 실제 user test:
+- 3곡 user batch 1 request: D1 `R45/W51`
+- 즉 HTTP/R2 묶기는 됐지만 기존 per-track D1 write amplification이 그대로여서 비용 FAIL.
 
-034가 직접 줄이는 것:
-- 서로 다른 곡 N개를 한 사용자가 4분 내 누르면 Worker/auth/App Check 요청을 `N → 1 batch`로 줄일 수 있음.
-- 사용자 liked-state R2 sync를 `N회 → batch당 1회`로 줄일 수 있음.
-- 4분 내 같은 곡 최종 상태가 원상복귀하면 canonical mutation 0 가능.
-
-034만으로 남는 것:
-- 실제 최종 상태가 바뀐 각 곡의 canonical `likes` 관계.
-- 각 변경곡의 `track_stats.like_count` 및 032 derived projection/journal D1 write.
-- 따라서 공개 likeCount / Feed / 공개프로필 / popular 집계를 더 긴 분 단위로 합치는 후속 비용 단계가 여전히 필요할 수 있다.
+035 목적:
+- user batch network/auth/R2 절감 유지.
+- D1의 public count / Feed/Profile derived bookkeeping을 user-like마다 반복하지 않고 aggregate 단위로 합친다.
+- full Feed/Profile scan/rebuild 금지.
 
 현재 비용 판정:
-- 034 구조 및 배포: PASS.
-- 실제 사용자 세션에서 4분 전 서버 mutation 0 / multi-track 1 batch / batch D1 rows 실측: **미검증**.
-- 10만×30/day 최종 월비용 재계산: **034 실측 전**.
-- 따라서 전체 좋아요 비용 목표 최종 PASS는 아직 선언하지 않는다.
+- 035 코드/fixture: PASS.
+- Shared D1 additive prerequisite: PASS.
+- PREVIEW Worker 035 deployment/smoke: PASS.
+- unchanged warm revision `R0/W0`: PASS.
+- **실제 인증 사용자 4분 batch의 D1 R/W + 10분 aggregate R/W는 아직 실측 전.**
+- 따라서 100,000×30/day 최종 월비용 PASS는 아직 선언하지 않는다.
 
-## 7. 절대 보호
+## 7. 개발/배포 운영 기준
+- PREVIEW 기능 개발 기본 루프: `수정 → 사전검사 1회 → PREVIEW 배포 1회 → 실제 확인 → 수정`.
+- 첫 deploy 실패 시 같은 release를 무작정 재시도하지 않는다. 전체 경로를 먼저 진단한다.
+- 일반 기능 작업 중 deployment workflow 수정 금지. 인프라 작업으로 분리한다.
+- PREVIEW Worker 기준 속도: 현재 end-to-end 약 43초. 명확한 이유 없이 수분대로 회귀하면 원인 분석 대상.
+- Firebase PREVIEW app 기존 정상 deploy workflow는 현재 유지. Worker 구조 정상화 때문에 앱 pipeline까지 동시에 뜯지 않는다.
+- D1 migration은 Worker deployment와 분리한다.
+- TEST 승격은 사용자 `테스트배포` 요청 전 금지.
+- PRODUCTION은 명확한 정식배포 승인 전 금지.
+
+## 8. 절대 보호
 - Music Note 로컬 즉시 반영 + 약 60초 묶음 저장
 - Library Local First
 - UI/반응형/간격/색상
 - 공유 canonical 사용자 데이터
-- 승인 없는 main/production 승격
-- 승인 없는 PRODUCTION 배포
-- FCM/WebSocket/새 외부 실시간 인프라 임의 추가 금지
+- 기존 TEST/PRODUCTION 호환성
+- 승인 없는 main/production 변경
+- 앱 업데이트/페이지 이동 때문에 데이터 전체 읽기/재생성 금지
 
-## 8. 다음 실제 검증
-1. PREVIEW CACHE LIVE reset.
-2. 한 곡 좋아요 후 4분 전 Worker/D1 mutation `0` 확인.
-3. 같은 4분 window에서 여러 곡 좋아요 후 마감 시 Worker `1 batch` 확인.
-4. 같은 곡 좋아요→해제를 4분 안에 상쇄했을 때 server mutation `0` 확인.
-5. batch당 user R2 GET/PUT 1회 확인.
-6. batch D1 rows read/write와 변경곡당 평균 기록.
-7. Explore 최신/인기·공개프로필 likeCount 최종 수렴 확인.
-8. PC↔모바일 최종 좋아요 상태 일치 확인.
-9. 100,000 DAU × 30 likes/day 기준 월비용 재계산.
-10. 이 결과가 PASS일 때만 TEST 승격 후보로 고정. `테스트배포` 요청 전 main은 변경하지 않는다.
+## 9. 다음 실제 작업
+1. PREVIEW에서 실제 사용자로 3개 이상 서로 다른 곡 좋아요.
+2. 4분 전 server mutation 0 확인.
+3. 4분 후 `/v1/me/likes/batch` 1회와 intake D1 R/W 측정.
+4. 다음 10분 aggregate 이후 public count/Feed/Profile 수렴과 aggregate D1 R/W 측정.
+5. 같은 곡 상쇄 케이스 server 0 mutation 확인.
+6. PC↔모바일 최종 canonical like 상태 일치 확인.
+7. 실제 035 수치로 100,000 DAU × 30 likes/day 월비용 재계산.
+8. 비용이 합격선에 못 미치면 **요청 횟수가 아니라 남은 physical D1 writes만** 다음 최적화 대상으로 잡는다.
 
-## 9. 현재 완료 판정
-- PREVIEW Worker 034: **배포 PASS** — Run `34506266106`, Version `27cc6139-a59c-41d1-9674-4c710d687050`.
-- PREVIEW 앱 052 + 034 client: **배포 PASS** — Run `34506474866`, checkout `2c069c7a20ad82bb21380f05f282f5ac4cc6cfee`.
-- TypeScript / Build: **PASS**.
-- Firebase PREVIEW Hosting: **PASS**.
-- 실제 `preview.soridraw.com` exact build/version: **PASS**.
-- Feed / Public Profile smoke: **PASS**.
-- warm revision: **R0/W0 PASS**.
-- Shared D1 새 migration/seed: **없음**.
-- canonical 사용자 데이터 migration/backfill/delete: **없음**.
-- Functions / Firestore Rules: **변경 없음**.
-- TEST / PRODUCTION Worker·refs·HTML: **비변경 PASS**.
+## 10. 현재 완료 판정
+- PREVIEW app 052 + 034 client: **배포 PASS**.
+- Shared D1 035 additive schema: **PASS** — Run `34511788949`.
+- PREVIEW Worker 035: **배포 PASS** — Run `34519328112`, Version `8fe58486-91c6-43dc-af7c-eb7945448054`.
+- Worker canonical one-file release 구조: **실제 배포 43초 PASS**.
+- Feed/Profile/like route/warm revision: **PASS**.
+- TEST / PRODUCTION Workers: **비변경 PASS**.
+- Firebase/Functions/Rules: 035 Worker release에서 **변경 없음**.
+- 사용자 canonical 데이터 migration/backfill/delete: **없음**.
 - UI 변경: **없음**.
-- 남은 미검증: **실사용 4분 multi-track batch 비용/수렴 + PC↔모바일**.
-- branch protection: `preview` / `main` / `production` 모두 현재 OFF — 운영 위험 유지.
+- PC/모바일: **035 실사용 검증 전**.
+- 100k×30 최종 비용: **실측 전 / 아직 PASS 아님**.

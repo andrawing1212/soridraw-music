@@ -34,6 +34,7 @@ jobs:
       PREVIEW_RATE_D1_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
       PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
       PREVIEW_ORIGIN: https://preview.soridraw.com
+      LIKE_AGGREGATE_CRON: '*/10 * * * *'
 
     steps:
       - name: Resolve approved PREVIEW source
@@ -134,6 +135,16 @@ jobs:
             fs.writeFileSync('.remote-worker/original.js', source);
             fs.writeFileSync('.remote-worker/worker.js', source);
 
+            const schedulesPayload = await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${process.env.PREVIEW_WORKER}/schedules`);
+            const schedules = Array.isArray(schedulesPayload?.schedules) ? schedulesPayload.schedules : [];
+            const crons = schedules.map(row => String(row?.cron || '')).filter(Boolean);
+            const expected = String(process.env.LIKE_AGGREGATE_CRON || '');
+            if (crons.length && !(crons.length === 1 && crons[0] === expected)) {
+              throw new Error(`Unexpected PREVIEW cron schedule(s): ${crons.join(',')}`);
+            }
+            fs.writeFileSync('.remote-worker/schedules-before.json', JSON.stringify(crons.map(cron => ({ cron }))));
+            console.log(`PREVIEW_CRON_BEFORE=${crons.length ? crons.join(',') : 'none'}`);
+
             const settings = await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${process.env.PREVIEW_WORKER}/settings`);
             const bindings = settings.bindings || [];
             const resourceBindings = bindings.filter(x => ['d1','r2_bucket'].includes(x.type));
@@ -214,6 +225,17 @@ jobs:
               echo "PREVIEW_WORKER_ROLLBACK_STATUS=$status"
               cp .remote-worker/original.js .remote-worker/worker.js
               node scripts/derived-deploy-preflight.mjs --config .remote-worker/wrangler.jsonc || true
+              node <<'NODE' || true
+              const fs=require('fs');
+              const account=process.env.CLOUDFLARE_ACCOUNT_ID;
+              const token=process.env.CLOUDFLARE_API_TOKEN;
+              const body=JSON.parse(fs.readFileSync('.remote-worker/schedules-before.json','utf8'));
+              fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${process.env.PREVIEW_WORKER}/schedules`,{
+                method:'PUT',
+                headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json',Accept:'application/json'},
+                body:JSON.stringify(body)
+              }).then(async r=>{const t=await r.text();if(!r.ok)throw new Error(t);console.log('PREVIEW_CRON_ROLLBACK=PASS')}).catch(e=>{console.error(e);process.exit(1)});
+              NODE
               echo 'PREVIEW_WORKER_ROLLBACK=ATTEMPTED'
             fi
             exit "$status"
@@ -251,10 +273,33 @@ jobs:
           done
           test "$warm_ok" = 1
           echo "REVISION_2_ROWS_READ=$read2 ROWS_WRITTEN=$write2"
+
+          node <<'NODE'
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          const cron=String(process.env.LIKE_AGGREGATE_CRON||'');
+          const url=`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${process.env.PREVIEW_WORKER}/schedules`;
+          const headers={Authorization:`Bearer ${token}`,'Content-Type':'application/json',Accept:'application/json'};
+          async function call(method,body){
+            const r=await fetch(url,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
+            const t=await r.text();let x;try{x=JSON.parse(t)}catch{throw new Error(`Cloudflare ${r.status}: ${t.slice(0,500)}`)}
+            if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${t.slice(0,800)}`);
+            return x.result??x;
+          }
+          (async()=>{
+            await call('PUT',[{cron}]);
+            const result=await call('GET');
+            const schedules=Array.isArray(result?.schedules)?result.schedules:[];
+            const crons=schedules.map(x=>String(x?.cron||'')).filter(Boolean);
+            if(crons.length!==1||crons[0]!==cron)throw new Error(`PREVIEW cron mismatch: ${crons.join(',')}`);
+            console.log(`PREVIEW_LIKE_AGGREGATE_CRON=PASS ${cron}`);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
           trap - EXIT
           echo 'PREVIEW_WORKER_DEPLOY=PASS'
 
-      - name: Verify protected Workers and refs unchanged
+      - name: Verify PREVIEW 035 cron and protected Workers and refs unchanged
         shell: bash
         working-directory: cloudflare/explore-worker
         run: |
@@ -281,6 +326,12 @@ jobs:
             const production = await active(process.env.PRODUCTION_WORKER);
             if (test !== fs.readFileSync('.remote-worker/test-before.txt','utf8').trim()) throw new Error('TEST Worker changed');
             if (production !== fs.readFileSync('.remote-worker/prod-before.txt','utf8').trim()) throw new Error('PRODUCTION Worker changed');
+
+            const schedulesPayload=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${process.env.PREVIEW_WORKER}/schedules`);
+            const schedules=Array.isArray(schedulesPayload?.schedules)?schedulesPayload.schedules:[];
+            const crons=schedules.map(x=>String(x?.cron||'')).filter(Boolean);
+            if(crons.length!==1||crons[0]!==String(process.env.LIKE_AGGREGATE_CRON||'')) throw new Error(`PREVIEW cron final mismatch: ${crons.join(',')}`);
+            console.log(`PREVIEW_LIKE_AGGREGATE_CRON_FINAL=PASS ${crons[0]}`);
             console.log('TEST_PRODUCTION_WORKERS_UNCHANGED=PASS');
           })().catch(error => { console.error(error); process.exit(1); });
           NODE

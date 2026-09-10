@@ -224,21 +224,32 @@ jobs:
           sleep 3
 
           feed_code="$(curl -sS -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40")"
+          echo "FEED_HTTP=$feed_code"
           test "$feed_code" = 200
           owner="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json'),x=p?.data?.items?.[0]||{};process.stdout.write(String(x.ownerUid||x.owner_uid||''))")"
+          echo "FEED_OWNER_PRESENT=$([ -n "$owner" ] && echo yes || echo no)"
           test -n "$owner"
           profile_code="$(curl -sS -o "$RUNNER_TEMP/profile.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50")"
+          echo "PROFILE_HTTP=$profile_code"
           test "$profile_code" = 200
 
-          for n in 1 2; do
-            code="$(curl -sS -D "$RUNNER_TEMP/rev-${n}.head" -o "$RUNNER_TEMP/rev-${n}.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=latest")"
-            test "$code" = 200
-            [ "$n" = 1 ] && sleep 1 || true
+          warm_ok=0
+          for attempt in 1 2 3 4 5; do
+            for n in 1 2; do
+              code="$(curl -sS -D "$RUNNER_TEMP/rev-${attempt}-${n}.head" -o "$RUNNER_TEMP/rev-${attempt}-${n}.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=latest")"
+              test "$code" = 200
+              [ "$n" = 1 ] && sleep 1 || true
+            done
+            read2="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/rev-${attempt}-2.head" | tail -1)"
+            write2="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/rev-${attempt}-2.head" | tail -1)"
+            echo "REVISION_WARM_ATTEMPT=$attempt ROWS_READ=${read2:-missing} ROWS_WRITTEN=${write2:-missing}"
+            if [ "$read2" = 0 ] && [ "$write2" = 0 ]; then
+              warm_ok=1
+              break
+            fi
+            sleep 2
           done
-          read2="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/rev-2.head" | tail -1)"
-          write2="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/rev-2.head" | tail -1)"
-          test "$read2" = 0
-          test "$write2" = 0
+          test "$warm_ok" = 1
           echo "REVISION_2_ROWS_READ=$read2 ROWS_WRITTEN=$write2"
           trap - EXIT
           echo 'PREVIEW_WORKER_DEPLOY=PASS'

@@ -167,7 +167,7 @@ jobs:
               ],
               r2_buckets: r2,
               observability: settings.observability && typeof settings.observability === 'object'
-                ? { enabled: settings.observability.enabled !== false, ...(typeof settings.observability.head_sampling_rate === 'number' ? { head_sampling_rate: settings.observability.head_sampling_rate } : {})
+                ? { enabled: settings.observability.enabled !== false, ...(typeof settings.observability.head_sampling_rate === 'number' ? { head_sampling_rate: settings.observability.head_sampling_rate } : {}) }
                 : { enabled: true }
             };
             if (Array.isArray(settings.compatibility_flags) && settings.compatibility_flags.length) config.compatibility_flags = settings.compatibility_flags;

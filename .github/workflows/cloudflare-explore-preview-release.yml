@@ -178,16 +178,21 @@ jobs:
 
       - name: Apply repository-owned release patches
         id: patch
+        working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
-          export SORIDRAW_REMOTE_WORKER_DIR="$PWD/cloudflare/explore-worker/.remote-worker"
-          node cloudflare/explore-worker/scripts/apply-release-patches.mjs
-          node --check cloudflare/explore-worker/.remote-worker/worker.js
-          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/.remote-worker/worker.js" node scripts/verify-explore-derived-cache.mjs
-          node scripts/verify-explore-deploy-preflight.mjs
-          before="$(sha256sum cloudflare/explore-worker/.remote-worker/original.js | awk '{print $1}')"
-          after="$(sha256sum cloudflare/explore-worker/.remote-worker/worker.js | awk '{print $1}')"
+          export SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker"
+          node scripts/apply-release-patches.mjs
+          node --check .remote-worker/worker.js
+          generated_worker="$PWD/.remote-worker/worker.js"
+          (
+            cd ../..
+            SORIDRAW_GENERATED_WORKER="$generated_worker" node scripts/verify-explore-derived-cache.mjs
+            node scripts/verify-explore-deploy-preflight.mjs
+          )
+          before="$(sha256sum .remote-worker/original.js | awk '{print $1}')"
+          after="$(sha256sum .remote-worker/worker.js | awk '{print $1}')"
           if [ "$before" = "$after" ]; then
             echo 'changed=false' >> "$GITHUB_OUTPUT"
             echo 'WORKER_SOURCE_CHANGE=NO'

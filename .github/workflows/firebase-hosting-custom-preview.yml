@@ -7,6 +7,10 @@ on:
         description: 'Optional exact commit SHA from preview history. Leave empty for latest preview.'
         required: false
         default: ''
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/preview-app-release.trigger'
 
 permissions:
   contents: read

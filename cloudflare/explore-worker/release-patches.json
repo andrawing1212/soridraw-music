@@ -3,6 +3,7 @@
   "patches": [
     "031-explore-shared-canonical-data.mjs",
     "032-derived-change-cache.mjs",
-    "033-explore-like-deferred-derived-sync.mjs"
+    "033-explore-like-deferred-derived-sync.mjs",
+    "034-explore-like-user-batch.mjs"
   ]
 }

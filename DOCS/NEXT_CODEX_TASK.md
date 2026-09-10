@@ -6,9 +6,11 @@
 - branch: `preview`
 - 034 구현 시작 기준: `421281da89c46fdd7c620b2f1b664d8796f886d0`
 - client commit: `3187f5be97aaa60796cdd4f8682b8726b058c5d1`
-- Worker patch commit: `13820ae13f8a5b3b7e057dd5051e3d74f77f492b`
+- Worker batch endpoint 최초 commit: `13820ae13f8a5b3b7e057dd5051e3d74f77f492b`
 - release manifest commit: `f8d2102ae03e92bdcf227a0669b49fc7a6da5288`
 - verifier commit: `20b826e8078790d7411e3f4b8344b88f5203bbec`
+- Worker prerequisite hardening commit: `76b819b84bab2b3f23265072f3141457d6bfdccb`
+- 034 code candidate: `76b819b84bab2b3f23265072f3141457d6bfdccb`
 - 실제 PREVIEW 앱은 아직 052 / source `873764137fbf5347ccb148789a2eed600d933ba2`
 - 실제 PREVIEW Worker는 아직 033 / Version `229ad87a-5773-4f71-9cac-d23b086a7225`
 - shared D1 low-write trigger `20260910_03` 적용 상태 유지
@@ -48,17 +50,23 @@
 - user liked-state R2는 per-track sync 대신 batch 종료 후 1회 read + 1회 write.
 - Feed/Profile eager R2 patch/rebuild 없음; 032 derived journal/revision 수렴 유지.
 - 기존 single-track endpoint는 구버전 호환 때문에 유지.
+- release patch가 `RATE_LIMITS`, `RATE_LIMIT_WINDOW_MS`, auth/public-track/canonical-like/R2 helpers 존재를 먼저 확인하도록 hardening 완료.
 
-## 현재 정적 검증
+## 현재 검증
 - Client TypeScript 5.8.3 strict isolated compile: PASS.
+- 축소된 4분 window isolated runtime simulation: PASS.
+  - 서로 다른 3곡 → 1 batch.
+  - 같은 곡 좋아요→해제 상쇄 → server request 0.
+  - 두 번째 클릭이 첫 window를 리셋하지 않음.
+  - 55곡 → 50 + 5 두 batch로 drain.
 - 034 Worker patch `node --check`: PASS.
 - mock active Worker에 patch 적용: PASS.
 - generated mock Worker `node --check`: PASS.
-- 4분 user timer / batch route / old 5초 per-track timer 제거 static check: PASS.
 - `scripts/verify-explore-like-cost-optimization.mjs`를 034 기준으로 갱신.
-- 전체 앱 Build: **미실행**.
+- 전체 앱 TypeScript/Build: **미실행**.
 - 실제 PREVIEW Worker patch chain 031→032→033→034: **배포 전이라 실제 release 검증 전**.
 - 실제 4분 CACHE LIVE 비용: **미측정**.
+- independent Work audit: **미실행**.
 
 ## 중요한 비용 판단
 034는 Worker 요청 및 사용자 R2 sync 횟수를 batch 크기만큼 줄일 수 있다.
@@ -68,13 +76,13 @@
 
 ## 다음 작업
 ### 먼저 감사
-배포 전에 034 commit 범위를 독립 검증한다.
+배포 전에 034 code candidate를 독립 검증한다.
 1. UI/Explore/Public Profile 기존 동작 비변경.
 2. 4분 window가 per-user 고정이며 연속 클릭으로 무한 연장되지 않는지.
 3. 기존 outbox pending과 하위호환되는지.
 4. batch 중 클릭 변경 / retry / 중복 응답에서 최종 desired state가 유실되지 않는지.
 5. 최대 50 초과 pending을 여러 batch로 안전하게 이어가는지.
-6. invalid track이 섞여도 첫 mutation 전 차단되는지.
+6. invalid track이 섞여도 첫 canonical mutation 전 차단되는지.
 7. batch 중 네트워크/D1 실패 후 retry가 idempotent하게 수렴하는지.
 8. user R2 sync가 batch당 1회인지.
 9. Feed/Profile 전체 rebuild가 mutation 안에서 재도입되지 않았는지.
@@ -109,7 +117,7 @@
 
 ## 현재 판정
 - 034 source implementation: **완료**.
-- static/type contract: **PASS**.
+- isolated runtime/static/type contract: **PASS**.
 - independent Work audit: **미실행**.
 - full app TypeScript/Build: **미검증**.
 - PREVIEW deployment: **미배포**.

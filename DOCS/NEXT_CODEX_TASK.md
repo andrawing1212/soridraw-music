@@ -1,82 +1,105 @@
 # NEXT CODEX TASK
 
-상태: **Explore 좋아요 033 + shared D1 low-write trigger 실사용 비용 PASS — Codex 구현 대기 없음, PREVIEW 최종 수렴 검증만 남음**
+상태: **Explore 좋아요 034 사용자 원본 4분 multi-track batch 구현 완료 — PREVIEW 배포/실사용 비용 검증 전**
 
 ## 현재 기준
 - branch: `preview`
-- 앱 버전: `052`
-- PREVIEW 앱 배포: Run `34436451189`, source `873764137fbf5347ccb148789a2eed600d933ba2`, PASS
-- PREVIEW Explore Worker: 033 활성화
-- Worker release source: `e7f51e77f30099e59bf1b5cb2281e88f20662436`
-- Worker release run: `34492208967`, PASS
-- PREVIEW Worker Version ID: `229ad87a-5773-4f71-9cac-d23b086a7225`
-- shared D1 low-write trigger release: Run `34496512024`, PASS
-- applied migration: `20260910_03_explore_like_write_optimization.sql`
-- warm `/feed-revision` after D1 change: `R0 / W0` PASS
+- 034 구현 시작 기준: `421281da89c46fdd7c620b2f1b664d8796f886d0`
+- client commit: `3187f5be97aaa60796cdd4f8682b8726b058c5d1`
+- Worker patch commit: `13820ae13f8a5b3b7e057dd5051e3d74f77f492b`
+- release manifest commit: `f8d2102ae03e92bdcf227a0669b49fc7a6da5288`
+- verifier commit: `20b826e8078790d7411e3f4b8344b88f5203bbec`
+- 실제 PREVIEW 앱은 아직 052 / source `873764137fbf5347ccb148789a2eed600d933ba2`
+- 실제 PREVIEW Worker는 아직 033 / Version `229ad87a-5773-4f71-9cac-d23b086a7225`
+- shared D1 low-write trigger `20260910_03` 적용 상태 유지
+- 034는 **아직 앱/Worker 배포 안 함**
 
-## 적용 전 실제 비용 baseline
-2026-09-10 PREVIEW CACHE LIVE 영상 기준:
-- 좋아요 첫 server mutation: D1 rows `R19 / W20`
-- 같은 곡 좋아요 해제 server mutation 증분: `R19 / W17`
-- 2회 누적: `R38 / W37`
-- 이전 `약 172 read / 20 write`는 여러 동작이 섞인 누적값이므로 단일 좋아요 baseline에서 제외
+## 사용자 확정 비용 스트레스 기준
+- 10만 DAU
+- 1인 하루 좋아요 30곡
+- 하루 300만 논리 좋아요
+- 30일 9천만 논리 좋아요
+- 현재 실제 배포 033 측정: 좋아요 `R16/W17`, 해제 `R17/W13`
+- 현재 구조 like-only 월비용 추정 약 `$1.9K~$2.0K` → **비용 FAIL**
+- 과거 `W20→W17` 감소만으로 PASS라고 한 기준은 폐기
 
-## 적용 후 실제 비용 — 2026-09-11 PREVIEW CACHE LIVE
-진단 패널의 `좋아요 변경` 구간 기준:
-- 좋아요 1회: Worker `1`, D1 query `R2/W2`, rows `R16/W17`
-- 같은 곡 좋아요 해제까지 누적: Worker `2`, D1 query `R4/W4`, rows `R33/W30`
-- 따라서 해제 1회 증분: rows `R17/W13`
-- 영상 종료까지 Worker `2`에서 더 증가하지 않아 반복 runaway mutation 없음 PASS
-- 적용 전 2회 누적 `R38/W37` → 적용 후 `R33/W30`: 실제 read 5행 / write 7행 감소
-- 5초 debounce + 최종 상태 1회 mutation 유지 PASS
-- 비용이 전체 공개곡/사용자 수에 비례하는 scan/rebuild 경로는 없음
+## 034 구현 내용
+### Client
+- 곡별 5초 timer 제거.
+- 사용자당 공통 timer 1개.
+- 첫 pending 변경부터 고정 4분 window. 새 곡 클릭이 계속 들어와도 timer를 매번 4분 뒤로 미루지 않음.
+- Explore와 공개프로필이 동일 `exploreLikeService` / 동일 persistent outbox 사용.
+- 한 batch 최대 50곡.
+- `POST /v1/me/likes/batch` 한 요청에 여러 곡 최종 상태 전송.
+- 같은 곡이 4분 안에 원래 상태로 돌아오면 서버 전송 전에 pending 제거 가능.
+- 기존 outbox schema version 1 유지 + optional `queuedAt` 하위호환 추가.
+- 탭 종료/재실행 시 persistent outbox로 이어서 전송.
+- UI는 즉시 optimistic 반영 유지.
 
-## 이번 단계 완료
-### Client / Worker
-- 좋아요 클릭 즉시 optimistic 표시 PASS.
-- 동일 곡 5초 idle 후 최종 상태만 서버 전송 PASS.
-- persistent outbox/retry 유지.
-- Worker 033 eager Feed/Profile derived R2 refresh 제거 유지.
+### Worker 034
+- 새 patch: `cloudflare/explore-worker/patches/034-explore-like-user-batch.mjs`
+- release manifest 마지막 patch로 034 추가.
+- 새 endpoint: `POST /v1/me/likes/batch`.
+- 인증 1회 / unique track 최대 50.
+- duplicate trackId는 마지막 상태로 collapse.
+- 모든 곡을 mutation 전 먼저 public-track validation.
+- existing idempotent `adjustExploreLikeCounterDelta` 재사용.
+- rate limit은 batch size만큼 weighted count하여 보호 강도 유지.
+- user liked-state R2는 per-track sync 대신 batch 종료 후 1회 read + 1회 write.
+- Feed/Profile eager R2 patch/rebuild 없음; 032 derived journal/revision 수렴 유지.
+- 기존 single-track endpoint는 구버전 호환 때문에 유지.
 
-### Shared D1 trigger
-- 전용 고정 Workflow `.github/workflows/cloudflare-explore-shared-d1-release.yml` 사용.
-- 전용 `.deploy/shared-d1-release.trigger`가 바뀔 때만 실행되며 일반 코드 push는 D1을 변경하지 않음.
-- exact target SHA + migration filename + migration blob 고정.
-- migration source static safety + fixture PASS.
-- 실제 D1 적용 전 필수 derived tables/triggers + `seeded=1` read-only preflight PASS.
-- 실제 live trigger가 승인된 기존 `legacy032` 정의와 정확히 일치함을 확인 후 적용.
-- PREVIEW/TEST/PRODUCTION 활성 Worker 호환성 검사 PASS.
-- migration 적용 PASS.
-- 적용 후 optimized trigger 정의 정확 일치 + 전체 readiness PASS.
-- PREVIEW/TEST/PRODUCTION feed HTTP 200 PASS.
-- PREVIEW warm revision `R0/W0` PASS.
-- 모든 Worker Version ID 비변경 PASS.
-- main/production refs 비변경 PASS.
-- canonical 사용자 row 삭제/백필/대량변환/덮어쓰기 없음.
-- 실제 좋아요/해제 비용도 baseline 대비 감소 PASS.
+## 현재 정적 검증
+- Client TypeScript 5.8.3 strict isolated compile: PASS.
+- 034 Worker patch `node --check`: PASS.
+- mock active Worker에 patch 적용: PASS.
+- generated mock Worker `node --check`: PASS.
+- 4분 user timer / batch route / old 5초 per-track timer 제거 static check: PASS.
+- `scripts/verify-explore-like-cost-optimization.mjs`를 034 기준으로 갱신.
+- 전체 앱 Build: **미실행**.
+- 실제 PREVIEW Worker patch chain 031→032→033→034: **배포 전이라 실제 release 검증 전**.
+- 실제 4분 CACHE LIVE 비용: **미측정**.
 
-## 다음 실제 작업
-현재는 새 Codex 구현을 시작하지 않는다.
+## 중요한 비용 판단
+034는 Worker 요청 및 사용자 R2 sync 횟수를 batch 크기만큼 줄일 수 있다.
+예: 평균 10곡/batch라면 논리 좋아요 9천만 회가 약 900만 batch 요청/R2 sync로 줄어드는 방향이다.
 
-사용자 PREVIEW 검증만 진행:
-1. 좋아요 후 Feed 최신/인기 likeCount 정상 수렴 확인.
-2. 공개프로필 likeCount 정상 수렴 확인.
-3. 같은 계정 PC/모바일 최종 좋아요 상태 일치 확인.
-4. 모두 PASS면 현재 033 릴리스를 PREVIEW 최종 합격 후보로 고정.
-5. 사용자 `테스트배포` 요청이 있을 때만 main/TEST 승격.
+하지만 각 최종 변경곡의 canonical `likes` 관계와 `track_stats` / 032 derived D1 write는 아직 곡별이다. 따라서 034 하나로 월 `$2K` 문제가 전부 해결됐다고 판단하면 안 된다.
 
-검증 중 기능 수렴 실패나 비용 재증가가 실제로 발견될 때만 다음 Codex 작업을 새로 정의한다.
+## 다음 작업
+### 먼저 감사
+배포 전에 034 commit 범위를 독립 검증한다.
+1. UI/Explore/Public Profile 기존 동작 비변경.
+2. 4분 window가 per-user 고정이며 연속 클릭으로 무한 연장되지 않는지.
+3. 기존 outbox pending과 하위호환되는지.
+4. batch 중 클릭 변경 / retry / 중복 응답에서 최종 desired state가 유실되지 않는지.
+5. 최대 50 초과 pending을 여러 batch로 안전하게 이어가는지.
+6. invalid track이 섞여도 첫 mutation 전 차단되는지.
+7. batch 중 네트워크/D1 실패 후 retry가 idempotent하게 수렴하는지.
+8. user R2 sync가 batch당 1회인지.
+9. Feed/Profile 전체 rebuild가 mutation 안에서 재도입되지 않았는지.
+10. shared D1 schema/migration/canonical 의미 변경 없음 확인.
 
-## 비용 합격선 판정
-- 좋아요 1회가 곡 수/사용자 수에 비례하면 FAIL → 현재 구조상 해당 없음.
-- 5초 debounce 이후 server mutation 최종 상태 1회 → PASS.
-- Worker eager Feed/Profile rebuild 0 → PASS.
-- rows written이 적용 전 `W20 / W17` 대비 감소 → 적용 후 `W17 / W13` PASS.
-- warm `/feed-revision` D1 `0 / 0` → PASS.
-- 현재 비용 단계 판정: **PASS**.
+### 사용자 PREVIEW 배포 요청 시
+1. Worker 034 PREVIEW 배포 + endpoint smoke.
+2. 앱 4분 client PREVIEW 배포.
+3. 첫 좋아요 후 4분 전 Worker/D1 write 0 확인.
+4. 서로 다른 여러 곡을 4분 안에 눌러 Worker 1 batch 확인.
+5. 같은 곡 상쇄 toggle은 server mutation 0 확인.
+6. R2 user bundle batch당 1회 확인.
+7. batch D1 rows / 변경곡당 평균 기록.
+8. Explore/공개프로필 및 PC/모바일 최종 수렴 확인.
+9. 10만×30/day 월비용 재계산.
+
+## 후속 비용 단계 — 034 실측 후 결정
+- 공개 likeCount 집계를 5~10분 단위로 더 묶는 구조.
+- 공개프로필 derived 반영을 5~10분 단위로 묶는 구조.
+- Explore popular 순위 갱신을 10~30분 단위로 묶는 구조.
+- 이 단계는 shared D1 trigger/aggregation 의미가 바뀔 수 있으므로 034와 섞지 않고 별도 감사/승인 대상으로 둔다.
 
 ## 절대 금지
-- 추가 shared D1 migration/seed를 임의 실행하지 않음.
+- 배포 요청 없는 PREVIEW 자동 배포 금지.
+- 추가 shared D1 migration/seed 임의 실행 금지.
 - canonical 사용자 rows 삭제/백필/덮어쓰기 금지.
 - Music Note 60초 묶음 저장 변경 금지.
 - Library Local First 변경 금지.
@@ -84,18 +107,11 @@
 - main/production 변경 금지.
 - PRODUCTION 승인 없는 배포 금지.
 
-## 현재 검증 결과
-- App TypeScript: PASS
-- App Build: PASS
-- Worker 031/032/033 release: PASS
-- 좋아요 client/outbox verifier: PASS
-- migration static/fixture: PASS
-- live D1 preflight: PASS
-- active Worker compatibility: PASS
-- shared D1 trigger 033 migration: **적용 PASS — Run `34496512024`**
-- postflight + PREVIEW/TEST/PRODUCTION feed: PASS
-- warm `/feed-revision` after migration: `R0/W0` PASS
-- Worker versions / main / production refs unchanged: PASS
-- trigger 적용 전 좋아요 비용: `R19/W20`, 해제 `R19/W17`, 누적 `R38/W37`
-- trigger 적용 후 실제 좋아요 비용: `R16/W17`, 해제 증분 `R17/W13`, 누적 `R33/W30` — **PASS**
-- 남은 미검증: Feed 최신/인기·공개프로필 최종 수렴, PC↔모바일 상태 일치
+## 현재 판정
+- 034 source implementation: **완료**.
+- static/type contract: **PASS**.
+- independent Work audit: **미실행**.
+- full app TypeScript/Build: **미검증**.
+- PREVIEW deployment: **미배포**.
+- live 4-minute batching/cost: **미검증**.
+- TEST 승격: **불가 — PREVIEW 검증 전**.

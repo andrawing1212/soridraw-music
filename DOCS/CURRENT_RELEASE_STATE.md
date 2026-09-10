@@ -11,22 +11,28 @@
 - PRODUCTION branch: `production`
 - 앱 버전: `052`
 - 배포 시스템 정상화 기준 commit: `bf049e68d84725c2f0322d347a7db534632f7260`
-- 최신 `preview` HEAD는 이 문서를 포함한 후속 기록 commit으로 확인한다.
+- 현재 PREVIEW 앱 배포 실행 commit: `bdcad8570cd6fc7dc6027dd6677f75bfeac7c0d9`
 - 현재 앱/Worker 제품 코드 기준: `6bd01324493c7c3d048aed825c5b8604f755d2cf`
-  - 이후 `preview` commit들은 이번 배포 진단/Workflow 정리 성격이며 앱 제품 코드는 동일하다.
+  - 이후 `preview` commit들은 배포 진단/Workflow/상태 기록 성격이며 앱 제품 코드는 동일하다.
 - TEST 앱 기준: `3b574c05589230f077eceff98190edd4b5195f75`
 - PRODUCTION은 이번 작업에서 변경하지 않는다.
 
 ## 2. 실제 PREVIEW 배포 상태
 ### Firebase PREVIEW Hosting
 - 현재 앱 버전: `052`
-- 현재 Hosting은 Explore 032 최종 앱 코드 반영 전 상태다.
-- 기존 PREVIEW Hosting 기준 commit: `2819dcf57904a8db7222a89c18965c28b94da60a`
-- `6bd013...` 앱은 아직 Firebase PREVIEW Hosting에 최종 배포하지 않았다.
+- `6bd013...` 제품 코드와 동일한 현재 preview 소스를 Firebase PREVIEW에 최종 반영 완료.
+- 배포 Workflow run: `34428090019`
+- 실행 checkout SHA: `bdcad8570cd6fc7dc6027dd6677f75bfeac7c0d9`
+- TypeScript: PASS
+- Build: PASS
+- Firebase Hosting deploy: PASS
+- `https://preview.soridraw.com/` exact build hash: PASS
+- `https://preview.soridraw.com/app-version.json`: `052` PASS
+- TEST / PRODUCTION branch 및 실제 Hosting HTML: 배포 전후 동일 PASS.
 
 ### Cloudflare PREVIEW Worker
 - Worker: `soridraw-explore-preview`
-- 현재 활성 Version ID: `d4b22d15-02c5-42d2-be73-8b2383710fc6`
+- 현재 기준 활성 Version ID: `d4b22d15-02c5-42d2-be73-8b2383710fc6`
 - 032 derived-change runtime 배포 성공.
 - 실제 검증:
   - Explore feed HTTP 200
@@ -34,8 +40,9 @@
   - `/v1/feed-revision` 첫 호출 당시 D1 rows read 2 / write 0
   - 두 번째 즉시 호출 D1 rows read 0 / write 0
   - 032 semantic marker PASS
-- TEST Worker는 `0b9cfe5c-1e29-4485-ac97-36f87832b41e`에서 변경 없음.
-- PRODUCTION Worker는 `07c11e5e-47a6-458b-a3a0-6e47b6c331e6`에서 변경 없음.
+- 이번 Firebase PREVIEW 앱 배포 commit에서 실행된 Action은 App Release 1개뿐이며 Worker/D1 배포 Workflow는 실행되지 않았다.
+- TEST Worker 기준 `0b9cfe5c-1e29-4485-ac97-36f87832b41e`.
+- PRODUCTION Worker 기준 `07c11e5e-47a6-458b-a3a0-6e47b6c331e6`.
 
 ## 3. 공유 D1 상태
 - canonical D1: `soridraw-explore-db`
@@ -47,7 +54,7 @@
   - derived tracks=35
   - derived profiles=3
 - seed는 canonical 사용자 원본을 삭제/덮어쓰기하지 않았다.
-- 이번 배포 시스템 정상화 작업에서는 D1 migration/seed/write를 실행하지 않는다.
+- 이번 Firebase PREVIEW 앱 배포에서는 D1 migration/seed/write를 실행하지 않았다.
 
 ## 4. 현재 비용 구조
 - `/feed-revision` 전체 latest+popular rebuild 경로는 032 changed-ID 소비 구조로 교체됐다.
@@ -67,9 +74,9 @@
 - PREVIEW 앱 배포: 고정된 `.github/workflows/firebase-hosting-custom-preview.yml`
 - PREVIEW Explore Worker 배포: 고정된 `.github/workflows/cloudflare-explore-preview-release.yml`
 - D1 migration/seed: 평상시 배포 경로에서 제외. 스키마 변경 릴리스에만 별도 승인.
-- Workflow는 `workflow_dispatch` 수동 실행 전용. 코드 push만으로 자동 배포하지 않는다.
+- 앱 배포는 수동 `workflow_dispatch` 또는 명시적 `.deploy/preview-app-release.trigger` 갱신으로만 실행한다. 일반 코드 push만으로 자동 배포하지 않는다.
 - 앱 배포는 앱만, Worker 변경은 Worker만 배포한다.
-- 배포 도중 Workflow 수정 금지.
+- 배포 도중 Workflow 즉흥 수정 금지.
 - 같은 실패가 반복되면 릴리스를 계속 재시도하지 않고 배포 시스템 문제로 분리한다.
 - 일회성 `v2/final/diagnostic/stage` 배포 Workflow를 새로 쌓지 않는다.
 
@@ -114,19 +121,20 @@ PREVIEW 완료 보고 전:
 - FCM/WebSocket/새 외부 실시간 인프라
 
 ## 9. 다음 작업
-1. 별도 승인 시 **Firebase PREVIEW 앱만** `6bd013...` 제품 코드와 동일한 현재 preview 소스에서 canonical App Workflow로 배포.
-2. Worker 032는 이미 PREVIEW에 정상 활성화되어 있으므로 앱 배포 때문에 재배포하지 않는다.
-3. PREVIEW 실사용 검증 후에만 TEST 승격 여부를 판단한다.
+1. 사용자 PREVIEW 실사용 검증.
+2. Explore / Public Profile / 좋아요 / 공개·비공개 등 실제 흐름의 기능·비용 확인.
+3. PREVIEW 검증 완료 후 사용자 요청이 있을 때만 TEST 승격.
 
 ## 10. 현재 완료 판정
 - Explore 032 Worker: PREVIEW 배포/비용 smoke PASS.
 - Shared D1 derived schema/seed: 준비 완료.
-- Firebase PREVIEW 앱 최종 반영: 아직 안 함.
-- TEST/PRODUCTION: 변경 없음.
+- Firebase PREVIEW 앱 052 최종 반영: **PASS**.
+- `preview.soridraw.com` exact build/version 확인: **PASS**.
+- TEST/PRODUCTION Hosting/branch 비변경: **PASS**.
+- 사용자 원본 데이터 변경: 없음.
+- Functions / Firestore Rules 변경: 없음.
 - 배포 시스템 정상화: **완료**.
   - canonical PREVIEW App Workflow 고정
   - canonical PREVIEW Explore Worker Workflow 고정
   - repository-owned Worker release patch manifest 추가
   - 이번 장애 대응에서 만든 일회성 PREVIEW 배포 Workflow 7개 삭제
-  - 정상화 commit에서 Actions 실행 0건 확인
-  - 정상화 작업 중 Firebase/Cloudflare/D1 배포·write 없음

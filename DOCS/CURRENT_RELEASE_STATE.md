@@ -10,13 +10,13 @@
 - TEST branch: `main`
 - PRODUCTION branch: `production`
 - 앱 버전: `053`
-- PREVIEW 앱: **034 user-level like batch 구조 유지 + 037 PREVIEW 전용 1분 테스트 window 활성**
+- PREVIEW 앱: **034 user-level like batch + PREVIEW 전용 1분 테스트 window 활성**
 - PREVIEW 앱 Run: `34525268095` — PASS
-- PREVIEW 앱 배포 source/checkout: `a08fba52c2f6ae64a1cc338dc29da3def624bffd`
-- PREVIEW Worker: **035 deferred like aggregate + 036 revision head-only 활성**
-- PREVIEW Worker 036 Run: `34521740340` — PASS
-- PREVIEW Worker 활성 Version ID: `f4ea48b4-11b0-4496-8df3-af8b857cc8c9`
-- 036 Worker source target: `f2b277266f11d02af1a91d52de8a92fe67f1d16a`
+- PREVIEW 앱 source/checkout: `a08fba52c2f6ae64a1cc338dc29da3def624bffd`
+- PREVIEW Worker: **035 deferred like aggregate + 037 revision one-row head read 활성**
+- PREVIEW Worker 037 Run: `34527195059` — PASS
+- PREVIEW Worker 활성 Version ID: `4236894d-b1ab-4181-9dc3-27621624595b`
+- 037 Worker source target: `6507b6a51a3932b98b6a682af90d2fdd807dc648`
 - Shared D1 035 additive schema Run: `34511788949` — PASS
 - TEST Worker: `0b9cfe5c-1e29-4485-ac97-36f87832b41e` — 비변경
 - PRODUCTION Worker: `07c11e5e-47a6-458b-a3a0-6e47b6c331e6` — 비변경
@@ -29,7 +29,6 @@
 - URL: `https://preview.soridraw.com/`
 - 앱 버전: `053`
 - Run: `34525268095` — **PASS**
-- source/checkout: `a08fba52c2f6ae64a1cc338dc29da3def624bffd`
 - TypeScript: PASS
 - Vite Build: PASS
 - Firebase Hosting: PASS
@@ -37,43 +36,42 @@
 - PREVIEW에서는 첫 좋아요부터 **고정 1분** 동안 user-level multi-track outbox에 모은 뒤 `/v1/me/likes/batch` 1회 전송.
 - 이후 클릭이 1분 타이머를 계속 리셋하지 않는다.
 - 같은 곡이 원래 상태로 되돌아오면 서버 전송 대상에서 제거될 수 있다.
-- `EXPLORE_ENVIRONMENT === 'preview'`일 때만 1분이다.
 - TEST/PRODUCTION 기본값은 코드상 4분을 유지하며 이번 작업에서 배포/변경하지 않았다.
-- 앱 버전을 052 → 053으로 올려 오래 열린 052 실행본이 새 client 변경을 놓치는 문제를 방지했다.
 
-### Cloudflare PREVIEW Worker 036
+### Cloudflare PREVIEW Worker 037
 - Worker: `soridraw-explore-preview`
-- Run: `34521740340` — **PASS**
-- 활성 Version: `f4ea48b4-11b0-4496-8df3-af8b857cc8c9`
-- 이전 035 Version: `8fe58486-91c6-43dc-af7c-eb7945448054`
+- Run: `34527195059` — **PASS**
+- 활성 Version: `4236894d-b1ab-4181-9dc3-27621624595b`
+- 이전 036 Version: `f4ea48b4-11b0-4496-8df3-af8b857cc8c9`
 - Feed HTTP 200: PASS
 - Public Profile first-view HTTP 200: PASS
 - `POST /v1/me/likes/batch` route: 인증 없는 smoke HTTP 401, route 존재 PASS
 - 035 scheduled aggregate cron `*/10 * * * *`: PASS
-- revision mode header `HEAD-ONLY-036`: PASS
-- 배포 직후 revision cold check: D1 `R2/W0`
-- 바로 다음 warm revision: D1 `R0/W0`
-- 이번 037에서는 Worker/D1/R2 설정 변경 및 재배포 없음.
+- revision mode header `HEAD-ONLY-036` 호환 유지, 037 source marker `STATE-SEQ-037` 추가.
+- warm revision smoke: D1 `R0/W0` PASS.
+- Worker upload 약 3.23초, trigger deploy 약 1.87초.
+- TEST / PRODUCTION Worker 비변경: PASS.
 
-## 3. Explore 최초 진입 revision 진단
+## 3. Explore revision 비용 진단과 037 수정
 
-사용자 CACHE LIVE 실측에서 과거 앱 실행 후 Explore 첫 진입 시 `/v1/feed-revision`이 `R448/W0` 수준까지 발생했다.
+사용자 CACHE LIVE 실측:
+- 앱 사용 중 `/v1/feed-revision`이 4회 반복되며 누적 D1 rows read가 약 `R272/W0`까지 증가.
+- 같은 화면에서 Feed 본문은 `R0/W0`이므로 본문 캐시 폭주가 아니라 revision 확인 경로 문제로 분리.
 
-036 원인/수정:
-- 과거 revision endpoint가 단순 버전 확인만 하지 않고 `syncDerivedCache032(...)`를 호출했다.
-- cold/stale feed cursor이면 changed-ID journal replay와 delta 적용이 revision 요청에 같이 붙었다.
-- 036은 `/v1/feed-revision`을 head/version 확인 전용으로 분리했다.
-- cold Edge 상태에서도 작은 SELECT 1회만 사용하고, 10초 Edge head cache가 있으면 D1 `R0/W0`.
-- revision이 실제로 다를 때만 `/v1/feed`가 bounded delta sync를 수행한다.
-- 실제 Worker smoke는 cold `R2/W0`, warm `R0/W0` PASS.
+036까지의 상태:
+- revision endpoint는 journal replay/rebuild를 제거했지만 cold head 조회가 `explore_derived_changes`의 최신 feed seq를 함께 확인했다.
+- Worker smoke에서는 cold `R2`, warm `R0`이었으나 사용자 실사용 누적에서 요청당 rows read가 예상보다 크게 관찰됨.
 
-추가 사용자 실측:
-- 오래 열린 052 실행본에서 시간이 지난 뒤 `/v1/feed-revision`과 `/v1/me/likes/batch` 누적 R/W가 크게 증가한 화면이 관찰됐다.
-- 이 측정은 053 새 클라이언트 강제 식별 전 세션이므로 034/035/036 최종 비용 판정에 그대로 사용하지 않는다.
-- 053 새 실행본에서 진단 초기화 후 동일 조건 재측정이 필요하다.
+037 수정:
+- `/v1/feed-revision` hot path에서 `explore_derived_changes` 조회를 완전히 제거.
+- `explore_derived_state WHERE id=1`의 **단일 row `seeded, seq`만 조회**.
+- 따라서 journal 크기/변경 ID 수가 revision 확인 비용에 영향을 주지 않도록 고정.
+- PREVIEW 내부 head cache를 10초 → **60초**로 늘려 반복 revision 요청은 Edge에서 D1 `R0/W0`으로 처리.
+- Feed/Profile 전체 scan/rebuild, changed-ID replay, R2 mutation 없음.
+- 기능상 feed-relevant derived-track 변경은 기존 monotonic state seq를 올리므로 revision 변화 감지는 유지.
+- 사용자 실브라우저에서 `진단 초기화 → Explore → 1~2분 사용` 재측정은 아직 필요.
 
 ## 4. PREVIEW Worker 배포 구조
-
 현재 일반 PREVIEW Worker 배포 흐름:
 `repository canonical Worker/entry → one-shot preflight → PREVIEW deploy 1회 → live smoke`
 
@@ -90,22 +88,19 @@ Canonical files:
 - `cloudflare/explore-worker/canonical/wrangler.preview.jsonc`
 - `cloudflare/explore-worker/canonical/source-sha256.txt`
 
-035 첫 canonical release Run `34519328112`: 약 43초.
-036 성공 Run `34521740340`: 약 41초.
+최근 실전 속도:
+- 035 canonical release 약 43초.
+- 036 release 약 41초.
+- 037 release 약 41초.
 
-## 5. 공유 D1 / 좋아요 035 + 037 테스트 window 상태
+## 5. 공유 D1 / 좋아요 035 상태
 - canonical D1: `soridraw-explore-db`
 - 033 low-write trigger 구조 유지.
 - 035 additive migration: `20260911_01_explore_like_deferred_batches.sql`
 - Shared D1 release Run `34511788949`: PASS
-- 필수 objects:
-  - `explore_like_batches_035`
-  - `idx_explore_like_batches_035_created`
-  - `explore_like_processor_035`
 - canonical 사용자 row 삭제/백필/대량변환/덮어쓰기 없음.
 - PREVIEW 사용자 기기: 첫 pending부터 고정 **1분** 동안 좋아요를 모아 최대 50곡 최종 상태를 한 번에 전송.
-- TEST/PRODUCTION 기본 정책: 4분 유지.
-- Worker는 사용자 batch를 deferred queue로 받고, **10분 scheduled processor는 그대로 유지**한다.
+- Worker는 사용자 batch를 deferred queue로 받고, **10분 scheduled processor**가 여러 사용자 변경을 changed-track 단위로 집계.
 - fixture: 100 same-track likes → 공개 count/derived update 1회 PASS.
 - net-zero cohort → 공개 count/derived update 0회 PASS.
 
@@ -121,11 +116,10 @@ Canonical files:
 
 현재:
 - 035 aggregate 구조 배포: PASS.
-- 036 revision 비용 수정 배포: PASS.
-- 037 PREVIEW 1분 client test window: 앱 053 배포 PASS.
-- 1분 변경은 **테스트 대기시간 단축 목적**이며 비용 구조 자체를 개선하거나 악화시키는 최종 정책 변경으로 판정하지 않는다.
-- `/v1/feed-revision` Worker smoke: cold `R2/W0`, warm `R0/W0`.
-- 035 실제 인증 사용자 batch + 10분 aggregate D1/R2 비용은 **053 깨끗한 세션에서 재실측 필요**.
+- 037 revision one-row head 구조 배포: PASS.
+- 053 PREVIEW 1분 client test window: 배포 PASS.
+- revision warm live smoke: `R0/W0`.
+- **사용자 실브라우저 first-entry/repeated revision rows 및 1분 authenticated like batch 비용은 재실측 필요.**
 - 100k×30/day 최종 월비용 PASS는 아직 선언하지 않는다.
 
 ## 7. 절대 보호
@@ -138,25 +132,25 @@ Canonical files:
 - 앱 업데이트/페이지 이동 때문에 데이터 전체 읽기/재생성 금지
 
 ## 8. 다음 실제 검증
-1. PREVIEW가 앱 버전 `053`인지 확인 후 새로고침/업데이트 적용.
+1. PREVIEW 앱 `053` 적용 확인 후 페이지 새로고침.
 2. CACHE LIVE 진단 초기화.
-3. 앱 실행 → Explore 최초 진입.
-4. `/v1/feed-revision`이 changed-ID journal replay를 하지 않는지 확인. 정상 목표: cold 작은 head read만, warm `R0/W0`.
-5. 서로 다른 곡 3개 이상 좋아요.
-6. 첫 좋아요 후 **1분 전** `/v1/me/likes/batch` mutation 0 확인.
-7. 약 1분 마감 시 `/v1/me/likes/batch` **1 request**의 D1 R/W + R2 A/B 기록.
-8. 10분 aggregate 후 public count/Feed/Profile 수렴과 aggregate 비용 확인.
-9. PC↔모바일 canonical like state 확인.
-10. 실제 값으로 100,000 DAU × 30 likes/day 월비용 재계산.
+3. Explore 진입 후 1~2분 사용하면서 `/v1/feed-revision` 누적 rows read 확인.
+   - 목표: cold여도 단일 state row 수준, 이후 60초 Edge warm은 `R0/W0`.
+4. 서로 다른 곡 3개 이상 좋아요.
+5. 첫 좋아요 후 **1분 전** 서버 mutation 0 확인.
+6. 약 1분 시 `/v1/me/likes/batch` 1 request의 D1 R/W + R2 A/B 기록.
+7. 10분 aggregate 후 public count/Feed/Profile 수렴과 aggregate 비용 확인.
+8. PC↔모바일 canonical like state 확인.
+9. 실제 값으로 100,000 DAU × 30 likes/day 월비용 재계산.
 
 ## 9. 현재 완료 판정
-- PREVIEW app 053 + 037 PREVIEW 1분 like test window: **배포 PASS** — Run `34525268095`.
-- TypeScript / Build / Firebase Hosting / exact build-version: **PASS**.
-- Shared D1 035 additive schema: **PASS** — Run `34511788949`.
-- PREVIEW Worker 035 + 036 revision head-only: **배포 PASS** — Run `34521740340`, Version `f4ea48b4-11b0-4496-8df3-af8b857cc8c9`.
-- Feed/Profile/like batch route/cron: 이전 PASS 유지.
-- TEST / PRODUCTION: **비변경**.
-- Firebase Functions / Rules: **변경 없음**.
-- D1 schema/user data: 037에서 **변경 없음**.
-- UI 변경: **없음**.
-- 053 사용자 브라우저 first-entry + authenticated batch 비용: **실사용 재검증 전**.
+- PREVIEW app 053 + 1분 like test window: **배포 PASS** — Run `34525268095`.
+- PREVIEW Worker 035 + 037 one-row revision head: **배포 PASS** — Run `34527195059`, Version `4236894d-b1ab-4181-9dc3-27621624595b`.
+- Worker preflight/verifiers: PASS.
+- Feed/Profile/like batch route/cron: PASS.
+- warm revision `R0/W0`: PASS.
+- TEST / PRODUCTION Workers: 비변경 PASS.
+- Firebase Functions / Rules: 변경 없음.
+- D1 schema/user data: 037에서 변경 없음.
+- UI 변경: 없음.
+- 사용자 실브라우저 revision + authenticated batch 최종 비용: **실사용 재검증 전**.

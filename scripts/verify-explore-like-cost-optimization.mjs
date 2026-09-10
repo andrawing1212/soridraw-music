@@ -39,9 +39,13 @@ const functionText = (source, needle) => {
   throw new Error(`unterminated function: ${needle}`);
 };
 
-// Client contract remains four-minute local-first. The deeper 035 saving is server-side.
+// PREVIEW is intentionally shortened to one minute for fast iteration.
+// TEST/PRODUCTION retain the four-minute default until separately approved.
 assert.match(service, /SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911/);
-assert.match(service, /const EXPLORE_LIKE_BATCH_WINDOW_MS = 4 \* 60_000;/);
+assert.match(service, /SORIDRAW_EXPLORE_LIKE_PREVIEW_1MIN_TEST_037_20260911/);
+assert.match(service, /const EXPLORE_LIKE_BATCH_WINDOW_PREVIEW_MS = 60_000;/);
+assert.match(service, /const EXPLORE_LIKE_BATCH_WINDOW_DEFAULT_MS = 4 \* 60_000;/);
+assert.match(service, /EXPLORE_ENVIRONMENT === 'preview'/);
 assert.match(service, /const EXPLORE_LIKE_BATCH_MAX = 50;/);
 assert.match(service, /EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox'/);
 const queueFunction = functionText(service, 'export const setExploreTrackLike = async');
@@ -52,7 +56,7 @@ assert.match(flushFunction, /'\/v1\/me\/likes\/batch'/);
 assert.match(flushFunction, /mutations: batchEntries\.map/);
 assert.doesNotMatch(service, /const EXPLORE_LIKE_IDLE_MS = 5_000;/, 'old per-track 5s flush must stay retired');
 assert.match(page, /setExploreTrackLike\(user, track\.id, !currentLiked, track\.likeCount, track\.ownerUid\)/);
-console.log('PASS client: immediate optimistic UI + durable four-minute user-level outbox retained');
+console.log('PASS client: PREVIEW one-minute test window + default four-minute durable user-level outbox');
 
 assert.ok(Array.isArray(manifest.patches));
 assert.deepEqual(manifest.patches.slice(-2), [

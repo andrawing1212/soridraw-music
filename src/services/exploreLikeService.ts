@@ -1,4 +1,4 @@
-import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
+import { EXPLORE_API_BASE, EXPLORE_ENVIRONMENT } from '../config/exploreEnvironment';
 import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
@@ -10,13 +10,18 @@ import {
 
 // SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
 // SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911
+// SORIDRAW_EXPLORE_LIKE_PREVIEW_1MIN_TEST_037_20260911
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
 const EXPLORE_LIKE_OUTBOX_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox';
 const EXPLORE_LIKE_OUTBOX_SOURCE_TYPE = 'explore_like_outbox';
-const EXPLORE_LIKE_BATCH_WINDOW_MS = 4 * 60_000;
+const EXPLORE_LIKE_BATCH_WINDOW_PREVIEW_MS = 60_000;
+const EXPLORE_LIKE_BATCH_WINDOW_DEFAULT_MS = 4 * 60_000;
+const EXPLORE_LIKE_BATCH_WINDOW_MS = EXPLORE_ENVIRONMENT === 'preview'
+  ? EXPLORE_LIKE_BATCH_WINDOW_PREVIEW_MS
+  : EXPLORE_LIKE_BATCH_WINDOW_DEFAULT_MS;
 const EXPLORE_LIKE_BATCH_MAX = 50;
 const EXPLORE_LIKE_RETRY_BASE_MS = 15_000;
 const EXPLORE_LIKE_RETRY_MAX_MS = 60_000;

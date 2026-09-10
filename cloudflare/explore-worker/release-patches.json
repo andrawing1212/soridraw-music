@@ -4,6 +4,7 @@
     "031-explore-shared-canonical-data.mjs",
     "032-derived-change-cache.mjs",
     "033-explore-like-deferred-derived-sync.mjs",
-    "034-explore-like-user-batch.mjs"
+    "034-explore-like-user-batch.mjs",
+    "035-explore-like-deferred-aggregate.mjs"
   ]
 }

@@ -1,0 +1,37 @@
+name: SORIDRAW PREVIEW Stage 2 Rollback Readonly Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/preview-stage2-rollback-readonly-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      TEST_WORKER: soridraw-explore-test
+      PRODUCTION_WORKER: soridraw-explore-api
+      PREVIEW_BEFORE_VERSION: 8d29d54e-285b-4c9a-84a4-cb4e305dd912
+      TEST_BEFORE_VERSION: 0b9cfe5c-1e29-4485-ac97-36f87832b41e
+      PRODUCTION_BEFORE_VERSION: 07c11e5e-47a6-458b-a3a0-6e47b6c331e6
+    steps:
+      - name: Verify rollback and protected Workers read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const crypto=require('crypto');
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_API_TOKEN,h={Authorization:`Bearer ${token}`,Accept:'application/json'};
+          async function get(url){const r=await fetch(url,{headers:h});const t=await r.text();let x;try{x=JSON.parse(t)}catch{throw Error(`Cloudflare ${r.status}: ${t.slice(0,800)}`)}if(!r.ok||x.success===false)throw Error(`Cloudflare ${r.status}: ${t.slice(0,1000)}`);return x.result??x}
+          async function active(name){const p=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`),d=(p.deployments||p||[])[0],v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];if(!v?.version_id||Number(v.percentage||0)<99.99)throw Error('No single active version '+name);return String(v.version_id)}
+          async function source(name,version){const v=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${version}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0];const s=Buffer.from(m?.content_base64||'','base64').toString('utf8');if(s.length<5000)throw Error('Worker source unavailable '+name+' '+version);return s}
+          (async()=>{const preview=await active(process.env.PREVIEW_WORKER),test=await active(process.env.TEST_WORKER),prod=await active(process.env.PRODUCTION_WORKER);if(test!==process.env.TEST_BEFORE_VERSION)throw Error(`TEST Worker changed ${test}`);if(prod!==process.env.PRODUCTION_BEFORE_VERSION)throw Error(`PRODUCTION Worker changed ${prod}`);const before=await source(process.env.PREVIEW_WORKER,process.env.PREVIEW_BEFORE_VERSION),current=await source(process.env.PREVIEW_WORKER,preview);const hash=s=>crypto.createHash('sha256').update(s).digest('hex');const beforeHash=hash(before),currentHash=hash(current);if(beforeHash!==currentHash)throw Error(`PREVIEW rollback source mismatch before=${beforeHash} current=${currentHash}`);console.log('PREVIEW_ACTIVE_VERSION='+preview);console.log('PREVIEW_ROLLBACK_SOURCE_MATCH=PASS');console.log('TEST_PRODUCTION_WORKERS_UNCHANGED=PASS');})().catch(e=>{console.error(e);process.exit(1)});
+          NODE

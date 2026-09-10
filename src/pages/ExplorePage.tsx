@@ -17,7 +17,12 @@ import {
   readExploreFeedSessionCacheRevision,
   writeExploreFeedSessionCache,
 } from '../services/exploreSessionCache';
-import { getExploreLikedTrackIds, setExploreTrackLike } from '../services/exploreLikeService';
+import {
+  EXPLORE_LIKE_SYNC_ERROR_EVENT,
+  EXPLORE_LIKE_SYNC_EVENT,
+  getExploreLikedTrackIds,
+  setExploreTrackLike,
+} from '../services/exploreLikeService';
 import { getExplorePublicProfileFirstView, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
 import {
   getExploreFollowState,
@@ -86,7 +91,6 @@ const buildExploreVersionedFeedUrl = (feedUrl: string, revision: string) => {
   parsed.searchParams.set('__soridraw_revision', revision);
   return parsed.toString();
 };
-
 
 const safeText = (value: unknown, fallback = '') => {
   const normalized = String(value ?? '').trim();
@@ -598,6 +602,36 @@ export default function ExplorePage() {
     setProfileTracks(patch);
   };
 
+  useEffect(() => {
+    const onLikeSync = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        trackId?: string;
+        ownerUid?: string;
+        liked?: boolean;
+        likeCount?: number;
+      }>).detail;
+      const trackId = String(detail?.trackId || '').trim();
+      const rawCount = Number(detail?.likeCount);
+      if (!trackId || typeof detail?.liked !== 'boolean' || !Number.isFinite(rawCount)) return;
+      const likeCount = Math.max(0, Math.floor(rawCount));
+      setLikedTrackIds((prev) => ({ ...prev, [trackId]: detail.liked as boolean }));
+      updateTrackLikeCount(trackId, likeCount);
+      patchExploreFeedSessionCacheRow(requestUrl, trackId, { likeCount });
+      const ownerUid = String(detail?.ownerUid || '').trim();
+      if (ownerUid) patchExplorePublicProfileFirstViewTrack(ownerUid, trackId, { likeCount });
+    };
+    const onLikeSyncError = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      setSocialNotice(String(detail?.message || '좋아요 서버 동기화를 재시도하고 있어요.'));
+    };
+    window.addEventListener(EXPLORE_LIKE_SYNC_EVENT, onLikeSync as EventListener);
+    window.addEventListener(EXPLORE_LIKE_SYNC_ERROR_EVENT, onLikeSyncError as EventListener);
+    return () => {
+      window.removeEventListener(EXPLORE_LIKE_SYNC_EVENT, onLikeSync as EventListener);
+      window.removeEventListener(EXPLORE_LIKE_SYNC_ERROR_EVENT, onLikeSyncError as EventListener);
+    };
+  }, [requestUrl]);
+
   const toggleLike = async (track: ExploreTrack) => {
     if (!user) {
       setSocialNotice('좋아요는 로그인 후 사용할 수 있어요.');
@@ -607,7 +641,7 @@ export default function ExplorePage() {
     const currentLiked = Boolean(likedTrackIds[track.id]);
     setLikeBusyTrackId(track.id);
     try {
-      const result = await setExploreTrackLike(user, track.id, !currentLiked);
+      const result = await setExploreTrackLike(user, track.id, !currentLiked, track.likeCount, track.ownerUid);
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
       updateTrackLikeCount(track.id, result.likeCount);
       patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: result.likeCount });

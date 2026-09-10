@@ -1,0 +1,66 @@
+name: SORIDRAW PREVIEW Fix Derived Head Cache Once
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/preview-fix-derived-head-cache-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply minimal derived-head cache fix and regression guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('cloudflare/explore-worker/runtime/derived-cache.js')
+          s=p.read_text()
+          old="'Cache-Control': 'public,max-age=0,s-maxage=10'"
+          new="'Cache-Control': 'public,max-age=10'"
+          if s.count(old)!=1: raise SystemExit(f'expected one cache header, found {s.count(old)}')
+          p.write_text(s.replace(old,new))
+
+          v=Path('scripts/verify-explore-derived-cache.mjs')
+          t=v.read_text()
+          old2="const runtime=readFileSync(root+'runtime/derived-cache.js','utf8');assert.doesNotMatch(runtime,/buildExploreFeedR2Payload\\(/);assert.doesNotMatch(readFileSync('src/services/exploreProfileFirstViewService.ts','utf8'),/__soridraw_shared_profile/);"
+          new2="const runtime=readFileSync(root+'runtime/derived-cache.js','utf8');assert.doesNotMatch(runtime,/max-age=0/,'derived head edge cache must not be immediately stale');assert.match(runtime,/public,max-age=10/,'derived head edge cache must stay fresh for 10 seconds');assert.doesNotMatch(runtime,/buildExploreFeedR2Payload\\(/);assert.doesNotMatch(readFileSync('src/services/exploreProfileFirstViewService.ts','utf8'),/__soridraw_shared_profile/);"
+          if t.count(old2)!=1: raise SystemExit(f'expected one verifier anchor, found {t.count(old2)}')
+          v.write_text(t.replace(old2,new2))
+          PY
+          git diff --check
+          git diff -- cloudflare/explore-worker/runtime/derived-cache.js scripts/verify-explore-derived-cache.mjs
+          echo 'MINIMAL_CACHE_FIX_APPLIED=PASS'
+      - name: Run focused cost regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/runtime/derived-cache.js
+          node scripts/verify-explore-derived-cache.mjs
+          node scripts/verify-explore-deploy-preflight.mjs
+          grep -Fq "'Cache-Control': 'public,max-age=10'" cloudflare/explore-worker/runtime/derived-cache.js
+          ! grep -Fq 'max-age=0' cloudflare/explore-worker/runtime/derived-cache.js
+          echo 'FOCUSED_CACHE_REGRESSION=PASS'
+      - name: Commit and push source-only fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add cloudflare/explore-worker/runtime/derived-cache.js scripts/verify-explore-derived-cache.mjs
+          git commit -m 'fix(preview): keep derived head cache fresh for ten seconds'
+          git push origin HEAD:preview
+          echo "FIX_SHA=$(git rev-parse HEAD)"

@@ -38,21 +38,29 @@ const functionText = (source, needle) => {
   throw new Error(`unterminated function: ${needle}`);
 };
 
-assert.match(service, /const EXPLORE_LIKE_IDLE_MS = 5_000;/);
+assert.match(service, /SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911/);
+assert.match(service, /const EXPLORE_LIKE_BATCH_WINDOW_MS = 4 \* 60_000;/);
+assert.match(service, /const EXPLORE_LIKE_BATCH_MAX = 50;/);
 assert.match(service, /EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox'/);
+assert.match(service, /queuedAt:/);
 assert.match(service, /dirty: true/);
 assert.match(service, /resumePendingLikes\(user\)/);
 assert.match(service, /EXPLORE_LIKE_SYNC_ERROR_EVENT/);
 const queueFunction = functionText(service, 'export const setExploreTrackLike = async');
-assert.match(queueFunction, /schedulePendingLike\(user, normalizedTrackId, EXPLORE_LIKE_IDLE_MS\)/);
+assert.match(queueFunction, /schedulePendingLikes\(user\)/);
 assert.doesNotMatch(queueFunction, /requestExploreLike\(/, 'UI queue function must not call the server immediately');
+const flushFunction = functionText(service, 'const flushPendingLikes = async');
+assert.match(flushFunction, /'\/v1\/me\/likes\/batch'/);
+assert.match(flushFunction, /mutations: batchEntries\.map/);
+assert.doesNotMatch(service, /const EXPLORE_LIKE_IDLE_MS = 5_000;/, 'old per-track 5s flush must be retired');
+assert.doesNotMatch(service, /schedulePendingLike\(user, normalizedTrackId/, 'per-track timers must be retired');
 assert.match(page, /setExploreTrackLike\(user, track\.id, !currentLiked, track\.likeCount, track\.ownerUid\)/);
 assert.match(page, /EXPLORE_LIKE_SYNC_EVENT/);
 assert.match(page, /EXPLORE_LIKE_SYNC_ERROR_EVENT/);
-console.log('PASS client: immediate optimistic result + durable 5s per-track outbox');
+console.log('PASS client: immediate optimistic result + durable 4-minute user-level multi-track outbox');
 
 assert.ok(Array.isArray(manifest.patches));
-assert.equal(manifest.patches.at(-1), '033-explore-like-deferred-derived-sync.mjs');
+assert.equal(manifest.patches.at(-1), '034-explore-like-user-batch.mjs');
 assert.equal((migration.match(/UPDATE explore_derived_state\s+SET seq = seq \+ 1/g) || []).length, 1);
 assert.match(migration, /WHERE OLD\.owner_uid IS NOT NEW\.owner_uid\s+ON CONFLICT/);
 assert.match(migration, /OLD\.active IS NOT NEW\.active/);
@@ -94,14 +102,27 @@ const generatedWorker = String(process.env.SORIDRAW_GENERATED_WORKER || '').trim
 if (generatedWorker) {
   const worker = readFileSync(generatedWorker, 'utf8');
   assert.match(worker, /SORIDRAW_EXPLORE_LIKE_DEFERRED_DERIVED_SYNC_033_20260910/);
-  assert.match(worker, /async function syncExploreLikeR2AfterMutation\(/, 'per-user liked-state R2 sync must remain');
+  assert.match(worker, /SORIDRAW_EXPLORE_LIKE_USER_BATCH_034_20260911/);
+  assert.match(worker, /url\.pathname === "\/v1\/me\/likes\/batch"/);
+  assert.match(worker, /async function syncExploreLikeR2AfterMutation\(/, 'single-route compatibility must remain');
+  const batchBody = functionText(worker, 'async function handleLikeBatch034(');
+  assert.match(batchBody, /adjustExploreLikeCounterDelta/);
+  assert.match(batchBody, /syncExploreLikeR2AfterBatch034/);
+  assert.doesNotMatch(batchBody, /patchExploreFeedR2LikeCount|patchExploreProfileR2Like020|patchExploreFirstViewLikeCount/,
+    'batch route must defer public Feed/Profile derived updates');
+  const batchR2 = functionText(worker, 'async function syncExploreLikeR2AfterBatch034(');
+  assert.equal((batchR2.match(/readExploreLikeR2Bundle/g) || []).length, 1);
+  assert.equal((batchR2.match(/writeExploreR2Json/g) || []).length, 1);
+  const batchRate = functionText(worker, 'async function enforceExploreLikeBatchRateLimit034(');
+  assert.match(batchRate, /exploreRateDb031/);
+  assert.match(batchRate, /excluded\.count/);
   for (const name of ['patchExploreFeedR2LikeCount', 'patchExploreProfileR2Like020']) {
     const body = functionText(worker, `async function ${name}(`);
     assert.doesNotMatch(body, /syncDerived|readExploreR2Json|writeExploreR2Json/);
   }
-  console.log('PASS generated Worker: like request no longer eagerly refreshes Feed/Profile derived cache');
+  console.log('PASS generated Worker: one authenticated multi-track batch + one user R2 sync; public Feed/Profile derived work deferred');
 } else {
   console.log('INFO generated Worker check skipped; canonical Worker release supplies SORIDRAW_GENERATED_WORKER');
 }
 
-console.log('PASS Explore like cost optimization static/fixture verifier; live D1 rows remain PREVIEW-measurement only');
+console.log('PASS Explore like 034 batch optimization static/fixture verifier; live batch cost remains PREVIEW-measurement only');

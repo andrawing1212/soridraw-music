@@ -10,7 +10,8 @@
 - TEST branch: `main`
 - PRODUCTION branch: `production`
 - 앱 버전: `052`
-- 현재 `preview` 기준 HEAD(정상화 작업 시작 전): `beee2578b46eece01648ca6dc7d4881c99370e10`
+- 배포 시스템 정상화 기준 commit: `bf049e68d84725c2f0322d347a7db534632f7260`
+- 최신 `preview` HEAD는 이 문서를 포함한 후속 기록 commit으로 확인한다.
 - 현재 앱/Worker 제품 코드 기준: `6bd01324493c7c3d048aed825c5b8604f755d2cf`
   - 이후 `preview` commit들은 이번 배포 진단/Workflow 정리 성격이며 앱 제품 코드는 동일하다.
 - TEST 앱 기준: `3b574c05589230f077eceff98190edd4b5195f75`
@@ -113,14 +114,19 @@ PREVIEW 완료 보고 전:
 - FCM/WebSocket/새 외부 실시간 인프라
 
 ## 9. 다음 작업
-1. 배포 시스템 정상화 commit 고정 및 Workflow 등록 상태 확인.
-2. 정상화 완료 후 별도 승인 시 **Firebase PREVIEW 앱만** `6bd013...` 제품 코드와 동일한 현재 preview 소스에서 배포.
-3. Worker 032는 이미 PREVIEW에 정상 활성화되어 있으므로 앱 배포 때문에 재배포하지 않는다.
-4. PREVIEW 실사용 검증 후에만 TEST 승격 여부를 판단한다.
+1. 별도 승인 시 **Firebase PREVIEW 앱만** `6bd013...` 제품 코드와 동일한 현재 preview 소스에서 canonical App Workflow로 배포.
+2. Worker 032는 이미 PREVIEW에 정상 활성화되어 있으므로 앱 배포 때문에 재배포하지 않는다.
+3. PREVIEW 실사용 검증 후에만 TEST 승격 여부를 판단한다.
 
 ## 10. 현재 완료 판정
 - Explore 032 Worker: PREVIEW 배포/비용 smoke PASS.
 - Shared D1 derived schema/seed: 준비 완료.
 - Firebase PREVIEW 앱 최종 반영: 아직 안 함.
 - TEST/PRODUCTION: 변경 없음.
-- 배포 시스템 정상화: 현재 작업 중. 정상화 commit 및 Workflow 등록 확인 후 완료로 갱신한다.
+- 배포 시스템 정상화: **완료**.
+  - canonical PREVIEW App Workflow 고정
+  - canonical PREVIEW Explore Worker Workflow 고정
+  - repository-owned Worker release patch manifest 추가
+  - 이번 장애 대응에서 만든 일회성 PREVIEW 배포 Workflow 7개 삭제
+  - 정상화 commit에서 Actions 실행 0건 확인
+  - 정상화 작업 중 Firebase/Cloudflare/D1 배포·write 없음

@@ -1,0 +1,247 @@
+name: SORIDRAW PREVIEW Explore Worker Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: 'Optional exact commit SHA from preview history. Leave empty for latest preview.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-preview-explore-worker-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      TEST_WORKER: soridraw-explore-test
+      PRODUCTION_WORKER: soridraw-explore-api
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+      PREVIEW_RATE_D1_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+
+    steps:
+      - name: Checkout approved PREVIEW source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_sha || 'preview' }}
+          fetch-depth: 0
+
+      - name: Lock source and protected refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main production --no-tags
+          target="$(git rev-parse HEAD)"
+          git merge-base --is-ancestor "$target" origin/preview
+          echo "TARGET_SHA=$target" >> "$GITHUB_ENV"
+          git rev-parse origin/main > "$RUNNER_TEMP/main-before.sha"
+          git rev-parse origin/production > "$RUNNER_TEMP/production-before.sha"
+          echo "LOCKED_PREVIEW_SHA=$target"
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Capture active PREVIEW Worker and exact bindings
+        id: prepare
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .remote-worker
+          mkdir -p .remote-worker
+          node <<'NODE'
+          const fs = require('fs');
+          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+
+          async function get(url) {
+            const response = await fetch(url, { headers });
+            const text = await response.text();
+            let body;
+            try { body = JSON.parse(text); } catch { throw new Error(`Cloudflare ${response.status}: ${text.slice(0,800)}`); }
+            if (!response.ok || body.success === false) throw new Error(`Cloudflare ${response.status}: ${text.slice(0,1000)}`);
+            return body.result ?? body;
+          }
+
+          async function active(name) {
+            const payload = await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);
+            const deployment = (payload.deployments || payload || [])[0];
+            const version = [...(deployment?.versions || [])].sort((a,b) => Number(b.percentage || 0) - Number(a.percentage || 0))[0];
+            if (!version?.version_id || Number(version.percentage || 0) < 99.99) throw new Error(`No single active version for ${name}`);
+            return String(version.version_id);
+          }
+
+          (async () => {
+            const preview = await active(process.env.PREVIEW_WORKER);
+            const test = await active(process.env.TEST_WORKER);
+            const production = await active(process.env.PRODUCTION_WORKER);
+            fs.writeFileSync('.remote-worker/preview-before.txt', preview);
+            fs.writeFileSync('.remote-worker/test-before.txt', test);
+            fs.writeFileSync('.remote-worker/prod-before.txt', production);
+
+            const version = await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${process.env.PREVIEW_WORKER}/versions/${preview}?include=modules`);
+            const modules = Array.isArray(version.modules) ? version.modules : [];
+            if (modules.length !== 1) throw new Error(`Expected one self-contained PREVIEW Worker module, got ${modules.length}`);
+            const main = modules[0];
+            const source = Buffer.from(main.content_base64 || '', 'base64').toString('utf8');
+            if (source.length < 5000 || !source.includes('exploreCacheBucket031')) throw new Error('PREVIEW Worker source prerequisite missing');
+            fs.writeFileSync('.remote-worker/original.js', source);
+            fs.writeFileSync('.remote-worker/worker.js', source);
+
+            const settings = await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${process.env.PREVIEW_WORKER}/settings`);
+            const bindings = settings.bindings || [];
+            const resourceBindings = bindings.filter(x => ['d1','r2_bucket'].includes(x.type));
+            const allowed = new Set(['DB','RATE_DB','PROFILE_MEDIA','EXPLORE_CACHE']);
+            for (const binding of resourceBindings) if (!allowed.has(binding.name)) throw new Error(`Unexpected resource binding ${binding.type}:${binding.name}`);
+
+            const id = x => String(x?.id || x?.database_id || x?.uuid || '');
+            const db = bindings.find(x => x.type === 'd1' && x.name === 'DB');
+            const rate = bindings.find(x => x.type === 'd1' && x.name === 'RATE_DB');
+            if (id(db) !== process.env.SHARED_D1_ID) throw new Error('DB binding mismatch');
+            if (id(rate) !== process.env.PREVIEW_RATE_D1_ID) throw new Error('RATE_DB binding mismatch');
+
+            const r2 = bindings.filter(x => x.type === 'r2_bucket').map(x => ({
+              binding: x.name,
+              bucket_name: String(x.bucket_name || x.bucket || '')
+            }));
+            const profile = r2.find(x => x.binding === 'PROFILE_MEDIA');
+            const cache = r2.find(x => x.binding === 'EXPLORE_CACHE');
+            if (profile?.bucket_name !== 'soridraw-profile-media') throw new Error('PROFILE_MEDIA binding mismatch');
+            if (cache?.bucket_name !== 'soridraw-profile-media-preview') throw new Error('EXPLORE_CACHE binding mismatch');
+
+            const config = {
+              name: process.env.PREVIEW_WORKER,
+              main: './worker.js',
+              compatibility_date: String(settings.compatibility_date || '2026-09-09').slice(0,10),
+              workers_dev: true,
+              keep_vars: true,
+              d1_databases: [
+                { binding: 'DB', database_name: 'soridraw-explore-db', database_id: process.env.SHARED_D1_ID },
+                { binding: 'RATE_DB', database_name: 'soridraw-explore-preview-db', database_id: process.env.PREVIEW_RATE_D1_ID }
+              ],
+              r2_buckets: r2,
+              observability: settings.observability && typeof settings.observability === 'object'
+                ? { enabled: settings.observability.enabled !== false, ...(typeof settings.observability.head_sampling_rate === 'number' ? { head_sampling_rate: settings.observability.head_sampling_rate } : {}) }
+                : { enabled: true }
+            };
+            if (Array.isArray(settings.compatibility_flags) && settings.compatibility_flags.length) config.compatibility_flags = settings.compatibility_flags;
+            fs.writeFileSync('.remote-worker/wrangler.jsonc', JSON.stringify(config, null, 2));
+            console.log(`WORKERS_BEFORE=${JSON.stringify({preview,test,production})}`);
+          })().catch(error => { console.error(error); process.exit(1); });
+          NODE
+
+      - name: Apply repository-owned release patches
+        id: patch
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SORIDRAW_REMOTE_WORKER_DIR="$PWD/.remote-worker"
+          node scripts/apply-release-patches.mjs
+          node --check .remote-worker/worker.js
+          SORIDRAW_GENERATED_WORKER="$PWD/.remote-worker/worker.js" node ../../scripts/verify-explore-derived-cache.mjs
+          node ../../scripts/verify-explore-deploy-preflight.mjs
+          before="$(sha256sum .remote-worker/original.js | awk '{print $1}')"
+          after="$(sha256sum .remote-worker/worker.js | awk '{print $1}')"
+          if [ "$before" = "$after" ]; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo 'WORKER_SOURCE_CHANGE=NO'
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+            echo 'WORKER_SOURCE_CHANGE=YES'
+          fi
+
+      - name: Deploy changed PREVIEW Worker
+        if: steps.patch.outputs.changed == 'true'
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployed=0
+          rollback() {
+            status=$?
+            if [ "$status" -ne 0 ] && [ "$deployed" = 1 ]; then
+              echo "PREVIEW_WORKER_ROLLBACK_STATUS=$status"
+              cp .remote-worker/original.js .remote-worker/worker.js
+              node scripts/derived-deploy-preflight.mjs --config .remote-worker/wrangler.jsonc || true
+              echo 'PREVIEW_WORKER_ROLLBACK=ATTEMPTED'
+            fi
+            exit "$status"
+          }
+          trap rollback EXIT
+          node scripts/derived-deploy-preflight.mjs --config .remote-worker/wrangler.jsonc
+          deployed=1
+          sleep 3
+
+          feed_code="$(curl -sS -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40")"
+          test "$feed_code" = 200
+          owner="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json'),x=p?.data?.items?.[0]||{};process.stdout.write(String(x.ownerUid||x.owner_uid||''))")"
+          test -n "$owner"
+          profile_code="$(curl -sS -o "$RUNNER_TEMP/profile.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50")"
+          test "$profile_code" = 200
+
+          for n in 1 2; do
+            code="$(curl -sS -D "$RUNNER_TEMP/rev-${n}.head" -o "$RUNNER_TEMP/rev-${n}.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=latest")"
+            test "$code" = 200
+            [ "$n" = 1 ] && sleep 1 || true
+          done
+          read2="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/rev-2.head" | tail -1)"
+          write2="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/rev-2.head" | tail -1)"
+          test "$read2" = 0
+          test "$write2" = 0
+          echo "REVISION_2_ROWS_READ=$read2 ROWS_WRITTEN=$write2"
+          trap - EXIT
+          echo 'PREVIEW_WORKER_DEPLOY=PASS'
+
+      - name: Verify protected Workers and refs unchanged
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+          async function get(url) {
+            const response = await fetch(url, { headers });
+            const body = await response.json();
+            if (!response.ok || body.success === false) throw new Error(JSON.stringify(body).slice(0,800));
+            return body.result ?? body;
+          }
+          async function active(name) {
+            const payload = await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);
+            const deployment = (payload.deployments || payload || [])[0];
+            const version = [...(deployment?.versions || [])].sort((a,b) => Number(b.percentage || 0) - Number(a.percentage || 0))[0];
+            return String(version?.version_id || '');
+          }
+          (async () => {
+            const test = await active(process.env.TEST_WORKER);
+            const production = await active(process.env.PRODUCTION_WORKER);
+            if (test !== fs.readFileSync('.remote-worker/test-before.txt','utf8').trim()) throw new Error('TEST Worker changed');
+            if (production !== fs.readFileSync('.remote-worker/prod-before.txt','utf8').trim()) throw new Error('PRODUCTION Worker changed');
+            console.log('TEST_PRODUCTION_WORKERS_UNCHANGED=PASS');
+          })().catch(error => { console.error(error); process.exit(1); });
+          NODE
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before.sha")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/production-before.sha")"
+          echo 'PROTECTED_REFS_UNCHANGED=PASS'

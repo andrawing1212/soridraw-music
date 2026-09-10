@@ -1,25 +1,52 @@
-name: Firebase Hosting Custom Preview
+name: SORIDRAW PREVIEW App Release
 
 on:
   workflow_dispatch:
+    inputs:
+      target_sha:
+        description: 'Optional exact commit SHA from preview history. Leave empty for latest preview.'
+        required: false
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: firebase-hosting-custom-preview
-  cancel-in-progress: true
+  group: soridraw-preview-app-release
+  cancel-in-progress: false
 
 jobs:
-  deploy-preview:
+  release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 12
+    env:
+      FIREBASE_PROJECT: soridraw
+      PREVIEW_URL: https://preview.soridraw.com/
+      TEST_URL: https://test.soridraw.com/
+      PRODUCTION_URL: https://soridraw.com/
+
     steps:
-      - name: Checkout latest preview
+      - name: Checkout approved PREVIEW source
         uses: actions/checkout@v4
         with:
-          ref: preview
-          fetch-depth: 10
+          ref: ${{ inputs.target_sha || 'preview' }}
+          fetch-depth: 0
+
+      - name: Lock source and protected refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main production --no-tags
+          target="$(git rev-parse HEAD)"
+          git merge-base --is-ancestor "$target" origin/preview
+          echo "TARGET_SHA=$target" >> "$GITHUB_ENV"
+          git rev-parse origin/main > "$RUNNER_TEMP/main-before.sha"
+          git rev-parse origin/production > "$RUNNER_TEMP/production-before.sha"
+          curl -fsS --max-time 15 -H 'Cache-Control: no-cache' "$TEST_URL" -o "$RUNNER_TEMP/test-before.html"
+          curl -fsS --max-time 15 -H 'Cache-Control: no-cache' "$PRODUCTION_URL" -o "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/test-before.html" | awk '{print $1}' > "$RUNNER_TEMP/test-before.sha"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+          echo "LOCKED_PREVIEW_SHA=$target"
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -27,60 +54,64 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install app dependencies
-        run: npm ci
+      - name: Install
+        run: npm ci --no-audit --no-fund
 
       - name: TypeScript
         run: npx tsc --noEmit
 
-      - name: Build preview app
+      - name: Build
         run: npm run build
 
-      - name: Authenticate Google Firebase
+      - name: Authenticate Firebase
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Snapshot official production before preview deploy
+      - name: Deploy PREVIEW Hosting only
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/production-before.html"
-          sha256sum "$RUNNER_TEMP/production-before.html" | awk '{print $1}' > "$RUNNER_TEMP/production-before.sha"
-
-      - name: Deploy Firebase preview only
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project "$FIREBASE_PROJECT" \
+            --config firebase.hosting-preview.json \
+            --non-interactive
           echo 'FIREBASE_PREVIEW_DEPLOY=PASS'
 
-      - name: Verify exact deployed preview build
+      - name: Verify PREVIEW exact build
         shell: bash
         run: |
           set -euo pipefail
           local_sha="$(sha256sum dist/index.html | awk '{print $1}')"
-          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
-            ok=''
-            for attempt in $(seq 1 12); do
-              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$url" -o "$RUNNER_TEMP/preview.html"; then
-                remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
-                if [ "$remote_sha" = "$local_sha" ]; then
-                  ok=yes
-                  echo "EXACT_BUILD_PASS=$url"
-                  break
-                fi
+          ok=''
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS --max-time 15 -H 'Cache-Control: no-cache' "$PREVIEW_URL" -o "$RUNNER_TEMP/preview.html"; then
+              remote_sha="$(sha256sum "$RUNNER_TEMP/preview.html" | awk '{print $1}')"
+              if [ "$remote_sha" = "$local_sha" ]; then
+                ok=yes
+                break
               fi
-              sleep 10
-            done
-            test "$ok" = yes
+            fi
+            sleep 2
           done
+          test "$ok" = yes
+          local_version="$(node -e "process.stdout.write(String(require('./public/app-version.json').version || ''))")"
+          remote_version="$(curl -fsS --max-time 15 -H 'Cache-Control: no-cache' "${PREVIEW_URL}app-version.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version||'')))")"
+          test -n "$local_version"
+          test "$remote_version" = "$local_version"
+          echo "PREVIEW_APP_VERSION=$remote_version"
+          echo "PREVIEW_EXACT_BUILD=PASS"
 
-      - name: Verify official production unchanged
+      - name: Verify TEST and PRODUCTION unchanged
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/production-after.html"
-          sha256sum "$RUNNER_TEMP/production-after.html" | awk '{print $1}' > "$RUNNER_TEMP/production-after.sha"
-          cmp "$RUNNER_TEMP/production-before.sha" "$RUNNER_TEMP/production-after.sha"
-          echo 'PRODUCTION_UNCHANGED=PASS'
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before.sha")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/production-before.sha")"
+          curl -fsS --max-time 15 -H 'Cache-Control: no-cache' "$TEST_URL" -o "$RUNNER_TEMP/test-after.html"
+          curl -fsS --max-time 15 -H 'Cache-Control: no-cache' "$PRODUCTION_URL" -o "$RUNNER_TEMP/prod-after.html"
+          test "$(sha256sum "$RUNNER_TEMP/test-after.html" | awk '{print $1}')" = "$(cat "$RUNNER_TEMP/test-before.sha")"
+          test "$(sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}')" = "$(cat "$RUNNER_TEMP/prod-before.sha")"
+          echo 'TEST_PRODUCTION_UNCHANGED=PASS'

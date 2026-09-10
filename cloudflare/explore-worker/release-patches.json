@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "patches": [
+    "031-explore-shared-canonical-data.mjs",
+    "032-derived-change-cache.mjs"
+  ]
+}

@@ -1,5 +1,5 @@
-requested_at=2026-09-10T15:18:00Z
+requested_at=2026-09-11T03:00:00+09:00
 requested_by=user
-product_code_target=9a097afabb23f15ffcb4439f6e4fc6a2b1edc95f
-migration=20260910_03_explore_like_write_optimization.sql
-migration_blob=e96c8ed00529d512163101f0d60ea63babdff7df
+product_code_target=1c2eac51e0844a8967121c2dd268174adf54d461
+migration=20260911_01_explore_like_deferred_batches.sql
+migration_blob=b3f68fa1feee460c19a4a3c687ceb990509f23c9

@@ -1,0 +1,63 @@
+name: SORIDRAW PREVIEW Explore Verifier Fix Once
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/preview-explore-verifier-fix-once.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix-and-resume:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Replace comment-marker verifier with executable-runtime verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/preview-explore-derived-release.yml')
+          s = p.read_text()
+          old = "if(!source.includes('SORIDRAW_DERIVED_CHANGE_CACHE_032'))throw Error('Deployed PREVIEW Worker missing 032 marker');"
+          new = "if(!source.includes('explore_derived_changes')||!source.includes('Explore derived state must be seeded before enabling runtime'))throw Error('Deployed PREVIEW Worker missing 032 executable runtime');"
+          if s.count(old) != 1:
+              raise SystemExit(f'Expected exactly one old verifier, found {s.count(old)}')
+          p.write_text(s.replace(old, new))
+          PY
+          git diff --check
+          git diff -- .github/workflows/preview-explore-derived-release.yml
+          grep -Fq "source.includes('explore_derived_changes')" .github/workflows/preview-explore-derived-release.yml
+          grep -Fq "source.includes('Explore derived state must be seeded before enabling runtime')" .github/workflows/preview-explore-derived-release.yml
+          echo 'EXECUTABLE_032_VERIFIER_FIX=PASS'
+
+      - name: Commit verifier-only fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git add .github/workflows/preview-explore-derived-release.yml
+          git diff --cached --quiet && { echo 'No verifier change to commit'; exit 1; }
+          git commit -m 'fix(preview): verify deployed 032 executable runtime'
+          git push origin HEAD:preview
+          echo 'VERIFIER_FIX_PUSH=PASS'
+
+      - name: Dispatch audited PREVIEW release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run preview-explore-derived-release.yml --repo "$GITHUB_REPOSITORY" --ref preview -f target_sha=686276700121ce8d5b2844cb608666c5b991c3be
+          echo 'PREVIEW_RELEASE_DISPATCHED=PASS'

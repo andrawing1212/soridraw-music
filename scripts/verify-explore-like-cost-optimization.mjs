@@ -11,7 +11,8 @@ const manifest = JSON.parse(readFileSync(root + 'release-patches.json', 'utf8'))
 const functionText = (source, needle) => {
   const start = source.indexOf(needle);
   assert.ok(start >= 0, `missing function anchor: ${needle}`);
-  const brace = source.indexOf('{', start);
+  const arrow = needle.startsWith('export const ') ? source.indexOf('=>', start) : -1;
+  const brace = arrow >= 0 ? source.indexOf('{', arrow + 2) : source.indexOf('{', start);
   assert.ok(brace >= 0, `missing function body: ${needle}`);
   let depth = 0;
   let quote = '';

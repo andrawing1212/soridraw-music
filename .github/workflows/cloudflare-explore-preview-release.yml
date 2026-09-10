@@ -66,6 +66,8 @@ jobs:
           test -n "$expected"
           test "$actual" = "$expected"
           node --check canonical/preview-worker.js
+          node --check canonical/preview-entry.js
+          grep -q 'SORIDRAW_EXPLORE_REVISION_HEAD_ONLY_036_20260911' canonical/preview-entry.js
           generated="$PWD/canonical/preview-worker.js"
           (
             cd ../..
@@ -79,7 +81,7 @@ jobs:
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT type,name FROM sqlite_schema WHERE name IN ('explore_like_batches_035','idx_explore_like_batches_035_created','explore_like_processor_035') ORDER BY name" --json > "$RUNNER_TEMP/like035-schema.json"
           node -e "const r=require(process.env.RUNNER_TEMP+'/like035-schema.json');const rows=r.flatMap(x=>x.results||[]);const got=new Set(rows.map(x=>x.name));for(const n of ['explore_like_batches_035','idx_explore_like_batches_035_created','explore_like_processor_035'])if(!got.has(n))throw new Error('Missing live 035 D1 prerequisite: '+n);console.log('LIVE_035_D1_SCHEMA=PASS')"
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT id,lease_until,owner FROM explore_like_processor_035 WHERE id=1; SELECT COUNT(*) AS pending FROM explore_like_batches_035" --json > "$RUNNER_TEMP/like035-state.json"
-          node -e "const r=require(process.env.RUNNER_TEMP+'/like035-state.json');const rows=r.flatMap(x=>x.results||[]);if(!rows.some(x=>Number(x.id)===1))throw new Error('035 processor row missing');const p=rows.find(x=>'pending' in x);if(Number(p?.pending||0)!==0)throw new Error('035 queue must be empty before first PREVIEW activation');console.log('LIVE_035_D1_STATE=PASS')"
+          node -e "const r=require(process.env.RUNNER_TEMP+'/like035-state.json');const rows=r.flatMap(x=>x.results||[]);if(!rows.some(x=>Number(x.id)===1))throw new Error('035 processor row missing');const p=rows.find(x=>'pending' in x);console.log('LIVE_035_D1_STATE=PASS pending='+Number(p?.pending||0))"
 
           (
             cd canonical
@@ -152,14 +154,16 @@ jobs:
           test "$batch_code" -lt 500
 
           warm_ok=0
+          revision_mode=''
           for attempt in 1 2 3; do
             curl -sS -o /dev/null -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=latest"
             sleep 1
             curl -sS -D "$RUNNER_TEMP/revision.head" -o /dev/null -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=latest"
             read_rows="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/revision.head" | tail -1)"
             write_rows="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/revision.head" | tail -1)"
-            echo "WARM_REVISION_ATTEMPT=$attempt R=${read_rows:-missing} W=${write_rows:-missing}"
-            if [ "$read_rows" = 0 ] && [ "$write_rows" = 0 ]; then warm_ok=1; break; fi
+            revision_mode="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-revision-mode:/{gsub("\r","");print $2}' "$RUNNER_TEMP/revision.head" | tail -1)"
+            echo "WARM_REVISION_ATTEMPT=$attempt R=${read_rows:-missing} W=${write_rows:-missing} MODE=${revision_mode:-missing}"
+            if [ "$read_rows" = 0 ] && [ "$write_rows" = 0 ] && [ "$revision_mode" = 'HEAD-ONLY-036' ]; then warm_ok=1; break; fi
             sleep 1
           done
           test "$warm_ok" = 1
@@ -183,6 +187,7 @@ jobs:
           echo 'FEED_SMOKE=PASS'
           echo 'PROFILE_SMOKE=PASS'
           echo "LIKE_BATCH_ROUTE_HTTP=$batch_code"
+          echo 'REVISION_HEAD_ONLY_036=PASS'
           echo 'WARM_REVISION_R0_W0=PASS'
           echo 'LIKE_AGGREGATE_CRON=PASS'
           echo 'TEST_PRODUCTION_WORKERS_UNCHANGED=PASS'

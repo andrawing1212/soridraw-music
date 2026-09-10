@@ -17,9 +17,11 @@
 - 034 사용자 4분 multi-track like batch 구현 기준 시작 commit: `421281da89c46fdd7c620b2f1b664d8796f886d0`
 - 034 구현 commits:
   - client 4분 user-level outbox: `3187f5be97aaa60796cdd4f8682b8726b058c5d1`
-  - Worker batch endpoint patch: `13820ae13f8a5b3b7e057dd5051e3d74f77f492b`
+  - Worker batch endpoint 최초 patch: `13820ae13f8a5b3b7e057dd5051e3d74f77f492b`
   - release manifest: `f8d2102ae03e92bdcf227a0669b49fc7a6da5288`
   - verifier: `20b826e8078790d7411e3f4b8344b88f5203bbec`
+  - Worker prerequisite hardening: `76b819b84bab2b3f23265072f3141457d6bfdccb`
+- 034 코드 후보 commit: `76b819b84bab2b3f23265072f3141457d6bfdccb`
 - TEST 앱 branch 기준: `3b574c05589230f077eceff98190edd4b5195f75`
 - PRODUCTION branch 기준: `a8971fae1014ce107927fcfb5491d202d4c68fbe`
 - 034는 현재 `preview` 소스에만 구현됐고 **아직 PREVIEW 앱/Worker에 배포하지 않았다.**
@@ -50,7 +52,7 @@
 - canonical 사용자 데이터 삭제/백필/대량변환/덮어쓰기 없음.
 - 기존 single-track like endpoint는 하위호환을 위해 유지한다.
 
-## 4. 좋아요 비용 기준 — 10만 DAU 스트레스 기준으로 변경
+## 4. 좋아요 비용 기준 — 10만 DAU 스트레스 기준
 사용자 확정 기준:
 - 일 사용자: `100,000명`
 - 1인 하루 좋아요: `30곡`
@@ -68,7 +70,7 @@
 하지만 새 10만 DAU × 30 likes/day 기준에서는 현재 구조를 **비용 FAIL**로 본다.
 - 현행처럼 서로 다른 곡을 각각 개별 Worker mutation + 사용자 R2 sync로 보내면 월 9천만 논리 좋아요에서 비용이 크게 증폭된다.
 - 2026-09-11 논의 당시 현재 측정 구조 기준 좋아요 기능만 대략 월 `$1.9K~$2.0K` 수준으로 추정되어 최종 합격선이 아니다.
-- 따라서 과거 문서의 `W20→W17 감소만으로 비용 PASS` 판정은 폐기한다.
+- 과거 `W20→W17 감소만으로 비용 PASS` 판정은 폐기한다.
 
 ## 5. 034 — 사용자 원본 좋아요 4분 multi-track batch 구현
 ### Client
@@ -95,9 +97,15 @@
 - 사용자 liked-state R2 bundle은 곡마다 PUT하지 않고 **batch 종료 후 1회 read + 1회 write**로 합친다.
 - 좋아요 batch 안에서 Feed/Profile R2 즉시 rebuild/patch는 하지 않는다. 032 changed-ID journal/revision 경로가 이후 정상 revision/first-view에서 수렴시킨다.
 - 기존 single-track endpoint는 TEST/PRODUCTION 및 구버전 client 호환을 위해 유지한다.
+- 034 적용 전에 `RATE_LIMITS`, `RATE_LIMIT_WINDOW_MS`, auth/public-track/canonical-like/R2 helper가 모두 존재하는지 patch prerequisite로 강제 확인한다.
 
 ### 034 현재 검증
-- 새 Client 소스 독립 TypeScript 5.8.3 strict compile: PASS.
+- 새 Client 소스 TypeScript 5.8.3 strict isolated compile: PASS.
+- 4분을 축소한 isolated runtime simulation:
+  - 서로 다른 3곡 → Worker batch 1회 PASS.
+  - 같은 곡 좋아요→해제 상쇄 → server request 0 PASS.
+  - 두 번째 곡 클릭이 첫 4분 window를 뒤로 리셋하지 않음 PASS.
+  - 55곡 pending → 50 + 5 두 batch로 안전하게 drain PASS.
 - `034-explore-like-user-batch.mjs` `node --check`: PASS.
 - mock active Worker source에 034 patch 적용 + 생성 Worker `node --check`: PASS.
 - client static contract: 4분 window / user timer / batch endpoint / old 5초 per-track timer 제거 확인 PASS.
@@ -159,7 +167,7 @@
 - 실제 PREVIEW Worker 033: **기존 배포 PASS, 034 미배포**.
 - Shared D1 low-write trigger: **PASS**.
 - 현재 실제 배포 좋아요 기능: **기능 PASS / 10만×30 비용 기준 FAIL**.
-- 034 4분 user-level multi-track batch source: **구현 완료 / 정적 검증 PASS / PREVIEW 실사용 검증 전**.
+- 034 4분 user-level multi-track batch source: **구현 완료 / isolated runtime+정적 검증 PASS / PREVIEW 실사용 검증 전**.
 - 새 D1 migration/seed: **없음**.
 - 사용자 canonical 데이터 변경: **없음**.
 - Functions / Firestore Rules 변경: **없음**.

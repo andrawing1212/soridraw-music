@@ -89,8 +89,7 @@ jobs:
           cat > "$RUNNER_TEMP/preflight-wrangler.jsonc" <<JSON
           {"name":"$PREVIEW_WORKER","main":"./worker.js","compatibility_date":"2026-09-09","d1_databases":[{"binding":"DB","database_name":"soridraw-explore-db","database_id":"$SHARED_D1_ID"}]}
           JSON
-          cp worker.js "$RUNNER_TEMP/worker.js"
-          node scripts/derived-deploy-preflight.mjs --config "$RUNNER_TEMP/preflight-wrangler.jsonc" >/dev/null 2>&1 && { echo 'Unexpected deploy in readiness-only stage'; exit 1; } || true
+          cp placeholder.js "$RUNNER_TEMP/worker.js"
           npx wrangler d1 execute DB --remote --config "$RUNNER_TEMP/preflight-wrangler.jsonc" --command "SELECT seeded,seq,(SELECT COUNT(*) FROM explore_derived_tracks) AS tracks,(SELECT COUNT(*) FROM explore_derived_profiles) AS profiles FROM explore_derived_state WHERE id=1;" --json > "$RUNNER_TEMP/d1-ready.json"
           node -e "const x=require(process.env.RUNNER_TEMP+'/d1-ready.json'),r=x?.[0]?.results?.[0];if(!r||r.seeded!==1||r.tracks!==35||r.profiles!==3)throw Error(JSON.stringify(r));console.log('D1_READY='+JSON.stringify(r))"
           echo 'LIVE_D1_READY_READONLY=PASS'

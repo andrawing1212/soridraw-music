@@ -7,6 +7,11 @@ on:
         description: 'Optional exact commit SHA from preview history. Leave empty for latest preview.'
         required: false
         default: ''
+  push:
+    branches:
+      - preview
+    paths:
+      - '.deploy/preview-worker-release.trigger'
 
 permissions:
   contents: read
@@ -31,10 +36,33 @@ jobs:
       PREVIEW_ORIGIN: https://preview.soridraw.com
 
     steps:
+      - name: Resolve approved PREVIEW source
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            requested='${{ inputs.target_sha }}'
+            if [ -n "$requested" ]; then
+              echo "target=$requested" >> "$GITHUB_OUTPUT"
+            else
+              echo "target=preview" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/preview-worker-release.trigger"
+            body="$(curl -fsSL "$trigger_url")"
+            target="$(printf '%s\n' "$body" | sed -n 's/^product_code_target=//p' | tail -1 | tr -d '\r')"
+            if ! printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo 'Invalid or missing product_code_target in preview-worker-release.trigger' >&2
+              exit 1
+            fi
+            echo "target=$target" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout approved PREVIEW source
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.target_sha || 'preview' }}
+          ref: ${{ steps.resolve.outputs.target }}
           fetch-depth: 0
 
       - name: Lock source and protected refs
@@ -139,7 +167,7 @@ jobs:
               ],
               r2_buckets: r2,
               observability: settings.observability && typeof settings.observability === 'object'
-                ? { enabled: settings.observability.enabled !== false, ...(typeof settings.observability.head_sampling_rate === 'number' ? { head_sampling_rate: settings.observability.head_sampling_rate } : {}) }
+                ? { enabled: settings.observability.enabled !== false, ...(typeof settings.observability.head_sampling_rate === 'number' ? { head_sampling_rate: settings.observability.head_sampling_rate } : {})
                 : { enabled: true }
             };
             if (Array.isArray(settings.compatibility_flags) && settings.compatibility_flags.length) config.compatibility_flags = settings.compatibility_flags;

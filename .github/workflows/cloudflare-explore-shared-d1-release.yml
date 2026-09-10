@@ -1,0 +1,243 @@
+name: SORIDRAW Shared D1 Trigger Release
+
+on:
+  push:
+    branches:
+      - preview
+    paths:
+      - '.deploy/shared-d1-release.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-shared-d1-trigger-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+      PREVIEW_WORKER: soridraw-explore-preview
+      TEST_WORKER: soridraw-explore-test
+      PRODUCTION_WORKER: soridraw-explore-api
+      APPROVED_MIGRATION: 20260910_03_explore_like_write_optimization.sql
+      APPROVED_MIGRATION_BLOB: e96c8ed00529d512163101f0d60ea63babdff7df
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      TEST_BASE: https://soridraw-explore-test.andrawing1212.workers.dev
+      PRODUCTION_BASE: https://soridraw-explore-api.andrawing1212.workers.dev
+
+    steps:
+      - name: Checkout release trigger
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Resolve approved shared D1 release
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          trigger='.deploy/shared-d1-release.trigger'
+          test -f "$trigger"
+          target="$(sed -n 's/^product_code_target=//p' "$trigger" | tail -1 | tr -d '\r')"
+          migration="$(sed -n 's/^migration=//p' "$trigger" | tail -1 | tr -d '\r')"
+          blob="$(sed -n 's/^migration_blob=//p' "$trigger" | tail -1 | tr -d '\r')"
+          test "$migration" = "$APPROVED_MIGRATION"
+          test "$blob" = "$APPROVED_MIGRATION_BLOB"
+          printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
+          git fetch origin preview main production --no-tags
+          git merge-base --is-ancestor "$target" origin/preview
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "migration=$migration" >> "$GITHUB_OUTPUT"
+          git rev-parse origin/main > "$RUNNER_TEMP/main-before.sha"
+          git rev-parse origin/production > "$RUNNER_TEMP/production-before.sha"
+          echo "LOCKED_D1_RELEASE_TARGET=$target"
+
+      - name: Checkout exact approved source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.resolve.outputs.target }}
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Verify migration source and fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration="cloudflare/explore-worker/migrations/${{ steps.resolve.outputs.migration }}"
+          test -f "$migration"
+          test "$(git hash-object "$migration")" = "$APPROVED_MIGRATION_BLOB"
+          node scripts/verify-explore-like-cost-optimization.mjs
+          node <<'NODE'
+          const fs=require('fs');
+          const sql=fs.readFileSync('cloudflare/explore-worker/migrations/20260910_03_explore_like_write_optimization.sql','utf8');
+          const compact=sql.replace(/--.*$/gm,' ').replace(/\s+/g,' ').trim();
+          if (/\b(?:INSERT|UPDATE|DELETE|ALTER|CREATE\s+TABLE|DROP\s+TABLE)\s+(?:INTO\s+|FROM\s+)?(?:tracks|track_stats|public_profiles|profile_stats)\b/i.test(compact)) {
+            throw new Error('Migration may not mutate canonical user tables');
+          }
+          const seqBumps=(compact.match(/UPDATE explore_derived_state SET seq = seq \+ 1/gi)||[]).length;
+          if(seqBumps!==1) throw new Error('Expected exactly one derived seq bump');
+          if(!/DROP TRIGGER IF EXISTS explore032_derived_track_update/i.test(compact) || !/CREATE TRIGGER explore032_derived_track_update/i.test(compact)) {
+            throw new Error('Migration must replace only the approved derived track update trigger');
+          }
+          console.log('MIGRATION_STATIC_SAFETY=PASS');
+          NODE
+
+      - name: Prepare shared D1 config and read-only preflight
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .shared-d1-release
+          cat > .shared-d1-release/wrangler.jsonc <<JSON
+          {
+            "name": "soridraw-shared-d1-maintenance",
+            "main": "./placeholder.js",
+            "compatibility_date": "2026-09-10",
+            "d1_databases": [
+              {"binding":"DB","database_name":"soridraw-explore-db","database_id":"${SHARED_D1_ID}"}
+            ]
+          }
+          JSON
+          node --input-type=module -e "import('./scripts/derived-deploy-preflight.mjs').then(m=>m.assertDerivedD1Ready('.shared-d1-release/wrangler.jsonc'))"
+          echo 'SHARED_D1_READONLY_PREFLIGHT=PASS'
+
+      - name: Verify all active Worker consumers before D1 change
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          const headers={Authorization:`Bearer ${token}`,Accept:'application/json'};
+          async function get(url){const r=await fetch(url,{headers});const t=await r.text();let x;try{x=JSON.parse(t)}catch{throw new Error(`Cloudflare ${r.status}: ${t.slice(0,500)}`)}if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${t.slice(0,800)}`);return x.result??x;}
+          async function active(name){const p=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);const d=(p.deployments||p||[])[0];const v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];if(!v?.version_id||Number(v.percentage||0)<99.99)throw new Error(`No single active version for ${name}`);return String(v.version_id);}
+          async function source(name,version){const v=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${version}?include=modules`);const mods=Array.isArray(v.modules)?v.modules:[];if(!mods.length)throw new Error(`No source modules for ${name}`);const main=mods.find(m=>m.name===v.main_module)||mods[0];return Buffer.from(main.content_base64||'','base64').toString('utf8');}
+          (async()=>{
+            for(const [key,name] of [['preview',process.env.PREVIEW_WORKER],['test',process.env.TEST_WORKER],['production',process.env.PRODUCTION_WORKER]]){
+              const version=await active(name);fs.writeFileSync(`.shared-d1-release/${key}-worker-before.txt`,version);
+              const src=await source(name,version);
+              const derived=/EXPLORE_DERIVED_CONTRACT_032|explore_derived_state|explore_derived_changes/.test(src);
+              if(derived){
+                if(!/scope\s*=\s*\?|WHERE scope=\?/.test(src) || !/seq>\?/.test(src)) throw new Error(`${name} derived cursor is not scope-local`);
+              }
+              console.log(`${key.toUpperCase()}_WORKER_COMPAT=PASS version=${version} derived032=${derived}`);
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Capture exact live trigger and require known baseline
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cfg='.shared-d1-release/wrangler.jsonc'
+          node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --command "SELECT sql FROM sqlite_schema WHERE type='trigger' AND name='explore032_derived_track_update'" --json > .shared-d1-release/trigger-before.json
+          node <<'NODE'
+          const fs=require('fs');
+          function extract(src){const m=src.match(/CREATE TRIGGER(?: IF NOT EXISTS)?\s+explore032_derived_track_update[\s\S]*?END;/i);if(!m)throw new Error('Approved trigger definition missing');return m[0];}
+          function norm(s){return s.replace(/--.*$/gm,' ').replace(/\bIF NOT EXISTS\b/ig,' ').replace(/\s+/g,'').replace(/;+$/,'').toLowerCase();}
+          const raw=JSON.parse(fs.readFileSync('.shared-d1-release/trigger-before.json','utf8'));
+          const live=raw?.[0]?.results?.[0]?.sql;if(!live)throw new Error('Live derived update trigger missing');
+          const old=extract(fs.readFileSync('migrations/20260910_01_explore_derived_state.sql','utf8'));
+          const next=extract(fs.readFileSync('migrations/20260910_03_explore_like_write_optimization.sql','utf8'));
+          const state=norm(live)===norm(old)?'legacy032':norm(live)===norm(next)?'optimized033':'unknown';
+          if(state==='unknown')throw new Error('Live trigger differs from both approved old and new definitions');
+          fs.writeFileSync('.shared-d1-release/trigger-before.sql',live.trim().replace(/;+$/,'')+';\n');
+          fs.writeFileSync('.shared-d1-release/baseline-state.txt',state);
+          console.log(`LIVE_TRIGGER_BASELINE=${state}`);
+          NODE
+
+      - name: Apply approved trigger migration with rollback guard
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cfg='.shared-d1-release/wrangler.jsonc'
+          migration="migrations/${{ steps.resolve.outputs.migration }}"
+          state="$(cat .shared-d1-release/baseline-state.txt)"
+          if [ "$state" = optimized033 ]; then
+            echo 'SHARED_D1_TRIGGER_ALREADY_OPTIMIZED=PASS'
+            exit 0
+          fi
+
+          {
+            echo 'DROP TRIGGER IF EXISTS explore032_derived_track_update;'
+            cat .shared-d1-release/trigger-before.sql
+          } > .shared-d1-release/rollback.sql
+
+          rollback() {
+            echo 'POST_APPLY_CHECK_FAILED: restoring previous approved trigger'
+            node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --file .shared-d1-release/rollback.sql --yes || true
+          }
+          applied=0
+          trap 'status=$?; if [ "$status" -ne 0 ] && [ "$applied" = 1 ]; then rollback; fi; exit "$status"' EXIT
+
+          node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --file "$migration" --yes
+          applied=1
+
+          node --input-type=module -e "import('./scripts/derived-deploy-preflight.mjs').then(m=>m.assertDerivedD1Ready('.shared-d1-release/wrangler.jsonc'))"
+          node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --command "SELECT sql FROM sqlite_schema WHERE type='trigger' AND name='explore032_derived_track_update'" --json > .shared-d1-release/trigger-after.json
+          node <<'NODE'
+          const fs=require('fs');
+          function extract(src){const m=src.match(/CREATE TRIGGER(?: IF NOT EXISTS)?\s+explore032_derived_track_update[\s\S]*?END;/i);if(!m)throw new Error('Approved optimized trigger missing');return m[0];}
+          function norm(s){return s.replace(/--.*$/gm,' ').replace(/\bIF NOT EXISTS\b/ig,' ').replace(/\s+/g,'').replace(/;+$/,'').toLowerCase();}
+          const raw=JSON.parse(fs.readFileSync('.shared-d1-release/trigger-after.json','utf8'));
+          const live=raw?.[0]?.results?.[0]?.sql;
+          const expected=extract(fs.readFileSync('migrations/20260910_03_explore_like_write_optimization.sql','utf8'));
+          if(!live||norm(live)!==norm(expected))throw new Error('Optimized trigger postflight mismatch');
+          console.log('SHARED_D1_TRIGGER_POSTFLIGHT=PASS');
+          NODE
+
+          for pair in \
+            "preview|${PREVIEW_BASE}|https://preview.soridraw.com" \
+            "test|${TEST_BASE}|https://test.soridraw.com" \
+            "production|${PRODUCTION_BASE}|https://soridraw.com"; do
+            name="${pair%%|*}"; rest="${pair#*|}"; base="${rest%%|*}"; origin="${rest#*|}"
+            code="$(curl -sS -o "$RUNNER_TEMP/${name}-feed.json" -w '%{http_code}' -H "Origin: ${origin}" "${base}/v1/feed?sort=latest&limit=40")"
+            test "$code" = 200
+            echo "${name^^}_FEED_POST_D1_CHANGE=PASS"
+          done
+
+          for n in 1 2; do
+            code="$(curl -sS -D "$RUNNER_TEMP/rev-${n}.head" -o "$RUNNER_TEMP/rev-${n}.json" -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' "${PREVIEW_BASE}/v1/feed-revision?sort=latest")"
+            test "$code" = 200
+            [ "$n" = 1 ] && sleep 1 || true
+          done
+          read2="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/rev-2.head" | tail -1)"
+          write2="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/rev-2.head" | tail -1)"
+          test "$read2" = 0
+          test "$write2" = 0
+          echo "PREVIEW_WARM_REVISION_AFTER_D1=R${read2}/W${write2} PASS"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_API_TOKEN;
+          const headers={Authorization:`Bearer ${token}`,Accept:'application/json'};
+          async function get(url){const r=await fetch(url,{headers});const x=await r.json();if(!r.ok||x.success===false)throw new Error(JSON.stringify(x).slice(0,600));return x.result??x;}
+          async function active(name){const p=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);const d=(p.deployments||p||[])[0];const v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];return String(v?.version_id||'');}
+          (async()=>{for(const [key,name] of [['preview',process.env.PREVIEW_WORKER],['test',process.env.TEST_WORKER],['production',process.env.PRODUCTION_WORKER]]){const now=await active(name);const before=fs.readFileSync(`.shared-d1-release/${key}-worker-before.txt`,'utf8').trim();if(now!==before)throw new Error(`${key} Worker changed during D1-only release`);}console.log('ALL_WORKER_VERSIONS_UNCHANGED=PASS');})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before.sha")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/production-before.sha")"
+          echo 'MAIN_PRODUCTION_REFS_UNCHANGED=PASS'
+          trap - EXIT
+          echo 'SHARED_D1_TRIGGER_RELEASE=PASS'

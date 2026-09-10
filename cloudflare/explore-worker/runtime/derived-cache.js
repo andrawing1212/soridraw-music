@@ -8,7 +8,7 @@ async function derivedHead032(env, scope, request = null) {
     FROM explore_derived_state WHERE id=1`).bind(scope).first();
   if (!row?.seeded) throw new Error('Explore derived state must be seeded before enabling runtime');
   const seq = Number(row.seq);
-  if (key) await caches.default.put(key, new Response(String(seq), { headers: { 'Cache-Control': 'public,max-age=0,s-maxage=10' } }));
+  if (key) await caches.default.put(key, new Response(String(seq), { headers: { 'Cache-Control': 'public,max-age=10' } }));
   return seq;
 }
 async function derivedProfile032(env, uid) {

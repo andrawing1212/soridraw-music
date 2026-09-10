@@ -96,5 +96,5 @@ objects.set('feed/popular',previewObject);db.prepare('UPDATE track_stats SET lik
 await ctx.syncDerivedCache032(env,'popular');assert.equal(read('feed/popular').payload.data.items[0].id,'t005');
 objects.set('feed/popular',secondEnvironment);await ctx.syncDerivedCache032(env,'popular');assert.equal(read('feed/popular').payload.data.items[0].id,'t005');
 console.log('PASS atomic trigger rollback, display-only no-rank patch, pinned profile cursor, independent environment catch-up');
-const runtime=readFileSync(root+'runtime/derived-cache.js','utf8');assert.doesNotMatch(runtime,/buildExploreFeedR2Payload\(/);assert.doesNotMatch(readFileSync('src/services/exploreProfileFirstViewService.ts','utf8'),/__soridraw_shared_profile/);
+const runtime=readFileSync(root+'runtime/derived-cache.js','utf8');assert.doesNotMatch(runtime,/max-age=0/,'derived head edge cache must not be immediately stale');assert.match(runtime,/public,max-age=10/,'derived head edge cache must stay fresh for 10 seconds');assert.doesNotMatch(runtime,/buildExploreFeedR2Payload\(/);assert.doesNotMatch(readFileSync('src/services/exploreProfileFirstViewService.ts','utf8'),/__soridraw_shared_profile/);
 console.log('PASS cost regression suite; live Cloudflare rows_read remains unverified (no deployment)');

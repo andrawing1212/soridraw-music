@@ -1,0 +1,92 @@
+name: SORIDRAW PREVIEW Explore Worker 032 Diagnostic Release
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/preview-explore-worker-diagnostic-release.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  worker032:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      TEST_WORKER: soridraw-explore-test
+      PRODUCTION_WORKER: soridraw-explore-api
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+      PREVIEW_RATE_D1_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 686276700121ce8d5b2844cb608666c5b991c3be
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker dependencies
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Prepare exact current PREVIEW source and bindings
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .remote-worker && mkdir -p .remote-worker
+          node <<'NODE'
+          const fs=require('fs'),account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_API_TOKEN,h={Authorization:`Bearer ${token}`,Accept:'application/json'};
+          async function get(url){const r=await fetch(url,{headers:h});const x=await r.json();if(!r.ok||x.success===false)throw Error(JSON.stringify(x).slice(0,1000));return x.result??x}
+          async function active(name){const p=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`),d=(p.deployments||p||[])[0],v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];if(!v?.version_id||Number(v.percentage||0)<99.99)throw Error('active missing '+name);return String(v.version_id)}
+          (async()=>{const preview=await active(process.env.PREVIEW_WORKER),test=await active(process.env.TEST_WORKER),prod=await active(process.env.PRODUCTION_WORKER);for(const [n,v] of [['preview',preview],['test',test],['prod',prod]])fs.writeFileSync(`.remote-worker/${n}-before.txt`,v);const ver=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${process.env.PREVIEW_WORKER}/versions/${preview}?include=modules`),mods=ver.modules||[],m=mods.find(x=>x.name===(ver.main_module||mods[0]?.name))||mods[0],source=Buffer.from(m?.content_base64||'','base64').toString('utf8');if(source.length<5000||!source.includes('exploreCacheBucket031'))throw Error('031 prerequisite missing');fs.writeFileSync('.remote-worker/original.js',source);fs.writeFileSync('.remote-worker/worker.js',source);const s=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${process.env.PREVIEW_WORKER}/settings`),b=s.bindings||[],id=x=>String(x?.id||x?.database_id||x?.uuid||''),db=b.find(x=>x.type==='d1'&&x.name==='DB'),rate=b.find(x=>x.type==='d1'&&x.name==='RATE_DB');if(id(db)!==process.env.SHARED_D1_ID||id(rate)!==process.env.PREVIEW_RATE_D1_ID)throw Error('D1 binding mismatch');const r2=b.filter(x=>x.type==='r2_bucket').map(x=>({binding:x.name,bucket_name:String(x.bucket_name||x.bucket||'')}));for(const name of ['PROFILE_MEDIA','EXPLORE_CACHE'])if(!r2.some(x=>x.binding===name&&x.bucket_name))throw Error('R2 binding missing '+name);const cfg={name:process.env.PREVIEW_WORKER,main:'./worker.js',compatibility_date:String(s.compatibility_date||'2026-09-09').slice(0,10),workers_dev:true,keep_vars:true,d1_databases:[{binding:'DB',database_name:'soridraw-explore-db',database_id:process.env.SHARED_D1_ID},{binding:'RATE_DB',database_name:'soridraw-explore-preview-db',database_id:process.env.PREVIEW_RATE_D1_ID}],r2_buckets:r2,observability:s.observability&&typeof s.observability==='object'?{enabled:s.observability.enabled!==false,...(typeof s.observability.head_sampling_rate==='number'?{head_sampling_rate:s.observability.head_sampling_rate}:{})}:{enabled:true}};if(Array.isArray(s.compatibility_flags)&&s.compatibility_flags.length)cfg.compatibility_flags=s.compatibility_flags;fs.writeFileSync('.remote-worker/wrangler.jsonc',JSON.stringify(cfg,null,2));console.log('PREPARE_BINDINGS=PASS preview='+preview+' test='+test+' prod='+prod)})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - name: Generate audited 032 Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SORIDRAW_REMOTE_WORKER_DIR="$PWD/cloudflare/explore-worker/.remote-worker"
+          node cloudflare/explore-worker/patches/031-explore-shared-canonical-data.mjs
+          node cloudflare/explore-worker/patches/032-derived-change-cache.mjs
+          node --check cloudflare/explore-worker/.remote-worker/worker.js
+          grep -Fq 'explore_derived_changes' cloudflare/explore-worker/.remote-worker/worker.js
+          grep -Fq 'Explore derived state must be seeded before enabling runtime' cloudflare/explore-worker/.remote-worker/worker.js
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/.remote-worker/worker.js" node scripts/verify-explore-derived-cache.mjs
+          echo 'GENERATED_032=PASS'
+      - name: Deploy with preflight and print every smoke checkpoint
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployed=0
+          rollback(){ status=$?; if [ "$status" -ne 0 ] && [ "$deployed" = 1 ]; then echo "ROLLBACK_REASON_STATUS=$status"; cp .remote-worker/original.js .remote-worker/worker.js; node scripts/derived-deploy-preflight.mjs --config .remote-worker/wrangler.jsonc || true; echo 'ROLLBACK=ATTEMPTED'; fi; exit "$status"; }
+          trap rollback EXIT
+          echo 'CHECKPOINT=preflight_deploy_start'
+          node scripts/derived-deploy-preflight.mjs --config .remote-worker/wrangler.jsonc
+          deployed=1
+          echo 'CHECKPOINT=deploy_done'
+          sleep 5
+          feed_code="$(curl -sS -D "$RUNNER_TEMP/feed.head" -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=5")"
+          echo "FEED_HTTP=$feed_code"; head -c 300 "$RUNNER_TEMP/feed.json"; echo
+          test "$feed_code" = 200
+          owner="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json'),x=p?.data?.items?.[0]||{};process.stdout.write(String(x.ownerUid||x.owner_uid||''))")"
+          echo "OWNER_PRESENT=$([ -n "$owner" ] && echo yes || echo no)"; test -n "$owner"
+          profile_code="$(curl -sS -D "$RUNNER_TEMP/profile.head" -o "$RUNNER_TEMP/profile.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50")"
+          echo "PROFILE_HTTP=$profile_code"; head -c 300 "$RUNNER_TEMP/profile.json"; echo
+          test "$profile_code" = 200
+          for n in 1 2; do code="$(curl -sS -D "$RUNNER_TEMP/rev-${n}.head" -o "$RUNNER_TEMP/rev-${n}.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=latest")"; echo "REVISION_${n}_HTTP=$code"; test "$code" = 200; echo "REVISION_${n}_D1_HEADERS:"; grep -i '^x-soridraw-d1-' "$RUNNER_TEMP/rev-${n}.head" || true; done
+          read0="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/rev-2.head" | tail -1)"
+          write0="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/rev-2.head" | tail -1)"
+          echo "REVISION_2_READ=$read0 WRITE=$write0"; test "$read0" = 0; test "$write0" = 0
+          node <<'NODE'
+          const fs=require('fs'),account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_API_TOKEN,h={Authorization:`Bearer ${token}`,Accept:'application/json'};
+          async function get(url){const r=await fetch(url,{headers:h});const x=await r.json();if(!r.ok||x.success===false)throw Error(JSON.stringify(x).slice(0,800));return x.result??x}async function active(name){const p=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`),d=(p.deployments||p||[])[0],v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];return String(v?.version_id||'')}
+          (async()=>{const preview=await active(process.env.PREVIEW_WORKER),test=await active(process.env.TEST_WORKER),prod=await active(process.env.PRODUCTION_WORKER);console.log('ACTIVE_AFTER='+JSON.stringify({preview,test,prod}));if(!preview||preview===fs.readFileSync('.remote-worker/preview-before.txt','utf8').trim())throw Error('preview unchanged');if(test!==fs.readFileSync('.remote-worker/test-before.txt','utf8').trim()||prod!==fs.readFileSync('.remote-worker/prod-before.txt','utf8').trim())throw Error('protected worker changed');const v=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${process.env.PREVIEW_WORKER}/versions/${preview}?include=modules`),mods=v.modules||[],m=mods.find(x=>x.name===(v.main_module||mods[0]?.name))||mods[0],source=Buffer.from(m?.content_base64||'','base64').toString('utf8');console.log('SOURCE_HAS_DERIVED_CHANGES='+source.includes('explore_derived_changes'));console.log('SOURCE_HAS_SEEDED_ERROR='+source.includes('Explore derived state must be seeded before enabling runtime'));if(!source.includes('explore_derived_changes')||!source.includes('Explore derived state must be seeded before enabling runtime'))throw Error('032 executable runtime missing')})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          trap - EXIT
+          echo 'PREVIEW_WORKER_032_DIAGNOSTIC_RELEASE=PASS'

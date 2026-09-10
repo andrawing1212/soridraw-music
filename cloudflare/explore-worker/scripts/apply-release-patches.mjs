@@ -14,8 +14,11 @@ for (const patch of manifest.patches) {
   if (typeof patch !== 'string' || basename(patch) !== patch || !patch.endsWith('.mjs')) {
     throw new Error(`Unsafe release patch entry: ${String(patch)}`);
   }
-  const patchPath = join(process.cwd(), 'patches', patch);
-  if (!existsSync(patchPath)) throw new Error(`Release patch missing: ${patch}`);
+  const runtimePatch = patch === '035-explore-like-deferred-aggregate.mjs'
+    ? '035-explore-like-deferred-aggregate-runtime.mjs'
+    : patch;
+  const patchPath = join(process.cwd(), 'patches', runtimePatch);
+  if (!existsSync(patchPath)) throw new Error(`Release patch missing: ${runtimePatch}`);
   console.log(`[SORIDRAW Worker release] applying ${patch}`);
   const result = spawnSync(process.execPath, [patchPath], {
     cwd: process.cwd(),

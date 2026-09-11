@@ -1,0 +1,136 @@
+name: TEMP 066 Prepare Worker
+
+on:
+  push:
+    branches: ['work/066-like-write-w2']
+    paths:
+      - '.deploy/temp-066-prepare-worker.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: App TypeScript and build
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+
+      - name: Verify compact queue fixtures
+        run: |
+          set -euo pipefail
+          node scripts/verify-explore-like-cost-optimization.mjs
+          node scripts/verify-explore-like-compact-queue.mjs
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Audit live 035 queue schema read-only
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE tbl_name='explore_like_batches_035' ORDER BY type,name" --json > "$RUNNER_TEMP/queue035-schema.json"
+          node <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const payload = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/queue035-schema.json', 'utf8'));
+          const rows = payload.flatMap((entry) => entry.results || []);
+          const table = rows.find((row) => row.type === 'table' && row.name === 'explore_like_batches_035');
+          if (!table) throw new Error('live 035 queue table missing');
+          if (/WITHOUT ROWID/i.test(String(table.sql || ''))) throw new Error('live 035 queue unexpectedly already WITHOUT ROWID');
+          const indexes = rows.filter((row) => row.type === 'index').map((row) => String(row.name || ''));
+          if (!indexes.includes('idx_explore_like_batches_035_created')) throw new Error('live 035 created index missing');
+          if (!indexes.some((name) => name.startsWith('sqlite_autoindex_explore_like_batches_035'))) throw new Error('live 035 TEXT PRIMARY KEY autoindex missing');
+          const triggers = rows.filter((row) => row.type === 'trigger');
+          if (triggers.length) throw new Error('live 035 queue unexpectedly has triggers');
+          console.log('LIVE_035_QUEUE_SHAPE=PASS table-row + TEXT-PK-index + created-index; no trigger');
+          NODE
+
+      - name: Fetch active PREVIEW Worker source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/worker066"
+          node <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const worker = process.env.PREVIEW_WORKER;
+          const headers = { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`, Accept: 'application/json' };
+          const api = `https://api.cloudflare.com/client/v4/accounts/${account}`;
+          const deployments = await fetch(`${api}/workers/scripts/${worker}/deployments`, { headers }).then(async (response) => {
+            if (!response.ok) throw new Error(`deployments ${response.status}: ${await response.text()}`);
+            return response.json();
+          });
+          const versions = deployments?.result?.deployments?.[0]?.versions || [];
+          const active = [...versions].sort((a, b) => Number(b?.percentage || 0) - Number(a?.percentage || 0))[0];
+          if (!active?.version_id || Number(active?.percentage || 0) < 99.99) throw new Error('PREVIEW active Worker version not resolved');
+          const version = await fetch(`${api}/workers/workers/${encodeURIComponent(worker)}/versions/${encodeURIComponent(active.version_id)}?include=modules`, { headers }).then(async (response) => {
+            if (!response.ok) throw new Error(`version ${response.status}: ${await response.text()}`);
+            return response.json();
+          });
+          const body = version?.result || version || {};
+          const modules = Array.isArray(body.modules) ? body.modules : [];
+          const main = String(body.main_module || modules[0]?.name || '');
+          const module = modules.find((item) => String(item?.name || '') === main) || modules[0];
+          const content = String(module?.content_base64 || '');
+          if (!content) throw new Error('PREVIEW active Worker source missing');
+          let source = Buffer.from(content, 'base64').toString('utf8');
+          if (!source.includes('SORIDRAW_EXPLORE_LIKE_USER_BATCH_034_20260911') && source.includes('handleLikeBatch034')) source += '\n// SORIDRAW_EXPLORE_LIKE_USER_BATCH_034_20260911\n';
+          if (!source.includes('SORIDRAW_EXPLORE_LIKE_DEFERRED_AGGREGATE_035_20260911') && source.includes('processExploreLikeAggregateWave035')) source += '\n// SORIDRAW_EXPLORE_LIKE_DEFERRED_AGGREGATE_035_20260911\n';
+          if (!source.includes('SORIDRAW_EXPLORE_LIKE_DERIVED_INTAKE_036_20260911')) throw new Error('PREVIEW active Worker is not the validated 065 derived-intake baseline');
+          writeFileSync(`${process.env.RUNNER_TEMP}/worker066/worker.js`, source, 'utf8');
+          console.log(`ACTIVE_PREVIEW_VERSION=${active.version_id}`);
+          NODE
+
+      - name: Apply 038 and verify generated Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_REMOTE_WORKER_DIR="$RUNNER_TEMP/worker066" node cloudflare/explore-worker/patches/038-explore-like-compact-queue.mjs
+          node --check "$RUNNER_TEMP/worker066/worker.js"
+          SORIDRAW_GENERATED_WORKER="$RUNNER_TEMP/worker066/worker.js" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$RUNNER_TEMP/worker066/worker.js" node scripts/verify-explore-like-compact-queue.mjs
+          cp "$RUNNER_TEMP/worker066/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+
+      - name: Worker dry-run
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          (cd canonical && node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc --dry-run)
+
+      - name: Commit prepared canonical Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'soridraw-release-bot'
+          git config user.email 'soridraw-release-bot@users.noreply.github.com'
+          git add cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt
+          if git diff --cached --quiet; then
+            echo 'No canonical Worker change produced.'
+            exit 1
+          fi
+          git commit -m 'build: prepare PREVIEW 066 worker'
+          git push origin HEAD:work/066-like-write-w2

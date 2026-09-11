@@ -115,7 +115,11 @@ const collectLikeRevalidationRows = (
   // must never trigger a personal-state server read.
   if (previousRevision === nextRevision) return [];
 
-  const previousById = new Map(previousRows.map((row) => [readTrackId(row), row]).filter(([trackId]) => Boolean(trackId)));
+  const previousById = new Map<string, Record<string, unknown>>();
+  for (const row of previousRows) {
+    const trackId = readTrackId(row);
+    if (trackId) previousById.set(trackId, row);
+  }
   const changed: ExploreLikeRevalidationRow[] = [];
   for (const row of nextRows) {
     const normalized = toLikeRevalidationRow(row);

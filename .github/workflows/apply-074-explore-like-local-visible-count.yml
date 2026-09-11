@@ -1,0 +1,96 @@
+name: Apply 074 Explore Like Local Visible Count
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-074-explore-like-local-visible-count.py'
+      - '.github/workflows/apply-074-explore-like-local-visible-count.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-074-explore-like-local-visible-count
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply targeted 074 client fix
+        run: python3 .deploy/apply-074-explore-like-local-visible-count.py
+
+      - name: Verify 074 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912' src/pages/ExplorePage.tsx
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912' src/services/exploreLikeService.ts
+          grep -Fq 'displayLikeCount?: number' src/services/exploreLikeService.ts
+          grep -Fq 'displayLikeCount: visibleLikeCount' src/services/exploreLikeService.ts
+          grep -Fq "clampLikeCount(currentLikeCount) + (liked ? 1 : -1)" src/services/exploreLikeService.ts
+          grep -Fq 'track.likeCount === 0 && likedTrackIds[track.id] === true' src/pages/ExplorePage.tsx
+          grep -Fq 'updateTrackLikeCount(track.id, result.likeCount);' src/pages/ExplorePage.tsx
+          grep -Fq 'patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: result.likeCount });' src/pages/ExplorePage.tsx
+          grep -Fq '"version": "074"' public/app-version.json
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912' src/services/exploreLikeService.ts
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_REVERSAL_ORDER_041_20260912' cloudflare/explore-worker/canonical/preview-worker.js
+          echo '074_STATIC_CONTRACT=PASS'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify change boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only | grep -v '^dist/' || true)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/pages/ExplorePage\.tsx|src/services/exploreLikeService\.ts|public/app-version\.json)$' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected generated changes:'
+            echo "$bad"
+            exit 1
+          fi
+          echo 'NO_WORKER_RUNTIME_CHANGE=true'
+          echo 'NO_D1_SCHEMA_CHANGE=true'
+          echo 'NO_FIREBASE_FUNCTIONS_CHANGE=true'
+          echo 'NO_FIRESTORE_RULES_CHANGE=true'
+          echo 'NO_USER_DATA_MIGRATION=true'
+          echo 'NO_UI_CSS_CHANGE=true'
+
+      - name: Commit actual PREVIEW 074 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked=(src/pages/ExplorePage.tsx src/services/exploreLikeService.ts public/app-version.json)
+          if git diff --quiet -- "${tracked[@]}"; then
+            echo '074 already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "${tracked[@]}"
+          git commit -m 'fix: show local Explore like count immediately'
+          git push origin HEAD:preview

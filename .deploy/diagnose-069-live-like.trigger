@@ -1,2 +1,2 @@
-requested_at=2026-09-12T03:52:30+09:00
-purpose=verify_second_live_like_after_070
+requested_at=2026-09-12T04:24:30+09:00
+purpose=recheck_right_track_after_072_and_0420_aggregate

@@ -23,6 +23,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       PREVIEW_WORKER: soridraw-explore-preview
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
@@ -120,6 +122,34 @@ jobs:
             console.log(`RECENT_COUNT track=${String(row.track_id||'')} age_s=${at ? Math.max(0,Math.floor((now-at)/1000)) : 0} canonical_count=${Number(row.canonical_like_count||0)} derived_count=${Number(row.derived_like_count??-1)}`);
           }
           console.log('READ_ONLY_DIAG=PASS');
+          NODE
+
+      - name: Probe current PREVIEW feed payload for recent like
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT track_id FROM likes
+            WHERE created_at >= CAST(strftime('%s','now','-30 minutes') AS INTEGER) * 1000
+            ORDER BY created_at DESC LIMIT 1;
+          " --json > "$RUNNER_TEMP/recent-like-track.json"
+          track="$(node -e "const r=require(process.env.RUNNER_TEMP+'/recent-like-track.json');process.stdout.write(String(r.flatMap(x=>x.results||[])[0]?.track_id||''))")"
+          test -n "$track"
+          curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__diag=${GITHUB_RUN_ID}" > "$RUNNER_TEMP/feed.json"
+          TRACK_ID="$track" node <<'NODE'
+          const fs=require('fs');
+          const payload=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/feed.json','utf8'));
+          const items=payload?.data?.items||[];
+          const row=items.find(x=>String(x?.id||'')===process.env.TRACK_ID);
+          if (!row) {
+            console.log(`FEED_TRACK_NOT_IN_TOP40 track=${process.env.TRACK_ID}`);
+            process.exit(0);
+          }
+          const count=Number(row.likeCount ?? row.like_count ?? row?.stats?.likeCount ?? row?.stats?.like_count ?? 0);
+          console.log(`FEED_PAYLOAD_TRACK track=${process.env.TRACK_ID} like_count=${count}`);
           NODE
 
       - name: Verify PREVIEW Worker schedule and active version

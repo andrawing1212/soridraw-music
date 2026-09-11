@@ -52,8 +52,8 @@ const replaceFunction = (name, nextText) => {
 };
 
 for (const required of [
-  'SORIDRAW_EXPLORE_LIKE_DEFERRED_AGGREGATE_035_20260911',
   'readExploreLikeBatchStates035',
+  'processExploreLikeAggregateWave035',
   'explore_derived_tracks',
   'explore_derived_profiles',
 ]) {

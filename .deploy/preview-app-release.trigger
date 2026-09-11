@@ -1,4 +1,4 @@
-requested_at=2026-09-11T22:07:00+09:00
+requested_at=2026-09-12T00:24:05+09:00
 requested_by=user
-product_code_target=cf9450839e848b4adc3a53ebb1227cf33cf38c0a
-release_purpose=066_like_queue_w2_live_validation
+product_code_target=92fa248eae33e29b2e520cb69bd1e46c856e2d50
+release_purpose=067_cross_device_like_count_and_diagnostics_reset_fix

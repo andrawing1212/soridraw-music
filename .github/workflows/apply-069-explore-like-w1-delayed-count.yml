@@ -1,0 +1,114 @@
+name: Apply 069 Explore Like W1 Delayed Count
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-069-explore-like-w1-delayed-count.py'
+      - '.github/workflows/apply-069-explore-like-w1-delayed-count.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-069-explore-like-w1-delayed-count
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply targeted 069 client changes
+        run: python3 .deploy/apply-069-explore-like-w1-delayed-count.py
+
+      - name: Build canonical Worker with 040 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count.mjs
+          tmp="$(mktemp -d)"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$tmp/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count.mjs
+          cp "$tmp/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_040_20260912' cloudflare/explore-worker/canonical/preview-worker.js
+
+      - name: Verify 069 contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-explore-like-w1-queue.mjs
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912' src/services/exploreLikeService.ts
+          grep -Fq 'mutationAt: pending.updatedAt' src/services/exploreLikeService.ts
+          grep -Fq 'const optimisticLikeCount = clampLikeCount(currentLikeCount);' src/services/exploreLikeService.ts
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912' src/pages/ExplorePage.tsx
+          grep -Fq '"version": "069"' public/app-version.json
+          test "$(grep -Ec '^CREATE[[:space:]]+(UNIQUE[[:space:]]+)?INDEX' cloudflare/explore-worker/migrations/20260912_01_explore_like_w1_queue.sql || true)" = 0
+          expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test "$expected" = "$actual"
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-explore-derived-cache.mjs
+          echo '069_STATIC_CONTRACT=PASS'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify change boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only | grep -v '^dist/' || true)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreLikeService\.ts|src/pages/ExplorePage\.tsx|public/app-version\.json|cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt)$' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected generated changes:'
+            echo "$bad"
+            exit 1
+          fi
+          echo 'NO_FIREBASE_FUNCTIONS_CHANGE=true'
+          echo 'NO_FIRESTORE_RULES_CHANGE=true'
+          echo 'NO_USER_DATA_MIGRATION=true'
+          echo 'NO_UI_CSS_CHANGE=true'
+
+      - name: Commit actual PREVIEW 069 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked=(
+            src/services/exploreLikeService.ts
+            src/pages/ExplorePage.tsx
+            public/app-version.json
+            cloudflare/explore-worker/canonical/preview-worker.js
+            cloudflare/explore-worker/canonical/source-sha256.txt
+          )
+          if git diff --quiet -- "${tracked[@]}"; then
+            echo '069 already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "${tracked[@]}"
+          git commit -m 'feat: use W1 delayed-count Explore likes'
+          git push origin HEAD:preview

@@ -73,6 +73,11 @@ type ExploreFeedRevisionResponse = {
 
 const EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 1000;
 const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 30_000;
+// SORIDRAW_EXPLORE_LIKE_AGGREGATE_AUTO_REFRESH_070_20260912
+// Revalidate once after the next 10-minute aggregate window. The extra grace
+// covers the revision endpoint's short edge cache without polling.
+const EXPLORE_LIKE_AGGREGATE_WINDOW_MS_070 = 10 * 60_000;
+const EXPLORE_LIKE_REVISION_CACHE_GRACE_MS_070 = 70_000;
 
 const isExploreFeedRequest = (value: string) => {
   try {
@@ -618,6 +623,24 @@ export default function ExplorePage() {
 
   // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
   useEffect(() => {
+    let aggregateRefreshTimer: number | null = null;
+
+    const scheduleAggregateCountRefresh070 = () => {
+      if (profileUid || !isExploreFeedRequest(requestUrl)) return;
+      const now = Date.now();
+      const nextAggregateAt = Math.ceil((now + 1000) / EXPLORE_LIKE_AGGREGATE_WINDOW_MS_070)
+        * EXPLORE_LIKE_AGGREGATE_WINDOW_MS_070;
+      const delay = Math.max(1000, nextAggregateAt + EXPLORE_LIKE_REVISION_CACHE_GRACE_MS_070 - now);
+      if (aggregateRefreshTimer !== null) window.clearTimeout(aggregateRefreshTimer);
+      aggregateRefreshTimer = window.setTimeout(() => {
+        aggregateRefreshTimer = null;
+        // Hidden tabs keep zero-read behavior; the existing visibility/focus path
+        // performs the revision check when the user actually returns.
+        if (document.visibilityState !== 'visible') return;
+        setFeedRevisionSignal((value) => value + 1);
+      }, delay);
+    };
+
     const onLikeSync = (event: Event) => {
       const detail = (event as CustomEvent<{
         trackId?: string;
@@ -630,6 +653,7 @@ export default function ExplorePage() {
       // Same-account signal changes only the personal heart. Public likeCount
       // changes only when the deferred aggregate/feed delta confirms it.
       setLikedTrackIds((prev) => ({ ...prev, [trackId]: detail.liked as boolean }));
+      scheduleAggregateCountRefresh070();
     };
     const onLikeSyncError = (event: Event) => {
       const detail = (event as CustomEvent<{ message?: string }>).detail;
@@ -638,10 +662,11 @@ export default function ExplorePage() {
     window.addEventListener(EXPLORE_LIKE_SYNC_EVENT, onLikeSync as EventListener);
     window.addEventListener(EXPLORE_LIKE_SYNC_ERROR_EVENT, onLikeSyncError as EventListener);
     return () => {
+      if (aggregateRefreshTimer !== null) window.clearTimeout(aggregateRefreshTimer);
       window.removeEventListener(EXPLORE_LIKE_SYNC_EVENT, onLikeSync as EventListener);
       window.removeEventListener(EXPLORE_LIKE_SYNC_ERROR_EVENT, onLikeSyncError as EventListener);
     };
-  }, [requestUrl]);
+  }, [requestUrl, profileUid]);
 
   const toggleLike = async (track: ExploreTrack) => {
     if (!user) {

@@ -1,0 +1,9 @@
+approved_by_user=true
+requested_at=2026-09-11T12:20:00+09:00
+scope=firestore:rules
+change=additive owner-only exploreLikeSyncSignal field for same-account cross-device like UI sync
+project=soridraw-app-866a5
+source_commit=2f20c1081b6ceadda295e3c411af0cf7a6b2107e
+no_data_migration=true
+no_functions=true
+no_hosting=true

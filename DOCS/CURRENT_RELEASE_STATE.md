@@ -9,8 +9,10 @@
 - 개발 branch: `preview`
 - TEST branch: `main`
 - PRODUCTION branch: `production`
-- **현재 실제 PREVIEW 앱 화면 버전: 065** — 066은 백엔드 비용 최적화라 Hosting/app-version 변경 없음.
-- PREVIEW 065 App Run: `34583313251` — PASS
+- **현재 실제 PREVIEW 앱 화면 버전: 066**
+- PREVIEW 066 App version source: `cf9450839e848b4adc3a53ebb1227cf33cf38c0a`
+- PREVIEW 066 App Release checkout: `dcded183270cfb1d5427ea5059deb2d6ba481a7a`
+- PREVIEW 066 App Run: `34602732958` — **PASS**
 - PREVIEW 066 코드 merge: `9909f1da16811153a5ba15795b27199c15ab4950`
 - PREVIEW 066 고정 Shared D1 release system merge: `8279447ca73996f6a5aef178d9c59602f9fbf82a`
 - Release System Audit Run: `34596887335` — **PASS**
@@ -140,30 +142,45 @@ Run `34597109785` — PASS.
 - TEST Worker `0b9cfe5c-1e29-4485-ac97-36f87832b41e` unchanged.
 - PRODUCTION Worker `07c11e5e-47a6-458b-a3a0-6e47b6c331e6` unchanged.
 
-## 9. 데이터/환경 안전
+## 9. PREVIEW 066 App 실제 배포
+사용자 실사용 테스트 전에 업데이트 표기가 필요했으나, 최초 066 배포는 Worker/D1만 적용되어 Hosting은 065 상태였다. 이 때문에 기존 065 탭에서 업데이트 표기가 뜨지 않았다.
+
+보정 배포 Run `34602732958` — PASS.
+- `public/app-version.json`을 `066`으로 승격.
+- TypeScript PASS.
+- Build PASS.
+- Firebase PREVIEW Hosting PASS.
+- 실제 `preview.soridraw.com` exact build PASS.
+- 실제 `app-version.json=066` PASS.
+- TEST/PRODUCTION branch 및 실제 HTML unchanged PASS.
+- 따라서 기존 065 실행 탭은 새 066 버전을 감지해 `새 업데이트 · 적용`을 표시할 수 있는 상태다.
+
+## 10. 데이터/환경 안전
 - Shared D1: additive table/index 2개만 추가.
 - 기존 user/content row migration/backfill/delete/overwrite: 없음.
 - 기존 035 queue/table 삭제: 없음.
 - Firestore Rules 변경: 없음.
 - Firebase Functions 변경: 없음.
-- Firebase Hosting 변경: 없음.
+- Firebase PREVIEW Hosting: 066 배포 완료.
 - TEST code/Worker 배포: 없음.
 - PRODUCTION code/Worker 배포: 없음.
 - UI/반응형/간격/색상 변경: 없음.
 
-## 10. 현재 판정
+## 11. 현재 판정
 - **066 코드 구현/merge: PASS.**
 - **066 안전검증: PASS.**
 - **고정 Shared D1 release system audit: PASS.**
 - **066 additive D1 schema 적용: PASS.**
 - **PREVIEW 066 Worker 배포: PASS.**
+- **PREVIEW 066 App/Hosting 배포: PASS.**
+- **실제 app-version 066: PASS.**
 - **Explore revision warm R0/W0 유지: PASS.**
 - **TEST/PRODUCTION 비변경: PASS.**
 - **실제 로그인 좋아요 batch W2: 아직 미검증.**
 - 따라서 W3→W2 최적화의 최종 비용 합격 판정은 사용자 PREVIEW 실사용 계측 후 확정한다.
 
-## 11. 다음 단계
-사용자 PREVIEW에서 진단 초기화 후 **기존에 좋아요하지 않은 공개곡 1곡을 좋아요**하고 약 1분 뒤 CACHE LIVE 확인.
+## 12. 다음 단계
+사용자 PREVIEW에서 066 업데이트 적용 후 진단 초기화하고 **기존에 좋아요하지 않은 공개곡 1곡을 좋아요**한 뒤 약 1분 후 CACHE LIVE 확인.
 
 합격 기대값:
 - `/v1/me/likes/batch` Worker 1.

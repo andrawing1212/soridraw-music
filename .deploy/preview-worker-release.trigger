@@ -1,4 +1,4 @@
-requested_at=2026-09-12T01:20:00+09:00
+requested_at=2026-09-12T03:03:00+09:00
 requested_by=user
-product_code_target=b12a108272b469ce346e6af0c7b102d90f0acc2e
-release_purpose=068_bounded_feed_delta_and_like_overlay_support
+product_code_target=a22c9f73208288e35844dbcfa58efae09b655fd8
+release_purpose=069_w1_delayed_count_and_reversal_order

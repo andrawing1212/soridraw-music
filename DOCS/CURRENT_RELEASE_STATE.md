@@ -9,11 +9,11 @@
 - 개발 branch: `preview`
 - TEST branch: `main`
 - PRODUCTION branch: `production`
-- 앱 버전: `054`
+- 앱 버전: `055`
 - PREVIEW 앱: **034 user-level like batch + PREVIEW 전용 1분 테스트 window + PREVIEW에서만 항상 보이는 업데이트 컨트롤 활성**
-- PREVIEW 앱 Run: `34544458065` — PASS
-- PREVIEW 앱 기능 source: `d1abaa24e91d8e1af2470b08ca3e1e316cc98733`
-- PREVIEW 앱 release trigger commit: `bd4a6c623b0b01335edef4a69183a98c981c5d2b`
+- PREVIEW 앱 Run: `34544719097` — PASS
+- PREVIEW 앱 기능 source: `4339f1a32aae66266f2957020ac5829d9accf03c`
+- PREVIEW 앱 release trigger commit: `450c52f22b9b122f52115cf0f53ab00e1f2e1edc`
 - PREVIEW Worker: **035 deferred like aggregate + 037 revision one-row head read 활성**
 - PREVIEW Worker 037 Run: `34527195059` — PASS
 - PREVIEW Worker 활성 Version ID: `4236894d-b1ab-4181-9dc3-27621624595b`
@@ -28,16 +28,16 @@
 
 ### Firebase PREVIEW Hosting
 - URL: `https://preview.soridraw.com/`
-- 앱 버전: `054`
-- Run: `34544458065` — **PASS**
-- 기능 source: `d1abaa24e91d8e1af2470b08ca3e1e316cc98733`
-- release trigger commit: `bd4a6c623b0b01335edef4a69183a98c981c5d2b`
+- 앱 버전: `055`
+- Run: `34544719097` — **PASS**
+- 기능 source: `4339f1a32aae66266f2957020ac5829d9accf03c`
+- release trigger commit: `450c52f22b9b122f52115cf0f53ab00e1f2e1edc`
 - TypeScript: PASS
 - Vite Build: PASS
 - Firebase Hosting: PASS
 - 실제 `preview.soridraw.com` exact build/version: PASS
 - 업데이트 컨트롤은 PREVIEW 주소에서만 실행한다.
-- PREVIEW 최신 상태에서는 `업데이트 · 054`처럼 작게 계속 보인다.
+- PREVIEW 최신 상태에서는 `업데이트 · 055`처럼 작게 계속 보인다.
 - 새 버전을 감지하면 같은 위치에서 노란 `새 업데이트 · 적용` 상태로 바뀐다.
 - TEST/PRODUCTION 주소에서는 PREVIEW 업데이트 컨트롤을 만들지 않고, 이미 남아 있으면 제거한다.
 - PREVIEW에서는 첫 좋아요부터 **고정 1분** 동안 user-level multi-track outbox에 모은 뒤 `/v1/me/likes/batch` 1회 전송.
@@ -56,7 +56,7 @@
 - revision mode `STATE-SEQ-037`, 단일 state row head read.
 - warm revision smoke: D1 `R0/W0` PASS.
 - TEST / PRODUCTION Worker 비변경: PASS.
-- 앱 054 업데이트 컨트롤 격리 작업에서는 Worker/D1/R2 변경 없음.
+- 앱 055 업데이트 컨트롤 격리 작업에서는 Worker/D1/R2 변경 없음.
 
 ## 3. Explore revision 비용 진단과 037 수정
 사용자 CACHE LIVE 실측에서 과거 `/v1/feed-revision`이 반복되며 누적 D1 rows read가 크게 증가했다.
@@ -109,9 +109,9 @@
 현재:
 - 035 aggregate 구조 배포: PASS.
 - 037 revision one-row head 구조 배포: PASS.
-- 054 PREVIEW 1분 client test window + PREVIEW-only persistent update control: 배포 PASS.
+- 055 PREVIEW 1분 client test window + PREVIEW-only persistent update control: 배포 PASS.
 - revision warm live smoke: `R0/W0`.
-- **사용자 실브라우저에서 `업데이트 · 054` 표시 확인 후 1분 authenticated like batch 비용 재실측 필요.**
+- **사용자 실브라우저에서 `업데이트 · 055` 표시 확인 후 1분 authenticated like batch 비용 재실측 필요.**
 - 100k×30/day 최종 월비용 PASS는 아직 선언하지 않는다.
 
 ## 7. 절대 보호
@@ -124,7 +124,7 @@
 - 앱 업데이트/페이지 이동 때문에 데이터 전체 읽기/재생성 금지
 
 ## 8. 다음 실제 검증
-1. PREVIEW에서 항상 보이는 업데이트 컨트롤에 `054`가 표시되는지 확인.
+1. PREVIEW에서 항상 보이는 업데이트 컨트롤에 `055`가 표시되는지 확인.
 2. TEST/PRODUCTION에서는 PREVIEW용 업데이트 컨트롤이 새로 생기지 않는지 확인.
 3. CACHE LIVE 진단 초기화.
 4. Explore 진입 후 `/v1/feed-revision` 누적 rows read 확인.
@@ -136,7 +136,7 @@
 10. 실제 값으로 100,000 DAU × 30 likes/day 월비용 재계산.
 
 ## 9. 현재 완료 판정
-- PREVIEW app 054 + PREVIEW-only 항상 보이는 업데이트 컨트롤 + 1분 like test window: **배포 PASS** — Run `34544458065`.
+- PREVIEW app 055 + PREVIEW-only 항상 보이는 업데이트 컨트롤 + 1분 like test window: **배포 PASS** — Run `34544719097`.
 - TypeScript / Build / Firebase Hosting / exact build-version: **PASS**.
 - PREVIEW 배포 Workflow의 TEST/PRODUCTION 비변경 검사: **PASS**.
 - PREVIEW Worker 035 + 037 one-row revision head: **배포 PASS** — Run `34527195059`, Version `4236894d-b1ab-4181-9dc3-27621624595b`.

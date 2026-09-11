@@ -6,6 +6,10 @@ on:
     paths:
       - '.deploy/apply-069-explore-like-w1-delayed-count.py'
       - '.github/workflows/apply-069-explore-like-w1-delayed-count.yml'
+      - 'cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count.mjs'
+      - 'cloudflare/explore-worker/patches/041-explore-like-reversal-order.mjs'
+      - 'cloudflare/explore-worker/release-patches.json'
+      - 'scripts/verify-explore-like-w1-queue.mjs'
   workflow_dispatch:
 
 permissions:
@@ -35,18 +39,21 @@ jobs:
       - name: Apply targeted 069 client changes
         run: python3 .deploy/apply-069-explore-like-w1-delayed-count.py
 
-      - name: Build canonical Worker with 040 patch
+      - name: Build canonical Worker with 040 + 041 patches
         shell: bash
         run: |
           set -euo pipefail
           node --check cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count.mjs
+          node --check cloudflare/explore-worker/patches/041-explore-like-reversal-order.mjs
           tmp="$(mktemp -d)"
           cp cloudflare/explore-worker/canonical/preview-worker.js "$tmp/worker.js"
           SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/041-explore-like-reversal-order.mjs
           cp "$tmp/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
           sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
           node --check cloudflare/explore-worker/canonical/preview-worker.js
           grep -Fq 'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_040_20260912' cloudflare/explore-worker/canonical/preview-worker.js
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_REVERSAL_ORDER_041_20260912' cloudflare/explore-worker/canonical/preview-worker.js
 
       - name: Verify 069 contracts
         shell: bash
@@ -55,9 +62,11 @@ jobs:
           node scripts/verify-explore-like-w1-queue.mjs
           grep -Fq 'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912' src/services/exploreLikeService.ts
           grep -Fq 'mutationAt: pending.updatedAt' src/services/exploreLikeService.ts
+          grep -Fq 'baseLiked: pending.baseLiked' src/services/exploreLikeService.ts
           grep -Fq 'const optimisticLikeCount = clampLikeCount(currentLikeCount);' src/services/exploreLikeService.ts
           grep -Fq 'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912' src/pages/ExplorePage.tsx
           grep -Fq '"version": "069"' public/app-version.json
+          grep -Fq '041-explore-like-reversal-order.mjs' cloudflare/explore-worker/release-patches.json
           test "$(grep -Ec '^CREATE[[:space:]]+(UNIQUE[[:space:]]+)?INDEX' cloudflare/explore-worker/migrations/20260912_01_explore_like_w1_queue.sql || true)" = 0
           expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
           actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
@@ -81,7 +90,7 @@ jobs:
           set -euo pipefail
           changed="$(git diff --name-only | grep -v '^dist/' || true)"
           echo "$changed"
-          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreLikeService\.ts|src/pages/ExplorePage\.tsx|public/app-version\.json|cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count\.mjs|cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt)$' || true)"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreLikeService\.ts|src/pages/ExplorePage\.tsx|public/app-version\.json|cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt)$' || true)"
           if [ -n "$bad" ]; then
             echo 'Unexpected generated changes:'
             echo "$bad"
@@ -100,7 +109,6 @@ jobs:
             src/services/exploreLikeService.ts
             src/pages/ExplorePage.tsx
             public/app-version.json
-            cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count.mjs
             cloudflare/explore-worker/canonical/preview-worker.js
             cloudflare/explore-worker/canonical/source-sha256.txt
           )

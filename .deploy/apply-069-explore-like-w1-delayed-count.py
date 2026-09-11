@@ -26,9 +26,10 @@ if 'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912' not in service:
         """        mutations: batchEntries.map((pending) => ({
           trackId: pending.trackId,
           liked: pending.desiredLiked,
+          baseLiked: pending.baseLiked,
           mutationAt: pending.updatedAt,
         })),""",
-        'mutationAt',
+        'reversal base + mutationAt',
     )
     service = replace_once(
         service,
@@ -126,4 +127,4 @@ if 'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912' not in page:
     page_path.write_text(page, encoding='utf-8')
 
 Path('public/app-version.json').write_text('{\n  "version": "069"\n}\n', encoding='utf-8')
-print('069 client source prepared')
+print('069 client source prepared with deferred-count reversal ordering')

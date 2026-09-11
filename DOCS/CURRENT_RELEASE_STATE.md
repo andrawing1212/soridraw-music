@@ -24,6 +24,7 @@
 - 고정 승격 Workflow: `.github/workflows/soridraw-release-promotion.yml`
 - 고정 승격 Trigger: `.deploy/release-promotion.trigger` — 기본 `enabled=false`
 - 배포시스템 최종 read-only Audit Run: `34576408798` — **PASS**
+- GitHub release branch Ruleset: `Protect release branches` (`22889511`) — **Active**, 대상 `preview/main/production`, 삭제 방지 + force-push 차단 적용
 
 ## 2. 현재 실제 PREVIEW 상태
 
@@ -123,6 +124,7 @@
 ## 8. 현재 완료 판정
 - **PREVIEW 배포 시스템: 고정 canonical app/Worker 경로 운영 중, PASS.**
 - **TEST → PRODUCTION 고정 승격 파이프라인: 코드/TypeScript/Build/Worker dry-run/D1 read-only audit PASS.**
+- **GitHub release branch 보호: PASS — `preview/main/production` 모두 `protected:true`, Ruleset에서 삭제 방지 + force-push 차단 적용.**
 - 실제 TEST/PRODUCTION 배포 실행: 아직 안 함.
 - main / production branch: 비변경.
 - Firebase Hosting runtime 변경: 없음.
@@ -132,15 +134,16 @@
 - 사용자 원본 데이터 변경: 없음.
 - 저장소 064 후보: **코드 반영 완료 / PREVIEW 배포 전**.
 
-## 9. 남은 운영 위험
-- GitHub `preview`, `main`, `production` branch protection이 현재 `protected:false`다.
-- 배포 Workflow 자체는 exact SHA 고정, 현재 ref 재확인, non-force forward push로 방어하지만 저장소 레벨의 force-push/delete 보호는 별도 GitHub 관리자 설정이 필요하다.
-- 현재 연결된 GitHub 기능으로 branch protection 관리자 설정을 변경할 수 없어 이번 코드 작업에서 켜지 못했다.
-- 따라서 배포 파이프라인의 코드/검증은 PASS지만 **저장소 관리자 보호 설정 1건은 미완료 운영 안전 항목**으로 남긴다.
+## 9. 저장소 보호 상태
+- Ruleset `Protect release branches` (`22889511`) — enforcement `active`.
+- 대상: `refs/heads/preview`, `refs/heads/main`, `refs/heads/production`.
+- 적용 규칙: `deletion`, `non_fast_forward`.
+- 즉 release branch 삭제와 force-push가 차단된다.
+- `Restrict updates`, PR 강제, status check 강제 등은 현재 켜지 않아 기존 정상 배포 Workflow의 fast-forward/forward commit 승격 경로를 유지한다.
+- Bypass list는 비어 있고 현재 사용자 bypass도 없음.
 
 ## 10. 다음 단계
 1. 사용자 승인 시 064 후보를 PREVIEW에 먼저 배포하고 `새 업데이트 · 적용 / 업데이트 완료`와 기존 062/063 기능 회귀를 실제 확인.
-2. GitHub 관리자에서 `preview/main/production` force-push/delete 방지 branch protection 활성화.
-3. 이후 사용자가 `테스트배포`를 요청하면 고정 파이프라인 `test_only` 사용.
-4. 사용자가 `테스트 후 이상 없으면 정식까지`처럼 명확히 승인하면 `test_then_production`으로 TEST PASS 직후 동일 tested tree를 PRODUCTION까지 연속 승격.
-5. 좋아요 `R3/W3` 추가 비용 최적화는 별도 기능 작업으로 진행.
+2. 이후 사용자가 `테스트배포`를 요청하면 고정 파이프라인 `test_only` 사용.
+3. 사용자가 `테스트 후 이상 없으면 정식까지`처럼 명확히 승인하면 `test_then_production`으로 TEST PASS 직후 동일 tested tree를 PRODUCTION까지 연속 승격.
+4. 좋아요 `R3/W3` 추가 비용 최적화는 별도 기능 작업으로 진행.

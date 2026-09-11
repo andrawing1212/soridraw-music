@@ -146,6 +146,8 @@ var __defProp2222222222222222222222222222222222222222222222222222222222222222222
 var __name22222222222222222222222222222222222222222222222222222222222222222222222 = /* @__PURE__ */ __name2222222222222222222222222222222222222222222222222222222222222222222222((target, value) => __defProp22222222222222222222222222222222222222222222222222222222222222222222222(target, "name", { value, configurable: true }), "__name");
 var __defProp222222222222222222222222222222222222222222222222222222222222222222222222 = Object.defineProperty;
 var __name222222222222222222222222222222222222222222222222222222222222222222222222 = /* @__PURE__ */ __name22222222222222222222222222222222222222222222222222222222222222222222222((target, value) => __defProp222222222222222222222222222222222222222222222222222222222222222222222222(target, "name", { value, configurable: true }), "__name");
+var __defProp2222222222222222222222222222222222222222222222222222222222222222222222222 = Object.defineProperty;
+var __name2222222222222222222222222222222222222222222222222222222222222222222222222 = /* @__PURE__ */ __name222222222222222222222222222222222222222222222222222222222222222222222222((target, value) => __defProp2222222222222222222222222222222222222222222222222222222222222222222222222(target, "name", { value, configurable: true }), "__name");
 var FIREBASE_PROJECT_ID = "soridraw-app-866a5";
 var FIREBASE_PROJECT_NUMBER = "91309780603";
 var FIREBASE_WEB_APP_ID = "1:91309780603:web:cde703895e2cf31ecffcde";
@@ -275,6 +277,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(crea
 __name2222222222222222222222222222222222222222222222222222222222222222222222(createCloudflareUsageMeter, "createCloudflareUsageMeter");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(createCloudflareUsageMeter, "createCloudflareUsageMeter");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(createCloudflareUsageMeter, "createCloudflareUsageMeter");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(createCloudflareUsageMeter, "createCloudflareUsageMeter");
 function addD1UsageMeta(usage, result) {
   const meta = result && result.meta ? result.meta : {};
   const rowsRead = Number(meta.rows_read ?? meta.rowsRead ?? 0);
@@ -355,6 +358,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(addD
 __name2222222222222222222222222222222222222222222222222222222222222222222222(addD1UsageMeta, "addD1UsageMeta");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(addD1UsageMeta, "addD1UsageMeta");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(addD1UsageMeta, "addD1UsageMeta");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(addD1UsageMeta, "addD1UsageMeta");
 function classifyD1Query026(sql) {
   const text = String(sql || "").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*--.*$/gm, " ").trim().toUpperCase();
   if (!text) return "other";
@@ -387,6 +391,7 @@ __name22222222222222222222(classifyD1Query026, "classifyD1Query026");
 __name222222222222222222222(classifyD1Query026, "classifyD1Query026");
 __name2222222222222222222222(classifyD1Query026, "classifyD1Query026");
 __name22222222222222222222222(classifyD1Query026, "classifyD1Query026");
+__name222222222222222222222222(classifyD1Query026, "classifyD1Query026");
 function addD1QueryCount026(usage, kind, amount = 1) {
   if (!usage || !Number.isFinite(Number(amount)) || Number(amount) <= 0) return;
   const count = Math.max(1, Math.floor(Number(amount)));
@@ -418,11 +423,12 @@ __name22222222222222222222(addD1QueryCount026, "addD1QueryCount026");
 __name222222222222222222222(addD1QueryCount026, "addD1QueryCount026");
 __name2222222222222222222222(addD1QueryCount026, "addD1QueryCount026");
 __name22222222222222222222222(addD1QueryCount026, "addD1QueryCount026");
+__name222222222222222222222222(addD1QueryCount026, "addD1QueryCount026");
 function createMeteredD1(db, usage) {
   if (!db) return db;
   const rawByProxy = /* @__PURE__ */ new WeakMap();
   const kindByProxy = /* @__PURE__ */ new WeakMap();
-  const wrapPrepared = /* @__PURE__ */ __name22222222222222222222222((statement, kind = "other") => {
+  const wrapPrepared = /* @__PURE__ */ __name222222222222222222222222((statement, kind = "other") => {
     if (!statement || typeof statement !== "object") return statement;
     const proxy = new Proxy(statement, {
       get(target, prop) {
@@ -556,6 +562,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(crea
 __name2222222222222222222222222222222222222222222222222222222222222222222222(createMeteredD1, "createMeteredD1");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(createMeteredD1, "createMeteredD1");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(createMeteredD1, "createMeteredD1");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(createMeteredD1, "createMeteredD1");
 function createMeteredR2(bucket, usage) {
   if (!bucket) return bucket;
   return new Proxy(bucket, {
@@ -650,6 +657,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(crea
 __name2222222222222222222222222222222222222222222222222222222222222222222222(createMeteredR2, "createMeteredR2");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(createMeteredR2, "createMeteredR2");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(createMeteredR2, "createMeteredR2");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(createMeteredR2, "createMeteredR2");
 function createMeteredEnv(env, usage) {
   const meteredDb = createMeteredD1(env?.DB, usage);
   const meteredProfileMedia = createMeteredR2(env?.PROFILE_MEDIA, usage);
@@ -735,6 +743,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(crea
 __name2222222222222222222222222222222222222222222222222222222222222222222222(createMeteredEnv, "createMeteredEnv");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(createMeteredEnv, "createMeteredEnv");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(createMeteredEnv, "createMeteredEnv");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(createMeteredEnv, "createMeteredEnv");
 function attachCloudflareUsageHeaders(response, usage) {
   if (!(response instanceof Response)) return response;
   const headers = new Headers(response.headers);
@@ -841,6 +850,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(atta
 __name2222222222222222222222222222222222222222222222222222222222222222222222(attachCloudflareUsageHeaders, "attachCloudflareUsageHeaders");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(attachCloudflareUsageHeaders, "attachCloudflareUsageHeaders");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(attachCloudflareUsageHeaders, "attachCloudflareUsageHeaders");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(attachCloudflareUsageHeaders, "attachCloudflareUsageHeaders");
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
@@ -928,6 +938,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(json
 __name2222222222222222222222222222222222222222222222222222222222222222222222(json, "json");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(json, "json");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(json, "json");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(json, "json");
 function apiError(code, message, status, headers = {}) {
   return json({ ok: false, code, message }, status, headers);
 }
@@ -1004,6 +1015,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(apiE
 __name2222222222222222222222222222222222222222222222222222222222222222222222(apiError, "apiError");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(apiError, "apiError");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(apiError, "apiError");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(apiError, "apiError");
 function getCorsHeaders(origin) {
   if (!origin || !ALLOWED_ORIGINS.has(origin)) return {};
   return {
@@ -1087,6 +1099,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(getC
 __name2222222222222222222222222222222222222222222222222222222222222222222222(getCorsHeaders, "getCorsHeaders");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(getCorsHeaders, "getCorsHeaders");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getCorsHeaders, "getCorsHeaders");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(getCorsHeaders, "getCorsHeaders");
 function base64UrlToBytes(value) {
   let base64 = value.replace(/-/g, "+").replace(/_/g, "/");
   while (base64.length % 4) base64 += "=";
@@ -1166,6 +1179,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(base
 __name2222222222222222222222222222222222222222222222222222222222222222222222(base64UrlToBytes, "base64UrlToBytes");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(base64UrlToBytes, "base64UrlToBytes");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(base64UrlToBytes, "base64UrlToBytes");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(base64UrlToBytes, "base64UrlToBytes");
 function bytesToBase64Url(bytes) {
   let binary = "";
   bytes.forEach((byte) => {
@@ -1246,6 +1260,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(byte
 __name2222222222222222222222222222222222222222222222222222222222222222222222(bytesToBase64Url, "bytesToBase64Url");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(bytesToBase64Url, "bytesToBase64Url");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(bytesToBase64Url, "bytesToBase64Url");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(bytesToBase64Url, "bytesToBase64Url");
 function encodeCursor(payload) {
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
   return bytesToBase64Url(bytes);
@@ -1323,6 +1338,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(enco
 __name2222222222222222222222222222222222222222222222222222222222222222222222(encodeCursor, "encodeCursor");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(encodeCursor, "encodeCursor");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(encodeCursor, "encodeCursor");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(encodeCursor, "encodeCursor");
 function decodeCursor(value) {
   if (!value) return null;
   try {
@@ -1406,6 +1422,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(deco
 __name2222222222222222222222222222222222222222222222222222222222222222222222(decodeCursor, "decodeCursor");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(decodeCursor, "decodeCursor");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(decodeCursor, "decodeCursor");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(decodeCursor, "decodeCursor");
 function getPageSize(url) {
   const raw = Number(url.searchParams.get("limit") || DEFAULT_PAGE_SIZE);
   if (!Number.isFinite(raw)) return DEFAULT_PAGE_SIZE;
@@ -1484,6 +1501,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(getP
 __name2222222222222222222222222222222222222222222222222222222222222222222222(getPageSize, "getPageSize");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(getPageSize, "getPageSize");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getPageSize, "getPageSize");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(getPageSize, "getPageSize");
 function safeString(value) {
   return typeof value === "string" ? value : "";
 }
@@ -1560,6 +1578,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(safe
 __name2222222222222222222222222222222222222222222222222222222222222222222222(safeString, "safeString");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(safeString, "safeString");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(safeString, "safeString");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(safeString, "safeString");
 function mapTrackRow(row) {
   return {
     id: row.id,
@@ -1670,6 +1689,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(mapT
 __name2222222222222222222222222222222222222222222222222222222222222222222222(mapTrackRow, "mapTrackRow");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(mapTrackRow, "mapTrackRow");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(mapTrackRow, "mapTrackRow");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(mapTrackRow, "mapTrackRow");
 function decodeJwt(token) {
   const parts = String(token || "").split(".");
   if (parts.length !== 3) throw new Error("INVALID_JWT");
@@ -1754,6 +1774,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(deco
 __name2222222222222222222222222222222222222222222222222222222222222222222222(decodeJwt, "decodeJwt");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(decodeJwt, "decodeJwt");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(decodeJwt, "decodeJwt");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(decodeJwt, "decodeJwt");
 async function fetchJwks(url, forceRefresh = false) {
   const now = Date.now();
   const cached = jwksCache.get(url);
@@ -1857,6 +1878,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(fetc
 __name2222222222222222222222222222222222222222222222222222222222222222222222(fetchJwks, "fetchJwks");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(fetchJwks, "fetchJwks");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(fetchJwks, "fetchJwks");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(fetchJwks, "fetchJwks");
 async function verifySignature(parsed, jwksUrl) {
   if (parsed.header?.alg !== "RS256") {
     throw new Error("INVALID_ALGORITHM");
@@ -1961,6 +1983,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(veri
 __name2222222222222222222222222222222222222222222222222222222222222222222222(verifySignature, "verifySignature");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(verifySignature, "verifySignature");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(verifySignature, "verifySignature");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(verifySignature, "verifySignature");
 async function verifyFirebaseIdToken(token) {
   const parsed = decodeJwt(token);
   await verifySignature(parsed, FIREBASE_AUTH_JWKS);
@@ -2062,6 +2085,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(veri
 __name2222222222222222222222222222222222222222222222222222222222222222222222(verifyFirebaseIdToken, "verifyFirebaseIdToken");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(verifyFirebaseIdToken, "verifyFirebaseIdToken");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(verifyFirebaseIdToken, "verifyFirebaseIdToken");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(verifyFirebaseIdToken, "verifyFirebaseIdToken");
 async function verifyFirebaseAppCheck(token) {
   const parsed = decodeJwt(token);
   if (parsed.header?.typ !== "JWT") {
@@ -2161,6 +2185,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(veri
 __name2222222222222222222222222222222222222222222222222222222222222222222222(verifyFirebaseAppCheck, "verifyFirebaseAppCheck");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(verifyFirebaseAppCheck, "verifyFirebaseAppCheck");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(verifyFirebaseAppCheck, "verifyFirebaseAppCheck");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(verifyFirebaseAppCheck, "verifyFirebaseAppCheck");
 var EXPLORE_FEED_EDGE_TTL_SECONDS = 30;
 function getExploreFeedEdgeCacheKey(url, origin) {
   const keyUrl = new URL(url.toString());
@@ -2233,6 +2258,7 @@ __name22222222222222222222222222222222222222222222222222222222222222(getExploreF
 __name222222222222222222222222222222222222222222222222222222222222222(getExploreFeedEdgeCacheKey, "getExploreFeedEdgeCacheKey");
 __name2222222222222222222222222222222222222222222222222222222222222222(getExploreFeedEdgeCacheKey, "getExploreFeedEdgeCacheKey");
 __name22222222222222222222222222222222222222222222222222222222222222222(getExploreFeedEdgeCacheKey, "getExploreFeedEdgeCacheKey");
+__name222222222222222222222222222222222222222222222222222222222222222222(getExploreFeedEdgeCacheKey, "getExploreFeedEdgeCacheKey");
 function withExploreEdgeCacheHeader(response, status) {
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", `public, max-age=0, s-maxage=${EXPLORE_FEED_EDGE_TTL_SECONDS}`);
@@ -2318,11 +2344,12 @@ __name22222222222222222222222222222222222222222222222222222222222222(withExplore
 __name222222222222222222222222222222222222222222222222222222222222222(withExploreEdgeCacheHeader, "withExploreEdgeCacheHeader");
 __name2222222222222222222222222222222222222222222222222222222222222222(withExploreEdgeCacheHeader, "withExploreEdgeCacheHeader");
 __name22222222222222222222222222222222222222222222222222222222222222222(withExploreEdgeCacheHeader, "withExploreEdgeCacheHeader");
+__name222222222222222222222222222222222222222222222222222222222222222222(withExploreEdgeCacheHeader, "withExploreEdgeCacheHeader");
 var EXPLORE_R2_FEED_SCHEMA_VERSION = 1;
 var EXPLORE_R2_LIKE_SCHEMA_VERSION = 1;
 var EXPLORE_R2_FEED_LIMIT = 40;
-var exploreFeedR2Key = /* @__PURE__ */ __name22222222222222222222222222222222222222222((sort) => `internal/explore/feed-v1/${sort === "popular" ? "popular" : "latest"}-40.json`, "exploreFeedR2Key");
-var exploreLikeR2Key = /* @__PURE__ */ __name22222222222222222222222222222222222222222((uid) => `internal/explore/likes-v1/${encodeURIComponent(String(uid || ""))}.json`, "exploreLikeR2Key");
+var exploreFeedR2Key = /* @__PURE__ */ __name222222222222222222222222222222222222222222((sort) => `internal/explore/feed-v1/${sort === "popular" ? "popular" : "latest"}-40.json`, "exploreFeedR2Key");
+var exploreLikeR2Key = /* @__PURE__ */ __name222222222222222222222222222222222222222222((uid) => `internal/explore/likes-v1/${encodeURIComponent(String(uid || ""))}.json`, "exploreLikeR2Key");
 var EXPLORE_SHARED_REVISION_EDGE_TTL_SECONDS_031 = 10;
 function exploreCacheBucket031(env) {
   return env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null;
@@ -2338,6 +2365,7 @@ __name2222222(exploreCacheBucket031, "exploreCacheBucket031");
 __name22222222(exploreCacheBucket031, "exploreCacheBucket031");
 __name222222222(exploreCacheBucket031, "exploreCacheBucket031");
 __name2222222222(exploreCacheBucket031, "exploreCacheBucket031");
+__name22222222222(exploreCacheBucket031, "exploreCacheBucket031");
 function exploreRateDb031(env) {
   return env?.RATE_DB || env?.DB || null;
 }
@@ -2352,6 +2380,7 @@ __name2222222(exploreRateDb031, "exploreRateDb031");
 __name22222222(exploreRateDb031, "exploreRateDb031");
 __name222222222(exploreRateDb031, "exploreRateDb031");
 __name2222222222(exploreRateDb031, "exploreRateDb031");
+__name22222222222(exploreRateDb031, "exploreRateDb031");
 function sharedDataRevisionEdgeKey031(request) {
   const base = new URL(request.url);
   const url = new URL("/__soridraw_shared_data_revision_031", base.origin);
@@ -2368,6 +2397,7 @@ __name2222222(sharedDataRevisionEdgeKey031, "sharedDataRevisionEdgeKey031");
 __name22222222(sharedDataRevisionEdgeKey031, "sharedDataRevisionEdgeKey031");
 __name222222222(sharedDataRevisionEdgeKey031, "sharedDataRevisionEdgeKey031");
 __name2222222222(sharedDataRevisionEdgeKey031, "sharedDataRevisionEdgeKey031");
+__name22222222222(sharedDataRevisionEdgeKey031, "sharedDataRevisionEdgeKey031");
 async function clearSharedDataRevisionEdge031(request) {
   try {
     await caches.default.delete(sharedDataRevisionEdgeKey031(request));
@@ -2385,6 +2415,7 @@ __name2222222(clearSharedDataRevisionEdge031, "clearSharedDataRevisionEdge031");
 __name22222222(clearSharedDataRevisionEdge031, "clearSharedDataRevisionEdge031");
 __name222222222(clearSharedDataRevisionEdge031, "clearSharedDataRevisionEdge031");
 __name2222222222(clearSharedDataRevisionEdge031, "clearSharedDataRevisionEdge031");
+__name22222222222(clearSharedDataRevisionEdge031, "clearSharedDataRevisionEdge031");
 async function readSharedDataRevision031(request, env) {
   const key = sharedDataRevisionEdgeKey031(request);
   try {
@@ -2423,11 +2454,12 @@ __name2222222(readSharedDataRevision031, "readSharedDataRevision031");
 __name22222222(readSharedDataRevision031, "readSharedDataRevision031");
 __name222222222(readSharedDataRevision031, "readSharedDataRevision031");
 __name2222222222(readSharedDataRevision031, "readSharedDataRevision031");
-__name222222(ensureExploreSharedFeedCache031, "ensureExploreSharedFeedCache031");
+__name22222222222(readSharedDataRevision031, "readSharedDataRevision031");
 __name2222222(ensureExploreSharedFeedCache031, "ensureExploreSharedFeedCache031");
 __name22222222(ensureExploreSharedFeedCache031, "ensureExploreSharedFeedCache031");
 __name222222222(ensureExploreSharedFeedCache031, "ensureExploreSharedFeedCache031");
 __name2222222222(ensureExploreSharedFeedCache031, "ensureExploreSharedFeedCache031");
+__name22222222222(ensureExploreSharedFeedCache031, "ensureExploreSharedFeedCache031");
 async function readExploreR2Json(env, key) {
   const bucket = exploreCacheBucket031(env);
   if (!bucket) return null;
@@ -2483,6 +2515,7 @@ __name22222222222222222222222222222222222222(readExploreR2Json, "readExploreR2Js
 __name222222222222222222222222222222222222222(readExploreR2Json, "readExploreR2Json");
 __name2222222222222222222222222222222222222222(readExploreR2Json, "readExploreR2Json");
 __name22222222222222222222222222222222222222222(readExploreR2Json, "readExploreR2Json");
+__name222222222222222222222222222222222222222222(readExploreR2Json, "readExploreR2Json");
 async function writeExploreR2JsonCore052(env, key, payload) {
   const bucket = exploreCacheBucket031(env);
   if (!bucket) throw new Error("Explore cache R2 binding is unavailable.");
@@ -2497,7 +2530,7 @@ __name22(writeExploreR2JsonCore052, "writeExploreR2JsonCore052");
 __name222(writeExploreR2JsonCore052, "writeExploreR2JsonCore052");
 __name2222(writeExploreR2JsonCore052, "writeExploreR2JsonCore052");
 __name22222(writeExploreR2JsonCore052, "writeExploreR2JsonCore052");
-__name222222(writeExploreR2Json, "writeExploreR2Json");
+__name222222(writeExploreR2JsonCore052, "writeExploreR2JsonCore052");
 __name2222222(writeExploreR2Json, "writeExploreR2Json");
 __name22222222(writeExploreR2Json, "writeExploreR2Json");
 __name222222222(writeExploreR2Json, "writeExploreR2Json");
@@ -2533,6 +2566,7 @@ __name22222222222222222222222222222222222222(writeExploreR2Json, "writeExploreR2
 __name222222222222222222222222222222222222222(writeExploreR2Json, "writeExploreR2Json");
 __name2222222222222222222222222222222222222222(writeExploreR2Json, "writeExploreR2Json");
 __name22222222222222222222222222222222222222222(writeExploreR2Json, "writeExploreR2Json");
+__name222222222222222222222222222222222222222222(writeExploreR2Json, "writeExploreR2Json");
 async function deleteExploreFeedR2Bundles(env) {
   const bucket = exploreCacheBucket031(env);
   if (!bucket) return;
@@ -2583,6 +2617,7 @@ __name22222222222222222222222222222222222222(deleteExploreFeedR2Bundles, "delete
 __name222222222222222222222222222222222222222(deleteExploreFeedR2Bundles, "deleteExploreFeedR2Bundles");
 __name2222222222222222222222222222222222222222(deleteExploreFeedR2Bundles, "deleteExploreFeedR2Bundles");
 __name22222222222222222222222222222222222222222(deleteExploreFeedR2Bundles, "deleteExploreFeedR2Bundles");
+__name222222222222222222222222222222222222222222(deleteExploreFeedR2Bundles, "deleteExploreFeedR2Bundles");
 async function buildExploreFeedR2PayloadCore052(env, sort) {
   const url = new URL(`https://soridraw-r2.local/v1/feed?sort=${sort === "popular" ? "popular" : "latest"}&limit=${EXPLORE_R2_FEED_LIMIT}`);
   const response = await handleFeed(url, env, {});
@@ -2602,7 +2637,7 @@ __name22(buildExploreFeedR2PayloadCore052, "buildExploreFeedR2PayloadCore052");
 __name222(buildExploreFeedR2PayloadCore052, "buildExploreFeedR2PayloadCore052");
 __name2222(buildExploreFeedR2PayloadCore052, "buildExploreFeedR2PayloadCore052");
 __name22222(buildExploreFeedR2PayloadCore052, "buildExploreFeedR2PayloadCore052");
-__name222222(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
+__name222222(buildExploreFeedR2PayloadCore052, "buildExploreFeedR2PayloadCore052");
 __name2222222(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
 __name22222222(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
 __name222222222(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
@@ -2638,7 +2673,7 @@ __name22222222222222222222222222222222222222(buildExploreFeedR2Payload, "buildEx
 __name222222222222222222222222222222222222222(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
 __name2222222222222222222222222222222222222222(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
 __name22222222222222222222222222222222222222222(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
-__name222222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
+__name222222222222222222222222222222222222222222(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
 __name2222222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
 __name22222222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
 __name222222222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
@@ -2674,6 +2709,7 @@ __name22222222222222222222222222222222222222(refreshExploreFeedR2Bundles, "refre
 __name222222222222222222222222222222222222222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
 __name2222222222222222222222222222222222222222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
 __name22222222222222222222222222222222222222222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
+__name222222222222222222222222222222222222222222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
 async function readExploreFeedR2Bundle(env, sort) {
   const bundle = await readExploreR2Json(env, exploreFeedR2Key(sort));
   if (!bundle || Number(bundle.schemaVersion) !== EXPLORE_R2_FEED_SCHEMA_VERSION) return null;
@@ -2722,6 +2758,7 @@ __name22222222222222222222222222222222222222(readExploreFeedR2Bundle, "readExplo
 __name222222222222222222222222222222222222222(readExploreFeedR2Bundle, "readExploreFeedR2Bundle");
 __name2222222222222222222222222222222222222222(readExploreFeedR2Bundle, "readExploreFeedR2Bundle");
 __name22222222222222222222222222222222222222222(readExploreFeedR2Bundle, "readExploreFeedR2Bundle");
+__name222222222222222222222222222222222222222222(readExploreFeedR2Bundle, "readExploreFeedR2Bundle");
 async function rebuildExploreLikeR2Bundle(env, uid) {
   const result = await env.DB.prepare(`
     SELECT l.track_id
@@ -2784,6 +2821,7 @@ __name22222222222222222222222222222222222222(rebuildExploreLikeR2Bundle, "rebuil
 __name222222222222222222222222222222222222222(rebuildExploreLikeR2Bundle, "rebuildExploreLikeR2Bundle");
 __name2222222222222222222222222222222222222222(rebuildExploreLikeR2Bundle, "rebuildExploreLikeR2Bundle");
 __name22222222222222222222222222222222222222222(rebuildExploreLikeR2Bundle, "rebuildExploreLikeR2Bundle");
+__name222222222222222222222222222222222222222222(rebuildExploreLikeR2Bundle, "rebuildExploreLikeR2Bundle");
 async function readExploreLikeR2Bundle(env, uid) {
   const bundle = await readExploreR2Json(env, exploreLikeR2Key(uid));
   if (!bundle || Number(bundle.schemaVersion) !== EXPLORE_R2_LIKE_SCHEMA_VERSION || !Array.isArray(bundle.likedTrackIds)) return null;
@@ -2831,7 +2869,7 @@ __name22222222222222222222222222222222222222(readExploreLikeR2Bundle, "readExplo
 __name222222222222222222222222222222222222222(readExploreLikeR2Bundle, "readExploreLikeR2Bundle");
 __name2222222222222222222222222222222222222222(readExploreLikeR2Bundle, "readExploreLikeR2Bundle");
 __name22222222222222222222222222222222222222222(readExploreLikeR2Bundle, "readExploreLikeR2Bundle");
-__name222222(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
+__name222222222222222222222222222222222222222222(readExploreLikeR2Bundle, "readExploreLikeR2Bundle");
 __name2222222(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
 __name22222222(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
 __name222222222(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
@@ -2867,7 +2905,7 @@ __name22222222222222222222222222222222222222(syncExploreLikeR2AfterMutation, "sy
 __name222222222222222222222222222222222222222(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
 __name2222222222222222222222222222222222222222(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
 __name22222222222222222222222222222222222222222(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
-__name222222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
+__name222222222222222222222222222222222222222222(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
 __name2222222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
 __name22222222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
 __name222222222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
@@ -2903,6 +2941,7 @@ __name22222222222222222222222222222222222222(patchExploreFeedR2LikeCount, "patch
 __name222222222222222222222222222222222222222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
 __name2222222222222222222222222222222222222222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
 __name22222222222222222222222222222222222222222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
+__name222222222222222222222222222222222222222222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
 function getExploreFeedItemLikeCount012(item) {
   return Math.max(0, Number(item?.likeCount ?? item?.stats?.likeCount ?? 0) || 0);
 }
@@ -2945,6 +2984,7 @@ __name22222222222222222222222222222222222(getExploreFeedItemLikeCount012, "getEx
 __name222222222222222222222222222222222222(getExploreFeedItemLikeCount012, "getExploreFeedItemLikeCount012");
 __name2222222222222222222222222222222222222(getExploreFeedItemLikeCount012, "getExploreFeedItemLikeCount012");
 __name22222222222222222222222222222222222222(getExploreFeedItemLikeCount012, "getExploreFeedItemLikeCount012");
+__name222222222222222222222222222222222222222(getExploreFeedItemLikeCount012, "getExploreFeedItemLikeCount012");
 function getExploreFeedItemId012(item) {
   return String(item?.id || item?.trackId || "").trim();
 }
@@ -2987,6 +3027,7 @@ __name22222222222222222222222222222222222(getExploreFeedItemId012, "getExploreFe
 __name222222222222222222222222222222222222(getExploreFeedItemId012, "getExploreFeedItemId012");
 __name2222222222222222222222222222222222222(getExploreFeedItemId012, "getExploreFeedItemId012");
 __name22222222222222222222222222222222222222(getExploreFeedItemId012, "getExploreFeedItemId012");
+__name222222222222222222222222222222222222222(getExploreFeedItemId012, "getExploreFeedItemId012");
 function sortExploreFeedItems012(items, sort) {
   return [...items].sort((a, b) => {
     if (sort === "popular") {
@@ -3037,6 +3078,7 @@ __name22222222222222222222222222222222222(sortExploreFeedItems012, "sortExploreF
 __name222222222222222222222222222222222222(sortExploreFeedItems012, "sortExploreFeedItems012");
 __name2222222222222222222222222222222222222(sortExploreFeedItems012, "sortExploreFeedItems012");
 __name22222222222222222222222222222222222222(sortExploreFeedItems012, "sortExploreFeedItems012");
+__name222222222222222222222222222222222222222(sortExploreFeedItems012, "sortExploreFeedItems012");
 function buildExploreFeedCursor012(sort, items, previousCursor, overflowed) {
   if (!items.length) return null;
   if (!previousCursor && !overflowed) return null;
@@ -3085,7 +3127,7 @@ __name22222222222222222222222222222222222(buildExploreFeedCursor012, "buildExplo
 __name222222222222222222222222222222222222(buildExploreFeedCursor012, "buildExploreFeedCursor012");
 __name2222222222222222222222222222222222222(buildExploreFeedCursor012, "buildExploreFeedCursor012");
 __name22222222222222222222222222222222222222(buildExploreFeedCursor012, "buildExploreFeedCursor012");
-__name222222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
+__name222222222222222222222222222222222222222(buildExploreFeedCursor012, "buildExploreFeedCursor012");
 __name2222222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 __name22222222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 __name222222222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
@@ -3118,6 +3160,7 @@ __name22222222222222222222222222222222222(syncExploreFeedR2Publication012, "sync
 __name222222222222222222222222222222222222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 __name2222222222222222222222222222222222222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 __name22222222222222222222222222222222222222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
+__name222222222222222222222222222222222222222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 async function safelyRefreshExploreFeedR2Bundles(env, reason) {
   try {
     await refreshExploreFeedR2Bundles(env);
@@ -3169,6 +3212,7 @@ __name22222222222222222222222222222222222222(safelyRefreshExploreFeedR2Bundles, 
 __name222222222222222222222222222222222222222(safelyRefreshExploreFeedR2Bundles, "safelyRefreshExploreFeedR2Bundles");
 __name2222222222222222222222222222222222222222(safelyRefreshExploreFeedR2Bundles, "safelyRefreshExploreFeedR2Bundles");
 __name22222222222222222222222222222222222222222(safelyRefreshExploreFeedR2Bundles, "safelyRefreshExploreFeedR2Bundles");
+__name222222222222222222222222222222222222222222(safelyRefreshExploreFeedR2Bundles, "safelyRefreshExploreFeedR2Bundles");
 async function handleFeedWithEdgeCacheD1Core(request, url, env, cors) {
   const cache = caches.default;
   const origin = request.headers.get("Origin") || "";
@@ -3223,6 +3267,7 @@ __name22222222222222222222222222222222222222(handleFeedWithEdgeCacheD1Core, "han
 __name222222222222222222222222222222222222222(handleFeedWithEdgeCacheD1Core, "handleFeedWithEdgeCacheD1Core");
 __name2222222222222222222222222222222222222222(handleFeedWithEdgeCacheD1Core, "handleFeedWithEdgeCacheD1Core");
 __name22222222222222222222222222222222222222222(handleFeedWithEdgeCacheD1Core, "handleFeedWithEdgeCacheD1Core");
+__name222222222222222222222222222222222222222222(handleFeedWithEdgeCacheD1Core, "handleFeedWithEdgeCacheD1Core");
 var EXPLORE_FEED_REVISION_EDGE_TTL_SECONDS_019 = 10;
 function withExploreFeedRevisionCache019(response, status, revision) {
   const headers = new Headers(response.headers);
@@ -3268,6 +3313,7 @@ __name222222222222222222(withExploreFeedRevisionCache019, "withExploreFeedRevisi
 __name2222222222222222222(withExploreFeedRevisionCache019, "withExploreFeedRevisionCache019");
 __name22222222222222222222(withExploreFeedRevisionCache019, "withExploreFeedRevisionCache019");
 __name222222222222222222222(withExploreFeedRevisionCache019, "withExploreFeedRevisionCache019");
+__name2222222222222222222222(withExploreFeedRevisionCache019, "withExploreFeedRevisionCache019");
 var EXPLORE_FEED_INTEGRITY_SCHEMA_VERSION_030 = 1;
 var EXPLORE_FEED_INTEGRITY_CHECK_INTERVAL_MS_030 = 5 * 60 * 1e3;
 var EXPLORE_FEED_INTEGRITY_EDGE_TTL_SECONDS_030 = 30;
@@ -3287,6 +3333,7 @@ __name22222222(exploreFeedIntegrityItemId030, "exploreFeedIntegrityItemId030");
 __name222222222(exploreFeedIntegrityItemId030, "exploreFeedIntegrityItemId030");
 __name2222222222(exploreFeedIntegrityItemId030, "exploreFeedIntegrityItemId030");
 __name22222222222(exploreFeedIntegrityItemId030, "exploreFeedIntegrityItemId030");
+__name222222222222(exploreFeedIntegrityItemId030, "exploreFeedIntegrityItemId030");
 function exploreFeedIntegrityLikeCount030(item) {
   return Math.max(0, Number(item?.likeCount ?? item?.stats?.likeCount ?? 0) || 0);
 }
@@ -3302,6 +3349,7 @@ __name22222222(exploreFeedIntegrityLikeCount030, "exploreFeedIntegrityLikeCount0
 __name222222222(exploreFeedIntegrityLikeCount030, "exploreFeedIntegrityLikeCount030");
 __name2222222222(exploreFeedIntegrityLikeCount030, "exploreFeedIntegrityLikeCount030");
 __name22222222222(exploreFeedIntegrityLikeCount030, "exploreFeedIntegrityLikeCount030");
+__name222222222222(exploreFeedIntegrityLikeCount030, "exploreFeedIntegrityLikeCount030");
 function exploreFeedIntegrityPublishedAt030(item) {
   return Math.max(0, Number(item?.publishedAt ?? item?.published_at ?? 0) || 0);
 }
@@ -3317,6 +3365,7 @@ __name22222222(exploreFeedIntegrityPublishedAt030, "exploreFeedIntegrityPublishe
 __name222222222(exploreFeedIntegrityPublishedAt030, "exploreFeedIntegrityPublishedAt030");
 __name2222222222(exploreFeedIntegrityPublishedAt030, "exploreFeedIntegrityPublishedAt030");
 __name22222222222(exploreFeedIntegrityPublishedAt030, "exploreFeedIntegrityPublishedAt030");
+__name222222222222(exploreFeedIntegrityPublishedAt030, "exploreFeedIntegrityPublishedAt030");
 function exploreFeedIntegritySignature030(bundle, sort) {
   const items = Array.isArray(bundle?.payload?.data?.items) ? bundle.payload.data.items : [];
   return JSON.stringify(items.map((item) => sort === "popular" ? [exploreFeedIntegrityItemId030(item), exploreFeedIntegrityLikeCount030(item), exploreFeedIntegrityPublishedAt030(item)] : [exploreFeedIntegrityItemId030(item), exploreFeedIntegrityPublishedAt030(item)]));
@@ -3333,6 +3382,7 @@ __name22222222(exploreFeedIntegritySignature030, "exploreFeedIntegritySignature0
 __name222222222(exploreFeedIntegritySignature030, "exploreFeedIntegritySignature030");
 __name2222222222(exploreFeedIntegritySignature030, "exploreFeedIntegritySignature030");
 __name22222222222(exploreFeedIntegritySignature030, "exploreFeedIntegritySignature030");
+__name222222222222(exploreFeedIntegritySignature030, "exploreFeedIntegritySignature030");
 function exploreFeedIntegrityEdgeKey030(request) {
   const base = new URL(request.url);
   const url = new URL("/__soridraw_feed_integrity_030", base.origin);
@@ -3351,6 +3401,7 @@ __name22222222(exploreFeedIntegrityEdgeKey030, "exploreFeedIntegrityEdgeKey030")
 __name222222222(exploreFeedIntegrityEdgeKey030, "exploreFeedIntegrityEdgeKey030");
 __name2222222222(exploreFeedIntegrityEdgeKey030, "exploreFeedIntegrityEdgeKey030");
 __name22222222222(exploreFeedIntegrityEdgeKey030, "exploreFeedIntegrityEdgeKey030");
+__name222222222222(exploreFeedIntegrityEdgeKey030, "exploreFeedIntegrityEdgeKey030");
 async function writeExploreFeedIntegrityState030(env, payload) {
   await writeExploreR2Json(env, EXPLORE_FEED_INTEGRITY_R2_KEY_030, {
     schemaVersion: EXPLORE_FEED_INTEGRITY_SCHEMA_VERSION_030,
@@ -3369,6 +3420,7 @@ __name22222222(writeExploreFeedIntegrityState030, "writeExploreFeedIntegrityStat
 __name222222222(writeExploreFeedIntegrityState030, "writeExploreFeedIntegrityState030");
 __name2222222222(writeExploreFeedIntegrityState030, "writeExploreFeedIntegrityState030");
 __name22222222222(writeExploreFeedIntegrityState030, "writeExploreFeedIntegrityState030");
+__name222222222222(writeExploreFeedIntegrityState030, "writeExploreFeedIntegrityState030");
 async function cacheExploreFeedIntegrityEdge030(request) {
   try {
     const headers = new Headers({
@@ -3393,12 +3445,13 @@ __name22222222(cacheExploreFeedIntegrityEdge030, "cacheExploreFeedIntegrityEdge0
 __name222222222(cacheExploreFeedIntegrityEdge030, "cacheExploreFeedIntegrityEdge030");
 __name2222222222(cacheExploreFeedIntegrityEdge030, "cacheExploreFeedIntegrityEdge030");
 __name22222222222(cacheExploreFeedIntegrityEdge030, "cacheExploreFeedIntegrityEdge030");
-__name222222(ensureExploreFeedIntegrity030, "ensureExploreFeedIntegrity030");
+__name222222222222(cacheExploreFeedIntegrityEdge030, "cacheExploreFeedIntegrityEdge030");
 __name2222222(ensureExploreFeedIntegrity030, "ensureExploreFeedIntegrity030");
 __name22222222(ensureExploreFeedIntegrity030, "ensureExploreFeedIntegrity030");
 __name222222222(ensureExploreFeedIntegrity030, "ensureExploreFeedIntegrity030");
 __name2222222222(ensureExploreFeedIntegrity030, "ensureExploreFeedIntegrity030");
 __name22222222222(ensureExploreFeedIntegrity030, "ensureExploreFeedIntegrity030");
+__name222222222222(ensureExploreFeedIntegrity030, "ensureExploreFeedIntegrity030");
 async function handleExploreFeedRevision019Core030(request, url, env, cors) {
   const sort = url.searchParams.get("sort") === "popular" ? "popular" : "latest";
   const cache = caches.default;
@@ -3432,6 +3485,7 @@ __name22222222(handleExploreFeedRevision019Core030, "handleExploreFeedRevision01
 __name222222222(handleExploreFeedRevision019Core030, "handleExploreFeedRevision019Core030");
 __name2222222222(handleExploreFeedRevision019Core030, "handleExploreFeedRevision019Core030");
 __name22222222222(handleExploreFeedRevision019Core030, "handleExploreFeedRevision019Core030");
+__name222222222222(handleExploreFeedRevision019Core030, "handleExploreFeedRevision019Core030");
 async function handleExploreFeedRevision019Core031(request, url, env, cors) {
   await ensureExploreFeedIntegrity030(request, env);
   return await handleExploreFeedRevision019Core030(request, url, env, cors);
@@ -3447,7 +3501,7 @@ __name2222222(handleExploreFeedRevision019Core031, "handleExploreFeedRevision019
 __name22222222(handleExploreFeedRevision019Core031, "handleExploreFeedRevision019Core031");
 __name222222222(handleExploreFeedRevision019Core031, "handleExploreFeedRevision019Core031");
 __name2222222222(handleExploreFeedRevision019Core031, "handleExploreFeedRevision019Core031");
-__name222222(handleExploreFeedRevision019, "handleExploreFeedRevision019");
+__name22222222222(handleExploreFeedRevision019Core031, "handleExploreFeedRevision019Core031");
 __name2222222(handleExploreFeedRevision019, "handleExploreFeedRevision019");
 __name22222222(handleExploreFeedRevision019, "handleExploreFeedRevision019");
 __name222222222(handleExploreFeedRevision019, "handleExploreFeedRevision019");
@@ -3463,6 +3517,7 @@ __name222222222222222222(handleExploreFeedRevision019, "handleExploreFeedRevisio
 __name2222222222222222222(handleExploreFeedRevision019, "handleExploreFeedRevision019");
 __name22222222222222222222(handleExploreFeedRevision019, "handleExploreFeedRevision019");
 __name222222222222222222222(handleExploreFeedRevision019, "handleExploreFeedRevision019");
+__name2222222222222222222222(handleExploreFeedRevision019, "handleExploreFeedRevision019");
 var EXPLORE_MIRROR_ROUTE_020 = "/__soridraw_explore_feed_mirror_020";
 var EXPLORE_MIRROR_SYNC_ROUTE_020 = "/__soridraw_explore_feed_sync_020";
 var EXPLORE_MIRROR_TARGETS_020 = [
@@ -3498,6 +3553,7 @@ __name2222222222222222(exploreMirrorEnvironment020, "exploreMirrorEnvironment020
 __name22222222222222222(exploreMirrorEnvironment020, "exploreMirrorEnvironment020");
 __name222222222222222222(exploreMirrorEnvironment020, "exploreMirrorEnvironment020");
 __name2222222222222222222(exploreMirrorEnvironment020, "exploreMirrorEnvironment020");
+__name22222222222222222222(exploreMirrorEnvironment020, "exploreMirrorEnvironment020");
 function exploreMirrorToken020(env) {
   return String(env?.EXPLORE_MIRROR_TOKEN || "").trim();
 }
@@ -3521,6 +3577,7 @@ __name2222222222222222(exploreMirrorToken020, "exploreMirrorToken020");
 __name22222222222222222(exploreMirrorToken020, "exploreMirrorToken020");
 __name222222222222222222(exploreMirrorToken020, "exploreMirrorToken020");
 __name2222222222222222222(exploreMirrorToken020, "exploreMirrorToken020");
+__name22222222222222222222(exploreMirrorToken020, "exploreMirrorToken020");
 function exploreMirrorSafeIdentifier020(value) {
   const text = String(value || "");
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(text)) throw new Error("invalid SQL identifier");
@@ -3546,6 +3603,7 @@ __name2222222222222222(exploreMirrorSafeIdentifier020, "exploreMirrorSafeIdentif
 __name22222222222222222(exploreMirrorSafeIdentifier020, "exploreMirrorSafeIdentifier020");
 __name222222222222222222(exploreMirrorSafeIdentifier020, "exploreMirrorSafeIdentifier020");
 __name2222222222222222222(exploreMirrorSafeIdentifier020, "exploreMirrorSafeIdentifier020");
+__name22222222222222222222(exploreMirrorSafeIdentifier020, "exploreMirrorSafeIdentifier020");
 function exploreMirrorUniqueText020(values) {
   return [...new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean))];
 }
@@ -3569,6 +3627,7 @@ __name2222222222222222(exploreMirrorUniqueText020, "exploreMirrorUniqueText020")
 __name22222222222222222(exploreMirrorUniqueText020, "exploreMirrorUniqueText020");
 __name222222222222222222(exploreMirrorUniqueText020, "exploreMirrorUniqueText020");
 __name2222222222222222222(exploreMirrorUniqueText020, "exploreMirrorUniqueText020");
+__name22222222222222222222(exploreMirrorUniqueText020, "exploreMirrorUniqueText020");
 async function exploreMirrorTableColumns020(env, table) {
   const safeTable = exploreMirrorSafeIdentifier020(table);
   const result = await env.DB.prepare("PRAGMA table_xinfo(" + safeTable + ")").all();
@@ -3594,6 +3653,7 @@ __name2222222222222222(exploreMirrorTableColumns020, "exploreMirrorTableColumns0
 __name22222222222222222(exploreMirrorTableColumns020, "exploreMirrorTableColumns020");
 __name222222222222222222(exploreMirrorTableColumns020, "exploreMirrorTableColumns020");
 __name2222222222222222222(exploreMirrorTableColumns020, "exploreMirrorTableColumns020");
+__name22222222222222222222(exploreMirrorTableColumns020, "exploreMirrorTableColumns020");
 async function exploreMirrorSelectRows020(env, table, keyColumn, ids) {
   const wanted = exploreMirrorUniqueText020(ids);
   if (!wanted.length) return { columns: [], rows: [] };
@@ -3628,6 +3688,7 @@ __name2222222222222222(exploreMirrorSelectRows020, "exploreMirrorSelectRows020")
 __name22222222222222222(exploreMirrorSelectRows020, "exploreMirrorSelectRows020");
 __name222222222222222222(exploreMirrorSelectRows020, "exploreMirrorSelectRows020");
 __name2222222222222222222(exploreMirrorSelectRows020, "exploreMirrorSelectRows020");
+__name22222222222222222222(exploreMirrorSelectRows020, "exploreMirrorSelectRows020");
 async function exploreMirrorSelectTrackTags020(env, trackIds) {
   const wanted = exploreMirrorUniqueText020(trackIds);
   if (!wanted.length) return { columns: [], rows: [], trackIds: [] };
@@ -3659,6 +3720,7 @@ __name2222222222222222(exploreMirrorSelectTrackTags020, "exploreMirrorSelectTrac
 __name22222222222222222(exploreMirrorSelectTrackTags020, "exploreMirrorSelectTrackTags020");
 __name222222222222222222(exploreMirrorSelectTrackTags020, "exploreMirrorSelectTrackTags020");
 __name2222222222222222222(exploreMirrorSelectTrackTags020, "exploreMirrorSelectTrackTags020");
+__name22222222222222222222(exploreMirrorSelectTrackTags020, "exploreMirrorSelectTrackTags020");
 function exploreMirrorFeedItems020(bundle) {
   const items = bundle?.payload?.data?.items;
   return Array.isArray(items) ? items : [];
@@ -3683,6 +3745,7 @@ __name2222222222222222(exploreMirrorFeedItems020, "exploreMirrorFeedItems020");
 __name22222222222222222(exploreMirrorFeedItems020, "exploreMirrorFeedItems020");
 __name222222222222222222(exploreMirrorFeedItems020, "exploreMirrorFeedItems020");
 __name2222222222222222222(exploreMirrorFeedItems020, "exploreMirrorFeedItems020");
+__name22222222222222222222(exploreMirrorFeedItems020, "exploreMirrorFeedItems020");
 async function buildExploreMirrorPayload020(env, changedTrackId, fullSnapshot) {
   let latest = await readExploreR2Json(env, exploreFeedR2Key("latest"));
   let popular = await readExploreR2Json(env, exploreFeedR2Key("popular"));
@@ -3748,6 +3811,7 @@ __name2222222222222222(buildExploreMirrorPayload020, "buildExploreMirrorPayload0
 __name22222222222222222(buildExploreMirrorPayload020, "buildExploreMirrorPayload020");
 __name222222222222222222(buildExploreMirrorPayload020, "buildExploreMirrorPayload020");
 __name2222222222222222222(buildExploreMirrorPayload020, "buildExploreMirrorPayload020");
+__name22222222222222222222(buildExploreMirrorPayload020, "buildExploreMirrorPayload020");
 async function applyExploreMirrorUpsert020(env, table, payload) {
   const conflictKey = EXPLORE_MIRROR_ALLOWED_TABLES_020.get(table);
   if (!conflictKey) throw new Error("unsupported mirror table: " + table);
@@ -3794,6 +3858,7 @@ __name2222222222222222(applyExploreMirrorUpsert020, "applyExploreMirrorUpsert020
 __name22222222222222222(applyExploreMirrorUpsert020, "applyExploreMirrorUpsert020");
 __name222222222222222222(applyExploreMirrorUpsert020, "applyExploreMirrorUpsert020");
 __name2222222222222222222(applyExploreMirrorUpsert020, "applyExploreMirrorUpsert020");
+__name22222222222222222222(applyExploreMirrorUpsert020, "applyExploreMirrorUpsert020");
 async function applyExploreMirrorTags020(env, payload) {
   const rows = Array.isArray(payload?.rows) ? payload.rows : [];
   const columns = Array.isArray(payload?.columns) ? payload.columns.map((value) => String(value || "")).filter(Boolean) : [];
@@ -3840,6 +3905,7 @@ __name2222222222222222(applyExploreMirrorTags020, "applyExploreMirrorTags020");
 __name22222222222222222(applyExploreMirrorTags020, "applyExploreMirrorTags020");
 __name222222222222222222(applyExploreMirrorTags020, "applyExploreMirrorTags020");
 __name2222222222222222222(applyExploreMirrorTags020, "applyExploreMirrorTags020");
+__name22222222222222222222(applyExploreMirrorTags020, "applyExploreMirrorTags020");
 var EXPLORE_PUBLIC_PROFILE_PARITY_VERSION_029 = 48;
 var EXPLORE_PUBLIC_PROFILE_PARITY_QUERY_029 = "__soridraw_profile_parity";
 function exploreProfileBase029(env) {
@@ -3863,6 +3929,7 @@ __name22222222222(exploreProfileBase029, "exploreProfileBase029");
 __name222222222222(exploreProfileBase029, "exploreProfileBase029");
 __name2222222222222(exploreProfileBase029, "exploreProfileBase029");
 __name22222222222222(exploreProfileBase029, "exploreProfileBase029");
+__name222222222222222(exploreProfileBase029, "exploreProfileBase029");
 async function writeExploreProfileParityBundle029(env, row) {
   const bundle = parseExploreProfileSnapshotRow(row);
   if (!bundle?.uid) return false;
@@ -3887,6 +3954,7 @@ __name22222222222(writeExploreProfileParityBundle029, "writeExploreProfileParity
 __name222222222222(writeExploreProfileParityBundle029, "writeExploreProfileParityBundle029");
 __name2222222222222(writeExploreProfileParityBundle029, "writeExploreProfileParityBundle029");
 __name22222222222222(writeExploreProfileParityBundle029, "writeExploreProfileParityBundle029");
+__name222222222222222(writeExploreProfileParityBundle029, "writeExploreProfileParityBundle029");
 async function syncMirroredProfileR2029(request, env, payload) {
   const firstViews = payload?.tables?.public_profile_first_views;
   const rows = Array.isArray(firstViews?.rows) ? firstViews.rows : [];
@@ -3921,6 +3989,7 @@ __name22222222222(syncMirroredProfileR2029, "syncMirroredProfileR2029");
 __name222222222222(syncMirroredProfileR2029, "syncMirroredProfileR2029");
 __name2222222222222(syncMirroredProfileR2029, "syncMirroredProfileR2029");
 __name22222222222222(syncMirroredProfileR2029, "syncMirroredProfileR2029");
+__name222222222222222(syncMirroredProfileR2029, "syncMirroredProfileR2029");
 async function repairPublicProfileParityOnColdRead029(request, env, profileRef) {
   const url = new URL(request.url);
   if (url.searchParams.get(EXPLORE_PUBLIC_PROFILE_PARITY_QUERY_029) !== String(EXPLORE_PUBLIC_PROFILE_PARITY_VERSION_029)) return false;
@@ -3951,6 +4020,7 @@ __name22222222222(repairPublicProfileParityOnColdRead029, "repairPublicProfilePa
 __name222222222222(repairPublicProfileParityOnColdRead029, "repairPublicProfileParityOnColdRead029");
 __name2222222222222(repairPublicProfileParityOnColdRead029, "repairPublicProfileParityOnColdRead029");
 __name22222222222222(repairPublicProfileParityOnColdRead029, "repairPublicProfileParityOnColdRead029");
+__name222222222222222(repairPublicProfileParityOnColdRead029, "repairPublicProfileParityOnColdRead029");
 async function applyExploreMirrorPayload020Core029(request, env, payload) {
   if (exploreMirrorEnvironment020(env) === "production") throw new Error("production cannot accept mirrored feed payloads");
   const tables = payload?.tables && typeof payload.tables === "object" ? payload.tables : {};
@@ -3989,6 +4059,7 @@ __name22222222222(applyExploreMirrorPayload020Core029, "applyExploreMirrorPayloa
 __name222222222222(applyExploreMirrorPayload020Core029, "applyExploreMirrorPayload020Core029");
 __name2222222222222(applyExploreMirrorPayload020Core029, "applyExploreMirrorPayload020Core029");
 __name22222222222222(applyExploreMirrorPayload020Core029, "applyExploreMirrorPayload020Core029");
+__name222222222222222(applyExploreMirrorPayload020Core029, "applyExploreMirrorPayload020Core029");
 async function applyExploreMirrorPayload020(request, env, payload) {
   const applied = await applyExploreMirrorPayload020Core029(request, env, payload);
   const profileR2 = await syncMirroredProfileR2029(request, env, payload);
@@ -4014,6 +4085,7 @@ __name2222222222222222(applyExploreMirrorPayload020, "applyExploreMirrorPayload0
 __name22222222222222222(applyExploreMirrorPayload020, "applyExploreMirrorPayload020");
 __name222222222222222222(applyExploreMirrorPayload020, "applyExploreMirrorPayload020");
 __name2222222222222222222(applyExploreMirrorPayload020, "applyExploreMirrorPayload020");
+__name22222222222222222222(applyExploreMirrorPayload020, "applyExploreMirrorPayload020");
 async function fanoutExploreMirror020(env, changedTrackId, fullSnapshot) {
   return { skipped: true, sharedCanonicalData: true, changedTrackId: String(changedTrackId || ""), fullSnapshot: Boolean(fullSnapshot) };
 }
@@ -4037,6 +4109,7 @@ __name2222222222222222(fanoutExploreMirror020, "fanoutExploreMirror020");
 __name22222222222222222(fanoutExploreMirror020, "fanoutExploreMirror020");
 __name222222222222222222(fanoutExploreMirror020, "fanoutExploreMirror020");
 __name2222222222222222222(fanoutExploreMirror020, "fanoutExploreMirror020");
+__name22222222222222222222(fanoutExploreMirror020, "fanoutExploreMirror020");
 async function handleExploreMirrorRoute020(request, env) {
   const token = exploreMirrorToken020(env);
   if (!token || request.headers.get("X-SORIDRAW-Explore-Mirror") !== token) return new Response("not found", { status: 404 });
@@ -4062,6 +4135,7 @@ __name2222222222222222(handleExploreMirrorRoute020, "handleExploreMirrorRoute020
 __name22222222222222222(handleExploreMirrorRoute020, "handleExploreMirrorRoute020");
 __name222222222222222222(handleExploreMirrorRoute020, "handleExploreMirrorRoute020");
 __name2222222222222222222(handleExploreMirrorRoute020, "handleExploreMirrorRoute020");
+__name22222222222222222222(handleExploreMirrorRoute020, "handleExploreMirrorRoute020");
 async function handleExploreMirrorSyncRoute020(request, env) {
   const token = exploreMirrorToken020(env);
   if (!token || request.headers.get("X-SORIDRAW-Explore-Mirror") !== token) return new Response("not found", { status: 404 });
@@ -4087,7 +4161,7 @@ __name2222222222222222(handleExploreMirrorSyncRoute020, "handleExploreMirrorSync
 __name22222222222222222(handleExploreMirrorSyncRoute020, "handleExploreMirrorSyncRoute020");
 __name222222222222222222(handleExploreMirrorSyncRoute020, "handleExploreMirrorSyncRoute020");
 __name2222222222222222222(handleExploreMirrorSyncRoute020, "handleExploreMirrorSyncRoute020");
-__name222222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
+__name22222222222222222222(handleExploreMirrorSyncRoute020, "handleExploreMirrorSyncRoute020");
 __name2222222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 __name22222222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 __name222222222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
@@ -4147,6 +4221,7 @@ __name22222222222222222222222222222222222222222222222222222222222222(handleFeedW
 __name222222222222222222222222222222222222222222222222222222222222222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 __name2222222222222222222222222222222222222222222222222222222222222222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 __name22222222222222222222222222222222222222222222222222222222222222222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
+__name222222222222222222222222222222222222222222222222222222222222222222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 async function invalidateExploreFeedEdgeCache019Core(request) {
   try {
     const cache = caches.default;
@@ -4185,6 +4260,7 @@ __name222222222222222222(invalidateExploreFeedEdgeCache019Core, "invalidateExplo
 __name2222222222222222222(invalidateExploreFeedEdgeCache019Core, "invalidateExploreFeedEdgeCache019Core");
 __name22222222222222222222(invalidateExploreFeedEdgeCache019Core, "invalidateExploreFeedEdgeCache019Core");
 __name222222222222222222222(invalidateExploreFeedEdgeCache019Core, "invalidateExploreFeedEdgeCache019Core");
+__name2222222222222222222222(invalidateExploreFeedEdgeCache019Core, "invalidateExploreFeedEdgeCache019Core");
 async function invalidateExploreFeedEdgeCacheCore031(request) {
   await invalidateExploreFeedEdgeCache019Core(request);
   try {
@@ -4213,6 +4289,7 @@ __name2222222(invalidateExploreFeedEdgeCacheCore031, "invalidateExploreFeedEdgeC
 __name22222222(invalidateExploreFeedEdgeCacheCore031, "invalidateExploreFeedEdgeCacheCore031");
 __name222222222(invalidateExploreFeedEdgeCacheCore031, "invalidateExploreFeedEdgeCacheCore031");
 __name2222222222(invalidateExploreFeedEdgeCacheCore031, "invalidateExploreFeedEdgeCacheCore031");
+__name22222222222(invalidateExploreFeedEdgeCacheCore031, "invalidateExploreFeedEdgeCacheCore031");
 async function invalidateExploreFeedEdgeCache(request) {
   await invalidateExploreFeedEdgeCacheCore031(request);
   await clearSharedDataRevisionEdge031(request);
@@ -4283,6 +4360,7 @@ __name22222222222222222222222222222222222222222222222222222222222222(invalidateE
 __name222222222222222222222222222222222222222222222222222222222222222(invalidateExploreFeedEdgeCache, "invalidateExploreFeedEdgeCache");
 __name2222222222222222222222222222222222222222222222222222222222222222(invalidateExploreFeedEdgeCache, "invalidateExploreFeedEdgeCache");
 __name22222222222222222222222222222222222222222222222222222222222222222(invalidateExploreFeedEdgeCache, "invalidateExploreFeedEdgeCache");
+__name222222222222222222222222222222222222222222222222222222222222222222(invalidateExploreFeedEdgeCache, "invalidateExploreFeedEdgeCache");
 async function handleFeed(url, env, cors) {
   const limit = getPageSize(url);
   const sort = url.searchParams.get("sort") === "popular" ? "popular" : "latest";
@@ -4426,6 +4504,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleFeed, "handleFeed");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleFeed, "handleFeed");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleFeed, "handleFeed");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleFeed, "handleFeed");
 function escapeLike(value) {
   return String(value || "").replace(/[\\%_]/g, (match) => `\\${match}`);
 }
@@ -4502,6 +4581,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(esca
 __name2222222222222222222222222222222222222222222222222222222222222222222222(escapeLike, "escapeLike");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(escapeLike, "escapeLike");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(escapeLike, "escapeLike");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(escapeLike, "escapeLike");
 function buildFtsQuery(value) {
   const terms = String(value || "").trim().split(/\s+/).map((term) => term.replace(/["*:^~(){}\[\]]/g, "").trim()).filter(Boolean).slice(0, 8);
   if (terms.length === 0) return "";
@@ -4580,6 +4660,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(buil
 __name2222222222222222222222222222222222222222222222222222222222222222222222(buildFtsQuery, "buildFtsQuery");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(buildFtsQuery, "buildFtsQuery");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(buildFtsQuery, "buildFtsQuery");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(buildFtsQuery, "buildFtsQuery");
 async function searchTrackIdsByFts(env, q, limit = 200) {
   const ftsQuery = buildFtsQuery(q);
   if (!ftsQuery) return [];
@@ -4669,6 +4750,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(sear
 __name2222222222222222222222222222222222222222222222222222222222222222222222(searchTrackIdsByFts, "searchTrackIdsByFts");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(searchTrackIdsByFts, "searchTrackIdsByFts");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(searchTrackIdsByFts, "searchTrackIdsByFts");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(searchTrackIdsByFts, "searchTrackIdsByFts");
 async function searchCreatorIdsByFts(env, q, limit = 50) {
   const ftsQuery = buildFtsQuery(q);
   if (!ftsQuery) return [];
@@ -4758,6 +4840,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(sear
 __name2222222222222222222222222222222222222222222222222222222222222222222222(searchCreatorIdsByFts, "searchCreatorIdsByFts");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(searchCreatorIdsByFts, "searchCreatorIdsByFts");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(searchCreatorIdsByFts, "searchCreatorIdsByFts");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(searchCreatorIdsByFts, "searchCreatorIdsByFts");
 async function handleSearch(url, env, cors) {
   const q = safeString(url.searchParams.get("q")).trim();
   if (!q) {
@@ -4973,6 +5056,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleSearch, "handleSearch");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleSearch, "handleSearch");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleSearch, "handleSearch");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleSearch, "handleSearch");
 async function handleTrackDetail(trackId, env, cors) {
   const row = await env.DB.prepare(`
     SELECT
@@ -5072,6 +5156,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleTrackDetail, "handleTrackDetail");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleTrackDetail, "handleTrackDetail");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleTrackDetail, "handleTrackDetail");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleTrackDetail, "handleTrackDetail");
 async function handleTrackComments(url, trackId, env, cors) {
   const track = await env.DB.prepare(`
     SELECT id
@@ -5210,6 +5295,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleTrackComments, "handleTrackComments");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleTrackComments, "handleTrackComments");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleTrackComments, "handleTrackComments");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleTrackComments, "handleTrackComments");
 function parseProfileGenres(value) {
   try {
     const parsed = JSON.parse(String(value || "[]"));
@@ -5291,6 +5377,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(pars
 __name2222222222222222222222222222222222222222222222222222222222222222222222(parseProfileGenres, "parseProfileGenres");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(parseProfileGenres, "parseProfileGenres");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(parseProfileGenres, "parseProfileGenres");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(parseProfileGenres, "parseProfileGenres");
 function normalizeProfileHandle(value) {
   return String(value || "").trim().replace(/^@+/, "").toLowerCase();
 }
@@ -5367,6 +5454,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(norm
 __name2222222222222222222222222222222222222222222222222222222222222222222222(normalizeProfileHandle, "normalizeProfileHandle");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(normalizeProfileHandle, "normalizeProfileHandle");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(normalizeProfileHandle, "normalizeProfileHandle");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(normalizeProfileHandle, "normalizeProfileHandle");
 function normalizeProfileSocialUrl(value, kind) {
   const text = String(value || "").trim();
   if (!text) return "";
@@ -5459,6 +5547,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(norm
 __name2222222222222222222222222222222222222222222222222222222222222222222222(normalizeProfileSocialUrl, "normalizeProfileSocialUrl");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(normalizeProfileSocialUrl, "normalizeProfileSocialUrl");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(normalizeProfileSocialUrl, "normalizeProfileSocialUrl");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(normalizeProfileSocialUrl, "normalizeProfileSocialUrl");
 async function resolvePublicProfileRef(env, profileRef) {
   const ref = String(profileRef || "").trim().replace(/^@+/, "");
   if (!ref) return null;
@@ -5544,6 +5633,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(reso
 __name2222222222222222222222222222222222222222222222222222222222222222222222(resolvePublicProfileRef, "resolvePublicProfileRef");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(resolvePublicProfileRef, "resolvePublicProfileRef");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(resolvePublicProfileRef, "resolvePublicProfileRef");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(resolvePublicProfileRef, "resolvePublicProfileRef");
 async function readPublicProfileByUid(env, uid) {
   const profile = await env.DB.prepare(`
     SELECT
@@ -5656,6 +5746,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(read
 __name2222222222222222222222222222222222222222222222222222222222222222222222(readPublicProfileByUid, "readPublicProfileByUid");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(readPublicProfileByUid, "readPublicProfileByUid");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(readPublicProfileByUid, "readPublicProfileByUid");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(readPublicProfileByUid, "readPublicProfileByUid");
 async function handlePublicProfileFirstViewSnapshot(profileRef, env, cors) {
   const ref = String(profileRef || "").trim().replace(/^@+/, "");
   if (!ref) return apiError("NOT_FOUND", "\uACF5\uAC1C \uD504\uB85C\uD544\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404, cors);
@@ -5757,6 +5848,7 @@ __name222222222222222222222222222222222222222222222222222222222(handlePublicProf
 __name2222222222222222222222222222222222222222222222222222222222(handlePublicProfileFirstViewSnapshot, "handlePublicProfileFirstViewSnapshot");
 __name22222222222222222222222222222222222222222222222222222222222(handlePublicProfileFirstViewSnapshot, "handlePublicProfileFirstViewSnapshot");
 __name222222222222222222222222222222222222222222222222222222222222(handlePublicProfileFirstViewSnapshot, "handlePublicProfileFirstViewSnapshot");
+__name2222222222222222222222222222222222222222222222222222222222222(handlePublicProfileFirstViewSnapshot, "handlePublicProfileFirstViewSnapshot");
 var PUBLIC_PROFILE_FIRST_VIEW_SCHEMA_VERSION = 1;
 var PUBLIC_PROFILE_FIRST_VIEW_LIMIT = 50;
 var PUBLIC_PROFILE_FIRST_VIEW_EDGE_TTL_SECONDS = 30;
@@ -5838,6 +5930,7 @@ __name22222222222222222222222222222222222222222222222222222222(ensurePublicProfi
 __name222222222222222222222222222222222222222222222222222222222(ensurePublicProfileFirstViewTable, "ensurePublicProfileFirstViewTable");
 __name2222222222222222222222222222222222222222222222222222222222(ensurePublicProfileFirstViewTable, "ensurePublicProfileFirstViewTable");
 __name22222222222222222222222222222222222222222222222222222222222(ensurePublicProfileFirstViewTable, "ensurePublicProfileFirstViewTable");
+__name222222222222222222222222222222222222222222222222222222222222(ensurePublicProfileFirstViewTable, "ensurePublicProfileFirstViewTable");
 function parsePublicProfileFirstViewRow(row) {
   if (!row) return null;
   try {
@@ -5914,6 +6007,7 @@ __name22222222222222222222222222222222222222222222222222222222(parsePublicProfil
 __name222222222222222222222222222222222222222222222222222222222(parsePublicProfileFirstViewRow, "parsePublicProfileFirstViewRow");
 __name2222222222222222222222222222222222222222222222222222222222(parsePublicProfileFirstViewRow, "parsePublicProfileFirstViewRow");
 __name22222222222222222222222222222222222222222222222222222222222(parsePublicProfileFirstViewRow, "parsePublicProfileFirstViewRow");
+__name222222222222222222222222222222222222222222222222222222222222(parsePublicProfileFirstViewRow, "parsePublicProfileFirstViewRow");
 async function readPublicProfileFirstViewRowByPrimaryKey(env, normalized) {
   return await env.DB.prepare(`
     SELECT uid, handle, schema_version, revision, payload_json, next_cursor, updated_at
@@ -5981,6 +6075,7 @@ __name2222222222222222222222222222222222222222222222222222222(readPublicProfileF
 __name22222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRowByPrimaryKey, "readPublicProfileFirstViewRowByPrimaryKey");
 __name222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRowByPrimaryKey, "readPublicProfileFirstViewRowByPrimaryKey");
 __name2222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRowByPrimaryKey, "readPublicProfileFirstViewRowByPrimaryKey");
+__name22222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRowByPrimaryKey, "readPublicProfileFirstViewRowByPrimaryKey");
 async function readPublicProfileFirstViewRowByHandle(env, normalized) {
   return await env.DB.prepare(`
     SELECT uid, handle, schema_version, revision, payload_json, next_cursor, updated_at
@@ -6048,6 +6143,7 @@ __name2222222222222222222222222222222222222222222222222222222(readPublicProfileF
 __name22222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRowByHandle, "readPublicProfileFirstViewRowByHandle");
 __name222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRowByHandle, "readPublicProfileFirstViewRowByHandle");
 __name2222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRowByHandle, "readPublicProfileFirstViewRowByHandle");
+__name22222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRowByHandle, "readPublicProfileFirstViewRowByHandle");
 async function readPublicProfileFirstViewRow(env, ref) {
   const normalized = String(ref || "").trim().replace(/^@+/, "");
   if (!normalized) return null;
@@ -6115,6 +6211,7 @@ __name22222222222222222222222222222222222222222222222222222222(readPublicProfile
 __name222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRow, "readPublicProfileFirstViewRow");
 __name2222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRow, "readPublicProfileFirstViewRow");
 __name22222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRow, "readPublicProfileFirstViewRow");
+__name222222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRow, "readPublicProfileFirstViewRow");
 async function readPublicProfileFirstViewBaseProfile(env, uid) {
   const profile = await env.DB.prepare(`
     SELECT
@@ -6208,6 +6305,7 @@ __name22222222222222222222222222222222222222222222222222222222(readPublicProfile
 __name222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewBaseProfile, "readPublicProfileFirstViewBaseProfile");
 __name2222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewBaseProfile, "readPublicProfileFirstViewBaseProfile");
 __name22222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewBaseProfile, "readPublicProfileFirstViewBaseProfile");
+__name222222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewBaseProfile, "readPublicProfileFirstViewBaseProfile");
 async function readPublicProfileFirstViewTrackWindow(env, uid) {
   const result = await env.DB.prepare(`
     SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,
@@ -6290,6 +6388,7 @@ __name22222222222222222222222222222222222222222222222222222222(readPublicProfile
 __name222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewTrackWindow, "readPublicProfileFirstViewTrackWindow");
 __name2222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewTrackWindow, "readPublicProfileFirstViewTrackWindow");
 __name22222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewTrackWindow, "readPublicProfileFirstViewTrackWindow");
+__name222222222222222222222222222222222222222222222222222222222222(readPublicProfileFirstViewTrackWindow, "readPublicProfileFirstViewTrackWindow");
 async function writePublicProfileFirstViewSnapshotR2Core(env, uid, handle, snapshot, nextCursor, now) {
   await env.DB.prepare(`
     INSERT INTO public_profile_first_views (
@@ -6352,6 +6451,7 @@ __name2222222222222222222222222222222222222(writePublicProfileFirstViewSnapshotR
 __name22222222222222222222222222222222222222(writePublicProfileFirstViewSnapshotR2Core, "writePublicProfileFirstViewSnapshotR2Core");
 __name222222222222222222222222222222222222222(writePublicProfileFirstViewSnapshotR2Core, "writePublicProfileFirstViewSnapshotR2Core");
 __name2222222222222222222222222222222222222222(writePublicProfileFirstViewSnapshotR2Core, "writePublicProfileFirstViewSnapshotR2Core");
+__name22222222222222222222222222222222222222222(writePublicProfileFirstViewSnapshotR2Core, "writePublicProfileFirstViewSnapshotR2Core");
 async function writePublicProfileFirstViewSnapshot(env, uid, handle, snapshot, nextCursor, now) {
   const result = await writePublicProfileFirstViewSnapshotR2Core(env, uid, handle, snapshot, nextCursor, now);
   try {
@@ -6421,7 +6521,7 @@ __name22222222222222222222222222222222222222222222222222222222(writePublicProfil
 __name222222222222222222222222222222222222222222222222222222222(writePublicProfileFirstViewSnapshot, "writePublicProfileFirstViewSnapshot");
 __name2222222222222222222222222222222222222222222222222222222222(writePublicProfileFirstViewSnapshot, "writePublicProfileFirstViewSnapshot");
 __name22222222222222222222222222222222222222222222222222222222222(writePublicProfileFirstViewSnapshot, "writePublicProfileFirstViewSnapshot");
-__name222222(materializePublicProfileFirstView, "materializePublicProfileFirstView");
+__name222222222222222222222222222222222222222222222222222222222222(writePublicProfileFirstViewSnapshot, "writePublicProfileFirstViewSnapshot");
 __name2222222(materializePublicProfileFirstView, "materializePublicProfileFirstView");
 __name22222222(materializePublicProfileFirstView, "materializePublicProfileFirstView");
 __name222222222(materializePublicProfileFirstView, "materializePublicProfileFirstView");
@@ -6475,6 +6575,7 @@ __name22222222222222222222222222222222222222222222222222222222(materializePublic
 __name222222222222222222222222222222222222222222222222222222222(materializePublicProfileFirstView, "materializePublicProfileFirstView");
 __name2222222222222222222222222222222222222222222222222222222222(materializePublicProfileFirstView, "materializePublicProfileFirstView");
 __name22222222222222222222222222222222222222222222222222222222222(materializePublicProfileFirstView, "materializePublicProfileFirstView");
+__name222222222222222222222222222222222222222222222222222222222222(materializePublicProfileFirstView, "materializePublicProfileFirstView");
 async function prebuildPublicProfileFirstViewIfMissing(env, uid, stored) {
   if (stored) return stored;
   const materializedRow = await materializePublicProfileFirstView(env, uid);
@@ -6537,6 +6638,7 @@ __name22222222222222222222222222222222222222222222222222222(prebuildPublicProfil
 __name222222222222222222222222222222222222222222222222222222(prebuildPublicProfileFirstViewIfMissing, "prebuildPublicProfileFirstViewIfMissing");
 __name2222222222222222222222222222222222222222222222222222222(prebuildPublicProfileFirstViewIfMissing, "prebuildPublicProfileFirstViewIfMissing");
 __name22222222222222222222222222222222222222222222222222222222(prebuildPublicProfileFirstViewIfMissing, "prebuildPublicProfileFirstViewIfMissing");
+__name222222222222222222222222222222222222222222222222222222222(prebuildPublicProfileFirstViewIfMissing, "prebuildPublicProfileFirstViewIfMissing");
 async function readOrMaterializePublicProfileFirstView(env, uid) {
   let stored = parsePublicProfileFirstViewRow(await readPublicProfileFirstViewRow(env, uid));
   if (stored) return { stored, created: false };
@@ -6600,7 +6702,7 @@ __name2222222222222222222222222222222222222222222222222222(readOrMaterializePubl
 __name22222222222222222222222222222222222222222222222222222(readOrMaterializePublicProfileFirstView, "readOrMaterializePublicProfileFirstView");
 __name222222222222222222222222222222222222222222222222222222(readOrMaterializePublicProfileFirstView, "readOrMaterializePublicProfileFirstView");
 __name2222222222222222222222222222222222222222222222222222222(readOrMaterializePublicProfileFirstView, "readOrMaterializePublicProfileFirstView");
-__name222222(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfileFirstView");
+__name22222222222222222222222222222222222222222222222222222222(readOrMaterializePublicProfileFirstView, "readOrMaterializePublicProfileFirstView");
 __name2222222(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfileFirstView");
 __name22222222(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfileFirstView");
 __name222222222(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfileFirstView");
@@ -6650,7 +6752,7 @@ __name2222222222222222222222222222222222222222222222222222(refreshOrPrebuildPubl
 __name22222222222222222222222222222222222222222222222222222(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfileFirstView");
 __name222222222222222222222222222222222222222222222222222222(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfileFirstView");
 __name2222222222222222222222222222222222222222222222222222222(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfileFirstView");
-__name222222(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProfileTrackWindow");
+__name22222222222222222222222222222222222222222222222222222222(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfileFirstView");
 __name2222222(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProfileTrackWindow");
 __name22222222(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProfileTrackWindow");
 __name222222222(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProfileTrackWindow");
@@ -6700,7 +6802,7 @@ __name2222222222222222222222222222222222222222222222222222(refreshOrPrebuildPubl
 __name22222222222222222222222222222222222222222222222222222(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProfileTrackWindow");
 __name222222222222222222222222222222222222222222222222222222(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProfileTrackWindow");
 __name2222222222222222222222222222222222222222222222222222222(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProfileTrackWindow");
-__name222222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
+__name22222222222222222222222222222222222222222222222222222222(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProfileTrackWindow");
 __name2222222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
 __name22222222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
 __name222222222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
@@ -6754,6 +6856,7 @@ __name22222222222222222222222222222222222222222222222222222222(refreshPublicProf
 __name222222222222222222222222222222222222222222222222222222222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
 __name2222222222222222222222222222222222222222222222222222222222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
 __name22222222222222222222222222222222222222222222222222222222222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
+__name222222222222222222222222222222222222222222222222222222222222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
 async function readLatestOwnerTrackForFirstViewMutation(env, uid) {
   return await env.DB.prepare(`
     SELECT t.*, p.nickname AS owner_nickname, p.avatar_url AS owner_avatar_url,
@@ -6801,6 +6904,7 @@ __name22222222222222222222222222222(readLatestOwnerTrackForFirstViewMutation, "r
 __name222222222222222222222222222222(readLatestOwnerTrackForFirstViewMutation, "readLatestOwnerTrackForFirstViewMutation");
 __name2222222222222222222222222222222(readLatestOwnerTrackForFirstViewMutation, "readLatestOwnerTrackForFirstViewMutation");
 __name22222222222222222222222222222222(readLatestOwnerTrackForFirstViewMutation, "readLatestOwnerTrackForFirstViewMutation");
+__name222222222222222222222222222222222(readLatestOwnerTrackForFirstViewMutation, "readLatestOwnerTrackForFirstViewMutation");
 async function syncExploreFeedR2PublicVisibility1028(env, trackId) {
   try {
     const row = await env.DB.prepare(`
@@ -6856,6 +6960,7 @@ __name22222222222222222222222222222(syncExploreFeedR2PublicVisibility1028, "sync
 __name222222222222222222222222222222(syncExploreFeedR2PublicVisibility1028, "syncExploreFeedR2PublicVisibility1028");
 __name2222222222222222222222222222222(syncExploreFeedR2PublicVisibility1028, "syncExploreFeedR2PublicVisibility1028");
 __name22222222222222222222222222222222(syncExploreFeedR2PublicVisibility1028, "syncExploreFeedR2PublicVisibility1028");
+__name222222222222222222222222222222222(syncExploreFeedR2PublicVisibility1028, "syncExploreFeedR2PublicVisibility1028");
 function sortPublicProfileFirstViewMutationItems(items) {
   return [...items].sort((a, b) => {
     const pin = Number(b?.profilePinned || 0) - Number(a?.profilePinned || 0);
@@ -6898,7 +7003,7 @@ __name22222222222222222222222222222(sortPublicProfileFirstViewMutationItems, "so
 __name222222222222222222222222222222(sortPublicProfileFirstViewMutationItems, "sortPublicProfileFirstViewMutationItems");
 __name2222222222222222222222222222222(sortPublicProfileFirstViewMutationItems, "sortPublicProfileFirstViewMutationItems");
 __name22222222222222222222222222222222(sortPublicProfileFirstViewMutationItems, "sortPublicProfileFirstViewMutationItems");
-__name222222(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstViewTrackWindow");
+__name222222222222222222222222222222222(sortPublicProfileFirstViewMutationItems, "sortPublicProfileFirstViewMutationItems");
 __name2222222(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstViewTrackWindow");
 __name22222222(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstViewTrackWindow");
 __name222222222(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstViewTrackWindow");
@@ -6952,6 +7057,7 @@ __name22222222222222222222222222222222222222222222222222222222(refreshPublicProf
 __name222222222222222222222222222222222222222222222222222222222(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstViewTrackWindow");
 __name2222222222222222222222222222222222222222222222222222222222(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstViewTrackWindow");
 __name22222222222222222222222222222222222222222222222222222222222(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstViewTrackWindow");
+__name222222222222222222222222222222222222222222222222222222222222(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstViewTrackWindow");
 async function patchPublicProfileFirstViewLikeCount(env, uid, trackId, likeCount) {
   try {
     let stored = parsePublicProfileFirstViewRow(await readPublicProfileFirstViewRow(env, uid));
@@ -7041,6 +7147,7 @@ __name22222222222222222222222222222222222222222222222222222222(patchPublicProfil
 __name222222222222222222222222222222222222222222222222222222222(patchPublicProfileFirstViewLikeCount, "patchPublicProfileFirstViewLikeCount");
 __name2222222222222222222222222222222222222222222222222222222222(patchPublicProfileFirstViewLikeCount, "patchPublicProfileFirstViewLikeCount");
 __name22222222222222222222222222222222222222222222222222222222222(patchPublicProfileFirstViewLikeCount, "patchPublicProfileFirstViewLikeCount");
+__name222222222222222222222222222222222222222222222222222222222222(patchPublicProfileFirstViewLikeCount, "patchPublicProfileFirstViewLikeCount");
 function getPublicProfileFirstViewEdgeCacheKey(requestUrl, profileRef, requestOrigin) {
   const base = new URL(requestUrl).origin;
   const normalized = String(profileRef || "").trim();
@@ -7110,6 +7217,7 @@ __name22222222222222222222222222222222222222222222222222222222(getPublicProfileF
 __name222222222222222222222222222222222222222222222222222222222(getPublicProfileFirstViewEdgeCacheKey, "getPublicProfileFirstViewEdgeCacheKey");
 __name2222222222222222222222222222222222222222222222222222222222(getPublicProfileFirstViewEdgeCacheKey, "getPublicProfileFirstViewEdgeCacheKey");
 __name22222222222222222222222222222222222222222222222222222222222(getPublicProfileFirstViewEdgeCacheKey, "getPublicProfileFirstViewEdgeCacheKey");
+__name222222222222222222222222222222222222222222222222222222222222(getPublicProfileFirstViewEdgeCacheKey, "getPublicProfileFirstViewEdgeCacheKey");
 function withPublicProfileFirstViewEdgeHeader(response, status) {
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", `public, max-age=0, s-maxage=${PUBLIC_PROFILE_FIRST_VIEW_EDGE_TTL_SECONDS}`);
@@ -7179,6 +7287,7 @@ __name22222222222222222222222222222222222222222222222222222222(withPublicProfile
 __name222222222222222222222222222222222222222222222222222222222(withPublicProfileFirstViewEdgeHeader, "withPublicProfileFirstViewEdgeHeader");
 __name2222222222222222222222222222222222222222222222222222222222(withPublicProfileFirstViewEdgeHeader, "withPublicProfileFirstViewEdgeHeader");
 __name22222222222222222222222222222222222222222222222222222222222(withPublicProfileFirstViewEdgeHeader, "withPublicProfileFirstViewEdgeHeader");
+__name222222222222222222222222222222222222222222222222222222222222(withPublicProfileFirstViewEdgeHeader, "withPublicProfileFirstViewEdgeHeader");
 async function invalidatePublicProfileFirstViewEdgeCacheCore031(request, refs) {
   try {
     const uniqueRefs = [...new Set((refs || []).map((value) => String(value || "").trim()).filter(Boolean))];
@@ -7209,6 +7318,7 @@ __name2222222(invalidatePublicProfileFirstViewEdgeCacheCore031, "invalidatePubli
 __name22222222(invalidatePublicProfileFirstViewEdgeCacheCore031, "invalidatePublicProfileFirstViewEdgeCacheCore031");
 __name222222222(invalidatePublicProfileFirstViewEdgeCacheCore031, "invalidatePublicProfileFirstViewEdgeCacheCore031");
 __name2222222222(invalidatePublicProfileFirstViewEdgeCacheCore031, "invalidatePublicProfileFirstViewEdgeCacheCore031");
+__name22222222222(invalidatePublicProfileFirstViewEdgeCacheCore031, "invalidatePublicProfileFirstViewEdgeCacheCore031");
 async function invalidatePublicProfileFirstViewEdgeCache(request, refs) {
   await invalidatePublicProfileFirstViewEdgeCacheCore031(request, refs);
   await clearSharedDataRevisionEdge031(request);
@@ -7273,6 +7383,7 @@ __name22222222222222222222222222222222222222222222222222222222(invalidatePublicP
 __name222222222222222222222222222222222222222222222222222222222(invalidatePublicProfileFirstViewEdgeCache, "invalidatePublicProfileFirstViewEdgeCache");
 __name2222222222222222222222222222222222222222222222222222222222(invalidatePublicProfileFirstViewEdgeCache, "invalidatePublicProfileFirstViewEdgeCache");
 __name22222222222222222222222222222222222222222222222222222222222(invalidatePublicProfileFirstViewEdgeCache, "invalidatePublicProfileFirstViewEdgeCache");
+__name222222222222222222222222222222222222222222222222222222222222(invalidatePublicProfileFirstViewEdgeCache, "invalidatePublicProfileFirstViewEdgeCache");
 function normalizePublicProfileRevision(value) {
   const normalized = String(value ?? "").trim();
   return /^\d+$/.test(normalized) ? normalized : "";
@@ -7326,6 +7437,7 @@ __name222222222222222222222222222222222222222222222(normalizePublicProfileRevisi
 __name2222222222222222222222222222222222222222222222(normalizePublicProfileRevision, "normalizePublicProfileRevision");
 __name22222222222222222222222222222222222222222222222(normalizePublicProfileRevision, "normalizePublicProfileRevision");
 __name222222222222222222222222222222222222222222222222(normalizePublicProfileRevision, "normalizePublicProfileRevision");
+__name2222222222222222222222222222222222222222222222222(normalizePublicProfileRevision, "normalizePublicProfileRevision");
 async function readPublicProfileFirstViewRevisionOnly(env, profileRef) {
   const normalized = String(profileRef || "").trim().replace(/^@+/, "");
   if (!normalized) return null;
@@ -7392,6 +7504,7 @@ __name222222222222222222222222222222222222222222222(readPublicProfileFirstViewRe
 __name2222222222222222222222222222222222222222222222(readPublicProfileFirstViewRevisionOnly, "readPublicProfileFirstViewRevisionOnly");
 __name22222222222222222222222222222222222222222222222(readPublicProfileFirstViewRevisionOnly, "readPublicProfileFirstViewRevisionOnly");
 __name222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRevisionOnly, "readPublicProfileFirstViewRevisionOnly");
+__name2222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRevisionOnly, "readPublicProfileFirstViewRevisionOnly");
 async function readPublicProfileFirstViewRevisionFromResponse(response) {
   const headerRevision = normalizePublicProfileRevision(response?.headers?.get("X-SORIDRAW-Profile-Revision"));
   if (headerRevision) return headerRevision;
@@ -7451,6 +7564,7 @@ __name222222222222222222222222222222222222222222222(readPublicProfileFirstViewRe
 __name2222222222222222222222222222222222222222222222(readPublicProfileFirstViewRevisionFromResponse, "readPublicProfileFirstViewRevisionFromResponse");
 __name22222222222222222222222222222222222222222222222(readPublicProfileFirstViewRevisionFromResponse, "readPublicProfileFirstViewRevisionFromResponse");
 __name222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRevisionFromResponse, "readPublicProfileFirstViewRevisionFromResponse");
+__name2222222222222222222222222222222222222222222222222(readPublicProfileFirstViewRevisionFromResponse, "readPublicProfileFirstViewRevisionFromResponse");
 function withPublicProfileRevisionHeaders(response, revision, validationMode) {
   const normalizedRevision = normalizePublicProfileRevision(revision);
   const headers = new Headers(response.headers);
@@ -7515,6 +7629,7 @@ __name222222222222222222222222222222222222222222222(withPublicProfileRevisionHea
 __name2222222222222222222222222222222222222222222222(withPublicProfileRevisionHeaders, "withPublicProfileRevisionHeaders");
 __name22222222222222222222222222222222222222222222222(withPublicProfileRevisionHeaders, "withPublicProfileRevisionHeaders");
 __name222222222222222222222222222222222222222222222222(withPublicProfileRevisionHeaders, "withPublicProfileRevisionHeaders");
+__name2222222222222222222222222222222222222222222222222(withPublicProfileRevisionHeaders, "withPublicProfileRevisionHeaders");
 function makePublicProfileFirstViewNotModified(baseResponse, revision, edgeStatus, validationMode, cors) {
   const headers = new Headers(baseResponse?.headers || cors || {});
   headers.delete("Content-Length");
@@ -7575,11 +7690,12 @@ __name222222222222222222222222222222222222222222222(makePublicProfileFirstViewNo
 __name2222222222222222222222222222222222222222222222(makePublicProfileFirstViewNotModified, "makePublicProfileFirstViewNotModified");
 __name22222222222222222222222222222222222222222222222(makePublicProfileFirstViewNotModified, "makePublicProfileFirstViewNotModified");
 __name222222222222222222222222222222222222222222222222(makePublicProfileFirstViewNotModified, "makePublicProfileFirstViewNotModified");
+__name2222222222222222222222222222222222222222222222222(makePublicProfileFirstViewNotModified, "makePublicProfileFirstViewNotModified");
 var EXPLORE_R2_PROFILE_SCHEMA_VERSION = 1;
 var EXPLORE_R2_FOLLOW_SCHEMA_VERSION = 1;
 var EXPLORE_R2_FOLLOW_LIMIT = 5e3;
-var exploreProfileR2Key = /* @__PURE__ */ __name2222222222222222222222222222222222222222((uid) => `internal/explore/profile-first-view-v1/${encodeURIComponent(String(uid || ""))}.json`, "exploreProfileR2Key");
-var exploreFollowingR2Key = /* @__PURE__ */ __name2222222222222222222222222222222222222222((uid) => `internal/explore/following-v1/${encodeURIComponent(String(uid || ""))}.json`, "exploreFollowingR2Key");
+var exploreProfileR2Key = /* @__PURE__ */ __name22222222222222222222222222222222222222222((uid) => `internal/explore/profile-first-view-v1/${encodeURIComponent(String(uid || ""))}.json`, "exploreProfileR2Key");
+var exploreFollowingR2Key = /* @__PURE__ */ __name22222222222222222222222222222222222222222((uid) => `internal/explore/following-v1/${encodeURIComponent(String(uid || ""))}.json`, "exploreFollowingR2Key");
 function parseExploreProfileSnapshotRow(row) {
   if (!row?.uid) return null;
   try {
@@ -7647,6 +7763,7 @@ __name2222222222222222222222222222222222222(parseExploreProfileSnapshotRow, "par
 __name22222222222222222222222222222222222222(parseExploreProfileSnapshotRow, "parseExploreProfileSnapshotRow");
 __name222222222222222222222222222222222222222(parseExploreProfileSnapshotRow, "parseExploreProfileSnapshotRow");
 __name2222222222222222222222222222222222222222(parseExploreProfileSnapshotRow, "parseExploreProfileSnapshotRow");
+__name22222222222222222222222222222222222222222(parseExploreProfileSnapshotRow, "parseExploreProfileSnapshotRow");
 async function writeExploreProfileR2FromRow(env, row) {
   const bundle = parseExploreProfileSnapshotRow(row);
   if (!bundle?.uid) return false;
@@ -7694,6 +7811,7 @@ __name2222222222222222222222222222222222222(writeExploreProfileR2FromRow, "write
 __name22222222222222222222222222222222222222(writeExploreProfileR2FromRow, "writeExploreProfileR2FromRow");
 __name222222222222222222222222222222222222222(writeExploreProfileR2FromRow, "writeExploreProfileR2FromRow");
 __name2222222222222222222222222222222222222222(writeExploreProfileR2FromRow, "writeExploreProfileR2FromRow");
+__name22222222222222222222222222222222222222222(writeExploreProfileR2FromRow, "writeExploreProfileR2FromRow");
 async function syncExploreProfileR2FromD1(env, uid) {
   const normalized = String(uid || "").trim();
   if (!normalized) return false;
@@ -7741,6 +7859,7 @@ __name2222222222222222222222222222222222222(syncExploreProfileR2FromD1, "syncExp
 __name22222222222222222222222222222222222222(syncExploreProfileR2FromD1, "syncExploreProfileR2FromD1");
 __name222222222222222222222222222222222222222(syncExploreProfileR2FromD1, "syncExploreProfileR2FromD1");
 __name2222222222222222222222222222222222222222(syncExploreProfileR2FromD1, "syncExploreProfileR2FromD1");
+__name22222222222222222222222222222222222222222(syncExploreProfileR2FromD1, "syncExploreProfileR2FromD1");
 async function readExploreProfileR2Bundle(env, profileRef) {
   const normalized = String(profileRef || "").trim().replace(/^@+/, "");
   if (!normalized) return null;
@@ -7790,6 +7909,7 @@ __name2222222222222222222222222222222222222(readExploreProfileR2Bundle, "readExp
 __name22222222222222222222222222222222222222(readExploreProfileR2Bundle, "readExploreProfileR2Bundle");
 __name222222222222222222222222222222222222222(readExploreProfileR2Bundle, "readExploreProfileR2Bundle");
 __name2222222222222222222222222222222222222222(readExploreProfileR2Bundle, "readExploreProfileR2Bundle");
+__name22222222222222222222222222222222222222222(readExploreProfileR2Bundle, "readExploreProfileR2Bundle");
 function withExploreZeroUsageOnEdgeHit(response, status) {
   const headers = new Headers(response.headers);
   headers.set("X-SORIDRAW-Profile-Edge-Cache", status);
@@ -7845,6 +7965,7 @@ __name2222222222222222222222222222222222222(withExploreZeroUsageOnEdgeHit, "with
 __name22222222222222222222222222222222222222(withExploreZeroUsageOnEdgeHit, "withExploreZeroUsageOnEdgeHit");
 __name222222222222222222222222222222222222222(withExploreZeroUsageOnEdgeHit, "withExploreZeroUsageOnEdgeHit");
 __name2222222222222222222222222222222222222222(withExploreZeroUsageOnEdgeHit, "withExploreZeroUsageOnEdgeHit");
+__name22222222222222222222222222222222222222222(withExploreZeroUsageOnEdgeHit, "withExploreZeroUsageOnEdgeHit");
 async function rebuildExploreFollowingR2Bundle(env, uid) {
   const normalized = String(uid || "").trim();
   if (!normalized) return [];
@@ -7905,6 +8026,7 @@ __name2222222222222222222222222222222222222(rebuildExploreFollowingR2Bundle, "re
 __name22222222222222222222222222222222222222(rebuildExploreFollowingR2Bundle, "rebuildExploreFollowingR2Bundle");
 __name222222222222222222222222222222222222222(rebuildExploreFollowingR2Bundle, "rebuildExploreFollowingR2Bundle");
 __name2222222222222222222222222222222222222222(rebuildExploreFollowingR2Bundle, "rebuildExploreFollowingR2Bundle");
+__name22222222222222222222222222222222222222222(rebuildExploreFollowingR2Bundle, "rebuildExploreFollowingR2Bundle");
 async function readExploreFollowingR2Bundle(env, uid) {
   const normalized = String(uid || "").trim();
   if (!normalized) return null;
@@ -7953,6 +8075,7 @@ __name2222222222222222222222222222222222222(readExploreFollowingR2Bundle, "readE
 __name22222222222222222222222222222222222222(readExploreFollowingR2Bundle, "readExploreFollowingR2Bundle");
 __name222222222222222222222222222222222222222(readExploreFollowingR2Bundle, "readExploreFollowingR2Bundle");
 __name2222222222222222222222222222222222222222(readExploreFollowingR2Bundle, "readExploreFollowingR2Bundle");
+__name22222222222222222222222222222222222222222(readExploreFollowingR2Bundle, "readExploreFollowingR2Bundle");
 async function syncExploreFollowingR2AfterMutation(env, uid, targetUid, following) {
   const normalized = String(uid || "").trim();
   const target = String(targetUid || "").trim();
@@ -8013,6 +8136,7 @@ __name2222222222222222222222222222222222222(syncExploreFollowingR2AfterMutation,
 __name22222222222222222222222222222222222222(syncExploreFollowingR2AfterMutation, "syncExploreFollowingR2AfterMutation");
 __name222222222222222222222222222222222222222(syncExploreFollowingR2AfterMutation, "syncExploreFollowingR2AfterMutation");
 __name2222222222222222222222222222222222222222(syncExploreFollowingR2AfterMutation, "syncExploreFollowingR2AfterMutation");
+__name22222222222222222222222222222222222222222(syncExploreFollowingR2AfterMutation, "syncExploreFollowingR2AfterMutation");
 async function handleMyFollowingR2Bundle(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   const bundled = await readExploreFollowingR2Bundle(env, authContext.uid);
@@ -8073,6 +8197,7 @@ __name2222222222222222222222222222222222222(handleMyFollowingR2Bundle, "handleMy
 __name22222222222222222222222222222222222222(handleMyFollowingR2Bundle, "handleMyFollowingR2Bundle");
 __name222222222222222222222222222222222222222(handleMyFollowingR2Bundle, "handleMyFollowingR2Bundle");
 __name2222222222222222222222222222222222222222(handleMyFollowingR2Bundle, "handleMyFollowingR2Bundle");
+__name22222222222222222222222222222222222222222(handleMyFollowingR2Bundle, "handleMyFollowingR2Bundle");
 async function handlePublicProfileFirstViewWithEdgeCacheR2Core(request, profileRef, env, cors) {
   const cache = caches.default;
   const requestOrigin = request.headers.get("Origin") || "";
@@ -8159,9 +8284,10 @@ __name2222222222222222222222222222222222222(handlePublicProfileFirstViewWithEdge
 __name22222222222222222222222222222222222222(handlePublicProfileFirstViewWithEdgeCacheR2Core, "handlePublicProfileFirstViewWithEdgeCacheR2Core");
 __name222222222222222222222222222222222222222(handlePublicProfileFirstViewWithEdgeCacheR2Core, "handlePublicProfileFirstViewWithEdgeCacheR2Core");
 __name2222222222222222222222222222222222222222(handlePublicProfileFirstViewWithEdgeCacheR2Core, "handlePublicProfileFirstViewWithEdgeCacheR2Core");
+__name22222222222222222222222222222222222222222(handlePublicProfileFirstViewWithEdgeCacheR2Core, "handlePublicProfileFirstViewWithEdgeCacheR2Core");
 var PROFILE_R2_REPAIR_VERSION_020 = 2;
 var PROFILE_R2_EDGE_SCHEMA_020 = 2;
-var exploreProfileHandleAliasR2Key020 = /* @__PURE__ */ __name222222222222222222222222222222222((handle) => `internal/explore/profile-handle-alias-v1/${encodeURIComponent(String(handle || "").trim().replace(/^@+/, "").toLowerCase())}.json`, "exploreProfileHandleAliasR2Key020");
+var exploreProfileHandleAliasR2Key020 = /* @__PURE__ */ __name2222222222222222222222222222222222((handle) => `internal/explore/profile-handle-alias-v1/${encodeURIComponent(String(handle || "").trim().replace(/^@+/, "").toLowerCase())}.json`, "exploreProfileHandleAliasR2Key020");
 function validExploreProfileR2Bundle020(bundle) {
   return Boolean(bundle && Number(bundle.schemaVersion) === EXPLORE_R2_PROFILE_SCHEMA_VERSION && bundle.body?.data?.profile && Array.isArray(bundle.body?.data?.items));
 }
@@ -8199,6 +8325,7 @@ __name222222222222222222222222222222(validExploreProfileR2Bundle020, "validExplo
 __name2222222222222222222222222222222(validExploreProfileR2Bundle020, "validExploreProfileR2Bundle020");
 __name22222222222222222222222222222222(validExploreProfileR2Bundle020, "validExploreProfileR2Bundle020");
 __name222222222222222222222222222222222(validExploreProfileR2Bundle020, "validExploreProfileR2Bundle020");
+__name2222222222222222222222222222222222(validExploreProfileR2Bundle020, "validExploreProfileR2Bundle020");
 async function writeExploreProfileAlias020(env, handle, uid) {
   const normalizedHandle = String(handle || "").trim().replace(/^@+/, "").toLowerCase();
   const normalizedUid = String(uid || "").trim();
@@ -8245,6 +8372,7 @@ __name222222222222222222222222222222(writeExploreProfileAlias020, "writeExploreP
 __name2222222222222222222222222222222(writeExploreProfileAlias020, "writeExploreProfileAlias020");
 __name22222222222222222222222222222222(writeExploreProfileAlias020, "writeExploreProfileAlias020");
 __name222222222222222222222222222222222(writeExploreProfileAlias020, "writeExploreProfileAlias020");
+__name2222222222222222222222222222222222(writeExploreProfileAlias020, "writeExploreProfileAlias020");
 async function readExploreProfileCanonicalR2Bundle020(env, profileRef) {
   const normalized = String(profileRef || "").trim().replace(/^@+/, "");
   if (!normalized) return null;
@@ -8291,6 +8419,7 @@ __name222222222222222222222222222222(readExploreProfileCanonicalR2Bundle020, "re
 __name2222222222222222222222222222222(readExploreProfileCanonicalR2Bundle020, "readExploreProfileCanonicalR2Bundle020");
 __name22222222222222222222222222222222(readExploreProfileCanonicalR2Bundle020, "readExploreProfileCanonicalR2Bundle020");
 __name222222222222222222222222222222222(readExploreProfileCanonicalR2Bundle020, "readExploreProfileCanonicalR2Bundle020");
+__name2222222222222222222222222222222222(readExploreProfileCanonicalR2Bundle020, "readExploreProfileCanonicalR2Bundle020");
 function profileR2NeedsRepair020(bundle) {
   return !validExploreProfileR2Bundle020(bundle) || Number(bundle?.repairVersion || bundle?.body?.data?.repairVersion || 0) < PROFILE_R2_REPAIR_VERSION_020;
 }
@@ -8328,7 +8457,7 @@ __name222222222222222222222222222222(profileR2NeedsRepair020, "profileR2NeedsRep
 __name2222222222222222222222222222222(profileR2NeedsRepair020, "profileR2NeedsRepair020");
 __name22222222222222222222222222222222(profileR2NeedsRepair020, "profileR2NeedsRepair020");
 __name222222222222222222222222222222222(profileR2NeedsRepair020, "profileR2NeedsRepair020");
-__name222222(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020");
+__name2222222222222222222222222222222222(profileR2NeedsRepair020, "profileR2NeedsRepair020");
 __name2222222(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020");
 __name22222222(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020");
 __name222222222(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020");
@@ -8356,7 +8485,7 @@ __name222222222222222222222222222222(rebuildExploreProfileR2Bounded020, "rebuild
 __name2222222222222222222222222222222(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020");
 __name22222222222222222222222222222222(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020");
 __name222222222222222222222222222222222(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020");
-__name222222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
+__name2222222222222222222222222222222222(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020");
 __name2222222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name22222222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name222222222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
@@ -8384,7 +8513,7 @@ __name222222222222222222222222222222(patchExploreProfileR2Counters020, "patchExp
 __name2222222222222222222222222222222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name22222222222222222222222222222222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name222222222222222222222222222222222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
-__name222222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
+__name2222222222222222222222222222222222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name2222222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 __name22222222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 __name222222222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
@@ -8412,6 +8541,7 @@ __name222222222222222222222222222222(patchExploreProfileR2Like020, "patchExplore
 __name2222222222222222222222222222222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 __name22222222222222222222222222222222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 __name222222222222222222222222222222222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
+__name2222222222222222222222222222222222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 async function handlePublicProfileFirstViewWithEdgeCacheCore029(request, profileRef, env, cors) {
   const requestUrl = new URL(request.url);
   const knownRevision = String(requestUrl.searchParams.get("knownRevision") || "").trim();
@@ -8466,6 +8596,7 @@ __name22222222222(handlePublicProfileFirstViewWithEdgeCacheCore029, "handlePubli
 __name222222222222(handlePublicProfileFirstViewWithEdgeCacheCore029, "handlePublicProfileFirstViewWithEdgeCacheCore029");
 __name2222222222222(handlePublicProfileFirstViewWithEdgeCacheCore029, "handlePublicProfileFirstViewWithEdgeCacheCore029");
 __name22222222222222(handlePublicProfileFirstViewWithEdgeCacheCore029, "handlePublicProfileFirstViewWithEdgeCacheCore029");
+__name222222222222222(handlePublicProfileFirstViewWithEdgeCacheCore029, "handlePublicProfileFirstViewWithEdgeCacheCore029");
 async function handlePublicProfileFirstViewWithEdgeCacheCore031(request, profileRef, env, cors) {
   await repairPublicProfileParityOnColdRead029(request, env, profileRef);
   return await handlePublicProfileFirstViewWithEdgeCacheCore029(request, profileRef, env, cors);
@@ -8481,7 +8612,7 @@ __name2222222(handlePublicProfileFirstViewWithEdgeCacheCore031, "handlePublicPro
 __name22222222(handlePublicProfileFirstViewWithEdgeCacheCore031, "handlePublicProfileFirstViewWithEdgeCacheCore031");
 __name222222222(handlePublicProfileFirstViewWithEdgeCacheCore031, "handlePublicProfileFirstViewWithEdgeCacheCore031");
 __name2222222222(handlePublicProfileFirstViewWithEdgeCacheCore031, "handlePublicProfileFirstViewWithEdgeCacheCore031");
-__name222222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
+__name22222222222(handlePublicProfileFirstViewWithEdgeCacheCore031, "handlePublicProfileFirstViewWithEdgeCacheCore031");
 __name2222222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
 __name22222222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
 __name222222222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
@@ -8535,6 +8666,7 @@ __name22222222222222222222222222222222222222222222222222222222(handlePublicProfi
 __name222222222222222222222222222222222222222222222222222222222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
 __name2222222222222222222222222222222222222222222222222222222222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
 __name22222222222222222222222222222222222222222222222222222222222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
+__name222222222222222222222222222222222222222222222222222222222222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
 async function handlePublicProfile(profileRef, env, cors) {
   const resolved = await resolvePublicProfileRef(env, profileRef);
   if (!resolved?.uid) {
@@ -8619,6 +8751,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handlePublicProfile, "handlePublicProfile");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handlePublicProfile, "handlePublicProfile");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handlePublicProfile, "handlePublicProfile");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handlePublicProfile, "handlePublicProfile");
 async function handleProfileTracks(url, profileRef, env, cors) {
   const resolved = await resolvePublicProfileRef(env, profileRef);
   if (!resolved?.uid) return apiError("NOT_FOUND", "\uACF5\uAC1C \uD504\uB85C\uD544\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404, cors);
@@ -8735,6 +8868,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleProfileTracks, "handleProfileTracks");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleProfileTracks, "handleProfileTracks");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleProfileTracks, "handleProfileTracks");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleProfileTracks, "handleProfileTracks");
 async function handleMyProfileUpdate(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "profile", RATE_LIMITS.profile);
@@ -8869,6 +9003,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleMyProfileUpdate, "handleMyProfileUpdate");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleMyProfileUpdate, "handleMyProfileUpdate");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleMyProfileUpdate, "handleMyProfileUpdate");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleMyProfileUpdate, "handleMyProfileUpdate");
 function getProfileMediaKey(uid, kind) {
   return `profiles/${uid}/${kind}.webp`;
 }
@@ -8945,6 +9080,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(getP
 __name2222222222222222222222222222222222222222222222222222222222222222222222(getProfileMediaKey, "getProfileMediaKey");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(getProfileMediaKey, "getProfileMediaKey");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getProfileMediaKey, "getProfileMediaKey");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(getProfileMediaKey, "getProfileMediaKey");
 async function handleProfileMediaUpload(request, env, cors, kind) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "profile-media", RATE_LIMITS.profileMedia);
@@ -9051,6 +9187,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaUpload, "handleProfileMediaUpload");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaUpload, "handleProfileMediaUpload");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaUpload, "handleProfileMediaUpload");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaUpload, "handleProfileMediaUpload");
 async function handleProfileMediaGet(uid, kind, env, cors) {
   if (!env?.PROFILE_MEDIA) return apiError("PROFILE_MEDIA_NOT_CONFIGURED", "\uD504\uB85C\uD544 \uC774\uBBF8\uC9C0 \uC800\uC7A5\uC18C \uC5F0\uACB0\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.", 503, cors);
   if (kind !== "avatar" && kind !== "background") return apiError("NOT_FOUND", "\uC774\uBBF8\uC9C0\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404, cors);
@@ -9139,6 +9276,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaGet, "handleProfileMediaGet");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaGet, "handleProfileMediaGet");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaGet, "handleProfileMediaGet");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleProfileMediaGet, "handleProfileMediaGet");
 function normalizeGenre(value) {
   const genre = String(value || "").trim();
   if (!genre || genre.length > 80) throwApi("INVALID_GENRE", "\uC7A5\uB974 \uAC12\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", 400);
@@ -9217,6 +9355,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(norm
 __name2222222222222222222222222222222222222222222222222222222222222222222222(normalizeGenre, "normalizeGenre");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(normalizeGenre, "normalizeGenre");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(normalizeGenre, "normalizeGenre");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(normalizeGenre, "normalizeGenre");
 async function handleGenres(env, cors) {
   const result = await env.DB.prepare(`
     WITH genre_tracks AS (
@@ -9314,6 +9453,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleGenres, "handleGenres");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleGenres, "handleGenres");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleGenres, "handleGenres");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleGenres, "handleGenres");
 async function handleGenreTracks(url, genreValue, env, cors) {
   const genre = normalizeGenre(genreValue);
   const limit = getPageSize(url);
@@ -9431,6 +9571,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleGenreTracks, "handleGenreTracks");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleGenreTracks, "handleGenreTracks");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleGenreTracks, "handleGenreTracks");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleGenreTracks, "handleGenreTracks");
 function getKstPeriodStart(period, nowMs = Date.now()) {
   const KST_OFFSET = 9 * 60 * 60 * 1e3;
   const shifted = new Date(nowMs + KST_OFFSET);
@@ -9524,6 +9665,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(getK
 __name2222222222222222222222222222222222222222222222222222222222222222222222(getKstPeriodStart, "getKstPeriodStart");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(getKstPeriodStart, "getKstPeriodStart");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getKstPeriodStart, "getKstPeriodStart");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(getKstPeriodStart, "getKstPeriodStart");
 async function handleTop10(url, env, cors) {
   const period = safeString(url.searchParams.get("period") || "daily").toLowerCase();
   const startAt = getKstPeriodStart(period);
@@ -9643,6 +9785,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleTop10, "handleTop10");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleTop10, "handleTop10");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleTop10, "handleTop10");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleTop10, "handleTop10");
 function normalizeCollectionKey(value) {
   const key = String(value || "featured").trim().toLowerCase();
   if (!/^[a-z0-9_-]{1,40}$/.test(key)) throwApi("INVALID_COLLECTION", "\uCD94\uCC9C \uCEEC\uB809\uC158 \uAC12\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", 400);
@@ -9721,6 +9864,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(norm
 __name2222222222222222222222222222222222222222222222222222222222222222222222(normalizeCollectionKey, "normalizeCollectionKey");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(normalizeCollectionKey, "normalizeCollectionKey");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(normalizeCollectionKey, "normalizeCollectionKey");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(normalizeCollectionKey, "normalizeCollectionKey");
 async function handleCurated(url, env, cors) {
   const collection = normalizeCollectionKey(url.searchParams.get("collection") || "featured");
   const now = Date.now();
@@ -9828,6 +9972,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleCurated, "handleCurated");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleCurated, "handleCurated");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleCurated, "handleCurated");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleCurated, "handleCurated");
 var ApiFault = class extends Error {
   static {
     __name(this, "ApiFault");
@@ -10048,6 +10193,9 @@ var ApiFault = class extends Error {
   static {
     __name222222222222222222222222222222222222222222222222222222222222222222222222(this, "ApiFault");
   }
+  static {
+    __name2222222222222222222222222222222222222222222222222222222222222222222222222(this, "ApiFault");
+  }
   constructor(code, message, status = 400, headers = {}) {
     super(message);
     this.name = "ApiFault";
@@ -10132,6 +10280,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(thro
 __name2222222222222222222222222222222222222222222222222222222222222222222222(throwApi, "throwApi");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(throwApi, "throwApi");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(throwApi, "throwApi");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(throwApi, "throwApi");
 function getContentLength(request) {
   const raw = request.headers.get("Content-Length");
   if (!raw) return null;
@@ -10211,6 +10360,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(getC
 __name2222222222222222222222222222222222222222222222222222222222222222222222(getContentLength, "getContentLength");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(getContentLength, "getContentLength");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getContentLength, "getContentLength");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(getContentLength, "getContentLength");
 async function readJsonBody(request, maxBytes = 16384) {
   const contentLength = getContentLength(request);
   if (contentLength !== null && contentLength > maxBytes) {
@@ -10305,6 +10455,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(read
 __name2222222222222222222222222222222222222222222222222222222222222222222222(readJsonBody, "readJsonBody");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(readJsonBody, "readJsonBody");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(readJsonBody, "readJsonBody");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(readJsonBody, "readJsonBody");
 function getClientAddress(request) {
   return (request.headers.get("CF-Connecting-IP") || "unknown").trim() || "unknown";
 }
@@ -10381,6 +10532,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(getC
 __name2222222222222222222222222222222222222222222222222222222222222222222222(getClientAddress, "getClientAddress");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(getClientAddress, "getClientAddress");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getClientAddress, "getClientAddress");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(getClientAddress, "getClientAddress");
 function enforcePreAuthBurstLimit(request) {
   const now = Date.now();
   const client = getClientAddress(request);
@@ -10476,6 +10628,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(enfo
 __name2222222222222222222222222222222222222222222222222222222222222222222222(enforcePreAuthBurstLimit, "enforcePreAuthBurstLimit");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(enforcePreAuthBurstLimit, "enforcePreAuthBurstLimit");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(enforcePreAuthBurstLimit, "enforcePreAuthBurstLimit");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(enforcePreAuthBurstLimit, "enforcePreAuthBurstLimit");
 async function enforceUserRateLimit(env, uid, action, limit, windowMs = RATE_LIMIT_WINDOW_MS) {
   if (!exploreRateDb031(env) || !uid || !action || !Number.isFinite(limit) || limit <= 0) return;
   const now = Date.now();
@@ -10584,6 +10737,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(enfo
 __name2222222222222222222222222222222222222222222222222222222222222222222222(enforceUserRateLimit, "enforceUserRateLimit");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(enforceUserRateLimit, "enforceUserRateLimit");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(enforceUserRateLimit, "enforceUserRateLimit");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(enforceUserRateLimit, "enforceUserRateLimit");
 async function requireExploreAuth(request) {
   const authHeader = request.headers.get("Authorization") || "";
   const appCheckToken = request.headers.get("X-Firebase-AppCheck") || "";
@@ -10686,6 +10840,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(requ
 __name2222222222222222222222222222222222222222222222222222222222222222222222(requireExploreAuth, "requireExploreAuth");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(requireExploreAuth, "requireExploreAuth");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(requireExploreAuth, "requireExploreAuth");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(requireExploreAuth, "requireExploreAuth");
 function decodeFirestoreValue(value) {
   if (!value || typeof value !== "object") return null;
   if (Object.prototype.hasOwnProperty.call(value, "nullValue")) return null;
@@ -10782,6 +10937,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(deco
 __name2222222222222222222222222222222222222222222222222222222222222222222222(decodeFirestoreValue, "decodeFirestoreValue");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(decodeFirestoreValue, "decodeFirestoreValue");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(decodeFirestoreValue, "decodeFirestoreValue");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(decodeFirestoreValue, "decodeFirestoreValue");
 function decodeFirestoreDocument(payload) {
   const fields = payload?.fields || {};
   return Object.fromEntries(
@@ -10861,6 +11017,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(deco
 __name2222222222222222222222222222222222222222222222222222222222222222222222(decodeFirestoreDocument, "decodeFirestoreDocument");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(decodeFirestoreDocument, "decodeFirestoreDocument");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(decodeFirestoreDocument, "decodeFirestoreDocument");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(decodeFirestoreDocument, "decodeFirestoreDocument");
 async function fetchFirestoreDocument(pathSegments, authContext) {
   const encodedPath = pathSegments.map((part) => encodeURIComponent(String(part))).join("/");
   const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${encodedPath}`;
@@ -10968,6 +11125,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(fetc
 __name2222222222222222222222222222222222222222222222222222222222222222222222(fetchFirestoreDocument, "fetchFirestoreDocument");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(fetchFirestoreDocument, "fetchFirestoreDocument");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(fetchFirestoreDocument, "fetchFirestoreDocument");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(fetchFirestoreDocument, "fetchFirestoreDocument");
 async function refreshProfileSearchIndex(env, uid) {
   const profile = await env.DB.prepare(`
     SELECT uid, nickname, bio FROM public_profiles WHERE uid = ? AND is_public = 1 LIMIT 1
@@ -11053,6 +11211,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(refr
 __name2222222222222222222222222222222222222222222222222222222222222222222222(refreshProfileSearchIndex, "refreshProfileSearchIndex");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(refreshProfileSearchIndex, "refreshProfileSearchIndex");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(refreshProfileSearchIndex, "refreshProfileSearchIndex");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(refreshProfileSearchIndex, "refreshProfileSearchIndex");
 async function refreshTrackSearchIndex(env, trackId) {
   const track = await env.DB.prepare(`
     SELECT id, title FROM tracks WHERE id = ? AND is_public = 1 AND status = 'published' LIMIT 1
@@ -11146,6 +11305,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(refr
 __name2222222222222222222222222222222222222222222222222222222222222222222222(refreshTrackSearchIndex, "refreshTrackSearchIndex");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(refreshTrackSearchIndex, "refreshTrackSearchIndex");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(refreshTrackSearchIndex, "refreshTrackSearchIndex");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(refreshTrackSearchIndex, "refreshTrackSearchIndex");
 async function readFirebaseAdminRole(authContext) {
   const userData = await fetchFirestoreDocument(["users", authContext.uid], authContext);
   const candidates = [userData?.role, userData?.planTier, userData?.tier];
@@ -11224,6 +11384,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(read
 __name2222222222222222222222222222222222222222222222222222222222222222222222(readFirebaseAdminRole, "readFirebaseAdminRole");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(readFirebaseAdminRole, "readFirebaseAdminRole");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(readFirebaseAdminRole, "readFirebaseAdminRole");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(readFirebaseAdminRole, "readFirebaseAdminRole");
 async function resolveCuratorAccess(env, authContext) {
   const row = await env.DB.prepare(`
     SELECT role FROM explore_curators WHERE uid = ? AND is_active = 1 LIMIT 1
@@ -11318,6 +11479,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(reso
 __name2222222222222222222222222222222222222222222222222222222222222222222222(resolveCuratorAccess, "resolveCuratorAccess");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(resolveCuratorAccess, "resolveCuratorAccess");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(resolveCuratorAccess, "resolveCuratorAccess");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(resolveCuratorAccess, "resolveCuratorAccess");
 async function requireCurator(env, authContext) {
   const role = await resolveCuratorAccess(env, authContext);
   if (!role) throwApi("CURATOR_REQUIRED", "Explore \uCD94\uCC9C \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.", 403);
@@ -11396,6 +11558,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(requ
 __name2222222222222222222222222222222222222222222222222222222222222222222222(requireCurator, "requireCurator");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(requireCurator, "requireCurator");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(requireCurator, "requireCurator");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(requireCurator, "requireCurator");
 async function requireFirebaseAdmin(authContext) {
   if (!await readFirebaseAdminRole(authContext)) {
     throwApi("ADMIN_REQUIRED", "\uAD00\uB9AC\uC790 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.", 403);
@@ -11474,6 +11637,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(requ
 __name2222222222222222222222222222222222222222222222222222222222222222222222(requireFirebaseAdmin, "requireFirebaseAdmin");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(requireFirebaseAdmin, "requireFirebaseAdmin");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(requireFirebaseAdmin, "requireFirebaseAdmin");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(requireFirebaseAdmin, "requireFirebaseAdmin");
 async function refreshFollowStats(env, followerUid, followingUid, now) {
   await env.DB.batch([
     env.DB.prepare(`
@@ -11571,6 +11735,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(refr
 __name2222222222222222222222222222222222222222222222222222222222222222222222(refreshFollowStats, "refreshFollowStats");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(refreshFollowStats, "refreshFollowStats");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(refreshFollowStats, "refreshFollowStats");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(refreshFollowStats, "refreshFollowStats");
 async function handleFollowR2Core(request, env, cors, targetUid, shouldFollow) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "follow", RATE_LIMITS.follow);
@@ -11632,6 +11797,7 @@ __name2222222222222222222222222222222222222(handleFollowR2Core, "handleFollowR2C
 __name22222222222222222222222222222222222222(handleFollowR2Core, "handleFollowR2Core");
 __name222222222222222222222222222222222222222(handleFollowR2Core, "handleFollowR2Core");
 __name2222222222222222222222222222222222222222(handleFollowR2Core, "handleFollowR2Core");
+__name22222222222222222222222222222222222222222(handleFollowR2Core, "handleFollowR2Core");
 async function handleFollow(request, env, cors, targetUid, shouldFollow) {
   const response = await handleFollowR2Core(request, env, cors, targetUid, shouldFollow);
   if (!response.ok) return response;
@@ -11717,6 +11883,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleFollow, "handleFollow");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleFollow, "handleFollow");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleFollow, "handleFollow");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleFollow, "handleFollow");
 function clampExploreSocialCount(value) {
   const count = Number(value || 0);
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
@@ -11767,6 +11934,7 @@ __name222222222222222222222222222222222222222222(clampExploreSocialCount, "clamp
 __name2222222222222222222222222222222222222222222(clampExploreSocialCount, "clampExploreSocialCount");
 __name22222222222222222222222222222222222222222222(clampExploreSocialCount, "clampExploreSocialCount");
 __name222222222222222222222222222222222222222222222(clampExploreSocialCount, "clampExploreSocialCount");
+__name2222222222222222222222222222222222222222222222(clampExploreSocialCount, "clampExploreSocialCount");
 async function adjustExploreFollowCountersDelta(env, followerUid, followingUid, shouldFollow, now) {
   const delta = shouldFollow ? 1 : -1;
   if (shouldFollow) {
@@ -11888,6 +12056,7 @@ __name222222222222222222222222222222222222222222(adjustExploreFollowCountersDelt
 __name2222222222222222222222222222222222222222222(adjustExploreFollowCountersDelta, "adjustExploreFollowCountersDelta");
 __name22222222222222222222222222222222222222222222(adjustExploreFollowCountersDelta, "adjustExploreFollowCountersDelta");
 __name222222222222222222222222222222222222222222222(adjustExploreFollowCountersDelta, "adjustExploreFollowCountersDelta");
+__name2222222222222222222222222222222222222222222222(adjustExploreFollowCountersDelta, "adjustExploreFollowCountersDelta");
 async function patchExploreFirstViewFollowCountsR2Core(env, followerUid, followingUid, stats, now) {
   try {
     const statements = [];
@@ -11963,6 +12132,7 @@ __name2222222222222222222222222222222222222(patchExploreFirstViewFollowCountsR2C
 __name22222222222222222222222222222222222222(patchExploreFirstViewFollowCountsR2Core, "patchExploreFirstViewFollowCountsR2Core");
 __name222222222222222222222222222222222222222(patchExploreFirstViewFollowCountsR2Core, "patchExploreFirstViewFollowCountsR2Core");
 __name2222222222222222222222222222222222222222(patchExploreFirstViewFollowCountsR2Core, "patchExploreFirstViewFollowCountsR2Core");
+__name22222222222222222222222222222222222222222(patchExploreFirstViewFollowCountsR2Core, "patchExploreFirstViewFollowCountsR2Core");
 async function patchExploreFirstViewFollowCounts(env, followerUid, followingUid, stats, now) {
   await Promise.all([
     stats?.follower ? patchExploreProfileR2Counters020(env, followerUid, {
@@ -12019,6 +12189,7 @@ __name222222222222222222222222222222222222222222(patchExploreFirstViewFollowCoun
 __name2222222222222222222222222222222222222222222(patchExploreFirstViewFollowCounts, "patchExploreFirstViewFollowCounts");
 __name22222222222222222222222222222222222222222222(patchExploreFirstViewFollowCounts, "patchExploreFirstViewFollowCounts");
 __name222222222222222222222222222222222222222222222(patchExploreFirstViewFollowCounts, "patchExploreFirstViewFollowCounts");
+__name2222222222222222222222222222222222222222222222(patchExploreFirstViewFollowCounts, "patchExploreFirstViewFollowCounts");
 async function adjustExploreLikeCounterDelta(env, trackId, userUid, shouldLike, now) {
   const mutation = shouldLike ? await env.DB.prepare(`
         INSERT OR IGNORE INTO likes (track_id, user_uid, created_at)
@@ -12091,6 +12262,7 @@ __name222222222222222222222222222222222222222222(adjustExploreLikeCounterDelta, 
 __name2222222222222222222222222222222222222222222(adjustExploreLikeCounterDelta, "adjustExploreLikeCounterDelta");
 __name22222222222222222222222222222222222222222222(adjustExploreLikeCounterDelta, "adjustExploreLikeCounterDelta");
 __name222222222222222222222222222222222222222222222(adjustExploreLikeCounterDelta, "adjustExploreLikeCounterDelta");
+__name2222222222222222222222222222222222222222222222(adjustExploreLikeCounterDelta, "adjustExploreLikeCounterDelta");
 async function patchExploreFirstViewLikeCountR2Core(env, ownerUid, trackId, likeCount, now) {
   try {
     await env.DB.prepare(`
@@ -12159,6 +12331,7 @@ __name2222222222222222222222222222222222222(patchExploreFirstViewLikeCountR2Core
 __name22222222222222222222222222222222222222(patchExploreFirstViewLikeCountR2Core, "patchExploreFirstViewLikeCountR2Core");
 __name222222222222222222222222222222222222222(patchExploreFirstViewLikeCountR2Core, "patchExploreFirstViewLikeCountR2Core");
 __name2222222222222222222222222222222222222222(patchExploreFirstViewLikeCountR2Core, "patchExploreFirstViewLikeCountR2Core");
+__name22222222222222222222222222222222222222222(patchExploreFirstViewLikeCountR2Core, "patchExploreFirstViewLikeCountR2Core");
 async function patchExploreFirstViewLikeCount(env, ownerUid, trackId, likeCount, now) {
   await patchExploreProfileR2Like020(env, ownerUid, trackId, likeCount);
 }
@@ -12208,6 +12381,7 @@ __name222222222222222222222222222222222222222222(patchExploreFirstViewLikeCount,
 __name2222222222222222222222222222222222222222222(patchExploreFirstViewLikeCount, "patchExploreFirstViewLikeCount");
 __name22222222222222222222222222222222222222222222(patchExploreFirstViewLikeCount, "patchExploreFirstViewLikeCount");
 __name222222222222222222222222222222222222222222222(patchExploreFirstViewLikeCount, "patchExploreFirstViewLikeCount");
+__name2222222222222222222222222222222222222222222222(patchExploreFirstViewLikeCount, "patchExploreFirstViewLikeCount");
 async function handleMyFollowStates(request, url, env, cors) {
   const authContext = await requireExploreAuth(request);
   const raw = String(url.searchParams.get("uids") || "");
@@ -12272,6 +12446,7 @@ __name222222222222222222222222222222222222222222(handleMyFollowStates, "handleMy
 __name2222222222222222222222222222222222222222222(handleMyFollowStates, "handleMyFollowStates");
 __name22222222222222222222222222222222222222222222(handleMyFollowStates, "handleMyFollowStates");
 __name222222222222222222222222222222222222222222222(handleMyFollowStates, "handleMyFollowStates");
+__name2222222222222222222222222222222222222222222222(handleMyFollowStates, "handleMyFollowStates");
 async function handleProfileConnections(request, url, env, cors, profileRef, direction) {
   const resolved = await resolvePublicProfileRef(env, profileRef);
   if (!resolved?.uid) return apiError("NOT_FOUND", "\uACF5\uAC1C \uD504\uB85C\uD544\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404, cors);
@@ -12370,6 +12545,7 @@ __name222222222222222222222222222222222222222222(handleProfileConnections, "hand
 __name2222222222222222222222222222222222222222222(handleProfileConnections, "handleProfileConnections");
 __name22222222222222222222222222222222222222222222(handleProfileConnections, "handleProfileConnections");
 __name222222222222222222222222222222222222222222222(handleProfileConnections, "handleProfileConnections");
+__name2222222222222222222222222222222222222222222222(handleProfileConnections, "handleProfileConnections");
 async function handleFollowState(request, env, cors, targetUid) {
   const authContext = await requireExploreAuth(request);
   const row = await env.DB.prepare(`
@@ -12458,6 +12634,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleFollowState, "handleFollowState");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleFollowState, "handleFollowState");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleFollowState, "handleFollowState");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleFollowState, "handleFollowState");
 var MUSIC_NOTE_PUBLICATION_R2_SCHEMA_VERSION = 1;
 function musicNotePublicationR2Key(uid) {
   return `derived/music-note-publications/v1/${encodeURIComponent(String(uid || ""))}.json`;
@@ -12505,6 +12682,7 @@ __name222222222222222222222222222222222222222(musicNotePublicationR2Key, "musicN
 __name2222222222222222222222222222222222222222(musicNotePublicationR2Key, "musicNotePublicationR2Key");
 __name22222222222222222222222222222222222222222(musicNotePublicationR2Key, "musicNotePublicationR2Key");
 __name222222222222222222222222222222222222222222(musicNotePublicationR2Key, "musicNotePublicationR2Key");
+__name2222222222222222222222222222222222222222222(musicNotePublicationR2Key, "musicNotePublicationR2Key");
 function normalizeMusicNotePublicationR2Payload(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const states = value.states;
@@ -12560,6 +12738,7 @@ __name222222222222222222222222222222222222222(normalizeMusicNotePublicationR2Pay
 __name2222222222222222222222222222222222222222(normalizeMusicNotePublicationR2Payload, "normalizeMusicNotePublicationR2Payload");
 __name22222222222222222222222222222222222222222(normalizeMusicNotePublicationR2Payload, "normalizeMusicNotePublicationR2Payload");
 __name222222222222222222222222222222222222222222(normalizeMusicNotePublicationR2Payload, "normalizeMusicNotePublicationR2Payload");
+__name2222222222222222222222222222222222222222222(normalizeMusicNotePublicationR2Payload, "normalizeMusicNotePublicationR2Payload");
 async function readMusicNotePublicationR2Payload(env, uid) {
   try {
     const object = await env.PROFILE_MEDIA.get(musicNotePublicationR2Key(uid));
@@ -12613,6 +12792,7 @@ __name222222222222222222222222222222222222222(readMusicNotePublicationR2Payload,
 __name2222222222222222222222222222222222222222(readMusicNotePublicationR2Payload, "readMusicNotePublicationR2Payload");
 __name22222222222222222222222222222222222222222(readMusicNotePublicationR2Payload, "readMusicNotePublicationR2Payload");
 __name222222222222222222222222222222222222222222(readMusicNotePublicationR2Payload, "readMusicNotePublicationR2Payload");
+__name2222222222222222222222222222222222222222222(readMusicNotePublicationR2Payload, "readMusicNotePublicationR2Payload");
 async function buildMusicNotePublicationR2Payload(env, uid) {
   const result = await env.DB.prepare(`
     SELECT id, source_id, is_public, allow_next_song_apply, allow_follower_save, profile_pinned
@@ -12680,6 +12860,7 @@ __name222222222222222222222222222222222222222(buildMusicNotePublicationR2Payload
 __name2222222222222222222222222222222222222222(buildMusicNotePublicationR2Payload, "buildMusicNotePublicationR2Payload");
 __name22222222222222222222222222222222222222222(buildMusicNotePublicationR2Payload, "buildMusicNotePublicationR2Payload");
 __name222222222222222222222222222222222222222222(buildMusicNotePublicationR2Payload, "buildMusicNotePublicationR2Payload");
+__name2222222222222222222222222222222222222222222(buildMusicNotePublicationR2Payload, "buildMusicNotePublicationR2Payload");
 async function writeMusicNotePublicationR2Payload(env, uid, payload) {
   await env.PROFILE_MEDIA.put(musicNotePublicationR2Key(uid), JSON.stringify(payload), { httpMetadata: { contentType: "application/json" } });
   return payload;
@@ -12727,6 +12908,7 @@ __name222222222222222222222222222222222222222(writeMusicNotePublicationR2Payload
 __name2222222222222222222222222222222222222222(writeMusicNotePublicationR2Payload, "writeMusicNotePublicationR2Payload");
 __name22222222222222222222222222222222222222222(writeMusicNotePublicationR2Payload, "writeMusicNotePublicationR2Payload");
 __name222222222222222222222222222222222222222222(writeMusicNotePublicationR2Payload, "writeMusicNotePublicationR2Payload");
+__name2222222222222222222222222222222222222222222(writeMusicNotePublicationR2Payload, "writeMusicNotePublicationR2Payload");
 async function syncMusicNotePublicationR2AfterMutation(env, uid, sourceId, nextState) {
   try {
     const normalizedUid = String(uid || "").trim();
@@ -12794,6 +12976,7 @@ __name222222222222222222222222222222222222222(syncMusicNotePublicationR2AfterMut
 __name2222222222222222222222222222222222222222(syncMusicNotePublicationR2AfterMutation, "syncMusicNotePublicationR2AfterMutation");
 __name22222222222222222222222222222222222222222(syncMusicNotePublicationR2AfterMutation, "syncMusicNotePublicationR2AfterMutation");
 __name222222222222222222222222222222222222222222(syncMusicNotePublicationR2AfterMutation, "syncMusicNotePublicationR2AfterMutation");
+__name2222222222222222222222222222222222222222222(syncMusicNotePublicationR2AfterMutation, "syncMusicNotePublicationR2AfterMutation");
 async function handleMusicNotePublicationR2Bundle(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   const cached = await readMusicNotePublicationR2Payload(env, authContext.uid);
@@ -12844,6 +13027,7 @@ __name222222222222222222222222222222222222222(handleMusicNotePublicationR2Bundle
 __name2222222222222222222222222222222222222222(handleMusicNotePublicationR2Bundle, "handleMusicNotePublicationR2Bundle");
 __name22222222222222222222222222222222222222222(handleMusicNotePublicationR2Bundle, "handleMusicNotePublicationR2Bundle");
 __name222222222222222222222222222222222222222222(handleMusicNotePublicationR2Bundle, "handleMusicNotePublicationR2Bundle");
+__name2222222222222222222222222222222222222222222(handleMusicNotePublicationR2Bundle, "handleMusicNotePublicationR2Bundle");
 async function handleMyPublications(request, url, env, cors) {
   const authContext = await requireExploreAuth(request);
   const limit = getPageSize(url);
@@ -12955,6 +13139,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleMyPublications, "handleMyPublications");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleMyPublications, "handleMyPublications");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleMyPublications, "handleMyPublications");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleMyPublications, "handleMyPublications");
 async function handleMyFollowing(request, url, env, cors) {
   const authContext = await requireExploreAuth(request);
   const limit = getPageSize(url);
@@ -13073,6 +13258,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleMyFollowing, "handleMyFollowing");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleMyFollowing, "handleMyFollowing");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleMyFollowing, "handleMyFollowing");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleMyFollowing, "handleMyFollowing");
 async function handleExploreAccess(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   const role = await resolveCuratorAccess(env, authContext);
@@ -13151,6 +13337,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleExploreAccess, "handleExploreAccess");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleExploreAccess, "handleExploreAccess");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleExploreAccess, "handleExploreAccess");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleExploreAccess, "handleExploreAccess");
 async function handleCurationWrite(request, env, cors, collectionValue, trackId, shouldAdd) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "curation", RATE_LIMITS.curation);
@@ -13252,6 +13439,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleCurationWrite, "handleCurationWrite");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleCurationWrite, "handleCurationWrite");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleCurationWrite, "handleCurationWrite");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleCurationWrite, "handleCurationWrite");
 async function handleCuratorAdmin(request, env, cors, targetUid, shouldEnable) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "curator-admin", RATE_LIMITS.curatorAdmin);
@@ -13351,6 +13539,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleCuratorAdmin, "handleCuratorAdmin");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleCuratorAdmin, "handleCuratorAdmin");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleCuratorAdmin, "handleCuratorAdmin");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleCuratorAdmin, "handleCuratorAdmin");
 function firstNonEmptyString(...values) {
   for (const value of values) {
     if (typeof value === "string" && value.trim()) return value.trim();
@@ -13430,6 +13619,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(firs
 __name2222222222222222222222222222222222222222222222222222222222222222222222(firstNonEmptyString, "firstNonEmptyString");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(firstNonEmptyString, "firstNonEmptyString");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(firstNonEmptyString, "firstNonEmptyString");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(firstNonEmptyString, "firstNonEmptyString");
 function toFiniteNumber(...values) {
   for (const value of values) {
     const parsed = Number(value);
@@ -13510,6 +13700,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(toFi
 __name2222222222222222222222222222222222222222222222222222222222222222222222(toFiniteNumber, "toFiniteNumber");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(toFiniteNumber, "toFiniteNumber");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(toFiniteNumber, "toFiniteNumber");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(toFiniteNumber, "toFiniteNumber");
 function candidateIdentity(candidate) {
   return firstNonEmptyString(
     candidate?.id,
@@ -13594,6 +13785,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(cand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(candidateIdentity, "candidateIdentity");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(candidateIdentity, "candidateIdentity");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(candidateIdentity, "candidateIdentity");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(candidateIdentity, "candidateIdentity");
 function candidateImageUrl(candidate) {
   return firstNonEmptyString(
     candidate?.imageUrl,
@@ -13678,6 +13870,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(cand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(candidateImageUrl, "candidateImageUrl");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(candidateImageUrl, "candidateImageUrl");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(candidateImageUrl, "candidateImageUrl");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(candidateImageUrl, "candidateImageUrl");
 function normalizeSunoPageUrl(value) {
   const raw = firstNonEmptyString(value);
   if (!raw || raw.length > 4e3) return "";
@@ -13767,6 +13960,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(norm
 __name2222222222222222222222222222222222222222222222222222222222222222222222(normalizeSunoPageUrl, "normalizeSunoPageUrl");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(normalizeSunoPageUrl, "normalizeSunoPageUrl");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(normalizeSunoPageUrl, "normalizeSunoPageUrl");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(normalizeSunoPageUrl, "normalizeSunoPageUrl");
 function candidateSunoPageUrl(candidate) {
   const values = [
     candidate?.sunoShareUrl,
@@ -13861,6 +14055,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(cand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(candidateSunoPageUrl, "candidateSunoPageUrl");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(candidateSunoPageUrl, "candidateSunoPageUrl");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(candidateSunoPageUrl, "candidateSunoPageUrl");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(candidateSunoPageUrl, "candidateSunoPageUrl");
 function collectSunoCandidates(track) {
   const pools = [
     track?.sunoData,
@@ -13963,6 +14158,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(coll
 __name2222222222222222222222222222222222222222222222222222222222222222222222(collectSunoCandidates, "collectSunoCandidates");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(collectSunoCandidates, "collectSunoCandidates");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(collectSunoCandidates, "collectSunoCandidates");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(collectSunoCandidates, "collectSunoCandidates");
 function parseRequestedSubtrack(body, candidates) {
   const hasIndex = body.sourceSubTrackIndex !== void 0 && body.sourceSubTrackIndex !== null && body.sourceSubTrackIndex !== "";
   const requestedIndex = hasIndex ? Number(body.sourceSubTrackIndex) : null;
@@ -14078,6 +14274,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(pars
 __name2222222222222222222222222222222222222222222222222222222222222222222222(parseRequestedSubtrack, "parseRequestedSubtrack");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(parseRequestedSubtrack, "parseRequestedSubtrack");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(parseRequestedSubtrack, "parseRequestedSubtrack");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(parseRequestedSubtrack, "parseRequestedSubtrack");
 var TAG_FIELD_MAP = /* @__PURE__ */ new Map([
   ["genre", "genre"],
   ["genres", "genre"],
@@ -14098,7 +14295,7 @@ var TAG_FIELD_MAP = /* @__PURE__ */ new Map([
 function collectTrackTags(track, candidate) {
   const rows = [];
   const seen = /* @__PURE__ */ new Set();
-  const add = /* @__PURE__ */ __name222222222222222222222222222222222222222222222222222222222222222222222222((kind, value) => {
+  const add = /* @__PURE__ */ __name2222222222222222222222222222222222222222222222222222222222222222222222222((kind, value) => {
     const text = typeof value === "string" ? value.trim() : "";
     if (!text || text.length > 80) return;
     const normalizedKind = String(kind || "tag").slice(0, 40);
@@ -14204,6 +14401,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(coll
 __name2222222222222222222222222222222222222222222222222222222222222222222222(collectTrackTags, "collectTrackTags");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(collectTrackTags, "collectTrackTags");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(collectTrackTags, "collectTrackTags");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(collectTrackTags, "collectTrackTags");
 function normalizeMusicNoteSunoLink(link, sourceIndex) {
   const raw = typeof link === "string" ? link : firstNonEmptyString(link?.url, link?.sunoShareUrl, link?.sunoUrl);
   const url = normalizeSunoPageUrl(raw);
@@ -14291,6 +14489,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(norm
 __name2222222222222222222222222222222222222222222222222222222222222222222222(normalizeMusicNoteSunoLink, "normalizeMusicNoteSunoLink");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(normalizeMusicNoteSunoLink, "normalizeMusicNoteSunoLink");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(normalizeMusicNoteSunoLink, "normalizeMusicNoteSunoLink");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(normalizeMusicNoteSunoLink, "normalizeMusicNoteSunoLink");
 function collectMusicNoteSunoLinks(note) {
   const rawLinks = Array.isArray(note?.sunoLinks) ? note.sunoLinks : Array.isArray(note?.sunoShareLinks) ? note.sunoShareLinks : [];
   const links = rawLinks.map((link, index) => normalizeMusicNoteSunoLink(link, index)).filter(Boolean);
@@ -14395,6 +14594,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(coll
 __name2222222222222222222222222222222222222222222222222222222222222222222222(collectMusicNoteSunoLinks, "collectMusicNoteSunoLinks");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(collectMusicNoteSunoLinks, "collectMusicNoteSunoLinks");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(collectMusicNoteSunoLinks, "collectMusicNoteSunoLinks");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(collectMusicNoteSunoLinks, "collectMusicNoteSunoLinks");
 function getMusicNotePrimaryAndSecondary(note, links) {
   if (!links.length) {
     throwApi(
@@ -14481,6 +14681,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(getM
 __name2222222222222222222222222222222222222222222222222222222222222222222222(getMusicNotePrimaryAndSecondary, "getMusicNotePrimaryAndSecondary");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(getMusicNotePrimaryAndSecondary, "getMusicNotePrimaryAndSecondary");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getMusicNotePrimaryAndSecondary, "getMusicNotePrimaryAndSecondary");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(getMusicNotePrimaryAndSecondary, "getMusicNotePrimaryAndSecondary");
 function combineLyrics(source) {
   const ko = firstNonEmptyString(
     source?.editedKoreanLyrics,
@@ -14570,6 +14771,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(comb
 __name2222222222222222222222222222222222222222222222222222222222222222222222(combineLyrics, "combineLyrics");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(combineLyrics, "combineLyrics");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(combineLyrics, "combineLyrics");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(combineLyrics, "combineLyrics");
 var SORIDRAW_PUBLIC_SHARE_SCHEMA_015 = 1;
 var SORIDRAW_PUBLIC_SHARE_MAX_JSON_015 = 14e3;
 function shareText015(value, max = 240) {
@@ -14614,6 +14816,7 @@ __name2222222222222222222222222222222222(shareText015, "shareText015");
 __name22222222222222222222222222222222222(shareText015, "shareText015");
 __name222222222222222222222222222222222222(shareText015, "shareText015");
 __name2222222222222222222222222222222222222(shareText015, "shareText015");
+__name22222222222222222222222222222222222222(shareText015, "shareText015");
 function shareList015(value, maxItems = 32, maxChars = 120) {
   const input = Array.isArray(value) ? value : value === null || value === void 0 || value === "" ? [] : [value];
   const out = [];
@@ -14665,6 +14868,7 @@ __name2222222222222222222222222222222222(shareList015, "shareList015");
 __name22222222222222222222222222222222222(shareList015, "shareList015");
 __name222222222222222222222222222222222222(shareList015, "shareList015");
 __name2222222222222222222222222222222222222(shareList015, "shareList015");
+__name22222222222222222222222222222222222222(shareList015, "shareList015");
 function shareSafeValue015(value, depth = 0) {
   if (depth > 4 || value === null || value === void 0) return null;
   if (typeof value === "string") return shareText015(value, 320);
@@ -14721,6 +14925,7 @@ __name2222222222222222222222222222222222(shareSafeValue015, "shareSafeValue015")
 __name22222222222222222222222222222222222(shareSafeValue015, "shareSafeValue015");
 __name222222222222222222222222222222222222(shareSafeValue015, "shareSafeValue015");
 __name2222222222222222222222222222222222222(shareSafeValue015, "shareSafeValue015");
+__name22222222222222222222222222222222222222(shareSafeValue015, "shareSafeValue015");
 function buildMusicNoteShareBundle015(note) {
   const applied = note?.appliedKeywords && typeof note.appliedKeywords === "object" && !Array.isArray(note.appliedKeywords) ? note.appliedKeywords : {};
   const preferredGenres = Array.isArray(applied.subGenre) && applied.subGenre.length ? applied.subGenre : applied.genre;
@@ -14860,6 +15065,7 @@ __name2222222222222222222222222222222222(buildMusicNoteShareBundle015, "buildMus
 __name22222222222222222222222222222222222(buildMusicNoteShareBundle015, "buildMusicNoteShareBundle015");
 __name222222222222222222222222222222222222(buildMusicNoteShareBundle015, "buildMusicNoteShareBundle015");
 __name2222222222222222222222222222222222222(buildMusicNoteShareBundle015, "buildMusicNoteShareBundle015");
+__name22222222222222222222222222222222222222(buildMusicNoteShareBundle015, "buildMusicNoteShareBundle015");
 function readPublicShareBundle015(row) {
   try {
     if (Number(row?.share_schema_version || 0) !== SORIDRAW_PUBLIC_SHARE_SCHEMA_015) return null;
@@ -14914,6 +15120,7 @@ __name2222222222222222222222222222222222(readPublicShareBundle015, "readPublicSh
 __name22222222222222222222222222222222222(readPublicShareBundle015, "readPublicShareBundle015");
 __name222222222222222222222222222222222222(readPublicShareBundle015, "readPublicShareBundle015");
 __name2222222222222222222222222222222222222(readPublicShareBundle015, "readPublicShareBundle015");
+__name22222222222222222222222222222222222222(readPublicShareBundle015, "readPublicShareBundle015");
 function buildMusicNoteExploreSource(note, uid, sourceId) {
   const ownerUid = firstNonEmptyString(note?.uid, note?.ownerUid);
   if (ownerUid && ownerUid !== uid) {
@@ -15052,9 +15259,10 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(buil
 __name2222222222222222222222222222222222222222222222222222222222222222222222(buildMusicNoteExploreSource, "buildMusicNoteExploreSource");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(buildMusicNoteExploreSource, "buildMusicNoteExploreSource");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(buildMusicNoteExploreSource, "buildMusicNoteExploreSource");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(buildMusicNoteExploreSource, "buildMusicNoteExploreSource");
 function collectCandidatePageUrls(candidate, track) {
   const values = [];
-  const add = /* @__PURE__ */ __name222222222222222222222222222222222222222222222222222222222222222222222222((value) => {
+  const add = /* @__PURE__ */ __name2222222222222222222222222222222222222222222222222222222222222222222222222((value) => {
     const normalized = normalizeSunoPageUrl(value);
     if (!normalized || values.includes(normalized)) return;
     values.push(normalized);
@@ -15170,6 +15378,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(coll
 __name2222222222222222222222222222222222222222222222222222222222222222222222(collectCandidatePageUrls, "collectCandidatePageUrls");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(collectCandidatePageUrls, "collectCandidatePageUrls");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(collectCandidatePageUrls, "collectCandidatePageUrls");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(collectCandidatePageUrls, "collectCandidatePageUrls");
 function buildSunoLibraryExploreSource(track, candidate, subtrack, uid, sourceId) {
   const pageUrls = collectCandidatePageUrls(candidate, track);
   if (!pageUrls.length) {
@@ -15295,6 +15504,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(buil
 __name2222222222222222222222222222222222222222222222222222222222222222222222(buildSunoLibraryExploreSource, "buildSunoLibraryExploreSource");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(buildSunoLibraryExploreSource, "buildSunoLibraryExploreSource");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(buildSunoLibraryExploreSource, "buildSunoLibraryExploreSource");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(buildSunoLibraryExploreSource, "buildSunoLibraryExploreSource");
 async function resolvePublicationSource(body, authContext) {
   const sourceType = firstNonEmptyString(body?.sourceType);
   const sourceId = firstNonEmptyString(body?.sourceId, body?.firebaseTrackId);
@@ -15408,6 +15618,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(reso
 __name2222222222222222222222222222222222222222222222222222222222222222222222(resolvePublicationSource, "resolvePublicationSource");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(resolvePublicationSource, "resolvePublicationSource");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(resolvePublicationSource, "resolvePublicationSource");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(resolvePublicationSource, "resolvePublicationSource");
 async function upsertPublicProfileFromFirebase(env, authContext, now) {
   const userData = await fetchFirestoreDocument(["users", authContext.uid], authContext);
   if (!userData) {
@@ -15515,6 +15726,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(upse
 __name2222222222222222222222222222222222222222222222222222222222222222222222(upsertPublicProfileFromFirebase, "upsertPublicProfileFromFirebase");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(upsertPublicProfileFromFirebase, "upsertPublicProfileFromFirebase");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(upsertPublicProfileFromFirebase, "upsertPublicProfileFromFirebase");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(upsertPublicProfileFromFirebase, "upsertPublicProfileFromFirebase");
 async function getOwnedTrack(env, trackId, uid) {
   const row = await env.DB.prepare(`
     SELECT id, owner_uid, is_public, status
@@ -15600,6 +15812,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(getO
 __name2222222222222222222222222222222222222222222222222222222222222222222222(getOwnedTrack, "getOwnedTrack");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(getOwnedTrack, "getOwnedTrack");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getOwnedTrack, "getOwnedTrack");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(getOwnedTrack, "getOwnedTrack");
 async function getPublicTrackForWrite(env, trackId) {
   const row = await env.DB.prepare(`
     SELECT id, owner_uid
@@ -15687,6 +15900,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(getP
 __name2222222222222222222222222222222222222222222222222222222222222222222222(getPublicTrackForWrite, "getPublicTrackForWrite");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(getPublicTrackForWrite, "getPublicTrackForWrite");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getPublicTrackForWrite, "getPublicTrackForWrite");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(getPublicTrackForWrite, "getPublicTrackForWrite");
 function readOptionalBoolean(body, key) {
   const nested = body?.publicationOptions && typeof body.publicationOptions === "object" ? body.publicationOptions : null;
   const value = nested && Object.prototype.hasOwnProperty.call(nested, key) ? nested[key] : body?.[key];
@@ -15765,6 +15979,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(read
 __name2222222222222222222222222222222222222222222222222222222222222222222222(readOptionalBoolean, "readOptionalBoolean");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(readOptionalBoolean, "readOptionalBoolean");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(readOptionalBoolean, "readOptionalBoolean");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(readOptionalBoolean, "readOptionalBoolean");
 function normalizePublicationOptions(body) {
   return {
     allowNextSongApply: readOptionalBoolean(body, "allowNextSongApply"),
@@ -15845,6 +16060,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(norm
 __name2222222222222222222222222222222222222222222222222222222222222222222222(normalizePublicationOptions, "normalizePublicationOptions");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(normalizePublicationOptions, "normalizePublicationOptions");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(normalizePublicationOptions, "normalizePublicationOptions");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(normalizePublicationOptions, "normalizePublicationOptions");
 function hasPublicationOptionChanges(options) {
   return Object.values(options).some((value) => typeof value === "boolean");
 }
@@ -15921,6 +16137,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hasP
 __name2222222222222222222222222222222222222222222222222222222222222222222222(hasPublicationOptionChanges, "hasPublicationOptionChanges");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(hasPublicationOptionChanges, "hasPublicationOptionChanges");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(hasPublicationOptionChanges, "hasPublicationOptionChanges");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(hasPublicationOptionChanges, "hasPublicationOptionChanges");
 async function applyPublicationOptions(env, trackId, uid, options, now) {
   if (!hasPublicationOptionChanges(options)) return;
   const current = await getOwnedTrack(env, trackId, uid);
@@ -16020,6 +16237,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(appl
 __name2222222222222222222222222222222222222222222222222222222222222222222222(applyPublicationOptions, "applyPublicationOptions");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(applyPublicationOptions, "applyPublicationOptions");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(applyPublicationOptions, "applyPublicationOptions");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(applyPublicationOptions, "applyPublicationOptions");
 async function handlePublicationOptionsR2Core(request, env, cors, trackId) {
   const probe = request.clone();
   const authContext = await requireExploreAuth(probe);
@@ -16073,6 +16291,7 @@ __name2222222222222222222222222222222222(handlePublicationOptionsR2Core, "handle
 __name22222222222222222222222222222222222(handlePublicationOptionsR2Core, "handlePublicationOptionsR2Core");
 __name222222222222222222222222222222222222(handlePublicationOptionsR2Core, "handlePublicationOptionsR2Core");
 __name2222222222222222222222222222222222222(handlePublicationOptionsR2Core, "handlePublicationOptionsR2Core");
+__name22222222222222222222222222222222222222(handlePublicationOptionsR2Core, "handlePublicationOptionsR2Core");
 async function handlePublicationOptionsR2CoreLegacy017(request, env, cors, trackId) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "visibility", RATE_LIMITS.visibility);
@@ -16144,10 +16363,11 @@ __name2222222222222222222222222222222222(handlePublicationOptionsR2CoreLegacy017
 __name22222222222222222222222222222222222(handlePublicationOptionsR2CoreLegacy017, "handlePublicationOptionsR2CoreLegacy017");
 __name222222222222222222222222222222222222(handlePublicationOptionsR2CoreLegacy017, "handlePublicationOptionsR2CoreLegacy017");
 __name2222222222222222222222222222222222222(handlePublicationOptionsR2CoreLegacy017, "handlePublicationOptionsR2CoreLegacy017");
-__name22222222222222222222222222222222222222(handlePublicationOptionsR2Core, "handlePublicationOptionsR2Core");
+__name22222222222222222222222222222222222222(handlePublicationOptionsR2CoreLegacy017, "handlePublicationOptionsR2CoreLegacy017");
 __name222222222222222222222222222222222222222(handlePublicationOptionsR2Core, "handlePublicationOptionsR2Core");
 __name2222222222222222222222222222222222222222(handlePublicationOptionsR2Core, "handlePublicationOptionsR2Core");
 __name22222222222222222222222222222222222222222(handlePublicationOptionsR2Core, "handlePublicationOptionsR2Core");
+__name222222222222222222222222222222222222222222(handlePublicationOptionsR2Core, "handlePublicationOptionsR2Core");
 async function handlePublicationOptions(request, env, cors, ...args) {
   const response = await handlePublicationOptionsR2Core(request, env, cors, ...args);
   if (response.ok) await safelyRefreshExploreFeedR2Bundles(env, "handlePublicationOptions");
@@ -16226,6 +16446,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handlePublicationOptions, "handlePublicationOptions");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handlePublicationOptions, "handlePublicationOptions");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handlePublicationOptions, "handlePublicationOptions");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handlePublicationOptions, "handlePublicationOptions");
 async function handleMyLikeStatesD1Core(request, url, env, cors) {
   const authContext = await requireExploreAuth(request);
   const raw = safeString(url.searchParams.get("trackIds"));
@@ -16290,6 +16511,7 @@ __name22222222222222222222222222222222222222(handleMyLikeStatesD1Core, "handleMy
 __name222222222222222222222222222222222222222(handleMyLikeStatesD1Core, "handleMyLikeStatesD1Core");
 __name2222222222222222222222222222222222222222(handleMyLikeStatesD1Core, "handleMyLikeStatesD1Core");
 __name22222222222222222222222222222222222222222(handleMyLikeStatesD1Core, "handleMyLikeStatesD1Core");
+__name222222222222222222222222222222222222222222(handleMyLikeStatesD1Core, "handleMyLikeStatesD1Core");
 async function handleMyLikeStates(request, url, env, cors) {
   const authContext = await requireExploreAuth(request);
   const raw = safeString(url.searchParams.get("trackIds"));
@@ -16375,6 +16597,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleMyLikeStates, "handleMyLikeStates");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleMyLikeStates, "handleMyLikeStates");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleMyLikeStates, "handleMyLikeStates");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleMyLikeStates, "handleMyLikeStates");
 async function handleFollowingFeed(request, url, env, cors) {
   const authContext = await requireExploreAuth(request);
   const limit = getPageSize(url);
@@ -16487,6 +16710,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleFollowingFeed, "handleFollowingFeed");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleFollowingFeed, "handleFollowingFeed");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleFollowingFeed, "handleFollowingFeed");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleFollowingFeed, "handleFollowingFeed");
 async function handleTrackApplySource(request, env, cors, trackId) {
   await requireExploreAuth(request);
   const row = await env.DB.prepare(`
@@ -16594,6 +16818,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleTrackApplySource, "handleTrackApplySource");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleTrackApplySource, "handleTrackApplySource");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleTrackApplySource, "handleTrackApplySource");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleTrackApplySource, "handleTrackApplySource");
 async function handleFollowerSaveAccess(request, env, cors, trackId) {
   const authContext = await requireExploreAuth(request);
   const track = await env.DB.prepare(`
@@ -16711,6 +16936,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleFollowerSaveAccess, "handleFollowerSaveAccess");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleFollowerSaveAccess, "handleFollowerSaveAccess");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleFollowerSaveAccess, "handleFollowerSaveAccess");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleFollowerSaveAccess, "handleFollowerSaveAccess");
 function normalizePublicFolderTitle(value) {
   const title = String(value || "").trim();
   if (!title) throwApi("FOLDER_TITLE_REQUIRED", "\uD3F4\uB354 \uC774\uB984\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.", 400);
@@ -16790,6 +17016,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(norm
 __name2222222222222222222222222222222222222222222222222222222222222222222222(normalizePublicFolderTitle, "normalizePublicFolderTitle");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(normalizePublicFolderTitle, "normalizePublicFolderTitle");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(normalizePublicFolderTitle, "normalizePublicFolderTitle");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(normalizePublicFolderTitle, "normalizePublicFolderTitle");
 function normalizePublicFolderTrackIds(value) {
   if (value === void 0) return null;
   if (!Array.isArray(value)) throwApi("INVALID_FOLDER_TRACKS", "\uD3F4\uB354 \uACE1 \uBAA9\uB85D \uD615\uC2DD\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", 400);
@@ -16870,6 +17097,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(norm
 __name2222222222222222222222222222222222222222222222222222222222222222222222(normalizePublicFolderTrackIds, "normalizePublicFolderTrackIds");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(normalizePublicFolderTrackIds, "normalizePublicFolderTrackIds");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(normalizePublicFolderTrackIds, "normalizePublicFolderTrackIds");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(normalizePublicFolderTrackIds, "normalizePublicFolderTrackIds");
 async function replacePublicFolderTracks(env, folderId, ownerUid, trackIds, now) {
   if (trackIds === null) return;
   if (trackIds.length) {
@@ -16964,6 +17192,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(repl
 __name2222222222222222222222222222222222222222222222222222222222222222222222(replacePublicFolderTracks, "replacePublicFolderTracks");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(replacePublicFolderTracks, "replacePublicFolderTracks");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(replacePublicFolderTracks, "replacePublicFolderTracks");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(replacePublicFolderTracks, "replacePublicFolderTracks");
 async function handleUpsertPublicFolder(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "folder", RATE_LIMITS.folder);
@@ -17074,6 +17303,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleUpsertPublicFolder, "handleUpsertPublicFolder");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleUpsertPublicFolder, "handleUpsertPublicFolder");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleUpsertPublicFolder, "handleUpsertPublicFolder");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleUpsertPublicFolder, "handleUpsertPublicFolder");
 async function handleMyPublicFolders(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   const result = await env.DB.prepare(`
@@ -17172,6 +17402,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleMyPublicFolders, "handleMyPublicFolders");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleMyPublicFolders, "handleMyPublicFolders");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleMyPublicFolders, "handleMyPublicFolders");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleMyPublicFolders, "handleMyPublicFolders");
 async function handlePublicProfileFolders(uid, env, cors) {
   const profile = await env.DB.prepare(`
     SELECT uid FROM public_profiles WHERE uid = ? AND is_public = 1 LIMIT 1
@@ -17269,6 +17500,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handlePublicProfileFolders, "handlePublicProfileFolders");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handlePublicProfileFolders, "handlePublicProfileFolders");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handlePublicProfileFolders, "handlePublicProfileFolders");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handlePublicProfileFolders, "handlePublicProfileFolders");
 async function handlePublicProfileFolderTracks(url, uid, folderId, env, cors) {
   const folder = await env.DB.prepare(`
     SELECT pf.id
@@ -17369,6 +17601,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handlePublicProfileFolderTracks, "handlePublicProfileFolderTracks");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handlePublicProfileFolderTracks, "handlePublicProfileFolderTracks");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handlePublicProfileFolderTracks, "handlePublicProfileFolderTracks");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handlePublicProfileFolderTracks, "handlePublicProfileFolderTracks");
 async function handlePublicFolderVisibility(request, env, cors, folderId) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "folder", RATE_LIMITS.folder);
@@ -17459,6 +17692,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handlePublicFolderVisibility, "handlePublicFolderVisibility");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handlePublicFolderVisibility, "handlePublicFolderVisibility");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handlePublicFolderVisibility, "handlePublicFolderVisibility");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handlePublicFolderVisibility, "handlePublicFolderVisibility");
 async function getOrEnsurePublicationOwnerProfile013(env, authContext, now) {
   const existing = await env.DB.prepare(`
     SELECT uid, nickname, avatar_url, is_public
@@ -17514,6 +17748,7 @@ __name22222222222222222222222222222222222(getOrEnsurePublicationOwnerProfile013,
 __name222222222222222222222222222222222222(getOrEnsurePublicationOwnerProfile013, "getOrEnsurePublicationOwnerProfile013");
 __name2222222222222222222222222222222222222(getOrEnsurePublicationOwnerProfile013, "getOrEnsurePublicationOwnerProfile013");
 __name22222222222222222222222222222222222222(getOrEnsurePublicationOwnerProfile013, "getOrEnsurePublicationOwnerProfile013");
+__name222222222222222222222222222222222222222(getOrEnsurePublicationOwnerProfile013, "getOrEnsurePublicationOwnerProfile013");
 function publicationSearchChanged013(previous, source) {
   if (!previous) return true;
   if (Number(previous.is_public || 0) !== 1 || String(previous.status || "") !== "published") return true;
@@ -17558,9 +17793,10 @@ __name22222222222222222222222222222222222(publicationSearchChanged013, "publicat
 __name222222222222222222222222222222222222(publicationSearchChanged013, "publicationSearchChanged013");
 __name2222222222222222222222222222222222222(publicationSearchChanged013, "publicationSearchChanged013");
 __name22222222222222222222222222222222222222(publicationSearchChanged013, "publicationSearchChanged013");
+__name222222222222222222222222222222222222222(publicationSearchChanged013, "publicationSearchChanged013");
 async function refreshPublicationTrackSearchIndex013(env, source) {
   const tags = Array.isArray(source?.tags) ? source.tags : [];
-  const values = /* @__PURE__ */ __name22222222222222222222222222222222222222((kind) => tags.filter((tag) => String(tag?.kind || "") === kind).map((tag) => String(tag?.value || "").trim()).filter(Boolean).join(" "), "values");
+  const values = /* @__PURE__ */ __name222222222222222222222222222222222222222((kind) => tags.filter((tag) => String(tag?.kind || "") === kind).map((tag) => String(tag?.value || "").trim()).filter(Boolean).join(" "), "values");
   const allTags = tags.map((tag) => String(tag?.value || "").trim()).filter(Boolean).join(" ");
   await env.DB.batch([
     env.DB.prepare("DELETE FROM track_search_fts WHERE track_id = ?").bind(source.id),
@@ -17616,6 +17852,7 @@ __name22222222222222222222222222222222222(refreshPublicationTrackSearchIndex013,
 __name222222222222222222222222222222222222(refreshPublicationTrackSearchIndex013, "refreshPublicationTrackSearchIndex013");
 __name2222222222222222222222222222222222222(refreshPublicationTrackSearchIndex013, "refreshPublicationTrackSearchIndex013");
 __name22222222222222222222222222222222222222(refreshPublicationTrackSearchIndex013, "refreshPublicationTrackSearchIndex013");
+__name222222222222222222222222222222222222222(refreshPublicationTrackSearchIndex013, "refreshPublicationTrackSearchIndex013");
 function publicationBool016(value, fallback) {
   return value === null || value === void 0 ? fallback ? 1 : 0 : value ? 1 : 0;
 }
@@ -17657,6 +17894,7 @@ __name2222222222222222222222222222222222(publicationBool016, "publicationBool016
 __name22222222222222222222222222222222222(publicationBool016, "publicationBool016");
 __name222222222222222222222222222222222222(publicationBool016, "publicationBool016");
 __name2222222222222222222222222222222222222(publicationBool016, "publicationBool016");
+__name22222222222222222222222222222222222222(publicationBool016, "publicationBool016");
 function publicationText016(value) {
   return value === null || value === void 0 ? "" : String(value);
 }
@@ -17698,6 +17936,7 @@ __name2222222222222222222222222222222222(publicationText016, "publicationText016
 __name22222222222222222222222222222222222(publicationText016, "publicationText016");
 __name222222222222222222222222222222222222(publicationText016, "publicationText016");
 __name2222222222222222222222222222222222222(publicationText016, "publicationText016");
+__name22222222222222222222222222222222222222(publicationText016, "publicationText016");
 function publicationNullableNumberEqual016(a, b) {
   const aEmpty = a === null || a === void 0 || a === "";
   const bEmpty = b === null || b === void 0 || b === "";
@@ -17742,6 +17981,7 @@ __name2222222222222222222222222222222222(publicationNullableNumberEqual016, "pub
 __name22222222222222222222222222222222222(publicationNullableNumberEqual016, "publicationNullableNumberEqual016");
 __name222222222222222222222222222222222222(publicationNullableNumberEqual016, "publicationNullableNumberEqual016");
 __name2222222222222222222222222222222222222(publicationNullableNumberEqual016, "publicationNullableNumberEqual016");
+__name22222222222222222222222222222222222222(publicationNullableNumberEqual016, "publicationNullableNumberEqual016");
 function publicationPrimaryGenre016(source) {
   const tags = Array.isArray(source?.tags) ? source.tags : [];
   const genre = tags.find((tag) => String(tag?.kind || "") === "genre" && String(tag?.value || "").trim());
@@ -17785,9 +18025,10 @@ __name2222222222222222222222222222222222(publicationPrimaryGenre016, "publicatio
 __name22222222222222222222222222222222222(publicationPrimaryGenre016, "publicationPrimaryGenre016");
 __name222222222222222222222222222222222222(publicationPrimaryGenre016, "publicationPrimaryGenre016");
 __name2222222222222222222222222222222222222(publicationPrimaryGenre016, "publicationPrimaryGenre016");
+__name22222222222222222222222222222222222222(publicationPrimaryGenre016, "publicationPrimaryGenre016");
 function publicationCanonicalUnchanged016(row, source, options, primaryGenre) {
   if (!row?.id) return false;
-  const sameText = /* @__PURE__ */ __name2222222222222222222222222222222222222((a, b) => publicationText016(a) === publicationText016(b), "sameText");
+  const sameText = /* @__PURE__ */ __name22222222222222222222222222222222222222((a, b) => publicationText016(a) === publicationText016(b), "sameText");
   return Number(row.is_public || 0) === 1 && String(row.status || "") === "published" && sameText(row.source_type, source.sourceType) && sameText(row.source_id, source.sourceId) && sameText(row.source_parent_id, source.sourceParentId) && sameText(row.legacy_global_id, source.legacyGlobalId) && sameText(row.source_subtrack_key, source.sourceSubTrackKey) && publicationNullableNumberEqual016(row.source_subtrack_index, source.sourceSubTrackIndex) && sameText(row.source_subtrack_id, source.sourceSubTrackId) && sameText(row.title, source.title) && sameText(row.description, source.description) && sameText(row.cover_url, source.coverUrl) && publicationNullableNumberEqual016(row.duration_seconds, source.durationSeconds) && sameText(row.lyrics, source.lyrics) && sameText(row.style, source.style) && sameText(row.prompt, source.prompt) && sameText(row.suno_url_primary, source.sunoUrlPrimary) && sameText(row.suno_url_secondary, source.sunoUrlSecondary) && sameText(row.search_text, source.searchText) && Number(row.allow_next_song_apply || 0) === Number(options.allowNextSongApply || 0) && Number(row.allow_follower_save || 0) === Number(options.allowFollowerSave || 0) && Number(row.profile_pinned || 0) === Number(options.profilePinned || 0) && Number(row.share_schema_version || 0) === Number(source.shareSchemaVersion || 0) && sameText(row.share_payload_json, source.sharePayloadJson) && sameText(row.primary_genre, primaryGenre);
 }
 __name(publicationCanonicalUnchanged016, "publicationCanonicalUnchanged016");
@@ -17828,6 +18069,7 @@ __name2222222222222222222222222222222222(publicationCanonicalUnchanged016, "publ
 __name22222222222222222222222222222222222(publicationCanonicalUnchanged016, "publicationCanonicalUnchanged016");
 __name222222222222222222222222222222222222(publicationCanonicalUnchanged016, "publicationCanonicalUnchanged016");
 __name2222222222222222222222222222222222222(publicationCanonicalUnchanged016, "publicationCanonicalUnchanged016");
+__name22222222222222222222222222222222222222(publicationCanonicalUnchanged016, "publicationCanonicalUnchanged016");
 async function publicationReadState016(env, uid, trackId) {
   return await env.DB.prepare(`
     SELECT *
@@ -17874,6 +18116,7 @@ __name2222222222222222222222222222222222(publicationReadState016, "publicationRe
 __name22222222222222222222222222222222222(publicationReadState016, "publicationReadState016");
 __name222222222222222222222222222222222222(publicationReadState016, "publicationReadState016");
 __name2222222222222222222222222222222222222(publicationReadState016, "publicationReadState016");
+__name22222222222222222222222222222222222222(publicationReadState016, "publicationReadState016");
 async function publicationEnsureProfile016(env, authContext, row, now) {
   const handle = String(row?.profile_handle || "").trim();
   if (row?.profile_uid && Number(row.profile_is_public || 0) === 1) {
@@ -17943,6 +18186,7 @@ __name2222222222222222222222222222222222(publicationEnsureProfile016, "publicati
 __name22222222222222222222222222222222222(publicationEnsureProfile016, "publicationEnsureProfile016");
 __name222222222222222222222222222222222222(publicationEnsureProfile016, "publicationEnsureProfile016");
 __name2222222222222222222222222222222222222(publicationEnsureProfile016, "publicationEnsureProfile016");
+__name22222222222222222222222222222222222222(publicationEnsureProfile016, "publicationEnsureProfile016");
 function publicationBuildFeedItem016(source, authContext, profile, previous, options, primaryGenre, publishedAt, now) {
   return mapTrackRow({
     id: source.id,
@@ -18020,6 +18264,7 @@ __name2222222222222222222222222222222222(publicationBuildFeedItem016, "publicati
 __name22222222222222222222222222222222222(publicationBuildFeedItem016, "publicationBuildFeedItem016");
 __name222222222222222222222222222222222222(publicationBuildFeedItem016, "publicationBuildFeedItem016");
 __name2222222222222222222222222222222222222(publicationBuildFeedItem016, "publicationBuildFeedItem016");
+__name22222222222222222222222222222222222222(publicationBuildFeedItem016, "publicationBuildFeedItem016");
 function getProfileTrackId019(item) {
   return String(item?.id || item?.trackId || "").trim();
 }
@@ -18058,6 +18303,7 @@ __name2222222222222222222222222222222(getProfileTrackId019, "getProfileTrackId01
 __name22222222222222222222222222222222(getProfileTrackId019, "getProfileTrackId019");
 __name222222222222222222222222222222222(getProfileTrackId019, "getProfileTrackId019");
 __name2222222222222222222222222222222222(getProfileTrackId019, "getProfileTrackId019");
+__name22222222222222222222222222222222222(getProfileTrackId019, "getProfileTrackId019");
 function sortProfileTracks019(items) {
   return [...items].sort((a, b) => {
     const pinnedA = a?.profilePinned === true || Number(a?.profile_pinned || 0) === 1 ? 1 : 0;
@@ -18104,7 +18350,7 @@ __name2222222222222222222222222222222(sortProfileTracks019, "sortProfileTracks01
 __name22222222222222222222222222222222(sortProfileTracks019, "sortProfileTracks019");
 __name222222222222222222222222222222222(sortProfileTracks019, "sortProfileTracks019");
 __name2222222222222222222222222222222222(sortProfileTracks019, "sortProfileTracks019");
-__name222222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
+__name22222222222222222222222222222222222(sortProfileTracks019, "sortProfileTracks019");
 __name2222222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 __name22222222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 __name222222222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
@@ -18133,6 +18379,7 @@ __name2222222222222222222222222222222(patchExploreProfileR2Mutation019, "patchEx
 __name22222222222222222222222222222222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 __name222222222222222222222222222222222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 __name2222222222222222222222222222222222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
+__name22222222222222222222222222222222222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 async function invalidatePublicationProfileCaches017(request, env, uid, handle) {
   try {
     await invalidatePublicProfileFirstViewEdgeCache(request, [uid, handle].filter(Boolean));
@@ -18178,7 +18425,7 @@ __name2222222222222222222222222222222222(invalidatePublicationProfileCaches017, 
 __name22222222222222222222222222222222222(invalidatePublicationProfileCaches017, "invalidatePublicationProfileCaches017");
 __name222222222222222222222222222222222222(invalidatePublicationProfileCaches017, "invalidatePublicationProfileCaches017");
 __name2222222222222222222222222222222222222(invalidatePublicationProfileCaches017, "invalidatePublicationProfileCaches017");
-__name222222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
+__name22222222222222222222222222222222222222(invalidatePublicationProfileCaches017, "invalidatePublicationProfileCaches017");
 __name2222222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 __name22222222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 __name222222222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
@@ -18210,7 +18457,7 @@ __name2222222222222222222222222222222222(syncExploreFeedR2OptionPatch017, "syncE
 __name22222222222222222222222222222222222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 __name222222222222222222222222222222222222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 __name2222222222222222222222222222222222222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
-__name222222(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
+__name22222222222222222222222222222222222222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 __name2222222(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
 __name22222222(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
 __name222222222(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
@@ -18242,6 +18489,7 @@ __name2222222222222222222222222222222222(syncExploreFeedR2Private017, "syncExplo
 __name22222222222222222222222222222222222(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
 __name222222222222222222222222222222222222(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
 __name2222222222222222222222222222222222222(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
+__name22222222222222222222222222222222222222(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
 async function handleMusicNotePublicationOptions017(request, env, cors, authContext, body, row) {
   const options = normalizePublicationOptions(body);
   if (!hasPublicationOptionChanges(options)) throwApi("PUBLICATION_OPTIONS_REQUIRED", "\uBCC0\uACBD\uD560 \uACF5\uAC1C \uC635\uC158\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.", 400);
@@ -18346,6 +18594,7 @@ __name2222222222222222222222222222222222(handleMusicNotePublicationOptions017, "
 __name22222222222222222222222222222222222(handleMusicNotePublicationOptions017, "handleMusicNotePublicationOptions017");
 __name222222222222222222222222222222222222(handleMusicNotePublicationOptions017, "handleMusicNotePublicationOptions017");
 __name2222222222222222222222222222222222222(handleMusicNotePublicationOptions017, "handleMusicNotePublicationOptions017");
+__name22222222222222222222222222222222222222(handleMusicNotePublicationOptions017, "handleMusicNotePublicationOptions017");
 async function handleMusicNotePrivate017(request, env, cors, authContext, row) {
   const changed = Number(row.is_public || 0) !== 0;
   if (!changed) return json({ ok: true, data: { trackId: row.id, isPublic: false, mutation: "idempotent" } }, 200, cors);
@@ -18412,6 +18661,7 @@ __name2222222222222222222222222222222222(handleMusicNotePrivate017, "handleMusic
 __name22222222222222222222222222222222222(handleMusicNotePrivate017, "handleMusicNotePrivate017");
 __name222222222222222222222222222222222222(handleMusicNotePrivate017, "handleMusicNotePrivate017");
 __name2222222222222222222222222222222222222(handleMusicNotePrivate017, "handleMusicNotePrivate017");
+__name22222222222222222222222222222222222222(handleMusicNotePrivate017, "handleMusicNotePrivate017");
 function publicationStableJsonValue022(value) {
   if (Array.isArray(value)) return value.map((item) => publicationStableJsonValue022(item));
   if (value && typeof value === "object") {
@@ -18451,8 +18701,9 @@ __name22222222222222222222222222(publicationStableJsonValue022, "publicationStab
 __name222222222222222222222222222(publicationStableJsonValue022, "publicationStableJsonValue022");
 __name2222222222222222222222222222(publicationStableJsonValue022, "publicationStableJsonValue022");
 __name22222222222222222222222222222(publicationStableJsonValue022, "publicationStableJsonValue022");
+__name222222222222222222222222222222(publicationStableJsonValue022, "publicationStableJsonValue022");
 function publicationJsonEquivalent022(a, b) {
-  const parse = /* @__PURE__ */ __name22222222222222222222222222222((value) => {
+  const parse = /* @__PURE__ */ __name222222222222222222222222222222((value) => {
     const text = value === null || value === void 0 || value === "" ? "{}" : String(value);
     try {
       return publicationStableJsonValue022(JSON.parse(text));
@@ -18495,6 +18746,7 @@ __name22222222222222222222222222(publicationJsonEquivalent022, "publicationJsonE
 __name222222222222222222222222222(publicationJsonEquivalent022, "publicationJsonEquivalent022");
 __name2222222222222222222222222222(publicationJsonEquivalent022, "publicationJsonEquivalent022");
 __name22222222222222222222222222222(publicationJsonEquivalent022, "publicationJsonEquivalent022");
+__name222222222222222222222222222222(publicationJsonEquivalent022, "publicationJsonEquivalent022");
 function publicationSearchSignature022(value) {
   return String(value ?? "").trim().split(/\s+/).filter(Boolean).sort().join("");
 }
@@ -18528,6 +18780,7 @@ __name22222222222222222222222222(publicationSearchSignature022, "publicationSear
 __name222222222222222222222222222(publicationSearchSignature022, "publicationSearchSignature022");
 __name2222222222222222222222222222(publicationSearchSignature022, "publicationSearchSignature022");
 __name22222222222222222222222222222(publicationSearchSignature022, "publicationSearchSignature022");
+__name222222222222222222222222222222(publicationSearchSignature022, "publicationSearchSignature022");
 function publicationStableShareValue027(value, path = "") {
   const setLikePaths = /* @__PURE__ */ new Set([
     "selectedKeywords.genres",
@@ -18588,8 +18841,9 @@ __name2222222222222222222(publicationStableShareValue027, "publicationStableShar
 __name22222222222222222222(publicationStableShareValue027, "publicationStableShareValue027");
 __name222222222222222222222(publicationStableShareValue027, "publicationStableShareValue027");
 __name2222222222222222222222(publicationStableShareValue027, "publicationStableShareValue027");
+__name22222222222222222222222(publicationStableShareValue027, "publicationStableShareValue027");
 function publicationShareEquivalent027(a, b) {
-  const parse = /* @__PURE__ */ __name2222222222222222222222((value) => {
+  const parse = /* @__PURE__ */ __name22222222222222222222222((value) => {
     const text = value === null || value === void 0 || value === "" ? "{}" : String(value);
     try {
       return publicationStableShareValue027(JSON.parse(text));
@@ -18625,6 +18879,7 @@ __name2222222222222222222(publicationShareEquivalent027, "publicationShareEquiva
 __name22222222222222222222(publicationShareEquivalent027, "publicationShareEquivalent027");
 __name222222222222222222222(publicationShareEquivalent027, "publicationShareEquivalent027");
 __name2222222222222222222222(publicationShareEquivalent027, "publicationShareEquivalent027");
+__name22222222222222222222222(publicationShareEquivalent027, "publicationShareEquivalent027");
 function publicationGenreSet027(payloadJson) {
   try {
     const parsed = JSON.parse(String(payloadJson || "{}"));
@@ -18658,6 +18913,7 @@ __name2222222222222222222(publicationGenreSet027, "publicationGenreSet027");
 __name22222222222222222222(publicationGenreSet027, "publicationGenreSet027");
 __name222222222222222222222(publicationGenreSet027, "publicationGenreSet027");
 __name2222222222222222222222(publicationGenreSet027, "publicationGenreSet027");
+__name22222222222222222222222(publicationGenreSet027, "publicationGenreSet027");
 function publicationPrimaryGenreEquivalent027(row, source, primaryGenre) {
   const previous = String(row?.primary_genre || "").trim();
   const next = String(primaryGenre || "").trim();
@@ -18691,11 +18947,12 @@ __name2222222222222222222(publicationPrimaryGenreEquivalent027, "publicationPrim
 __name22222222222222222222(publicationPrimaryGenreEquivalent027, "publicationPrimaryGenreEquivalent027");
 __name222222222222222222222(publicationPrimaryGenreEquivalent027, "publicationPrimaryGenreEquivalent027");
 __name2222222222222222222222(publicationPrimaryGenreEquivalent027, "publicationPrimaryGenreEquivalent027");
+__name22222222222222222222222(publicationPrimaryGenreEquivalent027, "publicationPrimaryGenreEquivalent027");
 function publicationRepublishSemanticUnchanged022(row, source, options, primaryGenre) {
   if (!row?.id) return false;
-  const text = /* @__PURE__ */ __name2222222222222222222222((value) => value === null || value === void 0 ? "" : String(value), "text");
-  const sameText = /* @__PURE__ */ __name2222222222222222222222((a, b) => text(a) === text(b), "sameText");
-  const sameNumber = /* @__PURE__ */ __name2222222222222222222222((a, b) => {
+  const text = /* @__PURE__ */ __name22222222222222222222222((value) => value === null || value === void 0 ? "" : String(value), "text");
+  const sameText = /* @__PURE__ */ __name22222222222222222222222((a, b) => text(a) === text(b), "sameText");
+  const sameNumber = /* @__PURE__ */ __name22222222222222222222222((a, b) => {
     const ae = a === null || a === void 0 || a === "";
     const be = b === null || b === void 0 || b === "";
     if (ae || be) return ae && be;
@@ -18733,6 +18990,7 @@ __name22222222222222222222222222(publicationRepublishSemanticUnchanged022, "publ
 __name222222222222222222222222222(publicationRepublishSemanticUnchanged022, "publicationRepublishSemanticUnchanged022");
 __name2222222222222222222222222222(publicationRepublishSemanticUnchanged022, "publicationRepublishSemanticUnchanged022");
 __name22222222222222222222222222222(publicationRepublishSemanticUnchanged022, "publicationRepublishSemanticUnchanged022");
+__name222222222222222222222222222222(publicationRepublishSemanticUnchanged022, "publicationRepublishSemanticUnchanged022");
 async function publicationResolveProfileHandle023(env, uid, preferredHandle) {
   const preferred = String(preferredHandle || "").trim().replace(/^@+/, "");
   if (preferred) return preferred;
@@ -18774,6 +19032,7 @@ __name222222222222222222222222(publicationResolveProfileHandle023, "publicationR
 __name2222222222222222222222222(publicationResolveProfileHandle023, "publicationResolveProfileHandle023");
 __name22222222222222222222222222(publicationResolveProfileHandle023, "publicationResolveProfileHandle023");
 __name222222222222222222222222222(publicationResolveProfileHandle023, "publicationResolveProfileHandle023");
+__name2222222222222222222222222222(publicationResolveProfileHandle023, "publicationResolveProfileHandle023");
 async function applyPublicationVisibilityTransition021(env, uid, trackId, isPublic, publishedAt, now, currentStatus) {
   if (isPublic) {
     if (String(currentStatus || "") === "published") {
@@ -18828,6 +19087,7 @@ __name222222222222222222222222222(applyPublicationVisibilityTransition021, "appl
 __name2222222222222222222222222222(applyPublicationVisibilityTransition021, "applyPublicationVisibilityTransition021");
 __name22222222222222222222222222222(applyPublicationVisibilityTransition021, "applyPublicationVisibilityTransition021");
 __name222222222222222222222222222222(applyPublicationVisibilityTransition021, "applyPublicationVisibilityTransition021");
+__name2222222222222222222222222222222(applyPublicationVisibilityTransition021, "applyPublicationVisibilityTransition021");
 async function publicationReadProfileR2024(env, authContext) {
   try {
     const uid = String(authContext?.uid || "").trim();
@@ -18869,6 +19129,7 @@ __name222222222222222222222(publicationReadProfileR2024, "publicationReadProfile
 __name2222222222222222222222(publicationReadProfileR2024, "publicationReadProfileR2024");
 __name22222222222222222222222(publicationReadProfileR2024, "publicationReadProfileR2024");
 __name222222222222222222222222(publicationReadProfileR2024, "publicationReadProfileR2024");
+__name2222222222222222222222222(publicationReadProfileR2024, "publicationReadProfileR2024");
 async function handleMusicNotePublicationSingleWrite016(request, env, cors, authContext, source, publicationOptions) {
   const now = Date.now();
   const previous = await publicationReadState016(env, authContext.uid, source.id);
@@ -19096,6 +19357,7 @@ __name2222222222222222222222222222222222(handleMusicNotePublicationSingleWrite01
 __name22222222222222222222222222222222222(handleMusicNotePublicationSingleWrite016, "handleMusicNotePublicationSingleWrite016");
 __name222222222222222222222222222222222222(handleMusicNotePublicationSingleWrite016, "handleMusicNotePublicationSingleWrite016");
 __name2222222222222222222222222222222222222(handleMusicNotePublicationSingleWrite016, "handleMusicNotePublicationSingleWrite016");
+__name22222222222222222222222222222222222222(handleMusicNotePublicationSingleWrite016, "handleMusicNotePublicationSingleWrite016");
 function shareBundleTags016(bundle) {
   const selected = bundle?.selectedKeywords && typeof bundle.selectedKeywords === "object" ? bundle.selectedKeywords : {};
   const mapping = [
@@ -19156,6 +19418,7 @@ __name2222222222222222222222222222222222(shareBundleTags016, "shareBundleTags016
 __name22222222222222222222222222222222222(shareBundleTags016, "shareBundleTags016");
 __name222222222222222222222222222222222222(shareBundleTags016, "shareBundleTags016");
 __name2222222222222222222222222222222222222(shareBundleTags016, "shareBundleTags016");
+__name22222222222222222222222222222222222222(shareBundleTags016, "shareBundleTags016");
 function handlePublicationR2Core(request, env, cors) {
   return (async () => {
     const probe = request.clone();
@@ -19208,6 +19471,7 @@ __name2222222222222222222222222222222222(handlePublicationR2Core, "handlePublica
 __name22222222222222222222222222222222222(handlePublicationR2Core, "handlePublicationR2Core");
 __name222222222222222222222222222222222222(handlePublicationR2Core, "handlePublicationR2Core");
 __name2222222222222222222222222222222222222(handlePublicationR2Core, "handlePublicationR2Core");
+__name22222222222222222222222222222222222222(handlePublicationR2Core, "handlePublicationR2Core");
 async function handlePublicationR2CoreLegacy016(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "publication", RATE_LIMITS.publication);
@@ -19407,10 +19671,11 @@ __name2222222222222222222222222222222222(handlePublicationR2CoreLegacy016, "hand
 __name22222222222222222222222222222222222(handlePublicationR2CoreLegacy016, "handlePublicationR2CoreLegacy016");
 __name222222222222222222222222222222222222(handlePublicationR2CoreLegacy016, "handlePublicationR2CoreLegacy016");
 __name2222222222222222222222222222222222222(handlePublicationR2CoreLegacy016, "handlePublicationR2CoreLegacy016");
-__name22222222222222222222222222222222222222(handlePublicationR2Core, "handlePublicationR2Core");
+__name22222222222222222222222222222222222222(handlePublicationR2CoreLegacy016, "handlePublicationR2CoreLegacy016");
 __name222222222222222222222222222222222222222(handlePublicationR2Core, "handlePublicationR2Core");
 __name2222222222222222222222222222222222222222(handlePublicationR2Core, "handlePublicationR2Core");
 __name22222222222222222222222222222222222222222(handlePublicationR2Core, "handlePublicationR2Core");
+__name222222222222222222222222222222222222222222(handlePublicationR2Core, "handlePublicationR2Core");
 async function handlePublication(request, env, cors, ...args) {
   return await handlePublicationR2Core(request, env, cors, ...args);
 }
@@ -19487,6 +19752,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handlePublication, "handlePublication");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handlePublication, "handlePublication");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handlePublication, "handlePublication");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handlePublication, "handlePublication");
 async function handleVisibilityR2Core(request, env, cors, trackId) {
   const probe = request.clone();
   const authContext = await requireExploreAuth(probe);
@@ -19541,6 +19807,7 @@ __name2222222222222222222222222222222222(handleVisibilityR2Core, "handleVisibili
 __name22222222222222222222222222222222222(handleVisibilityR2Core, "handleVisibilityR2Core");
 __name222222222222222222222222222222222222(handleVisibilityR2Core, "handleVisibilityR2Core");
 __name2222222222222222222222222222222222222(handleVisibilityR2Core, "handleVisibilityR2Core");
+__name22222222222222222222222222222222222222(handleVisibilityR2Core, "handleVisibilityR2Core");
 async function handleVisibilityR2CoreLegacy017(request, env, cors, trackId) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "visibility", RATE_LIMITS.visibility);
@@ -19630,10 +19897,11 @@ __name2222222222222222222222222222222222(handleVisibilityR2CoreLegacy017, "handl
 __name22222222222222222222222222222222222(handleVisibilityR2CoreLegacy017, "handleVisibilityR2CoreLegacy017");
 __name222222222222222222222222222222222222(handleVisibilityR2CoreLegacy017, "handleVisibilityR2CoreLegacy017");
 __name2222222222222222222222222222222222222(handleVisibilityR2CoreLegacy017, "handleVisibilityR2CoreLegacy017");
-__name22222222222222222222222222222222222222(handleVisibilityR2Core, "handleVisibilityR2Core");
+__name22222222222222222222222222222222222222(handleVisibilityR2CoreLegacy017, "handleVisibilityR2CoreLegacy017");
 __name222222222222222222222222222222222222222(handleVisibilityR2Core, "handleVisibilityR2Core");
 __name2222222222222222222222222222222222222222(handleVisibilityR2Core, "handleVisibilityR2Core");
 __name22222222222222222222222222222222222222222(handleVisibilityR2Core, "handleVisibilityR2Core");
+__name222222222222222222222222222222222222222222(handleVisibilityR2Core, "handleVisibilityR2Core");
 async function handleVisibility(request, env, cors, ...args) {
   return await handleVisibilityR2Core(request, env, cors, ...args);
 }
@@ -19710,6 +19978,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleVisibility, "handleVisibility");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleVisibility, "handleVisibility");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleVisibility, "handleVisibility");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleVisibility, "handleVisibility");
 async function refreshLikeCount(env, trackId, now) {
   await env.DB.batch([
     env.DB.prepare(`
@@ -19802,6 +20071,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(refr
 __name2222222222222222222222222222222222222222222222222222222222222222222222(refreshLikeCount, "refreshLikeCount");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(refreshLikeCount, "refreshLikeCount");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(refreshLikeCount, "refreshLikeCount");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(refreshLikeCount, "refreshLikeCount");
 async function handleLikeD1Core(request, env, cors, trackId, shouldLike) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "like", RATE_LIMITS.like);
@@ -19858,6 +20128,7 @@ __name22222222222222222222222222222222222222(handleLikeD1Core, "handleLikeD1Core
 __name222222222222222222222222222222222222222(handleLikeD1Core, "handleLikeD1Core");
 __name2222222222222222222222222222222222222222(handleLikeD1Core, "handleLikeD1Core");
 __name22222222222222222222222222222222222222222(handleLikeD1Core, "handleLikeD1Core");
+__name222222222222222222222222222222222222222222(handleLikeD1Core, "handleLikeD1Core");
 var EXPLORE_LIKE_BATCH_MAX_034 = 50;
 async function enforceExploreLikeBatchRateLimit034(env, uid, weight) {
   const db = exploreRateDb031(env);
@@ -19894,6 +20165,7 @@ async function enforceExploreLikeBatchRateLimit034(env, uid, weight) {
 }
 __name(enforceExploreLikeBatchRateLimit034, "enforceExploreLikeBatchRateLimit034");
 __name2(enforceExploreLikeBatchRateLimit034, "enforceExploreLikeBatchRateLimit034");
+__name22(enforceExploreLikeBatchRateLimit034, "enforceExploreLikeBatchRateLimit034");
 async function syncExploreLikeR2AfterBatch034(env, uid, results) {
   let likedIds = await readExploreLikeR2Bundle(env, uid);
   if (!likedIds) {
@@ -19915,6 +20187,7 @@ async function syncExploreLikeR2AfterBatch034(env, uid, results) {
 }
 __name(syncExploreLikeR2AfterBatch034, "syncExploreLikeR2AfterBatch034");
 __name2(syncExploreLikeR2AfterBatch034, "syncExploreLikeR2AfterBatch034");
+__name22(syncExploreLikeR2AfterBatch034, "syncExploreLikeR2AfterBatch034");
 var EXPLORE_LIKE_AGGREGATE_MAX_MUTATIONS_035 = 5e4;
 var EXPLORE_LIKE_AGGREGATE_MAX_WAVES_035 = 3;
 var EXPLORE_LIKE_PROCESSOR_LEASE_MS_035 = 12 * 60 * 1e3;
@@ -19926,11 +20199,11 @@ async function exploreLikeBatchId035(uid, mutations) {
   return "l035_" + hex;
 }
 __name(exploreLikeBatchId035, "exploreLikeBatchId035");
-// SORIDRAW_EXPLORE_LIKE_DERIVED_INTAKE_036_20260911
+__name2(exploreLikeBatchId035, "exploreLikeBatchId035");
 async function readExploreLikeBatchStates035(env, uid, mutations) {
-  const trackIds = mutations.map((row) => String(row.trackId || '')).filter(Boolean);
-  if (!trackIds.length) return new Map();
-  const values = trackIds.map(() => '(?)').join(',');
+  const trackIds = mutations.map((row) => String(row.trackId || "")).filter(Boolean);
+  if (!trackIds.length) return /* @__PURE__ */ new Map();
+  const values = trackIds.map(() => "(?)").join(",");
   const rows = await env.DB.prepare(`
     WITH requested(track_id) AS (VALUES ${values})
     SELECT
@@ -19949,38 +20222,71 @@ async function readExploreLikeBatchStates035(env, uid, mutations) {
     LEFT JOIN likes l
       ON l.track_id = r.track_id AND l.user_uid = ?
   `).bind(...trackIds, uid).all();
-  return new Map((rows?.results || []).map((row) => [String(row.track_id || ''), row]));
+  return new Map((rows?.results || []).map((row) => [String(row.track_id || ""), row]));
 }
 __name(readExploreLikeBatchStates035, "readExploreLikeBatchStates035");
+__name2(readExploreLikeBatchStates035, "readExploreLikeBatchStates035");
+// SORIDRAW_EXPLORE_LIKE_COMPACT_QUEUE_038_20260911
+function isMissingExploreLikeQueue066038(error) {
+  const message = String(error?.message || error || '');
+  return /no such table:\s*explore_like_batches_066/i.test(message);
+}
+
 async function enqueueExploreLikeBatch035(env, uid, mutations, now) {
   const batchId = await exploreLikeBatchId035(uid, mutations);
-  const payload = mutations.map((row) => ({ trackId: String(row.trackId || ""), liked: Boolean(row.liked) }));
-  const result = await env.DB.prepare(`
-    INSERT OR IGNORE INTO explore_like_batches_035(
-      batch_id, user_uid, created_at, mutation_count, mutations_json
-    ) VALUES (?, ?, ?, ?, ?)
-  `).bind(batchId, uid, now, payload.length, JSON.stringify(payload)).run();
-  return { batchId, inserted: Number(result?.meta?.changes || 0) > 0 };
+  const payload = mutations.map((row) => ({ trackId: String(row.trackId || ''), liked: Boolean(row.liked) }));
+  try {
+    const result = await env.DB.prepare(`
+      INSERT OR IGNORE INTO explore_like_batches_066(
+        batch_id, user_uid, created_at, mutation_count, mutations_json
+      ) VALUES (?, ?, ?, ?, ?)
+    `).bind(batchId, uid, now, payload.length, JSON.stringify(payload)).run();
+    return { batchId, inserted: Number(result?.meta?.changes || 0) > 0, queue: '066' };
+  } catch (error) {
+    // Backward-compatible rollout guard: an older shared schema must keep likes working.
+    // Once the additive 066 table exists this branch is never used on the hot path.
+    if (!isMissingExploreLikeQueue066038(error)) throw error;
+    const fallback = await env.DB.prepare(`
+      INSERT OR IGNORE INTO explore_like_batches_035(
+        batch_id, user_uid, created_at, mutation_count, mutations_json
+      ) VALUES (?, ?, ?, ?, ?)
+    `).bind(batchId, uid, now, payload.length, JSON.stringify(payload)).run();
+    return { batchId, inserted: Number(fallback?.meta?.changes || 0) > 0, queue: '035' };
+  }
 }
 __name(enqueueExploreLikeBatch035, "enqueueExploreLikeBatch035");
-function exploreLikeAggregateCte035() {
+__name2(enqueueExploreLikeBatch035, "enqueueExploreLikeBatch035");
+function exploreLikeAggregateCte035(includeQueue066 = false) {
+  const queueSource = includeQueue066 ? `
+    SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, '035' AS queue_kind
+    FROM explore_like_batches_035
+    UNION ALL
+    SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, '066' AS queue_kind
+    FROM explore_like_batches_066
+  ` : `
+    SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, '035' AS queue_kind
+    FROM explore_like_batches_035
+  `;
   return `
-    WITH ordered AS (
-      SELECT batch_id, user_uid, created_at, mutation_count, mutations_json,
+    WITH all_batches AS (
+      ${queueSource}
+    ),
+    ordered AS (
+      SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, queue_kind,
         SUM(mutation_count) OVER (
-          ORDER BY created_at ASC, batch_id ASC
+          ORDER BY created_at ASC, batch_id ASC, queue_kind ASC
           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS running_mutations
       FROM (
-        SELECT batch_id, user_uid, created_at, mutation_count, mutations_json
-        FROM explore_like_batches_035
+        SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, queue_kind
+        FROM all_batches
         WHERE created_at <= ?
-        ORDER BY created_at ASC, batch_id ASC
+        ORDER BY created_at ASC, batch_id ASC, queue_kind ASC
         LIMIT 50000
       )
     ),
     eligible AS (
-      SELECT batch_id, user_uid, created_at, mutation_count, mutations_json
+      SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, queue_kind
       FROM ordered
       WHERE running_mutations <= ?
     ),
@@ -19989,6 +20295,7 @@ function exploreLikeAggregateCte035() {
         e.batch_id,
         e.user_uid,
         e.created_at,
+        e.queue_kind,
         TRIM(CAST(json_extract(j.value, '$.trackId') AS TEXT)) AS track_id,
         CASE WHEN json_extract(j.value, '$.liked') THEN 1 ELSE 0 END AS desired_liked
       FROM eligible e, json_each(e.mutations_json) AS j
@@ -19996,12 +20303,12 @@ function exploreLikeAggregateCte035() {
         AND json_type(j.value, '$.liked') IN ('true', 'false')
     ),
     latest AS (
-      SELECT user_uid, track_id, desired_liked, created_at, batch_id
+      SELECT user_uid, track_id, desired_liked, created_at, batch_id, queue_kind
       FROM (
         SELECT expanded.*,
           ROW_NUMBER() OVER (
             PARTITION BY user_uid, track_id
-            ORDER BY created_at DESC, batch_id DESC
+            ORDER BY created_at DESC, batch_id DESC, queue_kind DESC
           ) AS rn
         FROM expanded
         WHERE track_id <> ''
@@ -20023,6 +20330,7 @@ function exploreLikeAggregateCte035() {
   `;
 }
 __name(exploreLikeAggregateCte035, "exploreLikeAggregateCte035");
+__name2(exploreLikeAggregateCte035, "exploreLikeAggregateCte035");
 async function acquireExploreLikeProcessor035(env, owner, now) {
   const result = await env.DB.prepare(`
     UPDATE explore_like_processor_035
@@ -20033,6 +20341,7 @@ async function acquireExploreLikeProcessor035(env, owner, now) {
   return String(result?.results?.[0]?.owner || "") === owner;
 }
 __name(acquireExploreLikeProcessor035, "acquireExploreLikeProcessor035");
+__name2(acquireExploreLikeProcessor035, "acquireExploreLikeProcessor035");
 async function releaseExploreLikeProcessor035(env, owner) {
   await env.DB.prepare(`
     UPDATE explore_like_processor_035
@@ -20041,10 +20350,131 @@ async function releaseExploreLikeProcessor035(env, owner) {
   `).bind(owner).run();
 }
 __name(releaseExploreLikeProcessor035, "releaseExploreLikeProcessor035");
-async function processExploreLikeAggregateWave035(env, cutoff, now) {
-  const cte = exploreLikeAggregateCte035();
+__name2(releaseExploreLikeProcessor035, "releaseExploreLikeProcessor035");
+// SORIDRAW_EXPLORE_LIKE_STABLE_DUAL_QUEUE_BOUNDARY_039_20260911
+function exploreLikeQueueSource039(includeQueue066 = false) {
+  return includeQueue066 ? `
+    SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, '035' AS queue_kind
+    FROM explore_like_batches_035
+    UNION ALL
+    SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, '066' AS queue_kind
+    FROM explore_like_batches_066
+  ` : `
+    SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, '035' AS queue_kind
+    FROM explore_like_batches_035
+  `;
+}
+
+async function selectExploreLikeAggregateBoundary039(env, cutoff, maxMutations, includeQueue066 = false) {
+  const queueSource = exploreLikeQueueSource039(includeQueue066);
+  const row = await env.DB.prepare(`
+    WITH all_batches AS (
+      ${queueSource}
+    ),
+    limited AS (
+      SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, queue_kind
+      FROM all_batches
+      WHERE created_at <= ?
+      ORDER BY created_at ASC, batch_id ASC, queue_kind ASC
+      LIMIT 50000
+    ),
+    ordered AS (
+      SELECT batch_id, created_at, queue_kind,
+        SUM(mutation_count) OVER (
+          ORDER BY created_at ASC, batch_id ASC, queue_kind ASC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS running_mutations
+      FROM limited
+    )
+    SELECT created_at, batch_id, queue_kind
+    FROM ordered
+    WHERE running_mutations <= ?
+    ORDER BY created_at DESC, batch_id DESC, queue_kind DESC
+    LIMIT 1
+  `).bind(cutoff, maxMutations).first();
+  if (!row?.batch_id) return null;
+  return {
+    createdAt: Number(row.created_at || 0),
+    batchId: String(row.batch_id || ''),
+    queueKind: String(row.queue_kind || '035')
+  };
+}
+
+function exploreLikeAggregateSnapshotCte039(includeQueue066 = false) {
+  const queueSource = exploreLikeQueueSource039(includeQueue066);
+  return `
+    WITH boundary(created_at, batch_id, queue_kind) AS (VALUES (?, ?, ?)),
+    all_batches AS (
+      ${queueSource}
+    ),
+    eligible AS (
+      SELECT a.batch_id, a.user_uid, a.created_at, a.mutation_count, a.mutations_json, a.queue_kind
+      FROM all_batches a, boundary b
+      WHERE a.created_at <= ?
+        AND (
+          a.created_at < b.created_at
+          OR (a.created_at = b.created_at AND a.batch_id < b.batch_id)
+          OR (a.created_at = b.created_at AND a.batch_id = b.batch_id AND a.queue_kind <= b.queue_kind)
+        )
+    ),
+    expanded AS (
+      SELECT
+        e.batch_id,
+        e.user_uid,
+        e.created_at,
+        e.queue_kind,
+        TRIM(CAST(json_extract(j.value, '$.trackId') AS TEXT)) AS track_id,
+        CASE WHEN json_extract(j.value, '$.liked') THEN 1 ELSE 0 END AS desired_liked
+      FROM eligible e, json_each(e.mutations_json) AS j
+      WHERE json_type(j.value, '$.trackId') = 'text'
+        AND json_type(j.value, '$.liked') IN ('true', 'false')
+    ),
+    latest AS (
+      SELECT user_uid, track_id, desired_liked, created_at, batch_id, queue_kind
+      FROM (
+        SELECT expanded.*,
+          ROW_NUMBER() OVER (
+            PARTITION BY user_uid, track_id
+            ORDER BY created_at DESC, batch_id DESC, queue_kind DESC
+          ) AS rn
+        FROM expanded
+        WHERE track_id <> ''
+      )
+      WHERE rn = 1
+    ),
+    deltas AS (
+      SELECT latest.*,
+        CASE
+          WHEN latest.desired_liked = 1 AND existing.user_uid IS NULL THEN 1
+          WHEN latest.desired_liked = 0 AND existing.user_uid IS NOT NULL THEN -1
+          ELSE 0
+        END AS delta
+      FROM latest
+      LEFT JOIN likes existing
+        ON existing.track_id = latest.track_id
+       AND existing.user_uid = latest.user_uid
+    )
+  `;
+}
+
+async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue066 = false) {
   const max = EXPLORE_LIKE_AGGREGATE_MAX_MUTATIONS_035;
-  const result = await env.DB.batch([
+  const boundary = await selectExploreLikeAggregateBoundary039(env, cutoff, max, includeQueue066);
+  if (!boundary) {
+    return {
+      positiveTracks: 0,
+      negativeTracks: 0,
+      insertedLikes: 0,
+      deletedLikes: 0,
+      processedBatches: 0,
+      oldProcessed: 0,
+      compactProcessed: 0
+    };
+  }
+
+  const cte = exploreLikeAggregateSnapshotCte039(includeQueue066);
+  const prefix = [boundary.createdAt, boundary.batchId, boundary.queueKind, cutoff];
+  const statements = [
     env.DB.prepare(cte + `
       INSERT INTO track_stats(track_id, like_count, comment_count, play_count, updated_at)
       SELECT track_id, SUM(delta), 0, 0, ?
@@ -20054,7 +20484,7 @@ async function processExploreLikeAggregateWave035(env, cutoff, now) {
       ON CONFLICT(track_id) DO UPDATE SET
         like_count = track_stats.like_count + excluded.like_count,
         updated_at = excluded.updated_at
-    `).bind(cutoff, max, now),
+    `).bind(...prefix, now),
     env.DB.prepare(cte + `
       UPDATE track_stats
       SET like_count = MAX(0, like_count + COALESCE((
@@ -20069,13 +20499,13 @@ async function processExploreLikeAggregateWave035(env, cutoff, now) {
         GROUP BY track_id
         HAVING SUM(delta) < 0
       )
-    `).bind(cutoff, max, now),
+    `).bind(...prefix, now),
     env.DB.prepare(cte + `
       INSERT OR IGNORE INTO likes(track_id, user_uid, created_at)
       SELECT track_id, user_uid, created_at
       FROM latest
       WHERE desired_liked = 1
-    `).bind(cutoff, max),
+    `).bind(...prefix),
     env.DB.prepare(cte + `
       DELETE FROM likes
       WHERE (track_id, user_uid) IN (
@@ -20083,46 +20513,87 @@ async function processExploreLikeAggregateWave035(env, cutoff, now) {
         FROM latest
         WHERE desired_liked = 0
       )
-    `).bind(cutoff, max),
+    `).bind(...prefix),
     env.DB.prepare(cte + `
       DELETE FROM explore_like_batches_035
-      WHERE batch_id IN (SELECT batch_id FROM eligible)
-    `).bind(cutoff, max)
-  ]);
+      WHERE batch_id IN (
+        SELECT batch_id FROM eligible WHERE queue_kind = '035'
+      )
+    `).bind(...prefix)
+  ];
+  if (includeQueue066) {
+    statements.push(
+      env.DB.prepare(cte + `
+        DELETE FROM explore_like_batches_066
+        WHERE batch_id IN (
+          SELECT batch_id FROM eligible WHERE queue_kind = '066'
+        )
+      `).bind(...prefix)
+    );
+  }
+  const result = await env.DB.batch(statements);
+  const oldProcessed = Number(result?.[4]?.meta?.changes || 0);
+  const compactProcessed = includeQueue066 ? Number(result?.[5]?.meta?.changes || 0) : 0;
   return {
     positiveTracks: Number(result?.[0]?.meta?.changes || 0),
     negativeTracks: Number(result?.[1]?.meta?.changes || 0),
     insertedLikes: Number(result?.[2]?.meta?.changes || 0),
     deletedLikes: Number(result?.[3]?.meta?.changes || 0),
-    processedBatches: Number(result?.[4]?.meta?.changes || 0)
+    processedBatches: oldProcessed + compactProcessed,
+    oldProcessed,
+    compactProcessed
   };
 }
 __name(processExploreLikeAggregateWave035, "processExploreLikeAggregateWave035");
+__name2(processExploreLikeAggregateWave035, "processExploreLikeAggregateWave035");
+async function hasExploreLikeQueue066038(env) {
+  try {
+    const result = await env.DB.prepare(
+      "SELECT name FROM sqlite_schema WHERE type='table' AND name='explore_like_batches_066' LIMIT 1"
+    ).first('name');
+    return String(result || '') === 'explore_like_batches_066';
+  } catch {
+    return false;
+  }
+}
+
 async function processExploreLikeBatches035(env, scheduledTime = Date.now()) {
-  if (!env?.DB) return { skipped: true, reason: "binding" };
+  if (!env?.DB) return { skipped: true, reason: 'binding' };
   const now = Math.max(0, Number(scheduledTime || Date.now()));
-  const owner = "like035_" + now + "_" + crypto.randomUUID();
+  const owner = 'like035_' + now + '_' + crypto.randomUUID();
   const acquired = await acquireExploreLikeProcessor035(env, owner, now);
-  if (!acquired) return { skipped: true, reason: "lease" };
-  const totals = { waves: 0, processedBatches: 0, insertedLikes: 0, deletedLikes: 0, changedTracks: 0 };
+  if (!acquired) return { skipped: true, reason: 'lease' };
+  const includeQueue066 = await hasExploreLikeQueue066038(env);
+  const totals = {
+    waves: 0,
+    processedBatches: 0,
+    oldProcessed: 0,
+    compactProcessed: 0,
+    insertedLikes: 0,
+    deletedLikes: 0,
+    changedTracks: 0,
+    compactQueue: includeQueue066,
+  };
   try {
     for (let wave = 0; wave < EXPLORE_LIKE_AGGREGATE_MAX_WAVES_035; wave += 1) {
-      const current = await processExploreLikeAggregateWave035(env, now, Date.now());
+      const current = await processExploreLikeAggregateWave035(env, now, Date.now(), includeQueue066);
       totals.waves += 1;
       totals.processedBatches += current.processedBatches;
+      totals.oldProcessed += current.oldProcessed;
+      totals.compactProcessed += current.compactProcessed;
       totals.insertedLikes += current.insertedLikes;
       totals.deletedLikes += current.deletedLikes;
       totals.changedTracks += current.positiveTracks + current.negativeTracks;
       if (!current.processedBatches) break;
     }
-    console.log("[SORIDRAW 035] like aggregate", JSON.stringify(totals));
+    console.log('[SORIDRAW 038] like aggregate', JSON.stringify(totals));
     return totals;
   } finally {
-    await releaseExploreLikeProcessor035(env, owner).catch(() => {
-    });
+    await releaseExploreLikeProcessor035(env, owner).catch(() => {});
   }
 }
 __name(processExploreLikeBatches035, "processExploreLikeBatches035");
+__name2(processExploreLikeBatches035, "processExploreLikeBatches035");
 async function handleLikeBatch034(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   let body = null;
@@ -20166,6 +20637,7 @@ async function handleLikeBatch034(request, env, cors) {
 }
 __name(handleLikeBatch034, "handleLikeBatch034");
 __name2(handleLikeBatch034, "handleLikeBatch034");
+__name22(handleLikeBatch034, "handleLikeBatch034");
 async function handleLike(request, env, cors, trackId, shouldLike) {
   const response = await handleLikeD1Core(request, env, cors, trackId, shouldLike);
   if (!response.ok) return response;
@@ -20257,6 +20729,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleLike, "handleLike");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleLike, "handleLike");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleLike, "handleLike");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleLike, "handleLike");
 function normalizeCommentBody(value) {
   const text = typeof value === "string" ? value.trim() : "";
   if (!text) {
@@ -20340,6 +20813,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(norm
 __name2222222222222222222222222222222222222222222222222222222222222222222222(normalizeCommentBody, "normalizeCommentBody");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(normalizeCommentBody, "normalizeCommentBody");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(normalizeCommentBody, "normalizeCommentBody");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(normalizeCommentBody, "normalizeCommentBody");
 async function refreshCommentCount(env, trackId, now) {
   await env.DB.batch([
     env.DB.prepare(`
@@ -20436,6 +20910,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(refr
 __name2222222222222222222222222222222222222222222222222222222222222222222222(refreshCommentCount, "refreshCommentCount");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(refreshCommentCount, "refreshCommentCount");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(refreshCommentCount, "refreshCommentCount");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(refreshCommentCount, "refreshCommentCount");
 async function handleCreateComment(request, env, cors, trackId) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "comment-create", RATE_LIMITS.commentCreate);
@@ -20545,6 +21020,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleCreateComment, "handleCreateComment");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleCreateComment, "handleCreateComment");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleCreateComment, "handleCreateComment");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleCreateComment, "handleCreateComment");
 async function getOwnedComment(env, commentId, uid) {
   const row = await env.DB.prepare(`
     SELECT id, track_id, user_uid, status
@@ -20630,6 +21106,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(getO
 __name2222222222222222222222222222222222222222222222222222222222222222222222(getOwnedComment, "getOwnedComment");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(getOwnedComment, "getOwnedComment");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(getOwnedComment, "getOwnedComment");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(getOwnedComment, "getOwnedComment");
 async function handleUpdateComment(request, env, cors, commentId) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "comment-update", RATE_LIMITS.commentUpdate);
@@ -20729,6 +21206,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleUpdateComment, "handleUpdateComment");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleUpdateComment, "handleUpdateComment");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleUpdateComment, "handleUpdateComment");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleUpdateComment, "handleUpdateComment");
 async function handleDeleteComment(request, env, cors, commentId) {
   const authContext = await requireExploreAuth(request);
   await enforceUserRateLimit(env, authContext.uid, "comment-delete", RATE_LIMITS.commentDelete);
@@ -20824,6 +21302,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleDeleteComment, "handleDeleteComment");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleDeleteComment, "handleDeleteComment");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleDeleteComment, "handleDeleteComment");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleDeleteComment, "handleDeleteComment");
 async function handleExploreRequest(request, env) {
   const url = new URL(request.url);
   const origin = request.headers.get("Origin") || "";
@@ -21190,6 +21669,7 @@ __name222222222222222222222222222222222222222222222222222222222222222222222(hand
 __name2222222222222222222222222222222222222222222222222222222222222222222222(handleExploreRequest, "handleExploreRequest");
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handleExploreRequest, "handleExploreRequest");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleExploreRequest, "handleExploreRequest");
+__name2222222222222222222222222222222222222222222222222222222222222222222222222(handleExploreRequest, "handleExploreRequest");
 var worker_default = {
   async scheduled(controller, env, ctx) {
     await processExploreLikeBatches035(env, Number(controller?.scheduledTime || Date.now()));
@@ -21214,6 +21694,7 @@ __name22(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
 __name222(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
 __name2222(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
 __name22222(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
+__name222222(buildExploreFeedR2Payload, "buildExploreFeedR2Payload");
 async function writeExploreR2Json(env, key, payload) {
   const baseline = payload?.[EXPLORE_CACHE_SNAPSHOT_052];
   if (!baseline) return writeExploreR2JsonCore052(env, key, payload);
@@ -21234,6 +21715,7 @@ __name22(writeExploreR2Json, "writeExploreR2Json");
 __name222(writeExploreR2Json, "writeExploreR2Json");
 __name2222(writeExploreR2Json, "writeExploreR2Json");
 __name22222(writeExploreR2Json, "writeExploreR2Json");
+__name222222(writeExploreR2Json, "writeExploreR2Json");
 async function mutateExploreR2Cache052(env, key, transform) {
   const bucket = exploreCacheBucket031(env);
   if (!bucket) throw new Error("Explore cache binding unavailable");
@@ -21263,6 +21745,7 @@ __name22(mutateExploreR2Cache052, "mutateExploreR2Cache052");
 __name222(mutateExploreR2Cache052, "mutateExploreR2Cache052");
 __name2222(mutateExploreR2Cache052, "mutateExploreR2Cache052");
 __name22222(mutateExploreR2Cache052, "mutateExploreR2Cache052");
+__name222222(mutateExploreR2Cache052, "mutateExploreR2Cache052");
 async function refreshOrPrebuildPublicProfileFirstView(env, uid) {
   return refreshPublicProfileFirstViewProfile(env, uid);
 }
@@ -21272,6 +21755,7 @@ __name22(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfil
 __name222(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfileFirstView");
 __name2222(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfileFirstView");
 __name22222(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfileFirstView");
+__name222222(refreshOrPrebuildPublicProfileFirstView, "refreshOrPrebuildPublicProfileFirstView");
 async function syncExploreLikeR2AfterMutation(env, uid, trackId, liked) {
   return mutateExploreR2Cache052(env, exploreLikeR2Key(uid), async (bundle) => {
     if (!Array.isArray(bundle.likedTrackIds)) return null;
@@ -21291,6 +21775,7 @@ __name22(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
 __name222(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
 __name2222(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
 __name22222(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
+__name222222(syncExploreLikeR2AfterMutation, "syncExploreLikeR2AfterMutation");
 var EXPLORE_DERIVED_CONTRACT_032 = 1;
 async function derivedHead032(env, scope, request = null) {
   const key = request && new Request(new URL("/__derived032/" + encodeURIComponent(scope), request.url));
@@ -21312,6 +21797,7 @@ __name22(derivedHead032, "derivedHead032");
 __name222(derivedHead032, "derivedHead032");
 __name2222(derivedHead032, "derivedHead032");
 __name22222(derivedHead032, "derivedHead032");
+__name222222(derivedHead032, "derivedHead032");
 async function derivedProfile032(env, uid) {
   const row = await env.DB.prepare("SELECT * FROM explore_derived_profiles WHERE uid=?").bind(uid).first();
   if (!row?.active) return null;
@@ -21338,6 +21824,7 @@ __name22(derivedProfile032, "derivedProfile032");
 __name222(derivedProfile032, "derivedProfile032");
 __name2222(derivedProfile032, "derivedProfile032");
 __name22222(derivedProfile032, "derivedProfile032");
+__name222222(derivedProfile032, "derivedProfile032");
 async function derivedItems032(env, ids) {
   if (!ids.length) return [];
   const rows = await env.DB.prepare(`SELECT t.row_json, p.row_json AS profile_json,p.active AS profile_active
@@ -21354,6 +21841,7 @@ __name22(derivedItems032, "derivedItems032");
 __name222(derivedItems032, "derivedItems032");
 __name2222(derivedItems032, "derivedItems032");
 __name22222(derivedItems032, "derivedItems032");
+__name222222(derivedItems032, "derivedItems032");
 async function derivedRank032(env, sort, uid) {
   const limit = uid ? 51 : 41;
   const index = uid ? "idx_explore_rank_profile" : sort === "popular" ? "idx_explore_rank_popular" : "idx_explore_rank_latest";
@@ -21368,6 +21856,7 @@ __name22(derivedRank032, "derivedRank032");
 __name222(derivedRank032, "derivedRank032");
 __name2222(derivedRank032, "derivedRank032");
 __name22222(derivedRank032, "derivedRank032");
+__name222222(derivedRank032, "derivedRank032");
 function derivedCursor032(items, sort, uid, overflow) {
   if (!overflow || !items.length) return null;
   const last = items.at(-1);
@@ -21383,6 +21872,7 @@ __name22(derivedCursor032, "derivedCursor032");
 __name222(derivedCursor032, "derivedCursor032");
 __name2222(derivedCursor032, "derivedCursor032");
 __name22222(derivedCursor032, "derivedCursor032");
+__name222222(derivedCursor032, "derivedCursor032");
 async function derivedNext032(env, previous, sort, uid, head) {
   const scope = uid ? "profile:" + uid : "feed";
   const oldData = uid ? previous?.body?.data : previous?.payload?.data;
@@ -21402,8 +21892,8 @@ async function derivedNext032(env, previous, sort, uid, head) {
     const limit = uid ? 50 : 40;
     const old = new Map(items.map((item) => [item.id, item]));
     const changed = new Map((await derivedItems032(env, bootstrap ? [] : [...touched])).map((item) => [item.id, item]));
-    const rankKey = /* @__PURE__ */ __name22222((item) => [uid ? Number(item.profilePinned) : sort === "popular" ? getExploreFeedItemLikeCount012(item) : 0, Number(item.publishedAt), item.id], "rankKey");
-    const compare = /* @__PURE__ */ __name22222((left, right) => {
+    const rankKey = /* @__PURE__ */ __name222222((item) => [uid ? Number(item.profilePinned) : sort === "popular" ? getExploreFeedItemLikeCount012(item) : 0, Number(item.publishedAt), item.id], "rankKey");
+    const compare = /* @__PURE__ */ __name222222((left, right) => {
       const a = rankKey(left), b = rankKey(right);
       for (let i = 0; i < a.length; i++) {
         if (a[i] !== b[i]) return a[i] > b[i] ? -1 : 1;
@@ -21461,6 +21951,7 @@ __name22(derivedNext032, "derivedNext032");
 __name222(derivedNext032, "derivedNext032");
 __name2222(derivedNext032, "derivedNext032");
 __name22222(derivedNext032, "derivedNext032");
+__name222222(derivedNext032, "derivedNext032");
 async function syncDerivedCache032(env, sort, uid = null, request = null) {
   const key = uid ? exploreProfileR2Key(uid) : exploreFeedR2Key(sort);
   const scope = uid ? "profile:" + uid : "feed";
@@ -21495,6 +21986,7 @@ __name22(syncDerivedCache032, "syncDerivedCache032");
 __name222(syncDerivedCache032, "syncDerivedCache032");
 __name2222(syncDerivedCache032, "syncDerivedCache032");
 __name22222(syncDerivedCache032, "syncDerivedCache032");
+__name222222(syncDerivedCache032, "syncDerivedCache032");
 async function syncDerivedFeeds032(env) {
   await Promise.all(["latest", "popular"].map((sort) => syncDerivedCache032(env, sort)));
 }
@@ -21504,6 +21996,7 @@ __name22(syncDerivedFeeds032, "syncDerivedFeeds032");
 __name222(syncDerivedFeeds032, "syncDerivedFeeds032");
 __name2222(syncDerivedFeeds032, "syncDerivedFeeds032");
 __name22222(syncDerivedFeeds032, "syncDerivedFeeds032");
+__name222222(syncDerivedFeeds032, "syncDerivedFeeds032");
 async function handleExploreFeedRevision019(request, url, env, cors) {
   const sort = url.searchParams.get("sort") === "popular" ? "popular" : "latest";
   const bundle = await syncDerivedCache032(env, sort, null, request);
@@ -21515,6 +22008,7 @@ __name22(handleExploreFeedRevision019, "handleExploreFeedRevision019");
 __name222(handleExploreFeedRevision019, "handleExploreFeedRevision019");
 __name2222(handleExploreFeedRevision019, "handleExploreFeedRevision019");
 __name22222(handleExploreFeedRevision019, "handleExploreFeedRevision019");
+__name222222(handleExploreFeedRevision019, "handleExploreFeedRevision019");
 async function ensureExploreSharedFeedCache031(request, env) {
   return syncDerivedFeeds032(env);
 }
@@ -21524,6 +22018,7 @@ __name22(ensureExploreSharedFeedCache031, "ensureExploreSharedFeedCache031");
 __name222(ensureExploreSharedFeedCache031, "ensureExploreSharedFeedCache031");
 __name2222(ensureExploreSharedFeedCache031, "ensureExploreSharedFeedCache031");
 __name22222(ensureExploreSharedFeedCache031, "ensureExploreSharedFeedCache031");
+__name222222(ensureExploreSharedFeedCache031, "ensureExploreSharedFeedCache031");
 async function ensureExploreFeedIntegrity030(request, env) {
   return syncDerivedFeeds032(env);
 }
@@ -21533,6 +22028,7 @@ __name22(ensureExploreFeedIntegrity030, "ensureExploreFeedIntegrity030");
 __name222(ensureExploreFeedIntegrity030, "ensureExploreFeedIntegrity030");
 __name2222(ensureExploreFeedIntegrity030, "ensureExploreFeedIntegrity030");
 __name22222(ensureExploreFeedIntegrity030, "ensureExploreFeedIntegrity030");
+__name222222(ensureExploreFeedIntegrity030, "ensureExploreFeedIntegrity030");
 async function handleFeedWithEdgeCache(request, url, env, cors) {
   if (url.searchParams.get("cursor") || Number(url.searchParams.get("limit") || 40) !== 40)
     return handleFeedWithEdgeCacheD1Core(request, url, env, cors);
@@ -21546,6 +22042,7 @@ __name22(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 __name222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 __name2222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 __name22222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
+__name222222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 async function handlePublicProfileFirstViewWithEdgeCache(request, profileRef, env, cors) {
   const existing = await readExploreProfileCanonicalR2Bundle020(env, profileRef);
   let uid = existing?.uid || existing?.body?.data?.profile?.uid;
@@ -21575,6 +22072,7 @@ __name22(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstVie
 __name222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
 __name2222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
 __name22222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
+__name222222(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
 async function patchExploreFeedR2LikeCount(env, trackId, likeCount) {
   return { deferred: true, trackId: String(trackId || ""), likeCount: Math.max(0, Number(likeCount || 0)) };
 }
@@ -21584,6 +22082,7 @@ __name22(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
 __name222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
 __name2222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
 __name22222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
+__name222222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
 async function syncExploreFeedR2Publication012(env, item) {
   return syncDerivedFeeds032(env);
 }
@@ -21593,6 +22092,7 @@ __name22(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 __name222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 __name2222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 __name22222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
+__name222222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 async function syncExploreFeedR2OptionPatch017(env, trackId, patch) {
   return syncDerivedFeeds032(env);
 }
@@ -21602,6 +22102,7 @@ __name22(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 __name222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 __name2222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 __name22222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
+__name222222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 async function syncExploreFeedR2Private017(env, trackId) {
   return syncDerivedFeeds032(env);
 }
@@ -21611,6 +22112,7 @@ __name22(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
 __name222(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
 __name2222(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
 __name22222(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
+__name222222(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
 async function refreshExploreFeedR2Bundles(env) {
   return syncDerivedFeeds032(env);
 }
@@ -21620,6 +22122,7 @@ __name22(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
 __name222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
 __name2222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
 __name22222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
+__name222222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
 async function patchExploreProfileR2Counters020(env, uid, patch) {
   return syncDerivedCache032(env, "latest", uid);
 }
@@ -21629,6 +22132,7 @@ __name22(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name2222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name22222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
+__name222222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 async function patchExploreProfileR2Like020(env, ownerUid, trackId, likeCount) {
   return { deferred: true, ownerUid: String(ownerUid || ""), trackId: String(trackId || ""), likeCount: Math.max(0, Number(likeCount || 0)) };
 }
@@ -21638,6 +22142,7 @@ __name22(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 __name222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 __name2222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 __name22222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
+__name222222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 async function patchExploreProfileR2Mutation019(env, uid, change) {
   return syncDerivedCache032(env, "latest", uid);
 }
@@ -21647,6 +22152,7 @@ __name22(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 __name222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 __name2222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 __name22222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
+__name222222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 async function refreshPublicProfileFirstViewProfile(env, uid) {
   const bundle = await syncDerivedCache032(env, "latest", uid);
   return [uid, bundle?.handle].filter(Boolean);
@@ -21657,6 +22163,7 @@ __name22(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewPro
 __name222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
 __name2222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
 __name22222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
+__name222222(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
 async function materializePublicProfileFirstView(env, uid) {
   const bundle = await syncDerivedCache032(env, "latest", uid);
   return bundle?.body?.data?.profile ? { uid, handle: bundle.handle, schema_version: 1, revision: bundle.revision, payload_json: JSON.stringify(bundle.body.data), next_cursor: bundle.body.data.nextCursor, updated_at: bundle.updatedAt } : null;
@@ -21667,6 +22174,7 @@ __name22(materializePublicProfileFirstView, "materializePublicProfileFirstView")
 __name222(materializePublicProfileFirstView, "materializePublicProfileFirstView");
 __name2222(materializePublicProfileFirstView, "materializePublicProfileFirstView");
 __name22222(materializePublicProfileFirstView, "materializePublicProfileFirstView");
+__name222222(materializePublicProfileFirstView, "materializePublicProfileFirstView");
 async function rebuildExploreProfileR2Bounded020(env, ref, knownBundle = null) {
   const uid = knownBundle?.uid || (await resolvePublicProfileRef(env, ref))?.uid;
   return uid ? syncDerivedCache032(env, "latest", uid) : null;
@@ -21677,6 +22185,7 @@ __name22(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020")
 __name222(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020");
 __name2222(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020");
 __name22222(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020");
+__name222222(rebuildExploreProfileR2Bounded020, "rebuildExploreProfileR2Bounded020");
 async function refreshPublicProfileFirstViewTrackWindow(env, uid, trackCountDelta = 0) {
   return refreshPublicProfileFirstViewProfile(env, uid);
 }
@@ -21686,6 +22195,7 @@ __name22(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstVie
 __name222(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstViewTrackWindow");
 __name2222(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstViewTrackWindow");
 __name22222(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstViewTrackWindow");
+__name222222(refreshPublicProfileFirstViewTrackWindow, "refreshPublicProfileFirstViewTrackWindow");
 async function refreshOrPrebuildPublicProfileTrackWindow(env, uid, trackCountDelta = 0) {
   return refreshPublicProfileFirstViewProfile(env, uid);
 }
@@ -21695,8 +22205,7 @@ __name22(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProf
 __name222(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProfileTrackWindow");
 __name2222(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProfileTrackWindow");
 __name22222(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProfileTrackWindow");
-
-// preview-entry.js
+__name222222(refreshOrPrebuildPublicProfileTrackWindow, "refreshOrPrebuildPublicProfileTrackWindow");
 var REVISION_HEAD_CACHE_SECONDS_036 = 60;
 var REVISION_HEAD_CACHE_PATH_036 = "/__soridraw/feed-revision-head-037";
 var RELEASE_ALLOWED_ORIGINS_036 = /* @__PURE__ */ new Set([
@@ -21724,6 +22233,7 @@ function revisionCors036(request) {
   };
 }
 __name(revisionCors036, "revisionCors036");
+__name2(revisionCors036, "revisionCors036");
 function revisionDiagnosticHeaders036(cors, rowsRead, readQueries) {
   const headers = new Headers(cors);
   headers.set("Content-Type", "application/json; charset=utf-8");
@@ -21755,6 +22265,7 @@ function revisionDiagnosticHeaders036(cors, rowsRead, readQueries) {
   return headers;
 }
 __name(revisionDiagnosticHeaders036, "revisionDiagnosticHeaders036");
+__name2(revisionDiagnosticHeaders036, "revisionDiagnosticHeaders036");
 async function handleFeedRevisionHeadOnly036(request, env) {
   const url = new URL(request.url);
   const sort = url.searchParams.get("sort") === "popular" ? "popular" : "latest";
@@ -21789,6 +22300,7 @@ async function handleFeedRevisionHeadOnly036(request, env) {
   });
 }
 __name(handleFeedRevisionHeadOnly036, "handleFeedRevisionHeadOnly036");
+__name2(handleFeedRevisionHeadOnly036, "handleFeedRevisionHeadOnly036");
 var preview_entry_default = {
   async scheduled(controller, env, ctx) {
     if (typeof worker_default?.scheduled === "function") {
@@ -21803,11 +22315,121 @@ var preview_entry_default = {
     return worker_default.fetch(request, env, ctx);
   }
 };
+
+// preview-entry.js
+var REVISION_HEAD_CACHE_SECONDS_0362 = 60;
+var REVISION_HEAD_CACHE_PATH_0362 = "/__soridraw/feed-revision-head-037";
+var RELEASE_ALLOWED_ORIGINS_0362 = /* @__PURE__ */ new Set([
+  "https://preview.soridraw.com",
+  "https://soridraw-preview.web.app",
+  "https://soridraw-preview.firebaseapp.com",
+  "https://test.soridraw.com",
+  "https://soridraw-test.web.app",
+  "https://soridraw-test.firebaseapp.com",
+  "https://soridraw.com",
+  "https://www.soridraw.com",
+  "https://soridraw.web.app",
+  "https://soridraw.firebaseapp.com",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173"
+]);
+function revisionCors0362(request) {
+  const origin = String(request.headers.get("Origin") || "");
+  if (!RELEASE_ALLOWED_ORIGINS_0362.has(origin)) return {};
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Vary": "Origin"
+  };
+}
+__name(revisionCors0362, "revisionCors036");
+function revisionDiagnosticHeaders0362(cors, rowsRead, readQueries) {
+  const headers = new Headers(cors);
+  headers.set("Content-Type", "application/json; charset=utf-8");
+  headers.set("Cache-Control", "no-store");
+  headers.set("X-SORIDRAW-CF-Diagnostics", "037");
+  headers.set("X-SORIDRAW-CF-Worker", "1");
+  headers.set("X-SORIDRAW-D1-Read", String(Math.max(0, Number(rowsRead || 0))));
+  headers.set("X-SORIDRAW-D1-Write", "0");
+  headers.set("X-SORIDRAW-D1-Read-Queries", String(Math.max(0, Number(readQueries || 0))));
+  headers.set("X-SORIDRAW-D1-Write-Queries", "0");
+  headers.set("X-SORIDRAW-D1-Other-Queries", "0");
+  headers.set("X-SORIDRAW-R2-A", "0");
+  headers.set("X-SORIDRAW-R2-B", "0");
+  headers.set("X-SORIDRAW-Revision-Mode", "HEAD-ONLY-036");
+  headers.set("X-SORIDRAW-Revision-Source", "STATE-SEQ-037");
+  headers.set("Access-Control-Expose-Headers", [
+    "X-SORIDRAW-CF-Diagnostics",
+    "X-SORIDRAW-CF-Worker",
+    "X-SORIDRAW-D1-Read",
+    "X-SORIDRAW-D1-Write",
+    "X-SORIDRAW-D1-Read-Queries",
+    "X-SORIDRAW-D1-Write-Queries",
+    "X-SORIDRAW-D1-Other-Queries",
+    "X-SORIDRAW-R2-A",
+    "X-SORIDRAW-R2-B",
+    "X-SORIDRAW-Revision-Mode",
+    "X-SORIDRAW-Revision-Source"
+  ].join(", "));
+  return headers;
+}
+__name(revisionDiagnosticHeaders0362, "revisionDiagnosticHeaders036");
+async function handleFeedRevisionHeadOnly0362(request, env) {
+  const url = new URL(request.url);
+  const sort = url.searchParams.get("sort") === "popular" ? "popular" : "latest";
+  const cors = revisionCors0362(request);
+  const cacheKeyUrl = new URL(REVISION_HEAD_CACHE_PATH_0362, url.origin);
+  const cacheKey = new Request(cacheKeyUrl.toString(), { method: "GET" });
+  const cached = await caches.default.match(cacheKey);
+  if (cached) {
+    const revision2 = String(await cached.text());
+    return new Response(JSON.stringify({ ok: true, data: { sort, revision: revision2 } }), {
+      status: 200,
+      headers: revisionDiagnosticHeaders0362(cors, 0, 0)
+    });
+  }
+  const result = await env.DB.prepare(
+    "SELECT seeded, seq FROM explore_derived_state WHERE id=1"
+  ).all();
+  const row = Array.isArray(result?.results) ? result.results[0] : null;
+  if (!row?.seeded) {
+    return new Response(JSON.stringify({ ok: false, error: "Explore derived state unavailable" }), {
+      status: 503,
+      headers: revisionDiagnosticHeaders0362(cors, Number(result?.meta?.rows_read || 0), 1)
+    });
+  }
+  const revision = String(Math.max(0, Number(row.seq || 0)));
+  await caches.default.put(cacheKey, new Response(revision, {
+    headers: { "Cache-Control": `public, max-age=${REVISION_HEAD_CACHE_SECONDS_0362}` }
+  }));
+  return new Response(JSON.stringify({ ok: true, data: { sort, revision } }), {
+    status: 200,
+    headers: revisionDiagnosticHeaders0362(cors, Number(result?.meta?.rows_read || 0), 1)
+  });
+}
+__name(handleFeedRevisionHeadOnly0362, "handleFeedRevisionHeadOnly036");
+var preview_entry_default2 = {
+  async scheduled(controller, env, ctx) {
+    if (typeof preview_entry_default?.scheduled === "function") {
+      return preview_entry_default.scheduled(controller, env, ctx);
+    }
+  },
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/v1/feed-revision") {
+      return handleFeedRevisionHeadOnly0362(request, env);
+    }
+    return preview_entry_default.fetch(request, env, ctx);
+  }
+};
 export {
-  preview_entry_default as default
+  preview_entry_default2 as default
 };
 //# sourceMappingURL=preview-entry.js.map
 
 // SORIDRAW_EXPLORE_LIKE_USER_BATCH_034_20260911
 
 // SORIDRAW_EXPLORE_LIKE_DEFERRED_AGGREGATE_035_20260911
+
+// SORIDRAW_EXPLORE_LIKE_DERIVED_INTAKE_036_20260911

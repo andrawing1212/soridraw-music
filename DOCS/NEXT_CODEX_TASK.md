@@ -1,82 +1,56 @@
 # NEXT CODEX TASK
 
-상태: **PREVIEW 070 배포 완료 / 069 서버 aggregate 정상 확인 / 070 자동 숫자 갱신 사용자 검증 대기 / TEST 승격 금지**
+상태: **PREVIEW 072 배포 완료 / 서버 aggregate 정상 / 072 fresh Feed 숫자 복구 사용자 확인 대기 / TEST 승격 금지**
 
 ## 현재 기준
 - branch: `preview`
-- 실제 PREVIEW 앱: `070`
-- 070 코드 commit: `b24b7eaa2dfe461b0d4db34dec3983f045534e29`
-- PREVIEW 070 release snapshot: `dce9448281cfbeedbc65e55bbf81cfc8f737b8ca`
-- PREVIEW 070 App Run `34634448854` — PASS
-- PREVIEW Worker는 069 runtime 유지
-- PREVIEW Worker Run `34631083178` — PASS
-- PREVIEW active Worker `caffa9f8-5b50-4a4a-a2db-578c0fe49b83`
-- Shared D1 069 additive schema Run `34630980764` — PASS
-- 070 Apply Run `34634327688` — PASS
-- 069 live diagnostic final Run `34634078292` — PASS
+- 실제 PREVIEW 앱: `072`
+- 072 코드 commit: `d9863e48b353493b4a32e9ba913f11d30e31bbb9`
+- PREVIEW 072 release trigger/locked build: `87ce8df39c525aeeb83a8437f794701e1c06686a`
+- 072 Apply Run `34637256916` — PASS
+- PREVIEW 072 App Run `34637365382` — PASS
+- PREVIEW Worker는 069 runtime 유지: `caffa9f8-5b50-4a4a-a2db-578c0fe49b83`
 - TEST main `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
 - PRODUCTION `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
 
-## 실사용에서 확인된 것
-PASS:
-- PC 좋아요 하트 즉시 ON.
-- 1분 batch 후 `/v1/me/likes/batch` Worker 1회.
-- D1 queue write `W1`.
-- 모바일 하트 same-account sync 정상.
-- 모바일 정상 캐시 Worker/D1 0.
-- aggregate 전 공개 숫자 고정.
+## 확정된 사실
+서버 좋아요 경로는 정상이다.
+- 1곡 1분 batch W1 실사용 PASS.
+- scheduled aggregate가 queue를 정상 소비.
+- canonical count = 1.
+- derived count = 1.
+- fresh PREVIEW Feed payload count = 1.
+- PC→모바일 하트 sync는 정상 캐시 Worker/D1 0으로 PASS.
 
-사용자가 10분 이후에도 화면 숫자 0을 확인했지만 서버 read-only 진단 결과:
-- q035/q066/q069 모두 0 → queue 정상 소비.
-- canonical `track_stats.like_count=1`.
-- derived `explore_derived_tracks.likes=1`.
-- current PREVIEW `/v1/feed`도 해당 곡 `like_count=1`.
-- cron `*/10 * * * *` 정상.
+070/071에서 사용자가 본 `하트 ON / 숫자 0`은 서버 count 실패가 아니라 stale HTTP Feed 응답 고착 문제였다.
+071도 강제 refresh 시 동일 versioned Feed URL을 재사용하여 stale edge cache를 다시 받을 수 있었다.
 
-따라서 aggregate 실패가 아니라 **열린 client session cache가 aggregate 완료 후 자동 revision revalidation을 다시 하지 않은 문제**로 확정.
-
-## 070 수정
-`src/pages/ExplorePage.tsx` client-only 수정:
-- 실제 `EXPLORE_LIKE_SYNC_EVENT` 발생 시에만 공개 숫자 재확인 timer 예약.
-- 다음 10분 aggregate 경계 + 70초 grace 뒤 revision revalidation 1회.
+## 072 수정
+- 실제 좋아요 숫자 복구가 필요한 경우에만 고유 `__soridraw_like_refresh` query로 HTTP Feed cache key를 1회 우회.
+- 기존 `내 하트 ON / 숫자 0` stale 행도 072에서 1회 자동 복구 시도.
+- 새 좋아요의 aggregate deadline은 immediate repair가 먼저 실행돼도 보존.
 - polling 없음.
-- optimistic 공개 숫자 +/- 없음.
-- hidden tab에서는 요청하지 않고 기존 visibility/focus revalidation 경로 사용.
-- 여러 sync는 timer 재예약으로 반복 요청 최소화.
+- Worker/D1/Functions/Rules/UI CSS/사용자 원본 데이터 변경 없음.
+- 기존 069 W1 / reversal contract 유지.
 
-보호 확인:
-- Worker runtime 변경 없음.
-- D1 schema 변경 없음.
-- Functions / Firestore Rules 변경 없음.
-- UI/CSS/반응형 변경 없음.
-- 사용자 원본 데이터 변경 없음.
-- 기존 069 W1/reversal contract 유지.
+## 다음 사용자 확인
+새 좋아요 테스트 금지. 우선 기존 두 곡만 확인한다.
+1. PREVIEW 072 업데이트.
+2. 기존 하트 ON / 숫자 0이던 두 곡 확인.
+3. 서버 확정 숫자 `1`이 화면에 회복되면 072 표시 복구 PASS.
 
-## 현재 작업
-추가 수정 전에 **070 사용자 최소 실사용 확인**이 우선.
-
-사용자 확인은 1곡만:
-1. PREVIEW 070 업데이트.
-2. 좋아요 0인 새 곡에 like.
-3. PC 즉시 하트 ON.
-4. 약 1분 뒤 모바일 하트 ON.
-5. 페이지를 일부러 새로고침/클릭하지 않고 기다림.
-6. 다음 aggregate 경계 + 약 70초 뒤 공개 숫자가 PC/모바일에서 자동 `0 → 1` 되는지 확인.
-
-## 이후 개발 측 검증
-070 표시 동기화가 통과하면:
-- 3곡 같은 1분 window → batch 1회 / queue W1 목표 확인.
-- aggregate 전 `like → unlike` 실제 최종 OFF 확인.
-- aggregate 전 `unlike → like` 실제 최종 ON 확인.
-- 비용 회귀 없음 확인.
-- TEST 승격 가능 여부 판단.
+## 통과 후 개발 측 검증
+- 3곡 같은 1분 window → batch 1회 / queue W1 목표.
+- aggregate 전 `like → unlike` 최종 OFF.
+- aggregate 전 `unlike → like` 최종 ON.
+- 비용 회귀 없음.
+- 이후에만 TEST 승격 가능 여부 판단.
 
 ## 계속 보호할 것
 - 좋아요 1분 batch.
 - 공개 숫자 10분 aggregate-authoritative.
 - 069 W1 queue.
-- same-account 기존 `users/{uid}` listener 재사용.
-- Explore LOCAL revision cache.
+- same-account 기존 users listener 재사용.
 - 정상 캐시 변경 없음 시 서버 read 0 목표.
 - UI/CSS/반응형 비변경.
 - 사용자 원본 데이터 migration/backfill/delete/overwrite 금지.

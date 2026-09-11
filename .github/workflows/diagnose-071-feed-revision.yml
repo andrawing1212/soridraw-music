@@ -1,0 +1,75 @@
+name: Diagnose 071 Feed Revision
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/diagnose-071-feed-revision.yml'
+      - '.deploy/diagnose-071-feed-revision.trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagnose-071-feed-revision
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Compare D1 derived head and live revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT seeded,seq AS global_seq FROM explore_derived_state WHERE id=1;
+            SELECT COALESCE(MAX(seq),0) AS feed_seq FROM explore_derived_changes WHERE scope='feed';
+            SELECT id,likes FROM explore_derived_tracks ORDER BY rowid DESC LIMIT 5;
+          " --json > "$RUNNER_TEMP/d1.json"
+
+          curl -fsS -D "$RUNNER_TEMP/revision.headers" -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=latest" > "$RUNNER_TEMP/revision.json"
+          curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__diag=${GITHUB_RUN_ID}" > "$RUNNER_TEMP/feed.json"
+
+          node <<'NODE'
+          const fs = require('fs');
+          const d1 = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/d1.json','utf8')).flatMap(x => x?.results || []);
+          const revision = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/revision.json','utf8'));
+          const feed = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/feed.json','utf8'));
+          const globalRow = d1.find(x => Object.prototype.hasOwnProperty.call(x,'global_seq')) || {};
+          const feedRow = d1.find(x => Object.prototype.hasOwnProperty.call(x,'feed_seq')) || {};
+          const globalSeq = Number(globalRow.global_seq || 0);
+          const feedSeq = Number(feedRow.feed_seq || 0);
+          const liveRevision = Number(revision?.data?.revision || 0);
+          console.log(`GLOBAL_SEQ=${globalSeq}`);
+          console.log(`FEED_SEQ=${feedSeq}`);
+          console.log(`LIVE_REVISION=${liveRevision}`);
+          console.log(`REVISION_MATCH_GLOBAL=${liveRevision === globalSeq ? 'PASS' : 'FAIL'}`);
+          console.log(`REVISION_AT_LEAST_FEED=${liveRevision >= feedSeq ? 'PASS' : 'FAIL'}`);
+          console.log(`FEED_ITEMS=${Array.isArray(feed?.data?.items) ? feed.data.items.length : -1}`);
+          NODE
+          grep -Ei 'x-soridraw-revision|x-soridraw-d1-read|cache-control' "$RUNNER_TEMP/revision.headers" || true

@@ -1,0 +1,100 @@
+name: SORIDRAW Release System Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/release-system-audit.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-release-system-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+
+    steps:
+      - name: Checkout exact preview audit source
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Static release-system verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-release-promotion-system.mjs
+          node --check .deploy/release-worker-runtime.mjs
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          grep -Fq 'enabled=false' .deploy/release-promotion.trigger
+          grep -Fq 'permissions:' .github/workflows/soridraw-release-promotion.yml
+          grep -Fq 'contents: write' .github/workflows/soridraw-release-promotion.yml
+          echo 'RELEASE_TRIGGER_DEFAULT_INERT=PASS'
+
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: TEST and PRODUCTION Worker dry-run only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .deploy/release-worker-runtime.mjs test dry-run
+          node .deploy/release-worker-runtime.mjs production dry-run
+          echo 'WORKER_TARGETS_DRY_RUN=PASS'
+
+      - name: Live shared D1 preflight is read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          for mode in test production; do
+            cfg="$PWD/cloudflare/explore-worker/.release-system/$mode/wrangler.jsonc"
+            node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "SELECT (SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name IN ('explore_derived_state','explore_derived_changes','explore_derived_tracks','explore_derived_profiles','explore_like_batches_035','explore_like_processor_035')) AS required_tables,(SELECT COUNT(*) FROM sqlite_schema WHERE type='trigger' AND name GLOB 'explore032_*') AS explore032_triggers,(SELECT seeded FROM explore_derived_state WHERE id=1) AS seeded" --json > "$RUNNER_TEMP/$mode-d1-audit.json"
+            MODE="$mode" node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/${process.env.MODE}-d1-audit.json`,'utf8'));
+          const rows=p.flatMap(x=>x.results||[]);
+          const r=rows.find(x=>'required_tables' in x);
+          if (!r || Number(r.required_tables) < 6) throw new Error(`${process.env.MODE}: required D1 tables missing`);
+          if (Number(r.explore032_triggers) < 10) throw new Error(`${process.env.MODE}: explore032 triggers missing`);
+          if (Number(r.seeded) !== 1) throw new Error(`${process.env.MODE}: seeded!=1`);
+          console.log(`${process.env.MODE.toUpperCase()}_LIVE_D1_READONLY=PASS tables=${r.required_tables} triggers=${r.explore032_triggers}`);
+          NODE
+          done
+          echo 'D1_WRITE_MIGRATION_SEED=NONE'
+
+      - name: Verify current branch refs are unchanged by audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main production --no-tags
+          echo "AUDIT_PREVIEW=$(git rev-parse origin/preview)"
+          echo "AUDIT_MAIN=$(git rev-parse origin/main)"
+          echo "AUDIT_PRODUCTION=$(git rev-parse origin/production)"
+          echo 'RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS'

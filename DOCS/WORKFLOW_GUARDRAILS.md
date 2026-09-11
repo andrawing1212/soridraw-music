@@ -53,11 +53,31 @@
 - DB migration/seed는 별도 승인 작업이며 앱/Worker release와 묶지 않는다.
 - 배포 Workflow 안에서 사용자 원본 데이터를 대량변경하지 않는다.
 
+### TEST → PRODUCTION canonical promotion path — 2026-09-11 고정
+- 고정 Workflow: `.github/workflows/soridraw-release-promotion.yml`.
+- 고정 Trigger: `.deploy/release-promotion.trigger`; 평상시 반드시 `enabled=false`.
+- 검증된 PREVIEW의 **정확한 40자리 SHA/tree**만 승격 대상으로 사용한다.
+- `preview`와 `main` history가 갈라져 있어도 force-push하지 않는다. 정확한 PREVIEW tree를 현재 main의 새 forward commit으로 만들어 TEST 기준을 고정한다.
+- TEST는 앱 Build/Hosting만이 아니라 해당 릴리스에 포함되는 Worker까지 같은 source로 검증한다.
+- TEST 전체 PASS 후 PRODUCTION으로 갈 때는 **TEST에서 검증된 main의 동일 tree**를 현재 production의 새 forward commit으로 만든다.
+- `test_only`: TEST까지만 배포.
+- `test_then_production`: 사용자가 처음부터 정식배포까지 명확히 승인한 경우, TEST PASS 직후 동일 tested tree를 PRODUCTION까지 연속 배포.
+- PRODUCTION 연속 모드는 명시적 승인값 `DEPLOY_PRODUCTION`이 없으면 실행하지 않는다.
+- TEST 실패 시 PRODUCTION 단계는 실행하지 않는다.
+- 승격 전 TEST/PRODUCTION Worker는 live environment binding을 읽고 그대로 보존하며 dry-run한다. 공유 canonical D1 확인은 SELECT/read-only만 허용한다.
+- 릴리스 Workflow 안에서 D1 migration/seed/write, 사용자 원본 데이터 복사/backfill/delete를 수행하지 않는다.
+- Worker 배포 후 smoke 실패 시 이전 active Worker version/schedule 복구를 시도한다.
+- Hosting 또는 branch 승격 후 실패 시 이전 tree를 새 forward rollback commit으로 복구하는 방식을 사용하며 force-push하지 않는다.
+- TEST/PRODUCTION 실제 주소와 exact `index.html`/`app-version.json`, Worker API/CORS를 확인해야 완료다.
+- 고정 배포시스템 변경 자체는 `.github/workflows/soridraw-release-system-audit.yml`로 read-only 감사하며 실제 배포 없이 TypeScript/Build/Worker dry-run/D1 preflight를 통과해야 한다.
+
 ### 릴리스 중 금지
 - 활성 릴리스 실패를 우회하려고 Workflow 파일을 즉흥 수정
 - 임의 migration/seed 추가
-- TEST/PRODUCTION 동시 코드 승격
+- 검증 없이 TEST/PRODUCTION 동시 코드 승격
 - 원인 미확정 상태의 반복 재배포
+- TEST 실패 후 PRODUCTION 강행
+- force-push로 main/production 이력 덮어쓰기
 
 ## 4. 사용자 데이터 운영
 PREVIEW / TEST / PRODUCTION은 코드와 실행 환경을 분리하지만 사용자 원본 데이터는 공유한다.

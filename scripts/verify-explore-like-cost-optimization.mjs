@@ -66,11 +66,17 @@ assert.match(page, /setExploreTrackLike\(user, track\.id, !currentLiked, track\.
 console.log('PASS client: one-minute PREVIEW outbox + same-account visible count replay survives page/background gaps');
 
 assert.ok(Array.isArray(manifest.patches));
-assert.deepEqual(manifest.patches.slice(-3), [
+const requiredReleasePatches = [
   '034-explore-like-user-batch.mjs',
   '035-explore-like-deferred-aggregate.mjs',
-  '036-explore-like-derived-intake.mjs'
-]);
+  '036-explore-like-derived-intake.mjs',
+  '038-explore-like-compact-queue.mjs'
+];
+assert.deepEqual(
+  manifest.patches.filter((patch) => requiredReleasePatches.includes(patch)),
+  requiredReleasePatches,
+  'required like release patches must remain present and ordered'
+);
 assert.equal((migration033.match(/UPDATE explore_derived_state\s+SET seq = seq \+ 1/g) || []).length, 1);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_batches_035/);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_processor_035/);

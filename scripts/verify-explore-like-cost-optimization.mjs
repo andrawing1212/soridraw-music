@@ -43,25 +43,33 @@ const functionText = (source, needle) => {
 // TEST/PRODUCTION retain the four-minute default until separately approved.
 assert.match(service, /SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911/);
 assert.match(service, /SORIDRAW_EXPLORE_LIKE_PREVIEW_1MIN_TEST_037_20260911/);
+assert.match(service, /SORIDRAW_EXPLORE_LIKE_ACCOUNT_COUNT_REPLAY_065_20260911/);
 assert.match(service, /const EXPLORE_LIKE_BATCH_WINDOW_PREVIEW_MS = 60_000;/);
 assert.match(service, /const EXPLORE_LIKE_BATCH_WINDOW_DEFAULT_MS = 4 \* 60_000;/);
 assert.match(service, /EXPLORE_ENVIRONMENT === 'preview'/);
 assert.match(service, /const EXPLORE_LIKE_BATCH_MAX = 50;/);
 assert.match(service, /EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox'/);
+assert.match(service, /EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY = 'explore-like-account-patches'/);
+assert.match(service, /rememberAccountSyncResults\(uid, signal\.results\)/);
+assert.match(service, /replayAccountSyncPatches\(user\.uid, normalized\)/);
 const queueFunction = functionText(service, 'export const setExploreTrackLike = async');
 assert.match(queueFunction, /schedulePendingLikes\(user\)/);
 assert.doesNotMatch(queueFunction, /requestExploreLike\(/, 'UI queue function must not call the server immediately');
 const flushFunction = functionText(service, 'const flushPendingLikes = async');
 assert.match(flushFunction, /'\/v1\/me\/likes\/batch'/);
 assert.match(flushFunction, /mutations: batchEntries\.map/);
+assert.match(flushFunction, /const accountSyncResults: ExploreLikeBatchResult\[\] = \[\]/);
+assert.match(flushFunction, /accountSyncResults\.push\(visibleResult\)/);
+assert.match(flushFunction, /publishExploreLikeAccountSyncSignal\(user, batchEntries, accountSyncResults\)/);
 assert.doesNotMatch(service, /const EXPLORE_LIKE_IDLE_MS = 5_000;/, 'old per-track 5s flush must stay retired');
 assert.match(page, /setExploreTrackLike\(user, track\.id, !currentLiked, track\.likeCount, track\.ownerUid\)/);
-console.log('PASS client: PREVIEW one-minute test window + default four-minute durable user-level outbox');
+console.log('PASS client: one-minute PREVIEW outbox + same-account visible count replay survives page/background gaps');
 
 assert.ok(Array.isArray(manifest.patches));
-assert.deepEqual(manifest.patches.slice(-2), [
+assert.deepEqual(manifest.patches.slice(-3), [
   '034-explore-like-user-batch.mjs',
-  '035-explore-like-deferred-aggregate.mjs'
+  '035-explore-like-deferred-aggregate.mjs',
+  '036-explore-like-derived-intake.mjs'
 ]);
 assert.equal((migration033.match(/UPDATE explore_derived_state\s+SET seq = seq \+ 1/g) || []).length, 1);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_batches_035/);
@@ -175,6 +183,24 @@ const runAggregateFixture = (db, cutoff = 999999, maxMutations = 50000, now = 99
   }
 };
 
+const derivedIntakeSql = (count) => `
+  WITH requested(track_id) AS (VALUES ${Array.from({ length: count }, () => '(?)').join(',')})
+  SELECT
+    r.track_id,
+    CASE
+      WHEN t.id IS NOT NULL AND t.active = 1 AND p.uid IS NOT NULL AND p.active = 1 THEN 1
+      ELSE 0
+    END AS valid_track,
+    COALESCE(t.likes, 0) AS like_count,
+    CASE WHEN l.user_uid IS NULL THEN 0 ELSE 1 END AS canonical_liked
+  FROM requested r
+  LEFT JOIN explore_derived_tracks t ON t.id = r.track_id
+  LEFT JOIN explore_derived_profiles p ON p.uid = t.owner_uid
+  LEFT JOIN likes l ON l.track_id = r.track_id AND l.user_uid = ?
+`;
+
+const readDerivedIntakeFixture = (db, trackIds, uid) => db.prepare(derivedIntakeSql(trackIds.length)).all(...trackIds, uid);
+
 const db = new DatabaseSync(':memory:');
 db.exec(readFileSync(root + 'scripts/fixtures/canonical-schema.sql', 'utf8'));
 db.exec(`
@@ -182,7 +208,7 @@ db.exec(`
     track_id TEXT NOT NULL,
     user_uid TEXT NOT NULL,
     created_at INTEGER NOT NULL,
-    PRIMARY KEY(track_id, user_uid)
+    PRIMARY KEY(track_id,user_uid)
   );
   INSERT INTO public_profiles(uid,nickname,handle,created_at,updated_at)
   VALUES('owner','Owner','owner',1,1);
@@ -195,21 +221,21 @@ db.exec(`
   INSERT INTO track_stats(track_id,like_count,comment_count,play_count,updated_at)
   VALUES('t',0,0,0,1);
   CREATE TABLE explore_derived_state(
-    id INTEGER PRIMARY KEY CHECK(id=1), seq INTEGER NOT NULL DEFAULT 0, seeded INTEGER NOT NULL DEFAULT 1
+    id INTEGER PRIMARY KEY CHECK(id=1),seq INTEGER NOT NULL DEFAULT 0,seeded INTEGER NOT NULL DEFAULT 1
   );
   INSERT INTO explore_derived_state(id,seq,seeded) VALUES(1,0,1);
   CREATE TABLE explore_derived_changes(
-    scope TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, seq INTEGER NOT NULL,
+    scope TEXT NOT NULL,kind TEXT NOT NULL,id TEXT NOT NULL,seq INTEGER NOT NULL,
     PRIMARY KEY(scope,kind,id)
   );
   CREATE TABLE explore_derived_profiles(
-    uid TEXT PRIMARY KEY, active INTEGER NOT NULL DEFAULT 1, row_json TEXT NOT NULL DEFAULT '{}',
-    followers INTEGER NOT NULL DEFAULT 0, following INTEGER NOT NULL DEFAULT 0, track_count INTEGER NOT NULL DEFAULT 1
+    uid TEXT PRIMARY KEY,active INTEGER NOT NULL DEFAULT 1,row_json TEXT NOT NULL DEFAULT '{}',
+    followers INTEGER NOT NULL DEFAULT 0,following INTEGER NOT NULL DEFAULT 0,track_count INTEGER NOT NULL DEFAULT 1
   );
   INSERT INTO explore_derived_profiles(uid) VALUES('owner');
   CREATE TABLE explore_derived_tracks(
-    id TEXT PRIMARY KEY, owner_uid TEXT NOT NULL, active INTEGER NOT NULL,
-    published_at INTEGER NOT NULL, pinned INTEGER NOT NULL, likes INTEGER NOT NULL, row_json TEXT NOT NULL
+    id TEXT PRIMARY KEY,owner_uid TEXT NOT NULL,active INTEGER NOT NULL,
+    published_at INTEGER NOT NULL,pinned INTEGER NOT NULL,likes INTEGER NOT NULL,row_json TEXT NOT NULL
   );
   INSERT INTO explore_derived_tracks VALUES('t','owner',1,1,0,0,'{}');
   CREATE TRIGGER explore032_stats_update AFTER UPDATE ON track_stats BEGIN
@@ -218,6 +244,25 @@ db.exec(`
 `);
 db.exec(migration033);
 db.exec(migration035);
+
+const intakePublic = readDerivedIntakeFixture(db, ['t'], 'probe').at(0);
+assert.equal(Number(intakePublic.valid_track), 1);
+assert.equal(Number(intakePublic.like_count), 0);
+assert.equal(Number(intakePublic.canonical_liked), 0);
+db.prepare("UPDATE explore_derived_profiles SET active=0 WHERE uid='owner'").run();
+assert.equal(Number(readDerivedIntakeFixture(db, ['t'], 'probe').at(0).valid_track), 0, 'private profile must be rejected');
+db.prepare("UPDATE explore_derived_profiles SET active=1 WHERE uid='owner'").run();
+db.prepare("UPDATE explore_derived_tracks SET active=0 WHERE id='t'").run();
+assert.equal(Number(readDerivedIntakeFixture(db, ['t'], 'probe').at(0).valid_track), 0, 'private/unpublished track must be rejected');
+db.prepare("UPDATE explore_derived_tracks SET active=1 WHERE id='t'").run();
+db.prepare("INSERT INTO likes(track_id,user_uid,created_at) VALUES('t','probe',1)").run();
+assert.equal(Number(readDerivedIntakeFixture(db, ['t'], 'probe').at(0).canonical_liked), 1, 'canonical personal relation stays authoritative');
+db.prepare("DELETE FROM likes WHERE track_id='t' AND user_uid='probe'").run();
+const planText = db.prepare('EXPLAIN QUERY PLAN ' + derivedIntakeSql(1)).all('t', 'probe').map((row) => String(row.detail || '')).join('\n');
+assert.match(planText, /explore_derived_tracks/i);
+assert.match(planText, /explore_derived_profiles/i);
+assert.match(planText, /likes/i);
+console.log('PASS intake fixture: keyed derived track/profile validation + canonical personal-like relation');
 
 // One user batch can carry multiple tracks in one durable queue row.
 db.prepare(`
@@ -271,7 +316,15 @@ if (generatedWorker) {
   const worker = readFileSync(generatedWorker, 'utf8');
   assert.match(worker, /SORIDRAW_EXPLORE_LIKE_USER_BATCH_034_20260911/);
   assert.match(worker, /SORIDRAW_EXPLORE_LIKE_DEFERRED_AGGREGATE_035_20260911/);
+  assert.match(worker, /SORIDRAW_EXPLORE_LIKE_DERIVED_INTAKE_036_20260911/);
   assert.match(worker, /async scheduled\(controller, env, ctx\)/);
+  const intakeBody = functionText(worker, 'async function readExploreLikeBatchStates035(');
+  assert.match(intakeBody, /LEFT JOIN explore_derived_tracks/);
+  assert.match(intakeBody, /LEFT JOIN explore_derived_profiles/);
+  assert.match(intakeBody, /LEFT JOIN likes/);
+  assert.doesNotMatch(intakeBody, /LEFT JOIN tracks /);
+  assert.doesNotMatch(intakeBody, /LEFT JOIN public_profiles /);
+  assert.doesNotMatch(intakeBody, /LEFT JOIN track_stats /);
   const batchBody = functionText(worker, 'async function handleLikeBatch034(');
   assert.match(batchBody, /enqueueExploreLikeBatch035/);
   assert.match(batchBody, /readExploreLikeBatchStates035/);
@@ -284,9 +337,9 @@ if (generatedWorker) {
   assert.match(processor, /DELETE FROM likes/);
   assert.match(processor, /DELETE FROM explore_like_batches_035/);
   assert.equal((processor.match(/env\.DB\.batch/g) || []).length, 1, 'one transactional D1 batch per aggregate wave');
-  console.log('PASS generated Worker: intake queues once; scheduled processor uses set-based transactional aggregation');
+  console.log('PASS generated Worker: derived intake + deferred set-based transactional aggregation');
 } else {
   console.log('INFO generated Worker check skipped; canonical Worker release supplies SORIDRAW_GENERATED_WORKER');
 }
 
-console.log('PASS Explore like 035 deferred aggregation verifier; live D1 rows remain PREVIEW-deployment measurement only');
+console.log('PASS Explore like 036 verifier; live D1 rows remain PREVIEW-deployment measurement only');

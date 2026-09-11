@@ -26,13 +26,13 @@
 - GitHub Ruleset `Protect release branches` (`22889511`) — Active
 - 고정 TEST→PRODUCTION Workflow: `.github/workflows/soridraw-release-promotion.yml`
 
-## 2. 065에서 이미 확정된 비용 기준
+## 2. 065 비용 기준
 사용자 실측:
 - 1곡 좋아요: D1 rows `R2/W3`.
 - 1곡 좋아요 해제: D1 rows `R3/W3`.
 - Feed revision: LOCAL-only / Worker 0 / D1 `R0/W0`.
 - 신규 좋아요 read는 이전 R3 → R2로 실제 감소 PASS.
-- 현재 남은 주요 병목은 batch queue INSERT의 `W3`.
+- 065의 남은 주요 병목은 batch queue INSERT의 `W3`였음.
 
 ## 3. 066 목표와 W3 원인
 실제 기존 shared D1 035 queue 구조를 read-only 감사한 결과:
@@ -47,8 +47,7 @@
 - 사용자 동작과 1분 묶음 전송은 그대로.
 - 10분 공개 좋아요 aggregate 그대로.
 - PC↔모바일 same-account sync 그대로.
-- queue 저장구조만 compact하게 바꿔 **live D1 W3 → W2 후보**를 만든다.
-- W2는 실제 인증 사용자 클릭 계측 전에는 합격 처리하지 않는다.
+- queue 저장구조만 compact하게 바꿔 **live D1 W3 → W2**를 목표로 함.
 
 ## 4. 066 구현
 ### 새 additive queue
@@ -153,9 +152,31 @@ Run `34597109785` — PASS.
 - 실제 `preview.soridraw.com` exact build PASS.
 - 실제 `app-version.json=066` PASS.
 - TEST/PRODUCTION branch 및 실제 HTML unchanged PASS.
-- 따라서 기존 065 실행 탭은 새 066 버전을 감지해 `새 업데이트 · 적용`을 표시할 수 있는 상태다.
 
-## 10. 데이터/환경 안전
+## 10. PREVIEW 066 사용자 실사용 비용 계측 — 2026-09-11
+사용자 인증 PREVIEW에서 진단 초기화 후 1곡씩 측정.
+
+### 좋아요
+- 영상 확인 기준 `/v1/me/likes/batch` Worker 1.
+- D1 query `R1/W1`.
+- D1 rows **`R2/W2`**.
+- 요청당 평균 **`R2/W2`**.
+- 065 좋아요 `R2/W3` 대비 read 유지, write **W3 → W2 감소 PASS**.
+
+### 좋아요 해제
+- 사진 확인 기준 `/v1/me/likes/batch` Worker 1.
+- D1 query `R1/W1`.
+- D1 rows **`R2/W2`**.
+- 요청당 평균 **`R2/W2`**.
+- 065 좋아요 해제 `R3/W3` 대비 read **R3 → R2**, write **W3 → W2 감소 PASS**.
+
+### 비용 판정
+- 단일 1곡 like/unlike 모두 실제 인증 PREVIEW에서 **R2/W2** 확인.
+- 066 compact queue의 W3→W2 최적화는 실사용 PASS.
+- 무료한도 단순 환산상 write 기준 약 **5만 batch/일** 수준으로 기존 약 3.3만/일 대비 약 50% 증가.
+- 이 환산은 Cloudflare D1 무료 write 10만 rows/일을 1 batch=W2로 단순 나눈 값이며, 다른 D1 write가 있으면 실제 여유는 줄어든다.
+
+## 11. 데이터/환경 안전
 - Shared D1: additive table/index 2개만 추가.
 - 기존 user/content row migration/backfill/delete/overwrite: 없음.
 - 기존 035 queue/table 삭제: 없음.
@@ -166,7 +187,7 @@ Run `34597109785` — PASS.
 - PRODUCTION code/Worker 배포: 없음.
 - UI/반응형/간격/색상 변경: 없음.
 
-## 11. 현재 판정
+## 12. 현재 판정
 - **066 코드 구현/merge: PASS.**
 - **066 안전검증: PASS.**
 - **고정 Shared D1 release system audit: PASS.**
@@ -174,20 +195,15 @@ Run `34597109785` — PASS.
 - **PREVIEW 066 Worker 배포: PASS.**
 - **PREVIEW 066 App/Hosting 배포: PASS.**
 - **실제 app-version 066: PASS.**
+- **실제 로그인 1곡 좋아요 R2/W2: PASS.**
+- **실제 로그인 1곡 좋아요 해제 R2/W2: PASS.**
+- **W3→W2 비용 최적화: 사용자 실사용 PASS.**
 - **Explore revision warm R0/W0 유지: PASS.**
 - **TEST/PRODUCTION 비변경: PASS.**
-- **실제 로그인 좋아요 batch W2: 아직 미검증.**
-- 따라서 W3→W2 최적화의 최종 비용 합격 판정은 사용자 PREVIEW 실사용 계측 후 확정한다.
 
-## 12. 다음 단계
-사용자 PREVIEW에서 066 업데이트 적용 후 진단 초기화하고 **기존에 좋아요하지 않은 공개곡 1곡을 좋아요**한 뒤 약 1분 후 CACHE LIVE 확인.
-
-합격 기대값:
-- `/v1/me/likes/batch` Worker 1.
-- 신규 좋아요 read는 065 기준 약 R2 유지 예상.
-- **D1 rows written W2가 목표.**
-- Feed revision은 LOCAL-only / Worker 0 / D1 R0/W0 유지.
-
-그 뒤 필요하면 진단 초기화 후 좋아요 해제 1회도 측정해 W2 유지 여부 확인.
-실제 W2가 확인되기 전에는 W1 추가 최적화를 시작하지 않는다.
-TEST/PRODUCTION 승격도 사용자 별도 요청 전에는 진행하지 않는다.
+## 13. 다음 단계
+1. PC↔모바일 같은 계정에서 하트뿐 아니라 숫자 `+1/-1` 자동 동기화 최종 실사용 확인.
+2. 필요 시 3곡 batch를 실제 측정해 `W2/batch` 유지와 read 증가폭 확인.
+3. W1은 full scan/동시성/재시도 안전성 손실 없이 가능한 경우에만 별도 검토. W2를 현재 안전 합격선으로 유지.
+4. 위 실사용 기능까지 PASS 후 사용자가 `테스트배포`를 요청하면 고정 TEST 승격 경로로 진행.
+5. PRODUCTION은 별도 명확한 승인 후 진행.

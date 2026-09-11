@@ -34,6 +34,36 @@ jobs:
           npx tsc --noEmit
           npm run build
 
+      - name: Align existing like verifier with additive release patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path = 'scripts/verify-explore-like-cost-optimization.mjs';
+          let source = readFileSync(path, 'utf8');
+          const oldBlock = `assert.deepEqual(manifest.patches.slice(-3), [
+            '034-explore-like-user-batch.mjs',
+            '035-explore-like-deferred-aggregate.mjs',
+            '036-explore-like-derived-intake.mjs'
+          ]);`;
+          const newBlock = `const requiredReleasePatches = [
+            '034-explore-like-user-batch.mjs',
+            '035-explore-like-deferred-aggregate.mjs',
+            '036-explore-like-derived-intake.mjs',
+            '038-explore-like-compact-queue.mjs'
+          ];
+          assert.deepEqual(
+            manifest.patches.filter((patch) => requiredReleasePatches.includes(patch)),
+            requiredReleasePatches,
+            'required like release patches must remain present and ordered'
+          );`;
+          if (!source.includes(oldBlock)) throw new Error('existing like verifier manifest assertion shape changed');
+          source = source.replace(oldBlock, newBlock);
+          writeFileSync(path, source, 'utf8');
+          console.log('LIKE_VERIFIER_MANIFEST_COMPAT=UPDATED');
+          NODE
+
       - name: Verify compact queue fixtures
         run: |
           set -euo pipefail
@@ -127,9 +157,9 @@ jobs:
           set -euo pipefail
           git config user.name 'soridraw-release-bot'
           git config user.email 'soridraw-release-bot@users.noreply.github.com'
-          git add cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt
+          git add scripts/verify-explore-like-cost-optimization.mjs cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt
           if git diff --cached --quiet; then
-            echo 'No canonical Worker change produced.'
+            echo 'No prepared 066 change produced.'
             exit 1
           fi
           git commit -m 'build: prepare PREVIEW 066 worker'

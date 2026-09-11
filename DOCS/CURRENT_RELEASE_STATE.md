@@ -53,6 +53,10 @@
 - PREVIEW 주소에만 적용. TEST/PRODUCTION의 기존 동작은 이번 배포에서 변경하지 않음.
 - 추가 Firestore/D1/Worker/Functions 호출 없음. localStorage만 사용.
 
+실사용 확인:
+- 사용자가 063 배포 후 `새 업데이트 · 적용` 표시가 정상 동작했다고 확인함 — **실사용 PASS**.
+- `업데이트 완료 · 063`의 새 실행 후 1회 표시/재실행 비반복 여부는 별도 명시 확인이 아직 필요함.
+
 ### 062 핵심 수정 — 창 복귀/모바일 복귀 때 Explore revision 반복 D1 read 제거
 - PREVIEW의 `GET /v1/feed-revision` 정상 응답을 기기 로컬에 10분 캐시.
 - 첫 정상 revision 응답 이후 10분 안의 focus/pageshow/visibility/Explore 재진입 확인은 네트워크 없이 로컬 응답 사용.
@@ -60,7 +64,15 @@
 - 진단판에는 `LOCAL REVISION CACHE`로 기록.
 - 10분 경과 뒤 다음 revision 확인 1회는 서버로 갈 수 있으며 edge cache 상태에 따라 D1 R0 또는 작은 head R1 가능.
 - 다른 사용자의 새 공개곡/공개 Feed 변경은 이미 캐시된 기기에서 최대 약 10분 늦게 보일 수 있음.
-- 실제 PC/모바일 반복 복귀 비용 실사용 검증은 아직 전.
+
+사용자 PC 실사용 영상 검증 (약 47.7초):
+- 진단 초기 상태에서 Cloudflare `LOCAL 0 / Worker 0` 확인.
+- Explore 첫 진입에서 Feed revision 확인이 실제 서버로 1회 발생: `Worker 1`, D1 head `R1`.
+- 이후 Studio/Library 이동 및 Explore 재진입 과정에서 Feed revision의 `LOCAL REVISION CACHE` 횟수만 증가하고 Feed revision Worker는 `1`, D1 head는 `R1`로 유지됨.
+- 영상 중 공개프로필 최초 접근으로 별도 서버 경로가 1회 추가되어 전체 Cloudflare가 `Worker 2`, D1 read 총 `R2`가 되었으나, 이는 Feed revision 반복 복귀 비용이 아니라 공개프로필 첫 접근 비용임.
+- 그 뒤 반복 이동/재진입에서 전체 LOCAL은 `14 → 15 → 16`까지 증가했지만 Worker는 `2`, D1 read 총량은 `R2`로 유지됨.
+- 따라서 **PC 10분 freshness window 내 반복 Explore 재진입/복귀의 추가 Worker/D1 read 0은 실사용 PASS**.
+- 모바일 전원/홈 → 앱 복귀의 동일 비용 판정은 이 영상으로는 확인 불가하여 **모바일 비용은 아직 미검증**.
 
 ### 058 같은 계정 PC↔모바일 좋아요 상태 — 실사용 PASS 유지
 - PC 3곡 좋아요 → 약 1분 뒤 모바일 빨간 하트 자동 동기화 PASS.
@@ -80,8 +92,9 @@
 ## 3. 비용 기준과 현재 판정
 - 063 완료 알림은 localStorage만 사용하므로 Firestore read/write 0, D1 read/write 0, Worker 0.
 - 059~063 업데이트 확인은 PREVIEW에서만 정적 Hosting `app-version.json` 확인이며 Firestore/D1/Worker 비용 없음.
-- 062 목표는 첫 revision 확인 후 10분 안 반복 PC/모바일 복귀에서 Worker 0, D1 R0/W0, R2 0.
-- 062 실사용 비용 PASS는 아직 사용자 진단 전.
+- 062 PC 실사용: 첫 Feed revision server check 이후 10분 안 반복 Explore 재진입/복귀에서 추가 Worker/D1 read 0 **PASS**.
+- 062 모바일 복귀 비용: 아직 실사용 계측 미검증.
+- 공개프로필 최초 접근은 별도 경로로 Worker/D1 read가 발생할 수 있으며 Feed revision 반복 비용과 분리해서 판단.
 - 좋아요 PC 3곡 실측은 batch 1회, D1 `R9/W3`.
 - Browser SDK `users:onSnapshot` 누적 read 구성과 모바일 likes 비용은 별도 계측 필요.
 - 최종 100,000 DAU × 30 likes/day 월비용 판정 전.
@@ -97,14 +110,11 @@
 - 좋아요 하나 때문에 Feed/Profile 전체 재생성 금지
 
 ## 5. 다음 실제 검증
-1. 현재 062가 열려 있다면 새로고침하지 말고 063 `새 업데이트 · 적용` 표시가 뜨는지 확인.
-2. `새 업데이트 · 적용` 클릭 또는 창을 완전히 닫았다 다시 열어 063이 시작될 때 `업데이트 완료 · 063`이 한 번 표시되는지 확인.
-3. 같은 063 버전에서 다시 닫았다 열었을 때 완료 알림이 반복되지 않는지 확인.
-4. CACHE LIVE 진단 초기화 후 Explore에서 PC 창 내림/복귀 3~5회 반복.
-5. 10분 안 `/v1/feed-revision` 서버/D1 증가 없이 `LOCAL REVISION CACHE`만 증가하는지 확인.
-6. 모바일도 전원/홈 → 앱 복귀를 여러 번 반복해 같은 결과인지 확인.
-7. 10분 이후 첫 revision 확인 1회 후 다시 반복 복귀가 로컬 0인지 확인.
-8. 좋아요/해제 PC↔모바일 동기화가 063에서도 유지되는지 회귀 확인.
+1. `업데이트 완료 · 063`이 새 실행 후 한 번 표시되고 같은 063 재실행에서는 반복되지 않는지 확인.
+2. 모바일 CACHE LIVE에서 전원/홈 → 앱/Explore 복귀를 여러 번 반복해 10분 안 Worker/D1 증가 0인지 확인.
+3. 10분 이후 첫 Feed revision 서버 확인 1회 후 다시 반복 복귀가 로컬 0인지 확인.
+4. 좋아요/해제 PC↔모바일 동기화가 063에서도 유지되는지 회귀 확인.
+5. 좋아요 batch 자체 `R3/W3`와 Browser SDK `users:onSnapshot` 비용을 다음 최적화 대상으로 분석.
 
 ## 6. 현재 완료 판정
 - PREVIEW app 063 source: `6b7a130ff9dfa373e67fdac4ce2b75c103434f56`.
@@ -114,9 +124,11 @@
 - TEST / PRODUCTION unchanged check: **PASS**.
 - Worker / D1 / R2 / Functions / Rules: **비변경**.
 - 사용자 원본 데이터 변경: **없음**.
-- 063 `업데이트 완료` 기능: **코드·배포 PASS / 사용자 실사용 확인 전**.
-- 062 창복귀/앱복귀 반복 server read 0: **코드·배포 PASS / 사용자 실사용 진단 전**.
-- TEST 승격: **아직 금지 — 063 업데이트 알림 + 062 비용 실사용 확인 전**.
+- 063 `새 업데이트 · 적용`: **사용자 실사용 PASS**.
+- 063 `업데이트 완료`: **코드·배포 PASS / 1회 표시·재실행 비반복 실사용 확인 필요**.
+- 062 PC 반복 Explore 재진입/복귀 추가 server read 0: **사용자 영상 실사용 PASS**.
+- 062 모바일 복귀 추가 server read 0: **미검증**.
+- TEST 승격: **아직 금지 — 모바일 비용 + 업데이트 완료 알림의 마지막 실사용 확인 전**.
 
 ## 7. 알려진 운영 위험
 - GitHub 실제 상태 확인 결과 `preview`, `main`, `production` branch protection이 현재 비활성 상태(`protected:false`).

@@ -1,4 +1,4 @@
-requested_at=2026-09-11T21:07:00+09:00
+requested_at=2026-09-12T01:20:00+09:00
 requested_by=user
-product_code_target=985493f156a7b3783ad3af61a0c25682fee2f51e
-release_purpose=066_compact_like_queue_w2_candidate
+product_code_target=b12a108272b469ce346e6af0c7b102d90f0acc2e
+release_purpose=068_bounded_feed_delta_and_like_overlay_support

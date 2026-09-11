@@ -44,7 +44,8 @@
 - 완료 알림은 같은 버전에서 한 번만 표시하고 약 8초 후 자동 닫힘. 클릭 시 즉시 닫힘.
 - 마지막 실행 버전과 완료 표시 버전은 PREVIEW localStorage만 사용.
 - visible tab 60초 정적 `app-version.json` 확인과 focus/visibility/online 즉시 확인 유지.
-- PREVIEW 주소에만 적용. 추가 Firestore/D1/Worker/Functions 호출 없음.
+- 현재 구현은 `PREVIEW_UPDATE_HOSTS` host guard 때문에 PREVIEW 주소에서만 동작함.
+- 추가 Firestore/D1/Worker/Functions 호출 없음.
 
 실사용 확인:
 - `새 업데이트 · 적용` 자동 표시 — **실사용 PASS**.
@@ -85,9 +86,16 @@
 - Firestore Rules 변경 없음.
 - 사용자 원본 데이터 migration / delete / backfill / overwrite 없음.
 
-## 3. 비용 기준과 현재 판정
+## 3. 기능 승격 기본 원칙 — 사용자 최종 지시
+- 사용자가 기능별로 PREVIEW / TEST / PRODUCTION 전용을 명확히 분리 지시하지 않는 한, **PREVIEW에서 구현·검증된 모든 기능은 동일한 기능과 사용자 동작을 그대로 TEST와 PRODUCTION까지 승격**한다.
+- PREVIEW는 최종 정식 서비스 기능을 먼저 검증하는 환경이며, 별도 지시 없이 기능을 다음 환경에서 임의로 끄거나 제외하지 않는다.
+- 환경별 endpoint/Hosting/Worker/Functions/캐시는 달라질 수 있지만 사용자 기능은 동일해야 한다.
+- 따라서 현재 `새 업데이트 · 적용 / 업데이트 완료` 기능도 최종 정식앱 서비스 기능이며, TEST/PRODUCTION 승격 전에 현재 PREVIEW-only host guard를 제거/환경 공통화해야 한다.
+- 위 공통화가 끝나기 전에는 해당 기능 기준으로 TEST/PRODUCTION 승격 준비가 완전하다고 판정하지 않는다.
+
+## 4. 비용 기준과 현재 판정
 - 063 완료 알림: localStorage만 사용 → Firestore read/write 0, D1 read/write 0, Worker 0.
-- 059~063 업데이트 확인: PREVIEW 정적 Hosting `app-version.json` 확인 → Firestore/D1/Worker 비용 없음.
+- 059~063 업데이트 확인: 현재 PREVIEW 정적 Hosting `app-version.json` 확인 → Firestore/D1/Worker 비용 없음.
 - 062 PC 반복 복귀/Explore 재진입: 10분 freshness window 내 추가 Worker/D1 read 0 **실사용 PASS**.
 - 062 모바일 홈/전원 후 복귀: 10분 freshness window 내 추가 Worker/D1 read 0 **실사용 PASS**.
 - 공개프로필 최초 접근은 별도 경로로 Worker/D1 read가 발생할 수 있으며 Feed revision 반복 비용과 분리.
@@ -95,7 +103,7 @@
 - Browser SDK `users:onSnapshot` 누적 read 구성과 모바일 likes 비용은 별도 계측 필요.
 - 최종 100,000 DAU × 30 likes/day 월비용 판정 전.
 
-## 4. 절대 보호
+## 5. 절대 보호
 - Music Note 로컬 즉시 반영 + 약 60초 묶음 저장
 - Library Local First
 - UI/반응형/간격/색상
@@ -105,14 +113,15 @@
 - 앱 업데이트/페이지 이동 때문에 데이터 전체 읽기/재생성 금지
 - 좋아요 하나 때문에 Feed/Profile 전체 재생성 금지
 
-## 5. 다음 작업
-1. 좋아요 batch 자체 `R3/W3`가 더 줄일 수 있는 구조인지 분석.
-2. Browser SDK `users:onSnapshot` read가 실제로 어떤 이벤트에서 증가하는지 계측.
-3. 모바일 좋아요/해제 시 실제 D1/Firestore 비용도 별도 계측.
-4. 100,000 DAU × 30 likes/day 기준 월비용을 다시 계산해 합격/개선 필요를 판정.
-5. 사용자가 `테스트배포`를 요청하면 현재 검증된 PREVIEW 전체를 main/TEST로 승격.
+## 6. 다음 작업
+1. TEST/PRODUCTION 승격 전 `새 업데이트 · 적용 / 업데이트 완료`를 PREVIEW-only host guard 없이 공통 기능으로 정리하고, 환경별 `app-version.json`을 사용하도록 검증.
+2. 좋아요 batch 자체 `R3/W3`가 더 줄일 수 있는 구조인지 분석.
+3. Browser SDK `users:onSnapshot` read가 실제로 어떤 이벤트에서 증가하는지 계측.
+4. 모바일 좋아요/해제 시 실제 D1/Firestore 비용도 별도 계측.
+5. 100,000 DAU × 30 likes/day 기준 월비용을 다시 계산해 합격/개선 필요를 판정.
+6. 사용자가 `테스트배포`를 요청하면 검증된 PREVIEW 전체 기능을 main/TEST로 승격하며 기능 누락 여부를 별도 확인.
 
-## 6. 현재 완료 판정
+## 7. 현재 완료 판정
 - PREVIEW app 063 source: `6b7a130ff9dfa373e67fdac4ce2b75c103434f56`.
 - PREVIEW app 063 deploy checkout: `762ed77b00e5d4fc149b5ee935a46712b02602fc`.
 - Release Run `34568279072`: **PASS**.
@@ -124,10 +133,11 @@
 - 063 `업데이트 완료` 1회 표시 + 같은 버전 재실행 비반복: **사용자 실사용 PASS**.
 - 062 PC 반복 Explore 재진입/복귀 추가 server read 0: **사용자 실사용 PASS**.
 - 062 모바일 홈/전원 후 복귀 추가 server read 0: **사용자 실사용 PASS**.
-- 이번 062/063 검증 범위: **PREVIEW 실사용 PASS 완료**.
+- 이번 062/063 PREVIEW 검증 범위: **실사용 PASS 완료**.
+- 기능 승격 parity: **정책 확정 / 063 업데이트 알림의 PREVIEW-only host guard는 승격 전 수정 필요**.
 - TEST 승격: **사용자 `테스트배포` 요청 전에는 진행하지 않음**.
 
-## 7. 알려진 운영 위험
+## 8. 알려진 운영 위험
 - GitHub 실제 상태 확인 결과 `preview`, `main`, `production` branch protection이 현재 비활성 상태(`protected:false`).
 - 이번 063 기능과 무관한 기존 저장소 운영 위험이며 별도 저장소 보호 작업 필요.
 - 작업용 branch `preview-062-explore-resume-zero-read`, `preview-063-update-complete-notice`는 최종 코드가 preview에 포함됐으나 현재 연결 도구에서 branch 삭제 기능이 없어 남아 있음. 고유 미병합 코드는 없음.

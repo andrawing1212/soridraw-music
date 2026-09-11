@@ -37,7 +37,12 @@ const functionText = (source, needle) => {
   throw new Error(`unterminated function: ${needle}`);
 };
 
-assert.equal(manifest.patches.at(-1), '038-explore-like-compact-queue.mjs');
+const compactPatchIndex = manifest.patches.indexOf('038-explore-like-compact-queue.mjs');
+assert.ok(compactPatchIndex >= 0, 'compact queue patch must be in release manifest');
+const stableBoundaryIndex = manifest.patches.indexOf('039-explore-like-stable-dual-queue-boundary.mjs');
+if (stableBoundaryIndex >= 0) {
+  assert.ok(compactPatchIndex < stableBoundaryIndex, 'stable boundary patch must run after compact queue patch');
+}
 assert.match(migration066, /CREATE TABLE IF NOT EXISTS explore_like_batches_066/);
 assert.match(migration066, /\) WITHOUT ROWID;/);
 assert.match(migration066, /CREATE INDEX IF NOT EXISTS idx_explore_like_batches_066_created\s+ON explore_like_batches_066\(created_at, batch_id\)/);

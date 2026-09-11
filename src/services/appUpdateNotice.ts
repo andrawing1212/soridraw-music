@@ -11,65 +11,115 @@ const PREVIEW_UPDATE_HOSTS = new Set([
 ]);
 let started = false;
 let lastCheckedAt = 0;
-let updateAvailable = false;
+let attachRetryTimer: number | null = null;
 
 const isPreviewUpdateHost = () => {
   if (typeof window === 'undefined') return false;
   return PREVIEW_UPDATE_HOSTS.has(window.location.hostname.toLowerCase());
 };
 
+const clearAttachRetry = () => {
+  if (attachRetryTimer !== null) {
+    window.clearTimeout(attachRetryTimer);
+    attachRetryTimer = null;
+  }
+};
+
 const removeUpdateNotice = () => {
+  clearAttachRetry();
   document.getElementById(NOTICE_ID)?.remove();
 };
 
-const applyButtonState = (button: HTMLButtonElement, hasUpdate: boolean, status: 'ready' | 'checking' | 'error' = 'ready') => {
-  updateAvailable = hasUpdate;
-  button.textContent = hasUpdate
-    ? '새 업데이트 · 적용'
-    : status === 'checking'
-      ? `업데이트 확인 중 · ${CURRENT_APP_VERSION}`
-      : status === 'error'
-        ? `업데이트 확인 · ${CURRENT_APP_VERSION}`
-        : `업데이트 · ${CURRENT_APP_VERSION}`;
-  button.setAttribute('aria-label', hasUpdate ? '새 업데이트 적용' : '프리뷰 앱 다시 불러오기');
-  Object.assign(button.style, hasUpdate ? {
-    background: '#ffb400',
-    color: '#151515',
-    border: '1px solid rgba(255,180,0,.9)',
-    opacity: '1',
-  } : {
-    background: 'rgba(20,20,20,.72)',
-    color: '#ffb400',
-    border: '1px solid rgba(255,180,0,.38)',
-    opacity: '.82',
-  });
-};
-
-const ensureUpdateNotice = () => {
-  if (!isPreviewUpdateHost()) {
-    removeUpdateNotice();
-    return null;
+const findStatusRowAnchor = (): HTMLElement | null => {
+  const accountButton = document.querySelector<HTMLElement>('button[aria-label="계정 메뉴"]');
+  if (accountButton) {
+    const rect = accountButton.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) return accountButton;
   }
 
-  const existing = document.getElementById(NOTICE_ID) as HTMLButtonElement | null;
-  if (existing) return existing;
+  const desktopRow = Array.from(document.querySelectorAll<HTMLElement>('div')).find((element) => {
+    const classes = element.classList;
+    if (
+      !classes.contains('flex') ||
+      !classes.contains('min-w-[176px]') ||
+      !classes.contains('shrink-0') ||
+      !classes.contains('items-center') ||
+      !classes.contains('justify-end')
+    ) return false;
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  });
 
-  const button = document.createElement('button');
-  button.id = NOTICE_ID;
-  button.type = 'button';
-  Object.assign(button.style, {
-    position: 'fixed', top: 'max(12px, env(safe-area-inset-top))', right: '12px',
-    zIndex: '2147483646', borderRadius: '999px', padding: '7px 10px',
-    fontSize: '11px', fontWeight: '700', lineHeight: '1', cursor: 'pointer',
-    boxShadow: '0 3px 12px rgba(0,0,0,.18)', backdropFilter: 'blur(8px)',
-    WebkitBackdropFilter: 'blur(8px)', transition: 'opacity .15s ease, background .15s ease, color .15s ease',
-  });
-  applyButtonState(button, false);
-  button.addEventListener('click', () => {
-    window.location.reload();
-  });
-  document.body.appendChild(button);
-  return button;
+  return desktopRow || null;
+};
+
+const positionNoticeInStatusRow = (button: HTMLButtonElement): boolean => {
+  const anchor = findStatusRowAnchor();
+  if (!anchor) return false;
+
+  const anchorRect = anchor.getBoundingClientRect();
+  const buttonHeight = button.offsetHeight || 28;
+  const top = Math.max(2, Math.round(anchorRect.top + (anchorRect.height - buttonHeight) / 2));
+
+  if (anchor.matches('button[aria-label="계정 메뉴"]')) {
+    const right = Math.max(8, Math.round(window.innerWidth - anchorRect.left + 8));
+    button.style.top = `${top}px`;
+    button.style.right = `${right}px`;
+  } else {
+    const right = Math.max(8, Math.round(window.innerWidth - anchorRect.right));
+    button.style.top = `${top}px`;
+    button.style.right = `${right}px`;
+  }
+
+  button.style.visibility = 'visible';
+  return true;
+};
+
+const scheduleStatusRowPosition = (button: HTMLButtonElement) => {
+  clearAttachRetry();
+  const tryPosition = (attempt: number) => {
+    if (!document.getElementById(NOTICE_ID)) return;
+    if (positionNoticeInStatusRow(button)) return;
+    if (attempt >= 20) return;
+    attachRetryTimer = window.setTimeout(() => tryPosition(attempt + 1), 250);
+  };
+  window.requestAnimationFrame(() => tryPosition(0));
+};
+
+const showUpdateNotice = () => {
+  if (!isPreviewUpdateHost()) {
+    removeUpdateNotice();
+    return;
+  }
+
+  let button = document.getElementById(NOTICE_ID) as HTMLButtonElement | null;
+  if (!button) {
+    button = document.createElement('button');
+    button.id = NOTICE_ID;
+    button.type = 'button';
+    button.textContent = '새 업데이트 · 적용';
+    button.setAttribute('aria-label', '새 업데이트 적용');
+    Object.assign(button.style, {
+      position: 'fixed',
+      zIndex: '2147483646',
+      visibility: 'hidden',
+      border: '1px solid rgba(255,180,0,.9)',
+      borderRadius: '999px',
+      padding: '7px 10px',
+      background: '#ffb400',
+      color: '#151515',
+      fontSize: '11px',
+      fontWeight: '700',
+      lineHeight: '1',
+      cursor: 'pointer',
+      boxShadow: '0 3px 12px rgba(0,0,0,.18)',
+      whiteSpace: 'nowrap',
+    });
+    button.addEventListener('click', () => window.location.reload());
+    document.body.appendChild(button);
+  }
+
+  scheduleStatusRowPosition(button);
 };
 
 const checkForUpdate = async (force = false) => {
@@ -81,24 +131,23 @@ const checkForUpdate = async (force = false) => {
   const now = Date.now();
   if (!force && now - lastCheckedAt < MIN_CHECK_INTERVAL_MS) return;
   lastCheckedAt = now;
-  const button = ensureUpdateNotice();
-  if (!button) return;
-  applyButtonState(button, updateAvailable, 'checking');
+
   try {
     const response = await fetch(`${VERSION_URL}?t=${now}`, { cache: 'no-store' });
     if (!response.ok) {
-      applyButtonState(button, updateAvailable, 'error');
+      removeUpdateNotice();
       return;
     }
     const payload = await response.json() as { version?: string | number };
     const remoteVersion = String(payload?.version || '').trim();
-    if (!remoteVersion) {
-      applyButtonState(button, updateAvailable, 'error');
+    if (!remoteVersion || remoteVersion === CURRENT_APP_VERSION) {
+      removeUpdateNotice();
       return;
     }
-    applyButtonState(button, remoteVersion !== CURRENT_APP_VERSION);
+    showUpdateNotice();
   } catch {
-    applyButtonState(button, updateAvailable, 'error');
+    // 업데이트 확인에 실패하면 현재 앱을 방해하지 않고 다음 복귀 때 다시 확인한다.
+    removeUpdateNotice();
   }
 };
 
@@ -111,10 +160,13 @@ export const startAppUpdateNotice = () => {
     return;
   }
 
-  ensureUpdateNotice();
   void checkForUpdate(true);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') void checkForUpdate();
   });
   window.addEventListener('focus', () => void checkForUpdate());
+  window.addEventListener('resize', () => {
+    const button = document.getElementById(NOTICE_ID) as HTMLButtonElement | null;
+    if (button) scheduleStatusRowPosition(button);
+  }, { passive: true });
 };

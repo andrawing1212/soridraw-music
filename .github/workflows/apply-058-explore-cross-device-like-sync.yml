@@ -67,11 +67,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          changed="$(git diff --name-only)"
+          changed="$(git diff --name-only | grep -v '^dist/' || true)"
           echo "$changed"
           bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreLikeService\.ts|src/services/exploreSessionCache\.ts|public/app-version\.json)$' || true)"
           if [ -n "$bad" ]; then
-            echo 'Unexpected generated changes:'
+            echo 'Unexpected source changes:'
             echo "$bad"
             exit 1
           fi
@@ -85,7 +85,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet; then
+          if git diff --quiet -- src/services/exploreLikeService.ts src/services/exploreSessionCache.ts public/app-version.json; then
             echo '058 already applied.'
             exit 0
           fi

@@ -1,0 +1,3 @@
+requested_at=2026-09-11T20:34:00+09:00
+requested_by=chatgpt
+purpose=prepare_066_compact_queue_stable_boundary_no_deploy

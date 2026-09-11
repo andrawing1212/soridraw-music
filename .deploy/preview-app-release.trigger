@@ -1,5 +1,4 @@
-requested_at=2026-09-11T12:26:00+09:00
+requested_at=2026-09-11T12:57:00+09:00
 requested_by=user
-product_code_target=2f20c1081b6ceadda295e3c411af0cf7a6b2107e
-release_purpose=058_cross_device_personal_like_sync
-firestore_rules_run=34558314461
+product_code_target=a43afb01e7828df28ca9da1076f58a22fca49cd5
+release_purpose=059_reliable_update_notice

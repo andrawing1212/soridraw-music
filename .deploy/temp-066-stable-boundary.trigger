@@ -1,3 +1,0 @@
-requested_at=2026-09-11T20:51:00+09:00
-requested_by=chatgpt
-purpose=rerun_066_stable_boundary_after_verifier_fix_no_deploy

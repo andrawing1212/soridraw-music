@@ -20351,9 +20351,129 @@ async function releaseExploreLikeProcessor035(env, owner) {
 }
 __name(releaseExploreLikeProcessor035, "releaseExploreLikeProcessor035");
 __name2(releaseExploreLikeProcessor035, "releaseExploreLikeProcessor035");
+// SORIDRAW_EXPLORE_LIKE_STABLE_DUAL_QUEUE_BOUNDARY_039_20260911
+function exploreLikeQueueSource039(includeQueue066 = false) {
+  return includeQueue066 ? `
+    SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, '035' AS queue_kind
+    FROM explore_like_batches_035
+    UNION ALL
+    SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, '066' AS queue_kind
+    FROM explore_like_batches_066
+  ` : `
+    SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, '035' AS queue_kind
+    FROM explore_like_batches_035
+  `;
+}
+
+async function selectExploreLikeAggregateBoundary039(env, cutoff, maxMutations, includeQueue066 = false) {
+  const queueSource = exploreLikeQueueSource039(includeQueue066);
+  const row = await env.DB.prepare(`
+    WITH all_batches AS (
+      ${queueSource}
+    ),
+    limited AS (
+      SELECT batch_id, user_uid, created_at, mutation_count, mutations_json, queue_kind
+      FROM all_batches
+      WHERE created_at <= ?
+      ORDER BY created_at ASC, batch_id ASC, queue_kind ASC
+      LIMIT 50000
+    ),
+    ordered AS (
+      SELECT batch_id, created_at, queue_kind,
+        SUM(mutation_count) OVER (
+          ORDER BY created_at ASC, batch_id ASC, queue_kind ASC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS running_mutations
+      FROM limited
+    )
+    SELECT created_at, batch_id, queue_kind
+    FROM ordered
+    WHERE running_mutations <= ?
+    ORDER BY created_at DESC, batch_id DESC, queue_kind DESC
+    LIMIT 1
+  `).bind(cutoff, maxMutations).first();
+  if (!row?.batch_id) return null;
+  return {
+    createdAt: Number(row.created_at || 0),
+    batchId: String(row.batch_id || ''),
+    queueKind: String(row.queue_kind || '035')
+  };
+}
+
+function exploreLikeAggregateSnapshotCte039(includeQueue066 = false) {
+  const queueSource = exploreLikeQueueSource039(includeQueue066);
+  return `
+    WITH boundary(created_at, batch_id, queue_kind) AS (VALUES (?, ?, ?)),
+    all_batches AS (
+      ${queueSource}
+    ),
+    eligible AS (
+      SELECT a.batch_id, a.user_uid, a.created_at, a.mutation_count, a.mutations_json, a.queue_kind
+      FROM all_batches a, boundary b
+      WHERE a.created_at <= ?
+        AND (
+          a.created_at < b.created_at
+          OR (a.created_at = b.created_at AND a.batch_id < b.batch_id)
+          OR (a.created_at = b.created_at AND a.batch_id = b.batch_id AND a.queue_kind <= b.queue_kind)
+        )
+    ),
+    expanded AS (
+      SELECT
+        e.batch_id,
+        e.user_uid,
+        e.created_at,
+        e.queue_kind,
+        TRIM(CAST(json_extract(j.value, '$.trackId') AS TEXT)) AS track_id,
+        CASE WHEN json_extract(j.value, '$.liked') THEN 1 ELSE 0 END AS desired_liked
+      FROM eligible e, json_each(e.mutations_json) AS j
+      WHERE json_type(j.value, '$.trackId') = 'text'
+        AND json_type(j.value, '$.liked') IN ('true', 'false')
+    ),
+    latest AS (
+      SELECT user_uid, track_id, desired_liked, created_at, batch_id, queue_kind
+      FROM (
+        SELECT expanded.*,
+          ROW_NUMBER() OVER (
+            PARTITION BY user_uid, track_id
+            ORDER BY created_at DESC, batch_id DESC, queue_kind DESC
+          ) AS rn
+        FROM expanded
+        WHERE track_id <> ''
+      )
+      WHERE rn = 1
+    ),
+    deltas AS (
+      SELECT latest.*,
+        CASE
+          WHEN latest.desired_liked = 1 AND existing.user_uid IS NULL THEN 1
+          WHEN latest.desired_liked = 0 AND existing.user_uid IS NOT NULL THEN -1
+          ELSE 0
+        END AS delta
+      FROM latest
+      LEFT JOIN likes existing
+        ON existing.track_id = latest.track_id
+       AND existing.user_uid = latest.user_uid
+    )
+  `;
+}
+
 async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue066 = false) {
-  const cte = exploreLikeAggregateCte035(includeQueue066);
   const max = EXPLORE_LIKE_AGGREGATE_MAX_MUTATIONS_035;
+  const boundary = await selectExploreLikeAggregateBoundary039(env, cutoff, max, includeQueue066);
+  if (!boundary) {
+    return {
+      positiveTracks: 0,
+      negativeTracks: 0,
+      insertedLikes: 0,
+      deletedLikes: 0,
+      processedBatches: 0,
+      oldProcessed: 0,
+      compactProcessed: 0
+    };
+  }
+
+  const cte = exploreLikeAggregateSnapshotCte039(includeQueue066);
+  const prefix = [boundary.createdAt, boundary.batchId, boundary.queueKind, cutoff];
   const statements = [
     env.DB.prepare(cte + `
       INSERT INTO track_stats(track_id, like_count, comment_count, play_count, updated_at)
@@ -20364,7 +20484,7 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
       ON CONFLICT(track_id) DO UPDATE SET
         like_count = track_stats.like_count + excluded.like_count,
         updated_at = excluded.updated_at
-    `).bind(cutoff, max, now),
+    `).bind(...prefix, now),
     env.DB.prepare(cte + `
       UPDATE track_stats
       SET like_count = MAX(0, like_count + COALESCE((
@@ -20379,13 +20499,13 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
         GROUP BY track_id
         HAVING SUM(delta) < 0
       )
-    `).bind(cutoff, max, now),
+    `).bind(...prefix, now),
     env.DB.prepare(cte + `
       INSERT OR IGNORE INTO likes(track_id, user_uid, created_at)
       SELECT track_id, user_uid, created_at
       FROM latest
       WHERE desired_liked = 1
-    `).bind(cutoff, max),
+    `).bind(...prefix),
     env.DB.prepare(cte + `
       DELETE FROM likes
       WHERE (track_id, user_uid) IN (
@@ -20393,13 +20513,13 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
         FROM latest
         WHERE desired_liked = 0
       )
-    `).bind(cutoff, max),
+    `).bind(...prefix),
     env.DB.prepare(cte + `
       DELETE FROM explore_like_batches_035
       WHERE batch_id IN (
         SELECT batch_id FROM eligible WHERE queue_kind = '035'
       )
-    `).bind(cutoff, max),
+    `).bind(...prefix)
   ];
   if (includeQueue066) {
     statements.push(
@@ -20408,7 +20528,7 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
         WHERE batch_id IN (
           SELECT batch_id FROM eligible WHERE queue_kind = '066'
         )
-      `).bind(cutoff, max),
+      `).bind(...prefix)
     );
   }
   const result = await env.DB.batch(statements);
@@ -20421,7 +20541,7 @@ async function processExploreLikeAggregateWave035(env, cutoff, now, includeQueue
     deletedLikes: Number(result?.[3]?.meta?.changes || 0),
     processedBatches: oldProcessed + compactProcessed,
     oldProcessed,
-    compactProcessed,
+    compactProcessed
   };
 }
 __name(processExploreLikeAggregateWave035, "processExploreLikeAggregateWave035");

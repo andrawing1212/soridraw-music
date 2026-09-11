@@ -6,7 +6,6 @@ import { EXPLORE_API_BASE, EXPLORE_ENVIRONMENT } from '../config/exploreEnvironm
 // focus/pageshow/re-entry events inside the same 10-minute window must stay local.
 const REVISION_CACHE_TTL_MS = 10 * 60 * 1000;
 const STORAGE_PREFIX = 'soridraw.explore.feed-revision-response.v1:';
-const INSTALL_FLAG = '__soridrawExploreRevisionRequestCache062';
 export const EXPLORE_REVISION_CLIENT_CACHE_HEADER = 'X-SORIDRAW-Client-Cache';
 export const EXPLORE_REVISION_CLIENT_CACHE_PATH_HEADER = 'X-SORIDRAW-Client-Cache-Path';
 
@@ -15,11 +14,11 @@ type RevisionCacheEntry = {
   status: number;
   statusText: string;
   body: string;
-  headers: Record<string, string>;
+  contentType: string;
 };
 
 type WindowWithRevisionCacheFlag = Window & {
-  [INSTALL_FLAG]?: boolean;
+  __soridrawExploreRevisionRequestCache062?: boolean;
 };
 
 const memoryCache = new Map<string, RevisionCacheEntry>();
@@ -47,9 +46,7 @@ const readEntry = (url: string): RevisionCacheEntry | null => {
       typeof parsed !== 'object' ||
       !Number.isFinite(parsed.expiresAt) ||
       parsed.expiresAt <= Date.now() ||
-      typeof parsed.body !== 'string' ||
-      !parsed.headers ||
-      typeof parsed.headers !== 'object'
+      typeof parsed.body !== 'string'
     ) {
       removeEntry(url);
       return null;
@@ -70,21 +67,19 @@ const writeEntry = (url: string, response: Response, body: string) => {
     return;
   }
 
-  const headers: Record<string, string> = {};
-  response.headers.forEach((value, key) => { headers[key] = value; });
   const entry: RevisionCacheEntry = {
     expiresAt: Date.now() + REVISION_CACHE_TTL_MS,
     status: response.status,
     statusText: response.statusText,
     body,
-    headers,
+    contentType: response.headers.get('Content-Type') || 'application/json; charset=utf-8',
   };
   memoryCache.set(url, entry);
   try { window.localStorage.setItem(storageKeyFor(url), JSON.stringify(entry)); } catch { /* cache is optional */ }
 };
 
 const cachedResponse = (entry: RevisionCacheEntry) => {
-  const headers = new Headers(entry.headers);
+  const headers = new Headers({ 'Content-Type': entry.contentType });
   headers.set(EXPLORE_REVISION_CLIENT_CACHE_HEADER, 'HIT');
   headers.set(EXPLORE_REVISION_CLIENT_CACHE_PATH_HEADER, '/v1/feed-revision');
   headers.set('X-SORIDRAW-CF-Worker', '0');
@@ -131,8 +126,8 @@ export const installExploreRevisionRequestCache = () => {
   if (EXPLORE_ENVIRONMENT !== 'preview') return;
 
   const scope = window as WindowWithRevisionCacheFlag;
-  if (scope[INSTALL_FLAG]) return;
-  scope[INSTALL_FLAG] = true;
+  if (scope.__soridrawExploreRevisionRequestCache062) return;
+  scope.__soridrawExploreRevisionRequestCache062 = true;
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {

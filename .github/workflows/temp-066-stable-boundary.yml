@@ -1,0 +1,67 @@
+name: TEMP 066 Stable Boundary
+
+on:
+  push:
+    branches: ['work/066-like-write-w2']
+    paths:
+      - '.deploy/temp-066-stable-boundary.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify source fixtures
+        run: |
+          set -euo pipefail
+          node scripts/verify-explore-like-cost-optimization.mjs
+          node scripts/verify-explore-like-compact-queue.mjs
+          node scripts/verify-explore-like-stable-boundary.mjs
+
+      - name: Apply stable-boundary patch to prepared 066 Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/worker066"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$RUNNER_TEMP/worker066/worker.js"
+          grep -q 'SORIDRAW_EXPLORE_LIKE_COMPACT_QUEUE_038_20260911' "$RUNNER_TEMP/worker066/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$RUNNER_TEMP/worker066" node cloudflare/explore-worker/patches/039-explore-like-stable-dual-queue-boundary.mjs
+          node --check "$RUNNER_TEMP/worker066/worker.js"
+          SORIDRAW_GENERATED_WORKER="$RUNNER_TEMP/worker066/worker.js" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$RUNNER_TEMP/worker066/worker.js" node scripts/verify-explore-like-compact-queue.mjs
+          SORIDRAW_GENERATED_WORKER="$RUNNER_TEMP/worker066/worker.js" node scripts/verify-explore-like-stable-boundary.mjs
+          cp "$RUNNER_TEMP/worker066/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Worker dry-run
+        working-directory: cloudflare/explore-worker/canonical
+        run: node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc --dry-run
+
+      - name: Commit prepared canonical Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'soridraw-release-bot'
+          git config user.email 'soridraw-release-bot@users.noreply.github.com'
+          git add cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt
+          if git diff --cached --quiet; then
+            echo 'No stable-boundary canonical change produced.'
+            exit 1
+          fi
+          git commit -m 'build: prepare PREVIEW 066 stable boundary worker'
+          git push origin HEAD:work/066-like-write-w2

@@ -1,18 +1,52 @@
 # NEXT CODEX TASK
 
-상태: **고정 TEST → PRODUCTION 배포시스템 read-only Audit PASS / 저장소 064 후보 PREVIEW 배포 전**
+상태: **PREVIEW 064 App + Worker 배포 PASS / 사용자 실사용 회귀 검증 전**
 
 ## 현재 기준
 - branch: `preview`
-- 실제 PREVIEW 앱: `063`
-- 저장소 다음 후보: `064` — 아직 PREVIEW 미배포
-- PREVIEW app 063 Run: `34568279072` — PASS
-- PREVIEW Worker 실제 배포본: 035 deferred like aggregate + 037 one-row revision head 유지
+- 실제 PREVIEW 앱: `064`
+- PREVIEW 064 App Run: `34578531037` — PASS
+- PREVIEW 064 Worker Run: `34578451076` — PASS
+- PREVIEW Worker Version ID: `a9a1b47e-5996-451d-a32b-760502e85d61`
+- 064 exact feature/Worker source: `7a9a68e6b5b5beedd745c5af4213fe1af13951ce`
+- App release checkout: `9b8ae6e35afd636ba6ca32388b949fc1610742aa`
 - TEST main: `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
 - 고정 승격 Workflow: `.github/workflows/soridraw-release-promotion.yml`
 - 고정 release trigger: `.deploy/release-promotion.trigger` — 기본 `enabled=false`
 - 배포시스템 최종 Audit Run: `34576408798` — PASS
+- GitHub Ruleset `Protect release branches` (`22889511`) — Active, preview/main/production 삭제 + force-push 차단
+
+## PREVIEW 064 자동 검증 PASS
+- TypeScript PASS
+- Build PASS
+- Firebase PREVIEW Hosting PASS
+- 실제 `preview.soridraw.com` exact build PASS
+- 실제 `app-version.json=064` PASS
+- Worker D1 read-only preflight PASS
+- Feed / Profile / likes route smoke PASS
+- revision head-only PASS
+- warm revision D1 `R0/W0` PASS
+- 10분 aggregate cron PASS
+- TEST/PRODUCTION 앱 + Worker 비변경 PASS
+- D1 migration/seed/write NONE
+- 사용자 원본 데이터 변경 NONE
+
+## 064 기능
+- `새 업데이트 · 적용 / 업데이트 완료` host guard를 PREVIEW / TEST / PRODUCTION 공통화.
+- revision endpoint CORS wrapper도 PREVIEW / TEST / PRODUCTION 공통화.
+- `public/app-version.json=064`.
+- 정식 Firebase Hosting 명시 config와 고정 TEST→PRODUCTION 승격 시스템 준비 완료.
+
+## 다음 작업
+1. 사용자 PREVIEW 064 실사용 확인만 우선한다.
+   - 기존 창: `새 업데이트 · 적용`
+   - 새 실행: `업데이트 완료 · 064` 1회
+   - Explore / 공개프로필 / 좋아요 정상
+   - PC 창복귀 / 모바일 홈·전원 복귀: LOCAL만 증가, Worker/D1 반복 증가 없음
+2. 사용자 확인 PASS 후 `테스트배포` 요청이면 고정 `test_only` 릴리스 사용.
+3. 사용자가 처음부터 `테스트 후 이상 없으면 정식까지` 승인하면 `test_then_production` 사용.
+4. 릴리스와 별도로 좋아요 `R3/W3` 추가 비용 최적화 분석 가능.
 
 ## 배포시스템 확정 구조
 - 검증된 PREVIEW exact SHA/tree를 main의 새 forward commit으로 승격.
@@ -24,37 +58,8 @@
 - force push 금지.
 - D1 migration/seed/write 없음. 공유 D1 preflight는 SELECT/read-only만 사용.
 - 사용자 원본 데이터 복사/삭제/backfill 없음.
-- Worker의 live 환경별 D1/R2/service bindings와 schedule을 보존.
+- Worker live 환경별 D1/R2/service bindings와 schedule 보존.
 - Worker smoke 실패 시 이전 active version/schedule rollback 시도.
-- Hosting/branch 실패 시 이전 tree를 forward rollback commit으로 복구하는 경로 포함.
-
-## Audit PASS
-Run `34576408798`:
-- TypeScript PASS
-- Build PASS
-- static release verifier PASS
-- TEST Worker dry-run PASS
-- PRODUCTION Worker dry-run PASS
-- TEST D1 read-only preflight PASS: tables 6 / explore032 triggers 18 / seeded=1
-- PRODUCTION D1 read-only preflight PASS: tables 6 / triggers 18 / seeded=1
-- D1 write/migration/seed NONE
-- main / production unchanged PASS
-- actual Hosting/Worker deploy NONE
-
-## 064 후보 기능
-- `새 업데이트 · 적용 / 업데이트 완료` host guard를 PREVIEW / TEST / PRODUCTION 공통화.
-- revision endpoint CORS wrapper도 PREVIEW / TEST / PRODUCTION 공통화.
-- `public/app-version.json=064`.
-- `firebase.hosting-production.json` 고정 production site 설정 추가.
-- 실제 `preview.soridraw.com`은 아직 063이므로 064 실사용 검증 전.
-
-## 다음 작업
-1. 사용자가 `프리뷰배포`를 요청하면 현재 064 후보를 PREVIEW에 배포.
-2. PREVIEW에서 업데이트 알림, Explore, 좋아요 PC↔모바일, resume zero-read 회귀 확인.
-3. GitHub 관리자에서 `preview/main/production` branch protection(force-push/delete 방지) 활성화 필요. 현재 연결 도구로 관리자 설정 변경 불가.
-4. 사용자 `테스트배포` 요청 시 고정 `test_only` 릴리스 사용.
-5. 사용자 `테스트 후 이상 없으면 정식까지` 승인 시 `test_then_production` 사용.
-6. 릴리스와 별도로 좋아요 `R3/W3` 추가 비용 최적화 분석 진행 가능.
 
 ## 절대 보호
 - PREVIEW에서 검증된 사용자 기능은 별도 환경 전용 지시가 없는 한 TEST/PRODUCTION에 그대로 승격.
@@ -65,7 +70,7 @@ Run `34576408798`:
 - 페이지 이동/업데이트만으로 데이터 전체 read/write 금지.
 
 ## 현재 판정
-- 배포시스템 코드/검증: **PASS**.
+- PREVIEW 064 자동 배포/검증: **PASS**.
+- 사용자 실사용 회귀: **미검증**.
 - 실제 TEST/PRODUCTION 릴리스: **미실행**.
-- 064 PREVIEW: **배포 전**.
-- branch protection: **미완료 운영 위험**.
+- branch protection: **PASS**.

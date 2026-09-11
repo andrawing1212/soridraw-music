@@ -13,12 +13,17 @@ import {
 // SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911
 // SORIDRAW_EXPLORE_LIKE_PREVIEW_1MIN_TEST_037_20260911
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
+// SORIDRAW_EXPLORE_LIKE_ACCOUNT_COUNT_REPLAY_065_20260911
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
 const EXPLORE_LIKE_OUTBOX_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox';
 const EXPLORE_LIKE_OUTBOX_SOURCE_TYPE = 'explore_like_outbox';
+const EXPLORE_LIKE_ACCOUNT_PATCH_SCHEMA_VERSION = 1;
+const EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY = 'explore-like-account-patches';
+const EXPLORE_LIKE_ACCOUNT_PATCH_SOURCE_TYPE = 'explore_like_account_patches';
+const EXPLORE_LIKE_ACCOUNT_PATCH_TTL_MS = 20 * 60_000;
 const EXPLORE_LIKE_BATCH_WINDOW_PREVIEW_MS = 60_000;
 const EXPLORE_LIKE_BATCH_WINDOW_DEFAULT_MS = 4 * 60_000;
 const EXPLORE_LIKE_BATCH_WINDOW_MS = EXPLORE_ENVIRONMENT === 'preview'
@@ -69,6 +74,13 @@ type ExploreLikeAccountSyncSignal = {
   previousVersion: number;
   results: ExploreLikeAccountSyncResult[];
 };
+
+type ExploreLikeAccountPatch = ExploreLikeAccountSyncResult & {
+  updatedAt: number;
+  expiresAt: number;
+};
+
+type ExploreLikeAccountPatchCache = Record<string, ExploreLikeAccountPatch>;
 
 const likedStateByUid = new Map<string, Map<string, boolean>>();
 const pendingTimers = new Map<string, number>();
@@ -125,6 +137,102 @@ const normalizeAccountSyncSignal = (value: unknown): ExploreLikeAccountSyncSigna
 const clampLikeCount = (value: unknown) => {
   const count = Number(value ?? 0);
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+};
+
+const readAccountPatchCache = (uid: string): ExploreLikeAccountPatchCache => {
+  const envelope = readSoridrawPersistentCache<ExploreLikeAccountPatchCache>({
+    cacheKey: EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY,
+    sourceType: EXPLORE_LIKE_ACCOUNT_PATCH_SOURCE_TYPE,
+    schemaVersion: EXPLORE_LIKE_ACCOUNT_PATCH_SCHEMA_VERSION,
+    uid,
+  });
+  if (!envelope?.data || typeof envelope.data !== 'object' || Array.isArray(envelope.data)) return {};
+
+  const now = Date.now();
+  const next: ExploreLikeAccountPatchCache = {};
+  let changed = false;
+  for (const [trackId, value] of Object.entries(envelope.data)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      changed = true;
+      continue;
+    }
+    const patch = value as Partial<ExploreLikeAccountPatch>;
+    const normalizedTrackId = String(patch.trackId || trackId || '').trim();
+    const expiresAt = Math.max(0, Number(patch.expiresAt || 0));
+    if (!normalizedTrackId || normalizedTrackId !== trackId || !expiresAt || expiresAt <= now || typeof patch.liked !== 'boolean') {
+      changed = true;
+      continue;
+    }
+    next[trackId] = {
+      trackId,
+      ownerUid: String(patch.ownerUid || '').trim(),
+      liked: patch.liked,
+      likeCount: clampLikeCount(patch.likeCount),
+      updatedAt: Math.max(0, Number(patch.updatedAt || 0)),
+      expiresAt,
+    };
+  }
+
+  if (changed) {
+    if (!Object.keys(next).length) {
+      removeSoridrawPersistentCache(EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY, uid);
+    } else {
+      writeSoridrawPersistentCache<ExploreLikeAccountPatchCache>({
+        cacheKey: EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY,
+        sourceType: EXPLORE_LIKE_ACCOUNT_PATCH_SOURCE_TYPE,
+        schemaVersion: EXPLORE_LIKE_ACCOUNT_PATCH_SCHEMA_VERSION,
+        dataVersion: 0,
+        uid,
+        syncCursor: null,
+        serverRevision: null,
+        deletedIds: [],
+        expiresAt: null,
+        dirty: false,
+        pendingMutationId: null,
+        data: next,
+      });
+    }
+  }
+  return next;
+};
+
+const persistAccountPatchCache = (uid: string, cache: ExploreLikeAccountPatchCache) => {
+  if (!Object.keys(cache).length) {
+    removeSoridrawPersistentCache(EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY, uid);
+    return;
+  }
+  writeSoridrawPersistentCache<ExploreLikeAccountPatchCache>({
+    cacheKey: EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY,
+    sourceType: EXPLORE_LIKE_ACCOUNT_PATCH_SOURCE_TYPE,
+    schemaVersion: EXPLORE_LIKE_ACCOUNT_PATCH_SCHEMA_VERSION,
+    dataVersion: 0,
+    uid,
+    syncCursor: null,
+    serverRevision: null,
+    deletedIds: [],
+    expiresAt: null,
+    dirty: false,
+    pendingMutationId: null,
+    data: cache,
+  });
+};
+
+const rememberAccountSyncResults = (uid: string, results: ExploreLikeAccountSyncResult[]) => {
+  if (!uid || !results.length) return;
+  const cache = readAccountPatchCache(uid);
+  const now = Date.now();
+  const expiresAt = now + EXPLORE_LIKE_ACCOUNT_PATCH_TTL_MS;
+  for (const result of results) {
+    cache[result.trackId] = {
+      trackId: result.trackId,
+      ownerUid: result.ownerUid,
+      liked: result.liked,
+      likeCount: clampLikeCount(result.likeCount),
+      updatedAt: now,
+      expiresAt,
+    };
+  }
+  persistAccountPatchCache(uid, cache);
 };
 
 const readLikedStateStorage = (uid: string): Map<string, boolean> => {
@@ -229,6 +337,21 @@ const dispatchLikeSync = (detail: ExploreLikeSyncEventDetail) => {
   window.dispatchEvent(new CustomEvent<ExploreLikeSyncEventDetail>(EXPLORE_LIKE_SYNC_EVENT, { detail }));
 };
 
+const replayAccountSyncPatches = (uid: string, trackIds: string[]) => {
+  if (!uid || typeof window === 'undefined' || !trackIds.length) return;
+  const cache = readAccountPatchCache(uid);
+  const patches = trackIds.map((trackId) => cache[trackId]).filter(Boolean) as ExploreLikeAccountPatch[];
+  if (!patches.length) return;
+  window.setTimeout(() => {
+    patches.forEach((patch) => dispatchLikeSync({
+      trackId: patch.trackId,
+      ownerUid: patch.ownerUid,
+      liked: patch.liked,
+      likeCount: patch.likeCount,
+    }));
+  }, 0);
+};
+
 const dispatchLikeSyncError = (detail: ExploreLikeSyncEventDetail & { message: string }) => {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_SYNC_ERROR_EVENT, { detail }));
@@ -252,6 +375,7 @@ export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) 
   const cache = getLikedStateCache(uid);
   if (missedSignal) cache.clear();
 
+  rememberAccountSyncResults(uid, signal.results);
   for (const result of signal.results) {
     cache.set(result.trackId, result.liked);
     dispatchLikeSync({
@@ -445,6 +569,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
     const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
     const confirmedCache = getLikedStateCache(uid);
     const latestOutbox = readLikeOutbox(uid);
+    const accountSyncResults: ExploreLikeBatchResult[] = [];
 
     for (const pending of batchEntries) {
       const result = resultByTrack.get(pending.trackId);
@@ -473,17 +598,21 @@ const flushPendingLikes = async (user: User): Promise<void> => {
         delete latestOutbox[pending.trackId];
       }
 
-      dispatchLikeSync({
+      const visibleResult = {
         trackId: result.trackId,
-        ownerUid,
         liked: visibleLiked,
         likeCount: visibleLikeCount,
+      };
+      accountSyncResults.push(visibleResult);
+      dispatchLikeSync({
+        ...visibleResult,
+        ownerUid,
       });
     }
 
     persistLikedStateCache(uid, confirmedCache);
     persistLikeOutbox(uid, latestOutbox);
-    await publishExploreLikeAccountSyncSignal(user, batchEntries, results);
+    await publishExploreLikeAccountSyncSignal(user, batchEntries, accountSyncResults);
     if (Object.keys(latestOutbox).length) schedulePendingLikes(user, undefined, true);
   } catch (reason) {
     const latestOutbox = readLikeOutbox(uid);
@@ -548,6 +677,7 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
 
   const outbox = readLikeOutbox(user.uid);
   resumePendingLikes(user);
+  replayAccountSyncPatches(user.uid, normalized);
   return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? cache.get(trackId) === true);
 };
 

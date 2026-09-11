@@ -39,19 +39,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_REVALIDATION_058_20260911' src/services/exploreLikeService.ts
-          grep -Fq 'export const refreshExploreLikedTrackStates' src/services/exploreLikeService.ts
-          grep -Fq 'const refreshIds = normalized.filter((trackId) => cache.has(trackId));' src/services/exploreLikeService.ts
-          grep -Fq 'SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_REVALIDATION_058_20260911' src/services/exploreSessionCache.ts
-          grep -Fq 'if (previousRevision === nextRevision) return [];' src/services/exploreSessionCache.ts
-          grep -Fq 'readTrackLikeCount(previous) !== normalized.likeCount' src/services/exploreSessionCache.ts
-          grep -Fq 'revalidateChangedPersonalLikes(likeRevalidationRows);' src/services/exploreSessionCache.ts
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911' src/services/exploreLikeService.ts
+          grep -Fq 'export const observeExploreLikeAccountSyncSignal' src/services/exploreLikeService.ts
+          grep -Fq 'publishExploreLikeAccountSyncSignal' src/services/exploreLikeService.ts
+          grep -Fq "updateDoc(doc(db, 'users', uid), { exploreLikeSyncSignal: signal })" src/services/exploreLikeService.ts
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911' src/App.tsx
+          grep -Fq 'observeExploreLikeAccountSyncSignal(currentUser, data?.exploreLikeSyncSignal);' src/App.tsx
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911' src/pages/ExplorePage.tsx
+          grep -Fq 'EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT' src/pages/ExplorePage.tsx
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911' firestore.rules
+          grep -Fq "'favoriteSyncSignal', 'favoriteSyncSignalUpdatedAt', 'exploreLikeSyncSignal'" firestore.rules
+          grep -Fq 'request.resource.data.exploreLikeSyncSignal.results.size() <= 50' firestore.rules
           grep -Fq '"version": "058"' public/app-version.json
+          if grep -Fq 'SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_REVALIDATION_058_20260911' src/services/exploreSessionCache.ts; then
+            echo 'Old public-feed-driven revalidation still present'
+            exit 1
+          fi
+          if grep -Fq 'revalidateChangedPersonalLikes' src/services/exploreSessionCache.ts; then
+            echo 'Old public-feed personal-like fanout still present'
+            exit 1
+          fi
           if grep -Eq 'setInterval|setTimeout\([^,]+,[[:space:]]*(60000|[0-9]{1,5})' src/services/exploreSessionCache.ts; then
             echo 'Unexpected polling/timer introduced in session cache'
             exit 1
           fi
-          echo 'CROSS_DEVICE_PERSONAL_LIKE_TARGETED_REVALIDATION=PASS'
+          echo 'ACCOUNT_SCOPED_CROSS_DEVICE_LIKE_SYNC=PASS'
+          echo 'PUBLIC_FEED_FANOUT_REMOVED=PASS'
           echo 'NO_POLLING=PASS'
 
       - name: Install dependencies
@@ -69,28 +82,36 @@ jobs:
           set -euo pipefail
           changed="$(git diff --name-only | grep -v '^dist/' || true)"
           echo "$changed"
-          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreLikeService\.ts|src/services/exploreSessionCache\.ts|public/app-version\.json)$' || true)"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreLikeService\.ts|src/services/exploreSessionCache\.ts|src/App\.tsx|src/pages/ExplorePage\.tsx|firestore\.rules|public/app-version\.json)$' || true)"
           if [ -n "$bad" ]; then
             echo 'Unexpected source changes:'
             echo "$bad"
             exit 1
           fi
           echo 'NO_FIREBASE_FUNCTIONS_CHANGE=true'
-          echo 'NO_FIRESTORE_SCHEMA_CHANGE=true'
           echo 'NO_D1_SCHEMA_CHANGE=true'
           echo 'NO_WORKER_CHANGE=true'
           echo 'NO_USER_DATA_MIGRATION=true'
+          echo 'FIRESTORE_RULES_ADDITIVE_ONLY=true'
 
       - name: Commit actual PREVIEW source
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- src/services/exploreLikeService.ts src/services/exploreSessionCache.ts public/app-version.json; then
+          tracked=(
+            src/services/exploreLikeService.ts
+            src/services/exploreSessionCache.ts
+            src/App.tsx
+            src/pages/ExplorePage.tsx
+            firestore.rules
+            public/app-version.json
+          )
+          if git diff --quiet -- "${tracked[@]}"; then
             echo '058 already applied.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/services/exploreLikeService.ts src/services/exploreSessionCache.ts public/app-version.json
+          git add "${tracked[@]}"
           git commit -m 'fix: sync personal Explore likes across devices'
           git push origin HEAD:preview

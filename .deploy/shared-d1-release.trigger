@@ -1,7 +1,7 @@
-requested_at=2026-09-11T21:05:00+09:00
+requested_at=2026-09-12T02:59:00+09:00
 requested_by=user
-product_code_target=51163d8ebe7634ccc775b55df98e6609fdbc49e7
-migration=20260911_02_explore_like_compact_queue.sql
-migration_blob=bc938c68fa394eb0fda24bd36dbf3a9bd45f78fe
-verifier=scripts/verify-explore-like-compact-queue.mjs
-verifier_blob=07e388a22bcc00b40dbad06791984a2c32b83e35
+product_code_target=a22c9f73208288e35844dbcfa58efae09b655fd8
+migration=20260912_01_explore_like_w1_queue.sql
+migration_blob=a27c09b0e5dd058dcead035ae763eae8504e7e04
+verifier=scripts/verify-explore-like-w1-queue.mjs
+verifier_blob=18393d1875cb36ff34712260a29e8857974ba55a

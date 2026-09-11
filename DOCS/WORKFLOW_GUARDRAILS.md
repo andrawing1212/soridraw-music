@@ -18,6 +18,13 @@
 - Vercel은 사용자가 명확히 요청한 경우만 사용.
 - PREVIEW와 main을 임의로 섞지 않는다.
 
+### 기능 승격 기본 원칙 — 2026-09-11 고정
+- 사용자가 특정 기능을 PREVIEW 전용 / TEST 전용 / PRODUCTION 전용으로 **명확히 분리 지시하지 않는 한**, PREVIEW에서 구현·검증된 기능은 **동일한 사용자 동작과 기능을 그대로 TEST와 PRODUCTION까지 승격**한다.
+- PREVIEW는 최종 서비스 기능을 먼저 검증하는 환경이다. PREVIEW에서 테스트한 기능을 별도 지시 없이 TEST/PRODUCTION에서 임의로 비활성화하지 않는다.
+- 환경별로 달라질 수 있는 것은 Hosting/Worker/Functions 주소, 캐시, 진단, Rate Limit 같은 실행 인프라다. 사용자 기능 자체를 host guard로 숨기는 것은 별도 환경 제한 지시가 있을 때만 허용한다.
+- 승격 전 코드에 PREVIEW-only host guard가 남아 있어 TEST/PRODUCTION에서 기능이 사라진다면 **승격 준비 미완료**로 판정하고 먼저 환경 공통화한다.
+- 예: `새 업데이트 · 적용 / 업데이트 완료`처럼 PREVIEW에서 검증한 기능은 사용자가 별도 제한하지 않는 한 TEST와 PRODUCTION에서도 동일하게 제공하는 것이 기본이다.
+
 ## 3. 글로벌 기본 뼈대 — 배포
 배포는 앱 기능과 별개의 **고정 인프라**로 취급한다.
 

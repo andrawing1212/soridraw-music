@@ -9,11 +9,11 @@
 - 개발 branch: `preview`
 - TEST branch: `main`
 - PRODUCTION branch: `production`
-- 앱 버전: `056`
-- PREVIEW 앱: **034 user-level like batch + PREVIEW 전용 1분 테스트 window + PREVIEW에서만 항상 보이는 업데이트 컨트롤 + 버튼 클릭 시 항상 앱 다시 불러오기**
-- PREVIEW 앱 Run: `34545671906` — PASS
-- PREVIEW 앱 기능 source: `4e899cc7da8653d608293771fe9b5190996c776f`
-- PREVIEW 앱 release trigger commit: `cd96aa0b4eb46d63082ed48d2b2068c86947451d`
+- 앱 버전: `057`
+- PREVIEW 앱: **034 user-level like batch + PREVIEW 전용 1분 테스트 window + 새 업데이트가 있을 때만 표시되는 업데이트 알림**
+- PREVIEW 앱 Run: `34547479171` — PASS
+- PREVIEW 앱 기능 source: `865e173022b09655a5a0f07398835d43ece46fcd`
+- PREVIEW 앱 release trigger commit: `c3d43b709d95ad0165ce2c3456aece56cd54ca6c`
 - PREVIEW Worker: **035 deferred like aggregate + 037 revision one-row head read 활성**
 - PREVIEW Worker 037 Run: `34527195059` — PASS
 - PREVIEW Worker 활성 Version ID: `4236894d-b1ab-4181-9dc3-27621624595b`
@@ -28,19 +28,20 @@
 
 ### Firebase PREVIEW Hosting
 - URL: `https://preview.soridraw.com/`
-- 앱 버전: `056`
-- Run: `34545671906` — **PASS**
-- 기능 source: `4e899cc7da8653d608293771fe9b5190996c776f`
-- release trigger commit: `cd96aa0b4eb46d63082ed48d2b2068c86947451d`
+- 앱 버전: `057`
+- Run: `34547479171` — **PASS**
+- 기능 source: `865e173022b09655a5a0f07398835d43ece46fcd`
+- release trigger commit: `c3d43b709d95ad0165ce2c3456aece56cd54ca6c`
 - TypeScript: PASS
 - Vite Build: PASS
 - Firebase Hosting: PASS
 - 실제 `preview.soridraw.com` exact build/version: PASS
-- 업데이트 컨트롤은 PREVIEW 주소에서만 실행한다.
-- PREVIEW 최신 상태에서는 `업데이트 · 056`처럼 작게 계속 보인다.
-- 새 버전을 감지하면 같은 위치에서 노란 `새 업데이트 · 적용` 상태로 바뀐다.
-- 버튼은 상태와 상관없이 누르면 **항상 현재 PREVIEW 앱을 다시 불러온다.**
-- TEST/PRODUCTION 주소에서는 PREVIEW 업데이트 컨트롤을 만들지 않는다.
+- 업데이트 알림은 PREVIEW 주소에서만 실행한다.
+- 현재 실행 버전과 서버 버전이 같으면 **업데이트 버튼을 만들지 않고, 기존 버튼이 있으면 제거한다.**
+- 새 버전이 발견된 경우에만 `새 업데이트 · 적용`을 표시한다.
+- 버튼 클릭 시 앱을 한 번 다시 불러오고, 새 버전 적용 뒤 버전이 같아지면 버튼은 사라진다.
+- 알림은 화면 모서리에 임의 고정하지 않고 기존 우측 상단 상태/작업 줄의 계정 버튼 왼쪽 위치를 기준으로 맞춘다.
+- 해당 줄이 아직 준비되지 않았으면 잠시 기다렸다가 위치를 다시 맞추며, 잘못된 위치에 임의 표시하지 않는다.
 - PREVIEW에서는 첫 좋아요부터 **고정 1분** 동안 user-level multi-track outbox에 모은 뒤 `/v1/me/likes/batch` 1회 전송.
 - 이후 클릭이 1분 타이머를 계속 리셋하지 않는다.
 - 같은 곡이 원래 상태로 되돌아오면 서버 전송 대상에서 제거될 수 있다.
@@ -57,7 +58,7 @@
 - revision mode `STATE-SEQ-037`, 단일 state row head read.
 - warm revision smoke: D1 `R0/W0` PASS.
 - TEST / PRODUCTION Worker 비변경: PASS.
-- 앱 056 버튼 동작 수정에서는 Worker/D1/R2 변경 없음.
+- 앱 057 업데이트 알림 수정에서는 Worker/D1/R2 변경 없음.
 
 ## 3. Explore revision 비용 진단과 037 수정
 사용자 CACHE LIVE 실측에서 과거 `/v1/feed-revision`이 반복되며 누적 D1 rows read가 크게 증가했다.
@@ -110,9 +111,9 @@
 현재:
 - 035 aggregate 구조 배포: PASS.
 - 037 revision one-row head 구조 배포: PASS.
-- 056 PREVIEW 1분 client test window + PREVIEW-only persistent update control + always-reload click: 배포 PASS.
+- 057 PREVIEW 1분 client test window + update-only notice: 배포 PASS.
 - revision warm live smoke: `R0/W0`.
-- **사용자 실브라우저에서 `업데이트 · 056` 표시와 클릭 재로드 확인 후 1분 authenticated like batch 비용 재실측 필요.**
+- **사용자 실브라우저에서 057 적용 후 업데이트 버튼 소멸/다음 업데이트 때 위치 및 1분 authenticated like batch 비용 재실측 필요.**
 - 100k×30/day 최종 월비용 PASS는 아직 선언하지 않는다.
 
 ## 7. 절대 보호
@@ -125,22 +126,23 @@
 - 앱 업데이트/페이지 이동 때문에 데이터 전체 읽기/재생성 금지
 
 ## 8. 다음 실제 검증
-1. PREVIEW에서 항상 보이는 업데이트 컨트롤에 `056`가 표시되는지 확인.
-2. 버튼을 눌렀을 때 PREVIEW 앱이 실제로 다시 불러와지는지 확인.
-3. CACHE LIVE 진단 초기화.
-4. Explore 진입 후 `/v1/feed-revision` 누적 rows read 확인.
-5. 서로 다른 곡 3개 이상 좋아요.
-6. 첫 좋아요 후 **1분 전** 서버 mutation 0 확인.
-7. 약 1분 시 `/v1/me/likes/batch` 1 request의 D1 R/W + R2 A/B 기록.
-8. 10분 aggregate 후 public count/Feed/Profile 수렴과 aggregate 비용 확인.
-9. PC↔모바일 canonical like state 확인.
-10. 실제 값으로 100,000 DAU × 30 likes/day 월비용 재계산.
+1. 현재 056 화면에서 `새 업데이트 · 적용`이 나타나면 눌러 057을 적용.
+2. 057 적용 뒤 업데이트 버튼이 **사라지는지** 확인.
+3. 다음 PREVIEW 버전이 생겼을 때만 우측 상단 상태/작업 줄에 `새 업데이트 · 적용`이 나타나는지 확인.
+4. CACHE LIVE 진단 초기화.
+5. Explore 진입 후 `/v1/feed-revision` 누적 rows read 확인.
+6. 서로 다른 곡 3개 이상 좋아요.
+7. 첫 좋아요 후 **1분 전** 서버 mutation 0 확인.
+8. 약 1분 시 `/v1/me/likes/batch` 1 request의 D1 R/W + R2 A/B 기록.
+9. 10분 aggregate 후 public count/Feed/Profile 수렴과 aggregate 비용 확인.
+10. PC↔모바일 canonical like state 확인.
+11. 실제 값으로 100,000 DAU × 30 likes/day 월비용 재계산.
 
 ## 9. 현재 완료 판정
-- PREVIEW app 056 + PREVIEW-only 항상 보이는 업데이트 컨트롤 + 클릭 시 항상 reload + 1분 like test window: **배포 PASS** — Run `34545671906`.
+- PREVIEW app 057 + 새 업데이트 있을 때만 표시되는 알림 + 1분 like test window: **배포 PASS** — Run `34547479171`.
 - TypeScript / Build / Firebase Hosting / exact build-version: **PASS**.
 - PREVIEW 배포 Workflow의 TEST/PRODUCTION 비변경 검사: **PASS**.
 - PREVIEW Worker 035 + 037 one-row revision head: **배포 PASS** — Run `34527195059`, Version `4236894d-b1ab-4181-9dc3-27621624595b`.
 - Firebase Functions / Rules: 변경 없음.
 - D1 schema/user data: 이번 앱 배포에서 변경 없음.
-- 사용자 실브라우저에서 버튼 클릭 동작 및 authenticated batch 비용: **실사용 재검증 전**.
+- 사용자 실브라우저에서 업데이트 알림 위치/소멸 및 authenticated batch 비용: **실사용 재검증 전**.

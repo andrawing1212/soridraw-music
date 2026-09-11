@@ -1,0 +1,412 @@
+name: SORIDRAW Release Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: 'Exact validated PREVIEW commit SHA'
+        required: true
+        type: string
+      release_mode:
+        description: 'Stop after TEST or continue to PRODUCTION after TEST PASS'
+        required: true
+        default: test_only
+        type: choice
+        options:
+          - test_only
+          - test_then_production
+      production_approval:
+        description: 'For production mode enter DEPLOY_PRODUCTION'
+        required: false
+        default: ''
+        type: string
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/release-promotion.trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-release-promotion
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      FIREBASE_PROJECT: soridraw
+      BACKEND_PROJECT: soridraw-app-866a5
+      TEST_URL: https://test.soridraw.com
+      TEST_FIREBASE_URL: https://soridraw-test.web.app
+      PRODUCTION_URL: https://soridraw.com
+      PRODUCTION_FIREBASE_URL: https://soridraw.web.app
+      TEST_WORKER: soridraw-explore-test
+      PRODUCTION_WORKER: soridraw-explore-api
+
+    steps:
+      - name: Checkout release controls
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Resolve and lock approved release request
+        id: request
+        shell: bash
+        env:
+          DISPATCH_TARGET: ${{ inputs.target_sha || '' }}
+          DISPATCH_MODE: ${{ inputs.release_mode || '' }}
+          DISPATCH_APPROVAL: ${{ inputs.production_approval || '' }}
+        run: |
+          set -euo pipefail
+          enabled=true
+          target="$DISPATCH_TARGET"
+          mode="$DISPATCH_MODE"
+          approval="$DISPATCH_APPROVAL"
+
+          if [ "${{ github.event_name }}" = 'push' ]; then
+            enabled="$(sed -n 's/^enabled=//p' .deploy/release-promotion.trigger | tail -1 | tr -d '\r')"
+            target="$(sed -n 's/^target_sha=//p' .deploy/release-promotion.trigger | tail -1 | tr -d '\r')"
+            mode="$(sed -n 's/^release_mode=//p' .deploy/release-promotion.trigger | tail -1 | tr -d '\r')"
+            approval="$(sed -n 's/^production_approval=//p' .deploy/release-promotion.trigger | tail -1 | tr -d '\r')"
+          fi
+
+          if [ "$enabled" != 'true' ]; then
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+            echo 'RELEASE_TRIGGER_DISABLED=PASS'
+            exit 0
+          fi
+
+          printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
+          case "$mode" in test_only|test_then_production) ;; *) echo "invalid release_mode=$mode"; exit 2;; esac
+          if [ "$mode" = 'test_then_production' ]; then
+            test "$approval" = 'DEPLOY_PRODUCTION'
+          fi
+
+          git fetch origin preview main production --no-tags
+          git cat-file -e "$target^{commit}"
+          git merge-base --is-ancestor "$target" origin/preview
+          main_before="$(git rev-parse origin/main)"
+          production_before="$(git rev-parse origin/production)"
+          printf '%s' "$main_before" > "$RUNNER_TEMP/main-before.sha"
+          printf '%s' "$production_before" > "$RUNNER_TEMP/production-before.sha"
+
+          rm -rf "$RUNNER_TEMP/release-source"
+          git worktree add --detach "$RUNNER_TEMP/release-source" "$target"
+          echo "RELEASE_ROOT=$RUNNER_TEMP/release-source" >> "$GITHUB_ENV"
+          echo "RELEASE_TARGET=$target" >> "$GITHUB_ENV"
+          echo "RELEASE_MODE=$mode" >> "$GITHUB_ENV"
+          echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "main_before=$main_before" >> "$GITHUB_OUTPUT"
+          echo "production_before=$production_before" >> "$GITHUB_OUTPUT"
+          echo "LOCKED_PREVIEW_SHA=$target"
+          echo "LOCKED_MAIN_BEFORE=$main_before"
+          echo "LOCKED_PRODUCTION_BEFORE=$production_before"
+
+      - name: Set up Node.js 22
+        if: steps.request.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build and static release preflight
+        if: steps.request.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_ROOT"
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-release-promotion-system.mjs
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/release-index.sha"
+          node -e "const v=require('./public/app-version.json').version;if(!v)process.exit(2);process.stdout.write(String(v))" > "$RUNNER_TEMP/release-version.txt"
+          echo "RELEASE_APP_VERSION=$(cat "$RUNNER_TEMP/release-version.txt")"
+          echo 'RELEASE_BUILD_PREFLIGHT=PASS'
+
+      - name: Worker dry-run and live read-only D1 preflight
+        if: steps.request.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_ROOT/cloudflare/explore-worker"
+          npm install --no-audit --no-fund --package-lock=false
+          cd "$RELEASE_ROOT"
+          node .deploy/release-worker-runtime.mjs test dry-run
+          node .deploy/release-worker-runtime.mjs production dry-run
+
+          WRANGLER="$RELEASE_ROOT/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          for mode in test production; do
+            cfg="$RELEASE_ROOT/cloudflare/explore-worker/.release-system/$mode/wrangler.jsonc"
+            node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "SELECT (SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name IN ('explore_derived_state','explore_derived_changes','explore_derived_tracks','explore_derived_profiles','explore_like_batches_035','explore_like_processor_035')) AS required_tables,(SELECT COUNT(*) FROM sqlite_schema WHERE type='trigger' AND name GLOB 'explore032_*') AS explore032_triggers,(SELECT seeded FROM explore_derived_state WHERE id=1) AS seeded" --json > "$RUNNER_TEMP/$mode-d1-preflight.json"
+            MODE="$mode" node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/${process.env.MODE}-d1-preflight.json`,'utf8'));
+          const rows=p.flatMap(x=>x.results||[]);
+          const r=rows.find(x=>'required_tables' in x);
+          if (!r || Number(r.required_tables) < 6) throw new Error(`${process.env.MODE}: required D1 tables missing`);
+          if (Number(r.explore032_triggers) < 10) throw new Error(`${process.env.MODE}: explore032 triggers missing`);
+          if (Number(r.seeded) !== 1) throw new Error(`${process.env.MODE}: explore_derived_state seeded!=1`);
+          console.log(`${process.env.MODE.toUpperCase()}_D1_READONLY_PREFLIGHT=PASS tables=${r.required_tables} triggers=${r.explore032_triggers}`);
+          NODE
+          done
+          echo 'NO_D1_MIGRATION_OR_SEED=PASS'
+
+      - name: Snapshot TEST and PRODUCTION before promotion
+        if: steps.request.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$TEST_FIREBASE_URL/" -o "$RUNNER_TEMP/test-before.html"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$PRODUCTION_FIREBASE_URL/" -o "$RUNNER_TEMP/production-before.html"
+          sha256sum "$RUNNER_TEMP/test-before.html" | awk '{print $1}' > "$RUNNER_TEMP/test-before.sha"
+          sha256sum "$RUNNER_TEMP/production-before.html" | awk '{print $1}' > "$RUNNER_TEMP/production-before.html.sha"
+
+          active_version() {
+            curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/$1/deployments" \
+              | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id'
+          }
+          active_version "$TEST_WORKER" > "$RUNNER_TEMP/test-worker-before.txt"
+          active_version "$PRODUCTION_WORKER" > "$RUNNER_TEMP/production-worker-before.txt"
+          curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${TEST_WORKER}/schedules" \
+            | jq -c '.result.schedules // [] | map({cron})' > "$RUNNER_TEMP/test-worker-schedules-before.json"
+          curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PRODUCTION_WORKER}/schedules" \
+            | jq -c '.result.schedules // [] | map({cron})' > "$RUNNER_TEMP/production-worker-schedules-before.json"
+          echo 'RELEASE_BASELINES_SNAPSHOTTED=PASS'
+
+      - name: Promote exact PREVIEW tree to main
+        if: steps.request.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          git fetch origin main --no-tags
+          test "$(git rev-parse origin/main)" = "${{ steps.request.outputs.main_before }}"
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'release@soridraw.local'
+          tree="$(git rev-parse "${RELEASE_TARGET}^{tree}")"
+          version="$(cat "$RUNNER_TEMP/release-version.txt")"
+          promoted="$(printf 'release: promote app %s to TEST\n\nsource-preview: %s\n' "$version" "$RELEASE_TARGET" | git commit-tree "$tree" -p "${{ steps.request.outputs.main_before }}")"
+          git push origin "$promoted:refs/heads/main"
+          printf '%s' "$promoted" > "$RUNNER_TEMP/main-promoted.sha"
+          echo "TEST_MAIN_SHA=$promoted"
+          echo 'MAIN_EXACT_TREE_PROMOTION=PASS'
+
+      - name: Authenticate Firebase
+        if: steps.request.outputs.enabled == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy exact release to TEST Worker
+        if: steps.request.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          touch "$RUNNER_TEMP/test-deploy-started"
+          cd "$RELEASE_ROOT"
+          node .deploy/release-worker-runtime.mjs test deploy
+
+      - name: Deploy exact release to Firebase TEST
+        if: steps.request.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_ROOT"
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive
+          echo 'FIREBASE_TEST_DEPLOY=PASS'
+
+      - name: Verify TEST exact release
+        if: steps.request.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/release-index.sha")"
+          version="$(cat "$RUNNER_TEMP/release-version.txt")"
+          for origin in "$TEST_FIREBASE_URL" "$TEST_URL"; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/test-index.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/test-index.html" | awk '{print $1}')"
+                remote_version="$(curl -fsS --max-time 15 -H 'Cache-Control: no-cache' "$origin/app-version.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version||'')))")"
+                if [ "$actual" = "$expected" ] && [ "$remote_version" = "$version" ]; then ok=yes; break; fi
+              fi
+              sleep 6
+            done
+            test "$ok" = yes
+            echo "TEST_HOST_PASS=$origin version=$version"
+          done
+          code="$(curl -sS -o "$RUNNER_TEMP/test-feed.json" -D "$RUNNER_TEMP/test-feed.headers" -w '%{http_code}' -H "Origin: $TEST_URL" 'https://soridraw-explore-test.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          test "$code" = 200
+          grep -qi "access-control-allow-origin: $TEST_URL" "$RUNNER_TEMP/test-feed.headers"
+          revision_code="$(curl -sS -o /tmp/test-revision.json -D /tmp/test-revision.headers -w '%{http_code}' -H "Origin: $TEST_URL" 'https://soridraw-explore-test.andrawing1212.workers.dev/v1/feed-revision?sort=latest')"
+          test "$revision_code" = 200
+          grep -qi 'x-soridraw-revision-mode: HEAD-ONLY-036' /tmp/test-revision.headers
+          for fn in getSunoApiKeyStatus generateGeminiContent; do
+            fn_code="$(curl -sS -o /tmp/fn-body -D /tmp/fn-head -w '%{http_code}' -X OPTIONS -H "Origin: $TEST_URL" -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' "https://us-central1-${BACKEND_PROJECT}.cloudfunctions.net/$fn" || true)"
+            test "$fn_code" = 204
+            grep -qi "access-control-allow-origin: $TEST_URL" /tmp/fn-head
+          done
+          test "$(git ls-remote origin refs/heads/production | cut -f1)" = "${{ steps.request.outputs.production_before }}"
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$PRODUCTION_FIREBASE_URL/" -o "$RUNNER_TEMP/production-after-test.html"
+          test "$(sha256sum "$RUNNER_TEMP/production-after-test.html" | awk '{print $1}')" = "$(cat "$RUNNER_TEMP/production-before.html.sha")"
+          touch "$RUNNER_TEMP/test-verified"
+          echo 'TEST_FULL_STACK_EXACT_RELEASE=PASS'
+          echo 'PRODUCTION_UNCHANGED_DURING_TEST=PASS'
+
+      - name: Promote tested exact tree to production branch
+        if: steps.request.outputs.enabled == 'true' && steps.request.outputs.mode == 'test_then_production'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$RUNNER_TEMP/test-verified"
+          cd "$GITHUB_WORKSPACE"
+          git fetch origin production --no-tags
+          test "$(git rev-parse origin/production)" = "${{ steps.request.outputs.production_before }}"
+          tested_main="$(cat "$RUNNER_TEMP/main-promoted.sha")"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$tested_main"
+          tree="$(git rev-parse "${tested_main}^{tree}")"
+          version="$(cat "$RUNNER_TEMP/release-version.txt")"
+          promoted="$(printf 'release: promote tested app %s to PRODUCTION\n\ntested-main: %s\nsource-preview: %s\n' "$version" "$tested_main" "$RELEASE_TARGET" | git commit-tree "$tree" -p "${{ steps.request.outputs.production_before }}")"
+          git push origin "$promoted:refs/heads/production"
+          printf '%s' "$promoted" > "$RUNNER_TEMP/production-promoted.sha"
+          echo "PRODUCTION_BRANCH_SHA=$promoted"
+          echo 'PRODUCTION_EXACT_TESTED_TREE_PROMOTION=PASS'
+
+      - name: Deploy tested release to PRODUCTION Worker
+        if: steps.request.outputs.enabled == 'true' && steps.request.outputs.mode == 'test_then_production'
+        shell: bash
+        run: |
+          set -euo pipefail
+          touch "$RUNNER_TEMP/production-deploy-started"
+          cd "$RELEASE_ROOT"
+          node .deploy/release-worker-runtime.mjs production deploy
+
+      - name: Deploy tested release to Firebase PRODUCTION
+        if: steps.request.outputs.enabled == 'true' && steps.request.outputs.mode == 'test_then_production'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RELEASE_ROOT"
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-production.json --non-interactive
+          echo 'FIREBASE_PRODUCTION_DEPLOY=PASS'
+
+      - name: Verify PRODUCTION exact release
+        if: steps.request.outputs.enabled == 'true' && steps.request.outputs.mode == 'test_then_production'
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/release-index.sha")"
+          version="$(cat "$RUNNER_TEMP/release-version.txt")"
+          for origin in "$PRODUCTION_FIREBASE_URL" "$PRODUCTION_URL"; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "$origin/" -o "$RUNNER_TEMP/prod-index.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/prod-index.html" | awk '{print $1}')"
+                remote_version="$(curl -fsS --max-time 15 -H 'Cache-Control: no-cache' "$origin/app-version.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version||'')))")"
+                if [ "$actual" = "$expected" ] && [ "$remote_version" = "$version" ]; then ok=yes; break; fi
+              fi
+              sleep 6
+            done
+            test "$ok" = yes
+            echo "PRODUCTION_HOST_PASS=$origin version=$version"
+          done
+          code="$(curl -sS -o "$RUNNER_TEMP/prod-feed.json" -D "$RUNNER_TEMP/prod-feed.headers" -w '%{http_code}' -H "Origin: $PRODUCTION_URL" 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          test "$code" = 200
+          grep -qi "access-control-allow-origin: $PRODUCTION_URL" "$RUNNER_TEMP/prod-feed.headers"
+          revision_code="$(curl -sS -o /tmp/prod-revision.json -D /tmp/prod-revision.headers -w '%{http_code}' -H "Origin: $PRODUCTION_URL" 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed-revision?sort=latest')"
+          test "$revision_code" = 200
+          grep -qi 'x-soridraw-revision-mode: HEAD-ONLY-036' /tmp/prod-revision.headers
+          for fn in getSunoApiKeyStatus generateGeminiContent; do
+            fn_code="$(curl -sS -o /tmp/fn-body -D /tmp/fn-head -w '%{http_code}' -X OPTIONS -H "Origin: $PRODUCTION_URL" -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' "https://us-central1-${BACKEND_PROJECT}.cloudfunctions.net/$fn" || true)"
+            test "$fn_code" = 204
+            grep -qi "access-control-allow-origin: $PRODUCTION_URL" /tmp/fn-head
+          done
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(cat "$RUNNER_TEMP/main-promoted.sha")"
+          touch "$RUNNER_TEMP/production-verified"
+          echo 'PRODUCTION_FULL_STACK_EXACT_RELEASE=PASS'
+
+      - name: Rollback failed release safely
+        if: failure() && steps.request.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set +e
+          echo 'RELEASE_FAILURE_ROLLBACK=START'
+          WRANGLER="$RELEASE_ROOT/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+
+          restore_schedules() {
+            worker="$1"; file="$2"
+            [ -f "$file" ] || return 0
+            curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' --data-binary @"$file" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${worker}/schedules" >/dev/null
+          }
+
+          rollback_worker() {
+            mode="$1"; worker="$2"; version_file="$3"; schedules_file="$4"
+            [ -f "$version_file" ] || return 0
+            cfg="$RELEASE_ROOT/cloudflare/explore-worker/.release-system/$mode/wrangler.jsonc"
+            [ -f "$cfg" ] || return 0
+            version="$(cat "$version_file")"
+            (cd "$RELEASE_ROOT/cloudflare/explore-worker" && node "$WRANGLER" rollback "$version" --name "$worker" --config "$cfg" --message 'automatic rollback after release failure')
+            restore_schedules "$worker" "$schedules_file"
+          }
+
+          rollback_branch_tree() {
+            branch="$1"; original="$2"; promoted_file="$3"
+            [ -f "$promoted_file" ] || return 0
+            promoted="$(cat "$promoted_file")"
+            git -C "$GITHUB_WORKSPACE" fetch origin "$branch" --no-tags
+            current="$(git -C "$GITHUB_WORKSPACE" rev-parse "origin/$branch")"
+            [ "$current" = "$promoted" ] || return 0
+            tree="$(git -C "$GITHUB_WORKSPACE" rev-parse "${original}^{tree}")"
+            rollback="$(printf 'rollback: restore %s after failed release\n\nfailed-promotion: %s\n' "$branch" "$promoted" | git -C "$GITHUB_WORKSPACE" commit-tree "$tree" -p "$current")"
+            git -C "$GITHUB_WORKSPACE" push origin "$rollback:refs/heads/$branch"
+          }
+
+          if [ -f "$RUNNER_TEMP/production-deploy-started" ]; then
+            rollback_worker production "$PRODUCTION_WORKER" "$RUNNER_TEMP/production-worker-before.txt" "$RUNNER_TEMP/production-worker-schedules-before.json"
+            rm -rf "$RUNNER_TEMP/prod-rollback"
+            git -C "$GITHUB_WORKSPACE" worktree add --detach "$RUNNER_TEMP/prod-rollback" "${{ steps.request.outputs.production_before }}"
+            (cd "$RUNNER_TEMP/prod-rollback" && npm ci --no-audit --no-fund && npm run build && npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.json --non-interactive)
+          fi
+          rollback_branch_tree production "${{ steps.request.outputs.production_before }}" "$RUNNER_TEMP/production-promoted.sha"
+
+          if [ -f "$RUNNER_TEMP/test-deploy-started" ]; then
+            rollback_worker test "$TEST_WORKER" "$RUNNER_TEMP/test-worker-before.txt" "$RUNNER_TEMP/test-worker-schedules-before.json"
+            rm -rf "$RUNNER_TEMP/test-rollback"
+            git -C "$GITHUB_WORKSPACE" worktree add --detach "$RUNNER_TEMP/test-rollback" "${{ steps.request.outputs.main_before }}"
+            (cd "$RUNNER_TEMP/test-rollback" && npm ci --no-audit --no-fund && npm run build && npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive)
+          fi
+          rollback_branch_tree main "${{ steps.request.outputs.main_before }}" "$RUNNER_TEMP/main-promoted.sha"
+          echo 'RELEASE_FAILURE_ROLLBACK=ATTEMPTED'
+
+      - name: Release summary
+        if: success() && steps.request.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "SOURCE_PREVIEW=$RELEASE_TARGET"
+          echo "TEST_MAIN=$(cat "$RUNNER_TEMP/main-promoted.sha")"
+          echo "APP_VERSION=$(cat "$RUNNER_TEMP/release-version.txt")"
+          if [ "$RELEASE_MODE" = 'test_then_production' ]; then
+            test -f "$RUNNER_TEMP/production-verified"
+            echo "PRODUCTION=$(cat "$RUNNER_TEMP/production-promoted.sha")"
+            echo 'RELEASE_TEST_TO_PRODUCTION=PASS'
+          else
+            echo 'RELEASE_TEST_ONLY=PASS'
+          fi
+          echo 'USER_DATA_MIGRATION=NONE'
+          echo 'FIRESTORE_RULES_DEPLOY=NONE'
+          echo 'FUNCTIONS_DEPLOY=NONE'

@@ -81,12 +81,24 @@ Run `34583313251` — PASS.
 - 실제 `app-version.json=065` PASS
 - TEST/PRODUCTION branch + 실제 HTML unchanged PASS
 
+### 사용자 실사용 D1 비용 계측 — 2026-09-11
+모바일 1곡 기준, 진단 초기화 후 각 동작을 약 1분 뒤 확인.
+- **좋아요 해제:** `/v1/me/likes/batch` Worker 1, D1 query `R1/W1`, D1 rows `R3/W3`, Feed revision LOCAL 2 / Worker 0 / D1 `R0/W0`.
+- **좋아요:** `/v1/me/likes/batch` Worker 1, D1 query `R1/W1`, D1 rows `R2/W3`, Feed revision LOCAL 2 / Worker 0 / D1 `R0/W0`.
+- Browser SDK 표시는 두 측정 모두 `읽기 1 / 쓰기 0`; `users:onSnapshot` 1건이 보임.
+- 따라서 065의 derived intake 변경은 **신규 좋아요 경로에서 기존 약 R3 → 실제 R2로 감소한 것이 실사용으로 확인됨**.
+- 좋아요 해제는 기존 개인 canonical `likes` row가 존재하는 상태를 확인해야 하므로 현재 실측 `R3` 유지.
+- write는 두 경로 모두 `W3`로 유지되어 다음 비용 최적화의 우선 대상이다.
+
 ## 4. 비용 판정
 - 064 이전 실측: 1곡 likes batch 약 D1 `R3/W3`, 3곡 약 `R9/W3`.
-- 065은 intake 원본 3종(`tracks/profile/stats`)을 파생 2종(`derived track/profile`)으로 줄이고 canonical personal `likes`만 유지했다.
-- SQLite/구조 검증은 PASS했지만 **실제 인증된 PREVIEW 좋아요 요청의 D1 rows_read 최종 숫자(R2 등)는 사용자 실사용 계측 전**이다. 숫자를 추정값으로 완료 처리하지 않는다.
-- `W3`를 줄이는 변경은 이번 릴리스에 넣지 않았다. write 증가 없음이 설계 기준이며 실제 PREVIEW 계측으로 재확인한다.
-- Explore 재진입/resume 10분 LOCAL revision cache zero-read 원리는 그대로 유지.
+- 065 실제 인증 PREVIEW 실측:
+  - 1곡 좋아요: **R2/W3**.
+  - 1곡 좋아요 해제: **R3/W3**.
+- 신규 좋아요 read는 약 33% 감소했다.
+- 현재 무료한도 기준 요청 가능 횟수는 read보다 `W3`가 먼저 제한하며 진단 UI의 단순 환산은 약 **3.3만 요청/일**이다.
+- `W3`를 줄이는 변경은 065에 넣지 않았다. 다음 비용 작업은 W3 구성 원인을 binding/statement별로 고정하고 안전하게 줄일 수 있는지 확인하는 것이다.
+- Explore 재진입/resume 10분 LOCAL revision cache는 이번 모바일 측정에서도 Worker 0 / D1 R0/W0로 유지됐다.
 
 ## 5. 데이터/환경 안전
 - D1 migration/seed: 없음.
@@ -115,13 +127,16 @@ Run `34583313251` — PASS.
 - **PREVIEW 065 App 배포: PASS.**
 - **PREVIEW 065 Worker 배포: PASS.**
 - **자동 회귀/비용 구조 테스트: PASS.**
-- **PC→모바일 실제 숫자 동기화: 사용자 실사용 검증 전.**
-- **실제 authenticated D1 R/W 개선 수치: 사용자 실사용 계측 전.**
+- **실제 인증 신규 좋아요 D1 read R3→R2 개선: 사용자 실사용 PASS.**
+- **좋아요 해제: R3/W3 실사용 확인.**
+- **Explore resume/revision: LOCAL-only, Worker 0, D1 R0/W0 유지 PASS.**
+- **PC↔모바일 숫자 자동 동기화 자체는 반대 기기 표시 확인이 아직 필요.**
 - TEST/PRODUCTION: unchanged.
 
 ## 9. 다음 단계
-1. PREVIEW 065에서 PC 좋아요 → 약 1분 뒤 모바일에서 하트 상태와 숫자가 함께 `+1` 되는지 확인.
-2. 반대로 모바일 좋아요 해제 → PC에서 하트와 숫자가 함께 `-1` 되는지 확인.
-3. CACHE LIVE에서 1곡/3곡 batch D1 R/W를 확인하여 065 비용 개선의 실제 수치를 고정.
-4. 위 항목 PASS 후 사용자가 `테스트배포`를 요청하면 고정 TEST 승격 경로로 진행.
-5. PRODUCTION은 별도 명확한 승인 후 진행.
+1. 같은 곡으로 모바일↔PC 반대 기기 숫자 자동 `+1/-1`까지 최종 확인.
+2. `W3`의 실제 구성(RATE_DB + shared DB queue 등)을 binding/statement별 계측으로 고정.
+3. W3를 줄일 수 있으면 035 deferred aggregate/보안/rate limit을 깨지 않는 최소 변경으로 최적화.
+4. 필요 시 3곡 batch도 065 실제 R/W를 측정해 곡 수 증가 비용을 확인.
+5. 위 항목 PASS 후 사용자가 `테스트배포`를 요청하면 고정 TEST 승격 경로로 진행.
+6. PRODUCTION은 별도 명확한 승인 후 진행.

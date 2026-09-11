@@ -87,6 +87,9 @@ const EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071 = 'soridraw:explore-like-count-ref
 // that URL can still be held by the HTTP edge cache while canonical D1/R2 is newer.
 // One unique request is allowed only for an actual/persisted like recovery. No polling.
 const EXPLORE_LIKE_FRESH_FEED_QUERY_072 = '__soridraw_like_refresh';
+// SORIDRAW_EXPLORE_LIKE_FRESH_BOOTSTRAP_RECOVERY_073_20260912
+// Forced like-count recovery must use the unique fresh Feed URL even when this
+// browser has no session Feed cache yet (for example immediately after app update).
 
 const exploreLikeRefreshStorageKey071 = (uid: string) => `${EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071}${uid}`;
 const readExploreLikeRefreshDeadline071 = (uid: string) => {
@@ -456,7 +459,10 @@ export default function ExplorePage() {
             applyPayload(payload, serverRevision);
           } catch (reason) {
             if (!controller.signal.aborted) {
-              if (forceLikeCountRefresh071) forceLikeCountRefreshRef071.current = false;
+              if (forceLikeCountRefresh071) {
+                forceLikeCountRefreshRef071.current = false;
+                likeCountRepairKeyRef072.current = '';
+              }
               console.warn('Explore feed revision revalidation failed; keeping cached feed:', reason);
             }
           }
@@ -472,6 +478,15 @@ export default function ExplorePage() {
     void (async () => {
       try {
         if (feedRequest) {
+          if (forceLikeCountRefresh071) {
+            // 073: 072 handled only the cachedRows branch. After an app update
+            // session cache can be empty, so the old bootstrap path reused the
+            // ordinary versioned Feed and could restore a stale public count.
+            const payload = await fetchPayload(buildExploreFreshLikeFeedUrl072(requestUrl));
+            if (controller.signal.aborted) return;
+            applyPayload(payload, readExploreFeedSessionCacheRevision(requestUrl));
+            return;
+          }
           const serverRevision = await fetchRevision().catch((reason) => {
             if (!controller.signal.aborted) {
               console.warn('Explore feed revision bootstrap failed; continuing with feed:', reason);
@@ -491,6 +506,10 @@ export default function ExplorePage() {
         applyPayload(payload, null);
       } catch (reason: unknown) {
         if (controller.signal.aborted) return;
+        if (forceLikeCountRefresh071) {
+          forceLikeCountRefreshRef071.current = false;
+          likeCountRepairKeyRef072.current = '';
+        }
         console.error('Explore feed load failed:', reason);
         setError('Explore 곡을 불러오지 못했어요.');
         setFeedNextCursor(null);

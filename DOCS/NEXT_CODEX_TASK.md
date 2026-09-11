@@ -1,6 +1,6 @@
 # NEXT CODEX TASK
 
-상태: **PREVIEW app 063 배포 PASS — 업데이트 완료 알림 + 062 복귀 zero-read 실사용 검증 대기**
+상태: **PREVIEW app 063 — 업데이트 알림 + PC/모바일 복귀 zero-read 실사용 PASS 완료**
 
 ## 현재 기준
 - branch: `preview`
@@ -16,32 +16,39 @@
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
 - 실제 URL: `https://preview.soridraw.com/`
 
-## 063 변경
-- 실행 중 구버전은 기존 `새 업데이트 · 적용` 유지.
-- 새 버전으로 앱/브라우저를 새로 시작하면 `업데이트 완료 · 063`을 같은 우측 상단 위치에 한 번 표시.
-- 완료 알림은 약 8초 후 자동 닫힘, 클릭 시 즉시 닫힘.
-- 마지막 실행 버전과 완료 표시 버전은 PREVIEW localStorage에만 저장.
-- 063 첫 도입 전환에서는 기존 SORIDRAW 로컬 상태가 있는 기기도 완료 알림을 한 번 받을 수 있음.
-- Firestore/D1/Worker/Functions 호출 추가 없음.
+## 실사용 PASS 확정
+- 실행 중 구버전 `새 업데이트 · 적용` 자동 표시 PASS.
+- 새 버전 첫 실행 `업데이트 완료 · 063` 1회 표시 PASS.
+- 같은 063 재실행 시 완료 알림 비반복 PASS.
+- PC Explore 반복 재진입/창복귀: 10분 freshness window 내 `LOCAL REVISION CACHE`만 증가, 추가 Worker/D1 read 0 PASS.
+- 모바일 홈/전원 후 앱/Explore 복귀: `LOCAL`만 1씩 증가, 추가 Worker/D1 read 0 PASS.
+- 기존 PC↔모바일 좋아요/해제 개인 하트 동기화 PASS 유지.
 
-## 다음 실제 검증
-1. 062가 열려 있으면 새로고침 없이 `새 업데이트 · 적용`이 뜨는지 확인.
-2. 적용 버튼 클릭 또는 창 완전 종료 후 다시 열어 063 시작 시 `업데이트 완료 · 063`이 보이는지 확인.
-3. 같은 063을 다시 완전 종료/재실행했을 때 완료 알림이 반복되지 않는지 확인.
-4. CACHE LIVE 진단 초기화 후 Explore에서 PC 창 내림/복귀 3~5회.
-5. 10분 안 `/v1/feed-revision` Worker/D1 증가 0, `LOCAL REVISION CACHE`만 증가하는지 확인.
-6. 모바일 전원/홈 → 앱/Explore 복귀도 같은 방식으로 확인.
-7. 10분 경과 후 첫 서버 revision 확인 1회는 허용. 이후 다시 10분 동안 반복 복귀 0인지 확인.
-8. PC↔모바일 좋아요/해제 개인 하트 동기화 회귀 확인.
+## 다음 작업 목표
+좋아요 실제 변경 비용을 더 줄일 수 있는지 분석한다. 현재 실측 기준:
+- 1곡 likes batch: 대략 D1 `R3 / W3`.
+- 3곡 likes batch: D1 `R9 / W3`.
+- 쓰기 3은 batch 1회당 고정 패턴으로 보이고, 읽기는 곡 수에 비례하는 패턴.
+- Browser SDK `users:onSnapshot` read 누적 구성과 모바일 좋아요 비용은 아직 정확한 분해가 필요함.
+
+## Codex 작업 범위
+1. `/v1/me/likes/batch`의 D1 `R3/W3` 구성요소를 정확히 분해.
+2. 1곡/3곡에서 왜 read가 곡당 약 3씩 증가하고 write는 batch당 3으로 보이는지 코드 기준으로 증명.
+3. 전체 Feed/Profile 재조회 없이 read/write를 더 줄일 수 있는지 설계.
+4. 058 같은 계정 PC↔모바일 개인 하트 동기화 구조와 035 deferred public aggregate를 보호.
+5. Browser SDK `users:onSnapshot` read가 좋아요 signal 때문에 얼마 증가하는지 분리 계측 가능한 진단 방법 제시.
+6. 모바일 좋아요/해제 비용도 동일 기준으로 측정할 수 있게 한다.
+7. 100,000 DAU × 30 likes/day 기준 월비용을 현재 구조와 개선안으로 비교.
+8. 데이터 migration/backfill/delete 없이 하위호환 방식만 사용.
+9. 배포는 사용자 승인 없이는 하지 않음.
 
 ## 합격선
-- 기존 열린 구버전: `새 업데이트 · 적용` 자동 표시.
-- 새 버전 첫 실행: `업데이트 완료 · 버전` 1회 표시, 같은 버전 재실행 시 반복 표시 없음.
-- 완료 알림 때문에 Firestore/D1/Worker 비용 추가 없음.
-- 정상 캐시 freshness window 안 단순 창복귀/앱복귀/Explore 재진입 Worker/D1/R2 증가 없음.
-- Feed 전체 재조회/재생성 없음.
-- 좋아요 batch/PC↔모바일 동기화 회귀 없음.
-- Music Note 약 60초 묶음 저장 / Library Local First / UI 변화 없음.
+- 좋아요 1개 변경 때문에 Feed/Profile 전체 read/rebuild 없음.
+- unchanged navigation/update/re-entry server data read 0 원칙 유지.
+- PC↔모바일 개인 하트 동기화 회귀 없음.
+- public like count의 deferred aggregate 구조 유지 또는 더 저렴한 동등 구조.
+- Firestore/D1/Worker 비용이 정확히 계측 가능해야 함.
+- UI/반응형/간격/색상 변경 없음.
 - TEST/PRODUCTION 영향 없음.
 
 ## 현재 판정
@@ -50,10 +57,11 @@
 - Firebase PREVIEW Hosting: PASS.
 - exact build/version 063: PASS.
 - TEST/PRODUCTION unchanged: PASS.
-- 063 update-completed notice: **코드/배포 PASS, 사용자 실사용 확인 전**.
-- 062 zero-read behavior: **코드/배포 PASS, 사용자 PC/모바일 진단 전**.
-- TEST promotion: **아직 금지**.
+- 063 update notices: **사용자 실사용 PASS**.
+- 062 PC/mobile resume zero-read: **사용자 실사용 PASS**.
+- 이번 PREVIEW 검증 범위: **완료**.
+- TEST promotion: 사용자가 `테스트배포`를 요청할 때만 진행.
 
 ## 운영 위험
-- GitHub `preview`, `main`, `production` branch protection이 실제로 비활성 상태. 이번 063과 별개인 기존 운영 위험.
+- GitHub `preview`, `main`, `production` branch protection이 실제로 비활성 상태. 이번 기능과 별개인 기존 운영 위험.
 - 작업 branch `preview-062-explore-resume-zero-read`, `preview-063-update-complete-notice`는 preview에 포함됐지만 현재 연결 도구에서 branch 삭제 기능이 없어 남아 있음.

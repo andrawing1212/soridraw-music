@@ -30,24 +30,19 @@
 - 여러 곡을 묶어도 queue write는 `W2/batch`로 고정됨.
 - 065의 W3 대비 write 약 33% 감소는 유지.
 
-## 3. 066 기능 판정 취소 / 067 수정 이유
-066에서 PC→모바일 좋아요 동기화 시:
-- 모바일 하트 색은 바뀌지만 숫자가 그대로인 재현이 확인됨.
-- 원인은 deferred public aggregate가 아직 반영되지 않은 Worker `result.likeCount`를 same-account signal 숫자로 다시 사용한 것.
-- 따라서 066의 `same-account 숫자 동기화 최종 PASS` 판정은 취소.
-
-067 수정:
-- same-account signal에는 현재 화면에서 이미 확정적으로 보이던 `optimisticLikeCount`를 전달.
-- 하트 상태와 숫자가 동일한 pending mutation 기준으로 같이 전달되도록 수정.
+## 3. 067 수정
+### same-account visible count
+- 066에서 PC→모바일 좋아요 동기화 시 하트는 바뀌어도 숫자가 stale Worker count로 남는 재현이 확인됨.
+- 067은 successful batch의 same-account signal에 현재 UI의 `optimisticLikeCount`를 전달.
 - 기존 root `users/{uid}` listener 재사용.
 - 새 Firestore listener / D1 query / Worker route 없음.
 
-## 4. CACHE LIVE 진단 초기화 오염 수정
+### CACHE LIVE 진단 초기화
 - `진단 초기화` 버튼 pointerdown이 Explore 전역 activity revalidation까지 전달되는 경로를 차단.
-- 버튼 자체를 눌렀다는 이유로 feed revision check가 발생하는 진단 오염을 제거.
+- 버튼 자체를 눌렀다는 이유로 feed revision check가 발생하는 진단 오염 제거.
 - UI 모양/위치 변경 없음.
 
-## 5. 067 배포 자동검증
+## 4. 067 배포 자동검증
 Run `34616138225`:
 - checkout `b6dd709e7fe5e73de4c89176dcbeb8d62a07d62d`
 - npm install PASS
@@ -60,21 +55,50 @@ Run `34616138225`:
 - Worker / D1 / Functions / Rules 변경 없음
 - 사용자 원본 데이터 변경 없음
 
-## 6. 추가 발견 — 좋아요 처리 뒤 Feed 재확인 비용
-사용자 066 실사용 캡처:
-- 2곡 unlike batch 직후: likes batch `R6/W2`.
-- 이후 브라우저가 다시 활성화/복귀한 시점의 캡처에서 추가로:
-  - `/v1/feed-revision`: Worker 1, D1 row `R1/W0`
-  - `/v1/feed`: Worker 1, D1 rows `R15/W0`
-  - SDK `users:onSnapshot`도 3→4 증가
-- ExplorePage에는 1분 주기 timer는 없음. revalidation trigger는 focus/pageshow/pointerdown/visibilitychange임.
-- 따라서 단순 1분 timer 자동 read로 보지 않는다. 좋아요가 실제 서버에 반영된 뒤 탭 활성/복귀 신호에서 revision 변화가 감지되어 Feed 동기화가 실행된 경로로 본다.
-- 하지만 SORIDRAW 비용 목표상 좋아요 몇 개 때문에 전체 Feed 성격의 재확인이 생기는 것은 추가 최적화 대상으로 유지한다.
-- 현재 Worker의 032 derived change cache는 changed track ID만 추적하는 delta 구조를 이미 갖고 있으므로, 다음 단계에서는 이 기존 구조를 재사용해 full feed 재요청을 더 줄일 수 있는지 좁게 검토한다.
+## 5. 사용자 재검증 — 2026-09-12
+### 좋아요 해제 경로
+사용자 순서: PC 기준 → 약 1분 대기 → 모바일 확인.
+- PC 기준 캡처: Cloudflare `LOCAL 1 / Worker 0`, D1 0.
+- 약 1분 뒤: `/v1/me/likes/batch` Worker 1.
+- D1 query `R1/W1`, rows `R4/W2`.
+- Feed revision은 `LOCAL 3 / Worker 0`, D1 0.
+- 모바일 확인: Browser SDK `users:onSnapshot 1`, Cloudflare `LOCAL 2 / Worker 0`, D1 0.
+- 즉 이 경로에서는 same-account 변경 신호를 Firestore 기존 listener로 받고, 모바일에서 추가 Worker/D1 없이 처리되는 비용 경로가 확인됨.
 
-## 7. 현재 보호 기준
+### 좋아요 경로
+사용자 순서: PC 기준 → 약 1분 대기 → 모바일 확인.
+- PC 기준 캡처에는 이전 batch 누적값으로 `/v1/me/likes/batch` Worker 1 / D1 query `R1/W1` / rows `R4/W2`가 존재.
+- 약 1분 뒤 누적값:
+  - `/v1/me/likes/batch` Worker 2 / query `R2/W2` / rows `R8/W2`
+  - `/v1/feed` Worker 1 / query `R3/W0` / rows `R11/W0`
+  - feed revision Worker 1 / query `R1/W0` / rows `R1/W0`
+- 즉 이번 like batch 1회 외에 **Feed + revision Worker 2회가 추가 발생**.
+- 모바일 확인에서도:
+  - feed revision Worker 1 / D1 `R1/W0` / rows `R1/W0`
+  - feed Worker 1 / D1 `R1/W0` / rows `R2/W0`
+  - `users:onSnapshot 2`
+- 따라서 좋아요 경로는 same-account 신호만으로 끝나지 않고 Feed revalidation이 다시 끼어들어 **Worker/D1 0 목표 FAIL**.
+
+## 6. 현재 원인 판단
+현재 코드 흐름상 원인은 두 겹이다.
+
+1. Explore는 revision이 바뀌면 cached feed가 있어도 `/v1/feed-revision` 확인 뒤 `/v1/feed` 전체 payload를 다시 받아 `setTracks(...)`로 교체한다.
+2. same-account like/count patch는 로컬 patch cache에 남아 있지만, `visibleTracks`의 track ID 구성이 같으면 `likeHydrationKeyRef`가 같은 값이라 hydration effect가 조기 return한다. 이 경우 `getExploreLikedTrackIds(...)` 안에 있는 account patch replay까지 다시 실행되지 않는다.
+
+따라서 서버 Feed가 deferred public count를 반환하는 타이밍에는, 이미 same-account signal로 맞춰둔 숫자를 stale public Feed가 다시 덮을 수 있는 구조가 남아 있다.
+
+이것은 067의 `optimisticLikeCount` 전달 자체가 틀린 것이 아니라, **그 뒤 Feed revalidation이 같은 ID 목록을 다시 덮고 local account patch replay가 생략되는 경로**가 남은 문제로 본다.
+
+## 7. 비용 이슈 판정
+- like/unlike batch 자체의 W2 개선은 유지.
+- 좋아요 해제 실사용에서는 1분 뒤 Worker 1 / rows `R4/W2`, 모바일 Worker/D1 0으로 좋은 경로가 확인됨.
+- 좋아요 실사용에서는 batch 뒤 Feed+revision이 추가되어 PC D1 rows가 누적 `R20`, 모바일도 추가 `R3` 발생.
+- 따라서 현재 병목은 batch write가 아니라 **like aggregate/revision 변화 뒤 전체 Feed 재확인**이다.
+- 032 derived 구조에는 `explore_derived_changes(scope,kind,id,seq)`가 이미 있으므로, 새 전체 구조보다 기존 changed-track delta 재사용을 우선한다.
+
+## 8. 현재 보호 기준
 - PREVIEW 좋아요 1분 batch.
-- 10분 deferred public aggregate.
+- 10분 deferred public like aggregate.
 - compact queue `W2/batch`.
 - PC↔모바일 same-account 하트 + 숫자 동기화.
 - 기존 Firestore root user listener 재사용, 새 listener 금지.
@@ -83,18 +107,23 @@ Run `34616138225`:
 - UI/CSS/반응형 변경 금지.
 - 사용자 원본 데이터 migration/backfill/delete/overwrite 금지.
 
-## 8. 현재 판정
+## 9. 현재 판정
 - PREVIEW 067 App 배포 자동검증: PASS.
-- 067 cross-device 숫자 수정: **사용자 실사용 재검증 전**.
-- 067 진단 초기화 pointer 오염 수정: **사용자 실사용 재검증 전**.
-- 066/067 좋아요 W2 비용 개선: PASS 유지.
-- TEST 승격: **불가 — 067 사용자 확인 및 Feed 재확인 비용 원인/범위 확인 전**.
+- 067 진단 초기화 pointer 오염 수정: 이번 캡처에서 초기 기준 Worker/D1 0 확인으로 PASS 쪽 증거 확보.
+- 067 same-account count 전달: **부분 PASS, 최종 PASS 아님**.
+- 좋아요 해제 경로: 모바일 Worker/D1 0 확인.
+- 좋아요 경로: Feed revalidation 추가 발생으로 FAIL.
+- W2 batch 비용 개선: PASS 유지.
+- TEST 승격: **불가**.
 - TEST/PRODUCTION 변경 없음.
 
-## 9. 다음 단계
-1. 사용자 PREVIEW 067 업데이트 적용 확인.
-2. PC에서 1~2곡 좋아요/해제 → 약 1분 뒤 모바일에서 **하트와 숫자가 함께 변경**되는지 확인.
-3. CACHE LIVE `진단 초기화` 직후 버튼 자체 때문에 Worker/D1이 증가하지 않는지 확인.
-4. 좋아요 batch 뒤 앱을 그대로 두거나 복귀했을 때 `/v1/feed-revision` + `/v1/feed`가 다시 발생하는 조건을 분리 계측.
-5. 필요하면 기존 032 changed-track delta를 이용해 like-only revision에서 full feed 재요청을 제거/축소하는 PREVIEW 작업 진행.
-6. 위 항목 PASS 전 TEST 승격 금지.
+## 10. 다음 단계
+1. PREVIEW 068에서는 Feed revalidation 뒤에도 same-account local patch를 반드시 다시 overlay/replay하도록 최소 수정.
+2. track ID 목록이 동일해 hydrationKey가 같아도 account patch replay는 생략하지 않도록 보호.
+3. like-only revision에서 `/v1/feed` 전체 payload 재요청 대신 기존 032 changed-track delta를 사용할 수 있는지 좁게 구현/검증.
+4. 검증 기준:
+   - PC like/unlike → 1분 뒤 모바일 하트+숫자 동일.
+   - 모바일 확인 Worker/D1 0 우선.
+   - batch W2 유지.
+   - publish/unpublish/profile/popular 정렬 정확성 유지.
+5. 위 항목 PASS 전 TEST 승격 금지.

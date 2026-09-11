@@ -1,0 +1,69 @@
+name: SORIDRAW 058 Explore Like Sync Rules Release
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/trigger-058-explore-like-sync-rules.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-058-explore-like-sync-rules
+  cancel-in-progress: false
+
+jobs:
+  deploy-rules:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout PREVIEW
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Lock protected refs and verify exact rules scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main production --no-tags
+          git rev-parse origin/main > "$RUNNER_TEMP/main-before.sha"
+          git rev-parse origin/production > "$RUNNER_TEMP/production-before.sha"
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911' firestore.rules
+          grep -Fq "'favoriteSyncSignal', 'favoriteSyncSignalUpdatedAt', 'exploreLikeSyncSignal'" firestore.rules
+          grep -Fq 'request.resource.data.exploreLikeSyncSignal.results.size() <= 50' firestore.rules
+          echo 'RULES_058_CONTRACT=PASS'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Authenticate Firebase shared backend
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firestore rules only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only firestore:rules \
+            --project soridraw-app-866a5 \
+            --non-interactive
+          echo 'FIRESTORE_RULES_058_DEPLOY=PASS'
+          echo 'NO_HOSTING_DEPLOY=true'
+          echo 'NO_FUNCTIONS_DEPLOY=true'
+          echo 'NO_DATA_MIGRATION=true'
+
+      - name: Verify main and production refs unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main production --no-tags
+          test "$(git rev-parse origin/main)" = "$(cat "$RUNNER_TEMP/main-before.sha")"
+          test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/production-before.sha")"
+          echo 'MAIN_PRODUCTION_REFS_UNCHANGED=PASS'

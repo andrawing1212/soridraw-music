@@ -67,6 +67,26 @@ for (const required of [
 const legacyEnqueue = functionRange('enqueueExploreLikeBatch035').text
   .replace('async function enqueueExploreLikeBatch035(', 'async function enqueueExploreLikeBatchLegacy040(');
 
+const enqueueReplacement040 = `${legacyEnqueue}\n\nasync function enqueueExploreLikeBatch035(env, uid, mutations, now) {
+  const next = await exploreLikeW1Batch040(uid, mutations, now);
+  try {
+    const result = await env.DB.prepare(\`
+      INSERT OR IGNORE INTO explore_like_batches_069(
+        batch_id, user_uid, created_at, mutation_count, mutations_json
+      ) VALUES (?, ?, ?, ?, ?)
+    \`).bind(next.batchId, uid, next.batchAt, next.payload.length, JSON.stringify(next.payload)).run();
+    return {
+      batchId: next.batchId,
+      inserted: Number(result?.meta?.changes || 0) > 0,
+      queue: '069'
+    };
+  } catch (error) {
+    if (!isMissingExploreLikeQueue069040(error)) throw error;
+    return enqueueExploreLikeBatchLegacy040(env, uid, mutations, now);
+  }
+}`;
+replaceFunction('enqueueExploreLikeBatch035', enqueueReplacement040);
+
 const helpers = `// ${marker}
 function exploreLikeCutoffKey069040(cutoff) {
   const value = Math.max(0, Math.floor(Number(cutoff || 0)));
@@ -98,26 +118,7 @@ async function exploreLikeW1Batch040(uid, mutations, now) {
   };
 }
 
-${legacyEnqueue}
 
-async function enqueueExploreLikeBatch035(env, uid, mutations, now) {
-  const next = await exploreLikeW1Batch040(uid, mutations, now);
-  try {
-    const result = await env.DB.prepare(\`
-      INSERT OR IGNORE INTO explore_like_batches_069(
-        batch_id, user_uid, created_at, mutation_count, mutations_json
-      ) VALUES (?, ?, ?, ?, ?)
-    \`).bind(next.batchId, uid, next.batchAt, next.payload.length, JSON.stringify(next.payload)).run();
-    return {
-      batchId: next.batchId,
-      inserted: Number(result?.meta?.changes || 0) > 0,
-      queue: '069'
-    };
-  } catch (error) {
-    if (!isMissingExploreLikeQueue069040(error)) throw error;
-    return enqueueExploreLikeBatchLegacy040(env, uid, mutations, now);
-  }
-}
 
 async function hasExploreLikeQueue069040(env) {
   try {

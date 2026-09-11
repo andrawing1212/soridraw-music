@@ -7,6 +7,7 @@
     "034-explore-like-user-batch.mjs",
     "035-explore-like-deferred-aggregate.mjs",
     "036-explore-like-derived-intake.mjs",
-    "038-explore-like-compact-queue.mjs"
+    "038-explore-like-compact-queue.mjs",
+    "039-explore-like-stable-dual-queue-boundary.mjs"
   ]
 }

@@ -2,6 +2,7 @@ const CURRENT_APP_VERSION = __SORIDRAW_APP_VERSION__;
 const VERSION_URL = '/app-version.json';
 const NOTICE_ID = 'soridraw-app-update-notice';
 const MIN_CHECK_INTERVAL_MS = 30_000;
+const ACTIVE_CHECK_INTERVAL_MS = 60_000;
 const PREVIEW_UPDATE_HOSTS = new Set([
   'preview.soridraw.com',
   'soridraw-preview.web.app',
@@ -12,6 +13,7 @@ const PREVIEW_UPDATE_HOSTS = new Set([
 let started = false;
 let lastCheckedAt = 0;
 let attachRetryTimer: number | null = null;
+let activeCheckTimer: number | null = null;
 
 const isPreviewUpdateHost = () => {
   if (typeof window === 'undefined') return false;
@@ -75,12 +77,22 @@ const positionNoticeInStatusRow = (button: HTMLButtonElement): boolean => {
   return true;
 };
 
+const showFallbackPosition = (button: HTMLButtonElement) => {
+  // A newer build must never be hidden just because the top status row is late
+  // or unavailable on the current responsive layout. Use the top-right corner
+  // as a temporary safe fallback, then move into the normal status row when found.
+  button.style.top = '12px';
+  button.style.right = '12px';
+  button.style.visibility = 'visible';
+};
+
 const scheduleStatusRowPosition = (button: HTMLButtonElement) => {
   clearAttachRetry();
   const tryPosition = (attempt: number) => {
     if (!document.getElementById(NOTICE_ID)) return;
     if (positionNoticeInStatusRow(button)) return;
-    if (attempt >= 20) return;
+    showFallbackPosition(button);
+    if (attempt >= 40) return;
     attachRetryTimer = window.setTimeout(() => tryPosition(attempt + 1), 250);
   };
   window.requestAnimationFrame(() => tryPosition(0));
@@ -119,6 +131,7 @@ const showUpdateNotice = () => {
     document.body.appendChild(button);
   }
 
+  showFallbackPosition(button);
   scheduleStatusRowPosition(button);
 };
 
@@ -146,9 +159,17 @@ const checkForUpdate = async (force = false) => {
     }
     showUpdateNotice();
   } catch {
-    // 업데이트 확인에 실패하면 현재 앱을 방해하지 않고 다음 복귀 때 다시 확인한다.
+    // 업데이트 확인에 실패하면 현재 앱을 방해하지 않고 다음 주기/복귀 때 다시 확인한다.
     removeUpdateNotice();
   }
+};
+
+const startActiveUpdateChecks = () => {
+  if (activeCheckTimer !== null || typeof window === 'undefined') return;
+  activeCheckTimer = window.setInterval(() => {
+    if (document.visibilityState !== 'visible') return;
+    void checkForUpdate();
+  }, ACTIVE_CHECK_INTERVAL_MS);
 };
 
 export const startAppUpdateNotice = () => {
@@ -161,10 +182,12 @@ export const startAppUpdateNotice = () => {
   }
 
   void checkForUpdate(true);
+  startActiveUpdateChecks();
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') void checkForUpdate();
+    if (document.visibilityState === 'visible') void checkForUpdate(true);
   });
-  window.addEventListener('focus', () => void checkForUpdate());
+  window.addEventListener('focus', () => void checkForUpdate(true));
+  window.addEventListener('online', () => void checkForUpdate(true));
   window.addEventListener('resize', () => {
     const button = document.getElementById(NOTICE_ID) as HTMLButtonElement | null;
     if (button) scheduleStatusRowPosition(button);

@@ -82,6 +82,11 @@ const EXPLORE_LIKE_REVISION_CACHE_GRACE_MS_070 = 70_000;
 // Keep one pending aggregate refresh across reloads/page changes and force one
 // server-confirmed Feed refresh after an actual like batch. No polling.
 const EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071 = 'soridraw:explore-like-count-refresh:071:';
+// SORIDRAW_EXPLORE_LIKE_FRESH_FEED_RECOVERY_072_20260912
+// A known like-count recovery must not reuse the ordinary versioned Feed URL:
+// that URL can still be held by the HTTP edge cache while canonical D1/R2 is newer.
+// One unique request is allowed only for an actual/persisted like recovery. No polling.
+const EXPLORE_LIKE_FRESH_FEED_QUERY_072 = '__soridraw_like_refresh';
 
 const exploreLikeRefreshStorageKey071 = (uid: string) => `${EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071}${uid}`;
 const readExploreLikeRefreshDeadline071 = (uid: string) => {
@@ -127,6 +132,13 @@ const buildExploreFeedRevisionUrl = (feedUrl: string) => {
 const buildExploreVersionedFeedUrl = (feedUrl: string, revision: string) => {
   const parsed = new URL(feedUrl);
   parsed.searchParams.set('__soridraw_revision', revision);
+  return parsed.toString();
+};
+
+const buildExploreFreshLikeFeedUrl072 = (feedUrl: string) => {
+  const parsed = new URL(feedUrl);
+  parsed.searchParams.delete('__soridraw_revision');
+  parsed.searchParams.set(EXPLORE_LIKE_FRESH_FEED_QUERY_072, `${Date.now()}`);
   return parsed.toString();
 };
 
@@ -318,6 +330,7 @@ export default function ExplorePage() {
   const feedRevisionEventAtRef = useRef(0);
   const feedRevisionActivityAtRef = useRef(0);
   const forceLikeCountRefreshRef071 = useRef(false);
+  const likeCountRepairKeyRef072 = useRef('');
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
     setUser(currentUser);
@@ -407,7 +420,11 @@ export default function ExplorePage() {
       }
       if (feedRequest && forceLikeCountRefresh071) {
         forceLikeCountRefreshRef071.current = false;
-        clearExploreLikeRefreshDeadline071(auth.currentUser?.uid || '');
+        const refreshUid = auth.currentUser?.uid || '';
+        const deadline = readExploreLikeRefreshDeadline071(refreshUid);
+        // An immediate 072 stale-cache repair can happen before the scheduled
+        // aggregate. Preserve its deadline so reloads still get the final refresh.
+        if (!deadline || Date.now() >= deadline) clearExploreLikeRefreshDeadline071(refreshUid);
       }
     };
 
@@ -421,10 +438,19 @@ export default function ExplorePage() {
       if (feedRequest) {
         void (async () => {
           try {
+            if (forceLikeCountRefresh071) {
+              // 072: bypass only the HTTP Feed cache key for a confirmed recovery.
+              // The Worker still uses the normal derived R2/D1 path underneath.
+              const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
+              const payload = await fetchPayload(buildExploreFreshLikeFeedUrl072(requestUrl));
+              if (controller.signal.aborted) return;
+              applyPayload(payload, cachedRevision);
+              return;
+            }
             const serverRevision = await fetchRevision();
             if (!serverRevision || controller.signal.aborted) return;
             const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
-            if (cachedRevision === serverRevision && !forceLikeCountRefresh071) return;
+            if (cachedRevision === serverRevision) return;
             const payload = await fetchPayload(buildExploreVersionedFeedUrl(requestUrl, serverRevision));
             if (controller.signal.aborted) return;
             applyPayload(payload, serverRevision);
@@ -604,6 +630,24 @@ export default function ExplorePage() {
 
     return () => { cancelled = true; };
   }, [user, visibleTracks, profileUid, likeAccountSyncSignal]);
+
+  useEffect(() => {
+    if (!user?.uid || profileUid || !isExploreFeedRequest(requestUrl) || !tracks.length) return;
+    const staleLikedIds = tracks
+      .filter((track) => track.likeCount === 0 && likedTrackIds[track.id] === true)
+      .map((track) => track.id)
+      .sort();
+    if (!staleLikedIds.length) return;
+    // 072 one-shot repair for rows that already reached canonical count >= 1
+    // under 069/070/071 but this browser still displays the old zero. A newly
+    // clicked like can also match briefly; the persisted aggregate deadline then
+    // remains armed and performs the final post-aggregate refresh.
+    const repairKey = `${user.uid}:${requestUrl}:${staleLikedIds.join(',')}`;
+    if (likeCountRepairKeyRef072.current === repairKey) return;
+    likeCountRepairKeyRef072.current = repairKey;
+    forceLikeCountRefreshRef071.current = true;
+    setFeedRevisionSignal((value) => value + 1);
+  }, [user?.uid, profileUid, requestUrl, tracks, likedTrackIds]);
 
   useEffect(() => {
     if (!searchOpen) return;

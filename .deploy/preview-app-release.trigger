@@ -1,3 +1,5 @@
-requested_at=2026-09-11T09:25:00+09:00
+requested_at=2026-09-11T12:26:00+09:00
 requested_by=user
-product_code_target=865e173022b09655a5a0f07398835d43ece46fcd
+product_code_target=2f20c1081b6ceadda295e3c411af0cf7a6b2107e
+release_purpose=058_cross_device_personal_like_sync
+firestore_rules_run=34558314461

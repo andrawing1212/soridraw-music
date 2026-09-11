@@ -1,76 +1,137 @@
 # NEXT CODEX TASK
 
-상태: **PREVIEW 064 App + Worker 배포 PASS / 사용자 실사용 회귀 검증 전**
+상태: **PREVIEW 064 배포 + 사용자 적용 PASS / 다음 작업은 Explore 좋아요 intake 비용 최적화**
 
 ## 현재 기준
 - branch: `preview`
+- 시작 전 반드시 최신 `preview` HEAD 재확인. 본 작업 설계 기준 commit: `369479188d1a2339c5f4c243c8a35e52d096beea`
 - 실제 PREVIEW 앱: `064`
 - PREVIEW 064 App Run: `34578531037` — PASS
 - PREVIEW 064 Worker Run: `34578451076` — PASS
 - PREVIEW Worker Version ID: `a9a1b47e-5996-451d-a32b-760502e85d61`
-- 064 exact feature/Worker source: `7a9a68e6b5b5beedd745c5af4213fe1af13951ce`
-- App release checkout: `9b8ae6e35afd636ba6ca32388b949fc1610742aa`
+- Worker source: `7a9a68e6b5b5beedd745c5af4213fe1af13951ce`
 - TEST main: `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
-- 고정 승격 Workflow: `.github/workflows/soridraw-release-promotion.yml`
-- 고정 release trigger: `.deploy/release-promotion.trigger` — 기본 `enabled=false`
-- 배포시스템 최종 Audit Run: `34576408798` — PASS
-- GitHub Ruleset `Protect release branches` (`22889511`) — Active, preview/main/production 삭제 + force-push 차단
+- GitHub Ruleset `Protect release branches` (`22889511`) — Active
+- 사용자 확인: **064 문제 없이 적용됨 — PASS**
 
-## PREVIEW 064 자동 검증 PASS
-- TypeScript PASS
-- Build PASS
-- Firebase PREVIEW Hosting PASS
-- 실제 `preview.soridraw.com` exact build PASS
-- 실제 `app-version.json=064` PASS
-- Worker D1 read-only preflight PASS
-- Feed / Profile / likes route smoke PASS
-- revision head-only PASS
-- warm revision D1 `R0/W0` PASS
-- 10분 aggregate cron PASS
-- TEST/PRODUCTION 앱 + Worker 비변경 PASS
-- D1 migration/seed/write NONE
-- 사용자 원본 데이터 변경 NONE
+## 작업 목표
+현재 `/v1/me/likes/batch` 실측:
+- 1곡 batch: pure likes route D1 약 `R3/W3`
+- 3곡 batch: 약 `R9/W3`
 
-## 064 기능
-- `새 업데이트 · 적용 / 업데이트 완료` host guard를 PREVIEW / TEST / PRODUCTION 공통화.
-- revision endpoint CORS wrapper도 PREVIEW / TEST / PRODUCTION 공통화.
-- `public/app-version.json=064`.
-- 정식 Firebase Hosting 명시 config와 고정 TEST→PRODUCTION 승격 시스템 준비 완료.
+이번 목표는 **035 deferred aggregate, 058 PC↔모바일 개인 좋아요 동기화, UI 동작을 그대로 보호하면서 곡당 intake D1 read를 줄이는 것**이다.
 
-## 다음 작업
-1. 사용자 PREVIEW 064 실사용 확인만 우선한다.
-   - 기존 창: `새 업데이트 · 적용`
-   - 새 실행: `업데이트 완료 · 064` 1회
-   - Explore / 공개프로필 / 좋아요 정상
-   - PC 창복귀 / 모바일 홈·전원 복귀: LOCAL만 증가, Worker/D1 반복 증가 없음
-2. 사용자 확인 PASS 후 `테스트배포` 요청이면 고정 `test_only` 릴리스 사용.
-3. 사용자가 처음부터 `테스트 후 이상 없으면 정식까지` 승인하면 `test_then_production` 사용.
-4. 릴리스와 별도로 좋아요 `R3/W3` 추가 비용 최적화 분석 가능.
+### 1차 합격선
+- 새 좋아요 기준 1곡 intake: 현재 `R3`보다 감소.
+- 3곡 intake: 현재 `R9`보다 감소하고 곡 수에 따른 불필요한 canonical table 중복 read 제거.
+- batch write는 현재 `W3`보다 증가 금지.
+- W3는 원인을 추측하지 말고 canonical DB / RATE_DB / queue insert 등 실제 구성별로 계측해서 원인을 확정.
+- 전체 Feed/Profile 재조회 없음.
+- 추가 Firestore listener 없음.
+- 사용자 원본 데이터 migration/backfill/delete 없음.
+- UI 변경 없음.
 
-## 배포시스템 확정 구조
-- 검증된 PREVIEW exact SHA/tree를 main의 새 forward commit으로 승격.
-- TEST Worker + Firebase TEST Hosting 배포 후 `test.soridraw.com` 실제 검증.
-- `test_only`는 TEST에서 종료.
-- `test_then_production`은 TEST 전체 PASS 후 동일 tested tree를 production의 새 forward commit으로 승격하고 Worker + Firebase PRODUCTION을 배포.
-- production 연속 모드는 초기 요청의 명시적 `DEPLOY_PRODUCTION` 승인값 필요.
-- TEST 실패 시 PRODUCTION 중단.
-- force push 금지.
-- D1 migration/seed/write 없음. 공유 D1 preflight는 SELECT/read-only만 사용.
-- 사용자 원본 데이터 복사/삭제/backfill 없음.
-- Worker live 환경별 D1/R2/service bindings와 schedule 보존.
-- Worker smoke 실패 시 이전 active version/schedule rollback 시도.
+## 현재 코드에서 확인된 원인
+`cloudflare/explore-worker/patches/035-explore-like-deferred-aggregate.mjs`의 `readExploreLikeBatchStates035()`가 현재 각 요청 곡에 대해 한 query에서 다음 canonical 상태를 조합한다.
+- `tracks`
+- `public_profiles`
+- `track_stats`
+- `likes`
 
-## 절대 보호
-- PREVIEW에서 검증된 사용자 기능은 별도 환경 전용 지시가 없는 한 TEST/PRODUCTION에 그대로 승격.
-- Music Note 로컬 즉시 반영 + 약 60초 묶음 저장.
-- Library Local First.
-- UI/반응형/간격/색상.
+이 query는 공개곡 유효성 + 공개프로필 유효성 + 현재 like_count + 현재 개인 canonical liked 상태를 동시에 얻는다.
+
+035 intake 이후에는 canonical likes/count를 즉시 쓰지 않는다.
+- `explore_like_batches_035`에 batch 1건 queue
+- 개인 R2 liked bundle 1회 동기화
+- 약 10분 scheduled aggregate가 canonical likes/track_stats/public derived 상태를 set-based 처리
+
+`src/services/exploreLikeService.ts` client outbox에는 이미 `baseLiked`, `baseLikeCount`, `optimisticLikeCount`가 존재하지만 현재 POST payload는 `trackId`, `liked`만 보낸다.
+
+## 권장 구현 방향 — High
+대규모 구조 변경보다 **현재 additive derived 상태를 재사용해 canonical 중복 read를 1단계 줄이는 방향을 우선 검토/구현**한다.
+
+### 우선 검토할 안전 경로
+1. `explore_derived_tracks`에서 요청 track의 `active`, `likes`, `owner_uid`를 key lookup.
+2. `explore_derived_profiles`에서 owner profile `active`를 확인.
+3. 개인 canonical liked 관계는 기존 `likes` key lookup을 유지해 응답 count 정확성과 queued like→unlike→like 순서를 보호.
+4. 즉 기존 `tracks + public_profiles + track_stats + likes` 대신 `explore_derived_tracks + explore_derived_profiles + likes`로 intake state를 구성할 수 있는지 실제 fixture/EXPLAIN/rows_read로 확인.
+5. `explore_derived_state.seeded=1` 및 032 triggers가 보장되는 현재 릴리스 preflight를 그대로 활용.
+
+중요:
+- `explore_derived_tracks.active`만으로 공개프로필 공개 여부를 대신하면 안 된다. 현재 derived track active는 track의 `is_public/status`를 반영하고, profile 공개 여부는 `explore_derived_profiles.active`로 별도 확인해야 한다.
+- client가 보내는 `optimisticLikeCount`를 canonical public count로 신뢰하거나 저장하지 않는다.
+- pending aggregate 전 같은 사용자가 like→unlike→like를 반복해도 응답 count/개인 상태가 틀어지지 않아야 한다.
+- 안전하게 감소가 증명되지 않으면 구현을 강행하지 말고 원인/한계를 보고한다.
+
+## W3 원인 감사
+현재 `W3`를 index 수만 보고 단정하지 않는다.
+- `enforceExploreLikeBatchRateLimit034()`의 RATE_DB upsert
+- `enqueueExploreLikeBatch035()`의 shared canonical DB queue insert
+- 현재 진단 meter가 DB/RATE_DB를 어떻게 합산하는지
+를 코드와 실제 PREVIEW 계측으로 분리해 확정한다.
+
+필요 시 PREVIEW 관리자 진단에 binding별 D1 row/query 카운터를 최소 추가할 수 있으나:
+- 일반 사용자 비노출
+- 기본 OFF
+- 기존 전체 D1 합계와 호환
+- TEST/PRODUCTION 동작 변화 없음
+- 진단 때문에 추가 D1 read/write 발생 금지
+
+## 반드시 보호
+- 035 deferred aggregate + 10분 cron.
+- 100 same-track likes → public count/derived update 1회 원리.
+- net-zero cohort → public count/derived write 0 원리.
+- 058 same-account Firestore signal + 기존 root user listener 재사용.
+- PC↔모바일 like/unlike 개인 하트 자동 동기화.
+- 현재 1분 PREVIEW outbox / 기본 4분 TEST·PRODUCTION window 정책.
+- Explore 10분 resume LOCAL revision cache zero-read.
+- Music Note/Library/공개프로필/Feed 기존 정상 동작.
+- 모든 UI/반응형/간격/색상.
 - 공유 canonical 사용자 데이터.
-- 페이지 이동/업데이트만으로 데이터 전체 read/write 금지.
 
-## 현재 판정
-- PREVIEW 064 자동 배포/검증: **PASS**.
-- 사용자 실사용 회귀: **미검증**.
-- 실제 TEST/PRODUCTION 릴리스: **미실행**.
-- branch protection: **PASS**.
+## 테스트 필수
+- TypeScript `npx tsc --noEmit` PASS.
+- Build PASS.
+- `scripts/verify-explore-like-cost-optimization.mjs` 기존 PASS 유지 + 새 intake regression 추가.
+- public track + public profile PASS.
+- private/unpublished track 차단.
+- private profile track 차단.
+- like / unlike / like→unlike→like before aggregate.
+- batch 1 / 3 / 최대 50.
+- duplicate/retry idempotency 보호.
+- 100 same-track aggregate fixture PASS.
+- net-zero aggregate fixture PASS.
+- no canonical immediate likes/track_stats write at intake.
+- no full scan / temp sort / full Feed/Profile rebuild.
+- 가능하면 SQLite fixture + `EXPLAIN QUERY PLAN`으로 key lookup 확인.
+
+## 작업 범위/금지
+- 작업 branch: `preview` 기반 별도 구현 branch 권장.
+- Codex High 사용.
+- 분석 → 구현 → 테스트 → commit까지 한 흐름.
+- **배포 금지.**
+- TEST/main 변경 금지.
+- PRODUCTION 변경 금지.
+- D1 migration/seed 실행 금지.
+- 기존 필드 제거/의미 변경 금지.
+- 사용자 데이터 backfill/delete/overwrite 금지.
+
+## 완료 보고 필수
+- 작업 branch
+- 기준 commit
+- 최종 commit SHA
+- 변경 파일
+- intake 전/후 예상 또는 fixture D1 read 구조
+- W3 구성 원인 감사 결과
+- TypeScript / Build / Test
+- Firebase 변경 여부
+- Functions 변경 여부
+- Cloudflare/D1 schema 변경 여부
+- 사용자 데이터 변경 여부
+- 남은 위험
+
+## 다음 승격
+이 작업은 PREVIEW 코드 작업이다. 구현/독립 감사 후에도 사용자 `프리뷰배포` 승인 전에는 배포하지 않는다.
+사용자 `테스트배포`가 명시되기 전에는 TEST로 승격하지 않는다.
+PRODUCTION은 별도 명확한 승인 후에만 승격한다.

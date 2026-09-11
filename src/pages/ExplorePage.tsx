@@ -78,6 +78,37 @@ const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 30_000;
 // covers the revision endpoint's short edge cache without polling.
 const EXPLORE_LIKE_AGGREGATE_WINDOW_MS_070 = 10 * 60_000;
 const EXPLORE_LIKE_REVISION_CACHE_GRACE_MS_070 = 70_000;
+// SORIDRAW_EXPLORE_LIKE_COUNT_REFRESH_RECOVERY_071_20260912
+// Keep one pending aggregate refresh across reloads/page changes and force one
+// server-confirmed Feed refresh after an actual like batch. No polling.
+const EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071 = 'soridraw:explore-like-count-refresh:071:';
+
+const exploreLikeRefreshStorageKey071 = (uid: string) => `${EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071}${uid}`;
+const readExploreLikeRefreshDeadline071 = (uid: string) => {
+  if (!uid || typeof window === 'undefined') return 0;
+  try {
+    const value = Number(window.localStorage.getItem(exploreLikeRefreshStorageKey071(uid)) || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+};
+const writeExploreLikeRefreshDeadline071 = (uid: string, deadline: number) => {
+  if (!uid || typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(exploreLikeRefreshStorageKey071(uid), String(Math.max(0, Math.floor(deadline))));
+  } catch {
+    // Storage failure must not break likes; the in-memory timer still works.
+  }
+};
+const clearExploreLikeRefreshDeadline071 = (uid: string) => {
+  if (!uid || typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(exploreLikeRefreshStorageKey071(uid));
+  } catch {
+    // Ignore storage cleanup failure.
+  }
+};
 
 const isExploreFeedRequest = (value: string) => {
   try {
@@ -286,6 +317,7 @@ export default function ExplorePage() {
   const [feedRevisionSignal, setFeedRevisionSignal] = useState(0);
   const feedRevisionEventAtRef = useRef(0);
   const feedRevisionActivityAtRef = useRef(0);
+  const forceLikeCountRefreshRef071 = useRef(false);
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
     setUser(currentUser);
@@ -317,6 +349,7 @@ export default function ExplorePage() {
   useEffect(() => {
     const cachedRows = readExploreFeedSessionCache(requestUrl);
     const feedRequest = isExploreFeedRequest(requestUrl);
+    const forceLikeCountRefresh071 = forceLikeCountRefreshRef071.current;
     const controller = new AbortController();
 
     const fetchPayload = async (url: string): Promise<ExploreApiResponse> => {
@@ -354,9 +387,28 @@ export default function ExplorePage() {
           serverRevision,
         );
       }
+      const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       setFeedNextCursor(nextCursor);
       setLoadMoreError('');
-      setTracks(rows.map(normalizeTrack).filter((track) => track.id));
+      setTracks(normalizedTracks);
+      if (feedRequest) {
+        const countByTrackId = new Map(normalizedTracks.map((track) => [track.id, track.likeCount]));
+        setProfileTracks((previous) => previous.map((track) => {
+          const nextCount = countByTrackId.get(track.id);
+          return nextCount === undefined || nextCount === track.likeCount
+            ? track
+            : { ...track, likeCount: nextCount };
+        }));
+        normalizedTracks.forEach((track) => {
+          if (track.ownerUid) {
+            patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
+          }
+        });
+      }
+      if (feedRequest && forceLikeCountRefresh071) {
+        forceLikeCountRefreshRef071.current = false;
+        clearExploreLikeRefreshDeadline071(auth.currentUser?.uid || '');
+      }
     };
 
     if (cachedRows) {
@@ -372,12 +424,13 @@ export default function ExplorePage() {
             const serverRevision = await fetchRevision();
             if (!serverRevision || controller.signal.aborted) return;
             const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
-            if (cachedRevision === serverRevision) return;
+            if (cachedRevision === serverRevision && !forceLikeCountRefresh071) return;
             const payload = await fetchPayload(buildExploreVersionedFeedUrl(requestUrl, serverRevision));
             if (controller.signal.aborted) return;
             applyPayload(payload, serverRevision);
           } catch (reason) {
             if (!controller.signal.aborted) {
+              if (forceLikeCountRefresh071) forceLikeCountRefreshRef071.current = false;
               console.warn('Explore feed revision revalidation failed; keeping cached feed:', reason);
             }
           }
@@ -624,21 +677,53 @@ export default function ExplorePage() {
   // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
   useEffect(() => {
     let aggregateRefreshTimer: number | null = null;
+    const uid = user?.uid || '';
 
-    const scheduleAggregateCountRefresh070 = () => {
-      if (profileUid || !isExploreFeedRequest(requestUrl)) return;
+    const clearTimer071 = () => {
+      if (aggregateRefreshTimer !== null) window.clearTimeout(aggregateRefreshTimer);
+      aggregateRefreshTimer = null;
+    };
+
+    const requestForcedAggregateRefresh071 = () => {
+      if (!uid || !isExploreFeedRequest(requestUrl) || document.visibilityState !== 'visible') return false;
+      forceLikeCountRefreshRef071.current = true;
+      const now = Date.now();
+      // Reuse the existing revision-event dedupe. If focus/visibility already
+      // requested a refresh in this tick, that render will consume force=true.
+      if (now - feedRevisionEventAtRef.current < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return true;
+      feedRevisionEventAtRef.current = now;
+      setFeedRevisionSignal((value) => value + 1);
+      return true;
+    };
+
+    const armStoredAggregateRefresh071 = () => {
+      clearTimer071();
+      if (!uid || !isExploreFeedRequest(requestUrl)) return;
+      const deadline = readExploreLikeRefreshDeadline071(uid);
+      if (!deadline) return;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        requestForcedAggregateRefresh071();
+        return;
+      }
+      aggregateRefreshTimer = window.setTimeout(() => {
+        aggregateRefreshTimer = null;
+        if (!requestForcedAggregateRefresh071()) {
+          // Keep the persisted deadline. Returning to a visible tab will retry.
+          return;
+        }
+      }, Math.max(1000, remaining));
+    };
+
+    const scheduleAggregateCountRefresh071 = () => {
+      if (!uid || !isExploreFeedRequest(requestUrl)) return;
       const now = Date.now();
       const nextAggregateAt = Math.ceil((now + 1000) / EXPLORE_LIKE_AGGREGATE_WINDOW_MS_070)
         * EXPLORE_LIKE_AGGREGATE_WINDOW_MS_070;
-      const delay = Math.max(1000, nextAggregateAt + EXPLORE_LIKE_REVISION_CACHE_GRACE_MS_070 - now);
-      if (aggregateRefreshTimer !== null) window.clearTimeout(aggregateRefreshTimer);
-      aggregateRefreshTimer = window.setTimeout(() => {
-        aggregateRefreshTimer = null;
-        // Hidden tabs keep zero-read behavior; the existing visibility/focus path
-        // performs the revision check when the user actually returns.
-        if (document.visibilityState !== 'visible') return;
-        setFeedRevisionSignal((value) => value + 1);
-      }, delay);
+      const deadline = nextAggregateAt + EXPLORE_LIKE_REVISION_CACHE_GRACE_MS_070;
+      const stored = readExploreLikeRefreshDeadline071(uid);
+      writeExploreLikeRefreshDeadline071(uid, stored > 0 ? Math.min(stored, deadline) : deadline);
+      armStoredAggregateRefresh071();
     };
 
     const onLikeSync = (event: Event) => {
@@ -651,22 +736,31 @@ export default function ExplorePage() {
       const trackId = String(detail?.trackId || '').trim();
       if (!trackId || typeof detail?.liked !== 'boolean') return;
       // Same-account signal changes only the personal heart. Public likeCount
-      // changes only when the deferred aggregate/feed delta confirms it.
+      // changes only after the deferred aggregate confirms the server value.
       setLikedTrackIds((prev) => ({ ...prev, [trackId]: detail.liked as boolean }));
-      scheduleAggregateCountRefresh070();
+      scheduleAggregateCountRefresh071();
     };
     const onLikeSyncError = (event: Event) => {
       const detail = (event as CustomEvent<{ message?: string }>).detail;
       setSocialNotice(String(detail?.message || '좋아요 서버 동기화를 재시도하고 있어요.'));
     };
+    const onReturnVisible071 = () => {
+      if (document.visibilityState === 'visible') armStoredAggregateRefresh071();
+    };
+
+    armStoredAggregateRefresh071();
     window.addEventListener(EXPLORE_LIKE_SYNC_EVENT, onLikeSync as EventListener);
     window.addEventListener(EXPLORE_LIKE_SYNC_ERROR_EVENT, onLikeSyncError as EventListener);
+    window.addEventListener('focus', onReturnVisible071);
+    document.addEventListener('visibilitychange', onReturnVisible071);
     return () => {
-      if (aggregateRefreshTimer !== null) window.clearTimeout(aggregateRefreshTimer);
+      clearTimer071();
       window.removeEventListener(EXPLORE_LIKE_SYNC_EVENT, onLikeSync as EventListener);
       window.removeEventListener(EXPLORE_LIKE_SYNC_ERROR_EVENT, onLikeSyncError as EventListener);
+      window.removeEventListener('focus', onReturnVisible071);
+      document.removeEventListener('visibilitychange', onReturnVisible071);
     };
-  }, [requestUrl, profileUid]);
+  }, [requestUrl, user?.uid]);
 
   const toggleLike = async (track: ExploreTrack) => {
     if (!user) {

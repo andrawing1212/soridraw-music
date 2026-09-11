@@ -7,10 +7,17 @@ const COMPLETED_NOTICE_VERSION_KEY = 'soridraw.app-update.completed-notice-versi
 const MIN_CHECK_INTERVAL_MS = 30_000;
 const ACTIVE_CHECK_INTERVAL_MS = 60_000;
 const COMPLETED_NOTICE_DURATION_MS = 8_000;
-const PREVIEW_UPDATE_HOSTS = new Set([
+const UPDATE_NOTICE_HOSTS = new Set([
   'preview.soridraw.com',
   'soridraw-preview.web.app',
   'soridraw-preview.firebaseapp.com',
+  'test.soridraw.com',
+  'soridraw-test.web.app',
+  'soridraw-test.firebaseapp.com',
+  'soridraw.com',
+  'www.soridraw.com',
+  'soridraw.web.app',
+  'soridraw.firebaseapp.com',
   'localhost',
   '127.0.0.1',
 ]);
@@ -20,9 +27,9 @@ let activeCheckTimer: number | null = null;
 let completedNoticeTimer: number | null = null;
 const attachRetryTimers = new Map<string, number>();
 
-const isPreviewUpdateHost = () => {
+const isUpdateNoticeHost = () => {
   if (typeof window === 'undefined') return false;
-  return PREVIEW_UPDATE_HOSTS.has(window.location.hostname.toLowerCase());
+  return UPDATE_NOTICE_HOSTS.has(window.location.hostname.toLowerCase());
 };
 
 const clearAttachRetry = (noticeId: string) => {
@@ -132,7 +139,7 @@ const applyNoticeStyle = (button: HTMLButtonElement) => {
 };
 
 const showUpdateNotice = () => {
-  if (!isPreviewUpdateHost()) {
+  if (!isUpdateNoticeHost()) {
     removeUpdateNotice();
     return;
   }
@@ -177,7 +184,7 @@ const isVersionUpgrade = (previousVersion: string, currentVersion: string) => {
 };
 
 const showCompletedNotice = () => {
-  if (!isPreviewUpdateHost()) return;
+  if (!isUpdateNoticeHost()) return;
   removeUpdateNotice();
   removeCompletedNotice();
 
@@ -197,7 +204,7 @@ const showCompletedNotice = () => {
 };
 
 const rememberLaunchVersionAndMaybeShowCompletedNotice = () => {
-  if (!isPreviewUpdateHost()) return;
+  if (!isUpdateNoticeHost()) return;
 
   let previousVersion = '';
   let completedVersion = '';
@@ -221,7 +228,7 @@ const rememberLaunchVersionAndMaybeShowCompletedNotice = () => {
 };
 
 const checkForUpdate = async (force = false) => {
-  if (!isPreviewUpdateHost()) {
+  if (!isUpdateNoticeHost()) {
     removeUpdateNotice();
     return;
   }
@@ -261,7 +268,7 @@ export const startAppUpdateNotice = () => {
   if (started || typeof window === 'undefined') return;
   started = true;
 
-  if (!isPreviewUpdateHost()) {
+  if (!isUpdateNoticeHost()) {
     removeUpdateNotice();
     removeCompletedNotice();
     return;

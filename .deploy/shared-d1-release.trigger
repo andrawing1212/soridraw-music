@@ -1,5 +1,7 @@
-requested_at=2026-09-11T03:03:00+09:00
+requested_at=2026-09-11T21:05:00+09:00
 requested_by=user
-product_code_target=cb2ce329ccc3c8ca1c2d834f106aa9482dfc1e6e
-migration=20260911_01_explore_like_deferred_batches.sql
-migration_blob=b3f68fa1feee460c19a4a3c687ceb990509f23c9
+product_code_target=51163d8ebe7634ccc775b55df98e6609fdbc49e7
+migration=20260911_02_explore_like_compact_queue.sql
+migration_blob=bc938c68fa394eb0fda24bd36dbf3a9bd45f78fe
+verifier=scripts/verify-explore-like-compact-queue.mjs
+verifier_blob=07e388a22bcc00b40dbad06791984a2c32b83e35

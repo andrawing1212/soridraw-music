@@ -81,7 +81,7 @@ jobs:
           set -euo pipefail
           changed="$(git diff --name-only | grep -v '^dist/' || true)"
           echo "$changed"
-          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreLikeService\.ts|src/pages/ExplorePage\.tsx|public/app-version\.json|cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt)$' || true)"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreLikeService\.ts|src/pages/ExplorePage\.tsx|public/app-version\.json|cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count\.mjs|cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt)$' || true)"
           if [ -n "$bad" ]; then
             echo 'Unexpected generated changes:'
             echo "$bad"
@@ -100,6 +100,7 @@ jobs:
             src/services/exploreLikeService.ts
             src/pages/ExplorePage.tsx
             public/app-version.json
+            cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count.mjs
             cloudflare/explore-worker/canonical/preview-worker.js
             cloudflare/explore-worker/canonical/source-sha256.txt
           )

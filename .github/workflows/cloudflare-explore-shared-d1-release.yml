@@ -235,10 +235,13 @@ jobs:
           MIGRATION_NAME: ${{ steps.resolve.outputs.migration }}
         run: |
           set -euo pipefail
-          cd cloudflare/explore-worker
-          cfg='.shared-d1-release/wrangler.jsonc'
-          migration="migrations/$MIGRATION_NAME"
+          root="$PWD"
+          worker_dir="$PWD/cloudflare/explore-worker"
+          cfg="$worker_dir/.shared-d1-release/wrangler.jsonc"
+          migration="$worker_dir/migrations/$MIGRATION_NAME"
+          rollback_file="$worker_dir/.shared-d1-release/rollback.sql"
           applied=0
+          cd "$worker_dir"
 
           node <<'NODE'
           const fs=require('fs');
@@ -249,14 +252,14 @@ jobs:
           const tables=added.filter(o=>o.type==='table').reverse();
           const ident=(s)=>`"${String(s).replaceAll('"','""')}"`;
           const sql=[...indexes.map(o=>`DROP INDEX IF EXISTS ${ident(o.name)};`),...tables.map(o=>`DROP TABLE IF EXISTS ${ident(o.name)};`)].join('\n');
-          fs.writeFileSync('.shared-d1-release/rollback.sql',sql+'\n');
+          fs.writeFileSync('.shared-d1-release/rollback.sql',sql ? sql+'\n' : '');
           console.log(`ROLLBACK_NEW_OBJECTS_ONLY=${added.map(o=>o.name).join(',')||'none'}`);
           NODE
 
           rollback() {
-            if [ -s .shared-d1-release/rollback.sql ]; then
+            if [ -s "$rollback_file" ]; then
               echo 'POST_APPLY_CHECK_FAILED: removing only objects absent before this release'
-              node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --file .shared-d1-release/rollback.sql --yes || true
+              node "$worker_dir/node_modules/wrangler/bin/wrangler.js" d1 execute DB --remote --config "$cfg" --file "$rollback_file" --yes || true
             fi
           }
           trap 'status=$?; if [ "$status" -ne 0 ] && [ "$applied" = 1 ]; then rollback; fi; exit "$status"' EXIT
@@ -282,7 +285,7 @@ jobs:
 
           node --input-type=module -e "import('./scripts/derived-deploy-preflight.mjs').then(m=>m.assertDerivedBaseD1Ready('.shared-d1-release/wrangler.jsonc'))"
 
-          cd ../..
+          cd "$root"
           for pair in \
             "preview|${PREVIEW_BASE}|https://preview.soridraw.com" \
             "test|${TEST_BASE}|https://test.soridraw.com" \

@@ -634,6 +634,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
           <div className="mt-2 flex justify-end">
             <button
               type="button"
+              onPointerDown={(event) => event.stopPropagation()}
               onClick={() => {
                 resetCacheDiagnostics();
                 resetCloudflareDiagnostics();

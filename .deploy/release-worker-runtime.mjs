@@ -121,12 +121,12 @@ async function makeConfig() {
     return entry;
   });
 
-  for (const required of ['DB', 'RATE_DB']) {
-    if (!d1.some((item) => item.binding === required)) throw new Error(`required D1 binding missing on ${target.worker}: ${required}`);
-  }
-  for (const required of ['PROFILE_MEDIA', 'EXPLORE_CACHE']) {
-    if (!r2.some((item) => item.binding === required)) throw new Error(`required R2 binding missing on ${target.worker}: ${required}`);
-  }
+  // DB/PROFILE_MEDIA are the canonical source bindings and are mandatory everywhere.
+  // RATE_DB/EXPLORE_CACHE are environment-local overrides. The Worker intentionally
+  // falls back to DB/PROFILE_MEDIA when an environment (currently PRODUCTION) does not
+  // have separate override bindings, so preserve live shape instead of inventing resources.
+  if (!d1.some((item) => item.binding === 'DB')) throw new Error(`required D1 binding missing on ${target.worker}: DB`);
+  if (!r2.some((item) => item.binding === 'PROFILE_MEDIA')) throw new Error(`required R2 binding missing on ${target.worker}: PROFILE_MEDIA`);
 
   const config = {
     name: target.worker,
@@ -152,6 +152,8 @@ async function makeConfig() {
   console.log(`LIVE_D1_BINDINGS=${d1.map((item) => `${item.binding}:${item.database_name}`).join(',')}`);
   console.log(`LIVE_R2_BINDINGS=${r2.map((item) => `${item.binding}:${item.bucket_name}`).join(',')}`);
   console.log(`LIVE_SERVICE_BINDINGS=${services.map((item) => `${item.binding}:${item.service}`).join(',') || '(none)'}`);
+  console.log(`RATE_DB_MODE=${d1.some((item) => item.binding === 'RATE_DB') ? 'separate-live-binding' : 'DB-fallback'}`);
+  console.log(`EXPLORE_CACHE_MODE=${r2.some((item) => item.binding === 'EXPLORE_CACHE') ? 'separate-live-binding' : 'PROFILE_MEDIA-fallback'}`);
   return config;
 }
 

@@ -86,9 +86,9 @@ async function readExploreLikeBatchStates035(env, uid, mutations) {
   return new Map((rows?.results || []).map((row) => [String(row.track_id || ''), row]));
 }`);
 
+if (!source.includes(marker)) throw new Error('[036] final source marker missing');
 const intake = functionRange('readExploreLikeBatchStates035').text;
 for (const required of [
-  marker,
   'LEFT JOIN explore_derived_tracks',
   'LEFT JOIN explore_derived_profiles',
   'LEFT JOIN likes',

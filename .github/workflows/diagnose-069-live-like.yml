@@ -73,11 +73,32 @@ jobs:
             LIMIT 20;
           " --json > "$RUNNER_TEMP/pending-detail.json"
 
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT l.track_id,l.created_at,
+                   COALESCE(s.like_count,0) AS canonical_like_count,
+                   COALESCE(d.likes,-1) AS derived_like_count
+            FROM likes l
+            LEFT JOIN track_stats s ON s.track_id=l.track_id
+            LEFT JOIN explore_derived_tracks d ON d.id=l.track_id
+            WHERE l.created_at >= CAST(strftime('%s','now','-30 minutes') AS INTEGER) * 1000
+            ORDER BY l.created_at DESC
+            LIMIT 20;
+
+            SELECT s.track_id,s.like_count AS canonical_like_count,s.updated_at,
+                   COALESCE(d.likes,-1) AS derived_like_count
+            FROM track_stats s
+            LEFT JOIN explore_derived_tracks d ON d.id=s.track_id
+            WHERE s.updated_at >= CAST(strftime('%s','now','-30 minutes') AS INTEGER) * 1000
+            ORDER BY s.updated_at DESC
+            LIMIT 20;
+          " --json > "$RUNNER_TEMP/recent-counts.json"
+
           node <<'NODE'
           const fs = require('fs');
           const flatten = (path) => JSON.parse(fs.readFileSync(path,'utf8')).flatMap(x => x?.results || []);
           const q = flatten(process.env.RUNNER_TEMP + '/queue-state.json');
           const d = flatten(process.env.RUNNER_TEMP + '/pending-detail.json');
+          const r = flatten(process.env.RUNNER_TEMP + '/recent-counts.json');
           const now = Date.now();
           console.log('=== 069 LIVE READ-ONLY DIAG ===');
           for (const row of q) {
@@ -92,6 +113,11 @@ jobs:
           if (!d.length) console.log('Q069_DETAIL none');
           for (const row of d) {
             console.log(`Q069_DETAIL batch=${String(row.batch_id||'')} age_s=${Math.max(0,Math.floor((now-Number(row.created_at||0))/1000))} track=${String(row.track_id||'')} desired=${Number(row.desired_liked||0)} canonical_liked=${Number(row.canonical_liked||0)} canonical_count=${Number(row.canonical_like_count||0)}`);
+          }
+          if (!r.length) console.log('RECENT_COUNTS none');
+          for (const row of r) {
+            const at = Number(row.created_at || row.updated_at || 0);
+            console.log(`RECENT_COUNT track=${String(row.track_id||'')} age_s=${at ? Math.max(0,Math.floor((now-at)/1000)) : 0} canonical_count=${Number(row.canonical_like_count||0)} derived_count=${Number(row.derived_like_count??-1)}`);
           }
           console.log('READ_ONLY_DIAG=PASS');
           NODE

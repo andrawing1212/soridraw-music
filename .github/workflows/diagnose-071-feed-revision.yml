@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
       PREVIEW_ORIGIN: https://preview.soridraw.com
     steps:

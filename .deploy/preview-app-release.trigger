@@ -1,4 +1,4 @@
-requested_at=2026-09-11T13:30:00+09:00
+requested_at=2026-09-11T14:29:40+09:00
 requested_by=user
-product_code_target=149badcaaf731db6995a23d67d52a7cf43c98e6e
-release_purpose=061_update_notice_live_retest_after_refresh
+product_code_target=1d82c595c10bdd3d3c19074e3e31210d76774dde
+release_purpose=062_explore_resume_revision_local_cache

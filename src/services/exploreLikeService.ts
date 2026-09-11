@@ -14,6 +14,7 @@ import {
 // SORIDRAW_EXPLORE_LIKE_PREVIEW_1MIN_TEST_037_20260911
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_COUNT_REPLAY_065_20260911
+// SORIDRAW_EXPLORE_LIKE_VISIBLE_COUNT_SIGNAL_067_20260911
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -577,8 +578,11 @@ const flushPendingLikes = async (user: User): Promise<void> => {
       confirmedCache.set(result.trackId, result.liked);
 
       const latest = latestOutbox[pending.trackId];
-      let visibleLiked = result.liked;
-      let visibleLikeCount = result.likeCount;
+      // The Worker accepts this mutation immediately, but its public like-count
+      // baseline is intentionally deferred. Keep the already-visible optimistic
+      // count as the same-account signal until the public aggregate catches up.
+      let visibleLiked = pending.desiredLiked;
+      let visibleLikeCount = pending.optimisticLikeCount;
       let ownerUid = pending.ownerUid;
 
       if (latest && latest.updatedAt !== pending.updatedAt) {
@@ -586,12 +590,11 @@ const flushPendingLikes = async (user: User): Promise<void> => {
         latest.baseLiked = result.liked;
         latest.baseLikeCount = result.likeCount;
         latest.retryCount = 0;
+        visibleLiked = latest.desiredLiked;
+        visibleLikeCount = latest.optimisticLikeCount;
         if (latest.desiredLiked === result.liked) {
           delete latestOutbox[pending.trackId];
         } else {
-          visibleLiked = latest.desiredLiked;
-          visibleLikeCount = Math.max(0, result.likeCount + (visibleLiked ? 1 : -1));
-          latest.optimisticLikeCount = visibleLikeCount;
           latestOutbox[pending.trackId] = latest;
         }
       } else {

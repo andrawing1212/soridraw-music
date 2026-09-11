@@ -226,6 +226,12 @@ export function recordCloudflareResponse(
 ): void {
   if (!readCacheDiagnosticsGloballyEnabled()) return;
 
+  if (String(response.headers.get('X-SORIDRAW-Client-Cache') || '').toUpperCase() === 'HIT') {
+    const cachedPath = path || String(response.headers.get('X-SORIDRAW-Client-Cache-Path') || '');
+    recordCloudflareLocalCacheHit(cachedPath, 'LOCAL REVISION CACHE');
+    return;
+  }
+
   const previous = readCloudflareDiagnostics();
   const diagnosticsVersion = String(response.headers.get('X-SORIDRAW-CF-Diagnostics') || '').trim();
   const metered = Boolean(diagnosticsVersion);

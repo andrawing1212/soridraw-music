@@ -1,0 +1,38 @@
+name: Fix 069 Worker Patch Composition
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/fix-069-worker-patch.py'
+      - '.github/workflows/fix-069-worker-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - name: Fix patch composition
+        run: python3 .deploy/fix-069-worker-patch.py
+      - name: Syntax check
+        run: node --check cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count.mjs
+      - name: Commit fixed patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count.mjs; then
+            echo '040 patch already fixed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count.mjs
+          git commit -m 'fix: compose 069 W1 enqueue patch once'
+          git push origin HEAD:preview

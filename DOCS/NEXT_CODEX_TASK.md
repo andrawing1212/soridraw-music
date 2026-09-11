@@ -1,6 +1,6 @@
 # NEXT CODEX TASK
 
-상태: **PREVIEW 065 App + Worker 배포 PASS / 사용자 실사용 검증 전**
+상태: **PREVIEW 065 실사용 비용 확인 완료 / 다음 작업은 좋아요 D1 W3 감소**
 
 ## 현재 기준
 - branch: `preview`
@@ -12,53 +12,98 @@
 - TEST main: `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
 
-## 065 완료 내용
-- 같은 계정 PC↔모바일 좋아요에서 하트 상태만 바뀌고 숫자가 남는 경로 수정.
-- account signal에 원본 브라우저가 실제로 표시하는 liked + likeCount를 함께 전달.
-- signal을 Explore 화면 밖에서 받아도 최근 숫자 패치를 로컬에 잠깐 보관하고 해당 곡 표시 시 재적용.
-- 새 Firestore listener 없음.
-- Worker intake는 `tracks + public_profiles + track_stats + likes` 대신 `explore_derived_tracks + explore_derived_profiles + likes` 사용.
-- D1 schema/migration/backfill 없음.
-- 035 10분 aggregate 유지.
-- UI 변경 없음.
+## 065 실사용 확인
+모바일 1곡 기준:
+- 좋아요: D1 `R2/W3`.
+- 좋아요 해제: D1 `R3/W3`.
+- Feed revision: LOCAL-only / Worker 0 / D1 `R0/W0` 유지.
+- 따라서 신규 좋아요 read는 이전 R3 → R2로 실제 감소 PASS.
+- 현재 비용 병목은 read보다 `W3`.
 
-## 자동 검증
-- TypeScript PASS
-- Build PASS
-- Firebase PREVIEW Hosting PASS
-- 실제 `preview.soridraw.com` app version 065 / exact build PASS
-- generated Worker + Wrangler dry-run PASS
-- public/private track/profile fixture PASS
-- canonical personal-like relation PASS
-- 100 same-track aggregate PASS
-- net-zero aggregate PASS
-- Worker Feed/Profile/likes route smoke PASS
-- revision warm D1 R0/W0 PASS
-- TEST/PRODUCTION unchanged PASS
+## 중요한 해석
+현재 `W3`는 사용자 요청을 서버에 세 번 보내서 생기는 값으로 단정하지 않는다.
+현재 035 queue는 rowid table에 `TEXT PRIMARY KEY(batch_id)`와 별도 `created_at,batch_id` index를 가진다.
+따라서 batch 1건 INSERT가 D1 row-write 기준으로 다음처럼 계산될 가능성이 높다.
+- queue table row 1
+- TEXT PRIMARY KEY unique index row 1
+- created_at secondary index row 1
+= W3
 
-## 지금 필요한 사용자 실사용 확인
-1. PC에서 좋아요 1개.
-2. 약 1분 뒤 모바일에서 **하트/숫자 색뿐 아니라 숫자 값도 +1**인지 확인.
-3. 모바일에서 좋아요 해제 후 약 1분 뒤 PC에서 숫자가 -1 되는지 확인.
-4. 가능하면 CACHE LIVE에서 해당 likes batch의 D1 R/W 확인.
+이 원인은 실제 D1 계측/fixture로 먼저 확정한다. rate-limit binding 등 다른 write를 추측으로 포함하지 않는다.
 
-## 비용 판정
-- 이전 실제 기준: 1곡 약 R3/W3, 3곡 약 R9/W3.
-- 065 구조상 public state/count 원본 read 3종을 derived read 2종으로 줄였음.
-- 실제 authenticated PREVIEW D1 수치는 아직 사용자 계측 전이므로 R2/R6를 확정값으로 기록하지 않는다.
-- W3 감소 작업은 이번 릴리스에 포함하지 않았고 write 증가도 의도하지 않았다.
+## 066 목표
+**좋아요 사용자 동작/동기화/집계 방식은 그대로 두고 D1 rows written을 우선 W3 → W2 이하로 줄인다.**
 
-## 다음 단계
-- 사용자 065 PC↔모바일 숫자 sync + CACHE LIVE 비용 PASS → 다음 승격 후보 확정.
-- 사용자가 `테스트배포`를 요청하면 고정 `test_only` 파이프라인 사용.
-- 사용자가 처음부터 `테스트 후 이상 없으면 정식까지`라고 명확히 승인하면 `test_then_production` 사용.
-- PRODUCTION 단독/연속 승격은 명확한 승인 없이는 실행하지 않는다.
+### 1차 안전안
+기존 035 queue를 파괴적으로 바꾸지 않는다.
+새 additive queue table을 검토한다.
+- `WITHOUT ROWID`
+- `batch_id TEXT PRIMARY KEY`
+- 10분 processor가 필요한 `created_at,batch_id` 순서 index 유지
 
-## 절대 보호
-- 035 deferred aggregate + 10분 cron.
+이 구조는 별도 rowid + PK index 중복을 제거해 queue INSERT를 W3 → W2로 줄일 가능성이 높다.
+
+### 전환 원칙
+- 기존 `explore_like_batches_035` 삭제/변경 금지.
+- 새 queue는 additive schema로 추가.
+- 새 intake만 새 queue에 기록.
+- 기존 035 pending batch가 남아 있어도 손실되지 않도록 processor가 구 queue를 안전하게 drain하거나 배포 전 pending=0을 확인하고 구 queue를 fallback 호환으로 유지.
+- 기존 processor lease/10분 aggregate/idempotency를 깨지 않는다.
+- 실제 사용자 likes/track_stats/public profile 데이터를 migration/backfill하지 않는다.
+
+## W1 검토는 2차
+W2가 실측 PASS한 뒤에만 W1 가능성을 검토한다.
+W1을 위해 created_at index를 단순 삭제해서 queue full scan을 만들지 않는다.
+W1은 아래를 모두 만족할 때만 허용한다.
+- retry/idempotency 유지
+- 10분 processor가 전체 queue scan 없이 오래된 batch를 찾을 수 있음
+- 동시 처리 안전
+- 기존 035/036과 하위호환
+- 쓰기를 줄인 대신 read가 폭증하지 않음
+
+조건을 만족하지 못하면 W2를 최종 안전선으로 유지한다.
+
+## 반드시 보호
+- 사용자 입력은 클라이언트에서 묶어서 `/v1/me/likes/batch` 1회 전송.
+- same-account PC↔모바일 하트 + 숫자 동기화.
+- 새 Firestore listener 추가 금지.
+- 다른 모든 사용자에게 fan-out write 금지.
+- 10분 deferred public like aggregate.
+- 100 same-track likes → public count/derived update 1회 원리.
+- net-zero cohort → public count/derived write 0 원리.
 - Explore resume LOCAL zero-read.
-- Music Note Local First + 묶음 저장.
-- Library Local First.
-- 사용자 원본 shared data.
-- UI/반응형/간격/색상.
-- 전체 Feed/Profile 재조회 및 추가 listener 금지.
+- 전체 Feed/Profile 재조회 금지.
+- UI/반응형/색상/간격 변경 금지.
+
+## 필수 검증
+- 기존 035 queue 1건 fixture의 D1 rows_written 기준을 재현해 W3 원인 확인.
+- 새 queue 1건 fixture에서 목표 W2 이하 확인.
+- 1곡 like/unlike, 3곡 batch, 최대 50곡 batch.
+- retry/duplicate batch.
+- like→unlike→like before aggregate.
+- public/private track/profile validation.
+- old queue pending drain/fallback.
+- 100 same-track aggregate / net-zero fixture.
+- TypeScript PASS.
+- Build PASS.
+- Worker verifier PASS.
+- Wrangler dry-run PASS.
+- 사용자 데이터 migration/backfill/delete/overwrite 없음.
+
+## 작업 방식
+- Codex High 권장.
+- `preview` 기반 별도 작업 branch에서 분석 → 구현 → 테스트 → commit.
+- 실제 D1 additive migration 실행 및 PREVIEW 배포는 구현/감사 후 사용자 승인 범위에서만 진행.
+- TEST/main 변경 금지.
+- PRODUCTION 변경 금지.
+
+## 완료 보고
+- 기준 commit / 최종 commit
+- 변경 파일
+- W3 구성 원인 확정 결과
+- queue INSERT 전/후 D1 rows_written
+- 좋아요/해제 R/W 실측
+- TypeScript / Build / Test
+- D1 schema 추가 여부
+- 사용자 데이터 변경 여부
+- 남은 위험

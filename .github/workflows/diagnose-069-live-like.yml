@@ -1,0 +1,110 @@
+name: Diagnose 069 Live Like
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/diagnose-069-live-like.yml'
+      - '.deploy/diagnose-069-live-like.trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagnose-069-live-like
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Read-only live D1 like state
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT 'processor' AS kind, id, lease_until, owner FROM explore_like_processor_035 WHERE id=1;
+            SELECT 'q035' AS kind, COUNT(*) AS pending_batches, COALESCE(SUM(mutation_count),0) AS pending_mutations, COALESCE(MIN(created_at),0) AS oldest_at, COALESCE(MAX(created_at),0) AS newest_at FROM explore_like_batches_035;
+            SELECT 'q066' AS kind, COUNT(*) AS pending_batches, COALESCE(SUM(mutation_count),0) AS pending_mutations, COALESCE(MIN(created_at),0) AS oldest_at, COALESCE(MAX(created_at),0) AS newest_at FROM explore_like_batches_066;
+            SELECT 'q069' AS kind, COUNT(*) AS pending_batches, COALESCE(SUM(mutation_count),0) AS pending_mutations, COALESCE(MIN(created_at),0) AS oldest_at, COALESCE(MAX(created_at),0) AS newest_at FROM explore_like_batches_069;
+          " --json > "$RUNNER_TEMP/queue-state.json"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            WITH expanded AS (
+              SELECT b.batch_id,b.user_uid,b.created_at,b.mutation_count,
+                     TRIM(CAST(json_extract(j.value,'$.trackId') AS TEXT)) AS track_id,
+                     CASE WHEN json_extract(j.value,'$.liked') THEN 1 ELSE 0 END AS desired_liked
+              FROM explore_like_batches_069 b, json_each(b.mutations_json) j
+              WHERE json_type(j.value,'$.trackId')='text'
+                AND json_type(j.value,'$.liked') IN ('true','false')
+            )
+            SELECT e.batch_id,e.created_at,e.mutation_count,e.track_id,e.desired_liked,
+                   COALESCE(s.like_count,0) AS canonical_like_count,
+                   CASE WHEN l.user_uid IS NULL THEN 0 ELSE 1 END AS canonical_liked
+            FROM expanded e
+            LEFT JOIN track_stats s ON s.track_id=e.track_id
+            LEFT JOIN likes l ON l.track_id=e.track_id AND l.user_uid=e.user_uid
+            ORDER BY e.created_at DESC,e.batch_id DESC
+            LIMIT 20;
+          " --json > "$RUNNER_TEMP/pending-detail.json"
+
+          node <<'NODE'
+          const fs = require('fs');
+          const flatten = (path) => JSON.parse(fs.readFileSync(path,'utf8')).flatMap(x => x?.results || []);
+          const q = flatten(process.env.RUNNER_TEMP + '/queue-state.json');
+          const d = flatten(process.env.RUNNER_TEMP + '/pending-detail.json');
+          const now = Date.now();
+          console.log('=== 069 LIVE READ-ONLY DIAG ===');
+          for (const row of q) {
+            if (row.kind === 'processor') {
+              console.log(`PROCESSOR lease_until=${Number(row.lease_until||0)} owner=${String(row.owner||'') ? 'SET' : 'EMPTY'} lease_remaining_ms=${Math.max(0, Number(row.lease_until||0)-now)}`);
+            } else {
+              const oldest = Number(row.oldest_at||0);
+              const newest = Number(row.newest_at||0);
+              console.log(`${row.kind.toUpperCase()} batches=${Number(row.pending_batches||0)} mutations=${Number(row.pending_mutations||0)} oldest_age_s=${oldest ? Math.max(0,Math.floor((now-oldest)/1000)) : 0} newest_age_s=${newest ? Math.max(0,Math.floor((now-newest)/1000)) : 0}`);
+            }
+          }
+          if (!d.length) console.log('Q069_DETAIL none');
+          for (const row of d) {
+            console.log(`Q069_DETAIL batch=${String(row.batch_id||'')} age_s=${Math.max(0,Math.floor((now-Number(row.created_at||0))/1000))} track=${String(row.track_id||'')} desired=${Number(row.desired_liked||0)} canonical_liked=${Number(row.canonical_liked||0)} canonical_count=${Number(row.canonical_like_count||0)}`);
+          }
+          console.log('READ_ONLY_DIAG=PASS');
+          NODE
+
+      - name: Verify PREVIEW Worker schedule and active version
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployments="$(curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/deployments")"
+          schedules="$(curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules")"
+          version="$(printf '%s' "$deployments" | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id')"
+          cron="$(printf '%s' "$schedules" | jq -r '.result.schedules[0].cron // ""')"
+          echo "PREVIEW_ACTIVE_VERSION=$version"
+          echo "PREVIEW_CRON=$cron"
+          test "$cron" = '*/10 * * * *'
+          echo 'PREVIEW_SCHEDULE=PASS'

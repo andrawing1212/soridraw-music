@@ -8,6 +8,7 @@
     "035-explore-like-deferred-aggregate.mjs",
     "036-explore-like-derived-intake.mjs",
     "038-explore-like-compact-queue.mjs",
-    "039-explore-like-stable-dual-queue-boundary.mjs"
+    "039-explore-like-stable-dual-queue-boundary.mjs",
+    "040-explore-like-w1-delayed-count.mjs"
   ]
 }

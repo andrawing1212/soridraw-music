@@ -37,10 +37,11 @@
 - 실제 `preview.soridraw.com` exact build/version 확인: PASS
 - TEST / PRODUCTION 비변경 검사: PASS
 
-### 061 검증 배포 — 새로고침 후 업데이트 표시 재검증
-- 사용자가 060 배포 직후 새로고침하여 059→060 자동 표시 검증 기회를 놓침.
-- 기능 코드는 059와 동일하게 유지하고 `public/app-version.json`만 `060 → 061`로 올림.
-- 현재 060 PREVIEW 탭을 새로고침하지 않고 그대로 두면, 정상일 경우 061 배포 완료 후 최대 약 60초 안에 `새 업데이트 · 적용`이 나타나야 한다.
+### 061 검증 배포 — 업데이트 표시 실사용 PASS
+- 사용자가 060 PREVIEW를 실행한 상태에서 061을 새로 배포.
+- 사용자가 새로고침하지 않은 상태에서 우측 상단 `새 업데이트 · 적용` 표시가 실제로 나타나는 것을 확인.
+- 따라서 059에서 추가한 60초 정적 버전 확인 + fallback 표시 경로는 PREVIEW 실사용에서 PASS.
+- 기능 코드는 059와 동일하게 유지하고 `public/app-version.json`만 `060 → 061`로 올린 검증 배포.
 - 사용자 데이터 / Firestore Rules / Functions / Worker / D1 / R2 변경 없음.
 
 ### 059 핵심 수정 — 업데이트 표시가 반드시 보이도록 보강
@@ -93,6 +94,7 @@
 - PREVIEW에서만 visible tab 기준 60초마다 정적 Hosting `app-version.json` 1회 GET.
 - Firestore read 0 / D1 read 0 / Worker 호출 0.
 - TEST/PRODUCTION에는 해당 주기 확인 비활성.
+- 060→061 실사용 자동 표시 PASS.
 
 058 좋아요 비용 방향:
 - 좋아요 batch 1회 확정 → 같은 계정 동기화 신호 Firestore write 1회.
@@ -102,7 +104,6 @@
 - public aggregate 기존 10분 묶음 유지.
 
 아직 필요한 실사용 측정:
-- 060 탭에서 061 자동 업데이트 표시 실사용 확인.
 - PC↔모바일에서 빨간 하트 정상 수렴 확인.
 - 1분 `/v1/me/likes/batch` 실제 D1 R/W + R2 A/B.
 - 058 동기화 신호 Firestore 실제 read/write 증가량.
@@ -120,24 +121,21 @@
 - 좋아요 하나 때문에 Feed/Profile 전체 재생성 금지
 
 ## 5. 다음 실제 검증
-1. 현재 060 PREVIEW 탭을 **새로고침하지 않고 그대로 유지**.
-2. 061 배포 완료 후 최대 약 60초 안에 우측 상단 `새 업데이트 · 적용`이 나타나는지 확인.
-3. 버튼을 눌러 061 적용 후 버튼이 사라지는지 확인.
-4. 이후 PC와 모바일을 같은 계정으로 로그인.
-5. PC에서 서로 다른 곡 2~3개 좋아요.
-6. PREVIEW 1분 batch 뒤 모바일 같은 곡 빨간 하트가 맞게 켜지는지 확인.
-7. 모바일에서 한 곡 좋아요 해제 후 PC도 같은 상태로 맞는지 확인.
-8. 10분 aggregate 뒤 공개 좋아요 숫자와 빨간 하트 상태가 서로 어긋나지 않는지 확인.
+1. 현재 표시된 `새 업데이트 · 적용`을 눌러 061 적용 후 버튼이 사라지는지 확인.
+2. PC와 모바일을 같은 계정으로 로그인.
+3. PC에서 서로 다른 곡 2~3개 좋아요.
+4. PREVIEW 1분 batch 뒤 모바일 같은 곡 빨간 하트가 맞게 켜지는지 확인.
+5. 모바일에서 한 곡 좋아요 해제 후 PC도 같은 상태로 맞는지 확인.
+6. 10분 aggregate 뒤 공개 좋아요 숫자와 빨간 하트 상태가 서로 어긋나지 않는지 확인.
 
 ## 6. 현재 완료 판정
 - PREVIEW app 061 verification deploy: **배포 PASS** — Run `34562423678`.
 - TypeScript / Build: **PASS** — Run `34562423678`.
 - Firebase PREVIEW Hosting exact build/version 061: **PASS** — Run `34562423678`.
-- PREVIEW app 059 reliable update notice 기능: **배포 유지 / 사용자 실사용 검증 중**.
-- PREVIEW app 058 same-account cross-device like sync: **배포 유지**.
+- PREVIEW app 059 reliable update notice 기능: **사용자 실사용 PASS** — 060→061 자동 표시 확인.
+- PREVIEW app 058 same-account cross-device like sync: **배포 유지 / 사용자 실사용 검증 전**.
 - Shared Firestore Rules 058: **배포 유지** — Run `34558314461`.
 - Cloudflare Worker / D1 / R2: 이번 061 작업에서 **비변경**.
 - Firebase Functions / Firestore Rules: 이번 061 작업에서 **비변경**.
 - 사용자 원본 데이터 migration / delete / backfill: **없음**.
 - TEST `main` / PRODUCTION branch: **비변경**.
-- 업데이트 표시 및 PC↔모바일 좋아요: **사용자 실사용 검증 전/진행 중**.

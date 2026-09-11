@@ -2,22 +2,31 @@ import baseWorker from './preview-worker.js';
 
 // SORIDRAW_EXPLORE_REVISION_HEAD_ONLY_036_20260911
 // SORIDRAW_EXPLORE_REVISION_HEAD_LOW_READ_037_20260911
-// PREVIEW-only entry wrapper. The feed revision endpoint is a version check only:
+// Release-compatible entry wrapper. The feed revision endpoint is a version check only:
 // it must never replay the derived change journal or rebuild the R2 feed.
 // 037 also removes the journal-head lookup from the revision hot path. A single
 // explore_derived_state row is enough because every feed-relevant derived-track
 // change advances its monotonic seq. The tiny head is edge-cached for 60 seconds.
 const REVISION_HEAD_CACHE_SECONDS_036 = 60;
 const REVISION_HEAD_CACHE_PATH_036 = '/__soridraw/feed-revision-head-037';
-const PREVIEW_ALLOWED_ORIGINS_036 = new Set([
+const RELEASE_ALLOWED_ORIGINS_036 = new Set([
   'https://preview.soridraw.com',
+  'https://soridraw-preview.web.app',
+  'https://soridraw-preview.firebaseapp.com',
+  'https://test.soridraw.com',
+  'https://soridraw-test.web.app',
+  'https://soridraw-test.firebaseapp.com',
+  'https://soridraw.com',
+  'https://www.soridraw.com',
+  'https://soridraw.web.app',
+  'https://soridraw.firebaseapp.com',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
 ]);
 
 function revisionCors036(request) {
   const origin = String(request.headers.get('Origin') || '');
-  if (!PREVIEW_ALLOWED_ORIGINS_036.has(origin)) return {};
+  if (!RELEASE_ALLOWED_ORIGINS_036.has(origin)) return {};
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, OPTIONS',

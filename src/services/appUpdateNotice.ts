@@ -31,7 +31,7 @@ const applyButtonState = (button: HTMLButtonElement, hasUpdate: boolean, status:
       : status === 'error'
         ? `업데이트 확인 · ${CURRENT_APP_VERSION}`
         : `업데이트 · ${CURRENT_APP_VERSION}`;
-  button.setAttribute('aria-label', hasUpdate ? '새 업데이트 적용' : '업데이트 확인');
+  button.setAttribute('aria-label', hasUpdate ? '새 업데이트 적용' : '프리뷰 앱 다시 불러오기');
   Object.assign(button.style, hasUpdate ? {
     background: '#ffb400',
     color: '#151515',
@@ -66,11 +66,7 @@ const ensureUpdateNotice = () => {
   });
   applyButtonState(button, false);
   button.addEventListener('click', () => {
-    if (updateAvailable) {
-      window.location.reload();
-      return;
-    }
-    void checkForUpdate(true);
+    window.location.reload();
   });
   document.body.appendChild(button);
   return button;

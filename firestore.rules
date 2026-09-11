@@ -101,17 +101,33 @@ service cloud.firestore {
             (!('musicNoteStructure' in request.resource.data.syncVersions) || request.resource.data.syncVersions.musicNoteStructure is int));
       }
 
+      // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
+      // Same-account cross-device UI signal only. Canonical likes remain in the
+      // Explore backend; this field carries at most one confirmed batch (50 rows).
+      function hasValidExploreLikeSyncSignal() {
+        return !('exploreLikeSyncSignal' in request.resource.data) ||
+          (request.resource.data.exploreLikeSyncSignal is map &&
+            request.resource.data.exploreLikeSyncSignal.keys().hasOnly(['version', 'previousVersion', 'results']) &&
+            request.resource.data.exploreLikeSyncSignal.version is int &&
+            request.resource.data.exploreLikeSyncSignal.version > 0 &&
+            request.resource.data.exploreLikeSyncSignal.previousVersion is int &&
+            request.resource.data.exploreLikeSyncSignal.previousVersion >= 0 &&
+            request.resource.data.exploreLikeSyncSignal.results is list &&
+            request.resource.data.exploreLikeSyncSignal.results.size() <= 50);
+      }
+
       function isValidSelfUpdate() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'uid', 'email', 'displayName', 'photoURL', 'providerIds',
           'lastLoginAt', 'lastSeenAt', 'lastLogoutAt', 'isOnline',
           'nickname', 'updatedAt', 'lyricClicheGuard', 'generationPreferences', 'syncVersions',
           'favoriteCount', 'songGeneratedCount',
-          'favoriteSyncSignal', 'favoriteSyncSignalUpdatedAt'
+          'favoriteSyncSignal', 'favoriteSyncSignalUpdatedAt', 'exploreLikeSyncSignal'
         ]) &&
         (!('uid' in request.resource.data) || request.resource.data.uid == uid) &&
         hasValidGenerationPreferences() &&
-        hasValidSyncVersions();
+        hasValidSyncVersions() &&
+        hasValidExploreLikeSyncSignal();
       }
 
       function changesPrivilegeFields() {

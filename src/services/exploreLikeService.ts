@@ -1,6 +1,7 @@
 import { EXPLORE_API_BASE, EXPLORE_ENVIRONMENT } from '../config/exploreEnvironment';
 import type { User } from 'firebase/auth';
-import { getFirebaseAppCheckToken } from '../firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db, getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
   readSoridrawPersistentCache,
@@ -11,7 +12,7 @@ import {
 // SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
 // SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911
 // SORIDRAW_EXPLORE_LIKE_PREVIEW_1MIN_TEST_037_20260911
-// SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_REVALIDATION_058_20260911
+// SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -29,6 +30,8 @@ const EXPLORE_LIKE_RETRY_MAX_MS = 60_000;
 
 export const EXPLORE_LIKE_SYNC_EVENT = 'soridraw:explore-like-sync';
 export const EXPLORE_LIKE_SYNC_ERROR_EVENT = 'soridraw:explore-like-sync-error';
+export const EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT = 'soridraw:explore-like-account-invalidation';
+const EXPLORE_LIKE_ACCOUNT_SIGNAL_VERSION_STORAGE_BASE = 'soridraw_explore_like_account_signal_v1';
 
 type ExploreLikePendingMutation = {
   trackId: string;
@@ -57,9 +60,67 @@ type ExploreLikeBatchResult = {
   likeCount: number;
 };
 
+type ExploreLikeAccountSyncResult = ExploreLikeBatchResult & {
+  ownerUid: string;
+};
+
+type ExploreLikeAccountSyncSignal = {
+  version: number;
+  previousVersion: number;
+  results: ExploreLikeAccountSyncResult[];
+};
+
 const likedStateByUid = new Map<string, Map<string, boolean>>();
 const pendingTimers = new Map<string, number>();
 const inflightByUid = new Map<string, ExploreLikeOutbox>();
+const observedAccountSignalVersionByUid = new Map<string, number>();
+
+const getAccountSignalVersionStorageKey = (uid: string) => `${EXPLORE_LIKE_ACCOUNT_SIGNAL_VERSION_STORAGE_BASE}_${uid}`;
+
+const readSeenAccountSignalVersion = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return 0;
+  try {
+    const value = Number(localStorage.getItem(getAccountSignalVersionStorageKey(uid)) || 0);
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const setSeenAccountSignalVersion = (uid: string, version: number) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try {
+    if (Number.isFinite(version) && version > 0) {
+      localStorage.setItem(getAccountSignalVersionStorageKey(uid), String(Math.floor(version)));
+    } else {
+      localStorage.removeItem(getAccountSignalVersionStorageKey(uid));
+    }
+  } catch {}
+};
+
+const normalizeAccountSyncSignal = (value: unknown): ExploreLikeAccountSyncSignal | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const version = Math.max(0, Math.floor(Number(raw.version || 0)));
+  const previousVersion = Math.max(0, Math.floor(Number(raw.previousVersion || 0)));
+  const rows = Array.isArray(raw.results) ? raw.results : [];
+  if (!version || rows.length > EXPLORE_LIKE_BATCH_MAX) return null;
+  const results: ExploreLikeAccountSyncResult[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    const item = row as Record<string, unknown>;
+    const trackId = String(item.trackId || '').trim();
+    if (!trackId) continue;
+    results.push({
+      trackId,
+      ownerUid: String(item.ownerUid || '').trim(),
+      liked: Boolean(item.liked),
+      likeCount: clampLikeCount(item.likeCount),
+    });
+  }
+  if (results.length !== rows.length) return null;
+  return { version, previousVersion, results };
+};
 
 const clampLikeCount = (value: unknown) => {
   const count = Number(value ?? 0);
@@ -171,6 +232,81 @@ const dispatchLikeSync = (detail: ExploreLikeSyncEventDetail) => {
 const dispatchLikeSyncError = (detail: ExploreLikeSyncEventDetail & { message: string }) => {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_SYNC_ERROR_EVENT, { detail }));
+};
+
+export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) => {
+  const signal = normalizeAccountSyncSignal(value);
+  if (!signal || !user?.uid) return;
+  const uid = user.uid;
+  const seenVersion = readSeenAccountSignalVersion(uid);
+  observedAccountSignalVersionByUid.set(
+    uid,
+    Math.max(observedAccountSignalVersionByUid.get(uid) || 0, signal.version),
+  );
+  if (signal.version <= seenVersion) return;
+
+  // If previousVersion does not match, this browser slept through at least one
+  // batch. Clear only this user's personal like-state cache. Explore will
+  // rehydrate only currently visible IDs; no public feed/full scan is triggered.
+  const missedSignal = signal.previousVersion !== seenVersion;
+  const cache = getLikedStateCache(uid);
+  if (missedSignal) cache.clear();
+
+  for (const result of signal.results) {
+    cache.set(result.trackId, result.liked);
+    dispatchLikeSync({
+      trackId: result.trackId,
+      ownerUid: result.ownerUid,
+      liked: result.liked,
+      likeCount: result.likeCount,
+    });
+  }
+  persistLikedStateCache(uid, cache);
+  setSeenAccountSignalVersion(uid, signal.version);
+
+  if (missedSignal && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
+      detail: { uid, version: signal.version },
+    }));
+  }
+};
+
+const publishExploreLikeAccountSyncSignal = async (
+  user: User,
+  batchEntries: ExploreLikePendingMutation[],
+  results: ExploreLikeBatchResult[],
+) => {
+  if (!user?.uid || !results.length) return;
+  const uid = user.uid;
+  const previousVersion = Math.max(
+    readSeenAccountSignalVersion(uid),
+    observedAccountSignalVersionByUid.get(uid) || 0,
+  );
+  const version = Math.max(Date.now(), previousVersion + 1);
+  const ownerByTrack = new Map(batchEntries.map((pending) => [pending.trackId, pending.ownerUid]));
+  const signal: ExploreLikeAccountSyncSignal = {
+    version,
+    previousVersion,
+    results: results.map((result) => ({
+      ...result,
+      ownerUid: ownerByTrack.get(result.trackId) || '',
+    })),
+  };
+
+  // Mark the origin browser before Firestore's local snapshot fires so it never
+  // replays its own already-applied batch. If the signal write is rejected,
+  // restore the previous marker; the canonical like batch itself remains saved.
+  setSeenAccountSignalVersion(uid, version);
+  observedAccountSignalVersionByUid.set(uid, version);
+  try {
+    await updateDoc(doc(db, 'users', uid), { exploreLikeSyncSignal: signal });
+  } catch (reason) {
+    if (readSeenAccountSignalVersion(uid) === version) setSeenAccountSignalVersion(uid, previousVersion);
+    if ((observedAccountSignalVersionByUid.get(uid) || 0) === version) {
+      observedAccountSignalVersionByUid.set(uid, previousVersion);
+    }
+    console.warn('Explore account like sync signal publish failed:', reason);
+  }
 };
 
 const buildAuthHeaders = async (user: User) => {
@@ -347,6 +483,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
 
     persistLikedStateCache(uid, confirmedCache);
     persistLikeOutbox(uid, latestOutbox);
+    await publishExploreLikeAccountSyncSignal(user, batchEntries, results);
     if (Object.keys(latestOutbox).length) schedulePendingLikes(user, undefined, true);
   } catch (reason) {
     const latestOutbox = readLikeOutbox(uid);
@@ -412,37 +549,6 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   const outbox = readLikeOutbox(user.uid);
   resumePendingLikes(user);
   return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? cache.get(trackId) === true);
-};
-
-export const refreshExploreLikedTrackStates = async (
-  user: User,
-  trackIds: string[],
-): Promise<Record<string, boolean>> => {
-  const normalized = [...new Set(trackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean))].slice(0, 50);
-  if (!normalized.length) return {};
-
-  const cache = getLikedStateCache(user.uid);
-  const refreshIds = normalized.filter((trackId) => cache.has(trackId));
-  if (!refreshIds.length) return {};
-
-  const query = new URLSearchParams({ trackIds: refreshIds.join(',') });
-  const payload = await requestExploreLike(user, `/v1/me/likes?${query.toString()}`);
-  const likedIds = new Set(
-    Array.isArray(payload?.data?.likedTrackIds)
-      ? payload.data.likedTrackIds.map((trackId: unknown) => String(trackId || '').trim()).filter(Boolean)
-      : [],
-  );
-  refreshIds.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
-  persistLikedStateCache(user.uid, cache);
-
-  const outbox = readLikeOutbox(user.uid);
-  resumePendingLikes(user);
-  return Object.fromEntries(
-    refreshIds.map((trackId) => [
-      trackId,
-      outbox[trackId]?.desiredLiked ?? (cache.get(trackId) === true),
-    ]),
-  );
 };
 
 export const setExploreTrackLike = async (

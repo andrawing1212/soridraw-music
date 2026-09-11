@@ -4,6 +4,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000
 // SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
+// SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Compass, ExternalLink, Heart, Loader2, Music2, Pencil, Pin, Search, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
@@ -18,6 +19,7 @@ import {
   writeExploreFeedSessionCache,
 } from '../services/exploreSessionCache';
 import {
+  EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT,
   EXPLORE_LIKE_SYNC_ERROR_EVENT,
   EXPLORE_LIKE_SYNC_EVENT,
   getExploreLikedTrackIds,
@@ -275,6 +277,7 @@ export default function ExplorePage() {
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const likeHydrationKeyRef = useRef('');
+  const [likeAccountSyncSignal, setLikeAccountSyncSignal] = useState(0);
   const [feedRevisionSignal, setFeedRevisionSignal] = useState(0);
   const feedRevisionEventAtRef = useRef(0);
   const feedRevisionActivityAtRef = useRef(0);
@@ -284,6 +287,17 @@ export default function ExplorePage() {
     likeHydrationKeyRef.current = '';
     if (!currentUser) setLikedTrackIds({});
   }), []);
+
+  useEffect(() => {
+    const onAccountLikeInvalidation = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string }>).detail;
+      if (!user?.uid || String(detail?.uid || '') !== user.uid) return;
+      likeHydrationKeyRef.current = '';
+      setLikeAccountSyncSignal((value) => value + 1);
+    };
+    window.addEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onAccountLikeInvalidation as EventListener);
+    return () => window.removeEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onAccountLikeInvalidation as EventListener);
+  }, [user?.uid]);
 
   const requestUrl = useMemo(() => {
     const cleanQuery = submittedQuery.trim();
@@ -531,7 +545,7 @@ export default function ExplorePage() {
       });
 
     return () => { cancelled = true; };
-  }, [user, visibleTracks, profileUid]);
+  }, [user, visibleTracks, profileUid, likeAccountSyncSignal]);
 
   useEffect(() => {
     if (!searchOpen) return;

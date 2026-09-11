@@ -124,6 +124,8 @@ import { createPortal } from 'react-dom';
 import { buildPreviewSongIntent, renderPreviewCards } from './services/songPreviewEngine';
 import { favoritesStore, useFavorites, useIsSongFavorited } from './hooks/useFavoritesStore';
 import { readUserProfileCache, writeUserProfileCache } from './lib/userProfileCache';
+import { observeExploreLikeAccountSyncSignal } from './services/exploreLikeService';
+// SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import { recoverFromStaleChunkError } from './services/chunkLoadRecovery';
 import StudioPageFrame from './components/studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/StudioLeftRail';
@@ -9020,6 +9022,7 @@ const toggleCycleVariantSelection = (
           if (docSnap.exists()) {
             const data = docSnap.data();
             writeUserProfileCache(currentUser.uid, data);
+            observeExploreLikeAccountSyncSignal(currentUser, data?.exploreLikeSyncSignal);
             const recentSongsVersion = Number(data?.syncVersions?.recentSongs || 0);
             if (recentSongsVersion > 0 && typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_VERSION_EVENT, {

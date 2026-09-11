@@ -616,6 +616,7 @@ export default function ExplorePage() {
     setProfileTracks(patch);
   };
 
+  // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
   useEffect(() => {
     const onLikeSync = (event: Event) => {
       const detail = (event as CustomEvent<{
@@ -625,14 +626,10 @@ export default function ExplorePage() {
         likeCount?: number;
       }>).detail;
       const trackId = String(detail?.trackId || '').trim();
-      const rawCount = Number(detail?.likeCount);
-      if (!trackId || typeof detail?.liked !== 'boolean' || !Number.isFinite(rawCount)) return;
-      const likeCount = Math.max(0, Math.floor(rawCount));
+      if (!trackId || typeof detail?.liked !== 'boolean') return;
+      // Same-account signal changes only the personal heart. Public likeCount
+      // changes only when the deferred aggregate/feed delta confirms it.
       setLikedTrackIds((prev) => ({ ...prev, [trackId]: detail.liked as boolean }));
-      updateTrackLikeCount(trackId, likeCount);
-      patchExploreFeedSessionCacheRow(requestUrl, trackId, { likeCount });
-      const ownerUid = String(detail?.ownerUid || '').trim();
-      if (ownerUid) patchExplorePublicProfileFirstViewTrack(ownerUid, trackId, { likeCount });
     };
     const onLikeSyncError = (event: Event) => {
       const detail = (event as CustomEvent<{ message?: string }>).detail;
@@ -656,10 +653,9 @@ export default function ExplorePage() {
     setLikeBusyTrackId(track.id);
     try {
       const result = await setExploreTrackLike(user, track.id, !currentLiked, track.likeCount, track.ownerUid);
+      // Heart changes immediately; public numeric count stays unchanged until
+      // the scheduled aggregate publishes the confirmed count.
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
-      updateTrackLikeCount(track.id, result.likeCount);
-      patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: result.likeCount });
-      patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: result.likeCount });
     } catch (reason) {
       console.error('Explore like failed:', reason);
       setSocialNotice(reason instanceof Error ? reason.message : '좋아요 처리에 실패했어요.');

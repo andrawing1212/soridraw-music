@@ -15,6 +15,7 @@ import {
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_COUNT_REPLAY_065_20260911
 // SORIDRAW_EXPLORE_LIKE_VISIBLE_COUNT_SIGNAL_067_20260911
+// SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -563,6 +564,8 @@ const flushPendingLikes = async (user: User): Promise<void> => {
         mutations: batchEntries.map((pending) => ({
           trackId: pending.trackId,
           liked: pending.desiredLiked,
+          baseLiked: pending.baseLiked,
+          mutationAt: pending.updatedAt,
         })),
       }),
     });
@@ -578,11 +581,10 @@ const flushPendingLikes = async (user: User): Promise<void> => {
       confirmedCache.set(result.trackId, result.liked);
 
       const latest = latestOutbox[pending.trackId];
-      // The Worker accepts this mutation immediately, but its public like-count
-      // baseline is intentionally deferred. Keep the already-visible optimistic
-      // count as the same-account signal until the public aggregate catches up.
+      // 069: heart state can sync promptly, but public numeric count is
+      // authoritative only after the deferred aggregate. Never manufacture +/-.
       let visibleLiked = pending.desiredLiked;
-      let visibleLikeCount = pending.optimisticLikeCount;
+      let visibleLikeCount = result.likeCount;
       let ownerUid = pending.ownerUid;
 
       if (latest && latest.updatedAt !== pending.updatedAt) {
@@ -591,7 +593,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
         latest.baseLikeCount = result.likeCount;
         latest.retryCount = 0;
         visibleLiked = latest.desiredLiked;
-        visibleLikeCount = latest.optimisticLikeCount;
+        visibleLikeCount = result.likeCount;
         if (latest.desiredLiked === result.liked) {
           delete latestOutbox[pending.trackId];
         } else {
@@ -625,7 +627,8 @@ const flushPendingLikes = async (user: User): Promise<void> => {
       const latest = latestOutbox[pending.trackId] || pending;
       if (latest.updatedAt === pending.updatedAt) {
         latest.retryCount = Math.min(8, latest.retryCount + 1);
-        latest.updatedAt = Date.now();
+        // Keep updatedAt stable across retries because 069 uses it in the
+        // idempotent chronological queue key.
         latestOutbox[pending.trackId] = latest;
       }
       maxRetryCount = Math.max(maxRetryCount, latest.retryCount);
@@ -700,7 +703,9 @@ export const setExploreTrackLike = async (
   const previousVisibleLiked = !liked;
   const baselineLiked = inflight?.desiredLiked ?? existing?.baseLiked ?? previousVisibleLiked;
   const baselineLikeCount = inflight?.optimisticLikeCount ?? existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);
-  const optimisticLikeCount = Math.max(0, clampLikeCount(currentLikeCount) + (liked ? 1 : -1));
+  // 069: keep the last aggregate-confirmed public number until the
+  // deferred server aggregate changes it.
+  const optimisticLikeCount = clampLikeCount(currentLikeCount);
 
   if (!inflight && liked === baselineLiked) {
     delete outbox[normalizedTrackId];

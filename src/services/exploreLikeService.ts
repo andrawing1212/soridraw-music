@@ -16,6 +16,7 @@ import {
 // SORIDRAW_EXPLORE_LIKE_ACCOUNT_COUNT_REPLAY_065_20260911
 // SORIDRAW_EXPLORE_LIKE_VISIBLE_COUNT_SIGNAL_067_20260911
 // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
+// SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -59,6 +60,7 @@ type ExploreLikeSyncEventDetail = {
   ownerUid: string;
   liked: boolean;
   likeCount: number;
+  displayLikeCount?: number;
 };
 
 type ExploreLikeBatchResult = {
@@ -69,6 +71,7 @@ type ExploreLikeBatchResult = {
 
 type ExploreLikeAccountSyncResult = ExploreLikeBatchResult & {
   ownerUid: string;
+  displayLikeCount?: number;
 };
 
 type ExploreLikeAccountSyncSignal = {
@@ -125,11 +128,13 @@ const normalizeAccountSyncSignal = (value: unknown): ExploreLikeAccountSyncSigna
     const item = row as Record<string, unknown>;
     const trackId = String(item.trackId || '').trim();
     if (!trackId) continue;
+    const displayLikeCount = Number(item.displayLikeCount);
     results.push({
       trackId,
       ownerUid: String(item.ownerUid || '').trim(),
       liked: Boolean(item.liked),
       likeCount: clampLikeCount(item.likeCount),
+      ...(Number.isFinite(displayLikeCount) ? { displayLikeCount: clampLikeCount(displayLikeCount) } : {}),
     });
   }
   if (results.length !== rows.length) return null;
@@ -165,11 +170,13 @@ const readAccountPatchCache = (uid: string): ExploreLikeAccountPatchCache => {
       changed = true;
       continue;
     }
+    const displayLikeCount = Number(patch.displayLikeCount);
     next[trackId] = {
       trackId,
       ownerUid: String(patch.ownerUid || '').trim(),
       liked: patch.liked,
       likeCount: clampLikeCount(patch.likeCount),
+      ...(Number.isFinite(displayLikeCount) ? { displayLikeCount: clampLikeCount(displayLikeCount) } : {}),
       updatedAt: Math.max(0, Number(patch.updatedAt || 0)),
       expiresAt,
     };
@@ -350,6 +357,7 @@ const replayAccountSyncPatches = (uid: string, trackIds: string[]) => {
       ownerUid: patch.ownerUid,
       liked: patch.liked,
       likeCount: patch.likeCount,
+      ...(patch.displayLikeCount === undefined ? {} : { displayLikeCount: patch.displayLikeCount }),
     }));
   }, 0);
 };
@@ -385,6 +393,7 @@ export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) 
       ownerUid: result.ownerUid,
       liked: result.liked,
       likeCount: result.likeCount,
+      ...(result.displayLikeCount === undefined ? {} : { displayLikeCount: result.displayLikeCount }),
     });
   }
   persistLikedStateCache(uid, cache);
@@ -400,7 +409,7 @@ export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) 
 const publishExploreLikeAccountSyncSignal = async (
   user: User,
   batchEntries: ExploreLikePendingMutation[],
-  results: ExploreLikeBatchResult[],
+  results: Array<ExploreLikeBatchResult & { displayLikeCount?: number }>,
 ) => {
   if (!user?.uid || !results.length) return;
   const uid = user.uid;
@@ -573,7 +582,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
     const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
     const confirmedCache = getLikedStateCache(uid);
     const latestOutbox = readLikeOutbox(uid);
-    const accountSyncResults: ExploreLikeBatchResult[] = [];
+    const accountSyncResults: Array<ExploreLikeBatchResult & { displayLikeCount?: number }> = [];
 
     for (const pending of batchEntries) {
       const result = resultByTrack.get(pending.trackId);
@@ -584,7 +593,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
       // 069: heart state can sync promptly, but public numeric count is
       // authoritative only after the deferred aggregate. Never manufacture +/-.
       let visibleLiked = pending.desiredLiked;
-      let visibleLikeCount = result.likeCount;
+      let visibleLikeCount = pending.optimisticLikeCount;
       let ownerUid = pending.ownerUid;
 
       if (latest && latest.updatedAt !== pending.updatedAt) {
@@ -593,7 +602,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
         latest.baseLikeCount = result.likeCount;
         latest.retryCount = 0;
         visibleLiked = latest.desiredLiked;
-        visibleLikeCount = result.likeCount;
+        visibleLikeCount = latest.optimisticLikeCount;
         if (latest.desiredLiked === result.liked) {
           delete latestOutbox[pending.trackId];
         } else {
@@ -606,7 +615,8 @@ const flushPendingLikes = async (user: User): Promise<void> => {
       const visibleResult = {
         trackId: result.trackId,
         liked: visibleLiked,
-        likeCount: visibleLikeCount,
+        likeCount: result.likeCount,
+        displayLikeCount: visibleLikeCount,
       };
       accountSyncResults.push(visibleResult);
       dispatchLikeSync({
@@ -703,9 +713,11 @@ export const setExploreTrackLike = async (
   const previousVisibleLiked = !liked;
   const baselineLiked = inflight?.desiredLiked ?? existing?.baseLiked ?? previousVisibleLiked;
   const baselineLikeCount = inflight?.optimisticLikeCount ?? existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);
-  // 069: keep the last aggregate-confirmed public number until the
-  // deferred server aggregate changes it.
-  const optimisticLikeCount = clampLikeCount(currentLikeCount);
+  // 074: public canonical count is still server-aggregated, but the person who
+  // clicked sees the expected +/- immediately. This is local display state only.
+  const optimisticLikeCount = clampLikeCount(
+    clampLikeCount(currentLikeCount) + (liked ? 1 : -1),
+  );
 
   if (!inflight && liked === baselineLiked) {
     delete outbox[normalizedTrackId];

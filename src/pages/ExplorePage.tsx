@@ -88,6 +88,7 @@ const EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071 = 'soridraw:explore-like-count-ref
 // One unique request is allowed only for an actual/persisted like recovery. No polling.
 const EXPLORE_LIKE_FRESH_FEED_QUERY_072 = '__soridraw_like_refresh';
 // SORIDRAW_EXPLORE_LIKE_FRESH_BOOTSTRAP_RECOVERY_073_20260912
+// SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912
 // Forced like-count recovery must use the unique fresh Feed URL even when this
 // browser has no session Feed cache yet (for example immediately after app update).
 
@@ -652,20 +653,18 @@ export default function ExplorePage() {
 
   useEffect(() => {
     if (!user?.uid || profileUid || !isExploreFeedRequest(requestUrl) || !tracks.length) return;
-    const staleLikedIds = tracks
-      .filter((track) => track.likeCount === 0 && likedTrackIds[track.id] === true)
-      .map((track) => track.id)
-      .sort();
-    if (!staleLikedIds.length) return;
-    // 072 one-shot repair for rows that already reached canonical count >= 1
-    // under 069/070/071 but this browser still displays the old zero. A newly
-    // clicked like can also match briefly; the persisted aggregate deadline then
-    // remains armed and performs the final post-aggregate refresh.
-    const repairKey = `${user.uid}:${requestUrl}:${staleLikedIds.join(',')}`;
-    if (likeCountRepairKeyRef072.current === repairKey) return;
-    likeCountRepairKeyRef072.current = repairKey;
-    forceLikeCountRefreshRef071.current = true;
-    setFeedRevisionSignal((value) => value + 1);
+    const selfLikedZeroTracks = tracks
+      .filter((track) => track.likeCount === 0 && likedTrackIds[track.id] === true);
+    if (!selfLikedZeroTracks.length) return;
+    // 074: a signed-in user who has this track liked must see at least 1
+    // immediately. This is a local-only display floor and causes no server read.
+    // The scheduled aggregate/fresh refresh still replaces it with canonical data.
+    const ids = new Set(selfLikedZeroTracks.map((track) => track.id));
+    setTracks((previous) => previous.map((track) => ids.has(track.id) ? { ...track, likeCount: 1 } : track));
+    for (const track of selfLikedZeroTracks) {
+      patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: 1 });
+      if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: 1 });
+    }
   }, [user?.uid, profileUid, requestUrl, tracks, likedTrackIds]);
 
   useEffect(() => {
@@ -795,12 +794,21 @@ export default function ExplorePage() {
         ownerUid?: string;
         liked?: boolean;
         likeCount?: number;
+        displayLikeCount?: number;
       }>).detail;
       const trackId = String(detail?.trackId || '').trim();
       if (!trackId || typeof detail?.liked !== 'boolean') return;
-      // Same-account signal changes only the personal heart. Public likeCount
-      // changes only after the deferred aggregate confirms the server value.
       setLikedTrackIds((prev) => ({ ...prev, [trackId]: detail.liked as boolean }));
+      // 074 same-account display: carry only the local optimistic number.
+      // Legacy signals do not include displayLikeCount, so they stay heart-only.
+      const displayLikeCount = Number(detail.displayLikeCount);
+      if (Number.isFinite(displayLikeCount)) {
+        const nextCount = safeCount(displayLikeCount);
+        updateTrackLikeCount(trackId, nextCount);
+        patchExploreFeedSessionCacheRow(requestUrl, trackId, { likeCount: nextCount });
+        const ownerUid = String(detail.ownerUid || '').trim();
+        if (ownerUid) patchExplorePublicProfileFirstViewTrack(ownerUid, trackId, { likeCount: nextCount });
+      }
       scheduleAggregateCountRefresh071();
     };
     const onLikeSyncError = (event: Event) => {
@@ -835,9 +843,12 @@ export default function ExplorePage() {
     setLikeBusyTrackId(track.id);
     try {
       const result = await setExploreTrackLike(user, track.id, !currentLiked, track.likeCount, track.ownerUid);
-      // Heart changes immediately; public numeric count stays unchanged until
-      // the scheduled aggregate publishes the confirmed count.
+      // 074: heart and the clicker's visible number move immediately. Canonical
+      // server count is still confirmed only by the existing deferred aggregate.
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
+      updateTrackLikeCount(track.id, result.likeCount);
+      patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: result.likeCount });
+      if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: result.likeCount });
     } catch (reason) {
       console.error('Explore like failed:', reason);
       setSocialNotice(reason instanceof Error ? reason.message : '좋아요 처리에 실패했어요.');

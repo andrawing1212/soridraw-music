@@ -94,7 +94,7 @@ async function readSchedules() {
 async function makeConfig() {
   const settings = await cfGet(`${apiBase}/workers/scripts/${target.worker}/settings`);
   const bindings = Array.isArray(settings?.bindings) ? settings.bindings : [];
-  const allowedTypes = new Set(['plain_text', 'secret_text', 'd1', 'r2_bucket']);
+  const allowedTypes = new Set(['plain_text', 'secret_text', 'd1', 'r2_bucket', 'service']);
   const unsupported = bindings.filter((item) => !allowedTypes.has(String(item?.type || '')));
   if (unsupported.length) {
     throw new Error(`unsupported live bindings on ${target.worker}; refusing deploy: ${JSON.stringify(unsupported.map((b) => ({ name: b?.name, type: b?.type })))}`);
@@ -111,6 +111,14 @@ async function makeConfig() {
     const bucket = String(item?.bucket_name || item?.bucket || '').trim();
     if (!bucket) throw new Error(`cannot resolve live R2 binding ${item?.name || '(unnamed)'}`);
     return { binding: String(item.name), bucket_name: bucket };
+  });
+  const services = bindings.filter((item) => item?.type === 'service').map((item) => {
+    const service = String(item?.service || item?.service_name || '').trim();
+    if (!service) throw new Error(`cannot resolve live service binding ${item?.name || '(unnamed)'}`);
+    const entry = { binding: String(item.name), service };
+    const environment = String(item?.environment || '').trim();
+    if (environment) entry.environment = environment;
+    return entry;
   });
 
   for (const required of ['DB', 'RATE_DB']) {
@@ -132,6 +140,7 @@ async function makeConfig() {
       ? { enabled: settings.observability.enabled !== false }
       : { enabled: true },
   };
+  if (services.length) config.services = services;
   if (Array.isArray(settings?.compatibility_flags) && settings.compatibility_flags.length) {
     config.compatibility_flags = settings.compatibility_flags;
   }
@@ -142,6 +151,7 @@ async function makeConfig() {
   console.log(`RELEASE_WORKER=${target.worker}`);
   console.log(`LIVE_D1_BINDINGS=${d1.map((item) => `${item.binding}:${item.database_name}`).join(',')}`);
   console.log(`LIVE_R2_BINDINGS=${r2.map((item) => `${item.binding}:${item.bucket_name}`).join(',')}`);
+  console.log(`LIVE_SERVICE_BINDINGS=${services.map((item) => `${item.binding}:${item.service}`).join(',') || '(none)'}`);
   return config;
 }
 

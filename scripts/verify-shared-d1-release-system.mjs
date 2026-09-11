@@ -10,8 +10,6 @@ for (const required of [
   'git merge-base --is-ancestor "$target" origin/preview',
   'git hash-object "$migration_path"',
   'ADDITIVE_DDL_STATIC_SAFETY=PASS',
-  'CREATE TABLE IF NOT EXISTS',
-  'CREATE INDEX IF NOT EXISTS',
   'INDEX_TARGET_MUST_BE_NEW_TABLE',
   'DROP INDEX IF EXISTS',
   'DROP TABLE IF EXISTS',
@@ -31,10 +29,12 @@ for (const forbidden of [
   assert.ok(!workflow.includes(forbidden), `shared D1 workflow still release-specific: ${forbidden}`);
 }
 
-assert.match(workflow, /\bDROP\|ALTER\|INSERT\|UPDATE\|DELETE\|REPLACE\|PRAGMA\|ATTACH\|DETACH\|VACUUM\|REINDEX\b/);
+assert.match(workflow, /CREATE\\s\+TABLE\\s\+IF\\s\+NOT\\s\+EXISTS/);
+assert.match(workflow, /CREATE\\s\+INDEX\\s\+IF\\s\+NOT\\s\+EXISTS/);
+assert.match(workflow, /DROP\|ALTER\|INSERT\|UPDATE\|DELETE\|REPLACE\|PRAGMA\|ATTACH\|DETACH\|VACUUM\|REINDEX/);
 assert.match(workflow, /migration.*\^20\[0-9\]\{6\}/);
 assert.match(workflow, /verifier.*scripts\//);
 assert.match(workflow, /explore_derived_state/);
-assert.match(workflow, /explore032_derived_track_update/);
+assert.match(workflow, /assertDerivedBaseD1Ready/);
 
 console.log('PASS shared D1 release system: fixed trigger-driven additive schema path, exact SHA/blob pinning, no per-release hardcoded migration, rollback of newly-created objects only');

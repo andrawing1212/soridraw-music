@@ -1,6 +1,6 @@
 # SORIDRAW CURRENT RELEASE STATE
 
-최종 갱신: 2026-09-11 KST
+최종 갱신: 2026-09-12 KST
 
 > 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다.
 
@@ -9,123 +9,92 @@
 - 개발 branch: `preview`
 - TEST branch: `main`
 - PRODUCTION branch: `production`
-- **현재 실제 PREVIEW 앱: 066**
-- PREVIEW 066 App version source: `cf9450839e848b4adc3a53ebb1227cf33cf38c0a`
-- PREVIEW 066 App Release checkout: `dcded183270cfb1d5427ea5059deb2d6ba481a7a`
-- PREVIEW 066 App Run: `34602732958` — PASS
-- PREVIEW 066 코드 merge: `9909f1da16811153a5ba15795b27199c15ab4950`
-- PREVIEW 066 Shared D1 release system merge: `8279447ca73996f6a5aef178d9c59602f9fbf82a`
-- Release System Audit Run: `34596887335` — PASS
+- **현재 실제 PREVIEW 앱: 067**
+- PREVIEW 067 app release checkout: `b6dd709e7fe5e73de4c89176dcbeb8d62a07d62d`
+- PREVIEW 067 App Run: `34616138225` — **PASS**
+- 067 same-account visible count fix: `973eb306447e4ec636302a63d04db561ab101bc1`
+- 067 app version commit: `f3d8e7951174dcb619f82435d7e56cff66c508cd`
+- 067 diagnostics reset propagation fix: `92fa248eae33e29b2e520cb69bd1e46c856e2d50`
+- PREVIEW Worker는 066 그대로: Run `34597109785`, active Version ID `d297dc1f-ec73-4ed3-89cd-547540c7ee86`
 - Shared D1 066 additive schema Run: `34597025382` — PASS
-- PREVIEW 066 Worker Run: `34597109785` — PASS
-- PREVIEW Worker active Version ID: `d297dc1f-ec73-4ed3-89cd-547540c7ee86`
-- Worker: 035 deferred aggregate + 036 derived intake + 037 revision head-only + 038 compact queue + 039 stable dual-queue boundary + 064 release-origin parity
 - Shared Firestore Rules 058 Run: `34558314461` — PASS
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
 - GitHub Ruleset `Protect release branches` (`22889511`) — Active
-- 고정 TEST→PRODUCTION Workflow: `.github/workflows/soridraw-release-promotion.yml`
 
-## 2. 066 핵심 변경
-### 좋아요 intake read 최적화
-- 공개곡/프로필/현재 like count는 기존 derived 상태를 사용.
-- 개인 liked 관계만 canonical `likes`를 authoritative source로 유지.
-- 원본 `tracks/public_profiles/track_stats` 중복 read 제거.
+## 2. 066에서 확정된 비용 개선
+- 1곡 like: D1 `R2/W2` 실사용 PASS.
+- 1곡 unlike: D1 `R2/W2` 실사용 PASS.
+- 2곡 unlike batch 사용자 캡처: Worker 1, D1 query `R1/W1`, rows `R6/W2`.
+- 3곡 unlike batch 사용자 캡처: Worker 1, D1 query `R1/W1`, rows `R9/W2`.
+- 여러 곡을 묶어도 queue write는 `W2/batch`로 고정됨.
+- 065의 W3 대비 write 약 33% 감소는 유지.
 
-### compact like queue
-- 새 additive `explore_like_batches_066` 사용.
-- `WITHOUT ROWID` + `batch_id TEXT PRIMARY KEY`.
-- `created_at,batch_id` index 유지.
-- 기존 `explore_like_batches_035` 삭제/변경 없음.
-- 새 Worker는 066 queue 우선, 035 fallback/호환 drain 유지.
-- 두 queue는 고정 chronological boundary 안에서 처리.
+## 3. 066 기능 판정 취소 / 067 수정 이유
+066에서 PC→모바일 좋아요 동기화 시:
+- 모바일 하트 색은 바뀌지만 숫자가 그대로인 재현이 확인됨.
+- 원인은 deferred public aggregate가 아직 반영되지 않은 Worker `result.likeCount`를 same-account signal 숫자로 다시 사용한 것.
+- 따라서 066의 `same-account 숫자 동기화 최종 PASS` 판정은 취소.
 
-### same-account 숫자 동기화
+067 수정:
+- same-account signal에는 현재 화면에서 이미 확정적으로 보이던 `optimisticLikeCount`를 전달.
+- 하트 상태와 숫자가 동일한 pending mutation 기준으로 같이 전달되도록 수정.
 - 기존 root `users/{uid}` listener 재사용.
-- 성공 batch의 실제 `liked + likeCount`를 account signal에 사용.
-- 다른 기기가 signal 순간 Explore 화면 밖이어도 짧은 로컬 patch cache로 숫자까지 재적용.
-- 새 Firestore listener 없음.
+- 새 Firestore listener / D1 query / Worker route 없음.
 
-## 3. 자동 검증/배포
-- TypeScript PASS.
-- Build PASS.
-- compact queue fixture PASS.
-- old/new queue rollout PASS.
-- stable boundary PASS.
-- 100 same-track aggregate PASS.
-- net-zero aggregate PASS.
-- Worker dry-run PASS.
-- Shared D1 exact migration/postflight PASS.
-- PREVIEW Feed/Profile/revision/cron smoke PASS.
-- warm revision `R0/W0` PASS.
-- Firebase PREVIEW Hosting exact build PASS.
-- 실제 `preview.soridraw.com` app-version `066` PASS.
-- TEST/PRODUCTION branch, Hosting, Worker unchanged PASS.
+## 4. CACHE LIVE 진단 초기화 오염 수정
+- `진단 초기화` 버튼 pointerdown이 Explore 전역 activity revalidation까지 전달되는 경로를 차단.
+- 버튼 자체를 눌렀다는 이유로 feed revision check가 발생하는 진단 오염을 제거.
+- UI 모양/위치 변경 없음.
 
-## 4. 사용자 실사용 비용 검증 — PREVIEW 066
-### 1곡 좋아요
-- `/v1/me/likes/batch` Worker 1.
-- D1 query `R1/W1`.
-- D1 rows **`R2/W2`**.
-- 065 `R2/W3` 대비 write W3→W2 PASS.
+## 5. 067 배포 자동검증
+Run `34616138225`:
+- checkout `b6dd709e7fe5e73de4c89176dcbeb8d62a07d62d`
+- npm install PASS
+- TypeScript PASS
+- Build PASS
+- Firebase PREVIEW Hosting PASS
+- 실제 `preview.soridraw.com` exact build PASS
+- 실제 `app-version.json=067` PASS
+- TEST/PRODUCTION branch + actual HTML unchanged PASS
+- Worker / D1 / Functions / Rules 변경 없음
+- 사용자 원본 데이터 변경 없음
 
-### 1곡 좋아요 해제
-- `/v1/me/likes/batch` Worker 1.
-- D1 query `R1/W1`.
-- D1 rows **`R2/W2`**.
-- 065 `R3/W3` 대비 read R3→R2, write W3→W2 PASS.
+## 6. 추가 발견 — 좋아요 처리 뒤 Feed 재확인 비용
+사용자 066 실사용 캡처:
+- 2곡 unlike batch 직후: likes batch `R6/W2`.
+- 이후 브라우저가 다시 활성화/복귀한 시점의 캡처에서 추가로:
+  - `/v1/feed-revision`: Worker 1, D1 row `R1/W0`
+  - `/v1/feed`: Worker 1, D1 rows `R15/W0`
+  - SDK `users:onSnapshot`도 3→4 증가
+- ExplorePage에는 1분 주기 timer는 없음. revalidation trigger는 focus/pageshow/pointerdown/visibilitychange임.
+- 따라서 단순 1분 timer 자동 read로 보지 않는다. 좋아요가 실제 서버에 반영된 뒤 탭 활성/복귀 신호에서 revision 변화가 감지되어 Feed 동기화가 실행된 경로로 본다.
+- 하지만 SORIDRAW 비용 목표상 좋아요 몇 개 때문에 전체 Feed 성격의 재확인이 생기는 것은 추가 최적화 대상으로 유지한다.
+- 현재 Worker의 032 derived change cache는 changed track ID만 추적하는 delta 구조를 이미 갖고 있으므로, 다음 단계에서는 이 기존 구조를 재사용해 full feed 재요청을 더 줄일 수 있는지 좁게 검토한다.
 
-### PC 3곡 좋아요 해제 → 모바일 자동 동기화
-2026-09-11 사용자 실사용 확인:
-- PC에서 공개곡 3개를 연속 좋아요 해제.
-- 약 1분 뒤 모바일에서 **하트/숫자 상태가 정상적으로 함께 변경됨 — PASS**.
-- PC/모바일 진단 화면 모두 `/v1/me/likes/batch` **Worker 1**로 확인.
-- D1 query `R1/W1`.
-- D1 rows **`R9/W2`**.
-- 요청당 평균 `R9/W2`.
-- 해제 3곡이 **서버 요청 1회 / queue write W2 한 번**으로 묶인 것이 실사용으로 확인됨.
-- read `R9`는 기존 personal like row가 있는 해제 경로에서 대략 3 rows/곡으로 증가하는 현재 구조와 일치.
-- 중요한 비용 결과: 곡 수가 3개로 늘어도 queue write는 **W2/batch로 고정**됨.
+## 7. 현재 보호 기준
+- PREVIEW 좋아요 1분 batch.
+- 10분 deferred public aggregate.
+- compact queue `W2/batch`.
+- PC↔모바일 same-account 하트 + 숫자 동기화.
+- 기존 Firestore root user listener 재사용, 새 listener 금지.
+- Explore resume LOCAL revision cache.
+- Music Note/Library Local First.
+- UI/CSS/반응형 변경 금지.
+- 사용자 원본 데이터 migration/backfill/delete/overwrite 금지.
 
-## 5. 비용 판정
-- 단일 like/unlike: 실제 인증 PREVIEW **R2/W2** PASS.
-- 3곡 unlike batch: **R9/W2** PASS.
-- 065 대비 queue write는 W3→W2로 약 33% 감소.
-- D1 무료 write 10만 rows/일 단순 환산상 likes batch 약 **5만 batch/일** 후보.
-- 3곡을 한 번에 처리해도 W2이므로 여러 좋아요/해제를 묶을수록 write 효율이 좋아짐.
-- read는 곡 수와 현재 개인 liked 상태에 따라 증가하므로 이후 대규모 최적화 시 read 쪽만 별도 검토 가능.
-- Explore resume/reentry LOCAL revision cache는 기존 zero-read 기준 유지.
-
-## 6. 기능 최종 판정
-- PREVIEW 066 App/Hosting: PASS.
-- PREVIEW 066 Worker: PASS.
-- Shared D1 additive schema: PASS.
-- W3→W2 비용 최적화: 사용자 실사용 PASS.
-- PC→모바일 3곡 좋아요 해제 same-account 하트/숫자 자동 동기화: PASS.
-- 기존 1곡 like/unlike 비용/표시: PASS.
-- 10분 deferred public aggregate 보호: PASS.
-- Explore revision warm R0/W0 보호: PASS.
-- UI/CSS 변경 없음.
-- 사용자 원본 데이터 migration/backfill/delete/overwrite 없음.
-- TEST/PRODUCTION unchanged.
-
-## 7. 남은 확인/위험
-- 이번 실사용으로 PC→모바일 방향의 다중 해제 동기화는 PASS.
-- 반대 방향(모바일→PC)은 065에서 단일 동기화 기준을 이미 보호하고 있으나, 066 다중 동작에 대한 별도 추가 계측은 필수 아님.
-- W1 최적화는 현재 자동 진행하지 않는다. `created_at` lookup index 제거/full scan, retry/idempotency 저하, 동시성 위험이 생기면 진행 금지.
-- 현재 안전 합격선은 **W2/batch**.
-
-## 8. 데이터/환경 안전
-- Shared D1: additive table/index 2개만 추가.
-- 기존 canonical user/content rows 변경 없음.
-- 기존 035 queue/table 삭제 없음.
-- Firestore Rules 변경 없음.
-- Firebase Functions 변경 없음.
-- TEST 배포 없음.
-- PRODUCTION 배포 없음.
+## 8. 현재 판정
+- PREVIEW 067 App 배포 자동검증: PASS.
+- 067 cross-device 숫자 수정: **사용자 실사용 재검증 전**.
+- 067 진단 초기화 pointer 오염 수정: **사용자 실사용 재검증 전**.
+- 066/067 좋아요 W2 비용 개선: PASS 유지.
+- TEST 승격: **불가 — 067 사용자 확인 및 Feed 재확인 비용 원인/범위 확인 전**.
+- TEST/PRODUCTION 변경 없음.
 
 ## 9. 다음 단계
-- PREVIEW 066은 현재 사용자 실사용 기준 **최종 PASS**로 본다.
-- 다음 릴리스 단계는 사용자가 `테스트배포`를 명시할 때만 TEST로 승격.
-- PRODUCTION은 별도 명확한 승인 후에만 진행.
-- 추가 비용 최적화(W1 포함)는 별도 사용자 요청이 있을 때만 새 PREVIEW 작업으로 시작.
+1. 사용자 PREVIEW 067 업데이트 적용 확인.
+2. PC에서 1~2곡 좋아요/해제 → 약 1분 뒤 모바일에서 **하트와 숫자가 함께 변경**되는지 확인.
+3. CACHE LIVE `진단 초기화` 직후 버튼 자체 때문에 Worker/D1이 증가하지 않는지 확인.
+4. 좋아요 batch 뒤 앱을 그대로 두거나 복귀했을 때 `/v1/feed-revision` + `/v1/feed`가 다시 발생하는 조건을 분리 계측.
+5. 필요하면 기존 032 changed-track delta를 이용해 like-only revision에서 full feed 재요청을 제거/축소하는 PREVIEW 작업 진행.
+6. 위 항목 PASS 전 TEST 승격 금지.

@@ -11,6 +11,7 @@ import {
 // SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
 // SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911
 // SORIDRAW_EXPLORE_LIKE_PREVIEW_1MIN_TEST_037_20260911
+// SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_REVALIDATION_058_20260911
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -411,6 +412,37 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   const outbox = readLikeOutbox(user.uid);
   resumePendingLikes(user);
   return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? cache.get(trackId) === true);
+};
+
+export const refreshExploreLikedTrackStates = async (
+  user: User,
+  trackIds: string[],
+): Promise<Record<string, boolean>> => {
+  const normalized = [...new Set(trackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean))].slice(0, 50);
+  if (!normalized.length) return {};
+
+  const cache = getLikedStateCache(user.uid);
+  const refreshIds = normalized.filter((trackId) => cache.has(trackId));
+  if (!refreshIds.length) return {};
+
+  const query = new URLSearchParams({ trackIds: refreshIds.join(',') });
+  const payload = await requestExploreLike(user, `/v1/me/likes?${query.toString()}`);
+  const likedIds = new Set(
+    Array.isArray(payload?.data?.likedTrackIds)
+      ? payload.data.likedTrackIds.map((trackId: unknown) => String(trackId || '').trim()).filter(Boolean)
+      : [],
+  );
+  refreshIds.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
+  persistLikedStateCache(user.uid, cache);
+
+  const outbox = readLikeOutbox(user.uid);
+  resumePendingLikes(user);
+  return Object.fromEntries(
+    refreshIds.map((trackId) => [
+      trackId,
+      outbox[trackId]?.desiredLiked ?? (cache.get(trackId) === true),
+    ]),
+  );
 };
 
 export const setExploreTrackLike = async (

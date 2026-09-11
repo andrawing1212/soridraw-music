@@ -49,12 +49,14 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/verify-release-promotion-system.mjs
+          node scripts/verify-shared-d1-release-system.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           grep -Fq 'enabled=false' .deploy/release-promotion.trigger
           grep -Fq 'permissions:' .github/workflows/soridraw-release-promotion.yml
           grep -Fq 'contents: write' .github/workflows/soridraw-release-promotion.yml
           echo 'RELEASE_TRIGGER_DEFAULT_INERT=PASS'
+          echo 'SHARED_D1_FIXED_PATH_STATIC_AUDIT=PASS'
 
       - name: Install Worker tooling
         working-directory: cloudflare/explore-worker

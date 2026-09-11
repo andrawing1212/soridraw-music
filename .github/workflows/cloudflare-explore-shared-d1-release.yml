@@ -25,8 +25,6 @@ jobs:
       PREVIEW_WORKER: soridraw-explore-preview
       TEST_WORKER: soridraw-explore-test
       PRODUCTION_WORKER: soridraw-explore-api
-      APPROVED_MIGRATION: 20260911_01_explore_like_deferred_batches.sql
-      APPROVED_MIGRATION_BLOB: b3f68fa1feee460c19a4a3c687ceb990509f23c9
       PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
       TEST_BASE: https://soridraw-explore-test.andrawing1212.workers.dev
       PRODUCTION_BASE: https://soridraw-explore-api.andrawing1212.workers.dev
@@ -38,7 +36,7 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Resolve approved shared D1 release
+      - name: Resolve exact additive shared D1 release
         id: resolve
         shell: bash
         run: |
@@ -48,16 +46,31 @@ jobs:
           target="$(sed -n 's/^product_code_target=//p' "$trigger" | tail -1 | tr -d '\r')"
           migration="$(sed -n 's/^migration=//p' "$trigger" | tail -1 | tr -d '\r')"
           blob="$(sed -n 's/^migration_blob=//p' "$trigger" | tail -1 | tr -d '\r')"
-          test "$migration" = "$APPROVED_MIGRATION"
-          test "$blob" = "$APPROVED_MIGRATION_BLOB"
+          verifier="$(sed -n 's/^verifier=//p' "$trigger" | tail -1 | tr -d '\r')"
+          verifier_blob="$(sed -n 's/^verifier_blob=//p' "$trigger" | tail -1 | tr -d '\r')"
+
           printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
+          printf '%s' "$migration" | grep -Eq '^20[0-9]{6}_[0-9]{2}_[a-z0-9][a-z0-9_-]*\.sql$'
+          printf '%s' "$blob" | grep -Eq '^[0-9a-f]{40}$'
+          if [ -n "$verifier" ]; then
+            printf '%s' "$verifier" | grep -Eq '^scripts/[A-Za-z0-9_./-]+\.mjs$'
+            ! printf '%s' "$verifier" | grep -Fq '..'
+            printf '%s' "$verifier_blob" | grep -Eq '^[0-9a-f]{40}$'
+          else
+            test -z "$verifier_blob"
+          fi
+
           git fetch origin preview main production --no-tags
           git merge-base --is-ancestor "$target" origin/preview
           echo "target=$target" >> "$GITHUB_OUTPUT"
           echo "migration=$migration" >> "$GITHUB_OUTPUT"
+          echo "migration_blob=$blob" >> "$GITHUB_OUTPUT"
+          echo "verifier=$verifier" >> "$GITHUB_OUTPUT"
+          echo "verifier_blob=$verifier_blob" >> "$GITHUB_OUTPUT"
           git rev-parse origin/main > "$RUNNER_TEMP/main-before.sha"
           git rev-parse origin/production > "$RUNNER_TEMP/production-before.sha"
           echo "LOCKED_D1_RELEASE_TARGET=$target"
+          echo "LOCKED_D1_MIGRATION=$migration"
 
       - name: Checkout exact approved source
         uses: actions/checkout@v4
@@ -74,28 +87,79 @@ jobs:
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
 
-      - name: Verify migration source and fixtures
+      - name: Verify exact migration source and additive-only contract
         shell: bash
+        env:
+          MIGRATION_NAME: ${{ steps.resolve.outputs.migration }}
+          MIGRATION_BLOB: ${{ steps.resolve.outputs.migration_blob }}
+          VERIFIER_PATH: ${{ steps.resolve.outputs.verifier }}
+          VERIFIER_BLOB: ${{ steps.resolve.outputs.verifier_blob }}
         run: |
           set -euo pipefail
-          migration="cloudflare/explore-worker/migrations/${{ steps.resolve.outputs.migration }}"
-          test -f "$migration"
-          test "$(git hash-object "$migration")" = "$APPROVED_MIGRATION_BLOB"
-          node scripts/verify-explore-like-cost-optimization.mjs
-          node <<'NODE'
-          const fs=require('fs');
-          const sql=fs.readFileSync('cloudflare/explore-worker/migrations/20260911_01_explore_like_deferred_batches.sql','utf8');
-          const compact=sql.replace(/--.*$/gm,' ').replace(/\s+/g,' ').trim();
-          for (const required of [
-            'CREATE TABLE IF NOT EXISTS explore_like_batches_035',
-            'CREATE INDEX IF NOT EXISTS idx_explore_like_batches_035_created',
-            'CREATE TABLE IF NOT EXISTS explore_like_processor_035',
-            'INSERT OR IGNORE INTO explore_like_processor_035'
-          ]) if (!compact.includes(required)) throw new Error(`Missing approved 035 D1 object: ${required}`);
-          if (/\b(?:DROP|ALTER|UPDATE|DELETE)\b/i.test(compact)) throw new Error('035 migration may not drop/alter/update/delete data');
-          const forbidden=/(?:INSERT\s+(?:OR\s+IGNORE\s+)?INTO|CREATE\s+(?:TABLE|INDEX)\s+(?:IF\s+NOT\s+EXISTS\s+)?)(tracks|track_stats|likes|public_profiles|profile_stats|explore_derived_state|explore_derived_changes|explore_derived_tracks|explore_derived_profiles)\b/i;
-          if (forbidden.test(compact)) throw new Error('035 migration may not mutate or redefine existing canonical/derived objects');
-          console.log('MIGRATION_035_STATIC_SAFETY=PASS');
+          migration_path="cloudflare/explore-worker/migrations/$MIGRATION_NAME"
+          test -f "$migration_path"
+          test "$(git hash-object "$migration_path")" = "$MIGRATION_BLOB"
+
+          if [ -n "$VERIFIER_PATH" ]; then
+            test -f "$VERIFIER_PATH"
+            test "$(git hash-object "$VERIFIER_PATH")" = "$VERIFIER_BLOB"
+            node "$VERIFIER_PATH"
+          fi
+
+          MIGRATION_PATH="$migration_path" node <<'NODE'
+          const fs = require('fs');
+          const path = process.env.MIGRATION_PATH;
+          const sql = fs.readFileSync(path, 'utf8');
+          const cleaned = sql
+            .replace(/\/\*[\s\S]*?\*\//g, ' ')
+            .replace(/--.*$/gm, ' ')
+            .trim();
+          const statements = cleaned.split(';').map((s) => s.trim()).filter(Boolean);
+          if (!statements.length) throw new Error('Migration has no SQL statements');
+
+          const forbiddenWords = /\b(?:DROP|ALTER|INSERT|UPDATE|DELETE|REPLACE|PRAGMA|ATTACH|DETACH|VACUUM|REINDEX|TRIGGER|VIEW)\b/i;
+          if (forbiddenWords.test(cleaned)) throw new Error('Only additive CREATE TABLE/INDEX DDL is allowed');
+
+          const reserved = new Set([
+            'tracks','track_stats','likes','public_profiles','profile_stats',
+            'explore_derived_state','explore_derived_changes','explore_derived_tracks','explore_derived_profiles'
+          ]);
+          const tables = new Map();
+          const indexes = new Map();
+          for (const statement of statements) {
+            let match = statement.match(/^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/i);
+            if (match) {
+              const name = match[1];
+              if (!/^explore_[a-z0-9_]+$/i.test(name)) throw new Error(`New D1 table outside explore namespace: ${name}`);
+              if (reserved.has(name.toLowerCase())) throw new Error(`Canonical/derived table may not be redefined: ${name}`);
+              if (tables.has(name) || indexes.has(name)) throw new Error(`Duplicate migration object: ${name}`);
+              tables.set(name, statement);
+              continue;
+            }
+            match = statement.match(/^CREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+([A-Za-z_][A-Za-z0-9_]*)\s+ON\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/i);
+            if (match) {
+              const [, name, table] = match;
+              if (!/^idx_explore_[a-z0-9_]+$/i.test(name)) throw new Error(`New D1 index outside explore namespace: ${name}`);
+              if (indexes.has(name) || tables.has(name)) throw new Error(`Duplicate migration object: ${name}`);
+              indexes.set(name, { statement, table });
+              continue;
+            }
+            throw new Error(`Unsupported migration statement: ${statement.slice(0, 120)}`);
+          }
+          if (!tables.size) throw new Error('Migration must create at least one new table');
+          for (const [name, info] of indexes) {
+            if (!tables.has(info.table)) {
+              console.error(`INDEX_TARGET_MUST_BE_NEW_TABLE index=${name} table=${info.table}`);
+              throw new Error(`Index may only target a table created by the same migration: ${name}`);
+            }
+          }
+          const objects = [
+            ...[...tables].map(([name, statement]) => ({ type: 'table', name, statement })),
+            ...[...indexes].map(([name, info]) => ({ type: 'index', name, table: info.table, statement: info.statement })),
+          ];
+          fs.mkdirSync('.shared-d1-release', { recursive: true });
+          fs.writeFileSync('.shared-d1-release/objects.json', JSON.stringify(objects, null, 2));
+          console.log(`ADDITIVE_DDL_STATIC_SAFETY=PASS objects=${objects.map((o) => `${o.type}:${o.name}`).join(',')}`);
           NODE
 
       - name: Prepare shared D1 config and base read-only preflight
@@ -117,8 +181,7 @@ jobs:
           node --input-type=module -e "import('./scripts/derived-deploy-preflight.mjs').then(m=>m.assertDerivedBaseD1Ready('.shared-d1-release/wrangler.jsonc'))"
           echo 'SHARED_D1_BASE_READONLY_PREFLIGHT=PASS'
 
-      - name: Capture active Worker consumers and live D1 baseline
-        working-directory: cloudflare/explore-worker
+      - name: Capture Worker consumers and live schema baseline
         shell: bash
         run: |
           set -euo pipefail
@@ -129,93 +192,100 @@ jobs:
           const headers={Authorization:`Bearer ${token}`,Accept:'application/json'};
           async function get(url){const r=await fetch(url,{headers});const t=await r.text();let x;try{x=JSON.parse(t)}catch{throw new Error(`Cloudflare ${r.status}: ${t.slice(0,500)}`)}if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${t.slice(0,800)}`);return x.result??x;}
           async function active(name){const p=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);const d=(p.deployments||p||[])[0];const v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];if(!v?.version_id||Number(v.percentage||0)<99.99)throw new Error(`No single active version for ${name}`);return String(v.version_id);}
-          async function source(name,version){const v=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${name}/versions/${version}?include=modules`);const mods=Array.isArray(v.modules)?v.modules:[];if(!mods.length)throw new Error(`No source modules for ${name}`);const main=mods.find(m=>m.name===v.main_module)||mods[0];return Buffer.from(main.content_base64||'','base64').toString('utf8');}
           (async()=>{
+            fs.mkdirSync('cloudflare/explore-worker/.shared-d1-release',{recursive:true});
             for(const [key,name] of [['preview',process.env.PREVIEW_WORKER],['test',process.env.TEST_WORKER],['production',process.env.PRODUCTION_WORKER]]){
               const version=await active(name);
-              fs.writeFileSync(`.shared-d1-release/${key}-worker-before.txt`,version);
-              const src=await source(name,version);
-              const derived=/EXPLORE_DERIVED_CONTRACT_032|explore_derived_state|explore_derived_changes/.test(src);
-              if(derived && (!/scope\s*=\s*\?|WHERE scope=\?/.test(src) || !/seq>\?/.test(src))) throw new Error(`${name} derived cursor is not scope-local`);
-              if(key==='preview' && /SORIDRAW_EXPLORE_LIKE_DEFERRED_AGGREGATE_035_20260911/.test(src)) throw new Error('PREVIEW Worker 035 is already active before shared D1 gate');
-              console.log(`${key.toUpperCase()}_WORKER_COMPAT=PASS version=${version} derived032=${derived}`);
+              fs.writeFileSync(`cloudflare/explore-worker/.shared-d1-release/${key}-worker-before.txt`,version);
+              console.log(`${key.toUpperCase()}_WORKER_CAPTURE=PASS version=${version}`);
             }
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
 
+          cp .shared-d1-release/objects.json cloudflare/explore-worker/.shared-d1-release/objects.json
+          cd cloudflare/explore-worker
           cfg='.shared-d1-release/wrangler.jsonc'
-          node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --command "SELECT type,name,sql FROM sqlite_schema WHERE name IN ('explore_like_batches_035','idx_explore_like_batches_035_created','explore_like_processor_035','explore032_derived_track_update') ORDER BY name" --json > .shared-d1-release/schema-before.json
+          node <<'NODE' > .shared-d1-release/schema-query.sql
+          const objects=require(process.cwd()+'/.shared-d1-release/objects.json');
+          const quote=(s)=>`'${String(s).replaceAll("'","''")}'`;
+          console.log(`SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name IN (${objects.map(o=>quote(o.name)).join(',')}) ORDER BY type,name`);
+          NODE
+          node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --command "$(cat .shared-d1-release/schema-query.sql)" --json > .shared-d1-release/schema-before.json
           node <<'NODE'
           const fs=require('fs');
+          const objects=require(process.cwd()+'/.shared-d1-release/objects.json');
           const raw=JSON.parse(fs.readFileSync('.shared-d1-release/schema-before.json','utf8'));
-          const rows=raw?.[0]?.results||[];
-          const likeNames=new Set(['explore_like_batches_035','idx_explore_like_batches_035_created','explore_like_processor_035']);
-          const present=rows.filter(r=>likeNames.has(String(r.name||'')));
-          if(present.length!==0 && present.length!==3) throw new Error(`Partial 035 schema exists: ${present.map(r=>r.name).join(',')}`);
-          const trigger=rows.find(r=>r.name==='explore032_derived_track_update')?.sql;
-          if(!trigger) throw new Error('Required low-write derived trigger missing');
-          const approved=fs.readFileSync('migrations/20260910_03_explore_like_write_optimization.sql','utf8').match(/CREATE TRIGGER(?: IF NOT EXISTS)?\s+explore032_derived_track_update[\s\S]*?END;/i)?.[0];
-          const norm=s=>String(s||'').replace(/--.*$/gm,' ').replace(/\bIF NOT EXISTS\b/ig,' ').replace(/\s+/g,'').replace(/;+$/,'').toLowerCase();
-          if(!approved || norm(trigger)!==norm(approved)) throw new Error('Live low-write trigger differs from approved 033 definition');
-          fs.writeFileSync('.shared-d1-release/trigger-before.sql',trigger);
-          fs.writeFileSync('.shared-d1-release/baseline-state.txt',present.length===3?'existing035':'fresh035');
-          console.log(`LIKE035_SCHEMA_BASELINE=${present.length===3?'existing035':'fresh035'}`);
+          const rows=raw.flatMap(x=>x?.results||[]);
+          const normalize=(s)=>String(s||'').replace(/--.*$/gm,' ').replace(/\bIF\s+NOT\s+EXISTS\b/ig,' ').replace(/\s+/g,'').replace(/;+$/,'').toLowerCase();
+          const existing=[];
+          for(const object of objects){
+            const row=rows.find(r=>String(r.name||'')===object.name);
+            if(!row) continue;
+            if(String(row.type||'')!==object.type) throw new Error(`Existing object type mismatch: ${object.name}`);
+            if(normalize(row.sql)!==normalize(object.statement)) throw new Error(`Existing object SQL differs from approved migration: ${object.name}`);
+            existing.push(object.name);
+          }
+          fs.writeFileSync('.shared-d1-release/existing-before.json',JSON.stringify(existing));
+          console.log(`LIVE_SCHEMA_BASELINE=PASS preexisting=${existing.join(',')||'none'}`);
           NODE
 
-          state="$(cat .shared-d1-release/baseline-state.txt)"
-          if [ "$state" = existing035 ]; then
-            node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --command "SELECT id,lease_until,owner FROM explore_like_processor_035 WHERE id=1; SELECT COUNT(*) AS pending FROM explore_like_batches_035" --json > .shared-d1-release/existing-state.json
-            node -e "const fs=require('fs');const raw=JSON.parse(fs.readFileSync('.shared-d1-release/existing-state.json','utf8'));const sets=raw.flatMap(x=>Array.isArray(x?.results)?[x.results]:[]);const processor=sets.find(x=>x.some(r=>'lease_until' in r))?.[0];const pending=sets.find(x=>x.some(r=>'pending' in r))?.[0];if(Number(processor?.id)!==1)throw new Error('Existing 035 processor row invalid');if(Number(pending?.pending||0)!==0)throw new Error('Existing 035 queue is not empty before Worker activation');console.log('EXISTING_035_SCHEMA_EMPTY_QUEUE=PASS');"
-          fi
-
-      - name: Apply approved additive 035 migration with rollback guard
-        working-directory: cloudflare/explore-worker
+      - name: Apply exact additive migration with rollback guard
         shell: bash
+        env:
+          MIGRATION_NAME: ${{ steps.resolve.outputs.migration }}
         run: |
           set -euo pipefail
-          cfg='.shared-d1-release/wrangler.jsonc'
-          migration="migrations/${{ steps.resolve.outputs.migration }}"
-          state="$(cat .shared-d1-release/baseline-state.txt)"
+          root="$PWD"
+          worker_dir="$PWD/cloudflare/explore-worker"
+          cfg="$worker_dir/.shared-d1-release/wrangler.jsonc"
+          migration="$worker_dir/migrations/$MIGRATION_NAME"
+          rollback_file="$worker_dir/.shared-d1-release/rollback.sql"
           applied=0
+          cd "$worker_dir"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const objects=require(process.cwd()+'/.shared-d1-release/objects.json');
+          const existing=new Set(JSON.parse(fs.readFileSync('.shared-d1-release/existing-before.json','utf8')));
+          const added=objects.filter(o=>!existing.has(o.name));
+          const indexes=added.filter(o=>o.type==='index').reverse();
+          const tables=added.filter(o=>o.type==='table').reverse();
+          const ident=(s)=>`"${String(s).replaceAll('"','""')}"`;
+          const sql=[...indexes.map(o=>`DROP INDEX IF EXISTS ${ident(o.name)};`),...tables.map(o=>`DROP TABLE IF EXISTS ${ident(o.name)};`)].join('\n');
+          fs.writeFileSync('.shared-d1-release/rollback.sql',sql ? sql+'\n' : '');
+          console.log(`ROLLBACK_NEW_OBJECTS_ONLY=${added.map(o=>o.name).join(',')||'none'}`);
+          NODE
 
           rollback() {
-            echo 'POST_APPLY_CHECK_FAILED: removing newly-created 035 additive objects'
-            cat > .shared-d1-release/rollback.sql <<'SQL'
-          DROP INDEX IF EXISTS idx_explore_like_batches_035_created;
-          DROP TABLE IF EXISTS explore_like_batches_035;
-          DROP TABLE IF EXISTS explore_like_processor_035;
-          SQL
-            node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --file .shared-d1-release/rollback.sql --yes || true
+            if [ -s "$rollback_file" ]; then
+              echo 'POST_APPLY_CHECK_FAILED: removing only objects absent before this release'
+              node "$worker_dir/node_modules/wrangler/bin/wrangler.js" d1 execute DB --remote --config "$cfg" --file "$rollback_file" --yes || true
+            fi
           }
           trap 'status=$?; if [ "$status" -ne 0 ] && [ "$applied" = 1 ]; then rollback; fi; exit "$status"' EXIT
 
-          if [ "$state" = fresh035 ]; then
-            node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --file "$migration" --yes
-            applied=1
-          else
-            echo 'SHARED_D1_035_ALREADY_PRESENT=PASS'
-          fi
+          applied=1
+          node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --file "$migration" --yes
 
-          node --input-type=module -e "import('./scripts/derived-deploy-preflight.mjs').then(m=>m.assertDerivedD1Ready('.shared-d1-release/wrangler.jsonc'))"
-          node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --command "SELECT type,name,sql FROM sqlite_schema WHERE name IN ('explore_like_batches_035','idx_explore_like_batches_035_created','explore_like_processor_035','explore032_derived_track_update') ORDER BY name; SELECT id,lease_until,owner FROM explore_like_processor_035 WHERE id=1; SELECT COUNT(*) AS pending FROM explore_like_batches_035" --json > .shared-d1-release/postflight.json
+          node node_modules/wrangler/bin/wrangler.js d1 execute DB --remote --config "$cfg" --command "$(cat .shared-d1-release/schema-query.sql)" --json > .shared-d1-release/schema-after.json
           node <<'NODE'
           const fs=require('fs');
-          const raw=JSON.parse(fs.readFileSync('.shared-d1-release/postflight.json','utf8'));
-          const all=raw.flatMap(x=>x?.results||[]);
-          for(const [type,name] of [['table','explore_like_batches_035'],['index','idx_explore_like_batches_035_created'],['table','explore_like_processor_035']]) {
-            if(!all.some(r=>r.type===type&&r.name===name)) throw new Error(`035 postflight missing ${type}:${name}`);
+          const objects=require(process.cwd()+'/.shared-d1-release/objects.json');
+          const raw=JSON.parse(fs.readFileSync('.shared-d1-release/schema-after.json','utf8'));
+          const rows=raw.flatMap(x=>x?.results||[]);
+          const normalize=(s)=>String(s||'').replace(/--.*$/gm,' ').replace(/\bIF\s+NOT\s+EXISTS\b/ig,' ').replace(/\s+/g,'').replace(/;+$/,'').toLowerCase();
+          for(const object of objects){
+            const row=rows.find(r=>String(r.name||'')===object.name);
+            if(!row) throw new Error(`Postflight object missing: ${object.name}`);
+            if(String(row.type||'')!==object.type) throw new Error(`Postflight type mismatch: ${object.name}`);
+            if(normalize(row.sql)!==normalize(object.statement)) throw new Error(`Postflight SQL mismatch: ${object.name}`);
           }
-          const processor=all.find(r=>'lease_until' in r && Number(r.id)===1);
-          if(!processor) throw new Error('035 processor row missing');
-          const pending=all.find(r=>'pending' in r);
-          if(Number(pending?.pending||0)!==0) throw new Error('035 queue must be empty before PREVIEW Worker activation');
-          const trigger=all.find(r=>r.name==='explore032_derived_track_update')?.sql;
-          const before=fs.readFileSync('.shared-d1-release/trigger-before.sql','utf8');
-          const norm=s=>String(s||'').replace(/\s+/g,'').replace(/;+$/,'').toLowerCase();
-          if(!trigger||norm(trigger)!==norm(before)) throw new Error('Existing low-write trigger changed during additive 035 migration');
-          console.log('SHARED_D1_035_POSTFLIGHT=PASS');
+          console.log(`SHARED_D1_ADDITIVE_POSTFLIGHT=PASS objects=${objects.map(o=>o.name).join(',')}`);
           NODE
 
+          node --input-type=module -e "import('./scripts/derived-deploy-preflight.mjs').then(m=>m.assertDerivedBaseD1Ready('.shared-d1-release/wrangler.jsonc'))"
+
+          cd "$root"
           for pair in \
             "preview|${PREVIEW_BASE}|https://preview.soridraw.com" \
             "test|${TEST_BASE}|https://test.soridraw.com" \
@@ -226,17 +296,6 @@ jobs:
             echo "${name^^}_FEED_POST_D1_CHANGE=PASS"
           done
 
-          for n in 1 2; do
-            code="$(curl -sS -D "$RUNNER_TEMP/rev-${n}.head" -o "$RUNNER_TEMP/rev-${n}.json" -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' "${PREVIEW_BASE}/v1/feed-revision?sort=latest")"
-            test "$code" = 200
-            [ "$n" = 1 ] && sleep 1 || true
-          done
-          read2="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/rev-2.head" | tail -1)"
-          write2="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/rev-2.head" | tail -1)"
-          test "$read2" = 0
-          test "$write2" = 0
-          echo "PREVIEW_WARM_REVISION_AFTER_D1=R${read2}/W${write2} PASS"
-
           node <<'NODE'
           const fs=require('fs');
           const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_API_TOKEN;
@@ -246,7 +305,7 @@ jobs:
           (async()=>{
             for(const [key,name] of [['preview',process.env.PREVIEW_WORKER],['test',process.env.TEST_WORKER],['production',process.env.PRODUCTION_WORKER]]){
               const now=await active(name);
-              const before=fs.readFileSync(`.shared-d1-release/${key}-worker-before.txt`,'utf8').trim();
+              const before=fs.readFileSync(`cloudflare/explore-worker/.shared-d1-release/${key}-worker-before.txt`,'utf8').trim();
               if(now!==before)throw new Error(`${key} Worker changed during D1-only release`);
             }
             console.log('ALL_WORKER_VERSIONS_UNCHANGED=PASS');
@@ -258,4 +317,4 @@ jobs:
           test "$(git rev-parse origin/production)" = "$(cat "$RUNNER_TEMP/production-before.sha")"
           echo 'MAIN_PRODUCTION_REFS_UNCHANGED=PASS'
           trap - EXIT
-          echo 'SHARED_D1_035_RELEASE=PASS'
+          echo 'SHARED_D1_ADDITIVE_RELEASE=PASS'

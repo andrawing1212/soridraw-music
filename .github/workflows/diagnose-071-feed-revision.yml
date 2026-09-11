@@ -49,7 +49,6 @@ jobs:
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
             SELECT seeded,seq AS global_seq FROM explore_derived_state WHERE id=1;
             SELECT COALESCE(MAX(seq),0) AS feed_seq FROM explore_derived_changes WHERE scope='feed';
-            SELECT id,likes FROM explore_derived_tracks ORDER BY rowid DESC LIMIT 5;
           " --json > "$RUNNER_TEMP/d1.json"
 
           curl -fsS -D "$RUNNER_TEMP/revision.headers" -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=latest" > "$RUNNER_TEMP/revision.json"

@@ -1,0 +1,129 @@
+name: SORIDRAW Audit All 044 Probe Records
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-audit-all-044-probes-20260912.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Authenticate Firebase read-only audit
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+      - name: Audit every exact 044 probe document
+        working-directory: functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const admin = require('firebase-admin');
+          admin.initializeApp({ projectId: 'soridraw-app-866a5' });
+          const db = admin.firestore();
+          const auth = admin.auth();
+          const DISPLAY = 'SORIDRAW 044 preview Probe';
+          const emptySub = async (path) => (await db.collection(path).limit(1).get()).empty;
+          const emptyRef = async (c,f,u) => (await db.collection(c).where(f,'==',u).limit(1).get()).empty;
+          const authState = async (uid) => {
+            try {
+              const u = await auth.getUser(uid);
+              return { exists:true, email:u.email || '', displayName:u.displayName || '', disabled:u.disabled, providers:(u.providerData||[]).map(p=>p.providerId) };
+            } catch (e) {
+              if (e?.code === 'auth/user-not-found') return { exists:false };
+              throw e;
+            }
+          };
+          (async () => {
+            const snap = await db.collection('users').where('displayName','==',DISPLAY).limit(20).get();
+            const report = [];
+            for (const doc of snap.docs) {
+              const uid = doc.id;
+              const d = doc.data() || {};
+              const direct = await Promise.all(['user_recent_songs','user_structures','user_api_keys','gemini_request_guards'].map(c => db.collection(c).doc(uid).get()));
+              const subchecks = await Promise.all([
+                emptySub(`users/${uid}/songs`), emptySub(`users/${uid}/playlists`), emptySub(`users/${uid}/settings`),
+                emptySub(`suno_tracks/${uid}/tracks`), emptySub(`user_list_caches/${uid}/bundles`), emptySub(`user_playlists/${uid}/lists`),
+              ]);
+              const refs = await Promise.all([
+                emptyRef('favorites','uid',uid), emptyRef('suno_shares','ownerUid',uid), emptyRef('music_note_shares','ownerUid',uid), emptyRef('admin_permission_audit','targetUid',uid),
+              ]);
+              report.push({
+                uid,
+                email:String(d.email||''),
+                role:String(d.role||'free'),
+                songGeneratedCount:Number(d.songGeneratedCount||0),
+                favoriteCount:Number(d.favoriteCount||0),
+                auth:await authState(uid),
+                directDocs:direct.filter(s=>s.exists).map(s=>s.ref.path),
+                nestedEmpty:subchecks.every(Boolean),
+                refsEmpty:refs.every(Boolean),
+              });
+            }
+            fs.writeFileSync('/tmp/044-probes.json', JSON.stringify(report));
+            console.log(`EXACT_044_PROBE_DOCS=${report.length}`);
+            console.log(JSON.stringify(report,null,2));
+            console.log('FIREBASE_WRITES=0');
+            console.log('FIREBASE_DELETES=0');
+          })().catch(e=>{ console.error(e?.stack||e); process.exit(1); });
+          NODE
+      - name: Audit D1 references for any remaining 044 probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const candidates = JSON.parse(fs.readFileSync('/tmp/044-probes.json','utf8'));
+          if (!candidates.length) { console.log('D1_REFERENCE_HITS=0'); process.exit(0); }
+          const endpoint = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/d1/database/${process.env.SHARED_D1_ID}/query`;
+          const headers = { Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`, 'Content-Type':'application/json' };
+          const qi=v=>`"${String(v).replaceAll('"','""')}"`;
+          const qs=v=>`'${String(v).replaceAll("'","''")}'`;
+          async function query(sql){
+            const r=await fetch(endpoint,{method:'POST',headers,body:JSON.stringify({sql})});
+            const t=await r.text(); const j=JSON.parse(t);
+            if(!r.ok||j.success===false) throw new Error(`D1 ${r.status}: ${t.slice(0,800)}`);
+            return (Array.isArray(j.result)?j.result:[j.result]).flatMap(b=>b?.results||[]);
+          }
+          (async()=>{
+            const cols=['uid','user_id','user_uid','owner_uid','author_uid','follower_uid','following_uid','target_uid','actor_uid','profile_uid'];
+            const schema=await query("SELECT name, sql FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+            const inList=candidates.map(c=>qs(c.uid)).join(',');
+            const hits=[]; let checks=0;
+            for(const row of schema){
+              const table=String(row.name||''), ddl=String(row.sql||'');
+              for(const col of cols){
+                if(!table||!new RegExp(`(^|[^A-Za-z0-9_])${col}([^A-Za-z0-9_]|$)`,'i').test(ddl)) continue;
+                checks++;
+                const rows=await query(`SELECT COUNT(*) count FROM ${qi(table)} WHERE ${qi(col)} IN (${inList})`);
+                const count=Number(rows[0]?.count||0);
+                if(count>0) hits.push({table,column:col,count});
+              }
+            }
+            console.log(`D1_COLUMN_CHECKS=${checks}`);
+            console.log(`D1_REFERENCE_HITS=${hits.length}`);
+            console.log(JSON.stringify({hits},null,2));
+            console.log('D1_WRITES=0');
+            console.log('D1_DELETES=0');
+          })().catch(e=>{ console.error(e?.stack||e); process.exit(1); });
+          NODE

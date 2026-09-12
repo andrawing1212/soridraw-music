@@ -88,11 +88,12 @@ PREVIEW App Run `34639940311` — PASS:
 - TEST / PRODUCTION branch 및 실제 HTML unchanged PASS.
 
 ## 6. 데이터 / 인프라 상태
-- Shared 사용자 원본 데이터 삭제/백필/덮어쓰기 없음.
+- 실사용자 원본 데이터 삭제/백필/덮어쓰기 없음.
+- synthetic `SORIDRAW 044 preview Probe` 잔여 Firestore 사용자 문서 총 4건은 안전 확인 후 정리 완료.
 - D1 schema 변경 없음.
 - PREVIEW Worker 재배포 없음.
 - Firebase Functions / Firestore Rules 변경 없음.
-- PREVIEW Hosting만 074로 갱신.
+- PREVIEW Hosting은 계속 074.
 - TEST / PRODUCTION 승격 없음.
 
 ## 7. 현재 판정
@@ -117,23 +118,33 @@ PREVIEW App Run `34639940311` — PASS:
 통과 후 개발 측에서 3곡 W1 비용과 reversal 실제 수렴을 검증하고 TEST 승격 가능 여부를 판단한다.
 
 ## 9. 2026-09-12 synthetic 044 Probe 잔여계정 정리
-관리자 사용자 목록에 남아 있던 `SORIDRAW 044 preview Probe` 3건을 실제 공유 데이터 기준으로 점검하고 정리함.
+관리자 사용자 목록에 남아 있던 `SORIDRAW 044 preview Probe`는 **총 4건**이었다.
 
-확인 결과:
-- 정확히 3건의 Firestore `users/{uid}` 문서만 존재.
-- 이메일은 모두 `soridraw044-preview-...@example.invalid`, displayName은 `SORIDRAW 044 preview Probe`.
-- Firebase Auth 계정은 3건 모두 이미 없음.
-- role `free`, 생성곡 0, 즐겨찾기 0.
+1차 확인/정리:
+- 이메일이 `soridraw044-preview-...@example.invalid`인 3건 확인.
+- Firebase Auth 계정 없음, role `free`, 생성곡 0, 즐겨찾기 0.
 - Music Note / playlist / settings / Suno track / list cache / share / permission audit 연결 데이터 없음.
 - Shared D1 UID 계열 38개 컬럼 경로 점검 결과 참조 0건.
 - D1 read-only audit Run `34670829830` — PASS.
-
-정리:
 - Cleanup Run `34670885055` — PASS.
-- 위 조건을 재확인한 뒤 **해당 3개의 synthetic Firestore 사용자 문서만 삭제**.
-- 삭제 후 동일 UID 문서 0건, Auth 0건, 동일 Probe marker 잔여 0건 재확인 PASS.
+- 해당 3개의 synthetic Firestore 사용자 문서 삭제.
+
+2차 사용자 화면 확인 후 재감사:
+- 화면에는 4건이 보였고 그중 1건은 `이메일 없음` 상태였음.
+- 최초 감사가 이메일 prefix 조건을 사용해 이 1건을 놓친 것이 원인.
+- 전체 `displayName == SORIDRAW 044 preview Probe` 재감사 Run `34680863851` — PASS.
+- 실제 서버에는 앞의 3건은 이미 삭제되어 있었고, **이메일 없는 1건만 실제로 남아 있음** 확인.
+- 남은 UID: `soridraw044_preview_1788857732210_a1o4qg`.
+- Auth 없음, role `free`, 생성곡 0, 즐겨찾기 0, 직접/하위/참조 사용자 데이터 없음.
+- Shared D1 38개 UID 경로 참조 0건.
+- 최종 Cleanup Run `34680914545` — PASS.
+- 이메일 없는 마지막 synthetic Firestore 사용자 문서 1건 삭제.
+- 삭제 후 `displayName == SORIDRAW 044 preview Probe` 서버 문서 **0건** 재확인 PASS.
 - `REAL_USER_DATA_CHANGED=0`, `D1_ROWS_DELETED=0`.
-- 실제 사용자 곡/좋아요/공개곡/프로필/플레이리스트 데이터 변경 없음.
-- Hosting / Worker / Functions / Rules 배포 없음.
-- PREVIEW 실제 앱은 계속 074, Worker 069 유지. TEST / PRODUCTION 변경 없음.
+
+관리자 화면 캐시 주의:
+- `AdminUserManagementPage`는 일반 진입 시 `readAdminUserListCache(...)`를 먼저 사용하므로 이미 삭제된 계정이 화면에 잠시 남을 수 있음.
+- 앱 배포는 필요 없음. 서버 데이터 삭제는 즉시 적용됨.
+- 관리자 사용자관리 화면의 **`새로고침` 버튼**은 `fetchUsers(true)`로 서버 목록을 강제 확인하고 캐시를 다시 씀.
+- 화면 상단의 **`지금 확인` 버튼은 접속상태(Presence)만 갱신**하므로 사용자 목록 삭제 반영용 버튼이 아님.
 - 점검/정리용 임시 GitHub Actions workflow는 작업 완료 후 제거함.

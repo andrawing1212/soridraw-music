@@ -115,3 +115,25 @@ PREVIEW App Run `34639940311` — PASS:
 4. 다시 취소하면 동시에 `1 → 0` 되는지 확인.
 
 통과 후 개발 측에서 3곡 W1 비용과 reversal 실제 수렴을 검증하고 TEST 승격 가능 여부를 판단한다.
+
+## 9. 2026-09-12 synthetic 044 Probe 잔여계정 정리
+관리자 사용자 목록에 남아 있던 `SORIDRAW 044 preview Probe` 3건을 실제 공유 데이터 기준으로 점검하고 정리함.
+
+확인 결과:
+- 정확히 3건의 Firestore `users/{uid}` 문서만 존재.
+- 이메일은 모두 `soridraw044-preview-...@example.invalid`, displayName은 `SORIDRAW 044 preview Probe`.
+- Firebase Auth 계정은 3건 모두 이미 없음.
+- role `free`, 생성곡 0, 즐겨찾기 0.
+- Music Note / playlist / settings / Suno track / list cache / share / permission audit 연결 데이터 없음.
+- Shared D1 UID 계열 38개 컬럼 경로 점검 결과 참조 0건.
+- D1 read-only audit Run `34670829830` — PASS.
+
+정리:
+- Cleanup Run `34670885055` — PASS.
+- 위 조건을 재확인한 뒤 **해당 3개의 synthetic Firestore 사용자 문서만 삭제**.
+- 삭제 후 동일 UID 문서 0건, Auth 0건, 동일 Probe marker 잔여 0건 재확인 PASS.
+- `REAL_USER_DATA_CHANGED=0`, `D1_ROWS_DELETED=0`.
+- 실제 사용자 곡/좋아요/공개곡/프로필/플레이리스트 데이터 변경 없음.
+- Hosting / Worker / Functions / Rules 배포 없음.
+- PREVIEW 실제 앱은 계속 074, Worker 069 유지. TEST / PRODUCTION 변경 없음.
+- 점검/정리용 임시 GitHub Actions workflow는 작업 완료 후 제거함.

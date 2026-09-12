@@ -45,22 +45,23 @@ jobs:
           (async () => {
             const uidCols = ['uid','user_id','user_uid','owner_uid','author_uid','follower_uid','following_uid','target_uid','actor_uid','profile_uid'];
             const schema = await query("SELECT name, sql FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
-            const clauses = [];
+            const hits = [];
+            let checks = 0;
+            const inList = uids.map(qs).join(',');
             for (const row of schema) {
               const table = String(row.name || '');
               const ddl = String(row.sql || '');
               if (!table || !ddl) continue;
               for (const col of uidCols) {
                 if (!new RegExp(`(^|[^A-Za-z0-9_])${col}([^A-Za-z0-9_]|$)`, 'i').test(ddl)) continue;
-                for (const uid of uids) clauses.push(`SELECT ${qs(table)} table_name,${qs(col)} column_name,${qs(uid)} uid,COUNT(*) count FROM ${qi(table)} WHERE ${qi(col)}=${qs(uid)}`);
+                checks += 1;
+                const rows = await query(`SELECT COUNT(*) count FROM ${qi(table)} WHERE ${qi(col)} IN (${inList})`);
+                const count = Number(rows[0]?.count || 0);
+                if (count > 0) hits.push({ table, column: col, count });
               }
             }
-            const hits = [];
-            for (let i = 0; i < clauses.length; i += 10) {
-              const rows = await query(clauses.slice(i, i + 10).join(' UNION ALL '));
-              hits.push(...rows.filter(r => Number(r.count || 0) > 0));
-            }
             console.log(`D1_CHECKED_CANDIDATES=${uids.length}`);
+            console.log(`D1_COLUMN_CHECKS=${checks}`);
             console.log(`D1_REFERENCE_HITS=${hits.length}`);
             console.log(JSON.stringify({ hits }, null, 2));
             if (hits.length) process.exit(2);

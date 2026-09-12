@@ -1,0 +1,220 @@
+name: SORIDRAW Synthetic 044 Probe Account Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-audit-probe-accounts-20260912.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+      GCLOUD_PROJECT: soridraw-app-866a5
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Authenticate Firebase read-only audit
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Audit Auth and Firestore without writes
+        working-directory: functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const admin = require('firebase-admin');
+          admin.initializeApp({
+            projectId: 'soridraw-app-866a5',
+            databaseURL: 'https://soridraw-app-866a5-default-rtdb.firebaseio.com',
+          });
+          const auth = admin.auth();
+          const db = admin.firestore();
+          const rtdb = admin.database();
+          const EMAIL_PREFIX = 'soridraw044-preview-';
+          const DISPLAY_NAME = 'SORIDRAW 044 preview Probe';
+          const uidFields = ['uid','userId','ownerUid','owner_uid','authorUid','createdBy','updatedBy','followerUid','followingUid','targetUid','actorUid'];
+          const safeData = (value) => {
+            if (value == null) return value;
+            if (typeof value === 'string') return value.length > 160 ? `${value.slice(0,80)}…` : value;
+            if (typeof value === 'number' || typeof value === 'boolean') return value;
+            if (Array.isArray(value)) return `[array:${value.length}]`;
+            if (value && typeof value.toMillis === 'function') return new Date(value.toMillis()).toISOString();
+            if (typeof value === 'object') return `[object keys:${Object.keys(value).slice(0,20).join(',')}]`;
+            return String(value);
+          };
+          async function allAuthUsers() {
+            const out = [];
+            let pageToken;
+            do {
+              const page = await auth.listUsers(1000, pageToken);
+              out.push(...page.users);
+              pageToken = page.pageToken;
+            } while (pageToken);
+            return out;
+          }
+          async function queryRefs(collection, field, uid) {
+            try {
+              const snap = await collection.where(field, '==', uid).limit(3).get();
+              return snap.docs.map((doc) => doc.ref.path);
+            } catch (error) {
+              return [`QUERY_ERROR:${collection.path}:${field}:${error.code || error.message}`];
+            }
+          }
+          (async () => {
+            const users = await allAuthUsers();
+            const candidates = users.filter((u) => {
+              const email = String(u.email || '').toLowerCase();
+              const name = String(u.displayName || '');
+              return email.startsWith(EMAIL_PREFIX) || name === DISPLAY_NAME;
+            });
+            if (!candidates.length) throw new Error('No synthetic 044 probe Auth users found');
+            if (candidates.length > 10) throw new Error(`Unexpected candidate count: ${candidates.length}`);
+
+            const topCollections = await db.listCollections();
+            const report = [];
+            for (const user of candidates) {
+              const uid = user.uid;
+              const email = String(user.email || '');
+              const displayName = String(user.displayName || '');
+              const userSnap = await db.collection('users').doc(uid).get();
+              const userData = userSnap.exists ? (userSnap.data() || {}) : {};
+              const directDocs = [];
+              const fieldRefs = [];
+              for (const collection of topCollections) {
+                const direct = await collection.doc(uid).get();
+                if (direct.exists) directDocs.push(collection.path);
+                for (const field of uidFields) {
+                  const refs = await queryRefs(collection, field, uid);
+                  for (const ref of refs) {
+                    if (ref.startsWith('QUERY_ERROR:')) continue;
+                    fieldRefs.push({ collection: collection.path, field, path: ref });
+                  }
+                }
+              }
+
+              const nested = {};
+              const nestedTargets = [
+                ['users', db.collection('users').doc(uid)],
+                ['suno_tracks', db.collection('suno_tracks').doc(uid)],
+                ['user_playlists', db.collection('user_playlists').doc(uid)],
+                ['user_list_caches', db.collection('user_list_caches').doc(uid)],
+              ];
+              for (const [label, ref] of nestedTargets) {
+                const subcols = await ref.listCollections();
+                const rows = [];
+                for (const sub of subcols) {
+                  const snap = await sub.limit(3).get();
+                  rows.push({ subcollection: sub.id, countSample: snap.size, paths: snap.docs.map((d) => d.ref.path) });
+                }
+                nested[label] = rows;
+              }
+
+              const presence = await rtdb.ref(`presence/${uid}`).get();
+              const control = await rtdb.ref(`userControls/${uid}`).get();
+              const userSummary = Object.fromEntries(Object.entries(userData).map(([k,v]) => [k, safeData(v)]));
+              report.push({
+                uid,
+                email,
+                displayName,
+                auth: {
+                  createdAt: user.metadata.creationTime || null,
+                  lastSignInAt: user.metadata.lastSignInTime || null,
+                  disabled: user.disabled,
+                  emailVerified: user.emailVerified,
+                  providers: (user.providerData || []).map((p) => p.providerId),
+                  customClaims: user.customClaims || {},
+                },
+                firestoreUser: { exists: userSnap.exists, data: userSummary },
+                directDocs,
+                fieldRefs,
+                nested,
+                rtdb: { presence: presence.exists(), userControls: control.exists() },
+              });
+            }
+            fs.writeFileSync('/tmp/soridraw-044-probe-candidates.json', JSON.stringify(report, null, 2));
+            console.log('SYNTHETIC_044_FIREBASE_AUDIT=PASS');
+            console.log(JSON.stringify(report, null, 2));
+          })().catch((error) => {
+            console.error('SYNTHETIC_044_FIREBASE_AUDIT=FAIL', error?.stack || error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Audit shared D1 references without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const dbid = process.env.SHARED_D1_ID;
+          const candidates = JSON.parse(fs.readFileSync('/tmp/soridraw-044-probe-candidates.json', 'utf8'));
+          const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+          const endpoint = `https://api.cloudflare.com/client/v4/accounts/${account}/d1/database/${dbid}/query`;
+          const qident = (name) => `"${String(name).replaceAll('"','""')}"`;
+          async function query(sql, params = []) {
+            const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ sql, params }) });
+            const text = await res.text();
+            let json;
+            try { json = JSON.parse(text); } catch { throw new Error(`D1 non-JSON ${res.status}: ${text.slice(0,500)}`); }
+            if (!res.ok || json.success === false) throw new Error(`D1 ${res.status}: ${text.slice(0,1200)}`);
+            const blocks = Array.isArray(json.result) ? json.result : [json.result];
+            return blocks.flatMap((block) => block?.results || []);
+          }
+          (async () => {
+            const tables = await query("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+            const uidColumns = new Set(['uid','user_id','user_uid','owner_uid','author_uid','follower_uid','following_uid','target_uid','actor_uid','profile_uid']);
+            const hits = [];
+            for (const row of tables) {
+              const table = String(row.name || '');
+              if (!table) continue;
+              const cols = await query(`PRAGMA table_info(${qident(table)})`);
+              const relevant = cols.map((c) => String(c.name || '')).filter((name) => uidColumns.has(name));
+              for (const column of relevant) {
+                for (const candidate of candidates) {
+                  const rows = await query(`SELECT COUNT(*) AS count FROM ${qident(table)} WHERE ${qident(column)} = ?`, [candidate.uid]);
+                  const count = Number(rows[0]?.count || 0);
+                  if (count > 0) hits.push({ table, column, uid: candidate.uid, count });
+                }
+              }
+            }
+            console.log('SYNTHETIC_044_D1_AUDIT=PASS');
+            console.log(JSON.stringify({ hits }, null, 2));
+          })().catch((error) => {
+            console.error('SYNTHETIC_044_D1_AUDIT=FAIL', error?.stack || error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Confirm audit was read-only
+        run: |
+          echo 'FIREBASE_WRITES=0'
+          echo 'FIREBASE_DELETES=0'
+          echo 'D1_WRITES=0'
+          echo 'D1_DELETES=0'
+          echo 'AUDIT_ONLY=PASS'

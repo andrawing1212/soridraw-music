@@ -66,42 +66,43 @@ jobs:
             if (typeof value === 'object') return `[object keys:${Object.keys(value).slice(0,20).join(',')}]`;
             return String(value);
           };
-          async function allAuthUsers() {
-            const out = [];
-            let pageToken;
-            do {
-              const page = await auth.listUsers(1000, pageToken);
-              out.push(...page.users);
-              pageToken = page.pageToken;
-            } while (pageToken);
-            return out;
-          }
           async function queryRefs(collection, field, uid) {
             try {
               const snap = await collection.where(field, '==', uid).limit(3).get();
               return snap.docs.map((doc) => doc.ref.path);
             } catch (error) {
-              return [`QUERY_ERROR:${collection.path}:${field}:${error.code || error.message}`];
+              return [];
+            }
+          }
+          async function authFor(uid) {
+            try { return await auth.getUser(uid); }
+            catch (error) {
+              if (error?.code === 'auth/user-not-found') return null;
+              throw error;
             }
           }
           (async () => {
-            const users = await allAuthUsers();
-            const candidates = users.filter((u) => {
-              const email = String(u.email || '').toLowerCase();
-              const name = String(u.displayName || '');
-              return email.startsWith(EMAIL_PREFIX) || name === DISPLAY_NAME;
-            });
-            if (!candidates.length) throw new Error('No synthetic 044 probe Auth users found');
+            const byUid = new Map();
+            const nameSnap = await db.collection('users').where('displayName', '==', DISPLAY_NAME).limit(20).get();
+            nameSnap.docs.forEach((doc) => byUid.set(doc.id, doc));
+            const emailSnap = await db.collection('users')
+              .where('email', '>=', EMAIL_PREFIX)
+              .where('email', '<', `${EMAIL_PREFIX}\uf8ff`)
+              .limit(20)
+              .get();
+            emailSnap.docs.forEach((doc) => byUid.set(doc.id, doc));
+            const candidates = [...byUid.values()];
+            if (!candidates.length) throw new Error('No synthetic 044 probe Firestore users found');
             if (candidates.length > 10) throw new Error(`Unexpected candidate count: ${candidates.length}`);
 
             const topCollections = await db.listCollections();
             const report = [];
-            for (const user of candidates) {
-              const uid = user.uid;
-              const email = String(user.email || '');
-              const displayName = String(user.displayName || '');
-              const userSnap = await db.collection('users').doc(uid).get();
-              const userData = userSnap.exists ? (userSnap.data() || {}) : {};
+            for (const userDoc of candidates) {
+              const uid = userDoc.id;
+              const userData = userDoc.data() || {};
+              const email = String(userData.email || '');
+              const displayName = String(userData.displayName || '');
+              const authUser = await authFor(uid);
               const directDocs = [];
               const fieldRefs = [];
               for (const collection of topCollections) {
@@ -109,10 +110,7 @@ jobs:
                 if (direct.exists) directDocs.push(collection.path);
                 for (const field of uidFields) {
                   const refs = await queryRefs(collection, field, uid);
-                  for (const ref of refs) {
-                    if (ref.startsWith('QUERY_ERROR:')) continue;
-                    fieldRefs.push({ collection: collection.path, field, path: ref });
-                  }
+                  for (const ref of refs) fieldRefs.push({ collection: collection.path, field, path: ref });
                 }
               }
 
@@ -140,15 +138,16 @@ jobs:
                 uid,
                 email,
                 displayName,
-                auth: {
-                  createdAt: user.metadata.creationTime || null,
-                  lastSignInAt: user.metadata.lastSignInTime || null,
-                  disabled: user.disabled,
-                  emailVerified: user.emailVerified,
-                  providers: (user.providerData || []).map((p) => p.providerId),
-                  customClaims: user.customClaims || {},
-                },
-                firestoreUser: { exists: userSnap.exists, data: userSummary },
+                auth: authUser ? {
+                  exists: true,
+                  createdAt: authUser.metadata.creationTime || null,
+                  lastSignInAt: authUser.metadata.lastSignInTime || null,
+                  disabled: authUser.disabled,
+                  emailVerified: authUser.emailVerified,
+                  providers: (authUser.providerData || []).map((p) => p.providerId),
+                  customClaims: authUser.customClaims || {},
+                } : { exists: false },
+                firestoreUser: { exists: true, data: userSummary },
                 directDocs,
                 fieldRefs,
                 nested,

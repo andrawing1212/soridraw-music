@@ -12,7 +12,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
       GCLOUD_PROJECT: soridraw-app-866a5
@@ -39,7 +39,7 @@ jobs:
         working-directory: functions
         run: npm ci
 
-      - name: Audit Auth and Firestore without writes
+      - name: Audit candidate Firebase records without writes
         working-directory: functions
         shell: bash
         run: |
@@ -56,24 +56,16 @@ jobs:
           const rtdb = admin.database();
           const EMAIL_PREFIX = 'soridraw044-preview-';
           const DISPLAY_NAME = 'SORIDRAW 044 preview Probe';
-          const uidFields = ['uid','userId','ownerUid','owner_uid','authorUid','createdBy','updatedBy','followerUid','followingUid','targetUid','actorUid'];
-          const safeData = (value) => {
+
+          const summarize = (value) => {
             if (value == null) return value;
-            if (typeof value === 'string') return value.length > 160 ? `${value.slice(0,80)}…` : value;
+            if (typeof value === 'string') return value.length > 180 ? `${value.slice(0,90)}…` : value;
             if (typeof value === 'number' || typeof value === 'boolean') return value;
             if (Array.isArray(value)) return `[array:${value.length}]`;
             if (value && typeof value.toMillis === 'function') return new Date(value.toMillis()).toISOString();
-            if (typeof value === 'object') return `[object keys:${Object.keys(value).slice(0,20).join(',')}]`;
+            if (typeof value === 'object') return `[object keys:${Object.keys(value).slice(0,30).join(',')}]`;
             return String(value);
           };
-          async function queryRefs(collection, field, uid) {
-            try {
-              const snap = await collection.where(field, '==', uid).limit(3).get();
-              return snap.docs.map((doc) => doc.ref.path);
-            } catch (error) {
-              return [];
-            }
-          }
           async function authFor(uid) {
             try { return await auth.getUser(uid); }
             catch (error) {
@@ -81,6 +73,23 @@ jobs:
               throw error;
             }
           }
+          async function direct(path) {
+            const snap = await db.doc(path).get();
+            return snap.exists ? path : null;
+          }
+          async function sample(collection, field, value) {
+            try {
+              const snap = await db.collection(collection).where(field, '==', value).limit(5).get();
+              return snap.docs.map((d) => d.ref.path);
+            } catch (error) {
+              return [`QUERY_ERROR:${collection}.${field}:${error.code || error.message}`];
+            }
+          }
+          async function sampleSub(path) {
+            const snap = await db.collection(path).limit(5).get();
+            return snap.docs.map((d) => d.ref.path);
+          }
+
           (async () => {
             const byUid = new Map();
             const nameSnap = await db.collection('users').where('displayName', '==', DISPLAY_NAME).limit(20).get();
@@ -91,53 +100,42 @@ jobs:
               .limit(20)
               .get();
             emailSnap.docs.forEach((doc) => byUid.set(doc.id, doc));
-            const candidates = [...byUid.values()];
-            if (!candidates.length) throw new Error('No synthetic 044 probe Firestore users found');
-            if (candidates.length > 10) throw new Error(`Unexpected candidate count: ${candidates.length}`);
+            const docs = [...byUid.values()];
+            if (!docs.length) throw new Error('No synthetic 044 probe Firestore users found');
+            if (docs.length > 10) throw new Error(`Unexpected candidate count: ${docs.length}`);
 
-            const topCollections = await db.listCollections();
             const report = [];
-            for (const userDoc of candidates) {
-              const uid = userDoc.id;
-              const userData = userDoc.data() || {};
-              const email = String(userData.email || '');
-              const displayName = String(userData.displayName || '');
+            for (const doc of docs) {
+              const uid = doc.id;
+              const data = doc.data() || {};
               const authUser = await authFor(uid);
-              const directDocs = [];
-              const fieldRefs = [];
-              for (const collection of topCollections) {
-                const direct = await collection.doc(uid).get();
-                if (direct.exists) directDocs.push(collection.path);
-                for (const field of uidFields) {
-                  const refs = await queryRefs(collection, field, uid);
-                  for (const ref of refs) fieldRefs.push({ collection: collection.path, field, path: ref });
-                }
-              }
-
-              const nested = {};
-              const nestedTargets = [
-                ['users', db.collection('users').doc(uid)],
-                ['suno_tracks', db.collection('suno_tracks').doc(uid)],
-                ['user_playlists', db.collection('user_playlists').doc(uid)],
-                ['user_list_caches', db.collection('user_list_caches').doc(uid)],
-              ];
-              for (const [label, ref] of nestedTargets) {
-                const subcols = await ref.listCollections();
-                const rows = [];
-                for (const sub of subcols) {
-                  const snap = await sub.limit(3).get();
-                  rows.push({ subcollection: sub.id, countSample: snap.size, paths: snap.docs.map((d) => d.ref.path) });
-                }
-                nested[label] = rows;
-              }
-
+              const directDocs = (await Promise.all([
+                direct(`user_recent_songs/${uid}`),
+                direct(`user_structures/${uid}`),
+                direct(`user_api_keys/${uid}`),
+                direct(`gemini_request_guards/${uid}`),
+              ])).filter(Boolean);
+              const nested = {
+                userSongs: await sampleSub(`users/${uid}/songs`),
+                userPlaylists: await sampleSub(`users/${uid}/playlists`),
+                userSettings: await sampleSub(`users/${uid}/settings`),
+                sunoTracks: await sampleSub(`suno_tracks/${uid}/tracks`),
+                listCaches: await sampleSub(`user_list_caches/${uid}/bundles`),
+                sunoPlaylists: await sampleSub(`user_playlists/${uid}/lists`),
+              };
+              const refs = {
+                favorites: await sample('favorites', 'uid', uid),
+                sunoShares: await sample('suno_shares', 'ownerUid', uid),
+                musicNoteShares: await sample('music_note_shares', 'ownerUid', uid),
+                adminPermissionAudit: await sample('admin_permission_audit', 'targetUid', uid),
+              };
               const presence = await rtdb.ref(`presence/${uid}`).get();
-              const control = await rtdb.ref(`userControls/${uid}`).get();
-              const userSummary = Object.fromEntries(Object.entries(userData).map(([k,v]) => [k, safeData(v)]));
+              const controls = await rtdb.ref(`userControls/${uid}`).get();
               report.push({
                 uid,
-                email,
-                displayName,
+                email: String(data.email || authUser?.email || ''),
+                displayName: String(data.displayName || authUser?.displayName || ''),
+                userDocument: Object.fromEntries(Object.entries(data).map(([k,v]) => [k, summarize(v)])),
                 auth: authUser ? {
                   exists: true,
                   createdAt: authUser.metadata.creationTime || null,
@@ -147,11 +145,10 @@ jobs:
                   providers: (authUser.providerData || []).map((p) => p.providerId),
                   customClaims: authUser.customClaims || {},
                 } : { exists: false },
-                firestoreUser: { exists: true, data: userSummary },
                 directDocs,
-                fieldRefs,
                 nested,
-                rtdb: { presence: presence.exists(), userControls: control.exists() },
+                refs,
+                rtdb: { presence: presence.exists(), userControls: controls.exists() },
               });
             }
             fs.writeFileSync('/tmp/soridraw-044-probe-candidates.json', JSON.stringify(report, null, 2));
@@ -163,7 +160,7 @@ jobs:
           });
           NODE
 
-      - name: Audit shared D1 references without writes
+      - name: Audit shared D1 candidate references without writes
         shell: bash
         run: |
           set -euo pipefail
@@ -176,8 +173,9 @@ jobs:
           const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
           const endpoint = `https://api.cloudflare.com/client/v4/accounts/${account}/d1/database/${dbid}/query`;
           const qident = (name) => `"${String(name).replaceAll('"','""')}"`;
-          async function query(sql, params = []) {
-            const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ sql, params }) });
+          const qlit = (value) => `'${String(value).replaceAll("'", "''")}'`;
+          async function query(sql) {
+            const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ sql }) });
             const text = await res.text();
             let json;
             try { json = JSON.parse(text); } catch { throw new Error(`D1 non-JSON ${res.status}: ${text.slice(0,500)}`); }
@@ -188,7 +186,7 @@ jobs:
           (async () => {
             const tables = await query("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
             const uidColumns = new Set(['uid','user_id','user_uid','owner_uid','author_uid','follower_uid','following_uid','target_uid','actor_uid','profile_uid']);
-            const hits = [];
+            const clauses = [];
             for (const row of tables) {
               const table = String(row.name || '');
               if (!table) continue;
@@ -196,12 +194,12 @@ jobs:
               const relevant = cols.map((c) => String(c.name || '')).filter((name) => uidColumns.has(name));
               for (const column of relevant) {
                 for (const candidate of candidates) {
-                  const rows = await query(`SELECT COUNT(*) AS count FROM ${qident(table)} WHERE ${qident(column)} = ?`, [candidate.uid]);
-                  const count = Number(rows[0]?.count || 0);
-                  if (count > 0) hits.push({ table, column, uid: candidate.uid, count });
+                  clauses.push(`SELECT ${qlit(table)} AS table_name, ${qlit(column)} AS column_name, ${qlit(candidate.uid)} AS uid, COUNT(*) AS count FROM ${qident(table)} WHERE ${qident(column)} = ${qlit(candidate.uid)}`);
                 }
               }
             }
+            const rows = clauses.length ? await query(clauses.join(' UNION ALL ')) : [];
+            const hits = rows.filter((r) => Number(r.count || 0) > 0);
             console.log('SYNTHETIC_044_D1_AUDIT=PASS');
             console.log(JSON.stringify({ hits }, null, 2));
           })().catch((error) => {

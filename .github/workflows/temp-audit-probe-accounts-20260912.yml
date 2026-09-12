@@ -164,16 +164,26 @@ jobs:
             return (Array.isArray(json.result) ? json.result : [json.result]).flatMap(b => b?.results || []);
           }
           (async () => {
-            const uidCols = new Set(['uid','user_id','user_uid','owner_uid','author_uid','follower_uid','following_uid','target_uid','actor_uid','profile_uid']);
-            const tables = await query("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+            const uidCols = ['uid','user_id','user_uid','owner_uid','author_uid','follower_uid','following_uid','target_uid','actor_uid','profile_uid'];
+            const schema = await query("SELECT name, sql FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
             const clauses = [];
-            for (const {name} of tables) {
-              const cols = await query(`PRAGMA table_info(${qi(name)})`);
-              for (const col of cols.map(c => String(c.name || '')).filter(c => uidCols.has(c))) {
-                for (const candidate of candidates) clauses.push(`SELECT ${qs(name)} table_name,${qs(col)} column_name,${qs(candidate.uid)} uid,COUNT(*) count FROM ${qi(name)} WHERE ${qi(col)}=${qs(candidate.uid)}`);
+            for (const row of schema) {
+              const name = String(row.name || '');
+              const sql = String(row.sql || '');
+              if (!name || !sql) continue;
+              for (const col of uidCols) {
+                const re = new RegExp(`(^|[^A-Za-z0-9_])${col}([^A-Za-z0-9_]|$)`, 'i');
+                if (!re.test(sql)) continue;
+                for (const candidate of candidates) {
+                  clauses.push(`SELECT ${qs(name)} table_name,${qs(col)} column_name,${qs(candidate.uid)} uid,COUNT(*) count FROM ${qi(name)} WHERE ${qi(col)}=${qs(candidate.uid)}`);
+                }
               }
             }
-            const hits = clauses.length ? (await query(clauses.join(' UNION ALL '))).filter(r => Number(r.count || 0) > 0) : [];
+            const hits = [];
+            for (let i = 0; i < clauses.length; i += 80) {
+              const rows = await query(clauses.slice(i, i + 80).join(' UNION ALL '));
+              hits.push(...rows.filter(r => Number(r.count || 0) > 0));
+            }
             console.log('SYNTHETIC_044_D1_AUDIT=PASS');
             console.log(JSON.stringify({ hits }, null, 2));
           })().catch(e => { console.error('SYNTHETIC_044_D1_AUDIT=FAIL', e?.stack || e); process.exit(1); });

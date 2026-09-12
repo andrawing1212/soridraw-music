@@ -9,13 +9,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: soridraw-synthetic-044-probe-audit
+  cancel-in-progress: true
+
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 8
     env:
-      GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
-      GCLOUD_PROJECT: soridraw-app-866a5
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
       SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
@@ -47,113 +49,96 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const admin = require('firebase-admin');
-          admin.initializeApp({
-            projectId: 'soridraw-app-866a5',
-            databaseURL: 'https://soridraw-app-866a5-default-rtdb.firebaseio.com',
-          });
+          admin.initializeApp({ projectId: 'soridraw-app-866a5' });
           const auth = admin.auth();
           const db = admin.firestore();
-          const rtdb = admin.database();
-          const EMAIL_PREFIX = 'soridraw044-preview-';
           const DISPLAY_NAME = 'SORIDRAW 044 preview Probe';
+          const EMAIL_PREFIX = 'soridraw044-preview-';
 
+          const withDeadline = (promise, label, ms = 20000) => Promise.race([
+            promise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error(`TIMEOUT:${label}`)), ms)),
+          ]);
+          const sampleSub = (path) => withDeadline(db.collection(path).limit(5).get(), path).then(s => s.docs.map(d => d.ref.path));
+          const sampleRef = (collection, field, uid) => withDeadline(db.collection(collection).where(field, '==', uid).limit(5).get(), `${collection}.${field}`).then(s => s.docs.map(d => d.ref.path));
+          const direct = (path) => withDeadline(db.doc(path).get(), path).then(s => s.exists ? path : null);
+          const authFor = async (uid) => {
+            try { return await withDeadline(auth.getUser(uid), `auth:${uid}`); }
+            catch (error) { if (error?.code === 'auth/user-not-found') return null; throw error; }
+          };
           const summarize = (value) => {
             if (value == null) return value;
-            if (typeof value === 'string') return value.length > 180 ? `${value.slice(0,90)}…` : value;
-            if (typeof value === 'number' || typeof value === 'boolean') return value;
+            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
             if (Array.isArray(value)) return `[array:${value.length}]`;
             if (value && typeof value.toMillis === 'function') return new Date(value.toMillis()).toISOString();
-            if (typeof value === 'object') return `[object keys:${Object.keys(value).slice(0,30).join(',')}]`;
-            return String(value);
+            return `[object keys:${Object.keys(value || {}).slice(0,30).join(',')}]`;
           };
-          async function authFor(uid) {
-            try { return await auth.getUser(uid); }
-            catch (error) {
-              if (error?.code === 'auth/user-not-found') return null;
-              throw error;
-            }
-          }
-          async function direct(path) {
-            const snap = await db.doc(path).get();
-            return snap.exists ? path : null;
-          }
-          async function sample(collection, field, value) {
-            try {
-              const snap = await db.collection(collection).where(field, '==', value).limit(5).get();
-              return snap.docs.map((d) => d.ref.path);
-            } catch (error) {
-              return [`QUERY_ERROR:${collection}.${field}:${error.code || error.message}`];
-            }
-          }
-          async function sampleSub(path) {
-            const snap = await db.collection(path).limit(5).get();
-            return snap.docs.map((d) => d.ref.path);
-          }
 
           (async () => {
-            const byUid = new Map();
-            const nameSnap = await db.collection('users').where('displayName', '==', DISPLAY_NAME).limit(20).get();
-            nameSnap.docs.forEach((doc) => byUid.set(doc.id, doc));
-            const emailSnap = await db.collection('users')
-              .where('email', '>=', EMAIL_PREFIX)
-              .where('email', '<', `${EMAIL_PREFIX}\uf8ff`)
-              .limit(20)
-              .get();
-            emailSnap.docs.forEach((doc) => byUid.set(doc.id, doc));
-            const docs = [...byUid.values()];
-            if (!docs.length) throw new Error('No synthetic 044 probe Firestore users found');
+            const snap = await withDeadline(db.collection('users').where('displayName', '==', DISPLAY_NAME).limit(20).get(), 'users.displayName');
+            const docs = snap.docs.filter((doc) => {
+              const data = doc.data() || {};
+              return String(data.displayName || '') === DISPLAY_NAME && String(data.email || '').toLowerCase().startsWith(EMAIL_PREFIX);
+            });
+            if (!docs.length) throw new Error('No exact synthetic 044 probe Firestore users found');
             if (docs.length > 10) throw new Error(`Unexpected candidate count: ${docs.length}`);
 
             const report = [];
             for (const doc of docs) {
               const uid = doc.id;
               const data = doc.data() || {};
-              const authUser = await authFor(uid);
-              const directDocs = (await Promise.all([
-                direct(`user_recent_songs/${uid}`),
-                direct(`user_structures/${uid}`),
-                direct(`user_api_keys/${uid}`),
-                direct(`gemini_request_guards/${uid}`),
-              ])).filter(Boolean);
-              const nested = {
-                userSongs: await sampleSub(`users/${uid}/songs`),
-                userPlaylists: await sampleSub(`users/${uid}/playlists`),
-                userSettings: await sampleSub(`users/${uid}/settings`),
-                sunoTracks: await sampleSub(`suno_tracks/${uid}/tracks`),
-                listCaches: await sampleSub(`user_list_caches/${uid}/bundles`),
-                sunoPlaylists: await sampleSub(`user_playlists/${uid}/lists`),
-              };
-              const refs = {
-                favorites: await sample('favorites', 'uid', uid),
-                sunoShares: await sample('suno_shares', 'ownerUid', uid),
-                musicNoteShares: await sample('music_note_shares', 'ownerUid', uid),
-                adminPermissionAudit: await sample('admin_permission_audit', 'targetUid', uid),
-              };
-              const presence = await rtdb.ref(`presence/${uid}`).get();
-              const controls = await rtdb.ref(`userControls/${uid}`).get();
+              const [authUser, directDocsRaw, nestedRows, refsRows] = await Promise.all([
+                authFor(uid),
+                Promise.all([
+                  direct(`user_recent_songs/${uid}`),
+                  direct(`user_structures/${uid}`),
+                  direct(`user_api_keys/${uid}`),
+                  direct(`gemini_request_guards/${uid}`),
+                ]),
+                Promise.all([
+                  sampleSub(`users/${uid}/songs`),
+                  sampleSub(`users/${uid}/playlists`),
+                  sampleSub(`users/${uid}/settings`),
+                  sampleSub(`suno_tracks/${uid}/tracks`),
+                  sampleSub(`user_list_caches/${uid}/bundles`),
+                  sampleSub(`user_playlists/${uid}/lists`),
+                ]),
+                Promise.all([
+                  sampleRef('favorites', 'uid', uid),
+                  sampleRef('suno_shares', 'ownerUid', uid),
+                  sampleRef('music_note_shares', 'ownerUid', uid),
+                  sampleRef('admin_permission_audit', 'targetUid', uid),
+                ]),
+              ]);
               report.push({
                 uid,
-                email: String(data.email || authUser?.email || ''),
-                displayName: String(data.displayName || authUser?.displayName || ''),
+                email: String(data.email || ''),
+                displayName: String(data.displayName || ''),
                 userDocument: Object.fromEntries(Object.entries(data).map(([k,v]) => [k, summarize(v)])),
                 auth: authUser ? {
                   exists: true,
+                  email: String(authUser.email || ''),
+                  displayName: String(authUser.displayName || ''),
                   createdAt: authUser.metadata.creationTime || null,
                   lastSignInAt: authUser.metadata.lastSignInTime || null,
                   disabled: authUser.disabled,
-                  emailVerified: authUser.emailVerified,
-                  providers: (authUser.providerData || []).map((p) => p.providerId),
+                  providers: (authUser.providerData || []).map(p => p.providerId),
                   customClaims: authUser.customClaims || {},
                 } : { exists: false },
-                directDocs,
-                nested,
-                refs,
-                rtdb: { presence: presence.exists(), userControls: controls.exists() },
+                directDocs: directDocsRaw.filter(Boolean),
+                nested: {
+                  userSongs: nestedRows[0], userPlaylists: nestedRows[1], userSettings: nestedRows[2],
+                  sunoTracks: nestedRows[3], listCaches: nestedRows[4], sunoPlaylists: nestedRows[5],
+                },
+                refs: {
+                  favorites: refsRows[0], sunoShares: refsRows[1], musicNoteShares: refsRows[2], adminPermissionAudit: refsRows[3],
+                },
               });
             }
             fs.writeFileSync('/tmp/soridraw-044-probe-candidates.json', JSON.stringify(report, null, 2));
             console.log('SYNTHETIC_044_FIREBASE_AUDIT=PASS');
             console.log(JSON.stringify(report, null, 2));
+            process.exit(0);
           })().catch((error) => {
             console.error('SYNTHETIC_044_FIREBASE_AUDIT=FAIL', error?.stack || error);
             process.exit(1);
@@ -166,46 +151,32 @@ jobs:
           set -euo pipefail
           node <<'NODE'
           const fs = require('fs');
-          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
-          const token = process.env.CLOUDFLARE_API_TOKEN;
-          const dbid = process.env.SHARED_D1_ID;
           const candidates = JSON.parse(fs.readFileSync('/tmp/soridraw-044-probe-candidates.json', 'utf8'));
-          const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-          const endpoint = `https://api.cloudflare.com/client/v4/accounts/${account}/d1/database/${dbid}/query`;
-          const qident = (name) => `"${String(name).replaceAll('"','""')}"`;
-          const qlit = (value) => `'${String(value).replaceAll("'", "''")}'`;
+          const endpoint = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/d1/database/${process.env.SHARED_D1_ID}/query`;
+          const headers = { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`, 'Content-Type': 'application/json' };
+          const qi = (v) => `"${String(v).replaceAll('"','""')}"`;
+          const qs = (v) => `'${String(v).replaceAll("'", "''")}'`;
           async function query(sql) {
             const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ sql }) });
             const text = await res.text();
-            let json;
-            try { json = JSON.parse(text); } catch { throw new Error(`D1 non-JSON ${res.status}: ${text.slice(0,500)}`); }
-            if (!res.ok || json.success === false) throw new Error(`D1 ${res.status}: ${text.slice(0,1200)}`);
-            const blocks = Array.isArray(json.result) ? json.result : [json.result];
-            return blocks.flatMap((block) => block?.results || []);
+            const json = JSON.parse(text);
+            if (!res.ok || json.success === false) throw new Error(`D1 ${res.status}: ${text.slice(0,1000)}`);
+            return (Array.isArray(json.result) ? json.result : [json.result]).flatMap(b => b?.results || []);
           }
           (async () => {
+            const uidCols = new Set(['uid','user_id','user_uid','owner_uid','author_uid','follower_uid','following_uid','target_uid','actor_uid','profile_uid']);
             const tables = await query("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
-            const uidColumns = new Set(['uid','user_id','user_uid','owner_uid','author_uid','follower_uid','following_uid','target_uid','actor_uid','profile_uid']);
             const clauses = [];
-            for (const row of tables) {
-              const table = String(row.name || '');
-              if (!table) continue;
-              const cols = await query(`PRAGMA table_info(${qident(table)})`);
-              const relevant = cols.map((c) => String(c.name || '')).filter((name) => uidColumns.has(name));
-              for (const column of relevant) {
-                for (const candidate of candidates) {
-                  clauses.push(`SELECT ${qlit(table)} AS table_name, ${qlit(column)} AS column_name, ${qlit(candidate.uid)} AS uid, COUNT(*) AS count FROM ${qident(table)} WHERE ${qident(column)} = ${qlit(candidate.uid)}`);
-                }
+            for (const {name} of tables) {
+              const cols = await query(`PRAGMA table_info(${qi(name)})`);
+              for (const col of cols.map(c => String(c.name || '')).filter(c => uidCols.has(c))) {
+                for (const candidate of candidates) clauses.push(`SELECT ${qs(name)} table_name,${qs(col)} column_name,${qs(candidate.uid)} uid,COUNT(*) count FROM ${qi(name)} WHERE ${qi(col)}=${qs(candidate.uid)}`);
               }
             }
-            const rows = clauses.length ? await query(clauses.join(' UNION ALL ')) : [];
-            const hits = rows.filter((r) => Number(r.count || 0) > 0);
+            const hits = clauses.length ? (await query(clauses.join(' UNION ALL '))).filter(r => Number(r.count || 0) > 0) : [];
             console.log('SYNTHETIC_044_D1_AUDIT=PASS');
             console.log(JSON.stringify({ hits }, null, 2));
-          })().catch((error) => {
-            console.error('SYNTHETIC_044_D1_AUDIT=FAIL', error?.stack || error);
-            process.exit(1);
-          });
+          })().catch(e => { console.error('SYNTHETIC_044_D1_AUDIT=FAIL', e?.stack || e); process.exit(1); });
           NODE
 
       - name: Confirm audit was read-only

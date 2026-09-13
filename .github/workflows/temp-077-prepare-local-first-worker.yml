@@ -140,7 +140,7 @@ jobs:
             assert.match(userProcessor, /patchExploreFeedR2Like044/);
             assert.match(userProcessor, /patchExploreProfileR2Like044/);
             const publicationStateSync = functionText(worker, 'async function syncMusicNotePublicationR2AfterMutation(');
-            assert.match(publicationStateSync, /PROFILE_MEDIA\.delete\(musicNotePublicationR2Key\(uid\)\)/);
+            assert.ok(publicationStateSync.includes('PROFILE_MEDIA.delete(musicNotePublicationR2Key(uid))'));
             console.log('PASS generated Worker 044: D1-free intake + stale-device convergence + bounded R2 recovery + aggregate canonical validation');
           } else {
             assert.match(batchBody, /enqueueExploreLikeBatch035/);

@@ -1,0 +1,50 @@
+name: TEMP 079 Publication Trigger Live Check
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-079-publication-trigger-live-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Inspect live publication-related triggers read-only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT name,tbl_name,sql FROM sqlite_schema WHERE type='trigger' AND (name LIKE 'trg_music_note_publication_bundle_%' OR name LIKE 'explore032_%' OR sql LIKE '%explore_shared_revision%') ORDER BY name;" --json > "$RUNNER_TEMP/triggers.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/triggers.json','utf8'));
+          const rows=raw.flatMap(x=>x.results||[]);
+          const legacy=rows.filter(r=>String(r.name||'').startsWith('trg_music_note_publication_bundle_'));
+          console.log('LEGACY_PUBLICATION_BUNDLE_TRIGGER_COUNT='+legacy.length);
+          for(const r of legacy) console.log('LEGACY_TRIGGER='+r.name);
+          for(const r of rows.filter(r=>['explore032_track_update','explore032_derived_track_update'].includes(r.name))) {
+            console.log('CORE_TRIGGER='+r.name);
+            console.log(String(r.sql||''));
+          }
+          console.log('LIVE_TRIGGER_READONLY_CHECK=PASS');
+          NODE

@@ -27,7 +27,7 @@ jobs:
       - name: Install Worker tooling
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
-      - name: Read relevant live schema and simulate publication locally
+      - name: Read live schema and validate corrected publication trigger locally
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -41,25 +41,68 @@ jobs:
           raw=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'schema.json'),encoding='utf-8'))
           rows=[r for group in raw for r in group.get('results',[])]
           print('REMOTE_SCHEMA_OBJECTS='+str(len(rows)))
-          conn=sqlite3.connect(':memory:')
-          conn.execute('PRAGMA recursive_triggers=OFF')
-          for r in rows:
-              sql=r.get('sql')
-              if not sql: continue
-              try:
-                  conn.execute(sql)
-              except Exception as e:
-                  raise RuntimeError(f"schema apply failed {r.get('type')} {r.get('name')}: {e}\n{sql}")
-          conn.execute("INSERT INTO explore_derived_state(id,seq,seeded) VALUES(1,0,1)")
-          conn.execute("INSERT INTO explore_shared_revision(scope,revision,updated_at) VALUES('global',1,0)")
-          conn.execute("""INSERT INTO tracks (
-              id,owner_uid,source_type,source_id,title,cover_url,suno_url_primary,search_text,
-              is_public,status,published_at,created_at,updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,1,'published',?,?,?)""",
-            ('__soridraw_sim_track__','__soridraw_sim_uid__','music_note','__sim_source__','sim','','https://example.invalid/audio','sim',1000,1000,1000))
-          conn.execute("INSERT INTO track_stats(track_id,like_count,comment_count,play_count,updated_at) VALUES(?,0,0,0,?)",('__soridraw_sim_track__',1000))
-          conn.commit()
 
+          trigger_row=next((r for r in rows if r.get('type')=='trigger' and r.get('name')=='explore032_derived_track_update'),None)
+          if not trigger_row:
+              raise RuntimeError('explore032_derived_track_update missing')
+          live_trigger=trigger_row['sql']
+          old_old="""  INSERT OR IGNORE INTO explore_derived_profiles(uid)
+  SELECT OLD.owner_uid
+  WHERE OLD.owner_uid IS NOT NEW.owner_uid
+     OR OLD.active IS NOT NEW.active;"""
+          new_old="""  INSERT INTO explore_derived_profiles(uid)
+  SELECT OLD.owner_uid
+  WHERE (OLD.owner_uid IS NOT NEW.owner_uid OR OLD.active IS NOT NEW.active)
+    AND NOT EXISTS (
+      SELECT 1 FROM explore_derived_profiles WHERE uid = OLD.owner_uid
+    );"""
+          old_new="""  INSERT OR IGNORE INTO explore_derived_profiles(uid)
+  SELECT NEW.owner_uid
+  WHERE OLD.owner_uid IS NOT NEW.owner_uid
+     OR OLD.active IS NOT NEW.active;"""
+          new_new="""  INSERT INTO explore_derived_profiles(uid)
+  SELECT NEW.owner_uid
+  WHERE (OLD.owner_uid IS NOT NEW.owner_uid OR OLD.active IS NOT NEW.active)
+    AND NOT EXISTS (
+      SELECT 1 FROM explore_derived_profiles WHERE uid = NEW.owner_uid
+    );"""
+          if live_trigger.count(old_old)!=1 or live_trigger.count(old_new)!=1:
+              raise RuntimeError('live trigger anchors changed')
+          fixed_trigger=live_trigger.replace(old_old,new_old).replace(old_new,new_new)
+
+          def build(fixed=False):
+              conn=sqlite3.connect(':memory:')
+              conn.execute('PRAGMA recursive_triggers=OFF')
+              for r in rows:
+                  sql=r.get('sql')
+                  if not sql: continue
+                  if r.get('type')=='trigger' and r.get('name')=='explore032_derived_track_update' and fixed:
+                      sql=fixed_trigger
+                  conn.execute(sql)
+              conn.execute("INSERT INTO explore_derived_state(id,seq,seeded) VALUES(1,0,1)")
+              conn.execute("INSERT INTO explore_shared_revision(scope,revision,updated_at) VALUES('global',1,0)")
+              conn.execute("""INSERT INTO tracks (
+                  id,owner_uid,source_type,source_id,title,cover_url,suno_url_primary,search_text,
+                  is_public,status,published_at,created_at,updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,1,'published',?,?,?)""",
+                ('__soridraw_sim_track__','__soridraw_sim_uid__','music_note','__sim_source__','sim','','https://example.invalid/audio','sim',1000,1000,1000))
+              conn.execute("INSERT INTO track_stats(track_id,like_count,comment_count,play_count,updated_at) VALUES(?,0,0,0,?)",('__soridraw_sim_track__',1000))
+              conn.commit()
+              return conn
+
+          broken=build(False)
+          try:
+              broken.execute("UPDATE tracks SET is_public=0, updated_at=2000 WHERE id='__soridraw_sim_track__' AND owner_uid='__soridraw_sim_uid__'")
+              broken.commit()
+              raise RuntimeError('live trigger unexpectedly did not reproduce private failure')
+          except sqlite3.IntegrityError as e:
+              broken.rollback()
+              msg=str(e)
+              print('LIVE_TRIGGER_REPRODUCED='+msg)
+              if 'UNIQUE constraint failed: explore_derived_profiles.uid' not in msg:
+                  raise
+
+          conn=build(True)
           def snap(label):
               t=conn.execute("SELECT is_public,status,published_at,updated_at FROM tracks WHERE id='__soridraw_sim_track__'").fetchone()
               d=conn.execute("SELECT active,published_at,pinned,likes FROM explore_derived_tracks WHERE id='__soridraw_sim_track__'").fetchone()
@@ -70,13 +113,13 @@ jobs:
               print(label+'='+json.dumps({'track':t,'derived':d,'profile':p,'seq':s,'revision':r,'changes':c},ensure_ascii=False))
               return t,d,p,s,r,c
 
-          snap('BEFORE_PRIVATE')
+          snap('FIXED_BEFORE_PRIVATE')
           before=conn.total_changes
           conn.execute("UPDATE tracks SET is_public=0, updated_at=2000 WHERE id='__soridraw_sim_track__' AND owner_uid='__soridraw_sim_uid__'")
           conn.commit()
           private_changes=conn.total_changes-before
-          t,d,p,s,r,c=snap('AFTER_PRIVATE')
-          print('PRIVATE_LOGICAL_ROW_CHANGES='+str(private_changes))
+          t,d,p,s,r,c=snap('FIXED_AFTER_PRIVATE')
+          print('FIXED_PRIVATE_LOGICAL_ROW_CHANGES='+str(private_changes))
           assert t[0] == 0 and d[0] == 0, (t,d)
           assert p and p[1] == 0, p
           assert {x[0] for x in c} >= {'feed','profile:__soridraw_sim_uid__'}, c
@@ -85,10 +128,10 @@ jobs:
           conn.execute("UPDATE tracks SET is_public=1,published_at=3000,updated_at=3000 WHERE id='__soridraw_sim_track__' AND owner_uid='__soridraw_sim_uid__'")
           conn.commit()
           public_changes=conn.total_changes-before
-          t,d,p,s,r,c=snap('AFTER_PUBLIC')
-          print('PUBLIC_LOGICAL_ROW_CHANGES='+str(public_changes))
+          t,d,p,s,r,c=snap('FIXED_AFTER_PUBLIC')
+          print('FIXED_PUBLIC_LOGICAL_ROW_CHANGES='+str(public_changes))
           assert t[0] == 1 and d[0] == 1, (t,d)
           assert p and p[1] == 1, p
-          print('LOCAL_TRIGGER_SIMULATION=PASS')
+          print('LOCAL_TRIGGER_FIX_SIMULATION=PASS')
+          print('REMOTE_D1_WRITES=0')
           PY
-          echo 'REMOTE_D1_WRITES=0'

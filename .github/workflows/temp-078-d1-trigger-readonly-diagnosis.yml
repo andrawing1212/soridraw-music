@@ -27,27 +27,21 @@ jobs:
       - name: Install Worker tooling
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
-      - name: Read full shared D1 trigger graph only
+      - name: Inspect publication D1 schema and constraints only
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
-          SQL="SELECT name,tbl_name,sql FROM sqlite_schema WHERE type='trigger' ORDER BY tbl_name,name;"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$SQL" --json > "$RUNNER_TEMP/triggers.json"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE (type='table' AND name IN ('tracks','track_stats','public_profiles','explore_derived_tracks','explore_derived_profiles','explore_derived_changes','explore_derived_state','explore_shared_revision')) OR (type='index' AND tbl_name IN ('tracks','explore_derived_tracks','explore_derived_profiles','explore_derived_changes','explore_derived_state','explore_shared_revision')) ORDER BY type,tbl_name,name;" --json > "$RUNNER_TEMP/schema.json"
           node <<'NODE'
           const fs=require('fs');
-          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/triggers.json','utf8'));
-          const rows=raw.flatMap(x=>x.results||[]);
-          console.log('TRIGGER_COUNT='+rows.length);
-          const byTable={};
-          for(const row of rows) byTable[row.tbl_name]=(byTable[row.tbl_name]||0)+1;
-          console.log('TRIGGERS_BY_TABLE='+JSON.stringify(byTable));
-          for(const row of rows){
-            console.log('\n===TRIGGER '+row.name+' ON '+row.tbl_name+'===');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/schema.json','utf8'));
+          for(const row of raw.flatMap(x=>x.results||[])){
+            console.log('\n=== '+row.type+' '+row.name+' ON '+row.tbl_name+' ===');
             console.log(String(row.sql||''));
           }
           NODE
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT seeded,seq FROM explore_derived_state WHERE id=1; SELECT scope,revision,updated_at FROM explore_shared_revision ORDER BY scope; PRAGMA recursive_triggers;" --json
-          echo 'READ_ONLY_DIAGNOSIS=PASS'
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "PRAGMA foreign_key_list(tracks); PRAGMA foreign_key_list(explore_derived_tracks); PRAGMA foreign_key_list(explore_derived_profiles); PRAGMA table_info(explore_derived_profiles);" --json
+          echo 'READ_ONLY_SCHEMA_DIAGNOSIS=PASS'

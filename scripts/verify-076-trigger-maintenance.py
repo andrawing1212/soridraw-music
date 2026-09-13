@@ -59,7 +59,6 @@ def seed() -> sqlite3.Connection:
         "INSERT INTO track_stats(track_id,like_count,comment_count,play_count,updated_at) VALUES('track-1',7,1,12,?)",
         (now,),
     )
-    conn.execute("INSERT INTO likes(track_id,user_uid,created_at) VALUES('track-1','viewer-1',?)", (now,))
     conn.commit()
     return conn
 

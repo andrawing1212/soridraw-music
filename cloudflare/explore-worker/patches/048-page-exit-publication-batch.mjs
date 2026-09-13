@@ -16,6 +16,7 @@ for (const required of [
   'async function handlePublication(',
   'async function handleVisibility(',
   'invalidateExploreFeedEdgeCache',
+  'musicNotePublicationR2Key',
 ]) {
   if (!source.includes(required)) throw new Error(`[048] prerequisite missing: ${required}`);
 }
@@ -43,11 +44,11 @@ function pageSyncPublicationRequest048(request, method, payload) {
 }
 
 async function handleMusicNotePublicationBatch048(request, env, cors) {
-  await requireExploreAuth(request.clone());
+  const authContext = await requireExploreAuth(request.clone());
   let body = null;
   try { body = await request.json(); } catch { throwApi('INVALID_BODY', '공개상태 묶음 요청이 올바르지 않습니다.', 400); }
   const raw = Array.isArray(body?.mutations) ? body.mutations : [];
-  if (!raw.length) return json({ ok: true, data: { results: [] } }, 200, cors);
+  if (!raw.length) return json({ ok: true, data: { results: [], revision: null } }, 200, cors);
   if (raw.length > 50) throwApi('TOO_MANY_PUBLICATIONS', '한 번에 처리할 수 있는 공개상태 변경 수를 초과했습니다.', 400);
 
   const bySource = new Map();
@@ -153,7 +154,20 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
       console.warn('[SORIDRAW 048] feed edge invalidation skipped:', String(error?.message || error || 'unknown'));
     }
   }
-  return json({ ok: true, data: { results } }, 200, cors);
+
+  let revision = null;
+  try {
+    if (env?.PROFILE_MEDIA) {
+      const object = await env.PROFILE_MEDIA.head(musicNotePublicationR2Key(authContext.uid));
+      revision = object
+        ? String(object.httpEtag || object.etag || object.customMetadata?.updatedAt || '') || null
+        : null;
+    }
+  } catch (error) {
+    console.warn('[SORIDRAW 048] publication revision head skipped:', String(error?.message || error || 'unknown'));
+  }
+
+  return json({ ok: true, data: { results, revision } }, 200, cors);
 }
 `;
 source = source.replace(helperAnchor, helper + '\n' + helperAnchor);

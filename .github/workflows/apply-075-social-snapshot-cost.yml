@@ -33,7 +33,20 @@ jobs:
           cache: npm
 
       - name: Apply targeted 075 client changes
-        run: python3 .deploy/apply-075-social-snapshot-cost.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .deploy/apply-075-social-snapshot-cost.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/services/exploreSocialService.ts')
+          text = path.read_text(encoding='utf-8')
+          old = "rawUids.reduce((acc: Record<string, boolean>, value: unknown) => {"
+          new = "rawUids.reduce<Record<string, boolean>>((acc, value: unknown) => {"
+          if old not in text:
+              raise SystemExit('075 follow reducer type anchor missing')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
 
       - name: Verify 075 Worker patch against canonical 041 source
         shell: bash

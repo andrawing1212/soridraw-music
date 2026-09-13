@@ -1,4 +1,4 @@
-requested_at=2026-09-13T12:01:00+09:00
+requested_at=2026-09-13T13:10:00+09:00
 requested_by=user
-product_code_target=15dcc55e84ad280f79ba48bed4d28dd908243531
-release_purpose=075_social_snapshot_user_queue_idle_w0_and_uid_sync
+product_code_target=9893590b526137a2528dfca8a50da87e20bcc056
+release_purpose=076_publication_state_cost_fix

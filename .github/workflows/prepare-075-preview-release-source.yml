@@ -1,0 +1,117 @@
+name: Prepare 075 PREVIEW Release Source
+
+on:
+  push:
+    branches: [work/social-snapshot-075-v2]
+    paths:
+      - '.github/workflows/prepare-075-preview-release-source.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prepare-075-preview-release-source
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout approved work branch
+        uses: actions/checkout@v4
+        with:
+          ref: work/social-snapshot-075-v2
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Generate canonical Worker 042 and app version 075
+        shell: bash
+        run: |
+          set -euo pipefail
+          worker='cloudflare/explore-worker/canonical/preview-worker.js'
+          patch='cloudflare/explore-worker/patches/042-social-snapshot-write-compaction.mjs'
+          marker='SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_WRITE_COMPACTION_042_20260913'
+          if ! grep -Fq "$marker" "$worker"; then
+            tmp="$(mktemp -d)"
+            cp "$worker" "$tmp/worker.js"
+            SORIDRAW_REMOTE_WORKER_DIR="$tmp" node "$patch"
+            cp "$tmp/worker.js" "$worker"
+          fi
+          node --check "$worker"
+          grep -Fq "$marker" "$worker"
+          grep -Fq 'SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_USER_QUEUE_042_20260913' "$worker"
+          grep -Fq '/v1/me/social-snapshot' "$worker"
+          grep -Fq 'enqueueExploreLikeUserQueue075' "$worker"
+          grep -Fq 'idleWriteZero: true' "$worker"
+          sha256sum "$worker" | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          cat > public/app-version.json <<'JSON'
+          {
+            "version": "075"
+          }
+          JSON
+          echo 'PREPARE_075_RELEASE_SOURCE=PASS'
+
+      - name: Verify 075 and 076 contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-075-social-snapshot-cost.py
+          python3 scripts/verify-076-trigger-maintenance.py
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
+          node scripts/verify-explore-deploy-preflight.mjs
+          grep -Fq '"version": "075"' public/app-version.json
+          echo '075_076_RELEASE_CONTRACT=PASS'
+
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify release boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only | grep -v '^dist/' || true)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt|public/app-version\.json)$' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected generated release changes:'
+            echo "$bad"
+            exit 1
+          fi
+          echo 'NO_UI_CSS_CHANGE=true'
+          echo 'NO_USER_DATA_CHANGE=true'
+          echo 'NO_FIREBASE_FUNCTIONS_CHANGE=true'
+          echo 'NO_FIRESTORE_RULES_CHANGE=true'
+
+      - name: Commit exact 075 release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked=(
+            cloudflare/explore-worker/canonical/preview-worker.js
+            cloudflare/explore-worker/canonical/source-sha256.txt
+            public/app-version.json
+          )
+          if git diff --quiet -- "${tracked[@]}"; then
+            echo '075 release source already prepared.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "${tracked[@]}"
+          git commit -m 'release: prepare 075 Worker 042 source'
+          git push origin HEAD:work/social-snapshot-075-v2
+          echo '075_RELEASE_SOURCE_COMMIT=PASS'

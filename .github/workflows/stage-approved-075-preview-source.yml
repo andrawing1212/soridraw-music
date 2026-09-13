@@ -60,7 +60,7 @@ jobs:
             public/app-version.json
           )
           git checkout "$APPROVED_SOURCE" -- "${files[@]}"
-          changed="$(git diff --name-only)"
+          changed="$(git diff --cached --name-only)"
           printf '%s\n' "$changed"
           expected="$(printf '%s\n' "${files[@]}" | sort)"
           actual="$(printf '%s\n' "$changed" | sed '/^$/d' | sort)"

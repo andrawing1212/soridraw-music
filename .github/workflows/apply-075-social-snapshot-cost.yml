@@ -50,6 +50,77 @@ jobs:
               raise SystemExit('075 follow reducer type contract missing')
           PY
 
+      - name: Apply UID-scoped like sync event guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one anchor, found {count}')
+              return text.replace(old, new, 1)
+
+          like_path = Path('src/services/exploreLikeService.ts')
+          like = like_path.read_text(encoding='utf-8')
+          marker = '// SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913'
+          if marker not in like:
+              like = replace_once(like,
+                  '// SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_075_20260913\nconst EXPLORE_LIKE_CACHE_SCHEMA_VERSION',
+                  '// SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_075_20260913\n' + marker + '\nconst EXPLORE_LIKE_CACHE_SCHEMA_VERSION',
+                  'like marker')
+              like = replace_once(like,
+                  'type ExploreLikeSyncEventDetail = {\n  trackId: string;',
+                  'type ExploreLikeSyncEventDetail = {\n  uid: string;\n  trackId: string;',
+                  'like event uid type')
+              like = replace_once(like,
+                  'patches.forEach((patch) => dispatchLikeSync({\n      trackId: patch.trackId,',
+                  'patches.forEach((patch) => dispatchLikeSync({\n      uid,\n      trackId: patch.trackId,',
+                  'replay uid')
+              like = replace_once(like,
+                  'dispatchLikeSync({\n      trackId: result.trackId,\n      ownerUid: result.ownerUid,',
+                  'dispatchLikeSync({\n      uid: user.uid,\n      trackId: result.trackId,\n      ownerUid: result.ownerUid,',
+                  'account signal uid')
+              like = replace_once(like,
+                  'dispatchLikeSync({\n        ...visibleResult,\n        ownerUid,\n      });',
+                  'dispatchLikeSync({\n        uid,\n        ...visibleResult,\n        ownerUid,\n      });',
+                  'flush uid')
+              like = replace_once(like,
+                  'dispatchLikeSyncError({\n        trackId: firstPending.trackId,',
+                  'dispatchLikeSyncError({\n        uid,\n        trackId: firstPending.trackId,',
+                  'sync error uid')
+              like_path.write_text(like, encoding='utf-8')
+
+          page_path = Path('src/pages/ExplorePage.tsx')
+          page = page_path.read_text(encoding='utf-8')
+          page_marker = '// SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913'
+          if page_marker not in page:
+              page = replace_once(page,
+                  '// SORIDRAW_EXPLORE_UID_SCOPED_LIKE_OVERLAY_075_20260913\n// Forced like-count recovery',
+                  '// SORIDRAW_EXPLORE_UID_SCOPED_LIKE_OVERLAY_075_20260913\n' + page_marker + '\n// Forced like-count recovery',
+                  'page marker')
+              page = replace_once(page,
+                  "  useEffect(() => onAuthStateChanged(auth, (currentUser) => {\n    setUser(currentUser);\n    likeHydrationKeyRef.current = '';\n    if (!currentUser) setLikedTrackIds({});\n  }), []);",
+                  "  useEffect(() => onAuthStateChanged(auth, (currentUser) => {\n    setUser(currentUser);\n    likeHydrationKeyRef.current = '';\n    setLikedTrackIds({});\n  }), []);",
+                  'auth switch clear')
+              page = replace_once(page,
+                  '      const detail = (event as CustomEvent<{\n        trackId?: string;',
+                  '      const detail = (event as CustomEvent<{\n        uid?: string;\n        trackId?: string;',
+                  'sync detail uid type')
+              page = replace_once(page,
+                  "      }>).detail;\n      const trackId = String(detail?.trackId || '').trim();\n      if (!trackId || typeof detail?.liked !== 'boolean') return;",
+                  "      }>).detail;\n      if (!user?.uid || String(detail?.uid || '').trim() !== user.uid) return;\n      const trackId = String(detail?.trackId || '').trim();\n      if (!trackId || typeof detail?.liked !== 'boolean') return;",
+                  'sync uid guard')
+              page = replace_once(page,
+                  "    const onLikeSyncError = (event: Event) => {\n      const detail = (event as CustomEvent<{ message?: string }>).detail;\n      setSocialNotice(String(detail?.message || '좋아요 서버 동기화를 재시도하고 있어요.'));\n    };",
+                  "    const onLikeSyncError = (event: Event) => {\n      const detail = (event as CustomEvent<{ uid?: string; message?: string }>).detail;\n      if (!user?.uid || String(detail?.uid || '').trim() !== user.uid) return;\n      setSocialNotice(String(detail?.message || '좋아요 서버 동기화를 재시도하고 있어요.'));\n    };",
+                  'sync error uid guard')
+              page_path.write_text(page, encoding='utf-8')
+          print('UID_SCOPED_LIKE_SYNC_EVENT=PASS')
+          PY
+
       - name: Verify 075 Worker patch against canonical 041 source
         shell: bash
         run: |
@@ -95,6 +166,10 @@ jobs:
           grep -Fq 'getExplorePersonalSocialSnapshot(user)' src/services/exploreSocialService.ts
           grep -Fq 'displayLikeCount: clampLikeCount(result.displayLikeCount)' src/services/exploreLikeService.ts
           grep -Fq 'SORIDRAW_EXPLORE_UID_SCOPED_LIKE_OVERLAY_075_20260913' src/pages/ExplorePage.tsx
+          grep -Fq 'SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913' src/pages/ExplorePage.tsx
+          grep -Fq 'SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913' src/services/exploreLikeService.ts
+          grep -Fq 'uid: user.uid' src/services/exploreLikeService.ts
+          grep -Fq "String(detail?.uid || '').trim() !== user.uid" src/pages/ExplorePage.tsx
           ! grep -Fq 'patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: result.likeCount });' src/pages/ExplorePage.tsx
           ! grep -Fq 'patchExploreFeedSessionCacheRow(requestUrl, trackId, { likeCount: nextCount });' src/pages/ExplorePage.tsx
           grep -Fq 'SORIDRAW_EXPLORE_TARGETED_PUBLICATION_CACHE_075_20260913' src/services/explorePublicationService.ts
@@ -148,5 +223,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add "${tracked[@]}"
-          git commit -m 'feat: apply 075 social snapshot cost structure'
+          git commit -m 'fix: scope like sync events to active uid'
           git push origin HEAD:work/social-snapshot-075-v2

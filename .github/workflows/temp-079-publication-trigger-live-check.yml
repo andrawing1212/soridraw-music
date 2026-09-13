@@ -34,17 +34,19 @@ jobs:
           set -euo pipefail
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT name,tbl_name,sql FROM sqlite_schema WHERE type='trigger' AND (name LIKE 'trg_music_note_publication_bundle_%' OR name LIKE 'explore032_%' OR sql LIKE '%explore_shared_revision%') ORDER BY name;" --json > "$RUNNER_TEMP/triggers.json"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT name,tbl_name,sql FROM sqlite_schema WHERE type='trigger' AND tbl_name IN ('tracks','track_stats','explore_derived_tracks','public_profiles','profile_stats','explore_derived_profiles','follows') ORDER BY tbl_name,name;" --json > "$RUNNER_TEMP/triggers.json"
           node <<'NODE'
           const fs=require('fs');
           const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/triggers.json','utf8'));
           const rows=raw.flatMap(x=>x.results||[]);
           const legacy=rows.filter(r=>String(r.name||'').startsWith('trg_music_note_publication_bundle_'));
           console.log('LEGACY_PUBLICATION_BUNDLE_TRIGGER_COUNT='+legacy.length);
-          for(const r of legacy) console.log('LEGACY_TRIGGER='+r.name);
-          for(const r of rows.filter(r=>['explore032_track_update','explore032_derived_track_update'].includes(r.name))) {
-            console.log('CORE_TRIGGER='+r.name);
-            console.log(String(r.sql||''));
+          console.log('RELEVANT_TRIGGER_COUNT='+rows.length);
+          for(const r of rows) {
+            const sql=String(r.sql||'');
+            const writes=(sql.match(/\b(?:INSERT|UPDATE|DELETE)\b/gi)||[]).length;
+            console.log(`TRIGGER=${r.name} TABLE=${r.tbl_name} WRITE_STATEMENTS=${writes}`);
+            if (r.tbl_name==='tracks' || r.name==='explore032_derived_track_update') console.log('SQL='+sql.replace(/\s+/g,' '));
           }
           console.log('LIVE_TRIGGER_READONLY_CHECK=PASS');
           NODE

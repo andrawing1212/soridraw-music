@@ -41,31 +41,14 @@ jobs:
           raw=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'schema.json'),encoding='utf-8'))
           rows=[r for group in raw for r in group.get('results',[])]
           print('REMOTE_SCHEMA_OBJECTS='+str(len(rows)))
-
           trigger_row=next((r for r in rows if r.get('type')=='trigger' and r.get('name')=='explore032_derived_track_update'),None)
           if not trigger_row:
               raise RuntimeError('explore032_derived_track_update missing')
           live_trigger=trigger_row['sql']
-          old_old="""  INSERT OR IGNORE INTO explore_derived_profiles(uid)
-  SELECT OLD.owner_uid
-  WHERE OLD.owner_uid IS NOT NEW.owner_uid
-     OR OLD.active IS NOT NEW.active;"""
-          new_old="""  INSERT INTO explore_derived_profiles(uid)
-  SELECT OLD.owner_uid
-  WHERE (OLD.owner_uid IS NOT NEW.owner_uid OR OLD.active IS NOT NEW.active)
-    AND NOT EXISTS (
-      SELECT 1 FROM explore_derived_profiles WHERE uid = OLD.owner_uid
-    );"""
-          old_new="""  INSERT OR IGNORE INTO explore_derived_profiles(uid)
-  SELECT NEW.owner_uid
-  WHERE OLD.owner_uid IS NOT NEW.owner_uid
-     OR OLD.active IS NOT NEW.active;"""
-          new_new="""  INSERT INTO explore_derived_profiles(uid)
-  SELECT NEW.owner_uid
-  WHERE (OLD.owner_uid IS NOT NEW.owner_uid OR OLD.active IS NOT NEW.active)
-    AND NOT EXISTS (
-      SELECT 1 FROM explore_derived_profiles WHERE uid = NEW.owner_uid
-    );"""
+          old_old="  INSERT OR IGNORE INTO explore_derived_profiles(uid)\n  SELECT OLD.owner_uid\n  WHERE OLD.owner_uid IS NOT NEW.owner_uid\n     OR OLD.active IS NOT NEW.active;"
+          new_old="  INSERT INTO explore_derived_profiles(uid)\n  SELECT OLD.owner_uid\n  WHERE (OLD.owner_uid IS NOT NEW.owner_uid OR OLD.active IS NOT NEW.active)\n    AND NOT EXISTS (SELECT 1 FROM explore_derived_profiles WHERE uid = OLD.owner_uid);"
+          old_new="  INSERT OR IGNORE INTO explore_derived_profiles(uid)\n  SELECT NEW.owner_uid\n  WHERE OLD.owner_uid IS NOT NEW.owner_uid\n     OR OLD.active IS NOT NEW.active;"
+          new_new="  INSERT INTO explore_derived_profiles(uid)\n  SELECT NEW.owner_uid\n  WHERE (OLD.owner_uid IS NOT NEW.owner_uid OR OLD.active IS NOT NEW.active)\n    AND NOT EXISTS (SELECT 1 FROM explore_derived_profiles WHERE uid = NEW.owner_uid);"
           if live_trigger.count(old_old)!=1 or live_trigger.count(old_new)!=1:
               raise RuntimeError('live trigger anchors changed')
           fixed_trigger=live_trigger.replace(old_old,new_old).replace(old_new,new_new)
@@ -81,11 +64,7 @@ jobs:
                   conn.execute(sql)
               conn.execute("INSERT INTO explore_derived_state(id,seq,seeded) VALUES(1,0,1)")
               conn.execute("INSERT INTO explore_shared_revision(scope,revision,updated_at) VALUES('global',1,0)")
-              conn.execute("""INSERT INTO tracks (
-                  id,owner_uid,source_type,source_id,title,cover_url,suno_url_primary,search_text,
-                  is_public,status,published_at,created_at,updated_at
-                ) VALUES (?,?,?,?,?,?,?,?,1,'published',?,?,?)""",
-                ('__soridraw_sim_track__','__soridraw_sim_uid__','music_note','__sim_source__','sim','','https://example.invalid/audio','sim',1000,1000,1000))
+              conn.execute("INSERT INTO tracks (id,owner_uid,source_type,source_id,title,cover_url,suno_url_primary,search_text,is_public,status,published_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,1,'published',?,?,?)",('__soridraw_sim_track__','__soridraw_sim_uid__','music_note','__sim_source__','sim','','https://example.invalid/audio','sim',1000,1000,1000))
               conn.execute("INSERT INTO track_stats(track_id,like_count,comment_count,play_count,updated_at) VALUES(?,0,0,0,?)",('__soridraw_sim_track__',1000))
               conn.commit()
               return conn

@@ -3,13 +3,12 @@ import baseWorker from './preview-worker.js';
 // SORIDRAW_EXPLORE_REVISION_HEAD_ONLY_036_20260911
 // SORIDRAW_EXPLORE_REVISION_HEAD_LOW_READ_037_20260911
 // SORIDRAW_EXPLORE_FEED_DELTA_068_20260912
-// Release-compatible entry wrapper. A plain feed revision check stays head-only.
-// When the client supplies its known revision, 068 may additionally return a
-// bounded list of changed existing tracks from the already-maintained 032 journal.
-// No canonical Feed scan/rebuild is performed here.
-const REVISION_HEAD_CACHE_SECONDS_036 = 60;
-const REVISION_HEAD_CACHE_PATH_036 = '/__soridraw/feed-revision-head-037';
-const REVISION_DELTA_MAX_068 = 64;
+// SORIDRAW_EXPLORE_R2_REVISION_HEAD_077_20260913
+//
+// 077: revision checks never open D1. The first-page Feed R2 object's ETag is the
+// revision. A mutation that changes the cached Feed changes the ETag; unchanged
+// reconnects are one tiny R2 HEAD (or edge hit) and D1 R0/W0.
+const REVISION_HEAD_CACHE_SECONDS_077 = 60;
 const RELEASE_ALLOWED_ORIGINS_036 = new Set([
   'https://preview.soridraw.com',
   'https://soridraw-preview.web.app',
@@ -36,21 +35,21 @@ function revisionCors036(request) {
   };
 }
 
-function revisionDiagnosticHeaders036(cors, rowsRead, readQueries, mode = 'HEAD-ONLY-036') {
+function revisionDiagnosticHeaders077(cors, r2ClassB = 0, source = 'R2-HEAD-077') {
   const headers = new Headers(cors);
   headers.set('Content-Type', 'application/json; charset=utf-8');
   headers.set('Cache-Control', 'no-store');
-  headers.set('X-SORIDRAW-CF-Diagnostics', '068');
+  headers.set('X-SORIDRAW-CF-Diagnostics', '077');
   headers.set('X-SORIDRAW-CF-Worker', '1');
-  headers.set('X-SORIDRAW-D1-Read', String(Math.max(0, Number(rowsRead || 0))));
+  headers.set('X-SORIDRAW-D1-Read', '0');
   headers.set('X-SORIDRAW-D1-Write', '0');
-  headers.set('X-SORIDRAW-D1-Read-Queries', String(Math.max(0, Number(readQueries || 0))));
+  headers.set('X-SORIDRAW-D1-Read-Queries', '0');
   headers.set('X-SORIDRAW-D1-Write-Queries', '0');
   headers.set('X-SORIDRAW-D1-Other-Queries', '0');
   headers.set('X-SORIDRAW-R2-A', '0');
-  headers.set('X-SORIDRAW-R2-B', '0');
-  headers.set('X-SORIDRAW-Revision-Mode', mode);
-  headers.set('X-SORIDRAW-Revision-Source', mode === 'HEAD-DELTA-068' ? 'DERIVED-CHANGES-068' : 'STATE-SEQ-037');
+  headers.set('X-SORIDRAW-R2-B', String(Math.max(0, Number(r2ClassB || 0))));
+  headers.set('X-SORIDRAW-Revision-Mode', 'HEAD-ONLY-036');
+  headers.set('X-SORIDRAW-Revision-Source', source);
   headers.set('Access-Control-Expose-Headers', [
     'X-SORIDRAW-CF-Diagnostics',
     'X-SORIDRAW-CF-Worker',
@@ -67,158 +66,55 @@ function revisionDiagnosticHeaders036(cors, rowsRead, readQueries, mode = 'HEAD-
   return headers;
 }
 
-const rowsRead068 = (result) => Math.max(0, Number(result?.meta?.rows_read || 0));
-const parseJson068 = (value) => {
-  try { return value ? JSON.parse(String(value)) : {}; } catch { return {}; }
-};
+const feedR2Key077 = (sort) => `internal/explore/feed-v1/${sort === 'popular' ? 'popular' : 'latest'}-40.json`;
+const feedCacheBucket077 = (env) => env?.EXPLORE_CACHE || env?.PROFILE_MEDIA || null;
 
-async function readRevisionHead068(url, env) {
-  const cacheKeyUrl = new URL(REVISION_HEAD_CACHE_PATH_036, url.origin);
-  const cacheKey = new Request(cacheKeyUrl.toString(), { method: 'GET' });
-  const cached = await caches.default.match(cacheKey);
-  if (cached) {
-    return { ok: true, revision: Math.max(0, Number(await cached.text() || 0)), rowsRead: 0, readQueries: 0 };
-  }
+async function readFeedR2Revision077(url, env, sort) {
+  const edgeUrl = new URL(`/__soridraw/feed-r2-revision-077/${sort}`, url.origin);
+  const edgeKey = new Request(edgeUrl.toString(), { method: 'GET' });
+  try {
+    const cached = await caches.default.match(edgeKey);
+    if (cached) {
+      const revision = String(await cached.text() || '').trim();
+      if (revision) return { revision, r2ClassB: 0, source: 'EDGE-R2-HEAD-077' };
+    }
+  } catch {}
 
-  const result = await env.DB.prepare(
-    'SELECT seeded, seq FROM explore_derived_state WHERE id=1'
-  ).all();
-  const row = Array.isArray(result?.results) ? result.results[0] : null;
-  if (!row?.seeded) {
-    return { ok: false, revision: 0, rowsRead: rowsRead068(result), readQueries: 1 };
-  }
-
-  const revision = Math.max(0, Number(row.seq || 0));
-  await caches.default.put(cacheKey, new Response(String(revision), {
-    headers: { 'Cache-Control': `public, max-age=${REVISION_HEAD_CACHE_SECONDS_036}` },
-  }));
-  return { ok: true, revision, rowsRead: rowsRead068(result), readQueries: 1 };
+  const bucket = feedCacheBucket077(env);
+  if (!bucket) return { revision: '', r2ClassB: 0, source: 'R2-BINDING-MISSING-077' };
+  let head = null;
+  try { head = await bucket.head(feedR2Key077(sort)); } catch {}
+  if (!head) return { revision: '', r2ClassB: 1, source: 'R2-MISSING-077' };
+  const revision = String(
+    head.httpEtag
+    || head.etag
+    || head.customMetadata?.updatedAt
+    || (head.uploaded && typeof head.uploaded.getTime === 'function' ? head.uploaded.getTime() : '')
+    || '',
+  ).trim();
+  if (!revision) return { revision: '', r2ClassB: 1, source: 'R2-REVISION-MISSING-077' };
+  try {
+    await caches.default.put(edgeKey, new Response(revision, {
+      headers: { 'Cache-Control': `public, max-age=${REVISION_HEAD_CACHE_SECONDS_077}` },
+    }));
+  } catch {}
+  return { revision, r2ClassB: 1, source: 'R2-HEAD-077' };
 }
 
-async function readFeedDelta068(env, knownRevision, revision) {
-  if (!(knownRevision >= 0) || knownRevision >= revision) {
-    return { complete: true, fromRevision: String(knownRevision), toRevision: String(revision), changes: [], removedIds: [], rowsRead: 0, readQueries: 0 };
-  }
-
-  const journal = await env.DB.prepare(`
-    SELECT kind,id,seq
-    FROM explore_derived_changes
-    WHERE scope='feed' AND seq>? AND seq<=?
-    ORDER BY seq
-    LIMIT ?
-  `).bind(knownRevision, revision, REVISION_DELTA_MAX_068 + 1).all();
-  const events = Array.isArray(journal?.results) ? journal.results : [];
-  let rowsRead = rowsRead068(journal);
-  let readQueries = 1;
-
-  // A global state revision can advance for non-feed scopes. Without an explicit
-  // feed journal event we cannot prove that a local Feed patch is complete, so
-  // preserve the old full-feed fallback instead of guessing.
-  if (!events.length || events.length > REVISION_DELTA_MAX_068 || events.some((event) => String(event.kind || '') !== 'track')) {
-    return {
-      complete: false,
-      fromRevision: String(knownRevision),
-      toRevision: String(revision),
-      changes: [],
-      removedIds: [],
-      rowsRead,
-      readQueries,
-    };
-  }
-
-  const ids = [...new Set(events.map((event) => String(event.id || '').trim()).filter(Boolean))];
-  if (!ids.length) {
-    return { complete: false, fromRevision: String(knownRevision), toRevision: String(revision), changes: [], removedIds: [], rowsRead, readQueries };
-  }
-
-  const placeholders = ids.map(() => '?').join(',');
-  const state = await env.DB.prepare(`
-    SELECT
-      t.id,t.owner_uid,t.active,t.published_at,t.pinned,t.likes,t.row_json,
-      p.active AS profile_active,p.row_json AS profile_json
-    FROM explore_derived_tracks t
-    LEFT JOIN explore_derived_profiles p ON p.uid=t.owner_uid
-    WHERE t.id IN (${placeholders})
-  `).bind(...ids).all();
-  rowsRead += rowsRead068(state);
-  readQueries += 1;
-  const stateRows = Array.isArray(state?.results) ? state.results : [];
-  const found = new Set(stateRows.map((row) => String(row.id || '')));
-  const removedIds = ids.filter((id) => !found.has(id));
-  const changes = stateRows.map((row) => {
-    const track = parseJson068(row.row_json);
-    const profile = Number(row.profile_active || 0) === 1 ? parseJson068(row.profile_json) : {};
-    return {
-      id: String(row.id || ''),
-      active: Number(row.active || 0) === 1,
-      ownerUid: String(row.owner_uid || ''),
-      publishedAt: Math.max(0, Number(row.published_at || 0)),
-      profilePinned: Number(row.pinned || 0) === 1,
-      likeCount: Math.max(0, Number(row.likes || 0)),
-      title: String(track.title || ''),
-      coverUrl: String(track.cover_url || '') || null,
-      sunoUrlPrimary: String(track.suno_url_primary || '') || null,
-      sunoUrlSecondary: String(track.suno_url_secondary || '') || null,
-      ownerNickname: String(profile.nickname || ''),
-      ownerAvatarUrl: String(profile.avatar_url || '') || null,
-      ownerHandle: String(profile.handle || ''),
-    };
-  });
-
-  return {
-    complete: true,
-    fromRevision: String(knownRevision),
-    toRevision: String(revision),
-    changes,
-    removedIds,
-    rowsRead,
-    readQueries,
-  };
-}
-
-async function handleFeedRevisionHeadOnly036(request, env) {
+async function handleFeedRevisionHeadOnly077(request, env) {
   const url = new URL(request.url);
   const sort = url.searchParams.get('sort') === 'popular' ? 'popular' : 'latest';
   const cors = revisionCors036(request);
-  const head = await readRevisionHead068(url, env);
-  if (!head.ok) {
-    return new Response(JSON.stringify({ ok: false, error: 'Explore derived state unavailable' }), {
+  const head = await readFeedR2Revision077(url, env, sort);
+  if (!head.revision) {
+    return new Response(JSON.stringify({ ok: false, error: 'Explore Feed snapshot unavailable' }), {
       status: 503,
-      headers: revisionDiagnosticHeaders036(cors, head.rowsRead, head.readQueries),
+      headers: revisionDiagnosticHeaders077(cors, head.r2ClassB, head.source),
     });
   }
-
-  const knownRaw = url.searchParams.get('knownRevision');
-  const knownRevision = knownRaw !== null && /^\d+$/.test(knownRaw) ? Number(knownRaw) : null;
-  if (knownRevision === null) {
-    return new Response(JSON.stringify({ ok: true, data: { sort, revision: String(head.revision) } }), {
-      status: 200,
-      headers: revisionDiagnosticHeaders036(cors, head.rowsRead, head.readQueries, 'HEAD-ONLY-036'),
-    });
-  }
-
-  const delta = await readFeedDelta068(env, knownRevision, head.revision);
-  return new Response(JSON.stringify({
-    ok: true,
-    data: {
-      sort,
-      revision: String(head.revision),
-      delta: {
-        complete: delta.complete,
-        fromRevision: delta.fromRevision,
-        toRevision: delta.toRevision,
-        changes: delta.changes,
-        removedIds: delta.removedIds,
-      },
-    },
-  }), {
+  return new Response(JSON.stringify({ ok: true, data: { sort, revision: head.revision } }), {
     status: 200,
-    headers: revisionDiagnosticHeaders036(
-      cors,
-      head.rowsRead + delta.rowsRead,
-      head.readQueries + delta.readQueries,
-      'HEAD-DELTA-068',
-    ),
+    headers: revisionDiagnosticHeaders077(cors, head.r2ClassB, head.source),
   });
 }
 
@@ -232,7 +128,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/v1/feed-revision') {
-      return handleFeedRevisionHeadOnly036(request, env);
+      return handleFeedRevisionHeadOnly077(request, env);
     }
     return baseWorker.fetch(request, env, ctx);
   },

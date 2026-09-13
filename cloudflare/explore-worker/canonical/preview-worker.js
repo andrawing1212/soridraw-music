@@ -19205,13 +19205,23 @@ async function syncExploreFeedR2Publication043Core044(env, incomingItem) {
   return { ok: results.every((result) => result?.ok !== false), results };
 }
 
-async function syncExploreFeedR2Publication043(...args) {
+async function syncExploreFeedR2Publication043Core046(...args) {
   try {
     return await syncExploreFeedR2Publication043Core044(...args);
   } catch (error) {
     console.warn('[SORIDRAW 044] derived publication patch deferred:', "syncExploreFeedR2Publication043", String(error?.message || error || 'unknown'));
     return { ok: false, repairNeeded: true };
   }
+}
+
+async function syncExploreFeedR2Publication043(...args) {
+  const result = await syncExploreFeedR2Publication043Core046(...args);
+  if (result?.ok === false || result?.repairNeeded) {
+    try { await deleteExploreFeedR2Bundles(args[0]); } catch (error) {
+      console.warn('[SORIDRAW 046] feed R2 repair marker failed:', String(error?.message || error || 'unknown'));
+    }
+  }
+  return result;
 }
 
 async function syncExploreFeedR2Private043Core044(env, trackId) {
@@ -19233,13 +19243,23 @@ async function syncExploreFeedR2Private043Core044(env, trackId) {
   return { ok: results.every((result) => result?.ok !== false), results };
 }
 
-async function syncExploreFeedR2Private043(...args) {
+async function syncExploreFeedR2Private043Core046(...args) {
   try {
     return await syncExploreFeedR2Private043Core044(...args);
   } catch (error) {
     console.warn('[SORIDRAW 044] derived publication patch deferred:', "syncExploreFeedR2Private043", String(error?.message || error || 'unknown'));
     return { ok: false, repairNeeded: true };
   }
+}
+
+async function syncExploreFeedR2Private043(...args) {
+  const result = await syncExploreFeedR2Private043Core046(...args);
+  if (result?.ok === false || result?.repairNeeded) {
+    try { await deleteExploreFeedR2Bundles(args[0]); } catch (error) {
+      console.warn('[SORIDRAW 046] feed R2 repair marker failed:', String(error?.message || error || 'unknown'));
+    }
+  }
+  return result;
 }
 
 async function syncExploreFeedR2OptionPatch043Core044(env, trackId, patch) {
@@ -19267,13 +19287,23 @@ async function syncExploreFeedR2OptionPatch043Core044(env, trackId, patch) {
   return { ok: results.every((result) => result?.ok !== false), results };
 }
 
-async function syncExploreFeedR2OptionPatch043(...args) {
+async function syncExploreFeedR2OptionPatch043Core046(...args) {
   try {
     return await syncExploreFeedR2OptionPatch043Core044(...args);
   } catch (error) {
     console.warn('[SORIDRAW 044] derived publication patch deferred:', "syncExploreFeedR2OptionPatch043", String(error?.message || error || 'unknown'));
     return { ok: false, repairNeeded: true };
   }
+}
+
+async function syncExploreFeedR2OptionPatch043(...args) {
+  const result = await syncExploreFeedR2OptionPatch043Core046(...args);
+  if (result?.ok === false || result?.repairNeeded) {
+    try { await deleteExploreFeedR2Bundles(args[0]); } catch (error) {
+      console.warn('[SORIDRAW 046] feed R2 repair marker failed:', String(error?.message || error || 'unknown'));
+    }
+  }
+  return result;
 }
 
 async function patchExploreProfileR2Publication043Core044(env, uid, change) {
@@ -19323,13 +19353,27 @@ async function patchExploreProfileR2Publication043Core044(env, uid, change) {
   };
 }
 
-async function patchExploreProfileR2Publication043(...args) {
+async function patchExploreProfileR2Publication043Core046(...args) {
   try {
     return await patchExploreProfileR2Publication043Core044(...args);
   } catch (error) {
     console.warn('[SORIDRAW 044] derived publication patch deferred:', "patchExploreProfileR2Publication043", String(error?.message || error || 'unknown'));
     return { ok: false, repairNeeded: true };
   }
+}
+
+async function patchExploreProfileR2Publication043(...args) {
+  const [env, uid] = args;
+  const result = await patchExploreProfileR2Publication043Core046(...args);
+  if (result?.ok === false || result?.repairNeeded) {
+    try {
+      const bucket = exploreCacheBucket031(env);
+      if (bucket && uid) await bucket.delete(exploreProfileR2Key(String(uid)));
+    } catch (error) {
+      console.warn('[SORIDRAW 046] profile R2 repair marker failed:', String(error?.message || error || 'unknown'));
+    }
+  }
+  return result;
 }
 
 async function handleMusicNotePublicationSingleWrite016(request, env, cors, authContext, source, publicationOptions) {
@@ -19355,6 +19399,12 @@ async function handleMusicNotePublicationSingleWrite016(request, env, cors, auth
     };
   }
   const unchanged = publicationCanonicalUnchanged016(previous, source, resolvedOptions, primaryGenre);
+  const visibilityOnly = Boolean(previous?.id) && publicationCanonicalUnchanged016(
+    { ...previous, is_public: 1, status: 'published' },
+    source,
+    resolvedOptions,
+    primaryGenre,
+  );
   const visibilityTransitionOnly022 = Boolean(previous?.id) && !unchanged && publicationRepublishSemanticUnchanged022(previous, source, resolvedOptions, primaryGenre);
   if (unchanged) {
     return json({
@@ -19384,86 +19434,97 @@ async function handleMusicNotePublicationSingleWrite016(request, env, cors, auth
       previous?.status
     );
   } else if (!unchanged) {
-    await env.DB.prepare(`
-      INSERT INTO tracks (
-        id, owner_uid,
-        source_type, source_id, source_parent_id, legacy_global_id,
-        source_subtrack_key, source_subtrack_index, source_subtrack_id,
-        title, description, cover_url, duration_seconds,
-        lyrics, style, prompt,
-        suno_url_primary, suno_url_secondary, search_text,
-        allow_next_song_apply, allow_follower_save, profile_pinned,
-        share_schema_version, share_payload_json, primary_genre,
-        is_public, status, published_at, created_at, updated_at
-      ) VALUES (
-        ?, ?,
-        ?, ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?,
-        1, 'published', ?, ?, ?
-      )
-      ON CONFLICT(id) DO UPDATE SET
-        source_type = excluded.source_type,
-        source_id = excluded.source_id,
-        source_parent_id = excluded.source_parent_id,
-        legacy_global_id = excluded.legacy_global_id,
-        source_subtrack_key = excluded.source_subtrack_key,
-        source_subtrack_index = excluded.source_subtrack_index,
-        source_subtrack_id = excluded.source_subtrack_id,
-        title = excluded.title,
-        description = excluded.description,
-        cover_url = excluded.cover_url,
-        duration_seconds = excluded.duration_seconds,
-        lyrics = excluded.lyrics,
-        style = excluded.style,
-        prompt = excluded.prompt,
-        suno_url_primary = excluded.suno_url_primary,
-        suno_url_secondary = excluded.suno_url_secondary,
-        search_text = excluded.search_text,
-        allow_next_song_apply = excluded.allow_next_song_apply,
-        allow_follower_save = excluded.allow_follower_save,
-        profile_pinned = excluded.profile_pinned,
-        share_schema_version = excluded.share_schema_version,
-        share_payload_json = excluded.share_payload_json,
-        primary_genre = excluded.primary_genre,
-        is_public = 1,
-        status = 'published',
-        published_at = excluded.published_at,
-        updated_at = excluded.updated_at
-    `).bind(
-      source.id,
-      authContext.uid,
-      source.sourceType,
-      source.sourceId,
-      source.sourceParentId,
-      source.legacyGlobalId,
-      source.sourceSubTrackKey,
-      source.sourceSubTrackIndex,
-      source.sourceSubTrackId,
-      source.title,
-      source.description,
-      source.coverUrl,
-      source.durationSeconds,
-      source.lyrics,
-      source.style,
-      source.prompt,
-      source.sunoUrlPrimary,
-      source.sunoUrlSecondary,
-      source.searchText,
-      resolvedOptions.allowNextSongApply,
-      resolvedOptions.allowFollowerSave,
-      resolvedOptions.profilePinned,
-      Number(source.shareSchemaVersion || 0),
-      source.sharePayloadJson || null,
-      primaryGenre || null,
-      publishedAt,
-      Number(previous?.created_at || now),
-      now
-    ).run();
+    if (visibilityOnly) {
+      await env.DB.prepare(`
+        UPDATE tracks
+        SET is_public = 1,
+            status = 'published',
+            published_at = ?,
+            updated_at = ?
+        WHERE id = ? AND owner_uid = ?
+      `).bind(publishedAt, now, source.id, authContext.uid).run();
+    } else {
+      await env.DB.prepare(`
+        INSERT INTO tracks (
+          id, owner_uid,
+          source_type, source_id, source_parent_id, legacy_global_id,
+          source_subtrack_key, source_subtrack_index, source_subtrack_id,
+          title, description, cover_url, duration_seconds,
+          lyrics, style, prompt,
+          suno_url_primary, suno_url_secondary, search_text,
+          allow_next_song_apply, allow_follower_save, profile_pinned,
+          share_schema_version, share_payload_json, primary_genre,
+          is_public, status, published_at, created_at, updated_at
+        ) VALUES (
+          ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?,
+          ?, ?, ?, ?,
+          ?, ?, ?,
+          ?, ?, ?,
+          ?, ?, ?,
+          ?, ?, ?,
+          1, 'published', ?, ?, ?
+        )
+        ON CONFLICT(id) DO UPDATE SET
+          source_type = excluded.source_type,
+          source_id = excluded.source_id,
+          source_parent_id = excluded.source_parent_id,
+          legacy_global_id = excluded.legacy_global_id,
+          source_subtrack_key = excluded.source_subtrack_key,
+          source_subtrack_index = excluded.source_subtrack_index,
+          source_subtrack_id = excluded.source_subtrack_id,
+          title = excluded.title,
+          description = excluded.description,
+          cover_url = excluded.cover_url,
+          duration_seconds = excluded.duration_seconds,
+          lyrics = excluded.lyrics,
+          style = excluded.style,
+          prompt = excluded.prompt,
+          suno_url_primary = excluded.suno_url_primary,
+          suno_url_secondary = excluded.suno_url_secondary,
+          search_text = excluded.search_text,
+          allow_next_song_apply = excluded.allow_next_song_apply,
+          allow_follower_save = excluded.allow_follower_save,
+          profile_pinned = excluded.profile_pinned,
+          share_schema_version = excluded.share_schema_version,
+          share_payload_json = excluded.share_payload_json,
+          primary_genre = excluded.primary_genre,
+          is_public = 1,
+          status = 'published',
+          published_at = excluded.published_at,
+          updated_at = excluded.updated_at
+      `).bind(
+        source.id,
+        authContext.uid,
+        source.sourceType,
+        source.sourceId,
+        source.sourceParentId,
+        source.legacyGlobalId,
+        source.sourceSubTrackKey,
+        source.sourceSubTrackIndex,
+        source.sourceSubTrackId,
+        source.title,
+        source.description,
+        source.coverUrl,
+        source.durationSeconds,
+        source.lyrics,
+        source.style,
+        source.prompt,
+        source.sunoUrlPrimary,
+        source.sunoUrlSecondary,
+        source.searchText,
+        resolvedOptions.allowNextSongApply,
+        resolvedOptions.allowFollowerSave,
+        resolvedOptions.profilePinned,
+        Number(source.shareSchemaVersion || 0),
+        source.sharePayloadJson || null,
+        primaryGenre || null,
+        publishedAt,
+        Number(previous?.created_at || now),
+        now
+      ).run();
+    }
   }
   const feedItem = publicationBuildFeedItem016(
     source,
@@ -23099,3 +23160,5 @@ export {
 // SORIDRAW_EXPLORE_LIKE_DERIVED_INTAKE_036_20260911
 
 // SORIDRAW_PUBLICATION_REVISION_METADATA_045_20260913
+
+// SORIDRAW_PUBLICATION_WRITE_COMPACTION_046_20260913

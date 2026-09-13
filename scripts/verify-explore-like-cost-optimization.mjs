@@ -77,8 +77,8 @@ assert.deepEqual(
   requiredReleasePatches,
   'required like release patches must remain present and ordered'
 );
-assert.equal(manifest.patches.at(-2), '044-local-first-cost-hotpath.mjs', '044 local-first hotpath must remain directly before 045');
-assert.equal(manifest.patches.at(-1), '045-publication-revision-metadata.mjs', '045 publication revision metadata must be the final Worker release patch');
+assert.equal(manifest.patches.at(-2), '045-publication-revision-metadata.mjs', '045 publication revision metadata must remain directly before 046');
+assert.equal(manifest.patches.at(-1), '046-publication-write-compaction.mjs', '046 publication write compaction must be the final Worker release patch');
 assert.equal((migration033.match(/UPDATE explore_derived_state\s+SET seq = seq \+ 1/g) || []).length, 1);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_batches_035/);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_processor_035/);

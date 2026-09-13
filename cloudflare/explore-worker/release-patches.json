@@ -11,6 +11,7 @@
     "039-explore-like-stable-dual-queue-boundary.mjs",
     "040-explore-like-w1-delayed-count.mjs",
     "041-explore-like-reversal-order.mjs",
-    "042-social-snapshot-write-compaction.mjs"
+    "042-social-snapshot-write-compaction.mjs",
+    "043-publication-targeted-r2-hotpath.mjs"
   ]
 }

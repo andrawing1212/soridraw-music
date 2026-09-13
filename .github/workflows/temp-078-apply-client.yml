@@ -48,6 +48,8 @@ jobs:
           git add src/services/explorePublicationService.ts
           git diff --cached --check
           git commit -m 'fix(preview): persist publication snapshot across app restarts'
+          git reset --hard HEAD
+          git clean -fd
           git fetch origin preview --no-tags
           git rebase origin/preview
           git push origin HEAD:preview

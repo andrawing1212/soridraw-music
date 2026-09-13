@@ -19315,6 +19315,7 @@ async function handleMusicNotePublicationSingleWrite016(request, env, cors, auth
       allowNextSongApply: resolvedOptions.allowNextSongApply === 1,
       allowFollowerSave: resolvedOptions.allowFollowerSave === 1,
       profilePinned: resolvedOptions.profilePinned === 1,
+      snapshotItem: feedItem,
       mutation: visibilityTransitionOnly022 ? "visibility-transition" : unchanged ? "idempotent" : "written"
     }
   }, 200, cors);
@@ -20549,26 +20550,76 @@ async function hasExploreLikeQueue066038(env) {
 async function processExploreLikeBatches035(env, scheduledTime = Date.now()) {
   if (!env?.DB) return { skipped: true, reason: 'binding' };
   const now = Math.max(0, Number(scheduledTime || Date.now()));
-  const owner = 'like035_' + now + '_' + crypto.randomUUID();
-  const acquired = await acquireExploreLikeProcessor035(env, owner, now);
-  if (!acquired) return { skipped: true, reason: 'lease' };
   const includeQueue066 = await hasExploreLikeQueue066038(env);
   const includeQueue069 = await hasExploreLikeQueue069040(env);
-  const totals = { waves: 0, processedBatches: 0, oldProcessed: 0, compactProcessed: 0, w1Processed: 0, insertedLikes: 0, deletedLikes: 0, changedTracks: 0, compactQueue: includeQueue066, w1Queue: includeQueue069 };
+  const legacyBoundary = await selectExploreLikeAggregateBoundary039(
+    env,
+    now,
+    EXPLORE_LIKE_AGGREGATE_MAX_MUTATIONS_035,
+    includeQueue066,
+    includeQueue069
+  );
+  let userQueuePending = false;
   try {
-    for (let wave = 0; wave < EXPLORE_LIKE_AGGREGATE_MAX_WAVES_035; wave += 1) {
-      const current = await processExploreLikeAggregateWave035(env, now, Date.now(), includeQueue066, includeQueue069);
-      totals.waves += 1;
-      totals.processedBatches += current.processedBatches;
-      totals.oldProcessed += current.oldProcessed;
-      totals.compactProcessed += current.compactProcessed;
-      totals.w1Processed += current.w1Processed;
-      totals.insertedLikes += current.insertedLikes;
-      totals.deletedLikes += current.deletedLikes;
-      totals.changedTracks += current.positiveTracks + current.negativeTracks;
-      if (!current.processedBatches) break;
+    userQueuePending = await hasExploreLikeUserQueuePending075(env, now);
+  } catch (error) {
+    const message = String(error?.message || error || '');
+    if (!/no such table:\s*explore_like_user_queue_075/i.test(message)) throw error;
+  }
+
+  // Important cost boundary: an empty 10-minute cron performs no D1 write.
+  // The lease is acquired only after read-only preflight proves there is work.
+  if (!legacyBoundary && !userQueuePending) {
+    const idle = { skipped: true, reason: 'idle', idleWriteZero: true, waves: 0, processedBatches: 0, processedUserWaves: 0, insertedLikes: 0, deletedLikes: 0, changedTracks: 0 };
+    console.log('[SORIDRAW 042] like aggregate idle', JSON.stringify(idle));
+    return idle;
+  }
+
+  const owner = 'like042_' + now + '_' + crypto.randomUUID();
+  const acquired = await acquireExploreLikeProcessor035(env, owner, now);
+  if (!acquired) return { skipped: true, reason: 'lease' };
+  const totals = {
+    waves: 0,
+    processedBatches: 0,
+    processedUserWaves: 0,
+    oldProcessed: 0,
+    compactProcessed: 0,
+    w1Processed: 0,
+    insertedLikes: 0,
+    deletedLikes: 0,
+    changedTracks: 0,
+    compactQueue: includeQueue066,
+    w1Queue: includeQueue069,
+    userQueue: userQueuePending
+  };
+  try {
+    if (legacyBoundary) {
+      for (let wave = 0; wave < EXPLORE_LIKE_AGGREGATE_MAX_WAVES_035; wave += 1) {
+        const current = await processExploreLikeAggregateWave035(env, now, Date.now(), includeQueue066, includeQueue069);
+        totals.waves += 1;
+        totals.processedBatches += current.processedBatches;
+        totals.oldProcessed += current.oldProcessed;
+        totals.compactProcessed += current.compactProcessed;
+        totals.w1Processed += current.w1Processed;
+        totals.insertedLikes += current.insertedLikes;
+        totals.deletedLikes += current.deletedLikes;
+        totals.changedTracks += current.positiveTracks + current.negativeTracks;
+        if (!current.processedBatches) break;
+      }
     }
-    console.log('[SORIDRAW 040] like aggregate', JSON.stringify(totals));
+
+    if (userQueuePending) {
+      for (let wave = 0; wave < EXPLORE_LIKE_USER_QUEUE_MAX_WAVES_075; wave += 1) {
+        const current = await processExploreLikeUserQueueWave075(env, now, Date.now());
+        totals.waves += 1;
+        if (!current.advanced) break;
+        totals.processedUserWaves += 1;
+        totals.insertedLikes += current.insertedLikes;
+        totals.deletedLikes += current.deletedLikes;
+        totals.changedTracks += current.positiveTracks + current.negativeTracks;
+      }
+    }
+    console.log('[SORIDRAW 042] like aggregate', JSON.stringify(totals));
     return totals;
   } finally {
     await releaseExploreLikeProcessor035(env, owner).catch(() => {});
@@ -20620,8 +20671,256 @@ async function hasExploreLikeQueue069040(env) {
   }
 }
 
+// SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_WRITE_COMPACTION_042_20260913
+// SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_USER_QUEUE_042_20260913
+const EXPLORE_LIKE_USER_QUEUE_MAX_MUTATIONS_075 = 50000;
+const EXPLORE_LIKE_USER_QUEUE_MAX_WAVES_075 = 3;
+
+function buildExploreLikeUserPatch075(mutations) {
+  const patch = {};
+  for (const row of mutations || []) {
+    const trackId = String(row?.trackId || '').trim();
+    if (!trackId) continue;
+    patch[trackId] = {
+      liked: row?.liked ? 1 : 0,
+      mutationAt: Math.max(0, Math.floor(Number(row?.mutationAt || 0))),
+    };
+  }
+  return patch;
+}
+
+async function enqueueExploreLikeUserQueue075(env, uid, mutations, now) {
+  const patch = buildExploreLikeUserPatch075(mutations);
+  const pendingCount = Object.keys(patch).length;
+  if (!pendingCount) return { batchId: '', inserted: false, queue: 'user-075' };
+
+  const processedCondition = `(
+    explore_like_user_queue_075.updated_at < (
+      SELECT processed_at FROM explore_like_user_queue_state_075 WHERE id = 1
+    )
+    OR (
+      explore_like_user_queue_075.updated_at = (
+        SELECT processed_at FROM explore_like_user_queue_state_075 WHERE id = 1
+      )
+      AND explore_like_user_queue_075.user_uid <= (
+        SELECT processed_uid FROM explore_like_user_queue_state_075 WHERE id = 1
+      )
+    )
+  )`;
+
+  const payload = JSON.stringify(patch);
+  const result = await env.DB.prepare(`
+    INSERT INTO explore_like_user_queue_075(
+      user_uid, updated_at, pending_count, mutations_json
+    ) VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_uid) DO UPDATE SET
+      mutations_json = CASE
+        WHEN ${processedCondition} THEN excluded.mutations_json
+        ELSE json_patch(explore_like_user_queue_075.mutations_json, excluded.mutations_json)
+      END,
+      pending_count = CASE
+        WHEN ${processedCondition} THEN excluded.pending_count
+        ELSE (
+          SELECT COUNT(*)
+          FROM json_each(json_patch(explore_like_user_queue_075.mutations_json, excluded.mutations_json))
+        )
+      END,
+      updated_at = CASE
+        WHEN excluded.updated_at > explore_like_user_queue_075.updated_at THEN excluded.updated_at
+        ELSE explore_like_user_queue_075.updated_at + 1
+      END
+    RETURNING updated_at, pending_count
+  `).bind(String(uid || ''), now, pendingCount, payload).first();
+
+  const acceptedAt = Math.max(now, Number(result?.updated_at || now));
+  return {
+    batchId: `u075_${String(uid || '')}_${acceptedAt}`,
+    inserted: true,
+    queue: 'user-075',
+    pendingCount: Number(result?.pending_count || pendingCount),
+  };
+}
+
+function exploreLikeUserAggregateCte075() {
+  return `
+    WITH cursor AS (
+      SELECT processed_at, processed_uid
+      FROM explore_like_user_queue_state_075
+      WHERE id = 1
+    ),
+    ordered AS (
+      SELECT q.user_uid, q.updated_at, q.pending_count, q.mutations_json,
+        SUM(q.pending_count) OVER (
+          ORDER BY q.updated_at ASC, q.user_uid ASC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS running_mutations,
+        ROW_NUMBER() OVER (
+          ORDER BY q.updated_at ASC, q.user_uid ASC
+        ) AS queue_row
+      FROM (
+        SELECT q.user_uid, q.updated_at, q.pending_count, q.mutations_json
+        FROM explore_like_user_queue_075 q, cursor c
+        WHERE (
+          q.updated_at > c.processed_at
+          OR (q.updated_at = c.processed_at AND q.user_uid > c.processed_uid)
+        )
+          AND q.updated_at <= ?
+        ORDER BY q.updated_at ASC, q.user_uid ASC
+        LIMIT 50000
+      ) q
+    ),
+    eligible AS (
+      SELECT user_uid, updated_at, pending_count, mutations_json
+      FROM ordered
+      WHERE running_mutations <= ? OR queue_row = 1
+    ),
+    expanded AS (
+      SELECT
+        e.user_uid,
+        e.updated_at,
+        TRIM(CAST(j.key AS TEXT)) AS track_id,
+        CASE WHEN CAST(json_extract(j.value, '$.liked') AS INTEGER) <> 0 THEN 1 ELSE 0 END AS desired_liked,
+        COALESCE(
+          CAST(json_extract(j.value, '$.mutationAt') AS INTEGER),
+          e.updated_at
+        ) AS mutation_at
+      FROM eligible e, json_each(e.mutations_json) AS j
+      WHERE TRIM(CAST(j.key AS TEXT)) <> ''
+    ),
+    deltas AS (
+      SELECT expanded.*,
+        CASE
+          WHEN expanded.desired_liked = 1 AND existing.user_uid IS NULL THEN 1
+          WHEN expanded.desired_liked = 0 AND existing.user_uid IS NOT NULL THEN -1
+          ELSE 0
+        END AS delta
+      FROM expanded
+      LEFT JOIN likes existing
+        ON existing.track_id = expanded.track_id
+       AND existing.user_uid = expanded.user_uid
+    )
+  `;
+}
+
+async function hasExploreLikeUserQueuePending075(env, cutoff) {
+  const row = await env.DB.prepare(`
+    SELECT 1 AS pending
+    FROM explore_like_user_queue_075 q
+    JOIN explore_like_user_queue_state_075 s ON s.id = 1
+    WHERE (
+      q.updated_at > s.processed_at
+      OR (q.updated_at = s.processed_at AND q.user_uid > s.processed_uid)
+    )
+      AND q.updated_at <= ?
+    ORDER BY q.updated_at ASC, q.user_uid ASC
+    LIMIT 1
+  `).bind(cutoff).first();
+  return Number(row?.pending || 0) === 1;
+}
+
+async function processExploreLikeUserQueueWave075(env, cutoff, now) {
+  const cte = exploreLikeUserAggregateCte075();
+  const max = EXPLORE_LIKE_USER_QUEUE_MAX_MUTATIONS_075;
+  const result = await env.DB.batch([
+    env.DB.prepare(cte + `
+      INSERT INTO track_stats(track_id, like_count, comment_count, play_count, updated_at)
+      SELECT track_id, SUM(delta), 0, 0, ?
+      FROM deltas
+      GROUP BY track_id
+      HAVING SUM(delta) > 0
+      ON CONFLICT(track_id) DO UPDATE SET
+        like_count = track_stats.like_count + excluded.like_count,
+        updated_at = excluded.updated_at
+    `).bind(cutoff, max, now),
+    env.DB.prepare(cte + `
+      UPDATE track_stats
+      SET like_count = MAX(0, like_count + COALESCE((
+            SELECT SUM(d.delta)
+            FROM deltas d
+            WHERE d.track_id = track_stats.track_id
+          ), 0)),
+          updated_at = ?
+      WHERE track_id IN (
+        SELECT track_id
+        FROM deltas
+        GROUP BY track_id
+        HAVING SUM(delta) < 0
+      )
+    `).bind(cutoff, max, now),
+    env.DB.prepare(cte + `
+      INSERT OR IGNORE INTO likes(track_id, user_uid, created_at)
+      SELECT track_id, user_uid, mutation_at
+      FROM expanded
+      WHERE desired_liked = 1
+    `).bind(cutoff, max),
+    env.DB.prepare(cte + `
+      DELETE FROM likes
+      WHERE (track_id, user_uid) IN (
+        SELECT track_id, user_uid
+        FROM expanded
+        WHERE desired_liked = 0
+      )
+    `).bind(cutoff, max),
+    env.DB.prepare(cte + `
+      UPDATE explore_like_user_queue_state_075
+      SET processed_at = COALESCE((
+            SELECT updated_at FROM eligible
+            ORDER BY updated_at DESC, user_uid DESC LIMIT 1
+          ), processed_at),
+          processed_uid = COALESCE((
+            SELECT user_uid FROM eligible
+            ORDER BY updated_at DESC, user_uid DESC LIMIT 1
+          ), processed_uid)
+      WHERE id = 1
+        AND EXISTS (SELECT 1 FROM eligible)
+    `).bind(cutoff, max),
+  ]);
+
+  return {
+    positiveTracks: Number(result?.[0]?.meta?.changes || 0),
+    negativeTracks: Number(result?.[1]?.meta?.changes || 0),
+    insertedLikes: Number(result?.[2]?.meta?.changes || 0),
+    deletedLikes: Number(result?.[3]?.meta?.changes || 0),
+    advanced: Number(result?.[4]?.meta?.changes || 0) > 0,
+  };
+}
+
+async function handleMySocialSnapshot042(request, env, cors) {
+  const authContext = await requireExploreAuth(request);
+  let [likedIds, followingUids] = await Promise.all([
+    readExploreLikeR2Bundle(env, authContext.uid),
+    readExploreFollowingR2Bundle(env, authContext.uid),
+  ]);
+
+  if (!likedIds || !followingUids) {
+    await Promise.all([
+      likedIds ? Promise.resolve() : rebuildExploreLikeR2Bundle(env, authContext.uid),
+      followingUids ? Promise.resolve() : rebuildExploreFollowingR2Bundle(env, authContext.uid),
+    ]);
+    [likedIds, followingUids] = await Promise.all([
+      readExploreLikeR2Bundle(env, authContext.uid),
+      readExploreFollowingR2Bundle(env, authContext.uid),
+    ]);
+  }
+
+  if (!likedIds || !followingUids) {
+    return json({ ok: false, error: 'SOCIAL_SNAPSHOT_UNAVAILABLE' }, 503, cors);
+  }
+
+  return json({
+    ok: true,
+    data: {
+      schemaVersion: 1,
+      likedTrackIds: [...likedIds],
+      followingUids: [...followingUids],
+      source: 'r2-social-042',
+      updatedAt: Date.now(),
+    },
+  }, 200, cors);
+}
+
+
 async function handleLikeBatch034(request, env, cors) {
-  // SORIDRAW_EXPLORE_LIKE_REVERSAL_ORDER_041_20260912
   const authContext = await requireExploreAuth(request);
   let body = null;
   try { body = await request.json(); } catch { throwApi('INVALID_BODY', '좋아요 묶음 요청이 올바르지 않습니다.', 400); }
@@ -20664,17 +20963,19 @@ async function handleLikeBatch034(request, env, cors) {
     const state = states.get(mutation.trackId) || {};
     const canonicalLiked = Number(state.canonical_liked || 0) === 1;
     if (mutation.liked !== canonicalLiked) return true;
-    // A desired state that equals the still-old canonical state can be the
-    // reversal of an already accepted, not-yet-aggregated batch. New clients
-    // send baseLiked so that reversal is preserved. Legacy clients do not have
-    // that hint, so queue the apparent no-op rather than risk dropping intent.
     if (mutation.baseLiked === null) return true;
     return mutation.baseLiked !== mutation.liked;
   });
 
   let queued = { batchId: '', inserted: false, queue: 'none' };
   if (effectiveMutations.length) {
-    queued = await enqueueExploreLikeBatch035(env, authContext.uid, effectiveMutations, receivedAt);
+    try {
+      queued = await enqueueExploreLikeUserQueue075(env, authContext.uid, effectiveMutations, receivedAt);
+    } catch (error) {
+      const message = String(error?.message || error || '');
+      if (!/no such table:\s*explore_like_user_queue_075/i.test(message)) throw error;
+      queued = await enqueueExploreLikeBatch035(env, authContext.uid, effectiveMutations, receivedAt);
+    }
   }
 
   await syncExploreLikeR2AfterBatch034(env, authContext.uid, results);
@@ -20684,7 +20985,7 @@ async function handleLikeBatch034(request, env, cors) {
       results,
       queued: Boolean(effectiveMutations.length),
       batchId: queued.batchId || null,
-      queue: queued.queue
+      queue: queued.queue || '075'
     }
   }, 200, cors);
 }
@@ -21481,6 +21782,9 @@ async function handleExploreRequest(request, env) {
     }
     if (url.pathname === "/v1/public-folders" && request.method === "POST") {
       return await handleUpsertPublicFolder(request, env, cors);
+    }
+    if (url.pathname === "/v1/me/social-snapshot" && request.method === "GET") {
+      return await handleMySocialSnapshot042(request, env, cors);
     }
     if (url.pathname === "/v1/me/following-bundle" && request.method === "GET") {
       return await handleMyFollowingR2Bundle(request, env, cors);

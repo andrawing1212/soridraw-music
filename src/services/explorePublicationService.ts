@@ -8,8 +8,20 @@ import {
   removeSoridrawPersistentCachesBySourceType,
   writeSoridrawPersistentCache,
 } from '../lib/soridrawPersistentCache';
-import { invalidateExploreFeedSessionCache } from './exploreSessionCache';
-import { invalidateExplorePublicProfileFirstView } from './exploreProfileFirstViewService';
+import {
+  invalidateExploreFeedSessionCache,
+  patchExploreFeedSessionCachesRow,
+  removeExploreFeedSessionCacheRow,
+  upsertExploreFeedSessionCacheRow,
+} from './exploreSessionCache';
+import {
+  invalidateExplorePublicProfileFirstView,
+  patchExplorePublicProfileFirstViewTrack,
+  removeExplorePublicProfileFirstViewTrack,
+  upsertExplorePublicProfileFirstViewTrack,
+} from './exploreProfileFirstViewService';
+
+// SORIDRAW_EXPLORE_TARGETED_PUBLICATION_CACHE_075_20260913
 
 const PUBLICATION_PAGE_SIZE = 50;
 const MAX_PUBLICATION_PAGES = 8;
@@ -387,8 +399,15 @@ export const publishMusicNoteToExplore = async (
     profilePinned: Boolean(payload?.data?.profilePinned ?? normalizedOptions.profilePinned),
   };
   patchPublicationStateBySourceId(user.uid, normalizedSourceId, nextState);
-  invalidateExploreFeedSessionCache();
-  invalidateExplorePublicProfileFirstView(user.uid);
+  const snapshotItem = payload?.data?.snapshotItem;
+  if (snapshotItem && typeof snapshotItem === 'object' && !Array.isArray(snapshotItem)) {
+    upsertExploreFeedSessionCacheRow(trackId, snapshotItem as Record<string, unknown>);
+    upsertExplorePublicProfileFirstViewTrack(user.uid, snapshotItem as Record<string, unknown>);
+  } else {
+    // Backward-compatible fallback while older Workers are still active.
+    invalidateExploreFeedSessionCache();
+    invalidateExplorePublicProfileFirstView(user.uid);
+  }
   return nextState;
 };
 
@@ -426,8 +445,19 @@ export const setExploreTrackVisibility = async (
     }
   }
   patchPublicationStateByTrackId(user.uid, resolvedTrackId, (state) => ({ ...state, status }));
-  invalidateExploreFeedSessionCache();
-  invalidateExplorePublicProfileFirstView(user.uid);
+  if (status === 'private') {
+    removeExploreFeedSessionCacheRow(resolvedTrackId);
+    removeExplorePublicProfileFirstViewTrack(user.uid, resolvedTrackId);
+  } else {
+    const snapshotItem = payload?.data?.snapshotItem;
+    if (snapshotItem && typeof snapshotItem === 'object' && !Array.isArray(snapshotItem)) {
+      upsertExploreFeedSessionCacheRow(resolvedTrackId, snapshotItem as Record<string, unknown>);
+      upsertExplorePublicProfileFirstViewTrack(user.uid, snapshotItem as Record<string, unknown>);
+    } else {
+      invalidateExploreFeedSessionCache();
+      invalidateExplorePublicProfileFirstView(user.uid);
+    }
+  }
   return {
     status,
     trackId: resolvedTrackId,
@@ -461,8 +491,8 @@ export const setExploreTrackPublicationOptions = async (
     profilePinned: Boolean(payload?.data?.profilePinned ?? normalizedOptions.profilePinned),
   };
   patchPublicationStateByTrackId(user.uid, normalizedTrackId, (state) => ({ ...state, ...nextOptions }));
-  invalidateExploreFeedSessionCache();
-  invalidateExplorePublicProfileFirstView(user.uid);
+  patchExploreFeedSessionCachesRow(normalizedTrackId, nextOptions);
+  patchExplorePublicProfileFirstViewTrack(user.uid, normalizedTrackId, nextOptions);
   return nextOptions;
 };
 

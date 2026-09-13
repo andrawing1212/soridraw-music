@@ -222,6 +222,61 @@ const requestMaterializedFirstView = async (
   };
 };
 
+
+// SORIDRAW_EXPLORE_TARGETED_PUBLICATION_PROFILE_075_20260913
+const publicProfileTrackId075 = (row: Record<string, unknown>) => String(row?.id || row?.trackId || '').trim();
+const publicProfileTrackPublishedAt075 = (row: Record<string, unknown>) => Number(row?.publishedAt || row?.published_at || 0);
+const publicProfileTrackPinned075 = (row: Record<string, unknown>) => Boolean(row?.profilePinned || row?.profile_pinned);
+
+const sortPublicProfileTracks075 = (rows: Array<Record<string, unknown>>) => [...rows].sort((a, b) => {
+  const pinned = Number(publicProfileTrackPinned075(b)) - Number(publicProfileTrackPinned075(a));
+  if (pinned) return pinned;
+  const published = publicProfileTrackPublishedAt075(b) - publicProfileTrackPublishedAt075(a);
+  if (published) return published;
+  return publicProfileTrackId075(b).localeCompare(publicProfileTrackId075(a));
+});
+
+export const upsertExplorePublicProfileFirstViewTrack = (
+  profileRef: string,
+  row: Record<string, unknown>,
+) => {
+  const cached = readCache(profileRef);
+  const trackId = publicProfileTrackId075(row);
+  if (!cached || !trackId) return;
+  const existing = cached.tracks.find((track) => publicProfileTrackId075(track) === trackId);
+  const tracks = sortPublicProfileTracks075([
+    ...cached.tracks.filter((track) => publicProfileTrackId075(track) !== trackId),
+    { ...(existing || {}), ...row },
+  ]).slice(0, PROFILE_FIRST_VIEW_LIMIT);
+  writeCache(cached.profile.uid || profileRef, {
+    ...cached,
+    profile: {
+      ...cached.profile,
+      trackCount: Math.max(0, cached.profile.trackCount + (existing ? 0 : 1)),
+    },
+    tracks,
+  });
+};
+
+export const removeExplorePublicProfileFirstViewTrack = (
+  profileRef: string,
+  trackId: string,
+) => {
+  const cached = readCache(profileRef);
+  const normalizedId = String(trackId || '').trim();
+  if (!cached || !normalizedId) return;
+  const tracks = cached.tracks.filter((track) => publicProfileTrackId075(track) !== normalizedId);
+  if (tracks.length === cached.tracks.length) return;
+  writeCache(cached.profile.uid || profileRef, {
+    ...cached,
+    profile: {
+      ...cached.profile,
+      trackCount: Math.max(0, cached.profile.trackCount - 1),
+    },
+    tracks,
+  });
+};
+
 export const invalidateExplorePublicProfileFirstView = (profileRef: string) => {
   const normalizedRef = normalizeProfileRef(profileRef);
   if (!normalizedRef) return;

@@ -1,0 +1,82 @@
+name: TEMP 078 Prepare Worker 045
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-078-prepare-worker045.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-temp-078-worker045
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Restore full 077 verifier and align only final patch contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show 81759e336bb083a1d11e4b79b4481725aa01db15^:scripts/verify-explore-like-cost-optimization.mjs > scripts/verify-explore-like-cost-optimization.mjs
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('scripts/verify-explore-like-cost-optimization.mjs')
+          s=p.read_text()
+          old="assert.equal(manifest.patches.at(-1), '044-local-first-cost-hotpath.mjs', '044 local-first hotpath must be the final Worker release patch');"
+          new="assert.equal(manifest.patches.at(-2), '044-local-first-cost-hotpath.mjs', '044 local-first hotpath must remain directly before 045');\nassert.equal(manifest.patches.at(-1), '045-publication-revision-metadata.mjs', '045 publication revision metadata must be the final Worker release patch');"
+          if s.count(old)!=1: raise SystemExit('077 final-patch assertion anchor mismatch')
+          s=s.replace(old,new)
+          old2="console.log('PASS Explore like 044 verifier; live D1 rows remain PREVIEW-deployment measurement only');"
+          new2="console.log('PASS Explore like 045 verifier; live D1 rows remain PREVIEW-deployment measurement only');"
+          if s.count(old2)!=1: raise SystemExit('077 verifier final log anchor mismatch')
+          s=s.replace(old2,new2)
+          p.write_text(s)
+          PY
+      - name: Build canonical 045 Worker and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .tmp-worker
+          mkdir -p .tmp-worker
+          cp cloudflare/explore-worker/canonical/preview-worker.js .tmp-worker/worker.js
+          grep -q 'SORIDRAW_PUBLICATION_TARGETED_R2_HOTPATH_043_20260913' .tmp-worker/worker.js
+          grep -q 'SORIDRAW_LOCAL_FIRST_COST_HOTPATH_044_20260913' .tmp-worker/worker.js
+          ! grep -q 'SORIDRAW_PUBLICATION_REVISION_METADATA_045_20260913' .tmp-worker/worker.js
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.tmp-worker" node cloudflare/explore-worker/patches/045-publication-revision-metadata.mjs
+          grep -q 'SORIDRAW_PUBLICATION_REVISION_METADATA_045_20260913' .tmp-worker/worker.js
+          grep -q '/v1/me/music-note-publications-revision' .tmp-worker/worker.js
+          grep -q 'PROFILE_MEDIA.head(musicNotePublicationR2Key' .tmp-worker/worker.js
+          node --check .tmp-worker/worker.js
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          SORIDRAW_GENERATED_WORKER="$PWD/.tmp-worker/worker.js" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/.tmp-worker/worker.js" node scripts/verify-explore-derived-cache.mjs
+          node scripts/verify-explore-deploy-preflight.mjs
+          echo '078_WORKER045_OFFLINE_VERIFY=PASS'
+      - name: Pin canonical Worker 045
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .tmp-worker/worker.js cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          git diff --check
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release-bot@users.noreply.github.com'
+          git add scripts/verify-explore-like-cost-optimization.mjs cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt
+          git commit -m 'fix(preview): pin 078 Worker 045 revision hotpath'
+          git push origin HEAD:preview
+          echo '078_WORKER045_PIN=PASS'

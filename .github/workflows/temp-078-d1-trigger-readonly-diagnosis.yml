@@ -27,24 +27,27 @@ jobs:
       - name: Install Worker tooling
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
-      - name: Read current shared D1 publication trigger schema only
+      - name: Read full shared D1 trigger graph only
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
-          SQL="SELECT name,tbl_name,sql FROM sqlite_schema WHERE type='trigger' AND tbl_name IN ('tracks','explore_derived_tracks','public_profiles','explore_derived_profiles','track_stats') ORDER BY tbl_name,name;"
+          SQL="SELECT name,tbl_name,sql FROM sqlite_schema WHERE type='trigger' ORDER BY tbl_name,name;"
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$SQL" --json > "$RUNNER_TEMP/triggers.json"
           node <<'NODE'
           const fs=require('fs');
           const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/triggers.json','utf8'));
           const rows=raw.flatMap(x=>x.results||[]);
           console.log('TRIGGER_COUNT='+rows.length);
+          const byTable={};
+          for(const row of rows) byTable[row.tbl_name]=(byTable[row.tbl_name]||0)+1;
+          console.log('TRIGGERS_BY_TABLE='+JSON.stringify(byTable));
           for(const row of rows){
             console.log('\n===TRIGGER '+row.name+' ON '+row.tbl_name+'===');
             console.log(String(row.sql||''));
           }
           NODE
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT seeded,seq FROM explore_derived_state WHERE id=1;" --json
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT seeded,seq FROM explore_derived_state WHERE id=1; SELECT scope,revision,updated_at FROM explore_shared_revision ORDER BY scope; PRAGMA recursive_triggers;" --json
           echo 'READ_ONLY_DIAGNOSIS=PASS'

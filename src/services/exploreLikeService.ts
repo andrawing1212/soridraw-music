@@ -4,6 +4,11 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db, getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
+  getExploreSocialSnapshot,
+  invalidateExploreSocialSnapshot,
+  rememberExploreSocialLike,
+} from './exploreSocialSnapshotService';
+import {
   readSoridrawPersistentCache,
   removeSoridrawPersistentCache,
   writeSoridrawPersistentCache,
@@ -17,6 +22,7 @@ import {
 // SORIDRAW_EXPLORE_LIKE_VISIBLE_COUNT_SIGNAL_067_20260911
 // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
 // SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912
+// SORIDRAW_SOCIAL_SNAPSHOT_075_20260913
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -383,11 +389,15 @@ export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) 
   // rehydrate only currently visible IDs; no public feed/full scan is triggered.
   const missedSignal = signal.previousVersion !== seenVersion;
   const cache = getLikedStateCache(uid);
-  if (missedSignal) cache.clear();
+  if (missedSignal) {
+    cache.clear();
+    invalidateExploreSocialSnapshot(uid);
+  }
 
   rememberAccountSyncResults(uid, signal.results);
   for (const result of signal.results) {
     cache.set(result.trackId, result.liked);
+    rememberExploreSocialLike(uid, result.trackId, result.liked);
     dispatchLikeSync({
       trackId: result.trackId,
       ownerUid: result.ownerUid,
@@ -680,15 +690,28 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   const cache = getLikedStateCache(user.uid);
   const missing = normalized.filter((trackId) => !cache.has(trackId));
   if (missing.length) {
-    const query = new URLSearchParams({ trackIds: missing.join(',') });
-    const payload = await requestExploreLike(user, `/v1/me/likes?${query.toString()}`);
-    const likedIds = new Set(
-      Array.isArray(payload?.data?.likedTrackIds)
-        ? payload.data.likedTrackIds.map((trackId: unknown) => String(trackId || '').trim()).filter(Boolean)
-        : [],
-    );
-    missing.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
-    persistLikedStateCache(user.uid, cache);
+    let resolvedFromSnapshot = false;
+    try {
+      const snapshot = await getExploreSocialSnapshot(user);
+      const likedIds = new Set(snapshot.likedTrackIds);
+      missing.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
+      persistLikedStateCache(user.uid, cache);
+      resolvedFromSnapshot = true;
+    } catch (snapshotError) {
+      console.warn('[Explore like] social snapshot unavailable; using legacy liked-state recovery.', snapshotError);
+    }
+
+    if (!resolvedFromSnapshot) {
+      const query = new URLSearchParams({ trackIds: missing.join(',') });
+      const payload = await requestExploreLike(user, `/v1/me/likes?${query.toString()}`);
+      const likedIds = new Set(
+        Array.isArray(payload?.data?.likedTrackIds)
+          ? payload.data.likedTrackIds.map((trackId: unknown) => String(trackId || '').trim()).filter(Boolean)
+          : [],
+      );
+      missing.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
+      persistLikedStateCache(user.uid, cache);
+    }
   }
 
   const outbox = readLikeOutbox(user.uid);
@@ -707,6 +730,7 @@ export const setExploreTrackLike = async (
   const normalizedTrackId = String(trackId || '').trim();
   if (!normalizedTrackId) throw new Error('Explore 곡 ID를 확인하지 못했습니다.');
 
+  rememberExploreSocialLike(user.uid, normalizedTrackId, liked);
   const outbox = readLikeOutbox(user.uid);
   const existing = outbox[normalizedTrackId];
   const inflight = getInflightMutation(user.uid, normalizedTrackId);

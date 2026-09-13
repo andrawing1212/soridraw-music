@@ -58,7 +58,7 @@ assert.doesNotMatch(queueFunction, /requestExploreLike\(/, 'UI queue function mu
 const flushFunction = functionText(service, 'const flushPendingLikes = async');
 assert.match(flushFunction, /'\/v1\/me\/likes\/batch'/);
 assert.match(flushFunction, /mutations: batchEntries\.map/);
-assert.match(flushFunction, /const accountSyncResults: ExploreLikeBatchResult\[\] = \[\]/);
+assert.match(flushFunction, /const accountSyncResults: (?:ExploreLikeBatchResult\[\]|Array<ExploreLikeBatchResult & \{ displayLikeCount\?: number \}>) = \[\]/);
 assert.match(flushFunction, /accountSyncResults\.push\(visibleResult\)/);
 assert.match(flushFunction, /publishExploreLikeAccountSyncSignal\(user, batchEntries, accountSyncResults\)/);
 assert.doesNotMatch(service, /const EXPLORE_LIKE_IDLE_MS = 5_000;/, 'old per-track 5s flush must stay retired');

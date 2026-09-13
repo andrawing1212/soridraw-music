@@ -3,10 +3,12 @@ import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { readSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
+import { getExploreSocialSnapshot, rememberExploreSocialFollow } from './exploreSocialSnapshotService';
 
 const EXPLORE_FOLLOW_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_FOLLOW_BUNDLE_DIAGNOSTIC_PATH = '/v1/me/following-bundle';
 // SORIDRAW_EXPLORE_PROFILE_FOLLOW_COST_1010_20260904
+// SORIDRAW_SOCIAL_SNAPSHOT_075_20260913
 const EXPLORE_FOLLOW_CACHE_KEY = 'explore-follow-state';
 const EXPLORE_FOLLOW_CACHE_SOURCE_TYPE = 'explore_follow_state';
 const EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH = '/v1/profiles/:id/follow-state';
@@ -242,6 +244,16 @@ export const getExploreFollowState = async (user: User, uid: string): Promise<Ex
   }
 
   try {
+    const snapshot = await getExploreSocialSnapshot(user);
+    const isFollowing = snapshot.followingUids.includes(normalizedUid);
+    rememberExploreFollowState(user.uid, normalizedUid, isFollowing);
+    recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL RESOLVE · 개인 소셜 스냅샷');
+    return { isFollowing, followerCount: 0, followingCount: 0 };
+  } catch (snapshotError) {
+    console.warn('[Explore follow] social snapshot unavailable; using legacy following bundle.', snapshotError);
+  }
+
+  try {
     const bundle = await loadExploreFollowingBundle(user);
     const isFollowing = Boolean(bundle.states[normalizedUid]);
     recordCloudflareLocalCacheHit(EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH, 'LOCAL RESOLVE · 팔로우 묶음 1회 로드');
@@ -258,6 +270,7 @@ export const getExploreFollowState = async (user: User, uid: string): Promise<Ex
     followingCount: toCount(row?.followingCount ?? row?.following_count),
   };
   rememberExploreFollowState(user.uid, normalizedUid, result.isFollowing);
+  rememberExploreSocialFollow(user.uid, normalizedUid, result.isFollowing);
   return result;
 };
 
@@ -276,6 +289,7 @@ export const setExploreFollow = async (user: User, uid: string, follow: boolean)
     followingCount: toCount(row?.followingCount ?? row?.following_count),
   };
   rememberExploreFollowState(user.uid, normalizedUid, result.isFollowing);
+  rememberExploreSocialFollow(user.uid, normalizedUid, result.isFollowing);
   return result;
 };
 

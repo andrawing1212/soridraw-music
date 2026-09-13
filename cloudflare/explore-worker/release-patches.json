@@ -10,6 +10,7 @@
     "038-explore-like-compact-queue.mjs",
     "039-explore-like-stable-dual-queue-boundary.mjs",
     "040-explore-like-w1-delayed-count.mjs",
-    "041-explore-like-reversal-order.mjs"
+    "041-explore-like-reversal-order.mjs",
+    "042-explore-social-snapshot-r2-queue.mjs"
   ]
 }

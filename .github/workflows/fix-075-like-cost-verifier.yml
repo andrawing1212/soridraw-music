@@ -1,0 +1,45 @@
+name: Fix 075 Like Cost Verifier
+
+on:
+  push:
+    branches: [work/social-snapshot-075-v2]
+    paths:
+      - '.github/workflows/fix-075-like-cost-verifier.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/social-snapshot-075-v2
+          fetch-depth: 0
+      - name: Update verifier contract and run it
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/verify-explore-like-cost-optimization.mjs')
+          s=p.read_text(encoding='utf-8')
+          old="assert.match(flushFunction, /const accountSyncResults: ExploreLikeBatchResult\\[\\] = \\[\\]/);"
+          new="assert.match(flushFunction, /const accountSyncResults: (?:ExploreLikeBatchResult\\[\\]|Array<ExploreLikeBatchResult & \\{ displayLikeCount\\?: number \\}>) = \\[\\]/);"
+          if old in s:
+              s=s.replace(old,new,1)
+              p.write_text(s,encoding='utf-8')
+          elif new not in s:
+              raise SystemExit('expected verifier anchor missing')
+          PY
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-like-cost-optimization.mjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git diff --quiet -- scripts/verify-explore-like-cost-optimization.mjs; then
+            git add scripts/verify-explore-like-cost-optimization.mjs
+            git commit -m 'test: accept 075 display-count sync result type'
+            git push origin HEAD:work/social-snapshot-075-v2
+          fi
+          echo '075_VERIFIER_COMPAT=PASS'

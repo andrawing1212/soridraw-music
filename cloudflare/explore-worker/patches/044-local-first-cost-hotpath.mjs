@@ -64,7 +64,6 @@ const wrapAsyncFunction = (name, wrapperBuilder) => {
 
 for (const required of [
   'SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_WRITE_COMPACTION_042_20260913',
-  'SORIDRAW_PUBLICATION_TARGETED_R2_HOTPATH_043_20260913',
   'handleLikeBatch034',
   'enqueueExploreLikeUserQueue075',
   'syncExploreLikeR2AfterBatch034',

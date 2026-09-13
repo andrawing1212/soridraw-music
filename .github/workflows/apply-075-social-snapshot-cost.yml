@@ -1,0 +1,131 @@
+name: Apply 075 Social Snapshot Cost Structure
+
+on:
+  push:
+    branches: [work/social-snapshot-075-v2]
+    paths:
+      - '.deploy/apply-075-social-snapshot-cost.py'
+      - '.github/workflows/apply-075-social-snapshot-cost.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-075-social-snapshot-cost
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@v4
+        with:
+          ref: work/social-snapshot-075-v2
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply targeted 075 client changes
+        run: python3 .deploy/apply-075-social-snapshot-cost.py
+
+      - name: Verify 075 Worker patch against canonical 041 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/worker075"
+          mkdir -p "$RUNNER_TEMP/worker075"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$RUNNER_TEMP/worker075/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$RUNNER_TEMP/worker075" node cloudflare/explore-worker/scripts/apply-release-patches.mjs
+          node --check "$RUNNER_TEMP/worker075/worker.js"
+          grep -Fq 'SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_WRITE_COMPACTION_042_20260913' "$RUNNER_TEMP/worker075/worker.js"
+          grep -Fq 'SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_USER_QUEUE_042_20260913' "$RUNNER_TEMP/worker075/worker.js"
+          grep -Fq '/v1/me/social-snapshot' "$RUNNER_TEMP/worker075/worker.js"
+          grep -Fq 'enqueueExploreLikeUserQueue075' "$RUNNER_TEMP/worker075/worker.js"
+          grep -Fq 'idleWriteZero: true' "$RUNNER_TEMP/worker075/worker.js"
+          grep -Fq 'snapshotItem: feedItem' "$RUNNER_TEMP/worker075/worker.js"
+          echo 'WORKER_042_STATIC=PASS'
+
+      - name: Verify additive 075 D1 schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          db="$RUNNER_TEMP/social075.sqlite"
+          sqlite3 "$db" < cloudflare/explore-worker/scripts/fixtures/canonical-schema.sql
+          sqlite3 "$db" < cloudflare/explore-worker/migrations/20260913_01_explore_like_user_queue.sql
+          sqlite3 "$db" "SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('explore_like_user_queue_075','explore_like_user_queue_state_075') ORDER BY name;" > "$RUNNER_TEMP/social075.tables"
+          grep -Fq 'explore_like_user_queue_075' "$RUNNER_TEMP/social075.tables"
+          grep -Fq 'explore_like_user_queue_state_075' "$RUNNER_TEMP/social075.tables"
+          test "$(sqlite3 "$db" 'SELECT COUNT(*) FROM explore_like_user_queue_state_075 WHERE id=1;')" = 1
+          echo 'D1_075_ADDITIVE_SCHEMA=PASS'
+
+      - name: Verify client contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'SORIDRAW_EXPLORE_PERSONAL_SOCIAL_SNAPSHOT_075_20260913' src/services/exploreSocialSnapshotService.ts
+          grep -Fq 'getExplorePersonalSocialSnapshot(user)' src/services/exploreLikeService.ts
+          grep -Fq 'getExplorePersonalSocialSnapshot(user)' src/services/exploreSocialService.ts
+          grep -Fq 'displayLikeCount: clampLikeCount(result.displayLikeCount)' src/services/exploreLikeService.ts
+          grep -Fq 'SORIDRAW_EXPLORE_UID_SCOPED_LIKE_OVERLAY_075_20260913' src/pages/ExplorePage.tsx
+          ! grep -Fq 'patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: result.likeCount });' src/pages/ExplorePage.tsx
+          ! grep -Fq 'patchExploreFeedSessionCacheRow(requestUrl, trackId, { likeCount: nextCount });' src/pages/ExplorePage.tsx
+          grep -Fq 'SORIDRAW_EXPLORE_TARGETED_PUBLICATION_CACHE_075_20260913' src/services/explorePublicationService.ts
+          grep -Fq 'upsertExploreFeedSessionCacheRow(trackId' src/services/explorePublicationService.ts
+          grep -Fq 'removeExploreFeedSessionCacheRow(resolvedTrackId)' src/services/explorePublicationService.ts
+          grep -Fq 'patchExploreFeedSessionCachesRow(normalizedTrackId, nextOptions)' src/services/explorePublicationService.ts
+          echo 'CLIENT_075_STATIC=PASS'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify change boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only | grep -v '^dist/' || true)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/pages/ExplorePage\.tsx|src/services/exploreLikeService\.ts|src/services/exploreSocialService\.ts|src/services/explorePublicationService\.ts|src/services/exploreSessionCache\.ts|src/services/exploreProfileFirstViewService\.ts)$' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected generated changes:'
+            echo "$bad"
+            exit 1
+          fi
+          echo 'NO_UI_CSS_CHANGE=true'
+          echo 'NO_USER_DATA_MIGRATION=true'
+          echo 'NO_FIREBASE_FUNCTIONS_CHANGE=true'
+          echo 'NO_FIRESTORE_RULES_CHANGE=true'
+
+      - name: Commit applied work branch source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked=(
+            src/pages/ExplorePage.tsx
+            src/services/exploreLikeService.ts
+            src/services/exploreSocialService.ts
+            src/services/explorePublicationService.ts
+            src/services/exploreSessionCache.ts
+            src/services/exploreProfileFirstViewService.ts
+          )
+          if git diff --quiet -- "${tracked[@]}"; then
+            echo '075 client changes already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "${tracked[@]}"
+          git commit -m 'feat: apply 075 social snapshot cost structure'
+          git push origin HEAD:work/social-snapshot-075-v2

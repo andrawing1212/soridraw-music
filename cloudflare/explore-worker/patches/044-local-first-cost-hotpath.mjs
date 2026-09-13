@@ -97,6 +97,21 @@ for (const name of [
   wrapAsyncFunction(name, (coreName) => `async function ${name}(...args) {\n  try {\n    return await ${coreName}(...args);\n  } catch (error) {\n    console.warn('[SORIDRAW 044] derived publication patch deferred:', ${JSON.stringify(name)}, String(error?.message || error || 'unknown'));\n    return { ok: false, repairNeeded: true };\n  }\n}`);
 }
 
+replaceFunction('syncMusicNotePublicationR2AfterMutation', `async function syncMusicNotePublicationR2AfterMutation(...args) {
+  const [env, uid] = args;
+  try {
+    return await syncMusicNotePublicationR2AfterMutationCore044(...args);
+  } catch (error) {
+    console.warn('[SORIDRAW 044] derived publication patch deferred:', 'syncMusicNotePublicationR2AfterMutation', String(error?.message || error || 'unknown'));
+    try {
+      if (env?.PROFILE_MEDIA && uid) await env.PROFILE_MEDIA.delete(musicNotePublicationR2Key(uid));
+    } catch (repairError) {
+      console.warn('[SORIDRAW 044] publication R2 repair marker failed:', String(repairError?.message || repairError || 'unknown'));
+    }
+    return { ok: false, repairNeeded: true };
+  }
+}`);
+
 // 043 now updates the profile R2 object in place. Do not delete that newly-patched
 // snapshot afterwards; only clear the HTTP edge shell.
 replaceFunction('invalidatePublicationProfileCaches017', `async function invalidatePublicationProfileCaches017(request, env, uid, handle) {
@@ -155,6 +170,28 @@ source = source.replace(
   `    if (url.pathname === "/v1/me/music-note-publications-revision" && request.method === "GET") {\n      return await handleMusicNotePublicationRevision044(request, env, cors);\n    }\n${publicationRoute}`,
 );
 
+replaceFunction('syncExploreLikeR2AfterBatch034', `async function syncExploreLikeR2AfterBatch034(env, uid, results) {
+  let likedIds = await readExploreLikeR2Bundle(env, uid);
+  if (!likedIds) {
+    await rebuildExploreLikeR2Bundle(env, uid);
+    likedIds = await readExploreLikeR2Bundle(env, uid);
+  }
+  if (!likedIds) return { ok: false, repairNeeded: true };
+  for (const result of results) {
+    const trackId = String(result?.trackId || '').trim();
+    if (!trackId) continue;
+    if (result?.liked) likedIds.add(trackId);
+    else likedIds.delete(trackId);
+  }
+  await writeExploreR2Json(env, exploreLikeR2Key(uid), {
+    schemaVersion: EXPLORE_R2_LIKE_SCHEMA_VERSION,
+    uid: String(uid || ''),
+    updatedAt: Date.now(),
+    likedTrackIds: [...likedIds].filter(Boolean).slice(0, 2000)
+  });
+  return { ok: true };
+}`);
+
 // One actual like batch must not re-read tracks/profile/stats/likes merely to echo
 // the optimistic state the browser already knows. Validation and canonical delta
 // application move to the scheduled aggregate, where work is proportional only to
@@ -185,9 +222,10 @@ replaceFunction('handleLikeBatch034', `async function handleLikeBatch034(request
   const mutations = [...byTrack.values()];
   await enforceExploreLikeBatchRateLimit034(env, authContext.uid, mutations.length);
 
-  const effectiveMutations = mutations.filter((mutation) => (
-    mutation.baseLiked === null || mutation.baseLiked !== mutation.liked
-  ));
+  // Do not discard an intent because this device's baseLiked happens to match it.
+// Another device may already have changed canonical state. The scheduled aggregate
+// is the authoritative idempotent comparison against canonical likes.
+const effectiveMutations = mutations;
   const results = mutations.map((mutation) => ({
     trackId: mutation.trackId,
     liked: mutation.liked,
@@ -428,6 +466,18 @@ for (const name of ['syncExploreFeedR2Publication043', 'syncExploreFeedR2Private
 if (!source.includes('/v1/me/music-note-publications-revision')) throw new Error('[044] publication revision route missing');
 if (!source.includes('patchExploreFeedR2Like044') || !source.includes('patchExploreProfileR2Like044')) {
   throw new Error('[044] aggregate targeted R2 like patch missing');
+}
+
+if (!likeHandler.includes('const effectiveMutations = mutations;')) {
+  throw new Error('[044] stale-device intents can still be discarded before canonical aggregate');
+}
+const socialR2Sync = functionRange('syncExploreLikeR2AfterBatch034').text;
+if ((socialR2Sync.match(/readExploreLikeR2Bundle\(env, uid\)/g) || []).length < 2) {
+  throw new Error('[044] cold personal-like R2 recovery does not re-read and apply current intent');
+}
+const publicationStateSync = functionRange('syncMusicNotePublicationR2AfterMutation').text;
+if (!publicationStateSync.includes('PROFILE_MEDIA.delete(musicNotePublicationR2Key(uid))')) {
+  throw new Error('[044] failed publication-state patch cannot force bounded R2 recovery');
 }
 
 writeFileSync(workerPath, source, 'utf8');

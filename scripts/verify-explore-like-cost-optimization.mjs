@@ -77,6 +77,7 @@ assert.deepEqual(
   requiredReleasePatches,
   'required like release patches must remain present and ordered'
 );
+assert.equal(manifest.patches.at(-1), '044-local-first-cost-hotpath.mjs', '044 local-first hotpath must be the final Worker release patch');
 assert.equal((migration033.match(/UPDATE explore_derived_state\s+SET seq = seq \+ 1/g) || []).length, 1);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_batches_035/);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_processor_035/);
@@ -332,20 +333,42 @@ if (generatedWorker) {
   assert.doesNotMatch(intakeBody, /LEFT JOIN public_profiles /);
   assert.doesNotMatch(intakeBody, /LEFT JOIN track_stats /);
   const batchBody = functionText(worker, 'async function handleLikeBatch034(');
+if (worker.includes('SORIDRAW_LOCAL_FIRST_COST_HOTPATH_044_20260913')) {
+  assert.match(batchBody, /enqueueExploreLikeUserQueue075/);
+  assert.match(batchBody, /syncExploreLikeR2AfterBatch034/);
+  assert.match(batchBody, /const effectiveMutations = mutations;/);
+  assert.doesNotMatch(batchBody, /readExploreLikeBatchStates035|canonical_liked|getPublicTrackForWrite|adjustExploreLikeCounterDelta/,
+    '044 intake must not re-read canonical/derived track state or mutate canonical likes immediately');
+  const personalR2 = functionText(worker, 'async function syncExploreLikeR2AfterBatch034(');
+  assert.ok((personalR2.match(/readExploreLikeR2Bundle\(env, uid\)/g) || []).length >= 2,
+    'cold personal-like R2 recovery must re-read and apply current intent');
+  const userCte = functionText(worker, 'function exploreLikeUserAggregateCte075(');
+  assert.match(userCte, /JOIN tracks t/);
+  assert.match(userCte, /JOIN public_profiles p/);
+  assert.match(userCte, /LEFT JOIN likes/);
+  const userProcessor = functionText(worker, 'async function processExploreLikeUserQueueWave075(');
+  assert.match(userProcessor, /env.DB.batch/);
+  assert.match(userProcessor, /patchExploreFeedR2Like044/);
+  assert.match(userProcessor, /patchExploreProfileR2Like044/);
+  const publicationStateSync = functionText(worker, 'async function syncMusicNotePublicationR2AfterMutation(');
+  assert.ok(publicationStateSync.includes('PROFILE_MEDIA.delete(musicNotePublicationR2Key(uid))'));
+  console.log('PASS generated Worker 044: D1-free intake + stale-device convergence + bounded R2 recovery + aggregate canonical validation');
+} else {
   assert.match(batchBody, /enqueueExploreLikeBatch035/);
   assert.match(batchBody, /readExploreLikeBatchStates035/);
   assert.match(batchBody, /syncExploreLikeR2AfterBatch034/);
   assert.doesNotMatch(batchBody, /adjustExploreLikeCounterDelta/, '035 intake may not mutate canonical likes/track_stats per track');
   assert.doesNotMatch(batchBody, /patchExploreFeedR2LikeCount|patchExploreProfileR2Like020|patchExploreFirstViewLikeCount/);
   const processor = functionText(worker, 'async function processExploreLikeAggregateWave035(');
-  assert.match(processor, /SUM\(delta\)/);
+  assert.match(processor, /SUM(delta)/);
   assert.match(processor, /INSERT OR IGNORE INTO likes/);
   assert.match(processor, /DELETE FROM likes/);
   assert.match(processor, /DELETE FROM explore_like_batches_035/);
-  assert.equal((processor.match(/env\.DB\.batch/g) || []).length, 1, 'one transactional D1 batch per aggregate wave');
+  assert.equal((processor.match(/env.DB.batch/g) || []).length, 1, 'one transactional D1 batch per aggregate wave');
   console.log('PASS generated Worker: derived intake + deferred set-based transactional aggregation');
+}
 } else {
   console.log('INFO generated Worker check skipped; canonical Worker release supplies SORIDRAW_GENERATED_WORKER');
 }
 
-console.log('PASS Explore like 036 verifier; live D1 rows remain PREVIEW-deployment measurement only');
+console.log('PASS Explore like 044 verifier; live D1 rows remain PREVIEW-deployment measurement only');

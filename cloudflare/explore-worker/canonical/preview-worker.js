@@ -12909,7 +12909,7 @@ __name2222222222222222222222222222222222222222(writeMusicNotePublicationR2Payloa
 __name22222222222222222222222222222222222222222(writeMusicNotePublicationR2Payload, "writeMusicNotePublicationR2Payload");
 __name222222222222222222222222222222222222222222(writeMusicNotePublicationR2Payload, "writeMusicNotePublicationR2Payload");
 __name2222222222222222222222222222222222222222222(writeMusicNotePublicationR2Payload, "writeMusicNotePublicationR2Payload");
-async function syncMusicNotePublicationR2AfterMutation(env, uid, sourceId, nextState) {
+async function syncMusicNotePublicationR2AfterMutationCore044(env, uid, sourceId, nextState) {
   try {
     const normalizedUid = String(uid || "").trim();
     const normalizedSourceId = String(sourceId || "").trim();
@@ -12930,6 +12930,21 @@ async function syncMusicNotePublicationR2AfterMutation(env, uid, sourceId, nextS
     return { ok: true, repairNeeded: false };
   } catch (error) {
     console.warn("[SORIDRAW publication bundle] delta sync failed after canonical mutation:", String(error?.message || error || "unknown"));
+    return { ok: false, repairNeeded: true };
+  }
+}
+
+async function syncMusicNotePublicationR2AfterMutation(...args) {
+  const [env, uid] = args;
+  try {
+    return await syncMusicNotePublicationR2AfterMutationCore044(...args);
+  } catch (error) {
+    console.warn('[SORIDRAW 044] derived publication patch deferred:', 'syncMusicNotePublicationR2AfterMutation', String(error?.message || error || 'unknown'));
+    try {
+      if (env?.PROFILE_MEDIA && uid) await env.PROFILE_MEDIA.delete(musicNotePublicationR2Key(uid));
+    } catch (repairError) {
+      console.warn('[SORIDRAW 044] publication R2 repair marker failed:', String(repairError?.message || repairError || 'unknown'));
+    }
     return { ok: false, repairNeeded: true };
   }
 }
@@ -12979,10 +12994,17 @@ __name222222222222222222222222222222222222222222(syncMusicNotePublicationR2After
 __name2222222222222222222222222222222222222222222(syncMusicNotePublicationR2AfterMutation, "syncMusicNotePublicationR2AfterMutation");
 async function handleMusicNotePublicationR2Bundle(request, env, cors) {
   const authContext = await requireExploreAuth(request);
-  const cached = await readMusicNotePublicationR2Payload(env, authContext.uid);
-  if (cached) return json({ ok: true, data: cached }, 200, cors);
-  const recovered = await buildMusicNotePublicationR2Payload(env, authContext.uid);
-  return json({ ok: true, data: recovered, recovery: true }, 200, cors);
+  let cached = await readMusicNotePublicationR2Payload(env, authContext.uid);
+  let recovered = false;
+  if (!cached) {
+    cached = await buildMusicNotePublicationR2Payload(env, authContext.uid);
+    // A genuinely cold/missing derived object may pay one owner snapshot read once.
+    // Persist the recovered R2 snapshot immediately so reconnects never repeat it.
+    await writeMusicNotePublicationR2Payload(env, authContext.uid, cached);
+    recovered = true;
+  }
+  const revision = await readMusicNotePublicationRevision044(env, authContext.uid);
+  return json({ ok: true, data: { ...cached, revision: revision || null }, recovery: recovered }, 200, cors);
 }
 __name(handleMusicNotePublicationR2Bundle, "handleMusicNotePublicationR2Bundle");
 __name2(handleMusicNotePublicationR2Bundle, "handleMusicNotePublicationR2Bundle");
@@ -18384,7 +18406,7 @@ async function invalidatePublicationProfileCaches017(request, env, uid, handle) 
   try {
     await invalidatePublicProfileFirstViewEdgeCache(request, [uid, handle].filter(Boolean));
   } catch (error) {
-    console.warn("[SORIDRAW stage3.2] profile edge invalidation skipped:", String(error?.message || error || "unknown"));
+    console.warn('[SORIDRAW 044] profile edge invalidation skipped:', String(error?.message || error || 'unknown'));
   }
 }
 __name(invalidatePublicationProfileCaches017, "invalidatePublicationProfileCaches017");
@@ -18522,12 +18544,12 @@ async function handleMusicNotePublicationOptions017(request, env, cors, authCont
       allowFollowerSave: next.allowFollowerSave === 1,
       profilePinned: next.profilePinned === 1
     }),
-    syncExploreFeedR2OptionPatch017(env, row.id, {
+    syncExploreFeedR2OptionPatch043(env, row.id, {
       allowNextSongApply: next.allowNextSongApply === 1,
       allowFollowerSave: next.allowFollowerSave === 1,
       profilePinned: next.profilePinned === 1
     }),
-    patchExploreProfileR2Mutation019(env, authContext.uid, {
+    patchExploreProfileR2Publication043(env, authContext.uid, {
       trackId: row.id,
       remove: false,
       trackCountDelta: 0,
@@ -18601,7 +18623,7 @@ async function handleMusicNotePrivate017(request, env, cors, authContext, row) {
   const now = Date.now();
   await applyPublicationVisibilityTransition021(env, authContext.uid, row.id, false, null, now, row.status);
   const derived = await Promise.allSettled([
-    syncExploreFeedR2Private017(env, row.id),
+    syncExploreFeedR2Private043(env, row.id),
     syncMusicNotePublicationR2AfterMutation(env, authContext.uid, row.source_id, {
       status: "private",
       trackId: row.id,
@@ -18609,7 +18631,7 @@ async function handleMusicNotePrivate017(request, env, cors, authContext, row) {
       allowFollowerSave: Number(row.allow_follower_save || 0) === 1,
       profilePinned: Number(row.profile_pinned || 0) === 1
     }),
-    patchExploreProfileR2Mutation019(env, authContext.uid, { trackId: row.id, remove: true, trackCountDelta: -1 })
+    patchExploreProfileR2Publication043(env, authContext.uid, { trackId: row.id, remove: true, trackCountDelta: -1 })
   ]);
   const profileMutation = derived[2]?.status === "fulfilled" ? derived[2].value : null;
   const handle = await publicationResolveProfileHandle023(env, authContext.uid, profileMutation?.handle || "");
@@ -19130,6 +19152,177 @@ __name2222222222222222222222(publicationReadProfileR2024, "publicationReadProfil
 __name22222222222222222222222(publicationReadProfileR2024, "publicationReadProfileR2024");
 __name222222222222222222222222(publicationReadProfileR2024, "publicationReadProfileR2024");
 __name2222222222222222222222222(publicationReadProfileR2024, "publicationReadProfileR2024");
+// SORIDRAW_PUBLICATION_TARGETED_R2_HOTPATH_043_20260913
+async function syncExploreFeedR2Publication043Core044(env, incomingItem) {
+  const trackId = getExploreFeedItemId012(incomingItem);
+  if (!trackId) return { ok: false, skipped: true };
+  const results = await Promise.all(['latest', 'popular'].map(async (sort) => (
+    mutateExploreR2Cache052(env, exploreFeedR2Key(sort), (bundle) => {
+      const data = bundle?.payload?.data;
+      if (!data || !Array.isArray(data.items)) return null;
+      const previousItems = data.items;
+      const existing = previousItems.find((item) => getExploreFeedItemId012(item) === trackId) || null;
+      const merged = existing ? {
+        ...existing,
+        ...incomingItem,
+        stats: { ...(incomingItem?.stats || {}), ...(existing?.stats || {}) },
+        likeCount: existing?.likeCount ?? incomingItem?.likeCount ?? incomingItem?.stats?.likeCount ?? 0,
+        commentCount: existing?.commentCount ?? incomingItem?.commentCount ?? incomingItem?.stats?.commentCount ?? 0,
+        playCount: existing?.playCount ?? incomingItem?.playCount ?? incomingItem?.stats?.playCount ?? 0,
+      } : incomingItem;
+      const withoutCurrent = previousItems.filter((item) => getExploreFeedItemId012(item) !== trackId);
+      const previousCursor = data.nextCursor ?? null;
+      const overflowed = !existing && previousItems.length >= EXPLORE_R2_FEED_LIMIT;
+      const items = sortExploreFeedItems012([merged, ...withoutCurrent], sort).slice(0, EXPLORE_R2_FEED_LIMIT);
+      if (sort === 'popular' && !existing && previousItems.length >= EXPLORE_R2_FEED_LIMIT) {
+        const included = items.some((item) => getExploreFeedItemId012(item) === trackId);
+        if (!included) return null;
+      }
+      return {
+        ...bundle,
+        payload: {
+          ...bundle.payload,
+          data: {
+            ...data,
+            items,
+            sort,
+            nextCursor: buildExploreFeedCursor012(sort, items, previousCursor, overflowed),
+          },
+        },
+        updatedAt: Date.now(),
+      };
+    })
+  )));
+  return { ok: results.every((result) => result?.ok !== false), results };
+}
+
+async function syncExploreFeedR2Publication043(...args) {
+  try {
+    return await syncExploreFeedR2Publication043Core044(...args);
+  } catch (error) {
+    console.warn('[SORIDRAW 044] derived publication patch deferred:', "syncExploreFeedR2Publication043", String(error?.message || error || 'unknown'));
+    return { ok: false, repairNeeded: true };
+  }
+}
+
+async function syncExploreFeedR2Private043Core044(env, trackId) {
+  const normalizedTrackId = String(trackId || '').trim();
+  if (!normalizedTrackId) return { ok: false, skipped: true };
+  const results = await Promise.all(['latest', 'popular'].map(async (sort) => (
+    mutateExploreR2Cache052(env, exploreFeedR2Key(sort), (bundle) => {
+      const data = bundle?.payload?.data;
+      if (!data || !Array.isArray(data.items)) return null;
+      const items = data.items.filter((item) => getExploreFeedItemId012(item) !== normalizedTrackId);
+      if (items.length === data.items.length) return null;
+      return {
+        ...bundle,
+        payload: { ...bundle.payload, data: { ...data, items } },
+        updatedAt: Date.now(),
+      };
+    })
+  )));
+  return { ok: results.every((result) => result?.ok !== false), results };
+}
+
+async function syncExploreFeedR2Private043(...args) {
+  try {
+    return await syncExploreFeedR2Private043Core044(...args);
+  } catch (error) {
+    console.warn('[SORIDRAW 044] derived publication patch deferred:', "syncExploreFeedR2Private043", String(error?.message || error || 'unknown'));
+    return { ok: false, repairNeeded: true };
+  }
+}
+
+async function syncExploreFeedR2OptionPatch043Core044(env, trackId, patch) {
+  const normalizedTrackId = String(trackId || '').trim();
+  if (!normalizedTrackId) return { ok: false, skipped: true };
+  const results = await Promise.all(['latest', 'popular'].map(async (sort) => (
+    mutateExploreR2Cache052(env, exploreFeedR2Key(sort), (bundle) => {
+      const data = bundle?.payload?.data;
+      if (!data || !Array.isArray(data.items)) return null;
+      let changed = false;
+      const patched = data.items.map((item) => {
+        if (getExploreFeedItemId012(item) !== normalizedTrackId) return item;
+        changed = true;
+        return { ...item, ...patch };
+      });
+      if (!changed) return null;
+      const items = sortExploreFeedItems012(patched, sort).slice(0, EXPLORE_R2_FEED_LIMIT);
+      return {
+        ...bundle,
+        payload: { ...bundle.payload, data: { ...data, items } },
+        updatedAt: Date.now(),
+      };
+    })
+  )));
+  return { ok: results.every((result) => result?.ok !== false), results };
+}
+
+async function syncExploreFeedR2OptionPatch043(...args) {
+  try {
+    return await syncExploreFeedR2OptionPatch043Core044(...args);
+  } catch (error) {
+    console.warn('[SORIDRAW 044] derived publication patch deferred:', "syncExploreFeedR2OptionPatch043", String(error?.message || error || 'unknown'));
+    return { ok: false, repairNeeded: true };
+  }
+}
+
+async function patchExploreProfileR2Publication043Core044(env, uid, change) {
+  const normalizedUid = String(uid || '').trim();
+  const trackId = String(change?.trackId || '').trim();
+  if (!normalizedUid || !trackId) return { ok: false, skipped: true, handle: '' };
+  let resolvedHandle = '';
+  const result = await mutateExploreR2Cache052(env, exploreProfileR2Key(normalizedUid), (bundle) => {
+    if (!validExploreProfileR2Bundle020(bundle)) return null;
+    const previousData = bundle.body.data;
+    resolvedHandle = String(previousData.profile?.handle || bundle.handle || '').trim().replace(/^@+/, '');
+    let items = previousData.items.filter((item) => getProfileTrackId019(item) !== trackId);
+    if (!change?.remove) {
+      const previous = previousData.items.find((item) => getProfileTrackId019(item) === trackId) || {};
+      const nextItem = change?.item ? {
+        ...previous,
+        ...change.item,
+        stats: { ...(change.item?.stats || {}), ...(previous?.stats || {}) },
+        likeCount: previous?.likeCount ?? change.item?.likeCount ?? change.item?.stats?.likeCount ?? 0,
+        commentCount: previous?.commentCount ?? change.item?.commentCount ?? change.item?.stats?.commentCount ?? 0,
+        playCount: previous?.playCount ?? change.item?.playCount ?? change.item?.stats?.playCount ?? 0,
+      } : { ...previous, ...(change?.patch || {}) };
+      items.push(nextItem);
+    }
+    items = sortProfileTracks019(items).slice(0, PUBLIC_PROFILE_FIRST_VIEW_LIMIT);
+    const previousCount = Number(previousData.profile?.trackCount ?? previousData.profile?.track_count ?? 0);
+    const nextCount = Math.max(0, previousCount + Number(change?.trackCountDelta || 0));
+    const nextRevision = Math.max(1, Number(bundle.revision || previousData.revision || 0) + 1);
+    const nextData = {
+      ...previousData,
+      profile: { ...previousData.profile, trackCount: nextCount },
+      items,
+      revision: nextRevision,
+      updatedAt: Date.now(),
+    };
+    return {
+      ...bundle,
+      revision: nextRevision,
+      updatedAt: Date.now(),
+      body: { ...bundle.body, data: nextData },
+    };
+  });
+  return {
+    ok: Boolean(result?.ok),
+    repairNeeded: Boolean(result?.repairNeeded),
+    handle: resolvedHandle,
+  };
+}
+
+async function patchExploreProfileR2Publication043(...args) {
+  try {
+    return await patchExploreProfileR2Publication043Core044(...args);
+  } catch (error) {
+    console.warn('[SORIDRAW 044] derived publication patch deferred:', "patchExploreProfileR2Publication043", String(error?.message || error || 'unknown'));
+    return { ok: false, repairNeeded: true };
+  }
+}
+
 async function handleMusicNotePublicationSingleWrite016(request, env, cors, authContext, source, publicationOptions) {
   const now = Date.now();
   const previous = await publicationReadState016(env, authContext.uid, source.id);
@@ -19274,7 +19467,7 @@ async function handleMusicNotePublicationSingleWrite016(request, env, cors, auth
     now
   );
   try {
-    await syncExploreFeedR2Publication012(env, feedItem);
+    await syncExploreFeedR2Publication043(env, feedItem);
   } catch (error) {
     console.warn("[SORIDRAW stage3] feed R2 sync skipped:", String(error?.message || error || "unknown"));
   }
@@ -19289,7 +19482,7 @@ async function handleMusicNotePublicationSingleWrite016(request, env, cors, auth
   } catch (error) {
     console.warn("[SORIDRAW stage3] publication-state R2 sync skipped:", String(error?.message || error || "unknown"));
   }
-  await patchExploreProfileR2Mutation019(env, authContext.uid, {
+  await patchExploreProfileR2Publication043(env, authContext.uid, {
     trackId: source.id,
     item: feedItem,
     remove: false,
@@ -20171,20 +20364,22 @@ async function syncExploreLikeR2AfterBatch034(env, uid, results) {
   let likedIds = await readExploreLikeR2Bundle(env, uid);
   if (!likedIds) {
     await rebuildExploreLikeR2Bundle(env, uid);
-    return;
+    likedIds = await readExploreLikeR2Bundle(env, uid);
   }
+  if (!likedIds) return { ok: false, repairNeeded: true };
   for (const result of results) {
-    const trackId = String(result?.trackId || "");
+    const trackId = String(result?.trackId || '').trim();
     if (!trackId) continue;
     if (result?.liked) likedIds.add(trackId);
     else likedIds.delete(trackId);
   }
   await writeExploreR2Json(env, exploreLikeR2Key(uid), {
     schemaVersion: EXPLORE_R2_LIKE_SCHEMA_VERSION,
-    uid: String(uid || ""),
+    uid: String(uid || ''),
     updatedAt: Date.now(),
-    likedTrackIds: [...likedIds].filter(Boolean).slice(0, 2e3)
+    likedTrackIds: [...likedIds].filter(Boolean).slice(0, 2000)
   });
+  return { ok: true };
 }
 __name(syncExploreLikeR2AfterBatch034, "syncExploreLikeR2AfterBatch034");
 __name2(syncExploreLikeR2AfterBatch034, "syncExploreLikeR2AfterBatch034");
@@ -20754,9 +20949,7 @@ function exploreLikeUserAggregateCte075() {
           ORDER BY q.updated_at ASC, q.user_uid ASC
           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS running_mutations,
-        ROW_NUMBER() OVER (
-          ORDER BY q.updated_at ASC, q.user_uid ASC
-        ) AS queue_row
+        ROW_NUMBER() OVER (ORDER BY q.updated_at ASC, q.user_uid ASC) AS queue_row
       FROM (
         SELECT q.user_uid, q.updated_at, q.pending_count, q.mutations_json
         FROM explore_like_user_queue_075 q, cursor c
@@ -20780,24 +20973,32 @@ function exploreLikeUserAggregateCte075() {
         e.updated_at,
         TRIM(CAST(j.key AS TEXT)) AS track_id,
         CASE WHEN CAST(json_extract(j.value, '$.liked') AS INTEGER) <> 0 THEN 1 ELSE 0 END AS desired_liked,
-        COALESCE(
-          CAST(json_extract(j.value, '$.mutationAt') AS INTEGER),
-          e.updated_at
-        ) AS mutation_at
+        COALESCE(CAST(json_extract(j.value, '$.mutationAt') AS INTEGER), e.updated_at) AS mutation_at
       FROM eligible e, json_each(e.mutations_json) AS j
       WHERE TRIM(CAST(j.key AS TEXT)) <> ''
     ),
+    valid AS (
+      SELECT expanded.*, t.owner_uid
+      FROM expanded
+      JOIN tracks t
+        ON t.id = expanded.track_id
+       AND t.is_public = 1
+       AND t.status = 'published'
+      JOIN public_profiles p
+        ON p.uid = t.owner_uid
+       AND p.is_public = 1
+    ),
     deltas AS (
-      SELECT expanded.*,
+      SELECT valid.*,
         CASE
-          WHEN expanded.desired_liked = 1 AND existing.user_uid IS NULL THEN 1
-          WHEN expanded.desired_liked = 0 AND existing.user_uid IS NOT NULL THEN -1
+          WHEN valid.desired_liked = 1 AND existing.user_uid IS NULL THEN 1
+          WHEN valid.desired_liked = 0 AND existing.user_uid IS NOT NULL THEN -1
           ELSE 0
         END AS delta
-      FROM expanded
+      FROM valid
       LEFT JOIN likes existing
-        ON existing.track_id = expanded.track_id
-       AND existing.user_uid = expanded.user_uid
+        ON existing.track_id = valid.track_id
+       AND existing.user_uid = valid.user_uid
     )
   `;
 }
@@ -20821,6 +21022,17 @@ async function hasExploreLikeUserQueuePending075(env, cutoff) {
 async function processExploreLikeUserQueueWave075(env, cutoff, now) {
   const cte = exploreLikeUserAggregateCte075();
   const max = EXPLORE_LIKE_USER_QUEUE_MAX_MUTATIONS_075;
+
+  const projection = await env.DB.prepare(cte + `
+    SELECT d.track_id, d.owner_uid,
+      MAX(0, COALESCE(s.like_count, 0) + SUM(d.delta)) AS next_like_count
+    FROM deltas d
+    LEFT JOIN track_stats s ON s.track_id = d.track_id
+    GROUP BY d.track_id, d.owner_uid, s.like_count
+    HAVING SUM(d.delta) <> 0
+  `).bind(cutoff, max).all();
+  const changedRows = Array.isArray(projection?.results) ? projection.results : [];
+
   const result = await env.DB.batch([
     env.DB.prepare(cte + `
       INSERT INTO track_stats(track_id, like_count, comment_count, play_count, updated_at)
@@ -20835,46 +21047,46 @@ async function processExploreLikeUserQueueWave075(env, cutoff, now) {
     env.DB.prepare(cte + `
       UPDATE track_stats
       SET like_count = MAX(0, like_count + COALESCE((
-            SELECT SUM(d.delta)
-            FROM deltas d
-            WHERE d.track_id = track_stats.track_id
+            SELECT SUM(d.delta) FROM deltas d WHERE d.track_id = track_stats.track_id
           ), 0)),
           updated_at = ?
       WHERE track_id IN (
-        SELECT track_id
-        FROM deltas
-        GROUP BY track_id
-        HAVING SUM(delta) < 0
+        SELECT track_id FROM deltas GROUP BY track_id HAVING SUM(delta) < 0
       )
     `).bind(cutoff, max, now),
     env.DB.prepare(cte + `
       INSERT OR IGNORE INTO likes(track_id, user_uid, created_at)
       SELECT track_id, user_uid, mutation_at
-      FROM expanded
+      FROM valid
       WHERE desired_liked = 1
     `).bind(cutoff, max),
     env.DB.prepare(cte + `
       DELETE FROM likes
       WHERE (track_id, user_uid) IN (
-        SELECT track_id, user_uid
-        FROM expanded
-        WHERE desired_liked = 0
+        SELECT track_id, user_uid FROM valid WHERE desired_liked = 0
       )
     `).bind(cutoff, max),
     env.DB.prepare(cte + `
       UPDATE explore_like_user_queue_state_075
       SET processed_at = COALESCE((
-            SELECT updated_at FROM eligible
-            ORDER BY updated_at DESC, user_uid DESC LIMIT 1
+            SELECT updated_at FROM eligible ORDER BY updated_at DESC, user_uid DESC LIMIT 1
           ), processed_at),
           processed_uid = COALESCE((
-            SELECT user_uid FROM eligible
-            ORDER BY updated_at DESC, user_uid DESC LIMIT 1
+            SELECT user_uid FROM eligible ORDER BY updated_at DESC, user_uid DESC LIMIT 1
           ), processed_uid)
-      WHERE id = 1
-        AND EXISTS (SELECT 1 FROM eligible)
+      WHERE id = 1 AND EXISTS (SELECT 1 FROM eligible)
     `).bind(cutoff, max),
   ]);
+
+  await Promise.allSettled(changedRows.flatMap((row) => {
+    const trackId = String(row?.track_id || '').trim();
+    const ownerUid = String(row?.owner_uid || '').trim();
+    const likeCount = Math.max(0, Number(row?.next_like_count || 0));
+    return [
+      patchExploreFeedR2Like044(env, trackId, likeCount),
+      patchExploreProfileR2Like044(env, ownerUid, trackId, likeCount),
+    ];
+  }));
 
   return {
     positiveTracks: Number(result?.[0]?.meta?.changes || 0),
@@ -20920,6 +21132,74 @@ async function handleMySocialSnapshot042(request, env, cors) {
 }
 
 
+// SORIDRAW_LOCAL_FIRST_COST_HOTPATH_044_20260913
+async function readMusicNotePublicationRevision044(env, uid) {
+  try {
+    if (!env?.PROFILE_MEDIA) return '';
+    const object = await env.PROFILE_MEDIA.head(musicNotePublicationR2Key(uid));
+    if (!object) return '';
+    return String(
+      object.httpEtag
+      || object.etag
+      || object.customMetadata?.updatedAt
+      || (object.uploaded && typeof object.uploaded.getTime === 'function' ? object.uploaded.getTime() : '')
+      || '',
+    );
+  } catch (error) {
+    console.warn('[SORIDRAW 044] publication revision head failed:', String(error?.message || error || 'unknown'));
+    return '';
+  }
+}
+
+async function handleMusicNotePublicationRevision044(request, env, cors) {
+  const authContext = await requireExploreAuth(request);
+  const revision = await readMusicNotePublicationRevision044(env, authContext.uid);
+  return json({ ok: true, data: { revision: revision || null, exists: Boolean(revision) } }, 200, cors);
+}
+
+async function patchExploreFeedR2Like044(env, trackId, likeCount) {
+  const normalizedTrackId = String(trackId || '').trim();
+  const count = Math.max(0, Number(likeCount || 0));
+  if (!normalizedTrackId) return { ok: false, skipped: true };
+  const results = await Promise.all(['latest', 'popular'].map((sort) => (
+    mutateExploreR2Cache052(env, exploreFeedR2Key(sort), (bundle) => {
+      const data = bundle?.payload?.data;
+      if (!data || !Array.isArray(data.items)) return null;
+      let changed = false;
+      const patched = data.items.map((item) => {
+        if (getExploreFeedItemId012(item) !== normalizedTrackId) return item;
+        changed = true;
+        return { ...item, likeCount: count, stats: { ...(item?.stats || {}), likeCount: count } };
+      });
+      if (!changed) return null;
+      const items = sortExploreFeedItems012(patched, sort).slice(0, EXPLORE_R2_FEED_LIMIT);
+      return { ...bundle, payload: { ...bundle.payload, data: { ...data, items } }, updatedAt: Date.now() };
+    })
+  )));
+  return { ok: results.every((result) => result?.ok !== false), results };
+}
+
+async function patchExploreProfileR2Like044(env, ownerUid, trackId, likeCount) {
+  const uid = String(ownerUid || '').trim();
+  const normalizedTrackId = String(trackId || '').trim();
+  const count = Math.max(0, Number(likeCount || 0));
+  if (!uid || !normalizedTrackId) return { ok: false, skipped: true };
+  return await mutateExploreR2Cache052(env, exploreProfileR2Key(uid), (bundle) => {
+    if (!validExploreProfileR2Bundle020(bundle)) return null;
+    const data = bundle.body.data;
+    let changed = false;
+    const items = data.items.map((item) => {
+      if (getProfileTrackId019(item) !== normalizedTrackId) return item;
+      changed = true;
+      return { ...item, likeCount: count, stats: { ...(item?.stats || {}), likeCount: count } };
+    });
+    if (!changed) return null;
+    const nextRevision = Math.max(1, Number(bundle.revision || data.revision || 0) + 1);
+    const nextData = { ...data, items, revision: nextRevision, updatedAt: Date.now() };
+    return { ...bundle, revision: nextRevision, updatedAt: Date.now(), body: { ...bundle.body, data: nextData } };
+  });
+}
+
 async function handleLikeBatch034(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   let body = null;
@@ -20940,32 +21220,21 @@ async function handleLikeBatch034(request, env, cors) {
       ? rawMutationAt
       : receivedAt;
     const baseLiked = typeof row?.baseLiked === 'boolean' ? row.baseLiked : null;
-    byTrack.set(trackId, { trackId, liked: row.liked, baseLiked, mutationAt });
+    const likeCount = clampExploreSocialCount(row?.likeCount);
+    byTrack.set(trackId, { trackId, liked: row.liked, baseLiked, mutationAt, likeCount });
   }
   const mutations = [...byTrack.values()];
   await enforceExploreLikeBatchRateLimit034(env, authContext.uid, mutations.length);
 
-  const states = await readExploreLikeBatchStates035(env, authContext.uid, mutations);
-  if (states.size !== mutations.length || mutations.some((mutation) => Number(states.get(mutation.trackId)?.valid_track || 0) !== 1)) {
-    throwApi('NOT_FOUND', '공개 곡을 찾을 수 없습니다.', 404);
-  }
-
-  const results = mutations.map((mutation) => {
-    const state = states.get(mutation.trackId) || {};
-    return {
-      trackId: mutation.trackId,
-      liked: mutation.liked,
-      likeCount: clampExploreSocialCount(state.like_count)
-    };
-  });
-
-  const effectiveMutations = mutations.filter((mutation) => {
-    const state = states.get(mutation.trackId) || {};
-    const canonicalLiked = Number(state.canonical_liked || 0) === 1;
-    if (mutation.liked !== canonicalLiked) return true;
-    if (mutation.baseLiked === null) return true;
-    return mutation.baseLiked !== mutation.liked;
-  });
+  // Do not discard an intent because this device's baseLiked happens to match it.
+// Another device may already have changed canonical state. The scheduled aggregate
+// is the authoritative idempotent comparison against canonical likes.
+const effectiveMutations = mutations;
+  const results = mutations.map((mutation) => ({
+    trackId: mutation.trackId,
+    liked: mutation.liked,
+    likeCount: mutation.likeCount,
+  }));
 
   let queued = { batchId: '', inserted: false, queue: 'none' };
   if (effectiveMutations.length) {
@@ -21761,6 +22030,9 @@ async function handleExploreRequest(request, env) {
     }
     if (url.pathname === "/v1/genres" && request.method === "GET") {
       return await handleGenres(env, cors);
+    }
+    if (url.pathname === "/v1/me/music-note-publications-revision" && request.method === "GET") {
+      return await handleMusicNotePublicationRevision044(request, env, cors);
     }
     if (url.pathname === "/v1/me/music-note-publications-bundle" && request.method === "GET") {
       return await handleMusicNotePublicationR2Bundle(request, env, cors);

@@ -36,3 +36,4 @@ jobs:
           echo 'CANONICAL_044=PASS'
           echo 'CANONICAL_045=PASS'
           echo 'REVISION_R2_HEAD_ONLY=PASS'
+          echo 'CHECK_REV=2'

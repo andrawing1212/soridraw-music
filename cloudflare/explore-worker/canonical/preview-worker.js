@@ -18617,7 +18617,7 @@ __name22222222222222222222222222222222222(handleMusicNotePublicationOptions017, 
 __name222222222222222222222222222222222222(handleMusicNotePublicationOptions017, "handleMusicNotePublicationOptions017");
 __name2222222222222222222222222222222222222(handleMusicNotePublicationOptions017, "handleMusicNotePublicationOptions017");
 __name22222222222222222222222222222222222222(handleMusicNotePublicationOptions017, "handleMusicNotePublicationOptions017");
-async function handleMusicNotePrivate017(request, env, cors, authContext, row) {
+async function handleMusicNotePrivate017Core045(request, env, cors, authContext, row) {
   const changed = Number(row.is_public || 0) !== 0;
   if (!changed) return json({ ok: true, data: { trackId: row.id, isPublic: false, mutation: "idempotent" } }, 200, cors);
   const now = Date.now();
@@ -18644,6 +18644,15 @@ async function handleMusicNotePrivate017(request, env, cors, authContext, row) {
     }
   }
   return json({ ok: true, data: { trackId: row.id, isPublic: false, mutation: "written" } }, 200, cors);
+}
+
+async function handleMusicNotePrivate017(...args) {
+  try {
+    return await handleMusicNotePrivate017Core045(...args);
+  } catch (error) {
+    console.error('[SORIDRAW 045] publication visibility mutation failed:', String(error?.message || error || 'unknown'), String(error?.stack || ''));
+    throw error;
+  }
 }
 __name(handleMusicNotePrivate017, "handleMusicNotePrivate017");
 __name2(handleMusicNotePrivate017, "handleMusicNotePrivate017");
@@ -21153,8 +21162,34 @@ async function readMusicNotePublicationRevision044(env, uid) {
 
 async function handleMusicNotePublicationRevision044(request, env, cors) {
   const authContext = await requireExploreAuth(request);
-  const revision = await readMusicNotePublicationRevision044(env, authContext.uid);
-  return json({ ok: true, data: { revision: revision || null, exists: Boolean(revision) } }, 200, cors);
+  try {
+    if (!env?.PROFILE_MEDIA) {
+      return json({ ok: true, data: { revision: null, exists: false, updatedAt: 0 } }, 200, cors);
+    }
+    const object = await env.PROFILE_MEDIA.head(musicNotePublicationR2Key(authContext.uid));
+    if (!object) {
+      return json({ ok: true, data: { revision: null, exists: false, updatedAt: 0 } }, 200, cors);
+    }
+    const revision = String(
+      object.httpEtag
+      || object.etag
+      || object.customMetadata?.updatedAt
+      || (object.uploaded && typeof object.uploaded.getTime === 'function' ? object.uploaded.getTime() : '')
+      || '',
+    );
+    const metadataUpdatedAt = Number(object.customMetadata?.updatedAt || 0);
+    const uploadedAt = object.uploaded && typeof object.uploaded.getTime === 'function'
+      ? Number(object.uploaded.getTime())
+      : 0;
+    const updatedAt = Math.max(
+      Number.isFinite(metadataUpdatedAt) ? metadataUpdatedAt : 0,
+      Number.isFinite(uploadedAt) ? uploadedAt : 0,
+    );
+    return json({ ok: true, data: { revision: revision || null, exists: true, updatedAt } }, 200, cors);
+  } catch (error) {
+    console.warn('[SORIDRAW 045] publication revision head failed:', String(error?.message || error || 'unknown'));
+    return json({ ok: true, data: { revision: null, exists: false, updatedAt: 0 } }, 200, cors);
+  }
 }
 
 async function patchExploreFeedR2Like044(env, trackId, likeCount) {
@@ -23062,3 +23097,5 @@ export {
 // SORIDRAW_EXPLORE_LIKE_DEFERRED_AGGREGATE_035_20260911
 
 // SORIDRAW_EXPLORE_LIKE_DERIVED_INTAKE_036_20260911
+
+// SORIDRAW_PUBLICATION_REVISION_METADATA_045_20260913

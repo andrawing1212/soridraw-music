@@ -21,6 +21,7 @@ import {
 
 // SORIDRAW_EXPLORE_TARGETED_PUBLICATION_CACHE_075_20260913
 // SORIDRAW_PUBLICATION_PERSISTENT_REVISION_078_20260913
+// SORIDRAW_PUBLICATION_REGISTERED_STATE_080_20260913
 
 export type ExplorePublicationOptions = {
   allowNextSongApply: boolean;
@@ -31,6 +32,7 @@ export type ExplorePublicationOptions = {
 export type ExploreMusicNotePublicationState = ExplorePublicationOptions & {
   status: 'private' | 'public';
   trackId: string;
+  registered: boolean;
 };
 
 class ExploreApiError extends Error {
@@ -91,6 +93,7 @@ const normalizeCachedPublicationStates = (data: Record<string, ExploreMusicNoteP
     normalized[sourceId] = {
       status: state?.status === 'public' ? 'public' : 'private',
       trackId,
+      registered: state?.registered !== false,
       allowNextSongApply: Boolean(state?.allowNextSongApply),
       allowFollowerSave: Boolean(state?.allowFollowerSave),
       profilePinned: Boolean(state?.profilePinned),
@@ -272,6 +275,7 @@ const parseMusicNotePublicationBundle = (
     bundledStates[sourceId] = {
       status: state?.status === 'public' ? 'public' : 'private',
       trackId: String(state?.trackId || '').trim(),
+      registered: true,
       allowNextSongApply: Boolean(state?.allowNextSongApply),
       allowFollowerSave: Boolean(state?.allowFollowerSave),
       profilePinned: Boolean(state?.profilePinned),
@@ -367,6 +371,7 @@ export const getExploreMusicNotePublicationState = async (
   return state ? { ...state } : {
     status: 'private',
     trackId: expectedTrackId,
+    registered: false,
     ...DEFAULT_PUBLICATION_OPTIONS,
   };
 };
@@ -395,6 +400,7 @@ export const publishMusicNoteToExplore = async (
   const nextState: ExploreMusicNotePublicationState = {
     status: 'public',
     trackId,
+    registered: true,
     allowNextSongApply: Boolean(payload?.data?.allowNextSongApply ?? normalizedOptions.allowNextSongApply),
     allowFollowerSave: Boolean(payload?.data?.allowFollowerSave ?? normalizedOptions.allowFollowerSave),
     profilePinned: Boolean(payload?.data?.profilePinned ?? normalizedOptions.profilePinned),
@@ -416,18 +422,20 @@ export const setExploreTrackVisibility = async (
   user: User,
   trackId: string,
   isPublic: boolean,
+  options?: Partial<ExplorePublicationOptions>,
 ): Promise<ExploreMusicNotePublicationState> => {
   const normalizedTrackId = String(trackId || '').trim();
   if (!normalizedTrackId) {
     throw new ExploreApiError('TRACK_ID_REQUIRED', 'Explore 곡 ID를 확인하지 못했습니다.');
   }
 
+  const requestedOptions = options ? normalizePublicationOptions(options) : null;
   const payload = await requestExplore(
     user,
     `/v1/tracks/${encodeURIComponent(normalizedTrackId)}/visibility`,
     {
       method: 'PATCH',
-      body: JSON.stringify({ isPublic }),
+      body: JSON.stringify({ isPublic, ...(requestedOptions || {}) }),
     },
   );
 
@@ -445,7 +453,17 @@ export const setExploreTrackVisibility = async (
       };
     }
   }
-  patchPublicationStateByTrackId(user.uid, resolvedTrackId, (state) => ({ ...state, status }));
+  const nextOptions: ExplorePublicationOptions = {
+    allowNextSongApply: Boolean(payload?.data?.allowNextSongApply ?? requestedOptions?.allowNextSongApply ?? cachedOptions.allowNextSongApply),
+    allowFollowerSave: Boolean(payload?.data?.allowFollowerSave ?? requestedOptions?.allowFollowerSave ?? cachedOptions.allowFollowerSave),
+    profilePinned: Boolean(payload?.data?.profilePinned ?? requestedOptions?.profilePinned ?? cachedOptions.profilePinned),
+  };
+  patchPublicationStateByTrackId(user.uid, resolvedTrackId, (state) => ({
+    ...state,
+    status,
+    registered: true,
+    ...nextOptions,
+  }));
   if (status === 'private') {
     removeExploreFeedSessionCacheRow(resolvedTrackId);
     removeExplorePublicProfileFirstViewTrack(user.uid, resolvedTrackId);
@@ -462,7 +480,8 @@ export const setExploreTrackVisibility = async (
   return {
     status,
     trackId: resolvedTrackId,
-    ...cachedOptions,
+    registered: true,
+    ...nextOptions,
   };
 };
 

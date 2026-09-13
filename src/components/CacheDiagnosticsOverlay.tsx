@@ -129,7 +129,7 @@ const getFreeCapacityTone = (daily: number | null) => {
 };
 
 const getCloudflarePathLabel = (path: string) => {
-  if (path === '/v1/publications') return '뮤직노트 공개 등록';
+  if (path === '/v1/publications') return '최초 공개 등록';
   if (path === '/v1/feed') return '피드';
   if (path === '/v1/feed-revision') return '피드 변경 확인';
   if (path === '/v1/me/likes') return '좋아요 상태';

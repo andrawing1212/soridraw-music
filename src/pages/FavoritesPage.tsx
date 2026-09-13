@@ -5489,9 +5489,18 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         const savedOptions = await setExploreTrackPublicationOptions(user, state.trackId, options);
         nextState = { ...state, ...savedOptions, status: 'public' };
         showFavoriteToast('공개 설정을 저장했습니다.');
+      } else if (state.registered) {
+
+        nextState = await setExploreTrackVisibility(user, state.trackId, true, options);
+
+        showFavoriteToast('Explore에 다시 공개했습니다.');
+
       } else {
+
         nextState = await publishMusicNoteToExplore(user, sourceId, options);
+
         showFavoriteToast('Explore에 공개했습니다.');
+
       }
 
       setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: nextState }));

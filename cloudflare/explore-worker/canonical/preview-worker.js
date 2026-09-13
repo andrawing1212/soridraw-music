@@ -19438,11 +19438,9 @@ async function handleMusicNotePublicationSingleWrite016(request, env, cors, auth
       await env.DB.prepare(`
         UPDATE tracks
         SET is_public = 1,
-            status = 'published',
-            published_at = ?,
             updated_at = ?
         WHERE id = ? AND owner_uid = ?
-      `).bind(publishedAt, now, source.id, authContext.uid).run();
+      `).bind(now, source.id, authContext.uid).run();
     } else {
       await env.DB.prepare(`
         INSERT INTO tracks (
@@ -20017,21 +20015,119 @@ __name2222222222222222222222222222222222222222222222222222222222222222222222(han
 __name22222222222222222222222222222222222222222222222222222222222222222222222(handlePublication, "handlePublication");
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handlePublication, "handlePublication");
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(handlePublication, "handlePublication");
+async function handleMusicNoteVisibility047(request, env, cors, authContext, body, row) {
+  const nextPublic = body.isPublic === true;
+  const wasPublic = Number(row.is_public || 0) === 1 && String(row.status || '') === 'published';
+  if (nextPublic && String(row.status || '') !== 'published') {
+    return await handleVisibilityR2CoreLegacy017(request, env, cors, row.id);
+  }
+
+  const next = {
+    allowNextSongApply: publicationBool016(body.allowNextSongApply, Number(row.allow_next_song_apply || 0) === 1),
+    allowFollowerSave: publicationBool016(body.allowFollowerSave, Number(row.allow_follower_save || 0) === 1),
+    profilePinned: publicationBool016(body.profilePinned, Number(row.profile_pinned || 0) === 1),
+  };
+  const nextPublicInt = nextPublic ? 1 : 0;
+  const changed = Number(row.is_public || 0) !== nextPublicInt
+    || Number(row.allow_next_song_apply || 0) !== next.allowNextSongApply
+    || Number(row.allow_follower_save || 0) !== next.allowFollowerSave
+    || Number(row.profile_pinned || 0) !== next.profilePinned;
+  const now = Date.now();
+
+  if (changed) {
+    await env.DB.prepare(`UPDATE tracks
+      SET is_public=?,allow_next_song_apply=?,allow_follower_save=?,profile_pinned=?,updated_at=?
+      WHERE id=? AND owner_uid=? AND source_type='music_note'`).bind(
+      nextPublicInt,
+      next.allowNextSongApply,
+      next.allowFollowerSave,
+      next.profilePinned,
+      now,
+      row.id,
+      authContext.uid,
+    ).run();
+  }
+
+  const nextRow = {
+    ...row,
+    is_public: nextPublicInt,
+    allow_next_song_apply: next.allowNextSongApply,
+    allow_follower_save: next.allowFollowerSave,
+    profile_pinned: next.profilePinned,
+    updated_at: now,
+  };
+  let profile = null;
+  try {
+    const profileBundle = await readExploreProfileCanonicalR2Bundle020(env, authContext.uid);
+    profile = profileBundle?.body?.data?.profile || null;
+  } catch (error) {
+    console.warn('[SORIDRAW 047] profile R2 read skipped:', String(error?.message || error || 'unknown'));
+  }
+  const snapshotItem = mapTrackRow({
+    ...nextRow,
+    owner_nickname: String(profile?.nickname || authContext.displayName || ''),
+    owner_avatar_url: String(profile?.avatarUrl || profile?.avatar_url || authContext.picture || ''),
+    like_count: Number(row.like_count || 0),
+    comment_count: Number(row.comment_count || 0),
+    play_count: Number(row.play_count || 0),
+  });
+
+  if (nextPublic) {
+    await syncExploreFeedR2Publication043(env, snapshotItem);
+    await patchExploreProfileR2Publication043(env, authContext.uid, {
+      trackId: row.id,
+      item: snapshotItem,
+      trackCountDelta: wasPublic ? 0 : 1,
+    });
+  } else {
+    await syncExploreFeedR2Private043(env, row.id);
+    await patchExploreProfileR2Publication043(env, authContext.uid, {
+      trackId: row.id,
+      remove: true,
+      trackCountDelta: wasPublic ? -1 : 0,
+    });
+  }
+
+  try {
+    await syncMusicNotePublicationR2AfterMutation(env, authContext.uid, row.source_id, {
+      status: nextPublic ? 'public' : 'private',
+      trackId: row.id,
+      allowNextSongApply: next.allowNextSongApply === 1,
+      allowFollowerSave: next.allowFollowerSave === 1,
+      profilePinned: next.profilePinned === 1,
+    });
+  } catch (error) {
+    console.warn('[SORIDRAW 047] publication-state R2 sync skipped:', String(error?.message || error || 'unknown'));
+  }
+  await invalidatePublicationProfileCaches017(request, env, authContext.uid, String(profile?.handle || ''));
+
+  return json({ ok: true, data: {
+    trackId: row.id,
+    isPublic: nextPublic,
+    allowNextSongApply: next.allowNextSongApply === 1,
+    allowFollowerSave: next.allowFollowerSave === 1,
+    profilePinned: next.profilePinned === 1,
+    snapshotItem: nextPublic ? snapshotItem : null,
+    mutation: changed ? 'written' : 'idempotent',
+  } }, 200, cors);
+}
+
 async function handleVisibilityR2Core(request, env, cors, trackId) {
   const probe = request.clone();
   const authContext = await requireExploreAuth(probe);
-  const body = await readJsonBody(probe, 2048);
-  if (typeof body.isPublic !== "boolean") throwApi("VISIBILITY_REQUIRED", "\uACF5\uAC1C \uC5EC\uBD80 \uAC12\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.", 400);
-  const row = await env.DB.prepare(`
-    SELECT id, owner_uid, source_type, source_id, is_public, status,
-      allow_next_song_apply, allow_follower_save, profile_pinned
-    FROM tracks
-    WHERE id = ? AND owner_uid = ?
-    LIMIT 1
-  `).bind(trackId, authContext.uid).first();
-  if (!row) throwApi("NOT_FOUND", "\uACE1\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.", 404);
-  if (String(row.source_type || "") !== "music_note" || body.isPublic === true) return await handleVisibilityR2CoreLegacy017(request, env, cors, trackId);
-  return await handleMusicNotePrivate017(request, env, cors, authContext, row);
+  const body = await readJsonBody(probe, 4096);
+  if (typeof body.isPublic !== 'boolean') throwApi('VISIBILITY_REQUIRED', '공개 여부 값이 필요합니다.', 400);
+  const row = await env.DB.prepare(`SELECT t.*,
+      COALESCE(s.like_count,0) AS like_count,
+      COALESCE(s.comment_count,0) AS comment_count,
+      COALESCE(s.play_count,0) AS play_count
+    FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id
+    WHERE t.id=? AND t.owner_uid=? LIMIT 1`).bind(trackId, authContext.uid).first();
+  if (!row) throwApi('NOT_FOUND', '곡을 찾을 수 없습니다.', 404);
+  if (String(row.source_type || '') !== 'music_note') {
+    return await handleVisibilityR2CoreLegacy017(request, env, cors, trackId);
+  }
+  return await handleMusicNoteVisibility047(request, env, cors, authContext, body, row);
 }
 __name(handleVisibilityR2Core, "handleVisibilityR2Core");
 __name2(handleVisibilityR2Core, "handleVisibilityR2Core");
@@ -22524,23 +22620,26 @@ __name2222(derivedHead032, "derivedHead032");
 __name22222(derivedHead032, "derivedHead032");
 __name222222(derivedHead032, "derivedHead032");
 async function derivedProfile032(env, uid) {
-  const row = await env.DB.prepare("SELECT * FROM explore_derived_profiles WHERE uid=?").bind(uid).first();
+  const row = await env.DB.prepare(`SELECT p.*,
+      COALESCE((SELECT COUNT(*) FROM tracks c
+        WHERE c.owner_uid=? AND c.is_public=1 AND c.status='published'),0) AS canonical_track_count
+    FROM explore_derived_profiles p WHERE p.uid=?`).bind(uid, uid).first();
   if (!row?.active) return null;
   const p = JSON.parse(row.row_json);
   return {
     uid,
-    nickname: p.nickname || "",
-    avatarUrl: p.avatar_url || "",
-    backgroundUrl: p.background_url || "",
-    bio: p.bio || "",
-    handle: p.handle || "",
+    nickname: p.nickname || '',
+    avatarUrl: p.avatar_url || '',
+    backgroundUrl: p.background_url || '',
+    bio: p.bio || '',
+    handle: p.handle || '',
     genres: parseProfileGenres(p.genre_override),
-    socialLinks: { spotify: p.spotify_url || "", instagram: p.instagram_url || "", tiktok: p.tiktok_url || "" },
+    socialLinks: { spotify: p.spotify_url || '', instagram: p.instagram_url || '', tiktok: p.tiktok_url || '' },
     followerCount: row.followers,
     followingCount: row.following,
-    trackCount: row.track_count,
+    trackCount: Number(row.canonical_track_count || 0),
     createdAt: p.created_at,
-    updatedAt: p.updated_at
+    updatedAt: p.updated_at,
   };
 }
 __name(derivedProfile032, "derivedProfile032");
@@ -22552,12 +22651,33 @@ __name22222(derivedProfile032, "derivedProfile032");
 __name222222(derivedProfile032, "derivedProfile032");
 async function derivedItems032(env, ids) {
   if (!ids.length) return [];
-  const rows = await env.DB.prepare(`SELECT t.row_json, p.row_json AS profile_json,p.active AS profile_active
-    FROM explore_derived_tracks t LEFT JOIN explore_derived_profiles p ON p.uid=t.owner_uid
-    WHERE t.id IN (${ids.map(() => "?").join(",")}) AND t.active=1`).bind(...ids).all();
+  const rows = await env.DB.prepare(`SELECT d.row_json,
+      p.row_json AS profile_json,p.active AS profile_active,
+      c.is_public AS canonical_is_public,c.status AS canonical_status,
+      c.published_at AS canonical_published_at,c.updated_at AS canonical_updated_at,
+      c.allow_next_song_apply AS canonical_allow_next_song_apply,
+      c.allow_follower_save AS canonical_allow_follower_save,
+      c.profile_pinned AS canonical_profile_pinned
+    FROM explore_derived_tracks AS d
+    JOIN tracks AS c ON c.id=d.id
+    LEFT JOIN explore_derived_profiles AS p ON p.uid=d.owner_uid
+    WHERE d.id IN (${ids.map(() => '?').join(',')})
+      AND c.is_public=1 AND c.status='published'`).bind(...ids).all();
   return rows.results.map((row) => {
     const p = row.profile_active ? JSON.parse(row.profile_json) : {};
-    return mapTrackRow({ ...JSON.parse(row.row_json), owner_nickname: p.nickname || "", owner_avatar_url: p.avatar_url || "" });
+    const track = JSON.parse(row.row_json);
+    return mapTrackRow({
+      ...track,
+      is_public: Number(row.canonical_is_public || 0),
+      status: String(row.canonical_status || 'published'),
+      published_at: Number(row.canonical_published_at || track.published_at || 0),
+      updated_at: Number(row.canonical_updated_at || track.updated_at || 0),
+      allow_next_song_apply: Number(row.canonical_allow_next_song_apply || 0),
+      allow_follower_save: Number(row.canonical_allow_follower_save || 0),
+      profile_pinned: Number(row.canonical_profile_pinned || 0),
+      owner_nickname: p.nickname || '',
+      owner_avatar_url: p.avatar_url || '',
+    });
   });
 }
 __name(derivedItems032, "derivedItems032");
@@ -22569,10 +22689,17 @@ __name22222(derivedItems032, "derivedItems032");
 __name222222(derivedItems032, "derivedItems032");
 async function derivedRank032(env, sort, uid) {
   const limit = uid ? 51 : 41;
-  const index = uid ? "idx_explore_rank_profile" : sort === "popular" ? "idx_explore_rank_popular" : "idx_explore_rank_latest";
-  const order = uid ? "pinned DESC,published_at DESC,id DESC" : sort === "popular" ? "likes DESC,published_at DESC,id DESC" : "published_at DESC,id DESC";
-  const rows = await env.DB.prepare(`SELECT id FROM explore_derived_tracks INDEXED BY ${index}
-    WHERE ${uid ? "owner_uid=? AND " : ""}active=1 ORDER BY ${order} LIMIT ${limit}`).bind(...uid ? [uid] : []).all();
+  const index = uid ? 'idx_explore_rank_profile' : sort === 'popular' ? 'idx_explore_rank_popular' : 'idx_explore_rank_latest';
+  const order = uid
+    ? 'c.profile_pinned DESC,d.published_at DESC,d.id DESC'
+    : sort === 'popular'
+      ? 'd.likes DESC,d.published_at DESC,d.id DESC'
+      : 'd.published_at DESC,d.id DESC';
+  const rows = await env.DB.prepare(`SELECT d.id
+    FROM explore_derived_tracks AS d INDEXED BY ${index}
+    JOIN tracks AS c ON c.id=d.id
+    WHERE ${uid ? 'd.owner_uid=? AND ' : ''}c.is_public=1 AND c.status='published'
+    ORDER BY ${order} LIMIT ${limit}`).bind(...(uid ? [uid] : [])).all();
   return rows.results.map((row) => row.id);
 }
 __name(derivedRank032, "derivedRank032");
@@ -23162,3 +23289,5 @@ export {
 // SORIDRAW_PUBLICATION_REVISION_METADATA_045_20260913
 
 // SORIDRAW_PUBLICATION_WRITE_COMPACTION_046_20260913
+
+// SORIDRAW_PUBLICATION_STATE_TRANSITION_047_20260913

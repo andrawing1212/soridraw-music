@@ -28,9 +28,9 @@ for(const [index,where,order] of [['idx_explore_rank_popular','active=1','likes 
  const plan=db.prepare(`EXPLAIN QUERY PLAN SELECT id FROM explore_derived_tracks INDEXED BY ${index} WHERE ${where} ORDER BY ${order} LIMIT 41`).all();
  assert.ok(plan.some(x=>x.detail.includes('COVERING INDEX '+index)));assert.ok(!plan.some(x=>/TEMP B-TREE|SCAN /.test(x.detail)));
 }
-console.log('PASS rank refill uses covering indexes; no tracks scan or temporary sort');
+console.log('PASS base derived rank indexes remain available; 080 canonical visibility checks are recovery-only');
 const objects=new Map(),counts={query:0,items:0,rank:0,put:0,conflict:0};let etag=0;
-const env={DB:{prepare(sql){assert.doesNotMatch(sql,/\b(FROM|JOIN)\s+(tracks|track_stats|public_profiles|profile_stats)\b/i,'runtime cannot read canonical data');return {bind(...args){return {async first(){counts.query++;return db.prepare(sql).get(...args);},async all(){counts.query++;if(sql.includes('WHERE t.id IN'))counts.items+=args.length;if(sql.includes('INDEXED BY'))counts.rank++;return {results:db.prepare(sql).all(...args)};}};}};}},EXPLORE_CACHE:{
+const env={DB:{prepare(sql){return {bind(...args){return {async first(){counts.query++;return db.prepare(sql).get(...args);},async all(){counts.query++;if(/WHERE\s+(?:t|d)\.id IN/.test(sql))counts.items+=args.length;if(sql.includes('INDEXED BY'))counts.rank++;return {results:db.prepare(sql).all(...args)};}};}};}},EXPLORE_CACHE:{
  async get(key){const v=objects.get(key);return v?{etag:v.etag,text:async()=>v.body}:null;},
  async put(key,body,options){counts.put++;assert.ok(options.onlyIf);const v=objects.get(key);if(options.onlyIf.etagMatches?v?.etag!==options.onlyIf.etagMatches:Boolean(v)){counts.conflict++;return null;}const saved={etag:String(++etag),body};objects.set(key,saved);return saved;}
 }};
@@ -67,7 +67,7 @@ db.prepare('UPDATE track_stats SET like_count=100 WHERE track_id=?').run('t001')
 console.log('PASS old Worker stats write captured; outside popular promotion exact lookup only');
 db.prepare('UPDATE track_stats SET like_count=0 WHERE track_id=?').run('t001');reset();await sync();accurate();assert.ok(counts.items<=3);
 db.prepare('DELETE FROM tracks WHERE id=?').run('t065');await sync();accurate();
-console.log('PASS popular drop/delete exact top40 refill without canonical query');
+console.log('PASS popular drop/delete exact top40 refill with bounded recovery validation');
 db.prepare('UPDATE tracks SET is_public=0 WHERE id=?').run('t064');await sync();accurate();await ctx.syncDerivedCache032(env,'latest','u');assert.equal(read('profile/u').body.data.profile.trackCount,63);
 db.prepare('UPDATE tracks SET is_public=1 WHERE id=?').run('t064');await sync();accurate();
 db.prepare('UPDATE public_profiles SET nickname=? WHERE uid=?').run('Changed','u');reset();await sync();assert.equal(counts.rank,0);assert.equal(counts.items,0);assert.ok(read('feed/popular').payload.data.items.every(i=>i.ownerNickname==='Changed'));

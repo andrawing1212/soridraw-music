@@ -6,6 +6,7 @@ on:
     paths:
       - '.deploy/apply-075-social-snapshot-cost.py'
       - '.github/workflows/apply-075-social-snapshot-cost.yml'
+      - 'scripts/verify-075-social-snapshot-cost.py'
   workflow_dispatch:
 
 permissions:
@@ -43,9 +44,10 @@ jobs:
           text = path.read_text(encoding='utf-8')
           old = "rawUids.reduce((acc: Record<string, boolean>, value: unknown) => {"
           new = "rawUids.reduce<Record<string, boolean>>((acc, value: unknown) => {"
-          if old not in text:
-              raise SystemExit('075 follow reducer type anchor missing')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          if old in text:
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          elif new not in text:
+              raise SystemExit('075 follow reducer type contract missing')
           PY
 
       - name: Verify 075 Worker patch against canonical 041 source
@@ -80,6 +82,9 @@ jobs:
           grep -Fq 'explore_like_user_queue_state_075' "$RUNNER_TEMP/social075.tables"
           test "$(sqlite3 "$db" 'SELECT COUNT(*) FROM explore_like_user_queue_state_075 WHERE id=1;')" = 1
           echo 'D1_075_ADDITIVE_SCHEMA=PASS'
+
+      - name: Verify structural cost and reversal behavior
+        run: python3 scripts/verify-075-social-snapshot-cost.py
 
       - name: Verify client contract
         shell: bash

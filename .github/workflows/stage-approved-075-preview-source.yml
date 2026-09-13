@@ -1,0 +1,126 @@
+name: Stage Approved 075 Source To PREVIEW
+
+on:
+  push:
+    branches: [work/social-snapshot-075-v2]
+    paths:
+      - '.github/workflows/stage-approved-075-preview-source.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-stage-approved-075-preview-source
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      APPROVED_SOURCE: d3269ab451f900d9a4633f7d97aa4e88d1006912
+      EXPECTED_PREVIEW_BASE: d9923a2394afb4c29e345f2d7d0506312a0af29c
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Guard PREVIEW baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PREVIEW_BASE"
+          git cat-file -e "$APPROVED_SOURCE^{commit}"
+          echo 'PREVIEW_STAGE_BASELINE=PASS'
+
+      - name: Copy only approved 075 product files
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            src/pages/ExplorePage.tsx
+            src/services/exploreLikeService.ts
+            src/services/exploreSocialService.ts
+            src/services/explorePublicationService.ts
+            src/services/exploreSessionCache.ts
+            src/services/exploreProfileFirstViewService.ts
+            src/services/exploreSocialSnapshotService.ts
+            cloudflare/explore-worker/patches/042-social-snapshot-write-compaction.mjs
+            cloudflare/explore-worker/runtime/social-snapshot-042.js
+            cloudflare/explore-worker/release-patches.json
+            cloudflare/explore-worker/migrations/20260913_01_explore_like_user_queue.sql
+            cloudflare/explore-worker/candidates/076-derived-trigger-compaction-live033.sql
+            cloudflare/explore-worker/canonical/preview-worker.js
+            cloudflare/explore-worker/canonical/source-sha256.txt
+            scripts/verify-explore-like-cost-optimization.mjs
+            scripts/verify-075-social-snapshot-cost.py
+            scripts/verify-076-live033-compaction.py
+            public/app-version.json
+          )
+          git checkout "$APPROVED_SOURCE" -- "${files[@]}"
+          changed="$(git diff --name-only)"
+          printf '%s\n' "$changed"
+          expected="$(printf '%s\n' "${files[@]}" | sort)"
+          actual="$(printf '%s\n' "$changed" | sed '/^$/d' | sort)"
+          unexpected="$(comm -13 <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") || true)"
+          if [ -n "$unexpected" ]; then
+            echo 'Unexpected staged file(s):'
+            echo "$unexpected"
+            exit 1
+          fi
+          test -n "$actual"
+          grep -Fq '"version": "075"' public/app-version.json
+          grep -Fq 'SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_WRITE_COMPACTION_042_20260913' cloudflare/explore-worker/canonical/preview-worker.js
+          grep -Fq 'SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913' src/pages/ExplorePage.tsx
+          echo 'APPROVED_075_FILES_STAGED=PASS'
+
+      - name: Verify staged PREVIEW source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-076-live033-compaction.py
+          python3 scripts/verify-075-social-snapshot-cost.py
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-explore-derived-cache.mjs
+          node scripts/verify-explore-deploy-preflight.mjs
+          echo 'STAGED_075_CONTRACT=PASS'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit approved source without deployment side effects
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            src/pages/ExplorePage.tsx \
+            src/services/exploreLikeService.ts \
+            src/services/exploreSocialService.ts \
+            src/services/explorePublicationService.ts \
+            src/services/exploreSessionCache.ts \
+            src/services/exploreProfileFirstViewService.ts \
+            src/services/exploreSocialSnapshotService.ts \
+            cloudflare/explore-worker/patches/042-social-snapshot-write-compaction.mjs \
+            cloudflare/explore-worker/runtime/social-snapshot-042.js \
+            cloudflare/explore-worker/release-patches.json \
+            cloudflare/explore-worker/migrations/20260913_01_explore_like_user_queue.sql \
+            cloudflare/explore-worker/candidates/076-derived-trigger-compaction-live033.sql \
+            cloudflare/explore-worker/canonical/preview-worker.js \
+            cloudflare/explore-worker/canonical/source-sha256.txt \
+            scripts/verify-explore-like-cost-optimization.mjs \
+            scripts/verify-075-social-snapshot-cost.py \
+            scripts/verify-076-live033-compaction.py \
+            public/app-version.json
+          git commit -m 'release: stage 075 approved PREVIEW source [skip ci]'
+          git push origin HEAD:preview
+          echo "PREVIEW_PRODUCT_SOURCE_SHA=$(git rev-parse HEAD)"

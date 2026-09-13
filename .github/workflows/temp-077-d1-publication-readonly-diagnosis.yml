@@ -1,0 +1,54 @@
+name: TEMP 077 D1 Publication Readonly Diagnosis
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-077-d1-publication-readonly-diagnosis.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Read-only D1 schema and UPDATE compile diagnosis
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .temp-077
+          cat > .temp-077/wrangler.jsonc <<JSON
+          {
+            "name": "soridraw-temp-077-readonly-diagnosis",
+            "main": "placeholder.js",
+            "compatibility_date": "2026-09-13",
+            "d1_databases": [
+              {"binding":"DB","database_name":"soridraw-explore-db","database_id":"${SHARED_D1_ID}"}
+            ]
+          }
+          JSON
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/.temp-077/wrangler.jsonc"
+          echo '=== TRACK COLUMNS ==='
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "PRAGMA table_info(tracks)" --json
+          echo '=== TRACK / DERIVED TRIGGERS ==='
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT name, tbl_name, sql FROM sqlite_schema WHERE type='trigger' AND name IN ('explore032_track_update','explore032_derived_track_update','explore032_derived_track_insert','explore032_derived_track_delete','explore032_derived_profile_update','explore032_derived_profile_feed') ORDER BY name" --json
+          echo '=== COMPILE PRIVATE UPDATE (NO EXECUTION) ==='
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "EXPLAIN UPDATE tracks SET is_public = 0, updated_at = 0 WHERE id = '__soridraw_diag_nonexistent__' AND owner_uid = '__soridraw_diag__' AND is_public <> 0" --json
+          echo '=== COMPILE PUBLIC UPDATE (NO EXECUTION) ==='
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "EXPLAIN UPDATE tracks SET is_public = 1, status = 'published', published_at = 0, updated_at = 0 WHERE id = '__soridraw_diag_nonexistent__' AND owner_uid = '__soridraw_diag__' AND (is_public <> 1 OR status <> 'published')" --json
+          echo 'TEMP_077_READONLY_DIAG=PASS'

@@ -27,21 +27,68 @@ jobs:
       - name: Install Worker tooling
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
-      - name: Inspect publication D1 schema and constraints only
+      - name: Read relevant live schema and simulate publication locally
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE (type='table' AND name IN ('tracks','track_stats','public_profiles','explore_derived_tracks','explore_derived_profiles','explore_derived_changes','explore_derived_state','explore_shared_revision')) OR (type='index' AND tbl_name IN ('tracks','explore_derived_tracks','explore_derived_profiles','explore_derived_changes','explore_derived_state','explore_shared_revision')) ORDER BY type,tbl_name,name;" --json > "$RUNNER_TEMP/schema.json"
-          node <<'NODE'
-          const fs=require('fs');
-          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/schema.json','utf8'));
-          for(const row of raw.flatMap(x=>x.results||[])){
-            console.log('\n=== '+row.type+' '+row.name+' ON '+row.tbl_name+' ===');
-            console.log(String(row.sql||''));
-          }
-          NODE
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "PRAGMA foreign_key_list(tracks); PRAGMA foreign_key_list(explore_derived_tracks); PRAGMA foreign_key_list(explore_derived_profiles); PRAGMA table_info(explore_derived_profiles);" --json
-          echo 'READ_ONLY_SCHEMA_DIAGNOSIS=PASS'
+          SQL="SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND tbl_name IN ('tracks','track_stats','explore_derived_tracks','explore_derived_profiles','explore_derived_changes','explore_derived_state','explore_shared_revision') ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 WHEN 'trigger' THEN 3 ELSE 4 END,name;"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$SQL" --json > "$RUNNER_TEMP/schema.json"
+          python3 <<'PY'
+          import json, os, sqlite3
+          raw=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'schema.json'),encoding='utf-8'))
+          rows=[r for group in raw for r in group.get('results',[])]
+          print('REMOTE_SCHEMA_OBJECTS='+str(len(rows)))
+          conn=sqlite3.connect(':memory:')
+          conn.execute('PRAGMA recursive_triggers=OFF')
+          for r in rows:
+              sql=r.get('sql')
+              if not sql: continue
+              try:
+                  conn.execute(sql)
+              except Exception as e:
+                  raise RuntimeError(f"schema apply failed {r.get('type')} {r.get('name')}: {e}\n{sql}")
+          conn.execute("INSERT INTO explore_derived_state(id,seq,seeded) VALUES(1,0,1)")
+          conn.execute("INSERT INTO explore_shared_revision(scope,revision,updated_at) VALUES('global',1,0)")
+          conn.execute("""INSERT INTO tracks (
+              id,owner_uid,source_type,source_id,title,cover_url,suno_url_primary,search_text,
+              is_public,status,published_at,created_at,updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,1,'published',?,?,?)""",
+            ('__soridraw_sim_track__','__soridraw_sim_uid__','music_note','__sim_source__','sim','','https://example.invalid/audio','sim',1000,1000,1000))
+          conn.execute("INSERT INTO track_stats(track_id,like_count,comment_count,play_count,updated_at) VALUES(?,0,0,0,?)",('__soridraw_sim_track__',1000))
+          conn.commit()
+
+          def snap(label):
+              t=conn.execute("SELECT is_public,status,published_at,updated_at FROM tracks WHERE id='__soridraw_sim_track__'").fetchone()
+              d=conn.execute("SELECT active,published_at,pinned,likes FROM explore_derived_tracks WHERE id='__soridraw_sim_track__'").fetchone()
+              p=conn.execute("SELECT active,track_count FROM explore_derived_profiles WHERE uid='__soridraw_sim_uid__'").fetchone()
+              s=conn.execute("SELECT seq FROM explore_derived_state WHERE id=1").fetchone()
+              r=conn.execute("SELECT revision FROM explore_shared_revision WHERE scope='global'").fetchone()
+              c=conn.execute("SELECT scope,kind,id,seq FROM explore_derived_changes WHERE id='__soridraw_sim_track__' ORDER BY scope").fetchall()
+              print(label+'='+json.dumps({'track':t,'derived':d,'profile':p,'seq':s,'revision':r,'changes':c},ensure_ascii=False))
+              return t,d,p,s,r,c
+
+          snap('BEFORE_PRIVATE')
+          before=conn.total_changes
+          conn.execute("UPDATE tracks SET is_public=0, updated_at=2000 WHERE id='__soridraw_sim_track__' AND owner_uid='__soridraw_sim_uid__'")
+          conn.commit()
+          private_changes=conn.total_changes-before
+          t,d,p,s,r,c=snap('AFTER_PRIVATE')
+          print('PRIVATE_LOGICAL_ROW_CHANGES='+str(private_changes))
+          assert t[0] == 0 and d[0] == 0, (t,d)
+          assert p and p[1] == 0, p
+          assert {x[0] for x in c} >= {'feed','profile:__soridraw_sim_uid__'}, c
+
+          before=conn.total_changes
+          conn.execute("UPDATE tracks SET is_public=1,published_at=3000,updated_at=3000 WHERE id='__soridraw_sim_track__' AND owner_uid='__soridraw_sim_uid__'")
+          conn.commit()
+          public_changes=conn.total_changes-before
+          t,d,p,s,r,c=snap('AFTER_PUBLIC')
+          print('PUBLIC_LOGICAL_ROW_CHANGES='+str(public_changes))
+          assert t[0] == 1 and d[0] == 1, (t,d)
+          assert p and p[1] == 1, p
+          print('LOCAL_TRIGGER_SIMULATION=PASS')
+          PY
+          echo 'REMOTE_D1_WRITES=0'

@@ -1,56 +1,90 @@
 # NEXT CODEX TASK
 
-상태: **PREVIEW 074 배포 완료 / 서버 좋아요 경로 정상 / 본인 숫자 Local First 즉시 반영 사용자 확인 대기 / TEST 승격 금지**
+상태: **075 코드/검증 PASS + 076 비용/rollback 후보 PASS / 실제 PREVIEW는 074 + Worker 069 유지 / 공유 D1 변경 승인 전 대기 / TEST 승격 금지**
 
 ## 현재 기준
-- branch: `preview`
+- repository: `andrawing1212/soridraw-music`
+- deployed PREVIEW branch: `preview`
 - 실제 PREVIEW 앱: `074`
-- 074 코드 commit: `835dd2cb0b5c206696a7e94dc18e9041155cbe23`
-- PREVIEW 074 release trigger/locked build: `1d5ecf841ae8335d21b992d3e7f4c160add75839`
-- 074 Apply Run `34639807460` — PASS
-- PREVIEW 074 App Run `34639940311` — PASS
-- PREVIEW Worker는 069 runtime 유지: `caffa9f8-5b50-4a4a-a2db-578c0fe49b83`
-- TEST main `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
-- PRODUCTION `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
+- 실제 PREVIEW Worker: `069` / `caffa9f8-5b50-4a4a-a2db-578c0fe49b83`
+- TEST main: `3b574c05589230f077eceff98190edd4b5195f75`
+- PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe`
+- 작업 branch: `work/social-snapshot-075-v2`
+- 075 client/account-isolation final source commit: `e3ac6ad3f4fa9d23f15a600269cba09c8551c80c`
+- 076 maintenance verifier Run `34733413924` — PASS
 
-## 확정된 사실
-- 테스트한 두 곡 모두 서버 canonical/derived/fresh Feed 숫자는 이미 `1`.
-- 073에서도 오른쪽 곡이 화면 `0`으로 남아 client 표시 복구는 FAIL.
-- 서버/aggregate를 더 기다리거나 반복 조회하는 방향은 중단.
+## 완료된 작업
+- 개인 좋아요 + 팔로우 Social Snapshot.
+- UID-scoped persistent cache.
+- UID-scoped browser sync/sync-error event.
+- A→B 계정전환 시 old liked state 즉시 초기화.
+- 사용자별 like pending row 1개 압축.
+- like↔unlike reversal 최종 상태 보존.
+- idle 10분 aggregate D1 row write 0 구조.
+- 공개/비공개 local Feed/Profile 전체 invalidate 제거, changed track only patch.
+- 076 trigger candidate로 구조 row changes 감소:
+  - like `8 → 5`
+  - visibility `12 → 6`
+  - bio/background/SNS profile `6 → 4`
+  - avatar/nickname은 Feed 반영 필요로 `6 유지`
+- 076 trigger DDL data purity PASS.
+- 076 rollback exact original trigger SQL restore PASS.
 
-## 074 수정
-- 본인 좋아요 클릭 즉시 하트 + 화면 숫자 `+1`.
-- 취소 즉시 `-1`.
-- 로컬 cache에도 표시 숫자 반영.
-- 1분 batch 뒤 same-account signal에 optional `displayLikeCount`를 전달해 다른 기기도 같은 표시값을 받을 수 있게 함.
-- legacy signal은 숫자를 덮어쓰지 않고 하트만 반영.
-- `내 하트 ON / 숫자 0`은 추가 서버 read 없이 최소 `1`로 로컬 회복.
-- canonical 서버 숫자는 기존 10분 aggregate 유지.
-- aggregate 후 fresh refresh로 최종 canonical에 수렴.
-- Worker/D1/Functions/Rules/UI CSS/사용자 원본 데이터 변경 없음.
+## 절대 실행 금지 — 승인 전
+- Shared D1 076 trigger replacement.
+- Shared D1 075 additive queue apply.
+- PREVIEW Worker 042 deploy.
+- PREVIEW App 075 deploy.
+- main/TEST promotion.
+- production promotion.
+- 사용자 데이터 backfill/migration/delete/overwrite.
 
-## 다음 사용자 확인
-복잡한 10분 테스트 금지.
-1. PREVIEW 074 업데이트.
-2. 기존 `[Breakbeat] '혼자만의 밤'`이 바로 `1`로 보이는지 확인.
-3. 새 0곡 1개 좋아요 시 하트와 숫자가 즉시 `0 → 1`인지 확인.
-4. 같은 곡 취소 시 즉시 `1 → 0`인지 확인.
+## 다음 작업 — 사용자 승인 전 가능한 범위
+실제 배포는 하지 말고 아래 준비만 한다.
 
-## 통과 후 개발 측 검증
-- 3곡 같은 1분 window → batch 1회 / queue W1 목표 확인.
-- aggregate 전 like→unlike 최종 OFF.
-- aggregate 전 unlike→like 최종 ON.
-- PC→모바일 same-account 표시 숫자 전달 확인.
-- 비용 회귀 없음 확인.
-- 이후에만 TEST 승격 가능 여부 판단.
+1. 075/076 final candidate commit을 하나로 고정한다.
+2. 076 manual maintenance 절차 문서를 확정한다.
+3. preflight는 SELECT/read-only만 사용하도록 설계한다.
+4. live trigger 5개 SQL을 적용 직전 read-only 캡처하는 rollback contract를 준비한다.
+5. postflight에서 trigger name/SQL, canonical row count, derived row count를 확인하도록 준비한다.
+6. Cloudflare D1 query `meta.rows_read` / `meta.rows_written`을 PREVIEW에서 측정할 telemetry 계획을 고정한다.
+7. 실환경 검증 matrix를 고정한다:
+   - idle 10분 cron
+   - 1 like / unlike
+   - ON→OFF→ON
+   - OFF→ON→OFF
+   - 3곡 같은 1분 window
+   - 한 사용자 여러 곡
+   - 여러 사용자 같은 곡
+   - public / private
+   - profile bio/background/avatar
+   - PC↔mobile same-account
+   - 같은 브라우저 A↔B account switch
+8. 하나라도 실패하면 TEST 승격 금지.
 
-## 계속 보호할 것
-- 좋아요 1분 batch.
-- 서버 canonical 숫자 10분 aggregate.
-- 069 W1 queue.
-- same-account 기존 users listener 재사용.
-- 정상 캐시 변경 없음 시 서버 read 0 목표.
-- UI/CSS/반응형 비변경.
-- 사용자 원본 데이터 migration/backfill/delete/overwrite 금지.
-- 사용자 실사용 PASS 전 TEST 승격 금지.
-- PRODUCTION은 명확한 사용자 승인 없이는 승격 금지.
+## 실제 적용 순서 — 사용자 승인 후에만
+1. 기준 commit lock.
+2. shared D1 live trigger read-only preflight + 5개 원본 SQL 캡처.
+3. 076 trigger 5개만 수동 maintenance 경로로 교체.
+4. 즉시 postflight.
+5. 실패 시 원본 SQL로 즉시 rollback.
+6. 075 additive queue schema 적용.
+7. PREVIEW Worker 042 배포.
+8. PREVIEW App 075 배포.
+9. 실제 `preview.soridraw.com` 검증.
+10. D1 billed `meta.rows_written` 실측.
+
+## 비용 숫자 해석 주의
+현재 `8→5`, `12→6`, `6→4`는 SQLite `total_changes` 기반 **구조상 row 변경 수**다.
+Cloudflare D1의 실제 청구 rows_written은 index write가 추가될 수 있으므로 같은 숫자라고 단정하지 않는다.
+실제 비용 판단은 PREVIEW 적용 후 D1 metadata 실측으로 확정한다.
+
+## 보호할 정상 기능
+- 즉시 하트 + 본인 로컬 숫자 UX.
+- 1분 client batch.
+- 10분 canonical aggregate.
+- 기존 same-account signal.
+- 정상 캐시 재진입 서버 read 0 목표.
+- 공개프로필/Feed 기존 데이터 형식.
+- UI/CSS/반응형.
+- TEST/PRODUCTION 코드와 공유 사용자 원본 데이터.

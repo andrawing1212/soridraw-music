@@ -77,8 +77,9 @@ assert.deepEqual(
   requiredReleasePatches,
   'required like release patches must remain present and ordered'
 );
-assert.equal(manifest.patches.at(-2), '045-publication-revision-metadata.mjs', '045 publication revision metadata must remain directly before 046');
-assert.equal(manifest.patches.at(-1), '046-publication-write-compaction.mjs', '046 publication write compaction must be the final Worker release patch');
+assert.equal(manifest.patches.at(-3), '045-publication-revision-metadata.mjs', '045 publication revision metadata must remain directly before 046');
+assert.equal(manifest.patches.at(-2), '046-publication-write-compaction.mjs', '046 publication write compaction must remain directly before 047');
+assert.equal(manifest.patches.at(-1), '047-publication-state-transition.mjs', '047 publication state transition must be the final Worker release patch');
 assert.equal((migration033.match(/UPDATE explore_derived_state\s+SET seq = seq \+ 1/g) || []).length, 1);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_batches_035/);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_processor_035/);

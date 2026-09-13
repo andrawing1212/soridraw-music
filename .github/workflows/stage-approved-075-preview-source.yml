@@ -51,6 +51,7 @@ jobs:
             cloudflare/explore-worker/runtime/social-snapshot-042.js
             cloudflare/explore-worker/release-patches.json
             cloudflare/explore-worker/migrations/20260913_01_explore_like_user_queue.sql
+            cloudflare/explore-worker/candidates/076-derived-trigger-compaction.sql
             cloudflare/explore-worker/candidates/076-derived-trigger-compaction-live033.sql
             cloudflare/explore-worker/canonical/preview-worker.js
             cloudflare/explore-worker/canonical/source-sha256.txt
@@ -114,6 +115,7 @@ jobs:
             cloudflare/explore-worker/runtime/social-snapshot-042.js \
             cloudflare/explore-worker/release-patches.json \
             cloudflare/explore-worker/migrations/20260913_01_explore_like_user_queue.sql \
+            cloudflare/explore-worker/candidates/076-derived-trigger-compaction.sql \
             cloudflare/explore-worker/candidates/076-derived-trigger-compaction-live033.sql \
             cloudflare/explore-worker/canonical/preview-worker.js \
             cloudflare/explore-worker/canonical/source-sha256.txt \

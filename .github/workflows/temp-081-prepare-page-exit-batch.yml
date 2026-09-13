@@ -1,0 +1,811 @@
+name: TEMP 081 Prepare Page Exit Batch
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-081-prepare-page-exit-batch.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-temp-081-page-exit-batch
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply 081 client batching
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 anchor, got {count}')
+              return text.replace(old, new, 1)
+
+          # 1) Explore likes: local durable outbox only while page is open.
+          p = Path('src/services/exploreLikeService.ts')
+          s = p.read_text(encoding='utf-8')
+          s = replace_once(s, "import { doc, updateDoc } from 'firebase/firestore';", "import { doc, updateDoc } from '../lib/firestoreMeasured';", 'like measured Firestore')
+          if 'SORIDRAW_PAGE_EXIT_LIKE_OUTBOX_081_20260914' not in s:
+              s = s.replace('// SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_075_20260913', '// SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_075_20260913\n// SORIDRAW_PAGE_EXIT_LIKE_OUTBOX_081_20260914', 1)
+          count_anchor = "const persistLikeOutbox = (uid: string, outbox: ExploreLikeOutbox) => {"
+          idx = s.index(count_anchor)
+          # insert count after the persist function, identified by next dispatch helper
+          dispatch_anchor = '\nconst dispatchLikeSync = (detail: ExploreLikeSyncEventDetail) => {'
+          dispatch_idx = s.index(dispatch_anchor, idx)
+          count_code = """
+
+export const getPendingExploreLikeMutationCount = (uid: string): number => Object.values(readLikeOutbox(uid))
+  .filter((pending) => pending.desiredLiked !== pending.baseLiked)
+  .length;
+"""
+          if 'export const getPendingExploreLikeMutationCount' not in s:
+              s = s[:dispatch_idx] + count_code + s[dispatch_idx:]
+          # no automatic network send from timer/read/UI/retry; explicit coordinator flush owns server timing
+          s = re.sub(r'^\s*resumePendingLikes\(user\);\s*$', '', s, flags=re.M)
+          s = re.sub(r'^\s*schedulePendingLikes\(user(?:,\s*[^;]+)?\);\s*$', '', s, flags=re.M)
+          # Add explicit wrapper after flush function and before resume helper.
+          resume_anchor = '\nconst resumePendingLikes = (user: User) => {'
+          resume_idx = s.index(resume_anchor)
+          if 'export const flushPendingExploreLikesForPageExit' not in s:
+              wrapper = """
+
+export const flushPendingExploreLikesForPageExit = async (user: User): Promise<void> => {
+  clearPendingLikeTimer(user.uid);
+  await flushPendingLikes(user);
+  if (getPendingExploreLikeMutationCount(user.uid) > 0) {
+    throw new Error('좋아요 변경분을 서버에 반영하지 못했습니다. 다음 페이지 이동 또는 재접속에서 다시 시도합니다.');
+  }
+};
+"""
+              s = s[:resume_idx] + wrapper + s[resume_idx:]
+          p.write_text(s, encoding='utf-8')
+
+          # 2) Publication state: optimistic local state + durable final-state outbox.
+          p = Path('src/services/explorePublicationService.ts')
+          s = p.read_text(encoding='utf-8')
+          s = replace_once(s,
+              "  readSoridrawPersistentCache,\n  writeSoridrawPersistentCache,",
+              "  readSoridrawPersistentCache,\n  removeSoridrawPersistentCache,\n  writeSoridrawPersistentCache,",
+              'publication persistent import')
+          if 'SORIDRAW_PAGE_EXIT_PUBLICATION_OUTBOX_081_20260914' not in s:
+              s = s.replace('// SORIDRAW_PUBLICATION_REGISTERED_STATE_080_20260913', '// SORIDRAW_PUBLICATION_REGISTERED_STATE_080_20260913\n// SORIDRAW_PAGE_EXIT_PUBLICATION_OUTBOX_081_20260914', 1)
+          insert_anchor = 'const publicationServerValidatedUids = new Set<string>();\n'
+          outbox_code = r'''
+
+const EXPLORE_PUBLICATION_OUTBOX_SCHEMA_VERSION = 1;
+const EXPLORE_PUBLICATION_OUTBOX_CACHE_KEY = 'explore-publication-outbox';
+const EXPLORE_PUBLICATION_OUTBOX_SOURCE_TYPE = 'explore_publication_outbox';
+
+type ExplorePublicationPendingMutation = {
+  sourceId: string;
+  trackId: string;
+  baseState: ExploreMusicNotePublicationState;
+  desiredState: ExploreMusicNotePublicationState;
+  updatedAt: number;
+};
+
+type ExplorePublicationOutbox = Record<string, ExplorePublicationPendingMutation>;
+
+const normalizePublicationState = (
+  value: Partial<ExploreMusicNotePublicationState> | null | undefined,
+  trackId: string,
+  registered = false,
+): ExploreMusicNotePublicationState => ({
+  status: value?.status === 'public' ? 'public' : 'private',
+  trackId: String(value?.trackId || trackId || '').trim(),
+  registered: value?.registered === undefined ? registered : Boolean(value.registered),
+  allowNextSongApply: Boolean(value?.allowNextSongApply),
+  allowFollowerSave: Boolean(value?.allowFollowerSave),
+  profilePinned: Boolean(value?.profilePinned),
+});
+
+const samePublicationState = (a: ExploreMusicNotePublicationState, b: ExploreMusicNotePublicationState) => (
+  a.status === b.status
+  && a.trackId === b.trackId
+  && a.registered === b.registered
+  && a.allowNextSongApply === b.allowNextSongApply
+  && a.allowFollowerSave === b.allowFollowerSave
+  && a.profilePinned === b.profilePinned
+);
+
+const readPublicationOutbox = (uid: string): ExplorePublicationOutbox => {
+  const envelope = readSoridrawPersistentCache<ExplorePublicationOutbox>({
+    cacheKey: EXPLORE_PUBLICATION_OUTBOX_CACHE_KEY,
+    sourceType: EXPLORE_PUBLICATION_OUTBOX_SOURCE_TYPE,
+    schemaVersion: EXPLORE_PUBLICATION_OUTBOX_SCHEMA_VERSION,
+    uid,
+  });
+  if (!envelope?.data || typeof envelope.data !== 'object' || Array.isArray(envelope.data)) return {};
+  const next: ExplorePublicationOutbox = {};
+  Object.entries(envelope.data).forEach(([sourceId, raw]) => {
+    const value = raw as Partial<ExplorePublicationPendingMutation> | null;
+    const trackId = String(value?.trackId || '').trim();
+    if (!sourceId || !trackId || !value?.baseState || !value?.desiredState) return;
+    next[sourceId] = {
+      sourceId,
+      trackId,
+      baseState: normalizePublicationState(value.baseState, trackId, Boolean(value.baseState.registered)),
+      desiredState: normalizePublicationState(value.desiredState, trackId, Boolean(value.desiredState.registered)),
+      updatedAt: Math.max(0, Number(value.updatedAt || 0)),
+    };
+  });
+  return next;
+};
+
+const persistPublicationOutbox = (uid: string, outbox: ExplorePublicationOutbox) => {
+  if (!Object.keys(outbox).length) {
+    removeSoridrawPersistentCache(EXPLORE_PUBLICATION_OUTBOX_CACHE_KEY, uid);
+    return;
+  }
+  writeSoridrawPersistentCache<ExplorePublicationOutbox>({
+    cacheKey: EXPLORE_PUBLICATION_OUTBOX_CACHE_KEY,
+    sourceType: EXPLORE_PUBLICATION_OUTBOX_SOURCE_TYPE,
+    schemaVersion: EXPLORE_PUBLICATION_OUTBOX_SCHEMA_VERSION,
+    dataVersion: 0,
+    uid,
+    syncCursor: null,
+    serverRevision: null,
+    deletedIds: [],
+    expiresAt: null,
+    dirty: true,
+    pendingMutationId: 'publication-page-exit',
+    data: outbox,
+  });
+};
+
+export const getPendingExplorePublicationMutationCount = (uid: string): number => Object.keys(readPublicationOutbox(uid)).length;
+
+const overlayPendingPublicationStates = (
+  uid: string,
+  states: Record<string, ExploreMusicNotePublicationState>,
+) => {
+  const next = clonePublicationStates(states);
+  Object.values(readPublicationOutbox(uid)).forEach((pending) => {
+    next[pending.sourceId] = { ...pending.desiredState };
+  });
+  return next;
+};
+
+const findPublicationSourceByTrackId = (uid: string, trackId: string) => {
+  const normalizedTrackId = String(trackId || '').trim();
+  const states = readPublicationStateCache(uid) || {};
+  const matched = Object.entries(states).find(([, state]) => state.trackId === normalizedTrackId);
+  if (matched) return { sourceId: matched[0], state: matched[1] };
+  const pending = Object.values(readPublicationOutbox(uid)).find((item) => item.trackId === normalizedTrackId);
+  if (pending) return { sourceId: pending.sourceId, state: pending.desiredState };
+  const prefix = `music_note_${uid}_`;
+  const sourceId = normalizedTrackId.startsWith(prefix) ? normalizedTrackId.slice(prefix.length) : normalizedTrackId;
+  return {
+    sourceId,
+    state: normalizePublicationState({ status: 'private', registered: true }, normalizedTrackId, true),
+  };
+};
+
+const queuePublicationMutation = (
+  uid: string,
+  sourceId: string,
+  currentState: ExploreMusicNotePublicationState,
+  requestedState: ExploreMusicNotePublicationState,
+) => {
+  const outbox = readPublicationOutbox(uid);
+  const existing = outbox[sourceId];
+  const baseState = existing?.baseState || { ...currentState };
+  let desiredState = { ...requestedState };
+  if (!baseState.registered && desiredState.status === 'private') {
+    desiredState = { ...baseState, status: 'private', registered: false };
+  }
+  if (samePublicationState(baseState, desiredState)) {
+    delete outbox[sourceId];
+  } else {
+    outbox[sourceId] = {
+      sourceId,
+      trackId: desiredState.trackId,
+      baseState: { ...baseState },
+      desiredState: { ...desiredState },
+      updatedAt: Date.now(),
+    };
+  }
+  persistPublicationOutbox(uid, outbox);
+  patchPublicationStateBySourceId(uid, sourceId, desiredState);
+  return desiredState;
+};
+'''
+          if 'EXPLORE_PUBLICATION_OUTBOX_CACHE_KEY' not in s:
+              s = replace_once(s, insert_anchor, insert_anchor + outbox_code, 'publication outbox insert')
+          # Pending local intent wins over revision validation until replayed.
+          cached_anchor = "  const cached = readPublicationStateCache(uid);\n  const envelope = readPublicationStateEnvelope(uid);\n"
+          if 'getPendingExplorePublicationMutationCount(uid) > 0' not in s:
+              s = replace_once(s, cached_anchor, cached_anchor + "  if (cached && getPendingExplorePublicationMutationCount(uid) > 0) return cached;\n", 'publication pending read guard')
+          bundle_old = "    const bundleRevision = String(payload?.data?.revision || knownRevision || '').trim() || null;\n    writePublicationStateCache(uid, bundledStates, bundleRevision);\n    publicationServerValidatedUids.add(uid);\n    return clonePublicationStates(bundledStates);"
+          bundle_new = "    const bundleRevision = String(payload?.data?.revision || knownRevision || '').trim() || null;\n    const mergedStates = overlayPendingPublicationStates(uid, bundledStates);\n    writePublicationStateCache(uid, mergedStates, bundleRevision);\n    publicationServerValidatedUids.add(uid);\n    return clonePublicationStates(mergedStates);"
+          s = replace_once(s, bundle_old, bundle_new, 'publication bundle pending overlay')
+
+          mut_start = s.index('export const publishMusicNoteToExplore = async (')
+          mut_end = s.index('export const getExplorePublicationErrorMessage', mut_start)
+          mutators = r'''export const publishMusicNoteToExplore = async (
+  user: User,
+  sourceId: string,
+  options?: Partial<ExplorePublicationOptions>,
+): Promise<ExploreMusicNotePublicationState> => {
+  const normalizedSourceId = String(sourceId || '').trim();
+  if (!normalizedSourceId) {
+    throw new ExploreApiError('SOURCE_ID_REQUIRED', '뮤직노트 원본 ID를 확인하지 못했습니다.');
+  }
+  const trackId = getMusicNoteTrackId(user.uid, normalizedSourceId);
+  const states = readPublicationStateCache(user.uid) || {};
+  const current = states[normalizedSourceId] || normalizePublicationState({
+    status: 'private',
+    registered: false,
+    ...DEFAULT_PUBLICATION_OPTIONS,
+  }, trackId, false);
+  const normalizedOptions = normalizePublicationOptions(options);
+  return queuePublicationMutation(user.uid, normalizedSourceId, current, {
+    status: 'public',
+    trackId,
+    registered: current.registered,
+    ...normalizedOptions,
+  });
+};
+
+export const setExploreTrackVisibility = async (
+  user: User,
+  trackId: string,
+  isPublic: boolean,
+  options?: Partial<ExplorePublicationOptions>,
+): Promise<ExploreMusicNotePublicationState> => {
+  const normalizedTrackId = String(trackId || '').trim();
+  if (!normalizedTrackId) {
+    throw new ExploreApiError('TRACK_ID_REQUIRED', 'Explore 곡 ID를 확인하지 못했습니다.');
+  }
+  const found = findPublicationSourceByTrackId(user.uid, normalizedTrackId);
+  const requestedOptions = options ? normalizePublicationOptions(options) : {
+    allowNextSongApply: found.state.allowNextSongApply,
+    allowFollowerSave: found.state.allowFollowerSave,
+    profilePinned: found.state.profilePinned,
+  };
+  return queuePublicationMutation(user.uid, found.sourceId, found.state, {
+    ...found.state,
+    status: isPublic ? 'public' : 'private',
+    trackId: normalizedTrackId,
+    ...requestedOptions,
+  });
+};
+
+export const setExploreTrackPublicationOptions = async (
+  user: User,
+  trackId: string,
+  options: ExplorePublicationOptions,
+): Promise<ExplorePublicationOptions> => {
+  const normalizedTrackId = String(trackId || '').trim();
+  if (!normalizedTrackId) {
+    throw new ExploreApiError('TRACK_ID_REQUIRED', 'Explore 곡 ID를 확인하지 못했습니다.');
+  }
+  const found = findPublicationSourceByTrackId(user.uid, normalizedTrackId);
+  const normalizedOptions = normalizePublicationOptions(options);
+  queuePublicationMutation(user.uid, found.sourceId, found.state, {
+    ...found.state,
+    ...normalizedOptions,
+    trackId: normalizedTrackId,
+  });
+  return normalizedOptions;
+};
+
+export const flushPendingExplorePublicationsForPageExit = async (user: User): Promise<void> => {
+  const uid = String(user.uid || '').trim();
+  const initialOutbox = readPublicationOutbox(uid);
+  const entries = Object.values(initialOutbox).sort((a, b) => a.updatedAt - b.updatedAt);
+  if (!entries.length) return;
+
+  const payload = await requestExplore(user, '/v1/me/music-note-publications/batch', {
+    method: 'POST',
+    body: JSON.stringify({
+      mutations: entries.map((pending) => ({
+        sourceId: pending.sourceId,
+        trackId: pending.trackId,
+        status: pending.desiredState.status,
+        registered: pending.baseState.registered,
+        options: {
+          allowNextSongApply: pending.desiredState.allowNextSongApply,
+          allowFollowerSave: pending.desiredState.allowFollowerSave,
+          profilePinned: pending.desiredState.profilePinned,
+        },
+        mutationAt: pending.updatedAt,
+      })),
+    }),
+  });
+  const rows = Array.isArray(payload?.data?.results) ? payload.data.results : [];
+  const resultBySource = new Map(rows.map((row: any) => [String(row?.sourceId || ''), row]));
+  const latestOutbox = readPublicationOutbox(uid);
+  const states = readPublicationStateCache(uid) || {};
+  let failed = false;
+
+  for (const pending of entries) {
+    const row: any = resultBySource.get(pending.sourceId);
+    if (!row?.ok) {
+      failed = true;
+      continue;
+    }
+    const confirmed: ExploreMusicNotePublicationState = {
+      status: row.status === 'public' ? 'public' : 'private',
+      trackId: String(row.trackId || pending.trackId),
+      registered: row.registered !== false,
+      allowNextSongApply: Boolean(row.allowNextSongApply),
+      allowFollowerSave: Boolean(row.allowFollowerSave),
+      profilePinned: Boolean(row.profilePinned),
+    };
+    const latest = latestOutbox[pending.sourceId];
+    let visibleState = confirmed;
+    if (latest && latest.updatedAt !== pending.updatedAt) {
+      const rebased = { ...latest, baseState: confirmed };
+      if (samePublicationState(rebased.baseState, rebased.desiredState)) {
+        delete latestOutbox[pending.sourceId];
+        visibleState = confirmed;
+      } else {
+        latestOutbox[pending.sourceId] = rebased;
+        visibleState = rebased.desiredState;
+      }
+    } else {
+      delete latestOutbox[pending.sourceId];
+    }
+    states[pending.sourceId] = { ...visibleState };
+
+    if (visibleState.status === 'private') {
+      removeExploreFeedSessionCacheRow(visibleState.trackId);
+      removeExplorePublicProfileFirstViewTrack(uid, visibleState.trackId);
+    } else if (row.snapshotItem && typeof row.snapshotItem === 'object' && !Array.isArray(row.snapshotItem)) {
+      upsertExploreFeedSessionCacheRow(visibleState.trackId, row.snapshotItem as Record<string, unknown>);
+      upsertExplorePublicProfileFirstViewTrack(uid, row.snapshotItem as Record<string, unknown>);
+    }
+  }
+
+  persistPublicationOutbox(uid, latestOutbox);
+  const revision = String(payload?.data?.revision || '').trim();
+  writePublicationStateCache(uid, states, revision || undefined);
+  publicationServerValidatedUids.add(uid);
+  if (failed || Object.keys(latestOutbox).length > 0) {
+    throw new ExploreApiError('PUBLICATION_BATCH_PENDING', '일부 공개상태 변경을 반영하지 못했습니다. 다음 페이지 이동 또는 재접속에서 다시 시도합니다.');
+  }
+};
+
+'''
+          s = s[:mut_start] + mutators + s[mut_end:]
+          p.write_text(s, encoding='utf-8')
+
+          # 3) Catalog derived delta: remember final local state, server publish only on page exit.
+          p = Path('src/lib/userDataEngine.ts')
+          s = p.read_text(encoding='utf-8')
+          start = s.index('export const scheduleCatalogSnapshotPublishIfDirty = (')
+          end = s.index('export const getCatalogRenderBatchSize', start)
+          block = r'''const flushCatalogPendingPublish = async (key: string): Promise<void> => {
+  const pending = catalogPendingPublishes.get(key);
+  if (!pending) return;
+  const { kind, uid, sourceItems, options } = pending;
+  const dirtyRevision = readAdaptiveListIndexDirtyRevision(kind, uid);
+  if (dirtyRevision <= 0) {
+    catalogPendingPublishes.delete(key);
+    return;
+  }
+
+  const previous = await readCatalogSnapshot(kind, uid);
+  if (!previous) {
+    const rebuilt = await rebuildCatalogSnapshotFromServer(kind, uid);
+    if (rebuilt) {
+      clearAdaptiveListIndexDirtyRevision(kind, uid, dirtyRevision);
+      catalogPendingPublishes.delete(key);
+    } else {
+      throw new Error(`catalog ${kind} rebuild failed`);
+    }
+    return;
+  }
+
+  const delta = buildCatalogDelta(previous, sourceItems, options);
+  if (!delta.upserts.length && !delta.deletedIds.length) {
+    clearAdaptiveListIndexDirtyRevision(kind, uid, dirtyRevision);
+    catalogPendingPublishes.delete(key);
+    return;
+  }
+
+  const result = await publishCatalogDelta(kind, uid, delta);
+  if (!result) throw new Error(`catalog ${kind} delta publish failed`);
+  if (result.conflict) {
+    const rebuilt = await rebuildCatalogSnapshotFromServer(kind, uid);
+    if (!rebuilt) throw new Error(`catalog ${kind} conflict rebuild failed`);
+    clearAdaptiveListIndexDirtyRevision(kind, uid, dirtyRevision);
+    catalogPendingPublishes.delete(key);
+    return;
+  }
+
+  const canonicalItems = normalizeCatalogItems(result.items || []);
+  const next: SoridrawCatalogSnapshot = {
+    schemaVersion: 4,
+    authority: 'server',
+    kind,
+    revision: Math.max(0, Math.floor(result.revision)),
+    items: canonicalItems,
+    itemCount: Number.isFinite(Number(result.itemCount)) ? Math.max(0, Math.floor(Number(result.itemCount))) : canonicalItems.length,
+    complete: true,
+    generatedAtMs: Date.now(),
+  };
+  const store = await openCatalogStore(kind, uid);
+  await idbPut(store, CATALOG_META_KEY, next);
+  if (result.syncToken !== undefined) await idbPut(store, CATALOG_SYNC_TOKEN_KEY, result.syncToken);
+  if (result.deltaToken !== undefined) await idbPut(store, CATALOG_DELTA_TOKEN_KEY, result.deltaToken);
+  clearAdaptiveListIndexDirtyRevision(kind, uid, dirtyRevision);
+  catalogPendingPublishes.delete(key);
+};
+
+export const scheduleCatalogSnapshotPublishIfDirty = (
+  kind: SoridrawCatalogKind,
+  uid: string,
+  sourceItems: any[],
+  options: CatalogPublishOptions = {},
+) => {
+  if (!uid) return;
+  const dirtyRevision = readAdaptiveListIndexDirtyRevision(kind, uid);
+  if (dirtyRevision <= 0) return;
+  const key = catalogKey(kind, uid);
+  const existingTimer = catalogPublishTimers.get(key);
+  if (existingTimer) clearTimeout(existingTimer);
+  catalogPublishTimers.delete(key);
+  catalogPendingPublishes.set(key, { kind, uid, sourceItems, options });
+};
+
+export const getPendingCatalogPublishCount = (uid: string): number => [...catalogPendingPublishes.values()]
+  .filter((pending) => pending.uid === uid && readAdaptiveListIndexDirtyRevision(pending.kind, uid) > 0)
+  .length;
+
+export const flushPendingCatalogPublishes = async (uid: string): Promise<void> => {
+  const keys = [...catalogPendingPublishes.entries()]
+    .filter(([, pending]) => pending.uid === uid)
+    .map(([key]) => key);
+  for (const key of keys) await flushCatalogPendingPublish(key);
+};
+
+'''
+          s = s[:start] + block + s[end:]
+          p.write_text(s, encoding='utf-8')
+
+          # 4) Durable detail drafts can enumerate all songs edited during one page session.
+          p = Path('src/lib/musicNoteDetailDraft.ts')
+          s = p.read_text(encoding='utf-8')
+          clear_anchor = '\nexport const clearMusicNoteDetailDraft = async (uid: string, sourceId: string): Promise<void> => {'
+          if 'export const listMusicNoteDetailDrafts' not in s:
+              list_code = r'''
+
+export const listMusicNoteDetailDrafts = async (uid: string): Promise<MusicNoteDetailPendingDraft[]> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid) return [];
+  const database = await openDb();
+  if (!database) return [];
+  try {
+    return await new Promise((resolve) => {
+      const tx = database.transaction(DB_STORE, 'readonly');
+      const request = tx.objectStore(DB_STORE).getAll();
+      request.onsuccess = () => resolve((Array.isArray(request.result) ? request.result : [])
+        .filter((row: MusicNoteDetailPendingDraft) => row?.uid === safeUid && row?.sourceId)
+        .sort((a: MusicNoteDetailPendingDraft, b: MusicNoteDetailPendingDraft) => a.updatedAtMs - b.updatedAtMs));
+      request.onerror = () => resolve([]);
+    });
+  } catch {
+    return [];
+  }
+};
+'''
+              s = s.replace(clear_anchor, list_code + clear_anchor, 1)
+          p.write_text(s, encoding='utf-8')
+
+          # 5) Music Note page: local draft/card state while open, one page-exit coordinator flush.
+          p = Path('src/pages/FavoritesPage.tsx')
+          s = p.read_text(encoding='utf-8')
+          s = replace_once(s,
+              "import { clearMusicNoteDetailDraft, mergeMusicNoteDetailDraft, readMusicNoteDetailDraft, writeMusicNoteDetailDraft } from '../lib/musicNoteDetailDraft';",
+              "import { clearMusicNoteDetailDraft, listMusicNoteDetailDrafts, mergeMusicNoteDetailDraft, readMusicNoteDetailDraft, writeMusicNoteDetailDraft } from '../lib/musicNoteDetailDraft';\nimport { flushSoridrawPageSync, registerPageSyncHandler } from '../lib/pageSyncCoordinator';",
+              'favorites draft/coordinator imports')
+          # Failure keeps IndexedDB draft for next page exit; no timed network retry.
+          retry_pattern = re.compile(r"\n\s*clearFavoriteDetailFlushTimer\(\);\n\s*favoriteDetailFlushTimerRef\.current = window\.setTimeout\(\(\) => \{\n\s*favoriteDetailFlushTimerRef\.current = null;\n\s*void flushFavoriteDetailPendingPatch\('idle'\);\n\s*\}, MUSIC_NOTE_DETAIL_IDLE_FLUSH_MS\);", re.M)
+          s, retry_count = retry_pattern.subn('', s)
+          if retry_count != 1:
+              raise SystemExit(f'favorites retry timer: expected 1, got {retry_count}')
+          schedule_pattern = re.compile(r"  const scheduleFavoriteDetailFlush = \(\) => \{\n(?:.|\n)*?\n  \};\n\n  const queueFavoriteDetailPatch", re.M)
+          schedule_repl = "  const scheduleFavoriteDetailFlush = () => {\n    // 081: IndexedDB is the durable outbox; no server timer while the page is open.\n    clearFavoriteDetailFlushTimer();\n  };\n\n  const queueFavoriteDetailPatch"
+          s, schedule_count = schedule_pattern.subn(schedule_repl, s, count=1)
+          if schedule_count != 1:
+              raise SystemExit('favorites schedule block anchor missing')
+
+          old_effect = """  useEffect(() => {
+    const flushOnPageExit = () => { void flushFavoriteDetailPendingPatch('page-exit'); };
+    window.addEventListener('pagehide', flushOnPageExit);
+    return () => {
+      window.removeEventListener('pagehide', flushOnPageExit);
+      clearFavoriteDetailFlushTimer();
+      void flushFavoriteDetailPendingPatch('page-exit');
+    };
+  }, [user?.uid]);
+"""
+          new_effect = r'''  const flushAllMusicNoteLocalChangesForPageExit = async () => {
+    if (!user?.uid) return;
+    const uid = user.uid;
+    if (favoriteDetailDraftPersistInFlightRef.current) await favoriteDetailDraftPersistInFlightRef.current;
+    await flushFavoriteDetailPendingPatch('page-exit');
+    const stillPendingSongId = favoriteDetailPendingPatchRef.current?.songId || '';
+    let firstError: unknown = stillPendingSongId ? new Error('current detail draft still pending') : null;
+    const drafts = await listMusicNoteDetailDrafts(uid);
+    for (const draft of drafts) {
+      if (!draft?.sourceId || draft.sourceId === stillPendingSongId) continue;
+      try {
+        await updateFavorite(draft.sourceId, draft.updates);
+        const latest = favoritesStore.getFavorites().find((song: any) => String(song?.id || '') === draft.sourceId);
+        const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
+        await patchMusicNoteDetailCache({
+          uid,
+          sourceId: draft.sourceId,
+          sourceVersion: committedVersion,
+          updates: draft.updates,
+        });
+        await clearMusicNoteDetailDraft(uid, draft.sourceId);
+      } catch (error) {
+        firstError ||= error;
+      }
+    }
+    if (isMusicNoteCardStateDirty(uid)) {
+      try { await flushMusicNoteCardStateServerWrite(uid); } catch (error) { firstError ||= error; }
+    }
+    if (firstError) throw firstError;
+  };
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const activeUser = user;
+    const uid = user.uid;
+    const unregister = registerPageSyncHandler({
+      key: `music-note:${uid}`,
+      uid,
+      count: async () => {
+        const drafts = await listMusicNoteDetailDrafts(uid);
+        const ids = new Set(drafts.map((draft) => draft.sourceId));
+        const inMemoryPending = favoriteDetailPendingPatchRef.current?.songId;
+        const detailCount = drafts.length + (inMemoryPending && !ids.has(inMemoryPending) ? 1 : 0);
+        return detailCount + (isMusicNoteCardStateDirty(uid) ? 1 : 0);
+      },
+      flush: flushAllMusicNoteLocalChangesForPageExit,
+    });
+    return () => {
+      clearFavoriteDetailFlushTimer();
+      void flushSoridrawPageSync(activeUser, 'music-note-exit')
+        .catch((error) => console.warn('[081] Music Note page sync pending:', error))
+        .finally(unregister);
+    };
+  }, [user?.uid]);
+'''
+          s = replace_once(s, old_effect, new_effect, 'favorites page-exit effect')
+          # Remove old card pagehide network effect; coordinator owns it.
+          card_effect = """  useEffect(() => {
+    if (!user?.uid) return;
+    const uid = user.uid;
+    const flushIfDirty = () => {
+      if (isMusicNoteCardStateDirty(uid)) void flushMusicNoteCardStateServerWrite(uid);
+    };
+
+    window.addEventListener('pagehide', flushIfDirty);
+    return () => {
+      window.removeEventListener('pagehide', flushIfDirty);
+      flushIfDirty();
+    };
+  }, [user?.uid]);
+
+"""
+          s = replace_once(s, card_effect, '', 'favorites card pagehide effect')
+          close_old = """    // 031: a completed local edit session is flushed once when Detail exits. If the
+    // network write fails, the IndexedDB draft remains available for recovery.
+    await flushFavoriteDetailPendingPatch('detail-close');
+    if (favoriteDetailPendingPatchRef.current) {
+      await flushFavoriteDetailPendingPatch('detail-close');
+    }
+
+"""
+          s = replace_once(s, close_old, "    // 081: closing the detail modal is local-only; the page exit owns server sync.\n\n", 'favorites detail close flush')
+          p.write_text(s, encoding='utf-8')
+
+          # 6) Library page exit joins the same coordinator. Local IndexedDB cache timers stay untouched.
+          p = Path('src/pages/SunoLibraryPage.tsx')
+          s = p.read_text(encoding='utf-8')
+          import_anchor = "import { schedulePreviewAdaptiveListIndexPublishIfDirty } from '../lib/adaptiveListIndexV2';"
+          s = replace_once(s, import_anchor, import_anchor + "\nimport { flushSoridrawPageSync } from '../lib/pageSyncCoordinator';", 'library coordinator import')
+          function_anchor = "export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = {}) {"
+          function_repl = function_anchor + "\n  useEffect(() => () => {\n    void flushSoridrawPageSync(auth.currentUser, 'library-exit')\n      .catch((error) => console.warn('[081] Library page sync pending:', error));\n  }, []);"
+          s = replace_once(s, function_anchor, function_repl, 'library page exit hook')
+          p.write_text(s, encoding='utf-8')
+
+          # 7) Explore page exit flushes likes once. Search/sort within Explore does not unmount the shell.
+          p = Path('src/components/explore/ExploreShell.tsx')
+          s = p.read_text(encoding='utf-8')
+          import_anchor = "import ExplorePage from '../../pages/ExplorePage';"
+          s = replace_once(s, import_anchor, import_anchor + "\nimport { flushSoridrawPageSync } from '../../lib/pageSyncCoordinator';", 'explore coordinator import')
+          auth_effect = "  useEffect(() => onAuthStateChanged(auth, setUser), []);\n"
+          exit_effect = """  useEffect(() => onAuthStateChanged(auth, setUser), []);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const activeUser = user;
+    return () => {
+      void flushSoridrawPageSync(activeUser, 'route-change')
+        .catch((error) => console.warn('[081] Explore page sync pending:', error));
+    };
+  }, [user?.uid]);
+"""
+          s = replace_once(s, auth_effect, exit_effect, 'explore exit hook')
+          p.write_text(s, encoding='utf-8')
+
+          # 8) App startup replays durable generic outboxes only if local dirty exists.
+          p = Path('src/App.tsx')
+          s = p.read_text(encoding='utf-8')
+          if "from './lib/pageSyncCoordinator'" not in s:
+              first_nl = s.index('\n') + 1
+              s = s[:first_nl] + "import { recoverSoridrawPendingSync } from './lib/pageSyncCoordinator';\n" + s[first_nl:]
+          main_anchor = "  const navigate = useNavigate();\n  const location = useLocation();\n  const studioTestParams = new URLSearchParams(location.search);"
+          main_repl = """  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    void recoverSoridrawPendingSync(user)
+      .catch((error) => console.warn('[081] startup pending sync retained locally:', error));
+  }, [user?.uid]);
+
+  const studioTestParams = new URLSearchParams(location.search);"""
+          s = replace_once(s, main_anchor, main_repl, 'app startup recovery hook')
+          p.write_text(s, encoding='utf-8')
+
+          # 9) Diagnostics: one logical page-sync summary, plus path label for publication batch.
+          p = Path('src/components/CacheDiagnosticsOverlay.tsx')
+          s = p.read_text(encoding='utf-8')
+          catalog_import = "import { CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, readCatalogRuntimeDiagnostic, resetCatalogRuntimeDiagnostics, type CatalogRuntimeDiagnosticKind, type CatalogRuntimeDiagnosticState } from '../lib/catalogRuntimeDiagnostics';"
+          page_import = "import { PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, readPageSyncDiagnostics, type PageSyncDiagnosticState } from '../lib/pageSyncCoordinator';"
+          s = replace_once(s, catalog_import, catalog_import + '\n' + page_import, 'overlay page sync import')
+          s = replace_once(s, "  if (path === '/v1/publications') return '최초 공개 등록';", "  if (path === '/v1/publications') return '최초 공개 등록';\n  if (path === '/v1/me/music-note-publications/batch') return '공개상태 묶음';", 'overlay publication batch label')
+          cloud_state = "  const [cloudflare, setCloudflare] = useState<CloudflareDiagnosticState>(() => readCloudflareDiagnostics());"
+          s = replace_once(s, cloud_state, cloud_state + "\n  const [pageSync, setPageSync] = useState<PageSyncDiagnosticState>(() => readPageSyncDiagnostics());", 'overlay page sync state')
+          update_anchor = "    const onCloudflareUpdate = (event: Event) => {\n      const detail = (event as CustomEvent<CloudflareDiagnosticState>).detail;\n      if (!detail) return;\n      setCloudflare(detail);\n    };"
+          update_repl = update_anchor + "\n    const onPageSyncUpdate = (event: Event) => {\n      const detail = (event as CustomEvent<PageSyncDiagnosticState>).detail;\n      if (!detail) return;\n      setPageSync(detail);\n    };"
+          s = replace_once(s, update_anchor, update_repl, 'overlay page sync update')
+          s = replace_once(s, "    setCloudflare(readCloudflareDiagnostics());", "    setCloudflare(readCloudflareDiagnostics());\n    setPageSync(readPageSyncDiagnostics());", 'overlay page sync initial')
+          s = replace_once(s, "    window.addEventListener(CLOUDFLARE_DIAGNOSTICS_UPDATE_EVENT, onCloudflareUpdate as EventListener);", "    window.addEventListener(CLOUDFLARE_DIAGNOSTICS_UPDATE_EVENT, onCloudflareUpdate as EventListener);\n    window.addEventListener(PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, onPageSyncUpdate as EventListener);", 'overlay page sync listener')
+          s = replace_once(s, "      window.removeEventListener(CLOUDFLARE_DIAGNOSTICS_UPDATE_EVENT, onCloudflareUpdate as EventListener);", "      window.removeEventListener(CLOUDFLARE_DIAGNOSTICS_UPDATE_EVENT, onCloudflareUpdate as EventListener);\n      window.removeEventListener(PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, onPageSyncUpdate as EventListener);", 'overlay page sync cleanup')
+          render_anchor = "            {cloudflarePathEntries.length > 0 ? ("
+          render_block = """            <div className=\"mt-1 rounded-lg bg-white/[0.035] px-2 py-1.5 text-[10px] font-bold text-white/70\">
+              <div className=\"flex items-center justify-between gap-2\">
+                <span className=\"text-[#9fddb9]\">PAGE SYNC · {pageSync.status.toUpperCase()}</span>
+                <span>변경 {formatNumber(pageSync.pendingChanges)} · Sync {formatNumber(pageSync.syncCount)}</span>
+              </div>
+              <div className=\"mt-0.5 flex items-center justify-between gap-2 text-white/55\">
+                <span>D1 R {formatNumber(pageSync.d1RowsRead)} · W {formatNumber(pageSync.d1RowsWritten)}</span>
+                <span>Firestore R {formatNumber(pageSync.firestoreReads)} · W {formatNumber(pageSync.firestoreWrites)}</span>
+              </div>
+            </div>
+"""
+          s = replace_once(s, render_anchor, render_block + render_anchor, 'overlay page sync render')
+          p.write_text(s, encoding='utf-8')
+
+          # 10) Existing detail verifiers now protect the new explicit page-exit contract instead of old timers.
+          p = Path('scripts/verify-031-music-note-detail-batched-draft.mjs')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("assert(page.includes('const MUSIC_NOTE_DETAIL_IDLE_FLUSH_MS = 60_000;'), '60s idle flush missing');\n", "assert(!page.includes(\"flushFavoriteDetailPendingPatch('idle')\"), 'idle server flush must stay disabled in 081');\n")
+          s = s.replace("assert(page.includes(\"await flushFavoriteDetailPendingPatch('detail-close');\"), 'detail exit flush missing');\n", "assert(!page.includes(\"flushFavoriteDetailPendingPatch('detail-close')\"), 'detail modal close must stay local-only');\n")
+          s = s.replace("assert(page.includes(\"flushFavoriteDetailPendingPatch('page-exit')\"), 'page exit flush missing');\n", "assert(page.includes(\"flushFavoriteDetailPendingPatch('page-exit')\"), 'page exit flush missing');\nassert(page.includes('registerPageSyncHandler'), 'page sync coordinator registration missing');\n")
+          old_queue_end = "'\\n\\n  useEffect(() => {\\n    const flushOnPageExit'"
+          if old_queue_end in s:
+              s = s.replace(old_queue_end, "'\\n\\n  const flushAllMusicNoteLocalChangesForPageExit'", 1)
+          p.write_text(s, encoding='utf-8')
+
+          p = Path('scripts/verify-032-music-note-detail-save-status.mjs')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("assert(page.includes('const MUSIC_NOTE_DETAIL_IDLE_FLUSH_MS = 60_000;'), '60s batching changed');\n", "assert(!page.includes(\"flushFavoriteDetailPendingPatch('idle')\"), 'idle server flush must stay disabled');\n")
+          s = s.replace("assert(page.includes(\"await flushFavoriteDetailPendingPatch('detail-close');\"), 'detail-close flush missing');\n", "assert(!page.includes(\"flushFavoriteDetailPendingPatch('detail-close')\"), 'detail-close server flush must stay disabled');\n")
+          s = s.replace("assert(page.includes(\"flushFavoriteDetailPendingPatch('page-exit')\"), 'page-exit flush missing');\n", "assert(page.includes(\"flushFavoriteDetailPendingPatch('page-exit')\"), 'page-exit flush missing');\nassert(page.includes('registerPageSyncHandler'), 'page sync coordinator missing');\n")
+          p.write_text(s, encoding='utf-8')
+
+          # Like verifier: same durable outbox, but page exit replaces the old 1-minute network timer.
+          p = Path('scripts/verify-explore-like-cost-optimization.mjs')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("assert.match(queueFunction, /schedulePendingLikes\\(user\\)/);", "assert.doesNotMatch(queueFunction, /schedulePendingLikes\\(user\\)/, '081 UI queue must remain local-only');")
+          s = s.replace("console.log('PASS client: one-minute PREVIEW outbox + same-account visible count replay survives page/background gaps');", "console.log('PASS client: durable like outbox stays local until 081 page-exit sync; same-account visible count replay preserved');")
+          s = s.replace("assert.equal(manifest.patches.at(-3), '045-publication-revision-metadata.mjs', '045 publication revision metadata must remain directly before 046');\nassert.equal(manifest.patches.at(-2), '046-publication-write-compaction.mjs', '046 publication write compaction must remain directly before 047');\nassert.equal(manifest.patches.at(-1), '047-publication-state-transition.mjs', '047 publication state transition must be the final Worker release patch');",
+              "assert.equal(manifest.patches.at(-4), '045-publication-revision-metadata.mjs', '045 must remain before 046/047/048');\nassert.equal(manifest.patches.at(-3), '046-publication-write-compaction.mjs', '046 must remain before 047/048');\nassert.equal(manifest.patches.at(-2), '047-publication-state-transition.mjs', '047 must remain before 048');\nassert.equal(manifest.patches.at(-1), '048-page-exit-publication-batch.mjs', '048 page-exit publication batch must be final');")
+          p.write_text(s, encoding='utf-8')
+
+          # 081 verifier expects page-specific exits rather than duplicate global route flushes.
+          p = Path('scripts/verify-081-page-exit-batch.mjs')
+          s = p.read_text(encoding='utf-8')
+          if "const exploreShell" not in s:
+              s = s.replace("const library = read('src/pages/SunoLibraryPage.tsx');", "const library = read('src/pages/SunoLibraryPage.tsx');\nconst exploreShell = read('src/components/explore/ExploreShell.tsx');", 1)
+          s = s.replace("assert.ok(app.includes(\"flushSoridrawPageSync(user, 'route-change')\"), 'global route-change page sync missing');", "assert.ok(exploreShell.includes(\"flushSoridrawPageSync(activeUser, 'route-change')\"), 'Explore page exit sync missing');")
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Apply Worker 048 to canonical PREVIEW source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$RUNNER_TEMP/worker048"
+          mkdir -p "$tmp"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$tmp/worker.js"
+          (
+            cd cloudflare/explore-worker
+            SORIDRAW_REMOTE_WORKER_DIR="$tmp" node patches/048-page-exit-publication-batch.mjs
+          )
+          cp "$tmp/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript and build
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          npm run build
+
+      - name: 081 regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-081-page-exit-batch.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-080-publication-state-engine.mjs
+          node scripts/verify-explore-deploy-preflight.mjs
+          echo '081_PAGE_EXIT_BATCH_VERIFY=PASS'
+
+      - name: Commit verified 081 product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git add \
+            src/lib/pageSyncCoordinator.ts \
+            src/services/exploreLikeService.ts \
+            src/services/explorePublicationService.ts \
+            src/lib/userDataEngine.ts \
+            src/lib/musicNoteDetailDraft.ts \
+            src/pages/FavoritesPage.tsx \
+            src/pages/SunoLibraryPage.tsx \
+            src/components/explore/ExploreShell.tsx \
+            src/App.tsx \
+            src/components/CacheDiagnosticsOverlay.tsx \
+            cloudflare/explore-worker/patches/048-page-exit-publication-batch.mjs \
+            cloudflare/explore-worker/release-patches.json \
+            cloudflare/explore-worker/canonical/preview-worker.js \
+            cloudflare/explore-worker/canonical/source-sha256.txt \
+            scripts/verify-031-music-note-detail-batched-draft.mjs \
+            scripts/verify-032-music-note-detail-save-status.mjs \
+            scripts/verify-explore-like-cost-optimization.mjs \
+            scripts/verify-081-page-exit-batch.mjs
+          git diff --cached --check
+          git commit -m 'feat(preview): prepare 081 page-exit batch sync'
+          git push origin HEAD:preview

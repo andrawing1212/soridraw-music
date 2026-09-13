@@ -1,4 +1,5 @@
 name: TEMP 081 Run Extracted Page Exit Batch
+# retry after verifier alignment
 
 on:
   push:

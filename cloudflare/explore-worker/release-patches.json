@@ -13,6 +13,7 @@
     "041-explore-like-reversal-order.mjs",
     "042-social-snapshot-write-compaction.mjs",
     "043-publication-targeted-r2-hotpath.mjs",
-    "044-local-first-cost-hotpath.mjs"
+    "044-local-first-cost-hotpath.mjs",
+    "045-publication-revision-metadata.mjs"
   ]
 }

@@ -136,11 +136,11 @@ jobs:
             assert.match(userCte, /JOIN public_profiles p/);
             assert.match(userCte, /LEFT JOIN likes/);
             const userProcessor = functionText(worker, 'async function processExploreLikeUserQueueWave075(');
-            assert.match(userProcessor, /env\\.DB\\.batch/);
+            assert.match(userProcessor, /env\.DB\.batch/);
             assert.match(userProcessor, /patchExploreFeedR2Like044/);
             assert.match(userProcessor, /patchExploreProfileR2Like044/);
             const publicationStateSync = functionText(worker, 'async function syncMusicNotePublicationR2AfterMutation(');
-            assert.match(publicationStateSync, /PROFILE_MEDIA\\.delete\\(musicNotePublicationR2Key\\(uid\\)\\)/);
+            assert.match(publicationStateSync, /PROFILE_MEDIA\.delete\(musicNotePublicationR2Key\(uid\)\)/);
             console.log('PASS generated Worker 044: D1-free intake + stale-device convergence + bounded R2 recovery + aggregate canonical validation');
           } else {
             assert.match(batchBody, /enqueueExploreLikeBatch035/);
@@ -149,11 +149,11 @@ jobs:
             assert.doesNotMatch(batchBody, /adjustExploreLikeCounterDelta/, '035 intake may not mutate canonical likes/track_stats per track');
             assert.doesNotMatch(batchBody, /patchExploreFeedR2LikeCount|patchExploreProfileR2Like020|patchExploreFirstViewLikeCount/);
             const processor = functionText(worker, 'async function processExploreLikeAggregateWave035(');
-            assert.match(processor, /SUM\\(delta\\)/);
+            assert.match(processor, /SUM\(delta\)/);
             assert.match(processor, /INSERT OR IGNORE INTO likes/);
             assert.match(processor, /DELETE FROM likes/);
             assert.match(processor, /DELETE FROM explore_like_batches_035/);
-            assert.equal((processor.match(/env\\.DB\\.batch/g) || []).length, 1, 'one transactional D1 batch per aggregate wave');
+            assert.equal((processor.match(/env\.DB\.batch/g) || []).length, 1, 'one transactional D1 batch per aggregate wave');
             console.log('PASS generated Worker: derived intake + deferred set-based transactional aggregation');
           }`;
           verifier = verifier.replace(generatedPattern, generatedReplacement);
@@ -171,6 +171,7 @@ jobs:
           rm -rf .tmp-worker
           mkdir -p .tmp-worker
           cp cloudflare/explore-worker/canonical/preview-worker.js .tmp-worker/worker.js
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.tmp-worker" node cloudflare/explore-worker/patches/043-publication-targeted-r2-hotpath.mjs
           SORIDRAW_REMOTE_WORKER_DIR="$PWD/.tmp-worker" node cloudflare/explore-worker/patches/044-local-first-cost-hotpath.mjs
           node --check .tmp-worker/worker.js
           node --check cloudflare/explore-worker/canonical/preview-entry.js

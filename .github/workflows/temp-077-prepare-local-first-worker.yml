@@ -41,65 +41,32 @@ jobs:
           const patchPath = 'cloudflare/explore-worker/patches/044-local-first-cost-hotpath.mjs';
           let patch = fs.readFileSync(patchPath, 'utf8');
 
-          const oldWrapper = `for (const name of [
-            'syncMusicNotePublicationR2AfterMutation',
-            'syncExploreFeedR2Publication043',
-            'syncExploreFeedR2Private043',
-            'syncExploreFeedR2OptionPatch043',
-            'patchExploreProfileR2Publication043',
-          ]) {
-            wrapAsyncFunction(name, (coreName) => \`async function \${name}(...args) {\\
-            try {\\
-              return await \${coreName}(...args);\\
-            } catch (error) {\\
-              console.warn('[SORIDRAW 044] derived publication patch deferred:', \${JSON.stringify(name)}, String(error?.message || error || 'unknown'));\\
-              return { ok: false, repairNeeded: true };\\
-            }\\
+          const publicationAnchor = `// 043 now updates the profile R2 object in place.`;
+          if (!patch.includes(publicationAnchor)) throw new Error('044 publication anchor missing');
+          const publicationRepair = `replaceFunction('syncMusicNotePublicationR2AfterMutation', \`async function syncMusicNotePublicationR2AfterMutation(...args) {
+            const [env, uid] = args;
+            try {
+              return await syncMusicNotePublicationR2AfterMutationCore044(...args);
+            } catch (error) {
+              console.warn('[SORIDRAW 044] derived publication patch deferred:', 'syncMusicNotePublicationR2AfterMutation', String(error?.message || error || 'unknown'));
+              try {
+                if (env?.PROFILE_MEDIA && uid) await env.PROFILE_MEDIA.delete(musicNotePublicationR2Key(uid));
+              } catch (repairError) {
+                console.warn('[SORIDRAW 044] publication R2 repair marker failed:', String(repairError?.message || repairError || 'unknown'));
+              }
+              return { ok: false, repairNeeded: true };
+            }
           }\`);
-          }`;
-          const newWrapper = `for (const name of [
-            'syncMusicNotePublicationR2AfterMutation',
-            'syncExploreFeedR2Publication043',
-            'syncExploreFeedR2Private043',
-            'syncExploreFeedR2OptionPatch043',
-            'patchExploreProfileR2Publication043',
-          ]) {
-            wrapAsyncFunction(name, (coreName) => name === 'syncMusicNotePublicationR2AfterMutation'
-              ? \`async function \${name}(...args) {\\
-            const [env, uid] = args;\\
-            try {\\
-              return await \${coreName}(...args);\\
-            } catch (error) {\\
-              console.warn('[SORIDRAW 044] derived publication patch deferred:', \${JSON.stringify(name)}, String(error?.message || error || 'unknown'));\\
-              try {\\
-                if (env?.PROFILE_MEDIA && uid) await env.PROFILE_MEDIA.delete(musicNotePublicationR2Key(uid));\\
-              } catch (repairError) {\\
-                console.warn('[SORIDRAW 044] publication R2 repair marker failed:', String(repairError?.message || repairError || 'unknown'));\\
-              }\\
-              return { ok: false, repairNeeded: true };\\
-            }\\
-          }\`
-              : \`async function \${name}(...args) {\\
-            try {\\
-              return await \${coreName}(...args);\\
-            } catch (error) {\\
-              console.warn('[SORIDRAW 044] derived publication patch deferred:', \${JSON.stringify(name)}, String(error?.message || error || 'unknown'));\\
-              return { ok: false, repairNeeded: true };\\
-            }\\
-          }\`);
-          }`;
-          if (!patch.includes(oldWrapper)) throw new Error('044 publication wrapper anchor drifted');
-          patch = patch.replace(oldWrapper, newWrapper);
 
-          const oldEffective = `  const effectiveMutations = mutations.filter((mutation) => (
-            mutation.baseLiked === null || mutation.baseLiked !== mutation.liked
-          ));`;
-          const newEffective = `  // Never discard an intent only because this device's baseLiked matches it.
+          `;
+          patch = patch.replace(publicationAnchor, publicationRepair + publicationAnchor);
+
+          const effectivePattern = /  const effectiveMutations = mutations\.filter\(\(mutation\) => \(\s*mutation\.baseLiked === null \|\| mutation\.baseLiked !== mutation\.liked\s*\)\);/;
+          if (!effectivePattern.test(patch)) throw new Error('044 effective mutation anchor missing');
+          patch = patch.replace(effectivePattern, `  // Do not discard an intent because this device's baseLiked happens to match it.
           // Another device may already have changed canonical state. The scheduled aggregate
-          // performs the authoritative idempotent comparison against canonical likes.
-          const effectiveMutations = mutations;`;
-          if (!patch.includes(oldEffective)) throw new Error('044 effective mutation anchor drifted');
-          patch = patch.replace(oldEffective, newEffective);
+          // is the authoritative idempotent comparison against canonical likes.
+          const effectiveMutations = mutations;`);
 
           const intakeAnchor = `// One actual like batch must not re-read tracks/profile/stats/likes merely to echo`;
           if (!patch.includes(intakeAnchor)) throw new Error('044 intake anchor missing');
@@ -128,11 +95,9 @@ jobs:
           `;
           patch = patch.replace(intakeAnchor, coldR2Fix + intakeAnchor);
 
-          const finalAnchor = `if (!source.includes('patchExploreFeedR2Like044') || !source.includes('patchExploreProfileR2Like044')) {
-            throw new Error('[044] aggregate targeted R2 like patch missing');
-          }`;
-          const finalNext = `${finalAnchor}
-          if (!likeHandler.includes('const effectiveMutations = mutations;')) {
+          const writeAnchor = `writeFileSync(workerPath, source, 'utf8');`;
+          if (!patch.includes(writeAnchor)) throw new Error('044 write anchor missing');
+          const extraAssertions = `if (!likeHandler.includes('const effectiveMutations = mutations;')) {
             throw new Error('[044] stale-device intents can still be discarded before canonical aggregate');
           }
           const socialR2Sync = functionRange('syncExploreLikeR2AfterBatch034').text;
@@ -142,23 +107,42 @@ jobs:
           const publicationStateSync = functionRange('syncMusicNotePublicationR2AfterMutation').text;
           if (!publicationStateSync.includes('PROFILE_MEDIA.delete(musicNotePublicationR2Key(uid))')) {
             throw new Error('[044] failed publication-state patch cannot force bounded R2 recovery');
-          }`;
-          if (!patch.includes(finalAnchor)) throw new Error('044 final assertion anchor missing');
-          patch = patch.replace(finalAnchor, finalNext);
+          }
+
+          `;
+          patch = patch.replace(writeAnchor, extraAssertions + writeAnchor);
           fs.writeFileSync(patchPath, patch);
 
           const verifierPath = 'scripts/verify-explore-like-cost-optimization.mjs';
           let verifier = fs.readFileSync(verifierPath, 'utf8');
-          const manifestAnchor = `assert.deepEqual(
-            manifest.patches.filter((patch) => requiredReleasePatches.includes(patch)),
-            requiredReleasePatches,
-            'required like release patches must remain present and ordered'
-          );`;
-          if (!verifier.includes(manifestAnchor)) throw new Error('verifier manifest anchor drifted');
-          verifier = verifier.replace(manifestAnchor, `${manifestAnchor}
-          assert.equal(manifest.patches.at(-1), '044-local-first-cost-hotpath.mjs', '044 local-first hotpath must be the final Worker release patch');`);
+          const manifestPattern = /(assert\.deepEqual\([\s\S]*?'required like release patches must remain present and ordered'\s*\);)/;
+          if (!manifestPattern.test(verifier)) throw new Error('verifier manifest anchor missing');
+          verifier = verifier.replace(manifestPattern, `$1\nassert.equal(manifest.patches.at(-1), '044-local-first-cost-hotpath.mjs', '044 local-first hotpath must be the final Worker release patch');`);
 
-          const oldGenerated = `  const batchBody = functionText(worker, 'async function handleLikeBatch034(');
+          const generatedPattern = /  const batchBody = functionText\(worker, 'async function handleLikeBatch034\('\);[\s\S]*?  console\.log\('PASS generated Worker: derived intake \+ deferred set-based transactional aggregation'\);/;
+          if (!generatedPattern.test(verifier)) throw new Error('verifier generated Worker block missing');
+          const generatedReplacement = `  const batchBody = functionText(worker, 'async function handleLikeBatch034(');
+          if (worker.includes('SORIDRAW_LOCAL_FIRST_COST_HOTPATH_044_20260913')) {
+            assert.match(batchBody, /enqueueExploreLikeUserQueue075/);
+            assert.match(batchBody, /syncExploreLikeR2AfterBatch034/);
+            assert.match(batchBody, /const effectiveMutations = mutations;/);
+            assert.doesNotMatch(batchBody, /readExploreLikeBatchStates035|canonical_liked|getPublicTrackForWrite|adjustExploreLikeCounterDelta/,
+              '044 intake must not re-read canonical/derived track state or mutate canonical likes immediately');
+            const personalR2 = functionText(worker, 'async function syncExploreLikeR2AfterBatch034(');
+            assert.ok((personalR2.match(/readExploreLikeR2Bundle\\(env, uid\\)/g) || []).length >= 2,
+              'cold personal-like R2 recovery must re-read and apply current intent');
+            const userCte = functionText(worker, 'function exploreLikeUserAggregateCte075(');
+            assert.match(userCte, /JOIN tracks t/);
+            assert.match(userCte, /JOIN public_profiles p/);
+            assert.match(userCte, /LEFT JOIN likes/);
+            const userProcessor = functionText(worker, 'async function processExploreLikeUserQueueWave075(');
+            assert.match(userProcessor, /env\\.DB\\.batch/);
+            assert.match(userProcessor, /patchExploreFeedR2Like044/);
+            assert.match(userProcessor, /patchExploreProfileR2Like044/);
+            const publicationStateSync = functionText(worker, 'async function syncMusicNotePublicationR2AfterMutation(');
+            assert.match(publicationStateSync, /PROFILE_MEDIA\\.delete\\(musicNotePublicationR2Key\\(uid\\)\\)/);
+            console.log('PASS generated Worker 044: D1-free intake + stale-device convergence + bounded R2 recovery + aggregate canonical validation');
+          } else {
             assert.match(batchBody, /enqueueExploreLikeBatch035/);
             assert.match(batchBody, /readExploreLikeBatchStates035/);
             assert.match(batchBody, /syncExploreLikeR2AfterBatch034/);
@@ -170,44 +154,9 @@ jobs:
             assert.match(processor, /DELETE FROM likes/);
             assert.match(processor, /DELETE FROM explore_like_batches_035/);
             assert.equal((processor.match(/env\\.DB\\.batch/g) || []).length, 1, 'one transactional D1 batch per aggregate wave');
-            console.log('PASS generated Worker: derived intake + deferred set-based transactional aggregation');`;
-          const newGenerated = `  const batchBody = functionText(worker, 'async function handleLikeBatch034(');
-            if (worker.includes('SORIDRAW_LOCAL_FIRST_COST_HOTPATH_044_20260913')) {
-              assert.match(batchBody, /enqueueExploreLikeUserQueue075/);
-              assert.match(batchBody, /syncExploreLikeR2AfterBatch034/);
-              assert.match(batchBody, /const effectiveMutations = mutations;/);
-              assert.doesNotMatch(batchBody, /readExploreLikeBatchStates035|canonical_liked|getPublicTrackForWrite|adjustExploreLikeCounterDelta/,
-                '044 intake must not re-read canonical/derived track state or mutate canonical likes immediately');
-              const personalR2 = functionText(worker, 'async function syncExploreLikeR2AfterBatch034(');
-              assert.ok((personalR2.match(/readExploreLikeR2Bundle\\(env, uid\\)/g) || []).length >= 2,
-                'cold personal-like R2 recovery must re-read and apply the current intent');
-              const userCte = functionText(worker, 'function exploreLikeUserAggregateCte075(');
-              assert.match(userCte, /JOIN tracks t/);
-              assert.match(userCte, /JOIN public_profiles p/);
-              assert.match(userCte, /LEFT JOIN likes/);
-              const userProcessor = functionText(worker, 'async function processExploreLikeUserQueueWave075(');
-              assert.match(userProcessor, /env\\.DB\\.batch/);
-              assert.match(userProcessor, /patchExploreFeedR2Like044/);
-              assert.match(userProcessor, /patchExploreProfileR2Like044/);
-              const publicationStateSync = functionText(worker, 'async function syncMusicNotePublicationR2AfterMutation(');
-              assert.match(publicationStateSync, /PROFILE_MEDIA\\.delete\\(musicNotePublicationR2Key\\(uid\\)\\)/);
-              console.log('PASS generated Worker 044: D1-free intake + stale-device convergence + bounded R2 recovery + aggregate canonical validation');
-            } else {
-              assert.match(batchBody, /enqueueExploreLikeBatch035/);
-              assert.match(batchBody, /readExploreLikeBatchStates035/);
-              assert.match(batchBody, /syncExploreLikeR2AfterBatch034/);
-              assert.doesNotMatch(batchBody, /adjustExploreLikeCounterDelta/, '035 intake may not mutate canonical likes/track_stats per track');
-              assert.doesNotMatch(batchBody, /patchExploreFeedR2LikeCount|patchExploreProfileR2Like020|patchExploreFirstViewLikeCount/);
-              const processor = functionText(worker, 'async function processExploreLikeAggregateWave035(');
-              assert.match(processor, /SUM\\(delta\\)/);
-              assert.match(processor, /INSERT OR IGNORE INTO likes/);
-              assert.match(processor, /DELETE FROM likes/);
-              assert.match(processor, /DELETE FROM explore_like_batches_035/);
-              assert.equal((processor.match(/env\\.DB\\.batch/g) || []).length, 1, 'one transactional D1 batch per aggregate wave');
-              console.log('PASS generated Worker: derived intake + deferred set-based transactional aggregation');
-            }`;
-          if (!verifier.includes(oldGenerated)) throw new Error('verifier generated-worker anchor drifted');
-          verifier = verifier.replace(oldGenerated, newGenerated);
+            console.log('PASS generated Worker: derived intake + deferred set-based transactional aggregation');
+          }`;
+          verifier = verifier.replace(generatedPattern, generatedReplacement);
           verifier = verifier.replace(
             `console.log('PASS Explore like 036 verifier; live D1 rows remain PREVIEW-deployment measurement only');`,
             `console.log('PASS Explore like 044 verifier; live D1 rows remain PREVIEW-deployment measurement only');`,

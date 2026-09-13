@@ -18,23 +18,29 @@ jobs:
         with:
           ref: preview
           fetch-depth: 1
-      - name: Print exact route and batching anchors
+      - name: Print exact integration anchors
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== APP ROUTING ==='
-          grep -nE "BrowserRouter|HashRouter|Routes|Route|useLocation|location\.pathname|navigate\(|setCurrent|currentPage|activePage|pageKey" src/App.tsx | head -n 180 || true
-          echo '=== FAVORITES PUBLICATION ==='
-          grep -nE "publishMusicNoteToExplore|setExploreTrackVisibility|setExploreTrackPublicationOptions|registered|publicationBusy" src/pages/FavoritesPage.tsx | head -n 200 || true
-          echo '=== LIKE OUTBOX ==='
-          grep -nE "LIKE_OUTBOX|scheduleLikeOutboxFlush|flushLikeOutbox|setTimeout" src/services/exploreLikeService.ts | head -n 200 || true
-          echo '=== CATALOG BATCH ==='
-          grep -nE "catalogPublishTimers|catalogPendingPublishes|scheduleCatalogSnapshotPublishIfDirty|setTimeout|flush" src/lib/userDataEngine.ts | head -n 220 || true
-          echo '=== FIRESTORE DIRTY / SAVE ==='
-          grep -nE "60_000|60000|setTimeout|debounce|flush|dirty|schedule.*save|pending.*save|pagehide" src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx src/hooks/useFavoritesStore.ts src/services/playlistService.ts 2>/dev/null | head -n 280 || true
-          echo '=== WORKER ROUTES ==='
-          grep -nE "likes/batch|publications|visibility|handleLikeBatch|handleVisibility|pathname ===|url\.pathname" cloudflare/explore-worker/canonical/preview-worker.js | head -n 260 || true
-          echo '=== WORKER LIKE FUNCTIONS ==='
-          grep -nE "async function handleLikeBatch|function handleLikeBatch|readExploreLike|enqueue|aggregate" cloudflare/explore-worker/canonical/preview-worker.js | head -n 180 || true
-          echo '=== WORKER PUBLICATION FUNCTIONS ==='
-          grep -nE "async function handleMusicNote|async function handleVisibility|function handleMusicNote|function handleVisibility|syncMusicNotePublicationR2AfterMutation" cloudflare/explore-worker/canonical/preview-worker.js | head -n 220 || true
+          echo '=== APP MAIN 4780-4860 ==='
+          sed -n '4780,4860p' src/App.tsx
+          echo '=== APP ROUTE WRAPPER 2860-2940 ==='
+          sed -n '2860,2940p' src/App.tsx
+          echo '=== APP BOTTOM 18970-19030 ==='
+          sed -n '18970,19030p' src/App.tsx
+          echo '=== APP FINAL 19340-19430 ==='
+          sed -n '19340,19430p' src/App.tsx
+          echo '=== FAVORITES PUBLICATION 5450-5550 ==='
+          sed -n '5450,5550p' src/pages/FavoritesPage.tsx
+          echo '=== FAVORITES IMPORTS 1-115 ==='
+          sed -n '1,115p' src/pages/FavoritesPage.tsx
+          echo '=== LIKE IMPORTS 1-80 ==='
+          sed -n '1,80p' src/services/exploreLikeService.ts
+          echo '=== USER DATA IMPORTS 1-45 ==='
+          sed -n '1,45p' src/lib/userDataEngine.ts
+          echo '=== WORKER LIKE 21380-21470 ==='
+          sed -n '21380,21470p' cloudflare/explore-worker/canonical/preview-worker.js
+          echo '=== WORKER VISIBILITY 19990-20145 ==='
+          sed -n '19990,20145p' cloudflare/explore-worker/canonical/preview-worker.js
+          echo '=== WORKER DISPATCH 22190-22370 ==='
+          sed -n '22190,22370p' cloudflare/explore-worker/canonical/preview-worker.js

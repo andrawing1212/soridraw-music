@@ -53,7 +53,7 @@ assert.match(service, /EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY = 'explore-like-acco
 assert.match(service, /rememberAccountSyncResults\(uid, signal\.results\)/);
 assert.match(service, /replayAccountSyncPatches\(user\.uid, normalized\)/);
 const queueFunction = functionText(service, 'export const setExploreTrackLike = async');
-assert.match(queueFunction, /schedulePendingLikes\(user\)/);
+assert.doesNotMatch(queueFunction, /schedulePendingLikes\(user\)/, '081 UI queue must remain local-only');
 assert.doesNotMatch(queueFunction, /requestExploreLike\(/, 'UI queue function must not call the server immediately');
 const flushFunction = functionText(service, 'const flushPendingLikes = async');
 assert.match(flushFunction, /'\/v1\/me\/likes\/batch'/);
@@ -63,7 +63,7 @@ assert.match(flushFunction, /accountSyncResults\.push\(visibleResult\)/);
 assert.match(flushFunction, /publishExploreLikeAccountSyncSignal\(user, batchEntries, accountSyncResults\)/);
 assert.doesNotMatch(service, /const EXPLORE_LIKE_IDLE_MS = 5_000;/, 'old per-track 5s flush must stay retired');
 assert.match(page, /setExploreTrackLike\(user, track\.id, !currentLiked, track\.likeCount, track\.ownerUid\)/);
-console.log('PASS client: one-minute PREVIEW outbox + same-account visible count replay survives page/background gaps');
+console.log('PASS client: durable like outbox stays local until 081 page-exit sync; same-account visible count replay preserved');
 
 assert.ok(Array.isArray(manifest.patches));
 const requiredReleasePatches = [
@@ -77,9 +77,10 @@ assert.deepEqual(
   requiredReleasePatches,
   'required like release patches must remain present and ordered'
 );
-assert.equal(manifest.patches.at(-3), '045-publication-revision-metadata.mjs', '045 publication revision metadata must remain directly before 046');
-assert.equal(manifest.patches.at(-2), '046-publication-write-compaction.mjs', '046 publication write compaction must remain directly before 047');
-assert.equal(manifest.patches.at(-1), '047-publication-state-transition.mjs', '047 publication state transition must be the final Worker release patch');
+assert.equal(manifest.patches.at(-4), '045-publication-revision-metadata.mjs', '045 must remain before 046/047/048');
+assert.equal(manifest.patches.at(-3), '046-publication-write-compaction.mjs', '046 must remain before 047/048');
+assert.equal(manifest.patches.at(-2), '047-publication-state-transition.mjs', '047 must remain before 048');
+assert.equal(manifest.patches.at(-1), '048-page-exit-publication-batch.mjs', '048 page-exit publication batch must be final');
 assert.equal((migration033.match(/UPDATE explore_derived_state\s+SET seq = seq \+ 1/g) || []).length, 1);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_batches_035/);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_processor_035/);

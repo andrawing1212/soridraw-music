@@ -24,6 +24,7 @@ import { USER_PROFILE_CACHE_EVENT, readUserProfileCache } from '../lib/userProfi
 import { hasAdminPermission } from '../constants/adminPermissions';
 import { favoritesStore } from '../hooks/useFavoritesStore';
 import { CATALOG_RUNTIME_DIAGNOSTICS_UPDATE_EVENT, readCatalogRuntimeDiagnostic, resetCatalogRuntimeDiagnostics, type CatalogRuntimeDiagnosticKind, type CatalogRuntimeDiagnosticState } from '../lib/catalogRuntimeDiagnostics';
+import { PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, readPageSyncDiagnostics, type PageSyncDiagnosticState } from '../lib/pageSyncCoordinator';
 
 const SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000 = true;
 const SORIDRAW_CACHE_LIVE_CLOUDFLARE_MOBILE_DOCK_977 = true;
@@ -130,6 +131,7 @@ const getFreeCapacityTone = (daily: number | null) => {
 
 const getCloudflarePathLabel = (path: string) => {
   if (path === '/v1/publications') return '최초 공개 등록';
+  if (path === '/v1/me/music-note-publications/batch') return '공개상태 묶음';
   if (path === '/v1/feed') return '피드';
   if (path === '/v1/feed-revision') return '피드 변경 확인';
   if (path === '/v1/me/likes') return '좋아요 상태';
@@ -198,6 +200,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
   const [docked, setDocked] = useState(() => readInitialDocked());
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= PANEL_MOBILE_BREAKPOINT);
   const [cloudflare, setCloudflare] = useState<CloudflareDiagnosticState>(() => readCloudflareDiagnostics());
+  const [pageSync, setPageSync] = useState<PageSyncDiagnosticState>(() => readPageSyncDiagnostics());
   const [catalogRuntime, setCatalogRuntime] = useState<Record<CatalogRuntimeDiagnosticKind, CatalogRuntimeDiagnosticState>>(() => ({ musicNote: readCatalogRuntimeDiagnostic('musicNote'), library: readCatalogRuntimeDiagnostic('library') }));
   const [favoriteStoreCount, setFavoriteStoreCount] = useState(() => favoritesStore.getFavorites().length);
   const [serverUsage, setServerUsage] = useState<FirestoreServerUsage | null>(null);
@@ -273,6 +276,11 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       if (!detail) return;
       setCloudflare(detail);
     };
+    const onPageSyncUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<PageSyncDiagnosticState>).detail;
+      if (!detail) return;
+      setPageSync(detail);
+    };
     const onProfileCache = () => {
       setAccessRevision((value) => value + 1);
       syncEnabled();
@@ -285,10 +293,12 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
     setStates(readAllStates());
     setActual(readFirestoreActual());
     setCloudflare(readCloudflareDiagnostics());
+    setPageSync(readPageSyncDiagnostics());
     window.addEventListener(CACHE_DIAGNOSTICS_TOGGLE_EVENT, onToggle as EventListener);
     window.addEventListener(CACHE_DIAGNOSTICS_UPDATE_EVENT, onUpdate as EventListener);
     window.addEventListener(FIRESTORE_ACTUAL_UPDATE_EVENT, onActualUpdate as EventListener);
     window.addEventListener(CLOUDFLARE_DIAGNOSTICS_UPDATE_EVENT, onCloudflareUpdate as EventListener);
+    window.addEventListener(PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, onPageSyncUpdate as EventListener);
     window.addEventListener(USER_PROFILE_CACHE_EVENT, onProfileCache as EventListener);
     window.addEventListener('storage', onStorage);
     return () => {
@@ -296,6 +306,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       window.removeEventListener(CACHE_DIAGNOSTICS_UPDATE_EVENT, onUpdate as EventListener);
       window.removeEventListener(FIRESTORE_ACTUAL_UPDATE_EVENT, onActualUpdate as EventListener);
       window.removeEventListener(CLOUDFLARE_DIAGNOSTICS_UPDATE_EVENT, onCloudflareUpdate as EventListener);
+      window.removeEventListener(PAGE_SYNC_DIAGNOSTICS_UPDATE_EVENT, onPageSyncUpdate as EventListener);
       window.removeEventListener(USER_PROFILE_CACHE_EVENT, onProfileCache as EventListener);
       window.removeEventListener('storage', onStorage);
     };
@@ -506,6 +517,16 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
                 현재 진단 누적 · D1 읽기 무료한도의 {formatQuotaPercent(cloudflare.d1RowsRead, D1_FREE_DAILY_READS)} · 쓰기 {formatQuotaPercent(cloudflare.d1RowsWritten, D1_FREE_DAILY_WRITES)}
               </div>
             ) : null}
+            <div className="mt-1 rounded-lg bg-white/[0.035] px-2 py-1.5 text-[10px] font-bold text-white/70">
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[#9fddb9]">PAGE SYNC · {pageSync.status.toUpperCase()}</span>
+      <span>변경 {formatNumber(pageSync.pendingChanges)} · Sync {formatNumber(pageSync.syncCount)}</span>
+    </div>
+    <div className="mt-0.5 flex items-center justify-between gap-2 text-white/55">
+      <span>D1 R {formatNumber(pageSync.d1RowsRead)} · W {formatNumber(pageSync.d1RowsWritten)}</span>
+      <span>Firestore R {formatNumber(pageSync.firestoreReads)} · W {formatNumber(pageSync.firestoreWrites)}</span>
+    </div>
+  </div>
             {cloudflarePathEntries.length > 0 ? (
               <div className="mt-1 space-y-1 rounded-lg bg-[#c6b5ff]/[0.055] px-2 py-1.5">
                 <div className="mb-0.5 text-[10px] font-black tracking-[0.04em] text-[#c6b5ff]/70">CLOUDFLARE 발생처 · 요청당 평균 무료 가능 횟수</div>
@@ -644,6 +665,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
                 setStates(readAllStates());
                 setActual(readFirestoreActual());
                 setCloudflare(readCloudflareDiagnostics());
+    setPageSync(readPageSyncDiagnostics());
               }}
               className="border-0 bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-black text-white/60 outline-none transition hover:bg-white/[0.10] hover:text-white/80"
             >

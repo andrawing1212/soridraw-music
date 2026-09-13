@@ -1,6 +1,6 @@
 import { EXPLORE_API_BASE, EXPLORE_ENVIRONMENT } from '../config/exploreEnvironment';
 import type { User } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc } from '../lib/firestoreMeasured';
 import { db, getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
@@ -22,6 +22,7 @@ import {
 // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
 // SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912
 // SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_075_20260913
+// SORIDRAW_PAGE_EXIT_LIKE_OUTBOX_081_20260914
 // SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
@@ -350,6 +351,11 @@ const persistLikeOutbox = (uid: string, outbox: ExploreLikeOutbox) => {
   });
 };
 
+
+export const getPendingExploreLikeMutationCount = (uid: string): number => Object.values(readLikeOutbox(uid))
+  .filter((pending) => pending.desiredLiked !== pending.baseLiked)
+  .length;
+
 const dispatchLikeSync = (detail: ExploreLikeSyncEventDetail) => {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent<ExploreLikeSyncEventDetail>(EXPLORE_LIKE_SYNC_EVENT, { detail }));
@@ -661,7 +667,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
       EXPLORE_LIKE_RETRY_MAX_MS,
       EXPLORE_LIKE_RETRY_BASE_MS * (2 ** Math.max(0, maxRetryCount - 1)),
     );
-    schedulePendingLikes(user, retryDelay, true);
+
     if (firstPending) {
       dispatchLikeSyncError({
         uid,
@@ -677,13 +683,22 @@ const flushPendingLikes = async (user: User): Promise<void> => {
   }
 };
 
+
+export const flushPendingExploreLikesForPageExit = async (user: User): Promise<void> => {
+  clearPendingLikeTimer(user.uid);
+  await flushPendingLikes(user);
+  if (getPendingExploreLikeMutationCount(user.uid) > 0) {
+    throw new Error('좋아요 변경분을 서버에 반영하지 못했습니다. 다음 페이지 이동 또는 재접속에서 다시 시도합니다.');
+  }
+};
+
 const resumePendingLikes = (user: User) => {
   const outbox = readLikeOutbox(user.uid);
   if (!Object.keys(outbox).length) {
     clearPendingLikeTimer(user.uid);
     return;
   }
-  schedulePendingLikes(user);
+
 };
 
 export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): Promise<string[]> => {
@@ -716,7 +731,7 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   }
 
   const outbox = readLikeOutbox(user.uid);
-  resumePendingLikes(user);
+
   replayAccountSyncPatches(user.uid, normalized);
   return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? cache.get(trackId) === true);
 };
@@ -787,6 +802,6 @@ export const setExploreTrackLike = async (
     retryCount: 0,
   };
   persistLikeOutbox(user.uid, outbox);
-  schedulePendingLikes(user);
+
   return { trackId: normalizedTrackId, liked, likeCount: optimisticLikeCount };
 };

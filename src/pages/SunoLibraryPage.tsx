@@ -26,6 +26,7 @@ import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
 import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
 import { subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
 import { schedulePreviewAdaptiveListIndexPublishIfDirty } from '../lib/adaptiveListIndexV2';
+import { flushSoridrawPageSync } from '../lib/pageSyncCoordinator';
 
 const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 
@@ -699,6 +700,10 @@ function AnimatedTrackPlayButton({
 // SORIDRAW_LIBRARY_PLAYBACK_DELETE_CONSISTENCY_954
 // SORIDRAW_LIBRARY_PLAYED_WRITE_DEDUPE_973
 export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = {}) {
+  useEffect(() => () => {
+    void flushSoridrawPageSync(auth.currentUser, 'library-exit')
+      .catch((error) => console.warn('[081] Library page sync pending:', error));
+  }, []);
   const navigate = useNavigate();
   const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
   const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');

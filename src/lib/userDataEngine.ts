@@ -721,6 +721,83 @@ const publishRemoteCatalogDelta = async (
   }
 };
 
+const flushCatalogPendingPublish = async (key: string): Promise<void> => {
+  const pending = catalogPendingPublishes.get(key);
+  if (!pending) return;
+  const { kind, uid, sourceItems, options } = pending;
+  const currentDirtyRevision = readAdaptiveListIndexDirtyRevision(kind);
+  if (currentDirtyRevision <= 0) {
+    catalogPendingPublishes.delete(key);
+    return;
+  }
+
+  const previous = await readCatalogSnapshotFromLocalCache(kind, uid);
+  const rebuild = async (minimumRevision: number) => {
+    const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(1, minimumRevision));
+    if (!rebuilt) throw new Error(`catalog ${kind} rebuild failed`);
+    clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
+    catalogPendingPublishes.delete(key);
+  };
+
+  // Never manufacture a complete Catalog from a partial compatibility list.
+  if (!previous) {
+    await rebuild(Math.max(Date.now(), currentDirtyRevision));
+    return;
+  }
+
+  const projectedCount = normalizeCatalogItems(kind, sourceItems).length;
+  const explicitComplete = options.complete === true;
+  const explicitDeletedIds = Array.from(new Set(
+    (Array.isArray(options.deletedIds) ? options.deletedIds : [])
+      .map((id) => String(id || '').trim())
+      .filter(Boolean)
+  ));
+  const looksCompleteAgainstPrevious = projectedCount >= Math.max(0, previous.itemCount - 2);
+  const unexplainedMissingFromCompleteSource = explicitComplete
+    && projectedCount + explicitDeletedIds.length < previous.itemCount;
+  if ((!explicitComplete && !looksCompleteAgainstPrevious) || unexplainedMissingFromCompleteSource) {
+    await rebuild(Math.max(Date.now(), previous.revision + 1));
+    return;
+  }
+
+  const built = buildCatalogDelta(
+    kind,
+    previous,
+    sourceItems,
+    currentDirtyRevision,
+    explicitDeletedIds,
+  );
+  if (!built) {
+    await rebuild(Math.max(Date.now(), previous.revision + 1));
+    return;
+  }
+
+  if (built.delta.upserts.length === 0 && built.delta.deletedIds.length === 0) {
+    clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
+    catalogPendingPublishes.delete(key);
+    return;
+  }
+
+  const published = await publishRemoteCatalogDelta(uid, built.delta);
+  if (!published) throw new Error(`catalog ${kind} delta publish failed`);
+  if (published.conflict) {
+    await rebuild(Math.max(Date.now(), previous.revision + 1));
+    return;
+  }
+  if (published.itemCount !== built.nextSnapshot.itemCount) {
+    await rebuild(Math.max(1, published.revision));
+    return;
+  }
+
+  const confirmedSnapshot: SoridrawCatalogSnapshot = {
+    ...built.nextSnapshot,
+    revision: published.revision,
+  };
+  await writeCatalogSnapshotToLocalCache(kind, uid, confirmedSnapshot);
+  clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
+  catalogPendingPublishes.delete(key);
+};
+
 export const scheduleCatalogSnapshotPublishIfDirty = (
   kind: SoridrawCatalogKind,
   uid: string,
@@ -730,81 +807,27 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
   if (!uid || !Array.isArray(sourceItems) || !isPreviewCatalogEnabled()) return;
   const dirtyRevision = readAdaptiveListIndexDirtyRevision(kind);
   if (dirtyRevision <= 0) return;
-
   const key = catalogKey(kind, uid);
-  catalogPendingPublishes.set(key, { kind, uid, sourceItems: [...sourceItems], options: { ...options } });
   const existingTimer = catalogPublishTimers.get(key);
   if (existingTimer) clearTimeout(existingTimer);
+  catalogPublishTimers.delete(key);
+  catalogPendingPublishes.set(key, {
+    kind,
+    uid,
+    sourceItems: [...sourceItems],
+    options: { ...options },
+  });
+};
 
-  catalogPublishTimers.set(key, setTimeout(() => {
-    catalogPublishTimers.delete(key);
-    const pending = catalogPendingPublishes.get(key);
-    catalogPendingPublishes.delete(key);
-    if (!pending) return;
+export const getPendingCatalogPublishCount = (uid: string): number => [...catalogPendingPublishes.values()]
+  .filter((pending) => pending.uid === uid && readAdaptiveListIndexDirtyRevision(pending.kind) > 0)
+  .length;
 
-    void (async () => {
-      const currentDirtyRevision = readAdaptiveListIndexDirtyRevision(kind);
-      if (currentDirtyRevision <= 0) return;
-      const previous = await readCatalogSnapshotFromLocalCache(kind, uid);
-
-      // No proven full local catalog means this device must never manufacture a
-      // "complete" object from a 10/20-row compatibility page. Force the Worker
-      // to materialize the canonical catalog server-side once instead.
-      if (!previous) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(Date.now(), previous?.revision ? previous.revision + 1 : 1));
-        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-        return;
-      }
-
-      const projectedCount = normalizeCatalogItems(kind, pending.sourceItems).length;
-      const explicitComplete = pending.options.complete === true;
-      const explicitDeletedIds = Array.from(new Set(
-        (Array.isArray(pending.options.deletedIds) ? pending.options.deletedIds : [])
-          .map((id) => String(id || '').trim())
-          .filter(Boolean)
-      ));
-      const looksCompleteAgainstPrevious = projectedCount >= Math.max(0, previous.itemCount - 2);
-      const unexplainedMissingFromCompleteSource = explicitComplete
-        && projectedCount + explicitDeletedIds.length < previous.itemCount;
-      if ((!explicitComplete && !looksCompleteAgainstPrevious) || unexplainedMissingFromCompleteSource) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(Date.now(), previous?.revision ? previous.revision + 1 : 1));
-        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-        return;
-      }
-
-      const built = buildCatalogDelta(
-        kind, previous, pending.sourceItems, currentDirtyRevision, explicitDeletedIds,
-      );
-      if (!built) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(Date.now(), previous?.revision ? previous.revision + 1 : 1));
-        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-        return;
-      }
-
-      if (built.delta.upserts.length === 0 && built.delta.deletedIds.length === 0) {
-        clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-        return;
-      }
-
-      const published = await publishRemoteCatalogDelta(uid, built.delta);
-      if (!published || published.conflict) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(Date.now(), previous.revision + 1));
-        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-        return;
-      }
-      if (published.itemCount !== built.nextSnapshot.itemCount) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, published.revision);
-        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-        return;
-      }
-      const confirmedSnapshot: SoridrawCatalogSnapshot = {
-        ...built.nextSnapshot,
-        revision: published.revision,
-      };
-      await writeCatalogSnapshotToLocalCache(kind, uid, confirmedSnapshot);
-      clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-    })();
-  }, 1200));
+export const flushPendingCatalogPublishes = async (uid: string): Promise<void> => {
+  const keys = [...catalogPendingPublishes.entries()]
+    .filter(([, pending]) => pending.uid === uid)
+    .map(([key]) => key);
+  for (const key of keys) await flushCatalogPendingPublish(key);
 };
 
 export const getCatalogRenderBatchSize = (kind: SoridrawCatalogKind): number => (

@@ -16,12 +16,13 @@ const block = (start, end) => {
   return page.slice(from, to);
 };
 
-assert(page.includes('const MUSIC_NOTE_DETAIL_IDLE_FLUSH_MS = 60_000;'), '60s idle flush missing');
+assert(!page.includes("flushFavoriteDetailPendingPatch('idle')"), 'idle server flush must stay disabled in 081');
 assert(page.includes('favoriteDetailPendingPatchRef'), 'pending patch ref missing');
 assert(page.includes('favoriteDetailServerBaselineRef'), 'server baseline ref missing');
 assert(page.includes('pruneFavoriteDetailPatchAgainstBaseline'), 'net-change pruning missing');
-assert(page.includes("await flushFavoriteDetailPendingPatch('detail-close');"), 'detail exit flush missing');
+assert(!page.includes("flushFavoriteDetailPendingPatch('detail-close')"), 'detail modal close must stay local-only');
 assert(page.includes("flushFavoriteDetailPendingPatch('page-exit')"), 'page exit flush missing');
+assert(page.includes('registerPageSyncHandler'), 'page sync coordinator registration missing');
 assert(page.includes("prompt: catalogSummary ? prev.prompt"), 'catalog summary prompt preservation missing');
 assert(page.includes('favoriteEditorReadySongIdRef.current === selectedSongId'), 'same-song editor reinit guard missing');
 assert(page.includes('void openFavoriteDetail(song);'), 'Suno URL detail path bypasses hydration');
@@ -43,7 +44,7 @@ assert(sunoSave.includes('else await updateFavorite(song.id, updates);'), 'non-d
 const sunoRemove = block('  const removeFavoriteSunoShareUrl = async', '\n\n  const COLOR_SYNC_USAGE_KEY');
 assert(sunoRemove.includes("if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);"), 'detail Suno URL remove does not use batch queue');
 
-const queue = block('  const queueFavoriteDetailPatch = (songId: string', '\n\n  useEffect(() => {\n    const flushOnPageExit');
+const queue = block('  const queueFavoriteDetailPatch = (songId: string', '\n\n  const flushAllMusicNoteLocalChangesForPageExit');
 assert(queue.includes('writeMusicNoteDetailDraft(user.uid'), 'pending changes are not persisted to IndexedDB');
 assert(queue.includes('Object.keys(updates).length === 0'), 'net-zero edits do not collapse to zero writes');
 assert(!queue.includes('patchMusicNoteDetailCache({'), 'pre-flush detail cache is mutated asynchronously');

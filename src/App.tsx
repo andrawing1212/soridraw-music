@@ -1,4 +1,5 @@
 import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
+import { recoverSoridrawPendingSync } from './lib/pageSyncCoordinator';
 import './data/v2PreviewShadowMirror';
 import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
 
@@ -4820,6 +4821,16 @@ function App() {
   };
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const unsubscribePendingSync = auth.onAuthStateChanged((currentUser) => {
+      if (!currentUser?.uid) return;
+      void recoverSoridrawPendingSync(currentUser)
+        .catch((error) => console.warn('[081] startup pending sync retained locally:', error));
+    });
+    return () => unsubscribePendingSync();
+  }, []);
+
   const studioTestParams = new URLSearchParams(location.search);
   const splitEngineParam = studioTestParams.get('splitEngine');
   const requestedStudioSplitEngineOverride: StudioSplitEngine | null = splitEngineParam === 'lite' || splitEngineParam === 'legacy'

@@ -5,6 +5,7 @@ import { auth } from '../../firebase';
 import StudioPageFrame from '../studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from '../studio/StudioLeftRail';
 import ExplorePage from '../../pages/ExplorePage';
+import { flushSoridrawPageSync } from '../../lib/pageSyncCoordinator';
 
 export default function ExploreShell() {
   const navigate = useNavigate();
@@ -12,6 +13,15 @@ export default function ExploreShell() {
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const activeUser = user;
+    return () => {
+      void flushSoridrawPageSync(activeUser, 'route-change')
+        .catch((error) => console.warn('[081] Explore page sync pending:', error));
+    };
+  }, [user?.uid]);
 
   const go = (path: string) => {
     if (`${location.pathname}${location.search}` === path) {

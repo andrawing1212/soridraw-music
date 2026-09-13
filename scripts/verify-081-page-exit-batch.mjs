@@ -9,6 +9,7 @@ const catalog = read('src/lib/userDataEngine.ts');
 const drafts = read('src/lib/musicNoteDetailDraft.ts');
 const favorites = read('src/pages/FavoritesPage.tsx');
 const library = read('src/pages/SunoLibraryPage.tsx');
+const exploreShell = read('src/components/explore/ExploreShell.tsx');
 const app = read('src/App.tsx');
 const overlay = read('src/components/CacheDiagnosticsOverlay.tsx');
 const patches = JSON.parse(read('cloudflare/explore-worker/release-patches.json'));
@@ -47,7 +48,7 @@ assert.doesNotMatch(scheduleBlock, /setTimeout\(/, 'catalog server publish still
 
 assert.ok(drafts.includes('listMusicNoteDetailDrafts'), 'detail draft durable outbox listing missing');
 assert.ok(favorites.includes('registerPageSyncHandler'), 'Music Note local Firestore flush not registered');
-assert.ok(favorites.includes("flushSoridrawPageSync(user, 'music-note-exit')"), 'Music Note route exit sync missing');
+assert.ok(favorites.includes("flushSoridrawPageSync(activeUser, 'music-note-exit')"), 'Music Note route exit sync missing');
 assert.ok(!favorites.includes("window.addEventListener('pagehide', flushOnPageExit)"), 'detail still writes server on window close');
 assert.ok(!favorites.includes("window.addEventListener('pagehide', flushIfDirty)"), 'card state still writes server on window close');
 assert.ok(!favorites.includes("flushFavoriteDetailPendingPatch('detail-close')"), 'detail modal close still writes server');
@@ -55,7 +56,7 @@ assert.ok(!favorites.includes("flushFavoriteDetailPendingPatch('idle')"), 'detai
 
 assert.ok(library.includes("flushSoridrawPageSync(auth.currentUser, 'library-exit')"), 'Library page exit sync missing');
 assert.ok(app.includes('recoverSoridrawPendingSync'), 'startup outbox recovery missing');
-assert.ok(app.includes("flushSoridrawPageSync(user, 'route-change')"), 'global route-change page sync missing');
+assert.ok(exploreShell.includes("flushSoridrawPageSync(activeUser, 'route-change')"), 'Explore page exit sync missing');
 assert.ok(overlay.includes('PAGE SYNC'), 'integrated page sync diagnostics missing');
 
 assert.equal(patches.patches.at(-1), '048-page-exit-publication-batch.mjs', '048 must be final Worker patch');

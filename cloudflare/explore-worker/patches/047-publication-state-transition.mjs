@@ -277,7 +277,7 @@ replaceFunction('handleVisibilityR2Core', handleVisibility047.toString().replace
 }
 
 for (const [name, requiredTokens] of [
-  ['handleVisibilityR2Core', ["source_type='music_note'", 'syncExploreFeedR2Publication043', 'syncExploreFeedR2Private043', 'snapshotItem']],
+  ['handleVisibilityR2Core', ["'music_note'", 'syncExploreFeedR2Publication043', 'syncExploreFeedR2Private043', 'snapshotItem']],
   ['derivedItems032', ['JOIN tracks AS c', "c.is_public=1", "c.status='published'"]],
   ['derivedRank032', ['JOIN tracks AS c', "c.is_public=1", "c.status='published'"]],
   ['derivedProfile032', ['COUNT(*) FROM tracks c', 'canonical_track_count']],

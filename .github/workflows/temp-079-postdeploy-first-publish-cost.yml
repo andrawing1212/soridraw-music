@@ -1,0 +1,91 @@
+name: TEMP 079 Postdeploy First Publish Cost
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-079-postdeploy-first-publish-cost.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Simulate current live 079 first publication locally
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          SQL="SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND tbl_name IN ('tracks','track_stats','public_profiles','profile_stats','explore_derived_tracks','explore_derived_profiles','explore_derived_changes','explore_derived_state','explore_shared_revision') ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 WHEN 'trigger' THEN 3 ELSE 4 END,name;"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$SQL" --json > "$RUNNER_TEMP/schema079live.json"
+          python3 <<'PY'
+          import json, os, sqlite3
+          raw=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'schema079live.json'),encoding='utf-8'))
+          rows=[r for group in raw for r in group.get('results',[])]
+          names={r.get('name') for r in rows}
+          for required in ['explore079_music_note_derived_track_insert','explore079_music_note_derived_track_update']:
+              assert required in names, required
+
+          def db_base():
+              db=sqlite3.connect(':memory:')
+              db.execute('PRAGMA recursive_triggers=ON')
+              for r in rows:
+                  sql=r.get('sql')
+                  if sql: db.execute(sql)
+              db.execute("INSERT OR IGNORE INTO explore_derived_state(id,seq,seeded) VALUES(1,0,1)")
+              db.execute("INSERT OR IGNORE INTO explore_shared_revision(scope,revision,updated_at) VALUES('global',1,0)")
+              db.commit()
+              return db
+
+          def insert_profile(db, uid):
+              db.execute("INSERT INTO public_profiles(uid,nickname,avatar_url,bio,is_public,created_at,updated_at) VALUES(?,?,?,'',1,1,1)",(uid,'U',''))
+              db.commit()
+
+          def insert_track(db, uid, tid, sid, ts=1000):
+              db.execute("INSERT INTO tracks(id,owner_uid,source_type,source_id,title,cover_url,suno_url_primary,search_text,is_public,status,published_at,created_at,updated_at) VALUES(?,?,?,?,?,'','https://example.invalid/t',?,1,'published',?,?,?)",(tid,uid,'music_note',sid,'T','T',ts,ts,ts))
+              db.commit()
+
+          existing=db_base()
+          insert_profile(existing,'u1')
+          before=existing.total_changes
+          insert_track(existing,'u1','t1','s1')
+          existing_w=existing.total_changes-before
+          count=existing.execute("SELECT track_count FROM explore_derived_profiles WHERE uid='u1'").fetchone()[0]
+          seq=existing.execute("SELECT seq FROM explore_derived_state WHERE id=1").fetchone()[0]
+          print('079_FIRST_PUBLISH_EXISTING_PROFILE_LOGICAL_WRITES='+str(existing_w))
+          print('079_FIRST_PUBLISH_EXISTING_PROFILE_TRACK_COUNT='+str(count))
+          print('079_FIRST_PUBLISH_EXISTING_PROFILE_SEQ='+str(seq))
+          assert existing_w <= 4, existing_w
+          assert count == 1, count
+
+          fresh=db_base()
+          before=fresh.total_changes
+          insert_profile(fresh,'u2')
+          insert_track(fresh,'u2','t2','s2')
+          fresh_w=fresh.total_changes-before
+          count2=fresh.execute("SELECT track_count FROM explore_derived_profiles WHERE uid='u2'").fetchone()[0]
+          print('079_FIRST_EVER_PROFILE_PLUS_TRACK_LOGICAL_WRITES='+str(fresh_w))
+          print('079_FIRST_EVER_TRACK_COUNT='+str(count2))
+          assert count2 == 1, count2
+
+          print('079_POSTDEPLOY_FIRST_PUBLISH_SIM=PASS')
+          print('REMOTE_D1_WRITES=0')
+          PY

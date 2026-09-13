@@ -144,4 +144,16 @@ export const flushPendingCatalogPublishes = async (uid: string): Promise<void> =
 s = s[:start] + block + s[end:]
 p.write_text(s, encoding='utf-8')
 
+# The Music Note page intentionally captures the authenticated user as activeUser
+# before cleanup, so the async exit sync is not tied to a React state value that is
+# disappearing during unmount. Keep the verifier aligned with that safer contract.
+p = Path('scripts/verify-081-page-exit-batch.mjs')
+s = p.read_text(encoding='utf-8')
+s = s.replace(
+    "assert.ok(favorites.includes(\"flushSoridrawPageSync(user, 'music-note-exit')\"), 'Music Note route exit sync missing');",
+    "assert.ok(favorites.includes(\"flushSoridrawPageSync(activeUser, 'music-note-exit')\"), 'Music Note route exit sync missing');",
+    1,
+)
+p.write_text(s, encoding='utf-8')
+
 print('NORMALIZE_081_PAGE_EXIT_PATCH=PASS')

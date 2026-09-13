@@ -10,141 +10,165 @@
 - TEST branch: `main`
 - PRODUCTION branch: `production`
 - **현재 실제 PREVIEW app-version 표시는 075 유지**
-- **현재 PREVIEW에는 076 publication-state/cost hotfix가 반영됨**
-- 076 hotfix product source commit: `9893590b526137a2528dfca8a50da87e20bcc056`
-- PREVIEW Worker release trigger commit: `0034164facbe7bde4432e8a9737c447cb5aca56e`
-- PREVIEW App release trigger commit: `b92babf1f53b24bc7663e2ca1566b9411154a1d9`
-- PREVIEW Worker Release Run: `34737493945` — PASS
-- PREVIEW App Release Run: `34737501029` — PASS
-- Shared D1 075/076 apply Run: `34734208590` — PASS, 이번 076 hotfix 배포에서는 추가 D1 migration 없음
+- **현재 PREVIEW Worker에는 077 Local First 비용 hotpath가 배포됨**
+- 077 product source commit: `d45e619232ffc30f825c12ffdf94a2b02b7ef151`
+- PREVIEW Worker release trigger commit: `6ed87f94bddd14b4a95886c02686780a0ec23658`
+- PREVIEW Worker Release Run: `34742021120` — PASS
+- PREVIEW Worker active version: `729795f9-98f8-4938-b28d-2590f466e4f2`
+- 이전 PREVIEW Worker version: `ec373b78-cf8f-4342-92af-a77eb5727a29`
+- PREVIEW App / Firebase Hosting: **077에서는 변경 없음**. 기존 075 앱 그대로 사용.
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — unchanged 확인
-- PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged 확인
+- PRODUCTION branch: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged 확인
+- TEST Worker version: `0b9cfe5c-1e29-4485-ac97-36f87832b41e` — unchanged 확인
+- PRODUCTION Worker version: `07c11e5e-47a6-458b-a3a0-6e47b6c331e6` — unchanged 확인
 
 ## 2. 075 핵심 구조 — 계속 보호
 075는 074의 즉시 Local First UX를 유지하면서 개인 Social 상태와 좋아요 대기구조를 비용 중심으로 정리했다.
 
 - 본인 좋아요/취소는 하트와 숫자가 즉시 로컬 반영.
 - 개인 Social Snapshot이 `likedTrackIds + followingUids`를 한 번에 보관해 같은 계정의 반복 개인상태 읽기를 줄임.
-- 좋아요 대기열은 `explore_like_user_queue_075` 한 행을 사용자별로 재사용한다.
-- 같은 사용자가 여러 곡을 수정하거나 같은 곡을 반복 ON/OFF해도 최종 의도를 JSON patch로 합친다.
-- 처리 완료된 사용자 행은 다음 변경 때 새 transient row를 만들지 않고 재사용한다.
-- aggregate 할 일이 없으면 lease를 잡기 전에 종료하여 **idle aggregate D1 write 0** 구조.
+- 좋아요 대기열은 사용자별 최종 의도를 합치는 구조 유지.
+- PREVIEW 좋아요 전송은 1분 묶음, TEST/PRODUCTION 기본값은 별도 승격 전까지 4분 유지.
 - 공개 숫자는 기존 10분 canonical aggregate 원칙 유지.
 - same-account 표시 숫자 replay 유지.
 - 좋아요 sync / sync-error 이벤트에 `uid`를 포함하고 현재 로그인 UID와 일치할 때만 화면 반영.
-- 계정 A→B 전환 순간 기존 하트 화면을 비워 A의 늦은 완료 이벤트가 B 화면에 섞이지 않게 함.
 - UI/CSS/위치/간격/반응형 변경 없음.
 
-## 3. 기존 Shared D1 076 파생 트리거 최적화
-Shared D1의 `explore032_derived_track_update`는 이미 033에서 좋아요 비용 최적화가 적용되어 있어 덮어쓰지 않았다.
+## 3. 기존 Shared D1 076 파생 트리거 최적화 — 계속 보호
+Shared D1의 `explore032_derived_track_update`는 033의 좋아요 비용 최적화 정의를 유지한다.
 
-교체된 4개 trigger:
+076에서 최적화된 trigger:
 - `explore032_derived_track_insert`
 - `explore032_derived_track_delete`
 - `explore032_derived_profile_update`
 - `explore032_derived_profile_feed`
 
 보호:
-- `explore032_derived_track_update` 033 정의 유지.
 - table/index 기존 구조 변경 없음.
 - canonical 사용자 데이터 migration/delete/backfill 없음.
-- 기존 저장 파생 데이터 변경 없이 trigger 정의만 교체.
+- 077에서도 추가 D1 schema migration 없음.
 
-Run `34734208590` — PASS.
-- 076 trigger 4개 교체: `rows_written=4`, `rows_read=1160`.
-- 075 additive queue/state/index 추가: `rows_written=7`, `rows_read=5`.
-- 위 수치는 배포 작업 1회의 수치이며 좋아요 1회당 비용이 아니다.
+## 4. 077 목표
+이번 077은 사용자가 실제로 관찰한 다음 문제를 비용 구조까지 포함해 해결하는 작업이다.
 
-## 4. 076 publication-state/cost hotfix
-목표:
-- Music Note의 실제 공개곡이 첫 진입부터 공개 상태로 정확히 보이게 한다.
-- 공개/비공개 변경 후 Explore / public profile 결과가 즉시 맞게 이어지게 한다.
-- 공개상태 확인 때문에 예전처럼 불필요한 D1 읽기를 반복하는 경로를 줄인다.
+- 좋아요 2곡 처리에서 불필요하게 발생하던 `R14/W2` 형태의 즉시 D1 재확인 제거.
+- PC/모바일처럼 같은 계정의 다른 기기에서 상태가 늦게 맞거나, 오래된 기기가 자기 `baseLiked`만 믿고 사용자의 최종 의도를 버리는 위험 제거.
+- 공개/비공개 실제 변경은 성공했는데 파생 R2 갱신 실패 때문에 요청 전체가 HTTP 500이 되는 구조 분리.
+- publication-state R2가 비어 있을 때 매번 사용자 곡 전체를 다시 읽는 복구 반복 방지.
+- Explore 재접속/변경없음 revision 확인을 D1이 아니라 파생 R2 head/ETag 중심으로 처리.
+- UI/CSS/레이아웃은 변경하지 않음.
 
-클라이언트:
-- publication state session validation 추가.
-- 서버 검증이 필요한 시점과 이미 검증된 UID 상태를 구분.
-- 기존 UI/CSS/레이아웃 변경 없음.
+## 5. Worker 044 — Local First 비용 hotpath
+파일:
+- `cloudflare/explore-worker/patches/044-local-first-cost-hotpath.mjs`
+- marker: `SORIDRAW_LOCAL_FIRST_COST_HOTPATH_044_20260913`
 
-Worker 043:
-- patch: `043-publication-targeted-r2-hotpath.mjs`
-- marker: `SORIDRAW_PUBLICATION_TARGETED_R2_HOTPATH_043_20260913`
-- 공개/비공개/옵션 변경 시 Feed 및 public-profile R2 cache를 전체 재생성하지 않고 해당 곡만 patch/remove/upsert.
-- release patch 마지막에 043 적용 확인.
-- D1 schema migration 없음.
-- 실사용자 원본 데이터 변환/삭제/백필 없음.
+좋아요:
+- 클릭 묶음 intake 단계에서 `tracks / profile / stats / likes`를 다시 읽어 화면이 이미 알고 있는 상태를 재검증하는 경로 제거.
+- 최종 사용자 의도는 `baseLiked`가 같아 보여도 버리지 않고 사용자별 queue에 전달.
+- 다른 기기가 canonical 상태를 먼저 바꿨더라도 10분 aggregate에서 실제 canonical `likes`와 비교해 최종 의도로 수렴.
+- aggregate는 queue에 들어온 **변경된 ID만** canonical 상태와 비교하며 전체 Feed/Profile을 스캔하지 않음.
+- canonical 숫자/관계가 실제로 바뀐 곡만 Feed/Profile R2의 해당 곡을 targeted patch.
+- 개인 좋아요 R2가 cold/missing이면 한 번 복구 후 다시 읽어 현재 클릭 의도를 반영하고 저장.
 
-## 5. PREVIEW Worker 043 배포 결과
-Run `34737493945` — PASS.
+공개/비공개:
+- canonical 공개/비공개 변경과 파생 R2 갱신 실패를 분리.
+- 파생 R2 patch 실패가 실제 사용자 변경을 HTTP 500으로 되돌리지 않도록 보호.
+- publication-state R2 patch가 실패하면 해당 사용자 파생 publication-state key만 제거해 다음 읽기에서 **한 번의 bounded recovery**가 일어나도록 함.
+- 사용자 원본 곡/계정 데이터 삭제가 아니라 파생 캐시 복구 표시만 수행.
+- 043의 targeted R2 hotpath를 먼저 적용한 뒤 044를 고정 canonical Worker에 합침.
 
-- locked product SHA: `9893590b526137a2528dfca8a50da87e20bcc056`
-- One-shot preflight PASS.
-- canonical PREVIEW Worker deploy PASS.
+## 6. Explore revision 077
+`canonical/preview-entry.js`는 Feed 변경 여부 확인을 파생 R2 object head/ETag 중심으로 처리한다.
+
+- 정상 warm revision 확인에서 D1 `R0/W0` 목표.
+- 변경 없음이면 Feed 전체를 다시 읽지 않는 구조.
+- 기존 release smoke 호환을 위해 진단 mode 표시는 `HEAD-ONLY-036` 유지.
+
+## 7. 077 사전 검증 결과
+최종 preparation Run `34741963353` — PASS.
+
+- 043 → 044 순서로 실제 canonical Worker 조립 PASS.
+- `node --check` Worker/entry PASS.
+- 좋아요 비용 검증 PASS.
+- 100명 같은 곡 좋아요 fixture: count/derived update 1회로 묶임 PASS.
+- net-zero cohort: count/derived write 0 PASS.
+- stale-device 최종 의도 보존 PASS.
+- cold 개인 like R2 복구 후 현재 의도 반영 PASS.
+- publication R2 실패 시 bounded recovery 보호 PASS.
+- derived cache regression suite PASS.
+- deploy preflight suite PASS.
+- TypeScript `npx tsc --noEmit` PASS.
+- `npm run build` PASS.
+- 사용자 원본 데이터 migration/rewrite/delete 없음.
+- 임시 077 진단/조립 workflow 4개 모두 제거 확인.
+
+## 8. PREVIEW Worker 077 실제 배포 결과
+Run `34742021120` — PASS.
+
+- locked product SHA: `d45e619232ffc30f825c12ffdf94a2b02b7ef151`
+- canonical Worker SHA256: `9998d63d0bfff7090dea5888cc6fdf08017e6c3dd9f441789128ab451bc5b1fb`
+- live 035 D1 prerequisite schema PASS.
+- live 035 processor state PASS, 배포 직전 pending `0`.
+- dry-run PASS.
+- PREVIEW Worker deploy PASS.
+- PREVIEW Worker version: `ec373b78-cf8f-4342-92af-a77eb5727a29` → `729795f9-98f8-4938-b28d-2590f466e4f2`.
 - Feed smoke PASS.
 - public profile smoke PASS.
-- like batch route 존재 확인 PASS.
-- warm Feed revision **D1 R0 / W0** PASS.
-- `HEAD-ONLY-036` PASS.
+- like batch route 존재 확인: unauthenticated `HTTP 401` — 정상 보호 응답, 404/5xx 아님.
+- warm Feed revision 실제 측정: **D1 R0 / W0** PASS.
+- revision mode `HEAD-ONLY-036` PASS.
 - aggregate cron `*/10 * * * *` PASS.
 - TEST / PRODUCTION Worker unchanged PASS.
-- smoke 실패 시 자동 rollback 보호 유지.
+- smoke 실패 시 자동 rollback 보호는 그대로 유지.
 
-## 6. PREVIEW App hotfix 배포 결과
-Run `34737501029` — PASS.
+## 9. Firebase / 사용자 데이터 변경 여부
+077에서는 Worker와 Worker 고정 소스만 변경했다.
 
-- TypeScript PASS.
-- Build PASS.
-- Firebase PREVIEW Hosting PASS.
-- 실제 `preview.soridraw.com` exact build PASS.
-- 실제 `app-version.json`은 **075 유지** PASS.
-- TEST / PRODUCTION branch unchanged PASS.
-- TEST / PRODUCTION 실제 HTML unchanged PASS.
+- Firebase PREVIEW Hosting 재배포 없음.
 - Firebase Functions 변경 없음.
 - Firestore Rules 변경 없음.
+- Shared D1 schema migration 없음.
+- canonical 사용자 데이터 대량변환/삭제/백필 없음.
+- TEST / PRODUCTION 코드 및 Worker 변경 없음.
+- UI/CSS/반응형 변경 없음.
 
-## 7. 사용자 데이터 / 백엔드 변경 여부
-이번 076 publication hotfix 배포:
-- 사용자 원본 데이터 변경 없음.
-- D1 table/index/schema migration 없음.
-- Firebase Functions 변경 없음.
-- Firestore Rules 변경 없음.
-- TEST / PRODUCTION 코드/Worker 비변경.
-- PREVIEW App + PREVIEW Worker만 변경.
-
-## 8. 비용 판정 — 현재 확정 범위
+## 10. 비용 판정 — 현재 확정 범위
 확정:
-- warm Feed revision은 실제 Worker 배포 후 D1 `R0/W0` 확인.
-- idle scheduled aggregate는 기존 코드/fixture 검증상 W0 구조 유지.
-- 사용자별 pending like queue는 한 사용자당 한 행 재사용 구조 유지.
-- Feed/public-profile 파생 갱신은 전체 재생성이 아니라 변경분 중심.
-- 043 publication R2 mutation도 해당 곡만 대상으로 변경.
+- 변경 없는 warm Feed revision: 실제 배포 Worker에서 **D1 R0/W0**.
+- 좋아요 HTTP intake는 코드/fixture 검증상 per-track canonical D1 재확인 경로 제거.
+- 실제 canonical 비교는 10분 aggregate에서 queue의 변경 ID에 한정.
+- 같은 곡 다수 사용자의 변경은 set 기반 집계로 묶여 파생 숫자 update 증폭 억제.
+- publication 파생 R2 갱신은 전체 재생성이 아니라 targeted patch/remove/upsert 유지.
+- 파생 publication-state cache가 깨지면 해당 사용자 cache만 bounded recovery.
 
-아직 **공개/비공개 1회 실사용 조작의 실제 D1 rows_read/rows_written 수치**는 미측정.
-실제 PREVIEW 조작 후 계측해서 이전 R14 증상이 사라졌는지 최종 판정한다.
+아직 실사용 계정으로 실제 클릭한 뒤의 인증된 D1 `rows_read / rows_written` 숫자는 미측정이다. 배포 smoke는 인증 없이 실제 사용자 데이터를 변경하지 않는 안전 검증만 수행했다.
 
-## 9. 기존 정상 기능 — 절대 보호
+## 11. 기존 정상 기능 — 절대 보호
 - 074 Local First 즉시 하트/숫자 UX.
 - 좋아요 PREVIEW 1분 묶음 전송.
 - canonical 공개 숫자 10분 aggregate.
-- `baseLiked` + stable `mutationAt` reversal 의도 보존.
+- 같은 계정 PC↔모바일 최종 상태 수렴.
+- 계정별 이벤트/캐시 분리.
 - 정상 캐시 변경 없음 시 서버 read 0 목표.
 - Music Note / Library 기존 local-first 및 묶음저장.
 - UI/CSS/반응형/분할 구조 비변경.
 - 공유 사용자 원본 데이터 비파괴.
 
-## 10. 현재 PREVIEW 실사용 검증 / TEST 승격 차단
-이번 076 hotfix는 배포 완료됐지만 아래 실사용 확인 전 TEST 승격 금지.
+## 12. 현재 PREVIEW 실사용 검증 / TEST 승격 차단
+077 코드/배포 검증은 완료됐지만 아래 **실사용 계정 확인 전 TEST 승격 금지**.
 
-- 기존 공개곡이 Music Note 첫 진입부터 공개 상태로 맞게 표시되는지.
-- 공개 → 비공개 전환 후 Explore에서 해당 곡이 사라지는지.
-- 공개 → 비공개 전환 후 public profile에서도 해당 곡이 사라지는지.
-- 비공개 → 공개 재전환 시 Explore / public profile에 정상 복귀하는지.
-- 위 조작의 D1 `rows_read / rows_written` 실제 측정, 특히 기존 R14 반복 여부.
-- 기존 075 검증 항목: 3곡 batch, like↔unlike reversal, PC↔mobile same-account, A↔B account switch.
+- PC에서 좋아요 → 모바일에서 같은 계정 하트가 정상 수렴하는지.
+- 모바일에서 좋아요/취소 → PC에서도 최종 의도가 뒤집히지 않는지.
+- 좋아요 2~3곡 묶음 후 실제 D1 `rows_read / rows_written`이 기존 R14 패턴에서 사라졌는지.
+- 공개 → 비공개 전환이 HTTP 500 없이 성공하고 Explore/public profile에서 빠지는지.
+- 비공개 → 공개 재전환이 정상 복귀하는지.
+- 위 공개/비공개 실제 D1 비용 확인.
+- like↔unlike reversal과 A↔B 계정 전환 회귀 확인.
 
-## 11. 다음 작업
-1. 사용자가 PREVIEW에서 공개/비공개를 실제로 조작해 화면 결과를 확인한다.
-2. 개발 측은 같은 조작의 D1 실제 비용을 확인한다.
+## 13. 다음 작업
+1. 사용자가 `preview.soridraw.com`에서 같은 계정 PC/모바일 좋아요와 공개/비공개를 실제 조작한다.
+2. 개발 측은 그 실제 조작의 D1 비용을 확인한다.
 3. 이상이 있으면 PREVIEW에서만 수정한다.
-4. 모든 항목 PASS 후 TEST 승격 가능 여부를 판단한다.
+4. 모든 실사용 항목 PASS 후 TEST 승격 가능 여부를 판단한다.
 5. PRODUCTION은 사용자의 명확한 정식배포 승인 없이는 변경하지 않는다.

@@ -1,66 +1,71 @@
 # NEXT CODEX TASK
 
-상태: **PREVIEW 078 배포 완료 / 실사용 비용·동기화 검증 대기 / TEST 승격 금지**
+상태: **PREVIEW 079 배포 완료 / 공개·비공개 실제 D1 비용 검증 대기 / TEST 승격 금지**
 
 ## 현재 기준
 - branch: `preview`
-- 실제 PREVIEW 앱: **078**
-- PREVIEW App release commit: `28825b09250cc4ff583e7d8f690a489b444741ae`
-- PREVIEW App Run `34753256732` — PASS
-- PREVIEW Worker product source: `dc414814cdc4f23ef26f86a6167001542c698c9e`
-- PREVIEW Worker Run `34753211173` — PASS
-- PREVIEW Worker active Version: `3f215682-ae3f-4c16-893d-16c7d0006a13`
-- Shared D1 trigger hotfix Run `34752669120` — PASS
+- 실제 PREVIEW 앱: **079**
+- Worker product source: `e68088ea036245b5385b296c08a1f8fe9001e62f`
+- PREVIEW Worker Run `34754775846` — PASS
+- PREVIEW Worker active Version: `737816a1-5cd2-4754-9c86-8904b2edd430`
+- Shared D1 079 trigger Run `34754740138` — PASS
+- App 079 source: `3df9c48f1a2dcf1f08a5867872e97bba8e04c9ac`
+- PREVIEW App Run `34754832740` — PASS
+- first-publication simulation Run `34755012756` — PASS
 - TEST main `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
 - PRODUCTION `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
 
-## 078에서 완료된 것
-- Music Note 공개상태: 앱 재실행마다 전체 bundle 확인하던 076 방식을 제거하고 persistent snapshot + small revision으로 변경.
-- Worker 045 publication revision: R2 HEAD-only, D1-free 구조.
-- Shared D1 `explore032_derived_track_update` UNIQUE conflict 수정.
-- 실제 live schema 로컬 재현에서 기존 private 오류 재현 PASS, 수정 후 private/public PASS.
-- 좋아요 intake는 044 기준 canonical 재확인 D1 hotpath 제거 유지.
-- warm Feed revision 실제 배포 환경 D1 `R0/W0` PASS.
-- 앱 버전 078 / Firebase PREVIEW Hosting 실제 배포 PASS.
-- 임시 078 Workflow 전부 제거.
-- UI/CSS/반응형 변경 없음.
-- 사용자 canonical data migration/delete/backfill 없음.
+## 079 확정 구조
+- Worker 046: 기존 private Music Note 곡 재공개 시 내용이 같으면 전체 row upsert 대신 visibility/timestamp 최소 UPDATE.
+- Shared D1: Music Note derived track은 최신 유지, profile `track_count` 유지.
+- Music Note 공개/비공개의 중복 `explore_derived_state` / `explore_derived_changes` journal write 제거.
+- non-Music-Note derived journal은 기존 동작 유지.
+- TEST/PRODUCTION 호환용 `explore_shared_revision` trigger 유지.
+- Feed/Profile publication은 targeted R2 patch 사용.
+- 078 persistent publication snapshot + R2 revision 구조 유지.
+- UI/CSS/레이아웃 변경 없음.
+- 사용자 canonical row migration/delete/backfill 없음.
 
-## 다음 작업 — 구현보다 먼저 실제 PREVIEW 검증
-사용자가 `preview.soridraw.com`에서 아래 순서로 실제 계정 테스트를 한다.
+## 자동검증 결과
+- 기존 078 existing-track private logical writes: `7`.
+- 079 existing-track private logical writes: `4`.
+- 079 existing-track republish logical writes: `4`.
+- 079 existing-profile 첫 Music Note 공개 logical writes: `4`.
+- 완전 신규 사용자의 profile 생성 + 첫 곡 공개: logical writes `11` — 최초 1회 profile initialization 포함.
+- profile `track_count`: `1 → 0 → 1` PASS.
+- non-Music journal compatibility PASS.
+- TypeScript PASS.
+- Build PASS.
+- like cost regression PASS.
+- derived cache regression PASS.
+- deploy preflight PASS.
+- warm Feed revision actual D1 `R0/W0` PASS.
+- Worker/App TEST/PRODUCTION 비변경 PASS.
 
-1. 078 update notice 확인 후 업데이트 적용.
-2. 앱 재실행 → Music Note 첫 진입 D1 R/W 확인.
-3. Music Note 재진입 → 변경 없음 비용 확인.
-4. 비공개 곡 1개 공개 → 실제 R/W 확인.
-5. 같은 곡 비공개 → HTTP 500 재발 여부 + 실제 R/W 확인.
-6. 같은 곡 다시 공개 → 실제 R/W 확인.
-7. 좋아요 2~3곡을 PREVIEW 1분 batch로 처리 → 기존 R14 intake 패턴 제거 확인.
-8. PC ↔ 모바일 같은 계정에서 하트/숫자 최종 수렴 확인.
+주의: 위 4/11은 local SQLite logical row changes이며 Cloudflare billed `rows_written`과 동일하지 않다. D1 index write가 포함될 수 있으므로 실제 계정 계측 전 W4라고 확정 금지.
+
+## 다음 작업 — PREVIEW 실제 계정 검증
+새 구현 전에 사용자가 `preview.soridraw.com`에서 다음을 실제 수행한다.
+
+1. 079 update 적용.
+2. Music Note에서 비공개 곡 1개 공개 → 진단창 R/W 기록.
+3. 같은 곡 비공개 → R/W + HTTP 오류 확인.
+4. 다시 공개 → R/W 기록.
+5. 가능하면 아직 Explore에 등록한 적 없는 새 곡 1개 최초 공개 → R/W 기록.
+6. 좋아요 2~3곡을 1분 안에 변경 → batch 처리 후 R/W 기록.
+7. PC↔모바일 동일 계정 상태 수렴 확인.
 
 ## 합격선
-- 비공개 HTTP 500 재발 없음.
-- 정상 persistent cache 재진입에서 publication 전체 bundle 재조회 없음.
-- app update 자체로 사용자 전체 데이터 재읽기 없음.
-- 좋아요 intake의 기존 R14 canonical 재확인 패턴 없음.
-- public/private 한 곡 변경 때문에 전체 Feed/Profile 재생성 없음.
-- 실제 Cloudflare `rows_read / rows_written`은 사용자 계정 계측 전 숫자를 추정 확정하지 않는다.
+- public/private HTTP 500 재발 0.
+- 078의 W25/W12 폭증이 실제 PREVIEW에서 크게 감소해야 함.
+- 정상 cache 변경 없음 서버 read 0 목표 유지.
+- profile track_count와 Explore/public profile 결과가 정확해야 함.
+- 좋아요 Local First / 1분 batch / 10분 aggregate 보호.
 - UI/CSS/반응형 변화 0.
 - TEST/PRODUCTION 비의도 변경 0.
 
-## FAIL 시 다음 Codex 작업
-- 반드시 사용자가 제공한 실제 진단 화면/영상의 경로별 R/W와 HTTP 상태를 기준으로 원인을 좁힌다.
-- 같은 기능 전체를 다시 쓰지 말고 해당 hotpath만 최소 수정한다.
-- Shared D1 사용자 row 변환/백필/삭제 금지.
-- PREVIEW에서 수정 → TypeScript/Build/비용회귀검사 → PREVIEW 재배포 → 사용자 재검증 순서 유지.
+실제 D1 비용이 여전히 높으면 원인을 모른 채 TEST로 승격하지 않고 PREVIEW 080 등으로 계속 비용 hotpath만 수정한다.
 
-## 계속 보호할 것
-- 즉시 Local First 좋아요 UX.
-- PREVIEW 좋아요 1분 batch.
-- 10분 canonical aggregate.
-- same-account PC↔모바일 최종 수렴.
-- warm revision R0/W0.
-- Music Note / Library 기존 Local First와 묶음저장.
-- 공유 사용자 원본 데이터 비파괴.
-- 사용자 실사용 및 비용 검증 PASS 전 TEST 승격 금지.
-- PRODUCTION은 명확한 사용자 승인 없이는 승격 금지.
+## 승격
+- TEST: **079 실사용 correctness + 비용 검증 PASS 전 금지**.
+- PRODUCTION: **사용자의 명확한 정식배포 승인 전 금지**.

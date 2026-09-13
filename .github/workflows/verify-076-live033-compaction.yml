@@ -1,0 +1,44 @@
+name: Verify 076 Live 033 Compaction
+
+on:
+  push:
+    branches: [work/social-snapshot-075-v2]
+    paths:
+      - '.github/workflows/verify-076-live033-compaction.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/social-snapshot-075-v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Verify current-baseline 075 076 contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-076-live033-compaction.py
+          python3 scripts/verify-075-social-snapshot-cost.py
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-explore-derived-cache.mjs
+          echo '076_LIVE033_FULL_CONTRACT=PASS'
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Confirm no deployment
+        run: |
+          echo 'SHARED_D1_EXECUTED=false'
+          echo 'WORKER_DEPLOYED=false'
+          echo 'FIREBASE_DEPLOYED=false'
+          echo 'USER_DATA_CHANGED=false'

@@ -1,150 +1,203 @@
 # SORIDRAW CURRENT RELEASE STATE
 
-최종 갱신: 2026-09-12 KST
+최종 갱신: 2026-09-13 KST
 
-> 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다.
+> 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다. 실제 배포 상태가 문서와 다르면 실제 상태를 우선한다.
 
-## 1. 현재 기준
+## 1. 실제 배포 기준
 - Repository: `andrawing1212/soridraw-music`
-- 개발 branch: `preview`
+- 개발 기준 branch: `preview`
 - TEST branch: `main`
 - PRODUCTION branch: `production`
-- **현재 실제 PREVIEW 앱: 074**
-- 074 실제 코드 commit: `835dd2cb0b5c206696a7e94dc18e9041155cbe23`
-- PREVIEW 074 release trigger/locked build commit: `1d5ecf841ae8335d21b992d3e7f4c160add75839`
-- 074 targeted Apply Run: `34639807460` — PASS
-- PREVIEW 074 App Run: `34639940311` — PASS
-- visible-track read-only diagnostic Run: `34638806229` — PASS
-- PREVIEW Worker는 검증된 069 서버 런타임 그대로 유지
-- PREVIEW active Worker Version ID: `caffa9f8-5b50-4a4a-a2db-578c0fe49b83`
-- Shared D1 069 additive schema Run: `34630980764` — PASS
+- **실제 PREVIEW 앱: 074**
+- PREVIEW 074 코드 commit: `835dd2cb0b5c206696a7e94dc18e9041155cbe23`
+- PREVIEW 074 release trigger/locked build: `1d5ecf841ae8335d21b992d3e7f4c160add75839`
+- PREVIEW 074 Apply Run `34639807460` — PASS
+- PREVIEW 074 App Run `34639940311` — PASS
+- PREVIEW Worker: 069 / Version ID `caffa9f8-5b50-4a4a-a2db-578c0fe49b83`
+- Shared D1 069 additive schema Run `34630980764` — PASS
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
+- `preview` HEAD at 075/076 work start: `d9923a2394afb4c29e345f2d7d0506312a0af29c`
 
-## 2. 서버 좋아요 구조 — 정상 / 유지
-- PREVIEW 좋아요 outbox는 1분 batch.
-- Worker `*/10 * * * *` scheduled aggregate가 canonical 공개 숫자를 확정.
-- 069 queue `explore_like_batches_069`는 queue write `W1/batch` 목표.
-- `baseLiked` + 안정적인 `mutationAt`으로 aggregate 전 like↔unlike 역전 의도 보존.
+## 2. 현재 진행 중인 작업 — 075 / 076
+작업 branch: `work/social-snapshot-075-v2`
 
-확정 PASS:
-- 1곡 batch: Worker 1 / D1 R1 W1 / queue row W1.
-- PC 즉시 하트 ON.
-- 약 1분 뒤 모바일 same-account 하트 ON.
-- 모바일 정상 캐시 Explore Worker 0 / D1 0.
-- queue 035/066/069 정상 소비.
-- scheduled aggregate 정상.
-- 테스트한 두 곡 모두 canonical=1 / derived=1 / relation=1 / fresh Feed `stats.likeCount=1`.
+목표:
+- 개인 좋아요/팔로우는 사용자별 Social Snapshot으로 묶어 읽기.
+- 좋아요 입력은 사용자별 대기행 1개로 압축.
+- 변경 없는 10분 aggregate는 D1 write 0.
+- 공개/비공개 시 기기 Feed/공개프로필 전체 캐시 삭제 금지, 변경곡만 패치.
+- 개인 좋아요 표시가 다른 계정의 공용 Feed/Profile cache에 섞이지 않게 분리.
+- 기존 파생 Feed/Profile trigger의 불필요한 write fan-out 축소.
 
-## 3. 070~073 실사용 결과
-- 070 자동 화면 반영: FAIL.
-- 071 persistent forced refresh: FAIL.
-- 072 fresh Feed recovery: 한 곡은 회복했지만 다른 곡은 0 유지 — FAIL.
-- 073 cached + cache-empty forced fresh recovery: 서버와 fresh Feed는 이미 1인데 사용자가 화면 0 유지 확인 — FAIL.
+075 실제 클라이언트/계정전환 보호 최종 코드 commit:
+- `e3ac6ad3f4fa9d23f15a600269cba09c8551c80c`
+- message: `fix: scope like sync events to active uid`
 
-판정:
-- 더 이상 서버 집계나 D1 문제가 아님.
-- fresh Feed도 1이므로 사용자 체감 문제는 client 표시 경로에 한정.
-- 반복적으로 Feed를 다시 읽어 고치기보다, 사용자가 제안한 UX대로 본인 좋아요 숫자는 Local First로 즉시 반응시키는 편이 더 자연스럽고 비용도 낮음.
+075 전체 자동검증 Run:
+- Run `34733171828` — PASS
+- UID-scoped sync event guard PASS
+- Worker 042 static PASS
+- additive 075 D1 schema PASS
+- reversal/cost verifier PASS
+- client contract PASS
+- TypeScript PASS
+- Build PASS
+- change boundary PASS
+- UI/CSS 변경 없음
+- 사용자 데이터 변경 없음
 
-## 4. 074 수정 — 본인에게 숫자 즉시 반영
-074 코드 commit `835dd2cb0b5c206696a7e94dc18e9041155cbe23`.
+## 3. 075 구조 — 검증 완료, 미배포
+### 개인 Social Snapshot
+- `/v1/me/social-snapshot`
+- 좋아요 track IDs + following UIDs를 한 개인 snapshot으로 읽음.
+- 정상 snapshot은 R2 우선, D1은 recovery 전용.
+- 기기 persistent cache는 UID별로 분리.
 
-변경:
-- 본인이 좋아요를 누르면 하트와 함께 화면 숫자도 즉시 `+1`.
-- 좋아요 취소 시 화면 숫자 즉시 `-1`.
-- 이 숫자는 **로컬 표시값**이며 서버 canonical 집계 구조는 기존 10분 aggregate 그대로 유지.
-- 클릭 즉시 Feed local cache와 공개프로필 first-view cache에도 같은 표시값을 반영해 페이지 이동/재진입에서 되돌아가지 않게 함.
-- 1분 batch 후 same-account signal에 선택적 `displayLikeCount`를 추가해 다른 기기에도 로컬 표시 숫자를 전달 가능.
-- legacy signal에는 `displayLikeCount`가 없으므로 기존 신호는 하트만 반영하고 숫자를 덮어쓰지 않음.
-- 이미 `내 하트=ON / 숫자=0`인 stale 곡은 서버를 다시 읽지 않고 **최소 1**로 로컬 회복. 사용자가 좋아요한 곡 총합은 최소 1이라는 UX 불변식 사용.
-- 기존 aggregate 후 fresh refresh는 유지되어 canonical 서버 숫자로 최종 수렴.
-- polling 없음.
-- UI/CSS/위치/간격/반응형 변경 없음.
+### 좋아요 대기 구조
+- additive candidate table: `explore_like_user_queue_075`
+- 사용자별 대기행 1개.
+- 같은 사용자가 여러 곡을 바꿔도 같은 행의 JSON patch로 최종 상태만 유지.
+- 처리 후 행 삭제/재생성 대신 같은 사용자 행 재사용.
+- like→unlike→like 최종 ON 보존 PASS.
+- 처리된 사용자 행 재사용 PASS.
+- legacy 035/066/069 queue와 동시 호환 fallback 유지.
 
-비용:
-- 즉시 숫자 변경 자체는 서버 read/write 0.
-- 기존 1분 batch / 10분 aggregate 구조 유지.
-- same-account Firestore signal은 기존 경로 재사용, 별도 listener 추가 없음.
-- stale `하트 ON / 0` 복구도 로컬 처리라 추가 Worker/D1 read 0.
+### idle 비용
+- 10분 scheduled aggregate에서 처리할 queue가 없으면 lease write 전 return.
+- 구조 검증상 idle D1 row write = 0.
 
-## 5. 074 자동 검증 / 배포
-Apply Run `34639807460` — PASS:
-- targeted apply PASS.
-- 074 static contract PASS.
-- 기존 069 W1/reversal contract 보존.
-- TypeScript PASS.
-- Build PASS.
-- change boundary PASS.
-- 변경 파일: `src/pages/ExplorePage.tsx`, `src/services/exploreLikeService.ts`, `public/app-version.json`.
-- Worker/D1/Functions/Rules/UI CSS 변경 없음.
+### 계정전환 안전
+- 좋아요 sync/sync-error browser event에 UID 포함.
+- 현재 로그인 UID와 다른 늦은 event는 Explore 화면에서 무시.
+- A→B 직접 계정전환 시 기존 `likedTrackIds` 즉시 초기화 후 B 계정 상태 hydrate.
+- 개인 optimistic count/heart를 공용 Feed/Profile persistent cache에 사용자 구분 없이 쓰지 않음.
 
-PREVIEW App Run `34639940311` — PASS:
-- TypeScript PASS.
-- Build PASS.
-- Firebase PREVIEW Hosting PASS.
-- 실제 `preview.soridraw.com` exact build PASS.
-- 실제 `app-version.json=074` PASS.
-- TEST / PRODUCTION branch 및 실제 HTML unchanged PASS.
+### 공개/비공개 local cache
+- Music Note 공개 시 Worker response의 `snapshotItem`으로 현재 기기 Feed/Profile cache의 해당 곡만 upsert.
+- 비공개 시 해당 곡만 remove.
+- 공개 옵션 수정 시 해당 곡만 patch.
+- 전체 Feed/Profile local cache invalidate 금지.
 
-## 6. 데이터 / 인프라 상태
-- 실사용자 원본 데이터 삭제/백필/덮어쓰기 없음.
-- synthetic `SORIDRAW 044 preview Probe` 잔여 Firestore 사용자 문서 총 4건은 안전 확인 후 정리 완료.
-- D1 schema 변경 없음.
-- PREVIEW Worker 재배포 없음.
-- Firebase Functions / Firestore Rules 변경 없음.
-- PREVIEW Hosting은 계속 074.
-- TEST / PRODUCTION 승격 없음.
+## 4. 기존 파생 trigger write 증폭 — 확인됨
+`20260910_01_explore_derived_state.sql`을 canonical fixture에 그대로 재현한 SQLite 구조 테스트 기준:
+- like count 1회 update → **8 row changes**
+- 공개/비공개 1회 update → **12 row changes**
+- bio 등 profile row 1회 update → **6 row changes**
 
-## 7. 현재 판정
-- 서버 batch / W1 / aggregate / canonical / derived / fresh Feed: **PASS**.
-- PC→모바일 하트 sync: **PASS**.
-- 모바일 정상 캐시 Worker/D1 0: **PASS**.
-- 073 화면 숫자 복구: **FAIL 실사용 확인**.
-- 074 즉시 로컬 숫자 UX: **코드/TS/Build/PREVIEW 배포 PASS, 사용자 화면 확인 전**.
-- 3곡 1분 batch W1 실사용: 미검증.
-- reversal 양방향 실제 최종 수렴: 미검증.
-- TEST 승격: 금지.
+중요:
+- 위 숫자는 SQLite `total_changes`로 측정한 **구조상 row 변경 수**다.
+- Cloudflare D1 실제 청구 `rows_written`은 index write까지 포함할 수 있으므로 이 숫자를 청구량으로 단정하지 않는다.
+- 실제 billed rows는 PREVIEW 안전 적용 후 D1 query `meta.rows_written` telemetry로 별도 확인해야 한다.
 
-## 8. 다음 작업
-사용자는 복잡한 서버 테스트를 할 필요 없음.
+## 5. 076 파생 trigger 압축 후보 — 오프라인 검증 완료 / 공유 D1 미적용
+후보:
+- `cloudflare/explore-worker/candidates/076-derived-trigger-compaction.sql`
+- **TEST/OFFLINE ONLY** 표시 유지.
+- 현재 additive-only shared-D1 release workflow로 실행 금지.
 
-074 최소 확인:
-1. PREVIEW를 074로 업데이트.
-2. 기존 `[Breakbeat] '혼자만의 밤'`은 하트가 켜져 있으므로 숫자가 바로 `1`로 보이는지 확인.
-3. 좋아요 0인 새 곡 1개를 눌렀을 때 하트와 숫자가 동시에 `0 → 1` 되는지 확인.
-4. 다시 취소하면 동시에 `1 → 0` 되는지 확인.
+변경 원칙:
+- 기존 `explore_derived_*` table/column/scope/kind contract 유지.
+- 5개 trigger 정의만 교체 후보.
+- 같은 mutation의 Feed scope + Profile scope sibling event는 같은 global seq 재사용.
+- 각 소비 cursor는 scope별이므로 같은 scope 안에서 같은 seq가 겹치지 않도록 보장.
+- owner가 안 바뀐 track update의 old-owner 중복 event 제거.
+- 같은 owner의 active 변화 시 track_count를 subtract+add 두 번 하지 않고 1회 update.
+- track scope event가 profile projection을 다시 읽기 때문에 track_count-only profile event 제거.
+- bio/background/SNS/genre처럼 Feed 카드가 사용하지 않는 profile 필드는 Feed wake-up 제거.
+- nickname/avatar/active는 Feed 카드가 사용하므로 기존 갱신 유지.
 
-통과 후 개발 측에서 3곡 W1 비용과 reversal 실제 수렴을 검증하고 TEST 승격 가능 여부를 판단한다.
+076 비용/의미 검증 Run `34732991095` — PASS:
+- 기존 baseline: like 8 / visibility 12 / profile 6 확인.
+- 076 candidate:
+  - like count update: **8 → 5 row changes**
+  - 공개/비공개: **12 → 6 row changes**
+  - bio/background/SNS 계열 profile update: **6 → 4 row changes**
+  - nickname/avatar 같이 Feed가 실제 사용하는 profile update: **6 유지**
+- Feed track 갱신 PASS.
+- Public profile track 갱신 PASS.
+- track_count 갱신 PASS.
+- profile scope 갱신 PASS.
+- 같은 scope 내부 seq collision 없음 PASS.
 
-## 9. 2026-09-12 synthetic 044 Probe 잔여계정 정리
-관리자 사용자 목록에 남아 있던 `SORIDRAW 044 preview Probe`는 **총 4건**이었다.
+## 6. 076 데이터 순도 / rollback 검증
+Read-only verification workflow:
+- `.github/workflows/verify-076-trigger-maintenance.yml`
+- Run `34733413924` — PASS
 
-1차 확인/정리:
-- 이메일이 `soridraw044-preview-...@example.invalid`인 3건 확인.
-- Firebase Auth 계정 없음, role `free`, 생성곡 0, 즐겨찾기 0.
-- Music Note / playlist / settings / Suno track / list cache / share / permission audit 연결 데이터 없음.
-- Shared D1 UID 계열 38개 컬럼 경로 점검 결과 참조 0건.
-- D1 read-only audit Run `34670829830` — PASS.
-- Cleanup Run `34670885055` — PASS.
-- 해당 3개의 synthetic Firestore 사용자 문서 삭제.
+확정:
+- 교체 대상 trigger 정확히 5개 PASS.
+- table DDL 0 PASS.
+- direct data DELETE 0 PASS.
+- trigger DDL 적용 직후 저장 데이터 **0행 변경** PASS.
+- index 변경 없음 PASS.
+- 관계없는 trigger 변경 없음 PASS.
+- 기존 5개 trigger 정의를 캡처해 rollback한 뒤 **원래 trigger SQL 정확히 복구** PASS.
+- rollback 전/후 저장 데이터 동일 PASS.
+- 이 검증 workflow는 `contents: read`이고 Shared D1/Worker/Firebase 실행 기능 없음.
 
-2차 사용자 화면 확인 후 재감사:
-- 화면에는 4건이 보였고 그중 1건은 `이메일 없음` 상태였음.
-- 최초 감사가 이메일 prefix 조건을 사용해 이 1건을 놓친 것이 원인.
-- 전체 `displayName == SORIDRAW 044 preview Probe` 재감사 Run `34680863851` — PASS.
-- 실제 서버에는 앞의 3건은 이미 삭제되어 있었고, **이메일 없는 1건만 실제로 남아 있음** 확인.
-- 남은 UID: `soridraw044_preview_1788857732210_a1o4qg`.
-- Auth 없음, role `free`, 생성곡 0, 즐겨찾기 0, 직접/하위/참조 사용자 데이터 없음.
-- Shared D1 38개 UID 경로 참조 0건.
-- 최종 Cleanup Run `34680914545` — PASS.
-- 이메일 없는 마지막 synthetic Firestore 사용자 문서 1건 삭제.
-- 삭제 후 `displayName == SORIDRAW 044 preview Probe` 서버 문서 **0건** 재확인 PASS.
-- `REAL_USER_DATA_CHANGED=0`, `D1_ROWS_DELETED=0`.
+## 7. TEST / PRODUCTION 호환 판단
+- `main` 현재 repository Worker tree에는 PREVIEW의 새 `runtime/derived-cache.js`가 없음.
+- 076은 canonical `tracks`, `track_stats`, `public_profiles`, `profile_stats`의 schema/의미를 바꾸지 않음.
+- 파생 table 이름/column/scope/kind 형식도 유지.
+- 따라서 현재 TEST/PRODUCTION 코드가 읽는 원본 데이터 계약을 변경하지 않는 방향으로 설계됨.
+- 그래도 실제 shared D1 trigger 교체는 모든 환경이 공유하는 DB 동작을 바꾸므로 사용자 승인 없는 실행 금지.
 
-관리자 화면 캐시 주의:
-- `AdminUserManagementPage`는 일반 진입 시 `readAdminUserListCache(...)`를 먼저 사용하므로 이미 삭제된 계정이 화면에 잠시 남을 수 있음.
-- 앱 배포는 필요 없음. 서버 데이터 삭제는 즉시 적용됨.
-- 관리자 사용자관리 화면의 **`새로고침` 버튼**은 `fetchUsers(true)`로 서버 목록을 강제 확인하고 캐시를 다시 씀.
-- 화면 상단의 **`지금 확인` 버튼은 접속상태(Presence)만 갱신**하므로 사용자 목록 삭제 반영용 버튼이 아님.
-- 점검/정리용 임시 GitHub Actions workflow는 작업 완료 후 제거함.
+## 8. 배포 / 데이터 상태
+현재까지 075/076 작업은 **코드 및 오프라인 검증만 완료**.
+
+변경하지 않은 것:
+- `preview` branch 미변경.
+- PREVIEW Hosting 미배포 — 실제 앱 074 유지.
+- PREVIEW Worker 미배포 — 실제 Worker 069 유지.
+- Shared D1 075 table 미적용.
+- Shared D1 076 trigger 미적용.
+- Firebase Functions 변경 없음.
+- Firestore Rules 변경 없음.
+- TEST 변경 없음.
+- PRODUCTION 변경 없음.
+- 실사용자 원본 데이터 변경 없음.
+
+## 9. 절대 보호
+- 사용자 Music Note / Library / 공개곡 / 좋아요 / 팔로우 / 프로필 원본 데이터 삭제/백필/덮어쓰기 금지.
+- UI/CSS/위치/간격/반응형 변경 금지.
+- 074에서 확인된 즉시 좋아요 UX 유지.
+- 1분 client like batch + 10분 canonical aggregate 원칙 유지.
+- 정상 cache 재진입 Worker/D1 0 목표 유지.
+- preview/main/production 임의 혼합 금지.
+
+## 10. 남은 위험 / 승인 경계
+### 아직 실환경에서 검증하지 않은 것
+- 075 Worker 042 실제 PREVIEW 동작.
+- 075 shared D1 queue 실제 `meta.rows_written`.
+- 076 trigger 교체 후 실제 Cloudflare billed `rows_written`.
+- 3곡 같은 1분 window 실환경 1-user-row 동작.
+- ON→OFF→ON / OFF→ON→OFF 실제 aggregate 최종 수렴.
+- PC↔mobile same-account.
+- 동일 브라우저 A↔B account switch 실사용 화면 순도.
+
+### 승인 경계
+076은 데이터 행을 바꾸지 않지만 **공유 D1의 기존 trigger 정의를 교체**한다.
+현재 고정 shared-D1 workflow는 additive-only이므로 임의 우회 실행 금지.
+
+다음 실제 단계는 사용자 승인 후에만:
+1. 075/076 기준 commit 고정.
+2. shared D1 현재 5개 trigger SQL read-only 캡처/preflight.
+3. 별도 수동 maintenance 경로로 076 trigger 5개만 교체.
+4. 즉시 postflight + 데이터 row count/hash + trigger SQL 확인.
+5. 실패 시 캡처한 기존 5개 trigger 즉시 rollback.
+6. 075 additive queue schema 적용.
+7. PREVIEW Worker 042 배포.
+8. PREVIEW App 075 배포.
+9. 실제 좋아요/공개/프로필/PC↔mobile/계정전환/비용 telemetry 검증.
+10. 하나라도 실패하면 TEST 승격 중단.
+
+## 11. 현재 판정
+- 075 코드/자동검증: **PASS / 미배포**.
+- 075 계정전환 event isolation: **PASS / 실사용 검증 전**.
+- 076 비용 구조: **PASS / 오프라인 후보**.
+- 076 data purity + rollback: **PASS / 공유 D1 미적용**.
+- PREVIEW 실제 서비스: **074 + Worker 069 그대로**.
+- TEST 승격: **금지**.
+- PRODUCTION 승격: **금지**.

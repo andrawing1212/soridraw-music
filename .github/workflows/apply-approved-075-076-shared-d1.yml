@@ -1,0 +1,213 @@
+name: Apply Approved 075 076 Shared D1 Maintenance
+
+on:
+  push:
+    branches: [work/social-snapshot-075-v2]
+    paths:
+      - '.github/workflows/apply-approved-075-076-shared-d1.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-approved-075-076-shared-d1
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      APPROVED_SOURCE: cffa4be83b79de3ce1deaa2ac0fd50b8867f28ec
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+      PREVIEW_WORKER: soridraw-explore-preview
+      TEST_WORKER: soridraw-explore-test
+      PRODUCTION_WORKER: soridraw-explore-api
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      TEST_BASE: https://soridraw-explore-test.andrawing1212.workers.dev
+      PRODUCTION_BASE: https://soridraw-explore-api.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+      TEST_ORIGIN: https://test.soridraw.com
+      PRODUCTION_ORIGIN: https://soridraw.com
+
+    steps:
+      - name: Checkout exact approved source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.APPROVED_SOURCE }}
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Re-verify offline safety contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$APPROVED_SOURCE"
+          python3 scripts/verify-075-social-snapshot-cost.py
+          python3 scripts/verify-076-trigger-maintenance.py
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-explore-derived-cache.mjs
+          echo 'APPROVED_SOURCE_OFFLINE_PREFLIGHT=PASS'
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Prepare D1 config and expected trigger definitions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p cloudflare/explore-worker/.approved-075-076
+          cat > cloudflare/explore-worker/.approved-075-076/wrangler.jsonc <<JSON
+          {
+            "name": "soridraw-approved-075-076-maintenance",
+            "main": "../placeholder.js",
+            "compatibility_date": "2026-09-13",
+            "d1_databases": [
+              {"binding":"DB","database_name":"soridraw-explore-db","database_id":"${SHARED_D1_ID}"}
+            ]
+          }
+          JSON
+          python3 - <<'PY'
+          import json, sqlite3
+          from pathlib import Path
+          root=Path('cloudflare/explore-worker')
+          names=[
+            'explore032_derived_track_insert','explore032_derived_track_update',
+            'explore032_derived_track_delete','explore032_derived_profile_update',
+            'explore032_derived_profile_feed'
+          ]
+          def build(candidate=False):
+              db=sqlite3.connect(':memory:')
+              db.executescript((root/'scripts/fixtures/canonical-schema.sql').read_text())
+              db.executescript((root/'migrations/20260910_01_explore_derived_state.sql').read_text())
+              if candidate:
+                  db.executescript((root/'candidates/076-derived-trigger-compaction.sql').read_text())
+              rows={n:s for n,s in db.execute("SELECT name,sql FROM sqlite_schema WHERE type='trigger'") if n in names}
+              assert set(rows)==set(names), (candidate, rows.keys())
+              return rows
+          out=root/'.approved-075-076'
+          (out/'expected-before.json').write_text(json.dumps(build(False),ensure_ascii=False,indent=2))
+          (out/'expected-after.json').write_text(json.dumps(build(True),ensure_ascii=False,indent=2))
+          PY
+          echo 'LOCAL_TRIGGER_EXPECTATIONS=PASS'
+
+      - name: Capture protected Worker versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          const headers={Authorization:`Bearer ${token}`,Accept:'application/json'};
+          async function get(url){const r=await fetch(url,{headers});const t=await r.text();let x;try{x=JSON.parse(t)}catch{throw new Error(`Cloudflare ${r.status}: ${t.slice(0,500)}`)}if(!r.ok||x.success===false)throw new Error(`Cloudflare ${r.status}: ${t.slice(0,800)}`);return x.result??x;}
+          async function active(name){const p=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);const d=(p.deployments||p||[])[0];const v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];if(!v?.version_id||Number(v.percentage||0)<99.99)throw new Error(`No single active version for ${name}`);return String(v.version_id);}
+          (async()=>{const dir='cloudflare/explore-worker/.approved-075-076';for(const [key,name] of [['preview',process.env.PREVIEW_WORKER],['test',process.env.TEST_WORKER],['production',process.env.PRODUCTION_WORKER]]){const version=await active(name);fs.writeFileSync(`${dir}/${key}-worker-before.txt`,version);console.log(`${key.toUpperCase()}_WORKER_BEFORE=${version}`)}})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Read-only live D1 baseline and rollback capture
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/.approved-075-076/wrangler.jsonc"
+          names="'explore032_derived_track_insert','explore032_derived_track_update','explore032_derived_track_delete','explore032_derived_profile_update','explore032_derived_profile_feed'"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name IN ($names) ORDER BY name" --json > .approved-075-076/live-before.json
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT id,seq,seeded FROM explore_derived_state WHERE id=1; SELECT name,type,sql FROM sqlite_schema WHERE name IN ('explore_like_user_queue_075','idx_explore_like_user_queue_075_updated','explore_like_user_queue_state_075') ORDER BY name" --json > .approved-075-076/state-before.json
+          node <<'NODE'
+          const fs=require('fs');
+          const dir='.approved-075-076';
+          const expected=JSON.parse(fs.readFileSync(`${dir}/expected-before.json`,'utf8'));
+          const raw=JSON.parse(fs.readFileSync(`${dir}/live-before.json`,'utf8'));
+          const rows=raw.flatMap(x=>x.results||[]);
+          const normalize=s=>String(s||'').replace(/\bIF\s+NOT\s+EXISTS\b/ig,' ').replace(/\s+/g,' ').replace(/;+\s*$/,'').trim().toLowerCase();
+          if(rows.length!==5) throw new Error(`Expected 5 live target triggers, got ${rows.length}`);
+          for(const [name,sql] of Object.entries(expected)){const row=rows.find(r=>r.name===name);if(!row)throw new Error(`Missing live trigger ${name}`);if(normalize(row.sql)!==normalize(sql))throw new Error(`Live trigger drift: ${name}`);}
+          const stateRaw=JSON.parse(fs.readFileSync(`${dir}/state-before.json`,'utf8'));
+          const all=stateRaw.flatMap(x=>x.results||[]);
+          const state=all.find(r=>Number(r.id)===1 && 'seeded' in r);
+          if(!state||Number(state.seeded)!==1) throw new Error('Derived state is not seeded=1');
+          const existing=all.filter(r=>String(r.name||'').includes('075'));
+          if(existing.length) throw new Error(`075 schema unexpectedly already exists: ${existing.map(x=>x.name).join(',')}`);
+          const rollback=[];
+          for(const row of rows.sort((a,b)=>String(a.name).localeCompare(String(b.name)))){rollback.push(`DROP TRIGGER IF EXISTS "${String(row.name).replaceAll('"','""')}";`);rollback.push(String(row.sql).trim().replace(/;+$/,'')+';');}
+          fs.writeFileSync(`${dir}/rollback-triggers.sql`,rollback.join('\n')+'\n');
+          console.log(`LIVE_D1_PREFLIGHT=PASS seeded=${state.seeded} seq=${state.seq} targets=5 schema075=absent`);
+          NODE
+
+      - name: Apply 076 triggers then 075 additive queue with rollback guard
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/.approved-075-076/wrangler.jsonc"
+          changed=0
+          rollback() {
+            status=$?
+            if [ "$changed" = 1 ]; then
+              echo "APPROVED_D1_STEP_FAILED status=$status: restoring original 5 triggers and removing only newly-created 075 objects"
+              node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file .approved-075-076/rollback-triggers.sql --yes || true
+              node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "DROP INDEX IF EXISTS idx_explore_like_user_queue_075_updated; DROP TABLE IF EXISTS explore_like_user_queue_075; DROP TABLE IF EXISTS explore_like_user_queue_state_075;" --yes || true
+              echo 'SHARED_D1_ROLLBACK=ATTEMPTED'
+            fi
+            exit "$status"
+          }
+          trap rollback EXIT
+
+          changed=1
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file candidates/076-derived-trigger-compaction.sql --yes
+
+          names="'explore032_derived_track_insert','explore032_derived_track_update','explore032_derived_track_delete','explore032_derived_profile_update','explore032_derived_profile_feed'"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name IN ($names) ORDER BY name" --json > .approved-075-076/live-after-076.json
+          node <<'NODE'
+          const fs=require('fs');const dir='.approved-075-076';const expected=JSON.parse(fs.readFileSync(`${dir}/expected-after.json`,'utf8'));const raw=JSON.parse(fs.readFileSync(`${dir}/live-after-076.json`,'utf8'));const rows=raw.flatMap(x=>x.results||[]);const norm=s=>String(s||'').replace(/\bIF\s+NOT\s+EXISTS\b/ig,' ').replace(/\s+/g,' ').replace(/;+\s*$/,'').trim().toLowerCase();if(rows.length!==5)throw new Error(`076 live target count=${rows.length}`);for(const [name,sql] of Object.entries(expected)){const row=rows.find(r=>r.name===name);if(!row||norm(row.sql)!==norm(sql))throw new Error(`076 live trigger mismatch: ${name}`);}console.log('LIVE_076_TRIGGER_DEFINITIONS=PASS targets=5');
+          NODE
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file migrations/20260913_01_explore_like_user_queue.sql --yes
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT name,type FROM sqlite_schema WHERE name IN ('explore_like_user_queue_075','idx_explore_like_user_queue_075_updated','explore_like_user_queue_state_075') ORDER BY name; SELECT id,processed_at,processed_uid FROM explore_like_user_queue_state_075 WHERE id=1; SELECT COUNT(*) AS pending FROM explore_like_user_queue_075;" --json > .approved-075-076/live-after-075.json
+          node <<'NODE'
+          const fs=require('fs');const raw=JSON.parse(fs.readFileSync('.approved-075-076/live-after-075.json','utf8'));const rows=raw.flatMap(x=>x.results||[]);const names=new Set(rows.map(r=>r.name).filter(Boolean));for(const n of ['explore_like_user_queue_075','idx_explore_like_user_queue_075_updated','explore_like_user_queue_state_075'])if(!names.has(n))throw new Error(`Missing 075 D1 object ${n}`);if(!rows.some(r=>Number(r.id)===1 && Number(r.processed_at)===0))throw new Error('075 state row missing/dirty');const p=rows.find(r=>'pending' in r);if(Number(p?.pending)!==0)throw new Error(`075 queue must start empty, pending=${p?.pending}`);console.log('LIVE_075_QUEUE_SCHEMA=PASS pending=0 state=seeded');
+          NODE
+
+          trap - EXIT
+          echo 'SHARED_D1_075_076_APPLY=PASS'
+
+      - name: Public read smoke after shared D1 maintenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          smoke() {
+            label="$1"; base="$2"; origin="$3"
+            code="$(curl --retry 3 --retry-delay 1 -sS -o "$RUNNER_TEMP/${label}-feed.json" -w '%{http_code}' -H "Origin: $origin" "$base/v1/feed?sort=latest&limit=5")"
+            test "$code" = 200
+            owner="$(node -e "const p=require(process.env.RUNNER_TEMP+'/${label}-feed.json'),x=p?.data?.items?.[0]||{};process.stdout.write(String(x.ownerUid||x.owner_uid||''))")"
+            if [ -n "$owner" ]; then
+              pcode="$(curl --retry 3 --retry-delay 1 -sS -o /dev/null -w '%{http_code}' -H "Origin: $origin" "$base/v1/profiles/$owner/first-view?limit=5")"
+              test "$pcode" = 200
+            fi
+            echo "${label^^}_PUBLIC_READ_SMOKE=PASS"
+          }
+          smoke preview "$PREVIEW_BASE" "$PREVIEW_ORIGIN"
+          smoke test "$TEST_BASE" "$TEST_ORIGIN"
+          smoke production "$PRODUCTION_BASE" "$PRODUCTION_ORIGIN"
+
+      - name: Verify all Worker versions unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');const account=process.env.CLOUDFLARE_ACCOUNT_ID;const token=process.env.CLOUDFLARE_API_TOKEN;const headers={Authorization:`Bearer ${token}`,Accept:'application/json'};async function get(url){const r=await fetch(url,{headers});const x=await r.json();if(!r.ok||x.success===false)throw new Error(JSON.stringify(x).slice(0,800));return x.result??x;}async function active(name){const p=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${name}/deployments`);const d=(p.deployments||p||[])[0];const v=[...(d?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];if(!v?.version_id||Number(v.percentage||0)<99.99)throw new Error(`No active version ${name}`);return String(v.version_id);} (async()=>{const dir='cloudflare/explore-worker/.approved-075-076';for(const [key,name] of [['preview',process.env.PREVIEW_WORKER],['test',process.env.TEST_WORKER],['production',process.env.PRODUCTION_WORKER]]){const before=fs.readFileSync(`${dir}/${key}-worker-before.txt`,'utf8').trim();const after=await active(name);if(after!==before)throw new Error(`${key} Worker changed during D1 maintenance ${before} -> ${after}`);console.log(`${key.toUpperCase()}_WORKER_UNCHANGED=PASS version=${after}`)}})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          echo 'USER_CANONICAL_DATA_MIGRATION=false'
+          echo 'USER_DATA_DELETE=false'
+          echo 'USER_DATA_BACKFILL=false'
+          echo 'FIREBASE_CHANGED=false'

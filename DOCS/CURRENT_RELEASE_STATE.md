@@ -1,6 +1,6 @@
 # SORIDRAW CURRENT RELEASE STATE
 
-최종 갱신: 2026-09-13 KST
+최종 갱신: 2026-09-14 KST
 
 > 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다.
 
@@ -9,234 +9,223 @@
 - 개발 branch: `preview`
 - TEST branch: `main`
 - PRODUCTION branch: `production`
-- 현재 PREVIEW 앱 버전: **079**
-- 079 Worker 제품 기준 commit: `e68088ea036245b5385b296c08a1f8fe9001e62f`
-- 079 Worker release trigger commit: `bc759d7f332f85543830f8c5427f9715781ceefb`
-- PREVIEW Worker Release Run: `34754775846` — **PASS**
-- 현재 PREVIEW Worker active version: `737816a1-5cd2-4754-9c86-8904b2edd430`
-- 이전 PREVIEW Worker: `3f215682-ae3f-4c16-893d-16c7d0006a13`
-- App 079 source commit: `3df9c48f1a2dcf1f08a5867872e97bba8e04c9ac`
-- App 079 release trigger commit: `458bd00fb70f032349e9459235a280290ac53276`
-- PREVIEW App Release Run: `34754832740` — **PASS**
-- Shared D1 079 trigger compaction Run: `34754740138` — **PASS**
-- 079 postdeploy first-publication local simulation Run: `34755012756` — **PASS**
-- TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
-- PRODUCTION branch: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
-- TEST Worker: `0b9cfe5c-1e29-4485-ac97-36f87832b41e` — unchanged
-- PRODUCTION Worker: `07c11e5e-47a6-458b-a3a0-6e47b6c331e6` — unchanged
+- 현재 PREVIEW 앱 버전: **081**
+- 081 제품 source commit: `1b3f409bf2077a9cd8dfe3a2c2d3f5488d220b6a`
+- App version 081 commit: `3a36924f5fd29f88c8c350abdb37f70994a53e43`
+- PREVIEW Worker 048 Release Run: `34789153609` — **PASS**
+- 현재 PREVIEW Worker active version: `b6524b19-e66b-4eb6-b36d-9741195637eb`
+- 이전 PREVIEW Worker: `13af5814-77bf-4845-93a2-32f90844d5ae`
+- PREVIEW App Release Run: `34789244994` — **PASS**
+- 실제 `preview.soridraw.com` remote app version: **081** — PASS
+- TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — 배포 시점 비변경 확인
+- PRODUCTION branch: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 배포 시점 비변경 확인
+- TEST Worker: `0b9cfe5c-1e29-4485-ac97-36f87832b41e` — 비변경
+- PRODUCTION Worker: `07c11e5e-47a6-458b-a3a0-6e47b6c331e6` — 비변경
 
-## 2. 079 작업 목표
-사용자 PREVIEW 078 실측에서 확인된 공개/비공개 쓰기 폭증을 줄이는 비용 hotfix.
+## 2. 081 작업 목표
+사용자가 요청한 최종 비용 원칙을 실제 저장 흐름에 적용한다.
 
-실측 문제:
-- 기존 공개 등록: 약 `R7 / W25`.
-- 기존 공개↔비공개 전환에서도 `W12` 수준의 쓰기 증폭 확인.
-- 078에서 HTTP 500 충돌은 해결됐지만 한 곡 변경이 여러 D1 파생 행으로 연쇄 전파되는 구조가 남아 있었음.
+절대 합격선:
+- 페이지에서 아무것도 변경하지 않고 다른 페이지로 이동하면 **서버 요청 자체 0**.
+- 정상 캐시 + 변경 없음: **D1 R0/W0 + Firestore R0/W0** 목표.
+- 페이지 안에서 여러 번 변경해도 중간 상태를 서버에 반복 저장하지 않는다.
+- 같은 항목을 여러 번 바꾸면 마지막 상태만 남긴다.
+- 앱 내부 페이지 이탈 시 실제 변경분만 하나의 논리적 `PAGE SYNC`로 flush한다.
+- 브라우저/앱 창 종료에서는 서버 전송을 강제하지 않고 local outbox/draft를 보존한다.
+- 재접속 시 pending이 있을 때만 변경분 복구를 시도한다.
+- UI/CSS/레이아웃/반응형은 변경하지 않는다.
 
-079 목표:
-- Music Note 한 곡의 공개/비공개는 해당 곡과 필요한 최소 파생 상태만 변경.
-- Feed/Profile은 이미 검증된 targeted R2 patch를 우선 사용.
-- Music Note visibility 전환 때문에 D1 change journal을 중복 기록하지 않음.
-- 공개프로필 `track_count`는 정확히 유지.
-- 기존 TEST/PRODUCTION 호환용 shared global revision은 그대로 유지.
-- UI/CSS/위치/간격/반응형 변경 없음.
+## 3. 081 확정 구조
+### Global Page Sync coordinator
+파일: `src/lib/pageSyncCoordinator.ts`
+marker: `SORIDRAW_PAGE_EXIT_BATCH_SYNC_081`
 
-## 3. Worker 046 — 기존 곡 재공개 최소 UPDATE
-파일:
-- `cloudflare/explore-worker/patches/046-publication-write-compaction.mjs`
-- marker: `SORIDRAW_PUBLICATION_WRITE_COMPACTION_046_20260913`
+동작:
+- Likes / publication / Catalog / 페이지 전용 local dirty 개수를 먼저 확인.
+- `pendingChanges <= 0`이면 `noop`으로 종료하며 backend flush 함수를 호출하지 않는다.
+- 실제 변경이 있을 때만 dirty category를 flush한다.
+- `pagehide`는 창 닫기 신호만 기록하고 네트워크 flush를 하지 않는다.
+- startup recovery는 인증 완료 후 local pending이 존재하는 경우에만 실행한다.
 
-변경:
-- 기존 private Music Note 곡을 다시 public으로 만들 때 곡 내용이 바뀌지 않았다면 전체 `INSERT ... ON CONFLICT DO UPDATE`를 사용하지 않음.
-- 최소 canonical 변경만 수행:
-  - `is_public`
-  - `status`
-  - `published_at`
-  - `updated_at`
-- 제목/가사/URL/검색텍스트/공유옵션 등 실제 payload가 바뀐 경우에는 기존 full upsert 유지.
-- Feed/Profile publication R2 targeted patch 실패 시 canonical 공개/비공개 자체를 실패시키지 않고 해당 파생 R2만 복구 대상으로 표시.
-- 043 targeted R2 → 044 Local First → 045 publication revision → 046 publication write compaction 순서로 canonical PREVIEW Worker에 고정.
+### Explore 좋아요
+- 기존 persistent like outbox 재사용.
+- 페이지 안에서 자동 1분/타이머 서버 전송 제거.
+- 여러 좋아요 변경을 로컬에 누적.
+- 페이지 이탈 시 `/v1/me/likes/batch` 한 번의 batch flush.
+- 같은 곡의 중간 토글은 최종 desired state로 수렴.
+- 기존 10분 canonical aggregate 구조 유지.
 
-Canonical Worker SHA256:
-- `96a64158c474687eb2036cf1b8877d03f087c9ccc7f4b20bfbb9158d7992a99d`
+### Music Note 공개/비공개/공개옵션
+- persistent publication outbox 추가.
+- 공개→비공개→공개처럼 같은 곡을 반복 변경해도 최종 상태만 보존.
+- 즉시 UI/cache는 로컬에서 반영하고 서버는 page-exit 때 반영.
+- Worker 048 route: `POST /v1/me/music-note-publications/batch`.
+- 외부 요청 1회에 최대 50개 publication final state를 묶음 처리.
+- 최초 등록되지 않은 곡이 최종 private면 net-zero로 서버 등록하지 않는다.
+- 기존 080 visibility hotpath / R2 targeted patch / canonical safety 유지.
 
-## 4. Shared D1 079 — Music Note 파생 쓰기 압축
-파일:
-- `cloudflare/explore-worker/migrations/20260913_03_music_note_write_compaction.sql`
+### Music Note 상세편집 / 카드 상태
+- IndexedDB detail draft와 기존 local card dirty 구조 재사용.
+- 60초 idle 서버저장 제거.
+- detail modal close 서버저장 제거.
+- browser `pagehide` 서버저장 제거.
+- Music Note 페이지 이탈 시 기존 변경분을 page sync에서 flush.
+- 창이 닫히면 local draft/dirty가 남고 다음 실행에서 복구 가능.
 
-변경 대상 trigger:
-- `explore032_derived_track_insert`
-- `explore032_derived_track_update`
-- `explore079_music_note_derived_track_insert`
-- `explore079_music_note_derived_track_update`
+### Music Note / Library Catalog
+- 새로운 저장엔진을 만들지 않음.
+- 기존 검증된 delta catalog 엔진을 재사용.
+- 자동 publish timer 제거.
+- dirty revision이 있을 때만 page-exit flush.
+- dirty 0이면 Catalog server request 0.
+- cache 손상/불완전 snapshot 같은 복구 상황에서만 기존 bounded rebuild fallback 허용.
 
-원칙:
-- `explore_derived_tracks`는 계속 최신 상태 유지.
-- `explore_derived_profiles.track_count`는 공개/비공개에 맞춰 유지.
-- Music Note의 공개/비공개에서는 중복된 `explore_derived_state` / `explore_derived_changes` journal 쓰기를 생략.
-- non-Music-Note 데이터는 기존 derived journal 동작 유지.
-- `soridraw_shared_rev_*_051` global revision trigger는 변경하지 않음.
-- canonical 사용자 tracks/profile row를 삭제, 백필, 변환하지 않음.
+## 4. Worker 048
+파일: `cloudflare/explore-worker/patches/048-page-exit-publication-batch.mjs`
+marker: `SORIDRAW_PAGE_EXIT_PUBLICATION_BATCH_048_20260914`
 
-Shared D1 실제 적용 Run `34754740138`:
-- 사전 live 078 trigger shape 확인 PASS.
-- 실패 시 exact 078 trigger 자동복구 guard 준비 PASS.
-- trigger-only migration 적용 PASS.
-- 적용 후 4개 trigger 구조 확인 PASS.
-- 적용 자체 비용: **589 rows read / 4 rows written**.
-- 위 수치는 1회 trigger 정의 교체 비용이며 사용자 공개 1회 비용이 아님.
-- main/production branch unchanged PASS.
+기능:
+- Music Note publication page-exit batch route 추가.
+- 한 요청 내부 sourceId 중복을 마지막 상태로 합침.
+- 기존 first-public / visibility handler를 재사용해 canonical 의미를 유지.
+- 변경 없음은 net-zero/idempotent 처리.
+- Feed edge invalidation은 batch 전체 이후 필요한 경우 한 번 처리.
+- publication R2 revision metadata를 batch 응답에 포함.
 
-## 5. 비용 시뮬레이션 결과
-실제 Shared D1 schema/trigger를 읽기 전용으로 복제한 로컬 SQLite 기준.
+Canonical PREVIEW Worker SHA256:
+- `9aed31dc08b20802b4253a8d43ec32b4fcd17b053a2460c14f7ba634a47fb2d1`
 
-기존 078:
-- existing Music Note public → private logical writes: **7**.
+PREVIEW Worker Run `34789153609`:
+- locked source: `3a36924f5fd29f88c8c350abdb37f70994a53e43`
+- Worker version: `13af5814-77bf-4845-93a2-32f90844d5ae` → `b6524b19-e66b-4eb6-b36d-9741195637eb`
+- preflight PASS
+- live like queue prerequisite PASS
+- Feed smoke PASS
+- public profile smoke PASS
+- unauthenticated like batch route HTTP 401 정상
+- warm Feed revision 실제 **D1 R0/W0 / HEAD-ONLY-036** PASS
+- like aggregate cron `*/10 * * * *` PASS
+- TEST Worker unchanged PASS
+- PRODUCTION Worker unchanged PASS
 
-079:
-- existing Music Note public → private logical writes: **4**.
-- existing Music Note private → public logical writes: **4**.
-- profile `track_count`: `1 → 0 → 1` PASS.
-- Music Note visibility 전환 중 old derived journal seq 증가 없음 PASS.
-- non-Music-Note journal compatibility PASS.
-
-최초 공개 추가검증 Run `34755012756`:
-- 이미 공개프로필이 있는 사용자의 첫 Music Note 곡 공개: logical writes **4**, track_count `1` PASS.
-- 공개프로필 자체가 없는 완전 신규 사용자의 최초 프로필 생성 + 첫 곡 공개: logical writes **11**, track_count `1` PASS.
-- 신규 사용자 11회는 계정당 최초 공개 시 프로필 초기화가 함께 발생하는 1회성 경로.
-- 위 숫자는 SQLite logical row changes이며 Cloudflare D1 청구 `rows_written`과 동일하다고 단정하지 않음. 실제 D1은 index write까지 포함될 수 있으므로 실사용 계측 필요.
-- postdeploy simulation은 원격 D1 사용자 row write **0**.
-
-## 6. 079 사전/회귀 검증
-Preparation Run `34754505681` — 최종 재실행 PASS.
-
-- live Shared D1 schema local clone PASS.
-- 078 → 079 logical write compaction PASS.
-- Worker 046 `node --check` PASS.
-- Explore like cost verifier PASS.
-- derived cache regression PASS.
-- deploy preflight PASS.
-- TypeScript `npx tsc --noEmit` PASS.
-- `npm run build` PASS.
-- 기존 좋아요 Local First / 10분 aggregate 보호 PASS.
-- 기존 078 persistent publication snapshot / R2 revision 구조 보호.
-
-첫 attempt는 046 patch 조립기의 줄바꿈 anchor가 너무 엄격해 안전 중단됐고, 원격 D1 쓰기/배포 없이 조립기만 구조 기반으로 수정 후 재검증했다.
-
-## 7. PREVIEW Worker 079 실제 배포
-Run `34754775846` — PASS.
-
-- locked product SHA: `e68088ea036245b5385b296c08a1f8fe9001e62f`.
-- previous Worker: `3f215682-ae3f-4c16-893d-16c7d0006a13`.
-- active Worker: `737816a1-5cd2-4754-9c86-8904b2edd430`.
-- canonical source SHA PASS.
-- live D1 prerequisite PASS.
-- dry-run PASS.
-- Feed smoke PASS.
-- public profile smoke PASS.
-- unauthenticated like batch route HTTP `401` 정상.
-- warm Feed revision 실제 측정: **D1 R0/W0** PASS.
-- like aggregate cron `*/10 * * * *` PASS.
-- TEST Worker unchanged PASS.
-- PRODUCTION Worker unchanged PASS.
-
-## 8. PREVIEW App 079 실제 배포
-App version:
-- `public/app-version.json`: `078` → **`079`**.
-
-Run `34754832740` — PASS.
-- locked release SHA: `458bd00fb70f032349e9459235a280290ac53276`.
-- TypeScript PASS.
-- Build PASS.
-- Firebase PREVIEW Hosting PASS.
-- actual `preview.soridraw.com` exact build PASS.
-- actual remote `app-version.json` = **079** PASS.
-- TEST page/branch unchanged PASS.
-- PRODUCTION page/branch unchanged PASS.
-
-079 앱은 기능 UI 변경이 아니라 테스트 버전 식별을 위해 버전만 상승. 기존 078 앱은 상단 update notice 조건을 충족한다.
-
-## 9. TEST / PRODUCTION 공유 D1 호환성
-Shared D1은 세 환경이 공유하므로 코드 비변경만으로 안전 판정하지 않는다.
+## 5. 081 제품 검증
+Preparation/verification Run `34789032320` — **PASS**.
 
 확인:
-- `main` 051 계열은 `explore_derived_changes`를 사용하는 현재 PREVIEW 032 delta 구조가 아니라 `explore_shared_revision` 기반 shared canonical cache 구조를 사용.
-- main 코드 검색에서 `explore_derived_changes` 사용 없음 확인.
-- 079는 `soridraw_shared_rev_tracks_au_051` 등 global revision trigger를 제거/변경하지 않음.
-- PRODUCTION Worker는 032 derived-change 도입 전 버전이며 Worker version도 비변경.
-- 따라서 079 Music Note journal 압축이 구 TEST/PRODUCTION의 변경 감지 신호를 제거하지 않도록 하위호환 유지.
+- 081 client patch PASS
+- Worker 048 canonical assembly PASS
+- TypeScript `npx tsc --noEmit` PASS
+- `npm run build` PASS
+- Music Note detail existing regression PASS
+- Music Note save-status regression PASS
+- 081 page-exit cost contract PASS
+- Explore like cost regression PASS
+- Explore derived cache regression PASS
+- 080 publication state engine regression PASS
+- deploy preflight PASS
+- verified product source commit `1b3f409bf2077a9cd8dfe3a2c2d3f5488d220b6a`
 
-TEST/PRODUCTION 승격은 별개이며 사용자 실사용 검증 전 금지.
+081 verifier가 보호하는 핵심:
+- zero dirty page transition은 flush 전에 return.
+- likes/publications/catalog 자동 network timer 없음.
+- Music Note detail idle/detail-close/pagehide server flush 없음.
+- Library/Music Note/Explore page-exit sync 연결 존재.
+- startup durable pending recovery 존재.
+- Worker 048 batch route 존재.
 
-## 10. Firebase / Cloudflare / 사용자 데이터 변경 범위
-Firebase:
-- PREVIEW Hosting: 079 배포 완료.
-- Functions: 변경 없음.
-- Firestore Rules: 변경 없음.
+## 6. PREVIEW App 081 실제 배포
+Run `34789244994` — **PASS**.
 
-Cloudflare:
-- PREVIEW Worker: 046 포함 079로 변경.
-- Shared D1: Music Note derived trigger 4개 정의만 하위호환 교체.
-- TEST Worker: 코드/버전 변경 없음.
-- PRODUCTION Worker: 코드/버전 변경 없음.
+- release source checkout: `cc6e037b869e338e6a920249e943759d99dba975` (081 product + version + release metadata descendant)
+- TypeScript PASS
+- Build PASS
+- Firebase PREVIEW Hosting deploy PASS
+- actual `preview.soridraw.com` exact build PASS
+- actual remote `app-version.json` = **081** PASS
+- TEST page/branch unchanged PASS
+- PRODUCTION page/branch unchanged PASS
+
+Firebase 변경:
+- PREVIEW Hosting only.
+- Functions 변경 없음.
+- Firestore Rules 변경 없음.
+
+## 7. Shared D1 / 사용자 데이터 변경 범위
+081에서는 Shared D1 migration 없음.
+
+유지:
+- 080 visibility-only hotpath trigger 구조.
+- shared canonical user data.
+- TEST/PRODUCTION 호환 revision 구조.
 
 사용자 데이터:
-- canonical 사용자 row migration 없음.
 - 대량삭제 없음.
 - 백필 없음.
-- 사용자 데이터 덮어쓰기 없음.
+- destructive migration 없음.
 - 기존 필드 제거/의미변경 없음.
+- 사용자 원본 데이터 강제 재생성 없음.
 
-## 11. 078에서 이어서 보호하는 정상 구조
-- Music Note publication persistent snapshot + 작은 R2 revision 확인.
-- 앱 재실행/업데이트 자체로 publication 전체 재읽기 금지.
-- 변경 없는 Feed revision D1 R0/W0.
-- 즉시 Local First 좋아요 하트/숫자 UX.
-- PREVIEW 좋아요 1분 묶음 전송.
-- canonical 공개 숫자 10분 aggregate.
-- 같은 계정 PC↔모바일 최종 수렴.
-- 정상 cache + 변경 없음 서버 read 0 목표.
-- Music Note / Library 기존 Local First와 묶음저장.
-- UI/CSS/반응형/분할 구조 비변경.
-- 공유 사용자 원본 데이터 비파괴.
+## 8. 비용 판정
+자동/정적 판정:
+- **zero-dirty page transition은 backend flush를 호출하지 않는 구조 PASS**.
+- warm Feed revision 실제 D1 R0/W0 PASS.
+- 중간 좋아요/publication 자동 flush 제거 PASS.
+- browser close 서버전송 제거 PASS.
+
+중요:
+- `PAGE SYNC 1회`는 사용자 행동 기준 하나의 논리적 sync다.
+- Likes + publication + Firestore detail처럼 서로 다른 backend 종류가 동시에 dirty면 하나의 page sync 안에서 backend별 batch 요청이 각각 발생할 수 있다.
+- 081은 “모든 서비스를 단 하나의 HTTP 요청”으로 합친 것이 아니라, **중간 반복 호출을 없애고 각 dirty category를 페이지 이탈 시 한 번씩만 처리**하는 구조다.
+- 실제 authenticated UI에서의 D1/Firestore R/W는 사용자 실사용 계측 전까지 확정하지 않는다.
+
+## 9. 실사용 검증 필요 항목
+`preview.soridraw.com` 081에서 다음을 실제 확인한다.
+
+1. 진단 초기화 후 아무것도 수정하지 않고 Explore → Music Note → Library 이동.
+   - 기대: PAGE SYNC `NOOP`, Worker 0, D1 R0/W0, Firestore R0/W0.
+2. Music Note 같은 곡을 공개→비공개→공개 등 여러 번 변경 후 페이지를 한 번 나감.
+   - 기대: 중간 서버 요청 없음, 마지막 상태만 publication batch에 포함.
+3. Explore에서 좋아요 여러 번 변경 후 다른 페이지 이동.
+   - 기대: 페이지 안에서는 서버 batch 없음, 이탈 때 likes batch 1회.
+4. Music Note 상세 여러 필드 편집 후 페이지 이탈.
+   - 기대: 중간 60초/닫기 write 없음, page exit 때 최종 변경분만 저장.
+5. Library/Music Note 변경 없이 페이지 재진입.
+   - 기대: 정상 cache면 반복 server read/write 0 목표.
+6. pending 변경 후 브라우저를 바로 종료하고 재접속.
+   - 기대: 종료 시 서버전송 강제 없음, local pending 유지, 재접속 후 변경분만 복구.
+7. PC ↔ 모바일 same-account 최종 상태 수렴 확인.
+
+## 10. TEST / PRODUCTION 승격
+- TEST 승격: **금지 / PREVIEW 081 실사용 correctness + 비용 검증 전**.
+- PRODUCTION 승격: **사용자의 명확한 정식배포 승인 전 금지**.
+- PREVIEW→TEST 승격 시 사용자 데이터 복제/덮어쓰기 금지.
+
+## 11. 정상 기능 보호
+절대 임의 변경 금지:
+- UI 외곽선/위치/크기/간격/반응형/테마/색상.
+- 분할바/생성바 기존 정상 동작.
+- Music Note / Library Local First data semantics.
+- Explore Feed/public profile R2 cache 구조.
+- 좋아요 10분 canonical aggregate.
+- 공유 사용자 원본 데이터.
 
 ## 12. 임시 작업파일 정리
-079용 temporary Workflow는 검증/배포 후 모두 제거 완료.
+081 구현 중 사용한 temporary workflow/script는 배포 후 제거 완료.
 
 제거:
-- `temp-079-publication-trigger-live-check.yml`
-- `temp-079-prepare-publication-compaction.yml`
-- `temp-079-shared-d1-write-compaction.yml`
-- `temp-079-postdeploy-first-publish-cost.yml`
+- `.github/workflows/temp-081-prepare-page-exit-batch.yml`
+- `.github/workflows/temp-081-run-extracted-page-exit-batch.yml`
+- `.deploy/normalize-081-page-exit-patch.py`
 
 영구 보존:
-- `patches/046-publication-write-compaction.mjs`
-- `migrations/20260913_03_music_note_write_compaction.sql`
-- canonical PREVIEW Worker 046 source/hash
-- 기존 043/044/045 및 078 client cache source
-- 비용/회귀 검증기
+- `src/lib/pageSyncCoordinator.ts`
+- `cloudflare/explore-worker/patches/048-page-exit-publication-batch.mjs`
+- `scripts/verify-081-page-exit-batch.mjs`
+- 081 client/page integrations
+- canonical PREVIEW Worker 048 source/hash
 
-## 13. 현재 비용 판정 / 실사용 검증
-자동검증 판정:
-- **079 코드/Shared D1/Worker/App PREVIEW 배포 완료.**
-- 기존 logical visibility writes `7 → 4` 확인.
-- 기존 프로필 사용자 첫 곡 공개 logical writes `4` 확인.
-- HTTP 500 충돌 수정 유지.
-- warm Feed revision D1 R0/W0 유지.
+## 13. 다음 작업
+새 기능 구현 전에 **PREVIEW 081 실사용 비용 계측**을 우선한다.
 
-아직 실제 사용자 계정으로 확인해야 하는 것:
-1. 079 update notice 적용 후 Music Note 진입.
-2. 비공개 곡 1개 공개 → 실제 Cloudflare `rows_read / rows_written` 측정.
-3. 같은 곡 비공개 → 실제 R/W + HTTP 오류 없음 확인.
-4. 다시 공개 → 실제 R/W 확인.
-5. 새 곡 최초 공개 등록 → 실제 R/W 확인.
-6. 좋아요 2~3곡 1분 묶음 → 실제 intake R/W 확인.
-7. PC↔모바일 same-account 최종 상태 수렴 확인.
-
-**실제 D1 청구 rows_written은 실사용 계정 계측 전 W4라고 단정하지 않는다.**
-
-## 14. TEST / PRODUCTION 승격 상태
-- TEST 승격: **금지 / PREVIEW 079 실사용 비용 검증 전**.
-- PRODUCTION 승격: **금지 / 사용자의 명확한 정식배포 승인 전**.
-
-다음 작업은 새 기능 추가가 아니라 PREVIEW 079 실제 사용 비용 확인이다. 실제 수치가 여전히 과하면 PREVIEW에서만 추가 최적화한다.
+실측이 합격하면 TEST 승격 후보로 판단한다.
+실측에서 zero-dirty 이동에 서버 사용이 발생하거나 page-exit batch가 중복 호출되면 원인을 확인하지 않은 상태에서 다음 승격으로 넘어가지 않는다.

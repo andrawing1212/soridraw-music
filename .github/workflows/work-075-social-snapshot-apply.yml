@@ -1,0 +1,121 @@
+name: Work 075 Social Snapshot Apply
+
+on:
+  push:
+    branches: [work/social-snapshot-075]
+    paths:
+      - '.github/workflows/work-075-social-snapshot-apply.yml'
+      - '.deploy/apply-075-social-snapshot-r2-queue.py'
+      - '.deploy/patch-075-like-verifier.py'
+      - 'cloudflare/explore-worker/patches/042-explore-social-snapshot-r2-queue.mjs'
+      - 'cloudflare/explore-worker/runtime/social-snapshot-042.js'
+      - 'scripts/verify-075-social-snapshot.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: work-075-social-snapshot-apply
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@v4
+        with:
+          ref: work/social-snapshot-075
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply 075 source
+        run: |
+          python3 .deploy/apply-075-social-snapshot-r2-queue.py
+          python3 .deploy/patch-075-like-verifier.py
+
+      - name: Static Worker checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/patches/042-explore-social-snapshot-r2-queue.mjs
+          node --check cloudflare/explore-worker/runtime/social-snapshot-042.js
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test -n "$expected"
+          test "$actual" = "$expected"
+          grep -Fq 'SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_R2_QUEUE_042_20260913' cloudflare/explore-worker/canonical/preview-worker.js
+          grep -Fq '042-explore-social-snapshot-r2-queue.mjs' cloudflare/explore-worker/release-patches.json
+          grep -Fq '"version": "075"' public/app-version.json
+          echo '075_WORKER_STATIC=PASS'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify social snapshot and like contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          node scripts/verify-explore-like-cost-optimization.mjs
+          node scripts/verify-075-social-snapshot.mjs
+          node scripts/verify-explore-derived-cache.mjs
+          node scripts/verify-explore-deploy-preflight.mjs
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify safe change boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only | grep -v '^dist/' || true)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreLikeService\.ts|src/services/exploreSocialService\.ts|src/services/exploreSocialSnapshotService\.ts|cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt|cloudflare/explore-worker/release-patches\.json|public/app-version\.json|scripts/verify-explore-like-cost-optimization\.mjs)$' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected generated changes:'
+            echo "$bad"
+            exit 1
+          fi
+          test -z "$(printf '%s\n' "$changed" | grep -E '\.(css|scss)$' || true)"
+          test -z "$(printf '%s\n' "$changed" | grep -E 'migrations/|firestore|functions/' || true)"
+          echo 'NO_D1_SCHEMA_CHANGE=true'
+          echo 'NO_USER_DATA_MIGRATION=true'
+          echo 'NO_FIREBASE_FUNCTIONS_CHANGE=true'
+          echo 'NO_FIRESTORE_RULES_CHANGE=true'
+          echo 'NO_UI_CSS_CHANGE=true'
+
+      - name: Commit verified 075 source on work branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked=(
+            src/services/exploreLikeService.ts
+            src/services/exploreSocialService.ts
+            src/services/exploreSocialSnapshotService.ts
+            cloudflare/explore-worker/canonical/preview-worker.js
+            cloudflare/explore-worker/canonical/source-sha256.txt
+            cloudflare/explore-worker/release-patches.json
+            public/app-version.json
+            scripts/verify-explore-like-cost-optimization.mjs
+          )
+          if git diff --quiet -- "${tracked[@]}"; then
+            echo '075 actual source already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "${tracked[@]}"
+          git commit -m 'feat: add Explore social snapshots and R2 like queue'
+          git push origin HEAD:work/social-snapshot-075

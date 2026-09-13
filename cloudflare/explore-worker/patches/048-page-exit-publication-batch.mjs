@@ -23,7 +23,7 @@ for (const required of [
 const helperAnchor = 'async function handleLikeBatch034(request, env, cors) {';
 if (!source.includes(helperAnchor)) throw new Error('[048] helper anchor missing');
 
-const helper = `
+const helper = String.raw`
 function pageSyncPublicationOptions048(value) {
   return {
     allowNextSongApply: Boolean(value?.allowNextSongApply),
@@ -115,7 +115,7 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
           trackId: mutation.trackId,
           status: mutation.status,
           registered: mutation.registered,
-          error: String(payload?.message || payload?.error?.message || payload?.error || \`HTTP_\${response.status}\u0060),
+          error: String(payload?.message || payload?.error?.message || payload?.error || ('HTTP_' + response.status)),
         });
         continue;
       }

@@ -1,0 +1,40 @@
+name: Diagnose 076 Current 033 Baseline
+
+on:
+  push:
+    branches: [work/social-snapshot-075-v2]
+    paths:
+      - '.github/workflows/diagnose-076-live-033-baseline.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/social-snapshot-075-v2
+      - name: Measure offline current 033 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          p=Path('scripts/verify-075-social-snapshot-cost.py')
+          spec=importlib.util.spec_from_file_location('v075',p)
+          m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+          mig=Path('cloudflare/explore-worker/migrations/20260910_03_explore_like_write_optimization.sql').read_text()
+          now=1_700_100_000_000
+          def conn():
+              c=m.seed_derived_db(); c.executescript(mig); return c
+          c=conn(); like=m.measured_changes(c,"UPDATE track_stats SET like_count=1, updated_at=? WHERE track_id='track-1'",(now,))
+          c=conn(); visibility=m.measured_changes(c,"UPDATE tracks SET is_public=0, updated_at=? WHERE id='track-1'",(now+1,))
+          c=conn(); bio=m.measured_changes(c,"UPDATE public_profiles SET bio='hello', updated_at=? WHERE uid='owner'",(now+2,))
+          c=conn(); avatar=m.measured_changes(c,"UPDATE public_profiles SET avatar_url='https://img.example/avatar.png', updated_at=? WHERE uid='owner'",(now+3,))
+          print(f'CURRENT_033_BASELINE like={like} visibility={visibility} bio={bio} avatar={avatar}')
+          assert like==5, like
+          print('CURRENT_033_LIKE_W5_PROTECTED=PASS')
+          PY

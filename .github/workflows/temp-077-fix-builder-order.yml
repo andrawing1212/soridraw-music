@@ -1,0 +1,40 @@
+name: TEMP 077 Fix Builder Order
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-077-fix-builder-order.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - name: Apply 043 before 044 in canonical builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/temp-077-prepare-local-first-worker.yml')
+          s = p.read_text()
+          old = '          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.tmp-worker" node cloudflare/explore-worker/patches/044-local-first-cost-hotpath.mjs\n'
+          new = '          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.tmp-worker" node cloudflare/explore-worker/patches/043-publication-targeted-r2-hotpath.mjs\n          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.tmp-worker" node cloudflare/explore-worker/patches/044-local-first-cost-hotpath.mjs\n'
+          if old not in s:
+              raise SystemExit('prepare Worker build anchor missing')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          rm -f .github/workflows/temp-077-fix-builder-order.yml
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release-bot@users.noreply.github.com'
+          git add .github/workflows/temp-077-prepare-local-first-worker.yml .github/workflows/temp-077-fix-builder-order.yml
+          git diff --cached --check
+          git commit -m 'fix(preview): build Worker 043 before 044'
+          git push origin HEAD:preview

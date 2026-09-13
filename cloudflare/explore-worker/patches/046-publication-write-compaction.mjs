@@ -76,30 +76,63 @@ const wrapAsyncFunction = (name, wrapperTextBuilder) => {
   source = source.slice(0, range.start) + renamed + '\n\n' + wrapperTextBuilder(coreName) + source.slice(range.end);
 };
 
+const blockRange = (text, start) => {
+  const brace = text.indexOf('{', start);
+  if (brace < 0) throw new Error('[046] block brace missing');
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  let comment = '';
+  for (let index = brace; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (comment === 'line') { if (char === '\n') comment = ''; continue; }
+    if (comment === 'block') { if (char === '*' && next === '/') { comment = ''; index += 1; } continue; }
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === quote) quote = '';
+      continue;
+    }
+    if (char === '/' && next === '/') { comment = 'line'; index += 1; continue; }
+    if (char === '/' && next === '*') { comment = 'block'; index += 1; continue; }
+    if ('"\'`'.includes(char)) { quote = char; continue; }
+    if (char === '{') depth += 1;
+    if (char === '}' && --depth === 0) return { start, end: index + 1 };
+  }
+  throw new Error('[046] unterminated block');
+};
+
 // Existing private Music Note rows already contain the full canonical payload.
 // Republishing must only touch visibility/ranking timestamps when the payload itself
 // has not changed. This avoids rewriting every track column and all related indexes.
 {
   const range = functionRange('handleMusicNotePublicationSingleWrite016');
   let text = range.text;
-  const unchangedAnchor = '  const unchanged = publicationCanonicalUnchanged016(previous, source, resolvedOptions, primaryGenre);';
+  const unchangedAnchor = 'const unchanged = publicationCanonicalUnchanged016(previous, source, resolvedOptions, primaryGenre);';
   if (text.split(unchangedAnchor).length - 1 !== 1) throw new Error('[046] unchanged anchor mismatch');
   text = text.replace(
     unchangedAnchor,
     `${unchangedAnchor}\n  const visibilityOnly = Boolean(previous?.id) && publicationCanonicalUnchanged016(\n    { ...previous, is_public: 1, status: 'published' },\n    source,\n    resolvedOptions,\n    primaryGenre,\n  );`,
   );
 
-  const blockStart = text.indexOf('  if (!unchanged) {');
-  const feedAnchor = text.indexOf('\n\n  const feedItem =', blockStart);
-  if (blockStart < 0 || feedAnchor < 0) throw new Error('[046] publication write block anchors missing');
-  const block = text.slice(blockStart, feedAnchor);
+  const match = /if\s*\(!unchanged\)\s*\{/.exec(text);
+  if (!match) throw new Error('[046] publication write block start missing');
+  const bounds = blockRange(text, match.index);
+  const block = text.slice(bounds.start, bounds.end);
   if (!block.includes('INSERT INTO tracks')) throw new Error('[046] full canonical upsert missing');
-  const upsertStart = block.indexOf('    await env.DB.prepare(`');
-  const close = block.lastIndexOf('\n  }');
-  if (upsertStart < 0 || close < 0) throw new Error('[046] full upsert block parse failed');
-  const fullUpsert = block.slice(upsertStart, close).replace(/^/gm, '  ');
-  const compactBlock = `  if (!unchanged) {\n    if (visibilityOnly) {\n      await env.DB.prepare(\`\n        UPDATE tracks\n        SET is_public = 1,\n            status = 'published',\n            published_at = ?,\n            updated_at = ?\n        WHERE id = ? AND owner_uid = ?\n      \`).bind(publishedAt, now, source.id, authContext.uid).run();\n    } else {\n${fullUpsert}\n    }\n  }`;
-  text = text.slice(0, blockStart) + compactBlock + text.slice(feedAnchor);
+  const upsertStart = block.indexOf('await env.DB.prepare(`');
+  const runEndToken = ').run();';
+  const upsertEnd = block.lastIndexOf(runEndToken);
+  if (upsertStart < 0 || upsertEnd < 0) throw new Error('[046] full upsert block parse failed');
+  const fullUpsertRaw = block.slice(upsertStart, upsertEnd + runEndToken.length);
+  const fullUpsert = fullUpsertRaw
+    .split('\n')
+    .map((line) => line.replace(/^\s{4}/, ''))
+    .join('\n')
+    .replace(/^/gm, '      ');
+  const compactBlock = `if (!unchanged) {\n    if (visibilityOnly) {\n      await env.DB.prepare(\`\n        UPDATE tracks\n        SET is_public = 1,\n            status = 'published',\n            published_at = ?,\n            updated_at = ?\n        WHERE id = ? AND owner_uid = ?\n      \`).bind(publishedAt, now, source.id, authContext.uid).run();\n    } else {\n${fullUpsert}\n    }\n  }`;
+  text = text.slice(0, bounds.start) + compactBlock + text.slice(bounds.end);
   source = source.slice(0, range.start) + text + source.slice(range.end);
 }
 

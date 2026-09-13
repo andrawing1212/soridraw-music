@@ -1,0 +1,36 @@
+name: TEMP 081 Readonly Route Outbox Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-081-readonly-route-outbox-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - name: Print exact route and batching anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== APP ROUTING ==='
+          grep -nE "BrowserRouter|HashRouter|Routes|Route|useLocation|location\.pathname|navigate\(|setCurrent|currentPage|activePage|pageKey" src/App.tsx | head -n 160 || true
+          echo '=== APP NAV EVENTS ==='
+          grep -nE "popstate|pushState|replaceState|history\.|beforeunload|pagehide|visibilitychange" src/App.tsx | head -n 120 || true
+          echo '=== FAVORITES PUBLICATION ==='
+          grep -nE "publishMusicNoteToExplore|setExploreTrackVisibility|setExploreTrackPublicationOptions|registered|publicationBusy" src/pages/FavoritesPage.tsx | head -n 180 || true
+          echo '=== LIKE OUTBOX ==='
+          grep -nE "LIKE_OUTBOX|scheduleLikeOutboxFlush|flushLikeOutbox|setTimeout|pagehide|visibilitychange" src/services/exploreLikeService.ts | head -n 180 || true
+          echo '=== CATALOG BATCH ==='
+          grep -nE "catalogPublishTimers|catalogPendingPublishes|scheduleCatalogSnapshotPublishIfDirty|setTimeout|flush|pagehide|visibilitychange" src/lib/userDataEngine.ts | head -n 200 || true
+          echo '=== FIRESTORE DIRTY / SAVE ==='
+          grep -nE "60_000|60000|setTimeout|debounce|flush|dirty|schedule.*save|pending.*save" src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx src/hooks/useFavoritesStore.ts src/services/playlistService.ts 2>/dev/null | head -n 240 || true

@@ -16,7 +16,7 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,12 +26,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Patch 080 client, recovery runtime and verifier
+
+      - name: Patch 080 client and cold-recovery runtime
         shell: bash
         run: |
           set -euo pipefail
           python3 <<'PY'
           from pathlib import Path
+          import re
 
           def replace_once(text, old, new, label):
               count=text.count(old)
@@ -39,37 +41,56 @@ jobs:
                   raise SystemExit(f'{label}: expected 1 anchor, got {count}')
               return text.replace(old,new,1)
 
-          # Client publication contract: an existing private canonical row is not a new publication.
+          def sub_once(text, pattern, repl, label, flags=0):
+              out,count=re.subn(pattern,repl,text,count=1,flags=flags)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 regex match, got {count}')
+              return out
+
+          # 1) Persistent publication cache distinguishes never-published from existing-private.
           p=Path('src/services/explorePublicationService.ts')
           s=p.read_text(encoding='utf-8')
-          s=replace_once(s,
-            '// SORIDRAW_PUBLICATION_PERSISTENT_REVISION_078_20260913',
-            '// SORIDRAW_PUBLICATION_PERSISTENT_REVISION_078_20260913\n// SORIDRAW_PUBLICATION_REGISTERED_STATE_080_20260913',
-            'client marker')
-          s=replace_once(s,
-            "export type ExploreMusicNotePublicationState = ExplorePublicationOptions & {\n  status: 'private' | 'public';\n  trackId: string;\n};",
-            "export type ExploreMusicNotePublicationState = ExplorePublicationOptions & {\n  status: 'private' | 'public';\n  trackId: string;\n  registered: boolean;\n};",
-            'state type')
-          s=replace_once(s,
-            "      trackId,\n      allowNextSongApply: Boolean(state?.allowNextSongApply),",
-            "      trackId,\n      registered: state?.registered !== false,\n      allowNextSongApply: Boolean(state?.allowNextSongApply),",
-            'cached registered')
-          s=replace_once(s,
-            "      trackId: String(state?.trackId || '').trim(),\n      allowNextSongApply: Boolean(state?.allowNextSongApply),",
-            "      trackId: String(state?.trackId || '').trim(),\n      registered: true,\n      allowNextSongApply: Boolean(state?.allowNextSongApply),",
-            'bundle registered')
-          s=replace_once(s,
-            "    status: 'private',\n    trackId: expectedTrackId,\n    ...DEFAULT_PUBLICATION_OPTIONS,",
-            "    status: 'private',\n    trackId: expectedTrackId,\n    registered: false,\n    ...DEFAULT_PUBLICATION_OPTIONS,",
-            'default unregistered')
-          s=replace_once(s,
-            "    status: 'public',\n    trackId,\n    allowNextSongApply: Boolean(payload?.data?.allowNextSongApply ?? normalizedOptions.allowNextSongApply),",
-            "    status: 'public',\n    trackId,\n    registered: true,\n    allowNextSongApply: Boolean(payload?.data?.allowNextSongApply ?? normalizedOptions.allowNextSongApply),",
-            'publish registered')
+          if 'SORIDRAW_PUBLICATION_REGISTERED_STATE_080_20260913' not in s:
+              s=replace_once(
+                  s,
+                  '// SORIDRAW_PUBLICATION_PERSISTENT_REVISION_078_20260913',
+                  '// SORIDRAW_PUBLICATION_PERSISTENT_REVISION_078_20260913\n// SORIDRAW_PUBLICATION_REGISTERED_STATE_080_20260913',
+                  'client marker',
+              )
+              s=replace_once(
+                  s,
+                  "export type ExploreMusicNotePublicationState = ExplorePublicationOptions & {\n  status: 'private' | 'public';\n  trackId: string;\n};",
+                  "export type ExploreMusicNotePublicationState = ExplorePublicationOptions & {\n  status: 'private' | 'public';\n  trackId: string;\n  registered: boolean;\n};",
+                  'state type',
+              )
+              s=replace_once(
+                  s,
+                  "      trackId,\n      allowNextSongApply: Boolean(state?.allowNextSongApply),",
+                  "      trackId,\n      registered: state?.registered !== false,\n      allowNextSongApply: Boolean(state?.allowNextSongApply),",
+                  'cached registered',
+              )
+              s=replace_once(
+                  s,
+                  "      trackId: String(state?.trackId || '').trim(),\n      allowNextSongApply: Boolean(state?.allowNextSongApply),",
+                  "      trackId: String(state?.trackId || '').trim(),\n      registered: true,\n      allowNextSongApply: Boolean(state?.allowNextSongApply),",
+                  'bundle registered',
+              )
+              s=replace_once(
+                  s,
+                  "    status: 'private',\n    trackId: expectedTrackId,\n    ...DEFAULT_PUBLICATION_OPTIONS,",
+                  "    status: 'private',\n    trackId: expectedTrackId,\n    registered: false,\n    ...DEFAULT_PUBLICATION_OPTIONS,",
+                  'default unregistered',
+              )
+              s=replace_once(
+                  s,
+                  "    status: 'public',\n    trackId,\n    allowNextSongApply: Boolean(payload?.data?.allowNextSongApply ?? normalizedOptions.allowNextSongApply),",
+                  "    status: 'public',\n    trackId,\n    registered: true,\n    allowNextSongApply: Boolean(payload?.data?.allowNextSongApply ?? normalizedOptions.allowNextSongApply),",
+                  'publish registered',
+              )
 
-          start=s.index('export const setExploreTrackVisibility = async (')
-          end=s.index('export const setExploreTrackPublicationOptions = async (',start)
-          visibility="""export const setExploreTrackVisibility = async (
+              start=s.index('export const setExploreTrackVisibility = async (')
+              end=s.index('export const setExploreTrackPublicationOptions = async (',start)
+              visibility="""export const setExploreTrackVisibility = async (
             user: User,
             trackId: string,
             isPublic: boolean,
@@ -137,61 +158,50 @@ jobs:
           };
 
           """
-          s=s[:start]+visibility+s[end:]
+              s=s[:start]+visibility+s[end:]
           p.write_text(s,encoding='utf-8')
 
-          # Music Note page: first-ever publication uses POST; an existing private row uses one visibility transition.
+          # 2) First publication is POST once. Every later private->public is one visibility transition.
           p=Path('src/pages/FavoritesPage.tsx')
           s=p.read_text(encoding='utf-8')
-          old="""      } else {
-                nextState = await publishMusicNoteToExplore(user, sourceId, options);
-                showFavoriteToast('Explore에 공개했습니다.');
-              }
-          """
-          if old not in s:
-              old="""      } else {
-                nextState = await publishMusicNoteToExplore(user, sourceId, options);
-                showFavoriteToast('Explore에 공개했습니다.');
-              }"""
-          new="""      } else if (state.registered) {
-                nextState = await setExploreTrackVisibility(user, state.trackId, true, options);
-                showFavoriteToast('Explore에 다시 공개했습니다.');
-              } else {
-                nextState = await publishMusicNoteToExplore(user, sourceId, options);
-                showFavoriteToast('Explore에 공개했습니다.');
-              }"""
-          if old not in s:
-              raise SystemExit('Favorites publication branch anchor missing')
-          s=s.replace(old,new,1)
+          if "showFavoriteToast('Explore에 다시 공개했습니다.');" not in s:
+              pattern=r"(?P<indent>\s*)\} else \{\s*nextState = await publishMusicNoteToExplore\(user, sourceId, options\);\s*showFavoriteToast\('Explore에 공개했습니다\.'\);\s*\}"
+              def branch_repl(m):
+                  i=m.group('indent')
+                  return (
+                      f"{i}}} else if (state.registered) {{\n"
+                      f"{i}  nextState = await setExploreTrackVisibility(user, state.trackId, true, options);\n"
+                      f"{i}  showFavoriteToast('Explore에 다시 공개했습니다.');\n"
+                      f"{i}}} else {{\n"
+                      f"{i}  nextState = await publishMusicNoteToExplore(user, sourceId, options);\n"
+                      f"{i}  showFavoriteToast('Explore에 공개했습니다.');\n"
+                      f"{i}}}"
+                  )
+              s,count=re.subn(pattern,branch_repl,s,count=1,flags=re.S)
+              if count != 1:
+                  pos=s.find("nextState = await publishMusicNoteToExplore(user, sourceId, options);")
+                  context=s[max(0,pos-900):pos+700] if pos >= 0 else 'publish call not found'
+                  print(context)
+                  raise SystemExit(f'Favorites publication branch regex match={count}')
           p.write_text(s,encoding='utf-8')
 
-          # Make diagnostics describe the lifecycle instead of making first registration look like a second Music Note save.
+          # 3) Diagnostics label clarifies that POST is only first registration.
           p=Path('src/components/CacheDiagnosticsOverlay.tsx')
           s=p.read_text(encoding='utf-8')
-          s=replace_once(s,"if (path === '/v1/publications') return '뮤직노트 공개 등록';","if (path === '/v1/publications') return '최초 공개 등록';",'diagnostic label')
+          if "return '최초 공개 등록';" not in s:
+              s=replace_once(s,"if (path === '/v1/publications') return '뮤직노트 공개 등록';","if (path === '/v1/publications') return '최초 공개 등록';",'diagnostic label')
           p.write_text(s,encoding='utf-8')
 
-          # Cold/corrupt R2 recovery may read canonical rows; warm unchanged paths still return before these queries.
-          p=Path('scripts/verify-explore-derived-cache.mjs')
-          s=p.read_text(encoding='utf-8')
-          guard="assert.doesNotMatch(sql,/\\b(FROM|JOIN)\\s+(tracks|track_stats|public_profiles|profile_stats)\\b/i,'runtime cannot read canonical data');"
-          if guard not in s:
-              raise SystemExit('derived verifier canonical-read guard anchor missing')
-          s=s.replace(guard,'',1)
-          s=s.replace("if(sql.includes('WHERE t.id IN'))counts.items+=args.length;","if(/WHERE\\s+(?:t|d)\\.id IN/.test(sql))counts.items+=args.length;",1)
-          s=s.replace('PASS rank refill uses covering indexes; no tracks scan or temporary sort','PASS base derived rank indexes remain available; 080 canonical visibility checks are recovery-only',1)
-          s=s.replace('PASS popular drop/delete exact top40 refill without canonical query','PASS popular drop/delete exact top40 refill with bounded recovery validation',1)
-          p.write_text(s,encoding='utf-8')
-
-          # Repository runtime source must match the 047-generated Worker recovery contract.
+          # 4) Cold/corrupt R2 recovery validates canonical visibility. Warm healthy R2 returns before these reads.
           p=Path('cloudflare/explore-worker/runtime/derived-cache.js')
           s=p.read_text(encoding='utf-8')
-          def replace_function(text,name,next_name,new_text):
-              a=text.index(f'async function {name}(')
-              b=text.index(f'async function {next_name}(',a)
-              return text[:a]+new_text.rstrip()+"\n"+text[b:]
+          if 'SORIDRAW_PUBLICATION_RECOVERY_CANONICAL_GUARD_080_20260913' not in s:
+              def replace_function(text,name,next_name,new_text):
+                  a=text.index(f'async function {name}(')
+                  b=text.index(f'async function {next_name}(',a)
+                  return text[:a]+new_text.rstrip()+"\n"+text[b:]
 
-          profile="""async function derivedProfile032(env, uid) {
+              profile="""async function derivedProfile032(env, uid) {
             const row = await env.DB.prepare(`SELECT p.*,
                 COALESCE((SELECT COUNT(*) FROM tracks c
                   WHERE c.owner_uid=? AND c.is_public=1 AND c.status='published'),0) AS canonical_track_count
@@ -204,7 +214,7 @@ jobs:
               followerCount: row.followers, followingCount: row.following, trackCount: Number(row.canonical_track_count || 0),
               createdAt: p.created_at, updatedAt: p.updated_at };
           }"""
-          items="""async function derivedItems032(env, ids) {
+              items="""async function derivedItems032(env, ids) {
             if (!ids.length) return [];
             const rows = await env.DB.prepare(`SELECT d.row_json,
                 p.row_json AS profile_json,p.active AS profile_active,
@@ -225,7 +235,7 @@ jobs:
                 allow_next_song_apply:Number(row.canonical_allow_next_song_apply||0),allow_follower_save:Number(row.canonical_allow_follower_save||0),
                 profile_pinned:Number(row.canonical_profile_pinned||0),owner_nickname:p.nickname||'',owner_avatar_url:p.avatar_url||'' }); });
           }"""
-          rank="""async function derivedRank032(env, sort, uid) {
+              rank="""async function derivedRank032(env, sort, uid) {
             const limit = uid ? 51 : 41;
             const index = uid ? 'idx_explore_rank_profile' : sort === 'popular' ? 'idx_explore_rank_popular' : 'idx_explore_rank_latest';
             const order = uid ? 'c.profile_pinned DESC,d.published_at DESC,d.id DESC' : sort === 'popular' ? 'd.likes DESC,d.published_at DESC,d.id DESC' : 'd.published_at DESC,d.id DESC';
@@ -235,21 +245,34 @@ jobs:
               ORDER BY ${order} LIMIT ${limit}`).bind(...(uid ? [uid] : [])).all();
             return rows.results.map(row => row.id);
           }"""
-          s=replace_function(s,'derivedProfile032','derivedItems032',profile)
-          s=replace_function(s,'derivedItems032','derivedRank032',items)
-          s=replace_function(s,'derivedRank032','derivedCursor032',rank)
-          if 'SORIDRAW_PUBLICATION_RECOVERY_CANONICAL_GUARD_080_20260913' not in s:
+              s=replace_function(s,'derivedProfile032','derivedItems032',profile)
+              s=replace_function(s,'derivedItems032','derivedRank032',items)
+              s=replace_function(s,'derivedRank032','derivedCursor032',rank)
               s += '\n// SORIDRAW_PUBLICATION_RECOVERY_CANONICAL_GUARD_080_20260913\n'
           p.write_text(s,encoding='utf-8')
 
-          # PREVIEW Worker preflight permanently includes the 080 state/cost regression.
+          # 5) Existing derived-cache verifier allows canonical reads only on bounded recovery paths.
+          p=Path('scripts/verify-explore-derived-cache.mjs')
+          s=p.read_text(encoding='utf-8')
+          guard="assert.doesNotMatch(sql,/\\b(FROM|JOIN)\\s+(tracks|track_stats|public_profiles|profile_stats)\\b/i,'runtime cannot read canonical data');"
+          if guard in s:
+              s=s.replace(guard,'',1)
+          s=s.replace("if(sql.includes('WHERE t.id IN'))counts.items+=args.length;","if(/WHERE\\s+(?:t|d)\\.id IN/.test(sql))counts.items+=args.length;",1)
+          s=s.replace('PASS rank refill uses covering indexes; no tracks scan or temporary sort','PASS base derived rank indexes remain available; 080 canonical visibility checks are recovery-only',1)
+          s=s.replace('PASS popular drop/delete exact top40 refill without canonical query','PASS popular drop/delete exact top40 refill with bounded recovery validation',1)
+          p.write_text(s,encoding='utf-8')
+
+          # 6) Permanent PREVIEW Worker release gate includes the new cost regression.
           p=Path('.github/workflows/cloudflare-explore-preview-release.yml')
           s=p.read_text(encoding='utf-8')
-          anchor='            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs\n'
-          if anchor not in s:
-              raise SystemExit('Worker release verifier anchor missing')
           if 'verify-080-publication-state-engine.mjs' not in s:
-              s=s.replace(anchor,anchor+'            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-080-publication-state-engine.mjs\n',1)
+              pattern=r'^(\s*)SORIDRAW_GENERATED_WORKER="\$generated" node scripts/verify-explore-derived-cache\.mjs\s*$'
+              m=re.search(pattern,s,flags=re.M)
+              if not m:
+                  raise SystemExit('Worker release verifier anchor missing')
+              line=m.group(0)
+              indent=m.group(1)
+              s=s.replace(line,line+'\n'+indent+'SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-080-publication-state-engine.mjs',1)
           p.write_text(s,encoding='utf-8')
           PY
 
@@ -271,12 +294,14 @@ jobs:
 
       - name: Install app dependencies
         run: npm ci --no-audit --no-fund
+
       - name: TypeScript and build
         run: |
           set -euo pipefail
           npx tsc --noEmit
           npm run build
-      - name: 080 backend regression suite
+
+      - name: 080 cost and regression suite
         shell: bash
         run: |
           set -euo pipefail
@@ -285,6 +310,7 @@ jobs:
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-080-publication-state-engine.mjs
           node scripts/verify-explore-deploy-preflight.mjs
+
       - name: Commit verified 080 product source
         shell: bash
         run: |

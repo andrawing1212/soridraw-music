@@ -1,56 +1,94 @@
 # NEXT CODEX TASK
 
-상태: **PREVIEW 074 배포 완료 / 서버 좋아요 경로 정상 / 본인 숫자 Local First 즉시 반영 사용자 확인 대기 / TEST 승격 금지**
+상태: **PREVIEW 075 + Worker 042 + Shared D1 075/076 적용 완료 / 실제 사용·비용 검증 단계 / TEST 승격 금지**
 
 ## 현재 기준
 - branch: `preview`
-- 실제 PREVIEW 앱: `074`
-- 074 코드 commit: `835dd2cb0b5c206696a7e94dc18e9041155cbe23`
-- PREVIEW 074 release trigger/locked build: `1d5ecf841ae8335d21b992d3e7f4c160add75839`
-- 074 Apply Run `34639807460` — PASS
-- PREVIEW 074 App Run `34639940311` — PASS
-- PREVIEW Worker는 069 runtime 유지: `caffa9f8-5b50-4a4a-a2db-578c0fe49b83`
+- 실제 PREVIEW 앱: `075`
+- 075 제품 코드 commit: `15dcc55e84ad280f79ba48bed4d28dd908243531`
+- App release trigger / locked build: `ac0bafe9bf545e80fd7f4050221ff187ea528913`
+- PREVIEW App Run `34734501063` — PASS
+- PREVIEW Worker Run `34734423534` — PASS
+- PREVIEW Worker active Version: `5680557a-e732-449a-81f5-4bfdc42991ba`
+- Shared D1 075/076 Apply Run `34734208590` — PASS
 - TEST main `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
 - PRODUCTION `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
 
-## 확정된 사실
-- 테스트한 두 곡 모두 서버 canonical/derived/fresh Feed 숫자는 이미 `1`.
-- 073에서도 오른쪽 곡이 화면 `0`으로 남아 client 표시 복구는 FAIL.
-- 서버/aggregate를 더 기다리거나 반복 조회하는 방향은 중단.
+## 확정된 075/076 구조
+- 074 Local First 즉시 하트/숫자 UX 유지.
+- 개인 Social Snapshot으로 likes/follows 개인상태 읽기 통합.
+- 좋아요 pending은 `explore_like_user_queue_075` **사용자별 한 행 재사용**.
+- 같은 사용자 여러 변경은 최종상태로 합침.
+- 처리할 일이 없는 aggregate는 lease 전에 종료 → idle W0 구조.
+- sync event는 UID scoped. A계정의 늦은 완료 이벤트를 B계정 화면에서 무시.
+- auth account 변경 시 기존 하트 화면 즉시 clear.
+- 공개/비공개 local cache는 해당 곡만 patch/remove/upsert.
+- 기존 live 033 `explore032_derived_track_update` 최적화는 절대 덮어쓰지 않음.
+- 076은 나머지 파생 trigger 4개만 교체.
+- 사용자 canonical 데이터 migration/delete/backfill 없음.
 
-## 074 수정
-- 본인 좋아요 클릭 즉시 하트 + 화면 숫자 `+1`.
-- 취소 즉시 `-1`.
-- 로컬 cache에도 표시 숫자 반영.
-- 1분 batch 뒤 same-account signal에 optional `displayLikeCount`를 전달해 다른 기기도 같은 표시값을 받을 수 있게 함.
-- legacy signal은 숫자를 덮어쓰지 않고 하트만 반영.
-- `내 하트 ON / 숫자 0`은 추가 서버 read 없이 최소 `1`로 로컬 회복.
-- canonical 서버 숫자는 기존 10분 aggregate 유지.
-- aggregate 후 fresh refresh로 최종 canonical에 수렴.
-- Worker/D1/Functions/Rules/UI CSS/사용자 원본 데이터 변경 없음.
+## 배포 결과
+Shared D1 one-time maintenance:
+- 076 trigger 4개 교체: `rows_written=4`, `rows_read=1160`.
+- 075 queue/state/index 생성: `rows_written=7`, `rows_read=5`.
+- 이 수치는 좋아요 1회 비용이 아니라 **배포 1회 비용**.
 
-## 다음 사용자 확인
-복잡한 10분 테스트 금지.
-1. PREVIEW 074 업데이트.
-2. 기존 `[Breakbeat] '혼자만의 밤'`이 바로 `1`로 보이는지 확인.
-3. 새 0곡 1개 좋아요 시 하트와 숫자가 즉시 `0 → 1`인지 확인.
-4. 같은 곡 취소 시 즉시 `1 → 0`인지 확인.
+Worker 042:
+- Feed smoke PASS.
+- public profile smoke PASS.
+- like batch route PASS(비인증 `401` 정상).
+- warm revision D1 `R0/W0` PASS.
+- cron `*/10 * * * *` PASS.
+- TEST/PRODUCTION Worker unchanged.
 
-## 통과 후 개발 측 검증
-- 3곡 같은 1분 window → batch 1회 / queue W1 목표 확인.
-- aggregate 전 like→unlike 최종 OFF.
-- aggregate 전 unlike→like 최종 ON.
-- PC→모바일 same-account 표시 숫자 전달 확인.
-- 비용 회귀 없음 확인.
-- 이후에만 TEST 승격 가능 여부 판단.
+App 075:
+- TypeScript PASS.
+- Build PASS.
+- Firebase PREVIEW Hosting PASS.
+- `preview.soridraw.com` exact build PASS.
+- `app-version.json=075` PASS.
+- TEST/PRODUCTION HTML unchanged.
+
+## 다음 작업 — 실제 PREVIEW 검증
+다음 구현보다 먼저 아래를 실제로 확인한다.
+
+1. **3곡 1분 batch**
+   - 같은 계정에서 1분 안에 곡 3개 좋아요/취소 변경.
+   - 사용자 pending queue가 한 행으로 유지되는지 확인.
+   - 최종 각 곡 상태가 정확한지 확인.
+   - Cloudflare 실제 `rows_read / rows_written` 측정.
+
+2. **reversal 양방향**
+   - aggregate 전 `OFF → ON → OFF` 최종 OFF.
+   - aggregate 전 `ON → OFF → ON` 최종 ON.
+   - 중간 상태가 아니라 마지막 의도만 canonical에 수렴해야 함.
+
+3. **PC ↔ 모바일 same-account**
+   - 한 기기에서 좋아요 후 다른 기기 하트 상태 확인.
+   - 표시 숫자 전달 및 최종 canonical 수렴 확인.
+   - 정상 캐시 재진입에서 불필요한 D1 read가 없는지 확인.
+
+4. **계정 A ↔ B 전환 purity**
+   - A의 늦은 sync completion이 B 화면에 반영되지 않아야 함.
+   - B 로그인 직후 A의 heart/display count가 남지 않아야 함.
+
+## 합격선
+- correctness PASS가 비용 감소보다 우선.
+- 변경 없는 normal cache 재진입 D1 read 0 목표.
+- idle 10분 aggregate W0 확인.
+- 3곡 같은 사용자 batch는 per-user queue one-row reuse가 실제로 확인돼야 함.
+- Cloudflare billed rows_written은 실제 계측 전 숫자를 추정 확정하지 않는다.
+- UI/CSS/반응형 변화 0.
+- TEST/PRODUCTION 비의도 변경 0.
 
 ## 계속 보호할 것
-- 좋아요 1분 batch.
-- 서버 canonical 숫자 10분 aggregate.
-- 069 W1 queue.
-- same-account 기존 users listener 재사용.
-- 정상 캐시 변경 없음 시 서버 read 0 목표.
-- UI/CSS/반응형 비변경.
-- 사용자 원본 데이터 migration/backfill/delete/overwrite 금지.
-- 사용자 실사용 PASS 전 TEST 승격 금지.
+- 074 즉시 Local First UX.
+- PREVIEW 1분 좋아요 batch.
+- 10분 canonical aggregate.
+- stable `mutationAt` / `baseLiked` reversal 의미.
+- live 033 track-update trigger 최적화.
+- warm revision R0/W0.
+- 공유 사용자 원본 데이터 비파괴.
+- Music Note / Library 기존 Local First와 묶음저장.
+- 사용자 실사용 및 비용 검증 PASS 전 TEST 승격 금지.
 - PRODUCTION은 명확한 사용자 승인 없이는 승격 금지.

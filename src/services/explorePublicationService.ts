@@ -22,6 +22,7 @@ import {
 } from './exploreProfileFirstViewService';
 
 // SORIDRAW_EXPLORE_TARGETED_PUBLICATION_CACHE_075_20260913
+// SORIDRAW_PUBLICATION_STATE_SESSION_VALIDATION_076_20260913
 
 const PUBLICATION_PAGE_SIZE = 50;
 const MAX_PUBLICATION_PAGES = 8;
@@ -68,13 +69,16 @@ const DEFAULT_PUBLICATION_OPTIONS: ExplorePublicationOptions = {
 
 const getMusicNoteTrackId = (uid: string, sourceId: string) => `music_note_${uid}_${sourceId}`;
 
-
 // SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
-const PUBLICATION_CACHE_SCHEMA_VERSION = 1;
+// Schema v2 invalidates the 075 cache that could live forever without checking the
+// authoritative R2 publication-state bundle. After the first R2 validation in an
+// app session, page re-entry remains local-only.
+const PUBLICATION_CACHE_SCHEMA_VERSION = 2;
 const PUBLICATION_CACHE_KEY = 'explore-publication-states';
 const PUBLICATION_CACHE_SOURCE_TYPE = 'explore_publication_states';
 const publicationMemoryCache = new Map<string, Record<string, ExploreMusicNotePublicationState>>();
 const publicationInflight = new Map<string, Promise<Record<string, ExploreMusicNotePublicationState>>>();
+const publicationServerValidatedUids = new Set<string>();
 
 const clonePublicationStates = (
   states: Record<string, ExploreMusicNotePublicationState>,
@@ -168,11 +172,13 @@ export const clearExplorePublicationSessionCache = (uid?: string | null) => {
   if (normalizedUid) {
     publicationMemoryCache.delete(normalizedUid);
     publicationInflight.delete(normalizedUid);
+    publicationServerValidatedUids.delete(normalizedUid);
     removeSoridrawPersistentCache(PUBLICATION_CACHE_KEY, normalizedUid);
     return;
   }
   publicationMemoryCache.clear();
   publicationInflight.clear();
+  publicationServerValidatedUids.clear();
   removeSoridrawPersistentCachesBySourceType(PUBLICATION_CACHE_SOURCE_TYPE);
 };
 
@@ -256,62 +262,74 @@ const normalizePublicationOptions = (
   profilePinned: Boolean(options?.profilePinned),
 });
 
+const parseMusicNotePublicationBundle = (
+  data: any,
+): Record<string, ExploreMusicNotePublicationState> | null => {
+  const rawStates = data?.states;
+  const entries = rawStates && typeof rawStates === 'object' && !Array.isArray(rawStates)
+    ? Object.entries(rawStates as Record<string, any>)
+    : [];
+  const isValidBundle = Number(data?.schemaVersion || 0) === 1
+    && rawStates
+    && typeof rawStates === 'object'
+    && !Array.isArray(rawStates)
+    && Number(data?.itemCount ?? -1) === entries.length
+    && entries.every(([sourceId, value]) => Boolean(
+      String(sourceId || '').trim()
+      && String((value as any)?.trackId || '').trim(),
+    ));
+  if (!isValidBundle) return null;
+
+  const bundledStates: Record<string, ExploreMusicNotePublicationState> = {};
+  entries.forEach(([sourceId, value]) => {
+    const state = value as any;
+    bundledStates[sourceId] = {
+      status: state?.status === 'public' ? 'public' : 'private',
+      trackId: String(state?.trackId || '').trim(),
+      allowNextSongApply: Boolean(state?.allowNextSongApply),
+      allowFollowerSave: Boolean(state?.allowFollowerSave),
+      profilePinned: Boolean(state?.profilePinned),
+    };
+  });
+  return bundledStates;
+};
+
 // SORIDRAW_EXPLORE_PUBLICATION_BATCH_STATE_965
 export const getExploreMusicNotePublicationStates = async (
   user: User,
 ): Promise<Record<string, ExploreMusicNotePublicationState>> => {
-  const cached = readPublicationStateCache(user.uid);
-  if (cached) return cached;
+  const uid = String(user.uid || '').trim();
+  const cached = readPublicationStateCache(uid);
+  if (cached && publicationServerValidatedUids.has(uid)) return cached;
 
-  const inFlight = publicationInflight.get(user.uid);
+  const inFlight = publicationInflight.get(uid);
   if (inFlight) return inFlight;
 
   const task = (async () => {
-    // SORIDRAW_MUSIC_NOTE_PUBLICATION_BUNDLE_20260904
-    // Cold browsers read one per-user D1 bundle row. The owner-wide paged sweep is
-    // retained only as a recovery fallback for an unavailable/corrupt derived cache.
+    // The authoritative publication-state snapshot is R2. Validate it once per app
+    // session so an old browser cache can never route a public track through the
+    // publish endpoint again. Re-entry after validation is local-only.
     try {
       const payload = await requestExplore(user, '/v1/me/music-note-publications-bundle');
-      const data = payload?.data;
-      const rawStates = data?.states;
-      const entries = rawStates && typeof rawStates === 'object' && !Array.isArray(rawStates)
-        ? Object.entries(rawStates as Record<string, any>)
-        : [];
-      const isValidBundle = Number(data?.schemaVersion || 0) === 1
-        && rawStates
-        && typeof rawStates === 'object'
-        && !Array.isArray(rawStates)
-        && Number(data?.itemCount ?? -1) === entries.length
-        && entries.every(([sourceId, value]) => Boolean(
-          String(sourceId || '').trim()
-          && String((value as any)?.trackId || '').trim(),
-        ));
-
-      if (!isValidBundle) {
+      const bundledStates = parseMusicNotePublicationBundle(payload?.data);
+      if (!bundledStates) {
         throw new ExploreApiError(
           'MUSIC_NOTE_PUBLICATION_BUNDLE_INVALID',
           '뮤직노트 공개상태 번들을 확인하지 못했습니다.',
         );
       }
-
-      const bundledStates: Record<string, ExploreMusicNotePublicationState> = {};
-      entries.forEach(([sourceId, value]) => {
-        const state = value as any;
-        bundledStates[sourceId] = {
-          status: state?.status === 'public' ? 'public' : 'private',
-          trackId: String(state?.trackId || '').trim(),
-          allowNextSongApply: Boolean(state?.allowNextSongApply),
-          allowFollowerSave: Boolean(state?.allowFollowerSave),
-          profilePinned: Boolean(state?.profilePinned),
-        };
-      });
-
-      writePublicationStateCache(user.uid, bundledStates);
+      writePublicationStateCache(uid, bundledStates);
+      publicationServerValidatedUids.add(uid);
       return clonePublicationStates(bundledStates);
     } catch (bundleError) {
-      console.warn('[Explore publication] one-row bundle unavailable; using legacy recovery sweep.', bundleError);
+      console.warn('[Explore publication] R2 publication-state validation unavailable.', bundleError);
+      // A valid local v2 snapshot is safer and cheaper than falling into an owner-wide
+      // D1 sweep during a transient network/R2 failure. The next call may validate again.
+      if (cached) return cached;
     }
 
+    // Recovery is reserved for a genuinely cold device where neither R2 nor a valid
+    // local snapshot is available.
     const result: Record<string, ExploreMusicNotePublicationState> = {};
     let cursor = '';
 
@@ -331,7 +349,7 @@ export const getExploreMusicNotePublicationStates = async (
           if (item.sourceType !== 'music_note') return;
           const sourceId = String(item.sourceId || '').trim();
           if (!sourceId) return;
-          const expectedTrackId = getMusicNoteTrackId(user.uid, sourceId);
+          const expectedTrackId = getMusicNoteTrackId(uid, sourceId);
           result[sourceId] = {
             status: item.isPublic ? 'public' : 'private',
             trackId: item.trackId || item.id || expectedTrackId,
@@ -345,13 +363,14 @@ export const getExploreMusicNotePublicationStates = async (
       if (!cursor) break;
     }
 
-    writePublicationStateCache(user.uid, result);
+    writePublicationStateCache(uid, result);
+    publicationServerValidatedUids.add(uid);
     return clonePublicationStates(result);
   })().finally(() => {
-    publicationInflight.delete(user.uid);
+    publicationInflight.delete(uid);
   });
 
-  publicationInflight.set(user.uid, task);
+  publicationInflight.set(uid, task);
   return task;
 };
 

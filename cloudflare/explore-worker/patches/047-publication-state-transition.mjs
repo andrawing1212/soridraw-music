@@ -257,6 +257,16 @@ async function handleVisibility047(request, env, cors, trackId) {
 replaceFunction('derivedItems032', derivedItems047.toString().replace('derivedItems047', 'derivedItems032'));
 replaceFunction('derivedRank032', derivedRank047.toString().replace('derivedRank047', 'derivedRank032'));
 replaceFunction('derivedProfile032', derivedProfile047.toString().replace('derivedProfile047', 'derivedProfile032'));
+
+// The wrapper calls this helper at runtime, so the helper must be embedded in the
+// generated Worker as actual source, not left only inside this build-time patch file.
+{
+  const visibilityAnchor = functionRange('handleVisibilityR2Core').start;
+  source = source.slice(0, visibilityAnchor)
+    + handleMusicNoteVisibility047.toString()
+    + '\n\n'
+    + source.slice(visibilityAnchor);
+}
 replaceFunction('handleVisibilityR2Core', handleVisibility047.toString().replace('handleVisibility047', 'handleVisibilityR2Core'));
 
 // Older 079 clients can still republish through POST /v1/publications. Keep that
@@ -277,7 +287,8 @@ replaceFunction('handleVisibilityR2Core', handleVisibility047.toString().replace
 }
 
 for (const [name, requiredTokens] of [
-  ['handleVisibilityR2Core', ["'music_note'", 'syncExploreFeedR2Publication043', 'syncExploreFeedR2Private043', 'snapshotItem']],
+  ['handleVisibilityR2Core', ["'music_note'", 'handleMusicNoteVisibility047']],
+  ['handleMusicNoteVisibility047', ["source_type='music_note'", 'syncExploreFeedR2Publication043', 'syncExploreFeedR2Private043', 'snapshotItem']],
   ['derivedItems032', ['JOIN tracks AS c', "c.is_public=1", "c.status='published'"]],
   ['derivedRank032', ['JOIN tracks AS c', "c.is_public=1", "c.status='published'"]],
   ['derivedProfile032', ['COUNT(*) FROM tracks c', 'canonical_track_count']],

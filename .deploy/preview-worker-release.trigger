@@ -1,4 +1,4 @@
-requested_at=2026-09-12T03:03:00+09:00
+requested_at=2026-09-13T12:01:00+09:00
 requested_by=user
-product_code_target=a22c9f73208288e35844dbcfa58efae09b655fd8
-release_purpose=069_w1_delayed_count_and_reversal_order
+product_code_target=15dcc55e84ad280f79ba48bed4d28dd908243531
+release_purpose=075_social_snapshot_user_queue_idle_w0_and_uid_sync

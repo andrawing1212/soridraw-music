@@ -12,7 +12,6 @@ import { useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
-  patchExploreFeedSessionCacheRow,
   readExploreFeedSessionCache,
   readExploreFeedSessionCacheCursor,
   readExploreFeedSessionCacheRevision,
@@ -23,6 +22,7 @@ import {
   EXPLORE_LIKE_SYNC_ERROR_EVENT,
   EXPLORE_LIKE_SYNC_EVENT,
   getExploreLikedTrackIds,
+  getExploreLikeDisplayCounts,
   setExploreTrackLike,
 } from '../services/exploreLikeService';
 import { getExplorePublicProfileFirstView, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
@@ -89,6 +89,7 @@ const EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071 = 'soridraw:explore-like-count-ref
 const EXPLORE_LIKE_FRESH_FEED_QUERY_072 = '__soridraw_like_refresh';
 // SORIDRAW_EXPLORE_LIKE_FRESH_BOOTSTRAP_RECOVERY_073_20260912
 // SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912
+// SORIDRAW_EXPLORE_UID_SCOPED_LIKE_OVERLAY_075_20260913
 // Forced like-count recovery must use the unique fresh Feed URL even when this
 // browser has no session Feed cache yet (for example immediately after app update).
 
@@ -636,12 +637,22 @@ export default function ExplorePage() {
     getExploreLikedTrackIds(user, ids)
       .then((likedIds) => {
         if (cancelled) return;
+        const likedSet = new Set(likedIds);
         setLikedTrackIds((prev) => {
           const next = { ...prev };
           ids.forEach((id) => { next[id] = false; });
           likedIds.forEach((id) => { next[id] = true; });
           return next;
         });
+        const displayCounts = getExploreLikeDisplayCounts(user, ids);
+        const applyPersonalOverlay = (list: ExploreTrack[]) => list.map((track) => {
+          const displayCount = displayCounts[track.id];
+          if (displayCount !== undefined) return { ...track, likeCount: displayCount };
+          if (likedSet.has(track.id) && track.likeCount === 0) return { ...track, likeCount: 1 };
+          return track;
+        });
+        setTracks(applyPersonalOverlay);
+        setProfileTracks(applyPersonalOverlay);
       })
       .catch((reason) => {
         console.warn('Explore like state hydration failed:', reason);
@@ -661,10 +672,6 @@ export default function ExplorePage() {
     // The scheduled aggregate/fresh refresh still replaces it with canonical data.
     const ids = new Set(selfLikedZeroTracks.map((track) => track.id));
     setTracks((previous) => previous.map((track) => ids.has(track.id) ? { ...track, likeCount: 1 } : track));
-    for (const track of selfLikedZeroTracks) {
-      patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: 1 });
-      if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: 1 });
-    }
   }, [user?.uid, profileUid, requestUrl, tracks, likedTrackIds]);
 
   useEffect(() => {
@@ -805,9 +812,6 @@ export default function ExplorePage() {
       if (Number.isFinite(displayLikeCount)) {
         const nextCount = safeCount(displayLikeCount);
         updateTrackLikeCount(trackId, nextCount);
-        patchExploreFeedSessionCacheRow(requestUrl, trackId, { likeCount: nextCount });
-        const ownerUid = String(detail.ownerUid || '').trim();
-        if (ownerUid) patchExplorePublicProfileFirstViewTrack(ownerUid, trackId, { likeCount: nextCount });
       }
       scheduleAggregateCountRefresh071();
     };
@@ -847,8 +851,6 @@ export default function ExplorePage() {
       // server count is still confirmed only by the existing deferred aggregate.
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
       updateTrackLikeCount(track.id, result.likeCount);
-      patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: result.likeCount });
-      if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: result.likeCount });
     } catch (reason) {
       console.error('Explore like failed:', reason);
       setSocialNotice(reason instanceof Error ? reason.message : '좋아요 처리에 실패했어요.');

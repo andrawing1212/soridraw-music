@@ -8,6 +8,10 @@ import {
   removeSoridrawPersistentCache,
   writeSoridrawPersistentCache,
 } from '../lib/soridrawPersistentCache';
+import {
+  getExplorePersonalSocialSnapshot,
+  patchExplorePersonalSocialLike,
+} from './exploreSocialSnapshotService';
 
 // SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
 // SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911
@@ -17,6 +21,7 @@ import {
 // SORIDRAW_EXPLORE_LIKE_VISIBLE_COUNT_SIGNAL_067_20260911
 // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
 // SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912
+// SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_075_20260913
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -237,9 +242,11 @@ const rememberAccountSyncResults = (uid: string, results: ExploreLikeAccountSync
       ownerUid: result.ownerUid,
       liked: result.liked,
       likeCount: clampLikeCount(result.likeCount),
+      ...(result.displayLikeCount === undefined ? {} : { displayLikeCount: clampLikeCount(result.displayLikeCount) }),
       updatedAt: now,
       expiresAt,
     };
+    patchExplorePersonalSocialLike(uid, result.trackId, result.liked);
   }
   persistAccountPatchCache(uid, cache);
 };
@@ -680,14 +687,25 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   const cache = getLikedStateCache(user.uid);
   const missing = normalized.filter((trackId) => !cache.has(trackId));
   if (missing.length) {
-    const query = new URLSearchParams({ trackIds: missing.join(',') });
-    const payload = await requestExploreLike(user, `/v1/me/likes?${query.toString()}`);
-    const likedIds = new Set(
-      Array.isArray(payload?.data?.likedTrackIds)
-        ? payload.data.likedTrackIds.map((trackId: unknown) => String(trackId || '').trim()).filter(Boolean)
-        : [],
-    );
-    missing.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
+    let resolved = false;
+    try {
+      const snapshot = await getExplorePersonalSocialSnapshot(user);
+      const likedIds = new Set(snapshot.likedTrackIds);
+      missing.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
+      resolved = true;
+    } catch (snapshotError) {
+      console.warn('[Explore like] Social Snapshot unavailable; using targeted likes recovery.', snapshotError);
+    }
+    if (!resolved) {
+      const query = new URLSearchParams({ trackIds: missing.join(',') });
+      const payload = await requestExploreLike(user, `/v1/me/likes?${query.toString()}`);
+      const likedIds = new Set(
+        Array.isArray(payload?.data?.likedTrackIds)
+          ? payload.data.likedTrackIds.map((trackId: unknown) => String(trackId || '').trim()).filter(Boolean)
+          : [],
+      );
+      missing.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
+    }
     persistLikedStateCache(user.uid, cache);
   }
 
@@ -695,6 +713,29 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   resumePendingLikes(user);
   replayAccountSyncPatches(user.uid, normalized);
   return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? cache.get(trackId) === true);
+};
+
+
+export const getExploreLikeDisplayCounts = (
+  user: User,
+  trackIds: string[],
+): Record<string, number> => {
+  const ids = new Set(trackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean));
+  const outbox = readLikeOutbox(user.uid);
+  const account = readAccountPatchCache(user.uid);
+  const result: Record<string, number> = {};
+  ids.forEach((trackId) => {
+    const pending = outbox[trackId];
+    if (pending) {
+      result[trackId] = clampLikeCount(pending.optimisticLikeCount);
+      return;
+    }
+    const patch = account[trackId];
+    if (patch?.displayLikeCount !== undefined) {
+      result[trackId] = clampLikeCount(patch.displayLikeCount);
+    }
+  });
+  return result;
 };
 
 export const setExploreTrackLike = async (
@@ -706,6 +747,7 @@ export const setExploreTrackLike = async (
 ): Promise<{ trackId: string; liked: boolean; likeCount: number }> => {
   const normalizedTrackId = String(trackId || '').trim();
   if (!normalizedTrackId) throw new Error('Explore 곡 ID를 확인하지 못했습니다.');
+  patchExplorePersonalSocialLike(user.uid, normalizedTrackId, liked);
 
   const outbox = readLikeOutbox(user.uid);
   const existing = outbox[normalizedTrackId];

@@ -92,11 +92,12 @@ def data_snapshot(conn: sqlite3.Connection) -> dict[str, tuple[tuple[str, ...], 
 
 def verify_candidate_static() -> None:
     sql = CANDIDATE.read_text(encoding='utf-8')
-    upper = re.sub(r'--.*$', '', sql, flags=re.MULTILINE).upper()
+    executable = re.sub(r'--.*$', '', sql, flags=re.MULTILINE)
+    upper = executable.upper()
     for forbidden in ('DROP TABLE', 'ALTER TABLE', 'CREATE TABLE', 'DROP INDEX', 'CREATE INDEX', 'DELETE FROM'):
         require(forbidden not in upper, f'076 maintenance candidate contains forbidden DDL/data operation: {forbidden}')
-    dropped = set(re.findall(r'DROP\s+TRIGGER\s+IF\s+EXISTS\s+([A-Za-z0-9_]+)', sql, flags=re.IGNORECASE))
-    created = set(re.findall(r'CREATE\s+TRIGGER\s+([A-Za-z0-9_]+)', sql, flags=re.IGNORECASE))
+    dropped = set(re.findall(r'^\s*DROP\s+TRIGGER\s+IF\s+EXISTS\s+([A-Za-z0-9_]+)', executable, flags=re.IGNORECASE | re.MULTILINE))
+    created = set(re.findall(r'^\s*CREATE\s+TRIGGER\s+([A-Za-z0-9_]+)', executable, flags=re.IGNORECASE | re.MULTILINE))
     require(dropped == TARGETS, f'076 drop target drift: {sorted(dropped)}')
     require(created == TARGETS, f'076 create target drift: {sorted(created)}')
     print('076_TRIGGER_MAINTENANCE_STATIC=PASS trigger_set=5 table_ddl=0 direct_delete=0')

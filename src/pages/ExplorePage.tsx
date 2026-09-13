@@ -90,6 +90,7 @@ const EXPLORE_LIKE_FRESH_FEED_QUERY_072 = '__soridraw_like_refresh';
 // SORIDRAW_EXPLORE_LIKE_FRESH_BOOTSTRAP_RECOVERY_073_20260912
 // SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912
 // SORIDRAW_EXPLORE_UID_SCOPED_LIKE_OVERLAY_075_20260913
+// SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
 // Forced like-count recovery must use the unique fresh Feed URL even when this
 // browser has no session Feed cache yet (for example immediately after app update).
 
@@ -340,7 +341,7 @@ export default function ExplorePage() {
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
     setUser(currentUser);
     likeHydrationKeyRef.current = '';
-    if (!currentUser) setLikedTrackIds({});
+    setLikedTrackIds({});
   }), []);
 
   useEffect(() => {
@@ -797,12 +798,14 @@ export default function ExplorePage() {
 
     const onLikeSync = (event: Event) => {
       const detail = (event as CustomEvent<{
+        uid?: string;
         trackId?: string;
         ownerUid?: string;
         liked?: boolean;
         likeCount?: number;
         displayLikeCount?: number;
       }>).detail;
+      if (!user?.uid || String(detail?.uid || '').trim() !== user.uid) return;
       const trackId = String(detail?.trackId || '').trim();
       if (!trackId || typeof detail?.liked !== 'boolean') return;
       setLikedTrackIds((prev) => ({ ...prev, [trackId]: detail.liked as boolean }));
@@ -816,7 +819,8 @@ export default function ExplorePage() {
       scheduleAggregateCountRefresh071();
     };
     const onLikeSyncError = (event: Event) => {
-      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      const detail = (event as CustomEvent<{ uid?: string; message?: string }>).detail;
+      if (!user?.uid || String(detail?.uid || '').trim() !== user.uid) return;
       setSocialNotice(String(detail?.message || '좋아요 서버 동기화를 재시도하고 있어요.'));
     };
     const onReturnVisible071 = () => {

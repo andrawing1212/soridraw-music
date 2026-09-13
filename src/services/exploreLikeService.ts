@@ -22,6 +22,7 @@ import {
 // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
 // SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912
 // SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_075_20260913
+// SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -61,6 +62,7 @@ type ExploreLikePendingMutation = {
 type ExploreLikeOutbox = Record<string, ExploreLikePendingMutation>;
 
 type ExploreLikeSyncEventDetail = {
+  uid: string;
   trackId: string;
   ownerUid: string;
   liked: boolean;
@@ -360,6 +362,7 @@ const replayAccountSyncPatches = (uid: string, trackIds: string[]) => {
   if (!patches.length) return;
   window.setTimeout(() => {
     patches.forEach((patch) => dispatchLikeSync({
+      uid,
       trackId: patch.trackId,
       ownerUid: patch.ownerUid,
       liked: patch.liked,
@@ -396,6 +399,7 @@ export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) 
   for (const result of signal.results) {
     cache.set(result.trackId, result.liked);
     dispatchLikeSync({
+      uid: user.uid,
       trackId: result.trackId,
       ownerUid: result.ownerUid,
       liked: result.liked,
@@ -627,6 +631,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
       };
       accountSyncResults.push(visibleResult);
       dispatchLikeSync({
+        uid,
         ...visibleResult,
         ownerUid,
       });
@@ -659,6 +664,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
     schedulePendingLikes(user, retryDelay, true);
     if (firstPending) {
       dispatchLikeSyncError({
+        uid,
         trackId: firstPending.trackId,
         ownerUid: firstPending.ownerUid,
         liked: firstPending.desiredLiked,

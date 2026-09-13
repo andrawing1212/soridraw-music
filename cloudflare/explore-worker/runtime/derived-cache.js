@@ -12,30 +12,47 @@ async function derivedHead032(env, scope, request = null) {
   return seq;
 }
 async function derivedProfile032(env, uid) {
-  const row = await env.DB.prepare('SELECT * FROM explore_derived_profiles WHERE uid=?').bind(uid).first();
+  const row = await env.DB.prepare(`SELECT p.*,
+      COALESCE((SELECT COUNT(*) FROM tracks c
+        WHERE c.owner_uid=? AND c.is_public=1 AND c.status='published'),0) AS canonical_track_count
+    FROM explore_derived_profiles p WHERE p.uid=?`).bind(uid, uid).first();
   if (!row?.active) return null;
   const p = JSON.parse(row.row_json);
   return { uid, nickname: p.nickname || '', avatarUrl: p.avatar_url || '', backgroundUrl: p.background_url || '',
     bio: p.bio || '', handle: p.handle || '', genres: parseProfileGenres(p.genre_override),
     socialLinks: { spotify: p.spotify_url || '', instagram: p.instagram_url || '', tiktok: p.tiktok_url || '' },
-    followerCount: row.followers, followingCount: row.following, trackCount: row.track_count,
+    followerCount: row.followers, followingCount: row.following, trackCount: Number(row.canonical_track_count || 0),
     createdAt: p.created_at, updatedAt: p.updated_at };
 }
 async function derivedItems032(env, ids) {
   if (!ids.length) return [];
-  const rows = await env.DB.prepare(`SELECT t.row_json, p.row_json AS profile_json,p.active AS profile_active
-    FROM explore_derived_tracks t LEFT JOIN explore_derived_profiles p ON p.uid=t.owner_uid
-    WHERE t.id IN (${ids.map(() => '?').join(',')}) AND t.active=1`).bind(...ids).all();
-  return rows.results.map(row => { const p = row.profile_active ? JSON.parse(row.profile_json) : {};
-    return mapTrackRow({ ...JSON.parse(row.row_json), owner_nickname: p.nickname || '', owner_avatar_url: p.avatar_url || '' }); });
+  const rows = await env.DB.prepare(`SELECT d.row_json,
+      p.row_json AS profile_json,p.active AS profile_active,
+      c.is_public AS canonical_is_public,c.status AS canonical_status,
+      c.published_at AS canonical_published_at,c.updated_at AS canonical_updated_at,
+      c.allow_next_song_apply AS canonical_allow_next_song_apply,
+      c.allow_follower_save AS canonical_allow_follower_save,
+      c.profile_pinned AS canonical_profile_pinned
+    FROM explore_derived_tracks AS d
+    JOIN tracks AS c ON c.id=d.id
+    LEFT JOIN explore_derived_profiles AS p ON p.uid=d.owner_uid
+    WHERE d.id IN (${ids.map(() => '?').join(',')})
+      AND c.is_public=1 AND c.status='published'`).bind(...ids).all();
+  return rows.results.map(row => { const p = row.profile_active ? JSON.parse(row.profile_json) : {}; const track=JSON.parse(row.row_json);
+    return mapTrackRow({ ...track,
+      is_public:Number(row.canonical_is_public||0),status:String(row.canonical_status||'published'),
+      published_at:Number(row.canonical_published_at||track.published_at||0),updated_at:Number(row.canonical_updated_at||track.updated_at||0),
+      allow_next_song_apply:Number(row.canonical_allow_next_song_apply||0),allow_follower_save:Number(row.canonical_allow_follower_save||0),
+      profile_pinned:Number(row.canonical_profile_pinned||0),owner_nickname:p.nickname||'',owner_avatar_url:p.avatar_url||'' }); });
 }
 async function derivedRank032(env, sort, uid) {
   const limit = uid ? 51 : 41;
   const index = uid ? 'idx_explore_rank_profile' : sort === 'popular' ? 'idx_explore_rank_popular' : 'idx_explore_rank_latest';
-  const order = uid ? 'pinned DESC,published_at DESC,id DESC' : sort === 'popular' ? 'likes DESC,published_at DESC,id DESC' : 'published_at DESC,id DESC';
-  // Covering index reads only 41/51 IDs, never sorts/scans canonical tracks.
-  const rows = await env.DB.prepare(`SELECT id FROM explore_derived_tracks INDEXED BY ${index}
-    WHERE ${uid ? 'owner_uid=? AND ' : ''}active=1 ORDER BY ${order} LIMIT ${limit}`).bind(...(uid ? [uid] : [])).all();
+  const order = uid ? 'c.profile_pinned DESC,d.published_at DESC,d.id DESC' : sort === 'popular' ? 'd.likes DESC,d.published_at DESC,d.id DESC' : 'd.published_at DESC,d.id DESC';
+  const rows = await env.DB.prepare(`SELECT d.id FROM explore_derived_tracks AS d INDEXED BY ${index}
+    JOIN tracks AS c ON c.id=d.id
+    WHERE ${uid ? 'd.owner_uid=? AND ' : ''}c.is_public=1 AND c.status='published'
+    ORDER BY ${order} LIMIT ${limit}`).bind(...(uid ? [uid] : [])).all();
   return rows.results.map(row => row.id);
 }
 function derivedCursor032(items, sort, uid, overflow) {
@@ -184,3 +201,5 @@ async function refreshPublicProfileFirstViewTrackWindow(env,uid,trackCountDelta=
 async function refreshOrPrebuildPublicProfileTrackWindow(env,uid,trackCountDelta=0) {
   return refreshPublicProfileFirstViewProfile(env,uid);
 }
+
+// SORIDRAW_PUBLICATION_RECOVERY_CANONICAL_GUARD_080_20260913

@@ -1,0 +1,261 @@
+name: TEMP 077 Prepare Local First Worker
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-077-prepare-local-first-worker.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-temp-077-prepare
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Correct 077 local-first contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+
+          const patchPath = 'cloudflare/explore-worker/patches/044-local-first-cost-hotpath.mjs';
+          let patch = fs.readFileSync(patchPath, 'utf8');
+
+          const oldWrapper = `for (const name of [
+            'syncMusicNotePublicationR2AfterMutation',
+            'syncExploreFeedR2Publication043',
+            'syncExploreFeedR2Private043',
+            'syncExploreFeedR2OptionPatch043',
+            'patchExploreProfileR2Publication043',
+          ]) {
+            wrapAsyncFunction(name, (coreName) => \`async function \${name}(...args) {\\
+            try {\\
+              return await \${coreName}(...args);\\
+            } catch (error) {\\
+              console.warn('[SORIDRAW 044] derived publication patch deferred:', \${JSON.stringify(name)}, String(error?.message || error || 'unknown'));\\
+              return { ok: false, repairNeeded: true };\\
+            }\\
+          }\`);
+          }`;
+          const newWrapper = `for (const name of [
+            'syncMusicNotePublicationR2AfterMutation',
+            'syncExploreFeedR2Publication043',
+            'syncExploreFeedR2Private043',
+            'syncExploreFeedR2OptionPatch043',
+            'patchExploreProfileR2Publication043',
+          ]) {
+            wrapAsyncFunction(name, (coreName) => name === 'syncMusicNotePublicationR2AfterMutation'
+              ? \`async function \${name}(...args) {\\
+            const [env, uid] = args;\\
+            try {\\
+              return await \${coreName}(...args);\\
+            } catch (error) {\\
+              console.warn('[SORIDRAW 044] derived publication patch deferred:', \${JSON.stringify(name)}, String(error?.message || error || 'unknown'));\\
+              try {\\
+                if (env?.PROFILE_MEDIA && uid) await env.PROFILE_MEDIA.delete(musicNotePublicationR2Key(uid));\\
+              } catch (repairError) {\\
+                console.warn('[SORIDRAW 044] publication R2 repair marker failed:', String(repairError?.message || repairError || 'unknown'));\\
+              }\\
+              return { ok: false, repairNeeded: true };\\
+            }\\
+          }\`
+              : \`async function \${name}(...args) {\\
+            try {\\
+              return await \${coreName}(...args);\\
+            } catch (error) {\\
+              console.warn('[SORIDRAW 044] derived publication patch deferred:', \${JSON.stringify(name)}, String(error?.message || error || 'unknown'));\\
+              return { ok: false, repairNeeded: true };\\
+            }\\
+          }\`);
+          }`;
+          if (!patch.includes(oldWrapper)) throw new Error('044 publication wrapper anchor drifted');
+          patch = patch.replace(oldWrapper, newWrapper);
+
+          const oldEffective = `  const effectiveMutations = mutations.filter((mutation) => (
+            mutation.baseLiked === null || mutation.baseLiked !== mutation.liked
+          ));`;
+          const newEffective = `  // Never discard an intent only because this device's baseLiked matches it.
+          // Another device may already have changed canonical state. The scheduled aggregate
+          // performs the authoritative idempotent comparison against canonical likes.
+          const effectiveMutations = mutations;`;
+          if (!patch.includes(oldEffective)) throw new Error('044 effective mutation anchor drifted');
+          patch = patch.replace(oldEffective, newEffective);
+
+          const intakeAnchor = `// One actual like batch must not re-read tracks/profile/stats/likes merely to echo`;
+          if (!patch.includes(intakeAnchor)) throw new Error('044 intake anchor missing');
+          const coldR2Fix = `replaceFunction('syncExploreLikeR2AfterBatch034', \`async function syncExploreLikeR2AfterBatch034(env, uid, results) {
+            let likedIds = await readExploreLikeR2Bundle(env, uid);
+            if (!likedIds) {
+              await rebuildExploreLikeR2Bundle(env, uid);
+              likedIds = await readExploreLikeR2Bundle(env, uid);
+            }
+            if (!likedIds) return { ok: false, repairNeeded: true };
+            for (const result of results) {
+              const trackId = String(result?.trackId || '').trim();
+              if (!trackId) continue;
+              if (result?.liked) likedIds.add(trackId);
+              else likedIds.delete(trackId);
+            }
+            await writeExploreR2Json(env, exploreLikeR2Key(uid), {
+              schemaVersion: EXPLORE_R2_LIKE_SCHEMA_VERSION,
+              uid: String(uid || ''),
+              updatedAt: Date.now(),
+              likedTrackIds: [...likedIds].filter(Boolean).slice(0, 2000)
+            });
+            return { ok: true };
+          }\`);
+
+          `;
+          patch = patch.replace(intakeAnchor, coldR2Fix + intakeAnchor);
+
+          const finalAnchor = `if (!source.includes('patchExploreFeedR2Like044') || !source.includes('patchExploreProfileR2Like044')) {
+            throw new Error('[044] aggregate targeted R2 like patch missing');
+          }`;
+          const finalNext = `${finalAnchor}
+          if (!likeHandler.includes('const effectiveMutations = mutations;')) {
+            throw new Error('[044] stale-device intents can still be discarded before canonical aggregate');
+          }
+          const socialR2Sync = functionRange('syncExploreLikeR2AfterBatch034').text;
+          if ((socialR2Sync.match(/readExploreLikeR2Bundle\\(env, uid\\)/g) || []).length < 2) {
+            throw new Error('[044] cold personal-like R2 recovery does not re-read and apply current intent');
+          }
+          const publicationStateSync = functionRange('syncMusicNotePublicationR2AfterMutation').text;
+          if (!publicationStateSync.includes('PROFILE_MEDIA.delete(musicNotePublicationR2Key(uid))')) {
+            throw new Error('[044] failed publication-state patch cannot force bounded R2 recovery');
+          }`;
+          if (!patch.includes(finalAnchor)) throw new Error('044 final assertion anchor missing');
+          patch = patch.replace(finalAnchor, finalNext);
+          fs.writeFileSync(patchPath, patch);
+
+          const verifierPath = 'scripts/verify-explore-like-cost-optimization.mjs';
+          let verifier = fs.readFileSync(verifierPath, 'utf8');
+          const manifestAnchor = `assert.deepEqual(
+            manifest.patches.filter((patch) => requiredReleasePatches.includes(patch)),
+            requiredReleasePatches,
+            'required like release patches must remain present and ordered'
+          );`;
+          if (!verifier.includes(manifestAnchor)) throw new Error('verifier manifest anchor drifted');
+          verifier = verifier.replace(manifestAnchor, `${manifestAnchor}
+          assert.equal(manifest.patches.at(-1), '044-local-first-cost-hotpath.mjs', '044 local-first hotpath must be the final Worker release patch');`);
+
+          const oldGenerated = `  const batchBody = functionText(worker, 'async function handleLikeBatch034(');
+            assert.match(batchBody, /enqueueExploreLikeBatch035/);
+            assert.match(batchBody, /readExploreLikeBatchStates035/);
+            assert.match(batchBody, /syncExploreLikeR2AfterBatch034/);
+            assert.doesNotMatch(batchBody, /adjustExploreLikeCounterDelta/, '035 intake may not mutate canonical likes/track_stats per track');
+            assert.doesNotMatch(batchBody, /patchExploreFeedR2LikeCount|patchExploreProfileR2Like020|patchExploreFirstViewLikeCount/);
+            const processor = functionText(worker, 'async function processExploreLikeAggregateWave035(');
+            assert.match(processor, /SUM\\(delta\\)/);
+            assert.match(processor, /INSERT OR IGNORE INTO likes/);
+            assert.match(processor, /DELETE FROM likes/);
+            assert.match(processor, /DELETE FROM explore_like_batches_035/);
+            assert.equal((processor.match(/env\\.DB\\.batch/g) || []).length, 1, 'one transactional D1 batch per aggregate wave');
+            console.log('PASS generated Worker: derived intake + deferred set-based transactional aggregation');`;
+          const newGenerated = `  const batchBody = functionText(worker, 'async function handleLikeBatch034(');
+            if (worker.includes('SORIDRAW_LOCAL_FIRST_COST_HOTPATH_044_20260913')) {
+              assert.match(batchBody, /enqueueExploreLikeUserQueue075/);
+              assert.match(batchBody, /syncExploreLikeR2AfterBatch034/);
+              assert.match(batchBody, /const effectiveMutations = mutations;/);
+              assert.doesNotMatch(batchBody, /readExploreLikeBatchStates035|canonical_liked|getPublicTrackForWrite|adjustExploreLikeCounterDelta/,
+                '044 intake must not re-read canonical/derived track state or mutate canonical likes immediately');
+              const personalR2 = functionText(worker, 'async function syncExploreLikeR2AfterBatch034(');
+              assert.ok((personalR2.match(/readExploreLikeR2Bundle\\(env, uid\\)/g) || []).length >= 2,
+                'cold personal-like R2 recovery must re-read and apply the current intent');
+              const userCte = functionText(worker, 'function exploreLikeUserAggregateCte075(');
+              assert.match(userCte, /JOIN tracks t/);
+              assert.match(userCte, /JOIN public_profiles p/);
+              assert.match(userCte, /LEFT JOIN likes/);
+              const userProcessor = functionText(worker, 'async function processExploreLikeUserQueueWave075(');
+              assert.match(userProcessor, /env\\.DB\\.batch/);
+              assert.match(userProcessor, /patchExploreFeedR2Like044/);
+              assert.match(userProcessor, /patchExploreProfileR2Like044/);
+              const publicationStateSync = functionText(worker, 'async function syncMusicNotePublicationR2AfterMutation(');
+              assert.match(publicationStateSync, /PROFILE_MEDIA\\.delete\\(musicNotePublicationR2Key\\(uid\\)\\)/);
+              console.log('PASS generated Worker 044: D1-free intake + stale-device convergence + bounded R2 recovery + aggregate canonical validation');
+            } else {
+              assert.match(batchBody, /enqueueExploreLikeBatch035/);
+              assert.match(batchBody, /readExploreLikeBatchStates035/);
+              assert.match(batchBody, /syncExploreLikeR2AfterBatch034/);
+              assert.doesNotMatch(batchBody, /adjustExploreLikeCounterDelta/, '035 intake may not mutate canonical likes/track_stats per track');
+              assert.doesNotMatch(batchBody, /patchExploreFeedR2LikeCount|patchExploreProfileR2Like020|patchExploreFirstViewLikeCount/);
+              const processor = functionText(worker, 'async function processExploreLikeAggregateWave035(');
+              assert.match(processor, /SUM\\(delta\\)/);
+              assert.match(processor, /INSERT OR IGNORE INTO likes/);
+              assert.match(processor, /DELETE FROM likes/);
+              assert.match(processor, /DELETE FROM explore_like_batches_035/);
+              assert.equal((processor.match(/env\\.DB\\.batch/g) || []).length, 1, 'one transactional D1 batch per aggregate wave');
+              console.log('PASS generated Worker: derived intake + deferred set-based transactional aggregation');
+            }`;
+          if (!verifier.includes(oldGenerated)) throw new Error('verifier generated-worker anchor drifted');
+          verifier = verifier.replace(oldGenerated, newGenerated);
+          verifier = verifier.replace(
+            `console.log('PASS Explore like 036 verifier; live D1 rows remain PREVIEW-deployment measurement only');`,
+            `console.log('PASS Explore like 044 verifier; live D1 rows remain PREVIEW-deployment measurement only');`,
+          );
+          fs.writeFileSync(verifierPath, verifier);
+          NODE
+
+      - name: Build corrected canonical Worker and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .tmp-worker
+          mkdir -p .tmp-worker
+          cp cloudflare/explore-worker/canonical/preview-worker.js .tmp-worker/worker.js
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.tmp-worker" node cloudflare/explore-worker/patches/044-local-first-cost-hotpath.mjs
+          node --check .tmp-worker/worker.js
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          SORIDRAW_GENERATED_WORKER="$PWD/.tmp-worker/worker.js" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/.tmp-worker/worker.js" node scripts/verify-explore-derived-cache.mjs
+          node scripts/verify-explore-deploy-preflight.mjs
+          echo '077_WORKER_OFFLINE_VERIFY=PASS'
+
+      - name: TypeScript and Build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          npm run build
+          echo '077_APP_BUILD_VERIFY=PASS'
+
+      - name: Pin canonical Worker and remove temporary diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .tmp-worker/worker.js cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          rm -f .github/workflows/temp-077-d1-publication-readonly-diagnosis.yml
+          rm -f .github/workflows/temp-077-prepare-local-first-worker.yml
+
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release-bot@users.noreply.github.com'
+          git add cloudflare/explore-worker/patches/044-local-first-cost-hotpath.mjs \
+                  cloudflare/explore-worker/canonical/preview-worker.js \
+                  cloudflare/explore-worker/canonical/source-sha256.txt \
+                  scripts/verify-explore-like-cost-optimization.mjs \
+                  .github/workflows/temp-077-d1-publication-readonly-diagnosis.yml \
+                  .github/workflows/temp-077-prepare-local-first-worker.yml
+          git diff --cached --check
+          git commit -m 'fix(preview): finalize 077 local-first cost hotpath'
+          git push origin HEAD:preview
+          echo '077_PREPARE_COMMIT=PASS'

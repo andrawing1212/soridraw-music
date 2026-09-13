@@ -106,7 +106,7 @@ def seed_derived_db() -> sqlite3.Connection:
         """INSERT INTO public_profiles(
           uid,nickname,avatar_url,bio,is_public,created_at,updated_at,handle,background_url,
           genre_override,spotify_url,instagram_url,tiktok_url,profile_customized
-        ) VALUES('owner','Owner','','',1,?,?,?,?,?,?,?,?,?,0)""",
+        ) VALUES('owner','Owner','','',1,?,?,?,?,?,?,?,?,0)""",
         (now, now, 'owner', '', '[]', '', '', ''),
     )
     conn.execute("INSERT INTO profile_stats(uid,follower_count,following_count,updated_at) VALUES('owner',0,0,?)", (now,))

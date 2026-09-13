@@ -42,7 +42,10 @@ jobs:
           rm -rf "$RUNNER_TEMP/worker075"
           mkdir -p "$RUNNER_TEMP/worker075"
           cp cloudflare/explore-worker/canonical/preview-worker.js "$RUNNER_TEMP/worker075/worker.js"
-          SORIDRAW_REMOTE_WORKER_DIR="$RUNNER_TEMP/worker075" node cloudflare/explore-worker/scripts/apply-release-patches.mjs
+          (
+            cd cloudflare/explore-worker
+            SORIDRAW_REMOTE_WORKER_DIR="$RUNNER_TEMP/worker075" node patches/042-social-snapshot-write-compaction.mjs
+          )
           node --check "$RUNNER_TEMP/worker075/worker.js"
           grep -Fq 'SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_WRITE_COMPACTION_042_20260913' "$RUNNER_TEMP/worker075/worker.js"
           grep -Fq 'SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_USER_QUEUE_042_20260913' "$RUNNER_TEMP/worker075/worker.js"

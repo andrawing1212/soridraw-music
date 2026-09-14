@@ -1,3 +1,0 @@
-requested_at=2026-09-14T02:44:00Z
-requested_by=assistant
-purpose=fix_084_patch_template_interpolation

@@ -1,0 +1,140 @@
+name: TEMP 087 Liked Card Consistency V2
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/temp-087-liked-card-consistency-v2.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply 087 consistency repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'missing patch anchor in {path}: {old[:100]!r}')
+              if text.count(old) != 1:
+                  raise SystemExit(f'non-unique patch anchor in {path}: {text.count(old)}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          path = 'src/services/exploreLikedTracksService.ts'
+          replace_once(path,
+              '// SORIDRAW_EXPLORE_LIKED_TRACK_CANONICAL_REPAIR_086_20260914\n',
+              '// SORIDRAW_EXPLORE_LIKED_TRACK_CANONICAL_REPAIR_086_20260914\n// SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914\n')
+          anchor = "export const getExploreLikedTracks = async (user: User): Promise<Array<Record<string, unknown>>> => {\n"
+          addition = """export const getExploreLikedTrackCollectionIds = (uid: string): string[] | null => {\n  const normalizedUid = normalizeId(uid);\n  if (!normalizedUid) return null;\n  const cache = readCache(normalizedUid);\n  return cache.canonicalLikedTrackIds === null ? null : normalizeIds(cache.canonicalLikedTrackIds);\n};\n\n"""
+          replace_once(path, anchor, addition + anchor)
+
+          path = 'src/services/exploreLikeService.ts'
+          replace_once(path,
+              '// SORIDRAW_EXPLORE_LIKE_MISSED_SIGNAL_REPAIR_086_20260914\n',
+              '// SORIDRAW_EXPLORE_LIKE_MISSED_SIGNAL_REPAIR_086_20260914\n// SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914\n')
+          anchor = "\n\nexport const getExploreLikeDisplayCounts = (\n"
+          addition = """\n\nexport const reconcileExploreLikedTrackCollectionState = (\n  uid: string,\n  canonicalLikedTrackIds: string[],\n): string[] => {\n  const normalizedUid = String(uid || '').trim();\n  if (!normalizedUid) return [];\n\n  const canonical = new Set(\n    canonicalLikedTrackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean),\n  );\n  const cache = getLikedStateCache(normalizedUid);\n  const outbox = readLikeOutbox(normalizedUid);\n  const scope = new Set<string>([\n    ...cache.keys(),\n    ...canonical,\n    ...Object.keys(outbox),\n  ]);\n  const effectiveLikedTrackIds: string[] = [];\n  let changed = false;\n\n  for (const trackId of scope) {\n    const pending = outbox[trackId];\n    const nextLiked = pending ? pending.desiredLiked : canonical.has(trackId);\n    if (cache.get(trackId) !== nextLiked) {\n      cache.set(trackId, nextLiked);\n      changed = true;\n    }\n    if (nextLiked) effectiveLikedTrackIds.push(trackId);\n  }\n\n  if (changed) persistLikedStateCache(normalizedUid, cache);\n  return effectiveLikedTrackIds;\n};\n"""
+          replace_once(path, anchor, addition + anchor)
+
+          path = 'src/pages/ExplorePage.tsx'
+          replace_once(path,
+              "  getExploreLikedTrackIds,\n  getExploreLikeDisplayCounts,\n  setExploreTrackLike,\n",
+              "  getExploreLikedTrackIds,\n  getExploreLikeDisplayCounts,\n  reconcileExploreLikedTrackCollectionState,\n  setExploreTrackLike,\n")
+          replace_once(path,
+              "import { getExploreLikedTracks, rememberExploreLikedTrack } from '../services/exploreLikedTracksService';\n",
+              "import { getExploreLikedTrackCollectionIds, getExploreLikedTracks, rememberExploreLikedTrack } from '../services/exploreLikedTracksService';\n")
+          replace_once(path,
+              """    getExploreLikedTracks(user)\n      .then((rows) => {\n        if (cancelled) return;\n        setProfileLikedTracks(rows.map(normalizeTrack).filter((track) => track.id));\n      })\n""",
+              """    getExploreLikedTracks(user)\n      .then((rows) => {\n        if (cancelled) return;\n        const normalizedRows = rows.map(normalizeTrack).filter((track) => track.id);\n        const canonicalLikedTrackIds = getExploreLikedTrackCollectionIds(user.uid)\n          ?? normalizedRows.map((track) => track.id);\n        const effectiveLikedTrackIds = reconcileExploreLikedTrackCollectionState(\n          user.uid,\n          canonicalLikedTrackIds,\n        );\n        const effectiveLikedSet = new Set(effectiveLikedTrackIds);\n        setLikedTrackIds((previous) => {\n          const next = { ...previous };\n          Object.keys(next).forEach((trackId) => { next[trackId] = effectiveLikedSet.has(trackId); });\n          effectiveLikedTrackIds.forEach((trackId) => { next[trackId] = true; });\n          return next;\n        });\n        setProfileLikedTracks(normalizedRows.map((track) => (\n          effectiveLikedSet.has(track.id) && track.likeCount === 0\n            ? { ...track, likeCount: 1 }\n            : track\n        )));\n        likeHydrationKeyRef.current = '';\n      })\n""")
+          replace_once(path,
+              "    const hydrationKey = `${user.uid}:${profileUid || 'feed'}:${ids.join(',')}`;\n",
+              "    const hydrationKey = `${user.uid}:${profileUid || 'feed'}:${profileUid ? profileCollection : 'feed'}:${ids.join(',')}`;\n")
+          replace_once(path,
+              """        setTracks(applyPersonalOverlay);\n        setProfileTracks(applyPersonalOverlay);\n""",
+              """        setTracks(applyPersonalOverlay);\n        setProfileTracks(applyPersonalOverlay);\n        setProfileLikedTracks(applyPersonalOverlay);\n""")
+          replace_once(path,
+              "  }, [user, visibleTracks, profileUid, likeAccountSyncSignal]);\n",
+              "  }, [user, visibleTracks, profileUid, profileCollection, likeAccountSyncSignal]);\n")
+
+          # Historical verifier must remain reusable after 086.
+          replace_once('scripts/verify-086-liked-sync-repair.mjs',
+              "assert.equal(String(version.version), '086');\n",
+              "assert.ok(Number(version.version) >= 86, `expected app version 086+, got ${version.version}`);\n")
+
+          Path('public/app-version.json').write_text('{\n  "version": "087"\n}\n', encoding='utf-8')
+
+          verifier = r'''import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+
+          const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
+          const liked = readFileSync('src/services/exploreLikedTracksService.ts', 'utf8');
+          const like = readFileSync('src/services/exploreLikeService.ts', 'utf8');
+          const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
+
+          assert.equal(String(version.version), '087');
+          assert.match(liked, /SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914/);
+          assert.match(liked, /export const getExploreLikedTrackCollectionIds/);
+          assert.doesNotMatch(liked, /firestoreMeasured|updateDoc\(|setDoc\(|addDoc\(/);
+          assert.match(like, /SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914/);
+          assert.match(like, /export const reconcileExploreLikedTrackCollectionState/);
+          assert.match(like, /const nextLiked = pending \? pending\.desiredLiked : canonical\.has\(trackId\)/);
+          assert.match(like, /if \(changed\) persistLikedStateCache\(normalizedUid, cache\)/);
+          assert.match(page, /const canonicalLikedTrackIds = getExploreLikedTrackCollectionIds\(user\.uid\)/);
+          assert.match(page, /reconcileExploreLikedTrackCollectionState/);
+          assert.match(page, /effectiveLikedSet\.has\(track\.id\) && track\.likeCount === 0/);
+          assert.match(page, /setProfileLikedTracks\(applyPersonalOverlay\)/);
+          assert.match(page, /profileUid \? profileCollection : 'feed'/);
+          assert.match(page, /\[user, visibleTracks, profileUid, profileCollection, likeAccountSyncSignal\]/);
+
+          const reconcileStart = like.indexOf('export const reconcileExploreLikedTrackCollectionState');
+          const reconcileEnd = like.indexOf('export const getExploreLikeDisplayCounts', reconcileStart);
+          const reconcileBody = like.slice(reconcileStart, reconcileEnd);
+          assert.doesNotMatch(reconcileBody, /fetch\(|requestExploreLike\(|updateDoc\(/);
+
+          console.log('PASS 087: canonical liked collection repairs stale heart state locally, pending outbox wins, liked-tab zero count gets a local floor, and liked-card overlay is applied without new server reads.');
+          '''
+          Path('scripts/verify-087-liked-card-consistency.mjs').write_text(verifier.replace('          ', ''), encoding='utf-8')
+          PY
+
+      - name: Install and validate 087
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-085-liked-profile.mjs
+          node scripts/verify-086-liked-sync-repair.mjs
+          node scripts/verify-087-liked-card-consistency.mjs
+          node scripts/verify-explore-like-cost-optimization.mjs
+          node scripts/verify-084-publication-write-returning.mjs
+
+      - name: Commit prepared 087
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'soridraw-release-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/pages/ExplorePage.tsx src/services/exploreLikeService.ts src/services/exploreLikedTracksService.ts scripts/verify-086-liked-sync-repair.mjs scripts/verify-087-liked-card-consistency.mjs public/app-version.json
+          git diff --cached --check
+          git commit -m 'fix(preview): reconcile liked collection card state'
+          git push origin HEAD:preview
+          echo "PRODUCT_COMMIT=$(git rev-parse HEAD)"

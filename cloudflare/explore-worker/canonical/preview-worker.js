@@ -21271,8 +21271,6 @@ async function handleMyLikedTracks052(request, env, cors) {
   const trackIds = [...new Set(raw.map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 200);
   if (raw.length > 200) throwApi('TOO_MANY_TRACKS', '한 번에 확인할 수 있는 좋아요 곡 수를 초과했습니다.', 400);
   if (trackIds.some((trackId) => trackId.length > 512)) throwApi('INVALID_TRACK_ID', '곡 ID가 올바르지 않습니다.', 400);
-  if (!trackIds.length) return json({ ok: true, data: { items: [], unavailableTrackIds: [] } }, 200, cors);
-
   let likedIds = await readExploreLikeR2Bundle(env, authContext.uid);
   if (!likedIds) {
     await rebuildExploreLikeR2Bundle(env, authContext.uid);
@@ -21280,9 +21278,14 @@ async function handleMyLikedTracks052(request, env, cors) {
   }
   if (!likedIds) throwApi('LIKED_TRACK_SNAPSHOT_UNAVAILABLE', '좋아요 곡 상태를 확인하지 못했습니다.', 503);
 
+  const canonicalLikedTrackIds = [...likedIds];
+  if (!trackIds.length) {
+    return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items: [], unavailableTrackIds: [] } }, 200, cors);
+  }
+
   const requested = trackIds.filter((trackId) => likedIds.has(trackId));
   if (!requested.length) {
-    return json({ ok: true, data: { items: [], unavailableTrackIds: trackIds } }, 200, cors);
+    return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items: [], unavailableTrackIds: trackIds } }, 200, cors);
   }
 
   const values = requested.map((_, index) => `(?,${index})`).join(',');
@@ -21291,8 +21294,8 @@ async function handleMyLikedTracks052(request, env, cors) {
     SELECT
       t.id,
       t.owner_uid,
-      t.owner_nickname,
-      t.owner_avatar_url,
+      p.nickname AS owner_nickname,
+      p.avatar_url AS owner_avatar_url,
       t.title,
       t.cover_url,
       t.suno_url_primary,
@@ -21303,6 +21306,7 @@ async function handleMyLikedTracks052(request, env, cors) {
       r.sort_order
     FROM requested r
     JOIN tracks t ON t.id = r.id
+    LEFT JOIN profiles p ON p.uid = t.owner_uid
     LEFT JOIN track_stats s ON s.track_id = t.id
     WHERE t.is_public = 1 AND t.status = 'published'
     ORDER BY r.sort_order ASC
@@ -21323,7 +21327,7 @@ async function handleMyLikedTracks052(request, env, cors) {
   })).filter((item) => item.id);
   const returned = new Set(items.map((item) => item.id));
   const unavailableTrackIds = trackIds.filter((trackId) => !returned.has(trackId));
-  return json({ ok: true, data: { items, unavailableTrackIds } }, 200, cors);
+  return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items, unavailableTrackIds } }, 200, cors);
 }
 
 async function handleMySocialSnapshot042(request, env, cors) {
@@ -23951,3 +23955,6 @@ export {
 
 
 // SORIDRAW_LIKED_TRACK_COLLECTION_052_20260914
+
+
+// SORIDRAW_LIKED_TRACK_SCHEMA_REPAIR_053_20260914

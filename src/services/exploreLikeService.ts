@@ -9,9 +9,14 @@ import {
   writeSoridrawPersistentCache,
 } from '../lib/soridrawPersistentCache';
 import {
+  clearExplorePersonalSocialSnapshot,
   getExplorePersonalSocialSnapshot,
   patchExplorePersonalSocialLike,
 } from './exploreSocialSnapshotService';
+import {
+  invalidateExploreLikedTrackCollection,
+  patchExploreLikedTrackMembership,
+} from './exploreLikedTracksService';
 
 // SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
 // SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911
@@ -24,6 +29,7 @@ import {
 // SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_075_20260913
 // SORIDRAW_PAGE_EXIT_LIKE_OUTBOX_081_20260914
 // SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
+// SORIDRAW_EXPLORE_LIKE_MISSED_SIGNAL_REPAIR_086_20260914
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -399,11 +405,16 @@ export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) 
   // rehydrate only currently visible IDs; no public feed/full scan is triggered.
   const missedSignal = signal.previousVersion !== seenVersion;
   const cache = getLikedStateCache(uid);
-  if (missedSignal) cache.clear();
+  if (missedSignal) {
+    cache.clear();
+    clearExplorePersonalSocialSnapshot(uid);
+    invalidateExploreLikedTrackCollection(uid);
+  }
 
   rememberAccountSyncResults(uid, signal.results);
   for (const result of signal.results) {
     cache.set(result.trackId, result.liked);
+    patchExploreLikedTrackMembership(uid, result.trackId, result.liked);
     dispatchLikeSync({
       uid: user.uid,
       trackId: result.trackId,
@@ -769,6 +780,7 @@ export const setExploreTrackLike = async (
   const normalizedTrackId = String(trackId || '').trim();
   if (!normalizedTrackId) throw new Error('Explore 곡 ID를 확인하지 못했습니다.');
   patchExplorePersonalSocialLike(user.uid, normalizedTrackId, liked);
+  patchExploreLikedTrackMembership(user.uid, normalizedTrackId, liked);
 
   const outbox = readLikeOutbox(user.uid);
   const existing = outbox[normalizedTrackId];

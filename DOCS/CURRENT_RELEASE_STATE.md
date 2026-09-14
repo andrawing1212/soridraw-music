@@ -16,8 +16,7 @@
 - 087 제품 commit: `28d090f2974a7c3745063dd9ac5ddd840c68f8d5`
 - 087 검증 Run `34814241643` — PASS
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
-- PRODUCTION: `a8971fae1014ce107927a46bd553b80e8d` — **아님: 아래 실제 고정값 유지**
-- PRODUCTION 실제: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
+- PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
 - TEST Worker: `0b9cfe5c-1e29-4485-ac97-36f87832b41e` — unchanged
 - PRODUCTION Worker: `07c11e5e-47a6-458b-a3a0-6e47b6c331e6` — unchanged
 

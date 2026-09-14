@@ -23,7 +23,7 @@ for (const [needle, label] of [
 ]) must(explorePage, needle, label);
 
 for (const [needle, label] of [
-  ["getExplorePersonalSocialSnapshot", 'existing personal social snapshot reuse'],
+  ["canonicalLikedTrackIds", 'canonical personal liked-ID cache'],
   ["explore-liked-track-collection-085", 'persistent local cache'],
   ["LOCAL HIT · 좋아요 곡 전체 캐시", 'warm local zero-read path'],
   ["/v1/me/liked-tracks", 'bounded missing-details route'],
@@ -48,4 +48,4 @@ if (worker.includes('WHERE t.owner_uid = ? AND t.id IN')) {
   throw new Error('085 verifier: owner-wide liked track scan reintroduced');
 }
 
-console.log('PASS 085: own-profile liked-song collection reuses personal liked IDs, warm local cache is read-free, and only missing liked public tracks use bounded PK lookup.');
+console.log('PASS 085: own-profile liked-song collection keeps canonical personal liked IDs locally, warm cache is read-free, and only missing liked public tracks use bounded PK lookup.');

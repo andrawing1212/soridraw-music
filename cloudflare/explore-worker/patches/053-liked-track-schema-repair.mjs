@@ -17,34 +17,32 @@ if (!source.includes('SORIDRAW_LIKED_TRACK_COLLECTION_052_20260914')) {
 
 const emptyBefore = "  if (!trackIds.length) return json({ ok: true, data: { items: [], unavailableTrackIds: [] } }, 200, cors);\n\n  let likedIds = await readExploreLikeR2Bundle(env, authContext.uid);";
 const emptyAfter = "  let likedIds = await readExploreLikeR2Bundle(env, authContext.uid);";
-if ((source.match(new RegExp(emptyBefore.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&'), 'g')) || []).length !== 1) {
-  if (!source.includes(emptyBefore)) throw new Error('[053] empty-request anchor missing');
-}
+if (source.split(emptyBefore).length - 1 !== 1) throw new Error('[053] empty-request anchor count mismatch');
 source = source.replace(emptyBefore, emptyAfter);
 
 const likedAnchor = "  if (!likedIds) throwApi('LIKED_TRACK_SNAPSHOT_UNAVAILABLE', '좋아요 곡 상태를 확인하지 못했습니다.', 503);\n\n  const requested = trackIds.filter((trackId) => likedIds.has(trackId));";
 const likedReplacement = "  if (!likedIds) throwApi('LIKED_TRACK_SNAPSHOT_UNAVAILABLE', '좋아요 곡 상태를 확인하지 못했습니다.', 503);\n\n  const canonicalLikedTrackIds = [...likedIds];\n  if (!trackIds.length) {\n    return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items: [], unavailableTrackIds: [] } }, 200, cors);\n  }\n\n  const requested = trackIds.filter((trackId) => likedIds.has(trackId));";
-if (!source.includes(likedAnchor)) throw new Error('[053] liked bundle anchor missing');
+if (source.split(likedAnchor).length - 1 !== 1) throw new Error('[053] liked bundle anchor count mismatch');
 source = source.replace(likedAnchor, likedReplacement);
 
 const noRequestedBefore = "    return json({ ok: true, data: { items: [], unavailableTrackIds: trackIds } }, 200, cors);";
 const noRequestedAfter = "    return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items: [], unavailableTrackIds: trackIds } }, 200, cors);";
-if (!source.includes(noRequestedBefore)) throw new Error('[053] empty intersection response anchor missing');
+if (source.split(noRequestedBefore).length - 1 !== 1) throw new Error('[053] empty intersection response anchor count mismatch');
 source = source.replace(noRequestedBefore, noRequestedAfter);
 
 const ownerColumnsBefore = "      t.owner_uid,\n      t.owner_nickname,\n      t.owner_avatar_url,";
 const ownerColumnsAfter = "      t.owner_uid,\n      p.nickname AS owner_nickname,\n      p.avatar_url AS owner_avatar_url,";
-if (!source.includes(ownerColumnsBefore)) throw new Error('[053] invalid track owner columns anchor missing');
+if (source.split(ownerColumnsBefore).length - 1 !== 1) throw new Error('[053] invalid track owner columns anchor count mismatch');
 source = source.replace(ownerColumnsBefore, ownerColumnsAfter);
 
 const joinBefore = "    JOIN tracks t ON t.id = r.id\n    LEFT JOIN track_stats s ON s.track_id = t.id";
 const joinAfter = "    JOIN tracks t ON t.id = r.id\n    LEFT JOIN profiles p ON p.uid = t.owner_uid\n    LEFT JOIN track_stats s ON s.track_id = t.id";
-if (!source.includes(joinBefore)) throw new Error('[053] track join anchor missing');
+if (source.split(joinBefore).length - 1 !== 1) throw new Error('[053] track join anchor count mismatch');
 source = source.replace(joinBefore, joinAfter);
 
 const finalBefore = "  return json({ ok: true, data: { items, unavailableTrackIds } }, 200, cors);";
 const finalAfter = "  return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items, unavailableTrackIds } }, 200, cors);";
-if (!source.includes(finalBefore)) throw new Error('[053] final response anchor missing');
+if (source.split(finalBefore).length - 1 !== 1) throw new Error('[053] final response anchor count mismatch');
 source = source.replace(finalBefore, finalAfter);
 
 source += `\n\n// ${MARKER}\n`;

@@ -36,7 +36,7 @@ const functionText = (source, name) => {
   throw new Error(`unterminated function ${name}`);
 };
 
-assert.equal(String(version.version), '086');
+assert.ok(Number(version.version) >= 86, `expected app version 086+, got ${version.version}`);
 assert.ok(manifest.patches.includes('053-liked-track-schema-repair.mjs'));
 assert.match(worker, /SORIDRAW_LIKED_TRACK_SCHEMA_REPAIR_053_20260914/);
 

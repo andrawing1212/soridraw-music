@@ -30,6 +30,7 @@ import {
 // SORIDRAW_PAGE_EXIT_LIKE_OUTBOX_081_20260914
 // SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
 // SORIDRAW_EXPLORE_LIKE_MISSED_SIGNAL_REPAIR_086_20260914
+// SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -745,6 +746,41 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
 
   replayAccountSyncPatches(user.uid, normalized);
   return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? cache.get(trackId) === true);
+};
+
+
+export const reconcileExploreLikedTrackCollectionState = (
+  uid: string,
+  canonicalLikedTrackIds: string[],
+): string[] => {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return [];
+
+  const canonical = new Set(
+    canonicalLikedTrackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean),
+  );
+  const cache = getLikedStateCache(normalizedUid);
+  const outbox = readLikeOutbox(normalizedUid);
+  const scope = new Set<string>([
+    ...cache.keys(),
+    ...canonical,
+    ...Object.keys(outbox),
+  ]);
+  const effectiveLikedTrackIds: string[] = [];
+  let changed = false;
+
+  for (const trackId of scope) {
+    const pending = outbox[trackId];
+    const nextLiked = pending ? pending.desiredLiked : canonical.has(trackId);
+    if (cache.get(trackId) !== nextLiked) {
+      cache.set(trackId, nextLiked);
+      changed = true;
+    }
+    if (nextLiked) effectiveLikedTrackIds.push(trackId);
+  }
+
+  if (changed) persistLikedStateCache(normalizedUid, cache);
+  return effectiveLikedTrackIds;
 };
 
 

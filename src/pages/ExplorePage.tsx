@@ -23,9 +23,10 @@ import {
   EXPLORE_LIKE_SYNC_EVENT,
   getExploreLikedTrackIds,
   getExploreLikeDisplayCounts,
+  reconcileExploreLikedTrackCollectionState,
   setExploreTrackLike,
 } from '../services/exploreLikeService';
-import { getExploreLikedTracks, rememberExploreLikedTrack } from '../services/exploreLikedTracksService';
+import { getExploreLikedTrackCollectionIds, getExploreLikedTracks, rememberExploreLikedTrack } from '../services/exploreLikedTracksService';
 import { getExplorePublicProfileFirstView, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
 import {
   getExploreFollowState,
@@ -648,7 +649,26 @@ export default function ExplorePage() {
     getExploreLikedTracks(user)
       .then((rows) => {
         if (cancelled) return;
-        setProfileLikedTracks(rows.map(normalizeTrack).filter((track) => track.id));
+        const normalizedRows = rows.map(normalizeTrack).filter((track) => track.id);
+        const canonicalLikedTrackIds = getExploreLikedTrackCollectionIds(user.uid)
+          ?? normalizedRows.map((track) => track.id);
+        const effectiveLikedTrackIds = reconcileExploreLikedTrackCollectionState(
+          user.uid,
+          canonicalLikedTrackIds,
+        );
+        const effectiveLikedSet = new Set(effectiveLikedTrackIds);
+        setLikedTrackIds((previous) => {
+          const next = { ...previous };
+          Object.keys(next).forEach((trackId) => { next[trackId] = effectiveLikedSet.has(trackId); });
+          effectiveLikedTrackIds.forEach((trackId) => { next[trackId] = true; });
+          return next;
+        });
+        setProfileLikedTracks(normalizedRows.map((track) => (
+          effectiveLikedSet.has(track.id) && track.likeCount === 0
+            ? { ...track, likeCount: 1 }
+            : track
+        )));
+        likeHydrationKeyRef.current = '';
       })
       .catch((reason: unknown) => {
         if (cancelled) return;
@@ -668,7 +688,7 @@ export default function ExplorePage() {
   useEffect(() => {
     if (!user || visibleTracks.length === 0) return;
     const ids = [...new Set(visibleTracks.map((track) => track.id).filter(Boolean))].slice(0, 50);
-    const hydrationKey = `${user.uid}:${profileUid || 'feed'}:${ids.join(',')}`;
+    const hydrationKey = `${user.uid}:${profileUid || 'feed'}:${profileUid ? profileCollection : 'feed'}:${ids.join(',')}`;
     if (!ids.length || likeHydrationKeyRef.current === hydrationKey) return;
     likeHydrationKeyRef.current = hydrationKey;
 
@@ -692,6 +712,7 @@ export default function ExplorePage() {
         });
         setTracks(applyPersonalOverlay);
         setProfileTracks(applyPersonalOverlay);
+        setProfileLikedTracks(applyPersonalOverlay);
       })
       .catch((reason) => {
         console.warn('Explore like state hydration failed:', reason);
@@ -699,7 +720,7 @@ export default function ExplorePage() {
       });
 
     return () => { cancelled = true; };
-  }, [user, visibleTracks, profileUid, likeAccountSyncSignal]);
+  }, [user, visibleTracks, profileUid, profileCollection, likeAccountSyncSignal]);
 
   useEffect(() => {
     if (!user?.uid || profileUid || !isExploreFeedRequest(requestUrl) || !tracks.length) return;

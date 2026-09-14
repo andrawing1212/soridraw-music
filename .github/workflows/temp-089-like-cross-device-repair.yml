@@ -17,7 +17,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - name: Apply 089 client consistency repair
         run: python3 scripts/temp-089-like-cross-device-repair.py

@@ -51,7 +51,16 @@ assert.match(service, /const EXPLORE_LIKE_BATCH_MAX = 50;/);
 assert.match(service, /EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox'/);
 assert.match(service, /EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY = 'explore-like-account-patches'/);
 assert.match(service, /rememberAccountSyncResults\(uid, signal\.results\)/);
-assert.match(service, /replayAccountSyncPatches\(user\.uid, normalized\)/);
+const sameSession088 = service.includes('SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914');
+if (sameSession088) {
+  assert.doesNotMatch(service, /replayAccountSyncPatches\(user\.uid, normalized\)/);
+  assert.doesNotMatch(service, /const replayAccountSyncPatches =/);
+  assert.match(service, /rememberAccountSyncResults\(uid, accountReplayResults\)/);
+  const displayCountsFunction = functionText(service, 'export const getExploreLikeDisplayCounts =');
+  assert.match(displayCountsFunction, /readAccountPatchCache\(user\.uid\)/);
+} else {
+  assert.match(service, /replayAccountSyncPatches\(user\.uid, normalized\)/);
+}
 const queueFunction = functionText(service, 'export const setExploreTrackLike = async');
 assert.doesNotMatch(queueFunction, /schedulePendingLikes\(user\)/, '081 UI queue must remain local-only');
 assert.doesNotMatch(queueFunction, /requestExploreLike\(/, 'UI queue function must not call the server immediately');

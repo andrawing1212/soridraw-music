@@ -4,7 +4,7 @@ const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const liked = readFileSync('src/services/exploreLikedTracksService.ts', 'utf8');
 const like = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
-assert.equal(String(version.version), '087');
+assert.ok(Number(version.version) >= 87, `expected app version 087+, got ${version.version}`);
 assert.match(liked, /SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914/);
 assert.match(liked, /export const getExploreLikedTrackCollectionIds/);
 assert.doesNotMatch(liked, /firestoreMeasured|updateDoc\(|setDoc\(|addDoc\(/);

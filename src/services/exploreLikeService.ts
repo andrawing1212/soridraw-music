@@ -31,6 +31,7 @@ import {
 // SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
 // SORIDRAW_EXPLORE_LIKE_MISSED_SIGNAL_REPAIR_086_20260914
 // SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914
+// SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -368,23 +369,6 @@ const dispatchLikeSync = (detail: ExploreLikeSyncEventDetail) => {
   window.dispatchEvent(new CustomEvent<ExploreLikeSyncEventDetail>(EXPLORE_LIKE_SYNC_EVENT, { detail }));
 };
 
-const replayAccountSyncPatches = (uid: string, trackIds: string[]) => {
-  if (!uid || typeof window === 'undefined' || !trackIds.length) return;
-  const cache = readAccountPatchCache(uid);
-  const patches = trackIds.map((trackId) => cache[trackId]).filter(Boolean) as ExploreLikeAccountPatch[];
-  if (!patches.length) return;
-  window.setTimeout(() => {
-    patches.forEach((patch) => dispatchLikeSync({
-      uid,
-      trackId: patch.trackId,
-      ownerUid: patch.ownerUid,
-      liked: patch.liked,
-      likeCount: patch.likeCount,
-      ...(patch.displayLikeCount === undefined ? {} : { displayLikeCount: patch.displayLikeCount }),
-    }));
-  }, 0);
-};
-
 const dispatchLikeSyncError = (detail: ExploreLikeSyncEventDetail & { message: string }) => {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_SYNC_ERROR_EVENT, { detail }));
@@ -612,6 +596,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
     const confirmedCache = getLikedStateCache(uid);
     const latestOutbox = readLikeOutbox(uid);
     const accountSyncResults: Array<ExploreLikeBatchResult & { displayLikeCount?: number }> = [];
+    const accountReplayResults: ExploreLikeAccountSyncResult[] = [];
 
     for (const pending of batchEntries) {
       const result = resultByTrack.get(pending.trackId);
@@ -648,6 +633,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
         displayLikeCount: visibleLikeCount,
       };
       accountSyncResults.push(visibleResult);
+      accountReplayResults.push({ ...visibleResult, ownerUid });
       dispatchLikeSync({
         uid,
         ...visibleResult,
@@ -657,6 +643,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
 
     persistLikedStateCache(uid, confirmedCache);
     persistLikeOutbox(uid, latestOutbox);
+    rememberAccountSyncResults(uid, accountReplayResults);
     await publishExploreLikeAccountSyncSignal(user, batchEntries, accountSyncResults);
     if (Object.keys(latestOutbox).length) schedulePendingLikes(user, undefined, true);
   } catch (reason) {
@@ -744,7 +731,8 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
 
   const outbox = readLikeOutbox(user.uid);
 
-  replayAccountSyncPatches(user.uid, normalized);
+  // 088: outbox/current liked-state are the heart source of truth. Historical
+  // account patches remain available only to getExploreLikeDisplayCounts().
   return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? cache.get(trackId) === true);
 };
 
@@ -817,6 +805,9 @@ export const setExploreTrackLike = async (
   if (!normalizedTrackId) throw new Error('Explore 곡 ID를 확인하지 못했습니다.');
   patchExplorePersonalSocialLike(user.uid, normalizedTrackId, liked);
   patchExploreLikedTrackMembership(user.uid, normalizedTrackId, liked);
+  const optimisticLikedCache = getLikedStateCache(user.uid);
+  optimisticLikedCache.set(normalizedTrackId, liked);
+  persistLikedStateCache(user.uid, optimisticLikedCache);
 
   const outbox = readLikeOutbox(user.uid);
   const existing = outbox[normalizedTrackId];

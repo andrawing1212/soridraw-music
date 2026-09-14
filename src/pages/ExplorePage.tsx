@@ -582,7 +582,9 @@ export default function ExplorePage() {
 
     let cancelled = false;
     setProfileCollection('public');
-    setProfileLikedTracks([]);
+    // 088: entering this user's own profile from Explore must not discard the
+    // optimistic liked cards created moments earlier in the same page session.
+    setProfileLikedTracks((previous) => profileUid === user?.uid ? previous : []);
     setProfileLikedLoading(false);
     setProfileLikedError('');
     setProfileLoading(true);
@@ -663,11 +665,19 @@ export default function ExplorePage() {
           effectiveLikedTrackIds.forEach((trackId) => { next[trackId] = true; });
           return next;
         });
-        setProfileLikedTracks(normalizedRows.map((track) => (
+        const normalizedLikedRows = normalizedRows.map((track) => (
           effectiveLikedSet.has(track.id) && track.likeCount === 0
             ? { ...track, likeCount: 1 }
             : track
-        )));
+        ));
+        setProfileLikedTracks((previous) => {
+          const merged = new Map(normalizedLikedRows.map((track) => [track.id, track]));
+          previous.forEach((track) => {
+            if (!effectiveLikedSet.has(track.id) || merged.has(track.id)) return;
+            merged.set(track.id, track.likeCount === 0 ? { ...track, likeCount: 1 } : track);
+          });
+          return [...merged.values()];
+        });
         likeHydrationKeyRef.current = '';
       })
       .catch((reason: unknown) => {

@@ -17,6 +17,7 @@
     "045-publication-revision-metadata.mjs",
     "046-publication-write-compaction.mjs",
     "047-publication-state-transition.mjs",
-    "048-page-exit-publication-batch.mjs"
+    "048-page-exit-publication-batch.mjs",
+    "049-publication-internal-batch-compaction.mjs"
   ]
 }

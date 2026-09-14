@@ -1,4 +1,4 @@
-requested_at=2026-09-14T02:48:00Z
+requested_at=2026-09-14T04:34:00Z
 requested_by=user
-product_code_target=3380b2ae9242743f96fc73307da322d1508f5d19
-release_purpose=084_publication_write_returning_cost_reduction
+product_code_target=048190e1b5aa0d4f35a5f0dd04a1298fe5060617
+release_purpose=085_own_profile_liked_song_collection

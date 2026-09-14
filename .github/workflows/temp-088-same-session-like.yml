@@ -1,0 +1,163 @@
+name: TEMP 088 Same Session Like Repair
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/temp-088-same-session-like.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply 088 same-session repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'missing patch anchor in {path}: {old[:140]!r}')
+              if text.count(old) != 1:
+                  raise SystemExit(f'non-unique patch anchor in {path}: {text.count(old)}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          like_path = 'src/services/exploreLikeService.ts'
+          replace_once(
+              like_path,
+              '// SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914\n',
+              '// SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914\n// SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914\n',
+          )
+
+          # 088-A: cached account patches are historical replay data. They must never
+          # fire a later event that can overwrite the current outbox/canonical state.
+          replay_block = """const replayAccountSyncPatches = (uid: string, trackIds: string[]) => {\n  if (!uid || typeof window === 'undefined' || !trackIds.length) return;\n  const cache = readAccountPatchCache(uid);\n  const patches = trackIds.map((trackId) => cache[trackId]).filter(Boolean) as ExploreLikeAccountPatch[];\n  if (!patches.length) return;\n  window.setTimeout(() => {\n    patches.forEach((patch) => dispatchLikeSync({\n      uid,\n      trackId: patch.trackId,\n      ownerUid: patch.ownerUid,\n      liked: patch.liked,\n      likeCount: patch.likeCount,\n      ...(patch.displayLikeCount === undefined ? {} : { displayLikeCount: patch.displayLikeCount }),\n    }));\n  }, 0);\n};\n\n"""
+          replace_once(like_path, replay_block, '')
+          replace_once(
+              like_path,
+              "  replayAccountSyncPatches(user.uid, normalized);\n  return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? cache.get(trackId) === true);\n",
+              "  // 088: outbox/current liked-state are the heart source of truth. Historical\n  // account patches remain available only to getExploreLikeDisplayCounts().\n  return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? cache.get(trackId) === true);\n",
+          )
+
+          # 088-B: the click itself updates the durable local heart cache immediately.
+          # This survives same-page route changes/remount-like state resets without a read.
+          replace_once(
+              like_path,
+              "  patchExplorePersonalSocialLike(user.uid, normalizedTrackId, liked);\n  patchExploreLikedTrackMembership(user.uid, normalizedTrackId, liked);\n\n  const outbox = readLikeOutbox(user.uid);\n",
+              "  patchExplorePersonalSocialLike(user.uid, normalizedTrackId, liked);\n  patchExploreLikedTrackMembership(user.uid, normalizedTrackId, liked);\n  const optimisticLikedCache = getLikedStateCache(user.uid);\n  optimisticLikedCache.set(normalizedTrackId, liked);\n  persistLikedStateCache(user.uid, optimisticLikedCache);\n\n  const outbox = readLikeOutbox(user.uid);\n",
+          )
+
+          # 088-C: after this browser flushes its own batch, replace any old account
+          # replay patch with the newest confirmed/visible result so count overlays do
+          # not resurrect an older state after the outbox is cleared.
+          replace_once(
+              like_path,
+              "    const accountSyncResults: Array<ExploreLikeBatchResult & { displayLikeCount?: number }> = [];\n",
+              "    const accountSyncResults: Array<ExploreLikeBatchResult & { displayLikeCount?: number }> = [];\n    const accountReplayResults: ExploreLikeAccountSyncResult[] = [];\n",
+          )
+          replace_once(
+              like_path,
+              "      accountSyncResults.push(visibleResult);\n      dispatchLikeSync({\n",
+              "      accountSyncResults.push(visibleResult);\n      accountReplayResults.push({ ...visibleResult, ownerUid });\n      dispatchLikeSync({\n",
+          )
+          replace_once(
+              like_path,
+              "    persistLikedStateCache(uid, confirmedCache);\n    persistLikeOutbox(uid, latestOutbox);\n    await publishExploreLikeAccountSyncSignal(user, batchEntries, accountSyncResults);\n",
+              "    persistLikedStateCache(uid, confirmedCache);\n    persistLikeOutbox(uid, latestOutbox);\n    rememberAccountSyncResults(uid, accountReplayResults);\n    await publishExploreLikeAccountSyncSignal(user, batchEntries, accountSyncResults);\n",
+          )
+
+          page_path = 'src/pages/ExplorePage.tsx'
+          replace_once(
+              page_path,
+              "    let cancelled = false;\n    setProfileCollection('public');\n    setProfileLikedTracks([]);\n    setProfileLikedLoading(false);\n",
+              "    let cancelled = false;\n    setProfileCollection('public');\n    // 088: entering this user's own profile from Explore must not discard the\n    // optimistic liked cards created moments earlier in the same page session.\n    setProfileLikedTracks((previous) => profileUid === user?.uid ? previous : []);\n    setProfileLikedLoading(false);\n",
+          )
+          replace_once(
+              page_path,
+              "        setProfileLikedTracks(normalizedRows.map((track) => (\n          effectiveLikedSet.has(track.id) && track.likeCount === 0\n            ? { ...track, likeCount: 1 }\n            : track\n        )));\n",
+              "        const normalizedLikedRows = normalizedRows.map((track) => (\n          effectiveLikedSet.has(track.id) && track.likeCount === 0\n            ? { ...track, likeCount: 1 }\n            : track\n        ));\n        setProfileLikedTracks((previous) => {\n          const merged = new Map(normalizedLikedRows.map((track) => [track.id, track]));\n          previous.forEach((track) => {\n            if (!effectiveLikedSet.has(track.id) || merged.has(track.id)) return;\n            merged.set(track.id, track.likeCount === 0 ? { ...track, likeCount: 1 } : track);\n          });\n          return [...merged.values()];\n        });\n",
+          )
+
+          # Historical verifier remains reusable for 088+.
+          replace_once(
+              'scripts/verify-087-liked-card-consistency.mjs',
+              "assert.equal(String(version.version), '087');\n",
+              "assert.ok(Number(version.version) >= 87, `expected app version 087+, got ${version.version}`);\n",
+          )
+
+          Path('public/app-version.json').write_text('{\n  "version": "088"\n}\n', encoding='utf-8')
+
+          verifier = r'''import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+
+          const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
+          const like = readFileSync('src/services/exploreLikeService.ts', 'utf8');
+          const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
+
+          assert.equal(String(version.version), '088');
+          assert.match(like, /SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914/);
+          assert.doesNotMatch(like, /const replayAccountSyncPatches =/);
+          assert.doesNotMatch(like, /replayAccountSyncPatches\(user\.uid, normalized\)/);
+          assert.match(like, /const optimisticLikedCache = getLikedStateCache\(user\.uid\);[\s\S]{0,180}optimisticLikedCache\.set\(normalizedTrackId, liked\);[\s\S]{0,180}persistLikedStateCache\(user\.uid, optimisticLikedCache\);/);
+          assert.match(like, /const accountReplayResults: ExploreLikeAccountSyncResult\[\] = \[\];/);
+          assert.match(like, /accountReplayResults\.push\(\{ \.\.\.visibleResult, ownerUid \}\);/);
+          assert.match(like, /rememberAccountSyncResults\(uid, accountReplayResults\);/);
+          assert.match(like, /return normalized\.filter\(\(trackId\) => outbox\[trackId\]\?\.desiredLiked \?\? cache\.get\(trackId\) === true\);/);
+
+          assert.match(page, /profileUid === user\?\.uid \? previous : \[\]/);
+          assert.match(page, /const normalizedLikedRows = normalizedRows\.map/);
+          assert.match(page, /previous\.forEach\(\(track\) => \{/);
+          assert.match(page, /!effectiveLikedSet\.has\(track\.id\) \|\| merged\.has\(track\.id\)/);
+          assert.match(page, /merged\.set\(track\.id, track\.likeCount === 0 \? \{ \.\.\.track, likeCount: 1 \} : track\)/);
+
+          const setLikeStart = like.indexOf('export const setExploreTrackLike');
+          const setLikeEnd = like.indexOf('\n};', setLikeStart) + 3;
+          const setLikeBody = like.slice(setLikeStart, setLikeEnd);
+          assert.doesNotMatch(setLikeBody, /fetch\(|requestExploreLike\(|updateDoc\(/);
+
+          console.log('PASS 088: same-session pending like remains authoritative across Explore -> own profile -> liked tab; stale account replay cannot turn the heart off; no new server read/write path.');
+          '''
+          Path('scripts/verify-088-same-session-liked-heart.mjs').write_text(verifier.replace('          ', ''), encoding='utf-8')
+          PY
+
+      - name: Install and validate 088
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-085-liked-profile.mjs
+          node scripts/verify-086-liked-sync-repair.mjs
+          node scripts/verify-087-liked-card-consistency.mjs
+          node scripts/verify-088-same-session-liked-heart.mjs
+          node scripts/verify-explore-like-cost-optimization.mjs
+          node scripts/verify-084-publication-write-returning.mjs
+
+      - name: Commit prepared 088
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'soridraw-release-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/pages/ExplorePage.tsx src/services/exploreLikeService.ts scripts/verify-087-liked-card-consistency.mjs scripts/verify-088-same-session-liked-heart.mjs public/app-version.json
+          git diff --cached --check
+          git commit -m 'fix(preview): preserve same-session liked heart state'
+          git push origin HEAD:preview
+          echo "PRODUCT_COMMIT=$(git rev-parse HEAD)"

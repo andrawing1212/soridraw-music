@@ -1,0 +1,188 @@
+import type { User } from 'firebase/auth';
+import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
+import { getFirebaseAppCheckToken } from '../firebase';
+import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
+import {
+  readSoridrawPersistentCache,
+  writeSoridrawPersistentCache,
+} from '../lib/soridrawPersistentCache';
+import { getExplorePersonalSocialSnapshot } from './exploreSocialSnapshotService';
+
+// SORIDRAW_EXPLORE_LIKED_TRACK_COLLECTION_085_20260914
+const LIKED_TRACK_CACHE_SCHEMA_VERSION = 1;
+const LIKED_TRACK_CACHE_KEY = 'explore-liked-track-collection-085';
+const LIKED_TRACK_CACHE_SOURCE_TYPE = 'explore_liked_track_collection';
+const LIKED_TRACK_ROUTE = '/v1/me/liked-tracks';
+const LIKED_TRACK_BATCH_MAX = 200;
+
+type LikedTrackCacheData = {
+  items: Record<string, Record<string, unknown>>;
+  unavailable: Record<string, boolean>;
+};
+
+type LikedTrackResponse = {
+  ok?: boolean;
+  data?: {
+    items?: Array<Record<string, unknown>>;
+    unavailableTrackIds?: string[];
+  };
+};
+
+const normalizeId = (value: unknown) => String(value || '').trim();
+
+const normalizeCache = (value: unknown): LikedTrackCacheData => {
+  const row = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const rawItems = row.items && typeof row.items === 'object' && !Array.isArray(row.items)
+    ? row.items as Record<string, unknown>
+    : {};
+  const items: Record<string, Record<string, unknown>> = {};
+  for (const [trackId, item] of Object.entries(rawItems)) {
+    const id = normalizeId(trackId);
+    if (!id || !item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const normalized = item as Record<string, unknown>;
+    if (normalizeId(normalized.id) !== id) continue;
+    items[id] = normalized;
+  }
+
+  const rawUnavailable = row.unavailable && typeof row.unavailable === 'object' && !Array.isArray(row.unavailable)
+    ? row.unavailable as Record<string, unknown>
+    : {};
+  const unavailable: Record<string, boolean> = {};
+  for (const [trackId, state] of Object.entries(rawUnavailable)) {
+    const id = normalizeId(trackId);
+    if (id && state === true) unavailable[id] = true;
+  }
+  return { items, unavailable };
+};
+
+const readCache = (uid: string): LikedTrackCacheData => {
+  const envelope = readSoridrawPersistentCache<LikedTrackCacheData>({
+    cacheKey: LIKED_TRACK_CACHE_KEY,
+    sourceType: LIKED_TRACK_CACHE_SOURCE_TYPE,
+    schemaVersion: LIKED_TRACK_CACHE_SCHEMA_VERSION,
+    uid,
+  });
+  return normalizeCache(envelope?.data);
+};
+
+const writeCache = (uid: string, data: LikedTrackCacheData) => {
+  writeSoridrawPersistentCache<LikedTrackCacheData>({
+    cacheKey: LIKED_TRACK_CACHE_KEY,
+    sourceType: LIKED_TRACK_CACHE_SOURCE_TYPE,
+    schemaVersion: LIKED_TRACK_CACHE_SCHEMA_VERSION,
+    dataVersion: 0,
+    uid,
+    syncCursor: null,
+    serverRevision: null,
+    deletedIds: [],
+    expiresAt: null,
+    dirty: false,
+    pendingMutationId: null,
+    data: normalizeCache(data),
+  });
+};
+
+const buildAuthHeaders = async (user: User) => {
+  const [idToken, appCheckToken] = await Promise.all([
+    user.getIdToken(),
+    getFirebaseAppCheckToken(),
+  ]);
+  if (!appCheckToken) throw new Error('Explore 보안 인증을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.');
+  return {
+    Authorization: `Bearer ${idToken}`,
+    'X-Firebase-AppCheck': appCheckToken,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+};
+
+const requestMissingTracks = async (user: User, trackIds: string[]) => {
+  const headers = await buildAuthHeaders(user);
+  const response = await fetch(`${EXPLORE_API_BASE}${LIKED_TRACK_ROUTE}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ trackIds }),
+  });
+  recordCloudflareResponse(response, LIKED_TRACK_ROUTE);
+  let payload: LikedTrackResponse | null = null;
+  try { payload = await response.json() as LikedTrackResponse; } catch { payload = null; }
+  if (!response.ok) {
+    const fallback = response.status === 401 ? '로그인 상태를 다시 확인해주세요.' : '좋아요 곡을 불러오지 못했습니다.';
+    throw new Error(fallback);
+  }
+  const items = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+  const unavailableTrackIds = Array.isArray(payload?.data?.unavailableTrackIds)
+    ? payload!.data!.unavailableTrackIds!.map(normalizeId).filter(Boolean)
+    : [];
+  return { items, unavailableTrackIds };
+};
+
+export const rememberExploreLikedTrack = (
+  uid: string,
+  track: Record<string, unknown> | null,
+  liked: boolean,
+) => {
+  const normalizedUid = normalizeId(uid);
+  const trackId = normalizeId(track?.id);
+  if (!normalizedUid || !trackId) return;
+  const cache = readCache(normalizedUid);
+  if (liked) {
+    cache.items[trackId] = { ...(track || {}), id: trackId };
+    delete cache.unavailable[trackId];
+  } else {
+    delete cache.items[trackId];
+    delete cache.unavailable[trackId];
+  }
+  writeCache(normalizedUid, cache);
+};
+
+export const getExploreLikedTracks = async (user: User): Promise<Array<Record<string, unknown>>> => {
+  const snapshot = await getExplorePersonalSocialSnapshot(user);
+  const likedTrackIds = [...new Set(snapshot.likedTrackIds.map(normalizeId).filter(Boolean))];
+  if (!likedTrackIds.length) {
+    writeCache(user.uid, { items: {}, unavailable: {} });
+    recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 없음');
+    return [];
+  }
+
+  const likedSet = new Set(likedTrackIds);
+  const cache = readCache(user.uid);
+  for (const trackId of Object.keys(cache.items)) {
+    if (!likedSet.has(trackId)) delete cache.items[trackId];
+  }
+  for (const trackId of Object.keys(cache.unavailable)) {
+    if (!likedSet.has(trackId)) delete cache.unavailable[trackId];
+  }
+
+  const missing = likedTrackIds.filter((trackId) => !cache.items[trackId] && !cache.unavailable[trackId]);
+  if (!missing.length) {
+    writeCache(user.uid, cache);
+    recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 전체 캐시');
+    return likedTrackIds.map((trackId) => cache.items[trackId]).filter(Boolean);
+  }
+
+  for (let start = 0; start < missing.length; start += LIKED_TRACK_BATCH_MAX) {
+    const page = missing.slice(start, start + LIKED_TRACK_BATCH_MAX);
+    const { items, unavailableTrackIds } = await requestMissingTracks(user, page);
+    const returned = new Set<string>();
+    for (const item of items) {
+      const id = normalizeId(item?.id);
+      if (!id || !likedSet.has(id)) continue;
+      cache.items[id] = { ...item, id };
+      delete cache.unavailable[id];
+      returned.add(id);
+    }
+    for (const trackId of unavailableTrackIds) {
+      if (!likedSet.has(trackId) || returned.has(trackId)) continue;
+      cache.unavailable[trackId] = true;
+    }
+    for (const trackId of page) {
+      if (!returned.has(trackId) && !cache.unavailable[trackId]) cache.unavailable[trackId] = true;
+    }
+  }
+
+  writeCache(user.uid, cache);
+  return likedTrackIds.map((trackId) => cache.items[trackId]).filter(Boolean);
+};

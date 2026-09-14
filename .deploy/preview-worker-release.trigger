@@ -1,4 +1,4 @@
-requested_at=2026-09-14T01:34:00Z
+requested_at=2026-09-14T02:48:00Z
 requested_by=user
-product_code_target=2dfaf70095592c1831fc93fb2c9777ccb126b9b3
-release_purpose=083_publication_pk_read_cost_fix
+product_code_target=3380b2ae9242743f96fc73307da322d1508f5d19
+release_purpose=084_publication_write_returning_cost_reduction

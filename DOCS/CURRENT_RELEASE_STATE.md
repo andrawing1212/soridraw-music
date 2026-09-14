@@ -9,11 +9,12 @@
 - 개발 branch: `preview`
 - TEST branch: `main`
 - PRODUCTION branch: `production`
-- 현재 PREVIEW 앱 버전: **082** (083은 Worker 비용 수정만 수행, 프론트 앱 변경 없음)
-- 083 Worker 제품/배포 고정 source: `2dfaf70095592c1831fc93fb2c9777ccb126b9b3`
-- 083 Worker release trigger commit: `501bd84da704a3172c6f862688da78a0145fd695`
-- PREVIEW Worker Run: `34796380007` — **PASS**
-- PREVIEW Worker active version: `ed462a80-29a2-4df0-a7ef-84dcef3c5fbc`
+- 현재 PREVIEW 앱 버전: **082** (083/084는 Worker 비용 수정만 수행, 프론트 앱 변경 없음)
+- 084 Worker 제품/배포 고정 source: `3380b2ae9242743f96fc73307da322d1508f5d19`
+- 084 permanent release gate commit: `309816bce8952f09eeaa6a86a1d7b6e2c66fc2cf`
+- 084 Worker release trigger commit: `8d3b5541819d7d36fd9e3d208464ea7782f795ca`
+- PREVIEW Worker Run: `34800196216` — **PASS**
+- PREVIEW Worker active version: `353327be-ac54-4c09-ad9c-b036f763f44e`
 - PREVIEW App Run: `34794189198` — **PASS** / 앱 자체는 082 그대로
 - 실제 `preview.soridraw.com` app version: **082**
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — 비변경
@@ -21,107 +22,114 @@
 - TEST Worker: `0b9cfe5c-1e29-4485-ac97-36f87832b41e` — 비변경
 - PRODUCTION Worker: `07c11e5e-47a6-458b-a3a0-6e47b6c331e6` — 비변경
 
-## 2. 083 작업 원인 — 082 실사용 계측
-사용자가 PREVIEW 082에서 공개/비공개만 실제 계정으로 측정했다.
+## 2. 083 실사용 재계측 결과
+사용자가 PREVIEW 083에서 이전과 같은 방식으로 공개/비공개 비용을 다시 측정했다.
 
 관찰값:
-- 1곡 변경: 약 `D1 R4/W2`, 다른 1곡 케이스 `R3/W2`.
-- 3곡 공개: `D1 R36/W6`.
-- 3곡 비공개: `D1 R30/W6`.
-- 공개상태 묶음 누적: `R73/W16`.
-- Firestore 최근 10분: `R0/W0/D0` 유지.
-- 페이지 안 중간 전송은 없고 page-exit 묶음 자체는 정상 작동.
+- 3곡 공개: publication batch `D1 R18/W6`, 페이지 동기화 전체 `R20/W6`.
+- 같은 3곡 비공개: 두 번째 publication batch 증가분 `D1 R12/W6`.
+- 082의 `R36/W6`, `R30/W6` 대비 읽기는 크게 감소.
+- page-exit에서 최종 상태를 한 번 묶어 보내는 동작은 정상 유지.
 
 판정:
-- 외부 요청을 page-exit 1회로 묶는 구조는 PASS.
-- 쓰기는 곡당 W2로 규칙적이지만, 읽기는 3곡에서 R30~36으로 비정상 증가해 FAIL.
-- TEST 승격 중단 후 083 PREVIEW 비용 수정 진행.
+- 083 PK exact lookup은 실제 비용 감소 효과가 있었음.
+- 하지만 3곡 기준 공개 R18 / 비공개 R12는 여전히 목표보다 높아 **TEST 승격 불가**.
+- W6은 3곡 canonical 변경 + protected shared revision 계약에 따른 현재 정상 범위로 유지.
 
-## 3. 원인 확정
-읽기 폭증은 요청 횟수가 많아서가 아니라 **Worker 049의 공유 canonical SELECT가 사용자 소유곡 범위를 먼저 훑는 실행계획**을 선택한 것이 원인이었다.
+## 3. 084 원인 확정
+083 이후 남은 읽기 경로를 코드 기준으로 다시 분리했다.
 
-082 쿼리:
-- `SELECT * FROM tracks WHERE owner_uid=? AND id IN (...)`
+비공개:
+- registered batch가 먼저 canonical `tracks` row를 PK SELECT로 읽은 뒤,
+- 실제 UPDATE를 다시 실행하는 구조여서 동일 변경에 **pre-read + guarded write** 비용이 겹쳤다.
 
-실제 D1 `EXPLAIN QUERY PLAN`:
-- `SEARCH tracks USING INDEX idx_tracks_owner_profile_order (owner_uid=?)`
+공개:
+- 위 pre-read + UPDATE에 더해 publication hot path에서 `track_stats`를 다시 읽고 있었다.
+- 기존 024 비용 계약상 engagement 값은 R2에 이미 materialize되어 있고 publication 변경 자체는 `track_stats` D1 read를 추가하지 않는 것이 원래 기준이다.
 
-즉 3곡만 필요해도 사용자 owner index 쪽에서 여러 행을 읽은 뒤 track id를 거르는 구조였다.
+따라서 084는 스키마 추가가 아니라:
+1. warm publication R2 상태로 변경 필요 필드를 판단하고,
+2. canonical `UPDATE ... RETURNING *`에서 변경과 canonical row 회수를 한 번에 처리하며,
+3. R2가 없거나 불일치/무변경 등 확인이 필요한 경우에만 정확한 track id SELECT fallback,
+4. public `track_stats` preflight 제거
+방식으로 읽기를 줄였다.
 
-대조 진단:
-- `SELECT * FROM tracks WHERE id IN (...)`
-- 실제 plan: `SEARCH tracks USING INDEX sqlite_autoindex_tracks_1 (id=?)`
-
-따라서 스키마 추가 없이 기존 track primary key를 직접 쓰는 것이 가장 단순하고 비용이 낮은 수정으로 확정됐다.
-
-## 4. 083 확정 구조 — Worker 050
+## 4. 084 확정 구조 — Worker 051
 주요 파일:
-- `cloudflare/explore-worker/patches/050-publication-primary-key-batch-read.mjs`
+- `cloudflare/explore-worker/patches/051-publication-write-returning.mjs`
 - `cloudflare/explore-worker/release-patches.json`
 - `cloudflare/explore-worker/canonical/preview-worker.js`
 - `cloudflare/explore-worker/canonical/source-sha256.txt`
+- `scripts/verify-084-publication-write-returning.mjs`
 - `scripts/verify-083-publication-pk-read.mjs`
 - `scripts/verify-082-publication-batch.mjs`
 - `scripts/verify-explore-like-cost-optimization.mjs`
 - `.github/workflows/cloudflare-explore-preview-release.yml`
 
 변경:
-- 이미 등록된 여러 공개/비공개 곡의 canonical pre-read를 `owner_uid + id IN`에서 **`id IN` primary-key lookup**으로 변경.
-- DB에서 받은 행은 Worker에서 `owner_uid === auth uid`로 다시 검증.
-- 실제 UPDATE에는 기존 `WHERE id=? AND owner_uid=? AND source_type='music_note'` 권한 가드를 그대로 유지.
-- 최초 등록 publication 경로, 081 page-exit final-state batch, R2 snapshot, feed/profile cache 구조는 변경하지 않음.
-- UI/CSS/프론트 코드 동작 변경 없음.
+- registered publication batch는 먼저 Music Note publication R2 snapshot을 확인.
+- warm snapshot이 모든 sourceId/trackId와 맞으면, 실제 바뀐 필드만 `UPDATE tracks ... RETURNING *`로 처리.
+- UPDATE 권한 가드는 `id + owner_uid + source_type='music_note'` 유지.
+- 공개 요청은 기존 published 상태 가드 유지.
+- UPDATE 결과가 없거나 R2 상태가 불완전/오래됨/불일치하면 해당 track id만 PK SELECT fallback.
+- publication R2 자체가 없으면 083의 PK canonical SELECT fallback 사용.
+- 이미 RETURNING으로 갱신한 track은 downstream에서 같은 canonical UPDATE를 다시 하지 않음.
+- public hot path의 `track_stats` preflight 제거.
+- Feed/Profile R2 publication helper는 기존 materialized like/comment/play 값을 우선 보존하는 043/024 계약 유지.
+- 최초 등록 publication 경로는 변경하지 않음.
+- 081 page-exit final-state batch, 082 missing-R2 self-heal, revision-first, UI/CSS/클라이언트 동작은 변경하지 않음.
 
-## 5. 쓰기 W2 해석
-이번 083에서는 W2/곡을 억지로 W1로 줄이지 않았다.
+## 5. 쓰기 W2 기준
+084도 W2/곡을 억지로 줄이지 않았다.
 
 현재 visibility 변경의 논리적 D1 write 2개는:
 1. 해당 `tracks` canonical row 실제 변경.
 2. 기존 공유 revision 보호 trigger가 `explore_shared_revision`을 갱신.
 
-이 revision write는 다른 환경/기기와 파생 캐시가 변경 여부를 알기 위한 기존 호환 구조다. 현재 verifier도 정상 private/republish를 **2 logical writes including protected shared revision**으로 보호한다.
+공유 revision은 다른 환경/기기/파생 캐시의 변경 감지를 위한 기존 호환 계약이다. 별도 동기화 설계 없이 제거하지 않는다.
 
-따라서 083의 목표는 비정상 owner-scan read 제거이며, W2는 중복 오류가 아닌 현재 공유 동기화 계약으로 유지한다. 이후 별도 설계 없이 revision write를 제거하지 않는다.
-
-## 6. 083 자동검증
-Materialization Run `34796253747` — **PASS**.
+## 6. 084 자동검증
+Materialization Run `34799978499` — **PASS**.
 
 확인:
 - TypeScript PASS.
 - Build PASS.
 - Explore like cost regression PASS.
 - Explore derived-cache regression PASS.
-- 080 publication state regression PASS.
-- 082 publication batch regression PASS.
+- 082 publication-batch regression PASS.
 - 083 PK-read regression PASS.
+- 084 write-returning regression PASS.
 - deploy preflight PASS.
 - Shared D1 migration/schema change **0**.
 
-083 verifier가 보호하는 핵심:
-- publication registered batch pre-read는 track PK `id IN` 사용.
-- owner-wide canonical pre-read 재도입 금지.
-- JS owner authorization 유지.
-- UPDATE owner/source_type guard 유지.
-- Worker 050이 release patch 최종 순서로 유지.
+084 verifier가 보호하는 핵심:
+- warm registered publication 변경은 canonical pre-read 없이 guarded `UPDATE ... RETURNING *` 사용.
+- D1 SELECT는 unresolved/cold repair에만 제한.
+- public `track_stats` preflight 재도입 금지.
+- owner/source authorization guard 유지.
+- R2 state guard + cold fallback 유지.
 
-## 7. PREVIEW Worker 050 실제 배포
-Run `34796380007` — **PASS**.
+## 7. PREVIEW Worker 051 실제 배포
+Run `34800196216` — **PASS**.
 
-- locked source: `2dfaf70095592c1831fc93fb2c9777ccb126b9b3`
-- canonical Worker SHA256: `ddb9ceaa190befe231ac3597a80cb0484cd1b6fc65aab669f2c39d4a3a1cac77`
-- Worker version: `4b46d3f4-4c4b-4dd2-9584-1b9f0d74ffd5` → `ed462a80-29a2-4df0-a7ef-84dcef3c5fbc`
+- locked source: `3380b2ae9242743f96fc73307da322d1508f5d19`
+- canonical Worker SHA256: `020105ef24dd95af10d27d9d13e52c3eca95dd9a80a17bdec212225f9447c77c`
+- Worker version: `ed462a80-29a2-4df0-a7ef-84dcef3c5fbc` → `353327be-ac54-4c09-ad9c-b036f763f44e`
 - 082 regression PASS.
 - 083 regression PASS.
-- live D1 plan: **`SEARCH tracks USING INDEX sqlite_autoindex_tracks_1 (id=?)` PASS**.
+- 084 regression PASS.
+- live D1 PK plan: `SEARCH tracks USING INDEX sqlite_autoindex_tracks_1 (id=?)` PASS.
+- live 035 prerequisite/state PASS, pending=0.
 - Feed smoke PASS.
 - public profile smoke PASS.
+- unauthenticated like batch route HTTP 401 정상.
 - warm Feed revision 실제 `D1 R0/W0 / HEAD-ONLY-036` PASS.
 - like aggregate cron `*/10 * * * *` PASS.
 - TEST Worker unchanged PASS.
 - PRODUCTION Worker unchanged PASS.
 
 ## 8. Firebase / Functions / 데이터 변경
-083은 Worker-only 비용 수정이다.
+084는 Worker-only 비용 수정이다.
 
 Firebase:
 - Hosting 변경 없음.
@@ -130,7 +138,7 @@ Firebase:
 - Firestore schema 변경 없음.
 
 Cloudflare/D1:
-- PREVIEW Worker만 050으로 갱신.
+- PREVIEW Worker만 051로 갱신.
 - Shared D1 migration 없음.
 - 테이블/인덱스/trigger 추가·삭제 없음.
 - TEST/PRODUCTION Worker 비변경.
@@ -144,36 +152,37 @@ Cloudflare/D1:
 
 ## 9. 비용 판정
 확정된 것:
-- 082에서 공개/비공개 3곡의 R30~36은 정상 비용이 아니었음.
-- 원인은 owner index scan으로 확정.
-- 083 배포 전/실제 D1 plan에서 track primary-key exact lookup 사용 확인.
-- 변경 없음 warm Feed revision `R0/W0` 유지.
-- page-exit batch 구조와 Firestore `R0/W0` 관찰값 유지 대상.
+- 083은 owner scan을 제거해 3곡 공개 R36→R18, 비공개 R30→R12로 감소시켰다.
+- 084는 남은 canonical pre-read를 warm path에서 제거하고 public track_stats preflight도 제거했다.
+- unchanged warm Feed revision `R0/W0` 유지.
+- page-exit final-state batch와 W2/곡 계약 유지.
 
 아직 실사용 재계측이 필요한 것:
-- 인증된 실제 공개/비공개 1곡/3곡의 최종 D1 rows_read/rows_written.
-- 3곡 비공개는 구조상 대략 `R6/W6`, 3곡 공개는 track_stats exact read를 포함해 대략 `R9/W6` 수준을 예상하지만 **실측 전 확정 금지**.
-- Firestore `user_structures` 불필요 write 의심은 이번 공개/비공개 영상에서는 W0였으나 다른 Music Note 동작까지 별도 확인 필요.
+- 인증된 실제 3곡 공개/비공개의 최종 D1 rows_read/rows_written.
+- healthy warm publication R2 상태라면 구조상 **약 R6/W6 수준**을 목표로 하나, 실제 계정 측정 전 확정 금지.
+- R2가 missing/stale/incomplete하면 correctness 보호를 위해 bounded PK fallback이 발생하므로 해당 1회 수치는 더 높을 수 있음.
+- Firestore `user_structures` 불필요 write 의심은 공개/비공개 외 Music Note 동작에서 별도 확인 필요.
 
 ## 10. 다음 PREVIEW 실사용 검증
-가장 먼저 이전과 **같은 공개/비공개 테스트를 083 Worker에서 반복**한다.
+가장 먼저 이전과 같은 공개/비공개 테스트를 084 Worker에서 반복한다.
 
 1. 진단 초기화.
-2. 이미 등록된 1곡 공개/비공개 후 페이지 이탈.
-3. 이미 등록된 3곡 공개 후 페이지 이탈.
-4. 같은 3곡 비공개 후 페이지 이탈.
-5. 각 단계의 D1 R/W, R2 A/B, Firestore R/W를 기록.
-6. 최종 공개상태 정확성 확인.
+2. 이미 등록된 3곡 공개 후 페이지 이탈.
+3. 같은 3곡 비공개 후 페이지 이탈.
+4. 각 단계의 publication batch D1 R/W, 페이지 전체 D1 R/W, R2 A/B, Firestore R/W를 기록.
+5. 페이지 안 중간 네트워크 요청이 없는지 확인.
+6. 최종 공개상태가 실제 Explore/공개프로필/다른 기기에서 맞는지 확인.
 
 합격 방향:
-- 3곡에서 다시 R30~36 같은 owner-scan 수치가 나오면 FAIL.
-- read가 실제 변경곡 수에 가까운 작은 값으로 내려와야 함.
-- W는 현재 계약상 곡당 2를 기준으로 확인.
-- 페이지 내부 중간 네트워크 전송 0 유지.
-- Firestore 공개/비공개 동작 R0/W0 유지.
+- healthy warm 상태에서 3곡 공개/비공개가 이전 083의 R18/R12보다 명확히 더 내려가야 함.
+- 목표 참고값은 약 `R6/W6`이나 **실측이 기준**.
+- W6 유지.
+- 페이지 내부 중간 서버 전송 0 유지.
+- Firestore 공개/비공개 `R0/W0` 유지.
+- 공개/비공개 후 기존 좋아요/재생/댓글 숫자가 사라지거나 0으로 틀어지면 FAIL.
 
 ## 11. TEST / PRODUCTION 승격
-- TEST 승격: **금지 / 083 실사용 비용 + correctness 재검증 전**.
+- TEST 승격: **금지 / 084 실사용 비용 + correctness 재검증 전**.
 - PRODUCTION 승격: **사용자의 명확한 정식배포 승인 전 금지**.
 - PREVIEW→TEST 승격 시 사용자 데이터 복제/덮어쓰기 금지.
 
@@ -190,17 +199,19 @@ Cloudflare/D1:
 - 공유 사용자 원본 데이터.
 
 ## 13. 임시 작업 정리
-083 분석/구현에 사용한 temporary workflows는 Worker 배포 완료 후 제거 완료.
+084 구현/검증용 temporary workflows와 trigger는 배포 완료 후 제거 완료.
 
 영구 보존:
-- Worker patch 050.
-- 083 regression verifier.
-- 082 verifier의 050 호환 guard.
-- canonical PREVIEW Worker 050 source/hash.
-- permanent PREVIEW Worker release gate의 083 verifier + live PK query-plan guard.
+- Worker patch 051.
+- 084 regression verifier.
+- 082/083 verifier의 051 호환 guard.
+- canonical PREVIEW Worker 051 source/hash.
+- permanent PREVIEW Worker release gate의 084 verifier.
+- 기존 live PK query-plan guard.
 
 ## 14. 알려진 위험 / 다음 작업
-- query plan은 정상 PK lookup으로 확인됐지만 실제 authenticated mutation rows_read는 사용자 실측 전이다.
+- 084 구조상 read 감소 경로는 검증됐지만 실제 authenticated mutation rows_read는 사용자 실측 전이다.
+- warm R2 snapshot과 canonical row가 다르면 안전하게 PK fallback하기 때문에 첫 1회 비용이 높을 수 있으며, 반복해서 fallback하면 원인을 추적해야 한다.
+- public track_stats D1 read를 제거했으므로 공개/비공개 후 기존 engagement 숫자가 보존되는지도 실사용에서 함께 확인한다.
 - W2/곡은 현재 공유 revision 계약이므로 별도 전체 동기화 설계 없이 제거하지 않는다.
-- 사용자 재테스트가 합격하면 공개/비공개 비용 문제는 통과 후보로 처리하고, 이후 좋아요/상세편집/Library/PC↔모바일 검증으로 이동한다.
-- 재테스트에서 read가 여전히 높으면 추측으로 다음 최적화를 하지 말고 응답별 D1 비용 경로를 다시 분리 측정한다.
+- 사용자 재테스트가 PASS면 공개/비공개 비용 문제를 통과 후보로 처리하고 이후 좋아요/상세편집/Library/PC↔모바일 검증으로 이동한다.

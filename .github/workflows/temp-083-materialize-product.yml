@@ -1,0 +1,140 @@
+name: TEMP 083 Materialize Product
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-083-materialize-product.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply Worker 050 and align permanent verifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          p=Path('scripts/verify-explore-like-cost-optimization.mjs')
+          s=p.read_text(encoding='utf-8')
+          old="""assert.equal(manifest.patches.at(-5), '045-publication-revision-metadata.mjs', '045 must remain before 046/047/048/049');
+          assert.equal(manifest.patches.at(-4), '046-publication-write-compaction.mjs', '046 must remain before 047/048/049');
+          assert.equal(manifest.patches.at(-3), '047-publication-state-transition.mjs', '047 must remain before 048/049');
+          assert.equal(manifest.patches.at(-2), '048-page-exit-publication-batch.mjs', '048 must remain before 049');
+          assert.equal(manifest.patches.at(-1), '049-publication-internal-batch-compaction.mjs', '049 internal publication batch must be final');"""
+          new="""assert.equal(manifest.patches.at(-6), '045-publication-revision-metadata.mjs', '045 must remain before 046/047/048/049/050');
+          assert.equal(manifest.patches.at(-5), '046-publication-write-compaction.mjs', '046 must remain before 047/048/049/050');
+          assert.equal(manifest.patches.at(-4), '047-publication-state-transition.mjs', '047 must remain before 048/049/050');
+          assert.equal(manifest.patches.at(-3), '048-page-exit-publication-batch.mjs', '048 must remain before 049/050');
+          assert.equal(manifest.patches.at(-2), '049-publication-internal-batch-compaction.mjs', '049 must remain before 050');
+          assert.equal(manifest.patches.at(-1), '050-publication-primary-key-batch-read.mjs', '050 publication PK batch read must be final');"""
+          if old in s:
+              s=s.replace(old,new,1)
+          elif "050 publication PK batch read must be final" not in s:
+              raise SystemExit('release patch order anchor missing')
+          p.write_text(s,encoding='utf-8')
+
+          verifier=r'''import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+
+          const workerPath = process.env.SORIDRAW_GENERATED_WORKER || 'cloudflare/explore-worker/canonical/preview-worker.js';
+          const worker = readFileSync(workerPath, 'utf8');
+          const manifest = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
+
+          const functionText = (source, name) => {
+            const needles=[`async function ${name}(`,`function ${name}(`];
+            let start=-1;
+            for(const needle of needles){ start=source.indexOf(needle); if(start>=0) break; }
+            assert.ok(start>=0,`missing function ${name}`);
+            const brace=source.indexOf('{',start);
+            let depth=0,quote='',escaped=false,comment='';
+            for(let i=brace;i<source.length;i+=1){
+              const c=source[i],n=source[i+1];
+              if(comment==='line'){ if(c==='\n') comment=''; continue; }
+              if(comment==='block'){ if(c==='*'&&n==='/'){comment='';i+=1;} continue; }
+              if(quote){ if(escaped) escaped=false; else if(c==='\\') escaped=true; else if(c===quote) quote=''; continue; }
+              if(c==='/'&&n==='/'){comment='line';i+=1;continue;}
+              if(c==='/'&&n==='*'){comment='block';i+=1;continue;}
+              if('"\'`'.includes(c)){quote=c;continue;}
+              if(c==='{') depth+=1;
+              if(c==='}'&&--depth===0) return source.slice(start,i+1);
+            }
+            throw new Error(`unterminated function ${name}`);
+          };
+
+          assert.equal(manifest.patches.at(-1),'050-publication-primary-key-batch-read.mjs');
+          assert.match(worker,/SORIDRAW_PUBLICATION_PK_BATCH_READ_050_20260914/);
+          const batch=functionText(worker,'handleMusicNotePublicationBatch048');
+          assert.match(batch,/SELECT \* FROM tracks\s+WHERE id IN/);
+          assert.doesNotMatch(batch,/SELECT \* FROM tracks[\s\S]{0,120}WHERE owner_uid=\? AND id IN/);
+          assert.match(batch,/canonicalRows = \(rows\.results \|\| \[\]\)\.filter/);
+          assert.match(batch,/String\(row\?\.owner_uid \|\| ''\) === authContext\.uid/);
+          assert.match(batch,/WHERE id=\? AND owner_uid=\? AND source_type='music_note'/);
+          console.log('PASS 083: publication batch uses track primary-key lookup; owner authorization and guarded updates remain intact.');
+          '''
+          Path('scripts/verify-083-publication-pk-read.mjs').write_text(verifier,encoding='utf-8')
+          PY
+
+          tmp="$RUNNER_TEMP/worker050"
+          mkdir -p "$tmp"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$tmp/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/050-publication-primary-key-batch-read.mjs
+          cp "$tmp/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript and build
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          npm run build
+
+      - name: 083 regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-080-publication-state-engine.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-082-publication-batch.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-083-publication-pk-read.mjs
+          node scripts/verify-explore-deploy-preflight.mjs
+          if git diff --name-only HEAD | grep -q '^cloudflare/explore-worker/migrations/'; then
+            echo '083 must not change shared D1 migrations' >&2
+            exit 1
+          fi
+          echo 'SHARED_D1_SCHEMA_CHANGE=0'
+
+      - name: Commit verified 083 product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name andrawing1212
+          git config user.email andrawing1212@gmail.com
+          git add \
+            cloudflare/explore-worker/canonical/preview-worker.js \
+            cloudflare/explore-worker/canonical/source-sha256.txt \
+            scripts/verify-explore-like-cost-optimization.mjs \
+            scripts/verify-083-publication-pk-read.mjs
+          git diff --cached --check
+          git commit -m 'fix(preview): use PK reads for publication batch'
+          git push origin HEAD:preview

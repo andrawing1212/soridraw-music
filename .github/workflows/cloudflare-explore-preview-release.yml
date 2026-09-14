@@ -75,6 +75,7 @@ jobs:
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-082-publication-batch.mjs
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-083-publication-pk-read.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-084-publication-write-returning.mjs
             node scripts/verify-explore-deploy-preflight.mjs
           )
 

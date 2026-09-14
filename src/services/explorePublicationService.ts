@@ -454,8 +454,10 @@ export const getExploreMusicNotePublicationStates = async (
         const localSyncedAt = Math.max(0, Number(envelope?.syncedAt || 0));
 
         if (!exists) {
-          publicationServerValidatedUids.add(uid);
-          return clonePublicationStates(cached);
+          // SORIDRAW_PUBLICATION_MISSING_R2_REPAIR_082_20260914
+          // A missing shared snapshot is a repair signal, not proof that this device cache is current.
+          // Fall through to the bundle route; the Worker rebuilds once from canonical D1 and repopulates R2.
+          knownRevision = '';
         }
         if (knownRevision && localRevision && knownRevision === localRevision) {
           publicationServerValidatedUids.add(uid);

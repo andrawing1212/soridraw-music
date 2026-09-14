@@ -213,6 +213,7 @@ async function handleMusicNotePublicationBatch049(request, env, cors) {
   const registeredMutations = ordered.filter((mutation) => mutation.registered);
   if (registeredMutations.length) {
     let canonicalRows = [];
+    let canonicalReadOk = true;
     try {
       const trackIds = [...new Set(registeredMutations.map((mutation) => mutation.trackId))];
       const rows = await env.DB.prepare(`SELECT * FROM tracks
@@ -222,6 +223,7 @@ async function handleMusicNotePublicationBatch049(request, env, cors) {
       ).all();
       canonicalRows = rows.results || [];
     } catch (error) {
+      canonicalReadOk = false;
       for (const mutation of registeredMutations) {
         resultsBySource.set(mutation.sourceId, {
           ok: false,
@@ -234,7 +236,7 @@ async function handleMusicNotePublicationBatch049(request, env, cors) {
       }
     }
 
-    if (canonicalRows.length || registeredMutations.every((mutation) => resultsBySource.has(mutation.sourceId))) {
+    if (canonicalReadOk) {
       const rowById = new Map(canonicalRows.map((row) => [String(row.id || ''), row]));
       const direct = [];
       const fallback = [];
@@ -339,7 +341,16 @@ async function handleMusicNotePublicationBatch049(request, env, cors) {
         }
 
         if (!statsReady) {
-          for (const item of direct) fallback.push(item);
+          for (const item of direct) {
+            resultsBySource.set(item.mutation.sourceId, {
+              ok: false,
+              sourceId: item.mutation.sourceId,
+              trackId: item.mutation.trackId,
+              status: item.mutation.status,
+              registered: true,
+              error: 'PUBLICATION_BATCH_STATS_PREFLIGHT_FAILED',
+            });
+          }
         } else {
           let profile = null;
           try {

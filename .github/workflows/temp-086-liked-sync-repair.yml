@@ -1,0 +1,142 @@
+name: TEMP 086 Repair Liked Sync
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/temp-086-liked-sync-repair.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Repair missed-device like cache invalidation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/services/exploreLikeService.ts')
+          text = path.read_text(encoding='utf-8')
+
+          def once(before, after, label):
+              global text
+              count = text.count(before)
+              if count != 1:
+                  raise SystemExit(f'{label}: anchor count={count}')
+              text = text.replace(before, after, 1)
+
+          once(
+              "import {\n  getExplorePersonalSocialSnapshot,\n  patchExplorePersonalSocialLike,\n} from './exploreSocialSnapshotService';",
+              "import {\n  clearExplorePersonalSocialSnapshot,\n  getExplorePersonalSocialSnapshot,\n  patchExplorePersonalSocialLike,\n} from './exploreSocialSnapshotService';\nimport {\n  invalidateExploreLikedTrackCollection,\n  patchExploreLikedTrackMembership,\n} from './exploreLikedTracksService';",
+              'like sync imports',
+          )
+
+          once(
+              "// SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913\n",
+              "// SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913\n// SORIDRAW_EXPLORE_LIKE_MISSED_SIGNAL_REPAIR_086_20260914\n",
+              '086 marker',
+          )
+
+          once(
+              "  const missedSignal = signal.previousVersion !== seenVersion;\n  const cache = getLikedStateCache(uid);\n  if (missedSignal) cache.clear();",
+              "  const missedSignal = signal.previousVersion !== seenVersion;\n  const cache = getLikedStateCache(uid);\n  if (missedSignal) {\n    cache.clear();\n    clearExplorePersonalSocialSnapshot(uid);\n    invalidateExploreLikedTrackCollection(uid);\n  }",
+              'missed signal invalidation',
+          )
+
+          once(
+              "    cache.set(result.trackId, result.liked);\n    dispatchLikeSync({",
+              "    cache.set(result.trackId, result.liked);\n    patchExploreLikedTrackMembership(uid, result.trackId, result.liked);\n    dispatchLikeSync({",
+              'remote membership patch',
+          )
+
+          once(
+              "  patchExplorePersonalSocialLike(user.uid, normalizedTrackId, liked);\n\n  const outbox = readLikeOutbox(user.uid);",
+              "  patchExplorePersonalSocialLike(user.uid, normalizedTrackId, liked);\n  patchExploreLikedTrackMembership(user.uid, normalizedTrackId, liked);\n\n  const outbox = readLikeOutbox(user.uid);",
+              'local membership patch',
+          )
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Register and materialize Worker 053
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('cloudflare/explore-worker/release-patches.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          patches = data['patches']
+          name = '053-liked-track-schema-repair.mjs'
+          if name not in patches:
+              idx = patches.index('052-liked-track-collection.mjs') + 1
+              patches.insert(idx, name)
+          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+
+          temp_dir="$(mktemp -d)"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$temp_dir/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$temp_dir" node cloudflare/explore-worker/patches/053-liked-track-schema-repair.mjs
+          cp "$temp_dir/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          node --check cloudflare/explore-worker/patches/053-liked-track-schema-repair.mjs
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+
+      - name: Set app version 086
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = 'public/app-version.json';
+          const value = JSON.parse(fs.readFileSync(path, 'utf8'));
+          value.version = '086';
+          fs.writeFileSync(path, JSON.stringify(value, null, 2) + '\n');
+          NODE
+
+      - name: Install and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-082-publication-batch.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-083-publication-pk-read.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-084-publication-write-returning.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-085-liked-profile.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-086-liked-sync-repair.mjs
+          node scripts/verify-explore-deploy-preflight.mjs
+
+      - name: Commit prepared 086 code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            src/services/exploreLikeService.ts \
+            cloudflare/explore-worker/release-patches.json \
+            cloudflare/explore-worker/canonical/preview-worker.js \
+            cloudflare/explore-worker/canonical/source-sha256.txt \
+            public/app-version.json
+          git diff --cached --check
+          git commit -m 'fix(preview): repair liked collection and missed-device sync'
+          git push origin HEAD:preview

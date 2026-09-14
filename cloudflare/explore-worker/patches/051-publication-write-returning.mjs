@@ -138,9 +138,9 @@ transformFunction('handleMusicNotePublicationBatch048', (input) => {
           const guardValues = [];
           for (const column of ['is_public', 'allow_next_song_apply', 'allow_follower_save', 'profile_pinned']) {
             if (previousValues[column] === nextValues[column]) continue;
-            sets.push(\`${column}=?\`);
+            sets.push(\`\${column}=?\`);
             values.push(nextValues[column]);
-            guards.push(\`${column}<>?\`);
+            guards.push(\`\${column}<>?\`);
             guardValues.push(nextValues[column]);
           }
           if (!sets.length) {

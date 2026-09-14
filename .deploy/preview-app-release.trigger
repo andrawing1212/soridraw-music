@@ -1,4 +1,4 @@
-requested_at=2026-09-14T00:56:00Z
+requested_at=2026-09-14T04:37:00Z
 requested_by=user
-product_code_target=9de67ec57eec1a9fa6c69d81a47c3924a7442398
-release_purpose=082_publication_batch_compaction
+product_code_target=440170640001fdf79c1206194acce97b4d338220
+release_purpose=085_own_profile_liked_song_collection

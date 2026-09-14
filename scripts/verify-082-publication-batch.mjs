@@ -30,8 +30,9 @@ const functionText = (source, name) => {
 };
 
 assert.equal(String(version.version),'082');
-assert.equal(manifest.patches.at(-2),'049-publication-internal-batch-compaction.mjs');
-assert.equal(manifest.patches.at(-1),'050-publication-primary-key-batch-read.mjs');
+assert.equal(manifest.patches.at(-3),'049-publication-internal-batch-compaction.mjs');
+assert.equal(manifest.patches.at(-2),'050-publication-primary-key-batch-read.mjs');
+assert.equal(manifest.patches.at(-1),'051-publication-write-returning.mjs');
 assert.match(worker,/SORIDRAW_PUBLICATION_INTERNAL_BATCH_049_20260914/);
 assert.match(worker,/SORIDRAW_PUBLICATION_PK_BATCH_READ_050_20260914/);
 assert.match(client,/SORIDRAW_PUBLICATION_MISSING_R2_REPAIR_082_20260914/);
@@ -40,12 +41,13 @@ assert.doesNotMatch(client,/if \(!exists\) \{\s*publicationServerValidatedUids\.
 assert.match(client,/\/v1\/me\/music-note-publications-bundle/);
 
 const batch=functionText(worker,'handleMusicNotePublicationBatch048');
-assert.match(batch,/SELECT \* FROM tracks\s+WHERE id IN/);
-assert.match(batch,/canonicalRows = \(rows\.results \|\| \[\]\)\.filter/);
-assert.match(batch,/String\(row\?\.owner_uid \|\| ''\) === authContext\.uid/);
+assert.match(batch,/readMusicNotePublicationR2Payload\(env, authContext\.uid\)/);
+assert.match(batch,/env\.DB\.batch\(updateStatements\)/);
+assert.match(batch,/RETURNING \*/);
+assert.match(batch,/unresolvedTrackIds/);
 assert.match(batch,/env\.DB\.batch\(statements\)/);
-assert.match(batch,/if \(Number\(item\.row\.profile_pinned \|\| 0\) !== nextPinned\) \{ sets\.push\('profile_pinned=\?'\)/);
-assert.match(batch,/PUBLICATION_BATCH_STATS_PREFLIGHT_FAILED/);
+assert.match(batch,/String\(row\?\.owner_uid \|\| ''\) !== authContext\.uid/);
+assert.doesNotMatch(batch,/FROM track_stats WHERE track_id IN/);
 assert.doesNotMatch(batch,/buildMusicNotePublicationR2Payload/);
 const batchR2=functionText(worker,'syncMusicNotePublicationR2Batch049');
 assert.match(batchR2,/readMusicNotePublicationR2Payload/);
@@ -57,4 +59,4 @@ const singleSync=functionText(worker,'syncMusicNotePublicationR2AfterMutation');
 assert.doesNotMatch(singleSync,/buildMusicNotePublicationR2Payload/,'mutation hot path must never owner-scan D1');
 assert.match(patch,/let canonicalReadOk = true;/);
 assert.match(patch,/PUBLICATION_BATCH_STATS_PREFLIGHT_FAILED/);
-console.log('PASS 082: registered publication changes share canonical reads/batch writes; 083 PK lookup preserves the 082 contract; missing R2 forces one canonical self-heal.');
+console.log('PASS 082: publication batching and missing-R2 self-heal remain protected; 084 warm writes use RETURNING with bounded cold/unresolved reads.');

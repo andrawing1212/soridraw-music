@@ -26,8 +26,10 @@ const functionText = (source, name) => {
   throw new Error(`unterminated function ${name}`);
 };
 
-assert.equal(manifest.patches.at(-1),'050-publication-primary-key-batch-read.mjs');
+assert.equal(manifest.patches.at(-2),'050-publication-primary-key-batch-read.mjs');
+assert.equal(manifest.patches.at(-1),'051-publication-write-returning.mjs');
 assert.match(worker,/SORIDRAW_PUBLICATION_PK_BATCH_READ_050_20260914/);
+assert.match(worker,/SORIDRAW_PUBLICATION_WRITE_RETURNING_051_20260914/);
 const batch=functionText(worker,'handleMusicNotePublicationBatch048');
 assert.match(batch,/SELECT \* FROM tracks\s+WHERE id IN/);
 assert.doesNotMatch(batch,/SELECT \* FROM tracks[\s\S]{0,120}WHERE owner_uid=\? AND id IN/);

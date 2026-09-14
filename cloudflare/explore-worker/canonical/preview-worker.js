@@ -21564,15 +21564,127 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
   if (registeredMutations.length) {
     let canonicalRows = [];
     let canonicalReadOk = true;
+    const preUpdatedTrackIds = new Set();
+    const previousPublicBySource = new Map();
+    let publicationStates = null;
+    let publicationStateWarm = false;
+    try {
+      const publicationPayload = await readMusicNotePublicationR2Payload(env, authContext.uid);
+      const candidateStates = publicationPayload?.states && typeof publicationPayload.states === 'object'
+        ? publicationPayload.states
+        : null;
+      if (candidateStates && registeredMutations.every((mutation) => {
+        const state = candidateStates[mutation.sourceId];
+        return state && String(state.trackId || '') === mutation.trackId;
+      })) {
+        publicationStates = candidateStates;
+        publicationStateWarm = true;
+        for (const mutation of registeredMutations) {
+          previousPublicBySource.set(
+            mutation.sourceId,
+            candidateStates[mutation.sourceId]?.status === 'public',
+          );
+        }
+      }
+    } catch (error) {
+      console.warn('[SORIDRAW 051] publication R2 pre-state unavailable; using canonical read fallback:', String(error?.message || error || 'unknown'));
+    }
+
     try {
       const trackIds = [...new Set(registeredMutations.map((mutation) => mutation.trackId))];
-      const rows = await env.DB.prepare(`SELECT * FROM tracks
-        WHERE id IN (${trackIds.map(() => '?').join(',')})`).bind(
-        ...trackIds,
-      ).all();
-      canonicalRows = (rows.results || []).filter(
-        (row) => String(row?.owner_uid || '') === authContext.uid,
-      );
+      if (publicationStateWarm) {
+        const mutationNow = Date.now();
+        const updateStatements = [];
+        const updateMutations = [];
+        const unresolvedTrackIds = new Set();
+
+        for (const mutation of registeredMutations) {
+          const previousState = publicationStates[mutation.sourceId];
+          const nextValues = {
+            is_public: mutation.status === 'public' ? 1 : 0,
+            allow_next_song_apply: mutation.options.allowNextSongApply ? 1 : 0,
+            allow_follower_save: mutation.options.allowFollowerSave ? 1 : 0,
+            profile_pinned: mutation.options.profilePinned ? 1 : 0,
+          };
+          const previousValues = {
+            is_public: previousState?.status === 'public' ? 1 : 0,
+            allow_next_song_apply: previousState?.allowNextSongApply ? 1 : 0,
+            allow_follower_save: previousState?.allowFollowerSave ? 1 : 0,
+            profile_pinned: previousState?.profilePinned ? 1 : 0,
+          };
+          const sets = [];
+          const values = [];
+          const guards = [];
+          const guardValues = [];
+          for (const column of ['is_public', 'allow_next_song_apply', 'allow_follower_save', 'profile_pinned']) {
+            if (previousValues[column] === nextValues[column]) continue;
+            sets.push(`${column}=?`);
+            values.push(nextValues[column]);
+            guards.push(`${column}<>?`);
+            guardValues.push(nextValues[column]);
+          }
+          if (!sets.length) {
+            unresolvedTrackIds.add(mutation.trackId);
+            continue;
+          }
+          sets.push('updated_at=?');
+          values.push(mutationNow);
+          const requirePublished = mutation.status === 'public' ? 1 : 0;
+          updateStatements.push(env.DB.prepare(`UPDATE tracks SET ${sets.join(',')}
+            WHERE id=? AND owner_uid=? AND source_type='music_note'
+              AND (?=0 OR status='published')
+              AND (${guards.join(' OR ')})
+            RETURNING *`).bind(
+            ...values,
+            mutation.trackId,
+            authContext.uid,
+            requirePublished,
+            ...guardValues,
+          ));
+          updateMutations.push(mutation);
+        }
+
+        const rowById = new Map();
+        if (updateStatements.length) {
+          const updateResults = await env.DB.batch(updateStatements);
+          for (let index = 0; index < updateMutations.length; index += 1) {
+            const mutation = updateMutations[index];
+            const row = updateResults?.[index]?.results?.[0] || null;
+            if (row && String(row.owner_uid || '') === authContext.uid) {
+              rowById.set(String(row.id || ''), row);
+              preUpdatedTrackIds.add(mutation.trackId);
+            } else {
+              unresolvedTrackIds.add(mutation.trackId);
+            }
+          }
+        }
+
+        if (unresolvedTrackIds.size) {
+          const unresolved = [...unresolvedTrackIds];
+          const rows = await env.DB.prepare(`SELECT * FROM tracks
+            WHERE id IN (${unresolved.map(() => '?').join(',')})`).bind(...unresolved).all();
+          for (const row of rows.results || []) {
+            if (String(row?.owner_uid || '') !== authContext.uid) continue;
+            rowById.set(String(row.id || ''), row);
+          }
+        }
+        canonicalRows = [...rowById.values()];
+      } else {
+        const rows = await env.DB.prepare(`SELECT * FROM tracks
+          WHERE id IN (${trackIds.map(() => '?').join(',')})`).bind(...trackIds).all();
+        canonicalRows = (rows.results || []).filter(
+          (row) => String(row?.owner_uid || '') === authContext.uid,
+        );
+        const fallbackRowById = new Map(canonicalRows.map((row) => [String(row.id || ''), row]));
+        for (const mutation of registeredMutations) {
+          const row = fallbackRowById.get(mutation.trackId);
+          if (!row) continue;
+          previousPublicBySource.set(
+            mutation.sourceId,
+            Number(row.is_public || 0) === 1 && String(row.status || '') === 'published',
+          );
+        }
+      }
     } catch (error) {
       canonicalReadOk = false;
       for (const mutation of registeredMutations) {
@@ -21616,8 +21728,11 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
           allowFollowerSave: Boolean(mutation.options.allowFollowerSave),
           profilePinned: Boolean(mutation.options.profilePinned),
         };
-        const wasPublic = Number(row.is_public || 0) === 1 && String(row.status || '') === 'published';
-        const changed = Number(row.is_public || 0) !== (next.isPublic ? 1 : 0)
+        const wasPublic = previousPublicBySource.has(mutation.sourceId)
+          ? Boolean(previousPublicBySource.get(mutation.sourceId))
+          : (Number(row.is_public || 0) === 1 && String(row.status || '') === 'published');
+        const changed = preUpdatedTrackIds.has(mutation.trackId)
+          || Number(row.is_public || 0) !== (next.isPublic ? 1 : 0)
           || Number(row.allow_next_song_apply || 0) !== (next.allowNextSongApply ? 1 : 0)
           || Number(row.allow_follower_save || 0) !== (next.allowFollowerSave ? 1 : 0)
           || Number(row.profile_pinned || 0) !== (next.profilePinned ? 1 : 0);
@@ -21677,19 +21792,10 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
       }
 
       if (direct.length) {
-        const publicIds = [...new Set(direct.filter((item) => item.next.isPublic).map((item) => item.mutation.trackId))];
+        // Publication state changes do not need engagement D1 reads. R2 feed/profile
+        // mutations preserve already-materialized counters, matching the proven 024 contract.
         const statsById = new Map();
-        let statsReady = true;
-        if (publicIds.length) {
-          try {
-            const stats = await env.DB.prepare(`SELECT track_id,like_count,comment_count,play_count
-              FROM track_stats WHERE track_id IN (${publicIds.map(() => '?').join(',')})`).bind(...publicIds).all();
-            for (const row of stats.results || []) statsById.set(String(row.track_id || ''), row);
-          } catch (error) {
-            statsReady = false;
-            console.warn('[SORIDRAW 049] batch stats preflight failed; using proven per-track fallback:', String(error?.message || error || 'unknown'));
-          }
-        }
+        const statsReady = true;
 
         if (!statsReady) {
           for (const item of direct) {
@@ -21714,7 +21820,7 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
           const now = Date.now();
           const statements = [];
           for (const item of direct) {
-            if (!item.changed) continue;
+            if (!item.changed || preUpdatedTrackIds.has(item.mutation.trackId)) continue;
             const sets = [];
             const values = [];
             const nextPublicInt = item.next.isPublic ? 1 : 0;
@@ -23773,3 +23879,6 @@ export {
 // SORIDRAW_PUBLICATION_INTERNAL_BATCH_049_20260914
 
 // SORIDRAW_PUBLICATION_PK_BATCH_READ_050_20260914
+
+
+// SORIDRAW_PUBLICATION_WRITE_RETURNING_051_20260914

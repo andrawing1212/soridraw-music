@@ -1,4 +1,4 @@
-requested_at=2026-09-14T06:05:00Z
+requested_at=2026-09-14T06:44:00Z
 requested_by=user
-product_code_target=a27b5ddbe0c6928ac210987e72a46bd553b80e8d
-release_purpose=086_liked_collection_and_missed_signal_repair
+product_code_target=28d090f2974a7c3745063dd9ac5ddd840c68f8d5
+release_purpose=087_liked_card_consistency_repair

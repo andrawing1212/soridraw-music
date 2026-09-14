@@ -6,9 +6,9 @@ import {
   readSoridrawPersistentCache,
   writeSoridrawPersistentCache,
 } from '../lib/soridrawPersistentCache';
-import { getExplorePersonalSocialSnapshot } from './exploreSocialSnapshotService';
 
 // SORIDRAW_EXPLORE_LIKED_TRACK_COLLECTION_085_20260914
+// SORIDRAW_EXPLORE_LIKED_TRACK_CANONICAL_REPAIR_086_20260914
 const LIKED_TRACK_CACHE_SCHEMA_VERSION = 1;
 const LIKED_TRACK_CACHE_KEY = 'explore-liked-track-collection-085';
 const LIKED_TRACK_CACHE_SOURCE_TYPE = 'explore_liked_track_collection';
@@ -18,17 +18,22 @@ const LIKED_TRACK_BATCH_MAX = 200;
 type LikedTrackCacheData = {
   items: Record<string, Record<string, unknown>>;
   unavailable: Record<string, boolean>;
+  canonicalLikedTrackIds: string[] | null;
 };
 
 type LikedTrackResponse = {
   ok?: boolean;
   data?: {
+    likedTrackIds?: string[];
     items?: Array<Record<string, unknown>>;
     unavailableTrackIds?: string[];
   };
 };
 
 const normalizeId = (value: unknown) => String(value || '').trim();
+const normalizeIds = (value: unknown) => [
+  ...new Set((Array.isArray(value) ? value : []).map(normalizeId).filter(Boolean)),
+];
 
 const normalizeCache = (value: unknown): LikedTrackCacheData => {
   const row = value && typeof value === 'object' && !Array.isArray(value)
@@ -54,7 +59,11 @@ const normalizeCache = (value: unknown): LikedTrackCacheData => {
     const id = normalizeId(trackId);
     if (id && state === true) unavailable[id] = true;
   }
-  return { items, unavailable };
+
+  const canonicalLikedTrackIds = Array.isArray(row.canonicalLikedTrackIds)
+    ? normalizeIds(row.canonicalLikedTrackIds)
+    : null;
+  return { items, unavailable, canonicalLikedTrackIds };
 };
 
 const readCache = (uid: string): LikedTrackCacheData => {
@@ -98,7 +107,7 @@ const buildAuthHeaders = async (user: User) => {
   };
 };
 
-const requestMissingTracks = async (user: User, trackIds: string[]) => {
+const requestLikedTracks = async (user: User, trackIds: string[]) => {
   const headers = await buildAuthHeaders(user);
   const response = await fetch(`${EXPLORE_API_BASE}${LIKED_TRACK_ROUTE}`, {
     method: 'POST',
@@ -112,11 +121,42 @@ const requestMissingTracks = async (user: User, trackIds: string[]) => {
     const fallback = response.status === 401 ? '로그인 상태를 다시 확인해주세요.' : '좋아요 곡을 불러오지 못했습니다.';
     throw new Error(fallback);
   }
+  const canonicalLikedTrackIds = Array.isArray(payload?.data?.likedTrackIds)
+    ? normalizeIds(payload?.data?.likedTrackIds)
+    : null;
   const items = Array.isArray(payload?.data?.items) ? payload.data.items : [];
   const unavailableTrackIds = Array.isArray(payload?.data?.unavailableTrackIds)
     ? payload!.data!.unavailableTrackIds!.map(normalizeId).filter(Boolean)
     : [];
-  return { items, unavailableTrackIds };
+  return { canonicalLikedTrackIds, items, unavailableTrackIds };
+};
+
+export const patchExploreLikedTrackMembership = (uid: string, trackId: string, liked: boolean) => {
+  const normalizedUid = normalizeId(uid);
+  const normalizedTrackId = normalizeId(trackId);
+  if (!normalizedUid || !normalizedTrackId) return;
+  const cache = readCache(normalizedUid);
+  if (cache.canonicalLikedTrackIds) {
+    const next = new Set(cache.canonicalLikedTrackIds);
+    if (liked) next.add(normalizedTrackId); else next.delete(normalizedTrackId);
+    cache.canonicalLikedTrackIds = [...next];
+  }
+  if (!liked) {
+    delete cache.items[normalizedTrackId];
+    delete cache.unavailable[normalizedTrackId];
+  } else {
+    delete cache.unavailable[normalizedTrackId];
+  }
+  writeCache(normalizedUid, cache);
+};
+
+export const invalidateExploreLikedTrackCollection = (uid: string) => {
+  const normalizedUid = normalizeId(uid);
+  if (!normalizedUid) return;
+  const cache = readCache(normalizedUid);
+  cache.canonicalLikedTrackIds = null;
+  cache.unavailable = {};
+  writeCache(normalizedUid, cache);
 };
 
 export const rememberExploreLikedTrack = (
@@ -128,6 +168,11 @@ export const rememberExploreLikedTrack = (
   const trackId = normalizeId(track?.id);
   if (!normalizedUid || !trackId) return;
   const cache = readCache(normalizedUid);
+  if (cache.canonicalLikedTrackIds) {
+    const next = new Set(cache.canonicalLikedTrackIds);
+    if (liked) next.add(trackId); else next.delete(trackId);
+    cache.canonicalLikedTrackIds = [...next];
+  }
   if (liked) {
     cache.items[trackId] = { ...(track || {}), id: trackId };
     delete cache.unavailable[trackId];
@@ -139,16 +184,28 @@ export const rememberExploreLikedTrack = (
 };
 
 export const getExploreLikedTracks = async (user: User): Promise<Array<Record<string, unknown>>> => {
-  const snapshot = await getExplorePersonalSocialSnapshot(user);
-  const likedTrackIds = [...new Set(snapshot.likedTrackIds.map(normalizeId).filter(Boolean))];
+  const cache = readCache(user.uid);
+  const hadCanonicalCache = cache.canonicalLikedTrackIds !== null;
+
+  if (cache.canonicalLikedTrackIds === null) {
+    const verification = await requestLikedTracks(user, []);
+    if (verification.canonicalLikedTrackIds === null) {
+      throw new Error('좋아요 곡 상태를 확인하지 못했습니다.');
+    }
+    cache.canonicalLikedTrackIds = verification.canonicalLikedTrackIds;
+  }
+
+  const likedTrackIds = normalizeIds(cache.canonicalLikedTrackIds);
   if (!likedTrackIds.length) {
-    writeCache(user.uid, { items: {}, unavailable: {} });
-    recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 없음');
+    cache.items = {};
+    cache.unavailable = {};
+    cache.canonicalLikedTrackIds = [];
+    writeCache(user.uid, cache);
+    if (hadCanonicalCache) recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 없음');
     return [];
   }
 
   const likedSet = new Set(likedTrackIds);
-  const cache = readCache(user.uid);
   for (const trackId of Object.keys(cache.items)) {
     if (!likedSet.has(trackId)) delete cache.items[trackId];
   }
@@ -159,13 +216,13 @@ export const getExploreLikedTracks = async (user: User): Promise<Array<Record<st
   const missing = likedTrackIds.filter((trackId) => !cache.items[trackId] && !cache.unavailable[trackId]);
   if (!missing.length) {
     writeCache(user.uid, cache);
-    recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 전체 캐시');
+    if (hadCanonicalCache) recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 전체 캐시');
     return likedTrackIds.map((trackId) => cache.items[trackId]).filter(Boolean);
   }
 
   for (let start = 0; start < missing.length; start += LIKED_TRACK_BATCH_MAX) {
     const page = missing.slice(start, start + LIKED_TRACK_BATCH_MAX);
-    const { items, unavailableTrackIds } = await requestMissingTracks(user, page);
+    const { items, unavailableTrackIds } = await requestLikedTracks(user, page);
     const returned = new Set<string>();
     for (const item of items) {
       const id = normalizeId(item?.id);

@@ -13,7 +13,7 @@
 - GitHub app-version: **086 준비본**
 - 086 PREVIEW 배포: **아직 안 함**
 - TEST main `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
-- PRODUCTION `a8971fae1014ce107927eceff98190edd4b5195f75` 표기는 사용 금지. 실제 PRODUCTION 기준은 `a8971fae1014ce107927fcfb5491d202d4c68fbe`.
+- PRODUCTION `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
 
 ## 085 실사용 FAIL 근거
 사용자 영상:

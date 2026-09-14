@@ -29,7 +29,8 @@ const functionText = (source, name) => {
   throw new Error(`unterminated function ${name}`);
 };
 
-assert.equal(String(version.version),'082');
+const appVersion = Number(version.version);
+assert.ok(Number.isFinite(appVersion) && appVersion >= 82, `082 publication regression requires app version >=082, got ${String(version.version)}`);
 assert.equal(manifest.patches.at(-3),'049-publication-internal-batch-compaction.mjs');
 assert.equal(manifest.patches.at(-2),'050-publication-primary-key-batch-read.mjs');
 assert.equal(manifest.patches.at(-1),'051-publication-write-returning.mjs');

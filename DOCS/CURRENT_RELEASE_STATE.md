@@ -9,199 +9,198 @@
 - 개발 branch: `preview`
 - TEST branch: `main`
 - PRODUCTION branch: `production`
-- 현재 PREVIEW 앱 버전: **082**
-- 082 제품 source commit: `9de67ec57eec1a9fa6c69d81a47c3924a7442398`
-- PREVIEW Worker release trigger commit: `98120646ea73b8b0b3fc895f1593fcc7c43dc94b`
-- PREVIEW App release commit: `a45f2a361be8648928302978c7177b9b75c0de48`
-- PREVIEW Worker Run: `34794135736` — **PASS**
-- PREVIEW Worker active version: `4b46d3f4-4c4b-4dd2-9584-1b9f0d74ffd5`
-- PREVIEW App Run: `34794189198` — **PASS**
-- 실제 `preview.soridraw.com` remote app version: **082** — PASS
+- 현재 PREVIEW 앱 버전: **082** (083은 Worker 비용 수정만 수행, 프론트 앱 변경 없음)
+- 083 Worker 제품/배포 고정 source: `2dfaf70095592c1831fc93fb2c9777ccb126b9b3`
+- 083 Worker release trigger commit: `501bd84da704a3172c6f862688da78a0145fd695`
+- PREVIEW Worker Run: `34796380007` — **PASS**
+- PREVIEW Worker active version: `ed462a80-29a2-4df0-a7ef-84dcef3c5fbc`
+- PREVIEW App Run: `34794189198` — **PASS** / 앱 자체는 082 그대로
+- 실제 `preview.soridraw.com` app version: **082**
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — 비변경
 - PRODUCTION branch: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 비변경
 - TEST Worker: `0b9cfe5c-1e29-4485-ac97-36f87832b41e` — 비변경
 - PRODUCTION Worker: `07c11e5e-47a6-458b-a3a0-6e47b6c331e6` — 비변경
 
-## 2. 082 작업 목표
-081의 page-exit 묶음 구조를 한 단계 더 완성한다.
+## 2. 083 작업 원인 — 082 실사용 계측
+사용자가 PREVIEW 082에서 공개/비공개만 실제 계정으로 측정했다.
 
-핵심 목표:
-- Music Note에서 이미 등록된 여러 곡의 공개/비공개 변경을 한 번에 전송했을 때 Worker 내부에서도 곡별 반복 canonical D1 조회를 하지 않는다.
-- 여러 등록곡 변경을 **공유 canonical 조회 + batch update**로 처리한다.
-- 공개상태 R2 snapshot이 사라진 오래된/새 기기에서는 stale local cache를 정답으로 믿지 않고 canonical 기준으로 한 번 복구한다.
-- 정상적인 warm R2/cache 사용자는 작은 revision 확인을 우선하고 불필요한 전체 조회를 하지 않는다.
-- Shared D1 schema/migration, 사용자 원본 데이터, UI/CSS/레이아웃은 변경하지 않는다.
+관찰값:
+- 1곡 변경: 약 `D1 R4/W2`, 다른 1곡 케이스 `R3/W2`.
+- 3곡 공개: `D1 R36/W6`.
+- 3곡 비공개: `D1 R30/W6`.
+- 공개상태 묶음 누적: `R73/W16`.
+- Firestore 최근 10분: `R0/W0/D0` 유지.
+- 페이지 안 중간 전송은 없고 page-exit 묶음 자체는 정상 작동.
 
-## 3. 082 확정 구조
-### Publication internal batch 049
+판정:
+- 외부 요청을 page-exit 1회로 묶는 구조는 PASS.
+- 쓰기는 곡당 W2로 규칙적이지만, 읽기는 3곡에서 R30~36으로 비정상 증가해 FAIL.
+- TEST 승격 중단 후 083 PREVIEW 비용 수정 진행.
+
+## 3. 원인 확정
+읽기 폭증은 요청 횟수가 많아서가 아니라 **Worker 049의 공유 canonical SELECT가 사용자 소유곡 범위를 먼저 훑는 실행계획**을 선택한 것이 원인이었다.
+
+082 쿼리:
+- `SELECT * FROM tracks WHERE owner_uid=? AND id IN (...)`
+
+실제 D1 `EXPLAIN QUERY PLAN`:
+- `SEARCH tracks USING INDEX idx_tracks_owner_profile_order (owner_uid=?)`
+
+즉 3곡만 필요해도 사용자 owner index 쪽에서 여러 행을 읽은 뒤 track id를 거르는 구조였다.
+
+대조 진단:
+- `SELECT * FROM tracks WHERE id IN (...)`
+- 실제 plan: `SEARCH tracks USING INDEX sqlite_autoindex_tracks_1 (id=?)`
+
+따라서 스키마 추가 없이 기존 track primary key를 직접 쓰는 것이 가장 단순하고 비용이 낮은 수정으로 확정됐다.
+
+## 4. 083 확정 구조 — Worker 050
 주요 파일:
-- `cloudflare/explore-worker/patches/049-publication-internal-batch-compaction.mjs`
-- `cloudflare/explore-worker/canonical/preview-worker.js`
+- `cloudflare/explore-worker/patches/050-publication-primary-key-batch-read.mjs`
 - `cloudflare/explore-worker/release-patches.json`
+- `cloudflare/explore-worker/canonical/preview-worker.js`
+- `cloudflare/explore-worker/canonical/source-sha256.txt`
+- `scripts/verify-083-publication-pk-read.mjs`
+- `scripts/verify-082-publication-batch.mjs`
+- `scripts/verify-explore-like-cost-optimization.mjs`
+- `.github/workflows/cloudflare-explore-preview-release.yml`
 
-동작:
-- 081의 외부 page-exit publication batch API를 유지한다.
-- 이미 등록된 여러 곡은 owner + track id 목록으로 canonical row를 한 번에 읽는다.
-- 실제 바뀐 컬럼만 UPDATE 대상으로 만들고 D1 batch로 반영한다.
-- 최초 등록 곡은 기존 검증된 단일 publication 등록 경로를 유지한다.
-- canonical 조회 실패나 stats preflight 실패 시 조용히 잘못 저장하지 않고 해당 batch를 실패 처리한다.
-- mutation hot path에서 owner 전체 scan을 하지 않는다.
+변경:
+- 이미 등록된 여러 공개/비공개 곡의 canonical pre-read를 `owner_uid + id IN`에서 **`id IN` primary-key lookup**으로 변경.
+- DB에서 받은 행은 Worker에서 `owner_uid === auth uid`로 다시 검증.
+- 실제 UPDATE에는 기존 `WHERE id=? AND owner_uid=? AND source_type='music_note'` 권한 가드를 그대로 유지.
+- 최초 등록 publication 경로, 081 page-exit final-state batch, R2 snapshot, feed/profile cache 구조는 변경하지 않음.
+- UI/CSS/프론트 코드 동작 변경 없음.
 
-### Publication R2 snapshot 복구 082
-주요 파일:
-- `src/services/explorePublicationService.ts`
+## 5. 쓰기 W2 해석
+이번 083에서는 W2/곡을 억지로 W1로 줄이지 않았다.
 
-동작:
-- 공유 publication R2 snapshot이 없는데 기기에 오래된 local cache가 남아 있으면 local cache를 서버 검증 완료 상태로 간주하지 않는다.
-- bundle route로 내려가 canonical D1 기준으로 한 번 복구하고 R2를 다시 만든다.
-- 정상 R2/cache가 있는 사용자는 기존 revision-first 경로를 유지한다.
+현재 visibility 변경의 논리적 D1 write 2개는:
+1. 해당 `tracks` canonical row 실제 변경.
+2. 기존 공유 revision 보호 trigger가 `explore_shared_revision`을 갱신.
 
-### Release safety
-- 영구 PREVIEW Worker 배포 gate에 `scripts/verify-082-publication-batch.mjs`를 추가했다.
-- 082 이후 Worker 배포에서도 publication batch/R2 복구 계약이 깨지면 배포 전 차단된다.
+이 revision write는 다른 환경/기기와 파생 캐시가 변경 여부를 알기 위한 기존 호환 구조다. 현재 verifier도 정상 private/republish를 **2 logical writes including protected shared revision**으로 보호한다.
 
-## 4. 082 자동검증
-Preparation/verification Run `34792337510` attempt 2 — **PASS**.
+따라서 083의 목표는 비정상 owner-scan read 제거이며, W2는 중복 오류가 아닌 현재 공유 동기화 계약으로 유지한다. 이후 별도 설계 없이 revision write를 제거하지 않는다.
+
+## 6. 083 자동검증
+Materialization Run `34796253747` — **PASS**.
 
 확인:
 - TypeScript PASS.
 - Build PASS.
 - Explore like cost regression PASS.
 - Explore derived-cache regression PASS.
-- 080 publication-state regression PASS.
-- 082 publication-batch regression PASS.
+- 080 publication state regression PASS.
+- 082 publication batch regression PASS.
+- 083 PK-read regression PASS.
 - deploy preflight PASS.
-- Shared D1 migration change **0**.
-- verified product commit `9de67ec57eec1a9fa6c69d81a47c3924a7442398`.
+- Shared D1 migration/schema change **0**.
 
-082 verifier 핵심 결과:
-- 여러 registered publication 변경이 canonical read를 공유하고 batch write를 사용함 — PASS.
-- missing R2는 canonical self-heal 1회 경로로 전환 — PASS.
-- healthy warm cache는 revision-first 유지 — PASS.
-- mutation hot path owner scan 금지 — PASS.
+083 verifier가 보호하는 핵심:
+- publication registered batch pre-read는 track PK `id IN` 사용.
+- owner-wide canonical pre-read 재도입 금지.
+- JS owner authorization 유지.
+- UPDATE owner/source_type guard 유지.
+- Worker 050이 release patch 최종 순서로 유지.
 
-## 5. PREVIEW Worker 049 실제 배포
-Run `34794135736` — **PASS**.
+## 7. PREVIEW Worker 050 실제 배포
+Run `34796380007` — **PASS**.
 
-- locked product source: `9de67ec57eec1a9fa6c69d81a47c3924a7442398`
-- canonical Worker SHA256: `3c797e14d71fd32d455d42c8c4acfc7733eb3e78ab6255e0db975e2da5f60464`
-- Worker version: `b6524b19-e66b-4eb6-b36d-9741195637eb` → `4b46d3f4-4c4b-4dd2-9584-1b9f0d74ffd5`
-- permanent 082 verifier PASS.
-- live D1 035 schema/state prerequisite PASS, pending=0.
+- locked source: `2dfaf70095592c1831fc93fb2c9777ccb126b9b3`
+- canonical Worker SHA256: `ddb9ceaa190befe231ac3597a80cb0484cd1b6fc65aab669f2c39d4a3a1cac77`
+- Worker version: `4b46d3f4-4c4b-4dd2-9584-1b9f0d74ffd5` → `ed462a80-29a2-4df0-a7ef-84dcef3c5fbc`
+- 082 regression PASS.
+- 083 regression PASS.
+- live D1 plan: **`SEARCH tracks USING INDEX sqlite_autoindex_tracks_1 (id=?)` PASS**.
 - Feed smoke PASS.
 - public profile smoke PASS.
-- unauthenticated like batch route HTTP 401 정상.
-- warm Feed revision 실제 **D1 R0/W0 / HEAD-ONLY-036** PASS.
+- warm Feed revision 실제 `D1 R0/W0 / HEAD-ONLY-036` PASS.
 - like aggregate cron `*/10 * * * *` PASS.
 - TEST Worker unchanged PASS.
 - PRODUCTION Worker unchanged PASS.
 
-## 6. PREVIEW App 082 실제 배포
-Run `34794189198` — **PASS**.
+## 8. Firebase / Functions / 데이터 변경
+083은 Worker-only 비용 수정이다.
 
-- release source checkout: `a45f2a361be8648928302978c7177b9b75c0de48`
-- 제품 코드 기준: `9de67ec57eec1a9fa6c69d81a47c3924a7442398`
-- TypeScript `npx tsc --noEmit` PASS.
-- `npm run build` PASS.
-- Firebase PREVIEW Hosting deploy PASS.
-- actual `preview.soridraw.com` exact build PASS.
-- actual remote `app-version.json` = **082** PASS.
-- TEST page/branch unchanged PASS.
-- PRODUCTION page/branch unchanged PASS.
-
-Firebase 변경:
-- PREVIEW Hosting only.
+Firebase:
+- Hosting 변경 없음.
 - Functions 변경 없음.
 - Firestore Rules 변경 없음.
+- Firestore schema 변경 없음.
 
-Cloudflare 변경:
-- PREVIEW Explore Worker만 049 canonical로 갱신.
+Cloudflare/D1:
+- PREVIEW Worker만 050으로 갱신.
+- Shared D1 migration 없음.
+- 테이블/인덱스/trigger 추가·삭제 없음.
 - TEST/PRODUCTION Worker 비변경.
-
-## 7. 사용자 데이터 / 스키마 변경
-082에서는 Shared D1 migration 없음.
 
 사용자 데이터:
 - 대량삭제 없음.
 - 백필 없음.
 - destructive migration 없음.
-- 기존 필드 제거/의미변경 없음.
-- 사용자 원본 데이터 강제 재생성 없음.
-- PREVIEW/TEST/PRODUCTION 공유 사용자 데이터 복제/덮어쓰기 없음.
+- 기존 필드 제거/의미 변경 없음.
+- 사용자 원본 데이터 복제/덮어쓰기 없음.
 
-R2:
-- 공개상태 snapshot은 파생 캐시다.
-- missing/stale 상태에서만 canonical 기준 self-heal 가능.
-- 사용자 원본 데이터 자체를 R2로 대체하지 않는다.
-
-## 8. 비용 판정
+## 9. 비용 판정
 확정된 것:
-- 변경 없음 warm Feed revision 실제 D1 **R0/W0** PASS.
-- 081 zero-dirty page transition backend flush 0 구조 유지.
-- 여러 registered 공개/비공개 변경은 Worker 내부 canonical 조회 공유 + batch update 구조 PASS.
-- R2가 정상일 때 publication state는 revision-first 경로 유지.
-- R2가 없을 때만 canonical self-heal 1회 허용.
+- 082에서 공개/비공개 3곡의 R30~36은 정상 비용이 아니었음.
+- 원인은 owner index scan으로 확정.
+- 083 배포 전/실제 D1 plan에서 track primary-key exact lookup 사용 확인.
+- 변경 없음 warm Feed revision `R0/W0` 유지.
+- page-exit batch 구조와 Firestore `R0/W0` 관찰값 유지 대상.
 
-아직 실사용 계측이 필요한 것:
-- 실제 로그인 계정에서 여러 곡 공개/비공개를 한 번에 변경했을 때 Cloudflare의 실제 D1 rows_read / rows_written 수치.
-- Firestore `user_structures` 쪽 불필요 write 의심 여부.
-- 새 기기/장기 미접속 최초 1회 복구 후 재접속 0-read 캐시 수렴 여부.
+아직 실사용 재계측이 필요한 것:
+- 인증된 실제 공개/비공개 1곡/3곡의 최종 D1 rows_read/rows_written.
+- 3곡 비공개는 구조상 대략 `R6/W6`, 3곡 공개는 track_stats exact read를 포함해 대략 `R9/W6` 수준을 예상하지만 **실측 전 확정 금지**.
+- Firestore `user_structures` 불필요 write 의심은 이번 공개/비공개 영상에서는 W0였으나 다른 Music Note 동작까지 별도 확인 필요.
 
-따라서 082 배포는 완료됐지만 **비용 실사용 검증 전** 상태다. 실제 수치가 예상보다 많으면 TEST로 넘기지 않는다.
+## 10. 다음 PREVIEW 실사용 검증
+가장 먼저 이전과 **같은 공개/비공개 테스트를 083 Worker에서 반복**한다.
 
-## 9. PREVIEW 실사용 검증 항목
-`preview.soridraw.com` 082에서 다음을 실제 계정으로 확인한다.
+1. 진단 초기화.
+2. 이미 등록된 1곡 공개/비공개 후 페이지 이탈.
+3. 이미 등록된 3곡 공개 후 페이지 이탈.
+4. 같은 3곡 비공개 후 페이지 이탈.
+5. 각 단계의 D1 R/W, R2 A/B, Firestore R/W를 기록.
+6. 최종 공개상태 정확성 확인.
 
-1. 진단 초기화 후 아무것도 수정하지 않고 Explore → Music Note → Library 이동.
-   - 기대: PAGE SYNC NOOP, Worker 0, D1 R0/W0, Firestore R0/W0.
-2. 이미 등록된 여러 곡을 공개/비공개로 여러 번 바꾼 뒤 페이지를 한 번 나감.
-   - 기대: 페이지 안 중간 전송 0, page-exit 외부 publication batch 1회, Worker 내부 shared canonical read + batch write.
-3. 공개→비공개→공개처럼 같은 곡을 반복 변경.
-   - 기대: 마지막 상태만 저장.
-4. R2 snapshot missing/오래된 기기 복구 상황.
-   - 기대: stale local cache를 정답으로 사용하지 않고 canonical self-heal 1회 후 이후 warm cache 수렴.
-5. Explore 좋아요 여러 번 변경 후 페이지 이동.
-   - 기대: 기존 081 final-state page-exit batch 유지.
-6. Music Note 상세 여러 필드 수정 후 page exit.
-   - 기대: idle/detail-close write 0, 최종 변경분만 flush.
-7. PC ↔ 모바일 same-account 공개상태/좋아요 최종 상태 수렴 확인.
-8. Firestore usage에서 `user_structures` 불필요 write가 발생하는지 확인.
+합격 방향:
+- 3곡에서 다시 R30~36 같은 owner-scan 수치가 나오면 FAIL.
+- read가 실제 변경곡 수에 가까운 작은 값으로 내려와야 함.
+- W는 현재 계약상 곡당 2를 기준으로 확인.
+- 페이지 내부 중간 네트워크 전송 0 유지.
+- Firestore 공개/비공개 동작 R0/W0 유지.
 
-## 10. TEST / PRODUCTION 승격
-- TEST 승격: **금지 / PREVIEW 082 실사용 correctness + 비용 검증 전**.
+## 11. TEST / PRODUCTION 승격
+- TEST 승격: **금지 / 083 실사용 비용 + correctness 재검증 전**.
 - PRODUCTION 승격: **사용자의 명확한 정식배포 승인 전 금지**.
 - PREVIEW→TEST 승격 시 사용자 데이터 복제/덮어쓰기 금지.
 
-## 11. 정상 기능 보호
+## 12. 정상 기능 보호
 절대 임의 변경 금지:
 - UI 외곽선/위치/크기/간격/반응형/테마/색상.
-- 분할바/생성바 기존 정상 동작.
-- Music Note / Library Local First data semantics.
+- 분할바/생성바 정상 동작.
+- Music Note / Library Local First semantics.
 - 081 page-exit final-state batching.
-- Explore Feed/public profile R2 cache 구조.
+- 082 missing-R2 canonical self-heal + healthy revision-first 구조.
+- Explore Feed/public profile R2 cache.
 - 좋아요 10분 canonical aggregate.
+- 공유 revision 호환 구조.
 - 공유 사용자 원본 데이터.
 
-## 12. 임시 작업파일 정리
-082 준비용 temporary workflow는 배포 완료 후 제거했다.
-
-제거:
-- `.github/workflows/temp-082-prepare-publication-batch.yml`
+## 13. 임시 작업 정리
+083 분석/구현에 사용한 temporary workflows는 Worker 배포 완료 후 제거 완료.
 
 영구 보존:
-- `cloudflare/explore-worker/patches/049-publication-internal-batch-compaction.mjs`
-- `scripts/verify-082-publication-batch.mjs`
-- `src/services/explorePublicationService.ts`의 missing-R2 repair guard
-- canonical PREVIEW Worker 049 source/hash
-- 영구 PREVIEW Worker release gate의 082 verifier
+- Worker patch 050.
+- 083 regression verifier.
+- 082 verifier의 050 호환 guard.
+- canonical PREVIEW Worker 050 source/hash.
+- permanent PREVIEW Worker release gate의 083 verifier + live PK query-plan guard.
 
-## 13. 알려진 위험
-- 자동 verifier는 082의 구조를 검증하지만 실제 authenticated publication mutation의 Cloudflare rows_read/rows_written 숫자를 대신하지 않는다.
-- missing R2 self-heal은 복구 상황 전용이다. 정상 사용자에게 반복 발생하면 캐시 생성/유지 경로를 다시 조사해야 한다.
-- Firestore `user_structures` write는 082 작업 범위에서 변경하지 않았으며 실제 계측 확인이 남아 있다.
-
-## 14. 다음 작업
-새 기능 추가보다 **PREVIEW 082 실사용 비용 계측**이 우선이다.
-
-실측 합격 후에만 TEST 승격 후보로 판단한다.
-실측에서 공개/비공개 batch의 D1 사용량이 곡 수만큼 선형 증가하거나 `user_structures` write가 불필요하게 발생하면 원인을 확정하고 PREVIEW에서 추가 최적화한 뒤 다시 검증한다.
+## 14. 알려진 위험 / 다음 작업
+- query plan은 정상 PK lookup으로 확인됐지만 실제 authenticated mutation rows_read는 사용자 실측 전이다.
+- W2/곡은 현재 공유 revision 계약이므로 별도 전체 동기화 설계 없이 제거하지 않는다.
+- 사용자 재테스트가 합격하면 공개/비공개 비용 문제는 통과 후보로 처리하고, 이후 좋아요/상세편집/Library/PC↔모바일 검증으로 이동한다.
+- 재테스트에서 read가 여전히 높으면 추측으로 다음 최적화를 하지 말고 응답별 D1 비용 경로를 다시 분리 측정한다.

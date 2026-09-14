@@ -30,15 +30,19 @@ const functionText = (source, name) => {
 };
 
 assert.equal(String(version.version),'082');
-assert.equal(manifest.patches.at(-1),'049-publication-internal-batch-compaction.mjs');
+assert.equal(manifest.patches.at(-2),'049-publication-internal-batch-compaction.mjs');
+assert.equal(manifest.patches.at(-1),'050-publication-primary-key-batch-read.mjs');
 assert.match(worker,/SORIDRAW_PUBLICATION_INTERNAL_BATCH_049_20260914/);
+assert.match(worker,/SORIDRAW_PUBLICATION_PK_BATCH_READ_050_20260914/);
 assert.match(client,/SORIDRAW_PUBLICATION_MISSING_R2_REPAIR_082_20260914/);
 assert.match(client,/if \(!exists\) \{[\s\S]{0,500}knownRevision = '';/);
 assert.doesNotMatch(client,/if \(!exists\) \{\s*publicationServerValidatedUids\.add\(uid\);\s*return clonePublicationStates\(cached\);/);
 assert.match(client,/\/v1\/me\/music-note-publications-bundle/);
 
 const batch=functionText(worker,'handleMusicNotePublicationBatch048');
-assert.match(batch,/SELECT \* FROM tracks[\s\S]*owner_uid=\? AND id IN/);
+assert.match(batch,/SELECT \* FROM tracks\s+WHERE id IN/);
+assert.match(batch,/canonicalRows = \(rows\.results \|\| \[\]\)\.filter/);
+assert.match(batch,/String\(row\?\.owner_uid \|\| ''\) === authContext\.uid/);
 assert.match(batch,/env\.DB\.batch\(statements\)/);
 assert.match(batch,/if \(Number\(item\.row\.profile_pinned \|\| 0\) !== nextPinned\) \{ sets\.push\('profile_pinned=\?'\)/);
 assert.match(batch,/PUBLICATION_BATCH_STATS_PREFLIGHT_FAILED/);
@@ -53,4 +57,4 @@ const singleSync=functionText(worker,'syncMusicNotePublicationR2AfterMutation');
 assert.doesNotMatch(singleSync,/buildMusicNotePublicationR2Payload/,'mutation hot path must never owner-scan D1');
 assert.match(patch,/let canonicalReadOk = true;/);
 assert.match(patch,/PUBLICATION_BATCH_STATS_PREFLIGHT_FAILED/);
-console.log('PASS 082: registered publication changes share canonical reads/batch writes; missing R2 forces one canonical self-heal; healthy warm cache remains revision-first.');
+console.log('PASS 082: registered publication changes share canonical reads/batch writes; 083 PK lookup preserves the 082 contract; missing R2 forces one canonical self-heal.');

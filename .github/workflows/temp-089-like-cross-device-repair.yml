@@ -21,19 +21,27 @@ jobs:
           cache: npm
       - name: Apply 089 client consistency repair
         run: python3 scripts/temp-089-like-cross-device-repair.py
-      - name: Align retained verifier with 089 count rule
+      - name: Align retained verifiers with 089 count rule
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('scripts/verify-087-liked-card-consistency.mjs')
-          s = p.read_text()
-          old = "assert.match(page, /setProfileLikedTracks\\(applyPersonalOverlay\\)/);"
-          new = "assert.doesNotMatch(page, /setProfileLikedTracks\\(applyPersonalOverlay\\)/);"
-          if s.count(old) != 1:
-              raise SystemExit(f'087 verifier overlay assertion count={s.count(old)}')
-          p.write_text(s.replace(old, new, 1))
+          p87 = Path('scripts/verify-087-liked-card-consistency.mjs')
+          s87 = p87.read_text()
+          old87 = "assert.match(page, /setProfileLikedTracks\\(applyPersonalOverlay\\)/);"
+          new87 = "assert.doesNotMatch(page, /setProfileLikedTracks\\(applyPersonalOverlay\\)/);"
+          if s87.count(old87) != 1:
+              raise SystemExit(f'087 verifier overlay assertion count={s87.count(old87)}')
+          p87.write_text(s87.replace(old87, new87, 1))
+
+          p88 = Path('scripts/verify-088-same-session-liked-heart.mjs')
+          s88 = p88.read_text()
+          old88 = "assert.match(page, /const normalizedLikedRows = normalizedRows\\.map/);"
+          new88 = "assert.match(page, /const normalizedLikedRows = normalizedRows;/);"
+          if s88.count(old88) != 1:
+              raise SystemExit(f'088 verifier normalized rows assertion count={s88.count(old88)}')
+          p88.write_text(s88.replace(old88, new88, 1))
           PY
       - name: Install
         run: npm ci --no-audit --no-fund

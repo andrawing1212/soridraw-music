@@ -25,6 +25,7 @@ import {
   getExploreLikeDisplayCounts,
   setExploreTrackLike,
 } from '../services/exploreLikeService';
+import { getExploreLikedTracks, rememberExploreLikedTrack } from '../services/exploreLikedTracksService';
 import { getExplorePublicProfileFirstView, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
 import {
   getExploreFollowState,
@@ -324,6 +325,10 @@ export default function ExplorePage() {
   const [socialNotice, setSocialNotice] = useState('');
   const [profile, setProfile] = useState<ExplorePublicProfile | null>(null);
   const [profileTracks, setProfileTracks] = useState<ExploreTrack[]>([]);
+  const [profileCollection, setProfileCollection] = useState<'public' | 'liked'>('public');
+  const [profileLikedTracks, setProfileLikedTracks] = useState<ExploreTrack[]>([]);
+  const [profileLikedLoading, setProfileLikedLoading] = useState(false);
+  const [profileLikedError, setProfileLikedError] = useState('');
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [followState, setFollowState] = useState<ExploreFollowState | null>(null);
@@ -564,6 +569,10 @@ export default function ExplorePage() {
     if (!profileUid) {
       setProfile(null);
       setProfileTracks([]);
+      setProfileCollection('public');
+      setProfileLikedTracks([]);
+      setProfileLikedLoading(false);
+      setProfileLikedError('');
       setProfileError('');
       setFollowState(null);
       setProfileEditOpen(false);
@@ -571,6 +580,10 @@ export default function ExplorePage() {
     }
 
     let cancelled = false;
+    setProfileCollection('public');
+    setProfileLikedTracks([]);
+    setProfileLikedLoading(false);
+    setProfileLikedError('');
     setProfileLoading(true);
     setProfileError('');
     setSocialNotice('');
@@ -625,7 +638,32 @@ export default function ExplorePage() {
     return () => { cancelled = true; };
   }, [profileUid, user]);
 
-  const visibleTracks = profileUid ? profileTracks : tracks;
+  const profileIsOwn = Boolean(profile && user?.uid === profile.uid);
+
+  useEffect(() => {
+    if (!profileUid || !profile || !user || user.uid !== profile.uid || profileCollection !== 'liked') return;
+    let cancelled = false;
+    setProfileLikedLoading(true);
+    setProfileLikedError('');
+    getExploreLikedTracks(user)
+      .then((rows) => {
+        if (cancelled) return;
+        setProfileLikedTracks(rows.map(normalizeTrack).filter((track) => track.id));
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        console.error('Explore liked track collection load failed:', reason);
+        setProfileLikedError(reason instanceof Error ? reason.message : '좋아요 곡을 불러오지 못했어요.');
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLikedLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [profileUid, profile, user, profileCollection, likeAccountSyncSignal]);
+
+  const visibleTracks = profileUid
+    ? (profileIsOwn && profileCollection === 'liked' ? profileLikedTracks : profileTracks)
+    : tracks;
 
   useEffect(() => {
     if (!user || visibleTracks.length === 0) return;
@@ -742,6 +780,7 @@ export default function ExplorePage() {
     const patch = (list: ExploreTrack[]) => list.map((track) => track.id === trackId ? { ...track, likeCount } : track);
     setTracks(patch);
     setProfileTracks(patch);
+    setProfileLikedTracks(patch);
   };
 
   // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
@@ -854,6 +893,11 @@ export default function ExplorePage() {
       // 074: heart and the clicker's visible number move immediately. Canonical
       // server count is still confirmed only by the existing deferred aggregate.
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
+      rememberExploreLikedTrack(user.uid, track as unknown as Record<string, unknown>, result.liked);
+      setProfileLikedTracks((previous) => {
+        if (!result.liked) return previous.filter((item) => item.id !== track.id);
+        return previous.some((item) => item.id === track.id) ? previous : [track, ...previous];
+      });
       updateTrackLikeCount(track.id, result.likeCount);
     } catch (reason) {
       console.error('Explore like failed:', reason);
@@ -991,7 +1035,41 @@ export default function ExplorePage() {
               />
             )}
 
-            {profileTracks.length === 0 ? (
+            {profileIsOwn && (
+              <nav className="soridraw-explore-tabs" aria-label="내 공개 프로필 곡 보기">
+                <button
+                  type="button"
+                  className={profileCollection === 'public' ? 'is-active' : undefined}
+                  onClick={() => setProfileCollection('public')}
+                  aria-current={profileCollection === 'public' ? 'page' : undefined}
+                >
+                  공개곡
+                </button>
+                <button
+                  type="button"
+                  className={profileCollection === 'liked' ? 'is-active' : undefined}
+                  onClick={() => setProfileCollection('liked')}
+                  aria-current={profileCollection === 'liked' ? 'page' : undefined}
+                >
+                  좋아요 곡
+                </button>
+              </nav>
+            )}
+
+            {profileIsOwn && profileCollection === 'liked' ? (
+              profileLikedLoading ? (
+                <div className="soridraw-explore-state" role="status"><Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 좋아요 곡을 불러오는 중</div>
+              ) : profileLikedError ? (
+                <div className="soridraw-explore-state">{profileLikedError}</div>
+              ) : profileLikedTracks.length === 0 ? (
+                <div className="soridraw-explore-state soridraw-explore-state--empty">
+                  <Heart aria-hidden="true" />
+                  <strong>아직 좋아요한 곡이 없어요.</strong>
+                </div>
+              ) : (
+                renderTrackGrid(profileLikedTracks, `${profile.nickname} 좋아요 곡`)
+              )
+            ) : profileTracks.length === 0 ? (
               <div className="soridraw-explore-state soridraw-explore-state--empty">
                 <Music2 aria-hidden="true" />
                 <strong>아직 공개된 곡이 없어요.</strong>

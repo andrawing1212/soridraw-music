@@ -74,6 +74,7 @@ jobs:
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-like-cost-optimization.mjs
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-082-publication-batch.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-083-publication-pk-read.mjs
             node scripts/verify-explore-deploy-preflight.mjs
           )
 
@@ -83,6 +84,8 @@ jobs:
           node -e "const r=require(process.env.RUNNER_TEMP+'/like035-schema.json');const rows=r.flatMap(x=>x.results||[]);const got=new Set(rows.map(x=>x.name));for(const n of ['explore_like_batches_035','idx_explore_like_batches_035_created','explore_like_processor_035'])if(!got.has(n))throw new Error('Missing live 035 D1 prerequisite: '+n);console.log('LIVE_035_D1_SCHEMA=PASS')"
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT id,lease_until,owner FROM explore_like_processor_035 WHERE id=1; SELECT COUNT(*) AS pending FROM explore_like_batches_035" --json > "$RUNNER_TEMP/like035-state.json"
           node -e "const r=require(process.env.RUNNER_TEMP+'/like035-state.json');const rows=r.flatMap(x=>x.results||[]);if(!rows.some(x=>Number(x.id)===1))throw new Error('035 processor row missing');const p=rows.find(x=>'pending' in x);console.log('LIVE_035_D1_STATE=PASS pending='+Number(p?.pending||0))"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "EXPLAIN QUERY PLAN SELECT * FROM tracks WHERE id IN ('__a__','__b__','__c__')" --json > "$RUNNER_TEMP/publication-pk-plan.json"
+          node -e "const r=require(process.env.RUNNER_TEMP+'/publication-pk-plan.json');const detail=r.flatMap(x=>x.results||[]).map(x=>String(x.detail||'')).join(' | ');if(!detail.includes('sqlite_autoindex_tracks_1')||!detail.includes('(id=?)'))throw new Error('Publication PK lookup plan unavailable: '+detail);console.log('LIVE_PUBLICATION_PK_PLAN=PASS '+detail)"
 
           (
             cd canonical

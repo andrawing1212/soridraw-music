@@ -1,4 +1,5 @@
-requested_at=2026-09-14T02:40:00Z
+requested_at=2026-09-14T02:45:00Z
 requested_by=user
 base_preview=8f2c07166db85c7836dbd5c651784fb8235a9bcc
 purpose=084_publication_write_returning_cost_reduction
+retry=2

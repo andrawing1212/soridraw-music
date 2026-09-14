@@ -21567,11 +21567,12 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
     try {
       const trackIds = [...new Set(registeredMutations.map((mutation) => mutation.trackId))];
       const rows = await env.DB.prepare(`SELECT * FROM tracks
-        WHERE owner_uid=? AND id IN (${trackIds.map(() => '?').join(',')})`).bind(
-        authContext.uid,
+        WHERE id IN (${trackIds.map(() => '?').join(',')})`).bind(
         ...trackIds,
       ).all();
-      canonicalRows = rows.results || [];
+      canonicalRows = (rows.results || []).filter(
+        (row) => String(row?.owner_uid || '') === authContext.uid,
+      );
     } catch (error) {
       canonicalReadOk = false;
       for (const mutation of registeredMutations) {
@@ -23770,3 +23771,5 @@ export {
 // SORIDRAW_PAGE_EXIT_PUBLICATION_BATCH_048_20260914
 
 // SORIDRAW_PUBLICATION_INTERNAL_BATCH_049_20260914
+
+// SORIDRAW_PUBLICATION_PK_BATCH_READ_050_20260914

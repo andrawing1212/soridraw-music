@@ -77,11 +77,12 @@ assert.deepEqual(
   requiredReleasePatches,
   'required like release patches must remain present and ordered'
 );
-assert.equal(manifest.patches.at(-5), '045-publication-revision-metadata.mjs', '045 must remain before 046/047/048/049');
-assert.equal(manifest.patches.at(-4), '046-publication-write-compaction.mjs', '046 must remain before 047/048/049');
-assert.equal(manifest.patches.at(-3), '047-publication-state-transition.mjs', '047 must remain before 048/049');
-assert.equal(manifest.patches.at(-2), '048-page-exit-publication-batch.mjs', '048 must remain before 049');
-assert.equal(manifest.patches.at(-1), '049-publication-internal-batch-compaction.mjs', '049 internal publication batch must be final');
+assert.equal(manifest.patches.at(-6), '045-publication-revision-metadata.mjs', '045 must remain before 046/047/048/049/050');
+assert.equal(manifest.patches.at(-5), '046-publication-write-compaction.mjs', '046 must remain before 047/048/049/050');
+assert.equal(manifest.patches.at(-4), '047-publication-state-transition.mjs', '047 must remain before 048/049/050');
+assert.equal(manifest.patches.at(-3), '048-page-exit-publication-batch.mjs', '048 must remain before 049/050');
+assert.equal(manifest.patches.at(-2), '049-publication-internal-batch-compaction.mjs', '049 must remain before 050');
+assert.equal(manifest.patches.at(-1), '050-publication-primary-key-batch-read.mjs', '050 publication PK batch read must be final');
 assert.equal((migration033.match(/UPDATE explore_derived_state\s+SET seq = seq \+ 1/g) || []).length, 1);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_batches_035/);
 assert.match(migration035, /CREATE TABLE IF NOT EXISTS explore_like_processor_035/);

@@ -9,14 +9,10 @@ import {
   writeSoridrawPersistentCache,
 } from '../lib/soridrawPersistentCache';
 import {
-  clearExplorePersonalSocialSnapshot,
   getExplorePersonalSocialSnapshot,
   patchExplorePersonalSocialLike,
 } from './exploreSocialSnapshotService';
-import {
-  invalidateExploreLikedTrackCollection,
-  patchExploreLikedTrackMembership,
-} from './exploreLikedTracksService';
+import { patchExploreLikedTrackMembership } from './exploreLikedTracksService';
 import {
   confirmExploreLikeDisplayTransition094,
   rebaseExploreLikePendingDisplay094,
@@ -49,6 +45,7 @@ import {
 // SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_REPLAY_096_20260915
 // SORIDRAW_EXPLORE_LIKE_REMOTE_PENDING_ACK_097_20260916
 // SORIDRAW_EXPLORE_LIKE_ATOMIC_SIGNAL_098_20260916
+// SORIDRAW_EXPLORE_UPDATE_ZERO_READ_099_20260916
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -394,16 +391,12 @@ export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) 
   );
   if (signal.version <= seenVersion) return;
 
-  // If previousVersion does not match, this browser slept through at least one
-  // batch. Clear only this user's personal like-state cache. Explore will
-  // rehydrate only currently visible IDs; no public feed/full scan is triggered.
-  const missedSignal = signal.previousVersion !== seenVersion;
-  const cache = getLikedStateCache(uid);
-  if (missedSignal) {
-    cache.clear();
-    clearExplorePersonalSocialSnapshot(uid);
-    invalidateExploreLikedTrackCollection(uid);
-  }
+
+// 099: a version gap/reconnect is not cache corruption. 098 already retains
+// recent approved deltas in RTDB, so preserve known-good local membership,
+// card and social caches and merge only the retained results below. Never turn
+// an app update or wake-up into a full liked-track verification/read.
+const cache = getLikedStateCache(uid);
 
   // 097: a local pending click should win only while it disagrees with the
   // server-acknowledged account signal. If both already describe the same liked
@@ -443,11 +436,6 @@ export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) 
   persistLikedStateCache(uid, cache);
   setSeenAccountSignalVersion(uid, signal.version);
 
-  if (missedSignal && typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
-      detail: { uid, version: signal.version },
-    }));
-  }
 };
 
 const publishExploreLikeAccountSyncSignal = async (

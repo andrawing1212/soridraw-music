@@ -58,10 +58,12 @@ assert.match(liked, /export const invalidateExploreLikedTrackCollection/);
 assert.match(liked, /export const patchExploreLikedTrackMembership/);
 assert.doesNotMatch(liked, /firestoreMeasured|updateDoc\(|setDoc\(|addDoc\(/);
 
-assert.match(like, /clearExplorePersonalSocialSnapshot/);
-assert.match(like, /invalidateExploreLikedTrackCollection/);
 assert.match(like, /patchExploreLikedTrackMembership/);
-assert.match(like, /if \(missedSignal\) \{[\s\S]{0,260}cache\.clear\(\);[\s\S]{0,260}clearExplorePersonalSocialSnapshot\(uid\);[\s\S]{0,260}invalidateExploreLikedTrackCollection\(uid\);/);
+assert.doesNotMatch(like, /clearExplorePersonalSocialSnapshot/);
+assert.doesNotMatch(like, /invalidateExploreLikedTrackCollection/);
+assert.doesNotMatch(like, /if \(missedSignal\)/);
+assert.match(like, /SORIDRAW_EXPLORE_UPDATE_ZERO_READ_099_20260916/);
+assert.match(like, /rememberAccountSyncResults\(uid, effectiveResults\);[\s\S]{0,320}patchExploreLikedTrackMembership\(uid, result\.trackId, result\.liked\);/);
 assert.match(like, /patchExplorePersonalSocialLike\(user\.uid, normalizedTrackId, liked\);[\s\S]{0,180}patchExploreLikedTrackMembership\(user\.uid, normalizedTrackId, liked\);/);
 
-console.log('PASS 086: liked collection uses valid profile joins, first explicit tab verification reconciles canonical R2 liked IDs without D1, warm local cache stays request-free, and missed account signals invalidate stale personal snapshots/liked membership before targeted rehydrate.');
+console.log('PASS 086/099: liked collection keeps valid profile joins and canonical local membership; warm cache stays request-free, while missed account signal gaps preserve cache and merge retained RTDB deltas without full liked-list rehydrate.');

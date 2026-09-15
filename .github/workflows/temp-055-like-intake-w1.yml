@@ -58,7 +58,7 @@ jobs:
           let source = fs.readFileSync(path, 'utf8');
           const old = "if (worker.includes('SORIDRAW_LOCAL_FIRST_COST_HOTPATH_044_20260913')) {\n  assert.match(batchBody, /enqueueExploreLikeUserQueue075/);";
           const next = "if (worker.includes('SORIDRAW_LOCAL_FIRST_COST_HOTPATH_044_20260913')) {\n  if (worker.includes('SORIDRAW_EXPLORE_LIKE_INTAKE_W1_HOTPATH_055_20260915')) {\n    assert.match(batchBody, /enqueueExploreLikeBatch035/);\n    assert.doesNotMatch(batchBody, /enqueueExploreLikeUserQueue075/);\n  } else {\n    assert.match(batchBody, /enqueueExploreLikeUserQueue075/);\n  }";
-          if (!source.includes(old) && !source.includes("SORIDRAW_EXPLORE_LIKE_INTAKE_W1_HOTPATH_055_20260915')) {
+          if (!source.includes(old) && !source.includes('SORIDRAW_EXPLORE_LIKE_INTAKE_W1_HOTPATH_055_20260915')) {
             throw new Error('expected 044 verifier anchor missing');
           }
           if (source.includes(old)) source = source.replace(old, next);

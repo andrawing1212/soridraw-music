@@ -208,17 +208,37 @@ if (generatedWorker) {
   const cte = functionText(worker, 'function exploreLikeAggregateCte035(');
   const wave = functionText(worker, 'async function processExploreLikeAggregateWave035(');
   const processor = functionText(worker, 'async function processExploreLikeBatches035(');
-  assert.match(enqueue, /explore_like_batches_066/);
-  assert.match(enqueue, /explore_like_batches_035/);
-  assert.match(cte, /UNION ALL/);
-  assert.match(cte, /queue_kind/);
-  assert.match(wave, /DELETE FROM explore_like_batches_035/);
-  assert.match(wave, /DELETE FROM explore_like_batches_066/);
-  assert.match(processor, /hasExploreLikeQueue066038/);
-  assert.match(processor, /includeQueue066/);
-  console.log('PASS generated Worker: compact enqueue + dual-queue chronological drain present');
+
+  // Current PREVIEW evolved from the 066 compact queue to 069 W1 and then 075
+  // user queue. 066/035 remain the backwards-compatible fallback and drain path.
+  if (worker.includes('exploreLikeW1Batch040') && worker.includes('explore_like_batches_069')) {
+    assert.match(enqueue, /explore_like_batches_069/);
+    assert.match(enqueue, /enqueueExploreLikeBatchLegacy040/);
+    const legacy = functionText(worker, 'async function enqueueExploreLikeBatchLegacy040(');
+    assert.match(legacy, /explore_like_batches_066/);
+    assert.match(legacy, /explore_like_batches_035/);
+    assert.match(processor, /hasExploreLikeQueue066038/);
+    assert.match(processor, /includeQueue066/);
+    assert.match(processor, /hasExploreLikeQueue069040/);
+    if (worker.includes('enqueueExploreLikeUserQueue075')) {
+      const handler = functionText(worker, 'async function handleLikeBatch034(');
+      assert.match(handler, /enqueueExploreLikeUserQueue075/);
+      assert.match(handler, /enqueueExploreLikeBatch035/);
+    }
+    console.log('PASS generated Worker: current 075/069 queue path retains 066/035 compatibility');
+  } else {
+    assert.match(enqueue, /explore_like_batches_066/);
+    assert.match(enqueue, /explore_like_batches_035/);
+    assert.match(cte, /UNION ALL/);
+    assert.match(cte, /queue_kind/);
+    assert.match(wave, /DELETE FROM explore_like_batches_035/);
+    assert.match(wave, /DELETE FROM explore_like_batches_066/);
+    assert.match(processor, /hasExploreLikeQueue066038/);
+    assert.match(processor, /includeQueue066/);
+    console.log('PASS generated Worker: compact enqueue + dual-queue chronological drain present');
+  }
 } else {
   console.log('INFO generated Worker check skipped; PREVIEW preparation supplies SORIDRAW_GENERATED_WORKER');
 }
 
-console.log('PASS Explore like 066 compact-queue verifier; D1 live rows_written W2 remains PREVIEW measurement, not a fixture claim');
+console.log('PASS Explore like 066 compact-queue verifier; current hot-path cost is validated separately by the active queue verifier');

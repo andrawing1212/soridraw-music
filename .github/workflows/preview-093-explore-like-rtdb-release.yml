@@ -88,21 +88,44 @@ jobs:
             --project demo-soridraw-like-sync \
             "node -e \"console.log('RTDB_RULES_EMULATOR=PASS')\""
 
-      - name: Authenticate Firebase with RTDB scope
-        id: firebase_auth
+      - name: Authenticate Firebase service account
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           project_id: soridraw-app-866a5
-          token_format: access_token
-          access_token_scopes: https://www.googleapis.com/auth/firebase.database,https://www.googleapis.com/auth/userinfo.email
+
+      - name: Mint RTDB OAuth token locally from service-account key
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          path = os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          if not path:
+              raise SystemExit('service-account credential file missing')
+          creds = service_account.Credentials.from_service_account_file(
+              path,
+              scopes=[
+                  'https://www.googleapis.com/auth/firebase.database',
+                  'https://www.googleapis.com/auth/userinfo.email',
+              ],
+          )
+          creds.refresh(Request())
+          if not creds.token:
+              raise SystemExit('RTDB OAuth token unavailable')
+          Path(os.environ['RUNNER_TEMP'], 'rtdb-access-token').write_text(creds.token, encoding='utf-8')
+          print('RTDB_OAUTH_TOKEN_LOCAL_MINT=PASS')
+          PY
 
       - name: Deploy shared RTDB rules through official REST endpoint
         shell: bash
-        env:
-          RTDB_ACCESS_TOKEN: ${{ steps.firebase_auth.outputs.access_token }}
         run: |
           set -euo pipefail
+          RTDB_ACCESS_TOKEN="$(cat "$RUNNER_TEMP/rtdb-access-token")"
           test -n "$RTDB_ACCESS_TOKEN"
           curl -fsS --max-time 30 \
             -H "Authorization: Bearer $RTDB_ACCESS_TOKEN" \
@@ -128,6 +151,7 @@ jobs:
               raise SystemExit('RTDB deployed rules do not match approved source')
           print('SHARED_RTDB_RULES_EXACT_MATCH=PASS')
           PY
+          rm -f "$RUNNER_TEMP/rtdb-access-token"
           echo 'SHARED_RTDB_RULES_093_DEPLOY=PASS'
           echo 'NO_FIRESTORE_RULE_DEPLOY=true'
           echo 'NO_FUNCTIONS_DEPLOY=true'

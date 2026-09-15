@@ -4,6 +4,8 @@ on:
     branches: [preview]
     paths:
       - '.github/workflows/temp-089-like-cross-device-repair.yml'
+      - 'scripts/temp-089-like-cross-device-repair.py'
+      - 'scripts/temp-089-like-verifier-align.py'
 permissions:
   contents: write
 jobs:

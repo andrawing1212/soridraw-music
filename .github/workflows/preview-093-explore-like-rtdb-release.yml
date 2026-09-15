@@ -20,6 +20,7 @@ jobs:
     env:
       HOSTING_PROJECT: soridraw
       SHARED_DATA_PROJECT: soridraw-app-866a5
+      RTDB_RULES_URL: https://soridraw-app-866a5-default-rtdb.firebaseio.com/.settings/rules.json
       PREVIEW_URL: https://preview.soridraw.com/
       TEST_URL: https://test.soridraw.com/
       PRODUCTION_URL: https://soridraw.com/
@@ -87,19 +88,46 @@ jobs:
             --project demo-soridraw-like-sync \
             "node -e \"console.log('RTDB_RULES_EMULATOR=PASS')\""
 
-      - name: Authenticate Firebase
+      - name: Authenticate Firebase with RTDB scope
+        id: firebase_auth
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/firebase.database,https://www.googleapis.com/auth/userinfo.email
 
-      - name: Deploy shared RTDB rules only
+      - name: Deploy shared RTDB rules through official REST endpoint
         shell: bash
+        env:
+          RTDB_ACCESS_TOKEN: ${{ steps.firebase_auth.outputs.access_token }}
         run: |
           set -euo pipefail
-          npx --yes firebase-tools@latest deploy \
-            --only database \
-            --project "$SHARED_DATA_PROJECT" \
-            --non-interactive
+          test -n "$RTDB_ACCESS_TOKEN"
+          curl -fsS --max-time 30 \
+            -H "Authorization: Bearer $RTDB_ACCESS_TOKEN" \
+            "$RTDB_RULES_URL" > "$RUNNER_TEMP/rtdb-rules-before.json"
+          python3 -m json.tool "$RUNNER_TEMP/rtdb-rules-before.json" >/dev/null
+
+          curl -fsS --max-time 30 -X PUT \
+            -H "Authorization: Bearer $RTDB_ACCESS_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @database.rules.json \
+            "$RTDB_RULES_URL" > "$RUNNER_TEMP/rtdb-rules-put.json"
+          python3 -m json.tool "$RUNNER_TEMP/rtdb-rules-put.json" >/dev/null
+
+          curl -fsS --max-time 30 \
+            -H "Authorization: Bearer $RTDB_ACCESS_TOKEN" \
+            "$RTDB_RULES_URL" > "$RUNNER_TEMP/rtdb-rules-after.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          local = json.loads(Path('database.rules.json').read_text(encoding='utf-8'))
+          remote = json.loads(Path(os.environ['RUNNER_TEMP'] + '/rtdb-rules-after.json').read_text(encoding='utf-8'))
+          if remote != local:
+              raise SystemExit('RTDB deployed rules do not match approved source')
+          print('SHARED_RTDB_RULES_EXACT_MATCH=PASS')
+          PY
           echo 'SHARED_RTDB_RULES_093_DEPLOY=PASS'
           echo 'NO_FIRESTORE_RULE_DEPLOY=true'
           echo 'NO_FUNCTIONS_DEPLOY=true'

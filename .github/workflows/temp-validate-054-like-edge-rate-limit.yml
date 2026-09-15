@@ -25,7 +25,7 @@ jobs:
           ref: work/054-like-edge-rate-limit
           fetch-depth: 0
 
-      - name: Set up Node.js 22
+      - name: Set up Node.js 22 for sqlite fixtures
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -73,15 +73,26 @@ jobs:
           node scripts/verify-081-page-exit-batch.mjs
           node scripts/verify-084-publication-write-returning.mjs
 
+      - name: Set up Node.js 20 for app contract
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
       - name: TypeScript
         run: npx tsc --noEmit
 
       - name: Build app
         run: npm run build
 
+      - name: Set up Node.js 22 for Wrangler
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Validate Wrangler config without deploy
         working-directory: cloudflare/explore-worker/canonical
-        run: npx --yes wrangler@4.72.0 deploy --dry-run --config wrangler.preview.jsonc
+        run: npx --yes wrangler@4.102.0 deploy --dry-run --config wrangler.preview.jsonc
 
       - name: Pin validated 054 canonical Worker on work branch
         shell: bash

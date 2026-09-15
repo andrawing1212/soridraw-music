@@ -779,14 +779,12 @@ const getCatalogState = async (identity, kind, requiredRevision, env) => {
   if (journalRecord) {
     const base = await readCatalogObjectAtKey(env, journalRecord.payload.baseKey, kind);
     if (base && base.revision === journalRecord.payload.baseRevision && base.itemCount === journalRecord.payload.baseItemCount) {
-      if (journalRecord.payload.headRevision >= requiredRevision) {
-        return { base, head: journalRecord.payload, journalObject: journalRecord.object };
-      }
+      return { base, head: journalRecord.payload, journalObject: journalRecord.object };
     }
   }
 
   const legacyBase = await readCatalogObject(env, identity.uid, kind);
-  if (legacyBase && legacyBase.revision >= requiredRevision && !journalRecord) {
+  if (legacyBase) {
     return {
       base: legacyBase,
       head: createEmptyCatalogJournal({
@@ -799,19 +797,11 @@ const getCatalogState = async (identity, kind, requiredRevision, env) => {
     };
   }
 
-  const rebuilt = await buildCanonicalCatalog(identity, kind, requiredRevision, env);
-  await putCatalogObject(env, identity.uid, rebuilt);
-  try { await env.MEDIA.delete(catalogJournalKey(identity.uid, kind)); } catch {}
-  return {
-    base: rebuilt,
-    head: createEmptyCatalogJournal({
-      kind,
-      baseKey: catalogObjectKey(identity.uid, kind),
-      baseRevision: rebuilt.revision,
-      itemCount: rebuilt.itemCount,
-    }),
-    journalObject: null,
-  };
+  // Ordinary GET/delta traffic is never allowed to traverse Firestore collections.
+  // A missing R2 Catalog is an explicit repair/bootstrap condition, not a page-entry rebuild.
+  const error = new Error('CATALOG_NOT_MATERIALIZED');
+  error.requiredRevision = Math.max(0, Math.floor(Number(requiredRevision || 0)));
+  throw error;
 };
 
 const materializeCatalogState = (state, kind) => {

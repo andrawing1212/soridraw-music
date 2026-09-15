@@ -8,7 +8,12 @@ const migration066 = readFileSync(root + 'migrations/20260911_02_explore_like_co
 const patch039 = readFileSync(root + 'patches/039-explore-like-stable-dual-queue-boundary.mjs', 'utf8');
 const manifest = JSON.parse(readFileSync(root + 'release-patches.json', 'utf8'));
 
-assert.equal(manifest.patches.at(-1), '039-explore-like-stable-dual-queue-boundary.mjs');
+// 039 must stay immediately after compact-queue 038 and before the later W1/reversal
+// and publication patches. It is no longer the final release patch in current releases.
+const p038 = manifest.patches.indexOf('038-explore-like-compact-queue.mjs');
+const p039 = manifest.patches.indexOf('039-explore-like-stable-dual-queue-boundary.mjs');
+const p040 = manifest.patches.indexOf('040-explore-like-w1-delayed-count.mjs');
+assert.ok(p038 >= 0 && p039 === p038 + 1 && p040 === p039 + 1, '039 must stay between 038 and 040');
 for (const required of [
   'selectExploreLikeAggregateBoundary039',
   'exploreLikeAggregateSnapshotCte039',

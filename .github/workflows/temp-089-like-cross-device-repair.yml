@@ -1,12 +1,10 @@
-name: SORIDRAW 089 Cross-device Like Repair
+name: SORIDRAW 090 Live Like Repair
 on:
   push:
     branches: [preview]
     paths:
       - '.github/workflows/temp-089-like-cross-device-repair.yml'
       - 'scripts/temp-089-like-cross-device-repair.py'
-      - 'scripts/temp-089-like-verifier-align.py'
-      - 'scripts/verify-081-page-exit-batch.mjs'
 permissions:
   contents: write
 jobs:
@@ -22,10 +20,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Apply 089 client consistency repair
+      - name: Apply 090 live like repair
         run: python3 scripts/temp-089-like-cross-device-repair.py
-      - name: Align retained verifiers with 089 contract
-        run: python3 scripts/temp-089-like-verifier-align.py
       - name: Install
         run: npm ci --no-audit --no-fund
       - name: TypeScript
@@ -41,17 +37,18 @@ jobs:
           node scripts/verify-087-liked-card-consistency.mjs
           node scripts/verify-088-same-session-liked-heart.mjs
           node scripts/verify-089-like-cross-device-consistency.mjs
+          node scripts/verify-090-like-live-display.mjs
           node scripts/verify-explore-like-cost-optimization.mjs
           node scripts/verify-081-page-exit-batch.mjs
           node scripts/verify-084-publication-write-returning.mjs
-      - name: Commit 089 product code
+      - name: Commit 090 product code
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'andrawing1212'
           git config user.email 'andrawing1212@gmail.com'
-          git add src/services/exploreLikeService.ts src/pages/ExplorePage.tsx public/app-version.json scripts/verify-087-liked-card-consistency.mjs scripts/verify-088-same-session-liked-heart.mjs scripts/verify-089-like-cross-device-consistency.mjs scripts/verify-explore-like-cost-optimization.mjs
+          git add src/services/exploreLikeService.ts src/pages/ExplorePage.tsx public/app-version.json scripts/verify-087-liked-card-consistency.mjs scripts/verify-088-same-session-liked-heart.mjs scripts/verify-089-like-cross-device-consistency.mjs scripts/verify-090-like-live-display.mjs
           git diff --cached --check
-          git commit -m 'fix(preview): unify cross-device like state and count 089'
+          git commit -m 'fix(preview): repair live like heart and count 090'
           git push origin HEAD:preview
           echo "PRODUCT_COMMIT=$(git rev-parse HEAD)"

@@ -116,7 +116,6 @@ jobs:
           assert.ok(!observer.includes('fetch('));
           assert.ok(!observer.includes('requestLikedTracks'));
 
-          // The full canonical liked-id request remains only the true cache-miss path.
           const getterStart = liked.indexOf('export const getExploreLikedTracks');
           assert.ok(getterStart >= 0);
           const getter = liked.slice(getterStart);
@@ -124,13 +123,38 @@ jobs:
           assert.ok(getter.includes('requestLikedTracks(user, [])'));
           assert.ok(liked.includes('patchExploreLikedTrackMembership'));
 
-          // App version is not part of the persistent cache key/compatibility identity.
           assert.ok(persistent.includes("const CACHE_STORAGE_PREFIX = 'soridraw_cache_envelope_v1'"));
           assert.ok(!persistent.includes('app-version.json'));
           assert.ok(!persistent.includes('APP_VERSION'));
 
           console.log('PASS 099: app update/wake version gaps preserve liked membership/card caches; no full liked-track verification or D1/Firestore read is introduced by reconnect.');
           ''').lstrip(), encoding='utf-8')
+
+          v86 = Path('scripts/verify-086-liked-sync-repair.mjs')
+          check = v86.read_text(encoding='utf-8')
+          old = dedent(r'''
+          assert.match(like, /clearExplorePersonalSocialSnapshot/);
+          assert.match(like, /invalidateExploreLikedTrackCollection/);
+          assert.match(like, /patchExploreLikedTrackMembership/);
+          assert.match(like, /if \(missedSignal\) \{[\s\S]{0,260}cache\.clear\(\);[\s\S]{0,260}clearExplorePersonalSocialSnapshot\(uid\);[\s\S]{0,260}invalidateExploreLikedTrackCollection\(uid\);/);
+          assert.match(like, /patchExplorePersonalSocialLike\(user\.uid, normalizedTrackId, liked\);[\s\S]{0,180}patchExploreLikedTrackMembership\(user\.uid, normalizedTrackId, liked\);/);
+
+          console.log('PASS 086: liked collection uses valid profile joins, first explicit tab verification reconciles canonical R2 liked IDs without D1, warm local cache stays request-free, and missed account signals invalidate stale personal snapshots/liked membership before targeted rehydrate.');
+          ''').lstrip()
+          new = dedent(r'''
+          assert.match(like, /patchExploreLikedTrackMembership/);
+          assert.doesNotMatch(like, /clearExplorePersonalSocialSnapshot/);
+          assert.doesNotMatch(like, /invalidateExploreLikedTrackCollection/);
+          assert.doesNotMatch(like, /if \(missedSignal\)/);
+          assert.match(like, /SORIDRAW_EXPLORE_UPDATE_ZERO_READ_099_20260916/);
+          assert.match(like, /rememberAccountSyncResults\(uid, effectiveResults\);[\s\S]{0,320}patchExploreLikedTrackMembership\(uid, result\.trackId, result\.liked\);/);
+          assert.match(like, /patchExplorePersonalSocialLike\(user\.uid, normalizedTrackId, liked\);[\s\S]{0,180}patchExploreLikedTrackMembership\(user\.uid, normalizedTrackId, liked\);/);
+
+          console.log('PASS 086/099: liked collection keeps valid profile joins and canonical local membership; warm cache stays request-free, while missed account signal gaps preserve cache and merge retained RTDB deltas without full liked-list rehydrate.');
+          ''').lstrip()
+          if old not in check:
+              raise SystemExit('099 preflight: 086 old missed-signal assertions missing')
+          v86.write_text(check.replace(old, new, 1), encoding='utf-8')
           PY
 
       - name: Install
@@ -166,10 +190,10 @@ jobs:
         run: |
           set -euo pipefail
           git checkout -- dist 2>/dev/null || true
-          git add src/services/exploreLikeService.ts scripts/verify-099-explore-like-update-zero-read.mjs
+          git add src/services/exploreLikeService.ts scripts/verify-086-liked-sync-repair.mjs scripts/verify-099-explore-like-update-zero-read.mjs
           git diff --cached --check
           git diff --cached --name-only | sort > "$RUNNER_TEMP/staged.txt"
-          test "$(cat "$RUNNER_TEMP/staged.txt")" = $'scripts/verify-099-explore-like-update-zero-read.mjs\nsrc/services/exploreLikeService.ts'
+          test "$(cat "$RUNNER_TEMP/staged.txt")" = $'scripts/verify-086-liked-sync-repair.mjs\nscripts/verify-099-explore-like-update-zero-read.mjs\nsrc/services/exploreLikeService.ts'
 
       - name: Commit verified 099 product fix
         shell: bash

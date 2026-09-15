@@ -61,7 +61,7 @@ jobs:
           set -euo pipefail
           git checkout -- dist
           git diff --check
-          changed="$(git diff --name-only | sort)"
+          changed="$({ git diff --name-only; git ls-files --others --exclude-standard; } | sort)"
           expected="$(printf '%s\n' \
             scripts/verify-094-explore-session-like-batch.mjs \
             scripts/verify-explore-like-cost-optimization.mjs \
@@ -71,7 +71,7 @@ jobs:
             src/services/exploreLikeService.ts | sort)"
           printf '%s\n' "$changed"
           test "$changed" = "$expected"
-          ! git diff --name-only | grep -E '(^|/)(database\.rules\.json|firestore\.rules|functions/|cloudflare/)' || exit 1
+          ! printf '%s\n' "$changed" | grep -E '(^|/)(database\.rules\.json|firestore\.rules|functions/|cloudflare/)' || exit 1
           echo 'NARROW_DIFF_094=PASS'
       - name: Commit verified product change
         shell: bash

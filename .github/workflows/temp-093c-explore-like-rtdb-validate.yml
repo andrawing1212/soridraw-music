@@ -1,4 +1,4 @@
-name: SORIDRAW 093c Explore Like RTDB Validation
+name: SORIDRAW 093 Live RTDB Validation
 
 on:
   push:
@@ -7,10 +7,10 @@ on:
       - '.github/workflows/temp-093c-explore-like-rtdb-validate.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: soridraw-093c-explore-like-rtdb-validation
+  group: soridraw-093-live-rtdb-validation
   cancel-in-progress: false
 
 jobs:
@@ -29,11 +29,6 @@ jobs:
         with:
           node-version: 20
           cache: npm
-
-      - name: Apply targeted 093 patch
-        run: |
-          python3 .deploy/apply-093-explore-like-rtdb-zero-count.py
-          python3 .deploy/fix-093-rtdb-rules.py
 
       - name: Verify source contract
         run: node scripts/verify-093-explore-like-rtdb-zero-count.mjs
@@ -62,36 +57,18 @@ jobs:
             --project demo-soridraw-like-sync \
             "node -e \"console.log('RTDB_RULES_EMULATOR=PASS')\""
 
-      - name: Verify boundary
+      - name: Verify no source side effects
         shell: bash
         run: |
           set -euo pipefail
-          git add -N scripts/verify-093-explore-like-rtdb-zero-count.mjs
           git diff --check
           changed="$(git diff --name-only | grep -v '^dist/' || true)"
-          echo "$changed"
-          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreLikeService\.ts|src/services/userDomainSyncService\.ts|src/services/exploreLikeDisplayStateService\.ts|database\.rules\.json|scripts/verify-093-explore-like-rtdb-zero-count\.mjs)$' || true)"
-          test -z "$bad" || { echo 'Unexpected source changes:'; echo "$bad"; exit 1; }
+          test -z "$changed" || { echo 'Unexpected source changes during validation:'; echo "$changed"; exit 1; }
+          echo 'EXPLORE_LIKE_FIRESTORE_SIGNAL_WRITE=0_TARGET'
+          echo 'RTDB_RULES_LIVE_PAYLOAD_COMPATIBLE=PASS'
           echo 'NO_DEPLOY=true'
           echo 'NO_WORKER_CHANGE=true'
           echo 'NO_FUNCTIONS_CHANGE=true'
           echo 'NO_FIRESTORE_RULE_CHANGE=true'
           echo 'NO_D1_SCHEMA_CHANGE=true'
           echo 'NO_USER_DATA_CHANGE=true'
-
-      - name: Commit validated source
-        shell: bash
-        run: |
-          set -euo pipefail
-          tracked=(
-            src/services/exploreLikeService.ts
-            src/services/userDomainSyncService.ts
-            src/services/exploreLikeDisplayStateService.ts
-            database.rules.json
-            scripts/verify-093-explore-like-rtdb-zero-count.mjs
-          )
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add "${tracked[@]}"
-          git commit -m 'fix: move Explore like sync off Firestore'
-          git push origin HEAD:preview

@@ -1,0 +1,30 @@
+name: TEMP Explore Like Session Diag
+
+on:
+  push:
+    branches:
+      - 'tmp/explore-session-like-batch-20260915'
+    paths:
+      - '.github/workflows/temp-explore-like-session-diag.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp/explore-session-like-batch-20260915
+          fetch-depth: 1
+      - name: Inspect current like boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== flush symbol usage ==='
+          grep -R -n -C 5 "flushPendingExploreLikesForPageExit\|resumePendingLikes\|schedulePendingLikes\|EXPLORE_LIKE_BATCH_WINDOW" src || true
+          echo '=== lifecycle hooks ==='
+          grep -R -n -C 5 "pagehide\|visibilitychange\|beforeunload" src/App.tsx src/pages/ExplorePage.tsx src/services/exploreLikeService.ts || true
+          echo '=== Explore navigation ==='
+          grep -n -C 12 "openProfile\|setSort\|profileCollection" src/pages/ExplorePage.tsx | head -n 260 || true

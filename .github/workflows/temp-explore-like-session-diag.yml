@@ -43,6 +43,10 @@ jobs:
         run: npx tsc --noEmit
       - name: Build
         run: npm run build
+      - name: Node 24 for sqlite regression
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - name: Like regression tests
         shell: bash
         run: |

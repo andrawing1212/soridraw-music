@@ -23,7 +23,20 @@ jobs:
         with:
           node-version: 20
       - name: Apply narrow 094 patch
-        run: python3 scripts/temp-apply-explore-session-like-batch.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/temp-apply-explore-session-like-batch.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/verify-094-explore-session-like-batch.mjs')
+          s = p.read_text(encoding='utf-8')
+          old = "assert.doesNotMatch(service, /updateDoc\\(|users\\//, 'Explore like sync must not reintroduce Firestore user writes');"
+          new = "assert.doesNotMatch(service, /from ['\\\"]firebase\\/firestore['\\\"]/, 'Explore like service must not import Firestore writes');\nassert.doesNotMatch(service, /\\b(?:updateDoc|setDoc|addDoc|deleteDoc)\\s*\\(/, 'Explore like sync must not call Firestore write APIs');"
+          if s.count(old) != 1:
+              raise SystemExit(f'verifier anchor mismatch: {s.count(old)}')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
       - name: Install
         run: npm ci
       - name: TypeScript

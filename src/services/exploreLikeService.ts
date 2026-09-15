@@ -1,7 +1,7 @@
 import { EXPLORE_API_BASE, EXPLORE_ENVIRONMENT } from '../config/exploreEnvironment';
 import type { User } from 'firebase/auth';
-import { doc, updateDoc } from '../lib/firestoreMeasured';
-import { db, getFirebaseAppCheckToken } from '../firebase';
+import { ref as databaseRef, set as setRealtimeValue } from 'firebase/database';
+import { getFirebaseAppCheckToken, realtimeDb } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
   readSoridrawPersistentCache,
@@ -42,6 +42,7 @@ import {
 // SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914
 // SORIDRAW_EXPLORE_LIKE_LIVE_DISPLAY_090_20260915
 // SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915
+// SORIDRAW_EXPLORE_LIKE_RTDB_SIGNAL_093_20260915
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -463,19 +464,19 @@ const publishExploreLikeAccountSyncSignal = async (
     })),
   };
 
-  // Mark the origin browser before Firestore's local snapshot fires so it never
-  // replays its own already-applied batch. If the signal write is rejected,
-  // restore the previous marker; the canonical like batch itself remains saved.
+  // 093: Explore likes must never mutate Firestore users/{uid} just to wake a
+  // second device. Reuse the UID-scoped RTDB invalidation channel instead. D1/R2
+  // remain canonical; this retained signal is fixed-size (max 50 results).
   setSeenAccountSignalVersion(uid, version);
   observedAccountSignalVersionByUid.set(uid, version);
   try {
-    await updateDoc(doc(db, 'users', uid), { exploreLikeSyncSignal: signal });
+    await setRealtimeValue(databaseRef(realtimeDb, `userSync/${uid}/exploreLike`), signal);
   } catch (reason) {
     if (readSeenAccountSignalVersion(uid) === version) setSeenAccountSignalVersion(uid, previousVersion);
     if ((observedAccountSignalVersionByUid.get(uid) || 0) === version) {
       observedAccountSignalVersionByUid.set(uid, previousVersion);
     }
-    console.warn('Explore account like sync signal publish failed:', reason);
+    console.warn('Explore account like RTDB sync signal publish failed:', reason);
   }
 };
 

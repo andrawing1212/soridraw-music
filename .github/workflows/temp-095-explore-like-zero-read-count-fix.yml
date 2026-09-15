@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
       - name: Apply 095 zero-read like-count fix
         shell: bash
@@ -36,22 +36,22 @@ jobs:
           s = s.replace(imports, '', 1)
           s = s.replace('// SORIDRAW_EXPLORE_LIKE_ZERO_COUNT_RECOVERY_093_20260915\n', '// SORIDRAW_EXPLORE_LIKE_ZERO_READ_DISPLAY_095_20260915\n', 1)
           s = s.replace('const DISPLAY_TTL_MS_091 = 30 * 60_000;', 'const DISPLAY_TTL_MS_091 = 7 * 24 * 60 * 60_000;', 1)
-          old_sig = "export const updateExploreLikeCanonicalCounts091 = (\n  uid: string,\n  rows: ExploreLikeCanonicalCount091[],\n  confirmAccepted = false,\n) => {"
-          new_sig = "export const updateExploreLikeCanonicalCounts091 = (\n  uid: string,\n  rows: ExploreLikeCanonicalCount091[],\n) => {"
-          assert old_sig in s
-          s = s.replace(old_sig, new_sig, 1)
+          old = "export const updateExploreLikeCanonicalCounts091 = (\n  uid: string,\n  rows: ExploreLikeCanonicalCount091[],\n  confirmAccepted = false,\n) => {"
+          new = "export const updateExploreLikeCanonicalCounts091 = (\n  uid: string,\n  rows: ExploreLikeCanonicalCount091[],\n) => {"
+          assert old in s
+          s = s.replace(old, new, 1)
           assert 'if (aggregateCaughtUp || confirmAccepted) {' in s
           s = s.replace('if (aggregateCaughtUp || confirmAccepted) {', 'if (aggregateCaughtUp) {', 1)
           start = s.index("const ZERO_COUNT_RECOVERY_ROUTE_093 = '/v1/me/liked-tracks';")
           end = s.index('export const getExploreLikeDisplayCount091 = (', start)
           s = s[:start] + s[end:]
           old = """  if (state && state.expiresAt > Date.now()) {\n    if (state.displayLikeCount === 0 && state.desiredLiked) queueZeroCountRecovery093(normalizedUid, normalizedTrackId);\n    return state.displayLikeCount;\n  }\n  if (state) {\n    states.delete(normalizedTrackId);\n    persistStates091(normalizedUid, states);\n  }\n  const resolved = getExploreLikeCanonicalCount091(normalizedUid, normalizedTrackId, fallbackLikeCount);\n  if (resolved === 0 && isPersistentlyLiked093(normalizedUid, normalizedTrackId)) {\n    queueZeroCountRecovery093(normalizedUid, normalizedTrackId);\n  }\n  return resolved;"""
-          new = """  if (state && state.expiresAt > Date.now()) {\n    return state.displayLikeCount;\n  }\n  if (state) {\n    states.delete(normalizedTrackId);\n    persistStates091(normalizedUid, states);\n  }\n  return getExploreLikeCanonicalCount091(normalizedUid, normalizedTrackId, fallbackLikeCount);"""
+          new = """  if (state && state.expiresAt > Date.now()) return state.displayLikeCount;\n  if (state) {\n    states.delete(normalizedTrackId);\n    persistStates091(normalizedUid, states);\n  }\n  return getExploreLikeCanonicalCount091(normalizedUid, normalizedTrackId, fallbackLikeCount);"""
           assert old in s
           s = s.replace(old, new, 1)
-          old_reset = """  if (typeof window !== 'undefined') {\n    zeroCountRecoveryTimerByUid093.forEach((timer) => window.clearTimeout(timer));\n  }\n  zeroCountRecoveryQueueByUid093.clear();\n  zeroCountRecoveryTimerByUid093.clear();\n  zeroCountRecoveryInflightByUid093.clear();\n  zeroCountRecoveryFailureUntil093.clear();\n"""
-          assert old_reset in s
-          s = s.replace(old_reset, '', 1)
+          old = """  if (typeof window !== 'undefined') {\n    zeroCountRecoveryTimerByUid093.forEach((timer) => window.clearTimeout(timer));\n  }\n  zeroCountRecoveryQueueByUid093.clear();\n  zeroCountRecoveryTimerByUid093.clear();\n  zeroCountRecoveryInflightByUid093.clear();\n  zeroCountRecoveryFailureUntil093.clear();\n"""
+          assert old in s
+          s = s.replace(old, '', 1)
           p.write_text(s)
 
           p = Path('src/pages/ExplorePage.tsx')
@@ -60,9 +60,9 @@ jobs:
           new = """      if (activeUid) {\n        if (feedRequest) updateExploreLikeCanonicalCounts091(activeUid, canonicalRows);\n        else seedExploreLikeCanonicalCounts091(activeUid, canonicalRows);\n      }"""
           assert old in s
           s = s.replace(old, new, 1)
-          old_more = "updateExploreLikeCanonicalCounts091(activeUid, normalized.map((track) => ({ trackId: track.id, likeCount: track.likeCount })), false);"
-          assert old_more in s
-          s = s.replace(old_more, "updateExploreLikeCanonicalCounts091(activeUid, normalized.map((track) => ({ trackId: track.id, likeCount: track.likeCount })));", 1)
+          old = "updateExploreLikeCanonicalCounts091(activeUid, normalized.map((track) => ({ trackId: track.id, likeCount: track.likeCount })), false);"
+          assert old in s
+          s = s.replace(old, "updateExploreLikeCanonicalCounts091(activeUid, normalized.map((track) => ({ trackId: track.id, likeCount: track.likeCount })));", 1)
           p.write_text(s)
 
           p = Path('src/lib/cloudflareDiagnostics.ts')
@@ -83,7 +83,7 @@ jobs:
           s = s.replace("console.log('FAKE_ZERO_TO_ONE_FLOOR=ABSENT');", "console.log('ACKNOWLEDGED_LOCAL_COUNT=CANONICAL_CATCHUP_ONLY');")
           p.write_text(s)
 
-          Path('scripts/verify-095-explore-like-zero-read-display.mjs').write_text("""import assert from 'node:assert/strict';\nimport { readFileSync } from 'node:fs';\nconst display = readFileSync('src/services/exploreLikeDisplayStateService.ts', 'utf8');\nconst service = readFileSync('src/services/exploreLikeService.ts', 'utf8');\nconst page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');\nconst diagnostics = readFileSync('src/lib/cloudflareDiagnostics.ts', 'utf8');\nconst likedTracks = readFileSync('src/services/exploreLikedTracksService.ts', 'utf8');\nassert.ok(display.includes('SORIDRAW_EXPLORE_LIKE_ZERO_READ_DISPLAY_095_20260915'));\nassert.ok(!display.includes('/v1/me/liked-tracks'));\nassert.ok(!display.includes('ZERO_COUNT_RECOVERY_'));\nassert.ok(!display.includes('getFirebaseAppCheckToken'));\nassert.ok(!display.includes('recordCloudflareResponse'));\nassert.ok(!display.includes('readSoridrawPersistentCache'));\nassert.ok(!display.includes('fetch('));\nassert.ok(display.includes('const DISPLAY_TTL_MS_091 = 7 * 24 * 60 * 60_000;'));\nassert.ok(display.includes('if (aggregateCaughtUp) {'));\nassert.ok(!display.includes('confirmAccepted'));\nassert.ok(!page.includes('aggregateConfirmed'));\nassert.ok(!page.includes(')), false);'));\nassert.ok(service.includes('SORIDRAW_EXPLORE_SESSION_BATCH_094_20260915'));\nassert.ok(service.includes("requestExploreLike(user, '/v1/me/likes/batch'"));\nassert.ok(service.includes('getPendingExploreLikeMutationCount(user.uid) >= EXPLORE_LIKE_BATCH_MAX'));\nassert.ok(likedTracks.includes('LOCAL HIT · 좋아요 곡 전체 캐시'));\nassert.ok(likedTracks.includes('/v1/me/liked-tracks'));\nassert.ok(diagnostics.includes("pathname === '/v1/me/liked-tracks') return '내 좋아요 곡 확인'"));\nassert.ok(diagnostics.includes("pathname === '/v1/me/likes/batch') return '좋아요 변경 묶음 저장'"));\nassert.ok(diagnostics.includes("pathname === '/v1/me/likes') return '좋아요 상태 확인'"));\nconsole.log('PASS 095: acknowledged counts stay local until canonical catch-up; normal display has no liked-tracks recovery read; diagnostics are Korean.');\n""")
+          Path('scripts/verify-095-explore-like-zero-read-display.mjs').write_text("""import assert from 'node:assert/strict';\nimport { readFileSync } from 'node:fs';\nconst display = readFileSync('src/services/exploreLikeDisplayStateService.ts', 'utf8');\nconst service = readFileSync('src/services/exploreLikeService.ts', 'utf8');\nconst page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');\nconst diagnostics = readFileSync('src/lib/cloudflareDiagnostics.ts', 'utf8');\nconst likedTracks = readFileSync('src/services/exploreLikedTracksService.ts', 'utf8');\nassert.ok(display.includes('SORIDRAW_EXPLORE_LIKE_ZERO_READ_DISPLAY_095_20260915'));\nfor (const needle of ['/v1/me/liked-tracks','ZERO_COUNT_RECOVERY_','getFirebaseAppCheckToken','recordCloudflareResponse','readSoridrawPersistentCache','fetch(']) assert.ok(!display.includes(needle));\nassert.ok(display.includes('const DISPLAY_TTL_MS_091 = 7 * 24 * 60 * 60_000;'));\nassert.ok(display.includes('if (aggregateCaughtUp) {'));\nassert.ok(!display.includes('confirmAccepted'));\nassert.ok(!page.includes('aggregateConfirmed'));\nassert.ok(service.includes('SORIDRAW_EXPLORE_SESSION_BATCH_094_20260915'));\nassert.ok(service.includes("requestExploreLike(user, '/v1/me/likes/batch'"));\nassert.ok(likedTracks.includes('LOCAL HIT · 좋아요 곡 전체 캐시'));\nassert.ok(likedTracks.includes('/v1/me/liked-tracks'));\nassert.ok(diagnostics.includes("pathname === '/v1/me/liked-tracks') return '내 좋아요 곡 확인'"));\nassert.ok(diagnostics.includes("pathname === '/v1/me/likes/batch') return '좋아요 변경 묶음 저장'"));\nconsole.log('PASS 095: acknowledged count persists locally until real canonical catch-up; normal display/re-entry has no liked-tracks recovery read; diagnostics are Korean.');\n""")
           PY
       - name: Install
         run: npm ci --no-audit --no-fund

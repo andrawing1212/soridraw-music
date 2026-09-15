@@ -101,7 +101,7 @@ jobs:
         run: |
           set -euo pipefail
           CFG='cloudflare/explore-worker/.diag-d1/wrangler.jsonc'
-          SQL="PRAGMA table_info('likes'); PRAGMA table_info('tracks'); PRAGMA table_info('profiles'); PRAGMA table_info('track_stats'); SELECT name,type FROM sqlite_master WHERE name IN ('likes','tracks','profiles','track_stats') ORDER BY name;"
+          SQL="PRAGMA table_info('likes'); PRAGMA table_info('tracks'); PRAGMA table_info('profiles'); PRAGMA table_info('track_stats'); PRAGMA table_info('explore_derived_profiles'); PRAGMA table_info('explore_profile_snapshots'); SELECT name,type FROM sqlite_master WHERE type IN ('table','view') AND (name LIKE '%profile%' OR name IN ('likes','tracks','track_stats')) ORDER BY name;"
           npx --yes wrangler@4 d1 execute DB --remote --config "$CFG" --command "$SQL" --json | tee .diag/d1-schema.json
           echo 'D1_SCHEMA_READONLY=PASS'
 

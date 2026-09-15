@@ -22038,6 +22038,21 @@ async function handleMusicNotePublicationBatch048(request, env, cors) {
   return json({ ok: true, data: { results, revision } }, 200, cors);
 }
 
+// SORIDRAW_EXPLORE_LIKE_EDGE_RATE_LIMIT_054_20260915
+async function enforceExploreLikeBatchEdgeRateLimit054(env, uid) {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) throwApi('UNAUTHENTICATED', '로그인이 필요합니다.', 401);
+  const limiter = env?.LIKE_RATE_LIMITER;
+  if (!limiter || typeof limiter.limit !== 'function') {
+    console.error('[SORIDRAW 054] LIKE_RATE_LIMITER binding missing');
+    throwApi('RATE_LIMIT_UNAVAILABLE', '좋아요 보호 기능을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.', 503);
+  }
+  const result = await limiter.limit({ key: 'like:' + normalizedUid });
+  if (!result?.success) {
+    throwApi('RATE_LIMITED', '좋아요 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', 429, { 'Retry-After': '60' });
+  }
+}
+
 async function handleLikeBatch034(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   let body = null;
@@ -22062,7 +22077,7 @@ async function handleLikeBatch034(request, env, cors) {
     byTrack.set(trackId, { trackId, liked: row.liked, baseLiked, mutationAt, likeCount });
   }
   const mutations = [...byTrack.values()];
-  await enforceExploreLikeBatchRateLimit034(env, authContext.uid, mutations.length);
+  await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);
 
   // Do not discard an intent because this device's baseLiked happens to match it.
 // Another device may already have changed canonical state. The scheduled aggregate

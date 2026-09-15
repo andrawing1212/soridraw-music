@@ -82,6 +82,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git checkout -- dist
           git diff --check
           git diff --name-only
           changed="$(git diff --name-only | sort)"

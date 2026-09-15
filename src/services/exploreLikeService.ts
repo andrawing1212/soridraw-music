@@ -47,6 +47,7 @@ import {
 // SORIDRAW_EXPLORE_SESSION_BATCH_094_20260915
 // SORIDRAW_EXPLORE_ACKNOWLEDGED_COUNT_094_20260915
 // SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_REPLAY_096_20260915
+// SORIDRAW_EXPLORE_LIKE_REMOTE_PENDING_ACK_097_20260916
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -403,14 +404,24 @@ export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) 
     invalidateExploreLikedTrackCollection(uid);
   }
 
-  // 090: a local pending click is newer UI intent than an account signal that
-  // arrives from another device. Keep the pending heart until this device's own
-  // batch is confirmed; otherwise a remote signal can visibly roll the heart back.
+  // 097: a local pending click should win only while it disagrees with the
+  // server-acknowledged account signal. If both already describe the same liked
+  // state, the durable pending row is stale/redundant: clear it and accept the
+  // remote display count too. This lets a sleeping second device converge without
+  // adding a D1/Firestore recovery read or requiring the user to clear app cache.
   const pendingOutbox = readLikeOutbox(uid);
+  let pendingOutboxChanged = false;
   const effectiveResults = signal.results.map((result) => {
     const pending = pendingOutbox[result.trackId];
-    return pending ? { ...result, liked: pending.desiredLiked } : result;
+    if (!pending) return result;
+    if (pending.desiredLiked === result.liked) {
+      delete pendingOutbox[result.trackId];
+      pendingOutboxChanged = true;
+      return result;
+    }
+    return { ...result, liked: pending.desiredLiked };
   });
+  if (pendingOutboxChanged) persistLikeOutbox(uid, pendingOutbox);
   rememberAccountSyncResults(uid, effectiveResults);
   for (const result of effectiveResults) {
     cache.set(result.trackId, result.liked);

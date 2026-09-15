@@ -1,0 +1,86 @@
+name: SORIDRAW 097 Explore Like Pending Acknowledgement
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-097-explore-like-pending-ack.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply 097 matching-pending acknowledgement fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('src/services/exploreLikeService.ts')
+          s = p.read_text()
+          marker = '// SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_REPLAY_096_20260915\n'
+          assert marker in s
+          s = s.replace(marker, marker + '// SORIDRAW_EXPLORE_LIKE_REMOTE_PENDING_ACK_097_20260916\n', 1)
+
+          old = """  // 090: a local pending click is newer UI intent than an account signal that\n  // arrives from another device. Keep the pending heart until this device's own\n  // batch is confirmed; otherwise a remote signal can visibly roll the heart back.\n  const pendingOutbox = readLikeOutbox(uid);\n  const effectiveResults = signal.results.map((result) => {\n    const pending = pendingOutbox[result.trackId];\n    return pending ? { ...result, liked: pending.desiredLiked } : result;\n  });\n  rememberAccountSyncResults(uid, effectiveResults);"""
+          new = """  // 097: a local pending click should win only while it disagrees with the\n  // server-acknowledged account signal. If both already describe the same liked\n  // state, the durable pending row is stale/redundant: clear it and accept the\n  // remote display count too. This lets a sleeping second device converge without\n  // adding a D1/Firestore recovery read or requiring the user to clear app cache.\n  const pendingOutbox = readLikeOutbox(uid);\n  let pendingOutboxChanged = false;\n  const effectiveResults = signal.results.map((result) => {\n    const pending = pendingOutbox[result.trackId];\n    if (!pending) return result;\n    if (pending.desiredLiked === result.liked) {\n      delete pendingOutbox[result.trackId];\n      pendingOutboxChanged = true;\n      return result;\n    }\n    return { ...result, liked: pending.desiredLiked };\n  });\n  if (pendingOutboxChanged) persistLikeOutbox(uid, pendingOutbox);\n  rememberAccountSyncResults(uid, effectiveResults);"""
+          assert old in s
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          Path('scripts/verify-097-explore-like-pending-ack.mjs').write_text("""import assert from 'node:assert/strict';\nimport { readFileSync } from 'node:fs';\n\nconst service = readFileSync('src/services/exploreLikeService.ts', 'utf8');\nconst start = service.indexOf('export const observeExploreLikeAccountSyncSignal');\nconst end = service.indexOf('const publishExploreLikeAccountSyncSignal', start);\nassert.ok(start >= 0 && end > start);\nconst observe = service.slice(start, end);\n\nassert.ok(service.includes('SORIDRAW_EXPLORE_LIKE_REMOTE_PENDING_ACK_097_20260916'));\nassert.ok(observe.includes('if (pending.desiredLiked === result.liked)'));\nassert.ok(observe.includes('delete pendingOutbox[result.trackId]'));\nassert.ok(observe.includes('pendingOutboxChanged = true'));\nassert.ok(observe.includes('if (pendingOutboxChanged) persistLikeOutbox(uid, pendingOutbox)'));\nassert.ok(observe.includes('return { ...result, liked: pending.desiredLiked }'));\nassert.ok(observe.includes('Boolean(pendingOutbox[result.trackId])'));\nassert.ok(observe.indexOf('persistLikeOutbox(uid, pendingOutbox)') < observe.indexOf('importExploreLikeDisplaySignal091('));\nassert.ok(!observe.includes('requestExploreLike('));\nassert.ok(!service.includes('firebase/firestore'));\nassert.ok(!service.includes('getDocs('));\nassert.ok(!service.includes('collection('));\n\nconsole.log('PASS 097: matching durable pending state is acknowledged by RTDB and its confirmed display count is accepted; conflicting newer local intent remains protected with zero recovery reads.');\n""")
+          PY
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Verify 094 session batching
+        run: node scripts/verify-094-explore-session-like-batch.mjs
+      - name: Verify 095 zero-read display
+        run: node scripts/verify-095-explore-like-zero-read-display.mjs
+      - name: Verify 096 cross-device replay
+        run: node scripts/verify-096-explore-like-cross-device-replay.mjs
+      - name: Verify 097 pending acknowledgement
+        run: node scripts/verify-097-explore-like-pending-ack.mjs
+      - name: Switch to Node 24 for like-cost verifier
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify like cost
+        run: node scripts/verify-explore-like-cost-optimization.mjs
+      - name: Verify liked profile regressions
+        run: |
+          node scripts/verify-085-liked-profile.mjs
+          node scripts/verify-086-liked-sync-repair.mjs
+      - name: Guard scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only | sort > "$RUNNER_TEMP/changed.txt"
+          cat "$RUNNER_TEMP/changed.txt"
+          test "$(cat "$RUNNER_TEMP/changed.txt")" = $'scripts/verify-097-explore-like-pending-ack.mjs\nsrc/services/exploreLikeService.ts'
+      - name: Commit verified product fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/services/exploreLikeService.ts scripts/verify-097-explore-like-pending-ack.mjs
+          test -n "$(git status --porcelain)"
+          git commit -m 'fix: acknowledge matching Explore like pending state'
+          git push origin HEAD:preview

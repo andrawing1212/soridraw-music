@@ -96,7 +96,7 @@ if (finalHandler.includes('enqueueExploreLikeUserQueue075(')) {
 if (finalHandler.includes('readExploreLikeBatchStates035(')) {
   throw new Error('[055] canonical D1 intake read unexpectedly restored');
 }
-if (!finalHandler.includes('enforceExploreLikeBatchRateLimit034(env, authContext.uid, mutations.length)')) {
+if (!finalHandler.includes('enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid)')) {
   throw new Error('[055] edge abuse guard missing');
 }
 if (!finalHandler.includes('syncExploreLikeR2AfterBatch034(env, authContext.uid, results)')) {

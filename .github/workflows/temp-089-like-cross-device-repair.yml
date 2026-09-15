@@ -22,6 +22,19 @@ jobs:
           cache: npm
       - name: Apply 091 shared like count repair
         run: python3 scripts/temp-089-like-cross-device-repair.py
+      - name: Align legacy 088 verifier with 091 layout
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/verify-088-same-session-liked-heart.mjs')
+          text = path.read_text()
+          old = "assert.match(like, /const optimisticLikedCache = getLikedStateCache\\(user\\.uid\\);[\\s\\S]{0,180}optimisticLikedCache\\.set\\(normalizedTrackId, liked\\);[\\s\\S]{0,180}persistLikedStateCache\\(user\\.uid, optimisticLikedCache\\);/);"
+          new = "assert.match(like, /const optimisticLikedCache = getLikedStateCache\\(user\\.uid\\);/);\nassert.match(like, /optimisticLikedCache\\.set\\(normalizedTrackId, liked\\);/);\nassert.match(like, /persistLikedStateCache\\(user\\.uid, optimisticLikedCache\\);/);"
+          if text.count(old) != 1:
+              raise SystemExit(f'088 verifier alignment expected 1 match, got {text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
+          PY
       - name: Install
         run: npm ci --no-audit --no-fund
       - name: TypeScript

@@ -1,4 +1,4 @@
-requested_at=2026-09-14T06:00:00Z
+requested_at=2026-09-15T06:39:00Z
 requested_by=user
-product_code_target=a27b5ddbe0c6928ac210987e72a46bd553b80e8d
-release_purpose=086_liked_collection_and_missed_signal_repair
+product_code_target=2a4d7ec35e82448b60d1c5edffa106082017c210
+release_purpose=055_like_intake_w1_hotpath

@@ -5,6 +5,7 @@ import { readSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
 
 // SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915
 // SORIDRAW_EXPLORE_LIKE_ZERO_COUNT_RECOVERY_093_20260915
+// SORIDRAW_EXPLORE_ACKNOWLEDGED_COUNT_094_20260915
 const STORAGE_VERSION_091 = 1;
 const STORAGE_PREFIX_091 = 'soridraw:explore-like-display:091:';
 const DISPLAY_TTL_MS_091 = 30 * 60_000;
@@ -132,8 +133,17 @@ export const updateExploreLikeCanonicalCounts091 = (
   rows.forEach((row) => {
     const trackId = normalizeTrackId091(row.trackId);
     if (!trackId) return;
-    counts.set(trackId, clampCount091(row.likeCount));
-    if (confirmAccepted && states.get(trackId)?.phase === 'accepted') {
+    const canonicalCount = clampCount091(row.likeCount);
+    counts.set(trackId, canonicalCount);
+    const state = states.get(trackId);
+    if (state?.phase !== 'accepted') return;
+    const direction = Number(state.desiredLiked) - Number(state.baseLiked);
+    const aggregateCaughtUp = direction > 0
+      ? canonicalCount >= state.displayLikeCount
+      : direction < 0
+        ? canonicalCount <= state.displayLikeCount
+        : canonicalCount === state.displayLikeCount;
+    if (aggregateCaughtUp || confirmAccepted) {
       states.delete(trackId);
       stateChanged = true;
     }
@@ -367,6 +377,71 @@ export const beginExploreLikeDisplayTransition091 = (
     baseLiked,
     desiredLiked,
     baseLikeCount,
+    displayLikeCount,
+    phase: 'pending',
+    updatedAt: now,
+    expiresAt: now + DISPLAY_TTL_MS_091,
+  });
+  persistStates091(normalizedUid, states);
+  return displayLikeCount;
+};
+
+export const confirmExploreLikeDisplayTransition094 = (
+  uid: string,
+  trackId: string,
+  ownerUid: string,
+  baseLiked: boolean,
+  liked: boolean,
+  baseLikeCount: number,
+  displayLikeCount: number,
+) => {
+  const normalizedUid = normalizeUid091(uid);
+  const normalizedTrackId = normalizeTrackId091(trackId);
+  const confirmedCount = clampCount091(displayLikeCount);
+  if (!normalizedUid || !normalizedTrackId) return confirmedCount;
+  const states = loadStates091(normalizedUid);
+  const now = Date.now();
+  states.set(normalizedTrackId, {
+    trackId: normalizedTrackId,
+    ownerUid: normalizeUid091(ownerUid),
+    baseLiked: Boolean(baseLiked),
+    desiredLiked: Boolean(liked),
+    baseLikeCount: clampCount091(baseLikeCount),
+    displayLikeCount: confirmedCount,
+    phase: 'accepted',
+    updatedAt: now,
+    expiresAt: now + DISPLAY_TTL_MS_091,
+  });
+  persistStates091(normalizedUid, states);
+  return confirmedCount;
+};
+
+export const rebaseExploreLikePendingDisplay094 = (
+  uid: string,
+  trackId: string,
+  ownerUid: string,
+  baseLiked: boolean,
+  desiredLiked: boolean,
+  baseLikeCount: number,
+) => {
+  const normalizedUid = normalizeUid091(uid);
+  const normalizedTrackId = normalizeTrackId091(trackId);
+  const baseCount = clampCount091(baseLikeCount);
+  const displayLikeCount = clampCount091(baseCount + Number(desiredLiked) - Number(baseLiked));
+  if (!normalizedUid || !normalizedTrackId) return displayLikeCount;
+  const states = loadStates091(normalizedUid);
+  if (baseLiked === desiredLiked) {
+    states.delete(normalizedTrackId);
+    persistStates091(normalizedUid, states);
+    return displayLikeCount;
+  }
+  const now = Date.now();
+  states.set(normalizedTrackId, {
+    trackId: normalizedTrackId,
+    ownerUid: normalizeUid091(ownerUid),
+    baseLiked,
+    desiredLiked,
+    baseLikeCount: baseCount,
     displayLikeCount,
     phase: 'pending',
     updatedAt: now,

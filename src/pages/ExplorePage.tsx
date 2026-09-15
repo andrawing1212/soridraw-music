@@ -21,6 +21,7 @@ import {
   EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT,
   EXPLORE_LIKE_SYNC_ERROR_EVENT,
   EXPLORE_LIKE_SYNC_EVENT,
+  flushPendingExploreLikesForPageExit,
   getExploreLikedTrackIds,
   reconcileExploreLikedTrackCollectionState,
   setExploreTrackLike,
@@ -773,13 +774,25 @@ export default function ExplorePage() {
     setSearchOpen(false);
   };
 
-  const openProfile = (track: ExploreTrack) => {
+  const flushExploreLikeBoundary094 = async () => {
+    if (!user) return;
+    try {
+      await flushPendingExploreLikesForPageExit(user);
+    } catch (reason) {
+      console.warn('[094] Explore like boundary sync retained locally:', reason);
+      setSocialNotice('좋아요 변경분은 기기에 보관됐어요. 다음 화면 이동 때 다시 동기화합니다.');
+    }
+  };
+
+  const openProfile = async (track: ExploreTrack) => {
     if (!track.ownerUid) return;
+    await flushExploreLikeBoundary094();
     setSearchParams({ profile: track.ownerUid });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const closeProfile = () => {
+  const closeProfile = async () => {
+    await flushExploreLikeBoundary094();
     setSearchParams({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

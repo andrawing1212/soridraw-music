@@ -5,6 +5,8 @@ import { DatabaseSync } from 'node:sqlite';
 const root = 'cloudflare/explore-worker/';
 const service = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
+const shell = readFileSync('src/components/explore/ExploreShell.tsx', 'utf8');
+const displayState = readFileSync('src/services/exploreLikeDisplayStateService.ts', 'utf8');
 const migration033 = readFileSync(root + 'migrations/20260910_03_explore_like_write_optimization.sql', 'utf8');
 const migration035 = readFileSync(root + 'migrations/20260911_01_explore_like_deferred_batches.sql', 'utf8');
 const manifest = JSON.parse(readFileSync(root + 'release-patches.json', 'utf8'));
@@ -39,50 +41,41 @@ const functionText = (source, needle) => {
   throw new Error(`unterminated function: ${needle}`);
 };
 
-// 089 correctness contract: actual like changes still batch, but flush within five seconds
-// so same-account devices converge promptly without per-click server writes.
-assert.match(service, /SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911/);
-assert.match(service, /SORIDRAW_EXPLORE_LIKE_PREVIEW_1MIN_TEST_037_20260911/);
-assert.match(service, /SORIDRAW_EXPLORE_LIKE_ACCOUNT_COUNT_REPLAY_065_20260911/);
-assert.match(service, /const EXPLORE_LIKE_BATCH_WINDOW_PREVIEW_MS = 5_000;/);
-assert.match(service, /const EXPLORE_LIKE_BATCH_WINDOW_DEFAULT_MS = 5_000;/);
-assert.match(service, /EXPLORE_ENVIRONMENT === 'preview'/);
+// 094 correctness contract: Explore browsing is local-first. Recommended/latest/popular
+// never start a timer; one batch is sent only at a meaningful boundary or the hard max-50 ceiling.
+assert.match(service, /SORIDRAW_EXPLORE_SESSION_BATCH_094_20260915/);
+assert.match(service, /SORIDRAW_EXPLORE_ACKNOWLEDGED_COUNT_094_20260915/);
 assert.match(service, /const EXPLORE_LIKE_BATCH_MAX = 50;/);
 assert.match(service, /EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox'/);
 assert.match(service, /EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY = 'explore-like-account-patches'/);
-assert.match(service, /rememberAccountSyncResults\(uid, effectiveResults\)/);
-const sameSession088 = service.includes('SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914');
-const crossDevice089 = service.includes('SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914');
-if (sameSession088) {
-  assert.doesNotMatch(service, /replayAccountSyncPatches\(user\.uid, normalized\)/);
-  assert.doesNotMatch(service, /const replayAccountSyncPatches =/);
-  assert.match(service, /rememberAccountSyncResults\(uid, accountReplayResults\)/);
-  const displayCountsFunction = functionText(service, 'export const getExploreLikeDisplayCounts =');
-  if (crossDevice089) {
-    assert.doesNotMatch(displayCountsFunction, /readAccountPatchCache\(user\.uid\)/);
-    assert.match(displayCountsFunction, /=> \(\{\}/);
-  } else {
-    assert.match(displayCountsFunction, /readAccountPatchCache\(user\.uid\)/);
-  }
-} else {
-  assert.match(service, /replayAccountSyncPatches\(user\.uid, normalized\)/);
-}
+assert.doesNotMatch(service, /EXPLORE_LIKE_BATCH_WINDOW_(?:PREVIEW|DEFAULT)_MS/);
+assert.doesNotMatch(service, /EXPLORE_LIKE_BATCH_WINDOW_MS/);
+assert.doesNotMatch(service, /schedulePendingLikes/);
+assert.doesNotMatch(service, /pendingTimers/);
+assert.doesNotMatch(service, /EXPLORE_LIKE_RETRY_(?:BASE|MAX)_MS/);
 const queueFunction = functionText(service, 'export const setExploreTrackLike = async');
-if (crossDevice089) {
-  assert.match(queueFunction, /schedulePendingLikes\(user\)/, '089 actual changes must start one bounded batch timer');
-} else {
-  assert.doesNotMatch(queueFunction, /schedulePendingLikes\(user\)/, '081 UI queue must remain local-only');
-}
-assert.doesNotMatch(queueFunction, /requestExploreLike\(/, 'UI queue function must not call the server immediately');
+assert.doesNotMatch(queueFunction, /requestExploreLike\(/, 'like click must stay local-only');
+assert.match(queueFunction, /getPendingExploreLikeMutationCount\(user\.uid\) >= EXPLORE_LIKE_BATCH_MAX/);
+assert.match(queueFunction, /void flushPendingLikes\(user\)/, 'only max-50 may auto flush inside Explore');
+const hydrateFunction = functionText(service, 'export const getExploreLikedTrackIds = async');
+assert.doesNotMatch(hydrateFunction, /flushPendingLikes|flushPendingExploreLikesForPageExit|schedulePendingLikes/);
 const flushFunction = functionText(service, 'const flushPendingLikes = async');
 assert.match(flushFunction, /'\/v1\/me\/likes\/batch'/);
-assert.match(flushFunction, /mutations: batchEntries\.map/);
-assert.match(flushFunction, /const accountSyncResults: (?:ExploreLikeBatchResult\[\]|Array<ExploreLikeBatchResult & \{ displayLikeCount\?: number \}>) = \[\]/);
-assert.match(flushFunction, /accountSyncResults\.push\(visibleResult\)/);
+assert.match(flushFunction, /acknowledgedDisplayLikeCount/);
+assert.match(flushFunction, /confirmExploreLikeDisplayTransition094/);
 assert.match(flushFunction, /publishExploreLikeAccountSyncSignal\(user, batchEntries, accountSyncResults\)/);
-assert.doesNotMatch(service, /const EXPLORE_LIKE_IDLE_MS = 5_000;/, 'old per-track 5s flush must stay retired');
-assert.match(page, /setExploreTrackLike\(user, track\.id, !currentLiked, track\.likeCount, track\.ownerUid\)/);
-console.log('PASS client: durable like outbox remains batched; 090 keeps one 5s timer, limits numeric optimism to the current pending transition, and adds no per-click server request');
+const boundaryFunction = functionText(service, 'export const flushPendingExploreLikesForPageExit = async');
+assert.match(boundaryFunction, /while \(true\)/);
+assert.match(page, /await flushPendingExploreLikesForPageExit\(user\)/, 'public profile boundary must flush once before navigation');
+const sortBlockStart = page.indexOf("['recommended', '추천']");
+const sortBlock = page.slice(sortBlockStart, sortBlockStart + 1200);
+assert.doesNotMatch(sortBlock, /flushPendingExploreLikesForPageExit|flushSoridrawPageSync/, 'recommended/latest/popular stay local-only');
+assert.match(shell, /document\.visibilityState !== 'hidden'/);
+assert.match(shell, /await flushSoridrawPageSync\(user, 'route-change'\)/);
+assert.match(displayState, /SORIDRAW_EXPLORE_ACKNOWLEDGED_COUNT_094_20260915/);
+assert.match(displayState, /export const confirmExploreLikeDisplayTransition094/);
+assert.match(displayState, /aggregateCaughtUp/);
+console.log('PASS client: 094 keeps Explore browsing local-only, batches at boundaries/max-50, and retains acknowledged count deltas until aggregate convergence');
 
 assert.ok(Array.isArray(manifest.patches));
 const requiredReleasePatches = [

@@ -1,0 +1,29 @@
+name: TEMP fix release doc number
+on:
+  push:
+    branches: ['tmp/catalog-no-fullscan-20260915']
+    paths: ['.github/workflows/temp-fix-release-doc-number.yml']
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp/catalog-no-fullscan-20260915
+      - run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('DOCS/CURRENT_RELEASE_STATE.md')
+          s=p.read_text()
+          old='## 4. 091 좋아요 표시 구조'
+          if old not in s: raise SystemExit('heading missing')
+          p.write_text(s.replace(old, '## 3. 091 좋아요 표시 구조', 1))
+          PY
+          git diff --check
+          git config user.name soridraw-ci
+          git config user.email actions@users.noreply.github.com
+          git add DOCS/CURRENT_RELEASE_STATE.md
+          git commit -m 'docs: fix release state section numbering'
+          git push origin HEAD:tmp/catalog-no-fullscan-20260915

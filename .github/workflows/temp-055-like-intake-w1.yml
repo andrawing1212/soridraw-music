@@ -5,6 +5,8 @@ on:
     branches: [preview]
     paths:
       - '.github/workflows/temp-055-like-intake-w1.yml'
+      - 'cloudflare/explore-worker/patches/055-explore-like-intake-w1-hotpath.mjs'
+      - 'scripts/verify-055-like-intake-w1.mjs'
 
 permissions:
   contents: write

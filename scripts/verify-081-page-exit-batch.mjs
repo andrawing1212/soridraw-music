@@ -67,7 +67,8 @@ assert.ok(app.includes('recoverSoridrawPendingSync'), 'startup outbox recovery m
 assert.ok(exploreShell.includes("flushSoridrawPageSync(activeUser, 'route-change')"), 'Explore page exit sync missing');
 assert.ok(overlay.includes('PAGE SYNC'), 'integrated page sync diagnostics missing');
 
-assert.equal(patches.patches.at(-1), '048-page-exit-publication-batch.mjs', '048 must be final Worker patch');
+assert.ok(patches.patches.includes('048-page-exit-publication-batch.mjs'), '048 page-exit publication patch missing');
+assert.equal(patches.patches.at(-1), '051-publication-write-returning.mjs', '051 publication write-returning must remain final Worker patch');
 if (process.env.SORIDRAW_GENERATED_WORKER) {
   const worker = read(process.env.SORIDRAW_GENERATED_WORKER);
   for (const token of [

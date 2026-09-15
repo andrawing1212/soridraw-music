@@ -99,9 +99,12 @@ jobs:
           assert.ok(!service.includes('clearExplorePersonalSocialSnapshot'));
 
           const observerStart = service.indexOf('export const observeExploreLikeAccountSyncSignal');
-          const observerEnd = service.indexOf('\nexport const ', observerStart + 20);
           assert.ok(observerStart >= 0);
-          const observer = service.slice(observerStart, observerEnd > observerStart ? observerEnd : service.length);
+          const observerSeen = service.indexOf('setSeenAccountSignalVersion(uid, signal.version);', observerStart);
+          assert.ok(observerSeen > observerStart);
+          const observerEnd = service.indexOf('\n};', observerSeen);
+          assert.ok(observerEnd > observerSeen);
+          const observer = service.slice(observerStart, observerEnd + 3);
           assert.ok(observer.includes('const cache = getLikedStateCache(uid);'));
           assert.ok(!observer.includes('cache.clear()'));
           assert.ok(!observer.includes('missedSignal'));

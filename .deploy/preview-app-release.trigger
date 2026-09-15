@@ -1,4 +1,4 @@
-requested_at=2026-09-15T08:38:00Z
+requested_at=2026-09-15T13:23:56Z
 requested_by=user
-product_code_target=641ea3326dede9128bb4f9592dac22f72de4a66d
-release_purpose=092_catalog_no_firestore_fullscan
+product_code_target=702ae885e8ae1afa361532c310343d39eb3d428d
+release_purpose=094_explore_session_like_batch

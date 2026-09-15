@@ -1,4 +1,5 @@
-requested_at=2026-09-15T17:06:00Z
+requested_at=2026-09-15T17:50:20Z
 requested_by=user
-product_code_target=dc525ab96d516b294eef2e0453ed80d36b7b9fd1
-release_purpose=098_explore_like_atomic_rtdb_merge
+product_code_target=4df9cf1dfa883289c3e554469afa1c335c5c6a9c
+release_source_target=ecf3eb5039058a2bd126bf75e8f4a4954932b100
+release_purpose=099_explore_like_update_reconnect_zero_read

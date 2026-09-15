@@ -23,6 +23,7 @@
     "048-page-exit-publication-batch.mjs",
     "049-publication-internal-batch-compaction.mjs",
     "050-publication-primary-key-batch-read.mjs",
-    "051-publication-write-returning.mjs"
+    "051-publication-write-returning.mjs",
+    "055-explore-like-intake-w1-hotpath.mjs"
   ]
 }

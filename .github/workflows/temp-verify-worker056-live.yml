@@ -53,13 +53,12 @@ jobs:
             const end=source.indexOf('async function handleMySocialSnapshot042',start);
             if(start<0||end<0) throw new Error('liked-track handler missing in active source');
             const block=source.slice(start,end);
-            if(!source.includes('SORIDRAW_LIKED_TRACK_PUBLIC_PROFILE_JOIN_056_20260915')) throw new Error('056 marker missing');
             if(!block.includes('LEFT JOIN public_profiles p ON p.uid = t.owner_uid')) throw new Error('public_profiles join missing');
             if(block.includes('LEFT JOIN profiles p ON p.uid = t.owner_uid')) throw new Error('old profiles join still active');
             console.log(`ACTIVE_PREVIEW_WORKER=${active.version_id}`);
-            console.log('LIVE_WORKER_056_MARKER=PASS');
             console.log('LIVE_LIKED_TRACK_PUBLIC_PROFILE_JOIN=PASS');
             console.log('OLD_PROFILES_JOIN_ABSENT=PASS');
+            console.log('NOTE=Wrangler bundle strips source comments; validate deployed SQL instead of comment marker');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
 

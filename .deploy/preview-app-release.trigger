@@ -1,4 +1,4 @@
-requested_at=2026-09-15T01:46:00Z
+requested_at=2026-09-15T02:25:00Z
 requested_by=user
-product_code_target=91c61627822b822457ed10eaf9001da5242d5e62
-release_purpose=090_live_like_heart_count_consistency
+product_code_target=22d11a7ce22a5a0ce154b6230278c14b7bdc199f
+release_purpose=091_shared_like_display_count_consistency

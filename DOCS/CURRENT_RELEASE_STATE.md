@@ -105,27 +105,50 @@ Run `34980745687` — **PASS**:
 
 PREVIEW/TEST/PRODUCTION 사용자 원본 데이터 공유 원칙 유지. 이번 배포는 기능 코드/Hosting 승격만 수행했다.
 
-## 7. 095 실사용 비용/정확성 합격선 — 사용자 검증 전
-다음은 실제 계정에서 확인해야 한다.
-1. Explore에서 좋아요 2~10개 연속 클릭 중 서버 like request/write 0.
-2. 추천/최신/인기 탭 전환만으로 batch 없음.
-3. 공개프로필 진입 또는 Explore 밖 이동 시 변경분이 `/v1/me/likes/batch` 1회로 묶임.
-4. 서버 승인 뒤 숫자가 0/옛 숫자로 역행하지 않음.
-5. 일반 Explore 재진입/재방문만으로 `내 좋아요 곡 확인` 호출 및 D1 row read 0.
-6. 정상 local/cache 상태에서 좋아요 관련 D1 추가 read 0 목표.
-7. Firestore `users:write` 및 listener read 연쇄 증가 없음.
-8. PC↔모바일 boundary sync 후 하트와 승인 숫자가 같은 상태로 수렴.
-9. Music Note / Recent Songs RTDB 회귀 없음.
-10. Catalog 092 Firestore full-scan 재발 없음.
+## 7. 095 데스크톱 실사용 영상 감사 — 2026-09-15
+사용자 제공 약 141초 PREVIEW 095 영상 기준으로 다음을 확인했다.
+
+PASS:
+- 시작 시 CACHE LIVE 초기화 상태에서 좋아요 관련 D1 read/write 0.
+- Explore 내부 탐색/추천·최신·인기 이동 중 5초 자동 like batch 재발 없음.
+- 실제 pending 변경이 있는 경계에서만 `좋아요 변경 묶음 저장` Worker 호출이 증가함.
+- 영상 중 여러 번 Explore 밖 이동이 있었지만 pending 변경이 없던 이동에서는 batch가 추가 증가하지 않는 구간 확인.
+- 최종 `좋아요 변경 묶음 저장`: Worker 4 / D1 query R0 W4 / cumulative row R0 W4. 즉 영상에서 좋아요 저장 자체는 **D1 row read 0**.
+- `내 좋아요 곡 확인`: 최종 LOCAL 3 / Worker 0 / D1 R0 W0 / cumulative row R0 W0. 094에서 발생했던 정상 재진입용 `/v1/me/liked-tracks` R28 재발 없음.
+- Firestore Browser SDK 최종 read 0 / write 0 유지.
+- `PAGE SYNC`: D1 R0 W0 / Firestore R0 W0.
+- 하트/숫자 사례가 Explore ↔ 공개프로필 ↔ Studio 이동 후에도 유지됨. 영상에서 `빨간 하트 + 0` 역행 재현되지 않음.
+- 예: `소스록` 좋아요 숫자 2가 공개프로필과 Explore 재진입 후에도 2로 유지되는 장면 확인.
+
+영상 종료 시 CACHE LIVE 총계:
+- Cloudflare 앱: LOCAL 15 / Worker 9
+- D1 query: R3 / W6
+- cumulative rows: R12 / W8
+- 이 중 좋아요 batch는 R0/W4, 좋아요 곡 확인은 R0/W0.
+- 남은 D1 read는 주로 실제 변경 뒤 공개프로필 조회 및 공개상태 변경 경로에 해당하며, 이번 영상에서는 좋아요 read 회귀로 보이지 않음.
+
+관찰상 큰 오점은 없음. 다만 아래는 **아직 미검증**:
+- 같은 계정 PC↔모바일에서 RTDB boundary sync 후 하트+숫자 수렴.
+- 장시간/7일 acknowledged 안전창 이후 canonical aggregate 수렴.
+- CACHE LIVE에 잡히지 않는 background/scheduled D1 processor의 실제 Cloudflare 계정 단위 비용은 별도 Cloudflare Analytics/D1 실측이 필요.
+- 공개프로필 D1 read는 이번 영상에서 실제 좋아요/공개 상태 변경 뒤 발생했으므로 정상 변경 비용으로 보이나, **변경 없는 동일 공개프로필 재진입 D1 read 0**은 별도 한 번 더 확인 필요.
+
+## 8. 095 남은 실사용 합격선
+1. PC↔모바일 같은 계정에서 boundary sync 후 하트와 승인 숫자가 같은 상태로 수렴.
+2. 변경 없는 동일 공개프로필 재진입에서 원본 D1 read 0.
+3. 장시간 뒤에도 승인 숫자가 0/옛 값으로 역행하지 않음.
+4. Cloudflare Analytics/D1에서 background processor가 사용자 행동 규모 대비 예상 밖 row read/write를 만들지 않음.
+5. Music Note / Recent Songs RTDB 회귀 없음.
+6. Catalog 092 Firestore full-scan 재발 없음.
 
 FAIL 조건:
 - 빨간 하트 + 0 재현
-- 일반 재진입만으로 liked-tracks D1 row read 발생
+- 일반 Explore 재진입만으로 liked-tracks D1 row read 발생
 - Explore 내부 탐색/탭 전환만으로 batch 발생
 - 좋아요 1회가 전체 Feed/Profile/tracks scan 유발
 - Firestore Explore-like sync write 재발
 
-## 8. 정상 기능 보호
+## 9. 정상 기능 보호
 - Catalog 092: 일반 Music Note/Library catalog R2-only, Firestore full scan 금지.
 - Worker 056: liked-track requested IDs만 PK/index lookup, 전체 tracks scan 금지.
 - Music Note: Local First + 약 60초 묶음 저장 보호.
@@ -133,19 +156,19 @@ FAIL 조건:
 - 공개/비공개 변경분 처리 구조 보호.
 - UI 위치/크기/간격/테마/반응형 비요청 변경 금지.
 
-## 9. TEST / PRODUCTION 승격
-- TEST: **095 PREVIEW 실사용 비용/정확성 PASS 전 승격 금지.**
+## 10. TEST / PRODUCTION 승격
+- TEST: **PC↔모바일 수렴 + 변경 없는 공개프로필 재진입 0-read 확인 전 승격 보류.**
 - 사용자 데이터 복사 금지.
 - PRODUCTION: 사용자 명확한 정식배포 승인 전 금지.
 
-## 10. 알려진 위험
-- 095 자동검증과 PREVIEW Hosting 배포는 PASS지만, 실제 사용자 계정의 장기 재진입/PC↔모바일 숫자 수렴은 아직 실사용 검증 전.
+## 11. 알려진 위험
+- 095 데스크톱 단일기기 영상에서는 핵심 좋아요 비용/정확성 목표가 PASS에 가까움.
 - 7일 acknowledged local 상태는 실제 승인된 delta만 보존하며 canonical aggregate가 따라오면 해제된다. 장기 재진입에서 이를 확인해야 한다.
 - `preview`, `main`, `production` 보호 API의 세부 `enabled=false` 표시는 별도 저장소 운영 위험으로 남음.
 - 기존 Build chunk-size/mixed import 경고는 이번 기능과 무관하며 미해결.
 
-## 11. 다음 작업
-- PREVIEW 095에서 CACHE LIVE 초기화 후 사용자 실측 진행.
-- 좋아요 연속 클릭 → Explore 내부 탐색/대기 → 공개프로필 또는 Explore 이탈 → Explore 재진입 순으로 확인.
-- 특히 `내 좋아요 곡 확인`이 일반 재진입에서 0회인지와 숫자 0 역행 재발 여부를 본다.
-- 모두 PASS 후에만 TEST 승격을 검토한다.
+## 12. 다음 작업
+- 같은 계정 PC↔모바일에서 좋아요 boundary sync 후 하트/숫자 수렴 확인.
+- CACHE LIVE 초기화 후 **아무 변경 없이 같은 공개프로필 재진입 2회** 하여 D1 row read 0 확인.
+- 필요 시 Cloudflare Analytics/D1에서 background processor 비용을 실제 수치로 대조.
+- 위 항목까지 PASS 후 TEST 승격 검토.

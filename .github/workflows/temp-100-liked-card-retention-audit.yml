@@ -45,7 +45,12 @@ jobs:
           node scripts/verify-098-explore-like-atomic-signal.mjs
           node scripts/verify-099-explore-like-update-zero-read.mjs
           node scripts/verify-100-liked-card-retention.mjs
-          node scripts/verify-explore-like-cost-optimization.mjs
+      - name: Set up Node.js 24 for sqlite verifier
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify like cost fixture
+        run: node scripts/verify-explore-like-cost-optimization.mjs
       - name: Guard no backend or UI scope change
         shell: bash
         run: |

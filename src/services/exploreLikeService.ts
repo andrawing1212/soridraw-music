@@ -1,6 +1,6 @@
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import type { User } from 'firebase/auth';
-import { ref as databaseRef, set as setRealtimeValue } from 'firebase/database';
+import { ref as databaseRef, runTransaction } from 'firebase/database';
 import { getFirebaseAppCheckToken, realtimeDb } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
@@ -48,6 +48,7 @@ import {
 // SORIDRAW_EXPLORE_ACKNOWLEDGED_COUNT_094_20260915
 // SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_REPLAY_096_20260915
 // SORIDRAW_EXPLORE_LIKE_REMOTE_PENDING_ACK_097_20260916
+// SORIDRAW_EXPLORE_LIKE_ATOMIC_SIGNAL_098_20260916
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -456,59 +457,52 @@ const publishExploreLikeAccountSyncSignal = async (
 ) => {
   if (!user?.uid || !results.length) return;
   const uid = user.uid;
-  const previousVersion = Math.max(
-    readSeenAccountSignalVersion(uid),
-    observedAccountSignalVersionByUid.get(uid) || 0,
-  );
-  const version = Math.max(Date.now(), previousVersion + 1);
   const ownerByTrack = new Map(batchEntries.map((pending) => [pending.trackId, pending.ownerUid]));
+  const currentConfirmedResults: ExploreLikeAccountSyncResult[] = results.map((result) => ({
+    ...result,
+    ownerUid: ownerByTrack.get(result.trackId) || '',
+  }));
 
-  // 096: RTDB keeps only the latest signal object. If another device was asleep
-  // while this device flushed several separate boundary batches, publishing only
-  // the newest batch loses the earlier display-count deltas. Reuse the existing
-  // short-lived account patch cache as a rolling, unique-by-track replay window.
-  // The payload remains capped at the existing 50-result rules limit and adds no
-  // D1/Firestore read. Current results are inserted first so storage failure can
-  // never prevent the just-confirmed batch from being signalled.
-  const replayByTrack = new Map<string, ExploreLikeAccountSyncResult>();
-  results.forEach((result) => {
-    replayByTrack.set(result.trackId, {
-      ...result,
-      ownerUid: ownerByTrack.get(result.trackId) || '',
-    });
-  });
-  Object.values(readAccountPatchCache(uid))
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .forEach((patch) => {
-      if (replayByTrack.has(patch.trackId) || replayByTrack.size >= EXPLORE_LIKE_BATCH_MAX) return;
-      replayByTrack.set(patch.trackId, {
-        trackId: patch.trackId,
-        ownerUid: patch.ownerUid,
-        liked: patch.liked,
-        likeCount: patch.likeCount,
-        ...(patch.displayLikeCount === undefined ? {} : { displayLikeCount: patch.displayLikeCount }),
-      });
-    });
-
-  const signal: ExploreLikeAccountSyncSignal = {
-    version,
-    previousVersion,
-    results: [...replayByTrack.values()].slice(0, EXPLORE_LIKE_BATCH_MAX),
-  };
-
-  // 093: Explore likes must never mutate Firestore users/{uid} just to wake a
-  // second device. Reuse the UID-scoped RTDB invalidation channel instead. D1/R2
-  // remain canonical; this retained signal is fixed-size (max 50 results).
-  setSeenAccountSignalVersion(uid, version);
-  observedAccountSignalVersionByUid.set(uid, version);
+  // 098: 093-097 could blind-overwrite another device's retained rows
+  // because set() rebuilt the whole signal from only this browser's cache.
+  // Merge the just-confirmed D1 batch against RTDB's actual latest value.
+  // Firebase retries this transaction on concurrent PC/mobile writes.
   try {
-    await setRealtimeValue(databaseRef(realtimeDb, `userSync/${uid}/exploreLike`), signal);
+    const transaction = await runTransaction(
+      databaseRef(realtimeDb, `userSync/${uid}/exploreLike`),
+      (currentValue) => {
+        const currentSignal = normalizeAccountSyncSignal(currentValue);
+        const mergedByTrack = new Map<string, ExploreLikeAccountSyncResult>();
+        for (const currentResult of currentConfirmedResults) {
+          mergedByTrack.set(currentResult.trackId, currentResult);
+        }
+        for (const existing of currentSignal?.results || []) {
+          if (mergedByTrack.size >= EXPLORE_LIKE_BATCH_MAX) break;
+          if (!mergedByTrack.has(existing.trackId)) mergedByTrack.set(existing.trackId, existing);
+        }
+        const previousVersion = Math.max(0, currentSignal?.version || 0);
+        const version = Math.max(Date.now(), previousVersion + 1);
+        return {
+          version,
+          previousVersion,
+          results: [...mergedByTrack.values()].slice(0, EXPLORE_LIKE_BATCH_MAX),
+        } satisfies ExploreLikeAccountSyncSignal;
+      },
+      { applyLocally: false },
+    );
+
+    const committedSignal = transaction.committed
+      ? normalizeAccountSyncSignal(transaction.snapshot.val())
+      : null;
+    if (!committedSignal) return;
+    setSeenAccountSignalVersion(uid, committedSignal.version);
+    observedAccountSignalVersionByUid.set(
+      uid,
+      Math.max(observedAccountSignalVersionByUid.get(uid) || 0, committedSignal.version),
+    );
   } catch (reason) {
-    if (readSeenAccountSignalVersion(uid) === version) setSeenAccountSignalVersion(uid, previousVersion);
-    if ((observedAccountSignalVersionByUid.get(uid) || 0) === version) {
-      observedAccountSignalVersionByUid.set(uid, previousVersion);
-    }
-    console.warn('Explore account like RTDB sync signal publish failed:', reason);
+    // D1 already acknowledged this batch; never undo canonical like data.
+    console.warn('Explore account like atomic RTDB sync signal publish failed:', reason);
   }
 };
 

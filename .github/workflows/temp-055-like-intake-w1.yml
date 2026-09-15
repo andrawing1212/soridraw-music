@@ -79,9 +79,9 @@ jobs:
           node scripts/verify-087-liked-card-consistency.mjs
           node scripts/verify-088-same-session-liked-heart.mjs
           node scripts/verify-089-like-cross-device-consistency.mjs
-          node scripts/verify-090-liked-count-live-sync.mjs
+          node scripts/verify-090-like-live-display.mjs
           node scripts/verify-091-like-count-state-machine.mjs
-          node scripts/verify-081-like-page-exit-batch.mjs
+          node scripts/verify-081-page-exit-batch.mjs
           node scripts/verify-084-publication-write-returning.mjs
 
       - name: Install app dependencies

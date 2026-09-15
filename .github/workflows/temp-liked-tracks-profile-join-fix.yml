@@ -85,7 +85,7 @@ jobs:
           git diff --check
           git diff --name-only
           changed="$(git diff --name-only | sort)"
-          expected="$(printf '%s\n' cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt scripts/verify-085-liked-profile.mjs | sort)"
+          expected="$(printf '%s\n' cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt scripts/verify-085-liked-profile.mjs scripts/verify-086-liked-sync-repair.mjs | sort)"
           test "$changed" = "$expected"
           echo 'NARROW_DIFF=PASS'
 
@@ -95,7 +95,7 @@ jobs:
           set -euo pipefail
           git config user.name 'andrawing1212'
           git config user.email 'andrawing1212@gmail.com'
-          git add cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt scripts/verify-085-liked-profile.mjs
+          git add cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt scripts/verify-085-liked-profile.mjs scripts/verify-086-liked-sync-repair.mjs
           git commit -m 'fix: repair liked-tracks public profile lookup'
           git push origin HEAD:tmp/liked-tracks-profile-join-fix-20260915
           echo "PRODUCT_COMMIT=$(git rev-parse HEAD)"

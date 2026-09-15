@@ -1,6 +1,6 @@
 # NEXT CODEX TASK
 
-상태: **PREVIEW 앱 092 + Catalog no-fullscan 구조 배포 완료 / 자동검증 PASS / 사용자 Firestore 비용 실측 전 / TEST 승격 금지**
+상태: **PREVIEW 앱 092 배포 중 / Explore 좋아요 093 비용수정 source 완료·자동검증 PASS·배포 전 / TEST 승격 금지**
 
 ## 현재 기준
 - branch: `preview`
@@ -10,53 +10,76 @@
 - Catalog 구현 commit: `4e961fa4bcc926540c430e4b2e945141c3b754a4`
 - Catalog 검증 Run: `34946586905` — PASS
 - 실제 PREVIEW Media Worker Version ID: `a00276d5-aca1-443f-a992-0b80ca0637ff`
-- Media Worker Run: `34946799113` — PASS
 - 실제 PREVIEW Explore Worker: **055** / `7191acce-fb21-48d6-867f-f237b1f32979`
+- Explore 좋아요 RTDB source commit: `7326168067141e01c32e54c932f23b5a32d91661`
+- RTDB payload rules fix: `f0d54cdff0dab2514c8c3afacba2608e505fee48`
+- 093 verifier fix: `3c9f5e00331ed08ae6fc2873a7e49646ebbdf89d`
+- 최종 093 validation workflow commit: `3ab57b90a09bb9dfbc3621d6170308c77be04311`
+- 최종 093 validation Run: `34954374540` — **PASS**
 - TEST main: `3b574c05589230f077eceff98190edd4b5195f75` — 변경 없음
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 변경 없음
 
-## Catalog 092 보호 기준
+## 보호 기준
+### Catalog 092
 - 일반 Music Note/Library Catalog GET은 R2 only.
-- profile revision은 invalidation hint이며 Firestore full rebuild 권한이 아님.
-- 새 기기는 기존 R2 Catalog를 1회 받고 로컬 IndexedDB/cache를 만든다.
-- R2 Catalog가 없으면 `CATALOG_NOT_MATERIALIZED` fail-closed + bounded legacy bundle fallback.
-- 일반 GET/delta/conflict 복구에서 Firestore collection traversal 금지.
-- partial UI list의 누락은 삭제로 해석하지 않음. explicit tombstone만 삭제.
-- local newer revision을 old R2 응답으로 덮어쓰지 않음.
+- 새 기기는 기존 R2 Catalog 1회 → 로컬 cache.
+- 일반 GET/delta/conflict 복구에서 Firestore 전체 collection traversal 금지.
 - 앱 업데이트 이유의 전체 Catalog rebuild/cache wipe 금지.
 
-## 지금 할 일 — 사용자 PREVIEW 실측
-1. 새 브라우저 프로필 또는 캐시 없는 기기에서 같은 계정 로그인.
-2. Firestore Dashboard 수치를 초기 상태에서 확인.
-3. Music Note 첫 진입 후 read 증가량 확인.
-4. Library 첫 진입 후 read 증가량 확인.
-5. Music Note/Library 재진입 + 변경 없음에서 data read 0 목표 확인.
-6. PC↔모바일 한쪽에서 곡 1개 수정 후 다른 기기에서 변경분만 수렴하는지 확인.
-7. 앱 092 업데이트 자체만으로 Firestore 전체 collection read가 발생하지 않는지 확인.
-8. 좋아요 1 batch의 D1 즉시 write가 W1인지 확인.
-9. Explore/공개프로필 warm 재진입 + 변경 없음 D1 read 0 목표 확인.
+### Explore 좋아요 093 후보
+- D1 = 실제 좋아요 원본/처리.
+- RTDB = 같은 계정 다른 기기에 작은 변경 신호만 전달.
+- Explore 좋아요 동기화 목적 Firestore `users/{uid}` write = **0 목표**.
+- 5초 batch / max 50 / durable outbox / deferred aggregate 유지.
+- `liked=true + count=0` 모순만 `/v1/me/liked-tracks` targeted batch로 확인.
+- targeted recovery 최대 50, polling 없음, Feed/Profile 전체조회 없음, Firestore 조회 없음.
+- 실제 서버 count가 0이면 가짜 `0→1` 보정 금지.
+- Music Note/Recent Songs RTDB 기존 publisher payload와 Rules가 정확히 일치해야 함.
 
-### Catalog 판정
-- Firestore read가 Music Note/Library 곡 개수에 비례하면 FAIL.
-- 새 기기 Catalog R2 1회 수신은 허용.
-- Firestore favorites 또는 suno_tracks 전체 collection 재조회는 금지.
-- 원인을 모르는 read 증가가 있으면 TEST 승격 중단.
+## 자동검증 완료
+Run `34954374540`:
+- source contract PASS
+- TypeScript PASS
+- Build PASS
+- RTDB Database Emulator Rules compile PASS
+- no source side effects PASS
+- no deploy / no Worker / no Functions / no D1 schema / no user-data change
 
-### 좋아요 판정
-- 정상 좋아요 1 batch 즉시 D1 write W1이면 055 비용 목표 PASS 후보.
-- W2 이상이면 추가 write 원인을 찾기 전 TEST 승격 금지.
+## 다음 작업
+사용자가 PREVIEW 배포를 승인하면:
+1. 현재 preview HEAD를 고정.
+2. 앱 버전을 다음 PREVIEW 버전으로 올림.
+3. TypeScript / Build / 관련 tests 재확인.
+4. Firebase PREVIEW Hosting 배포.
+5. **Firebase Realtime Database Rules도 같은 source로 PREVIEW 적용.**
+6. Explore Worker/Media Worker/Functions는 변경이 없으므로 불필요 재배포 금지.
+7. `preview.soridraw.com` 실제 build/version 확인.
+8. TEST/PRODUCTION 비변경 확인.
+
+배포 후 사용자 실측:
+1. PC/모바일 같은 계정에서 좋아요 1개.
+2. 좋아요 해제 1개.
+3. 2~10개 연속 좋아요 후 5초 batch.
+4. CACHE LIVE에 Explore 좋아요발 `users:write`가 없어야 함.
+5. Firestore Console도 Explore 좋아요 때문에 write/read 연쇄증가가 없어야 함.
+6. D1 batch는 정상 처리되어 실제 좋아요가 유지되어야 함.
+7. 다른 기기 하트 상태가 변경분만 수렴해야 함.
+8. `빨간 하트 + 0` 곡은 해당 곡만 targeted recovery 후 실제 숫자로 수렴해야 함.
+9. 실제 canonical count=0이면 임의 1 표시 금지.
+10. Music Note/Recent Songs RTDB 기존 동기화 회귀 없음 확인.
 
 ## 금지
 - 사용자 데이터 migration/backfill/delete/overwrite
 - Firestore/D1 destructive schema change
-- 새 기기 bootstrap을 이유로 전체 collection scan
+- 새 기기 bootstrap 전체 scan
 - 클릭별 서버 요청
 - 전체 Feed/Profile scan
-- 앱 업데이트 이유의 전체 cache wipe
+- 앱 업데이트 이유의 cache wipe
 - user Firestore liked-ID 배열 저장
 - UI/CSS 비요청 변경
+- 배포 승인 전 PREVIEW 배포
 
 ## 승격
-- TEST: **Catalog 새 기기 비용 실측 + 092 정확성 + Explore 좋아요 W1 실측 PASS 전 금지**.
-- TEST 승격 시 PREVIEW exact tree 전체를 main으로 승격하고 사용자 데이터는 복사하지 않는다.
+- TEST: **Catalog 비용 + Explore 좋아요 Firestore R/W 0 목표 + PC↔모바일 정확성 + 기존 RTDB 동기화 회귀 없음** 실사용 PASS 전 금지.
+- TEST 승격 시 PREVIEW exact tree 전체를 main으로 승격, 사용자 데이터 복사 금지.
 - PRODUCTION: 사용자의 명확한 정식배포 승인 전 금지.

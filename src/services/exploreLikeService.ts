@@ -32,18 +32,19 @@ import {
 // SORIDRAW_EXPLORE_LIKE_MISSED_SIGNAL_REPAIR_086_20260914
 // SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914
 // SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914
-const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 1;
+// SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914
+const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
 const EXPLORE_LIKE_OUTBOX_SCHEMA_VERSION = 1;
 const EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox';
 const EXPLORE_LIKE_OUTBOX_SOURCE_TYPE = 'explore_like_outbox';
-const EXPLORE_LIKE_ACCOUNT_PATCH_SCHEMA_VERSION = 1;
+const EXPLORE_LIKE_ACCOUNT_PATCH_SCHEMA_VERSION = 2;
 const EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY = 'explore-like-account-patches';
 const EXPLORE_LIKE_ACCOUNT_PATCH_SOURCE_TYPE = 'explore_like_account_patches';
 const EXPLORE_LIKE_ACCOUNT_PATCH_TTL_MS = 20 * 60_000;
-const EXPLORE_LIKE_BATCH_WINDOW_PREVIEW_MS = 60_000;
-const EXPLORE_LIKE_BATCH_WINDOW_DEFAULT_MS = 4 * 60_000;
+const EXPLORE_LIKE_BATCH_WINDOW_PREVIEW_MS = 5_000;
+const EXPLORE_LIKE_BATCH_WINDOW_DEFAULT_MS = 5_000;
 const EXPLORE_LIKE_BATCH_WINDOW_MS = EXPLORE_ENVIRONMENT === 'preview'
   ? EXPLORE_LIKE_BATCH_WINDOW_PREVIEW_MS
   : EXPLORE_LIKE_BATCH_WINDOW_DEFAULT_MS;
@@ -607,7 +608,6 @@ const flushPendingLikes = async (user: User): Promise<void> => {
       // 069: heart state can sync promptly, but public numeric count is
       // authoritative only after the deferred aggregate. Never manufacture +/-.
       let visibleLiked = pending.desiredLiked;
-      let visibleLikeCount = pending.optimisticLikeCount;
       let ownerUid = pending.ownerUid;
 
       if (latest && latest.updatedAt !== pending.updatedAt) {
@@ -616,7 +616,6 @@ const flushPendingLikes = async (user: User): Promise<void> => {
         latest.baseLikeCount = result.likeCount;
         latest.retryCount = 0;
         visibleLiked = latest.desiredLiked;
-        visibleLikeCount = latest.optimisticLikeCount;
         if (latest.desiredLiked === result.liked) {
           delete latestOutbox[pending.trackId];
         } else {
@@ -630,7 +629,6 @@ const flushPendingLikes = async (user: User): Promise<void> => {
         trackId: result.trackId,
         liked: visibleLiked,
         likeCount: result.likeCount,
-        displayLikeCount: visibleLikeCount,
       };
       accountSyncResults.push(visibleResult);
       accountReplayResults.push({ ...visibleResult, ownerUid });
@@ -697,12 +695,13 @@ const resumePendingLikes = (user: User) => {
     clearPendingLikeTimer(user.uid);
     return;
   }
-
+  schedulePendingLikes(user);
 };
 
 export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): Promise<string[]> => {
   const normalized = [...new Set(trackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean))].slice(0, 50);
   if (!normalized.length) return [];
+  resumePendingLikes(user);
 
   const cache = getLikedStateCache(user.uid);
   const missing = normalized.filter((trackId) => !cache.has(trackId));
@@ -773,26 +772,9 @@ export const reconcileExploreLikedTrackCollectionState = (
 
 
 export const getExploreLikeDisplayCounts = (
-  user: User,
-  trackIds: string[],
-): Record<string, number> => {
-  const ids = new Set(trackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean));
-  const outbox = readLikeOutbox(user.uid);
-  const account = readAccountPatchCache(user.uid);
-  const result: Record<string, number> = {};
-  ids.forEach((trackId) => {
-    const pending = outbox[trackId];
-    if (pending) {
-      result[trackId] = clampLikeCount(pending.optimisticLikeCount);
-      return;
-    }
-    const patch = account[trackId];
-    if (patch?.displayLikeCount !== undefined) {
-      result[trackId] = clampLikeCount(patch.displayLikeCount);
-    }
-  });
-  return result;
-};
+  _user: User,
+  _trackIds: string[],
+): Record<string, number> => ({});
 
 export const setExploreTrackLike = async (
   user: User,
@@ -815,11 +797,9 @@ export const setExploreTrackLike = async (
   const previousVisibleLiked = !liked;
   const baselineLiked = inflight?.desiredLiked ?? existing?.baseLiked ?? previousVisibleLiked;
   const baselineLikeCount = inflight?.optimisticLikeCount ?? existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);
-  // 074: public canonical count is still server-aggregated, but the person who
-  // clicked sees the expected +/- immediately. This is local display state only.
-  const optimisticLikeCount = clampLikeCount(
-    clampLikeCount(currentLikeCount) + (liked ? 1 : -1),
-  );
+  // 089: numeric likes are shared public state. Never manufacture a per-device
+  // +/- value from a possibly stale heart; only the heart is optimistic locally.
+  const optimisticLikeCount = clampLikeCount(currentLikeCount);
 
   if (!inflight && liked === baselineLiked) {
     delete outbox[normalizedTrackId];
@@ -841,6 +821,9 @@ export const setExploreTrackLike = async (
     retryCount: 0,
   };
   persistLikeOutbox(user.uid, outbox);
+  // 089: a real like change must leave this device promptly even if the user
+  // stays on Explore. The existing page-exit flush remains the final fallback.
+  schedulePendingLikes(user);
 
   return { trackId: normalizedTrackId, liked, likeCount: optimisticLikeCount };
 };

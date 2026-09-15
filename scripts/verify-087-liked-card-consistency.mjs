@@ -14,12 +14,12 @@ assert.match(like, /const nextLiked = pending \? pending\.desiredLiked : canonic
 assert.match(like, /if \(changed\) persistLikedStateCache\(normalizedUid, cache\)/);
 assert.match(page, /const canonicalLikedTrackIds = getExploreLikedTrackCollectionIds\(user\.uid\)/);
 assert.match(page, /reconcileExploreLikedTrackCollectionState/);
-assert.match(page, /effectiveLikedSet\.has\(track\.id\) && track\.likeCount === 0/);
-assert.match(page, /setProfileLikedTracks\(applyPersonalOverlay\)/);
+assert.doesNotMatch(page, /effectiveLikedSet\.has\(track\.id\) && track\.likeCount === 0/);
+assert.doesNotMatch(page, /setProfileLikedTracks\(applyPersonalOverlay\)/);
 assert.match(page, /profileUid \? profileCollection : 'feed'/);
 assert.match(page, /\[user, visibleTracks, profileUid, profileCollection, likeAccountSyncSignal\]/);
 const reconcileStart = like.indexOf('export const reconcileExploreLikedTrackCollectionState');
 const reconcileEnd = like.indexOf('export const getExploreLikeDisplayCounts', reconcileStart);
 const reconcileBody = like.slice(reconcileStart, reconcileEnd);
 assert.doesNotMatch(reconcileBody, /fetch\(|requestExploreLike\(|updateDoc\(/);
-console.log('PASS 087: canonical liked collection repairs stale heart state locally, pending outbox wins, liked-tab zero count gets a local floor, and liked-card overlay is applied without new server reads.');
+console.log('PASS 087: canonical liked collection repairs stale heart state locally, pending outbox wins, liked-card membership is repaired locally without inventing a per-device numeric count or adding server reads.');

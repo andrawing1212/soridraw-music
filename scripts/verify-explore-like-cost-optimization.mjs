@@ -39,30 +39,40 @@ const functionText = (source, needle) => {
   throw new Error(`unterminated function: ${needle}`);
 };
 
-// PREVIEW is intentionally shortened to one minute for fast iteration.
-// TEST/PRODUCTION retain the four-minute default until separately approved.
+// 089 correctness contract: actual like changes still batch, but flush within five seconds
+// so same-account devices converge promptly without per-click server writes.
 assert.match(service, /SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911/);
 assert.match(service, /SORIDRAW_EXPLORE_LIKE_PREVIEW_1MIN_TEST_037_20260911/);
 assert.match(service, /SORIDRAW_EXPLORE_LIKE_ACCOUNT_COUNT_REPLAY_065_20260911/);
-assert.match(service, /const EXPLORE_LIKE_BATCH_WINDOW_PREVIEW_MS = 60_000;/);
-assert.match(service, /const EXPLORE_LIKE_BATCH_WINDOW_DEFAULT_MS = 4 \* 60_000;/);
+assert.match(service, /const EXPLORE_LIKE_BATCH_WINDOW_PREVIEW_MS = 5_000;/);
+assert.match(service, /const EXPLORE_LIKE_BATCH_WINDOW_DEFAULT_MS = 5_000;/);
 assert.match(service, /EXPLORE_ENVIRONMENT === 'preview'/);
 assert.match(service, /const EXPLORE_LIKE_BATCH_MAX = 50;/);
 assert.match(service, /EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox'/);
 assert.match(service, /EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY = 'explore-like-account-patches'/);
 assert.match(service, /rememberAccountSyncResults\(uid, signal\.results\)/);
 const sameSession088 = service.includes('SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914');
+const crossDevice089 = service.includes('SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914');
 if (sameSession088) {
   assert.doesNotMatch(service, /replayAccountSyncPatches\(user\.uid, normalized\)/);
   assert.doesNotMatch(service, /const replayAccountSyncPatches =/);
   assert.match(service, /rememberAccountSyncResults\(uid, accountReplayResults\)/);
   const displayCountsFunction = functionText(service, 'export const getExploreLikeDisplayCounts =');
-  assert.match(displayCountsFunction, /readAccountPatchCache\(user\.uid\)/);
+  if (crossDevice089) {
+    assert.doesNotMatch(displayCountsFunction, /readAccountPatchCache\(user\.uid\)/);
+    assert.match(displayCountsFunction, /=> \(\{\}/);
+  } else {
+    assert.match(displayCountsFunction, /readAccountPatchCache\(user\.uid\)/);
+  }
 } else {
   assert.match(service, /replayAccountSyncPatches\(user\.uid, normalized\)/);
 }
 const queueFunction = functionText(service, 'export const setExploreTrackLike = async');
-assert.doesNotMatch(queueFunction, /schedulePendingLikes\(user\)/, '081 UI queue must remain local-only');
+if (crossDevice089) {
+  assert.match(queueFunction, /schedulePendingLikes\(user\)/, '089 actual changes must start one bounded batch timer');
+} else {
+  assert.doesNotMatch(queueFunction, /schedulePendingLikes\(user\)/, '081 UI queue must remain local-only');
+}
 assert.doesNotMatch(queueFunction, /requestExploreLike\(/, 'UI queue function must not call the server immediately');
 const flushFunction = functionText(service, 'const flushPendingLikes = async');
 assert.match(flushFunction, /'\/v1\/me\/likes\/batch'/);
@@ -72,7 +82,7 @@ assert.match(flushFunction, /accountSyncResults\.push\(visibleResult\)/);
 assert.match(flushFunction, /publishExploreLikeAccountSyncSignal\(user, batchEntries, accountSyncResults\)/);
 assert.doesNotMatch(service, /const EXPLORE_LIKE_IDLE_MS = 5_000;/, 'old per-track 5s flush must stay retired');
 assert.match(page, /setExploreTrackLike\(user, track\.id, !currentLiked, track\.likeCount, track\.ownerUid\)/);
-console.log('PASS client: durable like outbox stays local until 081 page-exit sync; same-account visible count replay preserved');
+console.log('PASS client: durable like outbox remains batched; 089 starts one 5s timer for actual changes, keeps heart local-first, and removes per-device numeric count fabrication');
 
 assert.ok(Array.isArray(manifest.patches));
 const requiredReleasePatches = [

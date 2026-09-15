@@ -22,7 +22,6 @@ import {
   EXPLORE_LIKE_SYNC_ERROR_EVENT,
   EXPLORE_LIKE_SYNC_EVENT,
   getExploreLikedTrackIds,
-  getExploreLikeDisplayCounts,
   reconcileExploreLikedTrackCollectionState,
   setExploreTrackLike,
 } from '../services/exploreLikeService';
@@ -93,6 +92,7 @@ const EXPLORE_LIKE_FRESH_FEED_QUERY_072 = '__soridraw_like_refresh';
 // SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912
 // SORIDRAW_EXPLORE_UID_SCOPED_LIKE_OVERLAY_075_20260913
 // SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
+// SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914
 // Forced like-count recovery must use the unique fresh Feed URL even when this
 // browser has no session Feed cache yet (for example immediately after app update).
 
@@ -665,16 +665,12 @@ export default function ExplorePage() {
           effectiveLikedTrackIds.forEach((trackId) => { next[trackId] = true; });
           return next;
         });
-        const normalizedLikedRows = normalizedRows.map((track) => (
-          effectiveLikedSet.has(track.id) && track.likeCount === 0
-            ? { ...track, likeCount: 1 }
-            : track
-        ));
+        const normalizedLikedRows = normalizedRows;
         setProfileLikedTracks((previous) => {
           const merged = new Map(normalizedLikedRows.map((track) => [track.id, track]));
           previous.forEach((track) => {
             if (!effectiveLikedSet.has(track.id) || merged.has(track.id)) return;
-            merged.set(track.id, track.likeCount === 0 ? { ...track, likeCount: 1 } : track);
+            merged.set(track.id, track);
           });
           return [...merged.values()];
         });
@@ -713,16 +709,7 @@ export default function ExplorePage() {
           likedIds.forEach((id) => { next[id] = true; });
           return next;
         });
-        const displayCounts = getExploreLikeDisplayCounts(user, ids);
-        const applyPersonalOverlay = (list: ExploreTrack[]) => list.map((track) => {
-          const displayCount = displayCounts[track.id];
-          if (displayCount !== undefined) return { ...track, likeCount: displayCount };
-          if (likedSet.has(track.id) && track.likeCount === 0) return { ...track, likeCount: 1 };
-          return track;
-        });
-        setTracks(applyPersonalOverlay);
-        setProfileTracks(applyPersonalOverlay);
-        setProfileLikedTracks(applyPersonalOverlay);
+        // 089: heart membership is personal; numeric likeCount stays on the shared public feed/profile value.
       })
       .catch((reason) => {
         console.warn('Explore like state hydration failed:', reason);
@@ -807,13 +794,6 @@ export default function ExplorePage() {
     }
   };
 
-  const updateTrackLikeCount = (trackId: string, likeCount: number) => {
-    const patch = (list: ExploreTrack[]) => list.map((track) => track.id === trackId ? { ...track, likeCount } : track);
-    setTracks(patch);
-    setProfileTracks(patch);
-    setProfileLikedTracks(patch);
-  };
-
   // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
   useEffect(() => {
     let aggregateRefreshTimer: number | null = null;
@@ -879,13 +859,6 @@ export default function ExplorePage() {
       const trackId = String(detail?.trackId || '').trim();
       if (!trackId || typeof detail?.liked !== 'boolean') return;
       setLikedTrackIds((prev) => ({ ...prev, [trackId]: detail.liked as boolean }));
-      // 074 same-account display: carry only the local optimistic number.
-      // Legacy signals do not include displayLikeCount, so they stay heart-only.
-      const displayLikeCount = Number(detail.displayLikeCount);
-      if (Number.isFinite(displayLikeCount)) {
-        const nextCount = safeCount(displayLikeCount);
-        updateTrackLikeCount(trackId, nextCount);
-      }
       scheduleAggregateCountRefresh071();
     };
     const onLikeSyncError = (event: Event) => {
@@ -929,7 +902,6 @@ export default function ExplorePage() {
         if (!result.liked) return previous.filter((item) => item.id !== track.id);
         return previous.some((item) => item.id === track.id) ? previous : [track, ...previous];
       });
-      updateTrackLikeCount(track.id, result.likeCount);
     } catch (reason) {
       console.error('Explore like failed:', reason);
       setSocialNotice(reason instanceof Error ? reason.message : '좋아요 처리에 실패했어요.');

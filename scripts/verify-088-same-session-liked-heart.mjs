@@ -5,7 +5,7 @@ const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const like = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(String(version.version), '088');
+assert.ok(Number(version.version) >= 88, `expected app version 088+, got ${version.version}`);
 assert.match(like, /SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914/);
 assert.doesNotMatch(like, /const replayAccountSyncPatches =/);
 assert.doesNotMatch(like, /replayAccountSyncPatches\(user\.uid, normalized\)/);
@@ -16,10 +16,10 @@ assert.match(like, /rememberAccountSyncResults\(uid, accountReplayResults\);/);
 assert.match(like, /return normalized\.filter\(\(trackId\) => outbox\[trackId\]\?\.desiredLiked \?\? cache\.get\(trackId\) === true\);/);
 
 assert.match(page, /profileUid === user\?\.uid \? previous : \[\]/);
-assert.match(page, /const normalizedLikedRows = normalizedRows\.map/);
+assert.match(page, /const normalizedLikedRows = normalizedRows;/);
 assert.match(page, /previous\.forEach\(\(track\) => \{/);
 assert.match(page, /!effectiveLikedSet\.has\(track\.id\) \|\| merged\.has\(track\.id\)/);
-assert.match(page, /merged\.set\(track\.id, track\.likeCount === 0 \? \{ \.\.\.track, likeCount: 1 \} : track\)/);
+assert.match(page, /merged\.set\(track\.id, track\);/);
 
 const setLikeStart = like.indexOf('export const setExploreTrackLike');
 const setLikeEnd = like.indexOf('\n};', setLikeStart) + 3;

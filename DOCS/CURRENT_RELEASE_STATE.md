@@ -34,7 +34,7 @@
 - 사용자 데이터/Firestore schema/Functions/Firebase/Cloudflare live 변경 없음. **아직 PREVIEW Hosting/Media Worker 미배포**.
 - TEST `main`과 PRODUCTION에는 기존 Catalog 구조가 남아 있으므로 PREVIEW 실사용 비용 검증 전 승격 금지. 안정화 후 exact PREVIEW tree를 TEST로 승격해 TEST에서도 동일 비용 구조를 맞춘다. PRODUCTION은 명확한 정식배포 승인 전 금지.
 
-## 4. 091 좋아요 표시 구조
+## 3. 091 좋아요 표시 구조
 090의 페이지별 숫자 불일치 문제를 091에서 수정했다.
 
 원칙:

@@ -1,4 +1,4 @@
-requested_at=2026-09-15T15:19:48Z
+requested_at=2026-09-15T15:52:00Z
 requested_by=user
-product_code_target=5de141a4f957da9e73827a65c9921cd9c9175372
-release_purpose=096_explore_like_cross_device_replay
+product_code_target=ae5748298eb612a6d592d58293898a58f8c99872
+release_purpose=097_explore_like_pending_acknowledgement

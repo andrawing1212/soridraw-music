@@ -7,10 +7,11 @@ const verifierPath = 'scripts/verify-085-liked-profile.mjs';
 const marker = '// SORIDRAW_LIKED_TRACK_PUBLIC_PROFILE_JOIN_056_20260915';
 const badJoin = 'LEFT JOIN profiles p ON p.uid = t.owner_uid';
 const goodJoin = 'LEFT JOIN public_profiles p ON p.uid = t.owner_uid';
+const nextFunction = 'async function handleMySocialSnapshot042';
 
 let worker = readFileSync(workerPath, 'utf8');
 const start = worker.indexOf('async function handleMyLikedTracks052');
-const end = worker.indexOf('__name(handleMyLikedTracks052', start);
+const end = worker.indexOf(nextFunction, start);
 if (start < 0 || end < 0) throw new Error('handleMyLikedTracks052 range not found');
 let block = worker.slice(start, end);
 
@@ -28,7 +29,7 @@ if (!worker.includes(marker)) {
 }
 
 const fixedStart = worker.indexOf('async function handleMyLikedTracks052');
-const fixedEnd = worker.indexOf('__name(handleMyLikedTracks052', fixedStart);
+const fixedEnd = worker.indexOf(nextFunction, fixedStart);
 const fixedBlock = worker.slice(fixedStart, fixedEnd);
 if (!worker.includes(marker)) throw new Error('056 marker missing');
 if (!fixedBlock.includes(goodJoin)) throw new Error('public_profiles join missing after patch');

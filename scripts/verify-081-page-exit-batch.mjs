@@ -25,8 +25,16 @@ assert.ok(coordinator.includes('flushPendingCatalogPublishes'), 'catalog delta n
 
 assert.ok(likes.includes('export const getPendingExploreLikeMutationCount'), 'like pending count export missing');
 assert.ok(likes.includes('export const flushPendingExploreLikesForPageExit'), 'like page-exit flush export missing');
-assert.ok(!likes.includes('schedulePendingLikes(user);'), 'like mutation still schedules automatic network flush');
-assert.ok(!likes.includes('resumePendingLikes(user);'), 'like read path still schedules pending network flush');
+const crossDevice089 = likes.includes('SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914');
+if (crossDevice089) {
+  assert.ok(likes.includes('const EXPLORE_LIKE_BATCH_WINDOW_PREVIEW_MS = 5_000;'), '089 preview batch window must remain 5s');
+  assert.ok(likes.includes('const EXPLORE_LIKE_BATCH_WINDOW_DEFAULT_MS = 5_000;'), '089 default batch window must remain 5s');
+  assert.ok(likes.includes('schedulePendingLikes(user);'), '089 like changes must schedule one bounded batched flush');
+  assert.ok(likes.includes('resumePendingLikes(user);'), '089 persisted pending likes must resume batched flush after restart');
+} else {
+  assert.ok(!likes.includes('schedulePendingLikes(user);'), 'like mutation still schedules automatic network flush');
+  assert.ok(!likes.includes('resumePendingLikes(user);'), 'like read path still schedules pending network flush');
+}
 
 for (const token of [
   'EXPLORE_PUBLICATION_OUTBOX_CACHE_KEY',
@@ -69,4 +77,6 @@ if (process.env.SORIDRAW_GENERATED_WORKER) {
   ]) assert.ok(worker.includes(token), `generated Worker missing ${token}`);
 }
 
-console.log('PASS 081: zero-dirty navigation has no server request; likes/publications/catalog are page-exit batched; unload is local-only; startup replays durable pending changes.');
+console.log(crossDevice089
+  ? 'PASS 081/089: zero-dirty navigation has no request; likes use one 5s batched flush plus page-exit fallback; publications/catalog remain page-exit batched; unload stays local-only.'
+  : 'PASS 081: zero-dirty navigation has no server request; likes/publications/catalog are page-exit batched; unload is local-only; startup replays durable pending changes.');

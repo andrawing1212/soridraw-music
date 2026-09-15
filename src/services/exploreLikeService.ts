@@ -17,6 +17,13 @@ import {
   invalidateExploreLikedTrackCollection,
   patchExploreLikedTrackMembership,
 } from './exploreLikedTracksService';
+import {
+  acceptExploreLikeDisplayTransition091,
+  beginExploreLikeDisplayTransition091,
+  getExploreLikeCanonicalCount091,
+  getExploreLikeDisplayCount091,
+  importExploreLikeDisplaySignal091,
+} from './exploreLikeDisplayStateService';
 
 // SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
 // SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911
@@ -34,6 +41,7 @@ import {
 // SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914
 // SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914
 // SORIDRAW_EXPLORE_LIKE_LIVE_DISPLAY_090_20260915
+// SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -410,6 +418,10 @@ export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) 
   for (const result of effectiveResults) {
     cache.set(result.trackId, result.liked);
     patchExploreLikedTrackMembership(uid, result.trackId, result.liked);
+    importExploreLikeDisplaySignal091(
+      uid, result.trackId, result.ownerUid, result.liked, result.displayLikeCount,
+      Boolean(pendingOutbox[result.trackId]),
+    );
     dispatchLikeSync({
       uid: user.uid,
       trackId: result.trackId,
@@ -619,25 +631,30 @@ const flushPendingLikes = async (user: User): Promise<void> => {
       let visibleLiked = pending.desiredLiked;
       let ownerUid = pending.ownerUid;
 
-      if (latest && latest.updatedAt !== pending.updatedAt) {
+      const hasNewerPending = Boolean(latest && latest.updatedAt !== pending.updatedAt);
+      if (hasNewerPending && latest) {
         ownerUid = latest.ownerUid || ownerUid;
         latest.baseLiked = result.liked;
-        latest.baseLikeCount = result.likeCount;
+        latest.baseLikeCount = getExploreLikeCanonicalCount091(uid, result.trackId, latest.baseLikeCount);
         latest.retryCount = 0;
         visibleLiked = latest.desiredLiked;
         if (latest.desiredLiked === result.liked) {
           delete latestOutbox[pending.trackId];
+          acceptExploreLikeDisplayTransition091(uid, result.trackId, visibleLiked);
         } else {
           latestOutbox[pending.trackId] = latest;
         }
       } else {
         delete latestOutbox[pending.trackId];
+        acceptExploreLikeDisplayTransition091(uid, result.trackId, result.liked);
       }
 
+      const displayLikeCount = getExploreLikeDisplayCount091(uid, result.trackId, pending.optimisticLikeCount);
       const visibleResult = {
         trackId: result.trackId,
         liked: visibleLiked,
         likeCount: result.likeCount,
+        displayLikeCount,
       };
       accountSyncResults.push(visibleResult);
       accountReplayResults.push({ ...visibleResult, ownerUid });
@@ -794,32 +811,27 @@ export const setExploreTrackLike = async (
 ): Promise<{ trackId: string; liked: boolean; likeCount: number }> => {
   const normalizedTrackId = String(trackId || '').trim();
   if (!normalizedTrackId) throw new Error('Explore 곡 ID를 확인하지 못했습니다.');
-  patchExplorePersonalSocialLike(user.uid, normalizedTrackId, liked);
-  patchExploreLikedTrackMembership(user.uid, normalizedTrackId, liked);
-  const optimisticLikedCache = getLikedStateCache(user.uid);
-  optimisticLikedCache.set(normalizedTrackId, liked);
-  persistLikedStateCache(user.uid, optimisticLikedCache);
-
   const outbox = readLikeOutbox(user.uid);
   const existing = outbox[normalizedTrackId];
   const inflight = getInflightMutation(user.uid, normalizedTrackId);
-  const previousVisibleLiked = !liked;
+  const optimisticLikedCache = getLikedStateCache(user.uid);
+  const previousVisibleLiked = existing?.desiredLiked ?? inflight?.desiredLiked ?? optimisticLikedCache.get(normalizedTrackId) ?? !liked;
+  const canonicalLikeCount = getExploreLikeCanonicalCount091(user.uid, normalizedTrackId, currentLikeCount);
   const baselineLiked = inflight?.desiredLiked ?? existing?.baseLiked ?? previousVisibleLiked;
-  const baselineLikeCount = inflight?.optimisticLikeCount ?? existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);
-  // 090: move the number only for this device's concrete pending transition.
-  // The delta is anchored to one stable baseline, so rapid like/unlike returns
-  // to the baseline instead of stacking +1/-1 from stale cross-device hearts.
-  const optimisticLikeCount = clampLikeCount(
-    baselineLikeCount + Number(liked) - Number(baselineLiked),
+  const baselineLikeCount = existing?.baseLikeCount ?? canonicalLikeCount;
+  const optimisticLikeCount = beginExploreLikeDisplayTransition091(
+    user.uid, normalizedTrackId, ownerUid, previousVisibleLiked, liked, canonicalLikeCount,
   );
-
+  patchExplorePersonalSocialLike(user.uid, normalizedTrackId, liked);
+  patchExploreLikedTrackMembership(user.uid, normalizedTrackId, liked);
+  optimisticLikedCache.set(normalizedTrackId, liked);
+  persistLikedStateCache(user.uid, optimisticLikedCache);
   if (!inflight && liked === baselineLiked) {
     delete outbox[normalizedTrackId];
     persistLikeOutbox(user.uid, outbox);
     if (!Object.keys(outbox).length) clearPendingLikeTimer(user.uid);
     return { trackId: normalizedTrackId, liked, likeCount: optimisticLikeCount };
   }
-
   const now = Date.now();
   outbox[normalizedTrackId] = {
     trackId: normalizedTrackId,
@@ -833,9 +845,6 @@ export const setExploreTrackLike = async (
     retryCount: 0,
   };
   persistLikeOutbox(user.uid, outbox);
-  // 089: a real like change must leave this device promptly even if the user
-  // stays on Explore. The existing page-exit flush remains the final fallback.
   schedulePendingLikes(user);
-
   return { trackId: normalizedTrackId, liked, likeCount: optimisticLikeCount };
 };

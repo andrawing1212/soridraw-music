@@ -14,7 +14,8 @@ assert.match(like, /const nextLiked = pending \? pending\.desiredLiked : canonic
 assert.match(like, /if \(changed\) persistLikedStateCache\(normalizedUid, cache\)/);
 assert.match(page, /const canonicalLikedTrackIds = getExploreLikedTrackCollectionIds\(user\.uid\)/);
 assert.match(page, /reconcileExploreLikedTrackCollectionState/);
-assert.match(page, /effectiveLikedSet\.has\(track\.id\) && track\.likeCount === 0/);
+assert.doesNotMatch(page, /effectiveLikedSet\.has\(track\.id\) && track\.likeCount === 0/);
+assert.match(page, /getExploreLikeDisplayCount091/);
 assert.doesNotMatch(page, /setProfileLikedTracks\(applyPersonalOverlay\)/);
 assert.match(page, /profileUid \? profileCollection : 'feed'/);
 assert.match(page, /\[user, visibleTracks, profileUid, profileCollection, likeAccountSyncSignal\]/);
@@ -22,4 +23,4 @@ const reconcileStart = like.indexOf('export const reconcileExploreLikedTrackColl
 const reconcileEnd = like.indexOf('export const getExploreLikeDisplayCounts', reconcileStart);
 const reconcileBody = like.slice(reconcileStart, reconcileEnd);
 assert.doesNotMatch(reconcileBody, /fetch\(|requestExploreLike\(|updateDoc\(/);
-console.log('PASS 087: canonical liked collection repairs stale heart state locally, pending outbox wins, liked-card membership is repaired locally, a liked card cannot display zero, and no new server reads are added.');
+console.log('PASS 087: canonical liked collection repairs stale heart state locally, pending outbox wins, liked-card membership is repaired locally, display counts are shared without mutating canonical card cache, and no new server reads are added.');

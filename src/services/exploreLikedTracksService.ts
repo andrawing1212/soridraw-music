@@ -10,6 +10,7 @@ import {
 // SORIDRAW_EXPLORE_LIKED_TRACK_COLLECTION_085_20260914
 // SORIDRAW_EXPLORE_LIKED_TRACK_CANONICAL_REPAIR_086_20260914
 // SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914
+// SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915
 const LIKED_TRACK_CACHE_SCHEMA_VERSION = 1;
 const LIKED_TRACK_CACHE_KEY = 'explore-liked-track-collection-085';
 const LIKED_TRACK_CACHE_SOURCE_TYPE = 'explore_liked_track_collection';
@@ -181,6 +182,23 @@ export const rememberExploreLikedTrack = (
     delete cache.items[trackId];
     delete cache.unavailable[trackId];
   }
+  writeCache(normalizedUid, cache);
+};
+
+export const patchExploreLikedTrackCachedCount091 = (
+  uid: string,
+  trackId: string,
+  likeCount: number,
+) => {
+  const normalizedUid = normalizeId(uid);
+  const normalizedTrackId = normalizeId(trackId);
+  if (!normalizedUid || !normalizedTrackId) return;
+  const cache = readCache(normalizedUid);
+  const item = cache.items[normalizedTrackId];
+  if (!item) return;
+  const normalizedCount = Math.max(0, Math.floor(Number(likeCount || 0)));
+  if (Number(item.likeCount || 0) === normalizedCount) return;
+  cache.items[normalizedTrackId] = { ...item, likeCount: normalizedCount };
   writeCache(normalizedUid, cache);
 };
 

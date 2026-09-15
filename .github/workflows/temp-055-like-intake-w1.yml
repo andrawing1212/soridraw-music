@@ -48,6 +48,23 @@ jobs:
           sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
           node --check cloudflare/explore-worker/canonical/preview-worker.js
 
+      - name: Align existing like cost verifier to 055 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'scripts/verify-explore-like-cost-optimization.mjs';
+          let source = fs.readFileSync(path, 'utf8');
+          const old = "if (worker.includes('SORIDRAW_LOCAL_FIRST_COST_HOTPATH_044_20260913')) {\n  assert.match(batchBody, /enqueueExploreLikeUserQueue075/);";
+          const next = "if (worker.includes('SORIDRAW_LOCAL_FIRST_COST_HOTPATH_044_20260913')) {\n  if (worker.includes('SORIDRAW_EXPLORE_LIKE_INTAKE_W1_HOTPATH_055_20260915')) {\n    assert.match(batchBody, /enqueueExploreLikeBatch035/);\n    assert.doesNotMatch(batchBody, /enqueueExploreLikeUserQueue075/);\n  } else {\n    assert.match(batchBody, /enqueueExploreLikeUserQueue075/);\n  }";
+          if (!source.includes(old) && !source.includes("SORIDRAW_EXPLORE_LIKE_INTAKE_W1_HOTPATH_055_20260915')) {
+            throw new Error('expected 044 verifier anchor missing');
+          }
+          if (source.includes(old)) source = source.replace(old, next);
+          fs.writeFileSync(path, source);
+          NODE
+
       - name: Verify 055 cost and regression contracts
         shell: bash
         run: |
@@ -106,7 +123,7 @@ jobs:
           set -euo pipefail
           changed="$(git diff --name-only | grep -v '^dist/' || true)"
           echo "$changed"
-          bad="$(printf '%s\n' "$changed" | grep -Ev '^(cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt)$' || true)"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt|scripts/verify-explore-like-cost-optimization\.mjs)$' || true)"
           if [ -n "$bad" ]; then
             echo 'Unexpected generated changes:'
             echo "$bad"
@@ -120,11 +137,11 @@ jobs:
           echo 'NO_FIREBASE_CHANGE=true'
           echo 'NO_UI_CHANGE=true'
 
-      - name: Commit validated 055 canonical source
+      - name: Commit validated 055 canonical source and verifier
         shell: bash
         run: |
           set -euo pipefail
-          files=(cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt)
+          files=(cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt scripts/verify-explore-like-cost-optimization.mjs)
           if git diff --quiet -- "${files[@]}"; then
             echo '055 canonical already applied.'
             exit 0

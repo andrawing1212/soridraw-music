@@ -50,7 +50,7 @@ assert.match(service, /EXPLORE_ENVIRONMENT === 'preview'/);
 assert.match(service, /const EXPLORE_LIKE_BATCH_MAX = 50;/);
 assert.match(service, /EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox'/);
 assert.match(service, /EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY = 'explore-like-account-patches'/);
-assert.match(service, /rememberAccountSyncResults\(uid, signal\.results\)/);
+assert.match(service, /rememberAccountSyncResults\(uid, effectiveResults\)/);
 const sameSession088 = service.includes('SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914');
 const crossDevice089 = service.includes('SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914');
 if (sameSession088) {
@@ -82,7 +82,7 @@ assert.match(flushFunction, /accountSyncResults\.push\(visibleResult\)/);
 assert.match(flushFunction, /publishExploreLikeAccountSyncSignal\(user, batchEntries, accountSyncResults\)/);
 assert.doesNotMatch(service, /const EXPLORE_LIKE_IDLE_MS = 5_000;/, 'old per-track 5s flush must stay retired');
 assert.match(page, /setExploreTrackLike\(user, track\.id, !currentLiked, track\.likeCount, track\.ownerUid\)/);
-console.log('PASS client: durable like outbox remains batched; 089 starts one 5s timer for actual changes, keeps heart local-first, and removes per-device numeric count fabrication');
+console.log('PASS client: durable like outbox remains batched; 090 keeps one 5s timer, limits numeric optimism to the current pending transition, and adds no per-click server request');
 
 assert.ok(Array.isArray(manifest.patches));
 const requiredReleasePatches = [

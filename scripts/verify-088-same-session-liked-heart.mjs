@@ -16,10 +16,10 @@ assert.match(like, /rememberAccountSyncResults\(uid, accountReplayResults\);/);
 assert.match(like, /return normalized\.filter\(\(trackId\) => outbox\[trackId\]\?\.desiredLiked \?\? cache\.get\(trackId\) === true\);/);
 
 assert.match(page, /profileUid === user\?\.uid \? previous : \[\]/);
-assert.match(page, /const normalizedLikedRows = normalizedRows;/);
+assert.match(page, /const normalizedLikedRows = normalizedRows\.map/);
 assert.match(page, /previous\.forEach\(\(track\) => \{/);
 assert.match(page, /!effectiveLikedSet\.has\(track\.id\) \|\| merged\.has\(track\.id\)/);
-assert.match(page, /merged\.set\(track\.id, track\);/);
+assert.match(page, /merged\.set\(track\.id, track\.likeCount === 0 \? \{ \.\.\.track, likeCount: 1 \} : track\);/);
 
 const setLikeStart = like.indexOf('export const setExploreTrackLike');
 const setLikeEnd = like.indexOf('\n};', setLikeStart) + 3;

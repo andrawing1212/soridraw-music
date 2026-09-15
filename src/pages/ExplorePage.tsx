@@ -93,6 +93,7 @@ const EXPLORE_LIKE_FRESH_FEED_QUERY_072 = '__soridraw_like_refresh';
 // SORIDRAW_EXPLORE_UID_SCOPED_LIKE_OVERLAY_075_20260913
 // SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
 // SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914
+// SORIDRAW_EXPLORE_LIKE_LIVE_DISPLAY_090_20260915
 // Forced like-count recovery must use the unique fresh Feed URL even when this
 // browser has no session Feed cache yet (for example immediately after app update).
 
@@ -343,6 +344,7 @@ export default function ExplorePage() {
   const feedRevisionActivityAtRef = useRef(0);
   const forceLikeCountRefreshRef071 = useRef(false);
   const likeCountRepairKeyRef072 = useRef('');
+  const likeInteractionVersionRef090 = useRef(0);
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
     setUser(currentUser);
@@ -665,12 +667,16 @@ export default function ExplorePage() {
           effectiveLikedTrackIds.forEach((trackId) => { next[trackId] = true; });
           return next;
         });
-        const normalizedLikedRows = normalizedRows;
+        const normalizedLikedRows = normalizedRows.map((track) => (
+          effectiveLikedSet.has(track.id) && track.likeCount === 0
+            ? { ...track, likeCount: 1 }
+            : track
+        ));
         setProfileLikedTracks((previous) => {
           const merged = new Map(normalizedLikedRows.map((track) => [track.id, track]));
           previous.forEach((track) => {
             if (!effectiveLikedSet.has(track.id) || merged.has(track.id)) return;
-            merged.set(track.id, track);
+            merged.set(track.id, track.likeCount === 0 ? { ...track, likeCount: 1 } : track);
           });
           return [...merged.values()];
         });
@@ -699,9 +705,15 @@ export default function ExplorePage() {
     likeHydrationKeyRef.current = hydrationKey;
 
     let cancelled = false;
+    const interactionVersion = likeInteractionVersionRef090.current;
     getExploreLikedTrackIds(user, ids)
       .then((likedIds) => {
         if (cancelled) return;
+        if (interactionVersion !== likeInteractionVersionRef090.current) {
+          likeHydrationKeyRef.current = '';
+          setLikeAccountSyncSignal((value) => value + 1);
+          return;
+        }
         const likedSet = new Set(likedIds);
         setLikedTrackIds((prev) => {
           const next = { ...prev };
@@ -720,16 +732,22 @@ export default function ExplorePage() {
   }, [user, visibleTracks, profileUid, profileCollection, likeAccountSyncSignal]);
 
   useEffect(() => {
-    if (!user?.uid || profileUid || !isExploreFeedRequest(requestUrl) || !tracks.length) return;
-    const selfLikedZeroTracks = tracks
-      .filter((track) => track.likeCount === 0 && likedTrackIds[track.id] === true);
-    if (!selfLikedZeroTracks.length) return;
-    // 074: a signed-in user who has this track liked must see at least 1
-    // immediately. This is a local-only display floor and causes no server read.
-    // The scheduled aggregate/fresh refresh still replaces it with canonical data.
-    const ids = new Set(selfLikedZeroTracks.map((track) => track.id));
-    setTracks((previous) => previous.map((track) => ids.has(track.id) ? { ...track, likeCount: 1 } : track));
-  }, [user?.uid, profileUid, requestUrl, tracks, likedTrackIds]);
+    if (!user?.uid) return;
+    // 090: liked membership itself proves the shared count cannot be zero.
+    // Apply only the safe floor 0 -> 1 on every local card source, with no fetch.
+    const patchLikedZeroFloor = (list: ExploreTrack[]) => {
+      let changed = false;
+      const next = list.map((track) => {
+        if (track.likeCount !== 0 || likedTrackIds[track.id] !== true) return track;
+        changed = true;
+        return { ...track, likeCount: 1 };
+      });
+      return changed ? next : list;
+    };
+    setTracks(patchLikedZeroFloor);
+    setProfileTracks(patchLikedZeroFloor);
+    setProfileLikedTracks(patchLikedZeroFloor);
+  }, [user?.uid, likedTrackIds]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -792,6 +810,21 @@ export default function ExplorePage() {
     } finally {
       setLoadingMore(false);
     }
+  };
+
+  const updateTrackLikeCount090 = (trackId: string, likeCount: number) => {
+    const patch = (list: ExploreTrack[]) => {
+      let changed = false;
+      const next = list.map((track) => {
+        if (track.id !== trackId || track.likeCount === likeCount) return track;
+        changed = true;
+        return { ...track, likeCount };
+      });
+      return changed ? next : list;
+    };
+    setTracks(patch);
+    setProfileTracks(patch);
+    setProfileLikedTracks(patch);
   };
 
   // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
@@ -891,16 +924,20 @@ export default function ExplorePage() {
     }
     if (likeBusyTrackId) return;
     const currentLiked = Boolean(likedTrackIds[track.id]);
+    likeInteractionVersionRef090.current += 1;
     setLikeBusyTrackId(track.id);
     try {
       const result = await setExploreTrackLike(user, track.id, !currentLiked, track.likeCount, track.ownerUid);
-      // 074: heart and the clicker's visible number move immediately. Canonical
-      // server count is still confirmed only by the existing deferred aggregate.
+      const optimisticTrack = { ...track, likeCount: result.likeCount };
+      // 090: heart and count move together from one pending transition. The
+      // shared aggregate still replaces the temporary number on its normal cycle.
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
-      rememberExploreLikedTrack(user.uid, track as unknown as Record<string, unknown>, result.liked);
+      updateTrackLikeCount090(track.id, result.likeCount);
+      rememberExploreLikedTrack(user.uid, optimisticTrack as unknown as Record<string, unknown>, result.liked);
       setProfileLikedTracks((previous) => {
         if (!result.liked) return previous.filter((item) => item.id !== track.id);
-        return previous.some((item) => item.id === track.id) ? previous : [track, ...previous];
+        const rest = previous.filter((item) => item.id !== track.id);
+        return [optimisticTrack, ...rest];
       });
     } catch (reason) {
       console.error('Explore like failed:', reason);

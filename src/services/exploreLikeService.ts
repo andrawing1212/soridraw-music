@@ -33,6 +33,7 @@ import {
 // SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914
 // SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914
 // SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914
+// SORIDRAW_EXPLORE_LIKE_LIVE_DISPLAY_090_20260915
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -397,8 +398,16 @@ export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) 
     invalidateExploreLikedTrackCollection(uid);
   }
 
-  rememberAccountSyncResults(uid, signal.results);
-  for (const result of signal.results) {
+  // 090: a local pending click is newer UI intent than an account signal that
+  // arrives from another device. Keep the pending heart until this device's own
+  // batch is confirmed; otherwise a remote signal can visibly roll the heart back.
+  const pendingOutbox = readLikeOutbox(uid);
+  const effectiveResults = signal.results.map((result) => {
+    const pending = pendingOutbox[result.trackId];
+    return pending ? { ...result, liked: pending.desiredLiked } : result;
+  });
+  rememberAccountSyncResults(uid, effectiveResults);
+  for (const result of effectiveResults) {
     cache.set(result.trackId, result.liked);
     patchExploreLikedTrackMembership(uid, result.trackId, result.liked);
     dispatchLikeSync({
@@ -797,9 +806,12 @@ export const setExploreTrackLike = async (
   const previousVisibleLiked = !liked;
   const baselineLiked = inflight?.desiredLiked ?? existing?.baseLiked ?? previousVisibleLiked;
   const baselineLikeCount = inflight?.optimisticLikeCount ?? existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);
-  // 089: numeric likes are shared public state. Never manufacture a per-device
-  // +/- value from a possibly stale heart; only the heart is optimistic locally.
-  const optimisticLikeCount = clampLikeCount(currentLikeCount);
+  // 090: move the number only for this device's concrete pending transition.
+  // The delta is anchored to one stable baseline, so rapid like/unlike returns
+  // to the baseline instead of stacking +1/-1 from stale cross-device hearts.
+  const optimisticLikeCount = clampLikeCount(
+    baselineLikeCount + Number(liked) - Number(baselineLiked),
+  );
 
   if (!inflight && liked === baselineLiked) {
     delete outbox[normalizedTrackId];

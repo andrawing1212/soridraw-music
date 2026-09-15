@@ -49,6 +49,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Set up Java 21 for RTDB emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Compile RTDB rules in local emulator only
         shell: bash
         run: |

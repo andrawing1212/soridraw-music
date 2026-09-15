@@ -18,10 +18,28 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: npm
       - name: Apply 090 live like repair
-        run: python3 scripts/temp-089-like-cross-device-repair.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/temp-089-like-cross-device-repair.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/verify-explore-like-cost-optimization.mjs')
+          text = path.read_text()
+          old = "assert.match(service, /rememberAccountSyncResults\\(uid, signal\\.results\\)/);"
+          new = "assert.match(service, /rememberAccountSyncResults\\(uid, effectiveResults\\)/);"
+          if text.count(old) != 1:
+              raise SystemExit(f'090 cost signal verifier: expected 1 match, got {text.count(old)}')
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              "PASS client: durable like outbox remains batched; 089 starts one 5s timer for actual changes, keeps heart local-first, and removes per-device numeric count fabrication",
+              "PASS client: durable like outbox remains batched; 090 keeps one 5s timer, limits numeric optimism to the current pending transition, and adds no per-click server request",
+          )
+          path.write_text(text)
+          PY
       - name: Install
         run: npm ci --no-audit --no-fund
       - name: TypeScript
@@ -47,7 +65,7 @@ jobs:
           set -euo pipefail
           git config user.name 'andrawing1212'
           git config user.email 'andrawing1212@gmail.com'
-          git add src/services/exploreLikeService.ts src/pages/ExplorePage.tsx public/app-version.json scripts/verify-087-liked-card-consistency.mjs scripts/verify-088-same-session-liked-heart.mjs scripts/verify-089-like-cross-device-consistency.mjs scripts/verify-090-like-live-display.mjs
+          git add src/services/exploreLikeService.ts src/pages/ExplorePage.tsx public/app-version.json scripts/verify-087-liked-card-consistency.mjs scripts/verify-088-same-session-liked-heart.mjs scripts/verify-089-like-cross-device-consistency.mjs scripts/verify-090-like-live-display.mjs scripts/verify-explore-like-cost-optimization.mjs
           git diff --cached --check
           git commit -m 'fix(preview): repair live like heart and count 090'
           git push origin HEAD:preview

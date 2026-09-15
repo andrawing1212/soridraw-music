@@ -11,16 +11,20 @@ import {
 // SORIDRAW_EXPLORE_LIKED_TRACK_CANONICAL_REPAIR_086_20260914
 // SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914
 // SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915
+// SORIDRAW_EXPLORE_LIKED_CARD_RETENTION_100_20260916
 const LIKED_TRACK_CACHE_SCHEMA_VERSION = 1;
 const LIKED_TRACK_CACHE_KEY = 'explore-liked-track-collection-085';
 const LIKED_TRACK_CACHE_SOURCE_TYPE = 'explore_liked_track_collection';
 const LIKED_TRACK_ROUTE = '/v1/me/liked-tracks';
 const LIKED_TRACK_BATCH_MAX = 200;
+const LIKED_TRACK_DORMANT_CARD_MAX = 100;
+const LIKED_TRACK_DORMANT_CARD_TTL_MS = 7 * 24 * 60 * 60_000;
 
 type LikedTrackCacheData = {
   items: Record<string, Record<string, unknown>>;
   unavailable: Record<string, boolean>;
   canonicalLikedTrackIds: string[] | null;
+  dormantSince: Record<string, number>;
 };
 
 type LikedTrackResponse = {
@@ -62,10 +66,44 @@ const normalizeCache = (value: unknown): LikedTrackCacheData => {
     if (id && state === true) unavailable[id] = true;
   }
 
+  const rawDormantSince = row.dormantSince && typeof row.dormantSince === 'object' && !Array.isArray(row.dormantSince)
+    ? row.dormantSince as Record<string, unknown>
+    : {};
+  const dormantSince: Record<string, number> = {};
+  for (const [trackId, value] of Object.entries(rawDormantSince)) {
+    const id = normalizeId(trackId);
+    const at = Math.max(0, Number(value || 0));
+    if (id && items[id] && Number.isFinite(at) && at > 0) dormantSince[id] = at;
+  }
+
   const canonicalLikedTrackIds = Array.isArray(row.canonicalLikedTrackIds)
     ? normalizeIds(row.canonicalLikedTrackIds)
     : null;
-  return { items, unavailable, canonicalLikedTrackIds };
+  return { items, unavailable, canonicalLikedTrackIds, dormantSince };
+};
+
+const trimDormantCards = (data: LikedTrackCacheData) => {
+  if (data.canonicalLikedTrackIds === null) return;
+  const liked = new Set(normalizeIds(data.canonicalLikedTrackIds));
+  const now = Date.now();
+
+  for (const trackId of liked) delete data.dormantSince[trackId];
+
+  const dormant = Object.keys(data.items)
+    .filter((trackId) => !liked.has(trackId))
+    .map((trackId) => ({ trackId, at: Math.max(0, Number(data.dormantSince[trackId] || 0)) }))
+    .filter(({ at }) => at > 0 && now - at <= LIKED_TRACK_DORMANT_CARD_TTL_MS)
+    .sort((a, b) => b.at - a.at);
+  const keep = new Set(dormant.slice(0, LIKED_TRACK_DORMANT_CARD_MAX).map(({ trackId }) => trackId));
+
+  for (const trackId of Object.keys(data.items)) {
+    if (liked.has(trackId) || keep.has(trackId)) continue;
+    delete data.items[trackId];
+    delete data.dormantSince[trackId];
+  }
+  for (const trackId of Object.keys(data.dormantSince)) {
+    if (!data.items[trackId] || liked.has(trackId)) delete data.dormantSince[trackId];
+  }
 };
 
 const readCache = (uid: string): LikedTrackCacheData => {
@@ -79,6 +117,7 @@ const readCache = (uid: string): LikedTrackCacheData => {
 };
 
 const writeCache = (uid: string, data: LikedTrackCacheData) => {
+  trimDormantCards(data);
   writeSoridrawPersistentCache<LikedTrackCacheData>({
     cacheKey: LIKED_TRACK_CACHE_KEY,
     sourceType: LIKED_TRACK_CACHE_SOURCE_TYPE,
@@ -143,10 +182,11 @@ export const patchExploreLikedTrackMembership = (uid: string, trackId: string, l
     if (liked) next.add(normalizedTrackId); else next.delete(normalizedTrackId);
     cache.canonicalLikedTrackIds = [...next];
   }
-  if (!liked) {
-    delete cache.items[normalizedTrackId];
+  if (liked) {
+    delete cache.dormantSince[normalizedTrackId];
     delete cache.unavailable[normalizedTrackId];
   } else {
+    if (cache.items[normalizedTrackId]) cache.dormantSince[normalizedTrackId] = Date.now();
     delete cache.unavailable[normalizedTrackId];
   }
   writeCache(normalizedUid, cache);
@@ -175,13 +215,10 @@ export const rememberExploreLikedTrack = (
     if (liked) next.add(trackId); else next.delete(trackId);
     cache.canonicalLikedTrackIds = [...next];
   }
-  if (liked) {
-    cache.items[trackId] = { ...(track || {}), id: trackId };
-    delete cache.unavailable[trackId];
-  } else {
-    delete cache.items[trackId];
-    delete cache.unavailable[trackId];
-  }
+  cache.items[trackId] = { ...(track || {}), id: trackId };
+  if (liked) delete cache.dormantSince[trackId];
+  else cache.dormantSince[trackId] = Date.now();
+  delete cache.unavailable[trackId];
   writeCache(normalizedUid, cache);
 };
 
@@ -223,7 +260,6 @@ export const getExploreLikedTracks = async (user: User): Promise<Array<Record<st
 
   const likedTrackIds = normalizeIds(cache.canonicalLikedTrackIds);
   if (!likedTrackIds.length) {
-    cache.items = {};
     cache.unavailable = {};
     cache.canonicalLikedTrackIds = [];
     writeCache(user.uid, cache);
@@ -232,9 +268,6 @@ export const getExploreLikedTracks = async (user: User): Promise<Array<Record<st
   }
 
   const likedSet = new Set(likedTrackIds);
-  for (const trackId of Object.keys(cache.items)) {
-    if (!likedSet.has(trackId)) delete cache.items[trackId];
-  }
   for (const trackId of Object.keys(cache.unavailable)) {
     if (!likedSet.has(trackId)) delete cache.unavailable[trackId];
   }
@@ -254,6 +287,7 @@ export const getExploreLikedTracks = async (user: User): Promise<Array<Record<st
       const id = normalizeId(item?.id);
       if (!id || !likedSet.has(id)) continue;
       cache.items[id] = { ...item, id };
+      delete cache.dormantSince[id];
       delete cache.unavailable[id];
       returned.add(id);
     }

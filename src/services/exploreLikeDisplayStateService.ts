@@ -1,14 +1,9 @@
-import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
-import { auth, getFirebaseAppCheckToken } from '../firebase';
-import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
-import { readSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
-
 // SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915
-// SORIDRAW_EXPLORE_LIKE_ZERO_COUNT_RECOVERY_093_20260915
+// SORIDRAW_EXPLORE_LIKE_ZERO_READ_DISPLAY_095_20260915
 // SORIDRAW_EXPLORE_ACKNOWLEDGED_COUNT_094_20260915
 const STORAGE_VERSION_091 = 1;
 const STORAGE_PREFIX_091 = 'soridraw:explore-like-display:091:';
-const DISPLAY_TTL_MS_091 = 30 * 60_000;
+const DISPLAY_TTL_MS_091 = 7 * 24 * 60 * 60_000;
 
 type ExploreLikeDisplayPhase091 = 'pending' | 'accepted';
 
@@ -123,7 +118,6 @@ export const seedExploreLikeCanonicalCounts091 = (
 export const updateExploreLikeCanonicalCounts091 = (
   uid: string,
   rows: ExploreLikeCanonicalCount091[],
-  confirmAccepted = false,
 ) => {
   const normalizedUid = normalizeUid091(uid);
   if (!normalizedUid) return;
@@ -143,7 +137,7 @@ export const updateExploreLikeCanonicalCounts091 = (
       : direction < 0
         ? canonicalCount <= state.displayLikeCount
         : canonicalCount === state.displayLikeCount;
-    if (aggregateCaughtUp || confirmAccepted) {
+    if (aggregateCaughtUp) {
       states.delete(trackId);
       stateChanged = true;
     }
@@ -164,163 +158,6 @@ export const getExploreLikeCanonicalCount091 = (
   return counts.get(normalizedTrackId) ?? clampCount091(fallbackLikeCount);
 };
 
-const ZERO_COUNT_RECOVERY_ROUTE_093 = '/v1/me/liked-tracks';
-const ZERO_COUNT_RECOVERY_BATCH_MAX_093 = 50;
-const ZERO_COUNT_RECOVERY_COOLDOWN_MS_093 = 12 * 60_000;
-const ZERO_COUNT_RECOVERY_FAILURE_COOLDOWN_MS_093 = 60_000;
-const ZERO_COUNT_RECOVERY_STORAGE_PREFIX_093 = 'soridraw:explore-like-zero-count-recovery:093:';
-const ZERO_COUNT_LIKED_CACHE_KEY_093 = 'explore-liked-state';
-const ZERO_COUNT_LIKED_SOURCE_TYPE_093 = 'explore_likes';
-const ZERO_COUNT_LIKED_SCHEMA_VERSION_093 = 2;
-const zeroCountRecoveryQueueByUid093 = new Map<string, Set<string>>();
-const zeroCountRecoveryTimerByUid093 = new Map<string, number>();
-const zeroCountRecoveryInflightByUid093 = new Set<string>();
-const zeroCountRecoveryFailureUntil093 = new Map<string, number>();
-
-const zeroCountRecoveryStorageKey093 = (uid: string, trackId: string) => (
-  `${ZERO_COUNT_RECOVERY_STORAGE_PREFIX_093}${uid}:${trackId}`
-);
-
-const readZeroCountRecoveryAttempt093 = (uid: string, trackId: string) => {
-  if (typeof window === 'undefined') return 0;
-  try {
-    const value = Number(window.localStorage.getItem(zeroCountRecoveryStorageKey093(uid, trackId)) || 0);
-    return Number.isFinite(value) && value > 0 ? value : 0;
-  } catch {
-    return 0;
-  }
-};
-
-const rememberZeroCountRecoveryAttempt093 = (uid: string, trackId: string, at: number) => {
-  if (typeof window === 'undefined') return;
-  try { window.localStorage.setItem(zeroCountRecoveryStorageKey093(uid, trackId), String(at)); } catch {}
-};
-
-const isPersistentlyLiked093 = (uid: string, trackId: string) => {
-  const envelope = readSoridrawPersistentCache<Record<string, boolean>>({
-    cacheKey: ZERO_COUNT_LIKED_CACHE_KEY_093,
-    sourceType: ZERO_COUNT_LIKED_SOURCE_TYPE_093,
-    schemaVersion: ZERO_COUNT_LIKED_SCHEMA_VERSION_093,
-    uid,
-  });
-  return Boolean(envelope?.data && typeof envelope.data === 'object' && envelope.data[trackId] === true);
-};
-
-const armZeroCountRecovery093 = (uid: string) => {
-  if (!uid || typeof window === 'undefined') return;
-  if (zeroCountRecoveryTimerByUid093.has(uid) || zeroCountRecoveryInflightByUid093.has(uid)) return;
-  const timer = window.setTimeout(() => {
-    zeroCountRecoveryTimerByUid093.delete(uid);
-    void flushZeroCountRecovery093(uid);
-  }, 0);
-  zeroCountRecoveryTimerByUid093.set(uid, timer);
-};
-
-const queueZeroCountRecovery093 = (uid: string, trackId: string) => {
-  if (!uid || !trackId || typeof window === 'undefined') return;
-  const now = Date.now();
-  const key = `${uid}:${trackId}`;
-  if ((zeroCountRecoveryFailureUntil093.get(key) || 0) > now) return;
-  const lastAttempt = readZeroCountRecoveryAttempt093(uid, trackId);
-  if (lastAttempt > 0 && now - lastAttempt < ZERO_COUNT_RECOVERY_COOLDOWN_MS_093) return;
-  let queue = zeroCountRecoveryQueueByUid093.get(uid);
-  if (!queue) {
-    queue = new Set<string>();
-    zeroCountRecoveryQueueByUid093.set(uid, queue);
-  }
-  queue.add(trackId);
-  armZeroCountRecovery093(uid);
-};
-
-async function flushZeroCountRecovery093(uid: string): Promise<void> {
-  if (!uid || zeroCountRecoveryInflightByUid093.has(uid)) return;
-  const queue = zeroCountRecoveryQueueByUid093.get(uid);
-  const trackIds = queue ? [...queue].slice(0, ZERO_COUNT_RECOVERY_BATCH_MAX_093) : [];
-  if (!trackIds.length) return;
-  trackIds.forEach((trackId) => queue?.delete(trackId));
-  zeroCountRecoveryInflightByUid093.add(uid);
-
-  try {
-    const user = auth.currentUser;
-    if (!user || user.uid !== uid) return;
-    const [idToken, appCheckToken] = await Promise.all([
-      user.getIdToken(),
-      getFirebaseAppCheckToken(),
-    ]);
-    if (!appCheckToken) throw new Error('APP_CHECK_UNAVAILABLE');
-
-    const response = await fetch(`${EXPLORE_API_BASE}${ZERO_COUNT_RECOVERY_ROUTE_093}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        'X-Firebase-AppCheck': appCheckToken,
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ trackIds }),
-    });
-    recordCloudflareResponse(response, ZERO_COUNT_RECOVERY_ROUTE_093);
-    let payload: any = null;
-    try { payload = await response.json(); } catch { payload = null; }
-    if (!response.ok) throw new Error(`HTTP_${response.status}`);
-
-    const canonicalLiked = new Set(
-      (Array.isArray(payload?.data?.likedTrackIds) ? payload.data.likedTrackIds : [])
-        .map((value: unknown) => String(value || '').trim())
-        .filter(Boolean),
-    );
-    const items = Array.isArray(payload?.data?.items) ? payload.data.items : [];
-    const itemById = new Map<string, any>(items.map((item: any) => [String(item?.id || '').trim(), item]));
-    const now = Date.now();
-    const counts = canonicalMap091(uid);
-    const states = loadStates091(uid);
-    const recovered: Array<{ trackId: string; ownerUid: string; likeCount: number }> = [];
-
-    trackIds.forEach((trackId) => {
-      rememberZeroCountRecoveryAttempt093(uid, trackId, now);
-      if (!canonicalLiked.has(trackId)) return;
-      const item = itemById.get(trackId);
-      const nestedStats = item?.stats && typeof item.stats === 'object' ? item.stats : null;
-      const likeCount = clampCount091(item?.likeCount ?? nestedStats?.likeCount);
-      // Never invent a count from membership. If canonical track_stats is still 0,
-      // the existing deferred aggregate/fresh-feed path remains responsible.
-      if (likeCount <= 0) return;
-      const ownerUid = normalizeUid091(item?.ownerUid ?? item?.owner_uid);
-      counts.set(trackId, likeCount);
-      states.set(trackId, {
-        trackId,
-        ownerUid,
-        baseLiked: true,
-        desiredLiked: true,
-        baseLikeCount: likeCount,
-        displayLikeCount: likeCount,
-        phase: 'accepted',
-        updatedAt: now,
-        expiresAt: now + DISPLAY_TTL_MS_091,
-      });
-      recovered.push({ trackId, ownerUid, likeCount });
-    });
-
-    if (recovered.length) {
-      persistStates091(uid, states);
-      if (typeof window !== 'undefined') {
-        recovered.forEach(({ trackId, ownerUid, likeCount }) => {
-          window.dispatchEvent(new CustomEvent('soridraw:explore-like-sync', {
-            detail: { uid, trackId, ownerUid, liked: true, likeCount, displayLikeCount: likeCount },
-          }));
-        });
-      }
-    }
-  } catch (reason) {
-    const retryAfter = Date.now() + ZERO_COUNT_RECOVERY_FAILURE_COOLDOWN_MS_093;
-    trackIds.forEach((trackId) => zeroCountRecoveryFailureUntil093.set(`${uid}:${trackId}`, retryAfter));
-    console.warn('[Explore like] targeted zero-count recovery unavailable.', reason);
-  } finally {
-    zeroCountRecoveryInflightByUid093.delete(uid);
-    if ((zeroCountRecoveryQueueByUid093.get(uid)?.size || 0) > 0) armZeroCountRecovery093(uid);
-  }
-}
-
 export const getExploreLikeDisplayCount091 = (
   uid: string,
   trackId: string,
@@ -331,19 +168,12 @@ export const getExploreLikeDisplayCount091 = (
   if (!normalizedUid || !normalizedTrackId) return clampCount091(fallbackLikeCount);
   const states = loadStates091(normalizedUid);
   const state = states.get(normalizedTrackId);
-  if (state && state.expiresAt > Date.now()) {
-    if (state.displayLikeCount === 0 && state.desiredLiked) queueZeroCountRecovery093(normalizedUid, normalizedTrackId);
-    return state.displayLikeCount;
-  }
+  if (state && state.expiresAt > Date.now()) return state.displayLikeCount;
   if (state) {
     states.delete(normalizedTrackId);
     persistStates091(normalizedUid, states);
   }
-  const resolved = getExploreLikeCanonicalCount091(normalizedUid, normalizedTrackId, fallbackLikeCount);
-  if (resolved === 0 && isPersistentlyLiked093(normalizedUid, normalizedTrackId)) {
-    queueZeroCountRecovery093(normalizedUid, normalizedTrackId);
-  }
-  return resolved;
+  return getExploreLikeCanonicalCount091(normalizedUid, normalizedTrackId, fallbackLikeCount);
 };
 
 export const beginExploreLikeDisplayTransition091 = (
@@ -508,11 +338,4 @@ export const resetExploreLikeDisplayState091ForTests = () => {
   canonicalCountsByUid091.clear();
   displayStatesByUid091.clear();
   loadedUid091.clear();
-  if (typeof window !== 'undefined') {
-    zeroCountRecoveryTimerByUid093.forEach((timer) => window.clearTimeout(timer));
-  }
-  zeroCountRecoveryQueueByUid093.clear();
-  zeroCountRecoveryTimerByUid093.clear();
-  zeroCountRecoveryInflightByUid093.clear();
-  zeroCountRecoveryFailureUntil093.clear();
 };

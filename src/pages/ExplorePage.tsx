@@ -430,10 +430,8 @@ export default function ExplorePage() {
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       const activeUid = auth.currentUser?.uid || '';
       const canonicalRows = normalizedTracks.map((track) => ({ trackId: track.id, likeCount: track.likeCount }));
-      const refreshDeadline = activeUid ? readExploreLikeRefreshDeadline071(activeUid) : 0;
-      const aggregateConfirmed = Boolean(feedRequest && forceLikeCountRefresh071 && refreshDeadline > 0 && Date.now() >= refreshDeadline);
       if (activeUid) {
-        if (feedRequest) updateExploreLikeCanonicalCounts091(activeUid, canonicalRows, aggregateConfirmed);
+        if (feedRequest) updateExploreLikeCanonicalCounts091(activeUid, canonicalRows);
         else seedExploreLikeCanonicalCounts091(activeUid, canonicalRows);
       }
       setFeedNextCursor(nextCursor);
@@ -815,7 +813,7 @@ export default function ExplorePage() {
       const normalized = rows.map(normalizeTrack).filter((track) => track.id);
       const activeUid = auth.currentUser?.uid || '';
       if (activeUid) {
-        updateExploreLikeCanonicalCounts091(activeUid, normalized.map((track) => ({ trackId: track.id, likeCount: track.likeCount })), false);
+        updateExploreLikeCanonicalCounts091(activeUid, normalized.map((track) => ({ trackId: track.id, likeCount: track.likeCount })));
         normalized.forEach((track) => {
           if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
           patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);

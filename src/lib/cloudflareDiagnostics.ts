@@ -105,6 +105,9 @@ const normalizeDiagnosticPath = (value: string) => {
     if (/^https?:\/\//i.test(pathname)) pathname = new URL(pathname).pathname;
   } catch {}
   pathname = pathname.split('?')[0] || '';
+  if (pathname === '/v1/me/liked-tracks') return '내 좋아요 곡 확인';
+  if (pathname === '/v1/me/likes/batch') return '좋아요 변경 묶음 저장';
+  if (pathname === '/v1/me/likes') return '좋아요 상태 확인';
   if (/^\/v1\/tracks\/[^/]+\/like$/.test(pathname)) return '/v1/tracks/:id/like';
   if (/^\/v1\/tracks\/[^/]+\/visibility$/.test(pathname)) return '/v1/tracks/:id/visibility';
   if (/^\/v1\/profiles\/[^/]+\/first-view$/.test(pathname)) return '/v1/profiles/:id/first-view';

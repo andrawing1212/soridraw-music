@@ -41,17 +41,18 @@ for (const domainName of ['musicNote', 'recentSongs']) {
   must(idRule.includes("matches(/^[0-9]$/)"), `${domainName} max-10 ID index bound missing`);
 }
 
-must(display.includes('SORIDRAW_EXPLORE_LIKE_ZERO_COUNT_RECOVERY_093_20260915'), 'zero-count recovery marker missing');
-must(display.includes("ZERO_COUNT_RECOVERY_ROUTE_093 = '/v1/me/liked-tracks'"), 'targeted liked-tracks recovery route missing');
-must(display.includes('ZERO_COUNT_RECOVERY_BATCH_MAX_093 = 50'), 'zero-count recovery batch cap missing');
-must(display.includes('resolved === 0 && isPersistentlyLiked093'), 'liked+zero contradiction gate missing');
-must(display.includes('if (likeCount <= 0) return;'), 'no-fabricated-count guard missing');
-must(!/setInterval\s*\(/.test(display), 'polling introduced in display recovery');
-must(!/firebase\/firestore|getDocs\(|collection\(/.test(display), 'zero-count recovery must not read Firestore/full collections');
+must(display.includes('SORIDRAW_EXPLORE_LIKE_ZERO_READ_DISPLAY_095_20260915'), 'zero-read display marker missing');
+must(!display.includes('/v1/me/liked-tracks'), 'display count path must not call liked-tracks D1 recovery');
+must(!display.includes('fetch('), 'display count path must remain network-free');
+must(!display.includes('ZERO_COUNT_RECOVERY_'), 'legacy zero-count recovery state remains');
+must(display.includes('if (aggregateCaughtUp) {'), 'accepted count must clear only when canonical aggregate catches up');
+must(!display.includes('confirmAccepted'), 'forced accepted-count clear remains');
+must(!/setInterval\s*\(/.test(display), 'polling introduced in display state');
+must(!/firebase\/firestore|getDocs\(|collection\(/.test(display), 'display state must not read Firestore/full collections');
 
 console.log('EXPLORE_LIKE_FIRESTORE_SYNC_WRITE=0_TARGET');
 console.log('EXPLORE_LIKE_RTDB_ACCOUNT_SIGNAL=PASS');
 console.log('RTDB_EXISTING_SIGNAL_PAYLOAD_COMPATIBLE=PASS');
-console.log('LIKED_ZERO_COUNT_TARGETED_BATCH_RECOVERY=PASS');
-console.log('FAKE_ZERO_TO_ONE_FLOOR=ABSENT');
+console.log('LIKED_ZERO_COUNT_NETWORK_RECOVERY=REMOVED');
+console.log('ACKNOWLEDGED_LOCAL_COUNT=CANONICAL_CATCHUP_ONLY');
 console.log('NO_POLLING_NO_FULLSCAN=PASS');

@@ -78,6 +78,12 @@ jobs:
             const cache = getLikedStateCache(uid);
           ''').rstrip()
           source = source[:start] + replacement + source[end:]
+
+          dispatch_start = source.find("\n  if (missedSignal && typeof window !== 'undefined') {")
+          dispatch_end = source.find('\n};', dispatch_start)
+          if dispatch_start < 0 or dispatch_end <= dispatch_start:
+              raise SystemExit('099 preflight: missed-signal event dispatch block missing')
+          source = source[:dispatch_start] + source[dispatch_end:]
           path.write_text(source, encoding='utf-8')
 
           Path('scripts/verify-099-explore-like-update-zero-read.mjs').write_text(dedent(r'''
@@ -98,8 +104,10 @@ jobs:
           const observer = service.slice(observerStart, observerEnd > observerStart ? observerEnd : service.length);
           assert.ok(observer.includes('const cache = getLikedStateCache(uid);'));
           assert.ok(!observer.includes('cache.clear()'));
+          assert.ok(!observer.includes('missedSignal'));
           assert.ok(!observer.includes('invalidateExploreLikedTrackCollection'));
           assert.ok(!observer.includes('clearExplorePersonalSocialSnapshot'));
+          assert.ok(!observer.includes('EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT'));
           assert.ok(observer.includes('rememberAccountSyncResults(uid, effectiveResults)'));
           assert.ok(observer.includes('patchExploreLikedTrackMembership(uid, result.trackId, result.liked)'));
           assert.ok(!observer.includes('fetch('));

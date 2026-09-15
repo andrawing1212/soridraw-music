@@ -22089,15 +22089,12 @@ const effectiveMutations = mutations;
     likeCount: mutation.likeCount,
   }));
 
+  // SORIDRAW_EXPLORE_LIKE_INTAKE_W1_HOTPATH_055_20260915
+  // New intake uses the single-B-tree 069 queue: one warm batch => D1 R0/W1.
+  // The 075 processor remains enabled below to drain already-queued legacy rows.
   let queued = { batchId: '', inserted: false, queue: 'none' };
   if (effectiveMutations.length) {
-    try {
-      queued = await enqueueExploreLikeUserQueue075(env, authContext.uid, effectiveMutations, receivedAt);
-    } catch (error) {
-      const message = String(error?.message || error || '');
-      if (!/no such table:\s*explore_like_user_queue_075/i.test(message)) throw error;
-      queued = await enqueueExploreLikeBatch035(env, authContext.uid, effectiveMutations, receivedAt);
-    }
+    queued = await enqueueExploreLikeBatch035(env, authContext.uid, effectiveMutations, receivedAt);
   }
 
   await syncExploreLikeR2AfterBatch034(env, authContext.uid, results);

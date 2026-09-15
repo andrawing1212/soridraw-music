@@ -359,7 +359,12 @@ if (generatedWorker) {
   assert.doesNotMatch(intakeBody, /LEFT JOIN track_stats /);
   const batchBody = functionText(worker, 'async function handleLikeBatch034(');
 if (worker.includes('SORIDRAW_LOCAL_FIRST_COST_HOTPATH_044_20260913')) {
-  assert.match(batchBody, /enqueueExploreLikeUserQueue075/);
+  if (worker.includes('SORIDRAW_EXPLORE_LIKE_INTAKE_W1_HOTPATH_055_20260915')) {
+    assert.match(batchBody, /enqueueExploreLikeBatch035/);
+    assert.doesNotMatch(batchBody, /enqueueExploreLikeUserQueue075/);
+  } else {
+    assert.match(batchBody, /enqueueExploreLikeUserQueue075/);
+  }
   assert.match(batchBody, /syncExploreLikeR2AfterBatch034/);
   assert.match(batchBody, /const effectiveMutations = mutations;/);
   assert.doesNotMatch(batchBody, /readExploreLikeBatchStates035|canonical_liked|getPublicTrackForWrite|adjustExploreLikeCounterDelta/,

@@ -6,6 +6,7 @@ const reversalPatch = readFileSync('cloudflare/explore-worker/patches/041-explor
 const releasePatches = readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8');
 const service = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
+const displaySource = readFileSync('src/services/exploreLikeDisplayStateService.ts', 'utf8');
 
 if (!/CREATE TABLE IF NOT EXISTS explore_like_batches_069/i.test(migration)) throw new Error('069 queue table missing');
 if (!/WITHOUT ROWID/i.test(migration)) throw new Error('069 queue must be WITHOUT ROWID');
@@ -37,8 +38,20 @@ if (!releasePatches.includes('041-explore-like-reversal-order.mjs')) throw new E
 if (!service.includes('SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912')) throw new Error('069 client marker missing');
 if (!service.includes('mutationAt: pending.updatedAt')) throw new Error('stable mutationAt missing');
 if (!service.includes('baseLiked: pending.baseLiked')) throw new Error('reversal baseLiked hint missing');
-if (!service.includes('const optimisticLikeCount = clampLikeCount(currentLikeCount);')) throw new Error('client still changes numeric count');
-if (service.includes('clampLikeCount(currentLikeCount) + (liked ? 1 : -1)')) throw new Error('optimistic numeric delta still present');
+
+// Pre-091 clients kept the public number frozen until aggregate. 091 moved the
+// immediate visual delta into a local-only display ledger so every Explore surface
+// shows the same number without turning the optimistic value into canonical cache.
+const sharedDisplay091 = service.includes('SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915');
+if (sharedDisplay091) {
+  if (!service.includes('beginExploreLikeDisplayTransition091(')) throw new Error('091 display transition missing');
+  if (!service.includes('getExploreLikeCanonicalCount091(')) throw new Error('091 canonical count baseline missing');
+  if (!displaySource.includes('SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915')) throw new Error('091 display ledger marker missing');
+  if (/fetch\(|updateDoc\(|setDoc\(|firestore/i.test(displaySource)) throw new Error('091 display ledger must remain local-only');
+} else {
+  if (!service.includes('const optimisticLikeCount = clampLikeCount(currentLikeCount);')) throw new Error('client still changes numeric count');
+}
+if (service.includes('clampLikeCount(currentLikeCount) + (liked ? 1 : -1)')) throw new Error('old direct optimistic numeric delta still present');
 
 const syncAt = page.indexOf('const onLikeSync = (event: Event) => {');
 const syncEnd = page.indexOf('const onLikeSyncError', syncAt);
@@ -72,3 +85,4 @@ console.log('EXPLORE_LIKE_DELAYED_PUBLIC_COUNT=PASS');
 console.log('EXPLORE_LIKE_STABLE_RETRY_IDEMPOTENCY=PASS');
 console.log('EXPLORE_LIKE_PRE_AGGREGATE_REVERSAL_ORDER=PASS');
 console.log('EXPLORE_LIKE_LEGACY_REVERSAL_COMPAT=PASS');
+if (sharedDisplay091) console.log('EXPLORE_LIKE_091_LOCAL_DISPLAY_LEDGER=PASS');

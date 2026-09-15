@@ -1,0 +1,81 @@
+name: TEMP verify live PREVIEW Worker 056
+
+on:
+  push:
+    branches:
+      - 'tmp/verify-worker056-live-20260915'
+    paths:
+      - '.github/workflows/temp-verify-worker056-live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      EXPECTED_VERSION: bd8a810f-8266-41e1-80a1-0c5e9bfc561a
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_APP: https://preview.soridraw.com
+    steps:
+      - name: Verify exact active Worker source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const account=process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          const worker=process.env.PREVIEW_WORKER;
+          const expected=process.env.EXPECTED_VERSION;
+          const headers={Authorization:`Bearer ${token}`,Accept:'application/json'};
+          async function get(url){
+            const r=await fetch(url,{headers});
+            const text=await r.text();
+            const body=JSON.parse(text);
+            if(!r.ok||body.success===false) throw new Error(`Cloudflare ${r.status}: ${text.slice(0,800)}`);
+            return body.result??body;
+          }
+          (async()=>{
+            const deps=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${worker}/deployments`);
+            const dep=(deps.deployments||deps||[])[0];
+            const active=[...(dep?.versions||[])].sort((a,b)=>Number(b.percentage||0)-Number(a.percentage||0))[0];
+            if(!active?.version_id||Number(active.percentage||0)<99.99) throw new Error('No single active PREVIEW Worker');
+            if(active.version_id!==expected) throw new Error(`Unexpected PREVIEW version ${active.version_id}, expected ${expected}`);
+            const version=await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${worker}/versions/${active.version_id}?include=modules`);
+            const modules=Array.isArray(version.modules)?version.modules:[];
+            if(modules.length!==1) throw new Error(`Expected one module, got ${modules.length}`);
+            const source=Buffer.from(modules[0].content_base64||'','base64').toString('utf8');
+            const start=source.indexOf('async function handleMyLikedTracks052');
+            const end=source.indexOf('async function handleMySocialSnapshot042',start);
+            if(start<0||end<0) throw new Error('liked-track handler missing in active source');
+            const block=source.slice(start,end);
+            if(!source.includes('SORIDRAW_LIKED_TRACK_PUBLIC_PROFILE_JOIN_056_20260915')) throw new Error('056 marker missing');
+            if(!block.includes('LEFT JOIN public_profiles p ON p.uid = t.owner_uid')) throw new Error('public_profiles join missing');
+            if(block.includes('LEFT JOIN profiles p ON p.uid = t.owner_uid')) throw new Error('old profiles join still active');
+            console.log(`ACTIVE_PREVIEW_WORKER=${active.version_id}`);
+            console.log('LIVE_WORKER_056_MARKER=PASS');
+            console.log('LIVE_LIKED_TRACK_PUBLIC_PROFILE_JOIN=PASS');
+            console.log('OLD_PROFILES_JOIN_ABSENT=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Verify public PREVIEW endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_code="$(curl --retry 3 --retry-delay 1 -sS -o "$RUNNER_TEMP/app.html" -w '%{http_code}' "$PREVIEW_APP")"
+          test "$app_code" = 200
+          feed_code="$(curl --retry 3 --retry-delay 1 -sS -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H "Origin: ${PREVIEW_APP}" "$PREVIEW_BASE/v1/feed?sort=latest&limit=1")"
+          test "$feed_code" = 200
+          liked_code="$(curl -sS -o "$RUNNER_TEMP/liked.json" -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H "Origin: ${PREVIEW_APP}" --data '{"trackIds":[]}' "$PREVIEW_BASE/v1/me/liked-tracks")"
+          test "$liked_code" -ge 400
+          test "$liked_code" -lt 500
+          test "$liked_code" != 404
+          echo "PREVIEW_APP_HTTP=$app_code"
+          echo "PREVIEW_FEED_HTTP=$feed_code"
+          echo "LIKED_TRACKS_UNAUTH_HTTP=$liked_code"
+          echo 'LIVE_PREVIEW_PUBLIC_SMOKE=PASS'

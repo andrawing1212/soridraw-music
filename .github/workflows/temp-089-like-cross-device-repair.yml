@@ -1,4 +1,4 @@
-name: SORIDRAW 090 Live Like Repair
+name: SORIDRAW 091 Shared Like Count Repair
 on:
   push:
     branches: [preview]
@@ -20,33 +20,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Apply 090 live like repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/temp-089-like-cross-device-repair.py
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/verify-explore-like-cost-optimization.mjs')
-          text = path.read_text()
-          old = "assert.match(service, /rememberAccountSyncResults\\(uid, signal\\.results\\)/);"
-          new = "assert.match(service, /rememberAccountSyncResults\\(uid, effectiveResults\\)/);"
-          if text.count(old) != 1:
-              raise SystemExit(f'090 cost signal verifier: expected 1 match, got {text.count(old)}')
-          text = text.replace(old, new, 1)
-          text = text.replace(
-              "PASS client: durable like outbox remains batched; 089 starts one 5s timer for actual changes, keeps heart local-first, and removes per-device numeric count fabrication",
-              "PASS client: durable like outbox remains batched; 090 keeps one 5s timer, limits numeric optimism to the current pending transition, and adds no per-click server request",
-          )
-          path.write_text(text)
-          PY
+      - name: Apply 091 shared like count repair
+        run: python3 scripts/temp-089-like-cross-device-repair.py
       - name: Install
         run: npm ci --no-audit --no-fund
       - name: TypeScript
         run: npx tsc --noEmit
       - name: Build
         run: npm run build
-      - name: Like regressions
+      - name: Like regressions and state machine
         shell: bash
         run: |
           set -euo pipefail
@@ -56,17 +38,28 @@ jobs:
           node scripts/verify-088-same-session-liked-heart.mjs
           node scripts/verify-089-like-cross-device-consistency.mjs
           node scripts/verify-090-like-live-display.mjs
+          node --experimental-strip-types scripts/verify-091-like-count-state-machine.mjs
           node scripts/verify-explore-like-cost-optimization.mjs
           node scripts/verify-081-page-exit-batch.mjs
           node scripts/verify-084-publication-write-returning.mjs
-      - name: Commit 090 product code
+      - name: Commit 091 product code
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'andrawing1212'
           git config user.email 'andrawing1212@gmail.com'
-          git add src/services/exploreLikeService.ts src/pages/ExplorePage.tsx public/app-version.json scripts/verify-087-liked-card-consistency.mjs scripts/verify-088-same-session-liked-heart.mjs scripts/verify-089-like-cross-device-consistency.mjs scripts/verify-090-like-live-display.mjs scripts/verify-explore-like-cost-optimization.mjs
+          git add \
+            src/services/exploreLikeDisplayStateService.ts \
+            src/services/exploreLikeService.ts \
+            src/services/exploreLikedTracksService.ts \
+            src/pages/ExplorePage.tsx \
+            public/app-version.json \
+            scripts/verify-087-liked-card-consistency.mjs \
+            scripts/verify-088-same-session-liked-heart.mjs \
+            scripts/verify-089-like-cross-device-consistency.mjs \
+            scripts/verify-090-like-live-display.mjs \
+            scripts/verify-091-like-count-state-machine.mjs
           git diff --cached --check
-          git commit -m 'fix(preview): repair live like heart and count 090'
+          git commit -m 'fix(preview): unify like display counts 091'
           git push origin HEAD:preview
           echo "PRODUCT_COMMIT=$(git rev-parse HEAD)"

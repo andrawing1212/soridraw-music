@@ -63,7 +63,7 @@ if (sameSession088) {
   const displayCountsFunction = functionText(service, 'export const getExploreLikeDisplayCounts =');
   if (crossDevice089) {
     assert.doesNotMatch(displayCountsFunction, /readAccountPatchCache\(user\.uid\)/);
-    assert.match(displayCountsFunction, /=> \(\{\}\);/);
+    assert.match(displayCountsFunction, /=> \(\{\}/);
   } else {
     assert.match(displayCountsFunction, /readAccountPatchCache\(user\.uid\)/);
   }

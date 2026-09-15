@@ -7,6 +7,7 @@ on:
       - '.github/workflows/temp-055-like-intake-w1.yml'
       - 'cloudflare/explore-worker/patches/055-explore-like-intake-w1-hotpath.mjs'
       - 'scripts/verify-055-like-intake-w1.mjs'
+      - 'cloudflare/explore-worker/release-patches.json'
 
 permissions:
   contents: write

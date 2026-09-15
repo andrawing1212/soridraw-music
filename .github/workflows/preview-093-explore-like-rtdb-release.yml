@@ -127,21 +127,29 @@ jobs:
           set -euo pipefail
           RTDB_ACCESS_TOKEN="$(cat "$RUNNER_TEMP/rtdb-access-token")"
           test -n "$RTDB_ACCESS_TOKEN"
-          curl -fsS --max-time 30 \
-            -H "Authorization: Bearer $RTDB_ACCESS_TOKEN" \
-            "$RTDB_RULES_URL" > "$RUNNER_TEMP/rtdb-rules-before.json"
+          auth_url="${RTDB_RULES_URL}?access_token=${RTDB_ACCESS_TOKEN}"
+
+          code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-rules-before.json" -w '%{http_code}' "$auth_url")"
+          if [ "$code" != '200' ]; then
+            echo "RTDB_RULES_READ_HTTP=$code"
+            cat "$RUNNER_TEMP/rtdb-rules-before.json" || true
+            exit 1
+          fi
           python3 -m json.tool "$RUNNER_TEMP/rtdb-rules-before.json" >/dev/null
 
-          curl -fsS --max-time 30 -X PUT \
-            -H "Authorization: Bearer $RTDB_ACCESS_TOKEN" \
+          code="$(curl -sS --max-time 30 -X PUT \
             -H 'Content-Type: application/json' \
             --data-binary @database.rules.json \
-            "$RTDB_RULES_URL" > "$RUNNER_TEMP/rtdb-rules-put.json"
+            -o "$RUNNER_TEMP/rtdb-rules-put.json" -w '%{http_code}' "$auth_url")"
+          if [ "$code" != '200' ]; then
+            echo "RTDB_RULES_PUT_HTTP=$code"
+            cat "$RUNNER_TEMP/rtdb-rules-put.json" || true
+            exit 1
+          fi
           python3 -m json.tool "$RUNNER_TEMP/rtdb-rules-put.json" >/dev/null
 
-          curl -fsS --max-time 30 \
-            -H "Authorization: Bearer $RTDB_ACCESS_TOKEN" \
-            "$RTDB_RULES_URL" > "$RUNNER_TEMP/rtdb-rules-after.json"
+          code="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/rtdb-rules-after.json" -w '%{http_code}' "$auth_url")"
+          test "$code" = '200'
           python3 - <<'PY'
           import json, os
           from pathlib import Path

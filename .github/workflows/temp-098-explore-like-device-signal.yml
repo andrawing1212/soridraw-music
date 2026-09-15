@@ -1,0 +1,170 @@
+name: SORIDRAW 098 Explore Like Device Scoped RTDB
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-098-explore-like-device-signal.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply 098 device-scoped retained like signals
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import copy, json
+
+          service_path = Path('src/services/exploreLikeService.ts')
+          service = service_path.read_text()
+
+          service = service.replace(
+              "import { ref as databaseRef, set as setRealtimeValue } from 'firebase/database';",
+              "import { ref as databaseRef, serverTimestamp, set as setRealtimeValue } from 'firebase/database';",
+              1,
+          )
+          marker = '// SORIDRAW_EXPLORE_LIKE_REMOTE_PENDING_ACK_097_20260916\n'
+          assert marker in service
+          service = service.replace(marker, marker + '// SORIDRAW_EXPLORE_LIKE_DEVICE_SIGNAL_098_20260916\n', 1)
+          service = service.replace(
+              'const EXPLORE_LIKE_ACCOUNT_PATCH_TTL_MS = 20 * 60_000;\nconst EXPLORE_LIKE_BATCH_MAX = 50;',
+              "const EXPLORE_LIKE_ACCOUNT_PATCH_TTL_MS = 7 * 24 * 60 * 60_000;\nconst EXPLORE_LIKE_BATCH_MAX = 50;\nconst EXPLORE_LIKE_DEVICE_SIGNAL_MAX_DEVICES = 8;\nconst EXPLORE_LIKE_DEVICE_ID_STORAGE_KEY = 'soridraw_user_domain_sync_device_v1';",
+              1,
+          )
+
+          old_expiry = """    const patch = value as Partial<ExploreLikeAccountPatch>;\n    const normalizedTrackId = String(patch.trackId || trackId || '').trim();\n    const expiresAt = Math.max(0, Number(patch.expiresAt || 0));\n    if (!normalizedTrackId || normalizedTrackId !== trackId || !expiresAt || expiresAt <= now || typeof patch.liked !== 'boolean') {\n      changed = true;\n      continue;\n    }\n    const displayLikeCount = Number(patch.displayLikeCount);\n    next[trackId] = {\n      trackId,\n      ownerUid: String(patch.ownerUid || '').trim(),\n      liked: patch.liked,\n      likeCount: clampLikeCount(patch.likeCount),\n      ...(Number.isFinite(displayLikeCount) ? { displayLikeCount: clampLikeCount(displayLikeCount) } : {}),\n      updatedAt: Math.max(0, Number(patch.updatedAt || 0)),\n      expiresAt,\n    };"""
+          new_expiry = """    const patch = value as Partial<ExploreLikeAccountPatch>;\n    const normalizedTrackId = String(patch.trackId || trackId || '').trim();\n    const updatedAt = Math.max(0, Number(patch.updatedAt || 0));\n    const storedExpiresAt = Math.max(0, Number(patch.expiresAt || 0));\n    // 098: older builds wrote a 20-minute replay expiry. Keep the already stored\n    // acknowledged result for up to seven days from its actual update time so a\n    // device that wakes later can replay it on the next real mutation boundary.\n    // This is local-only migration; app update/page entry never writes RTDB/D1.\n    const expiresAt = updatedAt > 0\n      ? Math.max(storedExpiresAt, updatedAt + EXPLORE_LIKE_ACCOUNT_PATCH_TTL_MS)\n      : storedExpiresAt;\n    if (!normalizedTrackId || normalizedTrackId !== trackId || !expiresAt || expiresAt <= now || typeof patch.liked !== 'boolean') {\n      changed = true;\n      continue;\n    }\n    if (expiresAt !== storedExpiresAt) changed = true;\n    const displayLikeCount = Number(patch.displayLikeCount);\n    next[trackId] = {\n      trackId,\n      ownerUid: String(patch.ownerUid || '').trim(),\n      liked: patch.liked,\n      likeCount: clampLikeCount(patch.likeCount),\n      ...(Number.isFinite(displayLikeCount) ? { displayLikeCount: clampLikeCount(displayLikeCount) } : {}),\n      updatedAt,\n      expiresAt,\n    };"""
+          assert old_expiry in service
+          service = service.replace(old_expiry, new_expiry, 1)
+
+          seen_anchor = """const setSeenAccountSignalVersion = (uid: string, version: number) => {\n  if (!uid || typeof localStorage === 'undefined') return;\n  try {\n    if (Number.isFinite(version) && version > 0) {\n      localStorage.setItem(getAccountSignalVersionStorageKey(uid), String(Math.floor(version)));\n    } else {\n      localStorage.removeItem(getAccountSignalVersionStorageKey(uid));\n    }\n  } catch {}\n};\n"""
+          assert seen_anchor in service
+          device_helper = seen_anchor + """\nconst getExploreLikeDeviceId098 = (): string => {\n  if (typeof localStorage === 'undefined') return 'like_server';\n  try {\n    const existing = String(localStorage.getItem(EXPLORE_LIKE_DEVICE_ID_STORAGE_KEY) || '').trim();\n    if (/^[A-Za-z0-9_-]{1,96}$/.test(existing)) return existing;\n    const next = `d_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;\n    localStorage.setItem(EXPLORE_LIKE_DEVICE_ID_STORAGE_KEY, next);\n    return next;\n  } catch {\n    return `d_mem_${Math.random().toString(36).slice(2, 10)}`;\n  }\n};\n"""
+          service = service.replace(seen_anchor, device_helper, 1)
+
+          publish_anchor = "\nconst publishExploreLikeAccountSyncSignal = async (\n"
+          assert publish_anchor in service
+          device_observer = """\nexport const observeExploreLikeAccountSyncDeviceSignals = (user: User, value: unknown) => {\n  if (!user?.uid || !value || typeof value !== 'object' || Array.isArray(value)) return;\n  const rows = Object.entries(value as Record<string, unknown>)\n    .map(([deviceId, raw]) => {\n      if (!/^[A-Za-z0-9_-]{1,96}$/.test(deviceId) || !raw || typeof raw !== 'object' || Array.isArray(raw)) return null;\n      const signal = normalizeAccountSyncSignal(raw);\n      if (!signal) return null;\n      const rawObject = raw as Record<string, unknown>;\n      const serverAt = Math.max(0, Math.floor(Number(rawObject.serverAt || 0)));\n      if (!serverAt) return null;\n      return { deviceId, serverAt, signal };\n    })\n    .filter((row): row is { deviceId: string; serverAt: number; signal: ExploreLikeAccountSyncSignal } => Boolean(row))\n    .sort((a, b) => b.serverAt - a.serverAt || b.signal.version - a.signal.version)\n    .slice(0, EXPLORE_LIKE_DEVICE_SIGNAL_MAX_DEVICES);\n  if (!rows.length) return;\n\n  // 098: each browser owns one retained RTDB child. A mobile mutation can no\n  // longer overwrite a PC batch (or vice versa). Merge the latest device slots\n  // locally and keep only the newest state per track. No D1/Firestore read.\n  const latestByTrack = new Map<string, { order: number; version: number; result: ExploreLikeAccountSyncResult }>();\n  rows.forEach(({ serverAt, signal }) => {\n    signal.results.forEach((result) => {\n      const previous = latestByTrack.get(result.trackId);\n      if (!previous || serverAt > previous.order || (serverAt === previous.order && signal.version >= previous.version)) {\n        latestByTrack.set(result.trackId, { order: serverAt, version: signal.version, result });\n      }\n    });\n  });\n\n  const mergedResults = [...latestByTrack.values()]\n    .sort((a, b) => b.order - a.order || b.version - a.version)\n    .slice(0, EXPLORE_LIKE_BATCH_MAX)\n    .map((entry) => entry.result);\n  if (!mergedResults.length) return;\n\n  const seenVersion = readSeenAccountSignalVersion(user.uid);\n  const remoteVersion = rows.reduce((max, row) => Math.max(max, row.signal.version), 0);\n  // Reuse the existing 097 pending-state protection, but present a local synthetic\n  // version so every changed parent snapshot is applied idempotently without\n  // claiming a missed legacy batch or causing any recovery fetch.\n  observeExploreLikeAccountSyncSignal(user, {\n    version: Math.max(Date.now(), seenVersion + 1, remoteVersion),\n    previousVersion: seenVersion,\n    results: mergedResults,\n  });\n};\n\n"""
+          service = service.replace(publish_anchor, device_observer + publish_anchor, 1)
+
+          old_write = """  try {\n    await setRealtimeValue(databaseRef(realtimeDb, `userSync/${uid}/exploreLike`), signal);\n  } catch (reason) {"""
+          new_write = """  const deviceId = getExploreLikeDeviceId098();\n  try {\n    await setRealtimeValue(databaseRef(realtimeDb, `userSync/${uid}/exploreLikeDevices/${deviceId}`), {\n      ...signal,\n      serverAt: serverTimestamp(),\n    });\n  } catch (reason) {"""
+          assert old_write in service
+          service = service.replace(old_write, new_write, 1)
+          service = service.replace(
+              "console.warn('Explore account like RTDB sync signal publish failed:', reason);",
+              "console.warn('Explore account like device RTDB sync signal publish failed:', reason);",
+              1,
+          )
+          service_path.write_text(service)
+
+          sync_path = Path('src/services/userDomainSyncService.ts')
+          sync = sync_path.read_text()
+          sync = sync.replace(
+              "import { observeExploreLikeAccountSyncSignal } from './exploreLikeService';",
+              "import { observeExploreLikeAccountSyncDeviceSignals, observeExploreLikeAccountSyncSignal } from './exploreLikeService';",
+              1,
+          )
+          sync = sync.replace(
+              "let unsubscribeExploreLike: Unsubscribe | null = null;",
+              "let unsubscribeExploreLike: Unsubscribe | null = null;\nlet unsubscribeExploreLikeDevices: Unsubscribe | null = null;",
+              1,
+          )
+          sync = sync.replace(
+              "  unsubscribeExploreLike?.();\n  unsubscribeMusicNote = null;",
+              "  unsubscribeExploreLike?.();\n  unsubscribeExploreLikeDevices?.();\n  unsubscribeMusicNote = null;",
+              1,
+          )
+          sync = sync.replace(
+              "  unsubscribeExploreLike = null;\n  activeUid = '';",
+              "  unsubscribeExploreLike = null;\n  unsubscribeExploreLikeDevices = null;\n  activeUid = '';",
+              1,
+          )
+          legacy_listener = """  unsubscribeExploreLike = onValue(ref(realtimeDb, `userSync/${safeUid}/exploreLike`), (snapshot) => {\n    const currentUser = auth.currentUser;\n    if (!currentUser || currentUser.uid !== safeUid) return;\n    observeExploreLikeAccountSyncSignal(currentUser, snapshot.val());\n  }, (error) => {\n    console.warn('Explore like RTDB sync signal unavailable; R2 social snapshot recovery remains active.', error);\n  });\n"""
+          assert legacy_listener in sync
+          new_listeners = legacy_listener + """\n  // SORIDRAW_EXPLORE_LIKE_DEVICE_SIGNAL_098_20260916\n  unsubscribeExploreLikeDevices = onValue(ref(realtimeDb, `userSync/${safeUid}/exploreLikeDevices`), (snapshot) => {\n    const currentUser = auth.currentUser;\n    if (!currentUser || currentUser.uid !== safeUid) return;\n    observeExploreLikeAccountSyncDeviceSignals(currentUser, snapshot.val());\n  }, (error) => {\n    console.warn('Explore like device RTDB sync signals unavailable; legacy signal and cached state remain active.', error);\n  });\n"""
+          sync = sync.replace(legacy_listener, new_listeners, 1)
+          sync_path.write_text(sync)
+
+          rules_path = Path('database.rules.json')
+          rules = json.loads(rules_path.read_text())
+          uid_rules = rules['rules']['userSync']['$uid']
+          assert 'exploreLike' in uid_rules and 'exploreLikeDevices' not in uid_rules
+          signal_rule = copy.deepcopy(uid_rules['exploreLike'])
+          signal_rule['.validate'] = "$deviceId.matches(/^[A-Za-z0-9_-]{1,96}$/) && newData.hasChildren(['version','previousVersion','serverAt','results']) && newData.child('version').val() > newData.child('previousVersion').val()"
+          signal_rule['serverAt'] = {'.validate': 'newData.isNumber() && newData.val() > 0'}
+          # Keep result schema exactly aligned with the already deployed bounded signal.
+          other = uid_rules.pop('$other')
+          uid_rules['exploreLikeDevices'] = {'$deviceId': signal_rule}
+          uid_rules['$other'] = other
+          rules_path.write_text(json.dumps(rules, ensure_ascii=False, indent=2) + '\n')
+
+          verifier = Path('scripts/verify-098-explore-like-device-signal.mjs')
+          verifier.write_text("""import assert from 'node:assert/strict';\nimport { readFileSync } from 'node:fs';\n\nconst service = readFileSync('src/services/exploreLikeService.ts', 'utf8');\nconst sync = readFileSync('src/services/userDomainSyncService.ts', 'utf8');\nconst rules = readFileSync('database.rules.json', 'utf8');\n\nassert.ok(service.includes('SORIDRAW_EXPLORE_LIKE_DEVICE_SIGNAL_098_20260916'));\nassert.ok(service.includes('const EXPLORE_LIKE_ACCOUNT_PATCH_TTL_MS = 7 * 24 * 60 * 60_000'));\nassert.ok(service.includes('updatedAt + EXPLORE_LIKE_ACCOUNT_PATCH_TTL_MS'));\nassert.ok(service.includes('exploreLikeDevices/${deviceId}'));\nassert.ok(service.includes('serverAt: serverTimestamp()'));\nassert.ok(service.includes('export const observeExploreLikeAccountSyncDeviceSignals'));\nassert.ok(service.includes('latestByTrack'));\nassert.ok(service.includes('.slice(0, EXPLORE_LIKE_DEVICE_SIGNAL_MAX_DEVICES)'));\nassert.ok(service.includes('.slice(0, EXPLORE_LIKE_BATCH_MAX)'));\nassert.ok(service.includes('previousVersion: seenVersion'));\nassert.ok(service.includes('if (pending.desiredLiked === result.liked)'));\nassert.ok(sync.includes('userSync/${safeUid}/exploreLikeDevices'));\nassert.ok(sync.includes('observeExploreLikeAccountSyncDeviceSignals'));\nassert.ok(sync.includes('unsubscribeExploreLikeDevices?.()'));\nassert.ok(rules.includes('exploreLikeDevices'));\nassert.ok(rules.includes("$deviceId.matches(/^[A-Za-z0-9_-]{1,96}$/)"));\nassert.ok(rules.includes("newData.hasChildren(['version','previousVersion','serverAt','results'])"));\nassert.ok(rules.includes('newData.isNumber() && newData.val() > 0'));\nassert.ok(rules.includes("$index.matches(/^(0|[1-9]|[1-4][0-9])$/)"));\nassert.ok(!service.includes('firebase/firestore'));\nassert.ok(!service.includes('getDocs('));\nassert.ok(!service.includes('collection('));\nconst deviceObserverStart = service.indexOf('export const observeExploreLikeAccountSyncDeviceSignals');\nconst publishStart = service.indexOf('const publishExploreLikeAccountSyncSignal', deviceObserverStart);\nconst deviceObserver = service.slice(deviceObserverStart, publishStart);\nassert.ok(!deviceObserver.includes('requestExploreLike('));\nassert.ok(!deviceObserver.includes('fetch('));\n\nconsole.log('PASS 098: Explore like RTDB uses per-device retained slots, merges newest per-track display counts locally, extends local replay to seven days, and adds no D1/Firestore recovery read.');\n""")
+          PY
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Verify 094-098 like path
+        run: |
+          node scripts/verify-094-explore-session-like-batch.mjs
+          node scripts/verify-095-explore-like-zero-read-display.mjs
+          node scripts/verify-096-explore-like-cross-device-replay.mjs
+          node scripts/verify-097-explore-like-pending-ack.mjs
+          node scripts/verify-098-explore-like-device-signal.mjs
+      - name: Switch to Node 24 for cost verifier
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify like cost and liked profile regressions
+        run: |
+          node scripts/verify-explore-like-cost-optimization.mjs
+          node scripts/verify-085-liked-profile.mjs
+          node scripts/verify-086-liked-sync-repair.mjs
+      - name: Compile RTDB rules
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Firebase Database Emulator rules compile
+        run: |
+          npx --yes firebase-tools@latest emulators:exec --only database --project demo-soridraw-like-sync "node -e \"console.log('RTDB_RULES_098_EMULATOR=PASS')\""
+      - name: Guard scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git restore --worktree dist 2>/dev/null || true
+          git diff --name-only | sort > "$RUNNER_TEMP/changed.txt"
+          cat "$RUNNER_TEMP/changed.txt"
+          test "$(cat "$RUNNER_TEMP/changed.txt")" = $'database.rules.json\nscripts/verify-098-explore-like-device-signal.mjs\nsrc/services/exploreLikeService.ts\nsrc/services/userDomainSyncService.ts'
+      - name: Commit verified 098 product fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add database.rules.json scripts/verify-098-explore-like-device-signal.mjs src/services/exploreLikeService.ts src/services/userDomainSyncService.ts
+          git diff --cached --check
+          test -n "$(git status --porcelain)"
+          git commit -m 'fix: isolate Explore like RTDB signals by device'
+          git push origin HEAD:preview

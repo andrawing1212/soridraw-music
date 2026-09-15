@@ -16,6 +16,16 @@
       "database_id": "aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f"
     }
   ],
+  "ratelimits": [
+    {
+      "name": "LIKE_RATE_LIMITER",
+      "namespace_id": "91054",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    }
+  ],
   "r2_buckets": [
     {
       "binding": "PROFILE_MEDIA",

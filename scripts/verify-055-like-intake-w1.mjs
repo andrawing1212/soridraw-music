@@ -45,7 +45,7 @@ assert.match(worker, /SORIDRAW_EXPLORE_LIKE_INTAKE_W1_HOTPATH_055_20260915/);
 assert.match(wrangler, /LIKE_RATE_LIMITER/);
 
 const handler = functionText(worker, 'handleLikeBatch034');
-assert.match(handler, /enforceExploreLikeBatchRateLimit034\(env, authContext\.uid, mutations\.length\)/, 'edge limiter must remain');
+assert.match(handler, /enforceExploreLikeBatchEdgeRateLimit054\(env, authContext\.uid\)/, 'edge limiter must remain');
 assert.match(handler, /enqueueExploreLikeBatch035\(env, authContext\.uid, effectiveMutations, receivedAt\)/, 'new intake must use W1 queue');
 assert.doesNotMatch(handler, /enqueueExploreLikeUserQueue075\(/, 'new intake must not use indexed 075 queue');
 assert.doesNotMatch(handler, /readExploreLikeBatchStates035\(/, 'warm intake must not restore D1 canonical reads');
@@ -63,9 +63,10 @@ const aggregate = functionText(worker, 'processExploreLikeBatches035');
 assert.match(aggregate, /hasExploreLikeUserQueuePending075/);
 assert.match(aggregate, /processExploreLikeUserQueueWave075/);
 
-const limiter = functionText(worker, 'enforceExploreLikeBatchRateLimit034');
+const limiter = functionText(worker, 'enforceExploreLikeBatchEdgeRateLimit054');
 assert.match(limiter, /LIKE_RATE_LIMITER/);
 assert.doesNotMatch(limiter, /api_rate_limits/i, 'normal abuse guard must not write D1 api_rate_limits');
+assert.doesNotMatch(limiter, /\.DB\.prepare|RATE_DB|exploreRateDb031/, 'edge limiter must remain D1-free');
 
 console.log('VERIFY_055_LIKE_INTAKE_W1=PASS');
 console.log('WARM_NORMAL_LIKE_EXPECTED_D1_READ_ROWS=0');

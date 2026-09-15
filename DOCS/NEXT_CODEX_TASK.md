@@ -1,103 +1,90 @@
 # NEXT CODEX TASK
 
-상태: **091 PREVIEW 앱 배포 완료 / Worker 053 유지 / 자동검증 PASS / 사용자 실사용·비용 검증 전 / TEST 승격 금지**
+상태: **PREVIEW 앱 091 / Worker 054 배포 완료 / 054 자동검증 PASS / 실제 좋아요 D1 W1 실측 전 / TEST 승격 금지**
 
 ## 현재 기준
 - branch: `preview`
 - 실제 PREVIEW 앱: **091**
-- 실제 PREVIEW Worker: **053** / `423c9501-8964-463c-b5b5-69ad08e1eb91`
-- 091 기준 시작 HEAD: `c1c2616ce0fd2e8cc7f5c8ad9440bf87ef0e18de`
-- 091 제품 commit: `22d11a7ce22a5a0ce154b6230278c14b7bdc199f`
-- 091 최종 검증 Run `34920960937` — **PASS**
-- 091 App Run `34921079977` — **PASS**
-- 091 배포 고정 commit: `2fc13f7b1848c960689336570a8abe1adcaa357d`
-- `PREVIEW_APP_VERSION=091`
-- `PREVIEW_EXACT_BUILD=PASS`
-- TEST main `3b574c05589230f077eceff98190edd4b5195f75` — unchanged
-- PRODUCTION `a8971fae1014ce107927fcfb5491d202d4c68fbe` — unchanged
+- 실제 PREVIEW Worker: **054** / `40d84c03-2aa9-4aaa-8539-676b48c96d6d`
+- 091 제품 commit: `22d11a7ce22b822457ed10eaf9001da5242d5e62`
+- 091 App Run `34921079977` — PASS
+- 054 검증 Run `34924497426` — PASS
+- 054 배포 Run `34929734785` — PASS
+- 054 validated candidate commit: `a9d2a0d0bfa616f85086419dc3ca081c945e1842`
+- 054 canonical source SHA256: `86bcfa28512712e4e2c8e221da06ed788abb21aa3177134a98e1f0160d5ba9e4`
+- TEST main `3b574c05589230f077eceff98190edd4b5195f75` — 변경 없음
+- PRODUCTION `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 변경 없음
 
-## 090 실사용 FAIL 원인
-Work 독립 감사 + 사용자 영상으로 확정:
-- Explore / 내 공개곡 / 좋아요 곡이 같은 곡의 서로 다른 cached `track.likeCount`를 표시.
-- 090의 optimistic count를 liked-card cache에 저장하면서 Feed/Profile cache와 기준이 갈라짐.
-- `liked → 0을 1로 보정` floor가 canonical/raw와 임시 표시를 섞음.
-- Worker batch 응답 `likeCount`는 deferred aggregate 완료값이 아닌데 baseline에 들어갈 수 있었음.
-- 페이지 이동/캐시 재사용 상태 전이가 기존 정적 verifier에서 빠져 있었음.
+## 091 보호 기준
+- Explore / 내 공개곡 / 좋아요 곡의 같은 곡 숫자는 공통 display ledger 기준.
+- persistent Feed/Profile/Liked cache에는 raw/canonical 숫자만 유지.
+- pending/accepted 화면 숫자는 로컬 overlay로 분리.
+- 090의 `0→1` floor 금지.
+- Worker batch ACK를 aggregate 완료로 간주하지 않음.
+- 5초 batch + page-exit fallback 유지.
+- PC↔모바일 account sync signal 유지.
 
-## 091 구조
-1. 신규 `exploreLikeDisplayStateService.ts`가 동일 곡의 **공통 화면 표시 숫자**를 관리.
-2. Feed/Profile/Liked persistent cache에는 raw/canonical 숫자만 유지.
-3. pending/accepted optimistic 숫자는 별도 로컬 display ledger로 분리.
-4. 모든 Explore 카드 렌더가 `getExploreLikeDisplayCount091()`을 사용해 같은 곡은 같은 숫자를 표시.
-5. 090의 `0→1` floor 제거.
-6. liked-card cache에 optimistic 숫자를 저장하지 않음.
-7. 5초 batch ACK는 aggregate 완료로 보지 않으며 accepted overlay를 유지.
-8. 기존 aggregate deadline 뒤 fresh Feed가 오면 해당 canonical 숫자로 전환하고 관련 raw Profile/Liked cache만 targeted patch.
-9. Worker batch 응답 `likeCount`를 canonical aggregate baseline으로 사용하지 않음.
-10. account sync signal은 origin의 display count를 전달할 수 있고, 현재 기기 pending이 더 최신이면 보호.
-11. 5초 batch + page-exit fallback / 084 publication / UI는 그대로 보호.
+## Worker 054 변경
+정상 좋아요 batch의 D1 `api_rate_limits` write를 제거하고 Cloudflare Rate Limiting binding으로 대체.
 
-## 자동검증
-Run `34920960937` PASS:
-- TypeScript PASS
-- Build PASS
-- 085 / 086 / 087 / 088 / 089 / 090 regression PASS
-- 091 state-machine PASS:
-  - raw `0/0/1/2` 페이지들이 pending like 중 모두 display `1`
-  - pre-aggregate stale refresh 후에도 display 유지
-  - final aggregate confirm 후 canonical 전환
-  - unlike raw `0/1/2/3`에서도 공통 `0`
-  - rapid like→unlike baseline 복귀
-  - cross-device imported display count 동일 적용
-  - display ledger server I/O 0
-- Explore like cost optimization PASS
-- 100 same-track likes → aggregate/derived update 1회 PASS
-- net-zero cohort → aggregate/derived write 0 PASS
+- `LIKE_RATE_LIMITER`: 60 requests / 60s, user uid key.
+- binding 누락 시 503으로 차단; fail-open 금지.
+- 초과 시 429 + Retry-After 60.
+- 중복 좋아요 방지는 기존 canonical `likes(track_id,user_uid)` idempotency 유지.
+- 5초 batch / max 50 / durable outbox / deferred aggregate 유지.
+- 정상 좋아요 1 batch 예상 즉시 D1 write: **W1**.
+- `api_rate_limits` hot-path D1 write: **0**.
+
+## 054 자동검증
+Run `34924497426` PASS:
+- 054 edge limiter PASS
+- 기존 Explore like cost contract PASS
+- W1 queue/deferred aggregate PASS
+- 085~091 regression PASS
 - 081 batching PASS
-- 084 publication regression PASS
-
-## 배포 검증
-Run `34921079977` PASS:
-- locked source `2fc13f7b1848c960689336570a8abe1adcaa357d`
+- 084 publication PASS
 - Node 20 TypeScript PASS
 - Node 20 Build PASS
-- Firebase PREVIEW Hosting PASS
-- `PREVIEW_APP_VERSION=091`
-- `PREVIEW_EXACT_BUILD=PASS`
-- `TEST_PRODUCTION_UNCHANGED=PASS`
-- 실제 `preview.soridraw.com` 091 확인
-- Worker 053 재배포 없음
-- Functions / D1 schema / 사용자 데이터 변경 없음
+- Wrangler config dry-run PASS
 
-## 지금 할 일 — 사용자 PREVIEW 실사용
-같은 네 곡으로 확인:
-- 좋아요 전 숫자가 Explore / 내 공개곡 / 좋아요 곡에서 동일한지.
-- 좋아요 직후 네 페이지를 옮겨도 같은 곡 숫자가 동일한지.
-- 5초 batch 뒤 이전 cache 값으로 되돌아가지 않는지.
-- aggregate 뒤 canonical 숫자와 동일하게 유지되는지.
-- 좋아요 해제 및 빠른 like→unlike가 모든 페이지에서 동일하게 복귀하는지.
-- PC↔모바일 같은 계정의 하트 / membership / display 숫자 수렴.
-- 1곡/여러 곡 실제 D1/Firestore 비용.
-- warm Explore/좋아요곡 재진입 + 변경 없음 원본 server R/W 0 목표.
+## 054 PREVIEW 배포
+Run `34929734785` PASS:
+- source SHA exact match PASS
+- D1 read-only preflight PASS
+- required tables / seeded=1 / explore032_* triggers / like processor 확인 후 배포
+- `soridraw-explore-preview` 배포 성공
+- Current Version ID `40d84c03-2aa9-4aaa-8539-676b48c96d6d`
+- `LIKE_RATE_LIMITER` binding 확인
+- cron `*/10 * * * *` 유지
+- live `/v1/feed-revision` HTTP 200 PASS
+- revision request D1 R0/W0 PASS
+- TEST/PRODUCTION Worker 배포 없음
+- temp deploy workflow/trigger 정리 완료
 
-### 중요 분기
-사용자가 기대하는 초기 `0/0/0/0`과 달리 091에서 모든 페이지가 동일한 `1/1/2/2` 같은 값을 보인다면, 이제 페이지 캐시 충돌보다 **PREVIEW D1 canonical like relation / track_stats aggregate 자체**를 read-only 대조해야 한다.
-- 강제 데이터 초기화 금지
-- migration/backfill 금지
-- 먼저 `likes` 고유 user relation과 `track_stats.like_count` 비교
-- 차이가 있으면 aggregate queue/cron 상태부터 확인
+## 지금 할 일 — 사용자 PREVIEW 실측
+1. Dashboard D1 수치를 초기 상태에서 확인.
+2. 좋아요 1곡만 누르고 5초 이상 기다림.
+3. 즉시 D1 write가 **1 증가**하는지 확인.
+4. 좋아요 해제 1회도 같은 기준으로 확인.
+5. 여러 곡을 5초 안에 눌렀을 때 batch 1회로 묶이는지 확인.
+6. Explore / 내 공개곡 / 좋아요 곡의 하트/숫자 일관성 유지 확인.
+7. PC↔모바일 같은 계정 수렴 확인.
+8. warm page 재진입 + 변경 없음 server R/W 0 목표 확인.
 
-## 비용/안전 합격선
-- 클릭마다 개별 서버 요청 금지; 실제 변경은 5초 batch.
-- warm liked tab/page revisit 원본 server R/W 0 목표.
-- 실제 변경분만 처리하고 전체 Feed/list scan 금지.
-- 앱 업데이트 이유의 전체 cache wipe 금지.
-- user Firestore에 liked ID 배열 저장 금지.
-- 사용자 데이터 migration/backfill/delete 금지.
-- UI 비요청 변경 금지.
+### 판정
+- 실제 정상 좋아요 1 batch가 D1 W1이면 054 비용 목표 PASS 후보.
+- W2 이상이면 어떤 쿼리가 추가 write를 만드는지 진단 후 TEST 승격 중단 유지.
+- Firestore account sync signal write는 D1 W1과 별도이며 batch당 1회 구조를 유지.
 
-## 승격/정리
-- TEST: **091 PREVIEW 실사용 정확성/비용 PASS 전 금지**.
+## 금지
+- 사용자 데이터 migration/backfill/delete/overwrite
+- D1 schema destructive change
+- 클릭별 서버 요청
+- 전체 Feed/Profile scan
+- 앱 업데이트 이유의 전체 cache wipe
+- user Firestore liked-ID 배열 저장
+- UI/CSS 비요청 변경
+
+## 승격
+- TEST: **091 정확성 + Worker 054 실제 D1 W1 비용 실측 PASS 전 금지**.
 - PRODUCTION: 사용자의 명확한 정식배포 승인 전 금지.
-- 091 관련 `temp-*` workflow/script는 사용자 실사용 PASS 후 정리.
-- GitHub preview branch protection enforcement 비활성 조회 이력은 운영 위험으로 유지 기록.

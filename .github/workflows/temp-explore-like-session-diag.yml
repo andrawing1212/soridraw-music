@@ -60,6 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           git checkout -- dist
+          git clean -fd dist
           git diff --check
           changed="$({ git diff --name-only; git ls-files --others --exclude-standard; } | sort)"
           expected="$(printf '%s\n' \

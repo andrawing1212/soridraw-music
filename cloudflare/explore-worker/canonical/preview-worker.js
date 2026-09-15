@@ -21263,6 +21263,7 @@ async function processExploreLikeUserQueueWave075(env, cutoff, now) {
   };
 }
 
+// SORIDRAW_LIKED_TRACK_PUBLIC_PROFILE_JOIN_056_20260915
 async function handleMyLikedTracks052(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   let body = null;
@@ -21306,7 +21307,7 @@ async function handleMyLikedTracks052(request, env, cors) {
       r.sort_order
     FROM requested r
     JOIN tracks t ON t.id = r.id
-    LEFT JOIN profiles p ON p.uid = t.owner_uid
+    LEFT JOIN public_profiles p ON p.uid = t.owner_uid
     LEFT JOIN track_stats s ON s.track_id = t.id
     WHERE t.is_public = 1 AND t.status = 'published'
     ORDER BY r.sort_order ASC

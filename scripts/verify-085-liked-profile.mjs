@@ -40,9 +40,15 @@ for (const [needle, label] of [
   ['"/v1/me/liked-tracks"', 'Worker liked-track route'],
   ['readExploreLikeR2Bundle(env, authContext.uid)', 'viewer liked-ID R2 authorization'],
   ['JOIN tracks t ON t.id = r.id', 'PK-bounded track detail lookup'],
+  ['SORIDRAW_LIKED_TRACK_PUBLIC_PROFILE_JOIN_056_20260915', 'Worker 056 liked-track profile join marker'],
+  ['LEFT JOIN public_profiles p ON p.uid = t.owner_uid', 'canonical public profile join'],
   ["t.is_public = 1", 'public-only guard'],
   ["t.status = 'published'", 'published-only guard'],
 ]) must(worker, needle, label);
+
+if (worker.includes('LEFT JOIN profiles p ON p.uid = t.owner_uid')) {
+  throw new Error('085 verifier: liked-track detail lookup must use public_profiles, not missing profiles table');
+}
 
 if (worker.includes('WHERE t.owner_uid = ? AND t.id IN')) {
   throw new Error('085 verifier: owner-wide liked track scan reintroduced');

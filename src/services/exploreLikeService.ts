@@ -46,6 +46,7 @@ import {
 // SORIDRAW_EXPLORE_LIKE_RTDB_SIGNAL_093_20260915
 // SORIDRAW_EXPLORE_SESSION_BATCH_094_20260915
 // SORIDRAW_EXPLORE_ACKNOWLEDGED_COUNT_094_20260915
+// SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_REPLAY_096_20260915
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -450,13 +451,38 @@ const publishExploreLikeAccountSyncSignal = async (
   );
   const version = Math.max(Date.now(), previousVersion + 1);
   const ownerByTrack = new Map(batchEntries.map((pending) => [pending.trackId, pending.ownerUid]));
+
+  // 096: RTDB keeps only the latest signal object. If another device was asleep
+  // while this device flushed several separate boundary batches, publishing only
+  // the newest batch loses the earlier display-count deltas. Reuse the existing
+  // short-lived account patch cache as a rolling, unique-by-track replay window.
+  // The payload remains capped at the existing 50-result rules limit and adds no
+  // D1/Firestore read. Current results are inserted first so storage failure can
+  // never prevent the just-confirmed batch from being signalled.
+  const replayByTrack = new Map<string, ExploreLikeAccountSyncResult>();
+  results.forEach((result) => {
+    replayByTrack.set(result.trackId, {
+      ...result,
+      ownerUid: ownerByTrack.get(result.trackId) || '',
+    });
+  });
+  Object.values(readAccountPatchCache(uid))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .forEach((patch) => {
+      if (replayByTrack.has(patch.trackId) || replayByTrack.size >= EXPLORE_LIKE_BATCH_MAX) return;
+      replayByTrack.set(patch.trackId, {
+        trackId: patch.trackId,
+        ownerUid: patch.ownerUid,
+        liked: patch.liked,
+        likeCount: patch.likeCount,
+        ...(patch.displayLikeCount === undefined ? {} : { displayLikeCount: patch.displayLikeCount }),
+      });
+    });
+
   const signal: ExploreLikeAccountSyncSignal = {
     version,
     previousVersion,
-    results: results.map((result) => ({
-      ...result,
-      ownerUid: ownerByTrack.get(result.trackId) || '',
-    })),
+    results: [...replayByTrack.values()].slice(0, EXPLORE_LIKE_BATCH_MAX),
   };
 
   // 093: Explore likes must never mutate Firestore users/{uid} just to wake a

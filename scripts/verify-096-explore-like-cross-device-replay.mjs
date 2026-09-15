@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const service = readFileSync('src/services/exploreLikeService.ts', 'utf8');
+const rules = readFileSync('database.rules.json', 'utf8');
+assert.ok(service.includes('SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_REPLAY_096_20260915'));
+assert.ok(service.includes('Object.values(readAccountPatchCache(uid))'));
+assert.ok(service.includes('replayByTrack.has(patch.trackId)'));
+assert.ok(service.includes('replayByTrack.size >= EXPLORE_LIKE_BATCH_MAX'));
+assert.ok(service.includes('results: [...replayByTrack.values()].slice(0, EXPLORE_LIKE_BATCH_MAX)'));
+assert.ok(service.indexOf('results.forEach((result) =>') < service.indexOf('Object.values(readAccountPatchCache(uid))'));
+assert.ok(service.includes('rememberAccountSyncResults(uid, accountReplayResults);\n    await publishExploreLikeAccountSyncSignal'));
+assert.ok(!service.includes('firebase/firestore'));
+assert.ok(!service.includes('getDocs('));
+assert.ok(!service.includes('collection('));
+assert.ok(rules.includes("$index.matches(/^(0|[1-9]|[1-4][0-9])$/)"));
+console.log('PASS 096: latest RTDB signal replays up to 50 recent unique acknowledged track states without D1/Firestore reads or rules expansion.');

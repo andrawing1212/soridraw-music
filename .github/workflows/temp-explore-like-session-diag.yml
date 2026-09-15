@@ -1,4 +1,4 @@
-name: TEMP Explore Session Like 094
+name: TEMP Promote Explore Session Like 094
 
 on:
   push:
@@ -11,58 +11,29 @@ permissions:
   contents: write
 
 jobs:
-  implement-and-validate:
+  promote-verified-patch:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: tmp/explore-session-like-batch-20260915
+          ref: preview
           fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Apply narrow 094 patch
+      - name: Lock PREVIEW baseline
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/temp-apply-explore-session-like-batch.py
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('scripts/verify-094-explore-session-like-batch.mjs')
-          s = p.read_text(encoding='utf-8')
-          old = "assert.doesNotMatch(service, /updateDoc\\(|users\\//, 'Explore like sync must not reintroduce Firestore user writes');"
-          new = "assert.doesNotMatch(service, /from ['\\\"]firebase\\/firestore['\\\"]/, 'Explore like service must not import Firestore writes');\nassert.doesNotMatch(service, /\\b(?:updateDoc|setDoc|addDoc|deleteDoc)\\s*\\(/, 'Explore like sync must not call Firestore write APIs');"
-          if s.count(old) != 1:
-              raise SystemExit(f'verifier anchor mismatch: {s.count(old)}')
-          p.write_text(s.replace(old, new, 1), encoding='utf-8')
-          PY
-      - name: Install
-        run: npm ci
-      - name: TypeScript
-        run: npx tsc --noEmit
-      - name: Build
-        run: npm run build
-      - name: Node 24 for sqlite regression
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Like regression tests
+          test "$(git rev-parse HEAD)" = "ec11473fa0ed6e34d1da8da35d6c637e516cb4b6"
+          echo "PREVIEW_BASE=$(git rev-parse HEAD)"
+      - name: Apply verified product commit only
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/verify-094-explore-session-like-batch.mjs
-          node scripts/verify-explore-like-cost-optimization.mjs
-          node scripts/verify-085-liked-profile.mjs
-          node scripts/verify-086-liked-sync-repair.mjs
-      - name: Diff safety
-        shell: bash
-        run: |
-          set -euo pipefail
-          git checkout -- dist
-          git clean -fd dist
-          git diff --check
-          changed="$({ git diff --name-only; git ls-files --others --exclude-standard; } | sort)"
+          git config user.name 'andrawing1212'
+          git config user.email 'andrawing1212@gmail.com'
+          git fetch origin tmp/explore-session-like-batch-20260915
+          git cherry-pick d09e9544c506816fffe8a565fd340dd399d8da4f
+          changed="$(git diff --name-only HEAD^ HEAD | sort)"
           expected="$(printf '%s\n' \
             scripts/verify-094-explore-session-like-batch.mjs \
             scripts/verify-explore-like-cost-optimization.mjs \
@@ -73,20 +44,32 @@ jobs:
           printf '%s\n' "$changed"
           test "$changed" = "$expected"
           ! printf '%s\n' "$changed" | grep -E '(^|/)(database\.rules\.json|firestore\.rules|functions/|cloudflare/)' || exit 1
-          echo 'NARROW_DIFF_094=PASS'
-      - name: Commit verified product change
+          git diff --check HEAD^
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm ci
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Like regression tests
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'andrawing1212'
-          git config user.email 'andrawing1212@gmail.com'
-          git add \
-            scripts/verify-094-explore-session-like-batch.mjs \
-            scripts/verify-explore-like-cost-optimization.mjs \
-            src/components/explore/ExploreShell.tsx \
-            src/pages/ExplorePage.tsx \
-            src/services/exploreLikeDisplayStateService.ts \
-            src/services/exploreLikeService.ts
-          git commit -m 'fix: batch Explore likes at session boundaries'
-          git push origin HEAD:tmp/explore-session-like-batch-20260915
-          echo "PRODUCT_COMMIT=$(git rev-parse HEAD)"
+          node scripts/verify-094-explore-session-like-batch.mjs
+          node scripts/verify-explore-like-cost-optimization.mjs
+          node scripts/verify-085-liked-profile.mjs
+          node scripts/verify-086-liked-sync-repair.mjs
+      - name: Push PREVIEW code only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview
+          test "$(git rev-parse origin/preview)" = "ec11473fa0ed6e34d1da8da35d6c637e516cb4b6"
+          git push origin HEAD:preview
+          echo "PREVIEW_PRODUCT_COMMIT=$(git rev-parse HEAD)"

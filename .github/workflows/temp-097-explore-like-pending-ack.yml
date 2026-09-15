@@ -71,6 +71,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git restore --worktree dist
+          git add -N scripts/verify-097-explore-like-pending-ack.mjs
           git diff --name-only | sort > "$RUNNER_TEMP/changed.txt"
           cat "$RUNNER_TEMP/changed.txt"
           test "$(cat "$RUNNER_TEMP/changed.txt")" = $'scripts/verify-097-explore-like-pending-ack.mjs\nsrc/services/exploreLikeService.ts'

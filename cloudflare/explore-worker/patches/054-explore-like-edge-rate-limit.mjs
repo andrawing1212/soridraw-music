@@ -46,12 +46,17 @@ const functionRange = (name) => {
   throw new Error(`[054] unterminated function: ${name}`);
 };
 
+// The repository-owned canonical Worker is the already-built current runtime.
+// Build-time patch markers can be removed by bundling, so guard on durable behavior
+// that must exist in the 053 baseline rather than on a source comment marker.
 for (const required of [
-  'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912',
   'handleLikeBatch034',
   'enforceExploreLikeBatchRateLimit034',
   'readExploreLikeBatchStates035',
   'enqueueExploreLikeBatch035',
+  'enqueueExploreLikeUserQueue075',
+  'exploreLikeW1Batch040',
+  'effectiveMutations',
   'EXPLORE_LIKE_BATCH_MAX_034',
   'throwApi',
 ]) {
@@ -73,6 +78,9 @@ if (!finalBatch.includes('enforceExploreLikeBatchEdgeRateLimit054(env, authConte
 }
 if (finalBatch.includes('enforceExploreLikeBatchRateLimit034(')) {
   throw new Error('[054] D1 rate limit remained on normal batch path');
+}
+for (const protectedBehavior of ['effectiveMutations', 'enqueueExploreLikeUserQueue075', 'enqueueExploreLikeBatch035']) {
+  if (!finalBatch.includes(protectedBehavior)) throw new Error(`[054] protected like batching behavior missing: ${protectedBehavior}`);
 }
 for (const forbidden of ['api_rate_limits', 'exploreRateDb031(', '.DB.prepare', 'RATE_DB']) {
   if (finalEdge.includes(forbidden)) throw new Error(`[054] edge limiter unexpectedly uses D1: ${forbidden}`);

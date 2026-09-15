@@ -1,5 +1,17 @@
 # NEXT CODEX TASK
 
+상태: **PREVIEW Catalog 전체 Firestore 재구성 차단 코드 반영 / CI PASS / 실환경 배포·비용 측정 전 / TEST 승격 금지**
+
+## 2026-09-15 최우선 다음 작업
+- 기준 branch: `preview`
+- Catalog 구현 commit: `4e961fa4bcc926540c430e4b2e945141c3b754a4`
+- 검증 Run: `34946586905` — TypeScript / Build / Worker syntax / no-fullscan verifier PASS
+- 일반 Music Note/Library Catalog GET 및 delta 충돌 복구에서 Firestore 전체 collection rebuild를 호출하지 않는다.
+- 새 기기는 이미 존재하는 R2 Catalog를 1회 받고 로컬 캐시를 만든다. R2가 없으면 fail-closed + bounded legacy bundle fallback이며 자동 full scan 금지.
+- 다음은 사용자 요청 시 PREVIEW에 필요한 앱/Media Worker만 배포하고, 새 기기/캐시 삭제 상태에서 Firestore read가 곡 수에 비례하지 않는지 실측한다.
+- 실측 합격 전 `main` TEST 승격 금지. TEST/PRODUCTION의 기존 읽기 구조는 PREVIEW 안정화 후 동일 exact tree 승격으로 맞춘다.
+- PRODUCTION은 명확한 정식배포 승인 전 금지.
+
 상태: **PREVIEW 앱 091 / Worker 054 배포 완료 / 054 자동검증 PASS / 실제 좋아요 D1 W1 실측 전 / TEST 승격 금지**
 
 ## 현재 기준

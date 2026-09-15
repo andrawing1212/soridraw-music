@@ -10,18 +10,31 @@
 - TEST branch: `main`
 - PRODUCTION branch: `production`
 - 실제 PREVIEW 앱: **091** — `preview.soridraw.com`
-- 실제 PREVIEW Worker: **054** / `40d84c03-2aa9-4aaa-8539-676b48c96d6d`
+- 실제 PREVIEW Explore Worker: **055** / `7191acce-fb21-48d6-867f-f237b1f32979`
 - 091 제품 commit: `22d11a7ce22a5a0ce154b6230278c14b7bdc199f`
 - 091 App Run: `34921079977` — **PASS**
-- 054 검증 Run: `34924497426` — **PASS**
-- 054 PREVIEW 배포 Run: `34929734785` — **PASS**
-- 054 validated candidate commit: `a9d2a0d0bfa616f85086419dc3ca081c945e1842`
+- 055 PREVIEW 배포 Run: `34937881843` — **PASS**
+- 055 제품 commit: `2a4d7ec35e82448b60d1c5edffa106082017c210`
+- Catalog full-scan 차단 기준 commit: `4e961fa4bcc926540c430e4b2e945141c3b754a4`
+- Catalog 수정 검증 Run: `34946586905` — **PASS**
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — 변경 없음
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 변경 없음
 - TEST Worker: `0b9cfe5c-1e29-4485-ac97-36f87832b41e` — 배포 없음
 - PRODUCTION Worker: `07c11e5e-47a6-458b-a3a0-6e47b6c331e6` — 배포 없음
 
-## 2. 091 좋아요 표시 구조
+## 2. 2026-09-15 Catalog Firestore 전체조회 차단 — 코드 반영 완료 / 배포 전
+- 문제: 새 기기/오래된 로컬 Catalog에서 profile revision이 R2보다 앞서면 `X-Soridraw-Require-Revision`이 Worker의 `buildCanonicalCatalog()`를 호출해 Music Note `favorites` 전체 + Library `suno_tracks/{uid}/tracks` 전체를 Firestore REST로 다시 읽을 수 있었음.
+- 조치: 일반 Catalog GET은 **R2 only**. profile revision은 invalidation hint로만 사용하며 일반 앱 경로에서 hard revision rebuild를 요구하지 않음.
+- Worker `getCatalogState()`는 R2 journal/base만 읽고, R2 Catalog가 없으면 `CATALOG_NOT_MATERIALIZED`로 fail-closed. 일반 GET/delta 경로에서 Firestore collection traversal 금지.
+- 새 기기 + 기존 R2: Catalog 1회 수신 후 IndexedDB/local cache 사용. Firestore 전체 collection read 0 목표.
+- R2 자체가 없는 예외 계정: 자동 전체 스캔 금지. 기존 bounded `user_list_caches` 1문서 fallback만 허용하고 별도 bootstrap/repair로 분리.
+- 변경 발행: partial UI list의 누락은 삭제로 간주하지 않고 explicit tombstone만 삭제. delta conflict/count mismatch도 R2 soft refresh만 수행하며 full rebuild 금지.
+- 검증: Run `34946586905`에서 TypeScript / Build / Worker syntax / `verify-046-catalog-stale-revision-rebuild.mjs` / diff check **PASS**.
+- 변경 파일: `src/lib/userDataEngine.ts`, `cloudflare/media-worker/src/index.js`, `scripts/verify-046-catalog-stale-revision-rebuild.mjs`.
+- 사용자 데이터/Firestore schema/Functions/Firebase/Cloudflare live 변경 없음. **아직 PREVIEW Hosting/Media Worker 미배포**.
+- TEST `main`과 PRODUCTION에는 기존 Catalog 구조가 남아 있으므로 PREVIEW 실사용 비용 검증 전 승격 금지. 안정화 후 exact PREVIEW tree를 TEST로 승격해 TEST에서도 동일 비용 구조를 맞춘다. PRODUCTION은 명확한 정식배포 승인 전 금지.
+
+## 4. 091 좋아요 표시 구조
 090의 페이지별 숫자 불일치 문제를 091에서 수정했다.
 
 원칙:
@@ -36,7 +49,7 @@
 
 사용자 실사용 영상에서 091은 이전의 페이지별 숫자 분리 증상이 사라진 것으로 확인됐으며, TEST 승격 전 PC↔모바일 최종 확인은 계속 필요하다.
 
-## 3. Worker 054 — 정상 좋아요 D1 W2 → W1 비용 최적화
+## 4. Worker 054 — 정상 좋아요 D1 W2 → W1 비용 최적화
 ### 목적
 정상 좋아요 batch마다 D1 `api_rate_limits`에 쓰던 보안 카운터 1행을 hot path에서 제거한다.
 
@@ -64,7 +77,7 @@
 
 실제 사용자 좋아요 1회에서 Dashboard D1 W1 확인은 배포 후 실사용 검증 항목으로 남는다.
 
-## 4. 054 검증
+## 5. 054 검증
 최종 검증 Run `34924497426` — **PASS**:
 - 054 edge rate limiter PASS
 - 기존 Explore like cost contract PASS
@@ -79,7 +92,7 @@
 
 검증 과정에서 오래된 039/066 전용 verifier가 현재 051/069 구조를 고정값으로 오판하던 부분만 현재 구조에 맞춰 정렬했다. 기능 보호 조건 자체를 완화하지 않았다.
 
-## 5. PREVIEW Worker 054 배포
+## 6. PREVIEW Worker 054 배포
 사용자 승인으로 PREVIEW Worker만 배포 완료.
 
 - 배포 Run: `34929734785` — **PASS**
@@ -106,7 +119,7 @@
 
 배포에 사용한 `temp-deploy-054-*` Workflow/trigger는 성공 후 제거했다.
 
-## 6. 비용/안전 원칙
+## 7. 비용/안전 원칙
 계속 보호:
 - 좋아요 클릭은 local-first.
 - 실제 변경만 기존 **5초 batch + page-exit fallback**으로 서버 전송.
@@ -117,7 +130,7 @@
 - 사용자 데이터 migration/backfill/delete/overwrite 금지.
 - 084 공개/비공개 비용 구조 보호.
 
-## 7. 다음 실사용 검증
+## 8. 다음 실사용 검증
 PREVIEW에서 우선 확인:
 1. 좋아요 1곡 → 약 5초 후 Dashboard 즉시 D1 write가 **W1**인지.
 2. 같은 곡 빠른 좋아요→해제 → 최종 상태만 반영되고 불필요 aggregate write가 없는지.
@@ -126,7 +139,7 @@ PREVIEW에서 우선 확인:
 5. PC↔모바일 같은 계정에서 하트/membership/display 숫자 수렴.
 6. warm Explore/좋아요곡 재진입 + 변경 없음 server R/W 0 목표.
 
-## 8. 084 공개/비공개 비용 보호
+## 9. 084 공개/비공개 비용 보호
 기존 PREVIEW 실측 기준:
 - 1곡 공개 `D1 R3/W2`
 - 1곡 비공개 `D1 R3/W2`
@@ -140,7 +153,7 @@ PREVIEW에서 우선 확인:
 - Feed/Profile R2 cache
 - shared revision 호환 구조
 
-## 9. 승격/위험 상태
+## 10. 승격/위험 상태
 - PREVIEW 실제: **앱 091 / Worker 054**
 - 091: 사용자 영상상 표시 일관성 개선 확인, PC↔모바일 최종 검증 필요
 - 054: 검증/배포 PASS, 실제 좋아요 Dashboard W1 실측 필요
@@ -148,7 +161,7 @@ PREVIEW에서 우선 확인:
 - PRODUCTION 승격: 사용자의 명확한 정식배포 승인 전 금지
 - GitHub preview branch protection enforcement 비활성 조회 이력은 운영 위험으로 유지 기록
 
-## 10. 정상 기능 보호
+## 11. 정상 기능 보호
 임의 변경 금지:
 - 요청하지 않은 UI 외곽선/위치/크기/간격/반응형/테마/색상
 - 분할바/생성바 정상 동작

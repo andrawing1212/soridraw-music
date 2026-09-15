@@ -1,4 +1,4 @@
-requested_at=2026-09-14T07:25:32Z
+requested_at=2026-09-15T01:06:31Z
 requested_by=user
-product_code_target=99dcd472868b9b27dd5c360dd749c6ef19454c12
-release_purpose=088_same_session_liked_heart_repair
+product_code_target=0d31dc19366fd4403896e01142236e4fe7fa164f
+release_purpose=089_cross_device_like_state_and_count_consistency

@@ -16,7 +16,7 @@ jobs:
       - name: Checkout fixed 108 candidate
         uses: actions/checkout@v4
         with:
-          ref: 509f4225a830d6dffce5331c7b8484ab01f8cc7f
+          ref: 441f615ee18470a1bddbf906b7ea062793d424a4
           fetch-depth: 0
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -42,8 +42,10 @@ jobs:
       - name: Change boundary
         run: |
           set -euo pipefail
-          git diff --name-only d2901829bab8ee8ad85791ac96bac457c2c2bc9c..509f4225a830d6dffce5331c7b8484ab01f8cc7f | sort | tee /tmp/changed.txt
+          git diff --name-only d2901829bab8ee8ad85791ac96bac457c2c2bc9c..441f615ee18470a1bddbf906b7ea062793d424a4 | sort | tee /tmp/changed.txt
           cat > /tmp/allowed.txt <<'EOF'
+          .deploy/temp-108-explore-feed-cache-verify.trigger
+          .github/workflows/temp-108-explore-feed-cache-verify.yml
           public/app-version.json
           scripts/verify-103-explore-like-event-batch.mjs
           scripts/verify-105-explore-like-1min.mjs

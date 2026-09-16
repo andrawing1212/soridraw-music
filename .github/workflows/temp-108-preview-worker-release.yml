@@ -1,0 +1,193 @@
+name: TEMP 108 PREVIEW Worker Release
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/temp-108-worker-release.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-preview-explore-worker-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      TEST_WORKER: soridraw-explore-test
+      PRODUCTION_WORKER: soridraw-explore-api
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+      PRODUCT_SHA: 933388f5775782fc29b2586e745b3238820bb8c6
+
+    steps:
+      - name: Checkout exact verified 108 source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Current-contract preflight
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(tr -d '[:space:]' < canonical/source-sha256.txt)"
+          actual="$(sha256sum canonical/preview-worker.js | awk '{print $1}')"
+          test -n "$expected"
+          test "$actual" = "$expected"
+          node --check canonical/preview-worker.js
+          node --check canonical/preview-entry.js
+          grep -q 'SORIDRAW_EXPLORE_R2_SNAPSHOT_BOOTSTRAP_108_20260916' canonical/preview-entry.js
+          generated="$PWD/canonical/preview-worker.js"
+          (
+            cd ../..
+            node scripts/verify-105-explore-like-1min.mjs
+            node scripts/verify-107-explore-direct-count-zero-read.mjs
+            node scripts/verify-108-explore-feed-cache-recovery.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-082-publication-batch.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-083-publication-pk-read.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-084-publication-write-returning.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-085-liked-profile.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-086-liked-sync-repair.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-102-explore-public-like-parity.mjs
+            node scripts/verify-103-explore-like-event-batch.mjs
+            node scripts/verify-explore-deploy-preflight.mjs
+          )
+
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT type,name FROM sqlite_schema WHERE name IN ('explore_like_batches_035','idx_explore_like_batches_035_created','explore_like_processor_035','explore_like_batches_069') ORDER BY name" --json > "$RUNNER_TEMP/like-schema.json"
+          node -e "const r=require(process.env.RUNNER_TEMP+'/like-schema.json');const rows=r.flatMap(x=>x.results||[]);const got=new Set(rows.map(x=>x.name));for(const n of ['explore_like_batches_035','idx_explore_like_batches_035_created','explore_like_processor_035','explore_like_batches_069'])if(!got.has(n))throw new Error('Missing live like prerequisite: '+n);console.log('LIVE_LIKE_D1_SCHEMA=PASS')"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT id,lease_until,owner FROM explore_like_processor_035 WHERE id=1; SELECT COUNT(*) AS pending035 FROM explore_like_batches_035; SELECT COUNT(*) AS pending069 FROM explore_like_batches_069" --json > "$RUNNER_TEMP/like-state.json"
+          node -e "const r=require(process.env.RUNNER_TEMP+'/like-state.json');const rows=r.flatMap(x=>x.results||[]);if(!rows.some(x=>Number(x.id)===1))throw new Error('035 processor row missing');const a=rows.find(x=>'pending035' in x),b=rows.find(x=>'pending069' in x);console.log('LIVE_LIKE_D1_STATE=PASS pending035='+Number(a?.pending035||0)+' pending069='+Number(b?.pending069||0));if(Number(b?.pending069||0)!==0)throw new Error('pending069 must drain before release')"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "EXPLAIN QUERY PLAN SELECT * FROM tracks WHERE id IN ('__a__','__b__','__c__')" --json > "$RUNNER_TEMP/publication-pk-plan.json"
+          node -e "const r=require(process.env.RUNNER_TEMP+'/publication-pk-plan.json');const detail=r.flatMap(x=>x.results||[]).map(x=>String(x.detail||'')).join(' | ');if(!detail.includes('sqlite_autoindex_tracks_1')||!detail.includes('(id=?)'))throw new Error('Publication PK lookup plan unavailable: '+detail);console.log('LIVE_PUBLICATION_PK_PLAN=PASS '+detail)"
+          (cd canonical && node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc --dry-run)
+          echo "CANONICAL_WORKER_SHA256=$actual"
+          echo 'PREVIEW_108_PREFLIGHT=PASS'
+
+      - name: Snapshot protected Worker versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          active_version() {
+            curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/$1/deployments" \
+              | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id'
+          }
+          active_version "$PREVIEW_WORKER" > "$RUNNER_TEMP/preview-before.txt"
+          active_version "$TEST_WORKER" > "$RUNNER_TEMP/test-before.txt"
+          active_version "$PRODUCTION_WORKER" > "$RUNNER_TEMP/production-before.txt"
+          curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" \
+            | jq -c '.result.schedules // [] | map({cron})' > "$RUNNER_TEMP/preview-crons-before.json"
+          echo "PREVIEW_BEFORE=$(cat "$RUNNER_TEMP/preview-before.txt")"
+          echo "TEST_BEFORE=$(cat "$RUNNER_TEMP/test-before.txt")"
+          echo "PRODUCTION_BEFORE=$(cat "$RUNNER_TEMP/production-before.txt")"
+
+      - name: Deploy PREVIEW Worker 108 and verify live
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          before="$(cat "$RUNNER_TEMP/preview-before.txt")"
+          deployed=0
+
+          restore_previous() {
+            status=$?
+            if [ "$status" -ne 0 ] && [ "$deployed" = 1 ]; then
+              echo "SMOKE_FAILED_ROLLBACK_TO=$before"
+              node "$WRANGLER" rollback "$before" --name "$PREVIEW_WORKER" --config "$CFG" --message 'automatic rollback after 108 PREVIEW smoke failure' || true
+              curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' \
+                --data-binary @"$RUNNER_TEMP/preview-crons-before.json" \
+                "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" >/dev/null || true
+              echo 'PREVIEW_ROLLBACK=ATTEMPTED'
+            fi
+            exit "$status"
+          }
+          trap restore_previous EXIT
+
+          (cd canonical && node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc)
+          deployed=1
+
+          printf '[]' > "$RUNNER_TEMP/preview-crons.json"
+          curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/preview-crons.json" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" >/dev/null
+
+          feed_code="$(curl --retry 3 --retry-delay 1 -sS -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40")"
+          test "$feed_code" = 200
+          owner="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json'),x=p?.data?.items?.[0]||{};process.stdout.write(String(x.ownerUid||x.owner_uid||''))")"
+          test -n "$owner"
+          profile_code="$(curl --retry 3 --retry-delay 1 -sS -o "$RUNNER_TEMP/profile.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50")"
+          test "$profile_code" = 200
+
+          snapshot_code="$(curl --retry 3 --retry-delay 1 -sS -D "$RUNNER_TEMP/snapshot.head" -o "$RUNNER_TEMP/snapshot.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__soridraw_r2_only=108")"
+          test "$snapshot_code" = 200
+          snapshot_r="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/snapshot.head" | tail -1)"
+          snapshot_w="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/snapshot.head" | tail -1)"
+          snapshot_revision="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-feed-revision:/{gsub("\r","");print $2}' "$RUNNER_TEMP/snapshot.head" | tail -1)"
+          test "$snapshot_r" = 0
+          test "$snapshot_w" = 0
+          test -n "$snapshot_revision"
+
+          batch_code="$(curl -sS -o "$RUNNER_TEMP/batch.json" -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H "Origin: ${PREVIEW_ORIGIN}" --data '{"mutations":[]}' "${PREVIEW_BASE}/v1/me/likes/batch")"
+          test "$batch_code" != 404
+          test "$batch_code" -ge 400
+          test "$batch_code" -lt 500
+
+          warm_ok=0
+          for attempt in 1 2 3; do
+            curl -sS -o /dev/null -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=latest"
+            sleep 1
+            curl -sS -D "$RUNNER_TEMP/revision.head" -o /dev/null -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=latest"
+            read_rows="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/revision.head" | tail -1)"
+            write_rows="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/revision.head" | tail -1)"
+            revision_mode="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-revision-mode:/{gsub("\r","");print $2}' "$RUNNER_TEMP/revision.head" | tail -1)"
+            if [ "$read_rows" = 0 ] && [ "$write_rows" = 0 ] && [ "$revision_mode" = 'HEAD-ONLY-036' ]; then warm_ok=1; break; fi
+            sleep 1
+          done
+          test "$warm_ok" = 1
+
+          schedules="$(curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules")"
+          test "$(printf '%s' "$schedules" | jq -r '[.result.schedules[]?.cron] | length')" = 0
+
+          active_version() {
+            curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/$1/deployments" \
+              | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id'
+          }
+          after="$(active_version "$PREVIEW_WORKER")"
+          test_worker="$(active_version "$TEST_WORKER")"
+          production="$(active_version "$PRODUCTION_WORKER")"
+          test "$after" != "$before"
+          test "$test_worker" = "$(cat "$RUNNER_TEMP/test-before.txt")"
+          test "$production" = "$(cat "$RUNNER_TEMP/production-before.txt")"
+          echo "PREVIEW_AFTER=$after"
+          echo 'FEED_SMOKE=PASS'
+          echo 'PROFILE_SMOKE=PASS'
+          echo 'R2_SNAPSHOT_108_HTTP=200'
+          echo 'R2_SNAPSHOT_108_D1_R0_W0=PASS'
+          echo 'WARM_REVISION_R0_W0=PASS'
+          echo 'LIKE_AGGREGATE_FIXED_CRON_DISABLED=PASS'
+          echo 'TEST_PRODUCTION_WORKERS_UNCHANGED=PASS'
+          trap - EXIT

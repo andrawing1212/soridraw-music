@@ -1,4 +1,4 @@
-requested_at=2026-09-16T03:41:20Z
-requested_by=assistant_after_preview_103_real_use_failure
-purpose=first_like_starts_5min_window_and_remove_old_10min_refresh_boundary
-attempt=2
+requested_at=2026-09-16T03:45:30Z
+requested_by=assistant_after_preview_104_deploy
+purpose=record_current_release_state_104
+attempt=3

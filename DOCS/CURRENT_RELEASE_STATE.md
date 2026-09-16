@@ -4,6 +4,26 @@
 
 > 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다. 문서와 실제 상태가 다르면 실제 상태 우선.
 
+## 0C. PREVIEW 106 — 공개 좋아요 숫자와 개인 하트 완전 분리 / 코드 완료·미배포
+- 105 PREVIEW 실사용 영상에서 같은 공개곡의 숫자가 Master/Admin 사이에서 달라지고, 숫자가 되돌아가거나 계정별로 서로 다른 값이 남는 현상을 확인해 **105 실사용 FAIL**로 판정.
+- 확정 원인: 공개 총 좋아요 숫자 위에 계정별 로컬 display state와 same-account RTDB replay 숫자가 덮여, 하나여야 할 공개 숫자가 계정/기기별 파생값을 가질 수 있었음.
+- **106 최종 규칙: 하트는 개인 상태, 숫자는 공용 상태로 완전히 분리.**
+  - 빨간/빈 하트: 로그인 계정의 개인 membership만 즉시 표시.
+  - 하트 옆 공개 숫자: shared Feed/Profile canonical projection 값만 표시.
+  - 계정 로컬 `+1/-1` 숫자 보정도 제거. 개인 클릭이 공개 숫자를 임의로 덮지 못함.
+  - same-account RTDB는 106에서 공개 숫자 변경에 사용하지 않고 개인 membership 동기화에만 사용. 기존 필드는 구버전 호환을 위해 파싱 가능 상태로 유지.
+  - 기존 `091` 로컬 display overlay는 새 `106` namespace로 전환하면서 기기 로컬 파생 캐시만 무효화. 사용자 원본 데이터 삭제/변환 없음.
+- 1분 event-driven server aggregate 구조는 그대로 유지. **고정 1분 Cron 없음.** 실제 좋아요가 있을 때만 1분 alarm 1회.
+- 106 초기 separation commit: `31b91b02b0aa6692401b457e6286ffad250c7b03`.
+- 106 최종 canonical-only 제품 commit: `a0946b0e296d5de5811567786cede9d75e911f90`.
+- 최종 검증 Run `35058485482` PASS: 106/105/103/102 like verifiers, 기존 like cost verifier, TypeScript, Build, change-boundary 모두 PASS.
+- 최종 검증 결과: `PUBLIC_COUNT_SOURCE=SHARED_CANONICAL_FEED_PROFILE`, `ACCOUNT_SIGNAL=MEMBERSHIP_ONLY`, `PUBLIC_DISPLAY_LOCAL_OPTIMISM=NONE`, `IDLE_PERIODIC_CRON=0`.
+- 106은 클라이언트 표시/동기화 경계 수정만 포함. Cloudflare Worker, Firebase Functions/Rules, RTDB Rules, D1 schema/migration/backfill, UI/CSS, 사용자 원본 데이터 변경 없음.
+- **현재 실제 PREVIEW 런타임은 앱 105 + Explore Worker `961084b2-28e0-4d04-8577-56d8944f4916`. 106은 아직 배포하지 않음.**
+- 106 배포 시 Worker 재배포 불필요. PREVIEW Firebase Hosting만 106으로 올리고 실제 `preview.soridraw.com` exact build 확인.
+- 106 의도된 UX: 하트는 즉시 바뀌지만 공개 숫자는 공식 1분 aggregate 전까지 이전 공용 숫자를 유지할 수 있음. 따라서 잠깐 `빨간 하트 + 공개숫자 0`이 가능하지만, 이는 계정별 가짜 숫자를 만들지 않기 위한 의도된 분리이며 aggregate 후 모든 계정의 숫자가 동일해야 함.
+- TEST/PRODUCTION 비변경. 106 PREVIEW 교차계정 실사용 검증 전까지 TEST 승격 금지.
+
 ## 0B. PREVIEW 105 — 1분 이벤트 좋아요 PREVIEW 배포 완료
 - 사용자 요청에 따라 PREVIEW 검증용 공개 좋아요 묶음 시간을 5분에서 **1분**으로 단축하고 실제 배포까지 완료.
 - **고정 1분 Cron은 없음.** 실제 non-empty like batch가 들어올 때만 shared Durable Object alarm 1개를 1분 뒤 예약한다. 좋아요가 없으면 주기 aggregate 실행 0.
@@ -56,17 +76,19 @@
 - 개발 branch: `preview`
 - TEST branch: `main`
 - PRODUCTION branch: `production`
-- 현재 `preview` 제품 코드 후보: **104**
+- 현재 `preview` 제품 코드 후보: **106**
 - 102 Explore public-like parity 제품 commit: `00fa785598b5b326800fc1ece0404a3dc9241fd8`
 - 103 Explore event-driven 5분 좋아요 묶음 제품 commit: `04b9829318b45637685549bb2160fb080c1068e0`
 - 104 first-like 5분 창 수정 제품 commit: `6073e840cd581a24e8f40012acec2776a85fa3b6`
+- 105 1분 event 테스트 제품 commit: `31d643104c965877a11e71f174a5318d0d4d41db`
+- 106 canonical-only 공개 숫자 분리 제품 commit: `a0946b0e296d5de5811567786cede9d75e911f90`
 - 102 source apply Workflow Run: `35046615434` — **PASS**
-- 실제 PREVIEW 앱: **104** — `https://preview.soridraw.com` — Run `35052825886` PASS
-- 실제 PREVIEW Explore Worker: **103 event scheduler** / `0287b2ef-6445-47a4-afd9-6058f02706cc` — 고정 10분 cron 제거 완료
+- 실제 PREVIEW 앱: **105** — `https://preview.soridraw.com` — Run `35055877861` PASS
+- 실제 PREVIEW Explore Worker: **105 1분 event scheduler** / `961084b2-28e0-4d04-8577-56d8944f4916` — 고정 cron 없음
 - PREVIEW Media Worker: `a00276d5-aca1-443f-a992-0b80ca0637ff` — 변경 없음
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — 비변경
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 비변경
-- **릴리스 상태: 104 PREVIEW 배포 완료, 교차계정 공개 좋아요 재검증 전. TEST 승격 금지.**
+- **릴리스 상태: 106 코드 완료·미배포. 실제 PREVIEW는 105이며, 106 PREVIEW 교차계정 재검증 전까지 TEST 승격 금지.**
 
 ## 2. 102 목표 — 공개 좋아요 숫자 교차계정 일치
 2026-09-16 Master / Admin A / Admin B 실사용 비교에서 다음 문제를 확인했다.

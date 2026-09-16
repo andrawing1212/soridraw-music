@@ -57,6 +57,17 @@ const EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY = 'explore-like-account-patches';
 const EXPLORE_LIKE_ACCOUNT_PATCH_SOURCE_TYPE = 'explore_like_account_patches';
 const EXPLORE_LIKE_ACCOUNT_PATCH_TTL_MS = 20 * 60_000;
 const EXPLORE_LIKE_BATCH_MAX = 50;
+// SORIDRAW_EXPLORE_LIKE_CLIENT_EVENT_WINDOW_104_20260916
+// The first real local like change starts the existing server-side five-minute
+// aggregate window. Later changes stay local and are flushed once near the end
+// of that window, so repeated toggles collapse to the final desired state.
+const EXPLORE_LIKE_EVENT_WINDOW_MS_104 = 5 * 60_000;
+const EXPLORE_LIKE_FINAL_FLUSH_LEAD_MS_104 = 15_000;
+type ExploreLikeEventWindow104 = {
+  startedAt: number;
+  finalFlushTimer: number;
+};
+const exploreLikeEventWindowByUid104 = new Map<string, ExploreLikeEventWindow104>();
 
 export const EXPLORE_LIKE_SYNC_EVENT = 'soridraw:explore-like-sync';
 export const EXPLORE_LIKE_SYNC_ERROR_EVENT = 'soridraw:explore-like-sync-error';
@@ -740,6 +751,28 @@ export const flushPendingExploreLikesForPageExit = async (user: User): Promise<v
   }
 };
 
+
+const beginExploreLikeEventWindow104 = (user: User, now = Date.now()) => {
+  const uid = user.uid;
+  const finalFlushDelay = EXPLORE_LIKE_EVENT_WINDOW_MS_104 - EXPLORE_LIKE_FINAL_FLUSH_LEAD_MS_104;
+  const active = exploreLikeEventWindowByUid104.get(uid);
+  if (active && now - active.startedAt < finalFlushDelay) return false;
+  if (active) window.clearTimeout(active.finalFlushTimer);
+
+  const startedAt = now;
+  const finalFlushTimer = window.setTimeout(() => {
+    const current = exploreLikeEventWindowByUid104.get(uid);
+    if (!current || current.startedAt != startedAt) return;
+    exploreLikeEventWindowByUid104.delete(uid);
+    // No request is made when the outbox is already empty. If later toggles
+    // exist, this sends their final states before the server aggregate alarm.
+    void flushPendingLikes(user);
+  }, finalFlushDelay);
+
+  exploreLikeEventWindowByUid104.set(uid, { startedAt, finalFlushTimer });
+  return true;
+};
+
 export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): Promise<string[]> => {
   const normalized = [...new Set(trackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean))].slice(0, 50);
   if (!normalized.length) return [];
@@ -860,9 +893,13 @@ export const setExploreTrackLike = async (
     retryCount: 0,
   };
   persistLikeOutbox(user.uid, outbox);
-  // 094: ordinary browsing is local-only. The only automatic flush inside the
-  // Explore session is the hard 50-change batch ceiling.
-  if (getPendingExploreLikeMutationCount(user.uid) >= EXPLORE_LIKE_BATCH_MAX) {
+  // 104: start one five-minute server aggregate window on the first real
+  // change, then keep later clicks local until the single near-deadline flush.
+  // This preserves idle=0 and avoids one server request per click.
+  const startedEventWindow104 = beginExploreLikeEventWindow104(user, now);
+  if (startedEventWindow104) {
+    void flushPendingLikes(user);
+  } else if (getPendingExploreLikeMutationCount(user.uid) >= EXPLORE_LIKE_BATCH_MAX) {
     void flushPendingLikes(user);
   }
   return { trackId: normalizedTrackId, liked, likeCount: optimisticLikeCount };

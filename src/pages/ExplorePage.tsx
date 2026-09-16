@@ -86,11 +86,12 @@ type ExploreFeedRevisionResponse = {
 
 const EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 1000;
 const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 30_000;
-// SORIDRAW_EXPLORE_LIKE_AGGREGATE_AUTO_REFRESH_070_20260912
-// Revalidate once after the next 10-minute aggregate window. The extra grace
-// covers the revision endpoint's short edge cache without polling.
-const EXPLORE_LIKE_AGGREGATE_WINDOW_MS_070 = 10 * 60_000;
-const EXPLORE_LIKE_REVISION_CACHE_GRACE_MS_070 = 70_000;
+// SORIDRAW_EXPLORE_LIKE_EVENT_REFRESH_104_20260916
+// 103 aggregates five minutes after the first server batch. The actor browser
+// performs one forced fresh Feed refresh just after that window; there is no
+// periodic polling and no wall-clock 10-minute boundary anymore.
+const EXPLORE_LIKE_AGGREGATE_WINDOW_MS_104 = 5 * 60_000;
+const EXPLORE_LIKE_REFRESH_GRACE_MS_104 = 10_000;
 // SORIDRAW_EXPLORE_LIKE_COUNT_REFRESH_RECOVERY_071_20260912
 // Keep one pending aggregate refresh across reloads/page changes and force one
 // server-confirmed Feed refresh after an actual like batch. No polling.
@@ -876,9 +877,7 @@ export default function ExplorePage() {
     const scheduleAggregateCountRefresh071 = () => {
       if (!uid || !isExploreFeedRequest(requestUrl)) return;
       const now = Date.now();
-      const nextAggregateAt = Math.ceil((now + 1000) / EXPLORE_LIKE_AGGREGATE_WINDOW_MS_070)
-        * EXPLORE_LIKE_AGGREGATE_WINDOW_MS_070;
-      const deadline = nextAggregateAt + EXPLORE_LIKE_REVISION_CACHE_GRACE_MS_070;
+      const deadline = now + EXPLORE_LIKE_AGGREGATE_WINDOW_MS_104 + EXPLORE_LIKE_REFRESH_GRACE_MS_104;
       const stored = readExploreLikeRefreshDeadline071(uid);
       writeExploreLikeRefreshDeadline071(uid, stored > 0 ? Math.min(stored, deadline) : deadline);
       armStoredAggregateRefresh071();

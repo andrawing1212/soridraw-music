@@ -1,4 +1,4 @@
-requested_at=2026-09-16T02:42:16Z
+requested_at=2026-09-16T02:44:30Z
 requested_by=user
-product_code_target=04b9829318b45637685549bb2160fb080c1068e0
-release_purpose=103_event_driven_5min_like_batch_public_parity
+product_code_target=3f421759a02bb5584045f8705f404e641a12af7d
+release_purpose=103_event_driven_5min_like_batch_do_registration_fix

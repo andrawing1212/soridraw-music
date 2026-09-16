@@ -4,6 +4,19 @@
 
 > 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다. 문서와 실제 상태가 다르면 실제 상태 우선.
 
+## 0A. PREVIEW 105 — 테스트용 1분 좋아요 창 코드 완료
+- 사용자 요청으로 5분 실사용 대기 시간을 PREVIEW 검증 동안 1분으로 단축.
+- **고정 1분 Cron은 추가하지 않음.** 좋아요가 실제로 들어올 때만 shared Durable Object alarm 1개를 1분 뒤 예약하는 기존 이벤트 기반 구조를 유지.
+- 같은 1분 창의 추가 batch는 deadline을 뒤로 미루지 않음. 후속 로컬 변경은 마감 약 15초 전에 최종 상태를 한 번 더 flush.
+- actor fresh Feed refresh는 `1분 + 10초`; `/v1/feed-revision` client cache도 1분, namespace v3로 변경해 기존 5분 cache를 차단.
+- Durable Object class/binding `ExploreLikeBatchScheduler103`은 유지해 새 DO migration 없음.
+- 105 제품 commit: `31d643104c965877a11e71f174a5318d0d4d41db`.
+- 105 apply/verification Run `35054646104` PASS: verifier, Worker syntax, TypeScript, Build, Wrangler PREVIEW dry-run, change-boundary 모두 PASS.
+- 변경 파일: `cloudflare/explore-worker/canonical/preview-entry.js`, `src/services/exploreLikeService.ts`, `src/services/exploreRevisionRequestCache.ts`, `src/pages/ExplorePage.tsx`, `public/app-version.json`.
+- UI/CSS, Firebase Functions/Rules, RTDB Rules, D1 schema/migration, 사용자 원본 데이터 변경 없음.
+- **현재 실제 PREVIEW 런타임은 아직 앱 104 + Worker 103의 5분 설정. 105는 미배포.** 사용자 배포 요청 전에는 실제 환경을 변경하지 않음.
+- TEST/PRODUCTION 비변경. TEST 승격 금지.
+
 ## 0. PREVIEW 104 — 103 실사용 실패 후 즉시 수정/재배포
 - 2026-09-16 실사용에서 Master는 공개 좋아요 1, 다른 Admin은 5분 후에도 0으로 남는 현상 확인.
 - 원인 1: 103 클라이언트가 일반 Explore 체류 중에는 좋아요 outbox를 서버로 보내지 않아, 페이지 경계/50개 전에는 서버의 5분 타이머 자체가 시작되지 않았음.

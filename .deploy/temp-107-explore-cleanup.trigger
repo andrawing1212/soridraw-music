@@ -1,5 +1,5 @@
-requested_at=2026-09-16T05:56:00Z
+requested_at=2026-09-16T06:00:00Z
 requested_by=user
-purpose=107_explore_direct_public_count_and_warm_profile_zero_read_cleanup
-retry=3
-base_head=f430a1c628567738e28e8b4db8257b7d8a45783b
+purpose=107_final_cleanup_generated_dist_and_temp_machinery
+retry=final
+product_commit=2fc858003b96d59a9e29961d60e4a4cf04181905

@@ -1,0 +1,83 @@
+name: Apply 106 Explore Public Count Separation
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-106-explore-public-count-separation.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply 106 source separation
+        run: python3 .deploy/apply-106-explore-public-count-separation.py
+
+      - name: Verify 106 contract
+        run: |
+          node scripts/verify-106-explore-public-count-separation.mjs
+          node scripts/verify-105-explore-like-1min.mjs
+          node scripts/verify-103-explore-like-event-batch.mjs
+          node scripts/verify-102-explore-public-like-parity.mjs
+          node scripts/verify-explore-like-cost-optimization.mjs
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Change boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          mapfile -t changed < <(git diff --name-only)
+          printf 'CHANGED=%s\n' "${changed[*]}"
+          allowed='^(src/services/exploreLikeDisplayStateService\.ts|src/services/exploreLikeService\.ts|public/app-version\.json|scripts/verify-105-explore-like-1min\.mjs|scripts/verify-103-explore-like-event-batch\.mjs)$'
+          for path in "${changed[@]}"; do
+            [[ "$path" =~ $allowed ]] || { echo "Unexpected changed file: $path"; exit 1; }
+          done
+          test "${#changed[@]}" -eq 5
+          ! git diff --name-only | grep -E '^(cloudflare/|functions/|firestore|database|src/components/|src/.*\.css$)' || {
+            echo 'Forbidden backend/UI boundary change'; exit 1;
+          }
+          echo 'CHANGE_BOUNDARY=PASS'
+
+      - name: Commit product candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'soridraw-release-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add \
+            src/services/exploreLikeDisplayStateService.ts \
+            src/services/exploreLikeService.ts \
+            public/app-version.json \
+            scripts/verify-105-explore-like-1min.mjs \
+            scripts/verify-103-explore-like-event-batch.mjs
+          git diff --cached --quiet && { echo 'No product changes'; exit 1; }
+          git commit -m 'fix: separate Explore public like count from account state'
+          git push origin HEAD:preview
+          echo "FINAL_COMMIT=$(git rev-parse HEAD)"
+          echo 'DEPLOYMENT=NONE'
+          echo 'USER_DATA_CHANGE=NONE'
+          echo 'D1_SCHEMA_CHANGE=NONE'
+          echo 'UI_CSS_CHANGE=NONE'

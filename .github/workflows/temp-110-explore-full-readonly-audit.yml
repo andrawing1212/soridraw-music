@@ -4,7 +4,7 @@ on:
   push:
     branches: [preview]
     paths:
-      - '.audit/explore-110-full-readonly.trigger'
+      - '.github/workflows/temp-110-explore-full-readonly-audit.yml'
 
 permissions:
   contents: read

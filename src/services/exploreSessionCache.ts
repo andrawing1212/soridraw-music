@@ -6,7 +6,9 @@ import {
 
 // SORIDRAW_LONG_TERM_CACHE_STAGE_1_3_990
 // SORIDRAW_EXPLORE_FEED_REVISION_033_20260908
-const EXPLORE_FEED_CACHE_SCHEMA_VERSION = 1;
+// SORIDRAW_EXPLORE_FEED_STALE_COUNT_CACHE_RECOVERY_108_20260916
+// One-time cache contract bump only. Do not tie this schema to app-version updates.
+const EXPLORE_FEED_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_FEED_SOURCE_TYPE = 'explore_feed';
 
 type ExploreFeedCacheData = {

@@ -6,7 +6,8 @@ const profile = readFileSync('src/services/exploreProfileFirstViewService.ts', '
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 
 const fail = (message) => { throw new Error(`[107] ${message}`); };
-if (String(version.version) !== '107') fail('app version is not 107');
+const appVersion = Number(version.version);
+if (!Number.isFinite(appVersion) || appVersion < 107) fail('app version is older than 107');
 if (existsSync('src/services/exploreLikeDisplayStateService.ts')) fail('obsolete display-state service still exists');
 for (const text of [page, likes]) {
   if (text.includes('exploreLikeDisplayStateService')) fail('display-state import remains');

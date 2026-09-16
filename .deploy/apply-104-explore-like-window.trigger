@@ -1,4 +1,4 @@
-requested_at=2026-09-16T03:45:30Z
-requested_by=assistant_after_preview_104_deploy
-purpose=record_current_release_state_104
-attempt=3
+requested_at=2026-09-16T04:07:26Z
+requested_by=user
+purpose=shorten_preview_explore_like_window_to_1min_for_testing
+attempt=4

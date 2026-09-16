@@ -1,89 +1,49 @@
 from pathlib import Path
 import json
 
-worker_path = Path('cloudflare/explore-worker/canonical/preview-entry.js')
-like_path = Path('src/services/exploreLikeService.ts')
-page_path = Path('src/pages/ExplorePage.tsx')
-revision_path = Path('src/services/exploreRevisionRequestCache.ts')
-version_path = Path('public/app-version.json')
+worker = Path('cloudflare/explore-worker/canonical/preview-entry.js').read_text(encoding='utf-8')
+like = Path('src/services/exploreLikeService.ts').read_text(encoding='utf-8')
+page = Path('src/pages/ExplorePage.tsx').read_text(encoding='utf-8')
+revision = Path('src/services/exploreRevisionRequestCache.ts').read_text(encoding='utf-8')
+version = json.loads(Path('public/app-version.json').read_text(encoding='utf-8'))
+state_path = Path('DOCS/CURRENT_RELEASE_STATE.md')
+state = state_path.read_text(encoding='utf-8')
 
-worker = worker_path.read_text(encoding='utf-8')
-like = like_path.read_text(encoding='utf-8')
-page = page_path.read_text(encoding='utf-8')
-revision = revision_path.read_text(encoding='utf-8')
+required = [
+    ('worker marker', 'SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_105_20260916', worker),
+    ('worker delay', 'const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 * 60 * 1000;', worker),
+    ('client marker', 'SORIDRAW_EXPLORE_LIKE_CLIENT_EVENT_WINDOW_105_20260916', like),
+    ('client window', 'const EXPLORE_LIKE_EVENT_WINDOW_MS_105 = 1 * 60_000;', like),
+    ('page marker', 'SORIDRAW_EXPLORE_LIKE_EVENT_REFRESH_105_20260916', page),
+    ('page window', 'const EXPLORE_LIKE_AGGREGATE_WINDOW_MS_105 = 1 * 60_000;', page),
+    ('revision marker', 'SORIDRAW_EXPLORE_LIKE_REVISION_1MIN_105_20260916', revision),
+    ('revision ttl', 'const REVISION_CACHE_TTL_MS = 1 * 60 * 1000;', revision),
+]
+for label, token, source in required:
+    if token not in source:
+        raise SystemExit(f'missing 105 {label}')
+if str(version.get('version')) != '105':
+    raise SystemExit(f"expected app version 105, got {version.get('version')}")
 
-if 'SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_105_20260916' not in worker:
-    marker = '// SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_103_20260916\n'
-    if marker not in worker:
-        raise SystemExit('missing Worker 103 marker')
-    worker = worker.replace(marker, marker + '// SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_105_20260916\n', 1)
+marker = '## 0A. PREVIEW 105 — 테스트용 1분 좋아요 창 코드 완료'
+if marker not in state:
+    intro = '> 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다. 문서와 실제 상태가 다르면 실제 상태 우선.\n\n'
+    block = """## 0A. PREVIEW 105 — 테스트용 1분 좋아요 창 코드 완료
+- 사용자 요청으로 5분 실사용 대기 시간을 PREVIEW 검증 동안 1분으로 단축.
+- **고정 1분 Cron은 추가하지 않음.** 좋아요가 실제로 들어올 때만 shared Durable Object alarm 1개를 1분 뒤 예약하는 기존 이벤트 기반 구조를 유지.
+- 같은 1분 창의 추가 batch는 deadline을 뒤로 미루지 않음. 후속 로컬 변경은 마감 약 15초 전에 최종 상태를 한 번 더 flush.
+- actor fresh Feed refresh는 `1분 + 10초`; `/v1/feed-revision` client cache도 1분, namespace v3로 변경해 기존 5분 cache를 차단.
+- Durable Object class/binding `ExploreLikeBatchScheduler103`은 유지해 새 DO migration 없음.
+- 105 제품 commit: `31d643104c965877a11e71f174a5318d0d4d41db`.
+- 105 apply/verification Run `35054646104` PASS: verifier, Worker syntax, TypeScript, Build, Wrangler PREVIEW dry-run, change-boundary 모두 PASS.
+- 변경 파일: `cloudflare/explore-worker/canonical/preview-entry.js`, `src/services/exploreLikeService.ts`, `src/services/exploreRevisionRequestCache.ts`, `src/pages/ExplorePage.tsx`, `public/app-version.json`.
+- UI/CSS, Firebase Functions/Rules, RTDB Rules, D1 schema/migration, 사용자 원본 데이터 변경 없음.
+- **현재 실제 PREVIEW 런타임은 아직 앱 104 + Worker 103의 5분 설정. 105는 미배포.** 사용자 배포 요청 전에는 실제 환경을 변경하지 않음.
+- TEST/PRODUCTION 비변경. TEST 승격 금지.
 
-worker = worker.replace(
-    '// 103: the fixed 10-minute cron is replaced by one shared Durable Object alarm.\n'
-    '// A successful non-empty like batch schedules exactly one alarm five minutes later.\n'
-    '// More batches joining the same window do not move the deadline. No likes means no\n'
-    '// alarm and therefore no periodic aggregate execution.\n',
-    '// 103: the fixed 10-minute cron was replaced by one shared Durable Object alarm.\n'
-    '// 105 PREVIEW test cadence: a successful non-empty like batch schedules exactly\n'
-    '// one alarm one minute later. More batches joining the same window do not move\n'
-    '// the deadline. No likes means no alarm and no periodic aggregate execution.\n',
-    1,
-)
-if 'const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_103 = 5 * 60 * 1000;' not in worker:
-    raise SystemExit('missing Worker five-minute delay')
-worker = worker.replace(
-    'const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_103 = 5 * 60 * 1000;',
-    'const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 * 60 * 1000;',
-    1,
-)
-worker = worker.replace('EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_103', 'EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105')
-worker = worker.replace("cron: 'event-like-batch-5m-103'", "cron: 'event-like-batch-1m-105'", 1)
-worker = worker.replace('// five-minute window. A concurrently scheduled alarm is never pushed later.', '// one-minute window. A concurrently scheduled alarm is never pushed later.', 1)
+"""
+    if intro not in state:
+        raise SystemExit('missing CURRENT_RELEASE_STATE intro anchor')
+    state = state.replace(intro, intro + block, 1)
 
-if 'SORIDRAW_EXPLORE_LIKE_CLIENT_EVENT_WINDOW_105_20260916' not in like:
-    marker = '// SORIDRAW_EXPLORE_LIKE_CLIENT_EVENT_WINDOW_104_20260916\n'
-    if marker not in like:
-        raise SystemExit('missing client 104 marker')
-    like = like.replace(marker, marker + '// SORIDRAW_EXPLORE_LIKE_CLIENT_EVENT_WINDOW_105_20260916\n', 1)
-if 'const EXPLORE_LIKE_EVENT_WINDOW_MS_104 = 5 * 60_000;' not in like:
-    raise SystemExit('missing client five-minute window')
-like = like.replace('const EXPLORE_LIKE_EVENT_WINDOW_MS_104 = 5 * 60_000;', 'const EXPLORE_LIKE_EVENT_WINDOW_MS_105 = 1 * 60_000;', 1)
-like = like.replace('EXPLORE_LIKE_EVENT_WINDOW_MS_104', 'EXPLORE_LIKE_EVENT_WINDOW_MS_105')
-like = like.replace('// The first real local like change starts the existing server-side five-minute', '// The first real local like change starts the PREVIEW server-side one-minute', 1)
-like = like.replace('// 104: start one five-minute server aggregate window on the first real', '// 105: start one one-minute server aggregate window on the first real', 1)
-
-if 'SORIDRAW_EXPLORE_LIKE_EVENT_REFRESH_105_20260916' not in page:
-    marker = '// SORIDRAW_EXPLORE_LIKE_EVENT_REFRESH_104_20260916\n'
-    if marker not in page:
-        raise SystemExit('missing page 104 refresh marker')
-    page = page.replace(marker, marker + '// SORIDRAW_EXPLORE_LIKE_EVENT_REFRESH_105_20260916\n', 1)
-if 'const EXPLORE_LIKE_AGGREGATE_WINDOW_MS_104 = 5 * 60_000;' not in page:
-    raise SystemExit('missing page five-minute aggregate window')
-page = page.replace('const EXPLORE_LIKE_AGGREGATE_WINDOW_MS_104 = 5 * 60_000;', 'const EXPLORE_LIKE_AGGREGATE_WINDOW_MS_105 = 1 * 60_000;', 1)
-page = page.replace('const EXPLORE_LIKE_REFRESH_GRACE_MS_104 = 10_000;', 'const EXPLORE_LIKE_REFRESH_GRACE_MS_105 = 10_000;', 1)
-page = page.replace('EXPLORE_LIKE_AGGREGATE_WINDOW_MS_104', 'EXPLORE_LIKE_AGGREGATE_WINDOW_MS_105')
-page = page.replace('EXPLORE_LIKE_REFRESH_GRACE_MS_104', 'EXPLORE_LIKE_REFRESH_GRACE_MS_105')
-page = page.replace('// 103 aggregates five minutes after the first server batch. The actor browser', '// 105 PREVIEW test cadence aggregates one minute after the first server batch. The actor browser', 1)
-
-if 'SORIDRAW_EXPLORE_LIKE_REVISION_1MIN_105_20260916' not in revision:
-    marker = '// SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_REVISION_103_20260916\n'
-    if marker not in revision:
-        raise SystemExit('missing revision 103 marker')
-    revision = revision.replace(marker, marker + '// SORIDRAW_EXPLORE_LIKE_REVISION_1MIN_105_20260916\n', 1)
-if 'const REVISION_CACHE_TTL_MS = 5 * 60 * 1000;' not in revision:
-    raise SystemExit('missing five-minute revision TTL')
-revision = revision.replace('const REVISION_CACHE_TTL_MS = 5 * 60 * 1000;', 'const REVISION_CACHE_TTL_MS = 1 * 60 * 1000;', 1)
-revision = revision.replace("const STORAGE_PREFIX = 'soridraw.explore.feed-revision-response.v2:';", "const STORAGE_PREFIX = 'soridraw.explore.feed-revision-response.v3:';", 1)
-revision = revision.replace('// Keep one tiny Edge/R2 revision check at most every five minutes while Explore is', '// Keep one tiny Edge/R2 revision check at most every one minute while PREVIEW Explore is', 1)
-revision = revision.replace('// existing 10-minute public settling window.', '// one-minute PREVIEW public settling window.', 1)
-
-worker_path.write_text(worker, encoding='utf-8')
-like_path.write_text(like, encoding='utf-8')
-page_path.write_text(page, encoding='utf-8')
-revision_path.write_text(revision, encoding='utf-8')
-
-version = json.loads(version_path.read_text(encoding='utf-8'))
-if str(version.get('version')) != '104':
-    raise SystemExit(f"expected app version 104, got {version.get('version')}")
-version['version'] = '105'
-version_path.write_text(json.dumps(version, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+state_path.write_text(state, encoding='utf-8')

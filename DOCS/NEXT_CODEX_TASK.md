@@ -5,7 +5,7 @@
 ## 현재 기준
 - branch: `preview`
 - 작업 시작 HEAD: `e7bb2ca455818ea6dcf47c3ba695ae82fea795b4`
-- Library zero-read 제품 후보: `158bf60b582260a4971d3343de76886a1ac33ba8`
+- Library zero-read 제품 후보: `485193ef6d147d4e4b3f03d3193cb4ba251fac72`
 - 실제 PREVIEW 앱: **100** — 새 Library 코드/Rules 미배포
 - PREVIEW 100 배포 source: `28a49b881e86f9f3ef752ed66e33d48a576bfe13`
 - TEST / PRODUCTION: 변경·배포 없음
@@ -44,7 +44,7 @@ Library 첫 진입 Browser SDK R69:
 - `git diff --check` PASS
 
 ## 다음 단계 — 독립 감사
-대상 제품 commit: `158bf60b582260a4971d3343de76886a1ac33ba8`
+대상 제품 commit: `485193ef6d147d4e4b3f03d3193cb4ba251fac72`
 
 확인 항목:
 1. warm Library 진입에 Firestore list/items/likes/share read 경로가 남지 않았는지 확인.

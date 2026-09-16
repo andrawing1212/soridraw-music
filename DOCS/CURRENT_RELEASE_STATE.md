@@ -179,7 +179,7 @@ FAIL 조건:
 - GitHub branch API는 `protected:true`이지만 세부 protection 응답에 `enabled=false`가 함께 보이는 표시 불일치가 있어 운영 위험 기록 유지.
 
 ## 12. 다음 작업
-- Library zero-read 후보 commit `158bf60b582260a4971d3343de76886a1ac33ba8` 독립 감사.
+- Library zero-read 후보 commit `485193ef6d147d4e4b3f03d3193cb4ba251fac72` 독립 감사.
 - 감사 PASS 후 Firestore Rules 선배포 → 앱 101 버전 고정 → PREVIEW Hosting 배포 순서로 진행.
 - PREVIEW에서 최초 cache bootstrap과 warm 재진입을 분리 측정.
 - PC↔모바일 플레이리스트 변경 수렴, 공유 리스트 재진입 0 read, 좋아요 진입 0 read 실측.
@@ -187,7 +187,7 @@ FAIL 조건:
 
 ## 13. Library zero-read 후보 — 코드 완료 / 배포 전
 - 기준 branch/commit: `preview` / `e7bb2ca455818ea6dcf47c3ba695ae82fea795b4`
-- 제품 후보 commit: `158bf60b582260a4971d3343de76886a1ac33ba8`
+- 제품 후보 commit: `485193ef6d147d4e4b3f03d3193cb4ba251fac72`
 - 실제 PREVIEW 앱은 여전히 **100**이며 이 후보는 아직 배포하지 않았다.
 
 확정 원인:

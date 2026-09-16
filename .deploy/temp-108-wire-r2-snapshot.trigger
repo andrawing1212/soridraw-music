@@ -1,3 +1,0 @@
-requested_at=2026-09-16T07:35:30Z
-purpose=wire_108_r2_snapshot_recovery_retry
-base_entry_commit=f867eaa8a7885e0d170742baaae01f7187a4567c

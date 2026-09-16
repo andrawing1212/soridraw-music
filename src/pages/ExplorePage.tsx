@@ -92,11 +92,12 @@ const EXPLORE_LIKE_REFRESH_GRACE_MS_105 = 10_000;
 // Keep one pending aggregate refresh across reloads/page changes and force one
 // server-confirmed Feed refresh after an actual like batch. No polling.
 const EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071 = 'soridraw:explore-like-count-refresh:071:';
-// SORIDRAW_EXPLORE_LIKE_FRESH_FEED_RECOVERY_072_20260912
-// A known like-count recovery must not reuse the ordinary versioned Feed URL:
-// that URL can still be held by the HTTP edge cache while canonical D1/R2 is newer.
-// One unique request is allowed only for an actual/persisted like recovery. No polling.
-const EXPLORE_LIKE_FRESH_FEED_QUERY_072 = '__soridraw_like_refresh';
+// SORIDRAW_EXPLORE_R2_SNAPSHOT_BOOTSTRAP_108_20260916
+// First-page Feed refreshes use the already-materialized R2 snapshot directly.
+// This keeps app-update/cache-recovery traffic off D1 while preserving local-first warm re-entry.
+const EXPLORE_FEED_R2_SNAPSHOT_QUERY_108 = '__soridraw_r2_only';
+const EXPLORE_FEED_R2_SNAPSHOT_REVISION_QUERY_108 = '__soridraw_r2_revision';
+const EXPLORE_FEED_R2_SNAPSHOT_VERSION_108 = '108';
 // SORIDRAW_EXPLORE_LIKE_FRESH_BOOTSTRAP_RECOVERY_073_20260912
 // SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
 // SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914
@@ -145,16 +146,13 @@ const buildExploreFeedRevisionUrl = (feedUrl: string) => {
   return `${parsed.origin}/v1/feed-revision?sort=${sort}`;
 };
 
-const buildExploreVersionedFeedUrl = (feedUrl: string, revision: string) => {
-  const parsed = new URL(feedUrl);
-  parsed.searchParams.set('__soridraw_revision', revision);
-  return parsed.toString();
-};
-
-const buildExploreFreshLikeFeedUrl072 = (feedUrl: string) => {
+const buildExploreR2SnapshotFeedUrl108 = (feedUrl: string, revision: string | null = null) => {
   const parsed = new URL(feedUrl);
   parsed.searchParams.delete('__soridraw_revision');
-  parsed.searchParams.set(EXPLORE_LIKE_FRESH_FEED_QUERY_072, `${Date.now()}`);
+  parsed.searchParams.delete('__soridraw_like_refresh');
+  parsed.searchParams.set(EXPLORE_FEED_R2_SNAPSHOT_QUERY_108, EXPLORE_FEED_R2_SNAPSHOT_VERSION_108);
+  if (revision) parsed.searchParams.set(EXPLORE_FEED_R2_SNAPSHOT_REVISION_QUERY_108, revision);
+  else parsed.searchParams.delete(EXPLORE_FEED_R2_SNAPSHOT_REVISION_QUERY_108);
   return parsed.toString();
 };
 
@@ -410,6 +408,19 @@ export default function ExplorePage() {
       return safeText(payload?.data?.revision) || null;
     };
 
+    const fetchFeedSnapshot108 = async (revision: string | null) => {
+      const response = await fetch(buildExploreR2SnapshotFeedUrl108(requestUrl, revision), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      recordCloudflareResponse(response);
+      if (!response.ok) throw new Error(`R2 snapshot HTTP ${response.status}`);
+      const payload = await response.json() as ExploreApiResponse;
+      const actualRevision = safeText(response.headers.get('X-SORIDRAW-Feed-Revision')) || revision;
+      return { payload, revision: actualRevision };
+    };
+
     const applyPayload = (payload: ExploreApiResponse, serverRevision: string | null) => {
       const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
       const nextCursor = feedRequest ? (safeText(payload?.data?.nextCursor) || null) : null;
@@ -459,19 +470,19 @@ export default function ExplorePage() {
             if (forceLikeCountRefresh071) {
               // 072: bypass only the HTTP Feed cache key for a confirmed recovery.
               // The Worker still uses the normal derived R2/D1 path underneath.
-              const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
-              const payload = await fetchPayload(buildExploreFreshLikeFeedUrl072(requestUrl));
+              const serverRevision = await fetchRevision().catch(() => null);
+              const snapshot = await fetchFeedSnapshot108(serverRevision);
               if (controller.signal.aborted) return;
-              applyPayload(payload, cachedRevision);
+              applyPayload(snapshot.payload, snapshot.revision);
               return;
             }
             const serverRevision = await fetchRevision();
             if (!serverRevision || controller.signal.aborted) return;
             const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
             if (cachedRevision === serverRevision) return;
-            const payload = await fetchPayload(buildExploreVersionedFeedUrl(requestUrl, serverRevision));
+            const snapshot = await fetchFeedSnapshot108(serverRevision);
             if (controller.signal.aborted) return;
-            applyPayload(payload, serverRevision);
+            applyPayload(snapshot.payload, snapshot.revision);
           } catch (reason) {
             if (!controller.signal.aborted) {
               if (forceLikeCountRefresh071) {
@@ -497,9 +508,10 @@ export default function ExplorePage() {
             // 073: 072 handled only the cachedRows branch. After an app update
             // session cache can be empty, so the old bootstrap path reused the
             // ordinary versioned Feed and could restore a stale public count.
-            const payload = await fetchPayload(buildExploreFreshLikeFeedUrl072(requestUrl));
+            const serverRevision = await fetchRevision().catch(() => null);
+            const snapshot = await fetchFeedSnapshot108(serverRevision);
             if (controller.signal.aborted) return;
-            applyPayload(payload, readExploreFeedSessionCacheRevision(requestUrl));
+            applyPayload(snapshot.payload, snapshot.revision);
             return;
           }
           const serverRevision = await fetchRevision().catch((reason) => {
@@ -508,11 +520,9 @@ export default function ExplorePage() {
             }
             return null;
           });
-          const payload = await fetchPayload(
-            serverRevision ? buildExploreVersionedFeedUrl(requestUrl, serverRevision) : requestUrl,
-          );
+          const snapshot = await fetchFeedSnapshot108(serverRevision);
           if (controller.signal.aborted) return;
-          applyPayload(payload, serverRevision);
+          applyPayload(snapshot.payload, snapshot.revision);
           return;
         }
 

@@ -1,2 +1,0 @@
-requested_at=2026-09-16T08:56:00Z
-purpose=109_mobile_stale_public_count_and_refresh_zero_reads_retry3

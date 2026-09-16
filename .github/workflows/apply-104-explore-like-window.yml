@@ -1,4 +1,4 @@
-name: Apply 105 Explore Like 1min
+name: Record 105 Explore Like State
 
 on:
   push:
@@ -14,9 +14,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  apply:
+  record:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
@@ -24,69 +24,29 @@ jobs:
           ref: preview
           fetch-depth: 0
 
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Apply targeted 105 one-minute patch
+      - name: Record 105 release state
         run: python3 .deploy/apply-105-explore-like-1min.py
 
-      - name: Verify 105 contract
+      - name: Verify 105 product contract remains intact
         run: node scripts/verify-105-explore-like-1min.mjs
 
-      - name: Worker syntax
-        run: node --check cloudflare/explore-worker/canonical/preview-entry.js
-
-      - name: Install
-        run: npm ci --no-audit --no-fund
-
-      - name: TypeScript
-        run: npx tsc --noEmit
-
-      - name: Build
-        run: npm run build
-
-      - name: Wrangler PREVIEW dry-run
-        run: npx wrangler deploy --dry-run --config cloudflare/explore-worker/canonical/wrangler.preview.jsonc
-
-      - name: Restore generated dist before source boundary check
-        run: git restore --worktree --staged -- dist
-
-      - name: Verify change boundary
+      - name: Verify docs-only boundary
         shell: bash
         run: |
           set -euo pipefail
-          allowed='^(cloudflare/explore-worker/canonical/preview-entry\.js|src/services/exploreLikeService\.ts|src/services/exploreRevisionRequestCache\.ts|src/pages/ExplorePage\.tsx|public/app-version\.json)$'
           changed="$(git diff --name-only)"
           printf '%s\n' "$changed"
-          test -n "$changed"
-          if printf '%s\n' "$changed" | grep -Ev "$allowed"; then
-            echo 'Unexpected product file change' >&2
-            exit 1
-          fi
-          test -z "$(git diff --name-only -- cloudflare/explore-worker/canonical/wrangler.preview.jsonc functions firestore.rules database.rules.json src/components src/styles)"
-          echo 'CHANGE_BOUNDARY=PASS'
-          echo 'WORKER_DELAY_ONLY=YES'
-          echo 'NO_D1_SCHEMA_MIGRATION=true'
-          echo 'NO_FIREBASE_FUNCTIONS_RULES_CHANGE=true'
-          echo 'NO_USER_DATA_MIGRATION=true'
-          echo 'NO_UI_CSS_CHANGE=true'
+          test "$changed" = 'DOCS/CURRENT_RELEASE_STATE.md'
+          echo 'DOCS_ONLY=PASS'
 
-      - name: Commit product files
+      - name: Commit release state
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'soridraw-release-bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add \
-            cloudflare/explore-worker/canonical/preview-entry.js \
-            src/services/exploreLikeService.ts \
-            src/services/exploreRevisionRequestCache.ts \
-            src/pages/ExplorePage.tsx \
-            public/app-version.json
-          git diff --cached --quiet && { echo 'No product changes to commit'; exit 1; }
-          git commit -m 'test: shorten PREVIEW Explore like window to one minute'
+          git add DOCS/CURRENT_RELEASE_STATE.md
+          git diff --cached --quiet && { echo 'No release-state change to commit'; exit 1; }
+          git commit -m 'docs: record PREVIEW 105 one-minute candidate'
           git push origin HEAD:preview
-          echo "PRODUCT_COMMIT=$(git rev-parse HEAD)"
+          echo "STATE_COMMIT=$(git rev-parse HEAD)"

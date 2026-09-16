@@ -4,21 +4,37 @@
 
 > 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다. 문서와 실제 상태가 다르면 실제 상태 우선.
 
+## 0. PREVIEW 104 — 103 실사용 실패 후 즉시 수정/재배포
+- 2026-09-16 실사용에서 Master는 공개 좋아요 1, 다른 Admin은 5분 후에도 0으로 남는 현상 확인.
+- 원인 1: 103 클라이언트가 일반 Explore 체류 중에는 좋아요 outbox를 서버로 보내지 않아, 페이지 경계/50개 전에는 서버의 5분 타이머 자체가 시작되지 않았음.
+- 원인 2: `ExplorePage.tsx`에 이전 10분 wall-clock aggregate refresh 기준이 남아 있었음.
+- 104 제품 commit: `6073e840cd581a24e8f40012acec2776a85fa3b6`.
+- 104 수정: 첫 실제 좋아요 변경에서 서버 5분 aggregate 창을 1회 시작하고, 같은 창의 후속 클릭은 로컬에 모은 뒤 마감 15초 전에 최종 상태만 한 번 더 flush. 50개 ceiling/page boundary는 기존 안전장치 유지.
+- 104 수정: actor 강제 fresh Feed refresh를 `5분 + 10초` 기준으로 변경하고 이전 10분 wall-clock 계산 제거.
+- 104 source apply Run `35052705770` PASS: verifier / TypeScript / Build / change boundary PASS.
+- PREVIEW Hosting 104 배포 Run `35052825886` PASS. 실제 `preview.soridraw.com` 앱 버전 104.
+- PREVIEW Explore Worker는 103 event scheduler 배포본 `0287b2ef-6445-47a4-afd9-6058f02706cc` 유지. 고정 10분 cron 없음.
+- TEST/PRODUCTION 비변경. Firebase Functions/Rules, D1 schema/migration, RTDB Rules, 사용자 원본 데이터 변경 없음.
+- 주의: 다른 계정의 **완전히 가만히 있는 열린 탭**은 비용 0 원칙 때문에 주기 polling하지 않는다. 5분 이후 해당 계정이 Explore 재진입/포커스/실제 상호작용하면 zero-D1 revision 경로로 최신 공개 숫자를 확인해야 한다.
+- 상태: **104 PREVIEW 배포 완료, Master/Admin 교차계정 재검증 필요. TEST 승격 금지.**
+- 아래 102/103의 “미배포” 문구는 당시 기록이며 이 0번 항목이 최신 실제 상태다.
+
 ## 1. 현재 기준
 - Repository: `andrawing1212/soridraw-music`
 - 개발 branch: `preview`
 - TEST branch: `main`
 - PRODUCTION branch: `production`
-- 현재 `preview` 제품 코드 후보: **103**
+- 현재 `preview` 제품 코드 후보: **104**
 - 102 Explore public-like parity 제품 commit: `00fa785598b5b326800fc1ece0404a3dc9241fd8`
 - 103 Explore event-driven 5분 좋아요 묶음 제품 commit: `04b9829318b45637685549bb2160fb080c1068e0`
+- 104 first-like 5분 창 수정 제품 commit: `6073e840cd581a24e8f40012acec2776a85fa3b6`
 - 102 source apply Workflow Run: `35046615434` — **PASS**
-- 실제 PREVIEW 앱: **101** — `https://preview.soridraw.com` — 102 아직 미배포
-- 실제 PREVIEW Explore Worker: 기존 **056** / `bd8a810f-8266-41e1-80a1-0c5e9bfc561a` — 102 parity 코드 아직 미배포
+- 실제 PREVIEW 앱: **104** — `https://preview.soridraw.com` — Run `35052825886` PASS
+- 실제 PREVIEW Explore Worker: **103 event scheduler** / `0287b2ef-6445-47a4-afd9-6058f02706cc` — 고정 10분 cron 제거 완료
 - PREVIEW Media Worker: `a00276d5-aca1-443f-a992-0b80ca0637ff` — 변경 없음
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — 비변경
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 비변경
-- **릴리스 상태: 103 코드/자동검증 PASS, PREVIEW 미배포·실사용 검증 전. TEST 승격 금지.**
+- **릴리스 상태: 104 PREVIEW 배포 완료, 교차계정 공개 좋아요 재검증 전. TEST 승격 금지.**
 
 ## 2. 102 목표 — 공개 좋아요 숫자 교차계정 일치
 2026-09-16 Master / Admin A / Admin B 실사용 비교에서 다음 문제를 확인했다.

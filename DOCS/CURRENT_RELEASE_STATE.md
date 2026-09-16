@@ -9,15 +9,16 @@
 - 개발 branch: `preview`
 - TEST branch: `main`
 - PRODUCTION branch: `production`
-- 현재 `preview` 제품 코드 후보: **102**
+- 현재 `preview` 제품 코드 후보: **103**
 - 102 Explore public-like parity 제품 commit: `00fa785598b5b326800fc1ece0404a3dc9241fd8`
+- 103 Explore event-driven 5분 좋아요 묶음 제품 commit: `04b9829318b45637685549bb2160fb080c1068e0`
 - 102 source apply Workflow Run: `35046615434` — **PASS**
 - 실제 PREVIEW 앱: **101** — `https://preview.soridraw.com` — 102 아직 미배포
 - 실제 PREVIEW Explore Worker: 기존 **056** / `bd8a810f-8266-41e1-80a1-0c5e9bfc561a` — 102 parity 코드 아직 미배포
 - PREVIEW Media Worker: `a00276d5-aca1-443f-a992-0b80ca0637ff` — 변경 없음
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — 비변경
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 비변경
-- **릴리스 상태: 102 코드/자동검증 PASS, PREVIEW 실사용 검증 전. TEST 승격 금지.**
+- **릴리스 상태: 103 코드/자동검증 PASS, PREVIEW 미배포·실사용 검증 전. TEST 승격 금지.**
 
 ## 2. 102 목표 — 공개 좋아요 숫자 교차계정 일치
 2026-09-16 Master / Admin A / Admin B 실사용 비교에서 다음 문제를 확인했다.
@@ -123,7 +124,7 @@ PASS 항목:
 - 제품 문제가 아니라 CI 권한 경계였고, 다른 workflow를 수정하지 않는 방식으로 정리 후 Run `35046615434`가 전체 PASS 및 제품 commit 생성.
 
 ## 6. 배포 상태 — 중요
-**102는 아직 배포하지 않았다.**
+**103은 아직 배포하지 않았다. 102 공개 좋아요 수렴 수정도 103에 포함된다.**
 
 현재 실제 서비스:
 - PREVIEW Hosting: 앱 101
@@ -168,7 +169,7 @@ Library 101 실제 비용/PC↔모바일 수렴 실측은 계속 필요하다.
 
 ## 10. TEST / PRODUCTION 승격 금지 조건
 TEST는 아래 전부 PASS 전 승격 금지:
-1. 102 PREVIEW 앱 + Explore Worker 배포 검증.
+1. 103 PREVIEW 앱 + Explore Worker 배포 검증.
 2. Master / Admin A / Admin B 교차계정 공개 총 좋아요 숫자 수렴.
 3. 좋아요/좋아요 해제 모두 수렴.
 4. 최신/인기 Feed 및 공개프로필 숫자 일치.
@@ -179,7 +180,7 @@ TEST는 아래 전부 PASS 전 승격 금지:
 
 PRODUCTION은 사용자의 명확한 정식배포 승인 전 금지.
 
-## 11. PREVIEW 102 배포 후 필수 실사용 검증
+## 11. PREVIEW 103 배포 후 필수 실사용 검증
 - Master에서 공개곡 좋아요 → boundary flush → canonical aggregate 이후 Admin A/B 공개 숫자 일치.
 - Master에서 좋아요 해제 → 동일하게 모든 계정 공개 숫자 감소 일치.
 - Admin A/B 자신의 빨간 heart는 각 계정 membership대로 독립 유지.
@@ -192,13 +193,28 @@ PRODUCTION은 사용자의 명확한 정식배포 승인 전 금지.
 
 ## 12. 알려진 위험 / 다음 작업
 - 102은 코드/자동검증 PASS지만 **실제 Cloudflare PREVIEW 배포 후 rows_read/R2 동작은 미검증**.
-- 공개 숫자는 비용 설계상 scheduled aggregate 경계까지 최대 약 10분 지연이 있을 수 있다. 102의 목표는 그 canonical 경계 이후 다른 계정에 오래된 값이 남지 않도록 수렴시키는 것.
+- 103은 고정 10분 Cron을 제거하고, 실제 서버 like batch가 생긴 경우에만 공유 Durable Object가 5분 뒤 aggregate 1회를 예약한다. 같은 5분 창의 추가 batch는 마감시각을 뒤로 미루지 않는다.
 - 사용자 요구가 ‘모든 다른 사용자에게 즉시 실시간 숫자’로 바뀌면 별도 비용 설계가 필요하며 현재 구조를 무조건 1분 polling으로 바꾸지 않는다.
 - 개인 heart missed-signal의 장기 stale cache 문제는 public 숫자와 분리된 영역이다. 102 PREVIEW 실측에서 재현되면 작은 per-account revision 방식으로 후속 수정한다.
 - Build chunk-size/mixed import 경고는 기존 경고로 남음.
 
 다음 안전 순서:
-1. 사용자가 `프리뷰배포` 요청 시 102 고정 commit 기준으로 PREVIEW Worker + Hosting 검증 배포.
+1. 사용자가 `프리뷰배포` 요청 시 103 고정 commit 기준으로 PREVIEW Worker + Hosting 검증 배포.
 2. 실제 Master/Admin A/Admin B 교차검증.
 3. 비용 계측.
 4. 문제 없을 때만 TEST 승격 검토.
+
+
+## 13. 103 이벤트 기반 5분 좋아요 묶음 — 2026-09-16
+- 제품 commit: `04b9829318b45637685549bb2160fb080c1068e0`
+- 목적: 고정 `*/10` Cron을 없애고 **실제 like batch가 서버에 들어왔을 때만** 5분 뒤 aggregate를 1회 실행.
+- Cloudflare Durable Object `ExploreLikeBatchScheduler103` 1개를 shared scheduler로 사용.
+- 첫 non-empty `/v1/me/likes/batch`가 alarm을 만들고, 같은 창의 후속 batch는 기존 alarm 시각을 유지해 5분을 계속 연장하지 않음.
+- 좋아요 변경이 없으면 alarm 0, aggregate 실행 0.
+- alarm은 Cloudflare at-least-once retry를 사용하고 기존 D1 aggregate lease/set semantics를 그대로 보호.
+- 아주 큰 burst로 069 queue가 남은 경우에만 처리 후 `LIMIT 1` 확인 1회 후 다음 5분 alarm을 추가. 평상시 반복 polling 없음.
+- 102에서 복구한 canonical D1 → public Feed/Profile R2 수렴 경로는 그대로 사용.
+- 다른 계정의 revision 확인은 event aggregate 시각이 고정 wall-clock이 아니므로 local revision cache를 10분 → 5분으로 축소. 이 경로는 Edge/R2 HEAD이며 D1 R0/W0 유지.
+- 기존 10분 revision response가 103 첫 수렴을 가리지 않도록 **revision response cache만** v2 namespace로 변경. Feed/사용자 데이터 cache는 무효화하지 않음.
+- D1 schema/migration/backfill 없음. Firebase/Functions/RTDB Rules/UI/CSS 변경 없음.
+- 실제 PREVIEW 배포 전 상태. Durable Object namespace는 PREVIEW Worker 첫 배포 때 Cloudflare가 additive 생성하며 사용자 원본 데이터와 무관.

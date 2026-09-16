@@ -1,4 +1,0 @@
-release=110
-product_sha=4723fe9450869dd80b0e684309681535a8512dcd
-release_run=35095168722
-action=record-and-clean

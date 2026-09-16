@@ -5,28 +5,35 @@
 ## 현재 기준
 
 - branch: `preview`
-- 제품 기준 commit: `933388f5775782fc29b2586e745b3238820bb8c6`
-- PREVIEW app: **108**, `https://preview.soridraw.com`
-- PREVIEW Explore Worker: `d8eae38a-09a9-4f37-9500-57f217ee1d8c`
-- Worker release Run: `35072908682` SUCCESS
-- App release Run: `35073054850` SUCCESS
+- PREVIEW app: **110**, `https://preview.soridraw.com`
+- 110 product commit: `4723fe9450869dd80b0e684309681535a8512dcd`
+- PREVIEW release Run: `35095168722` SUCCESS
+- PREVIEW Explore Worker: `d8eae38a-09a9-4f37-9500-57f217ee1d8c` (110에서 재배포 없음)
 - TEST/PRODUCTION: 비변경
 
-## 다음 작업 — PREVIEW 108 실사용 검증만
+## 109 사용자 실사용 결과
 
-코드 수정부터 하지 않는다. 먼저 실제 PC/모바일에서 108 결과를 확인한다.
+- PC Master/Admin public count 1 PASS.
+- Mobile Master/Admin public count 1 PASS.
+- repeated hard refresh Firestore runaway: 사용자 확인상 PASS.
+- second Admin cold `users:getDocs 12`: 1 query가 12 documents를 받은 진단값; admin user list는 max 20/page persistent cache.
 
-1. 앱 108 업데이트 직후 기존 Explore 공개 좋아요 숫자 `0` stale 화면이 서버/R2 기준 숫자 `1`로 한 번 정상 교체되는지 확인.
-2. 같은 기기에서 Explore 재진입/페이지 이동/재방문 후 숫자가 다시 0으로 돌아가지 않는지 확인. 정상 schema-2 warm cache는 앱 버전과 독립적으로 유지돼야 한다.
-3. Master/Admin 서로 다른 계정에서 같은 공개곡의 숫자가 동일한지 확인. 개인 빨간 heart는 계정별 membership이라 달라도 정상.
-4. like/unlike 후 개인 heart는 즉시, 공개 숫자는 현재 105 event contract 기준 약 1분~1분10초 후 모든 계정/PC/모바일에서 같은 최종 숫자로 수렴해야 한다.
-5. 비용 확인: cold stale-cache 복구는 R2 snapshot route D1 R0/W0가 이미 서버 smoke PASS. 실제 사용자 warm 재진입에서 불필요한 D1 read/write 증가가 없는지 확인.
-6. 공개프로필과 Explore Feed의 같은 곡 숫자도 동일해야 한다.
+## 110 수정
 
-## 승격 조건
+- 자기 `좋아요 곡` 탭의 red heart + stale public count 0 문제 수정.
+- shared Feed/Profile의 public likeCount를 open liked-tab state + `explore-liked-track-collection-085` local cache에 로컬 반영.
+- warm Feed cache도 repair source로 사용. 추가 Firestore/D1 read 없음.
+- liked-track schema reset 없음, app-version coupling 없음, polling 없음.
+- Worker/Functions/Rules/D1/user source data/UI/CSS 변경 없음.
 
-위 실사용 검증이 끝나기 전 `main`/TEST 승격 금지. 사용자가 `테스트배포`를 승인한 경우에만 검증된 PREVIEW 전체를 TEST로 승격한다. PRODUCTION은 별도 명확한 승인 전 금지.
+## 다음 작업 — 실사용 검증만
 
-## 알려진 릴리스 도구 정리
+1. PC/모바일 자기 공개프로필 → `좋아요 곡`에서 기존 0이 shared public count 1로 복구되는지 확인.
+2. 페이지 이동/재진입/새로고침 후에도 1 유지.
+3. Master/Admin 각 계정에서 자신의 heart membership은 계정별로 맞고 public count는 동일한지 확인.
+4. like/unlike 후 개인 heart 즉시, 약 1분~1분10초 뒤 Explore Feed/Public Profile/좋아요곡 public count가 같은 최종값으로 수렴.
+5. warm 재진입 D1 R0/W0 및 repeated refresh Firestore R0 목표 재확인.
 
-표준 PREVIEW Worker release workflow의 과거 094/086 verifier 일부가 107 이후 구조와 맞지 않는다. 제품 런타임 문제는 아니며 이번 108은 현재 계약을 사용한 별도 검증 release로 성공했다. 다음 Worker 코드 작업 전 표준 verifier를 현재 105/107/108 계약으로 정리한다.
+위 검증 전 TEST 승격 금지. `테스트배포` 명시 승인 전 main 변경 금지. PRODUCTION은 별도 명확 승인 전 금지.
+
+주의: 103 Durable Object migration v1 유지. pre-103 Worker 직접 rollback은 피하고 migration을 유지한 forward-compatible rollback 사용. formal Work 독립 감사 미실행.

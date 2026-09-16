@@ -19,6 +19,7 @@
 - PREVIEW Media Worker: `a00276d5-aca1-443f-a992-0b80ca0637ff` — 변경 없음
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — 101 배포 Workflow 기준 비변경 PASS
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 101 배포 Workflow 기준 비변경 PASS
+- **릴리스 상태: Explore 교차계정 좋아요 공개 숫자 동기화 실사용 FAIL로 TEST 승격 차단.**
 
 ## 2. 101 목표
 Library를 앱 업데이트/페이지 이동만으로 서버 비용이 발생하지 않는 Local First 구조로 바꾼다.
@@ -96,7 +97,7 @@ Rules 배포:
 - migration/backfill/delete/overwrite 없음.
 - Rules 변경은 하위호환 추가 + owner-first 평가 순서 변경이며 관리자 권한 제거 없음.
 
-상태: **코드/자동검증 PASS, PREVIEW 실사용 비용·PC↔모바일 수렴 검증 전.**
+상태: **101 Library 코드/자동검증 PASS, PREVIEW 실사용 비용 검증 진행 중. Explore 기존 좋아요 구조는 별도 FAIL 확인.**
 
 ## 6. PREVIEW 101 배포 결과
 canonical `.github/workflows/firebase-hosting-custom-preview.yml`로 Firebase PREVIEW Hosting을 배포했다.
@@ -171,10 +172,10 @@ Run `35039951005` — **PASS**:
 - Explore Worker 056 변경 없음.
 - 기존 payload가 있는 unlike→re-like 후 warm `내 좋아요곡` D1 card read 0 목표 유지.
 
-PREVIEW 100 liked-card 비용/PC↔mobile 실사용 최종 검증은 TEST 승격 전에 함께 완료해야 한다.
+하지만 2026-09-16 교차계정 실측에서 **공개 총 좋아요 숫자 수렴 FAIL**을 확인했다. 이는 101 Library 수정이 아니라 기존 Explore Worker/public R2 propagation 구조의 결함으로 확인됐다.
 
 ## 11. TEST / PRODUCTION 승격
-- TEST: **PREVIEW 100 좋아요 검증 + PREVIEW 101 Library 비용/정확성 실측 PASS 전 승격 금지.**
+- TEST: **Explore 교차계정 좋아요 공개 숫자 동기화 FAIL 해결 + PREVIEW 100 liked-card 검증 + PREVIEW 101 Library 비용/정확성 실측 PASS 전 승격 금지.**
 - 사용자 데이터 복사 금지.
 - PRODUCTION: 사용자 명확한 정식배포 승인 전 금지.
 
@@ -187,12 +188,47 @@ PREVIEW 100 liked-card 비용/PC↔mobile 실사용 최종 검증은 TEST 승격
 - warm cache 0-read 목표를 위해 앱 버전과 사용자 데이터 cache version을 다시 결합하지 말 것.
 - playlist page-entry `onSnapshot` 또는 곡별 likes/share fan-out 재도입 금지.
 - Build chunk-size/mixed import 경고는 기존 문제로 남음.
-- 실제 Firestore 청구 read와 PC↔모바일 수렴은 101 PREVIEW 실사용 검증 전.
+- Explore public Feed/Profile R2가 069 aggregate 변경을 못 받는 현상은 현재 최우선 릴리스 차단 오류.
 
 ## 13. 다음 작업
-- PREVIEW 101을 사용자가 PC/모바일에서 실사용 검증.
-- 최초 bootstrap vs warm 재진입 Firestore read를 분리 기록.
-- My List / Shared List 재진입 0 read 확인.
-- playlist 변경 후 PC↔모바일 수렴 확인.
-- 100 liked-card zero-read도 함께 최종 확인.
+- Explore 069 aggregate → public Feed/Profile R2 changed-track propagation 복구.
+- 교차계정 공개 총 좋아요 숫자 수렴 지연 구조 조정.
+- 개인 heart membership의 missed-signal/오래된 local cache repair를 별도 해결.
+- 그 뒤 PREVIEW에서 Master / Admin A / Admin B 계정 교차검증.
+- Library 101 zero-read 실측을 이어서 완료.
 - 모두 PASS 후에만 TEST 승격 검토.
+
+## 14. 2026-09-16 Explore 교차계정 좋아요 FAIL — 확정 원인
+사용자 영상 실측:
+- Master PC와 같은 Master 모바일은 같은 계정 RTDB/local signal 덕분에 대체로 수렴.
+- Admin A/B 다른 계정에서는 같은 공개곡의 총 좋아요 숫자가 과거 값에 머무는 현상 확인.
+- 일부 계정에서 개인 heart membership도 과거 로컬 값이 남는 현상 보고.
+
+정확한 의미:
+- 빨간/채운 하트 = 현재 로그인 사용자의 개인 membership. 다른 계정끼리 같을 필요가 없고 공유하면 안 됨.
+- 하트 옆 숫자 = 공개 총 좋아요 aggregate. 모든 계정/기기에서 수렴해야 함.
+
+확정된 public aggregate 결함:
+1. `044-local-first-cost-hotpath.mjs`는 legacy 075 aggregate에서 변경된 곡만 `patchExploreFeedR2Like044` / `patchExploreProfileR2Like044`로 public R2에 반영한다.
+2. 후속 `055-explore-like-intake-w1-hotpath.mjs`가 새 좋아요 intake를 069 queue로 전환했다.
+3. 069를 처리하는 `processExploreLikeAggregateWave035` / `processExploreLikeBatches035`는 D1 `likes`, `track_stats`, queue delete는 하지만 public Feed/Profile R2 patch가 없다.
+4. `/v1/feed-revision`은 D1이 아니라 public Feed R2 ETag를 revision으로 사용한다.
+5. 따라서 069 처리 후 D1이 바뀌어도 R2 ETag가 그대로면 다른 계정은 기존 local feed cache를 계속 최신으로 오인한다.
+
+추가 수렴 지연:
+- Worker cron: 10분 (`*/10 * * * *`).
+- 클라이언트 `/v1/feed-revision` 로컬 캐시: 10분.
+- Worker R2 revision edge cache: 60초.
+
+개인 heart 별도 위험:
+- UID별 `getExploreLikedTrackIds`는 이미 캐시된 track 상태를 재검증하지 않는다.
+- 개인 Social Snapshot cache는 expiry/revision이 없다.
+- bounded same-account RTDB signal을 놓친 오래된 기기는 개인 membership이 장기간 stale일 수 있다.
+
+수정 원칙:
+- 069 W1 저비용 intake는 보호.
+- 실제 delta가 생긴 changed track만 public Feed/Profile R2에 반영.
+- 전체 Feed/Profile/D1 scan 금지.
+- unchanged page entry D1 R0 유지.
+- 다른 사용자의 개인 heart membership broadcast 금지.
+- 사용자 데이터 migration/backfill/delete/overwrite 없이 하위호환 수정.

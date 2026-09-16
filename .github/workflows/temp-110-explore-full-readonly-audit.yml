@@ -17,19 +17,19 @@ jobs:
       PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
       PREVIEW_ORIGIN: https://preview.soridraw.com
     steps:
-      - name: Inspect valid and invalid profile request cost
+      - name: Inspect direct feed canonical and cache-buster cost
         shell: bash
         run: |
           set -euo pipefail
-          owner='rcZ2GZrBndOZzT8C635eiNBjYIJ2'
-          for n in 1 2; do
-            code="$(curl -sS -D "$RUNNER_TEMP/v-${n}.head" -o /dev/null -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50")"
-            echo "VALID_${n}=HTTP${code}"
-            grep -i '^x-soridraw-' "$RUNNER_TEMP/v-${n}.head" || true
-          done
-          bad='__soridraw_nonexistent_profile_110_audit__'
-          for n in 1 2 3; do
-            code="$(curl -sS -D "$RUNNER_TEMP/b-${n}.head" -o /dev/null -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${bad}/first-view?limit=50")"
-            echo "INVALID_${n}=HTTP${code}"
-            grep -i '^x-soridraw-' "$RUNNER_TEMP/b-${n}.head" || true
+          for sort in latest popular; do
+            for n in 1 2 3; do
+              code="$(curl -sS -D "$RUNNER_TEMP/${sort}-${n}.head" -o /dev/null -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=${sort}&limit=40")"
+              echo "CANONICAL_${sort}_${n}=HTTP${code}"
+              grep -Ei '^x-soridraw-(d1|r2|edge)' "$RUNNER_TEMP/${sort}-${n}.head" || true
+            done
+            for n in 1 2 3; do
+              code="$(curl -sS -D "$RUNNER_TEMP/${sort}-noise-${n}.head" -o /dev/null -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=${sort}&limit=40&noise=audit-${n}")"
+              echo "NOISE_${sort}_${n}=HTTP${code}"
+              grep -Ei '^x-soridraw-(d1|r2|edge)' "$RUNNER_TEMP/${sort}-noise-${n}.head" || true
+            done
           done

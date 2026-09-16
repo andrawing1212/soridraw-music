@@ -1,0 +1,59 @@
+name: TEMP 108 Explore Feed Cache Verify
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/temp-108-explore-feed-cache-verify.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout fixed 108 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 509f4225a830d6dffce5331c7b8484ab01f8cc7f
+          fetch-depth: 0
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify 108 cache contract
+        run: node scripts/verify-108-explore-feed-cache-recovery.mjs
+      - name: Verify 107 direct count contract
+        run: node scripts/verify-107-explore-direct-count-zero-read.mjs
+      - name: Verify 105 one-minute event contract
+        run: node scripts/verify-105-explore-like-1min.mjs
+      - name: Verify 103 scheduler compatibility
+        run: node scripts/verify-103-explore-like-event-batch.mjs
+      - name: Verify 102 public like parity
+        run: node scripts/verify-102-explore-public-like-parity.mjs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Change boundary
+        run: |
+          set -euo pipefail
+          git diff --name-only d2901829bab8ee8ad85791ac96bac457c2c2bc9c..509f4225a830d6dffce5331c7b8484ab01f8cc7f | sort | tee /tmp/changed.txt
+          cat > /tmp/allowed.txt <<'EOF'
+          public/app-version.json
+          scripts/verify-103-explore-like-event-batch.mjs
+          scripts/verify-105-explore-like-1min.mjs
+          scripts/verify-107-explore-direct-count-zero-read.mjs
+          scripts/verify-108-explore-feed-cache-recovery.mjs
+          src/services/exploreSessionCache.ts
+          EOF
+          diff -u /tmp/allowed.txt /tmp/changed.txt
+          echo 'CHANGE_BOUNDARY=PASS'
+          echo 'WORKER_CHANGED=NO'
+          echo 'FIREBASE_CHANGED=NO'
+          echo 'UI_CSS_CHANGED=NO'
+          echo 'USER_DATA_CHANGED=NO'

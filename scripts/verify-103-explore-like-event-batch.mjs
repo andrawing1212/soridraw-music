@@ -7,6 +7,20 @@ const revision = readFileSync('src/services/exploreRevisionRequestCache.ts', 'ut
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const wrangler = JSON.parse(readFileSync('cloudflare/explore-worker/canonical/wrangler.preview.jsonc', 'utf8'));
 
+if (version.version === '105') {
+  assert.equal(wrangler.triggers, undefined, 'fixed cron must be absent');
+  assert.deepEqual(wrangler.durable_objects?.bindings, [
+    { name: 'EXPLORE_LIKE_BATCH_SCHEDULER', class_name: 'ExploreLikeBatchScheduler103' },
+  ]);
+  assert.deepEqual(wrangler.migrations, [
+    { tag: 'v1', new_sqlite_classes: ['ExploreLikeBatchScheduler103'] },
+  ]);
+  assert.equal(wrangler.exports, undefined, 'unsupported top-level exports config must be absent');
+  await import('./verify-105-explore-like-1min.mjs');
+  console.log('103_RELEASE_COMPAT_105=PASS');
+  process.exit(0);
+}
+
 const functionText = (source, needle) => {
   const start = source.indexOf(needle);
   assert.ok(start >= 0, `missing anchor: ${needle}`);

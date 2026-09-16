@@ -1,0 +1,5 @@
+requested_at=2026-09-16T06:06:00Z
+release=107
+product_commit=2fc858003b96d59a9e29961d60e4a4cf04181905
+deploy_run=35061844172
+status=deployed

@@ -7,6 +7,7 @@ import baseWorker from './preview-worker.js';
 // SORIDRAW_EXPLORE_R2_REVISION_HEAD_077_20260913
 // SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_103_20260916
 // SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_105_20260916
+// SORIDRAW_EXPLORE_R2_SNAPSHOT_BOOTSTRAP_108_20260916
 //
 // 077: revision checks never open D1. The first-page Feed R2 object's ETag is the
 // revision. A mutation that changes the cached Feed changes the ETag; unchanged
@@ -16,10 +17,18 @@ import baseWorker from './preview-worker.js';
 // 105 PREVIEW test cadence: a successful non-empty like batch schedules exactly
 // one alarm one minute later. More batches joining the same window do not move
 // the deadline. No likes means no alarm and no periodic aggregate execution.
+//
+// 108: first-page Feed cache recovery reads the already-materialized R2 snapshot
+// directly. It never opens D1. The R2 ETag/revision is part of the edge key, so
+// many clients recovering the same snapshot share one edge body without polling.
 const REVISION_HEAD_CACHE_SECONDS_077 = 60;
 const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 * 60 * 1000;
 const EXPLORE_LIKE_BATCH_ROUTE_103 = '/v1/me/likes/batch';
 const EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103 = 'shared-like-batch';
+const EXPLORE_FEED_R2_SNAPSHOT_QUERY_108 = '__soridraw_r2_only';
+const EXPLORE_FEED_R2_SNAPSHOT_REVISION_QUERY_108 = '__soridraw_r2_revision';
+const EXPLORE_FEED_R2_SNAPSHOT_VERSION_108 = '108';
+const EXPLORE_FEED_R2_SNAPSHOT_EDGE_SECONDS_108 = 5 * 60;
 const RELEASE_ALLOWED_ORIGINS_036 = new Set([
   'https://preview.soridraw.com',
   'https://soridraw-preview.web.app',
@@ -129,6 +138,118 @@ async function handleFeedRevisionHeadOnly077(request, env) {
   });
 }
 
+function feedSnapshotEdgeKey108(url, sort, revision) {
+  const edgeUrl = new URL(`/__soridraw/feed-r2-snapshot-108/${sort}`, url.origin);
+  edgeUrl.searchParams.set('revision', revision);
+  return new Request(edgeUrl.toString(), { method: 'GET' });
+}
+
+function feedSnapshotHeaders108(request, revision, source, r2ClassB = 0) {
+  const headers = new Headers(revisionCors036(request));
+  headers.set('Content-Type', 'application/json; charset=utf-8');
+  headers.set('Cache-Control', 'no-store');
+  headers.set('X-SORIDRAW-CF-Diagnostics', '108');
+  headers.set('X-SORIDRAW-CF-Worker', '1');
+  headers.set('X-SORIDRAW-D1-Read', '0');
+  headers.set('X-SORIDRAW-D1-Write', '0');
+  headers.set('X-SORIDRAW-D1-Read-Queries', '0');
+  headers.set('X-SORIDRAW-D1-Write-Queries', '0');
+  headers.set('X-SORIDRAW-D1-Other-Queries', '0');
+  headers.set('X-SORIDRAW-R2-A', '0');
+  headers.set('X-SORIDRAW-R2-B', String(Math.max(0, Number(r2ClassB || 0))));
+  headers.set('X-SORIDRAW-Feed-Revision', String(revision || ''));
+  headers.set('X-SORIDRAW-Feed-Snapshot', source);
+  headers.set('Access-Control-Expose-Headers', [
+    'X-SORIDRAW-CF-Diagnostics',
+    'X-SORIDRAW-CF-Worker',
+    'X-SORIDRAW-D1-Read',
+    'X-SORIDRAW-D1-Write',
+    'X-SORIDRAW-D1-Read-Queries',
+    'X-SORIDRAW-D1-Write-Queries',
+    'X-SORIDRAW-D1-Other-Queries',
+    'X-SORIDRAW-R2-A',
+    'X-SORIDRAW-R2-B',
+    'X-SORIDRAW-Feed-Revision',
+    'X-SORIDRAW-Feed-Snapshot',
+  ].join(', '));
+  return headers;
+}
+
+async function handleFeedR2Snapshot108(request, env) {
+  const url = new URL(request.url);
+  const sort = url.searchParams.get('sort') === 'popular' ? 'popular' : 'latest';
+  const limit = Math.max(1, Number(url.searchParams.get('limit') || 40));
+  const cursor = String(url.searchParams.get('cursor') || '').trim();
+  if (limit !== 40 || cursor) {
+    return new Response(JSON.stringify({ ok: false, error: 'R2 snapshot supports first page only' }), {
+      status: 400,
+      headers: feedSnapshotHeaders108(request, '', 'INVALID-FIRST-PAGE-108', 0),
+    });
+  }
+
+  const requestedRevision = String(url.searchParams.get(EXPLORE_FEED_R2_SNAPSHOT_REVISION_QUERY_108) || '').trim();
+  if (requestedRevision) {
+    try {
+      const cached = await caches.default.match(feedSnapshotEdgeKey108(url, sort, requestedRevision));
+      if (cached) {
+        return new Response(await cached.text(), {
+          status: 200,
+          headers: feedSnapshotHeaders108(request, requestedRevision, 'EDGE-R2-SNAPSHOT-108', 0),
+        });
+      }
+    } catch {}
+  }
+
+  const bucket = feedCacheBucket077(env);
+  if (!bucket) {
+    return new Response(JSON.stringify({ ok: false, error: 'Explore Feed cache binding unavailable' }), {
+      status: 503,
+      headers: feedSnapshotHeaders108(request, '', 'R2-BINDING-MISSING-108', 0),
+    });
+  }
+
+  let object = null;
+  try { object = await bucket.get(feedR2Key077(sort)); } catch {}
+  if (!object) {
+    return new Response(JSON.stringify({ ok: false, error: 'Explore Feed snapshot unavailable' }), {
+      status: 503,
+      headers: feedSnapshotHeaders108(request, '', 'R2-MISSING-108', 1),
+    });
+  }
+
+  let bundle = null;
+  try { bundle = JSON.parse(await object.text()); } catch {}
+  const payload = bundle?.payload;
+  if (!payload?.data || !Array.isArray(payload.data.items)) {
+    return new Response(JSON.stringify({ ok: false, error: 'Explore Feed snapshot invalid' }), {
+      status: 503,
+      headers: feedSnapshotHeaders108(request, '', 'R2-INVALID-108', 1),
+    });
+  }
+
+  const actualRevision = String(
+    object.httpEtag
+    || object.etag
+    || object.customMetadata?.updatedAt
+    || (object.uploaded && typeof object.uploaded.getTime === 'function' ? object.uploaded.getTime() : '')
+    || requestedRevision
+    || '',
+  ).trim();
+  const body = JSON.stringify(payload);
+  if (actualRevision) {
+    try {
+      await caches.default.put(feedSnapshotEdgeKey108(url, sort, actualRevision), new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': `public, max-age=${EXPLORE_FEED_R2_SNAPSHOT_EDGE_SECONDS_108}` },
+      }));
+    } catch {}
+  }
+  return new Response(body, {
+    status: 200,
+    headers: feedSnapshotHeaders108(request, actualRevision, 'R2-GET-108', 1),
+  });
+}
+
 async function scheduleExploreLikeAggregate103(env) {
   const namespace = env?.EXPLORE_LIKE_BATCH_SCHEDULER;
   if (!namespace) throw new Error('Explore like scheduler binding unavailable');
@@ -219,6 +340,13 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (
+      request.method === 'GET'
+      && url.pathname === '/v1/feed'
+      && url.searchParams.get(EXPLORE_FEED_R2_SNAPSHOT_QUERY_108) === EXPLORE_FEED_R2_SNAPSHOT_VERSION_108
+    ) {
+      return handleFeedR2Snapshot108(request, env);
+    }
     if (request.method === 'GET' && url.pathname === '/v1/feed-revision') {
       return handleFeedRevisionHeadOnly077(request, env);
     }

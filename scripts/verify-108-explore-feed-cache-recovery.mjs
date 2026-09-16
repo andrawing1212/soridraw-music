@@ -7,9 +7,11 @@ const entry = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 
 const fail = (message) => { throw new Error(`[108] ${message}`); };
-if (String(version.version) !== '108') fail('app version is not 108');
+const appVersion = Number(version.version);
+if (!Number.isFinite(appVersion) || appVersion < 108) fail('app version is older than 108');
 if (!cache.includes('SORIDRAW_EXPLORE_FEED_STALE_COUNT_CACHE_RECOVERY_108_20260916')) fail('108 cache recovery marker missing');
-if (!/EXPLORE_FEED_CACHE_SCHEMA_VERSION\s*=\s*2\s*;/.test(cache)) fail('Explore Feed cache schema is not 2');
+const schemaMatch = cache.match(/EXPLORE_FEED_CACHE_SCHEMA_VERSION\s*=\s*(\d+)\s*;/);
+if (!schemaMatch || Number(schemaMatch[1]) < 2) fail('Explore Feed cache schema is older than 2');
 if (/app-version\.json|appVersion|APP_VERSION/.test(cache)) fail('Feed cache schema must not depend on app version');
 if (!cache.includes('expiresAt: null')) fail('long-lived cache contract changed unexpectedly');
 if (!persistent.includes('String(envelope.schemaVersion) === String(identity.schemaVersion)')) fail('schema compatibility gate missing');
@@ -32,7 +34,7 @@ for (const zero of ["headers.set('X-SORIDRAW-D1-Read', '0')", "headers.set('X-SO
 
 console.log('108_EXPLORE_FEED_CACHE_RECOVERY=PASS');
 console.log('OLD_SCHEMA_1_STALE_FEED=REJECTED_ONCE');
-console.log('NEW_SCHEMA_2_WARM_CACHE=PERSISTENT');
+console.log('SCHEMA_2_PLUS_WARM_CACHE=PERSISTENT');
 console.log('COLD_RECOVERY_SOURCE=R2_SNAPSHOT_ONLY');
 console.log('COLD_RECOVERY_D1=R0_W0_BY_ROUTE_CONTRACT');
 console.log('APP_VERSION_COUPLING=NONE');

@@ -7,8 +7,10 @@ import {
 // SORIDRAW_LONG_TERM_CACHE_STAGE_1_3_990
 // SORIDRAW_EXPLORE_FEED_REVISION_033_20260908
 // SORIDRAW_EXPLORE_FEED_STALE_COUNT_CACHE_RECOVERY_108_20260916
-// One-time cache contract bump only. Do not tie this schema to app-version updates.
-const EXPLORE_FEED_CACHE_SCHEMA_VERSION = 2;
+// 108 rejected schema-1 once. Real mobile evidence showed a stale schema-2 public-count payload can survive,
+// so 109 performs one final contract bump. Keep this value stable across ordinary future app versions.
+// SORIDRAW_EXPLORE_MOBILE_STALE_PUBLIC_COUNT_RECOVERY_109_20260916
+const EXPLORE_FEED_CACHE_SCHEMA_VERSION = 3;
 const EXPLORE_FEED_SOURCE_TYPE = 'explore_feed';
 
 type ExploreFeedCacheData = {

@@ -13,19 +13,20 @@ assert.match(display, /const LEGACY_STORAGE_PREFIX_091 = 'soridraw:explore-like-
 assert.match(display, /const PENDING_DISPLAY_TTL_MS_106 = 20 \* 60_000;/);
 assert.match(display, /const ACCEPTED_DISPLAY_TTL_MS_106 = 2 \* 60_000;/);
 assert.match(display, /window\.localStorage\.removeItem\(legacyStorageKey091\(normalizedUid\)\)/);
-assert.match(display, /const canonicalCount = getExploreLikeCanonicalCount091\(normalizedUid, normalizedTrackId, fallbackLikeCount\);/);
-assert.match(display, /const membershipDelta = Number\(state\.desiredLiked\) - Number\(state\.baseLiked\);/);
-assert.match(display, /return clampCount091\(canonicalCount \+ membershipDelta\);/);
+assert.match(display, /shared Feed\/Profile canonical projection is the only displayed count source/);
+assert.match(display, /return getExploreLikeCanonicalCount091\(normalizedUid, normalizedTrackId, fallbackLikeCount\);/);
+assert.doesNotMatch(display, /membershipDelta|canonicalCount \+ membershipDelta/);
 assert.doesNotMatch(display, /if \(state && state\.expiresAt > Date\.now\(\)\) return state\.displayLikeCount;/);
 assert.match(display, /account-scoped RTDB signals are membership-only/);
 
 assert.match(like, /SORIDRAW_EXPLORE_PUBLIC_COUNT_SOURCE_SEPARATION_106_20260916/);
 assert.doesNotMatch(like, /importExploreLikeDisplaySignal091\(/);
-assert.match(like, /const previousLiked = cache\.get\(result\.trackId\);/);
-assert.match(like, /previousLiked !== result\.liked/);
-assert.match(like, /const publicBaseLikeCount = getExploreLikeCanonicalCount091\(uid, result\.trackId, result\.likeCount\);/);
-assert.match(like, /beginExploreLikeDisplayTransition091\([\s\S]*previousLiked, result\.liked, publicBaseLikeCount/);
-assert.match(like, /confirmExploreLikeDisplayTransition094\([\s\S]*publicBaseLikeCount, localDisplayLikeCount/);
+assert.match(like, /account RTDB synchronizes only personal heart membership/);
+const observerStart = like.indexOf('for (const result of effectiveResults) {');
+const observerEnd = like.indexOf('persistLikedStateCache(uid, cache);', observerStart);
+assert.ok(observerStart >= 0 && observerEnd > observerStart, 'account observer block missing');
+const observerBlock = like.slice(observerStart, observerEnd);
+assert.doesNotMatch(observerBlock, /beginExploreLikeDisplayTransition091|confirmExploreLikeDisplayTransition094|getExploreLikeCanonicalCount091/);
 
 const confirmedStart = like.indexOf('// 106: RTDB/account replay carries membership plus the server response only.');
 assert.ok(confirmedStart >= 0, '106 confirmed result marker missing');
@@ -41,7 +42,7 @@ assert.match(like, /const EXPLORE_LIKE_EVENT_WINDOW_MS_105 = 1 \* 60_000;/);
 console.log('106_EXPLORE_PUBLIC_COUNT_SEPARATION=PASS');
 console.log('PUBLIC_COUNT_SOURCE=SHARED_CANONICAL_FEED_PROFILE');
 console.log('ACCOUNT_SIGNAL=MEMBERSHIP_ONLY');
-console.log('LOCAL_OPTIMISM=CANONICAL_PLUS_MEMBERSHIP_DELTA');
+console.log('PUBLIC_DISPLAY_LOCAL_OPTIMISM=NONE');
 console.log('LEGACY_FIXED_DISPLAY_OVERLAY=INVALIDATED_LOCAL_ONLY');
 console.log('SERVER_BATCH_CADENCE=UNCHANGED_1MIN_EVENT_DRIVEN');
 console.log('NO_WORKER_CHANGE=true');

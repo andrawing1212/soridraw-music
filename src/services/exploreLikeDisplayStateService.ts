@@ -174,20 +174,10 @@ export const getExploreLikeDisplayCount091 = (
   const normalizedUid = normalizeUid091(uid);
   const normalizedTrackId = normalizeTrackId091(trackId);
   if (!normalizedUid || !normalizedTrackId) return clampCount091(fallbackLikeCount);
-  const canonicalCount = getExploreLikeCanonicalCount091(normalizedUid, normalizedTrackId, fallbackLikeCount);
-  const states = loadStates091(normalizedUid);
-  const state = states.get(normalizedTrackId);
-  if (state && state.expiresAt > Date.now()) {
-    // 106: never replay a fixed per-account count. Rebase only this account's
-    // pending membership delta on top of the latest shared canonical count.
-    const membershipDelta = Number(state.desiredLiked) - Number(state.baseLiked);
-    return clampCount091(canonicalCount + membershipDelta);
-  }
-  if (state) {
-    states.delete(normalizedTrackId);
-    persistStates091(normalizedUid, states);
-  }
-  return canonicalCount;
+  // 106 final rule: the heart is personal, the number is public. Never add or
+  // subtract an account-local membership delta from the public number. The
+  // shared Feed/Profile canonical projection is the only displayed count source.
+  return getExploreLikeCanonicalCount091(normalizedUid, normalizedTrackId, fallbackLikeCount);
 };
 
 export const beginExploreLikeDisplayTransition091 = (

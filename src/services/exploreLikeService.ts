@@ -430,24 +430,9 @@ const cache = getLikedStateCache(uid);
   if (pendingOutboxChanged) persistLikeOutbox(uid, pendingOutbox);
   rememberAccountSyncResults(uid, effectiveResults);
   for (const result of effectiveResults) {
-    const previousLiked = cache.get(result.trackId);
-    if (
-      !pendingOutbox[result.trackId]
-      && typeof previousLiked === 'boolean'
-      && previousLiked !== result.liked
-    ) {
-      // 106: same-account RTDB tells this device only that membership changed.
-      // Build a short local +/- delta from this device's shared canonical count;
-      // never import another device's absolute public count.
-      const publicBaseLikeCount = getExploreLikeCanonicalCount091(uid, result.trackId, result.likeCount);
-      const localDisplayLikeCount = beginExploreLikeDisplayTransition091(
-        uid, result.trackId, result.ownerUid, previousLiked, result.liked, publicBaseLikeCount,
-      );
-      confirmExploreLikeDisplayTransition094(
-        uid, result.trackId, result.ownerUid, previousLiked, result.liked,
-        publicBaseLikeCount, localDisplayLikeCount,
-      );
-    }
+    // 106 final rule: account RTDB synchronizes only personal heart membership.
+    // Its likeCount/displayLikeCount fields remain parse-compatible for older
+    // clients, but this client never uses them to alter the public number.
     cache.set(result.trackId, result.liked);
     patchExploreLikedTrackMembership(uid, result.trackId, result.liked);
     dispatchLikeSync({

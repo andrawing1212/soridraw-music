@@ -62,10 +62,10 @@ assert.equal(wrangler.triggers, undefined, 'fixed cron must be absent');
 assert.deepEqual(wrangler.durable_objects?.bindings, [
   { name: 'EXPLORE_LIKE_BATCH_SCHEDULER', class_name: 'ExploreLikeBatchScheduler103' },
 ]);
-assert.deepEqual(wrangler.exports?.ExploreLikeBatchScheduler103, {
-  type: 'durable-object',
-  storage: 'sqlite',
-});
+assert.deepEqual(wrangler.migrations, [
+  { tag: 'v1', new_sqlite_classes: ['ExploreLikeBatchScheduler103'] },
+]);
+assert.equal(wrangler.exports, undefined, 'unsupported top-level exports config must be absent');
 
 assert.match(revision, /SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_REVISION_103_20260916/);
 assert.match(revision, /const REVISION_CACHE_TTL_MS = 5 \* 60 \* 1000;/);
@@ -82,5 +82,6 @@ console.log('IDLE_FIXED_CRON=0');
 console.log('WINDOW_RESET_ON_JOIN=NO');
 console.log('BACKLOG_CHECK=INDEXED_LIMIT_1_AFTER_ACTIVE_AGGREGATE_ONLY');
 console.log('REVISION_CACHE=5MIN_EDGE_R2_D1_R0W0');
+console.log('DURABLE_OBJECT_CLASS_REGISTRATION=ADDITIVE_V1');
 console.log('NO_D1_SCHEMA_MIGRATION=true');
 console.log('NO_UI_CSS_CHANGE=true');

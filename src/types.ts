@@ -665,6 +665,7 @@ export interface AppUserInfo {
     recentSongs?: number;
     musicNote?: number;
     library?: number;
+    playlists?: number;
   };
 }
 
@@ -753,6 +754,7 @@ export interface Playlist {
   type: 'normal' | 'shared';
   order: number;
   isDefault: boolean;
+  itemsRevision?: number;
   createdAt?: any;
   updatedAt?: any;
 }

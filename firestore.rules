@@ -91,13 +91,14 @@ service cloud.firestore {
         return !('syncVersions' in request.resource.data) ||
           (request.resource.data.syncVersions is map &&
             request.resource.data.syncVersions.keys().hasOnly([
-              'googleGeminiApiKey', 'sectionCustom', 'recentSongs', 'musicNote', 'library', 'musicNoteStructure'
+              'googleGeminiApiKey', 'sectionCustom', 'recentSongs', 'musicNote', 'library', 'musicNoteStructure', 'playlists'
             ]) &&
             (!('googleGeminiApiKey' in request.resource.data.syncVersions) || request.resource.data.syncVersions.googleGeminiApiKey is int) &&
             (!('sectionCustom' in request.resource.data.syncVersions) || request.resource.data.syncVersions.sectionCustom is int) &&
             (!('recentSongs' in request.resource.data.syncVersions) || request.resource.data.syncVersions.recentSongs is int) &&
             (!('musicNote' in request.resource.data.syncVersions) || request.resource.data.syncVersions.musicNote is int) &&
             (!('library' in request.resource.data.syncVersions) || request.resource.data.syncVersions.library is int) &&
+            (!('playlists' in request.resource.data.syncVersions) || request.resource.data.syncVersions.playlists is int) &&
             (!('musicNoteStructure' in request.resource.data.syncVersions) || request.resource.data.syncVersions.musicNoteStructure is int));
       }
 
@@ -151,7 +152,9 @@ service cloud.firestore {
       allow get: if isOwner(uid) || hasAdminPermission('userManagement');
       allow list: if hasAdminPermission('userManagement');
       allow create: if isOwner(uid) && isValidSelfCreate();
-      allow update: if isMaster() || validUserManagerUpdate() || (isOwner(uid) && isValidSelfUpdate());
+      // Owner-safe fields are checked first so ordinary self updates do not pay
+      // an admin-dependent users/{uid} rules lookup. Admin semantics stay intact.
+      allow update: if (isOwner(uid) && isValidSelfUpdate()) || isMaster() || validUserManagerUpdate();
 
       // SORIDRAW_BACKEND_V2_STEP2B_ADDITIVE_RULES
       // Additive V2 private-data rules only. Existing V1 rules remain unchanged.

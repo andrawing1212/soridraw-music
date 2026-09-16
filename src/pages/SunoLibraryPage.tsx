@@ -13,12 +13,12 @@ import {
   Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2, Plus, Check, CheckSquare, Square, ListChecks, Palette, Lock
 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter } from '../lib/firestoreMeasured';
+import { collection, query, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter, writeBatch } from '../lib/firestoreMeasured';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
 import { applyRecoveredSunoAudioUrl, downloadSunoAudioWithRecovery, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
 // SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
-import { ensureDefaultPlaylists, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, fetchTrackLikes, toggleTrackLike, fetchSharedTracksStatus } from '../services/playlistService';
+import { ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, toggleTrackLike } from '../services/playlistService';
 import { Playlist, PlaylistItem } from '../types';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
@@ -27,6 +27,14 @@ import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
 import { subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
 import { schedulePreviewAdaptiveListIndexPublishIfDirty } from '../lib/adaptiveListIndexV2';
 import { flushSoridrawPageSync } from '../lib/pageSyncCoordinator';
+import {
+  LIBRARY_PLAYLIST_CACHE_EVENT,
+  nextLibraryPlaylistSyncVersion,
+  readLibraryPlaylistItemsCache,
+  readLibraryPlaylistListCache,
+  writeLibraryPlaylistItemsCache,
+  writeLibraryPlaylistListCache,
+} from '../lib/libraryPlaylistCache';
 
 const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
 
@@ -57,7 +65,6 @@ const fallbackSharedPlaylists: Playlist[] = [
   { id: "fallback-shared-2", title: "2", type: "shared", order: 3, isDefault: true, isFallback: true } as any,
 ];
 
-const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
 // SORIDRAW_LIBRARY_PLAYBACK_FAILURE_RECOVERY_991
 const WORKSPACE_PAGE_SIZE = 10;
 const SORIDRAW_LIBRARY_MORE_VISIBILITY_1032 = true;
@@ -66,6 +73,16 @@ const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
 const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
 const scopedCreditStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
 const libraryAppliedKeywordsSessionCache = new Map<string, any>();
+
+const getLibraryLikeCacheKey = (uid?: string | null) => `soridraw_like_count_cache_v2_${uid || 'guest'}`;
+const getLibrarySharedStatusCacheKey = (uid?: string | null) => `soridraw_shared_track_status_cache_v2_${uid || 'guest'}`;
+const SHARED_PRIVATE_BLOCK_CACHE_MS = 5 * 60 * 1000;
+const isFreshSharedPrivateStatus = (value?: { isPublic: boolean; checkedAt: number } | null) => Boolean(
+  value?.isPublic === false && Date.now() - Number(value.checkedAt || 0) < SHARED_PRIVATE_BLOCK_CACHE_MS
+);
+const readLibraryLocalRecord = <T,>(key: string): T => {
+  try { return JSON.parse(localStorage.getItem(key) || '{}') as T; } catch { return {} as T; }
+};
 
 
 // 900: Keep the workspace Firestore listener alive once per authenticated app
@@ -771,6 +788,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   } | null>(null);
   const playlistSuppressClickRef = useRef<string | null>(null);
   const playlistsRef = useRef<Playlist[]>([]);
+  const playlistListCacheVersionRef = useRef(0);
+  const playlistListRefreshInFlightRef = useRef<Promise<void> | null>(null);
   const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
   const [playlistItems, setPlaylistItems] = useState<PlaylistItem[]>([]);
   const [playlistVisibleCount, setPlaylistVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
@@ -1676,28 +1695,73 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
-    let unsub: (() => void) | undefined;
+    let cancelled = false;
+    const uid = user.uid;
+    const readRemoteVersion = () => Number((readUserProfileCache(uid) as any)?.syncVersions?.playlists || 0);
 
-    const initPlaylists = async () => {
-      try {
-        await ensureDefaultPlaylists(user.uid);
-      } catch (error) {
-        console.error("ensureDefaultPlaylists failed:", error);
-      }
-
-      const listsRef = collection(db, 'user_playlists', user.uid, 'lists');
-      unsub = onSnapshot(listsRef, (snapshot) => {
-        const lists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Playlist));
-        setPlaylists(lists);
-      }, (error) => {
-        console.error("playlist snapshot failed:", error);
-      });
+    const applyCache = async () => {
+      const cached = await readLibraryPlaylistListCache(uid);
+      if (!cached || cancelled) return false;
+      playlistListCacheVersionRef.current = cached.version;
+      setPlaylists(cached.items);
+      return true;
     };
 
-    initPlaylists();
+    const loadPlaylists = async (forceServer = false) => {
+      if (playlistListRefreshInFlightRef.current) return playlistListRefreshInFlightRef.current;
+      const task = (async () => {
+        const remoteVersion = readRemoteVersion();
+        const cached = await readLibraryPlaylistListCache(uid);
+        const cacheIsCurrent = Boolean(
+          cached && !forceServer && (remoteVersion <= 0 || cached.version >= remoteVersion)
+        );
+        if (cacheIsCurrent && cached) {
+          if (!cancelled) {
+            playlistListCacheVersionRef.current = cached.version;
+            setPlaylists(cached.items);
+            markCacheDiagnostic('library', 'CACHE', 0);
+          }
+          return;
+        }
+
+        try {
+          const lists = cached
+            ? await refreshPlaylistsFromServer(uid, remoteVersion)
+            : await ensureDefaultPlaylists(uid, remoteVersion);
+          if (!cancelled) {
+            playlistListCacheVersionRef.current = remoteVersion;
+            setPlaylists(lists);
+          }
+        } catch (error) {
+          console.error('playlist cache refresh failed:', error);
+          if (!cancelled && cached) setPlaylists(cached.items);
+        }
+      })().finally(() => {
+        if (playlistListRefreshInFlightRef.current === task) playlistListRefreshInFlightRef.current = null;
+      });
+      playlistListRefreshInFlightRef.current = task;
+      return task;
+    };
+
+    const handleCacheChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string; scope?: string }>).detail;
+      if (detail?.uid !== uid || detail.scope !== 'lists') return;
+      void applyCache();
+    };
+    const handleProfileChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string }>).detail;
+      if (detail?.uid !== uid) return;
+      if (readRemoteVersion() > playlistListCacheVersionRef.current) void loadPlaylists(true);
+    };
+
+    window.addEventListener(LIBRARY_PLAYLIST_CACHE_EVENT, handleCacheChange as EventListener);
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, handleProfileChange as EventListener);
+    void loadPlaylists();
 
     return () => {
-      if (unsub) unsub();
+      cancelled = true;
+      window.removeEventListener(LIBRARY_PLAYLIST_CACHE_EVENT, handleCacheChange as EventListener);
+      window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleProfileChange as EventListener);
     };
   }, [user?.uid, playlistLiveModeActive, isSharedView]);
 
@@ -1853,193 +1917,96 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
-    setLoadingPlaylistItems(true);
-    const itemsRef = collection(db, 'user_playlists', user.uid, 'lists', activePlaylistId, 'items');
-    
-    // Subscribe to items without ordering first, or order by order asc
-    const unsub = onSnapshot(itemsRef, (snapshot) => {
-      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlaylistItem));
-      items.sort((a, b) => a.order - b.order);
-      setPlaylistItems(items);
-      setLoadingPlaylistItems(false);
-    }, (error) => {
-      console.error("Failed to fetch playlist items:", error);
-      setLoadingPlaylistItems(false);
-    });
+    let cancelled = false;
+    const uid = user.uid;
+    const playlistId = activePlaylistId;
+    const expectedVersion = Number(playlists.find((playlist) => playlist.id === playlistId)?.itemsRevision || 0);
 
-    return () => unsub();
-  }, [user, libraryViewMode, activePlaylistId]);
+    const loadItems = async () => {
+      setLoadingPlaylistItems(true);
+      const cached = await readLibraryPlaylistItemsCache(uid, playlistId);
+      const cacheIsCurrent = Boolean(cached && (expectedVersion <= 0 || cached.version >= expectedVersion));
+      if (cacheIsCurrent && cached) {
+        if (!cancelled) {
+          setPlaylistItems([...cached.items].sort((a, b) => a.order - b.order));
+          setLoadingPlaylistItems(false);
+          markCacheDiagnostic('library', 'CACHE', 0);
+        }
+        return;
+      }
+
+      try {
+        const snapshot = await getDocs(collection(db, 'user_playlists', uid, 'lists', playlistId, 'items'));
+        const items = snapshot.docs
+          .map((entry) => ({ id: entry.id, ...entry.data() } as PlaylistItem))
+          .sort((a, b) => a.order - b.order);
+        await writeLibraryPlaylistItemsCache(uid, playlistId, items, expectedVersion);
+        if (!cancelled) setPlaylistItems(items);
+      } catch (error) {
+        console.error('Failed to fetch playlist items:', error);
+        if (!cancelled && cached) setPlaylistItems(cached.items);
+      } finally {
+        if (!cancelled) setLoadingPlaylistItems(false);
+      }
+    };
+
+    const handleCacheChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string; scope?: string; playlistId?: string }>).detail;
+      if (detail?.uid !== uid || detail.scope !== 'items' || detail.playlistId !== playlistId) return;
+      void readLibraryPlaylistItemsCache(uid, playlistId).then((cached) => {
+        if (!cancelled && cached) setPlaylistItems([...cached.items].sort((a, b) => a.order - b.order));
+      });
+    };
+
+    window.addEventListener(LIBRARY_PLAYLIST_CACHE_EVENT, handleCacheChange as EventListener);
+    void loadItems();
+    return () => {
+      cancelled = true;
+      window.removeEventListener(LIBRARY_PLAYLIST_CACHE_EVENT, handleCacheChange as EventListener);
+    };
+  }, [user?.uid, libraryViewMode, activePlaylistId, playlists]);
 
   useEffect(() => {
     if (playlistItems.length === 0) return;
+    const nextUsers: Record<string, string> = {};
+    const nextShares: Record<string, string> = {};
+    playlistItems.forEach((item: any) => {
+      const displayName = item.creatorDisplayId || item.ownerNickname || item.creatorNickname || item.ownerEmail || item.creatorEmail || '';
+      if (item.ownerUid && displayName) nextUsers[item.ownerUid] = String(displayName);
+      if (item.sourceType === 'shared_track' && item.sourceId && displayName) nextShares[item.sourceId] = String(displayName);
+    });
+    if (Object.keys(nextUsers).length > 0) setUserNameMap((prev) => ({ ...prev, ...nextUsers }));
+    if (Object.keys(nextShares).length > 0) setShareCreatorNameMap((prev) => ({ ...prev, ...nextShares }));
+  }, [playlistItems]);
 
-    const uniqueOwnerUids = Array.from(
-      new Set<string>(
-        playlistItems
-          .map((item: any) => item.ownerUid)
-          .filter((uid): uid is string => typeof uid === 'string' && uid.trim().length > 0)
-      )
-    ).filter((uid) => !userNameMap[uid]);
-
-    if (uniqueOwnerUids.length === 0) return;
-
-    let cancelled = false;
-
-    const fetchUserNames = async () => {
-      const nextMap: Record<string, string> = {};
-
-      await Promise.all(
-        uniqueOwnerUids.map(async (uid) => {
-          try {
-            const cachedProfile = readUserProfileCache(uid);
-            if (cachedProfile) {
-              const displayName = cachedProfile.nickname || cachedProfile.displayName || (cachedProfile as any).name || cachedProfile.email || uid;
-              if (displayName) nextMap[uid] = String(displayName);
-              return;
-            }
-            const userSnap = await getDoc(doc(db, 'users', uid));
-            if (!userSnap.exists()) return;
-            const data: any = userSnap.data();
-            const cached = writeUserProfileCache(uid, { ...data, uid });
-            const displayName = cached.nickname || cached.displayName || (cached as any).name || cached.email || uid;
-            if (displayName) nextMap[uid] = String(displayName);
-          } catch (error) {
-            console.warn('Failed to fetch playlist creator name:', error);
-          }
-        })
-      );
-
-      if (!cancelled && Object.keys(nextMap).length > 0) {
-        setUserNameMap((prev) => ({ ...prev, ...nextMap }));
-      }
-    };
-
-    fetchUserNames();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [playlistItems, userNameMap]);
-
+  // Page entry is cache-only. Likes and shared-public status are verified only
+  // when the user performs the related action, never once per visible song.
   useEffect(() => {
-    const sharedSourceIds = Array.from(
-      new Set<string>(
-        playlistItems
-          .filter((item: any) => item.sourceType === 'shared_track')
-          .map((item: any) => item.sourceId)
-          .filter((sourceId): sourceId is string => typeof sourceId === 'string' && sourceId.trim().length > 0)
-      )
-    ).filter((sourceId) => !shareCreatorNameMap[sourceId]);
+    if (!user?.uid || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist')) return;
+    const likeKey = getLibraryLikeCacheKey(user.uid);
+    const sharedKey = getLibrarySharedStatusCacheKey(user.uid);
+    const scopedLikes = readLibraryLocalRecord<Record<string, { likeCount: number, likedByMe: boolean }>>(likeKey);
+    const scopedShared = readLibraryLocalRecord<Record<string, { isPublic: boolean, checkedAt: number }>>(sharedKey);
 
-    if (sharedSourceIds.length === 0) return;
-
-    let cancelled = false;
-
-    const fetchSharedCreatorNames = async () => {
-      const nextMap: Record<string, string> = {};
-
-      await Promise.all(
-        sharedSourceIds.map(async (sourceId) => {
-          try {
-            const shareSnap = await getDoc(doc(db, 'suno_shares', sourceId));
-            if (!shareSnap.exists()) return;
-            const data: any = shareSnap.data();
-            const displayName =
-              data.creatorDisplayId ||
-              data.ownerNickname ||
-              data.creatorNickname ||
-              data.ownerName ||
-              data.nickname ||
-              data.displayName ||
-              data.ownerEmail ||
-              data.creatorEmail ||
-              '';
-            if (displayName) nextMap[sourceId] = String(displayName);
-          } catch (error) {
-            console.warn('Failed to fetch shared track creator name:', sourceId, error);
-          }
-        })
-      );
-
-      if (!cancelled && Object.keys(nextMap).length > 0) {
-        setShareCreatorNameMap((prev) => ({ ...prev, ...nextMap }));
+    // One-time local migration only. No server access and no app-version invalidation.
+    if (Object.keys(scopedLikes).length === 0) {
+      const legacy = readLibraryLocalRecord<Record<string, { likeCount: number, likedByMe: boolean }>>('soridraw_like_count_cache');
+      if (Object.keys(legacy).length > 0) {
+        localStorage.setItem(likeKey, JSON.stringify(legacy));
+        Object.assign(scopedLikes, legacy);
       }
-    };
-
-    fetchSharedCreatorNames();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [playlistItems, shareCreatorNameMap]);
-
-  // Handle caching of likes and shared statuses
-  useEffect(() => {
-    if (playlistItems.length === 0 || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist')) return;
-
-    const currentLikesCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
-    const checkedAtStr = localStorage.getItem('soridraw_like_count_cache_checked_at');
-    const checkedAt = checkedAtStr ? parseInt(checkedAtStr, 10) : 0;
-    
-    setLikesCache(currentLikesCache);
-
-    const now = Date.now();
-    const needsLikeUpdate = (now - checkedAt) > CACHE_EXPIRY_MS;
-
-    const currentSharedCache = JSON.parse(localStorage.getItem('soridraw_shared_track_status_cache') || '{}');
-    setSharedStatusCache(currentSharedCache);
-
-    const checkCaches = async () => {
-      let updatedLikes = { ...currentLikesCache };
-      let updatedShared = { ...currentSharedCache };
-      let didUpdateLikes = false;
-      let didUpdateShared = false;
-
-      // 1. Likes Cache
-      if (needsLikeUpdate) {
-        const globalIds = playlistItems.map(p => getTrackGlobalId(p));
-        // unique
-        const uniqueGlobalIds = Array.from(new Set<string>(globalIds));
-        const fetchedLikes = await fetchTrackLikes(uniqueGlobalIds, user?.uid);
-        updatedLikes = { ...updatedLikes, ...fetchedLikes };
-        didUpdateLikes = true;
+    }
+    if (Object.keys(scopedShared).length === 0) {
+      const legacy = readLibraryLocalRecord<Record<string, { isPublic: boolean, checkedAt: number }>>('soridraw_shared_track_status_cache');
+      if (Object.keys(legacy).length > 0) {
+        localStorage.setItem(sharedKey, JSON.stringify(legacy));
+        Object.assign(scopedShared, legacy);
       }
+    }
 
-      // 2. Shared Status Cache
-      // Shared playlists must reflect private/public changes immediately.
-      // Do not rely on the long local cache here, otherwise a track can look public for hours after the owner made it private.
-      const forceSharedStatusRefresh = libraryViewMode === 'sharedPlaylist' || activePlaylistSection === 'shared';
-      const sharedSourceIdsToFetch = playlistItems
-        .filter(p => p.sourceType === 'shared_track')
-        .map(p => p.sourceId!)
-        .filter(sid => {
-           const cached = currentSharedCache[sid];
-           return forceSharedStatusRefresh || !cached || (now - cached.checkedAt > CACHE_EXPIRY_MS);
-        });
-
-      if (sharedSourceIdsToFetch.length > 0) {
-        // unique
-        const uniqueSourceIds = Array.from(new Set<string>(sharedSourceIdsToFetch));
-        const fetchedShared = await fetchSharedTracksStatus(uniqueSourceIds);
-        updatedShared = { ...updatedShared, ...fetchedShared };
-        didUpdateShared = true;
-      }
-      
-      if (didUpdateLikes) {
-        localStorage.setItem('soridraw_like_count_cache', JSON.stringify(updatedLikes));
-        localStorage.setItem('soridraw_like_count_cache_checked_at', now.toString());
-        setLikesCache(updatedLikes);
-      }
-
-      if (didUpdateShared) {
-        localStorage.setItem('soridraw_shared_track_status_cache', JSON.stringify(updatedShared));
-        setSharedStatusCache(updatedShared);
-      }
-    };
-
-    checkCaches();
-
-  }, [playlistItems, libraryViewMode, activePlaylistSection, user]);
+    setLikesCache(scopedLikes);
+    setSharedStatusCache(scopedShared);
+  }, [libraryViewMode, user?.uid]);
 
   const handleRemoveFromPlaylist = async (item: PlaylistItem) => {
     if (!user || !activePlaylistId) return;
@@ -2451,29 +2418,31 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setLikesCache(prev => ({ ...prev, [globalId]: newCacheValue }));
     
     // Also update localStorage immediately so it doesn't revert during re-render
-    const currentLikesCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
+    const likeCacheKey = getLibraryLikeCacheKey(user.uid);
+    const currentLikesCache = readLibraryLocalRecord<Record<string, { likeCount: number, likedByMe: boolean }>>(likeCacheKey);
     currentLikesCache[globalId] = newCacheValue;
-    localStorage.setItem('soridraw_like_count_cache', JSON.stringify(currentLikesCache));
+    localStorage.setItem(likeCacheKey, JSON.stringify(currentLikesCache));
 
     try {
-      const actualCount = await toggleTrackLike(globalId, user.uid, cached.likedByMe);
-      // Sync with actual count
-      if (actualCount !== newCount) {
-        const syncedCacheValue = { likeCount: actualCount, likedByMe: newLikedByMe };
+      const actual = await toggleTrackLike(globalId, user.uid, newLikedByMe);
+      // The mutation reads the canonical relation, so a stale/new-device cache
+      // self-corrects on the actual click instead of paying per-card entry reads.
+      if (actual.likeCount !== newCount || actual.likedByMe !== newLikedByMe) {
+        const syncedCacheValue = { likeCount: actual.likeCount, likedByMe: actual.likedByMe };
         setLikesCache(prev => ({ ...prev, [globalId]: syncedCacheValue }));
         
-        const finalCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
+        const finalCache = readLibraryLocalRecord<Record<string, { likeCount: number, likedByMe: boolean }>>(likeCacheKey);
         finalCache[globalId] = syncedCacheValue;
-        localStorage.setItem('soridraw_like_count_cache', JSON.stringify(finalCache));
+        localStorage.setItem(likeCacheKey, JSON.stringify(finalCache));
       }
     } catch (e) {
       console.error(e);
       showToast("좋아요 변경에 실패했습니다.");
       // Rollback
       setLikesCache(prev => ({ ...prev, [globalId]: cached }));
-      const rbCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
+      const rbCache = readLibraryLocalRecord<Record<string, { likeCount: number, likedByMe: boolean }>>(likeCacheKey);
       rbCache[globalId] = cached;
-      localStorage.setItem('soridraw_like_count_cache', JSON.stringify(rbCache));
+      localStorage.setItem(likeCacheKey, JSON.stringify(rbCache));
     }
   };
 
@@ -3933,7 +3902,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     try {
       const shareSnap = await getDoc(doc(db, 'suno_shares', safeSourceId));
       const isPublic = shareSnap.exists() && shareSnap.data().isPublic === true;
-      setSharedStatusCache(prev => ({ ...prev, [safeSourceId]: { isPublic, checkedAt: Date.now() } }));
+      const nextStatus = { isPublic, checkedAt: Date.now() };
+      setSharedStatusCache(prev => {
+        const next = { ...prev, [safeSourceId]: nextStatus };
+        if (user?.uid) {
+          try { localStorage.setItem(getLibrarySharedStatusCacheKey(user.uid), JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
 
       if (!isPublic && showMessage) {
         showToast('원곡자가 비공개로 전환하여 사용할 수 없습니다.');
@@ -4233,7 +4209,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (item?.sourceType === 'shared_track') {
       const sourceId = String(item?.sourceId || '').trim();
       const cached = sourceId ? sharedStatusCache[sourceId] : null;
-      return cached?.isPublic === false ? 'private' : 'public';
+      return isFreshSharedPrivateStatus(cached) ? 'private' : 'public';
     }
 
     const sourceTrack = getPlaylistItemSourceTrack(item);
@@ -4246,7 +4222,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (selection.context !== 'sharedPlaylist' && item?.sourceType !== 'shared_track') return false;
     const sourceId = String(item?.sourceId || '').trim();
     if (!sourceId) return false;
-    return sharedStatusCache[sourceId]?.isPublic === false;
+    return isFreshSharedPrivateStatus(sharedStatusCache[sourceId]);
   };
 
   const hasUnavailableSharedSelection = selectedTrackList.some(isUnavailableSharedSelection);
@@ -6422,11 +6398,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const persistPlaylistOrder = async (section: 'normal' | 'shared') => {
     if (!user?.uid) return;
     const sectionList = getPlaylistsBySectionForDrag(section).map((playlist, index) => ({ ...playlist, order: index + 1 }));
-    await Promise.all(
-      sectionList
-        .filter((playlist) => playlist.id && !(playlist as any).isFallback)
-        .map((playlist) => updateDoc(doc(db, 'user_playlists', user.uid, 'lists', playlist.id!), { order: playlist.order }))
-    );
+    const remoteVersion = Number((readUserProfileCache(user.uid) as any)?.syncVersions?.playlists || 0);
+    const syncVersion = nextLibraryPlaylistSyncVersion(user.uid, Math.max(playlistListCacheVersionRef.current, remoteVersion));
+    const batch = writeBatch(db);
+    sectionList
+      .filter((playlist) => playlist.id && !(playlist as any).isFallback)
+      .forEach((playlist) => batch.update(doc(db, 'user_playlists', user.uid, 'lists', playlist.id!), { order: playlist.order }));
+    batch.update(doc(db, 'users', user.uid), { 'syncVersions.playlists': syncVersion });
+    await batch.commit();
+    const sectionById = new Map(sectionList.map((playlist) => [playlist.id, playlist]));
+    const next = playlistsRef.current.map((playlist) => sectionById.get(playlist.id) || playlist);
+    playlistListCacheVersionRef.current = syncVersion;
+    await writeLibraryPlaylistListCache(user.uid, next, syncVersion);
   };
 
   const handlePlaylistPointerDown = (
@@ -6926,19 +6909,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       onClick={async () => {
                         if (!user || !activePlaylistId) return;
                         try {
-                          const targetItemsRef = collection(db, 'user_playlists', user.uid, 'lists', list.id!, 'items');
-                          const q = query(targetItemsRef, where('sourceId', '==', moveModalArgs.item.sourceId));
-                          const targetDocs = await getDocs(q);
-                          
-                          if (!targetDocs.empty) {
-                            showToast("이미 대상 플레이리스트에 있는 곡입니다.");
-                            return;
-                          }
-
                           await movePlaylistItem(user.uid, activePlaylistId, list.id!, moveModalArgs.item);
                           showToast("플레이리스트를 이동했습니다.");
                           setMoveModalArgs(null);
-                        } catch (error) {
+                        } catch (error: any) {
+                          if (error?.message === 'DUPLICATE') {
+                            showToast("이미 대상 플레이리스트에 있는 곡입니다.");
+                            return;
+                          }
                           console.error("move playlist item failed:", {
                             error,
                             fromPlaylistId: activePlaylistId,
@@ -7558,7 +7536,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     : null;
                   const playlistFavoriteActive = Boolean(!isShared && (((sourceTrackForPlaylist as any)?.favorite) ?? ((item as any).favorite)));
                   const cachedSharedStatus = sharedStatusCache[item.sourceId];
-                  const isUnavailable = isShared && cachedSharedStatus && cachedSharedStatus.isPublic === false;
+                  const isUnavailable = isShared && isFreshSharedPrivateStatus(cachedSharedStatus);
                   const blockedPlaylistActionClass = "w-full text-left px-4 py-2 flex items-center justify-between group text-white/25 cursor-not-allowed";
                   const normalPlaylistActionClass = "w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white";
                   
@@ -7656,7 +7634,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               .filter(p => {
                                 if (p.sourceType !== 'shared_track') return true;
                                 const cached = p.sourceId ? sharedStatusCache[p.sourceId] : null;
-                                return cached?.isPublic !== false;
+                                return !isFreshSharedPrivateStatus(cached);
                               })
                               .map(p => ({
                                 url: p.audioUrl!,

@@ -44,12 +44,14 @@
       }
     ]
   },
-  "exports": {
-    "ExploreLikeBatchScheduler103": {
-      "type": "durable-object",
-      "storage": "sqlite"
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "ExploreLikeBatchScheduler103"
+      ]
     }
-  },
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1

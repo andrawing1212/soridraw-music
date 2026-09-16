@@ -1,5 +1,16 @@
 # NEXT CODEX TASK
 
+## 우선 작업 — 107 공개 좋아요 실제 대조 후 남은 확인
+
+- 2026-09-16 read-only Run [35065130889](https://github.com/andrawing1212/soridraw-music/actions/runs/35065130889) SUCCESS.
+- 지정 곡 `music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q`는 likes membership → track_stats → derived row → PREVIEW R2 latest/popular/profile → API까지 **모두 1**. 전체 표/비용은 CURRENT_RELEASE_STATE 0F 참조.
+- 이번 증거에서는 서버에서 0으로 끊기는 구간을 재현하지 못했다. 원인 확정 전 제품 코드 수정/배포 금지 유지.
+- 실제 0을 표시하는 앱107 화면 및 해당 브라우저의 API/기존 캐시 값을 확인해 최초 불일치 지점을 찾아야 한다. 서버 projection 문제라고 미리 가정하거나 클라이언트 숫자 보정을 추가하지 않는다.
+- 기존 1분 event-driven aggregate, 개인 membership, local outbox, same-account RTDB 유지. D1/schema/backfill/사용자 데이터 변경 없음.
+- 임시 진단 Workflow/script는 제거. 제품 변경이 없으므로 TypeScript/Build/회귀 테스트 재실행 및 PREVIEW 재배포 없음.
+- TEST/PRODUCTION 접근·변경·승격 금지. 아래 107/106 배포 기록은 이 진단 이전 이력이다.
+
+
 상태: **107 PREVIEW 앱 배포 완료 / 자동·배포 검증 PASS / 교차계정 좋아요·공개프로필 warm 비용 실사용 검증 전 / TEST 승격 금지**
 
 ## 107 PREVIEW 배포 결과

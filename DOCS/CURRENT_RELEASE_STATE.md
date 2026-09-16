@@ -4,6 +4,38 @@
 
 > 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다. 문서와 실제 상태가 다르면 실제 상태 우선.
 
+## 0F. 107 공개 좋아요 1곡 실제 read-only 대조 — 서버 불일치 미재현
+
+- 기준 preview commit: `a59d1f109bfba0180bf4cc7dbce945cd0acd349f`.
+- 사용자 승인으로 Actions의 기존 Cloudflare 인증을 사용한 일회성 read-only 진단 실행. 제품 코드 수정/배포 전에 실제 값부터 확인했다.
+- 성공 Run: [35065130889](https://github.com/andrawing1212/soridraw-music/actions/runs/35065130889), 진단 source `5df136ea8591474493b4f5ac4ee25c98b6f0e4c6`, 측정 2026-09-16 06:45:03~06:45:10 UTC.
+- 대상: **[Nu Jazz] 한 걸음 비워둔 채로 / Leaving One Step Open**. 동일 trackId 결과:
+
+| 단계 | trackId | likeCount |
+|---|---|---:|
+| likes membership COUNT (해당 track만) | `music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q` | 1 |
+| track_stats.like_count | `music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q` | 1 |
+| derived row_json.like_count (rank likes도 1) | `music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q` | 1 |
+| PREVIEW R2 latest feed | `music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q` | 1 |
+| PREVIEW R2 popular feed | `music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q` | 1 |
+| PREVIEW R2 public profile | `music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q` | 1 |
+| PREVIEW /v1/feed latest | `music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q` | 1 |
+| PREVIEW /v1/feed popular | `music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q` | 1 |
+| PREVIEW /v1/profiles/{ownerUid}/first-view | `music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q` | 1 |
+
+- **이 시점/대상에서는 1→0 또는 stale 최초 구간이 존재하지 않았다. 서버 projection 오류로 단정하거나 수정할 근거 없음. UI에서 0이라는 현상 자체가 해결됐다는 뜻은 아니다.**
+- 실제 PREVIEW Worker `961084b2-28e0-4d04-8577-56d8944f4916` 확인. PREVIEW의 현재 DB binding(공유 canonical)과 PREVIEW EXPLORE_CACHE만 사용; TEST/PRODUCTION Worker·R2·앱에 접근하지 않음.
+- 실제 `explore032_stats_update`는 해당 track의 `track_stats.like_count`를 derived `row_json.like_count`에 반영하도록 존재함. SQL 정의를 SELECT로 읽었으며 실행하지 않음. camelCase `row_json.likeCount`는 원래 없는 필드다.
+- Feed R2/API는 `stats.likeCount=1`이며 top-level likeCount는 없음. Profile R2/API는 두 값 모두 1. 현재 `ExplorePage.readNestedCount`는 top-level이 없으면 `stats.likeCount`를 읽으므로 이 형태를 0의 원인으로 볼 수 없음.
+- `patchExploreFeedR2LikeCount`의 deferred는 033에서 즉시 중복 R2 I/O를 없애기 위해 도입됨. legacy 단건 handleLike에서 호출되며, batch aggregate는 056 reconciliation 경로를 사용함. 이번에 수정/삭제하지 않음.
+- 직접 D1 진단: 해당 track 조회 rows_read=5, trigger 메타데이터 조회 rows_read=302, 두 SELECT 모두 rows_written=0. 전체 tracks/likes scan 없음. PREVIEW R2 객체 GET 3회, PUT/DELETE 없음.
+- 실제 API D1: latest R2/W0, popular R0/W0, profile R2/W0(여기서 R은 읽은 row 수). 세 응답 모두 R2 Class A=0/B=0. 브라우저 warm 재진입 전체 계약을 이 결과만으로 PASS 처리하지 않음.
+- 인증 값 출력 없음. 첫 Run 35065011456은 ACCOUNT_ID Secret이 비어 서버 조회 전에 실패; 이후 기존 PREVIEW release에 고정된 동일 계정 식별자를 재사용. 토큰은 기존 Actions Secret만 사용. 인증/Secrets 설정 변경 없음.
+- **제품 변경/배포 없음:** Worker, UI, Firebase, schema, membership/outbox/RTDB, 사용자 원본 데이터 모두 비변경. 원인 미확정 상태에서 임의 server/client 보정 없음.
+- 진단 문법 검사 및 Actions read-only trace PASS. 제품 수정이 없어 TypeScript/Build/102·103·105·107 회귀 테스트는 이번 진단에서 실행하지 않음. Like/unlike 실데이터 쓰기 실험 없음.
+- 다음 증거: 실제 0을 표시하는 앱107 화면의 해당 track, browser cached payload 및 수신 API 응답 대조. Master/Admin 실사용·집계 후 ±1·idle/warm 검증은 미완료.
+- 진단용 임시 Workflow/script는 결과 기록 후 제거. TEST 승격 금지 유지.
+
 ## 0E. PREVIEW 107 — Explore 구조 정리 / 공개 숫자 직접 표시 / 공개프로필 warm 0-read 배포 완료
 - 사용자 지시대로 새 보정을 더 쌓지 않고 **과거 불필요한 좋아요 숫자 중간 계층을 제거하면서 구조를 단순화**했다.
 - 107 제품 commit: `2fc858003b96d59a9e29961d60e4a4cf04181905`.

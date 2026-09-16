@@ -1,5 +1,0 @@
-requested_at=2026-09-16T05:09:00Z
-requested_by=user_real_use_failure_video_followup
-base_product=31b91b02b0aa6692401b457e6286ffad250c7b03
-app_version=106
-purpose=public_number_shared_canonical_only_personal_heart_only_account_scoped

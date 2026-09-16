@@ -23808,12 +23808,17 @@ async function enforceExploreProfileColdRateLimit057(request, env, cors) {
   return withExploreProfileProtectionHeaders057(response, 'RATE_LIMIT', true);
 }
 
+// SORIDRAW_PUBLIC_PROFILE_NEGATIVE_CACHE_SHAPE_058_20260916
 async function isCacheableExploreProfileNotFound057(response) {
   if (!response || response.status !== 404) return false;
   try {
     const payload = await response.clone().json();
     const code = String(payload?.error?.code || payload?.code || '').trim();
-    return code === 'NOT_FOUND';
+    if (code === 'NOT_FOUND') return true;
+    const message = typeof payload?.error === 'string'
+      ? payload.error.trim()
+      : String(payload?.error?.message || payload?.message || '').trim();
+    return message === 'Profile not found' || message === '공개 프로필을 찾을 수 없습니다.';
   } catch {
     return false;
   }

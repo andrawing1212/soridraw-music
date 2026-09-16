@@ -1,11 +1,24 @@
 # NEXT CODEX TASK
 
-상태: **106 PREVIEW 앱 배포 완료 / 자동·배포 검증 PASS / 교차계정 실사용 검증 전 / TEST 승격 금지**
+상태: **107 PREVIEW 앱 배포 완료 / 자동·배포 검증 PASS / 교차계정 좋아요·공개프로필 warm 비용 실사용 검증 전 / TEST 승격 금지**
+
+## 107 PREVIEW 배포 결과
+- 107 제품 commit: `2fc858003b96d59a9e29961d60e4a4cf04181905`.
+- clean head: `cac2fd2cfea0b5f22a053cff4a106b1f93c02230`.
+- PREVIEW 배포 source: `998bcce8ef1d0beb906ba5f7dd7d81f735030263`.
+- 구현·검증 Run `35061505658` PASS / 정리 Run `35061772251` PASS / App Release Run `35061844172` PASS.
+- 실제 PREVIEW 앱: **107** — `https://preview.soridraw.com` / exact build PASS.
+- 공개 숫자: 계정별 display overlay 제거, shared Feed/Profile `track.likeCount` 직접 표시.
+- 공개프로필: 10초 시간기반 재확인 제거, 정상 warm cache 재진입은 서버 D1 read 0 목표.
+- Explore Worker는 기존 `961084b2-28e0-4d04-8577-56d8944f4916` 유지. 1분 event-driven, fixed cron 없음.
+- UI/CSS / Functions / Rules / RTDB Rules / D1 schema / 사용자 원본 데이터 변경 없음.
+- TEST/PRODUCTION 비변경.
+- 다음은 실사용에서 공개 숫자 수렴과 warm 공개프로필 D1 0을 확인한다. PASS 전 TEST 승격 금지.
 
 ## 106 PREVIEW 배포 결과
 - PREVIEW App Release Run: `35059625879` — **SUCCESS**.
 - 배포 source/trigger commit: `caf6f458096f876ae93bfb07c60f9445d6a14c76`.
-- 실제 PREVIEW 앱: **106** — `https://preview.soridraw.com`.
+- 실제 PREVIEW 앱: **107** — `https://preview.soridraw.com`.
 - TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS / exact build PASS.
 - TEST / PRODUCTION branch와 실제 Hosting 비변경 PASS.
 - Explore Worker는 기존 `961084b2-28e0-4d04-8577-56d8944f4916` 유지. 재배포 없음.
@@ -14,7 +27,7 @@
 
 ## 현재 기준
 - branch: `preview`
-- 106 최종 제품 commit: `a0946b0e296d5de5811567786cede9d75e911f90`
+- 107 최종 제품 commit: `2fc858003b96d59a9e29961d60e4a4cf04181905`
 - 106 초기 separation commit: `31b91b02b0aa6692401b457e6286ffad250c7b03`
 - 106 최종 검증 Run: `35058485482` — PASS
 - 실제 PREVIEW 앱: **106** — `https://preview.soridraw.com`
@@ -61,7 +74,7 @@ Run `35058485482` PASS:
 - Worker / D1 schema / user data / UI-CSS change 없음
 
 ## 다음 작업
-106 PREVIEW Hosting 배포는 완료되었다. 다음은 **Master/Admin 교차계정 실사용 검증**이다.
+107 PREVIEW Hosting 배포는 완료되었다. 다음은 **Master/Admin 교차계정 공개 숫자 + 공개프로필 warm 0-read 실사용 검증**이다.
 - Explore Worker는 105의 1분 event scheduler를 그대로 사용하므로 불필요한 재배포 금지.
 - Functions/Rules/RTDB Rules/D1/Media Worker 배포 금지.
 - TEST/PRODUCTION 변경 금지.

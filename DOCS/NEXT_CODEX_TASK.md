@@ -18,7 +18,7 @@
 ## 106 PREVIEW 배포 결과
 - PREVIEW App Release Run: `35059625879` — **SUCCESS**.
 - 배포 source/trigger commit: `caf6f458096f876ae93bfb07c60f9445d6a14c76`.
-- 실제 PREVIEW 앱: **107** — `https://preview.soridraw.com`.
+- 당시 실제 PREVIEW 앱: **106** — `https://preview.soridraw.com`.
 - TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS / exact build PASS.
 - TEST / PRODUCTION branch와 실제 Hosting 비변경 PASS.
 - Explore Worker는 기존 `961084b2-28e0-4d04-8577-56d8944f4916` 유지. 재배포 없음.
@@ -28,9 +28,9 @@
 ## 현재 기준
 - branch: `preview`
 - 107 최종 제품 commit: `2fc858003b96d59a9e29961d60e4a4cf04181905`
-- 106 초기 separation commit: `31b91b02b0aa6692401b457e6286ffad250c7b03`
-- 106 최종 검증 Run: `35058485482` — PASS
-- 실제 PREVIEW 앱: **106** — `https://preview.soridraw.com`
+- 107 구현·검증 Run: `35061505658` — PASS
+- 107 PREVIEW App Release Run: `35061844172` — PASS
+- 실제 PREVIEW 앱: **107** — `https://preview.soridraw.com`
 - 실제 PREVIEW Explore Worker: **105 1분 event scheduler** / `961084b2-28e0-4d04-8577-56d8944f4916`
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — 비변경
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 비변경

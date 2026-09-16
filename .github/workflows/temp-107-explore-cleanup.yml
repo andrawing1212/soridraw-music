@@ -47,6 +47,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Restore generated dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          git restore --source=HEAD --worktree -- dist
+
       - name: Change boundary
         shell: bash
         run: |

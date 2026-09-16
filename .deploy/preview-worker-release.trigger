@@ -1,4 +1,4 @@
-requested_at=2026-09-16T02:44:30Z
+requested_at=2026-09-16T02:47:30Z
 requested_by=user
 product_code_target=3f421759a02bb5584045f8705f404e641a12af7d
-release_purpose=103_event_driven_5min_like_batch_do_registration_fix
+release_purpose=103_event_driven_5min_like_batch_clear_legacy_cron

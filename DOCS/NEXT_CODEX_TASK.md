@@ -7,33 +7,34 @@
 - branch: `preview`
 - PREVIEW app: **110**, `https://preview.soridraw.com`
 - 110 product commit: `4723fe9450869dd80b0e684309681535a8512dcd`
-- PREVIEW release Run: `35095168722` SUCCESS
-- PREVIEW Explore Worker: `d8eae38a-09a9-4f37-9500-57f217ee1d8c` (110에서 재배포 없음)
+- PREVIEW Explore Worker: `d8eae38a-09a9-4f37-9500-57f217ee1d8c`
+- 110 좋아요곡 stale 0 문제: 사용자 실사용 PASS
 - TEST/PRODUCTION: 비변경
 
-## 109 사용자 실사용 결과
+## Explore 110 전체 누수 감사 결과
 
-- PC Master/Admin public count 1 PASS.
-- Mobile Master/Admin public count 1 PASS.
-- repeated hard refresh Firestore runaway: 사용자 확인상 PASS.
-- second Admin cold `users:getDocs 12`: 1 query가 12 documents를 받은 진단값; admin user list는 max 20/page persistent cache.
+PASS:
+- 추천/최신 정상 앱 첫 페이지: shared latest source + R2 snapshot, D1 R0/W0.
+- 인기 정상 앱 첫 페이지: R2 snapshot, D1 R0/W0.
+- Feed revision latest/popular: R2 HEAD only, D1 R0/W0, 클라이언트 1분 cache, 고정 polling 없음.
+- 정상 공개프로필: 앱 warm은 persistent local cache로 서버 요청 0. 새 edge 직접 cold는 bounded D1R2, 같은 edge 반복 R0.
+- 좋아요: 1분 event-driven, idle fixed cron 0.
+- TypeScript/Build + 110/109/108/107/105/103/102 검증 PASS.
 
-## 110 수정
+FAIL / 다음 작업:
+- 존재하지 않는 `/v1/profiles/{ref}/first-view`를 반복 직접 요청하면 404마다 D1 read 1이 반복된다.
+- 감사 Run `35097777687`: INVALID_1/2/3 모두 HTTP404 + D1R1/W0.
+- 이는 정상 UI 재진입 누수는 아니지만 외부에서 invalid profile ref를 반복 호출하면 D1 비용을 요청 수만큼 만들 수 있는 abuse gap이다.
 
-- 자기 `좋아요 곡` 탭의 red heart + stale public count 0 문제 수정.
-- shared Feed/Profile의 public likeCount를 open liked-tab state + `explore-liked-track-collection-085` local cache에 로컬 반영.
-- warm Feed cache도 repair source로 사용. 추가 Firestore/D1 read 없음.
-- liked-track schema reset 없음, app-version coupling 없음, polling 없음.
-- Worker/Functions/Rules/D1/user source data/UI/CSS 변경 없음.
+## 다음 작업 — invalid public-profile negative-cache 방어
 
-## 다음 작업 — 실사용 검증만
+목표:
+1. 존재하지 않는 동일 profile ref 첫 판정 뒤 반복 요청은 D1 R0/W0.
+2. 가능한 경우 서로 다른 무작위 invalid ref 난사도 edge에서 과도한 D1을 만들지 않도록 bounded rate/negative-cache 방어 검토.
+3. 정상 valid profile cold/warm, UID/handle alias, profile revision, 공개곡 50페이지, 좋아요/팔로우 정합성은 깨지지 않아야 한다.
+4. UI/CSS/클라이언트 데이터 schema 변경 금지.
+5. D1 schema/migration/backfill 금지. 사용자 데이터 변경 금지.
+6. 새 fixed cron/polling 금지.
+7. 수정 후 PREVIEW에서 valid profile, invalid profile 반복, Feed latest/popular/revision D1 R0 계약을 재감사한다.
 
-1. PC/모바일 자기 공개프로필 → `좋아요 곡`에서 기존 0이 shared public count 1로 복구되는지 확인.
-2. 페이지 이동/재진입/새로고침 후에도 1 유지.
-3. Master/Admin 각 계정에서 자신의 heart membership은 계정별로 맞고 public count는 동일한지 확인.
-4. like/unlike 후 개인 heart 즉시, 약 1분~1분10초 뒤 Explore Feed/Public Profile/좋아요곡 public count가 같은 최종값으로 수렴.
-5. warm 재진입 D1 R0/W0 및 repeated refresh Firestore R0 목표 재확인.
-
-위 검증 전 TEST 승격 금지. `테스트배포` 명시 승인 전 main 변경 금지. PRODUCTION은 별도 명확 승인 전 금지.
-
-주의: 103 Durable Object migration v1 유지. pre-103 Worker 직접 rollback은 피하고 migration을 유지한 forward-compatible rollback 사용. formal Work 독립 감사 미실행.
+이 FAIL을 해결하기 전 TEST 승격 금지. `테스트배포` 명시 승인 전 main 변경 금지. PRODUCTION은 별도 명확 승인 전 금지.

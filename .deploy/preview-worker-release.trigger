@@ -1,4 +1,4 @@
-requested_at=2026-09-16T04:18:49Z
+requested_at=2026-09-16T08:10:00Z
 requested_by=user
-product_code_target=8a26b5018dccfb3171d6cb4270a490309ccee704
-release_purpose=105_event_driven_1min_like_batch_preview_test_retry_after_verifier_compat
+product_code_target=933388f5775782fc29b2586e745b3238820bb8c6
+release_purpose=108_r2_snapshot_zero_d1_cache_recovery

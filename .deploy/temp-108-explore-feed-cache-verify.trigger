@@ -1,0 +1,3 @@
+requested_at=2026-09-16T07:11:38Z
+candidate_sha=509f4225a830d6dffce5331c7b8484ab01f8cc7f
+purpose=verify_108_explore_feed_cache_recovery

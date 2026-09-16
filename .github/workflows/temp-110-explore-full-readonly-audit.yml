@@ -17,29 +17,19 @@ jobs:
       PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
       PREVIEW_ORIGIN: https://preview.soridraw.com
     steps:
-      - name: Inspect profile edge/R2/D1 headers only
+      - name: Inspect valid and invalid profile request cost
         shell: bash
         run: |
           set -euo pipefail
-          hval() { awk -v key="$2" 'BEGIN{IGNORECASE=1} $1==key":" {gsub("\r",""); v=$2} END{print v}' "$1"; }
           owner='rcZ2GZrBndOZzT8C635eiNBjYIJ2'
-          for n in 1 2 3; do
-            code="$(curl -sS -D "$RUNNER_TEMP/p-${n}.head" -o "$RUNNER_TEMP/p-${n}.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50")"
-            edge="$(hval "$RUNNER_TEMP/p-${n}.head" x-soridraw-profile-edge-cache)"
-            mode="$(hval "$RUNNER_TEMP/p-${n}.head" x-soridraw-profile-revision-mode)"
-            r="$(hval "$RUNNER_TEMP/p-${n}.head" x-soridraw-d1-read)"
-            w="$(hval "$RUNNER_TEMP/p-${n}.head" x-soridraw-d1-write)"
-            r2a="$(hval "$RUNNER_TEMP/p-${n}.head" x-soridraw-r2-a)"
-            r2b="$(hval "$RUNNER_TEMP/p-${n}.head" x-soridraw-r2-b)"
-            cf="$(hval "$RUNNER_TEMP/p-${n}.head" cf-cache-status)"
-            echo "PROFILE_HEADER_${n}=HTTP${code} EDGE=${edge:-missing} MODE=${mode:-missing} D1R=${r:-missing} D1W=${w:-missing} R2A=${r2a:-missing} R2B=${r2b:-missing} CF=${cf:-missing}"
-            test "$code" = 200
+          for n in 1 2; do
+            code="$(curl -sS -D "$RUNNER_TEMP/v-${n}.head" -o /dev/null -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50")"
+            echo "VALID_${n}=HTTP${code}"
+            grep -i '^x-soridraw-' "$RUNNER_TEMP/v-${n}.head" || true
           done
-          revision="$(jq -r '.data.revision // empty' "$RUNNER_TEMP/p-3.json")"
-          test -n "$revision"
-          code="$(curl -sS -G -D "$RUNNER_TEMP/p-known.head" -o "$RUNNER_TEMP/p-known.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" --data-urlencode 'limit=50' --data-urlencode "knownRevision=${revision}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view")"
-          edge="$(hval "$RUNNER_TEMP/p-known.head" x-soridraw-profile-edge-cache)"
-          mode="$(hval "$RUNNER_TEMP/p-known.head" x-soridraw-profile-revision-mode)"
-          r="$(hval "$RUNNER_TEMP/p-known.head" x-soridraw-d1-read)"
-          w="$(hval "$RUNNER_TEMP/p-known.head" x-soridraw-d1-write)"
-          echo "PROFILE_KNOWN=HTTP${code} EDGE=${edge:-missing} MODE=${mode:-missing} D1R=${r:-missing} D1W=${w:-missing}"
+          bad='__soridraw_nonexistent_profile_110_audit__'
+          for n in 1 2 3; do
+            code="$(curl -sS -D "$RUNNER_TEMP/b-${n}.head" -o /dev/null -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${bad}/first-view?limit=50")"
+            echo "INVALID_${n}=HTTP${code}"
+            grep -i '^x-soridraw-' "$RUNNER_TEMP/b-${n}.head" || true
+          done

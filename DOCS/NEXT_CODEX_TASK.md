@@ -1,98 +1,87 @@
 # NEXT CODEX TASK
 
-상태: **PREVIEW 100 배포 완료 / 자동검증 PASS / liked-card zero-read·PC↔모바일 실사용 비용 검증 남음 / TEST 승격 금지**
+상태: **Library zero-read 후보 구현·자동검증 완료 / 독립 감사 및 PREVIEW 배포 전 / TEST 승격 금지**
 
 ## 현재 기준
 - branch: `preview`
-- 실제 PREVIEW 앱: **100**
-- 100 제품 수정 commit: `eef460f5024fab3a4ff6ad4e665c132aae0b69fa`
-- 100 verifier commit: `3dd5c60ca2531e6c8fad2c062de0c18784a455d4`
-- 100 version bump commit: `5f19e3f2c46a7f25e43ee22af8cd6bd15ae94961`
-- 100 PREVIEW 배포 source SHA: `28a49b881e86f9f3ef752ed66e33d48a576bfe13`
-- 100 최종 감사 Run: `35031690795` — PASS
-- 100 App Release Run: `35033032795` — PASS
-- PREVIEW Explore Worker: 056 / `bd8a810f-8266-41e1-80a1-0c5e9bfc561a` — 변경 없음
-- PREVIEW Media Worker: `a00276d5-aca1-443f-a992-0b80ca0637ff` — 변경 없음
-- TEST main: `3b574c05589230f077eceff98190edd4b5195f75` — 배포 Workflow 기준 비변경 PASS
-- PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 배포 Workflow 기준 비변경 PASS
+- 작업 시작 HEAD: `e7bb2ca455818ea6dcf47c3ba695ae82fea795b4`
+- Library zero-read 제품 후보: `158bf60b582260a4971d3343de76886a1ac33ba8`
+- 실제 PREVIEW 앱: **100** — 새 Library 코드/Rules 미배포
+- PREVIEW 100 배포 source: `28a49b881e86f9f3ef752ed66e33d48a576bfe13`
+- TEST / PRODUCTION: 변경·배포 없음
 
-## 099 실사용에서 확정된 문제
-`내 좋아요곡` 진입 시 LOCAL 0 / Worker 1 / D1 Query R1 / Rows Read R12가 재현됐다.
+## 해결 대상과 기존 실측
+Library 첫 진입 Browser SDK R69:
+- `user_playlists:onSnapshot` 21
+- `user_playlists:getDocs` 8
+- `playlist_like_counts:getDoc` 20
+- `playlist_likes:getDoc` 20
 
-원인:
-- unlike 시 cached card payload를 삭제.
-- 다른 기기 re-like 때 RTDB는 membership/heart/count만 전달하고 title/image/owner card payload는 전달하지 않음.
-- canonical liked ID는 있지만 card item이 없는 곡만 `/v1/me/liked-tracks` targeted hydration.
-- 실측 missing card 12개 → D1 Rows Read 12.
+추가 문제:
+- Shared List 진입마다 TTL을 무시하고 표시 곡 수만큼 `suno_shares`를 재조회.
+- playlist header와 선택 folder items에 실시간 listener를 매번 재부착.
+- Rules의 admin helper가 `users/{uid}`를 `get()/exists()`하는 경로에 dependent document read 가능.
 
-즉 앱 update 자체가 아니라 **unlike 때 재사용 가능한 card payload를 파괴한 것**이 직접 원인.
-
-## 100 수정
-- unlike 시 card payload 즉시 삭제 금지.
-- 최근 unlike card는 `dormantSince`와 함께 기기에 보존.
-- re-like 시 기존 card 즉시 재사용.
-- liked-page entry에서 현재 비좋아요 card 전체 pruning 제거.
-- dormant card 최대 **100곡 / 7일** bounded retention.
-- cache schema version **1 유지** → 100 update가 기존 099 cache를 무효화하지 않음.
-- 새 기기/실제 캐시 삭제·손상/한 번도 payload가 없던 remote-like만 targeted missing-card recovery 허용.
-
-변경 파일:
-- `src/services/exploreLikedTracksService.ts`
-- `scripts/verify-100-liked-card-retention.mjs`
-
-변경 없음:
-- UI / pages / CSS
-- Explore Worker / Media Worker
-- Functions / RTDB Rules / Firestore Rules
-- D1 schema/migration/seed
-- 사용자 원본 데이터
+## 제품 후보 구조
+- 사용자별 IndexedDB에 playlist header와 folder items를 영속 저장.
+- warm cache와 `users/{uid}.syncVersions.playlists`가 같으면 Library 목록/선택 folder 서버 read 0.
+- Library 전용 `onSnapshot` 2종 제거. 기존 users authority listener의 작은 version 신호만 사용.
+- 실제 playlist 변경 때만 user sync version과 해당 playlist `itemsRevision` 갱신.
+- 좋아요/공유 상태/작성자 곡별 page-entry fan-out 제거.
+- 좋아요는 실제 클릭 시 canonical count + membership을 확인해 사용자가 누른 의도를 적용.
+- 공유곡은 재생/다운로드 등 실제 사용 시 해당 share 한 건만 확인.
+- 일반 사용자 self-update Rules는 owner-safe 조건을 먼저 평가해 admin dependent read를 피함.
+- 관리자 권한 및 타 사용자 관리 경로는 유지.
 
 ## 자동검증
-최종 Run `35031690795` PASS:
-- TypeScript / Build PASS
-- 085 / 086 / 087 PASS
-- 094~100 좋아요 회귀 PASS
-- Node 24 Explore like cost fixture PASS
-- backend/UI exact scope guard PASS
+- TypeScript PASS
+- Production Build PASS
+- `verify-029-music-note-library` PASS
+- `verify-030-library-warm-cache-no-idle-read` PASS
+- `verify-101-library-playlist-zero-read` PASS
+- IndexedDB list/item write-read contract PASS
+- Firestore Rules local emulator compile PASS
+- `git diff --check` PASS
 
-## 배포 결과
-Run `35033032795` PASS:
-- locked source `28a49b881e86f9f3ef752ed66e33d48a576bfe13`
-- Install / TypeScript / Build PASS
-- Firebase PREVIEW Hosting 배포 PASS
-- `preview.soridraw.com` exact build PASS
-- 실제 `app-version.json=100` PASS
-- TEST / PRODUCTION branch + Hosting 비변경 PASS
-- Worker / Functions / RTDB Rules / Firestore Rules / D1 schema 재배포 없음
-- 사용자 데이터 migration/backfill/delete/overwrite 없음
+## 다음 단계 — 독립 감사
+대상 제품 commit: `158bf60b582260a4971d3343de76886a1ac33ba8`
 
-## 다음 실측
-1. PC/모바일 모두 **캐시 삭제 금지**.
-2. 100 업데이트 적용 후 CACHE LIVE 초기화.
-3. 현재 hydration된 `내 좋아요곡` 진입 → `/v1/me/liked-tracks` D1 Rows Read 0 확인.
-4. PC에서 3~5곡 unlike → boundary → re-like → boundary.
-5. 모바일 heart/count 수렴 확인.
-6. PC/모바일 각각 `내 좋아요곡` 진입 → 기존 card payload 재사용, D1 Rows Read 0 확인.
-7. 모바일→PC 방향도 반대로 반복.
-8. Explore 추천/최신/인기 이동만으로 like server request/write 0.
-9. Firestore Explore-like sync read/write 0.
-10. Cloudflare D1 Rows read/written과 CACHE LIVE 대조.
+확인 항목:
+1. warm Library 진입에 Firestore list/items/likes/share read 경로가 남지 않았는지 확인.
+2. cache miss, remote version 증가, 실제 사용자 action만 서버 read를 허용하는지 확인.
+3. PC↔모바일 playlist 생성/이름변경/삭제/곡 추가·이동·삭제가 version/revision으로 수렴하는지 확인.
+4. Rules owner-first 변경이 관리자 권한을 약화하지 않는지 확인.
+5. UI/CSS/Explore Worker/Media Worker/D1/Functions/RTDB가 비변경인지 확인.
+6. 사용자 원본 데이터 migration/backfill/delete/overwrite가 없는지 확인.
 
-## 정상 예외
-- 새 기기
-- 실제 캐시 삭제/손상
-- 해당 기기에서 한 번도 card payload를 받은 적 없는 곡의 remote-like
+## PREVIEW 배포 순서
+독립 감사 PASS 후에만:
+1. 추가형 Firestore Rules 선배포.
+2. 앱 버전 **101** 고정 및 verifier 갱신.
+3. PREVIEW App Release로 Hosting 배포.
+4. 실제 `preview.soridraw.com` build/version 확인.
 
-이 경우만 bounded targeted missing-card read 허용.
+주의:
+- 앱 101이 새 `syncVersions.playlists`를 쓰므로 **Rules를 먼저 배포**해야 한다.
+- TEST / PRODUCTION 승격 금지.
 
-## 합격선
-- 기존 payload가 있던 곡의 unlike→re-like 후 `내 좋아요곡` D1 Rows Read 0.
-- update만으로 membership/card cache 초기화 없음.
-- PC↔모바일 heart/count 동일 수렴.
-- ordinary Explore browsing = like server request/write 0.
-- 전체 liked-list / Feed / tracks scan 없음.
+## PREVIEW 실측
+최초 101 적용 시:
+- 기존 기기에는 새 IndexedDB playlist cache가 없으므로 legacy list + 선택 folder bootstrap read 1회 허용.
+- 이 최초 bootstrap에서도 곡별 좋아요 40 reads와 Shared List 곡별 share reads는 0이어야 함.
+
+warm 재진입 시:
+- My List / Shared List 목록·선택 folder·좋아요·공유상태 자동 read 0.
+- Library 전용 snapshot listener 0.
+- 페이지 진입 write 0.
+
+실제 변경 시:
+- 좋아요 클릭은 canonical 2 reads 허용.
+- 공유곡 실제 사용은 해당 share 1 read 허용.
+- playlist 변경은 canonical write + sync version/revision write 허용.
+- 반대 기기에서 version 신호 수신 후 변경된 목록/선택 folder만 bounded refresh되는지 확인.
 
 ## 승격 금지
-- 100 PREVIEW 실사용 zero-read + PC↔mobile 정확성 + Cloudflare 비용 실측 PASS 전 TEST 승격 금지.
+- PREVIEW 100 liked-card 검증과 PREVIEW 101 Library 비용·정확성 실측이 모두 PASS하기 전 TEST 승격 금지.
 - PRODUCTION은 사용자 명확한 정식배포 승인 전 금지.
-- 사용자 데이터 복사/백필/전체 재생성 금지.
+- 사용자 데이터 migration/backfill/delete/overwrite 금지.

@@ -179,7 +179,69 @@ FAIL 조건:
 - GitHub branch API는 `protected:true`이지만 세부 protection 응답에 `enabled=false`가 함께 보이는 표시 불일치가 있어 운영 위험 기록 유지.
 
 ## 12. 다음 작업
-- PREVIEW 100에서 기존 cache를 지우지 않고 unlike→re-like→내 좋아요곡 D1 Rows Read 0 실측.
-- PC↔모바일 heart/count 수렴 재확인.
-- Cloudflare D1 Analytics와 CACHE LIVE 대조.
-- 위 항목 PASS 후에만 TEST 승격 검토.
+- Library zero-read 후보 commit `158bf60b582260a4971d3343de76886a1ac33ba8` 독립 감사.
+- 감사 PASS 후 Firestore Rules 선배포 → 앱 101 버전 고정 → PREVIEW Hosting 배포 순서로 진행.
+- PREVIEW에서 최초 cache bootstrap과 warm 재진입을 분리 측정.
+- PC↔모바일 플레이리스트 변경 수렴, 공유 리스트 재진입 0 read, 좋아요 진입 0 read 실측.
+- PREVIEW 100 좋아요 검증과 Library 비용 검증이 모두 PASS한 뒤에만 TEST 승격 검토.
+
+## 13. Library zero-read 후보 — 코드 완료 / 배포 전
+- 기준 branch/commit: `preview` / `e7bb2ca455818ea6dcf47c3ba695ae82fea795b4`
+- 제품 후보 commit: `158bf60b582260a4971d3343de76886a1ac33ba8`
+- 실제 PREVIEW 앱은 여전히 **100**이며 이 후보는 아직 배포하지 않았다.
+
+확정 원인:
+- Library My List 진입 시 `user_playlists` 목록과 선택 폴더 items에 `onSnapshot`을 매번 재부착.
+- 기본 폴더 확인용 전체 `getDocs`가 앱 세션마다 추가 실행.
+- 6시간 TTL 만료 시 표시 곡마다 `playlist_like_counts` + `playlist_likes` 2 reads.
+- Shared List 진입은 TTL을 무시하고 곡마다 `suno_shares` 공개 상태를 강제 재조회.
+- 공유 작성자 이름 fallback도 `suno_shares`/`users`를 곡별 조회할 수 있었음.
+
+수정:
+- 사용자별 IndexedDB playlist header/item cache 추가. 앱 버전과 독립하며 업데이트로 무효화하지 않음.
+- warm cache + 동일 `syncVersions.playlists`이면 목록/선택 폴더 서버 read 0.
+- playlist/item `onSnapshot` 제거. 기존 전역 users authority listener의 작은 version 신호만 재사용.
+- 실제 playlist 변경 때만 `syncVersions.playlists`와 해당 playlist `itemsRevision` 갱신.
+- 좋아요/공유 상태/작성자 곡별 page-entry fan-out 제거.
+- 좋아요는 실제 클릭 때 count + membership만 확인하고 사용자가 누른 의도를 canonical 상태에 적용.
+- 공유곡은 재생/다운로드 등 실제 사용 때 해당 share 1곡만 확인. private 결과는 5분만 차단 캐시해 재공개 복구 가능.
+- 폴더 이동 전 중복 사전 query 제거. 기존 service의 bounded duplicate query 한 번만 사용.
+
+Rules 감사/수정:
+- Library owner read path는 `isOwner(uid) || isAdmin()` 순서라 일반 사용자는 admin dependent read 없음.
+- playlist likes read는 `isAuthenticated()`만 사용하고 admin dependent read 없음.
+- public/owner share read는 admin 검사 전에 단락됨.
+- `users/{uid}` self-update만 기존에 `isMaster()`가 먼저였음. owner-safe update를 첫 조건으로 이동해 일반 사용자 self-update의 숨은 dependent read를 제거.
+- 관리자 타 사용자 관리 경로와 권한 강도는 변경하지 않음.
+- Rules `get()/exists()`가 같은 users 문서를 여러 번 참조해도 dependent document는 요청당 최대 1 read지만, admin 경로에서는 그 1 read가 필요하므로 Custom Claims 전환 없이 제거하지 않음.
+
+비용 기대값:
+- 기존 warm Library My/Shared List 재진입: Firestore data read 0 목표.
+- 20곡 기준 기존 좋아요 자동 40 reads: 0.
+- Shared List 진입 N곡 `suno_shares` 자동 N reads: 0.
+- 실제 좋아요 클릭: canonical count + membership 2 reads, 상태 변경 때만 writes.
+- 실제 공유곡 사용: 해당 `suno_shares` 1 read.
+- 실제 playlist 변경: canonical write + cross-device version/해당 folder revision writes. 페이지 진입 반복 비용을 실제 변경 시점으로 이동.
+
+정상 예외/남은 실측:
+- 이 후보를 처음 적용한 기존 기기에는 playlist IndexedDB cache가 아직 없으므로 최초 1회 legacy list + 선택 folder bootstrap reads가 필요하다. 이후 앱 업데이트/재진입은 cache 유지.
+- 새 기기/브라우저 저장소 삭제·손상도 같은 1회 bootstrap 허용.
+- 첫 bootstrap 자체를 단일 document read로 묶으려면 별도 aggregate bundle/backfill 설계가 필요하며 이번 작업에는 migration/backfill을 추가하지 않았다.
+- PC/모바일 실제 수렴과 Firebase Console 청구 read는 배포 후 미검증.
+
+검증:
+- TypeScript PASS
+- Production Build PASS
+- `verify-029-music-note-library` PASS
+- `verify-030-library-warm-cache-no-idle-read` PASS
+- `verify-101-library-playlist-zero-read` PASS
+- IndexedDB list/item write-read contract PASS
+- Firestore Rules local emulator compile PASS
+- `git diff --check` PASS
+
+변경 없음:
+- UI/CSS/반응형/위치/크기/테마
+- Explore Worker / Media Worker / D1
+- Firebase Functions / RTDB Rules
+- 사용자 원본 데이터 migration/backfill/delete/overwrite
+- TEST / PRODUCTION branch 및 배포 환경

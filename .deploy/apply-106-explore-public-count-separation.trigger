@@ -1,0 +1,5 @@
+requested_at=2026-09-16T04:58:00Z
+requested_by=user_real_use_failure_video
+base_preview=119611324d702ed9f3bc143cd0617e5b4848cde1
+target_app_version=106
+purpose=separate_account_membership_from_shared_public_like_count

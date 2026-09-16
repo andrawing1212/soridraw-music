@@ -6,7 +6,10 @@ const ownerUid = 'rcZ2GZrBndOZzT8C635eiNBjYIJ2';
 const worker = 'soridraw-explore-preview';
 const bucket = 'soridraw-profile-media-preview';
 const api = 'https://soridraw-explore-preview.andrawing1212.workers.dev';
-const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+// The repository's existing release uses a fixed account identifier (not a credential).
+// Reuse that exact PREVIEW setting when the optional account Secret is absent.
+const releaseWorkflow = readFileSync('.github/workflows/cloudflare-explore-preview-release.yml', 'utf8');
+const account = process.env.CLOUDFLARE_ACCOUNT_ID || releaseWorkflow.match(/^\s+CLOUDFLARE_ACCOUNT_ID:\s+([a-f0-9]{32})\s*$/m)?.[1];
 const token = process.env.CLOUDFLARE_API_TOKEN;
 const rows = [];
 function emit(stage, likeCount, extra = {}) {
@@ -101,7 +104,7 @@ try {
 } catch (error) {
   // Only our controlled messages are logged; never serialize third-party errors.
   const message = String(error?.message ?? 'Unknown diagnostic failure');
-  console.error(message.includes(token) || message.includes(account) ? 'Read-only diagnostic failed' : message);
+  console.error((token && message.includes(token)) || (account && message.includes(account)) ? 'Read-only diagnostic failed' : message);
   process.exitCode = 1;
 } finally {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY,

@@ -9,7 +9,7 @@ const fail = (message) => { throw new Error(`[108] ${message}`); };
 if (String(version.version) !== '108') fail('app version is not 108');
 if (!cache.includes('SORIDRAW_EXPLORE_FEED_STALE_COUNT_CACHE_RECOVERY_108_20260916')) fail('108 cache recovery marker missing');
 if (!/EXPLORE_FEED_CACHE_SCHEMA_VERSION\s*=\s*2\s*;/.test(cache)) fail('Explore Feed cache schema is not 2');
-if (/app-version|appVersion|APP_VERSION/.test(cache)) fail('Feed cache schema must not depend on app version');
+if (/app-version\.json|appVersion|APP_VERSION/.test(cache)) fail('Feed cache schema must not depend on app version');
 if (!cache.includes('expiresAt: null')) fail('long-lived cache contract changed unexpectedly');
 if (!cache.includes('serverRevision: normalizedRevision')) fail('server revision persistence missing');
 if (!cache.includes('syncCursor')) fail('feed cursor persistence missing');

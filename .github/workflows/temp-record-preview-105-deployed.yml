@@ -19,40 +19,7 @@ jobs:
           ref: preview
           fetch-depth: 0
       - name: Update current release state
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('DOCS/CURRENT_RELEASE_STATE.md')
-          s = p.read_text(encoding='utf-8')
-          marker = '## 0B. PREVIEW 105 — 1분 이벤트 좋아요 PREVIEW 배포 완료\n'
-          if marker not in s:
-              intro = '> 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다. 문서와 실제 상태가 다르면 실제 상태 우선.\n\n'
-              block = '''## 0B. PREVIEW 105 — 1분 이벤트 좋아요 PREVIEW 배포 완료
-- 사용자 요청에 따라 PREVIEW 검증용 공개 좋아요 묶음 시간을 5분에서 **1분**으로 단축하고 실제 배포까지 완료.
-- **고정 1분 Cron은 없음.** 실제 non-empty like batch가 들어올 때만 shared Durable Object alarm 1개를 1분 뒤 예약한다. 좋아요가 없으면 주기 aggregate 실행 0.
-- 105 제품 commit: `31d643104c965877a11e71f174a5318d0d4d41db`.
-- Worker release source lock: `8a26b5018dccfb3171d6cb4270a490309ccee704`.
-- PREVIEW Worker Release Run `35055367492` 최종 재실행 PASS.
-- 실제 PREVIEW Explore Worker: `961084b2-28e0-4d04-8577-56d8944f4916`.
-- Worker 배포 전 live queue: `pending035=0`, `pending069=0`; warm `/v1/feed-revision` D1 R0/W0 + `HEAD-ONLY-036` PASS.
-- Feed smoke / 공개프로필 smoke / like batch route 존재 / fixed cron 0 / TEST·PRODUCTION Worker 비변경 모두 PASS.
-- PREVIEW App Release Run `35055877861` PASS. 실제 `https://preview.soridraw.com` 앱 버전 **105**, exact build PASS.
-- App TypeScript / Build / Firebase PREVIEW Hosting PASS. TEST·PRODUCTION Hosting 비변경 PASS.
-- 배포 중 기존 069 queue 1건이 남아 있을 때 transition guard가 정상적으로 배포를 중단했다. 데이터 삭제/강제처리 없이 기존 스케줄러가 자연 배출할 때까지 기다렸고, read-only 진단 Run `35055702601`에서 `pending069=0`, `rows_written=0` 확인 후 배포했다.
-- 임시 read-only 진단 Workflow/trigger는 배포 후 삭제 완료.
-- 변경 없음: Firebase Functions/Rules, RTDB Rules, D1 schema/migration/backfill, Media Worker, UI/CSS, 사용자 원본 데이터.
-- TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` 비변경. PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` 비변경.
-- **현재 상태: 105 PREVIEW 배포 완료 / Master·Admin 교차계정 좋아요·해제 실사용 검증 전 / TEST 승격 금지.**
-- 다음 실사용 기준: Master 좋아요 후 약 `1분~1분 10초` 뒤 Admin이 Explore 재진입/포커스/상호작용하면 공개 총 좋아요 숫자가 수렴해야 한다. 개인 빨간 heart는 계정별로 달라도 정상.
-- 아래 0A/0/102/103의 당시 “미배포” 문구는 과거 기록이며 이 0B 항목이 최신 실제 상태다.
-
-'''
-              if intro not in s:
-                  raise SystemExit('CURRENT_RELEASE_STATE intro anchor missing')
-              s = s.replace(intro, intro + block, 1)
-          p.write_text(s, encoding='utf-8')
-          PY
+        run: python3 .deploy/record-preview-105-deployed.py
       - name: Commit release state
         shell: bash
         run: |

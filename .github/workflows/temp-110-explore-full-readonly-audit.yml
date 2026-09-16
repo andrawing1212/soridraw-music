@@ -1,0 +1,173 @@
+name: TEMP 110 Explore Full Readonly Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.audit/explore-110-full-readonly.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      EXPECTED_WORKER_VERSION: d8eae38a-09a9-4f37-9500-57f217ee1d8c
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: TypeScript Build and current contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-110-explore-liked-public-count.mjs
+          node scripts/verify-109-mobile-feed-refresh-zero.mjs
+          node scripts/verify-108-explore-feed-cache-recovery.mjs
+          node scripts/verify-107-explore-direct-count-zero-read.mjs
+          node scripts/verify-105-explore-like-1min.mjs
+          node scripts/verify-103-explore-like-event-batch.mjs
+          node scripts/verify-102-explore-public-like-parity.mjs
+          echo 'CURRENT_CONTRACTS=PASS'
+
+      - name: Static Explore leak audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test "$expected" = "$actual"
+          node <<'NODE'
+          const fs = require('fs');
+          const page = fs.readFileSync('src/pages/ExplorePage.tsx','utf8');
+          const feedCache = fs.readFileSync('src/services/exploreSessionCache.ts','utf8');
+          const profile = fs.readFileSync('src/services/exploreProfileFirstViewService.ts','utf8');
+          const revision = fs.readFileSync('src/services/exploreRevisionRequestCache.ts','utf8');
+          const social = fs.readFileSync('src/services/exploreSocialSnapshotService.ts','utf8');
+          const liked = fs.readFileSync('src/services/exploreLikedTracksService.ts','utf8');
+          const like = fs.readFileSync('src/services/exploreLikeService.ts','utf8');
+          const wrangler = fs.readFileSync('cloudflare/explore-worker/canonical/wrangler.preview.jsonc','utf8');
+          const entry = fs.readFileSync('cloudflare/explore-worker/canonical/preview-entry.js','utf8');
+          const fail = (m) => { throw new Error(m); };
+          if (!page.includes("const apiSort = sort === 'popular' ? 'popular' : 'latest';")) fail('recommended/latest shared backend mapping missing');
+          if (/setInterval\s*\(/.test(page)) fail('ExplorePage has periodic polling interval');
+          if (!page.includes("window.addEventListener('pointerdown', requestActivityRevisionCheck")) fail('activity-driven revision guard missing');
+          if (!page.includes('EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 30_000')) fail('30s activity throttle missing');
+          if (!revision.includes('const REVISION_CACHE_TTL_MS = 1 * 60 * 1000')) fail('1m revision client cache missing');
+          if (!feedCache.includes('expiresAt: null')) fail('feed persistent no-expiry cache missing');
+          if (!profile.includes("'LOCAL HIT · 변경 없음 · 서버 D1 읽기 0'")) fail('profile warm local hit missing');
+          if (!profile.includes('if (cached) {') || !profile.includes('return cached;')) fail('profile warm short-circuit missing');
+          if (!social.includes("'LOCAL HIT · 개인 Social Snapshot'")) fail('social snapshot warm local hit missing');
+          if (!liked.includes("'LOCAL HIT · 좋아요 곡 전체 캐시'")) fail('liked-track warm local hit missing');
+          if (!like.includes('EXPLORE_LIKE_EVENT_WINDOW_MS_105 = 1 * 60_000')) fail('event-driven like window missing');
+          if (like.includes('setInterval(')) fail('like service has periodic interval');
+          if (/"triggers"\s*:/.test(wrangler)) fail('fixed Worker cron trigger present');
+          if (!entry.includes("url.pathname === '/v1/feed-revision'")) fail('R2 HEAD revision route missing');
+          if (!entry.includes("url.searchParams.get(EXPLORE_FEED_R2_SNAPSHOT_QUERY_108)")) fail('R2-only first-page route missing');
+          for (const [name, source] of Object.entries({page,feedCache,profile,revision,social,liked,like})) {
+            if (/firebase\/firestore/.test(source)) fail(`${name} normal Explore path imports Firestore`);
+          }
+          console.log('STATIC_RECOMMENDED_LATEST_SHARED_SOURCE=PASS');
+          console.log('STATIC_NO_PERIODIC_POLLING=PASS');
+          console.log('STATIC_PROFILE_WARM_LOCAL=PASS');
+          console.log('STATIC_FEED_WARM_LOCAL=PASS');
+          console.log('STATIC_SOCIAL_LIKED_WARM_LOCAL=PASS');
+          console.log('STATIC_FIXED_CRON=0');
+          console.log('STATIC_FIRESTORE_EXPLORE_PATH=0');
+          NODE
+
+      - name: Live PREVIEW feed profile and schedule audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          hval() { awk -v key="$2" 'BEGIN{IGNORECASE=1} $1==key":" {gsub("\r",""); v=$2} END{print v}' "$1"; }
+          revision_check() {
+            sort="$1"
+            for n in 1 2; do
+              code="$(curl -sS -D "$RUNNER_TEMP/rev-${sort}-${n}.head" -o "$RUNNER_TEMP/rev-${sort}-${n}.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed-revision?sort=${sort}")"
+              test "$code" = 200
+              r="$(hval "$RUNNER_TEMP/rev-${sort}-${n}.head" x-soridraw-d1-read)"
+              w="$(hval "$RUNNER_TEMP/rev-${sort}-${n}.head" x-soridraw-d1-write)"
+              mode="$(hval "$RUNNER_TEMP/rev-${sort}-${n}.head" x-soridraw-revision-mode)"
+              r2b="$(hval "$RUNNER_TEMP/rev-${sort}-${n}.head" x-soridraw-r2-b)"
+              echo "REVISION_${sort}_${n}=HTTP${code} D1R${r:-missing} D1W${w:-missing} R2B${r2b:-missing} MODE=${mode:-missing}"
+              test "${r:-x}" = 0
+              test "${w:-x}" = 0
+              test "${mode:-x}" = HEAD-ONLY-036
+            done
+          }
+          revision_check latest
+          revision_check popular
+
+          latest_revision="$(jq -r '.data.revision // empty' "$RUNNER_TEMP/rev-latest-2.json")"
+          popular_revision="$(jq -r '.data.revision // empty' "$RUNNER_TEMP/rev-popular-2.json")"
+          test -n "$latest_revision"
+          test -n "$popular_revision"
+
+          snapshot_check() {
+            sort="$1"; revision="$2"
+            for n in 1 2; do
+              code="$(curl -sS -G -D "$RUNNER_TEMP/snap-${sort}-${n}.head" -o "$RUNNER_TEMP/snap-${sort}-${n}.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" \
+                --data-urlencode "sort=${sort}" --data-urlencode 'limit=40' --data-urlencode '__soridraw_r2_only=108' --data-urlencode "__soridraw_r2_revision=${revision}" \
+                "${PREVIEW_BASE}/v1/feed")"
+              test "$code" = 200
+              r="$(hval "$RUNNER_TEMP/snap-${sort}-${n}.head" x-soridraw-d1-read)"
+              w="$(hval "$RUNNER_TEMP/snap-${sort}-${n}.head" x-soridraw-d1-write)"
+              r2b="$(hval "$RUNNER_TEMP/snap-${sort}-${n}.head" x-soridraw-r2-b)"
+              source="$(hval "$RUNNER_TEMP/snap-${sort}-${n}.head" x-soridraw-feed-snapshot)"
+              count="$(jq '.data.items | length' "$RUNNER_TEMP/snap-${sort}-${n}.json")"
+              echo "SNAPSHOT_${sort}_${n}=HTTP${code} ITEMS${count} D1R${r:-missing} D1W${w:-missing} R2B${r2b:-missing} SOURCE=${source:-missing}"
+              test "${r:-x}" = 0
+              test "${w:-x}" = 0
+              test "$count" -le 40
+            done
+          }
+          snapshot_check latest "$latest_revision"
+          snapshot_check popular "$popular_revision"
+
+          owner="$(jq -r '.data.items[0].ownerUid // .data.items[0].owner_uid // empty' "$RUNNER_TEMP/snap-latest-2.json")"
+          test -n "$owner"
+          for n in 1 2; do
+            code="$(curl -sS -D "$RUNNER_TEMP/profile-${n}.head" -o "$RUNNER_TEMP/profile-${n}.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50")"
+            test "$code" = 200
+            r="$(hval "$RUNNER_TEMP/profile-${n}.head" x-soridraw-d1-read)"
+            w="$(hval "$RUNNER_TEMP/profile-${n}.head" x-soridraw-d1-write)"
+            r2a="$(hval "$RUNNER_TEMP/profile-${n}.head" x-soridraw-r2-a)"
+            r2b="$(hval "$RUNNER_TEMP/profile-${n}.head" x-soridraw-r2-b)"
+            echo "PROFILE_${n}=HTTP${code} D1R${r:-missing} D1W${w:-missing} R2A${r2a:-missing} R2B${r2b:-missing}"
+            test "${w:-x}" = 0
+            test -n "${r:-}"
+            test "$r" -le 20
+          done
+
+          deployment="$(curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/deployments")"
+          active="$(printf '%s' "$deployment" | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id')"
+          schedules="$(curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json' "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules")"
+          cron_count="$(printf '%s' "$schedules" | jq -r '[.result.schedules[]?.cron] | length')"
+          echo "ACTIVE_PREVIEW_WORKER=$active"
+          echo "FIXED_CRON_COUNT=$cron_count"
+          test "$active" = "$EXPECTED_WORKER_VERSION"
+          test "$cron_count" = 0
+          echo 'LIVE_FEED_LATEST_R0W0=PASS'
+          echo 'LIVE_FEED_POPULAR_R0W0=PASS'
+          echo 'LIVE_PROFILE_GET_W0_BOUNDED=PASS'
+          echo 'LIVE_FIXED_CRON_0=PASS'

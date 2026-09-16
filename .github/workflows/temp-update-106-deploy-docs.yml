@@ -1,0 +1,84 @@
+name: Update 106 PREVIEW Deploy Docs
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/temp-update-106-deploy-docs.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Update release state docs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          current = Path('DOCS/CURRENT_RELEASE_STATE.md')
+          text = current.read_text(encoding='utf-8')
+          marker = '## 0D. PREVIEW 106 — 공개 좋아요 숫자/개인 하트 분리 배포 완료'
+          section = '''## 0D. PREVIEW 106 — 공개 좋아요 숫자/개인 하트 분리 배포 완료
+          - 사용자 승인으로 106을 **Firebase PREVIEW Hosting에 배포 완료**.
+          - 106 최종 제품 commit: `a0946b0e296d5de5811567786cede9d75e911f90`.
+          - PREVIEW 배포 source/trigger commit: `caf6f458096f876ae93bfb07c60f9445d6a14c76`.
+          - PREVIEW App Release Run `35059625879` — **SUCCESS**.
+          - TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS.
+          - 실제 `https://preview.soridraw.com`의 `app-version.json` = **106**, exact build hash PASS.
+          - Explore Worker는 재배포하지 않음. 기존 105 event-driven 1분 Worker `961084b2-28e0-4d04-8577-56d8944f4916` 유지.
+          - Firebase Functions/Rules, RTDB Rules, D1 schema/migration/backfill, Media Worker, UI/CSS, 사용자 원본 데이터 변경 없음.
+          - TEST `main` / PRODUCTION branch 및 실제 TEST/PRODUCTION Hosting 결과 비변경 PASS.
+          - **현재 상태: 106 PREVIEW 배포 완료 / Master·Admin 교차계정 실사용 검증 전 / TEST 승격 금지.**
+          - 실사용 기준: 개인 heart는 즉시 바뀌고 공개 숫자는 공식 1분 aggregate 전까지 이전 공용 숫자를 유지할 수 있다. 약 `1분~1분 10초` 뒤 재진입/포커스/상호작용 시 Master/Admin의 공개 숫자가 반드시 동일해야 하며, 좋아요 해제도 같은 기준으로 수렴해야 한다.
+          - 고정 1분 Cron은 없음. 실제 좋아요 batch가 있을 때만 alarm 1회가 예약되며 유휴 aggregate 반복 실행 0 목표 유지.
+
+          '''
+          if marker not in text:
+              anchor = '## 0C. PREVIEW 106 — 공개 좋아요 숫자와 개인 하트 완전 분리 / 코드 완료·미배포'
+              text = text.replace(anchor, section + anchor, 1)
+              current.write_text(text, encoding='utf-8')
+
+          nxt = Path('DOCS/NEXT_CODEX_TASK.md')
+          text = nxt.read_text(encoding='utf-8')
+          old = '상태: **106 공개 좋아요 숫자/개인 하트 분리 코드 완료 / 자동검증 PASS / 미배포 / TEST 승격 금지**'
+          new = '상태: **106 PREVIEW 앱 배포 완료 / 자동·배포 검증 PASS / 교차계정 실사용 검증 전 / TEST 승격 금지**'
+          text = text.replace(old, new, 1)
+          anchor = '## 현재 기준\n'
+          deploy = '''## 106 PREVIEW 배포 결과
+          - PREVIEW App Release Run: `35059625879` — **SUCCESS**.
+          - 배포 source/trigger commit: `caf6f458096f876ae93bfb07c60f9445d6a14c76`.
+          - 실제 PREVIEW 앱: **106** — `https://preview.soridraw.com`.
+          - TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS / exact build PASS.
+          - TEST / PRODUCTION branch와 실제 Hosting 비변경 PASS.
+          - Explore Worker는 기존 `961084b2-28e0-4d04-8577-56d8944f4916` 유지. 재배포 없음.
+          - Functions/Rules/RTDB Rules/D1/Media Worker/사용자 데이터/UI-CSS 변경 없음.
+          - 다음 단계는 Master/Admin 교차계정 좋아요·해제 실사용 확인. PASS 전 TEST 승격 금지.
+
+          '''
+          if '## 106 PREVIEW 배포 결과' not in text:
+              text = text.replace(anchor, deploy + anchor, 1)
+          text = text.replace('- 실제 PREVIEW 앱: **105** — `https://preview.soridraw.com`', '- 실제 PREVIEW 앱: **106** — `https://preview.soridraw.com`', 1)
+          text = text.replace('사용자가 명확하게 PREVIEW 배포를 요청하면 **Firebase PREVIEW Hosting만 앱 106으로 배포**한다.', '106 PREVIEW Hosting 배포는 완료되었다. 다음은 **Master/Admin 교차계정 실사용 검증**이다.', 1)
+          nxt.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'soridraw-release-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add DOCS/CURRENT_RELEASE_STATE.md DOCS/NEXT_CODEX_TASK.md
+          git diff --cached --quiet && { echo 'No docs change'; exit 1; }
+          git commit -m 'docs: record PREVIEW 106 deployment'
+          git push origin HEAD:preview
+          echo "FINAL_DOC_COMMIT=$(git rev-parse HEAD)"

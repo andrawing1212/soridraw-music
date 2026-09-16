@@ -23716,7 +23716,7 @@ __name222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 __name2222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 __name22222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
 __name222222(handleFeedWithEdgeCache, "handleFeedWithEdgeCache");
-async function handlePublicProfileFirstViewWithEdgeCache(request, profileRef, env, cors) {
+async function handlePublicProfileFirstViewWithEdgeCacheCore057(request, profileRef, env, cors) {
   const existing = await readExploreProfileCanonicalR2Bundle020(env, profileRef);
   let uid = existing?.uid || existing?.body?.data?.profile?.uid;
   if (!uid) {
@@ -23739,6 +23739,129 @@ async function handlePublicProfileFirstViewWithEdgeCache(request, profileRef, en
   if (new URL(request.url).searchParams.get("knownRevision") === revision) return new Response(null, { status: 304, headers });
   return json(bundle.body, 200, headers);
 }
+
+// SORIDRAW_PUBLIC_PROFILE_NEGATIVE_CACHE_057_20260916
+const EXPLORE_PROFILE_NEGATIVE_TTL_SECONDS_057 = 60;
+const EXPLORE_PROFILE_COLD_RATE_PREFIX_057 = 'profile-cold:';
+
+function normalizeExploreProfileNegativeRef057(profileRef) {
+  return String(profileRef || '').trim().replace(/^@+/, '');
+}
+
+function getExploreProfileNegativeCacheKey057(request, profileRef) {
+  const requestUrl = new URL(request.url);
+  const ref = normalizeExploreProfileNegativeRef057(profileRef);
+  const origin = request.headers.get('Origin') || '';
+  const keyUrl = new URL('/__soridraw/profile-negative-v1/' + encodeURIComponent(ref), requestUrl.origin);
+  keyUrl.searchParams.set('__soridraw_edge_origin', origin || 'none');
+  return new Request(keyUrl.toString(), { method: 'GET' });
+}
+
+function withExploreProfileProtectionHeaders057(response, status, zeroUsage) {
+  const headers = new Headers(response.headers);
+  headers.set('X-SORIDRAW-Profile-Negative-Cache', status);
+  if (zeroUsage) {
+    headers.set('X-SORIDRAW-D1-Read', '0');
+    headers.set('X-SORIDRAW-D1-Write', '0');
+    headers.set('X-SORIDRAW-D1-Read-Queries', '0');
+    headers.set('X-SORIDRAW-D1-Write-Queries', '0');
+    headers.set('X-SORIDRAW-D1-Other-Queries', '0');
+    headers.set('X-SORIDRAW-R2-A', '0');
+    headers.set('X-SORIDRAW-R2-B', '0');
+  }
+  const expose = new Set(String(headers.get('Access-Control-Expose-Headers') || '').split(',').map((item) => item.trim()).filter(Boolean));
+  for (const name of [
+    'X-SORIDRAW-Profile-Negative-Cache',
+    'X-SORIDRAW-D1-Read',
+    'X-SORIDRAW-D1-Write',
+    'X-SORIDRAW-D1-Read-Queries',
+    'X-SORIDRAW-D1-Write-Queries',
+    'X-SORIDRAW-D1-Other-Queries',
+    'X-SORIDRAW-R2-A',
+    'X-SORIDRAW-R2-B',
+  ]) expose.add(name);
+  headers.set('Access-Control-Expose-Headers', Array.from(expose).join(', '));
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+function exploreProfileClientKey057(request) {
+  const cfIp = String(request.headers.get('CF-Connecting-IP') || '').trim();
+  if (cfIp) return cfIp.slice(0, 64);
+  const forwarded = String(request.headers.get('X-Forwarded-For') || '').split(',')[0].trim();
+  if (forwarded) return forwarded.slice(0, 64);
+  return 'unknown';
+}
+
+async function enforceExploreProfileColdRateLimit057(request, env, cors) {
+  const limiter = env?.LIKE_RATE_LIMITER;
+  if (!limiter || typeof limiter.limit !== 'function') {
+    console.warn('[SORIDRAW 057] LIKE_RATE_LIMITER unavailable; negative cache remains active but cold-ref rate bound is skipped.');
+    return null;
+  }
+  const clientKey = exploreProfileClientKey057(request);
+  const result = await limiter.limit({ key: EXPLORE_PROFILE_COLD_RATE_PREFIX_057 + clientKey });
+  if (result?.success) return null;
+  const blocked = apiError('RATE_LIMITED', '공개 프로필 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', 429, cors);
+  const headers = new Headers(blocked.headers);
+  headers.set('Retry-After', '60');
+  const response = new Response(blocked.body, { status: blocked.status, statusText: blocked.statusText, headers });
+  return withExploreProfileProtectionHeaders057(response, 'RATE_LIMIT', true);
+}
+
+async function isCacheableExploreProfileNotFound057(response) {
+  if (!response || response.status !== 404) return false;
+  try {
+    const payload = await response.clone().json();
+    const code = String(payload?.error?.code || payload?.code || '').trim();
+    return code === 'NOT_FOUND';
+  } catch {
+    return false;
+  }
+}
+
+async function cacheExploreProfileNotFound057(request, profileRef, response) {
+  const cache = caches.default;
+  const key = getExploreProfileNegativeCacheKey057(request, profileRef);
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'public, max-age=0, s-maxage=' + EXPLORE_PROFILE_NEGATIVE_TTL_SECONDS_057);
+  headers.set('X-SORIDRAW-Profile-Negative-Cache', 'STORED');
+  const stored = new Response(response.clone().body, { status: response.status, statusText: response.statusText, headers });
+  await cache.put(key, stored);
+}
+
+async function handlePublicProfileFirstViewWithEdgeCache(request, profileRef, env, cors) {
+  const cache = caches.default;
+  const negativeKey = getExploreProfileNegativeCacheKey057(request, profileRef);
+  const negative = await cache.match(negativeKey);
+  if (negative) return withExploreProfileProtectionHeaders057(negative, 'HIT', true);
+
+  // A normal warm valid profile already has the existing positive edge entry.
+  // Do not spend abuse-limit budget on that path; the core keeps all revision/304 behavior.
+  try {
+    const origin = request.headers.get('Origin') || '';
+    const positiveKey = getPublicProfileFirstViewEdgeCacheKey(request.url, profileRef, origin);
+    if (await cache.match(positiveKey)) return await handlePublicProfileFirstViewWithEdgeCacheCore057(request, profileRef, env, cors);
+  } catch (error) {
+    console.warn('[SORIDRAW 057] positive profile edge probe skipped:', String(error?.message || error || 'unknown'));
+  }
+
+  // Only cold/unresolved refs are rate bounded. The existing Cloudflare edge limiter
+  // is reused with an independent key prefix, so likes and profile reads never share a counter.
+  const blocked = await enforceExploreProfileColdRateLimit057(request, env, cors);
+  if (blocked) return blocked;
+
+  const response = await handlePublicProfileFirstViewWithEdgeCacheCore057(request, profileRef, env, cors);
+  if (await isCacheableExploreProfileNotFound057(response)) {
+    try {
+      await cacheExploreProfileNotFound057(request, profileRef, response);
+    } catch (error) {
+      console.warn('[SORIDRAW 057] negative profile cache write skipped:', String(error?.message || error || 'unknown'));
+    }
+    return withExploreProfileProtectionHeaders057(response, 'MISS', false);
+  }
+  return response;
+}
+
 __name(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
 __name2(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");
 __name22(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");

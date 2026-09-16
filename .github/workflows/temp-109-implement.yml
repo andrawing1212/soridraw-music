@@ -53,6 +53,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git restore --source=HEAD --staged --worktree dist
+          git clean -fd -- dist
           git status --short
           mapfile -t changed < <(git status --porcelain | sed -E 's/^.. //' | sort)
           printf '%s\n' "${changed[@]}" > "$RUNNER_TEMP/changed.txt"

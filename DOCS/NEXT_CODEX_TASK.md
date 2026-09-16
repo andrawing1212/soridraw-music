@@ -1,13 +1,23 @@
 # NEXT CODEX TASK
 
-상태: **106 공개 좋아요 숫자/개인 하트 분리 코드 완료 / 자동검증 PASS / 미배포 / TEST 승격 금지**
+상태: **106 PREVIEW 앱 배포 완료 / 자동·배포 검증 PASS / 교차계정 실사용 검증 전 / TEST 승격 금지**
+
+## 106 PREVIEW 배포 결과
+- PREVIEW App Release Run: `35059625879` — **SUCCESS**.
+- 배포 source/trigger commit: `caf6f458096f876ae93bfb07c60f9445d6a14c76`.
+- 실제 PREVIEW 앱: **106** — `https://preview.soridraw.com`.
+- TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS / exact build PASS.
+- TEST / PRODUCTION branch와 실제 Hosting 비변경 PASS.
+- Explore Worker는 기존 `961084b2-28e0-4d04-8577-56d8944f4916` 유지. 재배포 없음.
+- Functions/Rules/RTDB Rules/D1/Media Worker/사용자 데이터/UI-CSS 변경 없음.
+- 다음 단계는 Master/Admin 교차계정 좋아요·해제 실사용 확인. PASS 전 TEST 승격 금지.
 
 ## 현재 기준
 - branch: `preview`
 - 106 최종 제품 commit: `a0946b0e296d5de5811567786cede9d75e911f90`
 - 106 초기 separation commit: `31b91b02b0aa6692401b457e6286ffad250c7b03`
 - 106 최종 검증 Run: `35058485482` — PASS
-- 실제 PREVIEW 앱: **105** — `https://preview.soridraw.com`
+- 실제 PREVIEW 앱: **106** — `https://preview.soridraw.com`
 - 실제 PREVIEW Explore Worker: **105 1분 event scheduler** / `961084b2-28e0-4d04-8577-56d8944f4916`
 - TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — 비변경
 - PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 비변경
@@ -51,7 +61,7 @@ Run `35058485482` PASS:
 - Worker / D1 schema / user data / UI-CSS change 없음
 
 ## 다음 작업
-사용자가 명확하게 PREVIEW 배포를 요청하면 **Firebase PREVIEW Hosting만 앱 106으로 배포**한다.
+106 PREVIEW Hosting 배포는 완료되었다. 다음은 **Master/Admin 교차계정 실사용 검증**이다.
 - Explore Worker는 105의 1분 event scheduler를 그대로 사용하므로 불필요한 재배포 금지.
 - Functions/Rules/RTDB Rules/D1/Media Worker 배포 금지.
 - TEST/PRODUCTION 변경 금지.

@@ -4,6 +4,20 @@
 
 > 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다. 문서와 실제 상태가 다르면 실제 상태 우선.
 
+## 0D. PREVIEW 106 — 공개 좋아요 숫자/개인 하트 분리 배포 완료
+- 사용자 승인으로 106을 **Firebase PREVIEW Hosting에 배포 완료**.
+- 106 최종 제품 commit: `a0946b0e296d5de5811567786cede9d75e911f90`.
+- PREVIEW 배포 source/trigger commit: `caf6f458096f876ae93bfb07c60f9445d6a14c76`.
+- PREVIEW App Release Run `35059625879` — **SUCCESS**.
+- TypeScript PASS / Build PASS / Firebase PREVIEW Hosting PASS.
+- 실제 `https://preview.soridraw.com`의 `app-version.json` = **106**, exact build hash PASS.
+- Explore Worker는 재배포하지 않음. 기존 105 event-driven 1분 Worker `961084b2-28e0-4d04-8577-56d8944f4916` 유지.
+- Firebase Functions/Rules, RTDB Rules, D1 schema/migration/backfill, Media Worker, UI/CSS, 사용자 원본 데이터 변경 없음.
+- TEST `main` / PRODUCTION branch 및 실제 TEST/PRODUCTION Hosting 결과 비변경 PASS.
+- **현재 상태: 106 PREVIEW 배포 완료 / Master·Admin 교차계정 실사용 검증 전 / TEST 승격 금지.**
+- 실사용 기준: 개인 heart는 즉시 바뀌고 공개 숫자는 공식 1분 aggregate 전까지 이전 공용 숫자를 유지할 수 있다. 약 `1분~1분 10초` 뒤 재진입/포커스/상호작용 시 Master/Admin의 공개 숫자가 반드시 동일해야 하며, 좋아요 해제도 같은 기준으로 수렴해야 한다.
+- 고정 1분 Cron은 없음. 실제 좋아요 batch가 있을 때만 alarm 1회가 예약되며 유휴 aggregate 반복 실행 0 목표 유지.
+
 ## 0C. PREVIEW 106 — 공개 좋아요 숫자와 개인 하트 완전 분리 / 코드 완료·미배포
 - 105 PREVIEW 실사용 영상에서 같은 공개곡의 숫자가 Master/Admin 사이에서 달라지고, 숫자가 되돌아가거나 계정별로 서로 다른 값이 남는 현상을 확인해 **105 실사용 FAIL**로 판정.
 - 확정 원인: 공개 총 좋아요 숫자 위에 계정별 로컬 display state와 same-account RTDB replay 숫자가 덮여, 하나여야 할 공개 숫자가 계정/기기별 파생값을 가질 수 있었음.

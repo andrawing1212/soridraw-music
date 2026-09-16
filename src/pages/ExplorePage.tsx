@@ -378,6 +378,28 @@ export default function ExplorePage() {
     return `${EXPLORE_API_BASE}/v1/feed?sort=${apiSort}&limit=40`;
   }, [sort, submittedQuery]);
 
+  // SORIDRAW_EXPLORE_LIKED_PUBLIC_COUNT_LOCAL_SYNC_110_20260916
+  // Public counts belong to the shared Feed/Profile payload, not to the account-specific
+  // liked-card snapshot. Reuse already-cached public payloads to repair liked cards locally
+  // without a Firestore/D1 request, schema reset, polling loop, or optimistic count overlay.
+  const syncSharedPublicCountsToLocal110 = (sharedTracks: ExploreTrack[]) => {
+    if (!sharedTracks.length) return;
+    const countByTrackId = new Map(sharedTracks.map((track) => [track.id, track.likeCount]));
+    const applyPublicCounts110 = (previous: ExploreTrack[]) => previous.map((track) => {
+      const nextCount = countByTrackId.get(track.id);
+      return nextCount === undefined || nextCount === track.likeCount ? track : { ...track, likeCount: nextCount };
+    });
+
+    setProfileTracks(applyPublicCounts110);
+    setProfileLikedTracks(applyPublicCounts110);
+
+    const activeUid = auth.currentUser?.uid || user?.uid || '';
+    sharedTracks.forEach((track) => {
+      if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
+      if (activeUid) patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);
+    });
+  };
+
   useEffect(() => {
     const cachedRows = readExploreFeedSessionCache(requestUrl);
     const feedRequest = isExploreFeedRequest(requestUrl);
@@ -433,21 +455,10 @@ export default function ExplorePage() {
         );
       }
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
-      const activeUid = auth.currentUser?.uid || '';
       setFeedNextCursor(nextCursor);
       setLoadMoreError('');
       setTracks(normalizedTracks);
-      if (feedRequest) {
-        const countByTrackId = new Map(normalizedTracks.map((track) => [track.id, track.likeCount]));
-        setProfileTracks((previous) => previous.map((track) => {
-          const nextCount = countByTrackId.get(track.id);
-          return nextCount === undefined || nextCount === track.likeCount ? track : { ...track, likeCount: nextCount };
-        }));
-        normalizedTracks.forEach((track) => {
-          if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
-          if (activeUid) patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);
-        });
-      }
+      if (feedRequest) syncSharedPublicCountsToLocal110(normalizedTracks);
       if (feedRequest && forceLikeCountRefresh071) {
         forceLikeCountRefreshRef071.current = false;
         const refreshUid = auth.currentUser?.uid || '';
@@ -461,6 +472,7 @@ export default function ExplorePage() {
       setFeedNextCursor(feedRequest ? readExploreFeedSessionCacheCursor(requestUrl) : null);
       setLoadMoreError('');
       const cachedTracks = cachedRows.map(normalizeTrack).filter((track) => track.id);
+      if (feedRequest) syncSharedPublicCountsToLocal110(cachedTracks);
       setTracks(cachedTracks);
       setLoading(false);
 
@@ -611,6 +623,7 @@ export default function ExplorePage() {
       if (cancelled) return;
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       normalizedTracks.sort(comparePublicProfileTracks);
+      syncSharedPublicCountsToLocal110(normalizedTracks);
       setProfile(nextProfile);
       setProfileTracks(normalizedTracks);
     };
@@ -803,13 +816,7 @@ export default function ExplorePage() {
       const payload = await response.json() as ExploreApiResponse;
       const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
       const normalized = rows.map(normalizeTrack).filter((track) => track.id);
-      const activeUid = auth.currentUser?.uid || '';
-      if (activeUid) {
-        normalized.forEach((track) => {
-          if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
-          patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);
-        });
-      }
+      syncSharedPublicCountsToLocal110(normalized);
       setTracks((previous) => {
         const seen = new Set(previous.map((track) => track.id));
         return [...previous, ...normalized.filter((track) => !seen.has(track.id))];

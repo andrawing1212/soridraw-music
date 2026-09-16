@@ -15,7 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # Dedicated read-only Cloudflare token. Do not reuse deployment credentials.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_READONLY_TOKEN }}
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
@@ -33,46 +34,85 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN unavailable'; exit 2; }
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_READONLY_TOKEN unavailable'; exit 2; }
           npm install --no-audit --no-fund
           mkdir -p "$RUNNER_TEMP/soridraw-worker-patches"
           shopt -s nullglob
           for patch in patches/*.mjs; do mv "$patch" "$RUNNER_TEMP/soridraw-worker-patches/"; done
           npm run cf:prepare
-          echo '[Stage2A] profile/feed/social router anchors'
-          grep -nE "v1/feed|v1/profiles|follow-state|v1/me/likes|handleFeed|handleProfile|handleFollow|handleLike|public_profiles|tracks" .remote-worker/worker.js | head -n 520 || true
-          echo '[Stage2A] feed/profile implementation ranges'
-          sed -n '740,1060p' .remote-worker/worker.js
-          sed -n '1240,1425p' .remote-worker/worker.js
-          echo '[Stage2A] follow/like implementation ranges'
-          sed -n '2320,2420p' .remote-worker/worker.js
-          sed -n '4125,4205p' .remote-worker/worker.js
-          echo '[Stage2A] router range'
-          sed -n '4440,4650p' .remote-worker/worker.js
           echo 'READ_ONLY_WORKER_SOURCE=true'
           echo 'NO_WORKER_DEPLOY=true'
 
-      - name: Inspect D1 schema read-only
+      - name: Inspect D1 schema and canonical counts read-only
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
-          set -u
+          set -euo pipefail
           schema_ok=0
           for target in DB soridraw-explore-db; do
             echo "[Stage2A] trying D1 target=$target"
-            if npx wrangler d1 execute "$target" --remote --config .remote-worker/wrangler.jsonc --command "SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','index') ORDER BY type, name;" --json | tee "$RUNNER_TEMP/d1-schema.json"; then
+            if npx wrangler d1 execute "$target" --remote --config .remote-worker/wrangler.jsonc --command "SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','index','trigger') ORDER BY type, name;" --json | tee "$RUNNER_TEMP/d1-schema.json"; then
               schema_ok=1
               break
             fi
           done
           if [ "$schema_ok" != '1' ]; then
             echo 'D1_SCHEMA_QUERY_UNAVAILABLE=true'
-          else
-            echo '[Stage2A] bounded structural counts'
-            npx wrangler d1 execute DB --remote --config .remote-worker/wrangler.jsonc --command "SELECT 'public_profiles' AS dataset, COUNT(*) AS count FROM public_profiles UNION ALL SELECT 'tracks', COUNT(*) FROM tracks UNION ALL SELECT 'follows', COUNT(*) FROM follows UNION ALL SELECT 'likes', COUNT(*) FROM likes;" --json || true
+            echo 'D1_READ_ONLY=true'
+            echo 'NO_D1_WRITE=true'
+            exit 5
           fi
+
+          npx wrangler d1 execute DB --remote --config .remote-worker/wrangler.jsonc --command "SELECT 'public_profiles' AS dataset, COUNT(*) AS count FROM public_profiles UNION ALL SELECT 'tracks', COUNT(*) FROM tracks UNION ALL SELECT 'follows', COUNT(*) FROM follows UNION ALL SELECT 'likes', COUNT(*) FROM likes;" --json | tee "$RUNNER_TEMP/canonical-counts.json"
+          echo 'D1_SCHEMA_QUERY_UNAVAILABLE=false'
           echo 'D1_READ_ONLY=true'
           echo 'NO_D1_WRITE=true'
+
+      - name: Inspect derived 032 state read-only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');
+          const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/d1-schema.json','utf8'));
+          const rows=x?.[0]?.results||[];
+          const names=new Set(rows.map(r=>String(r.name||'')));
+          const required=['explore_derived_state','explore_derived_changes','explore_derived_tracks','explore_derived_profiles'];
+          const triggers=rows.filter(r=>r.type==='trigger'&&String(r.name||'').startsWith('explore032_')).map(r=>r.name).sort();
+          const missing=required.filter(n=>!names.has(n));
+          console.log('DERIVED_TABLES_PRESENT='+String(missing.length===0));
+          console.log('DERIVED_TABLES_MISSING='+missing.join(','));
+          console.log('EXPLORE032_TRIGGER_COUNT='+triggers.length);
+          console.log('EXPLORE032_TRIGGERS='+triggers.join(','));
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/derived-tables-present.txt',missing.length===0?'1':'0');
+          NODE
+          if [ "$(cat "$RUNNER_TEMP/derived-tables-present.txt")" = '1' ]; then
+            npx wrangler d1 execute DB --remote --config .remote-worker/wrangler.jsonc --command "SELECT seeded,seq,(SELECT COUNT(*) FROM explore_derived_changes) AS derived_changes,(SELECT COUNT(*) FROM explore_derived_tracks) AS derived_tracks,(SELECT COUNT(*) FROM explore_derived_profiles) AS derived_profiles FROM explore_derived_state WHERE id=1;" --json | tee "$RUNNER_TEMP/derived-state.json"
+          else
+            echo 'DERIVED_STATE_QUERY_SKIPPED=TABLES_NOT_PRESENT'
+          fi
+          echo 'DERIVED_STATE_READ_ONLY_AUDIT=PASS'
+
+      - name: Probe existing release token D1 read capability without writes
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        env:
+          RELEASE_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -u
+          if [ -z "${RELEASE_TOKEN:-}" ]; then
+            echo 'RELEASE_TOKEN_D1_READ_EXIT=missing'
+            exit 0
+          fi
+          set +e
+          CLOUDFLARE_API_TOKEN="$RELEASE_TOKEN" npx wrangler d1 execute DB --remote --config .remote-worker/wrangler.jsonc --command "SELECT 1 AS ok;" --json > "$RUNNER_TEMP/release-token-d1-probe.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/release-token-d1-probe.log"
+          echo "RELEASE_TOKEN_D1_READ_EXIT=$status"
+          echo 'RELEASE_TOKEN_D1_PROBE_WRITE=false'
+          exit 0
 
       - name: Upload live source and schema artifacts
         if: always()
@@ -82,5 +122,8 @@ jobs:
           path: |
             cloudflare/explore-worker/.remote-worker/worker.js
             ${{ runner.temp }}/d1-schema.json
+            ${{ runner.temp }}/canonical-counts.json
+            ${{ runner.temp }}/derived-state.json
+            ${{ runner.temp }}/release-token-d1-probe.log
           if-no-files-found: warn
           retention-days: 1

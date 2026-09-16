@@ -91,14 +91,30 @@ service cloud.firestore {
         return !('syncVersions' in request.resource.data) ||
           (request.resource.data.syncVersions is map &&
             request.resource.data.syncVersions.keys().hasOnly([
-              'googleGeminiApiKey', 'sectionCustom', 'recentSongs', 'musicNote', 'library', 'musicNoteStructure'
+              'googleGeminiApiKey', 'sectionCustom', 'recentSongs', 'musicNote', 'library', 'musicNoteStructure', 'playlists'
             ]) &&
             (!('googleGeminiApiKey' in request.resource.data.syncVersions) || request.resource.data.syncVersions.googleGeminiApiKey is int) &&
             (!('sectionCustom' in request.resource.data.syncVersions) || request.resource.data.syncVersions.sectionCustom is int) &&
             (!('recentSongs' in request.resource.data.syncVersions) || request.resource.data.syncVersions.recentSongs is int) &&
             (!('musicNote' in request.resource.data.syncVersions) || request.resource.data.syncVersions.musicNote is int) &&
             (!('library' in request.resource.data.syncVersions) || request.resource.data.syncVersions.library is int) &&
+            (!('playlists' in request.resource.data.syncVersions) || request.resource.data.syncVersions.playlists is int) &&
             (!('musicNoteStructure' in request.resource.data.syncVersions) || request.resource.data.syncVersions.musicNoteStructure is int));
+      }
+
+      // SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
+      // Same-account cross-device UI signal only. Canonical likes remain in the
+      // Explore backend; this field carries at most one confirmed batch (50 rows).
+      function hasValidExploreLikeSyncSignal() {
+        return !('exploreLikeSyncSignal' in request.resource.data) ||
+          (request.resource.data.exploreLikeSyncSignal is map &&
+            request.resource.data.exploreLikeSyncSignal.keys().hasOnly(['version', 'previousVersion', 'results']) &&
+            request.resource.data.exploreLikeSyncSignal.version is int &&
+            request.resource.data.exploreLikeSyncSignal.version > 0 &&
+            request.resource.data.exploreLikeSyncSignal.previousVersion is int &&
+            request.resource.data.exploreLikeSyncSignal.previousVersion >= 0 &&
+            request.resource.data.exploreLikeSyncSignal.results is list &&
+            request.resource.data.exploreLikeSyncSignal.results.size() <= 50);
       }
 
       function isValidSelfUpdate() {
@@ -107,11 +123,12 @@ service cloud.firestore {
           'lastLoginAt', 'lastSeenAt', 'lastLogoutAt', 'isOnline',
           'nickname', 'updatedAt', 'lyricClicheGuard', 'generationPreferences', 'syncVersions',
           'favoriteCount', 'songGeneratedCount',
-          'favoriteSyncSignal', 'favoriteSyncSignalUpdatedAt'
+          'favoriteSyncSignal', 'favoriteSyncSignalUpdatedAt', 'exploreLikeSyncSignal'
         ]) &&
         (!('uid' in request.resource.data) || request.resource.data.uid == uid) &&
         hasValidGenerationPreferences() &&
-        hasValidSyncVersions();
+        hasValidSyncVersions() &&
+        hasValidExploreLikeSyncSignal();
       }
 
       function changesPrivilegeFields() {
@@ -135,7 +152,9 @@ service cloud.firestore {
       allow get: if isOwner(uid) || hasAdminPermission('userManagement');
       allow list: if hasAdminPermission('userManagement');
       allow create: if isOwner(uid) && isValidSelfCreate();
-      allow update: if isMaster() || validUserManagerUpdate() || (isOwner(uid) && isValidSelfUpdate());
+      // Owner-safe fields are checked first so ordinary self updates do not pay
+      // an admin-dependent users/{uid} rules lookup. Admin semantics stay intact.
+      allow update: if (isOwner(uid) && isValidSelfUpdate()) || isMaster() || validUserManagerUpdate();
 
       // SORIDRAW_BACKEND_V2_STEP2B_ADDITIVE_RULES
       // Additive V2 private-data rules only. Existing V1 rules remain unchanged.

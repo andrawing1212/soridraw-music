@@ -1,0 +1,6 @@
+{
+  "baseVersion": "27cc6139-a59c-41d1-9674-4c710d687050",
+  "baseSha256": "52c4cf90573ba1812c403e8623f3ad2e8a2b4d3167409570358d28110155c832",
+  "generatedFrom": "exact-active-preview-034",
+  "patch": "035-explore-like-deferred-aggregate-runtime.mjs"
+}

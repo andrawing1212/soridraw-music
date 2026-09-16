@@ -4,6 +4,7 @@ import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 // SORIDRAW_PROFILE_REVISION_DIAGNOSTICS_1000
 // SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048
 // SORIDRAW_EXPLORE_FEED_COMPLETENESS_049
+// SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Compass, ExternalLink, Heart, Loader2, Music2, Pencil, Pin, Search, UserCheck, UserPlus, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
@@ -11,13 +12,26 @@ import { useSearchParams } from 'react-router-dom';
 import { auth } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
-  patchExploreFeedSessionCacheRow,
   readExploreFeedSessionCache,
   readExploreFeedSessionCacheCursor,
   readExploreFeedSessionCacheRevision,
   writeExploreFeedSessionCache,
 } from '../services/exploreSessionCache';
-import { getExploreLikedTrackIds, setExploreTrackLike } from '../services/exploreLikeService';
+import {
+  EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT,
+  EXPLORE_LIKE_SYNC_ERROR_EVENT,
+  EXPLORE_LIKE_SYNC_EVENT,
+  flushPendingExploreLikesForPageExit,
+  getExploreLikedTrackIds,
+  reconcileExploreLikedTrackCollectionState,
+  setExploreTrackLike,
+} from '../services/exploreLikeService';
+import {
+  getExploreLikedTrackCollectionIds,
+  getExploreLikedTracks,
+  patchExploreLikedTrackCachedCount091,
+  rememberExploreLikedTrack,
+} from '../services/exploreLikedTracksService';
 import { getExplorePublicProfileFirstView, patchExplorePublicProfileFirstViewProfile, patchExplorePublicProfileFirstViewTrack, rememberExplorePublicProfileFirstViewProfile } from '../services/exploreProfileFirstViewService';
 import {
   getExploreFollowState,
@@ -66,6 +80,57 @@ type ExploreFeedRevisionResponse = {
 
 const EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 1000;
 const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 30_000;
+// SORIDRAW_EXPLORE_LIKE_EVENT_REFRESH_104_20260916
+// SORIDRAW_EXPLORE_LIKE_EVENT_REFRESH_105_20260916
+// SORIDRAW_EXPLORE_PUBLIC_COUNT_DIRECT_107_20260916
+// 105 PREVIEW test cadence aggregates one minute after the first server batch. The actor browser
+// performs one forced fresh Feed refresh just after that window; there is no
+// periodic polling and no wall-clock 10-minute boundary anymore.
+const EXPLORE_LIKE_AGGREGATE_WINDOW_MS_105 = 1 * 60_000;
+const EXPLORE_LIKE_REFRESH_GRACE_MS_105 = 10_000;
+// SORIDRAW_EXPLORE_LIKE_COUNT_REFRESH_RECOVERY_071_20260912
+// Keep one pending aggregate refresh across reloads/page changes and force one
+// server-confirmed Feed refresh after an actual like batch. No polling.
+const EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071 = 'soridraw:explore-like-count-refresh:071:';
+// SORIDRAW_EXPLORE_R2_SNAPSHOT_BOOTSTRAP_108_20260916
+// First-page Feed refreshes use the already-materialized R2 snapshot directly.
+// This keeps app-update/cache-recovery traffic off D1 while preserving local-first warm re-entry.
+const EXPLORE_FEED_R2_SNAPSHOT_QUERY_108 = '__soridraw_r2_only';
+const EXPLORE_FEED_R2_SNAPSHOT_REVISION_QUERY_108 = '__soridraw_r2_revision';
+const EXPLORE_FEED_R2_SNAPSHOT_VERSION_108 = '108';
+// SORIDRAW_EXPLORE_LIKE_FRESH_BOOTSTRAP_RECOVERY_073_20260912
+// SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
+// SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914
+// SORIDRAW_EXPLORE_LIKE_LIVE_DISPLAY_090_20260915
+// Forced like-count recovery must use the unique fresh Feed URL even when this
+// browser has no session Feed cache yet (for example immediately after app update).
+
+const exploreLikeRefreshStorageKey071 = (uid: string) => `${EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071}${uid}`;
+const readExploreLikeRefreshDeadline071 = (uid: string) => {
+  if (!uid || typeof window === 'undefined') return 0;
+  try {
+    const value = Number(window.localStorage.getItem(exploreLikeRefreshStorageKey071(uid)) || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+};
+const writeExploreLikeRefreshDeadline071 = (uid: string, deadline: number) => {
+  if (!uid || typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(exploreLikeRefreshStorageKey071(uid), String(Math.max(0, Math.floor(deadline))));
+  } catch {
+    // Storage failure must not break likes; the in-memory timer still works.
+  }
+};
+const clearExploreLikeRefreshDeadline071 = (uid: string) => {
+  if (!uid || typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(exploreLikeRefreshStorageKey071(uid));
+  } catch {
+    // Ignore storage cleanup failure.
+  }
+};
 
 const isExploreFeedRequest = (value: string) => {
   try {
@@ -81,12 +146,15 @@ const buildExploreFeedRevisionUrl = (feedUrl: string) => {
   return `${parsed.origin}/v1/feed-revision?sort=${sort}`;
 };
 
-const buildExploreVersionedFeedUrl = (feedUrl: string, revision: string) => {
+const buildExploreR2SnapshotFeedUrl108 = (feedUrl: string, revision: string | null = null) => {
   const parsed = new URL(feedUrl);
-  parsed.searchParams.set('__soridraw_revision', revision);
+  parsed.searchParams.delete('__soridraw_revision');
+  parsed.searchParams.delete('__soridraw_like_refresh');
+  parsed.searchParams.set(EXPLORE_FEED_R2_SNAPSHOT_QUERY_108, EXPLORE_FEED_R2_SNAPSHOT_VERSION_108);
+  if (revision) parsed.searchParams.set(EXPLORE_FEED_R2_SNAPSHOT_REVISION_QUERY_108, revision);
+  else parsed.searchParams.delete(EXPLORE_FEED_R2_SNAPSHOT_REVISION_QUERY_108);
   return parsed.toString();
 };
-
 
 const safeText = (value: unknown, fallback = '') => {
   const normalized = String(value ?? '').trim();
@@ -264,6 +332,10 @@ export default function ExplorePage() {
   const [socialNotice, setSocialNotice] = useState('');
   const [profile, setProfile] = useState<ExplorePublicProfile | null>(null);
   const [profileTracks, setProfileTracks] = useState<ExploreTrack[]>([]);
+  const [profileCollection, setProfileCollection] = useState<'public' | 'liked'>('public');
+  const [profileLikedTracks, setProfileLikedTracks] = useState<ExploreTrack[]>([]);
+  const [profileLikedLoading, setProfileLikedLoading] = useState(false);
+  const [profileLikedError, setProfileLikedError] = useState('');
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [followState, setFollowState] = useState<ExploreFollowState | null>(null);
@@ -271,15 +343,30 @@ export default function ExplorePage() {
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const likeHydrationKeyRef = useRef('');
+  const [likeAccountSyncSignal, setLikeAccountSyncSignal] = useState(0);
   const [feedRevisionSignal, setFeedRevisionSignal] = useState(0);
   const feedRevisionEventAtRef = useRef(0);
   const feedRevisionActivityAtRef = useRef(0);
+  const forceLikeCountRefreshRef071 = useRef(false);
+  const likeCountRepairKeyRef072 = useRef('');
+  const likeInteractionVersionRef090 = useRef(0);
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
     setUser(currentUser);
     likeHydrationKeyRef.current = '';
-    if (!currentUser) setLikedTrackIds({});
+    setLikedTrackIds({});
   }), []);
+
+  useEffect(() => {
+    const onAccountLikeInvalidation = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string }>).detail;
+      if (!user?.uid || String(detail?.uid || '') !== user.uid) return;
+      likeHydrationKeyRef.current = '';
+      setLikeAccountSyncSignal((value) => value + 1);
+    };
+    window.addEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onAccountLikeInvalidation as EventListener);
+    return () => window.removeEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onAccountLikeInvalidation as EventListener);
+  }, [user?.uid]);
 
   const requestUrl = useMemo(() => {
     const cleanQuery = submittedQuery.trim();
@@ -291,9 +378,32 @@ export default function ExplorePage() {
     return `${EXPLORE_API_BASE}/v1/feed?sort=${apiSort}&limit=40`;
   }, [sort, submittedQuery]);
 
+  // SORIDRAW_EXPLORE_LIKED_PUBLIC_COUNT_LOCAL_SYNC_110_20260916
+  // Public counts belong to the shared Feed/Profile payload, not to the account-specific
+  // liked-card snapshot. Reuse already-cached public payloads to repair liked cards locally
+  // without a Firestore/D1 request, schema reset, polling loop, or optimistic count overlay.
+  const syncSharedPublicCountsToLocal110 = (sharedTracks: ExploreTrack[]) => {
+    if (!sharedTracks.length) return;
+    const countByTrackId = new Map(sharedTracks.map((track) => [track.id, track.likeCount]));
+    const applyPublicCounts110 = (previous: ExploreTrack[]) => previous.map((track) => {
+      const nextCount = countByTrackId.get(track.id);
+      return nextCount === undefined || nextCount === track.likeCount ? track : { ...track, likeCount: nextCount };
+    });
+
+    setProfileTracks(applyPublicCounts110);
+    setProfileLikedTracks(applyPublicCounts110);
+
+    const activeUid = auth.currentUser?.uid || user?.uid || '';
+    sharedTracks.forEach((track) => {
+      if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
+      if (activeUid) patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);
+    });
+  };
+
   useEffect(() => {
     const cachedRows = readExploreFeedSessionCache(requestUrl);
     const feedRequest = isExploreFeedRequest(requestUrl);
+    const forceLikeCountRefresh071 = forceLikeCountRefreshRef071.current;
     const controller = new AbortController();
 
     const fetchPayload = async (url: string): Promise<ExploreApiResponse> => {
@@ -320,6 +430,19 @@ export default function ExplorePage() {
       return safeText(payload?.data?.revision) || null;
     };
 
+    const fetchFeedSnapshot108 = async (revision: string | null) => {
+      const response = await fetch(buildExploreR2SnapshotFeedUrl108(requestUrl, revision), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      recordCloudflareResponse(response);
+      if (!response.ok) throw new Error(`R2 snapshot HTTP ${response.status}`);
+      const payload = await response.json() as ExploreApiResponse;
+      const actualRevision = safeText(response.headers.get('X-SORIDRAW-Feed-Revision')) || revision;
+      return { payload, revision: actualRevision };
+    };
+
     const applyPayload = (payload: ExploreApiResponse, serverRevision: string | null) => {
       const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
       const nextCursor = feedRequest ? (safeText(payload?.data?.nextCursor) || null) : null;
@@ -331,30 +454,53 @@ export default function ExplorePage() {
           serverRevision,
         );
       }
+      const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       setFeedNextCursor(nextCursor);
       setLoadMoreError('');
-      setTracks(rows.map(normalizeTrack).filter((track) => track.id));
+      setTracks(normalizedTracks);
+      if (feedRequest) syncSharedPublicCountsToLocal110(normalizedTracks);
+      if (feedRequest && forceLikeCountRefresh071) {
+        forceLikeCountRefreshRef071.current = false;
+        const refreshUid = auth.currentUser?.uid || '';
+        const deadline = readExploreLikeRefreshDeadline071(refreshUid);
+        if (!deadline || Date.now() >= deadline) clearExploreLikeRefreshDeadline071(refreshUid);
+      }
     };
 
     if (cachedRows) {
       setError('');
       setFeedNextCursor(feedRequest ? readExploreFeedSessionCacheCursor(requestUrl) : null);
       setLoadMoreError('');
-      setTracks(cachedRows.map(normalizeTrack).filter((track) => track.id));
+      const cachedTracks = cachedRows.map(normalizeTrack).filter((track) => track.id);
+      if (feedRequest) syncSharedPublicCountsToLocal110(cachedTracks);
+      setTracks(cachedTracks);
       setLoading(false);
 
       if (feedRequest) {
         void (async () => {
           try {
+            if (forceLikeCountRefresh071) {
+              // 072: bypass only the HTTP Feed cache key for a confirmed recovery.
+              // The Worker still uses the normal derived R2/D1 path underneath.
+              const serverRevision = await fetchRevision().catch(() => null);
+              const snapshot = await fetchFeedSnapshot108(serverRevision);
+              if (controller.signal.aborted) return;
+              applyPayload(snapshot.payload, snapshot.revision);
+              return;
+            }
             const serverRevision = await fetchRevision();
             if (!serverRevision || controller.signal.aborted) return;
             const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
             if (cachedRevision === serverRevision) return;
-            const payload = await fetchPayload(buildExploreVersionedFeedUrl(requestUrl, serverRevision));
+            const snapshot = await fetchFeedSnapshot108(serverRevision);
             if (controller.signal.aborted) return;
-            applyPayload(payload, serverRevision);
+            applyPayload(snapshot.payload, snapshot.revision);
           } catch (reason) {
             if (!controller.signal.aborted) {
+              if (forceLikeCountRefresh071) {
+                forceLikeCountRefreshRef071.current = false;
+                likeCountRepairKeyRef072.current = '';
+              }
               console.warn('Explore feed revision revalidation failed; keeping cached feed:', reason);
             }
           }
@@ -370,17 +516,25 @@ export default function ExplorePage() {
     void (async () => {
       try {
         if (feedRequest) {
+          if (forceLikeCountRefresh071) {
+            // 073: 072 handled only the cachedRows branch. After an app update
+            // session cache can be empty, so the old bootstrap path reused the
+            // ordinary versioned Feed and could restore a stale public count.
+            const serverRevision = await fetchRevision().catch(() => null);
+            const snapshot = await fetchFeedSnapshot108(serverRevision);
+            if (controller.signal.aborted) return;
+            applyPayload(snapshot.payload, snapshot.revision);
+            return;
+          }
           const serverRevision = await fetchRevision().catch((reason) => {
             if (!controller.signal.aborted) {
               console.warn('Explore feed revision bootstrap failed; continuing with feed:', reason);
             }
             return null;
           });
-          const payload = await fetchPayload(
-            serverRevision ? buildExploreVersionedFeedUrl(requestUrl, serverRevision) : requestUrl,
-          );
+          const snapshot = await fetchFeedSnapshot108(serverRevision);
           if (controller.signal.aborted) return;
-          applyPayload(payload, serverRevision);
+          applyPayload(snapshot.payload, snapshot.revision);
           return;
         }
 
@@ -389,6 +543,10 @@ export default function ExplorePage() {
         applyPayload(payload, null);
       } catch (reason: unknown) {
         if (controller.signal.aborted) return;
+        if (forceLikeCountRefresh071) {
+          forceLikeCountRefreshRef071.current = false;
+          likeCountRepairKeyRef072.current = '';
+        }
         console.error('Explore feed load failed:', reason);
         setError('Explore 곡을 불러오지 못했어요.');
         setFeedNextCursor(null);
@@ -440,6 +598,10 @@ export default function ExplorePage() {
     if (!profileUid) {
       setProfile(null);
       setProfileTracks([]);
+      setProfileCollection('public');
+      setProfileLikedTracks([]);
+      setProfileLikedLoading(false);
+      setProfileLikedError('');
       setProfileError('');
       setFollowState(null);
       setProfileEditOpen(false);
@@ -447,6 +609,12 @@ export default function ExplorePage() {
     }
 
     let cancelled = false;
+    setProfileCollection('public');
+    // 088: entering this user's own profile from Explore must not discard the
+    // optimistic liked cards created moments earlier in the same page session.
+    setProfileLikedTracks((previous) => profileUid === user?.uid ? previous : []);
+    setProfileLikedLoading(false);
+    setProfileLikedError('');
     setProfileLoading(true);
     setProfileError('');
     setSocialNotice('');
@@ -455,6 +623,7 @@ export default function ExplorePage() {
       if (cancelled) return;
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       normalizedTracks.sort(comparePublicProfileTracks);
+      syncSharedPublicCountsToLocal110(normalizedTracks);
       setProfile(nextProfile);
       setProfileTracks(normalizedTracks);
     };
@@ -501,25 +670,81 @@ export default function ExplorePage() {
     return () => { cancelled = true; };
   }, [profileUid, user]);
 
-  const visibleTracks = profileUid ? profileTracks : tracks;
+  const profileIsOwn = Boolean(profile && user?.uid === profile.uid);
+
+  useEffect(() => {
+    if (!profileUid || !profile || !user || user.uid !== profile.uid || profileCollection !== 'liked') return;
+    let cancelled = false;
+    setProfileLikedLoading(true);
+    setProfileLikedError('');
+    getExploreLikedTracks(user)
+      .then((rows) => {
+        if (cancelled) return;
+        const normalizedRows = rows.map(normalizeTrack).filter((track) => track.id);
+        const canonicalLikedTrackIds = getExploreLikedTrackCollectionIds(user.uid)
+          ?? normalizedRows.map((track) => track.id);
+        const effectiveLikedTrackIds = reconcileExploreLikedTrackCollectionState(
+          user.uid,
+          canonicalLikedTrackIds,
+        );
+        const effectiveLikedSet = new Set(effectiveLikedTrackIds);
+        setLikedTrackIds((previous) => {
+          const next = { ...previous };
+          Object.keys(next).forEach((trackId) => { next[trackId] = effectiveLikedSet.has(trackId); });
+          effectiveLikedTrackIds.forEach((trackId) => { next[trackId] = true; });
+          return next;
+        });
+        const normalizedLikedRows = normalizedRows;
+        setProfileLikedTracks((previous) => {
+          const merged = new Map(normalizedLikedRows.map((track) => [track.id, track]));
+          previous.forEach((track) => {
+            if (!effectiveLikedSet.has(track.id) || merged.has(track.id)) return;
+            merged.set(track.id, track);
+          });
+          return [...merged.values()];
+        });
+        likeHydrationKeyRef.current = '';
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        console.error('Explore liked track collection load failed:', reason);
+        setProfileLikedError(reason instanceof Error ? reason.message : '좋아요 곡을 불러오지 못했어요.');
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLikedLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [profileUid, profile, user, profileCollection, likeAccountSyncSignal]);
+
+  const visibleTracks = profileUid
+    ? (profileIsOwn && profileCollection === 'liked' ? profileLikedTracks : profileTracks)
+    : tracks;
 
   useEffect(() => {
     if (!user || visibleTracks.length === 0) return;
     const ids = [...new Set(visibleTracks.map((track) => track.id).filter(Boolean))].slice(0, 50);
-    const hydrationKey = `${user.uid}:${profileUid || 'feed'}:${ids.join(',')}`;
+    const hydrationKey = `${user.uid}:${profileUid || 'feed'}:${profileUid ? profileCollection : 'feed'}:${ids.join(',')}`;
     if (!ids.length || likeHydrationKeyRef.current === hydrationKey) return;
     likeHydrationKeyRef.current = hydrationKey;
 
     let cancelled = false;
+    const interactionVersion = likeInteractionVersionRef090.current;
     getExploreLikedTrackIds(user, ids)
       .then((likedIds) => {
         if (cancelled) return;
+        if (interactionVersion !== likeInteractionVersionRef090.current) {
+          likeHydrationKeyRef.current = '';
+          setLikeAccountSyncSignal((value) => value + 1);
+          return;
+        }
+        const likedSet = new Set(likedIds);
         setLikedTrackIds((prev) => {
           const next = { ...prev };
           ids.forEach((id) => { next[id] = false; });
           likedIds.forEach((id) => { next[id] = true; });
           return next;
         });
+        // 089: heart membership is personal; numeric likeCount stays on the shared public feed/profile value.
       })
       .catch((reason) => {
         console.warn('Explore like state hydration failed:', reason);
@@ -527,7 +752,7 @@ export default function ExplorePage() {
       });
 
     return () => { cancelled = true; };
-  }, [user, visibleTracks, profileUid]);
+  }, [user, visibleTracks, profileUid, profileCollection, likeAccountSyncSignal]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -552,13 +777,25 @@ export default function ExplorePage() {
     setSearchOpen(false);
   };
 
-  const openProfile = (track: ExploreTrack) => {
+  const flushExploreLikeBoundary094 = async () => {
+    if (!user) return;
+    try {
+      await flushPendingExploreLikesForPageExit(user);
+    } catch (reason) {
+      console.warn('[094] Explore like boundary sync retained locally:', reason);
+      setSocialNotice('좋아요 변경분은 기기에 보관됐어요. 다음 화면 이동 때 다시 동기화합니다.');
+    }
+  };
+
+  const openProfile = async (track: ExploreTrack) => {
     if (!track.ownerUid) return;
+    await flushExploreLikeBoundary094();
     setSearchParams({ profile: track.ownerUid });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const closeProfile = () => {
+  const closeProfile = async () => {
+    await flushExploreLikeBoundary094();
     setSearchParams({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -579,6 +816,7 @@ export default function ExplorePage() {
       const payload = await response.json() as ExploreApiResponse;
       const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
       const normalized = rows.map(normalizeTrack).filter((track) => track.id);
+      syncSharedPublicCountsToLocal110(normalized);
       setTracks((previous) => {
         const seen = new Set(previous.map((track) => track.id));
         return [...previous, ...normalized.filter((track) => !seen.has(track.id))];
@@ -592,11 +830,93 @@ export default function ExplorePage() {
     }
   };
 
-  const updateTrackLikeCount = (trackId: string, likeCount: number) => {
-    const patch = (list: ExploreTrack[]) => list.map((track) => track.id === trackId ? { ...track, likeCount } : track);
-    setTracks(patch);
-    setProfileTracks(patch);
-  };
+  // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
+  useEffect(() => {
+    let aggregateRefreshTimer: number | null = null;
+    const uid = user?.uid || '';
+
+    const clearTimer071 = () => {
+      if (aggregateRefreshTimer !== null) window.clearTimeout(aggregateRefreshTimer);
+      aggregateRefreshTimer = null;
+    };
+
+    const requestForcedAggregateRefresh071 = () => {
+      if (!uid || !isExploreFeedRequest(requestUrl) || document.visibilityState !== 'visible') return false;
+      forceLikeCountRefreshRef071.current = true;
+      const now = Date.now();
+      // Reuse the existing revision-event dedupe. If focus/visibility already
+      // requested a refresh in this tick, that render will consume force=true.
+      if (now - feedRevisionEventAtRef.current < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return true;
+      feedRevisionEventAtRef.current = now;
+      setFeedRevisionSignal((value) => value + 1);
+      return true;
+    };
+
+    const armStoredAggregateRefresh071 = () => {
+      clearTimer071();
+      if (!uid || !isExploreFeedRequest(requestUrl)) return;
+      const deadline = readExploreLikeRefreshDeadline071(uid);
+      if (!deadline) return;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        requestForcedAggregateRefresh071();
+        return;
+      }
+      aggregateRefreshTimer = window.setTimeout(() => {
+        aggregateRefreshTimer = null;
+        if (!requestForcedAggregateRefresh071()) {
+          // Keep the persisted deadline. Returning to a visible tab will retry.
+          return;
+        }
+      }, Math.max(1000, remaining));
+    };
+
+    const scheduleAggregateCountRefresh071 = () => {
+      if (!uid || !isExploreFeedRequest(requestUrl)) return;
+      const now = Date.now();
+      const deadline = now + EXPLORE_LIKE_AGGREGATE_WINDOW_MS_105 + EXPLORE_LIKE_REFRESH_GRACE_MS_105;
+      const stored = readExploreLikeRefreshDeadline071(uid);
+      writeExploreLikeRefreshDeadline071(uid, stored > 0 ? Math.min(stored, deadline) : deadline);
+      armStoredAggregateRefresh071();
+    };
+
+    const onLikeSync = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        uid?: string;
+        trackId?: string;
+        ownerUid?: string;
+        liked?: boolean;
+        likeCount?: number;
+        displayLikeCount?: number;
+      }>).detail;
+      if (!user?.uid || String(detail?.uid || '').trim() !== user.uid) return;
+      const trackId = String(detail?.trackId || '').trim();
+      if (!trackId || typeof detail?.liked !== 'boolean') return;
+      setLikedTrackIds((prev) => ({ ...prev, [trackId]: detail.liked as boolean }));
+      scheduleAggregateCountRefresh071();
+    };
+    const onLikeSyncError = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string; message?: string }>).detail;
+      if (!user?.uid || String(detail?.uid || '').trim() !== user.uid) return;
+      setSocialNotice(String(detail?.message || '좋아요 서버 동기화를 재시도하고 있어요.'));
+    };
+    const onReturnVisible071 = () => {
+      if (document.visibilityState === 'visible') armStoredAggregateRefresh071();
+    };
+
+    armStoredAggregateRefresh071();
+    window.addEventListener(EXPLORE_LIKE_SYNC_EVENT, onLikeSync as EventListener);
+    window.addEventListener(EXPLORE_LIKE_SYNC_ERROR_EVENT, onLikeSyncError as EventListener);
+    window.addEventListener('focus', onReturnVisible071);
+    document.addEventListener('visibilitychange', onReturnVisible071);
+    return () => {
+      clearTimer071();
+      window.removeEventListener(EXPLORE_LIKE_SYNC_EVENT, onLikeSync as EventListener);
+      window.removeEventListener(EXPLORE_LIKE_SYNC_ERROR_EVENT, onLikeSyncError as EventListener);
+      window.removeEventListener('focus', onReturnVisible071);
+      document.removeEventListener('visibilitychange', onReturnVisible071);
+    };
+  }, [requestUrl, user?.uid]);
 
   const toggleLike = async (track: ExploreTrack) => {
     if (!user) {
@@ -605,13 +925,18 @@ export default function ExplorePage() {
     }
     if (likeBusyTrackId) return;
     const currentLiked = Boolean(likedTrackIds[track.id]);
+    likeInteractionVersionRef090.current += 1;
     setLikeBusyTrackId(track.id);
     try {
-      const result = await setExploreTrackLike(user, track.id, !currentLiked);
+      const result = await setExploreTrackLike(user, track.id, !currentLiked, track.likeCount, track.ownerUid);
+      const canonicalTrack = { ...track };
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
-      updateTrackLikeCount(track.id, result.likeCount);
-      patchExploreFeedSessionCacheRow(requestUrl, track.id, { likeCount: result.likeCount });
-      patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: result.likeCount });
+      rememberExploreLikedTrack(user.uid, canonicalTrack as unknown as Record<string, unknown>, result.liked);
+      setProfileLikedTracks((previous) => {
+        if (!result.liked) return previous.filter((item) => item.id !== track.id);
+        const rest = previous.filter((item) => item.id !== track.id);
+        return [canonicalTrack, ...rest];
+      });
     } catch (reason) {
       console.error('Explore like failed:', reason);
       setSocialNotice(reason instanceof Error ? reason.message : '좋아요 처리에 실패했어요.');
@@ -651,16 +976,18 @@ export default function ExplorePage() {
 
   const renderTrackGrid = (items: ExploreTrack[], label: string) => (
     <section className="soridraw-explore-grid" aria-label={label}>
-      {items.map((track) => (
-        <ExploreTrackCard
-          key={track.id}
-          track={track}
-          liked={Boolean(likedTrackIds[track.id])}
-          likeBusy={likeBusyTrackId === track.id}
-          onToggleLike={toggleLike}
-          onOpenProfile={openProfile}
-        />
-      ))}
+      {items.map((track) => {
+        return (
+          <ExploreTrackCard
+            key={track.id}
+            track={track}
+            liked={Boolean(likedTrackIds[track.id])}
+            likeBusy={likeBusyTrackId === track.id}
+            onToggleLike={toggleLike}
+            onOpenProfile={openProfile}
+          />
+        );
+      })}
     </section>
   );
 
@@ -748,7 +1075,41 @@ export default function ExplorePage() {
               />
             )}
 
-            {profileTracks.length === 0 ? (
+            {profileIsOwn && (
+              <nav className="soridraw-explore-tabs" aria-label="내 공개 프로필 곡 보기">
+                <button
+                  type="button"
+                  className={profileCollection === 'public' ? 'is-active' : undefined}
+                  onClick={() => setProfileCollection('public')}
+                  aria-current={profileCollection === 'public' ? 'page' : undefined}
+                >
+                  공개곡
+                </button>
+                <button
+                  type="button"
+                  className={profileCollection === 'liked' ? 'is-active' : undefined}
+                  onClick={() => setProfileCollection('liked')}
+                  aria-current={profileCollection === 'liked' ? 'page' : undefined}
+                >
+                  좋아요 곡
+                </button>
+              </nav>
+            )}
+
+            {profileIsOwn && profileCollection === 'liked' ? (
+              profileLikedLoading ? (
+                <div className="soridraw-explore-state" role="status"><Loader2 className="soridraw-explore-spinner" aria-hidden="true" /> 좋아요 곡을 불러오는 중</div>
+              ) : profileLikedError ? (
+                <div className="soridraw-explore-state">{profileLikedError}</div>
+              ) : profileLikedTracks.length === 0 ? (
+                <div className="soridraw-explore-state soridraw-explore-state--empty">
+                  <Heart aria-hidden="true" />
+                  <strong>아직 좋아요한 곡이 없어요.</strong>
+                </div>
+              ) : (
+                renderTrackGrid(profileLikedTracks, `${profile.nickname} 좋아요 곡`)
+              )
+            ) : profileTracks.length === 0 ? (
               <div className="soridraw-explore-state soridraw-explore-state--empty">
                 <Music2 aria-hidden="true" />
                 <strong>아직 공개된 곡이 없어요.</strong>

@@ -1,3 +1,4 @@
+import { assertDerivedD1Ready } from '../cloudflare/explore-worker/scripts/derived-deploy-preflight.mjs';
 import { readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -183,6 +184,7 @@ function injectSchemaRoute(source, route, secret, recoverySql = []) {
 
 async function deploySource(source, configPath) {
   writeFileSync(join(RELEASE_DIR, 'worker.js'), source, 'utf8');
+  assertDerivedD1Ready(configPath);
   run('npx', ['wrangler', 'deploy', '--strict', '--config', configPath], WORKER_DIR);
   await sleep(3500);
 }
@@ -372,7 +374,7 @@ try {
     } catch (rollbackError) {
       console.error(`[release027:${mode}] rollback failed`, rollbackError?.stack || rollbackError);
       if (oldVersion) {
-        try { run('npx', ['wrangler', 'versions', 'deploy', `${oldVersion}@100%`, '--name', target.worker, '--yes'], WORKER_DIR); } catch {}
+        try { assertDerivedD1Ready(configPath); run('npx', ['wrangler', 'versions', 'deploy', `${oldVersion}@100%`, '--name', target.worker, '--yes'], WORKER_DIR); } catch {}
       }
     }
   }

@@ -63,7 +63,7 @@ jobs:
             ]
           }
           JSON
-          npx wrangler deploy --strict --config "$RUNNER_TEMP/wrangler-preview.jsonc"
+          node scripts/derived-deploy-preflight.mjs --config "$RUNNER_TEMP/wrangler-preview.jsonc"
           echo 'AUTOPROVISION_DEPLOY=PASS'
           echo 'AUTOPROVISION_CONFIG_AFTER:'
           cat "$RUNNER_TEMP/wrangler-preview.jsonc"

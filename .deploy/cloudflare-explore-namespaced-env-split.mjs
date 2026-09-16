@@ -1,3 +1,4 @@
+import { assertDerivedD1Ready } from '../cloudflare/explore-worker/scripts/derived-deploy-preflight.mjs';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -578,6 +579,7 @@ for (const target of TARGETS) {
   const configPath = join(REMOTE_DIR, `wrangler.${target.env}.jsonc`);
   config.main = `./${bootstrapName}`;
   writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
+  assertDerivedD1Ready(configPath);
   wrangler(['deploy', '--strict', '--config', configPath]);
   console.log(`${target.env.toUpperCase()}_BOOTSTRAP_WORKER_DEPLOYED=true`);
 
@@ -588,6 +590,7 @@ for (const target of TARGETS) {
 
   config.main = `./${finalName}`;
   writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
+  assertDerivedD1Ready(configPath);
   wrangler(['deploy', '--strict', '--config', configPath]);
   console.log(`${target.env.toUpperCase()}_FINAL_WORKER_DEPLOYED=true`);
   console.log(`${target.env.toUpperCase()}_FEED_SMOKE=${await smoke(target)}`);

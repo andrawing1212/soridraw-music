@@ -1,0 +1,65 @@
+name: Diagnose 072 Visible Like Counts
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/diagnose-072-visible-like-counts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Read-only inspect two visible tracks
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT t.id,t.title,COALESCE(s.like_count,0) AS canonical_count,
+                   COALESCE(d.likes,-1) AS derived_count,
+                   COALESCE(json_extract(d.row_json,'$.like_count'),-1) AS derived_json_count,
+                   (SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id) AS relation_count,
+                   COALESCE(s.updated_at,0) AS stats_updated_at
+            FROM tracks t
+            LEFT JOIN track_stats s ON s.track_id=t.id
+            LEFT JOIN explore_derived_tracks d ON d.id=t.id
+            WHERE t.title LIKE '%너라는 밤의 크기%'
+               OR t.title LIKE '%혼자만의 밤%'
+            ORDER BY t.published_at DESC;
+          " --json
+      - name: Read-only fresh PREVIEW Feed
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__diag072=${GITHUB_RUN_ID}" > "$RUNNER_TEMP/feed.json"
+          node <<'NODE'
+          const p=require(process.env.RUNNER_TEMP+'/feed.json');
+          for(const row of p?.data?.items||[]) {
+            const title=String(row?.title||'');
+            if(title.includes('너라는 밤의 크기') || title.includes('혼자만의 밤')) {
+              console.log(JSON.stringify({id:row.id,title,likeCount:row.likeCount,like_count:row.like_count,stats:row.stats||null}));
+            }
+          }
+          NODE

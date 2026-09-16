@@ -3,10 +3,15 @@ import type { User } from 'firebase/auth';
 import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareLocalCacheHit, recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import { readSoridrawPersistentCache, writeSoridrawPersistentCache } from '../lib/soridrawPersistentCache';
+import {
+  getExplorePersonalSocialSnapshot,
+  patchExplorePersonalSocialFollow,
+} from './exploreSocialSnapshotService';
 
 const EXPLORE_FOLLOW_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_FOLLOW_BUNDLE_DIAGNOSTIC_PATH = '/v1/me/following-bundle';
 // SORIDRAW_EXPLORE_PROFILE_FOLLOW_COST_1010_20260904
+// SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_075_20260913
 const EXPLORE_FOLLOW_CACHE_KEY = 'explore-follow-state';
 const EXPLORE_FOLLOW_CACHE_SOURCE_TYPE = 'explore_follow_state';
 const EXPLORE_FOLLOW_STATE_DIAGNOSTIC_PATH = '/v1/profiles/:id/follow-state';
@@ -176,9 +181,16 @@ const loadExploreFollowingBundle = async (user: User): Promise<ExploreFollowCach
   if (existing) return existing;
 
   const task = (async () => {
-    const payload = await requestAuthed(user, EXPLORE_FOLLOW_BUNDLE_DIAGNOSTIC_PATH);
-    const rawUids = Array.isArray(payload?.data?.followingUids) ? payload.data.followingUids : [];
-    const states: Record<string, boolean> = rawUids.reduce((acc: Record<string, boolean>, value: unknown) => {
+    let rawUids: unknown[] = [];
+    try {
+      const snapshot = await getExplorePersonalSocialSnapshot(user);
+      rawUids = snapshot.followingUids;
+    } catch (snapshotError) {
+      console.warn('[Explore follow] Social Snapshot unavailable; using following bundle recovery.', snapshotError);
+      const payload = await requestAuthed(user, EXPLORE_FOLLOW_BUNDLE_DIAGNOSTIC_PATH);
+      rawUids = Array.isArray(payload?.data?.followingUids) ? payload.data.followingUids : [];
+    }
+    const states: Record<string, boolean> = rawUids.reduce<Record<string, boolean>>((acc, value: unknown) => {
       const uid = String(value || '').trim();
       if (uid) acc[uid] = true;
       return acc;
@@ -276,6 +288,7 @@ export const setExploreFollow = async (user: User, uid: string, follow: boolean)
     followingCount: toCount(row?.followingCount ?? row?.following_count),
   };
   rememberExploreFollowState(user.uid, normalizedUid, result.isFollowing);
+  patchExplorePersonalSocialFollow(user.uid, normalizedUid, result.isFollowing);
   return result;
 };
 

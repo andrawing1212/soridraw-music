@@ -113,6 +113,26 @@ export const writeMusicNoteDetailDraft = async (
   }
 };
 
+
+export const listMusicNoteDetailDrafts = async (uid: string): Promise<MusicNoteDetailPendingDraft[]> => {
+  const safeUid = String(uid || '').trim();
+  if (!safeUid) return [];
+  const database = await openDb();
+  if (!database) return [];
+  try {
+    return await new Promise((resolve) => {
+      const tx = database.transaction(DB_STORE, 'readonly');
+      const request = tx.objectStore(DB_STORE).getAll();
+      request.onsuccess = () => resolve((Array.isArray(request.result) ? request.result : [])
+        .filter((row: MusicNoteDetailPendingDraft) => row?.uid === safeUid && row?.sourceId)
+        .sort((a: MusicNoteDetailPendingDraft, b: MusicNoteDetailPendingDraft) => a.updatedAtMs - b.updatedAtMs));
+      request.onerror = () => resolve([]);
+    });
+  } catch {
+    return [];
+  }
+};
+
 export const clearMusicNoteDetailDraft = async (uid: string, sourceId: string): Promise<void> => {
   const safeUid = String(uid || '').trim();
   const safeSourceId = String(sourceId || '').trim();

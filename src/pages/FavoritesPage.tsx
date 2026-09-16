@@ -77,7 +77,8 @@ import {
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
 import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
-import { clearMusicNoteDetailDraft, mergeMusicNoteDetailDraft, readMusicNoteDetailDraft, writeMusicNoteDetailDraft } from '../lib/musicNoteDetailDraft';
+import { clearMusicNoteDetailDraft, listMusicNoteDetailDrafts, mergeMusicNoteDetailDraft, readMusicNoteDetailDraft, writeMusicNoteDetailDraft } from '../lib/musicNoteDetailDraft';
+import { flushSoridrawPageSync, registerPageSyncHandler } from '../lib/pageSyncCoordinator';
 
 
 const PROJECT_ID = 'soridraw-app-866a5';
@@ -1742,11 +1743,6 @@ export default function FavoritesPage({
         favoriteDetailPendingPatchRef.current = restored;
         setFavoriteDetailSaveStatus('pending');
         await writeMusicNoteDetailDraft(user.uid, restored.songId, restored.baseVersion, restored.updates);
-        clearFavoriteDetailFlushTimer();
-        favoriteDetailFlushTimerRef.current = window.setTimeout(() => {
-          favoriteDetailFlushTimerRef.current = null;
-          void flushFavoriteDetailPendingPatch('idle');
-        }, MUSIC_NOTE_DETAIL_IDLE_FLUSH_MS);
       } finally {
         favoriteDetailFlushInFlightRef.current = null;
       }
@@ -1757,11 +1753,6 @@ export default function FavoritesPage({
   };
 
   const scheduleFavoriteDetailFlush = () => {
-    clearFavoriteDetailFlushTimer();
-    favoriteDetailFlushTimerRef.current = window.setTimeout(() => {
-      favoriteDetailFlushTimerRef.current = null;
-      void flushFavoriteDetailPendingPatch('idle');
-    }, MUSIC_NOTE_DETAIL_IDLE_FLUSH_MS);
   };
 
   const queueFavoriteDetailPatch = (songId: string, patch: Record<string, any>) => {
@@ -1819,13 +1810,58 @@ export default function FavoritesPage({
     scheduleFavoriteDetailFlush();
   };
 
+  const flushAllMusicNoteLocalChangesForPageExit = async () => {
+    if (!user?.uid) return;
+    const uid = user.uid;
+    if (favoriteDetailDraftPersistInFlightRef.current) await favoriteDetailDraftPersistInFlightRef.current;
+    await flushFavoriteDetailPendingPatch('page-exit');
+    const stillPendingSongId = favoriteDetailPendingPatchRef.current?.songId || '';
+    let firstError: unknown = stillPendingSongId ? new Error('current detail draft still pending') : null;
+    const drafts = await listMusicNoteDetailDrafts(uid);
+    for (const draft of drafts) {
+      if (!draft?.sourceId || draft.sourceId === stillPendingSongId) continue;
+      try {
+        await updateFavorite(draft.sourceId, draft.updates);
+        const latest = favoritesStore.getFavorites().find((song: any) => String(song?.id || '') === draft.sourceId);
+        const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
+        await patchMusicNoteDetailCache({
+uid,
+sourceId: draft.sourceId,
+sourceVersion: committedVersion,
+updates: draft.updates,
+        });
+        await clearMusicNoteDetailDraft(uid, draft.sourceId);
+      } catch (error) {
+        firstError ||= error;
+      }
+    }
+    if (isMusicNoteCardStateDirty(uid)) {
+      try { await flushMusicNoteCardStateServerWrite(uid); } catch (error) { firstError ||= error; }
+    }
+    if (firstError) throw firstError;
+  };
+
   useEffect(() => {
-    const flushOnPageExit = () => { void flushFavoriteDetailPendingPatch('page-exit'); };
-    window.addEventListener('pagehide', flushOnPageExit);
+    if (!user?.uid) return;
+    const activeUser = user;
+    const uid = user.uid;
+    const unregister = registerPageSyncHandler({
+      key: `music-note:${uid}`,
+      uid,
+      count: async () => {
+        const drafts = await listMusicNoteDetailDrafts(uid);
+        const ids = new Set(drafts.map((draft) => draft.sourceId));
+        const inMemoryPending = favoriteDetailPendingPatchRef.current?.songId;
+        const detailCount = drafts.length + (inMemoryPending && !ids.has(inMemoryPending) ? 1 : 0);
+        return detailCount + (isMusicNoteCardStateDirty(uid) ? 1 : 0);
+      },
+      flush: flushAllMusicNoteLocalChangesForPageExit,
+    });
     return () => {
-      window.removeEventListener('pagehide', flushOnPageExit);
       clearFavoriteDetailFlushTimer();
-      void flushFavoriteDetailPendingPatch('page-exit');
+      void flushSoridrawPageSync(activeUser, 'music-note-exit')
+        .catch((error) => console.warn('[081] Music Note page sync pending:', error))
+        .finally(unregister);
     };
   }, [user?.uid]);
 
@@ -3642,20 +3678,6 @@ export default function FavoritesPage({
     setIsEditing(true);
   };
 
-  useEffect(() => {
-    if (!user?.uid) return;
-    const uid = user.uid;
-    const flushIfDirty = () => {
-      if (isMusicNoteCardStateDirty(uid)) void flushMusicNoteCardStateServerWrite(uid);
-    };
-
-    window.addEventListener('pagehide', flushIfDirty);
-    return () => {
-      window.removeEventListener('pagehide', flushIfDirty);
-      flushIfDirty();
-    };
-  }, [user?.uid]);
-
   const getMusicNoteCardStateSongId = (song: any) => String(
     song?.firestoreId || song?.favoriteFirestoreId || song?.id || ''
   ).trim();
@@ -4296,12 +4318,7 @@ export default function FavoritesPage({
   const closeSelectedSong = async (source: 'ui' | 'history' = 'ui') => {
     const shouldPopOverlayHistory = source === 'ui' && detailHistoryPushedRef.current;
 
-    // 031: a completed local edit session is flushed once when Detail exits. If the
-    // network write fails, the IndexedDB draft remains available for recovery.
-    await flushFavoriteDetailPendingPatch('detail-close');
-    if (favoriteDetailPendingPatchRef.current) {
-      await flushFavoriteDetailPendingPatch('detail-close');
-    }
+    // 081: closing the detail modal is local-only; the page exit owns server sync.
 
     // End the detail session only after the bounded flush attempt so async completion
     // can never reopen or attach to another song.
@@ -5489,9 +5506,18 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         const savedOptions = await setExploreTrackPublicationOptions(user, state.trackId, options);
         nextState = { ...state, ...savedOptions, status: 'public' };
         showFavoriteToast('공개 설정을 저장했습니다.');
+      } else if (state.registered) {
+
+        nextState = await setExploreTrackVisibility(user, state.trackId, true, options);
+
+        showFavoriteToast('Explore에 다시 공개했습니다.');
+
       } else {
+
         nextState = await publishMusicNoteToExplore(user, sourceId, options);
+
         showFavoriteToast('Explore에 공개했습니다.');
+
       }
 
       setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: nextState }));

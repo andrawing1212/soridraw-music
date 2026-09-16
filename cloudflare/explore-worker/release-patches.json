@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "patches": [
+    "031-explore-shared-canonical-data.mjs",
+    "032-derived-change-cache.mjs",
+    "033-explore-like-deferred-derived-sync.mjs",
+    "034-explore-like-user-batch.mjs",
+    "035-explore-like-deferred-aggregate.mjs",
+    "036-explore-like-derived-intake.mjs",
+    "038-explore-like-compact-queue.mjs",
+    "039-explore-like-stable-dual-queue-boundary.mjs",
+    "040-explore-like-w1-delayed-count.mjs",
+    "041-explore-like-reversal-order.mjs",
+    "042-social-snapshot-write-compaction.mjs",
+    "052-liked-track-collection.mjs",
+    "053-liked-track-schema-repair.mjs",
+    "054-explore-like-edge-rate-limit.mjs",
+    "043-publication-targeted-r2-hotpath.mjs",
+    "044-local-first-cost-hotpath.mjs",
+    "055-explore-like-intake-w1-hotpath.mjs",
+    "056-explore-public-like-parity.mjs",
+    "045-publication-revision-metadata.mjs",
+    "046-publication-write-compaction.mjs",
+    "047-publication-state-transition.mjs",
+    "048-page-exit-publication-batch.mjs",
+    "049-publication-internal-batch-compaction.mjs",
+    "050-publication-primary-key-batch-read.mjs",
+    "051-publication-write-returning.mjs"
+  ]
+}

@@ -49,10 +49,28 @@
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid",
         "musicNote": {
-          ".validate": "newData.hasChildren(['version','at','originDeviceId','operation','affectedCount','truncated']) && newData.child('version').isNumber() && newData.child('at').isNumber() && newData.child('originDeviceId').isString() && newData.child('originDeviceId').val().length <= 96 && newData.child('operation').isString() && newData.child('operation').val().length <= 48 && newData.child('affectedCount').isNumber() && newData.child('affectedCount').val() >= 0 && newData.child('affectedCount').val() <= 1000000 && newData.child('truncated').isBoolean() && (!newData.hasChild('documentIds') || newData.child('documentIds').numChildren() <= 10)",
+          ".validate": "newData.hasChildren(['version','at','originDeviceId','operation','affectedCount','truncated'])",
+          "version": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "at": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "originDeviceId": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 96"
+          },
+          "operation": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 48"
+          },
+          "affectedCount": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+          },
+          "truncated": {
+            ".validate": "newData.isBoolean()"
+          },
           "documentIds": {
             "$index": {
-              ".validate": "newData.isString() && newData.val().length <= 256"
+              ".validate": "$index.matches(/^[0-9]$/) && newData.isString() && newData.val().length > 0 && newData.val().length <= 256"
             }
           },
           "$other": {
@@ -60,10 +78,63 @@
           }
         },
         "recentSongs": {
-          ".validate": "newData.hasChildren(['version','at','originDeviceId','operation','affectedCount','truncated']) && newData.child('version').isNumber() && newData.child('at').isNumber() && newData.child('originDeviceId').isString() && newData.child('originDeviceId').val().length <= 96 && newData.child('operation').isString() && newData.child('operation').val().length <= 48 && newData.child('affectedCount').isNumber() && newData.child('affectedCount').val() >= 0 && newData.child('affectedCount').val() <= 1000000 && newData.child('truncated').isBoolean() && (!newData.hasChild('documentIds') || newData.child('documentIds').numChildren() <= 10)",
+          ".validate": "newData.hasChildren(['version','at','originDeviceId','operation','affectedCount','truncated'])",
+          "version": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "at": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "originDeviceId": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 96"
+          },
+          "operation": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 48"
+          },
+          "affectedCount": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+          },
+          "truncated": {
+            ".validate": "newData.isBoolean()"
+          },
           "documentIds": {
             "$index": {
-              ".validate": "newData.isString() && newData.val().length <= 256"
+              ".validate": "$index.matches(/^[0-9]$/) && newData.isString() && newData.val().length > 0 && newData.val().length <= 256"
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "exploreLike": {
+          ".validate": "newData.hasChildren(['version','previousVersion','results']) && newData.child('version').val() > newData.child('previousVersion').val()",
+          "version": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "previousVersion": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "results": {
+            "$index": {
+              ".validate": "$index.matches(/^(0|[1-9]|[1-4][0-9])$/) && newData.hasChildren(['trackId','ownerUid','liked','likeCount'])",
+              "trackId": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 512"
+              },
+              "ownerUid": {
+                ".validate": "newData.isString() && newData.val().length <= 128"
+              },
+              "liked": {
+                ".validate": "newData.isBoolean()"
+              },
+              "likeCount": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000"
+              },
+              "displayLikeCount": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000"
+              },
+              "$other": {
+                ".validate": false
+              }
             }
           },
           "$other": {

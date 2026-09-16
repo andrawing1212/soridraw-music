@@ -16,10 +16,10 @@ import {
 // SORIDRAW_PROFILE_REVISION_PREVIEW_DEPLOY_1001
 // SORIDRAW_PROFILE_EVENT_DRIVEN_CACHE_1003
 // SORIDRAW_PROFILE_CACHE_SWR_1020
+// SORIDRAW_PROFILE_WARM_ZERO_READ_107_20260916
 // SORIDRAW_PROFILE_ALIAS_PARITY_020
 // SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048
 const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 6;
-const PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS = 10_000;
 const PROFILE_FIRST_VIEW_SOURCE_TYPE = 'explore_profile_first_view';
 const PROFILE_FIRST_VIEW_LIMIT = 50;
 const PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH = '/v1/profiles/:id/first-view';
@@ -45,7 +45,6 @@ type MaterializedRequestResult =
   | { kind: 'unavailable' };
 
 const coldLoadInflight = new Map<string, Promise<ExploreProfileFirstViewData>>();
-const profileRevalidationInflight = new Map<string, Promise<void>>();
 
 const normalizeProfileRef = (value: string) => String(value || '').trim();
 const cacheKeyForRef = (profileRef: string) => `explore-profile-first-view:${normalizeProfileRef(profileRef).toLowerCase()}`;
@@ -155,10 +154,6 @@ const requestMaterializedFirstView = async (
   const revision = String(knownRevision || '').trim();
   if (revision) {
     url.searchParams.set('knownRevision', revision);
-  } else {
-    // 051: one cold request after the cache-contract bump re-materializes the
-    // public profile from the single shared canonical D1. Warm revision checks stay cheap.
-    url.searchParams.set('__soridraw_shared_profile', '51');
   }
 
   const startedAt = typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
@@ -224,6 +219,61 @@ const requestMaterializedFirstView = async (
       validatedAt: Date.now(),
     },
   };
+};
+
+
+// SORIDRAW_EXPLORE_TARGETED_PUBLICATION_PROFILE_075_20260913
+const publicProfileTrackId075 = (row: Record<string, unknown>) => String(row?.id || row?.trackId || '').trim();
+const publicProfileTrackPublishedAt075 = (row: Record<string, unknown>) => Number(row?.publishedAt || row?.published_at || 0);
+const publicProfileTrackPinned075 = (row: Record<string, unknown>) => Boolean(row?.profilePinned || row?.profile_pinned);
+
+const sortPublicProfileTracks075 = (rows: Array<Record<string, unknown>>) => [...rows].sort((a, b) => {
+  const pinned = Number(publicProfileTrackPinned075(b)) - Number(publicProfileTrackPinned075(a));
+  if (pinned) return pinned;
+  const published = publicProfileTrackPublishedAt075(b) - publicProfileTrackPublishedAt075(a);
+  if (published) return published;
+  return publicProfileTrackId075(b).localeCompare(publicProfileTrackId075(a));
+});
+
+export const upsertExplorePublicProfileFirstViewTrack = (
+  profileRef: string,
+  row: Record<string, unknown>,
+) => {
+  const cached = readCache(profileRef);
+  const trackId = publicProfileTrackId075(row);
+  if (!cached || !trackId) return;
+  const existing = cached.tracks.find((track) => publicProfileTrackId075(track) === trackId);
+  const tracks = sortPublicProfileTracks075([
+    ...cached.tracks.filter((track) => publicProfileTrackId075(track) !== trackId),
+    { ...(existing || {}), ...row },
+  ]).slice(0, PROFILE_FIRST_VIEW_LIMIT);
+  writeCache(cached.profile.uid || profileRef, {
+    ...cached,
+    profile: {
+      ...cached.profile,
+      trackCount: Math.max(0, cached.profile.trackCount + (existing ? 0 : 1)),
+    },
+    tracks,
+  });
+};
+
+export const removeExplorePublicProfileFirstViewTrack = (
+  profileRef: string,
+  trackId: string,
+) => {
+  const cached = readCache(profileRef);
+  const normalizedId = String(trackId || '').trim();
+  if (!cached || !normalizedId) return;
+  const tracks = cached.tracks.filter((track) => publicProfileTrackId075(track) !== normalizedId);
+  if (tracks.length === cached.tracks.length) return;
+  writeCache(cached.profile.uid || profileRef, {
+    ...cached,
+    profile: {
+      ...cached.profile,
+      trackCount: Math.max(0, cached.profile.trackCount - 1),
+    },
+    tracks,
+  });
 };
 
 export const invalidateExplorePublicProfileFirstView = (profileRef: string) => {
@@ -295,45 +345,12 @@ export const getExplorePublicProfileFirstView = async (
 
   const cached = readCache(normalizedRef);
   if (cached) {
+    // 107: warm revisit is strictly local. Known profile/publication/follow/like
+    // mutations already patch or invalidate this cache at the mutation boundary.
     recordCloudflareLocalCacheHit(
       PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH,
-      'LOCAL HIT · 서버 D1 읽기 0',
+      'LOCAL HIT · 변경 없음 · 서버 D1 읽기 0',
     );
-
-    const ageMs = Math.max(0, Date.now() - Number(cached.validatedAt || 0));
-    const revalidationKey = normalizedRef.toLowerCase();
-    if (ageMs >= PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS && !profileRevalidationInflight.has(revalidationKey)) {
-      const task = (async () => {
-        try {
-          const materialized = await requestMaterializedFirstView(normalizedRef, cached.revision);
-          if (materialized.kind === 'updated') {
-            writeCache(normalizedRef, materialized.data);
-            options.onRevalidated?.(materialized.data);
-            return;
-          }
-          if (materialized.kind === 'not-modified') {
-            writeCache(normalizedRef, {
-              ...cached,
-              revision: materialized.revision || cached.revision,
-              etag: materialized.etag || cached.etag,
-              validatedAt: Date.now(),
-            });
-            return;
-          }
-          if (materialized.kind === 'not-found') {
-            clearCache(normalizedRef, cached);
-            options.onInvalidated?.(materialized.message);
-            return;
-          }
-          writeCache(normalizedRef, { ...cached, validatedAt: Date.now() });
-        } catch (error) {
-          console.warn('[Explore profile first-view] background revision check failed; keeping local cache.', error);
-        }
-      })().finally(() => {
-        if (profileRevalidationInflight.get(revalidationKey) === task) profileRevalidationInflight.delete(revalidationKey);
-      });
-      profileRevalidationInflight.set(revalidationKey, task);
-    }
     return cached;
   }
 

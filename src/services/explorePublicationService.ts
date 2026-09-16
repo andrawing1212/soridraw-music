@@ -5,14 +5,25 @@ import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
   readSoridrawPersistentCache,
   removeSoridrawPersistentCache,
-  removeSoridrawPersistentCachesBySourceType,
   writeSoridrawPersistentCache,
 } from '../lib/soridrawPersistentCache';
-import { invalidateExploreFeedSessionCache } from './exploreSessionCache';
-import { invalidateExplorePublicProfileFirstView } from './exploreProfileFirstViewService';
+import {
+  invalidateExploreFeedSessionCache,
+  patchExploreFeedSessionCachesRow,
+  removeExploreFeedSessionCacheRow,
+  upsertExploreFeedSessionCacheRow,
+} from './exploreSessionCache';
+import {
+  invalidateExplorePublicProfileFirstView,
+  patchExplorePublicProfileFirstViewTrack,
+  removeExplorePublicProfileFirstViewTrack,
+  upsertExplorePublicProfileFirstViewTrack,
+} from './exploreProfileFirstViewService';
 
-const PUBLICATION_PAGE_SIZE = 50;
-const MAX_PUBLICATION_PAGES = 8;
+// SORIDRAW_EXPLORE_TARGETED_PUBLICATION_CACHE_075_20260913
+// SORIDRAW_PUBLICATION_PERSISTENT_REVISION_078_20260913
+// SORIDRAW_PUBLICATION_REGISTERED_STATE_080_20260913
+// SORIDRAW_PAGE_EXIT_PUBLICATION_OUTBOX_081_20260914
 
 export type ExplorePublicationOptions = {
   allowNextSongApply: boolean;
@@ -23,17 +34,7 @@ export type ExplorePublicationOptions = {
 export type ExploreMusicNotePublicationState = ExplorePublicationOptions & {
   status: 'private' | 'public';
   trackId: string;
-};
-
-type ExplorePublicationItem = {
-  id?: string;
-  trackId?: string;
-  sourceType?: string;
-  sourceId?: string;
-  isPublic?: boolean;
-  allowNextSongApply?: boolean;
-  allowFollowerSave?: boolean;
-  profilePinned?: boolean;
+  registered: boolean;
 };
 
 class ExploreApiError extends Error {
@@ -56,13 +57,156 @@ const DEFAULT_PUBLICATION_OPTIONS: ExplorePublicationOptions = {
 
 const getMusicNoteTrackId = (uid: string, sourceId: string) => `music_note_${uid}_${sourceId}`;
 
-
 // SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
-const PUBLICATION_CACHE_SCHEMA_VERSION = 1;
+// Schema v2 is intentionally kept stable across app releases. App updates must not
+// throw away a healthy device snapshot. A tiny R2 revision HEAD validates the
+// persistent snapshot; the full R2 bundle is fetched only on first device use or
+// when that revision actually changed.
+const PUBLICATION_CACHE_SCHEMA_VERSION = 2;
 const PUBLICATION_CACHE_KEY = 'explore-publication-states';
 const PUBLICATION_CACHE_SOURCE_TYPE = 'explore_publication_states';
 const publicationMemoryCache = new Map<string, Record<string, ExploreMusicNotePublicationState>>();
 const publicationInflight = new Map<string, Promise<Record<string, ExploreMusicNotePublicationState>>>();
+const publicationServerValidatedUids = new Set<string>();
+
+
+const EXPLORE_PUBLICATION_OUTBOX_SCHEMA_VERSION = 1;
+const EXPLORE_PUBLICATION_OUTBOX_CACHE_KEY = 'explore-publication-outbox';
+const EXPLORE_PUBLICATION_OUTBOX_SOURCE_TYPE = 'explore_publication_outbox';
+
+type ExplorePublicationPendingMutation = {
+  sourceId: string;
+  trackId: string;
+  baseState: ExploreMusicNotePublicationState;
+  desiredState: ExploreMusicNotePublicationState;
+  updatedAt: number;
+};
+
+type ExplorePublicationOutbox = Record<string, ExplorePublicationPendingMutation>;
+
+const normalizePublicationState = (
+  value: Partial<ExploreMusicNotePublicationState> | null | undefined,
+  trackId: string,
+  registered = false,
+): ExploreMusicNotePublicationState => ({
+  status: value?.status === 'public' ? 'public' : 'private',
+  trackId: String(value?.trackId || trackId || '').trim(),
+  registered: value?.registered === undefined ? registered : Boolean(value.registered),
+  allowNextSongApply: Boolean(value?.allowNextSongApply),
+  allowFollowerSave: Boolean(value?.allowFollowerSave),
+  profilePinned: Boolean(value?.profilePinned),
+});
+
+const samePublicationState = (a: ExploreMusicNotePublicationState, b: ExploreMusicNotePublicationState) => (
+  a.status === b.status
+  && a.trackId === b.trackId
+  && a.registered === b.registered
+  && a.allowNextSongApply === b.allowNextSongApply
+  && a.allowFollowerSave === b.allowFollowerSave
+  && a.profilePinned === b.profilePinned
+);
+
+const readPublicationOutbox = (uid: string): ExplorePublicationOutbox => {
+  const envelope = readSoridrawPersistentCache<ExplorePublicationOutbox>({
+    cacheKey: EXPLORE_PUBLICATION_OUTBOX_CACHE_KEY,
+    sourceType: EXPLORE_PUBLICATION_OUTBOX_SOURCE_TYPE,
+    schemaVersion: EXPLORE_PUBLICATION_OUTBOX_SCHEMA_VERSION,
+    uid,
+  });
+  if (!envelope?.data || typeof envelope.data !== 'object' || Array.isArray(envelope.data)) return {};
+  const next: ExplorePublicationOutbox = {};
+  Object.entries(envelope.data).forEach(([sourceId, raw]) => {
+    const value = raw as Partial<ExplorePublicationPendingMutation> | null;
+    const trackId = String(value?.trackId || '').trim();
+    if (!sourceId || !trackId || !value?.baseState || !value?.desiredState) return;
+    next[sourceId] = {
+      sourceId,
+      trackId,
+      baseState: normalizePublicationState(value.baseState, trackId, Boolean(value.baseState.registered)),
+      desiredState: normalizePublicationState(value.desiredState, trackId, Boolean(value.desiredState.registered)),
+      updatedAt: Math.max(0, Number(value.updatedAt || 0)),
+    };
+  });
+  return next;
+};
+
+const persistPublicationOutbox = (uid: string, outbox: ExplorePublicationOutbox) => {
+  if (!Object.keys(outbox).length) {
+    removeSoridrawPersistentCache(EXPLORE_PUBLICATION_OUTBOX_CACHE_KEY, uid);
+    return;
+  }
+  writeSoridrawPersistentCache<ExplorePublicationOutbox>({
+    cacheKey: EXPLORE_PUBLICATION_OUTBOX_CACHE_KEY,
+    sourceType: EXPLORE_PUBLICATION_OUTBOX_SOURCE_TYPE,
+    schemaVersion: EXPLORE_PUBLICATION_OUTBOX_SCHEMA_VERSION,
+    dataVersion: 0,
+    uid,
+    syncCursor: null,
+    serverRevision: null,
+    deletedIds: [],
+    expiresAt: null,
+    dirty: true,
+    pendingMutationId: 'publication-page-exit',
+    data: outbox,
+  });
+};
+
+export const getPendingExplorePublicationMutationCount = (uid: string): number => Object.keys(readPublicationOutbox(uid)).length;
+
+const overlayPendingPublicationStates = (
+  uid: string,
+  states: Record<string, ExploreMusicNotePublicationState>,
+) => {
+  const next = clonePublicationStates(states);
+  Object.values(readPublicationOutbox(uid)).forEach((pending) => {
+    next[pending.sourceId] = { ...pending.desiredState };
+  });
+  return next;
+};
+
+const findPublicationSourceByTrackId = (uid: string, trackId: string) => {
+  const normalizedTrackId = String(trackId || '').trim();
+  const states = readPublicationStateCache(uid) || {};
+  const matched = Object.entries(states).find(([, state]) => state.trackId === normalizedTrackId);
+  if (matched) return { sourceId: matched[0], state: matched[1] };
+  const pending = Object.values(readPublicationOutbox(uid)).find((item) => item.trackId === normalizedTrackId);
+  if (pending) return { sourceId: pending.sourceId, state: pending.desiredState };
+  const prefix = `music_note_${uid}_`;
+  const sourceId = normalizedTrackId.startsWith(prefix) ? normalizedTrackId.slice(prefix.length) : normalizedTrackId;
+  return {
+    sourceId,
+    state: normalizePublicationState({ status: 'private', registered: true }, normalizedTrackId, true),
+  };
+};
+
+const queuePublicationMutation = (
+  uid: string,
+  sourceId: string,
+  currentState: ExploreMusicNotePublicationState,
+  requestedState: ExploreMusicNotePublicationState,
+) => {
+  const outbox = readPublicationOutbox(uid);
+  const existing = outbox[sourceId];
+  const baseState = existing?.baseState || { ...currentState };
+  let desiredState = { ...requestedState };
+  if (!baseState.registered && desiredState.status === 'private') {
+    desiredState = { ...baseState, status: 'private', registered: false };
+  }
+  if (samePublicationState(baseState, desiredState)) {
+    delete outbox[sourceId];
+  } else {
+    outbox[sourceId] = {
+      sourceId,
+      trackId: desiredState.trackId,
+      baseState: { ...baseState },
+      desiredState: { ...desiredState },
+      updatedAt: Date.now(),
+    };
+  }
+  persistPublicationOutbox(uid, outbox);
+  patchPublicationStateBySourceId(uid, sourceId, desiredState);
+  return desiredState;
+};
 
 const clonePublicationStates = (
   states: Record<string, ExploreMusicNotePublicationState>,
@@ -70,33 +214,44 @@ const clonePublicationStates = (
   Object.entries(states).map(([sourceId, state]) => [sourceId, { ...state }]),
 );
 
-const readPublicationStateCache = (uid: string): Record<string, ExploreMusicNotePublicationState> | null => {
+const readPublicationStateEnvelope = (uid: string) => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) return null;
-  const memory = publicationMemoryCache.get(normalizedUid);
-  if (memory) return clonePublicationStates(memory);
-
-  const envelope = readSoridrawPersistentCache<Record<string, ExploreMusicNotePublicationState>>({
+  return readSoridrawPersistentCache<Record<string, ExploreMusicNotePublicationState>>({
     cacheKey: PUBLICATION_CACHE_KEY,
     sourceType: PUBLICATION_CACHE_SOURCE_TYPE,
     schemaVersion: PUBLICATION_CACHE_SCHEMA_VERSION,
     uid: normalizedUid,
   });
-  if (!envelope?.data || typeof envelope.data !== 'object' || Array.isArray(envelope.data)) return null;
+};
 
+const normalizeCachedPublicationStates = (data: Record<string, ExploreMusicNotePublicationState>) => {
   const normalized: Record<string, ExploreMusicNotePublicationState> = {};
-  Object.entries(envelope.data).forEach(([sourceId, value]) => {
+  Object.entries(data).forEach(([sourceId, value]) => {
     const state = value as Partial<ExploreMusicNotePublicationState> | null;
     const trackId = String(state?.trackId || '').trim();
     if (!sourceId || !trackId) return;
     normalized[sourceId] = {
       status: state?.status === 'public' ? 'public' : 'private',
       trackId,
+      registered: state?.registered !== false,
       allowNextSongApply: Boolean(state?.allowNextSongApply),
       allowFollowerSave: Boolean(state?.allowFollowerSave),
       profilePinned: Boolean(state?.profilePinned),
     };
   });
+  return normalized;
+};
+
+const readPublicationStateCache = (uid: string): Record<string, ExploreMusicNotePublicationState> | null => {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return null;
+  const memory = publicationMemoryCache.get(normalizedUid);
+  if (memory) return clonePublicationStates(memory);
+
+  const envelope = readPublicationStateEnvelope(normalizedUid);
+  if (!envelope?.data || typeof envelope.data !== 'object' || Array.isArray(envelope.data)) return null;
+  const normalized = normalizeCachedPublicationStates(envelope.data);
   publicationMemoryCache.set(normalizedUid, normalized);
   return clonePublicationStates(normalized);
 };
@@ -104,9 +259,11 @@ const readPublicationStateCache = (uid: string): Record<string, ExploreMusicNote
 const writePublicationStateCache = (
   uid: string,
   states: Record<string, ExploreMusicNotePublicationState>,
+  serverRevision?: string | null,
 ) => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) return;
+  const existingEnvelope = readPublicationStateEnvelope(normalizedUid);
   const cloned = clonePublicationStates(states);
   publicationMemoryCache.set(normalizedUid, cloned);
   writeSoridrawPersistentCache<Record<string, ExploreMusicNotePublicationState>>({
@@ -116,7 +273,9 @@ const writePublicationStateCache = (
     dataVersion: 0,
     uid: normalizedUid,
     syncCursor: null,
-    serverRevision: null,
+    serverRevision: serverRevision === undefined
+      ? (existingEnvelope?.serverRevision ?? null)
+      : serverRevision,
     deletedIds: [],
     expiresAt: null,
     dirty: false,
@@ -156,12 +315,12 @@ export const clearExplorePublicationSessionCache = (uid?: string | null) => {
   if (normalizedUid) {
     publicationMemoryCache.delete(normalizedUid);
     publicationInflight.delete(normalizedUid);
-    removeSoridrawPersistentCache(PUBLICATION_CACHE_KEY, normalizedUid);
+    publicationServerValidatedUids.delete(normalizedUid);
     return;
   }
   publicationMemoryCache.clear();
   publicationInflight.clear();
-  removeSoridrawPersistentCachesBySourceType(PUBLICATION_CACHE_SOURCE_TYPE);
+  publicationServerValidatedUids.clear();
 };
 
 const readResponsePayload = async (response: Response): Promise<any> => {
@@ -225,17 +384,6 @@ const requestExplore = async (
   return payload;
 };
 
-const normalizePublicationItem = (item: any): ExplorePublicationItem => ({
-  id: String(item?.id || item?.trackId || '').trim() || undefined,
-  trackId: String(item?.trackId || item?.id || '').trim() || undefined,
-  sourceType: String(item?.sourceType || '').trim() || undefined,
-  sourceId: String(item?.sourceId || '').trim() || undefined,
-  isPublic: Boolean(item?.isPublic),
-  allowNextSongApply: Boolean(item?.allowNextSongApply),
-  allowFollowerSave: Boolean(item?.allowFollowerSave),
-  profilePinned: Boolean(item?.profilePinned),
-});
-
 const normalizePublicationOptions = (
   options?: Partial<ExplorePublicationOptions> | null,
 ): ExplorePublicationOptions => ({
@@ -244,102 +392,116 @@ const normalizePublicationOptions = (
   profilePinned: Boolean(options?.profilePinned),
 });
 
+const parseMusicNotePublicationBundle = (
+  data: any,
+): Record<string, ExploreMusicNotePublicationState> | null => {
+  const rawStates = data?.states;
+  const entries = rawStates && typeof rawStates === 'object' && !Array.isArray(rawStates)
+    ? Object.entries(rawStates as Record<string, any>)
+    : [];
+  const isValidBundle = Number(data?.schemaVersion || 0) === 1
+    && rawStates
+    && typeof rawStates === 'object'
+    && !Array.isArray(rawStates)
+    && Number(data?.itemCount ?? -1) === entries.length
+    && entries.every(([sourceId, value]) => Boolean(
+      String(sourceId || '').trim()
+      && String((value as any)?.trackId || '').trim(),
+    ));
+  if (!isValidBundle) return null;
+
+  const bundledStates: Record<string, ExploreMusicNotePublicationState> = {};
+  entries.forEach(([sourceId, value]) => {
+    const state = value as any;
+    bundledStates[sourceId] = {
+      status: state?.status === 'public' ? 'public' : 'private',
+      trackId: String(state?.trackId || '').trim(),
+      registered: true,
+      allowNextSongApply: Boolean(state?.allowNextSongApply),
+      allowFollowerSave: Boolean(state?.allowFollowerSave),
+      profilePinned: Boolean(state?.profilePinned),
+    };
+  });
+  return bundledStates;
+};
+
 // SORIDRAW_EXPLORE_PUBLICATION_BATCH_STATE_965
 export const getExploreMusicNotePublicationStates = async (
   user: User,
 ): Promise<Record<string, ExploreMusicNotePublicationState>> => {
-  const cached = readPublicationStateCache(user.uid);
-  if (cached) return cached;
+  const uid = String(user.uid || '').trim();
+  const cached = readPublicationStateCache(uid);
+  const envelope = readPublicationStateEnvelope(uid);
+  if (cached && getPendingExplorePublicationMutationCount(uid) > 0) return cached;
+  if (cached && publicationServerValidatedUids.has(uid)) return cached;
 
-  const inFlight = publicationInflight.get(user.uid);
+  const inFlight = publicationInflight.get(uid);
   if (inFlight) return inFlight;
 
   const task = (async () => {
-    // SORIDRAW_MUSIC_NOTE_PUBLICATION_BUNDLE_20260904
-    // Cold browsers read one per-user D1 bundle row. The owner-wide paged sweep is
-    // retained only as a recovery fallback for an unavailable/corrupt derived cache.
-    try {
-      const payload = await requestExplore(user, '/v1/me/music-note-publications-bundle');
-      const data = payload?.data;
-      const rawStates = data?.states;
-      const entries = rawStates && typeof rawStates === 'object' && !Array.isArray(rawStates)
-        ? Object.entries(rawStates as Record<string, any>)
-        : [];
-      const isValidBundle = Number(data?.schemaVersion || 0) === 1
-        && rawStates
-        && typeof rawStates === 'object'
-        && !Array.isArray(rawStates)
-        && Number(data?.itemCount ?? -1) === entries.length
-        && entries.every(([sourceId, value]) => Boolean(
-          String(sourceId || '').trim()
-          && String((value as any)?.trackId || '').trim(),
-        ));
+    let knownRevision = '';
 
-      if (!isValidBundle) {
-        throw new ExploreApiError(
-          'MUSIC_NOTE_PUBLICATION_BUNDLE_INVALID',
-          '뮤직노트 공개상태 번들을 확인하지 못했습니다.',
-        );
+    // Warm device: validate only the tiny R2 object HEAD. This route is D1 R0/W0.
+    // A network/R2 outage never discards a valid device snapshot.
+    if (cached) {
+      try {
+        const revisionPayload = await requestExplore(user, '/v1/me/music-note-publications-revision');
+        const revisionData = revisionPayload?.data || {};
+        knownRevision = String(revisionData?.revision || '').trim();
+        const exists = Boolean(revisionData?.exists);
+        const remoteUpdatedAt = Math.max(0, Number(revisionData?.updatedAt || 0));
+        const localRevision = String(envelope?.serverRevision || '').trim();
+        const localSyncedAt = Math.max(0, Number(envelope?.syncedAt || 0));
+
+        if (!exists) {
+          // SORIDRAW_PUBLICATION_MISSING_R2_REPAIR_082_20260914
+          // A missing shared snapshot is a repair signal, not proof that this device cache is current.
+          // Fall through to the bundle route; the Worker rebuilds once from canonical D1 and repopulates R2.
+          knownRevision = '';
+        }
+        if (knownRevision && localRevision && knownRevision === localRevision) {
+          publicationServerValidatedUids.add(uid);
+          return clonePublicationStates(cached);
+        }
+        // Upgrade a healthy 076 cache without downloading the whole state bundle.
+        // If the R2 object has not changed since this device snapshot was written,
+        // the cached data is already current; simply attach the current revision.
+        if (knownRevision && !localRevision && remoteUpdatedAt > 0 && localSyncedAt >= remoteUpdatedAt) {
+          writePublicationStateCache(uid, cached, knownRevision);
+          publicationServerValidatedUids.add(uid);
+          return clonePublicationStates(cached);
+        }
+      } catch (revisionError) {
+        console.warn('[Explore publication] revision validation unavailable; using persistent snapshot.', revisionError);
+        publicationServerValidatedUids.add(uid);
+        return clonePublicationStates(cached);
       }
-
-      const bundledStates: Record<string, ExploreMusicNotePublicationState> = {};
-      entries.forEach(([sourceId, value]) => {
-        const state = value as any;
-        bundledStates[sourceId] = {
-          status: state?.status === 'public' ? 'public' : 'private',
-          trackId: String(state?.trackId || '').trim(),
-          allowNextSongApply: Boolean(state?.allowNextSongApply),
-          allowFollowerSave: Boolean(state?.allowFollowerSave),
-          profilePinned: Boolean(state?.profilePinned),
-        };
-      });
-
-      writePublicationStateCache(user.uid, bundledStates);
-      return clonePublicationStates(bundledStates);
-    } catch (bundleError) {
-      console.warn('[Explore publication] one-row bundle unavailable; using legacy recovery sweep.', bundleError);
     }
 
-    const result: Record<string, ExploreMusicNotePublicationState> = {};
-    let cursor = '';
-
-    for (let page = 0; page < MAX_PUBLICATION_PAGES; page += 1) {
-      const query = new URLSearchParams({
-        visibility: 'all',
-        limit: String(PUBLICATION_PAGE_SIZE),
-      });
-      if (cursor) query.set('cursor', cursor);
-
-      const payload = await requestExplore(user, `/v1/me/publications?${query.toString()}`);
-      const items = Array.isArray(payload?.data?.items) ? payload.data.items : [];
-
-      items
-        .map(normalizePublicationItem)
-        .forEach((item) => {
-          if (item.sourceType !== 'music_note') return;
-          const sourceId = String(item.sourceId || '').trim();
-          if (!sourceId) return;
-          const expectedTrackId = getMusicNoteTrackId(user.uid, sourceId);
-          result[sourceId] = {
-            status: item.isPublic ? 'public' : 'private',
-            trackId: item.trackId || item.id || expectedTrackId,
-            allowNextSongApply: Boolean(item.allowNextSongApply),
-            allowFollowerSave: Boolean(item.allowFollowerSave),
-            profilePinned: Boolean(item.profilePinned),
-          };
-        });
-
-      cursor = String(payload?.data?.nextCursor || '').trim();
-      if (!cursor) break;
+    // Cold device, or a warm device whose revision actually changed: one R2 snapshot.
+    // There is intentionally no paginated D1 fallback on the client.
+    const payload = await requestExplore(user, '/v1/me/music-note-publications-bundle');
+    const bundledStates = parseMusicNotePublicationBundle(payload?.data);
+    if (!bundledStates) {
+      if (cached) {
+        publicationServerValidatedUids.add(uid);
+        return clonePublicationStates(cached);
+      }
+      throw new ExploreApiError(
+        'MUSIC_NOTE_PUBLICATION_BUNDLE_INVALID',
+        '뮤직노트 공개상태 번들을 확인하지 못했습니다.',
+      );
     }
-
-    writePublicationStateCache(user.uid, result);
-    return clonePublicationStates(result);
+    const bundleRevision = String(payload?.data?.revision || knownRevision || '').trim() || null;
+    const mergedStates = overlayPendingPublicationStates(uid, bundledStates);
+    writePublicationStateCache(uid, mergedStates, bundleRevision);
+    publicationServerValidatedUids.add(uid);
+    return clonePublicationStates(mergedStates);
   })().finally(() => {
-    publicationInflight.delete(user.uid);
+    publicationInflight.delete(uid);
   });
 
-  publicationInflight.set(user.uid, task);
+  publicationInflight.set(uid, task);
   return task;
 };
 
@@ -354,6 +516,7 @@ export const getExploreMusicNotePublicationState = async (
   return state ? { ...state } : {
     status: 'private',
     trackId: expectedTrackId,
+    registered: false,
     ...DEFAULT_PUBLICATION_OPTIONS,
   };
 };
@@ -367,72 +530,44 @@ export const publishMusicNoteToExplore = async (
   if (!normalizedSourceId) {
     throw new ExploreApiError('SOURCE_ID_REQUIRED', '뮤직노트 원본 ID를 확인하지 못했습니다.');
   }
-
+  const trackId = getMusicNoteTrackId(user.uid, normalizedSourceId);
+  const states = readPublicationStateCache(user.uid) || {};
+  const current = states[normalizedSourceId] || normalizePublicationState({
+    status: 'private',
+    registered: false,
+    ...DEFAULT_PUBLICATION_OPTIONS,
+  }, trackId, false);
   const normalizedOptions = normalizePublicationOptions(options);
-  const payload = await requestExplore(user, '/v1/publications', {
-    method: 'POST',
-    body: JSON.stringify({
-      sourceType: 'music_note',
-      sourceId: normalizedSourceId,
-      ...normalizedOptions,
-    }),
-  });
-
-  const trackId = String(payload?.data?.trackId || getMusicNoteTrackId(user.uid, normalizedSourceId)).trim();
-  const nextState: ExploreMusicNotePublicationState = {
+  return queuePublicationMutation(user.uid, normalizedSourceId, current, {
     status: 'public',
     trackId,
-    allowNextSongApply: Boolean(payload?.data?.allowNextSongApply ?? normalizedOptions.allowNextSongApply),
-    allowFollowerSave: Boolean(payload?.data?.allowFollowerSave ?? normalizedOptions.allowFollowerSave),
-    profilePinned: Boolean(payload?.data?.profilePinned ?? normalizedOptions.profilePinned),
-  };
-  patchPublicationStateBySourceId(user.uid, normalizedSourceId, nextState);
-  invalidateExploreFeedSessionCache();
-  invalidateExplorePublicProfileFirstView(user.uid);
-  return nextState;
+    registered: current.registered,
+    ...normalizedOptions,
+  });
 };
 
 export const setExploreTrackVisibility = async (
   user: User,
   trackId: string,
   isPublic: boolean,
+  options?: Partial<ExplorePublicationOptions>,
 ): Promise<ExploreMusicNotePublicationState> => {
   const normalizedTrackId = String(trackId || '').trim();
   if (!normalizedTrackId) {
     throw new ExploreApiError('TRACK_ID_REQUIRED', 'Explore 곡 ID를 확인하지 못했습니다.');
   }
-
-  const payload = await requestExplore(
-    user,
-    `/v1/tracks/${encodeURIComponent(normalizedTrackId)}/visibility`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify({ isPublic }),
-    },
-  );
-
-  const resolvedTrackId = String(payload?.data?.trackId || normalizedTrackId).trim();
-  const status: ExploreMusicNotePublicationState['status'] = Boolean(payload?.data?.isPublic) ? 'public' : 'private';
-  let cachedOptions = DEFAULT_PUBLICATION_OPTIONS;
-  const cachedStates = readPublicationStateCache(user.uid);
-  if (cachedStates) {
-    const existing = Object.values(cachedStates).find((state) => state.trackId === resolvedTrackId);
-    if (existing) {
-      cachedOptions = {
-        allowNextSongApply: existing.allowNextSongApply,
-        allowFollowerSave: existing.allowFollowerSave,
-        profilePinned: existing.profilePinned,
-      };
-    }
-  }
-  patchPublicationStateByTrackId(user.uid, resolvedTrackId, (state) => ({ ...state, status }));
-  invalidateExploreFeedSessionCache();
-  invalidateExplorePublicProfileFirstView(user.uid);
-  return {
-    status,
-    trackId: resolvedTrackId,
-    ...cachedOptions,
+  const found = findPublicationSourceByTrackId(user.uid, normalizedTrackId);
+  const requestedOptions = options ? normalizePublicationOptions(options) : {
+    allowNextSongApply: found.state.allowNextSongApply,
+    allowFollowerSave: found.state.allowFollowerSave,
+    profilePinned: found.state.profilePinned,
   };
+  return queuePublicationMutation(user.uid, found.sourceId, found.state, {
+    ...found.state,
+    status: isPublic ? 'public' : 'private',
+    trackId: normalizedTrackId,
+    ...requestedOptions,
+  });
 };
 
 export const setExploreTrackPublicationOptions = async (
@@ -444,26 +579,91 @@ export const setExploreTrackPublicationOptions = async (
   if (!normalizedTrackId) {
     throw new ExploreApiError('TRACK_ID_REQUIRED', 'Explore 곡 ID를 확인하지 못했습니다.');
   }
-
+  const found = findPublicationSourceByTrackId(user.uid, normalizedTrackId);
   const normalizedOptions = normalizePublicationOptions(options);
-  const payload = await requestExplore(
-    user,
-    `/v1/tracks/${encodeURIComponent(normalizedTrackId)}/publication-options`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify(normalizedOptions),
-    },
-  );
+  queuePublicationMutation(user.uid, found.sourceId, found.state, {
+    ...found.state,
+    ...normalizedOptions,
+    trackId: normalizedTrackId,
+  });
+  return normalizedOptions;
+};
 
-  const nextOptions: ExplorePublicationOptions = {
-    allowNextSongApply: Boolean(payload?.data?.allowNextSongApply ?? normalizedOptions.allowNextSongApply),
-    allowFollowerSave: Boolean(payload?.data?.allowFollowerSave ?? normalizedOptions.allowFollowerSave),
-    profilePinned: Boolean(payload?.data?.profilePinned ?? normalizedOptions.profilePinned),
-  };
-  patchPublicationStateByTrackId(user.uid, normalizedTrackId, (state) => ({ ...state, ...nextOptions }));
-  invalidateExploreFeedSessionCache();
-  invalidateExplorePublicProfileFirstView(user.uid);
-  return nextOptions;
+export const flushPendingExplorePublicationsForPageExit = async (user: User): Promise<void> => {
+  const uid = String(user.uid || '').trim();
+  const initialOutbox = readPublicationOutbox(uid);
+  const entries = Object.values(initialOutbox).sort((a, b) => a.updatedAt - b.updatedAt);
+  if (!entries.length) return;
+
+  const payload = await requestExplore(user, '/v1/me/music-note-publications/batch', {
+    method: 'POST',
+    body: JSON.stringify({
+      mutations: entries.map((pending) => ({
+        sourceId: pending.sourceId,
+        trackId: pending.trackId,
+        status: pending.desiredState.status,
+        registered: pending.baseState.registered,
+        options: {
+allowNextSongApply: pending.desiredState.allowNextSongApply,
+allowFollowerSave: pending.desiredState.allowFollowerSave,
+profilePinned: pending.desiredState.profilePinned,
+        },
+        mutationAt: pending.updatedAt,
+      })),
+    }),
+  });
+  const rows = Array.isArray(payload?.data?.results) ? payload.data.results : [];
+  const resultBySource = new Map(rows.map((row: any) => [String(row?.sourceId || ''), row]));
+  const latestOutbox = readPublicationOutbox(uid);
+  const states = readPublicationStateCache(uid) || {};
+  let failed = false;
+
+  for (const pending of entries) {
+    const row: any = resultBySource.get(pending.sourceId);
+    if (!row?.ok) {
+      failed = true;
+      continue;
+    }
+    const confirmed: ExploreMusicNotePublicationState = {
+      status: row.status === 'public' ? 'public' : 'private',
+      trackId: String(row.trackId || pending.trackId),
+      registered: row.registered !== false,
+      allowNextSongApply: Boolean(row.allowNextSongApply),
+      allowFollowerSave: Boolean(row.allowFollowerSave),
+      profilePinned: Boolean(row.profilePinned),
+    };
+    const latest = latestOutbox[pending.sourceId];
+    let visibleState = confirmed;
+    if (latest && latest.updatedAt !== pending.updatedAt) {
+      const rebased = { ...latest, baseState: confirmed };
+      if (samePublicationState(rebased.baseState, rebased.desiredState)) {
+        delete latestOutbox[pending.sourceId];
+        visibleState = confirmed;
+      } else {
+        latestOutbox[pending.sourceId] = rebased;
+        visibleState = rebased.desiredState;
+      }
+    } else {
+      delete latestOutbox[pending.sourceId];
+    }
+    states[pending.sourceId] = { ...visibleState };
+
+    if (visibleState.status === 'private') {
+      removeExploreFeedSessionCacheRow(visibleState.trackId);
+      removeExplorePublicProfileFirstViewTrack(uid, visibleState.trackId);
+    } else if (row.snapshotItem && typeof row.snapshotItem === 'object' && !Array.isArray(row.snapshotItem)) {
+      upsertExploreFeedSessionCacheRow(visibleState.trackId, row.snapshotItem as Record<string, unknown>);
+      upsertExplorePublicProfileFirstViewTrack(uid, row.snapshotItem as Record<string, unknown>);
+    }
+  }
+
+  persistPublicationOutbox(uid, latestOutbox);
+  const revision = String(payload?.data?.revision || '').trim();
+  writePublicationStateCache(uid, states, revision || undefined);
+  publicationServerValidatedUids.add(uid);
+  if (failed || Object.keys(latestOutbox).length > 0) {
+    throw new ExploreApiError('PUBLICATION_BATCH_PENDING', '일부 공개상태 변경을 반영하지 못했습니다. 다음 페이지 이동 또는 재접속에서 다시 시도합니다.');
+  }
 };
 
 export const getExplorePublicationErrorMessage = (error: unknown): string => {

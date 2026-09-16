@@ -516,13 +516,10 @@ const readRemoteCatalogSnapshot = async (
       // into the old partial-list path.
       const headers = await authenticatedHeaders(false);
       if (!headers) throw new Error('CATALOG_AUTH_NOT_READY');
-      // A normal Catalog read asks for the already-materialized full R2 snapshot.
-      // Profile sync signals are cache-invalidation hints, not permission to force
-      // an expensive Firestore full rebuild on every browser entry. Only explicit
-      // maintenance/mutation callers may pass a hard minimumRevision.
-      const hardMinimumRevision = Math.max(0, Math.floor(minimumRevision || 0));
-      if (hardMinimumRevision > 0) headers['X-Soridraw-Require-Revision'] = String(hardMinimumRevision);
-      else if (allowDeltaSync && localSnapshot) headers['X-Soridraw-Known-Revision'] = String(localSnapshot.revision);
+      // Catalog reads are R2-only. Profile revisions are soft invalidation hints;
+      // ordinary app traffic never asks the Worker to rebuild from Firestore.
+      const hardMinimumRevision = 0;
+      if (allowDeltaSync && localSnapshot) headers['X-Soridraw-Known-Revision'] = String(localSnapshot.revision);
       markCatalogRuntimeDiagnostic(kind, { stage: 'REQUEST', attempt: attempt + 1 });
       const response = await fetch(`${resolveCatalogEndpoint()}/v1/catalog/${kind}`, {
         method: 'GET',
@@ -549,8 +546,13 @@ const readRemoteCatalogSnapshot = async (
         throw new Error('CATALOG_PAYLOAD_INVALID');
       }
       markCatalogRuntimeDiagnostic(kind, { stage: 'SNAPSHOT', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(resolved.itemCount || 0), revision: Number(resolved.revision || 0), errorCode: '' });
-      if (hardMinimumRevision > 0 && resolved.revision < hardMinimumRevision) {
-        throw new Error('CATALOG_REVISION_STALE');
+      // Never replace a newer local catalog with an older R2 base while another device's
+      // delta is still converging. Keep the newer local snapshot and retry only on a later
+      // invalidation signal.
+      if (localSnapshot && resolved.revision < localSnapshot.revision) {
+        catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));
+        markCatalogRuntimeDiagnostic(kind, { stage: 'ACCEPTED', attempt: attempt + 1, httpStatus: response.status, remoteItemCount: Number(localSnapshot.itemCount || 0), revision: Number(localSnapshot.revision || 0), errorCode: 'REMOTE_OLDER_THAN_LOCAL' });
+        return localSnapshot;
       }
       await writeCatalogSnapshotToLocalCache(kind, uid, resolved);
       catalogRemoteValidatedSessionKeys.add(catalogKey(kind, uid));
@@ -558,7 +560,9 @@ const readRemoteCatalogSnapshot = async (
       return resolved;
     } catch (error) {
       lastError = error;
-      markCatalogRuntimeDiagnostic(kind, { stage: 'ERROR', attempt: attempt + 1, errorCode: String((error as any)?.message || error || 'CATALOG_UNKNOWN_ERROR') });
+      const errorCode = String((error as any)?.message || error || 'CATALOG_UNKNOWN_ERROR');
+      markCatalogRuntimeDiagnostic(kind, { stage: 'ERROR', attempt: attempt + 1, errorCode });
+      if (errorCode.includes('CATALOG_NOT_MATERIALIZED')) break;
     }
   }
   console.warn(`[userDataEngine] ${kind} catalog snapshot read unavailable after retry.`, lastError);
@@ -590,14 +594,10 @@ export const readCatalogSnapshotCacheFirst = async (
       return local;
     }
 
-    // If the existing user-profile invalidation token proves this browser Catalog is stale,
-    // require that exact revision once. The Worker rebuilds only when its environment R2 is
-    // actually behind; after that, the warm-cache path returns CACHE with no Worker GET.
-    const hardRequiredRevision = knownRemoteRevision > 0
-      && (!local || knownRemoteRevision > local.revision)
-      ? knownRemoteRevision
-      : 0;
-    const remote = await readRemoteCatalogSnapshot(kind, uid, hardRequiredRevision, local);
+    // The profile revision is only an invalidation hint. A fresh device must fetch the
+    // already-materialized R2 Catalog once; it must never turn a revision gap into
+    // a full Firestore reconstruction request.
+    const remote = await readRemoteCatalogSnapshot(kind, uid, 0, local);
     if (remote) {
       catalogLastReadSources.set(key, 'remote');
       return remote;
@@ -721,6 +721,75 @@ const publishRemoteCatalogDelta = async (
   }
 };
 
+const flushCatalogPendingPublish = async (key: string): Promise<void> => {
+  const pending = catalogPendingPublishes.get(key);
+  if (!pending) return;
+  const { kind, uid, sourceItems, options } = pending;
+  const currentDirtyRevision = readAdaptiveListIndexDirtyRevision(kind);
+  if (currentDirtyRevision <= 0) {
+    catalogPendingPublishes.delete(key);
+    return;
+  }
+
+  let previous = await readCatalogSnapshotFromLocalCache(kind, uid);
+
+  // Missing local state is repaired only from the already-materialized R2 Catalog.
+  // Never convert a missing/stale local cache into a Firestore collection rebuild.
+  if (!previous) {
+    const refreshed = await readRemoteCatalogSnapshot(kind, uid, 0, null);
+    if (!refreshed) {
+      console.warn(`[userDataEngine] ${kind} catalog publish deferred: server catalog not materialized.`);
+      return;
+    }
+    previous = refreshed;
+  }
+
+  const explicitDeletedIds = Array.from(new Set(
+    (Array.isArray(options.deletedIds) ? options.deletedIds : [])
+      .map((id) => String(id || '').trim())
+      .filter(Boolean)
+  ));
+
+  // Partial UI lists are safe delta sources because absence is never interpreted as a
+  // deletion. Only explicit tombstones remove items from the canonical Catalog.
+  const built = buildCatalogDelta(
+    kind,
+    previous,
+    sourceItems,
+    currentDirtyRevision,
+    explicitDeletedIds,
+  );
+  if (!built) {
+    console.warn(`[userDataEngine] ${kind} catalog delta deferred: change set is not safely representable.`);
+    return;
+  }
+
+  if (built.delta.upserts.length === 0 && built.delta.deletedIds.length === 0) {
+    clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
+    catalogPendingPublishes.delete(key);
+    return;
+  }
+
+  const published = await publishRemoteCatalogDelta(uid, built.delta);
+  if (!published) throw new Error(`catalog ${kind} delta publish failed`);
+  if (published.conflict) {
+    await readRemoteCatalogSnapshot(kind, uid, 0, previous);
+    return;
+  }
+  if (published.itemCount !== built.nextSnapshot.itemCount) {
+    await readRemoteCatalogSnapshot(kind, uid, 0, previous);
+    return;
+  }
+
+  const confirmedSnapshot: SoridrawCatalogSnapshot = {
+    ...built.nextSnapshot,
+    revision: published.revision,
+  };
+  await writeCatalogSnapshotToLocalCache(kind, uid, confirmedSnapshot);
+  clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
+  catalogPendingPublishes.delete(key);
+};
+
 export const scheduleCatalogSnapshotPublishIfDirty = (
   kind: SoridrawCatalogKind,
   uid: string,
@@ -730,81 +799,27 @@ export const scheduleCatalogSnapshotPublishIfDirty = (
   if (!uid || !Array.isArray(sourceItems) || !isPreviewCatalogEnabled()) return;
   const dirtyRevision = readAdaptiveListIndexDirtyRevision(kind);
   if (dirtyRevision <= 0) return;
-
   const key = catalogKey(kind, uid);
-  catalogPendingPublishes.set(key, { kind, uid, sourceItems: [...sourceItems], options: { ...options } });
   const existingTimer = catalogPublishTimers.get(key);
   if (existingTimer) clearTimeout(existingTimer);
+  catalogPublishTimers.delete(key);
+  catalogPendingPublishes.set(key, {
+    kind,
+    uid,
+    sourceItems: [...sourceItems],
+    options: { ...options },
+  });
+};
 
-  catalogPublishTimers.set(key, setTimeout(() => {
-    catalogPublishTimers.delete(key);
-    const pending = catalogPendingPublishes.get(key);
-    catalogPendingPublishes.delete(key);
-    if (!pending) return;
+export const getPendingCatalogPublishCount = (uid: string): number => [...catalogPendingPublishes.values()]
+  .filter((pending) => pending.uid === uid && readAdaptiveListIndexDirtyRevision(pending.kind) > 0)
+  .length;
 
-    void (async () => {
-      const currentDirtyRevision = readAdaptiveListIndexDirtyRevision(kind);
-      if (currentDirtyRevision <= 0) return;
-      const previous = await readCatalogSnapshotFromLocalCache(kind, uid);
-
-      // No proven full local catalog means this device must never manufacture a
-      // "complete" object from a 10/20-row compatibility page. Force the Worker
-      // to materialize the canonical catalog server-side once instead.
-      if (!previous) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(Date.now(), previous?.revision ? previous.revision + 1 : 1));
-        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-        return;
-      }
-
-      const projectedCount = normalizeCatalogItems(kind, pending.sourceItems).length;
-      const explicitComplete = pending.options.complete === true;
-      const explicitDeletedIds = Array.from(new Set(
-        (Array.isArray(pending.options.deletedIds) ? pending.options.deletedIds : [])
-          .map((id) => String(id || '').trim())
-          .filter(Boolean)
-      ));
-      const looksCompleteAgainstPrevious = projectedCount >= Math.max(0, previous.itemCount - 2);
-      const unexplainedMissingFromCompleteSource = explicitComplete
-        && projectedCount + explicitDeletedIds.length < previous.itemCount;
-      if ((!explicitComplete && !looksCompleteAgainstPrevious) || unexplainedMissingFromCompleteSource) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(Date.now(), previous?.revision ? previous.revision + 1 : 1));
-        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-        return;
-      }
-
-      const built = buildCatalogDelta(
-        kind, previous, pending.sourceItems, currentDirtyRevision, explicitDeletedIds,
-      );
-      if (!built) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(Date.now(), previous?.revision ? previous.revision + 1 : 1));
-        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-        return;
-      }
-
-      if (built.delta.upserts.length === 0 && built.delta.deletedIds.length === 0) {
-        clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-        return;
-      }
-
-      const published = await publishRemoteCatalogDelta(uid, built.delta);
-      if (!published || published.conflict) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, Math.max(Date.now(), previous.revision + 1));
-        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-        return;
-      }
-      if (published.itemCount !== built.nextSnapshot.itemCount) {
-        const rebuilt = await readRemoteCatalogSnapshot(kind, uid, published.revision);
-        if (rebuilt) clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-        return;
-      }
-      const confirmedSnapshot: SoridrawCatalogSnapshot = {
-        ...built.nextSnapshot,
-        revision: published.revision,
-      };
-      await writeCatalogSnapshotToLocalCache(kind, uid, confirmedSnapshot);
-      clearAdaptiveListIndexDirtyRevision(kind, currentDirtyRevision);
-    })();
-  }, 1200));
+export const flushPendingCatalogPublishes = async (uid: string): Promise<void> => {
+  const keys = [...catalogPendingPublishes.entries()]
+    .filter(([, pending]) => pending.uid === uid)
+    .map(([key]) => key);
+  for (const key of keys) await flushCatalogPendingPublish(key);
 };
 
 export const getCatalogRenderBatchSize = (kind: SoridrawCatalogKind): number => (

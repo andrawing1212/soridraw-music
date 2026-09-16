@@ -1,0 +1,113 @@
+name: TEMP 080 Apply Visibility Hotpath Migration
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-080-apply-visibility-hotpath-migration.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-080-shared-d1-trigger-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Guard, migrate trigger only, verify, rollback on failure
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          MIG="$PWD/migrations/20260913_04_music_note_visibility_hotpath.sql"
+          test -f "$MIG"
+
+          query() {
+            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$1" --json
+          }
+
+          query "SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name IN ('explore032_track_update','soridraw_shared_rev_tracks_au_051') ORDER BY name;" > "$RUNNER_TEMP/before-triggers.json"
+          query "SELECT COUNT(*) AS track_count, COALESCE(SUM(is_public),0) AS public_sum, COALESCE(SUM(updated_at),0) AS updated_sum, COALESCE(SUM(length(title)+length(owner_uid)+length(source_id)),0) AS payload_sum FROM tracks;" > "$RUNNER_TEMP/before-data.json"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/before-triggers.json','utf8'));
+          const rows=raw.flatMap(x=>x.results||[]);
+          const old=rows.find(x=>x.name==='explore032_track_update');
+          const shared=rows.find(x=>x.name==='soridraw_shared_rev_tracks_au_051');
+          if(!old?.sql) throw new Error('existing explore032_track_update missing');
+          if(!/AFTER\s+UPDATE\s+ON\s+tracks/i.test(old.sql)) throw new Error('unexpected old trigger contract; migration blocked');
+          if(!/explore_derived_tracks/i.test(old.sql)) throw new Error('old trigger no longer maintains derived tracks; migration blocked');
+          if(!shared?.sql || !/explore_shared_revision/i.test(shared.sql)) throw new Error('protected shared revision trigger missing');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/old-trigger.sql','DROP TRIGGER IF EXISTS explore032_track_update;\n'+old.sql+';\n');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/shared-before.txt',shared.sql);
+          console.log('080_D1_PREFLIGHT=PASS');
+          console.log('USER_ROW_MUTATION_BEFORE=0');
+          NODE
+
+          migrated=0
+          restore_old() {
+            status=$?
+            if [ "$status" -ne 0 ] && [ "$migrated" = 1 ]; then
+              echo '080_MIGRATION_VERIFY_FAILED_ROLLBACK=START'
+              node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file "$RUNNER_TEMP/old-trigger.sql" >/dev/null || true
+              echo '080_MIGRATION_ROLLBACK=ATTEMPTED'
+            fi
+            exit "$status"
+          }
+          trap restore_old EXIT
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --file "$MIG"
+          migrated=1
+
+          query "SELECT name,sql FROM sqlite_schema WHERE type='trigger' AND name IN ('explore032_track_update','soridraw_shared_rev_tracks_au_051') ORDER BY name;" > "$RUNNER_TEMP/after-triggers.json"
+          query "SELECT COUNT(*) AS track_count, COALESCE(SUM(is_public),0) AS public_sum, COALESCE(SUM(updated_at),0) AS updated_sum, COALESCE(SUM(length(title)+length(owner_uid)+length(source_id)),0) AS payload_sum FROM tracks;" > "$RUNNER_TEMP/after-data.json"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const rows=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/after-triggers.json','utf8')).flatMap(x=>x.results||[]);
+          const next=rows.find(x=>x.name==='explore032_track_update');
+          const shared=rows.find(x=>x.name==='soridraw_shared_rev_tracks_au_051');
+          if(!next?.sql) throw new Error('new explore032_track_update missing');
+          if(!/AFTER\s+UPDATE\s+OF/i.test(next.sql)) throw new Error('080 column-scoped trigger not active');
+          const columnBlock=(next.sql.match(/AFTER\s+UPDATE\s+OF([\s\S]*?)ON\s+tracks/i)||[])[1]||'';
+          for(const hot of ['is_public','updated_at','allow_next_song_apply','allow_follower_save','profile_pinned']) {
+            if(new RegExp('\\b'+hot+'\\b','i').test(columnBlock)) throw new Error('hot column still causes derived rewrite: '+hot);
+          }
+          for(const required of ['title','status','published_at','share_payload_json']) {
+            if(!new RegExp('\\b'+required+'\\b','i').test(columnBlock)) throw new Error('required recovery column missing: '+required);
+          }
+          const beforeShared=fs.readFileSync(process.env.RUNNER_TEMP+'/shared-before.txt','utf8');
+          if(shared?.sql!==beforeShared) throw new Error('protected shared revision trigger changed unexpectedly');
+          const before=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/before-data.json','utf8')).flatMap(x=>x.results||[])[0];
+          const after=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/after-data.json','utf8')).flatMap(x=>x.results||[])[0];
+          for(const k of ['track_count','public_sum','updated_sum','payload_sum']) {
+            if(String(before?.[k])!==String(after?.[k])) throw new Error('canonical track data changed during trigger-only migration: '+k);
+          }
+          console.log('080_TRIGGER_HOT_COLUMNS_EXCLUDED=PASS');
+          console.log('SHARED_REVISION_TRIGGER_UNCHANGED=PASS');
+          console.log('CANONICAL_USER_ROWS_UNCHANGED=PASS');
+          console.log('080_D1_MIGRATION=PASS');
+          NODE
+
+          trap - EXIT

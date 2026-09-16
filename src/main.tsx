@@ -12,8 +12,10 @@ import './services/userDomainSyncService';
 import { startPreviewVersionSignal } from './services/versionSignalService';
 import { startAppUpdateNotice } from './services/appUpdateNotice';
 import { installChunkLoadRecovery } from './services/chunkLoadRecovery';
+import { installExploreRevisionRequestCache } from './services/exploreRevisionRequestCache';
 
 installChunkLoadRecovery();
+installExploreRevisionRequestCache();
 void startPreviewVersionSignal();
 startAppUpdateNotice();
 

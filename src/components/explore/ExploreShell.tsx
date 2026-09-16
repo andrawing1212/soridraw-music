@@ -5,6 +5,7 @@ import { auth } from '../../firebase';
 import StudioPageFrame from '../studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from '../studio/StudioLeftRail';
 import ExplorePage from '../../pages/ExplorePage';
+import { flushSoridrawPageSync } from '../../lib/pageSyncCoordinator';
 
 export default function ExploreShell() {
   const navigate = useNavigate();
@@ -13,10 +14,30 @@ export default function ExploreShell() {
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
-  const go = (path: string) => {
+  useEffect(() => {
+    if (!user?.uid) return;
+    const activeUser = user;
+    const flushWhenHidden = () => {
+      if (document.visibilityState !== 'hidden') return;
+      void flushSoridrawPageSync(activeUser, 'route-change')
+        .catch((error) => console.warn('[094] Explore background sync retained locally:', error));
+    };
+    document.addEventListener('visibilitychange', flushWhenHidden);
+    return () => {
+      document.removeEventListener('visibilitychange', flushWhenHidden);
+      void flushSoridrawPageSync(activeUser, 'route-change')
+        .catch((error) => console.warn('[081] Explore page sync pending:', error));
+    };
+  }, [user?.uid]);
+
+  const go = async (path: string) => {
     if (`${location.pathname}${location.search}` === path) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
+    }
+    if (user?.uid) {
+      await flushSoridrawPageSync(user, 'route-change')
+        .catch((error) => console.warn('[094] Explore route sync retained locally:', error));
     }
     navigate(path);
   };
@@ -36,8 +57,12 @@ export default function ExploreShell() {
       onPlan={() => go('/my-page?tab=plan')}
       onBilling={() => go('/my-page?tab=billing')}
       onLogout={async () => {
+        if (user?.uid) {
+          await flushSoridrawPageSync(user, 'route-change')
+            .catch((error) => console.warn('[094] Explore logout sync retained locally:', error));
+        }
         await signOut(auth);
-        go('/');
+        navigate('/');
       }}
       profileName={user?.displayName || user?.email?.split('@')[0] || 'SORiDRAW'}
       profileEmail={user?.email || ''}

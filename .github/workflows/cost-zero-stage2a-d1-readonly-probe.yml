@@ -1,11 +1,6 @@
 name: Cost Zero Stage 2A D1 Readonly Probe
-# recheck-20260901
 
 on:
-  push:
-    branches: [preview]
-    paths:
-      - '.github/workflows/cost-zero-stage2a-d1-readonly-probe.yml'
   workflow_dispatch:
 
 permissions:
@@ -16,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_READONLY_TOKEN }}
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
@@ -33,6 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_READONLY_TOKEN unavailable'; exit 2; }
           npm install --no-audit --no-fund --package-lock=false
           npm run cf:prepare
           node --check .remote-worker/worker.js

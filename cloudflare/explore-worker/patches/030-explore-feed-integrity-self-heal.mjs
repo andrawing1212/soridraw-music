@@ -7,7 +7,7 @@ const workerPath = join(remoteDir, 'worker.js');
 let source = readFileSync(workerPath, 'utf8');
 
 const marker = 'SORIDRAW_EXPLORE_FEED_INTEGRITY_SELF_HEAL_030_20260909';
-if (source.includes(marker)) {
+if (source.includes(marker) || source.includes('async function ensureExploreFeedIntegrity030(')) {
   console.log('[030] Explore feed integrity self-heal already applied.');
   process.exit(0);
 }

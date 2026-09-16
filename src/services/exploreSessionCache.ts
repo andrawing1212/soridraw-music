@@ -6,7 +6,11 @@ import {
 
 // SORIDRAW_LONG_TERM_CACHE_STAGE_1_3_990
 // SORIDRAW_EXPLORE_FEED_REVISION_033_20260908
-const EXPLORE_FEED_CACHE_SCHEMA_VERSION = 1;
+// SORIDRAW_EXPLORE_FEED_STALE_COUNT_CACHE_RECOVERY_108_20260916
+// 108 rejected schema-1 once. Real mobile evidence showed a stale schema-2 public-count payload can survive,
+// so 109 performs one final contract bump. Keep this value stable across ordinary future app versions.
+// SORIDRAW_EXPLORE_MOBILE_STALE_PUBLIC_COUNT_RECOVERY_109_20260916
+const EXPLORE_FEED_CACHE_SCHEMA_VERSION = 3;
 const EXPLORE_FEED_SOURCE_TYPE = 'explore_feed';
 
 type ExploreFeedCacheData = {
@@ -119,6 +123,76 @@ export const patchExploreFeedSessionCacheRow = (
     previous?.syncCursor ?? null,
     normalizeRevision(previous?.serverRevision),
   );
+};
+
+
+// SORIDRAW_EXPLORE_TARGETED_PUBLICATION_CACHE_075_20260913
+const rewriteLoadedFeedRows075 = (
+  mutator: (url: string, rows: Array<Record<string, unknown>>) => Array<Record<string, unknown>> | null,
+) => {
+  [...exploreFeedMemoryCache.entries()].forEach(([url, memory]) => {
+    if (!isFeedRequest(url)) return;
+    const nextRows = mutator(url, cloneRows(memory.rows));
+    if (!nextRows) return;
+    const previous = readFeedEnvelope(url);
+    writeExploreFeedSessionCache(
+      url,
+      nextRows,
+      previous?.syncCursor ?? null,
+      normalizeRevision(previous?.serverRevision),
+    );
+  });
+};
+
+export const patchExploreFeedSessionCachesRow = (
+  trackId: string,
+  patch: Record<string, unknown>,
+) => {
+  const normalizedId = String(trackId || '').trim();
+  if (!normalizedId) return;
+  rewriteLoadedFeedRows075((_url, rows) => {
+    let changed = false;
+    const next = rows.map((row) => {
+      const rowId = String(row.id || row.trackId || '').trim();
+      if (rowId !== normalizedId) return row;
+      changed = true;
+      return { ...row, ...patch };
+    });
+    return changed ? next : null;
+  });
+};
+
+export const upsertExploreFeedSessionCacheRow = (
+  trackId: string,
+  row: Record<string, unknown>,
+) => {
+  const normalizedId = String(trackId || '').trim();
+  if (!normalizedId) return;
+  rewriteLoadedFeedRows075((url, rows) => {
+    const index = rows.findIndex((item) => String(item.id || item.trackId || '').trim() === normalizedId);
+    if (index >= 0) {
+      const next = [...rows];
+      next[index] = { ...next[index], ...row };
+      return next;
+    }
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (parsed.searchParams.get('sort') !== 'latest') return null;
+    } catch {
+      return null;
+    }
+    const limit = Math.max(1, rows.length || 40);
+    return [{ ...row }, ...rows].slice(0, limit);
+  });
+};
+
+export const removeExploreFeedSessionCacheRow = (trackId: string) => {
+  const normalizedId = String(trackId || '').trim();
+  if (!normalizedId) return;
+  rewriteLoadedFeedRows075((_url, rows) => {
+    const next = rows.filter((row) => String(row.id || row.trackId || '').trim() !== normalizedId);
+    return next.length === rows.length ? null : next;
+  });
 };
 
 export const invalidateExploreFeedSessionCache = () => {

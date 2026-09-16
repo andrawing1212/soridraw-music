@@ -8,7 +8,8 @@ const control = readFileSync('src/services/userControlRevisionService.ts', 'utf8
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 
 const fail = (message) => { throw new Error(`[109] ${message}`); };
-if (String(version.version) !== '109') fail('app version is not 109');
+const appVersion = Number(version.version);
+if (!Number.isFinite(appVersion) || appVersion < 109) fail('app version is older than 109');
 if (!app.includes('SORIDRAW_ROOT_USER_REFRESH_ZERO_109_20260916')) fail('refresh-zero gate marker missing');
 if (app.includes('        attachUserRoleListener();\n\n        // Fetch favorites for the user.')) fail('unconditional root users listener remains');
 if (!app.includes('subscribeUserControlRevision(')) fail('UID RTDB control revision gate missing');

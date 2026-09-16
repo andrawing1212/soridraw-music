@@ -7,7 +7,7 @@ const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const revision = readFileSync('src/services/exploreRevisionRequestCache.ts', 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 
-assert.ok(['105', '106', '107'].includes(version.version), `105 one-minute contract incompatible with app ${version.version}`);
+assert.ok(['105', '106', '107', '108'].includes(version.version), `105 one-minute contract incompatible with app ${version.version}`);
 
 assert.match(worker, /SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_105_20260916/);
 assert.match(worker, /const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 \* 60 \* 1000;/);

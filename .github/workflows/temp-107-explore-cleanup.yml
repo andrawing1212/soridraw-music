@@ -1,4 +1,4 @@
-name: TEMP 107 Explore Cleanup
+name: TEMP 107 Final Cleanup
 
 on:
   push:
@@ -10,67 +10,47 @@ permissions:
   contents: write
 
 jobs:
-  apply:
+  cleanup:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           ref: preview
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Apply 107 cleanup
-        run: python3 .deploy/temp-apply-107-explore-cleanup.py
-
-      - name: Install
-        run: npm ci --no-audit --no-fund
-
-      - name: Verify 107
-        run: node scripts/verify-107-explore-direct-count-zero-read.mjs
-
-      - name: Verify existing Explore contracts
+      - name: Remove generated dist and temporary 107 machinery
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/verify-105-explore-like-1min.mjs
-          node scripts/verify-103-explore-like-event-batch.mjs
-          node scripts/verify-102-explore-public-like-parity.mjs
+          base='742e349307534e85da7ecca300c97e65a301ad80'
+          mapfile -t added_dist < <(git diff --name-only --diff-filter=A "$base"..HEAD -- dist)
+          if ((${#added_dist[@]})); then
+            git rm -- "${added_dist[@]}"
+          fi
+          git rm .deploy/temp-apply-107-explore-cleanup.py
+          git rm .deploy/temp-107-explore-cleanup.trigger
+          git rm .github/workflows/temp-107-explore-cleanup.yml
 
-      - name: TypeScript
-        run: npx tsc --noEmit
-
-      - name: Build
-        run: npm run build
-
-      - name: Restore generated dist
+      - name: Verify final source tree
         shell: bash
         run: |
           set -euo pipefail
-          git restore --source=HEAD --worktree -- dist
-
-      - name: Change boundary
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff --name-only HEAD -- | tee /tmp/changed.txt
-          if grep -E '(^|/)(.*\.css|firebase.*rules|firestore.*rules|database.*rules|functions/|cloudflare/explore-worker/canonical/|cloudflare/explore-worker/patches/)' /tmp/changed.txt; then
-            echo 'Unexpected UI/rules/functions/worker runtime change' >&2
+          test ! -e src/services/exploreLikeDisplayStateService.ts
+          test -e scripts/verify-107-explore-direct-count-zero-read.mjs
+          test "$(node -e "process.stdout.write(String(require('./public/app-version.json').version))")" = '107'
+          git diff --cached --name-only | tee /tmp/cleanup.txt
+          if grep -E '^src/|^public/app-version.json$|^cloudflare/|^functions/|\.css$' /tmp/cleanup.txt; then
+            echo 'Final cleanup unexpectedly changes product/runtime source' >&2
             exit 1
           fi
 
-      - name: Commit 107
+      - name: Commit cleanup
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'soridraw-release-bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add -A
-          git diff --cached --quiet && { echo 'No 107 changes'; exit 1; }
-          git commit -m 'fix: simplify Explore counts and warm profile cache'
+          git commit -m 'chore: clean temporary 107 release files'
           git push origin HEAD:preview
-          echo "PRODUCT_107_SHA=$(git rev-parse HEAD)"
+          echo "FINAL_107_CLEAN_HEAD=$(git rev-parse HEAD)"

@@ -1,38 +1,51 @@
 # SORIDRAW NEXT CODEX TASK
 
-최종 갱신: 2026-09-16 KST — PREVIEW 111 Explore 누수 방어 완료
+최종 갱신: 2026-09-16 KST — TEST 승격 완료 / 정식배포 전 실사용 검증
 
 ## 현재 기준
 
-- branch: `preview`
-- PREVIEW app: **110**, `https://preview.soridraw.com`
-- 110 product commit: `4723fe9450869dd80b0e684309681535a8512dcd`
-- PREVIEW Explore Worker product candidate: `c81ff2cf5e6aea820b6da45779b7d207f839257c`
-- PREVIEW Explore Worker live version: `c638d60f-8724-4d4a-bb05-0766d50a8dae`
-- Worker release Run: `35108113433` SUCCESS
-- postdeploy live leak audit Run: `35108725305` SUCCESS
-- TEST/PRODUCTION: 비변경
+- PREVIEW branch: `preview`
+- TEST branch: `main` = `bb1305660ca694dd057f3ed4184bdafea60f5b18`
+- TEST release source PREVIEW: `a3ba265357fa672cd4c9f6f58204003bb61d9ab0`
+- PREVIEW/TEST app: **110**
+- TEST URL: `https://test.soridraw.com`
+- TEST Explore Worker: `498f6180-f199-4d3d-b9c5-2744fe7889e0`
+- TEST promotion Run: `35109891755` SUCCESS
+- PRODUCTION branch: `a8971fae1014ce107927fcfb5491d202d4c68fbe` (비변경)
+- Release trigger: disabled
 
-## Explore 111 최종 비용 판정
+## TEST 자동 검증 결과
 
 PASS:
-- 추천/최신 정상 첫 페이지 및 warm: R2/edge 경로, warm D1 R0/W0.
-- 인기 warm: D1 R0/W0.
-- Feed revision latest/popular warm: D1 R0/W0.
-- 정상 공개프로필 warm: D1 R0/W0.
-- 동일 invalid 공개프로필 ref 반복: 같은 edge에서 최초 R1/W0 뒤 60초 negative-cache HIT로 R0/W0. 실제 SEA edge 5회 `R1 → R0 → R0 → R0 → R0` 검증.
-- unique cold invalid ref: 기존 Cloudflare limiter의 독립 `profile-cold:` key로 client key당 분당 60회 bounded.
-- 좋아요: 1분 event-driven 유지, idle fixed cron 0.
-- 사용자 데이터 write 0, D1 schema/migration/backfill 0.
+- TypeScript / Build / release static guard
+- TEST/PRODUCTION Worker dry-run
+- shared canonical D1 SELECT-only prerequisite check
+- TEST main exact PREVIEW tree promotion
+- TEST Worker deploy + smoke
+- Firebase TEST Hosting deploy
+- `soridraw-test.web.app` + `test.soridraw.com` exact build/app-version 110
+- TEST Feed/CORS + revision HEAD-ONLY-036
+- TEST Functions CORS
+- PRODUCTION branch/Hosting 비변경
+- 사용자 데이터 migration/backfill/delete 0
+- Firestore Rules/Functions deploy 0
 
-주의:
-- negative cache는 Cloudflare POP/colo별 edge cache다. 다른 POP의 최초 invalid-ref 요청은 그 POP에서 D1R1이 발생할 수 있다. 전역 단일 negative cache가 아니다.
-- PREVIEW 앱은 110 그대로이며 111은 Worker-only 비용 방어 수정이다.
-- 103 Durable Object migration v1 유지. pre-103 Worker 직접 rollback 금지; rollback 필요 시 migration을 유지한 forward-compatible build 사용.
+## 다음 작업 — 사용자 TEST 실사용 검증
 
-## 다음 작업
+정식배포 전 다음을 TEST에서 확인한다.
+1. PC/모바일 업데이트 후 기존 Music Note/Library/Explore 데이터가 그대로 보이는지.
+2. Music Note 편집이 로컬 즉시 반영되고 약 60초 묶음 저장이 유지되는지.
+3. Library warm 재진입이 불필요한 Firestore 전체 read를 만들지 않는지.
+4. Explore 최신/인기/추천 warm 재진입과 공개프로필 재진입이 정상이고 불필요한 D1 read/write가 없는지.
+5. Master/Admin 등 교차계정 좋아요 숫자가 약 1분 event batch 후 동일하게 수렴하는지.
+6. 같은 계정 PC↔모바일 heart membership 동기화 및 공개숫자 정합성.
+7. 공개/비공개/팔로우/프로필 수정이 변경된 항목만 반영되고 기존 데이터가 손상되지 않는지.
+8. PC/모바일 UI/반응형이 PREVIEW와 동일한지.
 
-- 현재 111 Explore 누수 방어 작업은 완료. 새 기능/버그 요청이 없으면 추가 서버 수정하지 않는다.
-- 사용자가 `테스트배포`를 명확히 승인하면, 현재 검증된 PREVIEW 전체본을 main/TEST로 승격하는 릴리스 절차를 수행한다. 사용자 데이터는 이동/복제하지 않는다.
-- TEST 승격 전 현재 preview HEAD와 문서/실제 Worker version을 다시 고정 확인하고 TypeScript/Build/필요 회귀검사를 통과시킨다.
-- PRODUCTION은 별도 명확한 정식배포 승인 전 절대 변경하지 않는다.
+실사용 FAIL이 나오면 PRODUCTION 승격 금지, 원인 수정은 다시 preview에서 시작한다.
+
+## PRODUCTION
+
+- 아직 승인 없음.
+- 사용자가 명확히 `정식배포`를 승인한 경우에만 현재 검증된 TEST tree를 PRODUCTION으로 승격한다.
+- 사용자 데이터는 이동/복제하지 않는다.

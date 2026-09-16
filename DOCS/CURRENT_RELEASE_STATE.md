@@ -1,8 +1,25 @@
 # SORIDRAW CURRENT RELEASE STATE
 
-최종 갱신: 2026-09-16 KST — PREVIEW 111 공개프로필 invalid-ref 서버 누수 방어 배포/실측 완료
+최종 갱신: 2026-09-16 KST — PREVIEW 111 전체본 TEST 승격 완료
 
 > 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다. 문서와 실제 상태가 다르면 실제 상태 우선.
+
+
+## 0L. TEST 승격 — PREVIEW 111 전체본 배포 완료
+
+- 사용자 명시 승인 `테스트 배포해`에 따라 검증된 PREVIEW 전체본을 TEST로 승격했다. **PRODUCTION 승격 승인은 아니며 PRODUCTION은 변경하지 않았다.**
+- 승격 source PREVIEW SHA: `a3ba265357fa672cd4c9f6f58204003bb61d9ab0`. 당시 제품은 앱 **110** + Explore Worker 111 누수 방어를 포함한다.
+- 고정 Release Promotion Run: `35109891755` **SUCCESS**, mode `test_only`. TypeScript PASS / Build PASS / release static guard PASS / TEST+PRODUCTION Worker dry-run PASS / shared canonical D1 SELECT-only preflight PASS(`tables=6`, `explore032 triggers=18`, `seeded=1`) / migration·seed 없음.
+- `main`은 기존 `3b574c05589230f077eceff98190edd4b5195f75` 위에 exact PREVIEW tree를 새 forward commit으로 승격했고, 현재 TEST 기준 SHA는 **`bb1305660ca694dd057f3ed4184bdafea60f5b18`**. force-push 없음.
+- Firebase TEST Hosting `soridraw-test` 배포 PASS. `https://soridraw-test.web.app`와 `https://test.soridraw.com` 모두 exact `index.html` hash + `app-version.json=110` PASS.
+- TEST Explore Worker `soridraw-explore-test`: 이전 `0b9cfe5c-1e29-4485-ac97-36f87832b41e` → **`498f6180-f199-4d3d-b9c5-2744fe7889e0`**. Worker smoke PASS, schedules `[]` 보존, 고정 cron 추가 없음.
+- TEST Worker는 공유 canonical D1 `soridraw-explore-db`를 그대로 사용하고 TEST 전용 `RATE_DB`/R2 derived cache를 유지한다. 사용자 원본 데이터 이동/복제/백필/삭제 없음.
+- 실제 TEST 검증: Feed HTTP/CORS PASS, `/v1/feed-revision` HEAD-ONLY-036 PASS, Firebase Functions `getSunoApiKeyStatus`/`generateGeminiContent` TEST origin CORS PASS.
+- PRODUCTION 기준 branch는 **`a8971fae1014ce107927fcfb5491d202d4c68fbe`** 그대로이며 PRODUCTION Hosting hash도 TEST 승격 전후 동일 확인. PRODUCTION Worker/Hosting 단계는 모두 SKIP.
+- Firestore Rules 배포 없음 / Functions 배포 없음 / D1 schema migration 없음 / 사용자 데이터 migration 없음.
+- Release trigger는 완료 직후 다시 `enabled=false`로 잠갔고 no-op 확인 Run `35110202022` SUCCESS.
+- **현재 단계:** TEST 코드/인프라 배포는 완료. 정식배포 전에는 `test.soridraw.com`에서 PC/모바일 실사용 최종 검증이 필요하다. 특히 Explore 교차계정 좋아요/공개숫자/공개프로필, Music Note 60초 묶음저장, Library Local First/재진입 비용, 업데이트 후 캐시 유지, PC↔모바일 동기화를 확인한다.
+- PRODUCTION은 사용자의 별도 명확한 `정식배포` 승인 전 금지.
 
 
 ## 0K. PREVIEW 111 — 공개프로필 invalid-ref 서버 누수 방어 배포/실측 완료

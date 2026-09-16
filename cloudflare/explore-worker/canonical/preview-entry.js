@@ -6,17 +6,18 @@ import baseWorker from './preview-worker.js';
 // SORIDRAW_EXPLORE_FEED_DELTA_068_20260912
 // SORIDRAW_EXPLORE_R2_REVISION_HEAD_077_20260913
 // SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_103_20260916
+// SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_105_20260916
 //
 // 077: revision checks never open D1. The first-page Feed R2 object's ETag is the
 // revision. A mutation that changes the cached Feed changes the ETag; unchanged
 // reconnects are one tiny R2 HEAD (or edge hit) and D1 R0/W0.
 //
-// 103: the fixed 10-minute cron is replaced by one shared Durable Object alarm.
-// A successful non-empty like batch schedules exactly one alarm five minutes later.
-// More batches joining the same window do not move the deadline. No likes means no
-// alarm and therefore no periodic aggregate execution.
+// 103: the fixed 10-minute cron was replaced by one shared Durable Object alarm.
+// 105 PREVIEW test cadence: a successful non-empty like batch schedules exactly
+// one alarm one minute later. More batches joining the same window do not move
+// the deadline. No likes means no alarm and no periodic aggregate execution.
 const REVISION_HEAD_CACHE_SECONDS_077 = 60;
-const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_103 = 5 * 60 * 1000;
+const EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 * 60 * 1000;
 const EXPLORE_LIKE_BATCH_ROUTE_103 = '/v1/me/likes/batch';
 const EXPLORE_LIKE_BATCH_SCHEDULER_NAME_103 = 'shared-like-batch';
 const RELEASE_ALLOWED_ORIGINS_036 = new Set([
@@ -176,7 +177,7 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
       return Response.json({ ok: true, scheduledAt: currentAlarm, newlyScheduled: false });
     }
 
-    const scheduledAt = Date.now() + EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_103;
+    const scheduledAt = Date.now() + EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105;
     await this.ctx.storage.setAlarm(scheduledAt);
     return Response.json({ ok: true, scheduledAt, newlyScheduled: true });
   }
@@ -190,20 +191,20 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
     // desired-state canonical mutation make a retry safe if an execution fails.
     await baseWorker.scheduled({
       scheduledTime: Date.now(),
-      cron: 'event-like-batch-5m-103',
+      cron: 'event-like-batch-1m-105',
       type: 'scheduled',
     }, this.env, this.ctx);
 
     // Normal windows drain completely and stop here. Under an unusually large
     // burst, only one indexed row is checked; if work remains, schedule one more
-    // five-minute window. A concurrently scheduled alarm is never pushed later.
+    // one-minute window. A concurrently scheduled alarm is never pushed later.
     const pending = await this.env.DB.prepare(
       'SELECT batch_id FROM explore_like_batches_069 ORDER BY created_at ASC, batch_id ASC LIMIT 1',
     ).first();
     if (pending) {
       const currentAlarm = await this.ctx.storage.getAlarm();
       if (currentAlarm == null) {
-        await this.ctx.storage.setAlarm(Date.now() + EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_103);
+        await this.ctx.storage.setAlarm(Date.now() + EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105);
       }
     }
   }

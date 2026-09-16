@@ -13,12 +13,13 @@ import {
 // SORIDRAW_EXPLORE_REVISION_CLIENT_CACHE_062_20260911
 // SORIDRAW_EXPLORE_FEED_DELTA_068_20260912
 // SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_REVISION_103_20260916
+// SORIDRAW_EXPLORE_LIKE_REVISION_1MIN_105_20260916
 // Public aggregate work is now event-driven and can complete at any wall-clock time.
-// Keep one tiny Edge/R2 revision check at most every five minutes while Explore is
+// Keep one tiny Edge/R2 revision check at most every one minute while PREVIEW Explore is
 // active; D1 remains R0/W0 on this path. A new cache namespace prevents a previously
 // stored 10-minute response from hiding the first 103 event-driven aggregate.
-const REVISION_CACHE_TTL_MS = 5 * 60 * 1000;
-const STORAGE_PREFIX = 'soridraw.explore.feed-revision-response.v2:';
+const REVISION_CACHE_TTL_MS = 1 * 60 * 1000;
+const STORAGE_PREFIX = 'soridraw.explore.feed-revision-response.v3:';
 export const EXPLORE_REVISION_CLIENT_CACHE_HEADER = 'X-SORIDRAW-Client-Cache';
 export const EXPLORE_REVISION_CLIENT_CACHE_PATH_HEADER = 'X-SORIDRAW-Client-Cache-Path';
 const LIKE_SYNC_EVENT = 'soridraw:explore-like-sync';
@@ -359,7 +360,7 @@ export const installExploreRevisionRequestCache = () => {
 
       // A just-received same-account signal already contains the exact visible
       // heart/count. Do not wake the public Feed for the same aggregate inside the
-      // existing 10-minute public settling window.
+      // one-minute PREVIEW public settling window.
       if (cachedFeedRevision && hasRecentExploreAccountLikePatch(REVISION_CACHE_TTL_MS)) {
         const body = JSON.stringify({ ok: true, data: { sort, revision: cachedFeedRevision } });
         return new Response(body, {

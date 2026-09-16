@@ -58,10 +58,11 @@ const EXPLORE_LIKE_ACCOUNT_PATCH_SOURCE_TYPE = 'explore_like_account_patches';
 const EXPLORE_LIKE_ACCOUNT_PATCH_TTL_MS = 20 * 60_000;
 const EXPLORE_LIKE_BATCH_MAX = 50;
 // SORIDRAW_EXPLORE_LIKE_CLIENT_EVENT_WINDOW_104_20260916
-// The first real local like change starts the existing server-side five-minute
+// SORIDRAW_EXPLORE_LIKE_CLIENT_EVENT_WINDOW_105_20260916
+// The first real local like change starts the PREVIEW server-side one-minute
 // aggregate window. Later changes stay local and are flushed once near the end
 // of that window, so repeated toggles collapse to the final desired state.
-const EXPLORE_LIKE_EVENT_WINDOW_MS_104 = 5 * 60_000;
+const EXPLORE_LIKE_EVENT_WINDOW_MS_105 = 1 * 60_000;
 const EXPLORE_LIKE_FINAL_FLUSH_LEAD_MS_104 = 15_000;
 type ExploreLikeEventWindow104 = {
   startedAt: number;
@@ -754,7 +755,7 @@ export const flushPendingExploreLikesForPageExit = async (user: User): Promise<v
 
 const beginExploreLikeEventWindow104 = (user: User, now = Date.now()) => {
   const uid = user.uid;
-  const finalFlushDelay = EXPLORE_LIKE_EVENT_WINDOW_MS_104 - EXPLORE_LIKE_FINAL_FLUSH_LEAD_MS_104;
+  const finalFlushDelay = EXPLORE_LIKE_EVENT_WINDOW_MS_105 - EXPLORE_LIKE_FINAL_FLUSH_LEAD_MS_104;
   const active = exploreLikeEventWindowByUid104.get(uid);
   if (active && now - active.startedAt < finalFlushDelay) return false;
   if (active) window.clearTimeout(active.finalFlushTimer);
@@ -893,7 +894,7 @@ export const setExploreTrackLike = async (
     retryCount: 0,
   };
   persistLikeOutbox(user.uid, outbox);
-  // 104: start one five-minute server aggregate window on the first real
+  // 105: start one one-minute server aggregate window on the first real
   // change, then keep later clicks local until the single near-deadline flush.
   // This preserves idle=0 and avoids one server request per click.
   const startedEventWindow104 = beginExploreLikeEventWindow104(user, now);

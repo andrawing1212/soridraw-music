@@ -160,6 +160,15 @@ jobs:
           )
           deployed=1
 
+          # Wrangler does not delete a previously configured cron merely because the
+          # new config omits triggers. 103 intentionally has no fixed like cron, so
+          # clear PREVIEW schedules explicitly after the new version is active.
+          printf '[]' > "$RUNNER_TEMP/preview-crons-103.json"
+          curl -fsS -X PUT -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/preview-crons-103.json" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" >/dev/null
+          echo 'PREVIEW_FIXED_CRON_CLEAR=PASS'
+
           feed_code="$(curl --retry 3 --retry-delay 1 -sS -o "$RUNNER_TEMP/feed.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40")"
           test "$feed_code" = 200
           owner="$(node -e "const p=require(process.env.RUNNER_TEMP+'/feed.json'),x=p?.data?.items?.[0]||{};process.stdout.write(String(x.ownerUid||x.owner_uid||''))")"

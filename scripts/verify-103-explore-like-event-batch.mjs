@@ -7,7 +7,7 @@ const revision = readFileSync('src/services/exploreRevisionRequestCache.ts', 'ut
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const wrangler = JSON.parse(readFileSync('cloudflare/explore-worker/canonical/wrangler.preview.jsonc', 'utf8'));
 
-if (version.version === '105') {
+if (version.version === '105' || version.version === '106') {
   assert.equal(wrangler.triggers, undefined, 'fixed cron must be absent');
   assert.deepEqual(wrangler.durable_objects?.bindings, [
     { name: 'EXPLORE_LIKE_BATCH_SCHEDULER', class_name: 'ExploreLikeBatchScheduler103' },

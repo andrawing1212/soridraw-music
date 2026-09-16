@@ -19,7 +19,6 @@ import {
   beginExploreLikeDisplayTransition091,
   getExploreLikeCanonicalCount091,
   getExploreLikeDisplayCount091,
-  importExploreLikeDisplaySignal091,
 } from './exploreLikeDisplayStateService';
 
 // SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
@@ -46,6 +45,7 @@ import {
 // SORIDRAW_EXPLORE_LIKE_REMOTE_PENDING_ACK_097_20260916
 // SORIDRAW_EXPLORE_LIKE_ATOMIC_SIGNAL_098_20260916
 // SORIDRAW_EXPLORE_UPDATE_ZERO_READ_099_20260916
+// SORIDRAW_EXPLORE_PUBLIC_COUNT_SOURCE_SEPARATION_106_20260916
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -430,19 +430,32 @@ const cache = getLikedStateCache(uid);
   if (pendingOutboxChanged) persistLikeOutbox(uid, pendingOutbox);
   rememberAccountSyncResults(uid, effectiveResults);
   for (const result of effectiveResults) {
+    const previousLiked = cache.get(result.trackId);
+    if (
+      !pendingOutbox[result.trackId]
+      && typeof previousLiked === 'boolean'
+      && previousLiked !== result.liked
+    ) {
+      // 106: same-account RTDB tells this device only that membership changed.
+      // Build a short local +/- delta from this device's shared canonical count;
+      // never import another device's absolute public count.
+      const publicBaseLikeCount = getExploreLikeCanonicalCount091(uid, result.trackId, result.likeCount);
+      const localDisplayLikeCount = beginExploreLikeDisplayTransition091(
+        uid, result.trackId, result.ownerUid, previousLiked, result.liked, publicBaseLikeCount,
+      );
+      confirmExploreLikeDisplayTransition094(
+        uid, result.trackId, result.ownerUid, previousLiked, result.liked,
+        publicBaseLikeCount, localDisplayLikeCount,
+      );
+    }
     cache.set(result.trackId, result.liked);
     patchExploreLikedTrackMembership(uid, result.trackId, result.liked);
-    importExploreLikeDisplaySignal091(
-      uid, result.trackId, result.ownerUid, result.liked, result.displayLikeCount,
-      Boolean(pendingOutbox[result.trackId]),
-    );
     dispatchLikeSync({
       uid: user.uid,
       trackId: result.trackId,
       ownerUid: result.ownerUid,
       liked: result.liked,
       likeCount: result.likeCount,
-      ...(result.displayLikeCount === undefined ? {} : { displayLikeCount: result.displayLikeCount }),
     });
   }
   persistLikedStateCache(uid, cache);
@@ -677,11 +690,12 @@ const flushPendingLikes = async (user: User): Promise<void> => {
 
       // Cross-device RTDB carries only the server-acknowledged transition.
       // A newer local click remains local/outbox until its own boundary flush.
+      // 106: RTDB/account replay carries membership plus the server response only.
+      // The optimistic display number is device-local and must not become a public total.
       const confirmedResult = {
         trackId: result.trackId,
         liked: result.liked,
         likeCount: result.likeCount,
-        displayLikeCount: acknowledgedDisplayLikeCount,
       };
       accountSyncResults.push(confirmedResult);
       accountReplayResults.push({ ...confirmedResult, ownerUid });

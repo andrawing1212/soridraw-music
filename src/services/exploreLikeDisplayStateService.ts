@@ -1,9 +1,14 @@
 // SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915
 // SORIDRAW_EXPLORE_LIKE_ZERO_READ_DISPLAY_095_20260915
 // SORIDRAW_EXPLORE_ACKNOWLEDGED_COUNT_094_20260915
-const STORAGE_VERSION_091 = 1;
-const STORAGE_PREFIX_091 = 'soridraw:explore-like-display:091:';
-const DISPLAY_TTL_MS_091 = 7 * 24 * 60 * 60_000;
+// SORIDRAW_EXPLORE_PUBLIC_COUNT_SOURCE_SEPARATION_106_20260916
+// Public aggregate numbers must come from the shared Feed/Profile canonical projection.
+// Account/device state may carry only a short optimistic membership delta.
+const STORAGE_VERSION_106 = 2;
+const STORAGE_PREFIX_106 = 'soridraw:explore-like-display:106:';
+const LEGACY_STORAGE_PREFIX_091 = 'soridraw:explore-like-display:091:';
+const PENDING_DISPLAY_TTL_MS_106 = 20 * 60_000;
+const ACCEPTED_DISPLAY_TTL_MS_106 = 2 * 60_000;
 
 type ExploreLikeDisplayPhase091 = 'pending' | 'accepted';
 
@@ -35,7 +40,8 @@ const clampCount091 = (value: unknown) => {
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
 };
 
-const storageKey091 = (uid: string) => `${STORAGE_PREFIX_091}${uid}`;
+const storageKey091 = (uid: string) => `${STORAGE_PREFIX_106}${uid}`;
+const legacyStorageKey091 = (uid: string) => `${LEGACY_STORAGE_PREFIX_091}${uid}`;
 
 const persistStates091 = (uid: string, states: Map<string, ExploreLikeDisplayState091>) => {
   if (!uid || typeof window === 'undefined') return;
@@ -45,7 +51,7 @@ const persistStates091 = (uid: string, states: Map<string, ExploreLikeDisplaySta
       return;
     }
     window.localStorage.setItem(storageKey091(uid), JSON.stringify({
-      version: STORAGE_VERSION_091,
+      version: STORAGE_VERSION_106,
       states: [...states.values()],
     }));
   } catch {
@@ -64,8 +70,10 @@ const loadStates091 = (uid: string) => {
   loadedUid091.add(normalizedUid);
   if (typeof window === 'undefined') return states;
   try {
+    // 106 invalidates only the old derived display overlay. Canonical/user data is untouched.
+    window.localStorage.removeItem(legacyStorageKey091(normalizedUid));
     const parsed = JSON.parse(window.localStorage.getItem(storageKey091(normalizedUid)) || 'null');
-    if (!parsed || parsed.version !== STORAGE_VERSION_091 || !Array.isArray(parsed.states)) return states;
+    if (!parsed || parsed.version !== STORAGE_VERSION_106 || !Array.isArray(parsed.states)) return states;
     const now = Date.now();
     for (const raw of parsed.states) {
       if (!raw || typeof raw !== 'object') continue;
@@ -166,14 +174,20 @@ export const getExploreLikeDisplayCount091 = (
   const normalizedUid = normalizeUid091(uid);
   const normalizedTrackId = normalizeTrackId091(trackId);
   if (!normalizedUid || !normalizedTrackId) return clampCount091(fallbackLikeCount);
+  const canonicalCount = getExploreLikeCanonicalCount091(normalizedUid, normalizedTrackId, fallbackLikeCount);
   const states = loadStates091(normalizedUid);
   const state = states.get(normalizedTrackId);
-  if (state && state.expiresAt > Date.now()) return state.displayLikeCount;
+  if (state && state.expiresAt > Date.now()) {
+    // 106: never replay a fixed per-account count. Rebase only this account's
+    // pending membership delta on top of the latest shared canonical count.
+    const membershipDelta = Number(state.desiredLiked) - Number(state.baseLiked);
+    return clampCount091(canonicalCount + membershipDelta);
+  }
   if (state) {
     states.delete(normalizedTrackId);
     persistStates091(normalizedUid, states);
   }
-  return getExploreLikeCanonicalCount091(normalizedUid, normalizedTrackId, fallbackLikeCount);
+  return canonicalCount;
 };
 
 export const beginExploreLikeDisplayTransition091 = (
@@ -210,7 +224,7 @@ export const beginExploreLikeDisplayTransition091 = (
     displayLikeCount,
     phase: 'pending',
     updatedAt: now,
-    expiresAt: now + DISPLAY_TTL_MS_091,
+    expiresAt: now + PENDING_DISPLAY_TTL_MS_106,
   });
   persistStates091(normalizedUid, states);
   return displayLikeCount;
@@ -240,7 +254,7 @@ export const confirmExploreLikeDisplayTransition094 = (
     displayLikeCount: confirmedCount,
     phase: 'accepted',
     updatedAt: now,
-    expiresAt: now + DISPLAY_TTL_MS_091,
+    expiresAt: now + ACCEPTED_DISPLAY_TTL_MS_106,
   });
   persistStates091(normalizedUid, states);
   return confirmedCount;
@@ -275,7 +289,7 @@ export const rebaseExploreLikePendingDisplay094 = (
     displayLikeCount,
     phase: 'pending',
     updatedAt: now,
-    expiresAt: now + DISPLAY_TTL_MS_091,
+    expiresAt: now + PENDING_DISPLAY_TTL_MS_106,
   });
   persistStates091(normalizedUid, states);
   return displayLikeCount;
@@ -298,40 +312,22 @@ export const acceptExploreLikeDisplayTransition091 = (
     desiredLiked: liked,
     phase: 'accepted',
     updatedAt: now,
-    expiresAt: now + DISPLAY_TTL_MS_091,
+    expiresAt: now + ACCEPTED_DISPLAY_TTL_MS_106,
   });
   persistStates091(normalizedUid, states);
   return states.get(normalizedTrackId)?.displayLikeCount ?? null;
 };
 
 export const importExploreLikeDisplaySignal091 = (
-  uid: string,
-  trackId: string,
-  ownerUid: string,
-  liked: boolean,
-  displayLikeCount: number | undefined,
-  preservePending: boolean,
+  _uid: string,
+  _trackId: string,
+  _ownerUid: string,
+  _liked: boolean,
+  _displayLikeCount: number | undefined,
+  _preservePending: boolean,
 ) => {
-  const normalizedUid = normalizeUid091(uid);
-  const normalizedTrackId = normalizeTrackId091(trackId);
-  const numericDisplay = Number(displayLikeCount);
-  if (!normalizedUid || !normalizedTrackId || !Number.isFinite(numericDisplay)) return;
-  const states = loadStates091(normalizedUid);
-  if (preservePending && states.get(normalizedTrackId)?.phase === 'pending') return;
-  const count = clampCount091(numericDisplay);
-  const now = Date.now();
-  states.set(normalizedTrackId, {
-    trackId: normalizedTrackId,
-    ownerUid: normalizeUid091(ownerUid),
-    baseLiked: liked,
-    desiredLiked: liked,
-    baseLikeCount: count,
-    displayLikeCount: count,
-    phase: 'accepted',
-    updatedAt: now,
-    expiresAt: now + DISPLAY_TTL_MS_091,
-  });
-  persistStates091(normalizedUid, states);
+  // 106: account-scoped RTDB signals are membership-only. A number received on
+  // that channel must never overwrite the shared public aggregate display.
 };
 
 export const resetExploreLikeDisplayState091ForTests = () => {

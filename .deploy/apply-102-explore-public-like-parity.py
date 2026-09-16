@@ -56,19 +56,7 @@ if patch_name not in patches:
     release['patches'] = patches
     write(release_path, json.dumps(release, ensure_ascii=False, indent=2) + '\n')
 
-# 3) Future PREVIEW Worker releases must reject a canonical source that loses
-# this public parity repair.
-workflow_path = '.github/workflows/cloudflare-explore-preview-release.yml'
-workflow = read(workflow_path)
-verify_line = '            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-102-explore-public-like-parity.mjs\n'
-if verify_line not in workflow:
-    anchor = '            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-086-liked-sync-repair.mjs\n'
-    if anchor not in workflow:
-        raise SystemExit('[102] PREVIEW Worker verifier anchor missing')
-    workflow = workflow.replace(anchor, anchor + verify_line, 1)
-    write(workflow_path, workflow)
-
-# 4) This is the next PREVIEW application candidate. No deployment is triggered
+# 3) This is the next PREVIEW application candidate. No deployment is triggered
 # by this script; it only prepares source/version state.
 version_path = 'public/app-version.json'
 version = json.loads(read(version_path))

@@ -1,4 +1,4 @@
-requested_at=2026-09-16T08:10:00Z
+requested_at=2026-09-16T13:16:30Z
 requested_by=user
-product_code_target=933388f5775782fc29b2586e745b3238820bb8c6
-release_purpose=108_r2_snapshot_zero_d1_cache_recovery
+product_code_target=c81ff2cf5e6aea820b6da45779b7d207f839257c
+release_purpose=111_public_profile_negative_cache_guard

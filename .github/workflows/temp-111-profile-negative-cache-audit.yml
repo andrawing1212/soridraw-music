@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     env:
-      CANDIDATE_SHA: caf8b1ef93f9567d32eb1f4fa795bdd25f5cdc00
+      CANDIDATE_SHA: c81ff2cf5e6aea820b6da45779b7d207f839257c
       PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
       PREVIEW_ORIGIN: https://preview.soridraw.com
     steps:
@@ -50,7 +50,7 @@ jobs:
           node scripts/verify-102-explore-public-like-parity.mjs
           echo 'INDEPENDENT_STATIC_AUDIT=PASS'
 
-      - name: Confirm current live 404 shape before deployment
+      - name: Confirm current live legacy 404 shape before deployment
         shell: bash
         run: |
           set -euo pipefail
@@ -58,10 +58,9 @@ jobs:
           code="$(curl -sS -D "$RUNNER_TEMP/invalid.head" -o "$RUNNER_TEMP/invalid.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/profiles/${bad}/first-view?limit=50")"
           echo "LIVE_PREDEPLOY_INVALID_HTTP=$code"
           test "$code" = 404
-          cat "$RUNNER_TEMP/invalid.json"
-          code_name="$(jq -r '.error.code // .code // empty' "$RUNNER_TEMP/invalid.json")"
-          echo "LIVE_PREDEPLOY_INVALID_CODE=${code_name:-missing}"
-          test "$code_name" = 'NOT_FOUND'
+          message="$(jq -r 'if (.error|type)=="string" then .error elif (.error|type)=="object" then (.error.message // .error.code // "") else (.message // .code // "") end' "$RUNNER_TEMP/invalid.json")"
+          echo "LIVE_PREDEPLOY_INVALID_MESSAGE=${message:-missing}"
+          test "$message" = 'Profile not found'
           r="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/invalid.head" | tail -1)"
           w="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/invalid.head" | tail -1)"
           echo "LIVE_PREDEPLOY_INVALID_D1R=${r:-missing} D1W=${w:-missing}"

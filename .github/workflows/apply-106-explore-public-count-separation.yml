@@ -44,6 +44,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Restore generated dist
+        run: git restore --worktree --staged dist
+
       - name: Change boundary
         shell: bash
         run: |

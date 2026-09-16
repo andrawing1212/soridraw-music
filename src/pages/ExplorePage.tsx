@@ -27,12 +27,6 @@ import {
   setExploreTrackLike,
 } from '../services/exploreLikeService';
 import {
-  getExploreLikeCanonicalCount091,
-  getExploreLikeDisplayCount091,
-  seedExploreLikeCanonicalCounts091,
-  updateExploreLikeCanonicalCounts091,
-} from '../services/exploreLikeDisplayStateService';
-import {
   getExploreLikedTrackCollectionIds,
   getExploreLikedTracks,
   patchExploreLikedTrackCachedCount091,
@@ -88,6 +82,7 @@ const EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 1000;
 const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 30_000;
 // SORIDRAW_EXPLORE_LIKE_EVENT_REFRESH_104_20260916
 // SORIDRAW_EXPLORE_LIKE_EVENT_REFRESH_105_20260916
+// SORIDRAW_EXPLORE_PUBLIC_COUNT_DIRECT_107_20260916
 // 105 PREVIEW test cadence aggregates one minute after the first server batch. The actor browser
 // performs one forced fresh Feed refresh just after that window; there is no
 // periodic polling and no wall-clock 10-minute boundary anymore.
@@ -103,12 +98,9 @@ const EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071 = 'soridraw:explore-like-count-ref
 // One unique request is allowed only for an actual/persisted like recovery. No polling.
 const EXPLORE_LIKE_FRESH_FEED_QUERY_072 = '__soridraw_like_refresh';
 // SORIDRAW_EXPLORE_LIKE_FRESH_BOOTSTRAP_RECOVERY_073_20260912
-// SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912
-// SORIDRAW_EXPLORE_UID_SCOPED_LIKE_OVERLAY_075_20260913
 // SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
 // SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914
 // SORIDRAW_EXPLORE_LIKE_LIVE_DISPLAY_090_20260915
-// SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915
 // Forced like-count recovery must use the unique fresh Feed URL even when this
 // browser has no session Feed cache yet (for example immediately after app update).
 
@@ -431,11 +423,6 @@ export default function ExplorePage() {
       }
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       const activeUid = auth.currentUser?.uid || '';
-      const canonicalRows = normalizedTracks.map((track) => ({ trackId: track.id, likeCount: track.likeCount }));
-      if (activeUid) {
-        if (feedRequest) updateExploreLikeCanonicalCounts091(activeUid, canonicalRows);
-        else seedExploreLikeCanonicalCounts091(activeUid, canonicalRows);
-      }
       setFeedNextCursor(nextCursor);
       setLoadMoreError('');
       setTracks(normalizedTracks);
@@ -463,8 +450,6 @@ export default function ExplorePage() {
       setFeedNextCursor(feedRequest ? readExploreFeedSessionCacheCursor(requestUrl) : null);
       setLoadMoreError('');
       const cachedTracks = cachedRows.map(normalizeTrack).filter((track) => track.id);
-      const activeUid = auth.currentUser?.uid || '';
-      if (activeUid) seedExploreLikeCanonicalCounts091(activeUid, cachedTracks.map((track) => ({ trackId: track.id, likeCount: track.likeCount })));
       setTracks(cachedTracks);
       setLoading(false);
 
@@ -616,10 +601,6 @@ export default function ExplorePage() {
       if (cancelled) return;
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       normalizedTracks.sort(comparePublicProfileTracks);
-      const activeUid = auth.currentUser?.uid || '';
-      if (activeUid) {
-        seedExploreLikeCanonicalCounts091(activeUid, normalizedTracks.map((track) => ({ trackId: track.id, likeCount: track.likeCount })));
-      }
       setProfile(nextProfile);
       setProfileTracks(normalizedTracks);
     };
@@ -690,7 +671,6 @@ export default function ExplorePage() {
           effectiveLikedTrackIds.forEach((trackId) => { next[trackId] = true; });
           return next;
         });
-        seedExploreLikeCanonicalCounts091(user.uid, normalizedRows.map((track) => ({ trackId: track.id, likeCount: track.likeCount })));
         const normalizedLikedRows = normalizedRows;
         setProfileLikedTracks((previous) => {
           const merged = new Map(normalizedLikedRows.map((track) => [track.id, track]));
@@ -815,7 +795,6 @@ export default function ExplorePage() {
       const normalized = rows.map(normalizeTrack).filter((track) => track.id);
       const activeUid = auth.currentUser?.uid || '';
       if (activeUid) {
-        updateExploreLikeCanonicalCounts091(activeUid, normalized.map((track) => ({ trackId: track.id, likeCount: track.likeCount })));
         normalized.forEach((track) => {
           if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
           patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);
@@ -933,7 +912,7 @@ export default function ExplorePage() {
     setLikeBusyTrackId(track.id);
     try {
       const result = await setExploreTrackLike(user, track.id, !currentLiked, track.likeCount, track.ownerUid);
-      const canonicalTrack = { ...track, likeCount: getExploreLikeCanonicalCount091(user.uid, track.id, track.likeCount) };
+      const canonicalTrack = { ...track };
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
       rememberExploreLikedTrack(user.uid, canonicalTrack as unknown as Record<string, unknown>, result.liked);
       setProfileLikedTracks((previous) => {
@@ -981,11 +960,10 @@ export default function ExplorePage() {
   const renderTrackGrid = (items: ExploreTrack[], label: string) => (
     <section className="soridraw-explore-grid" aria-label={label}>
       {items.map((track) => {
-        const displayTrack = user?.uid ? { ...track, likeCount: getExploreLikeDisplayCount091(user.uid, track.id, track.likeCount) } : track;
         return (
           <ExploreTrackCard
             key={track.id}
-            track={displayTrack}
+            track={track}
             liked={Boolean(likedTrackIds[track.id])}
             likeBusy={likeBusyTrackId === track.id}
             onToggleLike={toggleLike}

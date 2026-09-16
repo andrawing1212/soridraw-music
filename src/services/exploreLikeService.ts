@@ -13,13 +13,6 @@ import {
   patchExplorePersonalSocialLike,
 } from './exploreSocialSnapshotService';
 import { patchExploreLikedTrackMembership } from './exploreLikedTracksService';
-import {
-  confirmExploreLikeDisplayTransition094,
-  rebaseExploreLikePendingDisplay094,
-  beginExploreLikeDisplayTransition091,
-  getExploreLikeCanonicalCount091,
-  getExploreLikeDisplayCount091,
-} from './exploreLikeDisplayStateService';
 
 // SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
 // SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911
@@ -37,7 +30,6 @@ import {
 // SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914
 // SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914
 // SORIDRAW_EXPLORE_LIKE_LIVE_DISPLAY_090_20260915
-// SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915
 // SORIDRAW_EXPLORE_LIKE_RTDB_SIGNAL_093_20260915
 // SORIDRAW_EXPLORE_SESSION_BATCH_094_20260915
 // SORIDRAW_EXPLORE_ACKNOWLEDGED_COUNT_094_20260915
@@ -46,6 +38,7 @@ import {
 // SORIDRAW_EXPLORE_LIKE_ATOMIC_SIGNAL_098_20260916
 // SORIDRAW_EXPLORE_UPDATE_ZERO_READ_099_20260916
 // SORIDRAW_EXPLORE_PUBLIC_COUNT_SOURCE_SEPARATION_106_20260916
+// SORIDRAW_EXPLORE_PUBLIC_COUNT_DIRECT_107_20260916
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -619,64 +612,26 @@ const flushPendingLikes = async (user: User): Promise<void> => {
       confirmedCache.set(result.trackId, result.liked);
 
       const latest = latestOutbox[pending.trackId];
-      // 094: once this exact queued transition is acknowledged, keep its
-      // visible +/- delta stable until the deferred public aggregate catches up.
-      // This is not a liked=>1 guess: the value comes from the acknowledged
-      // transition's own base count + actual state change.
-      const acknowledgedDisplayLikeCount = clampLikeCount(
-        pending.baseLikeCount + Number(result.liked) - Number(pending.baseLiked),
-      );
       let visibleLiked = result.liked;
-      let visibleDisplayLikeCount = acknowledgedDisplayLikeCount;
       let ownerUid = pending.ownerUid;
-
       const hasNewerPending = Boolean(latest && latest.updatedAt !== pending.updatedAt);
       if (hasNewerPending && latest) {
         ownerUid = latest.ownerUid || ownerUid;
         latest.baseLiked = result.liked;
-        latest.baseLikeCount = acknowledgedDisplayLikeCount;
+        // Backward-compatible local outbox metadata only; never a public display source.
+        latest.baseLikeCount = clampLikeCount(result.likeCount);
+        latest.optimisticLikeCount = clampLikeCount(result.likeCount);
         latest.retryCount = 0;
         visibleLiked = latest.desiredLiked;
-        visibleDisplayLikeCount = rebaseExploreLikePendingDisplay094(
-          uid,
-          result.trackId,
-          ownerUid,
-          result.liked,
-          latest.desiredLiked,
-          acknowledgedDisplayLikeCount,
-        );
-        latest.optimisticLikeCount = visibleDisplayLikeCount;
         if (latest.desiredLiked === result.liked) {
           delete latestOutbox[pending.trackId];
-          visibleDisplayLikeCount = confirmExploreLikeDisplayTransition094(
-            uid,
-            result.trackId,
-            ownerUid,
-            pending.baseLiked,
-            result.liked,
-            pending.baseLikeCount,
-            acknowledgedDisplayLikeCount,
-          );
         } else {
           latestOutbox[pending.trackId] = latest;
         }
       } else {
         delete latestOutbox[pending.trackId];
-        visibleDisplayLikeCount = confirmExploreLikeDisplayTransition094(
-          uid,
-          result.trackId,
-          ownerUid,
-          pending.baseLiked,
-          result.liked,
-          pending.baseLikeCount,
-          acknowledgedDisplayLikeCount,
-        );
       }
 
-      // Cross-device RTDB carries only the server-acknowledged transition.
-      // A newer local click remains local/outbox until its own boundary flush.
-      // 106: RTDB/account replay carries membership plus the server response only.
-      // The optimistic display number is device-local and must not become a public total.
       const confirmedResult = {
         trackId: result.trackId,
         liked: result.liked,
@@ -690,7 +645,6 @@ const flushPendingLikes = async (user: User): Promise<void> => {
         ownerUid,
         liked: visibleLiked,
         likeCount: result.likeCount,
-        displayLikeCount: visibleDisplayLikeCount,
       });
     }
 
@@ -845,12 +799,6 @@ export const reconcileExploreLikedTrackCollectionState = (
   return effectiveLikedTrackIds;
 };
 
-
-export const getExploreLikeDisplayCounts = (
-  _user: User,
-  _trackIds: string[],
-): Record<string, number> => ({});
-
 export const setExploreTrackLike = async (
   user: User,
   trackId: string,
@@ -865,12 +813,12 @@ export const setExploreTrackLike = async (
   const inflight = getInflightMutation(user.uid, normalizedTrackId);
   const optimisticLikedCache = getLikedStateCache(user.uid);
   const previousVisibleLiked = existing?.desiredLiked ?? inflight?.desiredLiked ?? optimisticLikedCache.get(normalizedTrackId) ?? !liked;
-  const canonicalLikeCount = getExploreLikeCanonicalCount091(user.uid, normalizedTrackId, currentLikeCount);
+  const canonicalLikeCount = clampLikeCount(currentLikeCount);
   const baselineLiked = inflight?.desiredLiked ?? existing?.baseLiked ?? previousVisibleLiked;
   const baselineLikeCount = existing?.baseLikeCount ?? canonicalLikeCount;
-  const optimisticLikeCount = beginExploreLikeDisplayTransition091(
-    user.uid, normalizedTrackId, ownerUid, previousVisibleLiked, liked, canonicalLikeCount,
-  );
+  // 107: public count is never optimistic or account-scoped. Keep the last shared
+  // Feed/Profile count only as backward-compatible outbox metadata.
+  const optimisticLikeCount = canonicalLikeCount;
   patchExplorePersonalSocialLike(user.uid, normalizedTrackId, liked);
   patchExploreLikedTrackMembership(user.uid, normalizedTrackId, liked);
   optimisticLikedCache.set(normalizedTrackId, liked);

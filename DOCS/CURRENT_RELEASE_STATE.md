@@ -1,8 +1,24 @@
 # SORIDRAW CURRENT RELEASE STATE
 
-최종 갱신: 2026-09-16 KST — PREVIEW 110 Explore 전체 서버 누수 감사
+최종 갱신: 2026-09-16 KST — PREVIEW 111 공개프로필 invalid-ref 서버 누수 방어 배포/실측 완료
 
 > 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다. 문서와 실제 상태가 다르면 실제 상태 우선.
+
+
+## 0K. PREVIEW 111 — 공개프로필 invalid-ref 서버 누수 방어 배포/실측 완료
+
+- 사용자 요청으로 PREVIEW 110 Explore 전체 누수 감사에서 발견된 **존재하지 않는 공개프로필 ref 반복 404 → 매 요청 D1R1** abuse gap만 최소 수정했다. 앱 UI/Hosting은 변경하지 않았고 PREVIEW 앱은 **110** 유지.
+- **111 Worker 제품 candidate:** `c81ff2cf5e6aea820b6da45779b7d207f839257c`. 핵심 patch는 `057-public-profile-negative-cache-guard.mjs` + `058-public-profile-negative-cache-shape-compat.mjs`.
+- **PREVIEW Worker Release Run:** `35108113433` SUCCESS. 실제 PREVIEW Explore Worker version은 **`c638d60f-8724-4d4a-bb05-0766d50a8dae`**. 이전 `d8eae38a-09a9-4f37-9500-57f217ee1d8c`에서 승격. TEST/PRODUCTION Worker는 비변경 PASS.
+- 동작: 존재하지 않는 동일 profile ref의 404를 Cloudflare `caches.default`에 **60초 negative cache**로 보관한다. 정상 valid profile의 기존 positive edge cache는 cold-ref 방어 예산보다 먼저 사용한다. 서로 다른 cold invalid ref 난사는 기존 Cloudflare limiter를 독립 key prefix `profile-cold:`로 재사용해 현재 계약상 **client key당 분당 60회**로 bounded 한다.
+- live legacy 404 body `{ok:false,error:"Profile not found"}` 및 `NOT_FOUND` code/Korean equivalent를 negative-cache 대상으로 인식한다. D1 schema/data 변경 없음.
+- **배포 후 실제 감사 Run `35108725305` SUCCESS:** 동일 Cloudflare `SEA` edge에서 같은 invalid ref 5회 연속: `R1/W0 MISS → R0/W0 HIT → R0/W0 HIT → R0/W0 HIT → R0/W0 HIT`. 따라서 일반적인 동일 사용자의 반복 새로고침은 첫 판정 뒤 TTL 동안 D1로 재진입하지 않는다.
+- 같은 live 감사에서 **latest Feed warm R0/W0 / popular Feed warm R0/W0 / 정상 public-profile warm R0/W0 / latest revision warm R0/W0 / popular revision warm R0/W0** 모두 PASS. 사용자 데이터 write 0.
+- **Cloudflare edge 특성:** Cache API negative entry는 POP/colo 지역 캐시다. 다른 edge가 같은 invalid ref를 처음 받으면 그 edge에서 최초 D1R1이 생길 수 있다. 이를 전세계 단일 negative store처럼 해석하지 않는다. 무작위 unique ref는 limiter로 별도 bounded 한다.
+- 1분 event-driven like aggregate 유지, fixed cron 0. Firebase Functions/Firestore Rules/RTDB Rules 변경 없음. D1 migration/backfill 없음. 사용자 원본 데이터 변경 없음. UI/CSS 변경 없음.
+- 표준 PREVIEW Worker release gate에서 이미 삭제된 과거 display-overlay 구조를 요구하던 stale verifier 호출을 현재 111 계약에 맞게 정리했다. 제품 기능 수정이 아니라 릴리스 검사기 유지보수다.
+- 111 작업용 임시 prepare/audit/tooling/postdeploy workflow는 최종 실측 후 모두 삭제했다. formal Work 독립 감사는 미실행; 자동 계약검사 + 실제 PREVIEW 배포 smoke + live cost audit PASS.
+- **판정:** 이번에 감사한 Explore 추천/최신/인기/revision/정상 공개프로필 warm + 동일 invalid-ref 반복 누수 경로는 PASS. TEST 승격은 사용자의 명시적 `테스트배포` 승인 전 금지.
 
 
 ## 0J. PREVIEW 110 — Explore 전체 서버 누수 read-only 감사

@@ -1,4 +1,4 @@
-requested_at=2026-09-16T04:07:26Z
-requested_by=user
-purpose=shorten_preview_explore_like_window_to_1min_for_testing
-attempt=4
+requested_at=2026-09-16T04:13:30Z
+requested_by=assistant
+purpose=record_preview_105_one_minute_candidate
+attempt=5

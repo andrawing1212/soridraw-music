@@ -72,7 +72,7 @@ jobs:
           generated="$PWD/canonical/preview-worker.js"
           (
             cd ../..
-            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-like-cost-optimization.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-111-explore-profile-negative-cache.mjs
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-082-publication-batch.mjs
             SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-083-publication-pk-read.mjs

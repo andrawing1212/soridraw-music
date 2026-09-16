@@ -1,0 +1,51 @@
+name: TEMP 108 Release Preflight Fix
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/temp-108-release-preflight-fix.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - name: Replace obsolete 094 verifier with current 105-108 contracts
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/cloudflare-explore-preview-release.yml')
+          s=p.read_text()
+          old='            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-like-cost-optimization.mjs\n'
+          new=(
+            '            node scripts/verify-105-explore-like-1min.mjs\n'
+            '            node scripts/verify-107-explore-direct-count-zero-read.mjs\n'
+            '            node scripts/verify-108-explore-feed-cache-recovery.mjs\n'
+          )
+          if old not in s:
+              raise SystemExit('obsolete release verifier anchor missing')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+          grep -q 'verify-108-explore-feed-cache-recovery.mjs' .github/workflows/cloudflare-explore-preview-release.yml
+          ! grep -q 'verify-explore-like-cost-optimization.mjs' .github/workflows/cloudflare-explore-preview-release.yml
+      - name: Self-clean and commit
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/temp-108-release-preflight-fix.yml
+          rm -f .deploy/temp-108-release-preflight-fix.trigger
+          git config user.name 'soridraw-release-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          changed="$(git diff --cached --name-only)"
+          test "$changed" = '.github/workflows/cloudflare-explore-preview-release.yml'
+          git commit -m 'ci: align PREVIEW Worker preflight with 108 contracts'
+          git push origin HEAD:preview

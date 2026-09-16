@@ -1,0 +1,22 @@
+name: PREVIEW one-track public like trace (read only)
+on:
+  push:
+    branches: [preview]
+    paths: ['.github/workflows/temp-107-like-trace-readonly.yml', 'scripts/temp-107-like-trace-readonly.mjs']
+permissions:
+  contents: read
+jobs:
+  trace:
+    if: github.ref == 'refs/heads/preview'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read the single PREVIEW track through D1, R2 and public API
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/temp-107-like-trace-readonly.mjs

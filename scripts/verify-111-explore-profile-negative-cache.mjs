@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 const generated = String(process.env.SORIDRAW_GENERATED_WORKER || '').trim();
 const workerPath = generated || 'cloudflare/explore-worker/canonical/preview-worker.js';
 const worker = readFileSync(workerPath, 'utf8');
-const patch = readFileSync('cloudflare/explore-worker/patches/057-public-profile-negative-cache-guard.mjs', 'utf8');
+const patch057 = readFileSync('cloudflare/explore-worker/patches/057-public-profile-negative-cache-guard.mjs', 'utf8');
+const patch058 = readFileSync('cloudflare/explore-worker/patches/058-public-profile-negative-cache-shape-compat.mjs', 'utf8');
 const wrangler = JSON.parse(readFileSync('cloudflare/explore-worker/canonical/wrangler.preview.jsonc', 'utf8'));
 
 const functionText = (source, name) => {
@@ -42,6 +43,7 @@ const functionText = (source, name) => {
 };
 
 assert.match(worker, /SORIDRAW_PUBLIC_PROFILE_NEGATIVE_CACHE_057_20260916/);
+assert.match(worker, /SORIDRAW_PUBLIC_PROFILE_NEGATIVE_CACHE_SHAPE_058_20260916/);
 assert.match(worker, /const EXPLORE_PROFILE_NEGATIVE_TTL_SECONDS_057 = 60;/);
 assert.match(worker, /const EXPLORE_PROFILE_COLD_RATE_PREFIX_057 = 'profile-cold:';/);
 assert.match(worker, /handlePublicProfileFirstViewWithEdgeCacheCore057/);
@@ -72,6 +74,9 @@ assert.match(cacheWriter, /EXPLORE_PROFILE_NEGATIVE_TTL_SECONDS_057/);
 assert.match(cacheWriter, /cache\.put\(key, stored\)/);
 assert.match(cacheCheck, /response\.status !== 404/);
 assert.match(cacheCheck, /code === 'NOT_FOUND'/);
+assert.match(cacheCheck, /message === 'Profile not found'/);
+assert.match(cacheCheck, /message === '공개 프로필을 찾을 수 없습니다\.'/);
+assert.doesNotMatch(cacheCheck, /env\.DB\.|\.prepare\(/);
 
 for (const needle of [
   "headers.set('X-SORIDRAW-D1-Read', '0')",
@@ -86,11 +91,14 @@ assert.equal(Number(limiterBinding.simple?.limit), 60);
 assert.equal(Number(limiterBinding.simple?.period), 60);
 assert.equal(wrangler.triggers, undefined, 'fixed cron must remain absent');
 
-for (const forbidden of ['ALTER TABLE', 'CREATE TABLE', 'DROP TABLE', 'DELETE FROM', 'UPDATE public_profiles', 'UPDATE tracks']) {
-  assert.ok(!patch.includes(forbidden), `forbidden schema/data mutation in patch: ${forbidden}`);
+for (const [name, source] of [['057', patch057], ['058', patch058]]) {
+  for (const forbidden of ['ALTER TABLE', 'CREATE TABLE', 'DROP TABLE', 'DELETE FROM', 'UPDATE public_profiles', 'UPDATE tracks']) {
+    assert.ok(!source.includes(forbidden), `forbidden schema/data mutation in patch ${name}: ${forbidden}`);
+  }
 }
 
 console.log('111_EXPLORE_PROFILE_NEGATIVE_CACHE=PASS');
+console.log('INVALID_404_SHAPE=LIVE_LEGACY_AND_NOT_FOUND_CODE_COMPATIBLE');
 console.log('INVALID_SAME_REF=FIRST_D1_ONLY_THEN_EDGE_R0');
 console.log('RANDOM_INVALID_REF=BOUNDED_BY_EDGE_LIMIT_60_PER_MIN_PER_CLIENT_KEY');
 console.log('VALID_WARM_PROFILE=EXISTING_EDGE_BYPASSES_RATE_BUDGET');

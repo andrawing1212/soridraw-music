@@ -31,6 +31,7 @@ jobs:
           npm ci --no-audit --no-fund
           npx tsc --noEmit
           npm run build
+          git restore --worktree --staged dist
 
       - name: Build guarded canonical Worker and run contracts
         shell: bash

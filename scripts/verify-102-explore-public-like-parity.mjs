@@ -39,11 +39,16 @@ for (const forbidden of [
   if (helperBlock.includes(forbidden)) throw new Error(`[102] parity helper reintroduced full scan pattern: ${forbidden}`);
 }
 
-// 102's public Feed/Profile parity is permanent. 103 intentionally replaces only
-// the old wall-clock revision timing contract with an event-driven five-minute
-// scheduler, so this verifier accepts either the original 102 client timing or the
-// stricter 103 successor while continuing to enforce the 102 Worker parity code.
-if (client.includes('SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_REVISION_103_20260916')) {
+// 102's public Feed/Profile parity is permanent. 103/105 replace only the
+// revision timing contract, so accept those successors while preserving all
+// 102 Worker parity assertions above.
+if (client.includes('SORIDRAW_EXPLORE_LIKE_REVISION_1MIN_105_20260916')) {
+  for (const required of [
+    'const REVISION_CACHE_TTL_MS = 1 * 60 * 1000;',
+    "const STORAGE_PREFIX = 'soridraw.explore.feed-revision-response.v3:';",
+    'expiresAt: Date.now() + REVISION_CACHE_TTL_MS,',
+  ]) requireText(client, required, `105 successor client contract: ${required}`);
+} else if (client.includes('SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_REVISION_103_20260916')) {
   for (const required of [
     'const REVISION_CACHE_TTL_MS = 5 * 60 * 1000;',
     "const STORAGE_PREFIX = 'soridraw.explore.feed-revision-response.v2:';",
@@ -69,8 +74,10 @@ if (!Number.isFinite(appVersion) || appVersion < 102) throw new Error('[102] app
 console.log('102_EXPLORE_PUBLIC_LIKE_PARITY=PASS');
 console.log('PUBLIC_FEED_RECONCILE=BOUNDED_TOP40');
 console.log('PUBLIC_PROFILE_PATCH=VISIBLE_CHANGED_ONLY');
-console.log(client.includes('SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_REVISION_103_20260916')
-  ? 'REVISION_CACHE=103_EVENT_BATCH_SUCCESSOR'
-  : 'REVISION_CACHE=10MIN_CEILING_BOUNDARY_SHORTEN_ONLY');
+console.log(client.includes('SORIDRAW_EXPLORE_LIKE_REVISION_1MIN_105_20260916')
+  ? 'REVISION_CACHE=105_EVENT_BATCH_1MIN_SUCCESSOR'
+  : client.includes('SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_REVISION_103_20260916')
+    ? 'REVISION_CACHE=103_EVENT_BATCH_SUCCESSOR'
+    : 'REVISION_CACHE=10MIN_CEILING_BOUNDARY_SHORTEN_ONLY');
 console.log('NO_USER_DATA_MIGRATION=true');
 console.log('NO_UI_CSS_CHANGE=true');

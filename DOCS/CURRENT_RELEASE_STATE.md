@@ -9,226 +9,196 @@
 - 개발 branch: `preview`
 - TEST branch: `main`
 - PRODUCTION branch: `production`
-- 실제 PREVIEW 앱: **101** — `https://preview.soridraw.com`
-- Library zero-read 제품 commit: `485193ef6d147d4e4b3f03d3193cb4ba251fac72`
-- 101 version bump commit: `20df686cbb2ad8097b115bb4938cce93b37f7cef`
-- 101 PREVIEW 배포 source SHA: `88a52593f891755bd5999d0a63f0f0d86fcdd2d8`
-- 101 Firestore Rules 선배포 Run: `35039874658` — **PASS**
-- 101 PREVIEW App Release Run: `35039951005` — **PASS**
-- PREVIEW Explore Worker: **056** / `bd8a810f-8266-41e1-80a1-0c5e9bfc561a` — 101에서 변경/재배포 없음
+- 현재 `preview` 제품 코드 후보: **102**
+- 102 Explore public-like parity 제품 commit: `00fa785598b5b326800fc1ece0404a3dc9241fd8`
+- 102 source apply Workflow Run: `35046615434` — **PASS**
+- 실제 PREVIEW 앱: **101** — `https://preview.soridraw.com` — 102 아직 미배포
+- 실제 PREVIEW Explore Worker: 기존 **056** / `bd8a810f-8266-41e1-80a1-0c5e9bfc561a` — 102 parity 코드 아직 미배포
 - PREVIEW Media Worker: `a00276d5-aca1-443f-a992-0b80ca0637ff` — 변경 없음
-- TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — 101 배포 Workflow 기준 비변경 PASS
-- PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 101 배포 Workflow 기준 비변경 PASS
-- **릴리스 상태: Explore 교차계정 좋아요 공개 숫자 동기화 실사용 FAIL로 TEST 승격 차단.**
+- TEST `main`: `3b574c05589230f077eceff98190edd4b5195f75` — 비변경
+- PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 비변경
+- **릴리스 상태: 102 코드/자동검증 PASS, PREVIEW 실사용 검증 전. TEST 승격 금지.**
 
-## 2. 101 목표
-Library를 앱 업데이트/페이지 이동만으로 서버 비용이 발생하지 않는 Local First 구조로 바꾼다.
+## 2. 102 목표 — 공개 좋아요 숫자 교차계정 일치
+2026-09-16 Master / Admin A / Admin B 실사용 비교에서 다음 문제를 확인했다.
 
-정상 목표:
-- warm cache + 데이터 변경 없음 → My List / Shared List 재진입 Firestore data read 0.
-- Library 전용 playlist/item 실시간 listener 0.
-- 표시 곡마다 자동 좋아요 2 reads fan-out 0.
-- Shared List 진입 시 곡마다 `suno_shares` 자동 read 0.
-- 페이지 진입만으로 write 0.
-- 실제 사용자가 playlist/좋아요/공유곡을 변경·사용할 때만 필요한 부분 서버 사용.
+- 빨간/채운 하트는 로그인 계정별 개인 membership이므로 계정마다 달라도 정상.
+- 하트 옆 총 좋아요 숫자는 공개 공용 aggregate이므로 모든 계정/기기에서 수렴해야 함.
+- 기존 구조에서는 같은 계정 PC↔모바일은 RTDB/local signal로 수렴했지만, 다른 계정은 오래된 공개 숫자를 계속 볼 수 있었음.
 
-## 3. 101 제품 구조
-- 사용자별 IndexedDB에 playlist header와 folder items를 영속 저장.
-- 앱 버전과 playlist cache를 분리해 앱 업데이트만으로 cache를 무효화하지 않음.
-- warm cache + 동일 `users/{uid}.syncVersions.playlists`면 목록/선택 folder 서버 read 0 경로 사용.
-- playlist/item `onSnapshot` 제거.
-- 기존 users authority 상태의 작은 `syncVersions.playlists` 신호만 재사용.
-- 실제 playlist 변경 시에만 `syncVersions.playlists`와 해당 playlist `itemsRevision` 갱신.
-- 좋아요/공유 상태/작성자 곡별 page-entry fan-out 제거.
-- 좋아요는 실제 클릭 때 canonical count + membership만 확인.
-- 공유곡은 재생/다운로드 등 실제 사용 시 해당 share 한 건만 확인.
-- 폴더 이동 전 중복 사전 query 제거, 기존 bounded duplicate query 한 번만 유지.
+확정 원인:
+1. 새 좋아요 intake는 `055-explore-like-intake-w1-hotpath.mjs` 이후 069 W1 queue를 사용.
+2. scheduled aggregate가 canonical D1 `likes` / `track_stats`는 갱신하지만 069 경로에서 public Feed/Profile R2 projection이 누락됨.
+3. `/v1/feed-revision`은 public Feed R2 ETag를 revision으로 사용하므로 R2가 그대로면 다른 계정은 local cache를 최신값으로 오인.
+4. 클라이언트 revision 응답 10분 cache가 aggregate 직전 생성되면 public R2가 갱신된 뒤에도 추가로 오래된 revision을 가릴 수 있었음.
 
-변경 파일:
-- `src/lib/libraryPlaylistCache.ts`
-- `src/services/playlistService.ts`
-- `src/pages/SunoLibraryPage.tsx`
-- `src/types.ts`
-- `firestore.rules`
-- `scripts/verify-101-library-playlist-zero-read.mjs`
+## 3. 102 수정 구조
+### A. canonical aggregate 후 public Feed R2 수렴
+새 patch:
+- `cloudflare/explore-worker/patches/056-explore-public-like-parity.mjs`
+- marker: `SORIDRAW_EXPLORE_PUBLIC_LIKE_PARITY_056_20260916`
+
+동작:
+- 기존 `processExploreLikeBatches035` canonical 처리 자체는 유지.
+- 실제 public count가 변한 aggregate(`changedTracks > 0`) 뒤에만 public projection 수렴 실행.
+- `derivedHead032` + `derivedRank032` + `derivedItems032`를 사용해 `latest` / `popular`의 **첫 40곡만 bounded/indexed 방식으로** 정확히 재구성.
+- 전체 `tracks` / `likes` / `track_stats` scan 금지.
+- Feed R2가 실제 canonical 결과와 달라졌을 때 R2 객체가 갱신되어 ETag도 변경됨.
+- public Profile R2는 첫 화면에 실제 노출되는 changed track만 owner별로 묶어 수정.
+- 한 profile cache 문제가 canonical D1 또는 shared Feed 성공을 실패로 되돌리지 않음.
+- concurrent 공개/비공개 변경으로 bounded snapshot이 완전하지 않으면 거짓 cursor를 기록하지 않고 다음 repair 경로로 넘김.
+
+### B. 다른 계정 revision blind window 축소
+변경:
+- `src/services/exploreRevisionRequestCache.ts`
+- marker: `SORIDRAW_EXPLORE_PUBLIC_LIKE_REVISION_BOUNDARY_102_20260916`
+
+원칙:
+- 기존 최대 local revision cache 10분은 유지.
+- 단, 10분 aggregate 경계를 넘어 오래된 revision을 추가 10분 가리는 경우를 막기 위해:
+  - 일반 만료: `now + 10분`
+  - aggregate 경계 만료: `다음 10분 경계 + 70초`
+  - 둘 중 더 이른 시각을 선택.
+- 즉 기존보다 cache를 더 오래 유지하지 않으며, 경계 직전 만들어진 stale revision만 조기에 재확인.
+- 페이지 진입마다 D1 조회를 추가하지 않음. revision path는 기존 R2/Edge HEAD 기반 유지.
+
+### C. intentionally 유지한 비용 구조
+- 069 W1 queue 유지.
+- 좋아요 클릭 즉시 canonical D1 write로 되돌리지 않음.
+- cron `*/10 * * * *` 유지. 1분 cron으로 비용을 늘리지 않음.
+- unchanged page-entry / update / revisit 때문에 D1 full read/write를 만들지 않음.
+- UI / CSS / 반응형 변경 없음.
+
+## 4. 102 변경 파일
+제품 commit `00fa785598b5b326800fc1ece0404a3dc9241fd8`:
+- `cloudflare/explore-worker/canonical/preview-worker.js`
+- `cloudflare/explore-worker/canonical/source-sha256.txt`
+- `cloudflare/explore-worker/release-patches.json`
+- `src/services/exploreRevisionRequestCache.ts`
+- `public/app-version.json` → `102`
+
+지원/검증 파일:
+- `cloudflare/explore-worker/patches/056-explore-public-like-parity.mjs`
+- `scripts/verify-102-explore-public-like-parity.mjs`
+- `.deploy/apply-102-explore-public-like-parity.py`
+- `.github/workflows/apply-102-explore-public-like-parity.yml`
+- `.deploy/apply-102-explore-public-like-parity.trigger`
 
 변경하지 않은 것:
-- UI / CSS / 반응형 / 위치 / 크기 / 테마
-- Explore Worker / Media Worker / D1
 - Firebase Functions
+- Firestore Rules
 - RTDB Rules
-- 사용자 원본 데이터 구조의 파괴적 변경
-
-## 4. Firestore Rules 변경
-101 앱이 새 `syncVersions.playlists`를 쓰기 때문에 앱보다 Rules를 먼저 배포했다.
-
-변경:
-- `syncVersions.playlists` 정수 필드 허용.
-- `users/{uid}` self-update에서 owner-safe 검사를 admin/master 검사보다 먼저 평가.
-- 일반 사용자 self-update의 불필요한 admin dependent document read 가능성을 줄임.
-- 관리자 타 사용자 관리 경로/권한 강도는 유지.
-
-Rules 배포:
-- Run `35039874658` — **PASS**
-- Firebase project: `soridraw-app-866a5`
-- Firestore Rules only 배포 PASS
-- Hosting/Functions/data migration 없음
-- `main` / `production` refs 비변경 PASS
-
-## 5. 101 자동검증 / 독립 확인
-제품 후보 기준 기존 검증:
-- TypeScript PASS
-- Production Build PASS
-- `verify-029-music-note-library` PASS
-- `verify-030-library-warm-cache-no-idle-read` PASS
-- `verify-101-library-playlist-zero-read` PASS
-- IndexedDB list/item write-read contract PASS
-- Firestore Rules local emulator compile PASS
-- `git diff --check` PASS
-
-후속 GitHub Safety Run `35038525750`도 후보를 포함한 `preview`에서:
-- TypeScript PASS
-- Production Build PASS
-- V1 compatibility/safety gate PASS
-
-독립 코드 범위 확인:
-- 제품 후보 `485193ef...`는 기준 `e7bb2ca4...` 대비 Library cache/service/page, type, Rules, 101 verifier만 변경.
-- CSS/UI/Explore Worker/Media Worker/Functions/D1/RTDB 비변경 확인.
-- migration/backfill/delete/overwrite 없음.
-- Rules 변경은 하위호환 추가 + owner-first 평가 순서 변경이며 관리자 권한 제거 없음.
-
-상태: **101 Library 코드/자동검증 PASS, PREVIEW 실사용 비용 검증 진행 중. Explore 기존 좋아요 구조는 별도 FAIL 확인.**
-
-## 6. PREVIEW 101 배포 결과
-canonical `.github/workflows/firebase-hosting-custom-preview.yml`로 Firebase PREVIEW Hosting을 배포했다.
-
-Run `35039951005` — **PASS**:
-- locked/deployed source SHA: `88a52593f891755bd5999d0a63f0f0d86fcdd2d8`
-- Install PASS
-- TypeScript PASS
-- Build PASS
-- Firebase 인증 PASS
-- Firebase PREVIEW Hosting 배포 PASS
-- `preview.soridraw.com` 실제 `index.html` = 로컬 build exact hash match PASS
-- 실제 PREVIEW `app-version.json = 101` 확인 PASS
-- TEST branch/Hosting 비변경 PASS
-- PRODUCTION branch/Hosting 비변경 PASS
-
-101에서 재배포하지 않은 것:
-- Explore Worker 056
+- D1 schema / migration / seed
 - Media Worker
-- Firebase Functions
-- RTDB Rules
-- D1 schema/migration/seed
+- Music Note / Library 데이터 구조
+- UI / CSS / 위치 / 크기 / 테마 / 반응형
+- 사용자 원본 데이터
 
-## 7. 사용자 데이터 / 안전 영향
+## 5. 102 자동검증
+Source apply Run `35046615434` — **PASS**.
+
+PASS 항목:
+- Worker 056 patch syntax / canonical Worker syntax
+- `verify-102-explore-public-like-parity.mjs`
+- `verify-explore-like-cost-optimization.mjs`
+- `verify-explore-derived-cache.mjs`
+- TypeScript `npx tsc --noEmit`
+- Production Build `npm run build`
+- `git diff --check`
+- change boundary 확인
+
+핵심 검증 결과:
+- `102_EXPLORE_PUBLIC_LIKE_PARITY=PASS`
+- `PUBLIC_FEED_RECONCILE=BOUNDED_TOP40`
+- `PUBLIC_PROFILE_PATCH=VISIBLE_CHANGED_ONLY`
+- `REVISION_CACHE=10MIN_CEILING_BOUNDARY_SHORTEN_ONLY`
+- 100 same-track likes fixture → canonical count/derived update 1회 구조 유지
+- net-zero public count cohort → 불필요한 public derived write 0 구조 유지
+- unchanged cursor → item/rank/write 0 구조 유지
+- warm revision → D1 read 0 구조 유지
+- no user data migration / no UI CSS change
+
+참고:
+- 첫 Apply Run `35046459652`는 모든 코드/TypeScript/Build/검증까지 PASS했지만, 마지막 push에서 GitHub App이 다른 workflow 파일을 수정할 권한이 없어 실패.
+- 제품 문제가 아니라 CI 권한 경계였고, 다른 workflow를 수정하지 않는 방식으로 정리 후 Run `35046615434`가 전체 PASS 및 제품 commit 생성.
+
+## 6. 배포 상태 — 중요
+**102는 아직 배포하지 않았다.**
+
+현재 실제 서비스:
+- PREVIEW Hosting: 앱 101
+- PREVIEW Explore Worker: 기존 배포본 056
+- TEST: 변경 없음
+- PRODUCTION: 변경 없음
+
+따라서 `preview.soridraw.com`에서 지금 102 교차계정 수정 결과를 테스트하면 안 된다. 사용자 PREVIEW 배포 요청 후 앱 102 + 새 canonical Explore Worker를 함께 검증 배포한다.
+
+## 7. 사용자 데이터 / 안전
 - PREVIEW / TEST / PRODUCTION 사용자 원본 데이터 이동·복제 없음.
-- 대량삭제/대량변환/backfill/migration 없음.
-- 기존 playlist 문서/곡 데이터 의미 변경 없음.
-- 새 기기 또는 새 IndexedDB cache가 없는 기존 기기는 최초 1회 legacy list + 선택 folder bootstrap read 허용.
-- 이후 warm cache는 앱 버전 변경과 독립적으로 유지하는 구조.
+- D1 migration/backfill 없음.
+- 대량삭제/대량변환 없음.
+- 기존 likes / track_stats canonical 의미 변경 없음.
+- 공개 총 좋아요 숫자는 canonical D1을 기준으로 public cache가 따라가는 구조.
+- 개인 heart membership은 계정별 상태이며 다른 사용자에게 공유하지 않음.
 
-## 8. 101 비용 기대값
-정상 warm cache + 변경 없음:
-- Library My List 재진입: Firestore data read 0 목표.
-- Library Shared List 재진입: Firestore data read 0 목표.
-- 20곡 기준 기존 좋아요 자동 40 reads → 0 목표.
-- Shared List N곡 `suno_shares` 자동 N reads → 0 목표.
-- 페이지 진입 write 0 목표.
+## 8. 비용 기준
+정상 변경 없음:
+- app update 때문에 public data 전체 재생성 금지.
+- Explore warm revisit D1 read 0 목표 유지.
+- revision check는 Edge/R2 HEAD 기반, D1 R0/W0 유지 목표.
+- scheduled aggregate에 처리할 좋아요가 없으면 기존 idle W0 유지.
 
-실제 액션:
-- 좋아요 클릭: canonical count + membership 2 reads 허용.
-- 공유곡 실제 사용: 해당 `suno_shares` 1 read 허용.
-- playlist 변경: 해당 canonical write + cross-device sync version/revision write 허용.
+실제 좋아요 변경 있음:
+- client → local outbox / boundary batch 기존 구조 유지.
+- 069 W1 queue 유지.
+- scheduled canonical aggregate는 변경분만 처리.
+- public cache 수렴은 aggregate 뒤 bounded first 40 + visible changed profile 범위만 처리.
+- 1개 좋아요 때문에 전체 사용자/전체 곡/public profile 전체 재생성 금지.
 
-## 9. PREVIEW 101 실사용 검증 항목
-최초 bootstrap과 warm 재진입을 반드시 분리 측정한다.
+## 9. 기존 101 Library 상태
+101 Library Local First 개선은 그대로 보호한다.
+- playlist header/item IndexedDB cache
+- warm cache + 동일 `syncVersions.playlists` 재진입 read 0 목표
+- playlist/item page-entry `onSnapshot` 제거
+- 곡별 likes/share 자동 fan-out 제거
+- 실제 변경 때만 해당 revision/write
 
-1. 기존 기기에서 101 첫 Library 진입 → 새 IndexedDB cache bootstrap 비용 기록.
-2. 같은 기기 재진입 → My List 목록/선택 folder read 0 확인.
-3. Shared List 재진입 → playlist/share 자동 read 0 확인.
-4. 좋아요가 있는 20곡 기준 진입 시 곡별 40 reads가 사라졌는지 확인.
-5. playlist 생성/이름변경/삭제/곡 추가/이동/삭제 후 PC↔모바일 수렴 확인.
-6. 실제 좋아요 클릭에서만 canonical 2 reads 확인.
-7. 공유곡 재생/다운로드 등 실제 사용 때만 해당 share 1 read 확인.
-8. 페이지 이동/앱 업데이트만으로 write가 발생하지 않는지 확인.
-9. Firebase Console / CACHE LIVE 측정값과 화면 동작 대조.
-10. 기존 Music Note / Explore / 좋아요 기능 회귀 없음 확인.
+101 Rules Run `35039874658` PASS, PREVIEW App Run `35039951005` PASS.
+Library 101 실제 비용/PC↔모바일 수렴 실측은 계속 필요하다.
 
-정상 예외:
-- 새 기기
-- 브라우저 저장소 삭제/손상
-- 101 적용 후 아직 playlist IndexedDB cache를 한 번도 만들지 않은 기기
+## 10. TEST / PRODUCTION 승격 금지 조건
+TEST는 아래 전부 PASS 전 승격 금지:
+1. 102 PREVIEW 앱 + Explore Worker 배포 검증.
+2. Master / Admin A / Admin B 교차계정 공개 총 좋아요 숫자 수렴.
+3. 좋아요/좋아요 해제 모두 수렴.
+4. 최신/인기 Feed 및 공개프로필 숫자 일치.
+5. 같은 계정 PC↔모바일 개인 heart 유지.
+6. warm unchanged Explore 비용 회귀 없음.
+7. 100 liked-card zero-read 검증.
+8. 101 Library 비용/정확성 실측.
 
-이 경우 최초 bootstrap read는 허용하지만 곡별 likes/share fan-out은 허용하지 않는다.
+PRODUCTION은 사용자의 명확한 정식배포 승인 전 금지.
 
-## 10. PREVIEW 100 좋아요 보호 상태
-101은 100의 Explore liked-card retention 구조를 건드리지 않았다.
+## 11. PREVIEW 102 배포 후 필수 실사용 검증
+- Master에서 공개곡 좋아요 → boundary flush → canonical aggregate 이후 Admin A/B 공개 숫자 일치.
+- Master에서 좋아요 해제 → 동일하게 모든 계정 공개 숫자 감소 일치.
+- Admin A/B 자신의 빨간 heart는 각 계정 membership대로 독립 유지.
+- `추천/최신/인기` 전환 후 공개 숫자 동일.
+- 해당 곡 공개프로필에서도 같은 총 숫자 확인.
+- PC/모바일 같은 계정 heart/count 수렴 확인.
+- CACHE LIVE에서 변경 없는 재진입 D1 R0/W0 목표 확인.
+- 실제 aggregate 변경 시에만 bounded public R2 갱신되는지 확인.
+- 앱 업데이트만으로 전체 Feed/Profile 재생성 또는 D1 폭증 없는지 확인.
 
-보호:
-- unlike 시 이미 받은 card payload를 즉시 삭제하지 않음.
-- dormant card 최대 100곡 / 7일 bounded 유지.
-- same-account like UI sync는 기존 RTDB/D1 구조 유지.
-- Explore Worker 056 변경 없음.
-- 기존 payload가 있는 unlike→re-like 후 warm `내 좋아요곡` D1 card read 0 목표 유지.
+## 12. 알려진 위험 / 다음 작업
+- 102은 코드/자동검증 PASS지만 **실제 Cloudflare PREVIEW 배포 후 rows_read/R2 동작은 미검증**.
+- 공개 숫자는 비용 설계상 scheduled aggregate 경계까지 최대 약 10분 지연이 있을 수 있다. 102의 목표는 그 canonical 경계 이후 다른 계정에 오래된 값이 남지 않도록 수렴시키는 것.
+- 사용자 요구가 ‘모든 다른 사용자에게 즉시 실시간 숫자’로 바뀌면 별도 비용 설계가 필요하며 현재 구조를 무조건 1분 polling으로 바꾸지 않는다.
+- 개인 heart missed-signal의 장기 stale cache 문제는 public 숫자와 분리된 영역이다. 102 PREVIEW 실측에서 재현되면 작은 per-account revision 방식으로 후속 수정한다.
+- Build chunk-size/mixed import 경고는 기존 경고로 남음.
 
-하지만 2026-09-16 교차계정 실측에서 **공개 총 좋아요 숫자 수렴 FAIL**을 확인했다. 이는 101 Library 수정이 아니라 기존 Explore Worker/public R2 propagation 구조의 결함으로 확인됐다.
-
-## 11. TEST / PRODUCTION 승격
-- TEST: **Explore 교차계정 좋아요 공개 숫자 동기화 FAIL 해결 + PREVIEW 100 liked-card 검증 + PREVIEW 101 Library 비용/정확성 실측 PASS 전 승격 금지.**
-- 사용자 데이터 복사 금지.
-- PRODUCTION: 사용자 명확한 정식배포 승인 전 금지.
-
-## 12. 정상 기능 보호 / 알려진 위험
-- Catalog 092: Music Note/Library 일반 catalog R2-only, Firestore full scan 금지.
-- Worker 056: requested IDs PK/index lookup, 전체 tracks scan 금지.
-- Music Note Local First + 묶음 저장 보호.
-- Explore durable outbox + boundary/max50 batch + RTDB bounded retained transaction merge 보호.
-- UI 비요청 변경 금지.
-- warm cache 0-read 목표를 위해 앱 버전과 사용자 데이터 cache version을 다시 결합하지 말 것.
-- playlist page-entry `onSnapshot` 또는 곡별 likes/share fan-out 재도입 금지.
-- Build chunk-size/mixed import 경고는 기존 문제로 남음.
-- Explore public Feed/Profile R2가 069 aggregate 변경을 못 받는 현상은 현재 최우선 릴리스 차단 오류.
-
-## 13. 다음 작업
-- Explore 069 aggregate → public Feed/Profile R2 changed-track propagation 복구.
-- 교차계정 공개 총 좋아요 숫자 수렴 지연 구조 조정.
-- 개인 heart membership의 missed-signal/오래된 local cache repair를 별도 해결.
-- 그 뒤 PREVIEW에서 Master / Admin A / Admin B 계정 교차검증.
-- Library 101 zero-read 실측을 이어서 완료.
-- 모두 PASS 후에만 TEST 승격 검토.
-
-## 14. 2026-09-16 Explore 교차계정 좋아요 FAIL — 확정 원인
-사용자 영상 실측:
-- Master PC와 같은 Master 모바일은 같은 계정 RTDB/local signal 덕분에 대체로 수렴.
-- Admin A/B 다른 계정에서는 같은 공개곡의 총 좋아요 숫자가 과거 값에 머무는 현상 확인.
-- 일부 계정에서 개인 heart membership도 과거 로컬 값이 남는 현상 보고.
-
-정확한 의미:
-- 빨간/채운 하트 = 현재 로그인 사용자의 개인 membership. 다른 계정끼리 같을 필요가 없고 공유하면 안 됨.
-- 하트 옆 숫자 = 공개 총 좋아요 aggregate. 모든 계정/기기에서 수렴해야 함.
-
-확정된 public aggregate 결함:
-1. `044-local-first-cost-hotpath.mjs`는 legacy 075 aggregate에서 변경된 곡만 `patchExploreFeedR2Like044` / `patchExploreProfileR2Like044`로 public R2에 반영한다.
-2. 후속 `055-explore-like-intake-w1-hotpath.mjs`가 새 좋아요 intake를 069 queue로 전환했다.
-3. 069를 처리하는 `processExploreLikeAggregateWave035` / `processExploreLikeBatches035`는 D1 `likes`, `track_stats`, queue delete는 하지만 public Feed/Profile R2 patch가 없다.
-4. `/v1/feed-revision`은 D1이 아니라 public Feed R2 ETag를 revision으로 사용한다.
-5. 따라서 069 처리 후 D1이 바뀌어도 R2 ETag가 그대로면 다른 계정은 기존 local feed cache를 계속 최신으로 오인한다.
-
-추가 수렴 지연:
-- Worker cron: 10분 (`*/10 * * * *`).
-- 클라이언트 `/v1/feed-revision` 로컬 캐시: 10분.
-- Worker R2 revision edge cache: 60초.
-
-개인 heart 별도 위험:
-- UID별 `getExploreLikedTrackIds`는 이미 캐시된 track 상태를 재검증하지 않는다.
-- 개인 Social Snapshot cache는 expiry/revision이 없다.
-- bounded same-account RTDB signal을 놓친 오래된 기기는 개인 membership이 장기간 stale일 수 있다.
-
-수정 원칙:
-- 069 W1 저비용 intake는 보호.
-- 실제 delta가 생긴 changed track만 public Feed/Profile R2에 반영.
-- 전체 Feed/Profile/D1 scan 금지.
-- unchanged page entry D1 R0 유지.
-- 다른 사용자의 개인 heart membership broadcast 금지.
-- 사용자 데이터 migration/backfill/delete/overwrite 없이 하위호환 수정.
+다음 안전 순서:
+1. 사용자가 `프리뷰배포` 요청 시 102 고정 commit 기준으로 PREVIEW Worker + Hosting 검증 배포.
+2. 실제 Master/Admin A/Admin B 교차검증.
+3. 비용 계측.
+4. 문제 없을 때만 TEST 승격 검토.

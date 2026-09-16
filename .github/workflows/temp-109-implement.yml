@@ -58,6 +58,7 @@ jobs:
           printf '%s\n' "${changed[@]}" > "$RUNNER_TEMP/changed.txt"
           cat > "$RUNNER_TEMP/expected.txt" <<'EOF'
           public/app-version.json
+          scripts/verify-103-explore-like-event-batch.mjs
           scripts/verify-105-explore-like-1min.mjs
           scripts/verify-108-explore-feed-cache-recovery.mjs
           scripts/verify-109-mobile-feed-refresh-zero.mjs
@@ -78,7 +79,7 @@ jobs:
           set -euo pipefail
           git config user.name 'soridraw-release-bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add public/app-version.json scripts/verify-105-explore-like-1min.mjs scripts/verify-108-explore-feed-cache-recovery.mjs scripts/verify-109-mobile-feed-refresh-zero.mjs src/App.tsx src/services/exploreSessionCache.ts
+          git add public/app-version.json scripts/verify-103-explore-like-event-batch.mjs scripts/verify-105-explore-like-1min.mjs scripts/verify-108-explore-feed-cache-recovery.mjs scripts/verify-109-mobile-feed-refresh-zero.mjs src/App.tsx src/services/exploreSessionCache.ts
           git commit -m 'fix: recover mobile Explore cache and zero refresh reads'
           git push origin HEAD:preview
           echo "PRODUCT_COMMIT=$(git rev-parse HEAD)"

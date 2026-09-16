@@ -1,0 +1,323 @@
+name: TEMP 110 Liked Public Count Release
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/temp-110-liked-public-count.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Capture TEST and PRODUCTION baselines
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 "https://test.soridraw.com/app-version.json?before=${GITHUB_RUN_ID}" > /tmp/test-before.json
+          curl -fsSL --retry 3 "https://soridraw.com/app-version.json?before=${GITHUB_RUN_ID}" > /tmp/prod-before.json
+          echo "TEST_BEFORE=$(cat /tmp/test-before.json)"
+          echo "PROD_BEFORE=$(cat /tmp/prod-before.json)"
+
+      - name: Apply PREVIEW 110 liked-song public count fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          page_path = Path('src/pages/ExplorePage.tsx')
+          page = page_path.read_text(encoding='utf-8')
+
+          request_anchor = """  }, [sort, submittedQuery]);
+
+  useEffect(() => {
+    const cachedRows = readExploreFeedSessionCache(requestUrl);
+"""
+          helper = """  }, [sort, submittedQuery]);
+
+  // SORIDRAW_EXPLORE_LIKED_PUBLIC_COUNT_LOCAL_SYNC_110_20260916
+  // Public counts belong to the shared Feed/Profile payload, not to the account-specific
+  // liked-card snapshot. Reuse already-cached public payloads to repair liked cards locally
+  // without a Firestore/D1 request, schema reset, polling loop, or optimistic count overlay.
+  const syncSharedPublicCountsToLocal110 = (sharedTracks: ExploreTrack[]) => {
+    if (!sharedTracks.length) return;
+    const countByTrackId = new Map(sharedTracks.map((track) => [track.id, track.likeCount]));
+    const applyPublicCounts110 = (previous: ExploreTrack[]) => previous.map((track) => {
+      const nextCount = countByTrackId.get(track.id);
+      return nextCount === undefined || nextCount === track.likeCount ? track : { ...track, likeCount: nextCount };
+    });
+
+    setProfileTracks(applyPublicCounts110);
+    setProfileLikedTracks(applyPublicCounts110);
+
+    const activeUid = auth.currentUser?.uid || user?.uid || '';
+    sharedTracks.forEach((track) => {
+      if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
+      if (activeUid) patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);
+    });
+  };
+
+  useEffect(() => {
+    const cachedRows = readExploreFeedSessionCache(requestUrl);
+"""
+          if 'SORIDRAW_EXPLORE_LIKED_PUBLIC_COUNT_LOCAL_SYNC_110_20260916' not in page:
+              if request_anchor not in page:
+                  raise SystemExit('110 requestUrl helper anchor missing')
+              page = page.replace(request_anchor, helper, 1)
+
+          old_apply = """      const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
+      const activeUid = auth.currentUser?.uid || '';
+      setFeedNextCursor(nextCursor);
+      setLoadMoreError('');
+      setTracks(normalizedTracks);
+      if (feedRequest) {
+        const countByTrackId = new Map(normalizedTracks.map((track) => [track.id, track.likeCount]));
+        setProfileTracks((previous) => previous.map((track) => {
+          const nextCount = countByTrackId.get(track.id);
+          return nextCount === undefined || nextCount === track.likeCount ? track : { ...track, likeCount: nextCount };
+        }));
+        normalizedTracks.forEach((track) => {
+          if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
+          if (activeUid) patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);
+        });
+      }
+"""
+          new_apply = """      const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
+      setFeedNextCursor(nextCursor);
+      setLoadMoreError('');
+      setTracks(normalizedTracks);
+      if (feedRequest) syncSharedPublicCountsToLocal110(normalizedTracks);
+"""
+          if old_apply in page:
+              page = page.replace(old_apply, new_apply, 1)
+          elif new_apply not in page:
+              raise SystemExit('110 fresh payload sync anchor missing')
+
+          old_cached = """      const cachedTracks = cachedRows.map(normalizeTrack).filter((track) => track.id);
+      setTracks(cachedTracks);
+      setLoading(false);
+"""
+          new_cached = """      const cachedTracks = cachedRows.map(normalizeTrack).filter((track) => track.id);
+      if (feedRequest) syncSharedPublicCountsToLocal110(cachedTracks);
+      setTracks(cachedTracks);
+      setLoading(false);
+"""
+          if old_cached in page:
+              page = page.replace(old_cached, new_cached, 1)
+          elif new_cached not in page:
+              raise SystemExit('110 cached Feed local sync anchor missing')
+
+          old_profile = """      const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
+      normalizedTracks.sort(comparePublicProfileTracks);
+      setProfile(nextProfile);
+      setProfileTracks(normalizedTracks);
+"""
+          new_profile = """      const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
+      normalizedTracks.sort(comparePublicProfileTracks);
+      syncSharedPublicCountsToLocal110(normalizedTracks);
+      setProfile(nextProfile);
+      setProfileTracks(normalizedTracks);
+"""
+          if old_profile in page:
+              page = page.replace(old_profile, new_profile, 1)
+          elif new_profile not in page:
+              raise SystemExit('110 profile public sync anchor missing')
+
+          old_more = """      const normalized = rows.map(normalizeTrack).filter((track) => track.id);
+      const activeUid = auth.currentUser?.uid || '';
+      if (activeUid) {
+        normalized.forEach((track) => {
+          if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
+          patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);
+        });
+      }
+"""
+          new_more = """      const normalized = rows.map(normalizeTrack).filter((track) => track.id);
+      syncSharedPublicCountsToLocal110(normalized);
+"""
+          if old_more in page:
+              page = page.replace(old_more, new_more, 1)
+          elif new_more not in page:
+              raise SystemExit('110 load-more local sync anchor missing')
+
+          page_path.write_text(page, encoding='utf-8')
+
+          version_path = Path('public/app-version.json')
+          version = json.loads(version_path.read_text(encoding='utf-8'))
+          version['version'] = '110'
+          version_path.write_text(json.dumps(version, ensure_ascii=False, separators=(',', ':')) + '\n', encoding='utf-8')
+
+          verifier = r'''import { readFileSync } from 'node:fs';
+          
+          const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
+          const liked = readFileSync('src/services/exploreLikedTracksService.ts', 'utf8');
+          const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
+          const fail = (message) => { throw new Error(`[110] ${message}`); };
+          
+          if (String(version.version) !== '110') fail('app version is not 110');
+          if (!page.includes('SORIDRAW_EXPLORE_LIKED_PUBLIC_COUNT_LOCAL_SYNC_110_20260916')) fail('110 marker missing');
+          if (!page.includes('const syncSharedPublicCountsToLocal110 = (sharedTracks: ExploreTrack[]) =>')) fail('shared public-count local sync helper missing');
+          if (!page.includes('setProfileLikedTracks(applyPublicCounts110);')) fail('open liked-tab state is not reconciled');
+          if (!page.includes('patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);')) fail('persistent liked-card cache is not reconciled');
+          if (!page.includes('if (feedRequest) syncSharedPublicCountsToLocal110(cachedTracks);')) fail('warm persistent Feed cache does not repair liked cards');
+          if (!page.includes('if (feedRequest) syncSharedPublicCountsToLocal110(normalizedTracks);')) fail('fresh Feed payload does not repair liked cards');
+          if (!page.includes('syncSharedPublicCountsToLocal110(normalized);')) fail('load-more Feed payload does not repair liked cards');
+          if (!page.includes('syncSharedPublicCountsToLocal110(normalizedTracks);\n      setProfile(nextProfile);')) fail('public-profile payload does not repair matching liked cards');
+          if (!/LIKED_TRACK_CACHE_SCHEMA_VERSION\s*=\s*1\s*;/.test(liked)) fail('liked-track cache schema was reset; network bootstrap risk');
+          if (/app-version\.json|APP_VERSION|appVersion/.test(liked)) fail('liked-track cache became app-version coupled');
+          if (!/expiresAt:\s*null/.test(liked)) fail('liked-track long-lived cache contract changed');
+          if (!page.includes('EXPLORE_LIKE_AGGREGATE_WINDOW_MS_105 = 1 * 60_000')) fail('one-minute event aggregate contract changed');
+          if (/setInterval\([^)]*syncSharedPublicCountsToLocal110|syncSharedPublicCountsToLocal110[^\n]*fetch\(/s.test(page)) fail('110 introduced polling/network into local sync');
+          
+          console.log('110_LIKED_PUBLIC_COUNT_LOCAL_SYNC=PASS');
+          console.log('SOURCE=SHARED_FEED_PROFILE_PAYLOAD');
+          console.log('WARM_REPAIR_SERVER_READS=0_BY_CONTRACT');
+          console.log('LIKED_CACHE_SCHEMA_RESET=NO');
+          console.log('LIKED_MEMBERSHIP_CHANGED=NO');
+          console.log('WORKER_D1_CHANGE=NO');
+          console.log('NO_UI_CSS_CHANGE=true');
+          '''
+          Path('scripts/verify-110-explore-liked-public-count.mjs').write_text(verifier, encoding='utf-8')
+          PY
+
+          git diff --check
+
+      - name: Install and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-110-explore-liked-public-count.mjs
+          for pattern in \
+            'scripts/verify-109-*.mjs' \
+            'scripts/verify-108-*.mjs' \
+            'scripts/verify-107-*.mjs' \
+            'scripts/verify-105-*.mjs' \
+            'scripts/verify-103-*.mjs' \
+            'scripts/verify-102-*.mjs'; do
+            for file in $pattern; do
+              [ -e "$file" ] || continue
+              echo "VERIFY $file"
+              node "$file"
+            done
+          done
+          git diff --check
+          git restore --worktree --staged dist 2>/dev/null || true
+          git clean -fd dist 2>/dev/null || true
+          printf '%s\n' "$(git diff --name-only | sort)"
+          ACTUAL="$(git diff --name-only | sort | tr '\n' ' ')"
+          EXPECTED="public/app-version.json scripts/verify-110-explore-liked-public-count.mjs src/pages/ExplorePage.tsx "
+          [ "$ACTUAL" = "$EXPECTED" ] || { echo "Unexpected product diff: $ACTUAL"; exit 1; }
+
+      - name: Commit PREVIEW 110 product
+        id: product
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'soridraw-release-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add public/app-version.json src/pages/ExplorePage.tsx scripts/verify-110-explore-liked-public-count.mjs
+          git commit -m 'fix: sync liked-song public counts from shared cache'
+          PRODUCT_SHA="$(git rev-parse HEAD)"
+          echo "sha=$PRODUCT_SHA" >> "$GITHUB_OUTPUT"
+          git push origin HEAD:preview
+
+      - name: Rebuild exact PREVIEW 110
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+
+      - name: Deploy Firebase PREVIEW 110 only
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW_APP_866A5 }}'
+          projectId: soridraw-app-866a5
+          channelId: live
+          target: preview
+
+      - name: Verify live PREVIEW and non-target environments
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 18); do
+            if curl -fsSL --max-time 20 "https://preview.soridraw.com/app-version.json?run=${GITHUB_RUN_ID}-${attempt}" > /tmp/preview-version.json; then
+              if node -e "const fs=require('fs');const v=JSON.parse(fs.readFileSync('/tmp/preview-version.json','utf8'));process.exit(String(v.version)==='110'?0:1)"; then
+                ok=1
+                break
+              fi
+            fi
+            sleep 5
+          done
+          [ "$ok" = 1 ] || { echo 'PREVIEW 110 version verification failed'; cat /tmp/preview-version.json || true; exit 1; }
+
+          exact=0
+          for attempt in $(seq 1 12); do
+            curl -fsSL --max-time 20 "https://preview.soridraw.com/?run=${GITHUB_RUN_ID}-${attempt}" > /tmp/preview-index.html || true
+            if cmp -s dist/index.html /tmp/preview-index.html; then exact=1; break; fi
+            sleep 5
+          done
+          [ "$exact" = 1 ] || { echo 'PREVIEW exact index verification failed'; exit 1; }
+
+          curl -fsSL --retry 3 "https://test.soridraw.com/app-version.json?after=${GITHUB_RUN_ID}" > /tmp/test-after.json
+          curl -fsSL --retry 3 "https://soridraw.com/app-version.json?after=${GITHUB_RUN_ID}" > /tmp/prod-after.json
+          cmp -s /tmp/test-before.json /tmp/test-after.json || { echo 'TEST changed unexpectedly'; diff -u /tmp/test-before.json /tmp/test-after.json || true; exit 1; }
+          cmp -s /tmp/prod-before.json /tmp/prod-after.json || { echo 'PRODUCTION changed unexpectedly'; diff -u /tmp/prod-before.json /tmp/prod-after.json || true; exit 1; }
+          echo 'PREVIEW_APP_VERSION=110'
+          echo 'PREVIEW_EXACT_BUILD=PASS'
+          echo 'TEST_PRODUCTION_UNCHANGED=PASS'
+
+      - name: Record release state and remove temporary release files
+        shell: bash
+        env:
+          PRODUCT_SHA: ${{ steps.product.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git restore --worktree --staged dist 2>/dev/null || true
+          git clean -fd dist 2>/dev/null || true
+          git pull --ff-only origin preview
+          python - <<'PY'
+          from pathlib import Path
+          import os, re
+
+          product_sha = os.environ['PRODUCT_SHA']
+          run_id = os.environ['GITHUB_RUN_ID']
+          current_path = Path('DOCS/CURRENT_RELEASE_STATE.md')
+          current = current_path.read_text(encoding='utf-8')
+          current = re.sub(r'최종 갱신: .*', '최종 갱신: 2026-09-16 KST — PREVIEW 110 배포 완료', current, count=1)
+          marker = '> 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다. 문서와 실제 상태가 다르면 실제 상태 우선.\n'
+          if marker not in current:
+              raise SystemExit('release-state marker missing')
+          if '## 0I. PREVIEW 110' not in current:
+              section = f'''\n\n## 0I. PREVIEW 110 — 개인 좋아요곡 공개 숫자 로컬 정합성 복구 + 109 실사용 PASS\n\n- **109 사용자 실사용 확인:** PC Master/Admin 공개 숫자 `1` 보존 PASS, 모바일 Master/Admin도 `1` 복구 PASS. 반복 hard refresh의 Firestore `users:onSnapshot` 증가 현상도 사용자 확인상 해소. 두 번째 관리자 계정의 `users:getDocs 12`는 관리자 목록 cold cache 최초 1회에서 문서 12개를 받은 값이며 요청 12회가 아님; 목록은 최대 20개 페이지 단위 + 관리자 UID/정렬별 persistent cache 구조.\n- **남은 FAIL:** 자기 공개프로필의 `좋아요 곡` 탭에서는 heart membership은 빨간색으로 맞지만 카드 공개 `likeCount`가 과거 liked-card persistent cache의 `0`으로 표시됨. Explore 메인 공용 Feed는 같은 곡 `1`이므로 서버 canonical 문제가 아님.\n- **110 제품 commit:** `{product_sha}`. Release Run `{run_id}`. 실제 `https://preview.soridraw.com` 앱 버전 **110**, exact index PASS, TEST/PRODUCTION app-version 비변경 PASS.\n- **110 수정:** shared Feed/Profile payload에서 이미 확인된 public `likeCount`를 개인 liked-card 장기 cache와 현재 열려 있는 `좋아요 곡` state에 로컬로 동기화한다. warm persistent Feed cache도 즉시 source로 사용하므로 기존 stale `0` 카드는 서버 재조회 없이 `1`로 복구할 수 있다.\n- liked-track cache schema는 `1` 그대로 유지한다. 앱 업데이트 때문에 좋아요곡 cache를 폐기하거나 전체 liked tracks를 서버에서 재수집하지 않는다. 새 polling/fetch 없음. public 숫자는 shared payload가 authority이고 membership/outbox는 기존 계정별 구조를 유지한다.\n- TypeScript PASS / Build PASS / 110 verifier PASS / 109·108·107·105·103·102 관련 verifier PASS.\n- PREVIEW Explore Worker는 **재배포하지 않음**. 기존 `d8eae38a-09a9-4f37-9500-57f217ee1d8c` 유지. 1분 event-driven aggregate 및 fixed cron 0 유지.\n- Firebase Functions/Rules/RTDB Rules 변경 없음. D1 schema/migration/backfill 없음. 사용자 원본 데이터 변경 없음. UI/CSS 변경 없음.\n- 비용: 110 liked-card 복구 자체는 이미 기기에 있는 shared Feed/Profile payload → local cache patch이며 Firestore/D1 추가 read/write **0 계약**.\n- TEST/PRODUCTION 승격 없음. formal Work 독립 감사는 미실행.\n- **실사용 검증 필요:** 모바일/PC 자기 `좋아요 곡` 탭의 기존 0이 1로 복구되는지, 재진입/새로고침에도 유지되는지, like/unlike 후 약 1분 뒤 Feed/Profile/좋아요곡 숫자가 동일하게 수렴하는지 확인 전 TEST 승격 금지.\n'''
+              current = current.replace(marker, marker + section, 1)
+          current_path.write_text(current, encoding='utf-8')
+
+          Path('DOCS/NEXT_CODEX_TASK.md').write_text(f'''# SORIDRAW NEXT CODEX TASK\n\n최종 갱신: 2026-09-16 KST\n\n## 현재 기준\n\n- branch: `preview`\n- PREVIEW app: **110**, `https://preview.soridraw.com`\n- 110 product commit: `{product_sha}`\n- PREVIEW release Run: `{run_id}` SUCCESS\n- PREVIEW Explore Worker: `d8eae38a-09a9-4f37-9500-57f217ee1d8c` (110에서 재배포 없음)\n- TEST/PRODUCTION: 비변경\n\n## 109 사용자 실사용 결과\n\n- PC Master/Admin public count 1 PASS.\n- Mobile Master/Admin public count 1 PASS.\n- repeated hard refresh Firestore runaway: 사용자 확인상 PASS.\n- second Admin cold `users:getDocs 12`: 1 query가 12 documents를 받은 진단값; admin user list는 max 20/page persistent cache.\n\n## 110 수정\n\n- 자기 `좋아요 곡` 탭의 red heart + stale public count 0 문제 수정.\n- shared Feed/Profile의 public likeCount를 open liked-tab state + `explore-liked-track-collection-085` local cache에 로컬 반영.\n- warm Feed cache도 repair source로 사용. 추가 Firestore/D1 read 없음.\n- liked-track schema reset 없음, app-version coupling 없음, polling 없음.\n- Worker/Functions/Rules/D1/user source data/UI/CSS 변경 없음.\n\n## 다음 작업 — 실사용 검증만\n\n1. PC/모바일 자기 공개프로필 → `좋아요 곡`에서 기존 0이 shared public count 1로 복구되는지 확인.\n2. 페이지 이동/재진입/새로고침 후에도 1 유지.\n3. Master/Admin 각 계정에서 자신의 heart membership은 계정별로 맞고 public count는 동일한지 확인.\n4. like/unlike 후 개인 heart 즉시, 약 1분~1분10초 뒤 Explore Feed/Public Profile/좋아요곡 public count가 같은 최종값으로 수렴.\n5. warm 재진입 D1 R0/W0 및 repeated refresh Firestore R0 목표 재확인.\n\n위 검증 전 TEST 승격 금지. `테스트배포` 명시 승인 전 main 변경 금지. PRODUCTION은 별도 명확 승인 전 금지.\n\n주의: 103 Durable Object migration v1 유지. pre-103 Worker 직접 rollback 금지에 가깝게 취급하고 migration을 유지한 forward-compatible rollback 사용. formal Work 독립 감사 미실행.\n''', encoding='utf-8')
+          PY
+
+          find .github/workflows -maxdepth 1 -type f \( -name 'temp-109-*.yml' -o -name 'temp-110-*.yml' \) -print -delete || true
+          find .deploy -maxdepth 1 -type f \( -name 'temp-109-*' -o -name 'temp-110-*' \) -print -delete || true
+          git diff --check
+          git config user.name 'soridraw-release-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A DOCS/CURRENT_RELEASE_STATE.md DOCS/NEXT_CODEX_TASK.md .github/workflows .deploy
+          git commit -m 'docs: record PREVIEW 110 release and clean temp workflows'
+          git push origin HEAD:preview
+          echo "FINAL_PREVIEW_HEAD=$(git rev-parse HEAD)"
+          echo "PRODUCT_SHA=$PRODUCT_SHA"
+          echo "RELEASE_RUN=$GITHUB_RUN_ID"

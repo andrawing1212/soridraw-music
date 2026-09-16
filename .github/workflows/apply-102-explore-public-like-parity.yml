@@ -56,7 +56,6 @@ jobs:
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-like-cost-optimization.mjs
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
           grep -Fq '056-explore-public-like-parity.mjs' cloudflare/explore-worker/release-patches.json
-          grep -Fq 'verify-102-explore-public-like-parity.mjs' .github/workflows/cloudflare-explore-preview-release.yml
           grep -Fq '"version": "102"' public/app-version.json
           expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
           actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
@@ -79,7 +78,7 @@ jobs:
           git diff --check
           changed="$(git diff --name-only | grep -v '^dist/' || true)"
           echo "$changed"
-          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreRevisionRequestCache\.ts|public/app-version\.json|cloudflare/explore-worker/release-patches\.json|cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt|\.github/workflows/cloudflare-explore-preview-release\.yml)$' || true)"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreRevisionRequestCache\.ts|public/app-version\.json|cloudflare/explore-worker/release-patches\.json|cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt)$' || true)"
           if [ -n "$bad" ]; then
             echo 'Unexpected generated changes:'
             echo "$bad"
@@ -103,7 +102,6 @@ jobs:
             cloudflare/explore-worker/release-patches.json
             cloudflare/explore-worker/canonical/preview-worker.js
             cloudflare/explore-worker/canonical/source-sha256.txt
-            .github/workflows/cloudflare-explore-preview-release.yml
           )
           if git diff --quiet -- "${tracked[@]}"; then
             echo '102 already applied.'

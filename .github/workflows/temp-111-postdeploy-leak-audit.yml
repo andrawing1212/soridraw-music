@@ -1,0 +1,89 @@
+name: TEMP 111 Postdeploy Explore Leak Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-111-postdeploy-leak-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+      - name: Live PREVIEW leak audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          header_value() {
+            local file="$1" name="$2"
+            awk -v n="$name" 'BEGIN{IGNORECASE=1} tolower($1)==tolower(n ":"){gsub("\r","");print $2}' "$file" | tail -1
+          }
+          request() {
+            local url="$1" head="$2" body="$3"
+            curl -sS -D "$head" -o "$body" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "$url"
+          }
+          assert_r0w0() {
+            local head="$1" label="$2"
+            local r w
+            r="$(header_value "$head" 'x-soridraw-d1-read')"
+            w="$(header_value "$head" 'x-soridraw-d1-write')"
+            echo "$label D1R=${r:-missing} D1W=${w:-missing}"
+            test "${r:-0}" = 0
+            test "${w:-0}" = 0
+          }
+
+          bad="__soridraw_111_postdeploy_$(date +%s%N)__"
+          for i in 1 2 3; do
+            code="$(request "${PREVIEW_BASE}/v1/profiles/${bad}/first-view?limit=50" "$RUNNER_TEMP/bad${i}.head" "$RUNNER_TEMP/bad${i}.json")"
+            r="$(header_value "$RUNNER_TEMP/bad${i}.head" 'x-soridraw-d1-read')"
+            w="$(header_value "$RUNNER_TEMP/bad${i}.head" 'x-soridraw-d1-write')"
+            cache="$(header_value "$RUNNER_TEMP/bad${i}.head" 'x-soridraw-profile-cache')"
+            echo "INVALID_$i HTTP=$code D1R=${r:-missing} D1W=${w:-missing} CACHE=${cache:-missing}"
+            test "$code" = 404
+            test "${w:-0}" = 0
+            if [ "$i" -ge 2 ]; then test "${r:-0}" = 0; fi
+          done
+          echo 'INVALID_REPEAT_NEGATIVE_CACHE=PASS'
+
+          latest_code="$(request "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40" "$RUNNER_TEMP/latest1.head" "$RUNNER_TEMP/latest.json")"
+          test "$latest_code" = 200
+          owner="$(jq -r '.data.items[0].ownerUid // .data.items[0].owner_uid // empty' "$RUNNER_TEMP/latest.json")"
+          test -n "$owner"
+          sleep 1
+          latest2_code="$(request "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40" "$RUNNER_TEMP/latest2.head" "$RUNNER_TEMP/latest2.json")"
+          test "$latest2_code" = 200
+          assert_r0w0 "$RUNNER_TEMP/latest2.head" 'LATEST_WARM'
+
+          popular_code="$(request "${PREVIEW_BASE}/v1/feed?sort=popular&limit=40" "$RUNNER_TEMP/pop1.head" "$RUNNER_TEMP/pop1.json")"
+          test "$popular_code" = 200
+          sleep 1
+          popular2_code="$(request "${PREVIEW_BASE}/v1/feed?sort=popular&limit=40" "$RUNNER_TEMP/pop2.head" "$RUNNER_TEMP/pop2.json")"
+          test "$popular2_code" = 200
+          assert_r0w0 "$RUNNER_TEMP/pop2.head" 'POPULAR_WARM'
+
+          profile_code="$(request "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50" "$RUNNER_TEMP/profile1.head" "$RUNNER_TEMP/profile1.json")"
+          test "$profile_code" = 200
+          sleep 1
+          profile2_code="$(request "${PREVIEW_BASE}/v1/profiles/${owner}/first-view?limit=50" "$RUNNER_TEMP/profile2.head" "$RUNNER_TEMP/profile2.json")"
+          test "$profile2_code" = 200
+          assert_r0w0 "$RUNNER_TEMP/profile2.head" 'PROFILE_WARM'
+
+          for sort in latest popular; do
+            request "${PREVIEW_BASE}/v1/feed-revision?sort=${sort}" "$RUNNER_TEMP/rev-${sort}-1.head" "$RUNNER_TEMP/rev-${sort}-1.json" >/dev/null
+            sleep 1
+            code="$(request "${PREVIEW_BASE}/v1/feed-revision?sort=${sort}" "$RUNNER_TEMP/rev-${sort}-2.head" "$RUNNER_TEMP/rev-${sort}-2.json")"
+            test "$code" = 200
+            assert_r0w0 "$RUNNER_TEMP/rev-${sort}-2.head" "REVISION_${sort}_WARM"
+          done
+
+          echo 'LIVE_PREVIEW_111_EXPLORE_LEAK_AUDIT=PASS'
+          echo 'USER_DATA_WRITES=0'
+          echo 'FIXED_CRON_TESTED_BY_RELEASE=0'

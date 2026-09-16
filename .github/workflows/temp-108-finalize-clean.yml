@@ -1,0 +1,80 @@
+name: TEMP 108 Finalize Clean
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/temp-108-finalize-clean.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify 108 candidate
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          node scripts/verify-108-explore-feed-cache-recovery.mjs
+          node scripts/verify-107-explore-direct-count-zero-read.mjs
+          node scripts/verify-105-explore-like-1min.mjs
+          node scripts/verify-103-explore-like-event-batch.mjs
+          node scripts/verify-102-explore-public-like-parity.mjs
+          npx tsc --noEmit
+          npm run build
+      - name: Restore tracked dist and enforce exact source boundary
+        run: |
+          set -euo pipefail
+          BASE='d2901829bab8ee8ad85791ac96bac457c2c2bc9c'
+          DIST_BASE='7d410e375473cd98eb9e5041ab55a9d181a4db39'
+
+          # Build output is not release source. Restore the repository's tracked dist
+          # exactly to its pre-R2-extension state, including removing newly generated hashes.
+          git rm -r -f --ignore-unmatch dist >/dev/null 2>&1 || true
+          git checkout "$DIST_BASE" -- dist
+          git diff --quiet "$DIST_BASE" -- dist
+
+          # One-time workflow must not remain in the product candidate.
+          rm -f .github/workflows/temp-108-finalize-clean.yml
+          rm -f .deploy/temp-108-finalize-clean.trigger
+
+          git add -A
+          git diff --cached --check
+
+          git diff --name-only "$BASE" -- | sort > /tmp/actual.txt
+          cat > /tmp/expected.txt <<'EOF'
+          cloudflare/explore-worker/canonical/preview-entry.js
+          public/app-version.json
+          scripts/verify-103-explore-like-event-batch.mjs
+          scripts/verify-105-explore-like-1min.mjs
+          scripts/verify-107-explore-direct-count-zero-read.mjs
+          scripts/verify-108-explore-feed-cache-recovery.mjs
+          src/pages/ExplorePage.tsx
+          src/services/exploreSessionCache.ts
+          EOF
+          sort -o /tmp/expected.txt /tmp/expected.txt
+          echo 'FINAL_108_CHANGED_FILES:'
+          cat /tmp/actual.txt
+          diff -u /tmp/expected.txt /tmp/actual.txt
+          echo 'FINAL_108_CHANGE_BOUNDARY=PASS'
+          echo 'DIST_BASELINE_RESTORED=PASS'
+      - name: Commit final clean candidate
+        run: |
+          set -euo pipefail
+          git config user.name 'soridraw-release-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'chore: finalize clean 108 Explore recovery candidate'
+          git push origin HEAD:preview

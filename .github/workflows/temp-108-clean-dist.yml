@@ -1,0 +1,29 @@
+name: TEMP 108 Clean Dist
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/temp-108-clean-dist.trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - name: Restore tracked dist and self-clean
+        run: |
+          set -euo pipefail
+          git checkout d2901829bab8ee8ad85791ac96bac457c2c2bc9c -- dist
+          rm -f .github/workflows/temp-108-clean-dist.yml .deploy/temp-108-clean-dist.trigger
+          git config user.name 'soridraw-release-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'chore: keep 108 source diff clean'
+          git push origin HEAD:preview

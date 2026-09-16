@@ -12,22 +12,13 @@ import {
 
 // SORIDRAW_EXPLORE_REVISION_CLIENT_CACHE_062_20260911
 // SORIDRAW_EXPLORE_FEED_DELTA_068_20260912
-// A 10-minute local revision window remains the first guard. When the server is
-// actually consulted, 068 asks for a bounded changed-track delta. Safe latest-feed
-// changes are merged into the existing device cache locally, so one like aggregate
-// does not cause a second /v1/feed request. Structural/popular changes fall back to
-// the existing full-feed path to preserve correctness.
-const REVISION_CACHE_TTL_MS = 10 * 60 * 1000;
-// SORIDRAW_EXPLORE_PUBLIC_LIKE_REVISION_BOUNDARY_102_20260916
-const PUBLIC_LIKE_AGGREGATE_WINDOW_MS_102 = 10 * 60 * 1000;
-const PUBLIC_LIKE_REVISION_GRACE_MS_102 = 70 * 1000;
-const revisionCacheExpiry102 = (now = Date.now()) => {
-  const normalExpiry = now + REVISION_CACHE_TTL_MS;
-  const nextAggregateBoundary = Math.ceil((now + 1) / PUBLIC_LIKE_AGGREGATE_WINDOW_MS_102)
-    * PUBLIC_LIKE_AGGREGATE_WINDOW_MS_102;
-  return Math.min(normalExpiry, nextAggregateBoundary + PUBLIC_LIKE_REVISION_GRACE_MS_102);
-};
-const STORAGE_PREFIX = 'soridraw.explore.feed-revision-response.v1:';
+// SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_REVISION_103_20260916
+// Public aggregate work is now event-driven and can complete at any wall-clock time.
+// Keep one tiny Edge/R2 revision check at most every five minutes while Explore is
+// active; D1 remains R0/W0 on this path. A new cache namespace prevents a previously
+// stored 10-minute response from hiding the first 103 event-driven aggregate.
+const REVISION_CACHE_TTL_MS = 5 * 60 * 1000;
+const STORAGE_PREFIX = 'soridraw.explore.feed-revision-response.v2:';
 export const EXPLORE_REVISION_CLIENT_CACHE_HEADER = 'X-SORIDRAW-Client-Cache';
 export const EXPLORE_REVISION_CLIENT_CACHE_PATH_HEADER = 'X-SORIDRAW-Client-Cache-Path';
 const LIKE_SYNC_EVENT = 'soridraw:explore-like-sync';
@@ -131,7 +122,7 @@ const writeEntry = (url: string, response: Response, body: string) => {
   }
 
   const entry: RevisionCacheEntry = {
-    expiresAt: revisionCacheExpiry102(),
+    expiresAt: Date.now() + REVISION_CACHE_TTL_MS,
     status: response.status,
     statusText: response.statusText,
     body,

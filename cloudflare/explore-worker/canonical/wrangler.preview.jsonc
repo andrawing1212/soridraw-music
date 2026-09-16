@@ -36,10 +36,19 @@
       "bucket_name": "soridraw-profile-media-preview"
     }
   ],
-  "triggers": {
-    "crons": [
-      "*/10 * * * *"
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "EXPLORE_LIKE_BATCH_SCHEDULER",
+        "class_name": "ExploreLikeBatchScheduler103"
+      }
     ]
+  },
+  "exports": {
+    "ExploreLikeBatchScheduler103": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
   },
   "observability": {
     "enabled": true,

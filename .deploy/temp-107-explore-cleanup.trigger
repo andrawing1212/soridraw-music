@@ -1,0 +1,4 @@
+requested_at=2026-09-16T05:44:23Z
+requested_by=user
+purpose=107_explore_direct_public_count_and_warm_profile_zero_read_cleanup
+base_head=f430a1c628567738e28e8b4db8257b7d8a45783b

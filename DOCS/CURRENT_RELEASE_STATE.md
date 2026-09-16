@@ -1,8 +1,25 @@
 # SORIDRAW CURRENT RELEASE STATE
 
-최종 갱신: 2026-09-16 KST
+최종 갱신: 2026-09-16 KST — PREVIEW 108 배포 완료
 
 > 새 채팅은 이 문서 + 실제 GitHub/Firebase/Cloudflare 상태를 기준으로 이어간다. 문서와 실제 상태가 다르면 실제 상태 우선.
+
+## 0G. PREVIEW 108 — 오래된 Explore Feed 캐시 1회 복구 + D1 0 R2 snapshot 배포 완료
+
+- **현재 제품 기준 commit:** `933388f5775782fc29b2586e745b3238820bb8c6`. 108 기능 차이는 `d2901829bab8ee8ad85791ac96bac457c2c2bc9c` 대비 의도한 8개 파일만 남긴 clean candidate로 확정했다.
+- 108 최종 clean 검증 Run `35072117799` — **SUCCESS**. 108/107/105/103/102, TypeScript, Build, dist baseline 복구, exact change boundary 모두 PASS.
+- PREVIEW Explore Worker Release Run `35072908682` — **SUCCESS**. 실제 Worker version `d8eae38a-09a9-4f37-9500-57f217ee1d8c`. 이전 PREVIEW Worker는 `961084b2-28e0-4d04-8577-56d8944f4916`.
+- Worker 실측 smoke: Feed PASS / Public Profile PASS / `__soridraw_r2_only=108` HTTP 200 / **R2 snapshot D1 read 0, write 0** / warm `/v1/feed-revision` D1 read 0, write 0 / 고정 like cron 0 / TEST·PRODUCTION Worker 비변경 PASS.
+- PREVIEW App Release Run `35073054850` — **SUCCESS**. release source `3f47d76f5267e0048e786de8b4004b368b80d736`, 실제 `https://preview.soridraw.com` 앱 버전 **108**, exact build hash PASS. TEST/PRODUCTION branch 및 실제 Hosting 비변경 PASS.
+- **108 동작:** 기존 schema-1 Explore Feed 로컬 캐시는 108에서 한 번만 호환 불가로 버리고, 새 schema-2 캐시는 앱 버전과 독립적으로 장기 유지한다. 앱 업데이트 자체로 이후 캐시를 반복 폐기하지 않는다.
+- schema-1을 처음 교체할 때 일반 Feed D1 경로를 타지 않고, 이미 만들어진 PREVIEW R2 first-page snapshot을 직접 사용한다. 이 cold recovery route는 D1을 열지 않는 계약이며 실제 PREVIEW smoke에서도 R0/W0 확인.
+- 공개 좋아요 숫자는 107 원칙 그대로 Feed/Profile 공용 payload를 직접 표시한다. 개인 heart membership, local outbox, same-account RTDB membership sync, 105의 1분 event-driven aggregate는 유지. 고정 polling/cron 추가 없음.
+- UI/CSS 변경 없음. Firebase Functions/Rules/RTDB Rules 변경 없음. D1 schema/migration/backfill 없음. 사용자 원본 데이터 복사/삭제/덮어쓰기 없음.
+- PREVIEW Hosting만 108로 배포. TEST `main` / PRODUCTION은 승격하지 않음.
+- **실사용 검증 전:** PC/모바일에서 업데이트 직후 기존 0 stale 숫자가 서버/R2의 1로 교체되는지, 이후 warm 재진입이 다시 오래된 숫자로 돌아가지 않는지, Master/Admin 교차계정 like/unlike가 약 1분~1분10초 뒤 같은 공개 숫자로 수렴하는지 사용자 확인 필요. 이 검증 전 TEST 승격 금지.
+- 릴리스 도구 주의: 기존 표준 PREVIEW Worker release workflow의 과거 094/086 검사 일부는 107에서 제거된 display overlay 구조를 전제로 해 현재 코드에 stale 상태다. 이번 108은 현재 105/107/108 계약 + derived/publication/102/103 + live D1 read-only preflight를 통과한 일회성 release workflow로 배포했고, 해당 임시 workflow/trigger는 배포 직후 제거했다. 다음 Worker 릴리스 전에 표준 verifier 정리가 필요하다.
+- 103에서 추가된 Durable Object migration `v1`은 계속 유지한다. pre-103 Worker 직접 rollback은 호환되지 않을 수 있으므로 향후 rollback도 migration을 유지한 forward-compatible build를 사용한다.
+- formal Work 독립 감사: **미실행**. 자동 검증과 실제 PREVIEW Worker/Hosting smoke는 PASS.
 
 ## 0F. 107 공개 좋아요 1곡 실제 read-only 대조 — 서버 불일치 미재현
 

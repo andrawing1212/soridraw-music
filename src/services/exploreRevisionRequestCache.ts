@@ -18,6 +18,15 @@ import {
 // does not cause a second /v1/feed request. Structural/popular changes fall back to
 // the existing full-feed path to preserve correctness.
 const REVISION_CACHE_TTL_MS = 10 * 60 * 1000;
+// SORIDRAW_EXPLORE_PUBLIC_LIKE_REVISION_BOUNDARY_102_20260916
+const PUBLIC_LIKE_AGGREGATE_WINDOW_MS_102 = 10 * 60 * 1000;
+const PUBLIC_LIKE_REVISION_GRACE_MS_102 = 70 * 1000;
+const revisionCacheExpiry102 = (now = Date.now()) => {
+  const normalExpiry = now + REVISION_CACHE_TTL_MS;
+  const nextAggregateBoundary = Math.ceil((now + 1) / PUBLIC_LIKE_AGGREGATE_WINDOW_MS_102)
+    * PUBLIC_LIKE_AGGREGATE_WINDOW_MS_102;
+  return Math.min(normalExpiry, nextAggregateBoundary + PUBLIC_LIKE_REVISION_GRACE_MS_102);
+};
 const STORAGE_PREFIX = 'soridraw.explore.feed-revision-response.v1:';
 export const EXPLORE_REVISION_CLIENT_CACHE_HEADER = 'X-SORIDRAW-Client-Cache';
 export const EXPLORE_REVISION_CLIENT_CACHE_PATH_HEADER = 'X-SORIDRAW-Client-Cache-Path';
@@ -122,7 +131,7 @@ const writeEntry = (url: string, response: Response, body: string) => {
   }
 
   const entry: RevisionCacheEntry = {
-    expiresAt: Date.now() + REVISION_CACHE_TTL_MS,
+    expiresAt: revisionCacheExpiry102(),
     status: response.status,
     statusText: response.statusText,
     body,

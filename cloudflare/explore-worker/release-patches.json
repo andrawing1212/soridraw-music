@@ -18,6 +18,7 @@
     "043-publication-targeted-r2-hotpath.mjs",
     "044-local-first-cost-hotpath.mjs",
     "055-explore-like-intake-w1-hotpath.mjs",
+    "056-explore-public-like-parity.mjs",
     "045-publication-revision-metadata.mjs",
     "046-publication-write-compaction.mjs",
     "047-publication-state-transition.mjs",

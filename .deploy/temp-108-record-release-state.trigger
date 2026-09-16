@@ -1,2 +1,0 @@
-requested_at=2026-09-16T08:22:00Z
-purpose=record_completed_preview_108_release

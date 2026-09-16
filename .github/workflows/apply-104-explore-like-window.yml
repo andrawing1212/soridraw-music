@@ -1,4 +1,4 @@
-name: Apply 104 Explore Like Window
+name: Apply 105 Explore Like 1min
 
 on:
   push:
@@ -10,13 +10,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: soridraw-apply-104-explore-like-window
+  group: soridraw-apply-explore-like-window
   cancel-in-progress: false
 
 jobs:
   apply:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
@@ -30,11 +30,14 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Apply targeted 104 patch and release-state note
-        run: python3 .deploy/apply-104-explore-like-window.py
+      - name: Apply targeted 105 one-minute patch
+        run: python3 .deploy/apply-105-explore-like-1min.py
 
-      - name: Verify 104 contract
-        run: node scripts/verify-104-explore-like-window.mjs
+      - name: Verify 105 contract
+        run: node scripts/verify-105-explore-like-1min.mjs
+
+      - name: Worker syntax
+        run: node --check cloudflare/explore-worker/canonical/preview-entry.js
 
       - name: Install
         run: npm ci --no-audit --no-fund
@@ -45,6 +48,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Wrangler PREVIEW dry-run
+        run: npx wrangler deploy --dry-run --config cloudflare/explore-worker/canonical/wrangler.preview.jsonc
+
       - name: Restore generated dist before source boundary check
         run: git restore --worktree --staged -- dist
 
@@ -52,33 +58,35 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          allowed='^(src/services/exploreLikeService\.ts|src/pages/ExplorePage\.tsx|public/app-version\.json|DOCS/CURRENT_RELEASE_STATE\.md)$'
+          allowed='^(cloudflare/explore-worker/canonical/preview-entry\.js|src/services/exploreLikeService\.ts|src/services/exploreRevisionRequestCache\.ts|src/pages/ExplorePage\.tsx|public/app-version\.json)$'
           changed="$(git diff --name-only)"
           printf '%s\n' "$changed"
           test -n "$changed"
           if printf '%s\n' "$changed" | grep -Ev "$allowed"; then
-            echo 'Unexpected file change' >&2
+            echo 'Unexpected product file change' >&2
             exit 1
           fi
-          test -z "$(git diff --name-only -- cloudflare functions firestore.rules database.rules.json src/components src/styles)"
+          test -z "$(git diff --name-only -- cloudflare/explore-worker/canonical/wrangler.preview.jsonc functions firestore.rules database.rules.json src/components src/styles)"
           echo 'CHANGE_BOUNDARY=PASS'
-          echo 'NO_WORKER_CHANGE=true'
+          echo 'WORKER_DELAY_ONLY=YES'
+          echo 'NO_D1_SCHEMA_MIGRATION=true'
           echo 'NO_FIREBASE_FUNCTIONS_RULES_CHANGE=true'
           echo 'NO_USER_DATA_MIGRATION=true'
           echo 'NO_UI_CSS_CHANGE=true'
 
-      - name: Commit allowed files
+      - name: Commit product files
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'soridraw-release-bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add src/services/exploreLikeService.ts src/pages/ExplorePage.tsx public/app-version.json DOCS/CURRENT_RELEASE_STATE.md
-          git diff --cached --quiet && { echo 'No allowed changes to commit'; exit 1; }
-          if git diff --cached --name-only | grep -q '^DOCS/CURRENT_RELEASE_STATE.md$' && [ "$(git diff --cached --name-only | wc -l)" -eq 1 ]; then
-            git commit -m 'docs: record PREVIEW 104 like-window fix'
-          else
-            git commit -m 'fix: start Explore public like window on first change'
-          fi
+          git add \
+            cloudflare/explore-worker/canonical/preview-entry.js \
+            src/services/exploreLikeService.ts \
+            src/services/exploreRevisionRequestCache.ts \
+            src/pages/ExplorePage.tsx \
+            public/app-version.json
+          git diff --cached --quiet && { echo 'No product changes to commit'; exit 1; }
+          git commit -m 'test: shorten PREVIEW Explore like window to one minute'
           git push origin HEAD:preview
-          echo "FINAL_COMMIT=$(git rev-parse HEAD)"
+          echo "PRODUCT_COMMIT=$(git rev-parse HEAD)"

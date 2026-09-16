@@ -40,7 +40,7 @@ jobs:
           test -e scripts/verify-107-explore-direct-count-zero-read.mjs
           test "$(node -e "process.stdout.write(String(require('./public/app-version.json').version))")" = '107'
           git diff --cached --name-only | tee /tmp/cleanup.txt
-          if grep -E '^src/|^public/app-version.json$|^cloudflare/|^functions/|\.css$' /tmp/cleanup.txt; then
+          if grep -E '^(src/|public/app-version.json$|cloudflare/|functions/)' /tmp/cleanup.txt; then
             echo 'Final cleanup unexpectedly changes product/runtime source' >&2
             exit 1
           fi

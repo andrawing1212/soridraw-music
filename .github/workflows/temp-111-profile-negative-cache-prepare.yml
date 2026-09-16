@@ -33,13 +33,14 @@ jobs:
           npm run build
           git restore --worktree --staged dist
 
-      - name: Build guarded canonical Worker and run contracts
+      - name: Rebuild guarded canonical Worker and run contracts
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/soridraw-111"
           cp cloudflare/explore-worker/canonical/preview-worker.js "$RUNNER_TEMP/soridraw-111/worker.js"
           SORIDRAW_REMOTE_WORKER_DIR="$RUNNER_TEMP/soridraw-111" node cloudflare/explore-worker/patches/057-public-profile-negative-cache-guard.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$RUNNER_TEMP/soridraw-111" node cloudflare/explore-worker/patches/058-public-profile-negative-cache-shape-compat.mjs
           cp "$RUNNER_TEMP/soridraw-111/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
           sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
 
@@ -62,15 +63,16 @@ jobs:
           test "${changed[0]}" = 'cloudflare/explore-worker/canonical/preview-worker.js'
           test "${changed[1]}" = 'cloudflare/explore-worker/canonical/source-sha256.txt'
           grep -q 'SORIDRAW_PUBLIC_PROFILE_NEGATIVE_CACHE_057_20260916' cloudflare/explore-worker/canonical/preview-worker.js
+          grep -q 'SORIDRAW_PUBLIC_PROFILE_NEGATIVE_CACHE_SHAPE_058_20260916' cloudflare/explore-worker/canonical/preview-worker.js
           echo 'PREDEPLOY_111=PASS'
 
-      - name: Commit generated canonical Worker
+      - name: Commit regenerated canonical Worker
         shell: bash
         run: |
           set -euo pipefail
           git config user.name soridraw-worker-bot
           git config user.email actions@users.noreply.github.com
           git add cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt
-          git commit -m 'fix: harden invalid public profile reads'
+          git commit -m 'fix: align invalid profile cache with live 404'
           git push origin HEAD:preview
           echo "CANDIDATE_SHA=$(git rev-parse HEAD)"

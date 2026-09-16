@@ -1,6 +1,0 @@
-requested_at=2026-09-16T05:30:00Z
-preview_app_version=106
-product_commit=a0946b0e296d5de5811567786cede9d75e911f90
-deploy_source=caf6f458096f876ae93bfb07c60f9445d6a14c76
-release_run=35059625879
-status=deployed

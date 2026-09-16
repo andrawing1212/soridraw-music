@@ -1,3 +1,4 @@
-requested_at=2026-09-16T03:34:30Z
+requested_at=2026-09-16T03:41:20Z
 requested_by=assistant_after_preview_103_real_use_failure
 purpose=first_like_starts_5min_window_and_remove_old_10min_refresh_boundary
+attempt=2

@@ -1,4 +1,0 @@
-requested_at=2026-09-16T08:18:00Z
-requested_by=user
-product_code_target=933388f5775782fc29b2586e745b3238820bb8c6
-purpose=108_r2_snapshot_zero_d1_cache_recovery_retry

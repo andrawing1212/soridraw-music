@@ -21,9 +21,12 @@ on:
         description: 'For production enter DEPLOY_PRODUCTION'
         required: false
         type: string
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: write
+  issues: write
 
 # The controller only mutates the component whose flag has been armed after all prechecks.
 # Firebase Functions/Rules and user data are never deployment components here.
@@ -34,6 +37,7 @@ concurrency:
 
 jobs:
   controller:
+    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 76 && github.event.issue.pull_request == null)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
@@ -47,6 +51,8 @@ jobs:
       PRODUCTION_FIREBASE_URL: https://soridraw.web.app
       TEST_WORKER: soridraw-explore-test
       PRODUCTION_WORKER: soridraw-explore-api
+      RELEASE_CONTROL_ISSUE: '76'
+      RELEASE_STATUS_FILE: ${{ runner.temp }}/release-control-status.json
     steps:
       - name: Checkout fixed controller
         uses: actions/checkout@v4
@@ -58,13 +64,33 @@ jobs:
         id: request
         shell: bash
         env:
-          MODE: ${{ inputs.mode }}
-          TARGET: ${{ inputs.target_sha }}
-          MANIFEST_TAG: ${{ inputs.manifest_tag }}
-          APPROVAL: ${{ inputs.production_approval }}
+          DISPATCH_MODE: ${{ inputs.mode }}
+          DISPATCH_TARGET: ${{ inputs.target_sha }}
+          DISPATCH_MANIFEST_TAG: ${{ inputs.manifest_tag }}
+          DISPATCH_APPROVAL: ${{ inputs.production_approval }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_ISSUE: ${{ github.event.issue.number }}
+          COMMENT_IS_PR: ${{ github.event.issue.pull_request != null }}
+          ALLOWED_ACTORS: ${{ vars.SORIDRAW_RELEASE_ACTORS }}
         run: |
           set -euo pipefail
+          MODE="$DISPATCH_MODE" TARGET="$DISPATCH_TARGET" MANIFEST_TAG="$DISPATCH_MANIFEST_TAG" APPROVAL="$DISPATCH_APPROVAL"
+          if [ "$GITHUB_EVENT_NAME" = issue_comment ]; then
+            test "$COMMENT_ISSUE" = "$RELEASE_CONTROL_ISSUE" && test "$COMMENT_IS_PR" = false
+            case ",$ALLOWED_ACTORS," in *",$GITHUB_ACTOR,"*) allowed=true;; *) allowed=false;; esac
+            test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER" || test "$allowed" = true
+            read -r command argument value approval extra <<< "$COMMENT_BODY"
+            test "$command" = /soridraw && test -z "${extra:-}"
+            case "$argument" in
+              preflight) test -z "${approval:-}"; MODE=preflight_only; TARGET="$value"; MANIFEST_TAG=; APPROVAL=;;
+              test) test -z "${approval:-}"; MODE=test; TARGET="$value"; MANIFEST_TAG=; APPROVAL=;;
+              production) MODE=production; TARGET=; MANIFEST_TAG="$value"; test "$approval" = DEPLOY_PRODUCTION; APPROVAL="$approval";;
+              *) echo INVALID_RELEASE_COMMAND; exit 2;;
+            esac
+          fi
           case "$MODE" in preflight_only|test|production) ;; *) exit 2;; esac
+          export RELEASE_MODE="$MODE" RELEASE_TARGET_INPUT="${TARGET:-$MANIFEST_TAG}"
+          node scripts/update-release-control-status.mjs create REQUESTED
           git config user.name "soridraw-release-bot"
           git config user.email "release-bot@soridraw.invalid"
           export GIT_AUTHOR_NAME=soridraw-release-bot GIT_AUTHOR_EMAIL=release-bot@soridraw.invalid
@@ -85,7 +111,7 @@ jobs:
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "target=$TARGET" >> "$GITHUB_OUTPUT"
           echo "manifest_tag=$MANIFEST_TAG" >> "$GITHUB_OUTPUT"
-          echo "STATE=READY"
+          node scripts/update-release-control-status.mjs update SOURCE_LOCKED
 
       - uses: actions/setup-node@v4
         with:
@@ -125,13 +151,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo STATE=PREFLIGHT
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update STATIC_CHECKS
           cd "$RELEASE_ROOT"
           npm ci --no-audit --no-fund
           npx tsc --noEmit
           npm run build
           node scripts/verify-release-promotion-system.mjs
           node scripts/verify-release-controller.mjs
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update PREFLIGHT
           sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/index-sha"
           node -e "const v=require('./public/app-version.json').version;if(!v)process.exit(2);process.stdout.write(String(v))" > "$RUNNER_TEMP/app-version"
           echo "RELEASE_INDEX_SHA=$(cat "$RUNNER_TEMP/index-sha")" >> "$GITHUB_ENV"
@@ -212,7 +239,7 @@ jobs:
           hosting_release(){ curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/$1/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv'; }
           test "$(hosting_release soridraw-test)" = "$(cat "$RUNNER_TEMP/test-hosting-before")"
           test "$(hosting_release soridraw)" = "$(cat "$RUNNER_TEMP/production-hosting-before")"
-          echo STATE=PREFLIGHT
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update PREFLIGHT
           echo PREFLIGHT_NO_MUTATION=PASS
 
       - name: TEST_DEPLOY exact tree and uploaded Worker version
@@ -220,7 +247,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo STATE=TEST_DEPLOY
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update TEST_DEPLOY
           cd "$RELEASE_ROOT"
           node .deploy/release-worker-runtime.mjs test upload | tee "$RUNNER_TEMP/test-upload"
           tree="$(git rev-parse HEAD^{tree})"; before="$(cat "$RUNNER_TEMP/main-before")"
@@ -237,7 +264,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo STATE=TEST_VERIFY
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update TEST_VERIFY
           cd "$RELEASE_ROOT"; node .deploy/release-worker-runtime.mjs test verify
           for base in "$TEST_FIREBASE_URL" "$TEST_URL"; do
             curl -fsS -H 'Cache-Control: no-cache' "$base/" -o "$RUNNER_TEMP/test-index"
@@ -258,14 +285,14 @@ jobs:
           const fs=require('fs'); const m={schema:2,state:'TEST_VERIFIED',tag:process.env.TAG,appVersion:process.env.RELEASE_APP_VERSION,sourcePreviewSha:process.env.RELEASE_TARGET,sourcePreviewTree:process.env.SOURCE_TREE,promotedMainSha:process.env.MAIN_SHA,mainTree:process.env.MAIN_TREE,distIndexSha256:process.env.RELEASE_INDEX_SHA,testHosting:{site:'soridraw-test',channel:'live',release:process.env.TEST_HOSTING_RELEASE,version:process.env.TEST_HOSTING_VERSION,verified:true},testWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-bundle','utf8').trim(),testWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-worker-version','utf8').trim(),controllerIdentity:{workflowSha256:process.env.CONTROLLER_WORKFLOW_SHA,workerRuntimeSha256:process.env.CONTROLLER_RUNTIME_SHA,controllerVerifierSha256:process.env.CONTROLLER_VERIFIER_SHA},canonical:{d1:'soridraw-explore-db',profileMedia:'soridraw-profile-media'},parity:{reference:'PREVIEW',status:'PASS'},workflowRunId:process.env.GITHUB_RUN_ID,verifiedAt:new Date().toISOString()}; fs.writeFileSync(process.env.RUNNER_TEMP+'/soridraw-release-manifest.json',JSON.stringify(m,null,2)+'\n');
           NODE
           gh release create "$tag" "$RUNNER_TEMP/soridraw-release-manifest.json#soridraw-release-manifest.json" --repo "$GITHUB_REPOSITORY" --target "$(cat "$RUNNER_TEMP/main-promoted")" --title "SORIDRAW TEST verified v$RELEASE_APP_VERSION" --notes "Immutable TEST_VERIFIED release manifest. Production must consume this asset; it must not rebuild PREVIEW or redeploy TEST."
-          echo STATE=TEST_VERIFIED
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update TEST_VERIFIED
 
       - name: PROD_PREFLIGHT revalidate TEST manifest and live release
         if: steps.request.outputs.mode == 'production'
         shell: bash
         run: |
           set -euo pipefail
-          echo STATE=PROD_PREFLIGHT
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update PROD_PREFLIGHT
           test "$(git ls-remote origin refs/heads/main|cut -f1)" = "$MANIFEST_MAIN"
           test "$(git rev-parse "$MANIFEST_MAIN^{tree}")" = "$(node -p "require('$RUNNER_TEMP/manifest/soridraw-release-manifest.json').mainTree")"
           for base in "$TEST_FIREBASE_URL" "$TEST_URL"; do
@@ -286,7 +313,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo STATE=PROD_DEPLOY
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update PROD_DEPLOY
           cd "$RELEASE_ROOT"
           EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" node .deploy/release-worker-runtime.mjs production upload | tee "$RUNNER_TEMP/prod-upload"
           before="$(cat "$RUNNER_TEMP/production-before")"; tree="$(git rev-parse "$MANIFEST_MAIN^{tree}")"
@@ -303,7 +330,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo STATE=PROD_VERIFY
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update PROD_VERIFY
           cd "$RELEASE_ROOT"; EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" node .deploy/release-worker-runtime.mjs production verify
           for base in "$PRODUCTION_FIREBASE_URL" "$PRODUCTION_URL"; do
             curl -fsS -H 'Cache-Control: no-cache' "$base/" -o "$RUNNER_TEMP/prod-current"
@@ -312,14 +339,18 @@ jobs:
           test "$(git ls-remote origin refs/heads/main|cut -f1)" = "$MANIFEST_MAIN"
           test "$(cat "$RUNNER_TEMP/test-worker-before")" = "$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$TEST_WORKER/deployments" | jq -er '.result.deployments[0].versions|max_by(.percentage)|.version_id')"
           test "$(curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/soridraw-test/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv')" = "$TEST_HOSTING_RELEASE	$TEST_HOSTING_VERSION"
-          echo STATE=RELEASED
+          node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update RELEASED
 
       - name: Rollback branch and Worker traffic after deployment failure
         if: failure() && steps.request.outputs.mode != 'preflight_only'
         shell: bash
         run: |
           set +e
-          echo STATE=ROLLBACK
+          mutated=false
+          for flag in "$RUNNER_TEMP"/*-mutated; do
+            [ -f "$flag" ] && [ "$(cat "$flag")" = true ] && mutated=true
+          done
+          [ "$mutated" = true ] && node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update ROLLED_BACK || true
           rollback_worker(){ stage="$1"; version="$2"; schedules="$3"; flag="$4"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; cd "$RELEASE_ROOT"; RELEASE_WORKER_VERSION="$version" RELEASE_WORKER_SCHEDULES_JSON="$(cat "$schedules")" node .deploy/release-worker-runtime.mjs "$stage" restore; }
           rollback_branch(){ branch="$1"; original="$2"; promoted_file="$3"; flag="$4"; [ "$(cat "$flag" 2>/dev/null)" = true ] || return; [ -f "$promoted_file" ] || return; current="$(git ls-remote origin "refs/heads/$branch"|cut -f1)"; test "$current" = "$(cat "$promoted_file")" || return; tree="$(git rev-parse "$original^{tree}")"; rollback="$(printf 'rollback: restore %s after failed controlled release\n' "$branch"|git commit-tree "$tree" -p "$current")"; git push origin "$rollback:refs/heads/$branch"; }
           if [ "${{ steps.request.outputs.mode }}" = test ]; then
@@ -338,4 +369,16 @@ jobs:
               (cd "$RUNNER_TEMP/hosting-rollback" && npm ci --no-audit --no-fund && npm run build && npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-production.json --non-interactive)
             fi
           fi
-          echo STATE=FAILED
+          [ "$mutated" = true ] && node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update FAILED || true
+
+      - name: Record pre-mutation failure as BLOCKED
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          test -f "$RELEASE_STATUS_FILE" || exit 0
+          mutated=false
+          for flag in "$RUNNER_TEMP"/*-mutated; do
+            [ -f "$flag" ] && [ "$(cat "$flag")" = true ] && mutated=true
+          done
+          [ "$mutated" = true ] || node scripts/update-release-control-status.mjs update BLOCKED

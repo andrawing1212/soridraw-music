@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const workflow = fs.readFileSync('.github/workflows/soridraw-release-promotion.yml', 'utf8');
 const runtime = fs.readFileSync('.deploy/release-worker-runtime.mjs', 'utf8');
+const statusUpdater = fs.readFileSync('scripts/update-release-control-status.mjs', 'utf8');
 const need = (text, token) => {
   if (!text.includes(token)) throw new Error(`release controller invariant missing: ${token}`);
 };
@@ -33,6 +34,20 @@ for (const token of [
   "['getSunoApiKeyStatus', 'generateGeminiContent']", "method: 'OPTIONS'",
 ]) need(runtime, token);
 
+for (const token of [
+  'issue_comment:', 'issues: write', "RELEASE_CONTROL_ISSUE: '76'",
+  'SORIDRAW_RELEASE_ACTORS', 'github.event.issue.pull_request == null',
+  'update-release-control-status.mjs create REQUESTED',
+  'update SOURCE_LOCKED', 'update STATIC_CHECKS', 'update PREFLIGHT',
+  'update TEST_DEPLOY', 'update TEST_VERIFY', 'update TEST_VERIFIED',
+  'update PROD_PREFLIGHT', 'update PROD_DEPLOY', 'update PROD_VERIFY',
+  'update RELEASED', 'update ROLLED_BACK', 'update FAILED', 'update BLOCKED',
+]) need(workflow, token);
+for (const token of [
+  'soridraw-release-controller-status', '/issues/${issue}/comments',
+  '/issues/comments/${record.commentId}', "['create', 'update']",
+]) need(statusUpdater, token);
+
 ordered(workflow, 'release-worker-runtime.mjs test upload', 'git push origin "$promoted:refs/heads/main"');
 ordered(workflow, 'release-worker-runtime.mjs production upload', 'git push origin "$promoted:refs/heads/production"');
 if (/test_then_production|test_only/.test(workflow)) throw new Error('legacy coupled release modes remain');
@@ -46,3 +61,4 @@ console.log('RELEASE_CONTROLLER_STATE_MACHINE_STATIC=PASS');
 console.log('RELEASE_CONTROLLER_MANIFEST_SCHEMA_2_STATIC=PASS');
 console.log('RELEASE_CONTROLLER_PREFLIGHT_IMMUTABLE_STATIC=PASS');
 console.log('RELEASE_CONTROLLER_INDEPENDENT_PRODUCTION_STATIC=PASS');
+console.log('RELEASE_CONTROLLER_ISSUE_76_LIVE_STATUS_STATIC=PASS');

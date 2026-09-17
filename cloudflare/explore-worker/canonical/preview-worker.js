@@ -2759,7 +2759,7 @@ __name222222222222222222222222222222222222222(readExploreFeedR2Bundle, "readExpl
 __name2222222222222222222222222222222222222222(readExploreFeedR2Bundle, "readExploreFeedR2Bundle");
 __name22222222222222222222222222222222222222222(readExploreFeedR2Bundle, "readExploreFeedR2Bundle");
 __name222222222222222222222222222222222222222222(readExploreFeedR2Bundle, "readExploreFeedR2Bundle");
-async function rebuildExploreLikeR2Bundle(env, uid) {
+async function rebuildExploreLikeR2BundleCore061(env, uid) {
   const result = await env.DB.prepare(`
     SELECT l.track_id
     FROM likes l
@@ -2778,6 +2778,13 @@ async function rebuildExploreLikeR2Bundle(env, uid) {
     likedTrackIds
   });
   return likedTrackIds;
+}
+
+async function rebuildExploreLikeR2Bundle(env, uid) {
+  const result = await rebuildExploreLikeR2BundleCore061(env, uid);
+  const local = await readExploreLikeR2BundleCore061(env, uid);
+  if (local) await writeSharedLikes061(env, uid, local);
+  return result;
 }
 __name(rebuildExploreLikeR2Bundle, "rebuildExploreLikeR2Bundle");
 __name2(rebuildExploreLikeR2Bundle, "rebuildExploreLikeR2Bundle");
@@ -2822,10 +2829,99 @@ __name222222222222222222222222222222222222222(rebuildExploreLikeR2Bundle, "rebui
 __name2222222222222222222222222222222222222222(rebuildExploreLikeR2Bundle, "rebuildExploreLikeR2Bundle");
 __name22222222222222222222222222222222222222222(rebuildExploreLikeR2Bundle, "rebuildExploreLikeR2Bundle");
 __name222222222222222222222222222222222222222222(rebuildExploreLikeR2Bundle, "rebuildExploreLikeR2Bundle");
-async function readExploreLikeR2Bundle(env, uid) {
+// SORIDRAW_SHARED_SOCIAL_R2_PARITY_061_20260917
+const EXPLORE_SHARED_SOCIAL_VERSION_061 = 114;
+const exploreSharedLikesKey061 = (uid) => `internal/explore/shared-social-v114/likes/${encodeURIComponent(String(uid || '').trim())}.json`;
+const exploreSharedFollowingKey061 = (uid) => `internal/explore/shared-social-v114/following/${encodeURIComponent(String(uid || '').trim())}.json`;
+
+function exploreSharedSocialEnvironment061(env) {
+  return String(env?.SORIDRAW_ENVIRONMENT || env?.ENV_NAME || '').trim().toLowerCase();
+}
+
+async function readSharedSocialJson061(env, key) {
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!bucket) return null;
+  const object = await bucket.get(key);
+  if (!object) return null;
+  try { return JSON.parse(await object.text()); } catch { return null; }
+}
+
+async function writeSharedLikes061(env, uid, likedIds) {
+  const normalized = String(uid || '').trim();
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!normalized || !bucket || !likedIds) return false;
+  const ids = [...new Set([...likedIds].map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 2000);
+  await bucket.put(exploreSharedLikesKey061(normalized), JSON.stringify({
+    schemaVersion: 1,
+    uid: normalized,
+    updatedAt: Date.now(),
+    likedTrackIds: ids,
+  }), {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    customMetadata: { soridrawSharedLikes: '114', updatedAt: String(Date.now()) },
+  });
+  return true;
+}
+
+async function readSharedLikes061(env, uid) {
+  const normalized = String(uid || '').trim();
+  if (!normalized) return null;
+  const bundle = await readSharedSocialJson061(env, exploreSharedLikesKey061(normalized));
+  if (!bundle || Number(bundle.schemaVersion) !== 1 || !Array.isArray(bundle.likedTrackIds)) return null;
+  return new Set(bundle.likedTrackIds.map((value) => String(value || '').trim()).filter(Boolean));
+}
+
+async function writeSharedFollowing061(env, uid, followingUids) {
+  const normalized = String(uid || '').trim();
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!normalized || !bucket || !followingUids) return false;
+  const ids = [...new Set([...followingUids].map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 5000);
+  await bucket.put(exploreSharedFollowingKey061(normalized), JSON.stringify({
+    schemaVersion: 1,
+    uid: normalized,
+    updatedAt: Date.now(),
+    followingUids: ids,
+  }), {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    customMetadata: { soridrawSharedFollowing: '114', updatedAt: String(Date.now()) },
+  });
+  return true;
+}
+
+async function readSharedFollowing061(env, uid) {
+  const normalized = String(uid || '').trim();
+  if (!normalized) return null;
+  const bundle = await readSharedSocialJson061(env, exploreSharedFollowingKey061(normalized));
+  if (!bundle || Number(bundle.schemaVersion) !== 1 || !Array.isArray(bundle.followingUids)) return null;
+  return [...new Set(bundle.followingUids.map((value) => String(value || '').trim()).filter(Boolean))];
+}
+
+async function seedSharedLikesFromPreviewLocal061(env, uid, localReader) {
+  if (exploreSharedSocialEnvironment061(env) !== 'preview') return null;
+  const local = await localReader(env, uid);
+  if (!local) return null;
+  await writeSharedLikes061(env, uid, local);
+  return local;
+}
+
+async function seedSharedFollowingFromPreviewLocal061(env, uid, localReader) {
+  if (exploreSharedSocialEnvironment061(env) !== 'preview') return null;
+  const local = await localReader(env, uid);
+  if (!local) return null;
+  await writeSharedFollowing061(env, uid, local);
+  return local;
+}
+
+async function readExploreLikeR2BundleCore061(env, uid) {
   const bundle = await readExploreR2Json(env, exploreLikeR2Key(uid));
   if (!bundle || Number(bundle.schemaVersion) !== EXPLORE_R2_LIKE_SCHEMA_VERSION || !Array.isArray(bundle.likedTrackIds)) return null;
   return new Set(bundle.likedTrackIds.map((value) => String(value || "")).filter(Boolean));
+}
+
+async function readExploreLikeR2Bundle(env, uid) {
+  const shared = await readSharedLikes061(env, uid);
+  if (shared) return shared;
+  return await seedSharedLikesFromPreviewLocal061(env, uid, readExploreLikeR2BundleCore061);
 }
 __name(readExploreLikeR2Bundle, "readExploreLikeR2Bundle");
 __name2(readExploreLikeR2Bundle, "readExploreLikeR2Bundle");
@@ -7966,7 +8062,7 @@ __name22222222222222222222222222222222222222(withExploreZeroUsageOnEdgeHit, "wit
 __name222222222222222222222222222222222222222(withExploreZeroUsageOnEdgeHit, "withExploreZeroUsageOnEdgeHit");
 __name2222222222222222222222222222222222222222(withExploreZeroUsageOnEdgeHit, "withExploreZeroUsageOnEdgeHit");
 __name22222222222222222222222222222222222222222(withExploreZeroUsageOnEdgeHit, "withExploreZeroUsageOnEdgeHit");
-async function rebuildExploreFollowingR2Bundle(env, uid) {
+async function rebuildExploreFollowingR2BundleCore061(env, uid) {
   const normalized = String(uid || "").trim();
   if (!normalized) return [];
   const result = await env.DB.prepare(`
@@ -7984,6 +8080,13 @@ async function rebuildExploreFollowingR2Bundle(env, uid) {
     followingUids
   });
   return followingUids;
+}
+
+async function rebuildExploreFollowingR2Bundle(env, uid) {
+  const result = await rebuildExploreFollowingR2BundleCore061(env, uid);
+  const local = await readExploreFollowingR2BundleCore061(env, uid);
+  if (local) await writeSharedFollowing061(env, uid, local);
+  return result;
 }
 __name(rebuildExploreFollowingR2Bundle, "rebuildExploreFollowingR2Bundle");
 __name2(rebuildExploreFollowingR2Bundle, "rebuildExploreFollowingR2Bundle");
@@ -8027,12 +8130,18 @@ __name22222222222222222222222222222222222222(rebuildExploreFollowingR2Bundle, "r
 __name222222222222222222222222222222222222222(rebuildExploreFollowingR2Bundle, "rebuildExploreFollowingR2Bundle");
 __name2222222222222222222222222222222222222222(rebuildExploreFollowingR2Bundle, "rebuildExploreFollowingR2Bundle");
 __name22222222222222222222222222222222222222222(rebuildExploreFollowingR2Bundle, "rebuildExploreFollowingR2Bundle");
-async function readExploreFollowingR2Bundle(env, uid) {
+async function readExploreFollowingR2BundleCore061(env, uid) {
   const normalized = String(uid || "").trim();
   if (!normalized) return null;
   const bundle = await readExploreR2Json(env, exploreFollowingR2Key(normalized));
   if (!bundle || Number(bundle.schemaVersion) !== EXPLORE_R2_FOLLOW_SCHEMA_VERSION || !Array.isArray(bundle.followingUids)) return null;
   return [...new Set(bundle.followingUids.map((value) => String(value || "").trim()).filter(Boolean))];
+}
+
+async function readExploreFollowingR2Bundle(env, uid) {
+  const shared = await readSharedFollowing061(env, uid);
+  if (shared) return shared;
+  return await seedSharedFollowingFromPreviewLocal061(env, uid, readExploreFollowingR2BundleCore061);
 }
 __name(readExploreFollowingR2Bundle, "readExploreFollowingR2Bundle");
 __name2(readExploreFollowingR2Bundle, "readExploreFollowingR2Bundle");
@@ -8076,7 +8185,7 @@ __name22222222222222222222222222222222222222(readExploreFollowingR2Bundle, "read
 __name222222222222222222222222222222222222222(readExploreFollowingR2Bundle, "readExploreFollowingR2Bundle");
 __name2222222222222222222222222222222222222222(readExploreFollowingR2Bundle, "readExploreFollowingR2Bundle");
 __name22222222222222222222222222222222222222222(readExploreFollowingR2Bundle, "readExploreFollowingR2Bundle");
-async function syncExploreFollowingR2AfterMutation(env, uid, targetUid, following) {
+async function syncExploreFollowingR2AfterMutationCore061(env, uid, targetUid, following) {
   const normalized = String(uid || "").trim();
   const target = String(targetUid || "").trim();
   if (!normalized || !target) return;
@@ -8094,6 +8203,22 @@ async function syncExploreFollowingR2AfterMutation(env, uid, targetUid, followin
     updatedAt: Date.now(),
     followingUids: [...next].slice(0, EXPLORE_R2_FOLLOW_LIMIT)
   });
+}
+
+async function syncExploreFollowingR2AfterMutation(env, uid, targetUid, following) {
+  const shared = await readSharedFollowing061(env, uid);
+  if (shared) {
+    await writeExploreR2Json(env, exploreFollowingR2Key(uid), {
+      schemaVersion: EXPLORE_R2_FOLLOW_SCHEMA_VERSION,
+      uid: String(uid || ''),
+      updatedAt: Date.now(),
+      followingUids: shared.slice(0, 5000),
+    });
+  }
+  const result = await syncExploreFollowingR2AfterMutationCore061(env, uid, targetUid, following);
+  const local = await readExploreFollowingR2BundleCore061(env, uid);
+  if (local) await writeSharedFollowing061(env, uid, local);
+  return result;
 }
 __name(syncExploreFollowingR2AfterMutation, "syncExploreFollowingR2AfterMutation");
 __name2(syncExploreFollowingR2AfterMutation, "syncExploreFollowingR2AfterMutation");
@@ -20526,7 +20651,7 @@ async function enforceExploreLikeBatchRateLimit034(env, uid, weight) {
 __name(enforceExploreLikeBatchRateLimit034, "enforceExploreLikeBatchRateLimit034");
 __name2(enforceExploreLikeBatchRateLimit034, "enforceExploreLikeBatchRateLimit034");
 __name22(enforceExploreLikeBatchRateLimit034, "enforceExploreLikeBatchRateLimit034");
-async function syncExploreLikeR2AfterBatch034(env, uid, results) {
+async function syncExploreLikeR2AfterBatch034Core061(env, uid, results) {
   let likedIds = await readExploreLikeR2Bundle(env, uid);
   if (!likedIds) {
     await rebuildExploreLikeR2Bundle(env, uid);
@@ -20546,6 +20671,22 @@ async function syncExploreLikeR2AfterBatch034(env, uid, results) {
     likedTrackIds: [...likedIds].filter(Boolean).slice(0, 2000)
   });
   return { ok: true };
+}
+
+async function syncExploreLikeR2AfterBatch034(env, uid, results) {
+  const shared = await readSharedLikes061(env, uid);
+  if (shared) {
+    await writeExploreR2Json(env, exploreLikeR2Key(uid), {
+      schemaVersion: EXPLORE_R2_LIKE_SCHEMA_VERSION,
+      uid: String(uid || ''),
+      updatedAt: Date.now(),
+      likedTrackIds: [...shared].slice(0, 2000),
+    });
+  }
+  const result = await syncExploreLikeR2AfterBatch034Core061(env, uid, results);
+  const local = await readExploreLikeR2BundleCore061(env, uid);
+  if (local) await writeSharedLikes061(env, uid, local);
+  return result;
 }
 __name(syncExploreLikeR2AfterBatch034, "syncExploreLikeR2AfterBatch034");
 __name2(syncExploreLikeR2AfterBatch034, "syncExploreLikeR2AfterBatch034");

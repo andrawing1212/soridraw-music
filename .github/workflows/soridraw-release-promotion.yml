@@ -57,7 +57,8 @@ jobs:
       - name: Checkout fixed controller
         uses: actions/checkout@v4
         with:
-          ref: preview
+          # github.workflow_sha is the immutable revision whose workflow definition is executing.
+          ref: ${{ github.workflow_sha }}
           fetch-depth: 0
 
       - name: Lock request and immutable baselines
@@ -79,14 +80,9 @@ jobs:
             test "$COMMENT_ISSUE" = "$RELEASE_CONTROL_ISSUE" && test "$COMMENT_IS_PR" = false
             case ",$ALLOWED_ACTORS," in *",$GITHUB_ACTOR,"*) allowed=true;; *) allowed=false;; esac
             test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER" || test "$allowed" = true
-            read -r command argument value approval extra <<< "$COMMENT_BODY"
-            test "$command" = /soridraw && test -z "${extra:-}"
-            case "$argument" in
-              preflight) test -z "${approval:-}"; MODE=preflight_only; TARGET="$value"; MANIFEST_TAG=; APPROVAL=;;
-              test) test -z "${approval:-}"; MODE=test; TARGET="$value"; MANIFEST_TAG=; APPROVAL=;;
-              production) MODE=production; TARGET=; MANIFEST_TAG="$value"; test "$approval" = DEPLOY_PRODUCTION; APPROVAL="$approval";;
-              *) echo INVALID_RELEASE_COMMAND; exit 2;;
-            esac
+            parsed="$(node scripts/release-controller-policy.mjs parse-command)"
+            MODE="$(jq -r .mode <<<"$parsed")"; TARGET="$(jq -r .target <<<"$parsed")"
+            MANIFEST_TAG="$(jq -r .manifestTag <<<"$parsed")"; APPROVAL="$(jq -r .approval <<<"$parsed")"
           fi
           case "$MODE" in preflight_only|test|production) ;; *) exit 2;; esac
           export RELEASE_MODE="$MODE" RELEASE_TARGET_INPUT="${TARGET:-$MANIFEST_TAG}"
@@ -172,13 +168,17 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
           token_format: access_token
 
-      - name: Read-only Firebase and GitHub capability preflight
+      - name: Safe Firebase write-permission and GitHub capability preflight
         shell: bash
         run: |
           set -euo pipefail
           hosting_release(){ curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/$1/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv'; }
           hosting_release soridraw-test > "$RUNNER_TEMP/test-hosting-before"
           hosting_release soridraw > "$RUNNER_TEMP/production-hosting-before"
+          permissions="$(curl -fsS -X POST -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" -H 'Content-Type: application/json' "https://cloudresourcemanager.googleapis.com/v1/projects/$FIREBASE_PROJECT:testIamPermissions" --data '{"permissions":["firebasehosting.versions.create","firebasehosting.versions.delete","firebasehosting.releases.create"]}')"
+          for permission in firebasehosting.versions.create firebasehosting.versions.delete firebasehosting.releases.create; do
+            jq -e --arg permission "$permission" '.permissions | index($permission) != null' <<<"$permissions" >/dev/null
+          done
           gh api "repos/$GITHUB_REPOSITORY" --jq '.permissions.push == true' | grep -qx true
           git push --dry-run origin "HEAD:refs/heads/__release-controller-write-probe-${GITHUB_RUN_ID}"
           if [ "${{ steps.request.outputs.mode }}" = test ]; then
@@ -189,7 +189,7 @@ jobs:
             gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/__release-controller-capability-${GITHUB_RUN_ID}" --jq .id)"
             git push origin ":refs/tags/__release-controller-capability-${GITHUB_RUN_ID}" 2>/dev/null || true
           fi
-          echo FIREBASE_SITE_SERVICE_ACCOUNT_READ_ONLY_ACCESS=PASS
+          echo FIREBASE_HOSTING_WRITE_PERMISSIONS=PASS
           echo GITHUB_BRANCH_WRITE_DRY_RUN=PASS
 
       - name: Install Worker tooling
@@ -220,7 +220,7 @@ jobs:
           active(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/deployments"|jq -er '.result.deployments[0].versions|max_by(.percentage)|.version_id'; }
           active "$TEST_WORKER" > "$RUNNER_TEMP/test-worker-before"
           active "$PRODUCTION_WORKER" > "$RUNNER_TEMP/production-worker-before"
-          schedules(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/schedules" | jq -c '[.result[]? | {cron:.cron}]'; }
+          schedules(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/schedules" | jq -c '[.result[]? | {cron:.cron}] | sort_by(.cron)'; }
           schedules "$TEST_WORKER" > "$RUNNER_TEMP/test-worker-schedules-before"
           schedules "$PRODUCTION_WORKER" > "$RUNNER_TEMP/production-worker-schedules-before"
           printf false > "$RUNNER_TEMP/test-branch-mutated"; printf false > "$RUNNER_TEMP/test-worker-mutated"; printf false > "$RUNNER_TEMP/test-hosting-mutated"
@@ -238,6 +238,9 @@ jobs:
           test "$(git ls-remote origin refs/heads/production|cut -f1)" = "$(cat "$RUNNER_TEMP/production-before")"
           test "$(cat "$RUNNER_TEMP/test-worker-before")" = "$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$TEST_WORKER/deployments" | jq -er '.result.deployments[0].versions|max_by(.percentage)|.version_id')"
           test "$(cat "$RUNNER_TEMP/production-worker-before")" = "$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PRODUCTION_WORKER/deployments" | jq -er '.result.deployments[0].versions|max_by(.percentage)|.version_id')"
+          current_schedules(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/schedules" | jq -c '[.result[]? | {cron:.cron}] | sort_by(.cron)'; }
+          test "$(cat "$RUNNER_TEMP/test-worker-schedules-before")" = "$(current_schedules "$TEST_WORKER")"
+          test "$(cat "$RUNNER_TEMP/production-worker-schedules-before")" = "$(current_schedules "$PRODUCTION_WORKER")"
           hosting_release(){ curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/$1/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv'; }
           test "$(hosting_release soridraw-test)" = "$(cat "$RUNNER_TEMP/test-hosting-before")"
           test "$(hosting_release soridraw)" = "$(cat "$RUNNER_TEMP/production-hosting-before")"
@@ -279,9 +282,10 @@ jobs:
           curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/soridraw-test/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv' > "$RUNNER_TEMP/test-hosting-verified"
           export TEST_HOSTING_RELEASE="$(cut -f1 "$RUNNER_TEMP/test-hosting-verified")"
           export TEST_HOSTING_VERSION="$(cut -f2 "$RUNNER_TEMP/test-hosting-verified")"
-          export CONTROLLER_WORKFLOW_SHA="$(sha256sum .github/workflows/soridraw-release-promotion.yml|cut -d' ' -f1)"
-          export CONTROLLER_RUNTIME_SHA="$(sha256sum .deploy/release-worker-runtime.mjs|cut -d' ' -f1)"
-          export CONTROLLER_VERIFIER_SHA="$(sha256sum scripts/verify-release-controller.mjs|cut -d' ' -f1)"
+          controller_identity="$(node "$GITHUB_WORKSPACE/scripts/release-controller-policy.mjs" identity "$GITHUB_WORKSPACE")"
+          export CONTROLLER_WORKFLOW_SHA="$(jq -r .workflowSha256 <<<"$controller_identity")"
+          export CONTROLLER_RUNTIME_SHA="$(jq -r .workerRuntimeSha256 <<<"$controller_identity")"
+          export CONTROLLER_VERIFIER_SHA="$(jq -r .controllerVerifierSha256 <<<"$controller_identity")"
           tag="soridraw-test-v${RELEASE_APP_VERSION}-$(printf %.12s "$RELEASE_TARGET")"
           SOURCE_TREE="$(git rev-parse "$RELEASE_TARGET^{tree}")" MAIN_SHA="$(cat "$RUNNER_TEMP/main-promoted")" MAIN_TREE="$(git rev-parse "$(cat "$RUNNER_TEMP/main-promoted")^{tree}")" TAG="$tag" node - <<'NODE'
           const fs=require('fs'); const m={schema:2,state:'TEST_VERIFIED',tag:process.env.TAG,appVersion:process.env.RELEASE_APP_VERSION,sourcePreviewSha:process.env.RELEASE_TARGET,sourcePreviewTree:process.env.SOURCE_TREE,promotedMainSha:process.env.MAIN_SHA,mainTree:process.env.MAIN_TREE,distIndexSha256:process.env.RELEASE_INDEX_SHA,testHosting:{site:'soridraw-test',channel:'live',release:process.env.TEST_HOSTING_RELEASE,version:process.env.TEST_HOSTING_VERSION,verified:true},testWorkerBundleSha256:fs.readFileSync(process.env.RUNNER_TEMP+'/worker-bundle','utf8').trim(),testWorkerVersionId:fs.readFileSync(process.env.RUNNER_TEMP+'/test-worker-version','utf8').trim(),controllerIdentity:{workflowSha256:process.env.CONTROLLER_WORKFLOW_SHA,workerRuntimeSha256:process.env.CONTROLLER_RUNTIME_SHA,controllerVerifierSha256:process.env.CONTROLLER_VERIFIER_SHA},canonical:{d1:'soridraw-explore-db',profileMedia:'soridraw-profile-media'},parity:{reference:'PREVIEW',status:'PASS'},workflowRunId:process.env.GITHUB_RUN_ID,verifiedAt:new Date().toISOString()}; fs.writeFileSync(process.env.RUNNER_TEMP+'/soridraw-release-manifest.json',JSON.stringify(m,null,2)+'\n');
@@ -306,9 +310,10 @@ jobs:
           current_test_hosting="$(curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/soridraw-test/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv')"
           expected_test_hosting="$(printf '%s\t%s' "$TEST_HOSTING_RELEASE" "$TEST_HOSTING_VERSION")"
           test "$current_test_hosting" = "$expected_test_hosting"
-          node - "$RUNNER_TEMP/manifest/soridraw-release-manifest.json" <<'NODE'
-          const fs=require('fs'),crypto=require('crypto'); const m=require(process.argv[2]); const h=p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'); const c=m.controllerIdentity;
-          if(c.workflowSha256!==h('.github/workflows/soridraw-release-promotion.yml')||c.workerRuntimeSha256!==h('.deploy/release-worker-runtime.mjs')||c.controllerVerifierSha256!==h('scripts/verify-release-controller.mjs')) throw Error('Release Controller identity drift');
+          node - "$RUNNER_TEMP/manifest/soridraw-release-manifest.json" "$GITHUB_WORKSPACE" <<'NODE'
+          const m=require(process.argv[2]); const {pathToFileURL}=require('url');
+          (async()=>{const {controllerIdentity}=await import(pathToFileURL(process.argv[3]+'/scripts/release-controller-policy.mjs')); const actual=controllerIdentity(process.argv[3]); const c=m.controllerIdentity;
+          if(Object.keys(actual).some(k=>c[k]!==actual[k])) throw Error('Release Controller identity drift');})().catch(e=>{console.error(e);process.exit(1)});
           NODE
 
       - name: PROD_DEPLOY verified identities only

@@ -50,6 +50,7 @@ jobs:
           set -euo pipefail
           node scripts/verify-release-promotion-system.mjs
           node scripts/verify-release-controller.mjs
+          node scripts/verify-release-command-pipeline.mjs
           node scripts/verify-shared-d1-release-system.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js

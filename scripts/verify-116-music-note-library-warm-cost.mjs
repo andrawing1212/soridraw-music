@@ -38,35 +38,26 @@ const functionBlock = (source, signature, label) => {
   fail(`${label} unterminated`);
 };
 
-// Music Note warm automatic bootstrap.
+// Current Music Note warm-entry protection is the later 1030 normalization layer.
+// The dedicated stage1 verifier checks its bounded bootstrap/page-size details.
 for (const marker of [
   'SORIDRAW_937_MUSIC_NOTE_REFRESH_VERSION_GATE',
   'SORIDRAW_935_RECENT_VERSION_SYNC_ONLY',
   'SORIDRAW_932_REFRESH_ROOT_WRITE_AND_SECTION_ROUTE_GATE',
   'SORIDRAW_927_MONOTONIC_SECTION_VERSION_AND_OP_TRACE',
   'SORIDRAW_921_FIRESTORE_COST_HARDENING',
+  'SORIDRAW_MUSIC_NOTE_NORMALIZATION_STAGE1_1030',
+  'SORIDRAW_MUSIC_NOTE_STAGE1_PAGE_SIZED_CACHE_REUSE_1030B',
 ]) {
   if (!app.includes(marker)) fail(`App protection marker missing: ${marker}`);
 }
-
-const musicGateAt = app.indexOf('const musicNoteLocalVersionAtBootstrap = readMusicNoteSyncVersion(');
-if (musicGateAt < 0) fail('Music Note bootstrap version gate missing');
-const musicGate = app.slice(musicGateAt, musicGateAt + 12000);
 for (const required of [
-  'const musicNoteRemoteVersionAtBootstrap = readMusicNoteSyncVersion(',
-  'musicNoteLocalVersionAtBootstrap <= 0',
-  'musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap',
-  'if (shouldVerifyMusicNoteBundle)',
+  'musicNoteCacheNeedsBoundedVerification',
+  'cachedFavoriteCount < FAVORITES_PAGE_SIZE',
+  'attachFavoritesSourceBootstrap902(true)',
+  'const attachFavoritesSourceBootstrap902 = (allowCachedRepair = false)',
   "markCacheDiagnostic('musicNote', 'CACHE', 0)",
-  'setIsFavoritesLoading(false)',
-]) assert.ok(musicGate.includes(required), `Music Note warm gate missing: ${required}`);
-const gateUsesCache = musicGate.includes('const shouldVerifyMusicNoteBundle = !hasCachedMusicNote')
-  || musicGate.includes('const shouldVerifyMusicNoteBundle = hasCachedMusicNote && (');
-assert.ok(gateUsesCache, 'Music Note verification decision is no longer cache-gated');
-assert.ok(
-  musicGate.indexOf('if (shouldVerifyMusicNoteBundle)') < musicGate.indexOf("markCacheDiagnostic('musicNote', 'CACHE', 0)"),
-  'Music Note cache-hit branch ordering changed',
-);
+]) assert.ok(app.includes(required), `Music Note current warm guard missing: ${required}`);
 
 // Manual Music Note sync exits before the one-bundle read when unchanged.
 const manualSync = functionBlock(app, 'const refreshFavoritesFromServerFirstPage = useCallback(async ()', 'Music Note manual delta sync');
@@ -150,7 +141,7 @@ const librarySubscribe = functionBlock(library, 'const subscribeLibraryWorkspace
 assert.ok(librarySubscribe.includes('const session = startLibraryWorkspaceSession(uid)'), 'Library page no longer reuses module session');
 
 console.log('116_MUSIC_NOTE_LIBRARY_WARM_COST_AUDIT=PASS');
-console.log('MUSIC_NOTE_WARM_REENTRY_FIRESTORE_LIST_READ=0_BY_VERSION_AND_CACHE_GUARD');
+console.log('MUSIC_NOTE_WARM_REENTRY=PAGE_SIZED_CACHE_REUSED_WITH_CACHE_0_GUARD');
 console.log('RECENT_SONGS_WARM_GETDOC_FROM_SERVER=0_BY_VERSION_GUARD');
 console.log('USER_STRUCTURES_WARM_GETDOC=0_UNLESS_NEWER_PROFILE_VERSION');
 console.log('LIBRARY_WARM_REENTRY_SERVER_READ=0_BY_DURABLE_AND_SESSION_GUARDS');

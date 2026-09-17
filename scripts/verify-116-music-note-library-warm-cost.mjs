@@ -39,7 +39,7 @@ const functionBlock = (source, signature, label) => {
 };
 
 // Music Note warm-entry details are owned by the dedicated current 1030 verifier.
-// This cross-area audit only requires that those current protection layers remain present.
+// This cross-area audit only requires that the current protection layers remain present.
 for (const marker of [
   'SORIDRAW_937_MUSIC_NOTE_REFRESH_VERSION_GATE',
   'SORIDRAW_935_RECENT_VERSION_SYNC_ONLY',
@@ -51,20 +51,6 @@ for (const marker of [
 ]) {
   if (!app.includes(marker)) fail(`App protection marker missing: ${marker}`);
 }
-
-// Manual Music Note sync exits before the one-bundle read when unchanged.
-const manualSync = functionBlock(app, 'const refreshFavoritesFromServerFirstPage = useCallback(async ()', 'Music Note manual delta sync');
-for (const required of [
-  'const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid)',
-  'const remoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, uid)',
-  'if (remoteVersion > 0 && localVersion >= remoteVersion)',
-  "markCacheDiagnostic('musicNote', 'CACHE', 0)",
-  "readListBundleFromServerOnce('musicNote', uid)",
-]) assert.ok(manualSync.includes(required), `Music Note manual sync contract missing: ${required}`);
-assert.ok(
-  manualSync.indexOf('if (remoteVersion > 0 && localVersion >= remoteVersion)') < manualSync.indexOf("readListBundleFromServerOnce('musicNote', uid)"),
-  'Music Note manual sync reads before unchanged-version escape',
-);
 
 // Recent Songs warm state reads only when the root profile version advanced.
 const recent = functionBlock(app, 'const runRecentSongsServerSyncIfNeeded = () =>', 'Recent Songs version gate');

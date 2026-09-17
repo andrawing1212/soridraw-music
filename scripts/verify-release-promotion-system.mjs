@@ -42,7 +42,7 @@ for (const token of [
   'RATE_DB',
   'PROFILE_MEDIA',
   'EXPLORE_CACHE',
-  "['dry-run', 'upload', 'activate', 'verify']",
+  "['dry-run', 'upload', 'activate', 'verify', 'restore']",
   'keep_vars: true',
   'SORIDRAW_RELEASE_ENVIRONMENT_PARITY_INVARIANT_117_20260917',
   "const CANONICAL_D1_NAME = 'soridraw-explore-db'",

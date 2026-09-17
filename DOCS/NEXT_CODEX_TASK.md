@@ -1,6 +1,6 @@
 # SORIDRAW NEXT CODEX TASK
 
-최종 갱신: 2026-09-17 KST — Release Controller 구현 후 live read-only 감사 대기
+최종 갱신: 2026-09-17 KST — Release Controller 12개 안전 보강 PR 검증 대기
 
 ## 현재 기준
 
@@ -26,7 +26,7 @@
 
 ## 이번 작업 목표
 
-구현은 완료되었다. 다음 단계는 코드를 수정하지 않고 GitHub Actions에서 Controller `preflight_only`를 1회 실행해 배포 0, ref 0, Hosting/Worker traffic 0 변경을 독립 감사하는 것이다. 이 감사와 Work 검증 전 실제 TEST 승격은 금지한다.
+PR #75 1차본에 12개 안전 보강을 적용했다. 먼저 PR commit을 독립 감사하고, 그 결과가 GitHub에서 확인된 뒤에만 별도 2단계로 Issue #76 live pipeline status를 연결한다. 실제 `preflight_only` 실행과 Work 검증 전 TEST 승격은 금지한다.
 
 배포를 매번 사람이 조합하는 작업이 아니라 **수정하지 않고 계속 재사용하는 하나의 고정 Release Controller**로 만든다.
 

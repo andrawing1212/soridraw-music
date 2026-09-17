@@ -58,10 +58,20 @@ assert.match(migration069, /WITHOUT ROWID/);
 assert.doesNotMatch(migration069, /CREATE\s+(?:UNIQUE\s+)?INDEX/i, '069 W1 queue must have no secondary index');
 
 // Keep old 075 rows readable/drainable, but do not route new hot-path intake there.
+// 059 wraps the aggregate to mirror changed public counts into shared Feed R2, so
+// follow that wrapper into its core before asserting legacy 075 drain compatibility.
 assert.match(migration075, /idx_explore_like_user_queue_075_updated/);
 const aggregate = functionText(worker, 'processExploreLikeBatches035');
-assert.match(aggregate, /hasExploreLikeUserQueuePending075/);
-assert.match(aggregate, /processExploreLikeUserQueueWave075/);
+const aggregateCoreName = aggregate.includes('processExploreLikeBatches035Core059')
+  ? 'processExploreLikeBatches035Core059'
+  : 'processExploreLikeBatches035';
+const aggregateCore = functionText(worker, aggregateCoreName);
+assert.match(aggregateCore, /hasExploreLikeUserQueuePending075/);
+assert.match(aggregateCore, /processExploreLikeUserQueueWave075/);
+if (aggregateCoreName !== 'processExploreLikeBatches035') {
+  assert.match(aggregate, /processExploreLikeBatches035Core059\(env, scheduledTime\)/, '059 shared-feed wrapper must still invoke aggregate core');
+  assert.match(aggregate, /mirrorExploreSharedFeeds059\(env\)/, '059 shared-feed mirror must remain after aggregate changes');
+}
 
 const limiter = functionText(worker, 'enforceExploreLikeBatchEdgeRateLimit054');
 assert.match(limiter, /LIKE_RATE_LIMITER/);

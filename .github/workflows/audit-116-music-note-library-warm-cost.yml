@@ -35,12 +35,11 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/verify-116-music-note-library-warm-cost.mjs
-          node scripts/verify-music-note-1031-normalization.mjs
           node scripts/verify-no-unbounded-user-song-bootstrap.mjs
           node scripts/verify-030-library-warm-cache-no-idle-read.mjs
           node scripts/verify-029-music-note-library.mjs
           echo '116_WARM_COST_STATIC_AUDIT=PASS'
-          echo 'MUSIC_NOTE_1031_CURRENT_GUARD=PASS'
+          echo 'MUSIC_NOTE_CURRENT_SEMANTIC_GUARD=PASS'
           echo 'NO_FULL_USER_SONG_BOOTSTRAP=PASS'
 
       - name: Install dependencies

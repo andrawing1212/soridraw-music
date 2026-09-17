@@ -38,8 +38,8 @@ const functionBlock = (source, signature, label) => {
   fail(`${label} unterminated`);
 };
 
-// Current Music Note warm-entry protection is the later 1030 normalization layer.
-// The dedicated stage1 verifier checks its bounded bootstrap/page-size details.
+// Music Note warm-entry details are owned by the dedicated current 1030 verifier.
+// This cross-area audit only requires that those current protection layers remain present.
 for (const marker of [
   'SORIDRAW_937_MUSIC_NOTE_REFRESH_VERSION_GATE',
   'SORIDRAW_935_RECENT_VERSION_SYNC_ONLY',
@@ -51,13 +51,6 @@ for (const marker of [
 ]) {
   if (!app.includes(marker)) fail(`App protection marker missing: ${marker}`);
 }
-for (const required of [
-  'musicNoteCacheNeedsBoundedVerification',
-  'cachedFavoriteCount < FAVORITES_PAGE_SIZE',
-  'attachFavoritesSourceBootstrap902(true)',
-  'const attachFavoritesSourceBootstrap902 = (allowCachedRepair = false)',
-  "markCacheDiagnostic('musicNote', 'CACHE', 0)",
-]) assert.ok(app.includes(required), `Music Note current warm guard missing: ${required}`);
 
 // Manual Music Note sync exits before the one-bundle read when unchanged.
 const manualSync = functionBlock(app, 'const refreshFavoritesFromServerFirstPage = useCallback(async ()', 'Music Note manual delta sync');
@@ -141,7 +134,7 @@ const librarySubscribe = functionBlock(library, 'const subscribeLibraryWorkspace
 assert.ok(librarySubscribe.includes('const session = startLibraryWorkspaceSession(uid)'), 'Library page no longer reuses module session');
 
 console.log('116_MUSIC_NOTE_LIBRARY_WARM_COST_AUDIT=PASS');
-console.log('MUSIC_NOTE_WARM_REENTRY=PAGE_SIZED_CACHE_REUSED_WITH_CACHE_0_GUARD');
+console.log('MUSIC_NOTE_WARM_REENTRY=OWNED_BY_CURRENT_1030_VERIFIER');
 console.log('RECENT_SONGS_WARM_GETDOC_FROM_SERVER=0_BY_VERSION_GUARD');
 console.log('USER_STRUCTURES_WARM_GETDOC=0_UNLESS_NEWER_PROFILE_VERSION');
 console.log('LIBRARY_WARM_REENTRY_SERVER_READ=0_BY_DURABLE_AND_SESSION_GUARDS');

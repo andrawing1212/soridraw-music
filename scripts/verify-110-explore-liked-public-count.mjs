@@ -5,7 +5,8 @@ const liked = readFileSync('src/services/exploreLikedTracksService.ts', 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const fail = (message) => { throw new Error(`[110] ${message}`); };
 
-if (String(version.version) !== '110') fail('app version is not 110');
+const appVersion = Number(version.version);
+if (!Number.isFinite(appVersion) || appVersion < 110) fail('app version is older than 110');
 if (!page.includes('SORIDRAW_EXPLORE_LIKED_PUBLIC_COUNT_LOCAL_SYNC_110_20260916')) fail('110 marker missing');
 if (!page.includes('const syncSharedPublicCountsToLocal110 = (sharedTracks: ExploreTrack[]) =>')) fail('shared public-count local sync helper missing');
 if (!page.includes('setProfileLikedTracks(applyPublicCounts110);')) fail('open liked-tab state is not reconciled');

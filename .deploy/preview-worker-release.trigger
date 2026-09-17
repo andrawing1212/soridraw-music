@@ -1,4 +1,7 @@
-requested_at=2026-09-16T14:22:00Z
+requested_at=2026-09-17T07:54:00Z
 requested_by=user
-product_code_target=c81ff2cf5e6aea820b6da45779b7d207f839257c
-release_purpose=111_public_profile_negative_cache_guard_release_gate_refreshed
+product_code_target=95ca3310076f449ad8b850afa1977053e7a253ac
+release_purpose=115_shared_derived_cache_consistency_and_cost_fix
+no_d1_migration=true
+no_user_data_migration=true
+preview_only=true

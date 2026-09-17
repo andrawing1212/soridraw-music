@@ -52,7 +52,6 @@ jobs:
       TEST_WORKER: soridraw-explore-test
       PRODUCTION_WORKER: soridraw-explore-api
       RELEASE_CONTROL_ISSUE: '76'
-      RELEASE_STATUS_FILE: ${{ runner.temp }}/release-control-status.json
     steps:
       - name: Checkout fixed controller
         uses: actions/checkout@v4
@@ -73,8 +72,10 @@ jobs:
           COMMENT_ISSUE: ${{ github.event.issue.number }}
           COMMENT_IS_PR: ${{ github.event.issue.pull_request != null }}
           ALLOWED_ACTORS: ${{ vars.SORIDRAW_RELEASE_ACTORS }}
+          RELEASE_STATUS_FILE: ${{ runner.temp }}/release-control-status.json
         run: |
           set -euo pipefail
+          echo "RELEASE_STATUS_FILE=$RELEASE_STATUS_FILE" >> "$GITHUB_ENV"
           MODE="$DISPATCH_MODE" TARGET="$DISPATCH_TARGET" MANIFEST_TAG="$DISPATCH_MANIFEST_TAG" APPROVAL="$DISPATCH_APPROVAL"
           if [ "$GITHUB_EVENT_NAME" = issue_comment ]; then
             test "$COMMENT_ISSUE" = "$RELEASE_CONTROL_ISSUE" && test "$COMMENT_IS_PR" = false

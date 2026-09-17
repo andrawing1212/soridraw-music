@@ -1,7 +1,7 @@
-requested_at=2026-09-16T12:20:00Z
+requested_at=2026-09-17T08:43:00Z
 requested_by=user
-product_code_target=4723fe9450869dd80b0e684309681535a8512dcd
-release_source_target=preview-latest-after-product-110
-release_purpose=110_liked_public_count_local_sync
+product_code_target=011d3321c7b39228817db9c076485a6155002257
+release_source_target=preview-115-063-after-worker-success
+release_purpose=115_shared_derived_cache_consistency_and_cost_fix
 hosting_only=true
 worker_redeploy=false

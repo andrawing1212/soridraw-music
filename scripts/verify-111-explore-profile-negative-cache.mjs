@@ -48,20 +48,32 @@ assert.match(worker, /const EXPLORE_PROFILE_NEGATIVE_TTL_SECONDS_057 = 60;/);
 assert.match(worker, /const EXPLORE_PROFILE_COLD_RATE_PREFIX_057 = 'profile-cold:';/);
 assert.match(worker, /handlePublicProfileFirstViewWithEdgeCacheCore057/);
 
-const wrapper = functionText(worker, 'handlePublicProfileFirstViewWithEdgeCache');
+const shared060 = worker.includes('SORIDRAW_SHARED_PROFILE_R2_PARITY_060_20260917');
+const outerWrapper = functionText(worker, 'handlePublicProfileFirstViewWithEdgeCache');
+const guardedWrapper = shared060
+  ? functionText(worker, 'handlePublicProfileFirstViewWithEdgeCacheCore060')
+  : outerWrapper;
 const limiter = functionText(worker, 'enforceExploreProfileColdRateLimit057');
 const cacheWriter = functionText(worker, 'cacheExploreProfileNotFound057');
 const cacheCheck = functionText(worker, 'isCacheableExploreProfileNotFound057');
 const headers = functionText(worker, 'withExploreProfileProtectionHeaders057');
 
-assert.match(wrapper, /cache\.match\(negativeKey\)/);
-assert.match(wrapper, /cache\.match\(positiveKey\)/);
-assert.match(wrapper, /enforceExploreProfileColdRateLimit057\(request, env, cors\)/);
-assert.match(wrapper, /handlePublicProfileFirstViewWithEdgeCacheCore057\(request, profileRef, env, cors\)/);
-assert.match(wrapper, /cacheExploreProfileNotFound057\(request, profileRef, response\)/);
-assert.ok(wrapper.indexOf('cache.match(negativeKey)') < wrapper.indexOf('enforceExploreProfileColdRateLimit057'), 'negative cache must run before limiter/core');
-assert.ok(wrapper.indexOf('cache.match(positiveKey)') < wrapper.indexOf('enforceExploreProfileColdRateLimit057'), 'positive warm edge must bypass limiter budget');
-assert.doesNotMatch(wrapper, /env\.DB\.|\.prepare\(/);
+assert.match(guardedWrapper, /cache\.match\(negativeKey\)/);
+assert.match(guardedWrapper, /cache\.match\(positiveKey\)/);
+assert.match(guardedWrapper, /enforceExploreProfileColdRateLimit057\(request, env, cors\)/);
+assert.match(guardedWrapper, /handlePublicProfileFirstViewWithEdgeCacheCore057\(request, profileRef, env, cors\)/);
+assert.match(guardedWrapper, /cacheExploreProfileNotFound057\(request, profileRef, response\)/);
+assert.ok(guardedWrapper.indexOf('cache.match(negativeKey)') < guardedWrapper.indexOf('enforceExploreProfileColdRateLimit057'), 'negative cache must run before limiter/core');
+assert.ok(guardedWrapper.indexOf('cache.match(positiveKey)') < guardedWrapper.indexOf('enforceExploreProfileColdRateLimit057'), 'positive warm edge must bypass limiter budget');
+assert.doesNotMatch(guardedWrapper, /env\.DB\.|\.prepare\(/);
+
+if (shared060) {
+  assert.match(outerWrapper, /readExploreSharedProfile060\(env, profileRef\)/);
+  assert.match(outerWrapper, /handlePublicProfileFirstViewWithEdgeCacheCore060\(request, profileRef, env, cors\)/);
+  assert.match(outerWrapper, /cache\.match\(negativeKey\)/);
+  assert.match(outerWrapper, /cache\.match\(positiveKey\)/);
+  assert.doesNotMatch(outerWrapper, /env\.DB\.|\.prepare\(/);
+}
 
 assert.match(limiter, /env\?\.LIKE_RATE_LIMITER/);
 assert.match(limiter, /\.limit\(\{ key: EXPLORE_PROFILE_COLD_RATE_PREFIX_057 \+ clientKey \}\)/);
@@ -98,6 +110,7 @@ for (const [name, source] of [['057', patch057], ['058', patch058]]) {
 }
 
 console.log('111_EXPLORE_PROFILE_NEGATIVE_CACHE=PASS');
+console.log(shared060 ? 'PROFILE_READ_ORDER=EDGE_THEN_SHARED_R2_THEN_GUARDED_LEGACY' : 'PROFILE_READ_ORDER=EDGE_THEN_GUARDED_LEGACY');
 console.log('INVALID_404_SHAPE=LIVE_LEGACY_AND_NOT_FOUND_CODE_COMPATIBLE');
 console.log('INVALID_SAME_REF=FIRST_D1_ONLY_THEN_EDGE_R0');
 console.log('RANDOM_INVALID_REF=BOUNDED_BY_EDGE_LIMIT_60_PER_MIN_PER_CLIENT_KEY');

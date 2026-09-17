@@ -24387,7 +24387,7 @@ async function handlePublicProfileFirstViewWithEdgeCacheCore060(request, profile
   return response;
 }
 
-async function handlePublicProfileFirstViewWithEdgeCache(request, profileRef, env, cors) {
+async function handlePublicProfileFirstViewWithEdgeCacheCore063(request, profileRef, env, cors) {
   const cache = caches.default;
   try {
     const negativeKey = getExploreProfileNegativeCacheKey057(request, profileRef);
@@ -24421,6 +24421,51 @@ async function handlePublicProfileFirstViewWithEdgeCache(request, profileRef, en
   );
   try { await cache.put(key, response.clone()); } catch {}
   return response;
+}
+
+// SORIDRAW_PUBLIC_PROFILE_WARM_EDGE_ZERO_READ_063_20260917
+async function handlePublicProfileFirstViewWithEdgeCache(request, profileRef, env, cors) {
+  const cache = caches.default;
+
+  // A cached negative result has precedence over a stale positive entry. Delegate
+  // only that case to the existing 057 guard, which serves the negative cache
+  // without opening D1.
+  try {
+    const negativeKey = getExploreProfileNegativeCacheKey057(request, profileRef);
+    if (await cache.match(negativeKey)) {
+      return await handlePublicProfileFirstViewWithEdgeCacheCore063(request, profileRef, env, cors);
+    }
+  } catch {}
+
+  // HARD COST RULE: a positive Edge hit is already the validated first-view
+  // snapshot. Return it here instead of re-entering older wrapper layers that may
+  // inspect shared/materialized state. Warm revisit therefore performs D1 read 0.
+  try {
+    const requestUrl = new URL(request.url);
+    const knownRevision = String(requestUrl.searchParams.get('knownRevision') || '').trim();
+    const origin = request.headers.get('Origin') || '';
+    const key = getPublicProfileFirstViewEdgeCacheKey(request.url, profileRef, origin);
+    const cached = await cache.match(key);
+    if (cached) {
+      const cachedRevision = await readPublicProfileFirstViewRevisionFromResponse(cached);
+      if (knownRevision && cachedRevision && knownRevision === cachedRevision) {
+        return withExploreZeroUsageOnEdgeHit(
+          makePublicProfileFirstViewNotModified(cached, cachedRevision, 'HIT', 'NOT_MODIFIED_EDGE_063', cors),
+          'HIT'
+        );
+      }
+      return withExploreZeroUsageOnEdgeHit(
+        withPublicProfileRevisionHeaders(
+          withPublicProfileFirstViewEdgeHeader(cached, 'HIT'),
+          cachedRevision,
+          knownRevision ? 'UPDATED_EDGE_063' : 'FULL_EDGE_063'
+        ),
+        'HIT'
+      );
+    }
+  } catch {}
+
+  return await handlePublicProfileFirstViewWithEdgeCacheCore063(request, profileRef, env, cors);
 }
 
 __name(handlePublicProfileFirstViewWithEdgeCache, "handlePublicProfileFirstViewWithEdgeCache");

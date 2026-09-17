@@ -52,7 +52,9 @@ jobs:
       TEST_WORKER: soridraw-explore-test
       PRODUCTION_WORKER: soridraw-explore-api
       RELEASE_CONTROL_ISSUE: '76'
-      RELEASE_STATUS_FILE: ${{ runner.temp }}/release-control-status.json
+      # The runner context is unavailable while GitHub validates jobs.<job>.env.
+      # Use the run id to keep this per-run file unique without weakening isolation.
+      RELEASE_STATUS_FILE: /tmp/release-control-status-${{ github.run_id }}.json
     steps:
       - name: Checkout fixed controller
         uses: actions/checkout@v4

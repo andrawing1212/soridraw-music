@@ -16,6 +16,9 @@ function before(text, first, second) {
   assert.ok(text.indexOf(first) >= 0 && text.indexOf(first) < text.indexOf(second), `${first} must execute before ${second}`);
 }
 function validate(source = workflow) {
+  const jobEnv = source.slice(source.indexOf('    env:'), source.indexOf('    steps:'));
+  assert.doesNotMatch(jobEnv, /\$\{\{\s*runner\./, 'runner context is unavailable in jobs.<job>.env');
+  assert.match(jobEnv, /RELEASE_STATUS_FILE: \/tmp\/release-control-status-\$\{\{ github\.run_id \}\}\.json/);
   const checkout = source.slice(source.indexOf('      - name: Checkout fixed controller'), source.indexOf('      - name: Lock request and immutable baselines'));
   assert.match(checkout, /ref: \$\{\{ github\.workflow_sha \}\}/);
   assert.doesNotMatch(checkout, /ref: preview/);
@@ -72,6 +75,7 @@ assert.equal(Object.values(controllerIdentity(process.cwd())).every(value => /^[
 
 // Mutation tests prove the verifier rejects each audited defect rather than merely finding tokens.
 for (const [index, mutate] of [
+  s => s.replace('/tmp/release-control-status-${{ github.run_id }}.json', '${{ runner.temp }}/release-control-status.json'),
   s => s.replace('ref: ${{ github.workflow_sha }}', 'ref: preview'),
   s => s.replace('parsed="$(node scripts/release-controller-policy.mjs parse-command)"', 'read -r command argument value approval extra <<< "$COMMENT_BODY"'),
   s => s.replace('"$GITHUB_WORKSPACE" <<\'NODE\'', '"$RELEASE_ROOT" <<\'NODE\''),

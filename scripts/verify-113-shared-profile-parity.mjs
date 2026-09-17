@@ -17,6 +17,7 @@ for (const required of [
   'writeExploreSharedProfile060',
   'primeExploreLocalProfile060',
   'seedSharedProfileFromPreviewLocal060',
+  'readMaterializedSharedProfile060',
   'handlePublicProfileFirstViewWithEdgeCacheCore060',
   'patchExploreVisibleProfiles056Core060',
   'patchExploreProfileR2Counters020Core060',
@@ -32,21 +33,31 @@ if (!Array.isArray(manifest.patches) || !manifest.patches.includes('060-shared-p
 }
 
 const sharedStart = worker.indexOf('async function readSharedProfileJson060');
-const outerStart = worker.indexOf('async function handlePublicProfileFirstViewWithEdgeCacheCore060', sharedStart);
-const sharedHelpers = sharedStart >= 0 && outerStart > sharedStart ? worker.slice(sharedStart, outerStart) : '';
-if (!sharedHelpers.includes('env?.PROFILE_MEDIA')) fail('shared profile store must use shared PROFILE_MEDIA R2');
-if (!sharedHelpers.includes('exploreCacheBucket031(env)') && !sharedHelpers.includes('readExploreR2Json')) fail('local derived profile source missing');
-if (/env\.DB|\.prepare\(/.test(sharedHelpers)) fail('shared profile helper path must not read D1');
+const materializedStart = worker.indexOf('async function readMaterializedSharedProfile060', sharedStart);
+const pureShared = sharedStart >= 0 && materializedStart > sharedStart ? worker.slice(sharedStart, materializedStart) : '';
+if (!pureShared.includes('env?.PROFILE_MEDIA')) fail('shared profile store must use shared PROFILE_MEDIA R2');
+if (!pureShared.includes('readExploreR2Json')) fail('local derived profile source missing');
+if (/env\.DB|\.prepare\(/.test(pureShared)) fail('shared R2 helpers must not read D1');
+
+const materializedEnd = worker.indexOf('\n}', materializedStart);
+const materialized = materializedStart >= 0 ? worker.slice(materializedStart, materializedEnd > materializedStart ? materializedEnd + 2 : materializedStart + 2200) : '';
+if (!materialized.includes('readPublicProfileFirstViewRow(env, normalized)')) fail('bounded materialized snapshot read missing');
+if (!materialized.includes('parseExploreProfileSnapshotRow(row)')) fail('materialized snapshot parser missing');
+if (!materialized.includes('writeExploreSharedProfile060(env, bundle)')) fail('materialized row is not promoted to shared R2');
+for (const forbidden of ['materializePublicProfileFirstView', 'buildExploreFeedR2Payload', 'SELECT * FROM tracks', 'SELECT * FROM likes']) {
+  if (materialized.includes(forbidden)) fail(`materialized recovery uses expensive fallback: ${forbidden}`);
+}
 
 const wrapperStart = worker.indexOf('async function handlePublicProfileFirstViewWithEdgeCache(request');
 const wrapperEnd = worker.indexOf('\n}', wrapperStart);
-const wrapper = wrapperStart >= 0 ? worker.slice(wrapperStart, wrapperEnd > wrapperStart ? wrapperEnd + 2 : wrapperStart + 3500) : '';
+const wrapper = wrapperStart >= 0 ? worker.slice(wrapperStart, wrapperEnd > wrapperStart ? wrapperEnd + 2 : wrapperStart + 4200) : '';
 if (!wrapper.includes('cache.match(negativeKey)')) fail('negative edge guard missing before shared R2');
 if (!wrapper.includes('cache.match(positiveKey)')) fail('positive edge guard missing before shared R2');
 if (!wrapper.includes('readExploreSharedProfile060(env, profileRef)')) fail('shared R2 profile read missing');
-if (!wrapper.includes('seedSharedProfileFromPreviewLocal060(env, profileRef)')) fail('bounded PREVIEW seed path missing');
-if (!wrapper.includes('handlePublicProfileFirstViewWithEdgeCacheCore060')) fail('legacy guarded fallback missing');
-if (/env\.DB|\.prepare\(/.test(wrapper)) fail('shared-first profile wrapper must not touch D1 directly');
+if (!wrapper.includes('seedSharedProfileFromPreviewLocal060(env, profileRef)')) fail('PREVIEW local seed path missing');
+if (!wrapper.includes('readMaterializedSharedProfile060(env, profileRef)')) fail('one-row cold recovery missing');
+if (!wrapper.includes('handlePublicProfileFirstViewWithEdgeCacheCore060')) fail('guarded compatibility fallback missing');
+if (/env\.DB|\.prepare\(/.test(wrapper)) fail('outer profile wrapper must not run ad-hoc D1 queries');
 
 for (const mutation of [
   'patchExploreVisibleProfiles056',
@@ -57,7 +68,7 @@ for (const mutation of [
 ]) {
   const at = worker.indexOf(`async function ${mutation}(`);
   if (at < 0) fail(`mutation wrapper missing ${mutation}`);
-  const body = worker.slice(at, at + 2200);
+  const body = worker.slice(at, at + 2400);
   if (!body.includes('primeExploreLocalProfile060')) fail(`${mutation} does not prime from shared profile`);
   if (!body.includes('mirrorExploreLocalProfile060')) fail(`${mutation} does not mirror targeted profile back`);
 }
@@ -82,10 +93,11 @@ if (!warm.includes('revalidateCachedProfile113')) fail('warm profile bounded sha
 if (warm.indexOf('return cached') < warm.indexOf('revalidateCachedProfile113')) fail('shared revalidation must be scheduled without blocking local render');
 
 console.log('113_SHARED_PROFILE_PARITY=PASS');
-console.log('PROFILE_READ_ORDER=LOCAL_BROWSER_THEN_EDGE_THEN_SHARED_R2_THEN_GUARDED_LEGACY');
+console.log('PROFILE_READ_ORDER=LOCAL_BROWSER_THEN_EDGE_THEN_SHARED_R2_THEN_ONE_MATERIALIZED_ROW_THEN_GUARDED_FALLBACK');
+console.log('COLD_UID_TARGET=ONE_PRIMARY_KEY_MATERIALIZED_ROW');
 console.log('WARM_RENDER=LOCAL_IMMEDIATE');
 console.log('WARM_REVALIDATION=MAX_ONCE_PER_60S_ON_REVISIT');
-console.log('UNCHANGED_PROFILE_D1=R0_BY_SHARED_R2_ROUTE_CONTRACT');
+console.log('UNCHANGED_PROFILE_D1=R0_AFTER_SHARED_R2_SEED');
 console.log('MUTATION_SYNC=TARGETED_PROFILE_ONLY');
 console.log('NO_FULL_PROFILE_SCAN=true');
 console.log('NO_D1_SCHEMA_CHANGE=true');

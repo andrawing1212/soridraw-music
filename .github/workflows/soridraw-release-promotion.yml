@@ -107,8 +107,10 @@ jobs:
           const fs=require('fs'); const [path,tag]=process.argv.slice(2); const m=JSON.parse(fs.readFileSync(path));
           if(m.schema<2||m.state!=='TEST_VERIFIED'||m.tag!==tag) throw Error('manifest is not TEST_VERIFIED');
           for(const k of ['appVersion','sourcePreviewSha','sourcePreviewTree','promotedMainSha','mainTree','distIndexSha256','testWorkerBundleSha256','testWorkerVersionId','controllerIdentity','verifiedAt','workflowRunId']) if(!m[k]) throw Error(`manifest missing ${k}`);
+          for(const k of ['sourcePreviewSha','sourcePreviewTree','promotedMainSha','mainTree','distIndexSha256','testWorkerBundleSha256','controllerIdentity']) if(!/^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(String(m[k]))) throw Error(`manifest invalid identity ${k}`);
+          if(!/^[0-9a-f-]{36}$/i.test(String(m.testWorkerVersionId))) throw Error('manifest invalid TEST Worker version id');
           if(m.canonical?.d1!=='soridraw-explore-db'||m.canonical?.profileMedia!=='soridraw-profile-media'||m.parity?.status!=='PASS') throw Error('manifest canonical/parity invariant failed');
-          if(!m.testHosting?.release||!m.testHosting?.version) throw Error('manifest missing exact TEST Hosting identity'); fs.appendFileSync(process.env.GITHUB_ENV,`RELEASE_TARGET=${m.sourcePreviewSha}\nMANIFEST_MAIN=${m.promotedMainSha}\nRELEASE_APP_VERSION=${m.appVersion}\nRELEASE_INDEX_SHA=${m.distIndexSha256}\nEXPECTED_WORKER_BUNDLE_SHA256=${m.testWorkerBundleSha256}\nTEST_WORKER_VERSION_ID=${m.testWorkerVersionId}\nTEST_HOSTING_RELEASE=${m.testHosting.release}\nTEST_HOSTING_VERSION=${m.testHosting.version}\n`);
+          if(m.testHosting?.site!=='soridraw-test'||!m.testHosting?.release||!m.testHosting?.version) throw Error('manifest missing exact TEST Hosting identity'); fs.appendFileSync(process.env.GITHUB_ENV,`RELEASE_TARGET=${m.sourcePreviewSha}\nMANIFEST_MAIN=${m.promotedMainSha}\nRELEASE_APP_VERSION=${m.appVersion}\nRELEASE_INDEX_SHA=${m.distIndexSha256}\nEXPECTED_WORKER_BUNDLE_SHA256=${m.testWorkerBundleSha256}\nTEST_WORKER_VERSION_ID=${m.testWorkerVersionId}\nTEST_HOSTING_RELEASE=${m.testHosting.release}\nTEST_HOSTING_VERSION=${m.testHosting.version}\n`);
           NODE
             git fetch origin "$(node -p "require('$RUNNER_TEMP/manifest/soridraw-release-manifest.json').promotedMainSha")" --no-tags
           else

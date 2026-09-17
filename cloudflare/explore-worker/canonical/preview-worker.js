@@ -24058,7 +24058,37 @@ __name222(derivedNext032, "derivedNext032");
 __name2222(derivedNext032, "derivedNext032");
 __name22222(derivedNext032, "derivedNext032");
 __name222222(derivedNext032, "derivedNext032");
-async function syncDerivedCache032(env, sort, uid = null, request = null) {
+// SORIDRAW_SHARED_FEED_CATCHUP_CONVERGENCE_064_20260917
+async function mirrorExploreSharedFeedAfterDerivedSync064(env, sort) {
+  const normalizedSort = sort === 'popular' ? 'popular' : 'latest';
+  const shared = env?.PROFILE_MEDIA || null;
+  const local = exploreCacheBucket031(env);
+  if (!shared || !local) return { mirrored: false, skipped: true };
+  const localObject = await local.get(exploreFeedR2Key(normalizedSort));
+  if (!localObject) return { mirrored: false, missingLocal: true };
+  const localBody = await localObject.text();
+  if (!localBody) return { mirrored: false, missingLocalBody: true };
+  const sharedKey = exploreSharedFeedR2Key059(normalizedSort);
+  let sharedBody = '';
+  try {
+    const sharedObject = await shared.get(sharedKey);
+    if (sharedObject) sharedBody = await sharedObject.text();
+  } catch {}
+  if (sharedBody === localBody) return { mirrored: false, unchanged: true };
+  await shared.put(sharedKey, localBody, {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    customMetadata: {
+      soridrawSharedFeed: '116',
+      sourceUpdatedAt: String(localObject.customMetadata?.updatedAt || Date.now()),
+      mirroredAt: String(Date.now()),
+      catchUp: '064',
+    },
+  });
+  return { mirrored: true, unchanged: false };
+}
+
+
+async function syncDerivedCache032Core064(env, sort, uid = null, request = null) {
   const key = uid ? exploreProfileR2Key(uid) : exploreFeedR2Key(sort);
   const scope = uid ? "profile:" + uid : "feed";
   const head = await derivedHead032(env, scope, request);
@@ -24085,6 +24115,19 @@ async function syncDerivedCache032(env, sort, uid = null, request = null) {
     }
   }
   return readExploreR2Json(env, key);
+}
+
+async function syncDerivedCache032(env, sort, uid = null, request = null) {
+  const result = await syncDerivedCache032Core064(env, sort, uid, request);
+  if (!uid) {
+    try {
+      const catchUp = await mirrorExploreSharedFeedAfterDerivedSync064(env, sort);
+      if (catchUp?.mirrored) console.log('[SORIDRAW 064] shared Feed catch-up mirrored', sort);
+    } catch (error) {
+      console.warn('[SORIDRAW 064] shared Feed catch-up deferred:', String(error?.message || error || 'unknown'));
+    }
+  }
+  return result;
 }
 __name(syncDerivedCache032, "syncDerivedCache032");
 __name2(syncDerivedCache032, "syncDerivedCache032");

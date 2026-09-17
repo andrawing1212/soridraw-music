@@ -21128,7 +21128,34 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
   }
 }
 
-async function processExploreLikeBatches035(env, scheduledTime = Date.now()) {
+// SORIDRAW_SHARED_FEED_R2_PARITY_059_20260917
+const EXPLORE_SHARED_FEED_MIRROR_VERSION_059 = 112;
+const exploreSharedFeedR2Key059 = (sort) => `internal/explore/shared-feed-v112/${sort === 'popular' ? 'popular' : 'latest'}-40.json`;
+
+async function mirrorExploreSharedFeeds059(env) {
+  const shared = env?.PROFILE_MEDIA || null;
+  const local = exploreCacheBucket031(env);
+  if (!shared || !local) return { mirrored: 0, skipped: true };
+  let mirrored = 0;
+  for (const sort of ['latest', 'popular']) {
+    const object = await local.get(exploreFeedR2Key(sort));
+    if (!object) continue;
+    const body = await object.text();
+    if (!body) continue;
+    await shared.put(exploreSharedFeedR2Key059(sort), body, {
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      customMetadata: {
+        soridrawSharedFeed: '112',
+        sourceUpdatedAt: String(object.customMetadata?.updatedAt || Date.now()),
+        mirroredAt: String(Date.now()),
+      },
+    });
+    mirrored += 1;
+  }
+  return { mirrored, skipped: false };
+}
+
+async function processExploreLikeBatches035Core059(env, scheduledTime = Date.now()) {
   const totals = await processExploreLikeBatches035Core056(env, scheduledTime);
   if (!totals || Number(totals.changedTracks || 0) <= 0) return totals;
   try {
@@ -21141,6 +21168,19 @@ async function processExploreLikeBatches035(env, scheduledTime = Date.now()) {
     console.warn('[SORIDRAW 056] public like projection deferred:', String(error?.message || error || 'unknown'));
     return { ...totals, publicProjection: 'deferred' };
   }
+}
+
+async function processExploreLikeBatches035(env, scheduledTime = Date.now()) {
+  const totals = await processExploreLikeBatches035Core059(env, scheduledTime);
+  if (Number(totals?.changedTracks || 0) > 0) {
+    try {
+      totals.sharedFeedMirror059 = await mirrorExploreSharedFeeds059(env);
+    } catch (error) {
+      console.warn('[SORIDRAW 059] shared Feed mirror after like aggregate deferred:', String(error?.message || error || 'unknown'));
+      totals.sharedFeedMirror059 = { mirrored: 0, deferred: true };
+    }
+  }
+  return totals;
 }
 __name(processExploreLikeBatches035, "processExploreLikeBatches035");
 __name2(processExploreLikeBatches035, "processExploreLikeBatches035");
@@ -23884,8 +23924,19 @@ __name222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
 __name2222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
 __name22222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
 __name222222(patchExploreFeedR2LikeCount, "patchExploreFeedR2LikeCount");
-async function syncExploreFeedR2Publication012(env, item) {
+async function syncExploreFeedR2Publication012Core059(env, item) {
   return syncDerivedFeeds032(env);
+}
+
+async function syncExploreFeedR2Publication012(...args) {
+  const result = await syncExploreFeedR2Publication012Core059(...args);
+  const env = args[0];
+  try {
+    await mirrorExploreSharedFeeds059(env);
+  } catch (error) {
+    console.warn('[SORIDRAW 059] shared Feed mirror after syncExploreFeedR2Publication012 deferred:', String(error?.message || error || 'unknown'));
+  }
+  return result;
 }
 __name(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 __name2(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
@@ -23894,8 +23945,19 @@ __name222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 __name2222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 __name22222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
 __name222222(syncExploreFeedR2Publication012, "syncExploreFeedR2Publication012");
-async function syncExploreFeedR2OptionPatch017(env, trackId, patch) {
+async function syncExploreFeedR2OptionPatch017Core059(env, trackId, patch) {
   return syncDerivedFeeds032(env);
+}
+
+async function syncExploreFeedR2OptionPatch017(...args) {
+  const result = await syncExploreFeedR2OptionPatch017Core059(...args);
+  const env = args[0];
+  try {
+    await mirrorExploreSharedFeeds059(env);
+  } catch (error) {
+    console.warn('[SORIDRAW 059] shared Feed mirror after syncExploreFeedR2OptionPatch017 deferred:', String(error?.message || error || 'unknown'));
+  }
+  return result;
 }
 __name(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 __name2(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
@@ -23904,8 +23966,19 @@ __name222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 __name2222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 __name22222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
 __name222222(syncExploreFeedR2OptionPatch017, "syncExploreFeedR2OptionPatch017");
-async function syncExploreFeedR2Private017(env, trackId) {
+async function syncExploreFeedR2Private017Core059(env, trackId) {
   return syncDerivedFeeds032(env);
+}
+
+async function syncExploreFeedR2Private017(...args) {
+  const result = await syncExploreFeedR2Private017Core059(...args);
+  const env = args[0];
+  try {
+    await mirrorExploreSharedFeeds059(env);
+  } catch (error) {
+    console.warn('[SORIDRAW 059] shared Feed mirror after syncExploreFeedR2Private017 deferred:', String(error?.message || error || 'unknown'));
+  }
+  return result;
 }
 __name(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");
 __name2(syncExploreFeedR2Private017, "syncExploreFeedR2Private017");

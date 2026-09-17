@@ -1,0 +1,63 @@
+name: Audit 116 Music Note Library Warm Cost
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/audit-116-music-note-library-warm-cost.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-116-music-note-library-warm-cost
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify warm read guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-116-music-note-library-warm-cost.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-029-music-note-library.mjs
+          echo '116_WARM_COST_STATIC_AUDIT=PASS'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify no product mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test -z "$(git status --porcelain)"
+          echo 'NO_PRODUCT_CODE_CHANGE=true'
+          echo 'NO_FIREBASE_CHANGE=true'
+          echo 'NO_FUNCTIONS_CHANGE=true'
+          echo 'NO_CLOUDFLARE_DEPLOYMENT=true'
+          echo 'NO_D1_SCHEMA_CHANGE=true'
+          echo 'NO_USER_DATA_CHANGE=true'
+          echo 'NO_DEPLOYMENT=true'

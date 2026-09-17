@@ -1,11 +1,12 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const mode = String(process.argv[2] || '').trim();
 const action = String(process.argv[3] || 'dry-run').trim();
-if (!['test', 'production'].includes(mode)) throw new Error('usage: node .deploy/release-worker-runtime.mjs <test|production> <dry-run|deploy>');
-if (!['dry-run', 'deploy'].includes(action)) throw new Error(`unsupported action: ${action}`);
+if (!['test', 'production'].includes(mode)) throw new Error('usage: node .deploy/release-worker-runtime.mjs <test|production> <dry-run|upload|activate|verify|restore>');
+if (!['dry-run', 'upload', 'activate', 'verify', 'restore'].includes(action)) throw new Error(`unsupported action: ${action}`);
 
 // SORIDRAW_RELEASE_ENVIRONMENT_PARITY_INVARIANT_117_20260917
 // A promoted release is successful only when the target environment serves the
@@ -85,6 +86,28 @@ function run(command, args, cwd = ROOT) {
   if (result.stderr) process.stderr.write(result.stderr);
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed with exit ${result.status}`);
   return String(result.stdout || '').trim();
+}
+
+function hashBundleDirectory(directory) {
+  const files = [];
+  const visit = (current) => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) visit(path);
+      else if (entry.isFile()) files.push(path);
+    }
+  };
+  visit(directory);
+  files.sort((a, b) => a.localeCompare(b, 'en'));
+  const hash = createHash('sha256');
+  for (const file of files) {
+    const relative = file.slice(directory.length + 1).split('\\').join('/');
+    const contents = readFileSync(file);
+    hash.update(`${relative}\0${contents.byteLength}\0`, 'utf8');
+    hash.update(contents);
+    hash.update('\0', 'utf8');
+  }
+  return hash.digest('hex');
 }
 
 async function activeVersion() {
@@ -375,6 +398,23 @@ async function smoke() {
     throw new Error(`${mode} like batch route smoke unexpected HTTP ${batch.status}`);
   }
 
+  // Firebase Functions are shared code, so release verification is deliberately
+  // an OPTIONS-only CORS probe. It must never invoke an authenticated handler.
+  for (const functionName of ['getSunoApiKeyStatus', 'generateGeminiContent']) {
+    const response = await fetch(`https://us-central1-soridraw-app-866a5.cloudfunctions.net/${functionName}`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: target.origin,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type,authorization,x-firebase-appcheck',
+      },
+    });
+    if (![200, 204].includes(response.status)) throw new Error(`${mode} ${functionName} OPTIONS failed HTTP ${response.status}`);
+    const allow = String(response.headers.get('access-control-allow-origin') || '');
+    if (allow !== target.origin) throw new Error(`${mode} ${functionName} OPTIONS CORS mismatch: ${allow || '(none)'}`);
+    console.log(`${mode.toUpperCase()}_${functionName}_OPTIONS_CORS=PASS`);
+  }
+
   // Hard release invariant. Old target Edge/R2 state is allowed a bounded TTL
   // window to expire/self-heal from the shared source. It is never accepted as
   // a successful promotion if it still differs from the previous validated stage.
@@ -382,22 +422,74 @@ async function smoke() {
   console.log(`${mode.toUpperCase()}_WORKER_SMOKE=PASS`);
 }
 
+async function restore() {
+  const version = String(process.env.RELEASE_WORKER_VERSION || '').trim();
+  const schedulesJson = String(process.env.RELEASE_WORKER_SCHEDULES_JSON || '').trim();
+  if (!/^[0-9a-f-]{36}$/i.test(version)) throw new Error('RELEASE_WORKER_VERSION is required for restore');
+  if (!schedulesJson) throw new Error('RELEASE_WORKER_SCHEDULES_JSON is required for restore');
+  const schedules = JSON.parse(schedulesJson);
+  if (!Array.isArray(schedules)) throw new Error('restore schedules must be an array');
+  run(process.execPath, [WRANGLER, 'versions', 'deploy', `${version}@100%`, '--config', CONFIG_PATH, '--yes'], WORKER_DIR);
+  await cfPut(`${apiBase}/workers/scripts/${target.worker}/schedules`, schedules);
+  await sleep(2_500);
+  const active = await activeVersion();
+  if (active !== version) throw new Error(`${mode} Worker restore active version mismatch expected=${version} actual=${active}`);
+  const restoredSchedules = await readSchedules();
+  if (JSON.stringify(restoredSchedules) !== JSON.stringify(schedules)) throw new Error(`${mode} Worker restore schedules mismatch`);
+  console.log(`${mode.toUpperCase()}_WORKER_RESTORE=PASS version=${active}`);
+}
+
 await makeConfig();
-run(process.execPath, [WRANGLER, 'deploy', '--config', CONFIG_PATH, '--dry-run'], WORKER_DIR);
+const bundleDirectory = join(RELEASE_DIR, 'bundle');
+rmSync(bundleDirectory, { recursive: true, force: true });
+run(process.execPath, [WRANGLER, 'deploy', '--config', CONFIG_PATH, '--dry-run', '--outdir', bundleDirectory], WORKER_DIR);
+const bundleSha256 = hashBundleDirectory(bundleDirectory);
+const expectedBundleSha256 = String(process.env.EXPECTED_WORKER_BUNDLE_SHA256 || '').trim();
+if (expectedBundleSha256 && bundleSha256 !== expectedBundleSha256) {
+  throw new Error(`${mode} Worker bundle identity mismatch expected=${expectedBundleSha256} actual=${bundleSha256}`);
+}
+console.log(`${mode.toUpperCase()}_WORKER_BUNDLE_SHA256=${bundleSha256}`);
 console.log(`${mode.toUpperCase()}_WORKER_DRY_RUN=PASS`);
 if (action === 'dry-run') process.exit(0);
+
+if (action === 'restore') {
+  await restore();
+  process.exit(0);
+}
+
+if (action === 'verify') {
+  await smoke();
+  console.log(`${mode.toUpperCase()}_WORKER_VERIFY=PASS`);
+  process.exit(0);
+}
+
+if (action === 'upload') {
+  const before = await activeVersion();
+  const output = run(process.execPath, [WRANGLER, 'versions', 'upload', '--config', CONFIG_PATH], WORKER_DIR);
+  const matches = output.match(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/ig) || [];
+  const uploaded = matches.at(-1);
+  if (!uploaded) throw new Error(`${mode} Worker upload did not return a version id`);
+  const stillActive = await activeVersion();
+  if (stillActive !== before) throw new Error(`${mode} Worker upload changed live traffic before activation`);
+  console.log(`${mode.toUpperCase()}_WORKER_BEFORE=${before}`);
+  console.log(`${mode.toUpperCase()}_WORKER_UPLOADED_VERSION=${uploaded}`);
+  console.log(`${mode.toUpperCase()}_WORKER_UPLOAD_NO_TRAFFIC_CHANGE=PASS`);
+  process.exit(0);
+}
 
 const before = await activeVersion();
 const schedulesBefore = await readSchedules();
 let deployed = false;
 try {
-  run(process.execPath, [WRANGLER, 'deploy', '--config', CONFIG_PATH], WORKER_DIR);
+  const version = String(process.env.RELEASE_WORKER_VERSION || '').trim();
+  if (!/^[0-9a-f-]{36}$/i.test(version)) throw new Error('RELEASE_WORKER_VERSION is required for activate');
+  run(process.execPath, [WRANGLER, 'versions', 'deploy', `${version}@100%`, '--config', CONFIG_PATH, '--yes'], WORKER_DIR);
   deployed = true;
   await cfPut(`${apiBase}/workers/scripts/${target.worker}/schedules`, schedulesBefore);
   await sleep(2_500);
   await smoke();
   const after = await activeVersion();
-  if (after === before) throw new Error(`${mode} Worker active version did not change`);
+  if (after !== version || after === before) throw new Error(`${mode} Worker traffic did not activate the uploaded version`);
   console.log(`${mode.toUpperCase()}_WORKER_BEFORE=${before}`);
   console.log(`${mode.toUpperCase()}_WORKER_AFTER=${after}`);
   console.log(`${mode.toUpperCase()}_WORKER_SCHEDULES_PRESERVED=${JSON.stringify(schedulesBefore)}`);

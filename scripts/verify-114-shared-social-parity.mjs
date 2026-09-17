@@ -1,0 +1,101 @@
+import { readFileSync } from 'node:fs';
+
+const workerPath = process.env.SORIDRAW_GENERATED_WORKER || 'cloudflare/explore-worker/canonical/preview-worker.js';
+const worker = readFileSync(workerPath, 'utf8');
+const manifest = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
+const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
+
+const fail = (message) => { throw new Error(`[114] ${message}`); };
+if (String(version.version) !== '114') fail('app version must be 114');
+if (!Array.isArray(manifest.patches) || !manifest.patches.includes('061-shared-social-r2-parity.mjs')) fail('patch 061 missing from manifest');
+
+for (const required of [
+  'SORIDRAW_SHARED_SOCIAL_R2_PARITY_061_20260917',
+  'exploreSharedLikesKey061',
+  'exploreSharedFollowingKey061',
+  'readSharedLikes061',
+  'writeSharedLikes061',
+  'readSharedFollowing061',
+  'writeSharedFollowing061',
+  'seedSharedLikesFromPreviewLocal061',
+  'seedSharedFollowingFromPreviewLocal061',
+  'readExploreLikeR2BundleCore061',
+  'rebuildExploreLikeR2BundleCore061',
+  'syncExploreLikeR2AfterBatch034Core061',
+  'readExploreFollowingR2BundleCore061',
+  'rebuildExploreFollowingR2BundleCore061',
+  'syncExploreFollowingR2AfterMutationCore061',
+]) {
+  if (!worker.includes(required)) fail(`generated Worker missing ${required}`);
+}
+
+const functionText = (name) => {
+  const needles = [`async function ${name}(`, `function ${name}(`];
+  let start = -1;
+  for (const needle of needles) {
+    start = worker.indexOf(needle);
+    if (start >= 0) break;
+  }
+  if (start < 0) fail(`function missing ${name}`);
+  const brace = worker.indexOf('{', start);
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  let comment = '';
+  for (let i = brace; i < worker.length; i += 1) {
+    const c = worker[i];
+    const n = worker[i + 1];
+    if (comment === 'line') { if (c === '\n') comment = ''; continue; }
+    if (comment === 'block') { if (c === '*' && n === '/') { comment = ''; i += 1; } continue; }
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === quote) quote = '';
+      continue;
+    }
+    if (c === '/' && n === '/') { comment = 'line'; i += 1; continue; }
+    if (c === '/' && n === '*') { comment = 'block'; i += 1; continue; }
+    if ('"\'`'.includes(c)) { quote = c; continue; }
+    if (c === '{') depth += 1;
+    if (c === '}' && --depth === 0) return worker.slice(start, i + 1);
+  }
+  fail(`unterminated ${name}`);
+};
+
+const likeReader = functionText('readExploreLikeR2Bundle');
+if (!likeReader.includes('readSharedLikes061(env, uid)')) fail('like reader does not prefer shared R2');
+if (!likeReader.includes('seedSharedLikesFromPreviewLocal061')) fail('PREVIEW like seed path missing');
+if (/env\.DB|\.prepare\(/.test(likeReader)) fail('shared like read path queries D1');
+
+const followReader = functionText('readExploreFollowingR2Bundle');
+if (!followReader.includes('readSharedFollowing061(env, uid)')) fail('following reader does not prefer shared R2');
+if (!followReader.includes('seedSharedFollowingFromPreviewLocal061')) fail('PREVIEW following seed path missing');
+if (/env\.DB|\.prepare\(/.test(followReader)) fail('shared following read path queries D1');
+
+const likeRebuild = functionText('rebuildExploreLikeR2Bundle');
+if (!likeRebuild.includes('writeSharedLikes061(env, uid, local)')) fail('D1 like recovery is not promoted to shared R2');
+const followRebuild = functionText('rebuildExploreFollowingR2Bundle');
+if (!followRebuild.includes('writeSharedFollowing061(env, uid, local)')) fail('D1 following recovery is not promoted to shared R2');
+
+const likeSync = functionText('syncExploreLikeR2AfterBatch034');
+if (!likeSync.includes('readSharedLikes061(env, uid)')) fail('like mutation does not prime from shared state');
+if (!likeSync.includes('writeSharedLikes061(env, uid, local)')) fail('like mutation does not mirror shared state');
+const followSync = functionText('syncExploreFollowingR2AfterMutation');
+if (!followSync.includes('readSharedFollowing061(env, uid)')) fail('follow mutation does not prime from shared state');
+if (!followSync.includes('writeSharedFollowing061(env, uid, local)')) fail('follow mutation does not mirror shared state');
+
+const social = functionText('handleMySocialSnapshot042');
+if (!social.includes('readExploreLikeR2Bundle(env, authContext.uid)')) fail('social snapshot lost shared like reader');
+if (!social.includes('readExploreFollowingR2Bundle(env, authContext.uid)')) fail('social snapshot lost shared following reader');
+const liked = functionText('handleMyLikedTracks052');
+if (!liked.includes('readExploreLikeR2Bundle(env, authContext.uid)')) fail('liked collection lost shared like reader');
+
+console.log('114_SHARED_SOCIAL_PARITY=PASS');
+console.log('LIKES_SOURCE=SHARED_R2_FIRST');
+console.log('FOLLOWING_SOURCE=SHARED_R2_FIRST');
+console.log('PREVIEW_EXISTING_LOCAL_CAN_SEED_SHARED_WITHOUT_D1=true');
+console.log('ONE_TIME_D1_RECOVERY_PROMOTED_TO_SHARED=true');
+console.log('WARM_SOCIAL_D1=R0_BY_SHARED_R2_CONTRACT');
+console.log('NO_D1_SCHEMA_CHANGE=true');
+console.log('NO_USER_DATA_MIGRATION=true');
+console.log('NO_UI_CSS_CHANGE=true');

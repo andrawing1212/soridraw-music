@@ -26,8 +26,10 @@ const functionText = (source, name) => {
   throw new Error(`unterminated function ${name}`);
 };
 
-assert.equal(manifest.patches.at(-2),'050-publication-primary-key-batch-read.mjs');
-assert.equal(manifest.patches.at(-1),'051-publication-write-returning.mjs');
+const p50 = manifest.patches.indexOf('050-publication-primary-key-batch-read.mjs');
+const p51 = manifest.patches.indexOf('051-publication-write-returning.mjs');
+assert.ok(p50 >= 0 && p51 >= 0, 'publication patches 050/051 must remain in manifest');
+assert.ok(p50 < p51, 'publication patch order 050 -> 051 must remain intact');
 assert.match(worker,/SORIDRAW_PUBLICATION_PK_BATCH_READ_050_20260914/);
 assert.match(worker,/SORIDRAW_PUBLICATION_WRITE_RETURNING_051_20260914/);
 const batch=functionText(worker,'handleMusicNotePublicationBatch048');

@@ -20,6 +20,8 @@ for (const token of [
   'soridraw-release-bot', 'git push --dry-run', 'FIREBASE_SITE_SERVICE_ACCOUNT_READ_ONLY_ACCESS=PASS',
   'test-hosting-before', 'production-hosting-before', 'schema:2', 'controllerIdentity',
   'TEST_HOSTING_RELEASE', 'TEST_HOSTING_VERSION', 'Release Controller identity drift',
+  "['workflowSha256','workerRuntimeSha256','controllerVerifierSha256']", "printf '%s\\t%s'",
+  'hosting:clone "soridraw-test:@$test_hosting_version_id"',
   'test-branch-mutated', 'test-worker-mutated', 'test-hosting-mutated',
   'production-branch-mutated', 'production-worker-mutated', 'production-hosting-mutated',
   'release-worker-runtime.mjs "$stage" restore', 'soridraw-test-v${RELEASE_APP_VERSION}',
@@ -51,6 +53,8 @@ for (const token of [
 ordered(workflow, 'release-worker-runtime.mjs test upload', 'git push origin "$promoted:refs/heads/main"');
 ordered(workflow, 'release-worker-runtime.mjs production upload', 'git push origin "$promoted:refs/heads/production"');
 if (/test_then_production|test_only/.test(workflow)) throw new Error('legacy coupled release modes remain');
+if (workflow.includes('hosting:clone soridraw-test:live')) throw new Error('PRODUCTION Hosting clone must not consume mutable TEST live');
+if (/test\s+[^\n]*=\s*"\$TEST_HOSTING_RELEASE\\t\$TEST_HOSTING_VERSION"/.test(workflow)) throw new Error('Hosting identity comparison contains a literal \\t separator');
 if (/git\s+push[^\n]*(?:--force|-f\b)/i.test(workflow)) throw new Error('force push is forbidden');
 if (/d1\s+(?:migrations?\s+apply|execute)[^\n]*(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)/i.test(workflow)) throw new Error('release controller contains a D1 data mutation');
 

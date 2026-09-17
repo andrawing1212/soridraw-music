@@ -26,8 +26,18 @@ const start = entry.indexOf('async function handleFeedR2Snapshot108');
 const end = entry.indexOf('async function scheduleExploreLikeAggregate103', start);
 if (start < 0 || end < 0) fail('Worker snapshot handler range missing');
 const handler = entry.slice(start, end);
-if (!handler.includes('bucket.get(feedR2Key077(sort))')) fail('snapshot does not read R2 body');
-if (/env\.DB|baseWorker\.fetch|syncDerivedCache032/.test(handler)) fail('snapshot handler may touch D1/base Worker');
+const shared112 = entry.includes('SORIDRAW_SHARED_FEED_R2_READ_112_20260917');
+if (shared112) {
+  if (!handler.includes('readFeedObjectSource112(env, sort)')) fail('shared snapshot source helper missing');
+  const helperStart = entry.indexOf('async function readFeedObjectSource112');
+  const helperEnd = entry.indexOf('async function handleFeedRevisionHeadOnly077', helperStart);
+  const helper = helperStart >= 0 && helperEnd > helperStart ? entry.slice(helperStart, helperEnd) : '';
+  if (!helper.includes('env?.PROFILE_MEDIA') || !helper.includes('feedCacheBucket077(env)')) fail('shared/local R2 fallback contract missing');
+  if (/env\.DB|baseWorker\.fetch|syncDerivedCache032/.test(helper + handler)) fail('shared snapshot recovery may touch D1/base Worker');
+} else {
+  if (!handler.includes('bucket.get(feedR2Key077(sort))')) fail('snapshot does not read R2 body');
+  if (/env\.DB|baseWorker\.fetch|syncDerivedCache032/.test(handler)) fail('snapshot handler may touch D1/base Worker');
+}
 for (const zero of ["headers.set('X-SORIDRAW-D1-Read', '0')", "headers.set('X-SORIDRAW-D1-Write', '0')", "headers.set('X-SORIDRAW-D1-Read-Queries', '0')"]) {
   if (!entry.includes(zero)) fail(`missing zero-cost diagnostic: ${zero}`);
 }
@@ -35,7 +45,7 @@ for (const zero of ["headers.set('X-SORIDRAW-D1-Read', '0')", "headers.set('X-SO
 console.log('108_EXPLORE_FEED_CACHE_RECOVERY=PASS');
 console.log('OLD_SCHEMA_1_STALE_FEED=REJECTED_ONCE');
 console.log('SCHEMA_2_PLUS_WARM_CACHE=PERSISTENT');
-console.log('COLD_RECOVERY_SOURCE=R2_SNAPSHOT_ONLY');
+console.log(shared112 ? 'COLD_RECOVERY_SOURCE=SHARED_R2_WITH_LOCAL_FALLBACK' : 'COLD_RECOVERY_SOURCE=R2_SNAPSHOT_ONLY');
 console.log('COLD_RECOVERY_D1=R0_W0_BY_ROUTE_CONTRACT');
 console.log('APP_VERSION_COUPLING=NONE');
 console.log('REVISION_NOOP_FAST_PATH=PRESERVED');

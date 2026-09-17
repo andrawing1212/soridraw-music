@@ -1,7 +1,9 @@
-requested_at=2026-09-17T08:43:00Z
+requested_at=2026-09-17T09:38:00Z
 requested_by=user
-product_code_target=011d3321c7b39228817db9c076485a6155002257
-release_source_target=preview-115-063-after-worker-success
-release_purpose=115_shared_derived_cache_consistency_and_cost_fix
+product_code_target=35ef207407873f26b9dd7a6148f8d576b5936bfe
+release_source_target=preview-116-after-worker-7002605d
+release_purpose=116_explore_public_count_convergence
 hosting_only=true
 worker_redeploy=false
+no_user_data_migration=true
+preview_only=true

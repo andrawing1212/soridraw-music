@@ -38,8 +38,8 @@ const functionBlock = (source, signature, label) => {
   fail(`${label} unterminated`);
 };
 
-// Music Note warm-entry details are owned by the dedicated current 1030 verifier.
-// This cross-area audit only requires that the current protection layers remain present.
+// Music Note warm-entry protection. Check the current semantic contract instead of
+// pinning this audit to one historical helper/wrapper name.
 for (const marker of [
   'SORIDRAW_937_MUSIC_NOTE_REFRESH_VERSION_GATE',
   'SORIDRAW_935_RECENT_VERSION_SYNC_ONLY',
@@ -51,6 +51,31 @@ for (const marker of [
 ]) {
   if (!app.includes(marker)) fail(`App protection marker missing: ${marker}`);
 }
+for (const required of [
+  'musicNoteCacheNeedsBoundedVerification',
+  'cachedFavoriteCount < FAVORITES_PAGE_SIZE',
+  "markCacheDiagnostic('musicNote', 'CACHE', 0)",
+]) assert.ok(app.includes(required), `Music Note warm-cache guard missing: ${required}`);
+
+const musicVerifyStart = app.indexOf('const musicNoteCacheNeedsBoundedVerification =');
+if (musicVerifyStart < 0) fail('Music Note bounded verification condition missing');
+const musicVerifyEnd = app.indexOf(';', musicVerifyStart);
+if (musicVerifyEnd <= musicVerifyStart) fail('Music Note bounded verification condition unterminated');
+const musicVerifyCondition = app.slice(musicVerifyStart, musicVerifyEnd + 1);
+assert.ok(
+  musicVerifyCondition.includes('cachedFavoriteCount < FAVORITES_PAGE_SIZE'),
+  'Music Note small/partial cache no longer uses bounded verification',
+);
+for (const forbidden of [
+  'knownFavoriteCount > cachedCount',
+  'knownFavoriteCount > cachedFavoriteCount',
+]) {
+  assert.ok(!musicVerifyCondition.includes(forbidden), `Music Note page-sized cache would reread on reload: ${forbidden}`);
+}
+assert.ok(
+  !app.includes("scheduleListBundleWrite('musicNote', currentUser.uid, cachedFavs"),
+  'Music Note normal entry can republish cached list to server',
+);
 
 // Recent Songs warm state reads only when the root profile version advanced.
 const recent = functionBlock(app, 'const runRecentSongsServerSyncIfNeeded = () =>', 'Recent Songs version gate');
@@ -120,7 +145,7 @@ const librarySubscribe = functionBlock(library, 'const subscribeLibraryWorkspace
 assert.ok(librarySubscribe.includes('const session = startLibraryWorkspaceSession(uid)'), 'Library page no longer reuses module session');
 
 console.log('116_MUSIC_NOTE_LIBRARY_WARM_COST_AUDIT=PASS');
-console.log('MUSIC_NOTE_WARM_REENTRY=OWNED_BY_CURRENT_1030_VERIFIER');
+console.log('MUSIC_NOTE_WARM_REENTRY=PAGE_SIZED_CACHE_REUSED_AND_NORMAL_ENTRY_NO_SERVER_REPUBLISH');
 console.log('RECENT_SONGS_WARM_GETDOC_FROM_SERVER=0_BY_VERSION_GUARD');
 console.log('USER_STRUCTURES_WARM_GETDOC=0_UNLESS_NEWER_PROFILE_VERSION');
 console.log('LIBRARY_WARM_REENTRY_SERVER_READ=0_BY_DURABLE_AND_SESSION_GUARDS');

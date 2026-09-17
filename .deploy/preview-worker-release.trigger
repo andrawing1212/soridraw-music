@@ -1,7 +1,7 @@
-requested_at=2026-09-17T08:42:00Z
+requested_at=2026-09-17T09:36:00Z
 requested_by=user
-product_code_target=011d3321c7b39228817db9c076485a6155002257
-release_purpose=115_shared_derived_cache_consistency_plus_063_public_profile_warm_zero_read
+product_code_target=e5aa1e2d29132fa4e44498de95a256ee5123d371
+release_purpose=116_explore_public_count_convergence_and_shared_feed_catchup
 no_d1_migration=true
 no_user_data_migration=true
 preview_only=true

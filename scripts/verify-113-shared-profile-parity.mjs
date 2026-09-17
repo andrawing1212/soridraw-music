@@ -10,6 +10,39 @@ const fail = (message) => { throw new Error(`[113] ${message}`); };
 const appVersion = Number(version.version);
 if (!Number.isFinite(appVersion) || appVersion < 113) fail('app version is older than 113');
 
+const functionText = (name) => {
+  const needles = [`async function ${name}(`, `function ${name}(`];
+  let start = -1;
+  for (const needle of needles) {
+    start = worker.indexOf(needle);
+    if (start >= 0) break;
+  }
+  if (start < 0) fail(`function missing ${name}`);
+  const brace = worker.indexOf('{', start);
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  let comment = '';
+  for (let i = brace; i < worker.length; i += 1) {
+    const c = worker[i];
+    const n = worker[i + 1];
+    if (comment === 'line') { if (c === '\n') comment = ''; continue; }
+    if (comment === 'block') { if (c === '*' && n === '/') { comment = ''; i += 1; } continue; }
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === quote) quote = '';
+      continue;
+    }
+    if (c === '/' && n === '/') { comment = 'line'; i += 1; continue; }
+    if (c === '/' && n === '*') { comment = 'block'; i += 1; continue; }
+    if ('"\'`'.includes(c)) { quote = c; continue; }
+    if (c === '{') depth += 1;
+    if (c === '}' && --depth === 0) return worker.slice(start, i + 1);
+  }
+  fail(`unterminated ${name}`);
+};
+
 for (const required of [
   'SORIDRAW_SHARED_PROFILE_R2_PARITY_060_20260917',
   'exploreSharedProfileR2Key060',
@@ -40,8 +73,7 @@ if (!pureShared.includes('env?.PROFILE_MEDIA')) fail('shared profile store must 
 if (!pureShared.includes('readExploreR2Json')) fail('local derived profile source missing');
 if (/env\.DB|\.prepare\(/.test(pureShared)) fail('shared R2 helpers must not read D1');
 
-const materializedEnd = worker.indexOf('\n}', materializedStart);
-const materialized = materializedStart >= 0 ? worker.slice(materializedStart, materializedEnd > materializedStart ? materializedEnd + 2 : materializedStart + 2200) : '';
+const materialized = functionText('readMaterializedSharedProfile060');
 if (!materialized.includes('readPublicProfileFirstViewRow(env, normalized)')) fail('bounded materialized snapshot read missing');
 if (!materialized.includes('parseExploreProfileSnapshotRow(row)')) fail('materialized snapshot parser missing');
 if (!materialized.includes('writeExploreSharedProfile060(env, bundle)')) fail('materialized row is not promoted to shared R2');
@@ -49,9 +81,7 @@ for (const forbidden of ['materializePublicProfileFirstView', 'buildExploreFeedR
   if (materialized.includes(forbidden)) fail(`materialized recovery uses expensive fallback: ${forbidden}`);
 }
 
-const wrapperStart = worker.indexOf('async function handlePublicProfileFirstViewWithEdgeCache(request');
-const wrapperEnd = worker.indexOf('\n}', wrapperStart);
-const wrapper = wrapperStart >= 0 ? worker.slice(wrapperStart, wrapperEnd > wrapperStart ? wrapperEnd + 2 : wrapperStart + 4200) : '';
+const wrapper = functionText('handlePublicProfileFirstViewWithEdgeCache');
 if (!wrapper.includes('cache.match(negativeKey)')) fail('negative edge guard missing before shared R2');
 if (!wrapper.includes('cache.match(positiveKey)')) fail('positive edge guard missing before shared R2');
 if (!wrapper.includes('readExploreSharedProfile060(env, profileRef)')) fail('shared R2 profile read missing');
@@ -60,6 +90,22 @@ if (!wrapper.includes('readMaterializedSharedProfile060(env, profileRef)')) fail
 if (!wrapper.includes('handlePublicProfileFirstViewWithEdgeCacheCore060')) fail('guarded compatibility fallback missing');
 if (/env\.DB|\.prepare\(/.test(wrapper)) fail('outer profile wrapper must not run ad-hoc D1 queries');
 
+const findSharedProfileMutationLayer = (mutation) => {
+  let name = mutation;
+  const seen = new Set();
+  for (let depth = 0; depth < 10; depth += 1) {
+    if (seen.has(name)) fail(`mutation wrapper cycle: ${mutation} -> ${name}`);
+    seen.add(name);
+    const body = functionText(name);
+    if (body.includes('primeExploreLocalProfile060') && body.includes('mirrorExploreLocalProfile060')) return body;
+    const corePattern = new RegExp(`${mutation}Core\\d+`, 'g');
+    const next = [...body.matchAll(corePattern)].map((match) => match[0]).find((candidate) => !seen.has(candidate));
+    if (!next) break;
+    name = next;
+  }
+  fail(`${mutation} shared-profile mutation layer not reachable`);
+};
+
 for (const mutation of [
   'patchExploreVisibleProfiles056',
   'patchExploreProfileR2Counters020',
@@ -67,9 +113,7 @@ for (const mutation of [
   'patchExploreProfileR2Mutation019',
   'refreshPublicProfileFirstViewProfile',
 ]) {
-  const at = worker.indexOf(`async function ${mutation}(`);
-  if (at < 0) fail(`mutation wrapper missing ${mutation}`);
-  const body = worker.slice(at, at + 2400);
+  const body = findSharedProfileMutationLayer(mutation);
   if (!body.includes('primeExploreLocalProfile060')) fail(`${mutation} does not prime from shared profile`);
   if (!body.includes('mirrorExploreLocalProfile060')) fail(`${mutation} does not mirror targeted profile back`);
 }

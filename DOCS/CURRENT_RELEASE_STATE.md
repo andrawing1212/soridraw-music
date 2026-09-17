@@ -1,5 +1,12 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0P. Release Controller post-merge workflow validation 복구 PR 준비
+
+- PR #75는 `preview` merge commit `c4faf8f417b0b142b3e67c87697db7c7e6e4f9aa`에 포함됐지만, merge push의 Actions run `35257875949`는 workflow validation 단계에서 job 생성 전 실패했다.
+- 원인은 job-level `env`에서 runner가 배정된 뒤에만 사용할 수 있는 `${{ runner.temp }}` context를 평가한 것이다. `RELEASE_STATUS_FILE`을 첫 controller step에서 `$RUNNER_TEMP`로 설정하고 이후 step용 `$GITHUB_ENV`에 전달하도록 최소 수정한다.
+- Release Controller의 승인, source lock, read-only preflight, TEST/PRODUCTION 격리, manifest identity, component mutation/rollback 불변조건과 제품 코드는 변경하지 않는다.
+- 이번 복구 작업에서는 TEST/PRODUCTION 배포, Worker traffic/Hosting 변경, D1 write/migration/seed/backfill/delete, Functions/Rules 배포를 수행하지 않는다.
+
 ## 0O. Release Controller final static-audit blockers — 수정 완료/미배포
 
 - 실행 중인 controller checkout인 `GITHUB_WORKSPACE`를 기준으로 controller identity를 생성·비교하며, 과거 release source worktree의 파일로 drift 검사를 우회할 수 없게 했다.

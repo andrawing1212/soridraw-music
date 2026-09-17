@@ -1,7 +1,7 @@
-requested_at=2026-09-17T07:56:00Z
+requested_at=2026-09-17T07:59:00Z
 requested_by=user
-product_code_target=d0691a443795e9ba3a8e87d77fbe58a078f66b2a
-release_purpose=115_shared_derived_cache_consistency_and_cost_fix_preflight_aligned
+product_code_target=0aa03eeeeb8d384106f7defe77e7d8fdc7718180
+release_purpose=115_shared_derived_cache_consistency_and_cost_fix_preflight_shared_r2_modeled
 no_d1_migration=true
 no_user_data_migration=true
 preview_only=true

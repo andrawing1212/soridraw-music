@@ -1,6 +1,6 @@
 # SORIDRAW NEXT CODEX TASK
 
-최종 갱신: 2026-09-17 KST — Release Controller 프로그램화 작업 시작
+최종 갱신: 2026-09-17 KST — Release Controller 구현 후 live read-only 감사 대기
 
 ## 현재 기준
 
@@ -25,6 +25,8 @@
 - `scripts/verify-release-promotion-system.mjs`
 
 ## 이번 작업 목표
+
+구현은 완료되었다. 다음 단계는 코드를 수정하지 않고 GitHub Actions에서 Controller `preflight_only`를 1회 실행해 배포 0, ref 0, Hosting/Worker traffic 0 변경을 독립 감사하는 것이다. 이 감사와 Work 검증 전 실제 TEST 승격은 금지한다.
 
 배포를 매번 사람이 조합하는 작업이 아니라 **수정하지 않고 계속 재사용하는 하나의 고정 Release Controller**로 만든다.
 

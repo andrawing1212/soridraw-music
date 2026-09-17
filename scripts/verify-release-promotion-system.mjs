@@ -15,21 +15,22 @@ const forbidden = (text, pattern, label) => {
 };
 
 for (const token of [
-  '.deploy/release-promotion.trigger',
   'workflow_dispatch:',
+  'preflight_only',
+  'manifest_tag:',
+  'TEST_VERIFIED',
+  'hosting:clone',
   'target_sha:',
-  'test_then_production',
   'DEPLOY_PRODUCTION',
   'git commit-tree',
   'refs/heads/main',
   'refs/heads/production',
   'firebase.hosting-test.json',
-  'firebase.hosting-production.json',
-  'release-worker-runtime.mjs test deploy',
-  'release-worker-runtime.mjs production deploy',
-  'Verify TEST exact release',
-  'Verify PRODUCTION exact release',
-  'Rollback failed release safely',
+  'release-worker-runtime.mjs test upload',
+  'release-worker-runtime.mjs production upload',
+  'TEST_VERIFY',
+  'PROD_VERIFY',
+  'Rollback branch and Worker traffic after deployment failure',
 ]) required(workflow, token, 'promotion workflow');
 
 forbidden(workflow, /git\s+push[^\n]*(?:--force|-f\b)/i, 'force push');
@@ -41,7 +42,7 @@ for (const token of [
   'RATE_DB',
   'PROFILE_MEDIA',
   'EXPLORE_CACHE',
-  "['dry-run', 'deploy']",
+  "['dry-run', 'upload', 'activate', 'verify']",
   'keep_vars: true',
   'SORIDRAW_RELEASE_ENVIRONMENT_PARITY_INVARIANT_117_20260917',
   "const CANONICAL_D1_NAME = 'soridraw-explore-db'",
@@ -63,6 +64,8 @@ required(workerRuntime, 'sameProjection(profileProjection(targetProfile.payload)
 required(workerRuntime, 'PARITY_MAX_ATTEMPTS = 13', 'bounded parity attempts');
 required(workerRuntime, 'PARITY_RETRY_MS = 5_000', 'bounded parity retry window');
 required(workerRuntime, 'automatic ${mode} rollback after release smoke failure', 'Worker rollback on parity failure');
+required(workerRuntime, 'WORKER_UPLOAD_NO_TRAFFIC_CHANGE=PASS', 'Worker version upload before traffic');
+required(workerRuntime, 'Worker bundle identity mismatch', 'Worker bundle identity verification');
 
 const releaseHosts = [
   'preview.soridraw.com',

@@ -7,7 +7,8 @@ const manifest = JSON.parse(readFileSync('cloudflare/explore-worker/release-patc
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 
 const fail = (message) => { throw new Error(`[113] ${message}`); };
-if (String(version.version) !== '113') fail('app version must be 113');
+const appVersion = Number(version.version);
+if (!Number.isFinite(appVersion) || appVersion < 113) fail('app version is older than 113');
 
 for (const required of [
   'SORIDRAW_SHARED_PROFILE_R2_PARITY_060_20260917',

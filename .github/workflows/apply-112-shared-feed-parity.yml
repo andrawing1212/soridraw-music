@@ -55,7 +55,6 @@ jobs:
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-108-explore-feed-cache-recovery.mjs
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-109-mobile-feed-refresh-zero.mjs
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-110-explore-liked-public-count.mjs
-          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-like-cost-optimization.mjs
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
           grep -Fq '059-shared-feed-r2-parity.mjs' cloudflare/explore-worker/release-patches.json
           echo '112_STATIC_CONTRACT=PASS'

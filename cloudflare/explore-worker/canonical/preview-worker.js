@@ -20981,7 +20981,7 @@ async function reconcileExploreSharedFeed056(env, sort) {
   return { sort: normalizedSort, changed: Boolean(result.changed), changedItems };
 }
 
-async function patchExploreVisibleProfiles056(env, changedItems) {
+async function patchExploreVisibleProfiles056Core060(env, changedItems) {
   const grouped = new Map();
   for (const row of changedItems || []) {
     const ownerUid = String(row?.ownerUid || '').trim();
@@ -21029,6 +21029,14 @@ async function patchExploreVisibleProfiles056(env, changedItems) {
     }
   }
   return updatedProfiles;
+}
+
+async function patchExploreVisibleProfiles056(env, changedItems) {
+  const owners = [...new Set((changedItems || []).map((row) => String(row?.ownerUid || '').trim()).filter(Boolean))];
+  for (const uid of owners) await primeExploreLocalProfile060(env, uid).catch(() => false);
+  const result = await patchExploreVisibleProfiles056Core060(env, changedItems);
+  for (const uid of owners) await mirrorExploreLocalProfile060(env, uid).catch(() => false);
+  return result;
 }
 
 async function reconcileExplorePublicLikes056(env) {
@@ -23874,7 +23882,94 @@ async function cacheExploreProfileNotFound057(request, profileRef, response) {
   await cache.put(key, stored);
 }
 
-async function handlePublicProfileFirstViewWithEdgeCache(request, profileRef, env, cors) {
+// SORIDRAW_SHARED_PROFILE_R2_PARITY_060_20260917
+const EXPLORE_SHARED_PROFILE_VERSION_060 = 113;
+const exploreSharedProfileR2Key060 = (uid) => `internal/explore/shared-profile-v113/${encodeURIComponent(String(uid || '').trim())}.json`;
+const exploreSharedProfileAliasR2Key060 = (handle) => `internal/explore/shared-profile-alias-v113/${encodeURIComponent(String(handle || '').trim().replace(/^@+/, '').toLowerCase())}.json`;
+
+function exploreSharedEnvironment060(env) {
+  return String(env?.SORIDRAW_ENVIRONMENT || env?.ENV_NAME || '').trim().toLowerCase();
+}
+
+async function readSharedProfileJson060(env, key) {
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!bucket) return null;
+  const object = await bucket.get(key);
+  if (!object) return null;
+  try { return JSON.parse(await object.text()); } catch { return null; }
+}
+
+async function readExploreSharedProfile060(env, profileRef) {
+  const normalized = String(profileRef || '').trim().replace(/^@+/, '');
+  if (!normalized) return null;
+  const alias = await readSharedProfileJson060(env, exploreSharedProfileAliasR2Key060(normalized));
+  const aliasUid = String(alias?.uid || '').trim();
+  if (aliasUid) {
+    const byAlias = await readSharedProfileJson060(env, exploreSharedProfileR2Key060(aliasUid));
+    if (validExploreProfileR2Bundle020(byAlias)) return byAlias;
+  }
+  const direct = await readSharedProfileJson060(env, exploreSharedProfileR2Key060(normalized));
+  return validExploreProfileR2Bundle020(direct) ? direct : null;
+}
+
+async function writeExploreSharedProfile060(env, bundle) {
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!bucket || !validExploreProfileR2Bundle020(bundle)) return false;
+  const uid = String(bundle.uid || bundle.body?.data?.profile?.uid || '').trim();
+  if (!uid) return false;
+  const handle = String(bundle.handle || bundle.body?.data?.profile?.handle || '').trim().replace(/^@+/, '');
+  const now = Date.now();
+  await bucket.put(exploreSharedProfileR2Key060(uid), JSON.stringify(bundle), {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    customMetadata: { soridrawSharedProfile: '113', mirroredAt: String(now) },
+  });
+  if (handle) {
+    await bucket.put(exploreSharedProfileAliasR2Key060(handle), JSON.stringify({ schemaVersion: 1, uid, handle, updatedAt: now }), {
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      customMetadata: { soridrawSharedProfileAlias: '113', mirroredAt: String(now) },
+    });
+  }
+  return true;
+}
+
+async function mirrorExploreLocalProfile060(env, uid) {
+  const normalized = String(uid || '').trim();
+  if (!normalized) return false;
+  const bundle = await readExploreR2Json(env, exploreProfileR2Key(normalized));
+  return await writeExploreSharedProfile060(env, bundle);
+}
+
+async function primeExploreLocalProfile060(env, uid) {
+  const normalized = String(uid || '').trim();
+  if (!normalized) return false;
+  const shared = await readExploreSharedProfile060(env, normalized);
+  if (!validExploreProfileR2Bundle020(shared)) return false;
+  await writeExploreR2Json(env, exploreProfileR2Key(normalized), shared);
+  await writeExploreProfileAlias020(env, shared.handle || shared.body?.data?.profile?.handle, normalized);
+  return true;
+}
+
+async function seedSharedProfileFromPreviewLocal060(env, profileRef) {
+  if (exploreSharedEnvironment060(env) !== 'preview') return null;
+  const local = await readExploreProfileCanonicalR2Bundle020(env, profileRef);
+  if (!validExploreProfileR2Bundle020(local)) return null;
+  await writeExploreSharedProfile060(env, local);
+  return local;
+}
+
+async function readMaterializedSharedProfile060(env, profileRef) {
+  const normalized = String(profileRef || '').trim().replace(/^@+/, '');
+  if (!normalized || !env?.DB) return null;
+  const row = await readPublicProfileFirstViewRow(env, normalized);
+  const bundle = parseExploreProfileSnapshotRow(row);
+  if (!validExploreProfileR2Bundle020(bundle)) return null;
+  await writeExploreSharedProfile060(env, bundle);
+  await writeExploreR2Json(env, exploreProfileR2Key(bundle.uid), bundle);
+  await writeExploreProfileAlias020(env, bundle.handle || bundle.body?.data?.profile?.handle, bundle.uid);
+  return bundle;
+}
+
+async function handlePublicProfileFirstViewWithEdgeCacheCore060(request, profileRef, env, cors) {
   const cache = caches.default;
   const negativeKey = getExploreProfileNegativeCacheKey057(request, profileRef);
   const negative = await cache.match(negativeKey);
@@ -23904,6 +23999,42 @@ async function handlePublicProfileFirstViewWithEdgeCache(request, profileRef, en
     }
     return withExploreProfileProtectionHeaders057(response, 'MISS', false);
   }
+  return response;
+}
+
+async function handlePublicProfileFirstViewWithEdgeCache(request, profileRef, env, cors) {
+  const cache = caches.default;
+  try {
+    const negativeKey = getExploreProfileNegativeCacheKey057(request, profileRef);
+    if (await cache.match(negativeKey)) return await handlePublicProfileFirstViewWithEdgeCacheCore060(request, profileRef, env, cors);
+  } catch {}
+  try {
+    const origin = request.headers.get('Origin') || '';
+    const positiveKey = getPublicProfileFirstViewEdgeCacheKey(request.url, profileRef, origin);
+    if (await cache.match(positiveKey)) return await handlePublicProfileFirstViewWithEdgeCacheCore060(request, profileRef, env, cors);
+  } catch {}
+
+  let bundle = await readExploreSharedProfile060(env, profileRef);
+  if (!bundle) bundle = await seedSharedProfileFromPreviewLocal060(env, profileRef);
+  if (!bundle) bundle = await readMaterializedSharedProfile060(env, profileRef);
+  if (!validExploreProfileR2Bundle020(bundle)) {
+    return await handlePublicProfileFirstViewWithEdgeCacheCore060(request, profileRef, env, cors);
+  }
+
+  const requestUrl = new URL(request.url);
+  const knownRevision = String(requestUrl.searchParams.get('knownRevision') || '').trim();
+  const revision = String(bundle.revision || bundle.body?.data?.revision || '').trim();
+  if (knownRevision && revision && knownRevision === revision) {
+    return makePublicProfileFirstViewNotModified(null, revision, 'SHARED-R2-113', 'NOT_MODIFIED_SHARED_R2_113', cors);
+  }
+  const origin = request.headers.get('Origin') || '';
+  const key = getPublicProfileFirstViewEdgeCacheKey(request.url, profileRef, origin);
+  const response = withPublicProfileRevisionHeaders(
+    withPublicProfileFirstViewEdgeHeader(json(bundle.body, 200, cors), 'SHARED-R2-113'),
+    revision,
+    knownRevision ? 'UPDATED_SHARED_R2_113' : 'FULL_SHARED_R2_113'
+  );
+  try { await cache.put(key, response.clone()); } catch {}
   return response;
 }
 
@@ -23997,8 +24128,17 @@ __name222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
 __name2222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
 __name22222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
 __name222222(refreshExploreFeedR2Bundles, "refreshExploreFeedR2Bundles");
-async function patchExploreProfileR2Counters020(env, uid, patch) {
+async function patchExploreProfileR2Counters020Core060(env, uid, patch) {
   return syncDerivedCache032(env, "latest", uid);
+}
+
+async function patchExploreProfileR2Counters020(...args) {
+  const env = args[0];
+  const uid = String(args[1] || '').trim();
+  if (uid) await primeExploreLocalProfile060(env, uid).catch(() => false);
+  const result = await patchExploreProfileR2Counters020Core060(...args);
+  if (uid) await mirrorExploreLocalProfile060(env, uid).catch(() => false);
+  return result;
 }
 __name(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name2(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
@@ -24007,8 +24147,17 @@ __name222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name2222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name22222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
 __name222222(patchExploreProfileR2Counters020, "patchExploreProfileR2Counters020");
-async function patchExploreProfileR2Like020(env, ownerUid, trackId, likeCount) {
+async function patchExploreProfileR2Like020Core060(env, ownerUid, trackId, likeCount) {
   return { deferred: true, ownerUid: String(ownerUid || ""), trackId: String(trackId || ""), likeCount: Math.max(0, Number(likeCount || 0)) };
+}
+
+async function patchExploreProfileR2Like020(...args) {
+  const env = args[0];
+  const uid = String(args[1] || '').trim();
+  if (uid) await primeExploreLocalProfile060(env, uid).catch(() => false);
+  const result = await patchExploreProfileR2Like020Core060(...args);
+  if (uid) await mirrorExploreLocalProfile060(env, uid).catch(() => false);
+  return result;
 }
 __name(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 __name2(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
@@ -24017,8 +24166,17 @@ __name222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 __name2222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 __name22222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
 __name222222(patchExploreProfileR2Like020, "patchExploreProfileR2Like020");
-async function patchExploreProfileR2Mutation019(env, uid, change) {
+async function patchExploreProfileR2Mutation019Core060(env, uid, change) {
   return syncDerivedCache032(env, "latest", uid);
+}
+
+async function patchExploreProfileR2Mutation019(...args) {
+  const env = args[0];
+  const uid = String(args[1] || '').trim();
+  if (uid) await primeExploreLocalProfile060(env, uid).catch(() => false);
+  const result = await patchExploreProfileR2Mutation019Core060(...args);
+  if (uid) await mirrorExploreLocalProfile060(env, uid).catch(() => false);
+  return result;
 }
 __name(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 __name2(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
@@ -24027,9 +24185,18 @@ __name222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 __name2222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 __name22222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
 __name222222(patchExploreProfileR2Mutation019, "patchExploreProfileR2Mutation019");
-async function refreshPublicProfileFirstViewProfile(env, uid) {
+async function refreshPublicProfileFirstViewProfileCore060(env, uid) {
   const bundle = await syncDerivedCache032(env, "latest", uid);
   return [uid, bundle?.handle].filter(Boolean);
+}
+
+async function refreshPublicProfileFirstViewProfile(...args) {
+  const env = args[0];
+  const uid = String(args[1] || '').trim();
+  if (uid) await primeExploreLocalProfile060(env, uid).catch(() => false);
+  const result = await refreshPublicProfileFirstViewProfileCore060(...args);
+  if (uid) await mirrorExploreLocalProfile060(env, uid).catch(() => false);
+  return result;
 }
 __name(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");
 __name2(refreshPublicProfileFirstViewProfile, "refreshPublicProfileFirstViewProfile");

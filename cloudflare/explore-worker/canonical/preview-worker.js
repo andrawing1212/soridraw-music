@@ -19339,13 +19339,20 @@ async function syncExploreFeedR2Publication043Core046(...args) {
   }
 }
 
-async function syncExploreFeedR2Publication043(...args) {
+async function syncExploreFeedR2Publication043Core062(...args) {
   const result = await syncExploreFeedR2Publication043Core046(...args);
   if (result?.ok === false || result?.repairNeeded) {
     try { await deleteExploreFeedR2Bundles(args[0]); } catch (error) {
       console.warn('[SORIDRAW 046] feed R2 repair marker failed:', String(error?.message || error || 'unknown'));
     }
   }
+  return result;
+}
+
+async function syncExploreFeedR2Publication043(env, incomingItem) {
+  const result = await syncExploreFeedR2Publication043Core062(env, incomingItem);
+  try { await writeSharedTrackCard062(env, incomingItem); }
+  catch (error) { console.warn('[SORIDRAW 062] shared track-card publish deferred:', String(error?.message || error || 'unknown')); }
   return result;
 }
 
@@ -19377,13 +19384,20 @@ async function syncExploreFeedR2Private043Core046(...args) {
   }
 }
 
-async function syncExploreFeedR2Private043(...args) {
+async function syncExploreFeedR2Private043Core062(...args) {
   const result = await syncExploreFeedR2Private043Core046(...args);
   if (result?.ok === false || result?.repairNeeded) {
     try { await deleteExploreFeedR2Bundles(args[0]); } catch (error) {
       console.warn('[SORIDRAW 046] feed R2 repair marker failed:', String(error?.message || error || 'unknown'));
     }
   }
+  return result;
+}
+
+async function syncExploreFeedR2Private043(env, trackId) {
+  const result = await syncExploreFeedR2Private043Core062(env, trackId);
+  try { await deleteSharedTrackCard062(env, trackId); }
+  catch (error) { console.warn('[SORIDRAW 062] shared track-card private delete deferred:', String(error?.message || error || 'unknown')); }
   return result;
 }
 
@@ -19421,13 +19435,20 @@ async function syncExploreFeedR2OptionPatch043Core046(...args) {
   }
 }
 
-async function syncExploreFeedR2OptionPatch043(...args) {
+async function syncExploreFeedR2OptionPatch043Core062(...args) {
   const result = await syncExploreFeedR2OptionPatch043Core046(...args);
   if (result?.ok === false || result?.repairNeeded) {
     try { await deleteExploreFeedR2Bundles(args[0]); } catch (error) {
       console.warn('[SORIDRAW 046] feed R2 repair marker failed:', String(error?.message || error || 'unknown'));
     }
   }
+  return result;
+}
+
+async function syncExploreFeedR2OptionPatch043(env, trackId, patch) {
+  const result = await syncExploreFeedR2OptionPatch043Core062(env, trackId, patch);
+  try { await patchSharedTrackCard062(env, trackId, patch); }
+  catch (error) { console.warn('[SORIDRAW 062] shared track-card option patch deferred:', String(error?.message || error || 'unknown')); }
   return result;
 }
 
@@ -21172,11 +21193,22 @@ async function patchExploreVisibleProfiles056Core060(env, changedItems) {
   return updatedProfiles;
 }
 
-async function patchExploreVisibleProfiles056(env, changedItems) {
+async function patchExploreVisibleProfiles056Core062(env, changedItems) {
   const owners = [...new Set((changedItems || []).map((row) => String(row?.ownerUid || '').trim()).filter(Boolean))];
   for (const uid of owners) await primeExploreLocalProfile060(env, uid).catch(() => false);
   const result = await patchExploreVisibleProfiles056Core060(env, changedItems);
   for (const uid of owners) await mirrorExploreLocalProfile060(env, uid).catch(() => false);
+  return result;
+}
+
+async function patchExploreVisibleProfiles056(env, changedItems) {
+  const result = await patchExploreVisibleProfiles056Core062(env, changedItems);
+  for (const row of changedItems || []) {
+    const trackId = String(row?.trackId || '').trim();
+    if (!trackId) continue;
+    try { await patchSharedTrackCard062(env, trackId, { likeCount: Math.max(0, Number(row?.likeCount || 0)) }); }
+    catch (error) { console.warn('[SORIDRAW 062] shared track-card like patch deferred:', trackId, String(error?.message || error || 'unknown')); }
+  }
   return result;
 }
 
@@ -21609,7 +21641,152 @@ async function processExploreLikeUserQueueWave075(env, cutoff, now) {
 }
 
 // SORIDRAW_LIKED_TRACK_PUBLIC_PROFILE_JOIN_056_20260915
-async function handleMyLikedTracks052(request, env, cors) {
+// SORIDRAW_SHARED_TRACK_CARD_R2_062_20260917
+const EXPLORE_SHARED_TRACK_CARD_SCHEMA_062 = 1;
+const EXPLORE_SHARED_TRACK_CARD_LIMIT_062 = 200;
+const exploreSharedTrackCardKey062 = (trackId) => `internal/explore/shared-track-card-v115/${encodeURIComponent(String(trackId || '').trim())}.json`;
+
+function normalizeSharedTrackCard062(item) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+  const id = String(item.id || item.trackId || '').trim();
+  if (!id) return null;
+  const likeCount = Math.max(0, Number(item.likeCount ?? item.like_count ?? item.stats?.likeCount ?? 0));
+  const publishedAt = Math.max(0, Number(item.publishedAt ?? item.published_at ?? 0));
+  return {
+    ...item,
+    id,
+    ownerUid: String(item.ownerUid || item.owner_uid || '').trim(),
+    ownerNickname: String(item.ownerNickname || item.owner_nickname || '').trim(),
+    ownerAvatarUrl: String(item.ownerAvatarUrl || item.owner_avatar_url || '').trim(),
+    title: String(item.title || '').trim(),
+    coverUrl: String(item.coverUrl || item.cover_url || '').trim(),
+    sunoUrlPrimary: String(item.sunoUrlPrimary || item.suno_url_primary || '').trim(),
+    openUrl: String(item.openUrl || item.sunoUrlPrimary || item.suno_url_primary || item.suno_url_secondary || '').trim(),
+    likeCount,
+    publishedAt,
+    profilePinned: Boolean(item.profilePinned ?? item.profile_pinned),
+    ...(item.stats && typeof item.stats === 'object' ? { stats: { ...item.stats, likeCount } } : {}),
+  };
+}
+
+async function readSharedTrackCard062(env, trackId) {
+  const normalizedId = String(trackId || '').trim();
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!normalizedId || !bucket) return null;
+  try {
+    const object = await bucket.get(exploreSharedTrackCardKey062(normalizedId));
+    if (!object) return null;
+    const bundle = JSON.parse(await object.text());
+    if (Number(bundle?.schemaVersion || 0) !== EXPLORE_SHARED_TRACK_CARD_SCHEMA_062) return null;
+    const card = normalizeSharedTrackCard062(bundle?.card);
+    return card?.id === normalizedId ? card : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeSharedTrackCard062(env, item) {
+  const card = normalizeSharedTrackCard062(item);
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!card?.id || !bucket) return false;
+  const now = Date.now();
+  await bucket.put(exploreSharedTrackCardKey062(card.id), JSON.stringify({
+    schemaVersion: EXPLORE_SHARED_TRACK_CARD_SCHEMA_062,
+    trackId: card.id,
+    updatedAt: now,
+    card,
+  }), {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    customMetadata: { soridrawSharedTrackCard: '115', updatedAt: String(now) },
+  });
+  return true;
+}
+
+async function deleteSharedTrackCard062(env, trackId) {
+  const normalizedId = String(trackId || '').trim();
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!normalizedId || !bucket) return false;
+  await bucket.delete(exploreSharedTrackCardKey062(normalizedId));
+  return true;
+}
+
+async function patchSharedTrackCard062(env, trackId, patch) {
+  const normalizedId = String(trackId || '').trim();
+  if (!normalizedId) return false;
+  const current = await readSharedTrackCard062(env, normalizedId);
+  if (!current) return false;
+  const nextPatch = patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {};
+  const next = { ...current, ...nextPatch, id: normalizedId };
+  if (Object.prototype.hasOwnProperty.call(nextPatch, 'likeCount')) {
+    const likeCount = Math.max(0, Number(nextPatch.likeCount || 0));
+    next.likeCount = likeCount;
+    if (next.stats && typeof next.stats === 'object') next.stats = { ...next.stats, likeCount };
+  }
+  return await writeSharedTrackCard062(env, next);
+}
+
+async function readSharedFeedCards062(env, trackIds) {
+  const wanted = new Set((trackIds || []).map((value) => String(value || '').trim()).filter(Boolean));
+  const found = new Map();
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!wanted.size || !bucket) return found;
+  for (const sort of ['latest', 'popular']) {
+    let object = null;
+    try { object = await bucket.get(exploreSharedFeedR2Key059(sort)); } catch {}
+    if (!object) continue;
+    let bundle = null;
+    try { bundle = JSON.parse(await object.text()); } catch { bundle = null; }
+    const items = Array.isArray(bundle?.payload?.data?.items) ? bundle.payload.data.items : [];
+    for (const item of items) {
+      const card = normalizeSharedTrackCard062(item);
+      if (!card?.id || !wanted.has(card.id) || found.has(card.id)) continue;
+      found.set(card.id, card);
+    }
+    if (found.size >= wanted.size) break;
+  }
+  for (const card of found.values()) {
+    try { await writeSharedTrackCard062(env, card); } catch {}
+  }
+  return found;
+}
+
+async function enrichSharedTrackCards062(env, cards) {
+  const rows = Array.isArray(cards) ? cards : [];
+  const profileByUid = new Map();
+  for (const card of rows) {
+    const uid = String(card?.ownerUid || '').trim();
+    if (!uid || profileByUid.has(uid)) continue;
+    let profile = null;
+    try {
+      const bundle = await readExploreSharedProfile060(env, uid);
+      profile = bundle?.body?.data?.profile || null;
+    } catch {}
+    profileByUid.set(uid, profile);
+  }
+  return rows.map((card) => {
+    const uid = String(card?.ownerUid || '').trim();
+    const profile = profileByUid.get(uid);
+    if (!profile) return card;
+    return {
+      ...card,
+      ownerNickname: String(profile.nickname || profile.displayName || card.ownerNickname || '').trim(),
+      ownerAvatarUrl: String(profile.avatarUrl || profile.avatar_url || card.ownerAvatarUrl || '').trim(),
+    };
+  });
+}
+
+async function promoteLikedTrackResponse062(env, response) {
+  if (!(response instanceof Response) || !response.ok) return response;
+  let payload = null;
+  try { payload = await response.clone().json(); } catch { return response; }
+  const items = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+  for (const item of items) {
+    try { await writeSharedTrackCard062(env, item); } catch {}
+  }
+  return response;
+}
+
+async function handleMyLikedTracks052Core062(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   let body = null;
   try { body = await request.json(); } catch { throwApi('INVALID_BODY', '좋아요 곡 요청이 올바르지 않습니다.', 400); }
@@ -21672,6 +21849,73 @@ async function handleMyLikedTracks052(request, env, cors) {
     profilePinned: Boolean(row.profile_pinned),
   })).filter((item) => item.id);
   const returned = new Set(items.map((item) => item.id));
+  const unavailableTrackIds = trackIds.filter((trackId) => !returned.has(trackId));
+  return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items, unavailableTrackIds } }, 200, cors);
+}
+
+async function handleMyLikedTracks052(request, env, cors) {
+  const fallbackRequest = request.clone();
+  const bodyRequest = request.clone();
+  const authContext = await requireExploreAuth(request);
+  let body = null;
+  try { body = await bodyRequest.json(); } catch { throwApi('INVALID_BODY', '좋아요 곡 요청이 올바르지 않습니다.', 400); }
+  const raw = Array.isArray(body?.trackIds) ? body.trackIds : [];
+  if (raw.length > EXPLORE_SHARED_TRACK_CARD_LIMIT_062) throwApi('TOO_MANY_TRACKS', '한 번에 확인할 수 있는 좋아요 곡 수를 초과했습니다.', 400);
+  const trackIds = [...new Set(raw.map((value) => String(value || '').trim()).filter(Boolean))].slice(0, EXPLORE_SHARED_TRACK_CARD_LIMIT_062);
+  if (trackIds.some((trackId) => trackId.length > 512)) throwApi('INVALID_TRACK_ID', '곡 ID가 올바르지 않습니다.', 400);
+
+  const likedIds = await readExploreLikeR2Bundle(env, authContext.uid);
+  if (!likedIds) {
+    const response = await handleMyLikedTracks052Core062(fallbackRequest, env, cors);
+    return await promoteLikedTrackResponse062(env, response);
+  }
+  const canonicalLikedTrackIds = [...likedIds];
+  if (!trackIds.length) {
+    return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items: [], unavailableTrackIds: [] } }, 200, cors);
+  }
+
+  const requested = trackIds.filter((trackId) => likedIds.has(trackId));
+  if (!requested.length) {
+    return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items: [], unavailableTrackIds: trackIds } }, 200, cors);
+  }
+
+  const byId = new Map();
+  await Promise.all(requested.map(async (trackId) => {
+    const card = await readSharedTrackCard062(env, trackId);
+    if (card) byId.set(trackId, card);
+  }));
+
+  let missing = requested.filter((trackId) => !byId.has(trackId));
+  if (missing.length) {
+    const feedCards = await readSharedFeedCards062(env, missing);
+    for (const [trackId, card] of feedCards) byId.set(trackId, card);
+    missing = requested.filter((trackId) => !byId.has(trackId));
+  }
+
+  if (missing.length) {
+    const recoveryHeaders = new Headers(request.headers);
+    recoveryHeaders.set('Content-Type', 'application/json');
+    const recoveryRequest = new Request(request.url, {
+      method: 'POST',
+      headers: recoveryHeaders,
+      body: JSON.stringify({ trackIds: missing }),
+    });
+    const recoveryResponse = await handleMyLikedTracks052Core062(recoveryRequest, env, cors);
+    if (!recoveryResponse.ok) return recoveryResponse;
+    let recoveryPayload = null;
+    try { recoveryPayload = await recoveryResponse.clone().json(); } catch { recoveryPayload = null; }
+    const recoveredItems = Array.isArray(recoveryPayload?.data?.items) ? recoveryPayload.data.items : [];
+    for (const item of recoveredItems) {
+      const card = normalizeSharedTrackCard062(item);
+      if (!card?.id || !missing.includes(card.id)) continue;
+      byId.set(card.id, card);
+      try { await writeSharedTrackCard062(env, card); } catch {}
+    }
+  }
+
+  const ordered = requested.map((trackId) => byId.get(trackId)).filter(Boolean);
+  const items = await enrichSharedTrackCards062(env, ordered);
+  const returned = new Set(items.map((item) => String(item?.id || '').trim()).filter(Boolean));
   const unavailableTrackIds = trackIds.filter((trackId) => !returned.has(trackId));
   return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items, unavailableTrackIds } }, 200, cors);
 }

@@ -28,6 +28,7 @@
     "051-publication-write-returning.mjs",
     "059-shared-feed-r2-parity.mjs",
     "060-shared-profile-r2-parity.mjs",
-    "061-shared-social-r2-parity.mjs"
+    "061-shared-social-r2-parity.mjs",
+    "062-shared-track-card-r2.mjs"
   ]
 }

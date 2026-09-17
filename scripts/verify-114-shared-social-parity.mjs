@@ -6,7 +6,8 @@ const manifest = JSON.parse(readFileSync('cloudflare/explore-worker/release-patc
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 
 const fail = (message) => { throw new Error(`[114] ${message}`); };
-if (String(version.version) !== '114') fail('app version must be 114');
+const appVersion = Number(version.version);
+if (!Number.isFinite(appVersion) || appVersion < 114) fail('app version is older than 114');
 if (!Array.isArray(manifest.patches) || !manifest.patches.includes('061-shared-social-r2-parity.mjs')) fail('patch 061 missing from manifest');
 
 for (const required of [

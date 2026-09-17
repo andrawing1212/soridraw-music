@@ -49,7 +49,11 @@ assert.match(worker, /const EXPLORE_PROFILE_COLD_RATE_PREFIX_057 = 'profile-cold
 assert.match(worker, /handlePublicProfileFirstViewWithEdgeCacheCore057/);
 
 const shared060 = worker.includes('SORIDRAW_SHARED_PROFILE_R2_PARITY_060_20260917');
+const warm063 = worker.includes('SORIDRAW_PUBLIC_PROFILE_WARM_EDGE_ZERO_READ_063_20260917');
 const outerWrapper = functionText(worker, 'handlePublicProfileFirstViewWithEdgeCache');
+const sharedWrapper = shared060
+  ? functionText(worker, warm063 ? 'handlePublicProfileFirstViewWithEdgeCacheCore063' : 'handlePublicProfileFirstViewWithEdgeCache')
+  : outerWrapper;
 const guardedWrapper = shared060
   ? functionText(worker, 'handlePublicProfileFirstViewWithEdgeCacheCore060')
   : outerWrapper;
@@ -68,10 +72,18 @@ assert.ok(guardedWrapper.indexOf('cache.match(positiveKey)') < guardedWrapper.in
 assert.doesNotMatch(guardedWrapper, /env\.DB\.|\.prepare\(/);
 
 if (shared060) {
-  assert.match(outerWrapper, /readExploreSharedProfile060\(env, profileRef\)/);
-  assert.match(outerWrapper, /handlePublicProfileFirstViewWithEdgeCacheCore060\(request, profileRef, env, cors\)/);
+  assert.match(sharedWrapper, /readExploreSharedProfile060\(env, profileRef\)/);
+  assert.match(sharedWrapper, /handlePublicProfileFirstViewWithEdgeCacheCore060\(request, profileRef, env, cors\)/);
+  assert.match(sharedWrapper, /cache\.match\(negativeKey\)/);
+  assert.match(sharedWrapper, /cache\.match\(positiveKey\)/);
+  assert.doesNotMatch(sharedWrapper, /env\.DB\.|\.prepare\(/);
+}
+
+if (warm063) {
+  assert.match(outerWrapper, /handlePublicProfileFirstViewWithEdgeCacheCore063\(request, profileRef, env, cors\)/);
   assert.match(outerWrapper, /cache\.match\(negativeKey\)/);
-  assert.match(outerWrapper, /cache\.match\(positiveKey\)/);
+  assert.match(outerWrapper, /const cached = await cache\.match\(key\)/);
+  assert.match(outerWrapper, /withExploreZeroUsageOnEdgeHit/);
   assert.doesNotMatch(outerWrapper, /env\.DB\.|\.prepare\(/);
 }
 

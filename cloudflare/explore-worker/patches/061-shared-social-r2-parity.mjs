@@ -13,7 +13,6 @@ if (source.includes(marker)) {
 }
 
 for (const required of [
-  'SORIDRAW_EXPLORE_SHARED_CANONICAL_DATA_031_20260909',
   'readExploreLikeR2Bundle',
   'rebuildExploreLikeR2Bundle',
   'syncExploreLikeR2AfterBatch034',

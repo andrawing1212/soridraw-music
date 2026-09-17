@@ -81,14 +81,31 @@ for (const forbidden of ['materializePublicProfileFirstView', 'buildExploreFeedR
   if (materialized.includes(forbidden)) fail(`materialized recovery uses expensive fallback: ${forbidden}`);
 }
 
-const wrapper = functionText('handlePublicProfileFirstViewWithEdgeCache');
+const findSharedProfileReadLayer = () => {
+  let name = 'handlePublicProfileFirstViewWithEdgeCache';
+  const seen = new Set();
+  for (let depth = 0; depth < 10; depth += 1) {
+    if (seen.has(name)) fail(`profile read wrapper cycle at ${name}`);
+    seen.add(name);
+    const body = functionText(name);
+    if (body.includes('readExploreSharedProfile060(env, profileRef)')) return body;
+    const next = [...body.matchAll(/handlePublicProfileFirstViewWithEdgeCacheCore\d+/g)]
+      .map((match) => match[0])
+      .find((candidate) => !seen.has(candidate));
+    if (!next) break;
+    name = next;
+  }
+  fail('shared-profile 060 read layer not reachable');
+};
+
+const wrapper = findSharedProfileReadLayer();
 if (!wrapper.includes('cache.match(negativeKey)')) fail('negative edge guard missing before shared R2');
 if (!wrapper.includes('cache.match(positiveKey)')) fail('positive edge guard missing before shared R2');
 if (!wrapper.includes('readExploreSharedProfile060(env, profileRef)')) fail('shared R2 profile read missing');
 if (!wrapper.includes('seedSharedProfileFromPreviewLocal060(env, profileRef)')) fail('PREVIEW local seed path missing');
 if (!wrapper.includes('readMaterializedSharedProfile060(env, profileRef)')) fail('one-row cold recovery missing');
 if (!wrapper.includes('handlePublicProfileFirstViewWithEdgeCacheCore060')) fail('guarded compatibility fallback missing');
-if (/env\.DB|\.prepare\(/.test(wrapper)) fail('outer profile wrapper must not run ad-hoc D1 queries');
+if (/env\.DB|\.prepare\(/.test(wrapper)) fail('shared-profile wrapper must not run ad-hoc D1 queries');
 
 const findSharedProfileMutationLayer = (mutation) => {
   let name = mutation;

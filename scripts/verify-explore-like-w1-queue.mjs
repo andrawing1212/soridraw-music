@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const migration = readFileSync('cloudflare/explore-worker/migrations/20260912_01_explore_like_w1_queue.sql', 'utf8');
 const patch = readFileSync('cloudflare/explore-worker/patches/040-explore-like-w1-delayed-count.mjs', 'utf8');
@@ -6,7 +6,9 @@ const reversalPatch = readFileSync('cloudflare/explore-worker/patches/041-explor
 const releasePatches = readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8');
 const service = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
-const displaySource = readFileSync('src/services/exploreLikeDisplayStateService.ts', 'utf8');
+const displaySource = existsSync('src/services/exploreLikeDisplayStateService.ts')
+  ? readFileSync('src/services/exploreLikeDisplayStateService.ts', 'utf8')
+  : '';
 
 if (!/CREATE TABLE IF NOT EXISTS explore_like_batches_069/i.test(migration)) throw new Error('069 queue table missing');
 if (!/WITHOUT ROWID/i.test(migration)) throw new Error('069 queue must be WITHOUT ROWID');
@@ -49,7 +51,12 @@ if (sharedDisplay091) {
   if (!displaySource.includes('SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915')) throw new Error('091 display ledger marker missing');
   if (/fetch\(|updateDoc\(|setDoc\(|firestore/i.test(displaySource)) throw new Error('091 display ledger must remain local-only');
 } else {
-  if (!service.includes('const optimisticLikeCount = clampLikeCount(currentLikeCount);')) throw new Error('client still changes numeric count');
+  const frozenPublicCount = service.includes('const optimisticLikeCount = clampLikeCount(currentLikeCount);')
+    || (
+      service.includes('const canonicalLikeCount = clampLikeCount(currentLikeCount);')
+      && service.includes('const optimisticLikeCount = canonicalLikeCount;')
+    );
+  if (!frozenPublicCount) throw new Error('client still changes numeric count');
 }
 if (service.includes('clampLikeCount(currentLikeCount) + (liked ? 1 : -1)')) throw new Error('old direct optimistic numeric delta still present');
 

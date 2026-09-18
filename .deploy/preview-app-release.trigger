@@ -1,8 +1,8 @@
-requested_at=2026-09-18T05:16:30Z
+requested_at=2026-09-18T09:56:00Z
 requested_by=user
-product_code_target=06330ae00c2d7639542d7b3ab473aabb85f67d9e
-release_source_target=preview-117-public-count-personal-cache-separation
-release_purpose=117_explore_public_count_personal_cache_separation
+product_code_target=6934deb10d55ceb77a21ad09ca1d6436ded6d313
+release_source_target=app-121-explore-like-30s-2m-timing
+release_purpose=121_explore_like_timing_only
 hosting_only=true
 worker_redeploy=false
 no_user_data_migration=true

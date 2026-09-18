@@ -1,5 +1,42 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0Z. PREVIEW app 122 — Explore 좋아요 흰색 filled heart + 짧은 클릭 모션 / 코드 반영·검증 완료 / 미배포
+
+사용자 요청으로 좋아요 버튼의 시각 표현만 변경했다.
+
+변경:
+- 좋아요 ON 상태의 기존 빨간색 제거.
+- ON 상태 하트 아이콘을 흰색 filled heart로 표시.
+- 클릭 순간 하트가 살짝 눌렸다가 톡 올라오는 짧은 모션 추가.
+- Classic Light의 빨간 liked override도 제거하고 흰색 filled heart가 유지되도록 조정.
+- 버튼 크기/위치/간격/기능/좋아요 로직은 변경하지 않음.
+- app version: **122**.
+
+검증:
+- 작업 branch: `work/app122-like-white-heart-motion`
+- 기준 PREVIEW: `577d8a162c7839615ebbfaad4beae3e418a5121b` — app 121.
+- 검증 Run `35332970861` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app122 white-heart regression PASS
+  - red liked override 제거 PASS
+  - white filled heart PASS
+  - click motion PASS
+  - layout/size/spacing unchanged guard PASS
+- 임시 검증 Workflow 삭제 완료.
+
+변경 파일:
+- `src/components/explore/exploreSocial.css`
+- `src/styles/classicLightVisualFixes.css`
+- `public/app-version.json`
+- `scripts/verify-122-explore-like-white-heart.mjs`
+
+비변경:
+- Explore 좋아요 동작/30초 batch/2분 revision gate/1분 shared aggregate 모두 그대로.
+- Worker / D1 / Firebase Functions / Rules / 사용자 데이터 변경 없음.
+- PREVIEW Hosting은 아직 app 121. **미배포**.
+- TEST / PRODUCTION 변경 없음.
+
 ## 0Y. PREVIEW app 121 — Explore 좋아요 timing-only 조정 / 배포 완료
 
 사용자 지시로 app 120 동작은 그대로 유지하고 시간값 두 개만 변경했다.

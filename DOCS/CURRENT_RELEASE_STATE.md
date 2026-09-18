@@ -1,5 +1,68 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AD. PREVIEW app 123 — Worker + shared R2 제한복구 + Firebase Hosting 배포 완료 / 실사용 검증 대기
+
+2026-09-18 사용자 승인으로 app123 수정본을 PREVIEW까지 배포 완료했다.
+
+배포 기준:
+- app123 제품 merge: `edf80e7729323327802af205e42c5a462d049f0a`
+- 최종 PREVIEW verifier 정렬 merge: `ad3b9e0fc19229fd34b7b94a8c38a796c3bfc3a7`
+- PREVIEW Worker release trigger commit: `a3942176b84fbbaf8a4477b54708e8f106a54409`
+- PREVIEW Hosting release commit: `bb6bd713f8ba2b942473ad7af56bf0861718204b`
+- app version: **123**
+
+Worker:
+- Release Run `35344504551` — **SUCCESS**
+- PREVIEW Worker version: `02561c62-5f1c-4449-b2e6-4253faddd099`
+- canonical Worker SHA256: `312c28fe67af5c0bbd5639fa1a6230b53bd5cf12e165ca1f117e0e6552cbbfc3`
+- Feed smoke PASS / Profile smoke PASS.
+- revision HEAD-only D1 `R0/W0` PASS.
+- like queue preflight: pending035=0 / pending069=0.
+- fixed cron disabled PASS / Durable Object event scheduler PASS.
+- TEST Worker `78a3295f-cbf4-4c1f-8d1b-22934df7e7b0` 비변경.
+- PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` 비변경.
+
+기존 stale 4곡 shared 파생 캐시 제한 복구:
+- Repair Run `35345067282` — **SUCCESS**.
+- exact diagnosed 4 track IDs만 대상으로 canonical/relation/derived가 모두 1인지 재확인 후 실행.
+- shared latest Feed: 4곡 `0 → 1` 수정.
+- shared popular Feed: 4곡 모두 이미 1, write 0.
+- shared track-card: 4곡 수정.
+- shared public profile: 해당 owner 프로필 1개에서 4곡 수정.
+- 실제 PREVIEW shared Feed API: 4곡 모두 1, source `SHARED-R2-GET-112`, D1 read 0.
+- 실제 공개프로필 API: 4곡 모두 1, source `SHARED-R2-113`.
+- D1 operation은 SELECT only, 사용자 canonical data write 0.
+- migration/seed/backfill/delete 없음.
+- 임시 repair Workflow/script는 작업 branch에서 삭제 완료; preview에는 추가하지 않음.
+
+Firebase PREVIEW Hosting:
+- Release Run `35345235634` — **SUCCESS**.
+- locked source SHA: `bb6bd713f8ba2b942473ad7af56bf0861718204b`.
+- TypeScript PASS.
+- Build PASS.
+- Firebase PREVIEW Hosting deploy PASS.
+- `preview.soridraw.com` exact build PASS.
+- remote `app-version.json` = **123** PASS.
+- TEST / PRODUCTION Hosting 및 protected refs 비변경 PASS.
+
+현재 기능 기준:
+- 앱 업데이트/첫 진입 + 정상 Explore Feed 로컬 캐시 존재 시 last-known 좋아요 숫자를 즉시 표시.
+- 앱 업데이트 자체로 revision/server read를 강제하지 않음.
+- 실제 사용자 활동 + 2분 viewer gate에서만 revision 확인.
+- actor 좋아요 UI 즉시 반영, 현재 app121 기준 30초 trailing batch 유지.
+- server shared aggregate 1분 유지.
+- aggregate 후 변경된 track만 shared latest/popular Feed + track-card R2 targeted patch.
+- 전체 Feed D1 scan/rebuild 없음.
+- UI/CSS 변경 없음.
+- Firebase Functions/Rules 변경 없음.
+
+남은 검증:
+- 코드/배포 검증은 완료.
+- 사용자 PREVIEW 실사용 검증 전.
+- PC/모바일에서 앱 업데이트 직후 숫자 유지, 좋아요/해제, 30초 batch, 약 1분 shared 반영, 다른 사용자 2분 activity gate, 공개프로필/Explore 일치 확인 필요.
+- PREVIEW 실사용 통과 전 TEST 재승격 금지.
+- PRODUCTION은 명확한 정식배포 승인 전 변경 금지.
+
 ## 0AC. PREVIEW app 123 — 업데이트 캐시 유지 + shared 좋아요 숫자 targeted R2 repair / 검증 완료 / 배포 전
 
 사용자 지시로 두 문제를 함께 수정했다.

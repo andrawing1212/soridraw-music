@@ -35,7 +35,7 @@ jobs:
 
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT d.id,d.likes AS derivedLikes,COALESCE((SELECT COUNT(*) FROM likes l WHERE l.track_id=d.id),0) AS canonicalLikes FROM explore_derived_tracks d WHERE d.id IN ($ids) ORDER BY d.published_at DESC"             --json > "$RUNNER_TEMP/counts.json"
 
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT batch_id,user_uid,created_at,mutation_json FROM explore_like_batches_069 WHERE mutation_json LIKE '%music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2%' ORDER BY created_at ASC LIMIT 50"             --json > "$RUNNER_TEMP/queue.json"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT batch_id,user_uid,created_at,mutations_json FROM explore_like_batches_069 WHERE mutations_json LIKE '%music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2%' ORDER BY created_at ASC LIMIT 50"             --json > "$RUNNER_TEMP/queue.json"
 
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069"             --json > "$RUNNER_TEMP/pending.json"
 
@@ -46,7 +46,7 @@ jobs:
           const queue=flat(process.env.RUNNER_TEMP+'/queue.json').map(x=>({
             batch_id:x.batch_id,
             created_at:x.created_at,
-            mutation_json:x.mutation_json
+            mutations_json:x.mutations_json
           }));
           const pending=flat(process.env.RUNNER_TEMP+'/pending.json')[0]||{};
           console.log('COUNTS='+JSON.stringify(counts));

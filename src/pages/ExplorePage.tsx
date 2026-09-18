@@ -312,6 +312,7 @@ export default function ExplorePage() {
   const [feedRevisionSignal, setFeedRevisionSignal] = useState(0);
   const feedRevisionEventAtRef = useRef(0);
   const feedRevisionActivityAtRef = useRef(0);
+  const feedRevisionRequestedUrlRef = useRef('');
   const likeInteractionVersionRef090 = useRef(0);
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
@@ -433,30 +434,39 @@ export default function ExplorePage() {
       setFeedNextCursor(feedRequest ? readExploreFeedSessionCacheCursor(requestUrl) : null);
       setLoadMoreError('');
       const cachedTracks = cachedRows.map(normalizeTrack).filter((track) => track.id);
-      // 120: stale shared cache may render, but never over the actor's newest pending count.
+      // SORIDRAW_EXPLORE_UPDATE_LAST_KNOWN_FEED_123_20260918
+      // App updates and ordinary re-entry render the last known good Feed immediately
+      // and do not spend a revision request merely because code/version changed.
       setTracks(overlayActorLikeCounts120(cachedTracks));
       setLoading(false);
 
-      if (feedRequest) {
-        void (async () => {
-          try {
-            const serverRevision = await fetchRevision();
-            if (!serverRevision || controller.signal.aborted) return;
-            const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
-            if (cachedRevision === serverRevision) {
-              syncSharedPublicCountsToLocal110(cachedTracks);
-              return;
-            }
-            const snapshot = await fetchFeedSnapshot108(serverRevision);
-            if (controller.signal.aborted) return;
-            applyPayload(snapshot.payload, snapshot.revision);
-          } catch (reason) {
-            if (!controller.signal.aborted) {
-              console.warn('Explore feed revision revalidation failed; keeping cached feed:', reason);
-            }
-          }
-        })();
+      const revalidateRequested = feedRequest && feedRevisionRequestedUrlRef.current === requestUrl;
+      if (!revalidateRequested) {
+        const now = Date.now();
+        feedRevisionEventAtRef.current = now;
+        feedRevisionActivityAtRef.current = now;
+        return () => controller.abort();
       }
+
+      feedRevisionRequestedUrlRef.current = '';
+      void (async () => {
+        try {
+          const serverRevision = await fetchRevision();
+          if (!serverRevision || controller.signal.aborted) return;
+          const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
+          if (cachedRevision === serverRevision) {
+            syncSharedPublicCountsToLocal110(cachedTracks);
+            return;
+          }
+          const snapshot = await fetchFeedSnapshot108(serverRevision);
+          if (controller.signal.aborted) return;
+          applyPayload(snapshot.payload, snapshot.revision);
+        } catch (reason) {
+          if (!controller.signal.aborted) {
+            console.warn('Explore feed revision revalidation failed; keeping cached feed:', reason);
+          }
+        }
+      })();
 
       return () => controller.abort();
     }
@@ -505,6 +515,7 @@ export default function ExplorePage() {
       const now = Date.now();
       if (now - feedRevisionEventAtRef.current < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
       feedRevisionEventAtRef.current = now;
+      feedRevisionRequestedUrlRef.current = requestUrl;
       setFeedRevisionSignal((value) => value + 1);
     };
 

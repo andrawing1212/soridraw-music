@@ -11,6 +11,16 @@ export function isExploreR2CatalogEnabled066(env) {
   return String(env?.SORIDRAW_R2_CATALOG_V1 || '').trim() === '1';
 }
 
+export function isExploreR2CatalogReadEnabled066(env) {
+  return isExploreR2CatalogEnabled066(env)
+    && String(env?.SORIDRAW_R2_CATALOG_READ_V1 || '').trim() === '1';
+}
+
+export function isExploreR2FirstPublisherEnabled066(env) {
+  return isExploreR2CatalogEnabled066(env)
+    && String(env?.SORIDRAW_R2_FIRST_PUBLISHER_V1 || '').trim() === '1';
+}
+
 export function normalizeCatalogText066(value) {
   return String(value ?? '')
     .normalize('NFKC')
@@ -222,7 +232,7 @@ export async function syncExploreCatalogTrack066(env, item, options = {}) {
   const track = normalizeCatalogTrack066(item, options);
   if (!track) return { ok: false, reason: 'track' };
   const metaKey = catalogMetaKey066(track.id);
-  const previous = await readCatalogJson066(env, metaKey);
+  const previous = options.previousMeta || await readCatalogJson066(env, metaKey);
   const isPublic = options.isPublic !== false;
   const nextKeys = isPublic ? catalogMarkerKeys066(track) : [];
   const signature = catalogTrackSignature066(track, isPublic, nextKeys);
@@ -286,7 +296,7 @@ export async function patchExploreCatalogLike066(env, trackId, likeCount) {
   return syncExploreCatalogTrack066(env, {
     ...previous.track,
     likeCount: Math.max(0, Number(likeCount || 0)),
-  }, { isPublic: true });
+  }, { isPublic: true, previousMeta: previous });
 }
 
 export async function syncExploreCatalogArtist066(env, profile) {
@@ -370,6 +380,7 @@ export async function ensureFirstPublisherSharedProfile066(env, authContext, now
   const bundle = buildFirstPublisherSharedProfileBundle066(authContext, now);
   if (!bundle) return null;
   await writeExploreSharedProfile060(env, bundle);
+  try { await syncExploreCatalogArtist066(env, bundle.body.data.profile); } catch {}
   return {
     nickname: bundle.body.data.profile.nickname,
     avatarUrl: bundle.body.data.profile.avatarUrl,

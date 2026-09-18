@@ -222,7 +222,7 @@ jobs:
           active(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/deployments"|jq -er '.result.deployments[0].versions|max_by(.percentage)|.version_id'; }
           active "$TEST_WORKER" > "$RUNNER_TEMP/test-worker-before"
           active "$PRODUCTION_WORKER" > "$RUNNER_TEMP/production-worker-before"
-          schedules(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/schedules" | jq -c '[.result[]? | {cron:.cron}] | sort_by(.cron)'; }
+          schedules(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/schedules" | jq -c '.result | if type == "array" then . elif ((.schedules // null) | type) == "array" then .schedules else [] end | map({cron:(.cron // "")}) | map(select(.cron != "")) | sort_by(.cron)'; }
           schedules "$TEST_WORKER" > "$RUNNER_TEMP/test-worker-schedules-before"
           schedules "$PRODUCTION_WORKER" > "$RUNNER_TEMP/production-worker-schedules-before"
           printf false > "$RUNNER_TEMP/test-branch-mutated"; printf false > "$RUNNER_TEMP/test-worker-mutated"; printf false > "$RUNNER_TEMP/test-hosting-mutated"
@@ -240,7 +240,7 @@ jobs:
           test "$(git ls-remote origin refs/heads/production|cut -f1)" = "$(cat "$RUNNER_TEMP/production-before")"
           test "$(cat "$RUNNER_TEMP/test-worker-before")" = "$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$TEST_WORKER/deployments" | jq -er '.result.deployments[0].versions|max_by(.percentage)|.version_id')"
           test "$(cat "$RUNNER_TEMP/production-worker-before")" = "$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PRODUCTION_WORKER/deployments" | jq -er '.result.deployments[0].versions|max_by(.percentage)|.version_id')"
-          current_schedules(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/schedules" | jq -c '[.result[]? | {cron:.cron}] | sort_by(.cron)'; }
+          current_schedules(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/schedules" | jq -c '.result | if type == "array" then . elif ((.schedules // null) | type) == "array" then .schedules else [] end | map({cron:(.cron // "")}) | map(select(.cron != "")) | sort_by(.cron)'; }
           test "$(cat "$RUNNER_TEMP/test-worker-schedules-before")" = "$(current_schedules "$TEST_WORKER")"
           test "$(cat "$RUNNER_TEMP/production-worker-schedules-before")" = "$(current_schedules "$PRODUCTION_WORKER")"
           hosting_release(){ curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/$1/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv'; }

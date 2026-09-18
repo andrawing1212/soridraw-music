@@ -172,13 +172,16 @@ if (process.env.SORIDRAW_GENERATED_WORKER) {
     assert.doesNotMatch(block, /env\.DB|\.prepare\(/, name + ' must remain R2-only');
   }
 
-  const publishStart = worker.indexOf('async function syncExploreFeedR2Publication043(');
-  const publish = worker.slice(publishStart, publishStart + 2200);
+  const has068 = worker.includes('SORIDRAW_W2_PROFILE_SEARCH_PROJECTION_068_20260919');
+  const publishName = has068 ? 'syncExploreFeedR2Publication043Core068' : 'syncExploreFeedR2Publication043';
+  const publishStart = worker.indexOf('async function ' + publishName + '(');
+  const publish = worker.slice(publishStart, publishStart + 2600);
   assert.match(publish, /ensureW2FeedIndexes066\(env, incomingItem\)/);
   assert.match(publish, /mirrorExploreSharedFeeds059\(env\)/);
 
-  const privateStart = worker.indexOf('async function syncExploreFeedR2Private043(');
-  const makePrivate = worker.slice(privateStart, privateStart + 2600);
+  const privateName = has068 ? 'syncExploreFeedR2Private043Core068' : 'syncExploreFeedR2Private043';
+  const privateStart = worker.indexOf('async function ' + privateName + '(');
+  const makePrivate = worker.slice(privateStart, privateStart + 3000);
   assert.match(makePrivate, /readSharedTrackCard062\(env, trackId\)/);
   assert.match(makePrivate, /removeW2FeedIndexes066\(env, previousCard\)/);
   assert.match(makePrivate, /mirrorExploreSharedFeeds059\(env\)/);

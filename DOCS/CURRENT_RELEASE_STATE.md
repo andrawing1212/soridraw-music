@@ -1,5 +1,68 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0V. PREVIEW app 118 — Explore 좋아요 의도 snap-back 수정 / 배포 완료
+
+사용자 실사용 영상에서 좋아요 해제를 누르면 회색 하트로 잠시 바뀐 뒤 약 1초 안에 다시 빨간 하트로 돌아오는 현상을 기준으로 개인 좋아요 상태 머신을 수정했다.
+
+근본 원인:
+- 기기 로컬의 과거 `baseLiked`를 현재 서버 정답처럼 사용해, 명시적 사용자 클릭이 `desiredLiked === baseLiked`이면 outbox에서 제거될 수 있었다.
+- 같은 조건을 pending count / flush 직전 정리에서도 다시 적용해 서버 요청 자체가 사라질 수 있었다.
+- 직접 HTTP ACK 전에 오래된 RTDB 계정 replay 신호가 들어오면 방금 누른 해제 상태를 다시 덮을 수 있었다.
+- 읽기/쓰기 횟수 부족이 아니라, 비용 최적화용 local batch 상태와 cross-device replay 신호의 우선순위 오류였다.
+
+app 118 수정:
+- 사용자가 실제로 누른 heart intent는 direct `/v1/me/likes/batch` ACK 전까지 무조건 pending으로 유지한다.
+- `baseLiked`와 값이 같다는 이유로 명시적 클릭을 삭제하지 않는다.
+- RTDB는 cross-device replay 용도로만 사용하고, 이 브라우저의 pending intent보다 우선하지 못하게 했다.
+- direct batch ACK/RTDB publish 처리 뒤에만 local pending을 정리한다.
+- 요청 진행 중 같은 곡을 다시 누르면 첫 ACK 뒤 남은 최신 intent를 즉시 후속 flush한다.
+- 공개 좋아요 숫자는 기존처럼 shared/server authority를 유지하며 client optimistic numeric delta를 추가하지 않는다.
+- 페이지 진입/재진입/업데이트만으로 추가 서버 요청을 만들지 않는다. 실제 heart mutation일 때만 direct batch 요청이 발생한다.
+
+검증:
+- 작업 PR: #95 `Fix Explore like intent snap-back in app 118`
+- 제품 코드 merge commit: `5c8ef2f809fd0f230980706116cb3f25be5dc087`
+- 최종 branch 검증 Run `35318905850` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app 118 stale-base / stale-RTDB snap-back regression PASS
+  - app 117 public-count separation regression PASS
+  - app 116 public-count convergence regression PASS
+  - Worker desired-state queue regression PASS
+- 일회성 검증 Workflow는 merge 전 삭제 완료.
+
+PREVIEW 배포:
+- release trigger / 현재 preview HEAD: `65951004bc5e034b085915302643d419290859d7`
+- PREVIEW Hosting Run `35319195214` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - Firebase PREVIEW Hosting deploy PASS
+  - exact PREVIEW build PASS
+  - remote `app-version.json=118` PASS
+  - TEST/PRODUCTION branch + Hosting unchanged PASS
+- 실제 대상: `https://preview.soridraw.com`
+
+비변경:
+- Explore Worker 코드/배포 없음.
+- D1 migration/seed/backfill/write 없음.
+- Firebase Functions / Rules 변경 없음.
+- 사용자 원본 데이터 변경 없음.
+- UI/CSS 변경 없음.
+- main(TEST) 유지: `1ee8e9ae5252e6dc96ad2fcea9596a9a4a6773a1` — app 117
+- production 유지: `e994340f3c4f6ac97f444f1ddf13053d3faffa71` — app 117
+
+알려진 저장소 위험:
+- preview push 직후 legacy `Apply 069 Explore Like W1 Delayed Count` Workflow Run `35319169595`가 자동 실행됐으나, 오래된 app 069 검증 조건에서 실패했다.
+- 실패 지점은 commit/deploy 단계 전이므로 source push, Worker deploy, D1 write는 발생하지 않았다.
+- 이 legacy auto-run은 현재 app 118 배포 성공과 무관하지만 후속 저장소 정리 대상이다.
+- GitHub branch protection API 응답은 preview/main/production 모두 `protected=true`이면서 세부 enforcement가 off로 보이므로 저장소 보호 설정은 별도 감사 대상이다.
+
+현재 상태:
+- PREVIEW 앱: **118**
+- TEST 앱: **117**
+- PRODUCTION 앱: **117**
+- 사용자 실사용 다음 확인: 기존에 좋아요된 곡 1개를 해제했을 때 회색 하트가 다시 빨간색으로 되돌아오지 않는지, 다시 좋아요했을 때 PC/모바일이 같은 개인 heart 상태로 수렴하는지 확인.
+
 ## 0U. Explore 좋아요 해제 503 — TEST/PRODUCTION Worker 복구 완료
 
 사용자 정식복구 승인에 따라, app 117 이후 발견된 Explore 좋아요 해제 503의 Worker 필수 바인딩 유실을 TEST와 PRODUCTION에 복구했다.

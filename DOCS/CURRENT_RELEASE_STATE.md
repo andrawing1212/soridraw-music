@@ -1,5 +1,60 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AE. PREVIEW app 124 — PC/모바일 legacy mixed-count cache 1회 공통 복구 / 배포 완료
+
+사용자 모바일 실사용에서 PC는 정상인데 모바일이 같은 4곡을 `0 / 1 / 0 / 0`으로 표시하는 현상을 확인했다.
+
+확인된 구조:
+- app123 서버 shared Feed 자체는 이미 4곡 모두 1로 복구된 상태.
+- 모바일은 app122 시절 저장된 mixed-count 로컬 Feed 캐시를 보유.
+- app123의 '마지막 정상 캐시 우선' 규칙이 그 오래된 모바일 캐시도 그대로 유지했기 때문에 PC/모바일 표시가 달라짐.
+- 모바일 전용 UI 문제가 아니라 동일 코드에서 기기별 local cache 상태 차이 문제.
+
+app124 수정:
+- `src/pages/ExplorePage.tsx`에 `SORIDRAW_EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_20260918` 추가.
+- legacy mixed-count Feed cache를 가진 기기에서 sort별 정확히 1회 current shared R2 snapshot을 직접 읽어 캐시를 교체.
+- 이 1회 복구는 revision edge cache를 거치지 않고 current shared R2 first-page를 사용.
+- route contract상 D1 read/write 0.
+- 성공 후 localStorage marker를 남겨 이후 앱 업데이트/재진입에서는 같은 복구 read를 반복하지 않음.
+- PC/모바일 분기 없음. 동일 ExplorePage 공통 경로.
+- app123 last-known immediate render 규칙 유지.
+- 30초 actor batch / 1분 shared aggregate / 2분 viewer activity gate 유지.
+- UI/CSS/Worker runtime/Functions/Rules/D1 schema/user canonical data 변경 없음.
+
+GitHub / 검증:
+- 작업 branch: `work/app124-one-time-feed-cache-repair`
+- 기준 PREVIEW: `6e63a491f2a4983b348c37d051c3882002e97a49`
+- PR #105 merge commit: `929c02f8a235a8ef629ce85a8f0e28bfbaa04dfe`
+- app version: **124**
+- validation Run `35346359130` — **SUCCESS**
+  - app124 common cache repair verifier PASS
+  - TypeScript PASS
+  - Build PASS
+- 첫 validation Run `35346282776` 실패는 제품 코드가 아니라 verifier가 주석의 'mobile/PC' 단어를 device fork로 오인한 검사식 문제였고, 검사식 수정 후 최종 PASS.
+
+PREVIEW 배포:
+- deploy trigger commit: `ca05329c6004c2a47d05d1958915c1730436e1c2`
+- Firebase PREVIEW Hosting Run `35346588474` — **SUCCESS**
+- locked PREVIEW SHA: `ca05329c6004c2a47d05d1958915c1730436e1c2`
+- TypeScript PASS
+- Build PASS
+- Firebase PREVIEW Hosting deploy PASS
+- `preview.soridraw.com` exact build PASS
+- remote app version **124** PASS
+- TEST / PRODUCTION unchanged PASS
+- PREVIEW Worker는 app123 배포본 `02561c62-5f1c-4449-b2e6-4253faddd099` 그대로.
+
+현재 환경:
+- PREVIEW: app **124**
+- TEST: app **122** 유지
+- PRODUCTION: app **117** 유지
+
+필수 다음 검증:
+- 모바일에서 app124 업데이트 후 Explore 첫 화면이 4곡 모두 PC와 같은 `1`로 수렴하는지.
+- 복구 완료 후 재진입에서는 같은 repair R2 read가 반복되지 않는지.
+- 이후 새 좋아요/해제도 PC/모바일 공통 30초 batch → 1분 shared → 2분 viewer gate 구조로 동일하게 보이는지.
+- 앞으로 Explore 변경은 PC + 모바일을 항상 같은 공통 검증 범위로 확인.
+
 ## 0AD. PREVIEW app 123 — Worker + shared R2 제한복구 + Firebase Hosting 배포 완료 / 실사용 검증 대기
 
 2026-09-18 사용자 승인으로 app123 수정본을 PREVIEW까지 배포 완료했다.

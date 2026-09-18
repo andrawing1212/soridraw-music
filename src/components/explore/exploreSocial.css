@@ -5,10 +5,13 @@
 
 .soridraw-explore-like-button{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important;color:rgba(235,235,240,.4);font-size:11px;font-weight:750;cursor:pointer}
 .soridraw-explore-like-button:hover:not(:disabled){color:rgba(255,255,255,.86)}
-.soridraw-explore-like-button.is-liked{color:#ff6d78}
-.soridraw-explore-like-button.is-liked svg:not(.soridraw-explore-spinner){fill:currentColor;stroke:currentColor}
+.soridraw-explore-like-button svg:not(.soridraw-explore-spinner){transform-origin:center;transition:transform .16s ease}
+.soridraw-explore-like-button:active:not(:disabled) svg:not(.soridraw-explore-spinner){transform:scale(.86) translateY(1px)}
+.soridraw-explore-like-button.is-liked{color:rgba(255,255,255,.86)}
+.soridraw-explore-like-button.is-liked svg:not(.soridraw-explore-spinner){fill:#fff;stroke:#fff;animation:soridraw-explore-like-heart-pop .18s cubic-bezier(.2,.8,.2,1)}
 .soridraw-explore-like-button:disabled{cursor:wait;opacity:.62}
 .soridraw-explore-like-button .soridraw-explore-spinner{width:14px;height:14px}
+@keyframes soridraw-explore-like-heart-pop{0%{transform:scale(.9)}55%{transform:scale(1.1) translateY(-1px)}100%{transform:scale(1)}}
 
 .soridraw-explore-pin-badge{position:absolute;top:10px;left:10px;display:grid;place-items:center;width:29px;height:29px;border-radius:10px;background:rgba(10,10,12,.72);color:#ffb400;backdrop-filter:blur(10px)}
 .soridraw-explore-pin-badge svg{width:14px;height:14px;fill:currentColor}

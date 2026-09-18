@@ -6,7 +6,7 @@ const revision = readFileSync('src/services/exploreRevisionRequestCache.ts', 'ut
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 
-assert.equal(String(version.version), '117');
+assert.ok(Number(version.version) >= 117, `expected app version 117+, got ${String(version.version)}`);
 
 assert.match(overlay, /SORIDRAW_EXPLORE_PUBLIC_COUNT_PERSONAL_CACHE_SEPARATION_117_20260918/);
 assert.match(overlay, /sessionStorage/);

@@ -1,5 +1,44 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AF. TEST app 124 — PC+모바일 통과본 승격 완료 / PAGE SYNC 비용 감사
+
+사용자가 PREVIEW app124를 PC·모바일 모두 정상 적용으로 통과 처리하고 TEST 배포를 승인했다.
+
+TEST 승격:
+- source PREVIEW SHA: `3010dd0609bdfab6d19bd52add604fa8ce57a1b0`
+- preflight Run `35347397424` — **SUCCESS**
+- TEST promotion Run `35347566331` — **SUCCESS / TEST_VERIFIED**
+- promoted main SHA: `f7fc25d5452b3313efa3cca53c180c5494cc9837`
+- TEST app version: **124**
+- TEST Worker version: `6e8dca9c-2c58-42ea-ae7d-765e10afef8f`
+- TEST manifest/tag: `soridraw-test-v124-3010dd0609bd`
+- latest shared Feed parity PASS.
+- popular shared Feed parity PASS.
+- public profile parity PASS.
+- TEST release environment parity PASS on attempt 1.
+- PRODUCTION branch/Worker/Hosting 비변경.
+
+PAGE SYNC 비용 감사:
+- `src/lib/pageSyncCoordinator.ts`의 PAGE SYNC는 sync 시작 전/후 Cloudflare/Firestore 진단값의 차이만 기록한다.
+- 따라서 `PAGE SYNC D1 R6 W18`, `R3 W2`는 가짜 숫자가 아니라 해당 sync 1회에서 실제 계측된 D1 billable row 수다.
+- `Sync 3`, `Sync 4`는 누적 sync 횟수지만 D1 R/W 값은 마지막 sync의 delta다.
+- pending change가 0이면 PAGE SYNC는 즉시 noop 처리하며 worker/D1/Firestore를 모두 0으로 기록한다. 페이지 이동 자체의 반복 누수 구조는 아님.
+- publication flush는 local outbox의 최종 상태를 `/v1/me/music-note-publications/batch` 한 요청으로 묶는다.
+- D1 diagnostics는 query count와 billable row count를 분리한다. 따라서 `D1 query R0/W1`이어도 하나의 UPDATE가 대상 row/index를 처리하면서 `행 R3/W2` 같은 값이 나올 수 있다.
+- warm registered publication 변경은 guarded `UPDATE ... RETURNING`을 사용하고 canonical pre-read를 제거했다.
+- unresolved/cold fallback에서만 bounded SELECT를 허용한다.
+- public track_stats preflight는 제거되어 있다.
+- `profile_pinned` indexed column은 실제 값이 변할 때만 UPDATE에 포함되어 불필요 index rewrite를 차단한다.
+- visibility/options/updated_at-only hot transition은 heavy `explore_derived_tracks` mirror trigger 대상에서 제외되어 있다.
+- 따라서 현재 관측값은 실제 변경에 따른 비용이며, 동일 요청 반복/전체 scan/페이지 이동 누수 증거는 확인되지 않았다.
+- 비용을 더 낮출 수 있는 여지는 별도 최적화 주제로 감사할 수 있으나 현재 TEST 승격 차단 사유는 아님.
+
+현재 환경:
+- PREVIEW: app **124**
+- TEST: app **124 / TEST_VERIFIED**
+- PRODUCTION: app **117** 유지
+- PRODUCTION 승격 승인 없음.
+
 ## 0AE. PREVIEW app 124 — PC/모바일 legacy mixed-count cache 1회 공통 복구 / 배포 완료
 
 사용자 모바일 실사용에서 PC는 정상인데 모바일이 같은 4곡을 `0 / 1 / 0 / 0`으로 표시하는 현상을 확인했다.

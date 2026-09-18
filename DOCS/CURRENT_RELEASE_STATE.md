@@ -1,5 +1,61 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0W. PREVIEW app 119 — Explore 좋아요 최신 캐시 + 20초 슬라이딩 묶음쓰기 / PREVIEW 병합·배포 전
+
+사용자 지시로 좋아요 경로를 다시 단순화했다. 기준은 "누르는 사용자는 하트/숫자 즉시, 마지막 클릭 후 20초 동안 변경을 모아 한 번의 batch, 다른 사용자는 공용 결과를 최대 1분 안에 확인"이다.
+
+app 119 제품 변경:
+- 개인 좋아요 캐시는 새 `explore-liked-state-119`만 읽는다. 과거 Explore 좋아요 캐시는 app 119 판단 근거로 사용하지 않는다.
+- durable outbox도 새 `explore-like-outbox-119` 하나만 사용한다.
+- Explore 좋아요용 과거 RTDB replay subscriber를 중단했다.
+- 069/071 계열의 클라이언트 강제 좋아요 숫자 refresh/recovery 경로를 제거했다.
+- 하트 클릭 즉시 개인 하트 상태와 표시 숫자를 함께 ±1 한다.
+- 마지막 클릭 기준 20초 sliding idle window를 사용한다. 19초에 다른 하트를 누르면 그 클릭부터 다시 20초다.
+- 20초 안의 여러 곡 변경은 `/v1/me/likes/batch` 한 요청으로 보낸다.
+- 같은 곡을 여러 번 눌렀으면 최초 base 상태와 마지막 desired 상태만 서버에 보낸다. 결과가 원래 상태로 돌아오면 서버 mutation은 생략한다.
+- 페이지/프로필 이동은 20초 window를 강제 flush하지 않는다. 최신 outbox가 남아 다시 이어진다.
+- 다른 사용자의 shared Feed revision revalidation은 클라이언트 기준 최대 1분 간격으로 제한한다.
+- 기존 서버 hot path는 유지한다: warm batch intake는 D1 W1 069 queue, shared aggregate는 1분 event alarm이다.
+- app version: **119**.
+
+작업 branch / 기준:
+- 작업 branch: `work/app119-like-20s-latest-cache`
+- 기준 PREVIEW: `e15c5de462b73cc3f557fa5ee02ebb868318a022`
+- 제품 변경 파일:
+  - `src/services/exploreLikeService.ts`
+  - `src/pages/ExplorePage.tsx`
+  - `src/services/exploreLikedTracksService.ts`
+  - `src/services/userDomainSyncService.ts`
+  - `public/app-version.json`
+  - `scripts/verify-119-explore-like-20s-latest-cache.mjs`
+- UI/CSS 변경 없음.
+- Worker 제품 코드 변경 없음.
+- Firebase Functions/Rules 변경 없음.
+- D1 migration/seed/backfill/delete 없음.
+- 사용자 원본 데이터 구조/내용 변경 없음.
+
+검증:
+- 1차 Run `35326092830` SUCCESS.
+- 확장 회귀검사 과정에서 Run `35326266088`은 테스트 스크립트가 055 패치 파일의 "검사용 문자열"까지 실제 호출로 오인해 회귀검사만 FAIL했다. TypeScript/Build는 PASS였고 제품 코드 실패가 아니었다.
+- 검사 범위를 실제 hot-path replacement block으로 좁혀 수정.
+- 최종 제품 검증 Run `35328311634` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app119 regression PASS
+  - 20초 sliding idle batch 계약 PASS
+  - immediate heart/count 계약 PASS
+  - old RTDB/071 replay disabled PASS
+  - W1 queue intake + one-minute shared aggregate 계약 PASS
+- 임시 검증 Workflow는 merge 전 삭제한다.
+
+현재 상태:
+- PREVIEW 실제 배포 앱: **118** 유지.
+- TEST: **117** 유지.
+- PRODUCTION: **117** 유지.
+- app 119는 작업 branch 검증 완료, PREVIEW 병합/배포 전.
+- 다음 단계: 임시 검증 Workflow 제거 → PR로 preview 병합 → Firebase PREVIEW Hosting 배포 → preview.soridraw.com app119 exact build 확인 → 실제 하트/숫자/20초 묶음쓰기 실사용 확인.
+- PRODUCTION 변경 금지.
+
 ## 0V. PREVIEW app 118 — Explore 좋아요 의도 snap-back 수정 / 배포 완료
 
 사용자 실사용 영상에서 좋아요 해제를 누르면 회색 하트로 잠시 바뀐 뒤 약 1초 안에 다시 빨간 하트로 돌아오는 현상을 기준으로 개인 좋아요 상태 머신을 수정했다.

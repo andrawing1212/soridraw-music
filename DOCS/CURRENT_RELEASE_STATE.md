@@ -1,5 +1,69 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AA. TEST app 122 — PREVIEW 검증본 승격 / TEST_VERIFIED 완료
+
+사용자가 PREVIEW app 122를 통과 처리하고 TEST 배포를 승인했다. 검증된 PREVIEW 제품과 공유 사용자 데이터를 그대로 사용하며, 데이터 복사/마이그레이션 없이 코드/Worker/Hosting만 TEST로 승격했다.
+
+최종 TEST 승격 기준:
+- source PREVIEW SHA: `9be18f49b91d47f068b77c056e2611eb5a3c4d06`
+- source app version: **122**
+- promoted main SHA: `c16a8087c40a8e6330242b6420ac381d1b315ea2`
+- TEST Worker version: `78a3295f-cbf4-4c1f-8d1b-22934df7e7b0`
+- TEST manifest/tag: `soridraw-test-v122-9be18f49b91d`
+- TEST URL: `https://test.soridraw.com`
+- Firebase TEST fallback URL: `https://soridraw-test.web.app`
+- final TEST Release Controller Run: `35337836322` — **SUCCESS / TEST_VERIFIED**
+- final preflight Run: `35337724687` — **SUCCESS**
+
+최종 검증:
+- source SHA/tree 잠금 PASS.
+- TypeScript / Build / release static verification PASS.
+- Firebase Hosting write permission preflight PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- shared D1 SELECT-only preflight PASS.
+- TEST Worker upload → exact version activation PASS.
+- TEST latest shared Feed parity PASS.
+- TEST popular shared Feed parity PASS.
+- TEST public profile parity PASS.
+- TEST Worker smoke/verify PASS.
+- Firebase TEST Hosting deploy PASS.
+- `test.soridraw.com` + `soridraw-test.web.app` app-version/index exact verification PASS.
+- TEST_VERIFIED durable manifest 생성 PASS.
+- PRODUCTION branch / Worker / Hosting 비변경 PASS.
+
+첫 TEST 시도와 자동 복구:
+- 최초 preflight Run `35336675035` — SUCCESS.
+- 최초 TEST Run `35336817221` — TEST_DEPLOY parity 단계 FAIL.
+- 당시 제품/권한/Build 실패가 아니라 Release Controller가 PREVIEW/TEST 각각의 독립 60초 revision edge cache와 legacy direct Feed를 같은 순간 완전 동일해야 한다고 검사해, 실제 shared R2가 정상이어도 revision 세대가 교차하며 실패한 것이 로그/코드로 확인됐다.
+- 실패 직후 Controller 자동 rollback 성공:
+  - TEST Worker → 기존 `2d3f887d-8730-497f-a35c-d60452c532c4` 복구.
+  - main → app117 tree 복구.
+  - Firebase TEST Hosting은 실패 지점상 새 app122 배포 전에 중단되어 기존 app117 유지.
+  - PRODUCTION 비변경.
+- Release parity 검사 수정:
+  - PR #100 → preview merge `9be18f49b91d47f068b77c056e2611eb5a3c4d06`.
+  - 검증 Run `35337334681` — TypeScript / Build / promotion verifier / controller verifier / runtime syntax PASS.
+  - PREVIEW/TEST revision endpoint는 각자 SHARED authority + D1 R0/W0를 계속 검사.
+  - 환경별 edge revision 문자열의 순간 동일성 대신 현재 shared R2 revision + 실제 Feed projection의 완전 동일성을 검사.
+  - 공개프로필 parity 및 rollback/binding/bundle 안전검사는 유지.
+  - TEST 기준 main에도 동일 릴리스 도구만 PR #101로 동기화; merge `71d7cae35153291d77a27eda6cbf6674c236007a`.
+  - 앱/Hosting/Worker 제품 기능 변경 없음.
+
+현재 환경:
+- PREVIEW 제품: app **122** — source 기준 `9be18f49b91d47f068b77c056e2611eb5a3c4d06`.
+- TEST: app **122**, main `c16a8087c40a8e6330242b6420ac381d1b315ea2`, **TEST_VERIFIED**.
+- PRODUCTION: app **117**, `e994340f3c4f6ac97f444f1ddf13053d3faffa71` 유지.
+- PRODUCTION 승격은 사용자 명확한 정식배포 승인 전 금지.
+
+데이터/비용 안전:
+- 사용자 원본 데이터 복사 없음.
+- D1 migration/seed/backfill/delete 없음.
+- Firebase Functions/Rules 변경/배포 없음.
+- 공유 canonical D1: `soridraw-explore-db` 유지.
+- 공유 PROFILE_MEDIA: `soridraw-profile-media` 유지.
+- 좋아요 30초 actor batch / 다른 사용자 활동 gate 2분 / shared 1분 aggregate / app120 actor count lock 유지.
+- TEST 실사용 검증 전. 다음 단계는 사용자가 `test.soridraw.com`에서 실제 PC/모바일 기능·비용을 확인하는 것.
+
 ## 0Z. PREVIEW app 122 — Explore 좋아요 흰색 filled heart + 짧은 클릭 모션 / 배포 완료
 
 사용자 요청으로 좋아요 버튼의 시각 표현만 변경했다.

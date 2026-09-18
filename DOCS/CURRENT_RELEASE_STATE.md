@@ -1,5 +1,54 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AH. app125 W2 publication candidate — staged compatibility design / static validation PASS / live D1 not applied
+
+작업 branch:
+- `work/app125-publication-w2`
+- 기준 PREVIEW: `405cc43631d79db5d3cd7f36f4f8f32cb12b9140`
+- validation Run: `35363942705` — **SUCCESS**
+
+이번 설계의 핵심:
+- shared D1 `tracks`에 additive `publication_storage_version INTEGER NOT NULL DEFAULT 0` 후보 추가.
+- 기존 사용자 row와 기존 TEST/PRODUCTION Worker는 기본값 0으로 계속 기존 인덱스/derived/revision 경로를 사용한다.
+- 새 066 Worker가 **brand-new Music Note row만 version=1**로 INSERT하도록 후보 코드를 추가했다.
+- version=1 Music Note만 9개 secondary tracks index, `explore_derived_tracks` 자동 mirror, legacy shared revision trigger에서 제외한다.
+- 따라서 기존 row를 백필/변환하지 않고 새 공개부터 W2 경로로 단계 전환할 수 있다.
+- existing row를 ON CONFLICT로 version=1에 강제 승격하지 않는다.
+
+R2 호환 계층:
+- patch `066-publication-w2-shared-r2-authority.mjs` 추가.
+- 새 공개: 기존 targeted local R2 patch 후 shared Feed mirror + W2 Feed rank object 생성.
+- 비공개: shared track-card를 기준으로 W2 rank object 제거 + shared Feed mirror.
+- 좋아요 숫자 변경: W2 track만 popular rank key를 이동.
+- 공개프로필: mutation 전에 shared profile을 local에 prime하고 mutation 뒤 shared profile로 mirror.
+- 위 W2 R2 helpers는 D1 query를 포함하지 않도록 verifier로 고정.
+
+migration 안전:
+- 기존 Music Note row 삭제/수정/backfill 없음.
+- old Worker가 migration 후 새 Music Note를 쓰더라도 version=0이므로 현재 legacy 동작을 유지.
+- migration은 **아직 shared D1에 실행하지 않음**.
+- PREVIEW/TEST/PRODUCTION Worker/Hosting 배포 없음.
+- 사용자 데이터 write 없음.
+
+검증 Run `35363942705`:
+- generated Worker 066 적용/문법 PASS.
+- `APP125_W2_CUTOVER_STATIC=PASS`.
+- `APP125_NEW_MUSIC_NOTE_DERIVED_D1_WRITES=0`.
+- `APP125_NEW_MUSIC_NOTE_LEGACY_REVISION_WRITES=0`.
+- `APP125_OLD_WORKER_STORAGE_VERSION=0_COMPAT_PASS`.
+- shared track-card regression PASS.
+- app123 last-known/shared-like regression PASS.
+- TypeScript PASS.
+- Build PASS.
+- safety boundary PASS: deployment/shared-D1 execution/user-data write 없음.
+
+현재 판정:
+- W18 원인 제거 구조는 정적 검증까지 통과.
+- 실제 shared D1 `rows_written W2`는 migration + PREVIEW Worker를 실제 적용하기 전에는 미검증.
+- 검색/장르/Feed 2페이지의 **read 비용 최적화는 다음 단계**. 현재 후보는 correctness를 깨지 않도록 old version=0 호환을 유지하지만, migration 실행 전 이 부분까지 감사해야 한다.
+- 사용자 승인 없이 shared D1 migration 실행 금지.
+- PRODUCTION 승격 금지.
+
 ## 0AG. D1 mutation hard gate + publication W18 root cause confirmed
 
 - User directive: D1 mutation `rows_written` must be **W1~W2** per one user action. `W3+` is unconditional FAIL, including first registration.

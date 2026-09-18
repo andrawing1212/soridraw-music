@@ -1,43 +1,36 @@
 # SORIDRAW NEXT CODEX TASK
 
-최종 갱신: 2026-09-18 KST — TEST app124 TEST_VERIFIED / PAGE SYNC 비용 감사 완료
+최종 갱신: 2026-09-18 KST — publication first-public W18 hard FAIL / redesign required
 
-## 현재 기준
+## 절대 합격선
 
-- PREVIEW: app **124**
-- TEST: app **124 / TEST_VERIFIED**
-- TEST main: `f7fc25d5452b3313efa3cca53c180c5494cc9837`
-- TEST Worker: `6e8dca9c-2c58-42ea-ae7d-765e10afef8f`
-- TEST manifest: `soridraw-test-v124-3010dd0609bd`
-- preflight Run: `35347397424` — SUCCESS
-- TEST promotion Run: `35347566331` — SUCCESS
-- PRODUCTION: app **117**, 비변경
+- D1 사용자 mutation 1회 `rows_written` **W1~W2만 PASS**.
+- 좋아요/해제, 공개/비공개, 팔로우/해제 등 모두 동일.
+- 최초 등록도 예외 없음.
+- `W3+`면 기능이 정상이어도 TEST/PRODUCTION 승격 금지.
 
-## PAGE SYNC 비용 판정
+## 현재 확인된 실패
 
-- PAGE SYNC D1 R/W는 실제 마지막 sync 1회의 D1 billable row delta.
-- Sync N은 누적 sync 횟수.
-- pending change 0이면 PAGE SYNC noop, D1/Firestore 0.
-- 공개/비공개는 실제 mutation이므로 D1 write 비용이 발생하는 것이 정상.
-- query count와 billable row count는 별도이므로 query W1에서 row W18이 나올 수 있음.
-- warm publication hot path는 UPDATE RETURNING, canonical pre-read 없음.
-- unresolved/cold에서만 bounded SELECT.
-- track_stats pre-read 제거.
-- indexed profile_pinned는 값이 바뀔 때만 update.
-- visibility/options/updated_at-only 변경은 heavy derived mirror trigger 대상에서 제외.
-- 현재 R6/W18, R3/W2는 실제 변경 비용이며 반복 요청/전체 scan/페이지 이동 누수 증거는 없음.
+- 첫 Music Note 공개: `PAGE SYNC D1 R6/W18` → **FAIL**.
+- 등록된 곡 비공개: `R3/W2` → write gate PASS.
+- 첫 공개 W18 = tracks W11 + derived-track mirror W5 + derived-profile count W1 + shared revision W1.
+- live shared-D1 read-only audit Run `35352259068` SUCCESS, remote writes 0.
 
-## 다음 작업
+## 다음 구현 목표
 
-1. TEST 실사용에서 공개→비공개→재공개를 같은 곡으로 2~3회 반복하여 warm path가 안정적으로 유지되는지 확인.
-2. 공개상태 묶음의 query count가 warm 재실행에서 불필요하게 R1로 반복되는지 확인.
-3. PAGE SYNC가 pending 0 상태에서 route change만으로 발생하지 않는지 확인.
-4. PC/모바일 동일 결과 유지.
-5. 문제가 없으면 TEST 검증 완료 상태 유지.
-6. PRODUCTION은 사용자의 명확한 정식배포 승인 전 변경 금지.
+1. 첫 공개 경로를 구조적으로 재설계해 실제 live D1 `rows_written <=2`.
+2. 단순히 write를 늦추거나 다른 background job으로 옮겨 총량을 숨기는 방식 금지.
+3. Music Note에 불필요한 tracks indexes / derived D1 mirror / D1 revision write 의존성을 각각 감사.
+4. shared R2 Feed/Profile/current client cache 구조를 우선 재사용.
+5. 기존 TEST/PRODUCTION이 shared canonical data를 계속 읽을 수 있는 하위호환 유지.
+6. destructive migration/index drop/backfill은 사용자 별도 승인 없이 실행 금지.
+7. PREVIEW에서 공개·비공개·재공개 각각 실제 PAGE SYNC와 per-path D1 row meter 확인.
+8. PC+모바일 공통 검증.
+9. W3+ 하나라도 나오면 FAIL.
+10. PRODUCTION은 명확한 정식배포 승인 전 변경 금지.
 
-## 비용 추가 최적화 후보
+## 현재 환경
 
-- 현재 publication row 비용을 더 낮출 수 있는지 별도 감사 가능.
-- 단, 사용자 요청 없이 schema/index 제거, destructive migration, 데이터 의미 변경 금지.
-- 실제 변경 1건당 비용만 줄이고 전체 scan/rebuild는 금지.
+- PREVIEW app124
+- TEST app124 / TEST_VERIFIED 배포본은 존재하지만 신규 hard gate 기준으로 production 승격 불가.
+- PRODUCTION app117 유지.

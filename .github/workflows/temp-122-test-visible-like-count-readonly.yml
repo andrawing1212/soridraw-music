@@ -54,6 +54,8 @@ jobs:
           curl -fsS -D "$RUNNER_TEMP/preview.headers" -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__soridraw_r2_only=108" > "$RUNNER_TEMP/preview.json"
           curl -fsS -D "$RUNNER_TEMP/test.headers" -H "Origin: ${TEST_ORIGIN}" "${TEST_BASE}/v1/feed?sort=latest&limit=40&__soridraw_r2_only=108" > "$RUNNER_TEMP/test.json"
           curl -fsS -D "$RUNNER_TEMP/testrev.headers" -H "Origin: ${TEST_ORIGIN}" "${TEST_BASE}/v1/feed-revision?sort=latest" > "$RUNNER_TEMP/testrev.json"
+          curl -fsS -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/feed?sort=latest&limit=40&__diag122=${GITHUB_RUN_ID}" > "$RUNNER_TEMP/preview-direct.json"
+          curl -fsS -H "Origin: ${TEST_ORIGIN}" "${TEST_BASE}/v1/feed?sort=latest&limit=40&__diag122=${GITHUB_RUN_ID}" > "$RUNNER_TEMP/test-direct.json"
 
           node <<'NODE'
           const fs=require('fs');
@@ -61,8 +63,10 @@ jobs:
           const d1=flat(process.env.RUNNER_TEMP+'/d1.json');
           const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/preview.json','utf8'))?.data?.items||[];
           const t=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/test.json','utf8'))?.data?.items||[];
+          const pd=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/preview-direct.json','utf8'))?.data?.items||[];
+          const td=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/test-direct.json','utf8'))?.data?.items||[];
           const map=a=>new Map(a.map(x=>[String(x.id||x.trackId||''),x]));
-          const pm=map(p), tm=map(t);
+          const pm=map(p), tm=map(t), pdm=map(pd), tdm=map(td);
           console.log('=== VISIBLE LIKE COUNT PARITY ===');
           for(const row of d1){
             const pr=pm.get(String(row.id));
@@ -74,7 +78,9 @@ jobs:
               canonical:Number(row.canonical_count||0),
               relation:Number(row.relation_count||0),
               derived:Number(row.derived_count??-1),
-              preview:pc,test:tc
+              previewShared:pc,testShared:tc,
+              previewDirect:Number(pdm.get(String(row.id))?.likeCount ?? pdm.get(String(row.id))?.like_count ?? -1),
+              testDirect:Number(tdm.get(String(row.id))?.likeCount ?? tdm.get(String(row.id))?.like_count ?? -1)
             }));
           }
           console.log('PREVIEW_ITEMS='+p.length);

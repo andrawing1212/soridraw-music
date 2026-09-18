@@ -8,6 +8,7 @@ import baseWorker from './preview-worker.js';
 // SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_103_20260916
 // SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_105_20260916
 // SORIDRAW_EXPLORE_R2_SNAPSHOT_BOOTSTRAP_108_20260916
+// SORIDRAW_SHARED_FEED_R2_READ_112_20260917
 //
 // 077: revision checks never open D1. The first-page Feed R2 object's ETag is the
 // revision. A mutation that changes the cached Feed changes the ETag; unchanged
@@ -29,6 +30,42 @@ const EXPLORE_FEED_R2_SNAPSHOT_QUERY_108 = '__soridraw_r2_only';
 const EXPLORE_FEED_R2_SNAPSHOT_REVISION_QUERY_108 = '__soridraw_r2_revision';
 const EXPLORE_FEED_R2_SNAPSHOT_VERSION_108 = '108';
 const EXPLORE_FEED_R2_SNAPSHOT_EDGE_SECONDS_108 = 5 * 60;
+const EXPLORE_SHARED_FEED_R2_VERSION_112 = '112';
+const sharedFeedR2Key112 = (sort) => `internal/explore/shared-feed-v112/${sort === 'popular' ? 'popular' : 'latest'}-40.json`;
+
+async function readFeedHeadSource112(env, sort) {
+  const shared = env?.PROFILE_MEDIA || null;
+  if (shared) {
+    try {
+      const head = await shared.head(sharedFeedR2Key112(sort));
+      if (head) return { head, r2ClassB: 1, source: 'SHARED-R2-HEAD-112' };
+    } catch {}
+  }
+  const local = feedCacheBucket077(env);
+  if (!local) return { head: null, r2ClassB: shared ? 1 : 0, source: 'R2-BINDING-MISSING-112' };
+  try {
+    const head = await local.head(feedR2Key077(sort));
+    if (head) return { head, r2ClassB: shared ? 2 : 1, source: 'LOCAL-R2-HEAD-FALLBACK-112' };
+  } catch {}
+  return { head: null, r2ClassB: shared ? 2 : 1, source: 'R2-MISSING-112' };
+}
+
+async function readFeedObjectSource112(env, sort) {
+  const shared = env?.PROFILE_MEDIA || null;
+  if (shared) {
+    try {
+      const object = await shared.get(sharedFeedR2Key112(sort));
+      if (object) return { object, r2ClassB: 1, source: 'SHARED-R2-GET-112' };
+    } catch {}
+  }
+  const local = feedCacheBucket077(env);
+  if (!local) return { object: null, r2ClassB: shared ? 1 : 0, source: 'R2-BINDING-MISSING-112' };
+  try {
+    const object = await local.get(feedR2Key077(sort));
+    if (object) return { object, r2ClassB: shared ? 2 : 1, source: 'LOCAL-R2-GET-FALLBACK-112' };
+  } catch {}
+  return { object: null, r2ClassB: shared ? 2 : 1, source: 'R2-MISSING-112' };
+}
 const RELEASE_ALLOWED_ORIGINS_036 = new Set([
   'https://preview.soridraw.com',
   'https://soridraw-preview.web.app',
@@ -96,29 +133,28 @@ async function readFeedR2Revision077(url, env, sort) {
     const cached = await caches.default.match(edgeKey);
     if (cached) {
       const revision = String(await cached.text() || '').trim();
-      if (revision) return { revision, r2ClassB: 0, source: 'EDGE-R2-HEAD-077' };
+      if (revision) return { revision, r2ClassB: 0, source: 'EDGE-SHARED-R2-HEAD-112' };
     }
   } catch {}
 
-  const bucket = feedCacheBucket077(env);
-  if (!bucket) return { revision: '', r2ClassB: 0, source: 'R2-BINDING-MISSING-077' };
-  let head = null;
-  try { head = await bucket.head(feedR2Key077(sort)); } catch {}
-  if (!head) return { revision: '', r2ClassB: 1, source: 'R2-MISSING-077' };
+  const selected = await readFeedHeadSource112(env, sort);
+  const head = selected.head;
+  if (!head) return { revision: '', r2ClassB: selected.r2ClassB, source: selected.source };
   const revision = String(
     head.httpEtag
     || head.etag
+    || head.customMetadata?.mirroredAt
     || head.customMetadata?.updatedAt
     || (head.uploaded && typeof head.uploaded.getTime === 'function' ? head.uploaded.getTime() : '')
     || '',
   ).trim();
-  if (!revision) return { revision: '', r2ClassB: 1, source: 'R2-REVISION-MISSING-077' };
+  if (!revision) return { revision: '', r2ClassB: selected.r2ClassB, source: 'R2-REVISION-MISSING-112' };
   try {
     await caches.default.put(edgeKey, new Response(revision, {
       headers: { 'Cache-Control': `public, max-age=${REVISION_HEAD_CACHE_SECONDS_077}` },
     }));
   } catch {}
-  return { revision, r2ClassB: 1, source: 'R2-HEAD-077' };
+  return { revision, r2ClassB: selected.r2ClassB, source: selected.source };
 }
 
 async function handleFeedRevisionHeadOnly077(request, env) {
@@ -200,20 +236,12 @@ async function handleFeedR2Snapshot108(request, env) {
     } catch {}
   }
 
-  const bucket = feedCacheBucket077(env);
-  if (!bucket) {
-    return new Response(JSON.stringify({ ok: false, error: 'Explore Feed cache binding unavailable' }), {
-      status: 503,
-      headers: feedSnapshotHeaders108(request, '', 'R2-BINDING-MISSING-108', 0),
-    });
-  }
-
-  let object = null;
-  try { object = await bucket.get(feedR2Key077(sort)); } catch {}
+  const selected = await readFeedObjectSource112(env, sort);
+  const object = selected.object;
   if (!object) {
     return new Response(JSON.stringify({ ok: false, error: 'Explore Feed snapshot unavailable' }), {
       status: 503,
-      headers: feedSnapshotHeaders108(request, '', 'R2-MISSING-108', 1),
+      headers: feedSnapshotHeaders108(request, '', selected.source, selected.r2ClassB),
     });
   }
 
@@ -223,13 +251,14 @@ async function handleFeedR2Snapshot108(request, env) {
   if (!payload?.data || !Array.isArray(payload.data.items)) {
     return new Response(JSON.stringify({ ok: false, error: 'Explore Feed snapshot invalid' }), {
       status: 503,
-      headers: feedSnapshotHeaders108(request, '', 'R2-INVALID-108', 1),
+      headers: feedSnapshotHeaders108(request, '', 'R2-INVALID-112', selected.r2ClassB),
     });
   }
 
   const actualRevision = String(
     object.httpEtag
     || object.etag
+    || object.customMetadata?.mirroredAt
     || object.customMetadata?.updatedAt
     || (object.uploaded && typeof object.uploaded.getTime === 'function' ? object.uploaded.getTime() : '')
     || requestedRevision
@@ -246,7 +275,7 @@ async function handleFeedR2Snapshot108(request, env) {
   }
   return new Response(body, {
     status: 200,
-    headers: feedSnapshotHeaders108(request, actualRevision, 'R2-GET-108', 1),
+    headers: feedSnapshotHeaders108(request, actualRevision, selected.source, selected.r2ClassB),
   });
 }
 

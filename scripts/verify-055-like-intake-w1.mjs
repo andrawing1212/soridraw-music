@@ -58,10 +58,35 @@ assert.match(migration069, /WITHOUT ROWID/);
 assert.doesNotMatch(migration069, /CREATE\s+(?:UNIQUE\s+)?INDEX/i, '069 W1 queue must have no secondary index');
 
 // Keep old 075 rows readable/drainable, but do not route new hot-path intake there.
+// Later releases wrap the aggregate several times (public-like reconciliation,
+// shared Feed mirroring, etc.). Follow the wrapper chain until the actual drain
+// implementation is found instead of assuming a specific wrapper depth.
 assert.match(migration075, /idx_explore_like_user_queue_075_updated/);
-const aggregate = functionText(worker, 'processExploreLikeBatches035');
-assert.match(aggregate, /hasExploreLikeUserQueuePending075/);
-assert.match(aggregate, /processExploreLikeUserQueueWave075/);
+const aggregateOuter = functionText(worker, 'processExploreLikeBatches035');
+let aggregateName = 'processExploreLikeBatches035';
+let aggregateImplementation = '';
+const aggregateSeen = new Set();
+for (let depth = 0; depth < 10; depth += 1) {
+  assert.ok(!aggregateSeen.has(aggregateName), `aggregate wrapper cycle: ${aggregateName}`);
+  aggregateSeen.add(aggregateName);
+  const text = functionText(worker, aggregateName);
+  if (/hasExploreLikeUserQueuePending075/.test(text) && /processExploreLikeUserQueueWave075/.test(text)) {
+    aggregateImplementation = text;
+    break;
+  }
+  const next = [...text.matchAll(/processExploreLikeBatches035Core\d+/g)]
+    .map((match) => match[0])
+    .find((name) => !aggregateSeen.has(name));
+  assert.ok(next, `legacy 075 drain implementation not reachable from ${aggregateName}`);
+  aggregateName = next;
+}
+assert.ok(aggregateImplementation, 'legacy 075 drain implementation not found within aggregate wrapper chain');
+assert.match(aggregateImplementation, /hasExploreLikeUserQueuePending075/);
+assert.match(aggregateImplementation, /processExploreLikeUserQueueWave075/);
+if (aggregateOuter.includes('processExploreLikeBatches035Core059')) {
+  assert.match(aggregateOuter, /processExploreLikeBatches035Core059\(env, scheduledTime\)/, '059 shared-feed wrapper must still invoke aggregate core');
+  assert.match(aggregateOuter, /mirrorExploreSharedFeeds059\(env\)/, '059 shared-feed mirror must remain after aggregate changes');
+}
 
 const limiter = functionText(worker, 'enforceExploreLikeBatchEdgeRateLimit054');
 assert.match(limiter, /LIKE_RATE_LIMITER/);

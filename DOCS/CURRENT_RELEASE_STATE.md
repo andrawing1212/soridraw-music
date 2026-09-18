@@ -1,5 +1,84 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AH. W2 publication 구조설계 확정 / Phase A code-only 준비
+
+2026-09-19 KST 기준, Music Note 첫 공개의 D1 `W18`을 절대 합격선 `W1~W2`로 내리기 위한 구조설계를 확정했다.
+
+기준:
+- 설계 시작 PREVIEW HEAD: `405cc43631d79db5d3cd7f36f4f8f32cb12b9140`
+- 설계 문서: `DOCS/PUBLICATION_W2_R2_CATALOG_DESIGN.md`
+- 설계 문서 commit: `1baadfecf5c26930ee6740eeb85ca18b17549e06`
+- Phase A 작업지시 갱신 commit: `200f0bcd2e55bfa86b550dfbc2d0beffec47eaa9`
+
+실측 근거:
+- Run `35357007850` SUCCESS:
+  - 현재와 같은 rowid `tracks` 형태에서 9개 explicit secondary index를 Music Note에서 제외한 진단 구조:
+    - first insert `W2`
+    - private `W1`
+    - republish `W1`
+    - noop `W0`
+  - `WITHOUT ROWID` insert는 `W1`이었으나 목표 달성에 필수는 아님.
+- Run `35357864011` SUCCESS:
+  - FTS INSERT `W1`
+  - FTS DELETE `W1`
+  - 따라서 canonical first insert `W2` + D1 FTS `W1` = `W3`이므로 publication hot path에서 D1 FTS write 금지.
+- Run `35356844574` SUCCESS:
+  - live `tracks`는 9 explicit indexes + PK autoindex.
+  - `track_search_fts`, `profile_search_fts` 별도 존재.
+  - active runtime에서 `INDEXED BY idx_tracks_...` 강제 의존은 확인되지 않음.
+
+확정 구조:
+1. `tracks` 테이블/컬럼 계약은 그대로 유지한다. 공유 사용자 row를 새 테이블로 옮기지 않는다.
+2. 최종 shared D1 cutover 후보는 Music Note만 9개 explicit secondary index 대상에서 제외하는 partial-index 구조다. Suno Library/legacy row는 기존 동작 유지.
+3. Music Note publication에서 D1 `explore_derived_tracks` mirror 및 shared-revision write를 hot path에서 제외한다.
+4. Explore latest/popular, public profile, track-card는 현재 shared R2 구조를 계속 사용한다.
+5. 2페이지 이후 rank/pagination은 새 shared R2 ordered catalog로 옮긴다. 전체 Feed/profile 재생성 금지.
+6. 검색 UI 계약 `/v1/search?q=...`는 유지하고 Worker 내부 source만 R2 catalog로 교체한다.
+   - 제목 token/prefix
+   - 장르
+   - 아티스트 nickname/handle
+   - publication 시 D1 FTS INSERT/DELETE 0
+7. per-track R2 meta에 현재 marker key를 보관해 public/private/title/genre/pin/like 변경 시 해당 곡 marker만 이동한다.
+8. 신규 사용자의 첫 공개에서 자동 `public_profiles` D1 INSERT가 hard gate를 넘기지 않도록, auth nickname/avatar 기반 최소 shared profile v113 bundle을 R2에 먼저 만드는 경로를 준비한다. 이후 사용자가 프로필을 직접 편집하면 기존 canonical profile edit가 D1에 materialize/update하고 shared R2를 교체한다.
+9. 현재 first-public이 `ON CONFLICT(id)`를 사용해 PK idempotency를 제공하는 것은 확인했다. 다만 Music Note `source.id`의 기기/재시도 간 안정성은 partial unique-index cutover 전에 별도 verifier로 증명해야 한다.
+10. `WITHOUT ROWID` 재구축은 현재 목표에 불필요하므로 채택하지 않는다.
+
+R2 ordered catalog 초안:
+- `internal/explore/catalog-v1/meta/<trackId>.json`
+- `.../latest/<inversePublishedAt>/<trackId>.json`
+- `.../popular/<inverseLikeCount>/<inversePublishedAt>/<trackId>.json`
+- `.../profile/<uid>/<pinOrder>/<inversePublishedAt>/<trackId>.json`
+- `.../genre/<normalizedGenre>/<inversePublishedAt>/<trackId>.json`
+- `.../title/<normalizedToken>/<inversePublishedAt>/<trackId>.json`
+- `.../artist/name/<normalizedNickname>/<uid>.json`
+- `.../artist/handle/<normalizedHandle>/<uid>.json`
+
+호환성:
+- PREVIEW/main은 shared R2 043~065 구조 보유.
+- PRODUCTION app117도 shared R2 043~064 구조 보유.
+- shared profile v113은 UID direct read + handle alias read를 이미 지원한다.
+- first page current shared R2 path는 보호하고, deep-page/search만 새 path를 병행 추가한다.
+- legacy cursor/D1 fallback은 final cutover 전까지 제거하지 않는다.
+
+진행 단계:
+- Phase A: code-only R2 catalog/search/deep paging/first-publisher R2 profile/verifier 구현. **shared D1 변경/배포 없음.**
+- Phase B: RATE_DB/진단 환경에서 production-shape partial index + trigger exclusion 실측, R2 integration test, Work 독립 감사.
+- Phase C: 새 read path를 이해하는 코드를 PREVIEW → TEST → 명시적 승인 후 PRODUCTION까지 먼저 승격.
+- Phase D: 사용자 별도 승인 후에만 shared D1 index/trigger cutover. user row delete/backfill/rewrite 금지.
+
+현재 환경:
+- PREVIEW app **124**
+- TEST app **124 / TEST_VERIFIED**
+- PRODUCTION app **117**
+- 이 구조설계 작업에서 Firebase/Functions/Cloudflare Worker/shared D1/user data 배포·변경 없음.
+- PRODUCTION 비변경.
+
+다음 작업:
+- `DOCS/NEXT_CODEX_TASK.md`의 Phase A code-only 범위대로 구현.
+- Phase A 완료 전 shared D1 migration/index drop/create/trigger change 금지.
+- Phase A/Phase B/Work 감사 전 TEST/PRODUCTION 승격 금지.
+
+
 ## 0AG. D1 mutation hard gate + publication W18 root cause confirmed
 
 - User directive: D1 mutation `rows_written` must be **W1~W2** per one user action. `W3+` is unconditional FAIL, including first registration.

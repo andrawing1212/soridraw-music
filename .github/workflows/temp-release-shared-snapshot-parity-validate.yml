@@ -1,0 +1,34 @@
+name: TEMP release shared-snapshot parity validation
+
+on:
+  push:
+    branches:
+      - work/release-parity-shared-snapshot-fix
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Release promotion static verifier
+        run: node scripts/verify-release-promotion-system.mjs
+      - name: Release controller verifier
+        run: node scripts/verify-release-controller.mjs
+      - name: Runtime syntax
+        run: node --check .deploy/release-worker-runtime.mjs

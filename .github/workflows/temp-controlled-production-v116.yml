@@ -85,6 +85,7 @@ jobs:
           old_prod_hosting="$(hosting_identity soridraw)"
           old_prod_hosting_version="$(printf '%s' "$old_prod_hosting" | cut -f2)"
           old_prod_hosting_version_id="${old_prod_hosting_version##*/}"
+          rollback_channel="release-rollback-v116-${GITHUB_RUN_ID}"
           printf '%s' "$old_prod_schedules" > "$RUNNER_TEMP/prod-schedules-before"
 
           branch_mutated=false
@@ -100,15 +101,16 @@ jobs:
               RELEASE_WORKER_VERSION="$old_prod_worker" RELEASE_WORKER_SCHEDULES_JSON="$(cat "$RUNNER_TEMP/prod-schedules-before")" node .deploy/release-worker-runtime.mjs production restore
             fi
             if [ "$branch_mutated" = true ] && [ -n "$promoted" ]; then
+              git fetch origin production --no-tags || true
               current="$(git ls-remote origin refs/heads/production | cut -f1)"
               if [ "$current" = "$promoted" ]; then
                 old_tree="$(git rev-parse "$old_prod_branch^{tree}")"
                 rollback_commit="$(printf 'rollback: restore production after failed v116 release\n' | git commit-tree "$old_tree" -p "$current")"
-                git push origin "$rollback_commit:refs/heads/production"
+                git push origin "$rollback_commit:refs/heads/production" || true
               fi
             fi
             if [ "$hosting_mutated" = true ]; then
-              npx --yes firebase-tools@latest hosting:clone "soridraw:@$old_prod_hosting_version_id" soridraw:live --project soridraw --non-interactive
+              npx --yes firebase-tools@latest hosting:clone "soridraw:$rollback_channel" soridraw:live --project soridraw --non-interactive || true
             fi
             echo "CONTROLLED_PRODUCTION_ROLLBACK_END"
             exit "$code"
@@ -126,6 +128,9 @@ jobs:
           node -e "const p=require(process.env.RUNNER_TEMP+'/prod-d1.json'),r=p.flatMap(x=>x.results||[]).find(x=>'required_tables'in x);if(!r||+r.required_tables<6||+r.explore032_triggers<10||+r.seeded!==1)throw Error('D1 preflight');"
           echo PRODUCTION_D1_SELECT_ONLY_PREFLIGHT=PASS
 
+          # Preserve the exact current production Hosting release on a temporary channel for rollback.
+          npx --yes firebase-tools@latest hosting:clone soridraw:live "soridraw:$rollback_channel" --project soridraw --non-interactive
+
           node .deploy/release-worker-runtime.mjs production upload | tee "$RUNNER_TEMP/prod-upload"
           new_prod_worker="$(sed -n 's/^PRODUCTION_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/prod-upload" | tail -1)"
           test -n "$new_prod_worker"
@@ -139,7 +144,8 @@ jobs:
           worker_mutated=true
 
           test_version_id="${test_hosting_version##*/}"
-          npx --yes firebase-tools@latest hosting:clone "soridraw-test:@$test_version_id" soridraw:live --project soridraw --non-interactive
+          # TEST live was revalidated against the immutable manifest immediately above.
+          npx --yes firebase-tools@latest hosting:clone soridraw-test:live soridraw:live --project soridraw --non-interactive
           hosting_mutated=true
           echo FIREBASE_PRODUCTION_HOSTING_CLONED_FROM_TEST=PASS
 
@@ -155,6 +161,8 @@ jobs:
           test "$(git ls-remote origin refs/heads/production | cut -f1)" = "$promoted"
 
           trap - ERR
+          # Cleanup only the temporary rollback channel after the full production verification succeeds.
+          npx --yes firebase-tools@latest hosting:channel:delete "$rollback_channel" --site soridraw --project soridraw --force || true
           echo "PRODUCTION_RELEASED=PASS"
           echo "PRODUCTION_BRANCH=$promoted"
           echo "PRODUCTION_WORKER=$new_prod_worker"

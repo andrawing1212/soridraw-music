@@ -1,0 +1,79 @@
+name: Validate app125 Publication W2 Candidate
+
+on:
+  push:
+    branches:
+      - work/app125-publication-w2
+    paths:
+      - 'cloudflare/explore-worker/migrations/20260918_01_music_note_w2_cutover.sql'
+      - 'cloudflare/explore-worker/patches/066-publication-w2-shared-r2-authority.mjs'
+      - 'cloudflare/explore-worker/release-patches.json'
+      - 'scripts/verify-125-publication-w2-cutover.mjs'
+      - 'scripts/verify-115-shared-track-card-r2.mjs'
+      - 'scripts/verify-123-shared-like-cache-repair.mjs'
+      - '.github/workflows/validate-125-publication-w2.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-app125-publication-w2
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@v4
+        with:
+          ref: work/app125-publication-w2
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build generated Worker candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/patches/066-publication-w2-shared-r2-authority.mjs
+          tmp="$(mktemp -d)"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$tmp/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/066-publication-w2-shared-r2-authority.mjs
+          node --check "$tmp/worker.js"
+          cp "$tmp/worker.js" /tmp/app125-worker.js
+          echo "APP125_GENERATED_WORKER=/tmp/app125-worker.js" >> "$GITHUB_ENV"
+
+      - name: Verify W2 cutover and R2 regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$APP125_GENERATED_WORKER" node scripts/verify-125-publication-w2-cutover.mjs
+          SORIDRAW_GENERATED_WORKER="$APP125_GENERATED_WORKER" node scripts/verify-115-shared-track-card-r2.mjs
+          SORIDRAW_GENERATED_WORKER="$APP125_GENERATED_WORKER" node scripts/verify-123-shared-like-cache-repair.mjs
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Safety boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          echo 'NO_DEPLOYMENT=true'
+          echo 'NO_SHARED_D1_EXECUTION=true'
+          echo 'NO_USER_DATA_WRITE=true'
+          echo 'NO_FIREBASE_CHANGE=true'
+          echo 'NO_FUNCTIONS_CHANGE=true'
+          echo 'NO_PRODUCTION_CHANGE=true'

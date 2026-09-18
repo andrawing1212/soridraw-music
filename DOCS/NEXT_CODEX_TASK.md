@@ -40,6 +40,20 @@ TEST 실사용에서 Explore 공개 좋아요 숫자가 0으로 남는다.
 - `35339874817`
 - `35340012778` — canonical/derived/shared Feed 대조
 
+## 앱 업데이트 좋아요 숫자 고정 규칙
+
+사용자 추가 확정 기준:
+- 같은 환경(PREVIEW/TEST/PRODUCTION)에서 앱 버전만 업데이트되면 마지막 정상 Explore 좋아요 숫자 캐시를 유지한다.
+- 앱 업데이트 자체를 이유로 Explore Feed cache를 삭제/무효화/0 초기화하지 않는다.
+- 업데이트 후 첫 Explore 진입은 업데이트 전 마지막 정상 캐시 숫자를 즉시 그대로 표시한다.
+- 정상 캐시가 있으면 앱 업데이트/첫 진입만으로 revision/server read를 강제하지 않는다.
+- 이후 실제 사용자 활동 시 기존 2분 activity gate에 따라 작은 revision 확인만 수행한다.
+- revision이 동일하면 기존 캐시 유지.
+- revision이 변경된 경우에만 최신 shared Feed snapshot으로 교체한다.
+- 새 기기/새 브라우저/캐시 손상처럼 정상 로컬 캐시가 없을 때만 최초 shared Feed snapshot을 1회 받는다.
+- 서버에서 더 오래된/stale shared snapshot이 기존 정상 로컬 숫자를 역으로 덮어쓰는 경로를 금지한다.
+- 이 규칙은 app version과 data state를 분리하고, 업데이트 자체 Firestore/D1 read 0 목표를 지키는 기준이다.
+
 ## 다음 구현 목표
 
 `preview`에서만 수정.

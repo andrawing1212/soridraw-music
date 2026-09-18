@@ -1,5 +1,52 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0Y. PREVIEW app 121 — Explore 좋아요 timing-only 조정 / 검증 완료 / PREVIEW 병합·배포 전
+
+사용자 지시로 app 120의 동작은 그대로 유지하고 시간값 두 개만 변경했다.
+
+변경:
+- 좋아요 sliding idle batch: 마지막 클릭 후 **20초 → 30초**.
+- 다른 사용자 Feed revision 활동 판정 최소 간격: **60초 → 120초(2분)**.
+- app version: **121**.
+
+그대로 유지:
+- 하트/숫자 즉시 반영.
+- actor 최신 숫자 display lock.
+- app 120 개인 좋아요 캐시 namespace 및 outbox 구조.
+- 서버 warm batch intake: 069 queue D1 W1.
+- 서버 shared aggregate: **1분 event alarm 그대로**.
+- shared revision endpoint의 D1 R0/W0 계약.
+- UI/CSS, Worker 제품 코드, Firebase Functions/Rules, D1 schema/data, 사용자 원본 데이터 모두 비변경.
+
+작업 기준:
+- 기준 PREVIEW: `046fda0b746a912d8926cc2d09348d812aed7060` — app 120.
+- 작업 branch: `work/app121-like-30s-2m-timing`.
+- 변경 제품 파일:
+  - `src/services/exploreLikeService.ts` — 30초.
+  - `src/pages/ExplorePage.tsx` — 120초.
+  - `public/app-version.json` — 121.
+- 검증 파일:
+  - `scripts/verify-121-explore-like-timing-only.mjs`.
+
+검증:
+- Run `35331912691` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app121 timing-only regression PASS
+  - actor batch idle 30초 PASS
+  - 다른 사용자 활동 gate 120초 PASS
+  - 서버 1분 shared aggregate 비변경 PASS
+  - app120 cache/count-lock 비변경 PASS
+- 임시 검증 Workflow 삭제 완료.
+
+현재 상태:
+- PREVIEW 실제 배포: app **120** 유지.
+- TEST: app **117** 유지.
+- PRODUCTION: app **117** 유지.
+- app 121은 PREVIEW 병합·배포 전.
+- 다음 단계: PR → preview 병합 → Firebase PREVIEW Hosting 배포 → exact build 확인.
+- PRODUCTION 변경 금지.
+
 ## 0X. PREVIEW app 120 — Explore 좋아요 actor count lock / 배포 완료
 
 사용자 실사용 영상에서 app 119의 서버 1분 공용 집계는 정상적으로 수렴했지만, 누른 사용자 본인의 숫자가 20초 대기 구간 동안 올라갔다 내려갔다 반복되는 현상을 확인했다.

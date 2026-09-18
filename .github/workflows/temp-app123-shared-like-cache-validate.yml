@@ -1,0 +1,118 @@
+name: TEMP app123 shared like cache validation
+
+on:
+  push:
+    branches:
+      - work/app123-shared-like-cache-repair
+    paths:
+      - '.github/workflows/temp-app123-shared-like-cache-validate.yml'
+      - 'src/pages/ExplorePage.tsx'
+      - 'cloudflare/explore-worker/patches/056-explore-public-like-parity.mjs'
+      - 'cloudflare/explore-worker/patches/065-shared-like-count-targeted.mjs'
+      - 'cloudflare/explore-worker/release-patches.json'
+      - 'public/app-version.json'
+      - 'scripts/verify-123-shared-like-cache-repair.mjs'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temp-app123-shared-like-cache-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact work branch
+        uses: actions/checkout@v4
+        with:
+          ref: work/app123-shared-like-cache-repair
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Generate canonical Worker with 065
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/patches/065-shared-like-count-targeted.mjs
+          tmp="$(mktemp -d)"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$tmp/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/065-shared-like-count-targeted.mjs
+          cp "$tmp/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          node --check cloudflare/explore-worker/canonical/preview-entry.js
+          grep -Fq 'SORIDRAW_SHARED_LIKE_COUNT_TARGETED_065_20260918' cloudflare/explore-worker/canonical/preview-worker.js
+
+      - name: Verify app123 and shared-cache regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-123-shared-like-cache-repair.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-116-explore-public-count-convergence.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-115-shared-track-card-r2.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-114-shared-social-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-113-shared-profile-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-112-shared-feed-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-102-explore-public-like-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
+          expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test -n "$expected"
+          test "$expected" = "$actual"
+          echo 'APP123_SHARED_LIKE_CACHE_REGRESSION=PASS'
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify generated change boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only | grep -v '^dist/' || true)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt)$' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected generated changes:'
+            echo "$bad"
+            exit 1
+          fi
+          echo 'NO_D1_SCHEMA_CHANGE=true'
+          echo 'NO_FIREBASE_FUNCTIONS_CHANGE=true'
+          echo 'NO_RULES_CHANGE=true'
+          echo 'NO_USER_DATA_MIGRATION=true'
+          echo 'NO_UI_CSS_CHANGE=true'
+          echo 'NO_DEPLOYMENT=true'
+
+      - name: Commit generated canonical Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked=(
+            cloudflare/explore-worker/canonical/preview-worker.js
+            cloudflare/explore-worker/canonical/source-sha256.txt
+          )
+          if git diff --quiet -- "${tracked[@]}"; then
+            echo 'Canonical Worker already generated.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "${tracked[@]}"
+          git commit -m 'build: generate app123 targeted shared-like Worker'
+          git push origin HEAD:work/app123-shared-like-cache-repair

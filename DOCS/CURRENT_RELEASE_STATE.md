@@ -1,6 +1,6 @@
 # SORIDRAW CURRENT RELEASE STATE
 
-## 0Z. PREVIEW app 122 — Explore 좋아요 흰색 filled heart + 짧은 클릭 모션 / preview 병합 완료 / 미배포
+## 0Z. PREVIEW app 122 — Explore 좋아요 흰색 filled heart + 짧은 클릭 모션 / 배포 완료
 
 사용자 요청으로 좋아요 버튼의 시각 표현만 변경했다.
 
@@ -27,6 +27,16 @@
   - layout/size/spacing unchanged guard PASS
 - 임시 검증 Workflow 삭제 완료.
 
+PREVIEW 배포:
+- deploy trigger commit: `9cb35cebfd9bdfb47537a0587b11d9add595c23c`.
+- Firebase PREVIEW Hosting Run `35333985793` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - Firebase PREVIEW Hosting deploy PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+- 실제 대상: `https://preview.soridraw.com`.
+
 변경 파일:
 - `src/components/explore/exploreSocial.css`
 - `src/styles/classicLightVisualFixes.css`
@@ -36,9 +46,9 @@
 비변경:
 - Explore 좋아요 동작/30초 batch/2분 revision gate/1분 shared aggregate 모두 그대로.
 - Worker / D1 / Firebase Functions / Rules / 사용자 데이터 변경 없음.
-- GitHub preview 코드는 app 122 반영 완료.
-- PREVIEW Hosting은 아직 app 121. **미배포**.
-- TEST / PRODUCTION 변경 없음.
+- TEST app 117 유지.
+- PRODUCTION app 117 유지.
+- PRODUCTION 변경 금지.
 
 ## 0Y. PREVIEW app 121 — Explore 좋아요 timing-only 조정 / 배포 완료
 

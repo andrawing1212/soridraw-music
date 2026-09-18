@@ -10,11 +10,11 @@ const temp = process.env.RUNNER_TEMP || '/tmp';
 const previewBase = 'https://soridraw-explore-preview.andrawing1212.workers.dev';
 const previewOrigin = 'https://preview.soridraw.com';
 
-const expectedTitles = [
-  'Leaving One Step Open',
-  'Left Unsaid',
-  'Through the Night',
-  'Just Stay Here Awhile',
+const expectedTargets = [
+  { id: 'music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q', titleNeedle: 'Leaving One Step Open' },
+  { id: 'music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_mdCqNWohZwk6lsKuNWOa', titleNeedle: 'Left Unsaid' },
+  { id: 'music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_b1ef5cf6fcb04371b33ea71d1950f244_5jt44', titleNeedle: 'Through the Night' },
+  { id: 'music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6eb4944de4264b12a85f0d17180cd143_1en45bp', titleNeedle: 'Just Stay Here Awhile' },
 ];
 
 const run = (args, { capture = false, allowFail = false } = {}) => {
@@ -40,20 +40,24 @@ const sql = `SELECT
 FROM tracks t
 LEFT JOIN track_stats s ON s.track_id=t.id
 LEFT JOIN explore_derived_tracks d ON d.id=t.id
-WHERE t.title IN ('Leaving One Step Open','Left Unsaid','Through the Night','Just Stay Here Awhile')
-ORDER BY t.title,t.id`;
+WHERE t.id IN ('music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_mdCqNWohZwk6lsKuNWOa','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_b1ef5cf6fcb04371b33ea71d1950f244_5jt44','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6eb4944de4264b12a85f0d17180cd143_1en45bp')
+ORDER BY t.id`;
 
 const d1 = run(['d1','execute','DB','--remote','--config',config,'--command',sql,'--json'], { capture: true });
 let parsed;
 try { parsed = JSON.parse(d1.stdout); } catch (error) { throw new Error(`D1 JSON parse failed: ${d1.stdout}\n${d1.stderr}`); }
 const rows = parsed.flatMap((entry) => Array.isArray(entry?.results) ? entry.results : []);
-const titles = rows.map((row) => String(row.title || '')).sort();
-const expectedSorted = [...expectedTitles].sort();
-if (rows.length !== 4 || JSON.stringify(titles) !== JSON.stringify(expectedSorted)) {
-  throw new Error(`Safety stop: expected exact four diagnosed titles, got ${JSON.stringify(rows)}`);
+const expectedById = new Map(expectedTargets.map((row) => [row.id, row]));
+const actualIds = rows.map((row) => String(row.id || '')).sort();
+const expectedIds = expectedTargets.map((row) => row.id).sort();
+if (rows.length !== 4 || JSON.stringify(actualIds) !== JSON.stringify(expectedIds)) {
+  throw new Error(`Safety stop: expected exact four diagnosed track IDs, got ${JSON.stringify(rows)}`);
 }
 for (const row of rows) {
-  if (!String(row.id || '').trim() || !String(row.owner_uid || '').trim()) throw new Error(`Safety stop: missing id/owner ${JSON.stringify(row)}`);
+  const id = String(row.id || '').trim();
+  const expected = expectedById.get(id);
+  if (!expected || !String(row.owner_uid || '').trim()) throw new Error(`Safety stop: missing expected id/owner ${JSON.stringify(row)}`);
+  if (!String(row.title || '').includes(expected.titleNeedle)) throw new Error(`Safety stop: title/id pairing changed for ${id}: ${row.title}`);
   if (Number(row.like_count) !== 1 || Number(row.relation_count) !== 1 || Number(row.derived_likes) !== 1) {
     throw new Error(`Safety stop: canonical/relation/derived no longer all 1 for ${row.title}: ${JSON.stringify(row)}`);
   }

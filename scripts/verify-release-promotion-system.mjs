@@ -44,6 +44,16 @@ for (const token of [
   'EXPLORE_CACHE',
   "['dry-run', 'upload', 'activate', 'verify', 'restore']",
   'keep_vars: true',
+  'CANONICAL_WRANGLER_PATH',
+  "'ratelimit'",
+  "'durable_object_namespace'",
+  "item?.name === 'LIKE_RATE_LIMITER'",
+  "item?.name === 'EXPLORE_LIKE_BATCH_SCHEDULER'",
+  'ratelimits: canonicalRateLimits',
+  'durable_objects: { bindings: canonicalDurableBindings }',
+  'migrations: canonicalMigrations',
+  'REQUIRED_RATELIMIT_BINDINGS=',
+  'REQUIRED_DURABLE_OBJECT_BINDINGS=',
   'SORIDRAW_RELEASE_ENVIRONMENT_PARITY_INVARIANT_117_20260917',
   "const CANONICAL_D1_NAME = 'soridraw-explore-db'",
   "const CANONICAL_PROFILE_MEDIA_BUCKET = 'soridraw-profile-media'",
@@ -58,11 +68,19 @@ for (const token of [
 
 forbidden(workerRuntime, /\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b[^\n]*env\.DB/i, 'Worker runtime D1 mutation');
 required(workerRuntime, "if (!revisionSource.includes('SHARED'))", 'shared revision authority rejection');
-required(workerRuntime, 'targetRevision.revision !== referenceRevision.revision', 'stage revision equality');
+required(workerRuntime, 'SORIDRAW_RELEASE_SHARED_SNAPSHOT_PARITY_123_20260918', 'current shared snapshot parity marker');
+required(workerRuntime, 'REVISION_EDGE_SKEW=EXPECTED', 'bounded revision edge-cache skew handling');
+required(workerRuntime, 'targetSnapshot.revision !== referenceSnapshot.revision', 'current shared R2 revision equality');
 required(workerRuntime, 'sameProjection(targetSnapshotProjection, referenceSnapshotProjection)', 'shared Feed projection equality');
+forbidden(workerRuntime, /direct Feed projection differs from/, 'legacy direct first-page parity gate');
+forbidden(workerRuntime, /targetRevision\.revision !== referenceRevision\.revision/, 'independent edge revision exact-equality gate');
 required(workerRuntime, 'sameProjection(profileProjection(targetProfile.payload), profileProjection(referenceProfile.payload))', 'public-profile projection equality');
 required(workerRuntime, 'PARITY_MAX_ATTEMPTS = 13', 'bounded parity attempts');
 required(workerRuntime, 'PARITY_RETRY_MS = 5_000', 'bounded parity retry window');
+required(workerRuntime, 'readRevision(target.referenceBase', 'PREVIEW/TEST revision endpoint diagnostics');
+required(workerRuntime, 'readRevision(target.base', 'target revision endpoint diagnostics');
+required(workerRuntime, 'readCurrentSharedSnapshot(target.referenceBase', 'reference current shared R2 read');
+required(workerRuntime, 'readCurrentSharedSnapshot(target.base', 'target current shared R2 read');
 required(workerRuntime, 'automatic ${mode} rollback after release smoke failure', 'Worker rollback on parity failure');
 required(workerRuntime, 'WORKER_UPLOAD_NO_TRAFFIC_CHANGE=PASS', 'Worker version upload before traffic');
 required(workerRuntime, 'Worker bundle identity mismatch', 'Worker bundle identity verification');
@@ -94,4 +112,5 @@ console.log('RELEASE_PROMOTION_SYSTEM_STATIC=PASS');
 console.log('RELEASE_FEATURE_PARITY_GUARD=PASS');
 console.log('RELEASE_ENVIRONMENT_PARITY_INVARIANT_STATIC=PASS');
 console.log('RELEASE_SHARED_CANONICAL_BINDINGS_STATIC=PASS');
+console.log('RELEASE_REQUIRED_LIKE_BINDINGS_STATIC=PASS');
 console.log('RELEASE_NO_DESTRUCTIVE_DB_ACTION=PASS');

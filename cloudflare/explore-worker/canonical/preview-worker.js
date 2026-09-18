@@ -21225,6 +21225,7 @@ async function reconcileExplorePublicLikes056(env) {
   return {
     feeds: feedResults.map((result) => ({ sort: result.sort, changed: Boolean(result.changed), deferred: Boolean(result.deferred) })),
     visibleChangedTracks: changedByTrack.size,
+    changedItems: [...changedByTrack.values()],
     updatedProfiles,
   };
 }
@@ -21351,7 +21352,103 @@ async function processExploreLikeBatches035Core059(env, scheduledTime = Date.now
   }
 }
 
-async function processExploreLikeBatches035(env, scheduledTime = Date.now()) {
+// SORIDRAW_SHARED_LIKE_COUNT_TARGETED_065_20260918
+function normalizeSharedLikeRows065(changedItems) {
+  const byTrack = new Map();
+  for (const row of changedItems || []) {
+    const trackId = String(row?.trackId || '').trim();
+    if (!trackId) continue;
+    const likeCount = Math.max(0, Number(row?.likeCount || 0));
+    byTrack.set(trackId, {
+      trackId,
+      ownerUid: String(row?.ownerUid || '').trim(),
+      likeCount,
+    });
+  }
+  return [...byTrack.values()];
+}
+
+function patchSharedFeedItemLike065(item, likeCount) {
+  const current = Math.max(0, Number(item?.likeCount ?? item?.like_count ?? item?.stats?.likeCount ?? item?.stats?.like_count ?? 0));
+  if (current === likeCount) return { item, changed: false };
+  return {
+    changed: true,
+    item: {
+      ...item,
+      likeCount,
+      ...(item?.stats && typeof item.stats === 'object'
+        ? { stats: { ...item.stats, likeCount } }
+        : {}),
+    },
+  };
+}
+
+async function patchSharedFeedLikeCounts065(env, changedItems) {
+  const rows = normalizeSharedLikeRows065(changedItems);
+  const shared = env?.PROFILE_MEDIA || null;
+  if (!rows.length || !shared) return { rows: rows.length, changedFeeds: 0, changedCards: 0, skipped: !shared };
+  const wanted = new Map(rows.map((row) => [row.trackId, row.likeCount]));
+  let changedFeeds = 0;
+
+  for (const sort of ['latest', 'popular']) {
+    const key = exploreSharedFeedR2Key059(sort);
+    let object = null;
+    try { object = await shared.get(key); } catch {}
+    if (!object) continue;
+
+    let bundle = null;
+    try { bundle = JSON.parse(await object.text()); } catch { bundle = null; }
+    const items = Array.isArray(bundle?.payload?.data?.items) ? bundle.payload.data.items : null;
+    if (!items) continue;
+
+    let changed = false;
+    const nextItems = items.map((item) => {
+      const trackId = String(item?.id || item?.trackId || '').trim();
+      if (!wanted.has(trackId)) return item;
+      const patched = patchSharedFeedItemLike065(item, wanted.get(trackId));
+      if (patched.changed) changed = true;
+      return patched.item;
+    });
+    if (!changed) continue;
+
+    const now = Date.now();
+    const nextBundle = {
+      ...bundle,
+      updatedAt: now,
+      payload: {
+        ...bundle.payload,
+        data: {
+          ...bundle.payload.data,
+          items: nextItems,
+        },
+      },
+    };
+    await shared.put(key, JSON.stringify(nextBundle), {
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      customMetadata: {
+        ...(object.customMetadata || {}),
+        soridrawSharedFeed: '123',
+        targetedLikePatch: '065',
+        mirroredAt: String(now),
+      },
+    });
+    changedFeeds += 1;
+  }
+
+  let changedCards = 0;
+  for (const row of rows) {
+    try {
+      if (await patchSharedTrackCard062(env, row.trackId, { likeCount: row.likeCount })) changedCards += 1;
+    } catch (error) {
+      console.warn('[SORIDRAW 065] shared track card like patch deferred:', row.trackId, String(error?.message || error || 'unknown'));
+    }
+  }
+
+  return { rows: rows.length, changedFeeds, changedCards, skipped: false };
+}
+
+
+async function processExploreLikeBatches035Core065(env, scheduledTime = Date.now()) {
   const totals = await processExploreLikeBatches035Core059(env, scheduledTime);
   if (Number(totals?.changedTracks || 0) > 0) {
     try {
@@ -21360,6 +21457,21 @@ async function processExploreLikeBatches035(env, scheduledTime = Date.now()) {
       console.warn('[SORIDRAW 059] shared Feed mirror after like aggregate deferred:', String(error?.message || error || 'unknown'));
       totals.sharedFeedMirror059 = { mirrored: 0, deferred: true };
     }
+  }
+  return totals;
+}
+
+async function processExploreLikeBatches035(env, scheduledTime = Date.now()) {
+  const totals = await processExploreLikeBatches035Core065(env, scheduledTime);
+  const changedItems = Array.isArray(totals?.publicProjectionDetail?.changedItems)
+    ? totals.publicProjectionDetail.changedItems
+    : [];
+  if (!changedItems.length) return totals;
+  try {
+    totals.sharedLikePatch065 = await patchSharedFeedLikeCounts065(env, changedItems);
+  } catch (error) {
+    console.warn('[SORIDRAW 065] targeted shared like-count patch deferred:', String(error?.message || error || 'unknown'));
+    totals.sharedLikePatch065 = { rows: changedItems.length, deferred: true };
   }
   return totals;
 }

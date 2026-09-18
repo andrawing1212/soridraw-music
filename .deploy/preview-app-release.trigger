@@ -1,8 +1,8 @@
-requested_at=2026-09-18T07:23:00Z
+requested_at=2026-09-18T09:15:00Z
 requested_by=user
-product_code_target=5c8ef2f809fd0f230980706116cb3f25be5dc087
-release_source_target=app-118-explore-like-explicit-intent
-release_purpose=118_explore_like_explicit_intent_ack
+product_code_target=1b1f4664e39a5e0aecc9f4ba910cb4beba2c7f5e
+release_source_target=app-119-explore-like-20s-latest-cache
+release_purpose=119_explore_like_latest_cache_20s_batch
 hosting_only=true
 worker_redeploy=false
 no_user_data_migration=true

@@ -176,8 +176,8 @@ jobs:
           hosting_release(){ curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/sites/$1/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv'; }
           hosting_release soridraw-test > "$RUNNER_TEMP/test-hosting-before"
           hosting_release soridraw > "$RUNNER_TEMP/production-hosting-before"
-          permissions="$(curl -fsS -X POST -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" -H 'Content-Type: application/json' "https://cloudresourcemanager.googleapis.com/v1/projects/$FIREBASE_PROJECT:testIamPermissions" --data '{"permissions":["firebasehosting.versions.create","firebasehosting.versions.delete","firebasehosting.releases.create"]}')"
-          for permission in firebasehosting.versions.create firebasehosting.versions.delete firebasehosting.releases.create; do
+          permissions="$(curl -fsS -X POST -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" -H 'Content-Type: application/json' "https://cloudresourcemanager.googleapis.com/v1/projects/$FIREBASE_PROJECT:testIamPermissions" --data '{"permissions":["firebasehosting.sites.get","firebasehosting.sites.list","firebasehosting.sites.update"]}')"
+          for permission in firebasehosting.sites.get firebasehosting.sites.list firebasehosting.sites.update; do
             jq -e --arg permission "$permission" '.permissions | index($permission) != null' <<<"$permissions" >/dev/null
           done
           gh api "repos/$GITHUB_REPOSITORY" --jq '.permissions.push == true' | grep -qx true

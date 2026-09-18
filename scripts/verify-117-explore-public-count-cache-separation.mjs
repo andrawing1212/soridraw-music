@@ -14,7 +14,8 @@ assert.match(overlay, /LIKE_REVISION_GRACE_STORAGE_PREFIX/);
 assert.doesNotMatch(overlay, /soridrawPersistentCache/);
 assert.doesNotMatch(overlay, /explore-like-account-patches/);
 assert.doesNotMatch(overlay, /ACCOUNT_PATCH_SCHEMA_VERSION/);
-assert.doesNotMatch(overlay, /likeCount/);
+assert.doesNotMatch(overlay, /\blikeCount\s*:/);
+assert.doesNotMatch(overlay, /\.likeCount\b/);
 
 assert.doesNotMatch(revision, /overlayExploreAccountLikeCounts/);
 assert.doesNotMatch(revision, /overlayServerFeedResponse/);

@@ -1,5 +1,42 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0Q. Explore 공개 좋아요 숫자 개인 캐시 오염 근본 수정 — app 117 / PREVIEW 코드 반영 완료 / 배포 전
+
+사용자 실사용 비교에서 동일 곡과 동일 공개 데이터가 TEST에서는 `1`, PRODUCTION에서는 여러 로그인 계정에서 `0`으로 표시되는 현상을 확인했다. 서버-side TEST/PRODUCTION parity가 PASS해도 브라우저에서 값이 갈릴 수 있는 client 경로를 추적했다.
+
+근본 원인:
+- `src/services/exploreLikeAccountOverlay.ts`의 과거 068 경로가 로그인 계정별 `likeCount`를 persistent cache에 보관했다.
+- 이 모듈은 `explore-like-account-patches`를 schema **1**로 사용했지만 `src/services/exploreLikeService.ts`는 같은 cache key/source를 schema **2**로 사용했다.
+- `src/services/exploreRevisionRequestCache.ts`가 정상 서버 Feed 응답을 받은 뒤 `overlayExploreAccountLikeCounts()`를 다시 적용해, 오래된 계정 캐시의 `0`이 shared/server의 정상 `1`을 덮을 수 있었다.
+- 따라서 서버 parity 검사는 정상이어도 오래 사용한 PRODUCTION 브라우저와 깨끗한 TEST origin이 서로 다른 숫자를 표시할 수 있었다.
+
+app 117 수정:
+- 공개 `likeCount`는 shared/server Feed/Profile payload만 authority로 사용한다.
+- 계정별 persistent cache가 공개 숫자를 덮어쓰는 `overlayExploreAccountLikeCounts`와 server response overlay를 제거했다.
+- 과거 overlay helper는 별도 `sessionStorage` key에 revision grace timestamp만 보관하며 숫자는 저장하지 않는다.
+- 개인 빨간 하트 membership은 기존 계정별 경로를 유지하고 공개 숫자와 분리한다.
+- 현재 Explore 카드 render는 `track={track}` shared 숫자를 직접 사용하며 `getExploreLikeDisplayCount091` 같은 개인 display ledger를 public count source로 사용하지 않는 것을 117 verifier에 고정했다.
+- 기존 116 public-count convergence verifier는 app 116 이상에서 계속 적용되도록 보강했다.
+
+GitHub:
+- PR #93 `Fix Explore public like count stale personal-cache overwrite` merge 완료.
+- app 117 코드 merge commit: `06330ae00c2d7639542d7b3ab473aabb85f67d9e`.
+- 최종 검증 Run `35308672890` SUCCESS.
+  - TypeScript PASS
+  - Build PASS
+  - `verify-117-explore-public-count-cache-separation.mjs` PASS
+  - `verify-116-explore-public-count-convergence.mjs` PASS
+- UI/CSS 변경 없음.
+- Worker/D1/Functions/Rules 변경 없음.
+- 사용자 데이터 migration/seed/backfill/delete/overwrite 없음.
+- TEST/PRODUCTION 변경 없음.
+
+배포 상태:
+- PREVIEW branch 코드에는 app 117이 반영됐지만 **Firebase PREVIEW에는 아직 배포하지 않았다**.
+- 현재 TEST/PRODUCTION은 계속 app 116 상태다.
+- 다음 단계는 사용자의 배포 요청이 있을 때 app 117을 PREVIEW에 먼저 배포하여, 오래된 PRODUCTION형 브라우저 캐시가 존재하는 상태에서도 shared/server `1`이 더 이상 account-local `0`으로 덮이지 않는지 실사용 확인하는 것이다.
+
+
 ## 0P. 2026-09-18 TEST → PRODUCTION v116 정식 승격 — 완료
 
 이 섹션이 아래의 이전 release-state 기록보다 우선한다.

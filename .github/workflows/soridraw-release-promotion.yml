@@ -180,7 +180,8 @@ jobs:
           for permission in firebasehosting.sites.get firebasehosting.sites.list firebasehosting.sites.update; do
             jq -e --arg permission "$permission" '.permissions | index($permission) != null' <<<"$permissions" >/dev/null
           done
-          gh api "repos/$GITHUB_REPOSITORY" --jq '.permissions.push == true' | grep -qx true
+          # The repository permissions field does not reliably reflect the effective GitHub Actions installation token.
+          # Use the actual no-mutation push dry-run as the authoritative branch-write capability probe.
           git push --dry-run origin "HEAD:refs/heads/__release-controller-write-probe-${GITHUB_RUN_ID}"
           if [ "${{ steps.request.outputs.mode }}" = test ]; then
             tag="soridraw-test-v${RELEASE_APP_VERSION}-$(printf %.12s "$RELEASE_TARGET")"

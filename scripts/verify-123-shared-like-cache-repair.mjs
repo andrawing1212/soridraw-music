@@ -12,7 +12,8 @@ const manifest = JSON.parse(readFileSync('cloudflare/explore-worker/release-patc
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const entry = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');
 
-assert.equal(String(version.version), '123');
+const appVersion = Number(version.version);
+assert.ok(Number.isFinite(appVersion) && appVersion >= 123, 'app version must be >=123');
 
 // App update/re-entry must use the last known persistent Feed without a network revalidation.
 assert.match(page, /SORIDRAW_EXPLORE_UPDATE_LAST_KNOWN_FEED_123_20260918/);

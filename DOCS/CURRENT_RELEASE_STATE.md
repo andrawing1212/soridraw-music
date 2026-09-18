@@ -1,5 +1,80 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AC. PREVIEW app 123 — 업데이트 캐시 유지 + shared 좋아요 숫자 targeted R2 repair / 검증 완료 / 배포 전
+
+사용자 지시로 두 문제를 함께 수정했다.
+
+1. 앱 업데이트 직후 좋아요 숫자 보존
+- 정상 Explore Feed 로컬 캐시가 있으면 앱 버전 변경/첫 진입만으로 revision 확인을 강제하지 않는다.
+- 업데이트 전 마지막 정상 좋아요 숫자를 즉시 그대로 표시한다.
+- 첫 진입/재진입은 server read 0 목표를 유지한다.
+- 실제 사용자 활동이 있고 기존 2분 activity gate가 열린 경우에만 revision을 확인한다.
+- revision이 동일하면 로컬 캐시 유지.
+- revision이 달라진 경우에만 shared Feed snapshot으로 교체.
+- 새 기기/캐시 손상처럼 정상 로컬 캐시가 없는 경우만 최초 shared snapshot을 1회 받는다.
+- Explore Feed persistent cache schema는 기존 3을 유지하며 app version과 분리.
+
+2. shared Feed 좋아요 숫자 stale 문제
+- 기존 진단에서 canonical/derived가 1인데 shared Feed v112만 0으로 남은 것이 확인됨.
+- 056 public-like reconciliation이 실제 변경 row를 `changedItems`로 다음 단계에 전달하도록 보강.
+- 새 release patch `065-shared-like-count-targeted.mjs` 추가.
+- 좋아요 aggregate 완료 후 변경된 track ID + 최종 likeCount만 shared latest/popular Feed R2 bundle에서 패치.
+- shared track-card R2도 같은 track만 targeted patch.
+- 전체 Feed D1 scan/rebuild 없음.
+- 기존 059 full mirror, 060 shared profile parity, 064 catch-up은 유지.
+- canonical Worker에 065 실제 생성 반영 및 source SHA 재고정.
+- app version: **123**.
+
+변경 파일:
+- `src/pages/ExplorePage.tsx`
+- `cloudflare/explore-worker/patches/056-explore-public-like-parity.mjs`
+- `cloudflare/explore-worker/patches/065-shared-like-count-targeted.mjs`
+- `cloudflare/explore-worker/release-patches.json`
+- `cloudflare/explore-worker/canonical/preview-worker.js`
+- `cloudflare/explore-worker/canonical/source-sha256.txt`
+- `public/app-version.json`
+- `scripts/verify-123-shared-like-cache-repair.mjs`
+- `scripts/verify-116-explore-public-count-convergence.mjs`
+- `scripts/verify-112-shared-feed-parity.mjs`
+- docs only.
+- UI/CSS 변경 없음.
+
+검증:
+- 최종 validation Run `35342677962` — **SUCCESS**
+  - canonical Worker 065 generation PASS
+  - app123 verifier PASS
+  - app116 public-count convergence regression PASS
+  - app115 shared track-card PASS
+  - app114 shared social PASS
+  - app113 shared profile PASS
+  - app112 shared Feed PASS
+  - app102 public like parity PASS
+  - derived cache verifier PASS
+  - TypeScript PASS
+  - Build PASS
+  - generated change boundary PASS
+- 앞선 실패 Run들은 제품 코드 실패가 아니라 기존 verifier가 새 wrapper/guard 구조를 문자열 기준으로 오인한 검사 문제였고, 검사 범위를 실제 동작 계약으로 수정한 뒤 최종 PASS.
+
+안전:
+- D1 schema/migration/seed/backfill/delete 없음.
+- 사용자 원본 데이터 변경 없음.
+- Firebase Functions/Rules 변경 없음.
+- 30초 actor batch 유지.
+- 1분 shared aggregate 유지.
+- 2분 viewer activity gate 유지.
+- app120 actor count lock 유지.
+- TEST/PRODUCTION 비변경.
+
+현재 상태:
+- 작업 branch: `work/app123-shared-like-cache-repair`
+- 기준 PREVIEW: `174714c5c91e4ce406d36f1cdbf11779e53491e4`
+- PREVIEW 실제 배포: app **122**
+- TEST 실제 배포: app **122**
+- PRODUCTION: app **117**
+- app123 코드/Worker 검증 완료, PREVIEW 병합·배포 전.
+- 배포 후 이미 stale인 4곡은 shared derived cache만 제한적으로 복구하고 canonical user data는 변경하지 않는다.
+- PRODUCTION 변경 금지.
+
 ## 0AB. TEST app 122 — Explore 공개 좋아요 숫자 stale shared Feed 확인 / 수정 전
 
 TEST 승격 직후 사용자 실사용에서 Explore 카드 숫자가 예상값으로 갱신되지 않는 현상을 확인했다. 이 문제는 "최초 업데이트 후 2분을 기다려야 보이는 정상 지연"이 아니다.

@@ -16,6 +16,19 @@
 - 첫 공개 W18 = tracks W11 + derived-track mirror W5 + derived-profile count W1 + shared revision W1.
 - live shared-D1 read-only audit Run `35352259068` SUCCESS, remote writes 0.
 
+## 공개 검색/탐색 제품 범위 — 2026-09-18 확정
+
+
+- 공개곡에서 반드시 필요한 검색/탐색:
+  - 곡 제목 검색
+  - 장르 탐색/검색
+  - 아티스트(공개 프로필 닉네임/handle) 검색
+- Suno URL 역검색, source type별 최신순, legacy id 검색 등은 사용자 기능으로 유지할 필요 없음.
+- 단, PK/중복방지/하위호환처럼 사용자 검색과 무관한 무결성 인덱스는 삭제 후보로 간주하지 말고 실제 의존성 확인 후 판단.
+- 제목 검색은 tracks의 일반 title index 유지가 아니라 검색 전용 구조가 더 싼지 우선 비교.
+- 아티스트 검색은 tracks 인덱스를 추가하지 말고 public profile 검색 경로를 사용.
+- 장르는 primary_genre 기반 최소 인덱스/검색 구조를 우선.
+
 ## 다음 구현 목표
 
 1. 첫 공개 경로를 구조적으로 재설계해 실제 live D1 `rows_written <=2`.

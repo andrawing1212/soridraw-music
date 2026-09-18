@@ -1,5 +1,54 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0U. Explore 좋아요 해제 503 — TEST/PRODUCTION Worker 복구 완료
+
+사용자 정식복구 승인에 따라, app 117 이후 발견된 Explore 좋아요 해제 503의 Worker 필수 바인딩 유실을 TEST와 PRODUCTION에 복구했다.
+
+근본 원인:
+- TEST/PRODUCTION Worker 승격 과정에서 `LIKE_RATE_LIMITER`와 `EXPLORE_LIKE_BATCH_SCHEDULER`가 live config에서 유실됐다.
+- 앱의 `좋아요 보호 기능을 확인할 수 없습니다` 토스트는 Worker가 `LIKE_RATE_LIMITER`를 사용할 수 없을 때 발생한 503 `RATE_LIMIT_UNAVAILABLE` 경로였다.
+- release runtime은 PR #94에서 필수 Rate Limiter / Durable Object 바인딩을 보존하도록 수정됐다.
+
+실제 복구:
+- 최초 versioned upload는 Cloudflare 제한(code 10211)으로 차단됐다. Durable Object migration은 처음 한 번 non-versioned deploy가 필요했다.
+- TEST Worker에 1회 Durable Object migration + 필수 바인딩 적용 완료.
+- TEST의 오래된 환경별 파생 Feed R2 2개(latest/popular)는 shared canonical R2 snapshot으로만 복구했다.
+  - 사용자 원본 데이터가 아니라 environment-specific derived cache만 수정했다.
+- TEST edge revision cache 70초 만료 후 release parity 재검증 PASS.
+- PRODUCTION derived Feed cache도 shared canonical snapshot으로 준비한 뒤 동일 1회 migration + 바인딩 적용.
+- PRODUCTION edge revision cache 70초 만료 후 TEST 기준 release parity PASS.
+
+최종 Run:
+- GitHub Actions `35314376142` — **SUCCESS**
+- TEST active Worker: `2d3f887d-8730-497f-a35c-d60452c532c4`
+- TEST release parity: PASS (reference PREVIEW, attempt 1)
+- TEST like batch unauth smoke: HTTP 401 — expected auth rejection, **5xx 없음**
+- PRODUCTION Worker before: `0bc9f998-f5d4-4fe3-a63c-13f7a4f13f58`
+- PRODUCTION Worker after: `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0`
+- PRODUCTION release parity: PASS (reference TEST, attempt 1)
+- PRODUCTION like batch unauth smoke: HTTP 401 — expected auth rejection, **5xx 없음**
+
+3환경 live 최종감사:
+- PREVIEW `soridraw-explore-preview`: required like bindings PASS
+- TEST `soridraw-explore-test`: required like bindings PASS
+- PRODUCTION `soridraw-explore-api`: required like bindings PASS
+- `THREE_ENV_REQUIRED_LIKE_BINDINGS=PASS`
+
+비변경:
+- Firebase Hosting 변경 없음.
+- D1 write / migration / seed / backfill 없음.
+- Firebase Functions / Rules 변경 없음.
+- 사용자 원본 데이터 변경 없음.
+- 앱 UI/CSS 변경 없음.
+- 수정된 것은 Worker runtime binding/migration bootstrap과 environment-specific derived Feed R2 cache뿐이다.
+
+현재 상태:
+- PREVIEW / TEST / PRODUCTION 앱: **117**
+- TEST / PRODUCTION Worker: 좋아요 Rate Limiter + shared like batch Durable Object 바인딩 복구 완료
+- 좋아요 batch 보호 경로는 503이 아닌 정상 auth 401 smoke까지 확인 완료.
+- 다음 실사용 확인: 각 앱에서 기존에 좋아요된 곡의 좋아요 해제 → 다시 좋아요 1회씩 확인.
+
+
 ## 0T. Explore 좋아요 해제 503 — Worker 필수 바인딩 유실 원인 확정 / 코드 수정 완료 / live 복구배포 전
 
 사용자 실사용에서 PREVIEW/TEST/PRODUCTION 좋아요 해제가 실패하고 일부 환경에서 `좋아요 보호 기능을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.` 토스트가 발생했다.

@@ -1,0 +1,160 @@
+name: TEMP Controlled PRODUCTION v116
+
+on:
+  push:
+    branches:
+      - fix/release-controller-hosting-live-identity
+    paths:
+      - .github/workflows/temp-controlled-production-v116.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      MANIFEST_TAG: soridraw-test-v116-fc3895884356
+      SOURCE_SHA: fc389588435617a02c9c3fc76ab5f739a3033e9c
+      TEST_WORKER: soridraw-explore-test
+      PROD_WORKER: soridraw-explore-api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fc389588435617a02c9c3fc76ab5f739a3033e9c
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Authenticate Firebase
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          token_format: access_token
+
+      - name: Controlled immutable PRODUCTION promotion
+        shell: bash
+        env:
+          GOOGLE_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          git config user.name "soridraw-release-bot"
+          git config user.email "release-bot@soridraw.invalid"
+          git fetch origin main production --no-tags
+
+          mkdir -p "$RUNNER_TEMP/manifest"
+          gh release download "$MANIFEST_TAG" --repo "$GITHUB_REPOSITORY" --pattern soridraw-release-manifest.json --dir "$RUNNER_TEMP/manifest"
+          manifest="$RUNNER_TEMP/manifest/soridraw-release-manifest.json"
+
+          test "$(jq -r .state "$manifest")" = TEST_VERIFIED
+          test "$(jq -r .tag "$manifest")" = "$MANIFEST_TAG"
+          test "$(jq -r .sourcePreviewSha "$manifest")" = "$SOURCE_SHA"
+          manifest_main="$(jq -r .promotedMainSha "$manifest")"
+          manifest_main_tree="$(jq -r .mainTree "$manifest")"
+          release_index_sha="$(jq -r .distIndexSha256 "$manifest")"
+          test_worker_version="$(jq -r .testWorkerVersionId "$manifest")"
+          test_hosting_release="$(jq -r .testHosting.release "$manifest")"
+          test_hosting_version="$(jq -r .testHosting.version "$manifest")"
+          test "$(git rev-parse origin/main)" = "$manifest_main"
+          test "$(git rev-parse "$manifest_main^{tree}")" = "$manifest_main_tree"
+
+          for base in https://soridraw-test.web.app https://test.soridraw.com; do
+            curl -fsS -H 'Cache-Control: no-cache' "$base/" -o "$RUNNER_TEMP/test-index"
+            test "$(sha256sum "$RUNNER_TEMP/test-index" | cut -d' ' -f1)" = "$release_index_sha"
+          done
+
+          cf_get(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$1"; }
+          active_worker(){ cf_get "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/deployments" | jq -er '.result.deployments[0].versions|max_by(.percentage)|.version_id'; }
+          schedules(){ cf_get "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/schedules" | jq -c '.result | if type=="array" then . elif ((.schedules // null)|type)=="array" then .schedules else [] end | map({cron:(.cron // "")}) | map(select(.cron != "")) | sort_by(.cron)'; }
+          hosting_identity(){ curl -fsS -H "Authorization: Bearer $GOOGLE_ACCESS_TOKEN" "https://firebasehosting.googleapis.com/v1beta1/sites/$1/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv'; }
+
+          test "$(active_worker "$TEST_WORKER")" = "$test_worker_version"
+          expected_test_hosting="$(printf '%s\t%s' "$test_hosting_release" "$test_hosting_version")"
+          test "$(hosting_identity soridraw-test)" = "$expected_test_hosting"
+
+          old_prod_branch="$(git rev-parse origin/production)"
+          old_prod_worker="$(active_worker "$PROD_WORKER")"
+          old_prod_schedules="$(schedules "$PROD_WORKER")"
+          old_prod_hosting="$(hosting_identity soridraw)"
+          old_prod_hosting_version="$(printf '%s' "$old_prod_hosting" | cut -f2)"
+          old_prod_hosting_version_id="${old_prod_hosting_version##*/}"
+          printf '%s' "$old_prod_schedules" > "$RUNNER_TEMP/prod-schedules-before"
+
+          branch_mutated=false
+          worker_mutated=false
+          hosting_mutated=false
+          promoted=""
+
+          rollback() {
+            code=$?
+            set +e
+            echo "CONTROLLED_PRODUCTION_ROLLBACK_BEGIN code=$code"
+            if [ "$worker_mutated" = true ]; then
+              RELEASE_WORKER_VERSION="$old_prod_worker" RELEASE_WORKER_SCHEDULES_JSON="$(cat "$RUNNER_TEMP/prod-schedules-before")" node .deploy/release-worker-runtime.mjs production restore
+            fi
+            if [ "$branch_mutated" = true ] && [ -n "$promoted" ]; then
+              current="$(git ls-remote origin refs/heads/production | cut -f1)"
+              if [ "$current" = "$promoted" ]; then
+                old_tree="$(git rev-parse "$old_prod_branch^{tree}")"
+                rollback_commit="$(printf 'rollback: restore production after failed v116 release\n' | git commit-tree "$old_tree" -p "$current")"
+                git push origin "$rollback_commit:refs/heads/production"
+              fi
+            fi
+            if [ "$hosting_mutated" = true ]; then
+              npx --yes firebase-tools@latest hosting:clone "soridraw:@$old_prod_hosting_version_id" soridraw:live --project soridraw --non-interactive
+            fi
+            echo "CONTROLLED_PRODUCTION_ROLLBACK_END"
+            exit "$code"
+          }
+          trap rollback ERR
+
+          cd cloudflare/explore-worker
+          npm install --no-audit --no-fund --package-lock=false
+          cd ../..
+
+          node .deploy/release-worker-runtime.mjs production dry-run
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          cfg="$PWD/cloudflare/explore-worker/.release-system/production/wrangler.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "SELECT (SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name IN ('explore_derived_state','explore_derived_changes','explore_derived_tracks','explore_derived_profiles','explore_like_batches_035','explore_like_processor_035')) AS required_tables,(SELECT COUNT(*) FROM sqlite_schema WHERE type='trigger' AND name GLOB 'explore032_*') AS explore032_triggers,(SELECT seeded FROM explore_derived_state WHERE id=1) AS seeded" --json > "$RUNNER_TEMP/prod-d1.json"
+          node -e "const p=require(process.env.RUNNER_TEMP+'/prod-d1.json'),r=p.flatMap(x=>x.results||[]).find(x=>'required_tables'in x);if(!r||+r.required_tables<6||+r.explore032_triggers<10||+r.seeded!==1)throw Error('D1 preflight');"
+          echo PRODUCTION_D1_SELECT_ONLY_PREFLIGHT=PASS
+
+          node .deploy/release-worker-runtime.mjs production upload | tee "$RUNNER_TEMP/prod-upload"
+          new_prod_worker="$(sed -n 's/^PRODUCTION_WORKER_UPLOADED_VERSION=//p' "$RUNNER_TEMP/prod-upload" | tail -1)"
+          test -n "$new_prod_worker"
+
+          tree="$(git rev-parse "$manifest_main^{tree}")"
+          promoted="$(printf 'release: promote TEST_VERIFIED app 116 to PRODUCTION\n\ntested-main: %s\nmanifest: %s\n' "$manifest_main" "$MANIFEST_TAG" | git commit-tree "$tree" -p "$old_prod_branch")"
+          git push origin "$promoted:refs/heads/production"
+          branch_mutated=true
+
+          RELEASE_WORKER_VERSION="$new_prod_worker" node .deploy/release-worker-runtime.mjs production activate
+          worker_mutated=true
+
+          test_version_id="${test_hosting_version##*/}"
+          npx --yes firebase-tools@latest hosting:clone "soridraw-test:@$test_version_id" soridraw:live --project soridraw --non-interactive
+          hosting_mutated=true
+          echo FIREBASE_PRODUCTION_HOSTING_CLONED_FROM_TEST=PASS
+
+          node .deploy/release-worker-runtime.mjs production verify
+          for base in https://soridraw.web.app https://soridraw.com; do
+            curl -fsS -H 'Cache-Control: no-cache' "$base/" -o "$RUNNER_TEMP/prod-index"
+            test "$(sha256sum "$RUNNER_TEMP/prod-index" | cut -d' ' -f1)" = "$release_index_sha"
+          done
+
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$manifest_main"
+          test "$(active_worker "$TEST_WORKER")" = "$test_worker_version"
+          test "$(hosting_identity soridraw-test)" = "$expected_test_hosting"
+          test "$(git ls-remote origin refs/heads/production | cut -f1)" = "$promoted"
+
+          trap - ERR
+          echo "PRODUCTION_RELEASED=PASS"
+          echo "PRODUCTION_BRANCH=$promoted"
+          echo "PRODUCTION_WORKER=$new_prod_worker"

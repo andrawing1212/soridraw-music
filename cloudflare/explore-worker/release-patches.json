@@ -35,6 +35,7 @@
     "065-shared-like-count-targeted.mjs",
     "066-publication-w2-shared-r2-authority.mjs",
     "067-w2-feed-pagination.mjs",
-    "068-w2-profile-search-projection.mjs"
+    "068-w2-profile-search-projection.mjs",
+    "069-w2-profile-pagination.mjs"
   ]
 }

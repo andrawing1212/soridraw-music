@@ -44,6 +44,7 @@ jobs:
               DROP TABLE IF EXISTS diag125_revision;
               DROP TABLE IF EXISTS diag125_tracks;
               DROP TABLE IF EXISTS diag125_without_rowid;
+              DROP TABLE IF EXISTS diag125_search_fts;
             " --json >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
@@ -105,6 +106,7 @@ jobs:
               is_public INTEGER NOT NULL,
               updated_at INTEGER NOT NULL
             ) WITHOUT ROWID;
+            CREATE VIRTUAL TABLE diag125_search_fts USING fts5(track_id UNINDEXED,title,genre,artist,tokenize='unicode61');
           " --json >/dev/null
 
           run_measure() {
@@ -127,6 +129,8 @@ jobs:
           run_measure REPUBLIC "UPDATE diag125_tracks SET is_public=1,updated_at=102 WHERE id='m1' AND owner_uid='u1' AND source_type='music_note' AND is_public<>1"
           run_measure NOOP "UPDATE diag125_tracks SET is_public=1,updated_at=103 WHERE id='m1' AND owner_uid='u1' AND source_type='music_note' AND is_public<>1"
           run_measure WITHOUT_ROWID_INSERT "INSERT INTO diag125_without_rowid(id,source_type,is_public,updated_at) VALUES('m2','music_note',1,100)"
+          run_measure FTS_INSERT "INSERT INTO diag125_search_fts(track_id,title,genre,artist) VALUES('m1','봄날의 노래','Pop','Artist')"
+          run_measure FTS_DELETE "DELETE FROM diag125_search_fts WHERE track_id='m1'"
 
           echo DIAG125_SCOPE=PREVIEW_RATE_DB_ONLY
           echo DIAG125_SHARED_CANONICAL_D1_WRITES=0

@@ -6,7 +6,6 @@ import {
 } from './exploreSessionCache';
 import {
   hasRecentExploreAccountLikePatch,
-  overlayExploreAccountLikeCounts,
   rememberExploreAccountLikeOverlay,
 } from './exploreLikeAccountOverlay';
 
@@ -273,11 +272,10 @@ const synthesizeDeltaFeed = (feedUrl: string, pending: PendingDelta): Response |
     nextRows[current.index] = patchCachedRow(current.row, change);
   }
 
-  const rows = overlayExploreAccountLikeCounts(nextRows);
   const payload = {
     ok: true,
     data: {
-      items: rows,
+      items: nextRows,
       sort: pending.sort,
       nextCursor: readExploreFeedSessionCacheCursor(feedUrl),
     },
@@ -299,34 +297,6 @@ const rememberDeltaFromBody = (revisionUrl: URL, body: string) => {
     pendingDeltas.set(feedUrl, { revision, sort, delta });
   } catch {
     // The ordinary full-feed fallback remains available.
-  }
-};
-
-const overlayServerFeedResponse = async (response: Response) => {
-  if (!response.ok) return response;
-  try {
-    const payload = await response.clone().json() as {
-      data?: { items?: Array<Record<string, unknown>> };
-    };
-    const rows = payload?.data?.items;
-    if (!Array.isArray(rows) || !rows.length) return response;
-    const overlaid = overlayExploreAccountLikeCounts(rows);
-    if (overlaid.every((row, index) => row === rows[index])) return response;
-    const nextPayload = {
-      ...payload,
-      data: { ...payload.data, items: overlaid },
-    };
-    const headers = new Headers(response.headers);
-    headers.delete('Content-Length');
-    headers.delete('Content-Encoding');
-    headers.set('Content-Type', 'application/json; charset=utf-8');
-    return new Response(JSON.stringify(nextPayload), {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
-  } catch {
-    return response;
   }
 };
 
@@ -397,8 +367,7 @@ export const installExploreRevisionRequestCache = () => {
           if (synthetic) return synthetic;
         }
       }
-      const response = await originalFetch(input, init);
-      return overlayServerFeedResponse(response);
+      return originalFetch(input, init);
     }
 
     return originalFetch(input, init);

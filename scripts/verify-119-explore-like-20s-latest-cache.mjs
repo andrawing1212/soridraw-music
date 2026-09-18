@@ -66,8 +66,13 @@ assert.doesNotMatch(domain, /observeExploreLikeAccountSyncSignal/);
 // Existing server path stays deliberately simple: one W1 queue intake after the
 // 20-second client idle batch, then one shared one-minute alarm for publication.
 assert.match(intakePatch, /single-B-tree 069 queue: one warm batch => D1 R0\/W1/);
-assert.match(intakePatch, /await enqueueExploreLikeBatch035\(env, authContext\.uid, effectiveMutations, receivedAt\)/);
-assert.doesNotMatch(intakePatch, /readExploreLikeBatchStates035\(/);
+const newBlockStart = intakePatch.indexOf('const newBlock = `');
+const newBlockEnd = intakePatch.indexOf('`;\n\nif (!handler.includes(oldBlock))', newBlockStart);
+assert.ok(newBlockStart >= 0 && newBlockEnd > newBlockStart, '055 hot-path replacement block missing');
+const hotPathReplacement = intakePatch.slice(newBlockStart, newBlockEnd);
+assert.match(hotPathReplacement, /await enqueueExploreLikeBatch035\(env, authContext\.uid, effectiveMutations, receivedAt\)/);
+assert.doesNotMatch(hotPathReplacement, /readExploreLikeBatchStates035\(/);
+assert.doesNotMatch(hotPathReplacement, /enqueueExploreLikeUserQueue075\(/);
 assert.match(workerEntry, /EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 \* 60 \* 1000/);
 assert.match(workerEntry, /cron: 'event-like-batch-1m-105'/);
 assert.match(workerEntry, /REVISION_HEAD_CACHE_SECONDS_077 = 60/);

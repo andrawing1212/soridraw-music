@@ -1,0 +1,30 @@
+name: TEMP app122 white-heart validation
+
+on:
+  push:
+    branches:
+      - work/app122-like-white-heart-motion
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: App 122 regression
+        run: node scripts/verify-122-explore-like-white-heart.mjs

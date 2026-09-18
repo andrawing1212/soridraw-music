@@ -1,8 +1,8 @@
-requested_at=2026-09-18T09:38:00Z
+requested_at=2026-09-18T09:56:00Z
 requested_by=user
-product_code_target=d9263f94cb153da8d2f7d67a6e6695bb4d491c85
-release_source_target=app-120-explore-like-actor-count-lock
-release_purpose=120_explore_like_actor_count_lock
+product_code_target=6934deb10d55ceb77a21ad09ca1d6436ded6d313
+release_source_target=app-121-explore-like-30s-2m-timing
+release_purpose=121_explore_like_timing_only
 hosting_only=true
 worker_redeploy=false
 no_user_data_migration=true

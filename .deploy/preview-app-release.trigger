@@ -1,8 +1,8 @@
-requested_at=2026-09-18T12:33:30Z
+requested_at=2026-09-18T12:48:00Z
 requested_by=user
-product_code_target=a3942176b84fbbaf8a4477b54708e8f106a54409
-release_source_target=app-123-shared-like-cache-repair
-release_purpose=123_preserve_last_known_like_counts_and_targeted_shared_r2_repair
+product_code_target=929c02f8a235a8ef629ce85a8f0e28bfbaa04dfe
+release_source_target=app-124-common-stale-feed-cache-repair
+release_purpose=124_pc_mobile_common_legacy_shared_feed_cache_repair
 hosting_only=true
 worker_redeploy=false
 no_user_data_migration=true

@@ -159,7 +159,7 @@ const boundary = { publishedAt: 100, id: 'legacy-boundary' };
 const start = await ctx.initializeW2State067(env, 'latest', boundary);
 assert.deepEqual({ cursor: start.cursor, offset: start.offset, end: start.end }, { cursor: null, offset: 1, end: false });
 const candidates = await ctx.readW2FeedCandidates067(env, 'latest', start, 41);
-assert.deepEqual(candidates.entries.map((entry) => entry.item.id), ['w2b', 'w2c']);
+assert.deepEqual([...candidates.entries].map((entry) => entry.item.id), ['w2b', 'w2c']);
 const next = ctx.nextW2StateForBoundary067(
   'latest',
   start,

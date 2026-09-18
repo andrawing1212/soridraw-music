@@ -32,6 +32,7 @@
     "062-shared-track-card-r2.mjs",
     "063-public-profile-warm-edge-zero-read.mjs",
     "064-shared-feed-catchup-convergence.mjs",
-    "065-shared-like-count-targeted.mjs"
+    "065-shared-like-count-targeted.mjs",
+    "066-publication-r2-catalog-phase-a.mjs"
   ]
 }

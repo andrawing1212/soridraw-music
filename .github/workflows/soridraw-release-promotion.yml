@@ -173,7 +173,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          hosting_release(){ curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/$1/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv'; }
+          hosting_release(){ curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/$1/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv'; }
           hosting_release soridraw-test > "$RUNNER_TEMP/test-hosting-before"
           hosting_release soridraw > "$RUNNER_TEMP/production-hosting-before"
           permissions="$(curl -fsS -X POST -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" -H 'Content-Type: application/json' "https://cloudresourcemanager.googleapis.com/v1/projects/$FIREBASE_PROJECT:testIamPermissions" --data '{"permissions":["firebasehosting.versions.create","firebasehosting.versions.delete","firebasehosting.releases.create"]}')"
@@ -242,7 +242,7 @@ jobs:
           current_schedules(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/schedules" | jq -c '[.result[]? | {cron:.cron}] | sort_by(.cron)'; }
           test "$(cat "$RUNNER_TEMP/test-worker-schedules-before")" = "$(current_schedules "$TEST_WORKER")"
           test "$(cat "$RUNNER_TEMP/production-worker-schedules-before")" = "$(current_schedules "$PRODUCTION_WORKER")"
-          hosting_release(){ curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/$1/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv'; }
+          hosting_release(){ curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/$1/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv'; }
           test "$(hosting_release soridraw-test)" = "$(cat "$RUNNER_TEMP/test-hosting-before")"
           test "$(hosting_release soridraw)" = "$(cat "$RUNNER_TEMP/production-hosting-before")"
           node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update PREFLIGHT
@@ -279,8 +279,8 @@ jobs:
           done
           test "$(git ls-remote origin refs/heads/production|cut -f1)" = "$(cat "$RUNNER_TEMP/production-before")"
           test "$(cat "$RUNNER_TEMP/production-worker-before")" = "$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PRODUCTION_WORKER/deployments" | jq -er '.result.deployments[0].versions|max_by(.percentage)|.version_id')"
-          test "$(curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/soridraw/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv')" = "$(cat "$RUNNER_TEMP/production-hosting-before")"
-          curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/soridraw-test/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv' > "$RUNNER_TEMP/test-hosting-verified"
+          test "$(curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/soridraw/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv')" = "$(cat "$RUNNER_TEMP/production-hosting-before")"
+          curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/soridraw-test/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv' > "$RUNNER_TEMP/test-hosting-verified"
           export TEST_HOSTING_RELEASE="$(cut -f1 "$RUNNER_TEMP/test-hosting-verified")"
           export TEST_HOSTING_VERSION="$(cut -f2 "$RUNNER_TEMP/test-hosting-verified")"
           controller_identity="$(node "$GITHUB_WORKSPACE/scripts/release-controller-policy.mjs" identity "$GITHUB_WORKSPACE")"
@@ -308,7 +308,7 @@ jobs:
           done
           cd "$RELEASE_ROOT"; EXPECTED_WORKER_BUNDLE_SHA256="$EXPECTED_WORKER_BUNDLE_SHA256" node .deploy/release-worker-runtime.mjs test verify
           test "$(cat "$RUNNER_TEMP/test-worker-before")" = "$TEST_WORKER_VERSION_ID"
-          current_test_hosting="$(curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/soridraw-test/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv')"
+          current_test_hosting="$(curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/soridraw-test/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv')"
           expected_test_hosting="$(printf '%s\t%s' "$TEST_HOSTING_RELEASE" "$TEST_HOSTING_VERSION")"
           test "$current_test_hosting" = "$expected_test_hosting"
           node - "$RUNNER_TEMP/manifest/soridraw-release-manifest.json" "$GITHUB_WORKSPACE" <<'NODE'
@@ -350,7 +350,7 @@ jobs:
           test "$(git ls-remote origin refs/heads/main|cut -f1)" = "$MANIFEST_MAIN"
           test "$(cat "$RUNNER_TEMP/test-worker-before")" = "$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$TEST_WORKER/deployments" | jq -er '.result.deployments[0].versions|max_by(.percentage)|.version_id')"
           expected_test_hosting="$(printf '%s\t%s' "$TEST_HOSTING_RELEASE" "$TEST_HOSTING_VERSION")"
-          test "$(curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/soridraw-test/channels/live/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv')" = "$expected_test_hosting"
+          test "$(curl -fsS -H "Authorization: Bearer ${{ steps.auth.outputs.access_token }}" "https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/soridraw-test/releases?pageSize=1" | jq -er '.releases[0] | [.name,.version.name] | @tsv')" = "$expected_test_hosting"
           node "$GITHUB_WORKSPACE/scripts/update-release-control-status.mjs" update RELEASED
 
       - name: Rollback branch and Worker traffic after deployment failure

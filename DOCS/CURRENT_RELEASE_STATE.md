@@ -1,6 +1,6 @@
 # SORIDRAW CURRENT RELEASE STATE
 
-## 0Z. PREVIEW app 122 — Explore 좋아요 흰색 filled heart + 짧은 클릭 모션 / 코드 반영·검증 완료 / 미배포
+## 0Z. PREVIEW app 122 — Explore 좋아요 흰색 filled heart + 짧은 클릭 모션 / preview 병합 완료 / 미배포
 
 사용자 요청으로 좋아요 버튼의 시각 표현만 변경했다.
 
@@ -15,6 +15,8 @@
 검증:
 - 작업 branch: `work/app122-like-white-heart-motion`
 - 기준 PREVIEW: `577d8a162c7839615ebbfaad4beae3e418a5121b` — app 121.
+- PR #99 merge 완료.
+- PREVIEW 제품 merge commit: `cc2a55ad7d7deb25b971c39464c12f7a9981a8aa`.
 - 검증 Run `35332970861` — **SUCCESS**
   - TypeScript PASS
   - Build PASS
@@ -34,6 +36,7 @@
 비변경:
 - Explore 좋아요 동작/30초 batch/2분 revision gate/1분 shared aggregate 모두 그대로.
 - Worker / D1 / Firebase Functions / Rules / 사용자 데이터 변경 없음.
+- GitHub preview 코드는 app 122 반영 완료.
 - PREVIEW Hosting은 아직 app 121. **미배포**.
 - TEST / PRODUCTION 변경 없음.
 

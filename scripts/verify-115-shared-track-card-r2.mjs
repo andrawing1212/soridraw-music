@@ -110,13 +110,14 @@ for (const required of [
 ]) assert.ok(legacyCore.includes(required), `bounded D1 recovery core changed: ${required}`);
 assert.doesNotMatch(legacyCore, /WHERE\s+t\.owner_uid\s*=\s*\?\s+AND\s+t\.id\s+IN/i, 'owner-wide liked-track scan reintroduced');
 
-const publish = functionText('syncExploreFeedR2Publication043');
+const has066 = worker.includes('SORIDRAW_PUBLICATION_W2_SHARED_R2_AUTHORITY_066_20260919');
+const publish = functionText(has066 ? 'syncExploreFeedR2Publication043Core066' : 'syncExploreFeedR2Publication043');
 assert.match(publish, /writeSharedTrackCard062\(env, incomingItem\)/);
-const makePrivate = functionText('syncExploreFeedR2Private043');
+const makePrivate = functionText(has066 ? 'syncExploreFeedR2Private043Core066' : 'syncExploreFeedR2Private043');
 assert.match(makePrivate, /deleteSharedTrackCard062\(env, trackId\)/);
-const options = functionText('syncExploreFeedR2OptionPatch043');
+const options = functionText(has066 ? 'syncExploreFeedR2OptionPatch043Core066' : 'syncExploreFeedR2OptionPatch043');
 assert.match(options, /patchSharedTrackCard062\(env, trackId, patch\)/);
-const likeProjection = functionText('patchExploreVisibleProfiles056');
+const likeProjection = functionText(has066 ? 'patchExploreVisibleProfiles056Core066' : 'patchExploreVisibleProfiles056');
 assert.match(likeProjection, /patchSharedTrackCard062\(env, trackId, \{ likeCount:/);
 
 const profileOverlay = functionText('enrichSharedTrackCards062');

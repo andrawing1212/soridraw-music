@@ -1,0 +1,131 @@
+name: Cloudflare Media R2 Preview Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - 'cloudflare/media-worker/**'
+      - '.github/workflows/cloudflare-media-r2-preview-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-media-r2-preview-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      BUCKET: soridraw-media-preview
+      WORKER_URL: https://soridraw-media-preview.andrawing1212.workers.dev
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install media Worker dependencies
+        working-directory: cloudflare/media-worker
+        run: npm install --no-audit --no-fund
+
+      - name: Validate Worker build
+        working-directory: cloudflare/media-worker
+        run: npm run check
+
+      - name: Ensure private Standard R2 preview bucket exists
+        working-directory: cloudflare/media-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN unavailable'; exit 2; }
+          if npx wrangler r2 bucket info "$BUCKET" --json > "$RUNNER_TEMP/r2-info.json" 2> "$RUNNER_TEMP/r2-info.err"; then
+            echo 'R2_BUCKET_ALREADY_EXISTS=true'
+          else
+            echo 'R2 bucket not found; creating APAC Standard bucket.'
+            npx wrangler r2 bucket create "$BUCKET" --location apac --storage-class Standard
+            npx wrangler r2 bucket info "$BUCKET" --json > "$RUNNER_TEMP/r2-info.json"
+          fi
+          node - "$RUNNER_TEMP/r2-info.json" <<'NODE'
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const name = data.name || data.result?.name;
+          const storageClass = data.storage_class || data.storageClass || data.result?.storage_class || data.result?.storageClass;
+          if (name !== 'soridraw-media-preview') throw new Error(`Unexpected bucket: ${name}`);
+          console.log(`R2_BUCKET=${name}`);
+          console.log(`R2_STORAGE_CLASS=${storageClass || 'Standard'}`);
+          NODE
+
+      - name: Deploy preview media Worker with R2 binding
+        working-directory: cloudflare/media-worker
+        run: npm run deploy
+
+      - name: Ensure stable media signing secret exists
+        working-directory: cloudflare/media-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler secret list --format json > "$RUNNER_TEMP/media-secrets.json"
+          if node - "$RUNNER_TEMP/media-secrets.json" <<'NODE'
+          const fs = require('fs');
+          const list = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          process.exit(Array.isArray(list) && list.some((item) => item?.name === 'MEDIA_SIGNING_SECRET') ? 0 : 1);
+          NODE
+          then
+            echo 'MEDIA_SIGNING_SECRET_ALREADY_EXISTS=true'
+          else
+            openssl rand -hex 32 | npx wrangler secret put MEDIA_SIGNING_SECRET
+            echo 'MEDIA_SIGNING_SECRET_CREATED=true'
+          fi
+
+      - name: Prove remote R2 write and read
+        working-directory: cloudflare/media-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'SORIDRAW R2 preview connected %s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/r2-smoke.txt"
+          npx wrangler r2 object put "$BUCKET/__smoke/connection.txt" --file "$RUNNER_TEMP/r2-smoke.txt" --content-type text/plain --remote --force
+          npx wrangler r2 object get "$BUCKET/__smoke/connection.txt" --file "$RUNNER_TEMP/r2-smoke-read.txt" --remote
+          cmp "$RUNNER_TEMP/r2-smoke.txt" "$RUNNER_TEMP/r2-smoke-read.txt"
+          echo 'R2_REMOTE_WRITE_READ=PASS'
+
+      - name: Smoke Worker health and Preview CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "$WORKER_URL/health" -o "$RUNNER_TEMP/health.json"
+          grep -q '"ok":true' "$RUNNER_TEMP/health.json"
+          grep -q '"r2Binding":true' "$RUNNER_TEMP/health.json"
+          grep -q '"automaticWavGeneration":false' "$RUNNER_TEMP/health.json"
+
+          code="$(curl -sS -o "$RUNNER_TEMP/options-body" -D "$RUNNER_TEMP/options-head" -w '%{http_code}' -X OPTIONS \
+            -H 'Origin: https://preview.soridraw.com' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+            "$WORKER_URL/v1/archive/resolve")"
+          test "$code" = '204'
+          grep -qi '^access-control-allow-origin: https://preview.soridraw.com' "$RUNNER_TEMP/options-head"
+          echo 'MEDIA_WORKER_HEALTH_CORS=PASS'
+
+      - name: Safety result
+        run: |
+          echo 'TARGET_ENV=PREVIEW'
+          echo 'R2_BUCKET=soridraw-media-preview'
+          echo 'R2_PUBLIC_BUCKET=false'
+          echo 'LAZY_ARCHIVE_MIN_AGE_DAYS=14'
+          echo 'AUTOMATIC_WAV_GENERATION=false'
+          echo 'NO_MUSIC_API_CALL=true'
+          echo 'NO_FIRESTORE_WRITE=true'
+          echo 'NO_FIREBASE_FUNCTIONS_DEPLOY=true'
+          echo 'NO_FIREBASE_HOSTING_DEPLOY=true'
+          echo 'NO_MAIN_CHANGE=true'
+          echo 'NO_PRODUCTION_CHANGE=true'

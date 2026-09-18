@@ -1,0 +1,167 @@
+name: Firebase Preview Cache Parity Deploy
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/firebase-preview-cache-parity-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-preview-cache-parity-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      HOSTING_PROJECT: soridraw
+      PREVIEW_SITE: soridraw-preview
+      PREVIEW_DEFAULT_HOST: soridraw-preview.web.app
+      PREVIEW_CUSTOM_HOST: preview.soridraw.com
+      PRODUCTION_HOST: soridraw.web.app
+      BACKEND_PROJECT: soridraw-app-866a5
+
+    steps:
+      - name: Checkout exact preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Assert cache parity source is present
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "MUSIC_NOTE_CACHE_SCHEMA_VERSION = '3'" src/App.tsx
+          grep -q "Cacheless Music Note full bootstrap failed" src/App.tsx
+          grep -q "LIBRARY_WORKSPACE_CACHE_SCHEMA_VERSION = '3'" src/pages/SunoLibraryPage.tsx
+          grep -q "LIBRARY_WORKSPACE_CACHE_DB_NAME = 'soridraw_library_workspace_cache_v3'" src/pages/SunoLibraryPage.tsx
+          grep -q "const snapshot = await getDocs(tracksRef);" src/pages/SunoLibraryPage.tsx
+          grep -q '"site": "soridraw-preview"' firebase.hosting-preview.json
+          echo 'CACHE_PARITY_SOURCE=PASS'
+          echo 'TARGET_SITE=soridraw-preview'
+          echo 'NO_MAIN_DEPLOY=true'
+          echo 'NO_PRODUCTION_DEPLOY=true'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build exact preview
+        run: npm run build
+
+      - name: Authenticate Google and Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Assert isolated Firebase preview site exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest hosting:sites:list --project "$HOSTING_PROJECT" --json > "$RUNNER_TEMP/sites.json"
+          node - "$RUNNER_TEMP/sites.json" "$PREVIEW_SITE" <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const wanted = process.argv[3];
+          const candidates = [payload?.result?.sites, payload?.result, payload?.sites, payload];
+          const sites = candidates.find(Array.isArray) || [];
+          const ids = sites.map((site) => {
+            const raw = String(site?.site || site?.siteId || site?.id || site?.name || '');
+            return raw.includes('/') ? raw.split('/').filter(Boolean).pop() : raw;
+          }).filter(Boolean);
+          console.log(`HOSTING_SITES=${ids.join(',')}`);
+          if (!ids.includes('soridraw')) throw new Error('Production site soridraw missing; abort.');
+          if (!ids.includes(wanted)) throw new Error(`Preview site ${wanted} missing; abort.`);
+          console.log('PREVIEW_SITE_EXISTS=PASS');
+          NODE
+
+      - name: Snapshot production before preview deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "https://$PRODUCTION_HOST/" -o "$RUNNER_TEMP/prod-before.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/prod-before.html"
+          sha256sum "$RUNNER_TEMP/prod-before.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-before.sha"
+          echo 'PRODUCTION_BEFORE=PASS'
+
+      - name: Deploy exact preview build to Firebase preview site only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project "$HOSTING_PROJECT" \
+            --config firebase.hosting-preview.json \
+            --non-interactive
+          echo 'FIREBASE_PREVIEW_HOSTING_DEPLOY=PASS'
+
+      - name: Smoke Firebase preview default and custom domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in "$PREVIEW_DEFAULT_HOST" "$PREVIEW_CUSTOM_HOST"; do
+            ok=''
+            for attempt in $(seq 1 18); do
+              if curl -fsS --max-time 30 "https://$host/" -o "$RUNNER_TEMP/${host//./_}.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/${host//./_}.html"; then
+                ok='yes'
+                echo "PREVIEW_SMOKE_PASS=https://$host/"
+                break
+              fi
+              sleep 10
+            done
+            test "$ok" = 'yes' || { echo "Preview smoke failed: $host"; exit 7; }
+          done
+
+          default_asset="$(grep -oE 'src="/assets/index-[^"]+\.js"' "$RUNNER_TEMP/${PREVIEW_DEFAULT_HOST//./_}.html" | head -n1 || true)"
+          custom_asset="$(grep -oE 'src="/assets/index-[^"]+\.js"' "$RUNNER_TEMP/${PREVIEW_CUSTOM_HOST//./_}.html" | head -n1 || true)"
+          echo "DEFAULT_ASSET=$default_asset"
+          echo "CUSTOM_ASSET=$custom_asset"
+          test -n "$default_asset"
+          test "$default_asset" = "$custom_asset"
+          echo 'CUSTOM_DOMAIN_MATCH=PASS'
+
+      - name: Check Firebase shared backend boundaries from custom preview origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          function_status="$(curl -sS -o "$RUNNER_TEMP/function-cors.txt" -w '%{http_code}' -X OPTIONS \
+            -H "Origin: https://$PREVIEW_CUSTOM_HOST" \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+            'https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoApiKeyStatus' || true)"
+          echo "FUNCTIONS_CORS_HTTP=$function_status"
+          case "$function_status" in 200|204) ;; *) exit 8;; esac
+
+          explore_status="$(curl -sS -o "$RUNNER_TEMP/explore-cors.txt" -w '%{http_code}' \
+            -H "Origin: https://$PREVIEW_CUSTOM_HOST" \
+            'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1' || true)"
+          echo "EXPLORE_HTTP=$explore_status"
+          test "$explore_status" = '200'
+          echo 'SHARED_BACKEND_BOUNDARIES=PASS'
+
+      - name: Verify production stayed unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 "https://$PRODUCTION_HOST/" -o "$RUNNER_TEMP/prod-after.html"
+          grep -q '<div id="root"></div>' "$RUNNER_TEMP/prod-after.html"
+          sha256sum "$RUNNER_TEMP/prod-after.html" | awk '{print $1}' > "$RUNNER_TEMP/prod-after.sha"
+          diff -u "$RUNNER_TEMP/prod-before.sha" "$RUNNER_TEMP/prod-after.sha"
+          echo 'PRODUCTION_UNCHANGED=PASS'
+          echo 'FIRESTORE_RULES_DEPLOYED=false'
+          echo 'FUNCTIONS_DEPLOYED=false'
+          echo 'FIREBASE_PRODUCTION_DEPLOYED=false'

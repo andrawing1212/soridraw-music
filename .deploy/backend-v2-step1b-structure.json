@@ -1,0 +1,432 @@
+{
+  "tool": "SORIDRAW Backend V2 read-only inventory",
+  "safety": {
+    "databaseWrites": 0,
+    "databaseDeletes": 0,
+    "valuesPrinted": false,
+    "documentIdsPrinted": false,
+    "sampleSizePerCollection": 1,
+    "note": "Aggregation counts and optional sample reads still consume Firestore read quota. Capture the daily usage baseline first."
+  },
+  "projectId": "soridraw-app-866a5",
+  "generatedAt": "2026-08-24T19:25:37.681Z",
+  "elapsedMs": 16217,
+  "topLevelCollections": [
+    {
+      "name": "admin_permission_audit",
+      "documentCount": 6,
+      "sensitive": true,
+      "samples": []
+    },
+    {
+      "name": "app_settings",
+      "documentCount": 2,
+      "sensitive": false,
+      "samples": [
+        {
+          "fieldNames": [
+            "hardBanTerms",
+            "softBanTerms",
+            "updatedAt"
+          ],
+          "approximateBytes": 343,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "favorites",
+      "documentCount": 737,
+      "sensitive": false,
+      "samples": [
+        {
+          "fieldNames": [
+            "appliedKeywords",
+            "createdAt",
+            "englishTitle",
+            "genre",
+            "isLocked",
+            "koreanTitle",
+            "lyrics",
+            "prompt",
+            "title",
+            "uid"
+          ],
+          "approximateBytes": 10129,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "gemini_request_guards",
+      "documentCount": 2,
+      "sensitive": true,
+      "samples": []
+    },
+    {
+      "name": "playlist_like_counts",
+      "documentCount": 16,
+      "sensitive": false,
+      "samples": [
+        {
+          "fieldNames": [
+            "likeCount",
+            "updatedAt"
+          ],
+          "approximateBytes": 54,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "playlist_likes",
+      "documentCount": 0,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "section_tags",
+      "documentCount": 76,
+      "sensitive": false,
+      "samples": [
+        {
+          "fieldNames": [
+            "createdAt",
+            "description",
+            "id",
+            "isActive",
+            "label",
+            "sections",
+            "tier",
+            "updatedAt"
+          ],
+          "approximateBytes": 255,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "suno_shares",
+      "documentCount": 74,
+      "sensitive": false,
+      "samples": [
+        {
+          "fieldNames": [
+            "apiResponse",
+            "apiStatusResponse",
+            "appliedKeywords",
+            "audioUrl",
+            "createdAt",
+            "creatorDisplayId",
+            "creatorEmail",
+            "creatorNickname",
+            "duration",
+            "englishLyrics",
+            "imageUrl",
+            "isPublic",
+            "koreanLyrics",
+            "lyrics",
+            "lyricsText",
+            "ownerEmail",
+            "ownerNickname",
+            "ownerUid",
+            "prompt",
+            "requestPayload",
+            "status",
+            "style",
+            "subTrackIndex",
+            "sunoData",
+            "taskId",
+            "title",
+            "trackId"
+          ],
+          "approximateBytes": 27194,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "suno_tracks",
+      "documentCount": 0,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "user_api_keys",
+      "documentCount": 5,
+      "sensitive": true,
+      "samples": []
+    },
+    {
+      "name": "user_list_caches",
+      "documentCount": 0,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "user_plans",
+      "documentCount": 2,
+      "sensitive": false,
+      "samples": [
+        {
+          "fieldNames": [
+            "email",
+            "tier",
+            "updatedAt",
+            "updatedBy"
+          ],
+          "approximateBytes": 133,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "user_playlists",
+      "documentCount": 0,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "user_recent_songs",
+      "documentCount": 10,
+      "sensitive": false,
+      "samples": [
+        {
+          "fieldNames": [
+            "songs"
+          ],
+          "approximateBytes": 174585,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "user_structures",
+      "documentCount": 3,
+      "sensitive": false,
+      "samples": [
+        {
+          "fieldNames": [
+            "customDataSyncVersion",
+            "customDataUpdatedAt",
+            "customSectionTags",
+            "customSections",
+            "musicNoteFolders",
+            "structures"
+          ],
+          "approximateBytes": 18019,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "documentCount": 12,
+      "sensitive": false,
+      "samples": [
+        {
+          "fieldNames": [
+            "accountStatus",
+            "adminMemo",
+            "adminPermissions",
+            "appPreferences",
+            "createdAt",
+            "displayName",
+            "email",
+            "favoriteCount",
+            "favoriteSyncSignal",
+            "favoriteSyncSignalUpdatedAt",
+            "isOnline",
+            "lastLoginAt",
+            "lastLogoutAt",
+            "lastSeenAt",
+            "lyricClicheGuard",
+            "paymentStatus",
+            "planName",
+            "role",
+            "songGeneratedCount",
+            "staffBaseRole",
+            "staffRole",
+            "staffRoleUpdatedAt",
+            "staffRoleUpdatedBy",
+            "uid",
+            "updatedAt"
+          ],
+          "approximateBytes": 19049,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "vocalTones",
+      "documentCount": 1,
+      "sensitive": false,
+      "samples": [
+        {
+          "fieldNames": [
+            "createdAt",
+            "description",
+            "genderTarget",
+            "genreTags",
+            "id",
+            "isActive",
+            "isDefault",
+            "label",
+            "promptCore",
+            "sortOrder",
+            "toneType",
+            "updatedAt"
+          ],
+          "approximateBytes": 270,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    }
+  ],
+  "collectionGroups": [
+    {
+      "name": "tracks",
+      "documentCount": 72,
+      "samples": [
+        {
+          "fieldNames": [
+            "apiResponse",
+            "apiStatusResponse",
+            "audioUrl",
+            "createdAt",
+            "hasPlayed",
+            "hidden",
+            "imageUrl",
+            "isPublic",
+            "lyrics",
+            "playedAt",
+            "playedItemIndexes",
+            "prompt",
+            "provider",
+            "publicSharedAt",
+            "requestPayload",
+            "shareType",
+            "status",
+            "streamAudioUrl",
+            "style",
+            "taskId",
+            "title",
+            "updatedAt"
+          ],
+          "approximateBytes": 12646,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "lists",
+      "documentCount": 42,
+      "samples": [
+        {
+          "fieldNames": [
+            "createdAt",
+            "isDefault",
+            "order",
+            "title",
+            "type",
+            "updatedAt"
+          ],
+          "approximateBytes": 134,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "items",
+      "documentCount": 49,
+      "samples": [
+        {
+          "fieldNames": [
+            "addedAt",
+            "appliedKeywords",
+            "audioUrl",
+            "colorTag",
+            "creatorDisplayId",
+            "creatorEmail",
+            "creatorNickname",
+            "duration",
+            "englishLyrics",
+            "genreLabels",
+            "imageUrl",
+            "isUnavailable",
+            "koreanLyrics",
+            "likeCount",
+            "lyrics",
+            "lyricsText",
+            "order",
+            "ownerEmail",
+            "ownerNickname",
+            "ownerUid",
+            "playlistUniqueKey",
+            "prompt",
+            "requestPayload",
+            "sourceId",
+            "sourceSubTrackId",
+            "sourceType",
+            "style",
+            "title",
+            "unavailableReason",
+            "updatedAt"
+          ],
+          "approximateBytes": 6837,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "bundles",
+      "documentCount": 4,
+      "samples": [
+        {
+          "fieldNames": [
+            "cursorCreatedAtMs",
+            "deletedIds",
+            "hasMore",
+            "itemCount",
+            "items",
+            "kind",
+            "schemaVersion",
+            "updatedAt",
+            "updatedAtMs"
+          ],
+          "approximateBytes": 12772,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "documentCount": 17,
+      "samples": [
+        {
+          "fieldNames": [
+            "createdAt",
+            "uid"
+          ],
+          "approximateBytes": 77,
+          "valuesRedacted": true,
+          "documentIdRedacted": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { runV1MutationBoundary } from '../data/v1MutationBoundary';
+import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
+import { useMediaQuery } from '../lib/mediaQueryStore';
+import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
 import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../components/MusicApiGenerateModal';
+import StudioCenterModalPortal from '../components/studio/StudioCenterModalPortal';
+import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
+
+const SORIDRAW_930_ROUTE_USER_READ_CACHE = true;
+const SORIDRAW_917_MUSIC_NOTE_DELTA_SYNC_NO_FULLSCAN = true;
+const SORIDRAW_902_LIST_BUNDLE_CACHE = true;
+const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 import { GENRES, MOODS, THEMES, SOUND_STYLES, INSTRUMENT_SOUNDS } from '../constants';
 import {
   Music,
@@ -24,8 +35,9 @@ import {
   CheckSquare,
   Square,
   SlidersHorizontal,
-  Zap,
   Heart as HeartIcon,
+  ThumbsUp,
+  Globe2,
   Lock,
   Unlock,
   Edit2,
@@ -49,10 +61,24 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { User } from 'firebase/auth';
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc, setDoc, deleteDoc, addDoc, collection, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, updateDoc, setDoc, deleteDoc, addDoc, collection, serverTimestamp, writeBatch } from '../lib/firestoreMeasured';
 import { updatePlaylistItemColor } from '../services/playlistService';
 import { favoritesStore } from '../hooks/useFavoritesStore';
+import {
+  getExploreMusicNotePublicationState,
+  getExploreMusicNotePublicationStates,
+  getExplorePublicationErrorMessage,
+  publishMusicNoteToExplore,
+  setExploreTrackPublicationOptions,
+  setExploreTrackVisibility,
+  type ExploreMusicNotePublicationState,
+  type ExplorePublicationOptions,
+} from '../services/explorePublicationService';
 import { getResolvedGenre, resolveKeywordsForDisplay, getKeywordMeta } from '../lib/songUtils';
+import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
+import { getMusicNoteDetailSourceVersion, getOrLoadMusicNoteDetail, patchMusicNoteDetailCache } from '../lib/musicNoteDetailCache';
+import { clearMusicNoteDetailDraft, listMusicNoteDetailDrafts, mergeMusicNoteDetailDraft, readMusicNoteDetailDraft, writeMusicNoteDetailDraft } from '../lib/musicNoteDetailDraft';
+import { flushSoridrawPageSync, registerPageSyncHandler } from '../lib/pageSyncCoordinator';
 
 
 const PROJECT_ID = 'soridraw-app-866a5';
@@ -60,8 +86,378 @@ const REGION = 'us-central1';
 const BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
 const SUNO_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_suno_api_key_registered';
 const MUSIC_NOTE_VISIBLE_BATCH_SIZE = 20;
+const SORIDRAW_MUSIC_NOTE_MORE_VISIBILITY_1032 = true;
+const SORIDRAW_901_MUSIC_NOTE_10_INCREMENTAL_SYNC = true;
 const MUSIC_NOTE_FOLDER_WRITE_BATCH_LIMIT = 450;
+const MUSIC_NOTE_DETAIL_IDLE_FLUSH_MS = 60_000;
 let musicNoteVisibleCountMemory = MUSIC_NOTE_VISIBLE_BATCH_SIZE;
+
+type MusicNoteDetailPendingPatch = {
+  songId: string;
+  baseVersion: number;
+  updatedAtMs: number;
+  updates: Record<string, any>;
+};
+
+const mergeMusicNoteDetailPatch = (base: Record<string, any>, patch: Record<string, any>) => ({
+  ...(base || {}),
+  ...(patch || {}),
+  ...(patch?.lyrics ? { lyrics: { ...(base?.lyrics || {}), ...(patch.lyrics || {}) } } : {}),
+  ...(patch?.appliedKeywords ? { appliedKeywords: { ...(base?.appliedKeywords || {}), ...(patch.appliedKeywords || {}) } } : {}),
+});
+
+
+type MusicNoteStructureSharedSession = {
+  data: any | null;
+  version: number;
+  verified: boolean;
+  listeners: Set<(data: any) => void>;
+  syncInFlight: Promise<void> | null;
+  profileListenerAttached: boolean;
+};
+
+type MusicNoteStructureCacheEnvelope = {
+  schemaVersion: 1;
+  version: number;
+  verified: boolean;
+  updatedAtMs: number;
+  data: any;
+};
+
+const MUSIC_NOTE_STRUCTURE_CACHE_STORAGE_BASE = 'soridraw_music_note_structure_cache_v1';
+const musicNoteStructureSharedSessions = new Map<string, MusicNoteStructureSharedSession>();
+
+const getMusicNoteStructureCacheStorageKey = (uid: string) => `${MUSIC_NOTE_STRUCTURE_CACHE_STORAGE_BASE}_${uid}`;
+
+const projectMusicNoteStructureData = (value: any) => {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    ...(source.musicNoteFolders && typeof source.musicNoteFolders === 'object' ? { musicNoteFolders: source.musicNoteFolders } : {}),
+    ...(source.myNoteFolders !== undefined ? { myNoteFolders: source.myNoteFolders } : {}),
+    ...(source.sharedNoteFolders !== undefined ? { sharedNoteFolders: source.sharedNoteFolders } : {}),
+    ...(source.musicNoteCardState && typeof source.musicNoteCardState === 'object' ? { musicNoteCardState: source.musicNoteCardState } : {}),
+    ...(Number.isFinite(Number(source.musicNoteStructureVersion)) ? { musicNoteStructureVersion: Number(source.musicNoteStructureVersion) } : {}),
+  };
+};
+
+const getMusicNoteStructureProfileVersion = (uid: string): number => {
+  const value = Number((readUserProfileCache(uid) as any)?.syncVersions?.musicNoteStructure || 0);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+};
+
+const readMusicNoteStructureCache = (uid: string): MusicNoteStructureCacheEnvelope | null => {
+  if (!uid || typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(getMusicNoteStructureCacheStorageKey(uid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Number(parsed?.schemaVersion || 0) !== 1 || !parsed?.data || typeof parsed.data !== 'object') return null;
+    return {
+      schemaVersion: 1,
+      version: Math.max(0, Math.floor(Number(parsed?.version || 0))),
+      verified: parsed?.verified === true,
+      updatedAtMs: Math.max(0, Math.floor(Number(parsed?.updatedAtMs || 0))),
+      data: parsed.data,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const mergeMusicNoteStructureData = (base: any, patch: any) => {
+  const previous = base && typeof base === 'object' ? base : {};
+  const nextPatch = patch && typeof patch === 'object' ? patch : {};
+  const hasFolderPatch = nextPatch.musicNoteFolders && typeof nextPatch.musicNoteFolders === 'object';
+  return {
+    ...previous,
+    ...nextPatch,
+    ...(hasFolderPatch ? {
+      musicNoteFolders: {
+        ...(previous.musicNoteFolders || {}),
+        ...nextPatch.musicNoteFolders,
+      },
+    } : {}),
+  };
+};
+
+const writeMusicNoteStructureCache = (
+  uid: string,
+  patch: any,
+  version: number,
+  verified = true,
+): MusicNoteStructureCacheEnvelope => {
+  const previous = readMusicNoteStructureCache(uid);
+  const next: MusicNoteStructureCacheEnvelope = {
+    schemaVersion: 1,
+    version: Math.max(Number(previous?.version || 0), Math.max(0, Math.floor(Number(version || 0)))),
+    verified: verified || previous?.verified === true,
+    updatedAtMs: Date.now(),
+    data: mergeMusicNoteStructureData(previous?.data, patch),
+  };
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.setItem(getMusicNoteStructureCacheStorageKey(uid), JSON.stringify(next)); } catch {}
+  }
+  return next;
+};
+
+const publishMusicNoteStructureSession = (
+  uid: string,
+  patch: any,
+  version: number,
+  verified = true,
+) => {
+  const cached = writeMusicNoteStructureCache(uid, patch, version, verified);
+  let session = musicNoteStructureSharedSessions.get(uid);
+  if (!session) {
+    session = {
+      data: cached.data,
+      version: cached.version,
+      verified: cached.verified,
+      listeners: new Set(),
+      syncInFlight: null,
+      profileListenerAttached: false,
+    };
+    musicNoteStructureSharedSessions.set(uid, session);
+  } else {
+    session.data = cached.data;
+    session.version = cached.version;
+    session.verified = cached.verified;
+  }
+  session.listeners.forEach((subscriber) => subscriber(cached.data));
+};
+
+const getNextMusicNoteStructureVersion = (uid: string): number => {
+  const localVersion = Number(readMusicNoteStructureCache(uid)?.version || 0);
+  const profileVersion = getMusicNoteStructureProfileVersion(uid);
+  return Math.max(Date.now(), localVersion + 1, profileVersion + 1);
+};
+
+const ensureMusicNoteStructureFresh = (uid: string, session: MusicNoteStructureSharedSession): Promise<void> => {
+  const profileVersion = getMusicNoteStructureProfileVersion(uid);
+  if (session.data !== null && session.verified && profileVersion <= session.version) {
+    return Promise.resolve();
+  }
+  if (session.syncInFlight) return session.syncInFlight;
+
+  session.syncInFlight = (async () => {
+    try {
+      const snapshot = await getDocFromServer(doc(db, 'user_structures', uid));
+      const data: any = snapshot.exists() ? snapshot.data() : {};
+      const serverDocumentVersion = Number(data?.musicNoteStructureVersion || 0);
+      const resolvedVersion = Math.max(profileVersion, Number.isFinite(serverDocumentVersion) ? serverDocumentVersion : 0);
+      publishMusicNoteStructureSession(uid, projectMusicNoteStructureData(data), resolvedVersion, true);
+    } catch (error) {
+      console.warn('Music Note structure refresh failed; keeping verified local cache when available.', error);
+    } finally {
+      session.syncInFlight = null;
+    }
+  })();
+  return session.syncInFlight;
+};
+
+const subscribeMusicNoteStructureDocument = (uid: string, listener: (data: any) => void) => {
+  let session = musicNoteStructureSharedSessions.get(uid);
+  if (!session) {
+    const cached = readMusicNoteStructureCache(uid);
+    session = {
+      data: cached?.data || null,
+      version: Number(cached?.version || 0),
+      verified: cached?.verified === true,
+      listeners: new Set(),
+      syncInFlight: null,
+      profileListenerAttached: false,
+    };
+    musicNoteStructureSharedSessions.set(uid, session);
+  }
+
+  session.listeners.add(listener);
+  if (session.data !== null) {
+    const cachedData = session.data;
+    queueMicrotask(() => {
+      if (session?.listeners.has(listener)) listener(cachedData);
+    });
+  }
+
+  if (!session.profileListenerAttached && typeof window !== 'undefined') {
+    session.profileListenerAttached = true;
+    window.addEventListener(USER_PROFILE_CACHE_EVENT, ((event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string }>).detail;
+      if (String(detail?.uid || '') !== uid) return;
+      const current = musicNoteStructureSharedSessions.get(uid);
+      if (!current) return;
+      const nextRemoteVersion = getMusicNoteStructureProfileVersion(uid);
+      if (nextRemoteVersion > current.version) void ensureMusicNoteStructureFresh(uid, current);
+    }) as EventListener);
+  }
+
+  void ensureMusicNoteStructureFresh(uid, session);
+
+  return () => {
+    session?.listeners.delete(listener);
+    // Keep only local memory/event wiring for this SPA session. No Firestore listener remains alive.
+  };
+};
+
+const SORIDRAW_MUSIC_NOTE_STRUCTURE_SIGNAL_1056 = true;
+
+
+type MusicNoteCardStateItem = {
+  liked: boolean;
+  locked: boolean;
+  updatedAtMs: number;
+};
+
+type MusicNoteCardStateSnapshot = {
+  schemaVersion: 1;
+  items: Record<string, MusicNoteCardStateItem>;
+  updatedAtMs: number;
+};
+
+const MUSIC_NOTE_CARD_STATE_STORAGE_BASE = 'soridraw_music_note_card_state_v1';
+const MUSIC_NOTE_CARD_STATE_DIRTY_STORAGE_BASE = 'soridraw_music_note_card_state_dirty_v1';
+const EMPTY_MUSIC_NOTE_CARD_STATE: MusicNoteCardStateSnapshot = {
+  schemaVersion: 1,
+  items: {},
+  updatedAtMs: 0,
+};
+
+const getMusicNoteCardStateStorageKey = (uid: string) => `${MUSIC_NOTE_CARD_STATE_STORAGE_BASE}_${uid}`;
+
+const normalizeMusicNoteCardState = (value: any): MusicNoteCardStateSnapshot => {
+  const rawItems = value && typeof value?.items === 'object' && value.items ? value.items : {};
+  const items: Record<string, MusicNoteCardStateItem> = {};
+  Object.entries(rawItems).forEach(([id, raw]: [string, any]) => {
+    const normalizedId = String(id || '').trim();
+    if (!normalizedId || !raw || typeof raw !== 'object') return;
+    items[normalizedId] = {
+      liked: Boolean(raw.liked),
+      locked: Boolean(raw.locked),
+      updatedAtMs: Number(raw.updatedAtMs || 0),
+    };
+  });
+  return {
+    schemaVersion: 1,
+    items,
+    updatedAtMs: Number(value?.updatedAtMs || 0),
+  };
+};
+
+const mergeMusicNoteCardStateSnapshots = (
+  first: MusicNoteCardStateSnapshot,
+  second: MusicNoteCardStateSnapshot,
+): MusicNoteCardStateSnapshot => {
+  const ids = new Set([...Object.keys(first.items || {}), ...Object.keys(second.items || {})]);
+  const items: Record<string, MusicNoteCardStateItem> = {};
+  ids.forEach((id) => {
+    const a = first.items?.[id];
+    const b = second.items?.[id];
+    if (!a) items[id] = b;
+    else if (!b) items[id] = a;
+    else items[id] = Number(b.updatedAtMs || 0) >= Number(a.updatedAtMs || 0) ? b : a;
+  });
+  return {
+    schemaVersion: 1,
+    items,
+    updatedAtMs: Math.max(Number(first.updatedAtMs || 0), Number(second.updatedAtMs || 0)),
+  };
+};
+
+const readMusicNoteCardStateLocal = (uid: string): MusicNoteCardStateSnapshot => {
+  if (!uid || typeof localStorage === 'undefined') return EMPTY_MUSIC_NOTE_CARD_STATE;
+  try {
+    const raw = localStorage.getItem(getMusicNoteCardStateStorageKey(uid));
+    return raw ? normalizeMusicNoteCardState(JSON.parse(raw)) : EMPTY_MUSIC_NOTE_CARD_STATE;
+  } catch {
+    return EMPTY_MUSIC_NOTE_CARD_STATE;
+  }
+};
+
+const writeMusicNoteCardStateLocal = (uid: string, snapshot: MusicNoteCardStateSnapshot) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(getMusicNoteCardStateStorageKey(uid), JSON.stringify(snapshot));
+  } catch {
+    // Local persistence is an optimization; in-memory state still works.
+  }
+};
+
+const getMusicNoteCardStateDirtyStorageKey = (uid: string) => `${MUSIC_NOTE_CARD_STATE_DIRTY_STORAGE_BASE}_${uid}`;
+
+const isMusicNoteCardStateDirty = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem(getMusicNoteCardStateDirtyStorageKey(uid)) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const markMusicNoteCardStateDirty = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(getMusicNoteCardStateDirtyStorageKey(uid), '1');
+  } catch {
+    // The in-memory state still works even when localStorage is unavailable.
+  }
+};
+
+const clearMusicNoteCardStateDirty = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.removeItem(getMusicNoteCardStateDirtyStorageKey(uid));
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+};
+
+const musicNoteCardStateFlushInFlight = new Map<string, Promise<boolean>>();
+
+const flushMusicNoteCardStateServerWrite = (uid: string): Promise<boolean> => {
+  if (!uid || !isMusicNoteCardStateDirty(uid)) return Promise.resolve(false);
+  const existing = musicNoteCardStateFlushInFlight.get(uid);
+  if (existing) return existing;
+
+  const snapshot = readMusicNoteCardStateLocal(uid);
+  const task = (async () => {
+    try {
+      const structureVersion = getNextMusicNoteStructureVersion(uid);
+      const structurePatch = {
+        musicNoteCardState: {
+          schemaVersion: 1,
+          items: snapshot.items,
+          updatedAtMs: snapshot.updatedAtMs,
+          updatedAt: serverTimestamp(),
+        },
+        musicNoteStructureVersion: structureVersion,
+      };
+      await setDoc(doc(db, 'user_structures', uid), structurePatch, { merge: true });
+      publishMusicNoteStructureSession(uid, {
+        musicNoteCardState: {
+          schemaVersion: 1,
+          items: snapshot.items,
+          updatedAtMs: snapshot.updatedAtMs,
+        },
+        musicNoteStructureVersion: structureVersion,
+      }, structureVersion, true);
+      clearMusicNoteCardStateDirty(uid);
+      return true;
+    } catch (error) {
+      console.warn('Music Note card-state exit sync failed; local dirty state is preserved.', error);
+      return false;
+    } finally {
+      musicNoteCardStateFlushInFlight.delete(uid);
+    }
+  })();
+
+  musicNoteCardStateFlushInFlight.set(uid, task);
+  return task;
+};
+
+const SORIDRAW_MUSIC_NOTE_EXIT_ONLY_CARD_STATE_SYNC_961 = true;
+const SORIDRAW_MUSIC_NOTE_STATE_BUTTON_FILL_LAYER_962 = true;
+  // SORIDRAW_MUSIC_NOTE_VISUAL_TUNE_963
+  // SORIDRAW_MUSIC_NOTE_COMPACT_SUNO_BUTTONS_964
+const SORIDRAW_MUSIC_NOTE_LIGHTWEIGHT_CARD_STATE_960 = true;
 
 const scopedApiStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
 
@@ -173,7 +569,7 @@ function SunoUrlMobileGuideButton() {
       <button
         type="button"
         onClick={openGuide}
-        className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-[#FF5C52]/30 bg-[#FF5C52]/10 px-3.5 text-[11px] font-bold text-[#FF8B84] transition-all hover:border-[#FF5C52]/50 hover:bg-[#FF5C52]/18 hover:text-white active:scale-[0.97]"
+        className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-[#FF7A72]/30 bg-[#FF7A72]/10 px-3.5 text-[11px] font-bold text-[#FFC1BC] transition-all hover:border-[#FF7A72]/50 hover:bg-[#FF7A72]/18 hover:text-white active:scale-[0.97]"
       >
         연결가이드
       </button>
@@ -193,12 +589,12 @@ function SunoUrlMobileGuideButton() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ duration: 0 }}
-              className="max-h-[88vh] w-full max-w-[95%] md:max-w-[780px] overflow-y-auto rounded-[28px] border border-[#FF7066]/22 bg-[#181818] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.62)] md:p-8"
+              className="max-h-[88vh] w-full max-w-[95%] md:max-w-[780px] overflow-y-auto rounded-[28px] border border-[#FF8C85]/22 bg-[#181818] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.62)] md:p-8"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="text-[10px] font-black uppercase tracking-[0.28em] text-[#FF8B84]/78">suno guide</div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.28em] text-[#FFC1BC]/78">suno guide</div>
                   <h3 className="mt-1 text-xl font-black text-white">수노 링크 복사 방법</h3>
                   <p className="mt-2 text-sm leading-6 text-white/55">수노에서 곡의 공유 링크를 복사한 뒤, 이 입력칸에 그대로 붙여 넣으면 됩니다.</p>
                 </div>
@@ -219,7 +615,7 @@ function SunoUrlMobileGuideButton() {
                   onClick={() => setGuideTab('pc')}
                   className={cn(
                     "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all",
-                    guideTab === 'pc' ? "bg-[#FF5C52] text-white" : "text-white/50 hover:text-white/80"
+                    guideTab === 'pc' ? "bg-[#FF7A72] text-white" : "text-white/50 hover:text-white/80"
                   )}
                 >
                   PC / 웹 가이드
@@ -229,7 +625,7 @@ function SunoUrlMobileGuideButton() {
                   onClick={() => setGuideTab('mobile')}
                   className={cn(
                     "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all",
-                    guideTab === 'mobile' ? "bg-[#FF5C52] text-white" : "text-white/50 hover:text-white/80"
+                    guideTab === 'mobile' ? "bg-[#FF7A72] text-white" : "text-white/50 hover:text-white/80"
                   )}
                 >
                   모바일 가이드
@@ -239,9 +635,9 @@ function SunoUrlMobileGuideButton() {
               {guideTab === 'pc' ? (
                 <>
                   <div className="mt-5 space-y-2 text-xs text-white/62">
-                    <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF5C52]/16 text-[11px] font-bold text-[#FF8B84]">1</span><span>수노에서 원하는 곡 카드의 <span className="font-semibold text-white/84">...</span> 메뉴를 누르세요.</span></div>
-                    <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF5C52]/16 text-[11px] font-bold text-[#FF8B84]">2</span><span><span className="font-semibold text-white/84">Share → Copy Link</span> 순서로 링크를 복사하세요.</span></div>
-                    <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF5C52]/16 text-[11px] font-bold text-[#FF8B84]">3</span><span>복사한 주소를 여기 입력하고 <span className="font-semibold text-white/84">저장</span>하면 됩니다.</span></div>
+                    <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF7A72]/16 text-[11px] font-bold text-[#FFC1BC]">1</span><span>수노에서 원하는 곡 카드의 <span className="font-semibold text-white/84">...</span> 메뉴를 누르세요.</span></div>
+                    <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF7A72]/16 text-[11px] font-bold text-[#FFC1BC]">2</span><span><span className="font-semibold text-white/84">Share → Copy Link</span> 순서로 링크를 복사하세요.</span></div>
+                    <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF7A72]/16 text-[11px] font-bold text-[#FFC1BC]">3</span><span>복사한 주소를 여기 입력하고 <span className="font-semibold text-white/84">저장</span>하면 됩니다.</span></div>
                   </div>
 
                   <div className="mt-5 overflow-hidden rounded-2xl border border-white/10 bg-black/20 p-2">
@@ -251,9 +647,9 @@ function SunoUrlMobileGuideButton() {
               ) : (
                 <>
                   <div className="mt-5 space-y-2 text-xs text-white/62">
-                    <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF5C52]/16 text-[11px] font-bold text-[#FF8B84]">1</span><span>수노 앱에서 원하는 곡의 <span className="font-semibold text-white/84">노래 공유</span>를 누르세요.</span></div>
-                    <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF5C52]/16 text-[11px] font-bold text-[#FF8B84]">2</span><span><span className="font-semibold text-white/84">링크 복사</span>를 선택해 공유 링크를 복사하세요.</span></div>
-                    <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF5C52]/16 text-[11px] font-bold text-[#FF8B84]">3</span><span>복사한 주소를 SORIDRAW 입력칸에 붙여 넣고 <span className="font-semibold text-white/84">저장</span>하면 됩니다.</span></div>
+                    <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF7A72]/16 text-[11px] font-bold text-[#FFC1BC]">1</span><span>수노 앱에서 원하는 곡의 <span className="font-semibold text-white/84">노래 공유</span>를 누르세요.</span></div>
+                    <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF7A72]/16 text-[11px] font-bold text-[#FFC1BC]">2</span><span><span className="font-semibold text-white/84">링크 복사</span>를 선택해 공유 링크를 복사하세요.</span></div>
+                    <div className="flex gap-2"><span className="mt-[1px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF7A72]/16 text-[11px] font-bold text-[#FFC1BC]">3</span><span>복사한 주소를 SORIDRAW 입력칸에 붙여 넣고 <span className="font-semibold text-white/84">저장</span>하면 됩니다.</span></div>
                   </div>
 
                   <div className="mt-5 grid grid-cols-2 gap-3">
@@ -288,7 +684,7 @@ function SunoUrlMobileGuideButton() {
                 <button
                   type="button"
                   onClick={requestGuideClose}
-                  className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-[#FF5C52] text-sm font-black text-white transition-all hover:bg-[#FF7066]"
+                  className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-[#FF7A72] text-sm font-black text-white transition-all hover:bg-[#FF8C85]"
                 >
                   확인
                 </button>
@@ -306,22 +702,22 @@ const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
   const normalized = String(typeOrKey || '').toLowerCase();
 
   if (normalized.includes('genre') || normalized === 'subgenre') {
-    return 'border-[#FF5C52]/25 bg-[#FF5C52]/10 text-[#FF5C52] shadow-[0_0_10px_rgba(255,92,82,0.08)]';
+    return 'border-[#FF7A72]/25 bg-[#FF7A72]/10 text-[#FF7A72] shadow-[0_0_10px_rgba(255,122,114,0.08)]';
   }
   if (normalized.includes('style')) {
-    return 'border-[#FF5C52]/20 bg-[#FF5C52]/8 text-[#FF8B84] shadow-[0_0_10px_rgba(255,92,82,0.06)]';
+    return 'border-[#FF7A72]/20 bg-[#FF7A72]/8 text-[#FFC1BC] shadow-[0_0_10px_rgba(255,122,114,0.06)]';
   }
   if (normalized.includes('sound') || normalized.includes('instrument') || normalized.includes('point')) {
-    return 'border-[#FF5C52]/20 bg-[#FF5C52]/8 text-[#FF8B84] shadow-[0_0_10px_rgba(255,92,82,0.06)]';
+    return 'border-[#FF7A72]/20 bg-[#FF7A72]/8 text-[#FFC1BC] shadow-[0_0_10px_rgba(255,122,114,0.06)]';
   }
   if (normalized.includes('mood') || normalized.includes('atmosphere')) {
-    return 'border-[#FF5C52]/22 bg-[#FF5C52]/10 text-[#FF8B84] shadow-[0_0_10px_rgba(255,92,82,0.07)]';
+    return 'border-[#FF7A72]/22 bg-[#FF7A72]/10 text-[#FFC1BC] shadow-[0_0_10px_rgba(255,122,114,0.07)]';
   }
   if (normalized.includes('theme') || normalized.includes('topic')) {
-    return 'border-[#FF5C52]/22 bg-[#FF5C52]/10 text-[#FF8B84] shadow-[0_0_10px_rgba(255,92,82,0.07)]';
+    return 'border-[#FF7A72]/22 bg-[#FF7A72]/10 text-[#FFC1BC] shadow-[0_0_10px_rgba(255,122,114,0.07)]';
   }
   if (isRandom) {
-    return 'border-[#FF5C52]/30 bg-[#FF5C52]/16 text-[#FF5C52] font-bold';
+    return 'border-[#FF7A72]/30 bg-[#FF7A72]/16 text-[#FF7A72] font-bold';
   }
   return 'border-white/10 bg-white/[0.04] text-white/72';
 };
@@ -698,6 +1094,43 @@ export default function FavoritesPage({
   onLogin?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
+  const musicNotePageRootRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const root = musicNotePageRootRef.current;
+    if (!root) return;
+    return attachSoridrawResponsiveContract(root);
+  }, []);
+  const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
+  const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');
+
+  useEffect(() => {
+    const syncStudioWorkspaceHeroHost = () => {
+      const root = document.documentElement;
+      // 462: keep the active right-page masthead in the real result-pane
+      // scroller even when the builder is collapsed into result fullscreen.
+      // Split and one-pane result views now share one masthead owner/geometry.
+      const usePaneMasthead = isStudioDesktopViewport
+        && root.dataset.soridrawTheme === 'studio-black'
+        && root.dataset.soridrawResultCollapsed !== 'true';
+      const paneHost = usePaneMasthead
+        ? document.getElementById('soridraw-studio-result-pane-masthead-host')
+        : null;
+      const legacyHost = isStudioDesktopViewport
+        ? document.getElementById('soridraw-studio-workspace-hero-host')
+        : null;
+      setStudioWorkspaceHeroHost(paneHost || legacyHost);
+    };
+
+    syncStudioWorkspaceHeroHost();
+    window.addEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
+    window.addEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
+    return () => {
+      window.removeEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
+      window.removeEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
+    };
+  }, [isStudioDesktopViewport]);
+
   const [sharedMusicNoteSongs, setSharedMusicNoteSongs] = useState<any[]>([]);
   const [isMusicNoteSharedView, setIsMusicNoteSharedView] = useState(false);
   const [sharedMusicNoteLoading, setSharedMusicNoteLoading] = useState(false);
@@ -709,6 +1142,7 @@ export default function FavoritesPage({
   const musicNoteShareParam = new URLSearchParams(window.location.search).get('note');
   const isMusicNoteShareRoute = Boolean(musicNoteShareParam);
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [serverSearchFavorites, setServerSearchFavorites] = useState<any[]>([]);
   const [isServerSearchLoading, setIsServerSearchLoading] = useState(false);
   const [isManualSyncingFavorites, setIsManualSyncingFavorites] = useState(false);
@@ -717,7 +1151,7 @@ export default function FavoritesPage({
   const serverSearchRunIdRef = useRef(0);
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
   const baseFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
-  const activeFavoriteSource = !isMusicNoteSharedView && searchQuery.trim()
+  const activeFavoriteSource = !isMusicNoteSharedView && deferredSearchQuery.trim()
     ? mergeMusicNoteSearchSource(baseFavoriteSource, serverSearchFavorites)
     : baseFavoriteSource;
   const [creatorNameByUid, setCreatorNameByUid] = useState<Record<string, string>>({});
@@ -1128,12 +1562,347 @@ export default function FavoritesPage({
   const deleteTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; prompt: string; isEditing: boolean; activeEditSection: 'title' | 'lyrics-ko' | 'lyrics-en' | 'prompt' | null; foreignTargetLanguage?: string }>>({});
   const favoriteDraftCommitRef = useRef(false);
-  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const favoriteDetailPendingPatchRef = useRef<MusicNoteDetailPendingPatch | null>(null);
+  const favoriteDetailServerBaselineRef = useRef<{ songId: string; data: any } | null>(null);
+  const favoriteDetailFlushTimerRef = useRef<number | null>(null);
+  const favoriteDetailFlushInFlightRef = useRef<Promise<void> | null>(null);
+  const favoriteDetailDraftPersistInFlightRef = useRef<Promise<void> | null>(null);
+  const [favoriteDetailSaveStatus, setFavoriteDetailSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved'>('idle');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
   const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
   const [activeFavoriteMenuId, setActiveFavoriteMenuId] = useState<string | null>(null);
+  // SORIDRAW_EXPLORE_PUBLICATION_UI_902
+  const [explorePublicationStateBySongId, setExplorePublicationStateBySongId] = useState<Record<string, ExploreMusicNotePublicationState>>({});
+  const [explorePublicationBusyId, setExplorePublicationBusyId] = useState<string | null>(null);
+  // SORIDRAW_EXPLORE_8E4_MUSIC_NOTE_PUBLICATION_UI_956
+  // SORIDRAW_EXPLORE_8E4_INTERACTION_BUTTON_FIX_957
+  // SORIDRAW_EXPLORE_8E4_STATE_BUTTON_FILL_LIVE_LIKE_958
+  // SORIDRAW_EXPLORE_8E4_PERSONAL_LIKE_FIX_959
+  const [explorePublicationDialog, setExplorePublicationDialog] = useState<{
+    song: any;
+    sourceId: string;
+    state: ExploreMusicNotePublicationState;
+    options: ExplorePublicationOptions;
+  } | null>(null);
+  const [explorePublicationPrivateConfirm, setExplorePublicationPrivateConfirm] = useState(false);
+  // SORIDRAW_EXPLORE_PUBLICATION_STATE_HYDRATION_965
+  // SORIDRAW_MUSIC_NOTE_STATE_BUTTON_FINAL_ALIGN_966
+  // SORIDRAW_MUSIC_NOTE_STATE_BUTTON_HOVER_TONE_967
+  const explorePublicationHydratedUidRef = useRef<string | null>(null);
+  const [musicNoteCardState, setMusicNoteCardState] = useState<MusicNoteCardStateSnapshot>(EMPTY_MUSIC_NOTE_CARD_STATE);
+  const musicNoteCardStateRef = useRef<MusicNoteCardStateSnapshot>(EMPTY_MUSIC_NOTE_CARD_STATE);
+
+  const clearFavoriteDetailFlushTimer = () => {
+    if (favoriteDetailFlushTimerRef.current !== null) {
+      window.clearTimeout(favoriteDetailFlushTimerRef.current);
+      favoriteDetailFlushTimerRef.current = null;
+    }
+  };
+
+  const getComparableFavoriteSunoState = (song: any) => {
+    const state = buildFavoriteSunoEditorState(song);
+    const links = getFavoriteSunoLinks(song)
+      .map((link) => ({
+        url: String(link?.url || ''),
+        title: String(link?.title || ''),
+        coverUrl: String(link?.coverUrl || ''),
+        durationSeconds: Number(link?.durationSeconds || 0),
+        durationText: String(link?.durationText || ''),
+        rank: Number(link?.rank || 0),
+      }))
+      .sort((a, b) => a.rank - b.rank || a.url.localeCompare(b.url));
+    return JSON.stringify({ inputs: state.inputs, mainIndex: state.mainIndex, links });
+  };
+
+  const pruneFavoriteDetailPatchAgainstBaseline = (songId: string, updates: Record<string, any>) => {
+    const baselineEntry = favoriteDetailServerBaselineRef.current;
+    if (!baselineEntry || baselineEntry.songId !== songId) return updates;
+
+    const baseline = baselineEntry.data || {};
+    const projected = mergeMusicNoteDetailDraft(baseline, updates);
+    const next: Record<string, any> = mergeMusicNoteDetailPatch({}, updates);
+
+    const titleKeys = ['title', 'displayGenre', 'koreanTitle', 'englishTitle'];
+    if (titleKeys.some((key) => key in next)) {
+      const titleSame = (
+        cleanEditableTitleGenre(getEditableFavoriteTitleGenre(projected)) === cleanEditableTitleGenre(getEditableFavoriteTitleGenre(baseline)) &&
+        cleanTitlePart(getNormalizedTitles(projected).korean) === cleanTitlePart(getNormalizedTitles(baseline).korean) &&
+        cleanTitlePart(getNormalizedTitles(projected).english) === cleanTitlePart(getNormalizedTitles(baseline).english)
+      );
+      if (titleSame) titleKeys.forEach((key) => delete next[key]);
+    }
+
+    if ('prompt' in next) {
+      const projectedPrompt = normalizeFavoritePromptForDisplay(String(projected?.prompt || ''));
+      const baselinePrompt = normalizeFavoritePromptForDisplay(String(baseline?.prompt || ''));
+      if (projectedPrompt === baselinePrompt) delete next.prompt;
+    }
+
+    if ('lyrics' in next) {
+      const projectedKo = normalizeFavoriteLyricsForDisplay(String(projected?.lyrics?.korean || ''));
+      const projectedEn = normalizeFavoriteLyricsForDisplay(String(projected?.lyrics?.english || ''));
+      const baselineKo = normalizeFavoriteLyricsForDisplay(String(baseline?.lyrics?.korean || ''));
+      const baselineEn = normalizeFavoriteLyricsForDisplay(String(baseline?.lyrics?.english || ''));
+      if (projectedKo === baselineKo && projectedEn === baselineEn) delete next.lyrics;
+    }
+
+    const memoKeys = ['musicNoteMemo', 'noteMemo', 'memoUpdatedAt'];
+    if (memoKeys.some((key) => key in next) && getMusicNoteMemo(projected) === getMusicNoteMemo(baseline)) {
+      memoKeys.forEach((key) => delete next[key]);
+    }
+
+    const sunoKeys = [
+      'sunoLinks', 'mainSunoIndex', 'sunoLinkCount', 'sunoShareUrl', 'sunoShareUrlUpdatedAt',
+      'sunoCoverUrl', 'sunoTitle', 'sunoDurationSeconds', 'sunoDurationText', 'sunoCoverFetchedAt',
+    ];
+    if (sunoKeys.some((key) => key in next) && getComparableFavoriteSunoState(projected) === getComparableFavoriteSunoState(baseline)) {
+      sunoKeys.forEach((key) => delete next[key]);
+    }
+
+    return next;
+  };
+
+  const flushFavoriteDetailPendingPatch = async (reason: 'idle' | 'detail-close' | 'page-exit' | 'manual' = 'manual') => {
+    if (favoriteDetailFlushInFlightRef.current) return favoriteDetailFlushInFlightRef.current;
+    const pending = favoriteDetailPendingPatchRef.current;
+    if (!pending || !user?.uid || Object.keys(pending.updates || {}).length === 0) return;
+
+    clearFavoriteDetailFlushTimer();
+    if (favoriteDetailDraftPersistInFlightRef.current) {
+      await favoriteDetailDraftPersistInFlightRef.current;
+    }
+    favoriteDetailPendingPatchRef.current = null;
+    setFavoriteDetailSaveStatus('saving');
+
+    const task = (async () => {
+      try {
+        await updateFavorite(pending.songId, pending.updates);
+        const latest = favoritesStore.getFavorites().find((song: any) => String(song?.id || '') === pending.songId);
+        const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
+        await patchMusicNoteDetailCache({
+          uid: user.uid,
+          sourceId: pending.songId,
+          sourceVersion: committedVersion,
+          updates: pending.updates,
+        });
+
+        const baselineEntry = favoriteDetailServerBaselineRef.current;
+        if (baselineEntry?.songId === pending.songId) {
+          favoriteDetailServerBaselineRef.current = {
+            songId: pending.songId,
+            data: mergeMusicNoteDetailDraft(baselineEntry.data, {
+              ...pending.updates,
+              updatedAtMs: committedVersion,
+            }),
+          };
+        }
+
+        const newerPending = favoriteDetailPendingPatchRef.current;
+        if (newerPending && newerPending.songId === pending.songId) {
+          const rebasedUpdates = pruneFavoriteDetailPatchAgainstBaseline(pending.songId, newerPending.updates);
+          if (Object.keys(rebasedUpdates).length === 0) {
+            favoriteDetailPendingPatchRef.current = null;
+            await clearMusicNoteDetailDraft(user.uid, pending.songId);
+          } else {
+            const rebasedPending: MusicNoteDetailPendingPatch = {
+              ...newerPending,
+              baseVersion: committedVersion,
+              updatedAtMs: Date.now(),
+              updates: rebasedUpdates,
+            };
+            favoriteDetailPendingPatchRef.current = rebasedPending;
+            await writeMusicNoteDetailDraft(user.uid, rebasedPending.songId, rebasedPending.baseVersion, rebasedPending.updates);
+          }
+        } else {
+          await clearMusicNoteDetailDraft(user.uid, pending.songId);
+        }
+        setFavoriteDetailSaveStatus(favoriteDetailPendingPatchRef.current ? 'pending' : 'saved');
+      } catch (error) {
+        console.error(`music note detail draft flush failed (${reason})`, error);
+        const newerPending = favoriteDetailPendingPatchRef.current;
+        const restoredUpdates = pruneFavoriteDetailPatchAgainstBaseline(
+          pending.songId,
+          newerPending && newerPending.songId === pending.songId
+            ? mergeMusicNoteDetailPatch(pending.updates, newerPending.updates)
+            : pending.updates,
+        );
+        if (Object.keys(restoredUpdates).length === 0) {
+          favoriteDetailPendingPatchRef.current = null;
+          await clearMusicNoteDetailDraft(user.uid, pending.songId);
+          setFavoriteDetailSaveStatus('idle');
+          return;
+        }
+        const restored: MusicNoteDetailPendingPatch = {
+          songId: pending.songId,
+          baseVersion: pending.baseVersion || newerPending?.baseVersion || 0,
+          updatedAtMs: Date.now(),
+          updates: restoredUpdates,
+        };
+        favoriteDetailPendingPatchRef.current = restored;
+        setFavoriteDetailSaveStatus('pending');
+        await writeMusicNoteDetailDraft(user.uid, restored.songId, restored.baseVersion, restored.updates);
+      } finally {
+        favoriteDetailFlushInFlightRef.current = null;
+      }
+    })();
+
+    favoriteDetailFlushInFlightRef.current = task;
+    return task;
+  };
+
+  const scheduleFavoriteDetailFlush = () => {
+  };
+
+  const queueFavoriteDetailPatch = (songId: string, patch: Record<string, any>) => {
+    const safeSongId = String(songId || '').trim();
+    if (!safeSongId || !user?.uid || !patch || Object.keys(patch).length === 0) return;
+
+    const existing = favoriteDetailPendingPatchRef.current;
+    const baselineEntry = favoriteDetailServerBaselineRef.current;
+    const currentSong = selectedSong?.id === safeSongId
+      ? selectedSong
+      : favoritesStore.getFavorites().find((song: any) => String(song?.id || '') === safeSongId);
+    const baseVersion = existing?.songId === safeSongId
+      ? existing.baseVersion
+      : getMusicNoteDetailSourceVersion(baselineEntry?.songId === safeSongId ? baselineEntry.data : currentSong);
+    const mergedUpdates = existing?.songId === safeSongId
+      ? mergeMusicNoteDetailPatch(existing.updates, patch)
+      : mergeMusicNoteDetailPatch({}, patch);
+    const updates = pruneFavoriteDetailPatchAgainstBaseline(safeSongId, mergedUpdates);
+
+    setSelectedSong((current: any) => {
+      if (!current || String(current.id || '') !== safeSongId) return current;
+      return mergeMusicNoteDetailDraft(current, patch);
+    });
+
+    if (Object.keys(updates).length === 0) {
+      favoriteDetailPendingPatchRef.current = null;
+      setFavoriteDetailSaveStatus(favoriteDetailFlushInFlightRef.current ? 'saving' : 'idle');
+      clearFavoriteDetailFlushTimer();
+      const clearTask = clearMusicNoteDetailDraft(user.uid, safeSongId);
+      const trackedClearTask = clearTask.finally(() => {
+        if (favoriteDetailDraftPersistInFlightRef.current === trackedClearTask) {
+          favoriteDetailDraftPersistInFlightRef.current = null;
+        }
+      });
+      favoriteDetailDraftPersistInFlightRef.current = trackedClearTask;
+      return;
+    }
+
+    const pending: MusicNoteDetailPendingPatch = {
+      songId: safeSongId,
+      baseVersion,
+      updatedAtMs: Date.now(),
+      updates,
+    };
+    favoriteDetailPendingPatchRef.current = pending;
+    setFavoriteDetailSaveStatus('pending');
+
+    const persistTask = writeMusicNoteDetailDraft(user.uid, safeSongId, baseVersion, updates);
+    const trackedPersistTask = persistTask.finally(() => {
+      if (favoriteDetailDraftPersistInFlightRef.current === trackedPersistTask) {
+        favoriteDetailDraftPersistInFlightRef.current = null;
+      }
+    });
+    favoriteDetailDraftPersistInFlightRef.current = trackedPersistTask;
+    scheduleFavoriteDetailFlush();
+  };
+
+  const flushAllMusicNoteLocalChangesForPageExit = async () => {
+    if (!user?.uid) return;
+    const uid = user.uid;
+    if (favoriteDetailDraftPersistInFlightRef.current) await favoriteDetailDraftPersistInFlightRef.current;
+    await flushFavoriteDetailPendingPatch('page-exit');
+    const stillPendingSongId = favoriteDetailPendingPatchRef.current?.songId || '';
+    let firstError: unknown = stillPendingSongId ? new Error('current detail draft still pending') : null;
+    const drafts = await listMusicNoteDetailDrafts(uid);
+    for (const draft of drafts) {
+      if (!draft?.sourceId || draft.sourceId === stillPendingSongId) continue;
+      try {
+        await updateFavorite(draft.sourceId, draft.updates);
+        const latest = favoritesStore.getFavorites().find((song: any) => String(song?.id || '') === draft.sourceId);
+        const committedVersion = getMusicNoteDetailSourceVersion(latest) || Date.now();
+        await patchMusicNoteDetailCache({
+uid,
+sourceId: draft.sourceId,
+sourceVersion: committedVersion,
+updates: draft.updates,
+        });
+        await clearMusicNoteDetailDraft(uid, draft.sourceId);
+      } catch (error) {
+        firstError ||= error;
+      }
+    }
+    if (isMusicNoteCardStateDirty(uid)) {
+      try { await flushMusicNoteCardStateServerWrite(uid); } catch (error) { firstError ||= error; }
+    }
+    if (firstError) throw firstError;
+  };
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const activeUser = user;
+    const uid = user.uid;
+    const unregister = registerPageSyncHandler({
+      key: `music-note:${uid}`,
+      uid,
+      count: async () => {
+        const drafts = await listMusicNoteDetailDrafts(uid);
+        const ids = new Set(drafts.map((draft) => draft.sourceId));
+        const inMemoryPending = favoriteDetailPendingPatchRef.current?.songId;
+        const detailCount = drafts.length + (inMemoryPending && !ids.has(inMemoryPending) ? 1 : 0);
+        return detailCount + (isMusicNoteCardStateDirty(uid) ? 1 : 0);
+      },
+      flush: flushAllMusicNoteLocalChangesForPageExit,
+    });
+    return () => {
+      clearFavoriteDetailFlushTimer();
+      void flushSoridrawPageSync(activeUser, 'music-note-exit')
+        .catch((error) => console.warn('[081] Music Note page sync pending:', error))
+        .finally(unregister);
+    };
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      musicNoteCardStateRef.current = EMPTY_MUSIC_NOTE_CARD_STATE;
+      setMusicNoteCardState(EMPTY_MUSIC_NOTE_CARD_STATE);
+      return;
+    }
+
+    const uid = user.uid;
+    const localState = readMusicNoteCardStateLocal(uid);
+    musicNoteCardStateRef.current = localState;
+    setMusicNoteCardState(localState);
+
+    let active = true;
+    const unsubscribe = subscribeMusicNoteStructureDocument(uid, (data: any) => {
+      if (!active) return;
+      const serverState = normalizeMusicNoteCardState(data?.musicNoteCardState);
+      const currentLocal = musicNoteCardStateRef.current;
+      const merged = mergeMusicNoteCardStateSnapshots(serverState, currentLocal);
+      const localNewer: Record<string, MusicNoteCardStateItem> = {};
+      Object.entries(currentLocal.items).forEach(([id, item]) => {
+        const serverItem = serverState.items?.[id];
+        if (!serverItem || Number(item.updatedAtMs || 0) > Number(serverItem.updatedAtMs || 0)) {
+          localNewer[id] = item;
+        }
+      });
+
+      musicNoteCardStateRef.current = merged;
+      setMusicNoteCardState(merged);
+      writeMusicNoteCardStateLocal(uid, merged);
+      // Local-newer data stays cached and dirty; do not write while this page is open.
+      // A single exit flush handles all accumulated Like/Lock changes.
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [user?.uid]);
   const [favoriteContextMenuPosition, setFavoriteContextMenuPosition] = useState<{ songId: string; top: number; left: number } | null>(null);
   const [favoriteColorMap, setFavoriteColorMap] = useState<Record<string, string>>({});
   const [activeFavoriteColorMenuId, setActiveFavoriteColorMenuId] = useState<string | null>(null);
@@ -1145,6 +1914,7 @@ export default function FavoritesPage({
   const favoriteColorMapRef = useRef<Record<string, string>>({});
   const favoriteColorBaselineRef = useRef<string>('{}');
   const favoriteColorDirtyRef = useRef(false);
+  const pendingFavoriteColorIdsRef = useRef<Set<string>>(new Set());
   const favoriteColorsAutoSyncingRef = useRef(false);
   const favoritesRef = useRef<any[]>(favorites || []);
   const favoriteUserRef = useRef<User | null>(user);
@@ -1155,6 +1925,15 @@ export default function FavoritesPage({
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const selectionLongPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const cardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const horizontalListDragRef = useRef<{
+    element: HTMLElement;
+    pointerId: number;
+    startX: number;
+    startScrollLeft: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressHorizontalListClickRef = useRef(false);
+  const horizontalListClickTimerRef = useRef<number | null>(null);
   const longPressTriggeredRef = useRef(false);
   const suppressNextCardClickRef = useRef(false);
   const suppressNextCardClickSongIdRef = useRef<string | null>(null);
@@ -1164,17 +1943,12 @@ export default function FavoritesPage({
   const selectionDragStartSongIdRef = useRef<string | null>(null);
   const selectionDragActionRef = useRef<'select' | 'deselect'>('select');
   const selectionDragVisitedSongIdsRef = useRef<Set<string>>(new Set());
+  // SORIDRAW_MUSIC_NOTE_IDLE_MOUSEMOVE_982
+  const [isMusicNoteMousePressTracking, setIsMusicNoteMousePressTracking] = useState(false);
   const suppressSelectionDragClickRef = useRef(false);
   const selectionBeforeSelectAllRef = useRef<string[]>([]);
   const selectionHistoryPushedRef = useRef(false);
   const detailHistoryPushedRef = useRef(false);
-  const placeholders = [
-    "제목으로 검색해보세요...",
-    "가사 내용으로 검색해보세요...",
-    "장르나 키워드로 검색해보세요...",
-    "분위기로 검색해보세요..."
-  ];
-
   useEffect(() => {
     let cancelled = false;
     const loadUserProfile = async () => {
@@ -1185,10 +1959,20 @@ export default function FavoritesPage({
         }
         return;
       }
+      const cachedProfile = readUserProfileCache(user.uid);
+      if (cachedProfile) {
+        if (!cancelled) {
+          setFavoriteUserProfile(cachedProfile);
+          setIsFavoriteAdminUser(Boolean(cachedProfile.role === 'admin'));
+        }
+        return;
+      }
+
       try {
         const snap = await getDoc(doc(db, 'users', user.uid));
         if (!cancelled) {
           const data: any | null = snap.exists() ? { uid: user.uid, ...snap.data() } : null;
+          if (data) writeUserProfileCache(user.uid, data);
           setFavoriteUserProfile(data);
           setIsFavoriteAdminUser(Boolean(data && data.role === 'admin'));
         }
@@ -1236,11 +2020,10 @@ export default function FavoritesPage({
   };
 
   const handleManualFavoriteSync = async () => {
-    if (!onManualSyncFavorites || isManualSyncingFavorites || isManualSyncUsedToday) return;
+    if (!onManualSyncFavorites || isManualSyncingFavorites) return;
     setIsManualSyncingFavorites(true);
     try {
       const result = await onManualSyncFavorites();
-      if (result?.ok || result?.limited) setIsManualSyncUsedToday(true);
       showFavoriteToast(result?.message || (result?.ok ? '뮤직노트를 동기화했습니다.' : '동기화에 실패했습니다.'));
     } catch (error) {
       console.error('manual favorite sync failed:', error);
@@ -1361,10 +2144,15 @@ export default function FavoritesPage({
     (async () => {
       const entries: Array<[string, string]> = await Promise.all(uids.map(async (uid): Promise<[string, string]> => {
         try {
+          const cachedProfile = readUserProfileCache(uid);
+          if (cachedProfile) {
+            return [uid, getCreatorNicknameFromProfile(cachedProfile, null)];
+          }
           const snap = await getDoc(doc(db, 'users', uid));
           if (!snap.exists()) return [uid, ''];
           const data: any = snap.data();
-          return [uid, getCreatorNicknameFromProfile({ ...data, uid }, null)];
+          const cached = writeUserProfileCache(uid, { ...data, uid });
+          return [uid, getCreatorNicknameFromProfile(cached, null)];
         } catch {
           return [uid, ''];
         }
@@ -1416,23 +2204,21 @@ export default function FavoritesPage({
 
     setFavoriteMemoSavingIds(prev => ({ ...prev, [song.id]: true }));
     try {
-      await Promise.resolve(updateFavorite(song.id, {
+      const now = Date.now();
+      queueFavoriteDetailPatch(song.id, {
         musicNoteMemo: nextMemo,
         noteMemo: nextMemo,
-        memoUpdatedAt: Date.now(),
-      } as any));
-      if (selectedSong?.id === song.id) {
-        setSelectedSong({ ...(selectedSong || {}), musicNoteMemo: nextMemo, noteMemo: nextMemo, memoUpdatedAt: Date.now() });
-      }
+        memoUpdatedAt: now,
+      });
       setFavoriteMemoDrafts(prev => {
         const next = { ...prev };
         delete next[song.id];
         return next;
       });
-      showFavoriteToast('메모를 저장했습니다.');
+      showFavoriteToast('메모 변경을 반영했습니다.');
     } catch (error) {
-      console.error('music note memo save failed:', error);
-      showFavoriteToast('메모 저장에 실패했습니다.');
+      console.error('music note memo draft save failed:', error);
+      showFavoriteToast('메모 반영에 실패했습니다.');
     } finally {
       setFavoriteMemoSavingIds(prev => {
         const next = { ...prev };
@@ -1560,39 +2346,31 @@ export default function FavoritesPage({
 
 
   useEffect(() => {
-    let cancelled = false;
+    if (!user?.uid) {
+      setMyNoteFolders(DEFAULT_MY_NOTE_FOLDERS);
+      setSharedNoteFolders(DEFAULT_SHARED_NOTE_FOLDERS);
+      setSelectedMyNoteFolderId('default');
+      setSelectedSharedNoteFolderId('default');
+      return;
+    }
 
-    const loadMusicNoteFolders = async () => {
-      if (!user?.uid) {
-        setMyNoteFolders(DEFAULT_MY_NOTE_FOLDERS);
-        setSharedNoteFolders(DEFAULT_SHARED_NOTE_FOLDERS);
-        setSelectedMyNoteFolderId('default');
-        setSelectedSharedNoteFolderId('default');
-        return;
-      }
-
-      try {
-        const snap = await getDoc(doc(db, 'user_structures', user.uid));
-        if (cancelled) return;
-        const data: any = snap.exists() ? snap.data() : {};
-        const stored = data?.musicNoteFolders || {};
-        const nextMy = normalizeMusicNoteFolders(stored.myNote || data?.myNoteFolders, DEFAULT_MY_NOTE_FOLDERS);
-        const nextShared = normalizeMusicNoteFolders(stored.sharedNote || data?.sharedNoteFolders, DEFAULT_SHARED_NOTE_FOLDERS);
-        setMyNoteFolders(nextMy);
-        setSharedNoteFolders(nextShared);
-        setSelectedMyNoteFolderId((prev) => nextMy.some((folder) => folder.id === prev) ? prev : 'default');
-        setSelectedSharedNoteFolderId((prev) => nextShared.some((folder) => folder.id === prev) ? prev : 'default');
-      } catch (error) {
-        console.warn('load music note folders failed:', error);
-        if (!cancelled) {
-          setMyNoteFolders(DEFAULT_MY_NOTE_FOLDERS);
-          setSharedNoteFolders(DEFAULT_SHARED_NOTE_FOLDERS);
-        }
-      }
+    let active = true;
+    const applyFolderData = (data: any) => {
+      if (!active) return;
+      const stored = data?.musicNoteFolders || {};
+      const nextMy = normalizeMusicNoteFolders(stored.myNote || data?.myNoteFolders, DEFAULT_MY_NOTE_FOLDERS);
+      const nextShared = normalizeMusicNoteFolders(stored.sharedNote || data?.sharedNoteFolders, DEFAULT_SHARED_NOTE_FOLDERS);
+      setMyNoteFolders(nextMy);
+      setSharedNoteFolders(nextShared);
+      setSelectedMyNoteFolderId((prev) => nextMy.some((folder) => folder.id === prev) ? prev : 'default');
+      setSelectedSharedNoteFolderId((prev) => nextShared.some((folder) => folder.id === prev) ? prev : 'default');
     };
 
-    loadMusicNoteFolders();
-    return () => { cancelled = true; };
+    const unsubscribe = subscribeMusicNoteStructureDocument(user.uid, applyFolderData);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [user?.uid]);
 
   useEffect(() => {
@@ -1611,19 +2389,26 @@ export default function FavoritesPage({
   const persistMusicNoteFolders = async (mode: MusicNoteFolderMode, folders: MusicNoteFolder[]) => {
     if (!user?.uid) return;
     const normalized = normalizeMusicNoteFolders(folders, mode === 'sharedNote' ? DEFAULT_SHARED_NOTE_FOLDERS : DEFAULT_MY_NOTE_FOLDERS);
-    await setDoc(doc(db, 'user_structures', user.uid), {
-      musicNoteFolders: {
-        [mode]: normalized.map((folder, index) => ({
-          id: folder.id,
-          title: folder.title,
-          order: folder.order || index + 1,
-          isDefault: Boolean(folder.isDefault || folder.id === 'default'),
-          createdAt: folder.createdAt || Date.now(),
-          updatedAt: Date.now(),
-        })),
+    const structureVersion = getNextMusicNoteStructureVersion(user.uid);
+    const folderPatch = {
+      [mode]: normalized.map((folder, index) => ({
+        id: folder.id,
+        title: folder.title,
+        order: folder.order || index + 1,
+        isDefault: Boolean(folder.isDefault || folder.id === 'default'),
+        createdAt: folder.createdAt || Date.now(),
         updatedAt: Date.now(),
-      },
+      })),
+      updatedAt: Date.now(),
+    };
+    await setDoc(doc(db, 'user_structures', user.uid), {
+      musicNoteFolders: folderPatch,
+      musicNoteStructureVersion: structureVersion,
     }, { merge: true });
+    publishMusicNoteStructureSession(user.uid, {
+      musicNoteFolders: folderPatch,
+      musicNoteStructureVersion: structureVersion,
+    }, structureVersion, true);
   };
 
   const openMusicNoteFolderPicker = (songIds: string[], preferredMode?: MusicNoteFolderMode) => {
@@ -1670,7 +2455,7 @@ export default function FavoritesPage({
       chunk.forEach((id) => {
         batch.update(doc(db, 'favorites', id), updates);
       });
-      await batch.commit();
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-update', uid: user?.uid || '', documentIds: chunk, affectedCount: chunk.length }, batch.commit());
     }
   };
 
@@ -1889,7 +2674,7 @@ export default function FavoritesPage({
   };
 
   const deleteSongsByMusicNoteContext = async (songs: any[]): Promise<boolean> => {
-    const deletableSongs = songs.filter((song) => getFavoriteDocumentId(song) && !song.isLocked);
+    const deletableSongs = songs.filter((song) => getFavoriteDocumentId(song) && !isMusicNoteCardLocked(song));
     if (deletableSongs.length === 0) {
       showFavoriteToast(songs.length === 0 ? '삭제할 곡을 선택해주세요.' : '잠긴 곡은 삭제할 수 없습니다.');
       return false;
@@ -2090,7 +2875,7 @@ export default function FavoritesPage({
     // Open Detail & Edit and move to the embedded SUNO URL section instead.
     pendingDetailSunoUrlScrollRef.current = true;
     setIsDetailSunoUrlHighlighted(true);
-    setSelectedSong(song);
+    void openFavoriteDetail(song);
     setSunoUrlEditorSong(null);
     setSunoUrlError('');
     setSunoUrlSaveStatus('idle');
@@ -2231,7 +3016,8 @@ export default function FavoritesPage({
         sunoCoverFetchedAt: now,
       };
 
-      await updateFavorite(song.id, updates);
+      if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);
+      else await updateFavorite(song.id, updates);
 
       const targetSongId = String(song.id || '');
       const detailSessionStillOpen = source === 'detail'
@@ -2290,7 +3076,8 @@ export default function FavoritesPage({
         sunoDurationText: null,
         sunoCoverFetchedAt: null,
       };
-      await updateFavorite(song.id, updates);
+      if (source === 'detail') queueFavoriteDetailPatch(song.id, updates);
+      else await updateFavorite(song.id, updates);
       const targetSongId = String(song.id || '');
       const detailSessionStillOpen = source === 'detail'
         && activeFavoriteEditorSongIdRef.current === targetSongId
@@ -2421,21 +3208,22 @@ export default function FavoritesPage({
     const currentUser = favoriteUserRef.current;
     if (!currentUser || favoriteColorsAutoSyncingRef.current) return;
 
+    // Page entry/exit, server hydration and cache restoration must never write.
+    // Only explicit color clicks are eligible for an exit sync.
+    if (!favoriteColorDirtyRef.current) return;
+
     const currentMap = favoriteColorMapRef.current || {};
     const currentSerialized = serializeColorMap(currentMap);
-    if (currentSerialized === favoriteColorBaselineRef.current) return;
-
     const existingIds = new Set((favoritesRef.current || []).map(song => song?.id).filter(Boolean));
-    const entries = Object.entries(currentMap).filter(([id]) => existingIds.has(id));
-    if (entries.length === 0) {
-      favoriteColorBaselineRef.current = currentSerialized;
-      favoriteColorDirtyRef.current = false;
-      return;
-    }
+    const entries: [string, string][] = Array.from(pendingFavoriteColorIdsRef.current)
+      .filter((id) => existingIds.has(id))
+      .map((id): [string, string] => [id, currentMap[id] || 'gray']);
+    if (entries.length === 0) return;
 
     favoriteColorsAutoSyncingRef.current = true;
     try {
       await Promise.all(entries.map(([id, color]) => updateFavorite(id, { favoriteColorTag: color === 'gray' ? null : color } as any)));
+      pendingFavoriteColorIdsRef.current.clear();
       favoriteColorBaselineRef.current = currentSerialized;
       favoriteColorDirtyRef.current = false;
       if (!silent) showFavoriteToast('색상 변경사항을 저장했습니다.');
@@ -2480,9 +3268,16 @@ export default function FavoritesPage({
 
     setSelectedSong((prev: any) => {
       if (!prev || prev.id !== latestSong.id) return prev;
-      return {
+      const catalogSummary = latestSong?.__catalogSummary === true;
+      const pending = favoriteDetailPendingPatchRef.current;
+      const merged = {
         ...prev,
         ...latestSong,
+        // Catalog rows intentionally omit large detail fields. Never let a list refresh
+        // replace an already hydrated editor value with an absent/empty summary value.
+        prompt: catalogSummary ? prev.prompt : (latestSong.prompt ?? prev.prompt),
+        musicNoteMemo: catalogSummary ? prev.musicNoteMemo : (latestSong.musicNoteMemo ?? prev.musicNoteMemo),
+        noteMemo: catalogSummary ? prev.noteMemo : (latestSong.noteMemo ?? prev.noteMemo),
         lyrics: latestSong.lyrics
           ? { ...(prev.lyrics || {}), ...(latestSong.lyrics || {}) }
           : prev.lyrics,
@@ -2490,6 +3285,9 @@ export default function FavoritesPage({
           ? { ...(prev.appliedKeywords || {}), ...(latestSong.appliedKeywords || {}) }
           : prev.appliedKeywords,
       };
+      return pending?.songId === String(prev.id || '')
+        ? mergeMusicNoteDetailDraft(merged, pending.updates)
+        : merged;
     });
   }, [favorites, selectedSong?.id, isMusicNoteSharedView]);
 
@@ -2503,6 +3301,7 @@ export default function FavoritesPage({
       setFavoriteColorMap(loaded);
       favoriteColorMapRef.current = loaded;
       favoriteColorBaselineRef.current = serializeColorMap(loaded);
+      pendingFavoriteColorIdsRef.current.clear();
       favoriteColorDirtyRef.current = false;
     } catch (error) {
       console.warn('favorite color map load failed', error);
@@ -2580,13 +3379,6 @@ export default function FavoritesPage({
   }, []);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
     return () => clearSelectionLongPressTimer();
   }, []);
 
@@ -2617,6 +3409,15 @@ export default function FavoritesPage({
   useEffect(() => {
     if (selectedSong) {
       const selectedSongId = String(selectedSong.id || '');
+      if (!favoriteDetailServerBaselineRef.current || favoriteDetailServerBaselineRef.current.songId !== selectedSongId) {
+        favoriteDetailServerBaselineRef.current = { songId: selectedSongId, data: selectedSong };
+      }
+      if (
+        favoriteEditorReadySongIdRef.current === selectedSongId &&
+        popupOpenedSongIdRef.current === selectedSongId
+      ) {
+        return;
+      }
       const sourceTitle = selectedSong.title || '';
       const sourceTitles = getNormalizedTitles(selectedSong);
       const sourceTitleGenre = getEditableFavoriteTitleGenre(selectedSong);
@@ -2632,6 +3433,7 @@ export default function FavoritesPage({
       activeFavoriteEditorSongIdRef.current = selectedSongId;
       favoriteEditorReadySongIdRef.current = selectedSongId;
       popupOpenedSongIdRef.current = selectedSongId;
+      setFavoriteDetailSaveStatus(favoriteDetailPendingPatchRef.current?.songId === selectedSongId ? 'pending' : 'idle');
       skipNextFavoriteDraftSaveRef.current = false;
 
       setOriginalLyricsKo(sourceKorean);
@@ -2676,6 +3478,8 @@ export default function FavoritesPage({
       popupOpenedSongIdRef.current = null;
       activeFavoriteEditorSongIdRef.current = null;
       favoriteEditorReadySongIdRef.current = null;
+      favoriteDetailServerBaselineRef.current = null;
+      setFavoriteDetailSaveStatus('idle');
       skipNextFavoriteDraftSaveRef.current = false;
       setActiveEditSection(null);
       setForeignTargetLanguage('English');
@@ -2816,7 +3620,9 @@ export default function FavoritesPage({
 
     favoriteDraftCommitRef.current = true;
     try {
-      await updateFavorite(payload.targetSongId, payload.updates);
+      // 031: Detail edits are local-first. Multiple section saves are merged into one
+      // pending patch and only flushed after 60s idle or when the detail/page exits.
+      queueFavoriteDetailPatch(payload.targetSongId, payload.updates);
 
       setSelectedSong(payload.nextSong);
       setOriginalTitle(payload.nextSong.title);
@@ -2872,9 +3678,77 @@ export default function FavoritesPage({
     setIsEditing(true);
   };
 
+  const getMusicNoteCardStateSongId = (song: any) => String(
+    song?.firestoreId || song?.favoriteFirestoreId || song?.id || ''
+  ).trim();
+
+  const getMusicNoteCardStateItem = (song: any): MusicNoteCardStateItem | null => {
+    const id = getMusicNoteCardStateSongId(song);
+    return id ? (musicNoteCardState.items?.[id] || null) : null;
+  };
+
+  const isMusicNoteCardLiked = (song: any) => {
+    const item = getMusicNoteCardStateItem(song);
+    return item ? Boolean(item.liked) : Boolean(song?.isLiked);
+  };
+
+  const isMusicNoteCardLocked = (song: any) => {
+    const item = getMusicNoteCardStateItem(song);
+    const locked = item ? Boolean(item.locked) : Boolean(song?.isLocked);
+    if (item && song && typeof song === 'object') song.isLocked = locked;
+    return locked;
+  };
+
+  const updateMusicNoteCardStateForSong = (
+    song: any,
+    patch: Partial<Pick<MusicNoteCardStateItem, 'liked' | 'locked'>>,
+  ) => {
+    if (!user?.uid || !song || shouldHideSunoUrlControls(song)) return;
+    const id = getMusicNoteCardStateSongId(song);
+    if (!id) return;
+
+    const previousItem = getMusicNoteCardStateItem(song);
+    const now = Date.now();
+    const nextItem: MusicNoteCardStateItem = {
+      liked: patch.liked ?? (previousItem ? Boolean(previousItem.liked) : Boolean(song?.isLiked)),
+      locked: patch.locked ?? (previousItem ? Boolean(previousItem.locked) : Boolean(song?.isLocked)),
+      updatedAtMs: now,
+    };
+    const nextSnapshot: MusicNoteCardStateSnapshot = {
+      schemaVersion: 1,
+      items: { ...musicNoteCardStateRef.current.items, [id]: nextItem },
+      updatedAtMs: now,
+    };
+
+    musicNoteCardStateRef.current = nextSnapshot;
+    setMusicNoteCardState(nextSnapshot);
+    writeMusicNoteCardStateLocal(user.uid, nextSnapshot);
+    markMusicNoteCardStateDirty(user.uid);
+
+    // Keep legacy object consumers in this render/session consistent without a favorites write.
+    song.isLiked = nextItem.liked;
+    song.isLocked = nextItem.locked;
+  };
+
+  const renderMusicNoteStateButtonFill = (active: boolean) => (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 rounded-full"
+      style={{
+        background: active ? '#f7f7f7' : 'var(--soridraw-musicnote-state-bg, #242428)',
+        boxShadow: active ? '0 2px 9px rgba(0,0,0,0.24)' : 'none',
+      }}
+    />
+  );
+
+  const handleTogglePersonalLike = (song: any) => {
+    if (!song || shouldHideSunoUrlControls(song)) return;
+    updateMusicNoteCardStateForSong(song, { liked: !isMusicNoteCardLiked(song) });
+  };
+
   const handleToggleLock = async (song: any) => {
-    const newLockedState = !song.isLocked;
-    await updateFavorite(song.id, { isLocked: newLockedState });
+    const newLockedState = !isMusicNoteCardLocked(song);
+    updateMusicNoteCardStateForSong(song, { locked: newLockedState });
 
     if (newLockedState) {
       recentlyUnlockedFavoriteIdsRef.current.delete(song.id);
@@ -2920,7 +3794,7 @@ export default function FavoritesPage({
   };
 
   const handlePopupDelete = async (song: any) => {
-    if (song.isLocked) {
+    if (isMusicNoteCardLocked(song)) {
       forceDeleteUnlockedFavoriteIfNeeded(song);
       return;
     }
@@ -2956,7 +3830,7 @@ export default function FavoritesPage({
   });
 
   const getSelectionLockHover = (
-    allSelectedLocked = selectedSongs.length > 0 && selectedSongs.every(song => song.isLocked)
+    allSelectedLocked = selectedSongs.length > 0 && selectedSongs.every(song => isMusicNoteCardLocked(song))
   ) => ({
     id: 'selection-lock',
     label: allSelectedLocked ? '선택 잠금 해제' : '선택 잠금',
@@ -3044,7 +3918,10 @@ export default function FavoritesPage({
   }, []);
 
   useEffect(() => {
-    const stopSelectionDrag = () => handleSelectionDragEnd();
+    const stopSelectionDrag = () => {
+      handleSelectionDragEnd();
+      setIsMusicNoteMousePressTracking(false);
+    };
     window.addEventListener('mouseup', stopSelectionDrag);
     return () => window.removeEventListener('mouseup', stopSelectionDrag);
   }, []);
@@ -3077,6 +3954,74 @@ export default function FavoritesPage({
     }
 
     return { x: event.clientX, y: event.clientY };
+  };
+
+  const handleHorizontalListPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+    const element = event.currentTarget;
+    if (element.scrollWidth <= element.clientWidth + 1) return;
+
+    horizontalListDragRef.current = {
+      element,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScrollLeft: element.scrollLeft,
+      moved: false,
+    };
+    cardClickStartPointRef.current = { x: event.clientX, y: event.clientY };
+    element.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleHorizontalListPointerMove = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = horizontalListDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || drag.element !== event.currentTarget) return;
+
+    const deltaX = event.clientX - drag.startX;
+    if (!drag.moved && Math.abs(deltaX) > 3) {
+      drag.moved = true;
+      clearSelectionLongPressTimer();
+    }
+    if (!drag.moved) return;
+
+    drag.element.scrollLeft = drag.startScrollLeft - deltaX;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const finishHorizontalListPointerDrag = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = horizontalListDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || drag.element !== event.currentTarget) return;
+
+    try {
+      drag.element.releasePointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture may already be released by the browser.
+    }
+
+    horizontalListDragRef.current = null;
+    if (!drag.moved) return;
+
+    suppressHorizontalListClickRef.current = true;
+    if (horizontalListClickTimerRef.current) window.clearTimeout(horizontalListClickTimerRef.current);
+    horizontalListClickTimerRef.current = window.setTimeout(() => {
+      suppressHorizontalListClickRef.current = false;
+      horizontalListClickTimerRef.current = null;
+    }, 0);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const consumeHorizontalListClick = (event: React.MouseEvent<HTMLElement>) => {
+    if (!suppressHorizontalListClickRef.current) return;
+    suppressHorizontalListClickRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const handleHorizontalListWheel = (event: React.WheelEvent<HTMLElement>) => {
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    event.currentTarget.scrollLeft += event.deltaY;
   };
 
   const handleCardLongPressMove = (event: React.MouseEvent | React.TouchEvent) => {
@@ -3373,17 +4318,16 @@ export default function FavoritesPage({
   const closeSelectedSong = async (source: 'ui' | 'history' = 'ui') => {
     const shouldPopOverlayHistory = source === 'ui' && detailHistoryPushedRef.current;
 
-    // End the detail session synchronously before any pending URL save can resolve. This keeps the
-    // server save alive, but prevents its late completion from restoring a window the user closed.
+    // 081: closing the detail modal is local-only; the page exit owns server sync.
+
+    // End the detail session only after the bounded flush attempt so async completion
+    // can never reopen or attach to another song.
     popupOpenedSongIdRef.current = null;
     activeFavoriteEditorSongIdRef.current = null;
     favoriteEditorReadySongIdRef.current = null;
     clearFavoriteSunoSaveTimer('detail');
     setDetailSunoUrlSaveStatus('idle');
 
-    // Closing with the browser/app back button must never write to Firestore.
-    // Only the explicit check/save button commits edits. This protects existing
-    // Music Note data from cross-song overwrites during history navigation.
     setDrafts(prev => {
       if (!selectedSong?.id || !prev[selectedSong.id]) return prev;
       const next = { ...prev };
@@ -3504,7 +4448,7 @@ export default function FavoritesPage({
     const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
     if (selectedSongs.length === 0) return;
 
-    const allLocked = selectedSongs.every(song => song.isLocked);
+    const allLocked = selectedSongs.every(song => isMusicNoteCardLocked(song));
     setPendingSelectionAction(allLocked ? 'unlock' : 'lock');
   };
 
@@ -3512,7 +4456,7 @@ export default function FavoritesPage({
     const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
     if (selectedSongs.length === 0) return;
 
-    await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: shouldLock })));
+    selectedSongs.forEach((song) => updateMusicNoteCardStateForSong(song, { locked: shouldLock }));
     setLastSelectionAction(shouldLock ? 'lock' : 'unlock');
     
     if (selectedSong && selectedSongIds.includes(selectedSong.id)) {
@@ -3529,7 +4473,7 @@ export default function FavoritesPage({
     }
 
     const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
-    const deletableSongs = selectedSongs.filter(song => !song.isLocked);
+    const deletableSongs = selectedSongs.filter(song => !isMusicNoteCardLocked(song));
 
     if (deletableSongs.length === 0) {
       setIsShaking(true);
@@ -3552,7 +4496,7 @@ export default function FavoritesPage({
 
   const executeSelectedDelete = async () => {
     const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
-    const deletableSongs = selectedSongs.filter(song => !song.isLocked);
+    const deletableSongs = selectedSongs.filter(song => !isMusicNoteCardLocked(song));
     
     const deleted = await deleteSongsByMusicNoteContext(deletableSongs);
     if (deleted) exitSelectionMode();
@@ -3714,9 +4658,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   const selectedSongs = activeFavoriteSource.filter(song => selectedSongIds.includes(song.id));
   const isFavoriteTrashMode = musicNoteViewMode === 'noteSpace' && favoriteTrashView;
-  const selectedLockedCount = selectedSongs.filter(song => song.isLocked).length;
-  const hasDeletableSongs = selectedSongs.some(s => !s.isLocked);
-  const areSelectedSongsAllLocked = selectedSongs.length > 0 && selectedSongs.every(song => song.isLocked);
+  const selectedLockedCount = selectedSongs.filter(song => isMusicNoteCardLocked(song)).length;
+  const hasDeletableSongs = selectedSongs.some(s => !isMusicNoteCardLocked(s));
+  const areSelectedSongsAllLocked = selectedSongs.length > 0 && selectedSongs.every(song => isMusicNoteCardLocked(song));
 
   const handleSelectionMoveToFolder = () => {
     if (selectedSongIds.length === 0) return;
@@ -3727,7 +4671,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   const handleSelectionQuickLock = async () => {
     if (selectedSongs.length === 0) return;
     const shouldLock = !areSelectedSongsAllLocked;
-    await Promise.all(selectedSongs.map(song => updateFavorite(song.id, { isLocked: shouldLock })));
+    selectedSongs.forEach((song) => updateMusicNoteCardStateForSong(song, { locked: shouldLock }));
     setFavoriteSelectionMoreOpen(false);
     showFavoriteToast(shouldLock ? `${selectedSongs.length}곡을 잠금 처리했습니다.` : `${selectedSongs.length}곡 잠금을 해제했습니다.`);
     exitSelectionMode();
@@ -3735,7 +4679,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   const handleSelectionQuickDelete = () => {
     if (selectedSongIds.length === 0) return;
-    const deletable = activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !item.isLocked);
+    const deletable = activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !isMusicNoteCardLocked(item));
     if (deletable.length === 0) {
       showFavoriteToast('잠긴 곡은 삭제할 수 없습니다.');
       return;
@@ -3956,6 +4900,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       ? selectedSongIds
       : [song.id];
 
+    targetIds.forEach((id) => { if (id) pendingFavoriteColorIdsRef.current.add(id); });
     setFavoriteColorMap(prev => {
       const next = { ...prev };
       targetIds.forEach(id => { next[id] = color; });
@@ -4402,7 +5347,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     });
 
     try {
-      await addDoc(collection(db, 'favorites'), payload);
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'shared-note-save', uid: user?.uid || '', affectedCount: 1 }, addDoc(collection(db, 'favorites'), payload));
       setMusicNoteViewMode('sharedNote');
       setSelectedSharedNoteFolderId('default');
       setActiveFavoriteMenuId(null);
@@ -4414,6 +5359,275 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   };
 
+  const hasConnectedFavoriteSunoUrl = (song: any) => {
+    const mainUrl = String(getFavoriteSunoShareUrl(song) || '').trim();
+    if (!mainUrl) return false;
+
+    const links = getFavoriteSunoLinks(song);
+    const connectedLink = links.find((link: any) => String(link?.url || '').trim() === mainUrl)
+      || links.find((link: any) => String(link?.url || '').trim());
+    if (!connectedLink) return false;
+
+    // URL text alone is not enough. A successful Suno metadata connection leaves
+    // fetchedAt or usable metadata on the normalized link. The metadata fallback
+    // keeps older successfully-linked Music Note records compatible.
+    return Boolean(
+      connectedLink?.fetchedAt
+      || String(connectedLink?.title || '').trim()
+      || String(connectedLink?.coverUrl || '').trim()
+      || Number(connectedLink?.durationSeconds || 0) > 0
+      || String(connectedLink?.durationText || '').trim()
+    );
+  };
+
+  const canToggleFavoriteExplorePublication = (song: any) => {
+    const sourceId = getFavoriteDocumentId(song);
+    return explorePublicationStateBySongId[sourceId]?.status === 'public'
+      || hasConnectedFavoriteSunoUrl(song);
+  };
+
+  const refreshFavoriteExplorePublicationState = async (song: any) => {
+    if (!user?.uid || !song || shouldHideSunoUrlControls(song)) return;
+    const sourceId = getFavoriteDocumentId(song);
+    if (!sourceId) return;
+
+    try {
+      const state = await getExploreMusicNotePublicationState(user, sourceId);
+      setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: state }));
+    } catch (error) {
+      console.warn('explore publication state load failed:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeFavoriteMenuId || !user?.uid) return;
+    const song = activeFavoriteSource.find((item) => getFavoriteDocumentId(item) === activeFavoriteMenuId || item?.id === activeFavoriteMenuId);
+    const sourceId = getFavoriteDocumentId(song);
+    if (!song || !sourceId || explorePublicationStateBySongId[sourceId]) return;
+    void refreshFavoriteExplorePublicationState(song);
+  }, [activeFavoriteMenuId, user?.uid]);
+
+  useEffect(() => {
+    if (!selectedSong || !user?.uid || isSelectedSongReadOnly) return;
+    const sourceId = getFavoriteDocumentId(selectedSong);
+    if (!sourceId || explorePublicationStateBySongId[sourceId]) return;
+    void refreshFavoriteExplorePublicationState(selectedSong);
+  }, [selectedSong, user?.uid, isSelectedSongReadOnly]);
+
+
+  useEffect(() => {
+    const uid = String(user?.uid || '').trim();
+    if (!uid) {
+      explorePublicationHydratedUidRef.current = null;
+      return;
+    }
+    if (!Array.isArray(activeFavoriteSource) || activeFavoriteSource.length === 0) return;
+    if (explorePublicationHydratedUidRef.current === uid) return;
+
+    explorePublicationHydratedUidRef.current = uid;
+    void getExploreMusicNotePublicationStates(user)
+      .then((states) => {
+        if (explorePublicationHydratedUidRef.current !== uid) return;
+        // Server hydration restores persisted state after reload. Any state changed in
+        // this live session wins so an in-flight hydration cannot undo a recent click.
+        setExplorePublicationStateBySongId((prev) => ({ ...states, ...prev }));
+      })
+      .catch((error) => {
+        console.warn('explore publication list hydration failed:', error);
+        if (explorePublicationHydratedUidRef.current === uid) {
+          explorePublicationHydratedUidRef.current = null;
+        }
+      });
+  }, [user?.uid, activeFavoriteSource.length]);
+
+  const openFavoriteExplorePublicationDialog = async (song: any) => {
+    setActiveFavoriteMenuId(null);
+    setExplorePublicationPrivateConfirm(false);
+
+    if (!user?.uid) {
+      showFavoriteToast('로그인이 필요합니다.');
+      onLogin?.();
+      return;
+    }
+    if (!song || shouldHideSunoUrlControls(song)) {
+      showFavoriteToast('내 뮤직노트 곡만 Explore 공개 설정을 변경할 수 있습니다.');
+      return;
+    }
+
+    const sourceId = getFavoriteDocumentId(song);
+    if (!sourceId) {
+      showFavoriteToast('뮤직노트 원본 정보를 확인하지 못했습니다.');
+      return;
+    }
+    if (explorePublicationBusyId === sourceId) return;
+
+    setExplorePublicationBusyId(sourceId);
+    try {
+      const state = await getExploreMusicNotePublicationState(user, sourceId);
+      setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: state }));
+      setExplorePublicationDialog({
+        song,
+        sourceId,
+        state,
+        options: {
+          allowNextSongApply: Boolean(state.allowNextSongApply),
+          allowFollowerSave: Boolean(state.allowFollowerSave),
+          profilePinned: Boolean(state.profilePinned),
+        },
+      });
+    } catch (error) {
+      console.error('explore publication dialog load failed:', error);
+      showFavoriteToast(getExplorePublicationErrorMessage(error));
+    } finally {
+      setExplorePublicationBusyId((current) => current === sourceId ? null : current);
+    }
+  };
+
+  const updateFavoriteExplorePublicationDialogOption = (key: keyof ExplorePublicationOptions) => {
+    setExplorePublicationDialog((current) => current
+      ? { ...current, options: { ...current.options, [key]: !current.options[key] } }
+      : current);
+  };
+
+  const submitFavoriteExplorePublicationDialog = async () => {
+    if (!user?.uid || !explorePublicationDialog) return;
+    const { song, sourceId, state, options } = explorePublicationDialog;
+    if (explorePublicationBusyId === sourceId) return;
+
+    if (state.status !== 'public' && !hasConnectedFavoriteSunoUrl(song)) {
+      showFavoriteToast('수노 URL을 먼저 등록하고 정상 연결해주세요. 연결이 확인되면 Explore에 공개할 수 있습니다.');
+      return;
+    }
+
+    setExplorePublicationBusyId(sourceId);
+    try {
+      let nextState: ExploreMusicNotePublicationState;
+      if (state.status === 'public') {
+        const savedOptions = await setExploreTrackPublicationOptions(user, state.trackId, options);
+        nextState = { ...state, ...savedOptions, status: 'public' };
+        showFavoriteToast('공개 설정을 저장했습니다.');
+      } else if (state.registered) {
+
+        nextState = await setExploreTrackVisibility(user, state.trackId, true, options);
+
+        showFavoriteToast('Explore에 다시 공개했습니다.');
+
+      } else {
+
+        nextState = await publishMusicNoteToExplore(user, sourceId, options);
+
+        showFavoriteToast('Explore에 공개했습니다.');
+
+      }
+
+      setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: nextState }));
+      setExplorePublicationDialog(null);
+      setExplorePublicationPrivateConfirm(false);
+    } catch (error) {
+      console.error('explore publication submit failed:', error);
+      showFavoriteToast(getExplorePublicationErrorMessage(error));
+    } finally {
+      setExplorePublicationBusyId((current) => current === sourceId ? null : current);
+    }
+  };
+
+  const makeFavoriteExplorePublicationPrivate = async () => {
+    if (!user?.uid || !explorePublicationDialog) return;
+    const { sourceId, state, options } = explorePublicationDialog;
+    if (state.status !== 'public' || explorePublicationBusyId === sourceId) return;
+
+    if (!explorePublicationPrivateConfirm) {
+      setExplorePublicationPrivateConfirm(true);
+      return;
+    }
+
+    setExplorePublicationBusyId(sourceId);
+    try {
+      const visibilityState = await setExploreTrackVisibility(user, state.trackId, false);
+      const nextState: ExploreMusicNotePublicationState = {
+        ...visibilityState,
+        ...options,
+        status: 'private',
+      };
+      setExplorePublicationStateBySongId((prev) => ({ ...prev, [sourceId]: nextState }));
+      setExplorePublicationDialog(null);
+      setExplorePublicationPrivateConfirm(false);
+      showFavoriteToast('Explore에서 비공개로 전환했습니다.');
+    } catch (error) {
+      console.error('explore publication private transition failed:', error);
+      showFavoriteToast(getExplorePublicationErrorMessage(error));
+    } finally {
+      setExplorePublicationBusyId((current) => current === sourceId ? null : current);
+    }
+  };
+
+  const hydrateCatalogFavorite = async (song: any): Promise<any> => {
+    if (!song?.__catalogSummary || !user?.uid || isSharedMusicNoteItem(song) || isMusicNoteSharedView) return song;
+    const sourceId = getFavoriteDocumentId(song);
+    if (!sourceId) return song;
+    const sourceVersion = getMusicNoteDetailSourceVersion(song);
+    try {
+      const detail = await getOrLoadMusicNoteDetail({
+        uid: user.uid,
+        sourceId,
+        sourceVersion,
+        loader: async () => {
+          const snapshot = await getDoc(doc(db, 'favorites', sourceId));
+          return snapshot.exists() ? (snapshot.data() || {}) : null;
+        },
+      });
+      if (!detail) return song;
+      return {
+        ...song,
+        ...detail,
+        id: sourceId,
+        firestoreId: sourceId,
+        __catalogSummary: false,
+      };
+    } catch (error) {
+      console.warn('music note detail hydration failed:', error);
+      return song;
+    }
+  };
+
+  const openFavoriteDetail = async (song: any) => {
+    const hydrated = await hydrateCatalogFavorite(song);
+    let nextSong = hydrated;
+    const sourceId = getFavoriteDocumentId(hydrated || song);
+    const currentVersion = getMusicNoteDetailSourceVersion(hydrated);
+
+    if (sourceId) {
+      favoriteDetailServerBaselineRef.current = { songId: sourceId, data: hydrated };
+    }
+
+    if (user?.uid && sourceId && !isMusicNoteSharedView && !isSharedMusicNoteItem(hydrated)) {
+      const recovered = await readMusicNoteDetailDraft(user.uid, sourceId);
+      if (recovered?.updates && Object.keys(recovered.updates).length > 0) {
+        const compatible = recovered.baseVersion <= 0 || currentVersion <= 0 || currentVersion <= recovered.baseVersion;
+        if (compatible) {
+          const recoveredUpdates = pruneFavoriteDetailPatchAgainstBaseline(sourceId, recovered.updates);
+          if (Object.keys(recoveredUpdates).length > 0) {
+            nextSong = mergeMusicNoteDetailDraft(hydrated, recoveredUpdates);
+            favoriteDetailPendingPatchRef.current = {
+              songId: sourceId,
+              baseVersion: recovered.baseVersion || currentVersion,
+              updatedAtMs: recovered.updatedAtMs || Date.now(),
+              updates: recoveredUpdates,
+            };
+            scheduleFavoriteDetailFlush();
+          } else {
+            favoriteDetailPendingPatchRef.current = null;
+            void clearMusicNoteDetailDraft(user.uid, sourceId);
+          }
+        } else {
+          console.warn('music note detail recovery kept pending because server version advanced', { sourceId });
+        }
+      }
+    }
+
+    setSelectedSong(nextSong);
+  };
+
   const executeFavoriteMenuAction = (action: 'details' | 'select' | 'apply' | 'share' | 'sunoOpen' | 'sunoUrl' | 'sunoRemove' | 'favorite' | 'folder' | 'saveSharedNote' | 'delete' | 'restore' | 'permanentDelete' | 'selectAll' | 'clearSelection' | 'lock' | 'unlock' | 'lockSelected' | 'unlockSelected' | 'shareSelected' | 'favoriteSelected' | 'unfavoriteSelected' | 'folderSelected' | 'deleteSelected' | 'restoreSelected' | 'permanentDeleteSelected', song: any) => {
     setActiveFavoriteMenuId(null);
 
@@ -4423,7 +5637,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'details') {
-      setSelectedSong(song);
+      void openFavoriteDetail(song);
       return;
     }
 
@@ -4443,23 +5657,23 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'lock') {
-      if (!song.isLocked) handleToggleLock(song);
+      if (!isMusicNoteCardLocked(song)) handleToggleLock(song);
       return;
     }
 
     if (action === 'unlock') {
-      if (song.isLocked) handleToggleLock(song);
+      if (isMusicNoteCardLocked(song)) handleToggleLock(song);
       return;
     }
 
     if (action === 'lockSelected') {
-      selectedSongIds.forEach(id => updateFavorite(id, { isLocked: true }));
+      activeFavoriteSource.filter((item) => selectedSongIds.includes(item.id)).forEach((item) => updateMusicNoteCardStateForSong(item, { locked: true }));
       exitSelectionMode();
       return;
     }
 
     if (action === 'unlockSelected') {
-      selectedSongIds.forEach(id => updateFavorite(id, { isLocked: false }));
+      activeFavoriteSource.filter((item) => selectedSongIds.includes(item.id)).forEach((item) => updateMusicNoteCardStateForSong(item, { locked: false }));
       exitSelectionMode();
       return;
     }
@@ -4476,7 +5690,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'unfavoriteSelected') {
-      activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !item.isLocked).forEach(item => toggleFavorite(item));
+      activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !isMusicNoteCardLocked(item)).forEach(item => toggleFavorite(item));
       exitSelectionMode();
       return;
     }
@@ -4487,7 +5701,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'deleteSelected') {
-      const targets = activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !item.isLocked);
+      const targets = activeFavoriteSource.filter(item => selectedSongIds.includes(item.id) && !isMusicNoteCardLocked(item));
       deleteSongsByMusicNoteContext(targets).then((deleted) => { if (deleted) exitSelectionMode(); });
       return;
     }
@@ -4503,12 +5717,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'apply') {
-      applyKeywordsToNext(song);
+      void hydrateCatalogFavorite(song).then((hydrated) => applyKeywordsToNext(hydrated));
       return;
     }
 
     if (action === 'share') {
-      shareFavoriteSong(song);
+      void hydrateCatalogFavorite(song).then((hydrated) => shareFavoriteSong(hydrated));
       return;
     }
 
@@ -4553,7 +5767,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'delete') {
-      if (song.isLocked) {
+      if (isMusicNoteCardLocked(song)) {
         forceDeleteUnlockedFavoriteIfNeeded(song);
       } else {
         deleteSongsByMusicNoteContext([song]);
@@ -4591,7 +5805,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               _ts: Date.now(),
             });
           }}
-          className="text-[9px] px-2 py-0.5 rounded-md whitespace-nowrap cursor-pointer border border-black/20 bg-white/[0.075] text-white/58 transition-colors hover:text-white/78"
+          className="soridraw-musicnote-keyword-chip inline-flex h-5 shrink-0 items-center rounded-md bg-white/[0.075] px-2 text-[9px] leading-none text-white/58 whitespace-nowrap cursor-pointer transition-colors hover:bg-white/[0.11] hover:text-white/78"
         >
           #{entry.displayLabel || meta?.labelKo || entry.value}
         </span>
@@ -4599,7 +5813,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     });
   };
 
-  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const normalizedSearchQuery = deferredSearchQuery.trim().toLowerCase();
   const songMatchesMusicNoteSearch = (song: any, queryText = normalizedSearchQuery) => {
     if (!queryText) return true;
     return (song.koreanTitle || '').toLowerCase().includes(queryText) ||
@@ -4710,10 +5924,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         return aT.localeCompare(bT);
       }
       case 'locked-top':
-        if (a.isLocked !== b.isLocked) return a.isLocked ? -1 : 1;
+        if (isMusicNoteCardLocked(a) !== isMusicNoteCardLocked(b)) return isMusicNoteCardLocked(a) ? -1 : 1;
         return getTimestampMs(b.createdAtMs || b.createdAt) - getTimestampMs(a.createdAtMs || a.createdAt);
       case 'locked-bottom':
-        if (a.isLocked !== b.isLocked) return a.isLocked ? 1 : -1;
+        if (isMusicNoteCardLocked(a) !== isMusicNoteCardLocked(b)) return isMusicNoteCardLocked(a) ? 1 : -1;
         return getTimestampMs(b.createdAtMs || b.createdAt) - getTimestampMs(a.createdAtMs || a.createdAt);
       default:
         return 0;
@@ -4721,15 +5935,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   });
 
   const canShowCachedMusicNoteMore = visibleCount < filteredFavorites.length;
-  const canRequestMoreMusicNotePage = Boolean(
-    !isMusicNoteSharedView &&
-    !searchQuery.trim() &&
-    favoriteColorFilter === 'all' &&
-    !favoriteTrashView &&
-    hasMoreFavorites &&
-    filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE
-  );
-  const shouldShowMusicNoteMoreButton = canShowCachedMusicNoteMore || canRequestMoreMusicNotePage;
+  // 1036: Music Note mirrors Library full-catalog behavior. More is local-only.
+  const shouldShowMusicNoteMoreButton = canShowCachedMusicNoteMore;
+
+  const musicNoteFilterCount = (sortBy !== 'latest' ? 1 : 0) + (favoriteTrashView ? 1 : 0);
 
   const musicNoteTabs = [
     { id: 'noteSpace' as const, label: '노트 스페이스', description: '내가 저장한 전체 뮤직노트입니다.' },
@@ -4808,7 +6017,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       const titleUpdates = mode === 'sharedNote'
         ? { sharedNoteFolderTitle: trimmedTitle, sharedNoteFolderUpdatedAt: Date.now() }
         : { noteFolderTitle: trimmedTitle, noteFolderUpdatedAt: Date.now() };
-      await Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), titleUpdates)));
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-rename', uid: user?.uid || '', documentIds: affectedSongs.map((song) => song.id), affectedCount: affectedSongs.length }, Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), titleUpdates))));
       setMusicNoteFolderRenameArgs(null);
       showFavoriteToast('폴더 이름이 변경되었습니다.');
     } catch (error) {
@@ -4853,7 +6062,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       const fallbackUpdates = mode === 'sharedNote'
         ? { sharedNoteFolderId: 'default', sharedNoteFolderTitle: '기본', sharedNoteFolderUpdatedAt: Date.now() }
         : { noteFolderId: 'default', noteFolderTitle: '기본', noteFolderUpdatedAt: Date.now() };
-      await Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), fallbackUpdates)));
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-delete', uid: user?.uid || '', documentIds: affectedSongs.map((song) => song.id), affectedCount: affectedSongs.length }, Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), fallbackUpdates))));
       setMusicNoteFolderDeleteArgs(null);
       showFavoriteToast('폴더를 삭제했습니다. 곡은 기본 폴더로 이동했습니다.');
     } catch (error) {
@@ -5089,8 +6298,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     const setSelectedId = isShared ? setSelectedSharedNoteFolderId : setSelectedMyNoteFolderId;
 
     return (
-      <div className="mt-4 md:mt-5 space-y-3" data-selection-keep="true">
-        <h3 className="px-2 text-[12px] md:text-sm font-bold text-[#FF8B84]/80 tracking-wide">
+      <div className="soridraw-musicnote-region-top mt-4 md:mt-5 space-y-3" data-selection-keep="true">
+        <h3 className="soridraw-musicnote-folder-heading px-2 text-[12px] md:text-sm font-bold text-[#FFC1BC]/80 tracking-wide">
           {isShared ? '공유 받은 노트' : '나의 노트폴더'}
         </h3>
         <div
@@ -5116,13 +6325,15 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   resetVisibleCount();
                   exitSelectionMode('ui');
                 }}
+                aria-pressed={selectedId === folder.id}
+                data-active={selectedId === folder.id ? 'true' : 'false'}
                 className={cn(
-                  'shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none inline-flex items-center gap-1.5',
+                  'soridraw-musicnote-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none inline-flex items-center gap-1.5',
                   !isDefaultFolder && 'cursor-grab active:cursor-grabbing touch-pan-x',
                   isDefaultFolder && 'touch-pan-x',
                   isDraggingFolder && 'soridraw-folder-drag-active touch-none z-10',
                   selectedId === folder.id
-                    ? 'bg-[#FF5C52]/78 text-white border-[#FF5C52]/55 shadow-lg'
+                    ? 'bg-[#FF7A72]/78 text-white border-[#FF7A72]/55 shadow-lg'
                     : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
                 )}
               >
@@ -5134,7 +6345,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           <button
             type="button"
             onClick={() => handleAddMusicNoteFolder(mode)}
-            className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
+            className="soridraw-musicnote-folder-add shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
           >
             <span className="text-lg font-light leading-none">+</span>
           </button>
@@ -5146,7 +6357,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 <button
                   type="button"
                   onClick={() => setMusicNoteFolderRenameArgs({ mode, folder: activeFolder, newTitle: activeFolder.title })}
-                  className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-[#FF8B84] hover:bg-white/5 transition-all"
+                  className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-[#FFC1BC] hover:bg-white/5 transition-all"
                 >
                   <Edit2 className="w-4 h-4" />
                 </button>
@@ -5171,7 +6382,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       <>
         {renderMusicNoteFolderBar(mode)}
         <div className="mt-2 md:mt-3 min-h-[34vh] rounded-3xl border border-black/20 bg-[var(--card-bg)] p-8 text-center shadow-[var(--shadow-md)]">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-[#FF8B84]">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-[#FFC1BC]">
             {isShared ? <Share2 className="h-6 w-6" /> : <FolderOutput className="h-6 w-6" />}
           </div>
           <h3 className="mt-5 text-xl font-black text-white">{isShared ? '공유 노트' : '마이 노트'}</h3>
@@ -5185,10 +6396,67 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     );
   };
 
+  const musicNotePageHeader = (
+    <motion.div
+      initial={false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0 }}
+      className={cn(
+        "flex flex-row items-center flex-nowrap justify-between gap-2 md:gap-3",
+        studioWorkspaceHeroHost
+          ? "soridraw-studio-result-masthead soridraw-studio-result-masthead--music-note"
+          : "soridraw-musicnote-page-header soridraw-workspace-ported-header mb-4 md:mb-5 translate-y-2 md:translate-y-3"
+      )}
+    >
+      <div className="min-w-0">
+        <div className={cn("soridraw-page-title-hover relative inline-flex max-w-full", studioWorkspaceHeroHost && "soridraw-studio-result-masthead-title")}> 
+          <h1
+            className={cn("whitespace-nowrap text-3xl md:text-5xl font-black leading-none tracking-tight text-white", isMusicNoteSharedView ? "font-sans" : "font-display")}
+            title={isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
+          >
+            {isMusicNoteSharedView ? (
+              <span>공유 <span className="text-[#FF7A72]">뮤직노트</span></span>
+            ) : (
+              <span>Music <span className="text-[#FF7A72]">Note</span></span>
+            )}
+          </h1>
+          <div className="soridraw-page-title-description" role="tooltip">
+            {isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
+          </div>
+        </div>
+        {!isMusicNoteSharedView && <CacheDiagnosticBadge domain="musicNote" className="mt-1.5" />}
+      </div>
+      {!isMusicNoteSharedView && (
+        <button
+          type="button"
+          disabled={!onManualSyncFavorites || isManualSyncingFavorites}
+          onClick={handleManualFavoriteSync}
+          onMouseEnter={() => onHover({
+            id: 'music-note-manual-sync',
+            label: '동기화',
+            description: '변경 신호가 있을 때만 최신 변경분을 확인합니다. 전체 곡을 다시 읽지 않습니다.',
+            _ts: Date.now(),
+          })}
+          onMouseLeave={() => onHover(null)}
+          className={cn(
+            "soridraw-musicnote-hero-sync flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.055] text-white/55 transition-all",
+            isManualSyncingFavorites
+              ? "cursor-wait text-[#FFBB22]"
+              : "hover:bg-white/[0.09] hover:text-[#FFBB22]"
+          )}
+          title="뮤직노트 변경분 동기화"
+        >
+          <RefreshCw className={cn("h-4 w-4", isManualSyncingFavorites && "animate-spin")} />
+        </button>
+      )}
+    </motion.div>
+  );
+
   return (
     <div 
+      ref={musicNotePageRootRef}
       className={cn(
-        "soridraw-musicnote-theme mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative",
+        "soridraw-responsive-content-page soridraw-musicnote-theme soridraw-musicnote-page-shell mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative",
         isSelectionMode ? "select-none" : ""
       )}
       onClickCapture={(e) => {
@@ -5218,15 +6486,19 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       }}
     >
       <style>{`
-        .favorite-keyword-strip {
+        .favorite-keyword-strip,
+        .favorite-title-strip {
           scrollbar-width: none;
           -ms-overflow-style: none;
           -webkit-overflow-scrolling: touch;
           touch-action: pan-x pan-y;
           cursor: grab;
+          user-select: none;
         }
-        .favorite-keyword-strip:active { cursor: grabbing; }
-        .favorite-keyword-strip::-webkit-scrollbar { display: none; }
+        .favorite-keyword-strip:active,
+        .favorite-title-strip:active { cursor: grabbing; }
+        .favorite-keyword-strip::-webkit-scrollbar,
+        .favorite-title-strip::-webkit-scrollbar { display: none; }
         .favorite-mobile-title-strip {
           scrollbar-width: none;
           -ms-overflow-style: none;
@@ -5237,154 +6509,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .favorite-mobile-title-strip:active { cursor: grabbing; }
         .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
-      <div className="md:hidden h-7" aria-hidden="true" />
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28, ease: "easeOut" }}
-        className="mb-4 md:mb-5 flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
-      >
-          <div>
-            <h1 className={cn("text-3xl md:text-5xl font-black leading-none tracking-tight text-white flex items-center gap-3", isMusicNoteSharedView ? "font-sans" : "font-display")}>
-              <HeartIcon className="w-9 h-9 text-[#FF5C52] shrink-0" />
-              {isMusicNoteSharedView ? (
-                <span>공유 <span className="text-[#FF5C52]">뮤직노트</span></span>
-              ) : (
-                <span>Music <span className="text-[#FF5C52]">Note</span></span>
-              )}
-            </h1>
-            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2 mb-[2px]">{isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}</p>
-          </div>
-
-      </motion.div>
+      {studioWorkspaceHeroHost
+        ? createPortal(musicNotePageHeader, studioWorkspaceHeroHost)
+        : musicNotePageHeader}
 
       {!isMusicNoteSharedView && (
-      <div className="space-y-4 md:space-y-5">
-        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <button
-              onClick={() => navigate('/studio')}
-              className="h-[46px] w-[46px] shrink-0 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-[#FFBB22] transition-all flex items-center justify-center"
-            >
-              <Zap className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              disabled={!onManualSyncFavorites || isManualSyncingFavorites || isManualSyncUsedToday}
-              onClick={handleManualFavoriteSync}
-              onMouseEnter={() => onHover({
-                id: 'music-note-manual-sync',
-                label: '동기화',
-                description: isManualSyncUsedToday ? '오늘 수동 동기화 1회를 이미 사용했습니다.' : '서버의 최신 뮤직노트 20개를 다시 확인합니다. 하루 1회만 사용할 수 있습니다.',
-                _ts: Date.now(),
-              })}
-              onMouseLeave={() => onHover(null)}
-              className={cn(
-                "h-[46px] w-[46px] shrink-0 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-white/70 transition-all flex items-center justify-center",
-                isManualSyncingFavorites
-                  ? "cursor-wait text-[#FFBB22]"
-                  : isManualSyncUsedToday
-                    ? "opacity-40 cursor-not-allowed"
-                    : "hover:bg-white/5 hover:text-[#FFBB22]"
-              )}
-              title={isManualSyncUsedToday ? '오늘 동기화 1회 사용 완료' : '뮤직노트 동기화'}
-            >
-              <RefreshCw className={cn("w-4 h-4", isManualSyncingFavorites && "animate-spin")} />
-            </button>
-            <div className="relative flex-1 min-w-0 group overflow-hidden">
-            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none z-10">
-              <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#FF5C52] transition-colors" />
-            </div>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  runFavoriteServerSearch();
-                }
-              }}
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setIsSearchFocused(false)}
-              className="w-full h-[46px] bg-white/[0.145] border border-white/[0.14] rounded-2xl pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:bg-white/[0.17] focus:border-[#FF5C52]/50 transition-all"
-            />
-            {!searchQuery && !isSearchFocused && (
-              <div className="absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={placeholderIndex}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -12 }}
-                    transition={{ duration: 0.35 }}
-                    className="text-sm text-white/40 whitespace-nowrap"
-                  >
-                    {placeholders[placeholderIndex]}
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-            )}
-            </div>
-          </div>
-
-          <div className="flex h-[46px] items-center gap-1.5 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
-            <button
-              onClick={() => setFavoriteColorFilter('all')}
-              className={`h-9 shrink-0 whitespace-nowrap px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-[#FF5C52]/24 text-[#FF8B84]' : 'bg-transparent text-white/60 hover:text-white/75'}`}
-            >
-              전체
-            </button>
-            <div className="mx-1 h-3 w-px bg-white/10" />
-            {FAVORITE_COLOR_OPTIONS.map((color) => (
-              <button
-                key={color.value}
-                onClick={() => setFavoriteColorFilter(color.value)}
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all ${favoriteColorFilter === color.value ? 'ring-2 ring-white ring-offset-2 ring-offset-[var(--bg-secondary)] scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'}`}
-              >
-                <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: color.color }} />
-              </button>
-            ))}
-
-          </div>
-
-          <div className="flex h-[46px] items-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
-            {(['latest', 'oldest', 'genre', 'title', 'locked'] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => handleSortChange(mode)}
-                className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${
-                  (mode === 'latest' && sortBy === 'latest') ||
-                  (mode === 'oldest' && sortBy === 'oldest') ||
-                  (mode === 'genre' && sortBy.startsWith('genre')) ||
-                  (mode === 'title' && sortBy.startsWith('title')) ||
-                  (mode === 'locked' && sortBy.startsWith('locked'))
-                    ? 'bg-[#FF5C52]/72 text-white'
-                    : 'bg-transparent text-white/50 hover:text-white/75'
-                }`}
-              >
-                {mode === 'latest' ? '최신' : mode === 'oldest' ? '오래된' : mode === 'genre' ? '장르' : mode === 'title' ? '제목' : '잠금'}
-              </button>
-            ))}
-            <button
-              onClick={() => {
-                setMusicNoteViewMode('noteSpace');
-                setFavoriteTrashView((prev) => !prev);
-                resetVisibleCount();
-                exitSelectionMode('ui');
-              }}
-              className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${favoriteTrashView ? 'bg-[#FF5C52]/72 text-white' : 'bg-transparent text-white/50 hover:text-white/75'}`}
-            >
-              휴지통
-            </button>
-          </div>
-        </div>
-      </div>
-      )}
-
-      {!isMusicNoteSharedView && (
-      <div className="mt-3 md:mt-5 flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
-        <div className="grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px] shadow-[var(--shadow-md)]">
+      <div className="soridraw-musicnote-region-top flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
+        <div className="soridraw-musicnote-mode-tabs grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px] shadow-[var(--shadow-md)]">
           {musicNoteTabs.map((tab) => (
             <button
               key={tab.id}
@@ -5399,10 +6530,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
               onTouchStart={() => onLongPressStart({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description })}
               onTouchEnd={onLongPressEnd}
+              aria-pressed={musicNoteViewMode === tab.id}
+              data-active={musicNoteViewMode === tab.id ? 'true' : 'false'}
               className={cn(
-                'min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
+                'soridraw-musicnote-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
                 musicNoteViewMode === tab.id
-                  ? 'bg-[#FF5C52]/78 text-white shadow-lg'
+                  ? 'soridraw-musicnote-mode-tab--active bg-[#FF7A72]/78 text-white shadow-lg'
                   : 'text-white/60 hover:text-white'
               )}
             >
@@ -5413,33 +6546,159 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </div>
       )}
 
+      {!isMusicNoteSharedView && (
+      <div className="soridraw-musicnote-region-top mt-2 md:mt-3 space-y-4 md:space-y-5">
+        <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
+          <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
+            <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
+            <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
+              <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#FF7A72] transition-colors" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  runFavoriteServerSearch();
+                }
+              }}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+              className="soridraw-responsive-search-input w-full h-[46px] bg-white/[0.145] border border-white/[0.14] rounded-2xl pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:bg-white/[0.17] focus:border-[#FF7A72]/50 transition-all"
+            />
+            {!searchQuery && !isSearchFocused && (
+              <div className="soridraw-responsive-search-placeholder absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
+                <div className="text-sm text-white/40 whitespace-nowrap">제목이나 키워드로 검색해보세요...</div>
+              </div>
+            )}
+            </div>
+          </div>
+
+          <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
+            <button
+              onClick={() => setFavoriteColorFilter('all')}
+              className={`soridraw-color-reset-button h-9 text-xs font-bold px-4 transition-all rounded-xl ${favoriteColorFilter === 'all' ? 'bg-[#FF7A72]/24 text-[#FFC1BC]' : 'bg-transparent text-white/60 hover:text-white/75'}`}
+              aria-label="전체 색상 보기"
+            >
+              <span className="soridraw-color-reset-text">전체</span>
+              <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
+            </button>
+            <div className="w-px h-3 bg-white/10 mx-1"></div>
+            {FAVORITE_COLOR_OPTIONS.map((color) => (
+              <button
+                key={color.value}
+                onClick={() => setFavoriteColorFilter(color.value)}
+                className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${favoriteColorFilter === color.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'}`}
+              >
+                <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: color.color }}></div>
+              </button>
+            ))}
+
+          </div>
+
+          <div ref={sortPopupRef} className="relative shrink-0" data-selection-keep="true">
+            <button
+              type="button"
+              onClick={toggleSortPopup}
+              className={cn(
+                "soridraw-responsive-filter-button flex h-[46px] items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] px-4 text-xs font-black text-white/70 transition-all hover:bg-white/[0.08] hover:text-white",
+                showSortPopup && "bg-white/[0.09] text-white"
+              )}
+              aria-expanded={showSortPopup}
+            >
+              <Filter className="h-4 w-4" />
+              <span className="soridraw-filter-label">필터{musicNoteFilterCount > 0 ? ` (${musicNoteFilterCount})` : ''}</span>
+              <ChevronDown className={cn("soridraw-filter-chevron h-3.5 w-3.5 transition-transform", showSortPopup && "rotate-180")} />
+            </button>
+            <AnimatePresence>
+              {showSortPopup && (
+                <motion.div
+                  data-floating-menu="true"
+                  initial={{ opacity: 1, y: 0 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0 }}
+                  className="absolute right-0 top-[52px] z-[120] w-[210px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {(['latest', 'oldest', 'genre', 'title', 'locked'] as const).map((mode) => {
+                    const active =
+                      (mode === 'latest' && sortBy === 'latest') ||
+                      (mode === 'oldest' && sortBy === 'oldest') ||
+                      (mode === 'genre' && sortBy.startsWith('genre')) ||
+                      (mode === 'title' && sortBy.startsWith('title')) ||
+                      (mode === 'locked' && sortBy.startsWith('locked'));
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => { handleSortChange(mode); setShowSortPopup(false); }}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all",
+                          active ? "bg-[#FF7A72]/16 text-[#FFC1BC]" : "text-white/66 hover:bg-white/[0.06] hover:text-white"
+                        )}
+                      >
+                        <span>{mode === 'latest' ? '최신' : mode === 'oldest' ? '오래된' : mode === 'genre' ? '장르' : mode === 'title' ? '제목' : '잠금'}</span>
+                        {active && <Check className="h-3.5 w-3.5" />}
+                      </button>
+                    );
+                  })}
+                  <div className="my-1 h-px bg-white/[0.07]" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMusicNoteViewMode('noteSpace');
+                      setFavoriteTrashView((prev) => !prev);
+                      resetVisibleCount();
+                      exitSelectionMode('ui');
+                      setShowSortPopup(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all",
+                      favoriteTrashView ? "bg-[#FF7A72]/16 text-[#FFC1BC]" : "text-white/66 hover:bg-white/[0.06] hover:text-white"
+                    )}
+                  >
+                    <span>휴지통</span>
+                    {favoriteTrashView && <Check className="h-3.5 w-3.5" />}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+        </div>
+      </div>
+      )}
+
       {!isMusicNoteSharedView && (musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote') && (
         renderMusicNoteFolderBar(musicNoteViewMode)
       )}
 
       {((isFavoritesLoading && activeFavoriteSource.length === 0) || sharedMusicNoteLoading) ? (
-        <div className="mt-[13px] md:mt-[21px] min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
-          <Loader2 className="w-12 h-12 text-[#FF5C52] animate-spin mb-4" />
+        <div className="mt-2 md:mt-3 min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
+          <Loader2 className="w-12 h-12 text-[#FF7A72] animate-spin mb-4" />
           <p className="text-[var(--text-secondary)] text-lg font-medium">노트를 불러오는 중...</p>
         </div>
       ) : activeFavoriteSource.length === 0 ? (
-        <div className="mt-[13px] md:mt-[21px] min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
+        <div className="mt-2 md:mt-3 min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Music className="w-12 h-12 text-[var(--text-secondary)]/20 mb-4" />
           <p className="text-[var(--text-secondary)] text-lg font-medium">{isMusicNoteSharedView ? (sharedMusicNoteError ? '공유 노트 조회 중 오류가 발생했습니다.' : '공유된 뮤직노트를 이용할 수 없습니다.') : '아직 저장된 곡이 없습니다.'}</p>
           {!isMusicNoteSharedView && (
-            <Link to="/" className="mt-6 text-[#FF5C52] font-bold hover:underline">
+            <Link to="/" className="mt-6 text-[#FF7A72] font-bold hover:underline">
               첫 번째 곡 만들러 가기
             </Link>
           )}
         </div>
       ) : filteredFavorites.length === 0 ? (
-        <div className="mt-[13px] md:mt-[21px] min-h-[30vh] flex flex-col items-center justify-center text-center">
+        <div className="mt-2 md:mt-3 min-h-[30vh] flex flex-col items-center justify-center text-center">
           <Search className="w-10 h-10 text-[var(--text-secondary)]/20 mb-4" />
           <p className="text-[var(--text-secondary)]">검색 결과가 없습니다.</p>
         </div>
       ) : (
-        <div className="mt-[13px] md:mt-[21px] space-y-5" data-selection-keep="true">
-          <div className="space-y-4" data-selection-keep="true">
+        <div className="soridraw-musicnote-list-start-divider soridraw-perf-layout-region-list mt-[13px] md:mt-[21px] space-y-5" data-selection-keep="true">
+          <div className="space-y-2 md:space-y-3" data-selection-keep="true">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
               const isSelected = selectedSongIds.includes(song.id);
               const colorHex = getFavoriteColorHex(song.id, song);
@@ -5455,23 +6714,22 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 : '';
 
               return (
-                <motion.div
+                <div
                   key={song.id}
                   data-selection-keep="true"
-                  initial={{ opacity: 1, x: 0 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0 }}
                   onMouseDown={(event) => {
+                    setIsMusicNoteMousePressTracking(true);
                     handleSelectionDragStart(event, song.id);
                     handleCardLongPressStart(event, song);
                   }}
-                  onMouseMove={(event) => {
+                  onMouseMove={(isSelectionMode || isMusicNoteMousePressTracking) ? ((event: React.MouseEvent<HTMLDivElement>) => {
                     handleSelectionDragMove(event, song.id);
                     handleCardLongPressMove(event);
-                  }}
+                  }) : undefined}
                   onMouseUp={() => {
                     handleSelectionDragEnd();
                     handleCardLongPressEnd();
+                    setIsMusicNoteMousePressTracking(false);
                   }}
                   onTouchStart={(event) => handleCardLongPressStart(event, song)}
                   onTouchMove={handleCardLongPressMove}
@@ -5485,14 +6743,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     if (consumeFavoriteSuppressedClick(event, song.id)) return;
                     if (consumeSelectionDragClick(event)) return;
                   }}
-                  onMouseEnter={(event) => {
+                  onMouseEnter={isSelectionMode ? ((event: React.MouseEvent<HTMLDivElement>) => {
                     handleSelectionDragEnter(event, song.id);
-                    event.currentTarget.style.backgroundColor = '#171717';
-                  }}
-                  onMouseLeave={(event) => {
+                  }) : undefined}
+                  onMouseLeave={isMusicNoteMousePressTracking ? (() => {
                     handleCardLongPressEnd();
-                    event.currentTarget.style.backgroundColor = '';
-                  }}
+                    setIsMusicNoteMousePressTracking(false);
+                  }) : undefined}
                   onClick={(e) => {
                     if (consumeFavoriteSuppressedClick(e, song.id)) {
                       return;
@@ -5519,16 +6776,16 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       return;
                     }
 
-                    setSelectedSong(song);
+                    void openFavoriteDetail(song);
                   }}
                   className={cn(
-                    "group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
-                    (activeFavoriteMenuId === song.id || activeFavoriteColorMenuId === song.id) ? "z-[220]" : "z-0",
+                    "soridraw-musicnote-song-card soridraw-list-perf-item soridraw-perf-layout-region-item group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] hover:bg-[#171717] select-none",
+                    (activeFavoriteMenuId === song.id || activeFavoriteColorMenuId === song.id) ? "soridraw-list-perf-item--active z-[220]" : "z-0",
                     isSelectionMode ? "cursor-pointer" : "",
                     isFavoriteTrashMode ? "opacity-65 grayscale-[0.35] saturate-[0.45]" : ""
                   )}
                 >
-                  <div className="flex items-center gap-3 md:gap-4 px-4 md:px-6 py-4">
+                  <div className="soridraw-musicnote-song-row flex items-center gap-3 md:gap-4 px-4 md:px-6 py-5">
                     {isSelectionMode && (
                       <button
                         data-no-card-long-press="true"
@@ -5542,7 +6799,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           resetSelectionDragState();
                         }}
                         className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 transition-all ${
-                          isSelected ? 'border-[#FF8B84]/75 bg-[#FF8B84]/20 text-[#FF8B84] shadow-[0_0_0_1px_rgba(255,139,132,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'
+                          isSelected ? 'border-[#FFC1BC]/75 bg-[#FFC1BC]/20 text-[#FFC1BC] shadow-[0_0_0_1px_rgba(255,193,188,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'
                         }`}
                       >
                         {isSelected ? <Check className="w-4 h-4 stroke-[3]" /> : null}
@@ -5561,10 +6818,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                         onTouchStart={() => onLongPressStart({ id: `favorite-suno-open-${song.id}`, label: '수노에서 열기', description: '연결된 수노 공유 링크를 새 창으로 엽니다.' })}
                         onTouchEnd={onLongPressEnd}
-                        className="-ml-1 relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#FF5C52]/24 text-[#FF8B84] transition-all hover:bg-[#FF5C52]/34 hover:text-white md:ml-0 md:h-14 md:w-14 md:bg-[#FF5C52]/22 md:hover:bg-[#FF5C52]/30 shadow-[0_0_0_1px_rgba(255,139,132,0.18)]"
+                        className="soridraw-musicnote-song-media relative flex h-[52px] w-[42px] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#FF7A72]/24 text-[#FFC1BC] transition-colors hover:bg-[#FF7A72]/34 hover:text-white md:h-[60px] md:w-12 md:bg-[#FF7A72]/22 md:hover:bg-[#FF7A72]/30 shadow-[0_0_0_1px_rgba(255,193,188,0.18)]"
                       >
                         {getFavoriteSunoLinkCount(song) > 1 && (
-                          <span className="absolute right-0.5 top-0.5 z-20 flex h-4 min-w-4 items-center justify-center rounded-full border border-black/30 bg-[#FF8B84] px-1 text-[9px] font-black leading-none text-[#211615] shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
+                          <span className="absolute right-0.5 top-0.5 z-20 flex h-4 min-w-4 items-center justify-center rounded-full border border-black/30 bg-[#FFC1BC] px-1 text-[9px] font-black leading-none text-[#211615] shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
                             {getFavoriteSunoLinkCount(song)}
                           </span>
                         )}
@@ -5580,8 +6837,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               }}
                             />
                             <span className="absolute inset-0 bg-black/10" />
-                            <span className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/42 text-white shadow-[0_0_14px_rgba(0,0,0,0.36)]">
-                              <Play className="h-4 w-4 translate-x-[1px] fill-current" />
+                            <span className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/42 text-white shadow-[0_0_14px_rgba(0,0,0,0.36)] md:h-7 md:w-7">
+                              <Play className="h-3.5 w-3.5 translate-x-[1px] fill-current md:h-4 md:w-4" />
                             </span>
                           </>
                         ) : (
@@ -5589,125 +6846,174 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         )}
                       </button>
                     ) : (
-                      <div className="-ml-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/[0.10] text-[#FF9B8D] md:ml-0 md:h-14 md:w-14 md:bg-white/[0.09] shadow-[0_0_0_1px_rgba(255,255,255,0.07)]">
-                        <Music className="w-7 h-7" />
+                      <div className="soridraw-musicnote-song-media flex h-[52px] w-[42px] shrink-0 items-center justify-center rounded-xl bg-white/[0.10] text-[#FFC1BC] md:h-[60px] md:w-12 md:bg-white/[0.09] shadow-[0_0_0_1px_rgba(255,255,255,0.07)]">
+                        <Music className="h-6 w-6 md:h-7 md:w-7" />
                       </div>
                     )}
 
                     <button
                       data-no-card-long-press="true"
                       data-favorite-color-control="true"
+                      type="button"
                       onClick={(event) => {
                         event.stopPropagation();
                         setActiveFavoriteColorMenuId(activeFavoriteColorMenuId === song.id ? null : song.id);
                         setActiveFavoriteMenuId(null);
                       }}
-                      className="w-3 h-3 rounded-full shrink-0 hover:scale-110 transition-transform"
-                      style={{ backgroundColor: colorHex }}
-                    />
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-transparent transition-transform hover:scale-110"
+                      aria-label="곡 색상 지정"
+                    >
+                      <span className="block h-3 w-3 rounded-full" style={{ backgroundColor: colorHex }} />
+                    </button>
 
                     {activeFavoriteColorMenuId === song.id && (
                       <div data-favorite-color-menu="true" className="absolute left-14 md:left-20 top-[54px] z-[260] flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#2a2a2a] p-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
                         {FAVORITE_COLOR_OPTIONS.map((color) => (
                           <button
                             key={color.value}
+                            type="button"
                             onClick={(event) => {
                               event.stopPropagation();
                               handleFavoriteColorSelect(song, color.value);
                             }}
-                            className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
-                            style={{ backgroundColor: color.color }}
-                          />
+                            className="flex h-6 w-6 items-center justify-center rounded-full bg-transparent outline-none transition-transform hover:scale-110 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                            aria-label={`${color.label} 색상 지정`}
+                          >
+                            <span className="block h-4 w-4 rounded-full" style={{ backgroundColor: color.color }} />
+                          </button>
                         ))}
                       </div>
                     )}
 
-                                        <div className="flex-1 min-w-0 pl-1 pr-1 md:pl-0 md:pr-0">
-                      <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2 cursor-default">
-                        <div className="md:hidden min-w-0 leading-tight cursor-default">
-                          <div className="text-[13px] font-extrabold text-white truncate select-none cursor-default">
-                            {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
-                          </div>
-                          <div className="favorite-mobile-title-strip mt-0.5 max-w-[calc(100vw-192px)] overflow-x-auto overflow-y-hidden whitespace-nowrap text-[14px] font-bold text-white/92 md:max-w-none cursor-default">
-                            <span
-                              className={cn("inline-block max-w-full", isSelectionMode ? "select-none cursor-pointer" : "select-text cursor-text")}
-                              onMouseDown={(event) => {
-                                const point = getLongPressPoint(event);
-                                if (point) cardClickStartPointRef.current = point;
-                              }}
-                              onTouchStart={(event) => {
-                                const point = getLongPressPoint(event);
-                                if (point) cardClickStartPointRef.current = point;
-                              }}
-                            >
-                              {mobileTitleText}
-                            </span>
-                          </div>
-                        </div>
-                        <h3 className="hidden md:block min-w-0 text-[15px] font-bold text-white truncate cursor-default">
-                          <span
-                            className={cn("inline-block max-w-full truncate align-bottom", isSelectionMode ? "select-none cursor-pointer" : "select-text cursor-text")}
-                            onMouseDown={(event) => {
-                              const point = getLongPressPoint(event);
-                              if (point) cardClickStartPointRef.current = point;
-                            }}
-                            onTouchStart={(event) => {
-                              const point = getLongPressPoint(event);
-                              if (point) cardClickStartPointRef.current = point;
-                            }}
-                          >
-                            {getCombinedFavoriteTitle(song)}
-                          </span>
-                        </h3>
-                        <span className="hidden md:inline text-[10px] text-white/35 shrink-0 select-none cursor-default">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
-                      </div>
-                      <div className="mt-2 flex items-center gap-2 min-w-0">
-                        {musicNoteListCreator && (
-                          <span className="shrink-0 whitespace-nowrap text-[10px] font-bold leading-none text-[#FF8B84]/90 select-none cursor-default">
-                            {musicNoteListCreator}
-                          </span>
-                        )}
-                        <div
-                          className="favorite-keyword-strip relative flex min-w-0 flex-1 max-w-[calc(100vw-244px)] md:max-w-[260px] gap-1.5 overflow-x-auto overflow-y-hidden rounded-lg pr-2"
-                          onMouseDown={(event) => {
-                            if (isSelectionMode) return;
-                            const target = event.currentTarget;
-                            const startX = event.pageX;
-                            const startScrollLeft = target.scrollLeft;
-
-                            const onMove = (moveEvent: MouseEvent) => {
-                              target.scrollLeft = startScrollLeft - (moveEvent.pageX - startX);
-                            };
-
-                            const onUp = () => {
-                              document.removeEventListener('mousemove', onMove);
-                              document.removeEventListener('mouseup', onUp);
-                            };
-
-                            document.addEventListener('mousemove', onMove);
-                            document.addEventListener('mouseup', onUp);
-                          }}
-                        >
-                          {renderFavoriteKeywordChips(song)}
-                        </div>
-                        <span className="shrink-0 text-[10px] font-semibold text-white/35 md:hidden">
+                    <div className="soridraw-musicnote-song-copy flex min-w-0 flex-1 flex-col justify-center px-0.5 md:px-1">
+                      <div className="soridraw-musicnote-song-meta flex min-w-0 items-center gap-2 leading-none">
+                        <span className="soridraw-musicnote-song-genre min-w-0 flex-1 truncate text-[12px] font-extrabold text-white md:text-[13px] select-none cursor-default">
+                          {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
+                        </span>
+                        <span className="soridraw-musicnote-song-date shrink-0 whitespace-nowrap text-[9px] font-semibold text-white/35 md:text-[10px] select-none cursor-default">
                           {getRelativeTime(song.createdAtMs || song.createdAt)}
                         </span>
                       </div>
+
+                      <div
+                        className="soridraw-musicnote-song-title favorite-mobile-title-strip favorite-title-strip mt-1 min-w-0 max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap text-[13px] font-bold leading-tight text-white/92 md:text-[15px]"
+                        onPointerDown={handleHorizontalListPointerDown}
+                        onPointerMove={handleHorizontalListPointerMove}
+                        onPointerUp={finishHorizontalListPointerDrag}
+                        onPointerCancel={finishHorizontalListPointerDrag}
+                        onClickCapture={consumeHorizontalListClick}
+                        onWheel={handleHorizontalListWheel}
+                      >
+                        <span className="inline-block w-max max-w-none select-none whitespace-nowrap">
+                          {mobileTitleText}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 flex min-h-8 min-w-0 items-center gap-2">
+                        {musicNoteListCreator && (
+                          <span className="soridraw-musicnote-song-creator shrink-0 whitespace-nowrap text-[9px] font-bold leading-none text-[#FFC1BC]/90 md:text-[10px] select-none cursor-default">
+                            {musicNoteListCreator}
+                          </span>
+                        )}
+                        {!shouldHideSunoUrlControls(song) && (
+                          <div className="soridraw-musicnote-song-state-actions flex shrink-0 items-center gap-[5px]" onClick={(event) => event.stopPropagation()}>
+                            <button
+                              data-no-card-long-press="true"
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void handleTogglePersonalLike(song);
+                              }}
+                              className="relative flex h-[29px] w-[29px] shrink-0 items-center justify-center overflow-hidden rounded-full transition-all"
+                              style={{ border: 'none', outline: 'none', background: 'transparent' }}
+                              aria-label={isMusicNoteCardLiked(song) ? '좋아요 해제' : '좋아요'}
+                              title={isMusicNoteCardLiked(song) ? '좋아요 해제' : '좋아요'}
+                            >
+                              {renderMusicNoteStateButtonFill(isMusicNoteCardLiked(song))}
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 24 24"
+                                className="relative z-[1] h-[13px] w-[13px]"
+                                style={{
+                                  color: isMusicNoteCardLiked(song) ? '#202024' : 'rgba(255,255,255,0.66)',
+                                  transform: 'translateX(0.5px)',
+                                }}
+                              >
+                                <path fill="currentColor" d="M2.8 20.2h3.4V9.7H2.8v10.5Zm18.1-9.35c0-.93-.75-1.68-1.68-1.68h-5.28l.8-3.87.03-.28c0-.35-.14-.69-.38-.93L13.5 3.2 7.9 8.8a1.7 1.7 0 0 0-.5 1.2v7.9c0 .93.75 1.68 1.68 1.68h7.58c.7 0 1.31-.42 1.57-1.03l2.53-5.9c.09-.2.14-.43.14-.67v-1.13Z" />
+                              </svg>
+                            </button>
+                            <button
+                              data-no-card-long-press="true"
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void handleToggleLock(song);
+                              }}
+                              className="relative flex h-[29px] w-[29px] shrink-0 items-center justify-center overflow-hidden rounded-full transition-all"
+                              style={{ border: 'none', outline: 'none', background: 'transparent' }}
+                              aria-label={isMusicNoteCardLocked(song) ? '잠금 해제' : '잠금'}
+                              title={isMusicNoteCardLocked(song) ? '잠금 해제' : '잠금'}
+                            >
+                              {renderMusicNoteStateButtonFill(isMusicNoteCardLocked(song))}
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 24 24"
+                                className="relative z-[1] h-[13px] w-[13px]"
+                                style={{ color: isMusicNoteCardLocked(song) ? '#202024' : 'rgba(255,255,255,0.66)' }}
+                              >
+                                <path fill="currentColor" fillRule="evenodd" d="M7.1 9V6.9a4.9 4.9 0 0 1 9.8 0V9h.7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6.4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h.7Zm2.2 0h5.4V6.9a2.7 2.7 0 0 0-5.4 0V9Z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                            <button
+                              data-no-card-long-press="true"
+                              type="button"
+                              disabled={explorePublicationBusyId === getFavoriteDocumentId(song)}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void openFavoriteExplorePublicationDialog(song);
+                              }}
+                              className="relative flex h-[29px] w-[29px] shrink-0 items-center justify-center overflow-hidden rounded-full transition-all disabled:cursor-wait disabled:opacity-40"
+                              style={{ border: 'none', outline: 'none', background: 'transparent', color: explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public' ? '#252528' : 'rgba(255,255,255,0.78)' }}
+                              aria-label={explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public' ? '공개 설정' : '공개'}
+                              title={explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public' ? '공개 설정' : '공개'}
+                            >
+                              {renderMusicNoteStateButtonFill(explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public')}
+                              {explorePublicationBusyId === getFavoriteDocumentId(song)
+                                ? <Loader2 className="relative z-[1] h-[13px] w-[13px] animate-spin" />
+                                : (
+                                  <svg
+                                    aria-hidden="true"
+                                    viewBox="0 0 24 24"
+                                    className="relative z-[1] h-[13px] w-[13px]"
+                                    style={{
+                                      color: explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public' ? '#202024' : 'rgba(255,255,255,0.66)',
+                                      transform: 'translateX(0.5px)',
+                                    }}
+                                  >
+                                    <path fill="currentColor" d="M12 2.2A9.8 9.8 0 1 0 12 21.8 9.8 9.8 0 0 0 12 2.2Zm6.55 5.9h-2.72a15.4 15.4 0 0 0-1.18-3.15 8.05 8.05 0 0 1 3.9 3.15ZM12 4.15c.72 1.08 1.3 2.4 1.68 3.95h-3.36c.38-1.55.96-2.87 1.68-3.95ZM4.65 14a7.95 7.95 0 0 1 0-4h3.17a17.5 17.5 0 0 0 0 4H4.65Zm.8 2h2.72c.27 1.13.67 2.2 1.18 3.15A8.05 8.05 0 0 1 5.45 16Zm2.72-7.9H5.45a8.05 8.05 0 0 1 3.9-3.15A15.4 15.4 0 0 0 8.17 8.1ZM12 19.85c-.72-1.08-1.3-2.4-1.68-3.85h3.36c-.38 1.45-.96 2.77-1.68 3.85ZM14.07 14H9.93a14.1 14.1 0 0 1 0-4h4.14a14.1 14.1 0 0 1 0 4Zm.58 5.15c.51-.95.91-2.02 1.18-3.15h2.72a8.05 8.05 0 0 1-3.9 3.15ZM16.18 14a17.5 17.5 0 0 0 0-4h3.17a7.95 7.95 0 0 1 0 4h-3.17Z" />
+                                  </svg>
+                                )}
+                            </button>
+                          </div>
+                        )}
+                        <div
+                          className="soridraw-musicnote-song-keywords favorite-keyword-strip flex h-5 min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden whitespace-nowrap rounded-md pr-2"
+                          onPointerDown={handleHorizontalListPointerDown}
+                          onPointerMove={handleHorizontalListPointerMove}
+                          onPointerUp={finishHorizontalListPointerDrag}
+                          onPointerCancel={finishHorizontalListPointerDrag}
+                          onClickCapture={consumeHorizontalListClick}
+                          onWheel={handleHorizontalListWheel}
+                        >
+                          {renderFavoriteKeywordChips(song)}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      {song.isLocked && (
-                        <span className="hidden md:inline-flex h-10 w-10 items-center justify-center text-[#FF5C52]">
-                          <Lock className="w-4 h-4" />
-                        </span>
-                      )}
-
-                      {song.isLocked && (
-                        <span className="inline-flex h-10 w-10 items-center justify-center text-[#FF5C52] md:hidden">
-                          <Lock className="w-3.5 h-3.5" />
-                        </span>
-                      )}
+                    <div className="soridraw-musicnote-song-actions flex items-center gap-2 shrink-0">
 <div className="relative">
                         <button
                           data-floating-menu="true"
@@ -5719,7 +7025,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             setActiveFavoriteMenuId(activeFavoriteMenuId === song.id ? null : song.id);
                             setActiveFavoriteColorMenuId(null);
                           }}
-                          className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${isSelectionMode ? 'text-[#FF5C52]' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                          className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${isSelectionMode ? 'text-[#FF7A72]' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
                         >
                           <MoreVertical className="w-4 h-4" />
                         </button>
@@ -5745,16 +7051,16 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             >
                             {isMusicNoteSharedView ? (
                               <>
-                                <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#FF5C52]/10 hover:text-[#FF8B84] flex items-center gap-3"><Info className="w-4 h-4 opacity-70" />디테일</button>
-                                <button onClick={() => executeFavoriteMenuAction('select', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#FF5C52]/10 hover:text-[#FF8B84] flex items-center gap-3"><Square className="w-4 h-4 opacity-70" />선택</button>
-                                <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#FF5C52] hover:bg-[#FF5C52]/10 hover:text-[#FF8B84] flex items-center gap-3"><RefreshCw className="w-4 h-4 opacity-80" />다음곡에 적용</button>
-                                <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#FF5C52]/10 hover:text-[#FF8B84] flex items-center gap-3"><Share2 className="w-4 h-4 opacity-70" />공유하기</button>
-                                <button onClick={() => executeFavoriteMenuAction('saveSharedNote', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#FF5C52]/10 hover:text-[#FF8B84] flex items-center gap-3"><FolderOutput className="w-4 h-4 opacity-70" />노트 저장</button>
+                                <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#FF7A72]/10 hover:text-[#FFC1BC] flex items-center gap-3"><Info className="w-4 h-4 opacity-70" />디테일</button>
+                                <button onClick={() => executeFavoriteMenuAction('select', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#FF7A72]/10 hover:text-[#FFC1BC] flex items-center gap-3"><Square className="w-4 h-4 opacity-70" />선택</button>
+                                <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#FF7A72] hover:bg-[#FF7A72]/10 hover:text-[#FFC1BC] flex items-center gap-3"><RefreshCw className="w-4 h-4 opacity-80" />다음곡에 적용</button>
+                                <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#FF7A72]/10 hover:text-[#FFC1BC] flex items-center gap-3"><Share2 className="w-4 h-4 opacity-70" />공유하기</button>
+                                <button onClick={() => executeFavoriteMenuAction('saveSharedNote', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-[#FF7A72]/10 hover:text-[#FFC1BC] flex items-center gap-3"><FolderOutput className="w-4 h-4 opacity-70" />노트 저장</button>
                               </>
                             ) : isFavoriteTrashMode ? (
                               isBulkMenu ? (
                                 <>
-                                  <div className="px-4 py-2 text-xs font-bold text-[#FF5C52]">선택한 {selectedSongIds.length}곡</div>
+                                  <div className="px-4 py-2 text-xs font-bold text-[#FF7A72]">선택한 {selectedSongIds.length}곡</div>
                                   <button onClick={() => executeFavoriteMenuAction('selectAll', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><CheckSquare className="w-4 h-4" />전체선택</button>
                                   <button onClick={() => executeFavoriteMenuAction('restoreSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><RefreshCw className="w-4 h-4" />복구</button>
                                   <button onClick={() => executeFavoriteMenuAction('permanentDeleteSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />영구 삭제</button>
@@ -5769,7 +7075,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               )
                             ) : isBulkMenu ? (
                               <>
-                                <div className="px-4 py-2 text-xs font-bold text-[#FF5C52]">선택한 {selectedSongIds.length}곡</div>
+                                <div className="px-4 py-2 text-xs font-bold text-[#FF7A72]">선택한 {selectedSongIds.length}곡</div>
                                 <button onClick={() => executeFavoriteMenuAction('selectAll', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><CheckSquare className="w-4 h-4" />전체선택</button>
                                 <button onClick={() => executeFavoriteMenuAction('clearSelection', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Square className="w-4 h-4" />선택해제</button>
                                 <button onClick={() => executeFavoriteMenuAction('lockSelected', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Lock className="w-4 h-4" />선택잠금</button>
@@ -5782,15 +7088,37 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               <>
                                 <button onClick={() => executeFavoriteMenuAction('details', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Info className="w-4 h-4" />디테일 & Edit</button>
                                 <button onClick={() => executeFavoriteMenuAction('select', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Square className="w-4 h-4" />선택</button>
-                                {!song.isLocked ? (
+                                {!isMusicNoteCardLocked(song) ? (
                                   <button onClick={() => executeFavoriteMenuAction('lock', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Lock className="w-4 h-4" />잠금</button>
                                 ) : (
                                   <button onClick={() => executeFavoriteMenuAction('unlock', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Unlock className="w-4 h-4" />잠금해제</button>
                                 )}
-                                <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#FF5C52] hover:text-[#FF7066] hover:bg-transparent flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
+                                <button onClick={() => executeFavoriteMenuAction('apply', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#FF7A72] hover:text-[#FF8C85] hover:bg-transparent flex items-center gap-3"><RefreshCw className="w-4 h-4" />다음곡에 적용</button>
                                 <button onClick={() => executeFavoriteMenuAction('share', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><Share2 className="w-4 h-4" />공유</button>
+                                <button
+                                  type="button"
+                                  disabled={explorePublicationBusyId === getFavoriteDocumentId(song)}
+                                  aria-disabled={!canToggleFavoriteExplorePublication(song) || undefined}
+                                  onClick={() => openFavoriteExplorePublicationDialog(song)}
+                                  className={cn(
+                                    "flex w-full items-center gap-3 bg-transparent px-4 py-2.5 text-left text-sm transition-colors disabled:cursor-wait disabled:opacity-35",
+                                    canToggleFavoriteExplorePublication(song)
+                                      ? "text-white/85 hover:bg-white/5 hover:text-[#FFC1BC]"
+                                      : "cursor-pointer text-white/30 hover:bg-white/[0.025] hover:text-white/45"
+                                  )}
+                                  title={canToggleFavoriteExplorePublication(song) ? undefined : '수노 URL을 등록하고 정상 연결해주세요.'}
+                                >
+                                  {explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public'
+                                    ? <Lock className="h-4 w-4" />
+                                    : <Unlock className="h-4 w-4" />}
+                                  {explorePublicationBusyId === getFavoriteDocumentId(song)
+                                    ? '처리 중...'
+                                    : explorePublicationStateBySongId[getFavoriteDocumentId(song)]?.status === 'public'
+                                      ? '비공개'
+                                      : '공개'}
+                                </button>
                                 {!shouldHideSunoUrlControls(song) && (
-                                  <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#FF8B84] hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 연결</button>
+                                  <button onClick={() => executeFavoriteMenuAction('sunoUrl', song)} className="w-full px-4 py-2.5 text-left text-sm text-[#FFC1BC] hover:bg-white/5 flex items-center gap-3"><Link2 className="w-4 h-4" />수노 URL 연결</button>
                                 )}
                                 <button onClick={() => executeFavoriteMenuAction('folder', song)} className="w-full px-4 py-2.5 text-left text-sm text-white/85 hover:bg-white/5 flex items-center gap-3"><FolderOutput className="w-4 h-4" />폴더 저장</button>
                                 <button onClick={() => executeFavoriteMenuAction('delete', song)} className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"><Trash2 className="w-4 h-4" />삭제</button>
@@ -5802,7 +7130,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       </div>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               );
             })}
           </div>
@@ -5819,26 +7147,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE);
                     return;
                   }
-                  if (canRequestMoreMusicNotePage) {
-                    await onLoadMoreFavorites?.();
-                    setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE);
-                  }
+                  // Full catalog already contains every row; no server fallback exists here.
                 }}
-                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 20개 더 불러오거나 보여줍니다.' })}
+                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '저장된 곡을 20개 더 보여줍니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
                   "px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-black/20 flex items-center gap-2 group shadow-[var(--shadow-md)]",
                   isLoadingMoreFavorites && "cursor-wait opacity-60"
                 )}
               >
-                <Plus className="w-5 h-5 text-[#FF5C52] group-hover:rotate-90 transition-transform" />
-                {isLoadingMoreFavorites
-                  ? '불러오는 중...'
-                  : canShowCachedMusicNoteMore
-                    ? `더보기 (${filteredFavorites.length - visibleCount}개 남음)`
-                    : musicNoteViewMode === 'noteSpace'
-                      ? '더보기 (20개 더 불러오기)'
-                      : '더보기'}
+                <Plus className="w-5 h-5 text-[#FF7A72] group-hover:rotate-90 transition-transform" />
+                {`더보기 (${Math.max(0, filteredFavorites.length - visibleCount)}개 남음)`}
               </button>
             </div>
           )}
@@ -5862,7 +7181,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0 }}
-              className="w-full max-w-[380px] overflow-hidden rounded-[24px] border border-[#FF5C52]/25 bg-[#181818] shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+              className="w-full max-w-[380px] overflow-hidden rounded-[24px] border border-[#FF7A72]/25 bg-[#181818] shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
@@ -5886,7 +7205,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   placeholder="폴더 이름 (최대 20자)"
                   maxLength={20}
                   autoFocus
-                  className="w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-sm font-bold text-white outline-none transition-colors focus:border-[#FF5C52]/55"
+                  className="w-full rounded-2xl border border-white/10 bg-[#111] px-4 py-3 text-sm font-bold text-white outline-none transition-colors focus:border-[#FF7A72]/55"
                 />
               </div>
               <div className="flex justify-end gap-2 border-t border-white/10 bg-black/20 px-5 py-4">
@@ -5900,7 +7219,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 <button
                   type="button"
                   onClick={commitRenameMusicNoteFolder}
-                  className="rounded-xl bg-[#FF5C52]/85 px-4 py-2 text-sm font-black text-white transition-colors hover:bg-[#FF5C52]"
+                  className="rounded-xl bg-[#FF7A72]/85 px-4 py-2 text-sm font-black text-white transition-colors hover:bg-[#FF7A72]"
                 >
                   저장
                 </button>
@@ -6120,7 +7439,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               transition={{ duration: 0 }}
               className="w-full max-w-sm rounded-[2rem] border border-black/20 bg-[#1f1f1f] p-7 text-center shadow-2xl"
             >
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#FF5C52]/20 text-[#FF8B84]">
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#FF7A72]/20 text-[#FFC1BC]">
                 <Info className="h-8 w-8" />
               </div>
               <h2 className="mb-3 text-2xl font-black text-white">Chrome에서 열어주세요</h2>
@@ -6132,7 +7451,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 <button
                   type="button"
                   onClick={openCurrentMusicNoteShareInChrome}
-                  className="w-full rounded-2xl bg-[#FF5C52] py-4 text-lg font-black text-white shadow-lg shadow-[#FF5C52]/18 transition-all hover:bg-[#FF5C52]/90"
+                  className="w-full rounded-2xl bg-[#FF7A72] py-4 text-lg font-black text-white shadow-lg shadow-[#FF7A72]/18 transition-all hover:bg-[#FF7A72]/90"
                 >
                   공유 뮤직노트 보기
                 </button>
@@ -6171,7 +7490,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0 }}
-              className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-[#FF5C52]/25 bg-[#1a1a1a] p-6 shadow-2xl"
+              className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-[#FF7A72]/25 bg-[#1a1a1a] p-6 shadow-2xl"
               onClick={(event) => event.stopPropagation()}
               onPointerDown={(event) => event.stopPropagation()}
             >
@@ -6192,7 +7511,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 <button
                   type="button"
                   onClick={handleMusicNotePublicShare}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FF5C52] py-4 text-base font-black text-white shadow-lg shadow-[#FF5C52]/18 transition-all hover:bg-[#FF5C52]/90"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FF7A72] py-4 text-base font-black text-white shadow-lg shadow-[#FF7A72]/18 transition-all hover:bg-[#FF7A72]/90"
                 >
                   <Share2 className="h-5 w-5" /> 링크 공유하기
                 </button>
@@ -6211,7 +7530,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         className={`flex-1 rounded-xl border py-3 text-sm font-bold transition-all ${
                           btn.active
                             ? btn.color === 'note'
-                              ? 'border-[#FF5C52]/35 bg-[#FF5C52]/15 text-[#FF8B84]'
+                              ? 'border-[#FF7A72]/35 bg-[#FF7A72]/15 text-[#FFC1BC]'
                               : 'border-white/10 bg-white/10 text-white/65'
                             : 'border-black/15 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'
                         }`}
@@ -6232,6 +7551,151 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {explorePublicationDialog && (
+          <StudioCenterModalPortal themeClassName="soridraw-explore-publication-modal-portal">
+            <motion.div
+              initial={{ opacity: 1 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 1 }}
+              transition={{ duration: 0 }}
+              className="pointer-events-auto fixed inset-0 z-[430] flex items-end justify-center bg-black/58 px-4 py-5 backdrop-blur-sm md:items-center"
+              style={{ pointerEvents: 'auto', touchAction: 'manipulation' }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onTouchStart={(event) => event.stopPropagation()}
+              onClick={() => {
+                if (explorePublicationBusyId !== explorePublicationDialog.sourceId) {
+                  setExplorePublicationDialog(null);
+                  setExplorePublicationPrivateConfirm(false);
+                }
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 1, y: 0, scale: 1 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0 }}
+                className="pointer-events-auto w-full max-w-[430px] overflow-hidden rounded-[28px] bg-[#1b1b1b] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.6)] md:p-6"
+                style={{ pointerEvents: 'auto' }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onMouseDown={(event) => event.stopPropagation()}
+                onTouchStart={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#FFC1BC]/72">Explore</p>
+                    <h3 className="mt-1 text-xl font-black text-white">공개 설정</h3>
+                    <p className="mt-1 truncate text-xs font-semibold text-white/42">
+                      {String(explorePublicationDialog.song?.title || explorePublicationDialog.song?.koreanTitle || explorePublicationDialog.song?.englishTitle || '제목 없는 곡')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (explorePublicationBusyId !== explorePublicationDialog.sourceId) {
+                        setExplorePublicationDialog(null);
+                        setExplorePublicationPrivateConfirm(false);
+                      }
+                    }}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.055] text-white/50 transition-all hover:bg-white/[0.09] hover:text-white"
+                    aria-label="공개 설정 닫기"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-6 space-y-2.5">
+                  {([
+                    { key: 'allowNextSongApply', label: '다음곡에 적용 허용', description: '다른 사용자가 이 곡의 공개 설정을 다음곡에 활용할 수 있습니다.' },
+                    { key: 'allowFollowerSave', label: '팔로워 곡 저장 허용', description: '나를 팔로우한 사용자가 이 공개곡을 공유 노트에 저장할 수 있습니다.' },
+                    { key: 'profilePinned', label: '공개 프로필에 고정', description: '공개 프로필의 상단에 이 곡을 고정합니다.' },
+                  ] as const).map((item) => {
+                    const active = explorePublicationDialog.options[item.key];
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        role="switch"
+                        aria-checked={active}
+                        onClick={() => updateFavoriteExplorePublicationDialogOption(item.key)}
+                        className="flex w-full items-center gap-4 rounded-2xl bg-white/[0.045] px-4 py-3.5 text-left transition-all hover:bg-white/[0.07]"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-black text-white/88">{item.label}</span>
+                          <span className="mt-1 block text-[11px] leading-5 text-white/38">{item.description}</span>
+                        </span>
+                        <span
+                          className={cn(
+                            "relative h-7 w-12 shrink-0 rounded-full transition-all",
+                            active ? "bg-[#FF7A72]" : "bg-white/[0.11]"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "absolute top-1 h-5 w-5 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.28)] transition-all",
+                              active ? "left-6" : "left-1"
+                            )}
+                          />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {explorePublicationDialog.state.status === 'public' && explorePublicationPrivateConfirm && (
+                  <div className="mt-4 rounded-2xl bg-red-500/10 px-4 py-3 text-xs font-semibold leading-5 text-red-200/85">
+                    비공개로 전환하면 Explore와 공개 프로필에서 즉시 숨겨집니다. D1 기록은 삭제하지 않습니다.
+                  </div>
+                )}
+
+                <div className="mt-6 grid gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void submitFavoriteExplorePublicationDialog()}
+                    disabled={explorePublicationBusyId === explorePublicationDialog.sourceId}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FF7A72] text-sm font-black text-white shadow-[0_12px_28px_rgba(255,122,114,0.18)] transition-all hover:bg-[#FF8C85] disabled:cursor-wait disabled:opacity-45"
+                  >
+                    {explorePublicationBusyId === explorePublicationDialog.sourceId && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {explorePublicationDialog.state.status === 'public' ? '저장' : '공개'}
+                  </button>
+
+                  {explorePublicationDialog.state.status === 'public' && (
+                    <button
+                      type="button"
+                      onClick={() => void makeFavoriteExplorePublicationPrivate()}
+                      disabled={explorePublicationBusyId === explorePublicationDialog.sourceId}
+                      className={cn(
+                        "flex h-11 w-full items-center justify-center rounded-2xl text-sm font-black transition-all disabled:cursor-wait disabled:opacity-45",
+                        explorePublicationPrivateConfirm
+                          ? "bg-red-500/18 text-red-200 hover:bg-red-500/24"
+                          : "bg-white/[0.055] text-white/48 hover:bg-white/[0.085] hover:text-white/78"
+                      )}
+                    >
+                      {explorePublicationPrivateConfirm ? '비공개 전환 확인' : '비공개로 전환'}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (explorePublicationBusyId !== explorePublicationDialog.sourceId) {
+                        setExplorePublicationDialog(null);
+                        setExplorePublicationPrivateConfirm(false);
+                      }
+                    }}
+                    className="h-10 w-full rounded-2xl bg-transparent text-xs font-bold text-white/30 transition-colors hover:text-white/60"
+                  >
+                    취소
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          </StudioCenterModalPortal>
         )}
       </AnimatePresence>
 
@@ -6259,12 +7723,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0 }}
-              className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#FF5C52]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+              className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#FF7A72]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#FF8B84]/75">music note folder</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#FFC1BC]/75">music note folder</p>
                   <h3 className="mt-1 text-lg font-black text-white">폴더 저장</h3>
                   <p className="mt-1 text-xs leading-5 text-white/45">
                     {musicNoteFolderPicker.mode === 'sharedNote' ? '공유 노트 폴더를 선택하세요.' : '마이 노트 폴더를 선택하세요.'}
@@ -6290,12 +7754,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       className={cn(
                         'flex h-12 items-center justify-between rounded-2xl border px-4 text-sm font-bold transition-all',
                         selectedId === folder.id
-                          ? 'border-[#FF5C52]/45 bg-[#FF5C52]/22 text-white'
-                          : 'border-white/10 bg-white/[0.035] text-white/72 hover:border-[#FF5C52]/32 hover:text-white'
+                          ? 'border-[#FF7A72]/45 bg-[#FF7A72]/22 text-white'
+                          : 'border-white/10 bg-white/[0.035] text-white/72 hover:border-[#FF7A72]/32 hover:text-white'
                       )}
                     >
-                      <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#FF8B84]" />{folder.title}</span>
-                      {selectedId === folder.id && <Check className="h-4 w-4 text-[#FF8B84]" />}
+                      <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#FFC1BC]" />{folder.title}</span>
+                      {selectedId === folder.id && <Check className="h-4 w-4 text-[#FFC1BC]" />}
                     </button>
                   );
                 })}
@@ -6304,12 +7768,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <button
                     type="button"
                     onClick={() => setMusicNoteFolderCreateTitle('')}
-                    className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-[#FF5C52]/35 bg-[#FF5C52]/8 px-4 text-sm font-black text-[#FF8B84] transition-all hover:bg-[#FF5C52]/14 hover:text-white"
+                    className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-[#FF7A72]/35 bg-[#FF7A72]/8 px-4 text-sm font-black text-[#FFC1BC] transition-all hover:bg-[#FF7A72]/14 hover:text-white"
                   >
                     <Plus className="h-4 w-4" /> 새 폴더 만들기
                   </button>
                 ) : (
-                  <div className="mt-1 flex h-12 items-center gap-2 rounded-2xl border border-[#FF5C52]/35 bg-black/20 px-3">
+                  <div className="mt-1 flex h-12 items-center gap-2 rounded-2xl border border-[#FF7A72]/35 bg-black/20 px-3">
                     <input
                       type="text"
                       value={musicNoteFolderCreateTitle}
@@ -6326,7 +7790,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     <button
                       type="button"
                       onClick={commitCreateAndSaveMusicNoteFolder}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FF5C52]/18 text-[#FF8B84] transition-all hover:bg-[#FF5C52]/28 hover:text-white"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FF7A72]/18 text-[#FFC1BC] transition-all hover:bg-[#FF7A72]/28 hover:text-white"
                       aria-label="새 폴더 생성 후 저장"
                     >
                       <Check className="h-4 w-4" />
@@ -6360,7 +7824,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             )}
           >
             <span className="inline-flex items-center gap-2 whitespace-pre-line">
-              <Check className="h-4 w-4 text-[#FF5C52]" />
+              <Check className="h-4 w-4 text-[#FF7A72]" />
               {favoriteToastMessage}
             </span>
           </motion.div>
@@ -6371,10 +7835,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       <AnimatePresence>
         {sunoUrlEditorSong && (
           <motion.div initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 1 }} transition={{ duration: 0 }} className="fixed inset-0 z-[320] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={closeFavoriteSunoUrlEditor}>
-            <motion.div initial={{ opacity: 1, scale: 1, y: 0 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0 }} className="w-full max-w-[520px] md:max-w-[680px] overflow-hidden rounded-[28px] border border-[#FF5C52]/25 bg-[#181818] p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <motion.div initial={{ opacity: 1, scale: 1, y: 0 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0 }} className="w-full max-w-[520px] md:max-w-[680px] overflow-hidden rounded-[28px] border border-[#FF7A72]/25 bg-[#181818] p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#FF8B84]/80">suno url</div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]/80">suno url</div>
                   <h3 className="mt-1 text-xl font-bold text-white">수노 URL 연결</h3>
                   <p className="mt-1 truncate text-sm text-white/45">{getCombinedFavoriteTitle(sunoUrlEditorSong)}</p>
                 </div>
@@ -6383,7 +7847,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <button
                     type="button"
                     onClick={() => window.open('https://suno.com/create', '_blank', 'noopener,noreferrer')}
-                    className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] transition-all hover:scale-[1.04] hover:border-[#FF8B84]/35 hover:shadow-[0_8px_24px_rgba(255,139,132,0.18)]"
+                    className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] transition-all hover:scale-[1.04] hover:border-[#FFC1BC]/35 hover:shadow-[0_8px_24px_rgba(255,193,188,0.18)]"
                     aria-label="수노 열기"
                   >
                     <img src="/suno-icon.webp" alt="SUNO" className="h-full w-full rounded-2xl object-cover" />
@@ -6396,14 +7860,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   {[0, 1].map((index) => (
                     <div key={`suno-url-modal-${index}`} className="rounded-2xl border border-white/10 bg-black/15 p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
-                        <span className="text-xs font-black text-[#FF7066]">수노 URL {index + 1}</span>
+                        <span className="text-xs font-black text-[#FF8C85]">수노 URL {index + 1}</span>
                         <button
                           type="button"
                           onClick={() => setSunoUrlMainIndex(index as 0 | 1)}
                           disabled={!sunoUrlInputs[index].trim()}
                           className={cn(
                             'inline-flex h-8 items-center justify-center rounded-xl border px-3 text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-35',
-                            sunoUrlMainIndex === index ? 'border-[#FF7066]/65 bg-[#FF5C52]/24 text-[#FF8B84]' : 'border-white/10 bg-white/[0.035] text-white/50 hover:text-white/75'
+                            sunoUrlMainIndex === index ? 'border-[#FF8C85]/65 bg-[#FF7A72]/24 text-[#FFC1BC]' : 'border-white/10 bg-white/[0.035] text-white/50 hover:text-white/75'
                           )}
                         >
                           {sunoUrlMainIndex === index ? '1순위' : '1순위로'}
@@ -6458,7 +7922,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <button type="button" onClick={() => removeFavoriteSunoShareUrl(sunoUrlEditorSong)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/60 transition-all hover:text-red-300"><Trash2 className="h-4 w-4" />전체 제거</button>
                 )}
                 <button type="button" onClick={closeFavoriteSunoUrlEditor} className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/70 transition-all hover:text-white">취소</button>
-                <button type="button" onClick={() => saveFavoriteSunoShareUrls(sunoUrlEditorSong, sunoUrlInputs, sunoUrlMainIndex)} disabled={sunoUrlSaveStatus === 'saving' || !sunoUrlInputs.some(value => value.trim())} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#FF5C52] px-4 text-sm font-bold text-white shadow-[0_10px_24px_rgba(255,92,82,0.18)] transition-all hover:bg-[#FF7066] disabled:cursor-not-allowed disabled:opacity-35">
+                <button type="button" onClick={() => saveFavoriteSunoShareUrls(sunoUrlEditorSong, sunoUrlInputs, sunoUrlMainIndex)} disabled={sunoUrlSaveStatus === 'saving' || !sunoUrlInputs.some(value => value.trim())} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#FF7A72] px-4 text-sm font-bold text-white shadow-[0_10px_24px_rgba(255,122,114,0.18)] transition-all hover:bg-[#FF8C85] disabled:cursor-not-allowed disabled:opacity-35">
                   {sunoUrlSaveStatus === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                   {sunoUrlSaveStatus === 'saving' ? '저장 중...' : sunoUrlSaveStatus === 'saved' ? '저장 완료' : '저장'}
                 </button>
@@ -6469,23 +7933,24 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </AnimatePresence>
 
       {/* Lyrics Modal */}
+      <StudioCenterModalPortal themeClassName="soridraw-musicnote-theme">
       <AnimatePresence>
         {selectedSong && (
-          <div className="fixed inset-0 z-[350] flex items-center justify-center p-3 md:p-6 font-sans">
+          <div className="soridraw-detail-modal-frame fixed inset-0 z-[350] flex items-center justify-center p-3 md:p-6 font-sans">
             <motion.div
               initial={{ opacity: 1 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 1 }}
               transition={{ duration: 0 }}
               onClick={() => closeSelectedSong()}
-              className="absolute inset-0 bg-black/72 backdrop-blur-[7px]"
+              className="soridraw-detail-modal-backdrop absolute inset-0 bg-black/60 backdrop-blur-[5px]"
             />
             <motion.div
               initial={{ opacity: 1, scale: 1, y: 0 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ duration: 0 }}
-              className="relative flex w-full max-w-[1120px] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#131313] shadow-[0_40px_140px_rgba(0,0,0,0.58)] max-h-[92vh] musicnote-edit-mobile-boost"
+              className="soridraw-musicnote-detail-panel relative flex w-full max-w-[1120px] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#131313] shadow-[0_40px_140px_rgba(0,0,0,0.58)] max-h-[92vh] musicnote-edit-mobile-boost"
               onClick={(e) => e.stopPropagation()}
               onClickCapture={(e) => {
                 if (confirmDeleteSong && !(e.target as HTMLElement).closest('[data-detail-delete-button="true"]')) {
@@ -6545,7 +8010,20 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
               <div className="relative flex items-center justify-between gap-4 border-b border-black/20 px-5 py-4 md:px-8 md:py-5">
                 <div className="min-w-0">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-[#FF7066]">music note detail</div>
+                  <div className="flex min-w-0 items-center gap-2 text-[11px] font-bold uppercase tracking-[0.32em] text-[#FF8C85]">
+                    <span className="shrink-0">music note detail</span>
+                    {!isSelectedSongReadOnly && favoriteDetailSaveStatus !== 'idle' && (
+                      <span
+                        data-music-note-detail-save-status={favoriteDetailSaveStatus}
+                        className={cn(
+                          'min-w-0 truncate text-[10px] font-semibold normal-case tracking-normal',
+                          favoriteDetailSaveStatus === 'saved' ? 'text-emerald-300/70' : 'text-white/45'
+                        )}
+                      >
+                        {favoriteDetailSaveStatus === 'pending' ? '저장 대기' : favoriteDetailSaveStatus === 'saving' ? '저장 중…' : '저장됨'}
+                      </span>
+                    )}
+                  </div>
                   <h3 className="mt-1 text-[27px] font-bold tracking-tight text-white md:text-[32px]">{isSelectedSongReadOnly ? '디테일' : '디테일 & Edit'}</h3>
                 </div>
                 <div className="flex shrink-0 items-center gap-4">
@@ -6572,7 +8050,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                     onTouchStart={() => onLongPressStart({ id: 'detail-close', label: '닫기', description: '상세정보 창을 닫습니다.' })}
                     onTouchEnd={onLongPressEnd}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-white/60 transition-all hover:text-[#FF8B84]"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-white/60 transition-all hover:text-[#FFC1BC]"
                   >
                     <X className="h-6 w-6" />
                   </button>
@@ -6583,7 +8061,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 <section className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-5 py-5 md:px-7 md:py-6">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-[#FF8B84]">title</div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.32em] text-[#FFC1BC]">title</div>
                       <h4 className="mt-1 text-2xl font-bold text-white">제목</h4>
                     </div>
                     <div className="flex items-center gap-2">
@@ -6597,7 +8075,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-title-edit', label: '제목 수정', description: '곡 제목을 수정합니다.' })}
                           onTouchEnd={onLongPressEnd}
-                          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-white/70 transition-all hover:text-[#FF8B84]"
+                          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-white/70 transition-all hover:text-[#FFC1BC]"
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
@@ -6612,7 +8090,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                               onTouchStart={() => onLongPressStart({ id: 'detail-title-save', label: '저장', description: '수정한 제목을 저장합니다.' })}
                               onTouchEnd={onLongPressEnd}
-                              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:text-[#FF8B84] disabled:opacity-60"
+                              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:text-[#FFC1BC] disabled:opacity-60"
                             >
                               {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-white/25 border-t-white animate-spin" /> : <Check className="h-4 w-4" />}
                             </button>
@@ -6623,7 +8101,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                             onTouchStart={() => onLongPressStart({ id: 'detail-title-cancel', label: '취소', description: '제목 수정을 취소합니다.' })}
                             onTouchEnd={onLongPressEnd}
-                            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/70 transition-all hover:text-[#FF8B84]"
+                            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/70 transition-all hover:text-[#FFC1BC]"
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -6635,7 +8113,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                         onTouchStart={() => onLongPressStart({ id: 'detail-title-copy', label: '제목 복사', description: '한글/외국어 제목만 복사합니다.' })}
                         onTouchEnd={onLongPressEnd}
-                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 text-[12px] font-semibold text-white/72 transition-all hover:text-[#FF8B84]"
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 text-[12px] font-semibold text-white/72 transition-all hover:text-[#FFC1BC]"
                       >
                         {copiedType === 'title-all' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                         <span className="hidden sm:inline">제목 복사</span>
@@ -6652,7 +8130,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             value={editedTitleGenre}
                             onChange={(e) => setEditedTitleGenre(e.target.value)}
                             placeholder="Tropical House"
-                            className="w-full rounded-2xl border border-white/10 bg-black/15 px-4 py-3 text-center text-[15px] font-bold leading-tight text-white outline-none transition-all focus:border-[#FF5C52]/35 md:text-[18px]"
+                            className="w-full rounded-2xl border border-white/10 bg-black/15 px-4 py-3 text-center text-[15px] font-bold leading-tight text-white outline-none transition-all focus:border-[#FF7A72]/35 md:text-[18px]"
                           />
                         </label>
                         <label className="block">
@@ -6661,7 +8139,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             value={editedKoreanTitle}
                             onChange={(e) => setEditedKoreanTitle(e.target.value)}
                             placeholder="한국어 제목"
-                            className="w-full rounded-2xl border border-white/10 bg-black/15 px-5 py-3 text-center text-[24px] font-extrabold leading-tight tracking-tight text-white outline-none transition-all focus:border-[#FF5C52]/35 md:text-[34px]"
+                            className="w-full rounded-2xl border border-white/10 bg-black/15 px-5 py-3 text-center text-[24px] font-extrabold leading-tight tracking-tight text-white outline-none transition-all focus:border-[#FF7A72]/35 md:text-[34px]"
                           />
                         </label>
                         <label className="block">
@@ -6670,7 +8148,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             value={editedEnglishTitle}
                             onChange={(e) => setEditedEnglishTitle(e.target.value)}
                             placeholder="Foreign title"
-                            className="w-full rounded-2xl border border-white/10 bg-black/15 px-5 py-3 text-center text-[18px] font-bold leading-tight text-white/86 outline-none transition-all focus:border-[#FF5C52]/35 md:text-[24px]"
+                            className="w-full rounded-2xl border border-white/10 bg-black/15 px-5 py-3 text-center text-[18px] font-bold leading-tight text-white/86 outline-none transition-all focus:border-[#FF7A72]/35 md:text-[24px]"
                           />
                         </label>
                       </div>
@@ -6710,43 +8188,86 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     <button
                       onClick={() => handlePopupToggleLock(selectedSong)}
                       disabled={isEditing}
-                      onMouseEnter={() => onHover({ id: 'detail-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
+                      onMouseEnter={() => onHover({ id: 'detail-lock', label: isMusicNoteCardLocked(selectedSong) ? '잠금 해제' : '잠금', description: isMusicNoteCardLocked(selectedSong) ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
                       onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                      onTouchStart={() => onLongPressStart({ id: 'detail-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
+                      onTouchStart={() => onLongPressStart({ id: 'detail-lock', label: isMusicNoteCardLocked(selectedSong) ? '잠금 해제' : '잠금', description: isMusicNoteCardLocked(selectedSong) ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
                       onTouchEnd={onLongPressEnd}
+                      data-soridraw-detail-lock-button="true"
+                      data-locked={isMusicNoteCardLocked(selectedSong) ? 'true' : 'false'}
                       className={cn(
-                        'inline-flex h-12 w-12 items-center justify-center rounded-2xl border text-sm transition-all disabled:cursor-not-allowed disabled:opacity-35 hover:text-[#FF8B84]',
-                        selectedSong.isLocked
-                          ? 'border-[#FF5C52]/25 bg-white/[0.035] text-[#FF8B84]'
-                          : 'border-white/10 bg-white/[0.035] text-white/78'
+                        'soridraw-detail-state-button soridraw-detail-lock-state-button group inline-flex h-12 w-12 items-center justify-center rounded-2xl border text-sm transition-all disabled:cursor-not-allowed disabled:opacity-35',
+                        isMusicNoteCardLocked(selectedSong)
+                          ? 'border-transparent'
+                          : 'border-transparent'
                       )}
                     >
-                      {selectedSong.isLocked ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
+                      {isMusicNoteCardLocked(selectedSong) ? (
+                        <Lock className="soridraw-detail-lock-icon soridraw-detail-lock-icon--locked h-5 w-5" />
+                      ) : (
+                        <>
+                          <Unlock className="soridraw-detail-lock-icon soridraw-detail-lock-icon--rest h-5 w-5 group-hover:hidden" />
+                          <Lock className="soridraw-detail-lock-icon soridraw-detail-lock-icon--hover hidden h-5 w-5 group-hover:block" />
+                        </>
+                      )}
                     </button>
                     <button
                       data-detail-delete-button="true"
+                      data-soridraw-detail-delete-button="true"
+                      data-confirm={confirmDeleteSong ? 'true' : 'false'}
+                      data-locked={isMusicNoteCardLocked(selectedSong) ? 'true' : 'false'}
                       onClick={() => handlePopupDelete(selectedSong)}
                       disabled={isEditing}
-                      onMouseEnter={() => onHover({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
+                      onMouseEnter={() => onHover({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: isMusicNoteCardLocked(selectedSong) ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
                       onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                      onTouchStart={() => onLongPressStart({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
+                      onTouchStart={() => onLongPressStart({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: isMusicNoteCardLocked(selectedSong) ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        'inline-flex h-12 w-12 items-center justify-center rounded-2xl border transition-all disabled:cursor-not-allowed disabled:opacity-35',
-                        selectedSong.isLocked
-                          ? 'border-black/20 bg-white/[0.03] text-white/18'
+                        'soridraw-detail-state-button inline-flex h-12 w-12 items-center justify-center rounded-2xl border transition-all disabled:cursor-not-allowed disabled:opacity-35',
+                        isMusicNoteCardLocked(selectedSong)
+                          ? 'border-transparent bg-white/[0.03] text-white/18'
                           : confirmDeleteSong
-                            ? 'border-red-500/55 bg-white/[0.035] text-red-500'
-                            : 'border-white/10 bg-white/[0.035] text-white/78 hover:text-red-500'
+                            ? 'border-transparent bg-red-500/18 text-red-500 hover:bg-red-500/26'
+                            : 'border-transparent bg-white/[0.035] text-white/78 hover:bg-red-500/12 hover:text-red-500'
                       )}
                     >
                       <Trash2 className="h-5 w-5" />
                     </button>
 
+                    {!isSelectedSongReadOnly && (
+                      <button
+                        type="button"
+                        onClick={() => openFavoriteExplorePublicationDialog(selectedSong)}
+                        disabled={isEditing || explorePublicationBusyId === getFavoriteDocumentId(selectedSong)}
+                        aria-disabled={!canToggleFavoriteExplorePublication(selectedSong) || undefined}
+                        onMouseEnter={() => onHover({
+                          id: 'detail-explore-visibility',
+                          label: explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public' ? '비공개' : '공개',
+                          description: canToggleFavoriteExplorePublication(selectedSong)
+                            ? (explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public' ? 'Explore에서 이 곡을 비공개로 전환합니다.' : '이 곡을 Explore에 공개합니다.')
+                            : '수노 URL을 먼저 등록하고 정상 연결해주세요. 연결이 확인되면 Explore에 공개할 수 있습니다.',
+                        })}
+                        onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                        className={cn(
+                          "inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.035] transition-all disabled:cursor-wait disabled:opacity-30",
+                          canToggleFavoriteExplorePublication(selectedSong)
+                            ? "text-white/78 hover:bg-[#FF7A72]/12 hover:text-[#FFC1BC]"
+                            : "cursor-pointer text-white/25 hover:bg-white/[0.055] hover:text-white/40"
+                        )}
+                        aria-label={explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public' ? 'Explore 비공개' : 'Explore 공개'}
+                        title={canToggleFavoriteExplorePublication(selectedSong) ? undefined : '수노 URL을 등록하고 정상 연결해주세요.'}
+                      >
+                        {explorePublicationBusyId === getFavoriteDocumentId(selectedSong)
+                          ? <Loader2 className="h-5 w-5 animate-spin" />
+                          : explorePublicationStateBySongId[getFavoriteDocumentId(selectedSong)]?.status === 'public'
+                            ? <Lock className="h-5 w-5" />
+                            : <Unlock className="h-5 w-5" />}
+                      </button>
+                    )}
+
                     {isEditing && isModified && (
                       <button
                         onClick={handleRestoreOriginal}
-                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white/72 transition-all hover:text-[#FF8B84]"
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white/72 transition-all hover:text-[#FFC1BC]"
                       >
                         <ArrowLeft className="h-4 w-4" />
                         원본 복원
@@ -6759,7 +8280,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FF8B84]">info set</div>
+                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]">info set</div>
                         <h4 className="mt-1 text-[22px] font-bold text-white">키워드</h4>
                       </div>
                       <div className="-mt-1 flex shrink-0 items-center gap-2">
@@ -6770,7 +8291,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onTouchEnd={onLongPressEnd}
-                          className="inline-flex h-[42px] min-w-[124px] items-center justify-center gap-2 rounded-xl bg-[#FF5C52] px-4 text-[13px] font-black text-white shadow-[0_12px_30px_rgba(255,92,82,0.22)] transition-all hover:bg-[#FF7066] active:scale-95"
+                          className="inline-flex h-[42px] min-w-[124px] items-center justify-center gap-2 rounded-xl bg-[#FF7A72] px-4 text-[13px] font-black text-[#101010] shadow-[0_12px_30px_rgba(255,122,114,0.22)] transition-all hover:bg-[#FF8C85] active:scale-95"
                         >
                           <RefreshCw className="h-[17px] w-[17px]" />
                           <span className="whitespace-nowrap font-black tracking-[-0.01em]">다음 곡에 적용</span>
@@ -6782,7 +8303,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                         onTouchStart={() => onLongPressStart({ id: 'detail-keyword-toggle', label: isInfoExpanded ? '키워드 접기' : '키워드 펼치기', description: isInfoExpanded ? '키워드와 핵심정보를 접습니다.' : '키워드와 핵심정보를 펼칩니다.' })}
                         onTouchEnd={onLongPressEnd}
-                        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FF8B84]"
+                        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFC1BC]"
                       >
                         {isInfoExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                       </button>
@@ -6817,7 +8338,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           <section className="rounded-[24px] border border-black/20 bg-black/10 p-5">
                             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                               <div>
-                                <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FF8B84]">keywords</div>
+                                <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]">keywords</div>
                                 <h4 className="mt-1 text-xl font-bold text-white">곡 키워드 & 스타일</h4>
                               </div>
                               {!isEditing && (
@@ -6831,7 +8352,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                                   onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                                   onTouchStart={() => onLongPressStart({ id: 'detail-keywords-copy', label: '키워드 복사', description: '곡의 키워드와 스타일 정보를 복사합니다.' })}
                                   onTouchEnd={onLongPressEnd}
-                                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FF8B84]"
+                                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFC1BC]"
                                 >
                                   {copiedType === 'keywords' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                                 </button>
@@ -6861,7 +8382,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
                           <section className="rounded-[24px] border border-black/20 bg-black/10 p-5">
                             <div className="mb-4">
-                              <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FF8B84]">overview</div>
+                              <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]">overview</div>
                               <h4 className="mt-1 text-xl font-bold text-white">핵심 정보</h4>
                             </div>
                             <div className="grid gap-3">
@@ -6874,7 +8395,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                                 <div className="mt-2 flex flex-wrap gap-2">
                                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[12px] text-white/75">{selectedSong.appliedKeywords.vocalType || '정보 없음'}</span>
                                   {selectedSong.appliedKeywords.vocal?.isToneSelected && selectedSong.appliedKeywords.vocalTone && (
-                                    <span className="rounded-full border border-[#FF5C52]/25 bg-[#FF5C52]/10 px-3 py-1 text-[12px] text-[#FF8B84]">보컬톤: {selectedSong.appliedKeywords.vocalTone}</span>
+                                    <span className="rounded-full border border-[#FF7A72]/25 bg-[#FF7A72]/10 px-3 py-1 text-[12px] text-[#FFC1BC]">보컬톤: {selectedSong.appliedKeywords.vocalTone}</span>
                                   )}
                                 </div>
                               </div>
@@ -6899,13 +8420,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
 
                 {!isSelectedSongReadOnly && (
-                <section ref={detailSunoUrlSectionRef} className={cn('rounded-[28px] border border-white/10 bg-white/[0.02] p-5 transition-all md:p-6', isDetailSunoUrlHighlighted && 'border-[#FF7066]/70 shadow-[0_0_0_1px_rgba(255,112,102,0.26),0_18px_52px_rgba(255,92,82,0.24)]')}>
+                <section ref={detailSunoUrlSectionRef} className={cn('rounded-[28px] border border-white/10 bg-white/[0.02] p-5 transition-all md:p-6', isDetailSunoUrlHighlighted && 'border-[#FF8C85]/70 shadow-[0_0_0_1px_rgba(255,140,133,0.26),0_18px_52px_rgba(255,122,114,0.24)]')}>
                   <div className="relative">
                     <div className="absolute right-0 top-0">
                       <SunoUrlMobileGuideButton />
                     </div>
                     <div className="min-w-0 pr-[128px]">
-                      <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FF7066]">suno link</div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FF8C85]">suno link</div>
                       <h4 className="mt-1 text-xl font-bold text-white">수노 URL 연결</h4>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-white/45">수노 공유 링크를 최대 2곡까지 보관합니다. 각 커버의 재생 버튼으로 해당 곡을 수노에서 열 수 있고, 1순위 곡이 목록의 메인 커버와 재생 대상입니다.</p>
@@ -6919,17 +8440,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           <div
                             key={`suno-cover-preview-${index}`}
                             className={cn(
-                              'overflow-hidden rounded-2xl border bg-black/15',
+                              'soridraw-musicnote-suno-cover-card overflow-hidden rounded-2xl border bg-black/15',
                               link ? 'border-white/10' : 'border-white/[0.055] opacity-55',
-                              isMain && link ? 'ring-1 ring-[#FF8B84]/35' : ''
+                              isMain && link ? 'ring-1 ring-[#FFC1BC]/35' : ''
                             )}
                           >
-                            <div className="relative aspect-[16/9] bg-black/25">
+                            <div className="soridraw-musicnote-suno-cover-media relative aspect-[16/9] bg-black/25">
                               {link?.coverUrl ? (
                                 <img
                                   src={link.coverUrl}
                                   alt={`수노 URL ${index + 1} 커버`}
-                                  className="h-full w-full object-cover"
+                                  className="soridraw-musicnote-suno-cover-image h-full w-full object-cover"
                                   loading="lazy"
                                 />
                               ) : (
@@ -6942,9 +8463,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                                 <button
                                   type="button"
                                   onClick={() => openFavoriteSunoLinkAt(selectedSong, index)}
-                                  className="absolute inset-0 flex items-center justify-center bg-black/10 transition-all hover:bg-black/24"
+                                  className="soridraw-musicnote-suno-cover-open absolute inset-0 flex items-center justify-center bg-black/10 transition-all hover:bg-black/24"
                                 >
-                                  <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white shadow-[0_8px_22px_rgba(0,0,0,0.35)] backdrop-blur">
+                                  <span className="soridraw-musicnote-suno-cover-play flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white shadow-[0_8px_22px_rgba(0,0,0,0.35)] backdrop-blur">
                                     <Play className="ml-0.5 h-5 w-5 fill-current" />
                                   </span>
                                 </button>
@@ -6958,12 +8479,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             </div>
 
                             <div className="min-w-0 p-3">
-                              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#FF7066]">suno url {index + 1}</div>
+                              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#FF8C85]">suno url {index + 1}</div>
                               <p className="mt-1 truncate text-sm font-semibold text-white/82">
                                 {link?.title || (link ? `수노 URL ${index + 1} 연결됨` : `수노 URL ${index + 1}`)}
                               </p>
                               {link?.durationText && (
-                                <p className="mt-1 text-xs font-semibold text-[#FF8B84]/80">곡 길이 {link.durationText}</p>
+                                <p className="mt-1 text-xs font-semibold text-[#FFC1BC]/80">곡 길이 {link.durationText}</p>
                               )}
                               <p className="mt-1 truncate text-xs text-white/35">{link?.url || 'URL을 입력하면 커버를 불러옵니다.'}</p>
                             </div>
@@ -6976,14 +8497,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     {[0, 1].map((index) => (
                       <div key={`detail-suno-url-${index}`} className="rounded-2xl border border-white/10 bg-black/15 p-3">
                         <div className="mb-2 flex items-center justify-between gap-2">
-                          <span className="text-xs font-black text-[#FF7066]">수노 URL {index + 1}</span>
+                          <span className="text-xs font-black text-[#FF8C85]">수노 URL {index + 1}</span>
                           <button
                             type="button"
                             onClick={() => setDetailSunoUrlMainIndex(index as 0 | 1)}
                             disabled={!detailSunoUrlInputs[index].trim()}
                             className={cn(
                               'inline-flex h-8 items-center justify-center rounded-xl border px-3 text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-35',
-                              detailSunoUrlMainIndex === index ? 'border-[#FF7066]/65 bg-[#FF5C52]/24 text-[#FF8B84]' : 'border-white/10 bg-white/[0.035] text-white/50 hover:text-white/75'
+                              detailSunoUrlMainIndex === index ? 'border-[#FF8C85]/65 bg-[#FF7A72]/24 text-[#FFC1BC]' : 'border-white/10 bg-white/[0.035] text-white/50 hover:text-white/75'
                             )}
                           >
                             {detailSunoUrlMainIndex === index ? '1순위' : '1순위로'}
@@ -7030,7 +8551,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       </div>
                     ))}
                   </div>
-                  <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={detailSunoUrlSaveStatus === 'saving' || (!getFavoriteSunoShareUrl(selectedSong) && !detailSunoUrlInputs.some(value => value.trim()))} className="mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FF5C52] px-4 text-sm font-bold text-white shadow-[0_10px_26px_rgba(255,92,82,0.18)] transition-all hover:bg-[#FF7066] disabled:cursor-not-allowed disabled:opacity-35">
+                  <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={detailSunoUrlSaveStatus === 'saving' || (!getFavoriteSunoShareUrl(selectedSong) && !detailSunoUrlInputs.some(value => value.trim()))} className="mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FF7A72] px-4 text-sm font-bold text-white shadow-[0_10px_26px_rgba(255,122,114,0.18)] transition-all hover:bg-[#FF8C85] disabled:cursor-not-allowed disabled:opacity-35">
                     {detailSunoUrlSaveStatus === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                     {detailSunoUrlSaveStatus === 'saving' ? '저장 중...' : detailSunoUrlSaveStatus === 'saved' ? '저장 완료' : '저장'}
                   </button>
@@ -7047,7 +8568,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-5 md:p-6">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FF8B84]">memo</div>
+                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]">memo</div>
                         <h4 className="mt-1 text-xl font-bold text-white">메모</h4>
                         <p className="mt-1 text-sm leading-6 text-white/42">이 곡에 대한 메모를 남겨 관리합니다. 공유 링크에는 포함되지 않습니다.</p>
                       </div>
@@ -7057,10 +8578,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             type="button"
                             onClick={() => saveMusicNoteMemo(selectedSong)}
                             disabled={!!favoriteMemoSavingIds[selectedSong.id]}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#FF5C52]/45 bg-[#FF5C52]/16 text-[#FF8B84] transition-all hover:bg-[#FF5C52]/24 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#FF7A72]/45 bg-[#FF7A72]/16 text-[#FFC1BC] transition-all hover:bg-[#FF7A72]/24 disabled:cursor-not-allowed disabled:opacity-50"
                             aria-label="메모 저장"
                           >
-                            {favoriteMemoSavingIds[selectedSong.id] ? <div className="h-4 w-4 rounded-full border-2 border-[#FF8B84]/25 border-t-[#FF8B84] animate-spin" /> : <Check className="h-4 w-4" />}
+                            {favoriteMemoSavingIds[selectedSong.id] ? <div className="h-4 w-4 rounded-full border-2 border-[#FFC1BC]/25 border-t-[#FFC1BC] animate-spin" /> : <Check className="h-4 w-4" />}
                           </button>
                         )}
                         {(favoriteMemoDrafts[selectedSong.id] ?? getMusicNoteMemo(selectedSong)) !== getMusicNoteMemo(selectedSong) && (
@@ -7072,7 +8593,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               return next;
                             })}
                             disabled={!!favoriteMemoSavingIds[selectedSong.id]}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/65 transition-all hover:text-[#FF8B84] disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/65 transition-all hover:text-[#FFC1BC] disabled:cursor-not-allowed disabled:opacity-50"
                             aria-label="메모 취소"
                           >
                             <X className="h-4 w-4" />
@@ -7086,19 +8607,19 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       placeholder="곡에 대한 메모를 입력하세요..."
                       rows={4}
                       style={{ height: favoriteMemoExpanded ? 300 : 128 }}
-                      className="w-full min-h-[104px] resize-none rounded-2xl border border-white/[0.08] bg-black/[0.16] px-4 py-3 text-[14px] font-medium leading-7 text-white/76 outline-none transition-all duration-200 placeholder:text-white/28 focus:border-[#FF5C52]/45 focus:bg-black/[0.22] md:text-[15px]"
+                      className="w-full min-h-[104px] resize-none rounded-2xl border border-white/[0.08] bg-black/[0.16] px-4 py-3 text-[14px] font-medium leading-7 text-white/76 outline-none transition-all duration-200 placeholder:text-white/28 focus:border-[#FF7A72]/45 focus:bg-black/[0.22] md:text-[15px]"
                     />
                     <button
                       type="button"
                       aria-expanded={favoriteMemoExpanded}
                       aria-label={favoriteMemoExpanded ? '메모 입력창 기본 크기로 줄이기' : '메모 입력창 크게 펼치기'}
                       onClick={() => setFavoriteMemoExpanded(prev => !prev)}
-                      className="mt-2 flex h-8 w-full cursor-pointer touch-manipulation items-center justify-center rounded-2xl border border-white/[0.07] bg-white/[0.035] transition-all hover:border-[#FF5C52]/35 hover:bg-[#FF5C52]/10 active:bg-[#FF5C52]/14"
+                      className="mx-auto mt-2 flex h-6 w-[88px] cursor-pointer touch-manipulation items-center justify-center rounded-full bg-[#454549] transition-all hover:bg-[#525257] active:scale-[0.97]"
                     >
-                      <span className={`h-1.5 rounded-full bg-white/24 transition-all ${favoriteMemoExpanded ? 'w-20' : 'w-16'}`} />
+                      <span className={`h-1 rounded-full bg-[#d0d0d4] transition-all ${favoriteMemoExpanded ? 'w-9' : 'w-7'}`} />
                     </button>
                     {favoriteMemoSavingIds[selectedSong.id] && (
-                      <div className="mt-2 text-[11px] font-bold text-[#FF8B84]/75">메모 저장 중...</div>
+                      <div className="mt-2 text-[11px] font-bold text-[#FFC1BC]/75">메모 저장 중...</div>
                     )}
                   </section>
                 )}
@@ -7107,7 +8628,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
                     <div className="mb-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FF8B84]">lyrics ko</div>
+                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]">lyrics ko</div>
                         <h4 className="mt-1 text-xl font-bold text-white">한글 가사</h4>
                         {!isSelectedSongReadOnly && isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
                           <div className="mt-3 space-y-2">
@@ -7115,7 +8636,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               onClick={() => setIsSyncEnabled(!isSyncEnabled)}
                               className={cn(
                                 'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all',
-                                isSyncEnabled ? 'border-[#FF5C52]/30 bg-[#FF5C52]/15 text-[#FF8B84]' : 'border-white/10 bg-white/[0.04] text-white/60'
+                                isSyncEnabled ? 'border-[#FF7A72]/30 bg-[#FF7A72]/15 text-[#FFC1BC]' : 'border-white/10 bg-white/[0.04] text-white/60'
                               )}
                             >
                               {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
@@ -7125,7 +8646,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               <select
                                 value={foreignTargetLanguage}
                                 onChange={(e) => setForeignTargetLanguage(e.target.value)}
-                                className="block max-w-[180px] rounded-xl border border-white/10 bg-[#1f1f1f] px-3 py-2 text-[11px] font-bold text-white/72 outline-none focus:border-[#FF5C52]/30"
+                                className="block max-w-[180px] rounded-xl border border-white/10 bg-[#1f1f1f] px-3 py-2 text-[11px] font-bold text-white/72 outline-none focus:border-[#FF7A72]/30"
                               >
                                 <option value="English">영어</option>
                                 <option value="Japanese">일본어</option>
@@ -7147,7 +8668,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               <button
                                 onClick={handleSave}
                                 disabled={isTranslating}
-                                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:text-[#FF8B84] disabled:opacity-60"
+                                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:text-[#FFC1BC] disabled:opacity-60"
                               >
                                 {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-white/25 border-t-white animate-spin" /> : <Check className="h-4 w-4" />}
                               </button>
@@ -7158,7 +8679,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                               onTouchStart={() => onLongPressStart({ id: 'detail-cancel', label: '취소', description: '수정을 취소합니다.' })}
                               onTouchEnd={onLongPressEnd}
-                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FF8B84]"
+                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFC1BC]"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -7170,7 +8691,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                             onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-ko-edit', label: '한글 가사 수정', description: '한글 가사를 수정합니다.' })}
                             onTouchEnd={onLongPressEnd}
-                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FF8B84]"
+                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFC1BC]"
                           >
                             <Edit2 className="h-4 w-4" />
                           </button>
@@ -7181,7 +8702,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
                           onTouchEnd={onLongPressEnd}
-                          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FF8B84]"
+                          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFC1BC]"
                         >
                           {copiedType === 'lyrics-korean' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                         </button>
@@ -7192,7 +8713,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       <textarea
                         value={editedKoreanLyrics}
                         onChange={(e) => setEditedKoreanLyrics(e.target.value)}
-                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 outline-none transition-all focus:border-[#FF5C52]/30"
+                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 outline-none transition-all focus:border-[#FF7A72]/30"
                       />
                     ) : (
                       <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">
@@ -7204,7 +8725,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
                     <div className="mb-4 flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FF8B84]">lyrics foreign</div>
+                        <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]">lyrics foreign</div>
                         <h4 className="mt-1 text-xl font-bold text-white">외국어 가사</h4>
                         {!isSelectedSongReadOnly && isEditing && (activeEditSection === 'lyrics-ko' || activeEditSection === 'lyrics-en') && (
                           <div className="mt-3 space-y-2">
@@ -7212,7 +8733,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               onClick={() => setIsSyncEnabled(!isSyncEnabled)}
                               className={cn(
                                 'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all',
-                                isSyncEnabled ? 'border-[#FF5C52]/30 bg-[#FF5C52]/15 text-[#FF8B84]' : 'border-white/10 bg-white/[0.04] text-white/60'
+                                isSyncEnabled ? 'border-[#FF7A72]/30 bg-[#FF7A72]/15 text-[#FFC1BC]' : 'border-white/10 bg-white/[0.04] text-white/60'
                               )}
                             >
                               {isSyncEnabled ? <Link2 className="w-3 h-3" /> : <Link2Off className="w-3 h-3" />}
@@ -7222,7 +8743,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               <select
                                 value={foreignTargetLanguage}
                                 onChange={(e) => setForeignTargetLanguage(e.target.value)}
-                                className="block max-w-[180px] rounded-xl border border-white/10 bg-[#1f1f1f] px-3 py-2 text-[11px] font-bold text-white/72 outline-none focus:border-[#FF5C52]/30"
+                                className="block max-w-[180px] rounded-xl border border-white/10 bg-[#1f1f1f] px-3 py-2 text-[11px] font-bold text-white/72 outline-none focus:border-[#FF7A72]/30"
                               >
                                 <option value="English">영어</option>
                                 <option value="Japanese">일본어</option>
@@ -7244,7 +8765,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               <button
                                 onClick={handleSave}
                                 disabled={isTranslating}
-                                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:text-[#FF8B84] disabled:opacity-60"
+                                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:text-[#FFC1BC] disabled:opacity-60"
                               >
                                 {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-white/25 border-t-white animate-spin" /> : <Check className="h-4 w-4" />}
                               </button>
@@ -7255,7 +8776,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                               onTouchStart={() => onLongPressStart({ id: 'detail-cancel', label: '취소', description: '수정을 취소합니다.' })}
                               onTouchEnd={onLongPressEnd}
-                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FF8B84]"
+                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFC1BC]"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -7267,7 +8788,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                             onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-foreign-edit', label: '외국어 가사 수정', description: '외국어 가사를 수정합니다.' })}
                             onTouchEnd={onLongPressEnd}
-                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FF8B84]"
+                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFC1BC]"
                           >
                             <Edit2 className="h-4 w-4" />
                           </button>
@@ -7278,7 +8799,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
                           onTouchEnd={onLongPressEnd}
-                          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FF8B84]"
+                          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFC1BC]"
                         >
                           {copiedType === 'lyrics-foreign' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                         </button>
@@ -7289,7 +8810,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       <textarea
                         value={editedEnglishLyrics}
                         onChange={(e) => setEditedEnglishLyrics(e.target.value)}
-                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 italic outline-none transition-all focus:border-[#FF5C52]/30"
+                        className="custom-scrollbar h-[380px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 italic outline-none transition-all focus:border-[#FF7A72]/30"
                       />
                     ) : (
                       <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 whitespace-pre-wrap">
@@ -7302,7 +8823,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 <section className="rounded-[28px] border border-white/10 bg-white/[0.02] p-5 md:p-6">
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FF8B84]">prompt</div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]">prompt</div>
                       <h4 className="mt-1 text-xl font-bold text-white">곡 프롬프트</h4>
                     </div>
                     <div className="flex items-center gap-2">
@@ -7316,14 +8837,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               onTouchStart={() => onLongPressStart({ id: 'detail-save', label: '저장', description: '수정한 내용을 저장합니다.' })}
                               onTouchEnd={onLongPressEnd}
                               disabled={isTranslating}
-                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:text-[#FF8B84] disabled:opacity-60"
+                              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.045] text-white/82 transition-all hover:text-[#FFC1BC] disabled:opacity-60"
                             >
                               {isTranslating ? <div className="h-4 w-4 rounded-full border-2 border-white/25 border-t-white animate-spin" /> : <Check className="h-4 w-4" />}
                             </button>
                           )}
                           <button
                             onClick={cancelModalEditing}
-                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FF8B84]"
+                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFC1BC]"
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -7335,7 +8856,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-prompt-edit', label: '프롬프트 수정', description: '곡 프롬프트를 수정합니다.' })}
                           onTouchEnd={onLongPressEnd}
-                          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FF8B84]"
+                          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFC1BC]"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -7346,7 +8867,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                         onTouchStart={() => onLongPressStart({ id: 'detail-prompt-copy', label: '프롬프트 복사', description: '곡 프롬프트를 복사합니다.' })}
                         onTouchEnd={onLongPressEnd}
-                        className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FF8B84]"
+                        className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFC1BC]"
                       >
                         {copiedType === 'prompt' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                       </button>
@@ -7356,7 +8877,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     <textarea
                       value={editedPrompt}
                       onChange={(e) => setEditedPrompt(e.target.value)}
-                      className="custom-scrollbar h-[220px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-sm leading-7 text-white/68 outline-none transition-all focus:border-[#FF5C52]/30"
+                      className="custom-scrollbar h-[220px] w-full resize-none rounded-2xl border border-black/20 bg-black/15 p-4 text-sm leading-7 text-white/68 outline-none transition-all focus:border-[#FF7A72]/30"
                     />
                   ) : (
                     <div className="rounded-2xl border border-black/20 bg-black/15 p-4 md:p-5">
@@ -7373,7 +8894,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     aria-expanded={isFavoriteMusicApiSectionExpanded}
                   >
                     <div className="min-w-0">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#FF8B84]/85">music api</div>
+                      <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#FFC1BC]/85">music api</div>
                       <h4 className="mt-0.5 truncate text-base font-bold text-white md:text-lg">Music API 생성</h4>
                       <p className="mt-0.5 text-xs text-white/42 md:text-sm">현재 Edit 화면의 제목, 가사, 프롬프트 기준으로 생성합니다.</p>
                     </div>
@@ -7398,7 +8919,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                             onTouchStart={() => onLongPressStart({ id: 'detail-api-settings', label: 'Music API 설정', description: 'Music API 키 설정 페이지로 이동합니다.' })}
                             onTouchEnd={onLongPressEnd}
-                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FF8B84]"
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/70 transition-all hover:text-[#FFC1BC]"
                           >
                             <SlidersHorizontal className="h-5 w-5" />
                           </button>
@@ -7430,7 +8951,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                             onTouchStart={() => onLongPressStart({ id: 'detail-api-library', label: '라이브러리', description: 'Suno Library로 이동합니다.' })}
                             onTouchEnd={onLongPressEnd}
-                            className="flex h-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-bold text-white/70 transition-all hover:text-[#FF8B84]"
+                            className="flex h-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-bold text-white/70 transition-all hover:text-[#FFC1BC]"
                           >
                             Library
                           </button>
@@ -7450,6 +8971,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           </div>
         )}
       </AnimatePresence>
+      </StudioCenterModalPortal>
 
       <AnimatePresence>
         {showFavoriteMusicApiModal && selectedSong && (

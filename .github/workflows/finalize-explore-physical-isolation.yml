@@ -1,0 +1,156 @@
+name: Finalize Explore Physical Isolation
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/finalize-explore-physical-isolation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: finalize-explore-physical-isolation
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      RESTORE_RUN_ID: '33748261567'
+      PROD_DB_ID: '217ef5b1-5d80-4f7c-afc7-9e07eb05c06b'
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Wait until namespace restore can no longer race final deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 90); do
+            json="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${RESTORE_RUN_ID}")"
+            status="$(node -e 'const x=JSON.parse(process.argv[1]); console.log(x.status||"")' "$json")"
+            conclusion="$(node -e 'const x=JSON.parse(process.argv[1]); console.log(x.conclusion||"")' "$json")"
+            echo "RESTORE_POLL attempt=$i status=$status conclusion=${conclusion:-pending}"
+            if [ "$status" = completed ]; then
+              echo "RESTORE_FINISHED=true conclusion=${conclusion:-unknown}"
+              break
+            fi
+            if [ "$i" = 90 ]; then
+              echo 'Restore did not finish within the safety window.' >&2
+              exit 2
+            fi
+            sleep 10
+          done
+
+      - name: Record production Worker timestamp before final split
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'JS' > "$RUNNER_TEMP/prod-before.txt"
+          const {spawnSync}=require('node:child_process');
+          const run=(a)=>{const r=spawnSync('npx',['wrangler',...a],{cwd:'cloudflare/explore-worker',encoding:'utf8',env:process.env});if(r.status)throw new Error(r.stderr||r.stdout);return r.stdout.trim()};
+          const parse=s=>{try{return JSON.parse(s)}catch{const p=[s.indexOf('{'),s.indexOf('[')].filter(x=>x>=0);return JSON.parse(s.slice(Math.min(...p)))}};
+          const who=parse(run(['whoami','--json'])); const account=who.accounts?.[0]?.id; const auth=parse(run(['auth','token','--json']));
+          const headers=auth.type==='api_key'?{'X-Auth-Key':auth.key,'X-Auth-Email':auth.email}:{Authorization:`Bearer ${auth.token}`};
+          (async()=>{const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts`,{headers});const x=await r.json();if(!r.ok||x.success===false)throw new Error(JSON.stringify(x));const p=(x.result||[]).find(v=>v.id==='soridraw-explore-api');if(!p)throw new Error('production Worker missing'); console.log(String(p.modified_on||''));})().catch(e=>{console.error(e);process.exit(1)});
+          JS
+          echo "PRODUCTION_WORKER_MODIFIED_BEFORE=$(cat "$RUNNER_TEMP/prod-before.txt")"
+
+      - name: Trigger Cloudflare Native physical split after restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('cloudflare/explore-worker/scripts/native-git-deploy-router.mjs')
+          s=p.read_text(encoding='utf-8')
+          marker='// physical-isolation-final-trigger:'
+          lines=[line for line in s.splitlines() if not line.startswith(marker)]
+          lines.append(f'{marker} 2026-09-03T11:20Z')
+          p.write_text('\n'.join(lines)+'\n',encoding='utf-8')
+          PY
+          git add cloudflare/explore-worker/scripts/native-git-deploy-router.mjs
+          git commit -m 'ops(preview): trigger final physical Explore isolation'
+          git push origin HEAD:preview
+          echo 'CLOUDFLARE_NATIVE_FINAL_TRIGGER_PUSHED=true'
+
+      - name: Wait for physical Preview and Test Worker bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'JS'
+          const {spawnSync}=require('node:child_process');
+          const run=(a)=>{const r=spawnSync('npx',['wrangler',...a],{cwd:'cloudflare/explore-worker',encoding:'utf8',env:process.env});if(r.status)throw new Error(r.stderr||r.stdout);return r.stdout.trim()};
+          const parse=s=>{try{return JSON.parse(s)}catch{const p=[s.indexOf('{'),s.indexOf('[')].filter(x=>x>=0);return JSON.parse(s.slice(Math.min(...p)))}};
+          const who=parse(run(['whoami','--json'])); const account=who.accounts?.[0]?.id; const auth=parse(run(['auth','token','--json']));
+          const headers=auth.type==='api_key'?{'X-Auth-Key':auth.key,'X-Auth-Email':auth.email}:{Authorization:`Bearer ${auth.token}`};
+          const get=async worker=>{const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${worker}/settings`,{headers});const x=await r.json();if(!r.ok||x.success===false)throw new Error(JSON.stringify(x));const b=x.result?.bindings||[];return {db:b.find(v=>v.type==='d1'&&v.name==='DB'),r2:b.find(v=>v.type==='r2_bucket'&&v.name==='PROFILE_MEDIA')};};
+          const id=b=>b?.id||b?.database_id||b?.uuid||'';
+          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          (async()=>{
+            const prod=process.env.PROD_DB_ID;
+            for(let i=1;i<=80;i++){
+              const p=await get('soridraw-explore-preview'); const t=await get('soridraw-explore-test');
+              const pid=id(p.db), tid=id(t.db), pr2=p.r2?.bucket_name||'', tr2=t.r2?.bucket_name||'';
+              console.log(`PHYSICAL_POLL attempt=${i} previewDB=${pid||'none'} previewR2=${pr2||'none'} testDB=${tid||'none'} testR2=${tr2||'none'}`);
+              const ok=pid&&tid&&pid!==prod&&tid!==prod&&pid!==tid&&pr2==='soridraw-profile-media-preview'&&tr2==='soridraw-profile-media-test';
+              if(ok){console.log(`PREVIEW_PHYSICAL_DB_ID=${pid}`);console.log(`TEST_PHYSICAL_DB_ID=${tid}`);console.log('PHYSICAL_BINDING_ISOLATION=PASS');return;}
+              await sleep(10000);
+            }
+            throw new Error('Physical Preview/Test bindings did not become isolated in time.');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
+
+      - name: Smoke Preview Test Production APIs and origins
+        shell: bash
+        run: |
+          set -euo pipefail
+          p="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/p.json" -D "$RUNNER_TEMP/p.h" -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' 'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          t="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/t.json" -D "$RUNNER_TEMP/t.h" -w '%{http_code}' -H 'Origin: https://test.soridraw.com' 'https://soridraw-explore-test.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          r="$(curl -sS --max-time 30 -o "$RUNNER_TEMP/r.json" -w '%{http_code}' 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          test "$p" = 200
+          test "$t" = 200
+          test "$r" = 200
+          grep -qi '^access-control-allow-origin: https://preview.soridraw.com' "$RUNNER_TEMP/p.h"
+          grep -qi '^access-control-allow-origin: https://test.soridraw.com' "$RUNNER_TEMP/t.h"
+          echo "PREVIEW_EXPLORE_SMOKE=$p"
+          echo "TEST_EXPLORE_SMOKE=$t"
+          echo "PRODUCTION_EXPLORE_SMOKE=$r"
+
+      - name: Verify production Worker remained untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="$(cat "$RUNNER_TEMP/prod-before.txt")"
+          node <<'JS' > "$RUNNER_TEMP/prod-after.txt"
+          const {spawnSync}=require('node:child_process');
+          const run=(a)=>{const r=spawnSync('npx',['wrangler',...a],{cwd:'cloudflare/explore-worker',encoding:'utf8',env:process.env});if(r.status)throw new Error(r.stderr||r.stdout);return r.stdout.trim()};
+          const parse=s=>{try{return JSON.parse(s)}catch{const p=[s.indexOf('{'),s.indexOf('[')].filter(x=>x>=0);return JSON.parse(s.slice(Math.min(...p)))}};
+          const who=parse(run(['whoami','--json'])); const account=who.accounts?.[0]?.id; const auth=parse(run(['auth','token','--json']));
+          const headers=auth.type==='api_key'?{'X-Auth-Key':auth.key,'X-Auth-Email':auth.email}:{Authorization:`Bearer ${auth.token}`};
+          (async()=>{const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts`,{headers});const x=await r.json();if(!r.ok||x.success===false)throw new Error(JSON.stringify(x));const p=(x.result||[]).find(v=>v.id==='soridraw-explore-api');if(!p)throw new Error('production Worker missing'); console.log(String(p.modified_on||''));})().catch(e=>{console.error(e);process.exit(1)});
+          JS
+          after="$(cat "$RUNNER_TEMP/prod-after.txt")"
+          echo "PRODUCTION_WORKER_MODIFIED_AFTER=$after"
+          test "$before" = "$after"
+          echo 'PRODUCTION_WORKER_UNCHANGED=PASS'
+
+      - name: Verify Firebase Preview site remains live
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -L --max-time 30 -o "$RUNNER_TEMP/site.html" -w '%{http_code}' 'https://preview.soridraw.com')"
+          test "$code" = 200
+          echo "FIREBASE_PREVIEW_SITE_SMOKE=$code"
+          echo 'FINAL_PHYSICAL_EXPLORE_ISOLATION=PASS'

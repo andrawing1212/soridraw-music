@@ -1,0 +1,139 @@
+{
+  "tool": "SORIDRAW Backend V2 read-only inventory",
+  "safety": {
+    "databaseWrites": 0,
+    "databaseDeletes": 0,
+    "valuesPrinted": false,
+    "sampleSizePerTopLevelCollection": 0,
+    "note": "Aggregation counts and optional sample reads still consume Firestore read quota. Capture the daily usage baseline first."
+  },
+  "projectId": "soridraw-app-866a5",
+  "generatedAt": "2026-08-24T19:20:27.061Z",
+  "elapsedMs": 7105,
+  "topLevelCollections": [
+    {
+      "name": "admin_permission_audit",
+      "documentCount": 6,
+      "sensitive": true,
+      "samples": []
+    },
+    {
+      "name": "app_settings",
+      "documentCount": 2,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "favorites",
+      "documentCount": 737,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "gemini_request_guards",
+      "documentCount": 2,
+      "sensitive": true,
+      "samples": []
+    },
+    {
+      "name": "playlist_like_counts",
+      "documentCount": 16,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "playlist_likes",
+      "documentCount": 0,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "section_tags",
+      "documentCount": 76,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "suno_shares",
+      "documentCount": 74,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "suno_tracks",
+      "documentCount": 0,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "user_api_keys",
+      "documentCount": 5,
+      "sensitive": true,
+      "samples": []
+    },
+    {
+      "name": "user_list_caches",
+      "documentCount": 0,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "user_plans",
+      "documentCount": 2,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "user_playlists",
+      "documentCount": 0,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "user_recent_songs",
+      "documentCount": 10,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "user_structures",
+      "documentCount": 3,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "users",
+      "documentCount": 12,
+      "sensitive": false,
+      "samples": []
+    },
+    {
+      "name": "vocalTones",
+      "documentCount": 1,
+      "sensitive": false,
+      "samples": []
+    }
+  ],
+  "collectionGroups": [
+    {
+      "name": "tracks",
+      "documentCount": 72
+    },
+    {
+      "name": "lists",
+      "documentCount": 42
+    },
+    {
+      "name": "items",
+      "documentCount": 49
+    },
+    {
+      "name": "bundles",
+      "documentCount": 4
+    },
+    {
+      "name": "users",
+      "documentCount": 17
+    }
+  ]
+}

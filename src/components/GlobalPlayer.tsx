@@ -6,10 +6,12 @@ import {
   Volume2, VolumeX, ChevronDown, ChevronUp, Star, Music, X, MoreHorizontal, Info, Download, Share2, Trash2, FolderOutput
 } from 'lucide-react';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
+import { useMediaQuery } from '../lib/mediaQueryStore';
 import { auth, db } from '../firebase';
-import { doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { ensureDefaultPlaylists, getPlaylistsByType, addPlaylistItem } from '../services/playlistService';
-import { downloadAudioWithTitle } from '../lib/songUtils';
+import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
+import { ensureDefaultPlaylists, getPrimaryNormalPlaylist, addPlaylistItem } from '../services/playlistService';
+import { downloadSunoAudioWithRecovery } from '../services/sunoAudioRecovery';
+// SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
 import SunoTrackDetailModal from './SunoTrackDetailModal';
 
 function ScrollText({ text, className = '' }: { text: string; className?: string }) {
@@ -18,14 +20,27 @@ function ScrollText({ text, className = '' }: { text: string; className?: string
   const [needsScroll, setNeedsScroll] = useState(false);
 
   useEffect(() => {
+    let frame: number | null = null;
     const checkScroll = () => {
+      frame = null;
       if (containerRef.current && textRef.current) {
-        setNeedsScroll(textRef.current.scrollWidth > containerRef.current.clientWidth);
+        const next = textRef.current.scrollWidth > containerRef.current.clientWidth;
+        setNeedsScroll((current) => current === next ? current : next);
       }
     };
-    checkScroll();
-    window.addEventListener('resize', checkScroll);
-    return () => window.removeEventListener('resize', checkScroll);
+    const schedule = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(checkScroll);
+    };
+    schedule();
+    const observer = containerRef.current && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(schedule)
+      : null;
+    if (observer && containerRef.current) observer.observe(containerRef.current);
+    return () => {
+      observer?.disconnect();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
   }, [text]);
 
   return (
@@ -191,9 +206,9 @@ export default function GlobalPlayer() {
   const [showMenu, setShowMenu] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [localDetailsOpen, setLocalDetailsOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const COMPACT_MINI_PLAYER_BREAKPOINT = 1320;
-  const [isCompactPlayer, setIsCompactPlayer] = useState(window.innerWidth < COMPACT_MINI_PLAYER_BREAKPOINT);
+  const isCompactPlayer = useMediaQuery(`(max-width: ${COMPACT_MINI_PLAYER_BREAKPOINT - 1}px)`);
   const playerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const lyricScrollRef = useRef<HTMLDivElement>(null);
@@ -213,15 +228,6 @@ export default function GlobalPlayer() {
   const [isMiniPlayerDocked, setIsMiniPlayerDocked] = useState(false);
   const miniPlayerDragJustEndedRef = useRef(false);
   const miniPlayerDragResetTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-      setIsCompactPlayer(window.innerWidth < COMPACT_MINI_PLAYER_BREAKPOINT);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -422,14 +428,10 @@ export default function GlobalPlayer() {
   });
 
   useEffect(() => {
-    const handleResizeForPlayer = () => {
-      if (!isMobile && window.innerWidth < COMPACT_MINI_PLAYER_BREAKPOINT && mode === 'expanded') {
-        handleModeChange('collapsed');
-      }
-    };
-    window.addEventListener('resize', handleResizeForPlayer);
-    return () => window.removeEventListener('resize', handleResizeForPlayer);
-  }, [isMobile, mode]);
+    if (!isMobile && isCompactPlayer && mode === 'expanded') {
+      handleModeChange('collapsed');
+    }
+  }, [isCompactPlayer, isMobile, mode]);
 
   const handleExpandedDragStart = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (isMobile || mode !== 'expanded') return;
@@ -502,12 +504,19 @@ export default function GlobalPlayer() {
     handleModeChange('expanded');
   };
 
-  const handleDownload = (url: string, title?: string) => {
-    if (!url) {
+  const handleDownload = async (url: string, title?: string) => {
+    if (!url && !currentTrack) {
       alert('아직 다운로드할 음원이 없습니다.');
       return;
     }
-    downloadAudioWithTitle(url, title);
+
+    const target = currentTrack
+      ? { ...currentTrack, url: url || currentTrack.url }
+      : { url, title: title || 'SORIDRAW' };
+    const result = await downloadSunoAudioWithRecovery(target, title || currentTrack?.title);
+    if (!result.ok) {
+      alert('Music API에서 현재 다운로드 가능한 음원 링크를 찾지 못했습니다. 잠시 후 다시 시도해주세요.');
+    }
   };
 
   const handleCopyShareLink = async () => {
@@ -690,12 +699,40 @@ export default function GlobalPlayer() {
     setLocalDetailsOpen(true);
   };
 
-  const handleApplyNext = () => {
+  const handleApplyNext = async () => {
     if (dispatchLibraryAction('applyNext')) return;
     if (!currentTrack) return;
     const group = currentTrack.parent || {};
 
-    const appliedKeywords = group.appliedKeywords;
+    let appliedKeywords =
+      group.appliedKeywords ||
+      group?.requestPayload?.appliedKeywords ||
+      (currentTrack as any)?.appliedKeywords ||
+      null;
+
+    if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
+      const currentUser = auth.currentUser;
+      const sourceTrackId = String(
+        isPlaylistTrack
+          ? (group?.sourceId || group?.trackId || (currentTrack as any)?.sourceId || (currentTrack as any)?.trackId || '')
+          : (group?.id || group?.trackId || group?.taskId || '')
+      ).trim();
+
+      if (currentUser && sourceTrackId && !isSharedPlaylistTrack) {
+        try {
+          const sourceSnapshot = await getDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', sourceTrackId));
+          if (sourceSnapshot.exists()) {
+            const sourceData: any = sourceSnapshot.data() || {};
+            appliedKeywords = sourceData?.appliedKeywords || sourceData?.requestPayload?.appliedKeywords || null;
+            if (appliedKeywords && Object.keys(appliedKeywords).length > 0) {
+              group.appliedKeywords = appliedKeywords;
+            }
+          }
+        } catch (error) {
+          console.warn('Global player next-song keyword hydration failed:', error);
+        }
+      }
+    }
     
     if (!appliedKeywords || Object.keys(appliedKeywords).length === 0) {
       alert('이 곡은 키워드 정보가 없어 적용할 수 없습니다.');
@@ -735,9 +772,13 @@ export default function GlobalPlayer() {
 
     const group = currentTrack.parent || {};
     try {
-      await ensureDefaultPlaylists(user.uid);
-      const lists = await getPlaylistsByType(user.uid, 'normal');
-      const targetPlaylist = lists.find((p: any) => p?.id && !p?.isFallback) || lists[0];
+      // 1006 — Established users resolve only the one destination playlist.
+      // Default creation remains a one-time fallback for a genuinely empty account.
+      let targetPlaylist = await getPrimaryNormalPlaylist(user.uid);
+      if (!targetPlaylist?.id) {
+        await ensureDefaultPlaylists(user.uid);
+        targetPlaylist = await getPrimaryNormalPlaylist(user.uid);
+      }
 
       if (!targetPlaylist?.id || (targetPlaylist as any).isFallback) {
         alert('저장할 플레이리스트가 없습니다.');
@@ -928,7 +969,7 @@ export default function GlobalPlayer() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="fixed left-1/2 top-16 z-[140] w-[calc(100vw-28px)] max-w-[460px] -translate-x-1/2 rounded-2xl border border-amber-300/20 bg-[#1c1509]/95 px-4 py-3 text-[12px] leading-relaxed text-amber-100/85 shadow-2xl backdrop-blur-xl"
+            className="fixed left-1/2 top-16 z-[250] w-[calc(100vw-28px)] max-w-[460px] -translate-x-1/2 rounded-2xl border border-amber-300/20 bg-[#1c1509]/95 px-4 py-3 text-[12px] leading-relaxed text-amber-100/85 shadow-2xl backdrop-blur-xl"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -949,7 +990,7 @@ export default function GlobalPlayer() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[99] bg-transparent"
+          className="fixed inset-0 z-[235] bg-transparent"
           onClick={() => handleModeChange('collapsed')}
           aria-hidden="true"
         />
@@ -967,7 +1008,7 @@ export default function GlobalPlayer() {
           x: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.x) : (isMiniPlayerDocked && isCompactPlayer ? 0 : (isSharedPlayerMode || isCompactPlayer ? '-50%' : 0)),
           y: mode === 'expanded' ? (isMobile ? '-50%' : expandedPosition.y) : 0
         }}
-        className={`fixed z-[100] flex flex-col ${
+        className={`fixed z-[240] flex flex-col ${
           mode === 'expanded'
             ? isMobile
               ? 'top-1/2 left-1/2 w-[calc(100vw-28px)] max-w-[400px]'

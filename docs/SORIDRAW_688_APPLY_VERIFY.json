@@ -1,0 +1,18 @@
+{
+  "version": 688,
+  "basis": "SORIDRAW_687차_686기준_뮤직노트_라이브러리_태블릿_direct_geometry복구_4차.zip",
+  "goal": "PC Music Note/Library outer resize uses the same Legacy split owner as Recent while touch stays adaptive Lite",
+  "contracts": [
+    "fine-pointer PC automatic engine does not switch by workspace",
+    "touch automatic engine remains Lite V2 adaptive",
+    "Music Note/Library legacy pages consume parent-owned width bucket notifications instead of page-local ResizeObserver",
+    "outer window resize remains live",
+    "686 viewport windowing remains intact",
+    "no Firebase/Auth/Firestore/Functions schema changes"
+  ],
+  "user_test": [
+    "PC mouse: Recent -> Music Note -> Library, resize browser through PC/tablet range and compare stutter",
+    "PC mouse: divider drag on Music Note and Library must not regress",
+    "touch tablet: divider drag remains on Lite V2 and must retain prior speed"
+  ]
+}

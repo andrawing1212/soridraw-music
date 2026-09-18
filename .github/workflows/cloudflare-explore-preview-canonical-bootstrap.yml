@@ -1,0 +1,171 @@
+name: SORIDRAW PREVIEW Worker Canonical Bootstrap
+
+# One-time infrastructure migration: turn the exact active 034 Worker into a
+# repository-owned 035 complete Worker. This workflow NEVER deploys a Worker.
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cloudflare-explore-preview-canonical-bootstrap.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-preview-worker-canonical-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+      EXPECTED_ACTIVE_VERSION: 27cc6139-a59c-41d1-9674-4c710d687050
+      EXPECTED_ACTIVE_SHA256: 52c4cf90573ba1812c403e8623f3ad2e8a2b4d3167409570358d28110155c832
+      SHARED_D1_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+      PREVIEW_RATE_D1_ID: aaaa0fd9-1f34-4c97-9a41-11ef75d31f0f
+      LIKE_AGGREGATE_CRON: '*/10 * * * *'
+
+    steps:
+      - name: Checkout current PREVIEW tooling
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Capture exact active 034 Worker and fixed PREVIEW config
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .bootstrap
+          mkdir -p .bootstrap canonical
+          node <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const worker = process.env.PREVIEW_WORKER;
+          const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+
+          async function get(url) {
+            const response = await fetch(url, { headers });
+            const text = await response.text();
+            let body;
+            try { body = JSON.parse(text); } catch { throw new Error(`Cloudflare ${response.status}: ${text.slice(0,600)}`); }
+            if (!response.ok || body.success === false) throw new Error(`Cloudflare ${response.status}: ${text.slice(0,800)}`);
+            return body.result ?? body;
+          }
+
+          const id = x => String(x?.id || x?.database_id || x?.uuid || '');
+          (async () => {
+            const deployments = await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${worker}/deployments`);
+            const deployment = (deployments.deployments || deployments || [])[0];
+            const active = [...(deployment?.versions || [])].sort((a,b) => Number(b.percentage || 0) - Number(a.percentage || 0))[0];
+            if (String(active?.version_id || '') !== process.env.EXPECTED_ACTIVE_VERSION || Number(active?.percentage || 0) < 99.99) {
+              throw new Error(`PREVIEW active Worker drifted: ${active?.version_id || 'missing'}`);
+            }
+
+            const version = await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/workers/${worker}/versions/${active.version_id}?include=modules`);
+            const modules = Array.isArray(version.modules) ? version.modules : [];
+            if (modules.length !== 1) throw new Error(`Expected one self-contained Worker module, got ${modules.length}`);
+            let source = Buffer.from(modules[0].content_base64 || '', 'base64').toString('utf8');
+            const sha = crypto.createHash('sha256').update(source).digest('hex');
+            if (sha !== process.env.EXPECTED_ACTIVE_SHA256) throw new Error(`PREVIEW active source hash drifted: ${sha}`);
+            if (!source.includes('handleLikeBatch034') || !source.includes('EXPLORE_LIKE_BATCH_MAX_034')) throw new Error('Expected 034 batch runtime missing');
+            if (source.includes('SORIDRAW_EXPLORE_LIKE_DEFERRED_AGGREGATE_035_20260911')) throw new Error('Active PREVIEW unexpectedly already contains 035');
+            if (!source.includes('SORIDRAW_EXPLORE_LIKE_USER_BATCH_034_20260911')) {
+              source += '\n// SORIDRAW_EXPLORE_LIKE_USER_BATCH_034_20260911\n';
+            }
+            fs.writeFileSync('.bootstrap/worker.js', source);
+
+            const settings = await get(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${worker}/settings`);
+            const bindings = Array.isArray(settings.bindings) ? settings.bindings : [];
+            const db = bindings.find(x => x.type === 'd1' && x.name === 'DB');
+            const rate = bindings.find(x => x.type === 'd1' && x.name === 'RATE_DB');
+            const profile = bindings.find(x => x.type === 'r2_bucket' && x.name === 'PROFILE_MEDIA');
+            const cache = bindings.find(x => x.type === 'r2_bucket' && x.name === 'EXPLORE_CACHE');
+            const bucket = x => String(x?.bucket_name || x?.bucket || '');
+            if (id(db) !== process.env.SHARED_D1_ID) throw new Error('DB binding mismatch');
+            if (id(rate) !== process.env.PREVIEW_RATE_D1_ID) throw new Error('RATE_DB binding mismatch');
+            if (bucket(profile) !== 'soridraw-profile-media') throw new Error('PROFILE_MEDIA binding mismatch');
+            if (bucket(cache) !== 'soridraw-profile-media-preview') throw new Error('EXPLORE_CACHE binding mismatch');
+
+            const config = {
+              name: worker,
+              main: './preview-worker.js',
+              compatibility_date: String(settings.compatibility_date || '2026-09-09').slice(0,10),
+              workers_dev: true,
+              keep_vars: true,
+              d1_databases: [
+                { binding: 'DB', database_name: 'soridraw-explore-db', database_id: process.env.SHARED_D1_ID },
+                { binding: 'RATE_DB', database_name: 'soridraw-explore-preview-db', database_id: process.env.PREVIEW_RATE_D1_ID }
+              ],
+              r2_buckets: [
+                { binding: 'PROFILE_MEDIA', bucket_name: 'soridraw-profile-media' },
+                { binding: 'EXPLORE_CACHE', bucket_name: 'soridraw-profile-media-preview' }
+              ],
+              triggers: { crons: [process.env.LIKE_AGGREGATE_CRON] },
+              observability: settings.observability && typeof settings.observability === 'object'
+                ? { enabled: settings.observability.enabled !== false, ...(typeof settings.observability.head_sampling_rate === 'number' ? { head_sampling_rate: settings.observability.head_sampling_rate } : {}) }
+                : { enabled: true }
+            };
+            if (Array.isArray(settings.compatibility_flags) && settings.compatibility_flags.length) config.compatibility_flags = settings.compatibility_flags;
+            fs.writeFileSync('.bootstrap/wrangler.preview.jsonc', JSON.stringify(config, null, 2) + '\n');
+            fs.writeFileSync('.bootstrap/base.json', JSON.stringify({
+              baseVersion: active.version_id,
+              baseSha256: sha,
+              generatedFrom: 'exact-active-preview-034',
+              patch: '035-explore-like-deferred-aggregate-runtime.mjs'
+            }, null, 2) + '\n');
+            console.log(`BASE_VERSION=${active.version_id}`);
+            console.log(`BASE_SHA256=${sha}`);
+            console.log('PATCH_REPLAY=NO');
+          })().catch(error => { console.error(error); process.exit(1); });
+          NODE
+
+      - name: Apply only 035 and run complete offline verification
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SORIDRAW_REMOTE_WORKER_DIR="$PWD/.bootstrap"
+          node patches/035-explore-like-deferred-aggregate-runtime.mjs
+          node --check .bootstrap/worker.js
+          generated="$PWD/.bootstrap/worker.js"
+          (
+            cd ../..
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-like-cost-optimization.mjs
+            SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
+            node scripts/verify-explore-deploy-preflight.mjs
+          )
+          sha256sum .bootstrap/worker.js
+          echo 'CANONICAL_035_OFFLINE_VERIFY=PASS'
+
+      - name: Commit complete Worker source as the only future deployment source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp cloudflare/explore-worker/.bootstrap/worker.js cloudflare/explore-worker/canonical/preview-worker.js
+          cp cloudflare/explore-worker/.bootstrap/wrangler.preview.jsonc cloudflare/explore-worker/canonical/wrangler.preview.jsonc
+          cp cloudflare/explore-worker/.bootstrap/base.json cloudflare/explore-worker/canonical/source-base.json
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          git config user.name 'SORIDRAW Release Bot'
+          git config user.email 'soridraw-release-bot@users.noreply.github.com'
+          git add cloudflare/explore-worker/canonical
+          git diff --cached --quiet && { echo 'No canonical source change'; exit 0; }
+          git commit -m 'infra(preview): pin canonical 035 Worker source'
+          git push origin HEAD:preview
+          echo 'CANONICAL_WORKER_COMMIT=PASS'

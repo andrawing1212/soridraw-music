@@ -1,0 +1,21 @@
+{
+  "version": 702,
+  "base": 694,
+  "purpose": "Preserve 694 throughput while restoring uniform cursor/divider and outer-window/pane pacing",
+  "changes": [
+    "Use pointerrawupdate as mouse-only latest-coordinate source in Lite split workspace",
+    "Keep actual split geometry writes owned by existing requestAnimationFrame path",
+    "Use a continuous requestAnimationFrame viewport clock during native outer-window resizing",
+    "Suppress ResizeObserver geometry commits while the native resize rAF clock owns geometry"
+  ],
+  "not_used": [
+    "artificial interpolation",
+    "pixel step limiting",
+    "transform or scale proxy",
+    "forced synchronous layout acknowledgement",
+    "new diagnostic UI"
+  ],
+  "data_model_changed": false,
+  "firebase_changed": false,
+  "deployment": false
+}

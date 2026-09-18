@@ -1,0 +1,102 @@
+name: Repository Maintenance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repository-cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Prune merged temporary branches safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin --prune
+
+          # Long-lived/history refs are intentionally preserved. Other refs are
+          # deleted only when their tips are already reachable from preview/main.
+          is_preserved() {
+            case "$1" in
+              main|preview|production|backup*|release-*|release/*|production-*|deployed-snapshot-*|test-*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          safe_file="$RUNNER_TEMP/safe-merged-branches.txt"
+          keep_file="$RUNNER_TEMP/unmerged-branches.txt"
+          : > "$safe_file"
+          : > "$keep_file"
+
+          while IFS= read -r ref; do
+            b="${ref#origin/}"
+            [[ "$b" == "HEAD" || "$b" == "origin" ]] && continue
+            if is_preserved "$b"; then
+              echo "PRESERVE=$b"
+              continue
+            fi
+
+            if git merge-base --is-ancestor "refs/remotes/origin/$b" refs/remotes/origin/preview; then
+              echo "$b" >> "$safe_file"
+              echo "SAFE_PREVIEW=$b"
+            elif git merge-base --is-ancestor "refs/remotes/origin/$b" refs/remotes/origin/main; then
+              echo "$b" >> "$safe_file"
+              echo "SAFE_MAIN=$b"
+            else
+              echo "$b" >> "$keep_file"
+              echo "KEEP_UNMERGED=$b"
+            fi
+          done < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin | sort)
+
+          safe_count=$(grep -c . "$safe_file" || true)
+          keep_count=$(grep -c . "$keep_file" || true)
+          echo "SAFE_DELETE_COUNT=$safe_count"
+          echo "UNMERGED_KEEP_COUNT=$keep_count"
+
+          while IFS= read -r b; do
+            [[ -z "$b" ]] && continue
+            case "$b" in
+              main|preview|production|backup*|release-*|release/*|production-*|deployed-snapshot-*|test-*)
+                echo "REFUSE_PRESERVED=$b"
+                exit 2
+                ;;
+            esac
+            git push origin --delete "$b"
+            echo "DELETED=$b"
+          done < "$safe_file"
+
+          echo "BRANCH_CLEANUP_PASS=true"
+
+      - name: Remove obsolete temp workflow sources
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if grep -R --exclude='temp-*' --exclude='repository-maintenance.yml' -nE 'uses:.*\.github/workflows/temp-' .github/workflows; then
+            echo 'REFUSE_TEMP_WORKFLOW_DEPENDENCY=true'
+            exit 4
+          fi
+
+          mapfile -d '' temp_files < <(find .github/workflows -maxdepth 1 -type f -name 'temp-*' -print0 | sort -z)
+          echo "TEMP_WORKFLOW_DELETE_COUNT=${#temp_files[@]}"
+
+          if (( ${#temp_files[@]} == 0 )); then
+            echo 'TEMP_WORKFLOW_CLEANUP_PASS=true'
+            exit 0
+          fi
+
+          git rm -- "${temp_files[@]}"
+          git config user.name 'soridraw-maintenance'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'chore(preview): remove obsolete temporary workflows'
+          git push origin HEAD:preview
+          echo 'TEMP_WORKFLOW_CLEANUP_PASS=true'

@@ -1,0 +1,1 @@
+[inventory-readonly] failed: Error: 7 PERMISSION_DENIED: Missing or insufficient permissions. | at callErrorFromStatus (/home/runner/work/soridraw-music/soridraw-music/functions/node_modules/@grpc/grpc-js/build/src/call.js:32:19) | at Object.onReceiveStatus (/home/runner/work/soridraw-music/soridraw-music/functions/node_modules/@grpc/grpc-js/build/src/client.js:193:76)

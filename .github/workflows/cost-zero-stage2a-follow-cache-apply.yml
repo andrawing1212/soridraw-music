@@ -1,0 +1,69 @@
+name: Cost Zero Stage 2A Follow Cache Apply
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-cost-zero-stage2a-follow-cache.py'
+      - '.github/workflows/cost-zero-stage2a-follow-cache-apply.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply follow cache patch
+        run: python .deploy/apply-cost-zero-stage2a-follow-cache.py
+
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Production build
+        run: npm run build
+
+      - name: Verify bounded source scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          git status --short
+          python - <<'PY'
+          import subprocess
+          allowed = {'src/services/exploreSocialService.ts'}
+          lines = subprocess.check_output(['git','status','--porcelain'], text=True).splitlines()
+          changed = {line[3:] for line in lines if len(line) >= 4}
+          unexpected = sorted(changed - allowed)
+          if unexpected:
+              raise SystemExit(f'Unexpected follow-cache files: {unexpected}')
+          if 'src/services/exploreSocialService.ts' not in changed:
+              raise SystemExit('Follow cache patch made no service change')
+          print('FOLLOW_CACHE_SCOPE_OK=true')
+          PY
+
+      - name: Commit verified follow cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SORIDRAW Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/services/exploreSocialService.ts
+          git commit -m 'feat(preview): cache public profile follow state between visits'
+          git push origin HEAD:preview

@@ -1,0 +1,39 @@
+{
+  "version": 709,
+  "basis": "708",
+  "goal": "Suppress abrupt large visual jumps while preserving slow-motion responsiveness",
+  "changedFiles": [
+    "src/components/studio/StudioSplitWorkspace.tsx",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "src/components/studio/splitPointerLatency.ts",
+    "README.md"
+  ],
+  "logic": {
+    "jumpThresholdPx": 72,
+    "maxCorrectionPerDisplayFramePx": 56,
+    "minCorrectionPx": 18,
+    "targetBandPx": 18,
+    "ratePxPerMs": 3.0,
+    "frameDtCapMs": 16.667,
+    "slowMotion": "unchanged/exact",
+    "fastMotion": "large-jump guard with repeated rAF catch-up"
+  },
+  "appliesTo": [
+    "recent internal split",
+    "music-note internal split",
+    "library internal split",
+    "recent outer resize",
+    "music-note outer resize",
+    "library outer resize"
+  ],
+  "notChanged": [
+    "Studio Create",
+    "touch/pen path",
+    "responsive breakpoints",
+    "Firebase/Auth/Firestore/Functions/storage",
+    "visual design"
+  ],
+  "validation": {
+    "transpile": "PASS"
+  }
+}

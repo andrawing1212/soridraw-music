@@ -1,0 +1,242 @@
+name: SORIDRAW Backend V2 Step 2-A Safety
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - 'src/data/**'
+      - 'src/services/v1UserDataReadAdapter.ts'
+      - 'src/services/playlistService.ts'
+      - '.github/workflows/backend-v2-step2a-safety.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  v1-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        id: install
+        continue-on-error: true
+        run: npm ci
+
+      - name: Verify Step 2-A safety contract
+        id: contract
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          const repositorySource = fs.readFileSync('src/data/userDataRepository.ts', 'utf8');
+          const adapterSource = fs.readFileSync('src/data/v1UserDataAdapter.ts', 'utf8');
+          const runtimeBridgePath = 'src/services/v1UserDataReadAdapter.ts';
+          const runtimeBridgeSource = fs.readFileSync(runtimeBridgePath, 'utf8');
+          const playlistPath = 'src/services/playlistService.ts';
+          const playlistSource = fs.readFileSync(playlistPath, 'utf8');
+
+          const required = [
+            "BACKEND_V2_RUNTIME_MODE = 'v1-only'",
+            'readFromV2: false',
+            'writeToV2: false',
+            'shadowWriteToV2: false',
+            'migrateOnRead: false',
+            'deleteV1: false',
+          ];
+          for (const marker of required) {
+            if (!repositorySource.includes(marker)) throw new Error(`Missing safety marker: ${marker}`);
+          }
+
+          for (const [name, source] of [
+            ['userDataRepository.ts', repositorySource],
+            ['v1UserDataAdapter.ts', adapterSource],
+          ]) {
+            if (/from\s+['\"]firebase\//.test(source) || /from\s+['\"]\.\.\/firebase/.test(source)) {
+              throw new Error(`${name} must remain Firebase-independent in Step 2-A`);
+            }
+          }
+
+          const forbiddenMutationPortMarkers = [
+            'setDocument(',
+            'updateDocument(',
+            'deleteDocument(',
+            'writeBatch(',
+            'runTransaction(',
+          ];
+          for (const marker of forbiddenMutationPortMarkers) {
+            if (adapterSource.includes(marker)) {
+              throw new Error(`Step 2-A read adapter exposes mutation marker: ${marker}`);
+            }
+          }
+
+          const runtimeMutationMarkers = [
+            'setDoc(',
+            'updateDoc(',
+            'deleteDoc(',
+            'addDoc(',
+            'writeBatch(',
+            'runTransaction(',
+          ];
+          for (const marker of runtimeMutationMarkers) {
+            if (runtimeBridgeSource.includes(marker)) {
+              throw new Error(`Step 2-A3 runtime bridge gained mutation capability: ${marker}`);
+            }
+          }
+          if (!runtimeBridgeSource.includes('createV1UserDataAdapter')) {
+            throw new Error('Step 2-A3 runtime bridge must use the approved V1 adapter');
+          }
+          if (runtimeBridgeSource.includes('v2UserDataPaths')) {
+            throw new Error('Step 2-A3 runtime bridge must not access V2 paths');
+          }
+
+          const sourceFiles = [];
+          const walk = (directory) => {
+            for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+              const full = path.join(directory, entry.name);
+              if (entry.isDirectory()) {
+                if (full.replaceAll('\\', '/') === 'src/data') continue;
+                walk(full);
+              } else if (/\.(?:ts|tsx|js|jsx)$/.test(entry.name)) {
+                sourceFiles.push(full.replaceAll('\\', '/'));
+              }
+            }
+          };
+          walk('src');
+
+          const forbiddenDataImport = /from\s+['\"][^'\"]*(?:data\/userDataRepository|data\/v1UserDataAdapter)['\"]/;
+          const allowedDataImporters = new Set([runtimeBridgePath]);
+          const unexpectedDataImporters = sourceFiles.filter((file) => (
+            forbiddenDataImport.test(fs.readFileSync(file, 'utf8')) && !allowedDataImporters.has(file)
+          ));
+          if (unexpectedDataImporters.length) {
+            throw new Error(`Step 2-A data adapter escaped the approved runtime bridge: ${unexpectedDataImporters.join(', ')}`);
+          }
+
+          const runtimeBridgeImport = /from\s+['\"][^'\"]*v1UserDataReadAdapter['\"]/;
+          const allowedBridgeConsumers = new Set([playlistPath]);
+          const bridgeConsumers = sourceFiles.filter((file) => runtimeBridgeImport.test(fs.readFileSync(file, 'utf8')));
+          const unexpectedBridgeConsumers = bridgeConsumers.filter((file) => !allowedBridgeConsumers.has(file));
+          if (unexpectedBridgeConsumers.length) {
+            throw new Error(`Step 2-A3 runtime bridge wired outside approved playlist read: ${unexpectedBridgeConsumers.join(', ')}`);
+          }
+          if (!bridgeConsumers.includes(playlistPath)) {
+            throw new Error('Step 2-A3 playlist read is not wired through the approved runtime bridge');
+          }
+
+          const playlistRequiredMarkers = [
+            'loadPlaylistsByType(uid, type)',
+            'getPlaylistsByTypeDirectV1',
+            'playlist read adapter unavailable; using direct V1 fallback',
+          ];
+          for (const marker of playlistRequiredMarkers) {
+            if (!playlistSource.includes(marker)) throw new Error(`Missing Step 2-A3 playlist safety marker: ${marker}`);
+          }
+
+          const forbiddenPlaylistAdapterMethods = [
+            'loadRecentSongs(',
+            'loadFavoriteDocuments(',
+            'loadSectionsDocument(',
+            'loadPlaylistItems(',
+            'loadListBundle(',
+          ];
+          for (const marker of forbiddenPlaylistAdapterMethods) {
+            if (playlistSource.includes(marker)) {
+              throw new Error(`Step 2-A3 expanded beyond approved playlist-list read: ${marker}`);
+            }
+          }
+
+          console.log('Backend V2 Step 2-A3 isolation/safety contract verified');
+          NODE
+
+      - name: Run V1 adapter parity contract
+        id: adapter
+        if: steps.install.outcome == 'success' && steps.contract.outcome == 'success'
+        continue-on-error: true
+        run: npx tsx src/data/v1UserDataAdapter.contract.ts
+
+      - name: Type check
+        id: typecheck
+        if: steps.install.outcome == 'success' && steps.contract.outcome == 'success' && steps.adapter.outcome == 'success'
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Production build
+        id: build
+        if: steps.install.outcome == 'success' && steps.contract.outcome == 'success' && steps.adapter.outcome == 'success'
+        continue-on-error: true
+        run: npm run build
+
+      - name: Record safety outcome
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy
+          INSTALL='${{ steps.install.outcome }}'
+          CONTRACT='${{ steps.contract.outcome }}'
+          ADAPTER='${{ steps.adapter.outcome }}'
+          TYPECHECK='${{ steps.typecheck.outcome }}'
+          BUILD='${{ steps.build.outcome }}'
+          if [ "$INSTALL" = success ] && [ "$CONTRACT" = success ] && [ "$ADAPTER" = success ] && [ "$TYPECHECK" = success ] && [ "$BUILD" = success ]; then
+            STATUS=success
+          else
+            STATUS=failure
+          fi
+          {
+            echo "status=${STATUS}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "source_commit=${GITHUB_SHA}"
+            echo "runtime_mode=v1-only"
+            echo "v2_reads=false"
+            echo "v2_writes=false"
+            echo "v2_shadow_writes=false"
+            echo "migrate_on_read=false"
+            echo "delete_v1=false"
+            echo "adapter_runtime_wired=playlist-list-read-only"
+            echo "adapter_mutation_port=false"
+            echo "direct_v1_fallback=true"
+            echo "normal_playlist_read_query_count=1"
+            echo "install=${INSTALL}"
+            echo "contract=${CONTRACT}"
+            echo "adapter_parity=${ADAPTER}"
+            echo "typecheck=${TYPECHECK}"
+            echo "build=${BUILD}"
+            echo "firebase_deploy=0"
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > .deploy/backend-v2-step2a-safety.txt
+
+          cat .deploy/backend-v2-step2a-safety.txt
+          {
+            echo '## Backend V2 Step 2-A safety outcome'
+            echo '```text'
+            cat .deploy/backend-v2-step2a-safety.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail if any safety gate failed
+        if: always()
+        shell: bash
+        run: |
+          test '${{ steps.install.outcome }}' = success
+          test '${{ steps.contract.outcome }}' = success
+          test '${{ steps.adapter.outcome }}' = success
+          test '${{ steps.typecheck.outcome }}' = success
+          test '${{ steps.build.outcome }}' = success

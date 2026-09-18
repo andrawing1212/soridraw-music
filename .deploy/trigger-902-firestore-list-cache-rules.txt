@@ -1,0 +1,5 @@
+approved_by_user=true
+requested_at=2026-08-23T09:08:28+09:00
+scope=firestore:rules
+change=user_list_caches bundles only
+project=soridraw-app-866a5

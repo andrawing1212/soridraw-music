@@ -1,0 +1,15 @@
+{
+  "version": 706,
+  "basis": "SORIDRAW_705차_704기준_최근생성곡_뮤직노트_라이브러리_고정간격추종.zip",
+  "goal": "최근 생성곡/뮤직노트/라이브러리 내부 분할바가 빠른 마우스 이동에서도 실제 커서에 더 일정한 거리로 붙도록 저지연 좌표 보정",
+  "changes": [
+    "mouse only: latest coalesced confirmed pointer coordinate",
+    "mouse only: browser predicted event near +10ms, same-direction only, max 18px lead",
+    "drag visual lag cap 14px -> 6px",
+    "touch/pen and outer resize pacing unchanged"
+  ],
+  "firebase_changed": false,
+  "storage_changed": false,
+  "deployment": false,
+  "syntax_check": "changed TS/TSX transpileModule errors=0"
+}

@@ -1,0 +1,207 @@
+# SORIDRAW 작업·배포 고정 지침
+
+> 현재 구체 상태는 `DOCS/CURRENT_RELEASE_STATE.md`를 우선한다.
+
+## 1. 판단 순서
+현재 사용자 지시
+→ `CURRENT_RELEASE_STATE.md`
+→ 실제 GitHub/Firebase/Cloudflare 상태
+→ 이 문서
+
+확인 가능한 내용은 사용자에게 다시 묻지 않는다.
+
+## 2. 브랜치와 환경
+- `preview` → PREVIEW → `preview.soridraw.com`
+- `main` → TEST → `test.soridraw.com`
+- 검증된 `main` + 명확한 사용자 승인 → PRODUCTION → `soridraw.com`
+- 기본 Hosting은 Firebase.
+- Vercel은 사용자가 명확히 요청한 경우만 사용.
+- PREVIEW와 main을 임의로 섞지 않는다.
+
+### 기능 승격 기본 원칙 — 2026-09-11 고정
+- 사용자가 특정 기능을 PREVIEW 전용 / TEST 전용 / PRODUCTION 전용으로 **명확히 분리 지시하지 않는 한**, PREVIEW에서 구현·검증된 기능은 **동일한 사용자 동작과 기능을 그대로 TEST와 PRODUCTION까지 승격**한다.
+- PREVIEW는 최종 서비스 기능을 먼저 검증하는 환경이다. PREVIEW에서 테스트한 기능을 별도 지시 없이 TEST/PRODUCTION에서 임의로 비활성화하지 않는다.
+- 환경별로 달라질 수 있는 것은 Hosting/Worker/Functions 주소, 캐시, 진단, Rate Limit 같은 실행 인프라다. 사용자 기능 자체를 host guard로 숨기는 것은 별도 환경 제한 지시가 있을 때만 허용한다.
+- 승격 전 코드에 PREVIEW-only host guard가 남아 있어 TEST/PRODUCTION에서 기능이 사라진다면 **승격 준비 미완료**로 판정하고 먼저 환경 공통화한다.
+- 예: `새 업데이트 · 적용 / 업데이트 완료`처럼 PREVIEW에서 검증한 기능은 사용자가 별도 제한하지 않는 한 TEST와 PRODUCTION에서도 동일하게 제공하는 것이 기본이다.
+
+## 3. 글로벌 기본 뼈대 — 배포
+배포는 앱 기능과 별개의 **고정 인프라**로 취급한다.
+
+### 고정 원칙
+- 배포할 때마다 Workflow를 새로 만들거나 수정하지 않는다.
+- 앱 코드 수정과 배포 시스템 수정을 같은 릴리스에서 즉흥적으로 섞지 않는다.
+- 배포 파이프라인 변경은 별도 작업으로 수정·검증·고정한 뒤 사용한다.
+- 검증된 commit을 고정하고 필요한 서비스만 배포한다.
+- 앱만 바뀌면 Hosting만, Worker만 바뀌면 Worker만 배포한다.
+- DB migration/seed는 평상시 앱/Worker 배포에 포함하지 않는다.
+- 같은 실패가 반복되면 재배포를 계속하지 않고 CI/CD 문제로 분리한다.
+- 실패 시 다음 환경 승격을 즉시 중단한다.
+- `v2`, `final2`, `stage3`, `diagnostic-release` 식 일회성 배포 Workflow 누적을 금지한다.
+
+### PREVIEW canonical release path
+- 앱: `.github/workflows/firebase-hosting-custom-preview.yml`
+  - 명시적 `.deploy/preview-app-release.trigger` 변경 또는 수동 dispatch에서만 실행.
+- Explore Worker: `.github/workflows/cloudflare-explore-preview-release.yml`
+  - 명시적 `.deploy/preview-worker-release.trigger` 변경 또는 수동 dispatch에서만 실행.
+- Shared Explore D1 구조 변경: `.github/workflows/cloudflare-explore-shared-d1-release.yml`
+  - 명시적 `.deploy/shared-d1-release.trigger` 변경에서만 실행.
+  - exact preview target SHA + 승인 migration filename + blob SHA를 고정한다.
+  - live D1 read-only preflight, 현재 trigger baseline, PREVIEW/TEST/PRODUCTION Worker 호환을 확인한 뒤에만 schema 변경을 허용한다.
+  - 적용 후 postflight/API/Worker 및 main/production 비변경 검사가 실패하면 이전 trigger 복구를 시도한다.
+- 일반 코드 push만으로 앱/Worker/D1을 배포·변경하지 않는다.
+- DB migration/seed는 별도 승인 작업이며 앱/Worker release와 묶지 않는다.
+- 배포 Workflow 안에서 사용자 원본 데이터를 대량변경하지 않는다.
+
+### TEST → PRODUCTION canonical promotion path — 2026-09-11 고정
+- 고정 Workflow: `.github/workflows/soridraw-release-promotion.yml`.
+- 고정 Trigger: `.deploy/release-promotion.trigger`; 평상시 반드시 `enabled=false`.
+- 검증된 PREVIEW의 **정확한 40자리 SHA/tree**만 승격 대상으로 사용한다.
+- `preview`와 `main` history가 갈라져 있어도 force-push하지 않는다. 정확한 PREVIEW tree를 현재 main의 새 forward commit으로 만들어 TEST 기준을 고정한다.
+- TEST는 앱 Build/Hosting만이 아니라 해당 릴리스에 포함되는 Worker까지 같은 source로 검증한다.
+- TEST 전체 PASS 후 PRODUCTION으로 갈 때는 **TEST에서 검증된 main의 동일 tree**를 현재 production의 새 forward commit으로 만든다.
+- `test_only`: TEST까지만 배포.
+- `test_then_production`: 사용자가 처음부터 정식배포까지 명확히 승인한 경우, TEST PASS 직후 동일 tested tree를 PRODUCTION까지 연속 배포.
+- PRODUCTION 연속 모드는 명시적 승인값 `DEPLOY_PRODUCTION`이 없으면 실행하지 않는다.
+- TEST 실패 시 PRODUCTION 단계는 실행하지 않는다.
+- 승격 전 TEST/PRODUCTION Worker는 live environment binding을 읽고 그대로 보존하며 dry-run한다. 공유 canonical D1 확인은 SELECT/read-only만 허용한다.
+- 릴리스 Workflow 안에서 D1 migration/seed/write, 사용자 원본 데이터 복사/backfill/delete를 수행하지 않는다.
+- Worker 배포 후 smoke 실패 시 이전 active Worker version/schedule 복구를 시도한다.
+- Hosting 또는 branch 승격 후 실패 시 이전 tree를 새 forward rollback commit으로 복구하는 방식을 사용하며 force-push하지 않는다.
+- TEST/PRODUCTION 실제 주소와 exact `index.html`/`app-version.json`, Worker API/CORS를 확인해야 완료다.
+- 고정 배포시스템 변경 자체는 `.github/workflows/soridraw-release-system-audit.yml`로 read-only 감사하며 실제 배포 없이 TypeScript/Build/Worker dry-run/D1 preflight를 통과해야 한다.
+
+### 승격 불변조건 — 2026-09-17 고정
+- **시간 단축보다 `오류 없이 그대로 이동`이 상위 조건**이다. 빠르게 배포됐더라도 이전 단계와 실제 결과가 다르면 실패다.
+- TEST는 PREVIEW에서 검증된 exact tree만 받는 것으로 끝나지 않는다. 배포 직후 **실제 공개 결과도 PREVIEW와 동일**해야 성공이다.
+- PRODUCTION은 PREVIEW를 새로 해석하지 않는다. **방금 검증된 TEST의 동일 tree와 실제 결과를 그대로 이어받아야 성공**이다.
+- TEST 승격은 PREVIEW와 `latest/popular revision`, shared first-page snapshot, 직접 Feed 공개 projection, 공개프로필 projection을 자동 비교한다.
+- PRODUCTION 승격은 같은 항목을 TEST와 자동 비교한다.
+- 공개 projection 비교에는 곡 id/owner/title/likeCount/pinned 및 공개프로필 uid/handle/trackCount/follower/following/곡 목록을 포함한다.
+- `DB`는 반드시 공유 canonical D1 `soridraw-explore-db`, `PROFILE_MEDIA`는 반드시 공유 R2 `soridraw-profile-media`여야 한다. binding 이름만 맞고 실제 리소스가 다르면 배포 전 실패한다.
+- `RATE_DB`, `EXPLORE_CACHE`, Edge Cache 같은 환경별 파생 상태는 분리할 수 있지만 **사용자 원본/공유 기준을 대체하는 정답으로 인정하지 않는다.**
+- shared revision/snapshot/public-profile 확인에서 불필요 D1 read/write 0 계약을 유지한다.
+- 환경별 Edge/R2가 오래된 상태라면 5초 간격으로 bounded 재확인하고 최대 약 60초 안에 이전 단계와 같은 결과로 자동 수렴해야 한다.
+- 약 60초 안에 동일성이 확인되지 않으면 몇 시간 수동 재배포를 반복하지 않는다. 해당 Worker 이전 active version rollback을 시도하고 다음 단계 승격을 즉시 중단한다.
+- 승격 동일성 검사는 릴리스 1회에 한정된 bounded first-page/profile probe이며 전체 Feed/전체 사용자 scan, 사용자 데이터 backfill, 캐시 전체 재생성을 하지 않는다.
+- TEST parity FAIL이면 PRODUCTION은 절대 실행하지 않는다. PRODUCTION parity FAIL이면 정식배포 성공으로 보고하지 않는다.
+- 이 불변조건은 `scripts/verify-release-promotion-system.mjs`와 `.deploy/release-worker-runtime.mjs`의 고정 검증 대상이며 임의로 약화하지 않는다.
+
+### 릴리스 중 금지
+- 활성 릴리스 실패를 우회하려고 Workflow 파일을 즉흥 수정
+- 임의 migration/seed 추가
+- 검증 없이 TEST/PRODUCTION 동시 코드 승격
+- 원인 미확정 상태의 반복 재배포
+- TEST 실패 후 PRODUCTION 강행
+- force-push로 main/production 이력 덮어쓰기
+
+## 4. 사용자 데이터 운영
+PREVIEW / TEST / PRODUCTION은 코드와 실행 환경을 분리하지만 사용자 원본 데이터는 공유한다.
+
+공유 원본:
+- Auth/계정
+- Music Note
+- Library
+- Explore 공개곡
+- 공개프로필
+- 좋아요/팔로우/통계
+- 사용자 미디어
+
+환경별 분리:
+- Hosting
+- Worker/Functions 코드
+- Edge/R2 derived cache
+- Rate Limit/진단 상태
+
+승격은 데이터 복사가 아니라 코드 승격이다.
+공유 원본 변경은 additive/backward-compatible이 기본이며 destructive migration/backfill/대량삭제/필드 의미 변경은 승인 없이 금지한다.
+
+## 5. 비용 절대 기준
+- 앱 업데이트만으로 사용자 데이터 전체 조회/재생성 금지.
+- 페이지 진입/재방문/새로고침만으로 write 금지.
+- 정상 캐시가 최신이면 서버 data read 0 목표.
+- 실제 변경은 변경된 항목만 처리.
+- 좋아요 1회 때문에 전체 Feed rebuild 금지.
+- 공개/비공개 1곡 때문에 전체 Feed/프로필 재생성 금지.
+- 앱 버전과 데이터 캐시 상태를 분리.
+- 비용이 전체 사용자/곡 수에 비례하면 실패.
+
+## 6. Music Note / Library 보호
+- Music Note: 로컬 즉시 반영 + 여러 수정 약 60초 묶음 서버 저장.
+- 페이지 이동/재진입만으로 불필요한 Firestore read/write 금지.
+- Library: Local First 정상 경로 보호.
+- Explore 최적화 때문에 이 경로를 바꾸지 않는다.
+
+## 7. UI 보호
+사용자 요청 없이 다음을 변경하지 않는다.
+- 위치
+- 크기
+- 간격
+- 반응형
+- 테마
+- 색상
+- 정상 동작 방식
+
+## 8. 구현/검증 분리
+- ChatGPT: 설계, 위험 판단, 릴리스 통제.
+- Codex: `preview` 구현/테스트/commit. 배포 금지.
+- Work: 고위험 작업 독립 감사. 기본 수정 금지.
+- 같은 기능을 여러 AI가 동시에 수정하지 않는다.
+- 검증 실패 시 TEST 승격 금지.
+
+## 9. 배포 완료 기준
+완료 보고 전 최소 확인:
+- 대상 commit 고정
+- TypeScript PASS
+- Build PASS
+- 필요한 Test PASS
+- 필요한 Worker/Functions/Hosting 성공
+- 필요한 Firebase/Cloudflare 연결 확인
+- 실제 목표 주소 확인
+- TEST/PRODUCTION 비의도 변경 없음 확인
+- 비용 작업이면 실제 비용 결과 확인
+
+하나라도 실패하면 `미완료`로 보고하고 다음 승격을 중단한다.
+
+## 10. 새 채팅 시작
+1. `AGENTS.md`
+2. `DOCS/CURRENT_RELEASE_STATE.md`
+3. `DOCS/NEXT_CODEX_TASK.md`
+4. `DOCS/WORK_AUDIT_CHECKLIST.md`
+5. `DOCS/WORKFLOW_GUARDRAILS.md`
+6. `DOCS/CODEX_USAGE_BUDGET.md`
+7. 실제 `preview` HEAD
+8. 필요 시 배포/Work log와 실제 Firebase/Cloudflare 상태
+
+문서와 실제 상태가 다르면 실제 상태를 우선하고 문서를 갱신한다.
+
+## 11. 저장소 유지보수
+- 장기 브랜치는 `preview`, `main`, `production` 중심.
+- 임시 branch/workflow를 반복 생성하지 않는다.
+- 고유 미병합 commit은 이름만 보고 삭제하지 않는다.
+- 저장소 정리 Workflow는 자동 실행하지 않는다.
+- `preview`, `main`, `production` force-push/삭제 방지 보호가 기준이며 꺼져 있으면 위험으로 기록한다.
+
+## 12. 작업 종료 기록
+큰 구현/검증/배포/배포 시스템 변경 후 `DOCS/CURRENT_RELEASE_STATE.md`를 반드시 갱신한다.
+
+## 13. PREVIEW 빠른 개발 루프 — 2026-09-11 고정
+PREVIEW는 눈으로 빠르게 확인하고 다시 수정하는 개발 환경이다. 안전장치가 개발 자체를 막는 수준으로 복잡해지면 구조 실패로 본다.
+
+### 작은/중간 수정의 기본 흐름
+`기능 수정 → 필요한 사전검사 1회 → PREVIEW 배포 1회 → 실제 화면/API 확인 → 다음 수정`
+
+### 실패 처리
+- 첫 배포 실패 후 즉시 재배포하지 않는다.
+- 첫 실패에서 로그와 전체 배포 경로를 한 번에 분석해 후속 오류까지 사전에 찾는다.
+- 재시도 전 Worker/스크립트/Workflow 문법과 필수 preflight를 모두 배포 밖에서 검증한다.
+- 수정 후 재배포는 원칙적으로 1회만 한다.
+- 두 번째 배포가 실패하면 반복 수정·재배포를 중단하고 CI/CD 문제로 분리한다.
+- 실패한 배포가 실제 PREVIEW를 변경하지 않았다면 불필요한 원상복구 작업을 만들지 않는다.
+
+### 구조 단순화
+- 기능 수정 중 배포 Workflow를 동시에 개조하지 않는다.
+- 새 기능마다 기존 Worker에 누적 patch를 덧씌우는 방식으로 배포 복잡도를 증가시키지 않는다.
+- PREVIEW Worker는 가능한 한 GitHub의 검증된 완성 산출물 1개를 그대로 배포하는 구조를 우선한다.
+- D1 migration/seed처럼 공유 데이터에 영향을 주는 작업만 별도 고위험 절차로 분리한다.
+- 배포 자체보다 배포 준비가 오래 걸리거나 같은 종류의 오류가 연속되면 기능 개발을 멈추고 배포 기반을 먼저 정상화한다.

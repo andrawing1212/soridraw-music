@@ -394,9 +394,25 @@ export function buildLyricClicheGuardInstruction(params?: any): string {
   const resolved = resolveLyricClicheGuardTerms(params);
   const hardText = formatDynamicTermList(resolved.hardBanTerms, 240) || 'none';
   const softText = formatDynamicTermList(resolved.softBanTerms, 240) || 'none';
+  const lyricLanguageSignals = [
+    ...(Array.isArray(params?.lyricLanguages) ? params.lyricLanguages : []),
+    params?.targetLanguage,
+    params?.language,
+  ].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean);
+  const japaneseSelected = lyricLanguageSignals.some((value) =>
+    value === 'ja' || value === 'jp' || value.includes('japanese') || value.includes('일본어') || value.includes('日本語')
+  );
+  const japaneseQualityInstruction = japaneseSelected ? `
+JAPANESE NATIVE SEMANTIC QUALITY — 861 (Japanese lyric card/body only):
+- Write Japanese as Japanese, not as a translated Korean/English sentence skeleton. Grammar alone is not enough: every modifier→noun, noun→predicate, subject/object/location relationship must be semantically ordinary or intentionally poetic in contemporary Japanese.
+- Reject redundant same-meaning combinations inside one phrase, impossible body/location chains, and noun-noun pairings whose relationship is unclear to a Japanese listener.
+- Avoid translated abstract constructions such as an unnatural name / line / texture of time, day, memory, or feeling when the relation is not immediately intelligible in Japanese. Replace them with a concrete action, sensation, object, or scene that carries the same emotion.
+- A metaphor is allowed only when its image is instantly understandable in Japanese. Prefer a simpler native collocation over a clever but foreign-sounding abstraction.
+- Read each sung line as a standalone Japanese sentence fragment before finalizing it. If the line only makes sense when mentally reconstructing another language's source sentence, rewrite it.
+` : '';
 
   return `LYRIC CLICHE GUARD — ABSOLUTE HARD BAN:
-- HARD BAN TERMS: ${hardText}.
+${japaneseQualityInstruction}- HARD BAN TERMS: ${hardText}.
 - None of the hard-ban terms may appear in lyric-body lines. This rule also applies when the same term is present in the user draft, director note, selected theme, or another instruction.
 - Preserve the intended meaning by rewriting the whole phrase naturally with a context-appropriate alternative. Never merely delete the word, leave a broken particle/ending, or create an awkward evasive sentence.
 - Avoid spacing variants and obvious direct variants of the same hard-ban expression.

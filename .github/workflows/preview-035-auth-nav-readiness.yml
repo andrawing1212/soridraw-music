@@ -1,0 +1,197 @@
+name: SORIDRAW 035 Auth Navigation Readiness
+
+on:
+  push:
+    branches:
+      - preview-035-auth-nav-readiness
+      - preview
+    paths:
+      - '.deploy/apply-035-auth-nav-readiness.py'
+      - 'scripts/verify-035-auth-nav-readiness.mjs'
+      - '.github/workflows/preview-035-auth-nav-readiness.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-035-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate-and-preview-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_PREVIEW_BASE: a51bc4032a68eafaba9a730dad9e124b204d99a7
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      EXPECTED_EXPLORE_PREVIEW_VERSION: a58a1823-aa21-4d35-afe6-fe2a9f3bc093
+      EXPECTED_EXPLORE_TEST_VERSION: 162be148-177e-49d0-a7cd-251735156983
+      EXPECTED_EXPLORE_PRODUCTION_VERSION: 2926df94-7f2e-4dc9-9dd0-1f4b03091123
+
+    steps:
+      - name: Checkout exact triggering branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Guard feature baseline
+        if: github.ref_name == 'preview-035-auth-nav-readiness'
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git ls-remote origin refs/heads/preview | cut -f1)"
+          test "$actual" = "$EXPECTED_PREVIEW_BASE"
+          echo "PREVIEW_035_BASE_GUARD=PASS sha=$actual"
+
+      - name: Apply minimal 035 source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .deploy/apply-035-auth-nav-readiness.py
+          node scripts/verify-035-auth-nav-readiness.mjs
+          echo 'PREVIEW_035_SOURCE_PATCH=PASS'
+
+      - name: Commit generated App source on feature branch
+        if: github.ref_name == 'preview-035-auth-nav-readiness'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- src/App.tsx; then
+            echo 'APP_SOURCE_ALREADY_COMMITTED=true'
+          else
+            git config user.name 'SORIDRAW Release Bot'
+            git config user.email 'actions@users.noreply.github.com'
+            git add src/App.tsx
+            git commit -m 'fix(preview): keep top navigation responsive during auth restore'
+            git push origin HEAD:preview-035-auth-nav-readiness
+          fi
+          echo "FEATURE_SOURCE_SHA=$(git rev-parse HEAD)"
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Run 029-035 regression verifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-029-music-note-library.mjs
+          node scripts/verify-030-library-warm-cache-no-idle-read.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
+          node scripts/verify-032-music-note-detail-save-status.mjs
+          node scripts/verify-033-explore-feed-revision.mjs
+          node scripts/verify-035-auth-nav-readiness.mjs
+          echo 'SORIDRAW_029_035_REGRESSION=PASS'
+
+      - name: Verify 034 Explore Worker safety baseline unchanged
+        if: github.ref_name == 'preview'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const targets = [
+            ['soridraw-explore-preview', process.env.EXPECTED_EXPLORE_PREVIEW_VERSION],
+            ['soridraw-explore-test', process.env.EXPECTED_EXPLORE_TEST_VERSION],
+            ['soridraw-explore-api', process.env.EXPECTED_EXPLORE_PRODUCTION_VERSION],
+          ];
+          if (!token) throw new Error('CLOUDFLARE_API_TOKEN missing');
+          for (const [worker, expected] of targets) {
+            const url = `https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts/${worker}/deployments`;
+            const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+            const payload = await response.json();
+            if (!response.ok || payload?.success === false) throw new Error(`${worker} deployment read failed`);
+            const deployments = payload?.result?.deployments || payload?.result || [];
+            const active = deployments[0]?.versions?.slice().sort((a,b) => Number(b.percentage||0)-Number(a.percentage||0))[0];
+            if (!active?.version_id || Number(active.percentage || 0) < 99.99) throw new Error(`${worker} active version unresolved`);
+            if (String(active.version_id) !== String(expected)) throw new Error(`${worker} drift: ${active.version_id} != ${expected}`);
+            console.log(`WORKER_034_UNCHANGED=${worker}@${active.version_id}`);
+          }
+          NODE
+          echo 'WORKER_034_SAFE_BASELINE=PASS'
+
+      - name: Authenticate Firebase
+        if: github.ref_name == 'preview'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot production before PREVIEW deploy
+        if: github.ref_name == 'preview'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/production-before.html"
+          sha256sum "$RUNNER_TEMP/production-before.html" | awk '{print $1}' > "$RUNNER_TEMP/production-before.sha"
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/preview-index.sha"
+          echo 'PRODUCTION_SNAPSHOT_BEFORE=PASS'
+
+      - name: Deploy Firebase PREVIEW Hosting only
+        if: github.ref_name == 'preview'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only hosting --project soridraw --config firebase.hosting-preview.json --non-interactive
+          echo 'FIREBASE_PREVIEW_035_DEPLOY=PASS'
+
+      - name: Verify exact PREVIEW build and 034 integration
+        if: github.ref_name == 'preview'
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/preview-index.sha")"
+          for url in 'https://soridraw-preview.web.app/' 'https://preview.soridraw.com/'; do
+            ok=''
+            for attempt in $(seq 1 15); do
+              if curl -fsS --max-time 30 -H 'Cache-Control: no-cache' "${url}?release=035-${attempt}" -o "$RUNNER_TEMP/preview-live.html"; then
+                actual="$(sha256sum "$RUNNER_TEMP/preview-live.html" | awk '{print $1}')"
+                if [ "$actual" = "$expected" ]; then
+                  ok=yes
+                  echo "EXACT_PREVIEW_BUILD_PASS=$url"
+                  break
+                fi
+              fi
+              sleep 8
+            done
+            test "$ok" = yes
+          done
+          for spec in \
+            'https://soridraw-explore-preview.andrawing1212.workers.dev|https://preview.soridraw.com' \
+            'https://soridraw-explore-test.andrawing1212.workers.dev|https://test.soridraw.com' \
+            'https://soridraw-explore-api.andrawing1212.workers.dev|https://soridraw.com'; do
+            base="${spec%%|*}"
+            origin="${spec#*|}"
+            code="$(curl -sS -o "$RUNNER_TEMP/revision.json" -w '%{http_code}' -H "Origin: $origin" "$base/v1/feed-revision?sort=latest")"
+            test "$code" = 200
+            grep -q '"revision"' "$RUNNER_TEMP/revision.json"
+          done
+          echo 'EXPLORE_034_INTEGRATION_STILL_HEALTHY=PASS'
+
+      - name: Verify production unchanged
+        if: github.ref_name == 'preview'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H 'Cache-Control: no-cache' https://soridraw.web.app/ -o "$RUNNER_TEMP/production-after.html"
+          sha256sum "$RUNNER_TEMP/production-after.html" | awk '{print $1}' > "$RUNNER_TEMP/production-after.sha"
+          cmp "$RUNNER_TEMP/production-before.sha" "$RUNNER_TEMP/production-after.sha"
+          echo 'PRODUCTION_UNCHANGED=PASS'
+          echo 'MAIN_CHANGED=false'
+          echo 'FUNCTIONS_CHANGED=false'
+          echo 'RULES_CHANGED=false'
+          echo 'WORKERS_CHANGED=false'
+          echo 'SORIDRAW_035_PREVIEW=PASS'

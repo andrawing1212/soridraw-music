@@ -1,0 +1,60 @@
+name: SORIDRAW Backend V2 Step 3-1 Preflight Finalize
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREFLIGHT.md'
+      - '.deploy/apply-backend-v2-step3-1-preflight-master.py'
+      - '.github/workflows/backend-v2-step3-1-preflight-doc-finalize.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Verify preflight evidence and zero-data scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'Status: COMPLETE — SAFE READ HEADROOM CONFIRMED / ACTUAL BACKUP NOT EXECUTED' docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREFLIGHT.md
+          grep -F 'Final successful GitHub Actions run: `32826494494`.' docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREFLIGHT.md
+          grep -F 'Firestore document reads caused by this preflight: 0' docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREFLIGHT.md
+          grep -F 'safeReadCap = 10,000' docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREFLIGHT.md
+          grep -F 'estimatedBackupReads = 841' docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREFLIGHT.md
+          test -z "$(grep -E 'firebase deploy|firestore:delete|writeBatch|bulkWriter|recursiveDelete' .deploy/apply-backend-v2-step3-1-preflight-master.py || true)"
+
+      - name: Apply master status patch
+        run: python3 .deploy/apply-backend-v2-step3-1-preflight-master.py
+
+      - name: Verify exact update scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only)"
+          test "$changed" = 'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md'
+          grep -F 'Step 3-1 live backup preflight complete — awaiting explicit approval for actual secure local read-only backup execution' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          grep -F '3-1 live quota preflight: current usage/headroom verified; safe cap 10,000, estimated backup 841' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          grep -F 'actual backup: fresh-baseline confirmation -> secure local read -> checksum/count verification' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+
+      - name: Commit master status
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/preview)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git commit -m 'docs: mark Backend V2 Step 3-1 preflight complete'
+          git push origin HEAD:preview

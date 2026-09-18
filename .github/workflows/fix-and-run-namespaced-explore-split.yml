@@ -1,0 +1,92 @@
+name: Fix and Run Namespaced Explore Split
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/fix-and-run-namespaced-explore-split.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-split:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Repair generated-wrapper escaping and DDL execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.deploy/cloudflare-explore-namespaced-env-split.mjs')
+          s = p.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  "  return `import baseWorker from './worker.js';",
+                  "  return String.raw`import baseWorker from './worker.js';",
+                  'outer wrapper template',
+              ),
+              (
+                  "  const rx = new RegExp('\\\\b' + sourceName + '\\\\b');",
+                  "  const rx = new RegExp('\\\\\\\\b' + sourceName + '\\\\\\\\b');",
+                  'schema object regex',
+              ),
+              (
+                  r"  return R2_PREFIX + String(key || '').replace(/^\\/+/, '');",
+                  r"  return R2_PREFIX + String(key || '').replace(/^\/+/, '');",
+                  'R2 key regex',
+              ),
+              (
+                  '    await db.exec(createSql);',
+                  '    await db.prepare(createSql).run();',
+                  'table DDL execution',
+              ),
+              (
+                  "    await db.exec(rewriteSchemaObjectName(String(row.sql), String(row.type), String(row.name || '')));",
+                  "    await db.prepare(rewriteSchemaObjectName(String(row.sql), String(row.type), String(row.name || ''))).run();",
+                  'index trigger DDL execution',
+              ),
+          ]
+          for old, new, label in replacements:
+              if old in s:
+                  s = s.replace(old, new, 1)
+              elif new not in s:
+                  raise SystemExit(f'{label} anchor missing')
+          p.write_text(s, encoding='utf-8')
+          print('NAMESPACE_WRAPPER_REPAIR=APPLIED')
+          PY
+          git diff --check
+          git diff -- .deploy/cloudflare-explore-namespaced-env-split.mjs
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Resume isolated PREVIEW and TEST split
+        run: node .deploy/cloudflare-explore-namespaced-env-split.mjs
+
+      - name: Commit verified repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .deploy/cloudflare-explore-namespaced-env-split.mjs
+          git commit -m 'fix(preview): harden namespaced Explore bootstrap execution'
+          git push origin HEAD:preview
+          echo 'VERIFIED_SOURCE_FIX_PUSHED=true'

@@ -1,0 +1,95 @@
+name: Apply 070 Explore Like Count Auto Refresh
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-070-explore-like-count-auto-refresh.py'
+      - '.github/workflows/apply-070-explore-like-count-auto-refresh.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-070-explore-like-count-auto-refresh
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply targeted 070 client fix
+        run: python3 .deploy/apply-070-explore-like-count-auto-refresh.py
+
+      - name: Verify 070 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_AGGREGATE_AUTO_REFRESH_070_20260912' src/pages/ExplorePage.tsx
+          grep -Fq 'const EXPLORE_LIKE_AGGREGATE_WINDOW_MS_070 = 10 * 60_000;' src/pages/ExplorePage.tsx
+          grep -Fq 'const EXPLORE_LIKE_REVISION_CACHE_GRACE_MS_070 = 70_000;' src/pages/ExplorePage.tsx
+          grep -Fq 'scheduleAggregateCountRefresh070();' src/pages/ExplorePage.tsx
+          grep -Fq "if (document.visibilityState !== 'visible') return;" src/pages/ExplorePage.tsx
+          grep -Fq '"version": "070"' public/app-version.json
+          # 070 must not change the 069 W1/deferred-count server contract.
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912' src/services/exploreLikeService.ts
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_040_20260912' cloudflare/explore-worker/canonical/preview-worker.js
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_REVERSAL_ORDER_041_20260912' cloudflare/explore-worker/canonical/preview-worker.js
+          echo '070_STATIC_CONTRACT=PASS'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify change boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only | grep -v '^dist/' || true)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/pages/ExplorePage\.tsx|public/app-version\.json)$' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected generated changes:'
+            echo "$bad"
+            exit 1
+          fi
+          echo 'NO_WORKER_RUNTIME_CHANGE=true'
+          echo 'NO_D1_SCHEMA_CHANGE=true'
+          echo 'NO_FIREBASE_FUNCTIONS_CHANGE=true'
+          echo 'NO_FIRESTORE_RULES_CHANGE=true'
+          echo 'NO_USER_DATA_CHANGE=true'
+          echo 'NO_UI_CSS_CHANGE=true'
+
+      - name: Commit actual PREVIEW 070 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked=(src/pages/ExplorePage.tsx public/app-version.json)
+          if git diff --quiet -- "${tracked[@]}"; then
+            echo '070 already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "${tracked[@]}"
+          git commit -m 'fix: auto-refresh deferred Explore like count'
+          git push origin HEAD:preview

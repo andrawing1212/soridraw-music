@@ -1,9 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { FlaskConical, Heart, Home, Library, Loader2, ShieldAlert, SlidersHorizontal, User as UserIcon, Zap } from 'lucide-react';
+import { doc, getDoc, setDoc, serverTimestamp } from '../lib/firestoreMeasured';
+import { Compass, FlaskConical, Heart, Home, Library, Loader2, ShieldAlert, SlidersHorizontal, User as UserIcon, Zap } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
-import { db } from '../firebase';
+import { auth, db } from '../firebase';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
+import { FIRESTORE_READ_CACHE_KEYS, FIRESTORE_READ_CACHE_TTL_MS, readFirestoreReadCache, writeFirestoreReadCache } from '../lib/firestoreReadCache';
+import { readCacheDiagnosticsEnabled, readCacheDiagnosticsGloballyEnabled, readCacheDiagnosticsOwnerUid, setCacheDiagnosticsEnabled } from '../lib/cacheDiagnostics';
+
+const SORIDRAW_898_CACHE_DIAGNOSTICS_LIVE_PANEL = true;
+const SORIDRAW_897_CACHE_DIAGNOSTICS_ADMIN_SCOPE = true;
+const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 import {
   DEFAULT_NAVIGATION_VISIBILITY_SETTINGS,
   getNavigationFirestorePayload,
@@ -73,6 +79,7 @@ function AccessModeSelector({
   );
 }
 
+// SORIDRAW_NAV_PERMISSION_ADMIN_953
 export default function AdminAppSettingsPage() {
   const initialNavigationSettings = readStoredNavigationVisibilitySettings();
   const [savedSettings, setSavedSettings] = useState<NavigationVisibilitySettings>(initialNavigationSettings);
@@ -84,6 +91,16 @@ export default function AdminAppSettingsPage() {
   const [isClicheLoading, setIsClicheLoading] = useState(true);
   const [isSavingCliche, setIsSavingCliche] = useState(false);
   const [clicheMessage, setClicheMessage] = useState('');
+  const [cacheDiagnosticsEnabled, setCacheDiagnosticsEnabledState] = useState(() => readCacheDiagnosticsEnabled(auth.currentUser?.uid || null));
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid || '';
+    if (!uid) return;
+    if (readCacheDiagnosticsGloballyEnabled() && !readCacheDiagnosticsOwnerUid()) {
+      setCacheDiagnosticsEnabled(true, uid);
+      setCacheDiagnosticsEnabledState(true);
+    }
+  }, []);
 
   const hasUnsavedNavigationChanges = useMemo(
     () => JSON.stringify(savedSettings) !== JSON.stringify(draftSettings),
@@ -94,6 +111,18 @@ export default function AdminAppSettingsPage() {
     let isMounted = true;
 
     const loadSettings = async () => {
+      const cached = readFirestoreReadCache<NavigationVisibilitySettings>(
+        FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
+        FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
+      );
+      if (cached?.data) {
+        const nextSettings = normalizeNavigationVisibilitySettings(cached.data, readStoredNavigationVisibilitySettings());
+        setSavedSettings(nextSettings);
+        setDraftSettings(nextSettings);
+        writeStoredNavigationVisibilitySettings(nextSettings);
+        setIsLoading(false);
+        return;
+      }
       try {
         const snapshot = await getDoc(NAVIGATION_VISIBILITY_DOC);
         if (!isMounted) return;
@@ -103,6 +132,7 @@ export default function AdminAppSettingsPage() {
         setSavedSettings(nextSettings);
         setDraftSettings(nextSettings);
         writeStoredNavigationVisibilitySettings(nextSettings);
+        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, nextSettings);
       } catch (error) {
         console.error('Failed to load app settings:', error);
         if (isMounted) {
@@ -126,14 +156,31 @@ export default function AdminAppSettingsPage() {
     let isMounted = true;
 
     const loadClicheGuard = async () => {
+      const cached = readFirestoreReadCache<{ hardBanTerms?: unknown; softBanTerms?: unknown }>(
+        FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
+        FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
+      );
+      if (cached?.data) {
+        setClicheDraft({
+          hardBanText: parseTerms(formatTerms(cached.data.hardBanTerms)).join('\n'),
+          softBanText: parseTerms(formatTerms(cached.data.softBanTerms)).join('\n'),
+        });
+        setIsClicheLoading(false);
+        return;
+      }
       try {
         const snapshot = await getDoc(LYRIC_CLICHE_GUARD_DOC);
         if (!isMounted) return;
         const data = snapshot.exists() ? snapshot.data() : null;
+        const nextClicheGuard = {
+          hardBanTerms: parseTerms(formatTerms(data?.hardBanTerms)),
+          softBanTerms: parseTerms(formatTerms(data?.softBanTerms)),
+        };
         setClicheDraft({
-          hardBanText: formatTerms(data?.hardBanTerms),
-          softBanText: formatTerms(data?.softBanTerms),
+          hardBanText: nextClicheGuard.hardBanTerms.join('\n'),
+          softBanText: nextClicheGuard.softBanTerms.join('\n'),
         });
+        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, nextClicheGuard);
       } catch (error) {
         console.error('Failed to load lyric cliche guard settings:', error);
         if (isMounted) setClicheMessage('클리셰 설정을 불러오지 못했습니다. Firestore 권한을 확인해주세요.');
@@ -171,6 +218,7 @@ export default function AdminAppSettingsPage() {
       );
       setSavedSettings(draftSettings);
       writeStoredNavigationVisibilitySettings(draftSettings);
+      writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, draftSettings);
       window.dispatchEvent(new CustomEvent('soridraw:navigation-visibility-updated', {
         detail: draftSettings,
       }));
@@ -198,10 +246,13 @@ export default function AdminAppSettingsPage() {
         },
         { merge: true },
       );
+      const nextClicheGuard = { hardBanTerms, softBanTerms };
       setClicheDraft({
         hardBanText: hardBanTerms.join('\n'),
         softBanText: softBanTerms.join('\n'),
       });
+      writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, nextClicheGuard);
+      window.dispatchEvent(new CustomEvent('soridraw:lyric-cliche-guard-updated', { detail: nextClicheGuard }));
       setClicheMessage('전체 클리셰 설정을 저장했습니다.');
     } catch (error) {
       console.error('Failed to save lyric cliche guard settings:', error);
@@ -218,6 +269,7 @@ export default function AdminAppSettingsPage() {
     icon: React.ElementType;
   }> = [
     { key: 'home', label: '홈', description: '메인 홈 화면과 홈 메뉴를 관리합니다.', icon: Home },
+    { key: 'explore', label: '익스플로어', description: '공개 음악 탐색과 크리에이터 화면을 관리합니다.', icon: Compass },
     { key: 'studio', label: '스튜디오', description: '가사·프롬프트 제작 화면을 관리합니다.', icon: Zap },
     { key: 'musicNote', label: '뮤직노트', description: '저장한 곡과 제작 데이터 관리 화면을 관리합니다.', icon: Heart },
     { key: 'library', label: '라이브러리', description: 'Music API 생성곡과 재생 목록 화면을 관리합니다.', icon: Library },
@@ -337,6 +389,27 @@ export default function AdminAppSettingsPage() {
               </button>
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-3xl bg-[var(--bg-secondary)] px-5 py-4 shadow-sm md:px-6">
+          <div className="min-w-0">
+            <h3 className="text-sm font-black text-[var(--text-primary)]">캐시 진단 표시</h3>
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-secondary)]">
+              각 화면 상단의 CACHE / SYNC와 실제 읽기·조회 횟수를 표시합니다. 이 설정은 이 기기에만 저장되며 서버 요청을 만들지 않습니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !cacheDiagnosticsEnabled;
+              setCacheDiagnosticsEnabledState(next);
+              setCacheDiagnosticsEnabled(next, auth.currentUser?.uid || null);
+            }}
+            aria-pressed={cacheDiagnosticsEnabled}
+            className={`shrink-0 rounded-xl px-4 py-2 text-xs font-black transition-all ${cacheDiagnosticsEnabled ? 'bg-[#BBA8CA] text-[#1b161d]' : 'bg-white/[0.055] text-[var(--text-secondary)] hover:bg-white/[0.09]'}`}
+          >
+            {cacheDiagnosticsEnabled ? 'ON' : 'OFF'}
+          </button>
         </div>
 
         {clicheMessage && (

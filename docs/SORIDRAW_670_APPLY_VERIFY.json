@@ -1,0 +1,14 @@
+{
+  "version": 670,
+  "basis": "SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip",
+  "purpose": "Reuse the proven 657 pane-width fast path during outer browser-window resize without the 669 width snapshot/clip path.",
+  "required_css_marker": "670 — reuse the proven 657 pane fast path during OUTER window resize too.",
+  "critical_sha256": {
+    "src/components/studio/StudioSplitWorkspace.tsx": "1959cdba48ffb004ed83c7734b9b7af19c78708ecf5b933414fa2e90ffdf265b",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx": "fe70fe75973de17a4c0772825fca48e9fd148f7d658253ef16daed3b02e136eb",
+    "src/components/studio/studioLayout.css": "1f371e982cdfb5fac8881bc4b3df93a9a74c3e266e3299c909aa27a66fa62f05",
+    "src/App.tsx": "a299e133feee82a0f2e46d8a090429854f0c4a52862e98711983682aeea7061c",
+    "vite.config.ts": "efa027eab7e6774f11f0716409520f2cfa0b229e484828b632f76e01f866368e",
+    "vercel.json": "0f1e8273d28bb4e4aa1e3587690889311c54b4a0de7951f25dfc139ece9e543e"
+  }
+}

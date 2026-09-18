@@ -1,0 +1,21 @@
+{
+  "version": 697,
+  "base": "SORIDRAW_696차_690기준_분할모바일_펼치기버튼_분할선옆_공통적용.zip",
+  "scope": "Music Note / Library split result scrollbar right-edge pinning",
+  "changed": [
+    "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "src/components/studio/studioLayout.css",
+    "README.md"
+  ],
+  "new": ["docs/SORIDRAW_697_APPLY_VERIFY.json"],
+  "deleted": [],
+  "behavior": {
+    "scrollbar_edge": "fixed to the right workspace/rail boundary across css-var/direct geometry switches",
+    "content_width": "unchanged; 18px shell extension is consumed by 18px right padding",
+    "responsive_breakpoints": "unchanged",
+    "studio_create_recent": "unchanged",
+    "mobile_expand_controls_696": "preserved"
+  },
+  "firebase_data_model_changed": false,
+  "deployed": false
+}

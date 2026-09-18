@@ -1,0 +1,32 @@
+{
+  "version": 692,
+  "basis": "SORIDRAW_690차_689기준_내부분할683복구_외부창개선분리_균형본.zip",
+  "status": "code-applied-user-verification-pending",
+  "scope": "Music Note / Library Lite internal splitter pointer pacing only",
+  "changes": [
+    "Use the newest coalesced pointer sample only when high-frequency samples are batched",
+    "Move the body-level splitter immediately from cached drag geometry without DOM reads",
+    "Keep pane geometry commits at one requestAnimationFrame maximum and overwrite pending X with the latest coordinate"
+  ],
+  "preserved": [
+    "690 internal split baseline",
+    "690 external window resize behavior",
+    "686 viewport windowing",
+    "687 tablet direct geometry policy",
+    "689 outer-resize hit-test isolation",
+    "Firebase/Auth/Firestore/Functions/data structure"
+  ],
+  "files_modified": [
+    "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "README.md"
+  ],
+  "files_added": [
+    "docs/SORIDRAW_692_APPLY_VERIFY.json"
+  ],
+  "files_deleted": [],
+  "verification": {
+    "tsx_transpile_diagnostics": 0,
+    "full_vite_build": "not-run-no-node_modules",
+    "deployment": "none"
+  }
+}

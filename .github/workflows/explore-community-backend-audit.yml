@@ -1,0 +1,104 @@
+name: Explore Community Backend Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/explore-community-backend-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Probe currently deployed social route before local patch replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://soridraw-explore-api.andrawing1212.workers.dev'
+          status="$(curl -sS --max-time 20 -o "$RUNNER_TEMP/live-follow-batch.json" -w '%{http_code}' "$base/v1/me/follows?uids=probe")"
+          echo "LIVE_FOLLOW_BATCH_STATUS=$status"
+          head -c 400 "$RUNNER_TEMP/live-follow-batch.json" || true
+          echo
+
+      - name: Prepare exact live Worker source
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false
+          npm run cf:prepare
+          node --check .remote-worker/worker.js
+
+      - name: Print social mutation and route shapes
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('fs');
+          const src = fs.readFileSync('.remote-worker/worker.js','utf8');
+          function extract(name){
+            const needles = [`async function ${name}(`, `function ${name}(`];
+            let start = -1;
+            for(const needle of needles){ start = src.indexOf(needle); if(start >= 0) break; }
+            if(start < 0) return null;
+            const brace = src.indexOf('{', start);
+            let depth = 0, quote = null, esc = false;
+            for(let i=brace;i<src.length;i++){
+              const c=src[i];
+              if(quote){
+                if(esc){ esc=false; continue; }
+                if(c==='\\'){ esc=true; continue; }
+                if(c===quote) quote=null;
+                continue;
+              }
+              if(c==='"'||c==="'"||c==='`'){ quote=c; continue; }
+              if(c==='{') depth++;
+              else if(c==='}' && --depth===0) return src.slice(start,i+1);
+            }
+            return null;
+          }
+          const wanted = [
+            'handleFollowState','handleFollow','refreshFollowStats','handleLike','refreshLikeCount',
+            'getPublicTrackForWrite','patchPublicProfileFirstViewLikeCount','refreshPublicProfileFirstViewProfile',
+            'handlePublicProfileFirstViewSnapshot','handleMyFollowing','handleFollowingFeed','enforceUserRateLimit',
+            'getProfileMediaKey','handleProfileMediaUpload','handleProfileMediaGet'
+          ];
+          for(const name of wanted){
+            const body = extract(name);
+            if (body) {
+              console.log(`=== ${name} ===`);
+              console.log(body);
+            }
+          }
+          console.log('=== ENV REFERENCES ===');
+          console.log([...new Set([...src.matchAll(/env\.([A-Z0-9_]+)/g)].map((m)=>m[1]))].sort().join('\n'));
+          console.log('=== PREPARED WRANGLER CONFIG ===');
+          const cfg = JSON.parse(fs.readFileSync('.remote-worker/wrangler.jsonc','utf8'));
+          console.log(JSON.stringify({
+            name: cfg.name,
+            compatibility_date: cfg.compatibility_date,
+            d1_databases: cfg.d1_databases,
+            r2_buckets: cfg.r2_buckets,
+          }, null, 2));
+          console.log('READ_ONLY=true');
+          console.log('NO_DEPLOY=true');
+          console.log('NO_D1_MUTATION=true');
+          NODE

@@ -1,0 +1,150 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "presence": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "connections": {
+          "$sessionId": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.val() == null || (newData.hasChildren(['sessionId', 'state', 'device', 'visible', 'lastActivityAt', 'updatedAt']) && newData.child('sessionId').isString() && newData.child('sessionId').val() === $sessionId && newData.child('state').isString() && (newData.child('state').val() === 'active' || newData.child('state').val() === 'away' || newData.child('state').val() === 'background') && newData.child('device').isString() && newData.child('visible').isBoolean() && newData.child('lastActivityAt').isNumber() && newData.child('updatedAt').isNumber())"
+          }
+        },
+        "devices": {
+          "$deviceId": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.val() == null || (newData.hasChildren(['deviceId', 'label', 'platform', 'browser', 'deviceType', 'lastActivityAt', 'updatedAt']) && newData.child('deviceId').isString() && newData.child('deviceId').val() === $deviceId && newData.child('label').isString() && newData.child('platform').isString() && newData.child('browser').isString() && newData.child('deviceType').isString() && (newData.child('deviceType').val() === 'desktop' || newData.child('deviceType').val() === 'mobile' || newData.child('deviceType').val() === 'tablet') && newData.child('lastActivityAt').isNumber() && newData.child('updatedAt').isNumber() && (!newData.hasChild('lastSeenAt') || newData.child('lastSeenAt').isNumber()))"
+          }
+        },
+        "lastSeenAt": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "userControls": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false,
+        "revision": {
+          ".validate": "data.isString()"
+        },
+        "updatedAt": {
+          ".validate": "data.isNumber()"
+        },
+        "reason": {
+          ".validate": "data.isString() && data.val().length <= 64"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "userSync": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "musicNote": {
+          ".validate": "newData.hasChildren(['version','at','originDeviceId','operation','affectedCount','truncated'])",
+          "version": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "at": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "originDeviceId": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 96"
+          },
+          "operation": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 48"
+          },
+          "affectedCount": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+          },
+          "truncated": {
+            ".validate": "newData.isBoolean()"
+          },
+          "documentIds": {
+            "$index": {
+              ".validate": "$index.matches(/^[0-9]$/) && newData.isString() && newData.val().length > 0 && newData.val().length <= 256"
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "recentSongs": {
+          ".validate": "newData.hasChildren(['version','at','originDeviceId','operation','affectedCount','truncated'])",
+          "version": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "at": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "originDeviceId": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 96"
+          },
+          "operation": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 48"
+          },
+          "affectedCount": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+          },
+          "truncated": {
+            ".validate": "newData.isBoolean()"
+          },
+          "documentIds": {
+            "$index": {
+              ".validate": "$index.matches(/^[0-9]$/) && newData.isString() && newData.val().length > 0 && newData.val().length <= 256"
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "exploreLike": {
+          ".validate": "newData.hasChildren(['version','previousVersion','results']) && newData.child('version').val() > newData.child('previousVersion').val()",
+          "version": {
+            ".validate": "newData.isNumber() && newData.val() > 0"
+          },
+          "previousVersion": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "results": {
+            "$index": {
+              ".validate": "$index.matches(/^(0|[1-9]|[1-4][0-9])$/) && newData.hasChildren(['trackId','ownerUid','liked','likeCount'])",
+              "trackId": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 512"
+              },
+              "ownerUid": {
+                ".validate": "newData.isString() && newData.val().length <= 128"
+              },
+              "liked": {
+                ".validate": "newData.isBoolean()"
+              },
+              "likeCount": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000"
+              },
+              "displayLikeCount": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}

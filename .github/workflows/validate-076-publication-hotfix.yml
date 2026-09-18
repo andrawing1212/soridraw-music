@@ -1,0 +1,75 @@
+name: Validate 076 publication hotfix
+
+on:
+  push:
+    branches:
+      - work/publication-state-cost-fix-076
+    paths:
+      - 'src/services/explorePublicationService.ts'
+      - 'cloudflare/explore-worker/patches/043-publication-targeted-r2-hotpath.mjs'
+      - 'cloudflare/explore-worker/release-patches.json'
+      - '.github/workflows/validate-076-publication-hotfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+      - name: Apply 043 to current deployed canonical Worker source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .tmp-worker
+          mkdir -p .tmp-worker
+          cp cloudflare/explore-worker/canonical/preview-worker.js .tmp-worker/worker.js
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.tmp-worker" node cloudflare/explore-worker/patches/043-publication-targeted-r2-hotpath.mjs
+          node --check .tmp-worker/worker.js
+      - name: Verify publication hotpath contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const client = fs.readFileSync('src/services/explorePublicationService.ts', 'utf8');
+          const worker = fs.readFileSync('.tmp-worker/worker.js', 'utf8');
+          const release = JSON.parse(fs.readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
+          const mustClient = [
+            'SORIDRAW_PUBLICATION_STATE_SESSION_VALIDATION_076_20260913',
+            'const PUBLICATION_CACHE_SCHEMA_VERSION = 2',
+            'publicationServerValidatedUids',
+            "requestExplore(user, '/v1/me/music-note-publications-bundle')",
+          ];
+          for (const token of mustClient) if (!client.includes(token)) throw new Error(`client contract missing: ${token}`);
+          const mustWorker = [
+            'SORIDRAW_PUBLICATION_TARGETED_R2_HOTPATH_043_20260913',
+            'syncExploreFeedR2Publication043(env, feedItem)',
+            'syncExploreFeedR2Private043(env, row.id)',
+            'syncExploreFeedR2OptionPatch043(env, row.id',
+            'patchExploreProfileR2Publication043(env, authContext.uid',
+          ];
+          for (const token of mustWorker) if (!worker.includes(token)) throw new Error(`worker contract missing: ${token}`);
+          for (const token of [
+            'await syncExploreFeedR2Publication012(env, feedItem);',
+            'syncExploreFeedR2Private017(env, row.id),',
+            'syncExploreFeedR2OptionPatch017(env, row.id, {',
+          ]) {
+            const start = worker.indexOf('async function handleMusicNote');
+            if (start >= 0 && worker.slice(start).includes(token)) throw new Error(`legacy publication helper still active: ${token}`);
+          }
+          if (release.patches.at(-1) !== '043-publication-targeted-r2-hotpath.mjs') throw new Error('043 is not last release patch');
+          console.log('076 publication hotfix contracts PASS');
+          NODE

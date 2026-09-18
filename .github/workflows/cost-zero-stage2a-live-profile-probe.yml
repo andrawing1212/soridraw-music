@@ -1,0 +1,77 @@
+name: Cost Zero Stage 2A Live Profile Materialization Probe
+# live-recheck-20260901-cache-pop-diagnostic
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cost-zero-stage2a-live-profile-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Diagnose materialized snapshot cost and edge-cache POP behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://soridraw-explore-api.andrawing1212.workers.dev'
+          preview_origin='https://preview.soridraw.com'
+          steady_origin='https://test.soridraw.com'
+
+          curl -fsS --max-time 30 -o "$RUNNER_TEMP/feed.json" \
+            -H "Origin: $preview_origin" -H 'Accept: application/json' \
+            "$base/v1/feed?sort=latest&limit=1"
+          node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/feed.json','utf8'));
+          const row=p?.data?.items?.[0];
+          if(!row) throw new Error('No public feed row available for profile probe');
+          const uid=String(row.ownerUid||row.owner_uid||'').trim();
+          if(!uid) throw new Error('Feed row has no owner uid');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/profile-uid.txt',uid);
+          console.log('PROFILE_UID_FOUND=true');
+          NODE
+          uid="$(cat "$RUNNER_TEMP/profile-uid.txt")"
+          url="$base/v1/profiles/$uid/first-view?limit=50"
+
+          request_profile() {
+            label="$1"
+            origin="$2"
+            status="$(curl -sS --max-time 30 -w '%{http_code}' \
+              -D "$RUNNER_TEMP/$label.headers" \
+              -o "$RUNNER_TEMP/$label.json" \
+              -H "Origin: $origin" -H 'Accept: application/json' \
+              "$url")"
+            echo "${label}_HTTP_STATUS=$status"
+            test "$status" = '200'
+            grep -iE '^(cf-ray|age|server|cache-control|x-soridraw-profile-edge-cache|x-soridraw-d1-read|x-soridraw-d1-write|x-soridraw-cf-worker):' "$RUNNER_TEMP/$label.headers" || true
+            node - "$label" "$uid" <<'NODE'
+          const fs=require('fs');
+          const label=process.argv[2];
+          const uid=process.argv[3];
+          const p=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+`/${label}.json`,'utf8'));
+          if(p?.ok!==true) throw new Error(`${label} not ok`);
+          const profile=p?.data?.profile;
+          const items=Array.isArray(p?.data?.items)?p.data.items:[];
+          if(!profile?.uid || String(profile.uid)!==String(uid)) throw new Error(`${label} profile mismatch`);
+          if(items.length>50) throw new Error(`${label} exceeded 50 item bound`);
+          console.log(`${label}_ITEM_COUNT=${items.length}`);
+          console.log(`${label}_REVISION=${Number(p?.data?.revision||0)}`);
+          NODE
+          }
+
+          request_profile PREVIEW_1 "$preview_origin"
+          sleep 1
+          request_profile PREVIEW_2 "$preview_origin"
+          sleep 1
+          request_profile PREVIEW_3 "$preview_origin"
+          request_profile TEST_1 "$steady_origin"
+          sleep 1
+          request_profile TEST_2 "$steady_origin"
+          echo 'PROFILE_EDGE_DIAGNOSTIC_COMPLETE=true'

@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+const service = fs.readFileSync('src/services/userControlRevisionService.ts', 'utf8');
+const rules = fs.readFileSync('database.rules.json', 'utf8');
+const functions = fs.readFileSync('functions/src/index.ts', 'utf8');
+const adminPage = fs.readFileSync('src/pages/AdminUserManagementPage.tsx', 'utf8');
+const masterPage = fs.readFileSync('src/pages/MasterPermissionsPage.tsx', 'utf8');
+if (!service.includes('SORIDRAW_USER_CONTROL_REVISION_STAGE1_20260905')) throw new Error('control service marker missing');
+if (!service.includes('userControls/${uid}')) throw new Error('UID-scoped control path missing');
+if (/collection\(|getDocs\(|onSnapshot\(|firebase\/firestore/.test(service)) throw new Error('control service must never touch Firestore/song collections');
+if (!rules.includes('"userControls"') || !rules.includes('auth.uid === $uid')) throw new Error('owner-only control read rule missing');
+if (!functions.includes('adminSignalUserControlRevision') || !functions.includes('admin.database().ref(`userControls/${safeUid}`)')) throw new Error('control writer missing');
+if (!adminPage.includes("httpsCallable(functions, 'adminSignalUserControlRevision')")) throw new Error('admin page control signal missing');
+if (!masterPage.includes("httpsCallable(functions, 'adminSignalUserControlRevision')")) throw new Error('master permission signal missing');
+console.log('SORIDRAW USER CONTROL REVISION FOUNDATION: PASS');
+console.log('Invariant: one tiny UID-scoped RTDB control marker only; no song collection access.');

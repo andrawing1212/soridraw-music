@@ -1,0 +1,107 @@
+name: Apply 116 Public Profile Warm Zero Read
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-116-public-profile-warm-zero-read.trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-116-public-profile-warm-zero-read
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply Worker patch 063
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/patches/063-public-profile-warm-edge-zero-read.mjs
+          tmp="$(mktemp -d)"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$tmp/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/063-public-profile-warm-edge-zero-read.mjs
+          cp "$tmp/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+
+      - name: Verify Worker contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-063-public-profile-warm-edge-zero-read.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-115-shared-track-card-r2.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-114-shared-social-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-113-shared-profile-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-112-shared-feed-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-111-explore-profile-negative-cache.mjs
+          test "$(node -p "require('./public/app-version.json').version")" = '115'
+          echo '063_WARM_PROFILE_ZERO_READ=PASS'
+          echo 'APP_VERSION_115_PRESERVED=true'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify change boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only | grep -v '^dist/' || true)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt)$' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected generated changes:'
+            echo "$bad"
+            exit 1
+          fi
+          echo 'NO_FIREBASE_FUNCTIONS_CHANGE=true'
+          echo 'NO_FIRESTORE_RULES_CHANGE=true'
+          echo 'NO_RTDB_RULES_CHANGE=true'
+          echo 'NO_D1_SCHEMA_CHANGE=true'
+          echo 'NO_USER_DATA_MIGRATION=true'
+          echo 'NO_UI_CSS_CHANGE=true'
+          echo 'NO_DEPLOYMENT=true'
+
+      - name: Commit generated PREVIEW Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked=(
+            cloudflare/explore-worker/canonical/preview-worker.js
+            cloudflare/explore-worker/canonical/source-sha256.txt
+          )
+          if git diff --quiet -- "${tracked[@]}"; then
+            echo '063 already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "${tracked[@]}"
+          git commit -m 'fix: make warm public profile Edge hit D1 zero-read'
+          git push origin HEAD:preview

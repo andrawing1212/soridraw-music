@@ -1,0 +1,14 @@
+{
+  "version": 671,
+  "basis": "SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip",
+  "purpose": "Single-variable A/B: unmount only the Builder body during outer browser-window resize while keeping Result and split shell mounted.",
+  "required_marker": "671 A/B probe: during an OUTER browser-window resize",
+  "critical_sha256": {
+    "src/components/studio/StudioSplitWorkspace.tsx": "0cd7c9d5dd0c3d7b8e05dd6ce71256fa7e1fbf4dfbe17ebe9236146877abf825",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx": "fe70fe75973de17a4c0772825fca48e9fd148f7d658253ef16daed3b02e136eb",
+    "src/components/studio/studioLayout.css": "0f5d8bba1eeaab991cd988c26c1a546514e1a08a70a663116a02a457da5195d0",
+    "src/App.tsx": "a299e133feee82a0f2e46d8a090429854f0c4a52862e98711983682aeea7061c",
+    "vite.config.ts": "efa027eab7e6774f11f0716409520f2cfa0b229e484828b632f76e01f866368e",
+    "vercel.json": "0f1e8273d28bb4e4aa1e3587690889311c54b4a0de7951f25dfc139ece9e543e"
+  }
+}

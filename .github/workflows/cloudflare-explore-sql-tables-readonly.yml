@@ -1,0 +1,49 @@
+name: Cloudflare Explore SQL Tables Readonly
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cloudflare-explore-sql-tables-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prepare exact Worker source
+        working-directory: cloudflare/explore-worker
+        run: |
+          npm install --no-audit --no-fund --package-lock=false
+          npm run cf:prepare
+      - name: Print SQL identifier candidates
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('.remote-worker/worker.js','utf8');
+          const names=new Set();
+          const re=/\b(?:FROM|JOIN|INTO|UPDATE|TABLE(?:\s+IF\s+NOT\s+EXISTS)?|DELETE\s+FROM)\s+([A-Za-z_][A-Za-z0-9_]*)/gi;
+          let m;
+          while((m=re.exec(s))) names.add(m[1]);
+          console.log('SQL_TABLE_CANDIDATES=' + [...names].sort().join(','));
+          for(const name of [...names].sort()) {
+            const rx=new RegExp('\\b'+name+'\\b','g');
+            console.log(`${name} occurrences=${[...s.matchAll(rx)].length}`);
+          }
+          console.log('READ_ONLY=true');
+          console.log('NO_DEPLOY=true');
+          NODE

@@ -1,0 +1,12 @@
+{
+  "version": 667,
+  "basis": "SORIDRAW_666차_665정확복제_GitHub적용검증_SHA기준.zip",
+  "required_marker": "SORIDRAW_VERIFY_667: ACTUAL_PANE_661_1080_SHELL_PROBE",
+  "critical_sha256": {
+    "src/components/studio/StudioSplitWorkspace.tsx": "2d40b7d5782ccd01743c9c5c38e19d1b58b44bee4d9494625b24b734379800a3",
+    "src/components/studio/studioLayout.css": "057de73c9b60ad46aef1c5dc8490b6944e29959144f9d6466ede8e374285c6b0",
+    "src/App.tsx": "a299e133feee82a0f2e46d8a090429854f0c4a52862e98711983682aeea7061c",
+    "vite.config.ts": "efa027eab7e6774f11f0716409520f2cfa0b229e484828b632f76e01f866368e",
+    "vercel.json": "0f1e8273d28bb4e4aa1e3587690889311c54b4a0de7951f25dfc139ece9e543e"
+  }
+}

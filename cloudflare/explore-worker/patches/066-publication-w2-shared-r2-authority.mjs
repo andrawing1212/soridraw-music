@@ -111,7 +111,7 @@ replaceOnceInFunction(
   'single publish storage-version propagation',
 );
 replaceOnceInFunction(
-  'handleMusicNotePrivate017',
+  'handleMusicNotePrivate017Core045',
   'syncExploreFeedR2Private043(env, row.id),',
   'syncExploreFeedR2Private043(env, row.id, Number(row.publication_storage_version || 0)),',
   'single private storage-version propagation',

@@ -1,8 +1,8 @@
 # SORIDRAW CURRENT RELEASE STATE
 
-## 0Y. PREVIEW app 121 — Explore 좋아요 timing-only 조정 / 검증 완료 / PREVIEW 병합·배포 전
+## 0Y. PREVIEW app 121 — Explore 좋아요 timing-only 조정 / 배포 완료
 
-사용자 지시로 app 120의 동작은 그대로 유지하고 시간값 두 개만 변경했다.
+사용자 지시로 app 120 동작은 그대로 유지하고 시간값 두 개만 변경했다.
 
 변경:
 - 좋아요 sliding idle batch: 마지막 클릭 후 **20초 → 30초**.
@@ -18,18 +18,12 @@
 - shared revision endpoint의 D1 R0/W0 계약.
 - UI/CSS, Worker 제품 코드, Firebase Functions/Rules, D1 schema/data, 사용자 원본 데이터 모두 비변경.
 
-작업 기준:
+GitHub / 검증:
 - 기준 PREVIEW: `046fda0b746a912d8926cc2d09348d812aed7060` — app 120.
 - 작업 branch: `work/app121-like-30s-2m-timing`.
-- 변경 제품 파일:
-  - `src/services/exploreLikeService.ts` — 30초.
-  - `src/pages/ExplorePage.tsx` — 120초.
-  - `public/app-version.json` — 121.
-- 검증 파일:
-  - `scripts/verify-121-explore-like-timing-only.mjs`.
-
-검증:
-- Run `35331912691` — **SUCCESS**
+- PR #98 `App 121: change Explore like timing to 30s / 2m`.
+- 제품 merge commit: `6934deb10d55ceb77a21ad09ca1d6436ded6d313`.
+- 검증 Run `35331912691` — **SUCCESS**
   - TypeScript PASS
   - Build PASS
   - app121 timing-only regression PASS
@@ -39,12 +33,24 @@
   - app120 cache/count-lock 비변경 PASS
 - 임시 검증 Workflow 삭제 완료.
 
+PREVIEW 배포:
+- deploy trigger commit: `ce150de9a3fc39d626511b42fedfe73a08091263`.
+- Firebase PREVIEW Hosting Run `35332096766` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - Firebase PREVIEW Hosting deploy PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+- 실제 대상: `https://preview.soridraw.com`.
+
 현재 상태:
-- PREVIEW 실제 배포: app **120** 유지.
-- TEST: app **117** 유지.
-- PRODUCTION: app **117** 유지.
-- app 121은 PREVIEW 병합·배포 전.
-- 다음 단계: PR → preview 병합 → Firebase PREVIEW Hosting 배포 → exact build 확인.
+- PREVIEW 앱: **121 배포 완료**.
+- TEST: app **117 유지**.
+- PRODUCTION: app **117 유지**.
+- Cloudflare Worker 재배포 없음.
+- Firebase Functions / Rules 변경 없음.
+- D1 migration/seed/backfill/delete 없음.
+- 사용자 원본 데이터 변경 없음.
 - PRODUCTION 변경 금지.
 
 ## 0X. PREVIEW app 120 — Explore 좋아요 actor count lock / 배포 완료

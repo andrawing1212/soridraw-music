@@ -29,10 +29,13 @@ for(const [index,where,order] of [['idx_explore_rank_popular','active=1','likes 
  assert.ok(plan.some(x=>x.detail.includes('COVERING INDEX '+index)));assert.ok(!plan.some(x=>/TEMP B-TREE|SCAN /.test(x.detail)));
 }
 console.log('PASS base derived rank indexes remain available; 080 canonical visibility checks are recovery-only');
-const objects=new Map(),counts={query:0,items:0,rank:0,put:0,conflict:0};let etag=0;
-const env={DB:{prepare(sql){return {bind(...args){return {async first(){counts.query++;return db.prepare(sql).get(...args);},async all(){counts.query++;if(/WHERE\s+(?:t|d)\.id IN/.test(sql))counts.items+=args.length;if(sql.includes('INDEXED BY'))counts.rank++;return {results:db.prepare(sql).all(...args)};}};}};}},EXPLORE_CACHE:{
+const objects=new Map(),sharedObjects=new Map(),counts={query:0,items:0,rank:0,put:0,sharedPut:0,conflict:0};let etag=0;
+const env={SORIDRAW_ENVIRONMENT:'preview',DB:{prepare(sql){return {bind(...args){return {async first(){counts.query++;return db.prepare(sql).get(...args);},async all(){counts.query++;if(/WHERE\s+(?:t|d)\.id IN/.test(sql))counts.items+=args.length;if(sql.includes('INDEXED BY'))counts.rank++;return {results:db.prepare(sql).all(...args)};}};}};}},EXPLORE_CACHE:{
  async get(key){const v=objects.get(key);return v?{etag:v.etag,text:async()=>v.body}:null;},
  async put(key,body,options){counts.put++;assert.ok(options.onlyIf);const v=objects.get(key);if(options.onlyIf.etagMatches?v?.etag!==options.onlyIf.etagMatches:Boolean(v)){counts.conflict++;return null;}const saved={etag:String(++etag),body};objects.set(key,saved);return saved;}
+},PROFILE_MEDIA:{
+ async get(key){const v=sharedObjects.get(key);return v?{text:async()=>v.body}:null;},
+ async put(key,body){counts.sharedPut++;const saved={body:String(body)};sharedObjects.set(key,saved);return saved;}
 }};
 const edge=new Map();
 const ctx=vm.createContext({console,Request,Response,URL,Date,Headers,TextEncoder,TextDecoder,btoa,atob,crypto,
@@ -76,8 +79,8 @@ console.log('PASS visibility/profile/follow deltas with exact profile count; met
 db.prepare('UPDATE track_stats SET like_count=200 WHERE track_id=?').run('t002');db.prepare('UPDATE track_stats SET like_count=201 WHERE track_id=?').run('t003');reset();await Promise.all([sync(),sync()]);accurate();assert.ok(counts.conflict>0);assert.deepEqual(read('feed/popular').payload.data.items.slice(0,2).map(x=>x.id),['t003','t002']);reset();await sync();assert.equal(counts.put,0);
 console.log('PASS concurrent consumers preserve both changes; cursor replay produces no writes');
 objects.set('feed/latest',{etag:String(++etag),body:'corrupt'});await sync();accurate();
-const pr=new Request('https://preview.example/v1/profiles/u/first-view');await ctx.handlePublicProfileFirstViewWithEdgeCache(pr,'u',env,{});reset();const response=await ctx.handlePublicProfileFirstViewWithEdgeCache(pr,'u',env,{});assert.equal(response.status,200);assert.equal(counts.query,0);assert.equal(counts.put,0);
-console.log('PASS corrupted cache bounded recovery; healthy cold profile has no materialize/write; warm profile D1 0');
+const pr=new Request('https://preview.example/v1/profiles/u/first-view');await ctx.handlePublicProfileFirstViewWithEdgeCache(pr,'u',env,{});reset();const response=await ctx.handlePublicProfileFirstViewWithEdgeCache(pr,'u',env,{});assert.equal(response.status,200);assert.equal(counts.query,0);assert.equal(counts.put,0);assert.equal(counts.sharedPut,0);
+console.log('PASS corrupted cache bounded recovery; shared profile R2 is modeled; warm profile D1/R2 writes 0');
 // Old Worker writes are ordinary canonical SQL, without any frontend cache helper.
 const seqBeforeRollback=db.prepare('SELECT seq FROM explore_derived_state').get().seq;
 db.exec('BEGIN');db.prepare('UPDATE tracks SET title=? WHERE id=?').run('rolled back','t004');db.exec('ROLLBACK');

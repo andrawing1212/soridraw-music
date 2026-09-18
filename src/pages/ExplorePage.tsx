@@ -16,6 +16,7 @@ import {
   readExploreFeedSessionCacheCursor,
   readExploreFeedSessionCacheRevision,
   writeExploreFeedSessionCache,
+  patchExploreFeedSessionCachesRow,
 } from '../services/exploreSessionCache';
 import {
   EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT,
@@ -379,22 +380,25 @@ export default function ExplorePage() {
   }, [sort, submittedQuery]);
 
   // SORIDRAW_EXPLORE_LIKED_PUBLIC_COUNT_LOCAL_SYNC_110_20260916
-  // Public counts belong to the shared Feed/Profile payload, not to the account-specific
-  // liked-card snapshot. Reuse already-cached public payloads to repair liked cards locally
-  // without a Firestore/D1 request, schema reset, polling loop, or optimistic count overlay.
-  const syncSharedPublicCountsToLocal110 = (sharedTracks: ExploreTrack[]) => {
-    if (!sharedTracks.length) return;
+  // SORIDRAW_EXPLORE_PUBLIC_COUNT_CONVERGENCE_116_20260917
+  // Only server-confirmed/shared payloads may become public-count authority. Once a count is
+  // confirmed, patch every already-loaded Feed/Profile/Liked cache by track id so Recommended,
+  // Latest, Popular and Public Profile cannot display different counts on the same device.
+  const syncSharedPublicCountsToLocal110 = (sharedTracks: ExploreTrack[], authoritative = true) => {
+    if (!sharedTracks.length || !authoritative) return;
     const countByTrackId = new Map(sharedTracks.map((track) => [track.id, track.likeCount]));
     const applyPublicCounts110 = (previous: ExploreTrack[]) => previous.map((track) => {
       const nextCount = countByTrackId.get(track.id);
       return nextCount === undefined || nextCount === track.likeCount ? track : { ...track, likeCount: nextCount };
     });
 
+    setTracks(applyPublicCounts110);
     setProfileTracks(applyPublicCounts110);
     setProfileLikedTracks(applyPublicCounts110);
 
     const activeUid = auth.currentUser?.uid || user?.uid || '';
     sharedTracks.forEach((track) => {
+      patchExploreFeedSessionCachesRow(track.id, { likeCount: track.likeCount });
       if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
       if (activeUid) patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);
     });
@@ -472,7 +476,7 @@ export default function ExplorePage() {
       setFeedNextCursor(feedRequest ? readExploreFeedSessionCacheCursor(requestUrl) : null);
       setLoadMoreError('');
       const cachedTracks = cachedRows.map(normalizeTrack).filter((track) => track.id);
-      if (feedRequest) syncSharedPublicCountsToLocal110(cachedTracks);
+      // 116: cached rows render immediately but do not overwrite newer public-count authority.
       setTracks(cachedTracks);
       setLoading(false);
 
@@ -491,7 +495,10 @@ export default function ExplorePage() {
             const serverRevision = await fetchRevision();
             if (!serverRevision || controller.signal.aborted) return;
             const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
-            if (cachedRevision === serverRevision) return;
+            if (cachedRevision === serverRevision) {
+              syncSharedPublicCountsToLocal110(cachedTracks);
+              return;
+            }
             const snapshot = await fetchFeedSnapshot108(serverRevision);
             if (controller.signal.aborted) return;
             applyPayload(snapshot.payload, snapshot.revision);
@@ -619,18 +626,18 @@ export default function ExplorePage() {
     setProfileError('');
     setSocialNotice('');
 
-    const applyProfileFirstView = (nextProfile: ExplorePublicProfile, rows: Array<Record<string, unknown>>) => {
+    const applyProfileFirstView = (nextProfile: ExplorePublicProfile, rows: Array<Record<string, unknown>>, authoritative = false) => {
       if (cancelled) return;
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       normalizedTracks.sort(comparePublicProfileTracks);
-      syncSharedPublicCountsToLocal110(normalizedTracks);
+      if (authoritative) syncSharedPublicCountsToLocal110(normalizedTracks);
       setProfile(nextProfile);
       setProfileTracks(normalizedTracks);
     };
 
     getExplorePublicProfileFirstView(profileUid, {
       onRevalidated: ({ profile: refreshedProfile, tracks: refreshedRows }) => {
-        applyProfileFirstView(refreshedProfile, refreshedRows);
+        applyProfileFirstView(refreshedProfile, refreshedRows, true);
       },
       onInvalidated: (message) => {
         if (cancelled) return;

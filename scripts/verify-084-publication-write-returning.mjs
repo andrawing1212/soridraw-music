@@ -38,7 +38,7 @@ const functionText = (source, name) => {
   throw new Error(`unterminated function ${name}`);
 };
 
-assert.equal(manifest.patches.at(-1), '051-publication-write-returning.mjs');
+assert.ok(manifest.patches.includes('051-publication-write-returning.mjs'), 'publication patch 051 must remain in manifest');
 assert.match(worker, /SORIDRAW_PUBLICATION_WRITE_RETURNING_051_20260914/);
 
 const batch = functionText(worker, 'handleMusicNotePublicationBatch048');

@@ -17,6 +17,7 @@ import {
 // SORIDRAW_PROFILE_EVENT_DRIVEN_CACHE_1003
 // SORIDRAW_PROFILE_CACHE_SWR_1020
 // SORIDRAW_PROFILE_WARM_ZERO_READ_107_20260916
+// SORIDRAW_PROFILE_SHARED_R2_REVALIDATION_113_20260917
 // SORIDRAW_PROFILE_ALIAS_PARITY_020
 // SORIDRAW_EXPLORE_PUBLIC_PROFILE_PARITY_048
 const PROFILE_FIRST_VIEW_SCHEMA_VERSION = 6;
@@ -45,6 +46,8 @@ type MaterializedRequestResult =
   | { kind: 'unavailable' };
 
 const coldLoadInflight = new Map<string, Promise<ExploreProfileFirstViewData>>();
+const PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS_113 = 60_000;
+const profileRevalidationInflight113 = new Map<string, Promise<void>>();
 
 const normalizeProfileRef = (value: string) => String(value || '').trim();
 const cacheKeyForRef = (profileRef: string) => `explore-profile-first-view:${normalizeProfileRef(profileRef).toLowerCase()}`;
@@ -219,6 +222,48 @@ const requestMaterializedFirstView = async (
       validatedAt: Date.now(),
     },
   };
+ };
+
+const revalidateCachedProfile113 = (
+  normalizedRef: string,
+  cached: ExploreProfileFirstViewData,
+  options: ExploreProfileFirstViewOptions,
+) => {
+  const age = Math.max(0, Date.now() - Math.max(0, Number(cached.validatedAt || 0)));
+  if (cached.validatedAt > 0 && age < PROFILE_FIRST_VIEW_REVALIDATE_AFTER_MS_113) return;
+  const key = normalizedRef.toLowerCase();
+  if (profileRevalidationInflight113.has(key)) return;
+
+  const task = (async () => {
+    try {
+      const materialized = await requestMaterializedFirstView(normalizedRef, cached.revision);
+      if (materialized.kind === 'updated') {
+        writeCache(normalizedRef, materialized.data);
+        options.onRevalidated?.(materialized.data);
+        return;
+      }
+      if (materialized.kind === 'not-modified') {
+        writeCache(normalizedRef, {
+          ...cached,
+          revision: materialized.revision || cached.revision,
+          etag: materialized.etag || cached.etag,
+          validatedAt: Date.now(),
+        });
+        return;
+      }
+      if (materialized.kind === 'not-found') {
+        clearCache(normalizedRef, cached);
+        options.onInvalidated?.(materialized.message);
+      }
+    } catch (error) {
+      // Keep the last verified local snapshot. A transient shared-R2/edge failure must
+      // not blank a warm profile or trigger the two-request legacy fallback path.
+      console.warn('[Explore profile first-view] shared profile revalidation deferred.', error);
+    }
+  })().finally(() => {
+    if (profileRevalidationInflight113.get(key) === task) profileRevalidationInflight113.delete(key);
+  });
+  profileRevalidationInflight113.set(key, task);
 };
 
 
@@ -345,12 +390,14 @@ export const getExplorePublicProfileFirstView = async (
 
   const cached = readCache(normalizedRef);
   if (cached) {
-    // 107: warm revisit is strictly local. Known profile/publication/follow/like
-    // mutations already patch or invalidate this cache at the mutation boundary.
+    // 113: render the warm snapshot immediately. At most once per minute on a
+    // revisit, verify its shared revision in the background. The Worker serves
+    // this conditional path from shared R2/edge; unchanged profiles never read D1.
     recordCloudflareLocalCacheHit(
       PROFILE_FIRST_VIEW_DIAGNOSTIC_PATH,
-      'LOCAL HIT · 변경 없음 · 서버 D1 읽기 0',
+      'LOCAL HIT · 즉시 표시 · D1 읽기 0',
     );
+    revalidateCachedProfile113(normalizedRef, cached, options);
     return cached;
   }
 

@@ -104,6 +104,31 @@ replaceOnceInFunction(
   'W2 insert value',
 );
 
+replaceOnceInFunction(
+  'handleMusicNotePublicationSingleWrite016',
+  'await syncExploreFeedR2Publication043(env, feedItem);',
+  'await syncExploreFeedR2Publication043(env, feedItem, Number(previous?.publication_storage_version || (!previous?.id ? 1 : 0)));',
+  'single publish storage-version propagation',
+);
+replaceOnceInFunction(
+  'handleMusicNotePrivate017',
+  'syncExploreFeedR2Private043(env, row.id),',
+  'syncExploreFeedR2Private043(env, row.id, Number(row.publication_storage_version || 0)),',
+  'single private storage-version propagation',
+);
+replaceOnceInFunction(
+  'handleMusicNotePublicationBatch048',
+  'await syncExploreFeedR2Publication043(env, snapshotItem);',
+  'await syncExploreFeedR2Publication043(env, snapshotItem, Number(row.publication_storage_version || 0));',
+  'batch publish storage-version propagation',
+);
+replaceOnceInFunction(
+  'handleMusicNotePublicationBatch048',
+  'await syncExploreFeedR2Private043(env, row.id);',
+  'await syncExploreFeedR2Private043(env, row.id, Number(row.publication_storage_version || 0));',
+  'batch private storage-version propagation',
+);
+
 const helperAnchor = functionRange('syncExploreFeedR2Publication043').start;
 const helpers = `// ${marker}
 const EXPLORE_W2_FEED_INDEX_VERSION_066 = 125;
@@ -197,10 +222,10 @@ async function moveW2PopularIndex066(env, previousCard, nextCard) {
 `;
 source = source.slice(0, helperAnchor) + helpers + '\n' + source.slice(helperAnchor);
 
-wrapAsyncFunction('syncExploreFeedR2Publication043', 'Core066', (coreName) => `async function syncExploreFeedR2Publication043(env, incomingItem) {
+wrapAsyncFunction('syncExploreFeedR2Publication043', 'Core066', (coreName) => `async function syncExploreFeedR2Publication043(env, incomingItem, storageVersion = 0) {
   const result = await ${coreName}(env, incomingItem);
   try {
-    await ensureW2FeedIndexes066(env, incomingItem);
+    if (Number(storageVersion || 0) === 1) await ensureW2FeedIndexes066(env, incomingItem);
     await mirrorExploreSharedFeeds059(env);
   } catch (error) {
     console.warn('[SORIDRAW 066] W2 publish shared authority deferred:', String(error?.message || error || 'unknown'));
@@ -208,12 +233,14 @@ wrapAsyncFunction('syncExploreFeedR2Publication043', 'Core066', (coreName) => `a
   return result;
 }`);
 
-wrapAsyncFunction('syncExploreFeedR2Private043', 'Core066', (coreName) => `async function syncExploreFeedR2Private043(env, trackId) {
+wrapAsyncFunction('syncExploreFeedR2Private043', 'Core066', (coreName) => `async function syncExploreFeedR2Private043(env, trackId, storageVersion = 0) {
   let previousCard = null;
-  try { previousCard = await readSharedTrackCard062(env, trackId); } catch {}
+  if (Number(storageVersion || 0) === 1) {
+    try { previousCard = await readSharedTrackCard062(env, trackId); } catch {}
+  }
   const result = await ${coreName}(env, trackId);
   try {
-    if (previousCard) await removeW2FeedIndexes066(env, previousCard);
+    if (Number(storageVersion || 0) === 1 && previousCard) await removeW2FeedIndexes066(env, previousCard);
     await mirrorExploreSharedFeeds059(env);
   } catch (error) {
     console.warn('[SORIDRAW 066] W2 private shared authority deferred:', String(error?.message || error || 'unknown'));

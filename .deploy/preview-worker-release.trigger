@@ -1,7 +1,7 @@
-requested_at=2026-09-18T12:13:00Z
+requested_at=2026-09-18T12:25:00Z
 requested_by=user
-product_code_target=91e7f9c57c3acad4d744c3d6deb79d2f3ad1ad37
-release_purpose=123_shared_like_targeted_r2_repair_after_preflight_align
+product_code_target=ad3b9e0fc19229fd34b7b94a8c38a796c3bfc3a7
+release_purpose=123_shared_like_targeted_r2_repair_after_full_preflight_align
 no_d1_migration=true
 no_user_data_migration=true
 preview_only=true

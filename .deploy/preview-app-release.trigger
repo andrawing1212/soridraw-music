@@ -1,8 +1,8 @@
-requested_at=2026-09-18T10:18:00Z
+requested_at=2026-09-18T12:48:00Z
 requested_by=user
-product_code_target=cc2a55ad7d7deb25b971c39464c12f7a9981a8aa
-release_source_target=app-122-explore-like-white-heart-motion
-release_purpose=122_explore_like_white_heart_motion
+product_code_target=929c02f8a235a8ef629ce85a8f0e28bfbaa04dfe
+release_source_target=app-124-common-stale-feed-cache-repair
+release_purpose=124_pc_mobile_common_legacy_shared_feed_cache_repair
 hosting_only=true
 worker_redeploy=false
 no_user_data_migration=true

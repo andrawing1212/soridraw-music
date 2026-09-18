@@ -1,5 +1,307 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AE. PREVIEW app 124 — PC/모바일 legacy mixed-count cache 1회 공통 복구 / 배포 완료
+
+사용자 모바일 실사용에서 PC는 정상인데 모바일이 같은 4곡을 `0 / 1 / 0 / 0`으로 표시하는 현상을 확인했다.
+
+확인된 구조:
+- app123 서버 shared Feed 자체는 이미 4곡 모두 1로 복구된 상태.
+- 모바일은 app122 시절 저장된 mixed-count 로컬 Feed 캐시를 보유.
+- app123의 '마지막 정상 캐시 우선' 규칙이 그 오래된 모바일 캐시도 그대로 유지했기 때문에 PC/모바일 표시가 달라짐.
+- 모바일 전용 UI 문제가 아니라 동일 코드에서 기기별 local cache 상태 차이 문제.
+
+app124 수정:
+- `src/pages/ExplorePage.tsx`에 `SORIDRAW_EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_20260918` 추가.
+- legacy mixed-count Feed cache를 가진 기기에서 sort별 정확히 1회 current shared R2 snapshot을 직접 읽어 캐시를 교체.
+- 이 1회 복구는 revision edge cache를 거치지 않고 current shared R2 first-page를 사용.
+- route contract상 D1 read/write 0.
+- 성공 후 localStorage marker를 남겨 이후 앱 업데이트/재진입에서는 같은 복구 read를 반복하지 않음.
+- PC/모바일 분기 없음. 동일 ExplorePage 공통 경로.
+- app123 last-known immediate render 규칙 유지.
+- 30초 actor batch / 1분 shared aggregate / 2분 viewer activity gate 유지.
+- UI/CSS/Worker runtime/Functions/Rules/D1 schema/user canonical data 변경 없음.
+
+GitHub / 검증:
+- 작업 branch: `work/app124-one-time-feed-cache-repair`
+- 기준 PREVIEW: `6e63a491f2a4983b348c37d051c3882002e97a49`
+- PR #105 merge commit: `929c02f8a235a8ef629ce85a8f0e28bfbaa04dfe`
+- app version: **124**
+- validation Run `35346359130` — **SUCCESS**
+  - app124 common cache repair verifier PASS
+  - TypeScript PASS
+  - Build PASS
+- 첫 validation Run `35346282776` 실패는 제품 코드가 아니라 verifier가 주석의 'mobile/PC' 단어를 device fork로 오인한 검사식 문제였고, 검사식 수정 후 최종 PASS.
+
+PREVIEW 배포:
+- deploy trigger commit: `ca05329c6004c2a47d05d1958915c1730436e1c2`
+- Firebase PREVIEW Hosting Run `35346588474` — **SUCCESS**
+- locked PREVIEW SHA: `ca05329c6004c2a47d05d1958915c1730436e1c2`
+- TypeScript PASS
+- Build PASS
+- Firebase PREVIEW Hosting deploy PASS
+- `preview.soridraw.com` exact build PASS
+- remote app version **124** PASS
+- TEST / PRODUCTION unchanged PASS
+- PREVIEW Worker는 app123 배포본 `02561c62-5f1c-4449-b2e6-4253faddd099` 그대로.
+
+현재 환경:
+- PREVIEW: app **124**
+- TEST: app **122** 유지
+- PRODUCTION: app **117** 유지
+
+필수 다음 검증:
+- 모바일에서 app124 업데이트 후 Explore 첫 화면이 4곡 모두 PC와 같은 `1`로 수렴하는지.
+- 복구 완료 후 재진입에서는 같은 repair R2 read가 반복되지 않는지.
+- 이후 새 좋아요/해제도 PC/모바일 공통 30초 batch → 1분 shared → 2분 viewer gate 구조로 동일하게 보이는지.
+- 앞으로 Explore 변경은 PC + 모바일을 항상 같은 공통 검증 범위로 확인.
+
+## 0AD. PREVIEW app 123 — Worker + shared R2 제한복구 + Firebase Hosting 배포 완료 / 실사용 검증 대기
+
+2026-09-18 사용자 승인으로 app123 수정본을 PREVIEW까지 배포 완료했다.
+
+배포 기준:
+- app123 제품 merge: `edf80e7729323327802af205e42c5a462d049f0a`
+- 최종 PREVIEW verifier 정렬 merge: `ad3b9e0fc19229fd34b7b94a8c38a796c3bfc3a7`
+- PREVIEW Worker release trigger commit: `a3942176b84fbbaf8a4477b54708e8f106a54409`
+- PREVIEW Hosting release commit: `bb6bd713f8ba2b942473ad7af56bf0861718204b`
+- app version: **123**
+
+Worker:
+- Release Run `35344504551` — **SUCCESS**
+- PREVIEW Worker version: `02561c62-5f1c-4449-b2e6-4253faddd099`
+- canonical Worker SHA256: `312c28fe67af5c0bbd5639fa1a6230b53bd5cf12e165ca1f117e0e6552cbbfc3`
+- Feed smoke PASS / Profile smoke PASS.
+- revision HEAD-only D1 `R0/W0` PASS.
+- like queue preflight: pending035=0 / pending069=0.
+- fixed cron disabled PASS / Durable Object event scheduler PASS.
+- TEST Worker `78a3295f-cbf4-4c1f-8d1b-22934df7e7b0` 비변경.
+- PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` 비변경.
+
+기존 stale 4곡 shared 파생 캐시 제한 복구:
+- Repair Run `35345067282` — **SUCCESS**.
+- exact diagnosed 4 track IDs만 대상으로 canonical/relation/derived가 모두 1인지 재확인 후 실행.
+- shared latest Feed: 4곡 `0 → 1` 수정.
+- shared popular Feed: 4곡 모두 이미 1, write 0.
+- shared track-card: 4곡 수정.
+- shared public profile: 해당 owner 프로필 1개에서 4곡 수정.
+- 실제 PREVIEW shared Feed API: 4곡 모두 1, source `SHARED-R2-GET-112`, D1 read 0.
+- 실제 공개프로필 API: 4곡 모두 1, source `SHARED-R2-113`.
+- D1 operation은 SELECT only, 사용자 canonical data write 0.
+- migration/seed/backfill/delete 없음.
+- 임시 repair Workflow/script는 작업 branch에서 삭제 완료; preview에는 추가하지 않음.
+
+Firebase PREVIEW Hosting:
+- Release Run `35345235634` — **SUCCESS**.
+- locked source SHA: `bb6bd713f8ba2b942473ad7af56bf0861718204b`.
+- TypeScript PASS.
+- Build PASS.
+- Firebase PREVIEW Hosting deploy PASS.
+- `preview.soridraw.com` exact build PASS.
+- remote `app-version.json` = **123** PASS.
+- TEST / PRODUCTION Hosting 및 protected refs 비변경 PASS.
+
+현재 기능 기준:
+- 앱 업데이트/첫 진입 + 정상 Explore Feed 로컬 캐시 존재 시 last-known 좋아요 숫자를 즉시 표시.
+- 앱 업데이트 자체로 revision/server read를 강제하지 않음.
+- 실제 사용자 활동 + 2분 viewer gate에서만 revision 확인.
+- actor 좋아요 UI 즉시 반영, 현재 app121 기준 30초 trailing batch 유지.
+- server shared aggregate 1분 유지.
+- aggregate 후 변경된 track만 shared latest/popular Feed + track-card R2 targeted patch.
+- 전체 Feed D1 scan/rebuild 없음.
+- UI/CSS 변경 없음.
+- Firebase Functions/Rules 변경 없음.
+
+남은 검증:
+- 코드/배포 검증은 완료.
+- 사용자 PREVIEW 실사용 검증 전.
+- PC/모바일에서 앱 업데이트 직후 숫자 유지, 좋아요/해제, 30초 batch, 약 1분 shared 반영, 다른 사용자 2분 activity gate, 공개프로필/Explore 일치 확인 필요.
+- PREVIEW 실사용 통과 전 TEST 재승격 금지.
+- PRODUCTION은 명확한 정식배포 승인 전 변경 금지.
+
+## 0AC. PREVIEW app 123 — 업데이트 캐시 유지 + shared 좋아요 숫자 targeted R2 repair / 검증 완료 / 배포 전
+
+사용자 지시로 두 문제를 함께 수정했다.
+
+1. 앱 업데이트 직후 좋아요 숫자 보존
+- 정상 Explore Feed 로컬 캐시가 있으면 앱 버전 변경/첫 진입만으로 revision 확인을 강제하지 않는다.
+- 업데이트 전 마지막 정상 좋아요 숫자를 즉시 그대로 표시한다.
+- 첫 진입/재진입은 server read 0 목표를 유지한다.
+- 실제 사용자 활동이 있고 기존 2분 activity gate가 열린 경우에만 revision을 확인한다.
+- revision이 동일하면 로컬 캐시 유지.
+- revision이 달라진 경우에만 shared Feed snapshot으로 교체.
+- 새 기기/캐시 손상처럼 정상 로컬 캐시가 없는 경우만 최초 shared snapshot을 1회 받는다.
+- Explore Feed persistent cache schema는 기존 3을 유지하며 app version과 분리.
+
+2. shared Feed 좋아요 숫자 stale 문제
+- 기존 진단에서 canonical/derived가 1인데 shared Feed v112만 0으로 남은 것이 확인됨.
+- 056 public-like reconciliation이 실제 변경 row를 `changedItems`로 다음 단계에 전달하도록 보강.
+- 새 release patch `065-shared-like-count-targeted.mjs` 추가.
+- 좋아요 aggregate 완료 후 변경된 track ID + 최종 likeCount만 shared latest/popular Feed R2 bundle에서 패치.
+- shared track-card R2도 같은 track만 targeted patch.
+- 전체 Feed D1 scan/rebuild 없음.
+- 기존 059 full mirror, 060 shared profile parity, 064 catch-up은 유지.
+- canonical Worker에 065 실제 생성 반영 및 source SHA 재고정.
+- app version: **123**.
+
+변경 파일:
+- `src/pages/ExplorePage.tsx`
+- `cloudflare/explore-worker/patches/056-explore-public-like-parity.mjs`
+- `cloudflare/explore-worker/patches/065-shared-like-count-targeted.mjs`
+- `cloudflare/explore-worker/release-patches.json`
+- `cloudflare/explore-worker/canonical/preview-worker.js`
+- `cloudflare/explore-worker/canonical/source-sha256.txt`
+- `public/app-version.json`
+- `scripts/verify-123-shared-like-cache-repair.mjs`
+- `scripts/verify-116-explore-public-count-convergence.mjs`
+- `scripts/verify-112-shared-feed-parity.mjs`
+- docs only.
+- UI/CSS 변경 없음.
+
+검증:
+- 최종 validation Run `35342677962` — **SUCCESS**
+  - canonical Worker 065 generation PASS
+  - app123 verifier PASS
+  - app116 public-count convergence regression PASS
+  - app115 shared track-card PASS
+  - app114 shared social PASS
+  - app113 shared profile PASS
+  - app112 shared Feed PASS
+  - app102 public like parity PASS
+  - derived cache verifier PASS
+  - TypeScript PASS
+  - Build PASS
+  - generated change boundary PASS
+- 앞선 실패 Run들은 제품 코드 실패가 아니라 기존 verifier가 새 wrapper/guard 구조를 문자열 기준으로 오인한 검사 문제였고, 검사 범위를 실제 동작 계약으로 수정한 뒤 최종 PASS.
+
+안전:
+- D1 schema/migration/seed/backfill/delete 없음.
+- 사용자 원본 데이터 변경 없음.
+- Firebase Functions/Rules 변경 없음.
+- 30초 actor batch 유지.
+- 1분 shared aggregate 유지.
+- 2분 viewer activity gate 유지.
+- app120 actor count lock 유지.
+- TEST/PRODUCTION 비변경.
+
+현재 상태:
+- 작업 branch: `work/app123-shared-like-cache-repair`
+- 기준 PREVIEW: `174714c5c91e4ce406d36f1cdbf11779e53491e4`
+- PREVIEW 실제 배포: app **122**
+- TEST 실제 배포: app **122**
+- PRODUCTION: app **117**
+- app123 코드/Worker 검증 완료, PREVIEW 병합·배포 전.
+- 배포 후 이미 stale인 4곡은 shared derived cache만 제한적으로 복구하고 canonical user data는 변경하지 않는다.
+- PRODUCTION 변경 금지.
+
+## 0AB. TEST app 122 — Explore 공개 좋아요 숫자 stale shared Feed 확인 / 수정 전
+
+TEST 승격 직후 사용자 실사용에서 Explore 카드 숫자가 예상값으로 갱신되지 않는 현상을 확인했다. 이 문제는 "최초 업데이트 후 2분을 기다려야 보이는 정상 지연"이 아니다.
+
+2026-09-18 읽기 전용 진단:
+- Run `35339798457`: 069 queue/read-only 확인.
+  - Q035/Q066/Q069 pending batch = 0.
+  - 최근 30분 canonical like 변경 없음.
+  - 큐 적체 때문에 숫자가 늦는 상태 아님.
+- Run `35339874817`, `35340012778`: D1 canonical/derived와 PREVIEW/TEST shared Feed snapshot 대조.
+- 화면 상단 첫 4곡:
+  - `Leaving One Step Open`
+  - `Left Unsaid`
+  - `Through the Night`
+  - `Just Stay Here Awhile`
+- 위 4곡 모두:
+  - canonical `track_stats.like_count = 1`
+  - relation `likes COUNT = 1`
+  - derived `explore_derived_tracks.likes = 1`
+  - PREVIEW shared Feed v112 = **0**
+  - TEST shared Feed v112 = **0**
+- 반면 다른 공개곡(예: `스스륵`)은 canonical/derived/shared 모두 1로 일치.
+- TEST shared snapshot는 `SHARED-R2-GET-112`, D1 read 0으로 정상적으로 공용 R2를 읽고 있으나 해당 4개 row 자체가 stale.
+
+현재 판단:
+- actor 30초 batch, canonical D1 relation/count, derived row까지는 정상 반영된 기록이 존재한다.
+- 실패 구간은 canonical/derived 이후 **공용 Feed R2 shared-feed-v112 갱신/미러 경로**다.
+- 따라서 클라이언트 2분 activity gate를 기다려도 source shared snapshot 자체가 0이면 1로 바뀌지 않는다.
+- 2분 gate는 "다른 사용자가 revision을 얼마나 자주 확인할지"의 비용 제한일 뿐, 최초 업데이트 후 반드시 기다리는 시간 규칙이 아니다.
+- PREVIEW와 TEST가 같은 shared snapshot 0을 읽으므로 TEST 환경 분리/승격 문제도 아니다.
+
+보호:
+- 진단은 SELECT/read-only + 공개 snapshot GET만 사용.
+- D1 write/migration/seed/backfill/delete 없음.
+- 사용자 데이터 변경 없음.
+- 임시 진단 Workflow 삭제 완료.
+- PRODUCTION 비변경.
+
+다음 작업:
+- 수정은 `preview`에서만 시작.
+- `056-explore-public-like-parity` → 환경 R2 Feed materialization → `059-shared-feed-r2-parity` shared mirror 순서를 실제 runtime 기준으로 감사.
+- canonical/derived가 1일 때 shared v112도 해당 track 하나만 1로 패치되는지 검증.
+- 전체 Feed 재생성/전체 D1 scan 없이 변경 track만 반영하는 구조 유지.
+- 수정 전 TEST 재승격/PRODUCTION 승격 금지.
+
+## 0AA. TEST app 122 — PREVIEW 검증본 승격 / TEST_VERIFIED 완료
+
+사용자가 PREVIEW app 122를 통과 처리하고 TEST 배포를 승인했다. 검증된 PREVIEW 제품과 공유 사용자 데이터를 그대로 사용하며, 데이터 복사/마이그레이션 없이 코드/Worker/Hosting만 TEST로 승격했다.
+
+최종 TEST 승격 기준:
+- source PREVIEW SHA: `9be18f49b91d47f068b77c056e2611eb5a3c4d06`
+- source app version: **122**
+- promoted main SHA: `c16a8087c40a8e6330242b6420ac381d1b315ea2`
+- TEST Worker version: `78a3295f-cbf4-4c1f-8d1b-22934df7e7b0`
+- TEST manifest/tag: `soridraw-test-v122-9be18f49b91d`
+- TEST URL: `https://test.soridraw.com`
+- Firebase TEST fallback URL: `https://soridraw-test.web.app`
+- final TEST Release Controller Run: `35337836322` — **SUCCESS / TEST_VERIFIED**
+- final preflight Run: `35337724687` — **SUCCESS**
+
+최종 검증:
+- source SHA/tree 잠금 PASS.
+- TypeScript / Build / release static verification PASS.
+- Firebase Hosting write permission preflight PASS.
+- TEST/PRODUCTION Worker dry-run PASS.
+- shared D1 SELECT-only preflight PASS.
+- TEST Worker upload → exact version activation PASS.
+- TEST latest shared Feed parity PASS.
+- TEST popular shared Feed parity PASS.
+- TEST public profile parity PASS.
+- TEST Worker smoke/verify PASS.
+- Firebase TEST Hosting deploy PASS.
+- `test.soridraw.com` + `soridraw-test.web.app` app-version/index exact verification PASS.
+- TEST_VERIFIED durable manifest 생성 PASS.
+- PRODUCTION branch / Worker / Hosting 비변경 PASS.
+
+첫 TEST 시도와 자동 복구:
+- 최초 preflight Run `35336675035` — SUCCESS.
+- 최초 TEST Run `35336817221` — TEST_DEPLOY parity 단계 FAIL.
+- 당시 제품/권한/Build 실패가 아니라 Release Controller가 PREVIEW/TEST 각각의 독립 60초 revision edge cache와 legacy direct Feed를 같은 순간 완전 동일해야 한다고 검사해, 실제 shared R2가 정상이어도 revision 세대가 교차하며 실패한 것이 로그/코드로 확인됐다.
+- 실패 직후 Controller 자동 rollback 성공:
+  - TEST Worker → 기존 `2d3f887d-8730-497f-a35c-d60452c532c4` 복구.
+  - main → app117 tree 복구.
+  - Firebase TEST Hosting은 실패 지점상 새 app122 배포 전에 중단되어 기존 app117 유지.
+  - PRODUCTION 비변경.
+- Release parity 검사 수정:
+  - PR #100 → preview merge `9be18f49b91d47f068b77c056e2611eb5a3c4d06`.
+  - 검증 Run `35337334681` — TypeScript / Build / promotion verifier / controller verifier / runtime syntax PASS.
+  - PREVIEW/TEST revision endpoint는 각자 SHARED authority + D1 R0/W0를 계속 검사.
+  - 환경별 edge revision 문자열의 순간 동일성 대신 현재 shared R2 revision + 실제 Feed projection의 완전 동일성을 검사.
+  - 공개프로필 parity 및 rollback/binding/bundle 안전검사는 유지.
+  - TEST 기준 main에도 동일 릴리스 도구만 PR #101로 동기화; merge `71d7cae35153291d77a27eda6cbf6674c236007a`.
+  - 앱/Hosting/Worker 제품 기능 변경 없음.
+
+현재 환경:
+- PREVIEW 제품: app **122** — source 기준 `9be18f49b91d47f068b77c056e2611eb5a3c4d06`.
+- TEST: app **122**, main `c16a8087c40a8e6330242b6420ac381d1b315ea2`, **TEST_VERIFIED**.
+- PRODUCTION: app **117**, `e994340f3c4f6ac97f444f1ddf13053d3faffa71` 유지.
+- PRODUCTION 승격은 사용자 명확한 정식배포 승인 전 금지.
+
+데이터/비용 안전:
+- 사용자 원본 데이터 복사 없음.
+- D1 migration/seed/backfill/delete 없음.
+- Firebase Functions/Rules 변경/배포 없음.
+- 공유 canonical D1: `soridraw-explore-db` 유지.
+- 공유 PROFILE_MEDIA: `soridraw-profile-media` 유지.
+- 좋아요 30초 actor batch / 다른 사용자 활동 gate 2분 / shared 1분 aggregate / app120 actor count lock 유지.
+- TEST 실사용 검증 전. 다음 단계는 사용자가 `test.soridraw.com`에서 실제 PC/모바일 기능·비용을 확인하는 것.
+
 ## 0Z. PREVIEW app 122 — Explore 좋아요 흰색 filled heart + 짧은 클릭 모션 / 배포 완료
 
 사용자 요청으로 좋아요 버튼의 시각 표현만 변경했다.

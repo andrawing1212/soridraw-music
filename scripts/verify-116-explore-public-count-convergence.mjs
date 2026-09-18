@@ -23,7 +23,7 @@ if (!cache.includes('rewriteLoadedFeedRows075') || !cache.includes('patchExplore
 
 const initialCacheNeedle = 'if (feedRequest) syncSharedPublicCountsToLocal110(cachedTracks);';
 if (page.includes(initialCacheNeedle)) fail('stale cached Feed is still allowed to become authoritative on first render');
-if (!page.includes('if (cachedRevision === serverRevision) {\n              syncSharedPublicCountsToLocal110(cachedTracks);\n              return;\n            }')) {
+if (!/if \(cachedRevision === serverRevision\) \{\s*syncSharedPublicCountsToLocal110\(cachedTracks\);\s*return;\s*\}/.test(page)) {
   fail('server revision-confirmed cached Feed promotion missing');
 }
 if (!page.includes('applyProfileFirstView = (nextProfile: ExplorePublicProfile, rows: Array<Record<string, unknown>>, authoritative = false)')) {

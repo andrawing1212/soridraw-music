@@ -2,39 +2,67 @@ import { readFileSync } from 'node:fs';
 
 const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const liked = readFileSync('src/services/exploreLikedTracksService.ts', 'utf8');
+const entry = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const fail = (message) => { throw new Error(`[110] ${message}`); };
 
 const appVersion = Number(version.version);
 if (!Number.isFinite(appVersion) || appVersion < 110) fail('app version is older than 110');
 if (!page.includes('SORIDRAW_EXPLORE_LIKED_PUBLIC_COUNT_LOCAL_SYNC_110_20260916')) fail('110 marker missing');
-
-if (appVersion >= 116) {
-  if (!page.includes('SORIDRAW_EXPLORE_PUBLIC_COUNT_CONVERGENCE_116_20260917')) fail('116 convergence marker missing');
-  if (!page.includes('const syncSharedPublicCountsToLocal110 = (sharedTracks: ExploreTrack[], authoritative = true) =>')) fail('116 authority-aware shared public-count sync helper missing');
-  if (!page.includes('if (!sharedTracks.length || !authoritative) return;')) fail('116 authority guard missing');
-  if (page.includes('if (feedRequest) syncSharedPublicCountsToLocal110(cachedTracks);')) fail('stale warm Feed cache must not repair liked cards before server revision confirmation');
-  if (!page.includes('if (cachedRevision === serverRevision) {\n              syncSharedPublicCountsToLocal110(cachedTracks);\n              return;\n            }')) fail('revision-confirmed warm Feed cache does not repair liked cards');
-  if (!page.includes('applyProfileFirstView(refreshedProfile, refreshedRows, true);')) fail('only revalidated public-profile payload should become authoritative');
-} else {
-  if (!page.includes('const syncSharedPublicCountsToLocal110 = (sharedTracks: ExploreTrack[]) =>')) fail('shared public-count local sync helper missing');
-  if (!page.includes('if (feedRequest) syncSharedPublicCountsToLocal110(cachedTracks);')) fail('warm persistent Feed cache does not repair liked cards');
-  if (!page.includes('syncSharedPublicCountsToLocal110(normalizedTracks);\n      setProfile(nextProfile);')) fail('public-profile payload does not repair matching liked cards');
+if (!page.includes('SORIDRAW_EXPLORE_PUBLIC_COUNT_CONVERGENCE_116_20260917')) fail('116 convergence marker missing');
+if (!page.includes('const syncSharedPublicCountsToLocal110 = (sharedTracks: ExploreTrack[], authoritative = true) =>')) {
+  fail('authority-aware shared public-count sync helper missing');
+}
+if (!page.includes('if (!sharedTracks.length || !authoritative) return;')) fail('authority guard missing');
+if (page.includes('if (feedRequest) syncSharedPublicCountsToLocal110(cachedTracks);')) {
+  fail('stale warm Feed cache must not repair liked cards before server revision confirmation');
 }
 
+if (appVersion >= 123) {
+  if (!page.includes('SORIDRAW_EXPLORE_UPDATE_LAST_KNOWN_FEED_123_20260918')) fail('123 last-known Feed marker missing');
+  if (!page.includes('const revalidateRequested = feedRequest && feedRevisionRequestedUrlRef.current === requestUrl;')) {
+    fail('123 activity-requested revalidation guard missing');
+  }
+  if (!page.includes('if (!revalidateRequested) {')) fail('123 update/re-entry zero-read branch missing');
+  if (!page.includes("feedRevisionRequestedUrlRef.current = '';")) fail('123 requested revalidation reset missing');
+  if (!page.includes('feedRevisionRequestedUrlRef.current = requestUrl;')) fail('123 activity revision request marker missing');
+}
+
+if (!/if \(cachedRevision === serverRevision\) \{\s*syncSharedPublicCountsToLocal110\(cachedTracks\);\s*return;\s*\}/.test(page)) {
+  fail('revision-confirmed warm Feed cache does not repair liked cards');
+}
+if (!page.includes('applyProfileFirstView(refreshedProfile, refreshedRows, true);')) {
+  fail('only revalidated public-profile payload should become authoritative');
+}
 if (!page.includes('setProfileLikedTracks(applyPublicCounts110);')) fail('open liked-tab state is not reconciled');
 if (!page.includes('patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);')) fail('persistent liked-card cache is not reconciled');
 if (!page.includes('if (feedRequest) syncSharedPublicCountsToLocal110(normalizedTracks);')) fail('fresh Feed payload does not repair liked cards');
 if (!page.includes('syncSharedPublicCountsToLocal110(normalized);')) fail('load-more Feed payload does not repair liked cards');
-if (!/LIKED_TRACK_CACHE_SCHEMA_VERSION\s*=\s*1\s*;/.test(liked)) fail('liked-track cache schema was reset; network bootstrap risk');
+
+if (appVersion >= 120) {
+  if (!liked.includes('SORIDRAW_EXPLORE_LIKED_TRACK_LATEST_CACHE_120_20260918')) fail('latest liked-track cache marker missing');
+  if (!/LIKED_TRACK_CACHE_SCHEMA_VERSION\s*=\s*120\s*;/.test(liked)) fail('current liked-track cache schema missing');
+  if (!liked.includes("explore-liked-track-collection-120")) fail('current liked-track cache key missing');
+} else if (!/LIKED_TRACK_CACHE_SCHEMA_VERSION\s*=\s*1\s*;/.test(liked)) {
+  fail('legacy liked-track cache schema missing');
+}
+
 if (/app-version\.json|APP_VERSION|appVersion/.test(liked)) fail('liked-track cache became app-version coupled');
 if (!/expiresAt:\s*null/.test(liked)) fail('liked-track long-lived cache contract changed');
-if (!page.includes('EXPLORE_LIKE_AGGREGATE_WINDOW_MS_105 = 1 * 60_000')) fail('one-minute event aggregate contract changed');
+
+if (appVersion >= 121) {
+  if (!page.includes('EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000')) fail('two-minute viewer activity gate changed');
+} else if (!page.includes('EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS')) {
+  fail('viewer activity revision gate missing');
+}
+
+if (!entry.includes('EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 * 60 * 1000')) {
+  fail('one-minute shared aggregate contract changed');
+}
 
 console.log('110_LIKED_PUBLIC_COUNT_LOCAL_SYNC=PASS');
-console.log(appVersion >= 116 ? 'SOURCE=SERVER_CONFIRMED_SHARED_FEED_PROFILE_PAYLOAD' : 'SOURCE=SHARED_FEED_PROFILE_PAYLOAD');
-console.log('WARM_REPAIR_SERVER_READS=0_BY_CONTRACT');
-console.log('LIKED_CACHE_SCHEMA_RESET=NO');
-console.log('LIKED_MEMBERSHIP_CHANGED=NO');
-console.log('WORKER_D1_CHANGE=NO');
+console.log(appVersion >= 123 ? 'WARM_UPDATE_FIRST_RENDER=LAST_KNOWN_CACHE_ZERO_READ' : 'SOURCE=SERVER_CONFIRMED_SHARED_FEED_PROFILE_PAYLOAD');
+console.log('REVISION_CONFIRMED_REPAIR=ENABLED');
+console.log('LIKED_CACHE_APP_VERSION_COUPLED=NO');
+console.log('SHARED_AGGREGATE=ONE_MINUTE');
 console.log('NO_UI_CSS_CHANGE=true');

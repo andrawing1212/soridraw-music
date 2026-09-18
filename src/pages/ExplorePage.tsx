@@ -90,6 +90,37 @@ const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000;
 const EXPLORE_FEED_R2_SNAPSHOT_QUERY_108 = '__soridraw_r2_only';
 const EXPLORE_FEED_R2_SNAPSHOT_REVISION_QUERY_108 = '__soridraw_r2_revision';
 const EXPLORE_FEED_R2_SNAPSHOT_VERSION_108 = '108';
+// SORIDRAW_EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_20260918
+// app123 fixed the shared R2 values, but devices that had already cached the old
+// mixed counts (for example mobile 0/1/0/0 while PC was 1/1/1/1) can legitimately
+// keep rendering that last-known cache. Repair that known legacy state exactly once
+// per Feed sort by reading the current shared R2 snapshot directly (D1 R0/W0).
+// The marker persists across future app updates, so normal updates return to zero-read.
+const EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_PREFIX = 'soridraw:explore:shared-like-cache-repair:124';
+
+const exploreSharedLikeCacheRepairKey124 = (feedUrl: string) => {
+  try {
+    const parsed = new URL(feedUrl);
+    const sort = parsed.searchParams.get('sort') === 'popular' ? 'popular' : 'latest';
+    return `${EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_PREFIX}:${sort}`;
+  } catch {
+    return `${EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_PREFIX}:latest`;
+  }
+};
+
+const hasExploreSharedLikeCacheRepair124 = (feedUrl: string) => {
+  try {
+    return window.localStorage.getItem(exploreSharedLikeCacheRepairKey124(feedUrl)) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const markExploreSharedLikeCacheRepair124 = (feedUrl: string) => {
+  try {
+    window.localStorage.setItem(exploreSharedLikeCacheRepairKey124(feedUrl), '1');
+  } catch {}
+};
 // SORIDRAW_EXPLORE_LIKE_FRESH_BOOTSTRAP_RECOVERY_073_20260912
 // SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
 // SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914
@@ -312,6 +343,7 @@ export default function ExplorePage() {
   const [feedRevisionSignal, setFeedRevisionSignal] = useState(0);
   const feedRevisionEventAtRef = useRef(0);
   const feedRevisionActivityAtRef = useRef(0);
+  const feedRevisionRequestedUrlRef = useRef('');
   const likeInteractionVersionRef090 = useRef(0);
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
@@ -433,30 +465,61 @@ export default function ExplorePage() {
       setFeedNextCursor(feedRequest ? readExploreFeedSessionCacheCursor(requestUrl) : null);
       setLoadMoreError('');
       const cachedTracks = cachedRows.map(normalizeTrack).filter((track) => track.id);
-      // 120: stale shared cache may render, but never over the actor's newest pending count.
+      // SORIDRAW_EXPLORE_UPDATE_LAST_KNOWN_FEED_123_20260918
+      // App updates and ordinary re-entry render the last known good Feed immediately
+      // and do not spend a revision request merely because code/version changed.
       setTracks(overlayActorLikeCounts120(cachedTracks));
       setLoading(false);
 
-      if (feedRequest) {
+      const oneTimeSharedRepair124 = feedRequest && !hasExploreSharedLikeCacheRepair124(requestUrl);
+      if (oneTimeSharedRepair124) {
+        const now = Date.now();
+        feedRevisionEventAtRef.current = now;
+        feedRevisionActivityAtRef.current = now;
         void (async () => {
           try {
-            const serverRevision = await fetchRevision();
-            if (!serverRevision || controller.signal.aborted) return;
-            const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
-            if (cachedRevision === serverRevision) {
-              syncSharedPublicCountsToLocal110(cachedTracks);
-              return;
-            }
-            const snapshot = await fetchFeedSnapshot108(serverRevision);
+            // Direct current shared R2 snapshot: bypass the 60s revision edge cache so
+            // previously stale mobile/PC caches converge immediately, with D1 R0/W0.
+            const snapshot = await fetchFeedSnapshot108(null);
             if (controller.signal.aborted) return;
             applyPayload(snapshot.payload, snapshot.revision);
+            markExploreSharedLikeCacheRepair124(requestUrl);
           } catch (reason) {
             if (!controller.signal.aborted) {
-              console.warn('Explore feed revision revalidation failed; keeping cached feed:', reason);
+              console.warn('Explore one-time shared like cache repair failed; keeping cached feed:', reason);
             }
           }
         })();
+        return () => controller.abort();
       }
+
+      const revalidateRequested = feedRequest && feedRevisionRequestedUrlRef.current === requestUrl;
+      if (!revalidateRequested) {
+        const now = Date.now();
+        feedRevisionEventAtRef.current = now;
+        feedRevisionActivityAtRef.current = now;
+        return () => controller.abort();
+      }
+
+      feedRevisionRequestedUrlRef.current = '';
+      void (async () => {
+        try {
+          const serverRevision = await fetchRevision();
+          if (!serverRevision || controller.signal.aborted) return;
+          const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
+          if (cachedRevision === serverRevision) {
+            syncSharedPublicCountsToLocal110(cachedTracks);
+            return;
+          }
+          const snapshot = await fetchFeedSnapshot108(serverRevision);
+          if (controller.signal.aborted) return;
+          applyPayload(snapshot.payload, snapshot.revision);
+        } catch (reason) {
+          if (!controller.signal.aborted) {
+            console.warn('Explore feed revision revalidation failed; keeping cached feed:', reason);
+          }
+        }
+      })();
 
       return () => controller.abort();
     }
@@ -505,6 +568,7 @@ export default function ExplorePage() {
       const now = Date.now();
       if (now - feedRevisionEventAtRef.current < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return;
       feedRevisionEventAtRef.current = now;
+      feedRevisionRequestedUrlRef.current = requestUrl;
       setFeedRevisionSignal((value) => value + 1);
     };
 

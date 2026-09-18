@@ -68,11 +68,19 @@ for (const token of [
 
 forbidden(workerRuntime, /\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b[^\n]*env\.DB/i, 'Worker runtime D1 mutation');
 required(workerRuntime, "if (!revisionSource.includes('SHARED'))", 'shared revision authority rejection');
-required(workerRuntime, 'targetRevision.revision !== referenceRevision.revision', 'stage revision equality');
+required(workerRuntime, 'SORIDRAW_RELEASE_SHARED_SNAPSHOT_PARITY_123_20260918', 'current shared snapshot parity marker');
+required(workerRuntime, 'REVISION_EDGE_SKEW=EXPECTED', 'bounded revision edge-cache skew handling');
+required(workerRuntime, 'targetSnapshot.revision !== referenceSnapshot.revision', 'current shared R2 revision equality');
 required(workerRuntime, 'sameProjection(targetSnapshotProjection, referenceSnapshotProjection)', 'shared Feed projection equality');
+forbidden(workerRuntime, /direct Feed projection differs from/, 'legacy direct first-page parity gate');
+forbidden(workerRuntime, /targetRevision\.revision !== referenceRevision\.revision/, 'independent edge revision exact-equality gate');
 required(workerRuntime, 'sameProjection(profileProjection(targetProfile.payload), profileProjection(referenceProfile.payload))', 'public-profile projection equality');
 required(workerRuntime, 'PARITY_MAX_ATTEMPTS = 13', 'bounded parity attempts');
 required(workerRuntime, 'PARITY_RETRY_MS = 5_000', 'bounded parity retry window');
+required(workerRuntime, 'readRevision(target.referenceBase', 'PREVIEW/TEST revision endpoint diagnostics');
+required(workerRuntime, 'readRevision(target.base', 'target revision endpoint diagnostics');
+required(workerRuntime, 'readCurrentSharedSnapshot(target.referenceBase', 'reference current shared R2 read');
+required(workerRuntime, 'readCurrentSharedSnapshot(target.base', 'target current shared R2 read');
 required(workerRuntime, 'automatic ${mode} rollback after release smoke failure', 'Worker rollback on parity failure');
 required(workerRuntime, 'WORKER_UPLOAD_NO_TRAFFIC_CHANGE=PASS', 'Worker version upload before traffic');
 required(workerRuntime, 'Worker bundle identity mismatch', 'Worker bundle identity verification');

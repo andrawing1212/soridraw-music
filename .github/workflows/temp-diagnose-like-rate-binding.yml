@@ -1,0 +1,33 @@
+name: TEMP Diagnose LIKE_RATE_LIMITER Binding
+
+on:
+  push:
+    branches:
+      - diag/worker-like-rate-binding-117
+    paths:
+      - .github/workflows/temp-diagnose-like-rate-binding.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - name: Read live Worker binding settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          for worker in soridraw-explore-preview soridraw-explore-test soridraw-explore-api; do
+            body="$RUNNER_TEMP/$worker.json"
+            curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker/settings" > "$body"
+            echo "=== $worker ==="
+            jq -c '.result.bindings // [] | map({name,type,namespace_id,namespace,limit,period,class_name,script_name,bucket_name,database_id})' "$body"
+            echo -n "LIKE_RATE_LIMITER_COUNT="
+            jq '[.result.bindings[]? | select(.name=="LIKE_RATE_LIMITER")] | length' "$body"
+          done
+          echo LIVE_WORKER_BINDING_DIAGNOSTIC=PASS

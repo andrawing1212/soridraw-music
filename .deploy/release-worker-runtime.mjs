@@ -42,6 +42,7 @@ const TARGETS = {
 const target = TARGETS[mode];
 const ROOT = resolve(process.cwd());
 const WORKER_DIR = join(ROOT, 'cloudflare', 'explore-worker');
+const CANONICAL_WRANGLER_PATH = join(WORKER_DIR, 'canonical', 'wrangler.preview.jsonc');
 const RELEASE_DIR = join(WORKER_DIR, '.release-system', mode);
 const CONFIG_PATH = join(RELEASE_DIR, 'wrangler.jsonc');
 const WRANGLER = join(WORKER_DIR, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
@@ -136,7 +137,25 @@ async function readSchedules() {
 async function makeConfig() {
   const settings = await cfGet(`${apiBase}/workers/scripts/${target.worker}/settings`);
   const bindings = Array.isArray(settings?.bindings) ? settings.bindings : [];
-  const allowedTypes = new Set(['plain_text', 'secret_text', 'd1', 'r2_bucket', 'service']);
+  const canonicalWrangler = JSON.parse(readFileSync(CANONICAL_WRANGLER_PATH, 'utf8'));
+  const canonicalRateLimits = Array.isArray(canonicalWrangler?.ratelimits) ? canonicalWrangler.ratelimits : [];
+  const canonicalDurableBindings = Array.isArray(canonicalWrangler?.durable_objects?.bindings)
+    ? canonicalWrangler.durable_objects.bindings
+    : [];
+  const canonicalMigrations = Array.isArray(canonicalWrangler?.migrations) ? canonicalWrangler.migrations : [];
+  const requiredRateLimiter = canonicalRateLimits.find((item) => item?.name === 'LIKE_RATE_LIMITER');
+  const requiredLikeScheduler = canonicalDurableBindings.find((item) => item?.name === 'EXPLORE_LIKE_BATCH_SCHEDULER');
+  if (!requiredRateLimiter?.namespace_id || !requiredRateLimiter?.simple?.limit || !requiredRateLimiter?.simple?.period) {
+    throw new Error('canonical LIKE_RATE_LIMITER binding is missing or incomplete');
+  }
+  if (!requiredLikeScheduler?.class_name) {
+    throw new Error('canonical EXPLORE_LIKE_BATCH_SCHEDULER binding is missing or incomplete');
+  }
+  if (!canonicalMigrations.some((item) => Array.isArray(item?.new_sqlite_classes) && item.new_sqlite_classes.includes(requiredLikeScheduler.class_name))) {
+    throw new Error('canonical Durable Object migration for Explore like scheduler is missing');
+  }
+
+  const allowedTypes = new Set(['plain_text', 'secret_text', 'd1', 'r2_bucket', 'service', 'ratelimit', 'durable_object_namespace']);
   const unsupported = bindings.filter((item) => !allowedTypes.has(String(item?.type || '')));
   if (unsupported.length) {
     throw new Error(`unsupported live bindings on ${target.worker}; refusing deploy: ${JSON.stringify(unsupported.map((b) => ({ name: b?.name, type: b?.type })))}`);
@@ -163,6 +182,26 @@ async function makeConfig() {
     return entry;
   });
 
+  const liveRateLimits = bindings.filter((item) => item?.type === 'ratelimit');
+  for (const item of liveRateLimits) {
+    const canonical = canonicalRateLimits.find((row) => row?.name === item?.name);
+    if (!canonical) throw new Error(`unexpected live ratelimit binding on ${target.worker}: ${item?.name || '(unnamed)'}`);
+    const liveNamespace = String(item?.namespace_id || '').trim();
+    const canonicalNamespace = String(canonical?.namespace_id || '').trim();
+    if (liveNamespace && canonicalNamespace && liveNamespace !== canonicalNamespace) {
+      throw new Error(`ratelimit namespace drift on ${target.worker}: ${item?.name}`);
+    }
+  }
+
+  const liveDurableBindings = bindings.filter((item) => item?.type === 'durable_object_namespace');
+  for (const item of liveDurableBindings) {
+    const canonical = canonicalDurableBindings.find((row) => row?.name === item?.name);
+    if (!canonical) throw new Error(`unexpected live Durable Object binding on ${target.worker}: ${item?.name || '(unnamed)'}`);
+    if (item?.class_name && canonical?.class_name && String(item.class_name) !== String(canonical.class_name)) {
+      throw new Error(`Durable Object class drift on ${target.worker}: ${item?.name}`);
+    }
+  }
+
   // Hard promotion invariant: all three environments may have separate RATE_DB and
   // EXPLORE_CACHE, but the user-data source bindings must point at the same canonical
   // D1 and shared R2 bucket. A different source is a release failure, not a warning.
@@ -185,6 +224,9 @@ async function makeConfig() {
     keep_vars: true,
     d1_databases: d1,
     r2_buckets: r2,
+    ratelimits: canonicalRateLimits,
+    durable_objects: { bindings: canonicalDurableBindings },
+    migrations: canonicalMigrations,
     observability: settings?.observability && typeof settings.observability === 'object'
       ? { enabled: settings.observability.enabled !== false }
       : { enabled: true },
@@ -201,6 +243,8 @@ async function makeConfig() {
   console.log(`LIVE_D1_BINDINGS=${d1.map((item) => `${item.binding}:${item.database_name}`).join(',')}`);
   console.log(`LIVE_R2_BINDINGS=${r2.map((item) => `${item.binding}:${item.bucket_name}`).join(',')}`);
   console.log(`LIVE_SERVICE_BINDINGS=${services.map((item) => `${item.binding}:${item.service}`).join(',') || '(none)'}`);
+  console.log(`REQUIRED_RATELIMIT_BINDINGS=${canonicalRateLimits.map((item) => `${item.name}:${item.namespace_id}`).join(',')}`);
+  console.log(`REQUIRED_DURABLE_OBJECT_BINDINGS=${canonicalDurableBindings.map((item) => `${item.name}:${item.class_name}`).join(',')}`);
   console.log(`RATE_DB_MODE=${d1.some((item) => item.binding === 'RATE_DB') ? 'separate-live-binding' : 'DB-fallback'}`);
   console.log(`EXPLORE_CACHE_MODE=${r2.some((item) => item.binding === 'EXPLORE_CACHE') ? 'separate-live-binding' : 'PROFILE_MEDIA-fallback'}`);
   console.log(`SHARED_CANONICAL_BINDINGS=PASS DB=${CANONICAL_D1_NAME} PROFILE_MEDIA=${CANONICAL_PROFILE_MEDIA_BUCKET}`);

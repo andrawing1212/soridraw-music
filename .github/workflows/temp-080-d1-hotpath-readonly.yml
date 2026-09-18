@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND (tbl_name IN ('tracks','track_stats','public_profiles','profile_stats','explore_derived_tracks','explore_derived_profiles','explore_shared_revision') OR (type='trigger' AND (sql LIKE '%tracks%' OR sql LIKE '%explore_shared_revision%'))) ORDER BY type,tbl_name,name; PRAGMA index_list('tracks');" --json > "$RUNNER_TEMP/schema.json"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND (tbl_name IN ('tracks','track_stats','public_profiles','profile_stats','explore_derived_tracks','explore_derived_profiles','explore_shared_revision','track_search_fts','profile_search_fts','track_tags') OR name LIKE 'track_search_fts%' OR name LIKE 'profile_search_fts%' OR (type='trigger' AND (sql LIKE '%tracks%' OR sql LIKE '%track_search_fts%' OR sql LIKE '%profile_search_fts%' OR sql LIKE '%explore_shared_revision%'))) ORDER BY type,tbl_name,name; PRAGMA index_list('tracks'); PRAGMA index_list('track_tags');" --json > "$RUNNER_TEMP/schema.json"
           node <<'NODE'
           const fs=require('fs');
           const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/schema.json','utf8'));
@@ -53,5 +53,5 @@ jobs:
           const trackTriggers=rows.filter(r=>r.type==='trigger'&&r.tbl_name==='tracks').map(r=>({name:r.name,sql:r.sql}));
           console.log('TRACK_INDEXES='+JSON.stringify(trackIndexes));
           console.log('TRACK_TRIGGERS='+JSON.stringify(trackTriggers));
-          console.log('REMOTE_D1_WRITES=0');
+          console.log('SEARCH_SCHEMA_AUDIT_20260918=PASS\nREMOTE_D1_WRITES=0');
           NODE

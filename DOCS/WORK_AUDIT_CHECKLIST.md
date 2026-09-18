@@ -51,6 +51,7 @@
 - 좋아요 1회: 전체 Feed scan/rebuild 0
 - 공개/비공개 1곡: 전체 Feed/프로필 scan 0
 - mutation 비용이 O(1)인지 확인. 20행을 크게 넘는 read가 반복되면 원인을 밝히기 전 PASS 금지
+- **D1 rows_written hard gate:** 사용자 행동 1회(좋아요/해제, 공개/비공개, 팔로우/해제 등)는 `W1~W2`만 PASS. `W3+`는 최초 등록 포함 예외 없이 FAIL, 원인 제거 전 승격 금지.
 
 ## Work 사용량 절약
 - 저장소/WORK_LOG 전체를 반복 분석하지 않는다.

@@ -1,5 +1,28 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AG. D1 mutation hard gate + publication W18 root cause confirmed
+
+- User directive: D1 mutation `rows_written` must be **W1~W2** per one user action. `W3+` is unconditional FAIL, including first registration.
+- TEST app124 remains deployed for testing but is **not PRODUCTION-eligible** until this gate is met.
+- Read-only live shared-D1 audit Run `35352259068` — SUCCESS, `REMOTE_D1_WRITES=0`.
+- Live `tracks` has 10 indexes total: 9 explicit + `sqlite_autoindex_tracks_1` primary-key index.
+- First Music Note public registration observed `PAGE SYNC D1 R6/W18`.
+- W18 exact write amplification:
+  - canonical `tracks` INSERT: table 1 + 10 indexes = **W11**.
+  - `explore032_track_insert` derived mirror INSERT into `explore_derived_tracks`: table 1 + PK index 1 + 3 rank indexes = **W5**.
+  - `explore079_music_note_derived_track_insert` increments existing derived profile `track_count`: **W1**.
+  - `soridraw_shared_rev_tracks_ai_051` increments `explore_shared_revision`: **W1**.
+  - total **11 + 5 + 1 + 1 = W18**.
+- Registered private transition observed `R3/W2`.
+- W2 exact write path:
+  - canonical `tracks` UPDATE of `is_public/updated_at`: **W1**; those columns are not in current tracks indexes.
+  - `soridraw_shared_rev_tracks_au_051` revision UPDATE: **W1**.
+  - visibility-only hot transition does not fire heavy `explore032_track_update` because `is_public/updated_at` are excluded from its UPDATE OF list.
+- First-public R6 comes from the explicit publication-state/profile/stat pre-read plus row lookups inside the INSERT triggers; registered private has no standalone SELECT query but its write query still reads rows to locate/guard target/revision rows.
+- Root cause is not repeated background polling. It is **write amplification caused by canonical indexes + automatic D1 derived mirror + shared revision trigger**.
+- Current first-public architecture therefore fails the new absolute cost gate even though feature behavior is correct.
+- Production promotion blocked until redesigned and live-verified at W1~W2.
+
 ## 0AF. TEST app 124 — PC+모바일 통과본 승격 완료 / PAGE SYNC 비용 감사
 
 사용자가 PREVIEW app124를 PC·모바일 모두 정상 적용으로 통과 처리하고 TEST 배포를 승인했다.

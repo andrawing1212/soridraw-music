@@ -517,7 +517,20 @@ export async function handleCatalogProfileTracks066(url, profileRef, env, cors) 
   const limit = getPageSize(url);
   const prefix = catalogListPrefix066('profile', uid);
   const cursorValue = url.searchParams.get('cursor');
-  const cursor = readCatalogCursor066(cursorValue, 'profile', prefix);
+  let cursor = readCatalogCursor066(cursorValue, 'profile', prefix);
+  if (!cursor && cursorValue) {
+    const legacy = decodeCursor(cursorValue);
+    const profilePinned = Number(legacy?.profilePinned);
+    const publishedAt = Number(legacy?.publishedAt);
+    const id = String(legacy?.id || '').trim();
+    if ((profilePinned === 0 || profilePinned === 1) && Number.isFinite(publishedAt) && id) {
+      cursor = {
+        afterKey: catalogProfileKey066({ id, ownerUid: uid, profilePinned: profilePinned === 1, publishedAt }),
+        offsetHint: 50,
+        legacy: cursorValue,
+      };
+    }
+  }
   if (!cursor) return null;
   const page = await listCatalogObjects066(env, prefix, limit, cursor);
   if (!page) return null;

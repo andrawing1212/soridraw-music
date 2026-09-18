@@ -187,8 +187,9 @@ jobs:
             tag="soridraw-test-v${RELEASE_APP_VERSION}-$(printf %.12s "$RELEASE_TARGET")"
             ! git ls-remote --tags origin "refs/tags/$tag" | grep -q .
             ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1
-            gh api -X POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="__release-controller-capability-${GITHUB_RUN_ID}" -f target_commitish="$RELEASE_TARGET" -F draft=true >/dev/null
-            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/__release-controller-capability-${GITHUB_RUN_ID}" --jq .id)"
+            capability_release_id="$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="__release-controller-capability-${GITHUB_RUN_ID}" -f target_commitish="$RELEASE_TARGET" -F draft=true --jq .id)"
+            test -n "$capability_release_id"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$capability_release_id"
             git push origin ":refs/tags/__release-controller-capability-${GITHUB_RUN_ID}" 2>/dev/null || true
           fi
           echo FIREBASE_HOSTING_WRITE_PERMISSIONS=PASS

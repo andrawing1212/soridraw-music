@@ -1,5 +1,104 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0R. app 117 PREVIEW Hosting 배포 — 완료
+
+- 사용자 요청으로 app 117을 Firebase PREVIEW Hosting에 배포했다.
+- 배포 source commit: `328ae89287550d746d9a51f8ffdc168bd785e03c`.
+  - 제품 코드 핵심 merge: `06330ae00c2d7639542d7b3ab473aabb85f67d9e`.
+  - 상태 문서 반영 후 deploy trigger commit까지 포함한 PREVIEW 최신본이다.
+- GitHub Actions Run: `35310263271` — **SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Firebase PREVIEW Hosting deploy PASS.
+- `preview.soridraw.com` exact build hash PASS.
+- 실제 remote app version: **117**.
+- TEST/PRODUCTION branch 및 Hosting content unchanged PASS.
+- Worker/D1/Functions/Rules 배포 없음.
+- 사용자 데이터 migration/seed/backfill/delete/overwrite 없음.
+- 비용 관점: 앱 Hosting 배포만 수행했으며 데이터 서버 전체 읽기/재생성 작업 없음.
+
+현재 상태:
+- PREVIEW: app **117** 배포 완료.
+- TEST: app **116** 유지.
+- PRODUCTION: app **116** 유지.
+- 다음 확인 항목: PREVIEW Explore에서 기존 PROD형 브라우저 캐시가 남아 있어도 공개 좋아요 숫자 `1`이 개인 캐시 `0`으로 덮이지 않는지 실사용 검증.
+
+
+## 0Q. Explore 공개 좋아요 숫자 개인 캐시 오염 근본 수정 — app 117 / PREVIEW 코드 반영 완료 / 배포 전
+
+사용자 실사용 비교에서 동일 곡과 동일 공개 데이터가 TEST에서는 `1`, PRODUCTION에서는 여러 로그인 계정에서 `0`으로 표시되는 현상을 확인했다. 서버-side TEST/PRODUCTION parity가 PASS해도 브라우저에서 값이 갈릴 수 있는 client 경로를 추적했다.
+
+근본 원인:
+- `src/services/exploreLikeAccountOverlay.ts`의 과거 068 경로가 로그인 계정별 `likeCount`를 persistent cache에 보관했다.
+- 이 모듈은 `explore-like-account-patches`를 schema **1**로 사용했지만 `src/services/exploreLikeService.ts`는 같은 cache key/source를 schema **2**로 사용했다.
+- `src/services/exploreRevisionRequestCache.ts`가 정상 서버 Feed 응답을 받은 뒤 `overlayExploreAccountLikeCounts()`를 다시 적용해, 오래된 계정 캐시의 `0`이 shared/server의 정상 `1`을 덮을 수 있었다.
+- 따라서 서버 parity 검사는 정상이어도 오래 사용한 PRODUCTION 브라우저와 깨끗한 TEST origin이 서로 다른 숫자를 표시할 수 있었다.
+
+app 117 수정:
+- 공개 `likeCount`는 shared/server Feed/Profile payload만 authority로 사용한다.
+- 계정별 persistent cache가 공개 숫자를 덮어쓰는 `overlayExploreAccountLikeCounts`와 server response overlay를 제거했다.
+- 과거 overlay helper는 별도 `sessionStorage` key에 revision grace timestamp만 보관하며 숫자는 저장하지 않는다.
+- 개인 빨간 하트 membership은 기존 계정별 경로를 유지하고 공개 숫자와 분리한다.
+- 현재 Explore 카드 render는 `track={track}` shared 숫자를 직접 사용하며 `getExploreLikeDisplayCount091` 같은 개인 display ledger를 public count source로 사용하지 않는 것을 117 verifier에 고정했다.
+- 기존 116 public-count convergence verifier는 app 116 이상에서 계속 적용되도록 보강했다.
+
+GitHub:
+- PR #93 `Fix Explore public like count stale personal-cache overwrite` merge 완료.
+- app 117 코드 merge commit: `06330ae00c2d7639542d7b3ab473aabb85f67d9e`.
+- 최종 검증 Run `35308672890` SUCCESS.
+  - TypeScript PASS
+  - Build PASS
+  - `verify-117-explore-public-count-cache-separation.mjs` PASS
+  - `verify-116-explore-public-count-convergence.mjs` PASS
+- UI/CSS 변경 없음.
+- Worker/D1/Functions/Rules 변경 없음.
+- 사용자 데이터 migration/seed/backfill/delete/overwrite 없음.
+- TEST/PRODUCTION 변경 없음.
+
+배포 상태:
+- PREVIEW branch 코드에는 app 117이 반영됐지만 **Firebase PREVIEW에는 아직 배포하지 않았다**.
+- 현재 TEST/PRODUCTION은 계속 app 116 상태다.
+- 다음 단계는 사용자의 배포 요청이 있을 때 app 117을 PREVIEW에 먼저 배포하여, 오래된 PRODUCTION형 브라우저 캐시가 존재하는 상태에서도 shared/server `1`이 더 이상 account-local `0`으로 덮이지 않는지 실사용 확인하는 것이다.
+
+
+## 0P. 2026-09-18 TEST → PRODUCTION v116 정식 승격 — 완료
+
+이 섹션이 아래의 이전 release-state 기록보다 우선한다.
+
+- 제품 release source PREVIEW: `fc389588435617a02c9c3fc76ab5f739a3033e9c` — app **116**.
+- TEST `main`: `3c5bcef32650ee2e3b6de5e205071d705de8c6a3`.
+- TEST Release Controller Run `35303654387` attempt 2 — **SUCCESS / TEST_VERIFIED**.
+- 고정 TEST manifest: `soridraw-test-v116-fc3895884356`.
+- TEST Worker: `2bed883b-2c43-4cc0-bffc-ab71263538dc`.
+- TEST Hosting: `soridraw-test:live` 배포 및 `test.soridraw.com` exact index 검증 PASS.
+- TEST latest/popular shared Feed parity PASS, public profile parity PASS, Worker smoke/verify PASS.
+
+정식배포:
+- 사용자가 2026-09-18 정식배포를 명확히 승인했다.
+- 1차 Release Controller production Run `35306241583`은 **배포 전** Worker raw outdir hash 재생성 불일치로 차단. PRODUCTION 미변경.
+- 1차 controlled production Run `35306461837`은 Worker/branch까지 진행 후 Firebase CLI의 `soridraw-test:@VERSION` clone 해석 오류로 중단. Worker는 이전 version으로 즉시 복구했고 Hosting은 변경 전이었다. production branch는 후속 rollback commit으로 기존 tree를 복구했다.
+- Firebase 공식 channel clone 방식으로 `soridraw-test:live -> soridraw:live`를 사용한 controlled production Run `35306640261` — **SUCCESS**.
+- 현재 PRODUCTION branch: `3323f5610bb2acca98da9b4aa08b6aa9f766a29b`.
+- 현재 PRODUCTION Worker: `0bc9f998-f5d4-4fe3-a63c-13f7a4f13f58`.
+- PRODUCTION Worker latest/popular shared Feed parity PASS, public profile parity PASS, TEST reference parity PASS, Worker smoke/verify PASS.
+- Firebase PRODUCTION Hosting은 검증된 TEST live를 `soridraw:live`로 clone 완료. `soridraw.web.app` 및 `soridraw.com` exact index hash 검증 PASS.
+- 임시 Hosting rollback channel은 전체 검증 성공 후 삭제 완료.
+- PRODUCTION D1 preflight는 SELECT-only PASS. D1 migration/seed/backfill/user-data copy/delete 없음.
+- Functions/Rules 변경 없음. 사용자 원본 Firestore/D1/R2 데이터 구조 변경 없음.
+- main/TEST identity는 정식배포 후에도 변경되지 않음.
+
+### 이번 릴리스에서 확인된 Release Controller 후속 수정 필요
+
+다음 릴리스 전에 `.github/workflows/soridraw-release-promotion.yml`의 production 경로를 수정해야 한다.
+
+1. Wrangler `--dry-run --outdir` 전체 파일 raw hash는 같은 source에서도 실행마다 값이 달라질 수 있어 TEST manifest의 Worker bundle identity로 사용할 수 없다.
+   - 다음 Controller는 exact source SHA/tree + TEST active Worker version + canonical binding/parity를 불변조건으로 사용하고, 비결정적 raw outdir hash를 production gate로 사용하지 않도록 수정해야 한다.
+2. Firebase Hosting production clone은 검증된 TEST live identity를 재확인한 뒤 `soridraw-test:live -> soridraw:live` channel clone을 사용한다.
+3. rollback은 branch/Worker/Hosting 각각 exact 이전 상태를 독립 snapshot하고, Hosting은 임시 rollback channel 또는 REST exact version 방식으로 복구 가능해야 한다.
+
+현재 제품 배포는 **PRODUCTION v116 완료** 상태다. 위 항목은 다음 릴리스 자동화 개선 과제이며 현재 배포된 사용자 데이터/UI의 미완료를 의미하지 않는다.
+
+
 ## 0O. Release Controller final static-audit blockers — 수정 완료/미배포
 
 - 실행 중인 controller checkout인 `GITHUB_WORKSPACE`를 기준으로 controller identity를 생성·비교하며, 과거 release source worktree의 파일로 drift 검사를 우회할 수 없게 했다.

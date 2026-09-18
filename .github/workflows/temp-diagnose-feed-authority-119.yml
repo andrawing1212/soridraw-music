@@ -1,4 +1,4 @@
-name: TEMP Diagnose Feed Authority 119
+name: TEMP Diagnose Like Queue 119
 
 on:
   push:
@@ -25,38 +25,33 @@ jobs:
       - name: Install Worker tooling
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
-      - name: Compare D1, shared R2 and live PREVIEW feed
+      - name: Inspect canonical likes and pending queue read-only
         shell: bash
         run: |
           set -euo pipefail
           WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
+          ids="'music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_mdCqNWohZwk6lsKuNWOa','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_b1ef5cf6fcb04371b33ea71d1950f244_5jt44','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6eb4944de4264b12a85f0d17180cd143_1en45bp','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_39b4f82d4bff4698a10af069654804e8_6npdve'"
 
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT d.id,d.likes AS likeCount,d.published_at AS publishedAt,c.title FROM explore_derived_tracks d JOIN tracks c ON c.id=d.id WHERE d.active=1 AND c.is_public=1 AND c.status='published' ORDER BY d.published_at DESC,d.id DESC LIMIT 40"             --json > "$RUNNER_TEMP/d1-latest.json"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT d.id,d.likes AS likeCount,d.published_at AS publishedAt,c.title FROM explore_derived_tracks d JOIN tracks c ON c.id=d.id WHERE d.active=1 AND c.is_public=1 AND c.status='published' ORDER BY d.likes DESC,d.published_at DESC,d.id DESC LIMIT 40"             --json > "$RUNNER_TEMP/d1-popular.json"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT d.id,d.likes AS derivedLikes,COALESCE((SELECT COUNT(*) FROM likes l WHERE l.track_id=d.id),0) AS canonicalLikes FROM explore_derived_tracks d WHERE d.id IN ($ids) ORDER BY d.published_at DESC"             --json > "$RUNNER_TEMP/counts.json"
 
-          node "$WRANGLER" r2 object get "soridraw-profile-media/internal/explore/shared-feed-v112/latest-40.json" --file "$RUNNER_TEMP/r2-latest.json" --remote
-          node "$WRANGLER" r2 object get "soridraw-profile-media/internal/explore/shared-feed-v112/popular-40.json" --file "$RUNNER_TEMP/r2-popular.json" --remote
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT batch_id,user_uid,created_at,mutation_json FROM explore_like_batches_069 WHERE mutation_json LIKE '%music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2%' ORDER BY created_at ASC LIMIT 50"             --json > "$RUNNER_TEMP/queue.json"
 
-          curl -fsS -H 'Origin: https://preview.soridraw.com' -H 'Cache-Control: no-cache'             'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=latest&limit=40&__diag119=1' > "$RUNNER_TEMP/live-latest.json"
-          curl -fsS -H 'Origin: https://preview.soridraw.com' -H 'Cache-Control: no-cache'             'https://soridraw-explore-preview.andrawing1212.workers.dev/v1/feed?sort=popular&limit=40&__diag119=1' > "$RUNNER_TEMP/live-popular.json"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command             "SELECT COUNT(*) AS pending069 FROM explore_like_batches_069"             --json > "$RUNNER_TEMP/pending.json"
 
           node - <<'NODE'
           const fs=require('fs');
-          const flatD1=p=>JSON.parse(fs.readFileSync(p,'utf8')).flatMap(x=>x.results||[]);
-          const r2=p=>JSON.parse(fs.readFileSync(p,'utf8')).payload?.data?.items||[];
-          const live=p=>JSON.parse(fs.readFileSync(p,'utf8')).data?.items||[];
-          const pick=rows=>rows.slice(0,15).map(x=>({id:x.id,likeCount:Number(x.likeCount??x.stats?.likeCount??x.likes??0),title:x.title||''}));
-          for (const sort of ['latest','popular']) {
-            const d=pick(flatD1(process.env.RUNNER_TEMP+'/d1-'+sort+'.json'));
-            const r=pick(r2(process.env.RUNNER_TEMP+'/r2-'+sort+'.json'));
-            const l=pick(live(process.env.RUNNER_TEMP+'/live-'+sort+'.json'));
-            console.log('=== '+sort.toUpperCase()+' D1 ==='); console.log(JSON.stringify(d));
-            console.log('=== '+sort.toUpperCase()+' SHARED_R2 ==='); console.log(JSON.stringify(r));
-            console.log('=== '+sort.toUpperCase()+' LIVE_PREVIEW ==='); console.log(JSON.stringify(l));
-            console.log(sort.toUpperCase()+'_D1_EQ_R2='+(JSON.stringify(d)===JSON.stringify(r)));
-            console.log(sort.toUpperCase()+'_R2_EQ_LIVE='+(JSON.stringify(r)===JSON.stringify(l)));
-          }
+          const flat=p=>JSON.parse(fs.readFileSync(p,'utf8')).flatMap(x=>x.results||[]);
+          const counts=flat(process.env.RUNNER_TEMP+'/counts.json');
+          const queue=flat(process.env.RUNNER_TEMP+'/queue.json').map(x=>({
+            batch_id:x.batch_id,
+            created_at:x.created_at,
+            mutation_json:x.mutation_json
+          }));
+          const pending=flat(process.env.RUNNER_TEMP+'/pending.json')[0]||{};
+          console.log('COUNTS='+JSON.stringify(counts));
+          console.log('MATCHED_QUEUE_ROWS='+JSON.stringify(queue));
+          console.log('PENDING069='+Number(pending.pending069||0));
           NODE
           echo D1_WRITE=NONE
-          echo DIAG119=PASS
+          echo LIKE_QUEUE_DIAG119=PASS

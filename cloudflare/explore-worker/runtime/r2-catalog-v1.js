@@ -346,6 +346,7 @@ export function buildFirstPublisherSharedProfileBundle066(authContext, now = Dat
   };
   return {
     schemaVersion: 1,
+    firstPublisherBootstrap066: true,
     uid,
     handle: '',
     revision: 1,
@@ -370,11 +371,15 @@ export async function ensureFirstPublisherSharedProfile066(env, authContext, now
   let existing = null;
   try { existing = await readExploreSharedProfile060(env, uid); } catch {}
   if (validExploreProfileR2Bundle020(existing)) {
+    if (existing?.firstPublisherBootstrap066) {
+      try { await writeExploreR2Json(env, exploreProfileR2Key(uid), existing); } catch {}
+    }
     const profile = existing.body.data.profile || {};
     return {
       nickname: String(profile.nickname || profile.displayName || authContext?.displayName || ''),
       avatarUrl: String(profile.avatarUrl || profile.avatar_url || authContext?.picture || ''),
       handle: String(profile.handle || existing.handle || '').trim().replace(/^@+/, ''),
+      r2FirstPublisher066: Boolean(existing?.firstPublisherBootstrap066),
     };
   }
   const bundle = buildFirstPublisherSharedProfileBundle066(authContext, now);
@@ -387,7 +392,36 @@ export async function ensureFirstPublisherSharedProfile066(env, authContext, now
     nickname: bundle.body.data.profile.nickname,
     avatarUrl: bundle.body.data.profile.avatarUrl,
     handle: '',
+    r2FirstPublisher066: true,
   };
+}
+
+export async function firstPublisherProfileTrackDelta066(env, uid, trackId) {
+  const normalizedUid = String(uid || '').trim();
+  const normalizedTrackId = String(trackId || '').trim();
+  if (!normalizedUid || !normalizedTrackId) return 0;
+  let bundle = null;
+  try { bundle = await readExploreR2Json(env, exploreProfileR2Key(normalizedUid)); } catch {}
+  if (!validExploreProfileR2Bundle020(bundle) || !bundle?.firstPublisherBootstrap066) return 0;
+  const items = Array.isArray(bundle?.body?.data?.items) ? bundle.body.data.items : [];
+  return items.some((item) => getProfileTrackId019(item) === normalizedTrackId) ? 0 : 1;
+}
+
+export async function finalizeFirstPublisherProfile066(env, uid) {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return false;
+  let bundle = null;
+  try { bundle = await readExploreR2Json(env, exploreProfileR2Key(normalizedUid)); } catch {}
+  if (!validExploreProfileR2Bundle020(bundle)) return false;
+  if (!bundle?.firstPublisherBootstrap066) {
+    try { await writeExploreSharedProfile060(env, bundle); } catch {}
+    return true;
+  }
+  const cleaned = { ...bundle };
+  delete cleaned.firstPublisherBootstrap066;
+  await writeExploreR2Json(env, exploreProfileR2Key(normalizedUid), cleaned);
+  await writeExploreSharedProfile060(env, cleaned);
+  return true;
 }
 
 function catalogListPrefix066(kind, value = '') {

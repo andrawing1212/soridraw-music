@@ -370,7 +370,6 @@ export async function ensureFirstPublisherSharedProfile066(env, authContext, now
   const bundle = buildFirstPublisherSharedProfileBundle066(authContext, now);
   if (!bundle) return null;
   await writeExploreSharedProfile060(env, bundle);
-  try { await syncExploreCatalogArtist066(env, bundle.body.data.profile); } catch {}
   return {
     nickname: bundle.body.data.profile.nickname,
     avatarUrl: bundle.body.data.profile.avatarUrl,

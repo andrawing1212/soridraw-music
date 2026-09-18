@@ -78,10 +78,10 @@ type ExploreFeedRevisionResponse = {
   };
 };
 
-const EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 60_000;
-const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 60_000;
+const EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 120_000;
+const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000;
 // SORIDRAW_EXPLORE_LIKE_LATEST_CACHE_IDLE_BATCH_119_20260918
-// Public Feed revision checks are capped at one per minute. The actor keeps the
+// Public Feed revision checks are capped at one per two minutes. The actor keeps the
 // immediate optimistic heart/count locally; other users pick up the shared result
 // after the Worker aggregate updates the shared revision.
 // SORIDRAW_EXPLORE_R2_SNAPSHOT_BOOTSTRAP_108_20260916

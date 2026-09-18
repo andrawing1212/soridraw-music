@@ -1,5 +1,50 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AB. TEST app 122 — Explore 공개 좋아요 숫자 stale shared Feed 확인 / 수정 전
+
+TEST 승격 직후 사용자 실사용에서 Explore 카드 숫자가 예상값으로 갱신되지 않는 현상을 확인했다. 이 문제는 "최초 업데이트 후 2분을 기다려야 보이는 정상 지연"이 아니다.
+
+2026-09-18 읽기 전용 진단:
+- Run `35339798457`: 069 queue/read-only 확인.
+  - Q035/Q066/Q069 pending batch = 0.
+  - 최근 30분 canonical like 변경 없음.
+  - 큐 적체 때문에 숫자가 늦는 상태 아님.
+- Run `35339874817`, `35340012778`: D1 canonical/derived와 PREVIEW/TEST shared Feed snapshot 대조.
+- 화면 상단 첫 4곡:
+  - `Leaving One Step Open`
+  - `Left Unsaid`
+  - `Through the Night`
+  - `Just Stay Here Awhile`
+- 위 4곡 모두:
+  - canonical `track_stats.like_count = 1`
+  - relation `likes COUNT = 1`
+  - derived `explore_derived_tracks.likes = 1`
+  - PREVIEW shared Feed v112 = **0**
+  - TEST shared Feed v112 = **0**
+- 반면 다른 공개곡(예: `스스륵`)은 canonical/derived/shared 모두 1로 일치.
+- TEST shared snapshot는 `SHARED-R2-GET-112`, D1 read 0으로 정상적으로 공용 R2를 읽고 있으나 해당 4개 row 자체가 stale.
+
+현재 판단:
+- actor 30초 batch, canonical D1 relation/count, derived row까지는 정상 반영된 기록이 존재한다.
+- 실패 구간은 canonical/derived 이후 **공용 Feed R2 shared-feed-v112 갱신/미러 경로**다.
+- 따라서 클라이언트 2분 activity gate를 기다려도 source shared snapshot 자체가 0이면 1로 바뀌지 않는다.
+- 2분 gate는 "다른 사용자가 revision을 얼마나 자주 확인할지"의 비용 제한일 뿐, 최초 업데이트 후 반드시 기다리는 시간 규칙이 아니다.
+- PREVIEW와 TEST가 같은 shared snapshot 0을 읽으므로 TEST 환경 분리/승격 문제도 아니다.
+
+보호:
+- 진단은 SELECT/read-only + 공개 snapshot GET만 사용.
+- D1 write/migration/seed/backfill/delete 없음.
+- 사용자 데이터 변경 없음.
+- 임시 진단 Workflow 삭제 완료.
+- PRODUCTION 비변경.
+
+다음 작업:
+- 수정은 `preview`에서만 시작.
+- `056-explore-public-like-parity` → 환경 R2 Feed materialization → `059-shared-feed-r2-parity` shared mirror 순서를 실제 runtime 기준으로 감사.
+- canonical/derived가 1일 때 shared v112도 해당 track 하나만 1로 패치되는지 검증.
+- 전체 Feed 재생성/전체 D1 scan 없이 변경 track만 반영하는 구조 유지.
+- 수정 전 TEST 재승격/PRODUCTION 승격 금지.
+
 ## 0AA. TEST app 122 — PREVIEW 검증본 승격 / TEST_VERIFIED 완료
 
 사용자가 PREVIEW app 122를 통과 처리하고 TEST 배포를 승인했다. 검증된 PREVIEW 제품과 공유 사용자 데이터를 그대로 사용하며, 데이터 복사/마이그레이션 없이 코드/Worker/Hosting만 TEST로 승격했다.

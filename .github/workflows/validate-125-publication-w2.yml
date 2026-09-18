@@ -9,10 +9,12 @@ on:
       - 'cloudflare/explore-worker/patches/066-publication-w2-shared-r2-authority.mjs'
       - 'cloudflare/explore-worker/patches/067-w2-feed-pagination.mjs'
       - 'cloudflare/explore-worker/patches/068-w2-profile-search-projection.mjs'
+      - 'cloudflare/explore-worker/patches/069-w2-profile-pagination.mjs'
       - 'cloudflare/explore-worker/release-patches.json'
       - 'scripts/verify-125-publication-w2-cutover.mjs'
       - 'scripts/verify-125-w2-feed-pagination.mjs'
       - 'scripts/verify-125-w2-profile-search-projection.mjs'
+      - 'scripts/verify-125-w2-profile-pagination.mjs'
       - 'scripts/verify-115-shared-track-card-r2.mjs'
       - 'scripts/verify-123-shared-like-cache-repair.mjs'
       - '.github/workflows/validate-125-publication-w2.yml'
@@ -48,11 +50,13 @@ jobs:
           node --check cloudflare/explore-worker/patches/066-publication-w2-shared-r2-authority.mjs
           node --check cloudflare/explore-worker/patches/067-w2-feed-pagination.mjs
           node --check cloudflare/explore-worker/patches/068-w2-profile-search-projection.mjs
+          node --check cloudflare/explore-worker/patches/069-w2-profile-pagination.mjs
           tmp="$(mktemp -d)"
           cp cloudflare/explore-worker/canonical/preview-worker.js "$tmp/worker.js"
           SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/066-publication-w2-shared-r2-authority.mjs
           SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/067-w2-feed-pagination.mjs
           SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/068-w2-profile-search-projection.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/069-w2-profile-pagination.mjs
           node --check "$tmp/worker.js"
           cp "$tmp/worker.js" /tmp/app125-worker.js
           echo "APP125_GENERATED_WORKER=/tmp/app125-worker.js" >> "$GITHUB_ENV"
@@ -64,6 +68,7 @@ jobs:
           SORIDRAW_GENERATED_WORKER="$APP125_GENERATED_WORKER" node scripts/verify-125-publication-w2-cutover.mjs
           SORIDRAW_GENERATED_WORKER="$APP125_GENERATED_WORKER" node scripts/verify-125-w2-feed-pagination.mjs
           SORIDRAW_GENERATED_WORKER="$APP125_GENERATED_WORKER" node scripts/verify-125-w2-profile-search-projection.mjs
+          SORIDRAW_GENERATED_WORKER="$APP125_GENERATED_WORKER" node scripts/verify-125-w2-profile-pagination.mjs
           SORIDRAW_GENERATED_WORKER="$APP125_GENERATED_WORKER" node scripts/verify-115-shared-track-card-r2.mjs
           SORIDRAW_GENERATED_WORKER="$APP125_GENERATED_WORKER" node scripts/verify-123-shared-like-cache-repair.mjs
 

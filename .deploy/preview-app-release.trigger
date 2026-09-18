@@ -1,8 +1,8 @@
-requested_at=2026-09-18T09:56:00Z
+requested_at=2026-09-18T10:18:00Z
 requested_by=user
-product_code_target=6934deb10d55ceb77a21ad09ca1d6436ded6d313
-release_source_target=app-121-explore-like-30s-2m-timing
-release_purpose=121_explore_like_timing_only
+product_code_target=cc2a55ad7d7deb25b971c39464c12f7a9981a8aa
+release_source_target=app-122-explore-like-white-heart-motion
+release_purpose=122_explore_like_white_heart_motion
 hosting_only=true
 worker_redeploy=false
 no_user_data_migration=true

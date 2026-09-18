@@ -1,71 +1,81 @@
 -- SORIDRAW app125 candidate: Music Note W1-W2 D1 mutation cutover.
--- DO NOT APPLY directly. Shared canonical D1 migration requires explicit user approval
--- and must run only after PREVIEW/TEST/PRODUCTION Workers can read the shared R2 authority.
+-- DO NOT APPLY directly. This is a shared canonical D1 compatibility migration.
+-- Rollout order is intentionally staged:
+--   1) add the compatibility column + conditional indexes/triggers,
+--   2) old Workers keep writing publication_storage_version=0 and behave exactly as before,
+--   3) only the new 066 Worker writes publication_storage_version=1 for brand-new Music Note rows,
+--   4) TEST/PRODUCTION can be upgraded later without copying user data.
 --
--- Goal:
--- - Music Note first canonical INSERT: tracks table + TEXT PK only (D1 W2 on current ROWID schema)
--- - Music Note private/republish: canonical tracks row only (D1 W1)
--- - no D1 derived mirror / global-revision write for Music Note publication transitions
+-- Goal after a 066 Worker opt-in:
+-- - brand-new Music Note canonical INSERT: tracks table + TEXT PK only (D1 W2 on current ROWID schema)
+-- - registered private/republish visibility transition: canonical tracks row only (D1 W1)
+-- - no D1 derived mirror / global-revision write for version=1 Music Note publication transitions
+-- - preserve every existing Music Note row and every old Worker code path as legacy version=0
 -- - preserve legacy/suno_library indexes and derived behavior
 --
 -- Existing user rows are NOT deleted, rewritten, or backfilled.
 
 BEGIN;
 
--- Keep the same index names for legacy queries, but stop making every Music Note
--- publication pay for nine secondary index entries. Existing Music Note index entries
--- disappear as part of index recreation; canonical rows stay unchanged.
+-- Additive compatibility flag. Existing rows and old Workers remain version 0.
+-- SQLite adds this as schema metadata with a constant default; no user-row backfill is requested.
+ALTER TABLE tracks
+  ADD COLUMN publication_storage_version INTEGER NOT NULL DEFAULT 0;
+
+-- Keep the same index names. Legacy rows (including every pre-cutover Music Note row)
+-- stay indexed. Only brand-new Music Note rows explicitly written as version=1 by the
+-- 066 Worker skip the nine secondary indexes.
 DROP INDEX IF EXISTS idx_tracks_latest_order;
 CREATE INDEX idx_tracks_latest_order
   ON tracks (published_at DESC, id DESC)
-  WHERE source_type <> 'music_note';
+  WHERE source_type <> 'music_note' OR publication_storage_version <> 1;
 
 DROP INDEX IF EXISTS idx_tracks_legacy_global;
 CREATE UNIQUE INDEX idx_tracks_legacy_global
   ON tracks (legacy_global_id)
-  WHERE source_type <> 'music_note';
+  WHERE source_type <> 'music_note' OR publication_storage_version <> 1;
 
 DROP INDEX IF EXISTS idx_tracks_owner_latest;
 CREATE INDEX idx_tracks_owner_latest
   ON tracks (owner_uid, published_at DESC)
-  WHERE source_type <> 'music_note';
+  WHERE source_type <> 'music_note' OR publication_storage_version <> 1;
 
 DROP INDEX IF EXISTS idx_tracks_owner_profile_order;
 CREATE INDEX idx_tracks_owner_profile_order
   ON tracks (owner_uid, profile_pinned DESC, published_at DESC, id DESC)
-  WHERE source_type <> 'music_note';
+  WHERE source_type <> 'music_note' OR publication_storage_version <> 1;
 
 DROP INDEX IF EXISTS idx_tracks_owner_source;
 CREATE UNIQUE INDEX idx_tracks_owner_source
   ON tracks (owner_uid, source_type, source_id, source_subtrack_key)
-  WHERE source_type <> 'music_note';
+  WHERE source_type <> 'music_note' OR publication_storage_version <> 1;
 
 DROP INDEX IF EXISTS idx_tracks_owner_suno_url;
 CREATE INDEX idx_tracks_owner_suno_url
   ON tracks (owner_uid, suno_url_primary)
-  WHERE source_type <> 'music_note';
+  WHERE source_type <> 'music_note' OR publication_storage_version <> 1;
 
 DROP INDEX IF EXISTS idx_tracks_primary_genre_latest;
 CREATE INDEX idx_tracks_primary_genre_latest
   ON tracks (primary_genre, published_at DESC, id DESC)
-  WHERE source_type <> 'music_note';
+  WHERE source_type <> 'music_note' OR publication_storage_version <> 1;
 
 DROP INDEX IF EXISTS idx_tracks_source_type_latest;
 CREATE INDEX idx_tracks_source_type_latest
   ON tracks (source_type, published_at DESC)
-  WHERE source_type <> 'music_note';
+  WHERE source_type <> 'music_note' OR publication_storage_version <> 1;
 
 DROP INDEX IF EXISTS idx_tracks_title;
 CREATE INDEX idx_tracks_title
   ON tracks (title COLLATE NOCASE)
-  WHERE source_type <> 'music_note';
+  WHERE source_type <> 'music_note' OR publication_storage_version <> 1;
 
--- Legacy/suno_library keeps the D1 derived projection. Music Note public content is
--- served from the shared R2 authority after the Worker compatibility cutover.
+-- Version 0 keeps the historical D1-derived projection. Version 1 Music Note content
+-- is projected by the Worker directly into shared R2 Feed/Profile/card authority.
 DROP TRIGGER IF EXISTS explore032_track_insert;
 CREATE TRIGGER explore032_track_insert
 AFTER INSERT ON tracks
-WHEN NEW.source_type <> 'music_note'
+WHEN NEW.source_type <> 'music_note' OR NEW.publication_storage_version <> 1
 BEGIN
   INSERT INTO explore_derived_tracks(id,owner_uid,active,published_at,pinned,likes,row_json)
   SELECT
@@ -107,9 +117,9 @@ AFTER UPDATE OF
   source_subtrack_key,source_subtrack_index,source_subtrack_id,
   title,description,cover_url,duration_seconds,lyrics,style,prompt,
   suno_url_primary,suno_url_secondary,search_text,status,published_at,created_at,
-  share_schema_version,share_payload_json,primary_genre
+  share_schema_version,share_payload_json,primary_genre,publication_storage_version
 ON tracks
-WHEN NEW.source_type <> 'music_note' OR OLD.source_type <> 'music_note'
+WHEN NEW.source_type <> 'music_note' OR NEW.publication_storage_version <> 1
 BEGIN
   INSERT INTO explore_derived_tracks(id,owner_uid,active,published_at,pinned,likes,row_json)
   SELECT
@@ -147,16 +157,17 @@ END;
 DROP TRIGGER IF EXISTS explore032_track_delete;
 CREATE TRIGGER explore032_track_delete
 AFTER DELETE ON tracks
-WHEN OLD.source_type <> 'music_note'
+WHEN OLD.source_type <> 'music_note' OR OLD.publication_storage_version <> 1
 BEGIN
   DELETE FROM explore_derived_tracks WHERE id=OLD.id;
 END;
 
--- The old global revision is retained for non-Music-Note compatibility only.
+-- The old global revision remains active for every legacy/version-0 row.
+-- Version-1 Music Note publication uses targeted shared-R2 mutation signals instead.
 DROP TRIGGER IF EXISTS soridraw_shared_rev_tracks_ai_051;
 CREATE TRIGGER soridraw_shared_rev_tracks_ai_051
 AFTER INSERT ON tracks
-WHEN NEW.source_type <> 'music_note'
+WHEN NEW.source_type <> 'music_note' OR NEW.publication_storage_version <> 1
 BEGIN
   UPDATE explore_shared_revision
   SET revision=revision+1,updated_at=CAST(strftime('%s','now') AS INTEGER)*1000
@@ -166,7 +177,7 @@ END;
 DROP TRIGGER IF EXISTS soridraw_shared_rev_tracks_au_051;
 CREATE TRIGGER soridraw_shared_rev_tracks_au_051
 AFTER UPDATE ON tracks
-WHEN NEW.source_type <> 'music_note' OR OLD.source_type <> 'music_note'
+WHEN NEW.source_type <> 'music_note' OR NEW.publication_storage_version <> 1
 BEGIN
   UPDATE explore_shared_revision
   SET revision=revision+1,updated_at=CAST(strftime('%s','now') AS INTEGER)*1000
@@ -176,7 +187,7 @@ END;
 DROP TRIGGER IF EXISTS soridraw_shared_rev_tracks_ad_051;
 CREATE TRIGGER soridraw_shared_rev_tracks_ad_051
 AFTER DELETE ON tracks
-WHEN OLD.source_type <> 'music_note'
+WHEN OLD.source_type <> 'music_note' OR OLD.publication_storage_version <> 1
 BEGIN
   UPDATE explore_shared_revision
   SET revision=revision+1,updated_at=CAST(strftime('%s','now') AS INTEGER)*1000

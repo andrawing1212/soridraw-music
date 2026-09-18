@@ -29,6 +29,7 @@ for (const required of [
   'handleGenreTracks',
   'handleSearch',
   'handlePublicProfileFirstViewWithEdgeCache',
+  'handleMyProfileUpdate',
   'encodeCursor',
   'decodeCursor',
   'getPageSize',
@@ -106,7 +107,7 @@ source = source.slice(0, anchor) + runtime + '\n\n' + source.slice(anchor);
 
 wrapAsyncFunction('publicationReadProfileR2024', 'Core066', (coreName) => `async function publicationReadProfileR2024(env, authContext) {
   const current = await ${coreName}(env, authContext);
-  if (current || !isExploreR2CatalogEnabled066(env)) return current;
+  if (current || !isExploreR2FirstPublisherEnabled066(env)) return current;
   try {
     const uid = String(authContext?.uid || '').trim();
     if (!uid) return null;
@@ -124,7 +125,7 @@ wrapAsyncFunction('publicationReadProfileR2024', 'Core066', (coreName) => `async
 }`);
 
 wrapAsyncFunction('publicationEnsureProfile016', 'Core066', (coreName) => `async function publicationEnsureProfile016(env, authContext, row, now) {
-  if (isExploreR2CatalogEnabled066(env)) {
+  if (isExploreR2FirstPublisherEnabled066(env)) {
     try {
       const shared = await ensureFirstPublisherSharedProfile066(env, authContext, now);
       if (shared) return shared;
@@ -133,19 +134,6 @@ wrapAsyncFunction('publicationEnsureProfile016', 'Core066', (coreName) => `async
     }
   }
   return await ${coreName}(env, authContext, row, now);
-}`);
-
-wrapAsyncFunction('writeExploreSharedProfile060', 'Core066', (coreName) => `async function writeExploreSharedProfile060(env, bundle) {
-  const result = await ${coreName}(env, bundle);
-  if (result && isExploreR2CatalogEnabled066(env)) {
-    try {
-      const profile = bundle?.body?.data?.profile || null;
-      if (profile) await syncExploreCatalogArtist066(env, profile);
-    } catch (error) {
-      console.warn('[SORIDRAW 066] artist catalog sync deferred:', String(error?.message || error || 'unknown'));
-    }
-  }
-  return result;
 }`);
 
 appendBeforeResult066('syncExploreFeedR2Publication043', `  if (isExploreR2CatalogEnabled066(env)) {
@@ -182,7 +170,7 @@ appendBeforeResult066('patchExploreVisibleProfiles056', `  if (isExploreR2Catalo
   }`);
 
 wrapAsyncFunction('handleFeedWithEdgeCache', 'Core066', (coreName) => `async function handleFeedWithEdgeCache(request, url, env, cors) {
-  if (!isExploreR2CatalogEnabled066(env)) return await ${coreName}(request, url, env, cors);
+  if (!isExploreR2CatalogReadEnabled066(env)) return await ${coreName}(request, url, env, cors);
   const cursorValue = url.searchParams.get('cursor');
   if (cursorValue) {
     try {
@@ -205,7 +193,7 @@ wrapAsyncFunction('handleFeedWithEdgeCache', 'Core066', (coreName) => `async fun
 }`);
 
 wrapAsyncFunction('handleProfileTracks', 'Core066', (coreName) => `async function handleProfileTracks(url, profileRef, env, cors) {
-  if (!isExploreR2CatalogEnabled066(env)) return await ${coreName}(url, profileRef, env, cors);
+  if (!isExploreR2CatalogReadEnabled066(env)) return await ${coreName}(url, profileRef, env, cors);
   const cursorValue = url.searchParams.get('cursor');
   if (cursorValue) {
     try {
@@ -225,7 +213,7 @@ wrapAsyncFunction('handleProfileTracks', 'Core066', (coreName) => `async functio
 }`);
 
 wrapAsyncFunction('handleGenreTracks', 'Core066', (coreName) => `async function handleGenreTracks(url, genreValue, env, cors) {
-  if (!isExploreR2CatalogEnabled066(env)) return await ${coreName}(url, genreValue, env, cors);
+  if (!isExploreR2CatalogReadEnabled066(env)) return await ${coreName}(url, genreValue, env, cors);
   try {
     const catalog = await handleCatalogGenre066(url, genreValue, env, cors);
     if (catalog) return catalog;
@@ -236,7 +224,7 @@ wrapAsyncFunction('handleGenreTracks', 'Core066', (coreName) => `async function 
 }`);
 
 wrapAsyncFunction('handleSearch', 'Core066', (coreName) => `async function handleSearch(url, env, cors) {
-  if (!isExploreR2CatalogEnabled066(env)) return await ${coreName}(url, env, cors);
+  if (!isExploreR2CatalogReadEnabled066(env)) return await ${coreName}(url, env, cors);
   try {
     const catalog = await handleCatalogSearch066(url, env, cors);
     if (catalog) return catalog;
@@ -248,9 +236,26 @@ wrapAsyncFunction('handleSearch', 'Core066', (coreName) => `async function handl
 
 
 
+{
+  const range = functionRange('handleMyProfileUpdate');
+  const before = "  return json({ ok: true, data: { profile } }, 200, cors);\n}";
+  const count = range.text.split(before).length - 1;
+  if (count !== 1) throw new Error(`[066] profile-edit return anchor count=${count}`);
+  const after = `  if (isExploreR2CatalogEnabled066(env)) {
+    try { await syncExploreCatalogArtist066(env, profile); }
+    catch (error) { console.warn('[SORIDRAW 066] explicit profile artist sync deferred:', String(error?.message || error || 'unknown')); }
+  }
+  return json({ ok: true, data: { profile } }, 200, cors);
+}`;
+  const next = range.text.replace(before, after);
+  source = source.slice(0, range.start) + next + source.slice(range.end);
+}
+
 for (const required of [
   marker,
   'isExploreR2CatalogEnabled066',
+  'isExploreR2CatalogReadEnabled066',
+  'isExploreR2FirstPublisherEnabled066',
   'syncExploreCatalogTrack066',
   'removeExploreCatalogTrack066',
   'patchExploreCatalogLike066',
@@ -259,6 +264,7 @@ for (const required of [
   'handleCatalogProfileTracks066',
   'handleCatalogGenre066',
   'handleCatalogSearch066',
+  'explicit profile artist sync deferred',
   'publicationEnsureProfile016Core066',
   'handleSearchCore066',
   'handleFeedWithEdgeCacheCore066',

@@ -39,6 +39,10 @@ import { patchExploreLikedTrackMembership } from './exploreLikedTracksService';
 // SORIDRAW_EXPLORE_UPDATE_ZERO_READ_099_20260916
 // SORIDRAW_EXPLORE_PUBLIC_COUNT_SOURCE_SEPARATION_106_20260916
 // SORIDRAW_EXPLORE_PUBLIC_COUNT_DIRECT_107_20260916
+// SORIDRAW_EXPLORE_LIKE_EXPLICIT_INTENT_118_20260918
+// An explicit heart click is authoritative pending intent until the direct batch
+// response acknowledges it. Historical local baseLiked/RTDB state may never
+// erase or override that intent.
 const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 2;
 const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
 const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
@@ -117,6 +121,7 @@ type ExploreLikeAccountPatchCache = Record<string, ExploreLikeAccountPatch>;
 
 const likedStateByUid = new Map<string, Map<string, boolean>>();
 const inflightByUid = new Map<string, ExploreLikeOutbox>();
+const flushAfterInflightByUid = new Set<string>();
 const observedAccountSignalVersionByUid = new Map<string, number>();
 
 const getAccountSignalVersionStorageKey = (uid: string) => `${EXPLORE_LIKE_ACCOUNT_SIGNAL_VERSION_STORAGE_BASE}_${uid}`;
@@ -371,9 +376,7 @@ const persistLikeOutbox = (uid: string, outbox: ExploreLikeOutbox) => {
 };
 
 
-export const getPendingExploreLikeMutationCount = (uid: string): number => Object.values(readLikeOutbox(uid))
-  .filter((pending) => pending.desiredLiked !== pending.baseLiked)
-  .length;
+export const getPendingExploreLikeMutationCount = (uid: string): number => Object.keys(readLikeOutbox(uid)).length;
 
 const dispatchLikeSync = (detail: ExploreLikeSyncEventDetail) => {
   if (typeof window === 'undefined') return;
@@ -403,24 +406,15 @@ export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) 
 // an app update or wake-up into a full liked-track verification/read.
 const cache = getLikedStateCache(uid);
 
-  // 097: a local pending click should win only while it disagrees with the
-  // server-acknowledged account signal. If both already describe the same liked
-  // state, the durable pending row is stale/redundant: clear it and accept the
-  // remote display count too. This lets a sleeping second device converge without
-  // adding a D1/Firestore recovery read or requiring the user to clear app cache.
+  // 118: RTDB is a cross-device replay signal, not the ACK for this browser's
+  // current click. While an explicit mutation is pending, its desired state wins
+  // even when an older signal happens to contain the same/different value.
+  // Only the direct /v1/me/likes/batch response may clear the pending intent.
   const pendingOutbox = readLikeOutbox(uid);
-  let pendingOutboxChanged = false;
   const effectiveResults = signal.results.map((result) => {
     const pending = pendingOutbox[result.trackId];
-    if (!pending) return result;
-    if (pending.desiredLiked === result.liked) {
-      delete pendingOutbox[result.trackId];
-      pendingOutboxChanged = true;
-      return result;
-    }
-    return { ...result, liked: pending.desiredLiked };
+    return pending ? { ...result, liked: pending.desiredLiked } : result;
   });
-  if (pendingOutboxChanged) persistLikeOutbox(uid, pendingOutbox);
   rememberAccountSyncResults(uid, effectiveResults);
   for (const result of effectiveResults) {
     // 106 final rule: account RTDB synchronizes only personal heart membership.
@@ -568,17 +562,14 @@ const normalizeBatchResults = (payload: unknown, expectedTrackIds: string[]): Ex
 
 const flushPendingLikes = async (user: User): Promise<void> => {
   const uid = user.uid;
-  if (inflightByUid.has(uid)) return;
-
-  const outbox = readLikeOutbox(uid);
-  let changed = false;
-  for (const [trackId, pending] of Object.entries(outbox)) {
-    if (pending.desiredLiked !== pending.baseLiked) continue;
-    delete outbox[trackId];
-    changed = true;
+  if (inflightByUid.has(uid)) {
+    flushAfterInflightByUid.add(uid);
+    return;
   }
-  if (changed) persistLikeOutbox(uid, outbox);
 
+  // 118: every row here represents an explicit user click. Never discard one
+  // merely because desiredLiked equals a historical local baseLiked value.
+  const outbox = readLikeOutbox(uid);
   const batchEntries = Object.values(outbox)
     .sort((a, b) => (a.queuedAt || a.updatedAt) - (b.queuedAt || b.updatedAt))
     .slice(0, EXPLORE_LIKE_BATCH_MAX);
@@ -586,6 +577,7 @@ const flushPendingLikes = async (user: User): Promise<void> => {
 
   const snapshot = Object.fromEntries(batchEntries.map((pending) => [pending.trackId, { ...pending }])) as ExploreLikeOutbox;
   inflightByUid.set(uid, snapshot);
+  let batchSucceeded = false;
 
   try {
     const payload = await requestExploreLike(user, '/v1/me/likes/batch', {
@@ -649,9 +641,12 @@ const flushPendingLikes = async (user: User): Promise<void> => {
     }
 
     persistLikedStateCache(uid, confirmedCache);
-    persistLikeOutbox(uid, latestOutbox);
     rememberAccountSyncResults(uid, accountReplayResults);
+    // Publish the new cross-device signal while the local pending intent still
+    // exists, so an old RTDB replay cannot race between HTTP ACK and signal commit.
     await publishExploreLikeAccountSyncSignal(user, batchEntries, accountSyncResults);
+    persistLikeOutbox(uid, latestOutbox);
+    batchSucceeded = true;
   } catch (reason) {
     const latestOutbox = readLikeOutbox(uid);
     let firstPending: ExploreLikePendingMutation | null = null;
@@ -679,6 +674,10 @@ const flushPendingLikes = async (user: User): Promise<void> => {
     }
   } finally {
     inflightByUid.delete(uid);
+    const flushAgain = flushAfterInflightByUid.delete(uid);
+    if (batchSucceeded && flushAgain && getPendingExploreLikeMutationCount(uid) > 0) {
+      queueMicrotask(() => { void flushPendingLikes(user); });
+    }
   }
 };
 
@@ -823,11 +822,6 @@ export const setExploreTrackLike = async (
   patchExploreLikedTrackMembership(user.uid, normalizedTrackId, liked);
   optimisticLikedCache.set(normalizedTrackId, liked);
   persistLikedStateCache(user.uid, optimisticLikedCache);
-  if (!inflight && liked === baselineLiked) {
-    delete outbox[normalizedTrackId];
-    persistLikeOutbox(user.uid, outbox);
-    return { trackId: normalizedTrackId, liked, likeCount: optimisticLikeCount };
-  }
   const now = Date.now();
   outbox[normalizedTrackId] = {
     trackId: normalizedTrackId,
@@ -841,14 +835,12 @@ export const setExploreTrackLike = async (
     retryCount: 0,
   };
   persistLikeOutbox(user.uid, outbox);
-  // 105: start one one-minute server aggregate window on the first real
-  // change, then keep later clicks local until the single near-deadline flush.
-  // This preserves idle=0 and avoids one server request per click.
-  const startedEventWindow104 = beginExploreLikeEventWindow104(user, now);
-  if (startedEventWindow104) {
-    void flushPendingLikes(user);
-  } else if (getPendingExploreLikeMutationCount(user.uid) >= EXPLORE_LIKE_BATCH_MAX) {
-    void flushPendingLikes(user);
-  }
+  // 118: heart membership follows the normal optimistic-mutation pattern:
+  // update locally now, then send the desired state immediately. The Worker still
+  // coalesces canonical public-count projection behind its one-minute Durable
+  // Object alarm, so correctness no longer depends on keeping personal intent
+  // local for that whole aggregation window.
+  beginExploreLikeEventWindow104(user, now); // safety flush only; normally a no-op after ACK.
+  void flushPendingLikes(user);
   return { trackId: normalizedTrackId, liked, likeCount: optimisticLikeCount };
 };

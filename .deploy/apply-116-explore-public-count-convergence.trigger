@@ -1,9 +1,0 @@
-requested_at=2026-09-17T09:33:00Z
-requested_by=user
-base_head=51b12c4900e484d8a766740581384f8bc7f365dd
-scope=explore_public_like_count_convergence
-preview_only=true
-no_d1_migration=true
-no_user_data_migration=true
-no_test_main_change=true
-no_production_change=true

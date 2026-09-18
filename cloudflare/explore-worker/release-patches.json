@@ -25,12 +25,6 @@
     "048-page-exit-publication-batch.mjs",
     "049-publication-internal-batch-compaction.mjs",
     "050-publication-primary-key-batch-read.mjs",
-    "051-publication-write-returning.mjs",
-    "059-shared-feed-r2-parity.mjs",
-    "060-shared-profile-r2-parity.mjs",
-    "061-shared-social-r2-parity.mjs",
-    "062-shared-track-card-r2.mjs",
-    "063-public-profile-warm-edge-zero-read.mjs",
-    "064-shared-feed-catchup-convergence.mjs"
+    "051-publication-write-returning.mjs"
   ]
 }

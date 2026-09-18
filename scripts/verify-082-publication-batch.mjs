@@ -31,11 +31,9 @@ const functionText = (source, name) => {
 
 const appVersion = Number(version.version);
 assert.ok(Number.isFinite(appVersion) && appVersion >= 82, `082 publication regression requires app version >=082, got ${String(version.version)}`);
-const p49 = manifest.patches.indexOf('049-publication-internal-batch-compaction.mjs');
-const p50 = manifest.patches.indexOf('050-publication-primary-key-batch-read.mjs');
-const p51 = manifest.patches.indexOf('051-publication-write-returning.mjs');
-assert.ok(p49 >= 0 && p50 >= 0 && p51 >= 0, 'publication patches 049/050/051 must remain in manifest');
-assert.ok(p49 < p50 && p50 < p51, 'publication patch order 049 -> 050 -> 051 must remain intact');
+assert.equal(manifest.patches.at(-3),'049-publication-internal-batch-compaction.mjs');
+assert.equal(manifest.patches.at(-2),'050-publication-primary-key-batch-read.mjs');
+assert.equal(manifest.patches.at(-1),'051-publication-write-returning.mjs');
 assert.match(worker,/SORIDRAW_PUBLICATION_INTERNAL_BATCH_049_20260914/);
 assert.match(worker,/SORIDRAW_PUBLICATION_PK_BATCH_READ_050_20260914/);
 assert.match(client,/SORIDRAW_PUBLICATION_MISSING_R2_REPAIR_082_20260914/);

@@ -71,22 +71,6 @@
 - TEST/PRODUCTION 실제 주소와 exact `index.html`/`app-version.json`, Worker API/CORS를 확인해야 완료다.
 - 고정 배포시스템 변경 자체는 `.github/workflows/soridraw-release-system-audit.yml`로 read-only 감사하며 실제 배포 없이 TypeScript/Build/Worker dry-run/D1 preflight를 통과해야 한다.
 
-### 승격 불변조건 — 2026-09-17 고정
-- **시간 단축보다 `오류 없이 그대로 이동`이 상위 조건**이다. 빠르게 배포됐더라도 이전 단계와 실제 결과가 다르면 실패다.
-- TEST는 PREVIEW에서 검증된 exact tree만 받는 것으로 끝나지 않는다. 배포 직후 **실제 공개 결과도 PREVIEW와 동일**해야 성공이다.
-- PRODUCTION은 PREVIEW를 새로 해석하지 않는다. **방금 검증된 TEST의 동일 tree와 실제 결과를 그대로 이어받아야 성공**이다.
-- TEST 승격은 PREVIEW와 `latest/popular revision`, shared first-page snapshot, 직접 Feed 공개 projection, 공개프로필 projection을 자동 비교한다.
-- PRODUCTION 승격은 같은 항목을 TEST와 자동 비교한다.
-- 공개 projection 비교에는 곡 id/owner/title/likeCount/pinned 및 공개프로필 uid/handle/trackCount/follower/following/곡 목록을 포함한다.
-- `DB`는 반드시 공유 canonical D1 `soridraw-explore-db`, `PROFILE_MEDIA`는 반드시 공유 R2 `soridraw-profile-media`여야 한다. binding 이름만 맞고 실제 리소스가 다르면 배포 전 실패한다.
-- `RATE_DB`, `EXPLORE_CACHE`, Edge Cache 같은 환경별 파생 상태는 분리할 수 있지만 **사용자 원본/공유 기준을 대체하는 정답으로 인정하지 않는다.**
-- shared revision/snapshot/public-profile 확인에서 불필요 D1 read/write 0 계약을 유지한다.
-- 환경별 Edge/R2가 오래된 상태라면 5초 간격으로 bounded 재확인하고 최대 약 60초 안에 이전 단계와 같은 결과로 자동 수렴해야 한다.
-- 약 60초 안에 동일성이 확인되지 않으면 몇 시간 수동 재배포를 반복하지 않는다. 해당 Worker 이전 active version rollback을 시도하고 다음 단계 승격을 즉시 중단한다.
-- 승격 동일성 검사는 릴리스 1회에 한정된 bounded first-page/profile probe이며 전체 Feed/전체 사용자 scan, 사용자 데이터 backfill, 캐시 전체 재생성을 하지 않는다.
-- TEST parity FAIL이면 PRODUCTION은 절대 실행하지 않는다. PRODUCTION parity FAIL이면 정식배포 성공으로 보고하지 않는다.
-- 이 불변조건은 `scripts/verify-release-promotion-system.mjs`와 `.deploy/release-worker-runtime.mjs`의 고정 검증 대상이며 임의로 약화하지 않는다.
-
 ### 릴리스 중 금지
 - 활성 릴리스 실패를 우회하려고 Workflow 파일을 즉흥 수정
 - 임의 migration/seed 추가

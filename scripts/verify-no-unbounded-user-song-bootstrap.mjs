@@ -4,10 +4,10 @@ const failures = [];
 const app = readFileSync('src/App.tsx', 'utf8');
 const library = readFileSync('src/pages/SunoLibraryPage.tsx', 'utf8');
 
-function functionBody(source, signature, label, { optional = false } = {}) {
+function functionBody(source, signature, label) {
   const start = source.indexOf(signature);
   if (start < 0) {
-    if (!optional) failures.push(`${label}: anchor missing`);
+    failures.push(`${label}: anchor missing`);
     return '';
   }
   const brace = source.indexOf('{', start);
@@ -30,15 +30,7 @@ function functionBody(source, signature, label, { optional = false } = {}) {
   return '';
 }
 
-// This historical recovery helper has been retired in newer Music Note code.
-// If it still exists, it must not contain an owner-wide read. If it is absent,
-// that is the safer/current state and must not fail the guard.
-const musicRecovery = functionBody(
-  app,
-  'const runFavoritesFullCacheRecoveryOnce = async () =>',
-  'Music Note recovery',
-  { optional: true },
-);
+const musicRecovery = functionBody(app, 'const runFavoritesFullCacheRecoveryOnce = async () =>', 'Music Note recovery');
 for (const forbidden of ['getDocs(', "collection(db, 'favorites')", 'collection(db, "favorites")']) {
   if (musicRecovery.includes(forbidden)) failures.push(`Music Note recovery contains forbidden unbounded read: ${forbidden}`);
 }

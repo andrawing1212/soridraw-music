@@ -1,7 +1,7 @@
-requested_at=2026-09-17T09:39:00Z
+requested_at=2026-09-18T12:08:00Z
 requested_by=user
-product_code_target=35ef207407873f26b9dd7a6148f8d576b5936bfe
-release_purpose=116_explore_public_count_convergence_after_verifier_alignment
+product_code_target=edf80e7729323327802af205e42c5a462d049f0a
+release_purpose=123_shared_like_targeted_r2_repair
 no_d1_migration=true
 no_user_data_migration=true
 preview_only=true

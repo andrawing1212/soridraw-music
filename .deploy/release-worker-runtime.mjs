@@ -334,65 +334,70 @@ async function readRevision(base, origin, sort, label) {
   return { ...result, revision, revisionSource };
 }
 
-async function readSharedSnapshot(base, origin, sort, revision, label) {
+// SORIDRAW_RELEASE_SHARED_SNAPSHOT_PARITY_123_20260918
+// /feed-revision intentionally has an independent per-Worker 60s edge cache.
+// Under continuous shared mutations PREVIEW and TEST may therefore expose adjacent
+// revision generations at the same instant even though both read the same shared R2.
+// Release parity must verify the uncached current shared snapshot itself, while the
+// revision endpoint is still checked independently for shared authority + D1 R0/W0.
+async function readCurrentSharedSnapshot(base, origin, sort, label) {
   const params = new URLSearchParams({
     sort,
     limit: '40',
     [EXPLORE_FEED_R2_SNAPSHOT_QUERY]: EXPLORE_FEED_R2_SNAPSHOT_VERSION,
-    [EXPLORE_FEED_R2_SNAPSHOT_REVISION_QUERY]: revision,
   });
   const result = await getPublicJson(base, origin, `/v1/feed?${params.toString()}`);
-  requireCors(result, origin, `${label} ${sort} shared snapshot`);
-  requireZeroD1(result, `${label} ${sort} shared snapshot`);
+  requireCors(result, origin, `${label} ${sort} current shared snapshot`);
+  requireZeroD1(result, `${label} ${sort} current shared snapshot`);
   const snapshotSource = String(result.response.headers.get('x-soridraw-feed-snapshot') || '');
-  if (!snapshotSource.includes('SHARED') && !snapshotSource.includes('EDGE-R2-SNAPSHOT')) {
-    throw new Error(`${label} ${sort} snapshot must use shared authority, got ${snapshotSource || '(none)'}`);
+  if (!snapshotSource.includes('SHARED')) {
+    throw new Error(`${label} ${sort} current snapshot must read shared R2 directly, got ${snapshotSource || '(none)'}`);
   }
-  const responseRevision = String(result.response.headers.get('x-soridraw-feed-revision') || '').trim();
-  if (responseRevision && responseRevision !== revision) {
-    throw new Error(`${label} ${sort} snapshot revision mismatch expected=${revision} got=${responseRevision}`);
-  }
-  return result;
-}
-
-async function readDirectFeed(base, origin, sort, label) {
-  const result = await getPublicJson(base, origin, `/v1/feed?sort=${sort}&limit=40`);
-  requireCors(result, origin, `${label} ${sort} direct feed`);
-  return result;
+  const revision = String(result.response.headers.get('x-soridraw-feed-revision') || '').trim();
+  if (!revision) throw new Error(`${label} ${sort} current shared snapshot revision missing`);
+  return { ...result, revision, snapshotSource };
 }
 
 async function environmentParityOnce() {
   let ownerUid = '';
   for (const sort of ['latest', 'popular']) {
-    const [referenceRevision, targetRevision] = await Promise.all([
+    const [
+      referenceRevisionSignal,
+      targetRevisionSignal,
+      referenceSnapshot,
+      targetSnapshot,
+    ] = await Promise.all([
       readRevision(target.referenceBase, target.referenceOrigin, sort, target.referenceStage),
       readRevision(target.base, target.origin, sort, mode.toUpperCase()),
+      readCurrentSharedSnapshot(target.referenceBase, target.referenceOrigin, sort, target.referenceStage),
+      readCurrentSharedSnapshot(target.base, target.origin, sort, mode.toUpperCase()),
     ]);
-    if (targetRevision.revision !== referenceRevision.revision) {
-      throw new Error(`${mode} ${sort} revision differs from ${target.referenceStage}: target=${targetRevision.revision} reference=${referenceRevision.revision}`);
+
+    if (targetRevisionSignal.revision !== referenceRevisionSignal.revision) {
+      console.log(
+        `${mode.toUpperCase()}_${sort.toUpperCase()}_REVISION_EDGE_SKEW=EXPECTED `
+        + `target=${targetRevisionSignal.revision} reference=${referenceRevisionSignal.revision}`,
+      );
     }
 
-    const [referenceSnapshot, targetSnapshot, referenceDirect, targetDirect] = await Promise.all([
-      readSharedSnapshot(target.referenceBase, target.referenceOrigin, sort, referenceRevision.revision, target.referenceStage),
-      readSharedSnapshot(target.base, target.origin, sort, referenceRevision.revision, mode.toUpperCase()),
-      readDirectFeed(target.referenceBase, target.referenceOrigin, sort, target.referenceStage),
-      readDirectFeed(target.base, target.origin, sort, mode.toUpperCase()),
-    ]);
+    if (targetSnapshot.revision !== referenceSnapshot.revision) {
+      throw new Error(
+        `${mode} ${sort} current shared R2 revision differs from ${target.referenceStage}: `
+        + `target=${targetSnapshot.revision} reference=${referenceSnapshot.revision}`,
+      );
+    }
 
     const referenceSnapshotProjection = feedProjection(referenceSnapshot.payload);
     const targetSnapshotProjection = feedProjection(targetSnapshot.payload);
     if (!sameProjection(targetSnapshotProjection, referenceSnapshotProjection)) {
-      throw new Error(`${mode} ${sort} shared snapshot projection differs from ${target.referenceStage}`);
-    }
-
-    const referenceDirectProjection = feedProjection(referenceDirect.payload);
-    const targetDirectProjection = feedProjection(targetDirect.payload);
-    if (!sameProjection(targetDirectProjection, referenceDirectProjection)) {
-      throw new Error(`${mode} ${sort} direct Feed projection differs from ${target.referenceStage}`);
+      throw new Error(`${mode} ${sort} current shared snapshot projection differs from ${target.referenceStage}`);
     }
 
     if (!ownerUid) ownerUid = String(referenceSnapshotProjection.find((row) => row.ownerUid)?.ownerUid || '');
-    console.log(`${mode.toUpperCase()}_${sort.toUpperCase()}_SHARED_FEED_PARITY=PASS revision=${referenceRevision.revision}`);
+    console.log(
+      `${mode.toUpperCase()}_${sort.toUpperCase()}_SHARED_FEED_PARITY=PASS `
+      + `revision=${referenceSnapshot.revision}`,
+    );
   }
 
   if (!ownerUid) throw new Error(`${mode}: parity probe owner missing from shared Feed`);

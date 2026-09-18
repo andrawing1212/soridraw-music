@@ -1,2 +1,2 @@
-requested_at=2026-09-12T04:24:30+09:00
-purpose=recheck_right_track_after_072_and_0420_aggregate
+requested_at=2026-09-18T20:28:00+09:00
+purpose=read_only_test_app_like_count_not_updating_after_app122_test_promotion

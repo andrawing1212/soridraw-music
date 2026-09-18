@@ -50,9 +50,13 @@ assert.match(entry, /EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 \* 60 \* 1000/);
 // 056 exposes only the rows whose public count actually changed.
 assert.match(patch056, /changedItems: \[\.\.\.changedByTrack\.values\(\)\]/);
 
-// 065 is the final release patch and must stay R2-targeted.
+// 065 stays the targeted shared-like layer. Newer publication compatibility patches
+// may follow it, but must not move ahead of or replace 065's like-count contract.
 assert.ok(Array.isArray(manifest.patches));
-assert.equal(manifest.patches.at(-1), '065-shared-like-count-targeted.mjs');
+const patch065Index = manifest.patches.indexOf('065-shared-like-count-targeted.mjs');
+assert.ok(patch065Index >= 0, '065 shared-like patch missing');
+const patch066Index = manifest.patches.indexOf('066-publication-w2-shared-r2-authority.mjs');
+if (patch066Index >= 0) assert.ok(patch066Index > patch065Index, '066 must layer after 065');
 const patchHelperStart = patch065.indexOf('const helpers =');
 const patchWrapperStart = patch065.indexOf('const wrapper =', patchHelperStart);
 assert.ok(patchHelperStart >= 0 && patchWrapperStart > patchHelperStart, '065 patch helper boundary missing');

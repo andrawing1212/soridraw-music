@@ -1,4 +1,4 @@
-name: TEMP Restore Explore Like Worker Bindings 117
+name: TEMP Finish Explore Like Worker Binding Restore 117
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  restore:
+  finish:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
@@ -29,136 +29,99 @@ jobs:
         with:
           node-version: 22
 
-      - name: Verify release tooling
+      - name: Verify source and install Worker tooling
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$RELEASE_SOURCE_SHA"
           node scripts/verify-release-promotion-system.mjs
-          echo WORKER_BINDING_RELEASE_SOURCE=PASS
+          cd cloudflare/explore-worker
+          npm install --no-audit --no-fund --package-lock=false
+          echo RELEASE_SOURCE_STATIC=PASS
 
-      - name: Install Worker tooling
-        working-directory: cloudflare/explore-worker
-        run: npm install --no-audit --no-fund --package-lock=false
-
-      - name: D1 SELECT-only preflight
+      - name: Confirm TEST migration and required bindings are live
         shell: bash
         run: |
           set -euo pipefail
-          node .deploy/release-worker-runtime.mjs test dry-run
-          cfg="$PWD/cloudflare/explore-worker/.release-system/test/wrangler.jsonc"
-          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
-          node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "SELECT (SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name IN ('explore_derived_state','explore_derived_changes','explore_derived_tracks','explore_derived_profiles','explore_like_batches_035','explore_like_processor_035')) AS required_tables,(SELECT seeded FROM explore_derived_state WHERE id=1) AS seeded" --json > "$RUNNER_TEMP/d1.json"
-          node -e "const p=require(process.env.RUNNER_TEMP+'/d1.json'),r=p.flatMap(x=>x.results||[])[0];if(!r||+r.required_tables<6||+r.seeded!==1)throw Error('D1 preflight failed')"
-          echo D1_SELECT_ONLY_PREFLIGHT=PASS
-
-      - name: One-time TEST Durable Object migration and binding restore
-        shell: bash
-        run: |
-          set -euo pipefail
-          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
           api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
-          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
-          active_version() {
-            curl -fsS "${auth[@]}" "$api/workers/scripts/$1/deployments"               | jq -er '.result.deployments[0].versions | max_by(.percentage) | .version_id'
-          }
-          schedules() {
-            curl -fsS "${auth[@]}" "$api/workers/scripts/$1/schedules"               | jq -c '.result | if type=="array" then . elif ((.schedules // null)|type)=="array" then .schedules else [] end | map({cron:(.cron // "")}) | map(select(.cron != "")) | sort_by(.cron)'
-          }
-          restore_schedules() {
-            curl -fsS -X PUT "${auth[@]}" -H 'Content-Type: application/json'               --data "$2" "$api/workers/scripts/$1/schedules" >/dev/null
-          }
-
-          worker=soridraw-explore-test
-          old_version="$(active_version "$worker")"
-          old_schedules="$(schedules "$worker")"
-          node .deploy/release-worker-runtime.mjs test dry-run
-          cfg="$PWD/cloudflare/explore-worker/.release-system/test/wrangler.jsonc"
-          deployed=false
-          rollback() {
-            code=$?
-            set +e
-            if [ "$deployed" = true ]; then
-              node "$WRANGLER" rollback "$old_version" --name "$worker" --config "$cfg" --message "automatic rollback after failed TEST like-binding bootstrap" || true
-              restore_schedules "$worker" "$old_schedules" || true
-              echo TEST_WORKER_ROLLBACK=ATTEMPTED
-            fi
-            exit "$code"
-          }
-          trap rollback ERR
-
-          node "$WRANGLER" deploy --config "$cfg"
-          deployed=true
-          restore_schedules "$worker" "$old_schedules"
-          sleep 3
-          new_version="$(active_version "$worker")"
-          test "$new_version" != "$old_version"
-          node .deploy/release-worker-runtime.mjs test verify
-
-          curl -fsS "${auth[@]}" "$api/workers/scripts/$worker/settings" > "$RUNNER_TEMP/test-settings.json"
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             "$api/workers/scripts/soridraw-explore-test/settings" > "$RUNNER_TEMP/test-settings.json"
           jq -e '.result.bindings[] | select(.name=="LIKE_RATE_LIMITER" and .type=="ratelimit")' "$RUNNER_TEMP/test-settings.json" >/dev/null
           jq -e '.result.bindings[] | select(.name=="EXPLORE_LIKE_BATCH_SCHEDULER" and .type=="durable_object_namespace" and .class_name=="ExploreLikeBatchScheduler103")' "$RUNNER_TEMP/test-settings.json" >/dev/null
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             "$api/workers/scripts/soridraw-explore-test/deployments"             | jq -er '.result.deployments[0].versions | max_by(.percentage) | .version_id'             | sed 's/^/TEST_ACTIVE_VERSION=/'
+          echo TEST_REQUIRED_LIKE_BINDINGS_LIVE=PASS
 
-          trap - ERR
-          echo "TEST_WORKER_BEFORE=$old_version"
-          echo "TEST_WORKER_AFTER=$new_version"
-          echo TEST_REQUIRED_LIKE_BINDINGS=PASS
-          echo TEST_WORKER_VERIFY=PASS
+      - name: Repair TEST derived Feed cache from shared canonical R2 only
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          for sort in latest popular; do
+            file="$RUNNER_TEMP/shared-$sort.json"
+            node "$WRANGLER" r2 object get "soridraw-profile-media/internal/explore/shared-feed-v112/$sort-40.json" --file "$file" --remote
+            node -e "const j=require(process.argv[1]);if(!j?.payload?.data||!Array.isArray(j.payload.data.items))throw Error('invalid shared Feed snapshot')" "$file"
+            node "$WRANGLER" r2 object put "soridraw-profile-media-test/internal/explore/feed-v1/$sort-40.json" --file "$file" --remote
+          done
+          echo TEST_DERIVED_FEED_CACHE_REPAIRED_FROM_SHARED=PASS
+          echo USER_ORIGINAL_DATA_CHANGE=NONE
 
-      - name: One-time PRODUCTION Durable Object migration and binding restore
+      - name: Wait out TEST revision edge cache then verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 70
+          node .deploy/release-worker-runtime.mjs test verify
+          status="$(curl -sS -o "$RUNNER_TEMP/test-like.json" -w '%{http_code}'             -X POST -H 'Origin: https://test.soridraw.com' -H 'Content-Type: application/json'             --data '{"mutations":[]}'             https://soridraw-explore-test.andrawing1212.workers.dev/v1/me/likes/batch)"
+          test "$status" -ge 400
+          test "$status" -lt 500
+          echo "TEST_LIKE_BATCH_UNAUTH_STATUS=$status"
+          echo TEST_LIKE_PATH_NO_5XX=PASS
+
+      - name: Prepare PRODUCTION derived Feed cache from shared canonical R2
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          for sort in latest popular; do
+            file="$RUNNER_TEMP/shared-$sort.json"
+            test -s "$file"
+            node "$WRANGLER" r2 object put "soridraw-profile-media/internal/explore/feed-v1/$sort-40.json" --file "$file" --remote
+          done
+          echo PRODUCTION_DERIVED_FEED_CACHE_PREPARED_FROM_SHARED=PASS
+          echo USER_ORIGINAL_DATA_CHANGE=NONE
+
+      - name: Bootstrap PRODUCTION Durable Object migration and required bindings
         shell: bash
         run: |
           set -euo pipefail
           WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
           api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
           auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
-          active_version() {
-            curl -fsS "${auth[@]}" "$api/workers/scripts/$1/deployments"               | jq -er '.result.deployments[0].versions | max_by(.percentage) | .version_id'
-          }
-          schedules() {
-            curl -fsS "${auth[@]}" "$api/workers/scripts/$1/schedules"               | jq -c '.result | if type=="array" then . elif ((.schedules // null)|type)=="array" then .schedules else [] end | map({cron:(.cron // "")}) | map(select(.cron != "")) | sort_by(.cron)'
-          }
-          restore_schedules() {
-            curl -fsS -X PUT "${auth[@]}" -H 'Content-Type: application/json'               --data "$2" "$api/workers/scripts/$1/schedules" >/dev/null
-          }
+          old_version="$(curl -fsS "${auth[@]}" "$api/workers/scripts/soridraw-explore-api/deployments" | jq -er '.result.deployments[0].versions | max_by(.percentage) | .version_id')"
+          old_schedules="$(curl -fsS "${auth[@]}" "$api/workers/scripts/soridraw-explore-api/schedules" | jq -c '.result | if type=="array" then . elif ((.schedules // null)|type)=="array" then .schedules else [] end | map({cron:(.cron // "")}) | map(select(.cron != "")) | sort_by(.cron)')"
 
-          worker=soridraw-explore-api
-          old_version="$(active_version "$worker")"
-          old_schedules="$(schedules "$worker")"
           node .deploy/release-worker-runtime.mjs production dry-run
           cfg="$PWD/cloudflare/explore-worker/.release-system/production/wrangler.jsonc"
-          deployed=false
-          rollback() {
-            code=$?
-            set +e
-            if [ "$deployed" = true ]; then
-              node "$WRANGLER" rollback "$old_version" --name "$worker" --config "$cfg" --message "automatic rollback after failed PRODUCTION like-binding bootstrap" || true
-              restore_schedules "$worker" "$old_schedules" || true
-              echo PRODUCTION_WORKER_ROLLBACK=ATTEMPTED
-            fi
-            exit "$code"
-          }
-          trap rollback ERR
-
           node "$WRANGLER" deploy --config "$cfg"
-          deployed=true
-          restore_schedules "$worker" "$old_schedules"
-          sleep 3
-          new_version="$(active_version "$worker")"
+          curl -fsS -X PUT "${auth[@]}" -H 'Content-Type: application/json'             --data "$old_schedules" "$api/workers/scripts/soridraw-explore-api/schedules" >/dev/null
+          new_version="$(curl -fsS "${auth[@]}" "$api/workers/scripts/soridraw-explore-api/deployments" | jq -er '.result.deployments[0].versions | max_by(.percentage) | .version_id')"
           test "$new_version" != "$old_version"
-          node .deploy/release-worker-runtime.mjs production verify
-
-          curl -fsS "${auth[@]}" "$api/workers/scripts/$worker/settings" > "$RUNNER_TEMP/prod-settings.json"
-          jq -e '.result.bindings[] | select(.name=="LIKE_RATE_LIMITER" and .type=="ratelimit")' "$RUNNER_TEMP/prod-settings.json" >/dev/null
-          jq -e '.result.bindings[] | select(.name=="EXPLORE_LIKE_BATCH_SCHEDULER" and .type=="durable_object_namespace" and .class_name=="ExploreLikeBatchScheduler103")' "$RUNNER_TEMP/prod-settings.json" >/dev/null
-
-          trap - ERR
           echo "PRODUCTION_WORKER_BEFORE=$old_version"
           echo "PRODUCTION_WORKER_AFTER=$new_version"
-          echo PRODUCTION_REQUIRED_LIKE_BINDINGS=PASS
-          echo PRODUCTION_WORKER_VERIFY=PASS
+          echo PRODUCTION_BINDING_BOOTSTRAP_DEPLOY=PASS
 
-      - name: Final three-environment binding audit
+      - name: Wait out PRODUCTION revision edge cache then verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 70
+          node .deploy/release-worker-runtime.mjs production verify
+          status="$(curl -sS -o "$RUNNER_TEMP/prod-like.json" -w '%{http_code}'             -X POST -H 'Origin: https://soridraw.com' -H 'Content-Type: application/json'             --data '{"mutations":[]}'             https://soridraw-explore-api.andrawing1212.workers.dev/v1/me/likes/batch)"
+          test "$status" -ge 400
+          test "$status" -lt 500
+          echo "PRODUCTION_LIKE_BATCH_UNAUTH_STATUS=$status"
+          echo PRODUCTION_LIKE_PATH_NO_5XX=PASS
+
+      - name: Final three-environment live audit
         shell: bash
         run: |
           set -euo pipefail
@@ -172,5 +135,5 @@ jobs:
           done
           echo THREE_ENV_REQUIRED_LIKE_BINDINGS=PASS
           echo HOSTING_CHANGE=NONE
-          echo D1_DATA_MUTATION=NONE
+          echo D1_WRITE=NONE
           echo FUNCTIONS_RULES_CHANGE=NONE

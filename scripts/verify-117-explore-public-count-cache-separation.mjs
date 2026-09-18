@@ -24,5 +24,8 @@ assert.match(revision, /items: nextRows/);
 
 assert.match(page, /Only server-confirmed\/shared payloads may become public-count authority/);
 assert.match(page, /syncSharedPublicCountsToLocal110/);
+assert.doesNotMatch(page, /getExploreLikeDisplayCount091/);
+assert.match(page, /track=\{track\}/);
+assert.match(page, /liked=\{Boolean\(likedTrackIds\[track\.id\]\)\}/);
 
 console.log('PASS 117: public likeCount is shared-server authority only; account cache can affect heart membership/revision grace, never the public count.');

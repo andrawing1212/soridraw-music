@@ -33,6 +33,7 @@
     "063-public-profile-warm-edge-zero-read.mjs",
     "064-shared-feed-catchup-convergence.mjs",
     "065-shared-like-count-targeted.mjs",
-    "066-publication-w2-shared-r2-authority.mjs"
+    "066-publication-w2-shared-r2-authority.mjs",
+    "067-w2-feed-pagination.mjs"
   ]
 }

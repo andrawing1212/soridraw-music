@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0P. Release Controller preflight — Firebase Hosting resource-name 후속 수정 대기
+
+- `preview` SHA `8846875ac44dfd2dbe028f0542a892f839cb406f`의 read-only `preflight_only` Run `35298520258`은 Google 인증과 정적 검사를 통과했지만 Firebase Hosting live channel 조회에서 HTTP 400으로 중단됐다.
+- 원인은 Hosting Channels `get` API가 요구하는 전체 resource name `projects/{project}/sites/{site}/channels/{channel}`에서 `projects/{project}` 구간을 빠뜨리고 `/v1beta1/sites/{site}/channels/live`를 호출한 것이다.
+- 후속 후보는 모든 Hosting identity probe를 `/v1beta1/projects/$FIREBASE_PROJECT/sites/{site}/channels/live`로 통일하고 verifier가 축약된 잘못된 경로의 재도입을 거부한다.
+- 실패 지점 뒤의 D1 SELECT-only, Worker dry-run, 시작/종료 Worker·schedule·Hosting identity 비교와 `PREFLIGHT_NO_MUTATION`은 실행되지 않았다. `preview`/`main`/`production` branch ref는 실행 전후 동일했고 TEST/PRODUCTION 배포, Worker/Hosting mutation, D1 write, Functions/Rules 변경은 없었다.
+- 이 수정은 독립 검증과 `preview` 병합 전이며, 병합 전 추가 `preflight_only` 재시도를 금지한다.
+
 ## 0O. Release Controller final static-audit blockers — 수정 완료/미배포
 
 - 실행 중인 controller checkout인 `GITHUB_WORKSPACE`를 기준으로 controller identity를 생성·비교하며, 과거 release source worktree의 파일로 drift 검사를 우회할 수 없게 했다.

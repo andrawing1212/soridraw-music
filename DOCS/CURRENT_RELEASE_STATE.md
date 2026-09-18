@@ -1,5 +1,68 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0X. PREVIEW app 120 — Explore 좋아요 actor count lock / 검증 완료 / PREVIEW 병합·배포 전
+
+사용자 실사용 영상에서 app 119의 서버 1분 공용 집계는 정상적으로 수렴했지만, 누른 사용자 본인의 숫자가 20초 대기 구간 동안 올라갔다 내려갔다 반복되는 현상을 확인했다.
+
+확인된 원인:
+- app 119는 하트와 숫자를 즉시 로컬 반영했지만, 같은 시간에 이미 진행 중이던 Feed / 공개프로필 / 좋아요곡 재검증 응답이 과거 shared likeCount를 다시 적용할 수 있었다.
+- 특히 cached Feed revision revalidation, profile first-view revalidation, load-more/shared-count convergence 경로가 actor의 최신 optimistic count보다 우선할 수 있었다.
+- 따라서 서버 aggregate가 약 1분 뒤 최종 shared count를 만들면 정상 수렴하지만, 그 전에는 actor 숫자가 stale shared payload에 의해 흔들렸다.
+- 서버 1분 aggregate 자체의 실패가 아니라, actor-local 최신 숫자와 shared/public payload의 우선순위 문제였다.
+
+app 120 수정:
+- Explore 개인 좋아요 캐시는 app 120 namespace만 사용:
+  - `explore-liked-state-120`
+  - `explore-like-outbox-120`
+  - `explore-like-display-lock-120`
+- app 119 및 이전 좋아요 개인 캐시는 app 120 판단에서 사용하지 않는다.
+- 20초 sliding idle batch는 그대로 유지한다.
+- outbox pending 중에는 해당 track의 `optimisticLikeCount`가 어떤 Feed/Profile payload보다 우선한다.
+- batch ACK 후에도 shared publication이 따라오기 전까지 actor의 최신 숫자를 display lock으로 보호한다.
+- shared payload 숫자가 actor의 최신 숫자와 같아지는 순간 lock을 즉시 해제한다.
+- 비정상적으로 shared 값이 따라오지 않을 때 영구 고정을 막기 위해 보호 상한은 90초다.
+- Feed 첫 로딩, session cache, revision revalidation, 공개프로필 first-view/revalidation, 좋아요곡 목록, 더보기 응답 모두 actor overlay를 먼저 적용한다.
+- 하트/숫자 즉시 변경 계약과 20초 묶음쓰기 계약은 유지한다.
+- 기존 서버 경로는 변경하지 않는다:
+  - warm batch intake: 069 queue D1 W1
+  - shared aggregate: 1분 event alarm
+  - 다른 사용자는 shared publication 이후 기존 1분 revalidation 경로로 확인.
+
+작업 기준:
+- 기준 PREVIEW HEAD: `0f811dc93894976da5f21ee941755eac98077b07` (app 119 배포 상태)
+- 작업 branch: `work/app120-like-actor-count-lock`
+- app version: **120**
+- 변경 파일:
+  - `src/services/exploreLikeService.ts`
+  - `src/pages/ExplorePage.tsx`
+  - `src/services/exploreLikedTracksService.ts`
+  - `public/app-version.json`
+  - `scripts/verify-120-explore-like-actor-count-lock.mjs`
+- UI/CSS 변경 없음.
+- Cloudflare Worker 제품 코드 변경 없음.
+- Firebase Functions / Rules 변경 없음.
+- D1 migration/seed/backfill/delete 없음.
+- 사용자 원본 데이터 변경 없음.
+
+검증:
+- 최종 검증 Run `35330327699` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app 120 actor-count regression PASS
+  - 20초 sliding idle batch 유지 PASS
+  - stale Feed/Profile overwrite 차단 PASS
+  - old like cache namespace 비사용 PASS
+  - W1 server intake + one-minute shared publication 유지 PASS
+- 임시 검증 Workflow는 검증 후 삭제 완료.
+
+현재 상태:
+- PREVIEW 실제 배포: app **119** 유지.
+- TEST: app **117** 유지.
+- PRODUCTION: app **117** 유지.
+- app 120은 작업 branch 검증 완료 / PREVIEW 병합·배포 전.
+- 다음 단계: PR → preview 병합 → Firebase PREVIEW Hosting app120 배포 → exact build 확인 → 사용자 실사용으로 20초 동안 actor 숫자 고정 확인.
+- PRODUCTION 변경 금지.
+
 ## 0W. PREVIEW app 119 — Explore 좋아요 최신 캐시 + 20초 슬라이딩 묶음쓰기 / 배포 완료
 
 사용자 지시로 좋아요 경로를 다시 단순화했다. 기준은 "누르는 사용자는 하트/숫자 즉시, 마지막 클릭 후 20초 동안 변경을 모아 한 번의 batch, 다른 사용자는 공용 결과를 최대 1분 안에 확인"이다.

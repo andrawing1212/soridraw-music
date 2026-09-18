@@ -1,0 +1,47 @@
+name: TEMP app123 stale shared R2 repair
+
+on:
+  push:
+    branches:
+      - work/app123-stale-shared-r2-repair
+    paths:
+      - '.github/workflows/temp-app123-stale-shared-r2-repair.yml'
+      - 'scripts/temp-app123-stale-shared-r2-repair.mjs'
+      - '.deploy/app123-stale-shared-r2-repair.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+    steps:
+      - name: Checkout guarded repair source
+        uses: actions/checkout@v4
+        with:
+          ref: work/app123-stale-shared-r2-repair
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Guarded exact-four shared R2 repair
+        run: node scripts/temp-app123-stale-shared-r2-repair.mjs
+
+      - name: Safety declaration
+        run: |
+          echo 'NO_D1_SCHEMA_CHANGE=true'
+          echo 'NO_D1_WRITE=true'
+          echo 'NO_USER_DATA_MIGRATION=true'
+          echo 'NO_FIREBASE_CHANGE=true'
+          echo 'NO_WORKER_DEPLOY=true'
+          echo 'SHARED_DERIVED_R2_EXACT_4_ONLY=true'

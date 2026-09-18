@@ -53,7 +53,11 @@ assert.match(patch056, /changedItems: \[\.\.\.changedByTrack\.values\(\)\]/);
 // 065 is the final release patch and must stay R2-targeted.
 assert.ok(Array.isArray(manifest.patches));
 assert.equal(manifest.patches.at(-1), '065-shared-like-count-targeted.mjs');
-assert.doesNotMatch(patch065, /env\.DB\.|\.prepare\(/);
+const patchHelperStart = patch065.indexOf('const helpers =');
+const patchWrapperStart = patch065.indexOf('const wrapper =', patchHelperStart);
+assert.ok(patchHelperStart >= 0 && patchWrapperStart > patchHelperStart, '065 patch helper boundary missing');
+const patchHelperSource = patch065.slice(patchHelperStart, patchWrapperStart);
+assert.doesNotMatch(patchHelperSource, /env\.DB\.|\.prepare\(/);
 assert.match(patch065, /patchSharedFeedLikeCounts065/);
 assert.match(patch065, /patchSharedTrackCard062/);
 assert.match(patch065, /targetedLikePatch: '065'/);

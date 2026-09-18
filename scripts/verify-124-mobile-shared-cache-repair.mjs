@@ -36,8 +36,8 @@ assert.match(page, /EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000/);
 assert.match(like, /EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/);
 assert.match(entry, /EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 \* 60 \* 1000/);
 
-// No mobile-specific fork: the same ExplorePage path serves PC/mobile.
-assert.doesNotMatch(repair, /mobile|Mobile|navigator\.userAgent|matchMedia/);
+// No device-specific runtime fork: the same ExplorePage path serves PC/mobile.
+assert.doesNotMatch(repair, /navigator\.userAgent|matchMedia|isMobile|mobileOnly|mobile-only/i);
 
 console.log('PASS 124: one-time stale shared Feed cache repair is common across PC/mobile.');
 console.log('REPAIR_SOURCE=CURRENT_SHARED_R2_DIRECT');

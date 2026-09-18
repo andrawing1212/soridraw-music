@@ -1,5 +1,29 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0R. app 117 PREVIEW Hosting 배포 — 완료
+
+- 사용자 요청으로 app 117을 Firebase PREVIEW Hosting에 배포했다.
+- 배포 source commit: `328ae89287550d746d9a51f8ffdc168bd785e03c`.
+  - 제품 코드 핵심 merge: `06330ae00c2d7639542d7b3ab473aabb85f67d9e`.
+  - 상태 문서 반영 후 deploy trigger commit까지 포함한 PREVIEW 최신본이다.
+- GitHub Actions Run: `35310263271` — **SUCCESS**.
+- TypeScript PASS.
+- Build PASS.
+- Firebase PREVIEW Hosting deploy PASS.
+- `preview.soridraw.com` exact build hash PASS.
+- 실제 remote app version: **117**.
+- TEST/PRODUCTION branch 및 Hosting content unchanged PASS.
+- Worker/D1/Functions/Rules 배포 없음.
+- 사용자 데이터 migration/seed/backfill/delete/overwrite 없음.
+- 비용 관점: 앱 Hosting 배포만 수행했으며 데이터 서버 전체 읽기/재생성 작업 없음.
+
+현재 상태:
+- PREVIEW: app **117** 배포 완료.
+- TEST: app **116** 유지.
+- PRODUCTION: app **116** 유지.
+- 다음 확인 항목: PREVIEW Explore에서 기존 PROD형 브라우저 캐시가 남아 있어도 공개 좋아요 숫자 `1`이 개인 캐시 `0`으로 덮이지 않는지 실사용 검증.
+
+
 ## 0Q. Explore 공개 좋아요 숫자 개인 캐시 오염 근본 수정 — app 117 / PREVIEW 코드 반영 완료 / 배포 전
 
 사용자 실사용 비교에서 동일 곡과 동일 공개 데이터가 TEST에서는 `1`, PRODUCTION에서는 여러 로그인 계정에서 `0`으로 표시되는 현상을 확인했다. 서버-side TEST/PRODUCTION parity가 PASS해도 브라우저에서 값이 갈릴 수 있는 client 경로를 추적했다.

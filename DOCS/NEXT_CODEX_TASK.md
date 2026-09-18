@@ -1,131 +1,79 @@
 # SORIDRAW NEXT CODEX TASK
 
-최종 갱신: 2026-09-17 KST — Release Controller live status PR 검증 대기
+최종 갱신: 2026-09-18 KST — TEST app 122 TEST_VERIFIED 완료 / 사용자 TEST 실사용 검증 대기
 
 ## 현재 기준
 
 - PREVIEW branch: `preview`
-- PREVIEW app: **116**
-- PREVIEW 앱 116 배포 기준: `5df12009e46ab65ab7c3f95cb686926907c4c0d8`
-- 현재 preview HEAD는 Release Controller 설계 문서 추가 이후 HEAD를 실제 GitHub에서 다시 확인할 것
-- Release System Audit Run: `35211720327` SUCCESS
-- TEST `main`: `bb1305660ca694dd057f3ed4184bdafea60f5b18` — 기존 앱 110
-- PRODUCTION: `a8971fae1014ce107927fcfb5491d202d4c68fbe` — 비변경
-- 현재 TEST/PRODUCTION 승격 실행 없음
+- PREVIEW 제품 app: **122**
+- TEST source PREVIEW SHA: `9be18f49b91d47f068b77c056e2611eb5a3c4d06`
+- TEST `main`: `c16a8087c40a8e6330242b6420ac381d1b315ea2` — app **122**
+- TEST Worker: `78a3295f-cbf4-4c1f-8d1b-22934df7e7b0`
+- TEST manifest: `soridraw-test-v122-9be18f49b91d`
+- TEST Release Controller Run: `35337836322` — **TEST_VERIFIED**
+- TEST URL: `https://test.soridraw.com`
+- PRODUCTION: `e994340f3c4f6ac97f444f1ddf13053d3faffa71` — app **117**, 비변경
 - 사용자 데이터 migration/backfill/delete 없음
+- Firebase Functions/Rules 변경 없음
+- PRODUCTION 승격 승인 없음
 
-## 작업 기준 문서
+## 현재 좋아요 기준
 
-반드시 먼저 읽을 것:
-- `DOCS/RELEASE_CONTROLLER_SPEC.md`
-- `DOCS/CURRENT_RELEASE_STATE.md`
-- `DOCS/WORKFLOW_GUARDRAILS.md`
-- `.github/workflows/soridraw-release-promotion.yml`
-- `.deploy/release-worker-runtime.mjs`
-- `scripts/verify-release-promotion-system.mjs`
+- 누르는 사용자: 하트/숫자 즉시 반영.
+- 좋아요 ON UI: 빨간색 없이 흰색 filled heart + 짧은 클릭 모션.
+- 마지막 클릭 후 **30초 sliding idle batch**.
+- 30초 안 여러 곡은 한 batch 요청.
+- 같은 곡 반복 토글은 최초 base → 마지막 desired만 반영.
+- actor 최신 숫자는 stale Feed/Profile payload가 덮지 못하도록 display lock 유지.
+- 서버 shared aggregate: **1분**.
+- 다른 사용자는 가만히 있으면 자동 read 없음.
+- 실제 활동이 있을 때 revision 확인, 최소 **2분 간격**.
+- revision endpoint 목표: D1 R0/W0.
 
-## 이번 작업 목표
+## Release Controller 기준
 
-PR #75 1차본에 12개 안전 보강을 적용했고 GitHub remote commit 및 정적 검증을 확인한 뒤 Issue #76 live pipeline status 연결을 추가했다. 다음 단계는 변경 commit 독립 감사와 merge 후 authenticated `preflight_only` 실제 실행이다. 실제 `preflight_only` 실행과 Work 검증 전 TEST 승격은 금지한다.
+- 최종 preflight: `35337724687` SUCCESS.
+- 최종 TEST: `35337836322` SUCCESS / TEST_VERIFIED.
+- 첫 TEST Run `35336817221`은 release parity 검사 오류로 실패했고 자동 rollback 완료.
+- parity 검사는 현재:
+  - PREVIEW/TEST revision endpoint 각각 SHARED authority + D1 R0/W0 확인.
+  - 환경별 60초 edge revision 문자열 순간 동일성은 강제하지 않음.
+  - 현재 shared R2 revision + Feed projection 완전 동일성 강제.
+  - public profile parity 유지.
+- Release parity fix 검증 Run: `35337334681` SUCCESS.
+- preview fix PR #100 / main sync PR #101 완료.
 
-배포를 매번 사람이 조합하는 작업이 아니라 **수정하지 않고 계속 재사용하는 하나의 고정 Release Controller**로 만든다.
+## 다음 작업
 
-핵심 모드:
-1. `preflight_only` — 실제 배포 없이 실패 가능 항목 선검사
-2. `test` — exact PREVIEW 검증본을 TEST로 한 번 승격하고 `TEST_VERIFIED` manifest 생성
-3. `production` — 나중에 검증된 TEST manifest를 사용해 TEST를 재배포하지 않고 PRODUCTION 승격
+현재는 새 구현 작업보다 **TEST 실사용 검증**이 우선이다.
 
-현재 `test_only` / 같은 실행의 `test_then_production` 중심 구조에서 가장 먼저 해결할 구조적 문제는 **TEST 안정화 후 별도 날짜에 PRODUCTION으로 갈 때 TEST를 다시 배포하지 않는 경로가 없다는 점**이다.
+사용자가 `test.soridraw.com`에서 최소 확인:
+- 좋아요 즉시 하트/숫자.
+- 30초 동안 actor 숫자 흔들림 없음.
+- 여러 곡 30초 batch.
+- 다른 계정/기기에서 shared 결과 수렴.
+- Explore 재진입 비용.
+- 공개프로필 동일 숫자.
+- PC / 모바일 동일 결과.
+- Music Note / Library 기존 정상 기능 회귀 없음.
+- 관리자 진단/권한 정상.
 
-## 필수 구현 조건
+문제가 발견되면:
+1. TEST에서 재현 정보 확인.
+2. 수정은 항상 `preview`에서 시작.
+3. 기존 TEST/PRODUCTION 공유 사용자 데이터 하위호환 유지.
+4. 데이터 migration/backfill/delete 금지.
+5. 수정 후 PREVIEW 재검증 → 사용자 승인 후 다시 TEST 승격.
 
-- 제품 React/UI/Explore 동작 변경 금지
-- app 116 제품 코드 변경 금지
-- DB migration/seed/backfill/delete 금지
-- Functions/Rules 변경 금지
-- 사용자 원본 데이터 변경 금지
-- PREVIEW/TEST/PRODUCTION shared canonical DB/R2 원칙 유지
-- preflight FAIL이면 branch/Worker/Hosting 실제 변경 0
-- exact source SHA/tree 잠금
-- TEST 성공 뒤 durable Release Manifest 저장
-- Manifest는 제품 source tree에 섞지 않음
-- PRODUCTION은 PREVIEW를 새로 선택하지 않고 TEST_VERIFIED manifest만 입력으로 받음
-- PRODUCTION 전에 TEST actual app-version/index/Worker 공개 결과를 다시 확인
-- Firebase Hosting은 가능하면 TEST에서 검증된 Hosting content/config를 `hosting:clone` 방식으로 승격해 재빌드 차이를 제거
-- Cloudflare Worker는 version/deployment 분리를 우선 사용하고 traffic 전환 전에 exact source/bundle hash 검증
-- Worker environment binding은 환경별 live shape 보존 + canonical `DB=soridraw-explore-db`, `PROFILE_MEDIA=soridraw-profile-media` 강제
-- revision/shared snapshot/direct Feed/public profile parity 유지
-- shared 검증 경로 D1 read/write 0 계약 유지
-- 실패 시 반복 재배포가 아니라 rollback + 중단
-- 평상시 릴리스마다 workflow 파일 수정 필요 없어야 함
+문제가 없으면:
+- TEST 검증 완료 상태를 `CURRENT_RELEASE_STATE.md`에 기록.
+- 사용자의 명확한 **정식배포 승인** 전에는 PRODUCTION 승격 금지.
+- PRODUCTION 승격 시 최신 preview가 아니라 `soridraw-test-v122-9be18f49b91d` TEST_VERIFIED manifest를 기준으로 사용.
 
-## 구현 방식
+## 절대 건드리면 안 되는 것
 
-가능하면 기존 `.github/workflows/soridraw-release-promotion.yml`을 무한 증식시키지 말고 단일 Controller로 정리한다.
-
-Release state는 최소:
-`READY -> PREFLIGHT -> TEST_DEPLOY -> TEST_VERIFY -> TEST_VERIFIED -> PROD_PREFLIGHT -> PROD_DEPLOY -> PROD_VERIFY -> RELEASED`
-
-차단:
-`PREFLIGHT -> BLOCKED`
-
-배포 후 예외:
-`*_DEPLOY/*_VERIFY -> ROLLBACK -> FAILED`
-
-Release Manifest 최소 필드:
-- app version
-- source preview SHA/tree
-- promoted main SHA/tree
-- dist/index SHA-256
-- TEST Hosting 검증 정보
-- TEST Worker source/bundle SHA-256
-- TEST Worker version id
-- canonical shared resource identity
-- parity result
-- workflow run id / verified timestamp
-
-Manifest는 GitHub Release/annotated tag 등 장기 보존 가능한 별도 release metadata로 저장한다.
-
-## 검증
-
-구현 후 반드시:
-- TypeScript PASS
-- Build PASS
-- release static verifier PASS
-- Controller static/state-machine verifier PASS
-- TEST Worker dry-run PASS
-- PRODUCTION Worker dry-run PASS
-- shared D1 SELECT-only preflight PASS
-- `preflight_only` 실제 Actions 실행 PASS — **배포 0**
-- main/production refs 비변경 확인
-- Firebase/Cloudflare live version 비변경 확인
-- Work 독립 감사
-
-## 금지
-
-- 실제 TEST 배포
-- 실제 PRODUCTION 배포
-- D1 write/migration/seed
-- 사용자 데이터 write/backfill
-- 현재 정상 PREVIEW 116 제품 동작 수정
-- 임시 Workflow를 또 추가해 우회
-- 검증 실패를 재배포 반복으로 덮기
-
-## 완료 보고
-
-반드시 남길 것:
-- 작업 branch
-- 기준 commit
-- 최종 commit SHA
-- 변경 파일
-- Controller 모드/상태 구조
-- TypeScript / Build / static test
-- TEST/PRODUCTION dry-run
-- `preflight_only` Run ID와 결과
-- Firebase 변경 여부
-- Cloudflare 변경 여부
-- 사용자 데이터 변경 여부
-- main/production 비변경 확인
-- 남은 위험
-
-이 구현과 감사가 끝나기 전에는 실제 TEST 승격을 실행하지 않는다.
+- 현재 정상 app122 좋아요 로직/30초 batch/2분 activity gate/1분 shared aggregate.
+- app120 actor count lock.
+- 사용자 원본 Music Note / Library / Explore / 공개프로필 / 좋아요 / 팔로우 데이터.
+- UI 위치/크기/간격/테마 등 사용자 요청 없는 변경.
+- Production branch/Worker/Hosting은 명확한 승인 전 변경 금지.

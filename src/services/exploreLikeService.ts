@@ -1,76 +1,29 @@
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import type { User } from 'firebase/auth';
-import { ref as databaseRef, runTransaction } from 'firebase/database';
-import { getFirebaseAppCheckToken, realtimeDb } from '../firebase';
+import { getFirebaseAppCheckToken } from '../firebase';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
   readSoridrawPersistentCache,
   removeSoridrawPersistentCache,
   writeSoridrawPersistentCache,
 } from '../lib/soridrawPersistentCache';
-import {
-  getExplorePersonalSocialSnapshot,
-  patchExplorePersonalSocialLike,
-} from './exploreSocialSnapshotService';
-import { patchExploreLikedTrackMembership } from './exploreLikedTracksService';
 
-// SORIDRAW_LONG_TERM_CACHE_STAGE_2_3_990
-// SORIDRAW_EXPLORE_LIKE_BATCH_034_20260911
-// SORIDRAW_EXPLORE_LIKE_PREVIEW_1MIN_TEST_037_20260911
-// SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
-// SORIDRAW_EXPLORE_LIKE_ACCOUNT_COUNT_REPLAY_065_20260911
-// SORIDRAW_EXPLORE_LIKE_VISIBLE_COUNT_SIGNAL_067_20260911
-// SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
-// SORIDRAW_EXPLORE_LIKE_LOCAL_VISIBLE_COUNT_074_20260912
-// SORIDRAW_EXPLORE_SOCIAL_SNAPSHOT_075_20260913
-// SORIDRAW_PAGE_EXIT_LIKE_OUTBOX_081_20260914
-// SORIDRAW_EXPLORE_UID_SCOPED_SYNC_EVENT_075_20260913
-// SORIDRAW_EXPLORE_LIKE_MISSED_SIGNAL_REPAIR_086_20260914
-// SORIDRAW_EXPLORE_LIKED_CARD_CONSISTENCY_087_20260914
-// SORIDRAW_EXPLORE_SAME_SESSION_PENDING_LIKE_088_20260914
-// SORIDRAW_EXPLORE_CROSS_DEVICE_CANONICAL_DISPLAY_089_20260914
-// SORIDRAW_EXPLORE_LIKE_LIVE_DISPLAY_090_20260915
-// SORIDRAW_EXPLORE_LIKE_RTDB_SIGNAL_093_20260915
-// SORIDRAW_EXPLORE_SESSION_BATCH_094_20260915
-// SORIDRAW_EXPLORE_ACKNOWLEDGED_COUNT_094_20260915
-// SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_REPLAY_096_20260915
-// SORIDRAW_EXPLORE_LIKE_REMOTE_PENDING_ACK_097_20260916
-// SORIDRAW_EXPLORE_LIKE_ATOMIC_SIGNAL_098_20260916
-// SORIDRAW_EXPLORE_UPDATE_ZERO_READ_099_20260916
-// SORIDRAW_EXPLORE_PUBLIC_COUNT_SOURCE_SEPARATION_106_20260916
-// SORIDRAW_EXPLORE_PUBLIC_COUNT_DIRECT_107_20260916
-// SORIDRAW_EXPLORE_LIKE_EXPLICIT_INTENT_118_20260918
-// An explicit heart click is authoritative pending intent until the direct batch
-// response acknowledges it. Historical local baseLiked/RTDB state may never
-// erase or override that intent.
-const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 2;
-const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state';
-const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes';
-const EXPLORE_LIKE_OUTBOX_SCHEMA_VERSION = 1;
-const EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox';
-const EXPLORE_LIKE_OUTBOX_SOURCE_TYPE = 'explore_like_outbox';
-const EXPLORE_LIKE_ACCOUNT_PATCH_SCHEMA_VERSION = 2;
-const EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY = 'explore-like-account-patches';
-const EXPLORE_LIKE_ACCOUNT_PATCH_SOURCE_TYPE = 'explore_like_account_patches';
-const EXPLORE_LIKE_ACCOUNT_PATCH_TTL_MS = 20 * 60_000;
+// SORIDRAW_EXPLORE_LIKE_LATEST_CACHE_IDLE_BATCH_119_20260918
+// App 119 keeps one current heart cache + one durable outbox. Older Explore-like
+// cache namespaces and RTDB replay payloads are intentionally ignored.
+const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 119;
+const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state-119';
+const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes_119';
+const EXPLORE_LIKE_OUTBOX_SCHEMA_VERSION = 119;
+const EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox-119';
+const EXPLORE_LIKE_OUTBOX_SOURCE_TYPE = 'explore_like_outbox_119';
 const EXPLORE_LIKE_BATCH_MAX = 50;
-// SORIDRAW_EXPLORE_LIKE_CLIENT_EVENT_WINDOW_104_20260916
-// SORIDRAW_EXPLORE_LIKE_CLIENT_EVENT_WINDOW_105_20260916
-// The first real local like change starts the PREVIEW server-side one-minute
-// aggregate window. Later changes stay local and are flushed once near the end
-// of that window, so repeated toggles collapse to the final desired state.
-const EXPLORE_LIKE_EVENT_WINDOW_MS_105 = 1 * 60_000;
-const EXPLORE_LIKE_FINAL_FLUSH_LEAD_MS_104 = 15_000;
-type ExploreLikeEventWindow104 = {
-  startedAt: number;
-  finalFlushTimer: number;
-};
-const exploreLikeEventWindowByUid104 = new Map<string, ExploreLikeEventWindow104>();
+const EXPLORE_LIKE_IDLE_FLUSH_MS_119 = 20_000;
 
 export const EXPLORE_LIKE_SYNC_EVENT = 'soridraw:explore-like-sync';
 export const EXPLORE_LIKE_SYNC_ERROR_EVENT = 'soridraw:explore-like-sync-error';
+// Retained only as a compatibility export for older callers. App 119 never emits it.
 export const EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT = 'soridraw:explore-like-account-invalidation';
-const EXPLORE_LIKE_ACCOUNT_SIGNAL_VERSION_STORAGE_BASE = 'soridraw_explore_like_account_signal_v1';
 
 type ExploreLikePendingMutation = {
   trackId: string;
@@ -86,196 +39,26 @@ type ExploreLikePendingMutation = {
 
 type ExploreLikeOutbox = Record<string, ExploreLikePendingMutation>;
 
+type ExploreLikeBatchResult = {
+  trackId: string;
+  liked: boolean;
+};
+
 type ExploreLikeSyncEventDetail = {
   uid: string;
   trackId: string;
   ownerUid: string;
   liked: boolean;
   likeCount: number;
-  displayLikeCount?: number;
 };
-
-type ExploreLikeBatchResult = {
-  trackId: string;
-  liked: boolean;
-  likeCount: number;
-};
-
-type ExploreLikeAccountSyncResult = ExploreLikeBatchResult & {
-  ownerUid: string;
-  displayLikeCount?: number;
-};
-
-type ExploreLikeAccountSyncSignal = {
-  version: number;
-  previousVersion: number;
-  results: ExploreLikeAccountSyncResult[];
-};
-
-type ExploreLikeAccountPatch = ExploreLikeAccountSyncResult & {
-  updatedAt: number;
-  expiresAt: number;
-};
-
-type ExploreLikeAccountPatchCache = Record<string, ExploreLikeAccountPatch>;
 
 const likedStateByUid = new Map<string, Map<string, boolean>>();
-const inflightByUid = new Map<string, ExploreLikeOutbox>();
-const flushAfterInflightByUid = new Set<string>();
-const observedAccountSignalVersionByUid = new Map<string, number>();
-
-const getAccountSignalVersionStorageKey = (uid: string) => `${EXPLORE_LIKE_ACCOUNT_SIGNAL_VERSION_STORAGE_BASE}_${uid}`;
-
-const readSeenAccountSignalVersion = (uid: string) => {
-  if (!uid || typeof localStorage === 'undefined') return 0;
-  try {
-    const value = Number(localStorage.getItem(getAccountSignalVersionStorageKey(uid)) || 0);
-    return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-  } catch {
-    return 0;
-  }
-};
-
-const setSeenAccountSignalVersion = (uid: string, version: number) => {
-  if (!uid || typeof localStorage === 'undefined') return;
-  try {
-    if (Number.isFinite(version) && version > 0) {
-      localStorage.setItem(getAccountSignalVersionStorageKey(uid), String(Math.floor(version)));
-    } else {
-      localStorage.removeItem(getAccountSignalVersionStorageKey(uid));
-    }
-  } catch {}
-};
-
-const normalizeAccountSyncSignal = (value: unknown): ExploreLikeAccountSyncSignal | null => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const raw = value as Record<string, unknown>;
-  const version = Math.max(0, Math.floor(Number(raw.version || 0)));
-  const previousVersion = Math.max(0, Math.floor(Number(raw.previousVersion || 0)));
-  const rows = Array.isArray(raw.results) ? raw.results : [];
-  if (!version || rows.length > EXPLORE_LIKE_BATCH_MAX) return null;
-  const results: ExploreLikeAccountSyncResult[] = [];
-  for (const row of rows) {
-    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
-    const item = row as Record<string, unknown>;
-    const trackId = String(item.trackId || '').trim();
-    if (!trackId) continue;
-    const displayLikeCount = Number(item.displayLikeCount);
-    results.push({
-      trackId,
-      ownerUid: String(item.ownerUid || '').trim(),
-      liked: Boolean(item.liked),
-      likeCount: clampLikeCount(item.likeCount),
-      ...(Number.isFinite(displayLikeCount) ? { displayLikeCount: clampLikeCount(displayLikeCount) } : {}),
-    });
-  }
-  if (results.length !== rows.length) return null;
-  return { version, previousVersion, results };
-};
+const flushTimerByUid = new Map<string, number>();
+const inflightByUid = new Map<string, Promise<void>>();
 
 const clampLikeCount = (value: unknown) => {
   const count = Number(value ?? 0);
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
-};
-
-const readAccountPatchCache = (uid: string): ExploreLikeAccountPatchCache => {
-  const envelope = readSoridrawPersistentCache<ExploreLikeAccountPatchCache>({
-    cacheKey: EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY,
-    sourceType: EXPLORE_LIKE_ACCOUNT_PATCH_SOURCE_TYPE,
-    schemaVersion: EXPLORE_LIKE_ACCOUNT_PATCH_SCHEMA_VERSION,
-    uid,
-  });
-  if (!envelope?.data || typeof envelope.data !== 'object' || Array.isArray(envelope.data)) return {};
-
-  const now = Date.now();
-  const next: ExploreLikeAccountPatchCache = {};
-  let changed = false;
-  for (const [trackId, value] of Object.entries(envelope.data)) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      changed = true;
-      continue;
-    }
-    const patch = value as Partial<ExploreLikeAccountPatch>;
-    const normalizedTrackId = String(patch.trackId || trackId || '').trim();
-    const expiresAt = Math.max(0, Number(patch.expiresAt || 0));
-    if (!normalizedTrackId || normalizedTrackId !== trackId || !expiresAt || expiresAt <= now || typeof patch.liked !== 'boolean') {
-      changed = true;
-      continue;
-    }
-    const displayLikeCount = Number(patch.displayLikeCount);
-    next[trackId] = {
-      trackId,
-      ownerUid: String(patch.ownerUid || '').trim(),
-      liked: patch.liked,
-      likeCount: clampLikeCount(patch.likeCount),
-      ...(Number.isFinite(displayLikeCount) ? { displayLikeCount: clampLikeCount(displayLikeCount) } : {}),
-      updatedAt: Math.max(0, Number(patch.updatedAt || 0)),
-      expiresAt,
-    };
-  }
-
-  if (changed) {
-    if (!Object.keys(next).length) {
-      removeSoridrawPersistentCache(EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY, uid);
-    } else {
-      writeSoridrawPersistentCache<ExploreLikeAccountPatchCache>({
-        cacheKey: EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY,
-        sourceType: EXPLORE_LIKE_ACCOUNT_PATCH_SOURCE_TYPE,
-        schemaVersion: EXPLORE_LIKE_ACCOUNT_PATCH_SCHEMA_VERSION,
-        dataVersion: 0,
-        uid,
-        syncCursor: null,
-        serverRevision: null,
-        deletedIds: [],
-        expiresAt: null,
-        dirty: false,
-        pendingMutationId: null,
-        data: next,
-      });
-    }
-  }
-  return next;
-};
-
-const persistAccountPatchCache = (uid: string, cache: ExploreLikeAccountPatchCache) => {
-  if (!Object.keys(cache).length) {
-    removeSoridrawPersistentCache(EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY, uid);
-    return;
-  }
-  writeSoridrawPersistentCache<ExploreLikeAccountPatchCache>({
-    cacheKey: EXPLORE_LIKE_ACCOUNT_PATCH_CACHE_KEY,
-    sourceType: EXPLORE_LIKE_ACCOUNT_PATCH_SOURCE_TYPE,
-    schemaVersion: EXPLORE_LIKE_ACCOUNT_PATCH_SCHEMA_VERSION,
-    dataVersion: 0,
-    uid,
-    syncCursor: null,
-    serverRevision: null,
-    deletedIds: [],
-    expiresAt: null,
-    dirty: false,
-    pendingMutationId: null,
-    data: cache,
-  });
-};
-
-const rememberAccountSyncResults = (uid: string, results: ExploreLikeAccountSyncResult[]) => {
-  if (!uid || !results.length) return;
-  const cache = readAccountPatchCache(uid);
-  const now = Date.now();
-  const expiresAt = now + EXPLORE_LIKE_ACCOUNT_PATCH_TTL_MS;
-  for (const result of results) {
-    cache[result.trackId] = {
-      trackId: result.trackId,
-      ownerUid: result.ownerUid,
-      liked: result.liked,
-      likeCount: clampLikeCount(result.likeCount),
-      ...(result.displayLikeCount === undefined ? {} : { displayLikeCount: clampLikeCount(result.displayLikeCount) }),
-      updatedAt: now,
-      expiresAt,
-    };
-    patchExplorePersonalSocialLike(uid, result.trackId, result.liked);
-  }
-  persistAccountPatchCache(uid, cache);
 };
 
 const readLikedStateStorage = (uid: string): Map<string, boolean> => {
@@ -298,7 +81,7 @@ const persistLikedStateCache = (uid: string, cache: Map<string, boolean>) => {
     cacheKey: EXPLORE_LIKE_CACHE_KEY,
     sourceType: EXPLORE_LIKE_SOURCE_TYPE,
     schemaVersion: EXPLORE_LIKE_CACHE_SCHEMA_VERSION,
-    dataVersion: 0,
+    dataVersion: 119,
     uid,
     syncCursor: null,
     serverRevision: null,
@@ -363,18 +146,17 @@ const persistLikeOutbox = (uid: string, outbox: ExploreLikeOutbox) => {
     cacheKey: EXPLORE_LIKE_OUTBOX_CACHE_KEY,
     sourceType: EXPLORE_LIKE_OUTBOX_SOURCE_TYPE,
     schemaVersion: EXPLORE_LIKE_OUTBOX_SCHEMA_VERSION,
-    dataVersion: 0,
+    dataVersion: 119,
     uid,
     syncCursor: null,
     serverRevision: null,
     deletedIds: [],
     expiresAt: null,
     dirty: true,
-    pendingMutationId: 'explore-like-pending',
+    pendingMutationId: 'explore-like-idle-batch-119',
     data: outbox,
   });
 };
-
 
 export const getPendingExploreLikeMutationCount = (uid: string): number => Object.keys(readLikeOutbox(uid)).length;
 
@@ -388,131 +170,18 @@ const dispatchLikeSyncError = (detail: ExploreLikeSyncEventDetail & { message: s
   window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_SYNC_ERROR_EVENT, { detail }));
 };
 
-export const observeExploreLikeAccountSyncSignal = (user: User, value: unknown) => {
-  const signal = normalizeAccountSyncSignal(value);
-  if (!signal || !user?.uid) return;
-  const uid = user.uid;
-  const seenVersion = readSeenAccountSignalVersion(uid);
-  observedAccountSignalVersionByUid.set(
-    uid,
-    Math.max(observedAccountSignalVersionByUid.get(uid) || 0, signal.version),
-  );
-  if (signal.version <= seenVersion) return;
-
-
-// 099: a version gap/reconnect is not cache corruption. 098 already retains
-// recent approved deltas in RTDB, so preserve known-good local membership,
-// card and social caches and merge only the retained results below. Never turn
-// an app update or wake-up into a full liked-track verification/read.
-const cache = getLikedStateCache(uid);
-
-  // 118: RTDB is a cross-device replay signal, not the ACK for this browser's
-  // current click. While an explicit mutation is pending, its desired state wins
-  // even when an older signal happens to contain the same/different value.
-  // Only the direct /v1/me/likes/batch response may clear the pending intent.
-  const pendingOutbox = readLikeOutbox(uid);
-  const effectiveResults = signal.results.map((result) => {
-    const pending = pendingOutbox[result.trackId];
-    return pending ? { ...result, liked: pending.desiredLiked } : result;
-  });
-  rememberAccountSyncResults(uid, effectiveResults);
-  for (const result of effectiveResults) {
-    // 106 final rule: account RTDB synchronizes only personal heart membership.
-    // Its likeCount/displayLikeCount fields remain parse-compatible for older
-    // clients, but this client never uses them to alter the public number.
-    cache.set(result.trackId, result.liked);
-    patchExploreLikedTrackMembership(uid, result.trackId, result.liked);
-    dispatchLikeSync({
-      uid: user.uid,
-      trackId: result.trackId,
-      ownerUid: result.ownerUid,
-      liked: result.liked,
-      likeCount: result.likeCount,
-    });
-  }
-  persistLikedStateCache(uid, cache);
-  setSeenAccountSignalVersion(uid, signal.version);
-
-};
-
-const publishExploreLikeAccountSyncSignal = async (
-  user: User,
-  batchEntries: ExploreLikePendingMutation[],
-  results: Array<ExploreLikeBatchResult & { displayLikeCount?: number }>,
-) => {
-  if (!user?.uid || !results.length) return;
-  const uid = user.uid;
-  const ownerByTrack = new Map(batchEntries.map((pending) => [pending.trackId, pending.ownerUid]));
-  const currentConfirmedResults: ExploreLikeAccountSyncResult[] = results.map((result) => ({
-    ...result,
-    ownerUid: ownerByTrack.get(result.trackId) || '',
-  }));
-
-  // 098: 093-097 could blind-overwrite another device's retained rows
-  // because set() rebuilt the whole signal from only this browser's cache.
-  // Merge the just-confirmed D1 batch against RTDB's actual latest value.
-  // Firebase retries this transaction on concurrent PC/mobile writes.
-  try {
-    const transaction = await runTransaction(
-      databaseRef(realtimeDb, `userSync/${uid}/exploreLike`),
-      (currentValue) => {
-        const currentSignal = normalizeAccountSyncSignal(currentValue);
-        const mergedByTrack = new Map<string, ExploreLikeAccountSyncResult>();
-        for (const currentResult of currentConfirmedResults) {
-          mergedByTrack.set(currentResult.trackId, currentResult);
-        }
-        for (const existing of currentSignal?.results || []) {
-          if (mergedByTrack.size >= EXPLORE_LIKE_BATCH_MAX) break;
-          if (!mergedByTrack.has(existing.trackId)) mergedByTrack.set(existing.trackId, existing);
-        }
-        const previousVersion = Math.max(0, currentSignal?.version || 0);
-        const version = Math.max(Date.now(), previousVersion + 1);
-        return {
-          version,
-          previousVersion,
-          results: [...mergedByTrack.values()].slice(0, EXPLORE_LIKE_BATCH_MAX),
-        } satisfies ExploreLikeAccountSyncSignal;
-      },
-      { applyLocally: false },
-    );
-
-    const committedSignal = transaction.committed
-      ? normalizeAccountSyncSignal(transaction.snapshot.val())
-      : null;
-    if (!committedSignal) return;
-    setSeenAccountSignalVersion(uid, committedSignal.version);
-    observedAccountSignalVersionByUid.set(
-      uid,
-      Math.max(observedAccountSignalVersionByUid.get(uid) || 0, committedSignal.version),
-    );
-  } catch (reason) {
-    // D1 already acknowledged this batch; never undo canonical like data.
-    console.warn('Explore account like atomic RTDB sync signal publish failed:', reason);
-  }
-};
-
 const buildAuthHeaders = async (user: User) => {
   const [idToken, appCheckToken] = await Promise.all([
     user.getIdToken(),
     getFirebaseAppCheckToken(),
   ]);
-
   if (!appCheckToken) {
     throw new Error('Explore 보안 인증을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.');
   }
-
   return {
     Authorization: `Bearer ${idToken}`,
     'X-Firebase-AppCheck': appCheckToken,
   };
-};
-
-const readPayload = async (response: Response) => {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
 };
 
 const requestExploreLike = async (user: User, path: string, init: RequestInit = {}) => {
@@ -526,33 +195,26 @@ const requestExploreLike = async (user: User, path: string, init: RequestInit = 
     },
   });
   recordCloudflareResponse(response, path);
-  const payload = await readPayload(response);
-
+  let payload: any = null;
+  try { payload = await response.json(); } catch { payload = null; }
   if (!response.ok) {
     const message = String(payload?.message || payload?.error?.message || payload?.error || '좋아요 요청을 처리하지 못했습니다.').trim();
     throw new Error(message || '좋아요 요청을 처리하지 못했습니다.');
   }
-
   return payload;
 };
 
-const getInflightMutation = (uid: string, trackId: string) => inflightByUid.get(uid)?.[trackId];
-
 const normalizeBatchResults = (payload: unknown, expectedTrackIds: string[]): ExploreLikeBatchResult[] => {
   const body = payload && typeof payload === 'object' ? payload as { data?: { results?: unknown[] } } : null;
-  const rows = Array.isArray(body?.data?.results) ? body.data.results : [];
+  const rows = Array.isArray(body?.data?.results) ? body!.data!.results! : [];
   const expected = new Set(expectedTrackIds);
   const results: ExploreLikeBatchResult[] = [];
   for (const value of rows) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
     const row = value as Record<string, unknown>;
     const trackId = String(row.trackId || '').trim();
-    if (!trackId || !expected.has(trackId)) continue;
-    results.push({
-      trackId,
-      liked: Boolean(row.liked),
-      likeCount: clampLikeCount(row.likeCount),
-    });
+    if (!trackId || !expected.has(trackId) || typeof row.liked !== 'boolean') continue;
+    results.push({ trackId, liked: row.liked });
   }
   if (results.length !== expected.size || new Set(results.map((result) => result.trackId)).size !== expected.size) {
     throw new Error('좋아요 묶음 응답을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.');
@@ -560,209 +222,171 @@ const normalizeBatchResults = (payload: unknown, expectedTrackIds: string[]): Ex
   return results;
 };
 
-const flushPendingLikes = async (user: User): Promise<void> => {
-  const uid = user.uid;
-  if (inflightByUid.has(uid)) {
-    flushAfterInflightByUid.add(uid);
+const clearFlushTimer = (uid: string) => {
+  const timer = flushTimerByUid.get(uid);
+  if (timer !== undefined && typeof window !== 'undefined') window.clearTimeout(timer);
+  flushTimerByUid.delete(uid);
+};
+
+const latestOutboxUpdatedAt = (outbox: ExploreLikeOutbox) => Object.values(outbox)
+  .reduce((latest, pending) => Math.max(latest, pending.updatedAt || 0), 0);
+
+let flushPendingLikes: (user: User) => Promise<void>;
+
+const schedulePendingFlush = (user: User) => {
+  const uid = String(user?.uid || '').trim();
+  if (!uid || typeof window === 'undefined') return;
+  const outbox = readLikeOutbox(uid);
+  if (!Object.keys(outbox).length) {
+    clearFlushTimer(uid);
+    return;
+  }
+  clearFlushTimer(uid);
+  const deadline = latestOutboxUpdatedAt(outbox) + EXPLORE_LIKE_IDLE_FLUSH_MS_119;
+  const delay = Math.max(0, deadline - Date.now());
+  const timer = window.setTimeout(() => {
+    flushTimerByUid.delete(uid);
+    void flushPendingLikes(user);
+  }, delay);
+  flushTimerByUid.set(uid, timer);
+};
+
+flushPendingLikes = async (user: User): Promise<void> => {
+  const uid = String(user?.uid || '').trim();
+  if (!uid || inflightByUid.has(uid)) return;
+
+  const outbox = readLikeOutbox(uid);
+  const ordered = Object.values(outbox)
+    .sort((a, b) => (a.queuedAt || a.updatedAt) - (b.queuedAt || b.updatedAt))
+    .slice(0, EXPLORE_LIKE_BATCH_MAX);
+
+  if (!ordered.length) return;
+
+  const noOps = ordered.filter((pending) => pending.desiredLiked === pending.baseLiked);
+  if (noOps.length) {
+    const latest = readLikeOutbox(uid);
+    for (const pending of noOps) {
+      const current = latest[pending.trackId];
+      if (current?.updatedAt === pending.updatedAt) delete latest[pending.trackId];
+    }
+    persistLikeOutbox(uid, latest);
+  }
+
+  const batchEntries = ordered.filter((pending) => pending.desiredLiked !== pending.baseLiked);
+  if (!batchEntries.length) {
+    if (getPendingExploreLikeMutationCount(uid) > 0) schedulePendingFlush(user);
     return;
   }
 
-  // 118: every row here represents an explicit user click. Never discard one
-  // merely because desiredLiked equals a historical local baseLiked value.
-  const outbox = readLikeOutbox(uid);
-  const batchEntries = Object.values(outbox)
-    .sort((a, b) => (a.queuedAt || a.updatedAt) - (b.queuedAt || b.updatedAt))
-    .slice(0, EXPLORE_LIKE_BATCH_MAX);
-  if (!batchEntries.length) return;
+  let succeeded = false;
+  const task = (async () => {
+    try {
+      const payload = await requestExploreLike(user, '/v1/me/likes/batch', {
+        method: 'POST',
+        body: JSON.stringify({
+          mutations: batchEntries.map((pending) => ({
+            trackId: pending.trackId,
+            liked: pending.desiredLiked,
+            baseLiked: pending.baseLiked,
+            mutationAt: pending.updatedAt,
+          })),
+        }),
+      });
+      const results = normalizeBatchResults(payload, batchEntries.map((pending) => pending.trackId));
+      const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
+      const latest = readLikeOutbox(uid);
+      const cache = getLikedStateCache(uid);
 
-  const snapshot = Object.fromEntries(batchEntries.map((pending) => [pending.trackId, { ...pending }])) as ExploreLikeOutbox;
-  inflightByUid.set(uid, snapshot);
-  let batchSucceeded = false;
-
-  try {
-    const payload = await requestExploreLike(user, '/v1/me/likes/batch', {
-      method: 'POST',
-      body: JSON.stringify({
-        mutations: batchEntries.map((pending) => ({
-          trackId: pending.trackId,
-          liked: pending.desiredLiked,
-          baseLiked: pending.baseLiked,
-          mutationAt: pending.updatedAt,
-        })),
-      }),
-    });
-    const results = normalizeBatchResults(payload, batchEntries.map((pending) => pending.trackId));
-    const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
-    const confirmedCache = getLikedStateCache(uid);
-    const latestOutbox = readLikeOutbox(uid);
-    const accountSyncResults: Array<ExploreLikeBatchResult & { displayLikeCount?: number }> = [];
-    const accountReplayResults: ExploreLikeAccountSyncResult[] = [];
-
-    for (const pending of batchEntries) {
-      const result = resultByTrack.get(pending.trackId);
-      if (!result) continue;
-      confirmedCache.set(result.trackId, result.liked);
-
-      const latest = latestOutbox[pending.trackId];
-      let visibleLiked = result.liked;
-      let ownerUid = pending.ownerUid;
-      const hasNewerPending = Boolean(latest && latest.updatedAt !== pending.updatedAt);
-      if (hasNewerPending && latest) {
-        ownerUid = latest.ownerUid || ownerUid;
-        latest.baseLiked = result.liked;
-        // Backward-compatible local outbox metadata only; never a public display source.
-        latest.baseLikeCount = clampLikeCount(result.likeCount);
-        latest.optimisticLikeCount = clampLikeCount(result.likeCount);
-        latest.retryCount = 0;
-        visibleLiked = latest.desiredLiked;
-        if (latest.desiredLiked === result.liked) {
-          delete latestOutbox[pending.trackId];
-        } else {
-          latestOutbox[pending.trackId] = latest;
+      for (const pending of batchEntries) {
+        const result = resultByTrack.get(pending.trackId);
+        if (!result) continue;
+        const current = latest[pending.trackId];
+        const hasNewerPending = Boolean(current && current.updatedAt !== pending.updatedAt);
+        if (!hasNewerPending) {
+          cache.set(pending.trackId, result.liked);
+          delete latest[pending.trackId];
+          dispatchLikeSync({
+            uid,
+            trackId: pending.trackId,
+            ownerUid: pending.ownerUid,
+            liked: result.liked,
+            likeCount: pending.optimisticLikeCount,
+          });
         }
-      } else {
-        delete latestOutbox[pending.trackId];
       }
 
-      const confirmedResult = {
-        trackId: result.trackId,
-        liked: result.liked,
-        likeCount: result.likeCount,
-      };
-      accountSyncResults.push(confirmedResult);
-      accountReplayResults.push({ ...confirmedResult, ownerUid });
-      dispatchLikeSync({
-        uid,
-        trackId: result.trackId,
-        ownerUid,
-        liked: visibleLiked,
-        likeCount: result.likeCount,
-      });
-    }
-
-    persistLikedStateCache(uid, confirmedCache);
-    rememberAccountSyncResults(uid, accountReplayResults);
-    // Publish the new cross-device signal while the local pending intent still
-    // exists, so an old RTDB replay cannot race between HTTP ACK and signal commit.
-    await publishExploreLikeAccountSyncSignal(user, batchEntries, accountSyncResults);
-    persistLikeOutbox(uid, latestOutbox);
-    batchSucceeded = true;
-  } catch (reason) {
-    const latestOutbox = readLikeOutbox(uid);
-    let firstPending: ExploreLikePendingMutation | null = null;
-    for (const pending of batchEntries) {
-      const latest = latestOutbox[pending.trackId] || pending;
-      if (latest.updatedAt === pending.updatedAt) {
-        latest.retryCount = Math.min(8, latest.retryCount + 1);
-        // Keep updatedAt stable for idempotent replay. 094 deliberately has no
-        // retry timer: the durable outbox retries at the next meaningful boundary.
-        latestOutbox[pending.trackId] = latest;
+      persistLikedStateCache(uid, cache);
+      persistLikeOutbox(uid, latest);
+      succeeded = true;
+    } catch (reason) {
+      const latest = readLikeOutbox(uid);
+      const first = batchEntries[0];
+      for (const pending of batchEntries) {
+        const current = latest[pending.trackId];
+        if (current?.updatedAt === pending.updatedAt) {
+          current.retryCount = Math.min(8, current.retryCount + 1);
+          latest[pending.trackId] = current;
+        }
       }
-      firstPending ||= latest;
+      persistLikeOutbox(uid, latest);
+      if (first) {
+        dispatchLikeSyncError({
+          uid,
+          trackId: first.trackId,
+          ownerUid: first.ownerUid,
+          liked: first.desiredLiked,
+          likeCount: first.optimisticLikeCount,
+          message: reason instanceof Error
+            ? reason.message
+            : '좋아요 변경분을 최신 기기 캐시에 보관했습니다. 다음 조작 또는 재접속 때 다시 동기화합니다.',
+        });
+      }
     }
-    persistLikeOutbox(uid, latestOutbox);
-
-    if (firstPending) {
-      dispatchLikeSyncError({
-        uid,
-        trackId: firstPending.trackId,
-        ownerUid: firstPending.ownerUid,
-        liked: firstPending.desiredLiked,
-        likeCount: firstPending.optimisticLikeCount,
-        message: reason instanceof Error ? reason.message : '좋아요 변경분을 기기에 보관했습니다. 다음 화면 이동 때 다시 동기화합니다.',
-      });
-    }
-  } finally {
+  })().finally(() => {
     inflightByUid.delete(uid);
-    const flushAgain = flushAfterInflightByUid.delete(uid);
-    if (batchSucceeded && flushAgain && getPendingExploreLikeMutationCount(uid) > 0) {
-      queueMicrotask(() => { void flushPendingLikes(user); });
-    }
-  }
+    if (succeeded && getPendingExploreLikeMutationCount(uid) > 0) schedulePendingFlush(user);
+  });
+
+  inflightByUid.set(uid, task);
+  await task;
 };
 
-
-const waitForExploreLikeInflight094 = async (uid: string) => {
-  const startedAt = Date.now();
-  while (inflightByUid.has(uid) && Date.now() - startedAt < 5_000) {
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 25));
-  }
-};
+// App 119 deliberately ignores historical RTDB Explore-like replay payloads.
+// Personal heart state is recovered from the 119 cache, pending outbox, or one
+// targeted canonical request for missing visible track IDs.
+export const observeExploreLikeAccountSyncSignal = (_user: User, _value: unknown) => {};
 
 export const flushPendingExploreLikesForPageExit = async (user: User): Promise<void> => {
-  await waitForExploreLikeInflight094(user.uid);
-  let previousPending = Number.POSITIVE_INFINITY;
-  while (true) {
-    const pending = getPendingExploreLikeMutationCount(user.uid);
-    if (pending <= 0) return;
-    if (pending >= previousPending) {
-      throw new Error('좋아요 변경분을 서버에 반영하지 못했습니다. 다음 페이지 이동 또는 재접속에서 다시 시도합니다.');
-    }
-    previousPending = pending;
-    await flushPendingLikes(user);
-    await waitForExploreLikeInflight094(user.uid);
-  }
-};
-
-
-const beginExploreLikeEventWindow104 = (user: User, now = Date.now()) => {
-  const uid = user.uid;
-  const finalFlushDelay = EXPLORE_LIKE_EVENT_WINDOW_MS_105 - EXPLORE_LIKE_FINAL_FLUSH_LEAD_MS_104;
-  const active = exploreLikeEventWindowByUid104.get(uid);
-  if (active && now - active.startedAt < finalFlushDelay) return false;
-  if (active) window.clearTimeout(active.finalFlushTimer);
-
-  const startedAt = now;
-  const finalFlushTimer = window.setTimeout(() => {
-    const current = exploreLikeEventWindowByUid104.get(uid);
-    if (!current || current.startedAt != startedAt) return;
-    exploreLikeEventWindowByUid104.delete(uid);
-    // No request is made when the outbox is already empty. If later toggles
-    // exist, this sends their final states before the server aggregate alarm.
-    void flushPendingLikes(user);
-  }, finalFlushDelay);
-
-  exploreLikeEventWindowByUid104.set(uid, { startedAt, finalFlushTimer });
-  return true;
+  // Page/profile navigation must not cut short the 20-second idle window.
+  // The module-level timer survives route changes; the durable 119 outbox survives reloads.
+  schedulePendingFlush(user);
 };
 
 export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): Promise<string[]> => {
-  const normalized = [...new Set(trackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean))].slice(0, 50);
+  const normalized = [...new Set(
+    trackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean),
+  )].slice(0, EXPLORE_LIKE_BATCH_MAX);
   if (!normalized.length) return [];
 
-  // 094: reading/hydrating Explore must never flush the durable outbox.
   const cache = getLikedStateCache(user.uid);
   const missing = normalized.filter((trackId) => !cache.has(trackId));
   if (missing.length) {
-    let resolved = false;
-    try {
-      const snapshot = await getExplorePersonalSocialSnapshot(user);
-      const likedIds = new Set(snapshot.likedTrackIds);
-      missing.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
-      resolved = true;
-    } catch (snapshotError) {
-      console.warn('[Explore like] Social Snapshot unavailable; using targeted likes recovery.', snapshotError);
-    }
-    if (!resolved) {
-      const query = new URLSearchParams({ trackIds: missing.join(',') });
-      const payload = await requestExploreLike(user, `/v1/me/likes?${query.toString()}`);
-      const likedIds = new Set(
-        Array.isArray(payload?.data?.likedTrackIds)
-          ? payload.data.likedTrackIds.map((trackId: unknown) => String(trackId || '').trim()).filter(Boolean)
-          : [],
-      );
-      missing.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
-    }
+    const query = new URLSearchParams({ trackIds: missing.join(',') });
+    const payload = await requestExploreLike(user, `/v1/me/likes?${query.toString()}`);
+    const likedIds = new Set(
+      Array.isArray(payload?.data?.likedTrackIds)
+        ? payload.data.likedTrackIds.map((trackId: unknown) => String(trackId || '').trim()).filter(Boolean)
+        : [],
+    );
+    missing.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
     persistLikedStateCache(user.uid, cache);
   }
 
   const outbox = readLikeOutbox(user.uid);
+  if (Object.keys(outbox).length) schedulePendingFlush(user);
 
-  // 088: outbox/current liked-state are the heart source of truth. Historical
-  // account patches remain available only to getExploreLikeDisplayCounts().
   return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? cache.get(trackId) === true);
 };
-
 
 export const reconcileExploreLikedTrackCollectionState = (
   uid: string,
@@ -807,40 +431,46 @@ export const setExploreTrackLike = async (
 ): Promise<{ trackId: string; liked: boolean; likeCount: number }> => {
   const normalizedTrackId = String(trackId || '').trim();
   if (!normalizedTrackId) throw new Error('Explore 곡 ID를 확인하지 못했습니다.');
-  const outbox = readLikeOutbox(user.uid);
+
+  const uid = user.uid;
+  const outbox = readLikeOutbox(uid);
   const existing = outbox[normalizedTrackId];
-  const inflight = getInflightMutation(user.uid, normalizedTrackId);
-  const optimisticLikedCache = getLikedStateCache(user.uid);
-  const previousVisibleLiked = existing?.desiredLiked ?? inflight?.desiredLiked ?? optimisticLikedCache.get(normalizedTrackId) ?? !liked;
-  const canonicalLikeCount = clampLikeCount(currentLikeCount);
-  const baselineLiked = inflight?.desiredLiked ?? existing?.baseLiked ?? previousVisibleLiked;
-  const baselineLikeCount = existing?.baseLikeCount ?? canonicalLikeCount;
-  // 107: public count is never optimistic or account-scoped. Keep the last shared
-  // Feed/Profile count only as backward-compatible outbox metadata.
-  const optimisticLikeCount = canonicalLikeCount;
-  patchExplorePersonalSocialLike(user.uid, normalizedTrackId, liked);
-  patchExploreLikedTrackMembership(user.uid, normalizedTrackId, liked);
-  optimisticLikedCache.set(normalizedTrackId, liked);
-  persistLikedStateCache(user.uid, optimisticLikedCache);
+  const cache = getLikedStateCache(uid);
+  const previousVisibleLiked = existing?.desiredLiked ?? cache.get(normalizedTrackId) ?? !liked;
+  const baseLiked = existing?.baseLiked ?? previousVisibleLiked;
+  const baseLikeCount = existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);
+  const optimisticLikeCount = clampLikeCount(
+    baseLikeCount + (liked ? 1 : 0) - (baseLiked ? 1 : 0),
+  );
   const now = Date.now();
+
+  cache.set(normalizedTrackId, liked);
+  persistLikedStateCache(uid, cache);
+
   outbox[normalizedTrackId] = {
     trackId: normalizedTrackId,
-    ownerUid: String(ownerUid || existing?.ownerUid || inflight?.ownerUid || '').trim(),
-    baseLiked: baselineLiked,
+    ownerUid: String(ownerUid || existing?.ownerUid || '').trim(),
+    baseLiked,
     desiredLiked: liked,
-    baseLikeCount: baselineLikeCount,
+    baseLikeCount,
     optimisticLikeCount,
     queuedAt: existing?.queuedAt || now,
     updatedAt: now,
     retryCount: 0,
   };
-  persistLikeOutbox(user.uid, outbox);
-  // 118: heart membership follows the normal optimistic-mutation pattern:
-  // update locally now, then send the desired state immediately. The Worker still
-  // coalesces canonical public-count projection behind its one-minute Durable
-  // Object alarm, so correctness no longer depends on keeping personal intent
-  // local for that whole aggregation window.
-  beginExploreLikeEventWindow104(user, now); // safety flush only; normally a no-op after ACK.
-  void flushPendingLikes(user);
+  persistLikeOutbox(uid, outbox);
+
+  // Sliding idle window: every click restarts the same 20-second timer. One song
+  // or many songs therefore leave as one final-state batch after the last click.
+  schedulePendingFlush(user);
+
+  dispatchLikeSync({
+    uid,
+    trackId: normalizedTrackId,
+    ownerUid: String(ownerUid || existing?.ownerUid || '').trim(),
+    liked,
+    likeCount: optimisticLikeCount,
+  });
+
   return { trackId: normalizedTrackId, liked, likeCount: optimisticLikeCount };
 };

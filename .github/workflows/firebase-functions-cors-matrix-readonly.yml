@@ -1,0 +1,92 @@
+name: Firebase Functions CORS Matrix Readonly
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/firebase-functions-cors-matrix-readonly.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-cors-functions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Authenticate Google read-only inspection
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Download live source and compare CORS function source hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          project='soridraw-app-866a5'
+          region='us-central1'
+          seed='getSunoApiKeyStatus'
+
+          gcloud functions describe "$seed" --gen2 --region "$region" --project "$project" --format=json > "$RUNNER_TEMP/seed.json"
+          eval "$(python3 - "$RUNNER_TEMP/seed.json" <<'PY'
+          import json, shlex, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8'))
+          src=((data.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}
+          print('SEED_BUCKET='+shlex.quote(str(src.get('bucket') or '')))
+          print('SEED_OBJECT='+shlex.quote(str(src.get('object') or '')))
+          PY
+          )"
+          test -n "$SEED_BUCKET" -a -n "$SEED_OBJECT"
+          gcloud storage cp "gs://$SEED_BUCKET/$SEED_OBJECT" "$RUNNER_TEMP/seed.zip" >/dev/null
+          mkdir -p "$RUNNER_TEMP/seed-src"
+          unzip -q "$RUNNER_TEMP/seed.zip" -d "$RUNNER_TEMP/seed-src"
+          seed_index="$RUNNER_TEMP/seed-src/src/index.ts"
+          test -f "$seed_index"
+
+          python3 - "$seed_index" "$RUNNER_TEMP/functions.txt" <<'PY'
+          import re, sys
+          text=open(sys.argv[1], encoding='utf-8').read()
+          names=[]
+          pattern=re.compile(r'export\s+const\s+(\w+)\s*=\s*onRequest\s*\(', re.M)
+          matches=list(pattern.finditer(text))
+          for i,m in enumerate(matches):
+              end=matches[i+1].start() if i+1 < len(matches) else len(text)
+              block=text[m.start():end]
+              if 'handleCors(req, res)' in block:
+                  names.append(m.group(1))
+          if not names:
+              raise SystemExit('No handleCors onRequest exports found')
+          open(sys.argv[2],'w',encoding='utf-8').write('\n'.join(names)+'\n')
+          print('[CORS Matrix] functions: '+', '.join(names))
+          PY
+
+          printf '%-34s %-28s %-12s %s\n' 'FUNCTION' 'UPDATE_TIME' 'ZIP_HASH' 'SOURCE_OBJECT'
+          all_hashes="$RUNNER_TEMP/hashes.txt"
+          : > "$all_hashes"
+          while IFS= read -r fn; do
+            test -n "$fn" || continue
+            json="$RUNNER_TEMP/$fn.json"
+            gcloud functions describe "$fn" --gen2 --region "$region" --project "$project" --format=json > "$json"
+            eval "$(python3 - "$json" <<'PY'
+          import json, shlex, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8'))
+          src=((data.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}
+          print('B='+shlex.quote(str(src.get('bucket') or '')))
+          print('O='+shlex.quote(str(src.get('object') or '')))
+          print('U='+shlex.quote(str(data.get('updateTime') or '')))
+          PY
+          )"
+            test -n "$B" -a -n "$O"
+            zip="$RUNNER_TEMP/$fn.zip"
+            gcloud storage cp "gs://$B/$O" "$zip" >/dev/null
+            hash="$(sha256sum "$zip" | awk '{print $1}')"
+            printf '%-34s %-28s %-12s %s\n' "$fn" "${U:0:27}" "${hash:0:12}" "$O"
+            echo "$hash $fn" >> "$all_hashes"
+          done < "$RUNNER_TEMP/functions.txt"
+
+          echo '[CORS Matrix] unique source zip hashes:'
+          cut -d' ' -f1 "$all_hashes" | sort | uniq -c
+          echo 'READ_ONLY=true'
+          echo 'NO_FUNCTIONS_DEPLOY=true'
+          echo 'NO_DATA_WRITE=true'

@@ -1,0 +1,14 @@
+{
+  "version": 672,
+  "basis": "SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip",
+  "purpose": "Three-workspace shared Builder-only outer-window resize A/B diagnostic (Recent / Music Note / Library).",
+  "required_marker": "SORIDRAW_VERIFY_672: SHARED_BUILDER_ONLY_OUTER_RESIZE_AB",
+  "critical_sha256": {
+    "src/components/studio/StudioSplitWorkspace.tsx": "2b23d0e4f216db3d6b6246eec31e418954aeb70c1484fc7d33d3a35a9f039562",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx": "155fb3342d52f701ec9077c48758e988d4af73208888dbee129e5b88ae4dd904",
+    "src/components/studio/studioLayout.css": "0f5d8bba1eeaab991cd988c26c1a546514e1a08a70a663116a02a457da5195d0",
+    "src/App.tsx": "a299e133feee82a0f2e46d8a090429854f0c4a52862e98711983682aeea7061c",
+    "vite.config.ts": "efa027eab7e6774f11f0716409520f2cfa0b229e484828b632f76e01f866368e",
+    "vercel.json": "0f1e8273d28bb4e4aa1e3587690889311c54b4a0de7951f25dfc139ece9e543e"
+  }
+}

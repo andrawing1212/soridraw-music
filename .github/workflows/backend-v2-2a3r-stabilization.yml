@@ -1,0 +1,213 @@
+name: SORIDRAW Backend V2 2-A3-R Stabilization
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-backend-v2-2a3r-emergency.py'
+      - '.deploy/trigger-backend-v2-2a3r-stabilization.txt'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-backend-v2-2a3r-stabilization
+  cancel-in-progress: false
+
+jobs:
+  stabilize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 20 for frontend parity
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        id: install_frontend
+        continue-on-error: true
+        run: npm ci
+
+      - name: Capture baseline TypeScript diagnostics
+        id: baseline_tsc
+        if: steps.install_frontend.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit > /tmp/tsc-baseline.log 2>&1
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          cat /tmp/tsc-baseline.log
+          exit 0
+
+      - name: Apply deterministic emergency patch
+        id: patch
+        run: python3 .deploy/apply-backend-v2-2a3r-emergency.py
+
+      - name: Verify approved change scope
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git add -N docs/SORIDRAW_BACKEND_V2_STEP2A3R_EMERGENCY_STABILIZATION.md
+          python3 - <<'PY'
+          import subprocess
+          allowed = {
+              'src/firebase.js',
+              'src/services/playlistService.ts',
+              'src/pages/SunoLibraryPage.tsx',
+              'src/lib/songUtils.ts',
+              'functions/src/index.ts',
+              'docs/SORIDRAW_BACKEND_V2_STEP2A3R_EMERGENCY_STABILIZATION.md',
+              'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md',
+          }
+          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
+          if changed != allowed:
+              raise SystemExit(f'emergency scope mismatch: changed={sorted(changed)}, expected={sorted(allowed)}')
+          for protected in ['src/App.tsx','firestore.rules','database.rules.json']:
+              if subprocess.run(['git','diff','--quiet','HEAD','--',protected]).returncode != 0:
+                  raise SystemExit(f'protected file changed: {protected}')
+          print('approved emergency scope verified')
+          PY
+
+      - name: Verify stabilization markers
+        id: markers
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          checks = {
+            'src/firebase.js': ['isVercelPreviewApp','soridraw-music-git-preview-andrawing1212.vercel.app','isVercelPreviewApp || isVercelTestApp'],
+            'src/services/playlistService.ts': ['defaultPlaylistEnsurePromises','ensureDefaultPlaylistsInternal','defaultPlaylistEnsurePromises.delete(uid)'],
+            'src/pages/SunoLibraryPage.tsx': ['playlistLiveModeActive','[user?.uid, playlistLiveModeActive, isSharedView]',"audioValidationStatus === 'pending_or_empty'"],
+            'src/lib/songUtils.ts': ['blob.size <= 0','Audio download is empty'],
+            'functions/src/index.ts': ['probeSunoAudioUrlHasBytes','findFirstUsableSunoAudioUrl','audioValidationStatus','verifiedAudioUrls','reportedAudioUrls'],
+          }
+          for file, markers in checks.items():
+              source = Path(file).read_text(encoding='utf-8')
+              for marker in markers:
+                  if marker not in source:
+                      raise SystemExit(f'missing marker {marker!r} in {file}')
+          print('stabilization markers verified')
+          PY
+
+      - name: Verify frontend TypeScript diagnostics did not worsen
+        id: tsc_parity
+        if: steps.install_frontend.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit > /tmp/tsc-patched.log 2>&1
+          patched_code=$?
+          set -e
+          cat /tmp/tsc-patched.log
+          if ! diff -u /tmp/tsc-baseline.log /tmp/tsc-patched.log; then
+            echo '2-A3-R introduced or changed frontend TypeScript diagnostics.' >&2
+            exit 1
+          fi
+          if [ "$patched_code" != '${{ steps.baseline_tsc.outputs.exit_code }}' ]; then
+            echo "TypeScript exit code changed: baseline=${{ steps.baseline_tsc.outputs.exit_code }} patched=$patched_code" >&2
+            exit 1
+          fi
+          echo "TypeScript diagnostics parity PASS (baseline exit=$patched_code)."
+
+      - name: Frontend production build without npm lifecycle patches
+        id: build
+        if: steps.install_frontend.outcome == 'success'
+        continue-on-error: true
+        run: npx vite build
+
+      - name: Set up Node.js 22 for Functions source check
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        id: install_functions
+        continue-on-error: true
+        working-directory: functions
+        run: npm ci
+
+      - name: Functions TypeScript no-deploy check
+        id: functions_typecheck
+        if: steps.install_functions.outcome == 'success'
+        continue-on-error: true
+        working-directory: functions
+        run: npx tsc --noEmit
+
+      - name: Verify validation introduced no source side-effects
+        id: post_scope
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              'src/firebase.js',
+              'src/services/playlistService.ts',
+              'src/pages/SunoLibraryPage.tsx',
+              'src/lib/songUtils.ts',
+              'functions/src/index.ts',
+              'docs/SORIDRAW_BACKEND_V2_STEP2A3R_EMERGENCY_STABILIZATION.md',
+              'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md',
+          }
+          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
+          if changed != expected:
+              raise SystemExit(f'validation side-effect detected; changed={sorted(changed)}, expected={sorted(expected)}')
+          for protected in ['src/App.tsx','firestore.rules','database.rules.json']:
+              if subprocess.run(['git','diff','--quiet','HEAD','--',protected]).returncode != 0:
+                  raise SystemExit(f'protected file changed after validation: {protected}')
+          print('validation side-effect check PASS')
+          PY
+
+      - name: Final safety gate
+        id: final
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ steps.install_frontend.outcome }}' = success
+          test '${{ steps.baseline_tsc.outcome }}' = success
+          test '${{ steps.patch.outcome }}' = success
+          test '${{ steps.scope.outcome }}' = success
+          test '${{ steps.markers.outcome }}' = success
+          test '${{ steps.tsc_parity.outcome }}' = success
+          test '${{ steps.build.outcome }}' = success
+          test '${{ steps.install_functions.outcome }}' = success
+          test '${{ steps.functions_typecheck.outcome }}' = success
+          test '${{ steps.post_scope.outcome }}' = success
+          echo '2-A3-R safety gate PASS; no Firebase deploy executed.'
+
+      - name: Commit validated stabilization to preview
+        if: steps.final.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/firebase.js \
+            src/services/playlistService.ts \
+            src/pages/SunoLibraryPage.tsx \
+            src/lib/songUtils.ts \
+            functions/src/index.ts \
+            docs/SORIDRAW_BACKEND_V2_STEP2A3R_EMERGENCY_STABILIZATION.md \
+            docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git commit -m "fix: stage 2-A3-R emergency stabilization"
+          git push origin HEAD:preview

@@ -1,0 +1,45 @@
+name: SORIDRAW Backend V2 Step 3-3 Master Update
+
+on:
+  push:
+    branches:
+      - preview
+    paths:
+      - '.github/workflows/backend-v2-step3-3-master.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 2
+
+      - name: Apply master-plan patch
+        run: python3 .deploy/apply-backend-v2-step3-3-master.py
+
+      - name: Validate scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only)"
+          test "$changed" = "docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md"
+          grep -Fq "Step 3-3 actual backup approved but blocked" docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          grep -Fq "3-4 Rate-limited backfill" docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git commit -m "docs: normalize Backend V2 Step 3 numbering"
+          git push origin HEAD:preview

@@ -1,0 +1,143 @@
+name: SORIDRAW Suno Generation Read-only Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/trigger-suno-generation-diagnostic.txt'
+
+concurrency:
+  group: soridraw-suno-generation-readonly-diagnostic
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Authenticate read-only diagnostic session
+        id: auth
+        continue-on-error: true
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install Functions dependencies
+        id: install
+        continue-on-error: true
+        working-directory: functions
+        run: npm ci
+
+      - name: Run recent Suno track diagnostic
+        id: diagnose
+        if: steps.auth.outcome == 'success' && steps.install.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy
+          (
+            cd functions
+            node scripts/diagnose-recent-suno-tracks-readonly.cjs --project=soridraw-app-866a5 --minutes=90
+          ) > .deploy/suno-generation-diagnostic.json 2> /tmp/suno-generation-diagnostic.err
+
+      - name: Validate read-only safety contract
+        id: validate
+        if: steps.diagnose.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('.deploy/suno-generation-diagnostic.json').read_text(encoding='utf-8'))
+          safety = report.get('safety', {})
+          assert report.get('projectId') == 'soridraw-app-866a5'
+          assert safety.get('databaseWrites') == 0
+          assert safety.get('databaseDeletes') == 0
+          assert safety.get('documentIdsPrinted') is False
+          assert safety.get('userIdsPrinted') is False
+          assert safety.get('contentValuesPrinted') is False
+          assert safety.get('apiKeysPrinted') is False
+          print('read-only safety contract verified')
+          PY
+
+      - name: Record diagnostic result on preview
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy
+          AUTH='${{ steps.auth.outcome }}'
+          INSTALL='${{ steps.install.outcome }}'
+          DIAGNOSE='${{ steps.diagnose.outcome }}'
+          VALIDATE='${{ steps.validate.outcome }}'
+          if [ "$AUTH" = success ] && [ "$INSTALL" = success ] && [ "$DIAGNOSE" = success ] && [ "$VALIDATE" = success ]; then
+            STATUS=success
+          else
+            STATUS=failure
+          fi
+          {
+            echo "status=${STATUS}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "source_commit=${GITHUB_SHA}"
+            echo "target_project=soridraw-app-866a5"
+            echo "database_writes=0"
+            echo "database_deletes=0"
+            echo "identifiers_printed=0"
+            echo "content_values_printed=0"
+            echo "auth=${AUTH}"
+            echo "install=${INSTALL}"
+            echo "diagnose=${DIAGNOSE}"
+            echo "validate=${VALIDATE}"
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > .deploy/suno-generation-diagnostic-run.txt
+
+          if [ "$DIAGNOSE" != success ] && [ -f /tmp/suno-generation-diagnostic.err ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          import re
+          src = Path('/tmp/suno-generation-diagnostic.err').read_text(encoding='utf-8', errors='replace')
+          lines = [line.strip() for line in src.splitlines() if line.strip()]
+          text = ' | '.join(lines[:4])[:1000]
+          text = re.sub(r'(?i)(private_key|credentials_json|client_email|token|api[_-]?key)\s*[:=]\s*[^ |]+', r'\1=[REDACTED]', text)
+          Path('.deploy/suno-generation-diagnostic-error.txt').write_text(text + '\n', encoding='utf-8')
+          PY
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/suno-generation-diagnostic-run.txt
+          if [ -f .deploy/suno-generation-diagnostic.json ]; then git add .deploy/suno-generation-diagnostic.json; fi
+          if [ -f .deploy/suno-generation-diagnostic-error.txt ]; then git add .deploy/suno-generation-diagnostic-error.txt; fi
+          git commit -m "docs: record Suno generation read-only diagnostic" || true
+          git pull --rebase origin preview
+          git push origin HEAD:preview
+
+      - name: Fail workflow if diagnostic did not complete
+        if: always()
+        shell: bash
+        run: |
+          test '${{ steps.auth.outcome }}' = success
+          test '${{ steps.install.outcome }}' = success
+          test '${{ steps.diagnose.outcome }}' = success
+          test '${{ steps.validate.outcome }}' = success

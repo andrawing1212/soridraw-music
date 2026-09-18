@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>SORIDRAW(P)</title>
+    <!-- VERIFICATION COMMENT: IF YOU SEE THIS IN SOURCE, THIS FILE IS BEING SERVED -->
+    <meta name="theme-color" content="#0f0f0f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta id="soridraw-apple-app-title" name="apple-mobile-web-app-title" content="SORIDRAW(P)" />
+    <meta id="soridraw-application-name" name="application-name" content="SORIDRAW(P)" />
+
+    <!-- 037: environment-specific names and cache-busted PNG brand assets -->
+    <link id="soridraw-favicon" rel="icon" type="image/png" sizes="96x96" href="/brand/soridraw-favicon-preview-041.png" />
+    <link id="soridraw-shortcut-icon" rel="shortcut icon" type="image/png" href="/brand/soridraw-favicon-preview-041.png" />
+    <link id="soridraw-apple-touch-icon" rel="apple-touch-icon" sizes="192x192" href="/brand/soridraw-app-preview-041.png" />
+    <link id="soridraw-manifest" rel="manifest" href="/manifest.preview.json" crossorigin="use-credentials" />
+    <script>
+      (function() {
+        var host = String(window.location.hostname || '').toLowerCase();
+        var environment = 'preview';
+        if (host === 'soridraw.com' || host === 'www.soridraw.com' || host === 'soridraw.web.app') {
+          environment = 'production';
+        } else if (host === 'test.soridraw.com' || host === 'soridraw-test.web.app') {
+          environment = 'test';
+        }
+
+        var appName = environment === 'production'
+          ? 'SORIDRAW'
+          : environment === 'test'
+            ? 'SORIDRAW(T)'
+            : 'SORIDRAW(P)';
+
+        document.title = appName;
+        var appleTitle = document.getElementById('soridraw-apple-app-title');
+        var applicationName = document.getElementById('soridraw-application-name');
+        if (appleTitle) appleTitle.setAttribute('content', appName);
+        if (applicationName) applicationName.setAttribute('content', appName);
+
+        var favicon = document.getElementById('soridraw-favicon');
+        var shortcutIcon = document.getElementById('soridraw-shortcut-icon');
+        var appleTouchIcon = document.getElementById('soridraw-apple-touch-icon');
+        var manifest = document.getElementById('soridraw-manifest');
+
+        var faviconHref = environment === 'preview' ? '/brand/soridraw-favicon-preview-041.png' : '/brand/soridraw-favicon-' + environment + '.png?v=037';
+        if (favicon) favicon.href = faviconHref;
+        if (shortcutIcon) shortcutIcon.href = environment === 'preview' ? '/brand/soridraw-preview-041.ico' : faviconHref;
+        if (appleTouchIcon) appleTouchIcon.href = environment === 'preview' ? '/brand/soridraw-app-preview-041.png' : '/brand/soridraw-app-' + environment + '.png?v=037';
+        if (manifest) manifest.href = environment === 'preview' ? '/manifest.preview.json' : '/manifest.' + environment + '.json?v=037';
+
+        document.documentElement.dataset.soridrawEnvironment = environment;
+        document.documentElement.dataset.soridrawAppName = appName;
+      })();
+    </script>
+    <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
+
+    <style>
+      html,
+      body,
+      #root {
+        background: var(--soridraw-initial-bg, #0f0f0f);
+        color: var(--soridraw-initial-text, #f8f9fa);
+      }
+    </style>
+
+    <script>
+      (function() {
+        try {
+          var nav = navigator || {};
+          var ua = nav.userAgent || '';
+          var uaPhone = /iPhone|iPod|Windows Phone|IEMobile|Opera Mini|BlackBerry|webOS/i.test(ua)
+            || (/Android/i.test(ua) && /Mobile/i.test(ua));
+          var shortSide = Math.min((screen && screen.width) || 9999, (screen && screen.height) || 9999);
+          var touchPhoneFallback = typeof matchMedia === 'function'
+            && (matchMedia('(pointer: coarse)').matches || matchMedia('(hover: none)').matches)
+            && shortSide <= 600;
+          // 631: only UA-CH `mobile:true` is decisive. Some Android
+          // browser/PWA combinations can report false even on a real phone.
+          var isPhone = nav.userAgentData?.mobile === true || uaPhone || touchPhoneFallback;
+          var requestedTheme = localStorage.getItem('soridraw_app_theme') === 'studio-black' ? 'studio-black' : 'classic';
+          var displayKey = isPhone ? 'soridraw_phone_display_mode' : 'soridraw_large_display_mode';
+          var storedDisplay = localStorage.getItem(displayKey);
+          var legacyColorKey = isPhone ? 'soridraw_phone_color_mode' : 'soridraw_large_screen_color_mode';
+          var legacyColor = localStorage.getItem(legacyColorKey)
+            || localStorage.getItem('soridraw_color_mode')
+            || localStorage.getItem('themeMode')
+            || 'dark';
+          var requestedDisplay = storedDisplay === 'studio-black' || storedDisplay === 'light' || storedDisplay === 'dark'
+            ? storedDisplay
+            : requestedTheme === 'studio-black'
+              ? 'studio-black'
+              : legacyColor === 'light' ? 'light' : 'dark';
+          // 631: actual phones never first-paint the split workspace. Use the
+          // same robust physical-device rule as the React runtime so a stale Split
+          // preference cannot expose the desktop dashboard under the Classic page.
+          if (isPhone && requestedDisplay === 'studio-black') requestedDisplay = 'dark';
+          var effectiveTheme = requestedDisplay === 'studio-black' ? 'studio-black' : 'classic';
+          var effectiveColor = requestedDisplay === 'light' ? 'light' : 'dark';
+          document.documentElement.dataset.soridrawTheme = effectiveTheme;
+          document.documentElement.dataset.soridrawColorMode = effectiveColor;
+          document.documentElement.dataset.soridrawDevice = isPhone ? 'phone' : 'large-screen';
+          document.documentElement.classList.toggle('dark', effectiveColor === 'dark');
+          document.documentElement.style.setProperty('--soridraw-initial-bg', effectiveColor === 'light' ? '#ffffff' : effectiveTheme === 'studio-black' ? '#101010' : '#0f0f0f');
+          document.documentElement.style.setProperty('--soridraw-initial-text', effectiveColor === 'light' ? '#1a1a1a' : '#f8f9fa');
+        } catch (error) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+
+
+
+    <script>
+      // 모바일 앱 화면에서 두 손가락 확대/축소 흔들림을 막고, 한 손가락 스크롤은 유지합니다.
+      (function() {
+        var preventPinchZoom = function(event) {
+          if (event.touches && event.touches.length > 1) {
+            event.preventDefault();
+          }
+        };
+
+        var preventGestureZoom = function(event) {
+          event.preventDefault();
+        };
+
+        document.addEventListener('touchmove', preventPinchZoom, { passive: false });
+        document.addEventListener('gesturestart', preventGestureZoom, { passive: false });
+        document.addEventListener('gesturechange', preventGestureZoom, { passive: false });
+        document.addEventListener('gestureend', preventGestureZoom, { passive: false });
+      })();
+    </script>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+    </script>
+    <script type="module" crossorigin src="/assets/index-Ba96vnYI.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/react-core-CmGSpuP4.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-BEbxd11q.js">
+    <link rel="modulepreload" crossorigin href="/assets/firebase-B42J_rZO.js">
+    <link rel="modulepreload" crossorigin href="/assets/utils-B-dksMZM.js">
+    <link rel="modulepreload" crossorigin href="/assets/api-CCyN5wUP.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-AloA6yle.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

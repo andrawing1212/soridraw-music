@@ -1,0 +1,46 @@
+name: TEMP 081 Readonly Route Outbox Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-081-readonly-route-outbox-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - name: Print exact integration anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== APP MAIN 4780-4860 ==='
+          sed -n '4780,4860p' src/App.tsx
+          echo '=== APP ROUTE WRAPPER 2860-2940 ==='
+          sed -n '2860,2940p' src/App.tsx
+          echo '=== APP BOTTOM 18970-19030 ==='
+          sed -n '18970,19030p' src/App.tsx
+          echo '=== APP FINAL 19340-19430 ==='
+          sed -n '19340,19430p' src/App.tsx
+          echo '=== FAVORITES PUBLICATION 5450-5550 ==='
+          sed -n '5450,5550p' src/pages/FavoritesPage.tsx
+          echo '=== FAVORITES IMPORTS 1-115 ==='
+          sed -n '1,115p' src/pages/FavoritesPage.tsx
+          echo '=== LIKE IMPORTS 1-80 ==='
+          sed -n '1,80p' src/services/exploreLikeService.ts
+          echo '=== USER DATA IMPORTS 1-45 ==='
+          sed -n '1,45p' src/lib/userDataEngine.ts
+          echo '=== WORKER LIKE 21380-21470 ==='
+          sed -n '21380,21470p' cloudflare/explore-worker/canonical/preview-worker.js
+          echo '=== WORKER VISIBILITY 19990-20145 ==='
+          sed -n '19990,20145p' cloudflare/explore-worker/canonical/preview-worker.js
+          echo '=== WORKER DISPATCH 22190-22370 ==='
+          sed -n '22190,22370p' cloudflare/explore-worker/canonical/preview-worker.js

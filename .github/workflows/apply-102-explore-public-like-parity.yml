@@ -1,0 +1,114 @@
+name: Apply 102 Explore Public Like Parity
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-102-explore-public-like-parity.trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-102-explore-public-like-parity
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Prepare 102 client and release source
+        run: python3 .deploy/apply-102-explore-public-like-parity.py
+
+      - name: Build canonical Worker with 056 parity patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/patches/056-explore-public-like-parity.mjs
+          tmp="$(mktemp -d)"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$tmp/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/056-explore-public-like-parity.mjs
+          cp "$tmp/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          grep -Fq 'SORIDRAW_EXPLORE_PUBLIC_LIKE_PARITY_056_20260916' cloudflare/explore-worker/canonical/preview-worker.js
+
+      - name: Verify public like parity contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$PWD/cloudflare/explore-worker/canonical/preview-worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-102-explore-public-like-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-like-cost-optimization.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
+          grep -Fq '056-explore-public-like-parity.mjs' cloudflare/explore-worker/release-patches.json
+          grep -Fq '"version": "102"' public/app-version.json
+          expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test "$expected" = "$actual"
+          echo '102_STATIC_CONTRACT=PASS'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify change boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only | grep -v '^dist/' || true)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/services/exploreRevisionRequestCache\.ts|public/app-version\.json|cloudflare/explore-worker/release-patches\.json|cloudflare/explore-worker/canonical/preview-worker\.js|cloudflare/explore-worker/canonical/source-sha256\.txt)$' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected generated changes:'
+            echo "$bad"
+            exit 1
+          fi
+          echo 'NO_FIREBASE_FUNCTIONS_CHANGE=true'
+          echo 'NO_FIRESTORE_RULES_CHANGE=true'
+          echo 'NO_RTDB_RULES_CHANGE=true'
+          echo 'NO_D1_SCHEMA_CHANGE=true'
+          echo 'NO_USER_DATA_MIGRATION=true'
+          echo 'NO_UI_CSS_CHANGE=true'
+          echo 'NO_DEPLOYMENT=true'
+
+      - name: Commit actual PREVIEW 102 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked=(
+            src/services/exploreRevisionRequestCache.ts
+            public/app-version.json
+            cloudflare/explore-worker/release-patches.json
+            cloudflare/explore-worker/canonical/preview-worker.js
+            cloudflare/explore-worker/canonical/source-sha256.txt
+          )
+          if git diff --quiet -- "${tracked[@]}"; then
+            echo '102 already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "${tracked[@]}"
+          git commit -m 'fix: reconcile Explore public like counts'
+          git push origin HEAD:preview

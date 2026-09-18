@@ -1,0 +1,13 @@
+{
+  "version": 690,
+  "basis": "SORIDRAW_689",
+  "goal": "Preserve 683 fast internal splitter drag while retaining 686/687/689 outer-window resize gains for Music Note and Library.",
+  "strategy": {
+    "internal_split_drag": "restore exact 683 App/Legacy drag ownership and exact 683 Lite pointer path",
+    "outer_resize": "retain 686 viewport windowing, 687 tablet direct geometry, 689 outer-resize hit-test/animation isolation",
+    "engine_switching": "PC Music Note/Library return to the 683 Lite library-590 engine instead of 688 Legacy unification"
+  },
+  "firebase_changes": false,
+  "storage_schema_changes": false,
+  "deployment": false
+}

@@ -1,0 +1,4 @@
+triggeredAt=2026-08-30T07:30:00Z
+projectId=soridraw-app-866a5
+mode=read-only
+purpose=firebase-test-host-appcheck-final-after-domain-add

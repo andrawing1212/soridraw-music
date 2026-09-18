@@ -1,4 +1,52 @@
+import { runV1MutationBoundary, type V1MutationMirrorTarget } from './data/v1MutationBoundary';
+import { recoverSoridrawPendingSync } from './lib/pageSyncCoordinator';
+import './data/v2PreviewShadowMirror';
+import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';
+
+const SORIDRAW_EXPLORE_8C_THEME_STATUS_FINAL_951 = true;
+const getLiveSoridrawSongId = (song: any): string | null => {
+  const value = String(song?.soridrawSongId || '').trim();
+  return isSoridrawSongId(value) ? value : null;
+};
+
+const ensureLiveSoridrawSongId = <T extends Record<string, any>>(song: T): T => {
+  if (!song || typeof song !== 'object' || getLiveSoridrawSongId(song)) return song;
+  const soridrawSongId = createSoridrawSongId();
+  try { (song as any).soridrawSongId = soridrawSongId; return song; }
+  catch { return { ...song, soridrawSongId }; }
+};
+
+const buildRecentMirrorTargets = (songs: readonly any[], operation: 'upsert' | 'recent-hide', sourceUpdatedAtMs = Date.now()): V1MutationMirrorTarget[] => {
+  const seen = new Set<string>(); const targets: V1MutationMirrorTarget[] = [];
+  for (const song of songs || []) {
+    const targetSongId = getLiveSoridrawSongId(song);
+    if (!targetSongId || seen.has(targetSongId)) continue;
+    seen.add(targetSongId); targets.push({ targetSongId, operation, sourceUpdatedAtMs });
+    if (targets.length >= 10) break;
+  }
+  return targets;
+};
+
+
 import React, { useState, useEffect, useLayoutEffect, useRef, Component, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useMediaQuery } from './lib/mediaQueryStore';
+import CacheDiagnosticBadge from './components/CacheDiagnosticBadge';
+import CacheDiagnosticsOverlay from './components/CacheDiagnosticsOverlay';
+import { markCacheDiagnostic } from './lib/cacheDiagnostics';
+import { scheduleListBundleWrite, subscribeListBundle, readListBundleFromServerOnce } from './lib/listBundleCache';
+import { schedulePreviewAdaptiveListIndexPublishIfDirty } from './lib/adaptiveListIndexV2';
+const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
+const SORIDRAW_COMMON_USER_DATA_ENGINE_1033 = true;
+
+const SORIDRAW_897_CACHE_DIAGNOSTICS_READ_ACCURACY = true;
+const SORIDRAW_899_CACHE_DIAGNOSTICS_PERSISTENCE_MUSICNOTE = true;
+const SORIDRAW_898_CACHE_DIAGNOSTICS_LIVE_PANEL = true;
+const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
+import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from './lib/studioActionBarGeometry';
+import { resolveExpandedHeight, useStableContentHeight } from './lib/stableContentHeight';
+import { useStableHoverTooltip } from './lib/stableHoverTooltip';
+import MenuTitleTooltipPortal from './components/studio/MenuTitleTooltipPortal';
+import { MENU_HELP_TIPS_EVENT, MENU_HELP_TIPS_STORAGE_KEY, readMenuHelpTipsEnabled } from './lib/menuHelpPreference';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -21,6 +69,7 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Pin,
   PinOff,
   Trash2,
@@ -66,23 +115,420 @@ import {
   Sunset,
   Activity,
   PenTool,
+  Palette,
   FlaskConical,
   AlertTriangle
 } from 'lucide-react';
+import { Compass as ExploreCompass } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { buildPreviewSongIntent, renderPreviewCards } from './services/songPreviewEngine';
 import { favoritesStore, useFavorites, useIsSongFavorited } from './hooks/useFavoritesStore';
+import {
+  readUserProfileCache,
+  readUserProfileCacheStoredAt,
+  readUserProfileServerVerifiedAt,
+  writeUserProfileCache,
+  writeUserProfileServerVerifiedAt,
+} from './lib/userProfileCache';
+import {
+  readSeenUserControlRevision,
+  subscribeUserControlRevision,
+  writeSeenUserControlRevision,
+} from './services/userControlRevisionService';
+import { observeExploreLikeAccountSyncSignal } from './services/exploreLikeService';
+// SORIDRAW_EXPLORE_LIKE_ACCOUNT_SIGNAL_058_20260911
+import { recoverFromStaleChunkError } from './services/chunkLoadRecovery';
+import StudioPageFrame from './components/studio/StudioPageFrame';
+import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/StudioLeftRail';
+import StudioRightRail from './components/studio/StudioRightRail';
+import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
+import SplitPerformanceDiagnostics from './components/studio/SplitPerformanceDiagnostics';
+import { readSplitPerfToolVisibility, SPLIT_PERF_TOOL_VISIBILITY_EVENT } from './components/studio/splitPerfDiagnostics';
+import StudioSplitEngineWorkspace, { type StudioGenerationBarPerfMode, type StudioLiteRuntimeProfile, type StudioSplitEngine, type StudioV2DragPerfMode } from './components/studio/StudioSplitEngineWorkspace';
 
-// Portal component for top-level rendering
-function Portal({ children }: { children: React.ReactNode }) {
+// Portal component for top-level rendering. Action controls keep one DOM owner
+// so switching between fixed and anchored coordinates never remounts them.
+function Portal({ children, enabled = true }: { children: React.ReactNode; enabled?: boolean }) {
   if (typeof document === 'undefined') return null;
-  return createPortal(children, document.body);
+  return enabled ? createPortal(children, document.body) : <>{children}</>;
+}
+
+// SORIDRAW_TOOLTIP_ISOLATED_HOST_984
+// Tooltip hover changes stay inside this tiny persistent host instead of
+// re-rendering the full Studio/App tree. The DOM node never unmounts;
+// visibility/content/placement alone change, which also keeps a future
+// per-user tooltip ON/OFF preference cheap to add.
+type StudioDescriptionOverlayPlacement = {
+  pane: 'builder' | 'result' | 'global';
+  left: number;
+  maxWidth: number;
+};
+
+type StudioDescriptionOverlayItem = {
+  id: string;
+  label: string;
+  description?: string;
+};
+
+type StudioDescriptionOverlayController = {
+  show: (item: StudioDescriptionOverlayItem, placement: StudioDescriptionOverlayPlacement) => void;
+  hide: () => void;
+};
+
+function StudioDescriptionOverlayHost({
+  controllerRef,
+  resolvePlacement,
+  locationPathname,
+  studioActionOwner,
+  isActionButtonsCollapsed,
+  shouldRenderActionButtons,
+}: {
+  controllerRef: { current: StudioDescriptionOverlayController | null };
+  resolvePlacement: () => StudioDescriptionOverlayPlacement;
+  locationPathname: string;
+  studioActionOwner: string;
+  isActionButtonsCollapsed: boolean;
+  shouldRenderActionButtons: boolean;
+}) {
+  const [item, setItem] = useState<StudioDescriptionOverlayItem | null>(null);
+  const [placement, setPlacement] = useState<StudioDescriptionOverlayPlacement>(() => ({
+    pane: 'global',
+    left: typeof window !== 'undefined' ? window.innerWidth / 2 : 0,
+    maxWidth: typeof window !== 'undefined' && window.innerWidth < 768 ? 200 : 400,
+  }));
+  const [isVisible, setIsVisible] = useState(false);
+  const [isTooltipHovered, setIsTooltipHovered] = useState(false);
+  const autoHideTimerRef = useRef<number | null>(null);
+
+  const clearAutoHideTimer = useCallback(() => {
+    if (autoHideTimerRef.current !== null) {
+      window.clearTimeout(autoHideTimerRef.current);
+      autoHideTimerRef.current = null;
+    }
+  }, []);
+
+  const hide = useCallback(() => {
+    clearAutoHideTimer();
+    setIsVisible(false);
+    setIsTooltipHovered(false);
+  }, [clearAutoHideTimer]);
+
+  const show = useCallback((nextItem: StudioDescriptionOverlayItem, nextPlacement: StudioDescriptionOverlayPlacement) => {
+    clearAutoHideTimer();
+    setItem(nextItem);
+    setPlacement(nextPlacement);
+    setIsVisible(true);
+    setIsTooltipHovered(false);
+    autoHideTimerRef.current = window.setTimeout(() => {
+      autoHideTimerRef.current = null;
+      setIsVisible(false);
+      setIsTooltipHovered(false);
+    }, 6000);
+  }, [clearAutoHideTimer]);
+
+  useLayoutEffect(() => {
+    const controller: StudioDescriptionOverlayController = { show, hide };
+    controllerRef.current = controller;
+    return () => {
+      if (controllerRef.current === controller) controllerRef.current = null;
+    };
+  }, [controllerRef, hide, show]);
+
+  useEffect(() => () => clearAutoHideTimer(), [clearAutoHideTimer]);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    const refreshPlacement = () => setPlacement(resolvePlacement());
+    window.addEventListener('resize', refreshPlacement);
+    window.addEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
+    window.addEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
+    return () => {
+      window.removeEventListener('resize', refreshPlacement);
+      window.removeEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
+      window.removeEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
+    };
+  }, [isVisible, resolvePlacement]);
+
+  const suppressInlineActionHint = Boolean(
+    item && studioActionOwner !== 'floating' && ['generate', 'random', 'clear-all'].includes(item.id)
+  );
+  const shouldShow = Boolean(isVisible && item && !suppressInlineActionHint);
+  const bottomClass = locationPathname === '/studio'
+    ? (!isActionButtonsCollapsed && shouldRenderActionButtons
+        ? 'bottom-[6.75rem] md:bottom-[8.5rem]'
+        : 'bottom-10')
+    : (typeof document !== 'undefined' && document.querySelector('[data-selection-action-bar="true"]')
+        ? 'bottom-[7.75rem] md:bottom-[8.75rem]'
+        : 'bottom-10');
+
+  return (
+    <div
+      aria-hidden={!shouldShow}
+      onMouseEnter={() => setIsTooltipHovered(true)}
+      onMouseLeave={() => setIsTooltipHovered(false)}
+      style={{
+        left: placement.left,
+        width: 'max-content',
+        maxWidth: placement.maxWidth,
+        opacity: shouldShow ? (isTooltipHovered ? 0.1 : 1) : 0,
+        visibility: shouldShow ? 'visible' : 'hidden',
+        pointerEvents: shouldShow ? 'auto' : 'none',
+        transform: 'translateX(-50%)',
+      }}
+      data-description-pane={placement.pane}
+      className={`soridraw-studio-description-overlay fixed z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300 ${bottomClass}`}
+    >
+      <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{item?.label || ''}</p>
+      <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">{item?.description || ''}</p>
+    </div>
+  );
 }
 
 const favoritesInMemoryCache = new Map<string, any[]>();
 const favoritesCacheWriteTimers = new Map<string, any>();
 const FAVORITE_DELETED_TOMBSTONE_LIMIT = 800;
+
+const SORIDRAW_913_RECENT_SAVE_RUNTIME_FIX = true;
+const SORIDRAW_922_NO_UNBOUNDED_BOOTSTRAP_READS = true;
+const SORIDRAW_921_FIRESTORE_COST_HARDENING = true;
+const SORIDRAW_919_RECENT_CACHE_PAYLOAD_SHAPE_FIX = true;
+const SORIDRAW_918_FAVORITE_MUTATION_SIGNAL_ORDER_FIX = true;
+const SORIDRAW_917_MUSIC_NOTE_DELTA_SYNC_NO_FULLSCAN = true;
+const SORIDRAW_915_HEART_EXPLICIT_UNSAVE = true;
+const SORIDRAW_912_HEART_TRIGGERED_RECENT_SAVE = true;
+const SORIDRAW_911_RECENT_HEART_LINK_30S_BATCH = true;
+const SORIDRAW_910_RECENT_TEXT_BATCH_UNSAVE_FIX = true;
+const SORIDRAW_909_MUSIC_NOTE_NO_STARTUP_WRITE = true;
+const SORIDRAW_908_MUSIC_NOTE_NO_HOME_DELTA_READ = true;
+const SORIDRAW_907_SESSION_READ_GUARDS = true;
+const SORIDRAW_905_RECENT_SONGS_CACHE_LIVE_ACCOUNTING = true;
+const recentSongsSessionVerifiedUids = new Set<string>();
+const recentSongsSessionReadInFlightUids = new Set<string>();
+const RECENT_SONGS_LOCAL_SYNC_VERSION_STORAGE_BASE = 'soridraw_recent_songs_local_sync_version_v2';
+const RECENT_SONGS_SYNC_VERSION_EVENT = 'soridraw:recent-songs-sync-version-v2';
+
+const getRecentSongsVersionStorageKey = (uid: string) => `${RECENT_SONGS_LOCAL_SYNC_VERSION_STORAGE_BASE}_${uid}`;
+const RECENT_SONGS_MUTATION_EPOCH_STORAGE_BASE = 'soridraw_recent_songs_mutation_epoch_v1';
+const recentSongsWriteQueues = new Map<string, Promise<any>>();
+
+const getRecentSongsMutationEpochStorageKey = (uid: string) => `${RECENT_SONGS_MUTATION_EPOCH_STORAGE_BASE}_${uid}`;
+const readRecentSongsMutationEpoch = (uid: string): number => {
+  if (!uid || typeof localStorage === 'undefined') return 0;
+  try {
+    const value = Number(localStorage.getItem(getRecentSongsMutationEpochStorageKey(uid)) || 0);
+    return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+  } catch {
+    return 0;
+  }
+};
+const bumpRecentSongsMutationEpoch = (uid: string): number => {
+  if (!uid) return 0;
+  const next = Math.max(Date.now(), readRecentSongsMutationEpoch(uid) + 1);
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.setItem(getRecentSongsMutationEpochStorageKey(uid), String(next)); } catch {}
+  }
+  return next;
+};
+const readRecentSongsLocalVersion = (uid: string): number => {
+  if (!uid || typeof localStorage === 'undefined') return 0;
+  try {
+    const value = Number(localStorage.getItem(getRecentSongsVersionStorageKey(uid)) || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+};
+const writeRecentSongsLocalVersion = (uid: string, version: number) => {
+  if (!uid || !Number.isFinite(version) || version <= 0 || typeof localStorage === 'undefined') return;
+  try {
+    const previous = readRecentSongsLocalVersion(uid);
+    localStorage.setItem(getRecentSongsVersionStorageKey(uid), String(Math.max(previous, Math.floor(version))));
+  } catch {}
+};
+
+const persistRecentSongsDocument = async (
+  ref: any,
+  songs: any[],
+  expectedMutationEpoch?: number,
+): Promise<number | null> => {
+  const uid = String(ref?.id || '').trim();
+
+  const writeLatest = async (): Promise<number | null> => {
+    if (
+      uid
+      && Number.isFinite(expectedMutationEpoch)
+      && Number(expectedMutationEpoch) !== readRecentSongsMutationEpoch(uid)
+    ) {
+      return null;
+    }
+
+    const previousVersion = uid ? readRecentSongsLocalVersion(uid) : 0;
+    const syncVersion = Math.max(Date.now(), previousVersion + 1);
+
+    await setDoc(ref, sanitizeForFirestore({ songs, syncVersion }), { merge: true });
+    markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
+
+    if (!uid) return syncVersion;
+    writeRecentSongsLocalVersion(uid, syncVersion);
+
+    try {
+      await updateDoc(doc(db, 'users', uid), { 'syncVersions.recentSongs': syncVersion });
+      const cachedProfile = readUserProfileCache(uid);
+      if (cachedProfile) {
+        writeUserProfileCache(uid, {
+          ...(cachedProfile as any),
+          syncVersions: {
+            ...((cachedProfile as any)?.syncVersions || {}),
+            recentSongs: syncVersion,
+          },
+        });
+      }
+    } catch (error) {
+      console.warn('Recent songs version signal publish failed.', error);
+    }
+    return syncVersion;
+  };
+
+  if (!uid) return writeLatest();
+
+  const previousWrite = recentSongsWriteQueues.get(uid) || Promise.resolve();
+  const queuedWrite = previousWrite
+    .catch(() => undefined)
+    .then(writeLatest);
+  recentSongsWriteQueues.set(uid, queuedWrite);
+  try {
+    return await queuedWrite;
+  } finally {
+    if (recentSongsWriteQueues.get(uid) === queuedWrite) {
+      recentSongsWriteQueues.delete(uid);
+    }
+  }
+};
+const SORIDRAW_904_MUSIC_NOTE_LAZY_BUNDLE_ENTRY_RUNTIME = true;
+const SORIDRAW_903_LIST_BUNDLE_ONE_SHOT_RUNTIME = true;
+const SORIDRAW_902_LIST_BUNDLE_CACHE = true;
+const musicNoteBundleActiveUids = new Set<string>();
+const SORIDRAW_901_MUSIC_NOTE_SYNC_PERMISSION_HARDENING = true;
+const SORIDRAW_901_MUSIC_NOTE_10_INCREMENTAL_SYNC = true;
+const MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE = 'soridraw_music_note_local_sync_version_v1';
+const MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE = 'soridraw_music_note_remote_sync_version_v1';
+const MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE = 'soridraw_music_note_pagination_cursor_v1';
+const MUSIC_NOTE_DEVICE_ID_STORAGE_KEY = 'soridraw_music_note_device_id_v1';
+const MUSIC_NOTE_SYNC_VERSION_EVENT = 'soridraw:music-note-sync-version';
+const musicNoteFreshBootstrapUids = new Set<string>();
+const musicNoteFullCatalogReadyUids = new Set<string>(); // 1036: schema-1001 catalog is authoritative
+
+const MUSIC_NOTE_CACHE_SCHEMA_VERSION = '4'; // SORIDRAW_MUSIC_NOTE_NO_FULLSCAN_BOOTSTRAP_1022
+const MUSIC_NOTE_CACHE_SCHEMA_STORAGE_BASE = 'soridraw_music_note_cache_schema_v3';
+let musicNoteActiveUiUid: string | null = null;
+
+const getMusicNoteCacheSchemaKey = (uid: string) => `${MUSIC_NOTE_CACHE_SCHEMA_STORAGE_BASE}_${uid}`;
+const getMusicNotePayloadCacheKey = (uid: string) => `soridraw_favorites_cache_${uid}`;
+const SORIDRAW_MUSIC_NOTE_CACHE_INTEGRITY_1028 = true;
+const SORIDRAW_MUSIC_NOTE_NORMALIZATION_STAGE1_1030 = true;
+const SORIDRAW_MUSIC_NOTE_STAGE1_PAGE_SIZED_CACHE_REUSE_1030B = true;
+const SORIDRAW_MUSIC_NOTE_CLEAN_BOOTSTRAP_LEGACY_AXIS_1031 = true;
+
+const hasMusicNotePayloadCache = (uid: string): boolean => {
+  if (!uid) return false;
+  if (favoritesInMemoryCache.has(uid)) return true;
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem(getMusicNotePayloadCacheKey(uid)) !== null;
+  } catch {
+    return false;
+  }
+};
+
+const isMusicNoteCacheSchemaCurrent = (uid: string): boolean => {
+  if (!uid || typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem(getMusicNoteCacheSchemaKey(uid)) === MUSIC_NOTE_CACHE_SCHEMA_VERSION;
+  } catch {
+    return false;
+  }
+};
+
+const prepareMusicNoteCacheForUser = (uid: string): boolean => {
+  if (!uid) return false;
+  // Cache schema changes must never invalidate a user's complete Music Note
+  // payload and trigger an unbounded collection scan. Existing UID-scoped
+  // payloads remain usable; truly missing payloads fall through to the
+  // existing bounded/paged bootstrap path.
+  if (!isMusicNoteCacheSchemaCurrent(uid) && hasMusicNotePayloadCache(uid)) {
+    try {
+      localStorage.setItem(getMusicNoteCacheSchemaKey(uid), MUSIC_NOTE_CACHE_SCHEMA_VERSION);
+    } catch {}
+  }
+  return false;
+};
+
+const markMusicNoteCacheSchemaCurrent = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(getMusicNoteCacheSchemaKey(uid), MUSIC_NOTE_CACHE_SCHEMA_VERSION);
+  } catch {}
+};
+
+const getMusicNoteScopedStorageKey = (base: string, uid: string) => `${base}_${uid}`;
+const readMusicNoteSyncVersion = (base: string, uid: string): number => {
+  if (!uid || typeof localStorage === 'undefined') return 0;
+  try {
+    const value = Number(localStorage.getItem(getMusicNoteScopedStorageKey(base, uid)) || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const writeMusicNoteSyncVersion = (base: string, uid: string, version: number) => {
+  if (!uid || !Number.isFinite(version) || version <= 0 || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(getMusicNoteScopedStorageKey(base, uid), String(version));
+  } catch {}
+};
+
+const getMusicNoteDeviceId = (): string => {
+  if (typeof localStorage === 'undefined') return 'memory-device';
+  try {
+    const saved = localStorage.getItem(MUSIC_NOTE_DEVICE_ID_STORAGE_KEY);
+    if (saved) return saved;
+    const next = `mn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(MUSIC_NOTE_DEVICE_ID_STORAGE_KEY, next);
+    return next;
+  } catch {
+    return 'memory-device';
+  }
+};
+
+const readMusicNotePaginationCursor = (uid: string): Date | null => {
+  if (!uid || typeof localStorage === 'undefined') return null;
+  try {
+    const ms = Number(localStorage.getItem(getMusicNoteScopedStorageKey(MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE, uid)) || 0);
+    return Number.isFinite(ms) && ms > 0 ? new Date(ms) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeMusicNotePaginationCursor = (uid: string, docSnap: any | null) => {
+  if (!uid || !docSnap || typeof localStorage === 'undefined') return;
+  try {
+    const data = typeof docSnap.data === 'function' ? docSnap.data() : null;
+    const ms = Number(data?.createdAtMs || 0) || getTimestampMs(data?.createdAt);
+    if (ms > 0) {
+      localStorage.setItem(getMusicNoteScopedStorageKey(MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE, uid), String(ms));
+    }
+  } catch {}
+};
+
+const clearMusicNotePaginationCursor = (uid: string) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.removeItem(getMusicNoteScopedStorageKey(MUSIC_NOTE_PAGINATION_CURSOR_STORAGE_BASE, uid));
+  } catch {}
+};
 
 const getFavoriteDeletedTombstoneStorageKey = (uid: string) => `soridraw_favorite_deleted_tombstones_${uid}`;
 
@@ -281,7 +727,8 @@ import {
   VOCAL_PERSONALITIES
 } from './constants';
 import { VOCAL_TONES } from './constants/vocalTones';
-import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind, VocalCharacterSelection, LyricClicheGuardSettings, SectionCueOptions } from './types';
+import { normalizeLanguageMixRatioOption } from './constants/languageMixRatios';
+import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, StaffRole, AdminPermissions, AdminPermissionKey, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind, VocalCharacterSelection, LyricClicheGuardSettings, SectionCueOptions } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 import {
   getFirstEnabledNavigationPath,
@@ -293,7 +740,16 @@ import {
   type NavigationVisibilitySettings,
   writeStoredNavigationVisibilitySettings,
 } from './constants/navigationVisibility';
+import { EMPTY_ADMIN_PERMISSIONS, getFirstAccessibleAdminPath, normalizeAdminPermissions, normalizeStaffRole } from './constants/adminPermissions';
 import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
+import {
+  applyStoredSoridrawDisplayMode,
+  cycleSoridrawDisplayMode,
+  getSoridrawDisplayModeLabel,
+  isSoridrawPhoneDevice,
+  readSoridrawDisplayMode,
+  type SoridrawDisplayMode,
+} from './services/themePreferences';
 
 
 
@@ -301,6 +757,48 @@ const USER_CUSTOM_SECTIONS_STORAGE_KEY = 'soridraw_user_custom_sections_v1';
 const USER_CUSTOM_SECTION_TAGS_STORAGE_KEY = 'soridraw_user_custom_section_tags_v1';
 const USER_SAVED_STRUCTURES_STORAGE_KEY = 'soridraw_saved_structures_v1';
 const getSavedStructuresStorageKey = (uid?: string | null) => `${USER_SAVED_STRUCTURES_STORAGE_KEY}_${uid || 'guest'}`;
+
+const SORIDRAW_937_MUSIC_NOTE_REFRESH_VERSION_GATE = true;
+const SORIDRAW_935_RECENT_VERSION_SYNC_ONLY = true;
+const SORIDRAW_932_REFRESH_ROOT_WRITE_AND_SECTION_ROUTE_GATE = true;
+const SORIDRAW_931_REFRESH_SESSION_WRITE_GATE = true;
+const SORIDRAW_929_SINGLE_USER_PROFILE_SOURCE = true;
+const SORIDRAW_927_MONOTONIC_SECTION_VERSION_AND_OP_TRACE = true;
+const SORIDRAW_926_SESSION_PROFILE_STRUCTURE_CACHE = true;
+const SORIDRAW_896_SECTION_CUSTOM_SYNC_PERMISSION_HARDENING = true;
+const SORIDRAW_895_SECTION_CUSTOM_CACHE_SYNC = true;
+const SECTION_CUSTOM_SYNC_VERSION_EVENT = 'soridraw:section-custom-sync-version';
+const SECTION_CUSTOM_LOCAL_VERSION_STORAGE_BASE = 'soridraw_section_custom_local_version_v1';
+const SECTION_CUSTOM_REMOTE_VERSION_STORAGE_BASE = 'soridraw_section_custom_remote_version_v1';
+const sectionCustomVerifiedSessionVersions = new Map<string, number>();
+const getSectionCustomVersionStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
+const readSectionCustomVersion = (base: string, uid?: string | null): number => {
+  if (!uid || typeof localStorage === 'undefined') return 0;
+  try {
+    const value = Number(localStorage.getItem(getSectionCustomVersionStorageKey(base, uid)) || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+};
+const writeSectionCustomVersion = (base: string, uid: string, version: number) => {
+  if (!uid || !Number.isFinite(version) || version <= 0 || typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(getSectionCustomVersionStorageKey(base, uid), String(version));
+  } catch {}
+};
+const publishSectionCustomRemoteVersion = (uid: string, version: number) => {
+  if (!uid || !Number.isFinite(version) || version <= 0) return;
+  const localVersion = readSectionCustomVersion(SECTION_CUSTOM_LOCAL_VERSION_STORAGE_BASE, uid);
+  const remoteVersion = readSectionCustomVersion(SECTION_CUSTOM_REMOTE_VERSION_STORAGE_BASE, uid);
+  const sessionVersion = Number(sectionCustomVerifiedSessionVersions.get(uid) || 0);
+  const knownVersion = Math.max(localVersion, remoteVersion, sessionVersion);
+  if (knownVersion >= version) return;
+  writeSectionCustomVersion(SECTION_CUSTOM_REMOTE_VERSION_STORAGE_BASE, uid, version);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SECTION_CUSTOM_SYNC_VERSION_EVENT, { detail: { uid, version } }));
+  }
+};
 
 const safeReadJsonArray = <T,>(key: string): T[] => {
   if (typeof window === 'undefined') return [];
@@ -502,9 +1000,13 @@ import {
   increment,
   deleteField,
   query as firestoreQuery
-} from 'firebase/firestore';
-import { auth, googleProvider, db, getFirebaseAppCheckToken } from './firebase';
+} from './lib/firestoreMeasured';
+import { auth, googleProvider, db, functions, httpsCallable, getFirebaseAppCheckToken } from './firebase';
+import { startUserPresence } from './services/presenceService';
+import { writeGeminiAutoModelFallback } from './services/geminiModelPreferences';
+import { buildEmailVerificationActionSettings } from './constants/emailVerification';
 import { sanitizeForFirestore } from './lib/utils';
+import { FIRESTORE_READ_CACHE_KEYS, FIRESTORE_READ_CACHE_TTL_MS, readFirestoreReadCache, writeFirestoreReadCache } from './lib/firestoreReadCache';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
 import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle, readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/MusicApiGenerateModal';
 
@@ -540,9 +1042,91 @@ const isPureInstrumentalBgmGenreSelection = (ids: Array<string | null | undefine
   const cleanIds = ids.filter((id): id is string => Boolean(id));
   return cleanIds.length > 0 && cleanIds.every(isInstrumentalBgmGenreId);
 };
-import { signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
+import { signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
 
 type AuthMode = 'login' | 'signup' | 'reset';
+type EmailVerificationGate = 'idle' | 'checking' | 'required';
+
+type CachedHeaderIdentity = {
+  uid: string;
+  displayName: string;
+  photoURL: string;
+};
+
+const HEADER_IDENTITY_CACHE_KEY = 'soridraw_header_identity_v1';
+
+const getHeaderIdentityStorage = (): Storage | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem('rememberLogin') === 'true'
+      ? window.localStorage
+      : window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+const readCachedHeaderIdentity = (): CachedHeaderIdentity | null => {
+  const storage = getHeaderIdentityStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(HEADER_IDENTITY_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const uid = String(parsed?.uid || '').trim();
+    if (!uid) return null;
+    return {
+      uid,
+      displayName: String(parsed?.displayName || 'My'),
+      photoURL: String(parsed?.photoURL || ''),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const getHeaderIdentityFromUser = (
+  authUser: Pick<User, 'uid' | 'displayName' | 'photoURL'>,
+): CachedHeaderIdentity => ({
+  uid: authUser.uid,
+  displayName: authUser.displayName || 'My',
+  photoURL: authUser.photoURL || '',
+});
+
+const writeCachedHeaderIdentity = (identity: CachedHeaderIdentity) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const storage = getHeaderIdentityStorage();
+    if (!storage) return;
+    storage.setItem(HEADER_IDENTITY_CACHE_KEY, JSON.stringify(identity));
+    const otherStorage = storage === window.localStorage
+      ? window.sessionStorage
+      : window.localStorage;
+    otherStorage.removeItem(HEADER_IDENTITY_CACHE_KEY);
+  } catch {}
+};
+
+const clearCachedHeaderIdentity = () => {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.removeItem(HEADER_IDENTITY_CACHE_KEY); } catch {}
+  try { window.sessionStorage.removeItem(HEADER_IDENTITY_CACHE_KEY); } catch {}
+};
+
+const getEmailVerificationCycleKey = (authUser: User, userData?: Record<string, any> | null) => {
+  const resetAt = Number(userData?.emailVerificationResetAtMs || 0);
+  const isResetCycle =
+    userData?.lastAdminAuthAction === 'reset-email-verification' &&
+    Number.isFinite(resetAt) &&
+    resetAt > 0;
+
+  if (isResetCycle) return `${authUser.uid}:reset:${resetAt}`;
+
+  const creationMs = authUser.metadata.creationTime
+    ? new Date(authUser.metadata.creationTime).getTime()
+    : 0;
+  const safeCreationMs = Number.isFinite(creationMs) && creationMs > 0 ? creationMs : 0;
+  return `${authUser.uid}:signup:${safeCreationMs || authUser.uid}`;
+};
 
 enum OperationType {
   CREATE = 'create',
@@ -579,7 +1163,17 @@ class ErrorBoundary extends Component<any, any> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    if (recoverFromStaleChunkError(error)) return;
     console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  componentDidUpdate(prevProps: any) {
+    // 843 — Reset only the boundary state after an actual error and route change.
+    // A route-key on the boundary remounted the entire App tree on every normal
+    // navigation, recreating Auth/Firestore listeners and resetting verified role state.
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false, error: null });
+    }
   }
 
   render() {
@@ -590,8 +1184,10 @@ class ErrorBoundary extends Component<any, any> {
       if (error?.message) {
         if (/GEMINI_KEY_NOT_FOUND|API Key가 등록되어 있지/i.test(error.message)) {
           errorMessage = "마이페이지에서 개인 Gemini API 키를 등록해주세요.";
-        } else if (error.message.toLowerCase().includes("quota") || error.message.toLowerCase().includes("limit")) {
-          errorMessage = "무료 생성 한도를 초과했습니다. 나중에 다시 시도해주세요.";
+        } else if (/GEMINI_RATE_LIMITED|generate_content_.*(?:quota|limit)|gemini[^\n]*(?:quota|rate.?limit)|(?:quota|rate.?limit)[^\n]*gemini|HTTP\s*429/i.test(error.message)) {
+          errorMessage = "Gemini 생성 사용량 또는 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.";
+        } else if (/firestore|firebase/i.test(error.message) && /resource[-_ ]exhausted|quota/i.test(error.message)) {
+          errorMessage = "Firebase 데이터 요청이 일시적으로 제한되었습니다. 잠시 후 다시 시도해주세요.";
         } else {
           try {
             const parsed = JSON.parse(error.message);
@@ -815,6 +1411,18 @@ const getAppliedSelectionKeywordChipClass = (typeOrKey: string) => {
   return 'bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)] shadow-[0_8px_18px_rgba(0,0,0,0.10)]';
 };
 
+const getAppliedSelectionKeywordTextClass = (typeOrKey: string) => {
+  const normalized = String(typeOrKey || '').toLowerCase();
+
+  if (normalized === 'genre' || normalized === 'subgenre' || normalized.includes('genre')) return 'text-[#FFD36A]';
+  if (normalized === 'mood' || normalized.includes('mood') || normalized.includes('atmosphere')) return 'text-[#FFB4C4]';
+  if (normalized === 'theme' || normalized.includes('theme') || normalized.includes('topic')) return 'text-[#A9E7FF]';
+  if (normalized === 'style' || normalized.includes('style')) return 'text-[#D9CBFF]';
+  if (normalized === 'sound' || normalized === 'point-sound' || normalized.includes('sound') || normalized.includes('instrument') || normalized.includes('point')) return 'text-[#BDF6C4]';
+  if (normalized === 'mix' || normalized === 'rap') return 'text-[#FFD36A]';
+  return 'text-[var(--text-secondary)]';
+};
+
 
 function keepExpandableSectionInView(_trigger: HTMLElement, _wasExpanded: boolean) {
   // Keep expansion purely local. Auto-scroll during height transitions can fight
@@ -846,50 +1454,6 @@ function handleExpandableToggle(
     });
   });
 }
-
-function useStableContentHeight(
-  contentRef: React.RefObject<HTMLElement>,
-  setHeight: (value: number | string | ((prev: number | string) => number | string)) => void,
-  deps: React.DependencyList,
-  onHeightChange?: (height: number) => void
-) {
-  useLayoutEffect(() => {
-    let frameId: number | null = null;
-    let timeoutId: number | null = null;
-
-    const measure = () => {
-      const el = contentRef.current;
-      if (!el) return;
-      const nextHeight = el.scrollHeight || el.offsetHeight || 0;
-      if (nextHeight <= 0) return;
-      setHeight(nextHeight);
-      onHeightChange?.(nextHeight);
-    };
-
-    const scheduleMeasure = () => {
-      if (frameId !== null) cancelAnimationFrame(frameId);
-      frameId = requestAnimationFrame(measure);
-    };
-
-    scheduleMeasure();
-    timeoutId = window.setTimeout(measure, 100);
-
-    window.addEventListener('resize', scheduleMeasure);
-
-    return () => {
-      if (frameId !== null) cancelAnimationFrame(frameId);
-      if (timeoutId !== null) window.clearTimeout(timeoutId);
-      window.removeEventListener('resize', scheduleMeasure);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-}
-
-const resolveExpandedHeight = (preferredHeight: number | undefined, measuredHeight: number | string, fallbackHeight: number) => {
-  if (typeof preferredHeight === 'number' && preferredHeight > 0) return preferredHeight;
-  if (typeof measuredHeight === 'number' && measuredHeight > 0) return measuredHeight;
-  return fallbackHeight;
-};
 
 const getVocalToneDisplayLabel = (toneId: string | undefined, vocalTones: VocalTone[]) => {
   if (!toneId) return '';
@@ -2026,17 +2590,14 @@ const ReorderableSectionItem = ({
   return (
     <div
       data-reorder-section-id={item.id}
+      data-selected={isInsertionTarget ? 'true' : 'false'}
       onClick={() => {
         if (isReorderDragging) return;
         onSelect(index);
       }}
       className={cn(
-        "flex items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] border px-3 py-2.5 select-none shadow-sm cursor-pointer transition-[border-color,background-color,opacity,transform] duration-150",
-        isDraggingItem
-          ? "border-brand-orange/70 bg-white/[0.08] opacity-80 scale-[0.995]"
-          : isInsertionTarget
-            ? "border-white/70 bg-white/[0.07] ring-1 ring-white/35"
-            : "border-btn-border hover:border-white/30 hover:bg-white/[0.04]"
+        "soridraw-section-current-card flex items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] border-0 px-3 py-2.5 select-none cursor-pointer transition-[background-color,opacity,transform] duration-150",
+        isDraggingItem && "opacity-80 scale-[0.995]"
       )}
     >
       <button
@@ -2106,38 +2667,72 @@ function SecondaryScrollControl() {
   const startY = useRef(0);
   const scrollRaf = useRef<number | null>(null);
   const activeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const splitDraggingRef = useRef(false);
   
   // Max drag distance (track height is 160px, circle radius is 12px)
   const MAX_DRAG = 65;
 
   useEffect(() => {
-    const handleScroll = () => {
+    let visibilityFrame: number | null = null;
+    const updateVisibility = () => {
+      visibilityFrame = null;
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = document.documentElement.clientHeight;
-      // Show if page is long enough, regardless of current scroll position
-      setIsVisible(scrollHeight > clientHeight * 1.2);
-      
-      // Show on scroll
+      setIsVisible((current) => {
+        const next = scrollHeight > clientHeight * 1.2;
+        return current === next ? current : next;
+      });
+    };
+    const scheduleVisibilityUpdate = () => {
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
+      if (visibilityFrame !== null) return;
+      visibilityFrame = window.requestAnimationFrame(updateVisibility);
+    };
+    const handleScroll = () => {
+      scheduleVisibilityUpdate();
       setIsActive(true);
       if (activeTimerRef.current) clearTimeout(activeTimerRef.current);
       activeTimerRef.current = setTimeout(() => setIsActive(false), 2000);
     };
 
     const checkModal = () => {
-      // Check if the lyrics modal is open (it has z-[100])
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       const modal = document.querySelector('.z-\\[100\\]');
-      setIsModalOpen(!!modal);
+      const next = Boolean(modal);
+      setIsModalOpen((current) => current === next ? current : next);
     };
 
+    const handleSplitDragStart = () => {
+      splitDraggingRef.current = true;
+      if (visibilityFrame !== null) {
+        window.cancelAnimationFrame(visibilityFrame);
+        visibilityFrame = null;
+      }
+    };
+    const handleSplitDragEnd = () => {
+      splitDraggingRef.current = false;
+      scheduleVisibilityUpdate();
+      checkModal();
+    };
+
+    const documentResizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(scheduleVisibilityUpdate)
+      : null;
+    documentResizeObserver?.observe(document.documentElement);
     window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleScroll);
+    window.addEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
+    window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
     const modalInterval = setInterval(checkModal, 500);
-    
-    handleScroll();
+
+    scheduleVisibilityUpdate();
     return () => {
+      documentResizeObserver?.disconnect();
       window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleScroll);
+      window.removeEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
+      window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
       clearInterval(modalInterval);
+      if (visibilityFrame !== null) window.cancelAnimationFrame(visibilityFrame);
       if (activeTimerRef.current) clearTimeout(activeTimerRef.current);
     };
   }, []);
@@ -2295,6 +2890,10 @@ function SecondaryScrollControl() {
 }
 
 const FavoritesPageLazy = lazy(() => import('./pages/FavoritesPage'));
+const ExploreShellLazy = lazy(() => import('./components/explore/ExploreShell'));
+// SORIDRAW_EXPLORE_NATIVE_ROUTE_903
+// SORIDRAW_EXPLORE_NATIVE_NAV_8C
+// SORIDRAW_RAILLESS_MOBILE_NAV_8C
 
 function HistoryRouteWrapper({
   isFavoritesLoading,
@@ -2313,6 +2912,25 @@ function HistoryRouteWrapper({
 }: any) {
   const favorites = useFavorites();
   const location = useLocation();
+
+  useEffect(() => {
+    // 1050: HistoryRouteWrapper is mounted only while Music Note is visible.
+    // Studio embeds it at /studio, so pathname === /history cannot gate Catalog entry.
+    if (typeof window !== 'undefined') {
+      (window as any).__soridrawMusicNotePageActive = true;
+      window.dispatchEvent(new Event('soridraw:music-note-bundle-page-entry'));
+    }
+
+    if (!new URLSearchParams(location.search).has('note')) {
+      markCacheDiagnostic('musicNote', 'CACHE', 0);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        (window as any).__soridrawMusicNotePageActive = false;
+      }
+    };
+  }, [location.pathname, location.search]);
 
   return (
     <FavoritesPageLazy
@@ -2337,8 +2955,6 @@ function HistoryRouteWrapper({
     />
   );
 }
-const AdminVocalTonesPageLazy = lazy(() => import('./pages/AdminVocalTonesPage'));
-const AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage'));
 const AdminUserManagementPageLazy = lazy(() => import('./pages/AdminUserManagementPage'));
 const SunoLibraryPageLazy = lazy(() => import('./pages/SunoLibraryPage'));
 const SunoApiSettingsPageLazy = lazy(() => import('./pages/SunoApiSettingsPage'));
@@ -2348,6 +2964,7 @@ const HomePageLazy = lazy(() => import('./pages/HomePage'));
 const AdminSunoApiPageLazy = lazy(() => import('./pages/AdminSunoApiPage'));
 const AdminAppSettingsPageLazy = lazy(() => import('./pages/AdminAppSettingsPage'));
 const AdminGeminiAuditPageLazy = lazy(() => import('./pages/AdminGeminiAuditPage'));
+const MasterPermissionsPageLazy = lazy(() => import('./pages/MasterPermissionsPage'));
 
 const TROT_GENRES = ['traditional-trot', 'semi-trot'];
 
@@ -3047,9 +3664,37 @@ function FeatureUnavailablePage({ label, fallbackPath }: { label: string; fallba
   );
 }
 
+const EmailVerificationActionPageLazy = lazy(() => import('./components/EmailVerificationActionPage'));
+const EmailVerificationReturnPageLazy = lazy(() => import('./components/EmailVerificationReturnPage'));
+
 export default function AppWrapper() {
+  const location = useLocation();
+
+  if (location.pathname === '/auth/action' || location.pathname === '/auth/verified') {
+    const VerificationPage = location.pathname === '/auth/action'
+      ? EmailVerificationActionPageLazy
+      : EmailVerificationReturnPageLazy;
+
+    return (
+      <ErrorBoundary>
+        <Suspense
+          fallback={(
+            <main className="flex min-h-screen items-center justify-center bg-[#100e0f] px-4 text-white">
+              <div className="text-center">
+                <p className="text-[11px] font-black tracking-[0.28em] text-[#F2C587]">SORIDRAW</p>
+                <p className="mt-4 text-sm font-bold text-white/60">이메일 인증 화면을 불러오고 있습니다.</p>
+              </div>
+            </main>
+          )}
+        >
+          <VerificationPage />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
   return (
-    <ErrorBoundary>
+    <ErrorBoundary resetKey={location.pathname}>
       <GlobalPlayerProvider>
         <App />
       </GlobalPlayerProvider>
@@ -3057,7 +3702,39 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, rememberLogin, setRememberLogin, menuVisibility, menuAdminOnly, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; menuVisibility: NavigationMenuVisibility; menuAdminOnly: NavigationMenuAdminOnly; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
+function Navigation({
+  user,
+  cachedHeaderIdentity,
+  isAuthReady,
+  handleLogin,
+  isLoggingIn,
+  handleLogout,
+  isAdminUser,
+  menuVisibility,
+  menuAdminOnly,
+  sunoLibrarySignal,
+  sunoLibrarySignalDotClass,
+  clearSunoLibrarySignal,
+  studioCompactMobileLayout = false,
+  studioWorkspaceView = 'create',
+  onStudioWorkspaceSelect,
+}: {
+  user: User | null;
+  cachedHeaderIdentity: CachedHeaderIdentity | null;
+  isAuthReady: boolean;
+  handleLogin: () => void;
+  isLoggingIn: boolean;
+  handleLogout: () => void;
+  isAdminUser: boolean;
+  menuVisibility: NavigationMenuVisibility;
+  menuAdminOnly: NavigationMenuAdminOnly;
+  sunoLibrarySignal: 'generating' | 'completed' | null;
+  sunoLibrarySignalDotClass: string;
+  clearSunoLibrarySignal: () => void;
+  studioCompactMobileLayout?: boolean;
+  studioWorkspaceView?: StudioWorkspaceView;
+  onStudioWorkspaceSelect?: (view: StudioWorkspaceView) => void;
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -3065,6 +3742,13 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
   const menuRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [displayMode, setDisplayMode] = useState<SoridrawDisplayMode>(() => readSoridrawDisplayMode());
+  const headerIdentity = user
+    ? getHeaderIdentityFromUser(user)
+    : !isAuthReady
+      ? cachedHeaderIdentity
+      : null;
+  const isHeaderAuthPending = !isAuthReady && !user && Boolean(cachedHeaderIdentity);
   const isActivePath = (path: string) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
@@ -3074,13 +3758,55 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     if (!menuVisibility[key]) return false;
     if (menuAdminOnly[key] && !isAdminUser) return false;
     return true;
+  };// SORIDRAW_NAV_PERMISSION_ROOT_STATE_953
+
+
+  // 953: publish the resolved access decision once. Split rails and Explore
+  // rails consume this result instead of inventing a second permission path.
+  useEffect(() => {
+    const root = document.documentElement;
+    const accessMap: Array<[string, NavigationMenuKey]> = [
+      ['home', 'home'],
+      ['explore', 'explore'],
+      ['studio', 'studio'],
+      ['music-note', 'musicNote'],
+      ['library', 'library'],
+      ['lab', 'lab'],
+      ['my-page', 'myPage'],
+    ];
+
+    accessMap.forEach(([datasetKey, menuKey]) => {
+      root.setAttribute(`data-soridraw-nav-${datasetKey}`, canShowMenu(menuKey) ? 'show' : 'hide');
+    });
+  }, [menuVisibility, menuAdminOnly, isAdminUser]);
+
+
+  // SORIDRAW_AUTH_NAV_READINESS_035
+  // Route taps must stay responsive while Firebase restores the persisted session.
+  // Authorization still waits for isAuthReady: if the restore resolves signed-out,
+  // the login modal is opened after the navigation intent has already been reflected.
+  const pendingAuthNavigationRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthReady || !pendingAuthNavigationRef.current) return;
+    pendingAuthNavigationRef.current = false;
+    if (!user) handleLogin();
+  }, [handleLogin, isAuthReady, user]);
+
+  const canContinueTopNavigation = () => {
+    if (!isAuthReady) {
+      pendingAuthNavigationRef.current = true;
+      return true;
+    }
+    if (!user) {
+      handleLogin();
+      return false;
+    }
+    return true;
   };
 
   const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {
-    if (!user) {
-      handleLogin();
-      return;
-    }
+    if (!canContinueTopNavigation()) return;
     if (options?.clearSuno) clearSunoLibrarySignal();
     if (location.pathname === path) {
       scrollToTop();
@@ -3093,6 +3819,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
 
   const allTopNavItems: Array<{ key: NavigationMenuKey; path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [
     { key: 'home', path: '/', label: '홈', icon: HomeIcon },
+    { key: 'explore', path: '/explore', label: '익스플로어', icon: ExploreCompass },
     { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },
     { key: 'musicNote', path: '/history', label: '뮤직노트', icon: HeartIcon },
     { key: 'library', path: '/suno-library', label: '라이브러리', icon: Library, clearSuno: true },
@@ -3104,10 +3831,68 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     ? '/'
     : topNavItems[0]?.path || (isAdminUser ? '/admin/users' : '/');
 
+  const isRailLessNavigationViewport = useMediaQuery('(max-width: 1099px)');
+  const isCompactStudioMobileNavigation = isRailLessNavigationViewport;
+  const shouldUseStudioWorkspaceMobileNavigation = displayMode === 'studio-black'
+    && studioCompactMobileLayout
+    && Boolean(onStudioWorkspaceSelect);
+  const isCompactStudioRoute = shouldUseStudioWorkspaceMobileNavigation && location.pathname === '/studio';
+  const isCompactStudioMobileItemActive = (item: (typeof allTopNavItems)[number]) => {
+    if (!isCompactStudioRoute) return isActivePath(item.path);
+    if (item.key === 'studio') return studioWorkspaceView === 'create' || studioWorkspaceView === 'recent';
+    if (item.key === 'musicNote') return studioWorkspaceView === 'music-note';
+    if (item.key === 'library') return studioWorkspaceView === 'library';
+    return isActivePath(item.path);
+  };
+
+  const goToCompactMobileNav = (item: (typeof allTopNavItems)[number]) => {
+    if (!canContinueTopNavigation()) return;
+    if (!shouldUseStudioWorkspaceMobileNavigation || !onStudioWorkspaceSelect) {
+      goToTopNav(item.path, { clearSuno: item.clearSuno });
+      return;
+    }
+
+    const openCompactStudioWorkspace = (view: StudioWorkspaceView) => {
+      onStudioWorkspaceSelect(view);
+      if (location.pathname !== '/studio') navigate('/studio');
+      else scrollToTop();
+    };
+
+    if (item.key === 'studio') {
+      openCompactStudioWorkspace('create');
+      setIsExpanded(false);
+      setIsProfileOpen(false);
+      return;
+    }
+    if (item.key === 'musicNote') {
+      openCompactStudioWorkspace('music-note');
+      setIsExpanded(false);
+      setIsProfileOpen(false);
+      return;
+    }
+    if (item.key === 'library') {
+      if (item.clearSuno) clearSunoLibrarySignal();
+      openCompactStudioWorkspace('library');
+      setIsExpanded(false);
+      setIsProfileOpen(false);
+      return;
+    }
+
+    goToTopNav(item.path, { clearSuno: item.clearSuno });
+  };
+
   // Collapse menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      // Profile triggers and their menus live outside the mobile navigation ref
+      // on desktop. Excluding both from the outside-click handler lets the same
+      // profile button toggle open on the first click and closed on the second.
+      if (target.closest('.soridraw-profile-trigger, .soridraw-profile-menu')) return;
+
+      if (menuRef.current && !menuRef.current.contains(target)) {
         setIsExpanded(false);
         setIsProfileOpen(false);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -3140,6 +3925,24 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     }, 150); // Small delay to prevent flickering
   };
 
+  useEffect(() => {
+    const refreshDisplayMode = () => setDisplayMode(readSoridrawDisplayMode());
+    window.addEventListener('soridraw-theme-change', refreshDisplayMode as EventListener);
+    window.addEventListener('storage', refreshDisplayMode);
+    return () => {
+      window.removeEventListener('soridraw-theme-change', refreshDisplayMode as EventListener);
+      window.removeEventListener('storage', refreshDisplayMode);
+    };
+  }, []);
+
+  const handleDisplayModeCycle = () => {
+    setDisplayMode(cycleSoridrawDisplayMode());
+  };
+
+  const displayModeCycleText = isSoridrawPhoneDevice()
+    ? '다크 · 라이트'
+    : '다크 · 라이트 · 분할';
+
   // Collapse menu on scroll
   useEffect(() => {
     const handleScroll = () => {
@@ -3161,7 +3964,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     <>
       {/* Top Navigation */}
       <div
-        className="absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-3.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:flex"
+        className="soridraw-top-navigation absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-3.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl min-[1600px]:flex"
       >
         <button
           type="button"
@@ -3181,12 +3984,14 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
             return (
               <button
                 key={item.path}
+                data-soridraw-nav-key={item.key}
                 type="button"
                 onClick={() => goToTopNav(item.path, { clearSuno: item.clearSuno })}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
-                  "relative flex h-11 items-center gap-2.5 rounded-2xl px-3 text-[14px] font-black transition-all whitespace-nowrap sm:px-4",
+                  "soridraw-top-nav-item relative flex h-11 items-center gap-2.5 rounded-2xl px-3 text-[14px] font-black transition-all whitespace-nowrap sm:px-4",
                   active
-                    ? "bg-transparent text-white"
+                    ? "is-active bg-transparent text-white"
                     : "bg-transparent text-white/60 hover:text-white"
                 )}
               >
@@ -3196,7 +4001,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                 <Icon className="h-6 w-6" />
                 <span className="relative inline-flex items-center pb-1">
                   {item.label}
-                  {active && <span className="absolute -bottom-0.5 left-0 h-[2px] w-full rounded-full bg-[#783159]" />}
+                  {active && <span className="soridraw-top-nav-active-line absolute -bottom-0.5 left-0 h-[2px] w-full rounded-full bg-[#783159]" />}
                 </span>
               </button>
             );
@@ -3205,25 +4010,25 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
             <button
               type="button"
               onClick={() => goToTopNav('/admin/users')}
+              aria-current={isActivePath('/admin') ? 'page' : undefined}
               className={cn(
-                "relative flex h-11 items-center gap-2.5 rounded-2xl px-3 text-[14px] font-black transition-all whitespace-nowrap sm:px-4",
+                "soridraw-top-nav-item relative flex h-11 items-center gap-2.5 rounded-2xl px-3 text-[14px] font-black transition-all whitespace-nowrap sm:px-4",
                 isActivePath('/admin')
-                  ? "bg-transparent text-white"
+                  ? "is-active bg-transparent text-white"
                   : "bg-transparent text-white/60 hover:text-white"
               )}
             >
               <Shield className="h-6 w-6" />
               <span className="relative inline-flex items-center pb-1">
                 관리자
-                {isActivePath('/admin') && <span className="absolute -bottom-0.5 left-0 h-[2px] w-full rounded-full bg-[#783159]" />}
+                {isActivePath('/admin') && <span className="soridraw-top-nav-active-line absolute -bottom-0.5 left-0 h-[2px] w-full rounded-full bg-[#783159]" />}
               </span>
             </button>
           )}
         </div>
 
         <div className="flex min-w-[176px] shrink-0 items-center justify-end gap-2.5">
-          {user && (
-            <>
+          <>
               <a
                 href="https://www.flowmusic.app/"
                 target="_blank"
@@ -3236,7 +4041,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   src="/flowmusic-icon.png"
                   alt="Flow Music"
                   className="h-full w-full object-cover"
-                  loading="lazy"
+                  loading="eager"
+                  fetchPriority="high"
                 />
               </a>
               <a
@@ -3251,7 +4057,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   src="/elevenlabs-icon.png"
                   alt="ElevenLabs"
                   className="h-full w-full object-cover"
-                  loading="lazy"
+                  loading="eager"
+                  fetchPriority="high"
                 />
               </a>
               <a
@@ -3266,37 +4073,66 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   src="/suno-icon.webp"
                   alt="Suno"
                   className="h-full w-full object-cover"
-                  loading="lazy"
+                  loading="eager"
+                  fetchPriority="high"
                 />
               </a>
             </>
-          )}
-          {location.pathname === '/' && !user && (
-            <label className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.035] px-2.5 py-2 text-[10px] font-bold text-white/50">
-              <input
-                type="checkbox"
-                checked={rememberLogin}
-                onChange={(e) => setRememberLogin(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border border-white/20 accent-sky-500"
-              />
-              로그인 유지
-            </label>
-          )}
-          {user ? (
+          {headerIdentity ? (
             <>
               <button
                 type="button"
-                onClick={() => goToTopNav('/my-page')}
-                className="flex h-11 max-w-[54px] items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-[14px] font-black text-white/75 transition-all hover:bg-white/[0.07] hover:text-white sm:max-w-[170px] sm:px-4"
+                onClick={() => setIsProfileOpen((prev) => !prev)}
+                className="soridraw-profile-trigger flex h-11 max-w-[54px] items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-[14px] font-black text-white/75 transition-all hover:bg-white/[0.07] hover:text-white sm:max-w-[170px] sm:px-4"
               >
                 <img
-                  src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                  src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
                   alt="Profile"
                   className="h-[30px] w-[30px] shrink-0 rounded-xl object-cover"
                   referrerPolicy="no-referrer"
                 />
-                <span className="hidden truncate sm:inline">{user.displayName || 'My'}</span>
+                <span className="hidden truncate sm:inline">{headerIdentity.displayName || 'My'}</span>
               </button>
+              <AnimatePresence>
+                {isProfileOpen && user && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                    className="soridraw-profile-menu absolute right-5 top-[68px] z-[90] w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#15181e]/98 p-2 shadow-[0_18px_44px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                  >
+                    <div className="border-b border-white/10 px-3 py-2.5">
+                      <p className="truncate text-sm font-black text-white">{headerIdentity.displayName || 'SORIDRAW User'}</p>
+                      <p className="truncate text-xs text-white/45">{user.email || ''}</p>
+                    </div>
+                    {[
+                      { label: '내 프로필', path: '/my-page' },
+                      { label: '설정', path: '/my-page?tab=settings' },
+                      { label: '요금제', path: '/my-page?tab=plan' },
+                      { label: '결제 관리', path: '/my-page?tab=billing' },
+                    ].map((item) => (
+                      <button key={item.label} type="button" onClick={() => { navigate(item.path); setIsProfileOpen(false); }} className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-bold text-white/72 transition-all hover:bg-[#ffb400]/10 hover:text-[#ffb400]">{item.label}</button>
+                    ))}
+                    <div className="my-1 border-t border-white/10" />
+                    <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/35">디자인 모드</p>
+                    <button
+                      type="button"
+                      onClick={handleDisplayModeCycle}
+                      className="soridraw-theme-cycle-button flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-[#ffb400]/10"
+                    >
+                      <Palette className="h-5 w-5 shrink-0 text-[#ffb400]" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-black text-white/82">모드 변경</span>
+                        <span className="block truncate text-[10px] font-bold text-white/38">{displayModeCycleText}</span>
+                      </span>
+                      <span className="soridraw-theme-current-label rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] font-black text-[#ffb400]">{getSoridrawDisplayModeLabel(displayMode)}</span>
+                    </button>
+                    <div className="my-1 border-t border-white/10" />
+                    <button type="button" disabled className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-bold text-white/30">고객지원 · 준비중</button>
+                    <button type="button" onClick={() => { handleLogout(); setIsProfileOpen(false); }} className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-black text-[#ffb400] transition-all hover:bg-[#ffb400]/10">로그아웃</button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </>
           ) : (
             <button
@@ -3315,21 +4151,33 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
       {/* Mobile Top Icon Bar */}
       <div
         ref={menuRef}
-        className="fixed inset-x-0 top-0 z-[70] flex w-full items-center bg-[#111111]/95 px-3 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl lg:hidden"
+        className={cn(
+          "soridraw-mobile-navigation fixed inset-x-0 top-0 z-[70] flex w-full items-center px-3 py-2.5 min-[1600px]:hidden",
+          displayMode === 'studio-black'
+            ? "bg-[#0f0f10] shadow-none"
+            : "bg-[#111111]/95 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl"
+        )}
       >
         <div className="flex w-full min-w-0 items-center gap-1 overflow-visible">
-          <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
-            {topNavItems.filter((item) => item.key !== 'myPage').map((item) => {
+          <div className="soridraw-compact-nav-scroll flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden">
+            {topNavItems.filter((item) => item.key !== 'myPage' && !(isRailLessNavigationViewport && item.key === 'lab')).map((item) => {
               const Icon = item.icon;
               return (
                 <button
                   key={item.path}
+                  data-soridraw-nav-key={item.key}
                   type="button"
-                  onClick={() => goToTopNav(item.path, { clearSuno: item.clearSuno })}
+                  onClick={() => goToCompactMobileNav(item)}
                   className={cn(
-                    "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                    isActivePath(item.path) && "bg-[#FFB400]/18 text-[#FFB400]"
+                    "soridraw-mobile-nav-item relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent transition-all",
+                    displayMode === 'studio-black'
+                      ? "text-[#acacb3] hover:bg-transparent hover:text-[#f2f2f4]"
+                      : "text-white/72 hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                    isCompactStudioMobileItemActive(item) && (displayMode === 'studio-black'
+                      ? "is-active bg-transparent text-white"
+                      : "is-active bg-[#FFB400]/18 text-[#FFB400]")
                   )}
+                  aria-current={isCompactStudioMobileItemActive(item) ? 'page' : undefined}
                   aria-label={item.label}
                   title={item.label}
                 >
@@ -3344,22 +4192,25 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
             <div className="relative shrink-0">
-              {user ? (
+              {headerIdentity ? (
                 <button
                   type="button"
                   onClick={() => {
+                    if (!user || !isAuthReady) return;
                     setIsProfileOpen((prev) => !prev);
                     setIsExpanded(false);
                   }}
                   className={cn(
-                    "flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all hover:bg-[#FFB400]/15",
-                    isProfileOpen && "bg-[#FFB400]/18"
+                    "soridraw-profile-trigger flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all",
+                    displayMode === 'studio-black' ? "hover:bg-transparent" : "hover:bg-[#FFB400]/15",
+                    isProfileOpen && (displayMode === 'studio-black' ? "bg-transparent" : "bg-[#FFB400]/18")
                   )}
                   aria-label="계정 메뉴"
                   title="계정 메뉴"
+                  aria-busy={isHeaderAuthPending}
                 >
                   <img
-                    src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                    src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
                     alt="Profile"
                     className="h-8 w-8 rounded-xl object-cover"
                     referrerPolicy="no-referrer"
@@ -3370,7 +4221,12 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   type="button"
                   onClick={handleLogin}
                   disabled={isLoggingIn}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400] disabled:opacity-50"
+                  className={cn(
+                    "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent transition-all disabled:opacity-50",
+                    displayMode === 'studio-black'
+                      ? "text-[#acacb3] hover:bg-transparent hover:text-[#f2f2f4]"
+                      : "text-white/72 hover:bg-[#FFB400]/15 hover:text-[#FFB400]"
+                  )}
                   aria-label="로그인"
                   title="로그인"
                 >
@@ -3385,8 +4241,13 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.96 }}
                     transition={{ duration: 0.16 }}
-                    className="absolute right-0 top-full z-[80] mt-2 w-36 overflow-hidden rounded-2xl bg-[#181818]/96 p-1.5 shadow-[0_14px_32px_rgba(0,0,0,0.48)] backdrop-blur-xl"
+                    className="soridraw-profile-menu absolute right-0 top-full z-[80] mt-2 w-56 max-h-[calc(100vh-84px)] overflow-y-auto rounded-2xl border border-white/10 bg-[#181818]/96 p-2 shadow-[0_14px_32px_rgba(0,0,0,0.48)] backdrop-blur-xl"
                   >
+                    <div className="border-b border-white/10 px-3 py-2.5">
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#FFB400]">계정 메뉴</p>
+                      <p className="mt-1 truncate text-sm font-black text-white">{headerIdentity.displayName || 'SORIDRAW User'}</p>
+                      <p className="truncate text-[11px] text-white/42">{user.email || ''}</p>
+                    </div>
                     {isAdminUser && (
                       <button
                         type="button"
@@ -3409,12 +4270,41 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                           setIsProfileOpen(false);
                           setIsExpanded(false);
                         }}
-                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
+                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
                       >
                         <UserIcon className="h-5 w-5" />
                         마이페이지
                       </button>
                     )}
+                    {isRailLessNavigationViewport && canShowMenu('lab') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigate('/lab');
+                          setIsProfileOpen(false);
+                          setIsExpanded(false);
+                        }}
+                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
+                      >
+                        <FlaskConical className="h-5 w-5" />
+                        실험실
+                      </button>
+                    )}
+                    <div className="my-1 border-t border-white/10" />
+                    <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/35">디자인 모드</p>
+                    <button
+                      type="button"
+                      onClick={handleDisplayModeCycle}
+                      className="soridraw-theme-cycle-button flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-[#FFB400]/12"
+                    >
+                      <Palette className="h-5 w-5 shrink-0 text-[#FFB400]" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-black text-white/82">모드 변경</span>
+                        <span className="block truncate text-[10px] font-bold text-white/38">{displayModeCycleText}</span>
+                      </span>
+                      <span className="soridraw-theme-current-label rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] font-black text-[#FFB400]">{getSoridrawDisplayModeLabel(displayMode)}</span>
+                    </button>
+                    <div className="my-1 border-t border-white/10" />
                     <button
                       type="button"
                       onClick={() => {
@@ -3442,9 +4332,15 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   setIsProfileOpen(false);
                 }}
                 className={cn(
-                  "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                  isExpanded && "bg-[#FFB400]/18 text-[#FFB400]"
+                  "soridraw-mobile-menu-trigger flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent transition-all",
+                  displayMode === 'studio-black'
+                    ? "text-[#acacb3] hover:bg-transparent hover:text-[#f2f2f4]"
+                    : "text-white/72 hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                  isExpanded && (displayMode === 'studio-black'
+                    ? "is-active bg-transparent text-white"
+                    : "is-active bg-[#FFB400]/18 text-[#FFB400]")
                 )}
+                aria-expanded={isExpanded}
                 aria-label="외부 앱 메뉴"
                 title="메뉴"
               >
@@ -3637,6 +4533,7 @@ const fetchSunoApiKeyStatusFromServer = async (user: User | null | undefined): P
 };
 
 const GEMINI_MODEL_LABELS: Record<string, string> = {
+  'gemini-3.7-flash': 'Gemini 3.7 Flash',
   'gemini-3.6-flash': 'Gemini 3.6 Flash',
   'gemini-3.5-flash': 'Gemini 3.5 Flash',
   'gemini-3.5-flash-lite': 'Gemini 3.5 Flash-Lite',
@@ -3652,33 +4549,133 @@ const getGeminiUsedModelLabel = (song?: SongResult | null): string => {
   return rawModel ? (GEMINI_MODEL_LABELS[rawModel] || rawModel) : '';
 };
 
+const detectAutomaticStudioSplitEngine = (): StudioSplitEngine => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'legacy';
+  // 611: choose by the active interaction environment, not by viewport width.
+  // A coarse/no-hover primary pointer matches the verified Galaxy Tab/touch
+  // path. Fine hover pointers (normal PC mouse/trackpad) use the verified
+  // legacy split engine even when the browser window itself is narrow.
+  const coarsePrimaryPointer = window.matchMedia('(pointer: coarse)').matches;
+  const noPrimaryHover = window.matchMedia('(hover: none)').matches;
+  return coarsePrimaryPointer || noPrimaryHover ? 'lite' : 'legacy';
+};
+
 function App() {
-  // Screen size detection for FHD / QHD Desktop monitors to preserve styles during browser zoom
+  const isDesktopViewport = useMediaQuery('(min-width: 1024px)', true);
+  // 744 — One stable external responsive contract for the builder.
+  // Wide/tablet stays 3-column from 1100px upward; the dedicated portrait
+  // Compact band is 768~1099px; <=767px keeps the existing phone layout.
+  // matchMedia only wakes React when a breakpoint actually changes, so native
+  // window resizing stays live without rerendering on every pixel.
+  const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1100px)', true);
+  const isStudioTwoColumnSelectionLayout = useMediaQuery('(min-width: 768px)', true);
+  const isStudioCompactViewport = useMediaQuery('(max-width: 1099px)');
+  // 793 — The simplified Generate bar is now the shared phone/tablet contract.
+  // The heavier arrow + text-label composition is PC-only from 1600px upward.
+  const isActionCompactViewport = useMediaQuery('(max-width: 1599px)');
+  const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
+  const [isSplitBuilderActionCompact, setIsSplitBuilderActionCompact] = useState(false);
+  const [isStudioBlackActionMode, setIsStudioBlackActionMode] = useState(false);
+  const isStudioCompactMobileLayout = isStudioCompactViewport
+    && (isStudioBlackActionMode || readSoridrawDisplayMode() === 'studio-black');
+
   useEffect(() => {
-    const updateScreenType = () => {
-      if (typeof window !== 'undefined' && window.screen) {
-        const sw = window.screen.width;
-        const sh = window.screen.height;
-        const isDesktop = window.innerWidth >= 1024 || sw >= 1024;
-        
-        if (isDesktop) {
-          // If physical screen resolution is less than 2200x1200, it's categorized as FHD desktop.
-          // This keeps the FHD style even at 67% or 50% browser zoom!
-          if (sw < 2200 || sh < 1200) {
-            document.documentElement.setAttribute('data-screen-type', 'fhd-desktop');
-          } else {
-            document.documentElement.setAttribute('data-screen-type', 'qhd-desktop');
-          }
-        } else {
-          document.documentElement.removeAttribute('data-screen-type');
-        }
+    applyStoredSoridrawDisplayMode();
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    const syncBuilderActionMode = (force = false) => {
+      // 624: 623 intended to defer the App-root responsive mirror while Music
+      // Note is being dragged, but automatic PC Music Note uses the shared 590
+      // Lite runtime and therefore marks `soridraw-lite-split-dragging`, not the
+      // legacy `soridraw-split-dragging` class. Include both verified drag
+      // markers and return before either React state setter. CSS/root datasets
+      // continue reacting live; React mirrors catch up once on pointer-up.
+      const splitDragActive = root.classList.contains('soridraw-lite-split-dragging')
+        || root.classList.contains('soridraw-split-dragging');
+      const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1600;
+      const tabletSplitDragActive = splitDragActive && viewportWidth >= 1100 && viewportWidth < 1600;
+      const musicNoteDragActive = root.dataset.soridrawStudioWorkspaceView === 'music-note'
+        && splitDragActive;
+
+      // 648: do not mirror pane-mode changes into App-level React state while
+      // the divider is actively moving inside the shared 1100~1599 tablet band.
+      // The root data-soridraw-builder-mode attribute still changes immediately,
+      // so CSS keeps the live compact/desktop visual response. Only the expensive
+      // App-root React mirror waits until soridraw-split-drag-end, where it is
+      // synchronized once. This is the same already-verified rerender-suppression
+      // principle used by 623/624, now applied to the shared tablet band rather
+      // than swapping PC to the Galaxy Tab split engine. Wide PC behavior and
+      // the existing Music Note protection remain unchanged.
+      if (!force && (tabletSplitDragActive || musicNoteDragActive)) return;
+
+      const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
+      const builderMode = root.dataset.soridrawBuilderMode;
+      const builderContentMode = root.dataset.soridrawBuilderContentMode;
+      setIsStudioBlackActionMode(isStudioBlack);
+
+      // 793 — Split Studio uses the same compact/full ownership as its content
+      // mode: mobile + tablet are simplified; only a real PC Builder is full.
+      // Missing means the split engine has not committed yet, so keep the last
+      // state rather than flashing the PC bar during page/view hand-offs.
+      if (!isStudioBlack) {
+        setIsSplitBuilderActionCompact(false);
+      } else if (builderContentMode === 'mobile' || builderContentMode === 'tablet') {
+        setIsSplitBuilderActionCompact(true);
+      } else if (builderContentMode === 'pc') {
+        setIsSplitBuilderActionCompact(false);
+      }
+
+      // 749 — Split workspace callbacks used to clear data-soridraw-builder-mode
+      // for a moment while Recent/Music Note/Library changed. Treating that
+      // transient missing value as desktop inserted the PC collapse arrow and
+      // desktop side-button widths into a narrow mobile Builder, visibly
+      // crushing the expanded Generate bar. Missing means "not committed yet":
+      // keep the last responsive state until the split engine publishes an
+      // explicit mobile/desktop value.
+      if (!isStudioBlack) {
+        setIsSplitBuilderActionMobile(false);
+      } else if (builderMode === 'mobile') {
+        setIsSplitBuilderActionMobile(true);
+      } else if (builderMode === 'desktop') {
+        setIsSplitBuilderActionMobile(false);
       }
     };
-    
-    updateScreenType();
-    window.addEventListener('resize', updateScreenType);
-    return () => window.removeEventListener('resize', updateScreenType);
+
+    syncBuilderActionMode(true);
+    const observer = new MutationObserver(() => syncBuilderActionMode(false));
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ['data-soridraw-theme', 'data-soridraw-builder-mode', 'data-soridraw-builder-content-mode'],
+    });
+
+    const handleSplitDragEnd = () => syncBuilderActionMode(true);
+    window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
+    };
   }, []);
+
+  // 793 — Compact visual composition keeps the same gesture-first collapse
+  // behavior as mobile, so hiding the desktop arrow never removes the ability
+  // to collapse the bar on portrait/landscape tablets or a tablet-width split.
+  const isActionSwipeCollapseMode = isActionCompactViewport || isSplitBuilderActionCompact || isSplitBuilderActionMobile;
+  // Screen type only changes when the desktop breakpoint changes; physical
+  // screen resolution itself is stable. Avoid running this on every resize tick.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.screen) return;
+    const sw = window.screen.width;
+    const sh = window.screen.height;
+    const isDesktop = isDesktopViewport || sw >= 1024;
+    if (isDesktop) {
+      document.documentElement.setAttribute('data-screen-type', sw < 2200 || sh < 1200 ? 'fhd-desktop' : 'qhd-desktop');
+    } else {
+      document.documentElement.removeAttribute('data-screen-type');
+    }
+  }, [isDesktopViewport]);
 
   const getAvailableMusicApiLyricLanguages = (song: SongResult | null): LanguageCode[] => {
     return getGeneratedLyricLanguages(song);
@@ -3836,6 +4833,282 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  useEffect(() => {
+    const unsubscribePendingSync = auth.onAuthStateChanged((currentUser) => {
+      if (!currentUser?.uid) return;
+      void recoverSoridrawPendingSync(currentUser)
+        .catch((error) => console.warn('[081] startup pending sync retained locally:', error));
+    });
+    return () => unsubscribePendingSync();
+  }, []);
+
+  const studioTestParams = new URLSearchParams(location.search);
+  const splitEngineParam = studioTestParams.get('splitEngine');
+  const requestedStudioSplitEngineOverride: StudioSplitEngine | null = splitEngineParam === 'lite' || splitEngineParam === 'legacy'
+    ? splitEngineParam
+    : null;
+  // 752: lightweight A/B probe for the bottom Generate bar. `freeze` keeps the
+  // exact visible bar but removes only its divider-frame geometry writes;
+  // `off` removes the rendered bar as well. This lets admin testing distinguish
+  // tracking cost from render/paint cost without changing the split engine.
+  const generationBarPerfParam = studioTestParams.get('genBarPerf');
+  const studioGenerationBarPerfMode: StudioGenerationBarPerfMode = generationBarPerfParam === 'freeze' || generationBarPerfParam === 'off'
+    ? generationBarPerfParam
+    : 'normal';
+  // 754: split the V2 content-reflow probe into left/right/both and add a
+  // boundary-only auxiliary mode. This keeps the verified V2 geometry owner
+  // untouched while identifying which pane causes reflow cost and whether
+  // responsive state can update only when a real PC/tablet/mobile boundary is crossed.
+  const v2DragPerfParam = studioTestParams.get('v2DragPerf');
+  const studioV2DragPerfMode: StudioV2DragPerfMode = v2DragPerfParam === 'tablet-touch-pure' || v2DragPerfParam === 'tablet-pure'
+    ? 'tablet-touch-pure'
+    : v2DragPerfParam === 'content-left'
+    ? 'content-left-freeze'
+    : v2DragPerfParam === 'content-right'
+      ? 'content-right-freeze'
+      : v2DragPerfParam === 'content'
+        ? 'content-freeze'
+        : v2DragPerfParam === 'boundary'
+          ? 'aux-boundary'
+          : v2DragPerfParam === 'aux'
+            ? 'aux-freeze'
+            : v2DragPerfParam === 'scroll-defer'
+              ? 'scroll-defer'
+              : v2DragPerfParam === 'direct'
+                ? 'direct-geometry'
+                : v2DragPerfParam === 'direct-scroll'
+                  ? 'direct-scroll-defer'
+                  : v2DragPerfParam === 'responsive-freeze'
+                    ? 'responsive-freeze'
+                    : v2DragPerfParam === 'responsive-hysteresis'
+                      ? 'responsive-hysteresis'
+                      : v2DragPerfParam === 'local-responsive'
+                        ? 'local-responsive'
+                        : v2DragPerfParam === 'pure-pane'
+                          ? 'pure-pane'
+                          : v2DragPerfParam === 'pure-pane-hybrid'
+                            ? 'pure-pane-hybrid'
+                            : v2DragPerfParam === 'pure-pane-live'
+                            ? 'pure-pane-live'
+                            : v2DragPerfParam === 'splitter-only'
+                            ? 'splitter-only'
+                            : v2DragPerfParam === 'left-pane-only'
+                              ? 'left-pane-only'
+                              : v2DragPerfParam === 'right-pane-only'
+                                ? 'right-pane-only'
+                                : 'pure-pane-hybrid';
+  const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const pointerQuery = window.matchMedia('(pointer: coarse)');
+    const hoverQuery = window.matchMedia('(hover: none)');
+    const syncAutomaticSplitEngine = () => setAutomaticStudioSplitEngine(detectAutomaticStudioSplitEngine());
+    syncAutomaticSplitEngine();
+    pointerQuery.addEventListener('change', syncAutomaticSplitEngine);
+    hoverQuery.addEventListener('change', syncAutomaticSplitEngine);
+    return () => {
+      pointerQuery.removeEventListener('change', syncAutomaticSplitEngine);
+      hoverQuery.removeEventListener('change', syncAutomaticSplitEngine);
+    };
+  }, []);
+
+  const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>(() =>
+    readSoridrawDisplayMode() === 'studio-black' ? 'create' : 'recent',
+  );
+
+  // 622: all split diagnostic UI is controlled by the existing Admin Settings
+  // toggle and starts OFF. This includes the floating diagnostics panel and the
+  // Auto/Lite/Legacy engine switch; normal Studio users never see or run it.
+  const [splitPerfToolsVisible, setSplitPerfToolsVisible] = useState(() => readSplitPerfToolVisibility());
+  useEffect(() => {
+    const handleSplitPerfVisibility = (event: Event) => {
+      const detail = (event as CustomEvent<{ enabled?: boolean }>).detail;
+      setSplitPerfToolsVisible(typeof detail?.enabled === 'boolean' ? detail.enabled : readSplitPerfToolVisibility());
+    };
+    window.addEventListener(SPLIT_PERF_TOOL_VISIBILITY_EVENT, handleSplitPerfVisibility as EventListener);
+    return () => window.removeEventListener(SPLIT_PERF_TOOL_VISIBILITY_EVENT, handleSplitPerfVisibility as EventListener);
+  }, []);
+  // 751: keep the old Lite V2 / Legacy hand-comparison route available even
+  // when the heavier PERF diagnostics panel is OFF. The switch itself remains
+  // admin-only in the Studio Black UI, but its URL override must be honored so
+  // the two split engines can be compared under the exact same viewport/pane.
+  const studioSplitEngineOverride: StudioSplitEngine | null = requestedStudioSplitEngineOverride;
+
+  // 764: interaction type still selects the Lite runtime profile, but no longer
+  // selects Legacy vs Lite. Galaxy Tab/touch keeps the verified `adaptive`
+  // reconciliation profile; fine-pointer result pages keep `library-590` after
+  // pointer-up. During the actual drag, every Studio workspace now shares the
+  // same Pure Pane live Lite V2 hot path.
+  const isTouchPrimaryStudioEnvironment = automaticStudioSplitEngine === 'lite';
+  const usesSharedResultSplitEngine = studioWorkspaceView === 'recent'
+    || studioWorkspaceView === 'library'
+    || studioWorkspaceView === 'music-note';
+  // 764: Lite V2 is now the normal split engine for every Studio workspace.
+  // Pure Pane live proved stable and materially faster under real hand dragging,
+  // so Create no longer falls back to Legacy on fine-pointer desktop. The admin
+  // engine override remains available for A/B comparison and rollback diagnosis.
+  const automaticWorkspaceSplitEngine: StudioSplitEngine = 'lite';
+  const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = isTouchPrimaryStudioEnvironment
+    ? 'adaptive'
+    : usesSharedResultSplitEngine
+      ? 'library-590'
+      : 'adaptive';
+  const studioSplitEngine: StudioSplitEngine = studioSplitEngineOverride ?? automaticWorkspaceSplitEngine;
+  const studioLiteRuntimeProfile: StudioLiteRuntimeProfile = studioSplitEngineOverride === 'lite'
+    ? (!isTouchPrimaryStudioEnvironment && usesSharedResultSplitEngine
+      ? 'library-590'
+      : 'adaptive')
+    : automaticLiteRuntimeProfile;
+  const studioSplitAutoTitle = isTouchPrimaryStudioEnvironment
+    ? '자동 선택 · 갤탭/터치: Lite V2 · Pure Pane 하이브리드 기본'
+    : studioWorkspaceView === 'library'
+      ? '자동 선택 · PC 라이브러리: Lite V2 · Pure Pane 하이브리드 기본'
+      : studioWorkspaceView === 'music-note'
+        ? '자동 선택 · PC 뮤직노트: Lite V2 · Pure Pane 하이브리드 기본'
+        : studioWorkspaceView === 'recent'
+          ? '자동 선택 · PC 최근 생성곡: Lite V2 · Pure Pane 하이브리드 기본'
+          : '자동 선택 · PC 스튜디오: Lite V2 · Pure Pane 하이브리드 기본';
+  const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
+    const nextParams = new URLSearchParams(location.search);
+    if (engine === 'auto') nextParams.delete('splitEngine');
+    else nextParams.set('splitEngine', engine);
+    const query = nextParams.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+  const setStudioGenerationBarPerfMode = useCallback((mode: StudioGenerationBarPerfMode) => {
+    const nextParams = new URLSearchParams(location.search);
+    if (mode === 'normal') nextParams.delete('genBarPerf');
+    else nextParams.set('genBarPerf', mode);
+    const query = nextParams.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+  const setStudioV2DragPerfMode = useCallback((mode: StudioV2DragPerfMode) => {
+    const nextParams = new URLSearchParams(location.search);
+    if (mode === 'pure-pane-hybrid' || mode === 'normal') nextParams.delete('v2DragPerf');
+    else {
+      const param = mode === 'content-left-freeze'
+        ? 'content-left'
+        : mode === 'content-right-freeze'
+          ? 'content-right'
+          : mode === 'content-freeze'
+            ? 'content'
+            : mode === 'aux-boundary'
+              ? 'boundary'
+              : mode === 'aux-freeze'
+                ? 'aux'
+                : mode === 'scroll-defer'
+                  ? 'scroll-defer'
+                  : mode === 'direct-geometry'
+                    ? 'direct'
+                    : mode === 'direct-scroll-defer'
+                      ? 'direct-scroll'
+                      : mode === 'responsive-freeze'
+                        ? 'responsive-freeze'
+                        : mode === 'responsive-hysteresis'
+                          ? 'responsive-hysteresis'
+                          : mode === 'local-responsive'
+                            ? 'local-responsive'
+                            : mode === 'pure-pane'
+                              ? 'pure-pane'
+                                : mode === 'pure-pane-live'
+                                ? 'pure-pane-live'
+                                : mode === 'splitter-only'
+                                ? 'splitter-only'
+                                : mode === 'left-pane-only'
+                                  ? 'left-pane-only'
+                                  : 'right-pane-only';
+      nextParams.set('v2DragPerf', param);
+    }
+    const query = nextParams.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+  const [studioWorkspaceLayoutRequestId, setStudioWorkspaceLayoutRequestId] = useState(0);
+  const selectStudioWorkspaceView = useCallback((view: StudioWorkspaceView) => {
+    setStudioWorkspaceView(view);
+    setStudioWorkspaceLayoutRequestId((current) => current + 1);
+  }, []);
+
+  // 951: A Classic Music Note/Library route is a standalone page. When the
+  // user switches that live page into Split, move into the canonical Studio
+  // workspace route instead of wrapping the old standalone route in split rails.
+  useEffect(() => {
+    const redirectLegacyStandaloneRouteIntoSplit = (requestedMode?: unknown) => {
+      const mode = requestedMode === 'studio-black' ? 'studio-black' : readSoridrawDisplayMode();
+      if (mode !== 'studio-black') return;
+
+      const params = new URLSearchParams(location.search);
+      // Shared/public deep links remain independent and must never be swallowed
+      // by an appearance change.
+      if (params.has('note') || params.has('track') || params.has('playlist')) return;
+
+      const view: StudioWorkspaceView | null = location.pathname === '/history'
+        ? 'music-note'
+        : location.pathname === '/suno-library'
+          ? 'library'
+          : null;
+      if (!view) return;
+
+      selectStudioWorkspaceView(view);
+      navigate(`/studio?view=${view}`, { replace: true });
+    };
+
+    redirectLegacyStandaloneRouteIntoSplit();
+
+    const handleThemeChange = (event: Event) => {
+      const mode = (event as CustomEvent<{ mode?: string }>).detail?.mode;
+      redirectLegacyStandaloneRouteIntoSplit(mode);
+    };
+
+    window.addEventListener('soridraw-theme-change', handleThemeChange as EventListener);
+    return () => window.removeEventListener('soridraw-theme-change', handleThemeChange as EventListener);
+  }, [location.pathname, location.search, navigate, selectStudioWorkspaceView]);
+
+
+  // 603: admin performance diagnostics may compare Music Note and Library in
+  // one run. Keep this as a narrow workspace-selection bridge only; it never
+  // changes user data, split-engine selection, or normal navigation state.
+  useEffect(() => {
+    const handlePerfWorkspaceRequest = (event: Event) => {
+      if (location.pathname !== '/studio') return;
+      const view = (event as CustomEvent<{ view?: StudioWorkspaceView }>).detail?.view;
+      if (view !== 'music-note' && view !== 'library' && view !== 'recent' && view !== 'create') return;
+      selectStudioWorkspaceView(view);
+    };
+    window.addEventListener('soridraw:split-perf-workspace-request', handlePerfWorkspaceRequest as EventListener);
+    return () => window.removeEventListener('soridraw:split-perf-workspace-request', handlePerfWorkspaceRequest as EventListener);
+  }, [location.pathname, selectStudioWorkspaceView]);
+
+  // Split mode is a separate workspace world from the classic dark/light layout.
+  // When the user leaves Studio Black for either classic color mode, always
+  // restore the normal Studio composition: the builder remains mounted above
+  // and the recent/generated result area is shown below. This only changes the
+  // visible workspace target; every Studio selection and draft state is kept.
+  useEffect(() => {
+    const handleStudioThemeChange = (event: Event) => {
+      if (location.pathname !== '/studio') return;
+
+      const nextMode = (event as CustomEvent<{ mode?: SoridrawDisplayMode }>).detail?.mode;
+      if (nextMode === 'dark' || nextMode === 'light') {
+        selectStudioWorkspaceView('recent');
+        return;
+      }
+
+      // Returning to Split mode must restore Split's own workspace target.
+      // Dark/light intentionally uses the normal recent/result composition;
+      // keeping that `recent` target after switching back was what left the
+      // phone with two split panes squeezed into the old geometry.
+      if (nextMode === 'studio-black') {
+        selectStudioWorkspaceView('create');
+      }
+    };
+
+    window.addEventListener('soridraw-theme-change', handleStudioThemeChange as EventListener);
+    return () => {
+      window.removeEventListener('soridraw-theme-change', handleStudioThemeChange as EventListener);
+    };
+  }, [location.pathname, selectStudioWorkspaceView]);
+
   const [isStudioLoaded, setIsStudioLoaded] = useState(location.pathname === '/studio');
   useEffect(() => {
     if (location.pathname === '/studio') {
@@ -3846,7 +5119,10 @@ function App() {
   }, [location.pathname]);
 
   // 1. ALL STATES & REFS FIRST
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => auth.currentUser);
+  const [cachedHeaderIdentity, setCachedHeaderIdentity] = useState<CachedHeaderIdentity | null>(
+    readCachedHeaderIdentity,
+  );
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
@@ -3862,15 +5138,33 @@ function App() {
     }
   });
   const [userRole, setUserRole] = useState<UserRole>('free');
+  const [staffRole, setStaffRole] = useState<StaffRole>(null);
+  const [adminPermissions, setAdminPermissions] = useState<AdminPermissions>({ ...EMPTY_ADMIN_PERMISSIONS });
   const [cachedUserRoleHint, setCachedUserRoleHint] = useState<CachedUserRole | null>(readCachedUserRole);
   const [userStatus, setUserStatus] = useState<AccountStatus>('active');
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isUserRoleReady, setIsUserRoleReady] = useState(false);
+  const [emailVerificationGate, setEmailVerificationGate] = useState<EmailVerificationGate>('idle');
+  const [emailVerificationMessage, setEmailVerificationMessage] = useState<string | null>(null);
+  const [isEmailVerificationActionPending, setIsEmailVerificationActionPending] = useState(false);
+  const [emailVerificationRevision, setEmailVerificationRevision] = useState(0);
+  const [emailVerificationCycleKey, setEmailVerificationCycleKey] = useState<string | null>(null);
+  const [isEmailVerificationCycleReady, setIsEmailVerificationCycleReady] = useState(false);
+  const [emailVerificationResendSeconds, setEmailVerificationResendSeconds] = useState(0);
+  const emailVerificationHistoryPushedRef = useRef(false);
+  const suppressEmailVerificationPopRef = useRef(false);
+  const emailVerificationAutoSendRef = useRef('');
   const [isBanModalOpen, setIsBanModalOpen] = useState(false);
   const [isForcedLogoutModalOpen, setIsForcedLogoutModalOpen] = useState(false);
   const [forcedLogoutCountdown, setForcedLogoutCountdown] = useState(10);
   const isForcedLogoutProcessingRef = useRef(false);
   const lastForcedLogoutTimeRef = useRef<number>(0);
   const hasCompletedForceLogoutReentryCheckRef = useRef(false);
+  // 842 — A transient Firestore outage/quota response must not revoke a role that
+  // was already verified from the server for this exact signed-in identity.
+  // This flag is reset on every auth identity change, so a different account can
+  // never inherit the previous account's admin authority.
+  const hasVerifiedCurrentUserRoleFromServerRef = useRef(false);
   const lastFavoriteSyncSignalIdRef = useRef<string>('');
   const [result, setResult] = useState<SongResult | null>(null);
   const [history, setHistory] = useState<SongResult[]>([]);
@@ -4211,7 +5505,10 @@ function App() {
 
   const isSongFavorited = useCallback((song: any) => {
     if (!song) return false;
+    if ((song as any)?.recentFavoriteDetachedAt) return false;
     const statusMap = favoritesStore.getStatusMap();
+    const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
+    if (linkedFavoriteId && statusMap.has(linkedFavoriteId)) return true;
     if (song.id && statusMap.has(song.id)) return true;
     const key = buildFavoriteIdentityKey(song);
     if (key && statusMap.has(key)) return true;
@@ -4300,10 +5597,20 @@ function App() {
       song?.favoriteKey,
       ...(relatedFavorites || []).map((favorite) => favorite?.favoriteKey || buildFavoriteIdentityKey(favorite)),
     ].filter(Boolean))).slice(0, 20);
-    const favoriteIds = Array.from(new Set((relatedFavorites || []).map((favorite) => favorite?.id).filter(Boolean))).slice(0, 30);
     const syncedFavorite = buildFavoriteSyncSignalFavorite(action, song, relatedFavorites, at);
+    const signalUid = String(
+      syncedFavorite?.uid || song?.uid || relatedFavorites?.[0]?.uid || auth.currentUser?.uid || ''
+    ).trim();
+    const rememberedDeleteIds = action === 'delete' && signalUid
+      ? Array.from(getFavoriteDeletedTombstoneIds(signalUid))
+      : [];
+    const favoriteIds = Array.from(new Set([
+      ...(relatedFavorites || []).map((favorite) => favorite?.id).filter(Boolean),
+      ...rememberedDeleteIds,
+    ])).slice(-450);
     return sanitizeForFirestore({
       id: `${action}_${at}_${Math.random().toString(36).slice(2, 8)}`,
+      originDeviceId: getMusicNoteDeviceId(),
       action,
       at,
       favoriteKey: favoriteKeys[0] || syncedFavorite.favoriteKey || '',
@@ -4342,6 +5649,9 @@ function App() {
   };
 
   const mergeFavoriteFirstPageWithCache = (firstPageFavs: any[], previous: any[], allServerFavoritesLoaded = false) => {
+    // A schema-1001 catalog is the complete authority. Never preserve arbitrary
+    // stale rows from a partial/legacy local cache once that catalog arrives.
+    if (allServerFavoritesLoaded) return mergeFavoritePages([], firstPageFavs);
     const firstPageIds = new Set(firstPageFavs.map((item: any) => item?.id).filter(Boolean));
     const firstPageKeys = new Set(firstPageFavs.map((item: any) => item?.favoriteKey || buildFavoriteIdentityKey(item)).filter(Boolean));
     const removalSignals = firstPageFavs.filter((item: any) => isFavoriteSoftRemoved(item));
@@ -4369,6 +5679,19 @@ function App() {
 
     // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date
     favoritesInMemoryCache.set(uid, safeList);
+    const fullCatalogReady = musicNoteFullCatalogReadyUids.has(uid);
+    schedulePreviewAdaptiveListIndexPublishIfDirty('musicNote', uid, safeList, {
+      hasMore: fullCatalogReady ? false : undefined,
+      complete: fullCatalogReady,
+      deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
+    });
+    if (musicNoteBundleActiveUids.has(uid)) {
+      scheduleListBundleWrite('musicNote', uid, safeList, {
+        limit: 20,
+        hasMore: safeList.length >= 20,
+        deletedIds: Array.from(getFavoriteDeletedTombstoneIds(uid)),
+      });
+    }
 
     // Debounce/Schedule the actual high-cost JSON.stringify and localStorage.setItem writes
     if (favoritesCacheWriteTimers.has(uid)) {
@@ -4564,45 +5887,93 @@ function App() {
   });
 
 
-  const [navigationVisibilitySettings, setNavigationVisibilitySettings] = useState<NavigationVisibilitySettings>(
-    readStoredNavigationVisibilitySettings,
+  const cachedNavigationVisibility = readFirestoreReadCache<NavigationVisibilitySettings>(
+    FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
+    FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
+  );
+  const cachedGlobalLyricClicheGuard = readFirestoreReadCache<LyricClicheGuardSettings>(
+    FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
+    FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
+  );
+  const [navigationVisibilitySettings, setNavigationVisibilitySettings] = useState<NavigationVisibilitySettings>(() =>
+    cachedNavigationVisibility?.data || readStoredNavigationVisibilitySettings(),
   );
   const menuVisibility = navigationVisibilitySettings.menuVisibility;
   const menuAdminOnly = navigationVisibilitySettings.menuAdminOnly;
-  const [globalLyricClicheGuard, setGlobalLyricClicheGuard] = useState<LyricClicheGuardSettings>({
-    hardBanTerms: [],
-    softBanTerms: [],
-  });
+  const [globalLyricClicheGuard, setGlobalLyricClicheGuard] = useState<LyricClicheGuardSettings>(() =>
+    cachedGlobalLyricClicheGuard?.data || { hardBanTerms: [], softBanTerms: [] },
+  );
   const [userLyricClicheGuard, setUserLyricClicheGuard] = useState<LyricClicheGuardSettings | null>(null);
-  const [isGlobalLyricClicheGuardReady, setIsGlobalLyricClicheGuardReady] = useState(false);
+  const [isGlobalLyricClicheGuardReady, setIsGlobalLyricClicheGuardReady] = useState(Boolean(cachedGlobalLyricClicheGuard));
   const [isUserLyricClicheGuardReady, setIsUserLyricClicheGuardReady] = useState(false);
   const isLyricClicheGuardReady = isGlobalLyricClicheGuardReady && isUserLyricClicheGuardReady;
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      doc(db, 'app_settings', 'lyric_cliche_guard'),
-      (snapshot) => {
+    if (location.pathname !== '/studio') return;
+    let isMounted = true;
+
+    const loadGlobalLyricClicheGuard = async (force = false) => {
+      const cached = readFirestoreReadCache<LyricClicheGuardSettings>(
+        FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
+        FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
+      );
+      if (cached?.data) {
+        setGlobalLyricClicheGuard(cached.data);
+        setIsGlobalLyricClicheGuardReady(true);
+        if (cached.isFresh && !force) return;
+      }
+
+      try {
+        const snapshot = await getDoc(doc(db, 'app_settings', 'lyric_cliche_guard'));
+        if (!isMounted) return;
         const data = snapshot.exists() ? snapshot.data() : null;
-        setGlobalLyricClicheGuard({
+        const nextSettings: LyricClicheGuardSettings = {
           hardBanTerms: Array.isArray(data?.hardBanTerms) ? data.hardBanTerms : [],
           softBanTerms: Array.isArray(data?.softBanTerms) ? data.softBanTerms : [],
-        });
-        setIsGlobalLyricClicheGuardReady(true);
-      },
-      (error) => {
-        console.warn('Lyric cliche guard setting read failed. Keeping built-in defaults:', error);
-        setGlobalLyricClicheGuard({ hardBanTerms: [], softBanTerms: [] });
-        setIsGlobalLyricClicheGuardReady(true);
-      },
-    );
+        };
+        setGlobalLyricClicheGuard(nextSettings);
+        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, nextSettings);
+      } catch (error) {
+        console.warn('Lyric cliche guard setting read failed. Keeping cached/built-in defaults:', error);
+      } finally {
+        if (isMounted) setIsGlobalLyricClicheGuardReady(true);
+      }
+    };
 
-    return () => unsubscribe();
-  }, []);
+    const handleLocalClicheGuardUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<LyricClicheGuardSettings>).detail;
+      if (!detail) return;
+      setGlobalLyricClicheGuard(detail);
+      setIsGlobalLyricClicheGuardReady(true);
+      writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, detail);
+    };
+
+    window.addEventListener('soridraw:lyric-cliche-guard-updated', handleLocalClicheGuardUpdate as EventListener);
+    void loadGlobalLyricClicheGuard();
+    return () => {
+      isMounted = false;
+      window.removeEventListener('soridraw:lyric-cliche-guard-updated', handleLocalClicheGuardUpdate as EventListener);
+    };
+  }, [location.pathname]);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadNavigationVisibility = async () => {
+      const cached = readFirestoreReadCache<NavigationVisibilitySettings>(
+        FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
+        FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
+      );
+      if (cached?.data) {
+        const nextCachedSettings = normalizeNavigationVisibilitySettings(
+          cached.data,
+          readStoredNavigationVisibilitySettings(),
+        );
+        setNavigationVisibilitySettings(nextCachedSettings);
+        writeStoredNavigationVisibilitySettings(nextCachedSettings);
+        if (cached.isFresh) return;
+      }
+
       try {
         const snapshot = await getDoc(doc(db, 'app_settings', 'navigation_visibility'));
         if (!isMounted) return;
@@ -4613,6 +5984,7 @@ function App() {
         );
         setNavigationVisibilitySettings(nextSettings);
         writeStoredNavigationVisibilitySettings(nextSettings);
+        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, nextSettings);
       } catch (error) {
         console.warn('Navigation visibility setting read failed. Keeping cached fallback:', error);
         if (isMounted) {
@@ -4629,10 +6001,11 @@ function App() {
       );
       setNavigationVisibilitySettings(nextSettings);
       writeStoredNavigationVisibilitySettings(nextSettings);
+      writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, nextSettings);
     };
 
     window.addEventListener('soridraw:navigation-visibility-updated', handleLocalVisibilityUpdate);
-    loadNavigationVisibility();
+    void loadNavigationVisibility();
 
     return () => {
       isMounted = false;
@@ -4879,6 +6252,13 @@ function App() {
   useEffect(() => {
     if (!user) return;
 
+    const pendingTrackIdsAtAttach = getPendingSunoCreditTrackIds();
+    const needsGlobalTrackListener = sunoLibrarySignal === 'generating' || pendingTrackIdsAtAttach.length > 0;
+    if (!needsGlobalTrackListener) {
+      setRecentSunoTracksForPolling([]);
+      return;
+    }
+
     const q = query(
       collection(db, 'suno_tracks', user.uid, 'tracks'),
       orderBy('createdAt', 'desc'),
@@ -4915,7 +6295,7 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, [user?.uid, sunoLibrarySignal, sunoLibrarySignalStartedAt, checkSunoRemainingCreditsAfterCompletedTrack, getPendingSunoCreditTrackIds, removePendingSunoCreditTrackId]);
+  }, [user?.uid, sunoLibrarySignal, sunoLibrarySignalStartedAt, sunoRemainingCreditsUpdatedAt, checkSunoRemainingCreditsAfterCompletedTrack, getPendingSunoCreditTrackIds, removePendingSunoCreditTrackId]);
 
   const shouldPollSunoTrackGlobally = useCallback((track: any, now: number): boolean => {
     if (!track || typeof track !== 'object') return false;
@@ -5261,6 +6641,7 @@ function App() {
       return false;
     }
   });
+  const presenceControllerRef = useRef<ReturnType<typeof startUserPresence> | null>(null);
 
   // 2. CORE FUNCTIONS NEXT (BEFORE ANY USEEFFECT)
   const handleLogout = async () => {
@@ -5287,6 +6668,8 @@ function App() {
 
       clearCachedUserRole();
       setCachedUserRoleHint(null);
+      await presenceControllerRef.current?.stop();
+      presenceControllerRef.current = null;
       await signOut(auth);
       navigate('/', { replace: true });
 
@@ -5314,6 +6697,8 @@ function App() {
 
       clearCachedUserRole();
       setCachedUserRoleHint(null);
+      await presenceControllerRef.current?.stop();
+      presenceControllerRef.current = null;
       await signOut(auth);
       navigate('/', { replace: true });
     } catch (error) {
@@ -5321,10 +6706,31 @@ function App() {
       // Even if updateDoc fails, we should try to sign out
       clearCachedUserRole();
       setCachedUserRoleHint(null);
+      await presenceControllerRef.current?.stop().catch(() => {});
+      presenceControllerRef.current = null;
       await signOut(auth).catch(() => {});
       navigate('/', { replace: true });
     }
   };
+
+  useEffect(() => {
+    if (!user) return;
+    const authLastSignInAt = user.metadata.lastSignInTime
+      ? new Date(user.metadata.lastSignInTime).getTime()
+      : 0;
+    const presence = startUserPresence(user.uid, {
+      authLastSignInAt: Number.isFinite(authLastSignInAt) ? authLastSignInAt : 0,
+      onIdleTimeout: async () => {
+        console.info('[Presence] 1시간 미사용으로 자동 로그아웃합니다.');
+        await handleLogout();
+      },
+    });
+    presenceControllerRef.current = presence;
+    return () => {
+      if (presenceControllerRef.current === presence) presenceControllerRef.current = null;
+      void presence.stop();
+    };
+  }, [user?.uid]);
 
   const getEmailAuthErrorMessage = (error: any) => {
     const code = error?.code || 'unknown';
@@ -5337,7 +6743,7 @@ function App() {
     return `인증 처리 중 오류가 발생했습니다. (${code})`;
   };
 
-  const prepareEmailAuthAttempt = async () => {
+  const prepareAuthAttempt = async () => {
     localStorage.setItem('rememberLogin', String(rememberLogin));
     await setPersistence(auth, rememberLogin ? browserLocalPersistence : browserSessionPersistence);
   };
@@ -5352,6 +6758,134 @@ function App() {
     if (isLoggingIn) return;
     setIsAuthModalOpen(false);
     setAuthMessage(null);
+  };
+
+  useEffect(() => {
+    if (!isAuthReady || user) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get('auth') !== 'login') return;
+
+    setAuthMode('login');
+    setAuthMessage(null);
+    setIsAuthModalOpen(true);
+
+    params.delete('auth');
+    const nextSearch = params.toString();
+    navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}${location.hash}`, { replace: true });
+  }, [isAuthReady, location.hash, location.pathname, location.search, navigate, user]);
+
+  const sendVerificationEmailToCurrentUser = async ({
+    message = '인증메일을 보냈습니다. 메일함의 링크를 눌러주세요.',
+    source = 'manual',
+  }: {
+    message?: string;
+    source?: 'auto' | 'manual';
+  } = {}) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !currentUser.email) {
+      setEmailVerificationMessage('인증할 이메일 계정을 찾을 수 없습니다. 다시 로그인해주세요.');
+      return false;
+    }
+
+    if (source === 'manual' && emailVerificationResendSeconds > 0) {
+      setEmailVerificationMessage(`${emailVerificationResendSeconds}초 후 인증메일을 다시 보낼 수 있습니다.`);
+      return false;
+    }
+
+    setIsEmailVerificationActionPending(true);
+    if (source === 'manual') setEmailVerificationResendSeconds(60);
+
+    try {
+      auth.languageCode = 'ko';
+      await sendEmailVerification(
+        currentUser,
+        buildEmailVerificationActionSettings(currentUser.uid)
+      );
+      setEmailVerificationResendSeconds(60);
+      setEmailVerificationMessage(message);
+      return true;
+    } catch (error: any) {
+      console.error('Email verification send error:', error);
+      const code = error?.code || 'unknown';
+      if (code === 'auth/too-many-requests') {
+        setEmailVerificationResendSeconds(300);
+        setEmailVerificationMessage(
+          '최근 인증메일 요청이 이미 처리되었습니다. 받은편지함과 스팸함을 확인하고 5분 후 다시 시도해주세요.'
+        );
+      } else {
+        setEmailVerificationMessage(`인증메일을 보내지 못했습니다. 다시 시도해주세요. (${code})`);
+      }
+      return false;
+    } finally {
+      setIsEmailVerificationActionPending(false);
+    }
+  };
+
+
+  useEffect(() => {
+    if (emailVerificationResendSeconds <= 0) return;
+    const timer = window.setTimeout(() => {
+      setEmailVerificationResendSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [emailVerificationResendSeconds]);
+
+  const handleCheckEmailVerification = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setEmailVerificationMessage('로그인 정보가 없습니다. 다시 로그인해주세요.');
+      return;
+    }
+
+    setIsEmailVerificationActionPending(true);
+    try {
+      await currentUser.reload();
+      if (!currentUser.emailVerified) {
+        setEmailVerificationMessage('아직 이메일 인증이 확인되지 않았습니다. 메일의 인증 링크를 먼저 눌러주세요.');
+        return;
+      }
+      await currentUser.getIdToken(true);
+      releaseEmailVerificationHistory();
+      setEmailVerificationMessage(null);
+      setEmailVerificationRevision((revision) => revision + 1);
+      setEmailVerificationGate('idle');
+    } catch (error: any) {
+      console.error('Email verification check error:', error);
+      setEmailVerificationMessage(`인증 상태를 확인하지 못했습니다. 다시 시도해주세요. (${error?.code || 'unknown'})`);
+    } finally {
+      setIsEmailVerificationActionPending(false);
+    }
+  };
+
+  const handleEmailVerificationLogout = async () => {
+    setIsEmailVerificationActionPending(true);
+    try {
+      await presenceControllerRef.current?.stop();
+      presenceControllerRef.current = null;
+      await signOut(auth);
+      setEmailVerificationGate('idle');
+      setEmailVerificationMessage(null);
+    } finally {
+      setIsEmailVerificationActionPending(false);
+    }
+  };
+
+  const releaseEmailVerificationHistory = () => {
+    if (!emailVerificationHistoryPushedRef.current) return;
+    suppressEmailVerificationPopRef.current = true;
+    emailVerificationHistoryPushedRef.current = false;
+    window.history.back();
+    window.setTimeout(() => {
+      suppressEmailVerificationPopRef.current = false;
+    }, 500);
+  };
+
+  const requestCloseEmailVerificationGate = () => {
+    if (emailVerificationHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    void handleEmailVerificationLogout();
   };
 
   const handleEmailAuth = async (event?: React.FormEvent) => {
@@ -5393,7 +6927,7 @@ function App() {
 
     setIsLoggingIn(true);
     try {
-      await prepareEmailAuthAttempt();
+      await prepareAuthAttempt();
 
       if (authMode === 'signup') {
         const methods = await fetchSignInMethodsForEmail(auth, email);
@@ -5402,6 +6936,8 @@ function App() {
           return;
         }
         await createUserWithEmailAndPassword(auth, email, password);
+        setEmailVerificationGate('required');
+        setEmailVerificationMessage('가입이 완료되었습니다. 인증메일을 자동으로 보내고 있습니다.');
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
@@ -5429,9 +6965,65 @@ function App() {
       isOnline: true,
     };
 
+    const cachedProfile = readUserProfileCache(authUser.uid);
+    const authSignInAt = Date.parse(authUser.metadata.lastSignInTime || '') || 0;
+    const loginSyncStorageKey = `soridraw_user_login_sync_v1_${authUser.uid}`;
+
+    const profileTimestampMs = (value: any): number => {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (value && typeof value.toMillis === 'function') {
+        const millis = Number(value.toMillis());
+        return Number.isFinite(millis) ? millis : 0;
+      }
+      if (value && typeof value.seconds === 'number') {
+        const millis = (Number(value.seconds) * 1000) + Math.floor(Number(value.nanoseconds || 0) / 1_000_000);
+        return Number.isFinite(millis) ? millis : 0;
+      }
+      const numeric = Number(value || 0);
+      return Number.isFinite(numeric) ? numeric : 0;
+    };
+
+    const cachedLoginAt = profileTimestampMs((cachedProfile as any)?.lastLoginAt);
+    let lastSyncedAuthLoginAt = 0;
+    try {
+      lastSyncedAuthLoginAt = Number(localStorage.getItem(loginSyncStorageKey) || 0);
+      if (!Number.isFinite(lastSyncedAuthLoginAt)) lastSyncedAuthLoginAt = 0;
+    } catch {}
+
+    const shouldPublishLoginSession = authSignInAt > 0
+      && cachedLoginAt < authSignInAt
+      && lastSyncedAuthLoginAt < authSignInAt;
+
+    const rememberPublishedLoginSession = () => {
+      if (authSignInAt <= 0) return;
+      try { localStorage.setItem(loginSyncStorageKey, String(authSignInAt)); } catch {}
+    };
+
+    // Refresh/app restore with the same authenticated session: zero users/{uid}
+    // write. The root listener below still reconnects and remains the small
+    // cross-device version signal source.
+    if (cachedProfile && !shouldPublishLoginSession) return;
+
+    if (cachedProfile) {
+      try {
+        await updateDoc(userRef, sessionData);
+        rememberPublishedLoginSession();
+        return;
+      } catch (cachedUpdateError: any) {
+        const code = String(cachedUpdateError?.code || '').toLowerCase();
+        if (!code.includes('not-found')) throw cachedUpdateError;
+      }
+    }
+
+    // No local profile cache means a new device, cleared storage, or first login.
+    // Keep one safe server existence check so existing accounts are never
+    // overwritten and brand-new accounts can still be created correctly.
     const userSnap = await getDoc(userRef);
     if (userSnap.exists()) {
-      await updateDoc(userRef, sessionData);
+      if (shouldPublishLoginSession) {
+        await updateDoc(userRef, sessionData);
+        rememberPublishedLoginSession();
+      }
       return;
     }
 
@@ -5476,7 +7068,7 @@ function App() {
     };
 
     try {
-      localStorage.setItem('rememberLogin', String(rememberLogin));
+      await prepareAuthAttempt();
 
       // Environment check
       const hostname = window.location.hostname;
@@ -5577,11 +7169,6 @@ function App() {
       document.removeEventListener('visibilitychange', handleReEntry);
     };
   }, [isLoggingIn]);
-
-  useEffect(() => {
-    document.documentElement.classList.add('dark');
-    localStorage.setItem('themeMode', 'dark');
-  }, []);
 
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [subGenre, setSubGenre] = useState<string[]>([]);
@@ -5776,7 +7363,7 @@ function App() {
   useEffect(() => {
     sessionStorage.setItem('soridraw_pinned_instrument_sounds', JSON.stringify(pinnedInstrumentSounds));
   }, [pinnedInstrumentSounds]);
-  const [isGenreExpanded, setIsGenreExpanded] = useState(false);
+  const [genreExpandResetToken, setGenreExpandResetToken] = useState(0);
   const [isStyleExpanded, setIsStyleExpanded] = useState(false);
   const [isSoundExpanded, setIsSoundExpanded] = useState(false);
   const [isMoodExpanded, setIsMoodExpanded] = useState(false);
@@ -5785,30 +7372,81 @@ function App() {
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
   const [isSituationExpanded, setIsSituationExpanded] = useState(false);
   const [draftSituation, setDraftSituation] = useState<SituationConfig>(createEmptySituation);
-  const [sectionTags, setSectionTags] = useState<SectionTag[]>([]);
+  const [sectionTags, setSectionTags] = useState<SectionTag[]>(() =>
+    readFirestoreReadCache<SectionTag[]>(
+      FIRESTORE_READ_CACHE_KEYS.sectionTags,
+      FIRESTORE_READ_CACHE_TTL_MS.sectionTags,
+    )?.data || [],
+  );
 
-  // Load section tags from Firestore
+  // Section tags are static configuration, not live user data. Hydrate from the
+  // free local cache and refresh from Firestore only when Studio actually needs
+  // them and the cache is stale. This removes the always-on full-collection
+  // listener that used to re-read every tag after each development reload.
   useEffect(() => {
-    const q = query(
-      collection(db, 'section_tags'),
-      orderBy('label', 'asc')
-    );
+    if (location.pathname !== '/studio') return;
+    let isMounted = true;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedTags = snapshot.docs.map(doc => ({
-        ...doc.data()
-      })) as SectionTag[];
-      setSectionTags(fetchedTags);
-    }, (err) => {
-      console.error("Error fetching section tags for user UI:", err);
-    });
+    const loadSectionTags = async () => {
+      const cached = readFirestoreReadCache<SectionTag[]>(
+        FIRESTORE_READ_CACHE_KEYS.sectionTags,
+        FIRESTORE_READ_CACHE_TTL_MS.sectionTags,
+      );
+      if (cached && Array.isArray(cached.data)) {
+        setSectionTags(cached.data);
+        if (cached.isFresh) return;
+      }
 
-    return () => unsubscribe();
-  }, []);
+      try {
+        let sectionTagsBundleHydrated = false;
+        try {
+          const bundleSnapshot = await getDoc(doc(db, 'app_settings', 'section_tags_bundle'));
+          if (bundleSnapshot.exists()) {
+            const bundle = bundleSnapshot.data() as any;
+            const items = Array.isArray(bundle?.items) ? bundle.items : [];
+            const isValidBundle = Number(bundle?.schemaVersion) === 1
+              && Number(bundle?.itemCount) === items.length
+              && items.every((item: any) => Boolean(item && typeof item === 'object' && !Array.isArray(item)));
 
-  const toggleMainSections = (section: 'genre' | 'style' | 'sound') => {
-    if (section === 'genre') setIsGenreExpanded(prev => !prev);
-    else if (section === 'style') setIsStyleExpanded(prev => !prev);
+            if (isValidBundle) {
+              if (!isMounted) return;
+              const bundledTags = items as SectionTag[];
+              setSectionTags(bundledTags);
+              writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.sectionTags, bundledTags);
+              sectionTagsBundleHydrated = true;
+            } else {
+              console.warn('[Section tags] aggregate bundle is invalid; using legacy source fallback.');
+            }
+          }
+        } catch (bundleError) {
+          console.warn('[Section tags] aggregate bundle unavailable; using legacy source fallback.', bundleError);
+        }
+
+        if (sectionTagsBundleHydrated) return;
+
+        const snapshot = await getDocs(query(
+          collection(db, 'section_tags'),
+          orderBy('label', 'asc'),
+        ));
+        if (!isMounted) return;
+        const fetchedTags = snapshot.docs.map((snapshotDoc) => ({
+          ...snapshotDoc.data(),
+        })) as SectionTag[];
+        setSectionTags(fetchedTags);
+        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.sectionTags, fetchedTags);
+      } catch (err) {
+        console.error('Error fetching section tags for user UI. Keeping cache:', err);
+      }
+    };
+
+    void loadSectionTags();
+    return () => {
+      isMounted = false;
+    };
+  }, [location.pathname]);
+
+  const toggleMainSections = (section: 'style' | 'sound') => {
+    if (section === 'style') setIsStyleExpanded(prev => !prev);
     else if (section === 'sound') setIsSoundExpanded(prev => !prev);
   };
 
@@ -5825,36 +7463,32 @@ function App() {
 
   const row1MaxHeight = useMemo(() => Math.max(genreHeight, styleHeight, soundHeight), [genreHeight, styleHeight, soundHeight]);
   const row2MaxHeight = useMemo(() => Math.max(moodHeight, themeHeight), [moodHeight, themeHeight]);
-  const [isStudioWideSelectionLayout, setIsStudioWideSelectionLayout] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return window.innerWidth >= 1024 && window.matchMedia('(orientation: landscape)').matches;
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const updateStudioSelectionLayout = () => {
-      setIsStudioWideSelectionLayout(window.innerWidth >= 1024 && window.matchMedia('(orientation: landscape)').matches);
-    };
-
-    updateStudioSelectionLayout();
-    window.addEventListener('resize', updateStudioSelectionLayout);
-    window.addEventListener('orientationchange', updateStudioSelectionLayout);
-    return () => {
-      window.removeEventListener('resize', updateStudioSelectionLayout);
-      window.removeEventListener('orientationchange', updateStudioSelectionLayout);
-    };
-  }, []);
 
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const [isGenreHierarchyModalOpen, setIsGenreHierarchyModalOpen] = useState(false);
   const [isActionButtonsCollapsed, setIsActionButtonsCollapsed] = useState(true);
+  // A horizontal swipe can begin on top of the generate button itself. Browsers
+  // still synthesize a click after pointerup when the pointer finishes inside
+  // that button, so keep a short gesture-consumed window that blocks the
+  // trailing click for every theme that uses the shared swipe action row.
+  const actionSwipeClickBlockUntilRef = useRef(0);
+  const blockActionSwipeTrailingClick = (durationMs = 520) => {
+    actionSwipeClickBlockUntilRef.current = Date.now() + durationMs;
+  };
+  const handleActionSwipeClickCapture = (event: React.MouseEvent<HTMLElement>) => {
+    if (!isActionSwipeCollapseMode) return;
+    if (Date.now() > actionSwipeClickBlockUntilRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
   const genreModalHistoryPushedRef = useRef(false);
   const storyboardModalHistoryPushedRef = useRef(false);
   const storyboardModalBackdropMouseDownRef = useRef(false);
   const storyboardOpenTimerRef = useRef<number | null>(null);
   const [isStoryboardOpening, setIsStoryboardOpening] = useState(false);
+  const [showStoryboardTitleTooltip, setShowStoryboardTitleTooltip] = useStableHoverTooltip(60);
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const [isGlobalSearchOpening, setIsGlobalSearchOpening] = useState(false);
   const globalSearchOpenTimerRef = useRef<number | null>(null);
@@ -6062,15 +7696,261 @@ function App() {
   const [isConfirmingDeleteHistory, setIsConfirmingDeleteHistory] = useState(false);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
-  const [hoveredItem, setHoveredItem] = useState<CategoryItem | null>(null);
-  const [isTooltipHovered, setIsTooltipHovered] = useState(false);
+  type StudioDescriptionPlacement = StudioDescriptionOverlayPlacement;
+
+  const getDefaultStudioDescriptionPlacement = (): StudioDescriptionPlacement => ({
+    pane: 'global',
+    left: typeof window !== 'undefined' ? window.innerWidth / 2 : 0,
+    maxWidth: typeof window !== 'undefined' && window.innerWidth < 768 ? 200 : 400,
+  });
+
+  const studioDescriptionControllerRef = useRef<StudioDescriptionOverlayController | null>(null);
+  const studioDescriptionCurrentItemRef = useRef<CategoryItem | null>(null);
+  const studioDescriptionPointerRef = useRef<{ x: number; y: number; target: EventTarget | null }>({ x: 0, y: 0, target: null });
+  // SORIDRAW_STUDIO_IDLE_HOVER_STABILIZE_982
+  // Keep fast cursor sweeps from forcing tooltip work for accidental flyovers.
+  const studioDescriptionHoverTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    studioDescriptionPointerRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2, target: null };
+    const rememberPointer = (event: PointerEvent) => {
+      studioDescriptionPointerRef.current = { x: event.clientX, y: event.clientY, target: event.target };
+    };
+    window.addEventListener('pointerover', rememberPointer, { capture: true, passive: true });
+    window.addEventListener('pointerdown', rememberPointer, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('pointerover', rememberPointer, { capture: true });
+      window.removeEventListener('pointerdown', rememberPointer, true);
+    };
+  }, []);
+
+  const resolveStudioDescriptionPlacement = useCallback((): StudioDescriptionPlacement => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return getDefaultStudioDescriptionPlacement();
+    }
+
+    const fallback = getDefaultStudioDescriptionPlacement();
+    if (
+      location.pathname !== '/studio' ||
+      document.documentElement.dataset.soridrawTheme !== 'studio-black' ||
+      window.innerWidth < 1100
+    ) {
+      return fallback;
+    }
+
+    const { x, y, target } = studioDescriptionPointerRef.current;
+    // SORIDRAW_STUDIO_TOOLTIP_TARGET_REUSE_985
+    // pointerover already tells us the live DOM target. Reuse it instead of
+    // forcing elementFromPoint + two document queries on every tooltip hover.
+    const pointerTarget = target instanceof Element && target.isConnected ? target : null;
+    const hoveredElement = pointerTarget ?? document.elementFromPoint(x, y);
+    let paneElement = hoveredElement?.closest('[data-soridraw-studio-pane]') as HTMLElement | null;
+    let builderPane: HTMLElement | null = null;
+    let resultPane: HTMLElement | null = null;
+
+    if (!paneElement && hoveredElement?.closest('.soridraw-studio-action-bar--tracking, .soridraw-studio-action-collapsed')) {
+      builderPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="builder"]');
+      paneElement = builderPane;
+    }
+
+    if (!paneElement && y >= 58) {
+      builderPane ??= document.querySelector<HTMLElement>('[data-soridraw-studio-pane="builder"]');
+      resultPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="result"]');
+      const builderRect = builderPane?.getBoundingClientRect();
+      const resultRect = resultPane?.getBoundingClientRect();
+      if (builderRect && x >= builderRect.left && x <= builderRect.right) paneElement = builderPane;
+      else if (resultRect && x >= resultRect.left && x <= resultRect.right) paneElement = resultPane;
+    }
+
+    if (!paneElement) return fallback;
+
+    const rect = paneElement.getBoundingClientRect();
+    if (!Number.isFinite(rect.width) || rect.width < 1) return fallback;
+    const maxWidth = Math.max(180, Math.min(400, rect.width - 28));
+    const rawLeft = rect.left + rect.width / 2;
+    const left = Math.max(maxWidth / 2 + 12, Math.min(window.innerWidth - maxWidth / 2 - 12, rawLeft));
+    const pane = paneElement.dataset.soridrawStudioPane === 'result' ? 'result' : 'builder';
+    return { pane, left, maxWidth };
+  }, [location.pathname]);
+
+  const commitHoveredItem = useCallback((item: CategoryItem | null) => {
+    if (item && !readMenuHelpTipsEnabled()) {
+      studioDescriptionCurrentItemRef.current = null;
+      studioDescriptionControllerRef.current?.hide();
+      return;
+    }
+    studioDescriptionCurrentItemRef.current = item;
+    if (!item) {
+      studioDescriptionControllerRef.current?.hide();
+      return;
+    }
+    studioDescriptionControllerRef.current?.show(item, resolveStudioDescriptionPlacement());
+  }, [resolveStudioDescriptionPlacement]);
+
+  const setHoveredItem = useCallback((item: CategoryItem | null) => {
+    if (studioDescriptionHoverTimerRef.current !== null) {
+      window.clearTimeout(studioDescriptionHoverTimerRef.current);
+      studioDescriptionHoverTimerRef.current = null;
+    }
+
+    const shouldStabilizeStudioHover = Boolean(
+      item
+      && location.pathname === '/studio'
+      && typeof window !== 'undefined'
+      && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    );
+
+    if (!shouldStabilizeStudioHover) {
+      commitHoveredItem(item);
+      return;
+    }
+
+    studioDescriptionHoverTimerRef.current = window.setTimeout(() => {
+      studioDescriptionHoverTimerRef.current = null;
+      commitHoveredItem(item);
+    }, 60);
+  }, [commitHoveredItem, location.pathname]);
+
+  useEffect(() => {
+    const hideDisabledMenuHelp = () => {
+      if (!readMenuHelpTipsEnabled()) setHoveredItem(null);
+    };
+    const handleMenuHelpStorage = (event: StorageEvent) => {
+      if (event.key === MENU_HELP_TIPS_STORAGE_KEY) hideDisabledMenuHelp();
+    };
+    window.addEventListener(MENU_HELP_TIPS_EVENT, hideDisabledMenuHelp as EventListener);
+    window.addEventListener('storage', handleMenuHelpStorage);
+    return () => {
+      window.removeEventListener(MENU_HELP_TIPS_EVENT, hideDisabledMenuHelp as EventListener);
+      window.removeEventListener('storage', handleMenuHelpStorage);
+    };
+  }, [setHoveredItem]);
+
+  useEffect(() => () => {
+    if (studioDescriptionHoverTimerRef.current !== null) {
+      window.clearTimeout(studioDescriptionHoverTimerRef.current);
+      studioDescriptionHoverTimerRef.current = null;
+    }
+    studioDescriptionCurrentItemRef.current = null;
+    studioDescriptionControllerRef.current?.hide();
+  }, [location.pathname]);
   const appliedKeywordsRef = useRef<HTMLDivElement>(null);
   const [appliedKeywordsHeight, setAppliedKeywordsHeight] = useState<number | string>(0);
   const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);
+  const actionButtonsBarRef = useRef<HTMLDivElement>(null);
   const [isActionsFloating, setIsActionsFloating] = useState(true);
-  const [isActionDragMobile, setIsActionDragMobile] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth < 768 : false
-  );
+  const isActionsFloatingRef = useRef(true);
+  const isSplitDraggingRef = useRef(false);
+  const actionBarPlacementRafRef = useRef<number | null>(null);
+  const actionBarLayoutRafRef = useRef<number | null>(null);
+  const actionCollapseSnapshotRafRef = useRef<number | null>(null);
+  const actionCollapseRestorePendingRef = useRef(false);
+  const actionCollapseScrollSnapshotRef = useRef<{
+    host: HTMLElement | null;
+    before: number;
+    afterCollapse: number | null;
+  } | null>(null);
+
+  // 544 — Forward Generate-bar wheel input with a velocity model instead of a
+  // remembered target scrollTop. The old target accumulator could stay pinned at
+  // maxScrollTop after an outward wheel at the bottom, so the first reverse wheel
+  // was spent cancelling stale intent. It also eased toward large wheel-notch
+  // targets, which felt stepped. Keep one short rAF loop, but drive it from the
+  // current scrollTop + velocity. Direction reversals reset immediately and an
+  // outward wheel at either edge clears inertia, so the next opposite wheel works
+  // on the first notch. No persistent listener/observer/state is added.
+  const actionToggleWheelRafRef = useRef<number | null>(null);
+  const actionToggleWheelVelocityRef = useRef(0);
+  const actionToggleWheelHostRef = useRef<HTMLElement | null>(null);
+
+  const forwardActionToggleWheelToBuilder = useCallback((event: React.WheelEvent<HTMLElement>) => {
+    if (typeof window === 'undefined' || typeof document === 'undefined' || event.ctrlKey) return;
+
+    const builderPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="builder"]');
+    if (!builderPane) return;
+
+    const maxScrollTop = Math.max(0, builderPane.scrollHeight - builderPane.clientHeight);
+    if (maxScrollTop <= 0) return;
+
+    const deltaUnit = event.deltaMode === 1
+      ? 16
+      : event.deltaMode === 2
+        ? Math.max(1, builderPane.clientHeight)
+        : 1;
+    const deltaY = event.deltaY * deltaUnit;
+    if (!Number.isFinite(deltaY) || Math.abs(deltaY) < 0.01) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const atTop = builderPane.scrollTop <= 0.5;
+    const atBottom = maxScrollTop - builderPane.scrollTop <= 0.5;
+    const outwardAtEdge = (deltaY < 0 && atTop) || (deltaY > 0 && atBottom);
+
+    if (actionToggleWheelHostRef.current !== builderPane) {
+      actionToggleWheelVelocityRef.current = 0;
+      actionToggleWheelHostRef.current = builderPane;
+    }
+
+    if (outwardAtEdge) {
+      actionToggleWheelVelocityRef.current = 0;
+      if (actionToggleWheelRafRef.current != null) {
+        window.cancelAnimationFrame(actionToggleWheelRafRef.current);
+        actionToggleWheelRafRef.current = null;
+      }
+      return;
+    }
+
+    const direction = Math.sign(deltaY);
+    const currentVelocity = actionToggleWheelVelocityRef.current;
+    const nextImpulse = deltaY * 0.14;
+    actionToggleWheelVelocityRef.current = currentVelocity !== 0 && Math.sign(currentVelocity) !== direction
+      ? nextImpulse
+      : Math.max(-42, Math.min(42, currentVelocity + nextImpulse));
+
+    if (actionToggleWheelRafRef.current != null) return;
+
+    const animateWheelScroll = () => {
+      const host = actionToggleWheelHostRef.current;
+      let velocity = actionToggleWheelVelocityRef.current;
+      if (!host || Math.abs(velocity) < 0.12) {
+        actionToggleWheelVelocityRef.current = 0;
+        actionToggleWheelRafRef.current = null;
+        actionToggleWheelHostRef.current = null;
+        return;
+      }
+
+      const hostMaxScrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
+      const hostAtTop = host.scrollTop <= 0.5;
+      const hostAtBottom = hostMaxScrollTop - host.scrollTop <= 0.5;
+      if ((velocity < 0 && hostAtTop) || (velocity > 0 && hostAtBottom)) {
+        host.scrollTop = velocity < 0 ? 0 : hostMaxScrollTop;
+        actionToggleWheelVelocityRef.current = 0;
+        actionToggleWheelRafRef.current = null;
+        actionToggleWheelHostRef.current = null;
+        return;
+      }
+
+      const nextTop = Math.max(0, Math.min(hostMaxScrollTop, host.scrollTop + velocity));
+      host.scrollTop = nextTop;
+
+      velocity *= 0.84;
+      actionToggleWheelVelocityRef.current = velocity;
+      actionToggleWheelRafRef.current = window.requestAnimationFrame(animateWheelScroll);
+    };
+
+    actionToggleWheelRafRef.current = window.requestAnimationFrame(animateWheelScroll);
+  }, []);
+
+  useEffect(() => () => {
+    if (actionToggleWheelRafRef.current != null && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(actionToggleWheelRafRef.current);
+    }
+    actionToggleWheelRafRef.current = null;
+    actionToggleWheelVelocityRef.current = 0;
+    actionToggleWheelHostRef.current = null;
+  }, []);
   const selectedKeywordCount = selectedGenres.length + subGenre.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + selectedPointSounds.length + (hasActiveSituation(situation) ? 1 : 0);
   const vocalSectionTagOptions = useMemo(
     () => buildVocalSectionTagOptions(vocalMembers, vocalMode),
@@ -6229,65 +8109,229 @@ const toggleCycleVariantSelection = (
     }
   }, [isAppliedKeywordsExpanded, result]);
 
-  useEffect(() => {
-    let rafId: number | null = null;
+  const syncActionBarLayoutMetrics = useCallback(() => {
+    if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
 
-    const updateFloatingState = () => {
-      if (!actionButtonsAnchorRef.current) return;
+    // 792 — Workspace switches (Create <-> Recent) must never inherit the
+    // outgoing page's live Generate-bar geometry. Lite V2 writes temporary
+    // per-element CSS vars while dragging; those vars outrank the committed
+    // root geometry and can survive on the same mounted portal node when the
+    // workspace changes. Collapse/expand remounts that node, which is why the
+    // old bug appeared to fix itself only after toggling the bar.
+    //
+    // At rest, root geometry is the single owner. Clear only the transient
+    // live element vars before measuring the current command anchor, then
+    // publish fresh geometry for the active workspace. No user state is reset.
+    const floatingActionBar = document.querySelector<HTMLElement>(
+      'body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]',
+    );
+    floatingActionBar?.style.removeProperty('--soridraw-action-fixed-left');
+    floatingActionBar?.style.removeProperty('--soridraw-action-fixed-width');
 
-      const rect = actionButtonsAnchorRef.current.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
+    const collapsedActionButton = document.querySelector<HTMLElement>('body > .soridraw-studio-action-collapsed');
+    collapsedActionButton?.style.removeProperty('--soridraw-studio-builder-width');
+    collapsedActionButton?.style.removeProperty('--soridraw-studio-left-rail-edge');
 
-      // Hysteresis prevents the inline/floating bars from rapidly toggling at the boundary,
-      // which caused a short flicker right after docking/undocking.
-      const floatStartLine = viewportHeight - 92;
-      const floatEndLine = viewportHeight - 168;
+    const anchor = actionButtonsAnchorRef.current;
+    if (!anchor) return;
 
-      setIsActionsFloating((prev) => {
-        const next = prev
-          ? rect.top > floatEndLine
-          : rect.top > floatStartLine;
-        return prev === next ? prev : next;
-      });
-    };
+    const anchorRect = anchor.getBoundingClientRect();
+    const root = document.documentElement;
+    const gutter = getStudioActionFloatingGutter(window.innerWidth, root.dataset.soridrawBuilderMode);
+    const floatingGeometry = resolveStudioActionFloatingGeometry(anchorRect.left, anchorRect.width, gutter);
 
-    const handleScroll = () => {
-      if (rafId !== null) return;
-      rafId = window.requestAnimationFrame(() => {
-        rafId = null;
-        updateFloatingState();
-      });
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleScroll);
-    handleScroll();
-    return () => {
-      if (rafId !== null) window.cancelAnimationFrame(rafId);
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleScroll);
-    };
+    // 532 — one geometry source for every expanded/collapsed Studio Black state.
+    // The portal bar and the docked slot now derive from the same real command
+    // anchor, so collapse/expand can only change appearance, never scroll range
+    // or vertical ownership.
+    root.style.setProperty('--soridraw-action-fixed-left', `${floatingGeometry.left}px`);
+    root.style.setProperty('--soridraw-action-fixed-width', `${floatingGeometry.width}px`);
   }, []);
 
-  useEffect(() => {
-    const updateActionDragMode = () => {
-      setIsActionDragMobile(window.innerWidth < 768);
-    };
-    window.addEventListener('resize', updateActionDragMode);
-    updateActionDragMode();
-    return () => window.removeEventListener('resize', updateActionDragMode);
+  const captureCollapsedActionVisualBottom = useCallback(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    // 535 — Studio Black no longer has a second Y-axis owner. Expanded and
+    // collapsed controls both consume the same fixed/footer-aware CSS bottom,
+    // so measuring the outgoing row here would reintroduce the old state lock.
+    if (document.documentElement.dataset.soridrawTheme === 'studio-black') return;
+
+    const actionBar = actionButtonsBarRef.current;
+    if (!actionBar) return;
+
+    const rect = actionBar.getBoundingClientRect();
+    if (!Number.isFinite(rect.bottom)) return;
+
+    // Classic/Dark/Light keep the verified collapse-in-place behavior.
+    const visualBottom = Math.max(4, Math.round(window.innerHeight - rect.bottom));
+    document.documentElement.style.setProperty(
+      '--soridraw-action-collapsed-visual-bottom',
+      `${visualBottom}px`,
+    );
   }, []);
 
-  useEffect(() => {
-    if (hoveredItem) {
-      const timer = setTimeout(() => {
-        setHoveredItem(null);
-      }, 6000);
-      return () => clearTimeout(timer);
+  const collapseActionButtons = useCallback(() => {
+    if (!isStudioBlackActionMode) {
+      captureCollapsedActionVisualBottom();
+
+      // Non-Studio themes still swap an in-flow/floating owner, so preserve
+      // their verified scroll snapshot behavior without burdening Studio Black.
+      const anchor = actionButtonsAnchorRef.current;
+      const builderPane = anchor?.closest<HTMLElement>('.soridraw-studio-builder-pane') ?? null;
+      const readScrollTop = () => builderPane ? builderPane.scrollTop : window.scrollY;
+      const snapshot = { host: builderPane, before: readScrollTop(), afterCollapse: null as number | null };
+      actionCollapseScrollSnapshotRef.current = snapshot;
+      if (actionCollapseSnapshotRafRef.current !== null) {
+        window.cancelAnimationFrame(actionCollapseSnapshotRafRef.current);
+      }
+      actionCollapseSnapshotRafRef.current = window.requestAnimationFrame(() => {
+        actionCollapseSnapshotRafRef.current = null;
+        if (actionCollapseScrollSnapshotRef.current !== snapshot) return;
+        snapshot.afterCollapse = readScrollTop();
+      });
     } else {
-      setIsTooltipHovered(false);
+      // Studio Black collapse is now a pure shape swap. There is no inline slot
+      // to remove, no scroll range change to compensate, and no captured bottom
+      // to keep alive across PC/tablet/mobile mode changes.
+      if (actionCollapseSnapshotRafRef.current !== null) {
+        window.cancelAnimationFrame(actionCollapseSnapshotRafRef.current);
+        actionCollapseSnapshotRafRef.current = null;
+      }
+      actionCollapseScrollSnapshotRef.current = null;
+      actionCollapseRestorePendingRef.current = false;
+      document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
     }
-  }, [hoveredItem]);
+
+    setIsActionButtonsCollapsed(true);
+  }, [captureCollapsedActionVisualBottom, isStudioBlackActionMode]);
+
+  const expandActionButtons = useCallback(() => {
+    actionCollapseRestorePendingRef.current = !isStudioBlackActionMode;
+    if (isStudioBlackActionMode) {
+      actionCollapseScrollSnapshotRef.current = null;
+      document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
+    }
+    setIsActionButtonsCollapsed(false);
+  }, [isStudioBlackActionMode]);
+
+  const updateActionBarPlacement = useCallback(() => {
+    if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
+    const root = document.documentElement;
+    const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
+
+    // 535 — Studio Black has one Y-axis owner only: the body-fixed action row.
+    // Footer collision is expressed by --soridraw-studio-action-footer-offset,
+    // so scroll, builder mode and collapse state never switch this row between
+    // fixed and inline DOM owners. This removes the dock/undock rerender and its
+    // stale-position lock entirely.
+    if (isStudioBlack) {
+      if (!isActionsFloatingRef.current) {
+        isActionsFloatingRef.current = true;
+        setIsActionsFloating(true);
+      }
+      return;
+    }
+
+    // Classic/Dark/Light keep their existing shared floating behavior.
+    root.style.removeProperty('--soridraw-action-fixed-left');
+    root.style.removeProperty('--soridraw-action-fixed-width');
+    if (!isActionsFloatingRef.current) {
+      isActionsFloatingRef.current = true;
+      setIsActionsFloating(true);
+    }
+  }, []);
+
+  const scheduleActionBarPlacement = useCallback(() => {
+    if (actionBarPlacementRafRef.current !== null) return;
+    actionBarPlacementRafRef.current = window.requestAnimationFrame(() => {
+      actionBarPlacementRafRef.current = null;
+      updateActionBarPlacement();
+    });
+  }, [updateActionBarPlacement]);
+
+  useEffect(() => {
+    const handleSplitDragStart = () => {
+      isSplitDraggingRef.current = true;
+      if (actionBarPlacementRafRef.current !== null) {
+        window.cancelAnimationFrame(actionBarPlacementRafRef.current);
+        actionBarPlacementRafRef.current = null;
+      }
+    };
+
+    const handleSplitDragEnd = () => {
+      isSplitDraggingRef.current = false;
+      syncActionBarLayoutMetrics();
+      scheduleActionBarPlacement();
+    };
+
+    window.addEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
+    window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
+    return () => {
+      window.removeEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
+      window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
+    };
+  }, [scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
+
+  useEffect(() => {
+    // Studio Black fixed Y no longer depends on scroll. The split workspace owns
+    // footer collision in one rAF-coalesced listener, so registering a second
+    // App-level scroll path here only duplicates layout work.
+    const handleScroll = () => {
+      if (!isStudioBlackActionMode) scheduleActionBarPlacement();
+    };
+    const scheduleLayoutChange = () => {
+      if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
+      if (actionBarLayoutRafRef.current !== null) return;
+      actionBarLayoutRafRef.current = window.requestAnimationFrame(() => {
+        actionBarLayoutRafRef.current = null;
+        syncActionBarLayoutMetrics();
+        scheduleActionBarPlacement();
+      });
+    };
+
+    const anchor = actionButtonsAnchorRef.current;
+    const resizeObserver = anchor && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(scheduleLayoutChange)
+      : null;
+    if (resizeObserver && anchor) resizeObserver.observe(anchor);
+
+    const handleWindowResizeEnd = () => scheduleLayoutChange();
+
+    if (!isStudioBlackActionMode) {
+      window.addEventListener('scroll', handleScroll, { passive: true });
+    }
+    window.addEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
+    window.addEventListener('soridraw-studio-frame-resize', scheduleLayoutChange as EventListener);
+    window.addEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
+    // 792 — Create collapses the Result pane, while Recent restores the split.
+    // Lite/Legacy already publish this event after their pane geometry has been
+    // committed. Re-measure on the next rAF so each workspace gets its own
+    // Generate-bar left/width instead of reusing the previous workspace's
+    // portal geometry until collapse/expand.
+    window.addEventListener('soridraw-studio-pane-collapse-change', scheduleLayoutChange as EventListener);
+    scheduleLayoutChange();
+
+    return () => {
+      resizeObserver?.disconnect();
+      if (actionBarPlacementRafRef.current !== null) {
+        window.cancelAnimationFrame(actionBarPlacementRafRef.current);
+        actionBarPlacementRafRef.current = null;
+      }
+      if (actionBarLayoutRafRef.current !== null) {
+        window.cancelAnimationFrame(actionBarLayoutRafRef.current);
+        actionBarLayoutRafRef.current = null;
+      }
+      if (!isStudioBlackActionMode) {
+        window.removeEventListener('scroll', handleScroll);
+      }
+      window.removeEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
+      window.removeEventListener('soridraw-studio-frame-resize', scheduleLayoutChange as EventListener);
+      window.removeEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
+      window.removeEventListener('soridraw-studio-pane-collapse-change', scheduleLayoutChange as EventListener);
+      document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
+      document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
+      };
+  }, [isStudioBlackActionMode, scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
+
 
   const [exitCount, setExitCount] = useState(0);
   const exitTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -6343,15 +8387,25 @@ const toggleCycleVariantSelection = (
   const [commandPlaceholderIndex, setCommandPlaceholderIndex] = useState(0);
 
   useEffect(() => {
+    // 580: this placeholder belongs only to the create workspace. Previously
+    // the top-level App state advanced every 3.6s even while Music Note or
+    // Library was active. Because App owns the routed Studio tree, that tiny
+    // cosmetic tick could schedule a large React commit in the middle of a
+    // split drag/benchmark. Keep the exact create-screen behavior, but do not
+    // run the timer when the command input is not actually on screen.
+    if (location.pathname !== '/studio' || studioWorkspaceView !== 'create') return;
+
     const timer = window.setInterval(() => {
+      if (document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       setCommandPlaceholderIndex((prev) => (prev + 1) % commandPlaceholderExamples.length);
     }, 3600);
     return () => window.clearInterval(timer);
-  }, [commandPlaceholderExamples.length]);
+  }, [commandPlaceholderExamples.length, location.pathname, studioWorkspaceView]);
   const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // legacy K-Pop mode state
   const [isKoreanEnglishMix, setIsKoreanEnglishMix] = useState(false);
   const [englishMixRatio, setEnglishMixRatio] = useState(10);
   const [languageMixTargetLanguages, setLanguageMixTargetLanguages] = useState<LanguageCode[]>([]);
+  const [mainGenerationLyricLanguages, setMainGenerationLyricLanguages] = useState<LanguageCode[]>(['ko']);
   const [customStructure, setCustomStructure] = useState<CustomSectionItem[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
@@ -6362,6 +8416,90 @@ const toggleCycleVariantSelection = (
   const actionBarModalReleaseTimerRef = useRef<number | null>(null);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen || isCycleKeywordPopupOpen || isVocalCharacterModalOpen || isGlobalSearchOpen || isGlobalSearchOpening || isSituationExpanded || isStoryboardOpening;
   const shouldShowActionButtons = !isActionBarBlockedByModal && !isAnyModalOpen;
+  const isGenerationBarPerfHidden = isStudioBlackActionMode && studioGenerationBarPerfMode === 'off';
+  const shouldRenderActionButtons = shouldShowActionButtons && !isGenerationBarPerfHidden;
+  const studioActionOwner = !shouldRenderActionButtons
+    ? 'hidden'
+    : isActionButtonsCollapsed
+      ? 'collapsed'
+      : isStudioBlackActionMode
+        ? 'floating'
+        : isActionsFloating
+          ? 'floating'
+          : 'inline';
+
+  // 299: Framer Motion can briefly retain an exiting portal copy while the
+  // action row changes between floating and inline ownership.  Publish the
+  // single current owner before paint so any retained copy is made completely
+  // non-interactive by Studio Black CSS.
+  useLayoutEffect(() => {
+    document.documentElement.dataset.soridrawActionOwner = studioActionOwner;
+  }, [studioActionOwner]);
+
+  useEffect(() => {
+    if (studioActionOwner === 'floating') return;
+    const current = studioDescriptionCurrentItemRef.current;
+    if (isActionButtonHintItem(current)) setHoveredItem(null);
+  }, [studioActionOwner, setHoveredItem]);
+
+  useEffect(() => () => {
+    delete document.documentElement.dataset.soridrawActionOwner;
+    document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
+    if (actionCollapseSnapshotRafRef.current !== null) {
+      window.cancelAnimationFrame(actionCollapseSnapshotRafRef.current);
+      actionCollapseSnapshotRafRef.current = null;
+    }
+    actionCollapseScrollSnapshotRef.current = null;
+    actionCollapseRestorePendingRef.current = false;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!shouldRenderActionButtons || isActionButtonsCollapsed) return;
+
+    if (isStudioBlackActionMode) {
+      // 535 — one lightweight mount sync only. Geometry changes after this are
+      // owned by the single anchor ResizeObserver above and by the split rAF fast
+      // path. Do not attach a second ResizeObserver or pane-scroll listener to
+      // the same action row.
+      actionCollapseRestorePendingRef.current = false;
+      actionCollapseScrollSnapshotRef.current = null;
+      document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
+      syncActionBarLayoutMetrics();
+      const frame = window.requestAnimationFrame(syncActionBarLayoutMetrics);
+      return () => window.cancelAnimationFrame(frame);
+    }
+
+    if (actionCollapseRestorePendingRef.current) {
+      const snapshot = actionCollapseScrollSnapshotRef.current;
+      if (snapshot) {
+        const current = snapshot.host ? snapshot.host.scrollTop : window.scrollY;
+        const untouchedCollapsedPosition = snapshot.afterCollapse ?? current;
+        if (Math.abs(current - untouchedCollapsedPosition) <= 2) {
+          if (snapshot.host) snapshot.host.scrollTop = snapshot.before;
+          else window.scrollTo(0, snapshot.before);
+        }
+      }
+      actionCollapseRestorePendingRef.current = false;
+      actionCollapseScrollSnapshotRef.current = null;
+      document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
+    }
+
+    syncActionBarLayoutMetrics();
+    updateActionBarPlacement();
+    const frame = window.requestAnimationFrame(() => {
+      syncActionBarLayoutMetrics();
+      updateActionBarPlacement();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    isActionButtonsCollapsed,
+    isActionsFloating,
+    isStudioBlackActionMode,
+    shouldRenderActionButtons,
+    syncActionBarLayoutMetrics,
+    updateActionBarPlacement,
+  ]);
 
   const handleCycleKeywordModalStateChange = useCallback((sectionKey: string, isOpen: boolean) => {
     setCycleKeywordPopupOpenMap((prev) => {
@@ -6457,12 +8595,138 @@ const toggleCycleVariantSelection = (
     };
   }, [unlockGlobalSearchScrollLock]);
   
-  const isAdminUser = useMemo(() => userRole === 'admin', [userRole]);
+  const isAdminUser = useMemo(() => staffRole !== null || userRole === 'admin', [staffRole, userRole]);
+  const isMasterUser = staffRole === 'master';
+  const canAccessAdminPage = useCallback((permission: AdminPermissionKey) => {
+    if (isMasterUser) return true;
+    return isAdminUser && adminPermissions[permission] === true;
+  }, [adminPermissions, isAdminUser, isMasterUser]);
+  const firstAccessibleAdminPath = useMemo(() => getFirstAccessibleAdminPath(staffRole, adminPermissions), [adminPermissions, staffRole]);
+  useEffect(() => {
+    if (!user) {
+      setEmailVerificationGate('idle');
+      setEmailVerificationMessage(null);
+      return;
+    }
+
+    const usesPasswordLogin = user.providerData.some((provider) => provider.providerId === 'password');
+    if (!usesPasswordLogin || user.emailVerified) {
+      setEmailVerificationGate('idle');
+      setEmailVerificationMessage(null);
+      return;
+    }
+
+    if (!isUserRoleReady) {
+      setEmailVerificationGate('checking');
+      return;
+    }
+
+    if (isAdminUser) {
+      setEmailVerificationGate('idle');
+      setEmailVerificationMessage(null);
+      return;
+    }
+
+    setEmailVerificationGate('required');
+    setEmailVerificationMessage((current) => current || '이메일 인증이 필요합니다. 인증메일을 받은 뒤 완료 여부를 확인해주세요.');
+  }, [emailVerificationRevision, isAdminUser, isUserRoleReady, user]);
+
+  useEffect(() => {
+    if (
+      !user ||
+      emailVerificationGate !== 'required' ||
+      !isEmailVerificationCycleReady ||
+      !emailVerificationCycleKey
+    ) return;
+
+    const runningKey = `running:${emailVerificationCycleKey}`;
+    const doneKey = `done:${emailVerificationCycleKey}`;
+    if (
+      emailVerificationAutoSendRef.current === runningKey ||
+      emailVerificationAutoSendRef.current === doneKey
+    ) return;
+
+    const storageKey = `soridraw-email-verification-auto-attempted:${emailVerificationCycleKey}`;
+    try {
+      if (localStorage.getItem(storageKey)) {
+        emailVerificationAutoSendRef.current = doneKey;
+        setEmailVerificationMessage(
+          '이 인증 단계의 자동 발송은 이미 1회 처리되었습니다. 받은편지함과 스팸함을 확인하고, 메일이 없을 때만 재전송해주세요.'
+        );
+        return;
+      }
+      // 로그인·새로고침을 반복해도 같은 가입/초기화 단계에서는 자동 요청을
+      // 다시 보내지 않는다. 전송 실패 시에는 사용자가 재전송 버튼으로 시도한다.
+      localStorage.setItem(storageKey, String(Date.now()));
+    } catch {
+      // Storage can be unavailable in restricted browser modes.
+    }
+
+    emailVerificationAutoSendRef.current = runningKey;
+    void sendVerificationEmailToCurrentUser({
+      source: 'auto',
+      message: '인증메일을 자동으로 1회 보냈습니다. 메일의 인증 링크를 누른 뒤 인증 완료를 확인해주세요.',
+    }).finally(() => {
+      emailVerificationAutoSendRef.current = doneKey;
+    });
+  }, [
+    emailVerificationCycleKey,
+    emailVerificationGate,
+    isEmailVerificationCycleReady,
+    user,
+  ]);
+
+  useEffect(() => {
+    if (!user || emailVerificationGate === 'idle') return;
+
+    const modalHistoryKey = '__soridrawEmailVerificationGate';
+    const currentState = window.history.state || {};
+    if (!currentState[modalHistoryKey]) {
+      window.history.pushState(
+        { ...currentState, [modalHistoryKey]: true },
+        '',
+        `${window.location.pathname}${window.location.search}${window.location.hash}`
+      );
+    }
+    emailVerificationHistoryPushedRef.current = true;
+
+    const handlePopState = () => {
+      if (suppressEmailVerificationPopRef.current) {
+        suppressEmailVerificationPopRef.current = false;
+        emailVerificationHistoryPushedRef.current = false;
+        return;
+      }
+      if (!emailVerificationHistoryPushedRef.current) return;
+      emailVerificationHistoryPushedRef.current = false;
+      void handleEmailVerificationLogout();
+    };
+
+    const handleVerificationEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      requestCloseEmailVerificationGate();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    document.addEventListener('keydown', handleVerificationEscape, true);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener('keydown', handleVerificationEscape, true);
+    };
+  }, [emailVerificationGate, user]);
+
   const isAdminMenuUser = useMemo(() => {
     if (isAdminUser) return true;
     if (cachedUserRoleHint?.role !== 'admin') return false;
     return !user || cachedUserRoleHint.uid === user.uid;
   }, [cachedUserRoleHint, isAdminUser, user]);
+  // 765: performance/test controls are stricter than navigation hints.
+  // Never show them from cached admin hints; require the current signed-in
+  // identity's live role state to be ready and admin/staff-authorized.
+  // 766: Studio performance/A-B test controls are a master-only app-test tool.
+  // Admin accounts still keep their normal admin pages, but cannot expose the
+  // floating split diagnostics or comparison switches.
+  const isMasterDiagnosticsUser = Boolean(user && isUserRoleReady && isMasterUser);
   const canAccessNavigationMenu = useCallback((key: NavigationMenuKey) => {
     if (isAdminUser) return true;
     if (!menuVisibility[key]) return false;
@@ -6489,10 +8753,10 @@ const toggleCycleVariantSelection = (
     return getFirstEnabledNavigationPath(accessibleVisibility);
   }, [menuAdminOnly, menuVisibility]);
   const effectiveUserTier: TagTier = useMemo(() => {
-    if (userRole === 'admin' || userRole === 'pro') return 'pro';
+    if (isAdminUser || userRole === 'pro') return 'pro';
     if (userRole === 'basic') return 'basic';
     return 'free';
-  }, [userRole]);
+  }, [isAdminUser, userRole]);
 
   // Refs for stable access in callbacks
   const pinnedGenresRef = useRef(pinnedGenres);
@@ -6576,19 +8840,25 @@ const toggleCycleVariantSelection = (
   }, [isForcedLogoutModalOpen, navigate]);
 
   useEffect(() => {
-    const testConnection = async () => {
-      try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if(error instanceof Error && error.message.includes('the client is offline')) {
+    // 843 — Connection probing is diagnostics, not production data flow.
+    // Avoid a forced server read on every real app bootstrap.
+    if (import.meta.env.DEV) {
+      void getDocFromServer(doc(db, 'test', 'connection')).catch((error) => {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
           console.error("Please check your Firebase configuration. " );
         }
-      }
-    };
-    testConnection();
+      });
+    }
 
     let unsubFavs: (() => void) | null = null;
+    let unsubMusicNoteBundle: (() => void) | null = null;
     let unsubUserDoc: (() => void) | null = null;
+    let unsubUserControlRevision: (() => void) | null = null;
+    let userProfileSafetyReverifyTimer: number | null = null;
+    let favoritesRetryTimer: number | null = null;
+    let favoritesRetryAttempt = 0;
+    let userRoleRetryTimer: number | null = null;
+    let userRoleRetryAttempt = 0;
     let favoriteFullCacheRecoveryTimer: any = null;
 
     const getSessionStartTime = (targetUser: User | null) => {
@@ -6597,14 +8867,29 @@ const toggleCycleVariantSelection = (
       return Number.isFinite(ms) ? ms : 0;
     };
 
-    const shouldProcessForceLogout = (forceLogoutAtValue: any, targetUser: User | null) => {
-      const forceLogoutTime = getTimestampMs(forceLogoutAtValue);
+    const shouldProcessForceLogout = (userData: any, targetUser: User | null) => {
+      const forceLogoutTime = getTimestampMs(userData?.forceLogoutAt);
       const sessionStartTime = getSessionStartTime(targetUser);
-      
-      const result = forceLogoutTime > 0 && sessionStartTime > 0 && 
-                     forceLogoutTime > sessionStartTime && 
+
+      // 이메일 인증 초기화는 기존 세션만 종료해야 한다. 초기화 직후 새로 로그인한
+      // 세션까지 같은 forceLogoutAt으로 다시 끊으면 사용자가 인증 안내 화면에
+      // 진입하지 못하므로, 재로그인 시각이 초기화 시각과 같거나 이후면 허용한다.
+      const verificationResetTime = Number(userData?.emailVerificationResetAtMs || 0);
+      const isEmailVerificationReset =
+        userData?.lastAdminAuthAction === 'reset-email-verification' &&
+        verificationResetTime > 0 &&
+        Math.abs(forceLogoutTime - verificationResetTime) <= 5000;
+      const isFreshLoginAfterVerificationReset =
+        isEmailVerificationReset &&
+        sessionStartTime > 0 &&
+        sessionStartTime + 5000 >= verificationResetTime;
+
+      if (isFreshLoginAfterVerificationReset) return false;
+
+      const result = forceLogoutTime > 0 && sessionStartTime > 0 &&
+                     forceLogoutTime > sessionStartTime &&
                      forceLogoutTime > lastForcedLogoutTimeRef.current;
-      
+
       if (!result) return false;
       lastForcedLogoutTimeRef.current = forceLogoutTime;
       return true;
@@ -6612,7 +8897,36 @@ const toggleCycleVariantSelection = (
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      const nextMusicNoteUiUid = currentUser?.uid || null;
+      if (musicNoteActiveUiUid !== nextMusicNoteUiUid) {
+        // Never leave account A's active list visible while account B hydrates.
+        // Durable caches remain separated by UID.
+        setFavorites([]);
+        musicNoteActiveUiUid = nextMusicNoteUiUid;
+      }
+      if (currentUser) {
+        const nextHeaderIdentity = getHeaderIdentityFromUser(currentUser);
+        setCachedHeaderIdentity(nextHeaderIdentity);
+        writeCachedHeaderIdentity(nextHeaderIdentity);
+      } else {
+        setCachedHeaderIdentity(null);
+        clearCachedHeaderIdentity();
+      }
       setIsAuthReady(true);
+      setIsUserRoleReady(!currentUser);
+      // 765: never carry an admin/staff role across an auth identity change.
+      // A direct account switch can deliver the next Firebase user without an
+      // intermediate signed-out callback, so keeping the previous role here can
+      // briefly expose admin-only diagnostics to the wrong account. Start every
+      // identity from the safe non-admin baseline; the current user's Firestore
+      // snapshot will promote it again after that user's role is read.
+      setUserRole('free');
+      setStaffRole(null);
+      setAdminPermissions({ ...EMPTY_ADMIN_PERMISSIONS });
+      setEmailVerificationCycleKey(null);
+      setIsEmailVerificationCycleReady(false);
+      setEmailVerificationResendSeconds(0);
+      emailVerificationAutoSendRef.current = '';
       if (!currentUser) {
         setUserLyricClicheGuard(null);
         setIsUserLyricClicheGuardReady(true);
@@ -6623,15 +8937,38 @@ const toggleCycleVariantSelection = (
       setForcedLogoutCountdown(10);
       lastForcedLogoutTimeRef.current = 0;
       hasCompletedForceLogoutReentryCheckRef.current = false;
+      hasVerifiedCurrentUserRoleFromServerRef.current = false;
       
       if (unsubFavs) {
         unsubFavs();
         unsubFavs = null;
       }
+      if (unsubMusicNoteBundle) {
+        unsubMusicNoteBundle();
+        unsubMusicNoteBundle = null;
+      }
       if (unsubUserDoc) {
         unsubUserDoc();
         unsubUserDoc = null;
       }
+      if (unsubUserControlRevision) {
+        unsubUserControlRevision();
+        unsubUserControlRevision = null;
+      }
+      if (userProfileSafetyReverifyTimer !== null) {
+        window.clearTimeout(userProfileSafetyReverifyTimer);
+        userProfileSafetyReverifyTimer = null;
+      }
+      if (favoritesRetryTimer !== null) {
+        window.clearTimeout(favoritesRetryTimer);
+        favoritesRetryTimer = null;
+      }
+      favoritesRetryAttempt = 0;
+      if (userRoleRetryTimer !== null) {
+        window.clearTimeout(userRoleRetryTimer);
+        userRoleRetryTimer = null;
+      }
+      userRoleRetryAttempt = 0;
       if (favoriteFullCacheRecoveryTimer) {
         window.clearTimeout(favoriteFullCacheRecoveryTimer);
         favoriteFullCacheRecoveryTimer = null;
@@ -6641,156 +8978,355 @@ const toggleCycleVariantSelection = (
         const cachedRole = readCachedUserRole();
         if (!cachedRole || cachedRole.uid !== currentUser.uid) {
           setCachedUserRoleHint(null);
-          setUserRole('free');
         } else {
+          // Cached role may hydrate menu hints, but it never restores the live
+          // admin/staff authority that was just reset above. Server/current-user
+          // document state remains the authority for admin diagnostics.
           setCachedUserRoleHint(cachedRole);
         }
         const userRef = doc(db, 'users', currentUser.uid);
 
-        const runInitialForceLogoutCheck = async () => {
-          try {
-            const userSnap = await getDoc(userRef);
-            if (!userSnap.exists()) {
-              setUserLyricClicheGuard(null);
-              setIsUserLyricClicheGuardReady(true);
-              hasCompletedForceLogoutReentryCheckRef.current = true;
-              return;
-            }
+        let hasSyncedSessionDoc = false;
+        let hasCreatedMissingUserDoc = false;
 
-            const data = userSnap.data();
-            setUserLyricClicheGuard({
-              hardBanTerms: Array.isArray(data.lyricClicheGuard?.hardBanTerms) ? data.lyricClicheGuard.hardBanTerms : [],
-              softBanTerms: Array.isArray(data.lyricClicheGuard?.softBanTerms) ? data.lyricClicheGuard.softBanTerms : [],
-            });
-            setIsUserLyricClicheGuardReady(true);
-            {
-              const verifiedRole = (data.role || 'free') as UserRole;
-              setUserRole(verifiedRole);
-              const roleCache = { uid: currentUser.uid, role: verifiedRole };
-              setCachedUserRoleHint(roleCache);
-              writeCachedUserRole(currentUser.uid, verifiedRole);
-            }
-            if (data.accountStatus) {
-              const status = data.accountStatus as AccountStatus;
-              setUserStatus(status);
-              if (status === 'banned') setIsBanModalOpen(true);
-            }
-
-            if (shouldProcessForceLogout(data.forceLogoutAt, currentUser)) {
-              await performForcedLogout({ silent: true });
-              return;
-            }
-          } catch (error) {
-            console.error('[Auth] Initial force logout check failed:', error);
-          } finally {
-            hasCompletedForceLogoutReentryCheckRef.current = true;
-          }
+        const syncSessionFieldsOnce = async () => {
+          if (hasSyncedSessionDoc) return;
+          // Refresh/app restore is not a login and must not mutate users/{uid}.
+          // Genuine login metadata is written by ensureAuthUserDocument (931),
+          // while live presence is owned by Realtime Database.
+          hasSyncedSessionDoc = true;
         };
 
-        runInitialForceLogoutCheck();
-
-        // Sync user role in real-time
-        unsubUserDoc = onSnapshot(userRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            {
-              const verifiedRole = (data.role || 'free') as UserRole;
-              setUserRole(verifiedRole);
-              const roleCache = { uid: currentUser.uid, role: verifiedRole };
-              setCachedUserRoleHint(roleCache);
-              writeCachedUserRole(currentUser.uid, verifiedRole);
-            }
-            setUserLyricClicheGuard({
-              hardBanTerms: Array.isArray(data.lyricClicheGuard?.hardBanTerms) ? data.lyricClicheGuard.hardBanTerms : [],
-              softBanTerms: Array.isArray(data.lyricClicheGuard?.softBanTerms) ? data.lyricClicheGuard.softBanTerms : [],
-            });
-            setIsUserLyricClicheGuardReady(true);
-            applyFavoriteSyncSignal(currentUser.uid, data.favoriteSyncSignal);
-            
-            // Check for Banned status
-            if (data.accountStatus) {
-              const status = data.accountStatus as AccountStatus;
-              setUserStatus(status);
-              if (status === 'banned') {
-                setIsBanModalOpen(true);
-              }
-            }
-
-            if (!hasCompletedForceLogoutReentryCheckRef.current) {
-              return;
-            }
-
-            if (shouldProcessForceLogout(data.forceLogoutAt, currentUser)) {
-              setIsForcedLogoutModalOpen(true);
-            }
-          } else {
-            // Initial signup fallback
-            setUserRole('free');
-            const roleCache = { uid: currentUser.uid, role: 'free' as UserRole };
-            setCachedUserRoleHint(roleCache);
-            writeCachedUserRole(currentUser.uid, 'free');
-            setUserStatus('active');
-            setUserLyricClicheGuard(null);
-            setIsUserLyricClicheGuardReady(true);
-          }
-        }, (error) => {
-          console.error('Failed to sync user role:', error);
-          setUserLyricClicheGuard(null);
-          setIsUserLyricClicheGuardReady(true);
-        });
-
-        const syncUserDoc = async () => {
+        const createMissingUserDocOnce = async () => {
+          if (hasCreatedMissingUserDoc) return;
+          hasCreatedMissingUserDoc = true;
           try {
-            const userRef = doc(db, 'users', currentUser.uid);
-            const userSnap = await getDoc(userRef);
-
-            const safeSessionData = {
+            // 922: missing-profile recovery must never full-scan favorites.
+            // Use the account-scoped local cache as a safe approximate seed; normal
+            // favorite mutations keep the count current after the profile exists.
+            const cachedFavoritesForProfile = getFavoritesCacheInMemoryOrLocalStorage(currentUser.uid);
+            const recoveredFavoriteCount = Array.isArray(cachedFavoritesForProfile)
+              ? cachedFavoritesForProfile.filter((favorite) => !isFavoriteSoftRemoved(favorite)).length
+              : 0;
+            const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
+            const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
+            await setDoc(userRef, {
               uid: currentUser.uid,
               email: currentUser.email ?? '',
               displayName: currentUser.displayName ?? '',
               lastLoginAt: Date.now(),
               lastSeenAt: Date.now(),
               isOnline: true,
-            };
-
-            if (!userSnap.exists()) {
-              const favsSnap = await getDocs(
-                query(collection(db, 'favorites'), where('uid', '==', currentUser.uid))
-              );
-              const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
-              const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
-
-              await setDoc(userRef, {
-                ...safeSessionData,
-                favoriteCount: favsSnap.size,
-                songGeneratedCount: songCount,
-                createdAt: Date.now(),
-                role: 'free',
-                accountStatus: 'active',
-                paymentStatus: 'none',
-              });
-            } else {
-              const currentData = userSnap.data();
-
-              if (currentData.accountStatus === 'banned') {
-                setIsBanModalOpen(true);
-              }
-
-              // Existing users: never touch role/plan/account status from the client.
-              await updateDoc(userRef, safeSessionData);
-            }
+              favoriteCount: recoveredFavoriteCount,
+              songGeneratedCount: songCount,
+              createdAt: Date.now(),
+              role: 'free',
+              accountStatus: 'active',
+              paymentStatus: 'none',
+            });
           } catch (error) {
-            console.error('Failed to sync user document:', error);
+            console.error('Failed to create user document:', error);
           }
         };
 
-        syncUserDoc();
+        let activeUserControlRevision = readSeenUserControlRevision(currentUser.uid);
+
+        // One listener is now the single source for role/status/force-logout. Its
+        // first server snapshot replaces the two extra getDoc(userRef) calls that
+        // previously ran on every login/reload. Cached snapshots may hydrate the UI
+        // immediately, but force-logout and session writes wait for the server copy.
+        const attachUserRoleListener = () => {
+          if (auth.currentUser?.uid !== currentUser.uid) return;
+          if (unsubUserDoc) {
+            try { unsubUserDoc(); } catch {}
+            unsubUserDoc = null;
+          }
+
+          unsubUserDoc = onSnapshot(userRef, { includeMetadataChanges: true }, (docSnap) => {
+          const isServerSnapshot = !docSnap.metadata.fromCache;
+          if (isServerSnapshot) {
+            hasVerifiedCurrentUserRoleFromServerRef.current = true;
+            userRoleRetryAttempt = 0;
+            if (userRoleRetryTimer !== null) {
+              window.clearTimeout(userRoleRetryTimer);
+              userRoleRetryTimer = null;
+            }
+          }
+
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            writeUserProfileCache(currentUser.uid, data);
+            if (isServerSnapshot) {
+              writeUserProfileServerVerifiedAt(currentUser.uid);
+              if (activeUserControlRevision) {
+                writeSeenUserControlRevision(currentUser.uid, activeUserControlRevision);
+              }
+            }
+            observeExploreLikeAccountSyncSignal(currentUser, data?.exploreLikeSyncSignal);
+            const recentSongsVersion = Number(data?.syncVersions?.recentSongs || 0);
+            if (recentSongsVersion > 0 && typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent(RECENT_SONGS_SYNC_VERSION_EVENT, {
+                detail: { uid: currentUser.uid, version: recentSongsVersion },
+              }));
+            }
+            const sectionCustomVersion = Number(data?.syncVersions?.sectionCustom || 0);
+            if (sectionCustomVersion > 0) {
+              publishSectionCustomRemoteVersion(currentUser.uid, sectionCustomVersion);
+            }
+            setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser, data));
+            setIsEmailVerificationCycleReady(true);
+            {
+              const verifiedRole = (data.role || 'free') as UserRole;
+              setUserRole(verifiedRole);
+              setStaffRole(normalizeStaffRole(data));
+              setAdminPermissions(normalizeAdminPermissions(data));
+              setIsUserRoleReady(true);
+              const roleCache = { uid: currentUser.uid, role: verifiedRole };
+              setCachedUserRoleHint(roleCache);
+              writeCachedUserRole(currentUser.uid, verifiedRole);
+            }
+            setUserLyricClicheGuard({
+              hardBanTerms: Array.isArray(data.lyricClicheGuard?.hardBanTerms) ? data.lyricClicheGuard.hardBanTerms : [],
+              softBanTerms: Array.isArray(data.lyricClicheGuard?.softBanTerms) ? data.lyricClicheGuard.softBanTerms : [],
+            });
+            writeGeminiAutoModelFallback(data.generationPreferences?.autoModelFallback !== false, currentUser.uid);
+            setIsUserLyricClicheGuardReady(true);
+            applyFavoriteSyncSignal(currentUser.uid, data.favoriteSyncSignal);
+            const musicNoteRemoteVersion = Number(data?.syncVersions?.musicNote || data?.favoriteSyncSignalUpdatedAt || 0);
+            if (musicNoteRemoteVersion > 0) {
+              const musicNoteOriginDeviceId = String(data?.favoriteSyncSignal?.originDeviceId || '');
+              writeMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid, musicNoteRemoteVersion);
+              // 1010 — the latest Music Note mutation came from this browser, so its
+              // local cache already contains that mutation. Advance the local version
+              // immediately even while Studio is open; otherwise the next heart click
+              // performs a redundant favorites duplicate-check query.
+              if (musicNoteOriginDeviceId && musicNoteOriginDeviceId === getMusicNoteDeviceId()) {
+                writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, currentUser.uid, musicNoteRemoteVersion);
+              }
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent(MUSIC_NOTE_SYNC_VERSION_EVENT, {
+                  detail: {
+                    uid: currentUser.uid,
+                    version: musicNoteRemoteVersion,
+                    originDeviceId: musicNoteOriginDeviceId,
+                  },
+                }));
+              }
+            }
+
+            if (data.accountStatus) {
+              const status = data.accountStatus as AccountStatus;
+              setUserStatus(status);
+              if (status === 'banned') setIsBanModalOpen(true);
+            }
+
+            if (isServerSnapshot && !hasCompletedForceLogoutReentryCheckRef.current) {
+              if (shouldProcessForceLogout(data, currentUser)) {
+                hasCompletedForceLogoutReentryCheckRef.current = true;
+                void performForcedLogout({ silent: true });
+                return;
+              }
+              hasCompletedForceLogoutReentryCheckRef.current = true;
+              void syncSessionFieldsOnce();
+              return;
+            }
+
+            if (isServerSnapshot && hasCompletedForceLogoutReentryCheckRef.current && shouldProcessForceLogout(data, currentUser)) {
+              setIsForcedLogoutModalOpen(true);
+            }
+          } else {
+            setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
+            setIsEmailVerificationCycleReady(true);
+            setUserRole('free');
+            setStaffRole(null);
+            setAdminPermissions({ ...EMPTY_ADMIN_PERMISSIONS });
+            setIsUserRoleReady(true);
+            const roleCache = { uid: currentUser.uid, role: 'free' as UserRole };
+            setCachedUserRoleHint(roleCache);
+            writeCachedUserRole(currentUser.uid, 'free');
+            setUserStatus('active');
+            setUserLyricClicheGuard(null);
+            writeGeminiAutoModelFallback(true, currentUser.uid);
+            setIsUserLyricClicheGuardReady(true);
+
+            if (isServerSnapshot) {
+              hasCompletedForceLogoutReentryCheckRef.current = true;
+              void createMissingUserDocOnce();
+            }
+          }
+        }, (error: any) => {
+          console.error('Failed to sync user role:', error);
+          const firestoreCode = String(error?.code || '').toLowerCase();
+          const transientReadFailure = [
+            'resource-exhausted',
+            'unavailable',
+            'deadline-exceeded',
+            'aborted',
+            'internal',
+          ].some((code) => firestoreCode.includes(code));
+
+          if (transientReadFailure) {
+            // Firestore stops delivering events to a listener after its error callback.
+            // Retry slowly so recovery does not require a reload, without hammering
+            // a project that is genuinely quota-limited.
+            const retryDelaysMs = [30_000, 60_000, 120_000, 300_000];
+            const retryDelay = retryDelaysMs[Math.min(userRoleRetryAttempt, retryDelaysMs.length - 1)];
+            userRoleRetryAttempt += 1;
+            if (userRoleRetryTimer !== null) window.clearTimeout(userRoleRetryTimer);
+            userRoleRetryTimer = window.setTimeout(() => {
+              userRoleRetryTimer = null;
+              attachUserRoleListener();
+            }, retryDelay);
+
+            // Preserve authority only when this same signed-in identity was already
+            // server-verified in the current auth session. First-read failures remain
+            // fail-closed and are merely retried in the background.
+            if (hasVerifiedCurrentUserRoleFromServerRef.current) {
+              console.warn(`[Firestore role] transient read failure; keeping last verified role and retrying in ${Math.round(retryDelay / 1000)}s.`);
+              return;
+            }
+          }
+
+          // 765 safety remains for first-read failures and real permission/auth errors.
+          setUserRole('free');
+          setStaffRole(null);
+          setAdminPermissions({ ...EMPTY_ADMIN_PERMISSIONS });
+          setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
+          setIsEmailVerificationCycleReady(true);
+          setIsUserRoleReady(true);
+          setUserLyricClicheGuard(null);
+          setIsUserLyricClicheGuardReady(true);
+          });
+        };
+
+        // SORIDRAW_ROOT_USER_REFRESH_ZERO_109_20260916
+        // A normal hard refresh trusts the last server-verified local profile and
+        // only watches the tiny UID-scoped RTDB control revision. Firestore users/{uid}
+        // is reopened only on cache miss, an actual admin/security revision, or the
+        // bounded 24-hour safety verification. Repeated refresh itself is Firestore R0/W0.
+        const cachedUserProfileForRefresh = readUserProfileCache(currentUser.uid) as any;
+        if (cachedUserProfileForRefresh) {
+          const cachedVerifiedRole = (cachedUserProfileForRefresh.role || 'free') as UserRole;
+          setUserRole(cachedVerifiedRole);
+          setStaffRole(normalizeStaffRole(cachedUserProfileForRefresh));
+          setAdminPermissions(normalizeAdminPermissions(cachedUserProfileForRefresh));
+          setIsUserRoleReady(true);
+          setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser, cachedUserProfileForRefresh));
+          setIsEmailVerificationCycleReady(true);
+          setUserLyricClicheGuard({
+            hardBanTerms: Array.isArray(cachedUserProfileForRefresh.lyricClicheGuard?.hardBanTerms)
+              ? cachedUserProfileForRefresh.lyricClicheGuard.hardBanTerms
+              : [],
+            softBanTerms: Array.isArray(cachedUserProfileForRefresh.lyricClicheGuard?.softBanTerms)
+              ? cachedUserProfileForRefresh.lyricClicheGuard.softBanTerms
+              : [],
+          });
+          writeGeminiAutoModelFallback(cachedUserProfileForRefresh.generationPreferences?.autoModelFallback !== false, currentUser.uid);
+          setIsUserLyricClicheGuardReady(true);
+          applyFavoriteSyncSignal(currentUser.uid, cachedUserProfileForRefresh.favoriteSyncSignal);
+          if (cachedUserProfileForRefresh.accountStatus) {
+            const cachedStatus = cachedUserProfileForRefresh.accountStatus as AccountStatus;
+            setUserStatus(cachedStatus);
+            if (cachedStatus === 'banned') setIsBanModalOpen(true);
+          }
+          if (shouldProcessForceLogout(cachedUserProfileForRefresh, currentUser)) {
+            hasCompletedForceLogoutReentryCheckRef.current = true;
+            void performForcedLogout({ silent: true });
+          } else if (!hasCompletedForceLogoutReentryCheckRef.current) {
+            hasCompletedForceLogoutReentryCheckRef.current = true;
+          }
+        }
+
+        const attachUserRoleListenerFromGate = () => {
+          if (userProfileSafetyReverifyTimer !== null) {
+            window.clearTimeout(userProfileSafetyReverifyTimer);
+            userProfileSafetyReverifyTimer = null;
+          }
+          attachUserRoleListener();
+        };
+
+        const scheduleProfileSafetyVerification = () => {
+          if (!cachedUserProfileForRefresh || userProfileSafetyReverifyTimer !== null || unsubUserDoc) return;
+          const verifiedAt = readUserProfileServerVerifiedAt(currentUser.uid);
+          const PROFILE_SAFETY_REVERIFY_MS = 24 * 60 * 60 * 1000;
+          const age = verifiedAt > 0 ? Math.max(0, Date.now() - verifiedAt) : Number.POSITIVE_INFINITY;
+          if (age >= PROFILE_SAFETY_REVERIFY_MS) {
+            attachUserRoleListenerFromGate();
+            return;
+          }
+          userProfileSafetyReverifyTimer = window.setTimeout(() => {
+            userProfileSafetyReverifyTimer = null;
+            attachUserRoleListener();
+          }, Math.max(1_000, PROFILE_SAFETY_REVERIFY_MS - age));
+        };
+
+        if (!cachedUserProfileForRefresh) {
+          attachUserRoleListenerFromGate();
+        } else {
+          scheduleProfileSafetyVerification();
+        }
+
+        unsubUserControlRevision = subscribeUserControlRevision(
+          currentUser.uid,
+          (revision) => {
+            if (auth.currentUser?.uid !== currentUser.uid) return;
+            const nextRevision = String(revision?.revision || '').trim();
+            const revisionUpdatedAt = Math.max(0, Number(revision?.updatedAt || 0) || 0);
+            activeUserControlRevision = nextRevision;
+
+            const currentCache = readUserProfileCache(currentUser.uid);
+            if (!currentCache) {
+              attachUserRoleListenerFromGate();
+              return;
+            }
+            if (!nextRevision) return;
+
+            const seenRevision = readSeenUserControlRevision(currentUser.uid);
+            if (seenRevision === nextRevision) return;
+
+            const cachedAt = readUserProfileCacheStoredAt(currentUser.uid);
+            if (revisionUpdatedAt > 0 && cachedAt >= revisionUpdatedAt) {
+              writeSeenUserControlRevision(currentUser.uid, nextRevision);
+              return;
+            }
+
+            attachUserRoleListenerFromGate();
+          },
+          (error) => {
+            console.warn('User control revision unavailable; cached profile remains active until bounded safety verification.', error);
+            if (!readUserProfileCache(currentUser.uid)) attachUserRoleListenerFromGate();
+          },
+        );
 
         // Fetch favorites for the user.
-        // Server reads are paged, but the local cache is kept as a free UI fallback so My/Shared tabs do not appear empty while older pages are not loaded yet.
+        // A cache is trusted only when both its UID-scoped schema and payload are
+        // current. Old/partial caches are discarded for this UID only.
+        const musicNoteCacheNeedsFullBootstrap = prepareMusicNoteCacheForUser(currentUser.uid);
         const cachedFavs = getFavoritesCacheInMemoryOrLocalStorage(currentUser.uid);
+        const cachedFavoriteCount = Array.isArray(cachedFavs)
+          ? cachedFavs.filter((favorite) => !isFavoriteSoftRemoved(favorite)).length
+          : 0;
+        const cachedMusicNoteProfile = readUserProfileCache(currentUser.uid) as any;
+        const knownFavoriteCount = Math.max(
+          0,
+          Math.floor(Number(cachedMusicNoteProfile?.favoriteCount || 0) || 0),
+        );
+        const hasAnyMusicNotePayload = hasMusicNotePayloadCache(currentUser.uid);
+        // 1030 Stage 1: cache is an instant-paint layer, not proof of completeness.
+        // A tiny payload must get one bounded first-page repair instead of being
+        // trusted forever and hiding the user's saved songs. Once a full 20-item
+        // page is cached, keep it: knownFavoriteCount only keeps More available for
+        // older history and must not force the same latest 20 reads on every reload.
+        const musicNoteCacheNeedsBoundedVerification = hasAnyMusicNotePayload
+          && cachedFavoriteCount < FAVORITES_PAGE_SIZE;
+        if (!musicNoteCacheNeedsFullBootstrap && hasAnyMusicNotePayload) {
+          musicNoteFreshBootstrapUids.delete(currentUser.uid);
+        } else {
+          musicNoteFreshBootstrapUids.add(currentUser.uid);
+        }
 
-        if (Array.isArray(cachedFavs) && cachedFavs.length > 0) {
+        if (!musicNoteCacheNeedsFullBootstrap && hasMusicNotePayloadCache(currentUser.uid)) {
+          markCacheDiagnostic('musicNote', 'CACHE', 0);
           // Do not slice the cache. It costs nothing and prevents existing My Note / Shared Note items from visually disappearing.
           setFavorites(sortFavoriteList(cachedFavs.filter((favorite) => !isFavoriteSoftRemoved(favorite))));
         } else {
@@ -6805,131 +9341,121 @@ const toggleCycleVariantSelection = (
         setHasMoreFavorites(false);
         setIsLoadingMoreFavorites(false);
 
-        const attachLegacyFavoritesFallback = () => {
+        // 1036: legacy 20-row Music Note recovery was removed. Cold/stale
+        // devices use the private full catalog; navigation itself never scans or pages favorites.
+
+        const hasCachedMusicNote = !musicNoteCacheNeedsFullBootstrap
+          && hasAnyMusicNotePayload;
+        if (hasCachedMusicNote) {
           favoritePaginationCursorRef.current = null;
           favoritePaginationExhaustedRef.current = true;
-          favoritePaginationLoadingRef.current = false;
-          favoritePaginationFallbackModeRef.current = true;
-          setHasMoreFavorites(false);
-          setIsLoadingMoreFavorites(false);
-
-          const legacyQuery = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
-          unsubFavs = onSnapshot(legacyQuery, (legacySnapshot) => {
-            const legacyFavs = sortFavoriteList(legacySnapshot.docs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
-            setFavorites(legacyFavs);
-            writeFavoritesCache(currentUser.uid, legacyFavs);
-            setIsFavoritesLoading(false);
-          }, (legacyError) => {
-            handleFirestoreError(legacyError, OperationType.GET, 'favorites');
-            setIsFavoritesLoading(false);
-          });
-        };
-
-        const runFavoritesFullCacheRecoveryOnce = async () => {
-          const performRecovery = async () => {
-            const recoveryKey = `soridraw_favorites_full_cache_recovery_v3_${currentUser.uid}`;
-            const maxCountKey = `soridraw_favorites_cache_max_count_${currentUser.uid}`;
-            let shouldSkipRecovery = false;
-            try {
-              const previousMaxCount = Number(localStorage.getItem(maxCountKey) || '0') || 0;
-              shouldSkipRecovery = localStorage.getItem(recoveryKey) === 'done'
-                && (!previousMaxCount || cachedFavs.length >= previousMaxCount);
-            } catch {
-              // If localStorage is unavailable, still try one safe recovery fetch for this page load.
-            }
-            if (shouldSkipRecovery) return;
-
-            try {
-              const fullSnapshot = await getDocs(query(collection(db, 'favorites'), where('uid', '==', currentUser.uid)));
-              const fullFavorites = sortFavoriteList(fullSnapshot.docs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
-              if (fullFavorites.length === 0) {
-                try {
-                  localStorage.setItem(recoveryKey, 'done');
-                } catch {
-                  // ignore marker write failure
-                }
-                return;
-              }
-
-              const applyUpdates = () => {
-                setFavorites((prev) => {
-                  const merged = mergeFavoritePages(prev || [], fullFavorites);
-                  writeFavoritesCache(currentUser.uid, merged);
-                  return merged;
-                });
-
-                try {
-                  localStorage.setItem(recoveryKey, 'done');
-                  const previousMaxCount = Number(localStorage.getItem(maxCountKey) || '0') || 0;
-                  localStorage.setItem(maxCountKey, String(Math.max(previousMaxCount, fullFavorites.length)));
-                } catch {
-                  // ignore marker write failure
-                }
-              };
-
-              if (typeof requestIdleCallback !== 'undefined') {
-                requestIdleCallback(() => applyUpdates());
-              } else {
-                setTimeout(applyUpdates, 100);
-              }
-            } catch (recoveryError) {
-              console.warn('Favorites full cache recovery failed. Keeping paged/cache data only.', recoveryError);
-            }
-          };
-
-          if (typeof requestIdleCallback !== 'undefined') {
-            requestIdleCallback(() => {
-              void performRecovery();
-            });
-          } else {
-            setTimeout(() => {
-              void performRecovery();
-            }, 3000);
-          }
-        };
-
-        const q = query(
-          collection(db, 'favorites'),
-          where('uid', '==', currentUser.uid),
-          orderBy('createdAt', 'desc'),
-          limit(FAVORITES_PAGE_SIZE + 1)
-        );
-
-        unsubFavs = onSnapshot(q, (snapshot) => {
-          const firstPageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-          const firstPageFavs = firstPageDocs.map(mapFavoriteFirestoreDoc);
-          favoritePaginationCursorRef.current = firstPageDocs[firstPageDocs.length - 1] || null;
-          favoritePaginationExhaustedRef.current = snapshot.docs.length <= FAVORITES_PAGE_SIZE;
           favoritePaginationFallbackModeRef.current = false;
-          setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
-          setFavorites((prev) => {
-            const merged = mergeFavoriteFirstPageWithCache(firstPageFavs, prev || [], favoritePaginationExhaustedRef.current);
-            writeFavoritesCache(currentUser.uid, merged);
-            return merged;
-          });
+          clearMusicNotePaginationCursor(currentUser.uid);
+          setHasMoreFavorites(false);
           setIsFavoritesLoading(false);
-        }, (error) => {
-          console.warn('Favorites paged query failed. Falling back to the legacy full-list listener until the Firestore index is available.', error);
-          // This query can fail before the composite index is deployed. Do not throw here;
-          // falling back keeps Music Note usable while Firebase builds the index.
-          if (favoritePaginationFallbackModeRef.current) {
-            setIsFavoritesLoading(false);
-            return;
-          }
-          if (unsubFavs) {
-            try {
-              unsubFavs();
-            } catch (unsubscribeError) {
-              console.warn('Failed to detach favorites paged listener before fallback:', unsubscribeError);
-            }
-            unsubFavs = null;
-          }
-          attachLegacyFavoritesFallback();
-        });
+        }
 
-        favoriteFullCacheRecoveryTimer = window.setTimeout(() => {
-          void runFavoritesFullCacheRecoveryOnce();
-        }, 8000);
+        // 1036: paged favorites onSnapshot removed; full catalog is the bootstrap source.
+
+        let musicNoteBundleMissingHandled = false;
+        // 909: Home/login startup must stay local-only. Do not mark the bundle
+        // active until the real /history bundle read succeeds in 902 onData.
+        const musicNoteLocalVersionAtBootstrap = readMusicNoteSyncVersion(
+          MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,
+          currentUser.uid,
+        );
+        const musicNoteRemoteVersionAtBootstrap = readMusicNoteSyncVersion(
+          MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE,
+          currentUser.uid,
+        );
+        // 1036: always prepare the catalog reader. subscribeListBundle itself stays
+        // route-gated and readCatalogSnapshotCacheFirst returns IndexedDB without network
+        // when its revision is current, so page re-entry remains cache-first.
+        const shouldVerifyMusicNoteBundle = true;
+
+        if (shouldVerifyMusicNoteBundle) {
+          unsubMusicNoteBundle = subscribeListBundle('musicNote', currentUser.uid, {
+            onData: (bundle, meta) => {
+              const isFullMusicNoteCatalog = bundle.schemaVersion === 1001;
+              musicNoteBundleActiveUids.delete(currentUser.uid);
+              musicNoteFreshBootstrapUids.delete(currentUser.uid);
+              if (isFullMusicNoteCatalog) musicNoteFullCatalogReadyUids.add(currentUser.uid);
+              else musicNoteFullCatalogReadyUids.delete(currentUser.uid);
+
+              if (bundle.deletedIds.length > 0) {
+                rememberFavoriteDeletedTombstones(currentUser.uid, bundle.deletedIds);
+              }
+              const localDeletedIds = getFavoriteDeletedTombstoneIds(currentUser.uid);
+              const catalogFavorites = (bundle.items || []).filter((favorite: any) => {
+                if (isFavoriteSoftRemoved(favorite)) return false;
+                const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+                return !favoriteId || !localDeletedIds.has(favoriteId);
+              });
+
+              // Full catalog follows the same contract as Library: no server cursor,
+              // no 20-row More, and all subsequent More clicks are local rendering only.
+              favoritePaginationCursorRef.current = null;
+              favoritePaginationExhaustedRef.current = true;
+              favoritePaginationFallbackModeRef.current = false;
+              clearMusicNotePaginationCursor(currentUser.uid);
+              setHasMoreFavorites(false);
+
+              setFavorites((prev) => {
+                const previous = Array.isArray(prev) ? prev : [];
+                const bundleVersion = Number(bundle.updatedAtMs || 0);
+                const localNewer = previous.filter((favorite: any) => {
+                  if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+                  const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+                  if (favoriteId && localDeletedIds.has(favoriteId)) return false;
+                  const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
+                    || getTimestampMs(favorite?.updatedAt)
+                    || getTimestampMs(favorite?.createdAt)
+                    || 0;
+                  return bundleVersion > 0 && favoriteVersion > bundleVersion;
+                });
+                const authoritative = isFullMusicNoteCatalog
+                  ? mergeFavoritePages(catalogFavorites, localNewer)
+                  : mergeFavoriteFirstPageWithCache(catalogFavorites, previous, false);
+                writeFavoritesCache(currentUser.uid, authoritative);
+                return authoritative;
+              });
+
+              if (bundle.updatedAtMs > 0) {
+                const currentLocalVersion = readMusicNoteSyncVersion(
+                  MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,
+                  currentUser.uid,
+                );
+                writeMusicNoteSyncVersion(
+                  MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,
+                  currentUser.uid,
+                  Math.max(currentLocalVersion, Number(bundle.updatedAtMs || 0)),
+                );
+              }
+              markCacheDiagnostic('musicNote', meta.fromCache ? 'CACHE' : 'SYNC', meta.fromCache ? 0 : 1);
+              setIsFavoritesLoading(false);
+            },
+            onMissing: (meta) => {
+              if (meta.fromCache) return;
+              musicNoteBundleMissingHandled = true;
+              musicNoteFullCatalogReadyUids.delete(currentUser.uid);
+              setHasMoreFavorites(false);
+              setIsFavoritesLoading(false);
+              markCacheDiagnostic('musicNote', hasCachedMusicNote ? 'CACHE' : 'ERROR', 0);
+              console.warn('Music Note catalog unavailable; refusing legacy 20-row server pagination.');
+            },
+            onError: (error) => {
+              musicNoteFullCatalogReadyUids.delete(currentUser.uid);
+              setHasMoreFavorites(false);
+              setIsFavoritesLoading(false);
+              markCacheDiagnostic('musicNote', hasCachedMusicNote ? 'CACHE' : 'ERROR', 0);
+              console.warn('Music Note catalog read failed; keeping local cache and refusing legacy pagination.', error);
+            },
+          });
+        }
+
+
+        // 901: delayed full-list recovery disabled; manual Sync owns full reconciliation.
+        favoriteFullCacheRecoveryTimer = null;
       } else {
         setFavorites([]);
         setHasMoreFavorites(false);
@@ -6948,51 +9474,115 @@ const toggleCycleVariantSelection = (
     return () => {
       unsubscribe();
       if (unsubFavs) unsubFavs();
+      if (unsubMusicNoteBundle) unsubMusicNoteBundle();
       if (unsubUserDoc) unsubUserDoc();
+      if (unsubUserControlRevision) unsubUserControlRevision();
+      if (userProfileSafetyReverifyTimer !== null) window.clearTimeout(userProfileSafetyReverifyTimer);
+      if (favoritesRetryTimer !== null) window.clearTimeout(favoritesRetryTimer);
+      if (userRoleRetryTimer !== null) window.clearTimeout(userRoleRetryTimer);
       if (favoriteFullCacheRecoveryTimer) window.clearTimeout(favoriteFullCacheRecoveryTimer);
     };
   }, []);
 
   const loadMoreFavorites = useCallback(async () => {
-    const currentUser = user || auth.currentUser;
-    if (!currentUser?.uid) return;
-    if (favoritePaginationFallbackModeRef.current) return;
-    if (favoritePaginationLoadingRef.current || favoritePaginationExhaustedRef.current) return;
-    const cursor = favoritePaginationCursorRef.current;
-    if (!cursor) return;
+    // 1036: 20 is a render batch only. A Music Note More click must never read Firestore.
+    setHasMoreFavorites(false);
+    markCacheDiagnostic('musicNote', 'CACHE', 0);
+  }, []);
 
-    favoritePaginationLoadingRef.current = true;
-    setIsLoadingMoreFavorites(true);
+  const syncMusicNoteIncrementalFromRemoteVersion = useCallback(async (
+    remoteVersion: number,
+    originDeviceId = '',
+  ) => {
+    const currentUser = user || auth.currentUser;
+    if (!currentUser?.uid || !Number.isFinite(remoteVersion) || remoteVersion <= 0) return;
+
+    const uid = currentUser.uid;
+    // 1010 — own-device invalidation does not need a server delta query and is
+    // safe to acknowledge on every route because the successful local mutation
+    // already updated the cache before publishing the sync signal.
+    if (originDeviceId && originDeviceId === getMusicNoteDeviceId()) {
+      writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+      markCacheDiagnostic('musicNote', 'CACHE', 0);
+      return;
+    }
+    if (typeof window !== 'undefined' && window.location.pathname !== '/history') {
+      return;
+    }
+    if (musicNoteBundleActiveUids.has(uid)) {
+      markCacheDiagnostic('musicNote', 'CACHE', 0);
+      return;
+    }
+    const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
+    if (localVersion >= remoteVersion) return;
+
+    if (musicNoteFreshBootstrapUids.has(uid)) {
+      writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+      return;
+    }
+
     try {
       const q = query(
         collection(db, 'favorites'),
-        where('uid', '==', currentUser.uid),
-        orderBy('createdAt', 'desc'),
-        startAfter(cursor),
-        limit(FAVORITES_PAGE_SIZE + 1)
+        where('uid', '==', uid),
+        where('updatedAtMs', '>', localVersion),
+        orderBy('updatedAtMs', 'asc'),
+        limit(FAVORITES_PAGE_SIZE)
       );
       const snapshot = await getDocs(q);
-      const nextDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-      const nextFavs = nextDocs.map(mapFavoriteFirestoreDoc);
-      if (nextDocs.length > 0) {
-        favoritePaginationCursorRef.current = nextDocs[nextDocs.length - 1];
+      const changedFavorites = snapshot.docs.map(mapFavoriteFirestoreDoc);
+      markCacheDiagnostic('musicNote', 'SYNC', snapshot.docs.length);
+
+      if (changedFavorites.length > 0) {
+        setFavorites((prev) => {
+          let next = Array.isArray(prev) ? [...prev] : [];
+          changedFavorites.forEach((favorite) => {
+            next = next.filter((item) => item?.id !== favorite?.id);
+            if (!isFavoriteSoftRemoved(favorite)) {
+              next = mergeFavoritePages([favorite], next);
+            }
+          });
+          const sorted = sortFavoriteList(next);
+          writeFavoritesCache(uid, sorted);
+          return sorted;
+        });
       }
-      favoritePaginationExhaustedRef.current = snapshot.docs.length <= FAVORITES_PAGE_SIZE;
-      setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
-      setFavorites((prev) => {
-        const merged = mergeFavoritePages(prev || [], nextFavs);
-        writeFavoritesCache(currentUser.uid, merged);
-        return merged;
-      });
+
+      const maxSeenVersion = changedFavorites.reduce(
+        (maxValue, favorite) => Math.max(maxValue, Number(favorite?.updatedAtMs || 0)),
+        localVersion,
+      );
+
+      if (snapshot.docs.length < FAVORITES_PAGE_SIZE || maxSeenVersion >= remoteVersion) {
+        writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, remoteVersion);
+      } else if (maxSeenVersion > localVersion) {
+        writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, maxSeenVersion);
+      }
     } catch (error) {
-      console.warn('Favorites additional page load failed. Keeping the current list instead of crashing the page.', error);
-      favoritePaginationExhaustedRef.current = true;
-      setHasMoreFavorites(false);
-    } finally {
-      favoritePaginationLoadingRef.current = false;
-      setIsLoadingMoreFavorites(false);
+      console.warn('Music Note incremental sync failed. Keeping cache + latest sync signal.', error);
     }
   }, [user]);
+
+  useEffect(() => {
+    const currentUser = user || auth.currentUser;
+    if (!currentUser?.uid || typeof window === 'undefined') return;
+
+    const handleMusicNoteSyncVersion = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string; version?: number; originDeviceId?: string }>).detail;
+      if (!detail || detail.uid !== currentUser.uid) return;
+      void syncMusicNoteIncrementalFromRemoteVersion(
+        Number(detail.version || 0),
+        String(detail.originDeviceId || ''),
+      );
+    };
+
+    window.addEventListener(MUSIC_NOTE_SYNC_VERSION_EVENT, handleMusicNoteSyncVersion as EventListener);
+    const pendingRemoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, currentUser.uid);
+    if (pendingRemoteVersion > 0) {
+      void syncMusicNoteIncrementalFromRemoteVersion(pendingRemoteVersion);
+    }
+    return () => window.removeEventListener(MUSIC_NOTE_SYNC_VERSION_EVENT, handleMusicNoteSyncVersion as EventListener);
+  }, [user, syncMusicNoteIncrementalFromRemoteVersion]);
 
   const searchFavoritesOnServer = useCallback(async (rawSearchText: string): Promise<any[]> => {
     const currentUser = user || auth.currentUser;
@@ -7031,55 +9621,76 @@ const toggleCycleVariantSelection = (
     }
   }, [user]);
 
-  const FAVORITES_MANUAL_SYNC_STORAGE_BASE = 'soridraw_favorites_manual_sync_date';
-
   const refreshFavoritesFromServerFirstPage = useCallback(async (): Promise<{ ok: boolean; limited?: boolean; message?: string }> => {
     const currentUser = user || auth.currentUser;
-    if (!currentUser?.uid) {
-      return { ok: false, message: '로그인이 필요합니다.' };
+    if (!currentUser?.uid) return { ok: false, message: '로그인이 필요합니다.' };
+
+    const uid = currentUser.uid;
+    const localVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid);
+    const remoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, uid);
+    if (remoteVersion > 0 && localVersion >= remoteVersion) {
+      markCacheDiagnostic('musicNote', 'CACHE', 0);
+      return { ok: true, message: '변경된 뮤직노트가 없습니다.' };
     }
 
-    const todayKey = new Date().toISOString().slice(0, 10);
-    const storageKey = `${FAVORITES_MANUAL_SYNC_STORAGE_BASE}_${currentUser.uid}`;
+    let timeoutId: number | null = null;
     try {
-      if (localStorage.getItem(storageKey) === todayKey) {
-        return { ok: false, limited: true, message: '오늘 동기화는 이미 사용했습니다.' };
-      }
-    } catch {
-      // localStorage is only a client-side daily limiter. If it fails, continue with the sync attempt.
-    }
-
-    try {
-      const q = query(
-        collection(db, 'favorites'),
-        where('uid', '==', currentUser.uid),
-        orderBy('createdAt', 'desc'),
-        limit(FAVORITES_PAGE_SIZE + 1)
-      );
-      const snapshot = await getDocs(q);
-      const firstPageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-      const firstPageFavs = firstPageDocs.map(mapFavoriteFirestoreDoc);
-
-      favoritePaginationCursorRef.current = firstPageDocs[firstPageDocs.length - 1] || null;
-      favoritePaginationExhaustedRef.current = snapshot.docs.length <= FAVORITES_PAGE_SIZE;
-      favoritePaginationFallbackModeRef.current = false;
-      setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
-
-      setFavorites((prev) => {
-        const merged = mergeFavoriteFirstPageWithCache(firstPageFavs, prev || [], favoritePaginationExhaustedRef.current);
-        writeFavoritesCache(currentUser.uid, merged);
-        return merged;
+      const timeoutPromise = new Promise<null>((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error('MUSIC_NOTE_SYNC_TIMEOUT')), 8000);
       });
+      const bundle = await Promise.race([
+        readListBundleFromServerOnce('musicNote', uid),
+        timeoutPromise,
+      ]);
+      if (!bundle) return { ok: false, message: '뮤직노트 변경 캐시가 아직 준비되지 않았습니다.' };
 
-      try {
-        localStorage.setItem(storageKey, todayKey);
-      } catch {
-        // ignore daily marker write failure
+      const localDeletedIds = getFavoriteDeletedTombstoneIds(uid);
+      if (bundle.deletedIds.length > 0) {
+        rememberFavoriteDeletedTombstones(uid, bundle.deletedIds);
+        bundle.deletedIds.forEach((id) => localDeletedIds.add(id));
       }
-      return { ok: true, message: '뮤직노트를 동기화했습니다.' };
-    } catch (error) {
-      console.warn('Manual favorites sync failed.', error);
-      return { ok: false, message: '동기화에 실패했습니다.' };
+      const incoming = (bundle.items || []).filter((favorite: any) => {
+        if (isFavoriteSoftRemoved(favorite)) return false;
+        const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+        return !favoriteId || !localDeletedIds.has(favoriteId);
+      });
+      const previous = favoritesStore.getFavorites();
+      const bundleVersion = Number(bundle.updatedAtMs || 0);
+      const localNewer = (Array.isArray(previous) ? previous : []).filter((favorite: any) => {
+        if (!favorite || isFavoriteSoftRemoved(favorite)) return false;
+        const favoriteId = String(favorite?.id || favorite?.firestoreId || '').trim();
+        if (favoriteId && localDeletedIds.has(favoriteId)) return false;
+        const favoriteVersion = Number(favorite?.updatedAtMs || favorite?.createdAtMs || 0)
+          || getTimestampMs(favorite?.updatedAt)
+          || getTimestampMs(favorite?.createdAt)
+          || 0;
+        return bundleVersion > 0 && favoriteVersion > bundleVersion;
+      });
+      const mergedFirstPage = mergeFavoritePages(localNewer, incoming);
+      const merged = mergeFavoriteFirstPageWithCache(
+        mergedFirstPage,
+        Array.isArray(previous) ? previous : [],
+        !bundle.hasMore,
+      );
+      setFavorites(merged);
+      writeFavoritesCache(uid, merged);
+      favoritesStore.setFavorites(merged);
+      favoritePaginationCursorRef.current = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
+      favoritePaginationExhaustedRef.current = !bundle.hasMore;
+      favoritePaginationFallbackModeRef.current = false;
+      setHasMoreFavorites(bundle.hasMore);
+      const nextLocalVersion = Math.max(localVersion, bundleVersion);
+      if (nextLocalVersion > 0) writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, uid, nextLocalVersion);
+      markCacheDiagnostic('musicNote', 'SYNC', 1);
+      return { ok: true, message: '변경된 뮤직노트만 동기화했습니다.' };
+    } catch (error: any) {
+      if (String(error?.message || '').includes('MUSIC_NOTE_SYNC_TIMEOUT')) {
+        return { ok: false, message: '동기화 응답이 지연되어 중단했습니다. 다시 시도해주세요.' };
+      }
+      console.warn('Music Note one-document sync failed.', error);
+      return { ok: false, message: '변경분 동기화에 실패했습니다.' };
+    } finally {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
     }
   }, [user]);
 
@@ -7111,7 +9722,7 @@ const toggleCycleVariantSelection = (
       : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
   }, [activeGenreIdentityCount, maxHybridStyleSelections, selectedStyles, showToast]);
 
-  const toggleFavorite = async (song: SongResult) => {
+  const toggleFavorite = async (song: SongResult, options?: { trustedRecentStudio?: boolean }) => {
     song = normalizeFavoriteTitleFields(song as any) as SongResult;
 
     if (!user) {
@@ -7120,21 +9731,30 @@ const toggleCycleVariantSelection = (
       return;
     }
 
-    // Activity indicator
-    updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
-
-    const favoriteDeleteId = (song as any)?.firestoreId || (song as any)?.id;
+    const favoriteDeleteId = (song as any)?.favoriteFirestoreId || (song as any)?.firestoreId || (song as any)?.id;
     const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
     const songIdentityKey = buildFavoriteIdentityKey(song);
     const findLocalExistingFavorite = () => {
+      if ((song as any)?.recentFavoriteDetachedAt) return null;
       const latestFavorites = favoritesStore.getFavorites();
+      const linkedFavoriteId = String((song as any)?.favoriteFirestoreId || '').trim();
+      if (linkedFavoriteId) {
+        const exactLinkedFavorite = latestFavorites.find((favorite: any) =>
+          String(favorite?.firestoreId || favorite?.id || '').trim() === linkedFavoriteId,
+        );
+        if (exactLinkedFavorite) return exactLinkedFavorite;
+      }
       const byId = favoriteDeleteId ? latestFavorites.find(f => f.id === favoriteDeleteId || f.firestoreId === favoriteDeleteId) : null;
       if (byId) return byId;
       return findBestMatchingFavorite(latestFavorites, song, songIdentityKey);
     };
 
-    const findServerMatchingFavorites = async (includeFullScan = false): Promise<any[]> => {
+    const findServerMatchingFavorites = async (_includeFullScan = false): Promise<any[]> => {
       const matches = new Map<string, any>();
+      // 1007 — Recent-song saves already carry a stable SORIDRAW song id.
+      // Use that exact identity first so a normal save needs only one bounded
+      // server duplicate check instead of chaining favoriteKey + title lookups.
+      const stableSongId = getLiveSoridrawSongId(song);
       const addCandidates = (candidates: any[]) => {
         candidates.forEach((candidate) => {
           if (!candidate?.id) return;
@@ -7144,59 +9764,68 @@ const toggleCycleVariantSelection = (
         });
       };
 
-      if (forceDeleteFavoriteById && favoriteDeleteId) {
-        const snap = await getDoc(doc(db, 'favorites', favoriteDeleteId));
-        if (snap.exists()) addCandidates([mapFavoriteFirestoreDoc(snap)]);
+      const exactFavoriteId = String(
+        (song as any)?.favoriteFirestoreId
+        || (song as any)?.firestoreId
+        || (forceDeleteFavoriteById ? favoriteDeleteId : '')
+        || '',
+      ).trim();
+      if (exactFavoriteId) {
+        try {
+          const exactSnap = await getDoc(doc(db, 'favorites', exactFavoriteId));
+          if (exactSnap.exists()) addCandidates([mapFavoriteFirestoreDoc(exactSnap)]);
+        } catch (error) {
+          console.warn('Exact favorite lookup failed.', error);
+        }
       }
 
-      if (songIdentityKey) {
+      if (matches.size === 0 && stableSongId) {
+        let stableLookupSucceeded = false;
+        try {
+          const stableSnap = await getDocs(query(
+            collection(db, 'favorites'),
+            where('uid', '==', user.uid),
+            where('soridrawSongId', '==', stableSongId),
+            limit(2),
+          ));
+          stableLookupSucceeded = true;
+          addCandidates(stableSnap.docs.map(mapFavoriteFirestoreDoc));
+        } catch (error) {
+          // Preserve the older bounded identity/title fallback only when the
+          // stable-id query itself could not be completed.
+          console.warn('Favorite stable song id lookup failed; using legacy bounded fallback.', error);
+        }
+        if (stableLookupSucceeded) return Array.from(matches.values());
+      }
+
+      if (matches.size === 0 && songIdentityKey) {
         try {
           const keySnap = await getDocs(query(
             collection(db, 'favorites'),
             where('uid', '==', user.uid),
             where('favoriteKey', '==', songIdentityKey),
-            limit(20)
+            limit(5),
           ));
           addCandidates(keySnap.docs.map(mapFavoriteFirestoreDoc));
         } catch (error) {
-          console.warn('Favorite identity lookup by key failed. Falling back to title/prompt comparison.', error);
+          console.warn('Favorite identity lookup by key failed.', error);
         }
       }
 
-      const titleCandidates = [song.title, song.koreanTitle, song.englishTitle].filter(Boolean).map(value => String(value).trim());
-      for (const titleCandidate of titleCandidates.slice(0, 3)) {
-        try {
-          const titleSnap = await getDocs(query(
-            collection(db, 'favorites'),
-            where('uid', '==', user.uid),
-            where('title', '==', titleCandidate),
-            limit(30)
-          ));
-          addCandidates(titleSnap.docs.map(mapFavoriteFirestoreDoc));
-        } catch (error) {
-          console.warn('Favorite identity lookup by title failed.', error);
-        }
-      }
-
-      const recentQueries = [
-        query(collection(db, 'favorites'), where('uid', '==', user.uid), orderBy('createdAt', 'desc'), limit(100)),
-        query(collection(db, 'favorites'), where('uid', '==', user.uid), limit(100)),
-      ];
-      for (const recentQuery of recentQueries) {
-        try {
-          const recentSnap = await getDocs(recentQuery);
-          addCandidates(recentSnap.docs.map(mapFavoriteFirestoreDoc));
-        } catch (error) {
-          console.warn('Favorite recent server lookup failed.', error);
-        }
-      }
-
-      if (includeFullScan) {
-        try {
-          const fullSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
-          addCandidates(fullSnap.docs.map(mapFavoriteFirestoreDoc));
-        } catch (error) {
-          console.warn('Favorite full duplicate lookup failed. Continuing with targeted matches only.', error);
+      if (matches.size === 0) {
+        const titleCandidate = String(song.title || song.koreanTitle || song.englishTitle || '').trim();
+        if (titleCandidate) {
+          try {
+            const titleSnap = await getDocs(query(
+              collection(db, 'favorites'),
+              where('uid', '==', user.uid),
+              where('title', '==', titleCandidate),
+              limit(5),
+            ));
+            addCandidates(titleSnap.docs.map(mapFavoriteFirestoreDoc));
+          } catch (error) {
+            console.warn('Favorite bounded title lookup failed.', error);
+          }
         }
       }
 
@@ -7236,11 +9865,25 @@ const toggleCycleVariantSelection = (
 
     try {
       const localExistingFav = findLocalExistingFavorite();
-      const serverExistingFav = await findServerExistingFavorite().catch((error) => {
+      const stableRecentSongId = getLiveSoridrawSongId(song);
+      const localMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, user.uid);
+      const remoteMusicNoteVersion = readMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, user.uid);
+      const canTrustRecentStudioLocalIdentity = Boolean(
+        options?.trustedRecentStudio
+        && stableRecentSongId
+        && hasMusicNotePayloadCache(user.uid)
+        && localMusicNoteVersion > 0
+        && remoteMusicNoteVersion <= localMusicNoteVersion
+      );
+      const serverExistingFav = (
+        localExistingFav
+        || (song as any)?.recentFavoriteDetachedAt
+        || canTrustRecentStudioLocalIdentity
+      ) ? null : await findServerExistingFavorite().catch((error) => {
         console.warn('Favorite server confirmation failed. Using local favorite state as fallback.', error);
         return null;
       });
-      const existingFav = serverExistingFav || localExistingFav;
+      const existingFav = localExistingFav || serverExistingFav;
 
       if (existingFav) {
         if (existingFav.isLocked && !forceDeleteFavoriteById) {
@@ -7250,9 +9893,9 @@ const toggleCycleVariantSelection = (
 
         if (forceDeleteFavoriteById) {
           if (existingFav.isLocked) {
-            await updateDoc(doc(db, 'favorites', existingFav.id), { isLocked: false });
+            await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', existingFav.id), { isLocked: false }));
           }
-          await deleteDoc(doc(db, 'favorites', existingFav.id));
+          await runV1MutationBoundary({ domain: 'musicNote', operation: 'permanent-delete', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([existingFav], 'recent-hide').map((target) => ({ ...target, operation: 'music-note-unsave' as const, sourceDocumentId: existingFav.id })) }, deleteDoc(doc(db, 'favorites', existingFav.id)));
           rememberFavoriteDeletedTombstones(user.uid, [existingFav.id]);
           removeLocalFavorite(existingFav.id);
 
@@ -7289,7 +9932,9 @@ const toggleCycleVariantSelection = (
         }
 
         if (isFavoriteHidden(existingFav)) {
+          const restoredAt = Date.now();
           const restoreUpdates = {
+            updatedAtMs: restoredAt,
             hidden: false,
             favoriteHidden: false,
             deletedAt: null,
@@ -7303,9 +9948,9 @@ const toggleCycleVariantSelection = (
             favoriteKey: existingFav.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(existingFav),
             searchTokens: buildFavoriteSearchTokens({ ...existingFav, ...song }),
           };
-          await updateDoc(doc(db, 'favorites', existingFav.id), sanitizeForFirestore(restoreUpdates));
+          await runV1MutationBoundary({ domain: 'musicNote', operation: 'restore', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', existingFav.id), sanitizeForFirestore(restoreUpdates)));
           patchLocalFavorite(existingFav.id, restoreUpdates, existingFav);
-          const saveSignal = buildFavoriteSyncSignal('save', { ...song, ...restoreUpdates }, [{ ...existingFav, ...restoreUpdates }], Date.now());
+          const saveSignal = buildFavoriteSyncSignal('save', { ...song, ...restoreUpdates }, [{ ...existingFav, ...restoreUpdates }], restoredAt);
           updateDoc(doc(db, 'users', user.uid), {
             favoriteSyncSignal: saveSignal,
             favoriteSyncSignalUpdatedAt: saveSignal.at,
@@ -7331,24 +9976,25 @@ const toggleCycleVariantSelection = (
           favoriteRemovedAt: unsavedAt,
           unlikedAt: unsavedAt,
           unsavedAt,
+          updatedAtMs: unsavedAt,
           saved: false,
           hidden: false,
           favoriteHidden: false,
           deletedAt: null,
           trashedAt: null,
           isPublic: false,
-          createdAtMs: unsavedAt,
-          createdAt: serverTimestamp(),
+          // 1033: preserve the immutable creation axis on save release.
+          // Recent Songs <-> Music Note linking stays unchanged; only mutation time advances.
           updatedAt: serverTimestamp(),
         });
         try {
           if (unsaveTargets.length > 0) {
-            await Promise.all(unsaveTargets.map((targetFavorite) => updateDoc(doc(db, 'favorites', targetFavorite.id), sanitizeForFirestore({
+            await Promise.all(unsaveTargets.map((targetFavorite) => runV1MutationBoundary({ domain: 'musicNote', operation: 'unsave', uid: user.uid, documentIds: [targetFavorite.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', targetFavorite.id), sanitizeForFirestore({
               ...unsaveUpdates,
               favoriteKey: targetFavorite.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(targetFavorite),
-            }))));
+            })))));
           } else if (existingFav?.id) {
-            await updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates);
+            await runV1MutationBoundary({ domain: 'musicNote', operation: 'unsave', uid: user.uid, documentIds: [existingFav.id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates));
           }
 
           removeLocalFavorite(existingFav.id);
@@ -7381,9 +10027,38 @@ const toggleCycleVariantSelection = (
       }
 
       const createdAtMs = Date.now();
+      song = ensureLiveSoridrawSongId(song as any) as SongResult;
+      const favoriteSoridrawSongId = getLiveSoridrawSongId(song);
+      const buildRecentFavoriteDocumentId = (uid: string, stableSongId: string): string => {
+        const raw = `${uid}|${stableSongId}`;
+        let hash = 2166136261;
+        for (let index = 0; index < raw.length; index += 1) {
+          hash ^= raw.charCodeAt(index);
+          hash = Math.imul(hash, 16777619);
+        }
+        const safeSongId = stableSongId.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 72) || 'song';
+        return `rs_${safeSongId}_${(hash >>> 0).toString(36)}`;
+      };
       const resolvedGenre = getResolvedGenre(song);
+      const favoriteMediaKeys = [
+        'audioUrl', 'audio_url', 'streamAudioUrl', 'stream_audio_url', 'sourceAudioUrl', 'sourceStreamAudioUrl',
+        'imageUrl', 'image_url', 'coverUrl', 'thumbnailUrl', 'audioUrls',
+        'sunoAudioUrl', 'sunoCoverUrl', 'sunoImageUrl', 'sunoArtworkUrl',
+        'sunoLinks', 'sunoShareLinks', 'mainSunoIndex',
+        'sunoShareUrl', 'sunoUrl', 'sunoSongUrl', 'sunoTitle',
+        'sunoDurationSeconds', 'sunoDurationText', 'sunoShareUrlUpdatedAt', 'sunoCoverFetchedAt',
+      ] as const;
+      const favoriteMediaPayload = Object.fromEntries(
+        favoriteMediaKeys
+          .filter((key) => {
+            const value = (song as any)?.[key];
+            return value !== undefined && value !== null && value !== '';
+          })
+          .map((key) => [key, (song as any)[key]]),
+      );
       const favoritePayload = sanitizeForFirestore({
         uid: user.uid,
+        soridrawSongId: favoriteSoridrawSongId,
         title: song.title,
         koreanTitle: song.koreanTitle ?? '',
         englishTitle: song.englishTitle ?? '',
@@ -7393,6 +10068,7 @@ const toggleCycleVariantSelection = (
         appliedKeywords: song.appliedKeywords,
         userInput: song.userInput ?? (song.appliedKeywords as any)?.userInput ?? '',
         situationSummary: song.situationSummary || (song.appliedKeywords as any)?.situationSummary || '',
+        ...favoriteMediaPayload,
         isLocked: false,
         hidden: false,
         favoriteHidden: false,
@@ -7400,17 +10076,33 @@ const toggleCycleVariantSelection = (
         favoriteRemovedAt: null,
         saved: true,
         createdAtMs,
+        updatedAtMs: createdAtMs,
         createdAt: serverTimestamp(),
         favoriteKey: songIdentityKey,
         searchTokens: buildFavoriteSearchTokens(song)
       });
-      const favoriteDocRef = await addDoc(collection(db, 'favorites'), favoritePayload);
+      const useDeterministicRecentFavoriteDoc = Boolean(
+        canTrustRecentStudioLocalIdentity && favoriteSoridrawSongId
+      );
+      const favoriteDocRef = useDeterministicRecentFavoriteDoc
+        ? doc(db, 'favorites', buildRecentFavoriteDocumentId(user.uid, favoriteSoridrawSongId))
+        : null;
+      if (favoriteDocRef) {
+        await runV1MutationBoundary(
+          { domain: 'musicNote', operation: 'save', uid: user.uid, documentIds: [favoriteDocRef.id], affectedCount: 1 },
+          setDoc(favoriteDocRef, favoritePayload, { merge: true }),
+        );
+      }
+      const createdFavoriteDocRef = favoriteDocRef || await runV1MutationBoundary(
+        { domain: 'musicNote', operation: 'save', uid: user.uid, affectedCount: 1 },
+        addDoc(collection(db, 'favorites'), favoritePayload),
+      );
 
       const localFavorite = sanitizeForFirestore({
         ...song,
         ...favoritePayload,
-        id: favoriteDocRef.id,
-        firestoreId: favoriteDocRef.id,
+        id: createdFavoriteDocRef.id,
+        firestoreId: createdFavoriteDocRef.id,
         uid: user.uid,
         genre: resolvedGenre,
         createdAtMs,
@@ -7549,7 +10241,7 @@ const toggleCycleVariantSelection = (
         try {
           // Legacy favorites could store a generated song id inside the document's `id` field.
           // Read the user's favorites only after an exact update fails, then recover the real docSnap.id.
-          const legacyIdSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
+          const legacyIdSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid), limit(20)));
           addMatches(legacyIdSnap.docs);
         } catch (error) {
           console.warn('Favorite recovery lookup by legacy stored id failed.', error);
@@ -7564,8 +10256,9 @@ const toggleCycleVariantSelection = (
     };
 
     try {
-      await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);
       const favoriteUpdatedAtMs = Date.now();
+      sanitizedUpdates = sanitizeForFirestore({ ...sanitizedUpdates, updatedAtMs: favoriteUpdatedAtMs });
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user?.uid || currentFavorite?.uid || '', documentIds: [id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));
       const updatedFavoriteSnapshot = sanitizeForFirestore({
         ...(currentFavorite || {}),
         ...sanitizedUpdates,
@@ -7604,7 +10297,7 @@ const toggleCycleVariantSelection = (
         try {
           const serverMatches = await findServerMatchesForCurrentFavorite();
           if (serverMatches.length > 0) {
-            await Promise.all(serverMatches.map((favorite) => updateDoc(doc(db, 'favorites', favorite.id), sanitizedUpdates)));
+            await runV1MutationBoundary({ domain: 'musicNote', operation: 'recovery-update', uid: user?.uid || currentFavorite?.uid || '', documentIds: serverMatches.map((favorite) => favorite.id), affectedCount: serverMatches.length }, Promise.all(serverMatches.map((favorite) => updateDoc(doc(db, 'favorites', favorite.id), sanitizedUpdates))));
             const serverIds = serverMatches.map((favorite) => favorite.id);
             const localIdsToRemove = serverIds.includes(id) ? [] : [id];
             applyFavoriteUpdateToLocalState(serverIds, localIdsToRemove);
@@ -7636,81 +10329,115 @@ const toggleCycleVariantSelection = (
     }
   };
 
-  const clearAllFavorites = async () => {
-    if (!user) return;
+  type MusicNoteBulkOperation = 'clear-unlocked' | 'lock-all' | 'unlock-all';
 
-    if (userStatus === 'banned' && !isAdminUser) {
-      showToast('차단된 계정입니다. 기능을 사용할 수 없습니다.');
+const runMusicNoteBulkOperation = async (operation: MusicNoteBulkOperation) => {
+  if (!user?.uid) return { changedCount: 0, changedIds: [] as string[], version: 0 };
+
+  const callable = httpsCallable(functions, 'processMusicNoteBulkPage');
+  const changedIds = new Set<string>();
+  let cursor: string | null = null;
+  let latestVersion = 0;
+  let pageCount = 0;
+
+  while (pageCount < 1000) {
+    const response: any = await callable({ operation, cursor, limit: 120 });
+    const payload = (response?.data || {}) as any;
+    const pageChangedIds = Array.isArray(payload.changedIds)
+      ? payload.changedIds.map((value: unknown) => String(value || '').trim()).filter(Boolean)
+      : [];
+    pageChangedIds.forEach((id: string) => changedIds.add(id));
+    latestVersion = Math.max(latestVersion, Number(payload.version || 0));
+
+    if (payload.done === true) break;
+    const nextCursor = String(payload.nextCursor || '').trim();
+    if (!nextCursor || nextCursor === cursor) {
+      throw new Error('Music Note bulk pagination did not advance.');
+    }
+    cursor = nextCursor;
+    pageCount += 1;
+  }
+
+  if (pageCount >= 1000) {
+    throw new Error('Music Note bulk pagination safety limit reached.');
+  }
+
+  if (latestVersion > 0) {
+    writeMusicNoteSyncVersion(MUSIC_NOTE_REMOTE_SYNC_VERSION_STORAGE_BASE, user.uid, latestVersion);
+    writeMusicNoteSyncVersion(MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE, user.uid, latestVersion);
+  }
+
+  return { changedCount: changedIds.size, changedIds: Array.from(changedIds), version: latestVersion };
+};
+
+const clearAllFavorites = async () => {
+  if (!user) return;
+  if (userStatus === 'banned' && !isAdminUser) {
+    showToast('차단된 계정입니다. 기능을 사용할 수 없습니다.');
+    return;
+  }
+
+  try {
+    const result = await runMusicNoteBulkOperation('clear-unlocked');
+    if (result.changedCount === 0) {
+      showToast('삭제할 수 있는 곡이 없습니다.');
       return;
     }
 
-    try {
-      // In paged loading mode, never rely on the currently visible 20-item slice for destructive all-item actions.
-      const allFavoritesSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
-      const unlockedDocs = allFavoritesSnap.docs.filter((docSnap) => !docSnap.data()?.isLocked);
-      if (unlockedDocs.length === 0) {
-        showToast('삭제할 수 있는 곡이 없습니다.');
-        return;
-      }
+    const removedIds = new Set(result.changedIds);
+    rememberFavoriteDeletedTombstones(user.uid, result.changedIds);
+    setFavorites((previous) => {
+      const next = (previous || []).filter((favorite) => !removedIds.has(String(favorite?.id || '')));
+      writeFavoritesCache(user.uid, next);
+      return next;
+    });
+    showToast(`${result.changedCount}개의 곡이 삭제되었습니다.`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'favorites');
+  }
+};
 
-      const batch = writeBatch(db);
-      unlockedDocs.forEach((docSnap) => {
-        batch.delete(doc(db, 'favorites', docSnap.id));
-      });
-      
-      // Update favoriteCount
-      batch.update(doc(db, 'users', user.uid), {
-        favoriteCount: increment(-unlockedDocs.length)
-      });
-
-      await batch.commit();
-      showToast(`${unlockedDocs.length}개의 곡이 삭제되었습니다.`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'favorites');
+const lockAllFavorites = async () => {
+  if (!user) return;
+  try {
+    const result = await runMusicNoteBulkOperation('lock-all');
+    if (result.changedCount === 0) {
+      showToast('이미 모든 곡이 잠겨 있습니다.');
+      return;
     }
-  };
 
-  const lockAllFavorites = async () => {
-    if (!user) return;
-    try {
-      const allFavoritesSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
-      const unlockedDocs = allFavoritesSnap.docs.filter((docSnap) => !docSnap.data()?.isLocked);
-      if (unlockedDocs.length === 0) {
-        showToast('이미 모든 곡이 잠겨 있습니다.');
-        return;
-      }
+    const changedIds = new Set(result.changedIds);
+    setFavorites((previous) => {
+      const next = (previous || []).map((favorite) => changedIds.has(String(favorite?.id || '')) ? { ...favorite, isLocked: true } : favorite);
+      writeFavoritesCache(user.uid, next);
+      return next;
+    });
+    showToast(`${result.changedCount}개의 곡이 잠금 설정되었습니다.`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'favorites');
+  }
+};
 
-      const batch = writeBatch(db);
-      unlockedDocs.forEach((docSnap) => {
-        batch.update(doc(db, 'favorites', docSnap.id), { isLocked: true });
-      });
-      await batch.commit();
-      showToast(`${unlockedDocs.length}개의 곡이 잠금 설정되었습니다.`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'favorites');
+const unlockAllFavorites = async () => {
+  if (!user) return;
+  try {
+    const result = await runMusicNoteBulkOperation('unlock-all');
+    if (result.changedCount === 0) {
+      showToast('잠긴 곡이 없습니다.');
+      return;
     }
-  };
 
-  const unlockAllFavorites = async () => {
-    if (!user) return;
-    try {
-      const allFavoritesSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
-      const lockedDocs = allFavoritesSnap.docs.filter((docSnap) => docSnap.data()?.isLocked);
-      if (lockedDocs.length === 0) {
-        showToast('잠긴 곡이 없습니다.');
-        return;
-      }
-
-      const batch = writeBatch(db);
-      lockedDocs.forEach((docSnap) => {
-        batch.update(doc(db, 'favorites', docSnap.id), { isLocked: false });
-      });
-      await batch.commit();
-      showToast(`${lockedDocs.length}개의 곡이 잠금 해제되었습니다.`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'favorites');
-    }
-  };
+    const changedIds = new Set(result.changedIds);
+    setFavorites((previous) => {
+      const next = (previous || []).map((favorite) => changedIds.has(String(favorite?.id || '')) ? { ...favorite, isLocked: false } : favorite);
+      writeFavoritesCache(user.uid, next);
+      return next;
+    });
+    showToast(`${result.changedCount}개의 곡이 잠금 해제되었습니다.`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'favorites');
+  }
+};
 
   // Scroll to top on mount
   useEffect(() => {
@@ -7763,7 +10490,6 @@ const toggleCycleVariantSelection = (
       longPressTimerRef.current = null;
     }
     setHoveredItem(null);
-    setIsTooltipHovered(false);
 
     const normalizeGenreKey = (value: string) => String(value || '')
       .replace(/\bcore\b/gi, '')
@@ -7925,6 +10651,25 @@ const toggleCycleVariantSelection = (
     const resolvedKpopMode = appliedKeywords.kpopMode ?? (restoredGenreIds.includes('kpop') ? 1 : 0);
     const resolvedMixedLyrics = appliedKeywords.isKoreanEnglishMix ?? (appliedKeywords.kpopMode === 2);
 
+    const supportedLyricLanguages = new Set<LanguageCode>(['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'ru', 'th']);
+    const storedLyricLanguageSource = Array.isArray((appliedKeywords as any).lyricLanguages)
+      ? (appliedKeywords as any).lyricLanguages
+      : Array.isArray((appliedKeywords as any).titleLanguages)
+        ? (appliedKeywords as any).titleLanguages
+        : [];
+    const restoredLyricLanguages = Array.from(new Set(
+      storedLyricLanguageSource
+        .map((language: unknown) => String(language || '').trim())
+        .filter((language: string): language is LanguageCode => supportedLyricLanguages.has(language as LanguageCode)),
+    )).slice(0, 2) as LanguageCode[];
+    const storedMixTargets = Array.from(new Set(
+      (Array.isArray((appliedKeywords as any).languageMixTargetLanguages)
+        ? (appliedKeywords as any).languageMixTargetLanguages
+        : [])
+        .map((language: unknown) => String(language || '').trim())
+        .filter((language: string): language is LanguageCode => supportedLyricLanguages.has(language as LanguageCode)),
+    )).slice(0, 2) as LanguageCode[];
+
     // Overwrite pinned keywords when applying from Favorites or Results
     setPinnedGenres([]);
     setPinnedThemes([]);
@@ -7936,8 +10681,14 @@ const toggleCycleVariantSelection = (
     setSelectedPointSounds(pointSoundIds);
     setIsPointSoundMode(pointSoundIds.length > 0);
     setKpopMode(restoredGenreIds.includes('kpop') ? resolvedKpopMode : 0);
-    setIsKoreanEnglishMix(resolvedMixedLyrics);
-    setEnglishMixRatio(Math.max(10, Math.min(70, Math.round((Number((appliedKeywords as any).englishMixRatio ?? 10) || 10) / 10) * 10)));
+    if (restoredLyricLanguages.length > 0) {
+      setMainGenerationLyricLanguages(restoredLyricLanguages);
+    }
+    setIsKoreanEnglishMix(Boolean(resolvedMixedLyrics));
+    setEnglishMixRatio(normalizeLanguageMixRatioOption(
+      (appliedKeywords as any).englishMixRatio ?? (appliedKeywords as any).languageMixRatio ?? 10,
+    ));
+    setLanguageMixTargetLanguages(Boolean(resolvedMixedLyrics) ? storedMixTargets : []);
     setCitypopMode(restoredGenreIds.includes('citypop') ? ((appliedKeywords.citypopMode ?? 1) as 0 | 1 | 2) : 0);
 
     // Expand to include other generation settings
@@ -8230,7 +10981,7 @@ const toggleCycleVariantSelection = (
   };
 
   // History state is cached locally only for the first paint.
-  // Firestore remains the source of truth and is listened to in real time on the Studio page.
+  // Firestore remains the source of truth, but Studio verifies it with one server read instead of a persistent listener.
   useEffect(() => {
     if (!user) {
       recentSongsReadyToCacheRef.current = false;
@@ -8241,7 +10992,7 @@ const toggleCycleVariantSelection = (
       return;
     }
 
-    // Keep the realtime listener limited to Studio so the cost stays bounded.
+    // Keep the one-shot server verification limited to Studio so the cost stays bounded.
     if (location.pathname !== '/studio') {
       recentSongsReadyToCacheRef.current = false;
       return;
@@ -8253,6 +11004,7 @@ const toggleCycleVariantSelection = (
     const cachedHistory = Array.isArray(cached?.history) ? cached!.history : [];
 
     if (cachedHistory.length > 0) {
+      markCacheDiagnostic('recentSongs', 'CACHE', 0);
       applyRecentSongsState(cachedHistory, {
         preferredIndex: cached?.historyIndex,
         latestBatchId: cached?.latestGenerationBatchId || null,
@@ -8265,9 +11017,36 @@ const toggleCycleVariantSelection = (
     }
 
     const ref = doc(db, "user_recent_songs", user.uid);
-    const unsubscribe = onSnapshot(
-      ref,
-      (snap) => {
+    let cancelledRecentSongsRead = false;
+
+    const runRecentSongsServerSyncIfNeeded = () => {
+      if (cancelledRecentSongsRead) return;
+
+      const cachedProfile = readUserProfileCache(user.uid);
+      const remoteVersion = Number((cachedProfile as any)?.syncVersions?.recentSongs || 0);
+      const localVersion = readRecentSongsLocalVersion(user.uid);
+      const hasLocalState = Boolean(cached);
+      const needsServerRead = !hasLocalState || remoteVersion > localVersion;
+
+      if (!needsServerRead) {
+        recentSongsSessionVerifiedUids.add(user.uid);
+        markCacheDiagnostic('recentSongs', 'CACHE', 0, 0);
+        return;
+      }
+      if (recentSongsSessionReadInFlightUids.has(user.uid)) return;
+      recentSongsSessionReadInFlightUids.add(user.uid);
+      const recentReadMutationEpoch = readRecentSongsMutationEpoch(user.uid);
+
+      void getDocFromServer(ref)
+        .then((snap) => {
+          recentSongsSessionReadInFlightUids.delete(user.uid);
+          if (cancelledRecentSongsRead) return;
+          if (recentReadMutationEpoch !== readRecentSongsMutationEpoch(user.uid)) return;
+          recentSongsSessionVerifiedUids.add(user.uid);
+          const documentVersion = Number(snap.exists() ? (snap.data() as any)?.syncVersion || 0 : 0);
+          const verifiedVersion = Math.max(remoteVersion, localVersion, documentVersion);
+          if (verifiedVersion > 0) writeRecentSongsLocalVersion(user.uid, verifiedVersion);
+        markCacheDiagnostic('recentSongs', snap.metadata.fromCache ? 'CACHE' : 'SYNC', snap.metadata.fromCache ? 0 : 1);
         const preservedIndex = preserveHistoryIndexOnNextSnapshotRef.current;
         preserveHistoryIndexOnNextSnapshotRef.current = null;
 
@@ -8280,18 +11059,32 @@ const toggleCycleVariantSelection = (
         });
 
         recentSongsReadyToCacheRef.current = true;
-      },
-      (error) => {
+        })
+        .catch((error) => {
+          recentSongsSessionReadInFlightUids.delete(user.uid);
+          if (cancelledRecentSongsRead) return;
         // If Firestore fails, keep the account-scoped local cache as a temporary fallback.
         recentSongsReadyToCacheRef.current = cachedHistory.length > 0;
         if (cachedHistory.length === 0) {
           console.error('Failed to subscribe recent songs:', error);
         }
-      }
-    );
+        });
+    };
+
+    const handleRecentSongsVersionSignal = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string; version?: number }>).detail;
+      if (!detail || detail.uid !== user.uid) return;
+      const signaledVersion = Number(detail.version || 0);
+      if (signaledVersion <= readRecentSongsLocalVersion(user.uid)) return;
+      runRecentSongsServerSyncIfNeeded();
+    };
+
+    window.addEventListener(RECENT_SONGS_SYNC_VERSION_EVENT, handleRecentSongsVersionSignal as EventListener);
+    runRecentSongsServerSyncIfNeeded();
 
     return () => {
-      unsubscribe();
+      cancelledRecentSongsRead = true;
+      window.removeEventListener(RECENT_SONGS_SYNC_VERSION_EVENT, handleRecentSongsVersionSignal as EventListener);
     };
   }, [user, location.pathname]);
 
@@ -8749,8 +11542,12 @@ const toggleCycleVariantSelection = (
     setSituation(createEmptySituation());
 
     setKpopMode(0);
+    // 전체초기화는 생성 옵션도 앱 기본값으로 되돌린다.
+    // '다음곡에 적용'으로 복원된 언어 설정은 해당 동작에서만 유지된다.
+    setMainGenerationLyricLanguages(['ko']);
     setIsKoreanEnglishMix(false);
     setEnglishMixRatio(10);
+    setLanguageMixTargetLanguages([]);
     setCitypopMode(0);
 
     setIsGenreRandomized(false);
@@ -8759,7 +11556,7 @@ const toggleCycleVariantSelection = (
     setIsStyleRandomized(false);
     setIsSoundTextureRandomized(false);
         // 펼쳐보기 상태 초기화
-    setIsGenreExpanded(false);
+    setGenreExpandResetToken((prev) => prev + 1);
     setIsStyleExpanded(false);
     setIsSoundExpanded(false);
     setIsMoodExpanded(false);
@@ -8800,7 +11597,8 @@ const toggleCycleVariantSelection = (
       if (userRef.current) {
         try {
           const ref = doc(db, "user_recent_songs", userRef.current.uid);
-          await setDoc(ref, { songs: [] }, { merge: true });
+          await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: userRef.current.uid, affectedCount: 0, mirrorTargets: buildRecentMirrorTargets(historyRef.current, 'recent-hide') }, setDoc(ref, { songs: [] }, { merge: true }));
+          markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
         } catch (error) {
           console.error('Failed to clear history in Firestore:', error);
         }
@@ -8825,8 +11623,18 @@ const toggleCycleVariantSelection = (
     
     if (user) {
       try {
+        const recentMutationEpoch = bumpRecentSongsMutationEpoch(user.uid);
+        recentSongTextWritePendingRef.current = null;
+        if (recentSongTextWriteTimerRef.current !== null) {
+          window.clearTimeout(recentSongTextWriteTimerRef.current);
+          recentSongTextWriteTimerRef.current = null;
+        }
         const ref = doc(db, "user_recent_songs", user.uid);
-        await setDoc(ref, sanitizeForFirestore({ songs: newHistory }), { merge: true });
+        await runV1MutationBoundary(
+          { domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([history[index]], 'recent-hide') },
+          persistRecentSongsDocument(ref, newHistory, recentMutationEpoch),
+        );
+        markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
       } catch (e) {
         console.error("Failed to update history in Firestore:", e);
       }
@@ -8848,8 +11656,18 @@ const toggleCycleVariantSelection = (
     if (window.confirm('모든 히스토리를 삭제하시겠습니까?')) {
       if (user) {
         try {
+          const recentMutationEpoch = bumpRecentSongsMutationEpoch(user.uid);
+          recentSongTextWritePendingRef.current = null;
+          if (recentSongTextWriteTimerRef.current !== null) {
+            window.clearTimeout(recentSongTextWriteTimerRef.current);
+            recentSongTextWriteTimerRef.current = null;
+          }
           const ref = doc(db, "user_recent_songs", user.uid);
-          await setDoc(ref, { songs: [] }, { merge: true });
+          await runV1MutationBoundary(
+            { domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: history.length, mirrorTargets: buildRecentMirrorTargets(history, 'recent-hide') },
+            persistRecentSongsDocument(ref, [], recentMutationEpoch),
+          );
+          markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
         } catch (e) {
           console.error("Failed to clear history in Firestore:", e);
         }
@@ -9015,8 +11833,10 @@ const toggleCycleVariantSelection = (
 
     // These menus should not keep stale values during random selection unless explicitly locked.
     // Generation modal options are always reset on global random so old popup choices do not leak into the next song.
+    setMainGenerationLyricLanguages(['ko']);
     setIsKoreanEnglishMix(false);
     setEnglishMixRatio(10);
+    setLanguageMixTargetLanguages([]);
     setRapEnabled(false);
 
     if (!isMenuLocked('situation')) {
@@ -9041,18 +11861,33 @@ const toggleCycleVariantSelection = (
       setMaxBPM(max);
     }
   };
-const saveRecentSong = async (newSong: any) => {
-  if (!user) return;
+const saveRecentSongsBatch = async (newSongs: any[]) => {
+  if (!user || !Array.isArray(newSongs) || newSongs.length === 0) return;
+
+  const canonicalNewSongs = newSongs.map((song) => ensureLiveSoridrawSongId(song));
+  const recentMutationEpoch = readRecentSongsMutationEpoch(user.uid);
 
   const saveOperation = async () => {
     try {
       const ref = doc(db, "user_recent_songs", user.uid);
       const snap = await getDoc(ref);
+      markCacheDiagnostic('recentSongs', 'SYNC', 1, 0);
       const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
       const recoverySongs = findRecoverableLocalRecentSongs(user.uid);
-      const updatedSongs = mergeRecentSongLists([newSong], firestoreSongs, recoverySongs);
+      const updatedSongs = mergeRecentSongLists(canonicalNewSongs, firestoreSongs, recoverySongs);
+      const updatedStableIds = new Set(updatedSongs.map((song: any) => getLiveSoridrawSongId(song)).filter(Boolean));
+      const mirrorAtMs = Date.now();
+      const mirrorTargets = [
+        ...buildRecentMirrorTargets(canonicalNewSongs, 'upsert', mirrorAtMs),
+        ...buildRecentMirrorTargets(firestoreSongs.filter((song: any) => { const stableId = getLiveSoridrawSongId(song); return Boolean(stableId && !updatedStableIds.has(stableId)); }), 'recent-hide', mirrorAtMs),
+      ].slice(0, 10);
 
-      await setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true });
+      const persistedVersion = await runV1MutationBoundary(
+      { domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: canonicalNewSongs.length, mirrorTargets },
+      persistRecentSongsDocument(ref, updatedSongs, recentMutationEpoch),
+    );
+    if (!persistedVersion) return;
+    markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
       recentSongsReadyToCacheRef.current = true;
       applyRecentSongsState(updatedSongs, {
         preferredIndex: 0,
@@ -9064,11 +11899,14 @@ const saveRecentSong = async (newSong: any) => {
   };
 
   // Concurrent Gemini jobs may finish at nearly the same moment. Serialize the Firestore
-  // read-merge-write sequence in completion order so one finished song cannot overwrite another.
+  // read-merge-write sequence in completion order so one finished batch cannot overwrite another.
+  // A multi-song generation is persisted with one read + one write instead of one pair per song.
   const chainedSave = recentSongSaveChainRef.current.then(saveOperation, saveOperation);
   recentSongSaveChainRef.current = chainedSave.catch(() => undefined);
   await chainedSave;
 };
+
+const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
 
   /* 
   useEffect(() => {
@@ -9151,7 +11989,7 @@ const saveRecentSong = async (newSong: any) => {
     const requestedKoreanEnglishMix = requestedIncludeLyrics
       ? Boolean(generationOptions?.isKoreanEnglishMix ?? isKoreanEnglishMix)
       : false;
-    const requestedEnglishMixRatio = Math.max(10, Math.min(70, Math.round((Number(generationOptions?.englishMixRatio ?? englishMixRatio) || 10) / 10) * 10));
+    const requestedEnglishMixRatio = normalizeLanguageMixRatioOption(generationOptions?.englishMixRatio ?? englishMixRatio);
     const requestedLanguageMixTargetLanguages = requestedIncludeLyrics && requestedKoreanEnglishMix
       ? Array.from(new Set(((generationOptions?.languageMixTargetLanguages?.length ? generationOptions.languageMixTargetLanguages : languageMixTargetLanguages) || [])
           .filter((lang): lang is LanguageCode => Boolean(lang) && lang !== requestedLyricLanguages[0])))
@@ -9174,10 +12012,6 @@ const saveRecentSong = async (newSong: any) => {
     }
 
     try {
-      // Activity indicator
-      if (user) {
-        updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
-      }
       let finalGenres = limitFusionGenreIds([...selectedGenres, ...subGenre]);
       const isFinalInstrumentalBgm = isPureInstrumentalBgmGenreSelection(finalGenres);
       if (!isFinalInstrumentalBgm && hasInstrumentalBgmGenreIds(finalGenres)) {
@@ -9882,24 +12716,37 @@ const saveRecentSong = async (newSong: any) => {
 
       const usedModelLabel = getGeminiUsedModelLabel(firstResult);
       if (usedModelLabel) {
-        setGenerationModelNotice(`생성 모델 ${usedModelLabel}`);
+        const modelApplied = (firstResult.appliedKeywords || {}) as any;
+        const fallbackReason = String(modelApplied.geminiFallbackReason || '').trim();
+        const fallbackNotice = modelApplied.geminiFallbackUsed
+          ? fallbackReason === 'quota_or_rate_limit'
+            ? ' · 기본 모델 한도 초과로 자동 전환'
+            : ' · 기본 모델 일시 사용 불가로 자동 전환'
+          : '';
+        setGenerationModelNotice(`생성 모델 ${usedModelLabel}${fallbackNotice}`);
       }
 
       setResult(firstResult);
       setLatestGenerationBatchId(generationBatchId);
       setHistory(prev => [...generatedResults, ...prev].slice(0, 10));
-      for (const item of generatedResults) {
-        await saveRecentSong(item);
-      }
-
-      // Increment songGeneratedCount in users document
-      if (user) {
-        await updateDoc(doc(db, 'users', user.uid), {
-          songGeneratedCount: increment(generatedResults.length)
-        }).catch(err => console.error("Failed to increment songGeneratedCount:", err));
-      }
-
       setHistoryIndex(0);
+
+      // 841 — Result-ready and persistence-ready are different states.
+      // Once Gemini has returned the complete song, release the generation queue immediately.
+      // Firestore recent-song persistence and the user counter continue in the existing serialized
+      // background save chain, so a slow Firestore/network response can no longer leave the UI
+      // spinner stuck for minutes after the finished song is already visible.
+      void (async () => {
+        await saveRecentSongsBatch(generatedResults);
+        if (user) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            songGeneratedCount: increment(generatedResults.length)
+          }).catch(err => console.error("Failed to increment songGeneratedCount:", err));
+        }
+      })().catch((error) => {
+        console.error('Failed to persist completed generation in background:', error);
+      });
+
       return {
         success: true,
         generationBatchId,
@@ -10214,9 +13061,17 @@ ${normalizePromptForDisplay(result.prompt)}
     const secondaryLanguage = (applied.secondaryLanguage || storedLanguages.find((lang) => lang !== 'ko') || 'en') as LanguageCode;
     const map: Partial<Record<LanguageCode, string>> = { ...storedMap };
 
-    if (song.lyrics?.korean?.trim()) map.ko = song.lyrics.korean;
+    if (song.lyrics?.korean?.trim()) {
+      const mappedPrimary = storedLanguages.find((lang) => (storedMap as any)[lang] === song.lyrics.korean)
+        || (storedLanguages.includes('ko') ? 'ko' : null);
+      if (mappedPrimary) {
+        map[mappedPrimary as LanguageCode] = map[mappedPrimary as LanguageCode] || song.lyrics.korean;
+      }
+    }
     if (song.lyrics?.english?.trim()) {
-      const mappedForeign = storedLanguages.find((lang) => lang !== 'ko' && (storedMap as any)[lang] === song.lyrics.english) || secondaryLanguage || 'en';
+      const mappedForeign = storedLanguages.find((lang) => (storedMap as any)[lang] === song.lyrics.english)
+        || secondaryLanguage
+        || 'en';
       map[mappedForeign as LanguageCode] = map[mappedForeign as LanguageCode] || song.lyrics.english;
     }
 
@@ -10231,9 +13086,17 @@ ${normalizePromptForDisplay(result.prompt)}
     const secondaryLanguage = (applied.secondaryLanguage || storedLanguages.find((lang) => lang !== 'ko') || 'en') as LanguageCode;
     const map: Partial<Record<LanguageCode, string>> = { ...storedMap };
 
-    if (song.koreanTitle?.trim()) map.ko = song.koreanTitle;
+    if (song.koreanTitle?.trim()) {
+      const mappedPrimary = storedLanguages.find((lang) => (storedMap as any)[lang] === song.koreanTitle)
+        || (storedLanguages.includes('ko') ? 'ko' : null);
+      if (mappedPrimary) {
+        map[mappedPrimary as LanguageCode] = map[mappedPrimary as LanguageCode] || song.koreanTitle;
+      }
+    }
     if (song.englishTitle?.trim()) {
-      const mappedForeign = storedLanguages.find((lang) => lang !== 'ko' && (storedMap as any)[lang] === song.englishTitle) || secondaryLanguage || 'en';
+      const mappedForeign = storedLanguages.find((lang) => (storedMap as any)[lang] === song.englishTitle)
+        || secondaryLanguage
+        || 'en';
       map[mappedForeign as LanguageCode] = map[mappedForeign as LanguageCode] || song.englishTitle;
     }
 
@@ -10655,6 +13518,64 @@ ${normalizePromptForDisplay(result.prompt)}
     } as any;
   };
 
+  const recentSongTextWriteTimerRef = useRef<number | null>(null);
+  const recentSongTextWritePendingRef = useRef<{ uid: string; songs: any[]; operation: 'regenerate' | 'edit' | 'pre-favorite-edit'; mirrorTargets?: V1MutationMirrorTarget[]; mutationEpoch: number } | null>(null);
+
+  const flushRecentSongTextWrite = useCallback(async () => {
+    const pending = recentSongTextWritePendingRef.current;
+    if (!pending?.uid || !Array.isArray(pending.songs)) return;
+
+    recentSongTextWritePendingRef.current = null;
+    if (recentSongTextWriteTimerRef.current !== null) {
+      window.clearTimeout(recentSongTextWriteTimerRef.current);
+      recentSongTextWriteTimerRef.current = null;
+    }
+
+    try {
+      if (pending.mutationEpoch !== readRecentSongsMutationEpoch(pending.uid)) return;
+      const ref = doc(db, "user_recent_songs", pending.uid);
+      const persistedVersion = await runV1MutationBoundary(
+        { domain: 'recent', operation: pending.operation, uid: pending.uid, affectedCount: 1, mirrorTargets: pending.mirrorTargets },
+        persistRecentSongsDocument(ref, pending.songs, pending.mutationEpoch),
+      );
+      if (!persistedVersion) return;
+      markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);
+    } catch (error) {
+      // Keep the newest pending value so a later edit/flush can retry instead of
+      // dropping a locally saved text change.
+      recentSongTextWritePendingRef.current = pending;
+      console.error('Failed to flush batched recent-song text edits:', error);
+    }
+  }, []);
+
+  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit', mirrorTargets?: V1MutationMirrorTarget[]) => {
+    if (!uid || !Array.isArray(songs)) return;
+
+    const activeIndex = historyIndexRef.current;
+    let nextSongs = songs;
+
+    if (activeIndex >= 0 && activeIndex < songs.length) {
+      const detachedSong = { ...(songs[activeIndex] as any) };
+      delete detachedSong.favoriteFirestoreId;
+      delete detachedSong.musicNoteFavoriteId;
+      detachedSong.recentFavoriteDetachedAt = Date.now();
+
+      nextSongs = songs.map((song, index) => index === activeIndex ? detachedSong : song);
+      historyRef.current = nextSongs;
+      resultRef.current = detachedSong as SongResult;
+      setHistory(nextSongs);
+      setResult(detachedSong as SongResult);
+    }
+
+    // Local persistence only. No timer and no pagehide Firestore flush.
+    saveRecentSongsCache(uid, {
+      history: nextSongs,
+      historyIndex: activeIndex,
+      latestGenerationBatchId: (nextSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
+    });
+    recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets, mutationEpoch: readRecentSongsMutationEpoch(uid) };
+  }, []);
+
   const persistRegeneratedCurrentSong = async (nextSong: SongResult) => {
     const currentIndex = historyIndexRef.current;
     const currentHistory = historyRef.current;
@@ -10672,9 +13593,8 @@ ${normalizePromptForDisplay(result.prompt)}
     preserveHistoryIndexOnNextSnapshotRef.current = nextIndex;
     recentSongsReadyToCacheRef.current = true;
 
-    if (user) {
-      const ref = doc(db, "user_recent_songs", user.uid);
-      await setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true });
+    if (user?.uid) {
+      queueRecentSongTextWrite(user.uid, nextHistory, 'regenerate', buildRecentMirrorTargets([nextSong], 'upsert'));
     }
   };
 
@@ -10933,7 +13853,9 @@ ${normalizePromptForDisplay(result.prompt)}
         if (currentHistoryIndex < 0) return prev;
         if (user) {
           const ref = doc(db, "user_recent_songs", user.uid);
-          setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true }).catch((error) => {
+          runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, persistRecentSongsDocument(ref, next, readRecentSongsMutationEpoch(user.uid)))
+            .then((version) => { if (version) markCacheDiagnostic('recentSongs', 'SYNC', 0, 1); })
+            .catch((error) => {
             console.error('Failed to persist added lyric language:', error);
           });
         }
@@ -11075,9 +13997,8 @@ ${normalizePromptForDisplay(result.prompt)}
       preserveHistoryIndexOnNextSnapshotRef.current = currentIndex;
       recentSongsReadyToCacheRef.current = true;
 
-      if (user) {
-        const ref = doc(db, "user_recent_songs", user.uid);
-        await setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true });
+      if (user?.uid) {
+        queueRecentSongTextWrite(user.uid, nextHistory, 'edit', buildRecentMirrorTargets([nextSong], 'upsert'));
       }
 
       setIsRecentSongEditOpen(false);
@@ -11090,6 +14011,13 @@ ${normalizePromptForDisplay(result.prompt)}
     } finally {
       setIsSavingRecentSongEdit(false);
     }
+  };
+
+  const handleRecentSongTitleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void saveRecentSongEdit();
   };
 
   const getStudioSongFingerprint = (song: SongResult | null | undefined): string => {
@@ -11155,16 +14083,87 @@ ${normalizePromptForDisplay(result.prompt)}
       setRecentSongInlineEditMode(null);
       setRecentSongEditDraft(null);
 
-      if (user) {
-        const ref = doc(db, "user_recent_songs", user.uid);
-        setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }).catch((error) => {
-          console.error('Failed to persist studio edit before favorite save:', error);
-        });
+      if (user?.uid) {
+        queueRecentSongTextWrite(user.uid, nextHistory, 'pre-favorite-edit', buildRecentMirrorTargets([nextHistory[currentIndex]], 'upsert'));
       }
     }
 
     try {
-      await toggleFavorite(snapshot);
+      const currentSongBeforeToggle = currentIndex >= 0
+        ? ((historyRef.current[currentIndex] || snapshot) as any)
+        : (snapshot as any);
+      const wasDetachedBeforeToggle = Boolean(currentSongBeforeToggle?.recentFavoriteDetachedAt);
+      const heartSnapshot = ({ ...snapshot } as any);
+
+      if (wasDetachedBeforeToggle) {
+        delete heartSnapshot.favoriteFirestoreId;
+        delete heartSnapshot.musicNoteFavoriteId;
+      }
+      delete heartSnapshot.recentFavoriteDetachedAt;
+
+      const wasFavoritedBeforeToggle = wasDetachedBeforeToggle
+        ? false
+        : isSongFavorited(heartSnapshot);
+
+      await toggleFavorite(heartSnapshot as SongResult, { trustedRecentStudio: true });
+
+      const linkedFavorite = wasFavoritedBeforeToggle
+        ? null
+        : findBestMatchingFavorite(
+            favoritesStore.getFavorites(),
+            heartSnapshot,
+            buildFavoriteIdentityKey(heartSnapshot),
+          );
+      const linkedFavoriteId = String(
+        (linkedFavorite as any)?.firestoreId || (linkedFavorite as any)?.id || '',
+      ).trim();
+
+      if (currentIndex >= 0) {
+        const currentSongAfterToggle = (historyRef.current[currentIndex] || heartSnapshot) as any;
+        const nextCommittedSong = ({ ...currentSongAfterToggle } as any);
+        delete nextCommittedSong.recentFavoriteDetachedAt;
+        delete nextCommittedSong.musicNoteFavoriteId;
+
+        if (wasFavoritedBeforeToggle) {
+          delete nextCommittedSong.favoriteFirestoreId;
+        } else if (linkedFavoriteId) {
+          nextCommittedSong.favoriteFirestoreId = linkedFavoriteId;
+        } else {
+          delete nextCommittedSong.favoriteFirestoreId;
+        }
+
+        const nextCommittedHistory = historyRef.current.map((song, index) =>
+          index === currentIndex ? (nextCommittedSong as SongResult) : song,
+        );
+
+        historyRef.current = nextCommittedHistory;
+        resultRef.current = nextCommittedSong as SongResult;
+        setHistory(nextCommittedHistory);
+        setResult(nextCommittedSong as SongResult);
+
+        if (user?.uid) {
+          // Heart is the only Firestore commit boundary for text edits.
+          // Persist the local snapshot, then write user_recent_songs exactly once.
+          saveRecentSongsCache(user.uid, {
+            history: nextCommittedHistory,
+            historyIndex: currentIndex,
+            latestGenerationBatchId: (nextCommittedHistory[0]?.appliedKeywords as any)?.generationBatchId || null,
+          });
+          const pendingRecentTextWrite = recentSongTextWritePendingRef.current;
+          if (pendingRecentTextWrite) {
+            // A real title/lyrics edit was already waiting to be committed.
+            // Keep heart as that edit's commit boundary, but do not create a
+            // user_recent_songs write for a plain save/unsave click.
+            recentSongTextWritePendingRef.current = {
+              ...pendingRecentTextWrite,
+              uid: user.uid,
+              songs: nextCommittedHistory,
+              mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),
+            };
+            await flushRecentSongTextWrite();
+          }
+        }
+      }
     } catch (error) {
       console.warn('Studio favorite toggle failed.', error);
     } finally {
@@ -11227,7 +14226,7 @@ ${normalizePromptForDisplay(result.prompt)}
     hoverId: string,
     label: string,
     description: string,
-    variant: 'title-desktop' | 'title-mobile' | 'section' = 'section'
+    variant: 'title-desktop' | 'title-mobile' | 'title-inline' | 'section' = 'section'
   ) => {
     const isEditing = isRecentSongSectionEditing(focus);
     const wrapperClass = variant === 'title-mobile'
@@ -11265,11 +14264,13 @@ ${normalizePromptForDisplay(result.prompt)}
       );
     }
 
-    const baseClass = variant === 'title-mobile'
-      ? 'flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm'
-      : variant === 'title-desktop'
-        ? 'order-2 flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-3 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm sm:order-1 sm:h-11 sm:w-auto sm:min-h-0 sm:min-w-0 sm:px-3.5 sm:py-2.5'
-        : 'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn';
+    const baseClass = variant === 'title-inline'
+      ? 'soridraw-result-title-inline-edit flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-transparent text-[var(--text-primary)] transition-colors hover:bg-white/10 active:scale-95'
+      : variant === 'title-mobile'
+        ? 'flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm'
+        : variant === 'title-desktop'
+          ? 'order-2 flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-3 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm sm:order-1 sm:h-11 sm:w-auto sm:min-h-0 sm:min-w-0 sm:px-3.5 sm:py-2.5'
+          : 'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn';
 
     return (
       <button
@@ -11283,7 +14284,7 @@ ${normalizePromptForDisplay(result.prompt)}
         className={baseClass}
         title={label}
       >
-        <Edit2 className={variant === 'title-mobile' ? 'w-[20px] h-[20px] opacity-85' : 'w-5 h-5 opacity-80'} />
+        <Edit2 className={variant === 'title-inline' ? 'w-[18px] h-[18px] opacity-85' : variant === 'title-mobile' ? 'w-[20px] h-[20px] opacity-85' : 'w-5 h-5 opacity-80'} />
       </button>
     );
   };
@@ -11587,6 +14588,29 @@ ${normalizePromptForDisplay(result.prompt)}
       label: resolveGenreChipLabel(id),
     }));
 
+  type LiveSelectedKeywordType = 'genre' | 'mood' | 'theme' | 'style' | 'sound' | 'point-sound' | 'mix' | 'rap';
+  type LiveSelectedKeywordItem = { id: string; type: LiveSelectedKeywordType; label: string };
+
+  const liveSelectedKeywordItems: LiveSelectedKeywordItem[] = [
+    ...displayGenreKeywords,
+    ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: getMoodKeywordLabel(id) })),
+    ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: getThemeKeywordLabel(id) })),
+    ...filterSelectableIds(selectedStyles).flatMap((id) => {
+      const label = getStyleVariantLabelById(id);
+      return label ? [{ id, type: 'style' as const, label }] : [];
+    }),
+    ...filterSelectableIds(selectedInstrumentSounds).flatMap((id) => {
+      const label = getSoundVariantLabelById(id);
+      return label ? [{ id, type: 'sound' as const, label }] : [];
+    }),
+    ...filterSelectableIds(selectedPointSounds).flatMap((id) => {
+      const label = getSoundVariantLabelById(id);
+      return label ? [{ id: `point-${id}`, type: 'point-sound' as const, label: `#포인트: ${label}` }] : [];
+    }),
+    ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#언어혼합' }] : []),
+    ...(rapEnabled ? [{ id: 'rap', type: 'rap' as const, label: '#랩 ON' }] : []),
+  ];
+
   const removeAppliedGenreKeyword = (id: string) => {
     setIsGenreRandomized(false);
     setSelectedGenres((prev) => prev.filter((value) => value !== id));
@@ -11601,6 +14625,26 @@ ${normalizePromptForDisplay(result.prompt)}
     } else if (id === 'semi-trot') {
       const moodsToRemove = ['bright', 'hopeful', 'warm', 'tense'];
       setSelectedMoods((prev) => prev.filter((moodId) => !moodsToRemove.includes(moodId)));
+    }
+  };
+
+  const removeLiveSelectedKeyword = (item: LiveSelectedKeywordItem) => {
+    if (item.type === 'genre') removeAppliedGenreKeyword(item.id);
+    else if (item.type === 'mood') toggleSelection(item.id, 'mood');
+    else if (item.type === 'theme') toggleSelection(item.id, 'theme');
+    else if (item.type === 'style') setSelectedStyles((prev) => prev.filter((value) => value !== item.id));
+    else if (item.type === 'sound') {
+      if (!clearRecommendedSoundCombo(item.id)) {
+        setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
+      }
+    } else if (item.type === 'point-sound') {
+      const pointSoundId = item.id.replace(/^point-/, '');
+      setSelectedPointSounds((prev) => prev.filter((value) => value !== pointSoundId));
+    } else if (item.type === 'mix') {
+      setIsKoreanEnglishMix(false);
+      setEnglishMixRatio(10);
+    } else if (item.type === 'rap') {
+      setRapEnabled(false);
     }
   };
 
@@ -12256,78 +15300,107 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number],
   };
 
-  const setActionButtonHint = (item: CategoryItem) => {
-    if (isActionsFloating || isActionButtonsCollapsed) return;
+  const isActionButtonHintItem = (item: CategoryItem | null) =>
+    Boolean(item && ['generate', 'random', 'clear-all'].includes(item.id));
+
+  const setActionButtonHint = (item: CategoryItem, placement: 'floating' | 'inline') => {
+    // The inline copy is already docked directly above the page footer. Showing
+    // the shared bottom description there covers the action row itself, so only
+    // the temporary floating copy may publish action-button hints.
+    if (placement !== 'floating' || isActionButtonsCollapsed) return;
     setHoveredItem(item);
   };
 
   const clearActionButtonHint = () => {
-    if (isActionsFloating || isActionButtonsCollapsed) return;
-    setHoveredItem(null);
+    const current = studioDescriptionCurrentItemRef.current;
+    if (isActionButtonHintItem(current)) setHoveredItem(null);
   };
 
-  const actionButtonsContent = (
+  const renderActionButtonsContent = (placement: 'floating' | 'inline') => (
     <>
-      <div className="relative flex-shrink-0">
+      <div className="soridraw-action-item soridraw-action-random relative flex-shrink-0">
         <button
           onClick={() => {
             applyRandom();
-            setActionButtonHint({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' });
+            if (placement === 'floating') {
+              setActionButtonHint({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' }, placement);
+            }
           }}
-          onMouseEnter={() => setActionButtonHint({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' })}
+          onMouseEnter={() => {
+            if (placement === 'floating') {
+              setActionButtonHint({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' }, placement);
+            }
+          }}
           onMouseLeave={() => {
             clearActionButtonHint();
             handleLongPressEnd();
           }}
-          onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' })}
+          onTouchStart={() => {
+            if (placement === 'floating') {
+              handleLongPressStart({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' });
+            }
+          }}
           onTouchEnd={handleLongPressEnd}
           className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[#FFB400] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
           <Dices className="w-5 h-5 text-[#FFB400] group-hover:rotate-180 transition-transform duration-500" />
-          <span className="hidden md:block font-bold text-[#FFB400]">무작위</span>
+          <span className="soridraw-action-side-label hidden md:block font-bold text-[#FFB400]">무작위</span>
         </button>
       </div>
 
-      <div className="relative flex-1">
+      <div className="soridraw-action-item soridraw-action-generate relative flex-1">
         <button
+          data-soridraw-button-variant="primary"
           onClick={() => {
             setShowMainGenerationModal(true);
-            setActionButtonHint({
-              id: 'generate',
-              label: '생성하기',
-              description: isGenerating
-                ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
-                : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
-            });
+            if (placement === 'floating') {
+              setActionButtonHint({
+                id: 'generate',
+                label: '생성하기',
+                description: isGenerating
+                  ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
+                  : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
+              }, placement);
+            }
           }}
-          onMouseEnter={() => setActionButtonHint({
-            id: 'generate',
-            label: '생성하기',
-            description: isGenerating
-              ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
-              : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
-          })}
+          onMouseEnter={() => {
+            if (placement === 'floating') {
+              setActionButtonHint({
+                id: 'generate',
+                label: '생성하기',
+                description: isGenerating
+                  ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
+                  : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
+              }, placement);
+            }
+          }}
           onMouseLeave={() => {
             clearActionButtonHint();
             handleLongPressEnd();
           }}
-          onTouchStart={() => handleLongPressStart({
-            id: 'generate',
-            label: '생성하기',
-            description: isGenerating
-              ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
-              : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
-          })}
+          onTouchStart={() => {
+            if (placement === 'floating') {
+              handleLongPressStart({
+                id: 'generate',
+                label: '생성하기',
+                description: isGenerating
+                  ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
+                  : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
+              });
+            }
+          }}
           onTouchEnd={handleLongPressEnd}
-          className="soridraw-generate-heartbeat relative w-full py-4 md:py-5 rounded-2xl bg-[#FFC15A] text-[#171717] text-[25px] md:text-[34px] font-black shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(255,193,90,0.16)] hover:bg-[#FFCB70] transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
+          className="soridraw-action-generate-button soridraw-generate-heartbeat relative w-full py-4 md:py-5 rounded-2xl bg-[#FFC15A] text-[#171717] text-[25px] md:text-[34px] font-black shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(255,193,90,0.16)] hover:bg-[#FFCB70] transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
           {isGenerating && (
             <span
-              className="pointer-events-none absolute left-2 top-2 inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-black/20 bg-[#171717] px-1.5 text-[10px] font-black text-[#FFC15A] shadow-lg"
+              className="soridraw-generation-running-badge pointer-events-none absolute left-2 top-2"
               aria-label={`${runningGenerationCount}곡 생성 중`}
             >
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              {runningGenerationCount > 1 && <span className="ml-0.5">{runningGenerationCount}</span>}
+              <span className="soridraw-generation-running-spinner" aria-hidden="true" />
+              {runningGenerationCount > 1 && (
+                <span className="soridraw-generation-running-count">{runningGenerationCount}</span>
+              )}
             </span>
           )}
           <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
@@ -12335,13 +15408,17 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         </button>
       </div>
 
-      <div className="relative flex-shrink-0">
+      <div className="soridraw-action-item soridraw-action-reset relative flex-shrink-0">
         <button
           onClick={() => clearAll({ preserveHistory: true })}
-          onMouseEnter={() => setActionButtonHint({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
+          onMouseEnter={() => {
+            if (placement === 'floating') {
+              setActionButtonHint({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' }, placement);
+            }
+          }}
           onMouseLeave={() => clearActionButtonHint()}
           className={cn(
-            "h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all duration-150 ease-out border flex items-center justify-center gap-2 shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
+            "soridraw-action-reset-button h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all duration-150 ease-out border flex items-center justify-center gap-2 shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGlobalClearable
               ? "bg-[var(--card-bg)] border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
               : "bg-[var(--bg-primary)] border-btn-border text-[var(--text-secondary)]/50 cursor-not-allowed opacity-60"
@@ -12349,10 +15426,199 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           disabled={!isGlobalClearable}
         >
           <Trash2 className={cn("w-5 h-5", isGlobalClearable ? "text-red-500" : "text-red-500/30")} />
-          <span className="hidden md:block font-bold">전체초기화</span>
+          <span className="soridraw-action-side-label hidden md:block font-bold">전체초기화</span>
         </button>
       </div>
     </>
+  );
+
+  const generationQueueIndicatorItems = useMemo(() => (
+    generationQueueItems.flatMap((item) => {
+      const indicatorCount = Math.max(1, Math.floor(Number(item.generationCount) || 1));
+      return Array.from({ length: indicatorCount }, (_, copyIndex) => ({ item, copyIndex }));
+    })
+  ), [generationQueueItems]);
+
+  const renderExpandedActionBar = (placement: 'floating' | 'inline') => (
+<motion.div
+  ref={actionButtonsBarRef}
+  key={`action-buttons-expanded-bar-${placement}`}
+  initial={false}
+  animate={floatingActionBarVariants.animate}
+  exit={floatingActionBarVariants.exit}
+  transition={smoothActionPanelTransition}
+  data-soridraw-placement={placement}
+  className="soridraw-studio-action-bar soridraw-studio-action-bar--tracking z-[120] flex w-full justify-center pointer-events-none"
+>
+  <div className="soridraw-studio-action-panel relative w-full max-w-4xl pointer-events-auto">
+    {generationQueueItems.length > 0 && (
+      <div className="absolute bottom-[calc(100%+10px)] left-0 z-[146] max-w-full md:max-w-[48%]">
+        <div className="flex max-w-full items-center gap-2 overflow-x-auto px-1 py-1 custom-scrollbar">
+          {generationQueueIndicatorItems.map(({ item, copyIndex }, indicatorIndex) => {
+            const isDelayed = item.status === 'running'
+              && Boolean(item.startedAt)
+              && generationQueueClock - Number(item.startedAt) >= STUDIO_GENERATION_DELAY_NOTICE_MS;
+            const statusTitle = item.status === 'running'
+              ? (isDelayed ? '생성 지연 중 · 계속 진행 중' : '생성 중')
+              : item.status === 'queued'
+                ? '대기 중'
+                : item.status === 'completed'
+                  ? '완료 · 누르면 결과로 이동'
+                  : `생성 실패${item.errorMessage ? ` · ${item.errorMessage}` : ''}`;
+            return (
+              <button
+                key={`${item.id}-indicator-${copyIndex}`}
+                type="button"
+                onClick={() => handleGenerationQueueItemClick(item)}
+                className={cn(
+                  "soridraw-generation-queue-indicator relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[11px] font-black shadow-lg backdrop-blur-md transition-all hover:scale-105 active:scale-95",
+                  item.status === 'completed' && "is-completed",
+                  item.status === 'running' && "border-[#FFB400]/65 bg-[#2A2418]/95 text-[#FFD36A] shadow-[#FFB400]/15",
+                  isDelayed && "border-amber-300/80 shadow-[0_0_0_3px_rgba(251,191,36,0.10)]",
+                  item.status === 'queued' && "border-white/15 bg-[#242424]/95 text-white/60",
+                  item.status === 'completed' && "border-emerald-400/55 bg-emerald-500/20 text-emerald-300 shadow-emerald-500/10",
+                  item.status === 'failed' && "border-red-400/45 bg-red-500/15 text-red-300"
+                )}
+                title={`${indicatorIndex + 1}. ${item.summary} · ${statusTitle}`}
+                aria-label={`${indicatorIndex + 1}번 생성 결과 ${statusTitle}`}
+              >
+                {item.status === 'running' ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : item.status === 'completed' ? (
+                  <Check className="h-4 w-4" strokeWidth={3} />
+                ) : item.status === 'failed' ? (
+                  <AlertCircle className="h-4 w-4" />
+                ) : (
+                  <span>{indicatorIndex + 1}</span>
+                )}
+                {item.status === 'running' && (
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] text-[#FFD36A]">
+                    {indicatorIndex + 1}
+                  </span>
+                )}
+                {isDelayed && (
+                  <span className="pointer-events-none absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.75)]" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    )}
+
+    {selectedGenerationQueueItem && selectedGenerationQueueItem.status !== 'completed' && (
+      <div className="absolute bottom-[calc(100%+60px)] left-0 z-[147] w-[min(340px,calc(100vw-40px))] rounded-2xl border border-white/12 bg-[#1D1D1D]/98 p-3.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              {selectedGenerationQueueItem.status === 'running' && <Loader2 className="h-4 w-4 animate-spin text-[#FFB400]" />}
+              {selectedGenerationQueueItem.status === 'queued' && <span className="h-2 w-2 rounded-full bg-white/35" />}
+              {selectedGenerationQueueItem.status === 'failed' && <AlertCircle className="h-4 w-4 text-red-300" />}
+              <span className="text-xs font-black text-white">
+                {selectedGenerationQueueItem.status === 'running'
+                  ? (selectedGenerationQueueItem.startedAt && generationQueueClock - selectedGenerationQueueItem.startedAt >= STUDIO_GENERATION_DELAY_NOTICE_MS
+                    ? '생성 지연 중 · 계속 진행 중'
+                    : '생성 중')
+                  : selectedGenerationQueueItem.status === 'queued' ? '대기 중' : '생성 실패'}
+              </span>
+            </div>
+            <p className="mt-1 truncate text-[11px] font-bold text-white/65">{selectedGenerationQueueItem.summary}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelectedGenerationQueueItemId(null)}
+            className="rounded-lg p-1 text-white/40 transition-colors hover:bg-white/5 hover:text-white/75"
+            aria-label="작업 정보 닫기"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="max-h-52 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+          {selectedGenerationQueueItem.details.map((detail) => (
+            <div key={`${selectedGenerationQueueItem.id}-${detail.label}`} className="grid grid-cols-[52px_1fr] gap-2 text-[11px] leading-relaxed">
+              <span className="font-bold text-[#FFB400]/85">{detail.label}</span>
+              <span className="break-words text-white/72">{detail.value}</span>
+            </div>
+          ))}
+        </div>
+        {selectedGenerationQueueItem.status === 'failed' && selectedGenerationQueueItem.errorMessage && (
+          <div className="mt-3 rounded-xl border border-red-400/20 bg-red-500/8 px-3 py-2.5">
+            <p className="text-[10px] font-black text-red-300/90">실패 사유</p>
+            <p className="mt-1 break-words text-[11px] leading-relaxed text-red-100/75">
+              {selectedGenerationQueueItem.errorMessage}
+            </p>
+          </div>
+        )}
+        {selectedGenerationQueueItem.status === 'queued' && (
+          <button
+            type="button"
+            onClick={() => cancelQueuedGeneration(selectedGenerationQueueItem.id)}
+            className="mt-3 w-full rounded-xl border border-red-400/25 bg-red-500/10 py-2 text-[11px] font-bold text-red-300 transition-colors hover:bg-red-500/15"
+          >
+            대기 작업 취소
+          </button>
+        )}
+        {selectedGenerationQueueItem.status === 'failed' && (
+          <button
+            type="button"
+            onClick={() => removeGenerationQueueItem(selectedGenerationQueueItem.id)}
+            className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 py-2 text-[11px] font-bold text-white/65 transition-colors hover:bg-white/10"
+          >
+            목록에서 지우기
+          </button>
+        )}
+      </div>
+    )}
+
+    {generationModelNotice && (
+      <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] z-[140] whitespace-nowrap rounded-full border border-brand-orange/30 bg-[var(--card-bg)]/95 px-3 py-1.5 text-xs font-bold text-brand-orange shadow-lg shadow-brand-orange/10 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-200">
+        {generationModelNotice}
+      </div>
+    )}
+    <motion.div
+      drag={isActionSwipeCollapseMode ? "x" : false}
+      dragConstraints={isActionSwipeCollapseMode ? { left: 0, right: 0 } : undefined}
+      dragElastic={0.16}
+      onDragStart={() => {
+        if (!isActionSwipeCollapseMode) return;
+        // Mark the gesture before pointerup so a button underneath the swipe
+        // cannot receive the browser's trailing click. A normal tap/click never
+        // enters onDragStart, so ordinary generation clicks are unaffected.
+        blockActionSwipeTrailingClick(1500);
+      }}
+      onDragEnd={(_, info) => {
+        if (!isActionSwipeCollapseMode) return;
+        blockActionSwipeTrailingClick();
+        if (info.offset.x < -70 || info.velocity.x < -520) {
+          collapseActionButtons();
+        }
+      }}
+      onClickCapture={handleActionSwipeClickCapture}
+      onWheelCapture={forwardActionToggleWheelToBuilder}
+      style={{ transformOrigin: 'center bottom' }}
+      className="soridraw-studio-action-row flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
+    >
+      {/* 791 — Keep the split-desktop collapse control mounted even while the
+       * Builder is in its narrow mobile pane state. CSS owns its live visibility
+       * from data-soridraw-builder-mode, so dragging mobile -> desktop can reveal
+       * it immediately without an App-root rerender. <1100px keeps the old DOM
+       * behavior. */}
+      {(!isActionSwipeCollapseMode || isStudioWideSelectionLayout) && (
+        <motion.button
+          type="button"
+          onClick={collapseActionButtons}
+          onMouseEnter={() => {}}
+          onMouseLeave={() => {}}
+          className="soridraw-action-collapse hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#FFB400] hover:bg-white/[0.045] hover:text-[#FFB400] transition-all shadow-none items-center justify-center opacity-100"
+          aria-label="생성 버튼 접기"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </motion.button>
+      )}
+      {renderActionButtonsContent(placement)}
+    </motion.div>
+  </div>
+</motion.div>
   );
 
   const filteredSoundTextureCycles = useMemo(
@@ -12360,9 +15626,132 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     [],
   );
 
+  const formatStudioDashboardTime = (timestamp?: number | null) => {
+    if (!timestamp) return '기록 없음';
+    const elapsed = Math.max(0, Date.now() - timestamp);
+    if (elapsed < 60_000) return '방금 전';
+    if (elapsed < 3_600_000) return `${Math.max(1, Math.floor(elapsed / 60_000))}분 전`;
+    if (elapsed < 86_400_000) return `${Math.max(1, Math.floor(elapsed / 3_600_000))}시간 전`;
+    return new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(timestamp);
+  };
+
+
+  const getStudioSongGenerationBatchId = (song: SongResult | null | undefined) =>
+    String((song?.appliedKeywords as any)?.generationBatchId || '');
+
+  const completedGenerationBatchIds = useMemo(() => new Set(
+    generationQueueItems
+      .filter((item) => item.status === 'completed' && item.generationBatchId)
+      .map((item) => String(item.generationBatchId)),
+  ), [generationQueueItems]);
+
+  const isStudioDashboardSongUnread = (song: SongResult) => {
+    const batchId = getStudioSongGenerationBatchId(song);
+    return Boolean(batchId && completedGenerationBatchIds.has(batchId));
+  };
+
+  const clearCompletedGenerationForSong = (song: SongResult) => {
+    const batchId = getStudioSongGenerationBatchId(song);
+    if (!batchId) return;
+    setGenerationQueueItems((current) => current.filter((item) => !(
+      item.status === 'completed' && String(item.generationBatchId || '') === batchId
+    )));
+    setSelectedGenerationQueueItemId((current) => {
+      if (!current) return current;
+      const selectedItem = generationQueueItems.find((item) => item.id === current);
+      return selectedItem?.status === 'completed' && String(selectedItem.generationBatchId || '') === batchId
+        ? null
+        : current;
+    });
+  };
+
+  const openStudioDashboardSong = (song: SongResult, index: number) => {
+    clearCompletedGenerationForSong(song);
+    setHistoryIndex(index);
+    setResult(song);
+    setLatestGenerationBatchId((song.appliedKeywords as any)?.generationBatchId || null);
+    window.requestAnimationFrame(() => {
+      resultAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
+    <div className="soridraw-app-root min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
+      {user && emailVerificationGate !== 'idle' && (
+        <Portal>
+          <div className="fixed inset-0 z-[30000] flex items-center justify-center bg-black/78 px-4 py-8 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              className="relative w-full max-w-[430px] rounded-2xl border border-white/12 bg-[#151313] p-6 shadow-[0_28px_100px_rgba(0,0,0,0.62)]"
+            >
+              <button
+                type="button"
+                onClick={requestCloseEmailVerificationGate}
+                aria-label="이메일 인증 창 닫기"
+                className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-white/45 transition-all hover:bg-white/[0.07] hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              {emailVerificationGate === 'checking' ? (
+                <div className="flex min-h-40 flex-col items-center justify-center text-center">
+                  <Loader2 className="h-7 w-7 animate-spin text-[#F2C587]" />
+                  <p className="mt-4 text-sm font-black text-white">계정 확인 중</p>
+                  <p className="mt-1 text-xs font-bold text-white/50">이메일 인증 상태와 관리자 예외 여부를 확인하고 있습니다.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#F2C587]/20 bg-[#F2C587]/10">
+                    <Shield className="h-6 w-6 text-[#F2C587]" />
+                  </div>
+                  <h2 className="mt-4 text-xl font-black text-white">이메일 인증이 필요합니다</h2>
+                  <p className="mt-2 text-sm font-bold leading-6 text-white/58">
+                    <span className="text-white">{user.email}</span> 주소로 받은 인증메일의 링크를 한 번만 눌러주세요. 인증 전에는 앱을 사용할 수 없습니다.
+                  </p>
+
+                  {emailVerificationMessage && (
+                    <div className="mt-4 rounded-xl border border-[#F2C587]/20 bg-[#F2C587]/10 px-3 py-2.5 text-xs font-bold leading-5 text-[#FFE08A]">
+                      {emailVerificationMessage}
+                    </div>
+                  )}
+
+                  <div className="mt-5 grid gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCheckEmailVerification}
+                      disabled={isEmailVerificationActionPending}
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#FFD84F] via-[#FF9B72] to-[#F06C8B] px-4 text-sm font-black text-[#151313] transition-all hover:brightness-110 disabled:cursor-wait disabled:opacity-65"
+                    >
+                      {isEmailVerificationActionPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                      인증 완료 확인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void sendVerificationEmailToCurrentUser({ source: 'manual' })}
+                      disabled={isEmailVerificationActionPending || emailVerificationResendSeconds > 0}
+                      className="h-11 w-full rounded-xl border border-white/12 bg-white/[0.06] px-4 text-sm font-black text-white transition-all hover:bg-white/[0.1] disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {emailVerificationResendSeconds > 0
+                        ? `${emailVerificationResendSeconds}초 후 다시 보내기`
+                        : '인증메일 다시 보내기'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={requestCloseEmailVerificationGate}
+                      disabled={isEmailVerificationActionPending}
+                      className="h-10 w-full rounded-xl text-xs font-black text-white/45 transition-all hover:bg-white/[0.05] hover:text-white/70 disabled:opacity-50"
+                    >
+                      다른 계정으로 로그인
+                    </button>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </div>
+        </Portal>
+      )}
+
       {/* Account Status Banner */}
       {user && userStatus !== 'active' && !isAdminUser && (
         <Portal>
@@ -12646,6 +16035,19 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     Google로 계속하기
                   </button>
 
+                  {authMode !== 'reset' && (
+                    <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-black/12 px-3 py-2.5 text-xs font-bold text-white/60 transition-all hover:border-white/15 hover:text-white/75">
+                      <input
+                        type="checkbox"
+                        checked={rememberLogin}
+                        onChange={(event) => setRememberLogin(event.target.checked)}
+                        disabled={isLoggingIn}
+                        className="h-4 w-4 rounded border border-white/20 accent-sky-500 disabled:opacity-60"
+                      />
+                      로그인 유지
+                    </label>
+                  )}
+
                   <div className="my-4 flex items-center gap-3">
                     <div className="h-px flex-1 bg-white/10" />
                     <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/32">or</span>
@@ -12741,7 +16143,26 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         )}
       </AnimatePresence>
 
-      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminMenuUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} menuVisibility={menuVisibility} menuAdminOnly={menuAdminOnly} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
+      <Navigation
+        user={user}
+        cachedHeaderIdentity={cachedHeaderIdentity}
+        isAuthReady={isAuthReady}
+        handleLogin={handleLogin}
+        isLoggingIn={isLoggingIn}
+        handleLogout={handleLogout}
+        isAdminUser={isAdminMenuUser}
+        menuVisibility={menuVisibility}
+        menuAdminOnly={menuAdminOnly}
+        sunoLibrarySignal={sunoLibrarySignal}
+        sunoLibrarySignalDotClass={sunoLibrarySignalDotClass}
+        clearSunoLibrarySignal={clearSunoLibrarySignal}
+        studioCompactMobileLayout={isStudioCompactMobileLayout}
+        studioWorkspaceView={studioWorkspaceView}
+        onStudioWorkspaceSelect={selectStudioWorkspaceView}
+      />
+
+      <SplitPerformanceDiagnostics isAdmin={isMasterDiagnosticsUser} />
+      <CacheDiagnosticsOverlay isAdmin={isMasterDiagnosticsUser} />
 
       <Routes>
         <Route path="/" element={
@@ -12753,10 +16174,303 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <FeatureUnavailablePage label="홈" fallbackPath={navigationFallbackPath} />
           )
         } />
+        <Route path="/explore" element={<ExploreShellLazy />} />
         <Route path="/studio" element={
           canAccessNavigationMenu('studio') ? (
-          <>
-
+          <StudioPageFrame
+            workspaceView={studioWorkspaceView}
+            compactMobileLayout={isStudioCompactMobileLayout}
+            leftRail={
+              <StudioLeftRail
+                activeWorkspace={studioWorkspaceView}
+                onCreate={() => {
+                  selectStudioWorkspaceView('create');
+                  window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: window.scrollX, behavior: 'auto' }));
+                }}
+                onRecentSongs={() => selectStudioWorkspaceView('recent')}
+                onMusicNote={() => selectStudioWorkspaceView('music-note')}
+                onLibrary={() => selectStudioWorkspaceView('library')}
+                onSearch={openGlobalSearchModal}
+                onApiSettings={() => navigate('/suno-api-settings')}
+                onLab={() => navigate('/lab')}
+                onProfile={() => navigate('/my-page')}
+                onSettings={() => navigate('/my-page?tab=settings')}
+                onPlan={() => navigate('/my-page?tab=plan')}
+                onBilling={() => navigate('/my-page?tab=billing')}
+                onLogout={handleLogout}
+                profileName={user?.displayName || cachedHeaderIdentity?.displayName || 'SORiDRAW'}
+                profileEmail={user?.email || ''}
+                profilePhotoURL={user?.photoURL || cachedHeaderIdentity?.photoURL || ''}
+              />
+            }
+            rightRail={
+              <StudioRightRail
+                isGenerating={isGenerating}
+                runningCount={runningGenerationCount}
+                queuedCount={queuedGenerationCount}
+                history={history}
+                selectedIndex={historyIndex}
+                remainingCredits={sunoRemainingCredits}
+                creditsUpdatedAt={sunoRemainingCreditsUpdatedAt}
+                selectedKeywords={liveSelectedKeywordItems}
+                onRemoveSelectedKeyword={removeLiveSelectedKeyword}
+                formatTime={formatStudioDashboardTime}
+                formatSongTitle={formatUnifiedTitle}
+                onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
+                onOpenSong={(song, index) => {
+                  selectStudioWorkspaceView('recent');
+                  openStudioDashboardSong(song, index);
+                }}
+                isSongUnread={isStudioDashboardSongUnread}
+                isSongFavorited={isSongFavorited}
+                onOpenApiSettings={() => navigate('/suno-api-settings')}
+              />
+            }
+          >
+              {isStudioBlackActionMode && isMasterDiagnosticsUser && splitPerfToolsVisible && (
+                <>
+                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 비교 전환">
+                    <button
+                      type="button"
+                      className={studioSplitEngineOverride === null ? 'is-active' : ''}
+                      onClick={() => setStudioSplitEngine('auto')}
+                      title={studioSplitAutoTitle}
+                    >
+                      자동
+                    </button>
+                    <button
+                      type="button"
+                      className={studioSplitEngineOverride === 'lite' ? 'is-active' : ''}
+                      onClick={() => setStudioSplitEngine('lite')}
+                      title="진단용 강제 선택 · 초경량 Studio 분할 엔진 V2"
+                    >
+                      Lite V2
+                    </button>
+                    <button
+                      type="button"
+                      className={studioSplitEngineOverride === 'legacy' ? 'is-active' : ''}
+                      onClick={() => setStudioSplitEngine('legacy')}
+                      title="진단용 강제 선택 · 기존 StudioSplitWorkspace"
+                    >
+                      기존 방식
+                    </button>
+                  </div>
+                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--generation" aria-label="생성바 성능 비교 전환">
+                    <button
+                      type="button"
+                      className={studioGenerationBarPerfMode === 'normal' ? 'is-active' : ''}
+                      onClick={() => setStudioGenerationBarPerfMode('normal')}
+                      title="현재 생성바 · 분할 드래그 중 위치를 실시간 추적"
+                    >
+                      생성바 정상
+                    </button>
+                    <button
+                      type="button"
+                      className={studioGenerationBarPerfMode === 'freeze' ? 'is-active' : ''}
+                      onClick={() => setStudioGenerationBarPerfMode('freeze')}
+                      title="생성바는 그대로 표시하고 드래그 중 위치 추적 쓰기만 중지 · 놓으면 최종 위치 동기화"
+                    >
+                      추적 정지
+                    </button>
+                    <button
+                      type="button"
+                      className={studioGenerationBarPerfMode === 'off' ? 'is-active' : ''}
+                      onClick={() => setStudioGenerationBarPerfMode('off')}
+                      title="생성바 렌더 자체를 제외해 paint/render 비용까지 비교"
+                    >
+                      생성바 OFF
+                    </button>
+                  </div>
+                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--v2-drag" aria-label="Lite V2 드래그 병목 비교 전환">
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'pure-pane-hybrid' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('pure-pane-hybrid')}
+                      title="현재 생산 기본 엔진 · Lite V2 + Pure Pane 하이브리드"
+                    >
+                      V2 기본
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'content-left-freeze' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('content-left-freeze')}
+                      title="왼쪽 곡 만들기 콘텐츠 폭만 드래그 시작값으로 고정 · 오른쪽은 정상 reflow"
+                    >
+                      좌 콘텐츠 고정
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'content-right-freeze' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('content-right-freeze')}
+                      title="오른쪽 결과 콘텐츠 폭만 드래그 시작값으로 고정 · 왼쪽은 정상 reflow"
+                    >
+                      우 콘텐츠 고정
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'content-freeze' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('content-freeze')}
+                      title="좌우 콘텐츠 폭을 모두 고정해 전체 width reflow 비용 비교"
+                    >
+                      양쪽 고정
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'aux-boundary' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('aux-boundary')}
+                      title="드래그 중 부가 동기화는 정지하되 PC/Tablet/Compact/Mobile 실제 경계가 바뀔 때만 responsive UI를 즉시 갱신"
+                    >
+                      경계만 동기
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'aux-freeze' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('aux-freeze')}
+                      title="드래그 중 Pane/분할선 geometry만 갱신하고 responsive broadcast·외부 geometry·scroll lock·상태 마커는 놓을 때 반영"
+                    >
+                      부가동기 정지
+                    </button>
+                  </div>
+                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--v2-trace" aria-label="Lite V2 Trace 원인 검증 전환">
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'pure-pane-hybrid' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('pure-pane-hybrid')}
+                      title="Trace 기준 비교점 · 현재 생산 기본 Pure Pane 하이브리드"
+                    >
+                      Trace 기본
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'scroll-defer' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('scroll-defer')}
+                      title="드래그 중 pane scrollTop 재고정만 생략하고 pointer-up 후 1회 복원"
+                    >
+                      스크롤락 지연
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'direct-geometry' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('direct-geometry')}
+                      title="드래그 중 workspace builder-width CSS 변수 갱신 대신 builder width + result left + splitter left만 직접 갱신"
+                    >
+                      Direct Geometry
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'direct-scroll-defer' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('direct-scroll-defer')}
+                      title="Direct Geometry와 스크롤락 지연을 동시에 적용"
+                    >
+                      Direct + 지연
+                    </button>
+                  </div>
+                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--v2-responsive" aria-label="Lite V2 반응형 전환 병목 비교">
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'direct-scroll-defer' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('direct-scroll-defer')}
+                      title="756 최적 비교점 · Direct Geometry + 스크롤락 지연"
+                    >
+                      Direct+ 현재
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'responsive-freeze' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('responsive-freeze')}
+                      title="Direct+를 유지하고 드래그 중 PC/Tablet/Mobile responsive 동기만 완전히 정지 · 놓을 때 1회 반영"
+                    >
+                      반응형 정지
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'responsive-hysteresis' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('responsive-hysteresis')}
+                      title="Direct+ 유지 · responsive 경계에 28px dead-band를 둬 경계 왕복 재계산을 억제"
+                    >
+                      Hysteresis
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'local-responsive' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('local-responsive')}
+                      title="Direct+ 유지 · pane/page 내부 responsive는 실시간 반영하되 html 전역 responsive dataset 갱신은 드래그 종료까지 지연"
+                    >
+                      Local Responsive
+                    </button>
+                  </div>
+                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--v2-pure" aria-label="Lite V2 순수 pane layout 진단">
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'pure-pane' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('pure-pane')}
+                      title="드래그 중 Builder + Result + Splitter geometry만 갱신. responsive/external/ARIA/broadcast/scroll sync는 pointer-up까지 정지"
+                    >
+                      Pure Pane
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'pure-pane-hybrid' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('pure-pane-hybrid')}
+                      title="799 생산 기본 엔진 · Pure Pane geometry는 매 프레임 유지하고 Builder가 820px Compact/태블릿 세로 또는 660px Mobile 경계를 넘는 순간에만 pane responsive 상태를 1회 갱신. 7/5칸은 CSS 폭 반응 그대로 유지"
+                    >
+                      Pure Pane 하이브리드
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'pure-pane-live' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('pure-pane-live')}
+                      title="비교용 · Pure Pane geometry에 기존 PC/Tablet/Compact/Mobile content responsive publication을 모두 실시간 연결"
+                    >
+                      Pure Pane 실시간
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'splitter-only' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('splitter-only')}
+                      title="진단용: 실제 pane은 고정하고 분할선만 pointer/rAF를 따라 이동. 입력 엔진 자체 속도 확인"
+                    >
+                      Splitter Only
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'left-pane-only' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('left-pane-only')}
+                      title="진단용: Builder pane + Splitter만 실제 resize. 오른쪽 pane layout 비용 제외"
+                    >
+                      Left Pane Only
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'right-pane-only' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('right-pane-only')}
+                      title="진단용: Result pane + Splitter만 실제 resize. 왼쪽 pane layout 비용 제외"
+                    >
+                      Right Pane Only
+                    </button>
+                  </div>
+                </>
+              )}
               {/* Header */}
               <header className="soridraw-studio-hero studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
                 <div className="soridraw-studio-shell mx-auto w-full max-w-[1500px] px-4 md:px-6 relative">
@@ -12765,7 +16479,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <button
                       type="button"
                       onClick={openGlobalSearchModal}
-                      className="absolute bottom-0 right-5 md:right-6 z-20 flex h-9 w-9 md:h-10 md:w-10 translate-y-1/2 items-center justify-center rounded-2xl bg-transparent border-0 shadow-none hover:scale-105 transition-all group"
+                      className="soridraw-studio-hero-search-button absolute bottom-0 right-5 md:right-6 z-20 flex h-9 w-9 md:h-10 md:w-10 translate-y-1/2 items-center justify-center rounded-2xl bg-transparent border-0 shadow-none hover:scale-105 transition-all group"
                       aria-label="통합 검색"
                       title="통합 검색"
                     >
@@ -12773,26 +16487,62 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </button>
                   )}
 
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex flex-col items-start mt-4 md:mt-10 translate-y-6 md:translate-y-5"
-                  >
-                    <h1 
-                      className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
+                  <div className="soridraw-studio-hero-row">
+                    <motion.div
+                      initial={false}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="soridraw-studio-masthead flex flex-col items-start mt-4 md:mt-10"
                     >
-                      <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
-                      <span>Sori <span className="text-[#FFB400]">Studio</span></span>
-                    </h1>
-                  </motion.div>
+                      <h1 
+                        className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
+                      >
+                        <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
+                        <span>Sori <span className="text-[#FFB400]">Studio</span></span>
+                      </h1>
+                    </motion.div>
+                    <div
+                      id="soridraw-studio-workspace-hero-host"
+                      className="soridraw-studio-workspace-hero-host"
+                      aria-live="polite"
+                    />
+                  </div>
                 </div>
               </header>
 
             <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
               {isStudioLoaded && (
-                <>
-                  {/* Selection Sections */}
-                  <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
+                <StudioSplitEngineWorkspace
+                  engine={studioSplitEngine}
+                  liteRuntimeProfile={studioLiteRuntimeProfile}
+                  viewMode="split"
+                  workspaceView={studioWorkspaceView}
+                  workspaceRequestId={studioWorkspaceLayoutRequestId}
+                  compactMobileMode={isStudioCompactMobileLayout}
+                  generationBarPerfMode={studioGenerationBarPerfMode}
+                  v2DragPerfMode={studioV2DragPerfMode}
+                  builderMasthead={
+                    <div className="soridraw-studio-scroll-builder-masthead">
+                      <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">
+                        <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
+                        <span>Sori <span className="text-[#FFB400]">Studio</span></span>
+                      </h1>
+                      {user && (
+                        <button
+                          type="button"
+                          onClick={openGlobalSearchModal}
+                          className="soridraw-studio-scroll-search-button flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-2xl bg-transparent border-0 shadow-none hover:scale-105 transition-all group"
+                          aria-label="통합 검색"
+                          title="통합 검색"
+                        >
+                          <Search className="w-6 h-6 md:w-7 md:h-7 text-[#FFB400] group-hover:scale-110 transition-transform" />
+                        </button>
+                      )}
+                    </div>
+                  }
+                >
+                  <StudioBuilderPane>
+                    {/* Selection Sections */}
+                  <div className="soridraw-studio-selection-grid grid grid-cols-1 gap-5 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
@@ -12856,11 +16606,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 isLocked={menuLocks.genre}
                 onToggleLock={() => toggleMenuLock('genre')}
                 onHover={setHoveredItem}
-                isExpanded={isGenreExpanded}
-                onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
+                expandResetToken={genreExpandResetToken}
                 onHeightChange={setGenreHeight}
-                forcedHeight={isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+                forcedHeight={!isStudioBlackActionMode && isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
                 onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
                 directInput={{
                   selectedText: subGenre.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || selectedGenres.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || '',
@@ -13007,8 +16756,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         </AnimatePresence>
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
+        <div className="soridraw-studio-secondary-section space-y-5">
+          <div className="soridraw-studio-secondary-grid soridraw-studio-mood-theme-grid soridraw-studio-vocal-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
             <CategorySection 
               title="Mood" 
               titleKo="분위기"
@@ -13024,12 +16773,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
-              hoveredItem={hoveredItem}
               isExpanded={isMoodExpanded}
               onToggleExpand={() => toggleSubSections('mood')}
               onHeightChange={setMoodHeight}
-              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
-              allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
+              forcedHeight={isStudioTwoColumnSelectionLayout && row2MaxHeight > 0 ? row2MaxHeight : undefined}
               isRandomized={isMoodRandomized}
               hidePin={true}
               uniformKeywordGrid={true}
@@ -13054,12 +16801,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
-              hoveredItem={hoveredItem}
               isExpanded={isThemeExpanded}
               onToggleExpand={() => toggleSubSections('theme')}
               onHeightChange={setThemeHeight}
-              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
-              allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
+              forcedHeight={isStudioTwoColumnSelectionLayout && row2MaxHeight > 0 ? row2MaxHeight : undefined}
               isRandomized={isThemeRandomized}
               hidePin={true}
               uniformKeywordGrid={true}
@@ -13069,21 +16814,41 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onCancelSelected: clearDirectThemeInput,
               }}
             />
-            <div className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface md:col-span-2 rounded-[26px] bg-[var(--card-bg)] overflow-visible relative">
-              <div className="p-5 md:p-6 flex items-center justify-between gap-4">
+            <div className="soridraw-storyboard-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface md:col-span-2 rounded-[26px] bg-[var(--card-bg)] overflow-visible relative">
+              <div className="soridraw-storyboard-card-inner px-5 md:px-6 py-3.5 md:py-4 flex items-center justify-between gap-4">
                 <button
                   type="button"
                   onClick={openStoryboardModal}
-                  className="flex-1 min-w-0 text-left"
+                  className="soridraw-storyboard-launcher flex-1 min-w-0 text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-[#FFB400]/14 border border-black/20 flex items-center justify-center shrink-0">
-                      <Users className="w-[22px] h-[22px] text-[#FFD36A]" />
+                    <div className="soridraw-storyboard-trigger-icon w-11 h-11 rounded-2xl bg-[#FFB400]/14 border border-black/20 flex items-center justify-center shrink-0">
+                      <Users className="soridraw-storyboard-trigger-icon-glyph w-[22px] h-[22px] text-[#FFD36A]" />
                     </div>
-                    <div className="min-w-0">
+                    <div className="soridraw-card-title-anchor relative min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-base md:text-lg font-black text-[var(--text-primary)]">스토리보드</h3>
+                        <h3
+                          data-soridraw-menu-title-tooltip-anchor
+                          onMouseEnter={() => setShowStoryboardTitleTooltip(true)}
+                          onMouseLeave={() => setShowStoryboardTitleTooltip(false)}
+                          className="text-base md:text-lg font-black text-[var(--text-primary)] cursor-help"
+                        >
+                          스토리보드
+                        </h3>
                       </div>
+                      {showStoryboardTitleTooltip && (
+                        <MenuTitleTooltipPortal>
+<motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 10 }}
+                            className="soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl w-64 pointer-events-none"
+                          >
+                            <p className="soridraw-card-title-tooltip-label hidden">스토리보드</p>
+                            <p className="soridraw-card-title-tooltip-description text-[11px] leading-snug">캐릭터, 관계, 말투, 감정, 세계관과 이야기 전개를 설정합니다.</p>
+                          </motion.div>
+                        </MenuTitleTooltipPortal>
+                      )}
                       <p className="text-xs md:text-sm text-[var(--text-secondary)] truncate">
                         {buildStoryboardSummary(situation)}
                       </p>
@@ -13091,7 +16856,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </div>
                 </button>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="soridraw-card-header-actions flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => toggleMenuLock('situation')}
@@ -13312,6 +17077,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}
             </AnimatePresence>
 
+            <div className="soridraw-studio-vocal-slot min-w-0 h-full">
             <VocalControl 
               maleCount={maleCount}
               femaleCount={femaleCount}
@@ -13359,7 +17125,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsVocalCharacterModalOpen(isOpen); }}
               genreHints={[...selectedGenres, ...subGenre, ...selectedStyles]}
               randomActivationKey={vocalRandomActivationKey}
+              naturalResponsiveHeight={isStudioBlackActionMode}
             />
+            </div>
+            <div className="soridraw-studio-lyrics-slot min-w-0 h-full">
             <SongStructureIntegratedControl
               lyricsLength={lyricsLength}
               onLyricsLengthChange={setLyricsLength}
@@ -13399,12 +17168,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}
               vocalSectionTags={vocalSectionTagOptions}
               selectedGenreIds={Array.from(new Set([...selectedGenres, ...subGenre]))}
+              naturalResponsiveHeight={isStudioBlackActionMode}
             />
+            </div>
           </div>
         </div>
 
         {/* Tempo Control Bar */}
-        <div className="mb-4">
+        <div className="soridraw-studio-tempo-wrap mb-4">
           <TempoControl 
             enabled={tempoEnabled}
             onEnabledChange={setTempoEnabled}
@@ -13454,7 +17225,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   animate={{ opacity: isInputFocused ? 0.78 : 0.92, y: 0, filter: 'blur(0px)' }}
                   exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }}
                   transition={{ duration: 0.35, ease: 'easeOut' }}
-                  className="pointer-events-none absolute left-12 right-52 md:right-60 top-1/2 -translate-y-1/2 z-10 text-base md:text-lg leading-snug text-white/65 truncate"
+                  className="soridraw-command-placeholder pointer-events-none absolute left-12 right-52 md:right-60 top-1/2 -translate-y-1/2 z-10 text-base md:text-lg leading-snug text-white/65 truncate"
                 >
                   {commandPlaceholderExamples[commandPlaceholderIndex]}
                 </motion.div>
@@ -13488,8 +17259,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onClick={() => setIsLyricMode(!isLyricMode)}
                 onMouseEnter={() => setHoveredItem({ id: 'lyric-mode', label: '직접 작사', description: '가사 초안을 직접 입력하여 생성 결과에 우선 반영합니다.' })}
                 onMouseLeave={() => setHoveredItem(null)}
+                aria-pressed={isLyricMode}
                 className={cn(
-                  "flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-[13px] md:text-sm font-extrabold transition-all border shadow-[0_8px_24px_rgba(0,0,0,0.28)] min-h-[42px]",
+                  "soridraw-direct-lyrics-toggle flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-[13px] md:text-sm font-extrabold transition-all border shadow-[0_8px_24px_rgba(0,0,0,0.28)] min-h-[42px]",
                   isLyricMode 
                     ? "bg-[#F4A900] text-[#18110A] border-[#F4A900] hover:bg-[#F7B31A] hover:border-[#F7B31A]" 
                     : "bg-white/14 text-white border-white/25 hover:bg-white/20 hover:border-[#F4A900]/80"
@@ -13525,8 +17297,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <div className="flex items-center bg-btn-bg rounded-lg p-0.5 border border-btn-border shadow-btn">
                         <button
                           onClick={() => setLyricMode('assist')}
+                          aria-pressed={lyricMode === 'assist'}
                           className={cn(
-                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
+                            "soridraw-lyric-mode-option px-2 py-1 rounded-md text-[10px] font-bold transition-all",
                             lyricMode === 'assist' 
                               ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
                               : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -13536,8 +17309,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         </button>
                         <button
                           onClick={() => setLyricMode('preserve')}
+                          aria-pressed={lyricMode === 'preserve'}
                           className={cn(
-                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
+                            "soridraw-lyric-mode-option px-2 py-1 rounded-md text-[10px] font-bold transition-all",
                             lyricMode === 'preserve' 
                               ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
                               : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -13577,19 +17351,40 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           </AnimatePresence>
 
           {/* Action Buttons Anchor */}
-          <div ref={actionButtonsAnchorRef} className="relative h-0" aria-hidden="true" />
+          <div
+            ref={actionButtonsAnchorRef}
+            className={cn(
+              "relative soridraw-studio-action-geometry-anchor",
+              // 535 — Studio Black uses this node only as an X/width geometry
+              // probe. It never reserves a second expanded-row slot, so collapse,
+              // expand and PC/mobile pane changes cannot alter the scroll range.
+              !isStudioBlackActionMode
+                && shouldRenderActionButtons
+                && !isActionButtonsCollapsed
+                && !isActionsFloating
+                ? "soridraw-studio-action-anchor-expanded"
+                : "h-0"
+            )}
+            data-soridraw-docked={!isStudioBlackActionMode && !isActionsFloating ? "true" : "false"}
+          >
+            {shouldRenderActionButtons
+              && !isStudioBlackActionMode
+              && !isActionButtonsCollapsed
+              && !isActionsFloating
+              && renderExpandedActionBar('inline')}
+          </div>
 
           {/* Floating / Collapsible Action Buttons */}
           <AnimatePresence initial={false} mode="wait">
-            {shouldShowActionButtons && (
-              <Portal>
-                {isActionButtonsCollapsed ? (
+            {shouldRenderActionButtons && (
+              isActionButtonsCollapsed ? (
+                <Portal>
                   <motion.button
                     key="action-buttons-collapsed-toggle"
                     type="button"
-                    initial={{ opacity: 0, y: 8, scale: 1 }}
+                    initial={{ opacity: 0, y: 0, scale: 1 }}
                     animate={{ opacity: 1, y: 0, scale: [1, 1.1, 0.995, 1.045, 1] }}
-                    exit={{ opacity: 0, y: 8, scale: 1, transition: { duration: 0 } }}
+                    exit={{ opacity: 0, y: 0, scale: 1, transition: { duration: 0 } }}
                     transition={{
                       opacity: smoothActionPanelTransition,
                       y: smoothActionPanelTransition,
@@ -13601,266 +17396,140 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         repeatDelay: 0.18,
                       },
                     }}
-                    drag={isActionDragMobile ? "x" : false}
-                    dragConstraints={isActionDragMobile ? { left: 0, right: 92 } : undefined}
+                    drag={isActionSwipeCollapseMode ? "x" : false}
+                    dragConstraints={isActionSwipeCollapseMode ? { left: 0, right: 92 } : undefined}
                     dragElastic={0.12}
                     onDragEnd={(_, info) => {
-                      if (!isActionDragMobile) return;
+                      if (!isActionSwipeCollapseMode) return;
                       if (info.offset.x > 34 || info.velocity.x > 360) {
-                        setIsActionButtonsCollapsed(false);
+                        expandActionButtons();
                       }
                     }}
-                    onClick={() => setIsActionButtonsCollapsed(false)}
+                    onClick={expandActionButtons}
+                    onWheelCapture={forwardActionToggleWheelToBuilder}
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
+                    data-soridraw-placement="floating"
                     className="soridraw-studio-action-collapsed group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-142px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFB400] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06] will-change-transform"
                   >
-                                        <span className="relative flex h-9 w-9 items-center justify-center">
+                    <span className="soridraw-studio-action-collapsed-arrow relative flex h-9 w-9 items-center justify-center">
                       <ArrowRight className="h-5 w-5 translate-x-0.5 text-[#171717] transition-transform group-hover:translate-x-1" strokeWidth={3.2} />
                     </span>
-                    <span className="pointer-events-none absolute right-2 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-[#171717]/70" />
                   </motion.button>
-                ) : (
-                  <motion.div
-                    key="action-buttons-expanded-bar"
-                    initial={floatingActionBarVariants.initial}
-                    animate={floatingActionBarVariants.animate}
-                    exit={floatingActionBarVariants.exit}
-                    transition={smoothActionPanelTransition}
-                    className="soridraw-studio-action-bar fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8 will-change-transform"
-                  >
-                    <div className="soridraw-studio-action-panel relative w-full max-w-4xl pointer-events-auto">
-                      {generationQueueItems.length > 0 && (
-                        <div className="absolute bottom-[calc(100%+10px)] left-0 z-[146] max-w-full md:max-w-[48%]">
-                          <div className="flex max-w-full items-center gap-2 overflow-x-auto px-1 py-1 custom-scrollbar">
-                            {generationQueueItems.map((item, index) => {
-                              const isDelayed = item.status === 'running'
-                                && Boolean(item.startedAt)
-                                && generationQueueClock - Number(item.startedAt) >= STUDIO_GENERATION_DELAY_NOTICE_MS;
-                              const statusTitle = item.status === 'running'
-                                ? (isDelayed ? '생성 지연 중 · 계속 진행 중' : '생성 중')
-                                : item.status === 'queued'
-                                  ? '대기 중'
-                                  : item.status === 'completed'
-                                    ? '완료 · 누르면 결과로 이동'
-                                    : `생성 실패${item.errorMessage ? ` · ${item.errorMessage}` : ''}`;
-                              return (
-                                <button
-                                  key={item.id}
-                                  type="button"
-                                  onClick={() => handleGenerationQueueItemClick(item)}
-                                  className={cn(
-                                    "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[11px] font-black shadow-lg backdrop-blur-md transition-all hover:scale-105 active:scale-95",
-                                    item.status === 'running' && "border-[#FFB400]/65 bg-[#2A2418]/95 text-[#FFD36A] shadow-[#FFB400]/15",
-                                    isDelayed && "border-amber-300/80 shadow-[0_0_0_3px_rgba(251,191,36,0.10)]",
-                                    item.status === 'queued' && "border-white/15 bg-[#242424]/95 text-white/60",
-                                    item.status === 'completed' && "border-emerald-400/55 bg-emerald-500/20 text-emerald-300 shadow-emerald-500/10",
-                                    item.status === 'failed' && "border-red-400/45 bg-red-500/15 text-red-300"
-                                  )}
-                                  title={`${index + 1}. ${item.summary} · ${statusTitle}`}
-                                  aria-label={`${index + 1}번 생성 작업 ${statusTitle}`}
-                                >
-                                  {item.status === 'running' ? (
-                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                  ) : item.status === 'completed' ? (
-                                    <Check className="h-4 w-4" strokeWidth={3} />
-                                  ) : item.status === 'failed' ? (
-                                    <AlertCircle className="h-4 w-4" />
-                                  ) : (
-                                    <span>{index + 1}</span>
-                                  )}
-                                  {item.status === 'running' && (
-                                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] text-[#FFD36A]">
-                                      {index + 1}
-                                    </span>
-                                  )}
-                                  {isDelayed && (
-                                    <span className="pointer-events-none absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.75)]" />
-                                  )}
-                                  {item.generationCount > 1 && (
-                                    <span className="pointer-events-none absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/30 bg-[#111] px-1 text-[8px] text-white/85">
-                                      {item.generationCount}
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedGenerationQueueItem && selectedGenerationQueueItem.status !== 'completed' && (
-                        <div className="absolute bottom-[calc(100%+60px)] left-0 z-[147] w-[min(340px,calc(100vw-40px))] rounded-2xl border border-white/12 bg-[#1D1D1D]/98 p-3.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-                          <div className="mb-3 flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                {selectedGenerationQueueItem.status === 'running' && <Loader2 className="h-4 w-4 animate-spin text-[#FFB400]" />}
-                                {selectedGenerationQueueItem.status === 'queued' && <span className="h-2 w-2 rounded-full bg-white/35" />}
-                                {selectedGenerationQueueItem.status === 'failed' && <AlertCircle className="h-4 w-4 text-red-300" />}
-                                <span className="text-xs font-black text-white">
-                                  {selectedGenerationQueueItem.status === 'running'
-                                    ? (selectedGenerationQueueItem.startedAt && generationQueueClock - selectedGenerationQueueItem.startedAt >= STUDIO_GENERATION_DELAY_NOTICE_MS
-                                      ? '생성 지연 중 · 계속 진행 중'
-                                      : '생성 중')
-                                    : selectedGenerationQueueItem.status === 'queued' ? '대기 중' : '생성 실패'}
-                                </span>
-                              </div>
-                              <p className="mt-1 truncate text-[11px] font-bold text-white/65">{selectedGenerationQueueItem.summary}</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedGenerationQueueItemId(null)}
-                              className="rounded-lg p-1 text-white/40 transition-colors hover:bg-white/5 hover:text-white/75"
-                              aria-label="작업 정보 닫기"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                          <div className="max-h-52 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
-                            {selectedGenerationQueueItem.details.map((detail) => (
-                              <div key={`${selectedGenerationQueueItem.id}-${detail.label}`} className="grid grid-cols-[52px_1fr] gap-2 text-[11px] leading-relaxed">
-                                <span className="font-bold text-[#FFB400]/85">{detail.label}</span>
-                                <span className="break-words text-white/72">{detail.value}</span>
-                              </div>
-                            ))}
-                          </div>
-                          {selectedGenerationQueueItem.status === 'failed' && selectedGenerationQueueItem.errorMessage && (
-                            <div className="mt-3 rounded-xl border border-red-400/20 bg-red-500/8 px-3 py-2.5">
-                              <p className="text-[10px] font-black text-red-300/90">실패 사유</p>
-                              <p className="mt-1 break-words text-[11px] leading-relaxed text-red-100/75">
-                                {selectedGenerationQueueItem.errorMessage}
-                              </p>
-                            </div>
-                          )}
-                          {selectedGenerationQueueItem.status === 'queued' && (
-                            <button
-                              type="button"
-                              onClick={() => cancelQueuedGeneration(selectedGenerationQueueItem.id)}
-                              className="mt-3 w-full rounded-xl border border-red-400/25 bg-red-500/10 py-2 text-[11px] font-bold text-red-300 transition-colors hover:bg-red-500/15"
-                            >
-                              대기 작업 취소
-                            </button>
-                          )}
-                          {selectedGenerationQueueItem.status === 'failed' && (
-                            <button
-                              type="button"
-                              onClick={() => removeGenerationQueueItem(selectedGenerationQueueItem.id)}
-                              className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 py-2 text-[11px] font-bold text-white/65 transition-colors hover:bg-white/10"
-                            >
-                              목록에서 지우기
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {generationModelNotice && (
-                        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] z-[140] whitespace-nowrap rounded-full border border-brand-orange/30 bg-[var(--card-bg)]/95 px-3 py-1.5 text-xs font-bold text-brand-orange shadow-lg shadow-brand-orange/10 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-200">
-                          {generationModelNotice}
-                        </div>
-                      )}
-                      <motion.div
-                        drag={isActionDragMobile ? "x" : false}
-                        dragConstraints={isActionDragMobile ? { left: 0, right: 0 } : undefined}
-                        dragElastic={0.16}
-                        onDragEnd={(_, info) => {
-                          if (!isActionDragMobile) return;
-                          if (info.offset.x < -70 || info.velocity.x < -520) {
-                            setIsActionButtonsCollapsed(true);
-                          }
-                        }}
-                        style={{ transformOrigin: 'center bottom' }}
-                        className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
-                      >
-                        <motion.button
-                                type="button"
-                          onClick={() => setIsActionButtonsCollapsed(true)}
-                          onMouseEnter={() => {}}
-                          onMouseLeave={() => {}}
-                          className="hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#FFB400] hover:bg-white/[0.045] hover:text-[#FFB400] transition-all shadow-none items-center justify-center opacity-100"
-                          aria-label="생성 버튼 접기"
-                        >
-                          <ArrowLeft className="w-5 h-5" />
-                        </motion.button>
-                        {actionButtonsContent}
-                      </motion.div>
-                    </div>
-                  </motion.div>
-                )}
-              </Portal>
+                </Portal>
+              ) : (isStudioBlackActionMode || isActionsFloating) ? (
+                <Portal>
+                  {renderExpandedActionBar('floating')}
+                </Portal>
+              ) : null
             )}
           </AnimatePresence>
 
-          {/* Applied Keywords Display */}
-          <div className="relative mt-2 md:mt-3">
+          {/* Applied Keywords Display (Classic only; Studio Black uses the sticky result-pane strip.) */}
+          <div className="soridraw-builder-live-keywords relative mt-2 md:mt-3">
             <div className="flex flex-wrap gap-2 justify-center min-h-[24px] md:min-h-[26px] content-start">
-              {[
-                ...displayGenreKeywords,
-                ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: getMoodKeywordLabel(id) })),
-                ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: getThemeKeywordLabel(id) })),
-                ...filterSelectableIds(selectedStyles).map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })).filter((item) => item.label),
-                ...filterSelectableIds(selectedInstrumentSounds).map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })).filter((item) => item.label),
-                ...filterSelectableIds(selectedPointSounds).map((id) => ({ id: `point-${id}`, type: 'point-sound' as const, label: `#포인트: ${getSoundVariantLabelById(id)}` })).filter((item) => item.label !== '#포인트: '),
-                ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#언어혼합' }] : []),
-                ...(rapEnabled ? [{ id: 'rap', type: 'rap' as const, label: '#랩 ON' }] : []),
-              ].map((item) => {
-                  const chipClassName = cn(
-                    'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
-                    getAppliedSelectionKeywordChipClass(item.type)
-                  );
-                  return (
-                    <span
-                      key={`${item.type}-${item.id}`}
-                      className={chipClassName}
+              {liveSelectedKeywordItems.map((item) => {
+                const chipClassName = cn(
+                  'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
+                  getAppliedSelectionKeywordChipClass(item.type)
+                );
+                return (
+                  <span key={`${item.type}-${item.id}`} className={chipClassName}>
+                    {item.label}
+                    <button
+                      type="button"
+                      onClick={() => removeLiveSelectedKeyword(item)}
+                      aria-label={`${item.label} 선택 해제`}
+                      className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
                     >
-                      {item.label}
-                      <button 
-                        onClick={() => {
-                          if (item.type === 'genre') removeAppliedGenreKeyword(item.id);
-                          else if (item.type === 'mood') toggleSelection(item.id, 'mood');
-                          else if (item.type === 'theme') toggleSelection(item.id, 'theme');
-                          else if (item.type === 'style') setSelectedStyles((prev) => prev.filter((value) => value !== item.id));
-                          else if (item.type === 'sound') {
-                            if (!clearRecommendedSoundCombo(item.id)) {
-                              setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
-                            }
-                          }
-                          else if (item.type === 'point-sound') {
-                            const pointSoundId = item.id.replace(/^point-/, '');
-                            setSelectedPointSounds((prev) => prev.filter((value) => value !== pointSoundId));
-                          }
-                          else if (item.type === 'mix') { setIsKoreanEnglishMix(false); setEnglishMixRatio(10); }
-                          else if (item.type === 'rap') setRapEnabled(false);
-                              }}
-                        className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
-                      >
-                        <X className="w-[18px] h-[18px]" />
-                      </button>
-                    </span>
-                  );
-                })}
+                      <X className="w-[18px] h-[18px]" />
+                    </button>
+                  </span>
+                );
+              })}
             </div>
           </div>
         </div>
-
-        {/* Result Area */}
-        <AnimatePresence>
-          {user && result && (
-            <motion.div
+                  </StudioBuilderPane>
+                  <StudioResultPane>
+                    {studioWorkspaceView === 'music-note' ? (
+                      <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--music-note" aria-label="뮤직노트 작업공간">
+                        {!isAuthReady ? (
+                          <div className="soridraw-studio-workspace-loading">
+                            <Loader2 className="h-8 w-8 animate-spin text-brand-orange" />
+                            <span>뮤직노트를 불러오는 중...</span>
+                          </div>
+                        ) : (user || auth.currentUser) ? (
+                          <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
+                            <HistoryRouteWrapper
+                              isFavoritesLoading={isFavoritesLoading}
+                              hasMoreFavorites={hasMoreFavorites}
+                              isLoadingMoreFavorites={isLoadingMoreFavorites}
+                              loadMoreFavorites={loadMoreFavorites}
+                              searchFavoritesOnServer={searchFavoritesOnServer}
+                              refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
+                              toggleFavorite={toggleFavorite}
+                              updateFavorite={updateFavorite}
+                              clearAllFavorites={clearAllFavorites}
+                              unlockAllFavorites={unlockAllFavorites}
+                              lockAllFavorites={lockAllFavorites}
+                              user={user || auth.currentUser}
+                              handleLogin={handleLogin}
+                            />
+                          </Suspense>
+                        ) : (
+                          <div className="soridraw-studio-workspace-loading">로그인이 필요합니다.</div>
+                        )}
+                      </section>
+                    ) : studioWorkspaceView === 'library' ? (
+                      <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--library" aria-label="라이브러리 작업공간">
+                        <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
+                          <SunoLibraryPageLazy appUser={user || auth.currentUser} />
+                        </Suspense>
+                      </section>
+                    ) : (
+                      <>
+                    {liveSelectedKeywordItems.length > 0 && (
+                      <Portal>
+                        <div className="soridraw-live-keywords-fixed" role="region" aria-label="현재 선택된 키워드">
+                          <div className="soridraw-live-keywords-row">
+                            {liveSelectedKeywordItems.map((item) => (
+                              <span
+                                key={`live-${item.type}-${item.id}`}
+                                className={cn('soridraw-live-keyword', getAppliedSelectionKeywordTextClass(item.type))}
+                              >
+                                <span>{item.label}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeLiveSelectedKeyword(item)}
+                                  aria-label={`${item.label} 선택 해제`}
+                                  className="soridraw-live-keyword-remove"
+                                >
+                                  <X aria-hidden="true" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </Portal>
+                    )}
+                    {/* Result Area */}
+        {user && result && (
+            <div
               ref={resultAreaRef}
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn(
-                "space-y-6 pt-4 md:pt-5 border-t-2 border-[#e3a13a]/30 shadow-[0_-1px_0_rgba(227,161,58,0.16)] transition-all duration-300 relative"
-              )}
+              className="soridraw-studio-result-content space-y-6 pt-4 md:pt-5 border-t-2 border-[#e3a13a]/30 shadow-[0_-1px_0_rgba(227,161,58,0.16)] relative"
             >
 
 
               {/* Title Card */}
-              <div className="bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-all duration-500">
-          <div className="absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
+              <div className={cn(
+                "soridraw-result-title-card soridraw-result-title-card--genre-height bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-colors duration-150",
+                isRecentSongSectionEditing('title') && "soridraw-result-title-card--editing"
+              )}>
+          <div className="soridraw-result-desktop-header absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
-                      onClick={() => navigate('/history')}
+                      onClick={() => selectStudioWorkspaceView('music-note')}
                       onMouseEnter={() =>
                         setHoveredItem({
                           id: 'go-history',
@@ -13869,13 +17538,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 transition-all shrink-0 active:scale-95 shadow-sm"
+                      data-soridraw-button-variant="primary"
+                      className="soridraw-result-action-button soridraw-result-music-note-button flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 transition-all shrink-0 active:scale-95 shadow-sm"
                     >
                       <HeartIcon className="w-5 h-5 fill-current text-[#cd8c31]" />
                       <span className="text-xs md:text-sm font-bold whitespace-nowrap">뮤직노트</span>
                     </button>
                   </div>
-                  <div className="absolute top-4 right-4 z-10 hidden items-center gap-2 origin-top-right sm:flex">
+                  <div className="soridraw-result-desktop-header absolute top-4 right-4 z-10 hidden items-center gap-2 origin-top-right sm:flex">
                     {(() => {
                       return (
                         <button 
@@ -13892,7 +17562,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             })
                           }
                           onMouseLeave={() => setHoveredItem(null)}
-                          className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] transition-all shrink-0 active:scale-95 border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 shadow-sm"
+                          data-soridraw-button-variant="primary"
+                          className="soridraw-result-action-button soridraw-result-copy-all-button flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] transition-all shrink-0 active:scale-95 border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 shadow-sm"
                         >
                           {copiedType === 'title' ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5 opacity-85" />}
                           <span className="text-xs md:text-sm font-bold uppercase tracking-tight">전체복사</span>
@@ -13901,8 +17572,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     })()}
                   </div>
 
-                <div className="sm:hidden space-y-1.5 pt-0">
-                  <div className="relative grid grid-cols-[84px_minmax(0,1fr)_84px] items-center gap-2 min-h-[38px]">
+                <div className="soridraw-result-mobile-header sm:hidden space-y-1.5 pt-0">
+                  <div className="soridraw-result-mobile-topbar relative grid grid-cols-[84px_minmax(0,1fr)_84px] items-center gap-2 min-h-[38px]">
                     <button
                       onClick={() => navigate('/history')}
                       onMouseEnter={() =>
@@ -13913,7 +17584,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-1.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
+                      data-soridraw-button-variant="primary"
+                      className="soridraw-result-action-button soridraw-result-music-note-button flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-1.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
                     >
                       <HeartIcon className="w-[16px] h-[16px] fill-current text-[#cd8c31]" />
                       <span className="text-[11px] font-extrabold whitespace-nowrap">뮤직노트</span>
@@ -13939,7 +17611,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-1.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
+                      data-soridraw-button-variant="primary"
+                      className="soridraw-result-action-button soridraw-result-copy-all-button flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-1.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
                     >
                       {copiedType === 'title' ? <Check className="w-[16px] h-[16px] text-green-500" /> : <Copy className="w-[16px] h-[16px] opacity-85" />}
                       <span className="text-[11px] font-extrabold uppercase tracking-tight whitespace-nowrap">전체복사</span>
@@ -13947,8 +17620,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                   </div>
 
-
-                  <div className="flex justify-center pt-2.5 pb-0.5">
+                  <div className="soridraw-result-mobile-title-stack">
+                    <div className="soridraw-result-mobile-genre flex justify-center pt-2.5 pb-0.5">
                     <p className="max-w-[calc(100%-80px)] truncate text-center text-[15px] font-extrabold text-[#e3a13a]/90 tracking-tight">
                       [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
                     </p>
@@ -13960,6 +17633,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <input
                           value={recentSongEditDraft.koreanTitle}
                           onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
+                          onKeyDown={handleRecentSongTitleInputKeyDown}
                           className="w-full rounded-xl border border-[#e3a13a]/35 bg-black/20 px-3 py-2 text-center text-[18px] font-extrabold text-[#f4bc63] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                           placeholder="한국어 제목"
                         />
@@ -13968,6 +17642,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <input
                           value={recentSongEditDraft.secondaryTitle}
                           onChange={(event) => updateRecentSongTitleDraft('secondaryTitle', event.target.value)}
+                          onKeyDown={handleRecentSongTitleInputKeyDown}
                           className="w-full rounded-xl border border-[#e3a13a]/20 bg-black/15 px-3 py-1.5 text-center text-[15px] font-bold text-[#e3a13a] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                           placeholder="외국어 제목"
                         />
@@ -13977,11 +17652,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </div>
                     </div>
                   ) : (
-                    <div className="relative min-h-[92px] pt-0">
+                    <div className="soridraw-result-mobile-title-content relative min-h-[92px] pt-0">
                       {(() => {
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
                         const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
+                        const titleTone = hasAddedLyricsLanguage ? 'added-language' : (isRecent ? 'recent' : 'default');
                         const primaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#f4bc63]' : 'text-[var(--text-primary)]');
                         const secondaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#e3a13a]' : 'text-[#e3a13a]/90');
 
@@ -13994,19 +17670,37 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   const titleSizeClass = index === 0
                                     ? 'text-[21px] leading-[1.08]'
                                     : 'text-[18px] leading-[1.06]';
-
-                                  return (
-                                    <h2 key={entry.lang} className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
+                                  const titleNode = (
+                                    <h2
+                                      data-soridraw-title-tone={`${titleTone}-${index === 0 ? 'primary' : 'secondary'}`}
+                                      className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}
+                                    >
                                       {entry.line}
                                     </h2>
+                                  );
+
+                                  return index === 0 ? (
+                                    <div key={entry.lang} className="soridraw-result-primary-title-line relative inline-flex max-w-full min-w-0 items-center justify-center">
+                                      <span className="soridraw-result-primary-title-edit">
+                                        {renderRecentSongInlineEditActions(
+                                          'title',
+                                          'edit-generated-title-primary-mobile',
+                                          '생성곡 수정',
+                                          '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
+                                          'title-inline'
+                                        )}
+                                      </span>
+                                      {titleNode}
+                                    </div>
+                                  ) : (
+                                    <div key={entry.lang} className="max-w-full min-w-0">
+                                      {titleNode}
+                                    </div>
                                   );
                                 })}
                               </div>
                             </div>
 
-                            <div className="flex justify-center pt-1">
-                              {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
-                            </div>
 
                             <div className="absolute right-0 top-[-10px] flex flex-col gap-2">
                               {entries.map((entry) => {
@@ -14050,7 +17744,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     const generatedAtLabel = formatGeneratedDateTimeLabel((result as any).createdAt || (result as any).updatedAt || (result as any).savedAt);
                     if (!generatedAtLabel) return null;
                     return (
-                      <div className="flex justify-center px-4">
+                      <div className="soridraw-result-title-date flex justify-center px-4">
                         <p className="text-[12px] font-semibold text-[var(--text-secondary)]/80 tracking-tight text-center">
                           {generatedAtLabel}
                           {isInLatestGenerationBatch(result) && (
@@ -14060,8 +17754,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </div>
                     );
                   })()}
+                  </div>
 
-                  <div className="flex w-full max-w-full items-center justify-center gap-2 pt-2 overflow-visible">
+                  <div className="soridraw-result-mobile-footer-controls flex w-full max-w-full items-center justify-center gap-2 pt-2 overflow-visible">
                     <button
                       onClick={() => {
                         if (isConfirmingDeleteHistory) {
@@ -14135,14 +17830,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </div>
                 </div>
 
-                <div className="hidden sm:block space-y-4 pt-0">
+                <div className="soridraw-result-desktop-header soridraw-result-title-body hidden sm:block space-y-4 pt-0">
                   <div className="flex flex-col items-center gap-2">
                     <div className="flex items-center gap-2 text-[var(--text-primary)] font-mono text-sm tracking-widest uppercase font-bold">
                       <Music className="w-[18px] h-[18px] text-[#e3a13a]" />
                       제목 (Title)
                     </div>
                   </div>
-                  <div className="relative h-auto min-h-[132px] flex items-center justify-center w-full px-4 mt-2">
+                  <div className="soridraw-result-title-heading-area relative h-auto min-h-[132px] flex items-center justify-center w-full px-4 mt-2">
                     <div className="w-full max-w-none text-center flex flex-col items-center">
                       {(() => {
                         if (isRecentSongSectionEditing('title') && recentSongEditDraft) {
@@ -14152,6 +17847,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 <input
                                   value={recentSongEditDraft.koreanTitle}
                                   onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
+                                  onKeyDown={handleRecentSongTitleInputKeyDown}
                                   className="w-full rounded-2xl border border-[#e3a13a]/35 bg-black/20 px-4 py-3 text-center text-xl md:text-2xl font-extrabold text-[#f4bc63] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                                   placeholder="한국어 제목"
                                 />
@@ -14160,6 +17856,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 <input
                                   value={recentSongEditDraft.secondaryTitle}
                                   onChange={(event) => updateRecentSongTitleDraft('secondaryTitle', event.target.value)}
+                                  onKeyDown={handleRecentSongTitleInputKeyDown}
                                   className="w-full rounded-2xl border border-[#e3a13a]/20 bg-black/15 px-4 py-2.5 text-center text-base md:text-lg font-bold text-[#e3a13a] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                                   placeholder="외국어 제목"
                                 />
@@ -14175,27 +17872,49 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const genrePrefix = getResolvedGenre(result) || getSubGenre(result) || 'Song';
                         const isRecent = isInLatestGenerationBatch(result);
                         const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
+                        const titleTone = hasAddedLyricsLanguage ? 'added-language' : (isRecent ? 'recent' : 'default');
                         const primaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#f4bc63]' : 'text-[var(--text-primary)]');
                         const secondaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#e3a13a]' : 'text-[#e3a13a]/90');
 
                         return (
-                          <div className="relative w-full min-h-[132px] flex flex-col items-center justify-start pt-0">
+                          <div className="soridraw-result-title-display relative w-full min-h-[132px] flex flex-col items-center justify-start pt-0">
                             <p className="max-w-[calc(100%-160px)] truncate text-center text-base md:text-lg font-extrabold text-[#e3a13a]/90 tracking-tight">
                               [{genrePrefix}]
                             </p>
 
-                            <div className="relative w-full min-h-[92px] flex items-start justify-center pt-3">
+                            <div className="soridraw-result-title-lines relative w-full min-h-[92px] flex items-start justify-center pt-3">
                               <div className="flex flex-col items-center justify-center gap-2 px-[96px] w-full overflow-hidden text-center">
                                 {entries.map((entry, index) => {
                                   const titleClassName = index === 0 ? primaryClass : secondaryClass;
                                   const titleSizeClass = index === 0
                                     ? 'text-2xl md:text-3xl leading-[1.1]'
                                     : 'text-lg md:text-xl leading-[1.08]';
-
-                                  return (
-                                    <h2 key={entry.lang} className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
+                                  const titleNode = (
+                                    <h2
+                                      data-soridraw-title-tone={`${titleTone}-${index === 0 ? 'primary' : 'secondary'}`}
+                                      className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}
+                                    >
                                       {entry.line}
                                     </h2>
+                                  );
+
+                                  return index === 0 ? (
+                                    <div key={entry.lang} className="soridraw-result-primary-title-line relative inline-flex max-w-full min-w-0 items-center justify-center">
+                                      <span className="soridraw-result-primary-title-edit">
+                                        {renderRecentSongInlineEditActions(
+                                          'title',
+                                          'edit-generated-title-primary-desktop',
+                                          '생성곡 수정',
+                                          '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
+                                          'title-inline'
+                                        )}
+                                      </span>
+                                      {titleNode}
+                                    </div>
+                                  ) : (
+                                    <div key={entry.lang} className="max-w-full min-w-0">
+                                      {titleNode}
+                                    </div>
                                   );
                                 })}
                               </div>
@@ -14232,9 +17951,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 })}
                               </div>
 
-                              <div className="absolute left-1/2 top-[74px] -translate-x-1/2">
-                                {renderRecentSongInlineEditActions('title', 'edit-generated-title-desktop-inline', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
-                              </div>
                             </div>
                           </div>
                         );
@@ -14245,7 +17961,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     const generatedAtLabel = formatGeneratedDateTimeLabel((result as any).createdAt || (result as any).updatedAt || (result as any).savedAt);
                     if (!generatedAtLabel) return null;
                     return (
-                      <div className="flex justify-center -mt-1 px-4">
+                      <div className="soridraw-result-title-date flex justify-center -mt-1 px-4">
                         <p className="text-[11px] sm:text-xs font-semibold text-[var(--text-secondary)]/80 tracking-tight">
                           {generatedAtLabel}
                           {isInLatestGenerationBatch(result) && (
@@ -14255,7 +17971,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </div>
                     );
                   })()}
-                  <div className="flex items-center justify-center gap-3 mt-4">
+                  <div className="soridraw-result-title-footer-controls flex items-center justify-center gap-3 mt-4">
                     <button
                       onClick={() => {
                         if (isConfirmingDeleteHistory) {
@@ -14331,7 +18047,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
 
               {/* Applied Keywords After Generation */}
-              <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[#e3a13a]/[0.16] shadow-[0_14px_36px_rgba(0,0,0,0.26)] relative hover:border-[#e3a13a]/[0.15] transition-all duration-500">
+              <div data-expand-section className="soridraw-result-keywords-card bg-[var(--card-bg)] rounded-3xl p-6 border border-[#e3a13a]/[0.16] shadow-[0_14px_36px_rgba(0,0,0,0.26)] relative hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
                 <div className="flex items-center justify-between gap-4 mb-3">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-[#e3a13a]" />
@@ -14342,7 +18058,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       onClick={() => applyKeywordsToNext(result.appliedKeywords)}
                       onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center justify-center gap-2 px-4 sm:px-[18px] h-[42px] sm:h-11 min-w-[112px] sm:min-w-[124px] rounded-xl bg-[#F4A900] text-[#18110A] hover:bg-[#F7B31A] transition-all shadow-[0_12px_28px_rgba(244,169,0,0.18)] text-[13px] sm:text-[14px] font-black border border-[#F4A900] active:scale-95"
+                      data-soridraw-button-variant="primary"
+                      className="soridraw-result-action-button soridraw-result-apply-next-button flex items-center justify-center gap-2 px-4 sm:px-[18px] h-[42px] sm:h-11 min-w-[112px] sm:min-w-[124px] rounded-xl bg-[#F4A900] text-[#18110A] hover:bg-[#F7B31A] transition-all shadow-[0_12px_28px_rgba(244,169,0,0.18)] text-[13px] sm:text-[14px] font-black border border-[#F4A900] active:scale-95"
                     >
                       <RefreshCw className="w-[17px] h-[17px] sm:w-[18px] sm:h-[18px]" />
                       <span className="whitespace-nowrap font-black tracking-[-0.01em]">다음 곡에 적용</span>
@@ -14357,10 +18074,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     opacity: isAppliedKeywordsExpanded ? 1 : 0
                   }}
                   transition={{ duration: 0.25, ease: "easeOut" }}
-                  className="overflow-hidden"
+                  className="soridraw-result-keywords-body overflow-hidden"
                 >
                   <div ref={appliedKeywordsRef} className="pt-2">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                    <div className="soridraw-result-keywords-grid grid grid-cols-1 md:grid-cols-4 gap-2">
                     {resolveKeywordsForDisplay(result).map((section) => (
                       <div key={section.key} className="space-y-0.5 group/cat">
                         <div className="flex items-center justify-between">
@@ -14460,7 +18177,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     const placementLabels: Record<string, string> = {
                       accent: '짧은 포인트',
                       'hook-led': '훅 중심 포인트',
+                      'hook-led-clusters': '훅 중심 짧은 묶음',
                       'distributed-blocks': '구간별 언어 블록',
+                      'distributed-clusters': '전·중·후 언어 묶음',
+                      'within-line-rhyme-distribution': '한 줄 내부 라임 혼합',
+                      'kpop-within-line-sound-switch': 'K-pop 사운드 코드 스위칭',
                       'balanced-blocks': '균형형 섹션·블록',
                       'target-dominant': '혼합 언어 중심',
                       'arc-balanced': '전·중·후 언어 아크',
@@ -14476,6 +18197,30 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       'global-pop': '글로벌 팝',
                     };
                     const cards = Object.entries(mixAudit.cards || {}).filter(([, card]) => card && (card as any).active) as Array<[string, any]>;
+                    const rewritePlan = (result.appliedKeywords as any)?.languageMixRewritePlan;
+                    const sectionIntegrityAudit = (result.appliedKeywords as any)?.sectionIntegrityAudit;
+                    const diagnosticText = [
+                      'SORIDRAW 언어 혼합 검사 보고서',
+                      `곡: ${String(result.title || '')}`,
+                      `언어 혼합 엔진: ${String(rewritePlan?.version || 'unknown')}`,
+                      `재작성 상태: ${String(rewritePlan?.status || 'unknown')}`,
+                      `추가 Gemini 호출: ${rewritePlan?.additionalGeminiCallUsed ? '사용' : '없음'}`,
+                      '',
+                      '[언어 혼합 검사]',
+                      JSON.stringify(mixAudit, null, 2),
+                      '',
+                      '[잠금형 전체 가사 재작성]',
+                      JSON.stringify(rewritePlan || {}, null, 2),
+                      '',
+                      '[섹션·섹션 태그·악기큐 검사]',
+                      JSON.stringify(sectionIntegrityAudit || {}, null, 2),
+                      '',
+                      '[한글 가사]',
+                      String(result.lyrics?.korean || '(없음)'),
+                      '',
+                      '[보조 언어 가사]',
+                      String(result.lyrics?.english || '(없음)'),
+                    ].join('\n');
                     const statusLabel = mixAudit.status === 'passed'
                       ? '언어 비율·배치 확인'
                       : mixAudit.status === 'preserved'
@@ -14491,15 +18236,91 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <h4 className="text-xs font-black text-[var(--text-primary)]">언어 혼합 검사</h4>
-                            <p className="mt-1 text-[10px] text-[var(--text-secondary)]">섹션 태그·사운드 큐·허밍을 제외하고 실제 가창 언어 분량과 섹션·블록 배치를 함께 검사합니다.</p>
+                            <p className="mt-1 text-[10px] text-[var(--text-secondary)]">섹션 태그·보컬·사운드 큐를 제외하고, 한국어 음절과 외국어 발음 음절을 같은 가창 단위로 계산해 한 줄 내부 혼합·라임·분산을 함께 검사합니다.</p>
                             {mixAudit.exactRepairAttempted && (
                               <p className={cn('mt-1 text-[9px] font-semibold', mixAudit.exactRepairUsed ? 'text-emerald-300' : 'text-amber-300')}>
                                 {mixAudit.exactRepairUsed ? '최종 가사 기준 정밀 보정을 적용했습니다.' : '정밀 보정을 시도했지만 사용할 수 있는 교체 후보가 부족했습니다.'}
                               </p>
                             )}
                           </div>
-                          <span className={cn('rounded-full border px-2.5 py-1 text-[10px] font-black', statusClass)}>{statusLabel}</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(diagnosticText, 'language-mix-audit')}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-[#e3a13a]/25 bg-[#e3a13a]/10 px-2.5 py-1 text-[10px] font-black text-[#e3a13a] transition hover:bg-[#e3a13a]/15"
+                            >
+                              {copiedType === 'language-mix-audit' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                              검사 전체 복사
+                            </button>
+                            <span className={cn('rounded-full border px-2.5 py-1 text-[10px] font-black', statusClass)}>{statusLabel}</span>
+                          </div>
                         </div>
+                        {rewritePlan?.active && (
+                          <div className="rounded-2xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-[10px] font-black text-[var(--text-primary)]">잠금형 전체 가사 재작성</p>
+                              <span className={cn(
+                                'rounded-full border px-2 py-0.5 text-[9px] font-black',
+                                rewritePlan.status === 'applied'
+                                  ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                                  : 'border-amber-400/20 bg-amber-400/10 text-amber-200',
+                              )}>
+                                {rewritePlan.status === 'applied' ? '적용' : '원문 보호'}
+                              </span>
+                            </div>
+                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {Object.entries(rewritePlan.cards || {}).map(([cardKey, rawCard]) => {
+                                const card = rawCard as any;
+                                return (
+                                  <div key={cardKey} className="rounded-xl border border-white/8 bg-black/10 px-3 py-2">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">{cardKey === 'korean' ? '한글 가사' : '보조 언어 가사'}</p>
+                                    <p className="mt-1 text-[10px] font-semibold text-[var(--text-primary)]">
+                                      {card.status === 'applied' ? `${Number(card.actualRatio || 0)}% · ${Number(card.appliedPlacementCount || 0)}개 ${card.blockPlan?.mode === 'within-line-rhyme' ? '혼합 라임 줄' : '완성형 줄'} 적용` : `보존 · ${String(card.preservedReason || '원인 확인 필요')}`}
+                                    </p>
+                                    {card.error && <p className="mt-1 text-[9px] leading-relaxed text-red-200/80">{String(card.error)}</p>}
+                                    {(card.retryUsed || Number(card.waitedMs || 0) > 0) && (
+                                      <p className="mt-1 text-[9px] text-amber-200/80">429 재시도 {card.retryUsed ? '사용' : '없음'} · {Math.round(Number(card.waitedMs || 0) / 1000)}초 대기</p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {sectionIntegrityAudit?.active && (
+                          <div className="rounded-2xl border border-white/8 bg-white/[0.025] p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[10px] font-black text-[var(--text-primary)]">섹션·섹션 태그·악기큐 검사</p>
+                              <span className={cn(
+                                'rounded-full border px-2 py-0.5 text-[9px] font-black',
+                                sectionIntegrityAudit.status === 'passed'
+                                  ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                                  : 'border-red-400/20 bg-red-400/10 text-red-300',
+                              )}>
+                                {sectionIntegrityAudit.status === 'passed' ? '통과' : '확인 필요'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {Object.entries(sectionIntegrityAudit.cards || {}).filter(([, card]) => Boolean(card)).map(([cardKey, rawCard]) => {
+                                const card = rawCard as any;
+                                return (
+                                  <div key={cardKey} className="rounded-xl border border-white/8 bg-black/10 px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">{cardKey === 'korean' ? '한글 가사' : '보조 언어 가사'}</p>
+                                    <p className={cn('mt-1 text-[10px] font-semibold', card.status === 'passed' ? 'text-emerald-300' : 'text-red-300')}>
+                                      순서 {card.orderMatches ? '정상' : '오류'} · 태그 손상 {Number(card.malformedSectionTags?.length || 0)}개 · 악기큐 누락 {Number(card.missingProductionCueSections?.length || 0)}개
+                                    </p>
+                                    {Array.isArray(card.malformedSectionTags) && card.malformedSectionTags.length > 0 && (
+                                      <p className="mt-1 text-[9px] leading-relaxed text-red-200/80">손상 태그: {card.malformedSectionTags.join(' / ')}</p>
+                                    )}
+                                    {Array.isArray(card.missingProductionCueSections) && card.missingProductionCueSections.length > 0 && (
+                                      <p className="mt-1 text-[9px] leading-relaxed text-amber-200/80">악기큐 누락: {card.missingProductionCueSections.join(', ')}</p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                           {cards.map(([key, card]) => {
                             const passed = card.status === 'passed';
@@ -14856,36 +18677,40 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                 {/* Expand Button at Bottom Center */}
                 <button
+                  type="button"
                   data-expanded={isAppliedKeywordsExpanded ? 'true' : 'false'}
                   aria-pressed={isAppliedKeywordsExpanded}
+                  aria-label={isAppliedKeywordsExpanded ? '적용된 키워드 접기' : '적용된 키워드 펼치기'}
+                  title={isAppliedKeywordsExpanded ? '적용된 키워드 접기' : '적용된 키워드 펼치기'}
                   onClick={(event) => {
-                    setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded);
-                    keepExpandableSectionInView(event.currentTarget, isAppliedKeywordsExpanded);
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsAppliedKeywordsExpanded((prev) => !prev);
                   }}
                   className={cn(
-                    "section-expand-button section-expand-button--half-y absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
+                    "soridraw-result-keywords-expand section-expand-button absolute left-1/2 flex items-center justify-center border transition-all z-20",
                     isAppliedKeywordsExpanded 
                       ? "bg-[#e3a13a] text-white border-[#e3a13a]" 
                       : "bg-[var(--card-bg)] border-[var(--border-color)] text-[#e3a13a] hover:text-white hover:bg-[#e3a13a]"
                   )}
                 >
-                  {isAppliedKeywordsExpanded ? <ChevronUp className="w-[18px] h-[18px]" /> : <ChevronDown className="w-[18px] h-[18px]" />}
+                  {isAppliedKeywordsExpanded ? <ChevronUp aria-hidden="true" className="w-[18px] h-[18px]" /> : <ChevronDown aria-hidden="true" className="w-[18px] h-[18px]" />}
                 </button>
               </div>
 
               {/* Prompt Section */}
-              <div className="bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col h-[400px] shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-all duration-500">
+              <div className="soridraw-result-prompt-card bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col h-[360px] shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
                 <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                     <Sparkles className="w-4 h-4 text-[#e3a13a]" />
-                    음악 프롬프트
+                    스타일 프롬프트
                   </h3>
                   <div className="flex items-center gap-2">
-                    {renderRecentSongInlineEditActions('prompt', 'edit-generated-prompt', '프롬프트 수정', '보관함 저장 전 음악 프롬프트를 수정합니다.', 'section')}
+                    {renderRecentSongInlineEditActions('prompt', 'edit-generated-prompt', '프롬프트 수정', '보관함 저장 전 스타일 프롬프트를 수정합니다.', 'section')}
                     <button
                       type="button"
                       onClick={() => copyToClipboard(isRecentSongSectionEditing('prompt') && recentSongEditDraft ? recentSongEditDraft.prompt : normalizePromptForDisplay(result.prompt), 'prompt')}
-                      onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
+                      onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '스타일 프롬프트를 복사합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] text-[#e3a13a]/85 hover:text-[#f4bc63] transition-all border border-[#e3a13a]/[0.16] active:scale-95 shadow-btn"
                     >
@@ -14893,13 +18718,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </button>
                   </div>
                 </div>
-                <div className="p-5 sm:p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+                <div data-soridraw-selectable-text="true" className="p-5 sm:p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
                   {isRecentSongSectionEditing('prompt') && recentSongEditDraft ? (
                     <textarea
                       value={recentSongEditDraft.prompt}
                       onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, prompt: event.target.value } : prev)}
-                      className="h-full min-h-[260px] w-full resize-none rounded-2xl border border-[#e3a13a]/35 bg-black/20 p-4 font-mono text-sm leading-relaxed text-[var(--text-primary)] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
-                      placeholder="음악 프롬프트를 수정하세요"
+                      className="h-full min-h-[220px] w-full resize-none rounded-2xl border border-[#e3a13a]/35 bg-black/20 p-4 font-mono text-sm leading-relaxed text-[var(--text-primary)] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
+                      placeholder="스타일 프롬프트를 수정하세요"
                     />
                   ) : (
                     <pre className="whitespace-pre-wrap font-mono text-[var(--text-secondary)] leading-relaxed text-sm w-full">
@@ -14910,22 +18735,22 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
 
 
-              <div className="flex flex-col gap-3">
+              <div className="soridraw-result-lyrics-section flex flex-col gap-3">
                 {!result.appliedKeywords.isNoLyrics && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="soridraw-result-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-6">
                     {(() => {
                       const displayLyricLanguages = getDisplayLyricLanguages(result);
                       const missingLyricLanguages = getMissingLyricLanguages(result);
 
                       const renderAddLyricsLanguageCard = () => missingLyricLanguages.length > 0 ? (
-                        <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-all duration-500">
+                        <div className="soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-colors duration-150">
                           <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                             <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                               <Languages className="w-4 h-4 text-[#e3a13a]" />
                               가사 언어 추가
                             </h3>
                           </div>
-                          <div className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col justify-center gap-4">
+                          <div data-soridraw-selectable-text="true" className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col justify-center gap-4">
                             <div className="text-center space-y-2">
                               <p className="text-sm font-bold text-[var(--text-primary)]">다른 언어 가사가 필요해?</p>
                               <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
@@ -14958,7 +18783,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const copyType = `lyrics-${lang}`;
 
                         return (
-                          <div key={lang} className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-all duration-500">
+                          <div key={lang} className="soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
                             <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                               <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                                 <Music className="w-4 h-4 text-[#e3a13a]" />
@@ -14992,7 +18817,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 </button>
                               </div>
                             </div>
-                            <div className="flex-1 p-5 sm:p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
+                            <div data-soridraw-selectable-text="true" className="soridraw-result-lyrics-scroll flex-1 p-5 sm:p-8 overflow-y-scroll custom-scrollbar flex flex-col items-center h-full">
                               {isRecentSongSectionEditing('lyrics') && recentSongEditDraft ? (
                                 <textarea
                                   value={getRecentSongLyricsDraftValue(lang)}
@@ -15026,11 +18851,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     })()}
                   </div>
                 )}
-                  <div className="mt-2 overflow-hidden rounded-2xl border border-[#e3a13a]/[0.16] bg-[#e3a13a]/[0.035]">
+                  <div className="soridraw-result-music-api-card mt-2 overflow-hidden rounded-2xl border border-[#e3a13a]/[0.16] bg-[#e3a13a]/[0.035]">
                     <button
                       type="button"
                       onClick={() => setIsHomeMusicApiMenuCollapsed((prev) => !prev)}
-                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-all hover:bg-[#e3a13a]/[0.06]"
+                      className="soridraw-result-music-api-toggle flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-all hover:bg-[#e3a13a]/[0.06]"
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-black text-[#f4bc63]">Music API 생성</p>
@@ -15071,7 +18896,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <button
                           onClick={() => {
                             clearSunoLibrarySignal();
-                            navigate('/suno-library');
+                            selectStudioWorkspaceView('library');
                           }}
                           className="relative flex bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] py-3 px-4 rounded-xl text-[#e3a13a]/80 hover:text-[#f4bc63] transition-all items-center justify-center shrink-0 border border-[#e3a13a]/[0.22] text-sm font-bold"
                           title="라이브러리로 이동"
@@ -15085,13 +18910,16 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     )}
                   </div>
               </div>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
-                </>
+                      </>
+                    )}
+                  </StudioResultPane>
+                </StudioSplitEngineWorkspace>
               )}
             </main>
-          </>
+
+          </StudioPageFrame>
           ) : (
             <FeatureUnavailablePage label="스튜디오" fallbackPath={navigationFallbackPath} />
           )
@@ -15109,23 +18937,101 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 </div>
               </div>
             ) : (user || auth.currentUser || new URLSearchParams(location.search).has('note')) ? (
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <HistoryRouteWrapper
-                  isFavoritesLoading={isFavoritesLoading}
-                  hasMoreFavorites={hasMoreFavorites}
-                  isLoadingMoreFavorites={isLoadingMoreFavorites}
-                  loadMoreFavorites={loadMoreFavorites}
-                  searchFavoritesOnServer={searchFavoritesOnServer}
-                  refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
-                  toggleFavorite={toggleFavorite}
-                  updateFavorite={updateFavorite}
-                  clearAllFavorites={clearAllFavorites}
-                  unlockAllFavorites={unlockAllFavorites}
-                  lockAllFavorites={lockAllFavorites}
-                  user={user || auth.currentUser}
-                  handleLogin={handleLogin}
-                />
-              </Suspense>
+              (user || auth.currentUser) ? (
+                <StudioPageFrame
+                  workspaceView="music-note"
+                  lockViewport={false}
+                  leftRail={
+                    <StudioLeftRail
+                      activeWorkspace="music-note"
+                      onCreate={() => {
+                        selectStudioWorkspaceView('create');
+                        navigate('/studio');
+                      }}
+                      onRecentSongs={() => {
+                        selectStudioWorkspaceView('recent');
+                        navigate('/studio');
+                      }}
+                      onMusicNote={() => navigate('/history')}
+                      onLibrary={() => {
+                        clearSunoLibrarySignal();
+                        navigate('/suno-library');
+                      }}
+                      onSearch={openGlobalSearchModal}
+                      onApiSettings={() => navigate('/suno-api-settings')}
+                      onLab={() => navigate('/lab')}
+                      onProfile={() => navigate('/my-page')}
+                      onSettings={() => navigate('/my-page?tab=settings')}
+                      onPlan={() => navigate('/my-page?tab=plan')}
+                      onBilling={() => navigate('/my-page?tab=billing')}
+                      onLogout={handleLogout}
+                      profileName={user?.displayName || cachedHeaderIdentity?.displayName || 'SORiDRAW'}
+                      profileEmail={user?.email || ''}
+                      profilePhotoURL={user?.photoURL || cachedHeaderIdentity?.photoURL || ''}
+                    />
+                  }
+                  rightRail={
+                    <StudioRightRail
+                      isGenerating={isGenerating}
+                      runningCount={runningGenerationCount}
+                      queuedCount={queuedGenerationCount}
+                      history={history}
+                      selectedIndex={historyIndex}
+                      remainingCredits={sunoRemainingCredits}
+                      creditsUpdatedAt={sunoRemainingCreditsUpdatedAt}
+                      selectedKeywords={liveSelectedKeywordItems}
+                      onRemoveSelectedKeyword={removeLiveSelectedKeyword}
+                      formatTime={formatStudioDashboardTime}
+                      formatSongTitle={formatUnifiedTitle}
+                      onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
+                      onOpenSong={(song, index) => {
+                        selectStudioWorkspaceView('recent');
+                        navigate('/studio');
+                        window.requestAnimationFrame(() => openStudioDashboardSong(song, index));
+                      }}
+                      isSongUnread={isStudioDashboardSongUnread}
+                      isSongFavorited={isSongFavorited}
+                      onOpenApiSettings={() => navigate('/suno-api-settings')}
+                    />
+                  }
+                >
+                  <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                    <HistoryRouteWrapper
+                      isFavoritesLoading={isFavoritesLoading}
+                      hasMoreFavorites={hasMoreFavorites}
+                      isLoadingMoreFavorites={isLoadingMoreFavorites}
+                      loadMoreFavorites={loadMoreFavorites}
+                      searchFavoritesOnServer={searchFavoritesOnServer}
+                      refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
+                      toggleFavorite={toggleFavorite}
+                      updateFavorite={updateFavorite}
+                      clearAllFavorites={clearAllFavorites}
+                      unlockAllFavorites={unlockAllFavorites}
+                      lockAllFavorites={lockAllFavorites}
+                      user={user || auth.currentUser}
+                      handleLogin={handleLogin}
+                    />
+                  </Suspense>
+                </StudioPageFrame>
+              ) : (
+                <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                  <HistoryRouteWrapper
+                    isFavoritesLoading={isFavoritesLoading}
+                    hasMoreFavorites={hasMoreFavorites}
+                    isLoadingMoreFavorites={isLoadingMoreFavorites}
+                    loadMoreFavorites={loadMoreFavorites}
+                    searchFavoritesOnServer={searchFavoritesOnServer}
+                    refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
+                    toggleFavorite={toggleFavorite}
+                    updateFavorite={updateFavorite}
+                    clearAllFavorites={clearAllFavorites}
+                    unlockAllFavorites={unlockAllFavorites}
+                    lockAllFavorites={lockAllFavorites}
+                    user={null}
+                    handleLogin={handleLogin}
+                  />
+                </Suspense>
+              )
             ) : (
               <Navigate to="/" replace />
             )
@@ -15155,9 +19061,16 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         <Route path="/my-page" element={
           !canAccessNavigationMenu('myPage') ? (
             <FeatureUnavailablePage label="마이페이지" fallbackPath={navigationFallbackPath} />
+          ) : !isAuthReady ? (
+            <div className="min-h-screen flex items-center justify-center text-[var(--text-primary)] bg-[var(--bg-primary)]">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="w-8 h-8 animate-spin text-sky-300" />
+                <p className="text-sm font-medium text-gray-400">사용자 정보를 불러오는 중...</p>
+              </div>
+            </div>
           ) : user ? (
             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-sky-300 animate-spin" /></div>}>
-              <MyPageLazy />
+              <MyPageLazy onLogout={handleLogout} />
             </Suspense>
           ) : (
             <Navigate to="/" replace />
@@ -15166,6 +19079,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         <Route path="/lab" element={
           !canAccessNavigationMenu('lab') ? (
             <FeatureUnavailablePage label="실험실" fallbackPath={navigationFallbackPath} />
+          ) : !isAuthReady ? (
+            <div className="min-h-screen flex items-center justify-center text-[var(--text-primary)] bg-[var(--bg-primary)]">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="w-8 h-8 animate-spin text-[#BBA8CA]" />
+                <p className="text-sm font-medium text-gray-400">사용자 정보를 불러오는 중...</p>
+              </div>
+            </div>
           ) : user ? (
             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-[#BBA8CA] animate-spin" /></div>}>
               <LabPageLazy />
@@ -15178,41 +19098,19 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         {/* Admin Routes */}
         {isAdminUser ? (
           <>
-            <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
-            <Route path="/admin/users" element={
-              <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
-                <AdminUserManagementPageLazy isAdmin={isAdminUser} />
-              </Suspense>
-            } />
-            <Route path="/admin/vocals" element={
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminVocalTonesPageLazy isAdmin={isAdminUser} />
-              </Suspense>
-            } />
-            <Route path="/admin/tags" element={
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminSectionTagsPageLazy isAdmin={isAdminUser} />
-              </Suspense>
-            } />
-            <Route path="/admin/suno-api" element={
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminSunoApiPageLazy />
-              </Suspense>
-            } />
-            <Route path="/admin/app-settings" element={
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminAppSettingsPageLazy />
-              </Suspense>
-            } />
-            <Route path="/admin/gemini-audit" element={
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminGeminiAuditPageLazy />
-              </Suspense>
-            } />
+            <Route path="/admin" element={<Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/master" element={isMasterUser ? <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-amber-300 animate-spin" /></div>}><MasterPermissionsPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/users" element={canAccessAdminPage('userManagement') ? <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}><AdminUserManagementPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/vocals" element={<Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/tags" element={<Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/suno-api" element={canAccessAdminPage('sunoApiManagement') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminSunoApiPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/app-settings" element={canAccessAdminPage('appSettings') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminAppSettingsPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/gemini-audit" element={canAccessAdminPage('geminiAudit') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminGeminiAuditPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
           </>
         ) : (
           <>
             <Route path="/admin" element={<Navigate to="/" replace />} />
+            <Route path="/admin/master" element={<Navigate to="/" replace />} />
             <Route path="/admin/users" element={<Navigate to="/" replace />} />
             <Route path="/admin/vocals" element={<Navigate to="/" replace />} />
             <Route path="/admin/tags" element={<Navigate to="/" replace />} />
@@ -15220,38 +19118,18 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <Route path="/admin/app-settings" element={<Navigate to="/" replace />} />
             <Route path="/admin/gemini-audit" element={<Navigate to="/" replace />} />
           </>
-        )}
-      </Routes>
+        )}      </Routes>
       <GlobalPlayer />
 
-      {/* Tooltip / Description Overlay */}
-      <AnimatePresence>
-        {hoveredItem && (
-          <motion.div
-            initial={{ opacity: 0, x: '-50%' }}
-            animate={{ 
-              opacity: isTooltipHovered ? 0.1 : 1, 
-              x: '-50%'
-            }}
-            exit={{ opacity: 0, x: '-50%' }}
-            onMouseEnter={() => setIsTooltipHovered(true)}
-            onMouseLeave={() => setIsTooltipHovered(false)}
-            className={cn(
-              "fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
-              location.pathname === '/studio' 
-                ? (!isActionButtonsCollapsed && shouldShowActionButtons
-                    ? "bottom-[6.75rem] md:bottom-[8.5rem] max-w-[200px] md:max-w-[400px]" 
-                    : "bottom-10 max-w-[200px] md:max-w-[400px]")
-                : (typeof document !== 'undefined' && document.querySelector('[data-selection-action-bar="true"]')
-                    ? "bottom-[7.75rem] md:bottom-[8.75rem] max-w-[250px] md:max-w-[400px]"
-                    : "bottom-10 max-w-[250px] md:max-w-[400px]")
-            )}
-          >
-            <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>
-            <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">{hoveredItem.description}</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Tooltip / Description Overlay — isolated persistent host */}
+      <StudioDescriptionOverlayHost
+        controllerRef={studioDescriptionControllerRef}
+        resolvePlacement={resolveStudioDescriptionPlacement}
+        locationPathname={location.pathname}
+        studioActionOwner={studioActionOwner}
+        isActionButtonsCollapsed={isActionButtonsCollapsed}
+        shouldRenderActionButtons={shouldRenderActionButtons}
+      />
 
       <AnimatePresence>
         {isRecentSongEditOpen && recentSongEditDraft && (
@@ -15299,6 +19177,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <input
                           value={recentSongEditDraft.koreanTitle}
                           onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, koreanTitle: event.target.value } : prev)}
+                          onKeyDown={handleRecentSongTitleInputKeyDown}
                           placeholder="한글 제목"
                           className={cn(
                             "w-full rounded-2xl border border-[#cd8c31]/20 bg-[var(--input-bg)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/50 focus:ring-2 focus:ring-[#cd8c31]/15",
@@ -15323,6 +19202,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           <input
                             value={recentSongEditDraft.secondaryTitle}
                             onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, secondaryTitle: event.target.value } : prev)}
+                            onKeyDown={handleRecentSongTitleInputKeyDown}
                             placeholder="보조 제목"
                             className="min-w-0 flex-1 rounded-2xl border border-[#cd8c31]/20 bg-[var(--input-bg)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/50 focus:ring-2 focus:ring-[#cd8c31]/15"
                           />
@@ -15396,9 +19276,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         )}
       </AnimatePresence>
 
-      <footer className="py-12 px-6 text-center border-t border-[var(--border-color)] text-[var(--text-secondary)]/50 text-sm">
-        <p>© 2026 SORIDRAW's Studio. All rights reserved.</p>
-      </footer>
+      {location.pathname !== '/studio' && (
+        <footer className="soridraw-app-footer py-12 px-6 text-center border-t border-[var(--border-color)] text-[var(--text-secondary)]/50 text-sm">
+          <p>© 2026 SORIDRAW's Studio. All rights reserved.</p>
+        </footer>
+      )}
 
       {/* Toast Notification */}
       <AnimatePresence>
@@ -15424,6 +19306,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               hasApiKey={true}
               isNoLyrics={hasSelectedInstrumentalBgm}
               maxLyricLanguages={hasSelectedInstrumentalBgm ? 0 : 2}
+              initialLyricLanguages={mainGenerationLyricLanguages}
               isKoreanEnglishMix={isKoreanEnglishMix}
               englishMixRatio={englishMixRatio}
               languageMixTargetLanguages={languageMixTargetLanguages}
@@ -15438,10 +19321,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               }}
               onConfirm={(_titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
                 const nextMix = includeLyrics ? Boolean(options?.isKoreanEnglishMix ?? isKoreanEnglishMix) : false;
-                const nextRatio = Math.max(10, Math.min(70, Math.round((Number(options?.englishMixRatio ?? englishMixRatio) || 10) / 10) * 10));
+                const nextRatio = normalizeLanguageMixRatioOption(options?.englishMixRatio ?? englishMixRatio);
                 const nextRapMode: RapMode = includeLyrics ? (options?.rapMode || (options?.rapEnabled ? 'on' : rapMode)) : rapMode;
                 const nextRap = includeLyrics ? nextRapMode === 'on' : rapEnabled;
                 const nextMixTargets = includeLyrics && nextMix ? Array.from(new Set((options?.languageMixTargetLanguages || languageMixTargetLanguages).filter(Boolean))).slice(0, 2) as LanguageCode[] : [];
+                const nextLyricLanguages = includeLyrics
+                  ? Array.from(new Set(lyricLanguages.filter(Boolean))).slice(0, 2) as LanguageCode[]
+                  : [];
+                if (nextLyricLanguages.length > 0) setMainGenerationLyricLanguages(nextLyricLanguages);
                 setIsKoreanEnglishMix(nextMix);
                 setEnglishMixRatio(nextRatio);
                 setLanguageMixTargetLanguages(nextMixTargets);
@@ -15450,7 +19337,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 closeMainGenerationModal();
                 enqueueGeneration({
                   includeLyrics: hasSelectedInstrumentalBgm ? false : includeLyrics,
-                  lyricLanguages: hasSelectedInstrumentalBgm ? [] : lyricLanguages,
+                  lyricLanguages: hasSelectedInstrumentalBgm ? [] : nextLyricLanguages,
                   generationCount,
                   isKoreanEnglishMix: nextMix,
                   englishMixRatio: nextRatio,
@@ -16058,20 +19945,7 @@ interface SongPreviewPopupProps {
 }
 
 const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, details }) => {
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth < 640;
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 640);
-    };
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const isMobile = useMediaQuery('(max-width: 639px)');
 
   const getPreviewKeywordTextClass = (id: string) => {
     if (id === 'genre') return 'text-[#FFC15A]';
@@ -16344,7 +20218,7 @@ function GenreCategorySectionComponent({
   isExpanded = false,
   onToggleExpand,
 }: GenreCategorySectionProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(120);
 
@@ -16356,7 +20230,7 @@ function GenreCategorySectionComponent({
   const isExpandSummaryActive = isExpanded;
 
   return (
-    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col h-full relative group">
+    <div data-expand-section className="soridraw-genre-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col h-full relative group">
       {onToggleExpand && (
         <button
           data-expanded={isExpanded ? 'true' : 'false'}
@@ -16377,26 +20251,28 @@ function GenreCategorySectionComponent({
         <div className="flex items-center gap-3">
           <div className="relative">
             <h3
+              data-soridraw-menu-title-tooltip-anchor
               onMouseEnter={() => setShowTitleTooltip(true)}
               onMouseLeave={() => setShowTitleTooltip(false)}
               className="text-[20px] font-bold text-[var(--text-primary)] flex items-center gap-2 cursor-help"
             >
               <span className={cn("w-1.5 h-6 rounded-full", sectionAccent.bar)} />
               {title}
-              <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedChild ? '1' : '0'}/1)</span>
+              <span className="soridraw-menu-count text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedChild ? '1' : '0'}/1)</span>
             </h3>
-            <AnimatePresence>
-              {showTitleTooltip && (
-                <motion.div
+            {showTitleTooltip && (
+              <MenuTitleTooltipPortal>
+<motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className={cn("absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-56 pointer-events-none", sectionAccent.selectedBorder)}
+                  className={cn("soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-56 pointer-events-none", sectionAccent.selectedBorder)}
                 >
-                  <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
+                  <p className="soridraw-card-title-tooltip-label hidden">{title}</p>
+                  <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
                 </motion.div>
-              )}
-            </AnimatePresence>
+              </MenuTitleTooltipPortal>
+            )}
           </div>
         </div>
 
@@ -16432,7 +20308,8 @@ function GenreCategorySectionComponent({
               "p-2.5 rounded-xl transition-all border shadow-btn",
               (!!selectedChild || isRandomized)
                 ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
-                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover",
+              (!!selectedChild || isRandomized) && "soridraw-active-reset-button"
             )}
           >
             <Trash2 className="w-4 h-4" />
@@ -16510,7 +20387,7 @@ function GenreCategorySectionComponent({
           }
         }}
         className={cn(
-        "soridraw-expand-summary mt-4 min-h-[44px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center transition-all",
+        "soridraw-expand-summary soridraw-genre-summary-box mt-4 min-h-[44px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center transition-all",
         isExpandSummaryActive
           ? cn(sectionAccent.summaryActive, "border-dashed")
           : cn("border-dashed", sectionAccent.summaryRest),
@@ -16524,11 +20401,11 @@ function GenreCategorySectionComponent({
         } as React.CSSProperties}
       >
         {selectedChild ? (
-          <p className={cn("text-[15px] font-black soridraw-selected-summary", sectionAccent.text)}>
+          <p className={cn("text-[15px] font-black soridraw-selected-summary soridraw-genre-selected-summary", sectionAccent.text)}>
             {(selectedGroup?.labelKo || selectedGroup?.label)} / {(selectedChild.labelKo || selectedChild.label)}
           </p>
         ) : (
-          <p className="text-xs text-[var(--text-secondary)]">
+          <p className="soridraw-genre-selection-tip text-xs text-[var(--text-secondary)]">
             대분류를 누른 뒤 팝업에서 세부 장르를 최대 2개까지 선택하세요.
           </p>
         )}
@@ -16726,7 +20603,7 @@ function CycleSectionComponent({
   onModalStateChange,
   directInput
 }: CycleSectionProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(64);
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
@@ -16767,15 +20644,28 @@ function CycleSectionComponent({
     ].filter((item) => item.label);
   }, [cycles, selected, pointSelected]);
   const selectedDisplayTextLength = selectedDisplayItems.reduce((sum, item) => sum + item.label.length + (item.mode === 'point' ? 5 : 2), 0);
-  const selectedDisplayTextClass = selectedDisplayTextLength > 120
-    ? 'text-[8.5px] leading-[1.05]'
-    : selectedDisplayTextLength > 92
-      ? 'text-[9.5px] leading-[1.08]'
-      : selectedDisplayTextLength > 68
-        ? 'text-[10.5px] leading-[1.12]'
-        : selectedDisplayTextLength > 44
-          ? 'text-[11.5px] leading-[1.15]'
-          : 'text-sm leading-tight';
+  const selectedSummaryItemCount = selectedDisplayItems.length;
+  const isSelectedSummaryDense = selectedSummaryItemCount >= 4 || selectedDisplayTextLength > 42;
+  const selectedSummaryFontSize = selectedSummaryItemCount >= 7
+    ? 8.75
+    : selectedSummaryItemCount === 6
+      ? 9.25
+      : selectedSummaryItemCount === 5
+        ? 10
+        : selectedSummaryItemCount === 4
+          ? 11
+          : selectedSummaryItemCount === 3
+            ? 12.25
+            : selectedSummaryItemCount === 2
+              ? 13.25
+              : 15;
+  const selectedSummaryLineHeight = selectedSummaryItemCount >= 6
+    ? 1.02
+    : selectedSummaryItemCount >= 4
+      ? 1.045
+      : selectedSummaryItemCount === 3
+        ? 1.08
+        : 1.15;
   const selectedKeywordCount = selected.length + pointSelected.length;
   const totalKeywordCount = cycles.reduce((sum, cycle) => sum + cycle.variants.filter((variant) => variant.kind !== 'separator').length, 0);
   const maxSelectableCount = Number.POSITIVE_INFINITY;
@@ -16788,6 +20678,11 @@ function CycleSectionComponent({
   const isExpandSummaryActive = isExpanded;
   const normalizedCycleSectionTitle = `${titleKo || title}`.trim().toLowerCase();
   const useGenreKeywordButtonFont = ['스타일', 'style', '사운드', 'sound'].includes(normalizedCycleSectionTitle);
+  const emptySummaryLabel = normalizedCycleSectionTitle === '스타일' || normalizedCycleSectionTitle === 'style'
+    ? '스타일을 설정하세요.'
+    : normalizedCycleSectionTitle === '사운드' || normalizedCycleSectionTitle === 'sound' || normalizedCycleSectionTitle.includes('sound')
+      ? '사운드를 설정하세요.'
+      : `${titleKo || title}을 설정하세요.`;
 
   useEffect(() => {
     if (!isDirectInputEditing) setDirectInputDraft(directInput?.selectedText || '');
@@ -16815,12 +20710,13 @@ function CycleSectionComponent({
   };
 
   return (
-    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
+    <div data-expand-section data-studio-menu={title === 'Style' ? 'style' : title === 'Sound/Texture' ? 'sound' : title.toLowerCase()} className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <div className="flex-1">
-        <div className="flex items-center justify-between mb-4 gap-3">
+        <div className="soridraw-card-header soridraw-menu-card-header-slot flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3
+                data-soridraw-menu-title-tooltip-anchor
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className={cn("font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help min-w-0", titleClassName ?? "text-[22px]")}
@@ -16828,25 +20724,26 @@ function CycleSectionComponent({
                 <span className={cn("w-1.5 h-6 rounded-full shrink-0", sectionAccent.bar)} />
                 <span className="truncate">{titleKo || title}</span>
                 {countLabel && (
-                  <span className="text-[15px] font-normal text-[var(--text-secondary)] ml-1.5 shrink-0">({countLabel})</span>
+                  <span className="soridraw-menu-count text-[15px] font-normal text-[var(--text-secondary)] ml-1.5 shrink-0">({countLabel})</span>
                 )}
               </h3>
-              <AnimatePresence>
-                {showTitleTooltip && (
-                  <motion.div
+              {showTitleTooltip && (
+                <MenuTitleTooltipPortal>
+<motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
+                    className="soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
                   >
-                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
+                    <p className="soridraw-card-title-tooltip-label hidden">{titleKo || title}</p>
+                    <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                   </motion.div>
-                )}
-              </AnimatePresence>
+                </MenuTitleTooltipPortal>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="soridraw-card-header-actions flex items-center gap-2 shrink-0">
             {extraHeaderControls}
             {onToggleLock && (
               <button
@@ -16879,7 +20776,8 @@ function CycleSectionComponent({
                 "p-2.5 rounded-xl transition-all border shadow-btn",
                 (activeSelected.length > 0 || isRandomized)
                   ? sectionAccent.selectedSoft 
-                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+                (activeSelected.length > 0 || isRandomized) && "soridraw-active-reset-button"
               )}
             >
               <Trash2 className="w-4 h-4" />
@@ -16888,7 +20786,7 @@ function CycleSectionComponent({
         </div>
 
         <div
-          className="soridraw-expand-content overflow-hidden min-h-[76px] transition-[max-height,opacity] duration-300 ease-out"
+          className="soridraw-expand-content soridraw-menu-card-body-slot soridraw-keyword-expand-motion overflow-hidden min-h-[76px]"
           style={{
             maxHeight: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 76) : 76,
             opacity: 1
@@ -16944,7 +20842,7 @@ function CycleSectionComponent({
                   <span
                     className={cn(
                       useGenreKeywordButtonFont ? "text-[15px] md:text-[16.5px]" : "text-[16px] md:text-[17px]",
-                      "font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]"
+                      "soridraw-menu-keyword-label font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]"
                     )}
                   >
                     {folderLabel}
@@ -17016,7 +20914,7 @@ function CycleSectionComponent({
           }
         }}
         className={cn(
-          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all relative",
+          "soridraw-expand-summary soridraw-menu-summary-box mt-5 h-[64px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all relative",
           isExpandSummaryActive
             ? cn(sectionAccent.summaryActive, "border-dashed")
             : cn("border-dashed", sectionAccent.summaryRest),
@@ -17061,16 +20959,24 @@ function CycleSectionComponent({
             </button>
           </div>
         ) : selectedDisplayItems.length > 0 ? (
-          <div className={cn("w-full max-h-[42px] overflow-hidden font-black soridraw-selected-summary break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", selectedDisplayTextClass, directInput ? "pr-10" : "")}>
+          <div
+            data-summary-density={isSelectedSummaryDense ? "dense" : "normal"}
+            data-selected-count={selectedSummaryItemCount}
+            style={{
+              '--soridraw-cycle-summary-count-size': `${selectedSummaryFontSize}px`,
+              '--soridraw-cycle-summary-count-line-height': selectedSummaryLineHeight,
+            } as React.CSSProperties}
+            className={cn("soridraw-menu-summary-text soridraw-menu-summary-text--selected soridraw-cycle-summary-text w-full max-h-[42px] overflow-hidden font-black soridraw-selected-summary break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", directInput ? "pr-10" : "")}
+          >
             {selectedDisplayItems.map((item, index) => (
-              <span key={`${item.mode}-${item.id}`} className={cn("soridraw-selected-summary", sectionAccent.text)}>
+              <span key={`${item.mode}-${item.id}`} className="soridraw-menu-summary-token">
                 {item.mode === 'point' ? '포인트: ' : ''}{item.label}{index < selectedDisplayItems.length - 1 ? ',' : ''}
               </span>
             ))}
           </div>
         ) : (
-          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", isPointSelectionMode ? "text-[#F0A3C9]/45" : sectionAccent.softText)}>
-            {isPointSelectionMode ? '포인트 사운드를 선택하세요.' : `${titleKo || title} 키워드를 선택하세요.`}
+          <p className={cn("soridraw-menu-summary-text soridraw-menu-summary-text--empty text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", isPointSelectionMode && "text-[#F0A3C9]/55")}>
+            {isPointSelectionMode ? '포인트 사운드를 설정하세요.' : emptySummaryLabel}
           </p>
         )}
         {directInput && !isDirectInputEditing && (
@@ -17309,6 +21215,15 @@ function CycleKeywordPopup({
   const isAtLimit = Number.isFinite(maxSelectableCount) && localTotalSelectedCount >= maxSelectableCount;
   const cycleDescriptionText = cycle.descriptionKo || cycle.description || '';
   const selectedCountText = localSelected.length > 0 ? ` (${localSelected.length})` : '';
+  const cycleVariantLabelMap = new Map(
+    cycle.variants
+      .filter((variant) => variant.kind !== 'separator')
+      .map((variant) => [variant.id, variant.labelKo || variant.label] as const)
+  );
+  const modalSelectionStatusItems = [
+    ...localSelected.map((id) => ({ id: `selected-${id}`, role: '선택', label: cycleVariantLabelMap.get(id) || id })),
+    ...localOtherSelected.map((id) => ({ id: `point-${id}`, role: '포인트', label: cycleVariantLabelMap.get(id) || id })),
+  ];
 
   useEffect(() => {
     onHover(null);
@@ -17346,7 +21261,7 @@ function CycleKeywordPopup({
           onPointerUp={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
+          <div className="soridraw-studio-modal-header px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
             <div className="min-w-0">
               <p className={cn("text-[10px] font-black tracking-[0.16em] uppercase mb-1", sectionAccent.text)}>{isPointSelectionMode ? `${title} Point Keyword` : `${title} Keyword`}</p>
               <h3 className="text-2xl font-black text-[var(--text-primary)] leading-tight truncate">{cycle.titleKo || cycle.title}</h3>
@@ -17393,8 +21308,35 @@ function CycleKeywordPopup({
             </div>
           </div>
 
+          <div className="soridraw-studio-modal-selection-bar px-5 py-2.5 border-b flex items-center justify-start gap-2 overflow-hidden text-left shrink-0">
+            <span className="text-[10px] font-black text-[var(--soridraw-menu-amber-soft)] uppercase tracking-widest shrink-0">
+              Selection
+            </span>
+            <div className="min-w-0 flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate break-keep">
+              {modalSelectionStatusItems.length > 0 ? (
+                <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                  {modalSelectionStatusItems.map((item, index) => (
+                    <React.Fragment key={item.id}>
+                      {index > 0 && (
+                        <span className="shrink-0 text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.35)]">·</span>
+                      )}
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="shrink-0 rounded-full border border-[rgb(var(--soridraw-menu-amber-rgb)/0.24)] bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] px-1.5 py-[2px] text-[10px] font-black leading-none tracking-tight text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.78)]">
+                          {item.role}
+                        </span>
+                        <span className="min-w-0 truncate text-[var(--soridraw-menu-amber-soft)]">{item.label}</span>
+                      </span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-[var(--text-secondary)]">미선택</span>
+              )}
+            </div>
+          </div>
+
           <div
-            className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-5 pt-5 pb-8 space-y-3 scroll-pb-8"
+            className="soridraw-studio-modal-body min-h-0 flex-1 overflow-y-auto custom-scrollbar px-5 pt-5 pb-8 space-y-3 scroll-pb-8"
             onWheel={(e) => e.stopPropagation()}
             onTouchMove={(e) => e.stopPropagation()}
           >
@@ -17502,10 +21444,8 @@ interface CategorySectionProps {
   onHover: (item: CategoryItem | null) => void;
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
-  hoveredItem: CategoryItem | null;
   isExpanded: boolean;
   onToggleExpand: () => void;
-  allExpanded: boolean;
   kpopMode?: 0 | 1 | 2;
   citypopMode?: 0 | 1 | 2;
   isRandomized?: boolean;
@@ -17538,10 +21478,8 @@ function CategorySectionComponent({
   onHover,
   onLongPressStart,
   onLongPressEnd,
-  hoveredItem,
   isExpanded,
   onToggleExpand,
-  allExpanded,
   kpopMode = 0,
   citypopMode = 0,
   isRandomized = false,
@@ -17551,13 +21489,19 @@ function CategorySectionComponent({
   uniformKeywordGrid = false,
   directInput
 }: CategorySectionProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(84);
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
   const [directInputDraft, setDirectInputDraft] = useState('');
   const sectionAccent = getStudioSectionAccent(titleKo || title);
   const isExpandSummaryActive = isExpanded;
+  const normalizedCategoryTitle = `${titleKo || title}`.trim().toLowerCase();
+  const emptySummaryLabel = normalizedCategoryTitle === '분위기' || normalizedCategoryTitle === 'mood'
+    ? '분위기를 설정하세요.'
+    : normalizedCategoryTitle === '주제' || normalizedCategoryTitle === 'theme'
+      ? '주제를 설정하세요.'
+      : `${titleKo || title}를 설정하세요.`;
 
   useStableContentHeight(contentRef, setContentHeight, [items, selected, pinned, uniformKeywordGrid], onHeightChange);
 
@@ -17569,6 +21513,8 @@ function CategorySectionComponent({
     const item = items.find(i => i.id === id);
     return item?.labelKo || item?.label || id;
   };
+  const selectedSummaryText = selected.map((id) => resolveSelectedLabel(id)).join(', ');
+  const isSelectedSummaryDense = selectedSummaryText.length > 34 || selected.length >= 5;
 
   const openDirectInput = () => {
     setDirectInputDraft(directInput?.selectedText || '');
@@ -17591,35 +21537,37 @@ function CategorySectionComponent({
   };
 
   return (
-    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
+    <div data-expand-section data-studio-menu={title.toLowerCase()} className="soridraw-category-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <div className="flex-1">
-        <div className="flex items-center justify-between mb-4">
+        <div className="soridraw-card-header soridraw-menu-card-header-slot flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3 
+                data-soridraw-menu-title-tooltip-anchor
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help min-w-0"
               >
                 <span className={cn("w-1.5 h-6 rounded-full shrink-0", sectionAccent.bar)} />
                 <span className="truncate">{titleKo || title}</span>
-                <span className="text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selected.length}/{items.length})</span>
+                <span className="soridraw-menu-count text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selected.length}/{items.length})</span>
               </h3>
-              <AnimatePresence>
-                {showTitleTooltip && (
-                  <motion.div
+              {showTitleTooltip && (
+                <MenuTitleTooltipPortal>
+<motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className={cn("absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-48 pointer-events-none", sectionAccent.selectedBorder)}
+                    className={cn("soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-48 pointer-events-none", sectionAccent.selectedBorder)}
                   >
-                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
+                    <p className="soridraw-card-title-tooltip-label hidden">{titleKo || title}</p>
+                    <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                   </motion.div>
-                )}
-              </AnimatePresence>
+                </MenuTitleTooltipPortal>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="soridraw-card-header-actions flex items-center gap-2">
             {onToggleLock && (
               <button
                 type="button"
@@ -17689,7 +21637,8 @@ function CategorySectionComponent({
                 "p-2.5 rounded-xl transition-all border shadow-btn",
                 (selected.length > 0 || isRandomized)
                   ? sectionAccent.selectedSoft 
-                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+                (selected.length > 0 || isRandomized) && "soridraw-active-reset-button"
               )}
             >
               <Trash2 className="w-4 h-4" />
@@ -17698,15 +21647,17 @@ function CategorySectionComponent({
         </div>
         
         <div
-          className="soridraw-expand-content overflow-hidden min-h-[48px] md:min-h-[96px] transition-[max-height,opacity] duration-300 ease-out"
+          className="soridraw-expand-content soridraw-menu-card-body-slot soridraw-keyword-expand-motion overflow-hidden min-h-[48px] md:min-h-[96px]"
           style={{
-            maxHeight: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, window.innerWidth < 768 ? 48 : 96) : (window.innerWidth < 768 ? 48 : 96),
+            maxHeight: isExpanded
+              ? resolveExpandedHeight(forcedHeight, contentHeight, 96)
+              : 'var(--soridraw-expand-collapsed-height, 96px)',
             opacity: 1
           }}
         >
           <div
             ref={contentRef}
-            className={cn(
+            className={cn("soridraw-category-keyword-grid",
               uniformKeywordGrid
                 ? "grid grid-cols-4 lg:grid-cols-7 gap-2"
                 : "flex flex-wrap gap-2"
@@ -17830,7 +21781,7 @@ function CategorySectionComponent({
                   <span
                     className={cn(
                       uniformKeywordGrid
-                        ? ["block w-full whitespace-normal break-keep text-center", uniformLabelTextClass]
+                        ? ["soridraw-menu-keyword-label block w-full whitespace-normal break-keep text-center", uniformLabelTextClass]
                         : ""
                     )}
                   >
@@ -17881,7 +21832,7 @@ function CategorySectionComponent({
           }
         }}
         className={cn(
-          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-5 py-3 flex items-center justify-center text-center overflow-hidden relative transition-all",
+          "soridraw-expand-summary soridraw-menu-summary-box mt-5 h-[64px] rounded-2xl border border-dashed px-5 py-3 flex items-center justify-center text-center overflow-hidden relative transition-all",
           isExpandSummaryActive
             ? cn(sectionAccent.summaryActive, "border-dashed")
             : cn("border-dashed", sectionAccent.summaryRest),
@@ -17926,12 +21877,15 @@ function CategorySectionComponent({
             </button>
           </div>
         ) : selected.length > 0 ? (
-          <p className={cn("text-[15px] font-black soridraw-selected-summary leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10", sectionAccent.text)}>
-            {selected.map(id => resolveSelectedLabel(id)).join(', ')}
+          <p
+            data-summary-density={isSelectedSummaryDense ? "dense" : "normal"}
+            className="soridraw-menu-summary-text soridraw-menu-summary-text--selected soridraw-category-summary-text text-[15px] font-black soridraw-selected-summary leading-tight w-full text-center overflow-hidden pr-10"
+          >
+            {selectedSummaryText}
           </p>
         ) : (
-          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10", sectionAccent.softText)}>
-            키워드를 선택하여 곡의 {titleKo || title}를 설정하세요.
+          <p className="soridraw-menu-summary-text soridraw-menu-summary-text--empty text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10">
+            {emptySummaryLabel}
           </p>
         )}
         {directInput && !isDirectInputEditing && (
@@ -17959,7 +21913,6 @@ const CategorySection = React.memo(CategorySectionComponent, (prev, next) => {
          prev.isLocked === next.isLocked &&
          prev.isRandomized === next.isRandomized &&
          prev.isExpanded === next.isExpanded &&
-         prev.allExpanded === next.allExpanded &&
          prev.kpopMode === next.kpopMode &&
          prev.citypopMode === next.citypopMode &&
          prev.forcedHeight === next.forcedHeight &&
@@ -17998,6 +21951,7 @@ interface SongStructureIntegratedControlProps {
   vocalSectionTags?: VocalSectionTagOption[];
   selectedGenreIds?: string[];
   onModalStateChange?: (isOpen: boolean) => void;
+  naturalResponsiveHeight?: boolean;
 }
 
 function SongStructureIntegratedControlComponent({
@@ -18026,9 +21980,10 @@ function SongStructureIntegratedControlComponent({
   pointSoundTagLabels = {},
   vocalSectionTags = [],
   selectedGenreIds = [],
-  onModalStateChange
+  onModalStateChange,
+  naturalResponsiveHeight = false
 }: SongStructureIntegratedControlProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const contentRef = useRef<HTMLDivElement>(null);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
   const customModalHistoryPushedRef = useRef(false);
@@ -18098,7 +22053,13 @@ function SongStructureIntegratedControlComponent({
     onModalStateChange?.(isCustomModalOpen || editingSectionIndex !== null || isCustomSectionEditorOpen || isSaveStructureModalOpen || isSavedSectionsModalOpen);
   }, [isCustomModalOpen, editingSectionIndex, isCustomSectionEditorOpen, isSaveStructureModalOpen, isSavedSectionsModalOpen, onModalStateChange]);
 
-  useStableContentHeight(contentRef, setContentHeight, [lyricsLength, songStructure, customStructure]);
+  useStableContentHeight(
+    contentRef,
+    setContentHeight,
+    [lyricsLength, songStructure, customStructure],
+    undefined,
+    !naturalResponsiveHeight
+  );
 
   const moveDraftSectionById = useCallback((dragId: string, targetIndex: number) => {
     setDraftStructure((prev) => {
@@ -18318,6 +22279,7 @@ function SongStructureIntegratedControlComponent({
     customBackupDirtyRef.current = false;
     customBackupSavingRef.current = true;
 
+    const nextSectionCustomVersion = Date.now();
     const payload = {
       structures: savedStructuresRef.current
         .map((item) => normalizeSavedStructurePreset(item))
@@ -18326,12 +22288,31 @@ function SongStructureIntegratedControlComponent({
       customSections: normalizeUserCustomSections(userCustomSectionsRef.current).slice(0, 40),
       customSectionTags: normalizeUserCustomSectionTags(userCustomSectionTagsRef.current).slice(0, 120),
       customDataSyncVersion: 2,
-      customDataUpdatedAt: Date.now(),
+      customDataUpdatedAt: nextSectionCustomVersion,
+      sectionCustomVersion: nextSectionCustomVersion,
     };
 
     try {
       const ref = doc(db, 'user_structures', user.uid);
       await setDoc(ref, sanitizeForFirestore(payload), { merge: true });
+
+      // The payload write is authoritative for this device. Cache the same token
+      // before publishing it to the profile so our own profile snapshot does not
+      // cause a redundant reread.
+      writeSectionCustomVersion(SECTION_CUSTOM_LOCAL_VERSION_STORAGE_BASE, user.uid, nextSectionCustomVersion);
+      writeSectionCustomVersion(SECTION_CUSTOM_REMOTE_VERSION_STORAGE_BASE, user.uid, nextSectionCustomVersion);
+      sectionCustomVerifiedSessionVersions.set(user.uid, nextSectionCustomVersion);
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          syncVersions: { sectionCustom: nextSectionCustomVersion },
+        }, { merge: true });
+      } catch (syncError) {
+        // Keep the section-custom save authoritative even if the currently
+        // deployed rules have not yet been upgraded to allow syncVersions.
+        // Same-device cache remains valid; cross-device invalidation activates
+        // as soon as the prepared Firestore rule is deployed.
+        console.warn('Failed to publish section custom sync version:', syncError);
+      }
     } catch (error) {
       customBackupDirtyRef.current = true;
       console.error('Failed to save custom backup to Firestore:', error);
@@ -18345,10 +22326,29 @@ function SongStructureIntegratedControlComponent({
 
     customBackupLoadingRef.current = true;
     const storageKey = getSavedStructuresStorageKey(user.uid);
+    const localVersion = readSectionCustomVersion(SECTION_CUSTOM_LOCAL_VERSION_STORAGE_BASE, user.uid);
+    const persistedRemoteVersion = readSectionCustomVersion(SECTION_CUSTOM_REMOTE_VERSION_STORAGE_BASE, user.uid);
+    const cachedProfileSectionVersion = Number((readUserProfileCache(user.uid) as any)?.syncVersions?.sectionCustom || 0);
+    const remoteVersion = cachedProfileSectionVersion > 0 ? cachedProfileSectionVersion : persistedRemoteVersion;
+    const cacheVersionMatches = localVersion > 0 && (remoteVersion <= 0 || localVersion >= remoteVersion);
+
+    const sessionVerifiedVersion = Number(sectionCustomVerifiedSessionVersions.get(user.uid) || 0);
+    const sessionVersionMatches = sessionVerifiedVersion > 0
+      && (remoteVersion <= 0 || sessionVerifiedVersion >= remoteVersion);
+
+    if (cacheVersionMatches || sessionVersionMatches) {
+      const verifiedVersion = localVersion || sessionVerifiedVersion || remoteVersion;
+      if (verifiedVersion > 0) sectionCustomVerifiedSessionVersions.set(user.uid, verifiedVersion);
+      markCacheDiagnostic('sectionCustom', 'CACHE', 0);
+      customBackupLoadedRef.current = true;
+      customBackupLoadingRef.current = false;
+      return;
+    }
 
     try {
       const ref = doc(db, 'user_structures', user.uid);
       const snap = await getDoc(ref);
+      markCacheDiagnostic('sectionCustom', 'SYNC', 1);
       const localStructures = safeReadJsonArray<SavedStructurePreset>(storageKey)
         .map((item) => normalizeSavedStructurePreset(item))
         .filter((item): item is SavedStructurePreset => item !== null);
@@ -18359,6 +22359,15 @@ function SongStructureIntegratedControlComponent({
         if (localStructures.length > 0 || localSections.length > 0 || localTags.length > 0) {
           customBackupDirtyRef.current = true;
         }
+        // Remember that this device has already checked the empty remote state.
+        // A later cross-device save publishes a different profile version and
+        // will invalidate this sentinel automatically.
+        const checkedVersion = remoteVersion || localVersion || Date.now();
+        writeSectionCustomVersion(SECTION_CUSTOM_LOCAL_VERSION_STORAGE_BASE, user.uid, checkedVersion);
+        if (remoteVersion <= 0) {
+          writeSectionCustomVersion(SECTION_CUSTOM_REMOTE_VERSION_STORAGE_BASE, user.uid, checkedVersion);
+        }
+        sectionCustomVerifiedSessionVersions.set(user.uid, checkedVersion);
         return;
       }
 
@@ -18393,6 +22402,12 @@ function SongStructureIntegratedControlComponent({
       } else if (localTags.length > 0) {
         customBackupDirtyRef.current = true;
       }
+
+      const resolvedVersion = Number(data?.sectionCustomVersion || data?.customDataUpdatedAt || remoteVersion || Date.now());
+      const verifiedResolvedVersion = Math.max(resolvedVersion, remoteVersion, localVersion);
+      writeSectionCustomVersion(SECTION_CUSTOM_LOCAL_VERSION_STORAGE_BASE, user.uid, verifiedResolvedVersion);
+      writeSectionCustomVersion(SECTION_CUSTOM_REMOTE_VERSION_STORAGE_BASE, user.uid, verifiedResolvedVersion);
+      sectionCustomVerifiedSessionVersions.set(user.uid, verifiedResolvedVersion);
     } catch (error) {
       console.error('Failed to load custom backup from Firestore:', error);
     } finally {
@@ -18750,6 +22765,31 @@ function SongStructureIntegratedControlComponent({
     writeJsonArray(getSavedStructuresStorageKey(user?.uid), sanitized);
     markCustomBackupDirty();
   };
+
+  useEffect(() => {
+    if (!user || typeof window === 'undefined') return;
+
+    const refreshIfVersionChanged = (version: number) => {
+      if (!Number.isFinite(version) || version <= 0) return;
+      const localVersion = readSectionCustomVersion(SECTION_CUSTOM_LOCAL_VERSION_STORAGE_BASE, user.uid);
+      const sessionVerifiedVersion = Number(sectionCustomVerifiedSessionVersions.get(user.uid) || 0);
+      if ((localVersion > 0 && localVersion >= version) || sessionVerifiedVersion >= version) return;
+      sectionCustomVerifiedSessionVersions.delete(user.uid);
+      customBackupLoadedRef.current = false;
+      void ensureCustomBackupLoaded();
+    };
+
+    const handleSectionCustomVersion = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string; version?: number }>).detail;
+      if (!detail || detail.uid !== user.uid) return;
+      refreshIfVersionChanged(Number(detail.version || 0));
+    };
+
+    window.addEventListener(SECTION_CUSTOM_SYNC_VERSION_EVENT, handleSectionCustomVersion as EventListener);
+    const cachedProfileSectionVersion = Number((readUserProfileCache(user.uid) as any)?.syncVersions?.sectionCustom || 0);
+    refreshIfVersionChanged(cachedProfileSectionVersion);
+    return () => window.removeEventListener(SECTION_CUSTOM_SYNC_VERSION_EVENT, handleSectionCustomVersion as EventListener);
+  }, [user, ensureCustomBackupLoaded]);
 
 
   const openCustomModal = () => {
@@ -19234,9 +23274,10 @@ function SongStructureIntegratedControlComponent({
 
   return (
     <>
-      <div className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--home-card-border)] flex flex-col h-full relative pb-12 overflow-visible">
-        <div className="relative mb-4 flex items-center justify-between">
+      <div data-studio-menu="lyrics" className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--home-card-border)] flex flex-col h-full relative pb-12 overflow-visible">
+        <div className="soridraw-card-header soridraw-menu-card-header-slot relative mb-4 flex items-center justify-between">
           <h3 
+            data-soridraw-menu-title-tooltip-anchor
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
             className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
@@ -19244,7 +23285,7 @@ function SongStructureIntegratedControlComponent({
             <span className="w-1.5 h-6 bg-[#FFB400] rounded-full" />
             가사
           </h3>
-          <div className="flex items-center gap-2">
+          <div className="soridraw-card-header-actions flex items-center gap-2">
             {onToggleLock && (
               <button
                 type="button"
@@ -19270,37 +23311,42 @@ function SongStructureIntegratedControlComponent({
               className={cn(
                 "p-2.5 rounded-xl transition-all border shadow-btn",
                 (lyricsLength !== 'normal' || songStructure !== '1' || (customStructure ?? []).length > 0)
-                  ? "bg-[#FFB400]/20 text-[#FFD36A] border-black/20 hover:bg-[#FFB400]/30" 
-                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                  ? "bg-[#FFB400]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/20"
+                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover",
+                (lyricsLength !== 'normal' || songStructure !== '1' || (customStructure ?? []).length > 0) && "soridraw-active-reset-button"
               )}
             >
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
-          <AnimatePresence>
-            {showTitleTooltip && (
-              <motion.div
+          {showTitleTooltip && (
+            <MenuTitleTooltipPortal>
+<motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
-                className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-black/20/30 shadow-2xl w-56 pointer-events-none"
+                className="soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-black/20/30 shadow-2xl w-56 pointer-events-none"
               >
-                <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가사 분량과 곡의 전개 방식을 통합적으로 설정합니다.</p>
+                <p className="soridraw-card-title-tooltip-label hidden">가사</p>
+                <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">가사 분량과 곡의 전개 방식을 통합적으로 설정합니다.</p>
               </motion.div>
-            )}
-          </AnimatePresence>
+            </MenuTitleTooltipPortal>
+          )}
         </div>
 
         <div className="flex flex-col flex-1 overflow-visible">
-          <motion.div 
-            animate={{ height: contentHeight }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
-            className="overflow-hidden"
+          <motion.div
+            animate={naturalResponsiveHeight ? undefined : { height: contentHeight }}
+            transition={naturalResponsiveHeight ? undefined : { duration: 0.25, ease: "easeOut" }}
+            className={cn(
+              "soridraw-lyrics-content-shell soridraw-menu-card-body-slot",
+              naturalResponsiveHeight ? "overflow-visible" : "overflow-hidden"
+            )}
           >
             <div ref={contentRef} className="space-y-3 flex-1 flex flex-col justify-start">
               {/* 공통 작사 스타일 */}
               <div className="space-y-2">
-                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│작사 스타일</p>
+                <p className="soridraw-split-accent-label text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│작사 스타일</p>
                 <div className="grid grid-cols-2 gap-2 rounded-2xl border border-btn-border bg-btn-bg p-1 shadow-btn">
                   {([
                     { id: 'default', label: '기본', description: 'Story Context와 장르에 맞춰 자유롭게 작사합니다.' },
@@ -19309,6 +23355,8 @@ function SongStructureIntegratedControlComponent({
                     <button
                       key={item.id}
                       type="button"
+                      data-soridraw-selected={lyricWritingStyle === item.id ? 'true' : 'false'}
+                      aria-pressed={lyricWritingStyle === item.id}
                       onClick={() => {
                         onLyricWritingStyleChange(item.id);
                         writeStoredV1LyricWritingStyle(item.id);
@@ -19334,11 +23382,13 @@ function SongStructureIntegratedControlComponent({
 
               {/* 1. 가사 길이 */}
               <div className="space-y-2">
-                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│가사 길이</p>
+                <p className="soridraw-split-accent-label text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│가사 길이</p>
                 <div className="flex gap-2">
                   {lyricsOptions.map((opt) => (
                     <div key={opt.id} className="relative flex-1">
                       <button
+                        data-soridraw-selected={lyricsLength === opt.id ? 'true' : 'false'}
+                        aria-pressed={lyricsLength === opt.id}
                         onClick={() => {
                           onLyricsLengthChange(opt.id as LyricsLength);
                           onHover({ id: opt.id, label: opt.label, labelKo: opt.labelKo, description: opt.description, _ts: Date.now() });
@@ -19351,7 +23401,7 @@ function SongStructureIntegratedControlComponent({
                         onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, labelKo: opt.labelKo, description: opt.description })}
                         onTouchEnd={onLongPressEnd}
                         className={cn(
-                          "w-full py-1.5 rounded-xl text-[14px] md:text-[15px] font-bold transition-all border shadow-sm",
+                          "soridraw-lyrics-option-button w-full py-1.5 rounded-xl text-[13px] font-bold transition-all border shadow-sm",
                           lyricsLength === opt.id
                             ? "bg-[#FFB400] border-black/20 text-[#171717] font-black shadow-lg shadow-[#FFB400]/20"
                             : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
@@ -19369,14 +23419,17 @@ function SongStructureIntegratedControlComponent({
               </div>
 
               {/* 3. 섹션 */}
-              <div className="space-y-2">
-                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│섹션 구조</p>
+              <div data-soridraw-scroll-anchor="lyrics-section-structure" className="space-y-2">
+                <p className="soridraw-split-accent-label text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│섹션 구조</p>
+                <CacheDiagnosticBadge domain="sectionCustom" className="ml-1" />
                 <div className="grid grid-cols-4 gap-2">
                   {structureOptions.map((opt) => {
                     const isCustomLocked = opt.id === 'custom' && userTier === 'free';
                     return (
                       <button
                         key={opt.id}
+                        data-soridraw-selected={songStructure === opt.id ? 'true' : 'false'}
+                        aria-pressed={songStructure === opt.id}
                         onClick={() => handleSelectStructure(opt.id as SongStructure)}
                         onMouseEnter={() => onHover({ id: `song-structure-${opt.id}`, label: `섹션 ${opt.label}`, description: isCustomLocked ? '섹션 커스텀은 Pro부터 사용할 수 있습니다.' : opt.description })}
                         onMouseLeave={() => {
@@ -19386,7 +23439,7 @@ function SongStructureIntegratedControlComponent({
                         onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `섹션 ${opt.label}`, description: isCustomLocked ? '섹션 커스텀은 Pro부터 사용할 수 있습니다.' : opt.description })}
                         onTouchEnd={onLongPressEnd}
                         className={cn(
-                          "py-1.5 rounded-xl text-[14px] md:text-[15px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-sm",
+                          "soridraw-lyrics-option-button py-1.5 rounded-xl text-[13px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-sm",
                           songStructure === opt.id
                             ? "bg-[#FFB400] border-black/20 text-[#171717] font-black shadow-lg shadow-[#FFB400]/20"
                             : isCustomLocked
@@ -19402,8 +23455,8 @@ function SongStructureIntegratedControlComponent({
                 </div>
                 
                 {/* Structure Guide - Always Visible */}
-                <div className="mt-2 rounded-2xl border border-dashed border-black/20/30 px-3 py-3 bg-[#FFB400]/5">
-                  <p className="text-[10px] font-bold text-[#FFD36A] mb-1 uppercase tracking-tight">
+                <div data-soridraw-selectable-text="true" className="soridraw-structure-guide mt-2 rounded-2xl border border-dashed border-black/20/30 px-3 py-3 bg-[#FFB400]/5">
+                  <p className="soridraw-split-accent-caption text-[10px] font-bold text-[#FFD36A] mb-1 uppercase tracking-tight">
                     {songStructure === 'custom' ? '커스텀 상세 가이드' : `${structureOptions.find((opt) => opt.id === songStructure)?.label ?? '추천'} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words whitespace-pre-line">
@@ -19414,12 +23467,13 @@ function SongStructureIntegratedControlComponent({
                   </p>
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div data-soridraw-scroll-anchor="lyrics-cues" className="mt-3 grid grid-cols-2 gap-2">
                   <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-btn-border bg-btn-bg px-3 py-2">
                     <span className="truncate text-[13px] md:text-[14px] font-bold text-[var(--text-primary)]">보컬 큐</span>
                     <button
                       type="button"
                       role="switch"
+                      data-soridraw-selected={sectionVocalCueEnabled ? 'true' : 'false'}
                       aria-checked={sectionVocalCueEnabled}
                       aria-label={`보컬 큐 ${sectionVocalCueEnabled ? '켜짐' : '꺼짐'}`}
                       onClick={() => {
@@ -19454,7 +23508,7 @@ function SongStructureIntegratedControlComponent({
                       })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        'relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
+                        'soridraw-section-cue-toggle relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
                         sectionVocalCueEnabled
                           ? 'border-[#FFB400] bg-[#FFB400]'
                           : 'border-black/15 bg-[#CFCFCF] dark:border-white/10 dark:bg-[#4A4A4A]'
@@ -19475,6 +23529,7 @@ function SongStructureIntegratedControlComponent({
                     <button
                       type="button"
                       role="switch"
+                      data-soridraw-selected={sectionInstrumentCueEnabled ? 'true' : 'false'}
                       aria-checked={sectionInstrumentCueEnabled}
                       aria-label={`악기 큐 ${sectionInstrumentCueEnabled ? '켜짐' : '꺼짐'}`}
                       onClick={() => {
@@ -19509,7 +23564,7 @@ function SongStructureIntegratedControlComponent({
                       })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        'relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
+                        'soridraw-section-cue-toggle relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
                         sectionInstrumentCueEnabled
                           ? 'border-[#FFB400] bg-[#FFB400]'
                           : 'border-black/15 bg-[#CFCFCF] dark:border-white/10 dark:bg-[#4A4A4A]'
@@ -19531,6 +23586,9 @@ function SongStructureIntegratedControlComponent({
         </div>
       </div>
 
+      {/* Keep the entire section-custom modal stack at document level so Studio Black
+          split-pane containment cannot clip or confine fixed overlays. */}
+      <Portal>
       <AnimatePresence>
         {isCustomModalOpen && (
           <motion.div
@@ -19664,7 +23722,7 @@ function SongStructureIntegratedControlComponent({
                           }
                           onMouseLeave={() => onHover(null)}
                           className={cn(
-                            "px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-1.5 shadow-btn",
+                            "soridraw-section-control-button px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-1.5 shadow-btn",
                             isLocked 
                               ? "bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)]/40 cursor-not-allowed"
                               : "bg-btn-bg border-[var(--modal-button-border)] text-[var(--text-primary)] hover:bg-btn-hover"
@@ -19690,7 +23748,7 @@ function SongStructureIntegratedControlComponent({
                     <button
                       type="button"
                       onClick={() => openCustomSectionEditor()}
-                      className="px-3.5 py-2 rounded-xl border border-[var(--modal-button-border)] bg-white/5 text-[var(--text-primary)] text-[13px] font-black transition-all hover:bg-white/10 flex items-center gap-1.5 shadow-btn"
+                      className="soridraw-section-control-button px-3.5 py-2 rounded-xl border border-[var(--modal-button-border)] bg-white/5 text-[var(--text-primary)] text-[13px] font-black transition-all hover:bg-white/10 flex items-center gap-1.5 shadow-btn"
                     >
                       <Plus className="w-3.5 h-3.5" /> 섹션 추가
                     </button>
@@ -19755,7 +23813,7 @@ function SongStructureIntegratedControlComponent({
 
                 <div className="space-y-4 min-w-0">
                   <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch min-w-0">
-                    <div className="flex-1 min-w-0 rounded-2xl bg-[var(--hover-bg)]/60 border border-[var(--border-color)] px-4 py-3 overflow-hidden">
+                    <div className="soridraw-section-preview-card flex-1 min-w-0 rounded-2xl bg-[var(--hover-bg)]/60 border border-[var(--border-color)] px-4 py-3 overflow-hidden">
                       <p className="text-[11px] font-bold text-[#FFD36A] mb-2">미리보기</p>
                       <div className="h-[42px] overflow-y-auto pr-1 custom-scrollbar">
                         <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
@@ -19848,7 +23906,7 @@ function SongStructureIntegratedControlComponent({
                       <div
                         ref={currentStructureScrollRef}
                         className={cn(
-                          "flex-1 min-h-0 rounded-2xl border border-dashed border-[var(--border-color)] p-3 custom-scrollbar flex flex-col gap-2 [touch-action:pan-y] [-webkit-overflow-scrolling:touch]",
+                          "soridraw-section-current-list flex-1 min-h-0 rounded-2xl border border-dashed border-[var(--border-color)] p-3 custom-scrollbar flex flex-col gap-2 [touch-action:pan-y] [-webkit-overflow-scrolling:touch]",
                           hasDraftStructureSelection ? "overflow-y-auto overscroll-y-auto" : "overflow-visible",
                           isReorderDragging && "cursor-grabbing select-none"
                         )}
@@ -19866,7 +23924,7 @@ function SongStructureIntegratedControlComponent({
                               onEdit={setEditingSectionIndex}
                               onRemove={removeSectionAt}
                               onHover={onHover}
-                              onSelect={setSelectedInsertIndex}
+                              onSelect={(index) => setSelectedInsertIndex((current) => current === index ? null : index)}
                               onDragStart={handleSectionReorderPointerDown}
                               isReorderDragging={isReorderDragging}
                               isDraggingItem={draggingSectionId === item.id}
@@ -19880,7 +23938,7 @@ function SongStructureIntegratedControlComponent({
                     </div>
 
                     <div className="hidden xl:block min-w-0 overflow-hidden h-[520px]">
-                      <div className="h-full rounded-2xl border border-[var(--border-color)] p-4 min-w-0 overflow-hidden flex flex-col">
+                      <div className="soridraw-section-keep-panel h-full rounded-2xl border border-[var(--border-color)] p-4 min-w-0 overflow-hidden flex flex-col">
                       <div className="flex flex-col gap-3 mb-4 min-w-0">
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-xs font-bold text-[#FFD36A] uppercase tracking-wider">Keep 섹션</p>
@@ -19896,7 +23954,7 @@ function SongStructureIntegratedControlComponent({
                               value={structureSearch}
                               onChange={(e) => setStructureSearch(e.target.value)}
                               placeholder="섹션 이름 또는 내용 검색..."
-                              className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-[#FFB400]/40 shadow-inner"
+                              className="soridraw-section-keep-search w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-[#FFB400]/40 shadow-inner"
                             />
                             {structureSearch && (
                               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
@@ -19942,7 +24000,7 @@ function SongStructureIntegratedControlComponent({
                           </div>
                         ) : (
                           filteredSavedStructures.map((preset) => (
-                            <div key={preset.id} className="relative rounded-2xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] p-3 min-h-[132px] hover:border-black/20/30 transition-all group shadow-sm overflow-hidden min-w-0">
+                            <div key={preset.id} className="soridraw-section-keep-card relative rounded-2xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] p-3 min-h-[132px] hover:border-black/20/30 transition-all group shadow-sm overflow-hidden min-w-0">
                               <div className="absolute right-3 top-2 z-10 flex items-center gap-1.5">
                                 {editingPresetTitleId === preset.id ? (
                                   <button
@@ -20020,7 +24078,7 @@ function SongStructureIntegratedControlComponent({
                               </div>
                               
                               <div className="mt-3 flex gap-2 min-w-0">
-                                <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-[var(--modal-button-border)]">
+                                <div className="soridraw-section-reaction-group flex gap-1 bg-white/5 p-1 rounded-xl border border-[var(--modal-button-border)]">
                                   <button
                                     onClick={() => handleToggleReaction(preset.id, 'like')}
                                     className={cn(
@@ -20207,6 +24265,7 @@ function SongStructureIntegratedControlComponent({
           />
         )}
       </AnimatePresence>
+      </Portal>
     </>
   );
 }
@@ -20220,6 +24279,7 @@ const SongStructureIntegratedControl = React.memo(SongStructureIntegratedControl
          prev.isLocked === next.isLocked &&
          prev.userTier === next.userTier &&
          prev.user?.uid === next.user?.uid &&
+         prev.naturalResponsiveHeight === next.naturalResponsiveHeight &&
          isArrayEqual(prev.customStructure, next.customStructure) &&
          isArrayEqual(prev.selectedGenreIds, next.selectedGenreIds);
 });
@@ -21453,6 +25513,7 @@ interface VocalControlProps {
   onModalStateChange?: (isOpen: boolean) => void;
   genreHints?: string[];
   randomActivationKey?: number;
+  naturalResponsiveHeight?: boolean;
 }
 
 function VocalControlComponent({ 
@@ -21482,8 +25543,9 @@ function VocalControlComponent({
   onModalStateChange,
   genreHints = [],
   randomActivationKey = 0,
+  naturalResponsiveHeight = false,
 }: VocalControlProps) {
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const [editingVocalMemberId, setEditingVocalMemberId] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -21632,7 +25694,13 @@ function VocalControlComponent({
 
   const [contentHeight, setContentHeight] = useState<number | string>('auto');
 
-  useStableContentHeight(contentRef, setContentHeight, [vocalMode, maleCount, femaleCount, vocalMembers, rapEnabled, rapMode, isKoreanEnglishMix, englishMixRatio]);
+  useStableContentHeight(
+    contentRef,
+    setContentHeight,
+    [vocalMode, maleCount, femaleCount, vocalMembers, rapEnabled, rapMode, isKoreanEnglishMix, englishMixRatio],
+    undefined,
+    !naturalResponsiveHeight
+  );
 
   const createDefaultMember = (index: number, mode: VocalMode): VocalMember => ({
     id: `member_default_${mode}_${index}_${Date.now()}`,
@@ -22080,10 +26148,11 @@ function VocalControlComponent({
   };
 
   return (
-    <div className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 pb-10 border border-[var(--home-card-border)] flex flex-col h-full relative overflow-visible">
-      <div className="relative mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+    <div data-studio-menu="vocal" className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 pb-10 border border-[var(--home-card-border)] flex flex-col h-full relative overflow-visible">
+      <div className="soridraw-card-header relative mb-4 flex items-center justify-between">
+        <div className="soridraw-card-header-title flex items-center gap-2">
           <h3 
+            data-soridraw-menu-title-tooltip-anchor
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
             className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
@@ -22093,7 +26162,7 @@ function VocalControlComponent({
           </h3>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="soridraw-card-header-actions flex items-center gap-2">
           <button
             type="button"
             onClick={cycleRapMode}
@@ -22176,36 +26245,41 @@ function VocalControlComponent({
             className={cn(
               "p-2.5 rounded-xl transition-all border shadow-btn",
               (maleCount > 0 || femaleCount > 0)
-                ? "bg-[#FFB400]/20 text-[#FFD36A] border-black/20 hover:bg-[#FFB400]/30" 
-                : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                ? "bg-[#FFB400]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/20"
+                : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+              (maleCount > 0 || femaleCount > 0) && "soridraw-active-reset-button"
             )}
           >
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
 
-        <AnimatePresence>
-          {showTitleTooltip && (
-            <motion.div
+        {showTitleTooltip && (
+          <MenuTitleTooltipPortal>
+<motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-black/20/30 shadow-2xl w-48 pointer-events-none"
+              className="soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-black/20/30 shadow-2xl w-48 pointer-events-none"
             >
-              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{getCombinedDescription()}</p>
+              <p className="soridraw-card-title-tooltip-label hidden">보컬</p>
+              <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{getCombinedDescription()}</p>
             </motion.div>
-          )}
-        </AnimatePresence>
+          </MenuTitleTooltipPortal>
+        )}
       </div>
 
       <div className={cn(
         "flex flex-col flex-1 overflow-visible transition-all duration-500 ease-in-out",
         (vocalMembers.length > 0 || maleCount > 0 || femaleCount > 0 || vocalMode === 'group') ? "justify-start" : "justify-center"
       )}>
-        <motion.div 
-          animate={{ height: contentHeight }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
-          className="soridraw-expand-content overflow-hidden min-h-[76px]"
+        <motion.div
+          animate={naturalResponsiveHeight ? undefined : { height: contentHeight }}
+          transition={naturalResponsiveHeight ? undefined : { duration: 0.25, ease: "easeOut" }}
+          className={cn(
+            "soridraw-expand-content soridraw-vocal-content-shell min-h-[76px]",
+            naturalResponsiveHeight ? "overflow-visible" : "overflow-hidden"
+          )}
         >
           <div ref={contentRef} className="space-y-2 mt-0">
             {/* Mode Selection */}
@@ -22213,6 +26287,8 @@ function VocalControlComponent({
             {(['solo', 'group'] as VocalMode[]).map((mode) => (
               <button
                 key={mode}
+                data-soridraw-selected={vocalMode === mode ? 'true' : 'false'}
+                aria-pressed={vocalMode === mode}
                 onClick={() => handleModeClick(mode)}
                 onMouseEnter={() => onHover(getVocalModeTooltip(mode))}
                 onMouseLeave={() => onHover(null)}
@@ -22220,7 +26296,7 @@ function VocalControlComponent({
                 onTouchEnd={onLongPressEnd}
                 onTouchCancel={onLongPressEnd}
                 className={cn(
-                  "flex-1 py-2.5 rounded-xl text-[14px] font-bold transition-all",
+                  "soridraw-vocal-mode-button flex-1 py-2.5 rounded-xl text-[14px] font-bold transition-all",
                   vocalMode === mode 
                     ? "bg-[#FFB400] text-[#171717] font-black shadow-md" 
                     : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-btn-hover"
@@ -22235,6 +26311,7 @@ function VocalControlComponent({
           {vocalMode === 'group' ? (
             <div className="grid grid-cols-2 gap-2">
               <button
+                data-vocal-add-member="male"
                 onClick={() => handleAddMember('male')}
                 disabled={vocalMembers.length >= MAX_GROUP_VOCAL_MEMBERS && !vocalMembers.some((member) => member.gender === 'neutral')}
                 onMouseEnter={() => onHover({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: vocalMembers.some((member) => member.gender === 'neutral') ? '성별이 없는 기본 보컬에 남성 성별을 지정합니다.' : '남성 보컬 멤버를 1명 추가합니다.' })}
@@ -22243,9 +26320,9 @@ function VocalControlComponent({
                 onTouchEnd={onLongPressEnd}
                 onTouchCancel={onLongPressEnd}
                 className={cn(
-                  "py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5",
+                  "soridraw-vocal-add-member-button py-3 px-2 rounded-2xl text-[14px] font-bold transition-all flex items-center justify-center gap-2.5",
                   vocalMembers.length < MAX_GROUP_VOCAL_MEMBERS || vocalMembers.some((member) => member.gender === 'neutral')
-                    ? "bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-600/20"
+                    ? "soridraw-vocal-add-member-button--male"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                 )}
               >
@@ -22253,6 +26330,7 @@ function VocalControlComponent({
                 남성 멤버 추가
               </button>
               <button
+                data-vocal-add-member="female"
                 onClick={() => handleAddMember('female')}
                 disabled={vocalMembers.length >= MAX_GROUP_VOCAL_MEMBERS && !vocalMembers.some((member) => member.gender === 'neutral')}
                 onMouseEnter={() => onHover({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: vocalMembers.some((member) => member.gender === 'neutral') ? '성별이 없는 기본 보컬에 여성 성별을 지정합니다.' : '여성 보컬 멤버를 1명 추가합니다.' })}
@@ -22261,9 +26339,9 @@ function VocalControlComponent({
                 onTouchEnd={onLongPressEnd}
                 onTouchCancel={onLongPressEnd}
                 className={cn(
-                  "py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5",
+                  "soridraw-vocal-add-member-button py-3 px-2 rounded-2xl text-[14px] font-bold transition-all flex items-center justify-center gap-2.5",
                   vocalMembers.length < MAX_GROUP_VOCAL_MEMBERS || vocalMembers.some((member) => member.gender === 'neutral')
-                    ? "bg-pink-600/10 border-pink-500/20 text-pink-400 hover:bg-pink-600/20"
+                    ? "soridraw-vocal-add-member-button--female"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                 )}
               >
@@ -22274,6 +26352,9 @@ function VocalControlComponent({
           ) : (
             <div className="grid grid-cols-2 gap-2">
               <button
+                data-soridraw-selected={maleCount > 0 ? 'true' : 'false'}
+                data-vocal-gender="male"
+                aria-pressed={maleCount > 0}
                 onClick={() => handleGenderToggle('male')}
                 onMouseEnter={() => onHover({ id: 'male', label: 'Male', labelKo: '남성', description: '남성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
@@ -22291,6 +26372,9 @@ function VocalControlComponent({
                 남성
               </button>
               <button
+                data-soridraw-selected={femaleCount > 0 ? 'true' : 'false'}
+                data-vocal-gender="female"
+                aria-pressed={femaleCount > 0}
                 onClick={() => handleGenderToggle('female')}
                 onMouseEnter={() => onHover({ id: 'female', label: 'Female', labelKo: '여성', description: '여성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
@@ -22321,7 +26405,7 @@ function VocalControlComponent({
                 <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">멤버 ({vocalMembers.length}/{vocalMode === 'solo' ? 1 : MAX_GROUP_VOCAL_MEMBERS})</p>
                 <span className="text-[9px] text-[var(--text-secondary)] opacity-50">연령 · 음역 · 창법 · 기교</span>
               </div>
-              <div className={cn("grid gap-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar items-start", vocalMode === 'solo' ? "grid-cols-1" : "grid-cols-2")}>
+              <div className={cn("soridraw-vocal-member-grid grid gap-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar items-start", vocalMode === 'solo' ? "grid-cols-1" : "grid-cols-2")}>
                 {vocalMembers.map((member, idx) => {
                   const memberLetter = String.fromCharCode(65 + idx);
                   const memberDisplayName = member.gender === 'male'
@@ -22343,17 +26427,19 @@ function VocalControlComponent({
 
                   return (
                   <div key={member.id} className="bg-btn-bg rounded-xl p-2 border border-btn-border relative group/member shadow-sm">
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <span className={cn(
-                          "w-2 h-2 rounded-full shrink-0",
-                          memberAccent.dot
-                        )} />
-                        <span className="shrink-0 text-xs font-bold text-[var(--text-primary)]">
-                          {memberDisplayName}
-                        </span>
-                        <span className="h-4 w-px shrink-0 bg-[var(--border-color)]" />
-                        <div className="flex min-w-0 flex-nowrap items-center gap-0.5">
+                    <div className="soridraw-vocal-member-header flex items-center justify-between gap-2 mb-1.5">
+                      <div className="soridraw-vocal-member-heading flex min-w-0 flex-1 items-center gap-2">
+                        <div className="soridraw-vocal-member-identity flex min-w-0 items-center gap-2">
+                          <span className={cn(
+                            "w-2 h-2 rounded-full shrink-0",
+                            memberAccent.dot
+                          )} />
+                          <span className="shrink-0 text-xs font-bold text-[var(--text-primary)]">
+                            {memberDisplayName}
+                          </span>
+                          <span className="h-4 w-px shrink-0 bg-[var(--border-color)]" />
+                        </div>
+                        <div className="soridraw-vocal-role-buttons flex min-w-0 flex-nowrap items-center justify-center gap-1">
                           {(['main', 'lead', 'sub', 'rapper'] as VocalRole[]).map(role => {
                             const isActive = member.roles.includes(role);
                             const isRoleLimitReached = member.roles.length >= 2;
@@ -22362,6 +26448,8 @@ function VocalControlComponent({
                             return (
                               <button
                                 key={role}
+                                data-soridraw-selected={isActive ? 'true' : 'false'}
+                                aria-pressed={isActive}
                                 onClick={() => {
                                   if (isActive) {
                                     handleUpdateMember(idx, { roles: member.roles.filter(r => r !== role) });
@@ -22376,9 +26464,9 @@ function VocalControlComponent({
                                 onTouchEnd={onLongPressEnd}
                                 onTouchCancel={onLongPressEnd}
                                 className={cn(
-                                  "px-1.5 py-0.5 rounded-md text-[10px] leading-4 whitespace-nowrap font-bold transition-all border",
+                                  "soridraw-vocal-role-button px-1.5 py-0.5 rounded-md text-[10px] leading-4 whitespace-nowrap font-bold transition-all border",
                                   isActive
-                                    ? "bg-[#FFB400]/20 border-black/20 text-[#FFD36A]"
+                                    ? "soridraw-vocal-role-selected bg-[#FFB400]/20 border-black/20 text-[#FFD36A]"
                                     : isRoleLimitReached
                                       ? "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
                                       : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -22401,7 +26489,7 @@ function VocalControlComponent({
                           onTouchStart={() => onLongPressStart({ id: `remove-member-${idx}`, label: 'Remove Member', labelKo: '멤버 삭제', description: vocalMode === 'solo' ? '선택한 솔로 보컬을 해제합니다.' : '이 멤버를 삭제합니다. 마지막 멤버까지 삭제하면 랜덤 그룹 보컬로 적용됩니다.' })}
                           onTouchEnd={onLongPressEnd}
                           onTouchCancel={onLongPressEnd}
-                          className="p-1.5 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-all opacity-100"
+                          className="soridraw-vocal-member-remove p-1.5 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-all opacity-100"
                         >
                           <X className="w-[18px] h-[18px]" />
                         </button>
@@ -22416,7 +26504,7 @@ function VocalControlComponent({
                           setEditingVocalMemberId(member.id);
                         }}
                         className={cn(
-                          "w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/45 p-3 text-left transition-all group/character",
+                          "soridraw-vocal-character-launcher w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/45 p-3 text-left transition-all group/character",
                           memberAccent.hoverBorder
                         )}
                       >
@@ -22815,6 +26903,7 @@ const VocalControl = React.memo(VocalControlComponent, (prev, next) => {
          isArrayEqual(prev.vocalMembers, next.vocalMembers) &&
          isArrayEqual(prev.vocalTones, next.vocalTones) &&
          prev.randomActivationKey === next.randomActivationKey &&
+         prev.naturalResponsiveHeight === next.naturalResponsiveHeight &&
          isArrayEqual(prev.genreHints || [], next.genreHints || []);
 });
 
@@ -22833,94 +26922,229 @@ interface TempoControlProps {
 
 function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange, onMaxChange, onClear, onHover, onLongPressStart, onLongPressEnd }: TempoControlProps) {
   const sliderRef = useRef<HTMLDivElement>(null);
+  const activeRangeRef = useRef<HTMLDivElement>(null);
+  const minHandleRef = useRef<HTMLDivElement>(null);
+  const maxHandleRef = useRef<HTMLDivElement>(null);
+  const liveValueRootRef = useRef<HTMLDivElement>(null);
+  const dragTypeRef = useRef<'min' | 'max' | null>(null);
+  const dragRectRef = useRef<DOMRect | null>(null);
+  const liveMinRef = useRef(min);
+  const liveMaxRef = useRef(max);
+  const pendingClientXRef = useRef<number | null>(null);
+  const dragRafRef = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
 
-  const handleStart = (type: 'min' | 'max') => {
-    if (enabled) return; // If random is enabled, slider is disabled
-    setIsDragging(type);
-    document.body.style.userSelect = 'none';
-  };
+  const bpmToPercent = useCallback((value: number) => (
+    ((value - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100
+  ), []);
 
-  useEffect(() => {
-    const handleMove = (clientX: number) => {
-      if (!isDragging || !sliderRef.current) return;
+  const syncLiveBpmText = useCallback((nextMin: number, nextMax: number) => {
+    const root = liveValueRootRef.current;
+    if (!root) return;
+    root.querySelectorAll<HTMLInputElement>('[data-tempo-live="min"]').forEach((input) => {
+      input.value = String(nextMin);
+    });
+    root.querySelectorAll<HTMLInputElement>('[data-tempo-live="max"]').forEach((input) => {
+      input.value = String(nextMax);
+    });
+  }, []);
 
-      const rect = sliderRef.current.getBoundingClientRect();
-      const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-      const percent = x / rect.width;
-      const val = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
+  const paintSliderFrame = useCallback((nextMin: number, nextMax: number) => {
+    const minPercent = bpmToPercent(nextMin);
+    const maxPercent = bpmToPercent(nextMax);
 
-      if (isDragging === 'min') {
-        if (val <= max) onMinChange(val);
-      } else {
-        if (val >= min) onMaxChange(val);
-      }
-    };
+    if (minHandleRef.current) minHandleRef.current.style.left = `${minPercent}%`;
+    if (maxHandleRef.current) maxHandleRef.current.style.left = `${maxPercent}%`;
+    if (activeRangeRef.current) {
+      activeRangeRef.current.style.left = `${minPercent}%`;
+      activeRangeRef.current.style.width = `${Math.max(0, maxPercent - minPercent)}%`;
+    }
+    syncLiveBpmText(nextMin, nextMax);
+  }, [bpmToPercent, syncLiveBpmText]);
 
-    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX);
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
-        handleMove(e.touches[0].clientX);
-      }
-    };
+  const applyPointerPosition = useCallback((clientX: number) => {
+    const dragType = dragTypeRef.current;
+    const rect = dragRectRef.current;
+    if (!dragType || !rect || rect.width <= 0) return;
 
-    const handleEnd = () => {
-      setIsDragging(null);
-      document.body.style.userSelect = '';
-    };
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    const percent = x / rect.width;
+    const rawValue = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
 
-    if (isDragging) {
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', handleEnd);
-      window.addEventListener('touchmove', onTouchMove, { passive: false });
-      window.addEventListener('touchend', handleEnd);
+    if (dragType === 'min') {
+      liveMinRef.current = Math.min(rawValue, liveMaxRef.current);
+    } else {
+      liveMaxRef.current = Math.max(rawValue, liveMinRef.current);
     }
 
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', handleEnd);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', handleEnd);
-    };
-  }, [isDragging, min, max, onMinChange, onMaxChange]);
+    paintSliderFrame(liveMinRef.current, liveMaxRef.current);
+  }, [paintSliderFrame]);
+
+  const flushPendingPointerFrame = useCallback(() => {
+    if (dragRafRef.current !== null) {
+      cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = null;
+    }
+    const clientX = pendingClientXRef.current;
+    pendingClientXRef.current = null;
+    if (clientX !== null) applyPointerPosition(clientX);
+  }, [applyPointerPosition]);
+
+  const schedulePointerFrame = useCallback((clientX: number) => {
+    pendingClientXRef.current = clientX;
+    if (dragRafRef.current !== null) return;
+    dragRafRef.current = requestAnimationFrame(() => {
+      dragRafRef.current = null;
+      const latestClientX = pendingClientXRef.current;
+      pendingClientXRef.current = null;
+      if (latestClientX !== null) applyPointerPosition(latestClientX);
+    });
+  }, [applyPointerPosition]);
+
+  const handlePointerStart = useCallback((type: 'min' | 'max', event: React.PointerEvent<HTMLDivElement>) => {
+    if (enabled || !sliderRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    liveMinRef.current = min;
+    liveMaxRef.current = max;
+    dragTypeRef.current = type;
+    dragRectRef.current = sliderRef.current.getBoundingClientRect();
+    pendingClientXRef.current = null;
+    setIsDragging(type);
+    document.body.style.userSelect = 'none';
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture can fail only if the pointer already ended; dragging still
+      // remains safe because the final value is committed on pointer end.
+    }
+
+    // Paint the first position immediately so the handle attaches to the pointer
+    // on the same interaction frame instead of waiting for a React state round-trip.
+    applyPointerPosition(event.clientX);
+  }, [enabled, min, max, applyPointerPosition]);
+
+  const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragTypeRef.current) return;
+    event.preventDefault();
+    schedulePointerFrame(event.clientX);
+  }, [schedulePointerFrame]);
+
+  const commitPointerDrag = useCallback((dragType: 'min' | 'max') => {
+    const finalMin = liveMinRef.current;
+    const finalMax = liveMaxRef.current;
+    dragTypeRef.current = null;
+    dragRectRef.current = null;
+    setIsDragging(null);
+    document.body.style.userSelect = '';
+
+    // React state is committed once per drag. Visual movement above is direct DOM
+    // work, so all themes share the same low-latency slider path without re-rendering
+    // the Studio tree for every pointer event.
+    if (dragType === 'min') {
+      if (finalMin !== min) onMinChange(finalMin);
+    } else if (finalMax !== max) {
+      onMaxChange(finalMax);
+    }
+  }, [min, max, onMinChange, onMaxChange]);
+
+  const handlePointerEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const dragType = dragTypeRef.current;
+    if (!dragType) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    pendingClientXRef.current = event.clientX;
+    flushPendingPointerFrame();
+
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    } catch {
+      // No-op: capture is already released by the browser.
+    }
+
+    commitPointerDrag(dragType);
+  }, [flushPendingPointerFrame, commitPointerDrag]);
+
+  const handlePointerCancel = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const dragType = dragTypeRef.current;
+    if (!dragType) return;
+    event.preventDefault();
+    event.stopPropagation();
+    flushPendingPointerFrame();
+    commitPointerDrag(dragType);
+  }, [flushPendingPointerFrame, commitPointerDrag]);
+
+  useEffect(() => {
+    if (dragTypeRef.current) return;
+    liveMinRef.current = min;
+    liveMaxRef.current = max;
+  }, [min, max]);
+
+  useEffect(() => () => {
+    if (dragRafRef.current !== null) cancelAnimationFrame(dragRafRef.current);
+    document.body.style.userSelect = '';
+  }, []);
 
   const displayMin = min;
   const displayMax = max;
-  const minPos = ((displayMin - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100;
-  const maxPos = ((displayMax - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100;
+  const minPos = bpmToPercent(displayMin);
+  const maxPos = bpmToPercent(displayMax);
   const isValid = (max - min <= TEMPO_MAX_ACTIVE_RANGE) && (min !== TEMPO_MIN_BPM || max !== TEMPO_MAX_BPM);
 
   return (
-    <div className={cn(
+    <div ref={liveValueRootRef} className={cn(
       "soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl px-6 py-4 border border-[var(--home-card-border)] transition-all"
     )}>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+      <div className="soridraw-tempo-card-header flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
           <div className="flex items-center gap-3">
-            <h3 
-              onMouseEnter={() => setShowTitleTooltip(true)}
-              onMouseLeave={() => setShowTitleTooltip(false)}
-              className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
-            >
-              <span className="w-1.5 h-6 bg-[#FFB400] rounded-full" />
-              템포(BPM)
-            </h3>
+            <div className="relative min-w-0">
+              <h3 
+                data-soridraw-menu-title-tooltip-anchor
+                onMouseEnter={() => setShowTitleTooltip(true)}
+                onMouseLeave={() => setShowTitleTooltip(false)}
+                className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
+              >
+                <span className="w-1.5 h-6 bg-[#FFB400] rounded-full" />
+                템포(BPM)
+              </h3>
+              {showTitleTooltip && (
+                <MenuTitleTooltipPortal>
+<motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl w-56 pointer-events-none"
+                  >
+                    <p className="soridraw-card-title-tooltip-label hidden">템포(BPM)</p>
+                    <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">음악의 전체적인 속도를 설정합니다.</p>
+                  </motion.div>
+                </MenuTitleTooltipPortal>
+              )}
+            </div>
 
             <div 
               className={cn(
-                "hidden md:flex items-center gap-1 px-2.5 py-2 bg-btn-bg rounded-xl border border-btn-border shadow-btn transition-opacity",
+                "soridraw-tempo-desktop-input hidden md:flex items-center gap-1 px-2.5 py-2 bg-btn-bg rounded-xl border border-btn-border shadow-btn transition-opacity",
                 enabled && "opacity-30 pointer-events-none"
               )}
               onMouseEnter={() => onHover({ id: 'bpm-input-pc', label: 'BPM Input', labelKo: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
               onMouseLeave={() => onHover(null)}
             >
               <input
+                data-tempo-live="min"
                 type="number"
                 min={TEMPO_MIN_BPM}
                 max={max}
                 value={min}
-                disabled={enabled}
+                readOnly={enabled}
+                aria-disabled={enabled}
                 onChange={(e) => {
                   const val = parseInt(e.target.value);
                   if (!isNaN(val)) {
@@ -22932,11 +27156,13 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
               />
               <span className="text-[var(--text-secondary)]/50 font-bold text-sm">-</span>
               <input
+                data-tempo-live="max"
                 type="number"
                 min={min}
                 max={TEMPO_MAX_BPM}
                 value={max}
-                disabled={enabled}
+                readOnly={enabled}
+                aria-disabled={enabled}
                 onChange={(e) => {
                   const val = parseInt(e.target.value);
                   if (!isNaN(val)) {
@@ -22951,8 +27177,10 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="md:hidden flex items-center gap-2">
+            <div className="soridraw-tempo-mobile-actions md:hidden flex items-center gap-2">
               <button
+                data-soridraw-selected={enabled ? 'true' : 'false'}
+                aria-pressed={enabled}
                 onClick={() => {
                   onEnabledChange(!enabled);
                   onHover({ id: 'tempo-random-mobile', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
@@ -22960,7 +27188,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                 onMouseEnter={() => onHover({ id: 'tempo-random-mobile', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
+                  "soridraw-tempo-random-button soridraw-tempo-random-mobile px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
                   enabled 
                     ? "bg-[#FFB400] text-[#171717] font-black" 
                     : "bg-white/10 text-[var(--text-primary)] hover:bg-white/20"
@@ -22976,19 +27204,22 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                 className={cn(
                   "p-2.5 rounded-xl transition-all border shadow-btn",
                   (!enabled || min !== 90 || max !== 110)
-                    ? "bg-[#FFB400]/20 text-[#FFD36A] border-black/20 hover:bg-[#FFB400]/30" 
-                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                    ? "bg-[#FFB400]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/20"
+                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+                  (!enabled || min !== 90 || max !== 110) && "soridraw-active-reset-button"
                 )}
               >
-                <RotateCcw className="w-4 h-4" />
+                <Trash2 className="w-4 h-4" />
               </button>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="hidden md:flex items-center gap-2">
+          <div className="soridraw-tempo-desktop-actions hidden md:flex items-center gap-2">
             <button
+              data-soridraw-selected={enabled ? 'true' : 'false'}
+              aria-pressed={enabled}
               onClick={() => {
                 onEnabledChange(!enabled);
                 onHover({ id: 'tempo-random-pc', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
@@ -22996,7 +27227,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
               onMouseEnter={() => onHover({ id: 'tempo-random-pc', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "px-6 py-3 rounded-xl text-base font-bold transition-all flex items-center gap-2",
+                "soridraw-tempo-random-button soridraw-tempo-random-desktop px-6 py-3 rounded-xl text-base font-bold transition-all flex items-center gap-2",
                 enabled 
                   ? "bg-[#FFB400] text-[#171717] font-black" 
                   : "bg-white/10 text-[var(--text-primary)] hover:bg-white/20"
@@ -23012,29 +27243,32 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
               className={cn(
                 "p-2.5 rounded-xl transition-all border shadow-btn",
                 (!enabled || min !== 90 || max !== 110)
-                  ? "bg-[#FFB400]/20 text-[#FFD36A] border-black/20 hover:bg-[#FFB400]/30" 
-                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                  ? "bg-[#FFB400]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/20"
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+                (!enabled || min !== 90 || max !== 110) && "soridraw-active-reset-button"
               )}
             >
-              <RotateCcw className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         </div>
 
         <div 
           className={cn(
-            "md:hidden flex items-center justify-center gap-1 px-3 py-2 bg-white/5 rounded-xl border border-white/10 shadow-[var(--shadow-md)] transition-opacity w-fit mx-auto",
+            "soridraw-tempo-mobile-input md:hidden flex items-center justify-center gap-1 px-3 py-2 bg-white/5 rounded-xl border border-white/10 shadow-[var(--shadow-md)] transition-opacity w-fit mx-auto",
             enabled && "opacity-30 pointer-events-none"
           )}
           onMouseEnter={() => onHover({ id: 'bpm-input-mobile', label: 'BPM Input', labelKo: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
           onMouseLeave={() => onHover(null)}
         >
           <input
+            data-tempo-live="min"
             type="number"
             min={TEMPO_MIN_BPM}
             max={max}
             value={min}
-            disabled={enabled}
+            readOnly={enabled}
+            aria-disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
               if (!isNaN(val)) {
@@ -23046,11 +27280,13 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           />
           <span className="text-[var(--text-secondary)]/50 font-bold text-base">-</span>
           <input
+            data-tempo-live="max"
             type="number"
             min={min}
             max={TEMPO_MAX_BPM}
             value={max}
-            disabled={enabled}
+            readOnly={enabled}
+            aria-disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
               if (!isNaN(val)) {
@@ -23076,13 +27312,11 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           ref={sliderRef}
           className="relative h-2 bg-[var(--hover-bg)] rounded-full cursor-pointer mx-0"
           onClick={(e) => {
-            if (enabled) return;
+            if (enabled || dragTypeRef.current) return;
             const rect = sliderRef.current!.getBoundingClientRect();
-            const x = e.clientX - rect.left;
+            const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
             const percent = x / rect.width;
             const val = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
-            
-            // Snap to nearest handle but respect constraints
             if (Math.abs(val - min) < Math.abs(val - max)) {
               onMinChange(Math.min(val, max));
             } else {
@@ -23092,6 +27326,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
         >
           {/* Active Range Bar */}
           <div 
+            ref={activeRangeRef}
             className={cn(
               "absolute h-full rounded-full transition-colors",
               !enabled ? (isValid ? "bg-[#FFB400]" : "bg-[var(--text-secondary)]/30") : "bg-[#FFB400]/40"
@@ -23101,10 +27336,14 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
 
           {/* Min Handle */}
           <div 
-            onMouseDown={(e) => { e.stopPropagation(); handleStart('min'); }}
-            onTouchStart={(e) => { e.stopPropagation(); handleStart('min'); }}
+            ref={minHandleRef}
+            onPointerDown={(e) => handlePointerStart('min', e)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+            onPointerCancel={handlePointerCancel}
+            onClick={(e) => e.stopPropagation()}
             className={cn(
-              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
+              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-[transform,border-color,box-shadow] flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
                 ? "bg-[var(--card-bg)] border-black/20 shadow-lg shadow-[#FFB400]/20 scale-110" 
                 : "bg-[var(--card-bg)] border-black/20 shadow-lg shadow-[#FFB400]/10 scale-100 cursor-not-allowed",
@@ -23117,10 +27356,14 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
 
           {/* Max Handle */}
           <div 
-            onMouseDown={(e) => { e.stopPropagation(); handleStart('max'); }}
-            onTouchStart={(e) => { e.stopPropagation(); handleStart('max'); }}
+            ref={maxHandleRef}
+            onPointerDown={(e) => handlePointerStart('max', e)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+            onPointerCancel={handlePointerCancel}
+            onClick={(e) => e.stopPropagation()}
             className={cn(
-              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
+              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-[transform,border-color,box-shadow] flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
                 ? "bg-[var(--card-bg)] border-[#8AA35A] shadow-lg shadow-[#8AA35A]/20 scale-110" 
                 : "bg-[var(--card-bg)] border-[#8AA35A]/40 shadow-lg shadow-[#8AA35A]/10 scale-100 cursor-not-allowed",
@@ -23142,12 +27385,12 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
       {/* Status Guidance Text - Repositioned to Bottom Center */}
       <div className="flex justify-center mt-2">
         {enabled ? (
-          <span className="text-[#FFD36A] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/10 px-3 py-0.5 rounded-full border border-black/20/20">
+          <span className="soridraw-tempo-status-pill is-enabled text-[#FFD36A] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/10 px-3 py-0.5 rounded-full border border-black/20/20">
             <Sparkles className="w-3 h-3 animate-pulse" /> 랜덤 템포 적용됨
           </span>
         ) : (
           isValid ? (
-            <span className="text-[#FFE3A0] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/12 px-3 py-0.5 rounded-full border border-black/20/24">
+            <span className="soridraw-tempo-status-pill is-valid text-[#FFE3A0] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/12 px-3 py-0.5 rounded-full border border-black/20/24">
               <Check className="w-3 h-3" /> 템포 지정됨
             </span>
           ) : (

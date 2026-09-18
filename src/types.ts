@@ -353,7 +353,12 @@ export interface AppliedKeywords {
   customStructure?: CustomSectionItem[];
   sectionCueOptions?: SectionCueOptions;
   kpopMode?: 0 | 1 | 2;
+  lyricLanguages?: string[];
+  titleLanguages?: string[];
   isKoreanEnglishMix?: boolean;
+  englishMixRatio?: number;
+  languageMixRatio?: number;
+  languageMixTargetLanguages?: string[];
   citypopMode?: 0 | 1 | 2;
   vocal?: VocalConfig;
   maleCount?: number;
@@ -374,6 +379,27 @@ export interface AppliedKeywords {
   geminiFallbackFrom?: string | null;
   geminiFallbackReason?: string | null;
   geminiAttemptedModels?: string[];
+  lyricArchitectureAudit?: {
+    version?: string;
+    mode?: 'shadow';
+    primaryProfile?: string;
+    secondaryProfiles?: string[];
+    genreProsody?: Record<string, number>;
+    densityCurve?: Array<{ section?: string; density?: number }>;
+    sections?: Array<{
+      section?: string;
+      roleFamily?: string;
+      narrativeJob?: string;
+      density?: number;
+      phraseLength?: string;
+      breathSpace?: string;
+      repetition?: string;
+      melodicSustain?: string;
+      rhymePriority?: string;
+      languageMixShape?: string;
+    }>;
+    safeguards?: string[];
+  };
   languageMixAudit?: {
     active?: boolean;
     requestedRatio?: number;
@@ -573,6 +599,15 @@ export interface SongResult {
 }
 
 export type UserRole = 'free' | 'basic' | 'pro' | 'admin';
+export type StaffRole = 'master' | 'admin' | null;
+export type AdminPermissionKey =
+  | 'userManagement'
+  | 'vocalManagement'
+  | 'sectionTagManagement'
+  | 'sunoApiManagement'
+  | 'appSettings'
+  | 'geminiAudit';
+export type AdminPermissions = Record<AdminPermissionKey, boolean>;
 export type AccountStatus = 'active' | 'paused' | 'expired' | 'banned';
 export type PaymentStatus = 'none' | 'active' | 'canceled' | 'expired' | 'refunded' | 'trial';
 
@@ -582,6 +617,11 @@ export interface AppUserInfo {
   displayName: string | null;
   nickname?: string | null;
   role: UserRole;
+  staffRole?: StaffRole;
+  adminPermissions?: AdminPermissions;
+  staffBaseRole?: Exclude<UserRole, 'admin'> | null;
+  staffRoleUpdatedAt?: number;
+  staffRoleUpdatedBy?: string | null;
   accountStatus: AccountStatus;
   paymentStatus: PaymentStatus;
   createdAt: number;
@@ -590,6 +630,17 @@ export interface AppUserInfo {
   isOnline?: boolean;
   lastSeenAt?: number;
   forceLogoutAt?: number;
+  adminPresenceState?: 'offline' | 'loggedOut' | null;
+  adminPresenceStateAt?: number;
+  adminPresenceStateBy?: string | null;
+  providerIds?: string[];
+  emailVerified?: boolean;
+  authDisabled?: boolean;
+  authDeleted?: boolean;
+  authDeletedAt?: number;
+  authDeletedEmail?: string | null;
+  authLastSignInAt?: number;
+  emailVerificationResetAt?: number;
   
   // Subscription info
   planName?: string;
@@ -605,7 +656,20 @@ export interface AppUserInfo {
   // Admin only
   adminMemo?: string;
   lyricClicheGuard?: LyricClicheGuardSettings | null;
+  generationPreferences?: {
+    autoModelFallback?: boolean;
+  };
+  syncVersions?: {
+    googleGeminiApiKey?: number;
+    sectionCustom?: number;
+    recentSongs?: number;
+    musicNote?: number;
+    library?: number;
+    playlists?: number;
+  };
 }
+
+// SORIDRAW_892_CACHE_SYNC_VERSION_FOUNDATION
 
 // ==========================================
 // Suno API Types
@@ -690,6 +754,7 @@ export interface Playlist {
   type: 'normal' | 'shared';
   order: number;
   isDefault: boolean;
+  itemsRevision?: number;
   createdAt?: any;
   updatedAt?: any;
 }

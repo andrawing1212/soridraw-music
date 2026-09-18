@@ -1,0 +1,22 @@
+{
+  "version": 708,
+  "base": 707,
+  "goal": "Preserve 707 slow-motion feel while reusing the proven 668/683 fast-motion paths for Recent, Music Note, Library and outer resize.",
+  "changes": [
+    "Added velocity hysteresis: fast enter >= 0.85 px/ms; slow return <= 0.38 px/ms sustained for 90ms.",
+    "Recent fast motion reuses the 668/683 legacy preview-divider plus adaptive pane commit path.",
+    "Music Note/Library fast motion reuses the 668/683 Lite one-pointer-target + one-rAF + one-real-boundary path.",
+    "Fast outer resize bypasses synthetic bounded-gap pacing and applies the real stored split ratio directly, matching 668/683 ownership.",
+    "Slow motion retains the current close-gap/prediction/hysteresis behavior from 707."
+  ],
+  "untouched": [
+    "Studio Create",
+    "touch/pen verified paths",
+    "Firebase/Auth/Firestore/Functions/data structures",
+    "visual design"
+  ],
+  "verification": {
+    "typescript_transpile": "PASS",
+    "zip_integrity": "PASS"
+  }
+}

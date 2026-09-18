@@ -1,0 +1,188 @@
+name: SORIDRAW Backend V2 Step 3-1 Backup Preparation
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'backup_scripts/backend_v2_secure_backup.ts'
+      - 'backup_scripts/backend_v2_verify_backup.ts'
+      - 'backup_scripts/backend_v2_backup.contract.ts'
+      - 'docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREPARATION.md'
+      - '.deploy/apply-backend-v2-step3-1-master.py'
+      - '.gitignore'
+      - '.github/workflows/backend-v2-step3-1-backup-prep.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Capture protected baselines
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum \
+            firestore.rules \
+            firestore.indexes.json \
+            database.rules.json \
+            src/App.tsx \
+            src/firebase.js \
+            functions/src/index.ts \
+            src/services/playlistService.ts \
+            src/data/userDataRepository.ts \
+            src/data/v2Schema.ts \
+            src/data/indexedDbLocalCache.ts \
+            src/data/v2ShadowValidation.ts \
+            backup_scripts/copy_collections.ts \
+            > /tmp/step3-1-protected.sha256
+
+      - name: Static backup safety gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          backup = Path('backup_scripts/backend_v2_secure_backup.ts').read_text(encoding='utf-8')
+          verifier = Path('backup_scripts/backend_v2_verify_backup.ts').read_text(encoding='utf-8')
+          report = Path('docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREPARATION.md').read_text(encoding='utf-8')
+          patch = Path('.deploy/apply-backend-v2-step3-1-master.py').read_text(encoding='utf-8')
+
+          required_backup = [
+              "TARGET_PROJECT_ID = 'soridraw-app-866a5'",
+              "BACKUP_EXECUTION_APPROVAL_ENV = 'SORIDRAW_BACKUP_EXECUTION_APPROVED'",
+              "BACKUP_EXECUTION_APPROVAL_VALUE = 'YES'",
+              'MAX_BACKUP_READ_CAP = 10_000',
+              "executionDefault: 'disabled'",
+              "--project must equal",
+              "--ack-project must equal",
+              "output directory must be outside the Git repository",
+              "queryKind: 'collectionGroup'",
+              "id: 'playlist_lists'",
+              "id: 'playlist_items'",
+              "const { FieldPath, getFirestore } = await import('firebase-admin/firestore')",
+          ]
+          for marker in required_backup:
+              if marker not in backup:
+                  raise SystemExit(f'missing backup safety marker: {marker}')
+
+          forbidden_mutation = [
+              '.set(',
+              '.delete(',
+              '.doc(',
+              'writeBatch',
+              'bulkWriter',
+              'recursiveDelete',
+              'runTransaction',
+              'setDoc',
+              'updateDoc',
+              'deleteDoc',
+              '.create(',
+          ]
+          for marker in forbidden_mutation:
+              if marker in backup:
+                  raise SystemExit(f'forbidden Firestore mutation capability in backup tool: {marker}')
+
+          if 'copy_collections.ts' in backup or 'copy_collections.ts' in verifier:
+              raise SystemExit('legacy write-capable copy_collections.ts referenced by Backend V2 backup tooling')
+
+          for marker in [
+              'BACKUP NOT EXECUTED',
+              '841 document reads',
+              'Firestore reads during this preparation step: 0',
+              'Firestore writes: 0',
+              'Firestore deletes: 0',
+              'copy_collections.ts',
+              'must never be invoked',
+          ]:
+              if marker not in report:
+                  raise SystemExit(f'missing Step 3-1 report safety marker: {marker}')
+
+          if "MASTER = Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md')" not in patch:
+              raise SystemExit('Step 3-1 master patch target is not exact')
+          if 'Firestore' in patch and 'reads/writes/deletes caused by Step 3-1 preparation: 0 / 0 / 0' not in patch:
+              raise SystemExit('Step 3-1 master patch safety statement missing')
+
+          print('Step 3-1 static read-only/zero-data safety gate PASS')
+          PY
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck backup preparation modules
+        run: >-
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext
+          --moduleResolution Bundler --lib ES2022,DOM --types node
+          backup_scripts/backend_v2_secure_backup.ts
+          backup_scripts/backend_v2_verify_backup.ts
+          backup_scripts/backend_v2_backup.contract.ts
+
+      - name: Execute offline backup preparation contract
+        run: npx tsx backup_scripts/backend_v2_backup.contract.ts
+
+      - name: Verify plan mode is network-inert by contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$(npx tsx backup_scripts/backend_v2_secure_backup.ts --plan)"
+          printf '%s\n' "$output"
+          grep -F 'Target project: soridraw-app-866a5' <<<"$output"
+          grep -F 'Step 1-B estimated document reads: 841' <<<"$output"
+          grep -F 'No Firebase connection is made in plan mode.' <<<"$output"
+
+      - name: Production build without lifecycle patch scripts
+        run: npx vite build
+
+      - name: Final protected-file and omission gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum --check /tmp/step3-1-protected.sha256
+          git diff --check
+          test -z "$(git diff --name-only)"
+          test ! -e private_backups
+          if find . -maxdepth 2 -type d -name 'backend-v2-backup-*' -print -quit | grep -q .; then
+            echo 'Private backup output appeared inside repository.' >&2
+            exit 1
+          fi
+          echo 'Step 3-1 final self-review PASS; Firebase reads/writes/deletes/deploy operations = 0'
+
+      - name: Apply validated Step 3-1 master status
+        run: python3 .deploy/apply-backend-v2-step3-1-master.py
+
+      - name: Verify master update scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only)"
+          test "$changed" = 'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md'
+          grep -F 'Step 3-1 backup preparation complete — awaiting approval for actual read-only backup preflight/execution' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          grep -F '3-1 preparation: target pin, read-only tool, offline verifier, scope/budget gates' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          grep -F '3-1 actual backup: fresh quota baseline -> secure local read -> checksum/count verification' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+
+      - name: Commit validated Step 3-1 master status
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/preview)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git commit -m 'docs: mark Backend V2 Step 3-1 preparation complete'
+          git push origin HEAD:preview

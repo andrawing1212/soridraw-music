@@ -1,0 +1,85 @@
+name: SORIDRAW Backend V2 2-A3-R Defer Progress
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-2a3r-defer-progress.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update-progress:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Update master plan status only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md')
+          s = p.read_text(encoding='utf-8')
+          replacements = [
+            (
+              'Status: IMPLEMENTATION / Step 2-A3-R emergency stabilization staged on preview — authenticated Preview revalidation pending',
+              'Status: IMPLEMENTATION / Step 2-A3-R Preview latest-track blocker deferred — safe next step 2-B awaiting approval'
+            ),
+            (
+              '### 2-A3 implemented — lowest-risk playlist-list V1 read activation; user validation pending',
+              '### 2-A3 implemented — lowest-risk playlist-list V1 read activation; code/parity validation complete'
+            ),
+            (
+              '- Automated validation is complete; authenticated Preview playlist behavior still requires user confirmation before 2-A3 is marked complete.',
+              '- Automated validation is complete. Preview latest-track visibility failure was isolated as a separate environment/App Check configuration blocker, not as evidence of an adapter behavior mismatch.'
+            ),
+            (
+              '- Do not start 2-A4 until 2-A3 Preview behavior is confirmed and a separate explicit approval is given.',
+              '- 2-A4 remains blocked while Preview latest-data verification is unavailable. Safe code-only Step 2-B/2-C work may proceed separately after explicit approval.'
+            ),
+            (
+              '### 2-A3-R emergency stabilization staged — user revalidation pending',
+              '### 2-A3-R emergency stabilization — Preview latest-track blocker deferred'
+            ),
+            (
+              '- Preview App Check code path was missing. Existing Actions credentials cannot inspect reCAPTCHA Enterprise allowed domains (`recaptchaenterprise.keys.get` denied); no IAM change was made.',
+              '- Preview-only App Check activation was tested but did not restore the newest track. Existing Actions credentials cannot inspect reCAPTCHA Enterprise allowed domains (`recaptchaenterprise.keys.get` denied); no IAM change was made.'
+            ),
+            (
+              '- Preview-only frontend App Check activation, playlist bootstrap/listener read dedupe and zero-byte download guard are staged.',
+              '- The ineffective Preview-only App Check activation was reverted. Playlist bootstrap/listener read dedupe and zero-byte download guard remain staged.'
+            ),
+            (
+              '### Step 2 — V2 code implementation on preview (2-A in progress) 🔄',
+              '### Step 2 — V2 code implementation on preview (2-A3 blocker deferred; safe next 2-B) 🔄'
+            ),
+            (
+              '  - [~] 2-A3 Lowest-risk playlist-list V1 read activation implemented and automated checks green; authenticated Preview validation pending.',
+              '  - [x] 2-A3 Lowest-risk playlist-list V1 read activation implemented; adapter isolation/parity/build checks green. Preview latest-track environment blocker deferred.'
+            ),
+          ]
+          for old, new in replacements:
+            if old not in s:
+              raise SystemExit(f'master-plan expected text missing: {old}')
+            s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+          git diff --check
+          git diff -- docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+
+      - name: Commit master plan update
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git commit -m "docs: defer preview blocker and point to step 2-B"
+          git push origin HEAD:preview

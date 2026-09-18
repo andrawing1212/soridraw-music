@@ -1,0 +1,46 @@
+name: Cloudflare Explore Namespaced Environment Split
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/cloudflare-explore-namespaced-env-split.mjs'
+      - '.github/workflows/cloudflare-explore-namespaced-env-split.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Wrangler
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Split Explore PREVIEW and TEST using isolated namespaces
+        run: node .deploy/cloudflare-explore-namespaced-env-split.mjs
+
+      - name: Final repository safety check
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test -z "$(git status --porcelain)"
+          echo 'MAIN_UNCHANGED=true'
+          echo 'NO_FIREBASE_DEPLOY=true'
+          echo 'NO_PRODUCTION_WORKER_DEPLOY_BY_WORKFLOW=true'

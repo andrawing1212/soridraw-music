@@ -1,0 +1,6 @@
+Approved by user at 2026-08-23 KST.
+Target project: soridraw-app-866a5
+Scope: firestore:rules only
+Purpose: enable SORIDRAW 902 user_list_caches bundle access for Music Note and Library read optimization.
+Change: additive user_list_caches/{uid}/bundles rules only; existing favorites/suno_tracks rules unchanged.
+Requested: 2026-08-23T09:08+09:00

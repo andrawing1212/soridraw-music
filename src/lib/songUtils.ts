@@ -442,6 +442,7 @@ export const downloadAudioWithTitle = async (url: string, title?: string) => {
     if (!response.ok) throw new Error('Audio download failed');
 
     const blob = await response.blob();
+    if (!blob || blob.size <= 0) throw new Error('Audio download is empty');
     const blobUrl = URL.createObjectURL(blob);
 
     const a = document.createElement('a');

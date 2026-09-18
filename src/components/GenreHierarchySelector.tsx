@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CategoryItem, GenreGroupItem } from "../types";
 import { GENRE_HIERARCHY, GENRES } from "../constants";
 import {
@@ -16,6 +16,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { resolveExpandedHeight, useStableContentHeight } from "../lib/stableContentHeight";
+import { useStableHoverTooltip } from "../lib/stableHoverTooltip";
+import MenuTitleTooltipPortal from './studio/MenuTitleTooltipPortal';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -125,9 +128,10 @@ interface Props {
   onHover: (item: CategoryItem | null) => void;
   onCommitSelection?: (mainId: string | null, subId: string | null, meta?: { removeMainId?: string | null; removeSubId?: string | null }) => void;
   onCommitSelectionList?: (subIds: string[]) => void;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
   isRandomized?: boolean;
+  expandResetToken?: number;
   onHeightChange?: (height: number) => void;
   forcedHeight?: number;
   onModalStateChange?: (isOpen: boolean) => void;
@@ -253,18 +257,35 @@ function GenreHierarchySelectorComponent({
   onHover,
   onCommitSelection,
   onCommitSelectionList,
-  isExpanded,
-  onToggleExpand,
+  isExpanded: controlledExpanded,
+  onToggleExpand: controlledToggleExpand,
   isRandomized = false,
+  expandResetToken = 0,
   onHeightChange,
   forcedHeight,
   onModalStateChange,
   directInput,
 }: Props) {
+  // 829 — Genre expand/collapse owns its visual state locally by default.
+  // This keeps the fast Recent Songs interaction path identical when the right
+  // pane is Music Note or Library: toggling Genre no longer re-renders App or
+  // the heavyweight result page. Controlled props are still supported for any
+  // future caller that explicitly needs external ownership.
+  const [internalExpanded, setInternalExpanded] = useState(false);
+  const isControlledExpansion = typeof controlledExpanded === 'boolean' && typeof controlledToggleExpand === 'function';
+  const isExpanded = isControlledExpansion ? controlledExpanded : internalExpanded;
+  const onToggleExpand = isControlledExpansion
+    ? controlledToggleExpand
+    : () => setInternalExpanded((prev) => !prev);
+
+  useEffect(() => {
+    if (!isControlledExpansion) setInternalExpanded(false);
+  }, [expandResetToken, isControlledExpansion]);
+
   const [activeGroup, setActiveGroup] = useState<GroupItem | null>(null);
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>("main");
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [showTitleTooltip, setShowTitleTooltip] = useStableHoverTooltip(60);
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
   const [directInputDraft, setDirectInputDraft] = useState(directInput?.selectedText || '');
   const [hoveredModalItem, setHoveredModalItem] = useState<{
@@ -471,15 +492,12 @@ function GenreHierarchySelectorComponent({
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(0);
 
-  useLayoutEffect(() => {
-    if (contentRef.current) {
-      const height = contentRef.current.scrollHeight;
-      setContentHeight(height);
-      if (onHeightChange) {
-        onHeightChange(height);
-      }
-    }
-  }, [groups, onHeightChange]);
+  useStableContentHeight(
+    contentRef,
+    setContentHeight,
+    [groups],
+    onHeightChange,
+  );
 
   const totalCount = useMemo(() => {
     return groups.reduce((count, group) => {
@@ -977,7 +995,7 @@ function GenreHierarchySelectorComponent({
   }, [activeGroup]);
 
   return (
-    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
+    <div data-expand-section data-studio-menu="genre" className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <style>{`
         .soridraw-genre-desc-track {
           display: inline-flex;
@@ -1001,40 +1019,40 @@ function GenreHierarchySelectorComponent({
         }
       `}</style>
       <div className="flex-1">
-        <div className="flex items-center justify-between mb-4">
+        <div className="soridraw-card-header soridraw-menu-card-header-slot flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="relative min-w-0">
+            <div className="soridraw-card-title-anchor relative min-w-0">
               <h3
+                data-soridraw-menu-title-tooltip-anchor
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
                 className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help min-w-0"
               >
                 <span className={cn("w-1.5 h-6 rounded-full shrink-0", genreAccent.bar)} />
                 <span className="truncate">장르</span>
-                <span className="text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">
+                <span className="soridraw-menu-count text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">
                   ({selectedCount}/{totalCount})
                 </span>
               </h3>
-              <AnimatePresence>
-                {showTitleTooltip && (
-                  <motion.div
+              {showTitleTooltip && (
+                <MenuTitleTooltipPortal>
+<motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className={cn("absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-56 pointer-events-none", genreAccent.selectedBorder)}
+                    className={cn("soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-64 pointer-events-none", genreAccent.selectedBorder)}
                   >
-                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">
-                      곡의 핵심 장르와 세부 스타일을 결정합니다. 대분류를
-                      선택하고 메인 장르와 세부 장르를 조합하여 원하는 음악적
-                      색깔을 만드세요.
+                    <p className="soridraw-card-title-tooltip-label hidden">장르</p>
+                    <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">
+                      곡의 핵심 장르와 세부 스타일을 결정합니다. 대분류와 세부 장르를 조합해 원하는 음악적 색깔을 만드세요.
                     </p>
                   </motion.div>
-                )}
-              </AnimatePresence>
+                </MenuTitleTooltipPortal>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="soridraw-card-header-actions flex items-center gap-2">
             {onToggleLock && (
               <button
                 type="button"
@@ -1100,6 +1118,7 @@ function GenreHierarchySelectorComponent({
                 selectedCount > 0 || isRandomized
                   ? genreAccent.selectedSoft
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+                (selectedCount > 0 || isRandomized) && "soridraw-active-reset-button",
               )}
               title="초기화"
             >
@@ -1109,9 +1128,20 @@ function GenreHierarchySelectorComponent({
         </div>
 
         <div
-          className="soridraw-expand-content overflow-hidden min-h-[76px] transition-[max-height,opacity] duration-300 ease-out"
+          className="soridraw-expand-content soridraw-menu-card-body-slot soridraw-keyword-expand-motion overflow-hidden min-h-[76px]"
           style={{
-            maxHeight: isExpanded ? forcedHeight || contentHeight || 320 : 76,
+            // 637: if this selector remounts while Genre is already expanded (for example
+            // when the split result page changes), the stable-height observer has not
+            // measured yet. Starting from the collapsed 76px fallback made the card
+            // visibly fold once and then reopen on the next frame. Keep the content
+            // naturally open until the first real height arrives; normal user-triggered
+            // collapse/expand still uses the measured numeric height and the shared motion.
+            maxHeight: isExpanded
+              ? ((typeof forcedHeight === 'number' && forcedHeight > 0)
+                  || (typeof contentHeight === 'number' && contentHeight > 0)
+                    ? resolveExpandedHeight(forcedHeight, contentHeight, 76)
+                    : 'none')
+              : 76,
             opacity: 1
           }}
         >
@@ -1148,7 +1178,7 @@ function GenreHierarchySelectorComponent({
                   )}
                 >
                   {renderCategoryOrderBadges(groupOrderEntries, (event) => clearCommittedGenreIds(groupSelectedIds, event))}
-                  <span className="text-[15px] md:text-[16.5px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
+                  <span className="soridraw-menu-keyword-label text-[15px] md:text-[16.5px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
                     {group.labelKo || group.label}
                   </span>
                 </button>
@@ -1176,7 +1206,7 @@ function GenreHierarchySelectorComponent({
           }
         }}
         className={cn(
-          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-5 py-3 flex items-center justify-center text-center overflow-hidden transition-all relative",
+          "soridraw-expand-summary soridraw-menu-summary-box mt-5 h-[64px] rounded-2xl border border-dashed px-5 py-3 flex items-center justify-center text-center overflow-hidden transition-all relative",
           isExpandSummaryActive
             ? cn(genreAccent.summaryActive, "border-dashed")
             : "border-[var(--border-color)]",
@@ -1221,24 +1251,27 @@ function GenreHierarchySelectorComponent({
             </button>
           </div>
         ) : selectedDisplayLabels.length > 0 ? (
-          <div className={cn("soridraw-selected-summary flex min-w-0 w-full items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap text-[15px] font-black leading-tight", directInput ? "pr-10" : "")}>
+          <div
+            data-item-count={selectionRoleEntries.length}
+            className={cn("soridraw-menu-summary-text soridraw-menu-summary-text--selected soridraw-genre-summary-items soridraw-selected-summary flex min-w-0 w-full items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap text-[15px] font-black leading-tight", directInput ? "pr-10" : "")}
+          >
             {selectionRoleEntries.map((item, index) => (
               <React.Fragment key={`${item.role}-${item.label}-${index}`}>
                 {index > 0 && (
-                  <span className="shrink-0 text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.35)]">·</span>
+                  <span className="soridraw-genre-summary-separator shrink-0 text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.35)]">·</span>
                 )}
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="shrink-0 rounded-full border border-[rgb(var(--soridraw-menu-amber-rgb)/0.24)] bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] px-1.5 py-[2px] text-[10px] font-black leading-none tracking-tight text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.78)]">
+                <span className="soridraw-genre-summary-item flex min-w-0 items-center gap-1.5">
+                  <span className="soridraw-genre-summary-role shrink-0 rounded-full border border-[rgb(var(--soridraw-menu-amber-rgb)/0.24)] bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] px-1.5 py-[2px] text-[10px] font-black leading-none tracking-tight text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.78)]">
                     {item.role}
                   </span>
-                  <span className={cn("min-w-0 truncate", genreAccent.text)}>{item.label}</span>
+                  <span className="soridraw-genre-summary-item-label min-w-0 truncate">{item.label}</span>
                 </span>
               </React.Fragment>
             ))}
           </div>
         ) : (
-          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", genreAccent.softText)}>
-            장르를 선택하세요.
+          <p className={cn("soridraw-menu-summary-text soridraw-menu-summary-text--empty text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "")}>
+            장르를 설정하세요.
           </p>
         )}
         {directInput && !isDirectInputEditing && (
@@ -1287,7 +1320,7 @@ function GenreHierarchySelectorComponent({
                 onTouchMove={blockModalOuterScroll}
               >
               {/* Modal Header */}
-              <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between gap-3 relative bg-[var(--bg-secondary)]">
+              <div className="soridraw-studio-modal-header px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between gap-3 relative bg-[var(--bg-secondary)]">
                 <h3
                   className="min-w-0 flex-1 text-left text-xl md:text-2xl font-bold text-[var(--text-primary)] whitespace-nowrap truncate pr-2"
                 >
@@ -1332,7 +1365,7 @@ function GenreHierarchySelectorComponent({
               </div>
 
               {/* Selection Status Bar */}
-              <div className="px-6 py-2.5 bg-[rgb(var(--soridraw-menu-amber-rgb)/0.06)] border-b border-[rgb(var(--soridraw-menu-amber-rgb)/0.18)] flex items-center justify-start gap-2 overflow-hidden text-left">
+              <div className="soridraw-studio-modal-selection-bar px-6 py-2.5 bg-[rgb(var(--soridraw-menu-amber-rgb)/0.06)] border-b border-[rgb(var(--soridraw-menu-amber-rgb)/0.18)] flex items-center justify-start gap-2 overflow-hidden text-left">
                 <span className="text-[10px] font-black text-[var(--soridraw-menu-amber-soft)] uppercase tracking-widest shrink-0">
                   Selection
                 </span>
@@ -1364,7 +1397,7 @@ function GenreHierarchySelectorComponent({
               </div>
 
               <div
-                className="p-5 md:p-6 space-y-4 max-h-[60vh] md:max-h-[62vh] overflow-y-auto overscroll-contain custom-scrollbar"
+                className="soridraw-studio-modal-body p-5 md:p-6 space-y-4 max-h-[60vh] md:max-h-[62vh] overflow-y-auto overscroll-contain custom-scrollbar"
                 style={{ overscrollBehavior: 'contain' }}
                 onWheel={handleModalWheel}
                 onTouchStart={handleModalTouchStart}
@@ -1474,7 +1507,7 @@ function GenreHierarchySelectorComponent({
               </div>
 
               {/* Bottom Info Area */}
-              <div className="px-6 py-5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] h-[110px] flex items-center justify-center gap-4 overflow-hidden shadow-inner">
+              <div className="soridraw-studio-modal-footer px-6 py-5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] h-[110px] flex items-center justify-center gap-4 overflow-hidden shadow-inner">
                 <div className="p-2.5 rounded-xl bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] text-[var(--soridraw-menu-amber-soft)] shrink-0 shadow-inner hidden md:flex">
                   <Info className="w-5 h-5" />
                 </div>
@@ -1524,6 +1557,7 @@ const GenreHierarchySelector = React.memo(GenreHierarchySelectorComponent, (prev
   return prev.isLocked === next.isLocked &&
          prev.isExpanded === next.isExpanded &&
          prev.isRandomized === next.isRandomized &&
+         prev.expandResetToken === next.expandResetToken &&
          prev.forcedHeight === next.forcedHeight &&
          prev.directInput?.selectedText === next.directInput?.selectedText &&
          isArrayEqual(prev.selectedGenre, next.selectedGenre) &&

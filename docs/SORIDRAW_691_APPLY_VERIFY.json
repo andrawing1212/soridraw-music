@@ -1,0 +1,24 @@
+{
+  "version": 691,
+  "basis": "SORIDRAW_690",
+  "goal": "Make Music Note / Library internal splitter movement in tablet-width panes use the same fast interaction geometry owner as the improved PC lane, while preserving 690 outer-window tablet improvements.",
+  "strategy": {
+    "internal_split_drag": "For fine-pointer PC Music Note / Library using runtimeProfile=library-590, lock the whole active divider gesture to css-var geometry across PC/tablet/mobile pane widths.",
+    "mid_drag_owner_switch": "removed; content responsive mode may still change live, but geometry owner does not switch during the gesture",
+    "pointerdown_prewarm": "enter css-var owner before the first pointermove to avoid the one-shot direct->css-var hitch",
+    "drag_end": "restore normal 690/687 ownership immediately: tablet/mobile=result direct, PC=library-590 css-var",
+    "outer_window_resize": "unchanged from 690; direct tablet geometry + 686 viewport windowing + 689 outer-resize isolation remain active",
+    "touch_path": "unchanged; adaptive touch/Galaxy Tab engine is not forced onto the PC library-590 lane",
+    "visual_breakpoints": "unchanged and still live during drag"
+  },
+  "changed_files": [
+    "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "README.md",
+    "docs/SORIDRAW_691_APPLY_VERIFY.json"
+  ],
+  "firebase_changes": false,
+  "auth_changes": false,
+  "firestore_schema_changes": false,
+  "functions_changes": false,
+  "deployment": false
+}

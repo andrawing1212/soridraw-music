@@ -1,0 +1,46 @@
+name: Cloudflare Explore Environment Public Smoke
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cloudflare-explore-env-public-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wait for isolated PREVIEW and TEST Workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe() {
+            local name="$1" url="$2" origin="$3"
+            for i in $(seq 1 60); do
+              code="$(curl -sS --max-time 15 -H "Origin: $origin" -D /tmp/${name}.headers -o /tmp/${name}.json -w '%{http_code}' "$url/v1/feed?sort=latest&limit=1" || true)"
+              allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/{gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/${name}.headers 2>/dev/null || true)"
+              if [ "$code" = '200' ] && [ "$allow" = "$origin" ]; then
+                echo "${name}_SMOKE=PASS HTTP=200 CORS=$allow"
+                return 0
+              fi
+              echo "${name}_WAIT attempt=$i HTTP=${code:-none} CORS=${allow:-none}"
+              sleep 10
+            done
+            echo "${name}_BODY=$(head -c 500 /tmp/${name}.json 2>/dev/null || true)"
+            return 1
+          }
+          probe PREVIEW 'https://soridraw-explore-preview.andrawing1212.workers.dev' 'https://preview.soridraw.com'
+          probe TEST 'https://soridraw-explore-test.andrawing1212.workers.dev' 'https://test.soridraw.com'
+
+      - name: Production remains healthy
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS --max-time 20 -H 'Origin: https://soridraw.com' -o /tmp/prod.json -w '%{http_code}' 'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          test "$code" = '200'
+          echo 'PRODUCTION_EXPLORE_SMOKE=PASS HTTP=200'

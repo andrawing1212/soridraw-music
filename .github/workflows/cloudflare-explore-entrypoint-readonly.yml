@@ -1,0 +1,50 @@
+name: Cloudflare Explore Entrypoint Readonly
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/cloudflare-explore-entrypoint-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prepare exact Worker source
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --package-lock=false
+          npm run cf:prepare
+      - name: Print entrypoint shape only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('.remote-worker/worker.js','utf8');
+          for (const needle of ['export default','async fetch(', 'fetch(request', 'return handleRequest']) {
+            let pos=0, n=0;
+            while ((pos=s.indexOf(needle,pos))>=0 && n<8) {
+              console.log(`=== ${needle} @ ${pos} ===`);
+              console.log(s.slice(Math.max(0,pos-500), Math.min(s.length,pos+1800)));
+              pos += needle.length; n++;
+            }
+          }
+          console.log('READ_ONLY=true');
+          console.log('NO_DEPLOY=true');
+          NODE

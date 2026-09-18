@@ -1,0 +1,27 @@
+.soridraw-compact-nav-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior-x: contain;
+}
+
+.soridraw-compact-nav-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Side rails are absent below 1100px. In that whole range, every display mode
+   uses the same mobile navigation contents. Labs is moved into the account menu. */
+@media (max-width: 1099px) {
+  [data-soridraw-nav-key="lab"] {
+    display: none !important;
+  }
+}
+
+/* Split-only top-menu reduction starts only when the side-rail layout exists.
+   Tablet portrait and phone widths therefore behave exactly like mobile dark/light. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] [data-soridraw-nav-key]:not([data-soridraw-nav-key="home"]):not([data-soridraw-nav-key="studio"]):not([data-soridraw-nav-key="explore"]) {
+    display: none !important;
+  }
+}

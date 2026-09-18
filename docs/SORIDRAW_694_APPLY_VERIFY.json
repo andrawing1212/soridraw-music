@@ -1,0 +1,59 @@
+{
+  "version": 694,
+  "base": "SORIDRAW_690차_689기준_내부분할683복구_외부창개선분리_균형본.zip",
+  "goal": "Preserve 690 slow-drag smoothness while reducing rapid internal-split and outer-window frame collapse by removing same-frame forced-reflow and duplicate observer work, without visual proxies or speed throttling.",
+  "changedFiles": [
+    "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "src/App.tsx",
+    "src/components/studio/studioLayout.css",
+    "README.md",
+    "docs/SORIDRAW_694_APPLY_VERIFY.json"
+  ],
+  "notChanged": [
+    "FavoritesPage rendering/data",
+    "SunoLibraryPage rendering/data",
+    "StudioSplitWorkspace legacy geometry",
+    "Firebase/Auth/Firestore/Functions/storage schema",
+    "responsive breakpoints",
+    "visual design/borders"
+  ],
+  "mechanism": {
+    "internalSplit": [
+      "keep existing rAF latest-position split geometry",
+      "remove per-frame post-width scrollTop read/write guard",
+      "disable browser scroll anchoring during Lite drag",
+      "restore captured scroll position once after drag"
+    ],
+    "outerResize": [
+      "read layout geometry before writes",
+      "remove redundant JS modal-host viewport writes already overridden by fixed CSS",
+      "remove duplicate forced pane-width event after applyPercent",
+      "skip per-frame external control querySelector/temp-write-clear cycle; update split toggles only",
+      "pause SecondaryScrollControl document geometry reads until resize end",
+      "disable result-pane scroll anchoring for Music Note/Library during native resize"
+    ]
+  },
+  "research": [
+    "https://developer.chrome.com/docs/performance/insights/forced-reflow",
+    "https://web.dev/articles/avoid-large-complex-layouts-and-layout-thrashing",
+    "https://web.dev/articles/resize-observer",
+    "https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame",
+    "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/overflow-anchor"
+  ],
+  "verification": {
+    "tsxTranspileSyntax": "PASS",
+    "cssBraceBalance": "PASS",
+    "jsonParse": "PENDING_PACK_CHECK",
+    "zipIntegrity": "PENDING_PACK_CHECK",
+    "fullViteBuild": "not run: node_modules absent in ZIP workspace"
+  },
+  "userTest": [
+    "Music Note internal splitter: slow movement should feel identical to 690",
+    "Music Note internal splitter: rapid left-right movement should have fewer large frame stalls",
+    "Library internal splitter: same two checks",
+    "Music Note/Library outer window: slow resize unchanged; rapid PC↔tablet resize should reduce stall",
+    "scroll position must not jump vertically during/after splitter drag",
+    "detail modal and collapse toggles must remain correctly positioned"
+  ],
+  "status": "code applied; real-use verification pending"
+}

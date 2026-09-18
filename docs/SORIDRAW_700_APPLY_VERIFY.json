@@ -1,0 +1,14 @@
+{
+  "version": 700,
+  "basis": "699 diagnostics / 694 performance behavior",
+  "scope": "diagnostics only",
+  "changes": [
+    "manual outer-window capture starts only after real viewport-width delta",
+    "capture persists across 110ms resize settle pauses until >=4s",
+    "hard stop at 6.5s",
+    "valid result requires >=3.8s, >=24 spatial samples, >=500px cumulative viewport travel",
+    "explicit disarm and 650ms workspace settle between music-note and library"
+  ],
+  "firebaseChanged": false,
+  "appPerformancePathChanged": false
+}

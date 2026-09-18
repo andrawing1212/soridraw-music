@@ -1,0 +1,91 @@
+name: Apply 073 Explore Like Bootstrap Refresh
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/apply-073-explore-like-bootstrap-refresh.py'
+      - '.github/workflows/apply-073-explore-like-bootstrap-refresh.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-073-explore-like-bootstrap-refresh
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply targeted 073 client fix
+        run: python3 .deploy/apply-073-explore-like-bootstrap-refresh.py
+
+      - name: Verify 073 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_FRESH_BOOTSTRAP_RECOVERY_073_20260912' src/pages/ExplorePage.tsx
+          test "$(grep -Fc 'fetchPayload(buildExploreFreshLikeFeedUrl072(requestUrl))' src/pages/ExplorePage.tsx)" -ge 2
+          grep -Fq "likeCountRepairKeyRef072.current = '';" src/pages/ExplorePage.tsx
+          grep -Fq '"version": "073"' public/app-version.json
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912' src/services/exploreLikeService.ts
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_REVERSAL_ORDER_041_20260912' cloudflare/explore-worker/canonical/preview-worker.js
+          echo '073_STATIC_CONTRACT=PASS'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify change boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only | grep -v '^dist/' || true)"
+          echo "$changed"
+          bad="$(printf '%s\n' "$changed" | grep -Ev '^(src/pages/ExplorePage\.tsx|public/app-version\.json)$' || true)"
+          if [ -n "$bad" ]; then
+            echo 'Unexpected generated changes:'
+            echo "$bad"
+            exit 1
+          fi
+          echo 'NO_WORKER_RUNTIME_CHANGE=true'
+          echo 'NO_D1_SCHEMA_CHANGE=true'
+          echo 'NO_FIREBASE_FUNCTIONS_CHANGE=true'
+          echo 'NO_FIRESTORE_RULES_CHANGE=true'
+          echo 'NO_USER_DATA_CHANGE=true'
+          echo 'NO_UI_CSS_CHANGE=true'
+
+      - name: Commit actual PREVIEW 073 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked=(src/pages/ExplorePage.tsx public/app-version.json)
+          if git diff --quiet -- "${tracked[@]}"; then
+            echo '073 already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "${tracked[@]}"
+          git commit -m 'fix: refresh like counts on cache-empty bootstrap'
+          git push origin HEAD:preview

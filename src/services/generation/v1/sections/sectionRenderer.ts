@@ -619,6 +619,26 @@ type RenderState = {
   anchorUsage: Map<string, number>;
 };
 
+function fallbackPerformanceCueForSection(entry: V1SectionBlueprintEntry): string {
+  // Last-resort format safety only. The generated/current-song cue remains the first choice.
+  // This prevents a sung section from escaping as a bare [Chorus 1] when the model omitted
+  // only the performance cue while preserving the section's real lyric body.
+  const returning = entry.occurrence > 1;
+  switch (entry.roleFamily) {
+    case 'opening': return 'brief scene-setting entry';
+    case 'development': return returning ? 'advancing narrative phrasing' : 'conversational narrative phrasing';
+    case 'lift': return returning ? 'tightening rising phrasing' : 'restrained rising phrasing';
+    case 'hook': return returning ? 'expanded returning hook delivery' : 'focused melodic payoff';
+    case 'recurrence': return returning ? 'warmer returning refrain' : 'restrained recurring refrain';
+    case 'contrast': return 'exposed contrasting delivery';
+    case 'release': return 'clipped rhythmic release';
+    case 'payoff': return 'full-register final payoff';
+    case 'closing': return 'fading closing delivery';
+    case 'space': return '';
+    default: return 'section-specific delivery';
+  }
+}
+
 function renderSectionTag(
   entry: V1SectionBlueprintEntry,
   block: V1LyricBlock,
@@ -690,6 +710,10 @@ function renderSectionTag(
     ? renderedAnchors.join(' + ')
     : renderedAnchors[0] || '';
   const performance = [anchorText, ...localPerformance].filter(Boolean);
+  if (!performance.length && entry.allowsLyrics && hasConcreteBody(block)) {
+    const fallbackCue = cleanV1SectionCue(fallbackPerformanceCueForSection(entry));
+    if (fallbackCue) performance.push(fallbackCue);
+  }
 
   const productionCues = [...selected.production, ...existing.production]
     .filter(Boolean)

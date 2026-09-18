@@ -1,0 +1,42 @@
+{
+  "version": 695,
+  "basis": "SORIDRAW_690차_689기준_내부분할683복구_외부창개선분리_균형본.zip",
+  "status": "code_applied_user_validation_pending",
+  "goal": "Reduce high-speed pane/window resize frame collapse by physically removing off-screen Music Note and Library workspace row subtrees from the DOM.",
+  "changes": {
+    "new": [
+      "src/components/performance/SoridrawVirtualMount.tsx",
+      "docs/SORIDRAW_695_APPLY_VERIFY.json"
+    ],
+    "modified": [
+      "src/pages/FavoritesPage.tsx",
+      "src/pages/SunoLibraryPage.tsx",
+      "src/components/studio/studioLayout.css",
+      "README.md"
+    ],
+    "deleted": []
+  },
+  "virtualization": {
+    "music_note_estimated_slot_height_px": 116,
+    "library_workspace_estimated_slot_height_px": 198,
+    "vertical_overscan_px": 280,
+    "shared_intersection_observer_per_scroll_root": true,
+    "freeze_membership_during_split_drag": true,
+    "freeze_membership_during_outer_window_resize": true,
+    "preserve_last_measured_height_when_unmounted": true,
+    "force_mount_active_menu_items": true,
+    "old_686_resize_windowing_attached_to_pages": false
+  },
+  "protected": [
+    "Studio/Create/Recent rendering",
+    "split geometry and divider engine",
+    "PC/tablet/mobile responsive breakpoints",
+    "touch-priority Galaxy Tab path",
+    "Firebase Auth/Firestore/Functions and persisted user data"
+  ],
+  "validation": {
+    "typescript_transpile_diagnostics": 0,
+    "full_vite_build": "not_run_dependencies_unavailable_in_zip_runtime",
+    "deployment": "none"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "version": 682,
+  "basis": "SORIDRAW_668 clean",
+  "experiment": "Vercel Firestore local cache parity with AI Studio",
+  "changed": ["src/firebase.js", "README.md", "docs/SORIDRAW_682_APPLY_VERIFY.json"],
+  "vercel": "persistentLocalCache + persistentMultipleTabManager",
+  "aiStudio": "unchanged persistentLocalCache path",
+  "firebaseHostingProduction": "unchanged",
+  "appCheck": "668 default restored; no 681 change",
+  "uiResizeCode": "unchanged",
+  "cloudFirestoreSchemaOrWrites": "unchanged",
+  "fallback": "getFirestore memory cache if persistent cache init fails"
+}

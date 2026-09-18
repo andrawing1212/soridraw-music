@@ -1,0 +1,27 @@
+{
+  "marker": "SORIDRAW_VERIFY_680: OUTER_RESIZE_LOCAL_GEOMETRY_ROOT_WRITE_ZERO",
+  "basis": "SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip",
+  "intent": "Keep the current live outer-window resize visual behavior while preventing inherited <html> split-coordinate writes during the active native resize gesture.",
+  "changed_files": [
+    "src/components/studio/StudioSplitWorkspace.tsx",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "README.md"
+  ],
+  "new_files": [
+    "docs/SORIDRAW_680_APPLY_VERIFY.json"
+  ],
+  "behavior_contract": {
+    "live_window_resize_preserved": true,
+    "active_outer_resize_root_split_coordinate_writes": 0,
+    "live_geometry_owner": "local pane / splitter / portal element styles",
+    "final_root_commit": "once after soridraw-window-resizing is removed at settle",
+    "divider_drag_changed": false,
+    "freeze_snapshot_clip_unmount_used": false,
+    "firebase_or_data_structure_changed": false
+  },
+  "sha256": {
+    "src/components/studio/StudioSplitWorkspace.tsx": "b8df46afbe50b1d09368241888837272671a57624c53afc6de18c8796ff87800",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx": "c02ce63b5ca519b58ca76f9fb7db96c8d7967a3f8b358a2422eb020f0bc28359",
+    "README.md": "0e82467c0decef4d1b3f726f43f365e79a03c380251275a876497720194e2a27"
+  }
+}

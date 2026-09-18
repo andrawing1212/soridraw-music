@@ -4,3 +4,9 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Backend V2 private backup outputs must never enter Git.
+private_backups/
+backend-v2-backup-*/
+*.soridraw-backup.ndjson
+backend-v2-backup-manifest.json

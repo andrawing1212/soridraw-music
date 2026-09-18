@@ -1,0 +1,11 @@
+{
+  "version": 712,
+  "base": 709,
+  "scope": "fast internal split drag only",
+  "recent": "divider immediate + pane adaptive 16/20/28/36ms",
+  "musicNoteLibrary": "divider immediate + pane adaptive 16/20/28/36ms",
+  "slowPath": "unchanged from 709",
+  "outerResize": "unchanged from 709",
+  "firebaseData": "unchanged",
+  "deployment": "none"
+}

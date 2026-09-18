@@ -1,0 +1,16 @@
+{
+  "version": 701,
+  "base": 694,
+  "scope": "Music Note / Library geometry pacing only",
+  "changes": [
+    "one post-write visual geometry commit barrier during internal splitter drag",
+    "same single barrier during active native outer-window resize",
+    "no new diagnostics UI and no 698-700 diagnostic code"
+  ],
+  "protected": [
+    "694 performance cleanup",
+    "Recent/Create split behavior",
+    "responsive breakpoints",
+    "Firebase/Auth/Firestore/Functions/data schema"
+  ]
+}

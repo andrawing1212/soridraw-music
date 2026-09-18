@@ -1,0 +1,16 @@
+{
+  "version": 704,
+  "basis": 703,
+  "goal": "Recent + Music Note + Library share one pacing contract",
+  "changed": [
+    "src/components/studio/StudioSplitWorkspace.tsx",
+    "README.md",
+    "docs/SORIDRAW_704_APPLY_VERIFY.json"
+  ],
+  "recent_internal_drag": "paced on fine-pointer PC; divider and pane share the same paced pixel",
+  "recent_outer_resize": "paced visual boundary with stable stored split ratio",
+  "music_note_library": "703 pacing retained",
+  "studio_create": "unchanged",
+  "touch_adaptive": "unchanged",
+  "firebase_data": "unchanged"
+}

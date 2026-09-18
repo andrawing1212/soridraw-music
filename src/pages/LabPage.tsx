@@ -14,7 +14,7 @@ export default function LabPage() {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-3 md:px-6 pt-20 pb-10 text-[var(--text-primary)]">
       <div className="mx-auto w-full max-w-[1720px] space-y-7">
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
+        <motion.div initial={false} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
@@ -37,7 +37,7 @@ export default function LabPage() {
         </motion.div>
 
         {view === 'cards' ? (
-          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[2rem] bg-[#0A0B0F] p-5 shadow-2xl md:p-6">
+          <motion.section initial={false} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[2rem] bg-[#0A0B0F] p-5 shadow-2xl md:p-6">
             <div className="pointer-events-none absolute inset-0 opacity-45" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.28) 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
             <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(circle at 18% 12%, rgba(255,214,107,0.13), transparent 26%), radial-gradient(circle at 82% 18%, rgba(255,111,174,0.13), transparent 30%)' }} />
             <div className="relative z-10 mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -62,7 +62,7 @@ export default function LabPage() {
             </div>
           </motion.section>
         ) : (
-          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <motion.section initial={false} animate={{ opacity: 1, y: 0 }}>
             <LabWorkspace mode={view === 'lyrics' ? 'lyrics' : 'style'} />
           </motion.section>
         )}

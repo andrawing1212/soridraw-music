@@ -1,9 +1,22 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import fs from 'node:fs';
 import path from 'path';
 import { defineConfig } from 'vite';
 
+const appVersionPayload = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, 'public/app-version.json'), 'utf8'),
+) as { version?: string | number };
+const appVersion = String(appVersionPayload.version ?? '').trim();
+
+if (!/^\d{3}$/.test(appVersion)) {
+  throw new Error(`Invalid public/app-version.json version: ${appVersion || '(empty)'}`);
+}
+
 export default defineConfig({
+  define: {
+    __SORIDRAW_APP_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -22,6 +35,11 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // 589: restore the normal production build after the isolated minify A/B
+    // checks. The next diagnostic compares the computed/cascaded styles that
+    // the browser actually applies in DEV vs PROD without changing output.
+    minify: true,
+    cssMinify: true,
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {

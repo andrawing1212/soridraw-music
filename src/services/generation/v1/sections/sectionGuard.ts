@@ -292,12 +292,55 @@ function alignBlocksToBlueprint(blocks: V1LyricBlock[], blueprint: V1SectionBlue
 
 
 function repairStableMissingSections(
-  _aligned: AlignedBlock[],
-  _blueprint: V1SectionBlueprint,
+  aligned: AlignedBlock[],
+  blueprint: V1SectionBlueprint,
 ): void {
-  // Intentionally empty. Missing required bodies are repaired by the dedicated
-  // Gemini missing-section body stage. Copying a neighbouring Chorus or splitting
-  // blank-line paragraphs caused section ownership corruption.
+  if (blueprint.mode !== 'stable' && blueprint.mode !== 'recommended') return;
+
+  // Safe local ownership recovery for one narrow failure shape:
+  // Gemini occasionally leaves a required payoff slot empty while placing that slot's
+  // complete lyric paragraph(s) after a blank line inside the immediately preceding
+  // transition section. Do not guess from ordinary line length and do not split Verse
+  // paragraphs. Recover only an explicit transition -> payoff boundary where:
+  // - the required next slot is empty,
+  // - the previous transition owns at least two real paragraphs, and
+  // - both sides keep at least two concrete lyric/ad-lib lines.
+  // Any less certain shape remains delegated to the targeted Gemini body-repair stage.
+  for (let index = 1; index < aligned.length; index += 1) {
+    const current = aligned[index];
+    const previous = aligned[index - 1];
+    if (!current.entry.requiresLyrics || blockHasConcreteLyrics(current.block)) continue;
+    if (!previous.entry.allowsLyrics || !blockHasConcreteLyrics(previous.block)) continue;
+
+    const previousBase = baseV1SectionName(previous.entry.name);
+    const currentBase = baseV1SectionName(current.entry.name);
+    const isSafeTransitionBoundary = (
+      /^(?:Pre-Chorus|Build-Up)$/i.test(previousBase)
+      && /^(?:Chorus|Hook|Drop)$/i.test(currentBase)
+    ) || (
+      /^(?:Chorus|Hook|Refrain)$/i.test(previousBase)
+      && /^Bridge$/i.test(currentBase)
+    ) || (
+      /^Bridge$/i.test(previousBase)
+      && /^(?:Final Chorus|Final Hook|Climax)$/i.test(current.entry.name)
+    );
+    if (!isSafeTransitionBoundary) continue;
+
+    const paragraphs = stableParagraphs(previous.block.bodyLines);
+    if (paragraphs.length < 2) continue;
+    const keep = compactBodyLines(paragraphs[0]);
+    const move = compactBodyLines(
+      paragraphs.slice(1).flatMap((paragraph, paragraphIndex) => (
+        paragraphIndex ? ['', ...paragraph] : paragraph
+      )),
+    );
+    const keepConcrete = keep.filter((line) => String(line || '').trim() && !/^\[[^\]]+\]$/.test(String(line || '').trim()));
+    const moveConcrete = move.filter((line) => String(line || '').trim() && !/^\[[^\]]+\]$/.test(String(line || '').trim()));
+    if (keepConcrete.length < 2 || moveConcrete.length < 2) continue;
+
+    previous.block.bodyLines = keep;
+    current.block.bodyLines = move;
+  }
 }
 
 function moveLyricsOutOfNonVocalSections(aligned: AlignedBlock[]): void {

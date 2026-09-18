@@ -1,0 +1,19 @@
+{
+  "version": 687,
+  "basis": "SORIDRAW_686차_685기준_뮤직노트_라이브러리_태블릿리사이즈_뷰포트윈도잉_3차.zip",
+  "goal": "Music Note/Library only: restore direct result-pane geometry in the real 661-1080px tablet band while preserving PC library-590 geometry and live resize.",
+  "change": {
+    "file": "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "rule": "resultMode !== pc => direct before library-590 profile check",
+    "pc": "library-590 remains css-var",
+    "tablet_mobile": "direct",
+    "recent_create": "untouched"
+  },
+  "preserved": [
+    "686 viewport windowing",
+    "live external-window resize",
+    "live splitter movement",
+    "visual responsive transitions",
+    "Firebase/Auth/Firestore/Functions/data model"
+  ]
+}

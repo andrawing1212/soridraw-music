@@ -1,0 +1,201 @@
+name: Firebase Functions Test Host CORS Canary
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/firebase-functions-test-host-cors-canary.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-functions-test-host-cors-canary
+  cancel-in-progress: false
+
+jobs:
+  cors-only-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PROJECT: soridraw-app-866a5
+      REGION: us-central1
+      FUNCTION_NAME: getSunoApiKeyStatus
+      TEST_WEB_ORIGIN: https://soridraw-test.web.app
+      TEST_FIREBASE_ORIGIN: https://soridraw-test.firebaseapp.com
+    steps:
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Authenticate Google
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot live function and download its exact deployed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions describe "$FUNCTION_NAME" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$RUNNER_TEMP/before.json"
+          eval "$(python3 - "$RUNNER_TEMP/before.json" <<'PY'
+          import json, shlex, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8'))
+          src=((data.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}
+          bucket=str(src.get('bucket') or '')
+          obj=str(src.get('object') or '')
+          if not bucket or not obj:
+              raise SystemExit('Live source storage location unavailable')
+          print('LIVE_BUCKET='+shlex.quote(bucket))
+          print('LIVE_OBJECT='+shlex.quote(obj))
+          PY
+          )"
+          echo "[CORS Canary] live source: gs://$LIVE_BUCKET/$LIVE_OBJECT"
+          rm -rf live-function
+          mkdir -p live-function
+          gcloud storage cp "gs://$LIVE_BUCKET/$LIVE_OBJECT" "$RUNNER_TEMP/live.zip" >/dev/null
+          unzip -q "$RUNNER_TEMP/live.zip" -d live-function
+          test -f live-function/src/index.ts
+          test -f live-function/package.json
+          cp live-function/src/index.ts "$RUNNER_TEMP/index.before.ts"
+
+      - name: Prove old origins work and test origin is currently blocked
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://us-central1-$PROJECT.cloudfunctions.net/$FUNCTION_NAME"
+          check() {
+            local origin="$1" expected="$2"
+            code="$(curl -sS -o /tmp/body -D /tmp/head -w '%{http_code}' -X OPTIONS \
+              -H "Origin: $origin" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+              "$url" || true)"
+            allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/head)"
+            echo "[CORS Canary] BEFORE origin=$origin http=$code allow=${allow:-none}"
+            test "$code" = "$expected"
+          }
+          check 'https://soridraw-music.vercel.app' 204
+          check 'https://preview.soridraw.com' 204
+          check "$TEST_WEB_ORIGIN" 403
+          check "$TEST_FIREBASE_ORIGIN" 403
+
+      - name: Patch only two Firebase test origins in exact live source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('live-function/src/index.ts')
+          s=p.read_text(encoding='utf-8')
+          wanted=['https://soridraw-test.web.app','https://soridraw-test.firebaseapp.com']
+          if all(w in s for w in wanted):
+              raise SystemExit('Test origins already present; refusing redundant canary deploy')
+          anchor='  "https://soridraw-preview.firebaseapp.com",\n'
+          if anchor not in s:
+              raise SystemExit('Live custom-domain CORS anchor missing; refusing broad edit')
+          addition=''.join(f'  "{w}",\n' for w in wanted)
+          s=s.replace(anchor, anchor+addition, 1)
+          p.write_text(s,encoding='utf-8')
+          PY
+
+          diff -u "$RUNNER_TEMP/index.before.ts" live-function/src/index.ts | tee "$RUNNER_TEMP/cors.diff" || true
+          additions="$(grep -c '^+  "https://soridraw-test\.' "$RUNNER_TEMP/cors.diff" || true)"
+          deletions="$(grep -c '^-' "$RUNNER_TEMP/cors.diff" || true)"
+          test "$additions" = '2'
+          test "$deletions" = '0'
+          if grep -E '^[+-]' "$RUNNER_TEMP/cors.diff" | grep -Ev '^(---|\+\+\+|\+  "https://soridraw-test\.(web\.app|firebaseapp\.com)",$)' >/dev/null; then
+            echo 'Unexpected source change detected.'
+            exit 4
+          fi
+          echo '[CORS Canary] source diff limited to two origin additions: PASS'
+
+      - name: Rebuild exact live function package
+        working-directory: live-function
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run build
+          grep -Fq 'https://soridraw-test.web.app' lib/index.js
+          grep -Fq 'https://soridraw-test.firebaseapp.com' lib/index.js
+          echo '[CORS Canary] build: PASS'
+
+      - name: Deploy only getSunoApiKeyStatus from its own live source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > firebase.cors-canary.json <<'JSON'
+          {
+            "functions": {
+              "source": "live-function"
+            }
+          }
+          JSON
+          npx --yes firebase-tools@latest deploy \
+            --project "$PROJECT" \
+            --config firebase.cors-canary.json \
+            --only "functions:$FUNCTION_NAME" \
+            --non-interactive
+          echo '[CORS Canary] single-function deploy: PASS'
+
+      - name: Verify CORS and critical function configuration after deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions describe "$FUNCTION_NAME" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$RUNNER_TEMP/after.json"
+          python3 - "$RUNNER_TEMP/before.json" "$RUNNER_TEMP/after.json" <<'PY'
+          import json, sys
+          before=json.load(open(sys.argv[1],encoding='utf-8'))
+          after=json.load(open(sys.argv[2],encoding='utf-8'))
+          def pick(d):
+              b=d.get('buildConfig') or {}
+              s=d.get('serviceConfig') or {}
+              return {
+                'runtime': b.get('runtime'),
+                'entryPoint': b.get('entryPoint'),
+                'environmentVariables': b.get('environmentVariables'),
+                'availableMemory': s.get('availableMemory'),
+                'timeoutSeconds': s.get('timeoutSeconds'),
+                'minInstanceCount': s.get('minInstanceCount'),
+                'maxInstanceCount': s.get('maxInstanceCount'),
+                'maxInstanceRequestConcurrency': s.get('maxInstanceRequestConcurrency'),
+                'serviceAccountEmail': s.get('serviceAccountEmail'),
+                'ingressSettings': s.get('ingressSettings'),
+                'secretEnvironmentVariables': s.get('secretEnvironmentVariables'),
+              }
+          bp, ap = pick(before), pick(after)
+          if bp != ap:
+              print('Critical configuration changed unexpectedly')
+              print('BEFORE', json.dumps(bp, ensure_ascii=False, sort_keys=True))
+              print('AFTER ', json.dumps(ap, ensure_ascii=False, sort_keys=True))
+              raise SystemExit(6)
+          print('[CORS Canary] critical runtime configuration unchanged: PASS')
+          PY
+
+          url="https://us-central1-$PROJECT.cloudfunctions.net/$FUNCTION_NAME"
+          for origin in \
+            'https://soridraw-music.vercel.app' \
+            'https://preview.soridraw.com' \
+            "$TEST_WEB_ORIGIN" \
+            "$TEST_FIREBASE_ORIGIN"; do
+            ok=''
+            for attempt in $(seq 1 12); do
+              code="$(curl -sS -o /tmp/body -D /tmp/head -w '%{http_code}' -X OPTIONS \
+                -H "Origin: $origin" \
+                -H 'Access-Control-Request-Method: POST' \
+                -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+                "$url" || true)"
+              allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/head)"
+              if [ "$code" = '204' ] && [ "$allow" = "$origin" ]; then ok=yes; break; fi
+              sleep 10
+            done
+            echo "[CORS Canary] AFTER origin=$origin http=$code allow=${allow:-none}"
+            test "$ok" = yes
+          done
+          echo 'NO_FIRESTORE_MIGRATION=true'
+          echo 'NO_RULES_DEPLOY=true'
+          echo 'NO_OTHER_FUNCTION_DEPLOY=true'
+          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'

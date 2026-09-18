@@ -1,0 +1,181 @@
+name: Firebase Test Library Cache Parity V3
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - preview
+    paths:
+      - .github/workflows/firebase-test-library-cache-parity-v3.yml
+      - .deploy/apply-firebase-test-library-cache-parity-v3.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-test-library-cache-parity-v3
+  cancel-in-progress: true
+
+jobs:
+  deploy-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout preview migration infra
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          path: infra
+
+      - name: Checkout current Vercel test source from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: app
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install current main dependencies
+        working-directory: app
+        run: npm install --no-audit --no-fund
+
+      - name: Generate exact current Vercel runtime source
+        working-directory: app
+        run: npm run prebuild
+
+      - name: Apply existing Firebase test bootstrap safety
+        run: python3 infra/.deploy/apply-firebase-test-cacheless-bootstrap.py app
+
+      - name: Snapshot before Library parity v3
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp app/src/pages/SunoLibraryPage.tsx /tmp/library-v2.tsx
+
+      - name: Apply Library cache parity v3
+        run: python3 infra/.deploy/apply-firebase-test-library-cache-parity-v3.py app
+
+      - name: Verify Library parity safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp infra/firebase.hosting-test.json app/firebase.hosting-test.json
+          diff -u /tmp/library-v2.tsx app/src/pages/SunoLibraryPage.tsx > /tmp/library-v3.patch || true
+          test -s /tmp/library-v3.patch
+
+          grep -q "LIBRARY_WORKSPACE_CACHE_SCHEMA_VERSION = '3'" app/src/pages/SunoLibraryPage.tsx
+          grep -q "LIBRARY_WORKSPACE_CACHE_DB_NAME = 'soridraw_library_workspace_cache_v3'" app/src/pages/SunoLibraryPage.tsx
+          grep -q "readLibraryWorkspaceTrackCacheFromIndexedDb" app/src/pages/SunoLibraryPage.tsx
+          grep -q "persistLibraryWorkspaceTrackCacheNow" app/src/pages/SunoLibraryPage.tsx
+          grep -q "void hydrateLibraryWorkspaceCacheThenSync();" app/src/pages/SunoLibraryPage.tsx
+          grep -q "const snapshot = await getDocs(tracksRef);" app/src/pages/SunoLibraryPage.tsx
+          grep -q "saveLibraryWorkspaceTrackCache(uid, list);" app/src/pages/SunoLibraryPage.tsx
+          grep -q "libraryActiveUiUid !== nextLibraryUiUid" app/src/pages/SunoLibraryPage.tsx
+
+          # The large Library payload must no longer be written to localStorage.
+          if grep -E "localStorage\.setItem\([^\n]*soridraw_suno_tracks_cache_" app/src/pages/SunoLibraryPage.tsx >/dev/null; then
+            echo 'Legacy Library payload localStorage writer still exists.'
+            exit 4
+          fi
+
+          # V3 must not add any Firestore/server write operation.
+          if grep '^+' /tmp/library-v3.patch | grep -E '(setDoc|addDoc|updateDoc|deleteDoc|writeBatch|scheduleListBundleWrite)\s*\(' >/dev/null; then
+            echo 'Unexpected Firestore/server write added by Library cache v3.'
+            exit 5
+          fi
+
+          # Full rebuild read stays unordered/unlimited and only uses the signed-in UID path.
+          if grep '^+' /tmp/library-v3.patch | grep -E "orderBy\('createdAt'|limit\(" >/dev/null; then
+            echo 'Library v3 bootstrap accidentally added orderBy/limit.'
+            exit 6
+          fi
+
+          echo 'LIBRARY_CACHE_PARITY_V3=PASS'
+          echo 'LIBRARY_INDEXEDDB_DURABLE_CACHE=PASS'
+          echo 'LIBRARY_UID_ISOLATION=PASS'
+          echo 'LIBRARY_DUPLICATE_LOCALSTORAGE_WRITER_REMOVED=PASS'
+          echo 'NO_FIRESTORE_WRITE_ADDED=PASS'
+
+      - name: TypeScript check generated patched runtime
+        working-directory: app
+        run: npx tsc --noEmit
+
+      - name: Build without re-running prebuild
+        working-directory: app
+        run: npx vite build
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Assert isolated Firebase test site exists
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest hosting:sites:list --project soridraw --json > "$RUNNER_TEMP/sites.json"
+          node - "$RUNNER_TEMP/sites.json" <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const arrays = [payload?.result?.sites, payload?.result, payload?.sites, payload];
+          const sites = arrays.find(Array.isArray) || [];
+          const ids = sites.map((site) => {
+            const raw = String(site?.site || site?.siteId || site?.id || site?.name || '');
+            return raw.includes('/') ? raw.split('/').filter(Boolean).pop() : raw;
+          }).filter(Boolean);
+          if (!ids.includes('soridraw-test')) throw new Error('isolated soridraw-test Hosting site missing');
+          if (!ids.includes('soridraw')) throw new Error('production soridraw Hosting site unexpectedly missing');
+          console.log('ISOLATED_TEST_SITE=PASS');
+          NODE
+
+      - name: Deploy isolated Firebase test Hosting only
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only hosting \
+            --project soridraw \
+            --config firebase.hosting-test.json \
+            --non-interactive
+          echo 'FIREBASE_TEST_HOSTING_DEPLOY=PASS'
+
+      - name: Smoke and shared-backend boundary checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in soridraw-test.web.app soridraw-test.firebaseapp.com; do
+            ok=''
+            for attempt in $(seq 1 8); do
+              if curl -fsS --max-time 30 "https://$host/" -o "$RUNNER_TEMP/$host.html" && grep -q '<div id="root"></div>' "$RUNNER_TEMP/$host.html"; then
+                ok='yes'
+                break
+              fi
+              sleep 5
+            done
+            test "$ok" = yes
+            echo "HOST_SMOKE_PASS=$host"
+          done
+
+          f_code="$(curl -sS -o /tmp/f-body -D /tmp/f-head -w '%{http_code}' -X OPTIONS \
+            -H 'Origin: https://soridraw-test.web.app' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck' \
+            https://us-central1-soridraw-app-866a5.cloudfunctions.net/getSunoApiKeyStatus)"
+          e_code="$(curl -sS -o /tmp/e-body -D /tmp/e-head -w '%{http_code}' \
+            -H 'Origin: https://soridraw-test.web.app' \
+            'https://soridraw-explore-api.andrawing1212.workers.dev/v1/feed?sort=latest&limit=1')"
+          case "$f_code" in 200|204) ;; *) echo "Functions CORS failed: $f_code"; exit 8 ;; esac
+          test "$e_code" = 200
+          echo "FUNCTIONS_CORS=$f_code"
+          echo "EXPLORE_CORS=$e_code"
+          echo 'NO_FIRESTORE_SERVER_WRITE=true'
+          echo 'NO_RULES_DEPLOY=true'
+          echo 'NO_FUNCTIONS_DEPLOY=true'
+          echo 'NO_PRODUCTION_HOSTING_DEPLOY=true'

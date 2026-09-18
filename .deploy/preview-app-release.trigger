@@ -1,8 +1,8 @@
-requested_at=2026-09-18T05:16:30Z
+requested_at=2026-09-18T10:18:00Z
 requested_by=user
-product_code_target=06330ae00c2d7639542d7b3ab473aabb85f67d9e
-release_source_target=preview-117-public-count-personal-cache-separation
-release_purpose=117_explore_public_count_personal_cache_separation
+product_code_target=cc2a55ad7d7deb25b971c39464c12f7a9981a8aa
+release_source_target=app-122-explore-like-white-heart-motion
+release_purpose=122_explore_like_white_heart_motion
 hosting_only=true
 worker_redeploy=false
 no_user_data_migration=true

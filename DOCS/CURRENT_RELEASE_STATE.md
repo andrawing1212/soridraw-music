@@ -1,5 +1,437 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0Z. PREVIEW app 122 — Explore 좋아요 흰색 filled heart + 짧은 클릭 모션 / 배포 완료
+
+사용자 요청으로 좋아요 버튼의 시각 표현만 변경했다.
+
+변경:
+- 좋아요 ON 상태의 기존 빨간색 제거.
+- ON 상태 하트 아이콘을 흰색 filled heart로 표시.
+- 클릭 순간 하트가 살짝 눌렸다가 톡 올라오는 짧은 모션 추가.
+- Classic Light의 빨간 liked override도 제거하고 흰색 filled heart가 유지되도록 조정.
+- 버튼 크기/위치/간격/기능/좋아요 로직은 변경하지 않음.
+- app version: **122**.
+
+검증:
+- 작업 branch: `work/app122-like-white-heart-motion`
+- 기준 PREVIEW: `577d8a162c7839615ebbfaad4beae3e418a5121b` — app 121.
+- PR #99 merge 완료.
+- PREVIEW 제품 merge commit: `cc2a55ad7d7deb25b971c39464c12f7a9981a8aa`.
+- 검증 Run `35332970861` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app122 white-heart regression PASS
+  - red liked override 제거 PASS
+  - white filled heart PASS
+  - click motion PASS
+  - layout/size/spacing unchanged guard PASS
+- 임시 검증 Workflow 삭제 완료.
+
+PREVIEW 배포:
+- deploy trigger commit: `9cb35cebfd9bdfb47537a0587b11d9add595c23c`.
+- Firebase PREVIEW Hosting Run `35333985793` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - Firebase PREVIEW Hosting deploy PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+- 실제 대상: `https://preview.soridraw.com`.
+
+변경 파일:
+- `src/components/explore/exploreSocial.css`
+- `src/styles/classicLightVisualFixes.css`
+- `public/app-version.json`
+- `scripts/verify-122-explore-like-white-heart.mjs`
+
+비변경:
+- Explore 좋아요 동작/30초 batch/2분 revision gate/1분 shared aggregate 모두 그대로.
+- Worker / D1 / Firebase Functions / Rules / 사용자 데이터 변경 없음.
+- TEST app 117 유지.
+- PRODUCTION app 117 유지.
+- PRODUCTION 변경 금지.
+
+## 0Y. PREVIEW app 121 — Explore 좋아요 timing-only 조정 / 배포 완료
+
+사용자 지시로 app 120 동작은 그대로 유지하고 시간값 두 개만 변경했다.
+
+변경:
+- 좋아요 sliding idle batch: 마지막 클릭 후 **20초 → 30초**.
+- 다른 사용자 Feed revision 활동 판정 최소 간격: **60초 → 120초(2분)**.
+- app version: **121**.
+
+그대로 유지:
+- 하트/숫자 즉시 반영.
+- actor 최신 숫자 display lock.
+- app 120 개인 좋아요 캐시 namespace 및 outbox 구조.
+- 서버 warm batch intake: 069 queue D1 W1.
+- 서버 shared aggregate: **1분 event alarm 그대로**.
+- shared revision endpoint의 D1 R0/W0 계약.
+- UI/CSS, Worker 제품 코드, Firebase Functions/Rules, D1 schema/data, 사용자 원본 데이터 모두 비변경.
+
+GitHub / 검증:
+- 기준 PREVIEW: `046fda0b746a912d8926cc2d09348d812aed7060` — app 120.
+- 작업 branch: `work/app121-like-30s-2m-timing`.
+- PR #98 `App 121: change Explore like timing to 30s / 2m`.
+- 제품 merge commit: `6934deb10d55ceb77a21ad09ca1d6436ded6d313`.
+- 검증 Run `35331912691` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app121 timing-only regression PASS
+  - actor batch idle 30초 PASS
+  - 다른 사용자 활동 gate 120초 PASS
+  - 서버 1분 shared aggregate 비변경 PASS
+  - app120 cache/count-lock 비변경 PASS
+- 임시 검증 Workflow 삭제 완료.
+
+PREVIEW 배포:
+- deploy trigger commit: `ce150de9a3fc39d626511b42fedfe73a08091263`.
+- Firebase PREVIEW Hosting Run `35332096766` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - Firebase PREVIEW Hosting deploy PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+- 실제 대상: `https://preview.soridraw.com`.
+
+현재 상태:
+- PREVIEW 앱: **121 배포 완료**.
+- TEST: app **117 유지**.
+- PRODUCTION: app **117 유지**.
+- Cloudflare Worker 재배포 없음.
+- Firebase Functions / Rules 변경 없음.
+- D1 migration/seed/backfill/delete 없음.
+- 사용자 원본 데이터 변경 없음.
+- PRODUCTION 변경 금지.
+
+## 0X. PREVIEW app 120 — Explore 좋아요 actor count lock / 배포 완료
+
+사용자 실사용 영상에서 app 119의 서버 1분 공용 집계는 정상적으로 수렴했지만, 누른 사용자 본인의 숫자가 20초 대기 구간 동안 올라갔다 내려갔다 반복되는 현상을 확인했다.
+
+확인된 원인:
+- app 119는 하트와 숫자를 즉시 로컬 반영했지만, 같은 시간에 이미 진행 중이던 Feed / 공개프로필 / 좋아요곡 재검증 응답이 과거 shared likeCount를 다시 적용할 수 있었다.
+- cached Feed revision revalidation, profile first-view revalidation, load-more/shared-count convergence 경로가 actor의 최신 optimistic count보다 우선할 수 있었다.
+- 서버 1분 aggregate 자체의 실패가 아니라, actor-local 최신 숫자와 shared/public payload의 우선순위 문제였다.
+
+app 120 수정:
+- 개인 좋아요 캐시는 app 120 namespace만 사용:
+  - `explore-liked-state-120`
+  - `explore-like-outbox-120`
+  - `explore-like-display-lock-120`
+- app 119 및 이전 개인 좋아요 캐시는 app 120 판단에서 사용하지 않는다.
+- 20초 sliding idle batch 유지.
+- outbox pending 중에는 해당 곡의 최신 optimisticLikeCount가 Feed/Profile payload보다 우선한다.
+- batch ACK 뒤에도 shared publication이 따라오기 전까지 actor 최신 숫자를 display lock으로 보호한다.
+- shared 숫자가 actor 최신 숫자와 같아지는 순간 lock을 해제한다.
+- 영구 고정을 막기 위한 보호 상한은 90초다.
+- Feed 첫 로딩, session cache, revision revalidation, 공개프로필, 좋아요곡 목록, 더보기 응답 모두 actor overlay를 먼저 적용한다.
+- 기존 서버 경로는 유지:
+  - warm batch intake: 069 queue D1 W1
+  - shared aggregate: 1분 event alarm
+  - 다른 사용자는 shared publication 뒤 다음 실제 활동 시 revision 확인.
+
+GitHub / 검증:
+- 기준 PREVIEW: `0f811dc93894976da5f21ee941755eac98077b07`
+- 작업 PR: #97 `App 120: keep actor like count stable during shared revalidation`
+- 제품 merge commit: `d9263f94cb153da8d2f7d67a6e6695bb4d491c85`
+- 검증 Run `35330327699` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app120 actor-count regression PASS
+  - 20초 sliding idle batch 유지 PASS
+  - stale Feed/Profile overwrite 차단 PASS
+  - old like cache namespace 비사용 PASS
+  - W1 intake + one-minute shared publication 유지 PASS
+- 임시 검증 Workflow 삭제 완료.
+
+PREVIEW 배포:
+- deploy trigger commit: `d4c301a61c5d84cb7592c177592967525fce00db`
+- Firebase PREVIEW Hosting Run `35330543893` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - Firebase PREVIEW Hosting deploy PASS
+  - PREVIEW exact build PASS
+  - TEST / PRODUCTION unchanged PASS
+- app version: **120**
+- 실제 대상: `https://preview.soridraw.com`
+
+비변경:
+- Cloudflare Worker 제품 코드/배포 없음.
+- Firebase Functions / Rules 변경 없음.
+- D1 migration/seed/backfill/delete 없음.
+- 사용자 원본 데이터 변경 없음.
+- UI/CSS 변경 없음.
+- TEST app 117 유지.
+- PRODUCTION app 117 유지.
+
+실사용:
+- 사용자 1차 확인에서 app 120은 좋아요 숫자 흔들림이 사라지고 정상 동작하는 것으로 확인 중.
+- 최종 사용자 확인 기준:
+  1. 하트 클릭 즉시 빨강 + 숫자 +1.
+  2. 다시 클릭 즉시 해제 + 숫자 -1.
+  3. 20초 대기 중 actor 숫자 흔들림 없음.
+  4. 다른 사용자는 shared publication 후 다음 활동 시 최신 숫자 확인.
+- PRODUCTION 변경 금지.
+
+## 0W. PREVIEW app 119 — Explore 좋아요 최신 캐시 + 20초 슬라이딩 묶음쓰기 / 배포 완료
+
+사용자 지시로 좋아요 경로를 다시 단순화했다. 기준은 "누르는 사용자는 하트/숫자 즉시, 마지막 클릭 후 20초 동안 변경을 모아 한 번의 batch, 다른 사용자는 공용 결과를 최대 1분 안에 확인"이다.
+
+app 119 제품 변경:
+- 개인 좋아요 캐시는 새 `explore-liked-state-119`만 읽는다. 과거 Explore 좋아요 캐시는 app 119 판단 근거로 사용하지 않는다.
+- durable outbox도 새 `explore-like-outbox-119` 하나만 사용한다.
+- Explore 좋아요용 과거 RTDB replay subscriber를 중단했다.
+- 069/071 계열의 클라이언트 강제 좋아요 숫자 refresh/recovery 경로를 제거했다.
+- 하트 클릭 즉시 개인 하트 상태와 표시 숫자를 함께 ±1 한다.
+- 마지막 클릭 기준 20초 sliding idle window를 사용한다. 19초에 다른 하트를 누르면 그 클릭부터 다시 20초다.
+- 20초 안의 여러 곡 변경은 `/v1/me/likes/batch` 한 요청으로 보낸다.
+- 같은 곡을 여러 번 눌렀으면 최초 base 상태와 마지막 desired 상태만 서버에 보낸다. 결과가 원래 상태로 돌아오면 서버 mutation은 생략한다.
+- 페이지/프로필 이동은 20초 window를 강제 flush하지 않는다. 최신 outbox가 남아 다시 이어진다.
+- 다른 사용자의 shared Feed revision revalidation은 클라이언트 기준 최대 1분 간격으로 제한한다.
+- 기존 서버 hot path는 유지한다: warm batch intake는 D1 W1 069 queue, shared aggregate는 1분 event alarm이다.
+- app version: **119**.
+
+GitHub / 검증:
+- 작업 branch: `work/app119-like-20s-latest-cache`
+- 기준 PREVIEW: `e15c5de462b73cc3f557fa5ee02ebb868318a022`
+- PR #96 `App 119: simplify Explore likes to latest-cache 20s batch`
+- PREVIEW 제품 merge commit: `1b1f4664e39a5e0aecc9f4ba910cb4beba2c7f5e`
+- 최종 제품 검증 Run `35328311634` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app119 regression PASS
+  - 20초 sliding idle batch 계약 PASS
+  - immediate heart/count 계약 PASS
+  - old RTDB/071 replay disabled PASS
+  - W1 queue intake + one-minute shared aggregate 계약 PASS
+- 이전 Run `35326266088`의 회귀검사 FAIL은 055 패치 파일의 검사용 문자열을 실제 호출로 오인한 테스트식 문제였다. TypeScript/Build는 PASS였고 제품 코드 실패가 아니었다.
+- 검사 범위를 실제 hot-path replacement block으로 수정 후 최종 PASS.
+- 임시 검증 Workflow는 merge 전 삭제 완료.
+
+PREVIEW 배포:
+- 배포 trigger commit: `2487b74a44c00e458d7c42a72ba90284cd56d808`
+- Firebase PREVIEW Hosting Run `35328558283` — **SUCCESS**
+  - locked product source `1b1f4664e39a5e0aecc9f4ba910cb4beba2c7f5e`
+  - TypeScript PASS
+  - Build PASS
+  - Firebase PREVIEW Hosting deploy PASS
+  - `preview.soridraw.com` exact build PASS
+  - remote app-version **119** PASS
+  - TEST / PRODUCTION branch + Hosting unchanged PASS
+- 실제 대상: `https://preview.soridraw.com`
+
+변경 범위 / 안전:
+- UI/CSS 변경 없음.
+- Explore Worker 제품 코드 변경 없음 / Worker 재배포 없음.
+- Firebase Functions / Rules 변경 없음.
+- D1 migration/seed/backfill/delete 없음.
+- 사용자 원본 데이터 구조/내용 변경 없음.
+- main(TEST) 유지: `1ee8e9ae5252e6dc96ad2fcea9596a9a4a6773a1` — app 117.
+- production 유지: `e994340f3c4f6ac97f444f1ddf13053d3faffa71` — app 117.
+
+현재 상태:
+- PREVIEW 앱: **119 배포 완료**.
+- TEST 앱: **117 유지**.
+- PRODUCTION 앱: **117 유지**.
+- 사용자 실사용 확인 항목:
+  1. 하트 0 → 클릭 즉시 빨강 + 숫자 1.
+  2. 다시 클릭 즉시 회색 + 숫자 0.
+  3. 여러 곡을 연속 클릭하고 마지막 클릭 후 20초 전에는 서버 batch가 나가지 않는지.
+  4. 19초 시점에 다른 하트를 누르면 다시 20초로 연장되는지.
+  5. 20초 종료 후 여러 곡 최종 상태가 한 batch로 반영되는지.
+  6. 같은 곡을 여러 번 토글하면 최초 상태→최종 상태만 반영되는지.
+  7. 다른 사용자/기기에서 최대 1분 후 공용 숫자가 수렴하는지.
+- PRODUCTION 변경 금지.
+
+## 0V. PREVIEW app 118 — Explore 좋아요 의도 snap-back 수정 / 배포 완료
+
+사용자 실사용 영상에서 좋아요 해제를 누르면 회색 하트로 잠시 바뀐 뒤 약 1초 안에 다시 빨간 하트로 돌아오는 현상을 기준으로 개인 좋아요 상태 머신을 수정했다.
+
+근본 원인:
+- 기기 로컬의 과거 `baseLiked`를 현재 서버 정답처럼 사용해, 명시적 사용자 클릭이 `desiredLiked === baseLiked`이면 outbox에서 제거될 수 있었다.
+- 같은 조건을 pending count / flush 직전 정리에서도 다시 적용해 서버 요청 자체가 사라질 수 있었다.
+- 직접 HTTP ACK 전에 오래된 RTDB 계정 replay 신호가 들어오면 방금 누른 해제 상태를 다시 덮을 수 있었다.
+- 읽기/쓰기 횟수 부족이 아니라, 비용 최적화용 local batch 상태와 cross-device replay 신호의 우선순위 오류였다.
+
+app 118 수정:
+- 사용자가 실제로 누른 heart intent는 direct `/v1/me/likes/batch` ACK 전까지 무조건 pending으로 유지한다.
+- `baseLiked`와 값이 같다는 이유로 명시적 클릭을 삭제하지 않는다.
+- RTDB는 cross-device replay 용도로만 사용하고, 이 브라우저의 pending intent보다 우선하지 못하게 했다.
+- direct batch ACK/RTDB publish 처리 뒤에만 local pending을 정리한다.
+- 요청 진행 중 같은 곡을 다시 누르면 첫 ACK 뒤 남은 최신 intent를 즉시 후속 flush한다.
+- 공개 좋아요 숫자는 기존처럼 shared/server authority를 유지하며 client optimistic numeric delta를 추가하지 않는다.
+- 페이지 진입/재진입/업데이트만으로 추가 서버 요청을 만들지 않는다. 실제 heart mutation일 때만 direct batch 요청이 발생한다.
+
+검증:
+- 작업 PR: #95 `Fix Explore like intent snap-back in app 118`
+- 제품 코드 merge commit: `5c8ef2f809fd0f230980706116cb3f25be5dc087`
+- 최종 branch 검증 Run `35318905850` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - app 118 stale-base / stale-RTDB snap-back regression PASS
+  - app 117 public-count separation regression PASS
+  - app 116 public-count convergence regression PASS
+  - Worker desired-state queue regression PASS
+- 일회성 검증 Workflow는 merge 전 삭제 완료.
+
+PREVIEW 배포:
+- release trigger / 현재 preview HEAD: `65951004bc5e034b085915302643d419290859d7`
+- PREVIEW Hosting Run `35319195214` — **SUCCESS**
+  - TypeScript PASS
+  - Build PASS
+  - Firebase PREVIEW Hosting deploy PASS
+  - exact PREVIEW build PASS
+  - remote `app-version.json=118` PASS
+  - TEST/PRODUCTION branch + Hosting unchanged PASS
+- 실제 대상: `https://preview.soridraw.com`
+
+비변경:
+- Explore Worker 코드/배포 없음.
+- D1 migration/seed/backfill/write 없음.
+- Firebase Functions / Rules 변경 없음.
+- 사용자 원본 데이터 변경 없음.
+- UI/CSS 변경 없음.
+- main(TEST) 유지: `1ee8e9ae5252e6dc96ad2fcea9596a9a4a6773a1` — app 117
+- production 유지: `e994340f3c4f6ac97f444f1ddf13053d3faffa71` — app 117
+
+알려진 저장소 위험:
+- preview push 직후 legacy `Apply 069 Explore Like W1 Delayed Count` Workflow Run `35319169595`가 자동 실행됐으나, 오래된 app 069 검증 조건에서 실패했다.
+- 실패 지점은 commit/deploy 단계 전이므로 source push, Worker deploy, D1 write는 발생하지 않았다.
+- 이 legacy auto-run은 현재 app 118 배포 성공과 무관하지만 후속 저장소 정리 대상이다.
+- GitHub branch protection API 응답은 preview/main/production 모두 `protected=true`이면서 세부 enforcement가 off로 보이므로 저장소 보호 설정은 별도 감사 대상이다.
+
+현재 상태:
+- PREVIEW 앱: **118**
+- TEST 앱: **117**
+- PRODUCTION 앱: **117**
+- 사용자 실사용 다음 확인: 기존에 좋아요된 곡 1개를 해제했을 때 회색 하트가 다시 빨간색으로 되돌아오지 않는지, 다시 좋아요했을 때 PC/모바일이 같은 개인 heart 상태로 수렴하는지 확인.
+
+## 0U. Explore 좋아요 해제 503 — TEST/PRODUCTION Worker 복구 완료
+
+사용자 정식복구 승인에 따라, app 117 이후 발견된 Explore 좋아요 해제 503의 Worker 필수 바인딩 유실을 TEST와 PRODUCTION에 복구했다.
+
+근본 원인:
+- TEST/PRODUCTION Worker 승격 과정에서 `LIKE_RATE_LIMITER`와 `EXPLORE_LIKE_BATCH_SCHEDULER`가 live config에서 유실됐다.
+- 앱의 `좋아요 보호 기능을 확인할 수 없습니다` 토스트는 Worker가 `LIKE_RATE_LIMITER`를 사용할 수 없을 때 발생한 503 `RATE_LIMIT_UNAVAILABLE` 경로였다.
+- release runtime은 PR #94에서 필수 Rate Limiter / Durable Object 바인딩을 보존하도록 수정됐다.
+
+실제 복구:
+- 최초 versioned upload는 Cloudflare 제한(code 10211)으로 차단됐다. Durable Object migration은 처음 한 번 non-versioned deploy가 필요했다.
+- TEST Worker에 1회 Durable Object migration + 필수 바인딩 적용 완료.
+- TEST의 오래된 환경별 파생 Feed R2 2개(latest/popular)는 shared canonical R2 snapshot으로만 복구했다.
+  - 사용자 원본 데이터가 아니라 environment-specific derived cache만 수정했다.
+- TEST edge revision cache 70초 만료 후 release parity 재검증 PASS.
+- PRODUCTION derived Feed cache도 shared canonical snapshot으로 준비한 뒤 동일 1회 migration + 바인딩 적용.
+- PRODUCTION edge revision cache 70초 만료 후 TEST 기준 release parity PASS.
+
+최종 Run:
+- GitHub Actions `35314376142` — **SUCCESS**
+- TEST active Worker: `2d3f887d-8730-497f-a35c-d60452c532c4`
+- TEST release parity: PASS (reference PREVIEW, attempt 1)
+- TEST like batch unauth smoke: HTTP 401 — expected auth rejection, **5xx 없음**
+- PRODUCTION Worker before: `0bc9f998-f5d4-4fe3-a63c-13f7a4f13f58`
+- PRODUCTION Worker after: `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0`
+- PRODUCTION release parity: PASS (reference TEST, attempt 1)
+- PRODUCTION like batch unauth smoke: HTTP 401 — expected auth rejection, **5xx 없음**
+
+3환경 live 최종감사:
+- PREVIEW `soridraw-explore-preview`: required like bindings PASS
+- TEST `soridraw-explore-test`: required like bindings PASS
+- PRODUCTION `soridraw-explore-api`: required like bindings PASS
+- `THREE_ENV_REQUIRED_LIKE_BINDINGS=PASS`
+
+비변경:
+- Firebase Hosting 변경 없음.
+- D1 write / migration / seed / backfill 없음.
+- Firebase Functions / Rules 변경 없음.
+- 사용자 원본 데이터 변경 없음.
+- 앱 UI/CSS 변경 없음.
+- 수정된 것은 Worker runtime binding/migration bootstrap과 environment-specific derived Feed R2 cache뿐이다.
+
+현재 상태:
+- PREVIEW / TEST / PRODUCTION 앱: **117**
+- TEST / PRODUCTION Worker: 좋아요 Rate Limiter + shared like batch Durable Object 바인딩 복구 완료
+- 좋아요 batch 보호 경로는 503이 아닌 정상 auth 401 smoke까지 확인 완료.
+- 다음 실사용 확인: 각 앱에서 기존에 좋아요된 곡의 좋아요 해제 → 다시 좋아요 1회씩 확인.
+
+
+## 0T. Explore 좋아요 해제 503 — Worker 필수 바인딩 유실 원인 확정 / 코드 수정 완료 / live 복구배포 전
+
+사용자 실사용에서 PREVIEW/TEST/PRODUCTION 좋아요 해제가 실패하고 일부 환경에서 `좋아요 보호 기능을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.` 토스트가 발생했다.
+
+원인 확인:
+- 해당 토스트는 Worker의 `enforceExploreLikeBatchEdgeRateLimit054()`에서 `env.LIKE_RATE_LIMITER`가 없거나 `.limit()`을 제공하지 않을 때만 발생하는 503 `RATE_LIMIT_UNAVAILABLE` 메시지다.
+- live Cloudflare settings read-only 진단 Run `35311707087`:
+  - PREVIEW `soridraw-explore-preview`: `LIKE_RATE_LIMITER` 1개 존재, `EXPLORE_LIKE_BATCH_SCHEDULER` 존재.
+  - TEST `soridraw-explore-test`: `LIKE_RATE_LIMITER` 없음, `EXPLORE_LIKE_BATCH_SCHEDULER` 없음.
+  - PRODUCTION `soridraw-explore-api`: `LIKE_RATE_LIMITER` 없음, `EXPLORE_LIKE_BATCH_SCHEDULER` 없음.
+- `.deploy/release-worker-runtime.mjs`가 TEST/PRODUCTION Worker config를 재구성할 때 D1/R2/service만 보존하고 `ratelimit` 및 `durable_object_namespace`를 누락해, Worker 승격 시 좋아요 필수 바인딩이 제거될 수 있었다.
+
+근본 수정:
+- PR #94 `Fix Worker release binding loss that blocks Explore likes` merge 완료.
+- preview merge commit: `606a71cca5fb2cc3c3405c0c07b4fb7999403951`.
+- release runtime이 canonical PREVIEW wrangler의 필수 `LIKE_RATE_LIMITER`, `EXPLORE_LIKE_BATCH_SCHEDULER`, Durable Object migration을 TEST/PRODUCTION release config에 반드시 포함한다.
+- live ratelimit/DO binding drift를 검사하고, release static verifier가 필수 바인딩 보존을 강제한다.
+- dry-run 검증 Run `35312061720` SUCCESS:
+  - release static verifier PASS
+  - TEST generated config: Rate Limiter + scheduler + migration PASS
+  - PRODUCTION generated config: Rate Limiter + scheduler + migration PASS
+- 검증 과정에서 Worker deploy/traffic 변경, D1 write, 사용자 데이터 변경은 수행하지 않았다.
+
+현재 live 상태:
+- PREVIEW Worker는 필수 바인딩이 존재한다.
+- TEST/PRODUCTION Worker는 아직 필수 바인딩이 빠진 live version이므로 좋아요 batch mutation이 503으로 차단될 수 있다.
+- 사용자 승인 전이므로 TEST/PRODUCTION Worker 복구 배포는 아직 실행하지 않았다.
+
+다음 단계:
+- 사용자 배포 승인 시 수정된 release runtime으로 TEST Worker를 먼저 upload/activate/verify하고 live binding settings를 확인한다.
+- TEST PASS 후 동일 source로 PRODUCTION Worker를 upload/activate/verify한다.
+- D1 migration/schema/user-data migration은 실행하지 않으며, Durable Object migration은 canonical Worker binding class를 연결하기 위한 Worker runtime migration만 사용한다.
+- 최종적으로 세 Worker의 `LIKE_RATE_LIMITER` + `EXPLORE_LIKE_BATCH_SCHEDULER` 존재 여부와 Explore smoke/parity를 확인한다.
+
+
+## 0S. app 117 TEST → PRODUCTION 앱 전용 정식 승격 — 완료
+
+사용자 명확한 정식배포 승인에 따라 app 117을 PREVIEW 검증본에서 TEST를 거쳐 PRODUCTION으로 승격했다.
+
+기준:
+- release source PREVIEW: `ff4963e8261c96f6ab5186a7b872d8bc2817dfcd`
+- app version: **117**
+- 핵심 제품 수정 merge: `06330ae00c2d7639542d7b3ab473aabb85f67d9e`
+- PREVIEW Hosting 검증 Run: `35310263271` SUCCESS
+- PREVIEW `preview.soridraw.com` exact build / app-version 117 PASS
+
+정식 승격:
+- 앱 전용 TEST→PRODUCTION Run: `35311139826` — **SUCCESS**
+- TypeScript PASS
+- Build PASS
+- `verify-117-explore-public-count-cache-separation.mjs` PASS
+- `verify-116-explore-public-count-convergence.mjs` PASS
+- TEST Firebase Hosting deploy 완료
+- `test.soridraw.com` 및 `soridraw-test.web.app` exact index hash / app-version 117 PASS
+- TEST `main`: `1ee8e9ae5252e6dc96ad2fcea9596a9a4a6773a1`
+- PRODUCTION Hosting은 검증된 `soridraw-test:live`를 `soridraw:live`로 clone
+- `soridraw.com` 및 `soridraw.web.app` exact index hash / app-version 117 PASS
+- PRODUCTION branch: `e994340f3c4f6ac97f444f1ddf13053d3faffa71`
+- TEST/PRODUCTION 모두 동일 source tree `a567717dc6cbfb86c75cf9aa80078d6ccd657d25`
+- TEST/PRODUCTION rollback Hosting channel은 성공 후 삭제 완료
+
+변경 범위:
+- 이번 117 release는 클라이언트 앱 전용 승격이다.
+- Cloudflare Worker 재배포/traffic 변경 없음.
+- D1 read/write/migration/seed/backfill 없음.
+- Firebase Functions/Rules 변경 없음.
+- 사용자 원본 Firestore/D1/R2 데이터 변경 없음.
+- UI/CSS 변경 없음.
+- 실제 해결 대상은 Explore 공개 좋아요 숫자를 계정별 stale cache가 덮어쓰던 client 경로 제거 및 개인 하트 상태와 공개 숫자 authority 분리다.
+
+현재 상태:
+- PREVIEW: app **117**
+- TEST: app **117**
+- PRODUCTION: app **117**
+- 정식 주소: `https://soridraw.com`
+- 다음 실사용 확인: 기존 정식앱 브라우저 캐시를 그대로 둔 상태에서 Explore 공개 좋아요 숫자가 TEST와 동일하게 유지되는지 확인.
+
+
 ## 0R. app 117 PREVIEW Hosting 배포 — 완료
 
 - 사용자 요청으로 app 117을 Firebase PREVIEW Hosting에 배포했다.

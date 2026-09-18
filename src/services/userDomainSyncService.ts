@@ -1,7 +1,6 @@
 import { onAuthStateChanged } from 'firebase/auth';
 import { onValue, ref, set, type Unsubscribe } from 'firebase/database';
 import { auth, realtimeDb } from '../firebase';
-import { observeExploreLikeAccountSyncSignal } from './exploreLikeService';
 import {
   addV1MutationPostSuccessHook,
   type V1MutationBoundaryContext,
@@ -156,15 +155,12 @@ const dispatchSignal = (uid: string, kind: UserDomainSyncKind, signal: UserDomai
 let activeUid = '';
 let unsubscribeMusicNote: Unsubscribe | null = null;
 let unsubscribeRecentSongs: Unsubscribe | null = null;
-let unsubscribeExploreLike: Unsubscribe | null = null;
 
 const stopDomainSubscriptions = () => {
   unsubscribeMusicNote?.();
   unsubscribeRecentSongs?.();
-  unsubscribeExploreLike?.();
   unsubscribeMusicNote = null;
   unsubscribeRecentSongs = null;
-  unsubscribeExploreLike = null;
   activeUid = '';
 };
 
@@ -188,14 +184,7 @@ const startDomainSubscriptions = (uid: string) => {
     console.warn('Recent-song RTDB sync signal unavailable; Firestore fallback remains active.', error);
   });
 
-  // SORIDRAW_EXPLORE_LIKE_RTDB_SIGNAL_093_20260915
-  unsubscribeExploreLike = onValue(ref(realtimeDb, `userSync/${safeUid}/exploreLike`), (snapshot) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser || currentUser.uid !== safeUid) return;
-    observeExploreLikeAccountSyncSignal(currentUser, snapshot.val());
-  }, (error) => {
-    console.warn('Explore like RTDB sync signal unavailable; R2 social snapshot recovery remains active.', error);
-  });
+  // App 119: Explore likes no longer subscribe to historical RTDB replay state.
 };
 
 // SORIDRAW_USER_DOMAIN_SYNC_STAGE2A_20260905

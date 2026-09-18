@@ -246,19 +246,7 @@ wrapAsyncFunction('handleSearch', 'Core066', (coreName) => `async function handl
   return await ${coreName}(url, env, cors);
 }`);
 
-{
-  const range = functionRange('handlePublicProfileFirstViewWithEdgeCache');
-  const before = "  return await handlePublicProfileFirstViewWithEdgeCacheCore063(request, profileRef, env, cors);\n}";
-  const count = range.text.split(before).length - 1;
-  if (count !== 1) throw new Error(`[066] public-profile final 063 fallback anchor count=${count}`);
-  const after = `  const response066 = await handlePublicProfileFirstViewWithEdgeCacheCore063(request, profileRef, env, cors);
-  if (!isExploreR2CatalogEnabled066(env)) return response066;
-  try { return await rewriteFirstProfileCursor066(response066, profileRef, env); }
-  catch { return response066; }
-}`;
-  const next = range.text.replace(before, after);
-  source = source.slice(0, range.start) + next + source.slice(range.end);
-}
+
 
 for (const required of [
   marker,

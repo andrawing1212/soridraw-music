@@ -12,6 +12,8 @@ on:
       - 'cloudflare/explore-worker/release-patches.json'
       - 'public/app-version.json'
       - 'scripts/verify-123-shared-like-cache-repair.mjs'
+      - 'scripts/verify-116-explore-public-count-convergence.mjs'
+      - '.deploy/app123-validation.trigger'
 
 permissions:
   contents: write

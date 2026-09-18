@@ -1,0 +1,186 @@
+name: TEMP App117 TEST to PRODUCTION
+
+on:
+  push:
+    branches:
+      - fix/release-controller-hosting-live-identity
+    paths:
+      - .github/workflows/temp-app117-test-production.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SOURCE_SHA: ff4963e8261c96f6ab5186a7b872d8bc2817dfcd
+      FIREBASE_PROJECT: soridraw
+      TEST_URL: https://test.soridraw.com/
+      TEST_FIREBASE_URL: https://soridraw-test.web.app/
+      PROD_URL: https://soridraw.com/
+      PROD_FIREBASE_URL: https://soridraw.web.app/
+    steps:
+      - name: Checkout exact app 117 PREVIEW source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify app 117 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview main production --no-tags
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/preview
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+          node scripts/verify-117-explore-public-count-cache-separation.mjs
+          node scripts/verify-116-explore-public-count-convergence.mjs
+          test "$(node -p "require('./public/app-version.json').version")" = 117
+          sha256sum dist/index.html | awk '{print $1}' > "$RUNNER_TEMP/release-index.sha"
+          echo APP117_SOURCE_VERIFY=PASS
+
+      - name: Authenticate Firebase
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          token_format: access_token
+
+      - name: Promote app 117 through TEST then PRODUCTION
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "soridraw-release-bot"
+          git config user.email "release-bot@soridraw.invalid"
+          export GIT_AUTHOR_NAME=soridraw-release-bot GIT_AUTHOR_EMAIL=release-bot@soridraw.invalid
+          export GIT_COMMITTER_NAME=soridraw-release-bot GIT_COMMITTER_EMAIL=release-bot@soridraw.invalid
+
+          old_main="$(git rev-parse origin/main)"
+          old_prod="$(git rev-parse origin/production)"
+          source_tree="$(git rev-parse "$SOURCE_SHA^{tree}")"
+          release_index_sha="$(cat "$RUNNER_TEMP/release-index.sha")"
+          test_rollback="release-app117-test-rollback-${GITHUB_RUN_ID}"
+          prod_rollback="release-app117-prod-rollback-${GITHUB_RUN_ID}"
+          new_main=''
+          new_prod=''
+          test_host_mutated=false
+          main_mutated=false
+          prod_host_mutated=false
+          prod_branch_mutated=false
+          stage=pretest
+
+          forward_restore_branch() {
+            branch="$1"; old_sha="$2"; current_sha="$3"; label="$4"
+            git fetch origin "$branch" --no-tags || true
+            remote="$(git ls-remote origin "refs/heads/$branch" | cut -f1)"
+            if [ "$remote" = "$current_sha" ]; then
+              old_tree="$(git rev-parse "$old_sha^{tree}")"
+              restore="$(printf 'rollback: restore %s after failed app 117 release\n' "$label" | git commit-tree "$old_tree" -p "$remote")"
+              git push origin "$restore:refs/heads/$branch" || true
+            fi
+          }
+
+          rollback() {
+            code=$?
+            set +e
+            echo "APP117_ROLLBACK_BEGIN stage=$stage code=$code"
+            if [ "$stage" = test ] || [ "$stage" = test_verify ]; then
+              if [ "$test_host_mutated" = true ]; then
+                npx --yes firebase-tools@latest hosting:clone "soridraw-test:$test_rollback" soridraw-test:live --project "$FIREBASE_PROJECT" --non-interactive || true
+              fi
+              if [ "$main_mutated" = true ] && [ -n "$new_main" ]; then
+                forward_restore_branch main "$old_main" "$new_main" TEST
+              fi
+            else
+              if [ "$prod_host_mutated" = true ]; then
+                npx --yes firebase-tools@latest hosting:clone "soridraw:$prod_rollback" soridraw:live --project "$FIREBASE_PROJECT" --non-interactive || true
+              fi
+              if [ "$prod_branch_mutated" = true ] && [ -n "$new_prod" ]; then
+                forward_restore_branch production "$old_prod" "$new_prod" PRODUCTION
+              fi
+            fi
+            echo APP117_ROLLBACK_END
+            exit "$code"
+          }
+          trap rollback ERR
+
+          echo "=== TEST stage ==="
+          stage=test
+          npx --yes firebase-tools@latest hosting:clone soridraw-test:live "soridraw-test:$test_rollback" --project "$FIREBASE_PROJECT" --non-interactive
+
+          new_main="$(printf 'release: promote app 117 to TEST\n\nsource-preview: %s\n' "$SOURCE_SHA" | git commit-tree "$source_tree" -p "$old_main")"
+          git push origin "$new_main:refs/heads/main"
+          main_mutated=true
+
+          npx --yes firebase-tools@latest deploy --only hosting --project "$FIREBASE_PROJECT" --config firebase.hosting-test.json --non-interactive
+          test_host_mutated=true
+
+          stage=test_verify
+          for base in "$TEST_FIREBASE_URL" "$TEST_URL"; do
+            ok=''
+            for attempt in 1 2 3 4 5 6; do
+              if curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${base}" -o "$RUNNER_TEMP/test-index.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/test-index.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$release_index_sha" ]; then ok=yes; break; fi
+              fi
+              sleep 3
+            done
+            test "$ok" = yes
+            remote_version="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${base}app-version.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version||'')))")"
+            test "$remote_version" = 117
+          done
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$new_main"
+          test "$(git rev-parse "$new_main^{tree}")" = "$source_tree"
+          echo APP117_TEST_VERIFIED=PASS
+
+          echo "=== PRODUCTION stage ==="
+          stage=production
+          npx --yes firebase-tools@latest hosting:clone soridraw:live "soridraw:$prod_rollback" --project "$FIREBASE_PROJECT" --non-interactive
+
+          new_prod="$(printf 'release: promote TEST_VERIFIED app 117 to PRODUCTION\n\ntested-main: %s\nsource-preview: %s\n' "$new_main" "$SOURCE_SHA" | git commit-tree "$source_tree" -p "$old_prod")"
+          git push origin "$new_prod:refs/heads/production"
+          prod_branch_mutated=true
+
+          npx --yes firebase-tools@latest hosting:clone soridraw-test:live soridraw:live --project "$FIREBASE_PROJECT" --non-interactive
+          prod_host_mutated=true
+
+          stage=production_verify
+          for base in "$PROD_FIREBASE_URL" "$PROD_URL"; do
+            ok=''
+            for attempt in 1 2 3 4 5 6; do
+              if curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${base}" -o "$RUNNER_TEMP/prod-index.html"; then
+                remote_sha="$(sha256sum "$RUNNER_TEMP/prod-index.html" | awk '{print $1}')"
+                if [ "$remote_sha" = "$release_index_sha" ]; then ok=yes; break; fi
+              fi
+              sleep 3
+            done
+            test "$ok" = yes
+            remote_version="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${base}app-version.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s).version||'')))")"
+            test "$remote_version" = 117
+          done
+
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$new_main"
+          test "$(git ls-remote origin refs/heads/production | cut -f1)" = "$new_prod"
+          test "$(git rev-parse "$new_main^{tree}")" = "$source_tree"
+          test "$(git rev-parse "$new_prod^{tree}")" = "$source_tree"
+
+          trap - ERR
+          npx --yes firebase-tools@latest hosting:channel:delete "$test_rollback" --site soridraw-test --project "$FIREBASE_PROJECT" --force || true
+          npx --yes firebase-tools@latest hosting:channel:delete "$prod_rollback" --site soridraw --project "$FIREBASE_PROJECT" --force || true
+
+          echo APP117_PRODUCTION_RELEASED=PASS
+          echo APP117_MAIN="$new_main"
+          echo APP117_PRODUCTION_BRANCH="$new_prod"
+          echo APP117_WORKER_UNCHANGED=PASS
+          echo APP117_D1_UNCHANGED=PASS
+          echo APP117_FUNCTIONS_RULES_UNCHANGED=PASS

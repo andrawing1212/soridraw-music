@@ -1,2 +1,0 @@
-Apply SORIDRAW 860 bounded strict selected-language recovery on preview.
-Keep 859 Japanese naturalness rules. Do not touch main.

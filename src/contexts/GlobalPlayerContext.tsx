@@ -1,7 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { applyRecoveredSunoAudioUrl, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
-import { archiveOldSunoMp3ToR2 } from '../services/sunoR2Archive';
-// SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 
 export interface Track {
   url: string;
@@ -58,13 +55,6 @@ interface GlobalPlayerContextType {
 
 const GlobalPlayerContext = createContext<GlobalPlayerContextType | null>(null);
 
-type GlobalPlayerControlsContextType = Pick<
-  GlobalPlayerContextType,
-  'currentTrack' | 'isPlaying' | 'playTrack' | 'togglePlayPause' | 'setIsSharedPlayerMode'
->;
-
-const GlobalPlayerControlsContext = createContext<GlobalPlayerControlsContextType | null>(null);
-
 export function GlobalPlayerProvider({ children }: { children: React.ReactNode }) {
   // App lifecycle singleton audio instance. Do not recreate this per track.
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -94,8 +84,6 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   const isMutedRef = useRef(false);
   const wasClearedRef = useRef(false);
   const lastPlaybackErrorAtRef = useRef(0);
-  const playbackRecoveryAttemptedRef = useRef(false);
-  // SORIDRAW_MEDIA_ERROR_RECOVERY_993
 
   const notifyPlaybackUnavailable = useCallback((track: Track | null, error?: any) => {
     const now = Date.now();
@@ -186,71 +174,8 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  const recoverAndRetryPlayback = useCallback(async (track: Track, error?: any) => {
-    const failedUrl = String(track?.url || '').trim();
-    setIsPlaying(false);
-    isPlayingRef.current = false;
-
-    const recovered = await recoverSunoAudioUrl(track, { failedUrl });
-    if (!recovered?.audioUrl || !audioRef.current) {
-      notifyPlaybackUnavailable(track, error);
-      updateMediaSession(track, 'paused');
-      return false;
-    }
-
-    const recoveredTrack = applyRecoveredSunoAudioUrl(track, recovered) as Track;
-    currentTrackRef.current = recoveredTrack;
-    setCurrentTrack(recoveredTrack);
-
-    const sourceParentId = String(track?.parent?.id || track?.parent?.trackId || track?.parent?.sourceId || '').trim();
-    const sourceIndex = Number(track?.index ?? 0);
-    const nextQueue = queueRef.current.map((queued) => {
-      const queuedParentId = String(queued?.parent?.id || queued?.parent?.trackId || queued?.parent?.sourceId || '').trim();
-      const queuedIndex = Number(queued?.index ?? 0);
-      if (sourceParentId && queuedParentId === sourceParentId && queuedIndex === sourceIndex) {
-        return applyRecoveredSunoAudioUrl(queued, recovered) as Track;
-      }
-      if (!sourceParentId && queued.url === failedUrl) {
-        return applyRecoveredSunoAudioUrl(queued, recovered) as Track;
-      }
-      return queued;
-    });
-    queueRef.current = nextQueue;
-    setQueue(nextQueue);
-
-    const audio = audioRef.current;
-    try {
-      audio.pause();
-      audio.src = recovered.audioUrl;
-      audio.currentTime = 0;
-      audio.load();
-      await audio.play();
-      setIsPlaying(true);
-      isPlayingRef.current = true;
-      updateMediaSession(recoveredTrack, 'playing');
-      return true;
-    } catch (retryError) {
-      console.error('Recovered audio play failed:', retryError);
-      setIsPlaying(false);
-      isPlayingRef.current = false;
-      notifyPlaybackUnavailable(recoveredTrack, retryError);
-      updateMediaSession(recoveredTrack, 'paused');
-      return false;
-    }
-  }, [notifyPlaybackUnavailable, updateMediaSession]);
-
-  const attemptPlaybackRecovery = useCallback((track: Track | null, error?: any) => {
-    if (!track || playbackRecoveryAttemptedRef.current) return;
-    playbackRecoveryAttemptedRef.current = true;
-    void recoverAndRetryPlayback(track, error);
-  }, [recoverAndRetryPlayback]);
-
   const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
     if (!track?.url || !audioRef.current) return;
-    playbackRecoveryAttemptedRef.current = false;
-
-    // Only an actual playback request starts lazy archival; current provider playback is not delayed.
-    void archiveOldSunoMp3ToR2(track);
 
     if (newQueue) {
       queueRef.current = newQueue;
@@ -284,18 +209,24 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch((err) => {
-          console.error('Audio play failed; attempting Task ID URL recovery:', err);
-          attemptPlaybackRecovery(track, err);
+          console.error('Audio play failed:', err);
+          setIsPlaying(false);
+          isPlayingRef.current = false;
+          notifyPlaybackUnavailable(track, err);
+          updateMediaSession(track, 'paused');
         });
       }
 
       setIsPlaying(true);
       isPlayingRef.current = true;
     } catch (error) {
-      console.error('Audio play failed; attempting Task ID URL recovery:', error);
-      attemptPlaybackRecovery(track, error);
+      console.error('Audio play failed:', error);
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      notifyPlaybackUnavailable(track, error);
+      updateMediaSession(track, 'paused');
     }
-  }, [attemptPlaybackRecovery, updateMediaSession]);
+  }, [notifyPlaybackUnavailable, updateMediaSession]);
 
   const findCurrentIndex = useCallback((current: Track | null, list: Track[]) => {
     if (!current || list.length === 0) return -1;
@@ -380,19 +311,19 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
       isPlayingRef.current = false;
       updateMediaSession(track, 'paused');
     } else {
-      playbackRecoveryAttemptedRef.current = false;
       updateMediaSession(track, 'playing');
       audio.play().then(() => {
         setIsPlaying(true);
         isPlayingRef.current = true;
       }).catch((err) => {
-        console.error('Play failed; attempting Task ID URL recovery:', err);
+        console.error('Play failed:', err);
         setIsPlaying(false);
         isPlayingRef.current = false;
-        attemptPlaybackRecovery(track, err);
+        notifyPlaybackUnavailable(track, err);
+        updateMediaSession(track, 'paused');
       });
     }
-  }, [attemptPlaybackRecovery, updateMediaSession]);
+  }, [notifyPlaybackUnavailable, updateMediaSession]);
 
   const seek = useCallback((time: number) => {
     if (audioRef.current) {
@@ -545,10 +476,10 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     const onDurationChange = () => handleTimeUpdate();
     const onError = () => {
       const track = currentTrackRef.current;
-      if (!track || wasClearedRef.current) return;
       setIsPlaying(false);
       isPlayingRef.current = false;
-      attemptPlaybackRecovery(track, audio.error || new Error('audio element error'));
+      notifyPlaybackUnavailable(track, audio.error || new Error('audio element error'));
+      updateMediaSession(track, 'paused');
     };
 
     audio.addEventListener('play', onPlay);
@@ -568,7 +499,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
       audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('error', onError);
     };
-  }, [attemptPlaybackRecovery, handleEnded, handleTimeUpdate, updateMediaSession]);
+  }, [handleEnded, handleTimeUpdate, notifyPlaybackUnavailable, updateMediaSession]);
 
   // Media Session action handlers for lock-screen controls.
   // Register these once only; each handler delegates to refs above.
@@ -623,19 +554,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   }, []);
 
 
-  // List-heavy pages only need track identity and play controls. Keeping this
-  // value separate prevents audio currentTime updates from re-rendering every
-  // Library card several times per second while a song is playing.
-  const controlsValue = useMemo<GlobalPlayerControlsContextType>(() => ({
-    currentTrack,
-    isPlaying,
-    playTrack,
-    togglePlayPause,
-    setIsSharedPlayerMode,
-  }), [currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode]);
-
   return (
-    <GlobalPlayerControlsContext.Provider value={controlsValue}>
     <GlobalPlayerContext.Provider
       value={{
         currentTrack,
@@ -667,16 +586,7 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     >
       {children}
     </GlobalPlayerContext.Provider>
-    </GlobalPlayerControlsContext.Provider>
   );
-}
-
-export function useGlobalPlayerControls() {
-  const context = useContext(GlobalPlayerControlsContext);
-  if (!context) {
-    throw new Error('useGlobalPlayerControls must be used within a GlobalPlayerProvider');
-  }
-  return context;
 }
 
 export function useGlobalPlayer() {

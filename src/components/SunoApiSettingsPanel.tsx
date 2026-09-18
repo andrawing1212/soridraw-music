@@ -1,27 +1,14 @@
-// SORIDRAW_894_GEMINI_KEY_IDENTITY_SINGLE_CACHE
-// SORIDRAW_893_GOOGLE_KEY_CACHE_RESTORE_HARDENING
-// SORIDRAW_892_CACHE_SYNC_VERSION_FOUNDATION
-// SORIDRAW_891_GOOGLE_KEY_CACHE_FIRST
-// SORIDRAW_890_GEMINI_KEY_SIMPLE_UI
-// SORIDRAW_889_GEMINI_KEY_IDENTITY
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, CheckCircle2, ExternalLink, Key, Music2, RefreshCw, Sparkles, Trash2, X, XCircle } from 'lucide-react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, getFirebaseAppCheckToken } from '../firebase';
-import CacheDiagnosticBadge from './CacheDiagnosticBadge';
-import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
-
-const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
-// SORIDRAW_API_SETTINGS_ENTRY_ZERO_SERVER_20260904
 
 const PROJECT_ID = "soridraw-app-866a5";
 const REGION = "us-central1";
 const BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
 const GOOGLE_GEMINI_API_KEY_STORAGE_BASE = 'soridraw_google_gemini_api_key';
 const GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_google_gemini_api_key_registered';
-const GOOGLE_GEMINI_API_KEY_META_STORAGE_BASE = 'soridraw_google_gemini_api_key_meta';
-const GOOGLE_GEMINI_API_KEY_LAST6_STORAGE_BASE = 'soridraw_google_gemini_api_key_last6';
 const SUNO_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_suno_api_key_registered';
 const SUNO_REMAINING_CREDITS_STORAGE_BASE = 'soridraw_suno_remaining_credits';
 const SUNO_REMAINING_CREDITS_UPDATED_AT_STORAGE_BASE = 'soridraw_suno_remaining_credits_updated_at';
@@ -32,12 +19,9 @@ const MUSIC_API_CREATE_URL = 'https://sunoapi.org/ko';
 type SunoApiSettingsPanelProps = {
  className?: string;
  showHeader?: boolean;
- googleGeminiApiKeyVersion?: number | null;
 };
 
 type ApiModalType = 'google' | 'music' | null;
-
-type GoogleKeyMeta = { registered: boolean; last6: string; updatedAt: string | null; version: number };
 
 function scopedStorageKey(base: string, uid?: string | null) {
  return `${base}_${uid || 'guest'}`;
@@ -76,46 +60,9 @@ function getStoredGoogleApiKey(_uid?: string | null) {
 
 function getStoredGoogleApiKeyStatus(uid?: string | null) {
  try {
- const stored = String(localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid)) || '');
- return stored === 'true' || stored.startsWith('true|');
+ return localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid)) === 'true';
  } catch {
  return false;
- }
-}
-
-function getStoredGoogleRegisteredLast6(uid?: string | null): string {
- try {
- const stored = String(localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid)) || '');
- if (!stored.startsWith('true|')) return '';
- return String(stored.slice(5)).slice(-6);
- } catch {
- return '';
- }
-}
-
-function getStoredGoogleKeyMeta(uid?: string | null): GoogleKeyMeta | null {
- try {
- const raw = localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_META_STORAGE_BASE, uid));
- const fallbackLast6 = String(localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_LAST6_STORAGE_BASE, uid)) || getStoredGoogleRegisteredLast6(uid) || '').slice(-6);
- if (!raw) {
- return fallbackLast6
- ? { registered: true, last6: fallbackLast6, updatedAt: null, version: 0 }
- : null;
- }
- const parsed = JSON.parse(raw);
- const last6 = String(parsed?.last6 || fallbackLast6 || '').slice(-6);
- const version = Number(parsed?.version || 0);
- const registered = parsed?.registered === false ? false : Boolean(last6);
- if (!last6 && registered) return null;
- if (!last6 && !version && parsed?.registered !== false) return null;
- return { registered, last6, updatedAt: parsed?.updatedAt || null, version: Number.isFinite(version) ? version : 0 };
- } catch {
- try {
- const fallbackLast6 = String(localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_LAST6_STORAGE_BASE, uid)) || getStoredGoogleRegisteredLast6(uid) || '').slice(-6);
- return fallbackLast6 ? { registered: true, last6: fallbackLast6, updatedAt: null, version: 0 } : null;
- } catch {
- return null;
- }
  }
 }
 
@@ -151,7 +98,6 @@ function ApiKeyModal({
  setInputValue,
  isRegistered,
  isLoading,
- googleKeyMeta,
  onClose,
  onSave,
  onDelete,
@@ -165,23 +111,18 @@ function ApiKeyModal({
  setInputValue: (value: string) => void;
  isRegistered: boolean;
  isLoading: boolean;
- googleKeyMeta?: GoogleKeyMeta | null;
  onClose: () => void;
  onSave: () => void;
  onDelete: () => void;
 }) {
  const inputPlaceholder = isRegistered ? '새 API Key를 입력하면 기존 키를 변경합니다.' : 'API Key를 입력하세요.';
- const hasCachedGoogleKeyIdentity = type === 'google' && Boolean(googleKeyMeta?.last6);
- const maskedGoogleKey = hasCachedGoogleKeyIdentity ? `••••••••••••••••••••••${googleKeyMeta?.last6}` : '';
- const displayedPlaceholder = maskedGoogleKey || inputPlaceholder;
- const googleInputLabel = type === 'google' && (isRegistered || hasCachedGoogleKeyIdentity) ? 'API 저장완료' : 'API Key 입력';
 
  return (
  <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm" onMouseDown={(event) => {
  if (event.target === event.currentTarget) onClose();
  }}>
  <motion.div
- initial={false}
+ initial={{ opacity: 0, y: 16, scale: 0.98 }}
  animate={{ opacity: 1, y: 0, scale: 1 }}
  exit={{ opacity: 0, y: 16, scale: 0.98 }}
  className="w-full max-w-xl overflow-hidden rounded-[28px] bg-[#171717] shadow-2xl"
@@ -223,17 +164,12 @@ function ApiKeyModal({
  </a>
 
  <div className="space-y-2">
- <label className="ml-1 block text-sm font-black text-white/60">{type === 'google' ? googleInputLabel : 'API Key 입력'}</label>
+ <label className="ml-1 block text-sm font-black text-white/60">API Key 입력</label>
  <input
- type={type === 'google' ? 'text' : 'password'}
+ type="password"
  value={inputValue}
  onChange={(event) => setInputValue(event.target.value)}
- placeholder={displayedPlaceholder}
- name={type === 'google' ? 'soridraw-gemini-api-token' : 'soridraw-music-api-token'}
- autoComplete={type === 'google' ? 'off' : 'new-password'}
- autoCapitalize="none"
- spellCheck={false}
- style={type === 'google' && inputValue ? ({ WebkitTextSecurity: 'disc' } as React.CSSProperties & { WebkitTextSecurity?: string }) : undefined}
+ placeholder={inputPlaceholder}
  autoFocus
  className={`w-full rounded-2xl bg-white/[0.045] px-4 py-3 font-mono text-white transition-all outline-none placeholder:text-white/30 ${type === 'google' ? ' focus:ring-1 focus:ring-[#ff5f9f]/25' : ' focus:ring-1 focus:ring-[#b990ff]/25'}`}
  />
@@ -266,12 +202,10 @@ function ApiKeyModal({
  );
 }
 
-export default function SunoApiSettingsPanel({ className = '', showHeader = true, googleGeminiApiKeyVersion = null }: SunoApiSettingsPanelProps) {
+export default function SunoApiSettingsPanel({ className = '', showHeader = true }: SunoApiSettingsPanelProps) {
  const [user, setUser] = useState<User | null>(auth.currentUser);
  const [musicApiKey, setMusicApiKey] = useState('');
  const [googleApiKey, setGoogleApiKey] = useState('');
- const initialGoogleKeyMeta = getStoredGoogleKeyMeta(auth.currentUser?.uid);
- const [googleKeyMeta, setGoogleKeyMeta] = useState<GoogleKeyMeta | null>(initialGoogleKeyMeta);
  const [googleRegistered, setGoogleRegistered] = useState(() => getStoredGoogleApiKeyStatus(auth.currentUser?.uid));
  const [statusText, setStatusText] = useState<'확인 중...' | '등록됨' | '미등록' | '확인 실패'>('확인 중...');
  const [isLoading, setIsLoading] = useState(false);
@@ -323,9 +257,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  useEffect(() => {
  const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
  setUser(currentUser);
- const storedGoogleKeyMeta = getStoredGoogleKeyMeta(currentUser?.uid);
- setGoogleRegistered(getStoredGoogleApiKeyStatus(currentUser?.uid) || Boolean(storedGoogleKeyMeta?.registered && storedGoogleKeyMeta.last6));
- setGoogleKeyMeta(storedGoogleKeyMeta);
+ setGoogleRegistered(getStoredGoogleApiKeyStatus(currentUser?.uid));
  setRemainingCredits(readStoredCredits(currentUser?.uid));
  setRemainingCreditsUpdatedAt(readStoredCreditsUpdatedAt(currentUser?.uid));
  });
@@ -385,31 +317,10 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  const loadGoogleApiKeyStatus = useCallback(async (isRetry = false) => {
  if (!user) return;
 
- const cachedRegistered = getStoredGoogleApiKeyStatus(user.uid);
- const cachedMeta = getStoredGoogleKeyMeta(user.uid);
- const remoteVersion = Number(googleGeminiApiKeyVersion || 0);
- const cacheVersionMatches = remoteVersion <= 0 || Number(cachedMeta?.version || 0) === remoteVersion;
- if (!isRetry && cachedMeta && cacheVersionMatches) {
- if (cachedMeta.registered && cachedMeta.last6) {
- setGoogleRegistered(true);
- setGoogleKeyMeta(cachedMeta);
- markCacheDiagnostic('googleGeminiApiKey', 'CACHE', 0);
- return;
- }
- if (!cachedMeta.registered) {
- setGoogleRegistered(false);
- setGoogleKeyMeta(cachedMeta);
- markCacheDiagnostic('googleGeminiApiKey', 'CACHE', 0);
- return;
- }
- }
-
  if (!isRetry) {
- setGoogleRegistered(cachedRegistered);
- setGoogleKeyMeta(cachedMeta);
+ setGoogleRegistered(getStoredGoogleApiKeyStatus(user.uid));
  }
 
- markCacheDiagnostic('googleGeminiApiKey', 'SYNC', 1);
  try {
  const token = await user.getIdToken();
  const appCheckToken = await getFirebaseAppCheckToken();
@@ -426,22 +337,9 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
 
  if (res.ok && result?.ok && result.hasGoogleGeminiApiKey) {
  setGoogleRegistered(true);
- const storedGoogleKeyMeta = getStoredGoogleKeyMeta(user.uid);
- const nextGoogleKeyMeta = String(result.keyLast6 || '').trim()
- ? { registered: true, last6: String(result.keyLast6 || '').slice(-6), updatedAt: result.updatedAt || storedGoogleKeyMeta?.updatedAt || null, version: Number(result.syncVersion || googleGeminiApiKeyVersion || storedGoogleKeyMeta?.version || 0) }
- : storedGoogleKeyMeta;
- setGoogleKeyMeta(nextGoogleKeyMeta);
- if (nextGoogleKeyMeta?.last6) {
- localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_META_STORAGE_BASE, user.uid), JSON.stringify(nextGoogleKeyMeta));
- localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_LAST6_STORAGE_BASE, user.uid), nextGoogleKeyMeta.last6);
- }
- localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid), nextGoogleKeyMeta?.last6 ? `true|${nextGoogleKeyMeta.last6}` : 'true');
+ localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
  } else if (res.ok) {
  setGoogleRegistered(false);
- const emptyGoogleKeyMeta: GoogleKeyMeta = { registered: false, last6: '', updatedAt: result?.updatedAt || null, version: Number(result?.syncVersion || googleGeminiApiKeyVersion || 0) };
- setGoogleKeyMeta(emptyGoogleKeyMeta);
- localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_META_STORAGE_BASE, user.uid), JSON.stringify(emptyGoogleKeyMeta));
- localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_LAST6_STORAGE_BASE, user.uid));
  localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, user.uid));
  localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid));
  } else if (!isRetry) {
@@ -450,7 +348,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  } catch (e) {
  if (!isRetry) setGoogleRegistered(getStoredGoogleApiKeyStatus(user.uid));
  }
- }, [user, googleGeminiApiKeyVersion]);
+ }, [user]);
 
  const saveGoogleApiKey = async () => {
  if (!googleApiKey.trim() || !user) return;
@@ -474,14 +372,10 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, user.uid));
  localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
  setGoogleRegistered(true);
- const nextGoogleKeyMeta: GoogleKeyMeta = { registered: true, last6: String(result?.keyLast6 || googleApiKey.trim()).slice(-6), updatedAt: new Date().toISOString(), version: Number(result?.syncVersion || googleGeminiApiKeyVersion || Date.now()) };
- localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_META_STORAGE_BASE, user.uid), JSON.stringify(nextGoogleKeyMeta));
- localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_LAST6_STORAGE_BASE, user.uid), nextGoogleKeyMeta.last6);
- localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid), `true|${nextGoogleKeyMeta.last6}`);
- setGoogleKeyMeta(nextGoogleKeyMeta);
  setGoogleApiKey('');
  setActiveModal(null);
  setMessage('Google Gemini API Key가 현재 계정 기준으로 서버에 저장되었습니다. 같은 아이디로 로그인하면 다른 환경에서도 사용할 수 있습니다.');
+ loadGoogleApiKeyStatus(true);
  } else {
  setMessage(result?.error || 'Google API Key 저장에 실패했습니다.');
  }
@@ -515,12 +409,9 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid));
  setGoogleRegistered(false);
  setGoogleApiKey('');
- const deletedGoogleKeyMeta: GoogleKeyMeta = { registered: false, last6: '', updatedAt: new Date().toISOString(), version: Number(result?.syncVersion || googleGeminiApiKeyVersion || Date.now()) };
- setGoogleKeyMeta(deletedGoogleKeyMeta);
- localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_META_STORAGE_BASE, user.uid), JSON.stringify(deletedGoogleKeyMeta));
- localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_LAST6_STORAGE_BASE, user.uid));
  setActiveModal(null);
  setMessage('Google Gemini API Key가 삭제되었습니다.');
+ loadGoogleApiKeyStatus(true);
  } else {
  setMessage(result?.error || 'Google API Key 삭제에 실패했습니다.');
  }
@@ -555,6 +446,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  setMusicApiKey('');
  setActiveModal(null);
  setMessage('Music API Key가 안전하게 등록되었습니다.');
+ loadSunoApiKeyStatus(true);
  } else {
  setMessage('Music API Key 저장에 실패했습니다.');
  }
@@ -590,6 +482,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  setMusicApiKey('');
  setActiveModal(null);
  setMessage('Music API Key가 삭제되었습니다.');
+ loadSunoApiKeyStatus(true);
  } else {
  setMessage('Music API Key 삭제에 실패했습니다.');
  }
@@ -633,36 +526,9 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  };
 
  useEffect(() => {
- if (!user?.uid) return;
-
- // Normal page entry is cache-only. API status Functions are reserved for real
- // mutations/manual checks so reopening My Page or API Settings stays server 0.
- const storedGoogleKeyMeta = getStoredGoogleKeyMeta(user.uid);
- const cachedGoogleRegistered = getStoredGoogleApiKeyStatus(user.uid)
- || Boolean(storedGoogleKeyMeta?.registered && storedGoogleKeyMeta.last6);
- setGoogleRegistered(cachedGoogleRegistered);
- setGoogleKeyMeta(storedGoogleKeyMeta);
- markCacheDiagnostic('googleGeminiApiKey', 'CACHE', 0);
-
- let cachedMusicRegistered = false;
- try {
- cachedMusicRegistered = localStorage.getItem(scopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid)) === 'true';
- } catch {
- cachedMusicRegistered = false;
- }
- setStatusText(cachedMusicRegistered ? '등록됨' : '미등록');
- setRemainingCredits(readStoredCredits(user.uid));
- setRemainingCreditsUpdatedAt(readStoredCreditsUpdatedAt(user.uid));
- }, [user?.uid]);
-
- const openGoogleApiModal = () => {
- const storedGoogleKeyMeta = getStoredGoogleKeyMeta(user?.uid);
- if (storedGoogleKeyMeta?.last6) {
- setGoogleKeyMeta(storedGoogleKeyMeta);
- setGoogleRegistered(true);
- }
- setActiveModal('google');
- };
+ loadGoogleApiKeyStatus(false);
+ loadSunoApiKeyStatus(false);
+ }, [loadGoogleApiKeyStatus, loadSunoApiKeyStatus]);
 
  const StatusBadge = ({ registered, pending = false }: { registered: boolean; pending?: boolean }) => (
  <div className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-black ${
@@ -675,7 +541,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
 
  return (
  <motion.section
- initial={false}
+ initial={{ opacity: 0, y: 10 }}
  animate={{ opacity: 1, y: 0 }}
  className={`rounded-[28px] bg-gradient-to-br from-[#24191f]/95 via-[#181824]/95 to-[#11161f]/95 p-5 md:p-6 shadow-2xl backdrop-blur-xl ${className}`}
  >
@@ -685,7 +551,6 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  <p className="mt-1 text-sm text-white/56">Google API와 Music API를 구분해서 관리합니다.</p>
  </div>
  )}
- <CacheDiagnosticBadge domain="googleGeminiApiKey" readLabel="조회" className="mb-3 ml-1" />
 
  <div className="rounded-[22px] bg-gradient-to-r from-[#ff5f9f]/12 to-[#ffb400]/8 p-4 text-sm leading-relaxed text-white/64">
  <b className="text-[#ff8fb4]">Google Gemini API</b>는 가사/프롬프트 생성에 사용되고, <b className="text-[#c9a6ff]">Music API</b>는 음원 생성 및 크레딧 확인에 사용됩니다. SORIDRAW 플랜은 API 비용이 아니라 편의 기능과 고급 기능을 여는 구조입니다.
@@ -707,7 +572,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  <a href={GOOGLE_API_CREATE_URL} target="_blank" rel="noopener noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#ff5f9f]/12 px-3 py-2.5 text-xs font-black text-[#ff8fb4] transition hover:bg-[#ff5f9f]/20">
  API Key 생성 <ExternalLink className="h-3.5 w-3.5" />
  </a>
- <button type="button" onClick={openGoogleApiModal} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white/[0.04] px-3 py-2.5 text-xs font-black text-white/70 transition hover:bg-white/[0.07] hover:text-white">
+ <button type="button" onClick={() => setActiveModal('google')} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white/[0.04] px-3 py-2.5 text-xs font-black text-white/70 transition hover:bg-white/[0.07] hover:text-white">
  API Key 입력/변경
  </button>
  </div>
@@ -781,7 +646,6 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  setInputValue={setGoogleApiKey}
  isRegistered={googleRegistered}
  isLoading={isLoading}
- googleKeyMeta={googleKeyMeta}
  onClose={() => setActiveModal(null)}
  onSave={saveGoogleApiKey}
  onDelete={deleteGoogleApiKey}

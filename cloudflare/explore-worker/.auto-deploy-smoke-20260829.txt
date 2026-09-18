@@ -1,2 +1,0 @@
-SORIDRAW Cloudflare Git auto-deploy smoke test.
-No Worker behavior changes.

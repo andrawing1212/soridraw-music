@@ -1,11 +1,8 @@
-// SORIDRAW_926_SESSION_PROFILE_STRUCTURE_CACHE
-// SORIDRAW_API_SETTINGS_ENTRY_ZERO_SERVER_20260904
-// SORIDRAW_892_CACHE_SYNC_VERSION_FOUNDATION
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { onAuthStateChanged, updateProfile, User } from 'firebase/auth';
-import { doc, updateDoc } from '../lib/firestoreMeasured';
+import { onAuthStateChanged, signOut, updateProfile, User } from 'firebase/auth';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import {
  ArrowLeft,
  CheckCircle2,
@@ -19,6 +16,7 @@ import {
  Lock,
  LogOut,
  Music,
+ Palette,
  ShieldAlert,
  ShieldCheck,
  Sparkles,
@@ -30,9 +28,6 @@ import { auth, db } from '../firebase';
 import { AppUserInfo, UserRole } from '../types';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 import SunoApiSettingsPanel from '../components/SunoApiSettingsPanel';
-import { readGeminiAutoModelFallback, writeGeminiAutoModelFallback } from '../services/geminiModelPreferences';
-import { USER_PROFILE_CACHE_EVENT, isUserProfileCacheStorageKey, readUserProfileCache } from '../lib/userProfileCache';
-import { MENU_HELP_TIPS_STORAGE_KEY, readMenuHelpTipsEnabled, writeMenuHelpTipsEnabled } from '../lib/menuHelpPreference';
 
 type FeatureState = boolean | 'partial';
 type FeatureKey =
@@ -162,6 +157,9 @@ const formatDate = (value?: number | null) => {
  return date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
+const PROJECT_ID = 'soridraw-app-866a5';
+const REGION = 'us-central1';
+const BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
 const SUNO_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_suno_api_key_registered';
 
 const scopedStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
@@ -172,6 +170,35 @@ const getLocalApiStatus = (uid?: string | null) => {
  } catch {
  return false;
  }
+};
+
+const fetchSunoApiStatus = async (user?: User | null): Promise<boolean> => {
+ if (!user?.uid) return false;
+ try {
+ const token = await user.getIdToken();
+ const res = await fetch(`${BASE_URL}/getSunoApiKeyStatus`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({}),
+ });
+ const result = await res.json().catch(() => null);
+ if (res.ok) {
+ const hasKey = Boolean(result && (result.hasSunoApiKey || result.hasMusicApiKey || result.registered || result.hasApiKey || result.exists));
+ try {
+ if (hasKey) localStorage.setItem(scopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');
+ else localStorage.removeItem(scopedStorageKey(SUNO_API_KEY_REGISTERED_STORAGE_BASE, user.uid));
+ } catch {
+ // localStorage may be unavailable.
+ }
+ return hasKey;
+ }
+ } catch {
+ // Network/server failures fall back to local hint.
+ }
+ return getLocalApiStatus(user.uid);
 };
 
 const getRemainingCredits = (uid?: string | null) => {
@@ -215,15 +242,11 @@ function FeatureBadge({ state }: { state: FeatureState }) {
  return <span className="rounded-full bg-white/[0.04] px-2.5 py-1 text-[11px] font-black text-white/56">잠김</span>;
 }
 
-type MyPageProps = {
- onLogout: () => Promise<void> | void;
-};
-
-export default function MyPage({ onLogout }: MyPageProps) {
+export default function MyPage() {
  const navigate = useNavigate();
  const location = useLocation();
  const [user, setUser] = useState<User | null>(auth.currentUser);
- const [profile, setProfile] = useState<AppUserInfo | null>(() => readUserProfileCache(auth.currentUser?.uid));
+ const [profile, setProfile] = useState<AppUserInfo | null>(null);
  const [isApiRegistered, setIsApiRegistered] = useState(() => getLocalApiStatus(auth.currentUser?.uid));
  const [remainingCredits, setRemainingCredits] = useState<number | null>(() => getRemainingCredits(auth.currentUser?.uid));
  const [nicknameDraft, setNicknameDraft] = useState('');
@@ -233,70 +256,33 @@ export default function MyPage({ onLogout }: MyPageProps) {
  const [personalClicheDraft, setPersonalClicheDraft] = useState<PersonalClicheDraft>(EMPTY_PERSONAL_CLICHE_DRAFT);
  const [isSavingPersonalCliche, setIsSavingPersonalCliche] = useState(false);
  const [personalClicheMessage, setPersonalClicheMessage] = useState<string | null>(null);
- const [autoModelFallback, setAutoModelFallback] = useState(() => readGeminiAutoModelFallback(auth.currentUser?.uid));
- const [isSavingAutoModelFallback, setIsSavingAutoModelFallback] = useState(false);
- const [autoModelFallbackMessage, setAutoModelFallbackMessage] = useState<string | null>(null);
- const [menuHelpTipsEnabled, setMenuHelpTipsEnabled] = useState(() => readMenuHelpTipsEnabled());
 
  useEffect(() => {
  const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
  setUser(currentUser);
  setIsApiRegistered(getLocalApiStatus(currentUser?.uid));
  setRemainingCredits(getRemainingCredits(currentUser?.uid));
+ fetchSunoApiStatus(currentUser).then(setIsApiRegistered);
  });
  return () => unsubscribe();
  }, []);
 
  useEffect(() => {
- if (!user?.uid) {
+ if (!user) {
  setProfile(null);
  return;
  }
-
- const uid = user.uid;
- const applyCachedProfile = () => {
- const cached = readUserProfileCache(uid);
- if (cached) setProfile(cached);
- };
- applyCachedProfile();
-
- const handleProfileCache = (event: Event) => {
- const detail = (event as CustomEvent<{ uid?: string; profile?: AppUserInfo }>).detail;
- if (!detail || detail.uid !== uid) return;
- if (detail.profile) setProfile(detail.profile);
- else applyCachedProfile();
- };
- const handleStorage = (event: StorageEvent) => {
- if (isUserProfileCacheStorageKey(event.key, uid)) applyCachedProfile();
- };
-
- window.addEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
- window.addEventListener('storage', handleStorage);
- return () => {
- window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleProfileCache as EventListener);
- window.removeEventListener('storage', handleStorage);
- };
- }, [user?.uid]);
-
- useEffect(() => {
- if (!user?.uid || !profile) return;
- const nextValue = profile.generationPreferences?.autoModelFallback !== false;
- setAutoModelFallback(nextValue);
- writeGeminiAutoModelFallback(nextValue, user.uid);
- }, [profile, user?.uid]);
-
- useEffect(() => {
- const handleMenuHelpStorage = (event: StorageEvent) => {
- if (event.key === MENU_HELP_TIPS_STORAGE_KEY) setMenuHelpTipsEnabled(readMenuHelpTipsEnabled());
- };
- window.addEventListener('storage', handleMenuHelpStorage);
- return () => window.removeEventListener('storage', handleMenuHelpStorage);
- }, []);
+ const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (snapshot) => {
+ setProfile(snapshot.exists() ? ({ uid: user.uid, ...snapshot.data() } as AppUserInfo) : null);
+ });
+ return () => unsubscribe();
+ }, [user]);
 
  useEffect(() => {
  const refreshStatus = () => {
  setIsApiRegistered(getLocalApiStatus(user?.uid));
  setRemainingCredits(getRemainingCredits(user?.uid));
+ fetchSunoApiStatus(user).then(setIsApiRegistered);
  };
  window.addEventListener('storage', refreshStatus);
  window.addEventListener('soridraw:suno-credits-updated', refreshStatus as EventListener);
@@ -419,42 +405,10 @@ export default function MyPage({ onLogout }: MyPageProps) {
  }
  }, [isSavingPersonalCliche, personalClicheDraft.hardBanText, personalClicheDraft.softBanText, user?.uid]);
 
- const handleToggleAutoModelFallback = useCallback(async () => {
- if (!user?.uid || isSavingAutoModelFallback) return;
- const previousValue = autoModelFallback;
- const nextValue = !previousValue;
- setAutoModelFallback(nextValue);
- setIsSavingAutoModelFallback(true);
- setAutoModelFallbackMessage(null);
- writeGeminiAutoModelFallback(nextValue, user.uid);
- try {
- await updateDoc(doc(db, 'users', user.uid), {
- 'generationPreferences.autoModelFallback': nextValue,
- updatedAt: Date.now(),
- });
- setAutoModelFallbackMessage(nextValue
- ? '한도 초과 시 대체 Gemini 모델로 자동 전환합니다.'
- : '기본 Gemini 모델만 사용합니다.');
- } catch (error) {
- console.error('Gemini auto model fallback preference update failed:', error);
- setAutoModelFallback(previousValue);
- writeGeminiAutoModelFallback(previousValue, user.uid);
- setAutoModelFallbackMessage('자동 전환 설정 저장에 실패했습니다.');
- } finally {
- setIsSavingAutoModelFallback(false);
- }
- }, [autoModelFallback, isSavingAutoModelFallback, user?.uid]);
-
- const handleToggleMenuHelpTips = useCallback(() => {
- const nextValue = !menuHelpTipsEnabled;
- setMenuHelpTipsEnabled(nextValue);
- writeMenuHelpTipsEnabled(nextValue);
- }, [menuHelpTipsEnabled]);
-
  const handleLogout = useCallback(async () => {
- await onLogout();
- }, [onLogout]);
-
+ await signOut(auth);
+ navigate('/');
+ }, [navigate]);
 
  if (!user) {
  return (
@@ -474,7 +428,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  return (
  <div className="min-h-screen bg-[#09090d] px-4 md:px-6 pt-20 pb-16 text-[var(--text-primary)]">
  <div className="mx-auto w-full max-w-[1500px] space-y-7">
- <motion.div initial={false} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
+ <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
  <div className="flex flex-wrap items-center justify-between gap-3">
  <button
  onClick={() => navigate('/')}
@@ -503,7 +457,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  </motion.div>
 
  <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
- <motion.section initial={false} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl">
+ <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl">
  <div className="flex items-start justify-between gap-4">
  <div className="flex items-center gap-4 min-w-0">
  <img src={user.photoURL || 'https://picsum.photos/seed/soridraw-user/160/160'} alt="profile" referrerPolicy="no-referrer" className="h-16 w-16 rounded-3xl object-cover shadow-xl" />
@@ -587,7 +541,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  </div>
  </motion.section>
 
- <motion.section initial={false} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={`rounded-3xl bg-gradient-to-br ${plan.accentClass} p-5 md:p-6 shadow-2xl`}>
+ <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={`rounded-3xl bg-gradient-to-br ${plan.accentClass} p-5 md:p-6 shadow-2xl`}>
  <div className="flex items-start justify-between gap-4">
  <div>
  <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] px-3 py-1.5 text-xs font-black">
@@ -611,75 +565,13 @@ export default function MyPage({ onLogout }: MyPageProps) {
  </motion.section>
  </div>
 
-
- <motion.section
- initial={false}
- animate={{ opacity: 1, y: 0 }}
- transition={{ delay: 0.14 }}
- className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl"
- >
- <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
- <div className="max-w-3xl">
- <div className="flex items-center gap-2">
- <WandSparkles className="h-5 w-5 text-zinc-300" />
- <h2 className="text-lg font-black text-white">개인 설정</h2>
- </div>
- <h3 className="mt-4 text-sm font-black text-zinc-100">생성 모델 자동 전환</h3>
- <p className="mt-1 text-sm leading-relaxed text-white/56">
- 기본 Gemini 모델이 명확한 요청 한도 초과 또는 일시 사용 불가 상태일 때만 대체 Gemini 모델로 전환합니다.
- 정상 생성, 느린 응답, 가사 품질이나 형식 문제로는 전환하지 않습니다.
- </p>
- {autoModelFallbackMessage && (
- <p className="mt-2 text-xs font-bold text-zinc-400">{autoModelFallbackMessage}</p>
- )}
- </div>
- <button
- type="button"
- role="switch"
- aria-checked={autoModelFallback}
- aria-label="생성 모델 자동 전환"
- onClick={handleToggleAutoModelFallback}
- disabled={isSavingAutoModelFallback}
- className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition-colors disabled:cursor-wait disabled:opacity-60 ${autoModelFallback ? 'bg-zinc-100' : 'bg-white/[0.10]'}`}
- >
- <span
- className={`h-6 w-6 rounded-full shadow-sm transition-transform ${autoModelFallback ? 'translate-x-6 bg-zinc-950' : 'translate-x-0 bg-zinc-300'}`}
- />
- </button>
- </div>
-
- <div className="mt-6 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
- <div className="max-w-3xl">
- <h3 className="text-sm font-black text-zinc-100">메뉴 설명 팁</h3>
- <p className="mt-1 text-sm leading-relaxed text-white/56">
- Studio의 메뉴 제목과 버튼 설명 팁을 표시합니다. 필요하지 않으면 꺼서 마우스 이동 시 도움말 팝업을 만들지 않습니다.
- </p>
- </div>
- <button
- type="button"
- role="switch"
- aria-checked={menuHelpTipsEnabled}
- aria-label="메뉴 설명 팁"
- onClick={handleToggleMenuHelpTips}
- className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition-colors ${menuHelpTipsEnabled ? 'bg-zinc-100' : 'bg-white/[0.10]'}`}
- >
- <span
- className={`h-6 w-6 rounded-full shadow-sm transition-transform ${menuHelpTipsEnabled ? 'translate-x-6 bg-zinc-950' : 'translate-x-0 bg-zinc-300'}`}
- />
- </button>
- </div>
- </motion.section>
-
  <div className="grid gap-5 lg:grid-cols-2 items-start">
  <div id="music-api-credit-section" className="scroll-mt-24">
- <SunoApiSettingsPanel
- className="h-full bg-gradient-to-br from-[#24191f]/95 via-[#191824]/95 to-[#161922]/95"
- googleGeminiApiKeyVersion={profile?.syncVersions?.googleGeminiApiKey ?? null}
- />
+ <SunoApiSettingsPanel className="h-full bg-gradient-to-br from-[#24191f]/95 via-[#191824]/95 to-[#161922]/95" />
  </div>
 
  <motion.section
- initial={false}
+ initial={{ opacity: 0, y: 10 }}
  animate={{ opacity: 1, y: 0 }}
  transition={{ delay: 0.2 }}
  className="h-full rounded-[28px] bg-gradient-to-br from-[#25151f]/95 via-[#181622]/95 to-[#1f1a10]/95 p-5 md:p-6 shadow-2xl backdrop-blur-xl"
@@ -743,7 +635,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  </motion.section>
  </div>
 
- <motion.section initial={false} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl">
+ <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl">
  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
  <div>
  <h2 className="text-lg font-black">플랜별 기능 상태</h2>

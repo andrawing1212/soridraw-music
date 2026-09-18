@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Copy, Check, RefreshCw } from 'lucide-react';
 import { auth } from '../firebase';
-import StudioCenterModalPortal from './studio/StudioCenterModalPortal';
 
 interface SunoTrackDetailModalProps {
   open: boolean;
@@ -210,23 +209,22 @@ export default function SunoTrackDetailModal({ open, track, onClose, onEdit }: S
   };
 
   return (
-    <StudioCenterModalPortal themeClassName="soridraw-library-theme">
     <AnimatePresence>
       {open && track && (
-        <div className="soridraw-detail-modal-frame fixed inset-0 z-[300] flex items-center justify-center px-4 py-6" onClick={onClose}>
+        <div className="fixed inset-0 z-[300] flex items-center justify-center px-4 py-6" onClick={onClose}>
           <motion.div
             initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 1 }}
             transition={{ duration: 0 }}
-            className="soridraw-detail-modal-backdrop absolute inset-0 bg-black/28 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-black/35 backdrop-blur-sm"
           />
           <motion.div
             initial={{ opacity: 1, scale: 1, y: 0 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0 }}
-            className="soridraw-library-detail-panel relative flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[34px] border border-[#877198]/28 bg-[#171719]/96 shadow-[0_30px_90px_rgba(0,0,0,0.52)]"
+            className="relative flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[34px] border border-[#877198]/28 bg-[#171719]/96 shadow-[0_30px_90px_rgba(0,0,0,0.52)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative border-b border-white/8 bg-[radial-gradient(circle_at_12%_0%,rgba(135,113,152,0.22),transparent_38%),linear-gradient(135deg,rgba(20,20,21,0.98),rgba(24,22,26,0.98))] px-6 py-5 md:px-8">
@@ -245,7 +243,7 @@ export default function SunoTrackDetailModal({ open, track, onClose, onEdit }: S
                       <RefreshCw className="h-5 w-5" />
                     </button>
                   )}
-                  <button onClick={onClose} className="soridraw-detail-neutral-button flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/55 transition-all hover:bg-white/[0.085] hover:text-white">
+                  <button onClick={onClose} className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/55 transition-all hover:bg-white/[0.06] hover:text-white">
                     <X className="h-6 w-6" />
                   </button>
                 </div>
@@ -277,7 +275,7 @@ export default function SunoTrackDetailModal({ open, track, onClose, onEdit }: S
                   </div>
                   <button
                     onClick={() => copyToClipboard('all-meta', metaItems.map((item) => `${item.label}: ${item.value}`).join('\n'))}
-                    className="soridraw-detail-neutral-button inline-flex h-10 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 text-xs font-bold text-white/60 transition-all hover:bg-white/[0.075] hover:text-[#DCCDEA]"
+                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 text-xs font-bold text-white/60 hover:text-[#DCCDEA]"
                   >
                     {copiedKey === 'all-meta' ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
                     정보 복사
@@ -300,7 +298,7 @@ export default function SunoTrackDetailModal({ open, track, onClose, onEdit }: S
             </div>
 
             <div className="border-t border-white/8 bg-[#151516]/96 px-6 py-5 text-center">
-              <button onClick={onClose} className="soridraw-detail-neutral-button h-12 rounded-2xl bg-white/[0.06] px-9 text-sm font-black text-white/86 transition-all hover:bg-white/[0.11]">
+              <button onClick={onClose} className="h-12 rounded-2xl bg-white/[0.06] px-9 text-sm font-black text-white/86 transition-all hover:bg-white/[0.09]">
                 닫기
               </button>
             </div>
@@ -308,7 +306,6 @@ export default function SunoTrackDetailModal({ open, track, onClose, onEdit }: S
         </div>
       )}
     </AnimatePresence>
-    </StudioCenterModalPortal>
   );
 }
 
@@ -346,7 +343,7 @@ function DetailTextCard({ title, label, value, copied, onCopy }: any) {
           <div className="text-[11px] font-black uppercase tracking-[0.30em] text-[#BBA8CA]">{label}</div>
           <h4 className="mt-1 text-[22px] font-black text-white">{title}</h4>
         </div>
-        <button onClick={onCopy} className="soridraw-detail-neutral-button flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/55 transition-all hover:bg-white/[0.075] hover:text-[#DCCDEA]">
+        <button onClick={onCopy} className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/55 transition-all hover:text-[#DCCDEA]">
           {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
         </button>
       </div>

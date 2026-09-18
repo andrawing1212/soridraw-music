@@ -1,9 +1,6 @@
 {
   "functions": {
     "source": "functions",
-    "predeploy": [
-      "npm --prefix \"$RESOURCE_DIR\" run build"
-    ],
     "ignore": [
       "node_modules",
       ".git",
@@ -38,6 +35,10 @@
           {
             "key": "X-Frame-Options",
             "value": "SAMEORIGIN"
+          },
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://developers.kakao.com https://*.googleapis.com https://www.google.com https://www.gstatic.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https:; connect-src 'self' https: wss:; frame-src 'self' https://*.firebaseapp.com https://*.google.com https://*.recaptcha.net https://*.kakao.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
           }
         ]
       }
@@ -46,8 +47,5 @@
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
-  },
-  "database": {
-    "rules": "database.rules.json"
   }
 }

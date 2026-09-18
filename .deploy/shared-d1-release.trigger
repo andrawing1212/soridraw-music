@@ -1,7 +1,0 @@
-requested_at=2026-09-12T02:59:00+09:00
-requested_by=user
-product_code_target=a22c9f73208288e35844dbcfa58efae09b655fd8
-migration=20260912_01_explore_like_w1_queue.sql
-migration_blob=a27c09b0e5dd058dcead035ae763eae8504e7e04
-verifier=scripts/verify-explore-like-w1-queue.mjs
-verifier_blob=18393d1875cb36ff34712260a29e8857974ba55a

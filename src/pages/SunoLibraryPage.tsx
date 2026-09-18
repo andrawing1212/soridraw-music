@@ -1,56 +1,21 @@
-import { runV1MutationBoundary } from '../data/v1MutationBoundary';
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
-import { useMediaQuery } from '../lib/mediaQueryStore';
-import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Settings, Zap, Music, RefreshCw, Loader2, AlertCircle, 
   Search, Filter, PlayCircle, MoreVertical, Download, 
-  Share2, Star, Trash2, Info, ChevronRight, ChevronDown, X, Play,
+  Share2, Star, Trash2, Info, ChevronRight, X, Play,
   Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
   Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2, Plus, Check, CheckSquare, Square, ListChecks, Palette, Lock
 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, query, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter, writeBatch } from '../lib/firestoreMeasured';
+import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
-import { applyRecoveredSunoAudioUrl, downloadSunoAudioWithRecovery, recoverSunoAudioUrl } from '../services/sunoAudioRecovery';
-// SORIDRAW_SUNO_AUDIO_URL_AUTO_RECOVERY_955
-import { ensureDefaultPlaylists, refreshPlaylistsFromServer, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, toggleTrackLike } from '../services/playlistService';
+import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
+import { downloadAudioWithTitle } from '../lib/songUtils';
+import { ensureDefaultPlaylists, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, fetchTrackLikes, toggleTrackLike, fetchSharedTracksStatus } from '../services/playlistService';
 import { Playlist, PlaylistItem } from '../types';
-import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
-import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
-import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
-import { subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
-import { schedulePreviewAdaptiveListIndexPublishIfDirty } from '../lib/adaptiveListIndexV2';
-import { flushSoridrawPageSync } from '../lib/pageSyncCoordinator';
-import {
-  LIBRARY_PLAYLIST_CACHE_EVENT,
-  nextLibraryPlaylistSyncVersion,
-  readLibraryPlaylistItemsCache,
-  readLibraryPlaylistListCache,
-  writeLibraryPlaylistItemsCache,
-  writeLibraryPlaylistListCache,
-} from '../lib/libraryPlaylistCache';
-
-const SORIDRAW_ADAPTIVE_LIST_INDEX_V2_20260906 = true;
-
-const SORIDRAW_923_FINAL_FIRESTORE_GUARD = true;
-const SORIDRAW_LIBRARY_FULL_CATALOG_AUTHORITY_1051 = true;
-const SORIDRAW_936_LIBRARY_VERSION_SYNC_ONLY = true;
-const SORIDRAW_030_LIBRARY_WARM_CACHE_ZERO_REMOTE = true;
-const SORIDRAW_930_ROUTE_USER_READ_CACHE = true;
-const SORIDRAW_902_LIST_BUNDLE_CACHE = true;
-const SORIDRAW_922_NO_UNBOUNDED_BOOTSTRAP_READS = true;
-const SORIDRAW_921_FIRESTORE_COST_HARDENING = true;
-const SORIDRAW_900_LIBRARY_SESSION_CACHE = true;
-// SORIDRAW_LIBRARY_STATUS_MONOTONIC_20260904
-// SORIDRAW_LIBRARY_ACTIVE_GENERATION_WINDOW_20260904
-const SORIDRAW_897_CACHE_DIAGNOSTICS_READ_ACCURACY = true;
-const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 
 const fallbackNormalPlaylists: Playlist[] = [
   { id: "fallback-normal-0", title: "기본", type: "normal", order: 1, isDefault: true, isFallback: true } as any,
@@ -65,457 +30,14 @@ const fallbackSharedPlaylists: Playlist[] = [
   { id: "fallback-shared-2", title: "2", type: "shared", order: 3, isDefault: true, isFallback: true } as any,
 ];
 
-// SORIDRAW_LIBRARY_PLAYBACK_FAILURE_RECOVERY_991
-const WORKSPACE_PAGE_SIZE = 10;
-const SORIDRAW_LIBRARY_MORE_VISIBILITY_1032 = true;
+const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
+const WORKSPACE_PAGE_SIZE = 20;
+const WORKSPACE_SERVER_PAGE_SIZE = 20;
+const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE + 1;
 const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
 const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
 const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
 const scopedCreditStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
-const libraryAppliedKeywordsSessionCache = new Map<string, any>();
-
-const getLibraryLikeCacheKey = (uid?: string | null) => `soridraw_like_count_cache_v2_${uid || 'guest'}`;
-const getLibrarySharedStatusCacheKey = (uid?: string | null) => `soridraw_shared_track_status_cache_v2_${uid || 'guest'}`;
-const SHARED_PRIVATE_BLOCK_CACHE_MS = 5 * 60 * 1000;
-const isFreshSharedPrivateStatus = (value?: { isPublic: boolean; checkedAt: number } | null) => Boolean(
-  value?.isPublic === false && Date.now() - Number(value.checkedAt || 0) < SHARED_PRIVATE_BLOCK_CACHE_MS
-);
-const readLibraryLocalRecord = <T,>(key: string): T => {
-  try { return JSON.parse(localStorage.getItem(key) || '{}') as T; } catch { return {} as T; }
-};
-
-
-// 900: Keep the workspace Firestore listener alive once per authenticated app
-// session instead of recreating it on every Library page mount. Page re-entry
-// reuses this in-memory snapshot; the single listener still receives true remote
-// changes while the app remains open. The listener is stopped on account change.
-type LibraryWorkspaceSessionView = {
-  tracks: any[];
-  lastDoc: any | null;
-  hasMore: boolean;
-  paginationFallback: boolean;
-  ready: boolean;
-};
-
-type LibraryWorkspaceSession = LibraryWorkspaceSessionView & {
-  uid: string;
-  started: boolean;
-  unsubscribe: (() => void) | null;
-  unsubscribeFallback: (() => void) | null;
-  unsubscribeVersionSignal: (() => void) | null;
-  subscribers: Set<(state: LibraryWorkspaceSessionView) => void>;
-};
-
-let libraryWorkspaceSession: LibraryWorkspaceSession | null = null;
-let libraryWorkspaceAuthGuardStarted = false;
-
-const LIBRARY_WORKSPACE_CACHE_SCHEMA_VERSION = '3';
-const LIBRARY_WORKSPACE_CACHE_SCHEMA_STORAGE_BASE = 'soridraw_library_workspace_cache_schema_v3';
-const LIBRARY_WORKSPACE_CACHE_DB_NAME = 'soridraw_library_workspace_cache_v3';
-const LIBRARY_WORKSPACE_CACHE_STORE = 'workspace';
-let libraryActiveUiUid: string | null = null;
-const libraryWorkspaceInMemoryCache = new Map<string, any[]>();
-const libraryWorkspaceCacheWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
-let libraryWorkspaceCacheDbPromise: Promise<IDBDatabase | null> | null = null;
-
-const getLibraryWorkspaceCacheSchemaKey = (uid: string) => `${LIBRARY_WORKSPACE_CACHE_SCHEMA_STORAGE_BASE}_${uid}`;
-const getLegacyLibraryWorkspacePayloadCacheKey = (uid: string) => `soridraw_suno_tracks_cache_${uid}`;
-
-const isLibraryWorkspaceCacheSchemaCurrent = (uid: string): boolean => {
-  if (!uid || typeof localStorage === 'undefined') return false;
-  try {
-    return localStorage.getItem(getLibraryWorkspaceCacheSchemaKey(uid)) === LIBRARY_WORKSPACE_CACHE_SCHEMA_VERSION;
-  } catch {
-    return false;
-  }
-};
-
-const markLibraryWorkspaceCacheSchemaCurrent = (uid: string) => {
-  if (!uid || typeof localStorage === 'undefined') return;
-  try {
-    localStorage.setItem(getLibraryWorkspaceCacheSchemaKey(uid), LIBRARY_WORKSPACE_CACHE_SCHEMA_VERSION);
-  } catch {}
-};
-
-const openLibraryWorkspaceCacheDb = (): Promise<IDBDatabase | null> => {
-  if (typeof indexedDB === 'undefined') return Promise.resolve(null);
-  if (libraryWorkspaceCacheDbPromise) return libraryWorkspaceCacheDbPromise;
-  libraryWorkspaceCacheDbPromise = new Promise((resolve) => {
-    let settled = false;
-    const request = indexedDB.open(LIBRARY_WORKSPACE_CACHE_DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains(LIBRARY_WORKSPACE_CACHE_STORE)) {
-        database.createObjectStore(LIBRARY_WORKSPACE_CACHE_STORE, { keyPath: 'uid' });
-      }
-    };
-    request.onsuccess = () => {
-      settled = true;
-      const database = request.result;
-      database.onversionchange = () => {
-        database.close();
-        libraryWorkspaceCacheDbPromise = null;
-      };
-      resolve(database);
-    };
-    request.onerror = () => {
-      if (!settled) resolve(null);
-    };
-    request.onblocked = () => {
-      if (!settled) resolve(null);
-    };
-  });
-  return libraryWorkspaceCacheDbPromise;
-};
-
-const readLibraryWorkspaceTrackCacheFromIndexedDb = async (uid: string): Promise<any[] | null> => {
-  if (!uid) return null;
-  const database = await openLibraryWorkspaceCacheDb();
-  if (!database) return null;
-  try {
-    return await new Promise<any[] | null>((resolve) => {
-      const transaction = database.transaction(LIBRARY_WORKSPACE_CACHE_STORE, 'readonly');
-      const request = transaction.objectStore(LIBRARY_WORKSPACE_CACHE_STORE).get(uid);
-      request.onsuccess = () => {
-        const record = request.result;
-        resolve(record && Array.isArray(record.tracks) ? record.tracks : null);
-      };
-      request.onerror = () => resolve(null);
-    });
-  } catch {
-    return null;
-  }
-};
-
-const persistLibraryWorkspaceTrackCacheNow = async (uid: string, list: any[]): Promise<boolean> => {
-  if (!uid) return false;
-  const database = await openLibraryWorkspaceCacheDb();
-  if (!database) return false;
-  const safeList = Array.isArray(list) ? list : [];
-  try {
-    return await new Promise<boolean>((resolve) => {
-      const transaction = database.transaction(LIBRARY_WORKSPACE_CACHE_STORE, 'readwrite');
-      transaction.oncomplete = () => resolve(true);
-      transaction.onerror = () => resolve(false);
-      transaction.onabort = () => resolve(false);
-      transaction.objectStore(LIBRARY_WORKSPACE_CACHE_STORE).put({
-        uid,
-        schemaVersion: LIBRARY_WORKSPACE_CACHE_SCHEMA_VERSION,
-        tracks: safeList,
-        savedAtMs: Date.now(),
-      });
-    });
-  } catch {
-    return false;
-  }
-};
-
-const prepareLibraryWorkspaceCacheForUser = (uid: string): boolean => {
-  if (!uid) return true;
-  const schemaCurrent = isLibraryWorkspaceCacheSchemaCurrent(uid);
-  if (!schemaCurrent) {
-    libraryWorkspaceInMemoryCache.delete(uid);
-    const pendingTimer = libraryWorkspaceCacheWriteTimers.get(uid);
-    if (pendingTimer) {
-      clearTimeout(pendingTimer);
-      libraryWorkspaceCacheWriteTimers.delete(uid);
-    }
-    if (typeof localStorage !== 'undefined') {
-      try {
-        // Old Library payloads were large JSON blobs in localStorage. They are
-        // deliberately retired so a partial/quota-failed payload cannot return.
-        localStorage.removeItem(getLegacyLibraryWorkspacePayloadCacheKey(uid));
-        localStorage.removeItem(`soridraw_library_local_sync_version_v1_${uid}`);
-      } catch (error) {
-        console.warn('Library legacy cache invalidation failed:', error);
-      }
-    }
-  }
-  return !schemaCurrent;
-};
-
-const readLibraryWorkspaceTrackCache = (uid: string): any[] => {
-  const cached = libraryWorkspaceInMemoryCache.get(uid);
-  return Array.isArray(cached) ? cached : [];
-};
-
-const saveLibraryWorkspaceTrackCache = (uid: string, list: any[]) => {
-  if (!uid) return;
-  const safeList = Array.isArray(list) ? list : [];
-  libraryWorkspaceInMemoryCache.set(uid, safeList);
-  const pendingTimer = libraryWorkspaceCacheWriteTimers.get(uid);
-  if (pendingTimer) clearTimeout(pendingTimer);
-  const timer = setTimeout(() => {
-    libraryWorkspaceCacheWriteTimers.delete(uid);
-    void persistLibraryWorkspaceTrackCacheNow(uid, safeList).then((persisted) => {
-      if (persisted) {
-        markLibraryWorkspaceCacheSchemaCurrent(uid);
-      } else {
-        console.warn('Library IndexedDB cache write failed; schema remains unverified.');
-      }
-    });
-  }, 500);
-  libraryWorkspaceCacheWriteTimers.set(uid, timer);
-};
-
-const getLibraryWorkspaceTrackCreatedAtMs = (track: any): number => {
-  const value = track?.createdAt;
-  if (!value) return 0;
-  if (typeof value?.toMillis === 'function') return value.toMillis();
-  if (typeof value?.seconds === 'number') return value.seconds * 1000;
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const mergeLibraryWorkspaceSessionTracks = (incoming: any[], previous: any[] = []): any[] => {
-  const map = new Map<string, any>();
-  (Array.isArray(previous) ? previous : []).forEach((track: any) => {
-    const id = String(track?.id || '').trim();
-    if (id) map.set(id, track);
-  });
-  (Array.isArray(incoming) ? incoming : []).forEach((track: any) => {
-    const id = String(track?.id || '').trim();
-    if (id) map.set(id, { ...(map.get(id) || {}), ...track });
-  });
-  return Array.from(map.values()).sort(
-    (a: any, b: any) => getLibraryWorkspaceTrackCreatedAtMs(b) - getLibraryWorkspaceTrackCreatedAtMs(a)
-  );
-};
-
-const mergeLibraryLatestBundleWithCache = (
-  incoming: any[],
-  previous: any[],
-  cursorCreatedAtMs: number,
-  hasMore: boolean,
-): any[] => {
-  const incomingIds = new Set((incoming || []).map((track: any) => String(track?.id || '')).filter(Boolean));
-  const retained = (previous || []).filter((track: any) => {
-    const id = String(track?.id || '');
-    if (!id || incomingIds.has(id)) return false;
-    const createdAtMs = getLibraryWorkspaceTrackCreatedAtMs(track);
-    return cursorCreatedAtMs <= 0 || createdAtMs < cursorCreatedAtMs;
-  });
-  return mergeLibraryWorkspaceSessionTracks(incoming, retained);
-};
-
-const snapshotLibraryWorkspaceSession = (session: LibraryWorkspaceSession): LibraryWorkspaceSessionView => ({
-  tracks: session.tracks,
-  lastDoc: session.lastDoc,
-  hasMore: session.hasMore,
-  paginationFallback: session.paginationFallback,
-  ready: session.ready,
-});
-
-const emitLibraryWorkspaceSession = (session: LibraryWorkspaceSession) => {
-  const snapshot = snapshotLibraryWorkspaceSession(session);
-  session.subscribers.forEach((listener) => {
-    try {
-      listener(snapshot);
-    } catch (error) {
-      console.warn('Library workspace subscriber failed:', error);
-    }
-  });
-};
-
-const stopLibraryWorkspaceSession = () => {
-  const session = libraryWorkspaceSession;
-  if (!session) return;
-  try { session.unsubscribe?.(); } catch {}
-  try { session.unsubscribeFallback?.(); } catch {}
-  try { session.unsubscribeVersionSignal?.(); } catch {}
-  session.unsubscribe = null;
-  session.unsubscribeFallback = null;
-  session.unsubscribeVersionSignal = null;
-  session.subscribers.clear();
-  libraryWorkspaceSession = null;
-};
-
-const ensureLibraryWorkspaceAuthGuard = () => {
-  if (libraryWorkspaceAuthGuardStarted) return;
-  libraryWorkspaceAuthGuardStarted = true;
-  auth.onAuthStateChanged((currentUser) => {
-    if (!libraryWorkspaceSession) return;
-    if (!currentUser || currentUser.uid !== libraryWorkspaceSession.uid) {
-      stopLibraryWorkspaceSession();
-    }
-  });
-};
-
-const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
-  ensureLibraryWorkspaceAuthGuard();
-  if (libraryWorkspaceSession?.uid === uid && libraryWorkspaceSession.started) {
-    return libraryWorkspaceSession;
-  }
-  if (libraryWorkspaceSession && libraryWorkspaceSession.uid !== uid) {
-    stopLibraryWorkspaceSession();
-  }
-
-  const libraryCacheNeedsFullBootstrap = prepareLibraryWorkspaceCacheForUser(uid);
-  const cachedTracks = readLibraryWorkspaceTrackCache(uid);
-  const session: LibraryWorkspaceSession = {
-    uid,
-    tracks: cachedTracks,
-    lastDoc: null,
-    hasMore: false,
-    paginationFallback: false,
-    ready: cachedTracks.length > 0,
-    started: true,
-    unsubscribe: null,
-    unsubscribeFallback: null,
-    unsubscribeVersionSignal: null,
-    subscribers: new Set(),
-  };
-  libraryWorkspaceSession = session;
-
-  // 1051: Library workspace no longer owns a Firestore page bootstrap.
-  // The shared server-authoritative Catalog is the only list source; durable cache is instant paint only.
-
-  let libraryBundleReadInFlight = false;
-
-  const readRemoteLibraryVersion = () => Number(
-    (readUserProfileCache(uid) as any)?.syncVersions?.library || 0
-  );
-
-  const startLibraryBundleVerification = () => {
-    if (libraryBundleReadInFlight) return;
-    libraryBundleReadInFlight = true;
-    try { session.unsubscribe?.(); } catch {}
-    session.unsubscribe = null;
-    session.unsubscribe = subscribeListBundle('library', uid, {
-      onData: (bundle, meta) => {
-        libraryBundleReadInFlight = false;
-        const remoteVersion = Number((readUserProfileCache(uid) as any)?.syncVersions?.library || 0);
-        const verifiedVersion = Math.max(
-          remoteVersion,
-          readLibraryBundleLocalSyncVersion(uid),
-          Number(bundle.updatedAtMs || 0),
-          1,
-        );
-        writeLibraryBundleLocalSyncVersion(uid, verifiedVersion);
-        const list = Array.isArray(bundle.items) ? bundle.items : [];
-        const isFullCatalogSnapshot = bundle.schemaVersion === 1001;
-        session.tracks = isFullCatalogSnapshot
-          ? mergeLibraryWorkspaceSessionTracks(list, [])
-          : mergeLibraryLatestBundleWithCache(list, session.tracks, bundle.cursorCreatedAtMs, bundle.hasMore);
-        session.lastDoc = null;
-        session.hasMore = isFullCatalogSnapshot ? false : Boolean(bundle.hasMore);
-        session.paginationFallback = false;
-        session.ready = true;
-        saveLibraryWorkspaceTrackCache(uid, session.tracks);
-        markCacheDiagnostic('library', meta.fromCache ? 'CACHE' : 'SYNC', meta.fromCache ? 0 : 1);
-        emitLibraryWorkspaceSession(session);
-      },
-      onMissing: (meta) => {
-        libraryBundleReadInFlight = false;
-        if (meta.fromCache) return;
-        session.hasMore = false;
-        session.paginationFallback = false;
-        session.ready = true;
-        emitLibraryWorkspaceSession(session);
-      },
-      onError: (error) => {
-        libraryBundleReadInFlight = false;
-        console.warn('Library Catalog unavailable; keeping local cache without Firestore paging.', error);
-        session.hasMore = false;
-        session.paginationFallback = false;
-        session.ready = true;
-        emitLibraryWorkspaceSession(session);
-      },
-    });
-  };
-
-  let libraryHydrationStarted = false;
-  const hydrateLibraryWorkspaceCacheThenSync = async () => {
-    if (libraryHydrationStarted) return;
-    libraryHydrationStarted = true;
-
-    if (!libraryCacheNeedsFullBootstrap) {
-      const durableTracks = await readLibraryWorkspaceTrackCacheFromIndexedDb(uid);
-      if (libraryWorkspaceSession !== session || session.uid !== uid) return;
-      // [] is a valid durable zero-track cache. null means missing/corrupt cache.
-      if (durableTracks !== null) {
-        libraryWorkspaceInMemoryCache.set(uid, durableTracks);
-        session.tracks = mergeLibraryWorkspaceSessionTracks(durableTracks, []);
-        // Durable cache never manufactures a Firestore cursor or server-more state.
-        session.lastDoc = null;
-        session.hasMore = false;
-        session.paginationFallback = false;
-        session.ready = true;
-        markCacheDiagnostic('library', 'CACHE', 0);
-        emitLibraryWorkspaceSession(session);
-
-        // 030: A durable Library cache that already has a local sync version must not
-        // pay a background Catalog request on every normal page entry. The already-paid
-        // users authority listener carries syncVersions.library. If that token later
-        // advances, handleLibraryProfileVersion performs exactly one verification.
-        const localVersion = readLibraryBundleLocalSyncVersion(uid);
-        const remoteVersion = readRemoteLibraryVersion();
-        const warmCacheIsCurrent = localVersion > 0 && (remoteVersion <= 0 || localVersion >= remoteVersion);
-        if (warmCacheIsCurrent) return;
-
-        // Missing version proof or a known newer remote version still uses one bounded
-        // Catalog verification so first bootstrap and true cross-device changes remain safe.
-        startLibraryBundleVerification();
-        return;
-      }
-    }
-
-    startLibraryBundleVerification();
-  };
-
-  const handleLibraryProfileVersion = (event: Event) => {
-    const detail = (event as CustomEvent<{ uid?: string }>).detail;
-    if (!detail || detail.uid !== uid) return;
-    if (!session.ready) return;
-    if (readRemoteLibraryVersion() > readLibraryBundleLocalSyncVersion(uid)) {
-      startLibraryBundleVerification();
-    }
-  };
-
-  if (typeof window !== 'undefined') {
-    window.addEventListener(USER_PROFILE_CACHE_EVENT, handleLibraryProfileVersion as EventListener);
-    session.unsubscribeVersionSignal = () => {
-      window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleLibraryProfileVersion as EventListener);
-    };
-  }
-
-  // Durable cache always gets first chance. Server is used only when the
-  // UID cache is missing/outdated, or later when the profile version proves it changed.
-  void hydrateLibraryWorkspaceCacheThenSync();
-
-
-  return session;
-};
-
-const subscribeLibraryWorkspaceSession = (
-  uid: string,
-  listener: (state: LibraryWorkspaceSessionView) => void,
-): (() => void) => {
-  const session = startLibraryWorkspaceSession(uid);
-  session.subscribers.add(listener);
-  listener(snapshotLibraryWorkspaceSession(session));
-  return () => {
-    session.subscribers.delete(listener);
-  };
-};
-
-const replaceLibraryWorkspaceSessionTracks = (uid: string, tracks: any[]) => {
-  if (!libraryWorkspaceSession || libraryWorkspaceSession.uid !== uid) return;
-  libraryWorkspaceSession.tracks = Array.isArray(tracks) ? tracks : [];
-};
-
-const mergeLibraryWorkspaceSessionPage = (
-  uid: string,
-  incoming: any[],
-  lastDoc: any | null,
-  hasMore: boolean,
-) => {
-  if (!libraryWorkspaceSession || libraryWorkspaceSession.uid !== uid) return;
-  libraryWorkspaceSession.tracks = mergeLibraryWorkspaceSessionTracks(incoming, libraryWorkspaceSession.tracks);
-  libraryWorkspaceSession.lastDoc = lastDoc;
-  libraryWorkspaceSession.hasMore = hasMore;
-  libraryWorkspaceSession.ready = true;
-};
 
 const readStoredSunoCredits = (uid?: string | null): { credits: number | null; updatedAt: number | null } => {
   try {
@@ -556,8 +78,6 @@ const getSharedPlayedKeys = (item: any): string[] => {
   ));
 };
 
-// SORIDRAW_LIBRARY_COLOR_DOT_MENU_CLEANUP_970
-// SORIDRAW_LIBRARY_COLOR_PALETTE_LAYER_FIX_971
 const COLOR_OPTIONS = [
   { value: 'gray', color: '#6b7280', label: '회색' },
   { value: 'red', color: '#ef4444', label: '빨강' },
@@ -658,13 +178,13 @@ function AnimatedTrackPlayButton({
         unavailable
           ? 'opacity-50 cursor-not-allowed text-white/20'
           : isNowPlaying
-            ? 'ring-[3px] ring-[#A98BFF]/20 shadow-[0_12px_30px_rgba(169,139,255,0.22)] scale-[1.03]'
+            ? 'ring-[3px] ring-[#7FBD75]/20 shadow-[0_12px_30px_rgba(127,189,117,0.22)] scale-[1.03]'
             : isActive
-              ? 'ring-2 ring-[#A98BFF]/45'
-              : 'hover:ring-2 hover:ring-[#A98BFF]/35 group-hover:scale-[1.03]'
+              ? 'ring-2 ring-[#7FBD75]/45'
+              : 'hover:ring-2 hover:ring-[#7FBD75]/35 group-hover:scale-[1.03]'
       }`}
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-[#A98BFF]/10 via-[#A98BFF]/6 to-white/[0.03]" />
+      <div className="absolute inset-0 bg-gradient-to-br from-[#7FBD75]/10 via-[#7FBD75]/6 to-white/[0.03]" />
       {shouldUseImage ? (
         <img
           src={imageUrl || ''}
@@ -676,7 +196,7 @@ function AnimatedTrackPlayButton({
       ) : null}
 
       {isNowPlaying && <div className="pointer-events-none absolute inset-0 rounded-full suno-playing-ring" />}
-      {isNowPlaying && <div className="pointer-events-none absolute inset-[2px] rounded-full border border-[#A98BFF]/22 shadow-[0_0_18px_rgba(169,139,255,0.20)]" />}
+      {isNowPlaying && <div className="pointer-events-none absolute inset-[2px] rounded-full border border-[#7FBD75]/22 shadow-[0_0_18px_rgba(127,189,117,0.20)]" />}
 
       <div className={`absolute inset-0 transition-colors ${isNowPlaying ? 'bg-black/30' : 'bg-black/45 group-hover:bg-black/35'}`} />
 
@@ -711,47 +231,8 @@ function AnimatedTrackPlayButton({
   );
 }
 
-// SORIDRAW_EXPLORE_8C_STALE_LIBRARY_RECOVERY_950
-// SORIDRAW_EXPLORE_8C_STATUS_SYNC_951
-// SORIDRAW_LIBRARY_ORPHAN_STATUS_FINAL_952
-// SORIDRAW_LIBRARY_PLAYBACK_DELETE_CONSISTENCY_954
-// SORIDRAW_LIBRARY_PLAYED_WRITE_DEDUPE_973
 export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = {}) {
-  useEffect(() => () => {
-    void flushSoridrawPageSync(auth.currentUser, 'library-exit')
-      .catch((error) => console.warn('[081] Library page sync pending:', error));
-  }, []);
   const navigate = useNavigate();
-  const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
-  const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');
-
-  useEffect(() => {
-    const syncStudioWorkspaceHeroHost = () => {
-      const root = document.documentElement;
-      // 462: keep the active right-page masthead in the real result-pane
-      // scroller even when the builder is collapsed into result fullscreen.
-      // Split and one-pane result views now share one masthead owner/geometry.
-      const usePaneMasthead = isStudioDesktopViewport
-        && root.dataset.soridrawTheme === 'studio-black'
-        && root.dataset.soridrawResultCollapsed !== 'true';
-      const paneHost = usePaneMasthead
-        ? document.getElementById('soridraw-studio-result-pane-masthead-host')
-        : null;
-      const legacyHost = isStudioDesktopViewport
-        ? document.getElementById('soridraw-studio-workspace-hero-host')
-        : null;
-      setStudioWorkspaceHeroHost(paneHost || legacyHost);
-    };
-
-    syncStudioWorkspaceHeroHost();
-    window.addEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
-    window.addEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
-    return () => {
-      window.removeEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
-      window.removeEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
-    };
-  }, [isStudioDesktopViewport]);
-
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
@@ -788,8 +269,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   } | null>(null);
   const playlistSuppressClickRef = useRef<string | null>(null);
   const playlistsRef = useRef<Playlist[]>([]);
-  const playlistListCacheVersionRef = useRef(0);
-  const playlistListRefreshInFlightRef = useRef<Promise<void> | null>(null);
   const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
   const [playlistItems, setPlaylistItems] = useState<PlaylistItem[]>([]);
   const [playlistVisibleCount, setPlaylistVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
@@ -798,7 +277,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [playlistVisibilityFilter, setPlaylistVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
   const [playlistColorFilter, setPlaylistColorFilter] = useState<string>('all');
   const [playlistSearchTerm, setPlaylistSearchTerm] = useState('');
-  const deferredPlaylistSearchTerm = useDeferredValue(playlistSearchTerm);
   const [workspaceColorFilter, setWorkspaceColorFilter] = useState<string>('all');
   const [workspaceLocalColorMap, setWorkspaceLocalColorMap] = useState<Record<string, string>>({});
   const [playlistLocalColorMap, setPlaylistLocalColorMap] = useState<Record<string, string>>({});
@@ -878,18 +356,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (!cancelled) setIsLibraryAdminUser(false);
         return;
       }
-      const cachedProfile = readUserProfileCache(user.uid);
-      if (cachedProfile) {
-        if (!cancelled) setIsLibraryAdminUser(cachedProfile.role === 'admin');
-        return;
-      }
       try {
         const snap = await getDoc(doc(db, 'users', user.uid));
-        if (!cancelled) {
-          const data: any | null = snap.exists() ? { uid: user.uid, ...snap.data() } : null;
-          if (data) writeUserProfileCache(user.uid, data);
-          setIsLibraryAdminUser(Boolean(data && data.role === 'admin'));
-        }
+        if (!cancelled) setIsLibraryAdminUser(snap.exists() && snap.data()?.role === 'admin');
       } catch (error) {
         console.warn('library admin role check failed', error);
         if (!cancelled) setIsLibraryAdminUser(false);
@@ -921,8 +390,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       playlistLocalColorMapRef.current = loadedPlaylistMap;
       workspaceColorBaselineRef.current = serializeColorMap(loadedWorkspaceMap);
       playlistColorBaselineRef.current = serializeColorMap(loadedPlaylistMap);
-      pendingWorkspaceColorKeysRef.current.clear();
-      pendingPlaylistColorKeysRef.current.clear();
       workspaceColorDirtyRef.current = false;
       playlistColorDirtyRef.current = false;
     } catch (error) {
@@ -941,9 +408,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   useEffect(() => {
     libraryUserRef.current = user;
   }, [user]);
-
-  // 906: route hydration/remount is cache-only. Do not mirror the visible
-  // tracks state back to Firestore merely because the Library page mounted.
 
   useEffect(() => {
     writeLocalColorMap('soridraw.library.workspaceColorTags', workspaceLocalColorMap);
@@ -1117,11 +581,21 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
-  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const [libraryPlaceholderIndex, setLibraryPlaceholderIndex] = useState(0);
   const [isLibrarySearchFocused, setIsLibrarySearchFocused] = useState(false);
+  const librarySearchPlaceholders = [
+    "음악 제목이나 스타일 검색...",
+    "곡 제목으로 검색해보세요...",
+    "장르나 키워드로 검색해보세요...",
+    "제작자 이름으로 검색해보세요..."
+  ];
+  const playlistSearchPlaceholders = [
+    "음악 제목이나 제작자 검색...",
+    "플레이리스트 이름으로 검색해보세요...",
+    "공유 플레이리스트를 찾아보세요...",
+    "곡 제목으로 검색해보세요..."
+  ];
   const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
-  const [showLibraryFilterPopup, setShowLibraryFilterPopup] = useState(false);
-  const libraryFilterPopupRef = useRef<HTMLDivElement | null>(null);
   const [workspaceVisibleCount, setWorkspaceVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
   const [hasMoreWorkspaceServerTracks, setHasMoreWorkspaceServerTracks] = useState(false);
   const [isLoadingMoreWorkspaceTracks, setIsLoadingMoreWorkspaceTracks] = useState(false);
@@ -1130,30 +604,23 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [showWorkspaceMoreTooltip, setShowWorkspaceMoreTooltip] = useState(false);
 
   useEffect(() => {
-    const handleLibraryFilterOutside = (event: MouseEvent) => {
-      if (libraryFilterPopupRef.current && !libraryFilterPopupRef.current.contains(event.target as Node)) {
-        setShowLibraryFilterPopup(false);
-      }
-    };
-    document.addEventListener('mousedown', handleLibraryFilterOutside);
-    return () => document.removeEventListener('mousedown', handleLibraryFilterOutside);
+    const interval = window.setInterval(() => {
+      setLibraryPlaceholderIndex((prev) => (prev + 1) % librarySearchPlaceholders.length);
+    }, 4000);
+    return () => window.clearInterval(interval);
   }, []);
-
-  useEffect(() => {
-    setShowLibraryFilterPopup(false);
-  }, [libraryViewMode]);
 
   useEffect(() => {
     if (libraryViewMode === 'workspace') {
       setWorkspaceVisibleCount(WORKSPACE_PAGE_SIZE);
     }
-  }, [libraryViewMode, deferredSearchTerm, filter, workspaceColorFilter]);
+  }, [libraryViewMode, searchTerm, filter, workspaceColorFilter]);
 
   useEffect(() => {
     if (libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') {
       setPlaylistVisibleCount(WORKSPACE_PAGE_SIZE);
     }
-  }, [libraryViewMode, activePlaylistId, deferredPlaylistSearchTerm, playlistVisibilityFilter, playlistColorFilter, playlistSortMode]);
+  }, [libraryViewMode, activePlaylistId, playlistSearchTerm, playlistVisibilityFilter, playlistColorFilter, playlistSortMode]);
 
   useEffect(() => {
     setMultiSelectMode(false);
@@ -1193,12 +660,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const selectedTrackCount = selectedTrackList.length;
   const isLibraryTrashMode = filter === 'trash' && libraryViewMode === 'workspace';
   const libraryPageRootRef = useRef<HTMLDivElement | null>(null);
-
-  useLayoutEffect(() => {
-    const root = libraryPageRootRef.current;
-    if (!root) return;
-    return attachSoridrawResponsiveContract(root);
-  }, []);
   const libraryLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const libraryLongPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const libraryCardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -1212,14 +673,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const libraryDragSelectActionRef = useRef<'select' | 'deselect'>('select');
   const libraryDragSelectVisitedKeysRef = useRef<Set<string>>(new Set());
   const libraryDragSelectSuppressClickRef = useRef(false);
-  // SORIDRAW_LIBRARY_IDLE_MOUSEMOVE_982
-  const [isLibraryMousePressTracking, setIsLibraryMousePressTracking] = useState(false);
 
   useEffect(() => {
-    const stopLibraryDragSelect = () => {
-      handleLibraryDragSelectEnd();
-      setIsLibraryMousePressTracking(false);
-    };
+    const stopLibraryDragSelect = () => handleLibraryDragSelectEnd();
     window.addEventListener('mouseup', stopLibraryDragSelect);
     return () => window.removeEventListener('mouseup', stopLibraryDragSelect);
   }, []);
@@ -1427,7 +883,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const modalHistoryPushedRef = React.useRef(false);
   const multiSelectHistoryPushedRef = React.useRef(false);
 
-  const { currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode } = useGlobalPlayerControls();
+  const { currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode } = useGlobalPlayer();
 
   // Scroll to top on page enter
   useEffect(() => {
@@ -1435,6 +891,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   }, []);
 
   useEffect(() => {
+    console.log("Shared page browser check:", {
+      userAgent: navigator.userAgent,
+      isKakaoInAppBrowser,
+      isSharePage: isSharedView,
+    });
+
     if (isSharedView && isKakaoInAppBrowser) {
       setShowKakaoWarning(true);
     }
@@ -1476,50 +938,27 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   const saveWorkspaceTrackCache = (uid: string, list: any[]) => {
-    saveLibraryWorkspaceTrackCache(uid, list);
-    const activeSession = libraryWorkspaceSession?.uid === uid ? libraryWorkspaceSession : null;
-    const sessionComplete = Boolean(activeSession?.ready && activeSession?.hasMore === false);
-    schedulePreviewAdaptiveListIndexPublishIfDirty('library', uid, list, {
-      hasMore: activeSession ? activeSession.hasMore : true,
-      complete: sessionComplete,
-    });
-  };
-
-  const syncLibraryWorkspaceSessionTracks = (uid: string, nextTracks: any[]) => {
-    if (!uid || libraryWorkspaceSession?.uid !== uid) return;
-    libraryWorkspaceSession.tracks = nextTracks;
-    saveLibraryWorkspaceTrackCache(uid, nextTracks);
-    emitLibraryWorkspaceSession(libraryWorkspaceSession);
-  };
-
-  const patchWorkspaceTrackLocally = (trackId: string, updater: (track: any) => any) => {
-    const safeTrackId = String(trackId || '').trim();
-    if (!safeTrackId) return;
-    const uid = user?.uid || appUser?.uid || auth.currentUser?.uid;
-    setTracks((prev) => {
-      const next = (Array.isArray(prev) ? prev : []).map((track: any) =>
-        String(track?.id || '').trim() === safeTrackId ? updater(track) : track
-      );
-      if (uid) {
-        saveWorkspaceTrackCache(uid, next);
-        syncLibraryWorkspaceSessionTracks(uid, next);
-      }
-      return next;
-    });
+    try {
+      localStorage.setItem(`soridraw_suno_tracks_cache_${uid}`, JSON.stringify(list));
+    } catch (e) {
+      console.error('Failed to save suno_tracks to cache:', e);
+    }
   };
 
   const removeWorkspaceTracksLocally = (trackIds: string[]) => {
-    const removedIds = new Set(trackIds.map((id) => String(id || '').trim()).filter(Boolean));
+    const removedIds = new Set(
+      trackIds
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)
+    );
     if (removedIds.size === 0) return;
-    const uid = user?.uid || appUser?.uid || auth.currentUser?.uid;
+
     setTracks((prev) => {
       const next = (Array.isArray(prev) ? prev : []).filter(
         (track: any) => !removedIds.has(String(track?.id || '').trim())
       );
-      if (uid) {
-        saveWorkspaceTrackCache(uid, next);
-        syncLibraryWorkspaceSessionTracks(uid, next);
-      }
+      const uid = user?.uid || appUser?.uid || auth.currentUser?.uid;
+      if (uid) saveWorkspaceTrackCache(uid, next);
       return next;
     });
   };
@@ -1573,8 +1012,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           
           const q = query(
             collectionGroup(db, 'tracks'),
-            where('isPublic', '==', true),
-        limit(50)
+            where('isPublic', '==', true)
           );
           const querySnapshot = await getDocs(q);
           console.log("public tracks count", querySnapshot.size);
@@ -1614,22 +1052,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return () => unsubAuth();
     }
 
-    let unsubscribeWorkspaceView: (() => void) | null = null;
     const unsubscribeAuth = auth.onAuthStateChanged((currentUser) => {
       const resolvedUser = currentUser || appUser || auth.currentUser;
       setUser(resolvedUser);
-      const nextLibraryUiUid = resolvedUser?.uid || null;
-      if (libraryActiveUiUid !== nextLibraryUiUid) {
-        // Account A/B active state must never cross even for one render.
-        setTracks([]);
-        setWorkspaceVisibleCount(WORKSPACE_PAGE_SIZE);
-        libraryActiveUiUid = nextLibraryUiUid;
-      }
-
-      if (unsubscribeWorkspaceView) {
-        unsubscribeWorkspaceView();
-        unsubscribeWorkspaceView = null;
-      }
 
       if (!resolvedUser) {
         setLoading(false);
@@ -1637,133 +1062,174 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         return;
       }
 
+      const cacheKey = `soridraw_suno_tracks_cache_${resolvedUser.uid}`;
       workspaceLastTrackDocRef.current = null;
       workspacePaginationFallbackRef.current = false;
       setHasMoreWorkspaceServerTracks(false);
       setIsLoadingMoreWorkspaceTracks(false);
 
-      const alreadyRunning = Boolean(
-        libraryWorkspaceSession?.uid === resolvedUser.uid && libraryWorkspaceSession.started
-      );
-      const session = startLibraryWorkspaceSession(resolvedUser.uid);
+      let cachedTracks: any[] = [];
+      try {
+        const cachedJson = localStorage.getItem(cacheKey);
+        if (cachedJson) {
+          cachedTracks = JSON.parse(cachedJson);
+        }
+      } catch (e) {
+        console.error('Failed to parse cached suno_tracks:', e);
+      }
 
-      if (Array.isArray(session.tracks) && session.tracks.length > 0) {
-        // A page re-entry never creates another Firestore listener. It simply
-        // consumes the live session snapshot already held in memory.
-        markCacheDiagnostic('library', 'CACHE', 0);
-        setTracks(session.tracks);
+      if (Array.isArray(cachedTracks) && cachedTracks.length > 0) {
+        setTracks(cachedTracks);
         setLoading(false);
       } else {
         setTracks([]);
-        setLoading(!session.ready);
+        setLoading(true);
       }
 
-      const applySession = (next: LibraryWorkspaceSessionView) => {
-        setTracks(next.tracks);
-        setLoading(!next.ready);
-        workspaceLastTrackDocRef.current = next.lastDoc;
-        workspacePaginationFallbackRef.current = next.paginationFallback;
-        setHasMoreWorkspaceServerTracks(next.hasMore);
+      const tracksRef = collection(db, 'suno_tracks', resolvedUser.uid, 'tracks');
+      const pageQuery = query(
+        tracksRef,
+        orderBy('createdAt', 'desc'),
+        limit(WORKSPACE_SERVER_FETCH_SIZE)
+      );
+
+      const startFullWorkspaceFallback = () => {
+        workspacePaginationFallbackRef.current = true;
+        setHasMoreWorkspaceServerTracks(false);
+        const fallbackQuery = query(tracksRef);
+        return onSnapshot(fallbackQuery, (snapshot) => {
+          const list = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          const sorted = mergeWorkspaceTracks(list, []);
+          setTracks(sorted);
+          setLoading(false);
+          saveWorkspaceTrackCache(resolvedUser.uid, sorted);
+        }, (error) => {
+          console.error('Error fetching tracks fallback:', error);
+          setLoading(false);
+        });
       };
 
-      unsubscribeWorkspaceView = subscribeLibraryWorkspaceSession(resolvedUser.uid, applySession);
-      if (alreadyRunning) {
-        // Explicitly record the no-server-read re-entry in the admin diagnostic.
-        markCacheDiagnostic('library', 'CACHE', 0);
-      }
+      let unsubscribeFallback: (() => void) | undefined;
+      const unsubscribeSnapshot = onSnapshot(pageQuery, (snapshot) => {
+        const docs = snapshot.docs;
+        const hasMore = docs.length > WORKSPACE_SERVER_PAGE_SIZE;
+        const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
+        workspaceLastTrackDocRef.current = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : null;
+        setHasMoreWorkspaceServerTracks(hasMore);
+
+        const list = visibleDocs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        setTracks((prev) => {
+          const merged = mergeWorkspaceTracks(list, Array.isArray(prev) ? prev : []);
+          saveWorkspaceTrackCache(resolvedUser.uid, merged);
+          return merged;
+        });
+        setLoading(false);
+      }, (error: any) => {
+        console.error('Error fetching paged tracks:', error);
+        setLoading(false);
+        if (!unsubscribeFallback) {
+          unsubscribeFallback = startFullWorkspaceFallback();
+        }
+      });
+
+      return () => {
+        unsubscribeSnapshot();
+        if (unsubscribeFallback) unsubscribeFallback();
+      };
     });
 
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeWorkspaceView) unsubscribeWorkspaceView();
-    };
+    return () => unsubscribeAuth();
   }, [appUser?.uid]);
 
 
   const loadMoreWorkspaceTracks = async () => {
-    // 1051: UI pagination only. The full Library Catalog is already local.
-    setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
+    if (!user || isSharedView || workspacePaginationFallbackRef.current) {
+      setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
+      return;
+    }
+
+    if (workspaceVisibleCount < filteredTracks.length) {
+      setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
+      return;
+    }
+
+    if (!hasMoreWorkspaceServerTracks || !workspaceLastTrackDocRef.current || isLoadingMoreWorkspaceTracks) return;
+
+    setIsLoadingMoreWorkspaceTracks(true);
+    try {
+      const tracksRef = collection(db, 'suno_tracks', user.uid, 'tracks');
+      const nextQuery = query(
+        tracksRef,
+        orderBy('createdAt', 'desc'),
+        startAfter(workspaceLastTrackDocRef.current),
+        limit(WORKSPACE_SERVER_FETCH_SIZE)
+      );
+      const snapshot = await getDocs(nextQuery);
+      const docs = snapshot.docs;
+      const hasMore = docs.length > WORKSPACE_SERVER_PAGE_SIZE;
+      const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
+      workspaceLastTrackDocRef.current = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : workspaceLastTrackDocRef.current;
+      setHasMoreWorkspaceServerTracks(hasMore);
+
+      const list = visibleDocs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      setTracks((prev) => {
+        const merged = mergeWorkspaceTracks(list, Array.isArray(prev) ? prev : []);
+        saveWorkspaceTrackCache(user.uid, merged);
+        return merged;
+      });
+      setWorkspaceVisibleCount((prev) => prev + WORKSPACE_PAGE_SIZE);
+    } catch (error) {
+      console.error('load more workspace tracks failed:', error);
+      workspacePaginationFallbackRef.current = true;
+      setHasMoreWorkspaceServerTracks(false);
+    } finally {
+      setIsLoadingMoreWorkspaceTracks(false);
+    }
   };
 
-  const playlistLiveModeActive = libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist';
-
   useEffect(() => {
-    if (!user || !playlistLiveModeActive || isSharedView) {
+    if (!user || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') || isSharedView) {
       if (!user) {
         setPlaylists([]);
       }
       return;
     }
 
-    let cancelled = false;
-    const uid = user.uid;
-    const readRemoteVersion = () => Number((readUserProfileCache(uid) as any)?.syncVersions?.playlists || 0);
+    let unsub: (() => void) | undefined;
 
-    const applyCache = async () => {
-      const cached = await readLibraryPlaylistListCache(uid);
-      if (!cached || cancelled) return false;
-      playlistListCacheVersionRef.current = cached.version;
-      setPlaylists(cached.items);
-      return true;
-    };
+    const initPlaylists = async () => {
+      try {
+        await ensureDefaultPlaylists(user.uid);
+      } catch (error) {
+        console.error("ensureDefaultPlaylists failed:", error);
+      }
 
-    const loadPlaylists = async (forceServer = false) => {
-      if (playlistListRefreshInFlightRef.current) return playlistListRefreshInFlightRef.current;
-      const task = (async () => {
-        const remoteVersion = readRemoteVersion();
-        const cached = await readLibraryPlaylistListCache(uid);
-        const cacheIsCurrent = Boolean(
-          cached && !forceServer && (remoteVersion <= 0 || cached.version >= remoteVersion)
-        );
-        if (cacheIsCurrent && cached) {
-          if (!cancelled) {
-            playlistListCacheVersionRef.current = cached.version;
-            setPlaylists(cached.items);
-            markCacheDiagnostic('library', 'CACHE', 0);
-          }
-          return;
-        }
-
-        try {
-          const lists = cached
-            ? await refreshPlaylistsFromServer(uid, remoteVersion)
-            : await ensureDefaultPlaylists(uid, remoteVersion);
-          if (!cancelled) {
-            playlistListCacheVersionRef.current = remoteVersion;
-            setPlaylists(lists);
-          }
-        } catch (error) {
-          console.error('playlist cache refresh failed:', error);
-          if (!cancelled && cached) setPlaylists(cached.items);
-        }
-      })().finally(() => {
-        if (playlistListRefreshInFlightRef.current === task) playlistListRefreshInFlightRef.current = null;
+      const listsRef = collection(db, 'user_playlists', user.uid, 'lists');
+      unsub = onSnapshot(listsRef, (snapshot) => {
+        const lists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Playlist));
+        setPlaylists(lists);
+      }, (error) => {
+        console.error("playlist snapshot failed:", error);
       });
-      playlistListRefreshInFlightRef.current = task;
-      return task;
     };
 
-    const handleCacheChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ uid?: string; scope?: string }>).detail;
-      if (detail?.uid !== uid || detail.scope !== 'lists') return;
-      void applyCache();
-    };
-    const handleProfileChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ uid?: string }>).detail;
-      if (detail?.uid !== uid) return;
-      if (readRemoteVersion() > playlistListCacheVersionRef.current) void loadPlaylists(true);
-    };
-
-    window.addEventListener(LIBRARY_PLAYLIST_CACHE_EVENT, handleCacheChange as EventListener);
-    window.addEventListener(USER_PROFILE_CACHE_EVENT, handleProfileChange as EventListener);
-    void loadPlaylists();
+    initPlaylists();
 
     return () => {
-      cancelled = true;
-      window.removeEventListener(LIBRARY_PLAYLIST_CACHE_EVENT, handleCacheChange as EventListener);
-      window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleProfileChange as EventListener);
+      if (unsub) unsub();
     };
-  }, [user?.uid, playlistLiveModeActive, isSharedView]);
+  }, [user, libraryViewMode, isSharedView]);
 
   useEffect(() => {
     playlistsRef.current = playlists;
@@ -1771,22 +1237,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   useEffect(() => () => {
     if (playlistPressTimerRef.current) window.clearTimeout(playlistPressTimerRef.current);
-    playlistPressTimerRef.current = null;
-    // If Library unmounts while a folder long-press drag is active, remove the
-    // window-level handlers too. Previously only the timer/body class was cleaned,
-    // allowing a real listener leak on route changes during an active drag.
-    const drag = playlistDragRef.current;
-    if (drag?.windowMoveHandler) window.removeEventListener('pointermove', drag.windowMoveHandler);
-    if (drag?.windowEndHandler) {
-      window.removeEventListener('pointerup', drag.windowEndHandler);
-      window.removeEventListener('pointercancel', drag.windowEndHandler);
-    }
-    if (drag?.windowTouchMoveHandler) window.removeEventListener('touchmove', drag.windowTouchMoveHandler);
-    if (drag?.windowTouchEndHandler) {
-      window.removeEventListener('touchend', drag.windowTouchEndHandler);
-      window.removeEventListener('touchcancel', drag.windowTouchEndHandler);
-    }
-    playlistDragRef.current = null;
     document.body.classList.remove('soridraw-folder-dragging');
   }, []);
 
@@ -1917,96 +1367,186 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return;
     }
 
-    let cancelled = false;
-    const uid = user.uid;
-    const playlistId = activePlaylistId;
-    const expectedVersion = Number(playlists.find((playlist) => playlist.id === playlistId)?.itemsRevision || 0);
+    setLoadingPlaylistItems(true);
+    const itemsRef = collection(db, 'user_playlists', user.uid, 'lists', activePlaylistId, 'items');
+    
+    // Subscribe to items without ordering first, or order by order asc
+    const unsub = onSnapshot(itemsRef, (snapshot) => {
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlaylistItem));
+      items.sort((a, b) => a.order - b.order);
+      setPlaylistItems(items);
+      setLoadingPlaylistItems(false);
+    }, (error) => {
+      console.error("Failed to fetch playlist items:", error);
+      setLoadingPlaylistItems(false);
+    });
 
-    const loadItems = async () => {
-      setLoadingPlaylistItems(true);
-      const cached = await readLibraryPlaylistItemsCache(uid, playlistId);
-      const cacheIsCurrent = Boolean(cached && (expectedVersion <= 0 || cached.version >= expectedVersion));
-      if (cacheIsCurrent && cached) {
-        if (!cancelled) {
-          setPlaylistItems([...cached.items].sort((a, b) => a.order - b.order));
-          setLoadingPlaylistItems(false);
-          markCacheDiagnostic('library', 'CACHE', 0);
-        }
-        return;
-      }
-
-      try {
-        const snapshot = await getDocs(collection(db, 'user_playlists', uid, 'lists', playlistId, 'items'));
-        const items = snapshot.docs
-          .map((entry) => ({ id: entry.id, ...entry.data() } as PlaylistItem))
-          .sort((a, b) => a.order - b.order);
-        await writeLibraryPlaylistItemsCache(uid, playlistId, items, expectedVersion);
-        if (!cancelled) setPlaylistItems(items);
-      } catch (error) {
-        console.error('Failed to fetch playlist items:', error);
-        if (!cancelled && cached) setPlaylistItems(cached.items);
-      } finally {
-        if (!cancelled) setLoadingPlaylistItems(false);
-      }
-    };
-
-    const handleCacheChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ uid?: string; scope?: string; playlistId?: string }>).detail;
-      if (detail?.uid !== uid || detail.scope !== 'items' || detail.playlistId !== playlistId) return;
-      void readLibraryPlaylistItemsCache(uid, playlistId).then((cached) => {
-        if (!cancelled && cached) setPlaylistItems([...cached.items].sort((a, b) => a.order - b.order));
-      });
-    };
-
-    window.addEventListener(LIBRARY_PLAYLIST_CACHE_EVENT, handleCacheChange as EventListener);
-    void loadItems();
-    return () => {
-      cancelled = true;
-      window.removeEventListener(LIBRARY_PLAYLIST_CACHE_EVENT, handleCacheChange as EventListener);
-    };
-  }, [user?.uid, libraryViewMode, activePlaylistId, playlists]);
+    return () => unsub();
+  }, [user, libraryViewMode, activePlaylistId]);
 
   useEffect(() => {
     if (playlistItems.length === 0) return;
-    const nextUsers: Record<string, string> = {};
-    const nextShares: Record<string, string> = {};
-    playlistItems.forEach((item: any) => {
-      const displayName = item.creatorDisplayId || item.ownerNickname || item.creatorNickname || item.ownerEmail || item.creatorEmail || '';
-      if (item.ownerUid && displayName) nextUsers[item.ownerUid] = String(displayName);
-      if (item.sourceType === 'shared_track' && item.sourceId && displayName) nextShares[item.sourceId] = String(displayName);
-    });
-    if (Object.keys(nextUsers).length > 0) setUserNameMap((prev) => ({ ...prev, ...nextUsers }));
-    if (Object.keys(nextShares).length > 0) setShareCreatorNameMap((prev) => ({ ...prev, ...nextShares }));
-  }, [playlistItems]);
 
-  // Page entry is cache-only. Likes and shared-public status are verified only
-  // when the user performs the related action, never once per visible song.
+    const uniqueOwnerUids = Array.from(
+      new Set<string>(
+        playlistItems
+          .map((item: any) => item.ownerUid)
+          .filter((uid): uid is string => typeof uid === 'string' && uid.trim().length > 0)
+      )
+    ).filter((uid) => !userNameMap[uid]);
+
+    if (uniqueOwnerUids.length === 0) return;
+
+    let cancelled = false;
+
+    const fetchUserNames = async () => {
+      const nextMap: Record<string, string> = {};
+
+      await Promise.all(
+        uniqueOwnerUids.map(async (uid) => {
+          try {
+            const userSnap = await getDoc(doc(db, 'users', uid));
+            if (!userSnap.exists()) return;
+            const data: any = userSnap.data();
+            const displayName = data.nickname || data.displayName || data.name || data.email || uid;
+            if (displayName) nextMap[uid] = String(displayName);
+          } catch (error) {
+            console.warn('Failed to fetch playlist creator name:', error);
+          }
+        })
+      );
+
+      if (!cancelled && Object.keys(nextMap).length > 0) {
+        setUserNameMap((prev) => ({ ...prev, ...nextMap }));
+      }
+    };
+
+    fetchUserNames();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playlistItems, userNameMap]);
+
   useEffect(() => {
-    if (!user?.uid || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist')) return;
-    const likeKey = getLibraryLikeCacheKey(user.uid);
-    const sharedKey = getLibrarySharedStatusCacheKey(user.uid);
-    const scopedLikes = readLibraryLocalRecord<Record<string, { likeCount: number, likedByMe: boolean }>>(likeKey);
-    const scopedShared = readLibraryLocalRecord<Record<string, { isPublic: boolean, checkedAt: number }>>(sharedKey);
+    const sharedSourceIds = Array.from(
+      new Set<string>(
+        playlistItems
+          .filter((item: any) => item.sourceType === 'shared_track')
+          .map((item: any) => item.sourceId)
+          .filter((sourceId): sourceId is string => typeof sourceId === 'string' && sourceId.trim().length > 0)
+      )
+    ).filter((sourceId) => !shareCreatorNameMap[sourceId]);
 
-    // One-time local migration only. No server access and no app-version invalidation.
-    if (Object.keys(scopedLikes).length === 0) {
-      const legacy = readLibraryLocalRecord<Record<string, { likeCount: number, likedByMe: boolean }>>('soridraw_like_count_cache');
-      if (Object.keys(legacy).length > 0) {
-        localStorage.setItem(likeKey, JSON.stringify(legacy));
-        Object.assign(scopedLikes, legacy);
-      }
-    }
-    if (Object.keys(scopedShared).length === 0) {
-      const legacy = readLibraryLocalRecord<Record<string, { isPublic: boolean, checkedAt: number }>>('soridraw_shared_track_status_cache');
-      if (Object.keys(legacy).length > 0) {
-        localStorage.setItem(sharedKey, JSON.stringify(legacy));
-        Object.assign(scopedShared, legacy);
-      }
-    }
+    if (sharedSourceIds.length === 0) return;
 
-    setLikesCache(scopedLikes);
-    setSharedStatusCache(scopedShared);
-  }, [libraryViewMode, user?.uid]);
+    let cancelled = false;
+
+    const fetchSharedCreatorNames = async () => {
+      const nextMap: Record<string, string> = {};
+
+      await Promise.all(
+        sharedSourceIds.map(async (sourceId) => {
+          try {
+            const shareSnap = await getDoc(doc(db, 'suno_shares', sourceId));
+            if (!shareSnap.exists()) return;
+            const data: any = shareSnap.data();
+            const displayName =
+              data.creatorDisplayId ||
+              data.ownerNickname ||
+              data.creatorNickname ||
+              data.ownerName ||
+              data.nickname ||
+              data.displayName ||
+              data.ownerEmail ||
+              data.creatorEmail ||
+              '';
+            if (displayName) nextMap[sourceId] = String(displayName);
+          } catch (error) {
+            console.warn('Failed to fetch shared track creator name:', sourceId, error);
+          }
+        })
+      );
+
+      if (!cancelled && Object.keys(nextMap).length > 0) {
+        setShareCreatorNameMap((prev) => ({ ...prev, ...nextMap }));
+      }
+    };
+
+    fetchSharedCreatorNames();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playlistItems, shareCreatorNameMap]);
+
+  // Handle caching of likes and shared statuses
+  useEffect(() => {
+    if (playlistItems.length === 0 || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist')) return;
+
+    const currentLikesCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
+    const checkedAtStr = localStorage.getItem('soridraw_like_count_cache_checked_at');
+    const checkedAt = checkedAtStr ? parseInt(checkedAtStr, 10) : 0;
+    
+    setLikesCache(currentLikesCache);
+
+    const now = Date.now();
+    const needsLikeUpdate = (now - checkedAt) > CACHE_EXPIRY_MS;
+
+    const currentSharedCache = JSON.parse(localStorage.getItem('soridraw_shared_track_status_cache') || '{}');
+    setSharedStatusCache(currentSharedCache);
+
+    const checkCaches = async () => {
+      let updatedLikes = { ...currentLikesCache };
+      let updatedShared = { ...currentSharedCache };
+      let didUpdateLikes = false;
+      let didUpdateShared = false;
+
+      // 1. Likes Cache
+      if (needsLikeUpdate) {
+        const globalIds = playlistItems.map(p => getTrackGlobalId(p));
+        // unique
+        const uniqueGlobalIds = Array.from(new Set<string>(globalIds));
+        const fetchedLikes = await fetchTrackLikes(uniqueGlobalIds, user?.uid);
+        updatedLikes = { ...updatedLikes, ...fetchedLikes };
+        didUpdateLikes = true;
+      }
+
+      // 2. Shared Status Cache
+      // Shared playlists must reflect private/public changes immediately.
+      // Do not rely on the long local cache here, otherwise a track can look public for hours after the owner made it private.
+      const forceSharedStatusRefresh = libraryViewMode === 'sharedPlaylist' || activePlaylistSection === 'shared';
+      const sharedSourceIdsToFetch = playlistItems
+        .filter(p => p.sourceType === 'shared_track')
+        .map(p => p.sourceId!)
+        .filter(sid => {
+           const cached = currentSharedCache[sid];
+           return forceSharedStatusRefresh || !cached || (now - cached.checkedAt > CACHE_EXPIRY_MS);
+        });
+
+      if (sharedSourceIdsToFetch.length > 0) {
+        // unique
+        const uniqueSourceIds = Array.from(new Set<string>(sharedSourceIdsToFetch));
+        const fetchedShared = await fetchSharedTracksStatus(uniqueSourceIds);
+        updatedShared = { ...updatedShared, ...fetchedShared };
+        didUpdateShared = true;
+      }
+      
+      if (didUpdateLikes) {
+        localStorage.setItem('soridraw_like_count_cache', JSON.stringify(updatedLikes));
+        localStorage.setItem('soridraw_like_count_cache_checked_at', now.toString());
+        setLikesCache(updatedLikes);
+      }
+
+      if (didUpdateShared) {
+        localStorage.setItem('soridraw_shared_track_status_cache', JSON.stringify(updatedShared));
+        setSharedStatusCache(updatedShared);
+      }
+    };
+
+    checkCaches();
+
+  }, [playlistItems, libraryViewMode, activePlaylistSection, user]);
 
   const handleRemoveFromPlaylist = async (item: PlaylistItem) => {
     if (!user || !activePlaylistId) return;
@@ -2201,10 +1741,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     try {
       for (const [id, color] of favoriteEntries) {
         if (!id) continue;
-        await runV1MutationBoundary({ domain: 'musicNote', operation: 'color-sync', uid: user.uid, documentIds: [id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', id), {
+        await updateDoc(doc(db, 'favorites', id), {
           favoriteColorTag: color === 'gray' ? null : color,
           updatedAt: serverTimestamp()
-        }));
+        });
       }
 
       for (const [key, color] of workspaceEntries) {
@@ -2242,25 +1782,23 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const currentUser = libraryUserRef.current;
     if (!currentUser || libraryColorsAutoSyncingRef.current) return;
 
-    // Cache/server hydration can change the local maps while entering or leaving
-    // the page. Those changes are not user mutations and must stay write-free.
-    const workspaceChanged = workspaceColorDirtyRef.current;
-    const playlistChanged = playlistColorDirtyRef.current;
-    if (!workspaceChanged && !playlistChanged) return;
-
     const workspaceMap = workspaceLocalColorMapRef.current || {};
     const playlistMap = playlistLocalColorMapRef.current || {};
     const workspaceSerialized = serializeColorMap(workspaceMap);
     const playlistSerialized = serializeColorMap(playlistMap);
-    const workspaceEntries: [string, string][] = workspaceChanged
-      ? Array.from(pendingWorkspaceColorKeysRef.current).map((key): [string, string] => [key, workspaceMap[key] || 'gray'])
-      : [];
-    const playlistEntries: [string, string][] = playlistChanged
-      ? Array.from(pendingPlaylistColorKeysRef.current).map((key): [string, string] => [key, playlistMap[key] || 'gray'])
-      : [];
-    // A dirty flag without an explicit pending key is never enough to justify
-    // a server write. Preserve state and wait for an explicit mutation.
-    if (workspaceEntries.length === 0 && playlistEntries.length === 0) return;
+    const workspaceChanged = workspaceSerialized !== workspaceColorBaselineRef.current;
+    const playlistChanged = playlistSerialized !== playlistColorBaselineRef.current;
+    if (!workspaceChanged && !playlistChanged) return;
+
+    const workspaceEntries = workspaceChanged ? Object.entries(workspaceMap) : [];
+    const playlistEntries = playlistChanged ? Object.entries(playlistMap) : [];
+    if (workspaceEntries.length === 0 && playlistEntries.length === 0) {
+      workspaceColorBaselineRef.current = workspaceSerialized;
+      playlistColorBaselineRef.current = playlistSerialized;
+      workspaceColorDirtyRef.current = false;
+      playlistColorDirtyRef.current = false;
+      return;
+    }
 
     libraryColorsAutoSyncingRef.current = true;
     try {
@@ -2418,90 +1956,34 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setLikesCache(prev => ({ ...prev, [globalId]: newCacheValue }));
     
     // Also update localStorage immediately so it doesn't revert during re-render
-    const likeCacheKey = getLibraryLikeCacheKey(user.uid);
-    const currentLikesCache = readLibraryLocalRecord<Record<string, { likeCount: number, likedByMe: boolean }>>(likeCacheKey);
+    const currentLikesCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
     currentLikesCache[globalId] = newCacheValue;
-    localStorage.setItem(likeCacheKey, JSON.stringify(currentLikesCache));
+    localStorage.setItem('soridraw_like_count_cache', JSON.stringify(currentLikesCache));
 
     try {
-      const actual = await toggleTrackLike(globalId, user.uid, newLikedByMe);
-      // The mutation reads the canonical relation, so a stale/new-device cache
-      // self-corrects on the actual click instead of paying per-card entry reads.
-      if (actual.likeCount !== newCount || actual.likedByMe !== newLikedByMe) {
-        const syncedCacheValue = { likeCount: actual.likeCount, likedByMe: actual.likedByMe };
+      const actualCount = await toggleTrackLike(globalId, user.uid, cached.likedByMe);
+      // Sync with actual count
+      if (actualCount !== newCount) {
+        const syncedCacheValue = { likeCount: actualCount, likedByMe: newLikedByMe };
         setLikesCache(prev => ({ ...prev, [globalId]: syncedCacheValue }));
         
-        const finalCache = readLibraryLocalRecord<Record<string, { likeCount: number, likedByMe: boolean }>>(likeCacheKey);
+        const finalCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
         finalCache[globalId] = syncedCacheValue;
-        localStorage.setItem(likeCacheKey, JSON.stringify(finalCache));
+        localStorage.setItem('soridraw_like_count_cache', JSON.stringify(finalCache));
       }
     } catch (e) {
       console.error(e);
       showToast("좋아요 변경에 실패했습니다.");
       // Rollback
       setLikesCache(prev => ({ ...prev, [globalId]: cached }));
-      const rbCache = readLibraryLocalRecord<Record<string, { likeCount: number, likedByMe: boolean }>>(likeCacheKey);
+      const rbCache = JSON.parse(localStorage.getItem('soridraw_like_count_cache') || '{}');
       rbCache[globalId] = cached;
-      localStorage.setItem(likeCacheKey, JSON.stringify(rbCache));
+      localStorage.setItem('soridraw_like_count_cache', JSON.stringify(rbCache));
     }
-  };
-
-  const getCompletedSunoRescueUrl = (source: any, preferredAudioId = '') => {
-    if (!source || typeof source !== 'object') return '';
-    const rescueMap = source.audioRescue;
-    if (!rescueMap || typeof rescueMap !== 'object') return '';
-
-    const entries = Object.values(rescueMap).filter((entry: any) => entry && typeof entry === 'object') as any[];
-    const normalizedAudioId = String(preferredAudioId || '').trim();
-    const eligible = normalizedAudioId
-      ? entries.filter((entry: any) => String(entry?.audioId || entry?.audio_id || '').trim() === normalizedAudioId)
-      : entries.length === 1 ? entries : [];
-
-    for (const entry of eligible) {
-      const status = String(entry?.status || '').trim().toLowerCase();
-      if (status && !['completed', 'success', 'complete'].includes(status)) continue;
-      const url = String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim();
-      if (url) return url;
-    }
-    return '';
-  };
-
-  const getPlayableUrlFromSource = (source: any, preferredAudioId = '') => {
-    if (!source || typeof source !== 'object') return '';
-
-    // A completed rescue is a durable file that has already been paid for and
-    // stored. Prefer it over an expired provider MP3 URL when the row/audio id
-    // matches. This is metadata-only reuse; no conversion/generation call occurs.
-    const completedRescueUrl = getCompletedSunoRescueUrl(source, preferredAudioId);
-    if (completedRescueUrl) return completedRescueUrl;
-
-    const candidates = [
-      source.audioUrl,
-      source.streamAudioUrl,
-      source.audio_url,
-      source.stream_audio_url,
-      source.url,
-      source.downloadUrl,
-      source.download_url,
-      source.playUrl,
-      source.play_url,
-      source.mediaUrl,
-      source.media_url,
-      source.mp3Url,
-      source.mp3_url,
-    ];
-    for (const candidate of candidates) {
-      const normalized = String(candidate || '').trim();
-      if (normalized) return normalized;
-    }
-    return '';
   };
 
   const getAudioUrl = (item: any, group: any) => {
-    const preferredAudioId = String(item?.id || item?.audioId || item?.audio_id || '').trim();
-    return getPlayableUrlFromSource(item, preferredAudioId)
-      || getPlayableUrlFromSource(group, preferredAudioId)
-      || '';
+    return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || item?.stream_audio_url || item?.sourceAudioUrl || item?.source_audio_url || item?.sourceStreamAudioUrl || item?.source_stream_audio_url || group?.audioUrl || group?.streamAudioUrl || group?.audio_url || group?.stream_audio_url || '';
   };
 
   const getTitle = (item: any, group: any, idx: number) => {
@@ -2651,8 +2133,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const markWorkspaceItemPlayed = async (group: any, idx: number) => {
     if (!user || !group?.id) return;
-    const sourceItem = extractSunoData(group)[idx] || group;
-    if (!isWorkspaceItemUnplayed(group, sourceItem, idx)) return;
     const playedAt = new Date().toISOString();
 
     setTracks((prev) => prev.map((track: any) => {
@@ -2701,7 +2181,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const markPlaylistItemPlayed = async (item: any) => {
     if (!user || !item) return;
-    if (!isPlaylistItemUnplayed(item)) return;
     const playedAt = new Date().toISOString();
     const itemAudio = String(item?.audioUrl || item?.streamAudioUrl || item?.audio_url || '').trim();
 
@@ -2754,7 +2233,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const getCurrentPlayableUrl = () => {
     const parent: any = currentTrack?.parent || {};
-    return normalizePlayableUrl(getPlayableUrlFromSource(currentTrack as any) || getPlayableUrlFromSource(parent));
+    return normalizePlayableUrl(
+      (currentTrack as any)?.url ||
+      (currentTrack as any)?.audioUrl ||
+      parent.audioUrl ||
+      parent.streamAudioUrl ||
+      parent.audio_url
+    );
   };
 
   const isSamePlayableUrl = (candidateUrl: any) => {
@@ -2812,73 +2297,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return sunoData;
     }
 
-    const playableUrl = getPlayableUrlFromSource(group);
     return [{
-      audioUrl: playableUrl,
-      streamAudioUrl: playableUrl,
-      url: playableUrl,
+      audioUrl: group?.audioUrl || group?.streamAudioUrl,
       title: group?.title,
-      imageUrl: group?.imageUrl || group?.image_url,
+      imageUrl: group?.imageUrl,
       duration: getDuration(group, group),
       hidden: !!group?.hidden
     }];
-  };
-
-  const hasStableLibraryResult = (group: any) => {
-    if (!group) return false;
-    const normalizedStatus = String(group.status || '').trim().toLowerCase();
-    if (['completed', 'success', 'complete'].includes(normalizedStatus)) return true;
-
-    const items = extractSunoData(group);
-    const hasFullyPlayableItems = items.length > 0 && items.every((item: any) => {
-      const audioUrl = String(getAudioUrl(item, group) || '').trim();
-      return Boolean(audioUrl) && getDuration(item, group) !== null;
-    });
-    if (hasFullyPlayableItems) return true;
-
-    const rescueEntries = Object.values(group?.audioRescue || {}) as any[];
-    return rescueEntries.some((entry: any) => {
-      const rescueStatus = String(entry?.status || '').trim().toLowerCase();
-      const rescueUrl = String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim();
-      return Boolean(rescueUrl) && (!rescueStatus || ['completed', 'success', 'complete'].includes(rescueStatus));
-    });
-  };
-
-  const getLibraryGenerationCreatedAtMs = (group: any): number => {
-    const createdAt = group?.createdAt;
-    if (!createdAt) return 0;
-    try {
-      if (typeof createdAt?.toMillis === 'function') return createdAt.toMillis();
-      if (typeof createdAt?.seconds === 'number') return createdAt.seconds * 1000;
-      if (typeof createdAt?._seconds === 'number') return createdAt._seconds * 1000;
-      if (typeof createdAt?.toDate === 'function') return createdAt.toDate().getTime();
-      if (typeof createdAt === 'string' || typeof createdAt === 'number') {
-        const parsed = new Date(createdAt).getTime();
-        return Number.isFinite(parsed) ? parsed : 0;
-      }
-    } catch {}
-    return 0;
-  };
-
-  const hasAnyPlayableLibraryOutput = (group: any): boolean => {
-    const items = extractSunoData(group);
-    const hasDirectOutput = items.some((item: any) => Boolean(String(getAudioUrl(item, group) || '').trim()));
-    if (hasDirectOutput) return true;
-    const rescueEntries = Object.values(group?.audioRescue || {}) as any[];
-    return rescueEntries.some((entry: any) => Boolean(String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim()));
-  };
-
-  // Only a genuinely recent pending task may be labelled `생성 중`.
-  // Old/cache-restored pending records are historical reconciliation states,
-  // not active generation. Missing timestamps are treated as non-active too.
-  const isLibraryActiveGeneration = (group: any): boolean => {
-    if (!group?.taskId) return false;
-    const status = String(group?.status || '').trim().toLowerCase();
-    if (!['processing', 'submitted', 'pending', 'generating', 'queued', 'queue', 'running', 'in_progress'].includes(status)) return false;
-    const createdAtMs = getLibraryGenerationCreatedAtMs(group);
-    if (!createdAtMs) return false;
-    const elapsedMs = Date.now() - createdAtMs;
-    return elapsedMs >= 0 && elapsedMs <= 10 * 60 * 1000;
   };
 
   const isTrackStuck = (group: any) => {
@@ -2897,14 +2322,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       const url = getAudioUrl(item, group);
       return typeof url === 'string' && url.trim().length > 0;
     });
-    const hasAudioUrls = Array.isArray(group?.audioUrls) && group.audioUrls.some((entry: any) => {
-      const rawUrl = typeof entry === 'string'
-        ? entry
-        : entry?.url || entry?.audio_url || entry?.audioUrl || '';
-      return typeof rawUrl === 'string' && rawUrl.trim().length > 0;
-    });
-
-    if (hasAudioUrl || hasAudioUrls) {
+    const hasSunoData = Array.isArray(group?.sunoData) && group.sunoData.length > 0;
+    const hasAudioUrls = Array.isArray(group?.audioUrls) && group.audioUrls.length > 0;
+    
+    if (hasAudioUrl || hasSunoData || hasAudioUrls) {
       return false;
     }
 
@@ -2931,22 +2352,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
 
-
-  const isTrackPastAutoCheckWindow = (group: any) => {
-    if (!isTrackStuck(group)) return false;
-
-    let createdTime = 0;
-    if (group?.createdAt?.seconds) {
-      createdTime = group.createdAt.seconds * 1000;
-    } else if (group?.createdAt?.toDate) {
-      createdTime = group.createdAt.toDate().getTime();
-    } else if (typeof group?.createdAt === 'string' || typeof group?.createdAt === 'number') {
-      createdTime = new Date(group.createdAt).getTime();
-    }
-
-    if (!createdTime || !Number.isFinite(createdTime)) return false;
-    return Date.now() - createdTime > 10 * 60 * 1000;
-  };
 
   const collectStatusCandidates = (source: any): string[] => {
     const candidates: string[] = [];
@@ -3099,11 +2504,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (!currentUser || !trackId) return { status: null as string | null, raw: '' };
 
     const resolved = resolveSunoStatusFromResponse(data);
-    const currentTrack = tracks.find((track: any) => String(track?.id || '') === String(trackId));
-    if (currentTrack && hasStableLibraryResult(currentTrack) && resolved.status !== 'completed') {
-      return { status: 'completed' as string | null, raw: resolved.raw || '' };
-    }
-
     const updatePayload: any = {
       apiStatusResponse: data || null,
       lastStatusCheckedAt: serverTimestamp(),
@@ -3119,10 +2519,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     } else if (resolved.status === 'completed') {
       updatePayload.status = 'completed';
       updatePayload.completedAt = serverTimestamp();
-      // Clear any stale timeout/failure metadata from older recovery paths.
-      updatePayload.failedAt = null;
-      updatePayload.failureReason = null;
-      updatePayload.errorMessage = null;
       const nextSunoData = extractStatusSunoData(data);
       if (nextSunoData) updatePayload.sunoData = nextSunoData;
     } else if (resolved.status === 'processing') {
@@ -3135,87 +2531,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       await updateDoc(doc(db, 'suno_tracks', currentUser.uid, 'tracks', trackId), updatePayload);
     }
 
-    // Reflect confirmed status immediately in the mounted Library and its shared
-    // SPA session cache. This prevents a completed response from leaving the old
-    // `상태 확인 필요` badge visible until a later Firestore/cache refresh.
-    if (resolved.status) {
-      const localPatch: any = {
-        status: resolved.status,
-        apiStatusResponse: data || null,
-        lastStatusRaw: resolved.raw || null,
-      };
-      if (resolved.status === 'completed') {
-        localPatch.failedAt = null;
-        localPatch.failureReason = null;
-        localPatch.errorMessage = null;
-        if (updatePayload.sunoData) localPatch.sunoData = updatePayload.sunoData;
-      } else if (resolved.status === 'failed') {
-        localPatch.failureReason = updatePayload.failureReason || null;
-        localPatch.errorMessage = updatePayload.failureReason || null;
-      }
-
-      setTracks((prev) => prev.map((track: any) =>
-        String(track?.id || '') === String(trackId)
-          ? { ...track, ...localPatch }
-          : track
-      ));
-
-      if (libraryWorkspaceSession?.uid === currentUser.uid) {
-        libraryWorkspaceSession.tracks = libraryWorkspaceSession.tracks.map((track: any) =>
-          String(track?.id || '') === String(trackId)
-            ? { ...track, ...localPatch }
-            : track
-        );
-        saveLibraryWorkspaceTrackCache(currentUser.uid, libraryWorkspaceSession.tracks);
-        emitLibraryWorkspaceSession(libraryWorkspaceSession);
-      }
-    }
-
     return resolved;
   };
 
-
-  useEffect(() => {
-    const handleRecoveredAudioUrl = (event: Event) => {
-      const detail = (event as CustomEvent<any>).detail || {};
-      const trackId = String(detail.trackId || '').trim();
-      const audioUrl = String(detail.audioUrl || '').trim();
-      const index = Number(detail.index ?? 0);
-      const recoveredAt = Number(detail.recoveredAt || Date.now());
-      if (!trackId || !audioUrl) return;
-
-      patchWorkspaceTrackLocally(trackId, (current) => {
-        const next: any = {
-          ...current,
-          audioValidationStatus: 'verified',
-          reportedAudioUrls: Array.from(new Set([...(Array.isArray(current?.reportedAudioUrls) ? current.reportedAudioUrls : []), audioUrl])),
-          audioUrls: Array.from(new Set([...(Array.isArray(current?.audioUrls) ? current.audioUrls : []), audioUrl])),
-          lastAudioUrlRecoveredAt: recoveredAt,
-        };
-        if (Array.isArray(current?.sunoData) && current.sunoData.length > 0) {
-          next.sunoData = current.sunoData.map((entry: any, entryIndex: number) => entryIndex === index
-            ? { ...entry, audioUrl, streamAudioUrl: audioUrl, url: audioUrl }
-            : entry);
-        }
-        if (index === 0 || !Array.isArray(current?.sunoData) || current.sunoData.length <= 1) {
-          next.audioUrl = audioUrl;
-          next.streamAudioUrl = audioUrl;
-        }
-        return next;
-      });
-
-      setPlaylistItems((prev) => prev.map((item: any) => {
-        const sourceId = String(item?.sourceId || item?.trackId || item?.parentTrackId || '').trim();
-        const itemIndexRaw = item?.sourceSubTrackIndex ?? item?.subTrackIndex ?? 0;
-        const itemIndex = Number.isFinite(Number(itemIndexRaw)) ? Number(itemIndexRaw) : 0;
-        if (sourceId !== trackId || itemIndex !== index) return item;
-        return { ...item, audioUrl, streamAudioUrl: audioUrl, url: audioUrl, lastAudioUrlRecoveredAt: recoveredAt };
-      }));
-    };
-
-    window.addEventListener('soridraw:suno-audio-url-recovered', handleRecoveredAudioUrl as EventListener);
-    return () => window.removeEventListener('soridraw:suno-audio-url-recovered', handleRecoveredAudioUrl as EventListener);
-  }, [user?.uid]);
 
   const filteredTracks = useMemo(() => {
     return tracks.filter(t => {
@@ -3228,8 +2546,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (allHidden) return false;
       }
 
-      const matchesSearch = (t.title || '').toLowerCase().includes(deferredSearchTerm.toLowerCase()) || 
-                            (t.prompt || '').toLowerCase().includes(deferredSearchTerm.toLowerCase());
+      const matchesSearch = (t.title || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (t.prompt || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesFilter = filter === 'all' || filter === 'trash' ||
                             (filter === 'completed' && t.status === 'completed') || 
@@ -3241,7 +2559,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       return matchesSearch && matchesFilter && matchesColor;
     });
-  }, [tracks, deferredSearchTerm, filter, workspaceColorFilter]);
+  }, [tracks, searchTerm, filter, workspaceColorFilter]);
 
   const displayedWorkspaceTracks = useMemo(() => {
     if (libraryViewMode !== 'workspace') return filteredTracks;
@@ -3252,10 +2570,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const canRequestMoreWorkspacePage = Boolean(
     libraryViewMode === 'workspace' &&
     !isSharedView &&
-    !deferredSearchTerm.trim() &&
+    !searchTerm.trim() &&
     filter === 'all' &&
     workspaceColorFilter === 'all' &&
-    hasMoreWorkspaceServerTracks
+    hasMoreWorkspaceServerTracks &&
+    filteredTracks.length >= WORKSPACE_PAGE_SIZE
   );
   const hasMoreWorkspaceTracks = libraryViewMode === 'workspace' && (canShowCachedWorkspaceMore || canRequestMoreWorkspacePage);
 
@@ -3275,99 +2594,75 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return list;
   }, [filteredTracks, filter, workspaceColorFilter]);
 
-  // Match the last known-good Vercel behavior: when a stored URL exists, try it
-  // first and let GlobalPlayer recover only after a real playback failure. This
-  // preserves the failed URL so recovery can reject it and select a different
-  // verified provider URL. Only URL-less rows need pre-play recovery.
-  const shouldRecoverAudioUrlBeforePlay = (group: any, item: any): boolean => {
-    if (isSharedView || !group?.taskId) return false;
-    return !getAudioUrl(item, group);
-  };
+  const handlePlayTrack = (track: any, subIndex: number = 0) => {
+    const items = extractSunoData(track);
+    const item = items[subIndex] || {};
+    const url = getAudioUrl(item, track);
+    const title = getTitle(item, track, subIndex);
+    const imageUrl = getImageUrl(item, track);
+    const creatorMeta = resolveCreatorSnapshot(track, item, { fallbackToCurrentUser: true });
 
-  const handlePlayTrack = async (track: any, subIndex: number = 0) => {
-    let playGroup = track;
-    let items = extractSunoData(playGroup);
-    let item = items[subIndex] || {};
-    let url = getAudioUrl(item, playGroup);
-
-    if (shouldRecoverAudioUrlBeforePlay(playGroup, item)) {
-      const recovered = await recoverSunoAudioUrl({
-        url: url || '',
-        audioUrl: url || '',
-        parent: playGroup,
-        index: subIndex,
-        trackId: playGroup?.id || playGroup?.trackId || '',
-        taskId: playGroup?.taskId || '',
+    if (url) {
+      markWorkspaceItemPlayed(track, subIndex);
+      const newQueue = allPlayables.map(p => {
+        const queuedCreatorMeta = resolveCreatorSnapshot(p.group, p.item, { fallbackToCurrentUser: true });
+        return {
+          url: p.url,
+          title: getTitle(p.item, p.group, p.idx),
+          imageUrl: getImageUrl(p.item, p.group),
+          parent: { ...p.group, ...queuedCreatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
+          index: p.idx,
+          creatorDisplayId: queuedCreatorMeta.creatorDisplayId,
+          ownerNickname: queuedCreatorMeta.ownerNickname,
+          creatorNickname: queuedCreatorMeta.creatorNickname,
+          ownerEmail: queuedCreatorMeta.ownerEmail,
+          creatorEmail: queuedCreatorMeta.creatorEmail,
+          lyrics: p.item?.lyrics || p.item?.lyricsText || p.group?.lyrics || p.group?.lyricsText || null
+        };
       });
-      if (recovered?.audioUrl) {
-        const recoveredPlayable = applyRecoveredSunoAudioUrl({
-          url: url || '',
-          audioUrl: url || '',
-          parent: playGroup,
-          index: subIndex,
-        }, recovered);
-        playGroup = recoveredPlayable?.parent || playGroup;
-        items = extractSunoData(playGroup);
-        item = items[subIndex] || item;
-        url = recovered.audioUrl;
-      } else if (!url) {
-        showToast('Music API에서 현재 재생 가능한 음원 링크를 찾지 못했습니다.');
-        return;
-      }
+      playTrack({
+        url,
+        title,
+        imageUrl,
+        parent: { ...track, ...creatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
+        index: subIndex,
+        creatorDisplayId: creatorMeta.creatorDisplayId,
+        ownerNickname: creatorMeta.ownerNickname,
+        creatorNickname: creatorMeta.creatorNickname,
+        ownerEmail: creatorMeta.ownerEmail,
+        creatorEmail: creatorMeta.creatorEmail,
+        lyrics: item?.lyrics || item?.lyricsText || track?.lyrics || track?.lyricsText || null
+      }, newQueue);
     }
-
-    if (!url) return;
-
-    const title = getTitle(item, playGroup, subIndex);
-    const imageUrl = getImageUrl(item, playGroup);
-    const creatorMeta = resolveCreatorSnapshot(playGroup, item, { fallbackToCurrentUser: true });
-    markWorkspaceItemPlayed(playGroup, subIndex);
-
-    let newQueue = allPlayables.map(p => {
-      const queuedCreatorMeta = resolveCreatorSnapshot(p.group, p.item, { fallbackToCurrentUser: true });
-      return {
-        url: p.url,
-        title: getTitle(p.item, p.group, p.idx),
-        imageUrl: getImageUrl(p.item, p.group),
-        parent: { ...p.group, ...queuedCreatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
-        index: p.idx,
-        creatorDisplayId: queuedCreatorMeta.creatorDisplayId,
-        ownerNickname: queuedCreatorMeta.ownerNickname,
-        creatorNickname: queuedCreatorMeta.creatorNickname,
-        ownerEmail: queuedCreatorMeta.ownerEmail,
-        creatorEmail: queuedCreatorMeta.creatorEmail,
-        lyrics: p.item?.lyrics || p.item?.lyricsText || p.group?.lyrics || p.group?.lyricsText || null
-      };
-    });
-
-    const parentId = String(playGroup?.id || playGroup?.trackId || '').trim();
-    const currentQueueIndex = newQueue.findIndex((queued: any) => (
-      String(queued?.parent?.id || queued?.parent?.trackId || '').trim() === parentId
-      && Number(queued?.index ?? 0) === Number(subIndex)
-    ));
-    const currentQueueTrack = {
-      url,
-      title,
-      imageUrl,
-      parent: { ...playGroup, ...creatorMeta, __workspaceContext: true, __libraryViewMode: 'workspace' },
-      index: subIndex,
-      creatorDisplayId: creatorMeta.creatorDisplayId,
-      ownerNickname: creatorMeta.ownerNickname,
-      creatorNickname: creatorMeta.creatorNickname,
-      ownerEmail: creatorMeta.ownerEmail,
-      creatorEmail: creatorMeta.creatorEmail,
-      lyrics: item?.lyrics || item?.lyricsText || playGroup?.lyrics || playGroup?.lyricsText || null
-    };
-    if (currentQueueIndex >= 0) newQueue[currentQueueIndex] = currentQueueTrack;
-    else newQueue = [currentQueueTrack, ...newQueue];
-
-    playTrack(currentQueueTrack, newQueue);
   };
 
-  // Cost guard: old/stale Suno rows are rendered as '상태 확인 필요' only.
-  // Page entry/reload must never fan out one Function call + one Firestore
-  // write per stale track. The existing explicit status-check action owns
-  // reconciliation; active in-progress generation polling remains separate.
+  useEffect(() => {
+    if (!user || isSharedView || tracks.length === 0) return;
+
+    // Identify tracks that have been stuck for more than 3 minutes without audio URLs
+    const stuckTracks = tracks.filter(isTrackStuck);
+    if (stuckTracks.length === 0) return;
+
+    // Quietly update each stuck track status to failed in firestore
+    stuckTracks.forEach(async (group) => {
+      try {
+        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', group.id);
+        const reason = '생성 시간 초과 (3분 경과)';
+        await updateDoc(trackRef, {
+          status: 'failed',
+          failedAt: serverTimestamp(),
+          failureReason: reason,
+          errorMessage: reason, // Add errorMessage
+          lastStatusRaw: 'timeout | timed_out',
+          lastStatusCheckedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        console.log(`[Suno Safety Hook] Automatically marked stuck Suno track ${group.id} as failed.`);
+      } catch (e) {
+        console.error('Failed to update stuck track to failed:', e);
+      }
+    });
+  }, [tracks, user, isSharedView]);
 
   useEffect(() => {
     if (isSharedView || !user) return;
@@ -3382,11 +2677,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (count >= 30) return false;
 
         const items = extractSunoData(group);
-        if (hasStableLibraryResult(group)) return false;
+        const isFullyCompleted = group.status === 'completed' && items.every((item: any) => !!getAudioUrl(item, group) && getDuration(item, group) !== null);
 
-        const normalizedStatus = String(group.status || '').trim().toLowerCase();
-        const isExplicitPending = !normalizedStatus || ['processing', 'submitted', 'pending', 'generating', 'queued', 'queue', 'running', 'in_progress'].includes(normalizedStatus);
-        if (!isExplicitPending) return false;
+        if (isFullyCompleted) return false;
 
         if (!group.taskId) return false;
 
@@ -3546,51 +2839,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         return;
       }
 
-      const previewResolved = data ? resolveSunoStatusFromResponse(data) : { status: null, raw: '' };
-      if (group && isTrackPastAutoCheckWindow(group) && previewResolved.status === 'processing') {
-        const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', trackId);
-        const terminalReason = '서버 생성 상태 장기 미확정 (10분 초과)';
-        await updateDoc(trackRef, {
-          status: 'failed',
-          failedAt: serverTimestamp(),
-          failureReason: terminalReason,
-          errorMessage: terminalReason,
-          lastStatusRaw: previewResolved.raw || 'processing | stale_manual_check',
-          lastStatusCheckedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        const localPatch = {
-          status: 'failed',
-          failureReason: terminalReason,
-          errorMessage: terminalReason,
-        };
-        setTracks((prev) => prev.map((track: any) =>
-          String(track?.id || '') === String(trackId) ? { ...track, ...localPatch } : track
-        ));
-        if (libraryWorkspaceSession?.uid === user.uid) {
-          libraryWorkspaceSession.tracks = libraryWorkspaceSession.tracks.map((track: any) =>
-            String(track?.id || '') === String(trackId) ? { ...track, ...localPatch } : track
-          );
-          saveLibraryWorkspaceTrackCache(user.uid, libraryWorkspaceSession.tracks);
-          emitLibraryWorkspaceSession(libraryWorkspaceSession);
-        }
-        alert('이 작업은 오래 전에 종료됐지만 서버에서 완료 음원 정보를 확인하지 못했습니다. 다시 생성해주세요.');
-        return;
-      }
-
       const resolved = data ? await syncStatusResponseToFirestore(trackId, taskId, data) : { status: null, raw: '' };
 
       if (resolved.status === 'completed') {
-        const resolvedSunoData = extractStatusSunoData(data);
-        const resolvedHasAudio = Array.isArray(resolvedSunoData) && resolvedSunoData.some((entry: any) =>
-          Boolean(normalizePlayableUrl(entry?.audio_url || entry?.audioUrl || entry?.url || ''))
-        );
-        const currentHasAudio = Boolean(group && extractSunoData(group).some((entry: any) =>
-          Boolean(getAudioUrl(entry, group))
-        ));
-        alert(resolvedHasAudio || currentHasAudio
-          ? '생성 완료되었습니다.'
-          : '생성 완료 상태지만 재생 음원 정보를 받지 못했습니다.');
+        alert('생성 완료되었습니다.');
       } else if (resolved.status === 'failed') {
         const displayMsg = getSunoFailureDisplayMessage({ ...group, failureReason: group?.failureReason, errorMessage: group?.errorMessage });
         alert(displayMsg);
@@ -3662,19 +2914,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         </span>
       );
     }
-    const rescueEntries = Object.values(group?.audioRescue || {}) as any[];
-    const hasCompletedRescue = rescueEntries.some((entry: any) => {
-      const rescueStatus = String(entry?.status || '').trim().toLowerCase();
-      const rescueUrl = String(entry?.audioUrl || entry?.audio_url || entry?.url || '').trim();
-      return Boolean(rescueUrl) && (!rescueStatus || ['completed', 'success', 'complete'].includes(rescueStatus));
-    });
-    const normalizedDisplayStatus = String(group.status || '').trim().toLowerCase();
-    const isPendingDisplayStatus = ['processing', 'submitted', 'pending', 'generating', 'queued', 'queue', 'running', 'in_progress'].includes(normalizedDisplayStatus);
-    const hasAnyPlayableOutput = hasAnyPlayableLibraryOutput(group);
-    const displayStatus = isPendingDisplayStatus && !isLibraryActiveGeneration(group) && (hasCompletedRescue || hasAnyPlayableOutput)
-      ? 'completed'
-      : normalizedDisplayStatus;
-    switch (displayStatus) {
+    switch (group.status) {
       case 'failed':
       case 'cancelled':
       case 'canceled':
@@ -3683,21 +2923,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       case 'processing':
       case 'submitted':
       case 'pending':
-        if (!isLibraryActiveGeneration(group)) {
-          badges.push(
-            <span key="stale-processing" className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/12 text-amber-300">
-              <RefreshCw className="w-3 h-3" />
-              상태 확인 필요
-            </span>
-          );
-        } else {
-          badges.push(
-            <span key="processing" className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              생성 중...
-            </span>
-          );
-        }
+        badges.push(
+          <span key="processing" className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+             <Loader2 className="w-3 h-3 animate-spin" />
+             생성 중...
+          </span>
+        );
         break;
     }
     return badges;
@@ -3719,45 +2950,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
-  const resolveDownloadRecoveryTarget = (audioUrl?: string, title?: string) => {
-    const normalizedUrl = String(audioUrl || '').trim();
-    if (normalizedUrl) {
-      for (const group of tracks) {
-        const items = extractSunoData(group);
-        const idx = items.findIndex((entry: any) => String(getAudioUrl(entry, group) || '').trim() === normalizedUrl);
-        if (idx >= 0) {
-          return {
-            url: normalizedUrl,
-            title: title || getTitle(items[idx], group, idx),
-            parent: group,
-            index: idx,
-          };
-        }
-      }
-    }
-
-    if (currentTrack && (!normalizedUrl || getCurrentPlayableUrl() === normalizedUrl)) {
-      return { ...currentTrack, url: normalizedUrl || currentTrack.url };
-    }
-
-    return { url: normalizedUrl, title: title || 'SORIDRAW' };
-  };
-
   const runDownload = async (audioUrl?: string, title?: string) => {
-    const target = resolveDownloadRecoveryTarget(audioUrl, title);
-    if (!target?.url && !target?.parent?.taskId) {
+    if (!audioUrl) {
       showToast('아직 다운로드할 음원이 없습니다.');
       return;
     }
-
-    const result = await downloadSunoAudioWithRecovery(target, title || target.title);
-    if (!result.ok) {
-      showToast('Music API에서 현재 다운로드 가능한 음원 링크를 찾지 못했습니다.');
-    } else if (result.directFallback) {
-      showToast('브라우저에서 새 음원 링크를 열었습니다.');
-    } else if (result.recovered) {
-      showToast('최신 음원 링크로 갱신해 다운로드했습니다.');
-    }
+    // Use the optimized blob downloader instead of window.open
+    downloadAudioWithTitle(audioUrl, title);
   };
 
   const handleDownload = async (url: string, title?: string) => {
@@ -3902,14 +3101,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     try {
       const shareSnap = await getDoc(doc(db, 'suno_shares', safeSourceId));
       const isPublic = shareSnap.exists() && shareSnap.data().isPublic === true;
-      const nextStatus = { isPublic, checkedAt: Date.now() };
-      setSharedStatusCache(prev => {
-        const next = { ...prev, [safeSourceId]: nextStatus };
-        if (user?.uid) {
-          try { localStorage.setItem(getLibrarySharedStatusCacheKey(user.uid), JSON.stringify(next)); } catch {}
-        }
-        return next;
-      });
+      setSharedStatusCache(prev => ({ ...prev, [safeSourceId]: { isPublic, checkedAt: Date.now() } }));
 
       if (!isPublic && showMessage) {
         showToast('원곡자가 비공개로 전환하여 사용할 수 없습니다.');
@@ -4209,7 +3401,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (item?.sourceType === 'shared_track') {
       const sourceId = String(item?.sourceId || '').trim();
       const cached = sourceId ? sharedStatusCache[sourceId] : null;
-      return isFreshSharedPrivateStatus(cached) ? 'private' : 'public';
+      return cached?.isPublic === false ? 'private' : 'public';
     }
 
     const sourceTrack = getPlaylistItemSourceTrack(item);
@@ -4222,7 +3414,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (selection.context !== 'sharedPlaylist' && item?.sourceType !== 'shared_track') return false;
     const sourceId = String(item?.sourceId || '').trim();
     if (!sourceId) return false;
-    return isFreshSharedPrivateStatus(sharedStatusCache[sourceId]);
+    return sharedStatusCache[sourceId]?.isPublic === false;
   };
 
   const hasUnavailableSharedSelection = selectedTrackList.some(isUnavailableSharedSelection);
@@ -4235,7 +3427,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   const getVisiblePlaylistItemsForSelection = () => {
-    const normalizedPlaylistSearch = deferredPlaylistSearchTerm.trim().toLowerCase();
+    const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
     let items = playlistItems.filter((item) => {
       if (!matchesPlaylistVisibilityFilter(item)) return false;
       if (playlistColorFilter === 'all') return true;
@@ -4761,10 +3953,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return null;
   };
 
-  const handleApplyNext = async (group: any, item: any) => {
+  const handleApplyNext = (group: any, item: any) => {
     if (!group && !item) return;
 
-    let appliedKeywords = resolveSunoAppliedKeywords(
+    const appliedKeywords = resolveSunoAppliedKeywords(
       item,
       group,
       group?.item,
@@ -4772,56 +3964,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       group?.shareData,
       group?.tracks?.[0]
     );
-
-    const activeUid = String(user?.uid || auth.currentUser?.uid || '').trim();
-    const isPlaylistSource = Boolean(
-      group?.isPlaylistItem || item?.isPlaylistItem ||
-      group?.sourceType === 'suno_track' || item?.sourceType === 'suno_track'
-    );
-    const isSharedSource = Boolean(
-      isSharedView || group?.sourceType === 'shared_track' || item?.sourceType === 'shared_track'
-    );
-    const sourceTrackId = String(
-      isPlaylistSource
-        ? (group?.sourceId || item?.sourceId || group?.trackId || item?.trackId || group?.id || '')
-        : (group?.id || group?.trackId || item?.sourceId || item?.trackId || '')
-    ).trim();
-    const keywordCacheKey = activeUid && sourceTrackId ? `${activeUid}:${sourceTrackId}` : '';
-
-    if ((!appliedKeywords || Object.keys(appliedKeywords).length === 0) && keywordCacheKey) {
-      appliedKeywords = libraryAppliedKeywordsSessionCache.get(keywordCacheKey) || null;
-    }
-
-    if ((!appliedKeywords || Object.keys(appliedKeywords).length === 0) && activeUid && sourceTrackId && !isSharedSource) {
-      try {
-        const sourceSnapshot = await getDoc(doc(db, 'suno_tracks', activeUid, 'tracks', sourceTrackId));
-        if (sourceSnapshot.exists()) {
-          const fullTrack: any = { id: sourceTrackId, ...(sourceSnapshot.data() || {}) };
-          appliedKeywords = resolveSunoAppliedKeywords(
-            item,
-            fullTrack,
-            fullTrack?.item,
-            fullTrack?.track,
-            fullTrack?.shareData,
-            fullTrack?.tracks?.[0]
-          );
-          if (appliedKeywords && Object.keys(appliedKeywords).length > 0) {
-            libraryAppliedKeywordsSessionCache.set(keywordCacheKey, appliedKeywords);
-            patchWorkspaceTrackLocally(sourceTrackId, (current) => ({
-              ...current,
-              appliedKeywords,
-              requestPayload: current?.requestPayload || fullTrack?.requestPayload || null,
-            }));
-          }
-        }
-      } catch (error) {
-        console.warn('Library next-song keyword hydration failed:', error);
-      }
-    }
-
-    if (appliedKeywords && Object.keys(appliedKeywords).length > 0 && keywordCacheKey) {
-      libraryAppliedKeywordsSessionCache.set(keywordCacheKey, appliedKeywords);
-    }
 
     console.log("Shared/Library apply source:", {
       group,
@@ -5568,10 +4710,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (items.length > 0) {
           const nextSunoData = items.map((entry: any, entryIndex: number) => payload.indices.has(entryIndex) ? { ...entry, hidden: false } : entry);
           await updateDoc(trackRef, { sunoData: nextSunoData, hidden: false, deletedAt: null });
-          patchWorkspaceTrackLocally(groupId, (current) => ({ ...current, sunoData: nextSunoData, hidden: false, deletedAt: null }));
         } else {
           await updateDoc(trackRef, { hidden: false, deletedAt: null });
-          patchWorkspaceTrackLocally(groupId, (current) => ({ ...current, hidden: false, deletedAt: null }));
         }
       }
 
@@ -5589,7 +4729,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setBulkMenuState(null);
 
     try {
-      const { deleteDoc } = await import('../lib/firestoreMeasured');
+      const { deleteDoc } = await import('firebase/firestore');
       const workspaceGroups = new Map<string, { group: any; indices: Set<number> }>();
       for (const selection of selectedTrackList) {
         if (selection.context !== 'workspace') continue;
@@ -5609,7 +4749,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             removeWorkspaceTracksLocally([groupId]);
           } else {
             await updateDoc(trackRef, { sunoData: nextSunoData });
-            patchWorkspaceTrackLocally(groupId, (current) => ({ ...current, sunoData: nextSunoData }));
           }
         } else {
           await deleteDoc(trackRef);
@@ -5667,11 +4806,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 updatePayload.deletedAt = serverTimestamp();
               }
               await updateDoc(trackRef, updatePayload);
-              patchWorkspaceTrackLocally(groupId, (current) => ({ ...current, ...updatePayload, sunoData: nextSunoData }));
             } else {
-              const deletedAt = serverTimestamp();
-              await updateDoc(trackRef, { hidden: true, isPublic: false, deletedAt });
-              patchWorkspaceTrackLocally(groupId, (current) => ({ ...current, hidden: true, isPublic: false, deletedAt }));
+              await updateDoc(trackRef, { hidden: true, isPublic: false, deletedAt: serverTimestamp() });
             }
           }
 
@@ -5720,52 +4856,51 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     try {
       const { doc, updateDoc, serverTimestamp, deleteDoc } = await import('firebase/firestore');
       const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', deleteTarget.groupId);
-      const sourceGroup = deleteTarget.group || {};
-      const hasPersistedSunoData = Array.isArray(sourceGroup.sunoData) && sourceGroup.sunoData.length > 0;
+
+      const items = extractSunoData(deleteTarget.group);
+      let newSunoData = [...items];
       let deletedTrackDocument = false;
 
-      if (hasPersistedSunoData) {
-        const nextSunoData = [...sourceGroup.sunoData];
+      if (items.length > 0 && !(!deleteTarget.group.sunoData?.length && newSunoData.length === 1 && !newSunoData[0].audioUrl && !newSunoData[0].streamAudioUrl)) {
+        // Normal case: treat extracted items as the root sunoData array.
         if (deleteTarget.action === 'hide') {
-          if (nextSunoData[deleteTarget.itemIndex]) nextSunoData[deleteTarget.itemIndex] = { ...nextSunoData[deleteTarget.itemIndex], hidden: true };
+            newSunoData[deleteTarget.itemIndex] = { ...newSunoData[deleteTarget.itemIndex], hidden: true };
         } else if (deleteTarget.action === 'restore') {
-          if (nextSunoData[deleteTarget.itemIndex]) nextSunoData[deleteTarget.itemIndex] = { ...nextSunoData[deleteTarget.itemIndex], hidden: false };
+            newSunoData[deleteTarget.itemIndex] = { ...newSunoData[deleteTarget.itemIndex], hidden: false };
         } else if (deleteTarget.action === 'permanentDelete') {
-          nextSunoData.splice(deleteTarget.itemIndex, 1);
+            newSunoData.splice(deleteTarget.itemIndex, 1);
         }
 
-        if (deleteTarget.action === 'permanentDelete' && nextSunoData.length === 0) {
-          await deleteDoc(trackRef);
-          deletedTrackDocument = true;
+        if (deleteTarget.action === 'permanentDelete' && newSunoData.length === 0) {
+            await deleteDoc(trackRef);
+            deletedTrackDocument = true;
         } else {
-          const allHidden = nextSunoData.length > 0 && nextSunoData.every((entry: any) => entry?.hidden === true);
-          const updatePayload: any = { sunoData: nextSunoData, hidden: allHidden };
-          if (allHidden) {
-            updatePayload.isPublic = false;
-            updatePayload.deletedAt = serverTimestamp();
-          } else if (deleteTarget.action === 'restore') {
-            updatePayload.deletedAt = null;
-          }
-          await updateDoc(trackRef, updatePayload);
-          patchWorkspaceTrackLocally(deleteTarget.groupId, (current) => ({ ...current, ...updatePayload, sunoData: nextSunoData }));
+            const allHidden = newSunoData.length > 0 && newSunoData.every(i => i.hidden === true);
+            const updatePayload: any = { sunoData: newSunoData };
+            if (allHidden) {
+              updatePayload.hidden = true;
+              updatePayload.isPublic = false;
+              updatePayload.deletedAt = serverTimestamp();
+            } else if (deleteTarget.action === 'restore') {
+              updatePayload.hidden = false;
+            }
+            await updateDoc(trackRef, updatePayload);
         }
       } else {
+        // Fallback case: just update document hidden field.
         if (deleteTarget.action === 'hide') {
-          const deletedAt = serverTimestamp();
-          const updatePayload = { hidden: true, isPublic: false, deletedAt };
-          await updateDoc(trackRef, updatePayload);
-          patchWorkspaceTrackLocally(deleteTarget.groupId, (current) => ({ ...current, ...updatePayload }));
+            await updateDoc(trackRef, { hidden: true, isPublic: false, deletedAt: serverTimestamp() });
         } else if (deleteTarget.action === 'restore') {
-          const updatePayload = { hidden: false, deletedAt: null };
-          await updateDoc(trackRef, updatePayload);
-          patchWorkspaceTrackLocally(deleteTarget.groupId, (current) => ({ ...current, ...updatePayload }));
+            await updateDoc(trackRef, { hidden: false });
         } else if (deleteTarget.action === 'permanentDelete') {
-          await deleteDoc(trackRef);
-          deletedTrackDocument = true;
+            await deleteDoc(trackRef);
+            deletedTrackDocument = true;
         }
       }
 
-      if (deletedTrackDocument) removeWorkspaceTracksLocally([deleteTarget.groupId]);
+      if (deletedTrackDocument) {
+        removeWorkspaceTracksLocally([deleteTarget.groupId]);
+      }
       setDeleteTarget(null);
     } catch (e) {
       console.error(e);
@@ -5774,6 +4909,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       setIsDeleting(false);
     }
   };
+
   const isModalOpen = !!sharePopupInfo || !!showDetails || !!deleteTarget || !!renameModalArgs || !!moveModalArgs || !!playlistSavePicker || !!bulkShareModalOpen || !!bulkMoveModalOpen;
 
   const closeModal = () => {
@@ -6082,12 +5218,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     return (
       <>
-        <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
-            <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
-              <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
-                <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#A98BFF] transition-colors" />
-              </div>
+        <div className="-mt-[12px] md:mt-0 flex flex-col xl:flex-row xl:items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <button
+              onClick={() => navigate('/studio')}
+              className="h-[46px] w-[46px] shrink-0 flex items-center justify-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[#FFBB22] hover:bg-white/5 shadow-btn transition-all"
+            >
+              <Zap className="w-4 h-4" />
+            </button>
+            <div className="relative flex-1 min-w-0 group overflow-hidden">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#7FBD75] transition-colors" />
               <input
                 type="text"
                 value={isWorkspaceMode ? searchTerm : playlistSearchTerm}
@@ -6097,13 +5237,22 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }}
                 onFocus={() => setIsLibrarySearchFocused(true)}
                 onBlur={() => setIsLibrarySearchFocused(false)}
-                className="soridraw-responsive-search-input w-full h-[46px] pl-12 pr-4 rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#A98BFF]/45 transition-all text-sm text-[var(--text-primary)]"
+                className="w-full h-[46px] pl-12 pr-4 rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#7FBD75]/45 transition-all text-sm text-[var(--text-primary)]"
               />
               {!(isWorkspaceMode ? searchTerm : playlistSearchTerm) && !isLibrarySearchFocused && (
-                <div className="soridraw-responsive-search-placeholder absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
-                  <div className="text-sm text-white/40 whitespace-nowrap">
-                    {isWorkspaceMode ? '음악 제목이나 스타일 검색...' : '음악 제목이나 제작자 검색...'}
-                  </div>
+                <div className="absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={`${isWorkspaceMode ? 'workspace' : 'playlist'}-${libraryPlaceholderIndex}`}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.35 }}
+                      className="text-sm text-white/40 whitespace-nowrap"
+                    >
+                      {(isWorkspaceMode ? librarySearchPlaceholders : playlistSearchPlaceholders)[libraryPlaceholderIndex % (isWorkspaceMode ? librarySearchPlaceholders.length : playlistSearchPlaceholders.length)]}
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
               )}
             </div>
@@ -6111,71 +5260,48 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
           {isWorkspaceMode ? (
             <>
-              <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
                 <button
                   onClick={() => setWorkspaceColorFilter('all')}
-                  className={`soridraw-color-reset-button h-9 text-xs font-bold px-4 transition-all rounded-xl ${workspaceColorFilter === 'all' ? 'text-[#D8CCFF] bg-[#A98BFF]/24' : 'text-white/40 hover:text-white/70'}`}
-                  aria-label="전체 색상 보기"
+                  className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${workspaceColorFilter === 'all' ? 'text-[#C7F7BD] bg-[#7FBD75]/24' : 'text-white/40 hover:text-white/70'}`}
                 >
-                  <span className="soridraw-color-reset-text">전체</span>
-                  <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
+                  전체
                 </button>
                 <div className="w-px h-3 bg-white/10 mx-1"></div>
                 {COLOR_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
                     onClick={() => setWorkspaceColorFilter(opt.value)}
-                    className="group flex h-7 w-7 items-center justify-center rounded-full !bg-transparent !shadow-none !ring-0 transition-transform hover:scale-110"
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                      workspaceColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
+                    }`}
                   >
-                    <div
-                      className={`h-3.5 w-3.5 rounded-full transition-all ${workspaceColorFilter === opt.value ? 'scale-110 brightness-110' : 'brightness-75 group-hover:brightness-100'}`}
-                      style={{ backgroundColor: opt.color }}
-                    />
+                    <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
                   </button>
                 ))}
               </div>
-              <div ref={libraryFilterPopupRef} className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={(event) => { event.stopPropagation(); setShowLibraryFilterPopup((prev) => !prev); }}
-                  className={`soridraw-responsive-filter-button flex h-[46px] items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] px-4 text-xs font-black transition-all ${showLibraryFilterPopup ? 'bg-white/[0.09] text-white' : 'text-white/70 hover:bg-white/[0.08] hover:text-white'}`}
-                  aria-expanded={showLibraryFilterPopup}
-                >
-                  <Filter className="h-4 w-4" />
-                  <span className="soridraw-filter-label">필터{filter !== 'all' ? ' (1)' : ''}</span>
-                  <ChevronDown className={`soridraw-filter-chevron h-3.5 w-3.5 transition-transform ${showLibraryFilterPopup ? 'rotate-180' : ''}`} />
-                </button>
-                {showLibraryFilterPopup && (
-                  <div
-                    data-floating-menu="true"
-                    className="absolute right-0 top-[52px] z-[120] w-[210px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
-                    onClick={(event) => event.stopPropagation()}
+              <div className="flex h-[46px] items-center bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
+                {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${
+                      filter === f ? 'bg-[#7FBD75]/78 text-white' : 'bg-transparent text-white/50 hover:text-white/75'
+                    }`}
                   >
-                    {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
-                      <button
-                        key={f}
-                        type="button"
-                        onClick={() => { setFilter(f); setShowLibraryFilterPopup(false); }}
-                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all ${filter === f ? 'bg-[#A98BFF]/16 text-[#D8CCFF]' : 'text-white/66 hover:bg-white/[0.06] hover:text-white'}`}
-                      >
-                        <span>{f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : f === 'public' ? '공개' : f === 'private' ? '비공개' : '휴지통'}</span>
-                        {filter === f && <Check className="h-3.5 w-3.5" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                    {f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : f === 'public' ? '공개' : f === 'private' ? '비공개' : '휴지통'}
+                  </button>
+                ))}
               </div>
             </>
           ) : (
             <>
-              <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
                 <button
                   onClick={() => setPlaylistColorFilter('all')}
-                  className={`soridraw-color-reset-button h-9 text-xs font-bold px-4 transition-all rounded-xl ${playlistColorFilter === 'all' ? 'text-[#D8CCFF] bg-[#A98BFF]/24' : 'text-white/40 hover:text-white/70'}`}
-                  aria-label="전체 색상 보기"
+                  className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${playlistColorFilter === 'all' ? 'text-[#C7F7BD] bg-[#7FBD75]/24' : 'text-white/40 hover:text-white/70'}`}
                 >
-                  <span className="soridraw-color-reset-text">전체</span>
-                  <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
+                  전체
                 </button>
                 <div className="w-px h-3 bg-white/10 mx-1"></div>
                 {[
@@ -6190,67 +5316,50 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <button
                     key={opt.value}
                     onClick={() => setPlaylistColorFilter(opt.value)}
-                    className="group flex h-7 w-7 items-center justify-center rounded-full !bg-transparent !shadow-none !ring-0 transition-transform hover:scale-110"
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                      playlistColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
+                    }`}
                   >
-                    <div
-                      className={`h-3.5 w-3.5 rounded-full transition-all ${playlistColorFilter === opt.value ? 'scale-110 brightness-110' : 'brightness-75 group-hover:brightness-100'}`}
-                      style={{ backgroundColor: opt.color }}
-                    />
+                    <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
                   </button>
                 ))}
               </div>
-              <div ref={libraryFilterPopupRef} className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={(event) => { event.stopPropagation(); setShowLibraryFilterPopup((prev) => !prev); }}
-                  className={`soridraw-responsive-filter-button flex h-[46px] items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] px-4 text-xs font-black transition-all ${showLibraryFilterPopup ? 'bg-white/[0.09] text-white' : 'text-white/70 hover:bg-white/[0.08] hover:text-white'}`}
-                  aria-expanded={showLibraryFilterPopup}
-                >
-                  <Filter className="h-4 w-4" />
-                  <span className="soridraw-filter-label">필터{(playlistSortMode !== 'added' ? 1 : 0) + (playlistVisibilityFilter !== 'all' ? 1 : 0) > 0 ? ` (${(playlistSortMode !== 'added' ? 1 : 0) + (playlistVisibilityFilter !== 'all' ? 1 : 0)})` : ''}</span>
-                  <ChevronDown className={`soridraw-filter-chevron h-3.5 w-3.5 transition-transform ${showLibraryFilterPopup ? 'rotate-180' : ''}`} />
-                </button>
-                {showLibraryFilterPopup && (
-                  <div
-                    data-floating-menu="true"
-                    className="absolute right-0 top-[52px] z-[120] w-[220px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
-                    onClick={(event) => event.stopPropagation()}
+              <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 border border-black/15 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
+                {[
+                  { value: 'added', label: '저장순' },
+                  { value: 'genre', label: '장르순' },
+                  { value: 'custom', label: '사용자' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPlaylistSortMode(opt.value as any)}
+                    className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold rounded-xl transition-all ${
+                      playlistSortMode === opt.value
+                        ? 'bg-[#7FBD75]/24 text-[#C7F7BD]'
+                        : 'text-white/40 hover:text-white/70'
+                    }`}
                   >
-                    <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.12em] text-white/30">정렬</p>
-                    {[
-                      { value: 'added', label: '저장순' },
-                      { value: 'genre', label: '장르순' },
-                      { value: 'custom', label: '사용자' }
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => { setPlaylistSortMode(opt.value as any); setShowLibraryFilterPopup(false); }}
-                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all ${playlistSortMode === opt.value ? 'bg-[#A98BFF]/16 text-[#D8CCFF]' : 'text-white/66 hover:bg-white/[0.06] hover:text-white'}`}
-                      >
-                        <span>{opt.label}</span>
-                        {playlistSortMode === opt.value && <Check className="h-3.5 w-3.5" />}
-                      </button>
-                    ))}
-                    <div className="my-1 h-px bg-white/[0.07]" />
-                    <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.12em] text-white/30">공개 상태</p>
-                    {[
-                      { value: 'all', label: '전체' },
-                      { value: 'public', label: '공개' },
-                      { value: 'private', label: '비공개' }
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => { setPlaylistVisibilityFilter(opt.value as any); setShowLibraryFilterPopup(false); }}
-                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all ${playlistVisibilityFilter === opt.value ? 'bg-[#A98BFF]/16 text-[#D8CCFF]' : 'text-white/66 hover:bg-white/[0.06] hover:text-white'}`}
-                      >
-                        <span>{opt.label}</span>
-                        {playlistVisibilityFilter === opt.value && <Check className="h-3.5 w-3.5" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                    {opt.label}
+                  </button>
+                ))}
+                <div className="w-px h-4 bg-white/10 mx-1" />
+                {[
+                  { value: 'all', label: '전체' },
+                  { value: 'public', label: '공개' },
+                  { value: 'private', label: '비공개' }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPlaylistVisibilityFilter(opt.value as any)}
+                    className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold rounded-xl transition-all ${
+                      playlistVisibilityFilter === opt.value
+                        ? 'bg-[#7FBD75]/24 text-[#C7F7BD]'
+                        : 'text-white/40 hover:text-white/70'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
             </>
           )}
@@ -6264,18 +5373,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (isSharedView) return null;
     return (
       <div className="flex items-center gap-2 max-w-full whitespace-nowrap">
-        <div className="soridraw-library-mode-tabs grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px]">
+        <div className="grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none">
           <button
             onClick={() => setLibraryViewMode('workspace')}
-            aria-pressed={libraryViewMode === 'workspace'}
-            data-active={libraryViewMode === 'workspace' ? 'true' : 'false'}
-            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'soridraw-library-mode-tab--active bg-[#A98BFF]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             뮤직 스페이스
           </button>
           <button
-            aria-pressed={libraryViewMode === 'playlist'}
-            data-active={libraryViewMode === 'playlist' ? 'true' : 'false'}
             onClick={() => {
               if (libraryViewMode !== 'playlist') {
                 setLibraryViewMode('playlist');
@@ -6285,13 +5390,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'soridraw-library-mode-tab--active bg-[#A98BFF]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
-            마이 리스트
+            플레이리스트
           </button>
           <button
-            aria-pressed={libraryViewMode === 'sharedPlaylist'}
-            data-active={libraryViewMode === 'sharedPlaylist' ? 'true' : 'false'}
             onClick={() => {
               if (libraryViewMode !== 'sharedPlaylist') {
                 setLibraryViewMode('sharedPlaylist');
@@ -6301,9 +5404,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'soridraw-library-mode-tab--active bg-[#A98BFF]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
-            공유 리스트
+            공유 플레이리스트
           </button>
         </div>
       </div>
@@ -6398,18 +5501,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const persistPlaylistOrder = async (section: 'normal' | 'shared') => {
     if (!user?.uid) return;
     const sectionList = getPlaylistsBySectionForDrag(section).map((playlist, index) => ({ ...playlist, order: index + 1 }));
-    const remoteVersion = Number((readUserProfileCache(user.uid) as any)?.syncVersions?.playlists || 0);
-    const syncVersion = nextLibraryPlaylistSyncVersion(user.uid, Math.max(playlistListCacheVersionRef.current, remoteVersion));
-    const batch = writeBatch(db);
-    sectionList
-      .filter((playlist) => playlist.id && !(playlist as any).isFallback)
-      .forEach((playlist) => batch.update(doc(db, 'user_playlists', user.uid, 'lists', playlist.id!), { order: playlist.order }));
-    batch.update(doc(db, 'users', user.uid), { 'syncVersions.playlists': syncVersion });
-    await batch.commit();
-    const sectionById = new Map(sectionList.map((playlist) => [playlist.id, playlist]));
-    const next = playlistsRef.current.map((playlist) => sectionById.get(playlist.id) || playlist);
-    playlistListCacheVersionRef.current = syncVersion;
-    await writeLibraryPlaylistListCache(user.uid, next, syncVersion);
+    await Promise.all(
+      sectionList
+        .filter((playlist) => playlist.id && !(playlist as any).isFallback)
+        .map((playlist) => updateDoc(doc(db, 'user_playlists', user.uid, 'lists', playlist.id!), { order: playlist.order }))
+    );
   };
 
   const handlePlaylistPointerDown = (
@@ -6558,7 +5654,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       <div className="shrink-0 inline-flex items-center overflow-hidden rounded-xl bg-[var(--bg-secondary)] shadow-btn">
         <button
           onClick={() => handleRenamePlaylist(activePlaylist)}
-          className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-[#D8CCFF] hover:bg-white/5 transition-all"
+          className="h-9 w-9 flex items-center justify-center text-white/45 hover:text-[#C7F7BD] hover:bg-white/5 transition-all"
         >
           <Edit2 className="w-4 h-4" />
         </button>
@@ -6572,59 +5668,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     );
   };
 
-  const libraryPageHeader = (
-    <motion.div
-      initial={false}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0 }}
-      className={`flex flex-row items-center flex-nowrap justify-between gap-2 md:gap-3 ${
-        studioWorkspaceHeroHost
-          ? 'soridraw-studio-result-masthead soridraw-studio-result-masthead--library'
-          : 'soridraw-library-page-header soridraw-workspace-ported-header translate-y-2 md:translate-y-3'
-      }`}
-    >
-      <div className="flex items-start gap-4 min-w-0">
-        {isSharedView && (
-          <button
-            onClick={() => navigate('/studio')}
-            className="hidden md:flex mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-[#FFBB22] hover:bg-btn-hover shadow-btn transition-all shrink-0 items-center gap-2"
-          >
-            <Zap className="w-4 h-4" />스튜디오
-          </button>
-        )}
-        <div className="min-w-0">
-          <div className={`soridraw-page-title-hover relative inline-flex max-w-full${studioWorkspaceHeroHost ? ' soridraw-studio-result-masthead-title' : ''}`}> 
-            <h1
-              className={`text-3xl md:text-5xl font-black leading-none tracking-tight text-white ${isSharedView ? 'font-sans' : 'font-display'}`}
-              title={isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
-            >
-              {isSharedView ? '공유 라이브러리' : <>Suno <span className="text-[#A98BFF]">Library</span></>}
-            </h1>
-            <div className="soridraw-page-title-description" role="tooltip">
-              {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
-            </div>
-          </div>
-          {!isSharedView && <CacheDiagnosticBadge domain="library" className="mt-1.5" />}
-        </div>
-      </div>
-      <div className={`flex shrink-0 gap-2 items-center self-center${studioWorkspaceHeroHost ? ' soridraw-studio-result-masthead-actions' : ''}`}> 
-        {!isSharedView && typeof remainingCredits === 'number' && (
-          <button
-            type="button"
-            onClick={handleCreditShortcutClick}
-            className="soridraw-library-credit-button flex h-9 items-center justify-center gap-1 px-2.5 rounded-xl bg-[#A98BFF]/12 text-[10px] leading-none font-bold text-[#D8CCFF] whitespace-nowrap transition-all hover:bg-[#A98BFF]/18 active:scale-[0.98]"
-          >
-            남은 크레딧 {remainingCredits.toLocaleString()}
-          </button>
-        )}
-      </div>
-    </motion.div>
-  );
-
   return (
     <div
       ref={libraryPageRootRef}
-      className={`soridraw-responsive-content-page soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${multiSelectMode ? 'select-none' : ''}`}
+      className={`soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${multiSelectMode ? 'select-none' : ''}`}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
         const isSelectionActionTarget = Boolean(target.closest('[data-selection-action-bar="true"], [data-more-menu-panel="true"]'));
@@ -6834,7 +5881,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   onChange={e => setRenameModalArgs({ ...renameModalArgs, newTitle: e.target.value })}
                   placeholder="플레이리스트 이름 (최대 20자)"
                   maxLength={20}
-                  className="w-full bg-[#1a1a1a] text-white rounded-xl px-4 py-3 outline-none border border-black/15 focus:border-[#A98BFF]/45 transition-colors"
+                  className="w-full bg-[#1a1a1a] text-white rounded-xl px-4 py-3 outline-none border border-black/15 focus:border-[#7FBD75]/45 transition-colors"
                   autoFocus
                   onKeyDown={async (e) => {
                     if (e.key === 'Enter') {
@@ -6858,7 +5905,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               </div>
               <div className="p-4 bg-[#1a1a1a]/50 flex justify-end gap-2 border-t border-black/15">
                 <button className="px-4 py-2 font-bold text-white/50 hover:text-white transition-colors" onClick={() => setRenameModalArgs(null)}>취소</button>
-                <button className="px-4 py-2 font-bold bg-[#A98BFF] text-white rounded-xl hover:bg-[#A98BFF]/90 transition-colors" onClick={async () => {
+                <button className="px-4 py-2 font-bold bg-[#7FBD75] text-white rounded-xl hover:bg-[#7FBD75]/90 transition-colors" onClick={async () => {
                   if (!user || (renameModalArgs.playlist as any).isFallback) return;
                   const trimmedTitle = renameModalArgs.newTitle.trim();
                   if (!trimmedTitle) { showToast('이름을 입력해주세요.'); return; }
@@ -6909,14 +5956,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       onClick={async () => {
                         if (!user || !activePlaylistId) return;
                         try {
-                          await movePlaylistItem(user.uid, activePlaylistId, list.id!, moveModalArgs.item);
-                          showToast("플레이리스트를 이동했습니다.");
-                          setMoveModalArgs(null);
-                        } catch (error: any) {
-                          if (error?.message === 'DUPLICATE') {
+                          const targetItemsRef = collection(db, 'user_playlists', user.uid, 'lists', list.id!, 'items');
+                          const q = query(targetItemsRef, where('sourceId', '==', moveModalArgs.item.sourceId));
+                          const targetDocs = await getDocs(q);
+                          
+                          if (!targetDocs.empty) {
                             showToast("이미 대상 플레이리스트에 있는 곡입니다.");
                             return;
                           }
+
+                          await movePlaylistItem(user.uid, activePlaylistId, list.id!, moveModalArgs.item);
+                          showToast("플레이리스트를 이동했습니다.");
+                          setMoveModalArgs(null);
+                        } catch (error) {
                           console.error("move playlist item failed:", {
                             error,
                             fromPlaylistId: activePlaylistId,
@@ -6952,7 +6004,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               exit={{ opacity: 0, y: 24, scale: 0.96 }}
               className="w-full max-w-sm rounded-[2rem] bg-[#1f1f1f] border border-black/20 shadow-2xl p-7 text-center"
             >
-              <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-[#A98BFF]/20 text-[#A98BFF] flex items-center justify-center">
+              <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-[#7FBD75]/20 text-[#7FBD75] flex items-center justify-center">
                 <Info className="w-8 h-8" />
               </div>
               <h2 className="text-2xl font-black text-white mb-3">Chrome에서 열어주세요</h2>
@@ -6963,7 +6015,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <div className="space-y-3">
                 <button
                   onClick={openCurrentShareInChrome}
-                  className="w-full py-4 rounded-2xl bg-[#A98BFF] text-white font-black text-lg shadow-lg shadow-[#A98BFF]/18 hover:bg-[#A98BFF]/90 transition-all"
+                  className="w-full py-4 rounded-2xl bg-[#7FBD75] text-white font-black text-lg shadow-lg shadow-[#7FBD75]/18 hover:bg-[#7FBD75]/90 transition-all"
                 >
                   공유 음악 듣기
                 </button>
@@ -6987,27 +6039,78 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <div className="w-full space-y-3 md:space-y-5">
         
+        {!isSharedView && typeof remainingCredits === 'number' && (
+          <div className="flex md:hidden items-center justify-end">
+            <button
+              type="button"
+              onClick={handleCreditShortcutClick}
+              className="h-10 flex items-center px-3 rounded-xl text-xs font-bold bg-[#7FBD75]/12 border border-[#7FBD75]/22 text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
+            >
+              {remainingCredits.toLocaleString()} credit
+            </button>
+          </div>
+        )}
+
         {/* Header Block */}
-        {studioWorkspaceHeroHost
-          ? createPortal(libraryPageHeader, studioWorkspaceHeroHost)
-          : libraryPageHeader}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
+        >
+          <div className="flex items-start gap-4 min-w-0">
+            {isSharedView && (
+              <button
+                onClick={() => navigate('/studio')}
+                className="hidden md:flex mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-[#FFBB22] hover:bg-btn-hover shadow-btn transition-all shrink-0 items-center gap-2"
+              >
+                <Zap className="w-4 h-4" />스튜디오
+              </button>
+            )}
+            <div className="min-w-0">
+              <h1 className={`text-3xl md:text-5xl font-black leading-none tracking-tight text-white flex items-center gap-3 ${isSharedView ? 'font-sans' : 'font-display'}`}>
+                <div className="soridraw-library-title-icon flex gap-[5px] items-end justify-center w-9 h-9 text-[#7FBD75] shrink-0">
+                  <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] opacity-80" />
+                  <div className="w-[6px] h-[29px] border-[2px] border-current rounded-[3px]" />
+                  <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] transform origin-bottom -rotate-12 translate-x-[2px] opacity-90" />
+                </div>
+                {isSharedView ? '공유 라이브러리' : <>Suno <span className="text-[#7FBD75]">Library</span></>}
+              </h1>
+              <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2 mb-[2px]">
+                {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 items-center self-end md:self-center">
+          {!isSharedView && (
+            <>
+              {typeof remainingCredits === 'number' && (
+                <button
+                  type="button"
+                  onClick={handleCreditShortcutClick}
+                  className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#7FBD75]/22 bg-[#7FBD75]/12 text-xs font-bold text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
+                >
+                  남은 크레딧 {remainingCredits.toLocaleString()}
+                </button>
+              )}
+            </>
+          )}
+          </div>
+        </motion.div>
 
         {/* Main Music Player relocated to GlobalPlayer */}
 
-        <div className="soridraw-library-primary-controls soridraw-library-region-top space-y-2 md:space-y-3">
-          {renderLibraryModeTabs()}
+        {renderLibraryTopControls()}
 
-          {renderLibraryTopControls()}
-        </div>
+        {renderLibraryModeTabs()}
 
         {libraryViewMode === 'workspace' && (
           <>
         {loading || sharedTrackLoading ? (
-          <div className="!mt-2 md:!mt-3 pt-0 flex items-center justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-[#A98BFF]" />
+          <div className="!mt-3 pt-0 flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-[#7FBD75]" />
           </div>
         ) : (!(user || appUser || auth.currentUser) && !isSharedView) ? (
-          <div className="!mt-2 md:!mt-3 pt-0 flex flex-col items-center justify-center py-16 text-center">
+          <div className="!mt-3 pt-0 flex flex-col items-center justify-center py-16 text-center">
             <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
             <p className="text-[var(--text-secondary)]">Suno Library를 보려면 로그인해주세요.</p>
           </div>
@@ -7015,7 +6118,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="!mt-2 md:!mt-3 pt-0 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-[#A98BFF]/16 bg-white/[0.015]"
+            className="!mt-3 pt-0 flex flex-col items-center justify-center py-16 px-4 text-center rounded-2xl border border-dashed border-[#7FBD75]/16 bg-white/[0.015]"
           >
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
               {isSharedView ? <Info className="w-8 h-8 text-[var(--text-secondary)]/50" /> : <Music className="w-8 h-8 text-[var(--text-secondary)]/50" />}
@@ -7028,7 +6131,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             </p>
           </motion.div>
         ) : (
-          <div className="soridraw-library-list-start-divider soridraw-perf-layout-region-list !mt-2 md:!mt-3 pt-0 space-y-2 md:space-y-3" data-selection-keep="true">
+          <div className="!mt-3 pt-0 space-y-4 md:space-y-5" data-selection-keep="true">
             {displayedWorkspaceTracks.map((group) => {
               const dataItems = extractSunoData(group);
               const items = (dataItems.length > 0 ? dataItems : [{}])
@@ -7037,18 +6140,41 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               const dateStr = formatCreatedAt(group.createdAt);
               
               return (
-                <div
+                <motion.div
                   key={group.id}
-                  className={`soridraw-library-workspace-group soridraw-list-perf-item soridraw-perf-layout-region-group relative !overflow-visible bg-[#151515] rounded-2xl ${activeColorMenu?.startsWith(`workspace-${group.id}-`) ? 'soridraw-list-perf-item--active z-[250]' : 'z-0'}`}
+                  initial={{ opacity: 1, x: 0 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0 }}
+                  className="bg-[#151515] border border-black/24 rounded-2xl shadow-[0_14px_34px_rgba(0,0,0,0.24)]"
                 >
                   {/* Group Header */}
-                  <div className="soridraw-library-workspace-header px-4 md:px-6 py-4 flex items-start md:items-center justify-between gap-2 md:gap-3 rounded-t-2xl overflow-hidden">
-                    <div className="soridraw-library-workspace-header-main flex items-start md:items-center gap-3 min-w-0 flex-1">
-                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-[#A98BFF] shrink-0">
+                  <div className="px-4 md:px-6 py-4 border-b border-[#7FBD75]/10 flex items-start md:items-center justify-between gap-2 md:gap-3 bg-[#171717] rounded-t-2xl overflow-hidden">
+                    <div className="flex items-start md:items-center gap-3 min-w-0 flex-1">
+                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-[#7FBD75] shrink-0">
                         <Music className="w-5 h-5" />
                       </div>
                       <div className="min-w-0 flex-1 pr-1 md:pr-0">
-                        <div className="soridraw-library-workspace-meta flex items-center gap-2 opacity-40 text-[11px] min-w-0">
+                        {(() => {
+                          const titleParts = splitSunoDisplayTitleParts(group.title || 'Untitled Generation');
+                          return (
+                            <>
+                              <h3 className="hidden md:block font-bold leading-tight truncate">
+                                {formatSunoDisplayTitle(group.title || 'Untitled Generation')}
+                              </h3>
+                              <div className="md:hidden min-w-0 leading-tight">
+                                {titleParts.genre && (
+                                  <div className="text-sm font-black text-[var(--text-primary)] truncate">
+                                    {titleParts.genre}
+                                  </div>
+                                )}
+                                <div className="mt-0.5 text-sm font-black text-[var(--text-primary)] truncate">
+                                  {titleParts.title}
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                        <div className="flex items-center gap-2 mt-1 opacity-40 text-[10px] min-w-0">
                           <span className="truncate">{dateStr}</span>
                           <span className="shrink-0">•</span>
                           <span className="shrink-0">{items.length}곡</span>
@@ -7057,7 +6183,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     </div>
                     <div className="flex shrink-0 items-start md:items-center justify-end gap-1.5 md:gap-3 flex-nowrap max-w-[112px] md:max-w-none">
                       {getStatusBadge(group)}
-                      {!isSharedView && group.taskId && !hasStableLibraryResult(group) && (isTrackStuck(group) || ['failed', 'cancelled', 'canceled'].includes(String(group.status || '').trim().toLowerCase())) && (
+                      {group.status !== 'completed' && (
                         <button
                           onClick={() => checkStatus(group.id, group.taskId)}
                           disabled={statusChecking === group.id || !group.taskId}
@@ -7072,27 +6198,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   </div>
 
                   {/* Tracks List */}
-                  <div className="soridraw-library-workspace-tracks">
+                  <div className="divide-y divide-[#7FBD75]/8">
                     {items.map(({ item, idx }: { item: any; idx: number }) => {
                       const audioUrl = getAudioUrl(item, group);
                       const duration = getDuration(item, group);
                       const hasValidDuration = duration !== null;
-                      const normalizedGroupStatus = String(group.status || '').trim().toLowerCase();
-                      const isFailed = ['failed', 'cancelled', 'canceled'].includes(normalizedGroupStatus);
-                      const isCompletedStatus = ['completed', 'success', 'complete'].includes(normalizedGroupStatus);
-                      const isPendingStatus = ['processing', 'submitted', 'pending', 'generating', 'queued'].includes(normalizedGroupStatus);
-                      const rescueAudioId = String(item?.id || item?.audioId || item?.audio_id || '').trim();
-                      const completedRescueUrl = getCompletedSunoRescueUrl(group, rescueAudioId);
-                      const hasCompletedRescue = Boolean(completedRescueUrl);
-                      const isCompleted = Boolean((audioUrl || hasCompletedRescue) && (isCompletedStatus || hasValidDuration || hasCompletedRescue));
-                      const canRecoverPlaybackUrl = !isSharedView && Boolean(group.taskId) && (isCompletedStatus || hasValidDuration || hasCompletedRescue);
-                      const canPlayOrRecover = Boolean(audioUrl) || canRecoverPlaybackUrl;
-                      const isCompletedWithoutAudio = isCompletedStatus && !audioUrl && !hasCompletedRescue;
-                      const isActiveGeneration = isPendingStatus && isLibraryActiveGeneration(group);
-                      const isStalePending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && !isActiveGeneration;
-                      const isPending = !isFailed && isPendingStatus && !audioUrl && !hasCompletedRescue && isActiveGeneration;
+                      const isFailed = group.status === 'failed';
+                      const isCompleted = Boolean(audioUrl && (group.status === 'completed' || group.status === 'success' || hasValidDuration));
+                      const isPending = !isFailed && !audioUrl;
                       const sunoVersionLabel = getSunoModelVersionLabel(item, group);
-                      const itemTitleParts = splitSunoDisplayTitleParts(getTitle(item, group, idx));
                       
                       const isCurrent = isCurrentWorkspaceItem(group, item, idx);
                       const selection = buildWorkspaceSelection(group, item, idx);
@@ -7102,20 +6216,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         <div 
                           key={`${group.id}-${idx}`} 
                           data-selection-keep="true"
-                          className={`soridraw-library-workspace-track-row soridraw-perf-layout-region-item group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 transition-colors cursor-pointer ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
+                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 bg-[var(--bg-secondary)] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onMouseDown={(event) => {
-                            setIsLibraryMousePressTracking(true);
                             handleLibraryDragSelectStart(event, selection);
                             handleLibraryCardLongPressStart(event, selection);
                           }}
-                          onMouseMove={(multiSelectMode || isLibraryMousePressTracking) ? ((event: React.MouseEvent<HTMLDivElement>) => {
+                          onMouseMove={(event) => {
                             handleLibraryDragSelectMove(event, selection);
                             handleLibraryCardLongPressMove(event);
-                          }) : undefined}
+                          }}
                           onMouseUp={() => {
                             handleLibraryDragSelectEnd();
                             handleLibraryCardLongPressEnd();
-                            setIsLibraryMousePressTracking(false);
                           }}
                           onTouchStart={(event) => handleLibraryCardLongPressStart(event, selection)}
                           onTouchMove={handleLibraryCardLongPressMove}
@@ -7147,10 +6259,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               audioUrl,
                             });
                           }}
-                          onMouseEnter={multiSelectMode ? ((event: React.MouseEvent<HTMLDivElement>) => {
+                          onMouseEnter={(event) => {
                             handleLibraryDragSelectEnter(event, selection);
-                          }) : undefined}
-                          onMouseLeave={isLibraryMousePressTracking ? handleLibraryCardLongPressEnd : undefined}
+                            event.currentTarget.style.backgroundColor = '#171717';
+                          }}
+                          onMouseLeave={(event) => {
+                            handleLibraryCardLongPressEnd();
+                            event.currentTarget.style.backgroundColor = '';
+                          }}
                           onClick={(e) => {
                              if (consumeLibrarySuppressedClick(e, selection.key)) return;
                              if (consumeLibraryDragSelectClick(e)) return;
@@ -7164,9 +6280,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                resetLibraryDragSelectState();
                                return;
                              }
-                             if (canPlayOrRecover) {
-                               if (audioUrl && isCurrent) togglePlayPause();
-                               else void handlePlayTrack(group, idx);
+                             if (audioUrl) {
+                               if (isCurrent) togglePlayPause();
+                               else handlePlayTrack(group, idx);
                              }
                           }}
                         >
@@ -7174,7 +6290,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             imageUrl={getImageUrl(item, group)}
                             isActive={isCurrent}
                             isPlaying={isPlaying}
-                            disabled={!canPlayOrRecover}
+                            disabled={!audioUrl}
                             durationLabel={isCompleted && hasValidDuration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}` : undefined}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -7182,9 +6298,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                 toggleSelectedTrack(selection);
                                 return;
                               }
-                              if (canPlayOrRecover) {
-                                if (audioUrl && isCurrent) togglePlayPause();
-                                else void handlePlayTrack(group, idx);
+                              if (audioUrl) {
+                                if (isCurrent) togglePlayPause();
+                                else handlePlayTrack(group, idx);
                               }
                             }}
                           />
@@ -7201,7 +6317,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             clearLibrarySelectionClickGuards();
                             resetLibraryDragSelectState();
                           }}
-                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#A98BFF]/75 bg-[#A98BFF]/20 text-[#D3C4FF] shadow-[0_0_0_1px_rgba(169,139,255,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#7FBD75]/75 bg-[#7FBD75]/20 text-[#B8F0AE] shadow-[0_0_0_1px_rgba(127,189,117,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
                             >
                               {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
                             </button>
@@ -7221,7 +6337,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               style={{ backgroundColor: getColorHex(getWorkspaceItemColor(group, idx)) }}
                             />
                             {activeColorMenu === `workspace-${group.id}-${idx}` && (
-                              <div data-floating-menu="true" className="absolute left-0 top-7 z-[400] flex items-center gap-2 rounded-xl bg-[#2a2a2a] p-2 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                              <div data-floating-menu="true" className="absolute top-7 left-0 z-30 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-black/20" onClick={(e) => e.stopPropagation()}>
                                 {COLOR_OPTIONS.map(c => (
                                   <button
                                     key={c.value}
@@ -7234,19 +6350,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                         setActiveColorMenu(null);
                                       }
                                     }}
-                                    className="flex h-6 w-6 items-center justify-center rounded-full !bg-transparent !shadow-none !ring-0 outline-none transition-transform hover:scale-110"
-                                  >
-                                    <span className="block h-4 w-4 rounded-full" style={{ backgroundColor: c.color }} />
-                                  </button>
+                                    className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                                    style={{ backgroundColor: c.color }}
+                                  />
                                 ))}
                               </div>
                             )}
-                            <h4 className={`soridraw-library-item-title-wrap text-sm md:text-base font-bold transition-colors min-w-0 flex-1 max-w-full overflow-hidden ${isCurrent ? 'text-[#A98BFF]' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
-                              <span className="soridraw-library-item-title suno-mobile-title-strip">
-                                {itemTitleParts.genre && (
-                                  <span className="soridraw-library-item-genre">{itemTitleParts.genre}</span>
-                                )}
-                                <span className="soridraw-library-item-name">{itemTitleParts.title}</span>
+                            <h4 className={`text-sm md:text-base font-bold transition-colors min-w-0 flex-1 max-w-full overflow-hidden ${isCurrent ? 'text-[#7FBD75]' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
+                              <span className="suno-mobile-title-strip block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap">
+                                {getTitle(item, group, idx)}
+                              </span>
+                              <span className="hidden md:block truncate">
+                                {getTitle(item, group, idx)}
                               </span>
                             </h4>
                             {sunoVersionLabel && (
@@ -7266,16 +6381,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                   </span>
                                 </span>
                               </span>
-                            ) : isCompletedWithoutAudio ? (
-                              <span className="text-xs opacity-70 truncate flex items-center gap-1.5 text-amber-300">
-                                <AlertCircle className="w-3.5 h-3.5" />
-                                완료 · 재생 URL 없음
-                              </span>
-                            ) : isStalePending ? (
-                              <span className="text-xs opacity-60 truncate flex items-center gap-1.5 text-amber-300">
-                                <RefreshCw className="w-3.5 h-3.5" />
-                                상태 확인 필요
-                              </span>
                             ) : isPending ? (
                               <span className="text-xs opacity-50 truncate flex items-center gap-1.5 text-blue-400">
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -7286,7 +6391,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
                           {isCompleted && isWorkspaceItemUnplayed(group, item, idx) && (
                             <span
-                              className="w-2 h-2 rounded-full bg-[#A98BFF] shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0"
+                              className="w-2 h-2 rounded-full bg-[#7FBD75] shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0"
                             />
                           )}
 
@@ -7317,7 +6422,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                   });
                                 }
                               }}
-                              className={`w-10 h-10 flex items-center justify-center transition-all ${multiSelectMode ? 'text-[#A98BFF] hover:text-[#A98BFF]/80' : 'rounded-full hover:bg-white/10 text-white/50'}`}
+                              className={`w-10 h-10 flex items-center justify-center transition-all ${multiSelectMode ? 'text-[#7FBD75] hover:text-[#7FBD75]/80' : 'rounded-full hover:bg-white/10 text-white/50'}`}
                             >
                               <MoreVertical className="w-4 h-4" />
                             </button>
@@ -7326,7 +6431,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       );
                     })}
                   </div>
-                </div>
+                </motion.div>
               );
             })}
             {hasMoreWorkspaceTracks && (
@@ -7343,14 +6448,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   onBlur={() => setShowWorkspaceMoreTooltip(false)}
                   className={`px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)] ${isLoadingMoreWorkspaceTracks ? 'cursor-wait opacity-60' : ''}`}
                 >
-                  <span className="text-[#A98BFF] text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
+                  <span className="text-[#7FBD75] text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
                   {isLoadingMoreWorkspaceTracks
                     ? '불러오는 중...'
                     : `더보기 (${Math.max(0, filteredTracks.length - workspaceVisibleCount) + (canRequestMoreWorkspacePage ? WORKSPACE_PAGE_SIZE : 0)}세트 남음)`}
                 </button>
                 {false && showWorkspaceMoreTooltip && (
-                  <div className="fixed left-1/2 bottom-8 z-[500] -translate-x-1/2 rounded-2xl border border-[#A98BFF]/28 bg-[#171717] px-5 py-3 text-center shadow-2xl shadow-black/40 pointer-events-none">
-                    <p className="text-xs font-bold text-[#A98BFF]">더보기</p>
+                  <div className="fixed left-1/2 bottom-8 z-[500] -translate-x-1/2 rounded-2xl border border-[#7FBD75]/28 bg-[#171717] px-5 py-3 text-center shadow-2xl shadow-black/40 pointer-events-none">
+                    <p className="text-xs font-bold text-[#7FBD75]">더보기</p>
                     <p className="mt-1 text-[11px] text-white/60">곡을 20세트 더 불러옵니다.</p>
                   </div>
                 )}
@@ -7367,7 +6472,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             
             {libraryViewMode === 'playlist' && (
             <div className="space-y-3">
-              <h3 className="soridraw-library-folder-heading text-sm font-bold text-white/50 px-2 uppercase tracking-wider">나의 플레이리스트</h3>
+              <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">나의 플레이리스트</h3>
               <div
                 ref={(element) => { playlistBarRefs.current.normal = element; }}
                 className="soridraw-folder-drag-scrollbar flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
@@ -7389,15 +6494,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         setSelectedNormalPlaylistId(playlist.id!);
                         setActivePlaylistSection('normal');
                       }}
-                      aria-pressed={activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id}
-                      data-active={activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id ? 'true' : 'false'}
-                      className={`soridraw-library-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none ${
+                      className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none ${
                         !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-pan-x' : 'touch-pan-x'
                       } ${
                         isDraggingPlaylist ? 'soridraw-folder-drag-active touch-none z-10' : ''
                       } ${
                         activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id 
-                          ? 'bg-[#A98BFF]/78 text-white border-[#A98BFF]/55 shadow-lg' 
+                          ? 'bg-[#7FBD75]/78 text-white border-[#7FBD75]/55 shadow-lg' 
                           : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
                       }`}
                     >
@@ -7407,7 +6510,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 })}
                 <button 
                   onClick={() => handleAddPlaylist('normal')}
-                  className="soridraw-library-folder-add shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
+                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
                 >
                   <span className="text-lg font-light leading-none">+</span>
                 </button>
@@ -7418,7 +6521,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
             {libraryViewMode === 'sharedPlaylist' && (
             <div className="space-y-3">
-              <h3 className="soridraw-library-folder-heading text-sm font-bold text-white/50 px-2 uppercase tracking-wider">공유 받은 곡</h3>
+              <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">공유 받은 곡</h3>
               <div
                 ref={(element) => { playlistBarRefs.current.shared = element; }}
                 className="soridraw-folder-drag-scrollbar flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
@@ -7440,15 +6543,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         setSelectedSharedPlaylistId(playlist.id!);
                         setActivePlaylistSection('shared');
                       }}
-                      aria-pressed={activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id}
-                      data-active={activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id ? 'true' : 'false'}
-                      className={`soridraw-library-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 touch-pan-x select-none ${
+                      className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 touch-pan-x select-none ${
                         !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-pan-x' : 'touch-pan-x'
                       } ${
                         isDraggingPlaylist ? 'soridraw-folder-drag-active touch-none z-10' : ''
                       } ${
                         activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id 
-                          ? 'bg-[#A98BFF]/78 text-white border-[#A98BFF]/55 shadow-lg' 
+                          ? 'bg-[#7FBD75]/78 text-white border-[#7FBD75]/55 shadow-lg' 
                           : 'bg-[var(--bg-secondary)] border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
                       }`}
                     >
@@ -7459,7 +6560,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 })}
                 <button 
                   onClick={() => handleAddPlaylist('shared')}
-                  className="soridraw-library-folder-add shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
+                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
                 >
                   <span className="text-lg font-light leading-none">+</span>
                 </button>
@@ -7471,12 +6572,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             {/* Playlist Items */}
             {loadingPlaylistItems ? (
               <div className="flex justify-center p-6 mt-3 border-t border-black/15">
-                <Loader2 className="w-6 h-6 animate-spin text-[#A98BFF]" />
+                <Loader2 className="w-6 h-6 animate-spin text-[#7FBD75]" />
               </div>
             ) : playlistItems.length > 0 ? (
               <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-black/15" data-selection-keep="true">
                 {(() => {
-                  const normalizedPlaylistSearch = deferredPlaylistSearchTerm.trim().toLowerCase();
+                  const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
                   let items = playlistItems.filter(item => {
                     if (!matchesPlaylistVisibilityFilter(item)) return false;
                     if (playlistColorFilter === 'all') return true;
@@ -7536,7 +6637,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     : null;
                   const playlistFavoriteActive = Boolean(!isShared && (((sourceTrackForPlaylist as any)?.favorite) ?? ((item as any).favorite)));
                   const cachedSharedStatus = sharedStatusCache[item.sourceId];
-                  const isUnavailable = isShared && isFreshSharedPrivateStatus(cachedSharedStatus);
+                  const isUnavailable = isShared && cachedSharedStatus && cachedSharedStatus.isPublic === false;
                   const blockedPlaylistActionClass = "w-full text-left px-4 py-2 flex items-center justify-between group text-white/25 cursor-not-allowed";
                   const normalPlaylistActionClass = "w-full text-left px-4 py-2 hover:bg-white/5 flex items-center justify-between group text-white/80 hover:text-white";
                   
@@ -7549,21 +6650,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     <div 
                       key={item.id} 
                       onMouseDown={(event) => {
-                        setIsLibraryMousePressTracking(true);
                         handleLibraryDragSelectStart(event, selection);
                         handleLibraryCardLongPressStart(event, selection);
                       }}
-                      onMouseMove={(multiSelectMode || isLibraryMousePressTracking) ? ((event: React.MouseEvent<HTMLDivElement>) => {
+                      onMouseMove={(event) => {
                         handleLibraryDragSelectMove(event, selection);
                         handleLibraryCardLongPressMove(event);
-                      }) : undefined}
+                      }}
                       onMouseUp={() => {
                         handleLibraryDragSelectEnd();
                         handleLibraryCardLongPressEnd();
-                        setIsLibraryMousePressTracking(false);
                       }}
-                      onMouseEnter={multiSelectMode ? ((event: React.MouseEvent<HTMLDivElement>) => handleLibraryDragSelectEnter(event, selection)) : undefined}
-                      onMouseLeave={isLibraryMousePressTracking ? handleLibraryCardLongPressEnd : undefined}
+                      onMouseEnter={(event) => handleLibraryDragSelectEnter(event, selection)}
+                      onMouseLeave={handleLibraryCardLongPressEnd}
                       onTouchStart={(event) => handleLibraryCardLongPressStart(event, selection)}
                       onTouchMove={handleLibraryCardLongPressMove}
                       onTouchEnd={handleLibraryCardLongPressEnd}
@@ -7601,7 +6700,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         }
                       }}
                       data-selection-keep="true"
-                      className={`soridraw-library-playlist-row soridraw-list-perf-item soridraw-perf-layout-region-item group relative flex items-center p-2 rounded-2xl transition-colors border border-transparent hover:bg-white/5 hover:border-white/10 ${index < items.length - 1 ? 'after:absolute after:left-[5.25rem] md:after:left-[5.75rem] after:right-7 after:bottom-[-0.25rem] after:h-px after:bg-white/[0.035] after:content-[""]' : ''} ${(activeColorMenu === item.id || activePlaylistItemMenu === item.id) ? 'soridraw-list-perf-item--active z-[250]' : 'z-0'} ${multiSelectMode ? 'cursor-pointer' : ''}`}
+                      className={`group relative flex items-center p-2 rounded-2xl transition-all border border-transparent hover:bg-white/5 hover:border-white/10 ${index < items.length - 1 ? 'after:absolute after:left-[5.25rem] md:after:left-[5.75rem] after:right-7 after:bottom-[-0.25rem] after:h-px after:bg-white/[0.035] after:content-[""]' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
                     >
                       {/* Left: Play/Pause */}
                       <AnimatedTrackPlayButton
@@ -7634,7 +6733,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               .filter(p => {
                                 if (p.sourceType !== 'shared_track') return true;
                                 const cached = p.sourceId ? sharedStatusCache[p.sourceId] : null;
-                                return !isFreshSharedPrivateStatus(cached);
+                                return cached?.isPublic !== false;
                               })
                               .map(p => ({
                                 url: p.audioUrl!,
@@ -7697,7 +6796,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             clearLibrarySelectionClickGuards();
                             resetLibraryDragSelectState();
                           }}
-                          className={`ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#A98BFF]/75 bg-[#A98BFF]/20 text-[#D3C4FF] shadow-[0_0_0_1px_rgba(169,139,255,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
+                          className={`ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all ${isSelected ? 'border-[#7FBD75]/75 bg-[#7FBD75]/20 text-[#B8F0AE] shadow-[0_0_0_1px_rgba(127,189,117,0.18)]' : 'border-white/35 bg-white/[0.08] text-white/65 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)] hover:border-white/55 hover:bg-white/[0.12] hover:text-white/85'}`}
                         >
                           {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
                         </button>
@@ -7713,7 +6812,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             style={{ backgroundColor: getColorHex(getPlaylistItemColor(item)) }}
                           />
                           {activeColorMenu === item.id && (
-                            <div data-floating-menu="true" className="absolute left-0 top-7 z-[400] flex items-center gap-2 rounded-xl bg-[#2a2a2a] p-2 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                            <div data-floating-menu="true" className="absolute top-6 left-0 z-10 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-black/20">
                               {[
                                 { value: 'gray', color: '#6b7280' },
                                 { value: 'red', color: '#ef4444' },
@@ -7734,26 +6833,20 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                       setActiveColorMenu(null);
                                     }
                                   }}
-                                  className="flex h-6 w-6 items-center justify-center rounded-full !bg-transparent !shadow-none !ring-0 outline-none transition-transform hover:scale-110"
-                                >
-                                  <span className="block h-4 w-4 rounded-full" style={{ backgroundColor: c.color }} />
-                                </button>
+                                  className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                                  style={{ backgroundColor: c.color }}
+                                />
                               ))}
                             </div>
                           )}
                           
-                          <h3 className={`soridraw-library-item-title-wrap text-sm font-bold min-w-0 flex-1 max-w-full overflow-hidden ${isActive ? 'text-[#A98BFF]' : 'text-white'}`}>
-                            {(() => {
-                              const itemTitleParts = splitSunoDisplayTitleParts(item.title);
-                              return (
-                                <span className="soridraw-library-item-title suno-mobile-title-strip">
-                                  {itemTitleParts.genre && (
-                                    <span className="soridraw-library-item-genre">{itemTitleParts.genre}</span>
-                                  )}
-                                  <span className="soridraw-library-item-name">{itemTitleParts.title}</span>
-                                </span>
-                              );
-                            })()}
+                          <h3 className={`text-sm font-bold min-w-0 flex-1 max-w-full overflow-hidden ${isActive ? 'text-[#7FBD75]' : 'text-white'}`}>
+                            <span className="suno-mobile-title-strip block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap">
+                              {formatSunoDisplayTitle(item.title)}
+                            </span>
+                            <span className="hidden md:block truncate">
+                              {formatSunoDisplayTitle(item.title)}
+                            </span>
                           </h3>
                         </div>
                         
@@ -7775,7 +6868,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       <div className="flex items-center pr-2 ml-2">
                         {isPlaylistItemUnplayed(item) && (
                           <span
-                            className="w-2 h-2 rounded-full bg-[#A98BFF] shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0 mr-3"
+                            className="w-2 h-2 rounded-full bg-[#7FBD75] shadow-[0_0_10px_rgba(255,128,0,0.65)] shrink-0 mr-3"
                           />
                         )}
                         {playlistSortMode === 'custom' && (
@@ -7827,15 +6920,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               setActivePlaylistItemMenu(activePlaylistItemMenu === item.id ? null : item.id!);
                               setActiveColorMenu(null);
                             }}
-                            className={`p-2 -mr-2 transition-colors ${multiSelectMode ? 'text-[#A98BFF] hover:text-[#A98BFF]/80' : 'rounded-full text-white/40 hover:text-white'}`}
+                            className={`p-2 -mr-2 transition-colors ${multiSelectMode ? 'text-[#7FBD75] hover:text-[#7FBD75]/80' : 'rounded-full text-white/40 hover:text-white'}`}
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
                           {activePlaylistItemMenu === item.id && (
                             <div
                               data-floating-menu="true"
-                              data-more-menu-panel="true" data-soridraw-library-more-menu="true"
-                              className={`soridraw-library-more-menu-panel absolute w-40 max-h-[calc(100vh-24px)] bg-[#2a2a2a] rounded-xl shadow-xl overflow-y-auto z-20 border border-black/15 text-sm py-1 ${playlistItemContextMenuPosition?.id === item.id ? '' : 'right-0 top-8'}`}
+                              data-more-menu-panel="true"
+                              className={`absolute w-40 max-h-[calc(100vh-24px)] bg-[#2a2a2a] rounded-xl shadow-xl overflow-y-auto z-20 border border-black/15 text-sm py-1 ${playlistItemContextMenuPosition?.id === item.id ? '' : 'right-0 top-8'}`}
                               style={playlistItemContextMenuPosition?.id === item.id ? {
                                 top: playlistItemContextMenuPosition.top,
                                 left: playlistItemContextMenuPosition.left,
@@ -7860,7 +6953,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                   enterMultiSelectWith(selection);
                                   setActivePlaylistItemMenu(null);
                                 }}
-                                className="w-full text-left px-4 py-2 hover:bg-[#A98BFF]/10 flex items-center justify-between group text-white/80 hover:text-[#A98BFF]"
+                                className="w-full text-left px-4 py-2 hover:bg-[#7FBD75]/10 flex items-center justify-between group text-white/80 hover:text-[#7FBD75]"
                               >
                                 <span className="flex items-center gap-2"><CheckSquare className="w-4 h-4 opacity-70" />선택</span>
                               </button>
@@ -7950,7 +7043,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             }}
                             className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
                           >
-                            <span className="text-[#A98BFF] text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
+                            <span className="text-[#7FBD75] text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
                             {`더보기 (${Math.max(0, items.length - playlistVisibleCount)}곡 남음)`}
                           </button>
                         </div>
@@ -7961,7 +7054,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center border-t border-black/15 mt-3">
-                <Music className="w-12 h-12 text-[#A98BFF]/40 mb-4" />
+                <Music className="w-12 h-12 text-[#7FBD75]/40 mb-4" />
                 <h2 className="text-xl font-bold mb-2">
                   {activePlaylistSection === 'normal' ? '아직 저장된 곡이 없습니다.' : '아직 저장된 공유곡이 없습니다.'}
                 </h2>
@@ -7990,7 +7083,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
             className={`fixed left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-3 px-5 py-3 rounded-full bg-white text-black shadow-2xl pointer-events-none text-center ${multiSelectMode && selectedTrackCount > 0 ? 'bottom-[7.75rem] md:bottom-[8.75rem]' : 'bottom-24'}`}
           >
-            <Share2 className="w-4 h-4 text-[#A98BFF] shrink-0" />
+            <Share2 className="w-4 h-4 text-[#7FBD75] shrink-0" />
             <span className="text-sm font-bold tracking-tight whitespace-nowrap">{shareToastInfo}</span>
           </motion.div>
         )}
@@ -8017,7 +7110,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <div className="space-y-6">
                   <button
                     onClick={handlePublicShare}
-                    className="w-full py-4 bg-[#A98BFF] text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-[#A98BFF]/90 transition-all shadow-lg shadow-[#A98BFF]/18"
+                    className="w-full py-4 bg-[#7FBD75] text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-[#7FBD75]/90 transition-all shadow-lg shadow-[#7FBD75]/18"
                   >
                     <Share2 className="w-5 h-5" /> 링크 공유하기
                   </button>
@@ -8213,12 +7306,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              data-selection-keep="true" data-floating-menu="true" data-more-menu-panel="true" data-soridraw-library-more-menu="true" className="soridraw-library-more-menu-panel fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#A98BFF]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-selection-keep="true" data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#7FBD75]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{ top: bulkMenuState.top, right: bulkMenuState.right }}
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              <div className="px-4 py-2 text-[11px] font-bold text-[#A98BFF] border-b border-black/15">
+              <div className="px-4 py-2 text-[11px] font-bold text-[#7FBD75] border-b border-black/15">
                 선택한 {selectedTrackCount}곡
               </div>
 
@@ -8366,7 +7459,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <>
                     <button
                       onClick={handleBulkAllPublic}
-                      className="w-full py-4 bg-[#A98BFF] text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-[#A98BFF]/90 transition-all shadow-lg shadow-[#A98BFF]/18"
+                      className="w-full py-4 bg-[#7FBD75] text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 hover:bg-[#7FBD75]/90 transition-all shadow-lg shadow-[#7FBD75]/18"
                     >
                       <Globe2 className="w-5 h-5" /> All 공개
                     </button>
@@ -8413,12 +7506,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 0, scale: 1 }}
               transition={{ duration: 0.08, ease: [0.22, 1, 0.36, 1] }}
-              className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#A98BFF]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+              className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#7FBD75]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#D8CCFF]/75">playlist folder</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#C7F7BD]/75">playlist folder</p>
                   <h3 className="mt-1 text-lg font-black text-white">플레이리스트 저장</h3>
                   <p className="mt-1 text-xs leading-5 text-white/45">
                     {playlistSavePicker.isShared ? '공유 받은 곡 플레이리스트를 선택하세요.' : '저장할 플레이리스트를 선택하세요.'}
@@ -8441,10 +7534,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       key={playlist.id}
                       type="button"
                       onClick={() => savePlaylistPickerTargets(playlist)}
-                      className={`flex h-12 items-center justify-between rounded-2xl border px-4 text-sm font-bold transition-all ${selectedId === playlist.id ? 'border-[#A98BFF]/45 bg-[#A98BFF]/22 text-white' : 'border-white/10 bg-white/[0.035] text-white/72 hover:border-[#A98BFF]/32 hover:text-white'}`}
+                      className={`flex h-12 items-center justify-between rounded-2xl border px-4 text-sm font-bold transition-all ${selectedId === playlist.id ? 'border-[#7FBD75]/45 bg-[#7FBD75]/22 text-white' : 'border-white/10 bg-white/[0.035] text-white/72 hover:border-[#7FBD75]/32 hover:text-white'}`}
                     >
-                      <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#D8CCFF]" />{playlist.title}</span>
-                      {selectedId === playlist.id && <CheckSquare className="h-4 w-4 text-[#D8CCFF]" />}
+                      <span className="inline-flex items-center gap-2"><FolderOutput className="h-4 w-4 text-[#C7F7BD]" />{playlist.title}</span>
+                      {selectedId === playlist.id && <CheckSquare className="h-4 w-4 text-[#C7F7BD]" />}
                     </button>
                   );
                 })}
@@ -8453,12 +7546,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   <button
                     type="button"
                     onClick={() => setPlaylistSaveCreateTitle('')}
-                    className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-[#A98BFF]/35 bg-[#A98BFF]/8 px-4 text-sm font-black text-[#D8CCFF] transition-all hover:bg-[#A98BFF]/14 hover:text-white"
+                    className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-[#7FBD75]/35 bg-[#7FBD75]/8 px-4 text-sm font-black text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/14 hover:text-white"
                   >
                     <Plus className="h-4 w-4" /> 새 폴더 만들기
                   </button>
                 ) : (
-                  <div className="mt-1 flex h-12 items-center gap-2 rounded-2xl border border-[#A98BFF]/35 bg-black/20 px-3">
+                  <div className="mt-1 flex h-12 items-center gap-2 rounded-2xl border border-[#7FBD75]/35 bg-black/20 px-3">
                     <input
                       type="text"
                       value={playlistSaveCreateTitle}
@@ -8475,7 +7568,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     <button
                       type="button"
                       onClick={commitCreateAndSavePlaylist}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#A98BFF]/18 text-[#D8CCFF] transition-all hover:bg-[#A98BFF]/28 hover:text-white"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#7FBD75]/18 text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/28 hover:text-white"
                       aria-label="새 폴더 생성 후 저장"
                     >
                       <Check className="h-4 w-4" />
@@ -8549,7 +7642,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-floating-menu="true" data-more-menu-panel="true" data-soridraw-library-more-menu="true" className="soridraw-library-more-menu-panel absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-floating-menu="true" data-more-menu-panel="true" className="absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{
                 top: activeMenuState.position.top,
                 left: activeMenuState.position.left,
@@ -8617,7 +7710,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               className="w-full max-w-[360px] overflow-hidden rounded-3xl border border-black/20 bg-[var(--bg-secondary)] shadow-2xl"
             >
               <div className="px-5 pt-5 pb-4 border-b border-black/15">
-                <div className={`mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border ${playlistConfirmAction.danger ? 'border-red-400/25 bg-red-400/10 text-red-400' : 'border-[#A98BFF]/25 bg-[#A98BFF]/10 text-[#A98BFF]'}`}>
+                <div className={`mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border ${playlistConfirmAction.danger ? 'border-red-400/25 bg-red-400/10 text-red-400' : 'border-[#7FBD75]/25 bg-[#7FBD75]/10 text-[#7FBD75]'}`}>
                   <Trash2 className="h-5 w-5" />
                 </div>
                 <h3 className="text-center text-lg font-black text-white tracking-tight">
@@ -8650,7 +7743,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       setIsPlaylistConfirming(false);
                     }
                   }}
-                  className={`h-11 rounded-2xl text-sm font-black text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${playlistConfirmAction.danger ? 'bg-red-500 hover:bg-red-500/90 shadow-lg shadow-red-500/15' : 'bg-[#A98BFF] hover:bg-[#A98BFF]/90 shadow-lg shadow-[#A98BFF]/15'}`}
+                  className={`h-11 rounded-2xl text-sm font-black text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${playlistConfirmAction.danger ? 'bg-red-500 hover:bg-red-500/90 shadow-lg shadow-red-500/15' : 'bg-[#7FBD75] hover:bg-[#7FBD75]/90 shadow-lg shadow-[#7FBD75]/15'}`}
                 >
                   {isPlaylistConfirming && <Loader2 className="h-4 w-4 animate-spin" />}
                   {playlistConfirmAction.confirmLabel}
@@ -8680,7 +7773,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-sm bg-[var(--bg-secondary)] border border-[#A98BFF]/28 rounded-3xl shadow-2xl p-6"
+              className="w-full max-w-sm bg-[var(--bg-secondary)] border border-[#7FBD75]/28 rounded-3xl shadow-2xl p-6"
             >
               <div className="flex flex-col items-center text-center">
                  <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4 border border-red-500/20">

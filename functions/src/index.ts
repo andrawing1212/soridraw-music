@@ -1,457 +1,11 @@
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
-import {
-  buildLibraryOversizeFallbackMarker,
-  buildRebuiltLibraryBundle,
-  getDeletedIdsForRebuild,
-  getLibraryBundlePayloadByteSize,
-  getLibraryBundleSourceFingerprint,
-  getLibraryMutationFingerprint,
-  getNextLibraryBundleVersion,
-  hasLibraryBundleRelevantChange,
-  isLibraryBundleCoreCurrent,
-  isMatchingLibraryOversizeFallbackMarker,
-  LIBRARY_LIST_BUNDLE_MAX_BYTES,
-  planLibraryBundleMutation,
-  type LibraryListBundleCore,
-  type LibraryTrackMutation,
-} from "./libraryBundleFreshness";
-import { hasMusicNoteStructureRelevantChange, getMusicNoteStructureSignalVersion } from "./musicNoteStructureSync";
 
-admin.initializeApp({
-  databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com",
-});
-
-// SORIDRAW_MUSIC_NOTE_STRUCTURE_SIGNAL_1056
-// user_structures remains the canonical small private structure document. Only an
-// actual folder or Like/Lock mutation publishes a tiny version signal into users/{uid}.
-// Warm page entry/reload performs no Function work and no user_structures read.
-export const syncMusicNoteStructureVersion = functions
-  .region("asia-northeast3")
-  .firestore.document("user_structures/{uid}")
-  .onWrite(async (change, context) => {
-    const before = change.before.exists ? (change.before.data() || {}) : null;
-    const after = change.after.exists ? (change.after.data() || {}) : null;
-    if (!hasMusicNoteStructureRelevantChange(before, after)) return;
-
-    const uid = String(context.params.uid || "").trim();
-    if (!uid) return;
-    const eventTimeMs = Date.parse(String(context.timestamp || "")) || Date.now();
-    const firestore = admin.firestore();
-    const userRef = firestore.collection("users").doc(uid);
-
-    await firestore.runTransaction(async (transaction) => {
-      const userSnapshot = await transaction.get(userRef);
-      if (!userSnapshot.exists) return;
-      const currentVersion = Number(userSnapshot.data()?.syncVersions?.musicNoteStructure || 0);
-      const nextVersion = getMusicNoteStructureSignalVersion(after, eventTimeMs, currentVersion);
-      if (nextVersion <= currentVersion) return;
-      transaction.set(userRef, { syncVersions: { musicNoteStructure: nextVersion } }, { merge: true });
-    });
-  });
-
-// SORIDRAW_SECTION_TAGS_SHARED_BUNDLE_20260904
-// Public Studio configuration is shared by every user. Rebuild the single aggregate
-// only when an admin actually mutates the canonical section_tags collection.
-const SORIDRAW_SECTION_TAGS_BUNDLE_SCHEMA_VERSION = 1;
-const SORIDRAW_SECTION_TAGS_BUNDLE_MAX_BYTES = 800_000;
-
-const buildSectionTagsBundlePayload = async (sourceEventTimeMs: number, sourceEventId: string) => {
-  const snapshot = await admin.firestore().collection("section_tags").orderBy("label", "asc").get();
-  const items = snapshot.docs.map((snapshotDoc) => snapshotDoc.data());
-  if (!items.every((item) => Boolean(item && typeof item === "object" && !Array.isArray(item)))) {
-    throw new Error("Section tags bundle contains an invalid item.");
-  }
-
-  const updatedAtMs = Date.now();
-  const stablePayload = {
-    schemaVersion: SORIDRAW_SECTION_TAGS_BUNDLE_SCHEMA_VERSION,
-    items,
-    itemCount: items.length,
-    updatedAtMs,
-    sourceEventTimeMs,
-    sourceEventId,
-  };
-  const byteSize = Buffer.byteLength(JSON.stringify(stablePayload), "utf8");
-  if (byteSize > SORIDRAW_SECTION_TAGS_BUNDLE_MAX_BYTES) {
-    throw new Error(`Section tags bundle too large: ${byteSize} bytes.`);
-  }
-  return {
-    ...stablePayload,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  };
-};
-
-export const syncSectionTagsBundle = functions
-  .region("asia-northeast3")
-  .firestore.document("section_tags/{tagId}")
-  .onWrite(async (_change, context) => {
-    const sourceEventTimeMs = Date.parse(String(context.timestamp || "")) || Date.now();
-    const sourceEventId = String(context.eventId || "");
-    const payload = await buildSectionTagsBundlePayload(sourceEventTimeMs, sourceEventId);
-    const bundleRef = admin.firestore().doc("app_settings/section_tags_bundle");
-
-    // Multiple admin edits can trigger concurrently. Older events may finish later,
-    // so only the newest event is allowed to replace the aggregate document.
-    await admin.firestore().runTransaction(async (transaction) => {
-      const currentSnapshot = await transaction.get(bundleRef);
-      if (currentSnapshot.exists) {
-        const current = currentSnapshot.data() || {};
-        const currentTime = Number(current.sourceEventTimeMs || 0);
-        const currentId = String(current.sourceEventId || "");
-        if (currentTime > sourceEventTimeMs || (currentTime === sourceEventTimeMs && currentId > sourceEventId)) {
-          return;
-        }
-      }
-      transaction.set(bundleRef, payload, { merge: false });
-    });
-  });
-
-export const syncSunoLibraryLatest10Bundle = functions
-  .region("asia-northeast3")
-  .firestore.document("suno_tracks/{uid}/tracks/{trackId}")
-  .onWrite(async (change, context) => {
-    const mutation: LibraryTrackMutation = {
-      trackId: String(context.params.trackId || "").trim(),
-      before: change.before.exists ? (change.before.data() || {}) : null,
-      after: change.after.exists ? (change.after.data() || {}) : null,
-    };
-
-    // This guard intentionally runs before any Firestore operation. Provider raw
-    // responses, debug data, credit bookkeeping, and updatedAt-only writes never
-    // read or rewrite the Library bundle.
-    if (!mutation.trackId || !hasLibraryBundleRelevantChange(mutation)) return;
-
-    const uid = String(context.params.uid || "").trim();
-    if (!uid) return;
-    const mutationFingerprint = getLibraryMutationFingerprint(mutation);
-
-    const firestore = admin.firestore();
-    const bundleRef = firestore
-      .collection("user_list_caches")
-      .doc(uid)
-      .collection("bundles")
-      .doc("library_latest_10_sets");
-    const userRef = firestore.collection("users").doc(uid);
-    const latestTracksQuery = firestore
-      .collection("suno_tracks")
-      .doc(uid)
-      .collection("tracks")
-      .orderBy("createdAt", "desc")
-      .limit(10);
-
-    await firestore.runTransaction(async (transaction) => {
-      // A transaction retry always re-reads the latest bundle and recalculates
-      // the incremental result, so concurrent track events cannot overwrite one
-      // another with a stale bundle snapshot.
-      const bundleSnapshot = await transaction.get(bundleRef);
-      const currentBundle = bundleSnapshot.exists ? bundleSnapshot.data() : null;
-      if (isMatchingLibraryOversizeFallbackMarker(currentBundle, { mutation: mutationFingerprint })) return;
-      const plan = planLibraryBundleMutation(currentBundle, mutation);
-      let nextBundle: LibraryListBundleCore | null = null;
-
-      if (plan.action === "noop") return;
-      if (plan.action === "incremental") {
-        nextBundle = plan.bundle;
-      } else {
-        // Rebuilds are reserved for a missing/incompatible bundle, a latest-ten
-        // deletion, or ranking uncertainty. The query is always bounded to ten.
-        const latestTracksSnapshot = await transaction.get(latestTracksQuery);
-        nextBundle = buildRebuiltLibraryBundle(
-          latestTracksSnapshot.docs.map((trackSnapshot) => ({
-            id: trackSnapshot.id,
-            data: trackSnapshot.data(),
-          })),
-          getDeletedIdsForRebuild(currentBundle, mutation),
-        );
-        if (isLibraryBundleCoreCurrent(currentBundle, nextBundle)) return;
-      }
-
-      if (!nextBundle) return;
-      if (bundleSnapshot.exists && isLibraryBundleCoreCurrent(currentBundle, nextBundle)) return;
-
-      const version = getNextLibraryBundleVersion(currentBundle?.updatedAtMs);
-      const measuredBundlePayload = {
-        ...nextBundle,
-        updatedAtMs: version,
-        // A numeric timestamp placeholder slightly overestimates the serialized
-        // size needed by the final server timestamp field.
-        updatedAt: version,
-      };
-      if (getLibraryBundlePayloadByteSize(measuredBundlePayload) > LIBRARY_LIST_BUNDLE_MAX_BYTES) {
-        const sourceFingerprint = getLibraryBundleSourceFingerprint(nextBundle);
-        if (isMatchingLibraryOversizeFallbackMarker(currentBundle, { source: sourceFingerprint })) return;
-        const fallbackPayload = {
-          ...buildLibraryOversizeFallbackMarker(sourceFingerprint, mutationFingerprint, version),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
-        // The derived cache is replaced by a small, intentionally incompatible
-        // marker. Clients then use the existing bounded latest-ten source query;
-        // canonical suno_tracks documents are never truncated or modified.
-        transaction.set(bundleRef, fallbackPayload, { merge: false });
-        transaction.set(userRef, { syncVersions: { library: version } }, { merge: true });
-        return;
-      }
-
-      const bundlePayload = {
-        ...nextBundle,
-        updatedAtMs: version,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      };
-
-      transaction.set(bundleRef, bundlePayload, { merge: false });
-      transaction.set(userRef, { syncVersions: { library: version } }, { merge: true });
-    });
-  });
-
-const getAuthProviderIds = (user: admin.auth.UserRecord): string[] =>
-  (user.providerData || [])
-    .map((provider) => provider.providerId)
-    .filter((providerId): providerId is string => Boolean(providerId));
-
-type AdminPermissionKey =
-  | "userManagement"
-  | "vocalManagement"
-  | "sectionTagManagement"
-  | "sunoApiManagement"
-  | "appSettings"
-  | "geminiAudit";
-
-type CallableRequestLike = {
-  auth?: { uid: string; token?: Record<string, unknown> } | null;
-  data?: any;
-};
-
-const FULL_ADMIN_PERMISSIONS: Record<AdminPermissionKey, boolean> = {
-  userManagement: true,
-  vocalManagement: true,
-  sectionTagManagement: true,
-  sunoApiManagement: true,
-  appSettings: true,
-  geminiAudit: true,
-};
-
-const getStaffRole = (data: Record<string, any> | undefined | null): "master" | "admin" | null => {
-  if (data?.staffRole === "master") return "master";
-  if (data?.staffRole === "admin") return "admin";
-  if (data?.role === "admin" && !data?.staffRole) return "admin";
-  return null;
-};
-
-const getAdminPermissions = (data: Record<string, any> | undefined | null) => {
-  const staffRole = getStaffRole(data);
-  if (staffRole === "master") return { ...FULL_ADMIN_PERMISSIONS };
-  if (data?.role === "admin" && !data?.staffRole) return { ...FULL_ADMIN_PERMISSIONS };
-  const raw = data?.adminPermissions || {};
-  return Object.fromEntries(Object.keys(FULL_ADMIN_PERMISSIONS).map((key) => [key, raw[key] === true])) as Record<AdminPermissionKey, boolean>;
-};
-
-// SORIDRAW_USER_CONTROL_REVISION_STAGE1_20260905
-// Admin/security changes are rare. Publish only a tiny invalidation marker to RTDB.
-// No profile payload and no song/list data is copied into this channel.
-const writeUserControlRevision = async (targetUid: string, rawReason: string) => {
-  const safeUid = String(targetUid || "").trim();
-  if (!safeUid) throw new HttpsError("invalid-argument", "대상 회원 UID가 필요합니다.");
-  const now = Date.now();
-  const reason = String(rawReason || "control-change").slice(0, 64);
-  const revision = `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  await admin.database().ref(`userControls/${safeUid}`).set({ revision, updatedAt: now, reason });
-  return { revision, updatedAt: now };
-};
-
-const requireAdminCaller = async (request: CallableRequestLike, requiredPermission?: AdminPermissionKey) => {
-  const requesterUid = request.auth?.uid;
-  if (!requesterUid) throw new HttpsError("unauthenticated", "관리자 로그인이 필요합니다.");
-  const db = admin.firestore();
-  const requesterSnap = await db.collection("users").doc(requesterUid).get();
-  const requesterData = requesterSnap.data() || {};
-  const staffRole = getStaffRole(requesterData);
-  if (!staffRole) throw new HttpsError("permission-denied", "관리자 권한이 필요합니다.");
-  if (requiredPermission && staffRole !== "master" && !getAdminPermissions(requesterData)[requiredPermission]) {
-    throw new HttpsError("permission-denied", "이 관리자 페이지 권한이 없습니다.");
-  }
-  return { db, requesterUid, requesterData, staffRole };
-};
-
-const requireMasterCaller = async (request: CallableRequestLike) => {
-  const caller = await requireAdminCaller(request);
-  if (caller.staffRole !== "master") throw new HttpsError("permission-denied", "마스터 권한이 필요합니다.");
-  return caller;
-};
+admin.initializeApp();
 
 
-const PRESENCE_SESSION_STALE_MS = 25 * 60 * 1000;
-
-type AdminPresenceDeviceSummary = {
-  deviceId: string;
-  label: string;
-  platform: string;
-  browser: string;
-  deviceType: "desktop" | "mobile" | "tablet";
-  state: "active" | "away" | "background" | "offline";
-  connectionCount: number;
-  lastActivityAt: number | null;
-  lastSeenAt: number | null;
-  updatedAt: number | null;
-};
-
-type AdminPresenceSummary = {
-  state: "active" | "away" | "background" | "offline";
-  connectionCount: number;
-  deviceCount: number;
-  lastActivityAt: number | null;
-  lastSeenAt: number | null;
-  devices: AdminPresenceDeviceSummary[];
-};
-
-const getPresenceStateFromSessions = (sessions: any[]): AdminPresenceSummary["state"] => {
-  const states = sessions.map((session) => String(session?.state || ""));
-  return states.includes("active")
-    ? "active"
-    : states.includes("away")
-      ? "away"
-      : states.includes("background")
-        ? "background"
-        : "offline";
-};
-
-const getLegacyDeviceLabel = (session: any) => {
-  const raw = String(session?.device || "");
-  if (raw === "mobile") return "모바일 브라우저";
-  if (raw === "tablet") return "태블릿 브라우저";
-  return "데스크톱 브라우저";
-};
-
-const safePresenceTimestamp = (value: unknown) => {
-  const parsed = Number(value || 0);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-};
-
-const summarizePresenceRecord = (value: any, now = Date.now()): AdminPresenceSummary => {
-  const rawConnectionEntries = value?.connections && typeof value.connections === "object"
-    ? Object.entries(value.connections)
-    : [];
-  const validConnections = rawConnectionEntries
-    .map(([connectionKey, session]) => ({ ...(session as any), connectionKey }))
-    .filter((session: any) => {
-      const updatedAt = safePresenceTimestamp(session?.updatedAt);
-      return updatedAt > 0 && now - updatedAt <= PRESENCE_SESSION_STALE_MS;
-    });
-
-  const rawDeviceEntries = value?.devices && typeof value.devices === "object"
-    ? Object.entries(value.devices)
-    : [];
-  const deviceRows = new Map<string, { record: any; sessions: any[] }>();
-
-  rawDeviceEntries.forEach(([deviceKey, record]) => {
-    const deviceId = String((record as any)?.deviceId || deviceKey || "").trim();
-    if (!deviceId) return;
-    deviceRows.set(deviceId, { record: record as any, sessions: [] });
-  });
-
-  validConnections.forEach((session: any) => {
-    const explicitDeviceId = String(session?.deviceId || "").trim();
-    const legacyId = `legacy-${String(session?.sessionId || session?.connectionKey || "unknown")}`;
-    const deviceId = explicitDeviceId || legacyId;
-    const existing = deviceRows.get(deviceId) || { record: {}, sessions: [] };
-    existing.sessions.push(session);
-    deviceRows.set(deviceId, existing);
-  });
-
-  const allDevices = Array.from(deviceRows.entries()).map(([deviceId, row]): AdminPresenceDeviceSummary => {
-    const sessions = row.sessions;
-    const latestSession = sessions.reduce((latest: any, session: any) => {
-      return safePresenceTimestamp(session?.updatedAt) > safePresenceTimestamp(latest?.updatedAt) ? session : latest;
-    }, null);
-    const record = row.record || {};
-    const state = sessions.length > 0 ? getPresenceStateFromSessions(sessions) : "offline";
-    const lastActivityAt = Math.max(
-      safePresenceTimestamp(record?.lastActivityAt),
-      ...sessions.map((session: any) => safePresenceTimestamp(session?.lastActivityAt))
-    );
-    const lastSeenAt = safePresenceTimestamp(record?.lastSeenAt);
-    const updatedAt = Math.max(
-      safePresenceTimestamp(record?.updatedAt),
-      ...sessions.map((session: any) => safePresenceTimestamp(session?.updatedAt))
-    );
-    const deviceTypeRaw = String(record?.deviceType || latestSession?.device || "desktop");
-    const deviceType: AdminPresenceDeviceSummary["deviceType"] = deviceTypeRaw === "mobile" || deviceTypeRaw === "tablet"
-      ? deviceTypeRaw
-      : "desktop";
-    const platform = String(record?.platform || latestSession?.platform || "").trim();
-    const browser = String(record?.browser || latestSession?.browser || "").trim();
-    const label = String(record?.label || latestSession?.deviceLabel || "").trim()
-      || getLegacyDeviceLabel(latestSession);
-
-    return {
-      deviceId,
-      label,
-      platform,
-      browser,
-      deviceType,
-      state,
-      connectionCount: sessions.length,
-      lastActivityAt: lastActivityAt > 0 ? lastActivityAt : null,
-      lastSeenAt: lastSeenAt > 0 ? lastSeenAt : null,
-      updatedAt: updatedAt > 0 ? updatedAt : null,
-    };
-  });
-
-  const statePriority: Record<AdminPresenceDeviceSummary["state"], number> = {
-    active: 0,
-    away: 1,
-    background: 2,
-    offline: 3,
-  };
-  allDevices.sort((a, b) => {
-    const stateDiff = statePriority[a.state] - statePriority[b.state];
-    if (stateDiff !== 0) return stateDiff;
-    const aTime = Math.max(a.updatedAt || 0, a.lastActivityAt || 0, a.lastSeenAt || 0);
-    const bTime = Math.max(b.updatedAt || 0, b.lastActivityAt || 0, b.lastSeenAt || 0);
-    return bTime - aTime;
-  });
-
-  const state = getPresenceStateFromSessions(validConnections);
-  const lastActivityAt = allDevices.reduce((latest, device) => Math.max(latest, device.lastActivityAt || 0), 0);
-  const lastSeenAt = Math.max(
-    safePresenceTimestamp(value?.lastSeenAt),
-    ...allDevices.map((device) => device.lastSeenAt || 0)
-  );
-
-  return {
-    state,
-    connectionCount: validConnections.length,
-    deviceCount: allDevices.length,
-    lastActivityAt: lastActivityAt > 0 ? lastActivityAt : null,
-    lastSeenAt: lastSeenAt > 0 ? lastSeenAt : null,
-    devices: allDevices.slice(0, 10),
-  };
-};
-
-const assertManageableTarget = async (
-  db: admin.firestore.Firestore,
-  requesterUid: string,
-  targetUid: string
-) => {
-  if (!targetUid) {
-    throw new HttpsError("invalid-argument", "대상 회원 UID가 필요합니다.");
-  }
-  if (targetUid === requesterUid) {
-    throw new HttpsError("failed-precondition", "관리자 본인 계정에는 이 작업을 실행할 수 없습니다.");
-  }
-
-  const targetRef = db.collection("users").doc(targetUid);
-  const targetSnap = await targetRef.get();
-  if (getStaffRole(targetSnap.data())) {
-    throw new HttpsError("failed-precondition", "마스터·관리자 계정은 보호 대상이라 이 작업을 실행할 수 없습니다.");
-  }
-
-  return { targetRef, targetData: targetSnap.data() || {} };
-};
-
-
-export const syncAuthUserToFirestore = functions.region("us-east1").auth.user().onCreate(async (user: admin.auth.UserRecord) => {
+export const syncAuthUserToFirestore = functions.auth.user().onCreate(async (user: admin.auth.UserRecord) => {
   const db = admin.firestore();
   const userRef = db.collection("users").doc(user.uid);
   const snap = await userRef.get();
@@ -461,7 +15,9 @@ export const syncAuthUserToFirestore = functions.region("us-east1").auth.user().
     : Date.now();
   const safeCreatedAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
 
-  const providerIds = getAuthProviderIds(user);
+  const providerIds = (user.providerData || [])
+    .map((provider: any) => provider.providerId)
+    .filter(Boolean);
 
   const sessionData = {
     uid: user.uid,
@@ -469,8 +25,6 @@ export const syncAuthUserToFirestore = functions.region("us-east1").auth.user().
     displayName: user.displayName || "",
     photoURL: user.photoURL || "",
     providerIds,
-    emailVerified: user.emailVerified,
-    authDisabled: user.disabled,
     lastLoginAt: safeCreatedAt,
     lastSeenAt: safeCreatedAt,
     isOnline: false,
@@ -496,7 +50,16 @@ export const syncAuthUserToFirestore = functions.region("us-east1").auth.user().
 export const backfillMissingAuthUsers = onCall(
   { region: "us-central1" },
   async (request) => {
-    const { db } = await requireAdminCaller(request, "userManagement");
+    const requesterUid = request.auth?.uid;
+    if (!requesterUid) {
+      throw new HttpsError("unauthenticated", "관리자 로그인이 필요합니다.");
+    }
+
+    const db = admin.firestore();
+    const requesterSnap = await db.collection("users").doc(requesterUid).get();
+    if (requesterSnap.data()?.role !== "admin") {
+      throw new HttpsError("permission-denied", "관리자 권한이 필요합니다.");
+    }
 
     const dryRun = request.data?.dryRun === true;
     let pageToken: string | undefined;
@@ -526,7 +89,9 @@ export const backfillMissingAuthUsers = onCall(
             ? new Date(authUser.metadata.creationTime).getTime()
             : Date.now();
           const safeCreatedAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
-          const providerIds = getAuthProviderIds(authUser);
+          const providerIds = (authUser.providerData || [])
+            .map((provider: any) => provider.providerId)
+            .filter(Boolean);
 
           await userRef.set({
             uid: authUser.uid,
@@ -534,8 +99,6 @@ export const backfillMissingAuthUsers = onCall(
             displayName: authUser.displayName || "",
             photoURL: authUser.photoURL || "",
             providerIds,
-            emailVerified: authUser.emailVerified,
-            authDisabled: authUser.disabled,
             createdAt: safeCreatedAt,
             lastLoginAt: safeCreatedAt,
             lastSeenAt: safeCreatedAt,
@@ -573,305 +136,9 @@ export const backfillMissingAuthUsers = onCall(
   }
 );
 
-
-const sanitizeAdminPermissions = (value: unknown): Record<AdminPermissionKey, boolean> => {
-  const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};
-  return Object.fromEntries(Object.keys(FULL_ADMIN_PERMISSIONS).map((key) => [key, raw[key] === true])) as Record<AdminPermissionKey, boolean>;
-};
-
-export const ensureMasterAccess = onCall(
-  { region: "us-central1" },
-  async (request) => {
-    const requesterUid = request.auth?.uid;
-    const requesterEmail = String(request.auth?.token?.email || "").trim().toLowerCase();
-    const emailVerified = request.auth?.token?.email_verified === true;
-    if (!requesterUid || requesterEmail !== "andrawing1212@gmail.com" || !emailVerified) {
-      throw new HttpsError("permission-denied", "대표자 인증 계정만 마스터 권한을 복구할 수 있습니다.");
-    }
-    const db = admin.firestore();
-    await db.collection("users").doc(requesterUid).set({
-      role: "admin",
-      staffRole: "master",
-      adminPermissions: { ...FULL_ADMIN_PERMISSIONS },
-      staffRoleUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      staffRoleUpdatedBy: requesterUid,
-      masterBootstrapSource: "verified-owner-email",
-    }, { merge: true });
-    return { ok: true, uid: requesterUid, staffRole: "master" };
-  }
-);
-
-export const masterSetAdminAccess = onCall(
-  { region: "us-central1" },
-  async (request) => {
-    const { db, requesterUid } = await requireMasterCaller(request);
-    const targetUid = String(request.data?.targetUid || "").trim();
-    if (!targetUid) throw new HttpsError("invalid-argument", "대상 회원 UID가 필요합니다.");
-    if (targetUid === requesterUid) throw new HttpsError("failed-precondition", "마스터 본인 권한은 변경할 수 없습니다.");
-    const targetRef = db.collection("users").doc(targetUid);
-    const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) throw new HttpsError("not-found", "대상 회원을 찾을 수 없습니다.");
-    const targetData = targetSnap.data() || {};
-    if (getStaffRole(targetData) === "master") throw new HttpsError("failed-precondition", "다른 마스터 계정은 변경할 수 없습니다.");
-
-    const nextStaffRole = request.data?.staffRole === "admin" ? "admin" : null;
-    const now = admin.firestore.FieldValue.serverTimestamp();
-    if (nextStaffRole === "admin") {
-      const currentRole = String(targetData.role || "free");
-      const base = currentRole === "admin" ? String(targetData.staffBaseRole || targetData.planTier || "free") : currentRole;
-      const safeBaseRole = ["free", "basic", "pro"].includes(base) ? base : "free";
-      await targetRef.set({ role: "admin", staffRole: "admin", staffBaseRole: safeBaseRole, adminPermissions: sanitizeAdminPermissions(request.data?.adminPermissions), staffRoleUpdatedAt: now, staffRoleUpdatedBy: requesterUid }, { merge: true });
-    } else {
-      const base = String(targetData.staffBaseRole || targetData.planTier || "free");
-      const safeBaseRole = ["free", "basic", "pro"].includes(base) ? base : "free";
-      await targetRef.set({ role: safeBaseRole, staffRole: admin.firestore.FieldValue.delete(), staffBaseRole: admin.firestore.FieldValue.delete(), adminPermissions: admin.firestore.FieldValue.delete(), staffRoleUpdatedAt: now, staffRoleUpdatedBy: requesterUid }, { merge: true });
-    }
-    await db.collection("admin_permission_audit").add({ targetUid, staffRole: nextStaffRole, adminPermissions: nextStaffRole === "admin" ? sanitizeAdminPermissions(request.data?.adminPermissions) : {}, changedBy: requesterUid, changedAt: now });
-    return { ok: true, targetUid, staffRole: nextStaffRole };
-  }
-);
-
-
-export const getAdminAuthDirectory = onCall(
-  { region: "us-central1" },
-  async (request) => {
-    await requireAdminCaller(request, "userManagement");
-
-    const requestedMax = Number(request.data?.maxResults || 1000);
-    const maxResults = Math.min(1000, Math.max(1, Number.isFinite(requestedMax) ? Math.floor(requestedMax) : 1000));
-    const pageTokenRaw = String(request.data?.pageToken || "").trim();
-    const page = await admin.auth().listUsers(maxResults, pageTokenRaw || undefined);
-
-    return {
-      users: page.users.map((authUser) => ({
-        uid: authUser.uid,
-        email: authUser.email || "",
-        displayName: authUser.displayName || "",
-        photoURL: authUser.photoURL || "",
-        providerIds: getAuthProviderIds(authUser),
-        emailVerified: authUser.emailVerified,
-        disabled: authUser.disabled,
-        creationTime: authUser.metadata.creationTime || null,
-        lastSignInTime: authUser.metadata.lastSignInTime || null,
-      })),
-      nextPageToken: page.pageToken || null,
-    };
-  }
-);
-
-
-export const getAdminPresence = onCall(
-  { region: "us-central1" },
-  async (request) => {
-    await requireAdminCaller(request, "userManagement");
-    const requestedUids = Array.isArray(request.data?.uids) ? request.data.uids : [];
-    const uids = Array.from(new Set(
-      requestedUids
-        .map((uid: unknown) => String(uid || "").trim())
-        .filter((uid: string) => uid.length > 0 && uid.length <= 128)
-    )).slice(0, 50) as string[];
-
-    if (uids.length === 0) {
-      return { ok: true, schemaVersion: 2, checkedAt: Date.now(), presence: {} };
-    }
-
-    let rows: ReadonlyArray<readonly [string, AdminPresenceSummary]>;
-    try {
-      const database = admin.database();
-      rows = await Promise.all(uids.map(async (uid) => {
-        const snapshot = await database.ref(`presence/${uid}`).get();
-        return [uid, summarizePresenceRecord(snapshot.val())] as const;
-      }));
-    } catch (error) {
-      console.error("Failed to read Realtime Database presence:", error);
-      throw new HttpsError(
-        "failed-precondition",
-        "Realtime Database를 생성하고 접속 상태 규칙을 배포한 뒤 다시 시도해주세요."
-      );
-    }
-
-    const presence: Record<string, AdminPresenceSummary> = {};
-    rows.forEach(([uid, summary]) => {
-      presence[uid] = summary;
-    });
-
-    return {
-      ok: true,
-      schemaVersion: 2,
-      checkedAt: Date.now(),
-      presence,
-    };
-  }
-);
-
-export const adminSignalUserControlRevision = onCall(
-  { region: "us-central1" },
-  async (request) => {
-    const { db, requesterUid } = await requireAdminCaller(request, "userManagement");
-    const targetUid = String(request.data?.targetUid || "").trim();
-    await assertManageableTarget(db, requesterUid, targetUid);
-    const reason = String(request.data?.reason || "admin-user-settings").slice(0, 64);
-    const signal = await writeUserControlRevision(targetUid, reason);
-    return { ok: true, targetUid, ...signal };
-  }
-);
-
-export const adminForceLogoutUser = onCall(
-  { region: "us-central1" },
-  async (request) => {
-    const { db, requesterUid } = await requireAdminCaller(request, "userManagement");
-    const targetUid = String(request.data?.targetUid || "").trim();
-    const { targetRef } = await assertManageableTarget(db, requesterUid, targetUid);
-    const now = Date.now();
-
-    try {
-      await admin.auth().revokeRefreshTokens(targetUid);
-    } catch (error: any) {
-      if (error?.code !== "auth/user-not-found") throw error;
-    }
-
-    await targetRef.set({
-      forceLogoutAt: now,
-      lastLogoutAt: now,
-      lastSeenAt: now,
-      isOnline: false,
-      lastAdminAuthAction: "force-logout",
-      lastAdminAuthActionAt: admin.firestore.FieldValue.serverTimestamp(),
-      lastAdminAuthActionBy: requesterUid,
-    }, { merge: true });
-
-    return { ok: true, targetUid, forceLogoutAt: now };
-  }
-);
-
-export const adminResetEmailVerification = onCall(
-  { region: "us-central1" },
-  async (request) => {
-    const { db, requesterUid } = await requireAdminCaller(request, "userManagement");
-    const targetUid = String(request.data?.targetUid || "").trim();
-    const { targetRef } = await assertManageableTarget(db, requesterUid, targetUid);
-    const authUser = await admin.auth().getUser(targetUid);
-    const providerIds = getAuthProviderIds(authUser);
-
-    if (!providerIds.includes("password") || providerIds.some((providerId) => providerId !== "password")) {
-      throw new HttpsError("failed-precondition", "순수 이메일·비밀번호 가입 회원만 이메일 인증을 초기화할 수 있습니다.");
-    }
-
-    const now = Date.now();
-    await admin.auth().updateUser(targetUid, { emailVerified: false });
-    await admin.auth().revokeRefreshTokens(targetUid);
-    await targetRef.set({
-      providerIds,
-      emailVerified: false,
-      authDisabled: authUser.disabled,
-      emailVerificationResetAt: admin.firestore.FieldValue.serverTimestamp(),
-      emailVerificationResetAtMs: now,
-      emailVerificationResetBy: requesterUid,
-      forceLogoutAt: now,
-      lastLogoutAt: now,
-      lastSeenAt: now,
-      isOnline: false,
-      lastAdminAuthAction: "reset-email-verification",
-      lastAdminAuthActionAt: admin.firestore.FieldValue.serverTimestamp(),
-      lastAdminAuthActionBy: requesterUid,
-    }, { merge: true });
-
-    return {
-      ok: true,
-      targetUid,
-      email: authUser.email || "",
-      emailVerified: false,
-      forceLogoutAt: now,
-    };
-  }
-);
-
-export const adminDeleteUserAccount = onCall(
-  { region: "us-central1", timeoutSeconds: 60 },
-  async (request) => {
-    const { db, requesterUid } = await requireAdminCaller(request, "userManagement");
-    const targetUid = String(request.data?.targetUid || "").trim();
-    const confirmEmail = String(request.data?.confirmEmail || "").trim().toLowerCase();
-    const { targetRef, targetData } = await assertManageableTarget(db, requesterUid, targetUid);
-
-    let authUser: admin.auth.UserRecord | null = null;
-    try {
-      authUser = await admin.auth().getUser(targetUid);
-    } catch (error: any) {
-      if (error?.code !== "auth/user-not-found") throw error;
-    }
-
-    const targetEmail = String(authUser?.email || targetData.email || "").trim();
-    if (targetEmail && confirmEmail !== targetEmail.toLowerCase()) {
-      throw new HttpsError("invalid-argument", "회원 이메일 확인값이 일치하지 않습니다.");
-    }
-
-    const providerIds = authUser ? getAuthProviderIds(authUser) : (
-      Array.isArray(targetData.providerIds) ? targetData.providerIds.filter((value: unknown) => typeof value === "string") : []
-    );
-    const now = Date.now();
-
-    await targetRef.set({
-      accountStatus: "banned",
-      forceLogoutAt: now,
-      lastLogoutAt: now,
-      lastSeenAt: now,
-      isOnline: false,
-      authDeletionPendingAt: admin.firestore.FieldValue.serverTimestamp(),
-      authDeletionPendingBy: requesterUid,
-    }, { merge: true });
-
-    if (authUser) {
-      await admin.auth().revokeRefreshTokens(targetUid);
-      await admin.auth().deleteUser(targetUid);
-    }
-
-    const cleanupBatch = db.batch();
-    cleanupBatch.delete(db.collection("user_api_keys").doc(targetUid));
-    cleanupBatch.delete(db.collection("gemini_request_guards").doc(targetUid));
-    cleanupBatch.set(targetRef, {
-      accountStatus: "banned",
-      authDeleted: true,
-      authDeletedAt: admin.firestore.FieldValue.serverTimestamp(),
-      authDeletedAtMs: now,
-      authDeletedBy: requesterUid,
-      authDeletedEmail: targetEmail,
-      authDeletedProviderIds: providerIds,
-      authDisabled: true,
-      emailVerified: false,
-      isOnline: false,
-      forceLogoutAt: now,
-      lastLogoutAt: now,
-      adminDeletionContentPolicy: "retain-user-content",
-      lastAdminAuthAction: "delete-auth-account",
-      lastAdminAuthActionAt: admin.firestore.FieldValue.serverTimestamp(),
-      lastAdminAuthActionBy: requesterUid,
-      authDeletionPendingAt: admin.firestore.FieldValue.delete(),
-      authDeletionPendingBy: admin.firestore.FieldValue.delete(),
-    }, { merge: true });
-    await cleanupBatch.commit();
-
-    return {
-      ok: true,
-      targetUid,
-      email: targetEmail,
-      providerIds,
-      authDeleted: true,
-      userContentRetained: true,
-    };
-  }
-);
-
 const APP_CHECK_STATUS_HEADER = "X-SORIDRAW-App-Check-Status";
 
 const ALLOWED_ORIGINS = [
-  "https://preview.soridraw.com",
-  "https://soridraw-preview.web.app",
-  "https://soridraw-preview.firebaseapp.com",
-  "https://test.soridraw.com",
-  "https://soridraw-test.web.app",
-  "https://soridraw-test.firebaseapp.com",
-  "https://soridraw.com",
   "https://soridraw-music-git-preview-andrawing1212.vercel.app",
   "https://soridraw-music.vercel.app",
   "https://soridraw.web.app",
@@ -995,7 +262,6 @@ const verifyAppCheckForRequest = async (
 };
 
 const GEMINI_ALLOWED_MODELS = new Set([
-  "gemini-3.7-flash",
   "gemini-3.6-flash",
   "gemini-3.5-flash",
   "gemini-3.5-flash-lite",
@@ -1005,26 +271,25 @@ const GEMINI_ALLOWED_MODELS = new Set([
 const GEMINI_MAX_REQUEST_BYTES = 900_000;
 const GEMINI_MAX_REQUESTS_PER_MINUTE = 12;
 const GEMINI_MAX_ACTIVE_REQUESTS = 2;
-const GEMINI_MAX_REQUESTS_PER_SESSION = 5;
+const GEMINI_MAX_REQUESTS_PER_SESSION = 3;
 const GEMINI_GUARD_STALE_MS = 3 * 60 * 1000;
 const GEMINI_SESSION_WINDOW_MS = 10 * 60 * 1000;
+const getStoredGeminiApiKey = async (uid: string): Promise<string> => {
+  // Read the current server-only key for every real Gemini request. One Firestore read is
+  // intentionally preferred over caching private keys in warm instance memory, so key
+  // deletion or replacement takes effect immediately across all Function instances.
+  const snap = await admin.firestore().collection("user_api_keys").doc(uid).get();
+  return String(snap.data()?.googleGeminiApiKey || "").trim();
+};
 
-const acquireGeminiRequestGuard = async (uid: string, sessionId: string): Promise<string> => {
+const acquireGeminiRequestGuard = async (uid: string, sessionId: string): Promise<void> => {
   const db = admin.firestore();
   const guardRef = db.collection("gemini_request_guards").doc(uid);
   const userRef = db.collection("users").doc(uid);
-  const apiKeyRef = db.collection("user_api_keys").doc(uid);
   const now = Date.now();
 
-  // Keep the private Gemini key uncached, but read it inside the same transaction round-trip
-  // as the account/rate guard. Key deletion or replacement still takes effect immediately
-  // across warm instances without an extra Firestore request after the guard is acquired.
-  return db.runTransaction(async (tx) => {
-    const [userSnap, guardSnap, apiKeySnap] = await Promise.all([
-      tx.get(userRef),
-      tx.get(guardRef),
-      tx.get(apiKeyRef),
-    ]);
+  await db.runTransaction(async (tx) => {
+    const [userSnap, guardSnap] = await Promise.all([tx.get(userRef), tx.get(guardRef)]);
     const userData = userSnap.data() || {};
     const role = String(userData.role || "free");
     const accountStatus = String(userData.accountStatus || "active");
@@ -1067,61 +332,22 @@ const acquireGeminiRequestGuard = async (uid: string, sessionId: string): Promis
       sessionCounts,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
-
-    return String(apiKeySnap.data()?.googleGeminiApiKey || "").trim();
-  });
-};
-
-const reserveGeminiFallbackAttempt = async (uid: string, sessionId: string): Promise<void> => {
-  const db = admin.firestore();
-  const guardRef = db.collection("gemini_request_guards").doc(uid);
-  const now = Date.now();
-
-  // 838: fallback stays inside the same Function invocation, but every physical
-  // Gemini upstream call still consumes the existing per-minute/session ceiling.
-  // Only this single guard document is touched for fallback attempts; Auth, App Check,
-  // account state and API-key reads are not repeated.
-  await db.runTransaction(async (tx) => {
-    const guardSnap = await tx.get(guardRef);
-    const data = guardSnap.data() || {};
-
-    const minuteWindowStart = Number(data.minuteWindowStart || 0);
-    const sameMinuteWindow = minuteWindowStart > 0 && now - minuteWindowStart < 60_000;
-    const minuteCount = sameMinuteWindow ? Math.max(0, Number(data.minuteCount || 0)) : 0;
-    if (minuteCount >= GEMINI_MAX_REQUESTS_PER_MINUTE) {
-      throw new HttpsError("resource-exhausted", "짧은 시간에 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
-    }
-
-    const sessionWindowStart = Number(data.sessionWindowStart || 0);
-    const sameSessionWindow = sessionWindowStart > 0 && now - sessionWindowStart < GEMINI_SESSION_WINDOW_MS;
-    const sessionCounts = sameSessionWindow && data.sessionCounts && typeof data.sessionCounts === "object"
-      ? { ...data.sessionCounts }
-      : {};
-    const sessionCount = Math.max(0, Number(sessionCounts[sessionId] || 0));
-    if (sessionCount >= GEMINI_MAX_REQUESTS_PER_SESSION) {
-      throw new HttpsError("resource-exhausted", "곡 하나의 Gemini 호출 상한에 도달했습니다.");
-    }
-    sessionCounts[sessionId] = sessionCount + 1;
-
-    tx.set(guardRef, {
-      minuteWindowStart: sameMinuteWindow ? minuteWindowStart : now,
-      minuteCount: minuteCount + 1,
-      sessionWindowStart: sameSessionWindow ? sessionWindowStart : now,
-      sessionCounts,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
   });
 };
 
 const releaseGeminiRequestGuard = async (uid: string): Promise<void> => {
-  const guardRef = admin.firestore().collection("gemini_request_guards").doc(uid);
+  const db = admin.firestore();
+  const guardRef = db.collection("gemini_request_guards").doc(uid);
   try {
-    // The active counter is already serialized on acquire. Releasing only needs an atomic
-    // decrement, so avoid a second read/transaction after every Gemini response.
-    await guardRef.update({
-      activeCount: admin.firestore.FieldValue.increment(-1),
-      activeUpdatedAt: Date.now(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(guardRef);
+      if (!snap.exists) return;
+      const activeCount = Math.max(0, Number(snap.data()?.activeCount || 0) - 1);
+      tx.set(guardRef, {
+        activeCount,
+        activeUpdatedAt: Date.now(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
     });
   } catch (error) {
     console.warn("[Gemini Guard] failed to release active request:", error instanceof Error ? error.message : String(error));
@@ -1223,213 +449,8 @@ const sanitizeLegacyGeminiResponseSchema = (value: any): any => {
   return sanitized;
 };
 
-const normalizeInteractionJsonSchema = (value: any): any => {
-  if (Array.isArray(value)) return value.map(normalizeInteractionJsonSchema);
-  if (!value || typeof value !== "object") return value;
-
-  const normalized: Record<string, any> = {};
-  for (const [key, child] of Object.entries(value)) {
-    if (key === "type" && typeof child === "string") {
-      normalized[key] = child.toLowerCase();
-      continue;
-    }
-    normalized[key] = normalizeInteractionJsonSchema(child);
-  }
-  return normalized;
-};
-
-const geminiTextContentToInteractionInput = (rawContents: any): string => {
-  if (typeof rawContents === "string") return rawContents;
-  const contents = Array.isArray(rawContents) ? rawContents : [rawContents];
-  const turns = contents.map((content: any) => {
-    if (typeof content === "string") return content;
-    const role = String(content?.role || "user").trim();
-    const text = Array.isArray(content?.parts)
-      ? content.parts.map((part: any) => String(part?.text || "")).join("")
-      : "";
-    return role && role !== "user" ? `${role}: ${text}` : text;
-  }).filter(Boolean);
-  return turns.join("\n\n");
-};
-
-const geminiSystemInstructionToText = (value: any): string => {
-  if (typeof value === "string") return value;
-  if (value && typeof value === "object" && Array.isArray(value.parts)) {
-    return value.parts.map((part: any) => String(part?.text || "")).join("");
-  }
-  return "";
-};
-
-const extractGeminiInteractionText = (payload: any): string => {
-  if (typeof payload?.output_text === "string") return payload.output_text;
-  if (!Array.isArray(payload?.steps)) return "";
-  return payload.steps
-    .filter((step: any) => step?.type === "model_output")
-    .flatMap((step: any) => Array.isArray(step?.content) ? step.content : [])
-    .filter((item: any) => item?.type === "text")
-    .map((item: any) => String(item?.text || ""))
-    .join("");
-};
-
-const parseGeminiRetryAfterMs = (headerValue: string | null, message: unknown): number => {
-  const header = String(headerValue || "").trim();
-  if (header) {
-    const seconds = Number(header);
-    if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds * 1000);
-    const retryAt = Date.parse(header);
-    if (Number.isFinite(retryAt)) return Math.max(0, retryAt - Date.now());
-  }
-  const text = String(message || "");
-  const match = text.match(/(?:Please\s+retry\s+in|retry\s+in)\s*([0-9]+(?:\.[0-9]+)?)\s*s/i);
-  if (!match) return 0;
-  const parsedSeconds = Number(match[1]);
-  return Number.isFinite(parsedSeconds) && parsedSeconds > 0 ? Math.ceil(parsedSeconds * 1000) : 0;
-};
-
-const getGeminiServerCooldownMs = (statusCode: number, retryAfterMs = 0): number => {
-  const retryFloor = Math.max(0, Math.round(Number(retryAfterMs) || 0));
-  if (statusCode === 429) return Math.max(120_000, Math.min(10 * 60_000, retryFloor + 1_000));
-  if ([500, 502, 503, 504].includes(statusCode)) return Math.max(45_000, Math.min(5 * 60_000, retryFloor + 1_000));
-  if (statusCode === 404) return 30 * 60_000;
-  return 0;
-};
-
-type GeminiServerCooldownEntry = {
-  until: number;
-  reason: string;
-  statusCode: number;
-};
-
-// Best-effort per-instance memory only. It never stores API keys, prompts or generated text.
-// Browser localStorage remains the durable short-term source across Function instances.
-const geminiServerModelCooldowns = new Map<string, GeminiServerCooldownEntry>();
-
-const geminiServerCooldownKey = (uid: string, model: string): string => `${uid}:${model}`;
-
-const pruneGeminiServerCooldowns = (): void => {
-  const now = Date.now();
-  for (const [key, entry] of geminiServerModelCooldowns.entries()) {
-    if (!entry || entry.until <= now) geminiServerModelCooldowns.delete(key);
-  }
-  if (geminiServerModelCooldowns.size <= 500) return;
-  const oldest = Array.from(geminiServerModelCooldowns.entries())
-    .sort((a, b) => a[1].until - b[1].until)
-    .slice(0, geminiServerModelCooldowns.size - 500);
-  oldest.forEach(([key]) => geminiServerModelCooldowns.delete(key));
-};
-
-const getGeminiServerModelCooldown = (uid: string, model: string): GeminiServerCooldownEntry | null => {
-  pruneGeminiServerCooldowns();
-  const entry = geminiServerModelCooldowns.get(geminiServerCooldownKey(uid, model));
-  if (!entry || entry.until <= Date.now()) return null;
-  return entry;
-};
-
-const setGeminiServerModelCooldown = (
-  uid: string,
-  model: string,
-  statusCode: number,
-  retryAfterMs: number,
-  reason: string,
-): GeminiServerCooldownEntry | null => {
-  const cooldownMs = getGeminiServerCooldownMs(statusCode, retryAfterMs);
-  if (cooldownMs <= 0) return null;
-  const key = geminiServerCooldownKey(uid, model);
-  const existing = geminiServerModelCooldowns.get(key);
-  const next: GeminiServerCooldownEntry = {
-    until: Math.max(Number(existing?.until || 0), Date.now() + cooldownMs),
-    reason: String(reason || existing?.reason || "temporary_model_cooldown").trim() || "temporary_model_cooldown",
-    statusCode,
-  };
-  geminiServerModelCooldowns.set(key, next);
-  pruneGeminiServerCooldowns();
-  return next;
-};
-
-const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promise<any> => {
-  const model = String(requestPayload?.model || "").trim();
-  const config = requestPayload?.config && typeof requestPayload.config === "object"
-    ? { ...requestPayload.config }
-    : {};
-  const systemInstruction = geminiSystemInstructionToText(config.systemInstruction);
-  const responseMimeType = String(config.responseMimeType || "").trim();
-  const responseSchema = config.responseSchema;
-
-  const generationConfig: Record<string, any> = {
-    // AI Studio currently emits Gemini 3.7 Flash with medium thinking by default.
-    // Keep it explicit so the production proxy matches the model's current default profile.
-    thinking_level: "medium",
-  };
-  if (Number.isFinite(Number(config.maxOutputTokens)) && Number(config.maxOutputTokens) > 0) {
-    generationConfig.max_output_tokens = Math.round(Number(config.maxOutputTokens));
-  }
-  if (Number.isFinite(Number(config.seed))) generationConfig.seed = Math.round(Number(config.seed));
-  if (Array.isArray(config.stopSequences) && config.stopSequences.length) {
-    generationConfig.stop_sequences = config.stopSequences.map((item: any) => String(item));
-  }
-
-  const body: Record<string, any> = {
-    model,
-    input: geminiTextContentToInteractionInput(requestPayload?.contents),
-    generation_config: generationConfig,
-    store: false,
-  };
-  if (systemInstruction) body.system_instruction = systemInstruction;
-  if (responseMimeType || responseSchema) {
-    body.response_format = {
-      type: "text",
-      mime_type: responseMimeType || "application/json",
-      ...(responseSchema ? { schema: normalizeInteractionJsonSchema(responseSchema) } : {}),
-    };
-  }
-
-  const upstream = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/interactions",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify(body),
-    },
-  );
-  const payload = await upstream.json().catch(() => null);
-  if (!upstream.ok) {
-    const error = new Error(String(payload?.error?.message || `Gemini interaction failed (${upstream.status})`));
-    const upstreamReason = Array.isArray(payload?.error?.details)
-      ? String(payload.error.details.find((detail: any) => typeof detail?.reason === "string")?.reason || "")
-      : "";
-    (error as any).status = upstream.status;
-    (error as any).code = payload?.error?.status || upstream.status;
-    (error as any).reason = upstreamReason;
-    (error as any).retryAfterMs = parseGeminiRetryAfterMs(upstream.headers.get("retry-after"), (error as Error).message);
-    throw error;
-  }
-
-  const text = extractGeminiInteractionText(payload);
-  const usage = payload?.usage || {};
-  return {
-    candidates: [{ content: { role: "model", parts: [{ text }] } }],
-    usageMetadata: {
-      promptTokenCount: Number(usage.total_input_tokens || 0) || undefined,
-      candidatesTokenCount: Number(usage.total_output_tokens || 0) || undefined,
-      thoughtsTokenCount: Number(usage.total_thought_tokens || 0) || undefined,
-      // Interactions API implicit caching is automatic on Gemini 2.5+ models.
-      // Surface cache hits through the same generateContent-shaped metadata used by the admin audit UI.
-      cachedContentTokenCount: Number(usage.total_cached_tokens || 0) || undefined,
-      totalTokenCount: Number(usage.total_tokens || 0) || undefined,
-    },
-    modelVersion: String(payload?.model || model),
-    responseId: String(payload?.id || "") || undefined,
-  };
-};
-
 const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {
   const model = String(requestPayload?.model || "").trim();
-  if (model === "gemini-3.7-flash") {
-    return callGeminiInteraction(apiKey, requestPayload);
-  }
   const config = requestPayload?.config && typeof requestPayload.config === "object"
     ? { ...requestPayload.config }
     : {};
@@ -1482,126 +503,9 @@ const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): P
     (error as any).status = upstream.status;
     (error as any).code = payload?.error?.status || upstream.status;
     (error as any).reason = upstreamReason;
-    (error as any).retryAfterMs = parseGeminiRetryAfterMs(upstream.headers.get("retry-after"), (error as Error).message);
     throw error;
   }
   return payload || {};
-};
-
-type GeminiServerAttemptRecord = {
-  model: string;
-  status: "success" | "failed";
-  durationMs: number;
-  usageMetadata?: any;
-  errorMessage?: string;
-  statusCode?: number;
-  code?: string | number;
-  retryAfterMs?: number;
-  cooldownMs?: number;
-  cooldownReason?: string;
-};
-
-const normalizeGeminiServerAttemptRequest = (
-  requestPayload: any,
-  model: string,
-  fallbackInstruction: string,
-  isFallbackAttempt: boolean,
-): any => {
-  const next = {
-    ...(requestPayload || {}),
-    model,
-    config: requestPayload?.config && typeof requestPayload.config === "object"
-      ? { ...requestPayload.config }
-      : requestPayload?.config,
-  };
-
-  if ((model === "gemini-3.7-flash" || model === "gemini-3.6-flash" || model === "gemini-3.5-flash-lite") && next.config) {
-    delete next.config.temperature;
-    delete next.config.topP;
-    delete next.config.topK;
-  }
-
-  if (isFallbackAttempt && fallbackInstruction && next.config) {
-    const currentInstruction = next.config.systemInstruction;
-    if (typeof currentInstruction === "string") {
-      next.config.systemInstruction = [currentInstruction, fallbackInstruction].filter(Boolean).join("\n\n");
-    } else if (currentInstruction && typeof currentInstruction === "object" && Array.isArray(currentInstruction.parts)) {
-      next.config.systemInstruction = {
-        ...currentInstruction,
-        parts: [
-          ...currentInstruction.parts,
-          { text: `\n\n${fallbackInstruction}` },
-        ],
-      };
-    } else {
-      next.config.systemInstruction = fallbackInstruction;
-    }
-  }
-
-  return next;
-};
-
-const normalizeGeminiServerModelChain = (primaryModel: string, rawChain: any): string[] => {
-  const requested = Array.isArray(rawChain)
-    ? rawChain.map((item: any) => String(item || "").trim()).filter(Boolean)
-    : [];
-  const chain = [primaryModel, ...requested.filter((model: string) => model !== primaryModel)]
-    .filter((model, index, all) => Boolean(model) && all.indexOf(model) === index)
-    .filter((model) => GEMINI_ALLOWED_MODELS.has(model))
-    .slice(0, GEMINI_MAX_REQUESTS_PER_SESSION);
-  return chain.length ? chain : [primaryModel];
-};
-
-const isGeminiServerFallbackStatus = (status: number): boolean =>
-  status === 404 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
-
-const buildGeminiServerAttemptError = (error: unknown, apiKey: string, model: string, durationMs: number): GeminiServerAttemptRecord => {
-  const anyError = error as any;
-  const statusCode = extractGeminiErrorStatus(error);
-  const retryAfterMs = Math.max(0, Math.round(Number(anyError?.retryAfterMs) || 0));
-  const cooldownMs = getGeminiServerCooldownMs(statusCode, retryAfterMs);
-  return {
-    model,
-    status: "failed",
-    durationMs,
-    errorMessage: sanitizeGeminiErrorMessage(error, apiKey),
-    statusCode,
-    code: anyError?.code || statusCode,
-    ...(retryAfterMs > 0 ? { retryAfterMs } : {}),
-    ...(cooldownMs > 0 ? { cooldownMs } : {}),
-    ...(cooldownMs > 0 ? { cooldownReason: statusCode === 429 ? "quota_or_rate_limit" : statusCode === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded" } : {}),
-  };
-};
-
-type GeminiServerCooldownHint = {
-  model: string;
-  remainingMs: number;
-  reason: string;
-  statusCode: number;
-};
-
-const mergeGeminiServerCooldownHints = (...groups: GeminiServerCooldownHint[][]): GeminiServerCooldownHint[] => {
-  const merged = new Map<string, GeminiServerCooldownHint>();
-  groups.flat().forEach((hint) => {
-    if (!hint?.model || hint.remainingMs <= 0) return;
-    const previous = merged.get(hint.model);
-    if (!previous || hint.remainingMs > previous.remainingMs) merged.set(hint.model, hint);
-  });
-  return Array.from(merged.values());
-};
-
-const activeGeminiServerCooldownHints = (uid: string, models: string[]): GeminiServerCooldownHint[] => {
-  const now = Date.now();
-  return models.flatMap((model) => {
-    const entry = getGeminiServerModelCooldown(uid, model);
-    if (!entry) return [];
-    return [{
-      model,
-      remainingMs: Math.max(1_000, entry.until - now),
-      reason: entry.reason,
-      statusCode: entry.statusCode,
-    }];
-  });
 };
 
 const pickFirstString = (...values: any[]): string => {
@@ -2333,9 +1237,7 @@ export const generateGeminiContent = onRequest(
     const model = String(requestPayload?.model || "").trim();
     const sessionId = String(req.body?.sessionId || "").trim();
     const context = String(req.body?.context || "Gemini 호출").trim().slice(0, 120);
-    const fallbackAttempt = Math.max(1, Math.min(5, Math.round(Number(req.body?.fallbackAttempt) || 1)));
-    const modelChain = normalizeGeminiServerModelChain(model, req.body?.modelChain);
-    const fallbackInstruction = String(req.body?.fallbackInstruction || "").trim().slice(0, 5000);
+    const fallbackAttempt = Math.max(1, Math.min(3, Math.round(Number(req.body?.fallbackAttempt) || 1)));
 
     if (!requestPayload || typeof requestPayload !== "object" || !model || !GEMINI_ALLOWED_MODELS.has(model)) {
       res.status(400).json({ error: "Unsupported Gemini request", code: "INVALID_GEMINI_REQUEST", ok: false });
@@ -2355,116 +1257,34 @@ export const generateGeminiContent = onRequest(
 
     let guardAcquired = false;
     let apiKey = "";
-    const attempts: GeminiServerAttemptRecord[] = [];
-    const initialServerCooldownHints = activeGeminiServerCooldownHints(uid, modelChain);
-    const availableServerModelChain = modelChain.filter((attemptModel) => !getGeminiServerModelCooldown(uid, attemptModel));
-    const runtimeServerModelChain = availableServerModelChain.length
-      ? availableServerModelChain
-      : modelChain
-          .map((attemptModel) => ({ attemptModel, cooldown: getGeminiServerModelCooldown(uid, attemptModel) }))
-          .filter((item) => Boolean(item.cooldown))
-          .sort((a, b) => Number(a.cooldown?.until || 0) - Number(b.cooldown?.until || 0))
-          .slice(0, 1)
-          .map((item) => item.attemptModel);
-    let responseCooldownHints = initialServerCooldownHints;
     try {
-      apiKey = await acquireGeminiRequestGuard(uid, sessionId);
+      await acquireGeminiRequestGuard(uid, sessionId);
       guardAcquired = true;
+      apiKey = await getStoredGeminiApiKey(uid);
       if (!apiKey) {
         res.status(404).json({ error: "Google Gemini API Key is not registered", code: "GEMINI_KEY_NOT_FOUND", ok: false });
         return;
       }
 
-      let lastUpstreamError: unknown = null;
-      for (let index = 0; index < runtimeServerModelChain.length; index += 1) {
-        const attemptModel = runtimeServerModelChain[index];
-        if (index > 0) {
-          await reserveGeminiFallbackAttempt(uid, sessionId);
-        }
-
-        const attemptPayload = normalizeGeminiServerAttemptRequest(
-          requestPayload,
-          attemptModel,
-          fallbackInstruction,
-          index > 0 || attemptModel !== model,
-        );
-        const attemptStartedAt = Date.now();
-        try {
-          const response = await callGeminiGenerateContent(apiKey, attemptPayload);
-          const durationMs = Math.max(0, Date.now() - attemptStartedAt);
-          attempts.push({
-            model: attemptModel,
-            status: "success",
-            durationMs,
-            usageMetadata: response.usageMetadata || null,
-          });
-          geminiServerModelCooldowns.delete(geminiServerCooldownKey(uid, attemptModel));
-          responseCooldownHints = mergeGeminiServerCooldownHints(
-            responseCooldownHints,
-            activeGeminiServerCooldownHints(uid, modelChain),
-          );
-          const text = Array.isArray(response?.candidates?.[0]?.content?.parts)
-            ? response.candidates[0].content.parts.map((part: any) => String(part?.text || "")).join("")
-            : "";
-          res.json({
-            ok: true,
-            text,
-            usageMetadata: response.usageMetadata || null,
-            modelVersion: response.modelVersion || attemptModel,
-            responseId: response.responseId || null,
-            promptFeedback: response.promptFeedback || null,
-            usedModel: attemptModel,
-            attempts,
-            cooldowns: responseCooldownHints,
-            context,
-            fallbackAttempt: Math.min(5, fallbackAttempt + index),
-          });
-          return;
-        } catch (upstreamError) {
-          lastUpstreamError = upstreamError;
-          const durationMs = Math.max(0, Date.now() - attemptStartedAt);
-          const attemptRecord = buildGeminiServerAttemptError(upstreamError, apiKey, attemptModel, durationMs);
-          attempts.push(attemptRecord);
-          const status = attemptRecord.statusCode || 500;
-          const serverCooldown = isGeminiServerFallbackStatus(status)
-            ? setGeminiServerModelCooldown(
-                uid,
-                attemptModel,
-                status,
-                Number(attemptRecord.retryAfterMs || 0),
-                String(attemptRecord.cooldownReason || (status === 429 ? "quota_or_rate_limit" : status === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded")),
-              )
-            : null;
-          if (serverCooldown) {
-            responseCooldownHints = mergeGeminiServerCooldownHints(
-              responseCooldownHints,
-              [{
-                model: attemptModel,
-                remainingMs: Math.max(1_000, serverCooldown.until - Date.now()),
-                reason: serverCooldown.reason,
-                statusCode: serverCooldown.statusCode,
-              }],
-            );
-          }
-          const canFallback = index < runtimeServerModelChain.length - 1 && isGeminiServerFallbackStatus(status);
-          if (!canFallback) throw upstreamError;
-          console.warn("[Gemini Server Fallback] advancing model inside one Function request", {
-            context,
-            sessionId,
-            from: attemptModel,
-            to: runtimeServerModelChain[index + 1],
-            status,
-            physicalAttempt: fallbackAttempt + index,
-          });
-        }
-      }
-      if (lastUpstreamError) throw lastUpstreamError;
-      throw new Error("Gemini server fallback chain ended without a response.");
+      const response = await callGeminiGenerateContent(apiKey, requestPayload);
+      const text = Array.isArray(response?.candidates?.[0]?.content?.parts)
+        ? response.candidates[0].content.parts.map((part: any) => String(part?.text || "")).join("")
+        : "";
+      res.json({
+        ok: true,
+        text,
+        usageMetadata: response.usageMetadata || null,
+        modelVersion: response.modelVersion || model,
+        responseId: response.responseId || null,
+        promptFeedback: response.promptFeedback || null,
+        context,
+        fallbackAttempt,
+      });
     } catch (error) {
       const requestError = error as any;
       if (requestError instanceof HttpsError) {
         const status = requestError.code === "permission-denied" ? 403 : requestError.code === "resource-exhausted" ? 429 : 400;
-        res.status(status).json({ error: requestError.message, code: requestError.code, attempts, cooldowns: responseCooldownHints, ok: false });
+        res.status(status).json({ error: requestError.message, code: requestError.code, ok: false });
         return;
       }
       const status = extractGeminiErrorStatus(error);
@@ -2476,16 +1296,12 @@ export const generateGeminiContent = onRequest(
           : sanitizeGeminiErrorMessage(error, apiKey),
         code: isAuthKeyActivationError
           ? "GEMINI_AUTH_KEY_NOT_READY"
-          : status === 404
-            ? "GEMINI_MODEL_NOT_FOUND"
-            : status === 429
-              ? "GEMINI_RATE_LIMITED"
-              : status >= 500
-                ? "GEMINI_UPSTREAM_UNAVAILABLE"
-                : "GEMINI_UPSTREAM_ERROR",
+          : status === 429
+            ? "GEMINI_RATE_LIMITED"
+            : status >= 500
+              ? "GEMINI_UPSTREAM_UNAVAILABLE"
+              : "GEMINI_UPSTREAM_ERROR",
         ...(upstreamReason ? { upstreamReason } : {}),
-        attempts,
-        cooldowns: mergeGeminiServerCooldownHints(responseCooldownHints, activeGeminiServerCooldownHints(uid, modelChain)),
         ok: false,
       });
     } finally {
@@ -3074,402 +1890,6 @@ export const createSunoTrack = onRequest(
   }
 );
 
-const getSunoAudioCandidateUrls = (item: any): string[] => Array.from(new Set(
-  [
-    item?.audioUrl,
-    item?.streamAudioUrl,
-    item?.audio_url,
-    item?.stream_audio_url,
-    item?.sourceAudioUrl,
-    item?.source_audio_url,
-    item?.sourceStreamAudioUrl,
-    item?.source_stream_audio_url,
-  ]
-    .map((value) => pickFirstString(value))
-    .filter(Boolean)
-));
-
-const probeSunoAudioUrlHasBytes = async (url: string): Promise<boolean> => {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== "https:") return false;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 7000);
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: { Range: "bytes=0-0" },
-    });
-    if (!response.ok) return false;
-
-    const contentType = String(response.headers.get("content-type") || "").trim().toLowerCase();
-    if (!contentType.startsWith("audio/")) {
-      console.warn("[Music API] audio validation rejected non-audio response", {
-        host: parsed.hostname,
-        contentType: contentType || "missing",
-      });
-      try { await response.body?.cancel(); } catch {}
-      return false;
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      const buffer = await response.arrayBuffer();
-      return buffer.byteLength > 0;
-    }
-
-    const first = await reader.read();
-    try { await reader.cancel(); } catch {}
-    return Boolean(first.value && first.value.byteLength > 0);
-  } catch (error: any) {
-    console.warn("[Music API] audio validation probe failed", {
-      host: parsed.hostname,
-      message: error?.message || String(error),
-    });
-    return false;
-  } finally {
-    clearTimeout(timeout);
-  }
-};
-
-const findFirstUsableSunoAudioUrl = async (item: any): Promise<string> => {
-  const candidates = getSunoAudioCandidateUrls(item);
-  for (const candidate of candidates) {
-    if (await probeSunoAudioUrlHasBytes(candidate)) return candidate;
-  }
-  return "";
-};
-
-
-// SORIDRAW_SUNO_WAV_RESCUE_994
-const SUNO_WAV_RESCUE_CALLBACK_URL = "https://us-central1-soridraw-app-866a5.cloudfunctions.net/sunoWavRescueCallback";
-const SUNO_WAV_RESCUE_BUCKET = "soridraw-app-866a5.firebasestorage.app";
-const SUNO_WAV_RESCUE_MAX_POLLS = 12;
-const SUNO_WAV_RESCUE_POLL_MS = 5000;
-
-const sleepSunoWavRescue = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const getSunoWavRescueUrl = (payload: any): string => pickFirstString(
-  payload?.data?.response?.audioWavUrl,
-  payload?.data?.response?.audio_wav_url,
-  payload?.data?.audioWavUrl,
-  payload?.data?.audio_wav_url,
-  payload?.response?.audioWavUrl,
-  payload?.response?.audio_wav_url,
-  payload?.audioWavUrl,
-  payload?.audio_wav_url,
-);
-
-const getSunoWavRescueTaskId = (payload: any): string => pickFirstString(
-  payload?.data?.taskId,
-  payload?.data?.task_id,
-  payload?.taskId,
-  payload?.task_id,
-);
-
-const pollSunoWavRescue = async (apiKey: string, wavTaskId: string): Promise<{ audioUrl: string; payload: any } | null> => {
-  for (let attempt = 0; attempt < SUNO_WAV_RESCUE_MAX_POLLS; attempt += 1) {
-    if (attempt > 0) await sleepSunoWavRescue(SUNO_WAV_RESCUE_POLL_MS);
-
-    const response = await fetch(
-      "https://api.sunoapi.org/api/v1/wav/record-info?taskId=" + encodeURIComponent(wavTaskId),
-      { headers: { Authorization: "Bearer " + apiKey } },
-    );
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) {
-      console.warn('[Suno WAV Rescue] record-info HTTP', { status: response.status, attempt });
-      continue;
-    }
-
-    const providerCode = Number(payload?.code || 200);
-    const status = String(payload?.data?.successFlag || payload?.data?.status || payload?.status || '').toUpperCase();
-    if (providerCode >= 400 || status.includes('FAILED') || status.includes('ERROR')) return null;
-
-    const audioUrl = getSunoWavRescueUrl(payload);
-    if (audioUrl && await probeSunoAudioUrlHasBytes(audioUrl)) {
-      return { audioUrl, payload };
-    }
-  }
-  return null;
-};
-
-const persistSunoWavRescueToStorage = async (
-  uid: string,
-  trackId: string,
-  index: number,
-  sourceUrl: string,
-): Promise<string> => {
-  const sourceResponse = await fetch(sourceUrl, { method: 'GET', redirect: 'follow' });
-  if (!sourceResponse.ok) throw new Error('WAV rescue source download failed (' + sourceResponse.status + ')');
-  const bytes = Buffer.from(await sourceResponse.arrayBuffer());
-  if (bytes.byteLength <= 0) throw new Error('WAV rescue source returned zero bytes');
-
-  const bucket = admin.storage().bucket(SUNO_WAV_RESCUE_BUCKET);
-  const objectPath = 'suno-rescue/' + uid + '/' + trackId + '/' + index + '.wav';
-  const token = admin.firestore().collection('_download_tokens').doc().id;
-  const file = bucket.file(objectPath);
-  await file.save(bytes, {
-    resumable: false,
-    contentType: String(sourceResponse.headers.get('content-type') || 'audio/wav'),
-    metadata: {
-      cacheControl: 'public,max-age=31536000,immutable',
-      metadata: { firebaseStorageDownloadTokens: token },
-    },
-  });
-
-  return 'https://firebasestorage.googleapis.com/v0/b/'
-    + encodeURIComponent(bucket.name)
-    + '/o/'
-    + encodeURIComponent(objectPath)
-    + '?alt=media&token='
-    + encodeURIComponent(token);
-};
-
-export const sunoWavRescueCallback = onRequest(
-  { region: "us-central1", invoker: "public" },
-  async (req, res) => {
-    if (req.method !== 'POST') {
-      res.status(405).json({ ok: false, error: 'Method Not Allowed' });
-      return;
-    }
-    res.status(200).json({ ok: true });
-  },
-);
-
-export const rescueSunoTrackAudio = onRequest(
-  {
-    region: "us-central1",
-    invoker: "public",
-    timeoutSeconds: 120,
-    memory: "512MiB",
-    concurrency: 10,
-    maxInstances: 10,
-  },
-  async (req, res) => {
-    if (handleCors(req, res)) return;
-    if (req.method !== 'POST') {
-      res.status(405).json({ ok: false, error: 'Method Not Allowed' });
-      return;
-    }
-
-    const uid = await verifyAuth(req, res);
-    if (!uid) return;
-    if (!(await verifyAppCheckForRequest(req, res, 'rescueSunoTrackAudio'))) return;
-
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const reuseOnly = body.reuseOnly === true || body.data?.reuseOnly === true;
-    const explicitPaidWav = body.explicitPaidWav === true || body.data?.explicitPaidWav === true;
-    // SORIDRAW_SUNO_WAV_RESCUE_REUSE_ONLY_995
-    const trackId = pickFirstString(body.trackId, body.data?.trackId);
-    const taskId = pickFirstString(body.taskId, body.data?.taskId);
-    const requestedAudioId = pickFirstString(body.audioId, body.data?.audioId);
-    const rawIndex = Number(body.index ?? body.data?.index ?? 0);
-    const index = Number.isFinite(rawIndex) && rawIndex >= 0 && rawIndex <= 10 ? Math.floor(rawIndex) : 0;
-    const indexKey = String(index);
-
-    if (!trackId || !taskId) {
-      res.status(400).json({ ok: false, error: 'trackId and taskId are required', code: 'SUNO_RESCUE_INVALID_INPUT' });
-      return;
-    }
-
-    const db = admin.firestore();
-    const trackRef = db.collection('suno_tracks').doc(uid).collection('tracks').doc(trackId);
-    const trackSnap = await trackRef.get();
-    if (!trackSnap.exists) {
-      res.status(404).json({ ok: false, error: 'Track not found', code: 'SUNO_RESCUE_TRACK_NOT_FOUND' });
-      return;
-    }
-
-    const trackData = trackSnap.data() || {};
-    if (pickFirstString(trackData.taskId) !== taskId) {
-      res.status(400).json({ ok: false, error: 'Task ID mismatch', code: 'SUNO_RESCUE_TASK_MISMATCH' });
-      return;
-    }
-
-    const item = Array.isArray(trackData.sunoData) ? (trackData.sunoData[index] || {}) : {};
-    const audioId = pickFirstString(requestedAudioId, item?.id, item?.audioId, item?.audio_id);
-    if (!audioId) {
-      res.status(409).json({ ok: false, error: 'Audio ID is unavailable for this track', code: 'SUNO_RESCUE_AUDIO_ID_MISSING' });
-      return;
-    }
-
-    const apiKeySnap = await db.collection('user_api_keys').doc(uid).get();
-    const apiKey = getStoredSunoApiKeyFromDoc(apiKeySnap.data() || {});
-    if (!apiKey) {
-      res.status(400).json({ ok: false, error: 'Music API Key is unavailable', code: 'SUNO_RESCUE_API_KEY_MISSING' });
-      return;
-    }
-
-    const existing = trackData?.audioRescue?.[indexKey] || {};
-    const existingStoredUrl = pickFirstString(existing?.audioUrl);
-    if (existingStoredUrl && await probeSunoAudioUrlHasBytes(existingStoredUrl)) {
-      res.json({ ok: true, audioUrl: existingStoredUrl, index, audioId, source: 'stored-rescue', reused: true });
-      return;
-    }
-
-    let wavTaskId = pickFirstString(existing?.wavTaskId);
-    let providerResult: { audioUrl: string; payload: any } | null = null;
-
-    if (wavTaskId) {
-      providerResult = await pollSunoWavRescue(apiKey, wavTaskId);
-    }
-
-    if (!providerResult && wavTaskId) {
-      res.status(202).json({
-        ok: false,
-        pending: true,
-        code: 'SUNO_RESCUE_EXISTING_TASK_PENDING',
-        error: 'An existing WAV rescue task is still unavailable; a second paid rescue will not be started.',
-        index,
-        audioId,
-        reuseOnly,
-      });
-      return;
-    }
-
-    if (!providerResult && reuseOnly) {
-      res.status(404).json({
-        ok: false,
-        code: 'SUNO_RESCUE_NOT_PREVIOUSLY_RECOVERED',
-        error: 'No existing recovered audio is available for this track.',
-        index,
-        audioId,
-        reuseOnly: true,
-      });
-      return;
-    }
-
-    if (!providerResult && !explicitPaidWav) {
-      res.status(409).json({
-        ok: false,
-        code: 'SUNO_RESCUE_EXPLICIT_CHOICE_REQUIRED',
-        error: 'Starting a paid WAV rescue requires an explicit user choice.',
-        index,
-        audioId,
-      });
-      return;
-    }
-
-    if (!providerResult) {
-      const createResponse = await fetch('https://api.sunoapi.org/api/v1/wav/generate', {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer ' + apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          taskId,
-          audioId,
-          callBackUrl: SUNO_WAV_RESCUE_CALLBACK_URL,
-        }),
-      });
-      const createPayload = await createResponse.json().catch(() => null);
-      const providerCode = Number(createPayload?.code || createResponse.status || 500);
-
-      if (providerCode === 429 || providerCode === 402 || createResponse.status === 429 || createResponse.status === 402) {
-        res.status(402).json({ ok: false, code: 'SUNO_RESCUE_INSUFFICIENT_CREDITS', error: 'Music API credits are insufficient for WAV rescue.' });
-        return;
-      }
-      if (providerCode === 451) {
-        res.status(410).json({ ok: false, code: 'SUNO_RESCUE_SOURCE_UNAVAILABLE', error: 'Music API source audio is no longer available.' });
-        return;
-      }
-      if (!createResponse.ok || providerCode >= 400) {
-        res.status(502).json({
-          ok: false,
-          code: 'SUNO_RESCUE_CREATE_FAILED',
-          error: String(createPayload?.msg || ('Music API WAV rescue failed (' + createResponse.status + ')')),
-        });
-        return;
-      }
-
-      wavTaskId = getSunoWavRescueTaskId(createPayload);
-      if (!wavTaskId) {
-        res.status(502).json({ ok: false, code: 'SUNO_RESCUE_TASK_ID_MISSING', error: 'Music API did not return a WAV rescue task ID.' });
-        return;
-      }
-
-      await trackRef.update({
-        ['audioRescue.' + indexKey]: {
-          audioId,
-          wavTaskId,
-          status: 'processing',
-          requestedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        lastAudioRescueAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      providerResult = await pollSunoWavRescue(apiKey, wavTaskId);
-    }
-
-    if (!providerResult?.audioUrl) {
-      await trackRef.update({
-        ['audioRescue.' + indexKey + '.status']: 'pending',
-        lastAudioRescueAt: admin.firestore.FieldValue.serverTimestamp(),
-      }).catch(() => undefined);
-      res.status(202).json({ ok: false, pending: true, code: 'SUNO_RESCUE_PENDING', wavTaskId, index, audioId });
-      return;
-    }
-
-    let durableUrl = '';
-    try {
-      durableUrl = await persistSunoWavRescueToStorage(uid, trackId, index, providerResult.audioUrl);
-    } catch (storageError: any) {
-      console.error('[Suno WAV Rescue] durable storage copy failed', {
-        uid,
-        trackId,
-        index,
-        message: storageError?.message || String(storageError),
-      });
-    }
-
-    const finalUrl = durableUrl || providerResult.audioUrl;
-    if (!(await probeSunoAudioUrlHasBytes(finalUrl))) {
-      res.status(502).json({ ok: false, code: 'SUNO_RESCUE_ZERO_BYTES', error: 'Recovered audio URL did not return playable bytes.' });
-      return;
-    }
-
-    await trackRef.update({
-      ['audioRescue.' + indexKey]: {
-        audioId,
-        wavTaskId,
-        audioUrl: finalUrl,
-        providerAudioUrl: providerResult.audioUrl,
-        durable: Boolean(durableUrl),
-        status: 'completed',
-        recoveredAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      lastAudioRescueAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    console.log('[Suno WAV Rescue] success', {
-      uid,
-      trackId,
-      index,
-      durable: Boolean(durableUrl),
-      host: (() => { try { return new URL(finalUrl).hostname; } catch { return 'invalid'; } })(),
-    });
-
-    res.json({
-      ok: true,
-      audioUrl: finalUrl,
-      index,
-      audioId,
-      wavTaskId,
-      source: durableUrl ? 'firebase-storage-wav-rescue' : 'provider-wav-rescue',
-      durable: Boolean(durableUrl),
-      reused: false,
-    });
-  },
-);
-
 export const getSunoTrackStatus = onRequest(
   { region: "us-central1" },
   async (req, res) => {
@@ -3627,20 +2047,16 @@ export const getSunoTrackStatus = onRequest(
       const rawSunoData = Array.isArray(sunoDataRaw) ? sunoDataRaw : [sunoDataRaw];
       const sunoData = rawSunoData.filter(Boolean).map(normalizeSunoDataItem);
 
-      const reportedAudioUrls = Array.from(new Set(sunoData.flatMap((item: any) => getSunoAudioCandidateUrls(item))));
-      const verifiedAudioUrls: string[] = [];
-      for (const item of sunoData) {
-        const verified = await findFirstUsableSunoAudioUrl(item);
-        if (verified) verifiedAudioUrls.push(verified);
-      }
-      const allReportedAudioVerified = sunoData.length > 0 && verifiedAudioUrls.length === sunoData.length;
+      const audioUrls: string[] = sunoData
+        .map((item: any) => pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url))
+        .filter(Boolean);
 
       // If it's just a missing taskId error from API, do not mark as failed.
       if (!isMissingTaskIdError) {
-        const hasAnyAudio = verifiedAudioUrls.length > 0;
-        const hasAllAudio = allReportedAudioVerified;
+        const hasAnyAudio = audioUrls.length > 0;
+        const hasAllAudio = sunoData.length > 0 && sunoData.every((item: any) => !!pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url));
         const anyItemFailed = sunoData.some((item: any) => isFailedStatus(item?.status));
-        const allItemsCompleted = sunoData.length > 0 && sunoData.every((item: any) => isCompleteStatus(item?.status));
+        const allItemsCompleted = sunoData.length > 0 && sunoData.every((item: any) => isCompleteStatus(item?.status) || !!pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url));
         const apiReportedComplete = isCompleteStatus(data?.status) || isCompleteStatus(responseData?.status) || isCompleteStatus(responseObj?.status);
 
         for (const item of sunoData) {
@@ -3652,11 +2068,11 @@ export const getSunoTrackStatus = onRequest(
           status = hasAnyAudio ? "processing" : "failed";
         } else if (hasAllAudio && (apiReportedComplete || allItemsCompleted || hasAnyAudio)) {
           status = "completed";
-        } else if (reportedAudioUrls.length > 0 || hasAnyAudio) {
-          // A URL string alone is not completion. Empty/temporarily unavailable media keeps polling.
+        } else if (hasAnyAudio) {
+          // One result may be ready before the second one. Keep polling instead of freezing as completed.
           status = "processing";
         } else if (apiReportedComplete) {
-          // API can report SUCCESS before usable audio bytes become available. Keep polling.
+          // API can report SUCCESS before audio URLs become available. Keep polling.
           status = "processing";
         } else {
           status = String(data?.status || responseData?.status || status || "processing").toLowerCase();
@@ -3665,16 +2081,10 @@ export const getSunoTrackStatus = onRequest(
          console.warn("External API reported missing taskId. Not changing track status to failed.", data);
       }
 
-      const audioValidationStatus = allReportedAudioVerified
-        ? "verified"
-        : (reportedAudioUrls.length > 0 ? "pending_or_empty" : "missing");
-
       const updates: any = {
         apiStatusResponse: data,
         sunoData: sunoData,
-        audioUrls: verifiedAudioUrls,
-        reportedAudioUrls: reportedAudioUrls,
-        audioValidationStatus,
+        audioUrls: audioUrls,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       };
       
@@ -3687,7 +2097,17 @@ export const getSunoTrackStatus = onRequest(
 
       const first = Array.isArray(sunoData) ? sunoData.find((item: any) => pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url)) || sunoData[0] : null;
 
-      finalAudioUrl = verifiedAudioUrls[0] || "";
+      finalAudioUrl =
+        pickFirstString(
+          first?.audioUrl,
+          first?.streamAudioUrl,
+          first?.audio_url,
+          first?.stream_audio_url,
+          first?.sourceAudioUrl,
+          first?.sourceStreamAudioUrl,
+          responseObj?.audioUrl,
+          responseObj?.audio_url
+        );
 
       finalImageUrl =
         pickFirstString(
@@ -3732,9 +2152,7 @@ export const getSunoTrackStatus = onRequest(
         audioUrl: finalAudioUrl,
         streamAudioUrl: finalAudioUrl,
         imageUrl: finalImageUrl,
-        audioUrls: verifiedAudioUrls,
-        reportedAudioUrls: reportedAudioUrls,
-        audioValidationStatus,
+        audioUrls: audioUrls,
         sunoData: sunoData,
         apiStatusResponse: data
       });
@@ -3744,77 +2162,4 @@ export const getSunoTrackStatus = onRequest(
       res.status(500).json({ error: "Failed to fetch track status", details: error.message });
     }
   }
-);
-
-
-// SORIDRAW_MUSIC_NOTE_BOUNDED_BULK_20260905
-type MusicNoteBulkOperation = 'clear-unlocked' | 'lock-all' | 'unlock-all';
-const MUSIC_NOTE_BULK_PAGE_LIMIT = 120;
-
-export const processMusicNoteBulkPage = onCall(
-  { region: "us-central1" },
-  async (request) => {
-    const uid = String(request.auth?.uid || '').trim();
-    if (!uid) throw new HttpsError('unauthenticated', 'Authentication is required.');
-
-    const operation = String(request.data?.operation || '').trim() as MusicNoteBulkOperation;
-    if (!['clear-unlocked', 'lock-all', 'unlock-all'].includes(operation)) {
-      throw new HttpsError('invalid-argument', 'Unsupported Music Note bulk operation.');
-    }
-
-    const requestedLimit = Math.floor(Number(request.data?.limit || MUSIC_NOTE_BULK_PAGE_LIMIT));
-    const pageSize = Math.max(1, Math.min(MUSIC_NOTE_BULK_PAGE_LIMIT, Number.isFinite(requestedLimit) ? requestedLimit : MUSIC_NOTE_BULK_PAGE_LIMIT));
-    const cursor = String(request.data?.cursor || '').trim();
-
-    const firestore = admin.firestore();
-    let pageQuery = firestore.collection('favorites').where('uid', '==', uid).orderBy(admin.firestore.FieldPath.documentId()).limit(pageSize);
-    if (cursor) pageQuery = pageQuery.startAfter(cursor);
-
-    const snapshot = await pageQuery.get();
-    const changedIds: string[] = [];
-    const batch = firestore.batch();
-
-    for (const snapshotDoc of snapshot.docs) {
-      const data = snapshotDoc.data() || {};
-      const isLocked = data.isLocked === true;
-      if (operation === 'clear-unlocked') {
-        if (isLocked) continue;
-        batch.delete(snapshotDoc.ref);
-        changedIds.push(snapshotDoc.id);
-      } else if (operation === 'lock-all') {
-        if (isLocked) continue;
-        batch.update(snapshotDoc.ref, { isLocked: true, updatedAtMs: Date.now() });
-        changedIds.push(snapshotDoc.id);
-      } else {
-        if (!isLocked) continue;
-        batch.update(snapshotDoc.ref, { isLocked: false, updatedAtMs: Date.now() });
-        changedIds.push(snapshotDoc.id);
-      }
-    }
-
-    let version = 0;
-    if (changedIds.length > 0) {
-      version = Date.now();
-      const userRef = firestore.collection('users').doc(uid);
-      const userPatch: Record<string, any> = { syncVersions: { musicNote: version }, favoriteSyncSignalUpdatedAt: version };
-      if (operation === 'clear-unlocked') {
-        userPatch.favoriteCount = admin.firestore.FieldValue.increment(-changedIds.length);
-      }
-      batch.set(userRef, userPatch, { merge: true });
-      await batch.commit();
-    }
-
-    const lastDoc = snapshot.docs[snapshot.docs.length - 1];
-    const hasAnotherPage = snapshot.size === pageSize;
-    return {
-      ok: true,
-      operation,
-      processedCount: snapshot.size,
-      changedCount: changedIds.length,
-      changedIds,
-      version,
-      nextCursor: hasAnotherPage && lastDoc ? lastDoc.id : null,
-      done: !hasAnotherPage,
-    };
-  },
 );

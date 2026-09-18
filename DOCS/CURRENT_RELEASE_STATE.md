@@ -1,6 +1,6 @@
 # SORIDRAW CURRENT RELEASE STATE
 
-## 0W. PREVIEW app 119 — Explore 좋아요 최신 캐시 + 20초 슬라이딩 묶음쓰기 / PREVIEW 병합·배포 전
+## 0W. PREVIEW app 119 — Explore 좋아요 최신 캐시 + 20초 슬라이딩 묶음쓰기 / 배포 완료
 
 사용자 지시로 좋아요 경로를 다시 단순화했다. 기준은 "누르는 사용자는 하트/숫자 즉시, 마지막 클릭 후 20초 동안 변경을 모아 한 번의 batch, 다른 사용자는 공용 결과를 최대 1분 안에 확인"이다.
 
@@ -18,26 +18,11 @@ app 119 제품 변경:
 - 기존 서버 hot path는 유지한다: warm batch intake는 D1 W1 069 queue, shared aggregate는 1분 event alarm이다.
 - app version: **119**.
 
-작업 branch / 기준:
+GitHub / 검증:
 - 작업 branch: `work/app119-like-20s-latest-cache`
 - 기준 PREVIEW: `e15c5de462b73cc3f557fa5ee02ebb868318a022`
-- 제품 변경 파일:
-  - `src/services/exploreLikeService.ts`
-  - `src/pages/ExplorePage.tsx`
-  - `src/services/exploreLikedTracksService.ts`
-  - `src/services/userDomainSyncService.ts`
-  - `public/app-version.json`
-  - `scripts/verify-119-explore-like-20s-latest-cache.mjs`
-- UI/CSS 변경 없음.
-- Worker 제품 코드 변경 없음.
-- Firebase Functions/Rules 변경 없음.
-- D1 migration/seed/backfill/delete 없음.
-- 사용자 원본 데이터 구조/내용 변경 없음.
-
-검증:
-- 1차 Run `35326092830` SUCCESS.
-- 확장 회귀검사 과정에서 Run `35326266088`은 테스트 스크립트가 055 패치 파일의 "검사용 문자열"까지 실제 호출로 오인해 회귀검사만 FAIL했다. TypeScript/Build는 PASS였고 제품 코드 실패가 아니었다.
-- 검사 범위를 실제 hot-path replacement block으로 좁혀 수정.
+- PR #96 `App 119: simplify Explore likes to latest-cache 20s batch`
+- PREVIEW 제품 merge commit: `1b1f4664e39a5e0aecc9f4ba910cb4beba2c7f5e`
 - 최종 제품 검증 Run `35328311634` — **SUCCESS**
   - TypeScript PASS
   - Build PASS
@@ -46,14 +31,43 @@ app 119 제품 변경:
   - immediate heart/count 계약 PASS
   - old RTDB/071 replay disabled PASS
   - W1 queue intake + one-minute shared aggregate 계약 PASS
-- 임시 검증 Workflow는 merge 전 삭제한다.
+- 이전 Run `35326266088`의 회귀검사 FAIL은 055 패치 파일의 검사용 문자열을 실제 호출로 오인한 테스트식 문제였다. TypeScript/Build는 PASS였고 제품 코드 실패가 아니었다.
+- 검사 범위를 실제 hot-path replacement block으로 수정 후 최종 PASS.
+- 임시 검증 Workflow는 merge 전 삭제 완료.
+
+PREVIEW 배포:
+- 배포 trigger commit: `2487b74a44c00e458d7c42a72ba90284cd56d808`
+- Firebase PREVIEW Hosting Run `35328558283` — **SUCCESS**
+  - locked product source `1b1f4664e39a5e0aecc9f4ba910cb4beba2c7f5e`
+  - TypeScript PASS
+  - Build PASS
+  - Firebase PREVIEW Hosting deploy PASS
+  - `preview.soridraw.com` exact build PASS
+  - remote app-version **119** PASS
+  - TEST / PRODUCTION branch + Hosting unchanged PASS
+- 실제 대상: `https://preview.soridraw.com`
+
+변경 범위 / 안전:
+- UI/CSS 변경 없음.
+- Explore Worker 제품 코드 변경 없음 / Worker 재배포 없음.
+- Firebase Functions / Rules 변경 없음.
+- D1 migration/seed/backfill/delete 없음.
+- 사용자 원본 데이터 구조/내용 변경 없음.
+- main(TEST) 유지: `1ee8e9ae5252e6dc96ad2fcea9596a9a4a6773a1` — app 117.
+- production 유지: `e994340f3c4f6ac97f444f1ddf13053d3faffa71` — app 117.
 
 현재 상태:
-- PREVIEW 실제 배포 앱: **118** 유지.
-- TEST: **117** 유지.
-- PRODUCTION: **117** 유지.
-- app 119는 작업 branch 검증 완료, PREVIEW 병합/배포 전.
-- 다음 단계: 임시 검증 Workflow 제거 → PR로 preview 병합 → Firebase PREVIEW Hosting 배포 → preview.soridraw.com app119 exact build 확인 → 실제 하트/숫자/20초 묶음쓰기 실사용 확인.
+- PREVIEW 앱: **119 배포 완료**.
+- TEST 앱: **117 유지**.
+- PRODUCTION 앱: **117 유지**.
+- 사용자 실사용 확인 항목:
+  1. 하트 0 → 클릭 즉시 빨강 + 숫자 1.
+  2. 다시 클릭 즉시 회색 + 숫자 0.
+  3. 여러 곡을 연속 클릭하고 마지막 클릭 후 20초 전에는 서버 batch가 나가지 않는지.
+  4. 19초 시점에 다른 하트를 누르면 다시 20초로 연장되는지.
+  5. 20초 종료 후 여러 곡 최종 상태가 한 batch로 반영되는지.
+  6. 같은 곡을 여러 번 토글하면 최초 상태→최종 상태만 반영되는지.
+  7. 다른 사용자/기기에서 최대 1분 후 공용 숫자가 수렴하는지.
 - PRODUCTION 변경 금지.
 
 ## 0V. PREVIEW app 118 — Explore 좋아요 의도 snap-back 수정 / 배포 완료

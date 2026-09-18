@@ -42,6 +42,25 @@
 9. W3+ 하나라도 나오면 FAIL.
 10. PRODUCTION은 명확한 정식배포 승인 전 변경 금지.
 
+## 외부 대규모 서비스 조사 결론 — 2026-09-18
+
+
+- Discord: 검색을 원본 저장 hot path에 강결합하지 않고, 검색 수요가 있는 메시지를 lazy indexing하며 queue + chunk/bulk indexing으로 분리.
+- Uber CacheFront: 원본 DB를 source of truth로 두고 cache는 분리. DB change stream/CDC로 cache invalidation/upsert, version으로 중복 cache write 방지.
+- Uber Search: search serving과 indexing ingestion을 분리. 데이터 변경은 ingestion layer가 검색 인덱스로 전달하며 검색용 구조를 원본 DB hot path와 분리.
+- Meta TAO: persistent MySQL과 분산 cache tier를 분리하고 cache layer가 read를 흡수. 저장소와 읽기 가속 계층을 독립 확장.
+- Cloudflare D1 공식: index는 rows_read를 줄이지만 indexed-column write마다 rows_written을 추가한다. 자주 실행되는 read가 saved rows를 정당화할 때만 index가 이득이며 EXPLAIN/meta로 확인해야 함.
+
+### SORIDRAW 적용 원칙
+
+- `batch()`나 한 SQL 요청으로 W18을 묶는 것은 비용 절감으로 인정하지 않음. 총 `rows_written`이 그대로면 FAIL.
+- Music Note 첫 공개는 D1 canonical mutation **1개**를 목표로 하고, PK/무결성 외 secondary index와 D1 derived mirror/trigger를 hot path에서 제거하는 방향 우선.
+- Feed/latest/popular/profile/public-card는 이미 있는 R2/cache-first 구조를 우선 사용하고 같은 publication payload로 patch; D1 재조회/재생성 금지.
+- 검색(제목/장르/아티스트)은 원본 `tracks`에 다수 secondary index를 추가하는 대신 별도 검색 계층으로 분리. lazy/batch 가능한 구조 우선.
+- 검색용 파생 작업을 나중에 D1에 몰래 수행해 total D1 writes를 숨기는 방식 금지. 사용자 mutation에 귀속되는 총 D1 writes 기준 유지.
+- Cloudflare Queue batching은 consumer invocation은 줄일 수 있지만 메시지별 operation 과금은 줄지 않으므로 단순히 'batch라 싸다'고 판단하지 않음.
+- 최종 목표: public/private/republish 각각 D1 W1~W2, no-change W0. 불가능하면 최소 물리비용과 이유를 증명 후 사용자 승인.
+
 ## 현재 환경
 
 - PREVIEW app124

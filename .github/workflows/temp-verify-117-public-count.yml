@@ -1,0 +1,27 @@
+name: TEMP Verify 117 Public Count Separation
+
+on:
+  push:
+    branches:
+      - fix/explore-public-count-personal-cache-separation-117
+    paths:
+      - .github/workflows/temp-verify-117-public-count.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run build
+      - run: node scripts/verify-117-explore-public-count-cache-separation.mjs
+      - run: node scripts/verify-116-explore-public-count-convergence.mjs

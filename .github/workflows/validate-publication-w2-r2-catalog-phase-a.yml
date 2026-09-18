@@ -1,0 +1,97 @@
+name: Validate Publication W2 R2 Catalog Phase A
+
+on:
+  push:
+    branches:
+      - work/publication-w2-r2-catalog-phase-a
+    paths:
+      - 'cloudflare/explore-worker/runtime/r2-catalog-v1.js'
+      - 'cloudflare/explore-worker/patches/066-publication-r2-catalog-phase-a.mjs'
+      - 'cloudflare/explore-worker/release-patches.json'
+      - 'scripts/verify-publication-w2-r2-catalog-phase-a.mjs'
+      - '.github/workflows/validate-publication-w2-r2-catalog-phase-a.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Static syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/runtime/r2-catalog-v1.js
+          node --check cloudflare/explore-worker/patches/066-publication-r2-catalog-phase-a.mjs
+          node --check scripts/verify-publication-w2-r2-catalog-phase-a.mjs
+
+      - name: Apply 066 to canonical Worker copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .tmp-w2-r2-worker
+          mkdir -p .tmp-w2-r2-worker
+          cp cloudflare/explore-worker/canonical/preview-worker.js .tmp-w2-r2-worker/worker.js
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.tmp-w2-r2-worker" node cloudflare/explore-worker/patches/066-publication-r2-catalog-phase-a.mjs
+          node --check .tmp-w2-r2-worker/worker.js
+          grep -Fq 'SORIDRAW_R2_ORDERED_CATALOG_PHASE_A_066_20260919' .tmp-w2-r2-worker/worker.js
+          grep -Fq 'publicationEnsureProfile016Core066' .tmp-w2-r2-worker/worker.js
+          grep -Fq 'handleSearchCore066' .tmp-w2-r2-worker/worker.js
+          echo 'WORKER_PATCH_066=PASS'
+
+      - name: Verify Phase A contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/.tmp-w2-r2-worker/worker.js" node scripts/verify-publication-w2-r2-catalog-phase-a.mjs
+
+      - name: Existing Explore regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$PWD/.tmp-w2-r2-worker/worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-112-shared-feed-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-113-shared-profile-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-115-shared-track-card-r2.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-116-explore-public-count-convergence.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-063-public-profile-warm-edge-zero-read.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-explore-derived-cache.mjs
+          echo 'EXPLORE_REGRESSION_MATRIX=PASS'
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Safety boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test "$(node -p "require('./public/app-version.json').version")" = "124"
+          echo 'APP_VERSION=124'
+          echo 'NO_FIREBASE_CHANGE=true'
+          echo 'NO_FUNCTIONS_CHANGE=true'
+          echo 'NO_D1_SCHEMA_CHANGE=true'
+          echo 'NO_D1_MIGRATION=true'
+          echo 'NO_USER_DATA_CHANGE=true'
+          echo 'NO_UI_CSS_CHANGE=true'
+          echo 'NO_DEPLOYMENT=true'
+          echo 'CATALOG_FEATURE_DEFAULT=OFF'

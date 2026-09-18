@@ -1,0 +1,33 @@
+name: TEMP Dispatch Release Controller TEST
+
+on:
+  push:
+    branches:
+      - fix/release-controller-hosting-live-identity
+    paths:
+      - .github/workflows/temp-dispatch-release-controller-test.yml
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cleanup prior draft probe and dispatch exact TEST promotion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: fc389588435617a02c9c3fc76ab5f739a3033e9c
+          ORPHAN_RELEASE_ID: "391196365"
+        run: |
+          set -euo pipefail
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$ORPHAN_RELEASE_ID" || true
+          gh workflow run soridraw-release-promotion.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref preview \
+            -f mode=test \
+            -f target_sha="$TARGET_SHA" \
+            -f manifest_tag= \
+            -f production_approval=
+          echo "DISPATCH_RELEASE_TEST=PASS"

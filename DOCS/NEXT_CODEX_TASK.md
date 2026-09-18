@@ -1,46 +1,43 @@
 # SORIDRAW NEXT CODEX TASK
 
-최종 갱신: 2026-09-18 KST — PREVIEW app124 배포 완료 / PC+모바일 실사용 검증 대기
+최종 갱신: 2026-09-18 KST — TEST app124 TEST_VERIFIED / PAGE SYNC 비용 감사 완료
 
 ## 현재 기준
 
 - PREVIEW: app **124**
-- app124 PR #105 merge: `929c02f8a235a8ef629ce85a8f0e28bfbaa04dfe`
-- PREVIEW Hosting release commit: `ca05329c6004c2a47d05d1958915c1730436e1c2`
-- PREVIEW Hosting Run: `35346588474` — **SUCCESS**
-- PREVIEW Worker: `02561c62-5f1c-4449-b2e6-4253faddd099` 유지
-- app124 validation Run: `35346359130` — **SUCCESS**
-- TEST: app **122**, main `c16a8087c40a8e6330242b6420ac381d1b315ea2`
-- TEST Worker: `78a3295f-cbf4-4c1f-8d1b-22934df7e7b0`
+- TEST: app **124 / TEST_VERIFIED**
+- TEST main: `f7fc25d5452b3313efa3cca53c180c5494cc9837`
+- TEST Worker: `6e8dca9c-2c58-42ea-ae7d-765e10afef8f`
+- TEST manifest: `soridraw-test-v124-3010dd0609bd`
+- preflight Run: `35347397424` — SUCCESS
+- TEST promotion Run: `35347566331` — SUCCESS
 - PRODUCTION: app **117**, 비변경
 
-## app124 핵심
+## PAGE SYNC 비용 판정
 
-- PC/모바일 동일 ExplorePage 공통 경로.
-- app122 시절 mixed-count 로컬 Feed cache를 가진 기기만 sort별 1회 current shared R2 snapshot으로 복구.
-- current shared R2 direct route이므로 D1 read/write 0.
-- 성공 후 localStorage marker 저장 → 이후 앱 업데이트/재진입에서는 같은 repair read 반복 금지.
-- app123 last-known cache 즉시 표시 규칙 유지.
-- 정상 future update는 업데이트 자체 서버 data read 0 목표 유지.
-- 30초 actor batch / 1분 shared aggregate / 2분 viewer activity gate 유지.
-- UI/CSS, Worker runtime, Functions, Rules, D1 schema, canonical user data 변경 없음.
+- PAGE SYNC D1 R/W는 실제 마지막 sync 1회의 D1 billable row delta.
+- Sync N은 누적 sync 횟수.
+- pending change 0이면 PAGE SYNC noop, D1/Firestore 0.
+- 공개/비공개는 실제 mutation이므로 D1 write 비용이 발생하는 것이 정상.
+- query count와 billable row count는 별도이므로 query W1에서 row W18이 나올 수 있음.
+- warm publication hot path는 UPDATE RETURNING, canonical pre-read 없음.
+- unresolved/cold에서만 bounded SELECT.
+- track_stats pre-read 제거.
+- indexed profile_pinned는 값이 바뀔 때만 update.
+- visibility/options/updated_at-only 변경은 heavy derived mirror trigger 대상에서 제외.
+- 현재 R6/W18, R3/W2는 실제 변경 비용이며 반복 요청/전체 scan/페이지 이동 누수 증거는 없음.
 
-## 필수 실사용 검증 — PC + 모바일 항상 함께
+## 다음 작업
 
-앞으로 Explore/좋아요 관련 수정은 PC만 통과 처리하지 않는다. PC와 모바일을 같은 공통 검증 범위로 본다.
+1. TEST 실사용에서 공개→비공개→재공개를 같은 곡으로 2~3회 반복하여 warm path가 안정적으로 유지되는지 확인.
+2. 공개상태 묶음의 query count가 warm 재실행에서 불필요하게 R1로 반복되는지 확인.
+3. PAGE SYNC가 pending 0 상태에서 route change만으로 발생하지 않는지 확인.
+4. PC/모바일 동일 결과 유지.
+5. 문제가 없으면 TEST 검증 완료 상태 유지.
+6. PRODUCTION은 사용자의 명확한 정식배포 승인 전 변경 금지.
 
-1. 모바일 app124 업데이트 후 첫 Explore 진입에서 이전 `0/1/0/0` mixed count가 PC와 같은 `1/1/1/1`로 수렴하는지.
-2. PC도 app124에서 기존 정상 숫자가 유지되는지.
-3. 한 번 복구된 기기 재진입 시 one-time repair R2 read가 다시 발생하지 않는지.
-4. 좋아요 1개: 즉시 UI → 마지막 클릭 30초 후 batch → 약 1분 shared 반영.
-5. 좋아요 해제 동일.
-6. 여러 곡 연속 좋아요 trailing 30초 window 하나로 묶이는지.
-7. 다른 사용자/다른 기기에서 실제 활동 + 2분 gate 이후 최신 public count 반영.
-8. Explore / 공개프로필 숫자 일치.
-9. PC / 모바일 결과 일치.
+## 비용 추가 최적화 후보
 
-## 승격 제한
-
-- 사용자 PREVIEW PC+모바일 실사용 통과 전 TEST 재승격 금지.
-- 사용자 TEST 배포 요청 시 검증된 app124 전체를 main/TEST로 승격.
-- PRODUCTION은 명확한 정식배포 승인 전 변경 금지.
+- 현재 publication row 비용을 더 낮출 수 있는지 별도 감사 가능.
+- 단, 사용자 요청 없이 schema/index 제거, destructive migration, 데이터 의미 변경 금지.
+- 실제 변경 1건당 비용만 줄이고 전체 scan/rebuild는 금지.

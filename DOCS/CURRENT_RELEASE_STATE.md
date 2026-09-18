@@ -1,5 +1,48 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0S. app 117 TEST → PRODUCTION 앱 전용 정식 승격 — 완료
+
+사용자 명확한 정식배포 승인에 따라 app 117을 PREVIEW 검증본에서 TEST를 거쳐 PRODUCTION으로 승격했다.
+
+기준:
+- release source PREVIEW: `ff4963e8261c96f6ab5186a7b872d8bc2817dfcd`
+- app version: **117**
+- 핵심 제품 수정 merge: `06330ae00c2d7639542d7b3ab473aabb85f67d9e`
+- PREVIEW Hosting 검증 Run: `35310263271` SUCCESS
+- PREVIEW `preview.soridraw.com` exact build / app-version 117 PASS
+
+정식 승격:
+- 앱 전용 TEST→PRODUCTION Run: `35311139826` — **SUCCESS**
+- TypeScript PASS
+- Build PASS
+- `verify-117-explore-public-count-cache-separation.mjs` PASS
+- `verify-116-explore-public-count-convergence.mjs` PASS
+- TEST Firebase Hosting deploy 완료
+- `test.soridraw.com` 및 `soridraw-test.web.app` exact index hash / app-version 117 PASS
+- TEST `main`: `1ee8e9ae5252e6dc96ad2fcea9596a9a4a6773a1`
+- PRODUCTION Hosting은 검증된 `soridraw-test:live`를 `soridraw:live`로 clone
+- `soridraw.com` 및 `soridraw.web.app` exact index hash / app-version 117 PASS
+- PRODUCTION branch: `e994340f3c4f6ac97f444f1ddf13053d3faffa71`
+- TEST/PRODUCTION 모두 동일 source tree `a567717dc6cbfb86c75cf9aa80078d6ccd657d25`
+- TEST/PRODUCTION rollback Hosting channel은 성공 후 삭제 완료
+
+변경 범위:
+- 이번 117 release는 클라이언트 앱 전용 승격이다.
+- Cloudflare Worker 재배포/traffic 변경 없음.
+- D1 read/write/migration/seed/backfill 없음.
+- Firebase Functions/Rules 변경 없음.
+- 사용자 원본 Firestore/D1/R2 데이터 변경 없음.
+- UI/CSS 변경 없음.
+- 실제 해결 대상은 Explore 공개 좋아요 숫자를 계정별 stale cache가 덮어쓰던 client 경로 제거 및 개인 하트 상태와 공개 숫자 authority 분리다.
+
+현재 상태:
+- PREVIEW: app **117**
+- TEST: app **117**
+- PRODUCTION: app **117**
+- 정식 주소: `https://soridraw.com`
+- 다음 실사용 확인: 기존 정식앱 브라우저 캐시를 그대로 둔 상태에서 Explore 공개 좋아요 숫자가 TEST와 동일하게 유지되는지 확인.
+
+
 ## 0R. app 117 PREVIEW Hosting 배포 — 완료
 
 - 사용자 요청으로 app 117을 Firebase PREVIEW Hosting에 배포했다.

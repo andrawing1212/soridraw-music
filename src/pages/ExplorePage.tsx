@@ -22,6 +22,7 @@ import {
   EXPLORE_LIKE_SYNC_ERROR_EVENT,
   flushPendingExploreLikesForPageExit,
   getExploreLikedTrackIds,
+  overlayExploreLikeDisplayCounts,
   reconcileExploreLikedTrackCollectionState,
   setExploreTrackLike,
 } from '../services/exploreLikeService';
@@ -334,9 +335,22 @@ export default function ExplorePage() {
   // Only server-confirmed/shared payloads may become public-count authority. Once a count is
   // confirmed, patch every already-loaded Feed/Profile/Liked cache by track id so Recommended,
   // Latest, Popular and Public Profile cannot display different counts on the same device.
+  // SORIDRAW_EXPLORE_LIKE_ACTOR_COUNT_LOCK_120_20260918
+  // Shared/public payloads remain the public authority, except while this user's
+  // newest local mutation is still pending or waiting for the one-minute shared
+  // publication. During that short window the actor's latest count must not jump.
+  const overlayActorLikeCounts120 = (rows: ExploreTrack[]) => {
+    const activeUid = auth.currentUser?.uid || user?.uid || '';
+    return activeUid ? overlayExploreLikeDisplayCounts(activeUid, rows) : rows;
+  };
+
   const syncSharedPublicCountsToLocal110 = (sharedTracks: ExploreTrack[], authoritative = true) => {
     if (!sharedTracks.length || !authoritative) return;
-    const countByTrackId = new Map(sharedTracks.map((track) => [track.id, track.likeCount]));
+    const activeUid = auth.currentUser?.uid || user?.uid || '';
+    const effectiveSharedTracks = activeUid
+      ? overlayExploreLikeDisplayCounts(activeUid, sharedTracks)
+      : sharedTracks;
+    const countByTrackId = new Map(effectiveSharedTracks.map((track) => [track.id, track.likeCount]));
     const applyPublicCounts110 = (previous: ExploreTrack[]) => previous.map((track) => {
       const nextCount = countByTrackId.get(track.id);
       return nextCount === undefined || nextCount === track.likeCount ? track : { ...track, likeCount: nextCount };
@@ -346,8 +360,7 @@ export default function ExplorePage() {
     setProfileTracks(applyPublicCounts110);
     setProfileLikedTracks(applyPublicCounts110);
 
-    const activeUid = auth.currentUser?.uid || user?.uid || '';
-    sharedTracks.forEach((track) => {
+    effectiveSharedTracks.forEach((track) => {
       patchExploreFeedSessionCachesRow(track.id, { likeCount: track.likeCount });
       if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
       if (activeUid) patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);
@@ -408,9 +421,10 @@ export default function ExplorePage() {
         );
       }
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
+      const displayTracks = overlayActorLikeCounts120(normalizedTracks);
       setFeedNextCursor(nextCursor);
       setLoadMoreError('');
-      setTracks(normalizedTracks);
+      setTracks(displayTracks);
       if (feedRequest) syncSharedPublicCountsToLocal110(normalizedTracks);
     };
 
@@ -419,8 +433,8 @@ export default function ExplorePage() {
       setFeedNextCursor(feedRequest ? readExploreFeedSessionCacheCursor(requestUrl) : null);
       setLoadMoreError('');
       const cachedTracks = cachedRows.map(normalizeTrack).filter((track) => track.id);
-      // 116: cached rows render immediately but do not overwrite newer public-count authority.
-      setTracks(cachedTracks);
+      // 120: stale shared cache may render, but never over the actor's newest pending count.
+      setTracks(overlayActorLikeCounts120(cachedTracks));
       setLoading(false);
 
       if (feedRequest) {
@@ -546,9 +560,10 @@ export default function ExplorePage() {
       if (cancelled) return;
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       normalizedTracks.sort(comparePublicProfileTracks);
+      const displayTracks = overlayActorLikeCounts120(normalizedTracks);
       if (authoritative) syncSharedPublicCountsToLocal110(normalizedTracks);
       setProfile(nextProfile);
-      setProfileTracks(normalizedTracks);
+      setProfileTracks(displayTracks);
     };
 
     getExplorePublicProfileFirstView(profileUid, {
@@ -603,7 +618,9 @@ export default function ExplorePage() {
     getExploreLikedTracks(user)
       .then((rows) => {
         if (cancelled) return;
-        const normalizedRows = rows.map(normalizeTrack).filter((track) => track.id);
+        const normalizedRows = overlayActorLikeCounts120(
+          rows.map(normalizeTrack).filter((track) => track.id),
+        );
         const canonicalLikedTrackIds = getExploreLikedTrackCollectionIds(user.uid)
           ?? normalizedRows.map((track) => track.id);
         const effectiveLikedTrackIds = reconcileExploreLikedTrackCollectionState(
@@ -739,10 +756,11 @@ export default function ExplorePage() {
       const payload = await response.json() as ExploreApiResponse;
       const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
       const normalized = rows.map(normalizeTrack).filter((track) => track.id);
+      const displayRows = overlayActorLikeCounts120(normalized);
       syncSharedPublicCountsToLocal110(normalized);
       setTracks((previous) => {
         const seen = new Set(previous.map((track) => track.id));
-        return [...previous, ...normalized.filter((track) => !seen.has(track.id))];
+        return [...previous, ...displayRows.filter((track) => !seen.has(track.id))];
       });
       setFeedNextCursor(safeText(payload?.data?.nextCursor) || null);
     } catch (reason) {
@@ -753,7 +771,7 @@ export default function ExplorePage() {
     }
   };
 
-  // App 119 no longer reads or writes the old 069/071 actor refresh cache.
+  // App 120 no longer reads or writes the old 069/071 actor refresh cache.
   // Heart/count state is immediate locally; failed 20-second batch attempts surface
   // a notice while the newest outbox remains durable for the next interaction.
   useEffect(() => {
@@ -777,14 +795,14 @@ export default function ExplorePage() {
     try {
       const result = await setExploreTrackLike(user, track.id, !currentLiked, track.likeCount, track.ownerUid);
       const optimisticTrack = { ...track, likeCount: result.likeCount };
-      const patchOptimisticCount119 = (previous: ExploreTrack[]) => previous.map((item) => (
+      const patchOptimisticCount120 = (previous: ExploreTrack[]) => previous.map((item) => (
         item.id === track.id ? { ...item, likeCount: result.likeCount } : item
       ));
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
-      setTracks(patchOptimisticCount119);
-      setProfileTracks(patchOptimisticCount119);
+      setTracks(patchOptimisticCount120);
+      setProfileTracks(patchOptimisticCount120);
       setProfileLikedTracks((previous) => {
-        const patched = patchOptimisticCount119(previous);
+        const patched = patchOptimisticCount120(previous);
         if (!result.liked) return patched.filter((item) => item.id !== track.id);
         const rest = patched.filter((item) => item.id !== track.id);
         return [optimisticTrack, ...rest];

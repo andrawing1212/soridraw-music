@@ -8,17 +8,22 @@ import {
   writeSoridrawPersistentCache,
 } from '../lib/soridrawPersistentCache';
 
-// SORIDRAW_EXPLORE_LIKE_LATEST_CACHE_IDLE_BATCH_119_20260918
-// App 119 keeps one current heart cache + one durable outbox. Older Explore-like
-// cache namespaces and RTDB replay payloads are intentionally ignored.
-const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 119;
-const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state-119';
-const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes_119';
-const EXPLORE_LIKE_OUTBOX_SCHEMA_VERSION = 119;
-const EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox-119';
-const EXPLORE_LIKE_OUTBOX_SOURCE_TYPE = 'explore_like_outbox_119';
+// SORIDRAW_EXPLORE_LIKE_ACTOR_COUNT_LOCK_120_20260918
+// App 120 keeps only current-version Explore-like caches. The actor's newest
+// optimistic count is protected from stale Feed/Profile payloads until the shared
+// one-minute publication catches up.
+const EXPLORE_LIKE_CACHE_SCHEMA_VERSION = 120;
+const EXPLORE_LIKE_CACHE_KEY = 'explore-liked-state-120';
+const EXPLORE_LIKE_SOURCE_TYPE = 'explore_likes_120';
+const EXPLORE_LIKE_OUTBOX_SCHEMA_VERSION = 120;
+const EXPLORE_LIKE_OUTBOX_CACHE_KEY = 'explore-like-outbox-120';
+const EXPLORE_LIKE_OUTBOX_SOURCE_TYPE = 'explore_like_outbox_120';
+const EXPLORE_LIKE_DISPLAY_LOCK_SCHEMA_VERSION = 120;
+const EXPLORE_LIKE_DISPLAY_LOCK_CACHE_KEY = 'explore-like-display-lock-120';
+const EXPLORE_LIKE_DISPLAY_LOCK_SOURCE_TYPE = 'explore_like_display_lock_120';
 const EXPLORE_LIKE_BATCH_MAX = 50;
-const EXPLORE_LIKE_IDLE_FLUSH_MS_119 = 20_000;
+const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 20_000;
+const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
 
 export const EXPLORE_LIKE_SYNC_EVENT = 'soridraw:explore-like-sync';
 export const EXPLORE_LIKE_SYNC_ERROR_EVENT = 'soridraw:explore-like-sync-error';
@@ -38,6 +43,15 @@ type ExploreLikePendingMutation = {
 };
 
 type ExploreLikeOutbox = Record<string, ExploreLikePendingMutation>;
+
+type ExploreLikeDisplayLock = {
+  liked: boolean;
+  likeCount: number;
+  updatedAt: number;
+  protectUntil: number;
+};
+
+type ExploreLikeDisplayLocks = Record<string, ExploreLikeDisplayLock>;
 
 type ExploreLikeBatchResult = {
   trackId: string;
@@ -81,7 +95,7 @@ const persistLikedStateCache = (uid: string, cache: Map<string, boolean>) => {
     cacheKey: EXPLORE_LIKE_CACHE_KEY,
     sourceType: EXPLORE_LIKE_SOURCE_TYPE,
     schemaVersion: EXPLORE_LIKE_CACHE_SCHEMA_VERSION,
-    dataVersion: 119,
+    dataVersion: 120,
     uid,
     syncCursor: null,
     serverRevision: null,
@@ -146,19 +160,109 @@ const persistLikeOutbox = (uid: string, outbox: ExploreLikeOutbox) => {
     cacheKey: EXPLORE_LIKE_OUTBOX_CACHE_KEY,
     sourceType: EXPLORE_LIKE_OUTBOX_SOURCE_TYPE,
     schemaVersion: EXPLORE_LIKE_OUTBOX_SCHEMA_VERSION,
-    dataVersion: 119,
+    dataVersion: 120,
     uid,
     syncCursor: null,
     serverRevision: null,
     deletedIds: [],
     expiresAt: null,
     dirty: true,
-    pendingMutationId: 'explore-like-idle-batch-119',
+    pendingMutationId: 'explore-like-idle-batch-120',
     data: outbox,
   });
 };
 
 export const getPendingExploreLikeMutationCount = (uid: string): number => Object.keys(readLikeOutbox(uid)).length;
+
+const normalizeDisplayLock = (value: unknown): ExploreLikeDisplayLock | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Partial<ExploreLikeDisplayLock>;
+  if (typeof row.liked !== 'boolean') return null;
+  const likeCount = clampLikeCount(row.likeCount);
+  const updatedAt = Math.max(0, Number(row.updatedAt || 0));
+  const protectUntil = Math.max(0, Number(row.protectUntil || 0));
+  if (!updatedAt || !protectUntil) return null;
+  return { liked: row.liked, likeCount, updatedAt, protectUntil };
+};
+
+const readLikeDisplayLocks = (uid: string): ExploreLikeDisplayLocks => {
+  const envelope = readSoridrawPersistentCache<ExploreLikeDisplayLocks>({
+    cacheKey: EXPLORE_LIKE_DISPLAY_LOCK_CACHE_KEY,
+    sourceType: EXPLORE_LIKE_DISPLAY_LOCK_SOURCE_TYPE,
+    schemaVersion: EXPLORE_LIKE_DISPLAY_LOCK_SCHEMA_VERSION,
+    uid,
+  });
+  if (!envelope?.data || typeof envelope.data !== 'object' || Array.isArray(envelope.data)) return {};
+  return Object.entries(envelope.data).reduce<ExploreLikeDisplayLocks>((acc, [trackId, value]) => {
+    const normalized = normalizeDisplayLock(value);
+    if (trackId && normalized) acc[trackId] = normalized;
+    return acc;
+  }, {});
+};
+
+const persistLikeDisplayLocks = (uid: string, locks: ExploreLikeDisplayLocks) => {
+  if (!Object.keys(locks).length) {
+    removeSoridrawPersistentCache(EXPLORE_LIKE_DISPLAY_LOCK_CACHE_KEY, uid);
+    return;
+  }
+  writeSoridrawPersistentCache<ExploreLikeDisplayLocks>({
+    cacheKey: EXPLORE_LIKE_DISPLAY_LOCK_CACHE_KEY,
+    sourceType: EXPLORE_LIKE_DISPLAY_LOCK_SOURCE_TYPE,
+    schemaVersion: EXPLORE_LIKE_DISPLAY_LOCK_SCHEMA_VERSION,
+    dataVersion: 120,
+    uid,
+    syncCursor: null,
+    serverRevision: null,
+    deletedIds: [],
+    expiresAt: null,
+    dirty: false,
+    pendingMutationId: null,
+    data: locks,
+  });
+};
+
+// The current user's newest count always wins while the 20-second outbox is
+// pending. After batch ACK, the same count stays protected briefly until a shared
+// Feed/Profile payload reaches that exact count. This prevents old public cache
+// responses from making the actor's number jump backward and forward.
+export function overlayExploreLikeDisplayCounts<T extends { id: string; likeCount: number }>(
+  uid: string,
+  tracks: T[],
+): T[] {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid || !tracks.length) return tracks;
+
+  const outbox = readLikeOutbox(normalizedUid);
+  const locks = readLikeDisplayLocks(normalizedUid);
+  const now = Date.now();
+  let locksChanged = false;
+
+  const overlaid = tracks.map((track) => {
+    const trackId = String(track.id || '').trim();
+    if (!trackId) return track;
+
+    const pending = outbox[trackId];
+    if (pending) {
+      const nextCount = pending.optimisticLikeCount;
+      return nextCount === track.likeCount ? track : { ...track, likeCount: nextCount };
+    }
+
+    const lock = locks[trackId];
+    if (!lock) return track;
+
+    const sharedCount = clampLikeCount(track.likeCount);
+    if (sharedCount === lock.likeCount || lock.protectUntil <= now) {
+      delete locks[trackId];
+      locksChanged = true;
+      return track;
+    }
+
+    return lock.likeCount === track.likeCount ? track : { ...track, likeCount: lock.likeCount };
+  });
+
+  if (locksChanged) persistLikeDisplayLocks(normalizedUid, locks);
+  return overlaid;
+}
 
 const dispatchLikeSync = (detail: ExploreLikeSyncEventDetail) => {
   if (typeof window === 'undefined') return;
@@ -242,7 +346,7 @@ const schedulePendingFlush = (user: User) => {
     return;
   }
   clearFlushTimer(uid);
-  const deadline = latestOutboxUpdatedAt(outbox) + EXPLORE_LIKE_IDLE_FLUSH_MS_119;
+  const deadline = latestOutboxUpdatedAt(outbox) + EXPLORE_LIKE_IDLE_FLUSH_MS_120;
   const delay = Math.max(0, deadline - Date.now());
   const timer = window.setTimeout(() => {
     flushTimerByUid.delete(uid);
@@ -296,6 +400,8 @@ flushPendingLikes = async (user: User): Promise<void> => {
       const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
       const latest = readLikeOutbox(uid);
       const cache = getLikedStateCache(uid);
+      const displayLocks = readLikeDisplayLocks(uid);
+      const acknowledgedAt = Date.now();
 
       for (const pending of batchEntries) {
         const result = resultByTrack.get(pending.trackId);
@@ -304,6 +410,12 @@ flushPendingLikes = async (user: User): Promise<void> => {
         const hasNewerPending = Boolean(current && current.updatedAt !== pending.updatedAt);
         if (!hasNewerPending) {
           cache.set(pending.trackId, result.liked);
+          displayLocks[pending.trackId] = {
+            liked: result.liked,
+            likeCount: pending.optimisticLikeCount,
+            updatedAt: acknowledgedAt,
+            protectUntil: acknowledgedAt + EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120,
+          };
           delete latest[pending.trackId];
           dispatchLikeSync({
             uid,
@@ -316,6 +428,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
       }
 
       persistLikedStateCache(uid, cache);
+      persistLikeDisplayLocks(uid, displayLocks);
       persistLikeOutbox(uid, latest);
       succeeded = true;
     } catch (reason) {
@@ -351,14 +464,14 @@ flushPendingLikes = async (user: User): Promise<void> => {
   await task;
 };
 
-// App 119 deliberately ignores historical RTDB Explore-like replay payloads.
-// Personal heart state is recovered from the 119 cache, pending outbox, or one
+// App 120 deliberately ignores historical RTDB Explore-like replay payloads.
+// Personal heart state is recovered from the 120 cache, pending outbox, or one
 // targeted canonical request for missing visible track IDs.
 export const observeExploreLikeAccountSyncSignal = (_user: User, _value: unknown) => {};
 
 export const flushPendingExploreLikesForPageExit = async (user: User): Promise<void> => {
   // Page/profile navigation must not cut short the 20-second idle window.
-  // The module-level timer survives route changes; the durable 119 outbox survives reloads.
+  // The module-level timer survives route changes; the durable 120 outbox survives reloads.
   schedulePendingFlush(user);
 };
 

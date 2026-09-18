@@ -51,7 +51,12 @@ if (sharedDisplay091) {
   if (!displaySource.includes('SORIDRAW_EXPLORE_SHARED_DISPLAY_COUNT_091_20260915')) throw new Error('091 display ledger marker missing');
   if (/fetch\(|updateDoc\(|setDoc\(|firestore/i.test(displaySource)) throw new Error('091 display ledger must remain local-only');
 } else {
-  if (!service.includes('const optimisticLikeCount = clampLikeCount(currentLikeCount);')) throw new Error('client still changes numeric count');
+  const frozenPublicCount = service.includes('const optimisticLikeCount = clampLikeCount(currentLikeCount);')
+    || (
+      service.includes('const canonicalLikeCount = clampLikeCount(currentLikeCount);')
+      && service.includes('const optimisticLikeCount = canonicalLikeCount;')
+    );
+  if (!frozenPublicCount) throw new Error('client still changes numeric count');
 }
 if (service.includes('clampLikeCount(currentLikeCount) + (liked ? 1 : -1)')) throw new Error('old direct optimistic numeric delta still present');
 

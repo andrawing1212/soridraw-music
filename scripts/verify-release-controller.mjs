@@ -27,7 +27,7 @@ function validate(source = workflow) {
   assert.doesNotMatch(request, /read -r .*COMMENT_BODY/);
 
   const capability = step(source, 'Safe Firebase write-permission and GitHub capability preflight');
-  for (const permission of ['firebasehosting.versions.create', 'firebasehosting.versions.delete', 'firebasehosting.releases.create']) assert.ok(capability.includes(permission));
+  for (const permission of ['firebasehosting.sites.get', 'firebasehosting.sites.list', 'firebasehosting.sites.update']) assert.ok(capability.includes(permission));
   assert.ok(capability.includes(':testIamPermissions'));
   assert.ok(capability.includes('git push --dry-run'));
 
@@ -75,7 +75,7 @@ for (const [index, mutate] of [
   s => s.replace('ref: ${{ github.workflow_sha }}', 'ref: preview'),
   s => s.replace('parsed="$(node scripts/release-controller-policy.mjs parse-command)"', 'read -r command argument value approval extra <<< "$COMMENT_BODY"'),
   s => s.replace('"$GITHUB_WORKSPACE" <<\'NODE\'', '"$RELEASE_ROOT" <<\'NODE\''),
-  s => s.replaceAll('firebasehosting.versions.create', 'firebasehosting.versions.get'),
+  s => s.replaceAll('firebasehosting.sites.update', 'firebasehosting.sites.get'),
   s => s.replace('test "$(cat "$RUNNER_TEMP/test-worker-schedules-before")" = "$(current_schedules "$TEST_WORKER")"', ':'),
   s => s.replace('release-worker-runtime.mjs "$stage" restore', 'release-worker-runtime.mjs "$stage" activate'),
 ].entries()) assert.throws(() => validate(mutate(workflow)), undefined, `mutation ${index} was not rejected`);

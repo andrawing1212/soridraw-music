@@ -22,7 +22,7 @@ const EXPLORE_LIKE_DISPLAY_LOCK_SCHEMA_VERSION = 120;
 const EXPLORE_LIKE_DISPLAY_LOCK_CACHE_KEY = 'explore-like-display-lock-120';
 const EXPLORE_LIKE_DISPLAY_LOCK_SOURCE_TYPE = 'explore_like_display_lock_120';
 const EXPLORE_LIKE_BATCH_MAX = 50;
-const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 20_000;
+const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000;
 const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
 
 export const EXPLORE_LIKE_SYNC_EVENT = 'soridraw:explore-like-sync';
@@ -221,7 +221,7 @@ const persistLikeDisplayLocks = (uid: string, locks: ExploreLikeDisplayLocks) =>
   });
 };
 
-// The current user's newest count always wins while the 20-second outbox is
+// The current user's newest count always wins while the 30-second outbox is
 // pending. After batch ACK, the same count stays protected briefly until a shared
 // Feed/Profile payload reaches that exact count. This prevents old public cache
 // responses from making the actor's number jump backward and forward.
@@ -470,7 +470,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
 export const observeExploreLikeAccountSyncSignal = (_user: User, _value: unknown) => {};
 
 export const flushPendingExploreLikesForPageExit = async (user: User): Promise<void> => {
-  // Page/profile navigation must not cut short the 20-second idle window.
+  // Page/profile navigation must not cut short the 30-second idle window.
   // The module-level timer survives route changes; the durable 120 outbox survives reloads.
   schedulePendingFlush(user);
 };
@@ -573,7 +573,7 @@ export const setExploreTrackLike = async (
   };
   persistLikeOutbox(uid, outbox);
 
-  // Sliding idle window: every click restarts the same 20-second timer. One song
+  // Sliding idle window: every click restarts the same 30-second timer. One song
   // or many songs therefore leave as one final-state batch after the last click.
   schedulePendingFlush(user);
 

@@ -19,10 +19,11 @@ import {
   patchExploreFeedSessionCachesRow,
 } from '../services/exploreSessionCache';
 import {
+  EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT,
   EXPLORE_LIKE_SYNC_ERROR_EVENT,
+  EXPLORE_LIKE_SYNC_EVENT,
   flushPendingExploreLikesForPageExit,
   getExploreLikedTrackIds,
-  overlayExploreLikeDisplayCounts,
   reconcileExploreLikedTrackCollectionState,
   setExploreTrackLike,
 } from '../services/exploreLikeService';
@@ -78,12 +79,20 @@ type ExploreFeedRevisionResponse = {
   };
 };
 
-const EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 120_000;
-const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000;
-// SORIDRAW_EXPLORE_LIKE_LATEST_CACHE_IDLE_BATCH_119_20260918
-// Public Feed revision checks are capped at one per two minutes. The actor keeps the
-// immediate optimistic heart/count locally; other users pick up the shared result
-// after the Worker aggregate updates the shared revision.
+const EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 1000;
+const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 30_000;
+// SORIDRAW_EXPLORE_LIKE_EVENT_REFRESH_104_20260916
+// SORIDRAW_EXPLORE_LIKE_EVENT_REFRESH_105_20260916
+// SORIDRAW_EXPLORE_PUBLIC_COUNT_DIRECT_107_20260916
+// 105 PREVIEW test cadence aggregates one minute after the first server batch. The actor browser
+// performs one forced fresh Feed refresh just after that window; there is no
+// periodic polling and no wall-clock 10-minute boundary anymore.
+const EXPLORE_LIKE_AGGREGATE_WINDOW_MS_105 = 1 * 60_000;
+const EXPLORE_LIKE_REFRESH_GRACE_MS_105 = 10_000;
+// SORIDRAW_EXPLORE_LIKE_COUNT_REFRESH_RECOVERY_071_20260912
+// Keep one pending aggregate refresh across reloads/page changes and force one
+// server-confirmed Feed refresh after an actual like batch. No polling.
+const EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071 = 'soridraw:explore-like-count-refresh:071:';
 // SORIDRAW_EXPLORE_R2_SNAPSHOT_BOOTSTRAP_108_20260916
 // First-page Feed refreshes use the already-materialized R2 snapshot directly.
 // This keeps app-update/cache-recovery traffic off D1 while preserving local-first warm re-entry.
@@ -96,6 +105,33 @@ const EXPLORE_FEED_R2_SNAPSHOT_VERSION_108 = '108';
 // SORIDRAW_EXPLORE_LIKE_LIVE_DISPLAY_090_20260915
 // Forced like-count recovery must use the unique fresh Feed URL even when this
 // browser has no session Feed cache yet (for example immediately after app update).
+
+const exploreLikeRefreshStorageKey071 = (uid: string) => `${EXPLORE_LIKE_REFRESH_STORAGE_PREFIX_071}${uid}`;
+const readExploreLikeRefreshDeadline071 = (uid: string) => {
+  if (!uid || typeof window === 'undefined') return 0;
+  try {
+    const value = Number(window.localStorage.getItem(exploreLikeRefreshStorageKey071(uid)) || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+};
+const writeExploreLikeRefreshDeadline071 = (uid: string, deadline: number) => {
+  if (!uid || typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(exploreLikeRefreshStorageKey071(uid), String(Math.max(0, Math.floor(deadline))));
+  } catch {
+    // Storage failure must not break likes; the in-memory timer still works.
+  }
+};
+const clearExploreLikeRefreshDeadline071 = (uid: string) => {
+  if (!uid || typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(exploreLikeRefreshStorageKey071(uid));
+  } catch {
+    // Ignore storage cleanup failure.
+  }
+};
 
 const isExploreFeedRequest = (value: string) => {
   try {
@@ -312,6 +348,8 @@ export default function ExplorePage() {
   const [feedRevisionSignal, setFeedRevisionSignal] = useState(0);
   const feedRevisionEventAtRef = useRef(0);
   const feedRevisionActivityAtRef = useRef(0);
+  const forceLikeCountRefreshRef071 = useRef(false);
+  const likeCountRepairKeyRef072 = useRef('');
   const likeInteractionVersionRef090 = useRef(0);
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
@@ -319,6 +357,17 @@ export default function ExplorePage() {
     likeHydrationKeyRef.current = '';
     setLikedTrackIds({});
   }), []);
+
+  useEffect(() => {
+    const onAccountLikeInvalidation = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string }>).detail;
+      if (!user?.uid || String(detail?.uid || '') !== user.uid) return;
+      likeHydrationKeyRef.current = '';
+      setLikeAccountSyncSignal((value) => value + 1);
+    };
+    window.addEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onAccountLikeInvalidation as EventListener);
+    return () => window.removeEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onAccountLikeInvalidation as EventListener);
+  }, [user?.uid]);
 
   const requestUrl = useMemo(() => {
     const cleanQuery = submittedQuery.trim();
@@ -335,22 +384,9 @@ export default function ExplorePage() {
   // Only server-confirmed/shared payloads may become public-count authority. Once a count is
   // confirmed, patch every already-loaded Feed/Profile/Liked cache by track id so Recommended,
   // Latest, Popular and Public Profile cannot display different counts on the same device.
-  // SORIDRAW_EXPLORE_LIKE_ACTOR_COUNT_LOCK_120_20260918
-  // Shared/public payloads remain the public authority, except while this user's
-  // newest local mutation is still pending or waiting for the one-minute shared
-  // publication. During that short window the actor's latest count must not jump.
-  const overlayActorLikeCounts120 = (rows: ExploreTrack[]) => {
-    const activeUid = auth.currentUser?.uid || user?.uid || '';
-    return activeUid ? overlayExploreLikeDisplayCounts(activeUid, rows) : rows;
-  };
-
   const syncSharedPublicCountsToLocal110 = (sharedTracks: ExploreTrack[], authoritative = true) => {
     if (!sharedTracks.length || !authoritative) return;
-    const activeUid = auth.currentUser?.uid || user?.uid || '';
-    const effectiveSharedTracks = activeUid
-      ? overlayExploreLikeDisplayCounts(activeUid, sharedTracks)
-      : sharedTracks;
-    const countByTrackId = new Map(effectiveSharedTracks.map((track) => [track.id, track.likeCount]));
+    const countByTrackId = new Map(sharedTracks.map((track) => [track.id, track.likeCount]));
     const applyPublicCounts110 = (previous: ExploreTrack[]) => previous.map((track) => {
       const nextCount = countByTrackId.get(track.id);
       return nextCount === undefined || nextCount === track.likeCount ? track : { ...track, likeCount: nextCount };
@@ -360,7 +396,8 @@ export default function ExplorePage() {
     setProfileTracks(applyPublicCounts110);
     setProfileLikedTracks(applyPublicCounts110);
 
-    effectiveSharedTracks.forEach((track) => {
+    const activeUid = auth.currentUser?.uid || user?.uid || '';
+    sharedTracks.forEach((track) => {
       patchExploreFeedSessionCachesRow(track.id, { likeCount: track.likeCount });
       if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: track.likeCount });
       if (activeUid) patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);
@@ -370,6 +407,7 @@ export default function ExplorePage() {
   useEffect(() => {
     const cachedRows = readExploreFeedSessionCache(requestUrl);
     const feedRequest = isExploreFeedRequest(requestUrl);
+    const forceLikeCountRefresh071 = forceLikeCountRefreshRef071.current;
     const controller = new AbortController();
 
     const fetchPayload = async (url: string): Promise<ExploreApiResponse> => {
@@ -421,11 +459,16 @@ export default function ExplorePage() {
         );
       }
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
-      const displayTracks = overlayActorLikeCounts120(normalizedTracks);
       setFeedNextCursor(nextCursor);
       setLoadMoreError('');
-      setTracks(displayTracks);
+      setTracks(normalizedTracks);
       if (feedRequest) syncSharedPublicCountsToLocal110(normalizedTracks);
+      if (feedRequest && forceLikeCountRefresh071) {
+        forceLikeCountRefreshRef071.current = false;
+        const refreshUid = auth.currentUser?.uid || '';
+        const deadline = readExploreLikeRefreshDeadline071(refreshUid);
+        if (!deadline || Date.now() >= deadline) clearExploreLikeRefreshDeadline071(refreshUid);
+      }
     };
 
     if (cachedRows) {
@@ -433,13 +476,22 @@ export default function ExplorePage() {
       setFeedNextCursor(feedRequest ? readExploreFeedSessionCacheCursor(requestUrl) : null);
       setLoadMoreError('');
       const cachedTracks = cachedRows.map(normalizeTrack).filter((track) => track.id);
-      // 120: stale shared cache may render, but never over the actor's newest pending count.
-      setTracks(overlayActorLikeCounts120(cachedTracks));
+      // 116: cached rows render immediately but do not overwrite newer public-count authority.
+      setTracks(cachedTracks);
       setLoading(false);
 
       if (feedRequest) {
         void (async () => {
           try {
+            if (forceLikeCountRefresh071) {
+              // 072: bypass only the HTTP Feed cache key for a confirmed recovery.
+              // The Worker still uses the normal derived R2/D1 path underneath.
+              const serverRevision = await fetchRevision().catch(() => null);
+              const snapshot = await fetchFeedSnapshot108(serverRevision);
+              if (controller.signal.aborted) return;
+              applyPayload(snapshot.payload, snapshot.revision);
+              return;
+            }
             const serverRevision = await fetchRevision();
             if (!serverRevision || controller.signal.aborted) return;
             const cachedRevision = readExploreFeedSessionCacheRevision(requestUrl);
@@ -452,6 +504,10 @@ export default function ExplorePage() {
             applyPayload(snapshot.payload, snapshot.revision);
           } catch (reason) {
             if (!controller.signal.aborted) {
+              if (forceLikeCountRefresh071) {
+                forceLikeCountRefreshRef071.current = false;
+                likeCountRepairKeyRef072.current = '';
+              }
               console.warn('Explore feed revision revalidation failed; keeping cached feed:', reason);
             }
           }
@@ -467,6 +523,16 @@ export default function ExplorePage() {
     void (async () => {
       try {
         if (feedRequest) {
+          if (forceLikeCountRefresh071) {
+            // 073: 072 handled only the cachedRows branch. After an app update
+            // session cache can be empty, so the old bootstrap path reused the
+            // ordinary versioned Feed and could restore a stale public count.
+            const serverRevision = await fetchRevision().catch(() => null);
+            const snapshot = await fetchFeedSnapshot108(serverRevision);
+            if (controller.signal.aborted) return;
+            applyPayload(snapshot.payload, snapshot.revision);
+            return;
+          }
           const serverRevision = await fetchRevision().catch((reason) => {
             if (!controller.signal.aborted) {
               console.warn('Explore feed revision bootstrap failed; continuing with feed:', reason);
@@ -484,6 +550,10 @@ export default function ExplorePage() {
         applyPayload(payload, null);
       } catch (reason: unknown) {
         if (controller.signal.aborted) return;
+        if (forceLikeCountRefresh071) {
+          forceLikeCountRefreshRef071.current = false;
+          likeCountRepairKeyRef072.current = '';
+        }
         console.error('Explore feed load failed:', reason);
         setError('Explore 곡을 불러오지 못했어요.');
         setFeedNextCursor(null);
@@ -560,10 +630,9 @@ export default function ExplorePage() {
       if (cancelled) return;
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       normalizedTracks.sort(comparePublicProfileTracks);
-      const displayTracks = overlayActorLikeCounts120(normalizedTracks);
       if (authoritative) syncSharedPublicCountsToLocal110(normalizedTracks);
       setProfile(nextProfile);
-      setProfileTracks(displayTracks);
+      setProfileTracks(normalizedTracks);
     };
 
     getExplorePublicProfileFirstView(profileUid, {
@@ -618,9 +687,7 @@ export default function ExplorePage() {
     getExploreLikedTracks(user)
       .then((rows) => {
         if (cancelled) return;
-        const normalizedRows = overlayActorLikeCounts120(
-          rows.map(normalizeTrack).filter((track) => track.id),
-        );
+        const normalizedRows = rows.map(normalizeTrack).filter((track) => track.id);
         const canonicalLikedTrackIds = getExploreLikedTrackCollectionIds(user.uid)
           ?? normalizedRows.map((track) => track.id);
         const effectiveLikedTrackIds = reconcileExploreLikedTrackCollectionState(
@@ -756,11 +823,10 @@ export default function ExplorePage() {
       const payload = await response.json() as ExploreApiResponse;
       const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
       const normalized = rows.map(normalizeTrack).filter((track) => track.id);
-      const displayRows = overlayActorLikeCounts120(normalized);
       syncSharedPublicCountsToLocal110(normalized);
       setTracks((previous) => {
         const seen = new Set(previous.map((track) => track.id));
-        return [...previous, ...displayRows.filter((track) => !seen.has(track.id))];
+        return [...previous, ...normalized.filter((track) => !seen.has(track.id))];
       });
       setFeedNextCursor(safeText(payload?.data?.nextCursor) || null);
     } catch (reason) {
@@ -771,46 +837,113 @@ export default function ExplorePage() {
     }
   };
 
-  // App 120 no longer reads or writes the old 069/071 actor refresh cache.
-  // Heart/count state is immediate locally; failed 20-second batch attempts surface
-  // a notice while the newest outbox remains durable for the next interaction.
+  // SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_069_20260912
   useEffect(() => {
+    let aggregateRefreshTimer: number | null = null;
+    const uid = user?.uid || '';
+
+    const clearTimer071 = () => {
+      if (aggregateRefreshTimer !== null) window.clearTimeout(aggregateRefreshTimer);
+      aggregateRefreshTimer = null;
+    };
+
+    const requestForcedAggregateRefresh071 = () => {
+      if (!uid || !isExploreFeedRequest(requestUrl) || document.visibilityState !== 'visible') return false;
+      forceLikeCountRefreshRef071.current = true;
+      const now = Date.now();
+      // Reuse the existing revision-event dedupe. If focus/visibility already
+      // requested a refresh in this tick, that render will consume force=true.
+      if (now - feedRevisionEventAtRef.current < EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS) return true;
+      feedRevisionEventAtRef.current = now;
+      setFeedRevisionSignal((value) => value + 1);
+      return true;
+    };
+
+    const armStoredAggregateRefresh071 = () => {
+      clearTimer071();
+      if (!uid || !isExploreFeedRequest(requestUrl)) return;
+      const deadline = readExploreLikeRefreshDeadline071(uid);
+      if (!deadline) return;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        requestForcedAggregateRefresh071();
+        return;
+      }
+      aggregateRefreshTimer = window.setTimeout(() => {
+        aggregateRefreshTimer = null;
+        if (!requestForcedAggregateRefresh071()) {
+          // Keep the persisted deadline. Returning to a visible tab will retry.
+          return;
+        }
+      }, Math.max(1000, remaining));
+    };
+
+    const scheduleAggregateCountRefresh071 = () => {
+      if (!uid || !isExploreFeedRequest(requestUrl)) return;
+      const now = Date.now();
+      const deadline = now + EXPLORE_LIKE_AGGREGATE_WINDOW_MS_105 + EXPLORE_LIKE_REFRESH_GRACE_MS_105;
+      const stored = readExploreLikeRefreshDeadline071(uid);
+      writeExploreLikeRefreshDeadline071(uid, stored > 0 ? Math.min(stored, deadline) : deadline);
+      armStoredAggregateRefresh071();
+    };
+
+    const onLikeSync = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        uid?: string;
+        trackId?: string;
+        ownerUid?: string;
+        liked?: boolean;
+        likeCount?: number;
+        displayLikeCount?: number;
+      }>).detail;
+      if (!user?.uid || String(detail?.uid || '').trim() !== user.uid) return;
+      const trackId = String(detail?.trackId || '').trim();
+      if (!trackId || typeof detail?.liked !== 'boolean') return;
+      setLikedTrackIds((prev) => ({ ...prev, [trackId]: detail.liked as boolean }));
+      scheduleAggregateCountRefresh071();
+    };
     const onLikeSyncError = (event: Event) => {
       const detail = (event as CustomEvent<{ uid?: string; message?: string }>).detail;
       if (!user?.uid || String(detail?.uid || '').trim() !== user.uid) return;
-      setSocialNotice(String(detail?.message || '좋아요 변경분을 최신 기기 캐시에 보관했어요.'));
+      setSocialNotice(String(detail?.message || '좋아요 서버 동기화를 재시도하고 있어요.'));
     };
+    const onReturnVisible071 = () => {
+      if (document.visibilityState === 'visible') armStoredAggregateRefresh071();
+    };
+
+    armStoredAggregateRefresh071();
+    window.addEventListener(EXPLORE_LIKE_SYNC_EVENT, onLikeSync as EventListener);
     window.addEventListener(EXPLORE_LIKE_SYNC_ERROR_EVENT, onLikeSyncError as EventListener);
-    return () => window.removeEventListener(EXPLORE_LIKE_SYNC_ERROR_EVENT, onLikeSyncError as EventListener);
-  }, [user?.uid]);
+    window.addEventListener('focus', onReturnVisible071);
+    document.addEventListener('visibilitychange', onReturnVisible071);
+    return () => {
+      clearTimer071();
+      window.removeEventListener(EXPLORE_LIKE_SYNC_EVENT, onLikeSync as EventListener);
+      window.removeEventListener(EXPLORE_LIKE_SYNC_ERROR_EVENT, onLikeSyncError as EventListener);
+      window.removeEventListener('focus', onReturnVisible071);
+      document.removeEventListener('visibilitychange', onReturnVisible071);
+    };
+  }, [requestUrl, user?.uid]);
 
   const toggleLike = async (track: ExploreTrack) => {
     if (!user) {
       setSocialNotice('좋아요는 로그인 후 사용할 수 있어요.');
       return;
     }
+    if (likeBusyTrackId) return;
     const currentLiked = Boolean(likedTrackIds[track.id]);
     likeInteractionVersionRef090.current += 1;
     setLikeBusyTrackId(track.id);
     try {
       const result = await setExploreTrackLike(user, track.id, !currentLiked, track.likeCount, track.ownerUid);
-      const optimisticTrack = { ...track, likeCount: result.likeCount };
-      const patchOptimisticCount120 = (previous: ExploreTrack[]) => previous.map((item) => (
-        item.id === track.id ? { ...item, likeCount: result.likeCount } : item
-      ));
+      const canonicalTrack = { ...track };
       setLikedTrackIds((prev) => ({ ...prev, [track.id]: result.liked }));
-      setTracks(patchOptimisticCount120);
-      setProfileTracks(patchOptimisticCount120);
+      rememberExploreLikedTrack(user.uid, canonicalTrack as unknown as Record<string, unknown>, result.liked);
       setProfileLikedTracks((previous) => {
-        const patched = patchOptimisticCount120(previous);
-        if (!result.liked) return patched.filter((item) => item.id !== track.id);
-        const rest = patched.filter((item) => item.id !== track.id);
-        return [optimisticTrack, ...rest];
+        if (!result.liked) return previous.filter((item) => item.id !== track.id);
+        const rest = previous.filter((item) => item.id !== track.id);
+        return [canonicalTrack, ...rest];
       });
-      patchExploreFeedSessionCachesRow(track.id, { likeCount: result.likeCount });
-      if (track.ownerUid) patchExplorePublicProfileFirstViewTrack(track.ownerUid, track.id, { likeCount: result.likeCount });
-      patchExploreLikedTrackCachedCount091(user.uid, track.id, result.likeCount);
-      rememberExploreLikedTrack(user.uid, optimisticTrack as unknown as Record<string, unknown>, result.liked);
     } catch (reason) {
       console.error('Explore like failed:', reason);
       setSocialNotice(reason instanceof Error ? reason.message : '좋아요 처리에 실패했어요.');

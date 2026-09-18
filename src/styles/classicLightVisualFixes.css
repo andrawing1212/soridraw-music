@@ -63,12 +63,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-
   color: rgba(20, 20, 22, 0.86) !important;
 }
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-like-button.is-liked {
-  color: rgba(20, 20, 22, 0.78) !important;
-}
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-like-button.is-liked svg:not(.soridraw-explore-spinner) {
-  fill: #fff !important;
-  stroke: #fff !important;
-  filter: drop-shadow(0 0 1px rgba(20, 20, 22, 0.42));
+  color: #d84b58 !important;
 }
 
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-explore-back-button {

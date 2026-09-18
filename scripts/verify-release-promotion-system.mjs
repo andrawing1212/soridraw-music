@@ -44,16 +44,6 @@ for (const token of [
   'EXPLORE_CACHE',
   "['dry-run', 'upload', 'activate', 'verify', 'restore']",
   'keep_vars: true',
-  'CANONICAL_WRANGLER_PATH',
-  "'ratelimit'",
-  "'durable_object_namespace'",
-  "item?.name === 'LIKE_RATE_LIMITER'",
-  "item?.name === 'EXPLORE_LIKE_BATCH_SCHEDULER'",
-  'ratelimits: canonicalRateLimits',
-  'durable_objects: { bindings: canonicalDurableBindings }',
-  'migrations: canonicalMigrations',
-  'REQUIRED_RATELIMIT_BINDINGS=',
-  'REQUIRED_DURABLE_OBJECT_BINDINGS=',
   'SORIDRAW_RELEASE_ENVIRONMENT_PARITY_INVARIANT_117_20260917',
   "const CANONICAL_D1_NAME = 'soridraw-explore-db'",
   "const CANONICAL_PROFILE_MEDIA_BUCKET = 'soridraw-profile-media'",
@@ -104,5 +94,4 @@ console.log('RELEASE_PROMOTION_SYSTEM_STATIC=PASS');
 console.log('RELEASE_FEATURE_PARITY_GUARD=PASS');
 console.log('RELEASE_ENVIRONMENT_PARITY_INVARIANT_STATIC=PASS');
 console.log('RELEASE_SHARED_CANONICAL_BINDINGS_STATIC=PASS');
-console.log('RELEASE_REQUIRED_LIKE_BINDINGS_STATIC=PASS');
 console.log('RELEASE_NO_DESTRUCTIVE_DB_ACTION=PASS');

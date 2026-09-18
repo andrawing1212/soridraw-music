@@ -1,4 +1,4 @@
-name: TEMP Diagnose Shared Feed Authority
+name: TEMP Converge Shared Feed Authority
 
 on:
   push:
@@ -11,39 +11,32 @@ permissions:
   contents: read
 
 jobs:
-  diagnose:
+  converge:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
     steps:
-      - name: Probe active and version URLs read-only
+      - name: Bounded PREVIEW Feed convergence
         shell: bash
         run: |
           set -euo pipefail
-          active_version() {
-            curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/deployments"               | jq -r '.result.deployments[0].versions | max_by(.percentage) | .version_id'
-          }
-          preview_version="$(active_version soridraw-explore-preview)"
-          test_version="$(active_version soridraw-explore-test)"
-          echo "PREVIEW_ACTIVE=$preview_version"
-          echo "TEST_ACTIVE=$test_version"
-          probe() {
-            label="$1"; base="$2"; origin="$3"; sort="$4"
-            headers="$RUNNER_TEMP/$label-$sort.headers"
-            body="$RUNNER_TEMP/$label-$sort.json"
-            code="$(curl -sS -o "$body" -D "$headers" -w '%{http_code}'               -H "Origin: $origin" -H 'Cache-Control: no-cache'               "$base/v1/feed-revision?sort=$sort")"
-            source="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-revision-source:/{sub(/^[^:]+:[[:space:]]*/,"");gsub(/\r/,"");print;exit}' "$headers")"
-            mode="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-revision-mode:/{sub(/^[^:]+:[[:space:]]*/,"");gsub(/\r/,"");print;exit}' "$headers")"
-            d1r="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{sub(/^[^:]+:[[:space:]]*/,"");gsub(/\r/,"");print;exit}' "$headers")"
-            revision="$(jq -r '.data.revision // empty' "$body" 2>/dev/null || true)"
-            echo "$label $sort HTTP=$code SOURCE=$source MODE=$mode D1R=$d1r REV=$revision"
-          }
+          base="https://soridraw-explore-preview.andrawing1212.workers.dev"
+          origin="https://preview.soridraw.com"
           for sort in latest popular; do
-            probe PREVIEW_STABLE "https://soridraw-explore-preview.andrawing1212.workers.dev" "https://preview.soridraw.com" "$sort"
-            probe TEST_STABLE "https://soridraw-explore-test.andrawing1212.workers.dev" "https://test.soridraw.com" "$sort"
-            probe PREVIEW_VERSION "https://${preview_version%%-*}-soridraw-explore-preview.andrawing1212.workers.dev" "https://preview.soridraw.com" "$sort"
-            probe TEST_VERSION "https://${test_version%%-*}-soridraw-explore-test.andrawing1212.workers.dev" "https://test.soridraw.com" "$sort"
+            headers="$RUNNER_TEMP/feed-$sort.headers"
+            body="$RUNNER_TEMP/feed-$sort.json"
+            curl -fsS -o "$body" -D "$headers" -H "Origin: $origin" -H 'Cache-Control: no-cache'               "$base/v1/feed?sort=$sort&limit=40"
+            d1r="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{sub(/^[^:]+:[[:space:]]*/,"");gsub(/\r/,"");print;exit}' "$headers")"
+            d1w="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{sub(/^[^:]+:[[:space:]]*/,"");gsub(/\r/,"");print;exit}' "$headers")"
+            echo "PREVIEW_FEED_CONVERGE $sort D1R=${d1r:-unknown} D1W=${d1w:-unknown}"
           done
-          echo FEED_AUTHORITY_DIAGNOSTIC=PASS
+          sleep 2
+          for sort in latest popular; do
+            headers="$RUNNER_TEMP/rev-$sort.headers"
+            body="$RUNNER_TEMP/rev-$sort.json"
+            curl -fsS -o "$body" -D "$headers" -H "Origin: $origin" -H 'Cache-Control: no-cache'               "$base/v1/feed-revision?sort=$sort"
+            source="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-revision-source:/{sub(/^[^:]+:[[:space:]]*/,"");gsub(/\r/,"");print;exit}' "$headers")"
+            revision="$(jq -r '.data.revision // empty' "$body")"
+            echo "PREVIEW_REVISION_AFTER $sort SOURCE=$source REV=$revision"
+            case "$source" in *SHARED*) ;; *) echo "SHARED_AUTHORITY_NOT_READY $sort"; exit 2;; esac
+          done
+          echo SHARED_FEED_CONVERGENCE=PASS

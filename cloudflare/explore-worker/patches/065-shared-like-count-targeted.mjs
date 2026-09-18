@@ -58,6 +58,20 @@ const functionRange = (name) => {
   throw new Error(`[065] unterminated function: ${name}`);
 };
 
+const projectionRange = functionRange('reconcileExplorePublicLikes056');
+if (!projectionRange.text.includes('changedItems: [...changedByTrack.values()]')) {
+  const oldProjectionReturn = `    visibleChangedTracks: changedByTrack.size,
+    updatedProfiles,`;
+  const nextProjectionReturn = `    visibleChangedTracks: changedByTrack.size,
+    changedItems: [...changedByTrack.values()],
+    updatedProfiles,`;
+  if (!projectionRange.text.includes(oldProjectionReturn)) {
+    throw new Error('[065] 056 public projection return shape missing');
+  }
+  const patchedProjection = projectionRange.text.replace(oldProjectionReturn, nextProjectionReturn);
+  source = source.slice(0, projectionRange.start) + patchedProjection + source.slice(projectionRange.end);
+}
+
 const aggregateRange = functionRange('processExploreLikeBatches035');
 const coreName = 'processExploreLikeBatches035Core065';
 const renamedAggregate = aggregateRange.text.replace(

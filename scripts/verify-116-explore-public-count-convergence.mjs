@@ -62,7 +62,8 @@ if (!wrapper.includes('if (!uid)')) fail('064 shared Feed mirror must remain on 
 if (!wrapper.includes('mirrorExploreSharedFeedAfterDerivedSync064(env, sort)')) fail('064 wrapper does not mirror caught-up snapshot');
 
 if (!Array.isArray(manifest.patches) || !manifest.patches.includes('064-shared-feed-catchup-convergence.mjs')) fail('064 release patch not registered');
-if (String(version.version) !== '116') fail(`app version must be 116, got ${String(version.version)}`);
+const appVersion = Number(version.version);
+if (!Number.isFinite(appVersion) || appVersion < 116) fail(`app version must be >=116, got ${String(version.version)}`);
 
 console.log('116_EXPLORE_PUBLIC_COUNT_CONVERGENCE=PASS');
 console.log('SAME_TRACK_LOADED_FEEDS=PATCHED_BY_TRACK_ID');

@@ -1,8 +1,8 @@
-requested_at=2026-09-17T09:38:00Z
+requested_at=2026-09-18T05:16:30Z
 requested_by=user
-product_code_target=35ef207407873f26b9dd7a6148f8d576b5936bfe
-release_source_target=preview-116-after-worker-7002605d
-release_purpose=116_explore_public_count_convergence
+product_code_target=06330ae00c2d7639542d7b3ab473aabb85f67d9e
+release_source_target=preview-117-public-count-personal-cache-separation
+release_purpose=117_explore_public_count_personal_cache_separation
 hosting_only=true
 worker_redeploy=false
 no_user_data_migration=true

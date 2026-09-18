@@ -82,6 +82,15 @@ const wrapAsyncFunction = (name, suffix, wrapperBuilder) => {
   source = source.slice(0, range.start) + renamed + '\n\n' + wrapperBuilder(coreName) + source.slice(range.end);
 };
 
+const appendBeforeResult066 = (name, block) => {
+  const range = functionRange(name);
+  const anchor = '  return result;\n}';
+  const count = range.text.split(anchor).length - 1;
+  if (count !== 1) throw new Error(`[066] ${name} final result anchor count=${count}`);
+  const next = range.text.replace(anchor, `${block}\n  return result;\n}`);
+  source = source.slice(0, range.start) + next + source.slice(range.end);
+};
+
 let runtime = readFileSync(new URL('../runtime/r2-catalog-v1.js', import.meta.url), 'utf8');
 runtime = runtime.replace(/^export\s+/gm, '');
 if (!runtime.includes(marker)) throw new Error('[066] runtime marker missing');
@@ -139,27 +148,17 @@ wrapAsyncFunction('writeExploreSharedProfile060', 'Core066', (coreName) => `asyn
   return result;
 }`);
 
-wrapAsyncFunction('syncExploreFeedR2Publication043', 'Core066', (coreName) => `async function syncExploreFeedR2Publication043(env, incomingItem) {
-  const result = await ${coreName}(env, incomingItem);
-  if (isExploreR2CatalogEnabled066(env)) {
+appendBeforeResult066('syncExploreFeedR2Publication043', `  if (isExploreR2CatalogEnabled066(env)) {
     try { await syncExploreCatalogTrack066(env, incomingItem, { isPublic: true }); }
     catch (error) { console.warn('[SORIDRAW 066] publish catalog sync deferred:', String(error?.message || error || 'unknown')); }
-  }
-  return result;
-}`);
+  }`);
 
-wrapAsyncFunction('syncExploreFeedR2Private043', 'Core066', (coreName) => `async function syncExploreFeedR2Private043(env, trackId) {
-  const result = await ${coreName}(env, trackId);
-  if (isExploreR2CatalogEnabled066(env)) {
+appendBeforeResult066('syncExploreFeedR2Private043', `  if (isExploreR2CatalogEnabled066(env)) {
     try { await removeExploreCatalogTrack066(env, trackId); }
     catch (error) { console.warn('[SORIDRAW 066] private catalog delete deferred:', String(error?.message || error || 'unknown')); }
-  }
-  return result;
-}`);
+  }`);
 
-wrapAsyncFunction('syncExploreFeedR2OptionPatch043', 'Core066', (coreName) => `async function syncExploreFeedR2OptionPatch043(env, trackId, patch) {
-  const result = await ${coreName}(env, trackId, patch);
-  if (isExploreR2CatalogEnabled066(env)) {
+appendBeforeResult066('syncExploreFeedR2OptionPatch043', `  if (isExploreR2CatalogEnabled066(env)) {
     try {
       const card = await readSharedTrackCard062(env, trackId);
       if (card) await syncExploreCatalogTrack066(env, { ...card, ...patch }, {
@@ -171,22 +170,16 @@ wrapAsyncFunction('syncExploreFeedR2OptionPatch043', 'Core066', (coreName) => `a
     } catch (error) {
       console.warn('[SORIDRAW 066] option catalog patch deferred:', String(error?.message || error || 'unknown'));
     }
-  }
-  return result;
-}`);
+  }`);
 
-wrapAsyncFunction('patchExploreVisibleProfiles056', 'Core066', (coreName) => `async function patchExploreVisibleProfiles056(env, changedItems) {
-  const result = await ${coreName}(env, changedItems);
-  if (isExploreR2CatalogEnabled066(env)) {
+appendBeforeResult066('patchExploreVisibleProfiles056', `  if (isExploreR2CatalogEnabled066(env)) {
     for (const row of changedItems || []) {
       const trackId = String(row?.trackId || '').trim();
       if (!trackId) continue;
       try { await patchExploreCatalogLike066(env, trackId, Math.max(0, Number(row?.likeCount || 0))); }
       catch (error) { console.warn('[SORIDRAW 066] popular catalog like move deferred:', trackId, String(error?.message || error || 'unknown')); }
     }
-  }
-  return result;
-}`);
+  }`);
 
 wrapAsyncFunction('handleFeedWithEdgeCache', 'Core066', (coreName) => `async function handleFeedWithEdgeCache(request, url, env, cors) {
   if (!isExploreR2CatalogEnabled066(env)) return await ${coreName}(request, url, env, cors);

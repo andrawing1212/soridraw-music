@@ -94,14 +94,15 @@ jobs:
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
 
-      - name: Identify one missing shared profile and snapshot canonical row
+      - name: Verify repaired profiles and repair at most one missing shared track-card
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
-          CFG="$PWD/canonical/wrangler.preview.jsonc"
+
           node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-feed-v112/latest-40.json" --file "$RUNNER_TEMP/latest.json" --remote >/dev/null
+
           node <<'NODE'
           const fs=require('fs');
           const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/latest.json','utf8'));
@@ -110,130 +111,94 @@ jobs:
           const owners=[...new Set(items.map(v=>String(v?.ownerUid||v?.owner_uid||'').trim()).filter(Boolean))];
           if(ids.length!==38) throw new Error('latest track count '+ids.length);
           if(owners.length!==3) throw new Error('owner count '+owners.length);
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/track-ids.txt',ids.join('\n')+'\n');
           fs.writeFileSync(process.env.RUNNER_TEMP+'/owners.txt',owners.join('\n')+'\n');
           console.log('SHARED_LATEST_TRACKS='+ids.length);
           console.log('SHARED_LATEST_OWNERS='+owners.length);
           NODE
-          : > "$RUNNER_TEMP/missing-owner.txt"
-          found=0
-          missing=0
-          idx=0
+
+          profile_found=0
           while IFS= read -r uid; do
             [ -n "$uid" ] || continue
-            idx=$((idx+1))
             enc="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$uid")"
-            if node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-profile-v113/$enc.json" --file "$RUNNER_TEMP/shared-profile-$idx.json" --remote >/dev/null 2>&1; then
-              found=$((found+1))
-            else
-              missing=$((missing+1))
-              printf '%s' "$uid" > "$RUNNER_TEMP/missing-owner.txt"
-            fi
+            node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-profile-v113/$enc.json" --file "$RUNNER_TEMP/profile-$profile_found.json" --remote >/dev/null
+            profile_found=$((profile_found+1))
           done < "$RUNNER_TEMP/owners.txt"
-          echo "SHARED_PROFILE_FOUND_BEFORE=$found"
-          echo "SHARED_PROFILE_MISSING_BEFORE=$missing"
-          test "$found" = 2
-          test "$missing" = 1
-          uid="$(cat "$RUNNER_TEMP/missing-owner.txt")"
-          SQL="$(node - "$uid" <<'NODE'
-          const uid=process.argv[2];
-          const q="'"+uid.replaceAll("'","''")+"'";
-          process.stdout.write("SELECT * FROM public_profiles WHERE uid="+q+" LIMIT 1; SELECT COUNT(*) AS public_tracks FROM tracks WHERE is_public=1 AND status='published';");
-          NODE
-          )"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$SQL" --json > "$RUNNER_TEMP/canonical-before.json"
-          node <<'NODE'
-          const fs=require('fs');
-          const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/canonical-before.json','utf8'));
-          const sets=x.flatMap(v=>Array.isArray(v?.results)?[v.results]:[]);
-          const row=(sets[0]||[])[0];
-          const count=Number((sets[1]||[])[0]?.public_tracks||0);
-          if(!row?.uid) throw new Error('missing canonical profile row');
-          if(Number(row.is_public||0)!==1) throw new Error('canonical profile not public');
-          if(count!==38) throw new Error('canonical public track count '+count);
-          fs.writeFileSync(process.env.RUNNER_TEMP+'/canonical-row-before.json',JSON.stringify(row));
-          console.log('CANONICAL_PROFILE_ROW_BEFORE=PASS');
-          console.log('CANONICAL_PUBLIC_TRACK_COUNT='+count);
-          NODE
+          test "$profile_found" = 3
+          echo 'SHARED_PROFILE_REPAIR_PERSISTED=3_3'
 
-      - name: Repair only the missing shared profile through 068 runtime
-        working-directory: cloudflare/explore-worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
-          CFG="$PWD/canonical/wrangler.preview.jsonc"
-          uid="$(cat "$RUNNER_TEMP/missing-owner.txt")"
-          enc="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$uid")"
-          DEV_PID=""
-          stop_dev() {
-            if [ -n "$DEV_PID" ]; then
-              kill "$DEV_PID" >/dev/null 2>&1 || true
-              wait "$DEV_PID" >/dev/null 2>&1 || true
+          : > "$RUNNER_TEMP/missing-card.txt"
+          card_found=0
+          card_missing=0
+          while IFS= read -r id; do
+            [ -n "$id" ] || continue
+            enc="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$id")"
+            if node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-track-card-v115/$enc.json" --file "$RUNNER_TEMP/card-$card_found.json" --remote >/dev/null 2>&1; then
+              card_found=$((card_found+1))
+            else
+              card_missing=$((card_missing+1))
+              printf '%s' "$id" > "$RUNNER_TEMP/missing-card.txt"
             fi
-          }
-          trap stop_dev EXIT
-          node "$WRANGLER" dev --remote --config "$CFG" --ip 127.0.0.1 --port 8787 > "$RUNNER_TEMP/profile-repair-dev.log" 2>&1 &
-          DEV_PID=$!
-          ready=0
-          for attempt in $(seq 1 180); do
-            code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" "http://127.0.0.1:8787/v1/feed?sort=latest&limit=1" || true)"
-            if [ "$code" = 200 ]; then ready=1; break; fi
-            sleep 1
-          done
-          if [ "$ready" != 1 ]; then
-            cat "$RUNNER_TEMP/profile-repair-dev.log"
-            exit 1
-          fi
-          echo 'PROFILE_REPAIR_REMOTE_DEV_READY=PASS'
-          code="$(curl -sS -D "$RUNNER_TEMP/profile-repair.head" -o "$RUNNER_TEMP/profile-repair.json" -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" "http://127.0.0.1:8787/v1/profiles/$enc/first-view?limit=50")"
-          test "$code" = 200
-          stop_dev
-          DEV_PID=""
-          trap - EXIT
-          node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-profile-v113/$enc.json" --file "$RUNNER_TEMP/repaired-shared-profile.json" --remote >/dev/null
-          node <<'NODE'
+          done < "$RUNNER_TEMP/track-ids.txt"
+          echo "SHARED_TRACK_CARD_FOUND_BEFORE=$card_found"
+          echo "SHARED_TRACK_CARD_MISSING_BEFORE=$card_missing"
+          test "$card_missing" -le 1
+          test $((card_found+card_missing)) = 38
+
+          if [ "$card_missing" = 1 ]; then
+            id="$(cat "$RUNNER_TEMP/missing-card.txt")"
+            enc="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$id")"
+            node - "$id" <<'NODE'
           const fs=require('fs');
-          const uid=fs.readFileSync(process.env.RUNNER_TEMP+'/missing-owner.txt','utf8').trim();
+          const id=process.argv[2];
           const latest=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/latest.json','utf8'));
-          const bundle=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/repaired-shared-profile.json','utf8'));
-          const canonical=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/canonical-row-before.json','utf8'));
-          const profile=bundle?.body?.data?.profile;
-          const items=bundle?.body?.data?.items||[];
-          if(String(bundle?.uid||profile?.uid||'')!==uid) throw new Error('repaired uid mismatch');
-          if(!profile||!Array.isArray(items)) throw new Error('repaired bundle invalid');
-          const canonNick=String(canonical.nickname||'');
-          const canonHandle=String(canonical.handle||'').replace(/^@+/,'');
-          if(String(profile.nickname||profile.displayName||'')!==canonNick) throw new Error('nickname mismatch');
-          if(String(profile.handle||bundle.handle||'').replace(/^@+/,'')!==canonHandle) throw new Error('handle mismatch');
-          const expected=[...new Set((latest?.payload?.data?.items||[]).filter(v=>String(v?.ownerUid||v?.owner_uid||'')===uid).map(v=>String(v?.id||v?.trackId||'').trim()).filter(Boolean))].sort();
-          const actual=[...new Set(items.map(v=>String(v?.id||v?.trackId||'').trim()).filter(Boolean))].sort();
-          if(JSON.stringify(actual)!==JSON.stringify(expected)) throw new Error('profile track set mismatch expected='+expected.length+' actual='+actual.length);
-          if(Number(profile.trackCount??profile.track_count??actual.length)!==actual.length) throw new Error('profile trackCount mismatch');
-          fs.writeFileSync(process.env.RUNNER_TEMP+'/repaired-handle.txt',canonHandle);
-          console.log('MISSING_SHARED_PROFILE_REPAIR=PASS');
-          console.log('REPAIRED_PROFILE_TRACKS='+actual.length);
+          const item=(latest?.payload?.data?.items||[]).find(v=>String(v?.id||v?.trackId||'').trim()===id);
+          if(!item) throw new Error('missing latest source for card');
+          const likeCount=Math.max(0,Number(item.likeCount??item.like_count??item.stats?.likeCount??0));
+          const publishedAt=Math.max(0,Number(item.publishedAt??item.published_at??0));
+          const card={
+            ...item,
+            id,
+            ownerUid:String(item.ownerUid||item.owner_uid||'').trim(),
+            ownerNickname:String(item.ownerNickname||item.owner_nickname||'').trim(),
+            ownerAvatarUrl:String(item.ownerAvatarUrl||item.owner_avatar_url||'').trim(),
+            title:String(item.title||'').trim(),
+            coverUrl:String(item.coverUrl||item.cover_url||'').trim(),
+            sunoUrlPrimary:String(item.sunoUrlPrimary||item.suno_url_primary||'').trim(),
+            openUrl:String(item.openUrl||item.sunoUrlPrimary||item.suno_url_primary||item.suno_url_secondary||'').trim(),
+            likeCount,
+            publishedAt,
+            profilePinned:Boolean(item.profilePinned??item.profile_pinned),
+            ...(item.stats&&typeof item.stats==='object'?{stats:{...item.stats,likeCount}}:{}),
+          };
+          const bundle={schemaVersion:1,trackId:id,updatedAt:Date.now(),card};
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/repair-card.json',JSON.stringify(bundle));
+          console.log('TRACK_CARD_REPAIR_SOURCE=SHARED_LATEST_ONLY');
           NODE
-          handle="$(cat "$RUNNER_TEMP/repaired-handle.txt")"
-          if [ -n "$handle" ]; then
-            henc="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1].toLowerCase()))" "$handle")"
-            node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-profile-alias-v113/$henc.json" --file "$RUNNER_TEMP/repaired-shared-alias.json" --remote >/dev/null
-            echo 'MISSING_SHARED_PROFILE_ALIAS_REPAIR=PASS'
-          fi
-          SQL="$(node - "$uid" <<'NODE'
-          const uid=process.argv[2];
-          const q="'"+uid.replaceAll("'","''")+"'";
-          process.stdout.write("SELECT * FROM public_profiles WHERE uid="+q+" LIMIT 1;");
-          NODE
-          )"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$SQL" --json > "$RUNNER_TEMP/canonical-after.json"
-          node <<'NODE'
+            node "$WRANGLER" r2 object put "$SHARED_R2/internal/explore/shared-track-card-v115/$enc.json" --file "$RUNNER_TEMP/repair-card.json" --content-type application/json --remote --force >/dev/null
+            node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-track-card-v115/$enc.json" --file "$RUNNER_TEMP/repair-card-check.json" --remote >/dev/null
+            node - "$id" <<'NODE'
           const fs=require('fs');
-          const before=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/canonical-row-before.json','utf8'));
-          const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/canonical-after.json','utf8'));
-          const after=x.flatMap(v=>v.results||[])[0];
-          if(JSON.stringify(after)!==JSON.stringify(before)) throw new Error('canonical public_profiles row changed');
-          console.log('CANONICAL_PROFILE_ROW_UNCHANGED=PASS');
+          const id=process.argv[2];
+          const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/repair-card-check.json','utf8'));
+          if(Number(x?.schemaVersion||0)!==1||String(x?.trackId||'')!==id||String(x?.card?.id||'')!==id) throw new Error('repaired card invalid');
+          console.log('BOUNDED_SHARED_TRACK_CARD_REPAIR=1');
           NODE
+          else
+            echo 'BOUNDED_SHARED_TRACK_CARD_REPAIR=0_ALREADY_COMPLETE'
+          fi
+
+          final_found=0
+          while IFS= read -r id; do
+            [ -n "$id" ] || continue
+            enc="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$id")"
+            node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-track-card-v115/$enc.json" --file "$RUNNER_TEMP/final-card-$final_found.json" --remote >/dev/null
+            final_found=$((final_found+1))
+          done < "$RUNNER_TEMP/track-ids.txt"
+          test "$final_found" = 38
+          echo 'SHARED_TRACK_CARD_COVERAGE=38_38'
+          echo 'CANONICAL_D1_WRITE=0'
+          echo 'USER_ORIGIN_DATA_CHANGE=false'
 
       - name: Build R2-only bootstrap worker
         working-directory: cloudflare/explore-worker

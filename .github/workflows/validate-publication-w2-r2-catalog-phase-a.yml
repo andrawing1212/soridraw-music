@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -80,6 +80,13 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Phase B in-memory validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-publication-w2-r2-catalog-phase-b.mjs
+          node scripts/verify-publication-w2-track-id-stability.mjs
+
       - name: Safety boundary
         shell: bash
         run: |
@@ -95,3 +102,27 @@ jobs:
           echo 'NO_UI_CSS_CHANGE=true'
           echo 'NO_DEPLOYMENT=true'
           echo 'CATALOG_FEATURE_DEFAULT=OFF'
+
+      - name: Materialize verified 066 canonical Worker to work branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "work/publication-w2-r2-catalog-phase-a"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          expected="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          current="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          test "$expected" = "$current"
+          cp .tmp-w2-r2-worker/worker.js cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          grep -Fq 'SORIDRAW_R2_ORDERED_CATALOG_PHASE_A_066_20260919' cloudflare/explore-worker/canonical/preview-worker.js
+          test "$(grep -c 'SORIDRAW_R2_ORDERED_CATALOG_PHASE_A_066_20260919' cloudflare/explore-worker/canonical/preview-worker.js)" -ge 1
+          git add cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt
+          git diff --cached --check
+          test "$(git diff --cached --name-only | wc -l)" -eq 2
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build: materialize verified 066 canonical Worker [skip ci]'
+          git push origin HEAD:refs/heads/work/publication-w2-r2-catalog-phase-a
+          echo "MATERIALIZED_066_CANONICAL_SHA256=$(cat cloudflare/explore-worker/canonical/source-sha256.txt)"
+          echo 'NO_DEPLOYMENT=true'

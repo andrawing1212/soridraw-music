@@ -109,6 +109,7 @@ const firstProfile = buildFirstPublisherSharedProfileBundle066({
   email: 'artist@example.com',
 }, 123456789);
 assert(firstProfile?.schemaVersion === 1, 'first publisher profile schema invalid');
+assert(firstProfile?.firstPublisherBootstrap066 === true, 'first publisher bootstrap marker missing');
 assert(firstProfile?.uid === 'new-user', 'first publisher uid invalid');
 assert(Array.isArray(firstProfile?.body?.data?.items), 'first publisher profile items missing');
 assert(firstProfile.body.data.items.length === 0, 'first publisher profile must start with empty items');
@@ -122,6 +123,8 @@ for (const required of [
   'isExploreR2CatalogReadEnabled066',
   'isExploreR2FirstPublisherEnabled066',
   'ensureFirstPublisherSharedProfile066',
+  'firstPublisherProfileTrackDelta066',
+  'finalizeFirstPublisherProfile066',
   'syncExploreCatalogTrack066',
   'removeExploreCatalogTrack066',
   'patchExploreCatalogLike066',
@@ -133,6 +136,10 @@ for (const required of [
 
 for (const required of [
   "wrapAsyncFunction('publicationEnsureProfile016', 'Core066'",
+  "functionRange('handleMusicNotePublicationSingleWrite016')",
+  'firstPublisherProfileTrackDelta066(env, authContext.uid, source.id)',
+  'finalizeFirstPublisherProfile066(env, authContext.uid)',
+  'first-publisher idempotent repair deferred',
   "wrapAsyncFunction('handleFeedWithEdgeCache', 'Core066'",
   "wrapAsyncFunction('handleProfileTracks', 'Core066'",
   "wrapAsyncFunction('handleGenreTracks', 'Core066'",
@@ -172,6 +179,26 @@ if (worker) {
     ? worker.slice(profileEditStart, profileEditEnd > profileEditStart ? profileEditEnd : profileEditStart + 9000)
     : '';
   assert(profileEdit.includes('syncExploreCatalogArtist066(env, profile)'), 'explicit profile edit artist catalog sync missing');
+
+  const profileReadStart = worker.indexOf('async function publicationReadProfileR2024(env, authContext)');
+  const profileReadEnd = worker.indexOf('async function publicationEnsureProfile016', profileReadStart);
+  const profileRead = profileReadStart >= 0
+    ? worker.slice(profileReadStart, profileReadEnd > profileReadStart ? profileReadEnd : profileReadStart + 5000)
+    : '';
+  assert(profileRead.includes('readExploreR2Json(env, exploreProfileR2Key(uid))'), 'first-publisher retry must inspect local R2 bundle');
+  assert(profileRead.includes('firstPublisherBootstrap066'), 'first-publisher retry marker must survive profile read');
+
+  const publicationStart = worker.indexOf('async function handleMusicNotePublicationSingleWrite016(');
+  const publicationEnd = worker.indexOf('async function handleMusicNotePublication', publicationStart + 20);
+  const publication = publicationStart >= 0
+    ? worker.slice(publicationStart, publicationEnd > publicationStart ? publicationEnd : publicationStart + 18000)
+    : '';
+  assert(publication.includes('firstPublisherProfileTrackDelta066(env, authContext.uid, source.id)'), 'first-publisher track delta wiring missing');
+  assert(publication.includes('finalizeFirstPublisherProfile066(env, authContext.uid)'), 'first-publisher finalize wiring missing');
+  assert(publication.includes('first-publisher idempotent repair deferred'), 'first-publisher retry repair branch missing');
+  assert(publication.includes('trackCountDelta: profileTrackCountDelta066'), 'first-publisher exact trackCount delta missing');
+  assert(publication.indexOf('firstPublisherProfileTrackDelta066(env, authContext.uid, source.id)')
+    < publication.indexOf('trackCountDelta: profileTrackCountDelta066'), 'first-publisher delta must be resolved before profile patch');
 
   const ensureStart = worker.indexOf('async function publicationEnsureProfile016(env, authContext, row, now)');
   const ensureEnd = worker.indexOf('async function publicationBuildFeedItem016', ensureStart);

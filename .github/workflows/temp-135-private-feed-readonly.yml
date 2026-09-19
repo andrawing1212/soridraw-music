@@ -1,0 +1,70 @@
+name: TEMP 135 Private Feed Readonly
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-135-private-feed-readonly.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cf4ff0fa59894249676c6efdd2e5d894a011823f
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Check private track in real public feed and shared snapshots
+        shell: bash
+        working-directory: cloudflare/explore-worker
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          node "$WRANGLER" d1 execute DB --remote --config "$PWD/canonical/wrangler.preview.jsonc" --command "SELECT id,is_public,updated_at FROM tracks WHERE updated_at >= 1789829100000 ORDER BY updated_at DESC LIMIT 5" --json > "$RUNNER_TEMP/recent.json"
+          node "$WRANGLER" r2 object get "soridraw-profile-media/internal/explore/shared-feed-v112/latest-40.json" --file "$RUNNER_TEMP/shared-latest.json" --remote >/dev/null
+          node "$WRANGLER" r2 object get "soridraw-profile-media/internal/explore/shared-feed-v112/popular-40.json" --file "$RUNNER_TEMP/shared-popular.json" --remote >/dev/null
+          for sort in latest popular; do
+            for mode in regular debug; do
+              if [ "$mode" = debug ]; then extra='&__soridraw_r2_only=108'; else extra=''; fi
+              code="$(curl -sS -D "$RUNNER_TEMP/$sort-$mode.head" -o "$RUNNER_TEMP/$sort-$mode.json" -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40$extra")"
+              test "$code" = 200
+            done
+          done
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto'),root=process.env.RUNNER_TEMP;
+          const rec=JSON.parse(fs.readFileSync(root+'/recent.json','utf8')).flatMap(x=>x.results||[]);
+          if(rec.length!==1||Number(rec[0].is_public)!==0)throw Error('Expected exactly one private transition since 14:45 UTC');
+          const id=String(rec[0].id||'');
+          const mask=crypto.createHash('sha256').update(id).digest('hex').slice(0,10);
+          const scan=(file,shared=false)=>{
+            const obj=JSON.parse(fs.readFileSync(root+'/'+file,'utf8'));
+            const items=shared?(obj?.payload?.data?.items||[]):(obj?.data?.items||[]);
+            return {count:items.length,present:items.some(x=>String(x.id||x.trackId||'')===id)};
+          };
+          let failed=false;
+          for(const sort of ['latest','popular']){
+            for(const mode of ['regular','debug']){
+              const x=scan(sort+'-'+mode+'.json');
+              const head=fs.readFileSync(root+'/'+sort+'-'+mode+'.head','utf8');
+              const read=head.match(/^x-soridraw-d1-read:\s*(\d+)/im)?.[1]||'missing';
+              const write=head.match(/^x-soridraw-d1-write:\s*(\d+)/im)?.[1]||'missing';
+              console.log('PUBLIC_FEED key='+mask+' sort='+sort+' mode='+mode+' items='+x.count+' containsPrivate='+x.present+' D1_R='+read+' D1_W='+write);
+              if(x.present)failed=true;
+            }
+            const s=scan('shared-'+sort+'.json',true);
+            console.log('SHARED_FEED key='+mask+' sort='+sort+' items='+s.count+' containsPrivate='+s.present);
+            if(s.present)failed=true;
+          }
+          console.log('PRIVATE_NOT_VISIBLE_ALL_FEEDS='+(failed?'FAIL':'PASS'));
+          if(failed)process.exitCode=1;
+          NODE

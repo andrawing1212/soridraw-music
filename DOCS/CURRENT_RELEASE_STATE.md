@@ -1,5 +1,34 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AV. 070 PREVIEW 코드: 구형 shared Feed 전체 덮어쓰기 차단 + 좋아요 CAS 검증 PASS / 환경 간 보안 게이트 유지
+
+2026-09-19 KST, 사용자 지시로 0AT 재오염 원인의 PREVIEW 코드 측면을 수정했다. **변경 범위는 GitHub preview만이며 실제 Worker 배포, 사용자 원본/파생 R2 원격 수정, TEST/PRODUCTION 코드 변경은 하지 않았다.**
+
+### 070 변경 및 고정
+- 추가 `cloudflare/explore-worker/patches/070-shared-feed-legacy-writer-guard.mjs`: 069 통합을 전제하고 `mirrorExploreSharedFeeds059`와 `mirrorExploreSharedFeedAfterDerivedSync064`의 옛 전체 snapshot put을 명시적으로 비활성화. snapshot 신규 bootstrap은 별도 승인된 복구 경로로 제한한다.
+- 동일 070에서 `patchSharedFeedLikeCounts065`의 shared latest/popular 쓰기를 ETag 조건부 CAS, 최대 8회 재시도로 변경. 비공개 처리와 좋아요 집계가 동시에 발생해도 오래된 전체 body로 비공개 곡을 되살리지 않도록 충돌 이후 새 snapshot 재조회. 기존 shared track-card like patch 유지. 신규 D1 read/write 없음.
+- canonical `cloudflare/explore-worker/canonical/preview-worker.js`에 정확히 반영: product commit `2720607faa9ede08221e4b9a15c5a30967c622bc`.
+- 신규 Worker SHA256 `91d154aaa9524dbf1349d48d0d14eadd09738602f103fedfbcf360270c340000`. `canonical/source-sha256.txt` pin commit `ffb97fe94e80ca28ccf64548677a94eae5c01e18`.
+- 신규 `scripts/verify-070-shared-feed-guard.mjs`: 옛 두 함수 내 put 부재와 concurrent private/like CAS 재시도·card path/무 D1 확인.
+
+### 검증
+- TEMP 138 Run `35451832456` — PASS: 070 patch, legacy mirror disable, concurrent private/like race, track-card patch, no D1 (offline).
+- TEMP 138 최종 Run `35451900664` — **SUCCESS**:
+  - 070 소스 패치 결과와 canonical Worker byte-for-byte 일치 PASS.
+  - Worker SHA256 exact PASS.
+  - 070 관련 회귀 테스트 PASS.
+  - TypeScript `npm run lint` PASS, Vite `npm run build` PASS, Wrangler PREVIEW Worker `--dry-run` PASS.
+  - 원격 D1/R2 원본 또는 파생 데이터 쓰기 0, 배포 0.
+- 이전 069 회귀 PASS Run `35450819828` 유지. 070은 069 active targeted helper 자체를 변경하지 않음.
+
+### **중요: 모든 환경 재오염 방지 보장 = 여전히 FAIL**
+- PREVIEW **코드만** 059/064 전체 덮어쓰기를 차단했다. 실제 라이브 PREVIEW Worker는 068 `4f8471e3-576f-49de-9f2c-c3863021bf3d`로, 069/070 미배포.
+- 실제 TEST `6e8dca9c-2c58-42ea-ae7d-765e10afef8f`, PRODUCTION `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` Worker에는 059/064 무조건 덮어쓰기 경로가 남아 있다. PREVIEW만 배포해도 다른 환경이 기존 shared v112 데이터를 되오염시킬 위험은 제거되지 않는다.
+- 전체 환경의 공용 캐시에 대해 즉시 완전한 보호가 필요하다면, 안전한 순서로 TEST/PRODUCTION 구형 writer까지 차단하는 승격 계획을 제시하고 사용자의 명확한 PRODUCTION 승인 이후 처리해야 한다. PRODUCTION 무단 배포 금지.
+- TEST/PRODUCTION과 원본 사용자 데이터는 그대로. shared latest/popular 비공개 곡 37/37 부재 Run `35451509693`는 단일 시점만 PASS.
+- catalog READ / FIRST_PUBLISHER OFF 유지. D1 mutation W1~W2 실제 행 쓰기 미검증. PC/모바일 실사용 검증 전. 라이브 캐시 cold 최초 진입/복구 회귀 별도 검증 필요.
+- 이전 배포 보류 게이트 유지. 신규 070을 완료된 서비스 수정으로 보고하지 않는다.
+
 ## 0AU. 단일 비공개 곡 shared R2 점검 PASS — 자동 수렴 관측 / 재오염 위험 유지
 
 2026-09-19 KST, 사용자 요청에 따라 TEMP 137 Run `35451509693`에서 **실제 비공개 1곡에 한정**한 remote shared R2 조건부 복구를 진행했다. 고정 D1 timestamp `1789829348623`와 식별 해시 `1319e4479e`를 사전/사후로 검증했다.

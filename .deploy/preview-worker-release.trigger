@@ -1,9 +1,10 @@
-requested_at=2026-09-19T07:06:00Z
+requested_at=2026-09-19T10:54:00Z
 requested_by=user
-product_code_target=7461200c559b2de306121924a13d82175fb4d77a
-release_purpose=phase_c_066_dormant_r2_catalog_code_only
+product_code_target=81c414de9983eeda2f2bd31f77810038b6a19387
+release_purpose=fix_067_active_075_shared_like_count_parity
 no_d1_migration=true
 no_user_data_migration=true
+bounded_shared_r2_repair_after_deploy=true
 catalog_write_flag=false
 catalog_read_flag=false
 first_publisher_flag=false

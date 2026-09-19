@@ -1,5 +1,92 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AO. PREVIEW 068 배포 + derived R2 catalog 432 초기 구축 완료 / READ·WRITE flags OFF 유지
+
+2026-09-19 KST, 사용자가 승인한 범위인 PREVIEW 068 Worker code-only 배포와 현재 공개곡 38곡 기준 derived R2 catalog 초기 구축을 완료했다. 사용자 원본 데이터나 canonical D1 schema/index/trigger는 변경하지 않았고, catalog READ/WRITE/first-publisher flags는 모두 OFF로 유지했다.
+
+### PREVIEW 068 Worker 배포
+- product target: `b07458d9d7db30a9c1a67c9f8e0beea8c3bdb78b`.
+- release trigger commit: `2f60ef25878d6d669d5772413d0d9bb3f2987500`.
+- PREVIEW Worker Release Run `35446460693` — **SUCCESS**.
+- canonical Worker SHA256: `129c743de7305384205ba266691fa168c3098a8e7b537f02959a0779da8b6da6`.
+- previous PREVIEW Worker: `32428130-3cc0-47d8-867c-787064943ce4`.
+- current PREVIEW Worker: `3678c1da-1bb5-4cfc-881f-6d1ad85a7fe0`.
+- PRE_DEPLOY_PENDING_069=0.
+- TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f` unchanged.
+- PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` unchanged.
+- Firebase Hosting/Functions/Rules 변경 없음.
+- app version 124 unchanged.
+
+### TEMP 130 — approved bounded catalog bootstrap
+첫 실행 Run `35446868090`:
+- missing shared profile 1개 bounded derived repair **PASS**.
+- repaired profile의 canonical `public_profiles` row unchanged PASS.
+- catalog preflight에서 shared track-card 누락을 발견해 중단.
+- catalog object write 0.
+
+두 번째 실행 Run `35447005464`:
+- shared profiles 3/3 확인.
+- shared track-card 실제 상태: **10 found / 28 missing**.
+- 당시 guard가 최대 1개 repair만 허용해 bootstrap 전에 중단.
+- catalog object write 0.
+
+세 번째 실행 Run `35447123476` — **SUCCESS**:
+- shared latest source = 38 tracks / 3 owners.
+- shared profiles = 3/3.
+- missing shared track-card 28개는 **shared latest만 source로 bounded derived repair**.
+- repair 후 shared track-card = **38/38**.
+- canonical D1 write = 0.
+- user origin data change = false.
+- catalog preflight:
+  - existing catalog namespace = 0.
+  - tracks = 38.
+  - owners = 3.
+  - expected objects = 432.
+- 실제 catalog 구축 결과 = **정확히 432 objects**:
+  - meta 38.
+  - latest 38.
+  - popular 38.
+  - profile 38.
+  - genre 21.
+  - title 250.
+  - artist meta 3.
+  - artist name 3.
+  - artist handle 3.
+- catalog shared track-card coverage = 38/38.
+- remote bootstrap dev process 종료 PASS.
+- postflight:
+  - `SORIDRAW_R2_CATALOG_V1` = OFF.
+  - `SORIDRAW_R2_CATALOG_READ_V1` = OFF.
+  - `SORIDRAW_R2_FIRST_PUBLISHER_V1` = OFF.
+  - latest first page = D1 R0/W0.
+  - popular first page = D1 R0/W0.
+  - protected PREVIEW/TEST/PRODUCTION Worker versions unchanged during bootstrap.
+  - D1 schema change = false.
+  - canonical D1 write = 0.
+  - Firebase change = false.
+  - TEST/PRODUCTION change = false.
+
+### 현재 실제 상태
+- PREVIEW 068 Worker 배포 완료.
+- derived R2 catalog 432 초기 구축 완료.
+- shared profile coverage 3/3.
+- shared track-card coverage 38/38.
+- catalog READ/WRITE/first-publisher flags 전부 OFF.
+- legacy latest/popular first page D1 R0/W0 유지.
+- canonical shared D1 user rows/schema/index/trigger 변경 없음.
+- Firebase 변경 없음.
+- TEST/PRODUCTION 승격 없음.
+
+### 다음 승인 경계
+다음 단계는 자동 진행하지 않는다. 별도 사용자 승인 후 PREVIEW에서만:
+1. `SORIDRAW_R2_CATALOG_V1=1` **write flag만** 켠다.
+2. READ / FIRST_PUBLISHER flags는 OFF 유지한다.
+3. 새 publish / private / republish / like / profile edit가 전체 rebuild 없이 changed item marker만 갱신하는지 검증한다.
+4. D1 rows_written W1~W2 hard gate 유지.
+5. catalog 432 전체 재생성 금지.
+6. mutation parity와 비용 PASS 후에만 별도 단계에서 READ flag ON을 검토한다.
+7. shared canonical D1 partial-index/trigger Phase D는 계속 별도 승인 대상이다.
+
 ## 0AN. Phase C catalog 실제상태 감사 + 068 artist parity 코드 준비 완료 / 배포·bootstrap 전
 
 2026-09-19 KST, 067 좋아요 parity 복구 이후 원래 W2 publication Phase C 검증으로 복귀했다. 새 R2 catalog/search/deep-page 구조를 켜기 전에 실제 PREVIEW Cloudflare 설정, catalog 준비율, 현재 공개곡 전체 bootstrap 가능성을 read-only로 감사했고, catalog write 단독 ON 시 신규 publisher artist marker가 빠질 수 있는 경로를 068로 보강했다.

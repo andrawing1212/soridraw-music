@@ -1,0 +1,62 @@
+name: TEMP 136 Shared Feed 069 Verify
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-136-shared-feed-069-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 89c3ef5604ea2e9bb8bb1a3274c8b01181e69ee5
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check runtime, patch and behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/explore-worker/runtime/shared-feed-targeted-069.js
+          node --check cloudflare/explore-worker/patches/069-shared-feed-targeted-parity.mjs
+          node --check scripts/verify-069-shared-feed-targeted.mjs
+          node scripts/verify-069-shared-feed-targeted.mjs
+      - name: Apply patch to pinned canonical Worker without network or deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/worker-069"
+          mkdir -p "$work"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$work/worker.js"
+          export SORIDRAW_REMOTE_WORKER_DIR="$work"
+          node cloudflare/explore-worker/patches/069-shared-feed-targeted-parity.mjs
+          node --check "$work/worker.js"
+          for needle in 'syncExploreFeedR2Private043Core069' 'syncExploreFeedR2Publication043Core069' 'syncExploreFeedR2OptionPatch043Core069' 'syncExploreSharedFeedTargeted069'; do
+            grep -q "$needle" "$work/worker.js"
+          done
+          if grep -Eq 'env\.DB|\.prepare\s*\(' cloudflare/explore-worker/runtime/shared-feed-targeted-069.js; then
+            echo '069 runtime must not access D1'; exit 1
+          fi
+          echo '069_PINNED_WORKER_INTEGRATION=PASS'
+      - name: TypeScript and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run lint
+          npm run build
+          echo 'TYPE_SCRIPT_AND_BUILD=PASS'
+      - name: Safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git status --porcelain | wc -l)" -eq 0
+          echo 'D1_WRITE=0 R2_WRITE=0 DEPLOY=0 USER_DATA_CHANGE=0'

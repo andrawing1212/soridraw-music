@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 93289c7f82360b3a001ae6d9aaee48c7cde947eb
+          ref: 62c5741d773183d3064bcd53dc70a74179aad535
           fetch-depth: 1
       - uses: actions/setup-node@v4
         with:
@@ -35,10 +35,14 @@ jobs:
           set -euo pipefail
           work="$RUNNER_TEMP/worker-069"
           mkdir -p "$work"
-          cp cloudflare/explore-worker/canonical/preview-worker.js "$work/worker.js"
+          curl -fsSL --retry 3 "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/93289c7f82360b3a001ae6d9aaee48c7cde947eb/cloudflare/explore-worker/canonical/preview-worker.js" -o "$work/worker.js"
           export SORIDRAW_REMOTE_WORKER_DIR="$work"
           node cloudflare/explore-worker/patches/069-shared-feed-targeted-parity.mjs
           node --check "$work/worker.js"
+          cmp "$work/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js
+          echo '069_CANONICAL_MATCHES_OFFICIAL_PATCH=PASS'
           for needle in 'syncExploreFeedR2Private043Core069' 'syncExploreFeedR2Publication043Core069' 'syncExploreFeedR2OptionPatch043Core069' 'syncExploreSharedFeedTargeted069'; do
             grep -q "$needle" "$work/worker.js"
           done
@@ -54,6 +58,15 @@ jobs:
           npm run lint
           npm run build
           echo 'TYPE_SCRIPT_AND_BUILD=PASS'
+      - name: Worker offline build (no deploy)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npm install --no-audit --no-fund --package-lock=false
+          cd canonical
+          node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc --dry-run
+          echo 'WORKER_DRY_RUN=PASS'
       - name: Safety boundaries
         shell: bash
         run: |

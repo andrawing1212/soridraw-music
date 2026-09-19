@@ -16,9 +16,11 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
-      SHARED_BUCKET: soridraw-profile-media
       PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
       PREVIEW_ORIGIN: https://preview.soridraw.com
+      PREVIEW_WORKER: soridraw-explore-preview
+      TEST_WORKER: soridraw-explore-test
+      PRODUCTION_WORKER: soridraw-explore-api
 
     steps:
       - uses: actions/checkout@v4
@@ -34,15 +36,327 @@ jobs:
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
 
-      - name: Preflight exact canonical counts and R2 objects
+      - name: Build isolated repair Worker and static safety check
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEMP_WORKER="soridraw-temp-like-repair-127-${GITHUB_RUN_ID}"
+          echo "TEMP_WORKER=$TEMP_WORKER" >> "$GITHUB_ENV"
+
+          cat > "$RUNNER_TEMP/repair-worker.mjs" <<'EOF'
+          const IDS = [
+            'music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q',
+            'music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_mdCqNWohZwk6lsKuNWOa',
+            'music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_b1ef5cf6fcb04371b33ea71d1950f244_5jt44',
+            'music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6eb4944de4264b12a85f0d17180cd143_1en45bp',
+          ];
+
+          const FEED_KEYS = {
+            latest: 'internal/explore/shared-feed-v112/latest-40.json',
+            popular: 'internal/explore/shared-feed-v112/popular-40.json',
+          };
+          const cardKey = (id) => 'internal/explore/shared-track-card-v115/' + encodeURIComponent(id) + '.json';
+          const itemId = (item) => String(item?.id || item?.trackId || '').trim();
+          const likeCount = (item) => Math.max(0, Number(item?.likeCount ?? item?.like_count ?? item?.stats?.likeCount ?? item?.stats?.like_count ?? 0));
+          const patchLike = (item, count) => ({
+            ...item,
+            likeCount: count,
+            ...(item?.stats && typeof item.stats === 'object'
+              ? { stats: { ...item.stats, likeCount: count } }
+              : {}),
+          });
+
+          async function readCanonical(env) {
+            const placeholders = IDS.map(() => '?').join(',');
+            const sql = `
+              SELECT t.id,t.title,
+                COALESCE(dt.likes,0) AS derived_like_count,
+                COALESCE(ts.like_count,0) AS stat_like_count,
+                (SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id) AS relation_count
+              FROM tracks t
+              LEFT JOIN explore_derived_tracks dt ON dt.id=t.id
+              LEFT JOIN track_stats ts ON ts.track_id=t.id
+              WHERE t.id IN (${placeholders})
+              ORDER BY t.id
+            `;
+            const result = await env.DB.prepare(sql).bind(...IDS).all();
+            const rows = Array.isArray(result?.results) ? result.results : [];
+            if (rows.length !== 4) throw new Error('canonical row count=' + rows.length);
+            for (const row of rows) {
+              const relation = Number(row?.relation_count || 0);
+              const stat = Number(row?.stat_like_count || 0);
+              const derived = Number(row?.derived_like_count || 0);
+              if (relation !== 1 || stat !== 1 || derived !== 1) {
+                throw new Error('canonical mismatch ' + row.id + ' rel=' + relation + ' stat=' + stat + ' derived=' + derived);
+              }
+            }
+            return rows;
+          }
+
+          async function readObject(env, key) {
+            const object = await env.PROFILE_MEDIA.get(key);
+            if (!object) throw new Error('missing R2 object ' + key);
+            const text = await object.text();
+            return {
+              key,
+              text,
+              httpMetadata: object.httpMetadata || {},
+              customMetadata: object.customMetadata || {},
+            };
+          }
+
+          async function writeObject(env, original, text, tag) {
+            await env.PROFILE_MEDIA.put(original.key, text, {
+              httpMetadata: original.httpMetadata,
+              customMetadata: {
+                ...original.customMetadata,
+                boundedLikeRepair: '127',
+                boundedLikeRepairTag: tag,
+                boundedLikeRepairAt: String(Date.now()),
+              },
+            });
+          }
+
+          async function restoreObject(env, original) {
+            await env.PROFILE_MEDIA.put(original.key, original.text, {
+              httpMetadata: original.httpMetadata,
+              customMetadata: original.customMetadata,
+            });
+          }
+
+          function patchFeedSnapshot(original, sort) {
+            const bundle = JSON.parse(original.text);
+            const items = bundle?.payload?.data?.items;
+            if (!Array.isArray(items)) throw new Error(sort + ' feed items missing');
+            let seen = 0;
+            let changed = 0;
+            const nextItems = items.map((item) => {
+              const id = itemId(item);
+              if (!IDS.includes(id)) return item;
+              seen += 1;
+              if (likeCount(item) === 1) return item;
+              changed += 1;
+              return patchLike(item, 1);
+            });
+            if (seen !== 4) throw new Error(sort + ' expected 4 tracks, saw ' + seen);
+            if (!changed) return { changed: 0, text: original.text };
+            const next = {
+              ...bundle,
+              updatedAt: Date.now(),
+              payload: {
+                ...bundle.payload,
+                data: { ...bundle.payload.data, items: nextItems },
+              },
+            };
+            return { changed, text: JSON.stringify(next) };
+          }
+
+          function patchTrackCard(original, id) {
+            const bundle = JSON.parse(original.text);
+            const card = bundle?.card;
+            if (!card || itemId(card) !== id) throw new Error('track card mismatch ' + id);
+            if (likeCount(card) === 1) return { changed: 0, text: original.text };
+            const next = {
+              ...bundle,
+              updatedAt: Date.now(),
+              card: patchLike(card, 1),
+            };
+            return { changed: 1, text: JSON.stringify(next) };
+          }
+
+          async function verifyR2(env) {
+            for (const [sort, key] of Object.entries(FEED_KEYS)) {
+              const current = await readObject(env, key);
+              const bundle = JSON.parse(current.text);
+              const items = bundle?.payload?.data?.items || [];
+              const counts = new Map(items.map((item) => [itemId(item), likeCount(item)]));
+              for (const id of IDS) {
+                if (counts.get(id) !== 1) throw new Error('verify ' + sort + ' ' + id + '=' + counts.get(id));
+              }
+            }
+            for (const id of IDS) {
+              const current = await readObject(env, cardKey(id));
+              const bundle = JSON.parse(current.text);
+              if (likeCount(bundle?.card) !== 1) throw new Error('verify card ' + id);
+            }
+          }
+
+          export default {
+            async fetch(request, env) {
+              const url = new URL(request.url);
+              if (request.method !== 'POST' || url.pathname !== '/repair') return new Response('Not found', { status: 404 });
+              if (!env.REPAIR_TOKEN || request.headers.get('x-repair-token') !== env.REPAIR_TOKEN) {
+                return new Response('Forbidden', { status: 403 });
+              }
+
+              const originals = new Map();
+              const written = [];
+              try {
+                const canonicalBefore = await readCanonical(env);
+
+                for (const key of Object.values(FEED_KEYS)) originals.set(key, await readObject(env, key));
+                for (const id of IDS) {
+                  const key = cardKey(id);
+                  originals.set(key, await readObject(env, key));
+                }
+
+                const latestPatch = patchFeedSnapshot(originals.get(FEED_KEYS.latest), 'latest');
+                const popularPatch = patchFeedSnapshot(originals.get(FEED_KEYS.popular), 'popular');
+                const cardPatches = IDS.map((id) => ({ id, key: cardKey(id), ...patchTrackCard(originals.get(cardKey(id)), id) }));
+
+                if (latestPatch.changed) {
+                  await writeObject(env, originals.get(FEED_KEYS.latest), latestPatch.text, 'latest');
+                  written.push(FEED_KEYS.latest);
+                }
+                if (popularPatch.changed) {
+                  await writeObject(env, originals.get(FEED_KEYS.popular), popularPatch.text, 'popular');
+                  written.push(FEED_KEYS.popular);
+                }
+                for (const row of cardPatches) {
+                  if (!row.changed) continue;
+                  await writeObject(env, originals.get(row.key), row.text, 'card');
+                  written.push(row.key);
+                }
+
+                await verifyR2(env);
+                const canonicalAfter = await readCanonical(env);
+
+                return Response.json({
+                  ok: true,
+                  canonicalBefore: canonicalBefore.map((r) => ({
+                    id: r.id,
+                    relation: Number(r.relation_count),
+                    stat: Number(r.stat_like_count),
+                    derived: Number(r.derived_like_count),
+                  })),
+                  canonicalAfter: canonicalAfter.map((r) => ({
+                    id: r.id,
+                    relation: Number(r.relation_count),
+                    stat: Number(r.stat_like_count),
+                    derived: Number(r.derived_like_count),
+                  })),
+                  repair: {
+                    latestChangedTracks: latestPatch.changed,
+                    popularChangedTracks: popularPatch.changed,
+                    changedCards: cardPatches.filter((x) => x.changed).length,
+                    r2ObjectWrites: written.length,
+                    writtenKeys: written,
+                  },
+                });
+              } catch (error) {
+                const rollback = [];
+                for (const key of [...written].reverse()) {
+                  try {
+                    await restoreObject(env, originals.get(key));
+                    rollback.push(key);
+                  } catch {}
+                }
+                return Response.json({
+                  ok: false,
+                  error: String(error?.message || error || 'unknown'),
+                  writtenBeforeFailure: written,
+                  rollback,
+                }, { status: 500 });
+              }
+            },
+          };
+          EOF
+          sed -i 's/^          //' "$RUNNER_TEMP/repair-worker.mjs"
+
+          node - "$RUNNER_TEMP/repair-worker.mjs" <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync(process.argv[2],'utf8');
+          for(const forbidden of [/INSERT\s+INTO/i,/UPDATE\s+[a-z_]/i,/DELETE\s+FROM/i,/CREATE\s+(TABLE|INDEX|TRIGGER)/i,/DROP\s+(TABLE|INDEX|TRIGGER)/i,/ALTER\s+TABLE/i,/env\.DB\.batch/]) {
+            if(forbidden.test(s)) throw new Error('Forbidden canonical D1 mutation token: '+forbidden);
+          }
+          if(!s.includes('env.DB.prepare(sql).bind(...IDS).all()')) throw new Error('read-only canonical D1 query missing');
+          if(!s.includes('env.PROFILE_MEDIA.put')) throw new Error('bounded R2 repair write missing');
+          if(!s.includes('restoreObject')) throw new Error('rollback path missing');
+          console.log('TEMP127_STATIC_SAFETY=PASS');
+          NODE
+
+          cat > "$RUNNER_TEMP/wrangler.temp127.jsonc" <<EOF
+          {
+            "name": "$TEMP_WORKER",
+            "main": "$RUNNER_TEMP/repair-worker.mjs",
+            "compatibility_date": "2026-08-28",
+            "workers_dev": true,
+            "d1_databases": [
+              {
+                "binding": "DB",
+                "database_name": "soridraw-explore-db",
+                "database_id": "217ef5b1-5d80-4f7c-afc7-9e07eb05c06b"
+              }
+            ],
+            "r2_buckets": [
+              {
+                "binding": "PROFILE_MEDIA",
+                "bucket_name": "soridraw-profile-media"
+              }
+            ]
+          }
+          EOF
+          echo 'TEMP127_BUILD=PASS'
+
+      - name: Snapshot protected Worker versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          active_version() {
+            curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json'               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/$1/deployments"               | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id'
+          }
+          printf '%s' "$(active_version "$PREVIEW_WORKER")" > "$RUNNER_TEMP/preview.before"
+          printf '%s' "$(active_version "$TEST_WORKER")" > "$RUNNER_TEMP/test.before"
+          printf '%s' "$(active_version "$PRODUCTION_WORKER")" > "$RUNNER_TEMP/production.before"
+          echo "PREVIEW_PROTECTED_BEFORE=$(cat "$RUNNER_TEMP/preview.before")"
+          echo "TEST_PROTECTED_BEFORE=$(cat "$RUNNER_TEMP/test.before")"
+          echo "PRODUCTION_PROTECTED_BEFORE=$(cat "$RUNNER_TEMP/production.before")"
+
+      - name: Deploy isolated repair Worker, repair, verify, and delete
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
-          CFG="$PWD/canonical/wrangler.preview.jsonc"
-          node "$WRANGLER" r2 object put --help | grep -q -- '--header'
+          CFG="$RUNNER_TEMP/wrangler.temp127.jsonc"
+          TOKEN="$(openssl rand -hex 32)"
 
+          cleanup() {
+            curl -fsS -X DELETE               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${TEMP_WORKER}"               >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          node "$WRANGLER" deploy --config "$CFG"
+          printf '%s' "$TOKEN" | node "$WRANGLER" secret put REPAIR_TOKEN --config "$CFG" >/dev/null
+
+          url="https://${TEMP_WORKER}.andrawing1212.workers.dev/repair"
+          code="$(curl --retry 4 --retry-delay 1 -sS -o "$RUNNER_TEMP/repair-result.json" -w '%{http_code}'             -X POST -H "x-repair-token: $TOKEN" "$url")"
+          cat "$RUNNER_TEMP/repair-result.json"
+          test "$code" = 200
+
+          node <<'NODE'
+          const fs=require('fs');
+          const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/repair-result.json','utf8'));
+          if(x?.ok!==true) throw new Error('repair not ok: '+JSON.stringify(x));
+          if(!Array.isArray(x.canonicalBefore)||x.canonicalBefore.length!==4) throw new Error('canonicalBefore invalid');
+          if(!Array.isArray(x.canonicalAfter)||x.canonicalAfter.length!==4) throw new Error('canonicalAfter invalid');
+          for(const r of [...x.canonicalBefore,...x.canonicalAfter]){
+            if(Number(r.relation)!==1||Number(r.stat)!==1||Number(r.derived)!==1) throw new Error('canonical count changed '+r.id);
+          }
+          const writes=Number(x?.repair?.r2ObjectWrites||0);
+          if(writes<0||writes>6) throw new Error('repair write bound exceeded '+writes);
+          if(Number(x?.repair?.latestChangedTracks||0)<0||Number(x?.repair?.latestChangedTracks||0)>4) throw new Error('latest change bound invalid');
+          if(Number(x?.repair?.popularChangedTracks||0)<0||Number(x?.repair?.popularChangedTracks||0)>4) throw new Error('popular change bound invalid');
+          if(Number(x?.repair?.changedCards||0)<0||Number(x?.repair?.changedCards||0)>4) throw new Error('card change bound invalid');
+          console.log('TEMP127_REPAIR_RESULT=PASS');
+          console.log('TEMP127_R2_OBJECT_WRITES='+writes);
+          console.log('TEMP127_LATEST_CHANGED_TRACKS='+Number(x.repair.latestChangedTracks||0));
+          console.log('TEMP127_POPULAR_CHANGED_TRACKS='+Number(x.repair.popularChangedTracks||0));
+          console.log('TEMP127_CHANGED_CARDS='+Number(x.repair.changedCards||0));
+          NODE
+
+          # Direct live R2-only endpoints must now agree, with D1 R0/W0.
           cat > "$RUNNER_TEMP/ids.txt" <<'EOF'
           music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q
           music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_mdCqNWohZwk6lsKuNWOa
@@ -51,259 +365,37 @@ jobs:
           EOF
           sed -i 's/^          //' "$RUNNER_TEMP/ids.txt"
 
-          SQL="SELECT t.id,t.title,COALESCE(dt.likes,0) AS derived_like_count,COALESCE(ts.like_count,0) AS stat_like_count,(SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id) AS relation_count FROM tracks t LEFT JOIN explore_derived_tracks dt ON dt.id=t.id LEFT JOIN track_stats ts ON ts.track_id=t.id WHERE t.id IN ('music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_mdCqNWohZwk6lsKuNWOa','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_b1ef5cf6fcb04371b33ea71d1950f244_5jt44','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6eb4944de4264b12a85f0d17180cd143_1en45bp') ORDER BY t.id;"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$SQL" --json > "$RUNNER_TEMP/d1-before.json"
-          node <<'NODE'
-          const fs=require('fs');
-          const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/d1-before.json','utf8'));
-          const rows=x.flatMap(v=>v.results||[]);
-          if(rows.length!==4) throw new Error('Expected exactly 4 canonical tracks, got '+rows.length);
-          for(const r of rows){
-            const a=Number(r.relation_count||0),b=Number(r.stat_like_count||0),c=Number(r.derived_like_count||0);
-            if(a!==1||b!==1||c!==1) throw new Error('Canonical count changed; abort repair '+r.id+' rel='+a+' stat='+b+' derived='+c);
-          }
-          console.log('CANONICAL_FOUR_COUNTS=ALL_1');
-          NODE
-
-          node "$WRANGLER" r2 object get "$SHARED_BUCKET/internal/explore/shared-feed-v112/latest-40.json" --file "$RUNNER_TEMP/latest.before.json" --remote
-          node "$WRANGLER" r2 object get "$SHARED_BUCKET/internal/explore/shared-feed-v112/popular-40.json" --file "$RUNNER_TEMP/popular.before.json" --remote
-
-          while IFS= read -r id; do
-            key="internal/explore/shared-track-card-v115/${id}.json"
-            node "$WRANGLER" r2 object get "$SHARED_BUCKET/$key" --file "$RUNNER_TEMP/card.${id}.before.json" --remote
-          done < "$RUNNER_TEMP/ids.txt"
-
-          # Preserve current custom metadata for any object we may rewrite.
-          encode_uri() { node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$1"; }
-          meta_for() {
-            key="$1"; out="$2"
-            encoded="$(encode_uri "$key")"
-            curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Accept: application/json'               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/$SHARED_BUCKET/objects?prefix=$(encode_uri "$key")&limit=10" > "$out"
-            node - "$key" "$out" <<'NODE'
-          const fs=require('fs');
-          const key=process.argv[2], file=process.argv[3];
-          const x=JSON.parse(fs.readFileSync(file,'utf8'));
-          const rows=x?.result?.objects || x?.result || [];
-          const row=Array.isArray(rows)?rows.find(v=>v?.key===key):null;
-          if(!row) throw new Error('R2 metadata lookup failed: '+key);
-          console.log('R2_METADATA_PREFLIGHT='+key);
-          NODE
-          }
-          meta_for "internal/explore/shared-feed-v112/latest-40.json" "$RUNNER_TEMP/meta.latest.json"
-          meta_for "internal/explore/shared-feed-v112/popular-40.json" "$RUNNER_TEMP/meta.popular.json"
-          while IFS= read -r id; do
-            meta_for "internal/explore/shared-track-card-v115/${id}.json" "$RUNNER_TEMP/meta.card.${id}.json"
-          done < "$RUNNER_TEMP/ids.txt"
-
-          echo 'BOUNDED_REPAIR_PREFLIGHT=PASS'
-          echo 'D1_WRITE_BEFORE_REPAIR=0'
-          echo 'R2_WRITE_BEFORE_REPAIR=0'
-
-      - name: Patch only stale shared R2 objects with rollback
-        working-directory: cloudflare/explore-worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
-          writes_started=0
-          wrote_latest=0
-          wrote_popular=0
-          wrote_cards=0
-
-          put_with_meta() {
-            key="$1"; file="$2"; meta_file="$3"
-            args=(--file "$file" --content-type 'application/json; charset=utf-8' --remote --force)
-            while IFS=$'\t' read -r k v; do
-              [ -n "$k" ] || continue
-              args+=(--header "x-amz-meta-${k}:${v}")
-            done < <(node - "$key" "$meta_file" <<'NODE'
-          const fs=require('fs');
-          const key=process.argv[2], file=process.argv[3];
-          const x=JSON.parse(fs.readFileSync(file,'utf8'));
-          const rows=x?.result?.objects || x?.result || [];
-          const row=Array.isArray(rows)?rows.find(v=>v?.key===key):null;
-          const meta=row?.custom_metadata || row?.customMetadata || {};
-          for(const [k,v] of Object.entries(meta)) console.log(String(k)+'\t'+String(v));
-          NODE
-            )
-            node "$WRANGLER" r2 object put "$SHARED_BUCKET/$key" "${args[@]}"
-          }
-
-          rollback() {
-            status=$?
-            if [ "$status" -ne 0 ] && [ "$writes_started" = 1 ]; then
-              echo 'REPAIR_VERIFY_FAILED_ROLLBACK=START'
-              put_with_meta "internal/explore/shared-feed-v112/latest-40.json" "$RUNNER_TEMP/latest.before.json" "$RUNNER_TEMP/meta.latest.json" || true
-              put_with_meta "internal/explore/shared-feed-v112/popular-40.json" "$RUNNER_TEMP/popular.before.json" "$RUNNER_TEMP/meta.popular.json" || true
-              while IFS= read -r id; do
-                put_with_meta "internal/explore/shared-track-card-v115/${id}.json" "$RUNNER_TEMP/card.${id}.before.json" "$RUNNER_TEMP/meta.card.${id}.json" || true
-              done < "$RUNNER_TEMP/ids.txt"
-              echo 'REPAIR_VERIFY_FAILED_ROLLBACK=ATTEMPTED'
-            fi
-            exit "$status"
-          }
-          trap rollback EXIT
-
-          cp "$RUNNER_TEMP/latest.before.json" "$RUNNER_TEMP/latest.after.json"
-          cp "$RUNNER_TEMP/popular.before.json" "$RUNNER_TEMP/popular.after.json"
-
-          node - "$RUNNER_TEMP/latest.after.json" "$RUNNER_TEMP/ids.txt" <<'NODE'
-          const fs=require('fs');
-          const file=process.argv[2], ids=new Set(fs.readFileSync(process.argv[3],'utf8').trim().split(/\r?\n/));
-          const x=JSON.parse(fs.readFileSync(file,'utf8'));
-          const items=x?.payload?.data?.items;
-          if(!Array.isArray(items)) throw new Error('latest items missing');
-          let seen=0,changed=0;
-          for(let i=0;i<items.length;i++){
-            const id=String(items[i]?.id||items[i]?.trackId||'');
-            if(!ids.has(id)) continue;
-            seen++;
-            const current=Number(items[i]?.likeCount ?? items[i]?.like_count ?? items[i]?.stats?.likeCount ?? 0);
-            if(current!==1){
-              items[i]={...items[i],likeCount:1,...(items[i]?.stats&&typeof items[i].stats==='object'?{stats:{...items[i].stats,likeCount:1}}:{})};
-              changed++;
-            }
-          }
-          if(seen!==4) throw new Error('latest expected 4 tracks, saw '+seen);
-          if(changed){x.updatedAt=Date.now();fs.writeFileSync(file,JSON.stringify(x));}
-          console.log('LATEST_REPAIR_CHANGED='+changed);
-          fs.writeFileSync(process.env.RUNNER_TEMP+'/latest.changed',String(changed));
-          NODE
-
-          node - "$RUNNER_TEMP/popular.after.json" "$RUNNER_TEMP/ids.txt" <<'NODE'
-          const fs=require('fs');
-          const file=process.argv[2], ids=new Set(fs.readFileSync(process.argv[3],'utf8').trim().split(/\r?\n/));
-          const x=JSON.parse(fs.readFileSync(file,'utf8'));
-          const items=x?.payload?.data?.items;
-          if(!Array.isArray(items)) throw new Error('popular items missing');
-          let seen=0,changed=0;
-          for(let i=0;i<items.length;i++){
-            const id=String(items[i]?.id||items[i]?.trackId||'');
-            if(!ids.has(id)) continue;
-            seen++;
-            const current=Number(items[i]?.likeCount ?? items[i]?.like_count ?? items[i]?.stats?.likeCount ?? 0);
-            if(current!==1){
-              items[i]={...items[i],likeCount:1,...(items[i]?.stats&&typeof items[i].stats==='object'?{stats:{...items[i].stats,likeCount:1}}:{})};
-              changed++;
-            }
-          }
-          if(seen!==4) throw new Error('popular expected 4 tracks, saw '+seen);
-          if(changed){x.updatedAt=Date.now();fs.writeFileSync(file,JSON.stringify(x));}
-          console.log('POPULAR_REPAIR_CHANGED='+changed);
-          fs.writeFileSync(process.env.RUNNER_TEMP+'/popular.changed',String(changed));
-          NODE
-
-          if [ "$(cat "$RUNNER_TEMP/latest.changed")" -gt 0 ]; then
-            writes_started=1
-            put_with_meta "internal/explore/shared-feed-v112/latest-40.json" "$RUNNER_TEMP/latest.after.json" "$RUNNER_TEMP/meta.latest.json"
-            wrote_latest=1
-          fi
-          if [ "$(cat "$RUNNER_TEMP/popular.changed")" -gt 0 ]; then
-            writes_started=1
-            put_with_meta "internal/explore/shared-feed-v112/popular-40.json" "$RUNNER_TEMP/popular.after.json" "$RUNNER_TEMP/meta.popular.json"
-            wrote_popular=1
-          fi
-
-          while IFS= read -r id; do
-            before="$RUNNER_TEMP/card.${id}.before.json"
-            after="$RUNNER_TEMP/card.${id}.after.json"
-            cp "$before" "$after"
-            changed="$(node - "$after" "$id" <<'NODE'
-          const fs=require('fs');
-          const file=process.argv[2], id=process.argv[3];
-          const x=JSON.parse(fs.readFileSync(file,'utf8'));
-          if(String(x?.trackId||x?.card?.id||'')!==id) throw new Error('track card id mismatch '+id);
-          const card=x?.card;
-          if(!card||typeof card!=='object') throw new Error('track card body missing '+id);
-          const current=Number(card.likeCount ?? card.like_count ?? card.stats?.likeCount ?? 0);
-          if(current===1){process.stdout.write('0');process.exit(0);}
-          x.updatedAt=Date.now();
-          x.card={...card,likeCount:1,...(card.stats&&typeof card.stats==='object'?{stats:{...card.stats,likeCount:1}}:{})};
-          fs.writeFileSync(file,JSON.stringify(x));
-          process.stdout.write('1');
-          NODE
-            )"
-            if [ "$changed" = 1 ]; then
-              writes_started=1
-              put_with_meta "internal/explore/shared-track-card-v115/${id}.json" "$after" "$RUNNER_TEMP/meta.card.${id}.json"
-              wrote_cards=$((wrote_cards+1))
-            fi
-          done < "$RUNNER_TEMP/ids.txt"
-
-          echo "REPAIR_WRITE_LATEST=$wrote_latest"
-          echo "REPAIR_WRITE_POPULAR=$wrote_popular"
-          echo "REPAIR_WRITE_CARDS=$wrote_cards"
-          echo "REPAIR_TOTAL_R2_OBJECT_WRITES=$((wrote_latest+wrote_popular+wrote_cards))"
-          echo 'CANONICAL_D1_WRITE=0'
-
-          # Verify object bodies directly from R2 after writes.
-          node "$WRANGLER" r2 object get "$SHARED_BUCKET/internal/explore/shared-feed-v112/latest-40.json" --file "$RUNNER_TEMP/latest.verify.json" --remote
-          node "$WRANGLER" r2 object get "$SHARED_BUCKET/internal/explore/shared-feed-v112/popular-40.json" --file "$RUNNER_TEMP/popular.verify.json" --remote
-          while IFS= read -r id; do
-            node "$WRANGLER" r2 object get "$SHARED_BUCKET/internal/explore/shared-track-card-v115/${id}.json" --file "$RUNNER_TEMP/card.${id}.verify.json" --remote
-          done < "$RUNNER_TEMP/ids.txt"
-
-          node <<'NODE'
-          const fs=require('fs');
-          const ids=fs.readFileSync(process.env.RUNNER_TEMP+'/ids.txt','utf8').trim().split(/\r?\n/);
-          for(const sort of ['latest','popular']){
-            const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+sort+'.verify.json','utf8'));
-            const items=x?.payload?.data?.items||[];
-            const map=new Map(items.map(v=>[String(v?.id||v?.trackId||''),Number(v?.likeCount??v?.like_count??v?.stats?.likeCount??0)]));
-            for(const id of ids) if(map.get(id)!==1) throw new Error(sort+' R2 verify failed '+id+'='+map.get(id));
-          }
-          for(const id of ids){
-            const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/card.'+id+'.verify.json','utf8'));
-            const count=Number(x?.card?.likeCount??x?.card?.like_count??x?.card?.stats?.likeCount??0);
-            if(count!==1) throw new Error('track card verify failed '+id+'='+count);
-          }
-          console.log('BOUNDED_SHARED_R2_VERIFY=ALL_1');
-          NODE
-
-          trap - EXIT
-          echo 'BOUNDED_SHARED_R2_REPAIR=PASS'
-
-      - name: Verify live R2-only API and canonical D1 unchanged
-        working-directory: cloudflare/explore-worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
-          CFG="$PWD/canonical/wrangler.preview.jsonc"
-
           for sort in latest popular; do
-            curl -fsS -D "$RUNNER_TEMP/${sort}.head" -o "$RUNNER_TEMP/${sort}.api.json"               -H "Origin: $PREVIEW_ORIGIN"               "$PREVIEW_BASE/v1/feed?sort=${sort}&limit=40&__soridraw_r2_only=108"
-            node - "$sort" "$RUNNER_TEMP/${sort}.api.json" "$RUNNER_TEMP/ids.txt" <<'NODE'
+            curl -fsS -D "$RUNNER_TEMP/${sort}.head" -o "$RUNNER_TEMP/${sort}.json"               -H "Origin: $PREVIEW_ORIGIN"               "$PREVIEW_BASE/v1/feed?sort=${sort}&limit=40&__soridraw_r2_only=108"
+            node - "$sort" "$RUNNER_TEMP/${sort}.json" "$RUNNER_TEMP/ids.txt" <<'NODE'
           const fs=require('fs');
-          const sort=process.argv[2], file=process.argv[3], ids=fs.readFileSync(process.argv[4],'utf8').trim().split(/\r?\n/);
-          const x=JSON.parse(fs.readFileSync(file,'utf8'));
-          const items=x?.data?.items||[];
-          const map=new Map(items.map(v=>[String(v?.id||v?.trackId||''),Number(v?.likeCount??v?.like_count??v?.stats?.likeCount??0)]));
-          for(const id of ids) if(map.get(id)!==1) throw new Error('live '+sort+' mismatch '+id+'='+map.get(id));
+          const sort=process.argv[2], data=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
+          const ids=fs.readFileSync(process.argv[4],'utf8').trim().split(/\r?\n/);
+          const items=data?.data?.items||[];
+          const counts=new Map(items.map(v=>[String(v?.id||v?.trackId||''),Number(v?.likeCount??v?.like_count??v?.stats?.likeCount??0)]));
+          for(const id of ids) if(counts.get(id)!==1) throw new Error('live '+sort+' mismatch '+id+'='+counts.get(id));
           console.log('LIVE_'+sort.toUpperCase()+'_FOUR_COUNTS=ALL_1');
           NODE
-            read_rows="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/${sort}.head" | tail -1)"
-            write_rows="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/${sort}.head" | tail -1)"
-            test "$read_rows" = 0
-            test "$write_rows" = 0
+            reads="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/${sort}.head" | tail -1)"
+            writes="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/${sort}.head" | tail -1)"
+            test "$reads" = 0
+            test "$writes" = 0
             echo "LIVE_${sort^^}_D1=R0_W0"
           done
 
-          SQL="SELECT t.id,COALESCE(dt.likes,0) AS derived_like_count,COALESCE(ts.like_count,0) AS stat_like_count,(SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id) AS relation_count FROM tracks t LEFT JOIN explore_derived_tracks dt ON dt.id=t.id LEFT JOIN track_stats ts ON ts.track_id=t.id WHERE t.id IN ('music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_mdCqNWohZwk6lsKuNWOa','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_b1ef5cf6fcb04371b33ea71d1950f244_5jt44','music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6eb4944de4264b12a85f0d17180cd143_1en45bp') ORDER BY t.id;"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$SQL" --json > "$RUNNER_TEMP/d1-after.json"
-          node <<'NODE'
-          const fs=require('fs');
-          const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/d1-after.json','utf8'));
-          const rows=x.flatMap(v=>v.results||[]);
-          if(rows.length!==4) throw new Error('post-repair canonical row count mismatch');
-          for(const r of rows){
-            if(Number(r.relation_count)!==1||Number(r.stat_like_count)!==1||Number(r.derived_like_count)!==1) throw new Error('canonical changed '+r.id);
+          active_version() {
+            curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Accept: application/json'               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/$1/deployments"               | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id'
           }
-          console.log('CANONICAL_D1_AFTER_REPAIR=UNCHANGED_ALL_1');
-          NODE
-
+          test "$(active_version "$PREVIEW_WORKER")" = "$(cat "$RUNNER_TEMP/preview.before")"
+          test "$(active_version "$TEST_WORKER")" = "$(cat "$RUNNER_TEMP/test.before")"
+          test "$(active_version "$PRODUCTION_WORKER")" = "$(cat "$RUNNER_TEMP/production.before")"
+          echo 'PROTECTED_WORKERS_UNCHANGED_BY_REPAIR=PASS'
+          echo 'CANONICAL_D1_WRITE=0'
           echo 'D1_SCHEMA_CHANGE=false'
           echo 'USER_ORIGIN_DATA_CHANGE=false'
-          echo 'R2_REPAIR_SCOPE=2_FEED_OBJECTS_MAX_PLUS_4_TRACK_CARDS_MAX'
-          echo 'TEST_PRODUCTION_CODE_CHANGE=false'
+          echo 'FULL_FEED_REBUILD=false'
           echo 'FIREBASE_CHANGE=false'
+
+          cleanup
+          trap - EXIT
+          echo 'TEMP127_WORKER_DELETED=PASS'

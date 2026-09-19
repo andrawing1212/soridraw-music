@@ -1,0 +1,133 @@
+name: TEMP 132 Live Catalog Readonly Audit
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-132-live-catalog-readonly-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cf4ff0fa59894249676c6efdd2e5d894a011823f
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Read recent canonical state using SELECT only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT id,owner_uid,is_public,updated_at FROM tracks WHERE updated_at >= 1789827780000 ORDER BY updated_at DESC LIMIT 20;
+            SELECT s.track_id,s.like_count,s.updated_at,COALESCE(d.likes,-1) AS derived_like_count FROM track_stats s LEFT JOIN explore_derived_tracks d ON d.id=s.track_id WHERE s.updated_at >= 1789827780000 ORDER BY s.updated_at DESC LIMIT 20;
+            SELECT 'q035' AS kind,COUNT(*) AS batches,COALESCE(SUM(mutation_count),0) AS mutations FROM explore_like_batches_035;
+            SELECT 'q066' AS kind,COUNT(*) AS batches,COALESCE(SUM(mutation_count),0) AS mutations FROM explore_like_batches_066;
+            SELECT 'q069' AS kind,COUNT(*) AS batches,COALESCE(SUM(mutation_count),0) AS mutations FROM explore_like_batches_069;
+          " --json > "$RUNNER_TEMP/d1.json"
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const sets=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/d1.json','utf8'));
+          if(sets.length!==5||sets.some(x=>x.success===false))throw Error('D1 SELECT failed');
+          const [tracks,stats,...queues]=sets.map(x=>x.results||[]);
+          if(tracks.length>20||stats.length>20)throw Error('D1 bounded result exceeded');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/candidates.json',JSON.stringify({tracks,stats}));
+          const mask=s=>crypto.createHash('sha256').update(String(s||'')).digest('hex').slice(0,10);
+          console.log('RECENT_PUBLICATION_ROWS='+tracks.length);
+          for(const t of tracks)console.log('TRACK_HASH='+mask(t.id)+' public='+Number(t.is_public||0)+' updatedAt='+t.updated_at);
+          console.log('RECENT_LIKE_STATS_ROWS='+stats.length);
+          for(const s of stats)console.log('LIKE_HASH='+mask(s.track_id)+' canonical='+s.like_count+' derived='+s.derived_like_count+' updatedAt='+s.updated_at);
+          for(const q of queues)console.log('LIKE_QUEUE='+JSON.stringify(q[0]||{}));
+          console.log('CANONICAL_D1_READONLY=PASS');
+          NODE
+      - name: Read corresponding shared catalog meta, cards, and latest snapshot
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          mkdir -p "$RUNNER_TEMP/inspect"
+          node "$WRANGLER" r2 object get "soridraw-profile-media/internal/explore/shared-feed-v112/latest-40.json" --file "$RUNNER_TEMP/latest.json" --remote >/dev/null
+          node <<'NODE'
+          const fs=require('fs');
+          const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/candidates.json','utf8'));
+          const ids=[...new Set([...x.tracks.map(r=>r.id),...x.stats.map(r=>r.track_id)])].filter(Boolean);
+          if(ids.length>40)throw Error('Too many candidates');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/ids.txt',ids.join('\n')+'\n');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/mapping.json',JSON.stringify(ids));
+          console.log('BOUNDED_R2_OBJECT_TARGETS='+ids.length);
+          NODE
+          idx=0
+          while IFS= read -r id; do
+            [ -n "$id" ] || continue
+            enc="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$id")"
+            meta="soridraw-profile-media/internal/explore/catalog-v1/meta/$enc.json"
+            card="soridraw-profile-media/internal/explore/shared-track-card-v115/$enc.json"
+            if ! node "$WRANGLER" r2 object get "$meta" --file "$RUNNER_TEMP/inspect/meta-$idx.json" --remote >/dev/null 2>&1; then printf 'null' > "$RUNNER_TEMP/inspect/meta-$idx.json"; fi
+            if ! node "$WRANGLER" r2 object get "$card" --file "$RUNNER_TEMP/inspect/card-$idx.json" --remote >/dev/null 2>&1; then printf 'null' > "$RUNNER_TEMP/inspect/card-$idx.json"; fi
+            idx=$((idx+1))
+          done < "$RUNNER_TEMP/ids.txt"
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto'),root=process.env.RUNNER_TEMP;
+          const x=JSON.parse(fs.readFileSync(root+'/candidates.json','utf8'));
+          const ids=JSON.parse(fs.readFileSync(root+'/mapping.json','utf8'));
+          const latest=JSON.parse(fs.readFileSync(root+'/latest.json','utf8'))?.payload?.data?.items||[];
+          const mask=s=>crypto.createHash('sha256').update(String(s||'')).digest('hex').slice(0,10);
+          let mismatches=0;
+          console.log('SHARED_LATEST_COUNT='+latest.length);
+          for(const t of x.tracks){
+            const i=ids.indexOf(t.id),m=JSON.parse(fs.readFileSync(root+'/inspect/meta-'+i+'.json','utf8'));
+            const expected=Number(t.is_public||0)===1;
+            const listed=latest.some(r=>String(r.id||r.trackId||'')===String(t.id));
+            const count=Array.isArray(m?.markerKeys)?m.markerKeys.length:-1;
+            const good=(m?.public===expected)&&(expected?count>=3:count===0)&&(listed===expected);
+            console.log('PUBLICATION key='+mask(t.id)+' D1_public='+expected+' catalog_public='+String(m?.public)+' catalog_markers='+count+' shared_latest='+listed+' parity='+(good?'PASS':'FAIL'));
+            if(!good)mismatches++;
+          }
+          for(const s of x.stats){
+            const i=ids.indexOf(s.track_id);
+            const m=JSON.parse(fs.readFileSync(root+'/inspect/meta-'+i+'.json','utf8'));
+            const c=JSON.parse(fs.readFileSync(root+'/inspect/card-'+i+'.json','utf8'));
+            const l=latest.find(r=>String(r.id||r.trackId||'')===String(s.track_id));
+            const canonical=Number(s.like_count||0),derived=Number(s.derived_like_count??-1);
+            const cat=m?.public===true?Number(m?.track?.likeCount??-1):null;
+            const card=c?.card?Number(c.card.likeCount??c.card.stats?.likeCount??-1):null;
+            const shared=l?Number(l.likeCount??l.like_count??l.stats?.likeCount??-1):null;
+            const known=[derived,cat,card,shared].filter(v=>v!==null&&v!==-1);
+            const good=known.every(v=>v===canonical);
+            console.log('LIKE key='+mask(s.track_id)+' canonical='+canonical+' derived='+derived+' catalog='+cat+' card='+card+' latest='+shared+' parity='+(good?'PASS':'FAIL'));
+            if(!good)mismatches++;
+          }
+          console.log('LIVE_PARITY_MISMATCHES='+mismatches);
+          console.log('HISTORICAL_PER_ACTION_D1_WRITE=NOT_OBSERVABLE_IN_POSTFLIGHT');
+          if(mismatches)process.exitCode=1;
+          NODE
+      - name: Verify unchanged PREVIEW first-page D1 cost
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sort in latest popular; do
+            code="$(curl -sS -D "$RUNNER_TEMP/$sort.head" -o "$RUNNER_TEMP/$sort.json" -w '%{http_code}' -H 'Origin: https://preview.soridraw.com' "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108")"
+            reads="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/$sort.head" | tail -1)"
+            writes="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/$sort.head" | tail -1)"
+            echo "LIVE_$sort HTTP=$code R=$reads W=$writes"
+            test "$code" = 200
+            test "$reads" = 0
+            test "$writes" = 0
+          done
+          echo 'AUDIT_D1_WRITE=0'
+          echo 'AUDIT_R2_WRITE=0'
+          echo 'NO_DEPLOY=true'

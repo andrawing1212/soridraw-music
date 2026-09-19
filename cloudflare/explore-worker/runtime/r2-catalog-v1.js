@@ -599,28 +599,6 @@ export async function handleCatalogProfileTracks066(url, profileRef, env, cors) 
   return withCatalogDiagnostics066(json({ ok: true, data: { items, nextCursor } }, 200, cors), 'R2-CATALOG-PROFILE-066');
 }
 
-export async function rewriteFirstProfileCursor066(response, profileRef, env) {
-  if (!(response instanceof Response) || !response.ok) return response;
-  let payload = null;
-  try { payload = await response.clone().json(); } catch { return response; }
-  const data = payload?.data;
-  const items = Array.isArray(data?.items) ? data.items : [];
-  const uid = String(data?.profile?.uid || '').trim();
-  if (!uid || !items.length || !data?.nextCursor) return response;
-  const last = normalizeCatalogTrack066(items.at(-1), { ownerUid: uid });
-  if (!last) return response;
-  const prefix = catalogListPrefix066('profile', uid);
-  const nextCursor = catalogCursorPayload066('profile', prefix, {
-    afterKey: catalogProfileKey066(last),
-    offsetHint: items.length,
-    legacy: data.nextCursor,
-  });
-  payload.data.nextCursor = nextCursor;
-  const headers = new Headers(response.headers);
-  headers.set('X-SORIDRAW-Catalog-Cursor', 'R2-V1-066');
-  return new Response(JSON.stringify(payload), { status: response.status, headers });
-}
-
 export async function handleCatalogGenre066(url, genreValue, env, cors) {
   const genre = normalizeCatalogText066(genreValue).slice(0, 160);
   if (!genre) return null;

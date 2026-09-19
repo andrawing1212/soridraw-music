@@ -127,7 +127,7 @@ jobs:
           test "$profile_found" = 3
           echo 'SHARED_PROFILE_REPAIR_PERSISTED=3_3'
 
-          : > "$RUNNER_TEMP/missing-card.txt"
+          : > "$RUNNER_TEMP/missing-cards.txt"
           card_found=0
           card_missing=0
           while IFS= read -r id; do
@@ -137,53 +137,62 @@ jobs:
               card_found=$((card_found+1))
             else
               card_missing=$((card_missing+1))
-              printf '%s' "$id" > "$RUNNER_TEMP/missing-card.txt"
+              printf '%s\n' "$id" >> "$RUNNER_TEMP/missing-cards.txt"
             fi
           done < "$RUNNER_TEMP/track-ids.txt"
           echo "SHARED_TRACK_CARD_FOUND_BEFORE=$card_found"
           echo "SHARED_TRACK_CARD_MISSING_BEFORE=$card_missing"
-          test "$card_missing" -le 1
+          test "$card_missing" -le 28
           test $((card_found+card_missing)) = 38
 
-          if [ "$card_missing" = 1 ]; then
-            id="$(cat "$RUNNER_TEMP/missing-card.txt")"
-            enc="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$id")"
-            node - "$id" <<'NODE'
+          if [ "$card_missing" -gt 0 ]; then
+            mkdir -p "$RUNNER_TEMP/repair-cards"
+            node <<'NODE'
           const fs=require('fs');
-          const id=process.argv[2];
+          const path=require('path');
           const latest=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/latest.json','utf8'));
-          const item=(latest?.payload?.data?.items||[]).find(v=>String(v?.id||v?.trackId||'').trim()===id);
-          if(!item) throw new Error('missing latest source for card');
-          const likeCount=Math.max(0,Number(item.likeCount??item.like_count??item.stats?.likeCount??0));
-          const publishedAt=Math.max(0,Number(item.publishedAt??item.published_at??0));
-          const card={
-            ...item,
-            id,
-            ownerUid:String(item.ownerUid||item.owner_uid||'').trim(),
-            ownerNickname:String(item.ownerNickname||item.owner_nickname||'').trim(),
-            ownerAvatarUrl:String(item.ownerAvatarUrl||item.owner_avatar_url||'').trim(),
-            title:String(item.title||'').trim(),
-            coverUrl:String(item.coverUrl||item.cover_url||'').trim(),
-            sunoUrlPrimary:String(item.sunoUrlPrimary||item.suno_url_primary||'').trim(),
-            openUrl:String(item.openUrl||item.sunoUrlPrimary||item.suno_url_primary||item.suno_url_secondary||'').trim(),
-            likeCount,
-            publishedAt,
-            profilePinned:Boolean(item.profilePinned??item.profile_pinned),
-            ...(item.stats&&typeof item.stats==='object'?{stats:{...item.stats,likeCount}}:{}),
-          };
-          const bundle={schemaVersion:1,trackId:id,updatedAt:Date.now(),card};
-          fs.writeFileSync(process.env.RUNNER_TEMP+'/repair-card.json',JSON.stringify(bundle));
+          const missing=fs.readFileSync(process.env.RUNNER_TEMP+'/missing-cards.txt','utf8').trim().split(/\r?\n/).filter(Boolean);
+          const items=latest?.payload?.data?.items||[];
+          let made=0;
+          for(const id of missing){
+            const item=items.find(v=>String(v?.id||v?.trackId||'').trim()===id);
+            if(!item) throw new Error('missing latest source for '+id);
+            const likeCount=Math.max(0,Number(item.likeCount??item.like_count??item.stats?.likeCount??0));
+            const publishedAt=Math.max(0,Number(item.publishedAt??item.published_at??0));
+            const card={
+              ...item,
+              id,
+              ownerUid:String(item.ownerUid||item.owner_uid||'').trim(),
+              ownerNickname:String(item.ownerNickname||item.owner_nickname||'').trim(),
+              ownerAvatarUrl:String(item.ownerAvatarUrl||item.owner_avatar_url||'').trim(),
+              title:String(item.title||'').trim(),
+              coverUrl:String(item.coverUrl||item.cover_url||'').trim(),
+              sunoUrlPrimary:String(item.sunoUrlPrimary||item.suno_url_primary||'').trim(),
+              openUrl:String(item.openUrl||item.sunoUrlPrimary||item.suno_url_primary||item.suno_url_secondary||'').trim(),
+              likeCount,
+              publishedAt,
+              profilePinned:Boolean(item.profilePinned??item.profile_pinned),
+              ...(item.stats&&typeof item.stats==='object'?{stats:{...item.stats,likeCount}}:{}),
+            };
+            const bundle={schemaVersion:1,trackId:id,updatedAt:Date.now(),card};
+            const file=path.join(process.env.RUNNER_TEMP,'repair-cards',String(made)+'.json');
+            fs.writeFileSync(file,JSON.stringify(bundle));
+            made++;
+          }
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/repair-card-count.txt',String(made));
           console.log('TRACK_CARD_REPAIR_SOURCE=SHARED_LATEST_ONLY');
+          console.log('TRACK_CARD_REPAIR_FILES='+made);
           NODE
-            node "$WRANGLER" r2 object put "$SHARED_R2/internal/explore/shared-track-card-v115/$enc.json" --file "$RUNNER_TEMP/repair-card.json" --content-type application/json --remote --force >/dev/null
-            node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-track-card-v115/$enc.json" --file "$RUNNER_TEMP/repair-card-check.json" --remote >/dev/null
-            node - "$id" <<'NODE'
-          const fs=require('fs');
-          const id=process.argv[2];
-          const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/repair-card-check.json','utf8'));
-          if(Number(x?.schemaVersion||0)!==1||String(x?.trackId||'')!==id||String(x?.card?.id||'')!==id) throw new Error('repaired card invalid');
-          console.log('BOUNDED_SHARED_TRACK_CARD_REPAIR=1');
-          NODE
+
+            repair_idx=0
+            while IFS= read -r id; do
+              [ -n "$id" ] || continue
+              enc="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$id")"
+              node "$WRANGLER" r2 object put "$SHARED_R2/internal/explore/shared-track-card-v115/$enc.json" --file "$RUNNER_TEMP/repair-cards/$repair_idx.json" --content-type application/json --remote --force >/dev/null
+              repair_idx=$((repair_idx+1))
+            done < "$RUNNER_TEMP/missing-cards.txt"
+            test "$repair_idx" = "$(cat "$RUNNER_TEMP/repair-card-count.txt")"
+            echo "BOUNDED_SHARED_TRACK_CARD_REPAIR=$repair_idx"
           else
             echo 'BOUNDED_SHARED_TRACK_CARD_REPAIR=0_ALREADY_COMPLETE'
           fi
@@ -193,6 +202,12 @@ jobs:
             [ -n "$id" ] || continue
             enc="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$id")"
             node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-track-card-v115/$enc.json" --file "$RUNNER_TEMP/final-card-$final_found.json" --remote >/dev/null
+            node - "$RUNNER_TEMP/final-card-$final_found.json" "$id" <<'NODE'
+          const fs=require('fs');
+          const file=process.argv[2],id=process.argv[3];
+          const x=JSON.parse(fs.readFileSync(file,'utf8'));
+          if(Number(x?.schemaVersion||0)!==1||String(x?.trackId||'')!==id||String(x?.card?.id||'')!==id) throw new Error('shared track-card invalid');
+          NODE
             final_found=$((final_found+1))
           done < "$RUNNER_TEMP/track-ids.txt"
           test "$final_found" = 38

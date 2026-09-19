@@ -1,5 +1,16 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AT. 069 배포 전 독립 코드 감사 — FAIL, PREVIEW 배포 보류
+
+2026-09-19 KST, 069 코드/리그레션 감사를 실제 `preview`, `main`, `production` canonical Worker 소스와 대조했다. 069 개별 동작 테스트 PASS는 유지되나 **환경 간 shared R2 재오염 방지 조건은 FAIL**.
+
+- `preview`의 `059-shared-feed-r2-parity.mjs` 내 `mirrorExploreSharedFeeds059`는 environment-local latest/popular snapshot 전체를 shared R2 v112에 무조건 덮어쓴다. `064-shared-feed-catchup-convergence.mjs` 또한 local/shared body가 다르면 전체 body를 무조건 덮어쓴다.
+- 현재 `main` canonical Worker와 `production` canonical Worker에도 059/064가 포함되어 있고 069는 없다(각 protected branch 확인). 환경별 과거 local snapshot에 비공개 곡이 남아 있을 경우 이들 경로가 shared snapshot에 재삽입할 수 있다.
+- PREVIEW 069의 해당 곡 조건부 R2 제거는 **자체 호출만 보호**하므로 구버전 059/064의 무조건 overwrite를 막지 못한다. `catalogAllowsSharedMutation069`도 구버전에는 없다.
+- 이전 TEMP 136 offline PASS, source SHA pin은 변경하지 않았다. 이는 제품이 모든 환경에서 안전하다는 판정이 아니다.
+- **배포 보류:** READ cutover, TEST/PRODUCTION 승격뿐 아니라 PREVIEW 069 배포도 구버전 shared writers 무력화/환경 분리/안전한 계층 정리 전까지 중단한다. PRODUCTION 무단 코드 변경 금지.
+- 사용자 원본 D1에는 조치하지 않는다. 기존 노출 위험에 대한 피해 축소는 별도 bounded derived R2 private-track-only repair + 후속 reappearance 감시로 제한한다. 다른 환경 재오염 위험을 제거했다고 보고하지 않는다.
+
 ## 0AS. PREVIEW 069 shared Feed targeted parity 코드 반영 + 오프라인 검증 PASS / 배포·기존 stale 복구 전
 
 2026-09-19 KST, 사용자 요청으로 비공개 실사용 실패 `0AR`을 보수적으로 코드 수정했다. **이 항목은 GitHub 코드·오프라인 검증 완료일 뿐 PREVIEW 배포 또는 실사용 복구 완료가 아니다.** 사용자의 기존 비공개 곡은 그대로 유지한다.

@@ -7,10 +7,6 @@ function sharedFeedId069(item) {
   return String(item?.id || item?.trackId || '').trim();
 }
 
-function sharedFeedPositiveCount069(value) {
-  return Math.max(0, Number(value || 0));
-}
-
 export function sharedFeedNext069(bundle, sort, operation) {
   const data = bundle?.payload?.data;
   if (!data || !Array.isArray(data.items)) return null;
@@ -72,7 +68,8 @@ async function catalogAllowsSharedMutation069(env, operation) {
   if (!object) return false; // Do not guess when the ordering guard is missing.
   const meta = JSON.parse(await object.text());
   const shouldBePublic = operation.kind !== 'private';
-  return Boolean(meta?.public) === shouldBePublic;
+  return meta?.trackId === operation.trackId && typeof meta.public === 'boolean'
+    && meta.public === shouldBePublic;
 }
 
 export async function syncExploreSharedFeedTargeted069(env, operation) {

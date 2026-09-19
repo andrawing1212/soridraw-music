@@ -344,7 +344,7 @@ jobs:
 
           ready=0
           for attempt in $(seq 1 180); do
-            code="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/repair || true)"
+            code="$(curl -sS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8787/repair || true)"
             if [ "$code" = 403 ]; then ready=1; break; fi
             sleep 1
           done

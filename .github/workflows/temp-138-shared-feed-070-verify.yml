@@ -1,0 +1,35 @@
+name: TEMP 138 Shared Feed 070 Verify
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-138-shared-feed-070-verify.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 9d9d11b86cb3a866feed1c25e3a3cf2567f37311
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate 070 candidate and run regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/worker070"
+          mkdir -p "$work"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$work/worker.js"
+          export SORIDRAW_REMOTE_WORKER_DIR="$work"
+          node --check cloudflare/explore-worker/patches/070-shared-feed-legacy-writer-guard.mjs
+          node cloudflare/explore-worker/patches/070-shared-feed-legacy-writer-guard.mjs
+          node --check "$work/worker.js"
+          SORIDRAW_GENERATED_WORKER="$work/worker.js" node scripts/verify-070-shared-feed-guard.mjs
+          sha256sum "$work/worker.js"
+          echo '070_OFFLINE_PATCH_AND_REGRESSION=PASS'
+          echo 'DEPLOY=0 DATA_WRITE=0'

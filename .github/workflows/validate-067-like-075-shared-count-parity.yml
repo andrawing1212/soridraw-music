@@ -1,0 +1,107 @@
+name: Validate 067 Like 075 Shared Count Parity
+
+on:
+  push:
+    branches:
+      - work/like-075-shared-count-parity
+    paths:
+      - 'cloudflare/explore-worker/patches/067-like-075-shared-count-parity.mjs'
+      - 'cloudflare/explore-worker/release-patches.json'
+      - 'scripts/verify-067-like-075-shared-count-parity.mjs'
+      - '.github/workflows/validate-067-like-075-shared-count-parity.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Apply 067 to canonical Worker copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .tmp-067-worker
+          mkdir -p .tmp-067-worker
+          cp cloudflare/explore-worker/canonical/preview-worker.js .tmp-067-worker/worker.js
+          SORIDRAW_REMOTE_WORKER_DIR="$PWD/.tmp-067-worker" node cloudflare/explore-worker/patches/067-like-075-shared-count-parity.mjs
+          node --check .tmp-067-worker/worker.js
+          grep -Fq 'SORIDRAW_LIKE_075_SHARED_COUNT_PARITY_067_20260919' .tmp-067-worker/worker.js
+          echo 'WORKER_PATCH_067=PASS'
+
+      - name: Verify 067 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          SORIDRAW_GENERATED_WORKER="$PWD/.tmp-067-worker/worker.js" node scripts/verify-067-like-075-shared-count-parity.mjs
+
+      - name: Existing like and shared-cache regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$PWD/.tmp-067-worker/worker.js"
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-102-explore-public-like-parity.mjs
+          node scripts/verify-103-explore-like-event-batch.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-105-explore-like-1min.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-110-explore-liked-public-count.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-112-shared-feed-parity.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-115-shared-track-card-r2.mjs
+          SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-116-explore-public-count-convergence.mjs
+          node scripts/verify-118-explore-like-explicit-intent.mjs
+          node scripts/verify-119-explore-like-20s-latest-cache.mjs
+          node scripts/verify-120-explore-like-actor-count-lock.mjs
+          node scripts/verify-121-explore-like-timing-only.mjs
+          node scripts/verify-122-explore-like-white-heart.mjs
+          node scripts/verify-123-shared-like-cache-repair.mjs
+          node scripts/verify-124-mobile-shared-cache-repair.mjs
+          echo 'LIKE_SHARED_REGRESSION_MATRIX=PASS'
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Safety boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test "$(node -p "require('./public/app-version.json').version")" = "124"
+          echo 'APP_VERSION=124'
+          echo 'EXTRA_D1_READ_WRITE=0'
+          echo 'USER_DATA_CHANGE=false'
+          echo 'D1_SCHEMA_CHANGE=false'
+          echo 'FIREBASE_CHANGE=false'
+          echo 'UI_CSS_CHANGE=false'
+          echo 'DEPLOYMENT=false'
+
+      - name: Materialize verified 067 canonical Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .tmp-067-worker/worker.js cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          grep -Fq 'SORIDRAW_LIKE_075_SHARED_COUNT_PARITY_067_20260919' cloudflare/explore-worker/canonical/preview-worker.js
+          git add cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt
+          git diff --cached --check
+          test "$(git diff --cached --name-only | wc -l)" -eq 2
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build: materialize verified 067 canonical Worker [skip ci]'
+          git push origin HEAD:refs/heads/work/like-075-shared-count-parity
+          echo "CANONICAL_067_SHA256=$(cat cloudflare/explore-worker/canonical/source-sha256.txt)"
+          echo 'NO_DEPLOYMENT=true'

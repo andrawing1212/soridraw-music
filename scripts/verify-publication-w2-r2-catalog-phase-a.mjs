@@ -9,6 +9,7 @@ import {
   normalizeCatalogTrack066,
   catalogLatestKey066,
   catalogPopularKey066,
+  catalogDescendingText066,
   catalogProfileKey066,
   catalogMarkerKeys066,
   catalogMarkerDiff066,
@@ -73,8 +74,15 @@ assert(catalogPopularKey066(base) < catalogPopularKey066(lessPopular), 'popular 
 const sameLikesOlder = { ...base, id: 'track-same-old', publishedAt: 1500 };
 assert(catalogPopularKey066(base) < catalogPopularKey066(sameLikesOlder), 'popular tie must sort newer first');
 
+const idA = { ...base, id: 'track-a' };
+const idZ = { ...base, id: 'track-z' };
+assert(catalogDescendingText066('track-z') < catalogDescendingText066('track-a'), 'descending id codec must invert lexical order');
+assert(catalogLatestKey066(idZ) < catalogLatestKey066(idA), 'latest equal-time tie must preserve D1 id DESC');
+assert(catalogPopularKey066(idZ) < catalogPopularKey066(idA), 'popular equal-rank tie must preserve D1 id DESC');
+
 const pinned = { ...base, id: 'track-pin', profilePinned: true };
 assert(catalogProfileKey066(pinned) < catalogProfileKey066(base), 'profile pinned track must sort first');
+assert(catalogProfileKey066({ ...idZ, ownerUid: base.ownerUid }) < catalogProfileKey066({ ...idA, ownerUid: base.ownerUid }), 'profile equal-time tie must preserve D1 id DESC');
 
 const baseKeys = catalogMarkerKeys066(base);
 const sameDiff = catalogMarkerDiff066(baseKeys, catalogMarkerKeys066({ ...base }));

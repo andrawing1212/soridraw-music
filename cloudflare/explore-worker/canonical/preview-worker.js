@@ -20017,7 +20017,10 @@ async function publicationReadProfileR2024Core066(env, authContext) {
 }
 
 async function publicationReadProfileR2024(env, authContext) {
-  if (!isExploreR2FirstPublisherEnabled066(env)) {
+  // SORIDRAW_CATALOG_PUBLICATION_ARTIST_PARITY_068_20260919
+  // Catalog write mode may use the shared R2 profile as a zero-D1 fallback.
+  // First-publisher mode remains a stricter subset of catalog mode.
+  if (!isExploreR2CatalogEnabled066(env)) {
     return await publicationReadProfileR2024Core066(env, authContext);
   }
   try {
@@ -20344,6 +20347,22 @@ async function handleMusicNotePublicationSingleWrite016(request, env, cors, auth
       handle: ""
     };
   }
+  // SORIDRAW_CATALOG_PUBLICATION_ARTIST_PARITY_068_20260919
+  // A brand-new catalog track must also make its creator searchable. Reuse the
+  // already-resolved profile; never add a D1 query/write for this derived index.
+  // The dedicated first-publisher bootstrap already writes its own artist marker.
+  if (isExploreR2CatalogEnabled066(env) && !previous?.id && !profile?.r2FirstPublisher066) {
+    try {
+      await syncExploreCatalogArtist066(env, {
+        uid: String(authContext?.uid || '').trim(),
+        nickname: String(profile?.nickname || authContext?.displayName || '').trim(),
+        handle: String(profile?.handle || '').trim().replace(/^@+/, ''),
+      });
+    } catch (error) {
+      console.warn('[SORIDRAW 068] publication artist catalog sync deferred:', String(error?.message || error || 'unknown'));
+    }
+  }
+
   const unchanged = publicationCanonicalUnchanged016(previous, source, resolvedOptions, primaryGenre);
   const visibilityOnly = Boolean(previous?.id) && publicationCanonicalUnchanged016(
     { ...previous, is_public: 1, status: 'published' },

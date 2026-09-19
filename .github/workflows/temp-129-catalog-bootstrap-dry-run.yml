@@ -1,0 +1,190 @@
+name: TEMP 129 Catalog Bootstrap Dry Run
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-129-catalog-bootstrap-dry-run.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      SHARED_R2: soridraw-profile-media
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Read shared latest snapshot and canonical count only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+
+          node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-feed-v112/latest-40.json"             --file "$RUNNER_TEMP/latest.json" --remote >/dev/null
+
+          SQL="SELECT COUNT(*) AS public_tracks FROM tracks WHERE is_public=1 AND status='published';"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$SQL" --json > "$RUNNER_TEMP/count.json"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const latest=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/latest.json','utf8'));
+          const items=latest?.payload?.data?.items||[];
+          const ids=items.map(v=>String(v?.id||v?.trackId||'').trim()).filter(Boolean);
+          const unique=[...new Set(ids)];
+          const countJson=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/count.json','utf8'));
+          const canonical=Number(countJson.flatMap(v=>v.results||[])[0]?.public_tracks||0);
+          console.log('SHARED_LATEST_ITEMS='+items.length);
+          console.log('SHARED_LATEST_UNIQUE_IDS='+unique.length);
+          console.log('CANONICAL_PUBLIC_TRACK_COUNT='+canonical);
+          console.log('SHARED_LATEST_COVERS_ALL='+(unique.length===canonical?'YES':'NO'));
+          if(unique.length!==canonical) throw new Error('Shared latest snapshot does not cover all current public tracks');
+          const owners=[...new Set(items.map(v=>String(v?.ownerUid||v?.owner_uid||'').trim()).filter(Boolean))];
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/owners.txt',owners.join('\n')+'\n');
+          console.log('SHARED_LATEST_OWNER_COUNT='+owners.length);
+          NODE
+
+      - name: Read shared profile bundles for current owners
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          idx=0
+          while IFS= read -r uid; do
+            [ -n "$uid" ] || continue
+            idx=$((idx+1))
+            encoded="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$uid")"
+            node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-profile-v113/${encoded}.json"               --file "$RUNNER_TEMP/profile-${idx}.json" --remote >/dev/null
+          done < "$RUNNER_TEMP/owners.txt"
+          echo "SHARED_PROFILE_BUNDLES_READ=$idx"
+
+      - name: Calculate exact catalog object plan without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {
+            catalogMarkerKeys066,
+            catalogMetaKey066,
+            catalogArtistMetaKey066,
+            catalogArtistMarkerKeys066,
+            catalogGenreFromCard066,
+            catalogTitleTokens066,
+          } from './cloudflare/explore-worker/runtime/r2-catalog-v1.js';
+
+          const latest=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/latest.json','utf8'));
+          const items=latest?.payload?.data?.items||[];
+          const owners=fs.readFileSync(process.env.RUNNER_TEMP+'/owners.txt','utf8').trim().split(/\r?\n/).filter(Boolean);
+
+          const profiles=[];
+          for(let i=0;i<owners.length;i++){
+            const bundle=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+`/profile-${i+1}.json`,'utf8'));
+            const p=bundle?.body?.data?.profile||bundle?.data?.profile||bundle?.profile||null;
+            if(!p) throw new Error('shared profile body missing for owner '+owners[i]);
+            profiles.push({...p,uid:String(p.uid||owners[i])});
+          }
+
+          const allKeys=new Set();
+          const typeCounts={meta:0,latest:0,popular:0,profile:0,genre:0,title:0,artistMeta:0,artistName:0,artistHandle:0};
+          let missingOwner=0,missingTitle=0,missingGenre=0,missingPublishedAt=0,maxMarkers=0;
+          const ownersSeen=new Set();
+
+          for(const item of items){
+            const id=String(item?.id||item?.trackId||'').trim();
+            const ownerUid=String(item?.ownerUid||item?.owner_uid||'').trim();
+            const title=String(item?.title||'').trim();
+            const publishedAt=Number(item?.publishedAt??item?.published_at??0)||0;
+            if(!id) throw new Error('track id missing');
+            if(!ownerUid) missingOwner++;
+            if(!title) missingTitle++;
+            if(!publishedAt) missingPublishedAt++;
+            if(!catalogGenreFromCard066(item)) missingGenre++;
+            if(ownerUid) ownersSeen.add(ownerUid);
+
+            const meta=catalogMetaKey066(id);
+            allKeys.add(meta); typeCounts.meta++;
+
+            const markers=catalogMarkerKeys066(item);
+            maxMarkers=Math.max(maxMarkers,markers.length);
+            for(const key of markers){
+              allKeys.add(key);
+              if(key.includes('/latest/')) typeCounts.latest++;
+              else if(key.includes('/popular/')) typeCounts.popular++;
+              else if(key.includes('/profile/')) typeCounts.profile++;
+              else if(key.includes('/genre/')) typeCounts.genre++;
+              else if(key.includes('/title/')) typeCounts.title++;
+            }
+
+            const tokens=catalogTitleTokens066(title);
+            if(tokens.length===0) throw new Error('title token generation failed '+id);
+          }
+
+          for(const profile of profiles){
+            const uid=String(profile?.uid||'').trim();
+            if(!uid) throw new Error('profile uid missing');
+            const meta=catalogArtistMetaKey066(uid);
+            allKeys.add(meta); typeCounts.artistMeta++;
+            for(const key of catalogArtistMarkerKeys066(profile)){
+              allKeys.add(key);
+              if(key.includes('/artist/name/')) typeCounts.artistName++;
+              if(key.includes('/artist/handle/')) typeCounts.artistHandle++;
+            }
+          }
+
+          const expectedRaw =
+            typeCounts.meta+typeCounts.latest+typeCounts.popular+typeCounts.profile+
+            typeCounts.genre+typeCounts.title+typeCounts.artistMeta+
+            typeCounts.artistName+typeCounts.artistHandle;
+
+          console.log('DRY_RUN_TRACKS='+items.length);
+          console.log('DRY_RUN_OWNERS='+ownersSeen.size);
+          console.log('MISSING_OWNER_UID='+missingOwner);
+          console.log('MISSING_TITLE='+missingTitle);
+          console.log('MISSING_PUBLISHED_AT='+missingPublishedAt);
+          console.log('MISSING_PRIMARY_GENRE='+missingGenre);
+          console.log('MAX_MARKERS_PER_TRACK='+maxMarkers);
+          for(const [k,v] of Object.entries(typeCounts)) console.log('OBJECTS_'+k.toUpperCase()+'='+v);
+          console.log('EXPECTED_OBJECT_REFERENCES='+expectedRaw);
+          console.log('EXPECTED_UNIQUE_R2_OBJECTS='+allKeys.size);
+          console.log('BOOTSTRAP_D1_DATA_READ_REQUIRED=0');
+          console.log('BOOTSTRAP_SOURCE=SHARED_R2_LATEST_PLUS_SHARED_PROFILES');
+          console.log('CATALOG_WRITE_EXECUTED=0');
+
+          if(missingOwner||missingTitle||missingPublishedAt) {
+            throw new Error('Critical track fields missing');
+          }
+          if(ownersSeen.size!==profiles.length) {
+            throw new Error('Shared profile coverage mismatch owners='+ownersSeen.size+' profiles='+profiles.length);
+          }
+          console.log('R2_ONLY_BOOTSTRAP_DRY_RUN=PASS');
+          NODE
+
+      - name: Safety
+        run: |
+          echo 'D1_WRITE=0'
+          echo 'R2_WRITE=0'
+          echo 'USER_DATA_CHANGE=false'
+          echo 'D1_SCHEMA_CHANGE=false'
+          echo 'DEPLOYMENT=false'
+          echo 'TEST_PRODUCTION_CHANGE=false'

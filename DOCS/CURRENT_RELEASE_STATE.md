@@ -1,5 +1,16 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AU. 단일 비공개 곡 shared R2 점검 PASS — 자동 수렴 관측 / 재오염 위험 유지
+
+2026-09-19 KST, 사용자 요청에 따라 TEMP 137 Run `35451509693`에서 **실제 비공개 1곡에 한정**한 remote shared R2 조건부 복구를 진행했다. 고정 D1 timestamp `1789829348623`와 식별 해시 `1319e4479e`를 사전/사후로 검증했다.
+
+- D1 해당 곡 `is_public=0`·`updated_at` 불변 PASS.
+- R2 catalog `public=false`·marker 0 guard PASS.
+- shared latest/popular 각각 **37→37**, 해당 곡 부재: PASS. 이미 37곡으로 수렴해 있어 **이번 검사에서 실제 shared R2 put 0회** (`changed=false` 두 번). 이전 38곡을 누가 언제 37곡으로 수렴시켰는지는 증명되지 않으며, 064의 catch-up 등은 가능한 설명일 뿐이다.
+- 대상 외 곡 변경 0, canonical D1 write 0, 배포 0, Firebase 변경 0. 다른 환경 실사용/캐시 재방문 검증 전.
+- 이 결과는 **특정 시점의 shared 캐시 정합성**만 나타낸다. 0AT 감사 FAIL인 구형 059/064 전체 overwrite 경로가 계속 있으므로 재오염 방지 구조는 해결되지 않았다.
+- 069 PREVIEW 제품 소스와 sha pin은 유지하며 미배포. READ/FIRST_PUBLISHER 계속 OFF, TEST/PRODUCTION 배포 금지. 별도 승인 없는 데이터 원본 수정을 하지 않는다.
+
 ## 0AT. 069 배포 전 독립 코드 감사 — FAIL, PREVIEW 배포 보류
 
 2026-09-19 KST, 069 코드/리그레션 감사를 실제 `preview`, `main`, `production` canonical Worker 소스와 대조했다. 069 개별 동작 테스트 PASS는 유지되나 **환경 간 shared R2 재오염 방지 조건은 FAIL**.

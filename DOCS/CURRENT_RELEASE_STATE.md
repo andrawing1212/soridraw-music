@@ -1,5 +1,87 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AJ. W2 publication Phase B PASS / Phase A+B PREVIEW 코드 승격 완료
+
+2026-09-19 KST 기준, Music Note publication D1 W1~W2 구조의 Phase A 구현 + Phase B 진단을 완료하고 검증본을 PREVIEW 코드 기준으로 승격했다.
+
+GitHub:
+- Phase A+B work branch: `work/publication-w2-r2-catalog-phase-a`
+- Phase A product final before diagnostics: `1198c314000909a0fb5f954b7c3a9edcb8c6f13d`
+- Phase B final diagnostics head: `39dbd86c313db3a8438083f0d6240d13e7a8511c`
+- temporary diagnostic workflow cleanup commit: `3e35442b2e4aa3b86af414a3bcb4ed5a55708dbd`
+- PR #106 merge commit: `a7c048b0fa68907f459500fe1b547bb4126e8813`
+- PREVIEW app version: **124 unchanged**
+
+Phase A 검증:
+- Run `35410052082` — SUCCESS.
+- R2 ordered catalog/search/deep paging guarded path PASS.
+- first-publisher shared/local R2 bootstrap + retry-safe finalize PASS.
+- latest/popular/profile 동일 rank/timestamp에서 기존 D1과 같은 `id DESC` ordering PASS.
+- 112 shared Feed parity PASS.
+- 113 shared profile parity PASS.
+- 115 shared track-card R2 PASS.
+- 116 public count convergence PASS.
+- 063 public-profile warm Edge D1 R0/W0 PASS.
+- derived-cache/cost regression PASS.
+- TypeScript / Build PASS.
+
+Phase B 최종 Run:
+- Run `35427048164` — **SUCCESS**.
+- R2 integration:
+  - latest deep paging PASS.
+  - popular deep paging PASS.
+  - profile deep paging + pinned ordering PASS.
+  - title search PASS.
+  - genre search PASS.
+  - artist nickname/handle search PASS.
+  - like -> popular marker only PASS.
+  - pin -> profile marker only PASS.
+  - private/republish targeted marker PASS.
+  - first-publisher retry idempotency PASS.
+- Music Note trackId stability PASS:
+  - client/Worker `music_note_${uid}_${sourceId}` deterministic.
+  - retry/device/app-version independent.
+  - outbox/cache same trackId preserved.
+  - random/time/device input 없음.
+
+RATE_DB production-shape candidate 실측:
+- **FIRST PUBLIC: R0 / W2**
+- **PRIVATE: R1 / W1**
+- **REPUBLISH: R1 / W1**
+- **NOOP: R1 / W0**
+- legacy control: R2 / W15 — non-Music-Note 기존 index/trigger 비용 유지 확인.
+- FTS INSERT: R0 / W1.
+- FTS DELETE: R1 / W1.
+- 따라서 publication hot path에 D1 FTS write를 붙이면 first public W3가 되어 hard gate 실패하므로 계속 금지.
+
+안전:
+- Phase B는 PREVIEW 전용 RATE_DB diagnostic tables/triggers만 생성 후 cleanup.
+- shared canonical D1 write 0.
+- 실제 사용자 데이터 write 0.
+- PROFILE_MEDIA 실제 user catalog backfill 0.
+- Firebase / Functions / Rules 변경 없음.
+- UI/CSS 변경 없음.
+- Worker/Hosting **배포 없음**.
+- TEST/PRODUCTION 변경 없음.
+- catalog write/read/first-publisher flags 기본 OFF 유지.
+- temporary Phase B Workflow는 완료 후 제거됨.
+
+독립 감사 결론:
+- 기능 회귀: PASS.
+- 비용 회귀: PASS.
+- mutation O(1) / 전체 Feed-profile-search rebuild 없음.
+- 기존 Music Note 60초 묶음 저장/UI/반응형 비변경.
+- shared 사용자 데이터 하위호환 유지.
+- Phase C 코드 기준으로 진행 가능.
+- 단, 실제 shared D1 partial-index/trigger cutover는 **Phase D**이며 사용자 별도 승인 전 금지.
+- 배포 요청이 없으므로 PREVIEW Worker/Firebase 배포는 아직 하지 않는다.
+
+다음:
+- `DOCS/NEXT_CODEX_TASK.md`의 Phase C 기준으로 PREVIEW 배포 전 검증 준비.
+- 실제 PREVIEW Worker 배포는 사용자의 명확한 프리뷰배포 요청 후 진행.
+- TEST 승격은 PREVIEW 실제 검증 완료 후 별도 승인.
+- PRODUCTION은 명확한 정식배포 승인 전 금지.
+
 ## 0AI. W2 publication Phase A PASS / Phase B 진단 시작
 
 2026-09-19 KST 기준, Music Note publication D1 W1~W2 구조의 **Phase A code-only 구현과 독립 재검토를 완료**했다.

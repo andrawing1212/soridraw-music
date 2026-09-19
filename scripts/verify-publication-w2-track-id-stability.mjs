@@ -63,7 +63,7 @@ for (const [uid, sourceId] of [
   assert.equal(clientId(uid, sourceId), a, 'same uid/sourceId retry changed trackId');
 }
 
-assert.ok(client.includes('getMusicNoteTrackId(uid, sourceId)'), 'publication flow no longer calls deterministic trackId helper');
+assert.ok(client.includes('const trackId = getMusicNoteTrackId(user.uid, normalizedSourceId);'), 'publication flow no longer derives deterministic trackId from user.uid + normalized sourceId');
 assert.ok(client.includes('trackId: desiredState.trackId'), 'publication outbox no longer preserves desired trackId');
 assert.ok(client.includes("trackId: String(value?.trackId || trackId || '').trim()"), 'publication state normalization no longer preserves trackId');
 assert.ok(client.includes('state.trackId === normalizedTrackId'), 'cached publication state no longer resolves by stable trackId');

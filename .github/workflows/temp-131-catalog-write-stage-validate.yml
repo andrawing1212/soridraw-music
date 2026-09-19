@@ -341,11 +341,18 @@ jobs:
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
           for sort in latest popular; do
-            curl -fsS -D "$RUNNER_TEMP/$sort.head" -o "$RUNNER_TEMP/$sort.json" -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=131"
+            code="$(curl -sS -D "$RUNNER_TEMP/$sort.head" -o "$RUNNER_TEMP/$sort.json" -w '%{http_code}' -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108")"
             reads="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/$sort.head" | tail -1)"
             writes="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/$sort.head" | tail -1)"
-            test "$reads" = 0
-            test "$writes" = 0
+            echo "LIVE_$sort HTTP=$code R=${reads:-missing} W=${writes:-missing}"
+            if [ "$code" != 200 ] || [ "$reads" != 0 ] || [ "$writes" != 0 ]; then
+              echo "--- $sort headers ---"
+              cat "$RUNNER_TEMP/$sort.head" || true
+              echo "--- $sort body prefix ---"
+              head -c 1200 "$RUNNER_TEMP/$sort.json" || true
+              echo
+              exit 1
+            fi
             echo "LIVE_$sort=D1_R0_W0"
           done
           echo 'CANONICAL_D1_WRITE=0'

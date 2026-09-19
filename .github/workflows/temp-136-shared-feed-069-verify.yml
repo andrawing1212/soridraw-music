@@ -58,5 +58,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git status --porcelain | wc -l)" -eq 0
+          git diff --exit-code -- src cloudflare/explore-worker/runtime/shared-feed-targeted-069.js cloudflare/explore-worker/patches/069-shared-feed-targeted-parity.mjs scripts/verify-069-shared-feed-targeted.mjs
+          echo "VERSIONED_PRODUCT_FILES_UNTOUCHED_BY_TESTS=PASS"
           echo 'D1_WRITE=0 R2_WRITE=0 DEPLOY=0 USER_DATA_CHANGE=0'

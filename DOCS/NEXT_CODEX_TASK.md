@@ -1,149 +1,126 @@
 # SORIDRAW NEXT CODEX TASK
 
-최종 갱신: 2026-09-19 KST — W2 publication 구조설계 확정 / Phase A code-only 구현
+최종 갱신: 2026-09-19 KST — W2 publication Phase A PASS / Phase B diagnostics
 
-기준 설계:
-- `DOCS/PUBLICATION_W2_R2_CATALOG_DESIGN.md`
-- 설계 commit: `1baadfecf5c26930ee6740eeb85ca18b17549e06`
+## 기준
+
+- 제품 PREVIEW baseline: `434696ac8fbb551c31e3af985273ded6a635e68a`
+- Phase A work branch: `work/publication-w2-r2-catalog-phase-a`
+- Phase A final commit: `1198c314000909a0fb5f954b7c3a9edcb8c6f13d`
+- Phase A validation: Run `35410052082` SUCCESS
+- 설계: `DOCS/PUBLICATION_W2_R2_CATALOG_DESIGN.md`
+- app version: **124**
+- Phase A code는 아직 PREVIEW 제품 branch에 merge/deploy하지 않음.
 
 ## 절대 합격선
 
-- 사용자 mutation D1 `rows_written` **W1~W2만 PASS**.
+- 사용자 mutation D1 `rows_written`은 **W1~W2만 PASS**.
 - first public / private / republish 모두 동일.
 - no-change W0.
 - W3+는 기능이 정상이어도 FAIL.
-- 검색을 위해 publication D1 write를 추가하지 않는다.
+- 검색 때문에 publication D1 write 추가 금지.
 - shared user row delete/backfill/rewrite 금지.
 - UI/CSS 변경 금지.
-- PRODUCTION 변경/배포 금지.
+- PREVIEW Worker/Firebase deploy 금지.
+- TEST/main promotion 금지.
+- PRODUCTION 변경 금지.
 
-## 실측 기준
+## 이번 작업 — Phase B diagnostics only
 
-- live first Music Note public: R6/W18 FAIL.
-- W18 = tracks W11 + derived W5 + profile-count W1 + shared-revision W1.
-- diagnostic partial-index Music Note insert: W2.
-- private W1 / republish W1 / noop W0.
-- D1 FTS insert/delete 각각 W1이므로 canonical W2 + FTS는 W3 → 금지.
-- Explore UI search entry는 `/v1/search?q=...` 하나이므로 Worker 내부 source 교체 가능.
-- PRODUCTION app117도 shared R2 patches 043~064 보유.
+### 1. RATE_DB production-shape cost meter
 
-## 이번 구현 범위 — Phase A만
+PREVIEW의 **진단 전용 RATE_DB**만 사용한다. shared canonical `soridraw-explore-db`에는 write하지 않는다.
 
-**shared D1 schema/index/trigger는 절대 변경하지 않는다. deploy도 하지 않는다.**
+검증:
+- Music Note가 9 explicit secondary indexes에서 제외되는 partial-index candidate.
+- Music Note에서 derived mirror/profile count/shared revision trigger가 제외되는 candidate.
+- first public exact rows_written.
+- private exact rows_written.
+- republish exact rows_written.
+- no-op exact rows_written.
+- FTS write가 publication hot path에 없음을 재확인.
+- non-Music-Note row는 기존 index/trigger 동작을 유지하는 형태인지 확인.
+- 진단 table/trigger는 workflow 종료 시 cleanup.
 
-### 1. R2 ordered catalog code
+Hard gate:
+- first public W1~W2.
+- private W1~W2.
+- republish W1~W2.
+- noop W0.
+- 하나라도 W3+면 Phase B FAIL.
 
-기존 shared PROFILE_MEDIA R2 재사용.
+### 2. R2 catalog integration verifier
 
-구현 계약:
-- per-track meta
-- latest ordering marker
-- popular ordering marker
-- profile ordering marker
-- genre marker
-- bounded title-token marker
-- artist nickname/handle marker
-- 한 곡 변경 시 해당 marker만 PUT/DELETE
-- 전체 Feed/profile/search rebuild 금지
-- current marker key는 per-track meta에 저장
+실제 shared PROFILE_MEDIA user data를 쓰지 않는 in-memory/mock R2로 검증한다.
 
-### 2. Deep pagination
+필수:
+- latest 2페이지 이상 순서/중복/누락 없음.
+- popular 2페이지 이상 순서/중복/누락 없음.
+- 동일 timestamp/rank에서 기존 D1과 같은 id DESC.
+- public profile 2페이지 이상 + pinned ordering.
+- title token/prefix search.
+- genre search.
+- artist nickname/handle -> uid -> tracks.
+- likeCount 변경 시 popular marker만 이동.
+- pin 변경 시 profile marker만 이동.
+- private 시 해당 track marker 제거.
+- republish 시 해당 marker만 복구.
+- per-track meta marker set 일치.
+- first-publisher bootstrap -> trackCount 1 -> shared finalize.
+- retry/idempotent 복구에서 trackCount 중복 증가 없음.
+- legacy API response shape 유지.
 
-- Explore first page current shared R2 snapshot 보호.
-- Explore cursor/2페이지 이후는 새 R2 catalog path를 사용할 수 있게 wrapper 추가.
-- public profile 2페이지 이후도 R2 profile catalog path 추가.
-- 기존 API response shape 유지.
-- legacy cursor fallback은 Phase D cutover 전까지 유지.
-- D1 deep-page path를 바로 삭제하지 않는다.
+### 3. Music Note trackId stability verifier
 
-### 3. Search 3종
+partial unique-index cutover 전에 반드시 증명:
+- client track id: `music_note_${uid}_${sourceId}`
+- Worker source id: 동일한 `music_note_${uid}_${sourceId}`
+- 동일 uid/sourceId 재시도에서 같은 id.
+- 앱 버전/기기와 무관한 입력 기반 결정성.
+- publication outbox/cache가 같은 trackId를 유지.
+- 불안정한 random/time/device 값이 id 생성에 포함되지 않음.
 
-`/v1/search?q=...` UI 계약 유지.
+### 4. 독립 감사
 
-지원:
-- 제목 token/prefix
-- 장르
-- 아티스트 nickname/handle → uid → 해당 공개곡
-
-금지:
-- publication 시 `track_search_fts` INSERT/DELETE
-- title 일반 D1 secondary index 추가
-- 무제한 trigram/token fanout
-
-### 4. 신규 사용자 first publisher
-
-first publish에서 D1 `public_profiles` auto INSERT를 하지 않는 code path를 준비.
-
-대신:
-- auth nickname/avatar 기반 최소 shared profile v113 bundle 생성
-- UID direct shared profile key 생성
-- handle이 있을 때만 alias 생성
-- artist R2 index 생성
-- trackCount 1 반영
-- 기존 explicit profile edit가 나중에 D1 canonical profile을 materialize하면 shared R2를 그 결과로 교체
-
-Phase A에서는 이 code path를 feature/cutover guard 뒤에 두고 shared production behavior를 바꾸지 않는다.
-
-### 5. Like/profile mutation 연동
-
-- final likeCount가 바뀐 track만 popular marker 이동.
-- private/public/pin/genre/title 변경 시 old marker를 meta 기준 제거하고 new marker만 생성.
-- 추가 D1 rank/search write 금지.
-
-### 6. verifier
-
-최소 검증:
-- catalog key ordering deterministic
-- latest/popular/profile pagination cursor deterministic
-- publish/private/republish marker delta O(1)
-- title token bound
-- artist nickname/handle resolution
-- first publisher R2 profile valid bundle
-- no publication D1 FTS call
-- legacy API response shape compatibility
-- current first-page shared R2 flow regression 없음
-- TypeScript PASS
-- Build PASS
-- 관련 verifier PASS
+`DOCS/WORK_AUDIT_CHECKLIST.md` 기준:
+- 기존 Music Note 60초 묶음 저장 비변경.
+- UI/반응형 비변경.
+- Explore first page 현재 shared R2 보호.
+- 공개프로필 warm 재방문 D1 R0/W0 보호.
+- mutation O(1), 전체 Feed/profile/search rebuild 없음.
+- shared D1/user data write 0.
+- TypeScript / Build / related tests PASS.
+- PREVIEW/TEST/PRODUCTION 비변경.
 
 ## 이번 단계에서 하지 말 것
 
-- live shared D1 index DROP/CREATE
-- live trigger DROP/CREATE
-- migration / seed / backfill
-- user data rewrite
-- PREVIEW Worker deploy
-- Firebase deploy
-- TEST/main promotion
-- PRODUCTION 변경
-- 기존 D1 fallback 즉시 삭제
+- live shared D1 index DROP/CREATE.
+- live shared D1 trigger DROP/CREATE.
+- migration / seed / backfill.
+- 사용자 데이터 rewrite/delete.
+- 실제 PROFILE_MEDIA catalog backfill.
+- catalog read flag ON.
+- first-publisher flag ON.
+- PREVIEW Worker deploy.
+- Firebase deploy.
+- TEST/main promotion.
+- PRODUCTION 변경.
 
-## Phase A 완료 보고
+## Phase B 완료 보고
 
 반드시:
-- 작업 branch
-- 기준 preview commit
-- 최종 commit SHA
-- 변경 파일
-- catalog key contract
-- TypeScript / Build / Test
-- shared D1 변경 없음 확인
-- deploy 없음 확인
-- 남은 Phase B 위험
+- 작업 branch / 기준 commit / 최종 commit.
+- RATE_DB Run ID와 exact R/W.
+- R2 integration verifier 결과.
+- trackId stability 결과.
+- TypeScript / Build / regression results.
+- shared canonical D1 writes = 0 확인.
+- 실제 배포 없음.
+- Phase C로 넘어가도 되는지.
+- 남은 위험.
 
-## Phase B 예정
+## Phase C 예정
 
-Phase A PASS 후에만:
-- RATE_DB/diagnostic schema에서 production-shape partial index + Music Note trigger exclusion 후보 측정
-- exact first public/private/republish/noop row meter
-- R2 search/deep paging integration test
-- Work 독립 감사
-
-shared D1 cutover는 Phase B/Work PASS 후 사용자 별도 승인 전 실행 금지.
-
-## 현재 환경
-
-- PREVIEW app124
-- TEST app124 / TEST_VERIFIED
-- PRODUCTION app117
-- preview design HEAD는 설계 commit 이후 갱신될 수 있으므로 작업 시작 전 실제 HEAD 재확인
+Phase B + 독립 감사 PASS 후에만 새 R2 read path를 이해하는 코드를 PREVIEW에서 검증한다.
+TEST/PRODUCTION 승격은 별도 승인 규칙을 따른다.
+shared D1 partial-index/trigger cutover는 Phase D이며 사용자 별도 승인 전 실행 금지.

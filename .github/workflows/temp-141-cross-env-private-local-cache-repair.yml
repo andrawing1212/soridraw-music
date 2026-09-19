@@ -1,0 +1,176 @@
+name: TEMP 141 Cross Env Private Local Cache Repair
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-141-cross-env-private-local-cache-repair.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-temp-141-private-local-cache-repair
+  cancel-in-progress: false
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: e8f1c7a986801f4c10eb884f38e2ea9f816370b3
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Exact canonical private guard (D1 SELECT only)
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          node "$W" d1 execute DB --remote --config "$PWD/canonical/wrangler.preview.jsonc" --command "SELECT id,is_public,updated_at FROM tracks WHERE updated_at=1789829348623 LIMIT 2" --json > "$RUNNER_TEMP/target141.json"
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const rows=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/target141.json','utf8')).flatMap(x=>x.results||[]);
+          if(rows.length!==1||Number(rows[0].is_public)!==0||Number(rows[0].updated_at)!==1789829348623)throw Error('canonical private target drift');
+          const trackId=String(rows[0].id||'');if(!trackId||trackId.length>512)throw Error('invalid target id');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/target-id141.json',JSON.stringify({trackId}));
+          console.log('PRIVATE_TARGET_SHA10='+crypto.createHash('sha256').update(trackId).digest('hex').slice(0,10));
+          NODE
+      - name: Remove only private target from TEST and PRODUCTION local feed snapshots
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          TOKEN="$(openssl rand -hex 32)"
+          cat > .temp-141-worker.mjs <<'WORKER'
+          const SECRET='__TOKEN__';
+          const idOf=x=>String(x?.id||x?.trackId||'').trim();
+          const json=(x,status=200)=>new Response(JSON.stringify(x),{status,headers:{'content-type':'application/json'}});
+          async function readPrivateGuard(shared,trackId){
+            const object=await shared.get('internal/explore/catalog-v1/meta/'+encodeURIComponent(trackId)+'.json');
+            if(!object)throw Error('missing catalog meta');
+            const meta=JSON.parse(await object.text());
+            if(meta.trackId!==trackId||meta.public!==false||!Array.isArray(meta.markerKeys)||meta.markerKeys.length!==0)throw Error('catalog target no longer private');
+          }
+          async function repairBucket(bucket,shared,label,trackId){
+            const results=[];
+            for(const sort of ['latest','popular']){
+              const key='internal/explore/feed-v1/'+sort+'-40.json';
+              let done=false;
+              for(let attempt=0;attempt<8;attempt++){
+                await readPrivateGuard(shared,trackId);
+                const obj=await bucket.get(key);
+                if(!obj)throw Error(label+' missing '+sort);
+                const before=JSON.parse(await obj.text());
+                const items=before?.payload?.data?.items;
+                if(!Array.isArray(items)||![37,38].includes(items.length))throw Error(label+' unexpected count '+sort);
+                const hits=items.filter(x=>idOf(x)===trackId).length;
+                if(hits===0&&items.length===37){results.push({label,sort,before:37,after:37,changed:false});done=true;break;}
+                if(hits!==1||items.length!==38)throw Error(label+' target/count mismatch '+sort);
+                const filtered=items.filter(x=>idOf(x)!==trackId);
+                if(filtered.length!==37)throw Error(label+' filtered count mismatch '+sort);
+                const next={...before,payload:{...before.payload,data:{...before.payload.data,items:filtered}},updatedAt:Date.now()};
+                const saved=await bucket.put(key,JSON.stringify(next),{
+                  onlyIf:{etagMatches:obj.etag},
+                  httpMetadata:{contentType:'application/json; charset=utf-8'},
+                  customMetadata:{...(obj.customMetadata||{}),privateTargetRepair:'141',updatedAt:String(next.updatedAt)}
+                });
+                if(!saved)continue;
+                const verifyObj=await bucket.get(key);
+                const verify=JSON.parse(await verifyObj.text())?.payload?.data?.items;
+                if(!Array.isArray(verify)||verify.length!==37||verify.some(x=>idOf(x)===trackId))throw Error(label+' postflight failed '+sort);
+                if(filtered.some((x,i)=>JSON.stringify(x)!==JSON.stringify(verify[i])))throw Error(label+' unrelated track changed '+sort);
+                results.push({label,sort,before:38,after:37,changed:true});done=true;break;
+              }
+              if(!done)throw Error(label+' CAS contention '+sort);
+            }
+            return results;
+          }
+          export default {async fetch(request,env){
+            if(request.method!=='POST'||request.headers.get('x-secret')!==SECRET)return json({ok:false},403);
+            try{
+              const {trackId}=await request.json();
+              if(!trackId||typeof trackId!=='string'||trackId.length>512)throw Error('bad trackId');
+              await readPrivateGuard(env.SHARED,trackId);
+              const test=await repairBucket(env.TEST_CACHE,env.SHARED,'test',trackId);
+              const prod=await repairBucket(env.SHARED,env.SHARED,'prod',trackId);
+              await readPrivateGuard(env.SHARED,trackId);
+              return json({ok:true,results:[...test,...prod]});
+            }catch(e){return json({ok:false,error:String(e?.message||e)},500);}
+          }};
+          WORKER
+          TOKEN="$TOKEN" node <<'NODE'
+          const fs=require('fs'),p='.temp-141-worker.mjs';
+          fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace('__TOKEN__',process.env.TOKEN));
+          NODE
+          cat > .temp-141-config.jsonc <<'JSON'
+          {
+            "name":"soridraw-temp-141-local-cache-repair",
+            "main":".temp-141-worker.mjs",
+            "compatibility_date":"2026-08-28",
+            "r2_buckets":[
+              {"binding":"SHARED","bucket_name":"soridraw-profile-media"},
+              {"binding":"TEST_CACHE","bucket_name":"soridraw-profile-media-test"}
+            ]
+          }
+          JSON
+          node --check .temp-141-worker.mjs
+          DEV_PID=""
+          cleanup(){
+            status=$?
+            if [ -n "$DEV_PID" ]; then kill "$DEV_PID" >/dev/null 2>&1||true;wait "$DEV_PID" >/dev/null 2>&1||true;fi
+            exit "$status"
+          }
+          trap cleanup EXIT
+          node "$W" dev --remote --config .temp-141-config.jsonc --ip 127.0.0.1 --port 8794 > "$RUNNER_TEMP/dev141.log" 2>&1 &
+          DEV_PID=$!
+          ready=0
+          for n in $(seq 1 90);do
+            code="$(curl -sS -X POST -o /dev/null -w '%{http_code}' http://127.0.0.1:8794/||true)"
+            if [ "$code" = 403 ];then ready=1;break;fi
+            sleep 1
+          done
+          if [ "$ready" != 1 ];then sed -n '1,120p' "$RUNNER_TEMP/dev141.log";exit 1;fi
+          code="$(curl -sS -X POST -H "x-secret: $TOKEN" -H 'Content-Type: application/json' --data-binary @"$RUNNER_TEMP/target-id141.json" -o "$RUNNER_TEMP/result141.json" -w '%{http_code}' http://127.0.0.1:8794/)"
+          node <<'NODE'
+          const fs=require('fs'),r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/result141.json','utf8'));
+          if(!r.ok||r.results?.length!==4||r.results.some(x=>x.after!==37))throw Error('local cache repair failed '+String(r.error||'invalid result'));
+          for(const x of r.results)console.log('LOCAL_PRIVATE_REPAIR env='+x.label+' sort='+x.sort+' before='+x.before+' after='+x.after+' changed='+x.changed);
+          console.log('CANONICAL_D1_WRITE=0; USER_ORIGIN_WRITE=0; TARGET_ONLY=PASS');
+          NODE
+          test "$code" = 200
+          kill "$DEV_PID" >/dev/null 2>&1||true
+          wait "$DEV_PID" >/dev/null 2>&1||true
+          DEV_PID=""
+          trap - EXIT
+      - name: Independent postflight all caches
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          get(){
+            bucket="$1"; key="$2"; out="$3"
+            node "$W" r2 object get "$bucket/$key" --file "$out" --remote >/dev/null
+          }
+          for sort in latest popular;do
+            get soridraw-profile-media-preview "internal/explore/feed-v1/$sort-40.json" "$RUNNER_TEMP/preview-$sort.json"
+            get soridraw-profile-media-test "internal/explore/feed-v1/$sort-40.json" "$RUNNER_TEMP/test-$sort.json"
+            get soridraw-profile-media "internal/explore/feed-v1/$sort-40.json" "$RUNNER_TEMP/prod-$sort.json"
+            get soridraw-profile-media "internal/explore/shared-feed-v112/$sort-40.json" "$RUNNER_TEMP/shared-$sort.json"
+          done
+          node <<'NODE'
+          const fs=require('fs'),root=process.env.RUNNER_TEMP,id=JSON.parse(fs.readFileSync(root+'/target-id141.json','utf8')).trackId,idOf=x=>String(x?.id||x?.trackId||'').trim();
+          for(const env of ['preview','test','prod','shared'])for(const sort of ['latest','popular']){
+            const items=JSON.parse(fs.readFileSync(root+'/'+env+'-'+sort+'.json','utf8'))?.payload?.data?.items||[];
+            if(items.length!==37||items.some(x=>idOf(x)===id))throw Error(env+' '+sort+' still stale');
+            console.log('POSTFLIGHT env='+env+' sort='+sort+' count='+items.length+' privateAbsent=true');
+          }
+          console.log('ALL_FIRST_PAGE_LOCAL_AND_SHARED_PRIVATE_ABSENT=PASS');
+          NODE

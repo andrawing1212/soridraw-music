@@ -1,99 +1,86 @@
 # SORIDRAW NEXT CODEX TASK
 
-최종 갱신: 2026-09-19 KST — Phase C 068 준비 완료 / PREVIEW deploy + derived catalog bootstrap 승인 대기
+최종 갱신: 2026-09-19 KST — PREVIEW 068 배포 + derived R2 catalog 432 bootstrap 완료 / staged write 검증 승인 대기
 
 ## 현재 고정 기준
-- PREVIEW 068 code merge: `b07458d9d7db30a9c1a67c9f8e0beea8c3bdb78b`
-- 068 validation Run: `35445896054` SUCCESS
+- PREVIEW product code: `b07458d9d7db30a9c1a67c9f8e0beea8c3bdb78b`
+- PREVIEW Worker deploy Run: `35446460693` SUCCESS
+- active PREVIEW Worker: `3678c1da-1bb5-4cfc-881f-6d1ad85a7fe0`
 - canonical 068 SHA256: `129c743de7305384205ba266691fa168c3098a8e7b537f02959a0779da8b6da6`
-- current deployed PREVIEW Worker: `32428130-3cc0-47d8-867c-787064943ce4` — 067, **068 미배포**
+- catalog bootstrap Run: `35447123476` SUCCESS
 - app version: 124
-- TEST/PRODUCTION unchanged
+- TEST Worker: `6e8dca9c-2c58-42ea-ae7d-765e10afef8f` unchanged
+- PRODUCTION Worker: `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` unchanged
+- Firebase unchanged
 
-## Phase C live audit
-TEMP 128 Run `35445222323` SUCCESS:
-- catalog write/read/first-publisher flags all OFF.
-- DB/shared R2 + RATE_DB/PREVIEW cache bindings PASS.
-- public tracks 38 / owners 3.
-- catalog sample meta 0/8 → catalog 현재 미구축.
-- existing first page D1 R0/W0.
+## 현재 derived R2 상태
+- public tracks: 38
+- owners: 3
+- shared profiles: 3/3
+- shared track-card: 38/38
+- exact catalog objects: **432**
+  - meta 38
+  - latest 38
+  - popular 38
+  - profile 38
+  - genre 21
+  - title 250
+  - artistMeta 3
+  - artistName 3
+  - artistHandle 3
+- canonical D1 write during bootstrap: 0
+- user origin data change: false
+- latest/popular first page: D1 R0/W0
+- `SORIDRAW_R2_CATALOG_V1`: OFF
+- `SORIDRAW_R2_CATALOG_READ_V1`: OFF
+- `SORIDRAW_R2_FIRST_PUBLISHER_V1`: OFF
 
-TEMP 129 Run `35445458799` SUCCESS:
-- shared latest 38 = canonical public tracks 38, current tracks 전부 R2 source로 bootstrap 가능.
-- shared profiles 2/3 present, 1 missing.
-- missing critical owner/title/publishedAt = 0.
-- genre source missing = 17 tracks; 임의 생성 금지.
-- exact initial catalog plan = **432 unique R2 objects**:
-  - 38 meta
-  - 38 latest
-  - 38 popular
-  - 38 profile
-  - 21 genre
-  - 250 title
-  - 3 artistMeta
-  - 3 artistName
-  - 3 artistHandle
-- dry-run only; D1/R2 write 0.
+## 다음 실제 작업 — 별도 사용자 승인 필요
 
-## 068
-- catalog write mode에서도 local profile cache miss 시 shared profile R2 fallback 허용.
-- brand-new catalog track은 already-resolved uid/nickname/handle로 artist marker targeted sync.
-- first-publisher/profile-edit 기존 artist sync 보호.
-- extra D1 read/write 0.
-- TypeScript / Build / 066-067-068 / shared projection regressions PASS.
+### A. staged catalog WRITE 검증
+자동 진행 금지. 승인 후 PREVIEW에서만:
+1. `SORIDRAW_R2_CATALOG_V1=1`만 켠다.
+2. READ / FIRST_PUBLISHER는 OFF 유지한다.
+3. 기존 432 catalog 전체 rebuild 금지.
+4. 다음 mutation을 한 항목씩 검증한다.
+   - 새 publish
+   - private
+   - republish
+   - like / unlike
+   - profile nickname/handle edit
+5. 각 mutation은 changed track/profile marker만 갱신해야 한다.
+6. D1 rows_written hard gate = W1~W2.
+7. 전체 Feed/전체 profile scan/rebuild 금지.
+8. legacy latest/popular first page D1 R0/W0 보호.
+9. TEST/PRODUCTION/Firebase 비변경 확인.
 
-## 다음 실제 작업 — 사용자 승인 필요
+### B. staged WRITE postflight
+- catalog object count/key parity 유지.
+- publish/private 후 meta/latest/popular/profile/title/genre marker가 해당 곡만 이동/삭제되는지 확인.
+- like/unlike는 필요한 popular/meta/card 계열만 targeted delta인지 확인.
+- profile edit는 artist meta/name/handle만 targeted sync인지 확인.
+- 기존 검색 결과와 legacy 결과 parity 확인.
+- canonical user data 의미 변경 없음.
 
-### A. PREVIEW 068 code-only deploy
-- exact product target `b07458d9d7db30a9c1a67c9f8e0beea8c3bdb78b` 또는 문서 커밋만 뒤에 붙은 경우 동일 product tree 고정.
-- Worker만 배포.
-- Firebase Hosting/Functions/Rules 재배포 금지.
-- catalog flags는 전부 OFF 유지.
-- TEST/PRODUCTION 비변경 확인.
-
-### B. bounded derived R2 bootstrap
-**별도 승인 없이 실행 금지.**
-- canonical user row/D1 schema/index/trigger 수정 금지.
-- 먼저 missing shared profile 1개만 bounded derived-profile repair.
-- shared latest 38곡을 source로 catalog를 구축. 전체 D1 track scan 금지.
-- 최대 예상 unique R2 object 432.
-- 각 object는 derived index/cache이며 사용자 원본 데이터가 아님.
-- build 중 READ flag OFF 고정.
-- 실패 시 생성한 catalog-v1 namespace만 bounded rollback 가능한 구조 사용.
-- full Feed/public-profile rebuild 금지.
-
-### C. bootstrap postflight
-- meta/latest/popular/profile = 각 38.
-- genre = 21.
-- title = 250.
-- artist meta/name/handle = 각 3.
-- catalog hydration shared track-card coverage 확인.
-- title / genre / artist nickname / handle dry-read result와 legacy result 비교.
-- Explore/profile first page D1 R0/W0 보호.
-- user data / canonical D1 write 0.
-
-### D. write flag staged test
-bootstrap PASS 뒤에도 자동 진행 금지.
-- `SORIDRAW_R2_CATALOG_V1=1`만 먼저 검토.
-- READ / FIRST_PUBLISHER는 OFF 유지.
-- publish/private/republish/like/profile edit가 changed item marker만 움직이는지 확인.
-- D1 W1~W2 hard gate 유지.
-- 전체 catalog rebuild 금지.
-
-### E. read cutover
-- completeness + staged mutation parity PASS 뒤에만 `SORIDRAW_R2_CATALOG_READ_V1=1` 검토.
-- title / genre / artist search.
+### C. READ cutover
+A/B가 모두 PASS한 뒤에도 자동 진행 금지.
+- 별도 사용자 승인 후 `SORIDRAW_R2_CATALOG_READ_V1=1` 검토.
+- title / genre / artist nickname / handle search.
 - Explore/profile deep-page.
+- warm revisit D1 R0/W0.
 - legacy fallback/rollback 유지.
-- first-publisher flag는 별도.
-- shared D1 partial-index/trigger Phase D는 별도 사용자 승인 전 금지.
+
+### D. 이후 별도 단계
+- `SORIDRAW_R2_FIRST_PUBLISHER_V1` ON.
+- shared canonical D1 partial-index/trigger Phase D.
+- 둘 다 별도 승인 없이는 실행 금지.
 
 ## 금지
-- 사용자 승인 없는 432-object catalog bootstrap.
-- 사용자 승인 없는 missing profile derived repair.
-- shared canonical D1 migration/index/trigger/user-row rewrite.
+- 사용자 승인 없는 catalog WRITE flag ON.
 - catalog READ flag 조기 ON.
 - first-publisher flag 조기 ON.
+- 432 catalog 전체 재생성.
+- shared canonical D1 migration/index/trigger/user-row rewrite.
 - Firebase 재배포.
 - TEST 승격.
 - PRODUCTION 승격.

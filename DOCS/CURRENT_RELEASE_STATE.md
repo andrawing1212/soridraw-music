@@ -1,5 +1,31 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AQ. 실사용 mutation read-only 사후 점검 — 전송된 변경 미검출 / W1~W2 검증 보류
+
+2026-09-19 KST, 사용자가 PREVIEW의 비공개→재공개 및 좋아요→해제를 수행했다고 알려준 뒤 독립 사후 점검을 실행했다. **검증 결과는 실사용 D1 쓰기 합격이 아니라, 관측 가능한 최근 원본 변경이 없었다는 것**이다. 해당 동작이 한 묶음에서 최종 원상복귀했거나 앱의 페이지 이탈 저장/좋아요 지연 처리가 아직 전송되지 않았을 가능성이 있으며, 현재 서버 결과만으로 어느 경우인지 단정하지 않는다.
+
+- TEMP 132 Run `35449664860` — SUCCESS (점검 절차 자체 정상).
+  - 2026-09-19T14:23:00Z 이후 tracks.updated_at 변경 기록: **0개**.
+  - 같은 구간 track_stats.updated_at 변경 기록: **0개**.
+  - like batch pending 035/066/069: **모두 0** (2026-09-19T14:44:55Z).
+  - shared latest R2 항목: **38곡**.
+  - mutation 대상 후보 0개여서 catalog/D1 실사용 변경분 대조는 **수행 불가**. `LIVE_PARITY_MISMATCHES=0`은 비교 후보 0건인 결과이지 실사용 PASS 증거가 아님.
+  - PREVIEW latest/popular first page HTTP 200 / D1 R0/W0 유지.
+  - 이번 점검에서 D1/R2 write 0, 배포 0.
+- TEMP 133 Run `35449712958` — SUCCESS (D1 timestamp 형식 교차확인).
+  - tracks 최근 `updated_at` 최대 = `1789736525205` → 2026-09-18T13:02:05.205Z.
+  - track_stats 최근 `updated_at` 최대 = `1789728568148` → 2026-09-18T10:49:28.148Z.
+  - likes 최근 `created_at` 최대 = `1789728550782` (이전 날짜).
+  - timestamp는 밀리초이며 9월 19일 실사용 해당 변경을 나타내는 D1 기록 없음.
+- 앱은 공개/비공개를 페이지 이탈 시 최종 상태로 묶고 좋아요도 지연/최종 상태로 묶으므로, 두 동작을 각각 전송되기 전에 반대로 변경하면 원본 D1 write=0이 정상일 수 있다. 이는 코드 기반 가능한 설명이며 사용자 브라우저 outbox 상태는 미확인.
+
+### 다음 검증 방식 (실사용 작업 분리)
+1. 사용자에게 PREVIEW에서 기존 공개곡 1개를 **비공개만** 누르고 Music Note 페이지를 벗어난 뒤 알려달라고 안내. 이때 해당 곡의 실제 D1 상태 전환/해당 catalog marker 삭제와 요청당 W1~W2를 점검.
+2. 이후 별도로 **재공개만** 진행하고 페이지를 벗어나 저장 확인. 비공개와 재공개를 같은 outbox 묶음에서 처리하지 않는다.
+3. 좋아요 1회는 30초 idle 묶음 전송과 Worker의 지연 합산(최대 약 10분)까지 기다려 확인한 뒤 해제 테스트를 별도로 수행.
+4. 필요하면 사용자의 관리자 내부 진단 요청별 D1 쓰기 수 화면/기록을 받아 W1~W2 확인. 지금 사후 원본 상태만으로 과거 요청당 rows_written을 복원할 수 없음.
+5. catalog READ/FIRST_PUBLISHER OFF 유지, TEST/PRODUCTION 승격 금지.
+
 ## 0AP. PREVIEW catalog WRITE staged ON + targeted R2 delta 검증 PASS / READ·FIRST_PUBLISHER OFF 유지
 
 2026-09-19 KST, 사용자 승인으로 PREVIEW에서 `SORIDRAW_R2_CATALOG_V1=1`만 활성화하고 staged write 검증을 완료했다. catalog READ와 first-publisher는 계속 OFF이며, TEST/PRODUCTION/Firebase는 변경하지 않았다.

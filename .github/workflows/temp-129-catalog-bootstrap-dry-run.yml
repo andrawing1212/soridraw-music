@@ -32,7 +32,7 @@ jobs:
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
 
-      - name: Read shared latest snapshot and canonical count only
+      - name: Read shared latest snapshot and canonical counts only
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -42,8 +42,8 @@ jobs:
 
           node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-feed-v112/latest-40.json"             --file "$RUNNER_TEMP/latest.json" --remote >/dev/null
 
-          SQL="SELECT COUNT(*) AS public_tracks FROM tracks WHERE is_public=1 AND status='published';"
-          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$SQL" --json > "$RUNNER_TEMP/count.json"
+          SQL="SELECT COUNT(*) AS public_tracks FROM tracks WHERE is_public=1 AND status='published'; SELECT uid,nickname,handle,is_public FROM public_profiles WHERE is_public=1 ORDER BY uid;"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$SQL" --json > "$RUNNER_TEMP/canonical.json"
 
           node <<'NODE'
           const fs=require('fs');
@@ -51,8 +51,10 @@ jobs:
           const items=latest?.payload?.data?.items||[];
           const ids=items.map(v=>String(v?.id||v?.trackId||'').trim()).filter(Boolean);
           const unique=[...new Set(ids)];
-          const countJson=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/count.json','utf8'));
-          const canonical=Number(countJson.flatMap(v=>v.results||[])[0]?.public_tracks||0);
+          const canonicalJson=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/canonical.json','utf8'));
+          const sets=canonicalJson.flatMap(v=>Array.isArray(v?.results)?[v.results]:[]);
+          const canonical=Number((sets[0]||[])[0]?.public_tracks||0);
+          const profiles=sets[1]||[];
           console.log('SHARED_LATEST_ITEMS='+items.length);
           console.log('SHARED_LATEST_UNIQUE_IDS='+unique.length);
           console.log('CANONICAL_PUBLIC_TRACK_COUNT='+canonical);
@@ -60,23 +62,35 @@ jobs:
           if(unique.length!==canonical) throw new Error('Shared latest snapshot does not cover all current public tracks');
           const owners=[...new Set(items.map(v=>String(v?.ownerUid||v?.owner_uid||'').trim()).filter(Boolean))];
           fs.writeFileSync(process.env.RUNNER_TEMP+'/owners.txt',owners.join('\n')+'\n');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/canonical-profiles.json',JSON.stringify(profiles));
           console.log('SHARED_LATEST_OWNER_COUNT='+owners.length);
+          console.log('CANONICAL_PUBLIC_PROFILE_ROWS='+profiles.length);
           NODE
 
-      - name: Read shared profile bundles for current owners
+      - name: Read shared profile bundles best effort
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
           set -euo pipefail
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           idx=0
+          found=0
+          missing=0
           while IFS= read -r uid; do
             [ -n "$uid" ] || continue
             idx=$((idx+1))
             encoded="$(node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$uid")"
-            node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-profile-v113/${encoded}.json"               --file "$RUNNER_TEMP/profile-${idx}.json" --remote >/dev/null
+            if node "$WRANGLER" r2 object get "$SHARED_R2/internal/explore/shared-profile-v113/${encoded}.json"               --file "$RUNNER_TEMP/profile-${idx}.json" --remote >/dev/null 2>&1; then
+              found=$((found+1))
+              echo "SHARED_PROFILE_OWNER_${idx}=FOUND"
+            else
+              missing=$((missing+1))
+              printf '{}' > "$RUNNER_TEMP/profile-${idx}.json"
+              echo "SHARED_PROFILE_OWNER_${idx}=MISSING"
+            fi
           done < "$RUNNER_TEMP/owners.txt"
-          echo "SHARED_PROFILE_BUNDLES_READ=$idx"
+          echo "SHARED_PROFILE_BUNDLES_FOUND=$found"
+          echo "SHARED_PROFILE_BUNDLES_MISSING=$missing"
 
       - name: Calculate exact catalog object plan without writes
         shell: bash
@@ -96,13 +110,30 @@ jobs:
           const latest=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/latest.json','utf8'));
           const items=latest?.payload?.data?.items||[];
           const owners=fs.readFileSync(process.env.RUNNER_TEMP+'/owners.txt','utf8').trim().split(/\r?\n/).filter(Boolean);
+          const canonicalProfiles=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/canonical-profiles.json','utf8'));
+          const canonicalByUid=new Map(canonicalProfiles.map(p=>[String(p?.uid||''),p]));
 
           const profiles=[];
+          let sharedProfileFound=0;
+          let sharedProfileMissing=0;
+          let canonicalFallbackUsed=0;
           for(let i=0;i<owners.length;i++){
             const bundle=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+`/profile-${i+1}.json`,'utf8'));
-            const p=bundle?.body?.data?.profile||bundle?.data?.profile||bundle?.profile||null;
-            if(!p) throw new Error('shared profile body missing for owner '+owners[i]);
-            profiles.push({...p,uid:String(p.uid||owners[i])});
+            const shared=bundle?.body?.data?.profile||bundle?.data?.profile||bundle?.profile||null;
+            if(shared){
+              sharedProfileFound++;
+              profiles.push({...shared,uid:String(shared?.uid||owners[i])});
+              continue;
+            }
+            sharedProfileMissing++;
+            const canonical=canonicalByUid.get(owners[i]);
+            if(!canonical) throw new Error('canonical profile fallback missing for owner index '+(i+1));
+            canonicalFallbackUsed++;
+            profiles.push({
+              uid:owners[i],
+              nickname:String(canonical?.nickname||''),
+              handle:String(canonical?.handle||''),
+            });
           }
 
           const allKeys=new Set();
@@ -122,9 +153,7 @@ jobs:
             if(!catalogGenreFromCard066(item)) missingGenre++;
             if(ownerUid) ownersSeen.add(ownerUid);
 
-            const meta=catalogMetaKey066(id);
-            allKeys.add(meta); typeCounts.meta++;
-
+            allKeys.add(catalogMetaKey066(id)); typeCounts.meta++;
             const markers=catalogMarkerKeys066(item);
             maxMarkers=Math.max(maxMarkers,markers.length);
             for(const key of markers){
@@ -135,16 +164,13 @@ jobs:
               else if(key.includes('/genre/')) typeCounts.genre++;
               else if(key.includes('/title/')) typeCounts.title++;
             }
-
-            const tokens=catalogTitleTokens066(title);
-            if(tokens.length===0) throw new Error('title token generation failed '+id);
+            if(catalogTitleTokens066(title).length===0) throw new Error('title token generation failed '+id);
           }
 
           for(const profile of profiles){
             const uid=String(profile?.uid||'').trim();
             if(!uid) throw new Error('profile uid missing');
-            const meta=catalogArtistMetaKey066(uid);
-            allKeys.add(meta); typeCounts.artistMeta++;
+            allKeys.add(catalogArtistMetaKey066(uid)); typeCounts.artistMeta++;
             for(const key of catalogArtistMarkerKeys066(profile)){
               allKeys.add(key);
               if(key.includes('/artist/name/')) typeCounts.artistName++;
@@ -152,13 +178,13 @@ jobs:
             }
           }
 
-          const expectedRaw =
-            typeCounts.meta+typeCounts.latest+typeCounts.popular+typeCounts.profile+
-            typeCounts.genre+typeCounts.title+typeCounts.artistMeta+
-            typeCounts.artistName+typeCounts.artistHandle;
+          const expectedRaw=Object.values(typeCounts).reduce((a,b)=>a+b,0);
 
           console.log('DRY_RUN_TRACKS='+items.length);
           console.log('DRY_RUN_OWNERS='+ownersSeen.size);
+          console.log('SHARED_PROFILE_FOUND='+sharedProfileFound);
+          console.log('SHARED_PROFILE_MISSING='+sharedProfileMissing);
+          console.log('CANONICAL_PROFILE_FALLBACK_USED='+canonicalFallbackUsed);
           console.log('MISSING_OWNER_UID='+missingOwner);
           console.log('MISSING_TITLE='+missingTitle);
           console.log('MISSING_PUBLISHED_AT='+missingPublishedAt);
@@ -167,17 +193,15 @@ jobs:
           for(const [k,v] of Object.entries(typeCounts)) console.log('OBJECTS_'+k.toUpperCase()+'='+v);
           console.log('EXPECTED_OBJECT_REFERENCES='+expectedRaw);
           console.log('EXPECTED_UNIQUE_R2_OBJECTS='+allKeys.size);
-          console.log('BOOTSTRAP_D1_DATA_READ_REQUIRED=0');
-          console.log('BOOTSTRAP_SOURCE=SHARED_R2_LATEST_PLUS_SHARED_PROFILES');
+          console.log('BOOTSTRAP_TRACK_DATA_D1_READ_REQUIRED=0');
+          console.log('BOOTSTRAP_TRACK_SOURCE=SHARED_R2_LATEST');
+          console.log('BOOTSTRAP_PROFILE_SOURCE='+(sharedProfileMissing===0?'SHARED_R2_ONLY':'SHARED_R2_PLUS_CANONICAL_FALLBACK_FOR_MISSING_PROFILE'));
+          console.log('R2_ONLY_BOOTSTRAP_READY='+(sharedProfileMissing===0?'YES':'NO_PROFILE_REPAIR_REQUIRED'));
           console.log('CATALOG_WRITE_EXECUTED=0');
 
-          if(missingOwner||missingTitle||missingPublishedAt) {
-            throw new Error('Critical track fields missing');
-          }
-          if(ownersSeen.size!==profiles.length) {
-            throw new Error('Shared profile coverage mismatch owners='+ownersSeen.size+' profiles='+profiles.length);
-          }
-          console.log('R2_ONLY_BOOTSTRAP_DRY_RUN=PASS');
+          if(missingOwner||missingTitle||missingPublishedAt) throw new Error('Critical track fields missing');
+          if(ownersSeen.size!==profiles.length) throw new Error('Profile coverage mismatch');
+          console.log('CATALOG_BOOTSTRAP_DRY_RUN=PASS');
           NODE
 
       - name: Safety

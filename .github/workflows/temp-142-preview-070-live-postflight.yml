@@ -1,0 +1,88 @@
+name: TEMP 142 PREVIEW 070 Live Postflight
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-142-preview-070-live-postflight.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fc451c5d160d945005da9fb9985a15e52cb614cf
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Actual PREVIEW app address
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS --retry 3 --max-time 20 -D "$RUNNER_TEMP/app.head" -o "$RUNNER_TEMP/app.html" -w '%{http_code}' -H 'Cache-Control: no-cache' https://preview.soridraw.com/)"
+          test "$code" = 200
+          version_code="$(curl -sS --retry 3 --max-time 20 -o "$RUNNER_TEMP/app-version.json" -w '%{http_code}' -H 'Cache-Control: no-cache' https://preview.soridraw.com/app-version.json)"
+          test "$version_code" = 200
+          version="$(node -e "const p=require(process.env.RUNNER_TEMP+'/app-version.json');process.stdout.write(String(p.version||''))")"
+          test -n "$version"
+          echo "PREVIEW_APP_HTTP=200 APP_VERSION=$version"
+      - name: Current Worker versions and live zero-read feed
+        shell: bash
+        run: |
+          set -euo pipefail
+          active(){
+            curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/deployments" | jq -er '.result.deployments[0].versions|max_by(.percentage)|select(.percentage>=99.99)|.version_id'
+          }
+          p="$(active soridraw-explore-preview)"
+          t="$(active soridraw-explore-test)"
+          r="$(active soridraw-explore-api)"
+          test "$p" = 'f0a910a4-104e-47f7-8e3b-2c2c6454d8cf'
+          test "$t" = '6e8dca9c-2c58-42ea-ae7d-765e10afef8f'
+          test "$r" = 'd6b0a284-6e3c-4b57-aebf-0a7d1c3513e0'
+          for sort in latest popular;do
+            curl -sS --retry 3 -D "$RUNNER_TEMP/$sort.head" -o "$RUNNER_TEMP/$sort.json" -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108"
+            read="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/$sort.head"|tail -1)"
+            write="$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/$sort.head"|tail -1)"
+            test "$read" = 0
+            test "$write" = 0
+            echo "PREVIEW_SORT_R0_W0 sort=$sort PASS"
+          done
+          echo "PREVIEW_WORKER=$p"
+          echo "TEST_WORKER_UNCHANGED=$t"
+          echo "PRODUCTION_WORKER_UNCHANGED=$r"
+      - name: Private target remains absent in PREVIEW local and shared snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npm install --no-audit --no-fund --package-lock=false
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          node "$W" d1 execute DB --remote --config "$PWD/canonical/wrangler.preview.jsonc" --command "SELECT id,is_public,updated_at FROM tracks WHERE updated_at=1789829348623 LIMIT 2" --json > "$RUNNER_TEMP/target142.json"
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto'),rows=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/target142.json','utf8')).flatMap(x=>x.results||[]);
+          if(rows.length!==1||Number(rows[0].is_public)!==0)throw Error('private target drift');
+          const id=String(rows[0].id||'');fs.writeFileSync(process.env.RUNNER_TEMP+'/target142.id',id);
+          console.log('PRIVATE_TARGET_SHA10='+crypto.createHash('sha256').update(id).digest('hex').slice(0,10));
+          NODE
+          for sort in latest popular;do
+            node "$W" r2 object get "soridraw-profile-media-preview/internal/explore/feed-v1/$sort-40.json" --file "$RUNNER_TEMP/local-$sort.json" --remote >/dev/null
+            node "$W" r2 object get "soridraw-profile-media/internal/explore/shared-feed-v112/$sort-40.json" --file "$RUNNER_TEMP/shared-$sort.json" --remote >/dev/null
+          done
+          node <<'NODE'
+          const fs=require('fs'),root=process.env.RUNNER_TEMP,id=fs.readFileSync(root+'/target142.id','utf8').trim(),idOf=x=>String(x?.id||x?.trackId||'').trim();
+          for(const scope of ['local','shared'])for(const sort of ['latest','popular']){
+            const items=JSON.parse(fs.readFileSync(root+'/'+scope+'-'+sort+'.json','utf8'))?.payload?.data?.items||[];
+            if(items.length!==37||items.some(x=>idOf(x)===id))throw Error(scope+' '+sort+' private leak');
+            console.log('POSTFLIGHT '+scope+' '+sort+' count=37 privateAbsent=true');
+          }
+          console.log('PRIVATE_STATE_POST_DEPLOY=PASS');
+          console.log('D1_WRITE=0 R2_WRITE=0 FIREBASE_WRITE=0');
+          NODE

@@ -1,103 +1,38 @@
 # SORIDRAW NEXT CODEX TASK
 
-최종 갱신: 2026-09-19 KST — W2 publication Phase B PASS / Phase C PREVIEW 준비
+최종 갱신: 2026-09-19 KST — Phase C 066 PREVIEW Worker 배포 후 검증
 
-## 현재 고정 기준
+## 실제 기준
+- Phase A+B PR #106 merge: `a7c048b0fa68907f459500fe1b547bb4126e8813`
+- PREVIEW 066 canonical Worker PR #107 merge: `7461200c559b2de306121924a13d82175fb4d77a`
+- PREVIEW Worker target: `7461200c559b2de306121924a13d82175fb4d77a`
+- PREVIEW Worker Run: `35428391780` **SUCCESS**
+- PREVIEW Worker version: `c177104b-be57-4e0b-9d41-3b8b817fdfb4`
+- app version: **124**, Hosting unchanged
+- TEST/PRODUCTION unchanged
+- RATE_DB candidate Run: `35427048164` SUCCESS: first R0/W2, private R1/W1, republish R1/W1, noop R1/W0
+- 위 비용은 diagnostic candidate 수치이며 live shared D1 비용이 아니다.
 
-- PREVIEW code merge: `a7c048b0fa68907f459500fe1b547bb4126e8813`
-- app version: **124**
-- Phase A validation Run: `35410052082` SUCCESS
-- Phase B diagnostics Run: `35427048164` SUCCESS
-- PREVIEW/TEST/PRODUCTION 실제 배포 상태는 이번 작업으로 변경되지 않음.
-- shared canonical D1/user data 변경 없음.
+## 다음 단계 — 배포 후 보수적 검증
 
-## 확정 비용 결과
+1. PREVIEW Worker의 실제 `SORIDRAW_R2_CATALOG_V1`, `SORIDRAW_R2_CATALOG_READ_V1`, `SORIDRAW_R2_FIRST_PUBLISHER_V1` persisted flags가 기본 OFF인지, 공유 `DB`/`PROFILE_MEDIA`와 PREVIEW 전용 `RATE_DB`/`EXPLORE_CACHE` binding이 정확한지 확인.
+2. PREVIEW 기존 Feed 첫 페이지, 공개프로필 첫 페이지/063 warm Edge, 좋아요/해제, Music Note 공개/비공개, 페이지 재방문에서 회귀와 D1 비용 확인. 인증된 실사용 테스트는 명확히 미검증으로 구분.
+3. R2 catalog completeness 검증 계획 수립. 기존 공개곡 전체가 준비되기 전에는 catalog read flag ON 금지; 실제 사용자 데이터의 대량 backfill/복제/강제 재생성 금지.
+4. 제한된 테스트 계정으로 title/genre/artist search 및 Explore/profile deep-page를 단계별 검증하되, 공유 user data 안전 우선.
+5. 첫 공개의 shared D1 W1~W2 실현은 현재 배포만으로 달성되지 않는다. partial-index/trigger exclusion은 Phase D로 분리. 사용자 **별도 승인** 전에 shared canonical D1 index/trigger 변경 금지.
+6. 검증 FAIL 또는 D1 W3+면 TEST/PRODUCTION 승격 금지; 원인 분석 및 수정 후 PREVIEW 재검증.
 
-PREVIEW RATE_DB production-shape candidate:
-- first public: **R0/W2**
-- private: **R1/W1**
-- republish: **R1/W1**
-- noop: **R1/W0**
-- legacy control: R2/W15
-- FTS insert: W1
-- FTS delete: W1
+## 금지
+- 승인 없는 shared canonical D1 migration/index/trigger 변경.
+- 승인 없는 catalog 전체 backfill, 실제 사용자 row rewrite/delete, 데이터 복제.
+- 기능 플래그 무단 ON.
+- 불완전 catalog를 검색/2페이지에 노출.
+- 배포 요청 없는 Firebase Hosting 재배포.
+- PREVIEW 실사용 검증 전 TEST 승격.
+- 명시적 승인 없는 PRODUCTION 승격.
 
-Hard gate 결과:
-- first/private/republish W1~W2 PASS.
-- noop W0 PASS.
-- D1 FTS publication hot-path write는 W3를 만들기 때문에 금지 유지.
-
-## Phase C — PREVIEW 실제 검증 준비
-
-목표:
-새 R2 read/search/deep-page/first-publisher 코드를 PREVIEW에서 안전하게 검증할 준비를 한다.
-
-### 1. 배포 전 고정 검증
-- 현재 preview HEAD 고정.
-- patch 066 생성 Worker syntax 확인.
-- Phase A verifier 재실행.
-- Phase B R2 integration verifier 재실행.
-- trackId stability 재실행.
-- 112/113/115/116/063 + derived-cache regressions.
-- TypeScript.
-- Build.
-- UI/CSS 비변경.
-- Firebase/Functions/Rules 비변경.
-- shared D1 schema/data 비변경 확인.
-
-### 2. 기능 플래그 원칙
-현재 기본값은 모두 OFF:
-- `SORIDRAW_R2_CATALOG_V1`
-- `SORIDRAW_R2_CATALOG_READ_V1`
-- `SORIDRAW_R2_FIRST_PUBLISHER_V1`
-
-불완전 catalog 노출 방지를 위해 순서 고정:
-1. 코드 먼저 배포.
-2. write 준비를 별도 검증.
-3. catalog completeness 검증 전 read flag ON 금지.
-4. first-publisher flag도 별도 실제 검증 전 ON 금지.
-
-### 3. 실제 PREVIEW 배포 규칙
-사용자의 명확한 **프리뷰배포 요청이 있을 때만**:
-- 검증된 preview HEAD 고정.
-- 필요한 Worker만 배포.
-- Firebase Hosting 변경이 없으면 불필요 재배포 금지.
-- shared canonical D1 migration/index/trigger 변경 금지.
-- 실제 `preview.soridraw.com` / PREVIEW Worker smoke 확인.
-- TEST/PRODUCTION 비변경 확인.
-
-### 4. PREVIEW 실제 기능 검증 항목
-- Explore 첫 페이지 기존 shared R2 동작 보존.
-- Explore 2페이지 이후 순서/중복/누락.
-- public profile 2페이지 이후 + pinned order.
-- 제목 검색.
-- 장르 검색.
-- artist nickname/handle 검색.
-- 좋아요/해제 후 popular marker targeted 이동.
-- 공개/비공개/재공개 marker targeted 처리.
-- 신규 first publisher retry/idempotency.
-- warm Explore / public profile D1 R0/W0 목표.
-- PC/모바일 결과 일관성.
-
-## 이번 단계에서 하지 말 것
-
-- shared canonical D1 index DROP/CREATE.
-- shared trigger DROP/CREATE.
-- migration / backfill / 사용자 row rewrite.
-- PROFILE_MEDIA 전체 catalog backfill.
-- read flag 임의 ON.
-- first-publisher flag 임의 ON.
-- 배포 요청 없는 Worker/Firebase 배포.
-- TEST/main 승격.
-- PRODUCTION 변경.
-
-## Phase D 예정
-
-Phase C PREVIEW 실제 검증 완료 뒤에도 shared D1 cutover는 자동 진행하지 않는다.
-
-Phase D는 사용자 별도 승인 후:
-- Music Note만 9 explicit secondary indexes 대상에서 제외하는 실제 partial-index cutover.
-- Music Note derived/profile-count/shared-revision trigger exclusion.
-- exact live rows_written 재검증.
-- W3+면 즉시 중단/rollback.
-- user row delete/backfill/rewrite 금지.
+## 배포 확인
+- `DOCS/CURRENT_RELEASE_STATE.md`의 0AK가 배포의 기준.
+- PREVIEW Worker API smoke, profile, warm revision D1 R0/W0 PASS.
+- TEST/PRODUCTION Worker 비변경 PASS.
+- `preview.soridraw.com` 직접 별도 fetch / PC·모바일 실사용 / live W1~W2는 미검증으로 유지.

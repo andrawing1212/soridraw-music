@@ -186,7 +186,8 @@ jobs:
             async fetch(request, env) {
               const url = new URL(request.url);
               if (request.method !== 'POST' || url.pathname !== '/repair') return new Response('Not found', { status: 404 });
-              if (!env.REPAIR_TOKEN || request.headers.get('x-repair-token') !== env.REPAIR_TOKEN) {
+              const REPAIR_TOKEN = '__TEMP127_TOKEN__';
+              if (request.headers.get('x-repair-token') !== REPAIR_TOKEN) {
                 return new Response('Forbidden', { status: 403 });
               }
 
@@ -327,8 +328,16 @@ jobs:
           }
           trap cleanup EXIT
 
+          TOKEN="$TOKEN" node - "$RUNNER_TEMP/repair-worker.mjs" <<'NODE'
+          const fs=require('fs');
+          const file=process.argv[2];
+          const token=process.env.TOKEN;
+          let s=fs.readFileSync(file,'utf8');
+          if(!s.includes('__TEMP127_TOKEN__')) throw new Error('repair token placeholder missing');
+          s=s.replace('__TEMP127_TOKEN__', token);
+          fs.writeFileSync(file,s);
+          NODE
           node "$WRANGLER" deploy --config "$CFG"
-          printf '%s' "$TOKEN" | node "$WRANGLER" secret put REPAIR_TOKEN --config "$CFG" >/dev/null
 
           url="https://${TEMP_WORKER}.andrawing1212.workers.dev/repair"
           code="$(curl --retry 4 --retry-delay 1 -sS -o "$RUNNER_TEMP/repair-result.json" -w '%{http_code}'             -X POST -H "x-repair-token: $TOKEN" "$url")"

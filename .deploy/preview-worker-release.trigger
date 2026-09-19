@@ -1,11 +1,10 @@
-requested_at=2026-09-19T14:14:07Z
+requested_at=2026-09-19T17:13:52Z
 requested_by=user
-product_code_target=ba723fb817aa2de99cf28821d85c48b4261455b8
-release_purpose=enable_staged_r2_catalog_write_flag_for_preview_validation
+product_code_target=dc95856ad8299b3ed8746b2fd4d2dbdd574cda4b
+release_purpose=deploy_069_070_targeted_shared_feed_and_legacy_writer_guard_to_preview
 no_d1_migration=true
 no_user_data_migration=true
 catalog_bootstrap_complete=true
-catalog_expected_unique_objects=432
 catalog_write_flag=true
 catalog_read_flag=false
 first_publisher_flag=false

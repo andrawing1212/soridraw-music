@@ -1,5 +1,41 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AR. 단일 실사용 비공개 원본 반영 PASS / 공유 Feed R2 stale FAIL — READ 전환·TEST 승격 중단
+
+2026-09-19 KST 사용자가 PREVIEW의 기존 공개곡 1개를 비공개로 변경하고 Music Note 페이지를 이탈한 후 read-only postflight를 진행했다. 이번에는 실제로 **D1 원본 비공개 1건이 검출**되었다. 그러나 새 catalog는 비공개 반영에 성공한 반면 공유 Feed R2의 latest/popular 스냅샷에 이전 곡이 남는 **파생 캐시 불일치**가 검출됐다.
+
+### TEMP 134 Run `35449942592` — FAIL (실제 parity 실패, 테스트 절차 성공)
+- 2026-09-19T14:45:00Z 이후 D1 `tracks.updated_at` 변경: **1건**.
+- 변경된 곡은 `is_public=0`, `updated_at=1789829348623` (2026-09-19T14:49:08.623Z).
+- 대상 식별 로그는 SHA-256의 앞 10자리 `1319e4479e`로만 표기; 원본 ID 노출 없음.
+- 해당 곡 R2 catalog meta: `public=false`, markerKeys 0 — **PASS**.
+- shared latest v112 snapshot: 38곡, 해당 private 곡을 여전히 포함 — **FAIL**.
+- 최근 좋아요 stats 변경 0.
+- `LIVE_PARITY_MISMATCHES=1`이므로 top-level audit 실패 처리.
+
+### TEMP 135 Run `35450000210` — FAIL (shared snapshots stale 지속)
+- 실제 PREVIEW `/v1/feed?sort=latest&limit=40`: 37곡, private 곡 미노출; 최초 확인 D1 read 2/write 0.
+- PREVIEW latest 진단용 R2 warm 경로: 37곡, private 곡 미노출; D1 R0/W0.
+- 실제 PREVIEW 인기 피드와 진단용 인기 피드: 37곡, private 곡 미노출; D1 R0/W0.
+- shared R2 `internal/explore/shared-feed-v112/latest-40.json`: 38곡, private 곡 포함 — **FAIL**.
+- shared R2 `internal/explore/shared-feed-v112/popular-40.json`: 38곡, private 곡 포함 — **FAIL**.
+- 따라서 현재 PREVIEW 첫 화면의 공개 응답은 private 곡 미노출이나, 다른 공유 캐시 소비자의 노출 안전성은 보장할 수 없음.
+
+### 원인 추적 — 코드 근거
+- `cloudflare/explore-worker/patches/043-publication-targeted-r2-hotpath.mjs`에서 Music Note 비공개 경로는 `syncExploreFeedR2Private043`를 호출한다.
+- `cloudflare/explore-worker/patches/059-shared-feed-r2-parity.mjs`는 구형 `syncExploreFeedR2Private017`만 감싸서 `mirrorExploreSharedFeeds059`를 실행한다.
+- 043 비공개 hotpath를 타면 059의 shared mirror가 직접 연결되지 않는다. 064 catch-up은 별도의 `syncDerivedCache032` 실행 시에만 작동한다.
+- 043→059 연결 누락이 이번 live 불일치와 부합한다. 해당 호출/동시성 보호를 범위 최소 수정으로 감사해야 한다.
+
+### 즉시 처리 경계
+- 실사용 해당 곡은 **비공개 유지**. 사용자에게 재공개를 요구하지 않는다.
+- 지금까지 이번 점검은 read-only: 데이터 강제 재생성/대량변환/D1 write/배포 없음.
+- `SORIDRAW_R2_CATALOG_V1` WRITE ON, `SORIDRAW_R2_CATALOG_READ_V1` OFF, `SORIDRAW_R2_FIRST_PUBLISHER_V1` OFF 유지.
+- **READ cutover·TEST·PRODUCTION 승격 모두 중단**.
+- 우선 targeted shared latest/popular R2 동기화 누락 원인을 고치고 대상 private 곡에 한정한 안전한 파생 캐시 복구/검증 방식을 별도로 수립한다. D1 원본 덮어쓰기·전체 catalog/Feed 재생성 금지.
+- 요청당 과거 D1 rows_written은 사후 DB 결과만으로 측정 불가. `W1~W2` 비용 합격은 미검증이며 관리자 요청별 계측 필요.
+- GitHub `preview` 제품/Worker 코드는 이 실사용 점검에서 수정·배포하지 않았다.
+
 ## 0AQ. 실사용 mutation read-only 사후 점검 — 전송된 변경 미검출 / W1~W2 검증 보류
 
 2026-09-19 KST, 사용자가 PREVIEW의 비공개→재공개 및 좋아요→해제를 수행했다고 알려준 뒤 독립 사후 점검을 실행했다. **검증 결과는 실사용 D1 쓰기 합격이 아니라, 관측 가능한 최근 원본 변경이 없었다는 것**이다. 해당 동작이 한 묶음에서 최종 원상복귀했거나 앱의 페이지 이탈 저장/좋아요 지연 처리가 아직 전송되지 않았을 가능성이 있으며, 현재 서버 결과만으로 어느 경우인지 단정하지 않는다.

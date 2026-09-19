@@ -34,6 +34,7 @@
     "064-shared-feed-catchup-convergence.mjs",
     "065-shared-like-count-targeted.mjs",
     "066-publication-r2-catalog-phase-a.mjs",
-    "067-like-075-shared-count-parity.mjs"
+    "067-like-075-shared-count-parity.mjs",
+    "068-catalog-publication-artist-parity.mjs"
   ]
 }

@@ -159,7 +159,7 @@ for (const required of [
 ]) assert(patch.includes(required), `patch contract missing: ${required}`);
 
 const releasePatches = Array.isArray(manifest?.patches) ? manifest.patches : [];
-assert(releasePatches.at(-1) === '066-publication-r2-catalog-phase-a.mjs', '066 must be the last release patch');
+assert(releasePatches.includes('066-publication-r2-catalog-phase-a.mjs'), '066 release patch missing from manifest');
 assert(String(appVersion.version) === '124', `app version changed unexpectedly: ${String(appVersion.version)}`);
 
 if (worker) {

@@ -48,6 +48,16 @@ export function catalogInverseNumber066(value) {
   return String(Number.MAX_SAFE_INTEGER - safe).padStart(16, '0');
 }
 
+export function catalogDescendingText066(value) {
+  const text = String(value ?? '');
+  const encoded = Array.from(text, (char) => {
+    const codePoint = char.codePointAt(0) ?? 0;
+    return (0x10ffff - codePoint).toString(16).padStart(6, '0');
+  });
+  encoded.push('ffffff');
+  return encoded.join('');
+}
+
 export function catalogTitleTokens066(title) {
   const full = normalizeCatalogText066(title).slice(0, 160);
   const tokenText = normalizeCatalogToken066(title);
@@ -105,26 +115,26 @@ export function catalogMetaKey066(trackId) {
 }
 
 export function catalogLatestKey066(track) {
-  return `${EXPLORE_R2_CATALOG_ROOT_066}/latest/${catalogInverseNumber066(track.publishedAt)}/${catalogSegment066(track.id)}.json`;
+  return `${EXPLORE_R2_CATALOG_ROOT_066}/latest/${catalogInverseNumber066(track.publishedAt)}/${catalogDescendingText066(track.id)}/${catalogSegment066(track.id)}.json`;
 }
 
 export function catalogPopularKey066(track) {
-  return `${EXPLORE_R2_CATALOG_ROOT_066}/popular/${catalogInverseNumber066(track.likeCount)}/${catalogInverseNumber066(track.publishedAt)}/${catalogSegment066(track.id)}.json`;
+  return `${EXPLORE_R2_CATALOG_ROOT_066}/popular/${catalogInverseNumber066(track.likeCount)}/${catalogInverseNumber066(track.publishedAt)}/${catalogDescendingText066(track.id)}/${catalogSegment066(track.id)}.json`;
 }
 
 export function catalogProfileKey066(track) {
   const pinOrder = track.profilePinned ? '0' : '1';
-  return `${EXPLORE_R2_CATALOG_ROOT_066}/profile/${catalogSegment066(track.ownerUid)}/${pinOrder}/${catalogInverseNumber066(track.publishedAt)}/${catalogSegment066(track.id)}.json`;
+  return `${EXPLORE_R2_CATALOG_ROOT_066}/profile/${catalogSegment066(track.ownerUid)}/${pinOrder}/${catalogInverseNumber066(track.publishedAt)}/${catalogDescendingText066(track.id)}/${catalogSegment066(track.id)}.json`;
 }
 
 export function catalogGenreKey066(track) {
   if (!track.primaryGenre) return '';
-  return `${EXPLORE_R2_CATALOG_ROOT_066}/genre/${catalogSegment066(track.primaryGenre)}/${catalogInverseNumber066(track.publishedAt)}/${catalogSegment066(track.id)}.json`;
+  return `${EXPLORE_R2_CATALOG_ROOT_066}/genre/${catalogSegment066(track.primaryGenre)}/${catalogInverseNumber066(track.publishedAt)}/${catalogDescendingText066(track.id)}/${catalogSegment066(track.id)}.json`;
 }
 
 export function catalogTitleKeys066(track) {
   return catalogTitleTokens066(track.title).map((token) =>
-    `${EXPLORE_R2_CATALOG_ROOT_066}/title/${catalogSegment066(token)}/${catalogInverseNumber066(track.publishedAt)}/${catalogSegment066(track.id)}.json`
+    `${EXPLORE_R2_CATALOG_ROOT_066}/title/${catalogSegment066(token)}/${catalogInverseNumber066(track.publishedAt)}/${catalogDescendingText066(track.id)}/${catalogSegment066(track.id)}.json`
   );
 }
 

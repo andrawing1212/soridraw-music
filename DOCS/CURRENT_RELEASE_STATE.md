@@ -1,5 +1,116 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AN. Phase C catalog 실제상태 감사 + 068 artist parity 코드 준비 완료 / 배포·bootstrap 전
+
+2026-09-19 KST, 067 좋아요 parity 복구 이후 원래 W2 publication Phase C 검증으로 복귀했다. 새 R2 catalog/search/deep-page 구조를 켜기 전에 실제 PREVIEW Cloudflare 설정, catalog 준비율, 현재 공개곡 전체 bootstrap 가능성을 read-only로 감사했고, catalog write 단독 ON 시 신규 publisher artist marker가 빠질 수 있는 경로를 068로 보강했다.
+
+### TEMP 128 — live flag/binding/catalog read-only audit
+- Run `35445222323` — **SUCCESS**.
+- active PREVIEW Worker: `32428130-3cc0-47d8-867c-787064943ce4`.
+- `DB` = shared canonical D1 PASS.
+- `RATE_DB` = PREVIEW-only D1 PASS.
+- `PROFILE_MEDIA` = shared R2 PASS.
+- `EXPLORE_CACHE` = PREVIEW-only R2 PASS.
+- `SORIDRAW_R2_CATALOG_V1` = OFF/absent.
+- `SORIDRAW_R2_CATALOG_READ_V1` = OFF/absent.
+- `SORIDRAW_R2_FIRST_PUBLISHER_V1` = OFF/absent.
+- canonical public tracks = **38**.
+- public owners = **3**.
+- latest 8곡 sample catalog meta = **0/8 present** → catalog incomplete.
+- 기존 first-page shared R2 latest/popular = D1 R0/W0 PASS.
+- D1/R2 write 0, deployment 0, user data change 0.
+- TEMP 128 Workflow 완료 후 삭제.
+
+### TEMP 129 — catalog bootstrap dry-run
+첫 Run `35445359154`은 3 owner 중 shared profile v113 1개가 없어서 profile read 단계에서 중단했다. 쓰기/배포는 0.
+
+보완 dry-run Run `35445458799` — **SUCCESS**:
+- shared latest items = **38**.
+- shared latest unique track IDs = **38**.
+- canonical public track count = **38**.
+- 따라서 현재 공개곡 38곡은 shared latest R2 하나로 전부 bootstrap source 확보 가능.
+- current owners = 3.
+- canonical public_profiles = 3.
+- shared profile v113: **2 found / 1 missing**.
+- critical track field:
+  - missing owner UID = 0.
+  - missing title = 0.
+  - missing publishedAt = 0.
+  - missing genre = **17**.
+- genre가 없는 17곡은 현재 shared card에도 genre source가 없어 임의 추론하지 않음.
+- 예상 catalog:
+  - meta 38.
+  - latest 38.
+  - popular 38.
+  - profile 38.
+  - genre 21.
+  - title 250.
+  - artist meta 3.
+  - artist name 3.
+  - artist handle 3.
+  - **총 unique R2 objects = 432**.
+- track bootstrap에 전체 D1 track scan은 필요 없음. shared latest R2를 source로 사용 가능.
+- creator search 완전성을 위해 missing shared profile 1개는 read cutover 전에 bounded derived-profile repair가 필요.
+- 실제 catalog write 0 / D1 write 0 / user data change 0 / deployment 0.
+- TEMP 129 Workflow 완료 후 삭제.
+
+### 068 — catalog publication artist parity
+발견한 위험:
+- 066은 explicit profile edit와 first-publisher bootstrap에서는 artist marker를 갱신한다.
+- 하지만 `catalog write=ON`, `first-publisher=OFF` 상태에서 established user의 local profile R2가 비어 있으면 shared profile을 재사용하지 못하고 profile D1 ensure 쪽으로 내려갈 수 있었다.
+- 또한 brand-new catalog track 생성 시 이미 확보한 profile nickname/handle을 artist marker에 확실히 연결하는 보강이 필요했다.
+
+068 수정:
+- branch: `work/catalog-first-publisher-artist-parity`.
+- patch: `068-catalog-publication-artist-parity.mjs`.
+- catalog write mode가 ON이면 publication profile lookup이 local R2 실패 후 shared profile R2까지 확인.
+- 새 track이고 dedicated first-publisher bootstrap이 아닌 경우, 이미 resolve된 `uid/nickname/handle`로 artist marker를 targeted sync.
+- first-publisher 기존 artist sync와 explicit profile-edit artist sync는 그대로 유지.
+- 새 D1 query/write/FTS 없음.
+- D1 schema/UI/Firebase 변경 없음.
+
+검증:
+- 첫 validation Run `35445836603`: 068 자체 PASS 후 오래된 066 verifier의 “066 must be last patch” 조건 때문에 중단. 제품 로직 실패 아님.
+- verifier 유지보수 후 최종 Run `35445896054` — **SUCCESS**.
+- 068 contract PASS.
+- 066/067/068 matrix PASS.
+- Phase B in-memory catalog integration PASS.
+- Music Note trackId stability PASS.
+- shared Feed/profile/track-card/count convergence regressions PASS.
+- TypeScript PASS.
+- Build PASS.
+- app version 124 unchanged.
+- `EXTRA_D1_READ_WRITE_068=0`.
+- canonical 068 SHA256: `129c743de7305384205ba266691fa168c3098a8e7b537f02959a0779da8b6da6`.
+- materialized canonical commit: `aacf8b1f4b8c7774ffeb93635da36002076c1d3d`.
+- validation Workflow 완료 후 삭제.
+- PR #109 merge commit: `b07458d9d7db30a9c1a67c9f8e0beea8c3bdb78b`.
+
+### 현재 실제 상태
+- GitHub PREVIEW code에는 068 포함 완료.
+- **068 Worker는 아직 PREVIEW에 재배포하지 않음.**
+- live PREVIEW Worker는 계속 `32428130-3cc0-47d8-867c-787064943ce4` (067) 기준.
+- catalog 432개는 아직 생성하지 않음.
+- missing shared profile 1개도 아직 repair하지 않음.
+- catalog write/read/first-publisher flags 전부 OFF 유지.
+- shared canonical D1 schema/index/trigger/user rows 변경 없음.
+- Firebase Hosting/Functions/Rules 변경 없음.
+- main `f7fc25d5452b3313efa3cca53c180c5494cc9837` unchanged.
+- production `e994340f3c4f6ac97f444f1ddf13053d3faffa71` unchanged.
+- TEST/PRODUCTION 배포/승격 없음.
+
+### 다음 승인 경계
+다음 실제 단계부터는 사용자 승인 없이는 실행하지 않는다.
+1. 068 canonical Worker를 PREVIEW에 code-only 배포.
+2. read flag는 OFF 상태로 유지.
+3. missing shared profile 1개만 bounded derived R2 repair.
+4. 현재 38 public tracks를 shared latest R2 source로 catalog **432 derived R2 objects 초기 구축**.
+5. 정확히 38 meta/latest/popular/profile, 21 genre, 250 title, 3 artist-meta/name/handle인지 검증.
+6. bootstrap 완료 후에도 catalog READ flag는 자동 ON 금지.
+7. 이후 write flag만 먼저 ON하여 새 publish/private/like/profile edit의 targeted delta를 PREVIEW에서 검증.
+8. catalog completeness + mutation parity PASS 후 별도 단계에서 READ flag ON 검토.
+9. first-publisher flag와 shared D1 partial-index/trigger Phase D는 계속 별도 승인 대상.
+
 ## 0AM. PREVIEW 067 좋아요 shared parity 배포 + stale latest 4곡 제한 복구 완료
 
 2026-09-19 KST 사용자 승인으로 067 Worker PREVIEW 재배포와 기존 stale shared R2 likeCount 4곡의 제한 복구를 완료했다.

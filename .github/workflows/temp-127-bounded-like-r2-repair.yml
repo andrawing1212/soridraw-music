@@ -314,7 +314,7 @@ jobs:
           echo "TEST_PROTECTED_BEFORE=$(cat "$RUNNER_TEMP/test.before")"
           echo "PRODUCTION_PROTECTED_BEFORE=$(cat "$RUNNER_TEMP/production.before")"
 
-      - name: Deploy isolated repair Worker, repair, verify, and delete
+      - name: Run isolated remote repair Worker, verify, and stop
         working-directory: cloudflare/explore-worker
         shell: bash
         run: |
@@ -322,11 +322,6 @@ jobs:
           WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$RUNNER_TEMP/wrangler.temp127.jsonc"
           TOKEN="$(openssl rand -hex 32)"
-
-          cleanup() {
-            curl -fsS -X DELETE               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${TEMP_WORKER}"               >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
 
           TOKEN="$TOKEN" node - "$RUNNER_TEMP/repair-worker.mjs" <<'NODE'
           const fs=require('fs');
@@ -337,10 +332,30 @@ jobs:
           s=s.replace('__TEMP127_TOKEN__', token);
           fs.writeFileSync(file,s);
           NODE
-          node "$WRANGLER" deploy --config "$CFG"
 
-          url="https://${TEMP_WORKER}.andrawing1212.workers.dev/repair"
-          code="$(curl --retry 4 --retry-delay 1 -sS -o "$RUNNER_TEMP/repair-result.json" -w '%{http_code}'             -X POST -H "x-repair-token: $TOKEN" "$url")"
+          node "$WRANGLER" dev --remote --config "$CFG" --ip 127.0.0.1 --port 8787             > "$RUNNER_TEMP/temp127-dev.log" 2>&1 &
+          DEV_PID=$!
+
+          cleanup() {
+            kill "$DEV_PID" >/dev/null 2>&1 || true
+            wait "$DEV_PID" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          ready=0
+          for attempt in $(seq 1 30); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/repair || true)"
+            if [ "$code" = 403 ]; then ready=1; break; fi
+            sleep 1
+          done
+          if [ "$ready" != 1 ]; then
+            cat "$RUNNER_TEMP/temp127-dev.log"
+            echo 'TEMP127_REMOTE_DEV_READY=FAIL'
+            exit 1
+          fi
+          echo 'TEMP127_REMOTE_DEV_READY=PASS'
+
+          code="$(curl -sS -o "$RUNNER_TEMP/repair-result.json" -w '%{http_code}'             -X POST -H "x-repair-token: $TOKEN" http://127.0.0.1:8787/repair)"
           cat "$RUNNER_TEMP/repair-result.json"
           test "$code" = 200
 
@@ -365,7 +380,6 @@ jobs:
           console.log('TEMP127_CHANGED_CARDS='+Number(x.repair.changedCards||0));
           NODE
 
-          # Direct live R2-only endpoints must now agree, with D1 R0/W0.
           cat > "$RUNNER_TEMP/ids.txt" <<'EOF'
           music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_rs_sd_6ca2115f1b474aa7a60f1a2bdabd6317_k4e95q
           music_note_rcZ2GZrBndOZzT8C635eiNBjYIJ2_mdCqNWohZwk6lsKuNWOa
@@ -407,4 +421,4 @@ jobs:
 
           cleanup
           trap - EXIT
-          echo 'TEMP127_WORKER_DELETED=PASS'
+          echo 'TEMP127_REMOTE_DEV_STOPPED=PASS'

@@ -1,0 +1,87 @@
+name: TEMP 140 Cross Env Private Cache Audit
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-140-cross-env-private-cache-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 61796a7c1f90ff0cd949e68050feb85465e6e3b4
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Resolve exact private target from canonical D1 (SELECT only)
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          node "$W" d1 execute DB --remote --config "$PWD/canonical/wrangler.preview.jsonc" --command "SELECT id,is_public,updated_at FROM tracks WHERE updated_at=1789829348623 LIMIT 2" --json > "$RUNNER_TEMP/target140.json"
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const rows=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/target140.json','utf8')).flatMap(x=>x.results||[]);
+          if(rows.length!==1||Number(rows[0].is_public)!==0||Number(rows[0].updated_at)!==1789829348623)throw Error('target drift');
+          const id=String(rows[0].id||'');if(!id)throw Error('target id missing');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/target-id140.txt',id);
+          console.log('PRIVATE_TARGET_SHA10='+crypto.createHash('sha256').update(id).digest('hex').slice(0,10));
+          NODE
+      - name: Read all environment-local first-page R2 snapshots plus shared v112
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          get(){
+            bucket="$1"; key="$2"; out="$3"
+            if node "$W" r2 object get "$bucket/$key" --file "$out" --remote >/dev/null 2>&1; then
+              echo "R2_GET bucket=$bucket key=$key PASS"
+            else
+              printf '{"missing":true}' > "$out"
+              echo "R2_GET bucket=$bucket key=$key MISSING"
+            fi
+          }
+          for sort in latest popular; do
+            get soridraw-profile-media-preview "internal/explore/feed-v1/$sort-40.json" "$RUNNER_TEMP/preview-$sort.json"
+            get soridraw-profile-media-test "internal/explore/feed-v1/$sort-40.json" "$RUNNER_TEMP/test-$sort.json"
+            get soridraw-profile-media "internal/explore/feed-v1/$sort-40.json" "$RUNNER_TEMP/prod-$sort.json"
+            get soridraw-profile-media "internal/explore/shared-feed-v112/$sort-40.json" "$RUNNER_TEMP/shared-$sort.json"
+          done
+          node <<'NODE'
+          const fs=require('fs'),root=process.env.RUNNER_TEMP,id=fs.readFileSync(root+'/target-id140.txt','utf8').trim();
+          const idOf=x=>String(x?.id||x?.trackId||'').trim();
+          for(const env of ['preview','test','prod','shared']){
+            for(const sort of ['latest','popular']){
+              const obj=JSON.parse(fs.readFileSync(root+'/'+env+'-'+sort+'.json','utf8'));
+              const items=Array.isArray(obj?.payload?.data?.items)?obj.payload.data.items:[];
+              console.log('CACHE_AUDIT env='+env+' sort='+sort+' missing='+Boolean(obj?.missing)+' count='+items.length+' containsPrivate='+items.some(x=>idOf(x)===id));
+            }
+          }
+          NODE
+      - name: Read-only catalog target guard
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          id="$(cat "$RUNNER_TEMP/target-id140.txt")"
+          encoded="$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$id")"
+          node "$W" r2 object get "soridraw-profile-media/internal/explore/catalog-v1/meta/$encoded.json" --file "$RUNNER_TEMP/meta140.json" --remote >/dev/null
+          node <<'NODE'
+          const fs=require('fs'),id=fs.readFileSync(process.env.RUNNER_TEMP+'/target-id140.txt','utf8').trim(),m=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/meta140.json','utf8'));
+          if(m.trackId!==id||m.public!==false||!Array.isArray(m.markerKeys)||m.markerKeys.length!==0)throw Error('catalog private guard mismatch');
+          console.log('CATALOG_PRIVATE_GUARD=PASS');
+          console.log('D1_WRITE=0 R2_WRITE=0 DEPLOY=0');
+          NODE

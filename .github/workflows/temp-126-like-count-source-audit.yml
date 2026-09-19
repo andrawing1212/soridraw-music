@@ -1,0 +1,106 @@
+name: TEMP 126 Like Count Source Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-126-like-count-source-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+      SHARED_BUCKET: soridraw-profile-media
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Read shared latest/popular R2 snapshots
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          node "$WRANGLER" r2 object get "$SHARED_BUCKET/internal/explore/shared-feed-v112/latest-40.json" --file "$RUNNER_TEMP/latest.json" --remote
+          node "$WRANGLER" r2 object get "$SHARED_BUCKET/internal/explore/shared-feed-v112/popular-40.json" --file "$RUNNER_TEMP/popular.json" --remote
+          node <<'NODE'
+          const fs=require('fs');
+          const wanted=/한 걸음 비워둔 채로|Left Unsaid|Through|여기 잠시만/;
+          for(const [name,file] of [['LATEST',process.env.RUNNER_TEMP+'/latest.json'],['POPULAR',process.env.RUNNER_TEMP+'/popular.json']]){
+            const x=JSON.parse(fs.readFileSync(file,'utf8'));
+            const items=Array.isArray(x?.payload?.data?.items)?x.payload.data.items:Array.isArray(x?.data?.items)?x.data.items:[];
+            const rows=items.filter(v=>wanted.test(String(v?.title||''))).map(v=>({
+              id:String(v?.id||v?.trackId||''),
+              title:String(v?.title||''),
+              likeCount:Number(v?.likeCount ?? v?.like_count ?? v?.stats?.likeCount ?? v?.stats?.like_count ?? 0),
+              ownerUid:String(v?.ownerUid||v?.owner_uid||'')
+            }));
+            console.log(name+'_R2_MATCHES='+JSON.stringify(rows));
+          }
+          NODE
+
+      - name: Read live PREVIEW R2-only API snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sort in latest popular; do
+            curl -fsS -D "$RUNNER_TEMP/$sort.head" -o "$RUNNER_TEMP/$sort.api.json"               -H "Origin: $PREVIEW_ORIGIN"               "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108"
+            node - "$sort" "$RUNNER_TEMP/$sort.api.json" <<'NODE'
+          const fs=require('fs');
+          const sort=process.argv[2], file=process.argv[3], wanted=/한 걸음 비워둔 채로|Left Unsaid|Through|여기 잠시만/;
+          const x=JSON.parse(fs.readFileSync(file,'utf8'));
+          const items=Array.isArray(x?.data?.items)?x.data.items:[];
+          const rows=items.filter(v=>wanted.test(String(v?.title||''))).map(v=>({
+            id:String(v?.id||v?.trackId||''),
+            title:String(v?.title||''),
+            likeCount:Number(v?.likeCount ?? v?.like_count ?? v?.stats?.likeCount ?? v?.stats?.like_count ?? 0)
+          }));
+          console.log('LIVE_'+sort.toUpperCase()+'_MATCHES='+JSON.stringify(rows));
+          NODE
+            echo "LIVE_${sort^^}_D1_READ=$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-read:/{gsub("\r","");print $2}' "$RUNNER_TEMP/$sort.head" | tail -1)"
+            echo "LIVE_${sort^^}_D1_WRITE=$(awk 'BEGIN{IGNORECASE=1}/^x-soridraw-d1-write:/{gsub("\r","");print $2}' "$RUNNER_TEMP/$sort.head" | tail -1)"
+          done
+
+      - name: Read canonical D1 counts for visible titles
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          SQL="SELECT t.id,t.title,COALESCE(dt.likes,0) AS derived_like_count,COALESCE(ts.like_count,0) AS stat_like_count,(SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id) AS relation_count FROM tracks t LEFT JOIN explore_derived_tracks dt ON dt.id=t.id LEFT JOIN track_stats ts ON ts.track_id=t.id WHERE t.is_public=1 AND t.status='published' AND (t.title LIKE '%한 걸음 비워둔 채로%' OR t.title LIKE '%Left Unsaid%' OR t.title LIKE '%Through%' OR t.title LIKE '%여기 잠시만%') ORDER BY t.updated_at DESC LIMIT 40;"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "$SQL" --json > "$RUNNER_TEMP/d1.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const x=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/d1.json','utf8'));
+          const rows=x.flatMap(v=>v.results||[]);
+          console.log('CANONICAL_D1_COUNTS='+JSON.stringify(rows));
+          NODE
+
+      - name: Safety
+        run: |
+          echo 'TEMP126_READ_ONLY=true'
+          echo 'D1_WRITE=0'
+          echo 'R2_WRITE=0'
+          echo 'USER_DATA_CHANGE=false'
+          echo 'NO_DEPLOYMENT=true'
+          echo 'TEST_PRODUCTION_CHANGE=false'

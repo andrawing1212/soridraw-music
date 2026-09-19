@@ -1,5 +1,76 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AL. PREVIEW 좋아요 숫자 latest/popular 불일치 원인 확정 / 067 코드 수정 완료·재배포 전
+
+2026-09-19 KST 사용자 PREVIEW 실사용 중 다음 버그를 확인했다.
+- 추천/최신: 좋아요 하트는 채워져 있으나 4곡의 숫자가 0.
+- 인기: 동일 4곡의 숫자가 1.
+- 인기 탭에 갔다가 추천/최신으로 복귀하면 로컬 화면 숫자가 1로 보정됨.
+- 정상 동작 아님.
+
+읽기 전용 실제 데이터 감사:
+- TEMP 126 Run `35437572116` SUCCESS.
+- shared R2 latest:
+  - 한 걸음 비워둔 채로 = 0
+  - Left Unsaid = 0
+  - Through the Night = 0
+  - 여기 잠시만 = 0
+- shared R2 popular: 동일 4곡 모두 1.
+- live R2-only latest/popular API 모두 D1 R0/W0.
+- canonical shared D1:
+  - 위 4곡 relation_count = 1
+  - track_stats.like_count = 1
+  - explore_derived_tracks.likes = 1
+- 따라서 canonical 정답은 1이고, shared latest R2만 stale 0이었다.
+- 진단은 D1/R2 write 0, 사용자 데이터 변경 0, 배포 0.
+
+원인:
+- 현재 실제 좋아요 aggregate는 075 user queue + Durable Object event 경로를 사용.
+- 075는 canonical D1 확정 후 environment R2 latest/popular/profile을 targeted patch.
+- shared latest/popular/card를 targeted patch하는 065 helper는 legacy 035 aggregate 경계에만 연결되어 있었음.
+- 따라서 active 075 경로에서 shared first-page Feed 숫자 전파가 누락될 수 있었고 실제로 latest=0 / popular=1 불일치가 발생.
+- 앱의 하트 상태는 사용자 liked-state에서, 숫자는 shared Feed likeCount에서 오므로 하트=true / 숫자=0 조합이 가능했다.
+- popular=1을 읽으면 app116의 same-track local convergence가 추천/최신 session cache도 1로 보정하여 탭 복귀 후 숫자가 1로 바뀌는 현상이 설명됨.
+
+067 수정:
+- branch: `work/like-075-shared-count-parity`.
+- patch: `067-like-075-shared-count-parity.mjs`.
+- active `processExploreLikeUserQueueWave075`가 이미 계산한 changedRows만 사용.
+- 기존 local R2 feed/profile targeted patch 뒤에 기존 `patchSharedFeedLikeCounts065` 호출.
+- shared latest + popular + shared track-card의 **변경된 곡만** 같은 likeCount로 패치.
+- 전체 Feed rebuild/mirror 없음.
+- 추가 D1 read/write 0.
+- D1 schema/user row/Firebase/UI 변경 없음.
+
+검증:
+- Run `35437786780` SUCCESS.
+- 067 contract PASS.
+- shared latest targeted PASS.
+- shared popular targeted PASS.
+- shared track-card targeted PASS.
+- EXTRA_D1_READ_WRITE=0.
+- like/shared-cache regression matrix PASS.
+- TypeScript PASS.
+- Build PASS.
+- app124 unchanged.
+- canonical 067 SHA256: `35faf34dd9b8e564176cc88ee6ed149463de6275459e9f558067f234502474af`.
+- materialized canonical commit: `82c2f45192bfcb0ea3ba3f5635b087c70244f880`.
+- PR #108 merge commit: `81c414de9983eeda2f2bd31f77810038b6a19387`.
+
+현재 상태:
+- GitHub PREVIEW 코드에는 067 반영 완료.
+- **067 Worker 재배포는 아직 하지 않음.**
+- 현재 PREVIEW 실서비스 Worker는 이전 066 version `c177104b-be57-4e0b-9d41-3b8b817fdfb4` 유지.
+- 따라서 사용자 화면의 stale latest=0은 재배포/derived-cache repair 전까지 남을 수 있음.
+- TEST/PRODUCTION 비변경.
+
+다음:
+1. 사용자 명확한 PREVIEW 재배포 승인 후 067 canonical Worker만 배포.
+2. 배포 후 새 좋아요 mutation에서 latest/popular/card targeted parity 확인.
+3. 이미 stale인 위 4곡은 canonical D1을 원본으로 **해당 4곡만** shared derived R2에 bounded repair. 전체 Feed backfill/rebuild 금지.
+4. repair 후 latest/popular R2 및 live API가 4곡 모두 1, D1 R0/W0인지 재검증.
+5. 그 후에만 원래 Phase C/W2 검증으로 복귀.
+
 ## 0AK. PREVIEW Phase C 066 Worker code-only 배포 완료 / 실제 W2 cutover 전
 
 2026-09-19 KST, 사용자의 명시적 '프리뷰 배포 진행' 요청으로 066 R2 ordered catalog/search/deep-page 코드를 PREVIEW Worker에 배포했다. 공유 canonical D1 index/trigger 변경은 이번 배포에 포함하지 않았다.

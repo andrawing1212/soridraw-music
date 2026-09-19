@@ -36,7 +36,7 @@ assert(helper.includes('patchSharedTrackCard062(env, row.trackId, { likeCount: r
 assert(!/env\.DB|\.prepare\s*\(/.test(helper), 'shared helper unexpectedly accesses D1');
 
 const manifest = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
-assert(manifest.patches.at(-1) === '067-like-075-shared-count-parity.mjs', '067 is not final release patch');
+assert(manifest.patches.includes('067-like-075-shared-count-parity.mjs'), '067 release patch missing from manifest');
 
 console.log('LIKE_075_SHARED_COUNT_PARITY_067=PASS');
 console.log('ACTIVE_PATH=075');

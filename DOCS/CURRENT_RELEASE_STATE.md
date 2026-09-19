@@ -1,5 +1,39 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AS. PREVIEW 069 shared Feed targeted parity 코드 반영 + 오프라인 검증 PASS / 배포·기존 stale 복구 전
+
+2026-09-19 KST, 사용자 요청으로 비공개 실사용 실패 `0AR`을 보수적으로 코드 수정했다. **이 항목은 GitHub 코드·오프라인 검증 완료일 뿐 PREVIEW 배포 또는 실사용 복구 완료가 아니다.** 사용자의 기존 비공개 곡은 그대로 유지한다.
+
+### 원인과 수정
+- 원인: 실제 Music Note 경로는 `043`의 `syncExploreFeedR2Private043` 등을 사용하지만 `059`는 구형 `017` 경로만 shared Feed에 mirror함. 따라서 canonical D1 및 catalog가 private를 반영해도 shared latest/popular v112 스냅샷에 곡이 남았다.
+- 새 `cloudflare/explore-worker/runtime/shared-feed-targeted-069.js`: shared latest/popular 두 개에서 **대상 trackId만** 제거·복구·옵션 수정. R2 ETag 조건부 쓰기, 충돌 시 최대 8회 재시도, 무변경 시 쓰기 0, catalog 활성 시 meta public/private 상태 guard, D1 read/write 0. 다른 곡을 포함한 전체 Feed 재생성·사용자 원본 수정 금지.
+- 새 `cloudflare/explore-worker/patches/069-shared-feed-targeted-parity.mjs`: 구형 017이 아닌 **실사용 043 publish/private/options** 세 경로에 연동. 기존 canonical mutation 성공 여부와 R2 실패를 분리하여 사용자 원본 저장 결과는 보존하고 derived 실패는 경고로 남김.
+- `cloudflare/explore-worker/canonical/preview-worker.js`: 위 069 patch를 실제 릴리스가 사용하는 canonical 파일에도 정확히 반영. 기존 068 제품 기반에서만 새 동작 추가.
+- `cloudflare/explore-worker/canonical/source-sha256.txt`: 새 코드 SHA256 `643e3e82cdb96fdf82844822fe0678fd4afdf480a6b4e7dc5b5a8ea374542a7f`.
+- `scripts/verify-069-shared-feed-targeted.mjs`: private 단일 항목 제거/재요청 무쓰기, republish, 늦게 도착한 private 차단, option patch, 동시 쓰기 충돌 시 타 항목 보존, malformed catalog fail-closed 검증.
+
+### 검증
+- 처음 TEMP 136 Run `35450515141` FAILURE는 테스트 fixture의 잘못된 sort 인자 오류. 수정 후 Run `35450556280`에서 069 unit/integration, TypeScript/Build PASS; 마지막 `git status`가 빌드 생성 파일을 변경으로 처리하여 전체 실패. 제품 로직 실패 아님.
+- 최종 TEMP 136 Run `35450819828` **SUCCESS**:
+  - 069 unit test 7 checks PASS (private/republish/options/late-private/CAS/malformed/no D1).
+  - 기존 068 canonical 파일에 공식 069 patch를 적용한 결과와 신규 canonical 릴리스 파일이 byte-for-byte 동일 `cmp PASS`.
+  - Worker source `node --check` PASS.
+  - TypeScript `npm run lint` PASS.
+  - Vite `npm run build` PASS.
+  - Wrangler PREVIEW Worker `--dry-run` PASS. 실제 deploy **없음**.
+  - source hash `643e3e82cdb96fdf82844822fe0678fd4afdf480a6b4e7dc5b5a8ea374542a7f` 확인.
+  - 변경된 원본 데이터 0, D1/R2 read/write 0 (오프라인 검증에 한함).
+- product source commit `62c5741d773183d3064bcd53dc70a74179aad535`; SHA pin commit `9e66770ab01e4028a49188f2a9b13ecb1c299a26`. 이후 상태 문서/임시 Workflow 정리 commit은 별도.
+- Worker 실사용/API/PC·모바일 후속 검증 = **미수행**, 독립 Work 감사 = **미수행**.
+
+### 아직 남은 위험 / 배포 경계
+1. 라이브 PREVIEW Worker는 기존 `4f8471e3-576f-49de-9f2c-c3863021bf3d` 기준이며 이 069 수정은 아직 미배포. `main`/PRODUCTION 미승격, Firebase/Functions/Rules 변경 없음.
+2. 이미 비공개로 저장된 곡은 **shared latest/popular v112 각 38곡에 남아 있던 기존 stale 상태**가 자동으로 지워지지 않는다. 새 코드의 다음 mutation만으로 기존 곡을 복구하겠다고 단정하지 않는다.
+3. PREVIEW 배포는 사용자 별도 승인 후 고정 릴리스 절차에서 exact product SHA 및 source-sha256 검증, preflight, Worker 배포, 실제 endpoint 확인이 필요하다. TEST/PRODUCTION 승격 금지.
+4. 기존 stale 객체 복구는 **비공개 해당 1곡**만 대상으로 최신 canonical is_public=0·catalog public=false·shared snapshot의 ID 존재를 read-only preflight 후, shared latest/popular에서 ID만 CAS로 제거하는 별도 승인된 bounded repair. D1 쓰기/전체 재구축 금지. 실행 후 모든 환경의 공개 응답 확인.
+5. 실제 사용자 비공개·재공개·좋아요 요청당 D1 `rows_written` W1~W2는 아직 입증 안 됨. `W3+` 관측 시 FAIL. catalog READ 및 FIRST_PUBLISHER OFF 유지.
+6. 기존 `059`/ `064` 등 다른 공유 snapshot 갱신 경로가 stale snapshot을 되돌리지 않는지 별도 독립 감사 필요.
+
 ## 0AR. 단일 실사용 비공개 원본 반영 PASS / 공유 Feed R2 stale FAIL — READ 전환·TEST 승격 중단
 
 2026-09-19 KST 사용자가 PREVIEW의 기존 공개곡 1개를 비공개로 변경하고 Music Note 페이지를 이탈한 후 read-only postflight를 진행했다. 이번에는 실제로 **D1 원본 비공개 1건이 검출**되었다. 그러나 새 catalog는 비공개 반영에 성공한 반면 공유 Feed R2의 latest/popular 스냅샷에 이전 곡이 남는 **파생 캐시 불일치**가 검출됐다.

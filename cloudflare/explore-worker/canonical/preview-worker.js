@@ -22339,27 +22339,9 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
 const EXPLORE_SHARED_FEED_MIRROR_VERSION_059 = 112;
 const exploreSharedFeedR2Key059 = (sort) => `internal/explore/shared-feed-v112/${sort === 'popular' ? 'popular' : 'latest'}-40.json`;
 
+// SORIDRAW_SHARED_FEED_LEGACY_WRITER_GUARD_070_20260919
 async function mirrorExploreSharedFeeds059(env) {
-  const shared = env?.PROFILE_MEDIA || null;
-  const local = exploreCacheBucket031(env);
-  if (!shared || !local) return { mirrored: 0, skipped: true };
-  let mirrored = 0;
-  for (const sort of ['latest', 'popular']) {
-    const object = await local.get(exploreFeedR2Key(sort));
-    if (!object) continue;
-    const body = await object.text();
-    if (!body) continue;
-    await shared.put(exploreSharedFeedR2Key059(sort), body, {
-      httpMetadata: { contentType: 'application/json; charset=utf-8' },
-      customMetadata: {
-        soridrawSharedFeed: '112',
-        sourceUpdatedAt: String(object.customMetadata?.updatedAt || Date.now()),
-        mirroredAt: String(Date.now()),
-      },
-    });
-    mirrored += 1;
-  }
-  return { mirrored, skipped: false };
+  return { mirrored: 0, disabledBy070: true };
 }
 
 async function processExploreLikeBatches035Core059(env, scheduledTime = Date.now()) {
@@ -22417,47 +22399,41 @@ async function patchSharedFeedLikeCounts065(env, changedItems) {
 
   for (const sort of ['latest', 'popular']) {
     const key = exploreSharedFeedR2Key059(sort);
-    let object = null;
-    try { object = await shared.get(key); } catch {}
-    if (!object) continue;
-
-    let bundle = null;
-    try { bundle = JSON.parse(await object.text()); } catch { bundle = null; }
-    const items = Array.isArray(bundle?.payload?.data?.items) ? bundle.payload.data.items : null;
-    if (!items) continue;
-
-    let changed = false;
-    const nextItems = items.map((item) => {
-      const trackId = String(item?.id || item?.trackId || '').trim();
-      if (!wanted.has(trackId)) return item;
-      const patched = patchSharedFeedItemLike065(item, wanted.get(trackId));
-      if (patched.changed) changed = true;
-      return patched.item;
-    });
-    if (!changed) continue;
-
-    const now = Date.now();
-    const nextBundle = {
-      ...bundle,
-      updatedAt: now,
-      payload: {
-        ...bundle.payload,
-        data: {
-          ...bundle.payload.data,
-          items: nextItems,
+    let completed = false;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const object = await shared.get(key);
+      if (!object) { completed = true; break; }
+      let bundle = null;
+      try { bundle = JSON.parse(await object.text()); } catch { bundle = null; }
+      const items = Array.isArray(bundle?.payload?.data?.items) ? bundle.payload.data.items : null;
+      if (!items) { completed = true; break; }
+      let changed = false;
+      const nextItems = items.map((item) => {
+        const trackId = String(item?.id || item?.trackId || '').trim();
+        if (!wanted.has(trackId)) return item;
+        const patched = patchSharedFeedItemLike065(item, wanted.get(trackId));
+        if (patched.changed) changed = true;
+        return patched.item;
+      });
+      if (!changed) { completed = true; break; }
+      const now = Date.now();
+      const nextBundle = {
+        ...bundle, updatedAt: now,
+        payload: { ...bundle.payload, data: { ...bundle.payload.data, items: nextItems } },
+      };
+      const saved = await shared.put(key, JSON.stringify(nextBundle), {
+        onlyIf: { etagMatches: object.etag },
+        httpMetadata: { contentType: 'application/json; charset=utf-8' },
+        customMetadata: {
+          ...(object.customMetadata || {}),
+          soridrawSharedFeed: '070',
+          targetedLikePatch: '065-cas-070',
+          mirroredAt: String(now),
         },
-      },
-    };
-    await shared.put(key, JSON.stringify(nextBundle), {
-      httpMetadata: { contentType: 'application/json; charset=utf-8' },
-      customMetadata: {
-        ...(object.customMetadata || {}),
-        soridrawSharedFeed: '123',
-        targetedLikePatch: '065',
-        mirroredAt: String(now),
-      },
-    });
-    changedFeeds += 1;
+      });
+      if (saved) { changedFeeds += 1; completed = true; break; }
+    }
+    if (!completed) throw new Error('[SORIDRAW 070] shared like CAS contention: ' + sort);
   }
 
   let changedCards = 0;
@@ -25214,31 +25190,7 @@ __name22222(derivedNext032, "derivedNext032");
 __name222222(derivedNext032, "derivedNext032");
 // SORIDRAW_SHARED_FEED_CATCHUP_CONVERGENCE_064_20260917
 async function mirrorExploreSharedFeedAfterDerivedSync064(env, sort) {
-  const normalizedSort = sort === 'popular' ? 'popular' : 'latest';
-  const shared = env?.PROFILE_MEDIA || null;
-  const local = exploreCacheBucket031(env);
-  if (!shared || !local) return { mirrored: false, skipped: true };
-  const localObject = await local.get(exploreFeedR2Key(normalizedSort));
-  if (!localObject) return { mirrored: false, missingLocal: true };
-  const localBody = await localObject.text();
-  if (!localBody) return { mirrored: false, missingLocalBody: true };
-  const sharedKey = exploreSharedFeedR2Key059(normalizedSort);
-  let sharedBody = '';
-  try {
-    const sharedObject = await shared.get(sharedKey);
-    if (sharedObject) sharedBody = await sharedObject.text();
-  } catch {}
-  if (sharedBody === localBody) return { mirrored: false, unchanged: true };
-  await shared.put(sharedKey, localBody, {
-    httpMetadata: { contentType: 'application/json; charset=utf-8' },
-    customMetadata: {
-      soridrawSharedFeed: '116',
-      sourceUpdatedAt: String(localObject.customMetadata?.updatedAt || Date.now()),
-      mirroredAt: String(Date.now()),
-      catchUp: '064',
-    },
-  });
-  return { mirrored: true, unchanged: false };
+  return { mirrored: false, disabledBy070: true };
 }
 
 

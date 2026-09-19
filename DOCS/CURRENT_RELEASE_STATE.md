@@ -1,5 +1,68 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AM. PREVIEW 067 좋아요 shared parity 배포 + stale latest 4곡 제한 복구 완료
+
+2026-09-19 KST 사용자 승인으로 067 Worker PREVIEW 재배포와 기존 stale shared R2 likeCount 4곡의 제한 복구를 완료했다.
+
+067 PREVIEW 재배포:
+- approved product code target: `81c414de9983eeda2f2bd31f77810038b6a19387`.
+- release trigger commit: `78b5f236ff0fa46afe5ad8603458c3de3bffa293`.
+- PREVIEW Worker Release Run: `35438675995` — **SUCCESS**.
+- canonical Worker SHA256: `35faf34dd9b8e564176cc88ee6ed149463de6275459e9f558067f234502474af`.
+- previous PREVIEW Worker: `c177104b-be57-4e0b-9d41-3b8b817fdfb4`.
+- current PREVIEW Worker: `32428130-3cc0-47d8-867c-787064943ce4`.
+- Feed smoke PASS.
+- public profile smoke PASS.
+- warm revision D1 R0/W0 PASS.
+- PRE_DEPLOY_PENDING_069=0.
+- TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f` unchanged.
+- PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` unchanged.
+- Firebase Hosting/Functions/Rules 재배포 없음.
+- app version 124 unchanged.
+
+기존 stale cache 제한 복구:
+- 대상:
+  - 한 걸음 비워둔 채로
+  - Left Unsaid
+  - Through the Night
+  - 여기 잠시만
+- canonical 기준은 복구 전/후 모두 relation=1, track_stats=1, derived=1.
+- 초기 복구 시도 Run `35438823099`, `35438932946`, `35438982617`, `35439041268`, `35439118300`, `35439243737`는 **authorized repair 요청 전에 preflight/transport/readiness에서 중단**되어 D1/R2 write 0.
+- 최종 TEMP 127 Run `35439421372` — **SUCCESS**.
+- 실제 R2 object write: **1개**.
+- shared latest: 4곡 `0 → 1` 수정.
+- shared popular: 이미 1이라 write 0.
+- shared track-card 4개: 이미 1이라 write 0.
+- 전체 Feed rebuild/backfill 없음.
+- canonical D1 write 0.
+- D1 schema 변경 없음.
+- 사용자 원본 데이터 변경 없음.
+- Firebase 변경 없음.
+- repair 중 PREVIEW/TEST/PRODUCTION Worker version 비변경 PASS.
+- temporary remote dev repair process 종료 PASS.
+- TEMP 127 Workflow 완료 후 삭제 commit: `fbc8cb7fe73f1633f8f66109a0899ff33b46f20a`.
+
+복구 후 live 검증:
+- latest R2-only API: 4곡 모두 likeCount=1, **D1 R0/W0**.
+- popular R2-only API: 4곡 모두 likeCount=1, **D1 R0/W0**.
+- canonical D1은 4곡 모두 relation/stat/derived=1 유지.
+- 따라서 서버 원본 기준 추천/최신/인기 첫 페이지의 해당 4곡 likeCount 불일치는 해소됨.
+
+현재 상태:
+- 서버 측 likeCount parity: **PASS**.
+- 067 active 075 targeted propagation이 이후 새 좋아요 변경에도 shared latest + popular + track-card를 변경된 곡만 패치하도록 배포됨.
+- 사용자 PREVIEW PC/모바일 화면에서 추천/최신/인기 숫자 일관성은 **실사용 재확인 전**.
+- main `f7fc25d5452b3313efa3cca53c180c5494cc9837` unchanged.
+- production branch `e994340f3c4f6ac97f444f1ddf13053d3faffa71` unchanged.
+- TEST/PRODUCTION 승격 없음.
+
+다음:
+1. 사용자가 PREVIEW에서 추천 → 최신 → 인기 → 다시 추천 순서로 확인.
+2. 4곡 모두 하트 상태와 숫자 1이 탭 이동 전후 동일한지 확인.
+3. 새 좋아요/해제 1회 테스트 시 약 1분 aggregate 이후 latest/popular가 같은 count로 수렴하는지 확인.
+4. 위 PASS 후 원래 Phase C W2 publication 검증으로 복귀.
+5. shared canonical D1 partial-index/trigger cutover는 Phase D이며 별도 사용자 승인 전 금지.
+
 ## 0AL. PREVIEW 좋아요 숫자 latest/popular 불일치 원인 확정 / 067 코드 수정 완료·재배포 전
 
 2026-09-19 KST 사용자 PREVIEW 실사용 중 다음 버그를 확인했다.

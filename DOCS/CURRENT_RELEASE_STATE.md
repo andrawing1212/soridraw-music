@@ -1,5 +1,51 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AK. PREVIEW Phase C 066 Worker code-only 배포 완료 / 실제 W2 cutover 전
+
+2026-09-19 KST, 사용자의 명시적 '프리뷰 배포 진행' 요청으로 066 R2 ordered catalog/search/deep-page 코드를 PREVIEW Worker에 배포했다. 공유 canonical D1 index/trigger 변경은 이번 배포에 포함하지 않았다.
+
+GitHub 및 배포 고정:
+- Phase A+B PREVIEW merge: `a7c048b0fa68907f459500fe1b547bb4126e8813`.
+- 066 canonical Worker generation validation Run: `35428253735` SUCCESS.
+- canonical materialization commit: `7052f7e0239bbaf22908c8f1c7d29fffe759d277`.
+- one-off 066 generator workflow cleanup commit: `0efb188573aca81c28897746c7dfcf273328cd03`.
+- PR #107 merge: `7461200c559b2de306121924a13d82175fb4d77a`.
+- locked deployment target: `7461200c559b2de306121924a13d82175fb4d77a`.
+- release trigger commit: `7532e4d53c8cb02a8d07608379f4bca10da5d1ed`.
+- canonical Worker SHA256: `47b13090e7515325b3bf190ffa1cc1685c10125d4726568930f5120e407cb23c`.
+- PREVIEW Worker release Run: `35428391780` SUCCESS.
+- before Worker version: `02561c62-5f1c-4449-b2e6-4253faddd099`.
+- current PREVIEW Worker version: `c177104b-be57-4e0b-9d41-3b8b817fdfb4`.
+
+Run 검증:
+- exact target lock / canonical SHA / Worker syntax / existing Explore regression preflight PASS.
+- live shared D1 like prerequisite schema/state SELECT preflight PASS; pending035=0 / pending069=0.
+- publication PK lookup plan PASS.
+- Worker deploy PASS; Feed smoke PASS; public profile smoke PASS.
+- protected likes batch route unauthenticated 401 PASS.
+- revision HEAD-only PASS; warm revision D1 R0/W0 PASS.
+- fixed cron disabled / Durable Object event scheduler PASS.
+- TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f` unchanged PASS.
+- PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` unchanged PASS.
+- main `f7fc25d5452b3313efa3cca53c180c5494cc9837` unchanged.
+- production branch `e994340f3c4f6ac97f444f1ddf13053d3faffa71` unchanged.
+- Firebase Hosting/Functions/Rules, UI/CSS, app version **124** unchanged.
+- Shared canonical D1 schema/index/trigger, user rows, actual PROFILE_MEDIA catalog backfill unchanged.
+- No data migration/seed/backfill.
+
+중요한 비용 상태:
+- Phase B의 R0/W2 first-public, R1/W1 private, R1/W1 republish, R1/W0 noop는 RATE_DB 진단 후보 실측이며 아직 live shared canonical D1 수치가 아니다.
+- 실제 shared D1 index/trigger는 아직 기존 구조이므로 live Music Note 첫 공개 W18 문제를 해결했다고 보고하지 않는다.
+- 066의 catalog write/read/first-publisher 기능은 코드상 각각 별도 flag로 보호되며 기본 OFF. Cloudflare 기존 persisted vars의 실제 값과 실사용 mutation 경로는 별도로 확인 전이다.
+- R2 catalog completeness를 증명하기 전 read flag 활성화 금지. 사용자 승인 없는 전체 catalog backfill 금지.
+- 사용자 PREVIEW 실사용 PC/모바일 검증 전. `preview.soridraw.com` Hosting은 이전 app124 배포본을 유지했고 이번 Worker Release는 PREVIEW_ORIGIN 헤더로 Worker API를 검사했다. 별도 웹 도구로 Hosting URL 직접 fetch는 실패했으므로 이번 턴의 독립 Hosting 확인은 미검증.
+
+다음 단계:
+1. PREVIEW에 배포된 066의 runtime flag/binding 및 read-only route를 확인한다.
+2. 사용자 테스트 계정으로 기존 기능을 보호한 채 search/deep-page/catalog completeness 및 first-publisher 위험을 단계별 검증한다. shared user data 대량 변경 금지.
+3. 실제 shared D1 cutover는 Phase D, 사용자 별도 승인 전 금지. W3+이면 승격 중단.
+4. TEST 승격 / PRODUCTION 승격은 각각 별도 사용자 승인과 검증 후 수행.
+
 ## 0AJ. W2 publication Phase B PASS / Phase A+B PREVIEW 코드 승격 완료
 
 2026-09-19 KST 기준, Music Note publication D1 W1~W2 구조의 Phase A 구현 + Phase B 진단을 완료하고 검증본을 PREVIEW 코드 기준으로 승격했다.

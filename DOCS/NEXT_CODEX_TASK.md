@@ -1,5 +1,31 @@
 # SORIDRAW NEXT CODEX TASK
 
+최종 갱신: 2026-09-20 KST — PREVIEW 069/070 배포 PASS / TEST 승격 전 사용자·비용 검증 대기
+
+## 현재 고정 기준
+- PREVIEW release source: `dc95856ad8299b3ed8746b2fd4d2dbdd574cda4b`.
+- PREVIEW Worker Release Run `35457463038` SUCCESS.
+- live PREVIEW Worker `f0a910a4-104e-47f7-8e3b-2c2c6454d8cf`.
+- canonical Worker SHA256 `91d154aaa9524dbf1349d48d0d14eadd09738602f103fedfbcf360270c340000`.
+- postflight Run `35457550389` SUCCESS: preview.soridraw.com HTTP 200, app 124, latest/popular R0/W0, private target absent from PREVIEW local/shared 37/37.
+- TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f` unchanged.
+- PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` unchanged.
+- Firebase unchanged.
+- catalog WRITE ON, READ OFF, FIRST_PUBLISHER OFF.
+
+## 다음 작업
+1. PREVIEW 사용자 실사용에서 기존 private 상태 유지/Explore 노출 없음/PC·모바일 일관성 확인.
+2. 새 private→republish 검증은 아직 TEST/PRODUCTION 구형 shared writer가 살아 있으므로 범위를 좁혀 신중히 진행. 기존 known private 곡은 임의 재공개 금지.
+3. 요청당 D1 rows_written 실측: private/public/like/unlike 각각 W1~W2만 PASS. W3+면 즉시 실패 처리.
+4. 사용자가 **테스트배포**를 명시 승인하면 검증된 PREVIEW exact tree를 main/TEST로 승격하여 TEST Worker에 069/070 적용 후 shared/local parity와 비용 재검증.
+5. PRODUCTION은 TEST 전체 PASS + 사용자의 명확한 정식배포 승인 후에만 승격.
+6. catalog READ/FIRST_PUBLISHER 전환은 별도 승인/검증 작업으로 유지.
+
+## 금지
+- 사용자 원본 D1/Firebase migration/backfill/전체 Feed rebuild.
+- generic 계속 진행을 TEST 또는 PRODUCTION 승인으로 해석.
+- W1~W2 미검증 상태에서 TEST/PRODUCTION 비용 합격 선언.
+
 최종 갱신: 2026-09-19 KST — 070 cross-env dry-run PASS / 실제 stale cache 4개 수리 PASS / 승격 승인 대기
 
 ## 현재 고정 사실

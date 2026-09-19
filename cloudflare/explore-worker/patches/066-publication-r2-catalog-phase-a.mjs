@@ -109,23 +109,27 @@ const anchor = functionRange('publicationReadProfileR2024').start;
 source = source.slice(0, anchor) + runtime + '\n\n' + source.slice(anchor);
 
 wrapAsyncFunction('publicationReadProfileR2024', 'Core066', (coreName) => `async function publicationReadProfileR2024(env, authContext) {
-  const current = await ${coreName}(env, authContext);
-  if (current || !isExploreR2FirstPublisherEnabled066(env)) return current;
+  if (!isExploreR2FirstPublisherEnabled066(env)) {
+    return await ${coreName}(env, authContext);
+  }
   try {
     const uid = String(authContext?.uid || '').trim();
     if (!uid) return null;
-    const bundle = await readExploreSharedProfile060(env, uid);
-    if (!validExploreProfileR2Bundle020(bundle)) return null;
-    const profile = bundle.body.data.profile || {};
-    return {
-      nickname: String(profile.nickname || profile.displayName || authContext?.displayName || ''),
-      avatarUrl: String(profile.avatarUrl || profile.avatar_url || authContext?.picture || ''),
-      handle: String(profile.handle || bundle.handle || '').trim().replace(/^@+/, ''),
-      r2FirstPublisher066: Boolean(bundle?.firstPublisherBootstrap066),
-    };
-  } catch {
-    return null;
-  }
+    let bundle = await readExploreR2Json(env, exploreProfileR2Key(uid));
+    if (!validExploreProfileR2Bundle020(bundle)) {
+      bundle = await readExploreSharedProfile060(env, uid);
+    }
+    if (validExploreProfileR2Bundle020(bundle)) {
+      const profile = bundle.body.data.profile || {};
+      return {
+        nickname: String(profile.nickname || profile.displayName || authContext?.displayName || ''),
+        avatarUrl: String(profile.avatarUrl || profile.avatar_url || authContext?.picture || ''),
+        handle: String(profile.handle || bundle.handle || '').trim().replace(/^@+/, ''),
+        r2FirstPublisher066: Boolean(bundle?.firstPublisherBootstrap066),
+      };
+    }
+  } catch {}
+  return await ${coreName}(env, authContext);
 }`);
 
 wrapAsyncFunction('publicationEnsureProfile016', 'Core066', (coreName) => `async function publicationEnsureProfile016(env, authContext, row, now) {

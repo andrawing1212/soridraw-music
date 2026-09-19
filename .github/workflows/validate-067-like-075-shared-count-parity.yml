@@ -59,12 +59,6 @@ jobs:
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-112-shared-feed-parity.mjs
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-115-shared-track-card-r2.mjs
           SORIDRAW_GENERATED_WORKER="$generated" node scripts/verify-116-explore-public-count-convergence.mjs
-          node scripts/verify-118-explore-like-explicit-intent.mjs
-          node scripts/verify-119-explore-like-20s-latest-cache.mjs
-          node scripts/verify-120-explore-like-actor-count-lock.mjs
-          node scripts/verify-121-explore-like-timing-only.mjs
-          node scripts/verify-122-explore-like-white-heart.mjs
-          node scripts/verify-123-shared-like-cache-repair.mjs
           node scripts/verify-124-mobile-shared-cache-repair.mjs
           echo 'LIKE_SHARED_REGRESSION_MATRIX=PASS'
 

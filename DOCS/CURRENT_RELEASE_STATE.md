@@ -1,5 +1,85 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AP. PREVIEW catalog WRITE staged ON + targeted R2 delta 검증 PASS / READ·FIRST_PUBLISHER OFF 유지
+
+2026-09-19 KST, 사용자 승인으로 PREVIEW에서 `SORIDRAW_R2_CATALOG_V1=1`만 활성화하고 staged write 검증을 완료했다. catalog READ와 first-publisher는 계속 OFF이며, TEST/PRODUCTION/Firebase는 변경하지 않았다.
+
+### PREVIEW staged WRITE 배포
+- config commit: `ba723fb817aa2de99cf28821d85c48b4261455b8`.
+- release trigger commit: `380b147125ee1cebc4f897fd7b4588784e69801c`.
+- PREVIEW Worker Release Run `35448197594` — **SUCCESS**.
+- previous PREVIEW Worker: `3678c1da-1bb5-4cfc-881f-6d1ad85a7fe0`.
+- current PREVIEW Worker: `4f8471e3-576f-49de-9f2c-c3863021bf3d`.
+- canonical Worker product SHA256 remains `129c743de7305384205ba266691fa168c3098a8e7b537f02959a0779da8b6da6`.
+- live binding: `SORIDRAW_R2_CATALOG_V1=1`.
+- `SORIDRAW_R2_CATALOG_READ_V1` = OFF/absent.
+- `SORIDRAW_R2_FIRST_PUBLISHER_V1` = OFF/absent.
+- PRE_DEPLOY_PENDING_069=0.
+- warm revision D1 R0/W0 PASS.
+- TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f` unchanged.
+- PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` unchanged.
+- Firebase Hosting/Functions/Rules 재배포 없음.
+- app version 124 unchanged.
+
+### TEMP 131 — catalog targeted delta 검증
+첫 Run `35448428321`:
+- live WRITE ON / READ OFF / FIRST_PUBLISHER OFF PASS.
+- 066/068 mutation integration contract PASS.
+- 실제 shared derived R2 catalog에서 synthetic bounded mutation matrix 자체는 전부 PASS.
+- postflight에서 신규 진단 query token을 사용한 첫-page probe가 실패하여 전체 Run은 failure.
+- 제품 mutation 로직 실패가 아니라 postflight probe 조건 문제였고 synthetic object는 모두 cleanup되어 catalog baseline 432 복귀.
+
+수정 후 Run `35448560216` — **SUCCESS**:
+- catalog mutation integration contract PASS.
+- 시작 catalog = 432, 종료 catalog = **432**.
+- synthetic publish:
+  - 해당 test track marker **8개만 추가** + meta.
+- 동일 상태 republish:
+  - `changed=false`; 추가 변경 0.
+- synthetic like:
+  - popular rank marker **1개 제거 + 1개 추가**.
+  - 전체 catalog rebuild 없음.
+- synthetic private:
+  - 해당 track marker **8개만 제거**.
+  - private tombstone meta만 유지.
+- synthetic republish:
+  - 해당 track marker **8개만 복구**.
+- synthetic artist create:
+  - name/handle marker 2개 + artist meta.
+- synthetic profile nickname/handle edit:
+  - 기존 marker **2개 제거 + 새 marker 2개 추가**.
+- synthetic test object cleanup 후 catalog baseline **정확히 432** 복구.
+- live latest first page = HTTP 200 / D1 R0/W0.
+- live popular first page = HTTP 200 / D1 R0/W0.
+- canonical D1 write = 0.
+- D1 schema change = false.
+- user origin data change = false.
+- Firebase change = false.
+- TEST/PRODUCTION change = false.
+- protected Worker versions unchanged PASS.
+
+### 현재 실제 상태
+- PREVIEW catalog WRITE = **ON**.
+- catalog READ = **OFF**.
+- first-publisher = **OFF**.
+- derived R2 catalog = **432 exact**.
+- 전체 catalog rebuild 없이 changed track/profile marker만 움직이는 R2 delta contract = **PASS**.
+- existing first-page latest/popular D1 R0/W0 = **PASS**.
+- canonical shared D1 / user origin data = 비변경.
+- TEST/PRODUCTION/Firebase = 비변경.
+- 실제 로그인 사용자의 publish/private/like/profile edit에서 D1 W1~W2와 동일 delta가 함께 성립하는지는 **실사용 mutation 검증 전**.
+
+### 다음 경계
+1. PREVIEW 실제 로그인 계정에서 작은 실사용 mutation 세트를 확인:
+   - 기존 공개곡 1개 private → republish.
+   - 좋아요 1회 → 해제 1회.
+   - 프로필은 실제 값 의미를 바꾸지 않는 범위에서 수정/복구가 가능할 때만 검증.
+2. 각 행동의 D1 rows_written = W1~W2 hard gate 확인.
+3. catalog 전체 432 rebuild 없음 + 해당 marker만 delta인지 확인.
+4. 위 live authenticated mutation parity까지 PASS한 뒤에만 catalog READ ON을 별도 승인 대상으로 검토.
+5. READ 전환 전까지 검색/deep-page는 기존 legacy 경로 유지.
+6. FIRST_PUBLISHER와 shared canonical D1 partial-index/trigger Phase D는 계속 별도 승인 대상.
+
 ## 0AO. PREVIEW 068 배포 + derived R2 catalog 432 초기 구축 완료 / READ·WRITE flags OFF 유지
 
 2026-09-19 KST, 사용자가 승인한 범위인 PREVIEW 068 Worker code-only 배포와 현재 공개곡 38곡 기준 derived R2 catalog 초기 구축을 완료했다. 사용자 원본 데이터나 canonical D1 schema/index/trigger는 변경하지 않았고, catalog READ/WRITE/first-publisher flags는 모두 OFF로 유지했다.

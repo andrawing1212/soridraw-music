@@ -1,5 +1,50 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AX. PREVIEW 069/070 Worker 배포 완료 — live f0a910a4 / app 124 / R0W0 / private 37 유지
+
+2026-09-20 KST, 사용자의 명시적 **프리뷰 배포** 승인으로 고정된 069/070 canonical Worker를 PREVIEW에 배포했다.
+
+### 배포
+- release source target: `dc95856ad8299b3ed8746b2fd4d2dbdd574cda4b`.
+- release trigger commit: `fc451c5d160d945005da9fb9985a15e52cb614cf`.
+- canonical Worker SHA256: `91d154aaa9524dbf1349d48d0d14eadd09738602f103fedfbcf360270c340000`.
+- PREVIEW Worker Release Run `35457463038` — **SUCCESS**.
+- previous PREVIEW Worker: `4f8471e3-576f-49de-9f2c-c3863021bf3d`.
+- current PREVIEW Worker: `f0a910a4-104e-47f7-8e3b-2c2c6454d8cf`.
+- TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f` unchanged.
+- PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` unchanged.
+- Firebase Hosting/Functions/Rules 재배포 없음. 앱 버전 124 유지.
+
+### release preflight / smoke
+- LIVE like D1 schema PASS, pending035=0, pending069=0.
+- publication PK index plan PASS.
+- canonical hash exact PASS.
+- pre-deploy pending 069=0.
+- Feed smoke PASS, Profile smoke PASS.
+- warm revision D1 `R0/W0`, mode `HEAD-ONLY-036` PASS.
+- fixed like cron disabled / Durable Object event scheduler PASS.
+- TEST/PRODUCTION Worker non-mutation PASS.
+
+### postflight — TEMP 142 Run `35457550389` SUCCESS
+- `https://preview.soridraw.com/` HTTP 200.
+- `app-version.json=124`.
+- live PREVIEW latest/popular R2 snapshot requests: D1 `R0/W0` PASS.
+- live Worker exact version `f0a910a4-104e-47f7-8e3b-2c2c6454d8cf`.
+- known private target SHA10 `1319e4479e` remains D1 private.
+- PREVIEW local latest/popular = 37/37, private target absent.
+- shared v112 latest/popular = 37/37, private target absent.
+- postflight D1 write 0, R2 write 0, Firebase write 0.
+- TEMP 142 workflow는 검증 후 삭제 완료.
+
+### 남은 게이트
+- PREVIEW 069/070 배포 자체는 완료.
+- TEST/PRODUCTION은 아직 구형 059/064 전체 snapshot writer를 포함한 Worker 버전 유지. 현재 known private 곡의 local stale cache는 0AW에서 37/37로 수리했지만, 장기 구조 보호는 TEST→PRODUCTION 승격 전까지 완전하지 않다.
+- 사용자의 **테스트배포** 승인 전 main/TEST 승격 금지.
+- PRODUCTION은 TEST 전체 검증 후 사용자의 명확한 정식배포 승인 전까지 금지.
+- catalog WRITE ON, READ OFF, FIRST_PUBLISHER OFF 유지.
+- 실제 사용자 mutation 요청당 D1 `W1~W2`는 아직 미검증. W3+면 FAIL.
+- 기존 private 곡은 계속 비공개 유지.
+
 ## 0AW. cross-env 실상 확인 + 현재 비공개 1곡 stale local cache 수리 PASS / 장기 재오염 차단은 코드 승격 필요
 
 2026-09-19 KST, 070 승격 전 실제 TEST/PRODUCTION Cloudflare 설정과 환경별 first-page R2 캐시를 읽기 전용으로 감사하고, 확인된 **현재 비공개 1곡만** 파생 캐시에서 조건부 수리했다.

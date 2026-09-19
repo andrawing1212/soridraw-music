@@ -8,6 +8,7 @@ on:
       - 'cloudflare/explore-worker/patches/068-catalog-publication-artist-parity.mjs'
       - 'cloudflare/explore-worker/release-patches.json'
       - 'scripts/verify-068-catalog-publication-artist-parity.mjs'
+      - 'scripts/verify-publication-w2-r2-catalog-phase-a.mjs'
       - 'scripts/verify-067-like-075-shared-count-parity.mjs'
       - '.github/workflows/validate-068-catalog-publication-artist-parity.yml'
 

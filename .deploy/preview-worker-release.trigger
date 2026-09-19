@@ -1,7 +1,11 @@
-requested_at=2026-09-18T12:25:00Z
+requested_at=2026-09-19T07:06:00Z
 requested_by=user
-product_code_target=ad3b9e0fc19229fd34b7b94a8c38a796c3bfc3a7
-release_purpose=123_shared_like_targeted_r2_repair_after_full_preflight_align
+product_code_target=7461200c559b2de306121924a13d82175fb4d77a
+release_purpose=phase_c_066_dormant_r2_catalog_code_only
 no_d1_migration=true
 no_user_data_migration=true
+catalog_write_flag=false
+catalog_read_flag=false
+first_publisher_flag=false
+hosting_redeploy=false
 preview_only=true

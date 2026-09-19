@@ -16,6 +16,9 @@ for (const required of [
   'SORIDRAW_SHARED_LIKE_COUNT_TARGETED_065_20260918',
   'publicationReadProfileR2024',
   'publicationEnsureProfile016',
+  'handleMusicNotePublicationSingleWrite016',
+  'publicationBuildFeedItem016',
+  'syncMusicNotePublicationR2AfterMutation',
   'writeExploreSharedProfile060',
   'readExploreSharedProfile060',
   'validExploreProfileR2Bundle020',
@@ -118,6 +121,7 @@ wrapAsyncFunction('publicationReadProfileR2024', 'Core066', (coreName) => `async
       nickname: String(profile.nickname || profile.displayName || authContext?.displayName || ''),
       avatarUrl: String(profile.avatarUrl || profile.avatar_url || authContext?.picture || ''),
       handle: String(profile.handle || bundle.handle || '').trim().replace(/^@+/, ''),
+      r2FirstPublisher066: Boolean(bundle?.firstPublisherBootstrap066),
     };
   } catch {
     return null;
@@ -135,6 +139,89 @@ wrapAsyncFunction('publicationEnsureProfile016', 'Core066', (coreName) => `async
   }
   return await ${coreName}(env, authContext, row, now);
 }`);
+
+{
+  const range = functionRange('handleMusicNotePublicationSingleWrite016');
+  let next = range.text;
+
+  const unchangedAnchor = '  if (unchanged) {\n    return json({';
+  const unchangedCount = next.split(unchangedAnchor).length - 1;
+  if (unchangedCount !== 1) throw new Error(`[066] unchanged first-publisher repair anchor count=${unchangedCount}`);
+  next = next.replace(unchangedAnchor, `  if (unchanged) {
+    if (isExploreR2FirstPublisherEnabled066(env) && profile?.r2FirstPublisher066) {
+      try {
+        const retryDelta066 = await firstPublisherProfileTrackDelta066(env, authContext.uid, source.id);
+        if (retryDelta066 > 0) {
+          const retryFeedItem066 = publicationBuildFeedItem016(
+            source,
+            authContext,
+            profile,
+            previous,
+            resolvedOptions,
+            primaryGenre,
+            publishedAt,
+            now
+          );
+          await syncExploreFeedR2Publication043(env, retryFeedItem066);
+          try {
+            await syncMusicNotePublicationR2AfterMutation(env, authContext.uid, source.sourceId, {
+              status: 'public',
+              trackId: source.id,
+              allowNextSongApply: resolvedOptions.allowNextSongApply === 1,
+              allowFollowerSave: resolvedOptions.allowFollowerSave === 1,
+              profilePinned: resolvedOptions.profilePinned === 1
+            });
+          } catch (error) {
+            console.warn('[SORIDRAW 066] first-publisher publication-state retry deferred:', String(error?.message || error || 'unknown'));
+          }
+          await patchExploreProfileR2Publication043(env, authContext.uid, {
+            trackId: source.id,
+            item: retryFeedItem066,
+            remove: false,
+            trackCountDelta: retryDelta066
+          });
+        }
+        await finalizeFirstPublisherProfile066(env, authContext.uid);
+      } catch (error) {
+        console.warn('[SORIDRAW 066] first-publisher idempotent repair deferred:', String(error?.message || error || 'unknown'));
+      }
+    }
+    return json({`);
+
+  const profilePatchAnchor = `  await patchExploreProfileR2Publication043(env, authContext.uid, {
+    trackId: source.id,
+    item: feedItem,
+    remove: false,
+    trackCountDelta: wasPublic ? 0 : 1
+  });
+  await invalidatePublicationProfileCaches017(request, env, authContext.uid, profile?.handle || "");`;
+  const profilePatchCount = next.split(profilePatchAnchor).length - 1;
+  if (profilePatchCount !== 1) throw new Error(`[066] first-publisher profile patch anchor count=${profilePatchCount}`);
+  next = next.replace(profilePatchAnchor, `  let profileTrackCountDelta066 = wasPublic ? 0 : 1;
+  if (isExploreR2FirstPublisherEnabled066(env) && profile?.r2FirstPublisher066) {
+    try {
+      profileTrackCountDelta066 = await firstPublisherProfileTrackDelta066(env, authContext.uid, source.id);
+    } catch (error) {
+      console.warn('[SORIDRAW 066] first-publisher track delta fallback:', String(error?.message || error || 'unknown'));
+    }
+  }
+  await patchExploreProfileR2Publication043(env, authContext.uid, {
+    trackId: source.id,
+    item: feedItem,
+    remove: false,
+    trackCountDelta: profileTrackCountDelta066
+  });
+  if (isExploreR2FirstPublisherEnabled066(env) && profile?.r2FirstPublisher066) {
+    try {
+      await finalizeFirstPublisherProfile066(env, authContext.uid);
+    } catch (error) {
+      console.warn('[SORIDRAW 066] first-publisher finalize deferred:', String(error?.message || error || 'unknown'));
+    }
+  }
+  await invalidatePublicationProfileCaches017(request, env, authContext.uid, profile?.handle || "");`);
+
+  source = source.slice(0, range.start) + next + source.slice(range.end);
+}
 
 appendBeforeResult066('syncExploreFeedR2Publication043', `  if (isExploreR2CatalogEnabled066(env)) {
     try { await syncExploreCatalogTrack066(env, incomingItem, { isPublic: true }); }
@@ -260,6 +347,9 @@ for (const required of [
   'removeExploreCatalogTrack066',
   'patchExploreCatalogLike066',
   'ensureFirstPublisherSharedProfile066',
+  'firstPublisherProfileTrackDelta066',
+  'finalizeFirstPublisherProfile066',
+  'first-publisher idempotent repair deferred',
   'handleCatalogFeed066',
   'handleCatalogProfileTracks066',
   'handleCatalogGenre066',

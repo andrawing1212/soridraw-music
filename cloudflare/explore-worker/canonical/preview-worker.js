@@ -22604,6 +22604,23 @@ async function processExploreLikeUserQueueWave075(env, cutoff, now) {
     ];
   }));
 
+  // SORIDRAW_LIKE_075_SHARED_COUNT_PARITY_067_20260919
+  // 075 is the active like path. Patch only changed tracks into shared R2.
+  if (changedRows.length) {
+    const sharedRows067 = changedRows.map((row) => ({
+      trackId: String(row?.track_id || '').trim(),
+      ownerUid: String(row?.owner_uid || '').trim(),
+      likeCount: Math.max(0, Number(row?.next_like_count || 0)),
+    })).filter((row) => row.trackId);
+    if (sharedRows067.length) {
+      try {
+        await patchSharedFeedLikeCounts065(env, sharedRows067);
+      } catch (error) {
+        console.warn('[SORIDRAW 067] 075 shared like-count patch deferred:', String(error?.message || error || 'unknown'));
+      }
+    }
+  }
+
   return {
     positiveTracks: Number(result?.[0]?.meta?.changes || 0),
     negativeTracks: Number(result?.[1]?.meta?.changes || 0),

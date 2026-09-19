@@ -1,5 +1,78 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AI. W2 publication Phase A PASS / Phase B 진단 시작
+
+2026-09-19 KST 기준, Music Note publication D1 W1~W2 구조의 **Phase A code-only 구현과 독립 재검토를 완료**했다.
+
+고정 기준:
+- 제품 PREVIEW baseline: `434696ac8fbb551c31e3af985273ded6a635e68a`
+- Phase A 작업 branch: `work/publication-w2-r2-catalog-phase-a`
+- Phase A 최종 commit: `1198c314000909a0fb5f954b7c3a9edcb8c6f13d`
+- 최종 validation Run: `35410052082` — **SUCCESS**
+- app version: **124 unchanged**
+
+Phase A 구현:
+- shared PROFILE_MEDIA R2에 ordered catalog v1 코드 추가.
+- per-track meta + latest/popular/profile/genre/title marker.
+- title marker는 normalized full title + bounded token, 최대 8개.
+- artist nickname/handle marker.
+- 기존 Explore 첫 페이지 shared R2 snapshot 보호.
+- Explore 2페이지 이후 catalog 경로 + legacy D1 cursor fallback 유지.
+- 공개프로필 첫 페이지 063 warm-edge 경로는 그대로 보호하고, 2페이지 요청에서 legacy cursor를 R2 profile catalog cursor로 해석.
+- 검색 API `/v1/search?q=...` shape 유지:
+  - 제목 token/prefix
+  - 장르
+  - artist nickname/handle -> uid -> 공개곡
+- publication D1 FTS write는 새 catalog 경로에 추가하지 않음.
+- 좋아요 변경은 해당 곡 popular marker만 이동.
+- pin 변경은 해당 곡 profile marker만 이동.
+- private는 해당 곡의 현재 marker만 제거.
+- R2 catalog write 준비 flag / read cutover flag / first-publisher flag를 분리해 불완전 catalog가 사용자에게 노출되지 않도록 보호.
+- 신규 first publisher는 D1 `public_profiles` 자동 INSERT 대신 최소 shared/local R2 profile bootstrap을 사용할 수 있는 guarded 경로 추가.
+- 첫 공개가 D1 저장 뒤 R2 profile 반영 전에 끊겨 재시도돼도 bootstrap marker를 보존하고 첫 곡/trackCount를 정확히 복구한 뒤 shared profile을 finalize하도록 보강.
+- ordered catalog 동점 tie-break도 기존 D1과 동일한 `id DESC`가 되도록 descending id sort segment 사용.
+- 사용하지 않는 first-profile cursor helper 제거.
+
+검증:
+- `W2_R2_CATALOG_PHASE_A=PASS`
+- 기존 112 shared Feed parity PASS.
+- 기존 113 shared profile parity PASS.
+- 기존 115 shared track-card R2 PASS.
+- 기존 116 public count convergence PASS.
+- 기존 063 public-profile warm Edge D1 R0/W0 보호 PASS.
+- existing derived-cache/cost regression PASS.
+- TypeScript PASS.
+- Build PASS.
+- UI/CSS 변경 없음.
+- shared D1 schema/index/trigger 변경 없음.
+- migration/backfill/user row rewrite 없음.
+- Firebase/Functions/Rules 변경 없음.
+- Worker/Hosting 배포 없음.
+- TEST/PRODUCTION 변경 없음.
+- feature flags 기본 OFF.
+
+독립 재검토에서 수정한 항목:
+- first-publisher helper가 실제 publication 본체에 연결되지 않았던 점을 발견해 retry-safe wiring 추가.
+- first-publisher local R2 bootstrap marker가 기존 reader에서 소실될 수 있던 점을 보완.
+- R2 ordered key의 동일 timestamp/rank tie에서 `id ASC`가 되던 문제를 발견해 기존 D1과 같은 `id DESC`로 수정.
+- generic shared-profile write마다 artist marker를 확인하지 않고 첫 프로필 생성/명시적 프로필 편집에만 artist index를 갱신하도록 제한.
+- catalog build와 read cutover를 별도 flag로 분리.
+
+현재 상태:
+- Phase A 코드는 아직 PREVIEW 제품 branch에 merge하지 않음.
+- 현재 PREVIEW/TEST/PRODUCTION 실제 서비스 동작은 변경되지 않음.
+- 배포 요청 없음 / 배포 없음.
+- 다음 작업은 Phase B 진단이며 shared canonical D1 migration은 여전히 금지.
+
+Phase B 합격선:
+- RATE_DB/진단 schema에서 first public **W1~W2**, private **W1~W2**, republish **W1~W2**, noop **W0**.
+- R2 title/genre/artist search + Explore/profile deep paging + like/private marker integration PASS.
+- Music Note track id 안정성 verifier PASS.
+- shared canonical D1 user row write 0.
+- Work 기준 독립 감사 PASS.
+- Phase B PASS 전 PREVIEW Worker 배포/TEST 승격/shared D1 cutover 금지.
+
+
 ## 0AH. W2 publication 구조설계 확정 / Phase A code-only 준비
 
 2026-09-19 KST 기준, Music Note 첫 공개의 D1 `W18`을 절대 합격선 `W1~W2`로 내리기 위한 구조설계를 확정했다.

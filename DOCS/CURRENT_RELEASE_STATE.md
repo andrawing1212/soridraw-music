@@ -1,5 +1,50 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AW. cross-env 실상 확인 + 현재 비공개 1곡 stale local cache 수리 PASS / 장기 재오염 차단은 코드 승격 필요
+
+2026-09-19 KST, 070 승격 전 실제 TEST/PRODUCTION Cloudflare 설정과 환경별 first-page R2 캐시를 읽기 전용으로 감사하고, 확인된 **현재 비공개 1곡만** 파생 캐시에서 조건부 수리했다.
+
+### 실제 환경 설정 — TEMP 139 Run `35452733928` SUCCESS
+- 070 canonical SHA `91d154aaa9524dbf1349d48d0d14eadd09738602f103fedfbcf360270c340000` pin PASS.
+- TEST live bindings:
+  - `DB:soridraw-explore-db` 공유 canonical.
+  - `RATE_DB:soridraw-explore-test-db`.
+  - `PROFILE_MEDIA:soridraw-profile-media` 공유 canonical.
+  - `EXPLORE_CACHE:soridraw-profile-media-test` 환경별 캐시.
+- PRODUCTION live bindings:
+  - `DB:soridraw-explore-db`.
+  - `PROFILE_MEDIA:soridraw-profile-media`.
+  - **별도 EXPLORE_CACHE 없음 → PROFILE_MEDIA fallback**.
+- 동일 070 canonical Worker를 현재 TEST/PRODUCTION live binding으로 재구성한 `release-worker-runtime.mjs <env> dry-run`이 둘 다 PASS. TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f`, PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0`는 전후 불변. D1/R2/Firebase write 0.
+- 따라서 070 코드 자체는 현재 TEST/PRODUCTION 바인딩과 배포 형식상 호환되지만, **dry-run은 승격 승인 또는 실배포가 아니다**.
+
+### stale cache 실측 — TEMP 140 Run `35452779963` SUCCESS (read-only)
+대상은 D1 `is_public=0`, catalog `public=false`, 식별 SHA10 `1319e4479e`로 재확인.
+- PREVIEW local latest/popular: 37/37, 대상 없음.
+- TEST local latest/popular: **38/38, 대상 private 곡 존재**.
+- PRODUCTION local latest/popular: **38/38, 대상 private 곡 존재**.
+- shared v112 latest/popular: 37/37, 대상 없음.
+- 즉 0AT의 재오염 위험은 이론이 아니라 **실제 TEST/PRODUCTION stale local snapshot 존재로 확인**됨.
+- read-only 감사에서 D1/R2 write 0, deploy 0.
+
+### 현재 비공개 1곡만 local cache 수리 — TEMP 141 Run `35452879050` SUCCESS
+canonical D1 private 및 catalog private guard를 매 CAS 재시도 전에 확인하고, 다른 곡/원본 데이터 변경 금지 조건으로 실행.
+- TEST local latest: **38→37**, target-only remove.
+- TEST local popular: **38→37**, target-only remove.
+- PRODUCTION local latest: **38→37**, target-only remove.
+- PRODUCTION local popular: **38→37**, target-only remove.
+- PREVIEW local latest/popular 및 shared v112는 이미 37이므로 변경 없음.
+- postflight: PREVIEW / TEST / PRODUCTION local + shared latest/popular **8개 모두 37곡, private target absent PASS**.
+- canonical D1 write 0, user-origin write 0. 실제 변경은 환경별 파생 first-page R2 4개에서 private ID 한 건 제거뿐.
+- 이는 대량변환/Feed rebuild가 아니라 이미 확인된 single private target에 대한 bounded derived cache repair.
+
+### 남은 차단 조건
+- **현재 곡의 즉시 재오염 재료는 제거했지만 구조적 문제는 남음.** 라이브 TEST/PRODUCTION Worker는 아직 구형 059/064 전체 snapshot writer를 실행할 수 있다.
+- 다음에 PREVIEW에서 다른 곡을 private로 바꾸면 TEST/PRODUCTION local cache는 다시 stale이 될 수 있고, 구형 Worker가 shared v112를 덮어쓸 수 있다.
+- 따라서 070을 PREVIEW에 배포하고 새 private/republish 실사용 검증으로 넘어가기 전에, 정상 릴리스 순서상 TEST 및 최종 PRODUCTION까지 070 writer guard가 승격되어야 장기 재오염 방지를 보장할 수 있다.
+- TEST 승격은 사용자의 명시적 테스트배포 승인 필요. PRODUCTION은 그 후 TEST 검증 완료 + 사용자의 명확한 정식배포 승인 전에는 절대 배포하지 않는다.
+- catalog READ / FIRST_PUBLISHER OFF 유지. 실제 mutation D1 W1~W2는 아직 미검증.
+
 ## 0AV. 070 PREVIEW 코드: 구형 shared Feed 전체 덮어쓰기 차단 + 좋아요 CAS 검증 PASS / 환경 간 보안 게이트 유지
 
 2026-09-19 KST, 사용자 지시로 0AT 재오염 원인의 PREVIEW 코드 측면을 수정했다. **변경 범위는 GitHub preview만이며 실제 Worker 배포, 사용자 원본/파생 R2 원격 수정, TEST/PRODUCTION 코드 변경은 하지 않았다.**

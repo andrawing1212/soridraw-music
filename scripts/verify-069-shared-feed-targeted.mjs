@@ -98,9 +98,9 @@ bucket.seed('meta/target', { trackId: 'target', public: false });
 bucket.failOnce = 'shared/latest';
 result = await api.syncExploreSharedFeedTargeted069(env, { kind: 'private', trackId: 'target' });
 assert.equal(result.ok, true);
-assert.equal(bucket.items('shared/latest').some(x => x.id === 'concurrent'), true);
-assert.equal(bucket.items('shared/latest').some(x => x.id === 'target'), false);
-assert.equal(bucket.items('shared/popular').some(x => x.id === 'target'), false);
+assert.equal(bucket.items('latest').some(x => x.id === 'concurrent'), true);
+assert.equal(bucket.items('latest').some(x => x.id === 'target'), false);
+assert.equal(bucket.items('popular').some(x => x.id === 'target'), false);
 console.log('069_CAS_CONCURRENT_OTHER_ITEM_PRESERVED=PASS');
 
 const malformed = new FakeR2();

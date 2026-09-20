@@ -20,11 +20,15 @@ jobs:
           ref: f7fc25d5452b3313efa3cca53c180c5494cc9837
           path: frozen-test
           fetch-depth: 1
+          sparse-checkout: cloudflare/explore-worker/canonical/preview-worker.js
+          sparse-checkout-cone-mode: false
       - uses: actions/checkout@v4
         with:
           ref: e994340f3c4f6ac97f444f1ddf13053d3faffa71
           path: frozen-production
           fetch-depth: 1
+          sparse-checkout: cloudflare/explore-worker/canonical/preview-worker.js
+          sparse-checkout-cone-mode: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

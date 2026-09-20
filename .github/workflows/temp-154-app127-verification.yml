@@ -1,5 +1,5 @@
 name: TEMP 154 App127 Personal Like Verification
-# rerun candidate after bounded signal gap and executable transition tests
+# rerun after correcting TypeScript transpiled helper execution
 on:
   push:
     branches: [preview]

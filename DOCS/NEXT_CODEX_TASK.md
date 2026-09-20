@@ -1,5 +1,21 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-21 KST: 신규 132 비용 감사에서 단일 좋아요/해제 069 W4 재현 — **릴리스 차단**
+
+최신 `DOCS/CURRENT_RELEASE_STATE.md` 0BQ. 기준 `preview`에 `scripts/verify-132-like-d1-write-budget.py` 추가. Run `35538319528` SUCCESS는 격리 코드/SQLite 비용 위반 검출 성공이지 제품 비용 PASS가 아님. 실제 live D1 계량은 **미실시**. PREVIEW 라이브 앱126/Worker071 유지, 앱127 및 Worker072~077 전부 미배포, 사용자 원본/TEST/PRODUCTION 비변경.
+
+### 구조적으로 확인된 비용
+
+- 069 batch 신규 접수 INSERT 1행 + aggregate `track_stats` 갱신 1행 + `likes` 관계 INSERT/DELETE 1행 + 처리 큐 DELETE 1행 = 단일 행동 4행 변경. 좋아요와 해제 모두 같은 격리 모형 4. D1 `env.DB.batch` 명령 1회는 rows_written 1이 아님. 인덱스/트리거/운영 중 동시 배치 비용은 여기 포함하지 않음.
+- 프로젝트 하드 게이트 **사용자 변경 1회 D1 W1~W2**에 구조상 위배. 앱127 하트 일치만 완성해도 PREVIEW→TEST/PRODUCTION 승격 **FAIL**. 새 동기화 패치만 추가해서 이 비용이 줄어들지 않음.
+
+### 다음 작업 (Codex High 설계 → 소규모 격리검증 → 판단; 무단 배포 금지)
+
+1. 안전한 좋아요 저장의 필수조건을 정리: (a) **D1 두 행 이하** (b) 관계와 공개 숫자의 동일 트랜잭션 정합성 (c) PC·모바일 반대 요청의 서버 적용 순서 (d) HTTP 재시도와 중복 요청의 무해성 (e) 오프라인 복귀 후 최종 1회 저장 (f) 구형 Worker 공유 R2 공존·하위 호환 (g) 실패 시 기존 사용자 기록 보호.
+2. 기존 D1 069 큐를 계속 쓴 채 W1~W2로 위장하지 말 것. 큐 없는 직접 원본 변경은 `likes`/ `track_stats` 2행을 목표로 할 수 있지만, 반대 요청 재전송/순서와 좋아요 해제 후 과거 주문 증명(삭제 후 tombstone 없음)을 별도로 해결해야 한다. 영구 주문 기록이나 외부 큐가 추가되면 추가 D1 write·R2/Queue 요금·장애 복구를 정량 비교. 기존 TEST/PRODUCTION이 삭제된 `likes` 행만 보고 개인 소유를 판정하므로 거짓 tombstone을 여기에 추가하면 하위 호환 깨짐 — 금지.
+3. 외부 인프라 신규 도입·대량 migration·사용자 데이터 구조의 파괴적 의미 변경 금지. 최소 2개 대안의 쓰기/읽기/100k 유저 비용·경합 시뮬레이션을 비교한 후 구조 채택. 확정 전 새 Worker078을 만들거나 클라이언트 `settled`을 허위 활성화하지 말 것.
+4. 승인된 구조가 나오면 `preview`에서 격리 실행형 테스트 먼저. 라이브 D1 W1~W2·변경 없는 페이지 재방문 R0·R2/RTDB 사용량은 제한 테스트 계정으로만 검증; 원본 사용자 데이터 무단 변경 없음. Work 독립 감사 이후 사용자 별도 프리뷰배포 승인 전 배포 금지.
+
 ## 최종 기준 — 2026-09-20 KST: 앱127 R2 updated≠D1 settled 분리 / RTDB 확정 신호 금지
 
 현재 구체 상태: `DOCS/CURRENT_RELEASE_STATE.md` 0BP. 실제 PREVIEW 앱126 + Worker071, 후보 앱127/Worker072~077 미배포, main/production 비변경.

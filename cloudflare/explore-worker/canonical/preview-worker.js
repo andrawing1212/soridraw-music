@@ -20081,8 +20081,8 @@ async function syncExploreFeedR2Publication043Core044(env, incomingItem) {
       const merged = existing ? {
         ...existing,
         ...incomingItem,
-        stats: { ...(incomingItem?.stats || {}), ...(existing?.stats || {}) },
-        likeCount: existing?.likeCount ?? incomingItem?.likeCount ?? incomingItem?.stats?.likeCount ?? 0,
+        stats: { ...(incomingItem?.stats || {}), ...(existing?.stats || {}), likeCount: incomingItem.likeCount },
+        likeCount: incomingItem.likeCount,
         commentCount: existing?.commentCount ?? incomingItem?.commentCount ?? incomingItem?.stats?.commentCount ?? 0,
         playCount: existing?.playCount ?? incomingItem?.playCount ?? incomingItem?.stats?.playCount ?? 0,
       } : incomingItem;
@@ -20175,8 +20175,8 @@ function sharedFeedNext069(bundle, sort, operation) {
   const merged = existing ? {
     ...existing,
     ...incoming,
-    stats: { ...(incoming?.stats || {}), ...(existing?.stats || {}) },
-    likeCount: existing?.likeCount ?? incoming?.likeCount ?? incoming?.stats?.likeCount ?? 0,
+    stats: { ...(incoming?.stats || {}), ...(existing?.stats || {}), likeCount: incoming.likeCount },
+    likeCount: incoming.likeCount,
     commentCount: existing?.commentCount ?? incoming?.commentCount ?? incoming?.stats?.commentCount ?? 0,
     playCount: existing?.playCount ?? incoming?.playCount ?? incoming?.stats?.playCount ?? 0,
   } : incoming;
@@ -20254,10 +20254,34 @@ async function syncExploreFeedR2Publication043Core069(env, incomingItem) {
   return result;
 }
 
+// SORIDRAW_PUBLICATION_CANONICAL_LIKE_PARITY_071_20260920
+async function readCanonicalPublicationLike071(env, trackId) {
+  const id = String(trackId || '').trim();
+  if (!id || !env?.DB) throw new Error('[071] invalid canonical track');
+  const row = await env.DB.prepare(
+    "SELECT COALESCE(s.like_count,0) AS like_count FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id WHERE t.id=? AND t.is_public=1 AND t.status='published' LIMIT 1"
+  ).bind(id).first();
+  if (!row) throw new Error('[071] canonical public track unavailable');
+  const count = Number(row.like_count);
+  if (!Number.isFinite(count) || count < 0) throw new Error('[071] invalid canonical like count');
+  return Math.floor(count);
+}
+function withCanonicalPublicationLike071(item, count) {
+  return { ...item, likeCount: count, stats: { ...(item?.stats || {}), likeCount: count } };
+}
 async function syncExploreFeedR2Publication043(env, incomingItem) {
-  const result = await syncExploreFeedR2Publication043Core069(env, incomingItem);
+  let canonicalItem;
   try {
-    const shared = await syncExploreSharedFeedTargeted069(env, { kind: 'publish', trackId: String(incomingItem?.id || incomingItem?.trackId || '').trim(), item: incomingItem });
+    const trackId = String(incomingItem?.id || incomingItem?.trackId || '').trim();
+    const count = await readCanonicalPublicationLike071(env, trackId);
+    canonicalItem = withCanonicalPublicationLike071(incomingItem, count);
+  } catch (error) {
+    console.warn('[SORIDRAW 071] publication count deferred:', String(error?.message || error || 'unknown'));
+    return { ok: false, repairNeeded: true, reason: 'canonical_like_unavailable' };
+  }
+  const result = await syncExploreFeedR2Publication043Core069(env, canonicalItem);
+  try {
+    const shared = await syncExploreSharedFeedTargeted069(env, { kind: 'publish', trackId: String(incomingItem?.id || incomingItem?.trackId || '').trim(), item: canonicalItem });
     if (!shared.ok) console.warn("[SORIDRAW 069] targeted shared Feed repair needed:", "syncExploreFeedR2Publication043", JSON.stringify(shared.results || []));
   } catch (error) {
     console.warn("[SORIDRAW 069] targeted shared Feed deferred:", "syncExploreFeedR2Publication043", String(error?.message || error || "unknown"));
@@ -20415,8 +20439,8 @@ async function patchExploreProfileR2Publication043Core044(env, uid, change) {
       const nextItem = change?.item ? {
         ...previous,
         ...change.item,
-        stats: { ...(change.item?.stats || {}), ...(previous?.stats || {}) },
-        likeCount: previous?.likeCount ?? change.item?.likeCount ?? change.item?.stats?.likeCount ?? 0,
+        stats: { ...(change.item?.stats || {}), ...(previous?.stats || {}), likeCount: change.item.likeCount },
+        likeCount: change.item.likeCount,
         commentCount: previous?.commentCount ?? change.item?.commentCount ?? change.item?.stats?.commentCount ?? 0,
         playCount: previous?.playCount ?? change.item?.playCount ?? change.item?.stats?.playCount ?? 0,
       } : { ...previous, ...(change?.patch || {}) };
@@ -20457,6 +20481,16 @@ async function patchExploreProfileR2Publication043Core046(...args) {
 }
 
 async function patchExploreProfileR2Publication043(...args) {
+  const change = args[2];
+  if (change?.item) {
+    try {
+      const count = await readCanonicalPublicationLike071(args[0], change.trackId);
+      args[2] = { ...change, item: withCanonicalPublicationLike071(change.item, count) };
+    } catch (error) {
+      console.warn('[SORIDRAW 071] profile publication count deferred:', String(error?.message || error || 'unknown'));
+      return { ok: false, repairNeeded: true, reason: 'canonical_like_unavailable' };
+    }
+  }
   const [env, uid] = args;
   const result = await patchExploreProfileR2Publication043Core046(...args);
   if (result?.ok === false || result?.repairNeeded) {

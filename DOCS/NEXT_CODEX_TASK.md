@@ -1,5 +1,19 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 기준 — 2026-09-21 KST: 좋아요 predeploy STOP 사유 고정 — 069 재전송 ID 불안정 + 영구 중복 기록 부재
+
+사용자 "배포 전단계까지 한 흐름으로" 요청에 대해, 기존 리드온리 `soridraw-release-system-audit.yml` 실행 요청 commit `f951e797b8b0210042cd7bc39168d449c2b06e7d`를 생성했다. 실행/완료 결과는 연결된 GitHub에서 조회 불가하므로 **TypeScript/Build/Worker/D1 preflight 미확인**. 특히 이 워크플로는 127 회귀 테스트를 실행하지 않으므로 성공으로 보여도 좋아요 최종 합격이 아니다.
+
+Worker071 canonical SHA `9e0048ac0d2e3540707930786d531b9bca3bccb7`의 `exploreLikeW1Batch040`: `batchAt = Math.max(fallbackAt, ...canonical.mutationAt)`이고 `fallbackAt`는 매 HTTP 접수 시 **서버 현재 시각**. 동일 client mutation을 다시 요청하면 시각이 달라져 **새 069 batch ID**가 생성될 수 있다. `processExploreLikeAggregateWave035`가 처리된 069 행 DELETE; 과거 처리가 완료된 뒤에는 같은 ID라도 중복 증명이 사라진다. 기존 `scripts/verify-132-like-d1-write-budget.py`에 136 소스 가드·동일 action 재시도 counterexample 추가. 정량 W4 모형 외에 **중복 접수/역순 구조 FAIL**도 최종 릴리스 차단 조건으로 유지.
+
+### 하나의 완성 작업으로 수행할 범위 (Codex/독립 Work)
+
+1. preview 최신 SHA 고정, read-only audit 실제 Run ID·step 결과를 확인한다. TS/Build/관련 127·126·125·124·123·110와 128~136 테스트, Worker071 hash guard를 실행. static PASS를 실운영 PASS로 오인 금지. 검사 결과 미확인 시 배포 차단.
+2. 좋아요의 단일 원본 확정 순서: 안정된 operation ID·UID+곡 revision·관계와 공용 count의 동일 원자 commit·중복 및 out-of-order 영구 방어가 가능해야 한다. 기존 069/075/035/066 처리와 구형 TEST/PRODUCTION Writer가 우회하지 않는 전체 릴리스 계획을 제시하고 **가장 오래된 완료된 요청도 새 좋아요/해제를 재반전시키지 않음**을 검사.
+3. 공유 D1 실제 SQL 트리거·인덱스 SELECT/read-only 확인 후 별도 격리 D1로 행동별 billed `rows_written` W1~W2, 중복 W0, 읽기 R0 측정. 0BS에서 최초 좋아요/해제 격리 논리 6변경(실 청구 제외) 재현된 상태이므로 단순 2개 원본 SQL로 배포 가능 판정 불가. 비용을 충족하지 못하면 구조 재설계까지 같은 작업 범위이며 임시 게이트 완화 금지.
+4. 최종 D1 확정 이후에만 각 곡 개인 shared R2 및 원격 신호를 게시. 개인 pending이 영구 유지되지 않고 2,000/128/오프라인/재시도/구형 캐시에서도 자동 수렴하도록 제한 테스트 계정/실기기 검증. 잘못된 `settled` 금지.
+5. Cloudflare/Functions/Firebase/Rules 신규 배포, 사용자 원본 수정·migration·모든 환경 승격은 별도 명시 승인 전 실행하지 않는다. 비호환 구조나 W3+ 발견 시 **STOP/FAIL 보고**하고 테스트용 가짜 PASS 만들지 않는다.
+
 ## 최신 기준 — 2026-09-21 KST: 127 클라이언트 낙관적 상태·늦은 캐시 덮어쓰기 방지 후보 반영 / 배포 차단
 
 `DOCS/CURRENT_RELEASE_STATE.md` 0BT. 현재 `preview`에 `src/services/exploreLikeService.ts`, `src/pages/ExplorePage.tsx`, `scripts/verify-127-atomic-personal-like.mjs` 국소 수정. 반영: 신규 클릭은 로컬 즉시 저장/화면 반영; 늦은 개인 조회 응답은 **응답 직후 UID별 outbox·미확정 상태를 다시 읽고 보호된 곡을 덮어쓰지 않음**; 원격 알림은 표시 시점 현재 membership과 맞을 때만 반영; 최초처럼 오래된 hydrate 결과도 현재 곡 유효 상태 우선; 같은 ms 연속 클릭에 단조 증가하는 `updatedAt`으로 오래된 ACK 구분. 30초 묶음과 기존 공개 숫자/사용자 데이터 구조 그대로. 소규모 소스/순수 로직 점검 PASS, 타입/빌드/전체 CI/실기기 **미검증**. 앱126/Worker071 실제 배포 유지. 이 클라이언트 수정만으로 069 W4·trigger 증폭·구형 공유 Writer·최종 canonical 자동 수렴 FAIL은 해결되지 않음.

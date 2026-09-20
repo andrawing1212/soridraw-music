@@ -1,5 +1,18 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-20 KST: 074 R2 유실 방지 보완 PASS / 127 자동 수렴 구현 전
+
+상세 `DOCS/CURRENT_RELEASE_STATE.md` 0BM. 앱126/Worker071 실제 PREVIEW 유지, 후보 앱127/Worker072~077 미배포. main/TEST 및 production/PRODUCTION 미변경.
+
+- 074 patch는 shared R2 missing 시 구형 unconditional fallback 금지, 기존 2000 IDs의 손실 가능성이 있는 truncation 금지, 128 곡별 순서 토큰 초과 시 eviction 금지. 문제 상황에 `repairNeeded` 반환하고 D1 접수 큐 보호. 기존 한도 내 대상별 CAS 및 서버 수락 순서 유지. **이 부분은 데이터 보존이 확인됐을 뿐 해당 하트를 자동 복구한 상태가 아니다.**
+- `verify-128-like-concurrency.mjs`에 cold R2 쓰기0, 2000 ID 보존, 128 토큰 보존 mock 추가. 최종 Run `35517114646` SUCCESS: 072~077 후보 syntax, 128~131 및 127/126/125/124/123/110, TypeScript, Build. 임시 Workflow 161 삭제. 원본 사용자 데이터 변경 및 배포 없음.
+
+### 다음 작업
+1. `repairNeeded` 이후 **실제 canonical D1 완료 기준을 확인한 경우에만** 해당 UID/곡의 R2 부분 복구·기기 하트 변경 적용. 해당 계정 전체 좋아요 R2 cold/2000/128 cap 예외를 성공처럼 처리 금지. 데이터 원본 중복 write/migration/전역 Feed 재생성 금지.
+2. 동시에 남아 있는 구형 TEST/PRODUCTION writer unconditional 덮어쓰기를 공통 CAS로 호환시키는 릴리스 순서부터 확정. 별도 사용자 TEST/PRODUCTION 배포 승인은 아직 없음.
+3. 실제 D1 rows_written W1~W2/변경 없는 정상 D1 R0, 10만 사용자 RTDB+R2 비용, PC↔모바일/오프라인·2000곡 실행형 및 제한 테스트 계정 실측. 독립 Work 감사 가능한 경우 고정 commit에서 read-only 실시.
+4. PREVIEW에 앱127 또는 Worker candidate를 별도 `프리뷰배포` 승인 없이 배포 금지; main/production 변경 금지. 아직 릴리스 PASS로 기록하지 않는다.
+
 ## 최종 기준 — 2026-09-20 KST: 073/074 writer TEST·PRODUCTION 고정 소스 적용 모의검사 PASS, 실제 승격 전
 
 `DOCS/CURRENT_RELEASE_STATE.md` 0BL 상세 확인. 실제 앱126/Worker071 PREVIEW 유지, app127 및 Worker072~077는 미배포. TEST main `f7fc25d5452b3313efa3cca53c180c5494cc9837`, production `e994340f3c4f6ac97f444f1ddf13053d3faffa71` 미변경.

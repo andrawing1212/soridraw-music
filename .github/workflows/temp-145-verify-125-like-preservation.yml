@@ -1,0 +1,44 @@
+name: TEMP 145 Verify 125 Like Preservation
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-145-verify-125-like-preservation.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Offline canonical 071 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/worker125"
+          mkdir -p "$work"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$work/worker.js"
+          export SORIDRAW_REMOTE_WORKER_DIR="$work"
+          node --check cloudflare/explore-worker/patches/071-publication-canonical-like-parity.mjs
+          node cloudflare/explore-worker/patches/071-publication-canonical-like-parity.mjs
+          node --check "$work/worker.js"
+          grep -q 'SORIDRAW_PUBLICATION_CANONICAL_LIKE_PARITY_071_20260920' "$work/worker.js"
+          echo '071_CANONICAL_PATCH=PASS'
+          sha256sum "$work/worker.js"
+      - name: App125 existing regressions, lint and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-124-mobile-shared-cache-repair.mjs
+          npm ci --no-audit --no-fund
+          npm run lint
+          npm run build
+          echo 'APP125_TYPESCRIPT_BUILD=PASS'
+          echo 'DEPLOY=0 D1_WRITE=0 R2_WRITE=0'

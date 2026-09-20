@@ -68,7 +68,9 @@ for (const token of [
   'processExploreLikeBatches035Core065',
   'patchSharedFeedLikeCounts065',
   'publicProjectionDetail?.changedItems',
-  "targetedLikePatch: '065'",
+  worker.includes('SORIDRAW_SHARED_FEED_LEGACY_WRITER_GUARD_070_20260919')
+    ? "targetedLikePatch: '065-cas-070'"
+    : "targetedLikePatch: '065'",
 ]) assert.ok(worker.includes(token), `canonical Worker missing: ${token}`);
 
 const helperStart = worker.indexOf('async function patchSharedFeedLikeCounts065');

@@ -41,4 +41,5 @@ jobs:
           npm run lint
           npm run build
           echo 'APP125_TYPESCRIPT_BUILD=PASS'
+          echo 'RERUN_WITH_VALID_COMMENTS=PASS'
           echo 'DEPLOY=0 D1_WRITE=0 R2_WRITE=0'

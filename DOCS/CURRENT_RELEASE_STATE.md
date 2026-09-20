@@ -1,5 +1,16 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BI. Worker075 제한된 원본 좋아요 확인 API 후보 추가 / 모의검사 PASS·자동 복구 미구현 (2026-09-20 KST)
+
+사용자 "작업 진행해" 이후 0BH의 구형 Worker 공유 R2 덮어쓰기 문제를 별도로 재현하고 **원본을 확인하는 읽기 전용 경로**를 `preview`에 추가. 실제 서비스는 **PREVIEW 앱126 + Worker071 그대로**, 앱127 및 Worker072~075는 미배포. 사용자 원본/환경 변경 없음.
+
+- 신규 `cloudflare/explore-worker/patches/075-targeted-canonical-like-read.mjs`: 071 복사본에 072~074를 적용한 후보에 인증 `GET /v1/me/likes-confirmed?trackIds=...` 추가. 기존 `handleMyLikeStatesD1Core` 재사용으로 **본인 UID + 최대 서로 다른 20곡**의 공개·발행된 곡 D1 canonical membership만 읽고, 목록 전체/R2 값에서 추정하지 않음. 빈 요청·20곡 초과·과도한 ID는 D1 조회 전에 400. D1 WRITE 0, 공유 Edge 캐싱 없음. 이 API는 평상시 진입과 앱 업데이트에 연결하지 않은 **이벤트 발생 시 예외 복구용 기반 경로**다. 실행 시 대상 곡 수만큼 D1 rows_read는 발생하며 비용 검증 없이 상시 조회 금지.
+- 신규 `scripts/verify-129-like-legacy-repair-gate.mjs`: 인증 D1 core 경로·20곡 상한·잘못된 입력 선차단 검사와, 구형 Worker가 074의 ETag/정렬 필드를 무시하고 shared R2를 덮으면 **R2 하트 상태가 canonical D1과 달라지는 상황**을 실행형 mock으로 재현. `075_AUTOMATIC_LEGACY_REPAIR=NOT_IMPLEMENTED`를 명시. 이 테스트는 충돌 해결 PASS가 아니라 아직 남은 차단 원인의 재현이다.
+- Run `35514355534` **SUCCESS**: Worker071 고정 복사본에 072~075 패치 순서대로 생성·문법 검사; 128 동시 CAS 모의검사·129 원본 제한 조회·127/126/125/124/123/110 회귀, TypeScript, Build 성공. 임시 Workflow 157 검사 후 제거. 실제 DB·R2·Firebase 변경 및 배포 0. Worker075는 아직 canonical worker.js/ checksum에 포함되지 않았다.
+- **잔여 FAIL:** old TEST/PRODUCTION Worker가 shared R2를 덮으면 074 메타데이터가 사라질 수 있다. 075 원본 확인은 아직 앱의 자동 복구 과정에 연결되지 않았고, 큐 ACK→최종 canonical 확정 타이밍 판단·개인 R2 자체의 충돌 후 복구도 없다. 바로 앱127/Worker 후보 배포하면 안 된다. R2 2천 ID, 실제 D1 W1~W2, RTDB/R2 비용 및 PC↔모바일 실측 미검증.
+
+다음: 구형 writer가 덮어쓴 경우 *어떤 대상 ID를 언제 canonical에서 확인할지*를 이벤트별로 제한하고, 075 조회 이전의 큐 미완료 상태와 최종 D1 적용을 구별할 수 있는지 설계·검증. 필요하면 구형 코드가 동시에 쓸 수 있는 기간 동안 자동 복구를 안전하게 보장할 수 없는 사실을 보고하고 릴리스 차단 유지. 기존 UI/뮤직노트/전체 캐시 비변경.
+
 ## 0BH. 앱127 + Worker072~074 동시 변경 코드·실행형 모의검사 PASS / PREVIEW 미배포·최종 원본 실측 전 (2026-09-20 KST)
 
 사용자 지시: PC·모바일이 같은 계정/같은 곡을 거의 동시에 좋아요·해제해도 합리적으로 수렴하도록 수정. 0BG 후보 위에 preview 전용으로 다음 내용을 구현. **실제 PREVIEW 앱126 + Worker071은 유지**. Worker072~074는 Worker071 소스의 임시 복사본에만 적용했고 canonical 파일·checksum 및 live 배포는 변경하지 않음.

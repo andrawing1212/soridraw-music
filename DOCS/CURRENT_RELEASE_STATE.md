@@ -1,5 +1,24 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BD. 앱126 실사용 FAIL: PC↔모바일 개인 좋아요 하트 소유 상태 불일치 (사용자 확인 2026-09-20 KST)
+
+사용자 최신 사진: 동일 계정으로 보이는 PC·모바일 PREVIEW 추천에서 첫 네 곡의 공개 좋아요 수는 양쪽 모두 1. 모바일은 앞 두 곡 **빈 하트+1**, 세 번째·네 번째는 **채운 하트+1**. PC는 첫 네 곡 전부 **채운 하트+1**. 따라서 0BC의 38곡 canonical↔R2 **공개 숫자 정합성 PASS는 유지**하되, **개인 하트 PC↔모바일 실사용 정합성은 FAIL**. 사진만으로 현재 해당 사용자의 canonical likes 관계를 확정할 수 없어 어떤 기기가 stale인지는 아직 미확정. 공개 수 1에서 사용자 하트 소유를 역산하면 안 됨.
+
+사용자 확인: 이전 비공개 곡 SHA10 `1319e4479e`는 **본인이 2026-09-20 15:31경 직접 공개 전환**. 0BC의 '의도된 재공개인지 불명'은 해소. 사용자 직접 공개이므로 보안 사고/오류로 분류하지 않으며 임의로 비공개 원복하지 않는다.
+
+### 정적 경로 조사
+- `src/services/exploreLikeService.ts`: `getExploreLikedTrackIds()`는 사용자 UID별 영구 liked-state 120 캐시에 누락된 ID만 `/v1/me/likes`에 요청. 이미 true/false가 들어 있으면 타 기기의 변경 후에도 서버 재검증이 없다. `observeExploreLikeAccountSyncSignal`은 빈 함수로, 과거 RTDB replay는 명시적으로 비활성화됐다.
+- `src/pages/ExplorePage.tsx`: `likeHydrationKeyRef`는 동일 사용자/표시 ID 조합을 한 번 hydration한 뒤 반복 조회하지 않고, `likeAccountSyncSignal`도 현재 타 기기의 likes 변경으로 증가시키는 유효 구독 경로가 없다. 126 warm-entry revision은 **공유 Feed count 전용**이므로 하트 소유 상태를 고치지 않는다.
+- `src/services/exploreLikedTracksService.ts`: 개인 좋아요 곡 컬렉션도 `canonicalLikedTrackIds` 캐시가 있으면 네트워크 재검증하지 않는 경로. 페이지 이동/재방문 시 원본 전체 조회를 막는 기존 정상 캐시는 보호하되, 실제 다른 기기에서 변경됐다는 신호가 들어오면 해당 곡만 정확하게 갱신해야 한다.
+- 현재 사진은 양측 하트 소유 관계 모순 증거이나 **실제 account UID 대상 authenticated membership/canonical 상태는 미측정**. 강제 값 덮어쓰기/새 좋아요 조작으로 진단 금지.
+
+### 다음 작업 범위: 127 개인 like signal 설계·구현 전 안전 게이트
+1. 기존 099/098 RTDB replay를 무작정 복구하거나 매 진입 40곡 D1 membership 재조회 금지. 신규 버전 marker나 공유 카운트로 사용자 소유 여부를 결정하지 않음.
+2. 같은 사용자의 실제 **확정된 좋아요 변화**를 1회 작고 안전한 UID-scoped revision/변경 항목 신호로 전달할 수 있는지, Worker 큐 ACK vs canonical commit 시점, 기존 사용자 소유 스냅샷·RTDB 비용·환경간 구형 코드와의 호환성을 먼저 검증한다. 신규 서버 신호가 필요한 경우 좋아요/해제 D1 W1~W2 및 변경 없는 앱 업데이트 D1 R0 목표 유지.
+3. 변경이 없는 재진입에는 기존 기기 하트 캐시 유지. 실제 다른 기기 좋아요/해제에만 영향을 받은 ID의 개인 membership 및 liked-card cache 갱신. 공개 수는 항상 shared canonical-derived 별도 값, optimistic outbox는 로컬 최신 사용자 의도 우선. 동시 PC↔모바일/배치 실패/역순 이벤트/비공개 곡/타 사용자 likes 테스트 필수.
+4. 개인 좋아요 authoritative 확인 실패 시 기존 값 임의 false/true로 변경하지 않고 재시도 가능하게 유지. 기존 정상 뮤직노트/라이브러리/UI/Worker071 공개 수 경로 무변경 우선.
+5. 사용자 별도 프리뷰배포 승인 전 배포 금지. 126 실제 앱 유지. 본 FAIL이 해결되고 독립 감사·실사용·mutation W1~W2가 PASS되기 전 TEST/PRODUCTION 승격 차단.
+
 ## 0BC. 앱126 Firebase PREVIEW Hosting 배포 PASS / 38곡 현재 정합성 PASS / 모바일 실사용·과거 비공개 재공개 출처 확인 전
 
 2026-09-20 KST, 사용자의 "그래 다음 진행하자. 승인"에 따라 0BB의 모바일 추천·최신 stale 좋아요 1 표시 수정본을 **PREVIEW 앱126**으로 배포했다. 범위는 React/Firebase PREVIEW Hosting만. TEST/PRODUCTION, Worker071, Functions/Rules, 사용자 원본 D1/Firebase 데이터는 이 릴리스 작업에서 변경하지 않았다.

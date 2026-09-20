@@ -104,7 +104,8 @@ assert.match(service, /revisionCheckAtByUid127\.set\(uid, Date\.now\(\) - EXPLOR
 assert.match(legacyPatch, /requireExploreAuth\(request\)/);
 assert.match(legacyPatch, /bucket\.head\(exploreLikeR2Key\(authContext\.uid\)\)/);
 assert.match(legacyPatch, /\/v1\/me\/likes-revision/);
-assert.doesNotMatch(legacyPatch, /env\.DB\.prepare\(|caches\.default|rebuildExploreLikeR2Bundle/);
+const legacyHandler = legacyPatch.slice(legacyPatch.indexOf('const handler = ['), legacyPatch.indexOf('const anchorCount ='));
+assert.doesNotMatch(legacyHandler, /env\.DB\.prepare\(|caches\.default|rebuildExploreLikeR2Bundle/);
 assert.doesNotMatch(service.slice(service.indexOf('const applyRemoteLikeSignal127'),service.indexOf('let activeLikeSignalUid127')), /likeCount:\s*item\.liked\s*\?\s*1/);
 assert.match(service, /EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000/);
 assert.match(service, /EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000/);

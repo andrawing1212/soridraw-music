@@ -1,5 +1,15 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BY. 공유 환경 Writer + D1 트리거 공존 하드 차단 — 기존 구조를 단순 패치로 승격 금지 (2026-09-21 KST)
+
+사용자 "수정해봐" 후 GitHub 기준 `preview` `3f865b2e2bd43276dbc736888fa97efe7aa7c02e`를 다시 점검. 먼저 보고해야 하는 비호환성 확인: PREVIEW/TEST/PRODUCTION은 사용자 원본 D1 및 공유 개인 R2를 함께 사용하지만, TEST/PRODUCTION의 구형 Worker는 신규 UID/곡 순서 토큰과 영속 중복 방지 규칙을 통과하지 않고 `syncExploreLikeR2AfterBatch034` 계열로 값을 갱신한다. 따라서 preview Worker만 순서 관리자나 `settled` 신호로 바꿔도 동일 계정의 과거 요청/구형 writer가 최신 값을 덮어쓸 수 있다. 세 환경을 동시에 무단 승격하거나 기존 원본을 바꾸는 우회는 금지.
+
+또한 `20260910_01_explore_derived_state.sql`과 `20260910_03_explore_like_write_optimization.sql`의 `track_stats→explore_derived_tracks→derived seq/feed/profile journal` 트리거·인기 인덱스, 기존 069 큐 INSERT + likes/stats + 큐 DELETE는 사용자 행동당 D1 W1~W2 하드 게이트와 충돌한다. 133의 기본 SQLite 2행 실험은 **운영 트리거를 제외한 모형**이다. 단일 SQL `batch()`, 로컬 캐시 덮어쓰기 방지, 073/074 R2 CAS만으로 운영 전체 비용과 canonical 순서를 해결했다고 주장할 수 없다.
+
+**실제 서버 변경 전 필수 작업:** (1) 모든 환경 구형 writer 공존을 차단하거나 선행 호환 단계로 안전히 전환할 하위호환 롤아웃 설계, (2) 현재 트리거·인덱스를 포함한 격리 D1 실제 `rows_written` 실측 및 W1~W2용 파생 비용 재설계, (3) 안정적 operation ID·영속 UID/곡 순서·원자적 likes/stats 변경·장애 복구·D1 final 뒤 R2 게시를 단일 후보로 검증. 공유 데이터 구조가 기존 코드를 못 읽게 만들거나 새 인프라와 환경별 Worker 동시 전환이 선행되어야 하면 사용자에게 먼저 구체적인 변경·비용·복구 방안을 보고한 뒤 승인에 따라 적용. 구형과 공존 불가능한 migration/서버 변경을 preview 한쪽만 적용하지 않는다.
+
+이번 확인에서는 이미 반영한 클라이언트127 후보·현재 Worker071·공유 원본 데이터·Firebase·Cloudflare·main/production을 변경하지 않았다. 앱127/Worker072~077 미배포, 실제 D1 실측·전체 CI/Work 감사·PC↔모바일 최종 수렴 미검증. **릴리스 FAIL 유지.** 코드 검증 환경은 GitHub connector에서 최신 CI 결과를 가져오지 못해 통과라고 보고하지 않는다. 작업은 코드 수정 전 호환성 게이트에서 멈췄으며, 완료를 주장하지 않는다.
+
 ## 0BX. 잘못된 좋아요 접수 응답이 최신 로컬 하트를 지우는 경로 차단 (2026-09-21 KST)
 
 기준 preview `0feccae05f04fec3f2cc6232d6dce19c3061d8fb`. 서버 069 중복/순서·비용의 근본 해결은 아직 미완료이므로 범위를 정확히 구분해 `src/services/exploreLikeService.ts`의 `flushPendingLikes`에 fail-closed 검증을 추가. `normalizeBatchResults`로 모든 곡 ID/boolean을 확인한 후, **이번 요청에서 실제 전송한 각 곡의 desiredLiked와 서버가 반환한 liked가 하나라도 다르면** `readLikeOutbox(uid)`·개인 cache·snapshotPending·displayLocks에 접수 성공 변경을 하기 전에 오류 발생. 기존 catch가 마지막 로컬 의도를 보관하므로 잘못된/오래된 batch 응답이 유저의 하트를 확정하거나 삭제하지 않음. 정상 071 Worker의 응답은 전송한 값을 그대로 반환하므로 기존 성공 경로·30초 묶음·UI 디자인·D1 mutation 미변경. 이 검사는 서버 **접수 응답 검증**일 뿐 최종 D1 완료 증명이 아니다.

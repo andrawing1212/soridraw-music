@@ -102,7 +102,7 @@ assert.match(service, /await ensurePersonalLikeBaseline127\(user\)/);
 assert.match(service, /writeLikeLocal127\(key, revision\)/);
 assert.match(service, /revisionCheckAtByUid127\.set\(uid, Date\.now\(\) - EXPLORE_LIKE_LEGACY_CHECK_MS_127 \+ 30_000\)/);
 assert.match(legacyPatch, /requireExploreAuth\(request\)/);
-assert.match(legacyPatch, /bucket\.head\(exploreLikeR2Key\(authContext\.uid\)\)/);
+assert.match(legacyPatch, /bucket\.head\(exploreSharedLikesKey061\(authContext\.uid\)\)/);
 assert.match(legacyPatch, /\/v1\/me\/likes-revision/);
 const legacyHandler = legacyPatch.slice(legacyPatch.indexOf('const handler = ['), legacyPatch.indexOf('const anchorCount ='));
 assert.doesNotMatch(legacyHandler, /env\.DB\.prepare\(|caches\.default|rebuildExploreLikeR2Bundle/);

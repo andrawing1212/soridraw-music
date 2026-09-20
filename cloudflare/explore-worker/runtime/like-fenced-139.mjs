@@ -72,7 +72,14 @@ export class LikeFencedProcessor139 {
     try { value = await this.flush(value); }
     catch { return { state: 'pending', revision: value.revision }; }
 
-    if (value.last?.id === id) return { state: 'settled', duplicate: true, revision: value.revision, liked: value.liked };
+    if (value.last?.id === id) {
+      // Reusing an operation ID with a different payload is not an idempotent
+      // retry. Never acknowledge an unrelated click under an old token.
+      if (value.last.liked !== liked || value.last.revision !== baseRevision + 1) {
+        return { state: 'conflict', revision: value.revision, liked: value.liked };
+      }
+      return { state: 'settled', duplicate: true, revision: value.revision, liked: value.liked };
+    }
     if (value.revision !== baseRevision) return { state: 'stale', revision: value.revision, liked: value.liked };
 
     // Durable intent first. On crash, recover this exact operation before a

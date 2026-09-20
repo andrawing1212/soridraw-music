@@ -85,7 +85,7 @@ assert.match(service, /EXPLORE_LIKE_SNAPSHOT_PENDING_127/);
 assert.match(service, /outbox\[id\]\?\.desiredLiked \?\? unresolved\[id\] \?\? confirmed\.has\(id\)/);
 assert.match(service, /readSnapshotPending127\(uid\)/);
 const gateSource = service.slice(service.indexOf('export const canBroadcastExploreLikeSnapshot127 ='),
-  service.indexOf('const readSnapshotPending127 ='));
+  service.indexOf('const readSnapshotPending127 =')).replace('export const canBroadcastExploreLikeSnapshot127', 'const canBroadcastExploreLikeSnapshot127');
 const gateJs = ts.transpileModule(gateSource + '; return canBroadcastExploreLikeSnapshot127;', {
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
 }).outputText;

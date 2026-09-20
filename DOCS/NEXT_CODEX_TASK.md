@@ -9,6 +9,12 @@
 - Run 35505242919 SUCCESS: 127 및 과거 회귀, TypeScript/Build, 071 복사본에 072 패치 적용·문법 검사·UID HEAD-only 정적 검증. 071 canonical SHA 불변. 이번 작업에서 072 패치만 추가됐고 canonical 생성·배포 전.
 - **남은 핵심 FAIL**: 동일 계정 PC·모바일 반대 조작과 큐 ACK/R2/최종 D1 적용 순서 검증. 2천 ID 사용자 지원, 실제 좋아요/해제 W1~W2, 추가 RTDB/R2 비용 실측, Work 독립 감사 및 PC·모바일 실사용 미검증.
 
+### 추가 확인한 동시경합 원인 (소스 근거)
+
+- 040 W1 큐의 batchAt은 현재 server receivedAt과 클라이언트 mutationAt의 최대값을 사용한다. 따라서 두 기기 시계가 서로 다르면 **먼저 서버에 접수된 요청이 나중 요청보다 우선**할 수 있다. aggregate는 사용자+곡별 created_at DESC, batch_id DESC로 최신을 결정한다. 한 계정·두 기기의 실제 마지막 동작과 최종 canonical 상태가 일치한다는 보장은 현재 없다.
+- 034 syncExploreLikeR2AfterBatch034는 클라이언트 배치 접수 직후 개인 R2 bundle을 읽고 갱신한다. 두 기기의 read/put 순서가 뒤집히면 최신 canonical과 오래된 R2 개인 소유 상태가 달라질 수 있다. 이 경우 작은 HEAD는 **R2에 있는 잘못된 내용의 변경만 감지**하므로 원본 일치 보장 수단이 아니다.
+- 해결 요구: client clock 무신뢰 상태에서 server acceptance/order 최종 규칙, R2 경쟁 write 방지 또는 canonical 완료 후 대상 UID만 R2 repair, 최종 개인 membership 확인을 실행형 테스트로 검증. 공유 전체 Feed rebuild 및 D1 W3+ 금지. 072 단순 HEAD 패치는 이 문제의 해결이 아니며 별도 근본 수정이 필요하다.
+
 ### 다음 구현/검증 순서
 1. Worker 큐의 실제 최종 상태 적용 순서와 R2 bundle 갱신 시점을 확인하고 동일 ID 반대 클릭/순서 역전/동시 기기/오프라인 실패 실행형 테스트 작성. RTDB ACK만으로 최종 canonical 확정이라고 표시하지 말 것.
 2. 정상 상태 no-change R2 HEAD 호출 상한과 10만 사용자 비용 산정·가능하면 테스트 계정으로 실제 측정. 127 추가 listener / transaction, 데이터 2천 ID 한도 처리 검증. 전체 D1 membership read 반복 금지.

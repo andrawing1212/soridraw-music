@@ -1,5 +1,27 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BE. 앱127 통합 개인 좋아요 수정 후보 PREVIEW 코드 PASS / 실배포·기기실측·비용감사 전
+
+2026-09-20 KST 사용자 요청: 빈/채운 하트, 실제 좋아요·해제, 공개 숫자를 서로 무관한 값으로 봉합하지 말고 **한 곡의 한 사용자 동작으로 처리**할 것. 앱126 실사용에서 PC 첫 네 곡 하트 채움·모바일 앞 두 곡 비움, 숫자는 양쪽 1로 일치하는 0BD FAIL을 기준으로 `preview`만 수정했다. **현재 실제 서비스는 여전히 앱126 + Worker071**, 앱127은 후보 기능 코드이며 `public/app-version.json=126`. 사용자의 별도 명시적인 프리뷰배포 지시 전 Hosting/Worker 배포 금지.
+
+### 수정 코드 및 실제 의미
+- `src/services/exploreLikeService.ts`: `computeExploreLikeAction127(baseLiked, desiredLiked, publicCount)` 하나로 로컬 하트와 본인 변화량만 반영한 임시 표시 숫자를 함께 계산한다. 공개 전체 수에는 다른 사용자의 좋아요가 포함되므로 개인 하트에서 전역 숫자를 역산·강제하지 않는다. `readExploreTrackLikeMembership127`는 로컬 pending final-state → 검증된 개인 캐시 순으로 결정을 내리며 불명확한 과거 캐시로 신규 변경을 시작하지 않음. 기존 30초 최종 묶음 전송·90초 숫자 보호 유지.
+- 계정별 과거 120 로컬 liked-state의 **최초 1회** 복구는 기존 `/v1/me/social-snapshot`의 사용자별 R2 좋아요 스냅샷을 활용. 정상 R2 cache에서 D1 데이터 읽기 0, 다른 사용자의 데이터를 복제하지 않음. 유효한 응답에서만 완료 marker 기록, 실패 시 기존 로컬 데이터 보존·재시도, 로컬 outbox 최우선. R2 좋아요 원본은 2,000 ID 제한이므로 한도에 도달한 응답은 전체 목록으로 믿지 않고 캐시를 보존하며 안전 차단한다(한도 초과 사용자 지원은 미완료).
+- 기존 RTDB `userSync/{uid}/exploreLike` 규칙·경로를 재사용해 **좋아요 서버 batch 접수 ACK 이후 1회** UID별 최대 50개 변경 결과만 transaction으로 게시한다. 가입자 기기는 자기가 아직 미전송한 변경을 절대 덮어쓰지 않고 해당 ID의 하트·개인 좋아요 목록 캐시만 갱신한다. 메시지 누락/50개 초과 시 불완전한 replay를 먼저 적용하지 않고 R2 사용자 스냅샷 재검증. 알림 실패는 좋아요 서버 요청을 중복 전송하지 않고 작은 로컬 재시도 큐에 유지(재접속·온라인·포커스 시 시도).
+- **주의**: Worker의 batch ACK는 최종 D1 canonical 집계 완료가 아니라 큐 접수 완료다. 기존 1분 집계 이후 공개 숫자 갱신은 별도 서버 흐름으로 유지. 본인 클릭과 실제 모든 사용자의 집계가 완전히 동시에 확정됐다고 주장하지 않는다. 서버 장애·PC/모바일 경합·구형 TEST/PRODUCTION 코드의 추가 좋아요는 독립 실측 및 설계 감사 전.
+- `src/pages/ExplorePage.tsx`: 하트 클릭 시 React 표시값만 반전하지 않고 서비스가 보유한 하나의 유효한 개인 상태를 확인. 다른 기기의 대상별 변화 신호가 오면 추천/최신/인기/프로필의 동일한 개인 상태를 반영. 미검증 상태의 좋아요 조작을 잠시 차단. 사용자 UI 외곽선/위치/크기/색상 등 비변경.
+- `src/services/exploreLikedTracksService.ts`: 개인 R2 snapshot 수신 때 canonicalLikedTrackIds를 원본과 pending 최종값으로 합치되 기존 캐시 곡카드는 보존하고, 실제 좋아요 곡 화면에 필요한 누락된 카드만 조회. `scripts/verify-127-atomic-personal-like.mjs` 신규 고정 테스트(실제 함수 optimistic transition 실행 포함).
+
+### 코드 검증 및 범위
+- 최종 read-only/코드 테스트 Run `35498983342` SUCCESS: 신규 127 회귀, 기존 126/125/124/123/110 회귀, TypeScript, Build, Worker071 원본 SHA `b170d05385c3096a98033675a9acbb63b40148bf782017c326845b7ea4c17813` 비변경. 이전 임시 검사 Run `35498532876`, `35498941046`는 신규 테스트 파일 문자열·실행문 구문 오류로 FAIL, 검사 코드 정정 후 재실행 통과. 중간 `35498597502`은 이전 후보의 사전검증 PASS로 최종 고정 기준이 아님. 임시 Workflow 154 제거, 배포/원본 사용자 데이터 쓰기 0.
+- **독립 Work 감사, 실제 Firebase/RTDB 신호 송수신, PC↔모바일 UI 검증, 실사용 사용자 mutation 비용은 미검증.** 새 사용자별 RTDB listener 1개/서버 접수 batch당 RTDB transaction 1회와 재시도 비용을 추가하므로 10만 명 기준 비용 실측·감사 없이 릴리스 PASS/TEST 승격 선언 금지.
+- 서버 코드·Worker071·Functions·Rules·UI CSS·Music Note 저장 구조·공유 원본 D1/Firestore 변경 없음. main/TEST/production/PRODUCTION 코드·배포 변경 없음. 사용자 본인의 15:31 공개 전환은 의도한 정상 작업으로 이전 0BD에서 이미 확인.
+
+### 다음 게이트
+1. Work가 현재 127 코드 변경의 경쟁 조건, batch ACK vs canonical, RTDB Rule 실제 허용, 오래된 TEST/PRODUCTION writer와의 공존, 구형/신규 계정 처음 진입과 R2 2천개 안전 처리 및 RTDB 요금을 독립 감사. RTDB 사용량 증가가 비용 합격선을 훼손하면 미배포 상태에서 다른 저비용 경로로 다시 설계.
+2. 변경 없는 재방문 D1/Firestore data read=0, 최초 계정 R2 1회, 좋아요/해제 D1 rows_written W1~W2, 추가 RTDB read/write/연결 비용을 별도 측정. 50곡 초과 신호 누락, 인증 오류, 오프라인→복귀, 다른 사용자 좋아요, 반대 기기 동시 클릭 테스트 필수.
+3. 독립 검증 후 사용자 `프리뷰배포` 승인 시에만 버전127 고정·PREVIEW Hosting 배포. TEST/PRODUCTION 승격 절대 금지. 원본 대량 변경·캐시 전체 삭제·비공개 원복 금지.
+
 ## 0BD. 앱126 실사용 FAIL: PC↔모바일 개인 좋아요 하트 소유 상태 불일치 (사용자 확인 2026-09-20 KST)
 
 사용자 최신 사진: 동일 계정으로 보이는 PC·모바일 PREVIEW 추천에서 첫 네 곡의 공개 좋아요 수는 양쪽 모두 1. 모바일은 앞 두 곡 **빈 하트+1**, 세 번째·네 번째는 **채운 하트+1**. PC는 첫 네 곡 전부 **채운 하트+1**. 따라서 0BC의 38곡 canonical↔R2 **공개 숫자 정합성 PASS는 유지**하되, **개인 하트 PC↔모바일 실사용 정합성은 FAIL**. 사진만으로 현재 해당 사용자의 canonical likes 관계를 확정할 수 없어 어떤 기기가 stale인지는 아직 미확정. 공개 수 1에서 사용자 하트 소유를 역산하면 안 됨.

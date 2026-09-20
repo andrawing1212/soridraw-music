@@ -12,6 +12,7 @@ const helper=worker.slice(begin,end);
 assert.match(worker,/SORIDRAW_LIKE_TARGETED_CANONICAL_READ_075_20260920/);
 assert.match(helper,/handleMyLikeStatesD1Core\(request, url, env, cors\)/);
 assert.doesNotMatch(helper,/caches\.default|bucket\.get/);
+assert.match(helper,/await requireLegacyLikeQueuesSettled077\(env\)/);
 if (worker.includes('SORIDRAW_LIKE_CANONICAL_SETTLEMENT_GATE_076_20260920')) {
   assert.match(helper,/env\.DB\.prepare\(/);
 } else assert.doesNotMatch(helper,/env\.DB/);
@@ -25,10 +26,11 @@ assert.match(canonical,/t\.status = 'published'/);
 assert.doesNotMatch(canonical,/INSERT|DELETE FROM|UPDATE likes/);
 
 let calls=0;
-const fn=new Function('throwApi','handleMyLikeStatesD1Core','requireExploreAuth',helper+'return handleMyLikeConfirmed075;')(
+const fn=new Function('throwApi','handleMyLikeStatesD1Core','requireExploreAuth','requireLegacyLikeQueuesSettled077',helper+'return handleMyLikeConfirmed075;')(
   (code,message,status)=>{const e=new Error(message);e.code=code;e.status=status;throw e;},
   async (_request,_url,_env,_cors)=>{calls++;return {ok:true,data:{likedTrackIds:['track-a']}};},
   async ()=>({uid:'test-account'}),
+  async ()=>{}, // 077 actual queue behavior has independent verifier 131.
 );
 const safeEnv={DB:{prepare:(query)=>({bind:(uid)=>({
   first:async()=>{assert.match(query,/WHERE q\.user_uid = \?/);assert.equal(uid,'test-account');return null;}

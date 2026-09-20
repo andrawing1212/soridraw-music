@@ -20,25 +20,22 @@ if (source.split(anchor).length !== 2) throw new Error('[074] sync anchor ambigu
 source = source.replace(anchor, helper + anchor);
 const call = 'await syncExploreLikeR2AfterBatch034(env, authContext.uid, results);';
 if (source.split(call).length !== 2) throw new Error('[074] intake call ambiguous');
+// 138: queue ACK is NOT canonical D1 settlement. Never publish personal
+// R2 membership before the corresponding likes relation is finalized.
+// Existing CAS helper is preserved for a separately verified finalizer.
 source = source.replace(call, [
-  'let personalR2;',
-  'try {',
-  '  personalR2 = await syncExploreLikeR2AfterBatch074(env, authContext.uid, results, receivedAt, queued.batchId);',
-  '} catch (error) {',
-  "  personalR2 = { ok: false, repairNeeded: true, reason: 'r2_write_unavailable' };",
-  "  console.warn('[074] personal R2 unavailable; preserve queued mutation and scheduler:', String(error?.message || error));",
-  '}',
-  "if (personalR2?.ok === false) console.warn('[074] personal snapshot repair needed:', personalR2.reason);",
-].join('\n  '));
+  '// SORIDRAW_LIKE_PRECOMMIT_R2_BLOCK_138_20260921',
+  "const personalR2 = { ok: false, repairNeeded: true, reason: 'awaiting_canonical_d1_settlement' };",
+].join('\\n  '));
 const responseAnchor = "      queued: Boolean(effectiveMutations.length),";
 if (source.split(responseAnchor).length !== 2) throw new Error('[074] batch response shape changed');
 source = source.replace(responseAnchor, [
   "      // A queued D1 mutation and a materialized personal R2 snapshot are",
   "      // separate stages. Do not tell other devices that an R2 update worked",
   "      // when this worker has only accepted the server-side queue.",
-  "      personalLikeSnapshot: personalR2?.ok === true ? 'updated' : 'pending',",
+  "      personalLikeSnapshot: 'pending',",
   responseAnchor,
 ].join('\n'));
 if (!source.includes(marker) || source.includes(call)) throw new Error('[074] final source invalid');
 writeFileSync(path, source, 'utf8');
-console.log('[074] shared R2 CAS and server-order tokens; D1 writes unchanged.');
+console.log('[074/138] intake pending-only; finalizer and cross-environment writer cutover remain release-blocked.');

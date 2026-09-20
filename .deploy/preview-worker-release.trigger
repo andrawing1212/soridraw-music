@@ -1,12 +1,12 @@
-requested_at=2026-09-19T17:13:52Z
+requested_at=2026-09-20T05:10:10Z
 requested_by=user
-product_code_target=dc95856ad8299b3ed8746b2fd4d2dbdd574cda4b
-release_purpose=deploy_069_070_targeted_shared_feed_and_legacy_writer_guard_to_preview
+product_code_target=d7d44797957371712b96b84d466be76f2878e382
+release_purpose=deploy_071_canonical_like_preservation_after_bounded_repair
 no_d1_migration=true
 no_user_data_migration=true
 catalog_bootstrap_complete=true
 catalog_write_flag=true
 catalog_read_flag=false
 first_publisher_flag=false
-hosting_redeploy=false
+hosting_redeploy_separately=true
 preview_only=true

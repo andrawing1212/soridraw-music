@@ -13,6 +13,14 @@
 ## 기존 069 경로
 `explore_like_batches_069` INSERT 1 + `track_stats` 1 + `likes` INSERT/DELETE 1 + 큐 DELETE 1 = 격리 단일 행동 최소 W4. 이전 `verify-132-like-d1-write-budget.py` 결과와 일치. W1~W2 하드 게이트 FAIL. 실제 Cloudflare 라이브 청구량은 미측정.
 
+## 134 후속 정정 (필독, 2026-09-21)
+
+133의 `W2`는 **오직 `likes`와 `track_stats` 두 원본 테이블을 가진 격리 SQLite 모형의 변경 행 수**이며 실제 SORIDRAW 운영 D1 비용 추정치가 아니다. `20260910_01_explore_derived_state.sql`의 `explore032_stats_update` 및 `20260910_03_explore_like_write_optimization.sql`의 `explore032_derived_track_update`는 `track_stats` 변경 시 공개곡·변경 버전·feed/profile journal을 함께 갱신한다. `idx_explore_rank_popular`도 좋아요 수에 걸린 인덱스다. 공식 D1 문서는 인덱스 쓰기도 rows_written에 포함한다고 설명한다: https://developers.cloudflare.com/d1/platform/pricing/
+
+따라서 `scripts/verify-134-like-write-amplification.py`의 보수적 격리 모델은 **한 곡의 첫 좋아요/해제 각각 SQLite 논리 행 변경 6, 중복 0**을 재현한다. 이는 *실제 D1 청구량 6이라고 단정하는 수치가 아니다*. 인덱스 쓰기·추가 현행 트리거·다른 운영 분기는 별도이며 실제 D1 `meta.rows_written` 측정 필요. **현재 파생 자동갱신을 유지한 채 단순 D1 큐 제거만으로 W1~W2 달성했다고 주장 금지.** 133의 비용 PASS는 134에서 무효화했다.
+
+135의 `scripts/verify-135-like-fenced-protocol.mjs`는 순서 번호·영속 pending 복구·중복 재시도 모델을 격리 모의로 검증한다. 그러나 구형 shared writer가 이를 우회하면 깨지는 실패를 명시했다. 신규 DO를 생성/배포한 것이 아니며 DO↔D1 실 원자성과 비용은 미검증.
+
 ## 133 직접 2행 SQL 모형
 새 `scripts/verify-133-like-direct-two-row.py`는 메모리 SQLite에서 관계 INSERT/DELETE 후 **동일 트랜잭션 내 직전 statement의 `changes()`가 1이면** 통계 1행을 증감한다. 첫 좋아요 W2 / 첫 해제 W2 / 동일 상태 중복 요청 W0. 다른 사용자 숫자 보호, 별도 곡 독립, 누락 통계 행에서 중단 PASS. 이것은 **격리 SQL 원리 검증**이지 D1 바인딩에서 `changes()` 지원/라이브 `rows_written` 검증 아님.
 

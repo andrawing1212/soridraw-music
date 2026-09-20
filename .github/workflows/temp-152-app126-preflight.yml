@@ -1,4 +1,5 @@
 name: TEMP 152 App126 PREVIEW Preflight
+# rerun: make legacy 110 verifier accept validated app126 entry revision
 on:
   push:
     branches: [preview]

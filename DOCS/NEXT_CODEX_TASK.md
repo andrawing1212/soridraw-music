@@ -1,5 +1,24 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-20 KST: 앱127+Worker072~074 동시 변경 코드 PASS·legacy 최종 복구 미해결
+
+상세 기준 `DOCS/CURRENT_RELEASE_STATE.md` 0BH. 이 절이 아래 0BG의 072 단독 후보를 갱신한다.
+
+- 사용자 요구: 같은 계정의 두 기기에서 좋아요와 해제를 거의 동시에 수행해도 서버 확정값과 하트·숫자가 궁극적으로 수렴. 개인 하트는 UID별 불리언이고 공개 숫자는 타 사용자를 포함한 별도 canonical count.
+- 완료된 PREVIEW 코드 후보: 072 개인 변경 감지는 환경 로컬이 아니라 **공유 원본 R2 likes HEAD** 사용. 073은 W1 큐 순서를 기기 시간과 무관한 서버 receivedAt으로 고정. 074는 UID별 공유 R2에 conditional ETag PUT/최대 12회 retry와 최근 최대128곡 서버 시각+batchId를 두어 같은 곡의 과거 요청이 최신 수락 상태를 뒤집지 못하게 처리. R2 예외 시 이미 접수된 D1 큐의 DO 예약을 보호.
+- 새 `scripts/verify-128-like-concurrency.mjs` 실행형 모의검사: 같은 곡 상반 동작 양방향, 다른 곡 동시 병합, CAS 충돌 retry, 멱등 상태, 서버 순서. 최종 Run `35506583191` SUCCESS: 128/127/126/125/124/123/110, TypeScript/Build, Worker071 SHA 보호. 임시 workflow 156 삭제.
+- Worker072~074는 071 canonical 복사본에만 적용한 패치 후보이며, 실제 canonical `preview-worker.js`·checksum·live Worker071은 미변경. 현재 app-version126 / 실서비스 PREVIEW 앱126 + Worker071. TEST/PRODUCTION 데이터·코드·배포 미변경. D1/Rules/Functions 마이그레이션 없음.
+
+### 남은 절대 릴리스 차단 사항
+1. **구형 Worker 공존:** TEST/PRODUCTION의 기존 공유 개인 R2 writer는 074 CAS/lastLikeOrders074를 지키지 않는다. 동시에 오래된 writer가 공유 R2를 최종 덮어쓰거나 metadata를 없애면 074만으로 복구 불가. 최종 D1 aggregate 이후 해당 UID/track만 canonical에 맞추는 안전한 복구 또는 모든 writer의 호환 경로 설계 필요. D1 W3+ 및 대량 유저 데이터 read 금지.
+2. R2 미존재 cold fallback, 최대12회 CAS 실패, 임시 네트워크 오류와 2천 ID 좋아요 사용자의 완료 보장 없음. ACK된 D1 큐는 반드시 계속 스케줄되지만 개인 R2 자동 수렴 별도 필요. 신호와 실제 최종 D1 1분 집계 순서가 다른 위험 해결.
+3. Work 독립 감사·실제 Cloudflare conditional PUT/RTDB/PC↔모바일·구형 앱 동시 변경 실측·요청당 D1 W1~W2 및 R2/RTDB 10만 사용자 비용 PASS 미완료. 코드 모의검사 PASS를 실제 릴리스 PASS로 보고 금지.
+
+### 안전한 다음 순서
+- 먼저 구형 writer 상호운용 및 최종 canonical 재확인 정책을 설계·구현하고 실패 시 복구·상태 조회 비용을 테스트. 건드리는 곡/UID만 처리하고 정상 캐시 재진입 D1 R0 유지.
+- 고정 preview commit → 최종 릴리스 검증 → 독립 Work 감사(가능 시) → 사용자 별도 **프리뷰배포** 승인 후에만 app127+Worker 후보 함께 PREVIEW로 릴리스. TEST/PRODUCTION 승격 별도 승인 필요.
+- UI/반응형, Music Note 60초 묶음, 기존 공개 수/Feed/비공개 보호, 공유 원본·catalog flags 유지.
+
 ## 최종 기준 — 2026-09-20 KST: 앱127 구형 앱 동기화·복구 보완 / 072 패치 dry-run PASS·동시경합 보류
 
 이 절이 하위 0BF의 미수정 상태를 갱신한다. CURRENT_RELEASE_STATE.md 0BG 기준. PREVIEW 실제 앱126/Worker071, 앱127 코드 후보 및 Worker072 패치 후보는 모두 **미배포**.

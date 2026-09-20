@@ -61,14 +61,16 @@ jobs:
           if(privateMatches.length!==1)throw Error('known private identity not uniquely found in bounded D1 scan; n='+privateMatches.length);
           const privateItem=privateMatches[0];
           console.log('PRIVATE_TARGET_SHA10=1319e4479e IS_PUBLIC='+privateItem.is_public+' STATUS='+privateItem.status+' UPDATED_AT='+privateItem.updated_at+' CANONICAL_TRACK_ROWS='+privateRows.length);
-          if(Number(privateItem.is_public)!==0)throw Error('known private target is no longer private in canonical D1');
+          const previousPrivateNowPublic=Number(privateItem.is_public)===1;
+          if(previousPrivateNowPublic)console.log('ALERT_PREVIOUSLY_PRIVATE_NOW_PUBLIC=TRUE (origin updated before app126 deploy; no origin write from audit)');
+          if(!previousPrivateNowPublic&&Number(privateItem.is_public)!==0)throw Error('invalid canonical visibility');
           const privateId=String(privateItem.id);
           for(const scope of ['api','local','shared'])for(const sort of ['latest','popular']){
             const bundle=JSON.parse(fs.readFileSync(root+'/'+scope+'-'+sort+'.json','utf8'));
             if(bundle.ok===false)throw Error('API failure');
             const items=bundle?.data?.items||bundle?.payload?.data?.items||[];
             if(items.length!==rows.length||new Set(items.map(x=>String(x.id||x.trackId||''))).size!==rows.length)throw Error(scope+' '+sort+' population mismatch: canonical='+rows.length+' observed='+items.length);
-            if(items.some(x=>String(x.id||x.trackId||'')===privateId))throw Error(scope+' '+sort+' private leak');
+            if(items.some(x=>String(x.id||x.trackId||'')===privateId)!==previousPrivateNowPublic)throw Error(scope+' '+sort+' previously-private target visibility mismatch');
             for(const item of items){
               const id=String(item.id||item.trackId||''),count=Number(item.likeCount??item.stats?.likeCount??0);
               if(!reference.has(id)||reference.get(id)!==count)throw Error(scope+' '+sort+' like parity mismatch');
@@ -82,5 +84,5 @@ jobs:
             if(read!=='0'||write!=='0')throw Error(sort+' D1 R0W0 FAIL '+read+'/'+write);
             console.log('LIVE_D1_'+sort.toUpperCase()+'_R0W0=PASS');
           }
-          console.log('POSTFLIGHT_APP126_WORKER071=PASS D1_WRITE=0 R2_WRITE=0 FIREBASE_WRITE=0');
+          console.log('POSTFLIGHT_APP126_WORKER071_COUNTS=PASS PREVIOUSLY_PRIVATE_NOW_PUBLIC='+previousPrivateNowPublic+' D1_WRITE=0 R2_WRITE=0 FIREBASE_WRITE=0');
           NODE

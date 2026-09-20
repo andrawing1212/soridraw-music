@@ -13,7 +13,7 @@ if (source.includes(marker)) { console.log('[072] already applied'); process.exi
 for (const prerequisite of [
   'SORIDRAW_PUBLICATION_CANONICAL_LIKE_PARITY_071_20260920',
   'requireExploreAuth',
-  'exploreLikeR2Key',
+  'exploreSharedLikesKey061',
   'async function handleMyLikedTracks052(request, env, cors) {',
   'if (url.pathname === "/v1/me/liked-tracks" && request.method === "POST") {',
 ]) if (!source.includes(prerequisite)) throw new Error('[072] missing prerequisite: ' + prerequisite);
@@ -26,7 +26,7 @@ const handler = [
   '  const bucket = env?.PROFILE_MEDIA;',
   "  if (!bucket) throwApi('PERSONAL_LIKE_R2_UNAVAILABLE', '좋아요 변경 확인을 잠시 할 수 없습니다.', 503);",
   '  // Exactly one UID-scoped R2 HEAD; no D1, shared edge cache or full list.',
-  '  const head = await bucket.head(exploreLikeR2Key(authContext.uid));',
+  '  const head = await bucket.head(exploreSharedLikesKey061(authContext.uid));',
   "  if (!head) throwApi('PERSONAL_LIKE_R2_UNAVAILABLE', '개인 좋아요 캐시가 준비되지 않았습니다.', 503);",
   '  const revision = String(',
   '    head.httpEtag || head.etag ||',
@@ -50,7 +50,7 @@ source = source.replace(routeAnchor,
   '    if (url.pathname === "/v1/me/likes-revision" && request.method === "GET") {\n' +
   '      return await handleMyLikeRevision072(request, env, cors);\n' +
   '    }\n' + routeAnchor);
-if (!source.includes('await bucket.head(exploreLikeR2Key(authContext.uid))')) throw new Error('[072] R2 HEAD missing');
+if (!source.includes('await bucket.head(exploreSharedLikesKey061(authContext.uid))')) throw new Error('[072] R2 HEAD missing');
 if (handler.includes('caches.default') || handler.includes('env.DB')) throw new Error('[072] private revision must use only R2');
 writeFileSync(path, source, 'utf8');
 console.log('[072] one private R2 HEAD/revision; D1 R0/W0 and no schema/data writes.');

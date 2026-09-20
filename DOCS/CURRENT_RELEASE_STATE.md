@@ -1,5 +1,34 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AY. 사용자 app124 업데이트 후 좋아요 0/1 회귀 — live D1↔R2 4곡 FAIL / 배포·승격 중단
+
+2026-09-20 KST 사용자 제공 약 69초 PC 영상에서 Explore 추천·최신·인기 탭 전환 시 같은 곡의 숫자가 일부 0↔1로 달라지고, 채워진 하트와 숫자가 서로 맞지 않는 실사용 증상 확인. 이번 확인은 read-only이며 사용자 좋아요를 임의로 누르거나 해제하지 않음.
+
+### live read-only audit
+- TEMP 143 Run `35488556374` SUCCESS (진단 실행 성공, **서비스 정합성 FAIL**).
+  - shared v112 latest/popular 37곡 각각: nonzero 18, 같은 곡끼리 숫자 mismatch 0.
+  - PREVIEW local latest/popular 37곡 각각: nonzero 18, 정렬 간 mismatch 0.
+  - 실제 PREVIEW R2-only Feed latest/popular: 각각 37, shared와 숫자 mismatch 0.
+  - canonical D1 `tracks + track_stats.like_count` 대조 37곡 중 **네 곡이 canonical=1, latest=0, popular=0**. SHA10 `9fef3a2199`, `abd7763bc1`, `ab0e6f139f`, `0e5cd08e2a`.
+- 확장 TEMP 143 Run `35488673580` SUCCESS:
+  - 동일 4곡에 대해 TEST local latest/popular와 PRODUCTION local latest/popular는 **모두 1**.
+  - 해당 곡별 shared track-card R2 v115도 **모두 1**.
+  - PREVIEW local 및 shared v112 latest/popular만 0.
+  - 모든 감사에서 D1/R2 write 0, deploy 0, Firebase 비변경.
+- 2026-09-18 `0AB/0AD`에서 동일한 상단 4곡의 canonical=1/shared=0을 진단하고 Run `35345067282`로 shared latest 4곡을 0→1 복구한 기록이 있다. **이번 관측은 동일 오류의 재발**이며 이전 일회성 R2 복구가 영구 해결책이 아님을 보여준다.
+
+### 원인 범위 / 확정하지 않은 부분
+- **입증:** 사용자 원본 카운트는 정상 1이고, PREVIEW local+shared first-page Feed의 파생 카운트만 0. TEST/PRODUCTION local과 shared track-card는 정상 1.
+- 영상의 인기 1과 추천·최신 0은 **기기별/정렬별 last-known Feed 캐시가 서로 다른 값**을 계속 표시할 수 있는 app124 설계와 부합. app124의 one-time repair marker는 이미 완료되면 다음 업데이트에 같은 snapshot 재읽기를 강제하지 않는다. 원본 shared가 0이므로 단순 앱 재조회로 정상화될 수 없음.
+- **미입증:** 어느 요청/Worker가 공용 Feed의 1을 마지막으로 0으로 되돌렸는지. TEST/PRODUCTION local은 모두 1이므로 구형 full-mirror가 0으로 덮었다고 단정 금지. PREVIEW 043/069/070 경로, 056/065 aggregate, 064 및 다른 writer의 실제 실행 순서/metadata 추가 감사 필요.
+- 070 배포의 기존 검증은 단순 Feed smoke, revision R0/W0, private-track absent만 확인했고 canonical vs shared **좋아요 숫자 parity를 검사하지 않았음**. 배포 자체 PASS와 별개로 현재 좋아요 품질은 FAIL이다.
+
+### 즉시 게이트
+- PREVIEW 추가 배포 및 TEST/PRODUCTION 승격 **중단**. 기존 비공개 곡은 계속 비공개. 불명확한 원인 상태에서 cache 전체 rebuild/앱 버전 증가/원본 D1 수정/old Worker rollback 금지.
+- 네 곡만의 shared R2 복구를 반복하기 전에 **1→0 역전의 쓰기 경로**부터 증명하고 O(1) 보호를 구현/독립 감사한다. 복구 실행은 이후 bounded trackId + canonical guard + ETag CAS로 별도 승인/검증.
+- 좋아요 1회 D1 rows_written W1~W2는 여전히 실측 미검증. 신규 LIKE mutation 테스트는 현 단계에서 하지 않음.
+- 정상 캐시 0-read 목표와 기존 UI 유지. 점검 도구는 가능한 기존 관리자 진단/기존 verifier 재사용. 사용자에게 불필요한 조작 요구 금지.
+
 ## 0AX. PREVIEW 069/070 Worker 배포 완료 — live f0a910a4 / app 124 / R0W0 / private 37 유지
 
 2026-09-20 KST, 사용자의 명시적 **프리뷰 배포** 승인으로 고정된 069/070 canonical Worker를 PREVIEW에 배포했다.

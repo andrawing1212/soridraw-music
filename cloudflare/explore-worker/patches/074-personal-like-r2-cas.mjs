@@ -26,7 +26,7 @@ if (source.split(call).length !== 2) throw new Error('[074] intake call ambiguou
 source = source.replace(call, [
   '// SORIDRAW_LIKE_PRECOMMIT_R2_BLOCK_138_20260921',
   "const personalR2 = { ok: false, repairNeeded: true, reason: 'awaiting_canonical_d1_settlement' };",
-].join('\\n  '));
+].join('\n  '));
 const responseAnchor = "      queued: Boolean(effectiveMutations.length),";
 if (source.split(responseAnchor).length !== 2) throw new Error('[074] batch response shape changed');
 source = source.replace(responseAnchor, [

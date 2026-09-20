@@ -1,5 +1,17 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 기준 — 2026-09-21 KST: 인플라이트 좋아요→해제 최종 의도 유실 수정 (0BW)
+
+실제 클라이언트 재현 조건을 발견하고 `src/services/exploreLikeService.ts`의 `flushPendingLikes`에서 오래된 요청 ACK/모호한 네트워크 실패 이후 **그동안 발생한 최신 클릭을 재기준화**. 예: base=false → 첫 true 전송 → 동일 곡 최신 false는 처음에는 false/false로 보이지만, 첫 true가 접수된 뒤에는 true/false가 되어 반드시 서버에 전달되어야 한다. 기존 코드는 false/false를 no-op으로 삭제하여 최종 하트를 잃을 수 있었음. 신규 `rebaseExploreLikeAfterInFlight127` 및 기존 `scripts/verify-127-atomic-personal-like.mjs` 회귀 추가. 실제 GitHub 수정 helper 격리 실행 PASS, full CI/TypeScript/Build/PC·모바일 미검증. `DOCS/CURRENT_RELEASE_STATE.md` 0BW 참조.
+
+**중요:** 클라이언트 재기준화는 최종 서버 수렴 완료가 아님. 앞선 요청의 D1 069 중복·순서 영속성과 구형 Worker R2 호환 문제, 실제 W1~W2 비용은 아직 FAIL. 오프라인·불명확 ACK에서 자동 재전송을 단순 반복하는 것은 069의 매번 새로운 batch ID 때문에 중복 쓰기/역순 위험. 안정적 operation ID 및 최종 확정 증명 전 무한 재시도 도입 금지.
+
+### 다음 구현·검증 범위
+1. 지금 고정된 preview의 기존 127/126/125/124/123/110, 128~136 회귀, TypeScript/Build, Worker071 canonical 해시 점검. 저장 후 실 CI 결과가 없으면 PASS 보고 금지.
+2. **서버 069 중복·순서 구조부터 해결**: 요청 고유 ID의 영속 dedupe, 이미 처리 완료된 과거 주문 차단, 큐 전체/구형 writer 공존, 실제 D1 최종 저장 후 개인 R2 CAS, 검증된 settled, PC·모바일 자동 수렴. 127의 최신 로컬 outbox 의도는 오직 정식 서버 확정 뒤에만 해제.
+3. 라이브 D1 read-only schema/trigger/index 확인 후 격리 D1 W1~W2/정상 재진입 R0와 R2/RTDB/100k 사용자 비용 검증. 기존 Trigger로 6+ 논리 변경 가능성 미해결이면 코드를 더 얹지 말고 파생 비용 구조를 함께 바꿔야 함.
+4. 사용자의 배포 요청 전까지 PREVIEW/TEST/PRODUCTION Hosting/Worker/Functions/D1/R2/실사용 데이터 변경 금지. 최종 Work 독립 감사, 실기기 결과 확인 전 릴리스 FAIL 유지.
+
 ## 최신 기준 — 2026-09-21 KST: 좋아요 predeploy STOP 사유 고정 — 069 재전송 ID 불안정 + 영구 중복 기록 부재
 
 사용자 "배포 전단계까지 한 흐름으로" 요청에 대해, 기존 리드온리 `soridraw-release-system-audit.yml` 실행 요청 commit `f951e797b8b0210042cd7bc39168d449c2b06e7d`를 생성했다. 실행/완료 결과는 연결된 GitHub에서 조회 불가하므로 **TypeScript/Build/Worker/D1 preflight 미확인**. 특히 이 워크플로는 127 회귀 테스트를 실행하지 않으므로 성공으로 보여도 좋아요 최종 합격이 아니다.

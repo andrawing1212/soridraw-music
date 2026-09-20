@@ -200,7 +200,13 @@ const normalizeLikeSignal127 = (raw: unknown): ExploreLikeSignal127 | null => {
 const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => {
   const lastSeen = readSeenLikeSignal127(uid);
   if (signal.version <= lastSeen) return;
-  const gap = lastSeen > 0 && signal.previousVersion !== lastSeen;
+  // If an initial retained signal arrives after the R2 baseline, its rows
+  // could predate that snapshot. Reconcile once rather than accepting it as
+  // a newer personal state solely because no local signal version was stored.
+  const baselineAlreadyVerified = baselineCompleted127.has(uid) ||
+    readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1';
+  const gap = (lastSeen > 0 && signal.previousVersion !== lastSeen) ||
+    (lastSeen === 0 && baselineAlreadyVerified);
   const pending = readLikeOutbox(uid);
   const cache = getLikedStateCache(uid);
   let changed = false;
@@ -271,6 +277,11 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
   const task = (async () => {
     const versionAtStart = readSeenLikeSignal127(uid);
     const likedIds = await requestPersonalLikeBaseline127(user);
+    // The existing R2 writer intentionally caps an account at 2,000 liked
+    // IDs. At capacity, absence from the snapshot is NOT proof of unliked.
+    if (likedIds.length >= 2000) {
+      throw new Error('Personal like snapshot reached its 2000-ID limit; existing cache preserved');
+    }
     if (readSeenLikeSignal127(uid) !== versionAtStart) {
       throw new Error('Personal like signal advanced during baseline; retry on next entry');
     }

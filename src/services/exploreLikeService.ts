@@ -964,7 +964,17 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
         ? payload.data.likedTrackIds.map((trackId: unknown) => String(trackId || '').trim()).filter(Boolean)
         : [],
     );
-    missing.forEach((trackId) => cache.set(trackId, likedIds.has(trackId)));
+    // A response requested before an optimistic click (or before its intake
+    // ACK) is an older snapshot. It must not write through the local intent.
+    // Re-read the durable guards AFTER the awaited network request.
+    const currentOutbox127 = readLikeOutbox(user.uid);
+    const currentUnresolved127 = readSnapshotPending127(user.uid);
+    for (const trackId of missing) {
+      if (currentOutbox127[trackId] ||
+          Object.prototype.hasOwnProperty.call(currentUnresolved127, trackId)) continue;
+      // Another local path may have already filled the same cache ID.
+      if (!cache.has(trackId)) cache.set(trackId, likedIds.has(trackId));
+    }
     persistLikedStateCache(user.uid, cache);
   }
 
@@ -1026,12 +1036,18 @@ export const setExploreTrackLike = async (
   const outbox = readLikeOutbox(uid);
   const existing = outbox[normalizedTrackId];
   const cache = getLikedStateCache(uid);
-  const previousVisibleLiked = existing?.desiredLiked ?? cache.get(normalizedTrackId) ?? !liked;
+  // Pending accepted-but-unsettled intent outranks a legacy cached heart.
+  const previousVisibleLiked = existing?.desiredLiked ??
+    readExploreTrackLikeMembership127(uid, normalizedTrackId) ?? !liked;
   const baseLiked = existing?.baseLiked ?? previousVisibleLiked;
   const baseLikeCount = existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);
   const optimisticAction127 = computeExploreLikeAction127(baseLiked, liked, baseLikeCount);
   const optimisticLikeCount = optimisticAction127.likeCount;
-  const now = Date.now();
+  // A millisecond timestamp is not a unique mutation version: two clicks in
+  // the same millisecond could make an old ACK look like the newest action.
+  // Keep updatedAt strictly monotonic for THIS track while preserving the
+  // existing persisted outbox format and the 30-second batching contract.
+  const now = Math.max(Date.now(), (existing?.updatedAt || 0) + 1);
 
   cache.set(normalizedTrackId, liked);
   persistLikedStateCache(uid, cache);

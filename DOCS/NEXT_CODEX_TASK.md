@@ -1,5 +1,17 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-21 KST: 133 글로벌 조사·W2 격리모형 PASS / 실제 동시성·릴리스 FAIL
+
+최신 `DOCS/CURRENT_RELEASE_STATE.md` 0BR 및 `DOCS/LIKE_WRITE_REDESIGN_133.md`. `scripts/verify-133-like-direct-two-row.py` 격리 SQLite: 직접 두 행 모델의 신규 좋아요·해제 2행, 같은 상태 retry 0행, 타인 좋아요 보호 PASS. 다만 별개 오래된 주문이 나중에 도착하면 최종값 반전 재현: **순서 영속 기록 없는 직접 D1 W2 모델은 제품 적용 금지**. 이 작업은 preview 문서/모형만 반영; 실제 PREVIEW 앱126/Worker071, 앱127+Worker072~077 미배포. 기존 069 W4 비용 FAIL·개인 하트 자동 수렴 FAIL 유지.
+
+### 다음 Codex High 작업 (무단 Worker 변경·배포 금지)
+
+1. 소규모 **격리 D1 전용 테스트** 설계: 동일 `batch()` 내 직전 SQL `changes()`, 실제 `meta.rows_written/rows_read`, 재시도 no-op, rollback/잘못된 track_stats를 시험. 실서비스 데이터·설정 건드리지 말 것.
+2. 두 후보를 정량 비교: 직접 D1 두 행 + 사용자별 Durable Object 영속 순서/재시도 vs D1 밖의 Queue. DO/Queue/R2/RTDB 비용, 10만 명 변경, 재방문 0읽기, 네트워크 성공·실패 중간 상태 복구 모델을 함께 검증. DO↔D1 교차 시스템 원자성이 자동 보장된다고 가정하지 말 것.
+3. 기존 069 큐와 모든 환경 구형 공유 R2 writer가 병존할 때 과거 요청이 신형 기록을 덮는지 및 선행 호환 승격 순서를 검토. 구형 `likes` 존재 판정에 0상태 tombstone을 넣지 말 것.
+4. 변경 없음 R0, 행동당 D1 W1~W2, 중복 재시도 W0, PC↔모바일 최종 주문, cold/2000/128 무손실, 실패 즉시 local pending, 최종 D1 이후에만 `settled`를 합격선으로 제시. 실패 항목이 있으면 구현·승격 차단.
+5. 실제 구현 구조가 확정되기 전 Worker078 생성/앱127 활성화/새 인프라 생성·비용 청구/파괴적 migration 금지. 구현은 preview에서만, 사용자 프리뷰배포 요청 전 배포 없음. 본 단계 TypeScript/Build/전체 CI/PC·모바일/Work 감사 미실시.
+
 ## 최종 기준 — 2026-09-21 KST: 신규 132 비용 감사에서 단일 좋아요/해제 069 W4 재현 — **릴리스 차단**
 
 최신 `DOCS/CURRENT_RELEASE_STATE.md` 0BQ. 기준 `preview`에 `scripts/verify-132-like-d1-write-budget.py` 추가. Run `35538319528` SUCCESS는 격리 코드/SQLite 비용 위반 검출 성공이지 제품 비용 PASS가 아님. 실제 live D1 계량은 **미실시**. PREVIEW 라이브 앱126/Worker071 유지, 앱127 및 Worker072~077 전부 미배포, 사용자 원본/TEST/PRODUCTION 비변경.

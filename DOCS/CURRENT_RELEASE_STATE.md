@@ -1,5 +1,26 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BB. PREVIEW 앱125 사용자 실사용 FAIL: 모바일 추천/최신의 해제 후 좋아요 숫자 stale / 126 warm-entry 수정 코드 PASS·미배포
+
+2026-09-20 KST, 동일 계정 PC에서 원래 좋아요 1인 첫 두 곡을 해제하고 시간이 지난 뒤 모바일 PREVIEW 추천 탭에서 빈 하트·숫자 1을 확인했다. PC는 빈 하트·숫자 0. 모바일 인기 탭에서는 0이며 다시 추천/최신으로 돌아오면 숫자가 0으로 수렴한다. 이는 이전 0BA의 배포 시점 37곡 PASS 이후 **새 사용자 변경에 대한 실사용 회귀**이며, app125 화면 동기화는 FAIL이다. 기존 0BA PASS는 당시 시점의 서버 결과에 한정한다.
+
+### 원본/파생/API 실측 원인 분리
+- 2026-09-20 read-only GitHub Actions Run `35494118924` SUCCESS: 두 대상 track SHA10 `9fef3a2199`, `abd7763bc1` 모두 canonical D1 count=0, likes relation=0, derived likes/row_json=0. LIVE PREVIEW API, PREVIEW local R2, shared R2 각각 latest/popular **6개 경로 전부 두 곡 0**. 최신·인기 각각 37곡. 두 API 요청 D1 R0/W0, 진단 중 D1/R2/Firebase write 0. 즉 이번 1 잔존은 서버 latest/popular 숫자의 불일치가 아니라 **모바일 이전 latest Feed 캐시**에 한정된다.
+- `src/pages/ExplorePage.tsx`의 recommended/latest는 동일 latest URL·기기 캐시, popular는 별도 URL·캐시. app125의 update-marker는 최초 1회 이후 유지. 이후 cachedRows 재진입 때 `feedRevisionEventAtRef`를 현재 시각으로 재설정해 포커스/터치 revision 확인까지 120초 차단; 첫 진입을 발생시킨 내비게이션 이벤트는 Explore listener 장착 이전일 수 있다. 그래서 오래된 latest 수치가 남고 popular에서 새 0을 불러온 후 `syncSharedPublicCountsToLocal110`이 다른 로드된 카드·캐시를 곡별로 수정하면 정상화되는 구조다.
+- 개인의 하트 소유 여부와 공용 좋아요 숫자는 별개 데이터이며 **숫자를 하트 모양에서 역산해 고정하는 보정 금지**. 이번 증거는 빈 하트/숫자 1 불일치이며 PC↔모바일 모든 하트 소유 수렴을 입증한 것은 아니다.
+
+### PREVIEW 소스 수정 (릴리스 예정 app126, 현재 app-version.json 및 라이브는 125)
+- `src/pages/ExplorePage.tsx`: 같은 탭 내 요청 URL별 **마지막 성공 revision 확인 시각**을 유지. 캐시 표시만으로 검사 시각을 갱신하지 않음. stale warm Explore 진입(120초 경과 또는 탭 내 첫 진입)은 작은 edge-cache revision 확인; 같으면 Feed 데이터 읽기 0, 달라졌으면 기존 R2-only first-page를 받고 곡별 캐시 및 표시 수렴. 추천/최신 공통 경로, 인기 탭 경유 불필요. 앱125 최초 1회 direct shared R2 확인/실패 시 캐시 보존·재시도 및 현행 30초 좋아요 묶음 처리 보호. D1 origin read 추가 없음.
+- `scripts/verify-126-explore-entry-like-count.mjs` 신규; `scripts/verify-123-shared-like-cache-repair.mjs`는 기존 검사식의 explicit-only 조건을 126의 stale-entry/명시 이벤트 양립 조건으로 보강. UI·반응형·Worker·Functions·Rules·원본 데이터 미수정.
+- 최초 Run `35494196072` FAIL: 126/125 테스트 PASS 후 과거 123 verifier가 새 코드 구문을 인식하지 못해 TypeScript/Build 실행 전 중단. 검사식 호환 최소 수정 뒤 Run `35494247124` **SUCCESS**: 126/125/123/124 회귀, TypeScript, Vite Build PASS. **코드·정적 회귀 기준 PASS일 뿐 PC/모바일 새 빌드 실사용·독립 Work 감사는 미검증**.
+- 임시 read-only/코드 테스트 Workflow 150·151은 검사 후 삭제, 상시 126 verifier 보존. 코드는 preview만 commit; 125 라이브 Hosting·Worker071 및 main/production 변경 없음. 배포 트리거/사용자 데이터 변경 없음.
+
+### 다음 릴리스 게이트
+1. 배포 승인 전 preview 코드 기반 126 후보 버전·기존 125 verifier 호환성을 고정하고 필요 회귀 재검사; 독립 Work 감사가 가능하면 별도 실시. 사용자 별도 프리뷰배포 지시 전 Hosting/Worker 배포하지 않음.
+2. 배포 시 Firebase PREVIEW Hosting만(Worker 071 불필요 재배포 금지), exact build·앱 버전 확인. 기존 두 곡의 모바일 추천/최신 초기 진입 0+빈 하트, 인기 왕복, PC↔모바일, 실제 신규 좋아요/해제 후 다시 진입, 변경 없음 재진입과 D1 R0/W0 검증. revision의 작은 캐시 신호와 실제 목록 data read는 분리 측정.
+3. 실제 사용자 mutation별 D1 rows_written W1~W2는 여전히 미검증; W3+면 FAIL. TEST/PRODUCTION의 기존 059/064 구형 writer 위험과 Work 독립 감사도 미해결이므로 TEST/PRODUCTION 승격 중단.
+4. 데이터 대량수정/Feed rebuild/전체 캐시 삭제/기존 비공개 곡 재공개/자동 production 승격 금지.
+
 ## 0BA. PREVIEW 앱125 + Worker071 전체 배포 PASS — 공개 37곡 좋아요 정합성 / 비공개 유지 / D1 R0W0
 
 2026-09-20 KST, 사용자의 명시적 배포 요청으로 **PREVIEW만** 앱125와 Worker071을 승격했다. 변경된 실제 실행 서비스는 Firebase PREVIEW Hosting과 Cloudflare PREVIEW Worker이며, TEST/PRODUCTION 코드는 그대로다. 이 절은 하단 0AZ의 "app125/Worker071 미배포" 상태를 대체하는 최신 기준이다.

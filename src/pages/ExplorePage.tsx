@@ -454,15 +454,17 @@ export default function ExplorePage() {
           nextCursor,
           serverRevision,
         );
-        // Fresh/cold snapshot also satisfies this release's one-time refresh.
-        markExploreSharedLikeCacheRepair124(requestUrl);
       }
       const normalizedTracks = rows.map(normalizeTrack).filter((track) => track.id);
       const displayTracks = overlayActorLikeCounts120(normalizedTracks);
       setFeedNextCursor(nextCursor);
       setLoadMoreError('');
       setTracks(displayTracks);
-      if (feedRequest) syncSharedPublicCountsToLocal110(normalizedTracks);
+      if (feedRequest) {
+        syncSharedPublicCountsToLocal110(normalizedTracks);
+        // Mark only after the current snapshot is applied to Feed and loaded cards.
+        markExploreSharedLikeCacheRepair124(requestUrl);
+      }
     };
 
     if (cachedRows) {

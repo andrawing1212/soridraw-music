@@ -1,6 +1,11 @@
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
-import type { User } from 'firebase/auth';
-import { getFirebaseAppCheckToken } from '../firebase';
+import { onAuthStateChanged, type User } from 'firebase/auth';
+import { onValue, ref as databaseRef, runTransaction, type Unsubscribe } from 'firebase/database';
+import { auth, getFirebaseAppCheckToken, realtimeDb } from '../firebase';
+import {
+  patchExploreLikedTrackMembership,
+  reconcileExploreLikedTrackCollectionSnapshot127,
+} from './exploreLikedTracksService';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
   readSoridrawPersistentCache,
@@ -27,8 +32,12 @@ const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
 
 export const EXPLORE_LIKE_SYNC_EVENT = 'soridraw:explore-like-sync';
 export const EXPLORE_LIKE_SYNC_ERROR_EVENT = 'soridraw:explore-like-sync-error';
-// Retained only as a compatibility export for older callers. App 119 never emits it.
+// 127: used only when a confirmed-change notification gap requires targeted reconciliation.
 export const EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT = 'soridraw:explore-like-account-invalidation';
+const EXPLORE_LIKE_BASELINE_127 = 'soridraw:explore:like-baseline:127';
+const EXPLORE_LIKE_SIGNAL_SEEN_127 = 'soridraw:explore:like-signal-seen:127';
+const EXPLORE_LIKE_SIGNAL_RETRY_127 = 'soridraw:explore:like-signal-retry:127';
+const EXPLORE_LIKE_SIGNAL_MAX_127 = 50;
 
 type ExploreLikePendingMutation = {
   trackId: string;
@@ -64,11 +73,16 @@ type ExploreLikeSyncEventDetail = {
   ownerUid: string;
   liked: boolean;
   likeCount: number;
+  source?: 'local' | 'confirmed' | 'remote';
 };
 
 const likedStateByUid = new Map<string, Map<string, boolean>>();
 const flushTimerByUid = new Map<string, number>();
 const inflightByUid = new Map<string, Promise<void>>();
+const baselineInFlight127 = new Map<string, Promise<void>>();
+const baselineCompleted127 = new Set<string>();
+const signalRevisionByUid127 = new Map<string, number>();
+const signalPublishInFlight127 = new Map<string, Promise<void>>();
 
 const clampLikeCount = (value: unknown) => {
   const count = Number(value ?? 0);
@@ -115,6 +129,228 @@ const getLikedStateCache = (uid: string) => {
     likedStateByUid.set(normalizedUid, cache);
   }
   return cache;
+};
+
+// SORIDRAW_EXPLORE_ATOMIC_PERSONAL_LIKE_127_20260920
+// "Liked" is one user-owned boolean. The public count remains independently
+// authoritative because other users can like the same track. A local pending
+// intention always outranks an older cross-device acknowledgement.
+export const readExploreTrackLikeMembership127 = (uid: string, trackId: string): boolean | undefined => {
+  const id = String(trackId || '').trim();
+  if (!uid || !id) return undefined;
+  return readLikeOutbox(uid)[id]?.desiredLiked ?? getLikedStateCache(uid).get(id);
+};
+
+const scopedLikeKey127 = (prefix: string, uid: string) => prefix + ':' + uid;
+const readLikeLocal127 = (key: string) => {
+  if (typeof window === 'undefined') return '';
+  try { return window.localStorage.getItem(key) || ''; } catch { return ''; }
+};
+const writeLikeLocal127 = (key: string, value: string) => {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(key, value); } catch {}
+};
+const readSeenLikeSignal127 = (uid: string) =>
+  Math.max(signalRevisionByUid127.get(uid) || 0, Number(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_SEEN_127, uid))) || 0);
+const markSeenLikeSignal127 = (uid: string, version: number) => {
+  const next = Math.max(readSeenLikeSignal127(uid), version);
+  signalRevisionByUid127.set(uid, next);
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_SEEN_127, uid), String(next));
+};
+
+type ExploreLikeAcceptedRow127 = ExploreLikeSyncEventDetail;
+type ExploreLikeSignal127 = {
+  version: number;
+  previousVersion: number;
+  results: ExploreLikeAcceptedRow127[];
+};
+
+const normalizeLikeSignal127 = (raw: unknown): ExploreLikeSignal127 | null => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const row = raw as Record<string, unknown>;
+  const version = Math.floor(Number(row.version || 0));
+  const previousVersion = Math.floor(Number(row.previousVersion || 0));
+  if (!Number.isSafeInteger(version) || version <= 0 ||
+      !Number.isSafeInteger(previousVersion) || previousVersion < 0 ||
+      previousVersion >= version || !Array.isArray(row.results)) return null;
+  const results: ExploreLikeAcceptedRow127[] = [];
+  for (const item of row.results.slice(0, EXPLORE_LIKE_SIGNAL_MAX_127)) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const value = item as Record<string, unknown>;
+    const trackId = String(value.trackId || '').trim();
+    if (!trackId || trackId.length > 512 || typeof value.liked !== 'boolean') continue;
+    results.push({
+      uid: '',
+      trackId,
+      ownerUid: String(value.ownerUid || '').trim(),
+      liked: value.liked,
+      likeCount: clampLikeCount(value.likeCount),
+    });
+  }
+  return { version, previousVersion, results };
+};
+
+const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => {
+  const lastSeen = readSeenLikeSignal127(uid);
+  if (signal.version <= lastSeen) return;
+  const gap = lastSeen > 0 && signal.previousVersion !== lastSeen;
+  const pending = readLikeOutbox(uid);
+  const cache = getLikedStateCache(uid);
+  let changed = false;
+  for (const item of signal.results) {
+    if (pending[item.trackId]) continue;
+    if (cache.get(item.trackId) === item.liked) continue;
+    cache.set(item.trackId, item.liked);
+    patchExploreLikedTrackMembership(uid, item.trackId, item.liked);
+    changed = true;
+    // The numeric count is from the shared Feed, not this personal signal.
+    // Do not replace a public count with another device's optimistic estimate.
+    dispatchLikeSync({ ...item, uid, source: 'remote' });
+  }
+  if (changed) persistLikedStateCache(uid, cache);
+  markSeenLikeSignal127(uid, signal.version);
+  if (gap && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
+      detail: { uid, reason: 'missed-confirmed-like-signal' },
+    }));
+  }
+};
+
+let activeLikeSignalUid127 = '';
+let unsubscribeLikeSignal127: Unsubscribe | null = null;
+const startLikeSignal127 = (uid: string) => {
+  if (uid === activeLikeSignalUid127) return;
+  unsubscribeLikeSignal127?.();
+  unsubscribeLikeSignal127 = null;
+  activeLikeSignalUid127 = uid;
+  if (!uid) return;
+  unsubscribeLikeSignal127 = onValue(
+    databaseRef(realtimeDb, `userSync/${uid}/exploreLike`),
+    (snapshot) => {
+      const signal = normalizeLikeSignal127(snapshot.val());
+      if (signal) applyRemoteLikeSignal127(uid, signal);
+    },
+    (error) => console.warn('[127] Personal like signal unavailable; local cache preserved:', error),
+  );
+};
+// This listener does not read Firestore/D1 and subscribes once for the signed-in
+// account, not once per song/card/tab. No continuous timer or global Feed reload.
+onAuthStateChanged(auth, (user) => startLikeSignal127(user?.uid || ''));
+
+const requestPersonalLikeBaseline127 = async (user: User) => {
+  const headers = await buildAuthHeaders(user);
+  const response = await fetch(EXPLORE_API_BASE + '/v1/me/social-snapshot', {
+    method: 'GET',
+    headers,
+  });
+  recordCloudflareResponse(response, '/v1/me/social-snapshot');
+  if (!response.ok) throw new Error('Personal like snapshot unavailable: HTTP ' + response.status);
+  const payload = await response.json() as { ok?: boolean; data?: { likedTrackIds?: unknown } };
+  if (payload?.ok !== true || !Array.isArray(payload?.data?.likedTrackIds)) {
+    throw new Error('Personal like snapshot is invalid; preserving cached likes');
+  }
+  return [...new Set(payload.data.likedTrackIds.map((id) => String(id || '').trim()).filter(Boolean))];
+};
+
+// One-time per user migration from older local liked-state to the already
+// materialized per-user R2 bundle. Never clear device data, never scan D1 on
+// ordinary entry. The server may use its existing recovery path if R2 is absent.
+const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
+  const uid = user.uid;
+  if (!uid || baselineCompleted127.has(uid) ||
+      readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1') return;
+  const inflight = baselineInFlight127.get(uid);
+  if (inflight) return inflight;
+  const task = (async () => {
+    const versionAtStart = readSeenLikeSignal127(uid);
+    const likedIds = await requestPersonalLikeBaseline127(user);
+    if (readSeenLikeSignal127(uid) !== versionAtStart) {
+      throw new Error('Personal like signal advanced during baseline; retry on next entry');
+    }
+    const confirmed = new Set(likedIds);
+    const outbox = readLikeOutbox(uid);
+    const cache = getLikedStateCache(uid);
+    const scope = new Set([...cache.keys(), ...confirmed, ...Object.keys(outbox)]);
+    let changed = false;
+    for (const id of scope) {
+      const nextLiked = outbox[id]?.desiredLiked ?? confirmed.has(id);
+      if (cache.get(id) === nextLiked) continue;
+      cache.set(id, nextLiked);
+      changed = true;
+    }
+    if (changed) persistLikedStateCache(uid, cache);
+    reconcileExploreLikedTrackCollectionSnapshot127(
+      uid, likedIds, Object.fromEntries(Object.entries(outbox).map(([id, row]) => [id, row.desiredLiked])),
+    );
+    baselineCompleted127.add(uid);
+    writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '1');
+  })().finally(() => { baselineInFlight127.delete(uid); });
+  baselineInFlight127.set(uid, task);
+  return task;
+};
+
+const readSignalRetry127 = (uid: string): ExploreLikeAcceptedRow127[] => {
+  const raw = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_RETRY_127, uid));
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((row: unknown) =>
+      row && typeof row === 'object' && typeof (row as ExploreLikeAcceptedRow127).trackId === 'string',
+    ).slice(0, EXPLORE_LIKE_SIGNAL_MAX_127) : [];
+  } catch { return []; }
+};
+const saveSignalRetry127 = (uid: string, rows: ExploreLikeAcceptedRow127[]) =>
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_RETRY_127, uid), JSON.stringify(rows));
+
+const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcceptedRow127[]): Promise<void> => {
+  if (!fresh.length) return;
+  const pending = new Map<string, ExploreLikeAcceptedRow127>();
+  for (const row of [...fresh, ...readSignalRetry127(uid)]) {
+    if (row.trackId && !pending.has(row.trackId)) pending.set(row.trackId, row);
+  }
+  const rows = [...pending.values()].slice(0, EXPLORE_LIKE_SIGNAL_MAX_127);
+  saveSignalRetry127(uid, rows);
+  // Persist latest final-state mutations even if the Firebase notification fails:
+  // retry is triggered on the next successful batch or after reconnect/focus.
+  const task = signalPublishInFlight127.get(uid);
+  if (task) { await task; return publishConfirmedLikeSignal127(uid, readSignalRetry127(uid)); }
+  const publish = (async () => {
+    const notification = await runTransaction(
+      databaseRef(realtimeDb, `userSync/${uid}/exploreLike`),
+      (raw) => {
+        const current = normalizeLikeSignal127(raw);
+        const version = Math.max(Date.now(), (current?.version || 0) + 1);
+        const merged = new Map<string, ExploreLikeAcceptedRow127>();
+        [...rows, ...(current?.results || [])].forEach((row) => {
+          if (!merged.has(row.trackId) && merged.size < EXPLORE_LIKE_SIGNAL_MAX_127) merged.set(row.trackId, row);
+        });
+        return {
+          version,
+          previousVersion: current?.version || 0,
+          results: [...merged.values()].map(({ trackId, ownerUid, liked, likeCount }) =>
+            ({ trackId, ownerUid, liked, likeCount: clampLikeCount(likeCount) })),
+        };
+      },
+      { applyLocally: false },
+    );
+    if (!notification.committed) throw new Error('Personal like notification was not committed');
+    saveSignalRetry127(uid, []);
+  })().finally(() => { signalPublishInFlight127.delete(uid); });
+  signalPublishInFlight127.set(uid, publish);
+  await publish;
+};
+
+let likeSignalRetryListenerInstalled127 = false;
+const installLikeSignalRetry127 = (user: User) => {
+  if (typeof window === 'undefined' || likeSignalRetryListenerInstalled127) return;
+  likeSignalRetryListenerInstalled127 = true;
+  const retry = () => {
+    const current = auth.currentUser;
+    if (!current?.uid || !readSignalRetry127(current.uid).length) return;
+    void publishConfirmedLikeSignal127(current.uid, readSignalRetry127(current.uid))
+      .catch((error) => console.warn('[127] Pending personal like notification retained:', error));
+  };
+  window.addEventListener('online', retry);
+  window.addEventListener('focus', retry);
 };
 
 const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | null => {

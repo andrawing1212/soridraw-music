@@ -42,7 +42,7 @@ jobs:
           W="$PWD/node_modules/wrangler/bin/wrangler.js"
           CFG="$PWD/canonical/wrangler.preview.jsonc"
           node "$W" d1 execute DB --remote --config "$CFG" --command "SELECT t.id,COALESCE(s.like_count,0) AS canonical_count,(SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id) AS relation_count,d.likes AS derived_count,json_extract(d.row_json,'$.like_count') AS derived_json_count FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id LEFT JOIN explore_derived_tracks d ON d.id=t.id WHERE t.is_public=1 AND t.status='published' LIMIT 201" --json > "$RUNNER_TEMP/canonical153.json"
-          node "$W" d1 execute DB --remote --config "$CFG" --command "SELECT id,is_public FROM tracks WHERE updated_at=1789829348623 LIMIT 2" --json > "$RUNNER_TEMP/private153.json"
+          node "$W" d1 execute DB --remote --config "$CFG" --command "SELECT id,is_public,status,updated_at FROM tracks LIMIT 201" --json > "$RUNNER_TEMP/private153.json"
           for sort in latest popular; do
             curl -fsS --retry 3 --max-time 20 -D "$RUNNER_TEMP/api-$sort.head" -o "$RUNNER_TEMP/api-$sort.json" -H 'Origin: https://preview.soridraw.com' "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108"
             node "$W" r2 object get "soridraw-profile-media-preview/internal/explore/feed-v1/$sort-40.json" --file "$RUNNER_TEMP/local-$sort.json" --remote >/dev/null
@@ -57,8 +57,12 @@ jobs:
           if(reference.size!==rows.length)throw Error('duplicate canonical id');
           for(const row of rows)if([row.relation_count,row.derived_count,row.derived_json_count].some(n=>Number(n)!==Number(row.canonical_count)))throw Error('canonical relation/derived mismatch');
           const privateRows=JSON.parse(fs.readFileSync(root+'/private153.json','utf8')).flatMap(x=>x.results||[]);
-          if(privateRows.length!==1||Number(privateRows[0].is_public)!==0||crypto.createHash('sha256').update(String(privateRows[0].id)).digest('hex').slice(0,10)!=='1319e4479e')throw Error('private canonical drift');
-          const privateId=String(privateRows[0].id);
+          const privateMatches=privateRows.filter(x=>crypto.createHash('sha256').update(String(x.id)).digest('hex').slice(0,10)==='1319e4479e');
+          if(privateMatches.length!==1)throw Error('known private identity not uniquely found in bounded D1 scan; n='+privateMatches.length);
+          const privateItem=privateMatches[0];
+          console.log('PRIVATE_TARGET_SHA10=1319e4479e IS_PUBLIC='+privateItem.is_public+' STATUS='+privateItem.status+' UPDATED_AT='+privateItem.updated_at+' CANONICAL_TRACK_ROWS='+privateRows.length);
+          if(Number(privateItem.is_public)!==0)throw Error('known private target is no longer private in canonical D1');
+          const privateId=String(privateItem.id);
           for(const scope of ['api','local','shared'])for(const sort of ['latest','popular']){
             const bundle=JSON.parse(fs.readFileSync(root+'/'+scope+'-'+sort+'.json','utf8'));
             if(bundle.ok===false)throw Error('API failure');

@@ -821,9 +821,10 @@ flushPendingLikes = async (user: User): Promise<void> => {
         }),
       });
       const results = normalizeBatchResults(payload, batchEntries.map((pending) => pending.trackId));
-      // Missing status (older Worker) is NOT evidence that the personal
-      // materialization succeeded; preserve local state and avoid RTDB replay.
-      const personalSnapshotUpdated127 = canBroadcastExploreLikeSnapshot127(payload?.data?.personalLikeSnapshot);
+      // The batch ACK and an updated R2 are both PRE-final-aggregate stages.
+      // Only independent canonical settlement may release a personal heart
+      // to another device; no intake Worker currently issues that proof.
+      const canonicalLikeSettled127 = canBroadcastExploreLikeSnapshot127(payload?.data?.personalLikeSnapshot);
       const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
       const latest = readLikeOutbox(uid);
       const cache = getLikedStateCache(uid);
@@ -854,13 +855,13 @@ flushPendingLikes = async (user: User): Promise<void> => {
             likeCount: pending.optimisticLikeCount,
             source: 'confirmed',
           };
-          if (personalSnapshotUpdated127) {
+          if (canonicalLikeSettled127) {
             delete snapshotPending127[pending.trackId];
             acceptedForSignal127.push(accepted);
           } else {
             snapshotPending127[pending.trackId] = result.liked;
           }
-          dispatchLikeSync({ ...accepted, source: personalSnapshotUpdated127 ? 'confirmed' : 'local' });
+          dispatchLikeSync({ ...accepted, source: canonicalLikeSettled127 ? 'confirmed' : 'local' });
         }
       }
 
@@ -872,7 +873,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
       // The Worker has acknowledged the D1 batch for processing. A personal
       // R2 failure is not final membership confirmation and must not be
       // broadcast as a successful cross-device snapshot.
-      if (!personalSnapshotUpdated127 && batchEntries[0]) {
+      if (!canonicalLikeSettled127 && batchEntries[0]) {
         dispatchLikeSyncError({
           uid,
           trackId: batchEntries[0].trackId,

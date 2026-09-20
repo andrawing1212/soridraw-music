@@ -51,15 +51,15 @@ assert.match(listener, /invalidate|EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT/);
 
 const flush = service.slice(service.indexOf('flushPendingLikes = async'), service.indexOf('// App 120 deliberately ignores historical RTDB'));
 assert.match(flush, /acceptedForSignal127/);
-assert.match(flush, /const personalSnapshotUpdated127 = canBroadcastExploreLikeSnapshot127\(payload\?\.data\?\.personalLikeSnapshot\)/);
-assert.match(flush, /if \(personalSnapshotUpdated127\) \{/);
+assert.match(flush, /const canonicalLikeSettled127 = canBroadcastExploreLikeSnapshot127\(payload\?\.data\?\.personalLikeSnapshot\)/);
+assert.match(flush, /if \(canonicalLikeSettled127\) \{/);
 assert.match(flush, /snapshotPending127\[pending\.trackId\] = result\.liked/);
 assert.match(flush, /writeSnapshotPending127\(uid, snapshotPending127\)/);
 assert.ok(flush.indexOf('writeSnapshotPending127(uid, snapshotPending127)') <
   flush.indexOf('persistLikeOutbox(uid, latest);',flush.indexOf('writeSnapshotPending127(uid, snapshotPending127)')),
   'persist the unmaterialized state before clearing accepted D1 outbox');
-assert.match(flush, /if \(!personalSnapshotUpdated127 && batchEntries\[0\]\)/);
-assert.match(flush, /dispatchLikeSync\(\{ \.\.\.accepted, source: personalSnapshotUpdated127 \? 'confirmed' : 'local' \}\)/);
+assert.match(flush, /if \(!canonicalLikeSettled127 && batchEntries\[0\]\)/);
+assert.match(flush, /dispatchLikeSync\(\{ \.\.\.accepted, source: canonicalLikeSettled127 \? 'confirmed' : 'local' \}\)/);
 assert.match(flush, /persistLikedStateCache\(uid, cache\)/);
 assert.match(flush, /persistLikeOutbox\(uid, latest\)/);
 assert.ok(flush.indexOf('persistLikeOutbox(uid, latest);') < flush.indexOf('await publishConfirmedLikeSignal127(uid, acceptedForSignal127)'), 'publish only after durable batch ACK');
@@ -91,7 +91,8 @@ const gateJs = ts.transpileModule(gateSource + '; return canBroadcastExploreLike
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
 }).outputText;
 const canBroadcast = new Function(gateJs)();
-assert.equal(canBroadcast('updated'), true);
+assert.equal(canBroadcast('updated'), false, 'R2 cache update precedes final canonical D1 application');
+assert.equal(canBroadcast('settled'), true, 'reserved for a future independently verified canonical settlement proof');
 assert.equal(canBroadcast('pending'), false);
 assert.equal(canBroadcast(undefined), false, 'legacy Worker response cannot be treated as materialized');
 assert.equal(canBroadcast('failed'), false);

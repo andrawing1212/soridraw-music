@@ -28,6 +28,9 @@ const confirm=new Function('throwApi','handleMyLikeStatesD1Core','requireExplore
     legacy,
 );
 const env={DB:{prepare:(sql)=>{
+  if (sql.includes('FROM explore_like_user_queue_075 q')) {
+    return {bind:(uid)=>({first:async()=>{assert.equal(uid,'target-user');return null;}})};
+  }
   const found=tableNames.filter(t=>sql.includes('FROM '+t));
   assert.equal(found.length,1,'each query must probe a single existing legacy table');
   assert.match(sql,/SELECT 1 AS pending/);

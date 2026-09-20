@@ -58,6 +58,14 @@ assert.match(listener, /invalidate|EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT/);
 
 const flush = service.slice(service.indexOf('flushPendingLikes = async'), service.indexOf('// App 120 deliberately ignores historical RTDB'));
 assert.match(flush, /acceptedForSignal127/);
+assert.match(flush, /hasNewerPending && current/);
+assert.match(flush, /latest\\[pending\\.trackId\\] = rebaseExploreLikeAfterInFlight127\\(current, pending\\)/);
+assert.match(flush, /current && current\\.updatedAt > pending\\.updatedAt/);
+assert.equal(
+  (flush.match(/rebaseExploreLikeAfterInFlight127\\(current, pending\\)/g) || []).length,
+  2,
+  'successful ACK and ambiguous failure must both preserve a newer explicit intent',
+);
 assert.match(flush, /const canonicalLikeSettled127 = canBroadcastExploreLikeSnapshot127\(payload\?\.data\?\.personalLikeSnapshot\)/);
 assert.match(flush, /if \(canonicalLikeSettled127\) \{/);
 assert.match(flush, /snapshotPending127\[pending\.trackId\] = result\.liked/);
@@ -132,6 +140,35 @@ assert.deepEqual(compute(true, false, 2), { liked: false, likeCount: 1 }, 'unlik
 assert.deepEqual(compute(true, false, 1), { liked: false, likeCount: 0 });
 assert.deepEqual(compute(false, false, 1), { liked: false, likeCount: 1 }, 'a non-owner with public count one stays unliked');
 assert.deepEqual(compute(true, true, 1), { liked: true, likeCount: 1 }, 'repeating the same state changes neither count nor heart');
+
+// An in-flight true can reach canonical D1 after the same user's later false.
+// Compare the later intent against the earlier accepted desired state rather
+// than its original baseline, or the unlike is dropped as a false/false no-op.
+const rebaseStart127 = service.indexOf('const rebaseExploreLikeAfterInFlight127 =');
+const rebaseEnd127 = service.indexOf('\\n\\nflushPendingLikes = async', rebaseStart127);
+assert.ok(rebaseStart127 > 0 && rebaseEnd127 > rebaseStart127);
+const rebaseSource127 = service.slice(rebaseStart127, rebaseEnd127);
+const rebaseJs127 = ts.transpileModule(rebaseSource127 + '; return rebaseExploreLikeAfterInFlight127;', {
+  compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
+}).outputText;
+const rebase = new Function('computeExploreLikeAction127', rebaseJs127)(compute);
+const firstInflight = {
+  trackId: 'song', ownerUid: 'owner', baseLiked: false, desiredLiked: true,
+  baseLikeCount: 0, optimisticLikeCount: 1, queuedAt: 100, updatedAt: 101, retryCount: 0,
+};
+const secondUnlike = { ...firstInflight, desiredLiked: false, optimisticLikeCount: 0, updatedAt: 102 };
+const rebasedUnlike = rebase(secondUnlike, firstInflight);
+assert.equal(rebasedUnlike.baseLiked, true);
+assert.equal(rebasedUnlike.desiredLiked, false);
+assert.equal(rebasedUnlike.optimisticLikeCount, 0);
+assert.equal(rebasedUnlike.updatedAt, 102);
+assert.notEqual(rebasedUnlike.desiredLiked, rebasedUnlike.baseLiked,
+  'final unlike must still be transmitted after older like ACK or lost response');
+const thirdRelike = rebase({ ...secondUnlike, desiredLiked: true, updatedAt: 103 }, firstInflight);
+assert.equal(thirdRelike.desiredLiked, thirdRelike.baseLiked,
+  'third click to like is correctly coalesced with first accepted like');
+const unrelatedUserCount = rebase({ ...secondUnlike, optimisticLikeCount: 3 }, { ...firstInflight, optimisticLikeCount: 4 });
+assert.equal(unrelatedUserCount.optimisticLikeCount, 3, 'rebase must preserve other users\' likes');
 assert.match(page, /if \(currentLiked === undefined\)/);
 assert.match(page, /likedTrackIds\[track\.id\] === undefined/);
 assert.match(page, /detail\?\.source !== 'remote'/);
@@ -168,6 +205,8 @@ console.log('127_LOCAL_OUTBOX_OVERRIDES_OLD_REMOTE=PASS');
 console.log('127_LATE_HYDRATION_PRESERVES_LOCAL_INTENT=PASS');
 console.log('127_REMOTE_RENDER_GUARDED_BY_EFFECTIVE_MEMBERSHIP=PASS');
 console.log('127_SAME_MS_ACK_LOCAL_REVISION=PASS');
+console.log('127_INFLIGHT_LIKE_THEN_FINAL_UNLIKE_PRESERVED=PASS');
+console.log('127_AMBIGUOUS_ACK_FOLLOWUP_NOT_DROPPED=PASS');
 console.log('127_PUBLIC_COUNT_INDEPENDENT_AUTHORITY=PASS');
 console.log('127_D1_MUTATION_ROUTE_UNCHANGED=PASS');
 console.log('127_WORKER071_UNCHANGED=PASS');

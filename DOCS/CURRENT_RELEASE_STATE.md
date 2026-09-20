@@ -1,5 +1,28 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BH. 앱127 + Worker072~074 동시 변경 코드·실행형 모의검사 PASS / PREVIEW 미배포·최종 원본 실측 전 (2026-09-20 KST)
+
+사용자 지시: PC·모바일이 같은 계정/같은 곡을 거의 동시에 좋아요·해제해도 합리적으로 수렴하도록 수정. 0BG 후보 위에 preview 전용으로 다음 내용을 구현. **실제 PREVIEW 앱126 + Worker071은 유지**. Worker072~074는 Worker071 소스의 임시 복사본에만 적용했고 canonical 파일·checksum 및 live 배포는 변경하지 않음.
+
+### 순서 및 R2 충돌 방지
+- `cloudflare/explore-worker/patches/072-personal-like-r2-revision.mjs`: 잘못된 환경 로컬 개인 likes R2 HEAD를 **공유 원본 `exploreSharedLikesKey061(uid)`** HEAD로 정정. 인증 사용자 본인 UID만 조회, 데이터 GET/원본 D1 read 0. 과거 TEST/PRODUCTION writer도 공유 경로를 갱신할 수 있다는 전제의 하위호환 신호.
+- `073-server-like-queue-order.mjs`: 기존 040 큐의 `batchAt=max(serverReceivedAt, clientMutationAt)`를 **서버 접수 시각 `receivedAt`만 사용**하도록 수정. 변경 내용 digest는 그대로 유지해 재시도 동일성 정보를 보존. 같은 millisecond는 기존 SHA batch_id 정렬로 결정적 순서 사용. 기존 069 W1 큐와 aggregate SELECT/삽입/삭제 SQL, D1 스키마·쓰기 수 변경 없음.
+- `074-personal-like-r2-cas.mjs`: 신규 Worker가 같은 UID의 공유 좋아요 R2 오브젝트를 동시 변경하면 읽은 ETag 기반 `onlyIf:etagMatches` PUT으로 경쟁을 감지하고 최다 12회 **그 UID 오브젝트만** 재읽어 재시도. 최대 128곡의 최근 수락된 서버 시각+batch ID 순서를 저장해 **같은 곡에 더 늦게 접수된 상태**를 먼저 처리된 뒤 과거 요청이 뒤집지 못하도록 함. 서로 다른 곡 변경은 합침. 기존 `schemaVersion=1`과 `likedTrackIds` 유지하여 이전 앱은 새 필드를 무시할 수 있음. 초기 공유 R2 부재 시 기존 cold fallback 유지(별도 경합 검증 미완료).
+- 개인 R2 GET/PUT 에러는 별도로 잡아 이미 D1 큐에 들어간 좋아요 응답을 5xx로 바꾸지 않고 **기존 DO 예약이 실행될 수 있도록** 유지하며 repair-needed 경고 기록. 단, 이 실패 경로는 최종 개인 R2 자동 복구를 보장하지 않으므로 실배포 전 별도 보호 필요.
+- 127 UI의 하트/로컬 outbox 우선·30초 묶음 및 전체 공용 숫자 분리, 072 개인 revision의 최소 5분 체크, 사용자 데이터 공유 기본 원칙 그대로.
+
+### 코드 검사 및 제한
+- 새 `scripts/verify-128-like-concurrency.mjs`는 Worker071 복사본+072/073/074 생성본의 실제 `syncExploreLikeR2AfterBatch074`을 분리 실행. 동일 곡 상반 상태의 두 동시 요청(양방향), 서로 다른 곡 동시 요청, ETag CAS 충돌 및 retry, 동일 token 멱등성, 서버 시각 기반 069 순서 검사를 모의 실행. R2 데이터/실사용자 정보는 쓰지 않는다.
+- 최종 Run `35506583191` **SUCCESS**: 128 실행형 모의 테스트, 127/126/125/124/123/110 회귀, TypeScript, Build, 생성 Worker `node --check`, 071 SHA 보호 PASS. 이전 Run `35506283554`은 074 패치 파일의 불완전한 소스로, `35506389871`은 이전 127 검사식의 잘못된 로컬 R2 HEAD 기대값으로 FAIL. `35506444633` PASS 뒤 R2 예외 보호를 더하고 최종 재검증. 검사 완료 후 임시 Workflow 156 제거.
+- **독립 Work 감사/실제 Cloudflare 동시 R2 conditional write/실제 D1 W1~W2/PC·모바일 동일계정/RTDB 예외·비용 미검증.** 이 PASS는 코드+모의 테스트 범위에만 해당하며 릴리스 허가가 아님.
+- **잔여 근본 위험:** 아직 구형 TEST/PRODUCTION Worker는 공유 R2에 CAS·순서 필드를 쓰지 않아 같은 시점의 구형 writer가 새 CAS 결과를 덮어쓸 수 있음. 오래된 writer가 추가 필드를 유실시키거나 cold-R2/12회 충돌 실패 시 canonical 최종 상태와 개인 R2가 어긋나더라도 후속 repair 보장이 없음. RTDB ACK는 최종 D1 aggregate 확정이 아님. 전체 버전 공존·queue 최종 처리 후 대상 사용자/곡만 신뢰할 수 있게 복구하는 구조 및 비용 검증 전 **TEST 승격·프리뷰배포 중단**.
+- 사용자 원본 대량변경, D1 migration/seed, Functions/Rules, UI/반응형, Music Note 60초 저장, main/TEST/production/PRODUCTION 미변경. 앱 버전 파일은 126 그대로. 임시 워크플로만 삭제.
+
+### 다음 작업
+1. 구형 Worker와 공존하는 동안 074 metadata를 보존하거나 최종 D1 적용 후 변경된 UID/track의 개인 공유 R2를 신뢰 가능한 순서로 복구할 안전 경로 결정. 정상 재진입 D1 R0, 행동당 W1~W2를 깨지 않을 것.
+2. 실제 R2 conditional PUT 실패·기기 반대 클릭·이전 버전의 공유 R2 overwrite·aggregate queue 최종상태/RTDB 알림 순서·R2 2천 ID 한도에 대한 독립 실행검사. 비용 10만 명 및 읽기/쓰기 실측.
+3. Worker072~074 실제 canonical source/SHA와 app127 버전 정식 고정 및 복합 출시 사전검증. 사용자 별도 프리뷰배포 승인 전 어떤 서비스도 배포하지 않음. TEST/PRODUCTION 승격 금지.
+
 ## 0BG. 앱127 구형 호환·실패 복구 보완 코드 및 Worker072 패치 후보 PASS / 동시성·실사용 미검증 (2026-09-20 KST)
 
 사용자의 계속 수정 지시에 따라 0BF의 세 가지 차단 문제 가운데 구형 앱 변동 감지와 실패 복구 경로를 preview 코드에서 보완했다. **완료된 릴리스가 아니다. 앱126 + Worker071 실배포 유지.**

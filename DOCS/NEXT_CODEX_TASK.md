@@ -1,5 +1,19 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-20 KST: 앱127 R2 updated≠D1 settled 분리 / RTDB 확정 신호 금지
+
+현재 구체 상태: `DOCS/CURRENT_RELEASE_STATE.md` 0BP. 실제 PREVIEW 앱126 + Worker071, 후보 앱127/Worker072~077 미배포, main/production 비변경.
+
+- 127 `canBroadcastExploreLikeSnapshot127('updated')=false`: 074 개인 R2 CAS 성공은 batch 접수 이후 **canonical D1 좋아요 최종 반영 완료 증거가 아니므로** PC/모바일 confirmed RTDB 신호를 발송하지 않는다. 원본 완료가 불명확한 경우 사용자 최종 로컬 의도를 영속 pending으로 보호. 예약 `'settled'`는 앞으로 별도의 검증된 최종 증명 경로가 만들어지기 전까지 Worker에서 절대 발행하지 말 것.
+- Run `35518647451` SUCCESS: 127/126/125/124/123/110, 128~131, TypeScript/Build 및 Worker071 SHA 보호. 임시 Workflow 164 정리. 실제 데이터 쓰기/배포 0.
+- **아직 전체 사용자 동기화 FAIL:** 상태 확정 전 기존 하트를 잘못 전파하지는 않으나 다른 기기까지 실제 최종값이 수렴하는 자동 복구가 없다. 074 R2 pre-aggregate, 069/075 순서·구형 writer, 075~077 예외조회 큐 확인·기아, 2000/128/cold, W1~W2·10만 사용자 비용 모두 미해결.
+
+### 다음 작업
+1. 069/075 `likes` 최종 commit의 사용자별/대상곡 확정 신호를 **새 D1 write 없이** 신뢰성 있게 얻을 수 있는지 설계하고 반례(큐 ACK 후 최종값 역전, 구형 writer, 늦은 응답)를 실행형 모의검사. 원본 보장 불가능하면 FAIL 보고, 임의로 `settled` 열지 말 것.
+2. 사용자가 변경한 곡만 canonical 확인·개인 shared R2에 최소·조건부 복구할 수 있는 경우 비용 검증; 앱 기존 30초 묶음·Explore 캐시·공개 수치 보호. 추가 DB W3+ 또는 전역 큐/Feed scan이면 중단.
+3. 구형 TEST/PRODUCTION Writer 호환 선행 승격 및 사용자 승인 요건을 분리 보고. 실제 테스트 계정 PC/모바일, 오프라인 및 10만 명 R2/RTDB 비용·Work 독립 감사 전 릴리스 허가 금지.
+4. 앱127/Worker 후보 `preview` 개발만 진행. 사용자 `프리뷰배포` 승인 전 배포 금지, `테스트배포`/`정식배포` 승인 전 다음 환경 비변경.
+
 ## 최종 기준 — 2026-09-20 KST: 074 늦은 ACK의 잘못된 확정 차단 PASS / 자동 수렴 미완료
 
 상세는 `DOCS/CURRENT_RELEASE_STATE.md` 0BO. 실제 PREVIEW 앱126 + Worker071 유지; 후보 앱127/Worker072~077 미배포, main/production 비변경.

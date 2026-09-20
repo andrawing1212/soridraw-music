@@ -1,5 +1,23 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BL. 동일 좋아요 Writer 세 환경 고정 소스 호환 검증 PASS / 운영 배포 전 (2026-09-20 KST)
+
+사용자의 "작업 진행해" 지시로 0BK에서 남은 구형 Worker writer 공존 문제를 실제 GitHub `preview`/`main`/`production` 고정 canonical Worker 소스로 대조했다. **이번 작업은 preview 패치와 검사용 CI만 수정했다. 실제 PREVIEW 앱126/Worker071 및 TEST/PRODUCTION 서비스·사용자 데이터 비변경.**
+
+### 확인한 사실과 변경
+- `preview` canonical Worker blob `9e0048ac0d2e3540707930786d531b9bca3bccb7`, `main` app124 Worker blob `04586a5f203227d5cb02581d13f78a43b95053ce` (고정 main SHA `f7fc25d5452b3313efa3cca53c180c5494cc9837`), `production` app117 Worker blob `14b3e4f3211ee7dfe1fcf9fcf10c935b6ce000f6` (고정 production SHA `e994340f3c4f6ac97f444f1ddf13053d3faffa71`) 대조. 세 소스 모두 구형 `syncExploreLikeR2AfterBatch034`이 개인 로컬 R2 읽기/쓰기 후 **공유 개인 R2에 조건 없이 덮어쓰는 경로**이고, `handleLikeBatch034`에 `receivedAt`, `queued.batchId`가 있다. 단, GitHub 소스가 현재 원격 배포 바이너리와 같다는 별도 실측은 아님.
+- `cloudflare/explore-worker/patches/073-server-like-queue-order.mjs`, `074-personal-like-r2-cas.mjs`: 관련 없는 PREVIEW 전용 071/072 marker 의존성만 제거. 기존 실제 수정 로직/함수명/공유 R2 계약은 보존했다. `073` 기기 시계 대신 서버 접수 시각, `074` 같은 UID 공유 R2의 ETag conditional PUT + 곡별 수락 순서 기반 상태를 **구형 TEST/PRODUCTION Worker 복사본에도 동일 적용 가능**하도록 만들었다. 실제 main/production 파일은 손대지 않음.
+- `scripts/verify-128-like-concurrency.mjs`의 `SORIDRAW_VERIFY_PORTABLE=1`은 각 구형 복사본의 072 revision 신규 API 유무만 제외하고 기존 074 실제 함수의 동시/역순/서로 다른 곡/동일 token 검증을 재사용한다. 기존 PREVIEW 전체 후보는 072~077 생성 순서 그대로 별도 검증.
+- 최종 GitHub Actions Run `35516684243` **SUCCESS**: 정확한 고정 세 Worker 소스 blob 검사, old TEST/PRODUCTION Worker 복사본에 073/074 적용 및 `node --check`, 동일 실행형 128 모의 테스트 PASS; PREVIEW 072~077 모의검증 128~131 및 앱127/126/125/124/123/110 회귀, TypeScript, Build PASS. 선행 Run `35516547581`은 테스트용 다른 branch를 전체 checkout하면서 PREVIEW TypeScript 경로에 구형 Functions가 섞여 FAIL; Worker 파일만 sparse checkout하도록 격리 후 최종 성공. 검사 전용 Workflow 160 삭제, 배포/데이터 write 0.
+
+### 릴리스 순서 및 남은 FAIL
+- **지금 앱127 단독 PREVIEW 배포 금지.** 공유 R2의 구형 unconditional writer가 남아 있으면 신규 074 CAS/순서 필드를 지울 수 있음. 호환 Writer가 `preview`·`main`·`production` 각각에 적용되기 전에는 새 구조가 전 환경의 개인 하트 정합성을 보장할 수 없다.
+- 가능한 릴리스 단계는 (1) 기존 좋아요 API/하트 UI를 유지한 writer-only 호환 변경을 환경마다 별도 검증하고 사용자 승인으로 PREVIEW→TEST→PRODUCTION 순서로 검증·승격, (2) 실제 배포 Worker 소스와 R2 conditional-write 동작을 재확인, (3) 기존 Writer 공존 기간의 데이터 정합성·복구를 따로 검증, (4) 이후 앱127 출시 여부 판단. **TEST 배포는 사용자 `테스트배포` 승인, PRODUCTION은 명확한 `정식배포` 승인 전 진행하지 않는다.** 현재 프로젝트의 완성 버전 전체 승격 규칙 때문에 writer-only 배포를 계획할 때에도 어떤 앱/Worker tree를 승격하는지 명시·별도 승인 필요.
+- **이번 PASS는 세 고정 소스에 동일 패치를 적용할 수 있고 mock이 통과한 것만 보장.** 074 cold-R2 fallback, 최신 128곡 order cap, 다른 Worker가 그 사이 074 이전 코드를 실행하는 구간, 큐 최종 D1 commit vs ACK, 075 큐의 독립 timestamp 처리, 앱127 로컬/RTDB 최신성, R2 2천 ID, 10만 사용자 R2·RTDB 전송 비용, 실제 W1~W2·기기 검증은 남아 있다. 임의 사용자 데이터 재생성/대량 복구로 해결 금지.
+- 이 단계에서 source SHA/hash 고정까지 마친 **릴리스 후보**는 아직 없음. 앱 버전 파일은 126이고 PREVIEW Worker071 source canonical 및 main/production branch 미변경. 비용 수치 미측정/실사용 검증 전. Work 독립 실행 감사 미실시.
+
+다음: 실제 old/new writer가 동일한 입력에 대해 예상한 D1 집계 결과와 공유 R2가 맞는지 추가 모의/제한된 테스트 계정 검증, 074 cold-start/128 cap과 호환 승격 경계를 별도 설계. 사용자 승인 전 배포/데이터 변경 금지.
+
 ## 0BK. Worker077 구형 069/066/035 큐 보호 후보 PASS / 운영 복구 합격 아님 (2026-09-20 KST)
 
 사용자의 "진행해" 지시로 0BJ의 미해결 구형 좋아요 큐 문제를 추가 분석하고 `preview` 전용 patch·실행형 mock에 반영했다. **실제 PREVIEW 앱126 + Worker071 유지. 앱127/Worker072~077 미배포.**

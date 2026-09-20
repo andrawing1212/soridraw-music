@@ -15,13 +15,15 @@ assert.match(helper,/explore_like_user_queue_state_075 s ON s\.id = 1/);
 assert.match(helper,/LIMIT 1/);
 assert.match(helper,/PERSONAL_LIKE_STILL_PROCESSING/);
 assert.match(helper,/PERSONAL_LIKE_SETTLEMENT_UNAVAILABLE/);
+assert.match(helper,/await requireLegacyLikeQueuesSettled077\(env\)/);
 assert.doesNotMatch(helper,/UPDATE |INSERT |DELETE FROM|env\.PROFILE_MEDIA|caches\.default/);
 let reads=0,auths=0,queries=0,mode='settled';
 const fail=(code,message,status)=>{const err=new Error(message);Object.assign(err,{code,status});throw err;};
-const handler=new Function('throwApi','handleMyLikeStatesD1Core','requireExploreAuth',helper+'return handleMyLikeConfirmed075;')(
+const handler=new Function('throwApi','handleMyLikeStatesD1Core','requireExploreAuth','requireLegacyLikeQueuesSettled077',helper+'return handleMyLikeConfirmed075;')(
   fail,
   async()=>{reads++;return {ok:true,data:{likedTrackIds:['song']}};},
   async()=>{auths++;return {uid:'test-account'};},
+  async()=>{}, // 077 legacy probe independently verified by 131.
 );
 const env={DB:{prepare:(sql)=>{
   queries++;

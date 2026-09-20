@@ -16,6 +16,28 @@ assert.match(page, /setTracks\(overlayActorLikeCounts120\(cachedTracks\)\)/);
 assert.match(page, /patchExploreFeedSessionCachesRow\(track.id, \{ likeCount: track.likeCount \}\)/);
 assert.match(page, /markExploreSharedLikeCacheRepair124\(requestUrl\)/);
 assert.doesNotMatch(page, /window\.localStorage\.clear\(/);
+
+const applyStart = page.indexOf('const applyPayload =');
+const applyEnd = page.indexOf('if (cachedRows) {', applyStart);
+assert.ok(applyStart >= 0 && applyEnd > applyStart, '125 snapshot apply boundary');
+const apply = page.slice(applyStart, applyEnd);
+assert.match(apply, /payload\?\.ok !== true \|\| !Array\.isArray\(payload\?\.data\?\.items\)/);
+assert.match(apply, /throw new Error\('Invalid Explore snapshot; preserving the previous Feed'\)/);
+assert.ok(
+  apply.indexOf('setTracks(displayTracks);') <
+  apply.indexOf('syncSharedPublicCountsToLocal110(normalizedTracks);') &&
+  apply.indexOf('syncSharedPublicCountsToLocal110(normalizedTracks);') <
+  apply.indexOf('markExploreSharedLikeCacheRepair124(requestUrl);'),
+  '125 completion marker must follow successful snapshot, display and shared cache update'
+);
+const firstStart = page.indexOf('const oneTimeSharedRepair124 =');
+const firstEnd = page.indexOf('const revalidateRequested', firstStart);
+const first = page.slice(firstStart, firstEnd);
+assert.match(first, /fetchFeedSnapshot108\(null\)/);
+assert.match(first, /applyPayload\(snapshot\.payload, snapshot\.revision\)/);
+assert.doesNotMatch(first, /markExploreSharedLikeCacheRepair124\(requestUrl\)/, 'first attempt must not mark itself');
+assert.doesNotMatch(first, /fetchRevision\(/, 'update must never perform D1 feed revision read');
+
 for (const name of ['069-shared-feed-targeted-parity.mjs', '070-shared-feed-legacy-writer-guard.mjs', '071-publication-canonical-like-parity.mjs']) {
   assert.ok(manifest.patches.includes(name), 'replayable patch missing ' + name);
 }

@@ -14,7 +14,9 @@ const entry = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js
 
 assert.ok(Number(version.version) >= 123, 'app123 behavior must remain available in later releases');
 
-// App update/re-entry must use the last known persistent Feed without a network revalidation.
+// App update/re-entry renders the last-known persistent Feed immediately.
+// App126 may check only a small revision on stale warm entry; unchanged visits
+// must not reload Feed data or defer a needed check by resetting the clock.
 assert.match(page, /SORIDRAW_EXPLORE_UPDATE_LAST_KNOWN_FEED_123_20260918/);
 assert.match(page, /const feedRevisionRequestedUrlRef = useRef\(''\)/);
 const cachedStart = page.indexOf('if (cachedRows) {');
@@ -22,13 +24,22 @@ const coldStart = page.indexOf('setLoading(true);', cachedStart);
 assert.ok(cachedStart >= 0 && coldStart > cachedStart, 'cached Feed branch missing');
 const cachedBranch = page.slice(cachedStart, coldStart);
 assert.match(cachedBranch, /const revalidateRequested = feedRequest && feedRevisionRequestedUrlRef\.current === requestUrl/);
-assert.match(cachedBranch, /if \(!revalidateRequested\) \{/);
+const entry126 = page.includes('SORIDRAW_EXPLORE_ENTRY_REVISION_REVALIDATION_126_20260920');
 assert.match(cachedBranch, /feedRevisionEventAtRef\.current = now/);
 assert.match(cachedBranch, /feedRevisionActivityAtRef\.current = now/);
 assert.match(cachedBranch, /feedRevisionRequestedUrlRef\.current = ''/);
-const guardIndex = cachedBranch.indexOf('if (!revalidateRequested)');
+const guardIndex = entry126
+  ? cachedBranch.indexOf('if (!shouldRevalidate) return () => controller.abort();')
+  : cachedBranch.indexOf('if (!revalidateRequested)');
 const fetchRevisionIndex = cachedBranch.indexOf('const serverRevision = await fetchRevision()');
-assert.ok(guardIndex >= 0 && fetchRevisionIndex > guardIndex, 'cached Feed still revalidates before explicit activity request');
+assert.ok(guardIndex >= 0 && fetchRevisionIndex > guardIndex, 'cached Feed must gate revision by activity or stale warm entry');
+if (entry126) {
+  assert.match(cachedBranch, /const lastCheckedAt = exploreFeedLastRevisionCheckAt126\.get\(requestUrl\) \|\| 0/);
+  assert.match(cachedBranch, /shouldRevalidateExploreFeedOnEntry126\(/);
+  assert.match(cachedBranch, /if \(!shouldRevalidate\) return \(\) => controller\.abort\(\);/);
+} else {
+  assert.match(cachedBranch, /if \(!revalidateRequested\) \{/);
+}
 
 const requestStart = page.indexOf('const requestRevisionCheck = () => {');
 const requestEnd = page.indexOf('};', requestStart) + 2;
@@ -84,7 +95,7 @@ assert.match(helper, /await shared\.put\(key, JSON\.stringify\(nextBundle\)/);
 assert.match(helper, /if \(!wanted\.has\(trackId\)\) return item/);
 
 console.log('PASS 123: update keeps last-known Feed, changed likes patch shared R2 by track only.');
-console.log('APP_UPDATE_CACHED_FEED_SERVER_READ=0_BY_BRANCH');
+console.log('APP_UPDATE_CACHED_FEED_DATA_READ=0_REVISION_ONLY_WHEN_STALE');
 console.log('ACTIVITY_REVISION_GATE=120_SECONDS');
 console.log('LIKE_BATCH_IDLE=30_SECONDS');
 console.log('SHARED_AGGREGATE=60_SECONDS');

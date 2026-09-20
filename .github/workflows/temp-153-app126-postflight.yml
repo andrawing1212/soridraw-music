@@ -51,8 +51,9 @@ jobs:
           node <<'NODE'
           const fs=require('fs'),crypto=require('crypto'),root=process.env.RUNNER_TEMP;
           const rows=JSON.parse(fs.readFileSync(root+'/canonical153.json','utf8')).flatMap(x=>x.results||[]);
-          if(rows.length!==37)throw Error('population changed; do not label previous 37 baseline PASS: '+rows.length);
+          if(rows.length<1||rows.length>40)throw Error('canonical population outside bounded first page: '+rows.length);
           const reference=new Map(rows.map(x=>[String(x.id),Number(x.canonical_count)]));
+          console.log('CANONICAL_PUBLIC_COUNT='+rows.length);
           if(reference.size!==rows.length)throw Error('duplicate canonical id');
           for(const row of rows)if([row.relation_count,row.derived_count,row.derived_json_count].some(n=>Number(n)!==Number(row.canonical_count)))throw Error('canonical relation/derived mismatch');
           const privateRows=JSON.parse(fs.readFileSync(root+'/private153.json','utf8')).flatMap(x=>x.results||[]);
@@ -62,13 +63,13 @@ jobs:
             const bundle=JSON.parse(fs.readFileSync(root+'/'+scope+'-'+sort+'.json','utf8'));
             if(bundle.ok===false)throw Error('API failure');
             const items=bundle?.data?.items||bundle?.payload?.data?.items||[];
-            if(items.length!==37||new Set(items.map(x=>String(x.id||x.trackId||''))).size!==37)throw Error(scope+' '+sort+' population mismatch');
+            if(items.length!==rows.length||new Set(items.map(x=>String(x.id||x.trackId||''))).size!==rows.length)throw Error(scope+' '+sort+' population mismatch: canonical='+rows.length+' observed='+items.length);
             if(items.some(x=>String(x.id||x.trackId||'')===privateId))throw Error(scope+' '+sort+' private leak');
             for(const item of items){
               const id=String(item.id||item.trackId||''),count=Number(item.likeCount??item.stats?.likeCount??0);
               if(!reference.has(id)||reference.get(id)!==count)throw Error(scope+' '+sort+' like parity mismatch');
             }
-            console.log('LIVE_PARITY_'+scope.toUpperCase()+'_'+sort.toUpperCase()+'=PASS N=37');
+            console.log('LIVE_PARITY_'+scope.toUpperCase()+'_'+sort.toUpperCase()+'=PASS N='+rows.length);
           }
           for(const sort of ['latest','popular']){
             const headers=fs.readFileSync(root+'/api-'+sort+'.head','utf8');

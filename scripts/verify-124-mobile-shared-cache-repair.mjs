@@ -6,7 +6,7 @@ const like = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const entry = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');
 
-assert.equal(String(version.version), '124');
+assert.ok(Number(version.version) >= 124, 'app124 behavior must remain available in later releases');
 
 for (const token of [
   'SORIDRAW_EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_20260918',

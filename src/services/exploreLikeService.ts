@@ -37,6 +37,7 @@ export const EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT = 'soridraw:explore-like-ac
 const EXPLORE_LIKE_BASELINE_127 = 'soridraw:explore:like-baseline:127';
 const EXPLORE_LIKE_SIGNAL_SEEN_127 = 'soridraw:explore:like-signal-seen:127';
 const EXPLORE_LIKE_SIGNAL_RETRY_127 = 'soridraw:explore:like-signal-retry:127';
+const EXPLORE_LIKE_SIGNAL_GAP_127 = 'soridraw:explore:like-signal-gap:127';
 const EXPLORE_LIKE_SIGNAL_MAX_127 = 50;
 
 type ExploreLikePendingMutation = {
@@ -309,16 +310,28 @@ const saveSignalRetry127 = (uid: string, rows: ExploreLikeAcceptedRow127[]) =>
 
 const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcceptedRow127[]): Promise<void> => {
   if (!fresh.length) return;
+  // Serialize before touching the durable retry: an in-flight successful
+  // publication must never clear a second accepted batch's notification.
+  const task = signalPublishInFlight127.get(uid);
+  if (task) {
+    try { await task; } catch {}
+    return publishConfirmedLikeSignal127(uid, fresh);
+  }
   const pending = new Map<string, ExploreLikeAcceptedRow127>();
   for (const row of [...fresh, ...readSignalRetry127(uid)]) {
     if (row.trackId && !pending.has(row.trackId)) pending.set(row.trackId, row);
   }
+  // If >50 distinct changes accrued during an offline notification failure,
+  // tell recipients they missed an interval. They revalidate their personal
+  // R2 snapshot once instead of treating the retained 50 as a complete delta.
+  if (pending.size > EXPLORE_LIKE_SIGNAL_MAX_127) {
+    writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_GAP_127, uid), '1');
+  }
+  const forceGap = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_GAP_127, uid)) === '1';
   const rows = [...pending.values()].slice(0, EXPLORE_LIKE_SIGNAL_MAX_127);
   saveSignalRetry127(uid, rows);
   // Persist latest final-state mutations even if the Firebase notification fails:
   // retry is triggered on the next successful batch or after reconnect/focus.
-  const task = signalPublishInFlight127.get(uid);
-  if (task) { await task; return publishConfirmedLikeSignal127(uid, fresh); }
   const publish = (async () => {
     const notification = await runTransaction(
       databaseRef(realtimeDb, `userSync/${uid}/exploreLike`),
@@ -331,7 +344,7 @@ const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcce
         });
         return {
           version,
-          previousVersion: current?.version || 0,
+          previousVersion: forceGap ? 0 : current?.version || 0,
           results: [...merged.values()].map(({ trackId, ownerUid, liked, likeCount }) =>
             ({ trackId, ownerUid, liked, likeCount: clampLikeCount(likeCount) })),
         };
@@ -340,6 +353,7 @@ const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcce
     );
     if (!notification.committed) throw new Error('Personal like notification was not committed');
     saveSignalRetry127(uid, []);
+    writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_GAP_127, uid), '');
   })().finally(() => { signalPublishInFlight127.delete(uid); });
   signalPublishInFlight127.set(uid, publish);
   await publish;

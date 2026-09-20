@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BU. 좋아요 배포 전 검증 요청 및 실제 서버 재검토 — 릴리스 차단 유지 (2026-09-21 KST)
+
+사용자가 "찔끔찔끔 하지 말고 배포 전단계까지" 지시. 기존 `preview` 앱127 클라이언트 후보 수정 0BT를 기준으로 **배포 없는 기존 GitHub 감사** `.github/workflows/soridraw-release-system-audit.yml`을 실행 요청하기 위해 `.deploy/release-system-audit.trigger`만 갱신. 요청 commit `f951e797b8b0210042cd7bc39168d449c2b06e7d`. 이 워크플로는 TypeScript/Build/Worker test·production dry-run과 SELECT만 하는 D1 preflight를 포함하며 앱/Worker/D1 변경·배포 경로가 없다. 다만 연결된 GitHub의 `get_commit_combined_status`는 빈 statuses, `fetch_commit_workflow_runs`도 PR 필터로 빈 결과라 **실제 workflow 시작·실행 결과를 조회하지 못함**. Run ID/TypeScript/Build/D1 preflight를 PASS로 주장 금지. 해당 워크플로에는 127 좋아요 실행형 회귀가 포함되지 않으므로 성공하더라도 별도 확인 필수.
+
+확인한 실제 Worker071 canonical source SHA `9e0048ac0d2e3540707930786d531b9bca3bccb7`: `enqueueExploreLikeBatch035`가 069 큐에 INSERT OR IGNORE, `processExploreLikeAggregateWave035`가 `track_stats`/ `likes`를 변경하고 처리한 `explore_like_batches_069`를 DELETE. 같은 요청이 **처리·삭제 이후 재전송**되면 원래 batch ID를 더 이상 저장하지 않으므로 요청 ID만으로 영구 중복을 식별할 수 없음. 처리 CTE는 현재 eligible 큐 안에서만 최신 `uid+track`을 선택하며 완료된 주문 전체의 순서 이력을 유지하지 않음. 클라이언트 127 `settled` 신호는 여전히 발행 불가. 이전 0BS의 trigger/index 비용 및 구형 Worker shared R2 무조건 덮어쓰기 미해결.
+
+**배포 직전 조건 불충족:** ① 라이브 D1 행 쓰기 W1~W2 및 변경 없음 R0 검증 없음, ② 오래된 batch 재접수·PC↔모바일 순서·D1 최종 확정→R2→타기기 자동 수렴 검증 없음, ③ 127 실행형 회귀·최신 TypeScript/Build·독립 Work 실측 결과 확인 불가. 이번 작업은 `preview` audit trigger와 문서만 추가. 실제 사용자 데이터·Worker canonical·Firebase·TEST/PRODUCTION·배포 변경 없음. 위 조건 충족 전 배포 승인 불가이며, 사용자의 명시적 새 배포 승인 없이는 배포하지 않는다.
+
 ## 0BT. 화면 즉시 반영·미확정 보호·오래된 캐시 방지: 127 클라이언트 국소 수정 (2026-09-21 KST)
 
 사용자의 직접 지시 "화면을 먼저 반영하되, 서버 확정과 캐시 갱신을 구분하고 오래된 상태의 덮어쓰기를 방지"에 따라 기준 `preview` `5d29b198d2c5773da6c828101d3f5059c64bbcaf`에서 **앱127 후보의 개인 좋아요 클라이언트 경로만** 최소 수정. 앱 버전 및 Worker canonical은 변경하지 않음.

@@ -23,7 +23,14 @@ if (appVersion >= 123) {
   if (!page.includes('const revalidateRequested = feedRequest && feedRevisionRequestedUrlRef.current === requestUrl;')) {
     fail('123 activity-requested revalidation guard missing');
   }
-  if (!page.includes('if (!revalidateRequested) {')) fail('123 update/re-entry zero-read branch missing');
+  if (appVersion >= 126) {
+    if (!page.includes('SORIDRAW_EXPLORE_ENTRY_REVISION_REVALIDATION_126_20260920')) fail('126 entry revision marker missing');
+    if (!page.includes('if (!shouldRevalidate) return () => controller.abort();')) fail('126 unchanged warm Feed revision guard missing');
+    if (!page.includes('const lastCheckedAt = exploreFeedLastRevisionCheckAt126.get(requestUrl) || 0;')) fail('126 successful-check timestamp missing');
+    if (!page.includes('const serverRevision = await fetchRevision();')) fail('126 stale-entry revision validation missing');
+  } else if (!page.includes('if (!revalidateRequested) {')) {
+    fail('123 update/re-entry zero-read branch missing');
+  }
   if (!page.includes("feedRevisionRequestedUrlRef.current = '';")) fail('123 requested revalidation reset missing');
   if (!page.includes('feedRevisionRequestedUrlRef.current = requestUrl;')) fail('123 activity revision request marker missing');
 }
@@ -36,7 +43,7 @@ if (!page.includes('applyProfileFirstView(refreshedProfile, refreshedRows, true)
 }
 if (!page.includes('setProfileLikedTracks(applyPublicCounts110);')) fail('open liked-tab state is not reconciled');
 if (!page.includes('patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);')) fail('persistent liked-card cache is not reconciled');
-if (!/if \(feedRequest\) \{\s*syncSharedPublicCountsToLocal110\(normalizedTracks\);\s*(?:\/\/[^\n]*\n\s*)?markExploreSharedLikeCacheRepair124\(requestUrl\);\s*\}/.test(page)) fail('fresh Feed payload does not repair liked cards after shared snapshot validation');
+if (!/if \(feedRequest\) \{\s*syncSharedPublicCountsToLocal110\(normalizedTracks\);\s*(?:\/\/[^\n]*\n\s*)?markExploreSharedLikeCacheRepair124\(requestUrl\);\s*(?:exploreFeedLastRevisionCheckAt126\.set\(requestUrl, Date\.now\(\)\);\s*)?\}/.test(page)) fail('fresh Feed payload does not repair liked cards after shared snapshot validation');
 if (!page.includes('syncSharedPublicCountsToLocal110(normalized);')) fail('load-more Feed payload does not repair liked cards');
 
 if (appVersion >= 120) {
@@ -61,7 +68,7 @@ if (!entry.includes('EXPLORE_LIKE_EVENT_BATCH_DELAY_MS_105 = 1 * 60 * 1000')) {
 }
 
 console.log('110_LIKED_PUBLIC_COUNT_LOCAL_SYNC=PASS');
-console.log(appVersion >= 123 ? 'WARM_UPDATE_FIRST_RENDER=LAST_KNOWN_CACHE_ZERO_READ' : 'SOURCE=SERVER_CONFIRMED_SHARED_FEED_PROFILE_PAYLOAD');
+console.log(appVersion >= 126 ? 'WARM_UPDATE_FIRST_RENDER=LAST_KNOWN_CACHE_STALE_ENTRY_REVISION' : appVersion >= 123 ? 'WARM_UPDATE_FIRST_RENDER=LAST_KNOWN_CACHE_ZERO_READ' : 'SOURCE=SERVER_CONFIRMED_SHARED_FEED_PROFILE_PAYLOAD');
 console.log('REVISION_CONFIRMED_REPAIR=ENABLED');
 console.log('LIKED_CACHE_APP_VERSION_COUPLED=NO');
 console.log('SHARED_AGGREGATE=ONE_MINUTE');

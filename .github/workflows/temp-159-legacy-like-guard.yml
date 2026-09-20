@@ -1,5 +1,5 @@
 name: TEMP 159 Legacy Queue Guard Dry Run
-# rerun after fixing marker assertion scope
+# rerun after excluding nonexecuted comment from SQL scan assertion
 on:
   push:
     branches: [preview]

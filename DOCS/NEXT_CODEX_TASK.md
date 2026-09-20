@@ -1,5 +1,19 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-20 KST: 074/127 접수 ACK와 개인 R2 결과 분리 PASS / 자동 정합성 미완료
+
+`DOCS/CURRENT_RELEASE_STATE.md` 0BN 기준. 실제 PREVIEW 앱126/Worker071 유지. app127와 072~077 patch 미배포, main/production 미변경.
+
+- 074 intake 응답에 개인 R2 CAS `personalLikeSnapshot: 'updated' | 'pending'` 추가. 큐 접수 성공 ≠ 개인 캐시 갱신. 실패 또는 구형 Worker의 필드 없음 시 127은 다른 기기에 확정 알림을 전송하지 않는다.
+- 127은 `EXPLORE_LIKE_SNAPSHOT_PENDING_127` UID별 ID→최종 로컬 좋아요 의도를 120 outbox 제거 전에 영속 기록한다. R2 baseline/개인 좋아요 목록/늦은 RTDB가 과거 캐시로 이를 덮지 못하도록 보호. 상태를 `local` 이벤트로 표시하고 사용자에게 동기화 미완료 알림. 같은 ID의 실제 R2 CAS 성공 전에는 pending 보호 해제 금지; 서버 batch 중복 전송 금지.
+- Run `35517860556` SUCCESS: 127/126/125/124/123/110 및 128~131 검사, TypeScript/Build, Worker071 SHA 보호. 임시 Workflow 162 정리. 실제 데이터 변경/배포 없음. **이 PASS는 불확정 상태 보호이며 최종 D1과의 자동 수렴 검증은 아님.**
+
+### 다음 작업 (단일 근본 원인 우선)
+1. 069/075 처리 후 특정 UID+곡 canonical 확정 순서와 R2 CAS 후처리의 안전한 종료 조건 찾기. 현재 `075~077` 읽기 전용 가드와 `074` pending만으로 무한 재시도나 전체 Feed refresh 없이 자동 R2 재구축할 수 있는지 분석. 불가하면 즉시 FAIL 보고하고 구형 Worker 호환 선행 승격으로 범위 제한.
+2. 2000 좋아요/128 순서 토큰 한도는 절대 기존 ID 삭제·덮어쓰기 금지. 한도 초과 사용자도 무기한 좋아요 정지하지 않는 하위 호환 구조를 별도 비용/데이터 위험 감사 후 설계(파괴적 migration 승인 필요).
+3. 실제 D1 W1~W2 및 변경 없는 재진입 R0, RTDB/R2 사용량 10만 사용자 비용, PC↔모바일/오프라인/동시 업데이트 실측 + 독립 Work 감사. 사용자 별도 프리뷰배포 승인 전 배포 금지.
+4. 같은 기능의 TEST 승격은 명시적 `테스트배포`, PRODUCTION은 명시적 `정식배포` 승인 뒤에만; preview/main/production 임의 혼합 금지.
+
 ## 최종 기준 — 2026-09-20 KST: 074 R2 유실 방지 보완 PASS / 127 자동 수렴 구현 전
 
 상세 `DOCS/CURRENT_RELEASE_STATE.md` 0BM. 앱126/Worker071 실제 PREVIEW 유지, 후보 앱127/Worker072~077 미배포. main/TEST 및 production/PRODUCTION 미변경.

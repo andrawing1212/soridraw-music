@@ -59,6 +59,7 @@ assert.ok(flush.indexOf('writeSnapshotPending127(uid, snapshotPending127)') <
   flush.indexOf('persistLikeOutbox(uid, latest);',flush.indexOf('writeSnapshotPending127(uid, snapshotPending127)')),
   'persist the unmaterialized state before clearing accepted D1 outbox');
 assert.match(flush, /if \(!personalSnapshotUpdated127 && batchEntries\[0\]\)/);
+assert.match(flush, /dispatchLikeSync\(\{ \.\.\.accepted, source: personalSnapshotUpdated127 \? 'confirmed' : 'local' \}\)/);
 assert.match(flush, /persistLikedStateCache\(uid, cache\)/);
 assert.match(flush, /persistLikeOutbox\(uid, latest\)/);
 assert.ok(flush.indexOf('persistLikeOutbox(uid, latest);') < flush.indexOf('await publishConfirmedLikeSignal127(uid, acceptedForSignal127)'), 'publish only after durable batch ACK');

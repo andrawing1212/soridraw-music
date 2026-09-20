@@ -784,6 +784,25 @@ const schedulePendingFlush = (user: User) => {
   flushTimerByUid.set(uid, timer);
 };
 
+// An earlier batch may be in flight while the same song is toggled again.
+// Never discard a later unlike just because its ORIGINAL baseline was unliked:
+// the earlier like may still commit. Rebase the later intent to the earlier
+// intake outcome even when the response was lost (the accepted state is then
+// uncertain, but a final explicit desired state must still be transmitted).
+const rebaseExploreLikeAfterInFlight127 = (
+  latest: ExploreLikePendingMutation,
+  prior: ExploreLikePendingMutation,
+): ExploreLikePendingMutation => {
+  const baseLiked = prior.desiredLiked;
+  const baseLikeCount = prior.optimisticLikeCount;
+  return {
+    ...latest,
+    baseLiked,
+    baseLikeCount,
+    optimisticLikeCount: computeExploreLikeAction127(baseLiked, latest.desiredLiked, baseLikeCount).likeCount,
+  };
+};
+
 flushPendingLikes = async (user: User): Promise<void> => {
   const uid = String(user?.uid || '').trim();
   if (!uid || inflightByUid.has(uid)) return;
@@ -843,6 +862,13 @@ flushPendingLikes = async (user: User): Promise<void> => {
         if (!result) continue;
         const current = latest[pending.trackId];
         const hasNewerPending = Boolean(current && current.updatedAt !== pending.updatedAt);
+        if (hasNewerPending && current) {
+          // Preserve the last click as its own server mutation. The earlier
+          // batch may materialize after this ACK; do not optimize it away as
+          // desiredLiked === the pre-flight baseLiked.
+          latest[pending.trackId] = rebaseExploreLikeAfterInFlight127(current, pending);
+          continue;
+        }
         if (!hasNewerPending) {
           cache.set(pending.trackId, result.liked);
           displayLocks[pending.trackId] = {
@@ -909,6 +935,11 @@ flushPendingLikes = async (user: User): Promise<void> => {
         if (current?.updatedAt === pending.updatedAt) {
           current.retryCount = Math.min(8, current.retryCount + 1);
           latest[pending.trackId] = current;
+        } else if (current && current.updatedAt > pending.updatedAt) {
+          // The first request MAY have reached the server before the network
+          // error. Explicitly retain the last click instead of deleting it as
+          // an apparent no-op against the old baseline.
+          latest[pending.trackId] = rebaseExploreLikeAfterInFlight127(current, pending);
         }
       }
       persistLikeOutbox(uid, latest);

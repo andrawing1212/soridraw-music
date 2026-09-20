@@ -1,5 +1,36 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BA. PREVIEW 앱125 + Worker071 전체 배포 PASS — 공개 37곡 좋아요 정합성 / 비공개 유지 / D1 R0W0
+
+2026-09-20 KST, 사용자의 명시적 배포 요청으로 **PREVIEW만** 앱125와 Worker071을 승격했다. 변경된 실제 실행 서비스는 Firebase PREVIEW Hosting과 Cloudflare PREVIEW Worker이며, TEST/PRODUCTION 코드는 그대로다. 이 절은 하단 0AZ의 "app125/Worker071 미배포" 상태를 대체하는 최신 기준이다.
+
+### 배포 소스·실행 버전
+- 최종 배포 전 검증 Run `35490609131` SUCCESS: app125 최초 유효한 shared R2 snapshot 반영 뒤 완료 marker, 과거 app123/124 회귀, Worker071 canonical like count=1 보호/정상 unlike 0 허용/canonical 누락시 안전 중단, 070 private+like CAS, TypeScript, Build, Worker dry-run PASS.
+- 기존 release preflight가 신규 app125의 유효 snapshot 블록을 옛 단일행 문자열로 검사해 Worker Run `35491096749`에서 **배포 전 FAIL**. 런타임 실패가 아니라 `scripts/verify-110-explore-liked-public-count.mjs` 검사식 문제 확인 및 최소 수정. 재검증 Run `35491232039` PASS; 첫 실패 Run은 실제 Worker 배포/데이터 변경 없음.
+- Worker 배포 고정 source commit `e9ccd5d4092f24ae34457b81479eded73af59b87`. canonical SHA256 `b170d05385c3096a98033675a9acbb63b40148bf782017c326845b7ea4c17813`.
+- Cloudflare PREVIEW Worker Release Run `35491281571` **SUCCESS**. Worker `f0a910a4-104e-47f7-8e3b-2c2c6454d8cf` → **`a6fda48f-ec20-48b3-a08d-ef43128c2e43`**. prereq D1 035/069 pending=0; SHA/preflight, Feed/Profile smoke, head-only warm revision R0/W0 PASS.
+- Firebase PREVIEW Hosting Run `35491378862` **SUCCESS**. 앱 source/trigger commit `e2bc5ee3e1845e6abb6c573e468a711f40f41fd3`; TypeScript PASS, Build PASS, Firebase Hosting 배포 PASS, `https://preview.soridraw.com/` exact index build PASS, `app-version.json=125` PASS, TEST/PRODUCTION 비변경 PASS.
+- Firebase Functions/Rules, Cloudflare TEST/PRODUCTION Worker, 원본 D1/Firebase 사용자 데이터는 변경하지 않았다. TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f`, PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` 유지.
+
+### 배포 후 실제 좋아요·비공개·비용 정합성
+- 일회성 전체 공개곡 진단 0AZ: 37곡 중 4곡의 R2 파생 숫자가 1→0으로 어긋났고, 변경 대상 4곡만 ETag CAS로 PREVIEW local/shared 최신·인기 총 4개 snapshot에 반영(Run `35489878431`). 사용자 원본 D1 write 0, 다른 곡 변경 없음.
+- 독립 read-only postflight Run `35491493263` **SUCCESS** (배포된 app125/Worker071 시점):
+  - 실제 PREVIEW 앱 125, Worker `a6fda48f-ec20-48b3-a08d-ef43128c2e43` 확인.
+  - Canonical D1 like_count / likes 관계 / derived likes / derived row_json **37곡 전체 일치**.
+  - PREVIEW API latest/popular **각 37곡 전부 canonical 좋아요 수와 일치**.
+  - PREVIEW local/latest+popular, shared v112/latest+popular 각 37곡, 모두 canonical 좋아요 일치.
+  - 기존 비공개 target SHA10 `1319e4479e`는 D1 `is_public=0` 유지하며 위 6개 first-page 결과에서 모두 미노출.
+  - 실제 PREVIEW latest/popular R2-only Feed의 D1 `R0/W0` PASS. postflight에서 원본 D1/R2 write 0.
+  - TEST/PRODUCTION Worker 비변경 PASS.
+- 앱125은 기기의 이전 Feed·하트 상태를 먼저 표시하고, **앱 업데이트 후 각 정렬별 최초 1회** 현재 shared R2 first-page를 직접 읽어 정상적으로 반영한 뒤에만 완료 marker를 기록한다. 실패 시 기존 기기 캐시 보존·다음 방문 재시도. 정상 재방문은 추가 데이터 읽기 0 목표. 최초 1회에는 **R2 읽기 발생 가능**, D1 원본 조회는 Feed R2-only 경로에서 0. 하트의 실제 계정별 PC↔모바일 동기화는 사용자 실사용 검증 전.
+- Worker071은 실제 공개/재공개 mutation에서 해당 곡의 canonical 좋아요를 PK로 확인하여 과거 0이 local/shared Feed·공개프로필에 덮어쓰이지 않도록 한다. **실제 좋아요·해제·공개·비공개 요청별 D1 W1~W2는 아직 미측정**. 릴리스 과정에서 원본 사용자 데이터를 쓰지 않았음과 사용자 mutation 비용 합격은 별개.
+
+### 남은 위험 / 다음 단계
+- 해당 시점의 37곡 결과는 PASS지만 **과거 4곡 1→0을 마지막으로 쓴 Worker/요청의 타임라인 원인은 미확정**. 071은 알려진 publication 경로 보호이며 영구 무재발의 증명은 아니다.
+- TEST/PRODUCTION의 구형 059/064 shared snapshot 전체 덮어쓰기 경로가 여전히 존재. 보호 환경에 무단 코드 배포 금지. catalog WRITE ON, READ OFF, FIRST_PUBLISHER OFF 유지.
+- PC/모바일 실제 동일 계정 하트·숫자 확인, 사용자 mutation별 W1~W2 비용, 공개/비공개 실사용, Work 독립 감사는 **미검증**. 위 항목 중 FAIL이면 TEST 승격 금지.
+- 사용자의 별도 `테스트배포` 승인 전 main/TEST 변경 금지. `정식배포` 명시 승인 전 PRODUCTION 변경 금지. 데이터 일괄 재생성/migration 금지.
+
 ## 0AZ. 공개 좋아요 37곡 전수 대조·4곡 표적 복구 PASS / app125 + Worker071 코드 준비·미배포
 
 2026-09-20 KST, 사용자 요청에 따라 app124 좋아요 0/1 불일치를 네 곡 임시 표시 보정으로 끝내지 않고, **전체 공개곡 원본·좋아요 관계·파생 행과 R2 목록을 대조하고 변경 경로를 방어**했다. 별도 명시적 배포 요청은 없으므로 app125/Worker071은 아직 실제 PREVIEW에 배포하지 않았다.

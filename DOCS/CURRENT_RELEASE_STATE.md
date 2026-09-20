@@ -10,7 +10,7 @@
 - 앱은 Explore 최초/재개 및 자기 좋아요 목록에서 사용자별 마지막 검증 시각을 기준으로 최소 5분 간격의 변경번호 확인. 변경 없으면 전체 개인 목록 데이터 GET 0; 변경되면 기존 인증 R2 snapshot을 로컬 pending 최종값과 합침. 주기 타이머 없음. 변경 없는 확인에도 R2 Class B HEAD 비용 1회가 발생하므로 전체 네트워크 read 0으로 보고하면 안 됨.
 - GitHub Actions Run 35505242919 SUCCESS: 127/126/125/124/123/110 검사, TypeScript, Build, Worker071 SHA 보호, 071 복사본+072 패치 적용 및 node --check/인증·HEAD/D1 미조회 정적 검증. 최초 Run 35505175645은 검사식이 테스트 파일 안의 금지 문자열을 실제 구현으로 오인해 FAIL, 검사식 수정 후 통과. 임시 Workflow 155 제거.
 - **중요:** 072는 patch 파일과 dry-run 후보일 뿐 canonical preview-worker.js 및 source-sha256.txt에 아직 반영되지 않았으며 실제 Worker071 unchanged. 앱 버전 파일 126, 앱127 미배포. Rules/Functions/사용자 원본 데이터/main/TEST/PRODUCTION 비변경.
-- 남은 FAIL3: 서로 다른 두 기기가 같은 곡을 반대로 변경할 때 Worker 큐 접수 ACK, 사용자 R2, 최종 D1 canonical 적용 순서가 어긋날 수 있음. 역순·동시 변경 실행형 검증과 실제 두 기기 하트 수렴, 좋아요/해제 D1 W1~W2 및 RTDB/R2 비용 측정 미완료. R2 bundle 2천 ID 한도도 미해결.
+- 남은 FAIL3 (근거 구체화): 040 큐 batchAt이 server receivedAt과 기기 mutationAt의 최대값이며 aggregate는 created_at DESC로 우선순위를 정한다. 서로 다른 기기 시계 때문에 최종 작업 순서가 역전될 수 있고, 034 사용자 R2 read/put은 두 요청에서 경쟁해 canonical 최종값을 오래된 개인 R2가 덮을 수 있다. 단순 R2 HEAD 변경 감지만으로 해결되지 않음. 서로 다른 두 기기가 같은 곡을 반대로 변경할 때 Worker 큐 접수 ACK, 사용자 R2, 최종 D1 canonical 적용 순서 검증 필요. 역순·동시 변경 실행형 검증과 실제 두 기기 하트 수렴, 좋아요/해제 D1 W1~W2 및 RTDB/R2 비용 측정 미완료. R2 bundle 2천 ID 한도도 미해결.
 - 다음: 최종 원본 동시성 검증·비용 감사 후 Worker072 canonical 고정 및 앱127을 하나의 릴리스로 검증. 명시적 프리뷰배포 승인 없이는 배포 금지; TEST/PRODUCTION 승격 중단.
 
 ## 0BF. 앱127 독립 정적 감사 FAIL — 3개 릴리스 차단 문제 (2026-09-20 KST)

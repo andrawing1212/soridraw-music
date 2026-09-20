@@ -1,5 +1,22 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BJ. Worker076 활성 075 큐의 원본 확인 안전장치 코드 PASS — 이전 큐·자동 복구는 미완료 (2026-09-20 KST)
+
+사용자의 "계속 진행해줘" 지시로 0BI의 예외 복구용 D1 membership 확인을 **큐 접수 ACK와 실제 적용 완료를 혼동하지 않도록** 보완했다. 현재 실제 앱126/Worker071 유지. 후보 앱127 및 Worker072~076은 미배포.
+
+### 이번 소스 변경
+- 신규 `cloudflare/explore-worker/patches/076-like-canonical-settlement-gate.mjs`: 기존 인증된 `/v1/me/likes-confirmed` 075 handler가 호출되면 20곡 입력 검증 다음, 같은 사용자의 `explore_like_user_queue_075` 단일 UID 행과 `explore_like_user_queue_state_075` 처리 커서를 비교한다. 현재 활성 075 큐에 미처리분이 있으면 `PERSONAL_LIKE_STILL_PROCESSING` HTTP 409로 원본 판정 보류. 큐 확인 자체 실패 시 `PERSONAL_LIKE_SETTLEMENT_UNAVAILABLE` HTTP 503으로 fail-closed. 해당 사용자 큐가 처리됐을 때만 기존 최대20곡 읽기 전용 canonical D1 조회 실시.
+- 신규 `scripts/verify-130-like-settlement-gate.mjs`: pending→409/원본 조회0, 오류→503/원본 조회0, settled→정해진 곡 원본 1회 조회, 과도한 입력→큐 조회 전400, 인증된 UID만 조회 모의 실행. 기존 129 검증을 076의 보호 조회와 호환되도록 수정.
+- 최종 Run `35514904414` **SUCCESS**: Worker071 복사본에 072~076 패치 순서대로 생성·문법 검사; 128 동시 CAS/129 구형 overwrite 재현/130 큐 안전장치 및 127/126/125/124/123/110 회귀, TypeScript, Build PASS. Worker071 canonical SHA 보호, 실사용 데이터 write/배포 0. 임시 Workflow 158 삭제.
+
+### 여전히 릴리스 차단
+- 큐 확인은 현재 075 경로의 미처리 사용자 행만 확인한다. TEST/PRODUCTION 구형 069 및 기타 legacy 큐나 조회 도중 동시 접수되는 새 요청에 대한 전역 atomic fence가 아니다. 원본 조회 결과를 곧바로 클라이언트/공유 R2의 최종 확정값으로 취급하면 위험.
+- `075/076`은 **읽기 전용 검증용 후보**일 뿐 자동 개인 R2 CAS 복구·클라이언트 호출 조건/성공 이후 데이터 반영이 아직 구현되지 않았다. 구형 Worker가 새 개인 R2의 메타데이터를 덮는 위험 지속.
+- 075 확인 호출 시 사용자의 큐 상태 확인 D1 읽기 + 최대 20곡 canonical D1 읽기 발생. **변경 없는 일반 앱 업데이트·페이지 진입에는 연결하지 않았고 D1 data read 0 목표 유지**. 개인 R2/RTDB 추가비용, 실제 좋아요 W1~W2, 2000 ID, PC↔모바일 실사용·독립 Work 감사 미측정.
+- 현재 app-version126, PREVIEW 앱126/Worker071 실배포 상태. Worker072~076은 canonical source/hash 및 라이브에 미반영. main/TEST/production/PRODUCTION, Rules/Functions/UI/사용자 원본 비변경. 사용자 명시적 프리뷰배포 승인 없이는 배포 금지.
+
+다음: 구형 writer와 현재 075 큐가 공존하는 동안 최종 D1 원본을 언제 확정할지 안전한 fence·캐시 복구 종료 조건을 정하고 제한된 테스트 계정으로 실측. W3+ 또는 전체 원본 조회·무단 데이터 write 금지. 확정 가능성이 입증되지 않으면 해당 릴리스 차단 유지.
+
 ## 0BI. Worker075 제한된 원본 좋아요 확인 API 후보 추가 / 모의검사 PASS·자동 복구 미구현 (2026-09-20 KST)
 
 사용자 "작업 진행해" 이후 0BH의 구형 Worker 공유 R2 덮어쓰기 문제를 별도로 재현하고 **원본을 확인하는 읽기 전용 경로**를 `preview`에 추가. 실제 서비스는 **PREVIEW 앱126 + Worker071 그대로**, 앱127 및 Worker072~075는 미배포. 사용자 원본/환경 변경 없음.

@@ -1,3 +1,4 @@
+import { LikeFencedProcessor139 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 
 // ISOLATED PROTOCOL SIMULATION ONLY. No real Cloudflare Durable Object or D1.
@@ -93,3 +94,79 @@ console.log('135_LEGACY_WRITER_BYPASS_RELEASE_GATE=FAIL');
 console.log('135_REAL_D1_INDEX_TRIGGER_COST=NOT_MEASURED');
 console.log('135_DO_BILLING_AND_CROSS_SYSTEM_ATOMICITY=NOT_MEASURED');
 console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
+
+
+// 139: Test the actual Worker-compatible protocol core, not only FencedActor's
+// conceptual in-memory model. This is a fake ledger + fake atomic D1 adapter:
+// it must NOT be interpreted as Cloudflare metering or real DO atomicity.
+{
+  const persistent = new Map();
+  const membership = new Map();
+  const counts = new Map();
+  const publications = [];
+  let failure = '';
+  let denyPublish = false;
+  const ledger = {
+    async get(key) { return structuredClone(persistent.get(key)); },
+    async put(key, value) { persistent.set(key, structuredClone(value)); },
+  };
+  const canonical = {
+    async readMembership(uid, id) { return membership.get(uid + ':' + id) ?? false; },
+    async applyAtomically(uid, id, liked) {
+      if (failure === 'before') { failure = ''; throw Error('before D1'); }
+      const key = uid + ':' + id;
+      const previous = membership.get(key) ?? false;
+      if (previous !== liked) {
+        membership.set(key, liked);
+        counts.set(id, (counts.get(id) ?? 0) + (liked ? 1 : -1));
+      }
+      if (failure === 'after') { failure = ''; throw Error('after D1'); }
+      return { canonicalCommitted: true, liked };
+    },
+  };
+  const publish = async (event) => {
+    if (denyPublish) throw Error('shared R2 unavailable');
+    const last = publications.findLast((x) => x.uid === event.uid && x.trackId === event.trackId);
+    if (last && last.revision > event.revision) throw Error('stale publication');
+    publications.push(event);
+    return { settled: true };
+  };
+  let processor = new LikeFencedProcessor139({ ledger, canonical, publish });
+  const send = (id, baseRevision, liked, trackId = 'song') =>
+    processor.mutate({ uid: 'user', trackId, id, baseRevision, liked });
+
+  assert.deepEqual(await send('first', 0, true), { state: 'settled', revision: 1, liked: true });
+  assert.deepEqual(await send('first', 0, true), { state: 'settled', duplicate: true, revision: 1, liked: true });
+  assert.equal(counts.get('song'), 1, 'same operation must not double count');
+  assert.equal((await send('second', 1, false)).state, 'settled');
+  assert.deepEqual(await send('delayed-old', 0, true), { state: 'stale', revision: 2, liked: false });
+  assert.equal(counts.get('song'), 0, 'old like must not reverse confirmed unlike');
+
+  failure = 'before';
+  assert.equal((await send('crash-before', 2, true)).state, 'pending');
+  assert.equal(counts.get('song'), 0);
+  processor = new LikeFencedProcessor139({ ledger, canonical, publish });
+  assert.equal((await send('crash-before', 2, true)).state, 'settled');
+  assert.equal(counts.get('song'), 1);
+  failure = 'after';
+  assert.equal((await send('crash-after', 3, false)).state, 'pending');
+  assert.equal(counts.get('song'), 0);
+  processor = new LikeFencedProcessor139({ ledger, canonical, publish });
+  assert.equal((await send('crash-after', 3, false)).state, 'settled');
+  assert.equal(counts.get('song'), 0, 'after-D1 crash retry may not subtract twice');
+
+  denyPublish = true;
+  assert.equal((await send('publication-offline', 4, true)).state, 'pending');
+  assert.equal((await send('newer-blocked', 4, false)).state, 'pending');
+  denyPublish = false;
+  assert.equal((await send('publication-offline', 4, true)).state, 'settled');
+  assert.equal((await send('different-track', 0, true, 'song2')).state, 'settled');
+  assert.equal(counts.get('song2'), 1);
+  assert.equal(publications.at(-1).trackId, 'song2');
+  console.log('139_ACTUAL_CORE_IDEMPOTENT_REPLAY=PASS');
+  console.log('139_ACTUAL_CORE_DURABLE_CRASH_RECOVERY_MODEL=PASS');
+  console.log('139_ACTUAL_CORE_PUBLISH_AFTER_D1_ONLY=PASS');
+  console.log('139_ACTUAL_CORE_PUBLISH_FAILURE_BLOCKS_NEW_ORDER=PASS');
+  console.log('139_REAL_CLOUDFLARE_D1_DO_COST_AND_LEGACY_WRITERS=NOT_VERIFIED');
+  console.log('139_PRODUCT_RELEASE=FAIL');
+}

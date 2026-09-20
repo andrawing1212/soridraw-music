@@ -390,6 +390,8 @@ const installLikeSignalRetry127 = () => {
   };
   window.addEventListener('online', retry);
   window.addEventListener('focus', retry);
+  // Recover a previously ACKed but unannounced batch immediately on reopen.
+  retry();
 };
 
 const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | null => {
@@ -716,6 +718,13 @@ flushPendingLikes = async (user: User): Promise<void> => {
         await publishConfirmedLikeSignal127(uid, acceptedForSignal127);
       } catch (notifyError) {
         console.warn('[127] Like accepted; cross-device signal pending retry:', notifyError);
+        const firstAccepted = acceptedForSignal127[0];
+        if (firstAccepted) {
+          dispatchLikeSyncError({
+            ...firstAccepted,
+            message: '좋아요 변경은 접수됐지만 다른 기기 알림은 재시도 중이에요.',
+          });
+        }
       }
     } catch (reason) {
       const latest = readLikeOutbox(uid);

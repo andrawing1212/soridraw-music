@@ -1,5 +1,20 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-20 KST: 앱127 구형 앱 동기화·복구 보완 / 072 패치 dry-run PASS·동시경합 보류
+
+이 절이 하위 0BF의 미수정 상태를 갱신한다. CURRENT_RELEASE_STATE.md 0BG 기준. PREVIEW 실제 앱126/Worker071, 앱127 코드 후보 및 Worker072 패치 후보는 모두 **미배포**.
+
+- 구형 앱 호환: 인증 /v1/me/likes-revision API를 Worker072 patch 후보에 추가. 공유 개인 R2 bundle HEAD ETag 확인, 바뀌었을 때만 R2 개인 목록 확인. Explore 진입/재개·내 좋아요 진입에 5분 최소 간격, 주기적 타이머 없음. R2 HEAD Class B 비용 1회는 무조건 읽기 0과 다름.
+- 누락 신호: 영속 repair target 유지, 성공한 R2 snapshot 이후에만 RTDB signal seen 확정. 실패 후 온라인/포커스/재진입 재시도, pending 로컬 변경 보호. 성공한 상태를 다시 invalidate하지 않도록 ExplorePage 수정.
+- Run 35505242919 SUCCESS: 127 및 과거 회귀, TypeScript/Build, 071 복사본에 072 패치 적용·문법 검사·UID HEAD-only 정적 검증. 071 canonical SHA 불변. 이번 작업에서 072 패치만 추가됐고 canonical 생성·배포 전.
+- **남은 핵심 FAIL**: 동일 계정 PC·모바일 반대 조작과 큐 ACK/R2/최종 D1 적용 순서 검증. 2천 ID 사용자 지원, 실제 좋아요/해제 W1~W2, 추가 RTDB/R2 비용 실측, Work 독립 감사 및 PC·모바일 실사용 미검증.
+
+### 다음 구현/검증 순서
+1. Worker 큐의 실제 최종 상태 적용 순서와 R2 bundle 갱신 시점을 확인하고 동일 ID 반대 클릭/순서 역전/동시 기기/오프라인 실패 실행형 테스트 작성. RTDB ACK만으로 최종 canonical 확정이라고 표시하지 말 것.
+2. 정상 상태 no-change R2 HEAD 호출 상한과 10만 사용자 비용 산정·가능하면 테스트 계정으로 실제 측정. 127 추가 listener / transaction, 데이터 2천 ID 한도 처리 검증. 전체 D1 membership read 반복 금지.
+3. 동시성 수정 및 072 patch를 canonical Worker 후보와 SHA로 고정한 뒤 Wrangler dry-run, TypeScript/Build/127~기존 회귀. D1 write/전체 사용자 데이터 변경 없음. 위험이면 배포 중단 후 보고.
+4. 별도 독립 Work 감사 가능 시 고정 commit 검증. 사용자 명확한 프리뷰배포 승인 후에만 app127 + Worker072 PREVIEW 릴리스. main/TEST/production/PRODUCTION 비변경.
+
 ## 최종 기준 — 2026-09-20 KST: 앱127 독립 정적 감사 FAIL / 3개 차단 문제 보완 대기
 
 다음 구현 근거: `DOCS/APP127_INDEPENDENT_AUDIT_2026-09-20.md`; 상세 상태 `DOCS/CURRENT_RELEASE_STATE.md` 0BF. 고정 감사 기준 `7f744f7cf8d93148368d1c926ee5dc61703a6887`. 기존 Run `35498983342`은 정적 회귀·TS·Build PASS이지만 누락/경합/비용을 증명하지 않음. 별도 Work 실행 감사는 미실시.

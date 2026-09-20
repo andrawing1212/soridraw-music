@@ -46,7 +46,7 @@ jobs:
           npm run lint
           npm run build
           echo 'APP125_TYPESCRIPT_BUILD=PASS'
-          echo 'RERUN_WITH_VALID_COMMENTS=PASS'
+          echo 'APP125_FIRST_REFRESH_VALIDATION=PASS'
       - name: Worker dry-run only
         shell: bash
         run: |

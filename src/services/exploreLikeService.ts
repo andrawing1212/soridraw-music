@@ -289,6 +289,12 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
   return task;
 };
 
+export const invalidateExplorePersonalLikeBaseline127 = (uid: string) => {
+  if (!uid) return;
+  baselineCompleted127.delete(uid);
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '');
+};
+
 const readSignalRetry127 = (uid: string): ExploreLikeAcceptedRow127[] => {
   const raw = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_RETRY_127, uid));
   try {

@@ -845,6 +845,13 @@ flushPendingLikes = async (user: User): Promise<void> => {
         }),
       });
       const results = normalizeBatchResults(payload, batchEntries.map((pending) => pending.trackId));
+      // An accepted response must match the specific mutation sent in THIS
+      // request. A stale/mixed response is not proof of that intent; retaining
+      // the outbox is safer than clearing the user's last click.
+      const sentByTrack127 = new Map(batchEntries.map((pending) => [pending.trackId, pending.desiredLiked]));
+      if (results.some((row) => sentByTrack127.get(row.trackId) !== row.liked)) {
+        throw new Error('좋아요 서버 응답이 전송한 변경과 일치하지 않습니다. 최신 상태를 보관했습니다.');
+      }
       // The batch ACK and an updated R2 are both PRE-final-aggregate stages.
       // Only independent canonical settlement may release a personal heart
       // to another device; no intake Worker currently issues that proof.

@@ -1,5 +1,5 @@
 name: TEMP 156 Personal Like Concurrency Dry Run
-# rerun after completing 074 generated function source
+# rerun after corrected shared R2 regression matcher
 on:
   push:
     branches: [preview]

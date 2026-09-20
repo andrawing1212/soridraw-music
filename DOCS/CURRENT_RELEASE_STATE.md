@@ -1,5 +1,17 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BO. 074 뒤늦은 ACK가 개인 좋아요 확정으로 전파되는 경로 차단 PASS / 자동 최종 수렴은 미완료 (2026-09-20 KST)
+
+사용자의 "계속 진행해" 지시 이후 0BN 후보에서 다른 기기의 **더 최근 서버 수락 요청이 이미 개인 공유 R2에 반영된 뒤**, 과거 batch ACK가 늦게 도착했을 때 `syncExploreLikeR2AfterBatch074`의 `unchanged: true`를 개인 캐시 갱신 성공으로 판단할 수 있는 경로를 수정했다. 변경은 `preview` 후보 코드·테스트만 대상. 실배포 앱126/Worker071 유지, 사용자 데이터/TEST/PRODUCTION 비변경.
+
+- `cloudflare/explore-worker/patches/074-personal-like-r2-cas.mjs`: 기존 곡별 server order와 들어온 batch 순서를 비교한다. 더 나중 순서가 이미 저장된 곡의 과거 요청은 **`superseded_like_batch`**로 fail-closed, 개인 snapshot `updated` 응답 및 타 기기 확정 RTDB 재생 금지. 서로 다른 곡이 같은 batch에 포함됐다면 새 곡은 CAS 저장하지만 전체 응답은 **`partially_superseded_like_batch`** (`ok:false`)로 처리하여 과거 곡의 잘못된 하트 확정을 막는다. 정확히 같은 토큰/같은 값의 재시도만 `unchanged: true` 유지. D1 mutation/큐/사용자 데이터 구조 변화 없음.
+- `scripts/verify-128-like-concurrency.mjs`: ① 최신 좋아요 true(200)가 먼저 확정된 후 오래된 false(100)가 나중 도착해도 개인 R2 유지·새 write 0·pending 판정, ② 오래된 같은 곡+별도 새 곡 혼합 batch에서 새 곡만 CAS 처리하고 전체 확정 알림 금지 실행형 mock 추가.
+- GitHub Actions Run `35518204038` **SUCCESS**: Worker071 고정본에 072~077 순차 patch 적용·syntax, 128~131 및 127/126/125/124/123/110 회귀, TypeScript, Build. 임시 Workflow 163 삭제. 배포 0, 실제 D1/R2/RTDB/사용자 데이터 write 0.
+- **합격 범위:** 늦은 ACK에 따른 잘못된 개인 하트 확정 *차단*만 확인. 혼합 batch의 일부 곡이 실제 반영됐어도 전체 pending으로 처리하므로 로컬 보호값이 남을 수 있다. 사용자별 최종 D1 canonical 확정→해당 곡만 R2 조건부 복구→PC·모바일 상태 수렴은 미구현. `074`은 여전히 최종 D1 적용 전에 개인 R2 갱신을 시도하고, 069/075 처리 순서와 구형 unconditional writer 공존 위험·2000/128/cold 복구·10만 사용자 비용·실사용 W1~W2 모두 미검증. 서비스 릴리스 PASS 금지.
+- 사용자 명시적 프리뷰배포 승인 없이 앱127/Worker 후보 배포 금지. main/production 브랜치 및 TEST/PRODUCTION 변경 금지.
+
+다음: 자동 복구를 보장할 확정 근거가 없는 동안 패치 누적을 멈추고, 기존 069/075 처리 + 공유 R2 업데이트의 최종 원본 기준·구형 writer 선행 호환 정책을 **작은 범위로 독립 재검토**. 예외 원본 확인의 D1 read와 정상 재방문 D1 R0를 구별, 변경 1회 W1~W2 실측과 비용 측정 없이 승격 금지.
+
 ## 0BN. 074 접수 ACK와 개인 R2 성공 분리 / 127 불확정 하트 보호 코딩 PASS — 최종 자동 복구 미완료 (2026-09-20 KST)
 
 사용자의 "계속 진행해" 요청에 따라 Worker074 fail-closed 시에도 API가 일반 성공만 반환하여 클라이언트127이 이를 다른 기기에 잘못 확정 알림으로 발송하던 연결 버그를 preview 후보에서 보완했다. **실제 PREVIEW는 여전히 앱126 + Worker071. 앱127과 Worker072~077 모두 미배포, TEST/PRODUCTION 및 원본 사용자 데이터 비변경.**

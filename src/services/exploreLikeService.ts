@@ -856,7 +856,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
           } else {
             snapshotPending127[pending.trackId] = result.liked;
           }
-          dispatchLikeSync(accepted);
+          dispatchLikeSync({ ...accepted, source: personalSnapshotUpdated127 ? 'confirmed' : 'local' });
         }
       }
 

@@ -39,7 +39,7 @@ const {compareLikeOrder074, syncExploreLikeR2AfterBatch074: sync}=
 assert.equal(compareLikeOrder074({at:100,batchId:'a'},{at:200,batchId:'b'}),-1);
 assert.equal(compareLikeOrder074({at:200,batchId:'z'},{at:200,batchId:'b'}),1);
 
-const mockStore=(initIds=[])=>{
+const mockStore=(initIds=[], race=true)=>{
   let body={schemaVersion:1,uid:'test-uid',likedTrackIds:initIds,lastLikeOrders074:{}};
   let revision=1,gets=0,puts=0,rejected=0;
   let deferredFirstGet=null;
@@ -62,7 +62,7 @@ const mockStore=(initIds=[])=>{
       return {etag:'etag-'+revision};
     },
   });
-  return {env:{PROFILE_MEDIA:barrier()},get state(){return body;},get puts(){return puts;},get rejected(){return rejected;},get gets(){return gets;}};
+  return {env:{PROFILE_MEDIA:barrier(race)},get state(){return body;},get puts(){return puts;},get rejected(){return rejected;},get gets(){return gets;}};
 };
 const row=(id,liked)=>[{trackId:id,liked}];
 
@@ -100,12 +100,11 @@ const row=(id,liked)=>[{trackId:id,liked}];
 // Same token: idempotent. One actor's unlike must preserve another actor's
 // public count, which is not derived from this private shared R2 cache.
 {
-  const store=mockStore();
-  const a=sync(store.env,'test-uid',row('song',true),100,'a');
-  store.env.PROFILE_MEDIA.get=async()=>{
-    return {etag:'etag-1',text:async()=>JSON.stringify({schemaVersion:1,uid:'test-uid',likedTrackIds:[],lastLikeOrders074:{}})};
-  };
-  await a;
+  const store=mockStore([],false);
+  await sync(store.env,'test-uid',row('song',true),100,'a');
+  const firstPuts=store.puts;
+  await sync(store.env,'test-uid',row('song',true),100,'a');
+  assert.equal(store.puts,firstPuts,'same token must not rewrite shared R2');
   const updated=store.state;
   assert.ok(updated.likedTrackIds.includes('song'));
   assert.match(service,/computeExploreLikeAction127/);

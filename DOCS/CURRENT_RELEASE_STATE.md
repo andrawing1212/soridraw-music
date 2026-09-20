@@ -1,5 +1,17 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BW. 좋아요 첫 요청 중 재클릭의 최종 의도 유실 수정 (2026-09-21 KST)
+
+사용자 "진행해" 지시. 기준 `preview` `c0fc2ba5cc88d36a3f59f266281d38c87702bd48` 이후 실제 `src/services/exploreLikeService.ts`의 로컬 30초 묶음 경로 확인.
+
+**실제 발견한 버그:** 기존 baseLiked=false에서 첫 좋아요(true)가 이미 서버에 전송 중인데 사용자가 해제(false)를 다시 누르면 새 outbox는 `baseLiked=false,desiredLiked=false`. 첫 요청 ACK가 돌아오면 `hasNewerPending` 때문에 이전 true를 건너뛰고, 다음 flush에서는 해당 해제를 `desiredLiked===baseLiked`로 판정해 **서버 전송 없이 삭제**할 수 있었다. 첫 true가 나중에 서버에 반영되면 사용자의 최종 해제가 사라지고 PC·모바일 상태가 틀어질 수 있음.
+
+**국소 수정:** `rebaseExploreLikeAfterInFlight127(latest,prior)`가 앞서 보낸 batch의 desiredLiked 및 optimisticLikeCount를 최신 outbox의 새 기준으로 반영. `flushPendingLikes` 성공 ACK에서 더 최근 outbox가 발견되면 `latest[trackId]`를 재기준화하고 다음 30초 묶음으로 전송; 네트워크 실패/ACK 불확실 시에도 동일 재기준화를 수행해 최신 해제 요청을 구식 baseline 기준의 no-op으로 버리지 않음. 최신 `updatedAt`과 `desiredLiked`는 보존하며 다른 사용자의 public count를 이전 사용자 전환량만큼만 조정. 화면 레이아웃/기존 30초 window/미확정 저장 보호/Worker 변경 없음.
+
+`scripts/verify-127-atomic-personal-like.mjs` 기존 회귀 파일에 성공·실패 모두 재기준화 가드, 좋아요→해제, 좋아요→해제→재좋아요, 타인 공개 좋아요 보존 순수 helper 검증 추가. GitHub의 실제 수정된 service 소스에서 helper를 추출하여 V8 격리 실행: 최종 해제 보존·재좋아요 no-op·타인 count 보호 및 성공/실패 두 경로 연결 PASS; verifier 본문 JS 문법 검사 PASS. **전체 127 회귀/TypeScript/Build/GitHub Actions/실서비스 D1 및 실기기 PC·모바일는 미검증.** 배포 금지.
+
+한계: 069 HTTP retry ID 재생성·처리 후 큐 삭제, 파생 trigger/index W3+ 비용, 구형 Worker R2 충돌과 최종 canonical→R2 자동 수렴 미해결. 모호한 ACK 뒤 서버 순서가 바뀌는 최악의 사례는 신형 서버의 영속 idempotency 없이는 완전 보장 불가. 기존 0BV 차단 유지. `public/app-version.json=126`, 실제 PREVIEW 앱126/Worker071, main/production, 공유 사용자 원본 비변경. 이번 작업은 preview 후보 클라이언트 1개·기존 127 검사 1개·상태 문서만 수정, 배포 없음.
+
 ## 0BV. 069 중복 요청 ID가 재전송 시 변하는 구조 확인 (2026-09-21 KST)
 
 Worker071 canonical SHA `9e0048ac0d2e3540707930786d531b9bca3bccb7` 원문에서 `exploreLikeW1Batch040` 확인: `batchAt = Math.max(fallbackAt, ...mutationAt)`, `fallbackAt = now`(매번 새 서버 접수 시각). 동일 UID·곡·원하는 하트·고정 클라이언트 mutationAt이라도 수초 뒤 재전송하면 `l069_<batchAt>_<digest>`가 달라지는 구체 반례 확인. 처리 후 `explore_like_batches_069` DELETE되어 이미 처리한 ID의 영구 재접수 차단도 없음. `scripts/verify-132-like-d1-write-budget.py`에 소스 가드와 136 재시도 모델 추가; **모델/실제 소스 조건 확인**이며 전체 Python CI 또는 라이브 Cloudflare 테스트 결과는 미확인. 원본 Worker/DB 변경 없음.

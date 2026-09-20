@@ -40,6 +40,7 @@ const EXPLORE_LIKE_SIGNAL_RETRY_127 = 'soridraw:explore:like-signal-retry:127';
 const EXPLORE_LIKE_SIGNAL_GAP_127 = 'soridraw:explore:like-signal-gap:127';
 const EXPLORE_LIKE_REPAIR_TARGET_127 = 'soridraw:explore:like-repair-target:127';
 const EXPLORE_LIKE_R2_REVISION_127 = 'soridraw:explore:like-r2-revision:127';
+const EXPLORE_LIKE_SNAPSHOT_PENDING_127 = 'soridraw:explore:like-snapshot-pending:127';
 const EXPLORE_LIKE_LEGACY_CHECK_MS_127 = 5 * 60_000;
 const EXPLORE_LIKE_SIGNAL_MAX_127 = 50;
 
@@ -159,6 +160,8 @@ export const readExploreTrackLikeMembership127 = (uid: string, trackId: string):
   if (!uid || !id) return undefined;
   const pending = readLikeOutbox(uid)[id];
   if (pending) return pending.desiredLiked;
+  const acceptedButNotMaterialized = readSnapshotPending127(uid);
+  if (Object.prototype.hasOwnProperty.call(acceptedButNotMaterialized, id)) return acceptedButNotMaterialized[id];
   // Do not allow a stale legacy-cache boolean to initiate a new mutation until
   // the account's one-time authoritative R2 reconciliation has succeeded.
   if (!baselineCompleted127.has(uid) &&
@@ -175,6 +178,23 @@ const writeLikeLocal127 = (key: string, value: string) => {
   if (typeof window === 'undefined') return;
   try { window.localStorage.setItem(key, value); } catch {}
 };
+// Accepted D1 queue != updated personal R2. Keep a UID-scoped override for
+// accepted tracks whose shared R2 CAS was not materialized; an older R2 read
+// must not silently reverse this device's final intention on the next visit.
+// Only an actual updated snapshot for that same ID may clear this guard.
+const readSnapshotPending127 = (uid: string): Record<string, boolean> => {
+  try {
+    const raw = JSON.parse(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SNAPSHOT_PENDING_127, uid)));
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    return Object.fromEntries(Object.entries(raw).filter(
+      ([id, value]) => Boolean(id) && typeof value === 'boolean',
+    )) as Record<string, boolean>;
+  } catch { return {}; }
+};
+const writeSnapshotPending127 = (uid: string, values: Record<string, boolean>) => {
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SNAPSHOT_PENDING_127, uid), JSON.stringify(values));
+};
+
 const readSeenLikeSignal127 = (uid: string) =>
   Math.max(signalRevisionByUid127.get(uid) || 0, Number(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_SEEN_127, uid))) || 0);
 const markSeenLikeSignal127 = (uid: string, version: number) => {
@@ -252,10 +272,11 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
     return;
   }
   const pending = readLikeOutbox(uid);
+  const unresolved = readSnapshotPending127(uid);
   const cache = getLikedStateCache(uid);
   let changed = false;
   for (const item of signal.results) {
-    if (pending[item.trackId]) continue;
+    if (pending[item.trackId] || Object.prototype.hasOwnProperty.call(unresolved, item.trackId)) continue;
     if (cache.get(item.trackId) === item.liked) continue;
     cache.set(item.trackId, item.liked);
     patchExploreLikedTrackMembership(uid, item.trackId, item.liked);
@@ -333,18 +354,22 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
       }
       const confirmed = new Set(likedIds);
       const outbox = readLikeOutbox(uid);
+      const unresolved = readSnapshotPending127(uid);
       const cache = getLikedStateCache(uid);
-      const scope = new Set([...cache.keys(), ...confirmed, ...Object.keys(outbox)]);
+      const scope = new Set([...cache.keys(), ...confirmed, ...Object.keys(unresolved), ...Object.keys(outbox)]);
       let changed = false;
       for (const id of scope) {
-        const nextLiked = outbox[id]?.desiredLiked ?? confirmed.has(id);
+        const nextLiked = outbox[id]?.desiredLiked ?? unresolved[id] ?? confirmed.has(id);
         if (cache.get(id) === nextLiked) continue;
         cache.set(id, nextLiked);
         changed = true;
       }
       if (changed) persistLikedStateCache(uid, cache);
       reconcileExploreLikedTrackCollectionSnapshot127(
-        uid, likedIds, Object.fromEntries(Object.entries(outbox).map(([id, row]) => [id, row.desiredLiked])),
+        uid, likedIds, {
+          ...unresolved,
+          ...Object.fromEntries(Object.entries(outbox).map(([id, row]) => [id, row.desiredLiked])),
+        },
       );
       if (repairAtStart > 0) {
         markSeenLikeSignal127(uid, repairAtStart);
@@ -789,9 +814,13 @@ flushPendingLikes = async (user: User): Promise<void> => {
         }),
       });
       const results = normalizeBatchResults(payload, batchEntries.map((pending) => pending.trackId));
+      // Missing status (older Worker) is NOT evidence that the personal
+      // materialization succeeded; preserve local state and avoid RTDB replay.
+      const personalSnapshotUpdated127 = payload?.data?.personalLikeSnapshot === 'updated';
       const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
       const latest = readLikeOutbox(uid);
       const cache = getLikedStateCache(uid);
+      const snapshotPending127 = readSnapshotPending127(uid);
       const displayLocks = readLikeDisplayLocks(uid);
       const acknowledgedAt = Date.now();
       const acceptedForSignal127: ExploreLikeAcceptedRow127[] = [];
@@ -818,17 +847,35 @@ flushPendingLikes = async (user: User): Promise<void> => {
             likeCount: pending.optimisticLikeCount,
             source: 'confirmed',
           };
-          acceptedForSignal127.push(accepted);
+          if (personalSnapshotUpdated127) {
+            delete snapshotPending127[pending.trackId];
+            acceptedForSignal127.push(accepted);
+          } else {
+            snapshotPending127[pending.trackId] = result.liked;
+          }
           dispatchLikeSync(accepted);
         }
       }
 
       persistLikedStateCache(uid, cache);
       persistLikeDisplayLocks(uid, displayLocks);
+      writeSnapshotPending127(uid, snapshotPending127);
       persistLikeOutbox(uid, latest);
       succeeded = true;
-      // The Worker has acknowledged this final-state batch for processing.
-      // A notification failure must NEVER replay a successful like mutation.
+      // The Worker has acknowledged the D1 batch for processing. A personal
+      // R2 failure is not final membership confirmation and must not be
+      // broadcast as a successful cross-device snapshot.
+      if (!personalSnapshotUpdated127 && batchEntries[0]) {
+        dispatchLikeSyncError({
+          uid,
+          trackId: batchEntries[0].trackId,
+          ownerUid: batchEntries[0].ownerUid,
+          liked: batchEntries[0].desiredLiked,
+          likeCount: batchEntries[0].optimisticLikeCount,
+          message: '좋아요 저장은 접수됐지만 다른 기기 동기화는 확인 중이에요.',
+        });
+      }
+      // Notification failure must NEVER replay a successful D1 queue intake.
       try {
         await publishConfirmedLikeSignal127(uid, acceptedForSignal127);
       } catch (notifyError) {
@@ -914,9 +961,10 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   }
 
   const outbox = readLikeOutbox(user.uid);
+  const unresolved = readSnapshotPending127(user.uid);
   if (Object.keys(outbox).length) schedulePendingFlush(user);
 
-  return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? cache.get(trackId) === true);
+  return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? unresolved[trackId] ?? cache.get(trackId) === true);
 };
 
 export const reconcileExploreLikedTrackCollectionState = (
@@ -931,9 +979,11 @@ export const reconcileExploreLikedTrackCollectionState = (
   );
   const cache = getLikedStateCache(normalizedUid);
   const outbox = readLikeOutbox(normalizedUid);
+  const unresolved = readSnapshotPending127(normalizedUid);
   const scope = new Set<string>([
     ...cache.keys(),
     ...canonical,
+    ...Object.keys(unresolved),
     ...Object.keys(outbox),
   ]);
   const effectiveLikedTrackIds: string[] = [];
@@ -941,7 +991,7 @@ export const reconcileExploreLikedTrackCollectionState = (
 
   for (const trackId of scope) {
     const pending = outbox[trackId];
-    const nextLiked = pending ? pending.desiredLiked : canonical.has(trackId);
+    const nextLiked = pending ? pending.desiredLiked : unresolved[trackId] ?? canonical.has(trackId);
     if (cache.get(trackId) !== nextLiked) {
       cache.set(trackId, nextLiked);
       changed = true;

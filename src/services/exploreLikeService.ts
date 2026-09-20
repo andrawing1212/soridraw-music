@@ -90,6 +90,19 @@ const clampLikeCount = (value: unknown) => {
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
 };
 
+// One transition represents the actor's action, not two unrelated UI edits.
+// The public total is adjusted only by the actor's own delta; other users'
+// likes remain in the total. Server-confirmed public counts supersede this
+// optimistic display after the existing one-minute aggregate.
+export const computeExploreLikeAction127 = (
+  baseLiked: boolean,
+  desiredLiked: boolean,
+  publicCount: number,
+): { liked: boolean; likeCount: number } => ({
+  liked: desiredLiked,
+  likeCount: clampLikeCount(publicCount + Number(desiredLiked) - Number(baseLiked)),
+});
+
 const readLikedStateStorage = (uid: string): Map<string, boolean> => {
   const values = new Map<string, boolean>();
   const envelope = readSoridrawPersistentCache<Record<string, boolean>>({
@@ -868,9 +881,8 @@ export const setExploreTrackLike = async (
   const previousVisibleLiked = existing?.desiredLiked ?? cache.get(normalizedTrackId) ?? !liked;
   const baseLiked = existing?.baseLiked ?? previousVisibleLiked;
   const baseLikeCount = existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);
-  const optimisticLikeCount = clampLikeCount(
-    baseLikeCount + (liked ? 1 : 0) - (baseLiked ? 1 : 0),
-  );
+  const optimisticAction127 = computeExploreLikeAction127(baseLiked, liked, baseLikeCount);
+  const optimisticLikeCount = optimisticAction127.likeCount;
   const now = Date.now();
 
   cache.set(normalizedTrackId, liked);

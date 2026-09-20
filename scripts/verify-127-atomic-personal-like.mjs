@@ -58,6 +58,14 @@ assert.match(listener, /invalidate|EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT/);
 
 const flush = service.slice(service.indexOf('flushPendingLikes = async'), service.indexOf('// App 120 deliberately ignores historical RTDB'));
 assert.match(flush, /acceptedForSignal127/);
+assert.match(flush, /const sentByTrack127 = new Map\(batchEntries\.map\(\(pending\) => \[pending\.trackId, pending\.desiredLiked\]\)\)/);
+assert.match(flush, /results\.some\(\(row\) => sentByTrack127\.get\(row\.trackId\) !== row\.liked\)/);
+assert.ok(flush.indexOf('const sentByTrack127 =') < flush.indexOf('const latest = readLikeOutbox(uid);', flush.indexOf('const sentByTrack127 =')),
+  'reply mismatch must abort before any accepted outbox is cleared');
+const replyMatches127 = (sent, returned) => !returned.some((row) => sent.get(row.trackId) !== row.liked);
+assert.equal(replyMatches127(new Map([['song', true]]), [{ trackId: 'song', liked: true }]), true);
+assert.equal(replyMatches127(new Map([['song', true]]), [{ trackId: 'song', liked: false }]), false);
+assert.equal(replyMatches127(new Map([['song', false]]), [{ trackId: 'song', liked: true }]), false);
 assert.match(flush, /hasNewerPending && current/);
 assert.match(flush, /latest\[pending\.trackId\] = rebaseExploreLikeAfterInFlight127\(current, pending\)/);
 assert.match(flush, /current && current\.updatedAt > pending\.updatedAt/);
@@ -207,6 +215,7 @@ console.log('127_REMOTE_RENDER_GUARDED_BY_EFFECTIVE_MEMBERSHIP=PASS');
 console.log('127_SAME_MS_ACK_LOCAL_REVISION=PASS');
 console.log('127_INFLIGHT_LIKE_THEN_FINAL_UNLIKE_PRESERVED=PASS');
 console.log('127_AMBIGUOUS_ACK_FOLLOWUP_NOT_DROPPED=PASS');
+console.log('127_MISMATCHED_INTAKE_REPLY_RETAINS_LAST_INTENT=PASS');
 console.log('127_PUBLIC_COUNT_INDEPENDENT_AUTHORITY=PASS');
 console.log('127_D1_MUTATION_ROUTE_UNCHANGED=PASS');
 console.log('127_WORKER071_UNCHANGED=PASS');

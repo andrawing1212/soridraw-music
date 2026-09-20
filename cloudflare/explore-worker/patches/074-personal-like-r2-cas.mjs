@@ -1,23 +1,27 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-
-// SORIDRAW_PERSONAL_LIKE_R2_CAS_074_20260920
-// The shared user likes bundle is the membership read model for all app
-// generations. Serialize *competing new Worker writers* with R2 conditional PUT;
-// use server receipt order per track, never an independent device clock.
 const dir = process.env.SORIDRAW_REMOTE_WORKER_DIR;
 if (!dir) throw new Error('[074] Worker directory missing');
 const path = join(dir, 'worker.js');
 let source = readFileSync(path, 'utf8');
 const marker = 'SORIDRAW_PERSONAL_LIKE_R2_CAS_074_20260920';
 if (source.includes(marker)) { console.log('[074] already applied'); process.exit(0); }
-for (const prerequisite of [
+for (const required of [
   'SORIDRAW_SERVER_ORDER_LIKE_QUEUE_073_20260920',
   'SORIDRAW_PERSONAL_LIKE_R2_REVISION_072_20260920',
   'async function syncExploreLikeR2AfterBatch034(env, uid, results) {',
   'await syncExploreLikeR2AfterBatch034(env, authContext.uid, results);',
   'exploreSharedLikesKey061',
-]) if (!source.includes(prerequisite)) throw new Error('[074] missing prerequisite ' + prerequisite);
-
+]) if (!source.includes(required)) throw new Error('[074] missing prerequisite '+required);
 const anchor = 'async function syncExploreLikeR2AfterBatch034(env, uid, results) {';
-const helper = 
+const helper = "// SORIDRAW_PERSONAL_LIKE_R2_CAS_074_20260920\nconst EXPLORE_LIKE_R2_TRACK_ORDER_LIMIT_074 = 128;\nfunction compareLikeOrder074(a, b) {\n  const at = Number(a?.at || 0) - Number(b?.at || 0);\n  if (at) return at > 0 ? 1 : -1;\n  const left = String(a?.batchId || '');\n  const right = String(b?.batchId || '');\n  return left === right ? 0 : left > right ? 1 : -1;\n}\nasync function syncExploreLikeR2AfterBatch074(env, uid, results, acceptedAt, batchId) {\n  const bucket = env?.PROFILE_MEDIA;\n  if (!bucket) return { ok: false, repairNeeded: true, reason: 'shared_r2_unavailable' };\n  const key = exploreSharedLikesKey061(uid);\n  const incoming = { at: Math.floor(Number(acceptedAt || 0)), batchId: String(batchId || '') };\n  if (!Number.isSafeInteger(incoming.at) || incoming.at <= 0) {\n    return { ok: false, repairNeeded: true, reason: 'invalid_server_order' };\n  }\n  for (let attempt = 0; attempt < 12; attempt += 1) {\n    const object = await bucket.get(key);\n    if (!object) return syncExploreLikeR2AfterBatch034(env, uid, results);\n    let previous = null;\n    try { previous = JSON.parse(await object.text()); } catch {}\n    if (Number(previous?.schemaVersion) !== 1 || !Array.isArray(previous?.likedTrackIds)) {\n      return { ok: false, repairNeeded: true, reason: 'invalid_shared_r2' };\n    }\n    const liked = new Set(previous.likedTrackIds.map((id) => String(id || '').trim()).filter(Boolean));\n    const order = previous?.lastLikeOrders074 && typeof previous.lastLikeOrders074 === 'object'\n      ? { ...previous.lastLikeOrders074 } : {};\n    let changed = false;\n    for (const result of results) {\n      const id = String(result?.trackId || '').trim();\n      if (!id || id.length > 512) continue;\n      const current = order[id];\n      if (current && compareLikeOrder074(current, incoming) >= 0) continue;\n      if (result.liked) liked.add(id); else liked.delete(id);\n      order[id] = incoming;\n      changed = true;\n    }\n    if (!changed) return { ok: true, unchanged: true };\n    const oldestFirst = Object.entries(order).sort((a, b) => compareLikeOrder074(a[1], b[1]));\n    for (const [id] of oldestFirst.slice(0, Math.max(0, oldestFirst.length - EXPLORE_LIKE_R2_TRACK_ORDER_LIMIT_074))) {\n      delete order[id];\n    }\n    const body = {\n      ...previous, schemaVersion: 1, uid: String(uid || ''),\n      likedTrackIds: [...liked].slice(0, 2000), lastLikeOrders074: order, updatedAt: Date.now(),\n    };\n    const stored = await bucket.put(key, JSON.stringify(body), {\n      onlyIf: { etagMatches: object.etag },\n      httpMetadata: { contentType: 'application/json; charset=utf-8' },\n      customMetadata: { soridrawSharedLikes: '114', updatedAt: String(Date.now()) },\n    });\n    if (stored) return { ok: true, attempts: attempt + 1 };\n  }\n  console.warn('[074] shared personal R2 contested; canonical queue retained', String(uid || ''));\n  return { ok: false, repairNeeded: true, reason: 'r2_cas_exhausted' };\n}\n";
+if (source.split(anchor).length !== 2) throw new Error('[074] sync anchor ambiguous');
+source = source.replace(anchor, helper + anchor);
+const call = 'await syncExploreLikeR2AfterBatch034(env, authContext.uid, results);';
+if (source.split(call).length !== 2) throw new Error('[074] intake call ambiguous');
+source = source.replace(call,
+  'const personalR2 = await syncExploreLikeR2AfterBatch074(env, authContext.uid, results, receivedAt, queued.batchId);' +
+  "\n  if (personalR2?.ok === false) console.warn('[074] personal snapshot repair needed:', personalR2.reason);");
+if (!source.includes(marker) || source.includes(call)) throw new Error('[074] final source invalid');
+writeFileSync(path, source, 'utf8');
+console.log('[074] shared R2 CAS and server-order tokens; D1 writes unchanged.');

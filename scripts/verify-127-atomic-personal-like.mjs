@@ -33,10 +33,10 @@ const getter = service.slice(service.indexOf('export const getExploreLikedTrackI
 assert.match(getter, /await ensurePersonalLikeBaseline127\(user\)/);
 assert.match(getter, /const missing = normalized\.filter\(\(trackId\) => !cache\.has\(trackId\)\)/);
 assert.match(getter, /readLikeOutbox\(user\.uid\)/);
-assert.match(getter, /outbox\[trackId\]\?\.desiredLiked \?\? cache\.get\(trackId\) === true/);
+assert.match(getter, /outbox\[trackId\]\?\.desiredLiked \?\? unresolved\[trackId\] \?\? cache\.get\(trackId\) === true/);
 
 const listener = service.slice(service.indexOf('const applyRemoteLikeSignal127'), service.indexOf('const readSignalRetry127'));
-assert.match(listener, /if \(pending\[item\.trackId\]\) continue/);
+assert.match(listener, /if \(pending\[item\.trackId\] \|\| Object\.prototype\.hasOwnProperty\.call\(unresolved, item\.trackId\)\) continue/);
 assert.match(listener, /cache\.set\(item\.trackId, item\.liked\)/);
 assert.match(listener, /patchExploreLikedTrackMembership\(uid, item\.trackId, item\.liked\)/);
 assert.match(listener, /dispatchLikeSync\(\{ \.\.\.item, uid, source: 'remote' \}\)/);
@@ -51,6 +51,14 @@ assert.match(listener, /invalidate|EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT/);
 
 const flush = service.slice(service.indexOf('flushPendingLikes = async'), service.indexOf('// App 120 deliberately ignores historical RTDB'));
 assert.match(flush, /acceptedForSignal127/);
+assert.match(flush, /const personalSnapshotUpdated127 = canBroadcastExploreLikeSnapshot127\(payload\?\.data\?\.personalLikeSnapshot\)/);
+assert.match(flush, /if \(personalSnapshotUpdated127\) \{/);
+assert.match(flush, /snapshotPending127\[pending\.trackId\] = result\.liked/);
+assert.match(flush, /writeSnapshotPending127\(uid, snapshotPending127\)/);
+assert.ok(flush.indexOf('writeSnapshotPending127(uid, snapshotPending127)') <
+  flush.indexOf('persistLikeOutbox(uid, latest);',flush.indexOf('writeSnapshotPending127(uid, snapshotPending127)')),
+  'persist the unmaterialized state before clearing accepted D1 outbox');
+assert.match(flush, /if \(!personalSnapshotUpdated127 && batchEntries\[0\]\)/);
 assert.match(flush, /persistLikedStateCache\(uid, cache\)/);
 assert.match(flush, /persistLikeOutbox\(uid, latest\)/);
 assert.ok(flush.indexOf('persistLikeOutbox(uid, latest);') < flush.indexOf('await publishConfirmedLikeSignal127(uid, acceptedForSignal127)'), 'publish only after durable batch ACK');
@@ -73,6 +81,19 @@ assert.doesNotMatch(publish, /firebase\/firestore|env\.DB|D1/);
 assert.ok(rules.rules.userSync.$uid.exploreLike, 'existing UID-scoped like signal rules required');
 assert.match(page, /readExploreTrackLikeMembership127\(user\.uid, track\.id\)/);
 assert.match(service, /computeExploreLikeAction127\(baseLiked, liked, baseLikeCount\)/);
+assert.match(service, /EXPLORE_LIKE_SNAPSHOT_PENDING_127/);
+assert.match(service, /outbox\[id\]\?\.desiredLiked \?\? unresolved\[id\] \?\? confirmed\.has\(id\)/);
+assert.match(service, /readSnapshotPending127\(uid\)/);
+const gateSource = service.slice(service.indexOf('export const canBroadcastExploreLikeSnapshot127 ='),
+  service.indexOf('const readSnapshotPending127 ='));
+const gateJs = ts.transpileModule(gateSource + '; return canBroadcastExploreLikeSnapshot127;', {
+  compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
+}).outputText;
+const canBroadcast = new Function(gateJs)();
+assert.equal(canBroadcast('updated'), true);
+assert.equal(canBroadcast('pending'), false);
+assert.equal(canBroadcast(undefined), false, 'legacy Worker response cannot be treated as materialized');
+assert.equal(canBroadcast('failed'), false);
 const transitionStart = service.indexOf('const clampLikeCount =');
 const transitionEnd = service.indexOf('const readLikedStateStorage =', transitionStart);
 assert.ok(transitionStart > 0 && transitionEnd > transitionStart);
@@ -112,6 +133,7 @@ assert.match(service, /EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000/);
 assert.match(page, /EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 120_000/);
 console.log('127_PERSONAL_LIKE_SINGLE_MEMBERSHIP=PASS');
 console.log('127_ATOMIC_TRANSITION_TESTS=PASS');
+console.log('127_UNMATERIALIZED_SNAPSHOT_LOCAL_GUARD_NO_REMOTE_REPLAY=PASS');
 console.log('127_LEGACY_R2_HEAD_GATED_AND_ACCOUNT_PRIVATE=PASS');
 console.log('127_FAILED_REPAIR_RETRY_DURABLE=PASS');
 console.log('127_FIRST_R2_BASELINE_VALIDATED_ONLY_ONCE=PASS');

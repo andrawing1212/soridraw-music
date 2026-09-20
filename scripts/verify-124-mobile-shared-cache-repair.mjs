@@ -25,10 +25,19 @@ assert.ok(repairStart >= 0 && repairEnd > repairStart, 'one-time repair branch m
 const repair = page.slice(repairStart, repairEnd);
 assert.match(repair, /fetchFeedSnapshot108\(null\)/);
 assert.doesNotMatch(repair, /fetchRevision\(/);
+assert.match(repair, /applyPayload\(snapshot\.payload, snapshot\.revision\);/);
+assert.doesNotMatch(repair, /markExploreSharedLikeCacheRepair124\(requestUrl\)/, 'repair must not mark success before payload validation');
+const applyStart = page.indexOf('const applyPayload =');
+const applyEnd = page.indexOf('if (cachedRows) {', applyStart);
+assert.ok(applyStart >= 0 && applyEnd > applyStart, 'shared snapshot apply handler missing');
+const apply = page.slice(applyStart, applyEnd);
+assert.match(apply, /payload\?\.ok !== true \|\| !Array\.isArray\(payload\?\.data\?\.items\)/);
 assert.ok(
-  repair.indexOf('applyPayload(snapshot.payload, snapshot.revision);')
-    < repair.indexOf('markExploreSharedLikeCacheRepair124(requestUrl);'),
-  'repair marker must be written only after current shared snapshot is applied',
+  apply.indexOf('setTracks(displayTracks);')
+    < apply.indexOf('syncSharedPublicCountsToLocal110(normalizedTracks);') &&
+  apply.indexOf('syncSharedPublicCountsToLocal110(normalizedTracks);')
+    < apply.indexOf('markExploreSharedLikeCacheRepair124(requestUrl);'),
+  'marker must be written after a valid snapshot updates Feed and shared public counts',
 );
 
 assert.match(page, /EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 120_000/);
@@ -43,7 +52,7 @@ console.log('PASS 124: one-time stale shared Feed cache repair is common across 
 console.log('REPAIR_SOURCE=CURRENT_SHARED_R2_DIRECT');
 console.log('REPAIR_D1_READ=0_BY_ROUTE_CONTRACT');
 console.log('REPAIR_ONCE_PER_SORT=true');
-console.log('NORMAL_FUTURE_UPDATE_ZERO_READ=UNCHANGED');
+console.log('SUBSEQUENT_UNCHANGED_VISIT_ZERO_READ=UNCHANGED');
 console.log('ACTOR_BATCH_IDLE=30_SECONDS');
 console.log('VIEWER_ACTIVITY_GATE=120_SECONDS');
 console.log('SHARED_AGGREGATE=60_SECONDS');

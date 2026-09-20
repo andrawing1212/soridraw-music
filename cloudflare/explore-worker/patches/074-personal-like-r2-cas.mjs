@@ -38,7 +38,7 @@ source = source.replace(responseAnchor, [
   "      // when this worker has only accepted the server-side queue.",
   "      personalLikeSnapshot: personalR2?.ok === true ? 'updated' : 'pending',",
   responseAnchor,
-].join('\\n'));
+].join('\n'));
 if (!source.includes(marker) || source.includes(call)) throw new Error('[074] final source invalid');
 writeFileSync(path, source, 'utf8');
 console.log('[074] shared R2 CAS and server-order tokens; D1 writes unchanged.');

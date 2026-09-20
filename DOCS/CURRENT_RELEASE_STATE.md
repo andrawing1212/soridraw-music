@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BZ. 서버 접수 전 개인 R2 쓰기 차단: 074/138 후보 실제 구현·격리 생성 검사 PASS, 최종 수렴 미완료 (2026-09-21 KST)
+
+사용자의 "니가 말한대로 진행" 지시로 `preview` 기준 `975f94cae4301b3bcc98004217d8ba77238c640e` 이후 **실제 Worker 후보 patch 코드를 수정**함. 기존 `cloudflare/explore-worker/patches/074-personal-like-r2-cas.mjs`에서 `handleLikeBatch034`의 `syncExploreLikeR2AfterBatch034` 조기 실행을 **실제 canonical D1 최종 적용 전에 호출하지 않도록 교체**, `personalLikeSnapshot: 'pending'`만 반환. `SORIDRAW_LIKE_PRECOMMIT_R2_BLOCK_138_20260921` 마커. 기존 074 R2 CAS helper 자체는 격리 검증 대상으로 보존하지만 batch intake에서는 호출하지 않음. 현재 Worker071 배포본은 그대로, R2/D1 사용자 데이터 원본 수정 없음.
+
+`scripts/verify-128-like-concurrency.mjs`의 기존 074 실행형 mock을 유지하면서 **generated Worker의 batch 핸들러에 R2 선행 갱신 호출 0, pending 응답, D1 enqueue 유지** 검사를 추가·기존 조기 갱신을 전제로 한 assertion을 교체. 연결된 GitHub의 실제 `preview-worker.js` blob `9e0048ac0d2e3540707930786d531b9bca3bccb7`에서 073→수정된 074 patch를 격리 메모리 생성한 뒤 128 전체 mock을 실행하여 PASS: 138 R2 선행 갱신 차단·pending 응답, 074 CAS 단위 경쟁·다른 곡 독립·동일 토큰 중복·2000/128 예외 fail-closed. 고정 TEST blob `04586a5f203227d5cb02581d13f78a43b95053ce` 및 PRODUCTION blob `14b3e4f3211ee7dfe1fcf9fcf10c935b6ce000f6`에도 073→074 패치 **소스 적용 및 선행 write 금지 검사 PASS**(실제로 두 환경에 변경/배포한 것은 아님). 실제 032/033 SQL 소스 fanout·인기 인덱스가 그대로 존재함도 GitHub 원문 확인. Node 전체 repo CI·TypeScript·Build·실 D1 meta 비용·독립 Work·실기기 PC↔모바일는 미검증.
+
+**미완료·릴리스 차단:** 074/138은 잘못된 빠른 R2 게시를 멈춘 대신, 아직 D1 처리 완료 후 *해당 UID/곡만* 확인해 R2를 갱신하는 finalizer가 없다. 이를 배포하면 다른 기기는 새 좋아요를 자동 반영하지 못하고 127 pending이 오래 남을 수 있으므로 **앱127/Worker 후보 배포 금지**. 069 batch ID 재시도 변경·처리 후 dedupe 소실, 구형 TEST/PRODUCTION shared writer 우회, D1 W1~W2 vs triggers/index 비용 충돌도 여전히 미해결. `personalLikeSnapshot='settled'` 허위 발행 금지. 이번 작업은 074 patch/128 verifier 및 DOCS만 변경. Firebase/Functions/Cloudflare 실제 Worker·Rules·DB schema·공유 사용자 데이터·main/production 비변경, 실제 PREVIEW 앱126/Worker071 유지.
+
 ## 0BY. 공유 환경 Writer + D1 트리거 공존 하드 차단 — 기존 구조를 단순 패치로 승격 금지 (2026-09-21 KST)
 
 사용자 "수정해봐" 후 GitHub 기준 `preview` `3f865b2e2bd43276dbc736888fa97efe7aa7c02e`를 다시 점검. 먼저 보고해야 하는 비호환성 확인: PREVIEW/TEST/PRODUCTION은 사용자 원본 D1 및 공유 개인 R2를 함께 사용하지만, TEST/PRODUCTION의 구형 Worker는 신규 UID/곡 순서 토큰과 영속 중복 방지 규칙을 통과하지 않고 `syncExploreLikeR2AfterBatch034` 계열로 값을 갱신한다. 따라서 preview Worker만 순서 관리자나 `settled` 신호로 바꿔도 동일 계정의 과거 요청/구형 writer가 최신 값을 덮어쓸 수 있다. 세 환경을 동시에 무단 승격하거나 기존 원본을 바꾸는 우회는 금지.

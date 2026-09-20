@@ -1,5 +1,19 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-20 KST: 074 늦은 ACK의 잘못된 확정 차단 PASS / 자동 수렴 미완료
+
+상세는 `DOCS/CURRENT_RELEASE_STATE.md` 0BO. 실제 PREVIEW 앱126 + Worker071 유지; 후보 앱127/Worker072~077 미배포, main/production 비변경.
+
+- `074`가 더 최근 UID+곡 주문을 이미 반영한 상태에서 오래된 batch 응답이 도착하면 `superseded_like_batch` (`ok:false`)으로 확정 알림 차단. 다른 새 곡과 섞인 경우 새 곡만 CAS 저장하고 `partially_superseded_like_batch`로 전체 확정 보류. 동일 token/same state 재전송만 정상 unchanged. 기존 큐 접수 및 D1 W count 미수정.
+- `verify-128-like-concurrency.mjs` 신규 역순+혼합 batch 실행형 mock. Run `35518204038` SUCCESS: 071 고정 복사본+072~077, 128~131/127~110 회귀, TypeScript/Build. 임시 163 workflow 정리. 원본 사용자 데이터와 배포 비변경.
+- **아직 FAIL:** 혼합 batch의 별도 곡 포함 불확정 pending은 최종 D1 증명 없이는 해제되지 않음. 074 R2는 ACK 이후, D1 canonical 확정 전에 갱신됨. 구형 Worker가 공유 R2의 CAS 메타데이터를 지울 수 있음. cold/2000/128 한도 자동 복구, 069/075 최종 순서, 10만 명 비용, D1 W1~W2/실제 PC·모바일 검증은 남음.
+
+### 다음 수행 기준
+1. 069/075 worker가 실제 최종 D1 membership을 확정하는 위치와 R2 이전 갱신/구형 writer 공존을 좁혀 재검토. 확정 후 **변경된 UID+곡**만 조건부 복구 가능한지, 추가 D1 읽기/쓰기 비용 상한을 증명하기 전 새 파생 큐·전역 poll·migration 금지.
+2. `pending` 내 일부만 성공한 혼합 batch를 어떻게 정확한 대상별 결과로 알려줄지 설계. 최종 D1 확인 없이 local guard 해제/RTDB 확정 알림 불가. 2000/128 cap도 성공한 것처럼 처리 금지.
+3. 실사용 테스트 계정에서 D1 W1~W2, R2 HEAD/GET/PUT, RTDB listener/transaction 및 비용 검증. 별도 Work 독립 감사·PC↔모바일 수렴 확인 후 릴리스 판단.
+4. 사용자 명시적 프리뷰배포 승인 없이 PREVIEW 실제 앱/Worker 배포 금지, `테스트배포`/`정식배포` 승인 전 환경 승격 금지.
+
 ## 최종 기준 — 2026-09-20 KST: 074/127 접수 ACK와 개인 R2 결과 분리 PASS / 자동 정합성 미완료
 
 `DOCS/CURRENT_RELEASE_STATE.md` 0BN 기준. 실제 PREVIEW 앱126/Worker071 유지. app127와 072~077 patch 미배포, main/production 미변경.

@@ -1,9 +1,10 @@
-requested_at=2026-09-20T05:10:10Z
+requested_at=2026-09-20T06:44:01Z
 requested_by=user
-product_code_target=e9ccd5d4092f24ae34457b81479eded73af59b87
-release_source_target=app125_first_update_shared_r2_like_convergence
-release_purpose=125_pc_mobile_existing_like_preservation
+product_code_target=f88ba1f1ef644208acf938a18122f8651ed6c68a
+release_source_target=app126_warm_entry_cross_device_like_count_convergence
+release_purpose=126_mobile_recommended_latest_stale_like_count_after_unlike
 hosting_only=true
+worker_redeploy=false
 worker_version=a6fda48f-ec20-48b3-a08d-ef43128c2e43
 no_user_data_migration=true
 preview_only=true

@@ -1,5 +1,22 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BN. 074 접수 ACK와 개인 R2 성공 분리 / 127 불확정 하트 보호 코딩 PASS — 최종 자동 복구 미완료 (2026-09-20 KST)
+
+사용자의 "계속 진행해" 요청에 따라 Worker074 fail-closed 시에도 API가 일반 성공만 반환하여 클라이언트127이 이를 다른 기기에 잘못 확정 알림으로 발송하던 연결 버그를 preview 후보에서 보완했다. **실제 PREVIEW는 여전히 앱126 + Worker071. 앱127과 Worker072~077 모두 미배포, TEST/PRODUCTION 및 원본 사용자 데이터 비변경.**
+
+### 수정과 검증
+- `cloudflare/explore-worker/patches/074-personal-like-r2-cas.mjs`: batch 접수 응답 `data.personalLikeSnapshot`에 실제 개인 R2 CAS 결과를 `updated` 또는 `pending`으로 **명시**. D1 큐 접수 ACK만으로 R2 갱신 성공을 주장하지 않음. 추가 D1 read/write 없음. 071/구형 코드가 이 필드를 보내지 않는 경우도 갱신 성공으로 간주하지 않도록 클라이언트에서 보호.
+- `src/services/exploreLikeService.ts`: `canBroadcastExploreLikeSnapshot127`는 정확히 `updated`만 게시 허용. `pending`/응답 필드 없음일 때 서버 batch 재전송은 하지 않고, 사용자별 `EXPLORE_LIKE_SNAPSHOT_PENDING_127`에 접수된 곡의 최신 로컬 의도만 영속 기록한다. 이를 **기존 120 outbox 삭제 전에 저장**, 과거 개인 R2 baseline/개인 좋아요 목록 재동기화/늦은 RTDB 이벤트가 해당 곡을 과거 값으로 덮지 못하게 한다. 실패 대상은 다른 기기에 확정 RTDB 신호를 보내지 않고 같은 기기 이벤트를 `local`로 분류하며, UI에 "좋아요 저장은 접수됐지만 다른 기기 동기화는 확인 중" 오류 알림을 전달한다. 특정 ID에 대해 다음 성공한 개인 R2 CAS 결과가 실제로 왔을 때만 pending 보호값 삭제. 화면/색상/CSS·30초 묶음 저장 비변경.
+- `scripts/verify-127-atomic-personal-like.mjs`: 응답 `updated`/ `pending`/필드 없음 구별하는 **실행형 순수 판단 함수 테스트**와 pending UID 보존·원격 미전파·R2 baseline 우선권·기존 outbox 선저장 순서 정적 가드 추가. `scripts/verify-128-like-concurrency.mjs`는 Worker 후보의 batch 응답 필드와 실제 074 성공 여부의 연결 검사.
+- Run `35517860556` **SUCCESS**: 071 canonical 보호, 072~077 격리 Worker 생성·문법 검사, 128~131 및 127/126/125/124/123/110 회귀, TypeScript/Build. 선행 Run `35517703214`도 PASS였으나 최종 버전의 local/confirmed 이벤트 분류 수정 후 재검사. 임시 Workflow 162 삭제. 실제 데이터 read/write 및 배포 0.
+
+### 남은 명시적 FAIL
+- **아직 최종 자동 복구가 아니다.** 클라이언트의 accepted-but-unmaterialized UID/곡 상태는 다음 R2 CAS 성공이나 검증된 canonical 최종 상태 복구가 구현되기 전까지 local 보호값으로 남을 수 있다. 이미 보낸 오래된 RTDB 신호, 구형 Writer의 shared R2 무조건 덮어쓰기, 069/075 큐 ACK→최종 D1 적용 순서, 2000/128 한도 계정의 캐시 재구축은 여전히 해결 전. 075~077은 읽기 전용 가드로 앱 자동 호출·공유 R2 재구축 미연결이며 077 전역 구형 큐 가드는 상시 트래픽에서 기아 가능.
+- 첫 R2 baseline 및 R2 revision과 사용자 로컬 pending 최종값의 충돌은 보호하지만 **그 값이 최종 D1 canonical과 동일하다는 보장은 없음**. 따라서 PC·모바일 하트의 실제 수렴 PASS 금지. 구형 Worker 호환 선행 승격·각 환경 실제 배포 바인딩·D1 W1~W2·10만 사용자 R2/RTDB 비용, 실기기·Work 독립 검증 미완료.
+- 앱 버전 파일 126, 실제 Worker071 소스 비변경. main/production branch 비변경. 사용자 명시적 프리뷰배포 승인 전 배포 금지.
+
+다음: 기존 patch 증식 대신 `repairNeeded`를 *정확한 해당 UID/곡*의 canonical 후처리 완료 신호와 연결할 수 있는지 검증하고, 원본 D1 W1~W2/추가 R2 읽기·쓰기·RTDB 비용을 실제 계정에서 먼저 측정. 구형 Writer가 공존하는 기간에 불변 최종 판정이 불가능하면 혼용 버전을 릴리스하지 않고 단계별 호환 승격부터 설계.
+
 ## 0BM. 074 개인 좋아요 R2 cold/2천 ID/128 순서 한도 데이터 보존 보완 PASS — 자동 수렴은 아직 FAIL (2026-09-20 KST)
 
 사용자 "계속 진행해" 지시에 따라 0BL의 남은 공유 likes R2 결손/한도 처리 위험을 `preview` 후보 코드에서 보완했다. **실제 PREVIEW 앱126 + Worker071, TEST/PRODUCTION 변경 없음. 새 앱127/Worker072~077 미배포.**

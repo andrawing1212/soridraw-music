@@ -96,6 +96,11 @@ const clampLikeCount = (value: unknown) => {
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
 };
 
+// Local mutation order must not rely solely on Date.now(): same-ms clicks are
+// distinct user intentions, and older ACKs may not resolve the later one.
+export const nextExploreLikeMutationAt127 = (previousUpdatedAt: number, now: number): number =>
+  Math.max(now, previousUpdatedAt + 1);
+
 // One transition represents the actor's action, not two unrelated UI edits.
 // The public total is adjusted only by the actor's own delta; other users'
 // likes remain in the total. Server-confirmed public counts supersede this
@@ -1047,7 +1052,7 @@ export const setExploreTrackLike = async (
   // the same millisecond could make an old ACK look like the newest action.
   // Keep updatedAt strictly monotonic for THIS track while preserving the
   // existing persisted outbox format and the 30-second batching contract.
-  const now = Math.max(Date.now(), (existing?.updatedAt || 0) + 1);
+  const now = nextExploreLikeMutationAt127(existing?.updatedAt || 0, Date.now());
 
   cache.set(normalizedTrackId, liked);
   persistLikedStateCache(uid, cache);

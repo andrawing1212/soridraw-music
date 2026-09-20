@@ -35,6 +35,9 @@
     "065-shared-like-count-targeted.mjs",
     "066-publication-r2-catalog-phase-a.mjs",
     "067-like-075-shared-count-parity.mjs",
-    "068-catalog-publication-artist-parity.mjs"
+    "068-catalog-publication-artist-parity.mjs",
+    "069-shared-feed-targeted-parity.mjs",
+    "070-shared-feed-legacy-writer-guard.mjs",
+    "071-publication-canonical-like-parity.mjs"
   ]
 }

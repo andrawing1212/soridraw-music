@@ -1,5 +1,18 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BG. 앱127 구형 호환·실패 복구 보완 코드 및 Worker072 패치 후보 PASS / 동시성·실사용 미검증 (2026-09-20 KST)
+
+사용자의 계속 수정 지시에 따라 0BF의 세 가지 차단 문제 가운데 구형 앱 변동 감지와 실패 복구 경로를 preview 코드에서 보완했다. **완료된 릴리스가 아니다. 앱126 + Worker071 실배포 유지.**
+
+- exploreLikeService.ts: RTDB 신호 gap 발생 시 먼저 완료 처리하던 동작 제거. UID별 영속 repair target 보존, 인증된 사용자 R2 snapshot이 정상 반영된 후에만 신호 버전 완료 기록. R2/네트워크 실패 시 이전 캐시와 미완료 작업 보존, 온라인/포커스/재진입 시 제한 재시도. pending outbox 우선.
+- ExplorePage.tsx: 복구 성공 이벤트에서 방금 확인한 개인 좋아요 기준을 다시 무효화하던 동작 제거. 성공한 개인 상태를 화면에 다시 반영.
+- 072-personal-like-r2-revision.mjs: 기존 Worker071에 적용하는 코드 패치 후보. 신규 인증 GET /v1/me/likes-revision에서 같은 계정의 R2 좋아요 bundle을 UID별 HEAD 한 번으로 확인하고 ETag 반환. 공개 Edge 캐시에 사적 데이터를 저장하지 않고 원본 D1 read/write 0. 기존 앱126·구형 환경의 동일 공유 R2 bundle 변경을 감지하기 위한 하위호환 경로.
+- 앱은 Explore 최초/재개 및 자기 좋아요 목록에서 사용자별 마지막 검증 시각을 기준으로 최소 5분 간격의 변경번호 확인. 변경 없으면 전체 개인 목록 데이터 GET 0; 변경되면 기존 인증 R2 snapshot을 로컬 pending 최종값과 합침. 주기 타이머 없음. 변경 없는 확인에도 R2 Class B HEAD 비용 1회가 발생하므로 전체 네트워크 read 0으로 보고하면 안 됨.
+- GitHub Actions Run 35505242919 SUCCESS: 127/126/125/124/123/110 검사, TypeScript, Build, Worker071 SHA 보호, 071 복사본+072 패치 적용 및 node --check/인증·HEAD/D1 미조회 정적 검증. 최초 Run 35505175645은 검사식이 테스트 파일 안의 금지 문자열을 실제 구현으로 오인해 FAIL, 검사식 수정 후 통과. 임시 Workflow 155 제거.
+- **중요:** 072는 patch 파일과 dry-run 후보일 뿐 canonical preview-worker.js 및 source-sha256.txt에 아직 반영되지 않았으며 실제 Worker071 unchanged. 앱 버전 파일 126, 앱127 미배포. Rules/Functions/사용자 원본 데이터/main/TEST/PRODUCTION 비변경.
+- 남은 FAIL3: 서로 다른 두 기기가 같은 곡을 반대로 변경할 때 Worker 큐 접수 ACK, 사용자 R2, 최종 D1 canonical 적용 순서가 어긋날 수 있음. 역순·동시 변경 실행형 검증과 실제 두 기기 하트 수렴, 좋아요/해제 D1 W1~W2 및 RTDB/R2 비용 측정 미완료. R2 bundle 2천 ID 한도도 미해결.
+- 다음: 최종 원본 동시성 검증·비용 감사 후 Worker072 canonical 고정 및 앱127을 하나의 릴리스로 검증. 명시적 프리뷰배포 승인 없이는 배포 금지; TEST/PRODUCTION 승격 중단.
+
 ## 0BF. 앱127 독립 정적 감사 FAIL — 3개 릴리스 차단 문제 (2026-09-20 KST)
 
 고정 감사 대상 `7f744f7cf8d93148368d1c926ee5dc61703a6887`. 별도 ChatGPT 독립 정적 검토이며 **Work 도구로 수행한 독립 실행 감사가 아님**. 전문 근거·재현·수정 범위는 `DOCS/APP127_INDEPENDENT_AUDIT_2026-09-20.md` 참조.

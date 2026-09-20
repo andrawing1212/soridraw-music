@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BR. 글로벌 사례 조사 + 직접 2행 좋아요 격리검증 PASS / 역순 요청 FAIL (2026-09-21 KST)
+
+사용자 요청에 따라 Meta/Stripe/Cloudflare/Google 공식 문서를 검토하고 `DOCS/LIKE_WRITE_REDESIGN_133.md`에 실제로 공개된 원리와 SORIDRAW 적용 후보를 분리 기록. `scripts/verify-133-like-direct-two-row.py`를 추가해 격리 SQLite에서 관계 INSERT/DELETE + 직전 `changes()`에 따른 통계 갱신의 2행 모델 검증. 로컬 Python 실행: 신규 좋아요 2행, 중복 좋아요 0행, 타인 좋아요 숫자 보존, 중복 해제 0행, 누락 통계 fail-closed PASS. 반면 `true→false→늦은 과거 true`는 최종 상태를 재반전시켜 **순서 영속 기록 없이 직접 W2만 적용하는 방식은 FAIL**. 외부 DO/Queue 등은 아직 채택·생성하지 않음. SQL `changes()`의 실제 D1 batch 동작 및 live `rows_written` 미측정.
+
+- 작업 시작 SHA `ec69a1391d2ea8c9d11d4ce35e9a71311e26e5c2`; 133 문서/격리 verifier는 preview commit으로 저장. 실제 Worker071 canonical, React 앱126, `public/app-version.json`, main/production 미변경. Hosting/Worker/Functions/Rules/D1/R2/RTDB 실제 배포 및 사용자 데이터 mutation 없음. 기존 0BQ W4 비용 FAIL과 0BP 개인 하트 최종 수렴 FAIL 유지.
+- 테스트 범위는 **로컬 격리 Python 모형**. 이 변경 자체의 TypeScript/Build/전체 GitHub Actions/실제 PC·모바일/Work 감사는 미실시. 제품 완료 또는 PREVIEW 배포 PASS로 보고 금지.
+- 다음: 1) 격리 D1로 `batch()`/직전 `changes()`/rollback/실제 D1 meter 확인, 2) DO 기반 사용자별 영속 순서 조정 vs 외부 Queue의 100k 사용량·장애 복구 비용 비교, 3) 구형 TEST/PRODUCTION의 공유 R2 writer 공존 해결 순서 설계. 어느 하나라도 W3+·과거 ACK 반전·중복 과금·원본 데이터 손실 위험이면 릴리스 차단. 새 Worker078/클라이언트 `settled` 임의 활성화 및 무단 배포 금지.
+
 ## 0BQ. 좋아요/해제 1회 D1 최소 행 변경 4 검증 — W1~W2 하드 게이트 FAIL, 구조 재설계 필요 (2026-09-21 KST)
 
 사용자의 "다음 작업으로 이어가" 지시에 따라 새 개인 동기화 패치를 추가하기 전에 **기존 앱126/Worker071의 실제 069 좋아요 쓰기 비용 구조**를 코드와 격리 SQLite로 검증했다. `preview` Worker071 canonical은 바꾸지 않았고 실제 배포/사용자 데이터 변경 0.

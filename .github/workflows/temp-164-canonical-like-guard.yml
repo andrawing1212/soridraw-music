@@ -1,0 +1,54 @@
+name: TEMP 164 Canonical Like Signal Guard
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-164-canonical-like-guard.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Protect original 071 and test 072-077 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | cut -d' ' -f1)" = b170d05385c3096a98033675a9acbb63b40148bf782017c326845b7ea4c17813
+          mkdir -p "$RUNNER_TEMP/candidate"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$RUNNER_TEMP/candidate/worker.js"
+          for patch in 072-personal-like-r2-revision.mjs 073-server-like-queue-order.mjs 074-personal-like-r2-cas.mjs 075-targeted-canonical-like-read.mjs 076-like-canonical-settlement-gate.mjs 077-legacy-like-queue-guard.mjs; do
+            SORIDRAW_REMOTE_WORKER_DIR="$RUNNER_TEMP/candidate" node "cloudflare/explore-worker/patches/$patch"
+          done
+          node --check "$RUNNER_TEMP/candidate/worker.js"
+          SORIDRAW_GENERATED_WORKER="$RUNNER_TEMP/candidate/worker.js" node scripts/verify-128-like-concurrency.mjs
+          SORIDRAW_GENERATED_WORKER="$RUNNER_TEMP/candidate/worker.js" node scripts/verify-129-like-legacy-repair-gate.mjs
+          SORIDRAW_GENERATED_WORKER="$RUNNER_TEMP/candidate/worker.js" node scripts/verify-130-like-settlement-gate.mjs
+          SORIDRAW_GENERATED_WORKER="$RUNNER_TEMP/candidate/worker.js" node scripts/verify-131-legacy-like-queue-guard.mjs
+      - name: Client and previous like regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-127-atomic-personal-like.mjs
+          node scripts/verify-126-explore-entry-like-count.mjs
+          node scripts/verify-125-like-preservation.mjs
+          node scripts/verify-124-mobile-shared-cache-repair.mjs
+          node scripts/verify-123-shared-like-cache-repair.mjs
+          node scripts/verify-110-explore-liked-public-count.mjs
+      - name: TypeScript and Build
+        run: |
+          npm run lint
+          npm run build
+      - name: Boundaries
+        run: echo 'NO_DEPLOY=PASS NO_USER_DATA_WRITE=PASS WORKER071_UNCHANGED=PASS'

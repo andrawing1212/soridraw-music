@@ -139,7 +139,13 @@ const getLikedStateCache = (uid: string) => {
 export const readExploreTrackLikeMembership127 = (uid: string, trackId: string): boolean | undefined => {
   const id = String(trackId || '').trim();
   if (!uid || !id) return undefined;
-  return readLikeOutbox(uid)[id]?.desiredLiked ?? getLikedStateCache(uid).get(id);
+  const pending = readLikeOutbox(uid)[id];
+  if (pending) return pending.desiredLiked;
+  // Do not allow a stale legacy-cache boolean to initiate a new mutation until
+  // the account's one-time authoritative R2 reconciliation has succeeded.
+  if (!baselineCompleted127.has(uid) &&
+      readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) !== '1') return undefined;
+  return getLikedStateCache(uid).get(id);
 };
 
 const scopedLikeKey127 = (prefix: string, uid: string) => prefix + ':' + uid;
@@ -295,6 +301,8 @@ export const invalidateExplorePersonalLikeBaseline127 = (uid: string) => {
   baselineCompleted127.delete(uid);
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '');
 };
+
+export const ensureExplorePersonalLikeBaseline127 = ensurePersonalLikeBaseline127;
 
 const readSignalRetry127 = (uid: string): ExploreLikeAcceptedRow127[] => {
   const raw = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_RETRY_127, uid));

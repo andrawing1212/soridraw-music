@@ -24,6 +24,7 @@ import {
   EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT,
   flushPendingExploreLikesForPageExit,
   getExploreLikedTrackIds,
+  ensureExplorePersonalLikeBaseline127,
   invalidateExplorePersonalLikeBaseline127,
   readExploreTrackLikeMembership127,
   overlayExploreLikeDisplayCounts,
@@ -753,7 +754,15 @@ export default function ExplorePage() {
     let cancelled = false;
     setProfileLikedLoading(true);
     setProfileLikedError('');
-    getExploreLikedTracks(user)
+    (async () => {
+      try {
+        await ensureExplorePersonalLikeBaseline127(user);
+      } catch (reason) {
+        // Keep cached cards visible, but block new unverified like mutations.
+        console.warn('[127] Liked collection baseline pending:', reason);
+      }
+      return getExploreLikedTracks(user);
+    })()
       .then((rows) => {
         if (cancelled) return;
         const normalizedRows = overlayActorLikeCounts120(

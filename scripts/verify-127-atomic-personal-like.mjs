@@ -73,7 +73,7 @@ const transitionEnd = service.indexOf('const readLikedStateStorage =', transitio
 assert.ok(transitionStart > 0 && transitionEnd > transitionStart);
 const transitionSource = service.slice(transitionStart, transitionEnd)
   .replace('export const computeExploreLikeAction127', 'const computeExploreLikeAction127');
-const js = ts.transpileModule(transitionSource + '\\nreturn computeExploreLikeAction127;', {
+const js = ts.transpileModule(transitionSource + '; return computeExploreLikeAction127;', {
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
 }).outputText;
 const compute = new Function(js)();

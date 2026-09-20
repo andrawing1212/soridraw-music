@@ -1,5 +1,15 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BT. 화면 즉시 반영·미확정 보호·오래된 캐시 방지: 127 클라이언트 국소 수정 (2026-09-21 KST)
+
+사용자의 직접 지시 "화면을 먼저 반영하되, 서버 확정과 캐시 갱신을 구분하고 오래된 상태의 덮어쓰기를 방지"에 따라 기준 `preview` `5d29b198d2c5773da6c828101d3f5059c64bbcaf`에서 **앱127 후보의 개인 좋아요 클라이언트 경로만** 최소 수정. 앱 버전 및 Worker canonical은 변경하지 않음.
+
+- `src/services/exploreLikeService.ts`: 지연된 `/v1/me/likes` 조회가 반환된 직후 **그 시점의 UID별 outbox/accepted-but-unsettled snapshot을 다시 읽음**. 해당 곡이 보호 중이면 조회 응답을 캐시로 반영하지 않으며, 다른 경로가 이미 채운 캐시 항목도 덮어쓰지 않음. 신규 토글의 이전 하트 상태는 기존 낙관적/미확정 통합 판정 `readExploreTrackLikeMembership127`을 사용. `nextExploreLikeMutationAt127`을 추가해 같은 밀리초의 빠른 연속 클릭에도 각 `updatedAt`이 이전보다 커지도록 함(오래된 ACK가 다음 클릭과 같은 시각으로 보이는 회귀 방지). 기존 30초 묶음 저장·공용 좋아요 숫자 계산·소유자별 원본 변경 로직은 유지.
+- `src/pages/ExplorePage.tsx`: 타 기기 알림이 실제 React 반영 시점의 개인 유효 상태와 다르면 화면에 적용하지 않음. 조회된 좋아요 배열의 과거 값보다 **각 곡별 현재 outbox/미확정/로컬 유효 상태**를 우선하여 화면을 계산. 디자인·배치 변경 없음.
+- `scripts/verify-127-atomic-personal-like.mjs`: 지연 hydration 차단/원격 이벤트 재검사/동일 ms 클릭 순서 회귀 가드와 단순 clock 실행형 예 추가. V8 격리 점검에서 clock 3가지 및 outbox/미확정 3가지, 페이지·settled 가드 소스 확인 PASS. 기존 verifier의 JS 문법 파싱 PASS. **실제 TypeScript·Vite Build·전체 GitHub Actions 실행 및 실기기 테스트는 미실시.**
+- 기능 제한: 기존 Worker071의 ACK는 큐 접수이며 개인 하트/공개 숫자 최종 D1 확정 증거가 아님. `updated`는 확정 알림 금지, 미확정 local guard 유지. 069 W4 이상 쓰기/실 인덱스·trigger 비용, 구형 Worker 공유 R2 무조건 쓰기, 최종 자동 수렴, 2천/128 한도는 **여전히 FAIL 또는 미검증**. 따라서 제품·PREVIEW 배포·TEST/PRODUCTION 승격 PASS 아님.
+- 이번 작업은 GitHub `preview`의 React 후보 코드·기존 127 verifier·상태 문서만 변경. `public/app-version.json=126`, 실제 앱126/Worker071 유지; Firebase/Functions/Cloudflare/Rules/user canonical data 및 main/production 미변경. 실제 호스트/Cloudflare 계량은 이번 단계 미확인. 사용자 별도 배포 승인 전 배포 금지.
+
 ## 0BS. 134 파생 트리거 비용 감사 + 135 사용자별 순서 프로토콜 격리 검증 (2026-09-21 KST)
 
 사용자 "반드시 좋아요 문제를 해결" 요청으로 글로벌 idempotency/consistency 원칙을 SORIDRAW에 맞춰 재검토. 133의 "W2"는 최소 두 원본 테이블만 가진 SQLite 모델임을 명시적으로 정정. 운영 D1과 혼동 금지.

@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           W="$PWD/node_modules/wrangler/bin/wrangler.js"
-          node "$W" d1 execute DB --remote --config "$PWD/canonical/wrangler.preview.jsonc" --command "SELECT t.id,COALESCE(s.like_count,0) AS canonical_count,(SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id) AS relation_count,d.row_json AS derived_json,s.updated_at AS stats_updated_at,t.updated_at AS track_updated_at FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id LEFT JOIN explore_derived_tracks d ON d.id=t.id WHERE t.is_public=1 AND t.status='published' ORDER BY t.published_at DESC LIMIT 201" --json > "$RUNNER_TEMP/all144.json"
+          node "$W" d1 execute DB --remote --config "$PWD/canonical/wrangler.preview.jsonc" --command "SELECT t.id,COALESCE(s.like_count,0) AS canonical_count,(SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id) AS relation_count,d.row_json AS derived_json,d.likes AS derived_likes, json_extract(d.row_json,'$.like_count') AS derived_json_like_count,s.updated_at AS stats_updated_at,t.updated_at AS track_updated_at FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id LEFT JOIN explore_derived_tracks d ON d.id=t.id WHERE t.is_public=1 AND t.status='published' ORDER BY t.published_at DESC LIMIT 201" --json > "$RUNNER_TEMP/all144.json"
           for sort in latest popular;do
             node "$W" r2 object get "soridraw-profile-media/internal/explore/shared-feed-v112/$sort-40.json" --file "$RUNNER_TEMP/shared-$sort.json" --remote >/dev/null
             node "$W" r2 object get "soridraw-profile-media-preview/internal/explore/feed-v1/$sort-40.json" --file "$RUNNER_TEMP/local-$sort.json" --remote >/dev/null
@@ -66,7 +66,7 @@ jobs:
             if(Object.values(vals).some(x=>x==='ABSENT'))missing++;
             if(Object.values(vals).some(x=>typeof x==='number'&&x!==canonical))cache++;
             if(canonical!==rel||canonical!==dcount||Object.values(vals).some(x=>x!==canonical)){
-              console.log('ALL_SONG_MISMATCH hash='+hash(id)+' canonical='+canonical+' relation='+rel+' derived='+dcount+' sharedLatest='+vals.sharedlatest+' sharedPopular='+vals.sharedpopular+' localLatest='+vals.locallatest+' localPopular='+vals.localpopular+' statsUpdated='+row.stats_updated_at+' trackUpdated='+row.track_updated_at);
+              console.log('ALL_SONG_MISMATCH hash='+hash(id)+' canonical='+canonical+' relation='+rel+' derived='+dcount+' derivedColumn='+row.derived_likes+' derivedJsonLike='+row.derived_json_like_count+' sharedLatest='+vals.sharedlatest+' sharedPopular='+vals.sharedpopular+' localLatest='+vals.locallatest+' localPopular='+vals.localpopular+' statsUpdated='+row.stats_updated_at+' trackUpdated='+row.track_updated_at);
             }
           }
           console.log('ALL_SONG_SUMMARY checked='+rows.length+' canonicalRelationMismatch='+relation+' derivedMismatch='+derived+' feedCountMismatch='+cache+' missingFirstPage='+missing);

@@ -1,5 +1,22 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-20 KST: 075 제한된 원본 확인 경로 추가 / 자동 수렴·승격 미완료
+
+`DOCS/CURRENT_RELEASE_STATE.md` 0BI가 최신 기준. 071 실제 Worker, 앱126 실제 PREVIEW 유지. 127 앱 소스와 072~075 Worker patch는 PREVIEW의 미배포 후보.
+
+- 075 패치: 인증된 `GET /v1/me/likes-confirmed?trackIds=...`에서 본인 공개·발행 곡 최대 20개의 D1 canonical membership을 조회. 기존 read-only D1 core 재사용, R2 우선 경로와 다름. 앱의 정상 최초/재진입에 연결하지 않았으며 쓰기/마이그레이션 0.
+- 신규 `scripts/verify-129-like-legacy-repair-gate.mjs`: 오래된 Worker가 shared R2를 무조건 덮어쓰면 074의 순서 메타데이터가 유실되고 최종 canonical과 개인 R2가 달라지는 모의 재현. 별도 read-only canonical endpoint는 통과하지만 **자동 복구가 아직 없음을 명시**.
+- 최종 Run `35514355534` SUCCESS: Worker071 복사본에 072~075 순서대로 적용, syntax, 128/129 실행형 모의 테스트, 127~110 관련 회귀, TypeScript/Build. 임시 Workflow 157 제거. 실제 배포 및 실제 사용자 데이터 변경 없음.
+
+### 다음 작업 절대 순서
+
+1. `075`를 호출하는 조건은 **실제 사용자 변경으로 인한 R2 drift가 의심되는 경우만** 선정. 구형 writer/미전송 로컬 outbox/신규 worker 예외를 분리. UID+곡 ID 최대20개 제한을 유지; 변경 없음 페이지 진입에서 canonical D1 read 0.
+2. 확인한 D1 membership이 아직 처리 중인 큐의 과거 상태인지 구분할 안전한 확정 신호를 설계. ACK를 canonical commit으로 간주하지 말 것. D1 queue 상태 조회가 전체 테이블 scan이 된다면 중단하고 대안 선택.
+3. 오래된 Worker가 074 결과를 뒤덮은 경우 canonical로 개인 공유 R2를 대상곡만 안전 복구하고, 또 다른 구형 writer와 경쟁 시 재시도·복구 종료 조건을 명확히 한다. D1 W1~W2, R2 객체 2000곡 한도, 100k 사용자 비용 검증.
+4. 최종 정상상태 코드 및 Worker candidate SHA 고정, 모의/실제 테스트 계정 경합·예외·비용 테스트, 독립 Work 감사, 사용자 별도 `프리뷰배포` 승인 뒤 PREVIEW 적용. TEST/PRODUCTION 승격 금지.
+
+주의: 129의 `075_LEGACY_R2_OVERWRITE_REPRODUCED=PASS`는 기능 PASS가 아니라 **재현 검사 PASS**다. 과거 0BH의 기능 테스트도 구형 writer와의 공존을 보장하지 않는다.
+
 ## 최종 기준 — 2026-09-20 KST: 앱127+Worker072~074 동시 변경 코드 PASS·legacy 최종 복구 미해결
 
 상세 기준 `DOCS/CURRENT_RELEASE_STATE.md` 0BH. 이 절이 아래 0BG의 072 단독 후보를 갱신한다.

@@ -30,6 +30,15 @@ source = source.replace(call, [
   '}',
   "if (personalR2?.ok === false) console.warn('[074] personal snapshot repair needed:', personalR2.reason);",
 ].join('\n  '));
+const responseAnchor = "      queued: Boolean(effectiveMutations.length),";
+if (source.split(responseAnchor).length !== 2) throw new Error('[074] batch response shape changed');
+source = source.replace(responseAnchor, [
+  "      // A queued D1 mutation and a materialized personal R2 snapshot are",
+  "      // separate stages. Do not tell other devices that an R2 update worked",
+  "      // when this worker has only accepted the server-side queue.",
+  "      personalLikeSnapshot: personalR2?.ok === true ? 'updated' : 'pending',",
+  responseAnchor,
+].join('\\n'));
 if (!source.includes(marker) || source.includes(call)) throw new Error('[074] final source invalid');
 writeFileSync(path, source, 'utf8');
 console.log('[074] shared R2 CAS and server-order tokens; D1 writes unchanged.');

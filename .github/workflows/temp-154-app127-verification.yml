@@ -1,5 +1,5 @@
 name: TEMP 154 App127 Personal Like Verification
-# rerun after fixing test syntax
+# rerun candidate after bounded signal gap and executable transition tests
 on:
   push:
     branches: [preview]

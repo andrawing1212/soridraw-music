@@ -30,8 +30,12 @@ jobs:
           node cloudflare/explore-worker/patches/071-publication-canonical-like-parity.mjs
           node --check "$work/worker.js"
           grep -q 'SORIDRAW_PUBLICATION_CANONICAL_LIKE_PARITY_071_20260920' "$work/worker.js"
-          echo '071_CANONICAL_PATCH=PASS'
-          sha256sum "$work/worker.js"
+          cmp "$work/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          actual="$(sha256sum "$work/worker.js" | awk '{print $1}')"
+          test "$actual" = b170d05385c3096a98033675a9acbb63b40148bf782017c326845b7ea4c17813
+          echo "071_CANONICAL_PATCH_PARITY=PASS SHA=$actual"
+          SORIDRAW_GENERATED_WORKER="$work/worker.js" node scripts/verify-125-like-preservation.mjs
+          SORIDRAW_GENERATED_WORKER="$work/worker.js" node scripts/verify-070-shared-feed-guard.mjs
       - name: App125 existing regressions, lint and build
         shell: bash
         run: |
@@ -42,4 +46,13 @@ jobs:
           npm run build
           echo 'APP125_TYPESCRIPT_BUILD=PASS'
           echo 'RERUN_WITH_VALID_COMMENTS=PASS'
+      - name: Worker dry-run only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npm install --no-audit --no-fund --package-lock=false
+          cd canonical
+          node ../node_modules/wrangler/bin/wrangler.js deploy --config wrangler.preview.jsonc --dry-run
+          echo '125_WORKER_DRY_RUN=PASS'
           echo 'DEPLOY=0 D1_WRITE=0 R2_WRITE=0'

@@ -175,15 +175,15 @@ assert.doesNotMatch(handler,/env\.DB\.prepare\(|caches\.default/);
 // canonical D1 materialization. This is only stage one of settlement; release
 // remains blocked until a verified post-aggregate finalizer exists.
 const intakeStart138=worker.indexOf('async function handleLikeBatch034(');
-const intakeEnd138=worker.indexOf('\\n}',intakeStart138);
+const intakeEnd138=worker.indexOf('\n}',intakeStart138);
 assert.ok(intakeStart138>0 && intakeEnd138>intakeStart138);
 const intake138=worker.slice(intakeStart138,intakeEnd138+2);
 assert.match(intake138,/SORIDRAW_LIKE_PRECOMMIT_R2_BLOCK_138_20260921/);
 assert.match(intake138,/awaiting_canonical_d1_settlement/);
 assert.match(intake138,/personalLikeSnapshot: 'pending'/);
 assert.doesNotMatch(intake138,/personalLikeSnapshot: 'updated'|personalLikeSnapshot: 'settled'/);
-assert.doesNotMatch(intake138,/syncExploreLikeR2AfterBatch074\\(|syncExploreLikeR2AfterBatch034\\(/);
-assert.match(intake138,/await enqueueExploreLikeBatch035\\(/);
+assert.doesNotMatch(intake138,/syncExploreLikeR2AfterBatch074\(|syncExploreLikeR2AfterBatch034\(/);
+assert.match(intake138,/await enqueueExploreLikeBatch035\(/);
 console.log('138_PRECOMMIT_R2_WRITE_SUPPRESSED=PASS');
 console.log('138_QUEUE_ACK_PENDING_ONLY=PASS');
 console.log('074_SERVER_RECEIPT_BEATS_DEVICE_CLOCK=PASS');

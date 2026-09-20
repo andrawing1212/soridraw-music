@@ -1,0 +1,81 @@
+name: TEMP 153 App126 Live Readonly Postflight
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-153-app126-postflight.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_BASE: https://soridraw-explore-preview.andrawing1212.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 2c62108e2ad7b3c54ce41baf811dc45e603a8a01
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact PREVIEW app and protected Worker versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          live_version="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' https://preview.soridraw.com/app-version.json | node -pe "JSON.parse(require('fs').readFileSync(0)).version")"
+          test "$live_version" = 126
+          active(){ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$1/deployments" | jq -er '.result.deployments[0].versions|max_by(.percentage)|select(.percentage>=99.99)|.version_id'; }
+          test "$(active soridraw-explore-preview)" = a6fda48f-ec20-48b3-a08d-ef43128c2e43
+          test "$(active soridraw-explore-test)" = 6e8dca9c-2c58-42ea-ae7d-765e10afef8f
+          test "$(active soridraw-explore-api)" = d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0
+          echo "LIVE_APP_VERSION=126 WORKER071_UNCHANGED=PASS PROTECTED_WORKERS_UNCHANGED=PASS"
+      - name: Read-only canonical vs API and both R2 Feed scopes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          npm install --no-audit --no-fund --package-lock=false
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          node "$W" d1 execute DB --remote --config "$CFG" --command "SELECT t.id,COALESCE(s.like_count,0) AS canonical_count,(SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id) AS relation_count,d.likes AS derived_count,json_extract(d.row_json,'$.like_count') AS derived_json_count FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id LEFT JOIN explore_derived_tracks d ON d.id=t.id WHERE t.is_public=1 AND t.status='published' LIMIT 201" --json > "$RUNNER_TEMP/canonical153.json"
+          node "$W" d1 execute DB --remote --config "$CFG" --command "SELECT id,is_public FROM tracks WHERE updated_at=1789829348623 LIMIT 2" --json > "$RUNNER_TEMP/private153.json"
+          for sort in latest popular; do
+            curl -fsS --retry 3 --max-time 20 -D "$RUNNER_TEMP/api-$sort.head" -o "$RUNNER_TEMP/api-$sort.json" -H 'Origin: https://preview.soridraw.com' "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108"
+            node "$W" r2 object get "soridraw-profile-media-preview/internal/explore/feed-v1/$sort-40.json" --file "$RUNNER_TEMP/local-$sort.json" --remote >/dev/null
+            node "$W" r2 object get "soridraw-profile-media/internal/explore/shared-feed-v112/$sort-40.json" --file "$RUNNER_TEMP/shared-$sort.json" --remote >/dev/null
+          done
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto'),root=process.env.RUNNER_TEMP;
+          const rows=JSON.parse(fs.readFileSync(root+'/canonical153.json','utf8')).flatMap(x=>x.results||[]);
+          if(rows.length!==37)throw Error('population changed; do not label previous 37 baseline PASS: '+rows.length);
+          const reference=new Map(rows.map(x=>[String(x.id),Number(x.canonical_count)]));
+          if(reference.size!==rows.length)throw Error('duplicate canonical id');
+          for(const row of rows)if([row.relation_count,row.derived_count,row.derived_json_count].some(n=>Number(n)!==Number(row.canonical_count)))throw Error('canonical relation/derived mismatch');
+          const privateRows=JSON.parse(fs.readFileSync(root+'/private153.json','utf8')).flatMap(x=>x.results||[]);
+          if(privateRows.length!==1||Number(privateRows[0].is_public)!==0||crypto.createHash('sha256').update(String(privateRows[0].id)).digest('hex').slice(0,10)!=='1319e4479e')throw Error('private canonical drift');
+          const privateId=String(privateRows[0].id);
+          for(const scope of ['api','local','shared'])for(const sort of ['latest','popular']){
+            const bundle=JSON.parse(fs.readFileSync(root+'/'+scope+'-'+sort+'.json','utf8'));
+            if(bundle.ok===false)throw Error('API failure');
+            const items=bundle?.data?.items||bundle?.payload?.data?.items||[];
+            if(items.length!==37||new Set(items.map(x=>String(x.id||x.trackId||''))).size!==37)throw Error(scope+' '+sort+' population mismatch');
+            if(items.some(x=>String(x.id||x.trackId||'')===privateId))throw Error(scope+' '+sort+' private leak');
+            for(const item of items){
+              const id=String(item.id||item.trackId||''),count=Number(item.likeCount??item.stats?.likeCount??0);
+              if(!reference.has(id)||reference.get(id)!==count)throw Error(scope+' '+sort+' like parity mismatch');
+            }
+            console.log('LIVE_PARITY_'+scope.toUpperCase()+'_'+sort.toUpperCase()+'=PASS N=37');
+          }
+          for(const sort of ['latest','popular']){
+            const headers=fs.readFileSync(root+'/api-'+sort+'.head','utf8');
+            const read=/^x-soridraw-d1-read:\s*(\d+)/im.exec(headers)?.[1];
+            const write=/^x-soridraw-d1-write:\s*(\d+)/im.exec(headers)?.[1];
+            if(read!=='0'||write!=='0')throw Error(sort+' D1 R0W0 FAIL '+read+'/'+write);
+            console.log('LIVE_D1_'+sort.toUpperCase()+'_R0W0=PASS');
+          }
+          console.log('POSTFLIGHT_APP126_WORKER071=PASS D1_WRITE=0 R2_WRITE=0 FIREBASE_WRITE=0');
+          NODE

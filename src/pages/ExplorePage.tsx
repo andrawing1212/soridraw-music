@@ -24,6 +24,7 @@ import {
   EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT,
   flushPendingExploreLikesForPageExit,
   getExploreLikedTrackIds,
+  checkExplorePersonalLikeRevision127,
   ensureExplorePersonalLikeBaseline127,
   readExploreTrackLikeMembership127,
   overlayExploreLikeDisplayCounts,
@@ -400,9 +401,21 @@ export default function ExplorePage() {
       likeHydrationKeyRef.current = '';
       setLikeAccountSyncSignal((value) => value + 1);
     };
+    const onResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      // This does not force a data read. The account-private R2 HEAD is
+      // independently throttled in the service; an unchanged HEAD keeps
+      // the existing liked membership and all card bodies locally.
+      likeHydrationKeyRef.current = '';
+      setLikeAccountSyncSignal((value) => value + 1);
+    };
+    window.addEventListener('focus', onResume);
+    document.addEventListener('visibilitychange', onResume);
     window.addEventListener(EXPLORE_LIKE_SYNC_EVENT, onRemote);
     window.addEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onGap);
     return () => {
+      window.removeEventListener('focus', onResume);
+      document.removeEventListener('visibilitychange', onResume);
       window.removeEventListener(EXPLORE_LIKE_SYNC_EVENT, onRemote);
       window.removeEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onGap);
     };
@@ -756,6 +769,7 @@ export default function ExplorePage() {
     setProfileLikedError('');
     (async () => {
       try {
+        await checkExplorePersonalLikeRevision127(user);
         await ensureExplorePersonalLikeBaseline127(user);
       } catch (reason) {
         // Keep cached cards visible, but block new unverified like mutations.

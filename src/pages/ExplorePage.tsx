@@ -445,7 +445,12 @@ export default function ExplorePage() {
     };
 
     const applyPayload = (payload: ExploreApiResponse, serverRevision: string | null) => {
-      const rows = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+      // Never replace a known-good local Feed or mark this release converged on
+      // a malformed/failed R2 response. A failed first refresh must stay retryable.
+      if (payload?.ok !== true || !Array.isArray(payload?.data?.items)) {
+        throw new Error('Invalid Explore snapshot; preserving the previous Feed');
+      }
+      const rows = payload.data.items;
       const nextCursor = feedRequest ? (safeText(payload?.data?.nextCursor) || null) : null;
       if (feedRequest) {
         writeExploreFeedSessionCache(
@@ -490,7 +495,6 @@ export default function ExplorePage() {
             const snapshot = await fetchFeedSnapshot108(null);
             if (controller.signal.aborted) return;
             applyPayload(snapshot.payload, snapshot.revision);
-            markExploreSharedLikeCacheRepair124(requestUrl);
           } catch (reason) {
             if (!controller.signal.aborted) {
               console.warn('Explore one-time shared like cache repair failed; keeping cached feed:', reason);

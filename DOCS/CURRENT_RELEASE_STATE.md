@@ -1,5 +1,11 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BV. 069 중복 요청 ID가 재전송 시 변하는 구조 확인 (2026-09-21 KST)
+
+Worker071 canonical SHA `9e0048ac0d2e3540707930786d531b9bca3bccb7` 원문에서 `exploreLikeW1Batch040` 확인: `batchAt = Math.max(fallbackAt, ...mutationAt)`, `fallbackAt = now`(매번 새 서버 접수 시각). 동일 UID·곡·원하는 하트·고정 클라이언트 mutationAt이라도 수초 뒤 재전송하면 `l069_<batchAt>_<digest>`가 달라지는 구체 반례 확인. 처리 후 `explore_like_batches_069` DELETE되어 이미 처리한 ID의 영구 재접수 차단도 없음. `scripts/verify-132-like-d1-write-budget.py`에 소스 가드와 136 재시도 모델 추가; **모델/실제 소스 조건 확인**이며 전체 Python CI 또는 라이브 Cloudflare 테스트 결과는 미확인. 원본 Worker/DB 변경 없음.
+
+이 문제는 0BU/0BS의 별도 D1 W1~W2·trigger 증폭·R2 이전 갱신과 독립된 **최종 상태 정확성 FAIL**이다. 애매한 네트워크 실패 후 PC·모바일에서 나중에 재전송한 옛 주문이 최종 하트와 공개 숫자를 반전시킬 수 있으므로 안정적인 idempotency ID + 삭제 이후 유지되는 순서 기록·최종 확정 복구 전에는 PREVIEW 배포 금지. 이번 변경은 검사·문서만이며 사용자 원본 및 TEST/PRODUCTION 미변경. 리드온리 감사 요청 `f951e797...`의 실행 결과는 여전히 미확인; 해당 요청 이전 코드가 아닌 최신 candidate로 검증되었는지 추가 확인 필요.
+
 ## 0BU. 좋아요 배포 전 검증 요청 및 실제 서버 재검토 — 릴리스 차단 유지 (2026-09-21 KST)
 
 사용자가 "찔끔찔끔 하지 말고 배포 전단계까지" 지시. 기존 `preview` 앱127 클라이언트 후보 수정 0BT를 기준으로 **배포 없는 기존 GitHub 감사** `.github/workflows/soridraw-release-system-audit.yml`을 실행 요청하기 위해 `.deploy/release-system-audit.trigger`만 갱신. 요청 commit `f951e797b8b0210042cd7bc39168d449c2b06e7d`. 이 워크플로는 TypeScript/Build/Worker test·production dry-run과 SELECT만 하는 D1 preflight를 포함하며 앱/Worker/D1 변경·배포 경로가 없다. 다만 연결된 GitHub의 `get_commit_combined_status`는 빈 statuses, `fetch_commit_workflow_runs`도 PR 필터로 빈 결과라 **실제 workflow 시작·실행 결과를 조회하지 못함**. Run ID/TypeScript/Build/D1 preflight를 PASS로 주장 금지. 해당 워크플로에는 127 좋아요 실행형 회귀가 포함되지 않으므로 성공하더라도 별도 확인 필수.

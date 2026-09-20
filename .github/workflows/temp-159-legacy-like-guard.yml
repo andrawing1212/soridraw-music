@@ -1,5 +1,5 @@
 name: TEMP 159 Legacy Queue Guard Dry Run
-# rerun after excluding nonexecuted comment from SQL scan assertion
+# rerun after converting escaped regex check to literal token check
 on:
   push:
     branches: [preview]

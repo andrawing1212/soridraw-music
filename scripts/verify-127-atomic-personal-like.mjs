@@ -13,7 +13,7 @@ assert.match(page, /SORIDRAW_EXPLORE_ATOMIC_PERSONAL_LIKE_127_20260920/);
 assert.match(service, /EXPLORE_LIKE_BASELINE_127/);
 assert.match(service, /EXPLORE_LIKE_SIGNAL_SEEN_127/);
 assert.match(service, /EXPLORE_LIKE_SIGNAL_RETRY_127/);
-assert.match(service, //v1/me/social-snapshot/);
+assert.ok(service.includes('/v1/me/social-snapshot'));
 assert.match(service, /!Array\.isArray\(payload\?\.data\?\.likedTrackIds\)/);
 assert.match(service, /if \(readSeenLikeSignal127\(uid\) !== versionAtStart\)/);
 assert.match(service, /baselineCompleted127\.add\(uid\)/);

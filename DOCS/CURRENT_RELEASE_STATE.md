@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CA. 139 좋아요 영속 순서·D1 확정 후 게시 코어 후보 구현, 격리 회귀 PASS / 실제 Worker 미연결 (2026-09-21 KST)
+
+기준 `preview` 138 단계에서 실제 코드 `cloudflare/explore-worker/runtime/like-fenced-139.mjs` 신규 추가. `LikeFencedProcessor139`는 인증된 UID/곡·stable operation ID·서버 발급 baseRevision 기반의 단일 영속 소유자를 전제로, **영속 pending 우선 기록 → 원자 D1 adapter 확정 증명 → 영속 revision/마지막 ID → 공유 개인 캐시 monotonic publish 확정** 순서로만 `settled` 반환. 같은 ID는 중복 적용하지 않고, 오래된 revision은 stale이며, D1 전·후 크래시나 게시 실패 시 pending을 유지해 같은 의도를 먼저 복구한 다음 새 주문을 받음. 이 코어에는 실 DB·Auth·HTTP·R2 호출이 없고 기존 Worker 경로와 아직 연결하지 않았으므로 기능 배포 완료를 뜻하지 않음.
+
+기존 `scripts/verify-135-like-fenced-protocol.mjs`에 신규 코어를 실제 import하는 모의 영속 ledger·원자적 canonical adapter·monotonic publisher 실행형 회귀 추가(별도 일회성 verifier 누적 금지). 실제 GitHub `like-fenced-139.mjs` blob SHA `12e2a9523868fdc334217f9895602db07ad5fff2`와 로컬에서 직접 실행한 동일 코드 SHA 일치. Node 로컬 실행 139 중복/stale, 크래시 복구, D1 후 게시, 게시 실패 새 순서 차단, 곡 독립 PASS. GitHub에서 재조회한 실제 코어와 135 verifier를 V8 격리 실행하여 135/139 테스트 PASS 재확인. 135 원래 검사의 legacy writer bypass=FAIL, 실 D1/DO billing=NOT_MEASURED, product readiness=FAIL 표시는 의도한 릴리스 차단이며 기능 PASS로 바꾸지 않음.
+
+**아직 필요:** 139 코어를 실제 **모든 환경이 공유하는 단일 UID별 영속 owner**에 안전하게 연결하고 기존 069/035/066/075 및 직접 단일곡 writer가 우회하지 않도록 호환 전환해야 함. 현재 각 환경의 별도 DO scheduler는 이 조건을 만족하지 않음. 실제 `canonical.applyAtomically`를 구현하려면 D1 likes 관계·count 원자 트랜잭션, 인덱스/derived trigger를 포함한 W1~W2 실측 및 재설계가 선행. `publish`도 D1 확정 후 공유 R2 conditional revision CAS 및 타 기기 알림이 필요. 구형 Worker 공존/데이터 하위호환/비용·복구 정책이 확인되지 않은 상태에서 139를 실제 handler로 연결하거나 사용자 원본을 변환하지 않음. 138 pending-only 단계는 최종 R2 갱신이 없으므로 **절대 배포하지 않음**. TypeScript/Build/전체 CI/독립 Work/실기기/실 D1 미검증, 앱126/Worker071 실제 배포·main/production·공유 사용자 데이터 비변경.
+
 ## 0BZ. 서버 접수 전 개인 R2 쓰기 차단: 074/138 후보 실제 구현·격리 생성 검사 PASS, 최종 수렴 미완료 (2026-09-21 KST)
 
 사용자의 "니가 말한대로 진행" 지시로 `preview` 기준 `975f94cae4301b3bcc98004217d8ba77238c640e` 이후 **실제 Worker 후보 patch 코드를 수정**함. 기존 `cloudflare/explore-worker/patches/074-personal-like-r2-cas.mjs`에서 `handleLikeBatch034`의 `syncExploreLikeR2AfterBatch034` 조기 실행을 **실제 canonical D1 최종 적용 전에 호출하지 않도록 교체**, `personalLikeSnapshot: 'pending'`만 반환. `SORIDRAW_LIKE_PRECOMMIT_R2_BLOCK_138_20260921` 마커. 기존 074 R2 CAS helper 자체는 격리 검증 대상으로 보존하지만 batch intake에서는 호출하지 않음. 현재 Worker071 배포본은 그대로, R2/D1 사용자 데이터 원본 수정 없음.

@@ -32,7 +32,14 @@ assert.match(collection, /cache\.canonicalLikedTrackIds = \[\.\.\.next\]/);
 const getter = service.slice(service.indexOf('export const getExploreLikedTrackIds = async'),service.indexOf('export const reconcileExploreLikedTrackCollectionState'));
 assert.match(getter, /await ensurePersonalLikeBaseline127\(user\)/);
 assert.match(getter, /const missing = normalized\.filter\(\(trackId\) => !cache\.has\(trackId\)\)/);
-assert.match(getter, /readLikeOutbox\(user\.uid\)/);
+assert.match(getter, /readLikeOutbox\\(user\\.uid\\)/);
+assert.match(getter, /const currentOutbox127 = readLikeOutbox\\(user\\.uid\\)/);
+assert.match(getter, /const currentUnresolved127 = readSnapshotPending127\\(user\\.uid\\)/);
+assert.match(getter, /if \\(currentOutbox127\\[trackId\\] \\|\\|/);
+assert.match(getter, /Object\\.prototype\\.hasOwnProperty\\.call\\(currentUnresolved127, trackId\\)/);
+assert.ok(getter.indexOf('const currentOutbox127 =') > getter.indexOf('await requestExploreLike(user,'),
+  'late API payload must re-read pending state after network request');
+assert.match(getter, /if \\(!cache\\.has\\(trackId\\)\\) cache\\.set\\(trackId, likedIds\\.has\\(trackId\\)\\)/);
 assert.match(getter, /outbox\[trackId\]\?\.desiredLiked \?\? unresolved\[trackId\] \?\? cache\.get\(trackId\) === true/);
 
 const listener = service.slice(service.indexOf('const applyRemoteLikeSignal127'), service.indexOf('const readSignalRetry127'));
@@ -81,7 +88,21 @@ assert.doesNotMatch(publish, /firebase\/firestore|env\.DB|D1/);
 
 assert.ok(rules.rules.userSync.$uid.exploreLike, 'existing UID-scoped like signal rules required');
 assert.match(page, /readExploreTrackLikeMembership127\(user\.uid, track\.id\)/);
-assert.match(service, /computeExploreLikeAction127\(baseLiked, liked, baseLikeCount\)/);
+assert.match(service, /computeExploreLikeAction127\\(baseLiked, liked, baseLikeCount\\)/);
+assert.match(service, /readExploreTrackLikeMembership127\\(uid, normalizedTrackId\\) \\?\\? !liked/);
+assert.match(service, /const now = nextExploreLikeMutationAt127\\(existing\\?\\.updatedAt \\|\\| 0, Date\\.now\\(\\)\\)/);
+const clockStart127 = service.indexOf('export const nextExploreLikeMutationAt127 =');
+const clockEnd127 = service.indexOf('// One transition represents', clockStart127);
+assert.ok(clockStart127 > 0 && clockEnd127 > clockStart127);
+const clockSource127 = service.slice(clockStart127, clockEnd127)
+  .replace('export const nextExploreLikeMutationAt127', 'const nextExploreLikeMutationAt127');
+const clockJs127 = ts.transpileModule(clockSource127 + '; return nextExploreLikeMutationAt127;', {
+  compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
+}).outputText;
+const nextMutationAt127 = new Function(clockJs127)();
+assert.equal(nextMutationAt127(100, 100), 101, 'same-ms second click must be distinguishable');
+assert.equal(nextMutationAt127(101, 100), 102, 'clock rollback must not revive an older ACK');
+assert.equal(nextMutationAt127(50, 200), 200, 'normal clock progression stays unchanged');
 assert.match(service, /EXPLORE_LIKE_SNAPSHOT_PENDING_127/);
 assert.match(service, /outbox\[id\]\?\.desiredLiked \?\? unresolved\[id\] \?\? confirmed\.has\(id\)/);
 assert.match(service, /readSnapshotPending127\(uid\)/);
@@ -114,7 +135,10 @@ assert.deepEqual(compute(true, true, 1), { liked: true, likeCount: 1 }, 'repeati
 assert.match(page, /if \(currentLiked === undefined\)/);
 assert.match(page, /likedTrackIds\[track\.id\] === undefined/);
 assert.match(page, /detail\?\.source !== 'remote'/);
-assert.match(page, /setLikedTrackIds\(\(previous\) => \(\{ \.\.\.previous, \[detail\.trackId!\]: detail\.liked! \}\)\)/);
+assert.match(page, /const effectiveLiked127 = readExploreTrackLikeMembership127\\(user\\.uid, detail\\.trackId\\)/);
+assert.match(page, /if \\(effectiveLiked127 !== detail\\.liked\\) return/);
+assert.match(page, /setLikedTrackIds\\(\\(previous\\) => \\(\\{ \\.\\.\\.previous, \\[detail\\.trackId!\\]: effectiveLiked127 \\}\\)\\)/);
+assert.match(page, /next\\[id\\] = readExploreTrackLikeMembership127\\(user\\.uid, id\\) \\?\\? likedSet\\.has\\(id\\)/);
 assert.doesNotMatch(page, /invalidateExplorePersonalLikeBaseline127\(user\.uid\)/);
 assert.match(page, /checkExplorePersonalLikeRevision127\(user\)/);
 assert.match(page, /window\.addEventListener\('focus', onResume\)/);
@@ -141,6 +165,9 @@ console.log('127_FAILED_REPAIR_RETRY_DURABLE=PASS');
 console.log('127_FIRST_R2_BASELINE_VALIDATED_ONLY_ONCE=PASS');
 console.log('127_REMOTE_SIGNAL_BOUNDED_50_PER_BATCH=PASS');
 console.log('127_LOCAL_OUTBOX_OVERRIDES_OLD_REMOTE=PASS');
+console.log('127_LATE_HYDRATION_PRESERVES_LOCAL_INTENT=PASS');
+console.log('127_REMOTE_RENDER_GUARDED_BY_EFFECTIVE_MEMBERSHIP=PASS');
+console.log('127_SAME_MS_ACK_LOCAL_REVISION=PASS');
 console.log('127_PUBLIC_COUNT_INDEPENDENT_AUTHORITY=PASS');
 console.log('127_D1_MUTATION_ROUTE_UNCHANGED=PASS');
 console.log('127_WORKER071_UNCHANGED=PASS');

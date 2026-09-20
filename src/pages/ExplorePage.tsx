@@ -387,8 +387,13 @@ export default function ExplorePage() {
       }>).detail;
       if (detail?.source !== 'remote' || detail.uid !== user.uid ||
           !detail.trackId || typeof detail.liked !== 'boolean') return;
+      // React may commit this event after a newer local click. Read the
+      // service's effective membership again instead of trusting the event
+      // payload as the latest state.
+      const effectiveLiked127 = readExploreTrackLikeMembership127(user.uid, detail.trackId);
+      if (effectiveLiked127 !== detail.liked) return;
       likeInteractionVersionRef090.current += 1;
-      setLikedTrackIds((previous) => ({ ...previous, [detail.trackId!]: detail.liked! }));
+      setLikedTrackIds((previous) => ({ ...previous, [detail.trackId!]: effectiveLiked127 }));
       // Own liked collection uses the same membership cache; load only a newly
       // liked missing card when that section is actually visible.
       setLikeAccountSyncSignal((value) => value + 1);
@@ -841,8 +846,11 @@ export default function ExplorePage() {
         const likedSet = new Set(likedIds);
         setLikedTrackIds((prev) => {
           const next = { ...prev };
-          ids.forEach((id) => { next[id] = false; });
-          likedIds.forEach((id) => { next[id] = true; });
+          // This network response may have started before an optimistic
+          // action. Never use its absence to clear a later local heart.
+          ids.forEach((id) => {
+            next[id] = readExploreTrackLikeMembership127(user.uid, id) ?? likedSet.has(id);
+          });
           return next;
         });
         // 089: heart membership is personal; numeric likeCount stays on the shared public feed/profile value.

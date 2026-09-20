@@ -1,5 +1,17 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 실행 기준 0CA/139 — 서버 후보 코어 구현·검증 완료, 통합/비용 미해결 (2026-09-21 KST)
+
+이번 대화에서 실제 `preview` 코드 변경: `cloudflare/explore-worker/patches/074-personal-like-r2-cas.mjs`를 D1 접수 단계 **개인 R2 선행 갱신 금지/pending-only**로 수정(138). 기존 `scripts/verify-128-like-concurrency.mjs`를 이 계약으로 변경; 실제 071 Worker blob + 073→074 생성 후 전체 128 격리 mock PASS, 고정 TEST/PRODUCTION Worker 소스에 동일 패치가 **적용 가능함만** 확인(실행/배포하지 않음).
+
+또 `cloudflare/explore-worker/runtime/like-fenced-139.mjs` 신규: **영속 pending → 원자 D1 확정 증명 → UID/곡 revision·operation ID 확정 → monotonic 공유 캐시 게시 성공 이후에만 settled**하는 실제 JS 코어. 중복 ID 동일 payload는 W0 모델로 처리, 동일 ID를 다른 desired/base로 재사용하면 conflict, 과거 revision은 stale, D1 전·후 실패/재시작과 R2 실패 시 pending 보존 및 새 주문 차단. `scripts/verify-135-like-fenced-protocol.mjs`에 기존 모형 외 실제 139 모듈 import 실행형 모의검사 추가. GitHub 실제 소스 재조회 V8 격리 검증 PASS. 단, 코어는 아직 실제 Worker/Auth/DO/D1/R2에 연결되지 않았으며 real D1 billed rows / 실제 운영 보장은 미검증. `DOCS/CURRENT_RELEASE_STATE.md` 0BZ/0CA 참조.
+
+### 다음 실제 구현의 선행 확인 및 차단조건
+1. **UID별 영속 단일 소유자**를 3환경의 기존 모든 좋아요 writer가 공통 사용하도록 하위호환 전환 계획 마련. 현재 환경별 DO scheduler 103은 단일 공유 owner가 아니며 071/구형 Worker가 우회할 수 있음. 추가 인프라/구형 Worker 변경이 필요하면 정확한 서비스 비용·보안·롤백 방법을 보고하고 승인 후 구성.
+2. `canonical.applyAtomically`를 기존 공유 D1 원본 likes+count의 실제 **동일 원자 commit**으로 구현하고 재시도 후 통계 중복 증감 0, 데이터 소실/카운트 어긋남 0 검증. `publish`는 실제 D1 완료 후 UID shared R2 revision CAS 및 다른 기기 통지로 구현. `settled`를 queue ACK 또는 R2 updated로 대체 금지.
+3. 운영 D1 schema/trigger/index read-only 대조 → **격리 D1** 실 `meta.rows_written` 좋아요/해제 W1~W2, 중복 W0, 변경 없음 R0, R2/DO/RTDB 10만 사용자 단위 비용 확인. 현재 069 W4+·derived trigger 6 논리 행 모형이므로 기존 경로 사용한 채 PASS 금지. 하위호환·검색/추천/인기/프로필의 파생 인덱스 비용을 재설계해야 함.
+4. 실제 Work 독립 감사, TS/Build/127·128·135·과거 회귀, PC↔모바일 본계정/제한 테스트계정 데이터 일치, 기존 좋아요 2천/128 보호 확인. 미확인 시 릴리스 FAIL. 사용자 승인 전 배포/사용자 원본 schema 변경/PRODUCTION 승격 금지.
+
 ## 최종 우선순위 0BY — 구형 공유 Writer와 기존 D1 트리거 때문에 신규 Worker 단독 승격 불가
 
 사용자 "수정해봐"에 따라 선행 호환성을 확인한 결과, `DOCS/CURRENT_RELEASE_STATE.md` 0BY. PREVIEW/TEST/PRODUCTION의 구형 Worker가 같은 원본 D1·공유 개인 R2를 쓰며 새 영속 UID/곡 fence를 우회한다. 기존 069 큐의 W4+ 및 derived trigger/index의 W3+ 문제도 남아 있으므로 새 preview Worker만 교체해 좋아요 문제 완치·W1~W2 완료라고 보고할 수 없다.

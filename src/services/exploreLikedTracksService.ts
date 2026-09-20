@@ -240,6 +240,30 @@ export const patchExploreLikedTrackCachedCount091 = (
   writeCache(normalizedUid, cache);
 };
 
+// 127: A successfully authenticated personal R2 snapshot is the membership
+// authority for first-time legacy repair. Preserve cached card bodies and only
+// fetch missing IDs when the user's liked collection is actually opened.
+export const reconcileExploreLikedTrackCollectionSnapshot127 = (
+  uid: string,
+  serverLikedTrackIds: string[],
+  localPending: Record<string, boolean>,
+) => {
+  const normalizedUid = normalizeId(uid);
+  if (!normalizedUid) return;
+  const cache = readCache(normalizedUid);
+  const next = new Set(normalizeIds(serverLikedTrackIds));
+  Object.entries(localPending).forEach(([id, liked]) => {
+    const trackId = normalizeId(id);
+    if (!trackId) return;
+    if (liked) next.add(trackId); else next.delete(trackId);
+  });
+  cache.canonicalLikedTrackIds = [...next];
+  cache.unavailable = Object.fromEntries(
+    Object.entries(cache.unavailable).filter(([id]) => next.has(id)),
+  );
+  writeCache(normalizedUid, cache);
+};
+
 export const getExploreLikedTrackCollectionIds = (uid: string): string[] | null => {
   const normalizedUid = normalizeId(uid);
   if (!normalizedUid) return null;

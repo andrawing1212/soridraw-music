@@ -38,6 +38,7 @@ const EXPLORE_LIKE_BASELINE_127 = 'soridraw:explore:like-baseline:127';
 const EXPLORE_LIKE_SIGNAL_SEEN_127 = 'soridraw:explore:like-signal-seen:127';
 const EXPLORE_LIKE_SIGNAL_RETRY_127 = 'soridraw:explore:like-signal-retry:127';
 const EXPLORE_LIKE_SIGNAL_GAP_127 = 'soridraw:explore:like-signal-gap:127';
+const EXPLORE_LIKE_REPAIR_TARGET_127 = 'soridraw:explore:like-repair-target:127';
 const EXPLORE_LIKE_SIGNAL_MAX_127 = 50;
 
 type ExploreLikePendingMutation = {
@@ -177,6 +178,14 @@ const markSeenLikeSignal127 = (uid: string, version: number) => {
   signalRevisionByUid127.set(uid, next);
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_SEEN_127, uid), String(next));
 };
+const readRepairTarget127 = (uid: string) =>
+  Math.max(0, Number(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_TARGET_127, uid))) || 0);
+const requestRepair127 = (uid: string, version: number) => {
+  const target = Math.max(readRepairTarget127(uid), version);
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_TARGET_127, uid), String(target));
+  baselineCompleted127.delete(uid);
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '');
+};
 
 type ExploreLikeAcceptedRow127 = ExploreLikeSyncEventDetail;
 type ExploreLikeSignal127 = {
@@ -220,14 +229,21 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
     readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1';
   const gap = (lastSeen > 0 && signal.previousVersion !== lastSeen) ||
     (lastSeen === 0 && baselineAlreadyVerified);
-  if (gap) {
-    // Do not first apply a potentially incomplete 50-row replay, then undo it.
-    // Keep the last good UI and reconcile against per-user R2 once instead.
-    markSeenLikeSignal127(uid, signal.version);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
-        detail: { uid, reason: 'missed-confirmed-like-signal' },
-      }));
+  if (gap || readRepairTarget127(uid) > 0) {
+    // A failed R2 repair must never ACK the incoming RTDB revision. Record a
+    // durable retry target and let the verified personal snapshot finish first.
+    requestRepair127(uid, signal.version);
+    const current = auth.currentUser;
+    if (current?.uid === uid) {
+      void ensurePersonalLikeBaseline127(current)
+        .then(() => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
+              detail: { uid, reason: 'personal-like-repair-complete' },
+            }));
+          }
+        })
+        .catch((error) => console.warn('[127] Personal like gap repair retained for retry:', error));
     }
     return;
   }
@@ -297,13 +313,15 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
   const task = (async () => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const versionAtStart = readSeenLikeSignal127(uid);
+      const repairAtStart = readRepairTarget127(uid);
       const likedIds = await requestPersonalLikeBaseline127(user);
       // The existing R2 writer intentionally caps an account at 2,000 liked
       // IDs. At capacity, absence from the snapshot is NOT proof of unliked.
       if (likedIds.length >= 2000) {
         throw new Error('Personal like snapshot reached its 2000-ID limit; existing cache preserved');
       }
-      if (readSeenLikeSignal127(uid) !== versionAtStart) {
+      if (readSeenLikeSignal127(uid) !== versionAtStart ||
+          readRepairTarget127(uid) !== repairAtStart) {
         // Concurrent device mutation: reread the small per-user R2 snapshot,
         // never accept an older response over the user's latest signal.
         if (attempt === 0) continue;
@@ -324,6 +342,10 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
       reconcileExploreLikedTrackCollectionSnapshot127(
         uid, likedIds, Object.fromEntries(Object.entries(outbox).map(([id, row]) => [id, row.desiredLiked])),
       );
+      if (repairAtStart > 0) {
+        markSeenLikeSignal127(uid, repairAtStart);
+        writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_TARGET_127, uid), '');
+      }
       baselineCompleted127.add(uid);
       writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '1');
       return;
@@ -410,9 +432,20 @@ const installLikeSignalRetry127 = () => {
   likeSignalRetryListenerInstalled127 = true;
   const retry = () => {
     const current = auth.currentUser;
-    if (!current?.uid || !readSignalRetry127(current.uid).length) return;
-    void publishConfirmedLikeSignal127(current.uid, readSignalRetry127(current.uid))
-      .catch((error) => console.warn('[127] Pending personal like notification retained:', error));
+    if (!current?.uid) return;
+    if (readSignalRetry127(current.uid).length) {
+      void publishConfirmedLikeSignal127(current.uid, readSignalRetry127(current.uid))
+        .catch((error) => console.warn('[127] Pending personal like notification retained:', error));
+    }
+    if (readRepairTarget127(current.uid) > 0) {
+      void ensurePersonalLikeBaseline127(current)
+        .then(() => {
+          window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
+            detail: { uid: current.uid, reason: 'personal-like-repair-complete' },
+          }));
+        })
+        .catch((error) => console.warn('[127] Pending like repair retained:', error));
+    }
   };
   window.addEventListener('online', retry);
   window.addEventListener('focus', retry);

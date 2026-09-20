@@ -181,9 +181,13 @@ const writeLikeLocal127 = (key: string, value: string) => {
 // Accepted D1 queue != updated personal R2. Keep a UID-scoped override for
 // accepted tracks whose shared R2 CAS was not materialized; an older R2 read
 // must not silently reverse this device's final intention on the next visit.
-// Only an actual updated snapshot for that same ID may clear this guard.
-// An absent field from a legacy Worker is not proof of snapshot success.
-export const canBroadcastExploreLikeSnapshot127 = (status: unknown): boolean => status === 'updated';
+// An updated *R2 snapshot* is still only an accepted, pre-aggregate intent:
+// the canonical D1 likes relation can be changed later by 069/075 processing.
+// A missing field or 'updated' is NOT evidence of final personal membership.
+// Only a future independently verified canonical-settled response may release
+// this guard and send a cross-device confirmed event. No current intake Worker
+// emits 'settled'; do not turn this on until a durable settlement protocol exists.
+export const canBroadcastExploreLikeSnapshot127 = (status: unknown): boolean => status === 'settled';
 
 const readSnapshotPending127 = (uid: string): Record<string, boolean> => {
   try {

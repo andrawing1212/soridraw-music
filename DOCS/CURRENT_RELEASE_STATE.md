@@ -1,5 +1,22 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BM. 074 개인 좋아요 R2 cold/2천 ID/128 순서 한도 데이터 보존 보완 PASS — 자동 수렴은 아직 FAIL (2026-09-20 KST)
+
+사용자 "계속 진행해" 지시에 따라 0BL의 남은 공유 likes R2 결손/한도 처리 위험을 `preview` 후보 코드에서 보완했다. **실제 PREVIEW 앱126 + Worker071, TEST/PRODUCTION 변경 없음. 새 앱127/Worker072~077 미배포.**
+
+### 수정 파일 및 실제 동작
+- `cloudflare/explore-worker/patches/074-personal-like-r2-cas.mjs`의 **공유 개인 R2 부재** 시 기존 `syncExploreLikeR2AfterBatch034` unconditional write fallback **금지**. 이미 수락된 사용자별 D1 좋아요 큐는 유지하되, `{ok:false, repairNeeded:true, reason:'shared_r2_cold_requires_canonical_rebuild'}` 반환. 신규 원본을 모르는 상태에서 전체 개인 캐시를 만들어 쓰지 않는다.
+- 같은 패치에서 `likedTrackIds.length >= 2000`이면 missing ID를 미좋아요라고 판정할 수 없어 덮어쓰기 금지; 개인 목록 `slice(0,2000)`으로 기존 좋아요 ID가 조용히 사라질 수 있던 저장 부분 제거. 변경 후 2천 초과도 보호한다.
+- 기존 `lastLikeOrders074` 최근 128곡의 오래된 기록을 자동 삭제하면 지워진 곡에 뒤늦게 도착한 구요청이 새 상태를 뒤집을 수 있다. 새 ID 추가로 128개를 초과하면 토큰 eviction 대신 `shared_r2_order_capacity_requires_canonical_rebuild`를 반환하고 기존 R2와 순서 기록을 보존. 이미 기록된 ID는 정상 CAS 처리를 이어갈 수 있다.
+- `scripts/verify-128-like-concurrency.mjs`에 ① cold R2 write 0, ② 기존 2000 좋아요 ID 비삭제, ③ 128개 순서 기록 비삭제 실행형 mock 추가. 기존 두 기기 충돌/기기 시계/서로 다른 곡/idempotency도 그대로 검사.
+
+### 검사 및 릴리스 차단
+- GitHub Actions Run `35517114646` **SUCCESS**: Worker071 source SHA 보호 + 072~077 후보 생성·문법 검사, 128~131 및 127/126/125/124/123/110 회귀, TypeScript/Build. 테스트 전용 Workflow 161 정리. 사용자 D1/R2/RTDB 원본 write, 앱/Worker 배포, main/production 변경 0.
+- 이 PASS는 **데이터 유실 방지·fail-closed의 모의 테스트 PASS**다. cold/2000/128 경계에서는 personal R2 최신화를 완료하지 않고 `repairNeeded`로 멈춘다. 최종 D1 canonical 처리 완료 확인 및 조건부 개인 R2 재구축/부분 복구는 미구현. 좋아요 서버 큐 ACK가 최종 canonical 확정이라는 뜻도 아니다. 해당 사용자의 다른 기기 하트가 여전히 stale일 수 있으므로 자동 수렴 PASS 금지.
+- 남은 위험: 오래된 Worker unconditional shared R2 writer가 하나라도 활동하면 CAS 토큰이 덮일 수 있음; 075/076/077 복구 경로는 클라이언트 자동 연결·큐 atomic fence 및 10만 명 운영비 미합격. 실사용 D1 W1~W2/RTDB/R2 비용, TEST/PRODUCTION 실제 바이너리, PC↔모바일 검증, 별도 Work 감사 미실시.
+
+**다음 단계**는 unsafe fallback을 복구 완료로 오인하지 않고, compatible writer 선행 승격 정책과 read-only canonical 확인 후 안전한 repair 종료 조건을 확정하는 것. 그 전 배포·데이터 수정 금지.
+
 ## 0BL. 동일 좋아요 Writer 세 환경 고정 소스 호환 검증 PASS / 운영 배포 전 (2026-09-20 KST)
 
 사용자의 "작업 진행해" 지시로 0BK에서 남은 구형 Worker writer 공존 문제를 실제 GitHub `preview`/`main`/`production` 고정 canonical Worker 소스로 대조했다. **이번 작업은 preview 패치와 검사용 CI만 수정했다. 실제 PREVIEW 앱126/Worker071 및 TEST/PRODUCTION 서비스·사용자 데이터 비변경.**

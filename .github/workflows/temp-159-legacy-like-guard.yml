@@ -1,5 +1,5 @@
 name: TEMP 159 Legacy Queue Guard Dry Run
-# rerun after converting escaped regex check to literal token check
+# rerun with actual 075 queue mock for 077 handler
 on:
   push:
     branches: [preview]

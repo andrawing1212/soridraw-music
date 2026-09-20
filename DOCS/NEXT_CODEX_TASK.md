@@ -1,5 +1,11 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 우선순위 0BY — 구형 공유 Writer와 기존 D1 트리거 때문에 신규 Worker 단독 승격 불가
+
+사용자 "수정해봐"에 따라 선행 호환성을 확인한 결과, `DOCS/CURRENT_RELEASE_STATE.md` 0BY. PREVIEW/TEST/PRODUCTION의 구형 Worker가 같은 원본 D1·공유 개인 R2를 쓰며 새 영속 UID/곡 fence를 우회한다. 기존 069 큐의 W4+ 및 derived trigger/index의 W3+ 문제도 남아 있으므로 새 preview Worker만 교체해 좋아요 문제 완치·W1~W2 완료라고 보고할 수 없다.
+
+**코드 구현의 고정 합격선:** isolated test 계정/격리 D1에서 안정적 operation ID·영속 최신 순서·처리 후 중복 retry W0·likes+count 원자성·D1 final 이후에만 R2/remote confirmed·모든 환경 legacy writer 공존 대응·실 D1 `rows_written` W1~W2·변경 없음 read0. 구형과 신형이 동시 사용 시 안전하지 않은 migration/Worker 변경은 구현 전에 먼저 보고하고 승인 필요. 사용자 원본을 대량 복제·삭제/변환하지 않는다. 구조 검증 전 허위 `settled` 활성화와 제품 배포 금지. 현재 source-only 클라이언트127 후보와 Worker071 배포 유지. 전체 CI 및 PC·모바일 실사용 미검증.
+
 ## 2026-09-21 최신 수정 0BX — 불일치 ACK 차단, 서버 해결 우선
 
 `preview` 기존 앱127 후보 `src/services/exploreLikeService.ts`: 이번 batch에서 **실제 전송한 trackId→desiredLiked**와 intake 응답 result→liked가 서로 다르면 cache/outbox/snapshotPending 업데이트 이전에 실패시키고 로컬 마지막 의도를 보존. `scripts/verify-127-atomic-personal-like.mjs`에 기대값 불일치·보존순서 검사 추가. 실제 수정 service 구문 및 순수 판단 확인 PASS, full CI/TS/Build 미검증. `DOCS/CURRENT_RELEASE_STATE.md` 0BX 참조. 이는 **queue ACK 검증일 뿐 D1 final settlement이 아님**.

@@ -1,0 +1,47 @@
+name: TEMP 152 App126 PREVIEW Preflight
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-152-app126-preflight.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify 126 and backward compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./public/app-version.json').version")" = 126
+          node scripts/verify-126-explore-entry-like-count.mjs
+          node scripts/verify-125-like-preservation.mjs
+          node scripts/verify-124-mobile-shared-cache-repair.mjs
+          node scripts/verify-123-shared-like-cache-repair.mjs
+          node scripts/verify-110-explore-liked-public-count.mjs
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-070-shared-feed-guard.mjs
+          echo 'APP126_REGRESSIONS=PASS'
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Protect Worker and data boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | cut -d' ' -f1)" = "$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          test "$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)" = b170d05385c3096a98033675a9acbb63b40148bf782017c326845b7ea4c17813
+          echo 'WORKER_071_SOURCE_UNCHANGED=PASS'
+          echo 'VERIFY_ONLY=PASS DEPLOY=0 D1_WRITE=0 R2_WRITE=0 FIREBASE_WRITE=0'

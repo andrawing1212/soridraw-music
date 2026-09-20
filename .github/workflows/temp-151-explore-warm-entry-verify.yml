@@ -1,4 +1,5 @@
 name: TEMP 151 App125 Explore Warm Entry Code Verification
+# rerun after updating the legacy 123 verifier for 126 stale-entry behavior
 on:
   push:
     branches: [preview]

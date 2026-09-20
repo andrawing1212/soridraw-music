@@ -1,5 +1,14 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BS. 134 파생 트리거 비용 감사 + 135 사용자별 순서 프로토콜 격리 검증 (2026-09-21 KST)
+
+사용자 "반드시 좋아요 문제를 해결" 요청으로 글로벌 idempotency/consistency 원칙을 SORIDRAW에 맞춰 재검토. 133의 "W2"는 최소 두 원본 테이블만 가진 SQLite 모델임을 명시적으로 정정. 운영 D1과 혼동 금지.
+
+- **새 비용 차단 근거:** `cloudflare/explore-worker/migrations/20260910_01_explore_derived_state.sql`의 `explore032_stats_update`, `20260910_03_explore_like_write_optimization.sql`의 `explore032_derived_track_update`, `idx_explore_rank_popular` 소스 확인. 원본 `likes` 변경→`track_stats` 변경→파생 공개곡→변경 seq→Feed journal→프로필 journal 경로. 신규 `scripts/verify-134-like-write-amplification.py`의 **보수적 격리 SQLite 모형**은 첫 좋아요/해제 각각 논리 행 6개, 동일 상태 재시도 0개 재현. 로컬 실행 때 소스 문자열 검사 입력은 GitHub에서 확인한 핵심 구문만 재현한 **fixture**; 정확한 실서비스 D1 스키마/전체 trigger 재현, D1의 index/trigger 포함 `meta.rows_written` 측정은 미실시. Cloudflare 공식 문서상 인덱스 수정도 별도 billed row가 될 수 있으므로 W2 원본 행 모델은 최종 비용 PASS 아님. 132 W4도 전체 실제 D1 청구 하한으로 확정하지 않음.
+- **동시성 실험:** `scripts/verify-135-like-fenced-protocol.mjs`의 메모리 D1 + 재시작 후에도 유지되는 모의 영속 상태 기반 사용자별 곡 revision·operation ID·pending-first recovery. 격리 Node 실행에서 같은 요청 중복 W0, 오래된 좋아요 재전송 차단, 서로 다른 곡 독립, D1 전/후 실패·재시작 재개 시 숫자 이중 증가 방지 PASS. **반례:** 구형 Worker가 영속 순서 경로를 우회해 shared D1/R2를 쓰면 상태 불일치가 다시 발생하므로 승격 FAIL. 이는 실제 Cloudflare DO나 D1 실행이 아님. DO↔D1 원자성·DO 및 RTDB/R2 청구·구형 Worker 배포 호환·기기 동기화는 미검증.
+- 133 문서 후속 정정 반영. 새 검증 스크립트 134/135는 `preview`에 저장. 071 canonical / 앱126 / app-version 126 / main / production 및 사용자 원본 비변경. 배포 없음. 실제 TEST/PRODUCTION 배포 상태 이번 작업에서 신규 확인하지 않았고 이전 기록 유지. 이번 작업 CI TypeScript/Build/Work 독립 감사 미실시.
+- **다음 필수 순서:** (1) 실제 공유 D1은 SELECT/read-only schema/trigger/index 조회부터 하고 별도 격리 D1에서 각 SQL `meta.rows_written`·rollback 실측, (2) W1~W2를 요구하면 파생 자동 쓰기를 함께 재설계해야 하므로 검색/추천/최신/인기/프로필 최신성·구형 코드 호환 비교, (3) 사용자별 영속 순서 관리자(DO 등)의 운영비·장애 복구를 격리 구현/검증, (4) 각 환경의 모든 구형 writer가 동일 프로토콜에 진입하는 배포 경로 승인/검증. 이 조건 이전에는 Worker078, 개인 `settled` 허위 활성화, schema 변경, PREVIEW/TEST/PRODUCTION 배포 금지. 기존 0BQ/0BP 기능·비용 FAIL 유지.
+
 ## 0BR. 글로벌 사례 조사 + 직접 2행 좋아요 격리검증 PASS / 역순 요청 FAIL (2026-09-21 KST)
 
 사용자 요청에 따라 Meta/Stripe/Cloudflare/Google 공식 문서를 검토하고 `DOCS/LIKE_WRITE_REDESIGN_133.md`에 실제로 공개된 원리와 SORIDRAW 적용 후보를 분리 기록. `scripts/verify-133-like-direct-two-row.py`를 추가해 격리 SQLite에서 관계 INSERT/DELETE + 직전 `changes()`에 따른 통계 갱신의 2행 모델 검증. 로컬 Python 실행: 신규 좋아요 2행, 중복 좋아요 0행, 타인 좋아요 숫자 보존, 중복 해제 0행, 누락 통계 fail-closed PASS. 반면 `true→false→늦은 과거 true`는 최종 상태를 재반전시켜 **순서 영속 기록 없이 직접 W2만 적용하는 방식은 FAIL**. 외부 DO/Queue 등은 아직 채택·생성하지 않음. SQL `changes()`의 실제 D1 batch 동작 및 live `rows_written` 미측정.

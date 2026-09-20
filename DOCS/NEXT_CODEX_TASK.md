@@ -1,5 +1,21 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-21 KST: 134 비용 증폭·135 순서 모형 확인, 제품 릴리스 여전히 FAIL
+
+`DOCS/CURRENT_RELEASE_STATE.md` 0BS 및 `DOCS/LIKE_WRITE_REDESIGN_133.md` 134 정정 참조.
+
+- **비용:** 133의 원본 2행 SQLite 모델은 실제 운영 D1 비용 PASS가 아니다. 실 스키마 소스 `explore032_stats_update` → `explore032_derived_track_update`(seq/Feed journal/profile journal)와 인기 인덱스 확인. `scripts/verify-134-like-write-amplification.py` 보수적 *격리* 모델은 한 곡 최초 좋아요/해제 6 논리 행 변경(인덱스 추가 요금 제외), 동일 상태 반복 0. 외부 live `meta.rows_written` 미측정. 로컬 테스트에서 소스 가드는 GitHub에서 검토한 문자열의 별도 fixture로 검사되었으므로 실제 파일 연동 검사는 CI에서 다시 실행할 것.
+- **동시성:** `scripts/verify-135-like-fenced-protocol.mjs`의 격리 모의는 사용자별 곡 revision + 요청 ID + 영속 pending 우선 복구 + D1 관계 조건부 변경으로 재시도·늦은 요청·모의 런타임 재시작을 PASS. 실 Durable Object를 만든 것이 아니며 두 시스템 간 원자성/운영비/실기기 결과는 미검증. 구형 shared writer가 우회하면 모델도 FAIL함을 명시.
+- 071 canonical 및 app126 배포 상태 미변경, 127/072~077 미배포, 사용자 원본 변경 없음. TypeScript/Build/전체 CI/독립 Work/Cloudflare 실 D1 비용/PC↔모바일 미검증. **133 W2 격리 PASS를 배포 승인 근거로 사용 금지.**
+
+### 다음 Codex High 목표 — 실제 수정 전 반드시 좁은 범위 비용 검증
+
+1. read-only로 현재 **실제 공유 D1**의 likes/track_stats/derived/관련 인덱스/trigger SQL 목록과 환경별 Worker 버전을 대조(기존 사용자 데이터 SELECT/변경 금지). live trigger가 소스와 다르면 실제 live 우선.
+2. **별도 격리 D1**에서 133의 `batch()`·`changes()` 동작과 `meta.rows_written/read`, trigger/index 실제 비용을 좋아요/해제/중복/오류 롤백 각각 확인. 사용자 실데이터로 테스트하지 말 것. D1 W1~W2가 현재 trigger 유지 조건에서 불가능하면 빠르게 FAIL 보고하고 파생 업데이트 비용 구조 설계부터 진행.
+3. 135 사용자별 영속 순서 모델을 실 Cloudflare DO로 구현하기 전에 보존 기록/처리 중 실패/중복/오프라인·구형 Writer/2000 ID/128 토큰·10만 사용자 요금 비교. DO↔D1 한 트랜잭션이라고 가정 금지. 구형 Writer 전부 같은 순서/확정 규칙이 되기 전 PREVIEW 배포 금지.
+4. Explore 추천/최신/인기/프로필 재방문 원본 D1 read 0·공개 숫자/개인 하트 일치·계정별 원본 하위호환 유지. 직접 R2 덮어쓰기/전체 feed 재생성/파괴적 migration/자동 복구 허위 `settled` 금지.
+5. 앱/Worker와 모든 환경의 전체 릴리스 경로를 분리 검증. 코드 수정은 preview만; 최초 실 PREVIEW 배포는 사용자 별도 승인. TEST/PRODUCTION은 각각 명시 승인; 미검증 상태에서는 배포/원본 데이터 수정 없음.
+
 ## 최종 기준 — 2026-09-21 KST: 133 글로벌 조사·W2 격리모형 PASS / 실제 동시성·릴리스 FAIL
 
 최신 `DOCS/CURRENT_RELEASE_STATE.md` 0BR 및 `DOCS/LIKE_WRITE_REDESIGN_133.md`. `scripts/verify-133-like-direct-two-row.py` 격리 SQLite: 직접 두 행 모델의 신규 좋아요·해제 2행, 같은 상태 retry 0행, 타인 좋아요 보호 PASS. 다만 별개 오래된 주문이 나중에 도착하면 최종값 반전 재현: **순서 영속 기록 없는 직접 D1 W2 모델은 제품 적용 금지**. 이 작업은 preview 문서/모형만 반영; 실제 PREVIEW 앱126/Worker071, 앱127+Worker072~077 미배포. 기존 069 W4 비용 FAIL·개인 하트 자동 수렴 FAIL 유지.

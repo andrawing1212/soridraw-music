@@ -32,14 +32,14 @@ assert.match(collection, /cache\.canonicalLikedTrackIds = \[\.\.\.next\]/);
 const getter = service.slice(service.indexOf('export const getExploreLikedTrackIds = async'),service.indexOf('export const reconcileExploreLikedTrackCollectionState'));
 assert.match(getter, /await ensurePersonalLikeBaseline127\(user\)/);
 assert.match(getter, /const missing = normalized\.filter\(\(trackId\) => !cache\.has\(trackId\)\)/);
-assert.match(getter, /readLikeOutbox\\(user\\.uid\\)/);
-assert.match(getter, /const currentOutbox127 = readLikeOutbox\\(user\\.uid\\)/);
-assert.match(getter, /const currentUnresolved127 = readSnapshotPending127\\(user\\.uid\\)/);
-assert.match(getter, /if \\(currentOutbox127\\[trackId\\] \\|\\|/);
-assert.match(getter, /Object\\.prototype\\.hasOwnProperty\\.call\\(currentUnresolved127, trackId\\)/);
+assert.match(getter, /readLikeOutbox\(user\.uid\)/);
+assert.match(getter, /const currentOutbox127 = readLikeOutbox\(user\.uid\)/);
+assert.match(getter, /const currentUnresolved127 = readSnapshotPending127\(user\.uid\)/);
+assert.match(getter, /if \(currentOutbox127\[trackId\] \|\|/);
+assert.match(getter, /Object\.prototype\.hasOwnProperty\.call\(currentUnresolved127, trackId\)/);
 assert.ok(getter.indexOf('const currentOutbox127 =') > getter.indexOf('await requestExploreLike(user,'),
   'late API payload must re-read pending state after network request');
-assert.match(getter, /if \\(!cache\\.has\\(trackId\\)\\) cache\\.set\\(trackId, likedIds\\.has\\(trackId\\)\\)/);
+assert.match(getter, /if \(!cache\.has\(trackId\)\) cache\.set\(trackId, likedIds\.has\(trackId\)\)/);
 assert.match(getter, /outbox\[trackId\]\?\.desiredLiked \?\? unresolved\[trackId\] \?\? cache\.get\(trackId\) === true/);
 
 const listener = service.slice(service.indexOf('const applyRemoteLikeSignal127'), service.indexOf('const readSignalRetry127'));
@@ -88,9 +88,9 @@ assert.doesNotMatch(publish, /firebase\/firestore|env\.DB|D1/);
 
 assert.ok(rules.rules.userSync.$uid.exploreLike, 'existing UID-scoped like signal rules required');
 assert.match(page, /readExploreTrackLikeMembership127\(user\.uid, track\.id\)/);
-assert.match(service, /computeExploreLikeAction127\\(baseLiked, liked, baseLikeCount\\)/);
-assert.match(service, /readExploreTrackLikeMembership127\\(uid, normalizedTrackId\\) \\?\\? !liked/);
-assert.match(service, /const now = nextExploreLikeMutationAt127\\(existing\\?\\.updatedAt \\|\\| 0, Date\\.now\\(\\)\\)/);
+assert.match(service, /computeExploreLikeAction127\(baseLiked, liked, baseLikeCount\)/);
+assert.match(service, /readExploreTrackLikeMembership127\(uid, normalizedTrackId\) \?\? !liked/);
+assert.match(service, /const now = nextExploreLikeMutationAt127\(existing\?\.updatedAt \|\| 0, Date\.now\(\)\)/);
 const clockStart127 = service.indexOf('export const nextExploreLikeMutationAt127 =');
 const clockEnd127 = service.indexOf('// One transition represents', clockStart127);
 assert.ok(clockStart127 > 0 && clockEnd127 > clockStart127);
@@ -135,10 +135,10 @@ assert.deepEqual(compute(true, true, 1), { liked: true, likeCount: 1 }, 'repeati
 assert.match(page, /if \(currentLiked === undefined\)/);
 assert.match(page, /likedTrackIds\[track\.id\] === undefined/);
 assert.match(page, /detail\?\.source !== 'remote'/);
-assert.match(page, /const effectiveLiked127 = readExploreTrackLikeMembership127\\(user\\.uid, detail\\.trackId\\)/);
-assert.match(page, /if \\(effectiveLiked127 !== detail\\.liked\\) return/);
-assert.match(page, /setLikedTrackIds\\(\\(previous\\) => \\(\\{ \\.\\.\\.previous, \\[detail\\.trackId!\\]: effectiveLiked127 \\}\\)\\)/);
-assert.match(page, /next\\[id\\] = readExploreTrackLikeMembership127\\(user\\.uid, id\\) \\?\\? likedSet\\.has\\(id\\)/);
+assert.match(page, /const effectiveLiked127 = readExploreTrackLikeMembership127\(user\.uid, detail\.trackId\)/);
+assert.match(page, /if \(effectiveLiked127 !== detail\.liked\) return/);
+assert.match(page, /setLikedTrackIds\(\(previous\) => \(\{ \.\.\.previous, \[detail\.trackId!\]: effectiveLiked127 \}\)\)/);
+assert.match(page, /next\[id\] = readExploreTrackLikeMembership127\(user\.uid, id\) \?\? likedSet\.has\(id\)/);
 assert.doesNotMatch(page, /invalidateExplorePersonalLikeBaseline127\(user\.uid\)/);
 assert.match(page, /checkExplorePersonalLikeRevision127\(user\)/);
 assert.match(page, /window\.addEventListener\('focus', onResume\)/);

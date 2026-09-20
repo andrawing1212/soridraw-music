@@ -182,6 +182,9 @@ const writeLikeLocal127 = (key: string, value: string) => {
 // accepted tracks whose shared R2 CAS was not materialized; an older R2 read
 // must not silently reverse this device's final intention on the next visit.
 // Only an actual updated snapshot for that same ID may clear this guard.
+// An absent field from a legacy Worker is not proof of snapshot success.
+export const canBroadcastExploreLikeSnapshot127 = (status: unknown): boolean => status === 'updated';
+
 const readSnapshotPending127 = (uid: string): Record<string, boolean> => {
   try {
     const raw = JSON.parse(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SNAPSHOT_PENDING_127, uid)));
@@ -816,7 +819,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
       const results = normalizeBatchResults(payload, batchEntries.map((pending) => pending.trackId));
       // Missing status (older Worker) is NOT evidence that the personal
       // materialization succeeded; preserve local state and avoid RTDB replay.
-      const personalSnapshotUpdated127 = payload?.data?.personalLikeSnapshot === 'updated';
+      const personalSnapshotUpdated127 = canBroadcastExploreLikeSnapshot127(payload?.data?.personalLikeSnapshot);
       const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
       const latest = readLikeOutbox(uid);
       const cache = getLikedStateCache(uid);

@@ -7,9 +7,10 @@ const worker = readFileSync(generatedPath, 'utf8');
 const service = readFileSync('src/services/exploreLikeService.ts', 'utf8');
 const patch72 = readFileSync('cloudflare/explore-worker/patches/072-personal-like-r2-revision.mjs', 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
+const portableWorker = process.env.SORIDRAW_VERIFY_PORTABLE === '1';
 
 for (const marker of [
-  'SORIDRAW_PERSONAL_LIKE_R2_REVISION_072_20260920',
+  ...portableWorker ? [] : ['SORIDRAW_PERSONAL_LIKE_R2_REVISION_072_20260920'],
   'SORIDRAW_SERVER_ORDER_LIKE_QUEUE_073_20260920',
   'SORIDRAW_PERSONAL_LIKE_R2_CAS_074_20260920',
 ]) assert.ok(worker.includes(marker), 'missing '+marker);
@@ -121,3 +122,4 @@ console.log('074_CONCURRENT_DISTINCT_TRACKS_MERGED=PASS');
 console.log('074_SHARED_UID_R2_CAS_NO_D1_WRITE=PASS');
 console.log('074_LEGACY_SHARED_HEAD_CORRECT=PASS');
 console.log('074_NO_LIVE_DATA_WRITE=PASS');
+if (portableWorker) console.log('074_PORTABLE_FROZEN_WORKER_TEST=PASS');

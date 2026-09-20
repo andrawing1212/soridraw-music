@@ -1,5 +1,22 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BQ. 좋아요/해제 1회 D1 최소 행 변경 4 검증 — W1~W2 하드 게이트 FAIL, 구조 재설계 필요 (2026-09-21 KST)
+
+사용자의 "다음 작업으로 이어가" 지시에 따라 새 개인 동기화 패치를 추가하기 전에 **기존 앱126/Worker071의 실제 069 좋아요 쓰기 비용 구조**를 코드와 격리 SQLite로 검증했다. `preview` Worker071 canonical은 바꾸지 않았고 실제 배포/사용자 데이터 변경 0.
+
+### 확정한 소스 구조와 격리 감사
+- Worker071 `enqueueExploreLikeBatch035`: 좋아요/해제 한 번의 신규 batch를 `explore_like_batches_069`에 INSERT OR IGNORE → **행 변경 1**.
+- `processExploreLikeAggregateWave035`: 기존 통계가 있는 곡의 변경 때 `track_stats` UPDATE/UPSERT → **1**, 같은 사용자+곡 `likes` INSERT 또는 DELETE → **1**, 처리된 `explore_like_batches_069` DELETE → **1**.
+- 서로 다른 사용자 행동이 묶이지 않은 **새로운 단일 좋아요 / 단일 해제** 각각 **최소 4개 행 변경**이라는 구조상 결과. 작업을 한 `env.DB.batch`에 묶어도 행 변경 수가 1이 되는 것은 아니다. 이 수치는 이 코드 경로의 구조적 모델로, 인덱스·추가 트리거·실제 R2/RTDB 운영량까지 측정한 **라이브 Cloudflare 청구값은 아니다**.
+- 신규 `scripts/verify-132-like-d1-write-budget.py`: canonical 069 enqueue/집계 각 SQL 구문 존재 확인, 별도 인메모리 SQLite에서 좋아요와 해제 시 동일 행 변경 재현. 최종 GitHub Actions Run `35538319528` SUCCESS: `132_SQLITE_SINGLE_LIKE_ROW_CHANGES=4`, `132_SQLITE_SINGLE_UNLIKE_ROW_CHANGES=4`, `132_D1_W1_W2_RELEASE_GATE=FAIL_BY_SOURCE_LEVEL_LOWER_BOUND`, `132_D1_ROWS_WRITTEN_LIVE_METER=NOT_MEASURED`. 검사 PASS는 **비용 게이트 위반을 제대로 감지했다는 뜻**이며 릴리스 PASS 아님. 임시 Workflow 165 제거.
+- 이 비용 구조는 074의 R2 CAS, 127 개인 pending, 075~077 원본 확인 기능을 더 붙여도 줄지 않는다. 승인 없는 실제 사용자 mutation이나 실데이터 D1 조회는 실행하지 않았다.
+
+### 다음 작업·승격 차단
+1. **추가 자동 복구/알림 패치 전에** 단일 행동 D1 W1~W2를 만족할 별도 백엔드 구조를 결정. 후보는 기존 durable D1 069 큐와 집계 4행 경로를 제거하고 사용자별 좋아요 관계 및 곡 통계를 실제 원본 2행 안에서 **원자적으로** 처리하는 방식. 이 경로의 동시 기기 순서·재시도·중복·정합성부터 실행형 설계·비용 비교해야 하며 아직 구현 승인이 난 완성안이 아니다.
+2. 다른 후보(큐를 D1 밖으로 옮기는 방식 등)는 별도 Cloudflare 사용량·장애 복구·운영비가 있으므로 W1~W2만 보고 무조건 도입하지 않음. 장기 공유 데이터 유지·기존 구형 Writer 공존과 전체 릴리스 승격 방식을 함께 검증.
+3. 실제 계정 테스트 때 D1 **rows_written**(좋아요/해제 각각)과 D1 **rows_read**(재방문 변경 없음 0), R2 HEAD/GET/PUT, RTDB 다운로드/transaction을 명확히 분리 실측. W3+이면 사용자가 성공하더라도 TEST/PRODUCTION 승격 차단.
+4. 이전 0BP의 개인 하트 최종 D1 미확정/자동 수렴 FAIL도 유지. 구형 Worker 공유 R2 덮어쓰기, 2천/128 예외·PC↔모바일 실기기 검증 미완료. `public/app-version.json=126`, 실제 PREVIEW 앱126 + Worker071 유지. 후보 앱127/Worker072~077 미배포, main/production 및 사용자 원본 비변경. 명시적 프리뷰배포 승인 전 배포 금지.
+
 ## 0BP. 앱127 Worker 개인 R2 갱신과 최종 D1 확정 분리 — 잘못된 RTDB 하트 전파 차단 PASS, 최종 수렴 FAIL (2026-09-20 KST)
 
 사용자 "계속 진행해" 지시에 따라 기존 0BO의 **개인 좋아요 R2가 성공적으로 갱신돼도 D1 canonical 집계는 뒤에 완료될 수 있다는 미해결 경계**를 수정했다. 현재 PREVIEW 실서비스는 앱126 + Worker071 그대로다. 후보 앱127/Worker072~077 미배포.

@@ -207,6 +207,17 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
     readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1';
   const gap = (lastSeen > 0 && signal.previousVersion !== lastSeen) ||
     (lastSeen === 0 && baselineAlreadyVerified);
+  if (gap) {
+    // Do not first apply a potentially incomplete 50-row replay, then undo it.
+    // Keep the last good UI and reconcile against per-user R2 once instead.
+    markSeenLikeSignal127(uid, signal.version);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
+        detail: { uid, reason: 'missed-confirmed-like-signal' },
+      }));
+    }
+    return;
+  }
   const pending = readLikeOutbox(uid);
   const cache = getLikedStateCache(uid);
   let changed = false;
@@ -222,11 +233,6 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
   }
   if (changed) persistLikedStateCache(uid, cache);
   markSeenLikeSignal127(uid, signal.version);
-  if (gap && typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
-      detail: { uid, reason: 'missed-confirmed-like-signal' },
-    }));
-  }
 };
 
 let activeLikeSignalUid127 = '';

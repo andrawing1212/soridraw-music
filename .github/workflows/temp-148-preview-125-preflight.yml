@@ -42,7 +42,11 @@ jobs:
             scripts/verify-125-like-preservation.mjs \
             scripts/verify-070-shared-feed-guard.mjs; do
             echo "VERIFY_FILE=$f"
-            node "$f"
+            if [ "$f" = scripts/verify-070-shared-feed-guard.mjs ]; then
+              SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node "$f"
+            else
+              node "$f"
+            fi
           done
           echo 'ALL_OFFICIAL_RELEASE_PRECHECKS=PASS'
           echo 'DEPLOY=0 D1_WRITE=0 R2_WRITE=0'

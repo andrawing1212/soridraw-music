@@ -40,8 +40,8 @@ const {compareLikeOrder074, syncExploreLikeR2AfterBatch074: sync}=
 assert.equal(compareLikeOrder074({at:100,batchId:'a'},{at:200,batchId:'b'}),-1);
 assert.equal(compareLikeOrder074({at:200,batchId:'z'},{at:200,batchId:'b'}),1);
 
-const mockStore=(initIds=[], race=true)=>{
-  let body={schemaVersion:1,uid:'test-uid',likedTrackIds:initIds,lastLikeOrders074:{}};
+const mockStore=(initIds=[], race=true, initialOrders={})=>{
+  let body={schemaVersion:1,uid:'test-uid',likedTrackIds:initIds,lastLikeOrders074:initialOrders};
   let revision=1,gets=0,puts=0,rejected=0;
   let deferredFirstGet=null;
   const barrier=(releaseFirst=true)=>({
@@ -110,6 +110,39 @@ const row=(id,liked)=>[{trackId:id,liked}];
   assert.ok(updated.likedTrackIds.includes('song'));
   assert.match(service,/computeExploreLikeAction127/);
 }
+// Cold account, full user bundle and full conflict history must not fall
+// back to an unconditional shared R2 overwrite or silently drop any liked ID.
+{
+  let writes=0;
+  const cold={PROFILE_MEDIA:{
+    get:async()=>null,
+    put:async()=>{writes++; throw Error('cold write forbidden');},
+  }};
+  const result=await sync({PROFILE_MEDIA:cold.PROFILE_MEDIA},'test-uid',row('song',true),100,'a');
+  assert.deepEqual(result,{ok:false,repairNeeded:true,reason:'shared_r2_cold_requires_canonical_rebuild'});
+  assert.equal(writes,0);
+}
+{
+  const ids=Array.from({length:2000},(_,i)=>'existing-'+i);
+  const store=mockStore(ids,false);
+  const result=await sync(store.env,'test-uid',row('new',true),101,'n');
+  assert.equal(result.ok,false,'full user bundle is not authoritative for absence');
+  assert.equal(result.reason,'shared_r2_capacity_requires_canonical_rebuild');
+  assert.equal(store.puts,0);
+  assert.deepEqual(store.state.likedTrackIds,ids,'no existing like may be truncated');
+}
+{
+  const orders=Object.fromEntries(Array.from({length:128},(_,i)=>[
+    'seen-'+i,{at:i+1,batchId:'a'}
+  ]));
+  const store=mockStore(['seen-0'],false,orders);
+  const result=await sync(store.env,'test-uid',row('new',true),300,'n');
+  assert.equal(result.ok,false);
+  assert.equal(result.reason,'shared_r2_order_capacity_requires_canonical_rebuild');
+  assert.equal(store.puts,0);
+  assert.deepEqual(store.state.lastLikeOrders074,orders,'do not forget an ordering token');
+  assert.deepEqual(store.state.likedTrackIds,['seen-0']);
+}
 assert.match(handler,/EXPLORE_LIKE_R2_TRACK_ORDER_LIMIT_074 = 128/);
 assert.match(handler,/onlyIf: \{ etagMatches: object\.etag \}/);
 assert.doesNotMatch(handler,/env\.DB\.prepare\(|caches\.default/);
@@ -121,5 +154,6 @@ console.log('074_CONCURRENT_SAME_TRACK_LAST_SERVER_ORDER=PASS');
 console.log('074_CONCURRENT_DISTINCT_TRACKS_MERGED=PASS');
 console.log('074_SHARED_UID_R2_CAS_NO_D1_WRITE=PASS');
 console.log('074_LEGACY_SHARED_HEAD_CORRECT=PASS');
+console.log('074_COLD_FULL_AND_ORDER_CAP_FAIL_CLOSED_NO_DATA_LOSS=PASS');
 console.log('074_NO_LIVE_DATA_WRITE=PASS');
 if (portableWorker) console.log('074_PORTABLE_FROZEN_WORKER_TEST=PASS');

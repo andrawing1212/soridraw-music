@@ -1,5 +1,19 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-20 KST: 076 큐 처리 완료 검사 후보 PASS / 자동 복구·구형 큐 미해결
+
+최신 상태는 `DOCS/CURRENT_RELEASE_STATE.md` 0BJ. PREVIEW 실제 앱126/Worker071 유지. 앱127 및 072~076 patch는 미배포.
+
+- 076 패치: 인증된 예외 원본 확인에서 최대 20곡 요청 검증 후 사용자별 활성 `explore_like_user_queue_075` 행과 처리 커서 비교. 미처리 있으면 409, 읽기 실패면 503. 075 큐 처리 뒤에만 bounded D1 canonical membership 조회. 데이터 쓰기 0.
+- 신규 `scripts/verify-130-like-settlement-gate.mjs`: pending/error/settled/invalid 입력 실행형 mock. 기존 129와 128/127/126/125/124/123/110 회귀, TypeScript/Build와 071 SHA 고정. 최종 Run `35514904414` SUCCESS. 임시 workflow 158 삭제.
+- **PASS 범위 한정:** 076은 현재 075 큐만 검사하며 구형 069 큐, 동시 신규 요청, 074 개인 R2가 최종 D1과 이미 달라진 상황을 자동 복구하지 않는다. 075/076을 일반 페이지 진입에 호출하지 말 것. D1 read 0 목표와 1회 최대20곡 exceptional lookup을 분리한다.
+
+### 다음 안전 작업
+1. 구형 069/075 큐의 실제 공존·처리 커서/원본 최종화 경로를 비교하고, 별도 D1 write·전역 scan 없이 특정 UID/곡에 대해 확정 가능한 시점이 존재하는지 검증. 불가능하면 클라이언트가 정답을 확정했다고 표시하지 않으며 구형 writer 사용 종료 또는 선행 호환 수정 순서를 보고.
+2. 확정된 대상 곡에 한해 클라이언트 pending 우선/구형 R2 덮어쓰기 재경합 처리/최대20곡 canonical 확인/필요한 부분만 개인 R2 CAS 복구. 원본이 대량 재조회되거나 전체 사용자 캐시를 다시 쓰는 구조 금지. 실사용 D1 mutation W1~W2와 R2/RTDB 10만 사용자 비용부터 검증.
+3. 실제 Cloudflare 조건부 저장·기기 동시 좋아요/해제·오프라인·2000곡·독립 Work 감사 완료 전 릴리스 허가 금지. 변경 실패 시 FAIL로 보고하고 사용자 데이터 무단수정 없이 중단.
+4. 사용자 명시적 프리뷰배포 승인 전 preview 소스만 변경, 앱126/Worker071 라이브 유지, TEST/PRODUCTION 변경 금지.
+
 ## 최종 기준 — 2026-09-20 KST: 075 제한된 원본 확인 경로 추가 / 자동 수렴·승격 미완료
 
 `DOCS/CURRENT_RELEASE_STATE.md` 0BI가 최신 기준. 071 실제 Worker, 앱126 실제 PREVIEW 유지. 127 앱 소스와 072~075 Worker patch는 PREVIEW의 미배포 후보.

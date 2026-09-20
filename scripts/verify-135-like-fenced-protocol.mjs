@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 // A single durable actor owns all commands for one UID; it MUST recover its
 // pending transaction before accepting the next command for that track.
 class FencedActor {
-  constructor(database) { this.database = database; this.tracks = new Map(); }
+  constructor(database, durable) { this.database = database; this.tracks = durable; }
   canonical(track) { return Boolean(this.database.likes.get(track)); }
   record(track) {
     if (!this.tracks.has(track)) {
@@ -52,7 +52,8 @@ class FencedActor {
 }
 
 const db = { likes: new Map(), count: 0, logicalRowWrites: 0 };
-const actor = new FencedActor(db);
+const durable = new Map();
+let actor = new FencedActor(db, durable);
 assert.equal(actor.mutate('song','pc-like',0,true).state,'settled');
 assert.equal(db.count, 1);
 assert.deepEqual(actor.mutate('song','pc-like',0,true),{state:'settled',revision:1,desired:true,duplicate:true});
@@ -71,12 +72,14 @@ console.log('135_FENCED_DISTINCT_SONGS_INDEPENDENT=PASS');
 assert.equal(actor.mutate('song','crash-before',3,false,'before_d1').state,'pending');
 assert.equal(db.count,2);
 assert.equal(actor.mutate('song','newer-must-wait',3,true,'recovery_failure').state,'pending');
+actor = new FencedActor(db, durable); // simulated runtime restart, intent survives
 actor.recover('song');
 assert.equal(db.count,1);
 assert.equal(actor.mutate('song','crash-before',3,false).state,'settled');
 console.log('135_FENCED_RECOVER_DURABLE_INTENT_BEFORE_NEW_ORDER=PASS');
 assert.equal(actor.mutate('song','crash-after',4,true,'after_d1_before_ack').state,'pending');
 assert.equal(db.count,2);
+actor = new FencedActor(db, durable); // crash after D1, before persisted final ACK
 actor.recover('song');
 assert.equal(db.count,2);
 assert.equal(actor.mutate('song','crash-after',4,true).state,'settled');

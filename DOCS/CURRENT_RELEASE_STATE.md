@@ -1,5 +1,18 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BK. Worker077 구형 069/066/035 큐 보호 후보 PASS / 운영 복구 합격 아님 (2026-09-20 KST)
+
+사용자의 "진행해" 지시로 0BJ의 미해결 구형 좋아요 큐 문제를 추가 분석하고 `preview` 전용 patch·실행형 mock에 반영했다. **실제 PREVIEW 앱126 + Worker071 유지. 앱127/Worker072~077 미배포.**
+
+- `cloudflare/explore-worker/migrations/20260912_01_explore_like_w1_queue.sql`의 069은 `batch_id` 단일 PRIMARY KEY, `user_uid` secondary index가 없다. 066은 batch_id PK+created index, 035도 batch_id PK+created index이며 UID 전용 index가 없다. 구형 요청을 UID별로 찾기 위해 `WHERE user_uid = ?` 전체 큐 scan 실행 금지. 승인 없는 인덱스 추가 migration도 진행하지 않는다.
+- 신규 `cloudflare/explore-worker/patches/077-legacy-like-queue-guard.mjs`: **일반 진입과 무관한 예외 075/076 원본 조회 경로**에서 활성 UID별 075 큐 검사 다음 069→066→035 구형 큐를 각각 `SELECT 1 … LIMIT 1`로 최대 3회 검사. 어느 하나라도 미처리면 409, 큐 조회 오류면 503 fail-closed. 모두 비었을 때만 기존 본인 최대20곡 D1 canonical membership 조회. 각 구형 큐는 최대 첫 행만 읽으므로 전체/UID scan 없음. DB/사용자 데이터 쓰기 0.
+- 신규 `scripts/verify-131-legacy-like-queue-guard.mjs`: 구형 각 큐 pending/error 차단, 3개 전부 비었을 때 조회, 075 UID 선검사 후 구형 검사 순서, UID scan 없음 실행형 mock. `verify-129`·`verify-130`는 077 helper를 주입하여 과거 075/076 개별 기능도 유지.
+- 최종 Run `35515730947` **SUCCESS**: Worker071 SHA 고정 복사본+072~077 순차 적용·`node --check`, 128/129/130/131 실행형 mock, 127/126/125/124/123/110 기존 회귀, TypeScript, Build PASS. 초기 159 검사 Run `35515426960`, `35515499702`, `35515648324`은 신규 검증 스크립트의 marker/주석 정규식/075 mock 범위 문제로 FAIL, 검증 코드 수정 후 성공. 임시 Workflow 159 제거. 실제 D1/R2/RTDB/Firebase write·Hosting/Worker 배포 0.
+- **절대 한계:** 077은 전역 구형 큐에 1행만 남아 있어도 무관한 계정의 예외 복구를 409로 막을 수 있다. 구형 Worker가 계속 active면 높은 트래픽에서 복구 지연/기아가 발생한다. 또한 075 UID 및 3개 구형 큐 검사 직후 들어오는 새 요청까지 하나의 원자적 fence로 막지는 못한다. 구형 Worker의 공유 R2 무조건 덮어쓰기, 앱에서 canonical API 호출·R2 CAS 자동 복구 미구현, 과거 2000 ID 제한도 그대로이다. **운영용 자동 수렴 PASS 아님.**
+- 비용: 077은 정상 재방문에 사용하지 않으며 예외 복구 1회마다 활성 075 UID 조회와 최대 3개의 구형 큐 첫 행 조회 + 최대 20곡 원본 확인이 추가된다. W1~W2 mutation 실제 수치 및 R2/RTDB 10만 사용자 비용 미측정. 단순 mock 테스트로 비용 PASS 금지. 구형 코드가 활동 중인 동안 안전하고 효율적인 최종 복구를 보장하려면 구형 writer 호환 선행 승격 또는 별도 사용자별 확정 신호 구조가 필요. 사용자 승인 없이 TEST/PRODUCTION 변경 금지.
+
+다음: 077을 전체 해결로 승격하지 않고 **구형 Worker와 신규 Worker의 공유 원본 writer를 어떻게 동일 규칙으로 만들지** release sequencing을 설계. 공개 숫자/개인 하트/좋아요 D1 W1~W2 동시 측정 가능해진 후에만 PREVIEW 릴리스 판단. 사용자 원본 대량변경·전체 재생성 금지.
+
 ## 0BJ. Worker076 활성 075 큐의 원본 확인 안전장치 코드 PASS — 이전 큐·자동 복구는 미완료 (2026-09-20 KST)
 
 사용자의 "계속 진행해줘" 지시로 0BI의 예외 복구용 D1 membership 확인을 **큐 접수 ACK와 실제 적용 완료를 혼동하지 않도록** 보완했다. 현재 실제 앱126/Worker071 유지. 후보 앱127 및 Worker072~076은 미배포.

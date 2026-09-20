@@ -70,7 +70,7 @@ print("132_AUDIT_TEST=PASS (release readiness deliberately remains FAIL)")
 # This is a source-guarded counterexample, not a live D1 write.
 import hashlib
 w1_start = worker.index("async function exploreLikeW1Batch040(")
-w1_end = worker.index("\\n}", w1_start) + 2
+w1_end = worker.index("\n}", w1_start) + 2
 w1 = worker[w1_start:w1_end]
 assert "const fallbackAt = Math.max(0, Math.floor(Number(now || Date.now())));" in w1
 assert "const batchAt = Math.max(fallbackAt, ...canonical.map((row) => row.mutationAt));" in w1
@@ -78,7 +78,7 @@ assert "'l069_' + String(batchAt).padStart(13, '0') + '_' + hex" in w1
 
 def simulated_batch_key(server_now: int, client_mutation_at: int) -> str:
     payload = '[{"trackId":"song","liked":true,"mutationAt":' + str(client_mutation_at) + '}]'
-    digest = hashlib.sha256(('account-1\\n' + payload).encode()).hexdigest()
+    digest = hashlib.sha256(('account-1\n' + payload).encode()).hexdigest()
     batch_at = max(server_now, client_mutation_at)
     return 'l069_' + str(batch_at).zfill(13) + '_' + digest
 

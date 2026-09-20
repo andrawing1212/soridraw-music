@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BX. 잘못된 좋아요 접수 응답이 최신 로컬 하트를 지우는 경로 차단 (2026-09-21 KST)
+
+기준 preview `0feccae05f04fec3f2cc6232d6dce19c3061d8fb`. 서버 069 중복/순서·비용의 근본 해결은 아직 미완료이므로 범위를 정확히 구분해 `src/services/exploreLikeService.ts`의 `flushPendingLikes`에 fail-closed 검증을 추가. `normalizeBatchResults`로 모든 곡 ID/boolean을 확인한 후, **이번 요청에서 실제 전송한 각 곡의 desiredLiked와 서버가 반환한 liked가 하나라도 다르면** `readLikeOutbox(uid)`·개인 cache·snapshotPending·displayLocks에 접수 성공 변경을 하기 전에 오류 발생. 기존 catch가 마지막 로컬 의도를 보관하므로 잘못된/오래된 batch 응답이 유저의 하트를 확정하거나 삭제하지 않음. 정상 071 Worker의 응답은 전송한 값을 그대로 반환하므로 기존 성공 경로·30초 묶음·UI 디자인·D1 mutation 미변경. 이 검사는 서버 **접수 응답 검증**일 뿐 최종 D1 완료 증명이 아니다.
+
+기존 `scripts/verify-127-atomic-personal-like.mjs`에 sent-by-track 불일치와 보존 순서 회귀 추가. 실제 GitHub 수정 service 소스 내 검사 구문 위치 및 true/false 응답 모형 V8 격리 검증 PASS. 전체 127/128~136 실행, TypeScript, Build, 실 D1 billed rows, PC↔모바일 실사용은 **미검증**. 이전 read-only audit 요청 `f951e797...` 상태를 다시 조회했으나 GitHub connector statuses/runs 모두 빈 결과(검사 미확인). `src/services/exploreLikeService.ts` 및 127 verifier만 수정, 원본 사용자 데이터·Worker071·실제 앱126·main/production·Firebase/Cloudflare 배포 없음.
+
+**릴리스 차단 계속:** 071 069 큐 ID 재생성/처리 후 dedupe 삭제/구형 shared R2 unconditional writer, 파생 trigger/index 실제 W3+ 비용, 최종 canonical 이후 R2·기기 자동 수렴은 해결되지 않음. ACK 불확실 상태의 outbox 재전송은 069이 새로운 batch ID를 만들 수 있어 여전히 위험. 구형 혼합 Writer와 0BS·0BW를 모두 해결하고 full CI+격리 D1 실측 전 앱127/Worker078 배포 금지.
+
 ## 0BW. 좋아요 첫 요청 중 재클릭의 최종 의도 유실 수정 (2026-09-21 KST)
 
 사용자 "진행해" 지시. 기준 `preview` `c0fc2ba5cc88d36a3f59f266281d38c87702bd48` 이후 실제 `src/services/exploreLikeService.ts`의 로컬 30초 묶음 경로 확인.

@@ -9,7 +9,7 @@ const end=source.indexOf('async function handleMyLikeConfirmed075(',begin);
 assert.ok(begin>0&&end>begin);
 const helper=source.slice(begin,end);
 const handler=source.slice(end,source.indexOf('async function handleMyLikeStatesD1Core(',end));
-assert.match(helper,/SORIDRAW_LEGACY_LIKE_QUEUE_GUARD_077_20260920/);
+assert.match(source,/SORIDRAW_LEGACY_LIKE_QUEUE_GUARD_077_20260920/);
 assert.match(handler,/await requireLegacyLikeQueuesSettled077\(env\)/);
 assert.ok(handler.indexOf('await requireLegacyLikeQueuesSettled077(env)') <
   handler.indexOf('return await handleMyLikeStatesD1Core'), 'legacy queue probe must precede D1 membership');

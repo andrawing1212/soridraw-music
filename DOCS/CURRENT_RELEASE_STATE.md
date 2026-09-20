@@ -1,5 +1,28 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BC. 앱126 Firebase PREVIEW Hosting 배포 PASS / 38곡 현재 정합성 PASS / 모바일 실사용·과거 비공개 재공개 출처 확인 전
+
+2026-09-20 KST, 사용자의 "그래 다음 진행하자. 승인"에 따라 0BB의 모바일 추천·최신 stale 좋아요 1 표시 수정본을 **PREVIEW 앱126**으로 배포했다. 범위는 React/Firebase PREVIEW Hosting만. TEST/PRODUCTION, Worker071, Functions/Rules, 사용자 원본 D1/Firebase 데이터는 이 릴리스 작업에서 변경하지 않았다.
+
+### 고정 소스와 배포·검증 기록
+- 제품 준비 기준 `f88ba1f1ef644208acf938a18122f8651ed6c68a`; Firebase PREVIEW 앱 배포 트리거/실제 릴리스 source `2c62108e2ad7b3c54ce41baf811dc45e603a8a01`.
+- `public/app-version.json=126`, `src/pages/ExplorePage.tsx`의 126 warm-entry revision 확인 수정. 기존 125 회귀 verifier는 버전 >=125 호환으로, 110 verifier는 126 캐시 조건부 revision을 확인하도록 보완. 기본 30초 좋아요 묶음·공유 1분 반영·Music Note 60초 저장·UI 유지.
+- 첫 preflight Run `35495034377` FAILURE: 이전 110 검사식이 126 stale-entry 로직을 인식하지 못해 배포 전 중단. 110 검사 수정 후 Run `35495097116` **SUCCESS**: 126/125/124/123/110/070 회귀, TypeScript, Build, Worker071 SHA 그대로 `b170d05385c3096a98033675a9acbb63b40148bf782017c326845b7ea4c17813`, D1/R2/Firebase 원격 write 0.
+- Firebase Hosting PREVIEW Run `35495184909` **SUCCESS**: source `2c62108e2ad7b3c54ce41baf811dc45e603a8a01` 고정, TypeScript/Build/Hosting/exact index PASS, `https://preview.soridraw.com/app-version.json=126` PASS, TEST/PRODUCTION 정적 index·main/production refs 비변경 PASS.
+- Cloudflare PREVIEW Worker071 실제 버전 `a6fda48f-ec20-48b3-a08d-ef43128c2e43`, TEST `6e8dca9c-2c58-42ea-ae7d-765e10afef8f`, PRODUCTION `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` — 배포 후 read-only 확인, 변경 없음.
+
+### 실제 배포 후 결과와 예상과 다른 상태
+- 배포 후 read-only Run `35495431978` **SUCCESS (현재 상태 정합성)**: 원본 현재 공개곡 **38곡**의 canonical like count, likes relation, derived likes/row_json 전수 일치. PREVIEW API/latest+popular, PREVIEW local/latest+popular, shared/latest+popular 총 6목록 각각 38곡 전부 원본 카운트 일치. LIVE R2-only latest/popular D1 `R0/W0`; 진단 중 D1/R2/Firebase write 0.
+- 이전 0BA/0BB 당시 **37곡**, 과거 비공개 target SHA10 `1319e4479e` D1 is_public=0. 새 read-only 원본 확인에서 이 곡이 **is_public=1/status=published/updated_at=1789885898014 (2026-09-20 15:31:38 KST)** 으로 변경된 것을 확인. 앱126 배포(15:49 KST) 이전 시점이다. 현재 38곡 목록에는 해당 곡이 원본 공개 상태에 맞춰 노출된다. **의도된 사용자 재공개인지, 다른 코드의 변경인지 원인·승인 미확정**. "기존 비공개 그대로" PASS로 보고하지 않는다. 원본을 무단으로 비공개 원복하거나 덮어쓰지 않는다.
+- 최초 postflight `35495288121`은 기존 37곡 고정검사로 FAIL. `35495331318`은 과거 private `updated_at` 식별값이 변해 FAIL, `35495379834`는 실제 기존 private가 공개된 사실을 분리 확인하며 경고 후 중단. 현재 원본 visibility와 R2 6목록 정합성을 분리한 `35495431978`은 PASS하되 위 출처 미확정 위험 유지.
+- 검사 전용 임시 Workflow 152·153은 검증 후 제거, 상시 126 verifier 보존. 테스트용 신규 좋아요/공개/비공개 mutation은 실행하지 않았다.
+
+### 현재 게이트·다음 작업
+1. **PREVIEW 앱126은 실배포 완료.** 하지만 사용자가 동일 PC/모바일에서 추천·최신의 빈 하트+숫자0을 인기 탭 왕복 없이 확인하는 실사용은 아직 미검증. 정상 재방문 Feed 데이터 추가 read 0(작은 edge revision 체크는 stale일 때 가능), 실제 변경 시 bounded R2와 D1 R0W0도 기기에서 최종 확인 필요.
+2. 과거 비공개 target 재공개가 의도된 작업인지 확인하고, 사용자 행동/로그 없이 app126 버그 또는 임의 공개로 단정 금지. 현재 사용자 데이터를 수정하지 않는다.
+3. 좋아요/해제·공개/비공개 실제 사용자 행동 1회당 D1 rows_written `W1~W2` 실측 미완료. W3+ 또는 PC/모바일 FAIL 시 TEST 승격 금지. Work 독립 감사 미수행.
+4. 구형 TEST/PRODUCTION 059/064 shared full writer 공존 위험은 미해결. catalog WRITE ON/READ OFF/FIRST_PUBLISHER OFF 유지. 사용자 별도 `테스트배포` 승인 전 main/TEST, 명확한 `정식배포` 승인 전 PRODUCTION 변경 금지.
+
 ## 0BB. PREVIEW 앱125 사용자 실사용 FAIL: 모바일 추천/최신의 해제 후 좋아요 숫자 stale / 126 warm-entry 수정 코드 PASS·미배포
 
 2026-09-20 KST, 동일 계정 PC에서 원래 좋아요 1인 첫 두 곡을 해제하고 시간이 지난 뒤 모바일 PREVIEW 추천 탭에서 빈 하트·숫자 1을 확인했다. PC는 빈 하트·숫자 0. 모바일 인기 탭에서는 0이며 다시 추천/최신으로 돌아오면 숫자가 0으로 수렴한다. 이는 이전 0BA의 배포 시점 37곡 PASS 이후 **새 사용자 변경에 대한 실사용 회귀**이며, app125 화면 동기화는 FAIL이다. 기존 0BA PASS는 당시 시점의 서버 결과에 한정한다.

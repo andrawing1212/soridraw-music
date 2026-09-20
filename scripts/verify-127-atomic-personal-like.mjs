@@ -59,10 +59,10 @@ assert.match(listener, /invalidate|EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT/);
 const flush = service.slice(service.indexOf('flushPendingLikes = async'), service.indexOf('// App 120 deliberately ignores historical RTDB'));
 assert.match(flush, /acceptedForSignal127/);
 assert.match(flush, /hasNewerPending && current/);
-assert.match(flush, /latest\\[pending\\.trackId\\] = rebaseExploreLikeAfterInFlight127\\(current, pending\\)/);
-assert.match(flush, /current && current\\.updatedAt > pending\\.updatedAt/);
+assert.match(flush, /latest\[pending\.trackId\] = rebaseExploreLikeAfterInFlight127\(current, pending\)/);
+assert.match(flush, /current && current\.updatedAt > pending\.updatedAt/);
 assert.equal(
-  (flush.match(/rebaseExploreLikeAfterInFlight127\\(current, pending\\)/g) || []).length,
+  (flush.match(/rebaseExploreLikeAfterInFlight127\(current, pending\)/g) || []).length,
   2,
   'successful ACK and ambiguous failure must both preserve a newer explicit intent',
 );
@@ -145,7 +145,7 @@ assert.deepEqual(compute(true, true, 1), { liked: true, likeCount: 1 }, 'repeati
 // Compare the later intent against the earlier accepted desired state rather
 // than its original baseline, or the unlike is dropped as a false/false no-op.
 const rebaseStart127 = service.indexOf('const rebaseExploreLikeAfterInFlight127 =');
-const rebaseEnd127 = service.indexOf('\\n\\nflushPendingLikes = async', rebaseStart127);
+const rebaseEnd127 = service.indexOf('\n\nflushPendingLikes = async', rebaseStart127);
 assert.ok(rebaseStart127 > 0 && rebaseEnd127 > rebaseStart127);
 const rebaseSource127 = service.slice(rebaseStart127, rebaseEnd127);
 const rebaseJs127 = ts.transpileModule(rebaseSource127 + '; return rebaseExploreLikeAfterInFlight127;', {

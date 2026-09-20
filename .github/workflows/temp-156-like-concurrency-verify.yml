@@ -1,5 +1,5 @@
 name: TEMP 156 Personal Like Concurrency Dry Run
-# rerun after corrected shared R2 regression matcher
+# rerun with R2 error guard preserving event-batch scheduling
 on:
   push:
     branches: [preview]

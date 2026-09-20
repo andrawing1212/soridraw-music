@@ -240,6 +240,7 @@ const startLikeSignal127 = (uid: string) => {
   unsubscribeLikeSignal127 = onValue(
     databaseRef(realtimeDb, `userSync/${uid}/exploreLike`),
     (snapshot) => {
+      if (activeLikeSignalUid127 !== uid || auth.currentUser?.uid !== uid) return;
       const signal = normalizeLikeSignal127(snapshot.val());
       if (signal) applyRemoteLikeSignal127(uid, signal);
     },
@@ -275,33 +276,39 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
   const inflight = baselineInFlight127.get(uid);
   if (inflight) return inflight;
   const task = (async () => {
-    const versionAtStart = readSeenLikeSignal127(uid);
-    const likedIds = await requestPersonalLikeBaseline127(user);
-    // The existing R2 writer intentionally caps an account at 2,000 liked
-    // IDs. At capacity, absence from the snapshot is NOT proof of unliked.
-    if (likedIds.length >= 2000) {
-      throw new Error('Personal like snapshot reached its 2000-ID limit; existing cache preserved');
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const versionAtStart = readSeenLikeSignal127(uid);
+      const likedIds = await requestPersonalLikeBaseline127(user);
+      // The existing R2 writer intentionally caps an account at 2,000 liked
+      // IDs. At capacity, absence from the snapshot is NOT proof of unliked.
+      if (likedIds.length >= 2000) {
+        throw new Error('Personal like snapshot reached its 2000-ID limit; existing cache preserved');
+      }
+      if (readSeenLikeSignal127(uid) !== versionAtStart) {
+        // Concurrent device mutation: reread the small per-user R2 snapshot,
+        // never accept an older response over the user's latest signal.
+        if (attempt === 0) continue;
+        throw new Error('Personal like signal advanced during baseline; retry on next entry');
+      }
+      const confirmed = new Set(likedIds);
+      const outbox = readLikeOutbox(uid);
+      const cache = getLikedStateCache(uid);
+      const scope = new Set([...cache.keys(), ...confirmed, ...Object.keys(outbox)]);
+      let changed = false;
+      for (const id of scope) {
+        const nextLiked = outbox[id]?.desiredLiked ?? confirmed.has(id);
+        if (cache.get(id) === nextLiked) continue;
+        cache.set(id, nextLiked);
+        changed = true;
+      }
+      if (changed) persistLikedStateCache(uid, cache);
+      reconcileExploreLikedTrackCollectionSnapshot127(
+        uid, likedIds, Object.fromEntries(Object.entries(outbox).map(([id, row]) => [id, row.desiredLiked])),
+      );
+      baselineCompleted127.add(uid);
+      writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '1');
+      return;
     }
-    if (readSeenLikeSignal127(uid) !== versionAtStart) {
-      throw new Error('Personal like signal advanced during baseline; retry on next entry');
-    }
-    const confirmed = new Set(likedIds);
-    const outbox = readLikeOutbox(uid);
-    const cache = getLikedStateCache(uid);
-    const scope = new Set([...cache.keys(), ...confirmed, ...Object.keys(outbox)]);
-    let changed = false;
-    for (const id of scope) {
-      const nextLiked = outbox[id]?.desiredLiked ?? confirmed.has(id);
-      if (cache.get(id) === nextLiked) continue;
-      cache.set(id, nextLiked);
-      changed = true;
-    }
-    if (changed) persistLikedStateCache(uid, cache);
-    reconcileExploreLikedTrackCollectionSnapshot127(
-      uid, likedIds, Object.fromEntries(Object.entries(outbox).map(([id, row]) => [id, row.desiredLiked])),
-    );
-    baselineCompleted127.add(uid);
-    writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '1');
   })().finally(() => { baselineInFlight127.delete(uid); });
   baselineInFlight127.set(uid, task);
   return task;

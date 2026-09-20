@@ -1,4 +1,5 @@
 name: TEMP 162 Personal Snapshot ACK Boundary
+# rerun after local-event source boundary verification
 on:
   push:
     branches: [preview]

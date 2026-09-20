@@ -39,6 +39,8 @@ const EXPLORE_LIKE_SIGNAL_SEEN_127 = 'soridraw:explore:like-signal-seen:127';
 const EXPLORE_LIKE_SIGNAL_RETRY_127 = 'soridraw:explore:like-signal-retry:127';
 const EXPLORE_LIKE_SIGNAL_GAP_127 = 'soridraw:explore:like-signal-gap:127';
 const EXPLORE_LIKE_REPAIR_TARGET_127 = 'soridraw:explore:like-repair-target:127';
+const EXPLORE_LIKE_R2_REVISION_127 = 'soridraw:explore:like-r2-revision:127';
+const EXPLORE_LIKE_LEGACY_CHECK_MS_127 = 5 * 60_000;
 const EXPLORE_LIKE_SIGNAL_MAX_127 = 50;
 
 type ExploreLikePendingMutation = {
@@ -85,6 +87,8 @@ const baselineInFlight127 = new Map<string, Promise<void>>();
 const baselineCompleted127 = new Set<string>();
 const signalRevisionByUid127 = new Map<string, number>();
 const signalPublishInFlight127 = new Map<string, Promise<void>>();
+const revisionCheckAtByUid127 = new Map<string, number>();
+const revisionCheckInFlight127 = new Map<string, Promise<void>>();
 
 const clampLikeCount = (value: unknown) => {
   const count = Number(value ?? 0);
@@ -362,6 +366,58 @@ export const invalidateExplorePersonalLikeBaseline127 = (uid: string) => {
 };
 
 export const ensureExplorePersonalLikeBaseline127 = ensurePersonalLikeBaseline127;
+
+// SORIDRAW_EXPLORE_LIKE_LEGACY_R2_COMPAT_072_20260920
+// All old and new app generations share one user R2 like bundle. Check its
+// private HEAD at most once per five minutes of active Explore use. Unlike a
+// global Feed revision, this detects a legacy app's change to the current
+// account without a broad D1 membership scan. Unchanged HEAD -> no data GET.
+const requestPersonalLikeRevision127 = async (user: User): Promise<string> => {
+  const payload = await requestExploreLike(user, '/v1/me/likes-revision');
+  const revision = String(payload?.data?.revision || '').trim();
+  if (payload?.ok !== true || !revision || revision.length > 256) {
+    throw new Error('Personal like revision unavailable; preserving last confirmed cache');
+  }
+  return revision;
+};
+
+export const checkExplorePersonalLikeRevision127 = async (user: User): Promise<void> => {
+  const uid = String(user?.uid || '').trim();
+  if (!uid) return;
+  const now = Date.now();
+  if (now - (revisionCheckAtByUid127.get(uid) || 0) < EXPLORE_LIKE_LEGACY_CHECK_MS_127) return;
+  const existing = revisionCheckInFlight127.get(uid);
+  if (existing) return existing;
+  const task = (async () => {
+    try {
+      const revision = await requestPersonalLikeRevision127(user);
+      if (auth.currentUser?.uid !== uid) return;
+      const key = scopedLikeKey127(EXPLORE_LIKE_R2_REVISION_127, uid);
+      const previous = readLikeLocal127(key);
+      if (previous !== revision) {
+        invalidateExplorePersonalLikeBaseline127(uid);
+        await ensurePersonalLikeBaseline127(user);
+        if (auth.currentUser?.uid !== uid) return;
+        // A failed snapshot never advances this marker. The next focus/entry
+        // retries the exact same revision without hiding a stale heart.
+        writeLikeLocal127(key, revision);
+        if (typeof window !== 'undefined' && previous) {
+          window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
+            detail: { uid, reason: 'personal-r2-revision-changed' },
+          }));
+        }
+      }
+      revisionCheckAtByUid127.set(uid, Date.now());
+    } catch (error) {
+      // Throttle a broken connection for only 30 seconds, not for the entire
+      // five-minute normal check window. Never clear the last good liked set.
+      revisionCheckAtByUid127.set(uid, Date.now() - EXPLORE_LIKE_LEGACY_CHECK_MS_127 + 30_000);
+      throw error;
+    }
+  })().finally(() => { revisionCheckInFlight127.delete(uid); });
+  revisionCheckInFlight127.set(uid, task);
+  return task;
+};
 
 const readSignalRetry127 = (uid: string): ExploreLikeAcceptedRow127[] => {
   const raw = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_RETRY_127, uid));
@@ -836,6 +892,7 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   if (!normalized.length) return [];
   installLikeSignalRetry127();
   try {
+    await checkExplorePersonalLikeRevision127(user);
     await ensurePersonalLikeBaseline127(user);
   } catch (reason) {
     // The existing account cache is still usable while an R2 repair is retried.

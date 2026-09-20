@@ -1,5 +1,18 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-20 KST: 앱127 독립 정적 감사 FAIL / 3개 차단 문제 보완 대기
+
+다음 구현 근거: `DOCS/APP127_INDEPENDENT_AUDIT_2026-09-20.md`; 상세 상태 `DOCS/CURRENT_RELEASE_STATE.md` 0BF. 고정 감사 기준 `7f744f7cf8d93148368d1c926ee5dc61703a6887`. 기존 Run `35498983342`은 정적 회귀·TS·Build PASS이지만 누락/경합/비용을 증명하지 않음. 별도 Work 실행 감사는 미실시.
+
+**BLOCKER (수정 우선순위)**
+1. `exploreLikeService.ts`의 알림은 127 클라이언트만 발행. 현재 라이브 126 또는 TEST/PRODUCTION 구형 코드에서 공유 계정 좋아요 변경 시 기존 `EXPLORE_LIKE_BASELINE_127=1` 기기의 개인 하트가 무기한 stale 가능. 구형 환경에서도 사용자별 실제 변경을 bounded 신호/버전으로 감지 가능한지 서버 원본·R2 writer 경로 조사. 공개 likeCount에서 개인 소유 유추 금지.
+2. gap 처리 `markSeenLikeSignal127`가 R2 복구 성공보다 앞서 실행되므로 네트워크/503 실패 후 자동 재시도 없음. 성공 ACK 후에만 완료 마크하거나 durable pending-repair + focus/online/재진입 제한 재시도.
+3. 서버 큐 접수 ACK 시점과 최종 D1 canonical 확정 순서가 다름. 반대 기기의 같은 ID 좋아요/해제 동시 조작·역순/늦은 R2/알림에 대한 최종 상태 기준과 실행형 테스트 필요.
+
+**원칙:** 사용자 계정별 최초 R2 1회 구조를 무작정 매 페이지 전체 재조회로 바꾸지 말 것. 버전 조회는 가볍고 재방문 D1/Firestore 원본 data read 0 목표; W1~W2 하드 게이트. RTDB listener/transaction·R2 metadata 조회 비용을 10만 명 기준 비교해 실제 숫자 측정 없이는 PASS 선언 금지. 2천 ID 한도·오프라인/신호 50개 초과·비공개·다른 사용자 likes·구형 writer 호환도 검사.
+
+**실행:** Codex High 분석→최소 구현→실행형 회귀→TypeScript/Build→preview commit→Work 독립 감사(가능 시). 사용자 원본 D1/Firebase write·파괴적 migration·무단 데이터 전체 캐시 삭제 금지. **앱126/Worker071 실제 PREVIEW 그대로 유지**; 사용자 별도 프리뷰배포 승인 전 Hosting/Worker 배포하지 않음. TEST/PRODUCTION 변경 금지.
+
 ## 최종 기준 — 2026-09-20 KST: 앱127 통합 하트/좋아요 코딩 검증 PASS·미배포
 
 상세 기준은 `DOCS/CURRENT_RELEASE_STATE.md` 0BE. 이 절이 아래 127 진단·설계 단계의 미구현 상태를 대체한다.

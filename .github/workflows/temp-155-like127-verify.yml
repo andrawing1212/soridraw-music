@@ -1,4 +1,5 @@
 name: TEMP 155 Like127 Legacy and Retry Verification
+# rerun after scoping static handler assertion
 on:
   push:
     branches: [preview]

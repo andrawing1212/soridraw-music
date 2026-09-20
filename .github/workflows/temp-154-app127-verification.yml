@@ -1,4 +1,5 @@
 name: TEMP 154 App127 Personal Like Verification
+# rerun after fixing test syntax
 on:
   push:
     branches: [preview]

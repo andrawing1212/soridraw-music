@@ -1,5 +1,17 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0BP. 앱127 Worker 개인 R2 갱신과 최종 D1 확정 분리 — 잘못된 RTDB 하트 전파 차단 PASS, 최종 수렴 FAIL (2026-09-20 KST)
+
+사용자 "계속 진행해" 지시에 따라 기존 0BO의 **개인 좋아요 R2가 성공적으로 갱신돼도 D1 canonical 집계는 뒤에 완료될 수 있다는 미해결 경계**를 수정했다. 현재 PREVIEW 실서비스는 앱126 + Worker071 그대로다. 후보 앱127/Worker072~077 미배포.
+
+- `src/services/exploreLikeService.ts`: `canBroadcastExploreLikeSnapshot127('updated')`를 **false**로 변경. 074 intake의 `data.personalLikeSnapshot='updated'`는 R2 쓰기 성공일 뿐, 069/075 큐 최종 D1 적용 및 다른 구형 writer와의 경합이 끝났다는 증거가 아니다. 이 단계에서는 다른 기기에 `confirmed` RTDB 좋아요 변경을 게시하지 않고, 로컬 좋아요 의도를 `EXPLORE_LIKE_SNAPSHOT_PENDING_127`에 보존한다. 함수의 `'settled'`는 향후 독립 검증된 canonical 완료 증거를 위한 예약값이며 **현재 Worker는 발행하지 않음**. 변수명을 `canonicalLikeSettled127`로 정리.
+- `scripts/verify-127-atomic-personal-like.mjs`에서 `updated=false`, `pending=false`, 구형 응답 필드 없음=false, 예약 `settled=true` 실행형 검증. 기존 로컬 pending 우선·서버 batch 재전송 방지·늦은 RTDB 보호 및 모든 과거 좋아요 회귀 유지.
+- 최종 GitHub Actions Run `35518647451` SUCCESS: 기존 Worker071 SHA 고정, 072~077 격리 후보 생성·문법 검사, 128~131 실행형 mock, 127/126/125/124/123/110 회귀, TypeScript, Build PASS. 임시 Workflow 164 제거. 실제 D1/R2/RTDB/Firebase 사용자 원본 read/write, 앱/Worker 배포, main/production 변경 없음.
+
+**릴리스 차단 유지:** 이 수정은 **잘못된 개인 좋아요 확정 신호 차단**이고 자동 동기화 완료가 아니다. 신규 변경의 로컬 pending이 최종 canonical 완료 확인 없이 계속 유지될 수 있다. `075~077` 예외용 D1 조회의 전역 구형 큐 검사 기아·동시 접수 fence 미비, `074` 선행 R2 write와 실제 D1 집계 순서, 구형 unconditional writer, cold/2000/128 보호에서의 복구 미완료, 실제 W1~W2 및 10만 사용자 비용, PC·모바일 실사용/Work 독립 감사 모두 미검증. 클라이언트가 R2 HEAD·개인 snapshot을 canonical 확정으로 오인하지 않게 최종 판정 경로를 설계할 때까지 앱127 PREVIEW 배포 금지.
+
+**다음:** 기존 큐의 final canonical 조건을 실제 소스·비용으로 검증하고, 바뀐 UID+곡만 검증된 상태로 복구하는 최소 경로를 설계. 검증되지 않은 `'settled'` 응답을 단순 추가하여 신호를 재개하는 우회 금지.
+
 ## 0BO. 074 뒤늦은 ACK가 개인 좋아요 확정으로 전파되는 경로 차단 PASS / 자동 최종 수렴은 미완료 (2026-09-20 KST)
 
 사용자의 "계속 진행해" 지시 이후 0BN 후보에서 다른 기기의 **더 최근 서버 수락 요청이 이미 개인 공유 R2에 반영된 뒤**, 과거 batch ACK가 늦게 도착했을 때 `syncExploreLikeR2AfterBatch074`의 `unchanged: true`를 개인 캐시 갱신 성공으로 판단할 수 있는 경로를 수정했다. 변경은 `preview` 후보 코드·테스트만 대상. 실배포 앱126/Worker071 유지, 사용자 데이터/TEST/PRODUCTION 비변경.

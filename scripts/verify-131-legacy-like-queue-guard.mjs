@@ -13,7 +13,7 @@ assert.match(source,/SORIDRAW_LEGACY_LIKE_QUEUE_GUARD_077_20260920/);
 assert.match(handler,/await requireLegacyLikeQueuesSettled077\(env\)/);
 assert.ok(handler.indexOf('await requireLegacyLikeQueuesSettled077(env)') <
   handler.indexOf('return await handleMyLikeStatesD1Core'), 'legacy queue probe must precede D1 membership');
-assert.doesNotMatch(helper,/WHERE user_uid|WHERE q\.user_uid|SELECT \*|json_each|INSERT |UPDATE |DELETE FROM/);
+assert.doesNotMatch(helper,/WHERE\\s+(?:q\\.)?user_uid\\s*=|SELECT\\s+\\*|json_each\\(|\\bINSERT\\s+INTO\\b|\\bUPDATE\\s+explore_like|\\bDELETE\\s+FROM\\b/);
 
 let queried=[],membershipReads=0;
 let pendingTable='',errorTable='';

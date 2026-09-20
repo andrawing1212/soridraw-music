@@ -1,9 +1,9 @@
-requested_at=2026-09-18T12:48:00Z
+requested_at=2026-09-20T05:10:10Z
 requested_by=user
-product_code_target=929c02f8a235a8ef629ce85a8f0e28bfbaa04dfe
-release_source_target=app-124-common-stale-feed-cache-repair
-release_purpose=124_pc_mobile_common_legacy_shared_feed_cache_repair
+product_code_target=e9ccd5d4092f24ae34457b81479eded73af59b87
+release_source_target=app125_first_update_shared_r2_like_convergence
+release_purpose=125_pc_mobile_existing_like_preservation
 hosting_only=true
-worker_redeploy=false
+worker_version=a6fda48f-ec20-48b3-a08d-ef43128c2e43
 no_user_data_migration=true
 preview_only=true

@@ -20,8 +20,12 @@ import {
 } from '../services/exploreSessionCache';
 import {
   EXPLORE_LIKE_SYNC_ERROR_EVENT,
+  EXPLORE_LIKE_SYNC_EVENT,
+  EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT,
   flushPendingExploreLikesForPageExit,
   getExploreLikedTrackIds,
+  invalidateExplorePersonalLikeBaseline127,
+  readExploreTrackLikeMembership127,
   overlayExploreLikeDisplayCounts,
   reconcileExploreLikedTrackCollectionState,
   setExploreTrackLike,
@@ -369,6 +373,39 @@ export default function ExplorePage() {
     likeHydrationKeyRef.current = '';
     setLikedTrackIds({});
   }), []);
+
+  // SORIDRAW_EXPLORE_ATOMIC_PERSONAL_LIKE_127_20260920
+  // The same account-owned boolean drives every Heart in Feed/Profile/Liked.
+  // Apply a remote accepted final-state only when no newer local outbox owns it;
+  // never derive membership from the shared public likeCount.
+  useEffect(() => {
+    if (!user?.uid) return;
+    const onRemote = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        uid?: string; trackId?: string; liked?: boolean; source?: string;
+      }>).detail;
+      if (detail?.source !== 'remote' || detail.uid !== user.uid ||
+          !detail.trackId || typeof detail.liked !== 'boolean') return;
+      likeInteractionVersionRef090.current += 1;
+      setLikedTrackIds((previous) => ({ ...previous, [detail.trackId!]: detail.liked! }));
+      // Own liked collection uses the same membership cache; load only a newly
+      // liked missing card when that section is actually visible.
+      setLikeAccountSyncSignal((value) => value + 1);
+    };
+    const onGap = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string }>).detail;
+      if (detail?.uid !== user.uid) return;
+      invalidateExplorePersonalLikeBaseline127(user.uid);
+      likeHydrationKeyRef.current = '';
+      setLikeAccountSyncSignal((value) => value + 1);
+    };
+    window.addEventListener(EXPLORE_LIKE_SYNC_EVENT, onRemote);
+    window.addEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onGap);
+    return () => {
+      window.removeEventListener(EXPLORE_LIKE_SYNC_EVENT, onRemote);
+      window.removeEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onGap);
+    };
+  }, [user?.uid]);
 
   const requestUrl = useMemo(() => {
     const cleanQuery = submittedQuery.trim();
@@ -890,7 +927,13 @@ export default function ExplorePage() {
       setSocialNotice('좋아요는 로그인 후 사용할 수 있어요.');
       return;
     }
-    const currentLiked = Boolean(likedTrackIds[track.id]);
+    // The service's one effective membership includes any pending click.
+    // Never toggle from a possibly stale/undefined React display boolean.
+    const currentLiked = readExploreTrackLikeMembership127(user.uid, track.id);
+    if (currentLiked === undefined) {
+      setSocialNotice('좋아요 상태를 확인하고 있어요. 잠시 후 다시 시도해주세요.');
+      return;
+    }
     likeInteractionVersionRef090.current += 1;
     setLikeBusyTrackId(track.id);
     try {
@@ -957,7 +1000,7 @@ export default function ExplorePage() {
             key={track.id}
             track={track}
             liked={Boolean(likedTrackIds[track.id])}
-            likeBusy={likeBusyTrackId === track.id}
+            likeBusy={likeBusyTrackId === track.id || (Boolean(user) && likedTrackIds[track.id] === undefined)}
             onToggleLike={toggleLike}
             onOpenProfile={openProfile}
           />

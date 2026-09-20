@@ -1,5 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+// Compatible with PREVIEW/TEST/PRODUCTION intake and shared R2 key.
+// The unrelated 072 personal revision endpoint is not required for a writer.
 const dir = process.env.SORIDRAW_REMOTE_WORKER_DIR;
 if (!dir) throw new Error('[074] Worker directory missing');
 const path = join(dir, 'worker.js');
@@ -8,7 +10,6 @@ const marker = 'SORIDRAW_PERSONAL_LIKE_R2_CAS_074_20260920';
 if (source.includes(marker)) { console.log('[074] already applied'); process.exit(0); }
 for (const required of [
   'SORIDRAW_SERVER_ORDER_LIKE_QUEUE_073_20260920',
-  'SORIDRAW_PERSONAL_LIKE_R2_REVISION_072_20260920',
   'async function syncExploreLikeR2AfterBatch034(env, uid, results) {',
   'await syncExploreLikeR2AfterBatch034(env, authContext.uid, results);',
   'exploreSharedLikesKey061',

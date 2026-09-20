@@ -138,6 +138,10 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.deepEqual(await send('first', 0, true), { state: 'settled', revision: 1, liked: true });
   assert.deepEqual(await send('first', 0, true), { state: 'settled', duplicate: true, revision: 1, liked: true });
   assert.equal(counts.get('song'), 1, 'same operation must not double count');
+  assert.deepEqual(await send('first', 0, false), { state: 'conflict', revision: 1, liked: true },
+    'an operation ID reused for opposite desired state may not be treated as a successful duplicate');
+  assert.deepEqual(await send('first', 1, true), { state: 'conflict', revision: 1, liked: true },
+    'an operation ID reused with a different base revision must be rejected');
   assert.equal((await send('second', 1, false)).state, 'settled');
   assert.deepEqual(await send('delayed-old', 0, true), { state: 'stale', revision: 2, liked: false });
   assert.equal(counts.get('song'), 0, 'old like must not reverse confirmed unlike');
@@ -163,7 +167,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.equal((await send('different-track', 0, true, 'song2')).state, 'settled');
   assert.equal(counts.get('song2'), 1);
   assert.equal(publications.at(-1).trackId, 'song2');
-  console.log('139_ACTUAL_CORE_IDEMPOTENT_REPLAY=PASS');
+  console.log('139_ACTUAL_CORE_IDEMPOTENT_REPLAY_AND_CONFLICT=PASS');
   console.log('139_ACTUAL_CORE_DURABLE_CRASH_RECOVERY_MODEL=PASS');
   console.log('139_ACTUAL_CORE_PUBLISH_AFTER_D1_ONLY=PASS');
   console.log('139_ACTUAL_CORE_PUBLISH_FAILURE_BLOCKS_NEW_ORDER=PASS');

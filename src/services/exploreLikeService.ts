@@ -312,7 +312,7 @@ const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcce
   // Persist latest final-state mutations even if the Firebase notification fails:
   // retry is triggered on the next successful batch or after reconnect/focus.
   const task = signalPublishInFlight127.get(uid);
-  if (task) { await task; return publishConfirmedLikeSignal127(uid, readSignalRetry127(uid)); }
+  if (task) { await task; return publishConfirmedLikeSignal127(uid, fresh); }
   const publish = (async () => {
     const notification = await runTransaction(
       databaseRef(realtimeDb, `userSync/${uid}/exploreLike`),
@@ -340,7 +340,7 @@ const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcce
 };
 
 let likeSignalRetryListenerInstalled127 = false;
-const installLikeSignalRetry127 = (user: User) => {
+const installLikeSignalRetry127 = () => {
   if (typeof window === 'undefined' || likeSignalRetryListenerInstalled127) return;
   likeSignalRetryListenerInstalled127 = true;
   const retry = () => {
@@ -638,6 +638,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
       const cache = getLikedStateCache(uid);
       const displayLocks = readLikeDisplayLocks(uid);
       const acknowledgedAt = Date.now();
+      const acceptedForSignal127: ExploreLikeAcceptedRow127[] = [];
 
       for (const pending of batchEntries) {
         const result = resultByTrack.get(pending.trackId);
@@ -653,13 +654,16 @@ flushPendingLikes = async (user: User): Promise<void> => {
             protectUntil: acknowledgedAt + EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120,
           };
           delete latest[pending.trackId];
-          dispatchLikeSync({
+          const accepted: ExploreLikeAcceptedRow127 = {
             uid,
             trackId: pending.trackId,
             ownerUid: pending.ownerUid,
             liked: result.liked,
             likeCount: pending.optimisticLikeCount,
-          });
+            source: 'confirmed',
+          };
+          acceptedForSignal127.push(accepted);
+          dispatchLikeSync(accepted);
         }
       }
 
@@ -667,6 +671,13 @@ flushPendingLikes = async (user: User): Promise<void> => {
       persistLikeDisplayLocks(uid, displayLocks);
       persistLikeOutbox(uid, latest);
       succeeded = true;
+      // The Worker has acknowledged this final-state batch for processing.
+      // A notification failure must NEVER replay a successful like mutation.
+      try {
+        await publishConfirmedLikeSignal127(uid, acceptedForSignal127);
+      } catch (notifyError) {
+        console.warn('[127] Like accepted; cross-device signal pending retry:', notifyError);
+      }
     } catch (reason) {
       const latest = readLikeOutbox(uid);
       const first = batchEntries[0];
@@ -716,6 +727,13 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
     trackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean),
   )].slice(0, EXPLORE_LIKE_BATCH_MAX);
   if (!normalized.length) return [];
+  installLikeSignalRetry127();
+  try {
+    await ensurePersonalLikeBaseline127(user);
+  } catch (reason) {
+    // The existing account cache is still usable while an R2 repair is retried.
+    console.warn('[127] Personal like baseline pending; retaining local state:', reason);
+  }
 
   const cache = getLikedStateCache(user.uid);
   const missing = normalized.filter((trackId) => !cache.has(trackId));
@@ -782,6 +800,7 @@ export const setExploreTrackLike = async (
   if (!normalizedTrackId) throw new Error('Explore 곡 ID를 확인하지 못했습니다.');
 
   const uid = user.uid;
+  installLikeSignalRetry127();
   const outbox = readLikeOutbox(uid);
   const existing = outbox[normalizedTrackId];
   const cache = getLikedStateCache(uid);
@@ -819,6 +838,7 @@ export const setExploreTrackLike = async (
     ownerUid: String(ownerUid || existing?.ownerUid || '').trim(),
     liked,
     likeCount: optimisticLikeCount,
+    source: 'local',
   });
 
   return { trackId: normalizedTrackId, liked, likeCount: optimisticLikeCount };

@@ -19,9 +19,16 @@ if (source.split(anchor).length !== 2) throw new Error('[074] sync anchor ambigu
 source = source.replace(anchor, helper + anchor);
 const call = 'await syncExploreLikeR2AfterBatch034(env, authContext.uid, results);';
 if (source.split(call).length !== 2) throw new Error('[074] intake call ambiguous');
-source = source.replace(call,
-  'const personalR2 = await syncExploreLikeR2AfterBatch074(env, authContext.uid, results, receivedAt, queued.batchId);' +
-  "\n  if (personalR2?.ok === false) console.warn('[074] personal snapshot repair needed:', personalR2.reason);");
+source = source.replace(call, [
+  'let personalR2;',
+  'try {',
+  '  personalR2 = await syncExploreLikeR2AfterBatch074(env, authContext.uid, results, receivedAt, queued.batchId);',
+  '} catch (error) {',
+  "  personalR2 = { ok: false, repairNeeded: true, reason: 'r2_write_unavailable' };",
+  "  console.warn('[074] personal R2 unavailable; preserve queued mutation and scheduler:', String(error?.message || error));",
+  '}',
+  "if (personalR2?.ok === false) console.warn('[074] personal snapshot repair needed:', personalR2.reason);",
+].join('\n  '));
 if (!source.includes(marker) || source.includes(call)) throw new Error('[074] final source invalid');
 writeFileSync(path, source, 'utf8');
 console.log('[074] shared R2 CAS and server-order tokens; D1 writes unchanged.');

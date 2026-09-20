@@ -12,7 +12,7 @@ const manifest = JSON.parse(readFileSync('cloudflare/explore-worker/release-patc
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const entry = readFileSync('cloudflare/explore-worker/canonical/preview-entry.js', 'utf8');
 
-assert.equal(String(version.version), '123');
+assert.ok(Number(version.version) >= 123, 'app123 behavior must remain available in later releases');
 
 // App update/re-entry must use the last known persistent Feed without a network revalidation.
 assert.match(page, /SORIDRAW_EXPLORE_UPDATE_LAST_KNOWN_FEED_123_20260918/);
@@ -52,7 +52,7 @@ assert.match(patch056, /changedItems: \[\.\.\.changedByTrack\.values\(\)\]/);
 
 // 065 is the final release patch and must stay R2-targeted.
 assert.ok(Array.isArray(manifest.patches));
-assert.equal(manifest.patches.at(-1), '065-shared-like-count-targeted.mjs');
+assert.ok(manifest.patches.includes('065-shared-like-count-targeted.mjs'), '065 targeted like patch must remain registered');
 const patchHelperStart = patch065.indexOf('const helpers =');
 const patchWrapperStart = patch065.indexOf('const wrapper =', patchHelperStart);
 assert.ok(patchHelperStart >= 0 && patchWrapperStart > patchHelperStart, '065 patch helper boundary missing');

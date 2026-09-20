@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+// Compatible with frozen PREVIEW/TEST/PRODUCTION 040 queue shapes. Do not
+// require unrelated 071 publication patch in legacy environments.
 // SORIDRAW_SERVER_ORDER_LIKE_QUEUE_073_20260920
 // Only the server acceptance clock orders independently clocked devices.
 // Preserve payload digest/client timestamps for idempotency identity; do not
@@ -14,7 +16,6 @@ if (source.includes(marker)) { console.log('[073] already applied'); process.exi
 
 for (const required of [
   'SORIDRAW_EXPLORE_LIKE_W1_DELAYED_COUNT_040_20260912',
-  'SORIDRAW_PUBLICATION_CANONICAL_LIKE_PARITY_071_20260920',
   'async function exploreLikeW1Batch040(uid, mutations, now) {',
   'ORDER BY created_at DESC, batch_id DESC, queue_kind DESC'
 ]) if (!source.includes(required)) throw new Error('[073] missing prerequisite ' + required);

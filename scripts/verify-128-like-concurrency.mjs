@@ -110,6 +110,31 @@ const row=(id,liked)=>[{trackId:id,liked}];
   assert.ok(updated.likedTrackIds.includes('song'));
   assert.match(service,/computeExploreLikeAction127/);
 }
+// Delayed ACK of an older device must not claim the final R2 state.
+// It may be persisted in D1's queue, but cannot be broadcast as confirmed.
+{
+  const store=mockStore([],false);
+  const newer=await sync(store.env,'test-uid',row('song',true),200,'b');
+  assert.equal(newer.ok,true);
+  const writes=store.puts;
+  const old=await sync(store.env,'test-uid',row('song',false),100,'a');
+  assert.equal(old.ok,false,'superseded response must not be confirmed');
+  assert.equal(old.reason,'superseded_like_batch');
+  assert.equal(store.puts,writes,'older ACK must not rewrite R2');
+  assert.deepEqual(store.state.likedTrackIds,['song']);
+}
+// Mixed batch: accept the independent new song but do not announce the whole
+// request as confirmed when another ID lost a cross-device race.
+{
+  const store=mockStore([],false);
+  await sync(store.env,'test-uid',row('song',true),200,'b');
+  const result=await sync(store.env,'test-uid',[
+    {trackId:'song',liked:false},{trackId:'another',liked:true}
+  ],100,'a');
+  assert.equal(result.ok,false);
+  assert.equal(result.reason,'partially_superseded_like_batch');
+  assert.deepEqual(new Set(store.state.likedTrackIds),new Set(['song','another']));
+}
 // Cold account, full user bundle and full conflict history must not fall
 // back to an unconditional shared R2 overwrite or silently drop any liked ID.
 {
@@ -156,6 +181,7 @@ console.log('074_CONCURRENT_SAME_TRACK_LAST_SERVER_ORDER=PASS');
 console.log('074_CONCURRENT_DISTINCT_TRACKS_MERGED=PASS');
 console.log('074_SHARED_UID_R2_CAS_NO_D1_WRITE=PASS');
 console.log('074_LEGACY_SHARED_HEAD_CORRECT=PASS');
+console.log('074_SUPERSEDED_ACK_NO_FALSE_CONFIRMED_SIGNAL=PASS');
 console.log('074_COLD_FULL_AND_ORDER_CAP_FAIL_CLOSED_NO_DATA_LOSS=PASS');
 console.log('074_QUEUE_ACK_SEPARATED_FROM_PERSONAL_SNAPSHOT=PASS');
 console.log('074_NO_LIVE_DATA_WRITE=PASS');

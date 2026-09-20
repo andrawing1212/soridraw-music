@@ -171,11 +171,21 @@ const row=(id,liked)=>[{trackId:id,liked}];
 assert.match(handler,/EXPLORE_LIKE_R2_TRACK_ORDER_LIMIT_074 = 128/);
 assert.match(handler,/onlyIf: \{ etagMatches: object\.etag \}/);
 assert.doesNotMatch(handler,/env\.DB\.prepare\(|caches\.default/);
-assert.match(worker,/personalR2 = await syncExploreLikeR2AfterBatch074\(env, authContext\.uid, results, receivedAt, queued\.batchId\)/);
-assert.match(worker,/personalR2 = \{ ok: false, repairNeeded: true, reason: 'r2_write_unavailable' \}/);
-assert.match(worker,/personalLikeSnapshot: personalR2\?\.ok === true \? 'updated' : 'pending'/);
-assert.ok(worker.indexOf('personalLikeSnapshot: personalR2?.ok === true') > worker.indexOf('personalR2 = await syncExploreLikeR2AfterBatch074'), 'response must depend on actual CAS result');
-assert.match(worker,/preserve queued mutation and scheduler/);
+// The CAS engine remains testable, but an intake ACK must NOT call it before
+// canonical D1 materialization. This is only stage one of settlement; release
+// remains blocked until a verified post-aggregate finalizer exists.
+const intakeStart138=worker.indexOf('async function handleLikeBatch034(');
+const intakeEnd138=worker.indexOf('\\n}',intakeStart138);
+assert.ok(intakeStart138>0 && intakeEnd138>intakeStart138);
+const intake138=worker.slice(intakeStart138,intakeEnd138+2);
+assert.match(intake138,/SORIDRAW_LIKE_PRECOMMIT_R2_BLOCK_138_20260921/);
+assert.match(intake138,/awaiting_canonical_d1_settlement/);
+assert.match(intake138,/personalLikeSnapshot: 'pending'/);
+assert.doesNotMatch(intake138,/personalLikeSnapshot: 'updated'|personalLikeSnapshot: 'settled'/);
+assert.doesNotMatch(intake138,/syncExploreLikeR2AfterBatch074\\(|syncExploreLikeR2AfterBatch034\\(/);
+assert.match(intake138,/await enqueueExploreLikeBatch035\\(/);
+console.log('138_PRECOMMIT_R2_WRITE_SUPPRESSED=PASS');
+console.log('138_QUEUE_ACK_PENDING_ONLY=PASS');
 console.log('074_SERVER_RECEIPT_BEATS_DEVICE_CLOCK=PASS');
 console.log('074_CONCURRENT_SAME_TRACK_LAST_SERVER_ORDER=PASS');
 console.log('074_CONCURRENT_DISTINCT_TRACKS_MERGED=PASS');

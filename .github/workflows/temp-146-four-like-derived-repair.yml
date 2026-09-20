@@ -1,0 +1,187 @@
+name: TEMP 146 Four Like Derived Repair
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/temp-146-four-like-derived-repair.yml'
+permissions:
+  contents: read
+concurrency:
+  group: soridraw-temp-146-four-like-repair
+  cancel-in-progress: false
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Validate entire 37-song canonical set and identify exactly four stale IDs
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          node "$W" d1 execute DB --remote --config "$PWD/canonical/wrangler.preview.jsonc" --command "SELECT t.id,COALESCE(s.like_count,0) AS canonical_count,(SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id) AS relation_count,COALESCE(d.likes,-1) AS derived_count,COALESCE(json_extract(d.row_json,'$.like_count'),-1) AS derived_json_count FROM tracks t LEFT JOIN track_stats s ON s.track_id=t.id LEFT JOIN explore_derived_tracks d ON d.id=t.id WHERE t.is_public=1 AND t.status='published' LIMIT 201" --json > "$RUNNER_TEMP/d1-146.json"
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto'),root=process.env.RUNNER_TEMP;
+          const rows=JSON.parse(fs.readFileSync(root+'/d1-146.json','utf8')).flatMap(x=>x.results||[]);
+          if(rows.length!==37)throw Error('public set size drift: '+rows.length);
+          const hashes=['9fef3a2199','abd7763bc1','ab0e6f139f','0e5cd08e2a'];
+          const hash=id=>crypto.createHash('sha256').update(id).digest('hex').slice(0,10);
+          const target=rows.filter(x=>hash(String(x.id))&&hashes.includes(hash(String(x.id))));
+          if(target.length!==4||new Set(target.map(x=>hash(String(x.id)))).size!==4)throw Error('four target identities drifted');
+          for(const row of rows){
+            const a=Number(row.canonical_count),b=Number(row.relation_count),c=Number(row.derived_count),d=Number(row.derived_json_count);
+            if(a!==b||a!==c||a!==d)throw Error('canonical/relation/derived mismatch; abort all remote writes');
+          }
+          if(target.some(x=>Number(x.canonical_count)!==1))throw Error('target canonical likes changed; abort');
+          fs.writeFileSync(root+'/targets146.json',JSON.stringify({trackIds:target.map(x=>String(x.id))}));
+          console.log('ALL_37_CANONICAL_RELATION_DERIVED_PARITY=PASS');
+          console.log('EXACT_FOUR_LIKES_CANONICAL_ONE=PASS');
+          NODE
+      - name: Bounded R2 CAS repair four tracks only
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          TOKEN="$(openssl rand -hex 32)"
+          cat > .temp-146-worker.mjs <<'WORKER'
+          const SECRET='__TOKEN__';
+          const idOf=x=>String(x?.id||x?.trackId||'').trim();
+          const likeOf=x=>Math.max(0,Number(x?.likeCount??x?.stats?.likeCount??0));
+          const json=(x,status=200)=>new Response(JSON.stringify(x),{status,headers:{'content-type':'application/json'}});
+          const compare=(a,b)=>likeOf(b)-likeOf(a)||Number(b?.publishedAt||0)-Number(a?.publishedAt||0)||idOf(b).localeCompare(idOf(a));
+          async function repair(bucket,key,ids,scope,sort){
+            const wanted=new Set(ids);
+            for(let attempt=0;attempt<8;attempt++){
+              const object=await bucket.get(key);
+              if(!object)throw Error('missing '+scope+' '+sort);
+              const previous=JSON.parse(await object.text());
+              const items=previous?.payload?.data?.items;
+              if(!Array.isArray(items)||items.length!==37||new Set(items.map(idOf)).size!==37)throw Error('invalid snapshot '+scope+' '+sort);
+              for(const id of wanted){
+                const found=items.find(item=>idOf(item)===id);
+                if(!found||![0,1].includes(likeOf(found)))throw Error('target state drift '+scope+' '+sort);
+              }
+              let changed=0;
+              const mapped=items.map(item=>{
+                if(!wanted.has(idOf(item))||likeOf(item)===1) return item;
+                changed++;
+                return {...item,likeCount:1,stats:{...(item.stats||{}),likeCount:1}};
+              });
+              if(changed===0)return {scope,sort,changed:0,before:37,after:37};
+              const nextItems=sort==='popular'?[...mapped].sort(compare):mapped;
+              const next={...previous,updatedAt:Date.now(),payload:{...previous.payload,data:{...previous.payload.data,items:nextItems}}};
+              const saved=await bucket.put(key,JSON.stringify(next),{
+                onlyIf:{etagMatches:object.etag},
+                httpMetadata:{contentType:'application/json; charset=utf-8'},
+                customMetadata:{...(object.customMetadata||{}),likeRepair:'146-four-canonical',updatedAt:String(next.updatedAt)},
+              });
+              if(!saved)continue;
+              const actualObj=await bucket.get(key);
+              const actual=JSON.parse(await actualObj.text())?.payload?.data?.items;
+              if(!Array.isArray(actual)||actual.length!==37)throw Error('postflight size mismatch '+scope+' '+sort);
+              const byId=new Map(actual.map(item=>[idOf(item),item]));
+              for(const before of items){
+                const id=idOf(before),after=byId.get(id);
+                if(!after)throw Error('unrelated item disappeared');
+                if(wanted.has(id)){
+                  if(likeOf(after)!==1||Number(after?.stats?.likeCount)!==1)throw Error('target not updated');
+                }else if(JSON.stringify(before)!==JSON.stringify(after))throw Error('unrelated track changed');
+              }
+              return {scope,sort,changed,before:37,after:37};
+            }
+            throw Error('CAS contention '+scope+' '+sort);
+          }
+          export default {async fetch(request,env){
+            if(request.method!=='POST'||request.headers.get('x-secret')!==SECRET)return json({ok:false},403);
+            try{
+              const {trackIds}=await request.json();
+              if(!Array.isArray(trackIds)||trackIds.length!==4||new Set(trackIds).size!==4)throw Error('invalid bounded target list');
+              const hashes=['9fef3a2199','abd7763bc1','ab0e6f139f','0e5cd08e2a'];
+              const cryptoHash=async id=>{
+                const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(id));
+                return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,10);
+              };
+              const actual=await Promise.all(trackIds.map(cryptoHash));
+              if(actual.length!==4||actual.some(h=>!hashes.includes(h))||new Set(actual).size!==4)throw Error('target hash mismatch');
+              const results=[];
+              for(const [scope,bucket,prefix] of [
+                ['preview',env.PREVIEW,'internal/explore/feed-v1/'],
+                ['shared',env.SHARED,'internal/explore/shared-feed-v112/'],
+              ]){
+                for(const sort of ['latest','popular'])results.push(await repair(bucket,prefix+sort+'-40.json',trackIds,scope,sort));
+              }
+              return json({ok:true,results});
+            }catch(e){return json({ok:false,error:String(e?.message||e)},500);}
+          }};
+          WORKER
+          TOKEN="$TOKEN" node <<'NODE'
+          const fs=require('fs'),p='.temp-146-worker.mjs';
+          fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace('__TOKEN__',process.env.TOKEN));
+          NODE
+          cat > .temp-146-config.jsonc <<'JSON'
+          {"name":"soridraw-temp-146-four-like-derived-repair","main":".temp-146-worker.mjs","compatibility_date":"2026-08-28",
+           "r2_buckets":[{"binding":"PREVIEW","bucket_name":"soridraw-profile-media-preview"},{"binding":"SHARED","bucket_name":"soridraw-profile-media"}]}
+          JSON
+          node --check .temp-146-worker.mjs
+          DEV_PID=""
+          cleanup(){
+            status=$?
+            if [ -n "$DEV_PID" ];then kill "$DEV_PID" >/dev/null 2>&1||true;wait "$DEV_PID" >/dev/null 2>&1||true;fi
+            exit "$status"
+          }
+          trap cleanup EXIT
+          node "$W" dev --remote --config .temp-146-config.jsonc --ip 127.0.0.1 --port 8796 > "$RUNNER_TEMP/dev146.log" 2>&1 &
+          DEV_PID=$!
+          ready=0
+          for n in $(seq 1 90);do
+            code="$(curl -sS -X POST -o /dev/null -w '%{http_code}' http://127.0.0.1:8796/||true)"
+            if [ "$code" = 403 ];then ready=1;break;fi
+            sleep 1
+          done
+          if [ "$ready" != 1 ];then sed -n '1,80p' "$RUNNER_TEMP/dev146.log";exit 1;fi
+          code="$(curl -sS -X POST -H "x-secret: $TOKEN" -H 'Content-Type: application/json' --data-binary @"$RUNNER_TEMP/targets146.json" -o "$RUNNER_TEMP/result146.json" -w '%{http_code}' http://127.0.0.1:8796/)"
+          node <<'NODE'
+          const fs=require('fs'),r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/result146.json','utf8'));
+          if(!r.ok||r.results?.length!==4||r.results.some(x=>x.after!==37))throw Error('derived repair failed: '+String(r.error||'invalid result'));
+          for(const x of r.results)console.log('DERIVED_FOUR_REPAIR scope='+x.scope+' sort='+x.sort+' patched='+x.changed+' items='+x.after);
+          console.log('ONLY_FOUR_TARGETS_CHANGED=PASS');
+          NODE
+          test "$code" = 200
+          kill "$DEV_PID" >/dev/null 2>&1||true
+          wait "$DEV_PID" >/dev/null 2>&1||true
+          DEV_PID=""
+          trap - EXIT
+      - name: Independent read-only postflight
+        working-directory: cloudflare/explore-worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/node_modules/wrangler/bin/wrangler.js"
+          for sort in latest popular;do
+            node "$W" r2 object get "soridraw-profile-media-preview/internal/explore/feed-v1/$sort-40.json" --file "$RUNNER_TEMP/local-$sort.json" --remote >/dev/null
+            node "$W" r2 object get "soridraw-profile-media/internal/explore/shared-feed-v112/$sort-40.json" --file "$RUNNER_TEMP/shared-$sort.json" --remote >/dev/null
+          done
+          node <<'NODE'
+          const fs=require('fs'),root=process.env.RUNNER_TEMP,ids=JSON.parse(fs.readFileSync(root+'/targets146.json','utf8')).trackIds;
+          for(const scope of ['local','shared'])for(const sort of ['latest','popular']){
+            const items=JSON.parse(fs.readFileSync(root+'/'+scope+'-'+sort+'.json','utf8'))?.payload?.data?.items||[];
+            const byId=new Map(items.map(x=>[String(x.id||x.trackId||''),x]));
+            if(items.length!==37||ids.some(id=>Number(byId.get(id)?.likeCount)!==1||Number(byId.get(id)?.stats?.likeCount)!==1))throw Error('postflight still stale '+scope+' '+sort);
+            console.log('POSTFLIGHT '+scope+' '+sort+' count=37 canonicalFour=1');
+          }
+          console.log('D1_ORIGIN_WRITE=0; FIREBASE_WRITE=0; WORKER_DEPLOY=0');
+          NODE

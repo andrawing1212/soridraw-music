@@ -7,7 +7,7 @@ const page = readFileSync('src/pages/ExplorePage.tsx', 'utf8');
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const manifest = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
 
-assert.equal(String(version.version), '125');
+assert.ok(Number(version.version) >= 125, 'app125 first-update preservation must remain available in later releases');
 assert.match(page, /SORIDRAW_EXPLORE_UPDATE_FIRST_SHARED_CONVERGENCE_125_20260920/);
 assert.match(page, /EXPLORE_SHARED_LIKE_CACHE_REPAIR_124_PREFIX\}:\$\{__SORIDRAW_APP_VERSION__\}:\$\{sort\}/);
 assert.match(page, /const oneTimeSharedRepair124 = feedRequest && !hasExploreSharedLikeCacheRepair124\(requestUrl\)/);

@@ -80,6 +80,21 @@ type ExploreFeedRevisionResponse = {
 
 const EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS = 120_000;
 const EXPLORE_FEED_REVISION_ACTIVITY_MIN_INTERVAL_MS = 120_000;
+// SORIDRAW_EXPLORE_ENTRY_REVISION_REVALIDATION_126_20260920
+// The last successful check survives Explore route remounts within this tab.
+// Rendering cached rows must never reset this clock: otherwise opening Explore
+// hides a cross-device unlike behind a fresh two-minute delay.
+const exploreFeedLastRevisionCheckAt126 = new Map<string, number>();
+const shouldRevalidateExploreFeedOnEntry126 = (
+  feedRequest: boolean,
+  explicitRevision: boolean,
+  lastCheckedAt: number,
+  now: number,
+) => feedRequest && (
+  explicitRevision ||
+  !lastCheckedAt ||
+  now - lastCheckedAt >= EXPLORE_FEED_REVISION_EVENT_DEDUPE_MS
+);
 // SORIDRAW_EXPLORE_LIKE_LATEST_CACHE_IDLE_BATCH_119_20260918
 // Public Feed revision checks are capped at one per two minutes. The actor keeps the
 // immediate optimistic heart/count locally; other users pick up the shared result
@@ -428,7 +443,9 @@ export default function ExplorePage() {
       recordCloudflareResponse(response);
       if (!response.ok) throw new Error(`revision HTTP ${response.status}`);
       const payload = await response.json() as ExploreFeedRevisionResponse;
-      return safeText(payload?.data?.revision) || null;
+      const revision = safeText(payload?.data?.revision) || null;
+      if (revision) exploreFeedLastRevisionCheckAt126.set(requestUrl, Date.now());
+      return revision;
     };
 
     const fetchFeedSnapshot108 = async (revision: string | null) => {
@@ -469,6 +486,7 @@ export default function ExplorePage() {
         syncSharedPublicCountsToLocal110(normalizedTracks);
         // Mark only after the current snapshot is applied to Feed and loaded cards.
         markExploreSharedLikeCacheRepair124(requestUrl);
+        exploreFeedLastRevisionCheckAt126.set(requestUrl, Date.now());
       }
     };
 
@@ -505,14 +523,22 @@ export default function ExplorePage() {
       }
 
       const revalidateRequested = feedRequest && feedRevisionRequestedUrlRef.current === requestUrl;
-      if (!revalidateRequested) {
-        const now = Date.now();
-        feedRevisionEventAtRef.current = now;
-        feedRevisionActivityAtRef.current = now;
-        return () => controller.abort();
-      }
+      const lastCheckedAt = exploreFeedLastRevisionCheckAt126.get(requestUrl) || 0;
+      const shouldRevalidate = shouldRevalidateExploreFeedOnEntry126(
+        feedRequest,
+        revalidateRequested,
+        lastCheckedAt,
+        Date.now(),
+      );
+      // Recommended and Latest share one URL. On entry, validate a stale cache
+      // with the small edge-cached revision, not by opening Popular or reading D1.
+      // Freshly checked entries stay local-first, with zero Feed-data reads.
+      if (!shouldRevalidate) return () => controller.abort();
 
-      feedRevisionRequestedUrlRef.current = '';
+      const now = Date.now();
+      feedRevisionEventAtRef.current = now;
+      feedRevisionActivityAtRef.current = now;
+      if (revalidateRequested) feedRevisionRequestedUrlRef.current = '';
       void (async () => {
         try {
           const serverRevision = await fetchRevision();

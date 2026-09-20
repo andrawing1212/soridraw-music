@@ -4,6 +4,18 @@
 
 최종 갱신: 2026-09-20 KST
 
+## 현재 최신 배포: PREVIEW 앱126 + Worker071 (2026-09-20 KST)
+
+- 사용자 승인에 따라 앱126 PREVIEW Hosting Run `35495184909` SUCCESS. 승인된 코드 `f88ba1f1ef644208acf938a18122f8651ed6c68a`, 실제 고정 릴리스 source/trigger `2c62108e2ad7b3c54ce41baf811dc45e603a8a01`. TypeScript/Build, Firebase PREVIEW Hosting, `https://preview.soridraw.com/` exact index, `app-version.json=126` PASS.
+- 대상 수정: 모바일 추천/최신이 이전 like count=1을 유지하는 cache-entry 버그. 앱126은 마지막 정상 revision 확인 시각을 유지하고 오래된 목록 진입 시 작은 revision만 확인, 변경 시 R2 first-page를 반영한다. Worker/Functions/Rules 재배포 0.
+- 배포 전 Run `35495097116` PASS: 126/125/124/123/110/070 관련 회귀, TypeScript/Build, Worker071 canonical SHA `b170d05385c3096a98033675a9acbb63b40148bf782017c326845b7ea4c17813` 불변. 초기 검사 Run `35495034377`는 구형 110 검사식 미호환으로 배포 전 FAIL, 수정 후 전체 PASS.
+- 실제 PREVIEW Worker071 `a6fda48f-ec20-48b3-a08d-ef43128c2e43`, TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f`, PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` 불변. main/production 코드 및 TEST/PRODUCTION index 불변.
+- read-only postflight Run `35495431978` SUCCESS: 현재 canonical 공개곡 **38곡**, likes 관계/derived 및 LIVE API/local/shared latest+popular 6개 각각 38/38 count parity; LIVE Feed D1 R0/W0. 작업 중 사용자 원본 D1/Firebase write 0, R2 write 0.
+- **상태 변화 주의:** 이전 비공개 곡 SHA10 `1319e4479e`가 2026-09-20 15:31:38 KST, 이번 앱126 배포 이전에 `is_public=1`로 바뀌어 현재 38곡에 포함됨. 이 재공개가 의도됐는지 미확인; 이전 37곡/비공개 미노출 검사는 시점 한정. 원본 자동 원복 금지.
+- 배포 후 실제 모바일/PC 동일 계정 하트·숫자 수렴, 좋아요/해제·공개/비공개 W1~W2 실측 및 Work 독립 감사 **미검증**. TEST/PRODUCTION 승격 금지. catalog WRITE ON, READ OFF, FIRST_PUBLISHER OFF.
+
+아래 앱125 + Worker071 내용은 이 릴리스 이전 시점의 기록이다.
+
 ## 현재 실제 릴리스: PREVIEW 앱125 + Worker071
 - **PREVIEW 앱 125**: Firebase Hosting 배포 Run `35491378862` SUCCESS, source/trigger `e2bc5ee3e1845e6abb6c573e468a711f40f41fd3`. TypeScript PASS, Build PASS, `https://preview.soridraw.com/` exact index build PASS, `app-version.json=125` PASS.
 - **PREVIEW Worker071**: Run `35491281571` SUCCESS, source `e9ccd5d4092f24ae34457b81479eded73af59b87`. 버전 `a6fda48f-ec20-48b3-a08d-ef43128c2e43`; canonical SHA256 `b170d05385c3096a98033675a9acbb63b40148bf782017c326845b7ea4c17813`.

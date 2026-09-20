@@ -25,7 +25,6 @@ import {
   flushPendingExploreLikesForPageExit,
   getExploreLikedTrackIds,
   ensureExplorePersonalLikeBaseline127,
-  invalidateExplorePersonalLikeBaseline127,
   readExploreTrackLikeMembership127,
   overlayExploreLikeDisplayCounts,
   reconcileExploreLikedTrackCollectionState,
@@ -396,7 +395,8 @@ export default function ExplorePage() {
     const onGap = (event: Event) => {
       const detail = (event as CustomEvent<{ uid?: string }>).detail;
       if (detail?.uid !== user.uid) return;
-      invalidateExplorePersonalLikeBaseline127(user.uid);
+      // Service only sends this after authenticated R2 reconciliation succeeds.
+      // Never invalidate the just-verified baseline and start another repair.
       likeHydrationKeyRef.current = '';
       setLikeAccountSyncSignal((value) => value + 1);
     };

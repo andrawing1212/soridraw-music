@@ -1,5 +1,20 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최종 기준 — 2026-09-20 KST: 073/074 writer TEST·PRODUCTION 고정 소스 적용 모의검사 PASS, 실제 승격 전
+
+`DOCS/CURRENT_RELEASE_STATE.md` 0BL 상세 확인. 실제 앱126/Worker071 PREVIEW 유지, app127 및 Worker072~077는 미배포. TEST main `f7fc25d5452b3313efa3cca53c180c5494cc9837`, production `e994340f3c4f6ac97f444f1ddf13053d3faffa71` 미변경.
+
+- 세 환경의 고정 Worker source 모두 `syncExploreLikeR2AfterBatch034` 공유 R2 무조건 덮어쓰기, `receivedAt`/`queued.batchId` 동일 형태 확인. `073`·`074` patch에서 unrelated 071/072 marker 의존성을 제거해 구형 소스에도 최소 변경 적용 가능. 실제 구형 파일 및 서비스 직접 수정·배포 없음.
+- Run `35516684243` SUCCESS: 고정 TEST/PRODUCTION 소스 blob 각각 `04586a5f203227d5cb02581d13f78a43b95053ce`/`14b3e4f3211ee7dfe1fcf9fcf10c935b6ce000f6`에 073/074 적용 및 동일한 128 경쟁 모의 테스트, 기존 PREVIEW 072~077/127~110 회귀, TypeScript/Build 통과. 구형 checkout이 lint 파일 범위에 포함된 선행 Run `35516547581` FAIL은 sparse checkout으로 격리 후 해결. 임시 workflow 160 삭제.
+- **합격 범위는 소스 호환·mock까지.** 배포 바이너리 일치·실제 R2 conditional PUT·실제 D1 W1~W2·PC/모바일·10만 명 비용 미검증. 074 cold R2 fallback/128곡 순서 cap, 큐 ACK와 D1 최종 확정, 계속 동작 중인 다른 구형 writer가 있는 단계에서 shared R2 overwrite 위험은 여전히 존재.
+
+### 다음 안전 작업 (추가 패치 증식 금지)
+
+1. 073/074 writer-only 호환 수정이 *최종 D1 집계/메타데이터 손실*까지 어떻게 수렴하는지 두 기기+서버 모의/한정 테스트 계정으로 확인. 074 cold-start와 128곡 order cap, 069/075 혼합 큐 순서 검사. 문제 발견 시 파일 일부만 최소 수정하고 고정 test 재검사.
+2. 세 Worker의 소스와 **실제 배포 버전**을 읽기 전용으로 교차 확인. GitHub 오래된 source와 실제 런타임이 다른 경우 서둘러 릴리스하지 않음.
+3. 호환 writer를 선행 승격하려면 프로젝트의 릴리스 전체 코드/사용자 데이터 보호 정책과 맞는 완성 버전 tree·단계별 승인 기준을 별도 명시. TEST는 사용자 `테스트배포`, PRODUCTION은 명확한 `정식배포` 승인이 반드시 필요. 단독 앱127 PREVIEW 배포 금지.
+4. 원본 data read 0/좋아요 W1~W2·R2/RTDB 비용/PC-모바일 기기 실사용 및 독립 Work 감사 PASS 후에만 PREVIEW·TEST·PRODUCTION 단계별 승격. 사용자 원본 write/migration/전체 캐시 삭제 승인 없이 금지.
+
 ## 최종 기준 — 2026-09-20 KST: 077 구형 큐 보호 후보 PASS / 무기한 대기·자동 복구 미해결
 
 상세 최신 상태는 `DOCS/CURRENT_RELEASE_STATE.md` 0BK. 실제 PREVIEW 앱126 + Worker071 유지, 앱127 및 Worker072~077 patch는 미배포.

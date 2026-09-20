@@ -1,5 +1,11 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 2026-09-21 최신 수정 0BX — 불일치 ACK 차단, 서버 해결 우선
+
+`preview` 기존 앱127 후보 `src/services/exploreLikeService.ts`: 이번 batch에서 **실제 전송한 trackId→desiredLiked**와 intake 응답 result→liked가 서로 다르면 cache/outbox/snapshotPending 업데이트 이전에 실패시키고 로컬 마지막 의도를 보존. `scripts/verify-127-atomic-personal-like.mjs`에 기대값 불일치·보존순서 검사 추가. 실제 수정 service 구문 및 순수 판단 확인 PASS, full CI/TS/Build 미검증. `DOCS/CURRENT_RELEASE_STATE.md` 0BX 참조. 이는 **queue ACK 검증일 뿐 D1 final settlement이 아님**.
+
+**다음 작업은 서버를 완성하는 단일 작업으로 묶을 것:** 069의 `batchAt`가 매 접수 서버 시각에 의해 재생성되는 문제, 처리 후 큐 DELETE로 멱등 기록이 소실되는 문제, 다른 기기와 다른 Worker의 역순 R2 overwrite, D1 derived trigger/index의 W3+를 같은 플랜에서 다룬다. 서버가 영속 ordering과 canonical 확정 검증을 제공하기 전 client pending 제거·원격 confirmed 발송·자동 blind retry 금지. 이전 0BW 최종 클릭 보존과 0BT 늦은 캐시 보호의 회귀를 함께 검증. 격리 D1 실 billing, 전체 TS/Build/회귀, PC·모바일 실사용, Work 감사 전에는 preview 배포 금지. 배포/실사용 데이터 수정/새 인프라 생성은 사용자 별도 승인 전 불가.
+
 ## 최신 기준 — 2026-09-21 KST: 인플라이트 좋아요→해제 최종 의도 유실 수정 (0BW)
 
 실제 클라이언트 재현 조건을 발견하고 `src/services/exploreLikeService.ts`의 `flushPendingLikes`에서 오래된 요청 ACK/모호한 네트워크 실패 이후 **그동안 발생한 최신 클릭을 재기준화**. 예: base=false → 첫 true 전송 → 동일 곡 최신 false는 처음에는 false/false로 보이지만, 첫 true가 접수된 뒤에는 true/false가 되어 반드시 서버에 전달되어야 한다. 기존 코드는 false/false를 no-op으로 삭제하여 최종 하트를 잃을 수 있었음. 신규 `rebaseExploreLikeAfterInFlight127` 및 기존 `scripts/verify-127-atomic-personal-like.mjs` 회귀 추가. 실제 GitHub 수정 helper 격리 실행 PASS, full CI/TypeScript/Build/PC·모바일 미검증. `DOCS/CURRENT_RELEASE_STATE.md` 0BW 참조.

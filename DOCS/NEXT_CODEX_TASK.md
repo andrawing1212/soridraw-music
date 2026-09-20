@@ -1,5 +1,15 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 기준 — 2026-09-21 KST: 127 클라이언트 낙관적 상태·늦은 캐시 덮어쓰기 방지 후보 반영 / 배포 차단
+
+`DOCS/CURRENT_RELEASE_STATE.md` 0BT. 현재 `preview`에 `src/services/exploreLikeService.ts`, `src/pages/ExplorePage.tsx`, `scripts/verify-127-atomic-personal-like.mjs` 국소 수정. 반영: 신규 클릭은 로컬 즉시 저장/화면 반영; 늦은 개인 조회 응답은 **응답 직후 UID별 outbox·미확정 상태를 다시 읽고 보호된 곡을 덮어쓰지 않음**; 원격 알림은 표시 시점 현재 membership과 맞을 때만 반영; 최초처럼 오래된 hydrate 결과도 현재 곡 유효 상태 우선; 같은 ms 연속 클릭에 단조 증가하는 `updatedAt`으로 오래된 ACK 구분. 30초 묶음과 기존 공개 숫자/사용자 데이터 구조 그대로. 소규모 소스/순수 로직 점검 PASS, 타입/빌드/전체 CI/실기기 **미검증**. 앱126/Worker071 실제 배포 유지. 이 클라이언트 수정만으로 069 W4·trigger 증폭·구형 공유 Writer·최종 canonical 자동 수렴 FAIL은 해결되지 않음.
+
+### 다음 작업
+1. 기준 commit 고정 후 `verify-127-atomic-personal-like.mjs` 및 126/125/124/123/110, TypeScript, Build 전체 실행. 코드가 다른 과거 회귀 검사를 깨면 배포하지 않고 해당 assertion의 실제 계약을 좁혀 검토. 사용자 원본·Firebase·Cloudflare 실서비스 접근 없이 테스트.
+2. 동시에 클릭/늦은 API/늦은 RTDB/느린 baseline/30초 flush ACK 교차 테스트에서 개인 하트가 로컬 최종 의도 우선인지 확인. 공개 숫자는 원본 canonical과 분리한다. 허위 `settled` 발행 금지.
+3. 이전 0BS·0BR·0BQ 지시 유지: 실제 원본 D1 W1~W2와 파생 trigger/index 비용 재설계, 구형 Writer 병존 순서, R2/RTDB 비용 실측 없이는 Worker078 또는 앱127 배포하지 않음. 독립 Work 검증 후 명시적 사용자 PREVIEW 승인 필요.
+4. 업데이트/재진입 변경 없음 원본 read 0, 기존 좋아요 2천/128 보존, PC↔모바일 좋아요/해제·검색/추천/최신/인기/프로필 화면 일치가 최종 합격선. TEST/PRODUCTION 무단 승격 금지.
+
 ## 최종 기준 — 2026-09-21 KST: 134 비용 증폭·135 순서 모형 확인, 제품 릴리스 여전히 FAIL
 
 `DOCS/CURRENT_RELEASE_STATE.md` 0BS 및 `DOCS/LIKE_WRITE_REDESIGN_133.md` 134 정정 참조.

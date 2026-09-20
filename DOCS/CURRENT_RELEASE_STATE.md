@@ -1,5 +1,31 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0AZ. 공개 좋아요 37곡 전수 대조·4곡 표적 복구 PASS / app125 + Worker071 코드 준비·미배포
+
+2026-09-20 KST, 사용자 요청에 따라 app124 좋아요 0/1 불일치를 네 곡 임시 표시 보정으로 끝내지 않고, **전체 공개곡 원본·좋아요 관계·파생 행과 R2 목록을 대조하고 변경 경로를 방어**했다. 별도 명시적 배포 요청은 없으므로 app125/Worker071은 아직 실제 PREVIEW에 배포하지 않았다.
+
+### 전수 진단 및 제한 복구
+- TEMP 144 Run `35489084396`, 확장 Run `35489176377` SUCCESS: 실제 공개곡 **37곡 전체** 대조. canonical `track_stats.like_count`, 실제 `likes` 관계, `explore_derived_tracks.likes` 및 `row_json.like_count` 37/37 일치. 4곡만 PREVIEW local + shared latest/popular가 원본 1을 0으로 보유(나머지 33곡 일치). 이 네 곡은 9/18과 동일 대상. 전체 조회는 일회성 진단으로만 실행, 정상 페이지·앱 업데이트 경로에 포함하지 않음.
+- TEMP 146 Run `35489878431` SUCCESS: canonical/관계/파생이 계속 1인 동일 네 곡만 식별자 검사 후 ETag CAS로 PREVIEW local latest/popular와 shared latest/popular **각각 4개 값만 0→1** 수정. 37곡 및 비공개 곡 제외 유지, 나머지 곡 byte 동등성 postflight PASS. D1 사용자 원본 write 0; R2 파생 snapshot 네 객체만 쓰기. Firebase 및 Worker 배포 0.
+- TEMP 147 Run `35489951050` SUCCESS: 실제 PREVIEW Feed API latest/popular **37곡 모두 canonical 좋아요와 일치**, canonical/관계/파생 37/37 PASS. 검사 당시 라이브 app124·PREVIEW Worker070과 TEST/PRODUCTION Worker 버전 불변. 이것은 복구 직후의 시점 검사이며 영구 재오염 불가능성의 증명은 아님.
+
+### app125 클라이언트 변경
+- `src/pages/ExplorePage.tsx`, `public/app-version.json`: 기존 기기 캐시의 Feed·하트 상태를 먼저 사용. 릴리스 버전과 정렬(latest/popular)로 구분한 marker가 없으면 **최초 한 번 해당 공유 R2 first-page snapshot을 직접 확인**(D1 R0/W0 계약). 업데이트마다 모든 공개곡·전체 사용자 데이터·D1 원본 재조회 금지. 정상 재방문은 기존 R0/W0 유지.
+- HTTP 오류/유효하지 않은 payload이면 기존 캐시를 보존하고 marker를 쓰지 않아 다음 진입에 재시도. 유효한 snapshot을 로컬 Feed/공유 공개 숫자에 반영한 뒤에만 완료 기록. PC/모바일 공통 경로. *한 번은 정렬별 최대 한 번*이며 최초 요청은 R2 읽기가 발생할 수 있다. 이것을 업데이트 이후 모든 서버 읽기 0이라고 보고하면 안 됨.
+- 앱 버전 변경 자체로 기존 사용자 원본·좋아요 관계·Music Note 60초 묶음 저장·UI를 초기화하지 않음.
+
+### Worker071 변경
+- `cloudflare/explore-worker/patches/071-publication-canonical-like-parity.mjs` 및 canonical Worker: 공개·재공개 mutation에서 대상 곡 PK로 canonical like count를 확인해 PREVIEW local/shared Feed 및 공개프로필에 반영. 이전 stale 0 우선 병합을 제거하고 실제 해제 1→0도 허용. canonical 읽기 실패 시 잘못된 0으로 파생 캐시를 쓰지 않고 보류. 앱 업데이트/재방문 호출 경로에는 D1 읽기 없음.
+- `cloudflare/explore-worker/release-patches.json`에 069→070→071 순서 보존. canonical SHA256 `b170d05385c3096a98033675a9acbb63b40148bf782017c326845b7ea4c17813`을 `canonical/source-sha256.txt`에 고정.
+- source patch exact replay와 071 canonical byte parity PASS. 좋아요 aggregate 065는 별도 곡별 CAS 유지, 059/064 legacy full shared writer는 PREVIEW 070에서 차단 유지.
+- 주의: 071은 공개·재공개 경로 방어이며, 과거 1→0을 **어떤 라이브 writer가 마지막으로 발생시켰는지** 시점 로그로 확정하지 못함. 구형 TEST/PRODUCTION Worker의 shared writer 위험은 여전히 별도 승격 게이트.
+
+### 검증 / 현재 배포
+- 최종 TEMP 145 Run `35490609131` **SUCCESS**: 123·124 선행 회귀, 125 최초 공유 refresh 유효성·실패 후 재시도, 071 canonical count=1 보존/정상 unlike=0/원본 부재 시 쓰기 차단, 070 private+like CAS, TypeScript lint, 앱 Build, Worker dry-run. 실제 Worker 배포 0.
+- 최종 테스트 시점의 고정 제품 코드는 app125/Worker071 후보이나 **라이브는 app124 / Worker070 `f0a910a4-104e-47f7-8e3b-2c2c6454d8cf` 그대로**. TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f`, PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` 변경 없음. Firebase Hosting/Functions/Rules 배포 없음.
+- Work 독립 감사, 앱125 PC/모바일 실사용, 신규 mutation D1 W1~W2 실측은 **미검증**. 071은 공개·재공개에 대상별 D1 조회가 추가되므로 요청당 읽기 비용은 별도 검증 필요.
+- 기존 비공개 곡은 비공개 유지. TEST/PRODUCTION 승격 중단. 이후 PREVIEW 실배포는 사용자 명시적 프리뷰배포 지시를 받아 별도 진행.
+
 ## 0AY. 사용자 app124 업데이트 후 좋아요 0/1 회귀 — live D1↔R2 4곡 FAIL / 배포·승격 중단
 
 2026-09-20 KST 사용자 제공 약 69초 PC 영상에서 Explore 추천·최신·인기 탭 전환 시 같은 곡의 숫자가 일부 0↔1로 달라지고, 채워진 하트와 숫자가 서로 맞지 않는 실사용 증상 확인. 이번 확인은 read-only이며 사용자 좋아요를 임의로 누르거나 해제하지 않음.

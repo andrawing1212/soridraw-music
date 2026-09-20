@@ -36,7 +36,7 @@ if (!page.includes('applyProfileFirstView(refreshedProfile, refreshedRows, true)
 }
 if (!page.includes('setProfileLikedTracks(applyPublicCounts110);')) fail('open liked-tab state is not reconciled');
 if (!page.includes('patchExploreLikedTrackCachedCount091(activeUid, track.id, track.likeCount);')) fail('persistent liked-card cache is not reconciled');
-if (!page.includes('if (feedRequest) syncSharedPublicCountsToLocal110(normalizedTracks);')) fail('fresh Feed payload does not repair liked cards');
+if (!/if \(feedRequest\) \{\s*syncSharedPublicCountsToLocal110\(normalizedTracks\);\s*(?:\/\/[^\n]*\n\s*)?markExploreSharedLikeCacheRepair124\(requestUrl\);\s*\}/.test(page)) fail('fresh Feed payload does not repair liked cards after shared snapshot validation');
 if (!page.includes('syncSharedPublicCountsToLocal110(normalized);')) fail('load-more Feed payload does not repair liked cards');
 
 if (appVersion >= 120) {

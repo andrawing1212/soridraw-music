@@ -1,5 +1,15 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 0CB 최신 구현 — 140 D1 원자 어댑터, 트리거 비용 선행 FAIL (2026-09-21 KST)
+
+사용자의 조속한 배포 요청 이후 `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 `createLikeD1Canonical140` 실제 D1 prepared `batch` 연결부 추가. 실행 순서: 기존 곡/공개프로필/통계 존재 검사 → 원하는 좋아요 관계 하나만 INSERT/DELETE → 직전 relation `changes()=1`인 경우에만 track_stats ±1 → 최종 UID/곡 관계 확인. 불일치 fail-closed, 최종 D1 commit 전 개인 캐시 게시 없음. `scripts/verify-135-like-fenced-protocol.mjs`의 기존 모의 테스트에 D1 shaped mock 실제 어댑터 검사 추가 및 PASS. 독립 sqlite3 단순 2/0/2/0, derived trigger 모형 좋아요/해제 각각 논리 6행, **Cloudflare 청구 rows_written 미검증, W1~W2 릴리스 FAIL**. 현행 069 queue와 구형 writer에 139/140을 연결하거나 실제 DB에 쓰는 단계 아님.
+
+### 가장 짧은 실제 완성 경로 — 반드시 검증된 한 묶음으로
+1. 현재 라이브 공유 D1 schema/trigger/index와 세 Worker 버전을 **SELECT/read-only로** 확인. 별도 격리 D1 + 제한 테스트 계정에서 현행 trigger/index 포함 `meta.rows_written` 실측, 각 사용 행동 W1~W2를 만족하는 파생 cache 구조를 선택(인덱스/검색/추천/인기/공개프로필 보호). 숫자를 맞추려고 부작용만 감추거나 비용 gate를 완화하지 않는다.
+2. 단일 사용자·곡 owner에서 기존 전체 writer를 통합하는 하위호환 전환 설계와 실제 요청 경로 구현. 069/066/035/075/직접 likes, 각 환경 Worker, 기존 shared R2의 unconditional writer 우회 전부 처리. 추가 인프라 또는 비호환 데이터 변경이 불가피하면 관련 비용·롤백과 실사용 데이터 영향을 보고해 명시적 승인 후 적용. **현재 139/140 코어가 개별 Worker에 자동으로 적용됐다고 오해하지 말 것.**
+3. 실제 D1 확정 후 공유 개인 R2 conditional CAS, UID 신호, 타 기기 자동 수렴, 오래된 요청/네트워크 응답/앱127 outbox 결합. 138 pending-only Worker를 finalizer 없이 먼저 배포 금지.
+4. 고정 commit에서 전체 TS/Build/기존 좋아요·공개/비공개 회귀·W1~W2·PC/모바일 실사용·독립 Work 감사·실주소 PREVIEW 검증. 하나라도 불합격이면 PREVIEW 승격 중단. main/production 사용자 승인 없이 수정/배포 금지.
+
 ## 현재 실행 기준 0CA/139 — 서버 후보 코어 구현·검증 완료, 통합/비용 미해결 (2026-09-21 KST)
 
 이번 대화에서 실제 `preview` 코드 변경: `cloudflare/explore-worker/patches/074-personal-like-r2-cas.mjs`를 D1 접수 단계 **개인 R2 선행 갱신 금지/pending-only**로 수정(138). 기존 `scripts/verify-128-like-concurrency.mjs`를 이 계약으로 변경; 실제 071 Worker blob + 073→074 생성 후 전체 128 격리 mock PASS, 고정 TEST/PRODUCTION Worker 소스에 동일 패치가 **적용 가능함만** 확인(실행/배포하지 않음).

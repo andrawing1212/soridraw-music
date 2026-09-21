@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 
 // ISOLATED PROTOCOL SIMULATION ONLY. No real Cloudflare Durable Object or D1.
@@ -431,4 +431,51 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('142_CORE_TO_PUBLISHER_END_TO_END_MOCK=PASS');
   console.log('142_NO_PERSONAL_CACHE_BEFORE_D1_AND_RECOVER_NOTIFICATION=PASS');
   console.log('142_CROSS_ENV_AUTH_REAL_D1_AND_DEVICE_SIGNALS=NOT_VERIFIED');
+}
+
+
+// 143: actual durable-owner glue, tested against transactional storage mock.
+// One DO instance must be shared across ALL environments before real routing.
+{
+  const durable = new Map(), canonicalLiked = new Map(), sequenceSeen = [];
+  const storage = {
+    async get(key) { return structuredClone(durable.get(key)); },
+    async put(key, value) { durable.set(key, structuredClone(value)); },
+    async transaction(fn) {
+      return fn({
+        async get(key) { return durable.get(key); },
+        async put(key, val) { durable.set(key, val); },
+      });
+    },
+  };
+  const canonical = {
+    async readMembership(uid, track) { return canonicalLiked.get(uid + ':' + track) ?? false; },
+    async applyAtomically(uid, track, liked) {
+      canonicalLiked.set(uid + ':' + track, liked);
+      return { canonicalCommitted: true, liked };
+    },
+  };
+  const publish = async (event) => {
+    sequenceSeen.push(event.seq);
+    return { settled: true };
+  };
+  let owner = createLikeDurableOwner143({ uid: 'user', storage, canonical, publish });
+  const request = (trackId, id) => ({
+    uid: 'user', trackId, id, baseRevision: 0, liked: true,
+  });
+  const results = await Promise.all([
+    owner.mutate(request('song-a', 'a')),
+    owner.mutate(request('song-b', 'b')),
+    owner.mutate(request('song-c', 'c')),
+  ]);
+  assert.deepEqual(results.map(x => x.state), ['settled', 'settled', 'settled']);
+  assert.deepEqual(sequenceSeen, [1, 2, 3], 'concurrent tracks require one ordered account-wide stream');
+  assert.equal(durable.get('soridraw:account-like-seq:143:user'), 3);
+  await assert.rejects(owner.mutate({ ...request('song-d', 'd'), uid: 'other' }), /UID owner mismatch/);
+  owner = createLikeDurableOwner143({ uid: 'user', storage, canonical, publish });
+  assert.equal((await owner.mutate(request('song-d', 'd'))).state, 'settled');
+  assert.deepEqual(sequenceSeen, [1, 2, 3, 4], 'restart must preserve global publication order');
+  assert.equal(canonicalLiked.get('user:song-d'), true);
+  console.log('143_DURABLE_UID_OWNER_SERIALIZATION_AND_RESTART_MODEL=PASS');
+  console.log('143_SHARED_CROSS_ENV_SERVICE_BINDING_AND_AUTH=NOT_CONFIGURED');
 }

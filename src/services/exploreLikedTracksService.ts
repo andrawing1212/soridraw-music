@@ -202,6 +202,21 @@ export const invalidateExploreLikedTrackCollection = (uid: string) => {
   writeCache(normalizedUid, cache);
 };
 
+// App129 candidate seeding only. A partial personal R2 bundle is NOT allowed to
+// decide liked/unliked state, but its IDs are still useful as bounded candidates.
+// Every candidate is rechecked by exploreLikeService before My Likes renders.
+export const seedExploreLikedTrackCandidates129 = (uid: string, trackIds: string[]) => {
+  const normalizedUid = normalizeId(uid);
+  if (!normalizedUid) return;
+  const candidates = normalizeIds(trackIds);
+  if (!candidates.length) return;
+  const cache = readCache(normalizedUid);
+  const next = new Set(cache.canonicalLikedTrackIds || []);
+  candidates.forEach((trackId) => next.add(trackId));
+  cache.canonicalLikedTrackIds = [...next];
+  writeCache(normalizedUid, cache);
+};
+
 export const rememberExploreLikedTrack = (
   uid: string,
   track: Record<string, unknown> | null,

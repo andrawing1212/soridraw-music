@@ -365,8 +365,10 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
     };
   };
   let barrier156 = 10;
+  assert.throws(() => createLikeExactR2Rebuilder156(full, listPage156,
+    async () => barrier156), /blocked until all legacy like writers/);
   const rebuild156 = createLikeExactR2Rebuilder156(full, listPage156,
-    async () => barrier156);
+    async () => barrier156, { legacyWriterCutoverVerified: true });
   assert.deepEqual(await rebuild156('user'),
     { rebuilt: true, count: 2053, publicationSeq: 10 });
   assert.equal(full.value.canonicalComplete156, true);
@@ -387,7 +389,8 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   let seqReads156 = 0;
   const contestedRebuild = createLikeExactR2Rebuilder156(contested,
     async () => ({ items: [], nextCursor: null }),
-    async () => (++seqReads156 === 1 ? 20 : 21));
+    async () => (++seqReads156 === 1 ? 20 : 21),
+    { legacyWriterCutoverVerified: true });
   await assert.rejects(contestedRebuild('user'), /Concurrent like mutation/);
   assert.equal(contested.writes, 0, 'rebuild must not publish across a concurrent UID mutation');
 
@@ -410,6 +413,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('141_STALE_REPLAY_CONFLICT_AND_IDEMPOTENT_NOTIFY=PASS');
   console.log('141_CAS_RETRY_AMBIGUOUS_2000_FAIL_CLOSED_AND_128_HISTORY_ELIMINATED=PASS');
   console.log('156_EXACT_2053_R2_REBUILD_AND_POST_REBUILD_MUTATION=PASS');
+  console.log('156_LEGACY_WRITER_CUTOVER_GATE=PASS');
   const legacy061 = readFileSync('cloudflare/explore-worker/patches/061-shared-social-r2-parity.mjs', 'utf8');
   assert.match(legacy061, /existing\?\.canonicalComplete156 === true/);
   assert.match(legacy061, /must never truncate an.*exact >2,000 canonical snapshot/s);

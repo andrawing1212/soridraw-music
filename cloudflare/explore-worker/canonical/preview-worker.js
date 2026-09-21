@@ -2850,6 +2850,12 @@ async function writeSharedLikes061(env, uid, likedIds) {
   const normalized = String(uid || '').trim();
   const bucket = env?.PROFILE_MEDIA || null;
   if (!normalized || !bucket || !likedIds) return false;
+  // SORIDRAW_EXACT_SHARED_LIKE_GUARD_156_20260921
+  // Legacy 061 mirrors are capped at 2,000. Once a fenced canonical rebuild
+  // marks this shared object exact, this old writer may no longer overwrite it
+  // or silently truncate valid memberships.
+  const existing156 = await readSharedSocialJson061(env, exploreSharedLikesKey061(normalized));
+  if (existing156?.canonicalComplete156 === true) return false;
   const ids = [...new Set([...likedIds].map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 2000);
   await bucket.put(exploreSharedLikesKey061(normalized), JSON.stringify({
     schemaVersion: 1,

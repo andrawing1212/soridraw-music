@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 
 // ISOLATED PROTOCOL SIMULATION ONLY. No real Cloudflare Durable Object or D1.
@@ -173,4 +173,64 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('139_ACTUAL_CORE_PUBLISH_FAILURE_BLOCKS_NEW_ORDER=PASS');
   console.log('139_REAL_CLOUDFLARE_D1_DO_COST_AND_LEGACY_WRITERS=NOT_VERIFIED');
   console.log('139_PRODUCT_RELEASE=FAIL');
+}
+
+
+// 140: verify actual adapter statement ordering/guards with a transactional
+// D1-shaped mock. The existing 133/134 SQLite tests separately model row cost;
+// only an isolated real Cloudflare D1 can approve billed rows_written.
+{
+  let relation = false, stat = 0, eligible = true, sqlCalls = 0, batches = 0;
+  const prepared = (sql) => ({
+    bind(...args) {
+      return {
+        sql, args,
+        async first() {
+          assert.match(sql, /SELECT 1 AS liked FROM likes/);
+          return relation ? { liked: 1 } : null;
+        },
+      };
+    },
+  });
+  const db = {
+    prepare(sql) { sqlCalls++; return prepared(sql); },
+    async batch(stmts) {
+      batches++;
+      assert.equal(stmts.length, 4, 'preflight+relation+stat+canonical membership in one batch');
+      assert.match(stmts[0].sql, /JOIN public_profiles p/);
+      assert.match(stmts[0].sql, /JOIN track_stats s/);
+      assert.match(stmts[2].sql, /changes\(\) = 1/);
+      assert.match(stmts[3].sql, /SELECT EXISTS\(/);
+      const desired = stmts[1].sql.includes('INSERT OR IGNORE');
+      const before = relation;
+      if (eligible) relation = desired;
+      const relationChanges = eligible && before !== relation ? 1 : 0;
+      if (relationChanges) stat += desired ? 1 : -1;
+      return [
+        { results: [{ eligible: Number(eligible) }], meta: { rows_written: 0 } },
+        { results: [], meta: { rows_written: relationChanges } },
+        { results: [], meta: { rows_written: relationChanges } },
+        { results: [{ liked: Number(relation) }], meta: { rows_written: 0 } },
+      ];
+    },
+  };
+  const adapter = createLikeD1Canonical140(db);
+  assert.equal(await adapter.readMembership('uid','song'), false);
+  assert.deepEqual(await adapter.applyAtomically('uid','song',true), {
+    canonicalCommitted: true, liked: true, rowsWritten: 2,
+  });
+  assert.equal(stat, 1);
+  assert.deepEqual(await adapter.applyAtomically('uid','song',true), {
+    canonicalCommitted: true, liked: true, rowsWritten: 0,
+  });
+  assert.equal(stat, 1, 'duplicate like must not double count');
+  assert.equal((await adapter.applyAtomically('uid','song',false)).liked, false);
+  assert.equal(stat, 0);
+  assert.equal((await adapter.applyAtomically('uid','song',false)).rowsWritten, 0);
+  eligible = false;
+  await assert.rejects(adapter.applyAtomically('uid','song',true), /Canonical D1 settlement not proven/);
+  assert.equal(relation, false, 'invalid private track must not create a like');
+  assert.ok(batches >= 5 && sqlCalls > 0);
+  console.log('140_D1_ADAPTER_SQL_BATCH_ORDER_AND_FAIL_CLOSED_MOCK=PASS');
+  console.log('140_REAL_D1_CHANGES_ROWS_WRITTEN_TRIGGER_INDEX=NOT_MEASURED');
 }

@@ -1,2 +1,4 @@
-requested_at=2026-09-12T04:24:30+09:00
-purpose=recheck_right_track_after_072_and_0420_aggregate
+requested_at=2026-09-21T21:12:00Z
+purpose=app133_real_device_like_asymmetry_and_queue_materialization_readonly
+requested_by=user
+read_only=true

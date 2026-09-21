@@ -1,5 +1,41 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DB. app130 모바일 최초 진입 오래된 좋아요 캐시 차단 — source 감사 PASS (2026-09-22 KST)
+
+**현재 preview HEAD 코드:** `1c850beed0a4b4409b96acbb636176ea2cfe4bac`.
+**Release System Audit:** Run `35648185770` SUCCESS.
+
+실사용 사진에서 확인된 증상:
+- PC는 최신 좋아요 4곡인데 모바일 앱 업데이트 직후 첫 화면은 일부 곡이 0/빈 하트로 표시.
+- 인기 탭에 갔다가 추천/최신으로 돌아오면 일부 값이 뒤늦게 바뀜.
+- 즉 서버 최종값 자체보다 모바일 첫 화면이 과거 기기 캐시를 먼저 확정값처럼 쓰는 문제가 남아 있었음.
+
+이번 수정:
+- 모바일/PC 공통 개인 좋아요 exact 검증 캐시를 **계정 개인 R2 revision과 한 세트**로 저장.
+- 예전 app129 이하의 track ID-only verified cache는 app130 첫 진입에서 신뢰하지 않음.
+- 저장된 revision과 현재 계정 revision이 다르면 이전 verified membership을 무효화하고 현재 보이는 곡만 bounded exact 확인.
+- revision이 같으면 기존 검증 캐시를 그대로 사용해 재진입 서버 조회를 반복하지 않음.
+- revision이 아직 없으면 exact 검증을 세션 밖에 영구 저장하지 않아 오래된 모바일 상태가 다음 앱 시작까지 살아남지 않게 함.
+
+검증:
+- TypeScript PASS
+- Build PASS
+- Static release verification PASS
+- Like regression PASS
+- TEST / PRODUCTION Worker dry-run PASS
+- live shared D1 preflight read-only PASS
+- branch refs unchanged PASS
+
+변경하지 않은 것:
+- Worker 제품 코드 0
+- Firebase / Functions / Rules 변경 0
+- D1 schema / migration / 사용자 데이터 write 0
+- UI/CSS 변경 0
+- TEST / PRODUCTION 변경 0
+
+**실제 PREVIEW live는 아직 app129. app130은 배포 전이다.**
+
+
 ## 0DA. PREVIEW app129 — 하트·숫자·내 좋아요 단일 좋아요 원자 배포 완료 (2026-09-22 KST)
 
 **PREVIEW 배포 고정 commit:** `0a8b1d6820493c82d8cc2924446153c967fa3798`.

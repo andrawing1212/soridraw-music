@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 
 // ISOLATED PROTOCOL SIMULATION ONLY. No real Cloudflare Durable Object or D1.
@@ -962,4 +962,65 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('153_EXPLICIT_CUTOVER_USER_FIRST_D1_ADAPTER=PASS');
   console.log('153_W2_RELATION_AND_W3_FAIL_CLOSED_MOCK=PASS');
   console.log('153_SHARED_BASELINE_AND_LEGACY_WORKERS_RELEASE_GATE=FAIL');
+}
+
+
+// 155: cold-recovery of >2,000 personal likes must page by a stable compound
+// timestamp/track cursor. Same-millisecond clicks must never disappear.
+// This is an in-memory D1-shaped fixture, not a claim of live D1 rows_read.
+{
+  const all = Array.from({ length: 2053 }, (_, i) => ({
+    track_id: 'track-' + String(i).padStart(5, '0'),
+    created_at: 1710000000000 + Math.floor(i / 11),
+  })).sort((a, b) => b.created_at - a.created_at ||
+    (a.track_id < b.track_id ? 1 : a.track_id > b.track_id ? -1 : 0));
+  let calls = 0;
+  const db155 = {
+    prepare(sql) {
+      assert.match(sql, /FROM explore_likes_153 WHERE user_uid = \?/);
+      assert.match(sql, /ORDER BY created_at DESC,track_id DESC LIMIT \?/);
+      assert.doesNotMatch(sql, /OFFSET|COUNT\s*\(/);
+      return {
+        bind(...args) {
+          assert.equal(args[0], 'account-155');
+          const hasCursor = sql.includes('created_at < ?');
+          assert.equal(args.length, hasCursor ? 5 : 2);
+          const limit = args.at(-1);
+          assert.ok(limit > 0 && limit <= 128);
+          return {
+            async all() {
+              calls++;
+              let list = all;
+              if (hasCursor) {
+                const [, at1, at2, trackId] = args;
+                assert.equal(at1, at2);
+                list = list.filter(row => row.created_at < at1 ||
+                  (row.created_at === at1 && row.track_id < trackId));
+              }
+              return { results: list.slice(0, limit) };
+            },
+          };
+        },
+      };
+    },
+  };
+  const page = createLikeRecentPager155(db155);
+  const recovered = [];
+  let cursor = null;
+  do {
+    const result = await page('account-155', cursor, 128);
+    recovered.push(...result.items);
+    cursor = result.nextCursor;
+  } while (cursor !== null);
+  assert.equal(recovered.length, 2053, 'no truncation at old 2000-like limit');
+  assert.deepEqual(recovered.map(x => x.trackId), all.map(x => x.track_id),
+    'stable cursor preserves exact ordering even at duplicate timestamps');
+  assert.equal(new Set(recovered.map(x => x.trackId)).size, 2053);
+  assert.ok(calls <= Math.ceil(2053 / 128) + 1, 'only bounded page queries');
+  await assert.rejects(page('account-155', null, 129), /Invalid bounded/);
+  await assert.rejects(page('account-155', { createdAt: -1, trackId: 'x' }, 128),
+    /Invalid like recovery cursor/);
+  console.log('155_BOUNDED_2053_LIKES_SAME_MS_CURSOR_RECOVERY=PASS');
+  console.log('155_W2_WIDENED_INDEX_REAL_REMOTE_BILLING=NOT_YET_MEASURED');
+  console.log('155_LEGACY_2000_R2_SNAPSHOT_CUTOVER=NOT_CONNECTED');
 }

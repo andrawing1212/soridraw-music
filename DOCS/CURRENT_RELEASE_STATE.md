@@ -1,5 +1,25 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DG. PREVIEW app132 — PC/모바일 개인 좋아요 캐시 일치 hotfix 배포 완료 (2026-09-22 KST)
+
+**배포 고정 commit:** `ffff163783c3103a9594903132480ce356846ad2`.
+**코드 후보:** `164c9f77fe3540df9e721bdc4c1e2f868c0918f0`; `src/services/exploreLikeService.ts` 핵심 수정 `e5b6ff64cd649577411c3208c7970b97c8f61499`.
+**감사:** Release System Audit Run `35650903841` job `106508627342` rerun SUCCESS; checkout exact preview `b4377a1529df90a1ebff64c62c9a915321d2ca0b`.
+**Hosting:** PREVIEW App Release Run `35651254609` job `106509860243` rerun SUCCESS; checkout exact source `ffff163783c3103a9594903132480ce356846ad2`.
+
+검증 로그:
+- TypeScript PASS / Build PASS / like regression PASS / release-system audit PASS.
+- Firebase PREVIEW Hosting PASS.
+- 실제 `https://preview.soridraw.com/app-version.json` **132** 확인, remote exact `index.html` build PASS.
+- TEST / PRODUCTION git ref 및 실제 주소 변경 없음 PASS.
+- Worker/Functions/Rules 재배포 0. 공유 사용자 D1/R2 migration/backfill/delete/write 0. 기존 사용자 원본 구조 그대로 유지.
+- W1~W2 제품 합격선은 **이번 앱 수정으로 새롭게 달성한 것이 아니다**. 기존 source 비용 gate에는 알려진 FAIL이 있으며, 비용 최적화 및 TEST/PRODUCTION 승격은 계속 보류한다.
+
+app132 변경 내용: 첫 retained RTDB 신호, 오래된 partial-R2 개인 캐시 및 기기별 이전 snapshotPending이 다른 기기에서 승인된 새 좋아요/해제 상태를 막지 않도록 정리. 하트 bool이 같더라도 전달된 숫자가 변경되면 Feed/프로필/내 좋아요에 전파하고, Explore가 마운트되기 전에도 받은 값을 로컬 display lock에 보존. 기존 30초 sliding batch, UI/CSS 유지.
+
+**현재 마지막 상태: PREVIEW app132 배포·서버 exact build 확인 완료. PC/모바일 실사용 상호 일치는 사용자 재검증 전이다.** 같은 계정 4곡의 하트·숫자·내 좋아요가 첫 진입에서 동일한지 확인하고, ON→OFF→ON 후 30초 ACK 뒤 다른 기기에서 새로고침/탭 왕복 없이 수렴해야 합격. 실패 시 추가 비용 최적화/171 cutover/TEST/PRODUCTION 진행 금지.
+
+
 ## 0DF. app132 PREVIEW source 후보 — 최신 계정 좋아요 신호와 기기 캐시 일치 복구 (2026-09-22 KST)
 
 **기준 PREVIEW app131 live:** Hosting Run `35651254609` SUCCESS. **현재 app132는 아직 배포되지 않았다.**

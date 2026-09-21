@@ -138,6 +138,27 @@ jobs:
           test "$hash078_before" = "$hash078_after"
           grep -Fq 'SORIDRAW_LIKE_CUTOVER_PRECONDITION_PROOF_164_20260921' "$replay078/worker.js"
           echo '078_DEPLOYED_160_TO_164_REPLAY=PASS'
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/079-like-intake-drain-barrier.mjs
+          node --check "$replay078/worker.js"
+          REPLAY165="$replay078/worker.js" node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const src = fs.readFileSync(process.env.REPLAY165, 'utf8');
+          for (const name of ['handleLikeD1Core', 'handleLikeBatch034']) {
+            const start = src.indexOf('async function ' + name + '(');
+            const end = src.indexOf('\n}', start);
+            assert.ok(start >= 0 && end > start);
+            const body = src.slice(start, end + 2);
+            assert.match(body, /await assertLegacyLikeIntakeOpen165\(env\)/);
+          }
+          assert.match(src, /SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921/);
+          console.log('079_DEPLOYED_164_TO_165_REPLAY=PASS');
+          NODE
+          hash165_before="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/079-like-intake-drain-barrier.mjs
+          hash165_after="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          test "$hash165_before" = "$hash165_after"
+          echo '079_DRAIN_PATCH_IDEMPOTENT=PASS'
 
           generated="$RUNNER_TEMP/soridraw-like-candidate-071"
           mkdir -p "$generated"

@@ -34,7 +34,6 @@ if (appVersion >= 120) {
     likes.includes('publicCount + Number(desiredLiked) - Number(baseLiked)') &&
     likes.includes('const optimisticAction127 = computeExploreLikeAction127(baseLiked, liked, baseLikeCount);') &&
     likes.includes('const optimisticLikeCount = optimisticAction127.likeCount;');
-  if (!directOptimistic120 && !helperOptimistic127) fail('actor immediate optimistic count missing');
   if (!directOptimistic120 && !helperOptimistic127) {
     fail('actor optimistic count must remain one-step baseline/final delta');
   }

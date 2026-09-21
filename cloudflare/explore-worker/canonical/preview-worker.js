@@ -2869,12 +2869,52 @@ async function writeSharedLikes061(env, uid, likedIds) {
   return true;
 }
 
-async function readSharedLikes061(env, uid) {
+// SORIDRAW_SHARED_LIKE_READER_FIRST_161_20260921
+const EXPLORE_SHARED_LIKE_EXACT_MARKER_161 = 'SORIDRAW_SHARED_LIKE_EXACT_STATE_161_20260921';
+
+function normalizeSharedLikesState161(bundle, uid) {
+  const normalized = String(uid || '').trim();
+  if (!normalized || !bundle || Number(bundle.schemaVersion) !== 1 ||
+      String(bundle.uid || '').trim() !== normalized || !Array.isArray(bundle.likedTrackIds)) return null;
+  const values = bundle.likedTrackIds.map((value) => String(value || '').trim()).filter(Boolean);
+  const likedIds = new Set(values);
+  const exactLikeCount = Number(bundle.exactLikeCount156);
+  const canonicalSource = String(bundle.canonicalSource156 || '').trim();
+  const exact = bundle.canonicalComplete156 === true &&
+    Boolean(canonicalSource) &&
+    Number.isSafeInteger(exactLikeCount) && exactLikeCount >= 0 &&
+    exactLikeCount === likedIds.size && values.length === likedIds.size;
+  return {
+    likedIds,
+    exact,
+    exactLikeCount: exact ? exactLikeCount : null,
+    source: exact ? canonicalSource : 'legacy-v114-partial',
+  };
+}
+
+async function readSharedLikesState161(env, uid) {
   const normalized = String(uid || '').trim();
   if (!normalized) return null;
   const bundle = await readSharedSocialJson061(env, exploreSharedLikesKey061(normalized));
-  if (!bundle || Number(bundle.schemaVersion) !== 1 || !Array.isArray(bundle.likedTrackIds)) return null;
-  return new Set(bundle.likedTrackIds.map((value) => String(value || '').trim()).filter(Boolean));
+  return normalizeSharedLikesState161(bundle, normalized);
+}
+
+async function readBoundedLegacyLikeMemberships161(env, uid, trackIds) {
+  const normalized = String(uid || '').trim();
+  const ids = [...new Set((trackIds || []).map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 200);
+  if (!normalized || !ids.length || !env?.DB) return new Set();
+  const placeholders = ids.map(() => '?').join(',');
+  const result = await env.DB.prepare(
+    'SELECT l.track_id FROM likes l JOIN tracks t ON t.id = l.track_id ' +
+    'WHERE l.user_uid = ? AND l.track_id IN (' + placeholders + ') ' +
+    "AND t.is_public = 1 AND t.status = 'published'"
+  ).bind(normalized, ...ids).all();
+  return new Set((result?.results || []).map((row) => String(row?.track_id || '').trim()).filter(Boolean));
+}
+
+async function readSharedLikes061(env, uid) {
+  const state = await readSharedLikesState161(env, uid);
+  return state?.likedIds || null;
 }
 
 async function writeSharedFollowing061(env, uid, followingUids) {
@@ -16715,13 +16755,31 @@ async function handleMyLikeStates(request, url, env, cors) {
   const authContext = await requireExploreAuth(request);
   const raw = safeString(url.searchParams.get("trackIds"));
   const trackIds = [...new Set(raw.split(",").map((value) => value.trim()).filter(Boolean))].slice(0, 50);
-  if (!trackIds.length) return json({ ok: true, data: { likedTrackIds: [] } }, 200, cors);
-  if (trackIds.some((trackId) => trackId.length > 512)) throwApi("INVALID_TRACK_ID", "\uACE1 ID\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", 400);
-  const likedIds = await readExploreLikeR2Bundle(env, authContext.uid);
-  if (likedIds) {
-    return json({ ok: true, data: { likedTrackIds: trackIds.filter((trackId) => likedIds.has(trackId)) } }, 200, cors);
+  if (!trackIds.length) {
+    return json({ ok: true, data: {
+      likedTrackIds: [], likesComplete: false, exactLikeCount: null,
+      likesSnapshotSource: 'empty-targeted-161',
+    } }, 200, cors);
   }
-  return await handleMyLikeStatesD1Core(request, url, env, cors);
+  if (trackIds.some((trackId) => trackId.length > 512)) {
+    throwApi("INVALID_TRACK_ID", "\uACE1 ID\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.", 400);
+  }
+  const sharedState = await readSharedLikesState161(env, authContext.uid);
+  if (sharedState?.exact) {
+    return json({ ok: true, data: {
+      likedTrackIds: trackIds.filter((trackId) => sharedState.likedIds.has(trackId)),
+      likesComplete: true,
+      exactLikeCount: sharedState.exactLikeCount,
+      likesSnapshotSource: sharedState.source,
+    } }, 200, cors);
+  }
+  const targeted = await readBoundedLegacyLikeMemberships161(env, authContext.uid, trackIds);
+  return json({ ok: true, data: {
+    likedTrackIds: trackIds.filter((trackId) => targeted.has(trackId)),
+    likesComplete: false,
+    exactLikeCount: null,
+    likesSnapshotSource: 'legacy-targeted-161',
+  } }, 200, cors);
 }
 __name(handleMyLikeStates, "handleMyLikeStates");
 __name2(handleMyLikeStates, "handleMyLikeStates");
@@ -22947,6 +23005,34 @@ async function enrichSharedTrackCards062(env, cards) {
   });
 }
 
+async function readRequestedLikedTrackCardsD1161(env, trackIds) {
+  const ids = [...new Set((trackIds || []).map((value) => String(value || '').trim()).filter(Boolean))].slice(0, EXPLORE_SHARED_TRACK_CARD_LIMIT_062);
+  if (!ids.length || !env?.DB) return [];
+  const values = ids.map((_, index) => '(?,' + index + ')').join(',');
+  const result = await env.DB.prepare(
+    'WITH requested(id, sort_order) AS (VALUES ' + values + ') ' +
+    'SELECT t.id,t.owner_uid,p.nickname AS owner_nickname,p.avatar_url AS owner_avatar_url,' +
+    't.title,t.cover_url,t.suno_url_primary,t.suno_url_secondary,t.published_at,t.profile_pinned,' +
+    'COALESCE(s.like_count,0) AS like_count,r.sort_order FROM requested r ' +
+    'JOIN tracks t ON t.id=r.id LEFT JOIN public_profiles p ON p.uid=t.owner_uid ' +
+    'LEFT JOIN track_stats s ON s.track_id=t.id ' +
+    "WHERE t.is_public=1 AND t.status='published' ORDER BY r.sort_order ASC"
+  ).bind(...ids).all();
+  return (result?.results || []).map((row) => normalizeSharedTrackCard062({
+    id: String(row.id || ''),
+    ownerUid: String(row.owner_uid || ''),
+    ownerNickname: String(row.owner_nickname || ''),
+    ownerAvatarUrl: String(row.owner_avatar_url || ''),
+    title: String(row.title || ''),
+    coverUrl: String(row.cover_url || ''),
+    sunoUrlPrimary: String(row.suno_url_primary || ''),
+    openUrl: String(row.suno_url_primary || row.suno_url_secondary || ''),
+    likeCount: Math.max(0, Number(row.like_count || 0)),
+    publishedAt: Math.max(0, Number(row.published_at || 0)),
+    profilePinned: Boolean(row.profile_pinned),
+  })).filter(Boolean);
+}
+
 async function promoteLikedTrackResponse062(env, response) {
   if (!(response instanceof Response) || !response.ok) return response;
   let payload = null;
@@ -23026,7 +23112,6 @@ async function handleMyLikedTracks052Core062(request, env, cors) {
 }
 
 async function handleMyLikedTracks052(request, env, cors) {
-  const fallbackRequest = request.clone();
   const bodyRequest = request.clone();
   const authContext = await requireExploreAuth(request);
   let body = null;
@@ -23036,19 +23121,32 @@ async function handleMyLikedTracks052(request, env, cors) {
   const trackIds = [...new Set(raw.map((value) => String(value || '').trim()).filter(Boolean))].slice(0, EXPLORE_SHARED_TRACK_CARD_LIMIT_062);
   if (trackIds.some((trackId) => trackId.length > 512)) throwApi('INVALID_TRACK_ID', '곡 ID가 올바르지 않습니다.', 400);
 
-  const likedIds = await readExploreLikeR2Bundle(env, authContext.uid);
-  if (!likedIds) {
-    const response = await handleMyLikedTracks052Core062(fallbackRequest, env, cors);
-    return await promoteLikedTrackResponse062(env, response);
-  }
+  const likeState = await readSharedLikesState161(env, authContext.uid);
+  const likedIds = likeState?.exact
+    ? likeState.likedIds
+    : await readBoundedLegacyLikeMemberships161(env, authContext.uid, trackIds);
+  const likesComplete = Boolean(likeState?.exact);
   const canonicalLikedTrackIds = [...likedIds];
+
   if (!trackIds.length) {
-    return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items: [], unavailableTrackIds: [] } }, 200, cors);
+    return json({ ok: true, data: {
+      likedTrackIds: canonicalLikedTrackIds,
+      items: [],
+      unavailableTrackIds: [],
+      likesComplete,
+      exactLikeCount: likesComplete ? likeState.exactLikeCount : null,
+    } }, 200, cors);
   }
 
   const requested = trackIds.filter((trackId) => likedIds.has(trackId));
   if (!requested.length) {
-    return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items: [], unavailableTrackIds: trackIds } }, 200, cors);
+    return json({ ok: true, data: {
+      likedTrackIds: canonicalLikedTrackIds,
+      items: [],
+      unavailableTrackIds: trackIds,
+      likesComplete,
+      exactLikeCount: likesComplete ? likeState.exactLikeCount : null,
+    } }, 200, cors);
   }
 
   const byId = new Map();
@@ -23065,18 +23163,7 @@ async function handleMyLikedTracks052(request, env, cors) {
   }
 
   if (missing.length) {
-    const recoveryHeaders = new Headers(request.headers);
-    recoveryHeaders.set('Content-Type', 'application/json');
-    const recoveryRequest = new Request(request.url, {
-      method: 'POST',
-      headers: recoveryHeaders,
-      body: JSON.stringify({ trackIds: missing }),
-    });
-    const recoveryResponse = await handleMyLikedTracks052Core062(recoveryRequest, env, cors);
-    if (!recoveryResponse.ok) return recoveryResponse;
-    let recoveryPayload = null;
-    try { recoveryPayload = await recoveryResponse.clone().json(); } catch { recoveryPayload = null; }
-    const recoveredItems = Array.isArray(recoveryPayload?.data?.items) ? recoveryPayload.data.items : [];
+    const recoveredItems = await readRequestedLikedTrackCardsD1161(env, missing);
     for (const item of recoveredItems) {
       const card = normalizeSharedTrackCard062(item);
       if (!card?.id || !missing.includes(card.id)) continue;
@@ -23089,28 +23176,34 @@ async function handleMyLikedTracks052(request, env, cors) {
   const items = await enrichSharedTrackCards062(env, ordered);
   const returned = new Set(items.map((item) => String(item?.id || '').trim()).filter(Boolean));
   const unavailableTrackIds = trackIds.filter((trackId) => !returned.has(trackId));
-  return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items, unavailableTrackIds } }, 200, cors);
+  return json({ ok: true, data: {
+    likedTrackIds: canonicalLikedTrackIds,
+    items,
+    unavailableTrackIds,
+    likesComplete,
+    exactLikeCount: likesComplete ? likeState.exactLikeCount : null,
+  } }, 200, cors);
 }
 
 async function handleMySocialSnapshot042(request, env, cors) {
   const authContext = await requireExploreAuth(request);
-  let [likedIds, followingUids] = await Promise.all([
-    readExploreLikeR2Bundle(env, authContext.uid),
+  let [likeState, followingUids] = await Promise.all([
+    readSharedLikesState161(env, authContext.uid),
     readExploreFollowingR2Bundle(env, authContext.uid),
   ]);
 
-  if (!likedIds || !followingUids) {
+  if (!likeState || !followingUids) {
     await Promise.all([
-      likedIds ? Promise.resolve() : rebuildExploreLikeR2Bundle(env, authContext.uid),
+      likeState ? Promise.resolve() : rebuildExploreLikeR2Bundle(env, authContext.uid),
       followingUids ? Promise.resolve() : rebuildExploreFollowingR2Bundle(env, authContext.uid),
     ]);
-    [likedIds, followingUids] = await Promise.all([
-      readExploreLikeR2Bundle(env, authContext.uid),
+    [likeState, followingUids] = await Promise.all([
+      readSharedLikesState161(env, authContext.uid),
       readExploreFollowingR2Bundle(env, authContext.uid),
     ]);
   }
 
-  if (!likedIds || !followingUids) {
+  if (!likeState || !followingUids) {
     return json({ ok: false, error: 'SOCIAL_SNAPSHOT_UNAVAILABLE' }, 503, cors);
   }
 
@@ -23118,7 +23211,10 @@ async function handleMySocialSnapshot042(request, env, cors) {
     ok: true,
     data: {
       schemaVersion: 1,
-      likedTrackIds: [...likedIds],
+      likedTrackIds: [...likeState.likedIds],
+      likesComplete: likeState.exact,
+      exactLikeCount: likeState.exact ? likeState.exactLikeCount : null,
+      likesSnapshotSource: likeState.source,
       followingUids: [...followingUids],
       source: 'r2-social-042',
       updatedAt: Date.now(),

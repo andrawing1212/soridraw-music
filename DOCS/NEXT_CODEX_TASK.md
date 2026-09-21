@@ -1,5 +1,30 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — 166 전 환경 intake 종료 증명 + in-flight 안전 전환 (source-only)
+
+165 구현과 164 cursor 교정은 [run 35586848857](https://github.com/andrawing1212/soridraw-music/actions/runs/35586848857)에서 exact `9eafb865114456139cdd8b51882537b6ca11eec7` SUCCESS. 0CR 기준 **075의 실제 pending은 0**으로 정정되었다. 현재 164 read-only preflight가 막히는 이유는 `legacyIntakeClosed=false`와 157 table/index 미적용이다. 현재 신규 shared drain marker는 source-only이며 실제로 arm되지 않았다.
+
+### 166 목표: “marker 보임”을 “모든 구형 writer가 멎음”으로 오인하지 않는 검증
+
+1. 현재 165 guard를 지난 in-flight direct/batch request가 drain marker arm 이후에 queue/legacy relation을 쓸 수 있는 경쟁 상태를 좁은 실행형 test로 재현하고, **실제 인입 종료 증명 방법**을 설계한다. 검사 시점 이전에 실행 중이던 요청도 완전히 종료됐음을 보장하기 전에는 164 proof를 발행하지 않는다.
+2. 035/066/069/075는 cursor-aware `LIMIT 1` 기반 읽기 전용 미처리 확인. 075 raw table 행 존재만으로 pending이라 선언 금지. 단일 체크 순간의 0과 안정적인 quiescence를 구분한다.
+3. 164 CLI `--legacy-intake-closed` 같은 호출자 자기선언은 **실제 폐쇄 증명으로 취급 금지**. 전 환경 Worker 버전/바인딩, 공통 drain token 및 이전에 진입한 요청의 완료, 실제 schema/index를 검증한 독립 release controller만 proof 후보를 만들도록 source-level gate를 설계한다.
+4. PREVIEW/TEST/PRODUCTION 사용자 데이터는 동일 shared D1/R2다. 세 환경의 reader/writer가 모두 전환을 이해하기 전에는 어떤 환경도 개별 cutover 금지. 구형 앱 재시도와 기존 Worker 코드를 고려할 것.
+5. 157/158 owner는 dormant/source-only로 기존 기능을 보존하면서 연결 준비. final 162 marker를 실제 arm하기 전에는 `likes`/track_stats 기존 writer 정상 유지.
+6. marker arm 후에는 163 구형 writer 차단, 157 sparse override 및 158 lazy count만 canonical을 수정하도록 검증. 반쪽 전환·복구 없는 rollback 금지.
+7. 051 전체 global revision 대체 변경 신호, 141/156 exact 개인 R2, 공개 Feed/card/profile 부분 갱신, RTDB final settlement, D1 외 R2/DO/RTDB 총비용, PC↔모바일 동기화 검증이 제품 배포의 별도 필수 항목임을 유지한다.
+
+### 금지/합격선
+
+- 실제 157 migration apply, drain/cutover R2 marker write, Worker/Firebase 배포, 사용자 데이터 backfill/delete/transform은 **추가 승인 전 금지**.
+- 정상 Explore 재진입/업데이트 D1 data read 0 목표, 변경 있을 때만 R2/D1 접근.
+- 실관계 변경 W1~W2, 중복 W0, W3+ FAIL. 새 guard로 변경 없는 화면 읽기 또는 무의미한 서버 쓰기 증가 금지.
+- exact source commit TS/Build/실행형 source 회귀/TEST·PRODUCTION dry-run/shared D1 read-only audit. 제품 release gate는 계속 FAIL.
+- source-only 검증 성공을 실제 배포/세 환경 활성화 완료로 보고 금지.
+
+**기준:** code-audit commit `9eafb865114456139cdd8b51882537b6ca11eec7`; Worker SHA256 `316fc57b2a0ed6ff30a26b5a26e0309b9667db95bb164289de422f6132899f08`; 정확한 내용 `DOCS/CURRENT_RELEASE_STATE.md` 0CR.
+
+
 ## 현재 최우선 — 165 legacy intake drain barrier + dormant 157/158 writer cutover
 
 164 실제 read-only preflight는 run `35584354578`에서 PASS했고, 현재 shared D1은 **075 pending 존재 + 157 schema 미적용 + legacy intake open** 상태라 전환 준비가 아직 안 됐다.

@@ -1,5 +1,23 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CS. 166 in-flight 좋아요 경쟁 재현 + 허위 전환 증거 차단 — 코드 감사 PASS / 실제 전환 BLOCKED (2026-09-21 KST)
+
+**기준:** `preview` code-audit commit `5ed766f92c31cda2407efd25c0324b167b2f84bc`, GitHub Actions [35588084201](https://github.com/andrawing1212/soridraw-music/actions/runs/35588084201) **SUCCESS**. source-only + live shared D1 read-only 감사이며 배포가 아니다.
+
+165의 R2 drain guard를 통과한 좋아요 요청이 서버에서 일시 정지할 수 있고, 그 사이 release controller가 drain marker를 켠 뒤 queue=0을 관찰하더라도 기존 요청이 **나중에 다시 실행되어 구형 D1 queue에 쓸 수 있는** 시간차 오류를 실행형 test로 재현했다. 따라서 `legacyIntakeClosed=true` 플래그와 한 번의 queue=0 관측만으로 final 162 marker를 arm하는 절차는 안전하지 않다.
+
+**이번에 실제 바꾼 것:**
+- `cloudflare/explore-worker/scripts/like-cutover-preflight-164.mjs`: `--legacy-intake-closed` CLI 옵션을 명시적으로 거부한다. 호출자가 `inspectLikeCutoverPreflight164(...,{ legacyIntakeClosed:true })`를 직접 호출해도 166 BLOCKED 오류를 내고 DB query 전에 중단. 현재 CLI는 오직 intake open을 전제로 한 읽기 전용 관측만 가능하며 완성 cutover proof를 출력할 수 없다.
+- `scripts/verify-shared-d1-release-system.mjs`: guard 통과 → request 정지 → drain 시작 → queue=0 관측 → 기존 request가 재개되어 queue write하는 경쟁 재현. 순수 논리 모형만 임의로 `true`가 될 수 있음을 확인하고 실제 CLI와 exported inspection API가 허위 proof를 막는지 검증.
+- 제품 Worker/canonical/source hash 및 앱 UI는 **변경하지 않음**. 불완전한 in-flight 해결책을 제품 경로에 추가하지 않았다.
+
+**검증:** `166_INFLIGHT_AFTER_EMPTY_QUEUE_RACE_REPRODUCED=PASS`, `166_SELF_ATTESTED_CUTOVER_PROOF_FAILS_CLOSED=PASS`, `166_SHARED_ATOMIC_FENCE_NOT_IMPLEMENTED_PRODUCT_RELEASE_BLOCKED=PASS`; TypeScript PASS, Build PASS, 이전 164/165 source·replay PASS, TEST/PRODUCTION Worker dry-run PASS, shared D1 read-only PASS, `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`. 실제 D1 query 관측: 035/066/069/075=0/0/0/0, legacy intake open, 157 table/index 없음, `164_CUTOVER_PREFLIGHT_READY=NO`.
+
+**남은 근본 해결:** 세 환경에서 구형 좋아요 쓰기 직전과 컷오버 전환이 **동일 공유 D1의 원자적 fence**로 직렬화되어야 한다. 단순 R2 재조회, 고정 대기 시간, queue=0 반복 조회, 선언형 boolean만으로는 이 증명을 만들 수 없다. 현재 165는 신규 요청 접수 제한 및 기존 queue drain용 하위호환 구조로 보존하지만 final arm의 충분한 안전 조건이 아니다. 157/158 owner 실제 wiring, old Worker 병존, 051 변경 신호, 개인 R2/RTDB final settlement, W1~W2 총비용, PC↔모바일 실측과 Work 독립감사는 남아 있다.
+
+**운영 상태:** Worker/Hosting/Functions/Firebase 배포 없음. 실제 shared D1/R2 사용자 원본 mutation 없음. 157 migration 및 drain/cutover marker 미적용. 전체/파괴적 데이터 이전 없음. 사용자 실사용 검증 전이며 제품 승격 금지.
+
+
 ## 0CR. 165 좋아요 drain barrier + 164 실제 대기열 판정 정정 — exact 감사 PASS (2026-09-21 KST)
 
 **기준:** `preview` code-audit commit `9eafb865114456139cdd8b51882537b6ca11eec7`, GitHub Actions [35586848857](https://github.com/andrawing1212/soridraw-music/actions/runs/35586848857) **SUCCESS**. 실제 앱/Worker 배포가 아니라 GitHub source-only / 공유 D1 read-only 감사다.

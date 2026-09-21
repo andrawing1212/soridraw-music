@@ -38,8 +38,10 @@ export class LikeFencedProcessor139 {
       const applied = await this.canonical.applyAtomically(value.uid, value.trackId, intent.liked, {
         previousLiked: value.liked, id: intent.id, revision: intent.revision, seq: intent.seq,
       });
-      // This adapter must return only after the likes relation AND public
-      // count have committed together. An intake queue ACK is insufficient.
+      // 140 can atomically commit relation + count in one D1 batch. The 146
+      // proposal instead confirms D1 relation, then retries an independent
+      // durable per-track counter and its public cache until acknowledged.
+      // Neither route treats an intake queue ACK as canonical settlement.
       if (applied?.canonicalCommitted !== true || applied?.liked !== intent.liked) {
         throw new Error('Canonical D1 final settlement not proven');
       }

@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 
 // ISOLATED PROTOCOL SIMULATION ONLY. No real Cloudflare Durable Object or D1.
@@ -233,4 +233,108 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.ok(batches >= 5 && sqlCalls > 0);
   console.log('140_D1_ADAPTER_SQL_BATCH_ORDER_AND_FAIL_CLOSED_MOCK=PASS');
   console.log('140_REAL_D1_CHANGES_ROWS_WRITTEN_TRIGGER_INDEX=NOT_MEASURED');
+}
+
+
+// 141: Execute the actual post-D1 publisher against a revisioned, conditional
+// R2 mock. Never treat this as a real Cloudflare account or live billing test.
+{
+  function mockBucket(initial) {
+    let value = structuredClone(initial), generation = 1, writes = 0, conflicts = 0;
+    let forceConflict = false;
+    return {
+      get value() { return structuredClone(value); },
+      get writes() { return writes; },
+      get conflicts() { return conflicts; },
+      conflictOnce() { forceConflict = true; },
+      async get(key) {
+        assert.equal(key, 'internal/explore/shared-social-v114/likes/user.json');
+        if (!value) return null;
+        const snapshot = JSON.stringify(value), etag = 'rev-' + generation;
+        return { etag, text: async () => snapshot };
+      },
+      async put(key, body, options) {
+        assert.equal(key, 'internal/explore/shared-social-v114/likes/user.json');
+        assert.equal(options?.httpMetadata?.contentType, 'application/json; charset=utf-8');
+        if (forceConflict) { forceConflict = false; conflicts++; return null; }
+        if (options?.onlyIf?.etagMatches !== 'rev-' + generation) {
+          conflicts++;
+          return null;
+        }
+        value = JSON.parse(body);
+        generation++;
+        writes++;
+        return { etag: 'rev-' + generation };
+      },
+    };
+  }
+  const r2 = mockBucket({
+    schemaVersion: 1, uid: 'user', likedTrackIds: ['existing'],
+    lastLikeOrders074: { existing: { at: 100, batchId: 'legacy' } },
+    customLegacyField: 'untouched',
+  });
+  let notifications = [], failNotify = false;
+  const publish = createLikeSharedR2Publisher141(r2, async (event) => {
+    if (failNotify) throw Error('notification failed');
+    notifications.push(event);
+  });
+  const event = (trackId, id, revision, liked) => ({ uid: 'user', trackId, id, revision, liked });
+  const liked = await publish(event('song', 'first', 1, true));
+  assert.equal(liked.settled, true);
+  assert.deepEqual(new Set(r2.value.likedTrackIds), new Set(['existing', 'song']));
+  assert.equal(r2.value.customLegacyField, 'untouched');
+  assert.deepEqual(r2.value.lastLikeOrders074.existing, { at: 100, batchId: 'legacy' });
+  assert.deepEqual(r2.value.lastLikeRevisions141.song, { id: 'first', revision: 1, liked: true });
+  const firstWrites = r2.writes;
+  assert.deepEqual(await publish(event('song', 'first', 1, true)), { settled: true, duplicate: true });
+  assert.equal(r2.writes, firstWrites, 'same revision never rewrites shared R2');
+  await assert.rejects(publish(event('song', 'different-id', 1, true)), /Conflicting revision/);
+  await assert.rejects(publish(event('song', 'first', 1, false)), /Conflicting revision/);
+  assert.equal((await publish(event('song', 'second', 2, false))).settled, true);
+  assert.equal(r2.value.likedTrackIds.includes('song'), false);
+  assert.deepEqual(await publish(event('song', 'old', 1, true)), { settled: false, superseded: true });
+  assert.equal(r2.value.likedTrackIds.includes('song'), false);
+  r2.conflictOnce();
+  assert.equal((await publish(event('new-track', 'retry-etag', 1, true))).settled, true);
+  assert.equal(r2.conflicts, 1, 'CAS conflict retries against this user only');
+
+  failNotify = true;
+  await assert.rejects(publish(event('song', 'third', 3, true)), /notification failed/);
+  assert.equal(r2.value.likedTrackIds.includes('song'), true, 'R2 CAS committed before notification');
+  const committedWrites = r2.writes;
+  failNotify = false;
+  assert.deepEqual(await publish(event('song', 'third', 3, true)), { settled: true, duplicate: true });
+  assert.equal(r2.writes, committedWrites, 'notification retry must not rewrite R2');
+  assert.equal(notifications.at(-1).id, 'third');
+
+  const cold = mockBucket(null);
+  let coldNotified = false;
+  await assert.rejects(
+    createLikeSharedR2Publisher141(cold, async () => { coldNotified = true; })(event('cold', 'c', 1, true)),
+    /unavailable/
+  );
+  assert.equal(cold.writes, 0);
+  assert.equal(coldNotified, false);
+  const full = mockBucket({ schemaVersion: 1, uid: 'user',
+    likedTrackIds: Array.from({ length: 2000 }, (_, i) => 'track-' + i) });
+  const fullPublish = createLikeSharedR2Publisher141(full, async () => {});
+  await assert.rejects(fullPublish(event('new', 'n', 1, true)), /capacity/);
+  assert.equal(full.writes, 0, 'no liked song may be truncated');
+  assert.equal((await fullPublish(event('track-1', 'remove', 1, false))).settled, true,
+    'unlike must be permitted on a full bundle');
+  assert.equal(full.value.likedTrackIds.length, 1999);
+
+  const revisions = Object.fromEntries(Array.from({ length: 128 }, (_, i) =>
+    ['old-' + i, { id: 'id-' + i, revision: 1, liked: i === 0 }]));
+  const fullHistory = mockBucket({ schemaVersion: 1, uid: 'user',
+    likedTrackIds: ['old-0'], lastLikeRevisions141: revisions });
+  const historyPublish = createLikeSharedR2Publisher141(fullHistory, async () => {});
+  await assert.rejects(historyPublish(event('new', 'n', 1, true)), /revision capacity/);
+  assert.equal(fullHistory.writes, 0);
+  assert.equal((await historyPublish(event('old-0', 'update', 2, false))).settled, true);
+  assert.equal(fullHistory.value.likedTrackIds.length, 0);
+  console.log('141_SHARED_R2_POSTCOMMIT_CAS_AND_LEGACY_FIELDS=PASS');
+  console.log('141_STALE_REPLAY_CONFLICT_AND_IDEMPOTENT_NOTIFY=PASS');
+  console.log('141_CAS_RETRY_COLD_2000_128_FAIL_CLOSED=PASS');
+  console.log('141_LIVE_CROSS_ENV_WRITER_AND_AUTH_NOT_CONNECTED=NOT_VERIFIED');
 }

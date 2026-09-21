@@ -1137,7 +1137,9 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
         }
       }
       const totalChanges = removeChanges + upsertChanges;
-      const written = cost157 == null ? totalChanges * 2 : cost157;
+      const written = cost157 == null
+        ? (removeChanges ? 1 : upsertChanges ? 2 : 0)
+        : cost157;
       return [
         { results: [{ eligible: 1, baseline_liked: Number(baseline), liked: Number(before) }],
           meta: { rows_written: 0, changes: 0 } },
@@ -1166,13 +1168,13 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.equal(legacy.has('new-song'), false, 'new relation must not backfill legacy table');
   assert.equal(overrides.get('new-song').liked, true);
   assert.equal((await apply157('new-song', 'n1-dup', 2, true, true)).rowsWritten, 0);
-  assert.equal((await apply157('new-song', 'n2', 2, true, false)).rowsWritten, 2);
+  assert.equal((await apply157('new-song', 'n2', 2, true, false)).rowsWritten, 1);
   assert.equal(overrides.has('new-song'), false, 'return to false baseline deletes redundant override');
 
   assert.equal((await apply157('legacy-song', 'l1', 1, true, false)).rowsWritten, 2);
   assert.equal(legacy.has('legacy-song'), true, 'legacy baseline must remain immutable');
   assert.equal(overrides.get('legacy-song').liked, false);
-  assert.equal((await apply157('legacy-song', 'l2', 2, false, true)).rowsWritten, 2);
+  assert.equal((await apply157('legacy-song', 'l2', 2, false, true)).rowsWritten, 1);
   assert.equal(overrides.has('legacy-song'), false, 'return to true baseline deletes tombstone');
   assert.equal(aggregateCalls157, 4, 'only actual membership changes aggregate');
 
@@ -1288,7 +1290,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.deepEqual(rebuilt157.likedTrackIds, expected157.map(x => x.trackId));
   assert.equal(overrideRows157.size, 4, 'exact R2 rebuild must not materialize a D1 backfill');
 
-  console.log('157_NO_BACKFILL_SPARSE_OVERLAY_TRANSITIONS_W2_MOCK=PASS');
+  console.log('157_NO_BACKFILL_SPARSE_OVERLAY_TRANSITIONS_W2_W1_MOCK=PASS');
   console.log('157_TO_156_EXACT_R2_REBUILD_WITHOUT_D1_BACKFILL=PASS');
   console.log('157_2054_EFFECTIVE_COLD_UNION_WITH_TOMBSTONE=PASS');
   console.log('157_REAL_REMOTE_D1_BILLING=MEASURE_SEPARATELY');

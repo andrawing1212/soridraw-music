@@ -100,10 +100,20 @@ assert.match(membership127, /readTargetedVerifiedLikeTracks127\(uid\)\.has\(id\)
 assert.match(membership127, /return getLikedStateCache\(uid\)\.get\(id\)/);
 
 const listener = service.slice(service.indexOf('const applyRemoteLikeSignal127'), service.indexOf('const readSignalRetry127'));
-assert.match(listener, /if \(pending\[item\.trackId\] \|\| Object\.prototype\.hasOwnProperty\.call\(unresolved, item\.trackId\)\) continue/);
+assert.match(listener, /if \(pending\[item\.trackId\]\) continue/);
+assert.doesNotMatch(listener, /pending\[item\.trackId\] \|\| Object\.prototype\.hasOwnProperty\.call\(unresolved, item\.trackId\)/,
+  'a previous accepted-but-unsettled value must not suppress a newer cross-device ACK');
 assert.match(listener, /cache\.set\(item\.trackId, item\.liked\)/);
 assert.match(listener, /patchExploreLikedTrackMembership\(uid, item\.trackId, item\.liked\)/);
+assert.match(listener, /unresolved\[item\.trackId\] = item\.liked/,
+  'accepted device state must outrank a partial legacy R2/D1 snapshot');
+assert.match(listener, /persistLikeDisplayLocks\(uid, displayLocks\)/,
+  'accepted remote count must survive an Explore remount or early RTDB event');
 assert.match(listener, /dispatchLikeSync\(\{ \.\.\.item, uid, source: 'remote' \}\)/);
+assert.doesNotMatch(listener, /if \(cache\.get\(item\.trackId\) === item\.liked\) continue/,
+  'an unchanged heart must not suppress a changed accepted public count');
+assert.doesNotMatch(listener, /lastSeen === 0 && baselineAlreadyVerified/,
+  'the first retained account signal must not be discarded just because an older R2 baseline exists');
 assert.match(listener, /onValue\(/);
 assert.match(listener, /onAuthStateChanged\(auth/);
 assert.doesNotMatch(listener, /\.prepare\(|firebase\/firestore|setInterval\(/);

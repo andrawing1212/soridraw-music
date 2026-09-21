@@ -69,6 +69,8 @@ jobs:
           node --check canonical/preview-entry.js
           grep -q 'SORIDRAW_EXPLORE_REVISION_HEAD_ONLY_036_20260911' canonical/preview-entry.js
           grep -q 'SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_103_20260916' canonical/preview-entry.js
+          grep -q 'SORIDRAW_PERSONAL_LIKE_R2_REVISION_072_20260920' canonical/preview-worker.js
+          grep -q '/v1/me/likes-revision' canonical/preview-worker.js
           generated="$PWD/canonical/preview-worker.js"
           (
             cd ../..
@@ -183,6 +185,10 @@ jobs:
           test "$batch_code" != 404
           test "$batch_code" -ge 400
           test "$batch_code" -lt 500
+          like_revision_code="$(curl -sS -o "$RUNNER_TEMP/likes-revision.json" -w '%{http_code}' -H "Origin: ${PREVIEW_ORIGIN}" "${PREVIEW_BASE}/v1/me/likes-revision")"
+          test "$like_revision_code" != 404
+          test "$like_revision_code" -ge 400
+          test "$like_revision_code" -lt 500
 
           warm_ok=0
           revision_mode=''
@@ -217,6 +223,7 @@ jobs:
           echo 'FEED_SMOKE=PASS'
           echo 'PROFILE_SMOKE=PASS'
           echo "LIKE_BATCH_ROUTE_HTTP=$batch_code"
+          echo "LIKE_REVISION_ROUTE_HTTP=$like_revision_code"
           echo 'REVISION_HEAD_ONLY_036=PASS'
           echo 'WARM_REVISION_R0_W0=PASS'
           echo 'LIKE_AGGREGATE_FIXED_CRON_DISABLED=PASS'

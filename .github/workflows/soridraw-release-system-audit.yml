@@ -182,6 +182,16 @@ jobs:
           done
           echo 'D1_WRITE_MIGRATION_SEED=NONE'
 
+      - name: 164 shared cutover readiness report is read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cfg="$PWD/cloudflare/explore-worker/.release-system/test/wrangler.jsonc"
+          node cloudflare/explore-worker/scripts/like-cutover-preflight-164.mjs --config "$cfg" | tee "$RUNNER_TEMP/like-cutover-164-preflight.txt"
+          grep -Fq '164_CUTOVER_PREFLIGHT_READY=NO' "$RUNNER_TEMP/like-cutover-164-preflight.txt"
+          ! grep -Fq '164_CUTOVER_PREFLIGHT_PROOF=' "$RUNNER_TEMP/like-cutover-164-preflight.txt"
+          echo '164_LIVE_CUTOVER_PREFLIGHT_REPORT_ONLY=PASS'
+
       - name: Audit current shared D1 like write fanout (SELECT only)
         shell: bash
         run: |

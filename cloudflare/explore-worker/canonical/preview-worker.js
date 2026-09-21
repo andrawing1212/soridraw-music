@@ -2855,7 +2855,7 @@ async function writeSharedLikes061(env, uid, likedIds) {
   // marks this shared object exact, this old writer may no longer overwrite it
   // or silently truncate valid memberships.
   const existing156 = await readSharedSocialJson061(env, exploreSharedLikesKey061(normalized));
-  if (existing156?.canonicalComplete156 === true) return false;
+  if (existing156?.canonicalComplete156 === true || existing156?.revisionProtocol173 === 'd1only171') return false;
   const ids = [...new Set([...likedIds].map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 2000);
   await bucket.put(exploreSharedLikesKey061(normalized), JSON.stringify({
     schemaVersion: 1,
@@ -12571,7 +12571,46 @@ __name2222222222222222222222222222222222222222222222(patchExploreFirstViewFollow
 // No intermediate await, D1 query or JS-side stale baseCount is allowed.
 // This is still a LEGACY writer: it does not authorize a 157 cutover while
 // older deployed direct Workers are alive.
-async function adjustExploreLikeCounterDelta(env, trackId, userUid, shouldLike, now) {
+// SORIDRAW_LIKE_D1_ATOMIC_CUTOVER_FENCE_174_20260922
+const EXPLORE_LIKE_CUTOVER_CONTROL_TABLE_174 = 'explore_like_cutover_control_174';
+
+function isMissingLikeCutoverControl174(error) {
+  return /no such table:\s*explore_like_cutover_control_174/i.test(String(error?.message || error || ''));
+}
+
+function throwLikeCutoverFenceClosed174(phase) {
+  const normalized = String(phase || '').trim();
+  throwApi(
+    normalized === 'frozen' ? 'LIKE_CUTOVER_FROZEN' : 'LIKE_CUTOVER_DRAINING',
+    '좋아요 저장 방식을 안전하게 전환 중입니다. 변경 내용은 기기에 보관되며 잠시 후 다시 동기화됩니다.',
+    503,
+    { 'Retry-After': '2' },
+  );
+}
+
+async function assertD1OnlyFrozen174(env) {
+  if (!env?.DB?.prepare) throw new Error('[SORIDRAW 174] shared D1 unavailable');
+  let row;
+  try {
+    row = await env.DB.prepare(
+      "SELECT phase FROM explore_like_cutover_control_174 WHERE id = 1 LIMIT 1"
+    ).first();
+  } catch (error) {
+    if (isMissingLikeCutoverControl174(error)) {
+      throwApi(
+        'LIKE_CUTOVER_FENCE_UNAVAILABLE',
+        '좋아요 저장 전환 안전장치를 확인 중입니다. 잠시 후 다시 시도해 주세요.',
+        503,
+        { 'Retry-After': '2' },
+      );
+    }
+    throw error;
+  }
+  if (String(row?.phase || '') !== 'frozen') throwLikeCutoverFenceClosed174(row?.phase);
+  return true;
+}
+
+async function adjustExploreLikeCounterDeltaCore174(env, trackId, userUid, shouldLike, now) {
   if (!env?.DB?.batch || !env?.DB?.prepare) {
     throw new Error('[SORIDRAW 168] atomic D1 batch unavailable');
   }
@@ -12608,6 +12647,67 @@ async function adjustExploreLikeCounterDelta(env, trackId, userUid, shouldLike, 
   }
   return clampExploreSocialCount(result[2].results[0]?.like_count);
 }
+async function adjustExploreLikeCounterDelta(env, trackId, userUid, shouldLike, now) {
+  if (!env?.DB?.batch || !env?.DB?.prepare) {
+    throw new Error('[SORIDRAW 174] atomic D1 batch unavailable');
+  }
+  try {
+    const relation = shouldLike
+      ? env.DB.prepare(`
+        INSERT OR IGNORE INTO likes (track_id, user_uid, created_at)
+        SELECT ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM explore_like_cutover_control_174
+          WHERE id = 1 AND phase = 'open'
+        )
+      `).bind(trackId, userUid, now)
+      : env.DB.prepare(`
+        DELETE FROM likes
+        WHERE track_id = ? AND user_uid = ?
+          AND EXISTS (
+            SELECT 1 FROM explore_like_cutover_control_174
+            WHERE id = 1 AND phase = 'open'
+          )
+      `).bind(trackId, userUid);
+    const delta = shouldLike ? 1 : -1;
+    const initial = shouldLike ? 1 : 0;
+    const result = await env.DB.batch([
+      relation,
+      env.DB.prepare(`
+        INSERT INTO track_stats(track_id, like_count, comment_count, play_count, updated_at)
+        SELECT ?, ?, 0, 0, ?
+        WHERE changes() = 1
+        ON CONFLICT(track_id) DO UPDATE SET
+          like_count = MAX(0, track_stats.like_count + ?),
+          updated_at = excluded.updated_at
+      `).bind(trackId, initial, now, delta),
+      env.DB.prepare(`
+        SELECT like_count FROM track_stats WHERE track_id = ? LIMIT 1
+      `).bind(trackId),
+      env.DB.prepare(`
+        SELECT phase FROM explore_like_cutover_control_174 WHERE id = 1 LIMIT 1
+      `),
+    ]);
+    if (!Array.isArray(result) || result.length !== 4 ||
+        result.some((row) => row?.success === false) ||
+        !Number.isInteger(result[0]?.meta?.changes) ||
+        result[0].meta.changes < 0 || result[0].meta.changes > 1 ||
+        !Array.isArray(result[2]?.results) || !Array.isArray(result[3]?.results)) {
+      throw new Error('[SORIDRAW 174] fenced direct D1 receipt unavailable; retry idempotently');
+    }
+    const phase = String(result[3]?.results?.[0]?.phase || '');
+    if (phase !== 'open') throwLikeCutoverFenceClosed174(phase);
+    return clampExploreSocialCount(result[2].results[0]?.like_count);
+  } catch (error) {
+    // Before the additive control schema is installed, preserve the exact
+    // current 168 path. Any other failure is fail-closed.
+    if (isMissingLikeCutoverControl174(error)) {
+      return await adjustExploreLikeCounterDeltaCore174(env, trackId, userUid, shouldLike, now);
+    }
+    throw error;
+  }
+}
+
 __name(adjustExploreLikeCounterDelta, "adjustExploreLikeCounterDelta");
 __name2(adjustExploreLikeCounterDelta, "adjustExploreLikeCounterDelta");
 __name22(adjustExploreLikeCounterDelta, "adjustExploreLikeCounterDelta");
@@ -22004,7 +22104,11 @@ function createLikeD1OnlyCanonical171(db, options = {}) {
           user_uid, track_id, liked, revision, last_operation_id, updated_at
         )
         SELECT ?, ?, ?, 1, ?, ?
-        WHERE ${eligible171}
+        WHERE EXISTS (
+          SELECT 1 FROM explore_like_cutover_control_174
+          WHERE id = 1 AND phase = 'frozen'
+        )
+          AND ${eligible171}
           AND ${effectiveLiked171} != ?
           AND ${revision171} = ?
         ON CONFLICT(user_uid, track_id) DO UPDATE SET
@@ -22326,7 +22430,7 @@ async function enqueueExploreLikeBatchLegacy040(env, uid, mutations, now) {
   }
 }
 
-async function enqueueExploreLikeBatch035(env, uid, mutations, now) {
+async function enqueueExploreLikeBatch035Core174(env, uid, mutations, now) {
   const next = await exploreLikeW1Batch040(uid, mutations, now);
   try {
     const result = await env.DB.prepare(`
@@ -22344,6 +22448,47 @@ async function enqueueExploreLikeBatch035(env, uid, mutations, now) {
     return enqueueExploreLikeBatchLegacy040(env, uid, mutations, now);
   }
 }
+async function enqueueExploreLikeBatch035(env, uid, mutations, now) {
+  const next = await exploreLikeW1Batch040(uid, mutations, now);
+  try {
+    const result = await env.DB.batch([
+      env.DB.prepare(`
+        INSERT OR IGNORE INTO explore_like_batches_069(
+          batch_id, user_uid, created_at, mutation_count, mutations_json
+        )
+        SELECT ?, ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM explore_like_cutover_control_174
+          WHERE id = 1 AND phase = 'open'
+        )
+      `).bind(next.batchId, uid, next.batchAt, next.payload.length, JSON.stringify(next.payload)),
+      env.DB.prepare(`
+        SELECT phase FROM explore_like_cutover_control_174 WHERE id = 1 LIMIT 1
+      `),
+    ]);
+    if (!Array.isArray(result) || result.length !== 2 ||
+        result.some((row) => row?.success === false) ||
+        !Number.isInteger(result[0]?.meta?.changes) ||
+        result[0].meta.changes < 0 || result[0].meta.changes > 1 ||
+        !Array.isArray(result[1]?.results)) {
+      throw new Error('[SORIDRAW 174] fenced queue receipt unavailable');
+    }
+    const phase = String(result[1]?.results?.[0]?.phase || '');
+    if (phase !== 'open') throwLikeCutoverFenceClosed174(phase);
+    return {
+      batchId: next.batchId,
+      inserted: Number(result[0].meta.changes) > 0,
+      queue: '069',
+      fence174: 'open',
+    };
+  } catch (error) {
+    if (isMissingLikeCutoverControl174(error)) {
+      return await enqueueExploreLikeBatch035Core174(env, uid, mutations, now);
+    }
+    throw error;
+  }
+}
+
 __name(enqueueExploreLikeBatch035, "enqueueExploreLikeBatch035");
 __name2(enqueueExploreLikeBatch035, "enqueueExploreLikeBatch035");
 function exploreLikeAggregateCte035(includeQueue066 = false) {
@@ -22421,7 +22566,7 @@ function exploreLikeAggregateCte035(includeQueue066 = false) {
 }
 __name(exploreLikeAggregateCte035, "exploreLikeAggregateCte035");
 __name2(exploreLikeAggregateCte035, "exploreLikeAggregateCte035");
-async function acquireExploreLikeProcessor035(env, owner, now) {
+async function acquireExploreLikeProcessor035Core174(env, owner, now) {
   const result = await env.DB.prepare(`
     UPDATE explore_like_processor_035
     SET lease_until = ?, owner = ?
@@ -22430,6 +22575,28 @@ async function acquireExploreLikeProcessor035(env, owner, now) {
   `).bind(now + EXPLORE_LIKE_PROCESSOR_LEASE_MS_035, owner, now, owner).all();
   return String(result?.results?.[0]?.owner || "") === owner;
 }
+async function acquireExploreLikeProcessor035(env, owner, now) {
+  try {
+    const result = await env.DB.prepare(`
+      UPDATE explore_like_processor_035
+      SET lease_until = ?, owner = ?
+      WHERE id = 1
+        AND (lease_until <= ? OR owner = ?)
+        AND EXISTS (
+          SELECT 1 FROM explore_like_cutover_control_174
+          WHERE id = 1 AND phase IN ('open', 'draining')
+        )
+      RETURNING owner
+    `).bind(now + EXPLORE_LIKE_PROCESSOR_LEASE_MS_035, owner, now, owner).all();
+    return String(result?.results?.[0]?.owner || '') === owner;
+  } catch (error) {
+    if (isMissingLikeCutoverControl174(error)) {
+      return await acquireExploreLikeProcessor035Core174(env, owner, now);
+    }
+    throw error;
+  }
+}
+
 __name(acquireExploreLikeProcessor035, "acquireExploreLikeProcessor035");
 __name2(acquireExploreLikeProcessor035, "acquireExploreLikeProcessor035");
 async function releaseExploreLikeProcessor035(env, owner) {
@@ -24342,6 +24509,324 @@ async function enforceExploreLikeBatchEdgeRateLimit054(env, uid) {
   }
 }
 
+// SORIDRAW_LIKE_R2_REVISION_SAFE_173_20260922
+// Source-only runtime helper for the dormant D1-only like route.
+// No D1 access is allowed here. All writes are bounded shared-R2 CAS mutations.
+
+const LIKE_R2_MAX_RETRIES_173 = 8;
+const LIKE_R2_PERSONAL_PROTOCOL_173 = 'd1only171';
+
+const clean = (value) => String(value || '').trim();
+const safeInt = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0 ? number : null;
+};
+
+function normalizeCount173(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return null;
+  return Math.floor(number);
+}
+
+function itemId173(item) {
+  return clean(item?.id || item?.trackId);
+}
+
+function countFromItem173(item) {
+  return normalizeCount173(item?.likeCount ?? item?.like_count ?? item?.stats?.likeCount ?? item?.stats?.like_count ?? 0);
+}
+
+function generationFromItem173(item) {
+  const raw = item?.likeGeneration171;
+  return safeInt(raw);
+}
+
+function patchItem173(item, likeCount, generation) {
+  return {
+    ...item,
+    likeCount,
+    likeGeneration171: generation,
+    ...(item?.stats && typeof item.stats === 'object'
+      ? { stats: { ...item.stats, likeCount } }
+      : {}),
+  };
+}
+
+function applyGenerationGuard173(item, likeCountInput, generationInput) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    return { ok: false, reason: 'invalid-item' };
+  }
+  const likeCount = normalizeCount173(likeCountInput);
+  const generation = safeInt(generationInput);
+  if (likeCount === null || generation === null) {
+    return { ok: false, reason: 'invalid-generation-input' };
+  }
+  const storedGeneration = generationFromItem173(item);
+  const storedCount = countFromItem173(item);
+  if (storedCount === null) return { ok: false, reason: 'invalid-stored-count' };
+
+  // Legacy items have no generation marker. The first 173 writer may establish
+  // generation 0 without treating a stale pre-cutover count as a conflict.
+  if (storedGeneration === null) {
+    return { ok: true, changed: storedCount !== likeCount || item.likeGeneration171 !== generation,
+      item: patchItem173(item, likeCount, generation), initialized: true };
+  }
+  if (generation < storedGeneration) {
+    return { ok: true, changed: false, skippedOlder: true, item };
+  }
+  if (generation === storedGeneration) {
+    if (storedCount !== likeCount) {
+      return { ok: false, conflict: true, reason: 'same-generation-count-conflict' };
+    }
+    return { ok: true, changed: false, duplicate: true, item };
+  }
+  return { ok: true, changed: true, item: patchItem173(item, likeCount, generation) };
+}
+
+function normalizeRevisionEntry173(entry) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+  const revision = safeInt(entry.revision);
+  if (revision === null || typeof entry.liked !== 'boolean') return null;
+  return {
+    revision,
+    liked: entry.liked,
+    operationId: clean(entry.operationId),
+  };
+}
+
+function applyPersonalLikeRevision173(bundleInput, update) {
+  const uid = clean(update?.uid);
+  const trackId = clean(update?.trackId);
+  const revision = safeInt(update?.revision);
+  const operationId = clean(update?.operationId);
+  const liked = update?.liked;
+  if (!uid || !trackId || revision === null || typeof liked !== 'boolean' || !operationId || operationId.length > 128) {
+    return { ok: false, reason: 'invalid-personal-update' };
+  }
+
+  const bundle = bundleInput && typeof bundleInput === 'object' && !Array.isArray(bundleInput)
+    ? bundleInput : { schemaVersion: 1, uid, likedTrackIds: [] };
+  if (Number(bundle.schemaVersion || 0) !== 1 || clean(bundle.uid || uid) !== uid ||
+      !Array.isArray(bundle.likedTrackIds)) {
+    return { ok: false, reason: 'invalid-personal-bundle' };
+  }
+
+  const revisionMap = bundle.likeRevisionByTrack171 && typeof bundle.likeRevisionByTrack171 === 'object' &&
+    !Array.isArray(bundle.likeRevisionByTrack171)
+    ? { ...bundle.likeRevisionByTrack171 } : {};
+  const stored = normalizeRevisionEntry173(revisionMap[trackId]);
+  if (stored) {
+    if (revision < stored.revision) {
+      return { ok: true, changed: false, skippedOlder: true, bundle };
+    }
+    if (revision === stored.revision) {
+      if (stored.liked !== liked || (stored.operationId && stored.operationId !== operationId)) {
+        return { ok: false, conflict: true, reason: 'same-revision-personal-conflict' };
+      }
+      return { ok: true, changed: false, duplicate: true, bundle };
+    }
+  }
+
+  // Never slice/truncate the legacy list. Preserve every entry already present,
+  // then merge only this UID/track state.
+  const likedIds = new Set(bundle.likedTrackIds.map(clean).filter(Boolean));
+  if (liked) likedIds.add(trackId);
+  else likedIds.delete(trackId);
+  revisionMap[trackId] = { revision, operationId, liked };
+
+  const next = {
+    ...bundle,
+    schemaVersion: 1,
+    uid,
+    updatedAt: Date.now(),
+    likedTrackIds: [...likedIds],
+    likeRevisionByTrack171: revisionMap,
+    revisionProtocol173: LIKE_R2_PERSONAL_PROTOCOL_173,
+  };
+  if (bundle.canonicalComplete156 === true) {
+    next.exactLikeCount156 = likedIds.size;
+  }
+  return { ok: true, changed: true, bundle: next, initialized: !stored };
+}
+
+async function readJsonObject173(bucket, key) {
+  const object = await bucket.get(key);
+  if (!object) return { object: null, value: null };
+  let value = null;
+  try { value = JSON.parse(await object.text()); }
+  catch { return { object, value: null, invalid: true }; }
+  return { object, value };
+}
+
+async function casJson173(bucket, key, mutate, { allowCreate = false, metadata = {} } = {}) {
+  for (let attempt = 0; attempt < LIKE_R2_MAX_RETRIES_173; attempt += 1) {
+    const read = await readJsonObject173(bucket, key);
+    if (read.invalid) return { ok: false, reason: 'invalid-json', key };
+    if (!read.object && !allowCreate) return { ok: false, reason: 'missing-object', key };
+    const next = await mutate(read.value, read.object);
+    if (!next?.ok) return { ...next, key };
+    if (!next.changed) return { ...next, key };
+    const now = Date.now();
+    const saved = await bucket.put(key, JSON.stringify(next.value), {
+      onlyIf: read.object?.etag
+        ? { etagMatches: read.object.etag }
+        : { etagDoesNotMatch: '*' },
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      customMetadata: {
+        ...(read.object?.customMetadata || {}),
+        ...metadata,
+        revisionSafe173: '1',
+        updatedAt: String(now),
+      },
+    });
+    if (saved) return { ...next, ok: true, changed: true, key, attempts: attempt + 1 };
+  }
+  return { ok: false, reason: 'contention', key };
+}
+
+function normalizeTrackBundle173(value, trackId) {
+  if (!value || Number(value.schemaVersion || 0) !== 1 || clean(value.trackId) !== trackId ||
+      !value.card || itemId173(value.card) !== trackId) return null;
+  return value;
+}
+
+async function patchTrackCard173(bucket, key, update) {
+  let ownerUid = '';
+  const result = await casJson173(bucket, key, (value) => {
+    const bundle = normalizeTrackBundle173(value, update.trackId);
+    if (!bundle) return { ok: false, reason: 'invalid-track-card' };
+    ownerUid = clean(bundle.card?.ownerUid || bundle.card?.owner_uid);
+    const guarded = applyGenerationGuard173(bundle.card, update.likeCount, update.generation);
+    if (!guarded.ok || !guarded.changed) return { ...guarded, value: bundle, ownerUid };
+    return {
+      ok: true,
+      changed: true,
+      ownerUid,
+      value: { ...bundle, updatedAt: Date.now(), likeGeneration171: update.generation, card: guarded.item },
+    };
+  }, { metadata: { likePublication173: 'track-card' } });
+  return { ...result, ownerUid: result.ownerUid || ownerUid };
+}
+
+async function patchSharedFeed173(bucket, key, sort, update, sortItems, feedLimit) {
+  return await casJson173(bucket, key, (bundle) => {
+    const data = bundle?.payload?.data;
+    if (!data || !Array.isArray(data.items)) return { ok: false, reason: 'invalid-feed' };
+    const index = data.items.findIndex((item) => itemId173(item) === update.trackId);
+    if (index < 0) return { ok: true, changed: false, absent: true, value: bundle };
+    const guarded = applyGenerationGuard173(data.items[index], update.likeCount, update.generation);
+    if (!guarded.ok || !guarded.changed) return { ...guarded, value: bundle };
+    const items = [...data.items];
+    items[index] = guarded.item;
+    // Popular policy: reorder only the already-cached first-page window.
+    // Never query D1 or pull an outside candidate merely because one like changed.
+    const ordered = sort === 'popular' && typeof sortItems === 'function'
+      ? sortItems(items, 'popular').slice(0, feedLimit)
+      : items;
+    return {
+      ok: true,
+      changed: true,
+      value: {
+        ...bundle,
+        updatedAt: Date.now(),
+        payload: { ...bundle.payload, data: { ...data, items: ordered } },
+      },
+    };
+  }, { metadata: { likePublication173: 'feed-' + sort } });
+}
+
+async function patchSharedProfile173(bucket, key, update) {
+  return await casJson173(bucket, key, (bundle) => {
+    const items = bundle?.body?.data?.items;
+    if (!Array.isArray(items)) return { ok: false, reason: 'invalid-profile' };
+    const index = items.findIndex((item) => itemId173(item) === update.trackId);
+    if (index < 0) return { ok: true, changed: false, absent: true, value: bundle };
+    const guarded = applyGenerationGuard173(items[index], update.likeCount, update.generation);
+    if (!guarded.ok || !guarded.changed) return { ...guarded, value: bundle };
+    const nextItems = [...items];
+    nextItems[index] = guarded.item;
+    return {
+      ok: true,
+      changed: true,
+      value: {
+        ...bundle,
+        updatedAt: Date.now(),
+        body: { ...bundle.body, data: { ...bundle.body.data, items: nextItems } },
+      },
+    };
+  }, { metadata: { likePublication173: 'profile' } });
+}
+
+async function patchPersonal173(bucket, key, update) {
+  return await casJson173(bucket, key, (bundle) => {
+    const merged = applyPersonalLikeRevision173(bundle, update);
+    if (!merged.ok) return merged;
+    return { ...merged, value: merged.bundle };
+  }, { allowCreate: true, metadata: { likePublication173: 'personal' } });
+}
+
+function createLikeR2RevisionPublisher173(env, options = {}) {
+  const bucket = env?.PROFILE_MEDIA || null;
+  const trackCardKey = options.trackCardKey;
+  const feedKey = options.feedKey;
+  const profileKey = options.profileKey;
+  const sortItems = options.sortItems;
+  const feedLimit = Number.isSafeInteger(options.feedLimit) && options.feedLimit > 0 ? options.feedLimit : 40;
+
+  return {
+    async publish(updateInput) {
+      const update = {
+        uid: clean(updateInput?.uid),
+        trackId: clean(updateInput?.trackId),
+        liked: updateInput?.liked,
+        likeCount: normalizeCount173(updateInput?.likeCount),
+        revision: safeInt(updateInput?.revision),
+        generation: safeInt(updateInput?.generation),
+        operationId: clean(updateInput?.operationId),
+        status: clean(updateInput?.status),
+      };
+      if (!bucket || !update.uid || !update.trackId || typeof update.liked !== 'boolean' ||
+          update.likeCount === null || update.revision === null || update.generation === null ||
+          !update.operationId || typeof trackCardKey !== 'function' || typeof feedKey !== 'function' ||
+          typeof profileKey !== 'function') {
+        return { ok: false, reason: 'publisher-input-or-binding' };
+      }
+
+      const personalKey = `internal/explore/shared-social-v114/likes/${encodeURIComponent(update.uid)}.json`;
+      const personal = await patchPersonal173(bucket, personalKey, update);
+      if (!personal.ok) return { ok: false, stage: 'personal', personal };
+
+      if (update.status === 'ineligible') {
+        return { ok: true, personal, publicSkipped: 'ineligible' };
+      }
+
+      const card = await patchTrackCard173(bucket, trackCardKey(update.trackId), update);
+      if (!card.ok) return { ok: false, stage: 'track-card', personal, card };
+      const ownerUid = clean(card.ownerUid);
+      if (!ownerUid) return { ok: false, stage: 'track-card-owner', personal, card };
+
+      const feeds = await Promise.all(['latest', 'popular'].map((sort) =>
+        patchSharedFeed173(bucket, feedKey(sort), sort, update, sortItems, feedLimit)));
+      if (feeds.some((result) => !result.ok)) {
+        return { ok: false, stage: 'feeds', personal, card, feeds };
+      }
+
+      let profile = { ok: true, changed: false, absent: true };
+      const profileObject = await bucket.get(profileKey(ownerUid));
+      if (profileObject) {
+        // Re-read through CAS helper so the object used for the conditional write
+        // is always current. This preliminary GET only decides whether a cached
+        // profile surface exists; absent profiles are not materialized here.
+        profile = await patchSharedProfile173(bucket, profileKey(ownerUid), update);
+        if (!profile.ok) return { ok: false, stage: 'profile', personal, card, feeds, profile };
+      }
+      return { ok: true, personal, card, feeds, profile, ownerUid };
+    },
+  };
+}
+
+// SORIDRAW_LIKE_R2_REVISION_ROUTE_173_20260922
 async function handleLikeBatch034(request, env, cors) {
   const authContext = await requireExploreAuth(request);
   let body = null;
@@ -24376,8 +24861,17 @@ async function handleLikeBatch034(request, env, cors) {
   await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);
   const cutover172 = await readLikeCutoverState162(env);
   if (cutover172.mode === 'd1only171') {
+    await assertD1OnlyFrozen174(env);
     const canonical171 = createLikeD1OnlyCanonical171(env.DB, { cutoverVerified: true });
+    const publisher173 = createLikeR2RevisionPublisher173(env, {
+      trackCardKey: exploreSharedTrackCardKey062,
+      feedKey: exploreSharedFeedR2Key059,
+      profileKey: exploreSharedProfileR2Key060,
+      sortItems: sortExploreFeedItems012,
+      feedLimit: EXPLORE_R2_FEED_LIMIT,
+    });
     const results171 = [];
+    const publicationFailures173 = [];
     for (const mutation of mutations) {
       if (!mutation.operationId || mutation.operationId.length > 128 ||
           !Number.isSafeInteger(mutation.expectedRevision) || mutation.expectedRevision < 0) {
@@ -24393,6 +24887,17 @@ async function handleLikeBatch034(request, env, cors) {
           now: receivedAt,
         },
       );
+      const publication173 = await publisher173.publish({
+        uid: authContext.uid,
+        trackId: mutation.trackId,
+        liked: settled.liked,
+        likeCount: settled.likeCount,
+        revision: settled.revision,
+        generation: settled.generation,
+        operationId: settled.operationId || mutation.operationId,
+        status: settled.status,
+      });
+      if (!publication173.ok) publicationFailures173.push({ trackId: mutation.trackId, stage: publication173.stage || publication173.reason || 'unknown' });
       results171.push({
         trackId: mutation.trackId,
         liked: settled.liked,
@@ -24403,6 +24908,15 @@ async function handleLikeBatch034(request, env, cors) {
         status: settled.status,
       });
     }
+    if (publicationFailures173.length) {
+      console.warn('[SORIDRAW 173] canonical D1 settled but R2 publication needs retry:', JSON.stringify(publicationFailures173));
+      throwApi(
+        'LIKE_PUBLICATION_RETRY_REQUIRED',
+        '좋아요 상태는 저장되었고 기기 간 표시를 맞추는 중입니다. 잠시 후 다시 동기화합니다.',
+        503,
+        { 'Retry-After': '2' },
+      );
+    }
     return json({
       ok: true,
       data: {
@@ -24411,7 +24925,9 @@ async function handleLikeBatch034(request, env, cors) {
         batchId: null,
         queue: 'd1only171',
         canonicalD1: 'settled',
-        personalLikeSnapshot: 'pending',
+        personalLikeSnapshot: 'settled',
+        personalLikeProtocol: 'revision-safe-173',
+        publicLikePublication: 'generation-safe-173',
       },
     }, 200, cors);
   }

@@ -1723,8 +1723,9 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const patch165 = readFileSync('cloudflare/explore-worker/patches/079-like-intake-drain-barrier.mjs', 'utf8');
   const release165 = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
   assert.match(worker165, /SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921/);
-  assert.equal(release165.patches.at(-2), '079-like-intake-drain-barrier.mjs');
-  assert.equal(release165.patches.at(-1), '080-direct-like-atomic-batch.mjs');
+  assert.equal(release165.patches.at(-3), '079-like-intake-drain-barrier.mjs');
+  assert.equal(release165.patches.at(-2), '080-direct-like-atomic-batch.mjs');
+  assert.equal(release165.patches.at(-1), '081-batch-like-final-freeze.mjs');
   assert.match(patch165, /const marker165 = 'SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921'/);
   const slice165 = (name) => {
     const start = worker165.indexOf('async function ' + name + '(');
@@ -1776,5 +1777,13 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.match(patch168, /SORIDRAW_DIRECT_LIKE_ATOMIC_D1_BATCH_168_20260921/);
   assert.match(direct165, /await adjustExploreLikeCounterDelta\(env, trackId, authContext\.uid, shouldLike, now\)/);
   console.log('168_DIRECT_LEGACY_RELATION_COUNT_SINGLE_BATCH_SOURCE=PASS');
+  const patch169 = readFileSync('cloudflare/explore-worker/patches/081-batch-like-final-freeze.mjs', 'utf8');
+  assert.match(patch169, /SORIDRAW_BATCH_LIKE_FINAL_CUTOVER_FREEZE_169_20260921/);
+  const finalGuard169 = "await assertLegacyLikeWriterOpen163(env, 'batch-like-intake')";
+  assert.match(batch165, /SORIDRAW_BATCH_LIKE_FINAL_CUTOVER_FREEZE_169_20260921/);
+  assert.ok(batch165.indexOf(finalGuard169) > batch165.indexOf('await assertLegacyLikeIntakeOpen165(env)'));
+  assert.ok(batch165.indexOf(finalGuard169) < batch165.indexOf('enqueueExploreLikeBatch035('));
+  console.log('169_FINAL_CUTOVER_BATCH_INTAKE_GUARD=PASS');
+
 
 }

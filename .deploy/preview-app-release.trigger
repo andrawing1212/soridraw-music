@@ -1,8 +1,8 @@
-requested_at=2026-09-21T19:44:00Z
+requested_at=2026-09-21T20:03:40Z
 requested_by=user
-product_code_target=2c9745487517b86f1f910c651497be6a0003bca8
-release_source_target=app129_single_like_atom
-release_purpose=unify_heart_count_and_my_likes_as_one_account_track_like_state
+product_code_target=1c850beed0a4b4409b96acbb636176ea2cfe4bac
+release_source_target=app130_revision_scoped_mobile_like_cache
+release_purpose=make_mobile_first_entry_match_latest_account_like_state
 hosting_only=true
 worker_redeploy=false
 worker_version=733c3981-4095-4c69-bf33-9abb5de7a450

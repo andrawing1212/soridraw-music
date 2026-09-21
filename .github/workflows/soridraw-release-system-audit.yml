@@ -61,6 +61,7 @@ jobs:
           node --check cloudflare/explore-worker/patches/082-like-d1only-route.mjs
           node --check cloudflare/explore-worker/patches/083-like-r2-revision.mjs
           node --check cloudflare/explore-worker/runtime/like-r2-revision-173.mjs
+          node --check cloudflare/explore-worker/scripts/like-d1only-precutover-proof-173.mjs
           expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
           actual_worker_sha="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
           echo "CANONICAL_WORKER_EXPECTED_SHA256=$expected_worker_sha"
@@ -83,6 +84,8 @@ jobs:
           node scripts/verify-172-d1only-adapter.mjs
           node scripts/verify-172-d1only-route.mjs
           node scripts/verify-173-like-r2-revision.mjs
+          node scripts/verify-173-d1only-precutover-proof.mjs
+          node scripts/verify-173-cutover-proof-gate.mjs
 
           replay173="$RUNNER_TEMP/soridraw-like-r2-173"
           mkdir -p "$replay173"

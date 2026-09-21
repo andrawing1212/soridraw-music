@@ -1,5 +1,11 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 0CE 앱127의 안정적인 operationId 전송 준비 (2026-09-21 KST)
+
+`src/services/exploreLikeService.ts`는 신규 클릭마다 `crypto.randomUUID()`를 1회 생성하고 outbox에 저장, 재시도에서는 동일 `operationId` 전송. 과거 캐시에는 최초 flush 전 1회 생성·저장. `scripts/verify-127-atomic-personal-like.mjs`에 persist-before-send, 신규 클릭별 다른 ID, legacy 보정 테스트 추가. 실제 GitHub 소스 연결 정적 가드 PASS, 전체 CI 결과는 아직 미확인. 현행 071 Worker는 ID 필드 무시 → 실제 멱등성은 139/143 server owner 라우팅 및 baseRevision 연동까지 FAIL. `DOCS/CURRENT_RELEASE_STATE.md` 0CE 참조.
+
+**후속 작업 순서 유지:** 우선 0CD 143의 **공통 UID owner**를 실제 인증 경로/각 환경과 연결하는 컷오버 계획; 141의 2천 좋아요 제한에 대한 데이터 무손실 확장/복구; 140의 trigger/index 운영 D1 W1~W2 계량·파생 캐시 대체; 그 다음 127의 server-issued baseRevision 계약/최종 settle·RTDB. 전 과정에서 TEST/PRODUCTION 기존 writer가 공유 데이터 우회해서 덮어쓰지 못하게 해야 함. 사용자 원본 migration이나 불가역 조치는 명시적 승인 없이는 실행 금지. 전체 TS/Build/테스트/Work/PC↔모바일/실주소 검증 전 preview 후보 배포 금지.
+
 ## 최신 0CD — 128곡 순서 기록 제한을 전역 seq로 대체, 배포 전 CI 통합 (2026-09-21 KST)
 
 `preview`에 실제 변경: 139의 pending·141 공유 R2에 **UID 전역 단조 seq**를 연결하고, R2의 매곡 `lastLikeRevisions141` 누적/128 제한을 없애고 마지막 `lastPublishedSeq141`만 저장한다. `createLikeDurableOwner143`는 한 UID DO 인스턴스당 호출 직렬화·영속 `storage.transaction` seq 발급·UID 검증 모델. 기존 135 실행형 회귀에 256곡 순차 발행/늦은 seq/동시 세 곡/재시작/다른 UID 차단 추가, 실제 GitHub 소스 격리 실행 PASS. READ-ONLY `soridraw-release-system-audit.yml`에 기존 127, 전체 135, 071 복사본에 072/073/074 적용 후 128 실행형 회귀를 추가했다. CI 실제 Run과 TypeScript/Build 결과 확인 전 PASS 주장 금지. 0CD 참고.

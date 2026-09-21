@@ -138,18 +138,32 @@ export const createExploreLikeOperationId144 = (): string => {
   return crypto.randomUUID();
 };
 
-// One transition represents the actor's action, not two unrelated UI edits.
-// The public total is adjusted only by the actor's own delta; other users'
-// likes remain in the total. Server-confirmed public counts supersede this
-// optimistic display after the existing one-minute aggregate.
+// App129 single-like atom:
+// one (uid, trackId) relation contributes either 0 or exactly 1 to the public
+// total. Heart + this user's one-count contribution are therefore one state
+// transition, never two independent UI values.
+export const normalizeExploreLikeDisplayPair129 = (
+  liked: boolean,
+  publicCount: number,
+): { liked: boolean; likeCount: number } => ({
+  liked,
+  // A filled heart with public count 0 is impossible because this account
+  // itself contributes one like. Repair only that impossible stale display;
+  // never collapse counts from other users.
+  likeCount: Math.max(clampLikeCount(publicCount), liked ? 1 : 0),
+});
+
 export const computeExploreLikeAction127 = (
   baseLiked: boolean,
   desiredLiked: boolean,
   publicCount: number,
-): { liked: boolean; likeCount: number } => ({
-  liked: desiredLiked,
-  likeCount: clampLikeCount(publicCount + Number(desiredLiked) - Number(baseLiked)),
-});
+): { liked: boolean; likeCount: number } => {
+  const base = normalizeExploreLikeDisplayPair129(baseLiked, publicCount);
+  return normalizeExploreLikeDisplayPair129(
+    desiredLiked,
+    base.likeCount + Number(desiredLiked) - Number(baseLiked),
+  );
+};
 
 const readLikedStateStorage = (uid: string): Map<string, boolean> => {
   const values = new Map<string, boolean>();
@@ -824,21 +838,31 @@ export function overlayExploreLikeDisplayCounts<T extends { id: string; likeCoun
 
     const pending = outbox[trackId];
     if (pending) {
-      const nextCount = pending.optimisticLikeCount;
-      return nextCount === track.likeCount ? track : { ...track, likeCount: nextCount };
+      const pair = normalizeExploreLikeDisplayPair129(
+        pending.desiredLiked,
+        pending.optimisticLikeCount,
+      );
+      return pair.likeCount === track.likeCount ? track : { ...track, likeCount: pair.likeCount };
     }
 
+    const effectiveLiked = readExploreTrackLikeMembership127(normalizedUid, trackId);
     const lock = locks[trackId];
-    if (!lock) return track;
-
-    const sharedCount = clampLikeCount(track.likeCount);
-    if (sharedCount === lock.likeCount || lock.protectUntil <= now) {
-      delete locks[trackId];
-      locksChanged = true;
-      return track;
+    if (lock) {
+      const sharedCount = clampLikeCount(track.likeCount);
+      if (sharedCount === lock.likeCount || lock.protectUntil <= now) {
+        delete locks[trackId];
+        locksChanged = true;
+      } else {
+        const pair = normalizeExploreLikeDisplayPair129(lock.liked, lock.likeCount);
+        return pair.likeCount === track.likeCount ? track : { ...track, likeCount: pair.likeCount };
+      }
     }
 
-    return lock.likeCount === track.likeCount ? track : { ...track, likeCount: lock.likeCount };
+    if (effectiveLiked === true) {
+      const pair = normalizeExploreLikeDisplayPair129(true, track.likeCount);
+      return pair.likeCount === track.likeCount ? track : { ...track, likeCount: pair.likeCount };
+    }
+    return track;
   });
 
   if (locksChanged) persistLikeDisplayLocks(normalizedUid, locks);

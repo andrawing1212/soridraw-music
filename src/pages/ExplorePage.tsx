@@ -28,6 +28,7 @@ import {
   checkExplorePersonalLikeRevision127,
   ensureExplorePersonalLikeBaseline127,
   readExploreTrackLikeMembership127,
+  normalizeExploreLikeDisplayPair129,
   overlayExploreLikeDisplayCounts,
   reconcileExploreLikedTrackCollectionState,
   setExploreTrackLike,
@@ -384,7 +385,7 @@ export default function ExplorePage() {
     if (!user?.uid) return;
     const onRemote = (event: Event) => {
       const detail = (event as CustomEvent<{
-        uid?: string; trackId?: string; liked?: boolean; source?: string;
+        uid?: string; trackId?: string; ownerUid?: string; liked?: boolean; likeCount?: number; source?: string;
       }>).detail;
       if (detail?.source !== 'remote' || detail.uid !== user.uid ||
           !detail.trackId || typeof detail.liked !== 'boolean') return;
@@ -393,8 +394,32 @@ export default function ExplorePage() {
       // payload as the latest state.
       const effectiveLiked127 = readExploreTrackLikeMembership127(user.uid, detail.trackId);
       if (effectiveLiked127 !== detail.liked) return;
+      const pair129 = normalizeExploreLikeDisplayPair129(
+        effectiveLiked127,
+        Number.isSafeInteger(detail.likeCount) ? Number(detail.likeCount) : 0,
+      );
       likeInteractionVersionRef090.current += 1;
-      setLikedTrackIds((previous) => ({ ...previous, [detail.trackId!]: effectiveLiked127 }));
+      setLikedTrackIds((previous) => ({ ...previous, [detail.trackId!]: pair129.liked }));
+
+      // Heart + count are one accepted like atom. When a canonical remote count
+      // accompanies the account state, patch every loaded surface together.
+      if (Number.isSafeInteger(detail.likeCount)) {
+        const patchRemotePair129 = (previous: ExploreTrack[]) => previous.map((track) => (
+          track.id === detail.trackId ? { ...track, likeCount: pair129.likeCount } : track
+        ));
+        setTracks(patchRemotePair129);
+        setProfileTracks(patchRemotePair129);
+        setProfileLikedTracks((previous) => {
+          const patched = patchRemotePair129(previous);
+          return pair129.liked ? patched : patched.filter((track) => track.id !== detail.trackId);
+        });
+        patchExploreFeedSessionCachesRow(detail.trackId, { likeCount: pair129.likeCount });
+        if (detail.ownerUid) {
+          patchExplorePublicProfileFirstViewTrack(detail.ownerUid, detail.trackId, { likeCount: pair129.likeCount });
+        }
+        patchExploreLikedTrackCachedCount091(user.uid, detail.trackId, pair129.likeCount);
+      }
+
       // Own liked collection uses the same membership cache; load only a newly
       // liked missing card when that section is actually visible.
       setLikeAccountSyncSignal((value) => value + 1);
@@ -1047,11 +1072,16 @@ export default function ExplorePage() {
   const renderTrackGrid = (items: ExploreTrack[], label: string) => (
     <section className="soridraw-explore-grid" aria-label={label}>
       {items.map((track) => {
+        const liked129 = likedTrackIds[track.id] === true;
+        const pair129 = normalizeExploreLikeDisplayPair129(liked129, track.likeCount);
+        const displayTrack129 = pair129.likeCount === track.likeCount
+          ? track
+          : { ...track, likeCount: pair129.likeCount };
         return (
           <ExploreTrackCard
             key={track.id}
-            track={track}
-            liked={Boolean(likedTrackIds[track.id])}
+            track={displayTrack129}
+            liked={pair129.liked}
             likeBusy={likeBusyTrackId === track.id || (Boolean(user) && likedTrackIds[track.id] === undefined)}
             onToggleLike={toggleLike}
             onOpenProfile={openProfile}

@@ -191,6 +191,9 @@ assert.doesNotMatch(publish, /firebase\/firestore|env\.DB|D1/);
 assert.ok(rules.rules.userSync.$uid.exploreLike, 'existing UID-scoped like signal rules required');
 assert.match(page, /readExploreTrackLikeMembership127\(user\.uid, track\.id\)/);
 assert.match(service, /computeExploreLikeAction127\(baseLiked, liked, baseLikeCount\)/);
+assert.match(service, /normalizeExploreLikeDisplayPair129/);
+assert.match(page, /const pair129 = normalizeExploreLikeDisplayPair129\(liked129, track\.likeCount\)/);
+assert.match(page, /Heart \+ count are one accepted like atom/);
 assert.match(service, /readExploreTrackLikeMembership127\(uid, normalizedTrackId\) \?\? !liked/);
 assert.match(service, /const now = nextExploreLikeMutationAt127\(existing\?\.updatedAt \|\| 0, Date\.now\(\)\)/);
 const clockStart127 = service.indexOf('export const nextExploreLikeMutationAt127 =');
@@ -238,6 +241,9 @@ assert.deepEqual(compute(true, false, 2), { liked: false, likeCount: 1 }, 'unlik
 assert.deepEqual(compute(true, false, 1), { liked: false, likeCount: 0 });
 assert.deepEqual(compute(false, false, 1), { liked: false, likeCount: 1 }, 'a non-owner with public count one stays unliked');
 assert.deepEqual(compute(true, true, 1), { liked: true, likeCount: 1 }, 'repeating the same state changes neither count nor heart');
+assert.deepEqual(compute(true, true, 0), { liked: true, likeCount: 1 }, 'filled heart can never render with zero total');
+assert.deepEqual(compute(true, false, 0), { liked: false, likeCount: 0 }, 'stale impossible zero is repaired before unlike delta');
+assert.deepEqual(compute(false, false, 0), { liked: false, likeCount: 0 }, 'unliked zero remains zero');
 
 // An in-flight true can reach canonical D1 after the same user's later false.
 // Compare the later intent against the earlier accepted desired state rather

@@ -4,9 +4,12 @@
 --
 -- The existing legacy likes table remains an immutable historical baseline
 -- after the coordinated cross-environment cutover. This table stores only
--- post-cutover overrides/tombstones:
---   liked=1 => effective relation is liked
---   liked=0 => effective relation is unliked even if legacy baseline has it
+-- post-cutover overrides/tombstones. The row exists only while the desired
+-- state differs from the immutable legacy baseline; returning to baseline
+-- deletes the override again, so storage grows with current deviations rather
+-- than every track ever toggled after cutover:
+--   liked=1 => effective relation is liked while legacy baseline is unliked
+--   liked=0 => effective relation is unliked while legacy baseline is liked
 --
 -- Effective membership:
 --   override row when present, otherwise legacy likes relation.

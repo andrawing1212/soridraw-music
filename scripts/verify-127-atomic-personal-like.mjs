@@ -95,13 +95,25 @@ assert.notEqual(makeOperation144(), makeOperation144(), 'two clicks must differ'
 assert.equal(generated144, 2, 'a retry must reuse its stored ID, not call generator again');
 
 assert.match(flush, /const sentByTrack127 = new Map\(batchEntries\.map\(\(pending\) => \[pending\.trackId, pending\.desiredLiked\]\)\)/);
-assert.match(flush, /results\.some\(\(row\) => sentByTrack127\.get\(row\.trackId\) !== row\.liked\)/);
+assert.match(flush, /row\.status !== 'revision-conflict'/);
+assert.match(flush, /row\.status !== 'ineligible'/);
+assert.match(flush, /sentByTrack127\.get\(row\.trackId\) !== row\.liked/);
 assert.ok(flush.indexOf('const sentByTrack127 =') < flush.indexOf('const latest = readLikeOutbox(uid);', flush.indexOf('const sentByTrack127 =')),
-  'reply mismatch must abort before any accepted outbox is cleared');
-const replyMatches127 = (sent, returned) => !returned.some((row) => sent.get(row.trackId) !== row.liked);
+  'unexpected reply mismatch must abort before any accepted outbox is cleared');
+const replyMatches127 = (sent, returned) => !returned.some((row) =>
+  row.status !== 'revision-conflict' &&
+  row.status !== 'ineligible' &&
+  sent.get(row.trackId) !== row.liked
+);
 assert.equal(replyMatches127(new Map([['song', true]]), [{ trackId: 'song', liked: true }]), true);
 assert.equal(replyMatches127(new Map([['song', true]]), [{ trackId: 'song', liked: false }]), false);
 assert.equal(replyMatches127(new Map([['song', false]]), [{ trackId: 'song', liked: true }]), false);
+assert.equal(replyMatches127(new Map([['song', true]]), [{ trackId: 'song', liked: false, status: 'revision-conflict' }]), true);
+assert.equal(replyMatches127(new Map([['song', true]]), [{ trackId: 'song', liked: false, status: 'ineligible' }]), true);
+assert.match(flush, /persistLikeCanonicalRevisions172\(uid, canonicalRevisions172\)/);
+assert.match(flush, /expectedRevision: pending\.expectedRevision \?\? 0/);
+assert.match(flush, /result\.status === 'revision-conflict'/);
+assert.match(flush, /source: 'remote'/);
 assert.match(flush, /hasNewerPending && current/);
 assert.match(flush, /latest\[pending\.trackId\] = rebaseExploreLikeAfterInFlight127\(current, pending\)/);
 assert.match(flush, /current && current\.updatedAt > pending\.updatedAt/);

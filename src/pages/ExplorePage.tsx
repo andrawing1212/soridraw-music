@@ -23,6 +23,7 @@ import {
   EXPLORE_LIKE_SYNC_EVENT,
   EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT,
   flushPendingExploreLikesForPageExit,
+  getExploreKnownLikeCandidateIds127,
   getExploreLikedTrackIds,
   checkExplorePersonalLikeRevision127,
   ensureExplorePersonalLikeBaseline127,
@@ -777,38 +778,43 @@ export default function ExplorePage() {
         await checkExplorePersonalLikeRevision127(user);
         await ensureExplorePersonalLikeBaseline127(user);
       } catch (reason) {
-        // Keep cached cards visible, but block new unverified like mutations.
-        console.warn('[127] Liked collection baseline pending:', reason);
+        console.warn('[129] Personal like baseline pending; verifying known candidates directly:', reason);
       }
-      return getExploreLikedTracks(user);
+
+      // App129 single authority:
+      // My Likes does not trust its own collection cache as membership truth.
+      // It verifies every known candidate through the SAME membership service
+      // that paints Feed/Profile hearts, then uses the collection service only
+      // to supply card bodies.
+      const collectionCandidates = getExploreLikedTrackCollectionIds(user.uid) || [];
+      const heartCandidates = getExploreKnownLikeCandidateIds127(user.uid);
+      const candidates = [...new Set([...collectionCandidates, ...heartCandidates])];
+
+      for (let start = 0; start < candidates.length; start += 50) {
+        await getExploreLikedTrackIds(user, candidates.slice(start, start + 50));
+      }
+
+      const effectiveLikedTrackIds = reconcileExploreLikedTrackCollectionState(user.uid, candidates);
+      const rows = await getExploreLikedTracks(user, effectiveLikedTrackIds);
+      return { rows, effectiveLikedTrackIds };
     })()
-      .then((rows) => {
+      .then(({ rows, effectiveLikedTrackIds }) => {
         if (cancelled) return;
-        const normalizedRows = overlayActorLikeCounts120(
-          rows.map(normalizeTrack).filter((track) => track.id),
-        );
-        const canonicalLikedTrackIds = getExploreLikedTrackCollectionIds(user.uid)
-          ?? normalizedRows.map((track) => track.id);
-        const effectiveLikedTrackIds = reconcileExploreLikedTrackCollectionState(
-          user.uid,
-          canonicalLikedTrackIds,
-        );
         const effectiveLikedSet = new Set(effectiveLikedTrackIds);
+        const normalizedRows = overlayActorLikeCounts120(
+          rows.map(normalizeTrack).filter((track) => track.id && effectiveLikedSet.has(track.id)),
+        );
         setLikedTrackIds((previous) => {
           const next = { ...previous };
-          Object.keys(next).forEach((trackId) => { next[trackId] = effectiveLikedSet.has(trackId); });
-          effectiveLikedTrackIds.forEach((trackId) => { next[trackId] = true; });
+          const knownScope = new Set([
+            ...Object.keys(previous),
+            ...(getExploreLikedTrackCollectionIds(user.uid) || []),
+            ...getExploreKnownLikeCandidateIds127(user.uid),
+          ]);
+          knownScope.forEach((trackId) => { next[trackId] = effectiveLikedSet.has(trackId); });
           return next;
         });
-        const normalizedLikedRows = normalizedRows;
-        setProfileLikedTracks((previous) => {
-          const merged = new Map(normalizedLikedRows.map((track) => [track.id, track]));
-          previous.forEach((track) => {
-            if (!effectiveLikedSet.has(track.id) || merged.has(track.id)) return;
-            merged.set(track.id, track);
-          });
-          return [...merged.values()];
-        });
+        setProfileLikedTracks(normalizedRows);
         likeHydrationKeyRef.current = '';
       })
       .catch((reason: unknown) => {
@@ -844,12 +850,25 @@ export default function ExplorePage() {
           return;
         }
         const likedSet = new Set(likedIds);
+        const visibleById = new Map(visibleTracks.map((track) => [track.id, track]));
         setLikedTrackIds((prev) => {
           const next = { ...prev };
           // This network response may have started before an optimistic
           // action. Never use its absence to clear a later local heart.
           ids.forEach((id) => {
-            next[id] = readExploreTrackLikeMembership127(user.uid, id) ?? likedSet.has(id);
+            const liked = readExploreTrackLikeMembership127(user.uid, id) ?? likedSet.has(id);
+            next[id] = liked;
+            const visibleTrack = visibleById.get(id);
+            if (visibleTrack) {
+              // Keep the My Likes card index aligned with the same verified
+              // heart state. This is a cache projection, never a second source
+              // of membership truth.
+              rememberExploreLikedTrack(
+                user.uid,
+                visibleTrack as unknown as Record<string, unknown>,
+                liked,
+              );
+            }
           });
           return next;
         });

@@ -109,6 +109,12 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const ledger = {
     async get(key) { return structuredClone(persistent.get(key)); },
     async put(key, value) { persistent.set(key, structuredClone(value)); },
+    async nextPublicationSeq(uid) {
+      const key = 'seq:' + uid;
+      const next = (persistent.get(key) ?? 0) + 1;
+      persistent.set(key, next);
+      return next;
+    },
   };
   const canonical = {
     async readMembership(uid, id) { return membership.get(uid + ':' + id) ?? false; },
@@ -278,21 +284,29 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
     if (failNotify) throw Error('notification failed');
     notifications.push(event);
   });
-  const event = (trackId, id, revision, liked) => ({ uid: 'user', trackId, id, revision, liked });
+  const issued = new Map();
+  let nextSeq = 0;
+  const event = (trackId, id, revision, liked, explicitSeq) => {
+    let seq = explicitSeq ?? issued.get(id);
+    if (seq == null) { seq = ++nextSeq; issued.set(id, seq); }
+    return { uid: 'user', trackId, id, revision, liked, seq };
+  };
   const liked = await publish(event('song', 'first', 1, true));
   assert.equal(liked.settled, true);
   assert.deepEqual(new Set(r2.value.likedTrackIds), new Set(['existing', 'song']));
   assert.equal(r2.value.customLegacyField, 'untouched');
   assert.deepEqual(r2.value.lastLikeOrders074.existing, { at: 100, batchId: 'legacy' });
-  assert.deepEqual(r2.value.lastLikeRevisions141.song, { id: 'first', revision: 1, liked: true });
+  assert.equal(r2.value.lastPublishedSeq141, 1);
+  assert.deepEqual(r2.value.lastPublishedEvent141,
+    { trackId: 'song', id: 'first', revision: 1, liked: true });
   const firstWrites = r2.writes;
   assert.deepEqual(await publish(event('song', 'first', 1, true)), { settled: true, duplicate: true });
   assert.equal(r2.writes, firstWrites, 'same revision never rewrites shared R2');
-  await assert.rejects(publish(event('song', 'different-id', 1, true)), /Conflicting revision/);
-  await assert.rejects(publish(event('song', 'first', 1, false)), /Conflicting revision/);
+  await assert.rejects(publish(event('song', 'different-id', 1, true, 1)), /Conflicting publication sequence/);
+  await assert.rejects(publish(event('song', 'first', 1, false)), /Conflicting publication sequence/);
   assert.equal((await publish(event('song', 'second', 2, false))).settled, true);
   assert.equal(r2.value.likedTrackIds.includes('song'), false);
-  assert.deepEqual(await publish(event('song', 'old', 1, true)), { settled: false, superseded: true });
+  assert.deepEqual(await publish(event('song', 'old', 1, true, 1)), { settled: false, superseded: true });
   assert.equal(r2.value.likedTrackIds.includes('song'), false);
   r2.conflictOnce();
   assert.equal((await publish(event('new-track', 'retry-etag', 1, true))).settled, true);
@@ -324,18 +338,23 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
     'unlike must be permitted on a full bundle');
   assert.equal(full.value.likedTrackIds.length, 1999);
 
-  const revisions = Object.fromEntries(Array.from({ length: 128 }, (_, i) =>
-    ['old-' + i, { id: 'id-' + i, revision: 1, liked: i === 0 }]));
-  const fullHistory = mockBucket({ schemaVersion: 1, uid: 'user',
-    likedTrackIds: ['old-0'], lastLikeRevisions141: revisions });
-  const historyPublish = createLikeSharedR2Publisher141(fullHistory, async () => {});
-  await assert.rejects(historyPublish(event('new', 'n', 1, true)), /revision capacity/);
-  assert.equal(fullHistory.writes, 0);
-  assert.equal((await historyPublish(event('old-0', 'update', 2, false))).settled, true);
-  assert.equal(fullHistory.value.likedTrackIds.length, 0);
+  // More than 128 distinct changes must remain possible with a single
+  // per-UID cursor instead of a 128-track history embedded in every R2 body.
+  const longHistory = mockBucket({ schemaVersion: 1, uid: 'user', likedTrackIds: [] });
+  const historyPublish = createLikeSharedR2Publisher141(longHistory, async () => {});
+  for (let i = 0; i < 256; i++) {
+    const result = await historyPublish(event('history-' + i, 'history-id-' + i, 1, true));
+    assert.equal(result.settled, true);
+  }
+  assert.equal(longHistory.value.likedTrackIds.length, 256);
+  assert.equal(longHistory.value.lastPublishedSeq141, nextSeq);
+  assert.equal(longHistory.value.lastLikeRevisions141, undefined,
+    'no growing per-track R2 history should be created');
+  assert.deepEqual(await historyPublish(event('history-0', 'obsolete', 1, false, 1)),
+    { settled: false, superseded: true });
   console.log('141_SHARED_R2_POSTCOMMIT_CAS_AND_LEGACY_FIELDS=PASS');
   console.log('141_STALE_REPLAY_CONFLICT_AND_IDEMPOTENT_NOTIFY=PASS');
-  console.log('141_CAS_RETRY_COLD_2000_128_FAIL_CLOSED=PASS');
+  console.log('141_CAS_RETRY_COLD_2000_AND_128_HISTORY_ELIMINATED=PASS');
   console.log('141_LIVE_CROSS_ENV_WRITER_AND_AUTH_NOT_CONNECTED=NOT_VERIFIED');
 }
 
@@ -350,6 +369,12 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const ledger = {
     async get(key) { return structuredClone(durable.get(key)); },
     async put(key, value) { durable.set(key, structuredClone(value)); },
+    async nextPublicationSeq(uid) {
+      const key = 'seq:' + uid;
+      const next = (durable.get(key) ?? 0) + 1;
+      durable.set(key, next);
+      return next;
+    },
   };
   const canonical = {
     async readMembership(uid, id) { return relation.get(uid + ':' + id) ?? false; },

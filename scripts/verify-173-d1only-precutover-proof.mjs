@@ -38,10 +38,11 @@ const schemaRows = [
   { type: 'table', name: LIKE_D1ONLY_COUNT_TABLE_173, tbl_name: LIKE_D1ONLY_COUNT_TABLE_173, sql: countSql.replace(/IF\s+NOT\s+EXISTS\s+/i, '') },
 ];
 const queueZero = { queuePending: { '035': 0, '066': 0, '069': 0, '075': 0 }, processor: { id: 1, lease_until: 0, owner: '' } };
+const approvedWorkerSha256 = 'a'.repeat(64);
 const workerEvidence = Object.fromEntries(
-  ['preview', 'test', 'production'].map((environment, index) => [environment, {
+  ['preview', 'test', 'production'].map((environment) => [environment, {
     versionId: environment + '-version',
-    sha256: String(index + 1).repeat(64),
+    sha256: approvedWorkerSha256,
     markers: [...LIKE_PRECUTOVER_REQUIRED_WORKER_MARKERS_173],
   }]),
 );
@@ -61,6 +62,7 @@ const ready = evaluateD1OnlyPreCutoverProof173({
   secondObservation: queueZero,
   drainManifest,
   workerEvidence,
+  approvedWorkerSha256,
   observedAt,
 });
 assert.equal(ready.ready, true);
@@ -72,6 +74,7 @@ assert.equal(ready.proof.legacyProcessorIdle, true);
 assert.equal(ready.proof.d1OnlyHotSecondaryIndexes, 0);
 assert.match(ready.proof.drainTokenHash, /^[0-9a-f]{64}$/);
 assert.equal(JSON.stringify(ready.proof).includes(drainManifest.drainToken), false, 'raw drain token must not enter proof');
+assert.equal(ready.proof.approvedWorkerSha256, approvedWorkerSha256);
 assert.deepEqual(Object.keys(ready.proof.workerSha256ByEnvironment).sort(), ['preview', 'production', 'test']);
 
 const staleQueue = evaluateD1OnlyPreCutoverProof173({
@@ -80,6 +83,7 @@ const staleQueue = evaluateD1OnlyPreCutoverProof173({
   secondObservation: { ...queueZero, queuePending: { ...queueZero.queuePending, '069': 1 } },
   drainManifest,
   workerEvidence,
+  approvedWorkerSha256,
   observedAt,
 });
 assert.equal(staleQueue.ready, false);
@@ -91,6 +95,7 @@ const activeProcessor = evaluateD1OnlyPreCutoverProof173({
   secondObservation: { ...queueZero, processor: { id: 1, lease_until: observedAt + 1_000, owner: 'busy' } },
   drainManifest,
   workerEvidence,
+  approvedWorkerSha256,
   observedAt,
 });
 assert.equal(activeProcessor.ready, false);
@@ -102,6 +107,7 @@ const tooYoungDrain = evaluateD1OnlyPreCutoverProof173({
   secondObservation: queueZero,
   drainManifest: { ...drainManifest, armedAt: observedAt - 5_000 },
   workerEvidence,
+  approvedWorkerSha256,
   observedAt,
 });
 assert.equal(tooYoungDrain.ready, false);
@@ -119,7 +125,7 @@ const oldWorker = evaluateD1OnlyPreCutoverProof173({
   observedAt,
 });
 assert.equal(oldWorker.ready, false);
-assert.ok(oldWorker.reasons.includes('all-environment-worker-source-not-173-ready'));
+assert.ok(oldWorker.reasons.includes('all-environment-worker-source-not-exact-approved-173'));
 
 const indexedSchema = evaluateD1OnlyPreCutoverProof173({
   schemaRows: [
@@ -130,6 +136,7 @@ const indexedSchema = evaluateD1OnlyPreCutoverProof173({
   secondObservation: queueZero,
   drainManifest,
   workerEvidence,
+  approvedWorkerSha256,
   observedAt,
 });
 assert.equal(indexedSchema.ready, false);
@@ -138,6 +145,6 @@ assert.ok(indexedSchema.reasons.includes('171-hot-secondary-index-present'));
 console.log('173_PRECUTOVER_EXACT_171_SCHEMA_NO_HOT_INDEX=PASS');
 console.log('173_PRECUTOVER_TWO_ZERO_QUEUE_PASSES_PROCESSOR_IDLE=PASS');
 console.log('173_PRECUTOVER_DRAIN_QUIESCENCE_REQUIRED=PASS');
-console.log('173_PRECUTOVER_ALL_ENV_ACTIVE_SOURCE_SHA_MARKERS_REQUIRED=PASS');
+console.log('173_PRECUTOVER_ALL_ENV_ACTIVE_SOURCE_EXACT_APPROVED_SHA_MARKERS_REQUIRED=PASS');
 console.log('173_PRECUTOVER_RAW_DRAIN_TOKEN_NOT_IN_PROOF=PASS');
 console.log('173_PRECUTOVER_CONTROLLER_READ_ONLY=PASS');

@@ -76,11 +76,20 @@ if (process.argv[2] === 'cleanup') {
       ['relation_one_user_index', false, 1],
       ['relation_pk_only', false, 0],
       ['relation_pk_with_051', true, 0],
+      // Owner-first PK also supports per-UID cache recovery without another
+      // index. WITHOUT ROWID removes the duplicate rowid/PK B-trees.
+      ['user_pk_only', false, 0, true, false],
+      ['user_pk_without_rowid', false, 0, true, true],
+      ['track_pk_without_rowid', false, 0, false, true],
+      ['user_pk_one_recent_index', false, 1, true, true],
     ];
     const observations = [];
-    for (const [table, sharedRevision, indexCount] of definitions) {
+    for (const [table, sharedRevision, indexCount, userFirst = false, withoutRowid = false] of definitions) {
       // All row values are synthetic and unique per freshly created DB.
-      await ddl('CREATE TABLE ' + table + ' (track_id TEXT NOT NULL,user_uid TEXT NOT NULL,created_at INTEGER NOT NULL, PRIMARY KEY(track_id,user_uid))');
+      const pk = userFirst ? 'user_uid,track_id' : 'track_id,user_uid';
+      await ddl('CREATE TABLE ' + table +
+        ' (track_id TEXT NOT NULL,user_uid TEXT NOT NULL,created_at INTEGER NOT NULL, PRIMARY KEY(' + pk + '))' +
+        (withoutRowid ? ' WITHOUT ROWID' : ''));
       if (indexCount >= 1) {
         await ddl('CREATE INDEX ' + table + '_recent ON ' + table + '(user_uid,created_at DESC)');
       }
@@ -116,9 +125,19 @@ if (process.argv[2] === 'cleanup') {
       const sanity = await query('SELECT COUNT(*) AS n FROM ' + table);
       if (sanity.results?.[0]?.n !== 0) fail('synthetic relation did not restore to empty');
       if (metrics[1] !== 0 || metrics[3] !== 0) fail('duplicate mutation caused billed writes');
-      observations.push({ table, sharedRevision, indexCount,
+      const planner = await query("EXPLAIN QUERY PLAN SELECT track_id FROM " + table +
+        " WHERE user_uid='user-153' AND track_id='song-153'");
+      const plan = String(planner.results?.map(x => x.detail).join(' ') || '');
+      if (!plan.includes('SEARCH')) fail('membership lookup requires indexed search for ' + table);
+      const uidPlanner = await query("EXPLAIN QUERY PLAN SELECT track_id FROM " + table +
+        " WHERE user_uid='user-153'");
+      const uidPlan = String(uidPlanner.results?.map(x => x.detail).join(' ') || '');
+      if (userFirst && !uidPlan.includes('SEARCH')) fail('user-first PK must support UID recovery');
+      console.log('153_UID_RECOVERY_PLAN_' + table.toUpperCase() + '=' + uidPlan);
+      observations.push({ table, sharedRevision, indexCount, userFirst, withoutRowid,
         like: metrics[0], duplicateLike: metrics[1],
         unlike: metrics[2], duplicateUnlike: metrics[3],
+        uidIndexed: uidPlan.includes('SEARCH'),
         withinW2: metrics[0] <= 2 && metrics[2] <= 2 });
     }
     console.log('153_REMOTE_D1_BILLING_SUMMARY=' + JSON.stringify(observations));

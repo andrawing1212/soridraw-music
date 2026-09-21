@@ -1583,5 +1583,16 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
 
   const worker162 = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
   assert.match(worker162, /SORIDRAW_SHARED_LIKE_READER_FIRST_161_20260921/);
-  console.log('162_CANONICAL_WORKER_EFFECTIVE_READER_WIRING=NOT_YET_PROVEN');
+  assert.match(worker162, /SORIDRAW_SHARED_LIKE_CUTOVER_GATE_162_20260921/);
+  assert.match(worker162, /async function readLikeCutoverState162\(/);
+  assert.match(worker162, /async function readBoundedEffectiveLikeMemberships162\(/);
+  const target162Start = worker162.indexOf('async function handleMyLikeStates(');
+  const target162End = worker162.indexOf('\n}', target162Start);
+  const target162Body = worker162.slice(target162Start, target162End + 2);
+  assert.match(target162Body, /readBoundedEffectiveLikeMemberships162/);
+  const collection162Start = worker162.indexOf('async function handleMyLikedTracks052(');
+  const collection162End = worker162.indexOf('\n}', collection162Start);
+  const collection162Body = worker162.slice(collection162Start, collection162End + 2);
+  assert.match(collection162Body, /readBoundedEffectiveLikeMemberships162/);
+  console.log('162_CANONICAL_WORKER_EFFECTIVE_READER_WIRING=PASS');
 }

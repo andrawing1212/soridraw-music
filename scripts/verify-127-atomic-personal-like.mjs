@@ -58,6 +58,32 @@ assert.match(listener, /invalidate|EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT/);
 
 const flush = service.slice(service.indexOf('flushPendingLikes = async'), service.indexOf('// App 120 deliberately ignores historical RTDB'));
 assert.match(flush, /acceptedForSignal127/);
+
+assert.match(flush, /operationId: pending\.operationId/, 'stable ID must accompany the batch request');
+assert.match(flush, /if \(!mutation\.operationId\)/, 'legacy outbox ID must be backfilled once');
+assert.match(flush, /if \(upgradedLegacyOutbox144\) persistLikeOutbox\(uid, outbox\)/,
+  'backfilled operation ID must be saved before the HTTP request');
+assert.ok(flush.indexOf('persistLikeOutbox(uid, outbox)') < flush.indexOf("requestExploreLike(user, '/v1/me/likes/batch'"),
+  'persist before transport');
+assert.match(service, /operationId: createExploreLikeOperationId144\(\)/,
+  'every new click must receive a new stable operation ID');
+assert.match(service, /operationId: typeof row\.operationId === 'string'/,
+  'persisted ID must survive local cache normalization');
+const operationStart144 = service.indexOf('export const createExploreLikeOperationId144 =');
+const operationEnd144 = service.indexOf('\n};', operationStart144) + 3;
+assert.ok(operationStart144 > 0 && operationEnd144 > operationStart144);
+const operationJS144 = ts.transpileModule(
+  service.slice(operationStart144, operationEnd144).replace(/^export /, '') +
+    '\nreturn createExploreLikeOperationId144;',
+  { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
+).outputText;
+let generated144 = 0;
+const makeOperation144 = new Function('crypto', operationJS144)({
+  randomUUID: () => '00000000-0000-4000-8000-' + String(++generated144).padStart(12, '0'),
+});
+assert.notEqual(makeOperation144(), makeOperation144(), 'two clicks must differ');
+assert.equal(generated144, 2, 'a retry must reuse its stored ID, not call generator again');
+
 assert.match(flush, /const sentByTrack127 = new Map\(batchEntries\.map\(\(pending\) => \[pending\.trackId, pending\.desiredLiked\]\)\)/);
 assert.match(flush, /results\.some\(\(row\) => sentByTrack127\.get\(row\.trackId\) !== row\.liked\)/);
 assert.ok(flush.indexOf('const sentByTrack127 =') < flush.indexOf('const latest = readLikeOutbox(uid);', flush.indexOf('const sentByTrack127 =')),
@@ -216,6 +242,7 @@ console.log('127_SAME_MS_ACK_LOCAL_REVISION=PASS');
 console.log('127_INFLIGHT_LIKE_THEN_FINAL_UNLIKE_PRESERVED=PASS');
 console.log('127_AMBIGUOUS_ACK_FOLLOWUP_NOT_DROPPED=PASS');
 console.log('127_MISMATCHED_INTAKE_REPLY_RETAINS_LAST_INTENT=PASS');
+console.log('144_OPERATION_ID_PERSISTED_RETRY_STABLE_AND_NEW_CLICK_UNIQUE=PASS');
 console.log('127_PUBLIC_COUNT_INDEPENDENT_AUTHORITY=PASS');
 console.log('127_D1_MUTATION_ROUTE_UNCHANGED=PASS');
 console.log('127_WORKER071_UNCHANGED=PASS');

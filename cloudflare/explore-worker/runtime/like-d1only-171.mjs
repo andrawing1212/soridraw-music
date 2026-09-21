@@ -13,8 +13,8 @@
 // overwriting a newer canonical state. operationId is stable across retries.
 
 const safeId171 = (value, max) =>
-  typeof value === 'string' && value.length > 0 && value.length <= max &&
-  /^[A-Za-z0-9._~:@+\-]+$/.test(value);
+  typeof value === 'string' && value.trim() === value &&
+  value.length > 0 && value.length <= max;
 
 const effectiveLiked171 = `COALESCE((
   SELECT o.liked FROM explore_like_overrides_171 o

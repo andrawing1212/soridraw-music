@@ -1,3 +1,4 @@
-requested_at=2026-09-21T21:22:00Z
-purpose=verify_canonical_queue_replay_and_preview_cron_restored
-mode=postflight_read_only
+requested_at=2026-09-21T21:25:00Z
+purpose=safe_idempotent_one_time_queue_recovery_after_auditable_preflight
+mode=one_time_queue_rescue
+preview_only=true

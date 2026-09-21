@@ -26,8 +26,16 @@ if (appVersion >= 120) {
   if (!likes.includes('const baseLikeCount = existing?.baseLikeCount ?? clampLikeCount(currentLikeCount);')) {
     fail('actor optimistic count baseline missing');
   }
-  if (!likes.includes('const optimisticLikeCount = clampLikeCount(')) fail('actor immediate optimistic count missing');
-  if (!likes.includes('baseLikeCount + (liked ? 1 : 0) - (baseLiked ? 1 : 0)')) {
+  const directOptimistic120 =
+    likes.includes('const optimisticLikeCount = clampLikeCount(') &&
+    likes.includes('baseLikeCount + (liked ? 1 : 0) - (baseLiked ? 1 : 0)');
+  const helperOptimistic127 =
+    likes.includes('export const computeExploreLikeAction127 = (') &&
+    likes.includes('publicCount + Number(desiredLiked) - Number(baseLiked)') &&
+    likes.includes('const optimisticAction127 = computeExploreLikeAction127(baseLiked, liked, baseLikeCount);') &&
+    likes.includes('const optimisticLikeCount = optimisticAction127.likeCount;');
+  if (!directOptimistic120 && !helperOptimistic127) fail('actor immediate optimistic count missing');
+  if (!directOptimistic120 && !helperOptimistic127) {
     fail('actor optimistic count must remain one-step baseline/final delta');
   }
   if (!likes.includes('overlayExploreLikeDisplayCounts')) fail('actor stale-shared overwrite protection missing');

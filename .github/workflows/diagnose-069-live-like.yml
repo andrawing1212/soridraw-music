@@ -250,6 +250,12 @@ jobs:
           test "$remaining" = 0
           echo 'CANONICAL_QUEUE_069_DRAINED=PASS'
           echo 'Note: processing used existing Worker scheduled handler, not a direct data migration or custom data rewrite.'
+          printf '\\n## Existing Worker one-time queue recovery\\n- Earlier queued 069 mutations drained to zero by existing canonical scheduled handler.\\n- Temporary PREVIEW cron will be restored to its previous setting by EXIT trap.\\n- This is not proof of PC/mobile heart agreement or R0 on app re-entry.\\n' >> DOCS/LIKE_READONLY_DIAG_LATEST.md
+          git config user.name "soridraw-readonly-diagnostic"
+          git config user.email "actions@users.noreply.github.com"
+          git add DOCS/LIKE_READONLY_DIAG_LATEST.md
+          git commit -m "diag(preview): record bounded canonical queue recovery result"
+          git push origin HEAD:preview
 
       - name: Probe current PREVIEW feed payload for recent like
         shell: bash

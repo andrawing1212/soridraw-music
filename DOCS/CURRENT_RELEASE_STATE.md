@@ -1,5 +1,57 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CO. 161 reader-first exact/partial 분리 — 2천 한도 오판 제거·visible bounded 복구 PASS (2026-09-21 KST)
+
+159/160 완료 후 다음 비용·무손실 단계로 **기존 개인 좋아요 R2 snapshot이 완전본인지 불완전본인지 명시적으로 구분하는 161 reader-first 경로**를 구현했다.
+
+**발견한 실제 오류 가능성:** 기존 앱은 `likedTrackIds.length >= 2000`이면 불완전 snapshot으로 보고, 2000 미만이면 사실상 완전본처럼 받아들였다. 그러나 과거 2,000개에서 잘린 사용자가 이후 여러 곡을 해제하면 배열 길이가 2,000 미만으로 내려가도 이미 누락된 좋아요가 남아 있을 수 있다. 반대로 156의 정확한 신규 snapshot은 2,000개를 넘을 수 있으므로 단순 길이 기준은 정상 exact snapshot까지 거부한다.
+
+**161 기준:** shared v114 R2 object는 아래 조건을 모두 만족할 때만 exact로 인정한다.
+- `canonicalComplete156 === true`
+- `canonicalSource156` 존재
+- `exactLikeCount156`이 안전한 음이 아닌 정수
+- `exactLikeCount156 === unique likedTrackIds 수`
+- 원본 배열 길이와 unique 수가 같아 중복으로 개수가 위장되지 않음
+
+이 증명이 없으면 **1,999개든 정확히 2,000개든 모두 partial**로 취급한다. partial 목록은 기존 하트를 보존하기 위한 cache hint로만 사용하고, 목록에 곡이 없다는 사실을 unlike 증거로 사용하지 않는다.
+
+**reader-first 동작:**
+- exact shared R2: 기존 빠른 경로 유지, 개인 membership 확인에 원본 D1 read 0.
+- partial shared R2: 기존 기기 local heart/outbox/unsettled state를 지우지 않는다.
+- 화면에서 실제 확인이 필요한 누락 곡만 `/v1/me/likes`의 최대 50개 targeted lookup으로 확인.
+- 좋아요 곡 collection도 요청된 최대 200개 범위만 canonical membership을 확인하며 전체 사용자 likes scan 금지.
+- social snapshot 응답 shape의 기존 `likedTrackIds`는 유지하고 `likesComplete / exactLikeCount / likesSnapshotSource`만 additive로 추가.
+- 앱은 partial snapshot을 받아도 그 배열로 전체 local cache를 reconcile하지 않고 partial marker만 저장하여 **같은 R2 revision에서 반복 전체 snapshot GET을 하지 않음**.
+- R2 revision이 실제 바뀌면 기존 invalidation이 full/partial marker 둘 다 지우고 다시 확인.
+
+관련 source:
+- `cloudflare/explore-worker/patches/061-shared-social-r2-parity.mjs` — exact 상태 판정 + targeted membership reader
+- `cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs` — partial liked collection bounded recovery
+- `cloudflare/explore-worker/canonical/preview-worker.js` — 실제 repository canonical Worker에 동일 161 reader-first 반영
+- `src/services/exploreLikeService.ts` — 2천 길이 heuristic 제거, partial local-preserve 계약 반영
+- 기존 verifier 114/127/135를 재사용해 161 검증 추가. 새 일회성 verifier 파일은 만들지 않음.
+
+canonical Worker SHA256: `fabe274fde6d2ed1099f14f54852c06e12e4e37a5799708bbf8e1176fb85cc45`.
+
+최종 GitHub Actions [35577973005](https://github.com/andrawing1212/soridraw-music/actions/runs/35577973005), exact `8bcc02e69f1f548f094dc2f90b44c8cfacea3767` **SUCCESS**:
+- TypeScript PASS / Build PASS / static release audit PASS
+- `161_LEGACY_1999_2000_PARTIAL_AND_EXACT_2053=PASS`
+- `161_PARTIAL_VISIBLE_MEMBERSHIP_BOUNDED_D1=PASS`
+- `EXACT_156_SHARED_LIKE_LEGACY_OVERWRITE_GUARD=PASS`
+- 159 reader-first inventory가 targeted `handleMyLikeStates` 포함 **5개**로 고정
+- 160 direct RATE_DB 제거/replay PASS 유지
+- TEST/PRODUCTION Worker dry-run PASS
+- TEST/PRODUCTION shared D1 preflight read-only PASS
+- shared D1에 사용자 행을 읽지 않는 `EXPLAIN QUERY PLAN`으로 161 targeted lookup이 `tracks PK + likes PK` indexed SEARCH임을 확인:
+  `SEARCH t USING INDEX sqlite_autoindex_tracks_1 (id=?) | SEARCH l USING COVERING INDEX sqlite_autoindex_likes_1 (track_id=? AND user_uid=?)`
+- `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`
+- 161은 read 경로 변경이므로 isolated mutation billing은 의도적으로 재측정하지 않음. 157 W2/W1/W0 실측은 run 35568696258 기준 유지.
+
+**중요한 전환 경계:** 현재 partial targeted fallback은 아직 운영 중인 legacy `likes`가 canonical이기 때문에 legacy `likes`를 조회한다. 향후 157 writer cutover 순간에는 legacy `likes`가 frozen baseline이 되므로, **157 활성화 전에 이 targeted fallback도 반드시 baseline+override effective membership으로 전환/게이트해야 한다.** 이 순서를 어기면 post-cutover 변경을 partial 기기가 못 본다.
+
+**실서비스 상태:** 이번 161도 GitHub `preview` 소스·검증만 변경. PREVIEW 실주소 Worker에는 미배포. 157 migration 미적용, shared D1/R2 사용자 데이터/Firebase/Functions/TEST/PRODUCTION 실제 서비스 비변경. 사용자 원본 backfill/delete/transform 없음. UI 변경 없음. 제품 release는 계속 BLOCKED: 157/158 실제 owner wiring, 세 환경 writer 동시 cutover, 051 대체 신호, public generation, RTDB final settlement, 전체 DO/R2/RTDB 비용, Work 독립감사 및 PC↔모바일 실사용이 남아 있다.
+
+
 ## 0CN. 159/160 구형 좋아요 경로 고정 + direct RATE_DB write 제거 — exact CI PASS (2026-09-21 KST)
 
 사용자의 "니가 해볼래?" 요청으로 Codex/Work 없이 ChatGPT가 좁은 범위의 비용 절감 마무리를 직접 진행. 기준은 157/158 무백필 구조 이후 `preview`.

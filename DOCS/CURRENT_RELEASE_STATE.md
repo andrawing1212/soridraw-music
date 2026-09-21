@@ -1,5 +1,22 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DH. app133 소스 후보 — partial R2 동일 revision 아래 D1 최종상태 재검증 (2026-09-22 KST)
+
+**사용자 app132 실사용: FAIL.** 사진에서 같은 곡의 PC 하트 ON + 숫자 1과 모바일 하트 OFF + 숫자 1이 동시에 관찰됨. 서버 전체 좋아요 수가 1이라는 사실만으로 어느 계정의 하트인지는 알 수 없음.
+
+**코드에서 재현 가능한 경로:** PREVIEW Worker는 069 큐에 좋아요를 접수한 뒤 별도 scheduled 단계에서 canonical D1 `likes` 관계를 갱신한다. legacy personal R2가 partial인 계정에서는 `/v1/me/likes`가 canonical D1을 조회한다. 기존 모바일 `EXPLORE_LIKE_TARGETED_VERIFIED_130`은 조회한 0/1 값을 R2 HEAD revision에 묶어 기기에 영구 보관하지만, D1 큐가 나중에 처리되어도 그 R2 HEAD는 반드시 변하지 않는다. 같은 revision이라는 이유로 오래된 mobile 0/1을 다시 확인하지 않는 결함이다. 또 app131~132는 큐 ACK를 확정으로 전달해, PC가 실제 D1 완료 전 받은 좋아요를 로컬 `snapshotPending`으로 보존할 수 있다. 따라서 **PC 표시가 곧 최종 D1 상태라는 전제는 성립하지 않는다.**
+
+이번 클라이언트 수정 `1d1ece060ce4bac7d0bc0a4e6c565bf6b85c1613`:
+- partial R2 계정에 한해 이전 앱 세션의 revision-keyed exact membership 검증을 복원하지 않음. 최초 현재 화면의 곡만 기존 최대 50개 bounded canonical endpoint로 확인. complete exact R2 계정과 기기 캐시의 일반 진입은 변경 없음.
+- partial account의 R2 revision이 5분 뒤에도 같으면 targeted 검증만 만료해 다음 활성 Explore 입장에서 visible IDs만 다시 확인. 이전 표시값은 확인 결과 전까지 보존.
+- 실행형 회귀 `74214aa93598e3537c1e63b97d1261bf5e620ef5`: R2 HEAD 동일 + D1 later materialized 상황에서 partial verified stale 복원 금지, complete 동일 revision 캐시 복원 보호.
+- 앱 버전 133 candidate `7ecd7fd1ec919c5924660d703331b7e88ed748b2`.
+
+**검증 한계:** 특정 사용자 5곡에 대한 실제 인증 canonical D1/R2/RTDB 상태를 이 정적 감사만으로 조회한 것은 아님. 서버 큐가 미완료/실패했다면 PC의 미확정 ACK와 모바일 canonical 값이 여전히 달라질 수 있다. 그런 경우 실제 상태 계측과 queue drain 원인 확인 없이는 다른 기기 하트를 강제 ON으로 조작하지 않는다. 수정 이후 완전 해결 여부는 실사용 미검증.
+
+**배포:** TypeScript/Build/like regression/Release Audit PASS 전 배포 보류. 범위는 preview 앱·테스트·문서만. Worker/Functions/Rules/shared D1/R2 사용자 원본 비변경. W1~W2 별도 비용 gate FAIL 유지. TEST/PRODUCTION 승격 금지.
+
+
 ## 0DG. PREVIEW app132 — PC/모바일 개인 좋아요 캐시 일치 hotfix 배포 완료 (2026-09-22 KST)
 
 **배포 고정 commit:** `ffff163783c3103a9594903132480ce356846ad2`.

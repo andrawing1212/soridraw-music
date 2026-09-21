@@ -1,5 +1,22 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DI. PREVIEW app133 — partial legacy 좋아요 D1 재검증 수정 배포 완료 (2026-09-22 KST)
+
+**배포 exact commit:** `587e60ff451ce64d9d24be5ae943f5a32d71825d`.
+**사전 감사:** Release System Audit run `35650903841`, job `106514569533` (rerun) SUCCESS. exact audit HEAD `2034cb930a80913e161f6967228839b307d48dfa`.
+**Firebase PREVIEW Hosting:** run `35651254609`, job `106515752564` (rerun) SUCCESS. locked source `587e60ff451ce64d9d24be5ae943f5a32d71825d`.
+
+검증:
+- TypeScript PASS / Build PASS / 실행형 partial R2 stale verified regression PASS / 전체 source & isolated like regression PASS.
+- Firebase PREVIEW Hosting PASS; remote `app-version.json=133` / exact index build PASS.
+- TEST / PRODUCTION code·실제 HTML 비변경 PASS.
+- Worker / Functions / Rules 배포 없음. D1 schema 및 실제 사용자 데이터 migration/write/backfill/delete 없음.
+
+수정: old partial R2 HEAD revision은 deferred 069/075 canonical D1 완료를 증명하지 못하므로 과거 세션의 targeted verification을 캐시 영구 정답으로 복원하지 않는다. partial 계정의 현재 보이는 50개 이하 곡만 session당 기존 targeted membership 경로로 재검증하고, 활성 사용 중 5분 이후 동일 R2 revision이어도 기존 targeted 검증만 만료한다. complete exact R2의 D1 R0 재진입, 현재 미전송 클릭, 30초 묶음, 기존 UI 보존.
+
+**주의:** app133 코드 경로/배포 검증 PASS는 실제 동일 계정의 PC↔모바일 기능 PASS가 아니다. 현재 스크린샷의 5곡 canonical D1 개인 membership과 미확정 PC `snapshotPending`을 원격에서 인증 상태로 직접 대조하지 못했다. 해당 relation이 아직 queued거나 실패했다면 PC와 모바일이 계속 달라질 수 있다. 공개 숫자 1만으로 개인 하트 1을 강제하지 말 것. 사용자의 app133 실사용 검증 전 추가 비용 최적화/171 cutover/TEST/PRODUCTION 금지. 기존 W1~W2 gate 미통과 유지.
+
+
 ## 0DH. app133 소스 후보 — partial R2 동일 revision 아래 D1 최종상태 재검증 (2026-09-22 KST)
 
 **사용자 app132 실사용: FAIL.** 사진에서 같은 곡의 PC 하트 ON + 숫자 1과 모바일 하트 OFF + 숫자 1이 동시에 관찰됨. 서버 전체 좋아요 수가 1이라는 사실만으로 어느 계정의 하트인지는 알 수 없음.

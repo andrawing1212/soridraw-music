@@ -1440,6 +1440,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
     'readSharedLikes061',
     'rebuildExploreLikeR2Bundle',
     'handleMySocialSnapshot042',
+    'handleMyLikeStates',
     'handleMyLikedTracks052',
   ]) {
     assert.ok(worker159.includes('function ' + name + '(') ||
@@ -1457,7 +1458,9 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
 
   console.log('159_LEGACY_RELATION_WRITERS_FIXED_INVENTORY=3');
   console.log('159_LEGACY_LIKE_COUNT_REBUILD_WRITER_FIXED_INVENTORY=1');
-  console.log('159_READER_FIRST_CUTOVER_PATHS_FIXED_INVENTORY=4');
+  assert.ok(worker159.includes('SORIDRAW_SHARED_LIKE_READER_FIRST_161_20260921'));
+  assert.ok(worker159.includes('readBoundedLegacyLikeMemberships161'));
+  console.log('159_READER_FIRST_CUTOVER_PATHS_FIXED_INVENTORY=5');
   console.log('159_DIRECT_LIKE_ROUTE_AND_069_QUEUE_STILL_REQUIRE_OWNER_CUTOVER=FAIL');
 }
 

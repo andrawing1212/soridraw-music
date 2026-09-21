@@ -1,5 +1,38 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CN. 159/160 구형 좋아요 경로 고정 + direct RATE_DB write 제거 — exact CI PASS (2026-09-21 KST)
+
+사용자의 "니가 해볼래?" 요청으로 Codex/Work 없이 ChatGPT가 좁은 범위의 비용 절감 마무리를 직접 진행. 기준은 157/158 무백필 구조 이후 `preview`.
+
+**159 경로 고정:** repository-owned canonical Worker에서 현재 legacy 좋아요 쓰기/읽기 경로를 실행형 verifier로 고정했다. legacy `likes` INSERT/DELETE writer는 `adjustExploreLikeCounterDelta`, `processExploreLikeAggregateWave035`, `processExploreLikeUserQueueWave075` **3개**, legacy count 재계산 writer `refreshLikeCount` **1개**, reader-first 전환 대상 `readSharedLikes061`, `rebuildExploreLikeR2Bundle`, `handleMySocialSnapshot042`, `handleMyLikedTracks052` **4개**. direct PUT/DELETE like route와 069/055 batch route는 아직 157/158 single-owner cutover 전이므로 제품 release gate는 계속 FAIL로 유지.
+
+**160 숨은 비용 제거:** 구형 direct `PUT/DELETE /v1/tracks/:id/like` 호환 경로의 `handleLikeD1Core`가 좋아요 본체 처리 전에 `enforceUserRateLimit`를 통해 `RATE_DB.api_rate_limits`에 별도 D1 write를 하던 것을 제거했다. batch path와 동일한 Cloudflare `LIKE_RATE_LIMITER` binding을 사용하도록 `054-explore-like-edge-rate-limit.mjs`와 canonical PREVIEW Worker를 함께 수정. 현재 앱의 `setExploreTrackLike`는 클릭 시 즉시 서버 호출하지 않고 local outbox에 쌓은 뒤 `/v1/me/likes/batch`로 묶음 전송하므로, 160은 **구형/호환 direct route에 남아 있던 추가 D1 write를 제거한 것**이며 현재 batch relation/count 전체 비용 완료를 뜻하지 않는다.
+
+기존 054 patch는 이미 054가 적용된 Worker에서는 조기 종료하여 direct route 160을 추가하지 못하는 replay 오류가 있었다. 이를 `has054/has160` 별도 판정으로 수정하고, 055 W1 intake가 활성인 현재 Worker에서 `enqueueExploreLikeBatch035`만 남아도 정상 replay하도록 보강. 감사 Workflow에서 **054 적용됨 + 160 미적용** fixture를 실제로 만들어 같은 patch를 실행하고 direct route만 160으로 승격되는지 검증.
+
+canonical Worker SHA256을 새 소스에 맞춰 `c517ac6193cfe1bd12234a8158e9abcc89fd081fe0ab35b5a319b464fb553081`로 재고정.
+
+최종 GitHub Actions [35576793526](https://github.com/andrawing1212/soridraw-music/actions/runs/35576793526), exact `7bcd28f909eda4544ee9919351d8dfd6ec7853bf` **SUCCESS**:
+- TypeScript PASS / Build PASS
+- canonical Worker expected/actual SHA256 일치 PASS
+- `EXACT_156_SHARED_LIKE_LEGACY_OVERWRITE_GUARD=PASS`
+- 156/157/158 기존 격리 회귀 PASS
+- `159_LEGACY_RELATION_WRITERS_FIXED_INVENTORY=3`
+- `159_LEGACY_LIKE_COUNT_REBUILD_WRITER_FIXED_INVENTORY=1`
+- `159_READER_FIRST_CUTOVER_PATHS_FIXED_INVENTORY=4`
+- `160_DIRECT_LIKE_RATE_DB_WRITE_RETIRED=PASS`
+- `160_054_TO_160_PATCH_REPLAY_GUARD=PASS`
+- 실제 replay fixture `160_054_EXISTING_WORKER_REPLAY=PASS`
+- TEST/PRODUCTION Worker dry-run PASS
+- TEST/PRODUCTION 공유 D1 preflight read-only PASS
+- 158 track_stats PK plan PASS
+- `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`
+
+첫 두 audit 실패(run 35576474162/35576633560)는 제품 코드 실패가 아니라 새 verifier가 설명 comment의 `RATE_DB` 문자열까지 금지한 검사 오류와, replay 검사가 055 batch intake를 인식하지 못한 검사 오류를 각각 드러냈고 수정 후 최종 run이 PASS. 최종 run은 160이 D1 relation schema를 바꾸지 않으므로 원격 synthetic D1 billing 재측정은 의도적으로 skip; 157의 실제 W2/W1/W0 실측 run 35568696258을 그대로 기준으로 유지.
+
+**실서비스 상태:** 이번 턴은 GitHub `preview` 소스/검증만 변경. PREVIEW Worker 실주소에는 **미배포**, Firebase/Functions/shared D1/R2 사용자 데이터/TEST/PRODUCTION 실제 서비스 변경 없음. 157 migration도 계속 **미적용**. 제품 전체 release는 여전히 BLOCKED: 세 환경 legacy writer를 동시에 freeze/cutover하지 않았고, 157/158 owner, 051 대체 신호, public feed/profile generation, RTDB final settlement, PC↔모바일 실사용 및 전체 DO/R2/RTDB 비용 검증이 남아 있음.
+
+
 ## 0CM. 157/158 무백필 sparse override 실제 W2/W1/W0 + 곡 count lazy baseline PASS (2026-09-21 KST)
 
 사용자의 비용 절감 계속 요청. 153의 신형 relation 테이블은 격리 D1 W2/W1을 달성했지만 기존 모든 좋아요를 새 테이블로 옮기는 baseline/backfill 위험이 남아 있었음. 이를 제거하는 **157 sparse override**와 **158 lazy track baseline**을 실제 코드·격리 원격 D1로 검증.

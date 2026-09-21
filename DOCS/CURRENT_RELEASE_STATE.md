@@ -1,5 +1,16 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CH. 150~152 곡별 숫자 결손 차단·공유 카드 CAS·전체 표시 확정 조건 (2026-09-21 KST)
+
+사용자 "더 수정해줘"에 따라 `preview` 기준 `e901bc1d849b3ec68ae4d33c5bf2b95b1cdd3584`에서 실제 코드 수정:
+- `cloudflare/explore-worker/runtime/like-fenced-139.mjs`의 147 영속 곡별 카운터에서 UID/곡 이전 확정 revision이 있으면 정확히 다음 revision만 허용하고, UID/곡 기록이 없는 경우 revision=1만 허용. 중간 수정 이력 유실, 비정상 첫 revision, 이전 상태 불일치 시 숫자 변경 없이 오류 및 감사 복구 요구(150). 기존 데이터나 DB 재생성 없음.
+- 같은 runtime에 **`createLikeSharedTrackCardPublisher151(bucket)`** 추가. 실제 Worker071에 존재하는 공유 R2 카드 `internal/explore/shared-track-card-v115/<trackId>.json` / schemaVersion 1 / card.likeCount+stats.likeCount를 사용. R2 ETag 조건부 PUT, 최대 12회 CAS 충돌 재시도, card의 기존 제목/미디어/통계 기타 필드 보존, 상승하는 `lastLikeGeneration151`만 반영. 동일 세대 중복은 R2 W0, 더 오래된 세대는 superseded; 캐시 부재·파손·기초 숫자 불일치·신규 세대 누락(구형 writer가 토큰 제거했을 가능성)은 덮어쓰기 없이 fail-closed. 이 연결부는 **공개곡 카드 한 개만** 담당하고 Feed/인기/공개프로필을 완료했다고 표시하지 않는다.
+- 147의 공개 게시 확정은 카드·Feed·프로필에서 각각 영속 버전 이상의 `surfaceGenerations`를 확인해야 함(152). 카드만 성공/프로필 누락이면 개인 R2/다른 기기 `settled` 금지. 실제 연결되지 않은 프로필/Feed 경로는 의도적으로 fail-closed.
+
+`scripts/verify-135-like-fenced-protocol.mjs`의 기존 실행형 mock에 150 결손 순번, 151 ETag 충돌·재시도·이전 세대·동일 세대·기초 데이터 부재/충돌, 152 카드만 확인된 미완료 공개 갱신의 보류/재시도 검사 추가. 실제 GitHub runtime + verifier를 재조회해 V8 격리 전체 실행 **PASS**(135/139~143/146/147/149/150~152 포함). 기존 릴리스 차단 메시지 `LEGACY_WRITER_BYPASS_RELEASE_GATE=FAIL`, `REAL_D1...=NOT_MEASURED`, `PRODUCT_RELEASE_READINESS=FAIL` 유지. 이는 모의 스토리지·가상 R2 기반 실행 결과이며 실제 Worker/D1/RTDB/PC·모바일 합격 아님.
+
+**남은 필수:** 실제 공유 세 환경 Writer 공존/인증 UID별·곡별 owner 배포, Feed·인기 재정렬·공개프로필용 152 세대 부여 및 부분 갱신, R2 개인 2천 곡 확장, 기존 track_stats/derived reader 컷오버, 기존곡 초기 count의 감사 기반 시드, 운영 D1 인덱스 포함 `meta.rows_written` W1~W2 및 DO/R2 총비용 측정, TS/Build/전체 CI/Work/실기기 검사. 151만 연결해 152를 우회하거나 구형 Worker를 방치한 채 PREVIEW 배포 금지. 실제 앱126/Worker071 및 TEST/PRODUCTION/공유 사용자 데이터·Cloudflare/Firebase/Functions/R2 실서비스 비변경; 이번 작업은 preview 코드·검증·문서만 변경.
+
 ## 0CG. 146/147/149 좋아요 D1 관계 단독 저장 + 영속 곡별 숫자 모델 실제 코드·격리 검증 (2026-09-21 KST)
 
 사용자가 신속한 실제 수정을 요청. 기준 `preview` `9b77a68ea170bdd222dbba62dc985e148d0f3618`. 새 파일/Workflow 추가 없이 `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 **`createLikeRelationOnly146` / `createLikeTrackAggregator147` 실제 후보 코드 추가**. 139의 기존 영속 pending에서 이전 membership·operation ID·revision·UID 전역 seq를 canonical adapter에 전달한다. 146은 D1 단일 batch 안에서 공개곡 유효성→해당 UID/곡 likes 관계 INSERT/DELETE **한 행만**→최종 membership 확인; track_stats·derived/journal을 쓰지 않음. D1이 먼저 확정된 뒤 해당 곡 전용 영속 집계 147에 **이전 상태 기준 delta**를 전달. 147은 곡별 정확한 초기 total이 이미 확인·설정되어 있지 않으면 fail-closed, 트랜잭션 안에서 count+UID별 마지막 operation을 함께 기록, 같은 ID 재시도 W0, 다른 사용자 동일 곡 직렬 합산, 실패 후 중복 가산 없이 공개 R2 세대(generation) 검증을 요구한다. 147 공개 캐시 게시와 141 개인 캐시 게시까지 성공하기 전 139은 `settled` 반환 금지. DO↔D1은 *서로 원자 트랜잭션이 아님*; 영속 pending + idempotent 재시도로 복구하는 후보이며 모두 실제 Cloudflare에 미연결.

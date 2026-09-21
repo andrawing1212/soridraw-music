@@ -161,7 +161,7 @@ source = source.slice(0, batchAnchor) + runtime + '\n// ' + marker + '\n' + sour
         results: results171,`);
   body = body.replace(
     "        personalLikeSnapshot: 'pending',",
-    "        personalLikeSnapshot: 'revision-safe-173',\n        publicLikePublication: 'generation-safe-173',"
+    "        personalLikeSnapshot: 'settled',\n        personalLikeProtocol: 'revision-safe-173',\n        publicLikePublication: 'generation-safe-173',"
   );
   replaceFunction('handleLikeBatch034', body);
 }
@@ -172,7 +172,8 @@ for (const required of [
   marker,
   'createLikeR2RevisionPublisher173',
   'LIKE_PUBLICATION_RETRY_REQUIRED',
-  "personalLikeSnapshot: 'revision-safe-173'",
+  "personalLikeSnapshot: 'settled'",
+  "personalLikeProtocol: 'revision-safe-173'",
   "publicLikePublication: 'generation-safe-173'",
 ]) {
   if (!source.includes(required)) throw new Error('[083/173] final runtime missing: ' + required);

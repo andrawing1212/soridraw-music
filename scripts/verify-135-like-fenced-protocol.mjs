@@ -1460,3 +1460,33 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('159_READER_FIRST_CUTOVER_PATHS_FIXED_INVENTORY=4');
   console.log('159_DIRECT_LIKE_ROUTE_AND_069_QUEUE_STILL_REQUIRE_OWNER_CUTOVER=FAIL');
 }
+
+
+// 160: the direct PUT/DELETE compatibility route must use the same Cloudflare
+// edge limiter as batch. RATE_DB writes from enforceUserRateLimit are forbidden
+// on both like hot paths. Also lock replayability when 054 is already present.
+{
+  const worker160 = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
+  const directStart160 = worker160.indexOf('async function handleLikeD1Core(');
+  const directEnd160 = worker160.indexOf('\n}', directStart160);
+  assert.ok(directStart160 >= 0 && directEnd160 > directStart160, '160 direct like handler missing');
+  const direct160 = worker160.slice(directStart160, directEnd160 + 2);
+  assert.match(worker160, /SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921/);
+  assert.match(direct160, /enforceExploreLikeBatchEdgeRateLimit054\(env, authContext\.uid\)/);
+  assert.doesNotMatch(direct160, /enforceUserRateLimit\(|api_rate_limits|RATE_DB|exploreRateDb031/);
+
+  const batchStart160 = worker160.indexOf('async function handleLikeBatch034(');
+  const batchEnd160 = worker160.indexOf('\n}', batchStart160);
+  assert.ok(batchStart160 >= 0 && batchEnd160 > batchStart160, '160 batch like handler missing');
+  const batch160 = worker160.slice(batchStart160, batchEnd160 + 2);
+  assert.match(batch160, /enforceExploreLikeBatchEdgeRateLimit054\(env, authContext\.uid\)/);
+  assert.doesNotMatch(batch160, /enforceExploreLikeBatchRateLimit034\(/);
+
+  const patch160 = readFileSync('cloudflare/explore-worker/patches/054-explore-like-edge-rate-limit.mjs', 'utf8');
+  assert.match(patch160, /const marker160 = 'SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921'/);
+  assert.match(patch160, /if \(has054 && has160\)/);
+  assert.match(patch160, /if \(!has054\)/);
+  assert.match(patch160, /if \(!has160\)/);
+  console.log('160_DIRECT_LIKE_RATE_DB_WRITE_RETIRED=PASS');
+  console.log('160_054_TO_160_PATCH_REPLAY_GUARD=PASS');
+}

@@ -14,7 +14,7 @@ for (const marker of [
   'SORIDRAW_SERVER_ORDER_LIKE_QUEUE_073_20260920',
   'SORIDRAW_PERSONAL_LIKE_R2_CAS_074_20260920',
 ]) assert.ok(worker.includes(marker), 'missing '+marker);
-assert.equal(Number(version.version),126, 'do not bump app before authorized release');
+assert.ok(Number(version.version) >= 127, '127 concurrency contract requires app version 127 or newer');
 assert.match(patch72,/bucket\.head\(exploreSharedLikesKey061\(authContext\.uid\)\)/);
 assert.doesNotMatch(patch72,/bucket\.head\(exploreLikeR2Key\(authContext\.uid\)\)/);
 

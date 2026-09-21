@@ -1,5 +1,16 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app133 partial R2 캐시 검증 감사 및 안전 PREVIEW 배포
+
+app132 PC/모바일 사진 FAIL: 하트 OFF/숫자1 vs PC ON/숫자1. `DOCS/CURRENT_RELEASE_STATE.md` 0DH 원인·한계 참고.
+
+- current product candidate `7ecd7fd1ec919c5924660d703331b7e88ed748b2`; code `1d1ece060ce4bac7d0bc0a4e6c565bf6b85c1613`; test `74214aa93598e3537c1e63b97d1261bf5e620ef5`.
+- partial R2 device의 과거 `verified` 보관이 R2 revision 동일 상황의 deferred D1 materialization을 놓치는 경로를 실행형 테스트한 뒤 전체 TS/Build/Release Audit.
+- 완전한 R2, 최신 로컬 미전송 클릭, 30초 batch/RTDB, 기존 CSS/UI·모든 정상 기능 보호.
+- PASS면 app133 **PREVIEW Hosting만** 배포하고 remote exact build/TEST·PRODUCTION unchanged 확인. 공유 D1/Worker/migration/데이터 수정 금지.
+- 위 수정은 구형 partial D1 확인을 재실행하는 보호일 뿐 **서버 큐 완료를 보장하지 않음**. 재검증에서도 PC↔모바일 불일치면 canonical D1 개인 관계 vs 계정 R2 accepted state vs local outbox/snapshotPending을 실제 track 기준으로 비교하기 전 추가 서버·캐시 억측 패치 금지. 수치만 가지고 본인 하트 추론 금지.
+
+
 ## 현재 최우선 — PREVIEW app132 실사용 PC↔모바일 좋아요 검증 (2026-09-22)
 
 실제 PREVIEW app132 배포 확인:

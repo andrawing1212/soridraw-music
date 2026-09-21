@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 
 // ISOLATED PROTOCOL SIMULATION ONLY. No real Cloudflare Durable Object or D1.
@@ -478,4 +478,128 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.equal(canonicalLiked.get('user:song-d'), true);
   console.log('143_DURABLE_UID_OWNER_SERIALIZATION_AND_RESTART_MODEL=PASS');
   console.log('143_SHARED_CROSS_ENV_SERVICE_BINDING_AND_AUTH=NOT_CONFIGURED');
+}
+
+
+// 146: real relation-only adapter integrated into the actual 139 pending
+// protocol. Mock D1 billing deliberately excludes live SQLite indexes;
+// success here is correctness, NOT real Cloudflare W1-W2 proof.
+{
+  let relation = false, publicTrack = true, canonicalCount = 5;
+  let aggregateCount = 5, actualRelationWrites = 0, publishCount = 0;
+  let aggregateFailure = '', newestSeq = 0;
+  const ledgerValues = new Map(), counterDedupe = new Map(), r2Likes = new Map();
+  const ledger = {
+    async get(key) { return structuredClone(ledgerValues.get(key)); },
+    async put(key, value) { ledgerValues.set(key, structuredClone(value)); },
+    async nextPublicationSeq(uid) {
+      const key = 'seq:' + uid, next = (ledgerValues.get(key) || 0) + 1;
+      ledgerValues.set(key, next);
+      return next;
+    },
+  };
+  const db = {
+    prepare(sql) {
+      return {
+        bind(...args) {
+          return {
+            sql, args,
+            async first() {
+              assert.match(sql, /SELECT 1 AS liked FROM likes/);
+              return relation ? { liked: 1 } : null;
+            },
+          };
+        },
+      };
+    },
+    async batch(statements) {
+      assert.equal(statements.length, 3);
+      assert.match(statements[0].sql, /JOIN public_profiles p/);
+      assert.doesNotMatch(statements[1].sql, /UPDATE\s+track_stats|explore_derived_tracks/);
+      assert.match(statements[2].sql, /SELECT EXISTS\(SELECT 1 FROM likes/);
+      const desired = statements[1].sql.includes('INSERT OR IGNORE');
+      const before = relation;
+      if (publicTrack) relation = desired;
+      const changes = publicTrack && before !== relation ? 1 : 0;
+      actualRelationWrites += changes;
+      return [
+        { results: [{ eligible: Number(publicTrack) }], meta: { rows_written: 0, changes: 0 } },
+        { results: [], meta: { rows_written: changes, changes } },
+        { results: [{ liked: Number(relation) }], meta: { rows_written: 0, changes: 0 } },
+      ];
+    },
+  };
+  const commitAggregate = async (event) => {
+    assert.equal(canonicalCount, 5, 'old track_stats remains read-compatible but not hot-written');
+    assert.equal(event.delta, Number(event.liked) - Number(event.previousLiked));
+    if (aggregateFailure === 'before') {
+      aggregateFailure = '';
+      throw Error('aggregate unavailable before commit');
+    }
+    const key = [event.uid, event.trackId].join(':');
+    const previous = counterDedupe.get(key);
+    if (previous?.revision > event.revision) throw Error('stale external counter operation');
+    if (previous?.revision === event.revision) {
+      assert.equal(previous.id, event.id, 'same revision needs exact operation ID');
+      assert.equal(previous.delta, event.delta);
+    } else {
+      aggregateCount += event.delta;
+      counterDedupe.set(key, { id: event.id, revision: event.revision, delta: event.delta });
+    }
+    if (aggregateFailure === 'after') {
+      aggregateFailure = '';
+      throw Error('aggregate committed but receipt missing');
+    }
+    return { aggregateConfirmed: true, id: event.id, trackId: event.trackId, revision: event.revision };
+  };
+  const canonical = createLikeRelationOnly146(db, commitAggregate);
+  const publish = async (event) => {
+    assert.equal(aggregateCount, 5 + Number(event.liked), 'public count settles BEFORE personal R2');
+    assert.ok(event.seq > newestSeq);
+    newestSeq = event.seq;
+    r2Likes.set(event.trackId, event.liked);
+    publishCount++;
+    return { settled: true };
+  };
+  let processor = new LikeFencedProcessor139({ ledger, canonical, publish });
+  const send = (id, baseRevision, liked) =>
+    processor.mutate({ uid: 'u', trackId: 'song', id, baseRevision, liked });
+  assert.equal(await canonical.readMembership('u', 'song'), false);
+  aggregateFailure = 'before';
+  assert.equal((await send('like-1', 0, true)).state, 'pending');
+  assert.equal(relation, true, 'D1 relation committed independently');
+  assert.equal(aggregateCount, 5, 'public count has not been applied yet');
+  assert.equal(r2Likes.has('song'), false, 'no personal R2 before BOTH settlement stages');
+  processor = new LikeFencedProcessor139({ ledger, canonical, publish });
+  assert.equal((await send('like-1', 0, true)).state, 'settled');
+  assert.equal(aggregateCount, 6);
+  assert.equal(r2Likes.get('song'), true);
+  assert.equal(actualRelationWrites, 1, 'retry after D1 commit writes no extra relation row');
+  assert.equal((await send('like-1', 0, true)).duplicate, true);
+  assert.equal(aggregateCount, 6);
+  assert.equal((await send('unlike-2', 1, false)).state, 'settled');
+  assert.equal(relation, false);
+  assert.equal(aggregateCount, 5);
+  assert.equal(r2Likes.get('song'), false);
+  assert.equal(actualRelationWrites, 2);
+  assert.equal((await send('late-like', 0, true)).state, 'stale');
+  aggregateFailure = 'after';
+  assert.equal((await send('like-3', 2, true)).state, 'pending');
+  assert.equal(aggregateCount, 6);
+  assert.equal(publishCount, 2, 'never notify personal R2 before aggregate receipt');
+  processor = new LikeFencedProcessor139({ ledger, canonical, publish });
+  assert.equal((await send('like-3', 2, true)).state, 'settled');
+  assert.equal(aggregateCount, 6, 'idempotent counter retry never adds twice');
+  assert.equal(actualRelationWrites, 3);
+  assert.equal(r2Likes.get('song'), true);
+  publicTrack = false;
+  assert.equal((await send('private-attempt', 3, false)).state, 'pending');
+  assert.equal(relation, true);
+  assert.equal(aggregateCount, 6);
+  assert.equal(publishCount, 3);
+  console.log('146_RELATION_ONLY_WITH_DURABLE_AGGREGATE_CRASH_RETRY=PASS');
+  console.log('146_D1_RELATION_LOGICAL_WRITES_ONE_PER_REAL_CHANGE=PASS');
+  console.log('146_NO_PERSONAL_SETTLEMENT_BEFORE_PUBLIC_COUNT=PASS');
+  console.log('146_REAL_D1_TRIGGER_INDEX_ROWS_WRITTEN_AND_OLD_READERS=NOT_MEASURED');
+  console.log('146_PRODUCT_RELEASE_READINESS=FAIL');
 }

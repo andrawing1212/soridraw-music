@@ -1,1 +1,1 @@
-release_system_audit=2026-09-22-app127-like-rollout
+release_system_audit=2026-09-22-app127-authorized-verifier

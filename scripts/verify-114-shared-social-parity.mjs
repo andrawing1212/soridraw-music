@@ -132,7 +132,8 @@ if (!effective162.includes('COALESCE(o.liked')) fail('162 effective baseline+ove
 
 if (!worker.includes('SORIDRAW_LEGACY_LIKE_WRITER_FREEZE_GUARD_163_20260921')) fail('163 legacy writer freeze marker missing');
 const guard163 = functionText('assertLegacyLikeWriterOpen163');
-if (!guard163.includes("state?.mode === 'overlay157'")) fail('163 overlay writer block missing');
+if (!guard163.includes("state.mode !== 'legacy'")) fail('163 non-legacy writer block missing');
+if (!guard163.includes('legacy like writer frozen after shared cutover')) fail('163 writer freeze error missing');
 
 const targeted = functionText('handleMyLikeStates');
 if (!targeted.includes('readSharedLikesState161(env, authContext.uid)')) fail('targeted reader lost 161 state');

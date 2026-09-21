@@ -1,5 +1,11 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 0CH — 150~152 계정·곡 순서 유실 보호 / 공유 트랙 카드 CAS 구현 (2026-09-21 KST)
+
+실제 `preview` 변경: `cloudflare/explore-worker/runtime/like-fenced-139.mjs`의 147은 사용자별 이전 revision+1만 승인, 새 UID의 첫 수정은 revision1만 승인(누락/기존 사용자 시드 오류 시 fail-closed). 동일 파일에 실제 공유 카드 v115 키·필드를 유지하는 `createLikeSharedTrackCardPublisher151`을 추가: 조건부 ETag PUT, 기존 필드 보존, 카드 좋아요 숫자·stats 숫자 동일하게 변경, 세대 순서 및 최초 기초 숫자 검증. R2의 구형 Writer에 의해 151 세대가 유실되면 무작정 새 세대를 쓰지 않고 감사 복구 요구. **이는 카드 하나의 게시자이지 전체 Explore 갱신자가 아님.** 147은 `surfaceGenerations.card/feed/profile` 모두 곡별 영속 세대 이상임을 증명하기 전에는 139 개인 확정을 차단(152). `scripts/verify-135-like-fenced-protocol.mjs`에 150 결손 순번, 151 새 카드/중복/역순/동시 CAS/old baseline, 152 카드만 갱신 후 개인 미확정·재시도 추가; 실제 GitHub 코드 V8 격리 전체 PASS. 기존 135 legacy writer bypass/실 D1 비용/제품 준비 FAIL 유지.
+
+**다음 우선순위:** (1) 실제 공유 카드 외에 추천·최신·인기 및 공개프로필의 정확한 read/write 경로를 비교하고, 해당 곡만 조건부 갱신하는 feed/profile 152 세대 게시자를 구현. 인기 정렬·캐시 범위 밖 곡 처리에서 구형 D1 파생 데이터가 stale하지 않도록 별도 검증. (2) 모든 환경 구형 무조건 R2 Writer와 구형 count reader 컷오버 + UID/곡별 DO 바인딩·인증·감사 시드·RTDB 신호. (3) 공유 D1 원본 아닌 격리 D1에서 활성 index 포함 실제 `meta.rows_written` W1~W2, DO/R2 총비용·2천 곡 캐시 데이터 무손실 확장. (4) TS/Build/전체 CI/Work/PC↔모바일 최종검증. 프로덕션 승인 없이는 사용 데이터 변환/공유 DB migration/환경 승격 금지. PREVIEW 미완성 후보 배포 금지.
+
 ## 최신 0CG — 146/147/149 단일 좋아요 관계 + 곡별 영속 집계 후보까지 실제 코드 구현 (2026-09-21 KST)
 
 새 파일 없이 `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 `createLikeRelationOnly146(db,commitAggregate)`와 `createLikeTrackAggregator147(trackId,storage,publishTrack)` 구현. 139이 사전 확정 membership/operation ID/revision/seq 전달; 146이 **likes 관계만 D1 batch로 변경**, 원본 count/derived 실시간 트리거 호출을 의도적으로 제거한 후보. D1 확정 후 147이 정확한 미리 검증된 곡별 초기 count에 대한 UID별 revision/idempotent delta를 트랜잭션 안에서 기록, 버전부여 공개 R2 갱신 증명을 받은 뒤에야 139 개인 R2 확정. 실제 DO/DB 공통 바인딩에 미연결. 기존 135 실행형 테스트에 146/147/149 검증 추가: 애매한 D1 응답, 공개 R2 장애, 다른 사용자 동일곡, 뒤늦은 요청, 곡 total 미시드, 잘못된 사전 membership 등 격리 PASS. 134 격리 SQLite 148은 원본 likes 단독 논리 좋아요1/중복0/해제1, **구형 track_stats 및 derived 숫자 미갱신**을 명시적 release FAIL로 검증. 별도 in-memory SQLite 결과 6/6 대 1/0/1 재확인; D1 인덱스 과금과는 별개. 0CG 현재 상태 문서 참조.

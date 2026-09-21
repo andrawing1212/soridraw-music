@@ -129,6 +129,11 @@ jobs:
           for (const row of rows) {
             const hash = crypto.createHash('sha256').update(String(row.sql || '')).digest('hex').slice(0,16);
             console.log('LIVE_LIKE_SCHEMA ' + row.type + ' ' + row.tbl_name + ' ' + row.name + ' sha256_16=' + hash);
+            // Schema SQL only: never print a user row or token. This is needed
+            // to verify which legacy indexes and revision triggers block W2.
+            if (row.tbl_name === 'likes' && (row.type === 'trigger' || row.type === 'index')) {
+              console.log('LIVE_LIKES_DDL ' + row.name + ' ' + String(row.sql || '(implicit primary key)').replace(/\\s+/g, ' ').trim());
+            }
           }
           console.log('LIKE_READONLY_SCHEMA_AUDIT=PASS objects=' + rows.length);
           console.log('D1_LIVE_MUTATION_META_ROWS_WRITTEN=NOT_MEASURED');

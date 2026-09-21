@@ -1255,7 +1255,41 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.equal(recovered157.some(x => x.trackId === 'base-00001'), false);
   assert.equal(recovered157.filter(x => x.trackId === 'base-00002').length, 1);
   assert.equal(overrideRows157.size, 4, 'no user-wide backfill is created');
+
+  // 157 -> 156 integration: exact shared snapshot can be rebuilt directly
+  // from baseline+small overrides, without copying 2,053 legacy relations.
+  let exactBody157 = null, exactEtag157 = 0;
+  const exactBucket157 = {
+    async get() {
+      if (!exactBody157) return null;
+      const body = exactBody157, etag = 'e' + exactEtag157;
+      return { etag, text: async () => body };
+    },
+    async put(_key, body, options) {
+      if (exactBody157 === null) {
+        if (options?.onlyIf?.etagDoesNotMatch !== '*') return null;
+      } else if (options?.onlyIf?.etagMatches !== 'e' + exactEtag157) {
+        return null;
+      }
+      exactBody157 = body;
+      exactEtag157++;
+      return { etag: 'e' + exactEtag157 };
+    },
+  };
+  const rebuildFromOverlay157 = createLikeExactR2Rebuilder156(
+    exactBucket157, pager157, async () => 0,
+    { legacyWriterCutoverVerified: true }
+  );
+  assert.deepEqual(await rebuildFromOverlay157('u157'),
+    { rebuilt: true, count: 2054, publicationSeq: 0 });
+  const rebuilt157 = JSON.parse(exactBody157);
+  assert.equal(rebuilt157.canonicalComplete156, true);
+  assert.equal(rebuilt157.exactLikeCount156, 2054);
+  assert.deepEqual(rebuilt157.likedTrackIds, expected157.map(x => x.trackId));
+  assert.equal(overrideRows157.size, 4, 'exact R2 rebuild must not materialize a D1 backfill');
+
   console.log('157_NO_BACKFILL_SPARSE_OVERLAY_TRANSITIONS_W2_MOCK=PASS');
+  console.log('157_TO_156_EXACT_R2_REBUILD_WITHOUT_D1_BACKFILL=PASS');
   console.log('157_2054_EFFECTIVE_COLD_UNION_WITH_TOMBSTONE=PASS');
   console.log('157_REAL_REMOTE_D1_BILLING=MEASURE_SEPARATELY');
 }

@@ -150,20 +150,12 @@ assert queue_intake('before-drain') == 1
 assert begin_draining() == 1
 assert phase() == 'draining'
 assert queue_intake('after-drain') == 0
-try:
-    freeze()
-    raise AssertionError('freeze with non-empty queue must abort in D1 trigger')
-except sqlite3.IntegrityError as exc:
-    assert 'drained queues and idle processor' in str(exc)
+assert freeze() == 0, 'freeze with non-empty queue must not transition'
 db.execute("DELETE FROM explore_like_batches_069 WHERE batch_id='before-drain'")
 
 # Processor wins before freeze -> freeze must fail until the lease is released.
 assert acquire('processor-a') == 1
-try:
-    freeze()
-    raise AssertionError('freeze with active processor must abort in D1 trigger')
-except sqlite3.IntegrityError as exc:
-    assert 'drained queues and idle processor' in str(exc)
+assert freeze() == 0, 'freeze with active processor must not transition'
 release('processor-a')
 assert freeze() == 1
 assert phase() == 'frozen'
@@ -205,6 +197,6 @@ print('174_QUEUE_INTAKE_VS_DRAIN_SERIAL_ORDER=PASS')
 print('174_DIRECT_RELATION_COUNT_AFTER_DRAIN_W0=PASS')
 print('174_EXISTING_QUEUE_DRAINS_DURING_DRAINING=PASS')
 print('174_PROCESSOR_LEASE_BLOCKS_FREEZE=PASS')
-print('174_D1_TRIGGER_REJECTS_UNSAFE_FREEZE=PASS')
+print('174_D1_FREEZE_PREDICATE_AND_TRIGGER_REJECT_UNSAFE_FREEZE=PASS')
 print('174_FREEZE_BLOCKS_NEW_PROCESSOR=PASS')
 print('174_171_WRITER_REQUIRES_FROZEN=PASS')

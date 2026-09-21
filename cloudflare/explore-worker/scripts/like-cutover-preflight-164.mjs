@@ -169,6 +169,14 @@ export function inspectLikeCutoverPreflight164(
     // table. Only rows strictly beyond that cursor are pending. An absent or
     // malformed state table fails closed through d1Query164 instead of
     // reporting a false zero or permanently treating old rows as pending.
+    if (key === '075') {
+      const cursor = d1Query164(config,
+        'SELECT processed_at, processed_uid FROM explore_like_user_queue_state_075 WHERE id = 1 LIMIT 1', run);
+      if (cursor.length !== 1 || !Number.isSafeInteger(Number(cursor[0]?.processed_at)) ||
+          typeof cursor[0]?.processed_uid !== 'string') {
+        throw new Error('164 preflight: 075 processing cursor missing or invalid');
+      }
+    }
     const statement = key === '075'
       ? 'SELECT 1 AS pending FROM explore_like_user_queue_075 q ' +
         'JOIN explore_like_user_queue_state_075 s ON s.id = 1 ' +

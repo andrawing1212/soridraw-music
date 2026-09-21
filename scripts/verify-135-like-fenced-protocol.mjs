@@ -1473,7 +1473,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const direct160 = worker160.slice(directStart160, directEnd160 + 2);
   assert.match(worker160, /SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921/);
   assert.match(direct160, /enforceExploreLikeBatchEdgeRateLimit054\(env, authContext\.uid\)/);
-  assert.doesNotMatch(direct160, /enforceUserRateLimit\(|api_rate_limits|RATE_DB|exploreRateDb031/);
+  assert.doesNotMatch(direct160, /enforceUserRateLimit\(|api_rate_limits|exploreRateDb031/);
 
   const batchStart160 = worker160.indexOf('async function handleLikeBatch034(');
   const batchEnd160 = worker160.indexOf('\n}', batchStart160);

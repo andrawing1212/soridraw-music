@@ -1,5 +1,15 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 0CD — 128곡 순서 기록 제한을 전역 seq로 대체, 배포 전 CI 통합 (2026-09-21 KST)
+
+`preview`에 실제 변경: 139의 pending·141 공유 R2에 **UID 전역 단조 seq**를 연결하고, R2의 매곡 `lastLikeRevisions141` 누적/128 제한을 없애고 마지막 `lastPublishedSeq141`만 저장한다. `createLikeDurableOwner143`는 한 UID DO 인스턴스당 호출 직렬화·영속 `storage.transaction` seq 발급·UID 검증 모델. 기존 135 실행형 회귀에 256곡 순차 발행/늦은 seq/동시 세 곡/재시작/다른 UID 차단 추가, 실제 GitHub 소스 격리 실행 PASS. READ-ONLY `soridraw-release-system-audit.yml`에 기존 127, 전체 135, 071 복사본에 072/073/074 적용 후 128 실행형 회귀를 추가했다. CI 실제 Run과 TypeScript/Build 결과 확인 전 PASS 주장 금지. 0CD 참고.
+
+**다음 단일 완성 작업은 클라우드 실환경 통합과 비용:**
+1. **실제 공유 UID owner/인증 라우팅**: PREVIEW/TEST/PRODUCTION에서 서비스 바인딩으로 동일 DO 네임스페이스를 참조하고 `requireExploreAuth` 이후에만 내부 요청. 기존 `handleLikeBatch034`, 단일 `handleLike`, 069/066/075/035 큐와 구형 Worker 우회 시나리오를 모두 차단할 점진 전환 계획. 구형 프로덕션 변경이 필요하면 배포 전 영향·승인 절차 별도로 준수.
+2. **기존 2천 likedTrackIds 한도**: 061 writer가 `slice(0, 2000)`, 141은 fail-closed. 전체 기록을 유지하는 확장 구조(페이지/분할, 데이터 손실 없이 읽기·복구)와 이전 앱 하위호환 검증, 개인 캐시가 임의로 영구 pending에 갇히지 않도록.
+3. **D1 실제 rows_written W1~W2**: 운영 derived trigger/인덱스 소스 보존하면서 독립 D1 테스트 및 대체 파생 캐시 설계. 140 단순 관계+stats 2행은 운영 trigger 포함 6 논리행 모형과 불일치; 현상태 W3+ 릴리스 FAIL 유지. 원본 데이터 변환·트리거 변경은 명시적 승인 없이 실행 금지.
+4. 최종 고정 SHA 전체 127/128/135 및 기존 회귀, TS/Build, 실제 Cloudflare Worker·Firebase/RTDB 결합, PC↔모바일 실사용, Work 독립 감사 완료 전 PREVIEW 배포 금지. 새 production 릴리스는 별도 명확한 승인 후.
+
 ## 최신 0CC — 141 post-D1 공유 R2 publisher·142 결합검사 구현 (2026-09-21 KST)
 
 사용자 "하나씩이라도 집중해 해결" 지시. `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 `createLikeSharedR2Publisher141` 추가. 139의 검증된 D1 확정 이후에만 공유 `shared-social-v114/likes/<UID>.json` ETag CAS 갱신, 곡별 `lastLikeRevisions141` 기록, 기존 likedTrackIds/074 필드 보존. 기존 `scripts/verify-135-like-fenced-protocol.mjs`에 141 단독 및 139→141 결합 142 mock 회귀 추가. 실제 GitHub 소스 V8 격리 실행 PASS: 동시 CAS, 오래된 좋아요 역전 방지, 동일 ID 중복 no-op, 알림 실패 후 재시도, D1 실패 전 캐시 변경 0, 2천/128 실패 시 덮어쓰기 0. 모든 PASS는 가짜 공유 R2·D1·통지 모델이며 실제 배포/Cloudflare 비용 실측이 아님. `DOCS/CURRENT_RELEASE_STATE.md` 0CC 참조.

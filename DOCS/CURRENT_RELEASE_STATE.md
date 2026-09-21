@@ -1,5 +1,86 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CV. 170~172 실제 D1 비용 실측 + D1-only W2 구조 + dormant 제품 route — 감사 PASS / 전환 미활성 (2026-09-21 KST)
+
+**현재 코드 감사 기준:** `preview` exact commit `32795d33710a8f0f3bec6d280a2fd3f740232bb4`, GitHub Actions [35616444369](https://github.com/andrawing1212/soridraw-music/actions/runs/35616444369) **SUCCESS**. canonical Worker exact SHA256 `f215f3d49a4259183c829d3d73d0055013eb199c8d33637730c48ec07d906750`. TypeScript / Build / static release verification / isolated like regression / TEST Worker dry-run / PRODUCTION Worker dry-run / live shared D1 read-only audit PASS, `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`.
+
+### 실제 격리 원격 D1 비용 결론
+
+실 사용자 DB가 아닌 실행 중 생성 후 삭제하는 **ephemeral Cloudflare D1**에서 측정했다.
+
+- 기존 168 legacy 물리 구조 하한:
+  - 새 좋아요: `statement_writes 5/3/0 = W8`
+  - 해제: `2/2/0 = W4`
+  - 동일 상태 재요청: `W0`
+  - 따라서 168은 relation/count 원자성 안전장치로는 유효하지만 SORIDRAW 절대 비용 합격선 W1~W2는 **FAIL**.
+- 157 sparse overlay 단독 relation 후보: 원격 D1에서 W2/W1/W0 검증.
+- 새 171 **D1-only relation + count-delta** 후보:
+  - 실제 상태 변경 1회: user/track override W1 + track count-delta W1 = **W2**
+  - 동일 상태/중복: **W0**
+  - 신규 baseline-unliked / 기존 baseline-liked 양쪽 like→unlike→like 복귀 모두 W2/W0 유지.
+  - relation `revision`과 track `generation`은 실제 변경 때만 정확히 +1, 중복 때 증가 없음.
+  - 원격 측정 run [35601590772](https://github.com/andrawing1212/soridraw-music/actions/runs/35601590772), ephemeral DB 삭제 PASS.
+- 171은 Durable Object 없이 공유 D1 두 hot rows만 변경한다. 기존 `likes`와 `track_stats.like_count`는 **전환 순간의 immutable baseline**으로 두고 post-cutover 변경만 저장하는 no-backfill 방향이다.
+
+### 171/172 source-only 구현
+
+- `cloudflare/explore-worker/migrations/20260921_03_explore_like_d1only_v171_additive.sql`
+  - **UNAPPLIED** additive candidate.
+  - `explore_like_overrides_171`: `WITHOUT ROWID`, PK(user_uid, track_id), liked/revision/last_operation_id.
+  - `explore_like_count_deltas_171`: `WITHOUT ROWID`, PK(track_id), delta/generation.
+  - hot mutation table secondary index 0, seed/backfill/destructive DDL 0.
+- `runtime/like-d1only-171.mjs`
+  - shared cutover가 객관적으로 verified일 때만 생성 가능한 dormant adapter.
+  - expectedRevision + stable operationId 기반.
+  - applied는 exact W2/revision/generation 계약만 허용, no-op/duplicate/conflict는 W0, asymmetric/W3+ receipt는 fail closed.
+- PC↔mobile 격리 모델:
+  - 오래된 revision 요청이 최신 상태를 덮지 못함 PASS.
+  - 같은 desired 동시 요청 중 두 번째는 W0 PASS.
+  - 명시적으로 최신 revision으로 rebase된 새 사용자 의도만 다음 canonical 변경이 됨.
+  - 기존 baseline row backfill 없이 동일 규칙 적용 PASS.
+- `src/services/exploreLikeService.ts`
+  - 기존 30초 sliding idle batch 및 로컬 즉시 하트 동작을 유지하면서 per-track canonical revision을 별도 작은 로컬 cache에 저장.
+  - 기존 outbox의 stable operationId와 함께 `expectedRevision`을 batch payload에 보냄.
+  - legacy Worker 응답은 revision 없이도 기존 방식으로 동작하여 하위호환.
+  - 172 canonical revision-conflict 응답은 오래된 로컬 의도를 자동으로 재실행하지 않고 canonical 최신 상태를 수용하도록 source-only 준비.
+- `patches/082-like-d1only-route.mjs` + canonical Worker:
+  - shared cutover manifest **schemaVersion 2 + relationMode=d1only171 + preCutoverProof172**가 완전히 armed일 때만 batch가 171 adapter를 사용.
+  - source 변경만으로는 절대 활성화되지 않음.
+  - d1only171 모드에서는 legacy 069/035/066/075 queue를 사용하지 않음.
+  - bodyless old direct PUT/DELETE는 d1only171 이후 revision을 임의 생성하지 않고 refresh-required 409로 fail closed.
+  - legacy mode에서는 기존 165 drain/legacy queue가 유지됨.
+  - final non-legacy 상태는 legacy scheduled/direct writer를 차단.
+- replay: 169→172 patch 적용 PASS, 082 idempotency PASS.
+
+### 172 감사 PASS 근거
+
+run `35616444369`:
+- `171_UNAPPLIED_SCHEMA_TWO_HOT_ROWS_NO_SECONDARY_INDEX=PASS`
+- `171_SCHEMA_NO_BACKFILL_NO_SEED_NO_DESTRUCTIVE_DDL=PASS`
+- `172_171_ADAPTER_APPLIED_W2_DUPLICATE_W0=PASS`
+- `172_171_ADAPTER_STALE_REVISION_CONFLICT_W0=PASS`
+- `172_171_ADAPTER_ASYMMETRIC_OR_W3_FAIL_CLOSED=PASS`
+- `172_DORMANT_ROUTE_REQUIRES_SCHEMA2_SHARED_PROOF=PASS`
+- `172_BATCH_W2_ROUTE_PRECEDES_LEGACY_QUEUE=PASS`
+- `172_DIRECT_BODYLESS_ROUTE_FAILS_CLOSED_AFTER_CUTOVER=PASS`
+- `172_CLIENT_EXPECTED_REVISION_BACKWARD_COMPATIBLE=PASS`
+- `172_ROUTE_NOT_ARMED_BY_SOURCE_CHANGE=PASS`
+- `171_PC_MOBILE_STALE_REVISION_CANNOT_OVERWRITE=PASS`
+- `082_DEPLOYED_169_TO_172_REPLAY=PASS`
+- TEST/PRODUCTION dry-run PASS, no deploy PASS.
+
+### 아직 남은 blocker — 완료라고 보고 금지
+
+1. **171 schema는 실제 shared D1에 미적용**. 사용자 승인 없는 migration 금지 유지.
+2. **preCutoverProof172 생성/검증 controller 미완료.** 현재 164 read-only preflight는 기존 157 기준이며 `READY=NO` (legacy intake open, 157 schema absent). 172는 별도의 exact schema / all-environment Worker SHA / processor idle / queue drain / legacy in-flight 종료 증명이 필요하다.
+3. **R2 publication 미완료.** 172 D1 result의 `generation`을 사용해 shared track card / latest+popular Feed / public profile count가 늦게 도착한 과거 값으로 덮이지 않도록 monotonic publication guard가 필요하다. 개인 shared likes R2도 per-track revision/CAS로 PC↔mobile에 최종 상태를 정확히 전파해야 한다.
+4. 기존 실제 배포 PREVIEW/TEST/PRODUCTION Worker가 모두 172 fence-aware 버전으로 교체되고 이전 in-flight가 사라졌다는 증명 전 final marker arm 금지.
+5. 069 자동 Apply workflow는 patch manifest 변경에 반응하는 오래된 별도 경로가 남아 있으며 service marker mismatch로 deploy 전에 FAIL한다. release-system과 혼합/우회 금지.
+6. Work 독립 감사, PREVIEW 실제 배포 후 PC↔mobile 실사용 및 실제 사용자 경로 비용 측정 미완료.
+
+**실데이터/배포 영향:** shared 사용자 D1 row write 0, 171 migration apply 0, R2 cutover/drain marker arm 0, backfill/delete/overwrite 0. Worker/Hosting/Firebase/Functions 배포 없음. main/PRODUCTION 비변경. UI 변경 없음. Music Note 60초 묶음 저장 비변경.
+
+
 ## 0CU. 168 직접 좋아요 원자적 D1 batch + 169 최종 batch 재진입 차단 — 코드 감사 PASS / 제품 전환 BLOCKED (2026-09-21 KST)
 
 **고정 검사:** `preview` code-audit commit `784568e785c203978c2b2fc36e1d50d67579955e`, GitHub Actions [35596351769](https://github.com/andrawing1212/soridraw-music/actions/runs/35596351769) **SUCCESS**. 이전 direct 168 단독 감사 [35595813905](https://github.com/andrawing1212/soridraw-music/actions/runs/35595813905)도 SUCCESS. 중간 첫 실행 두 건의 static FAIL은 새 canonical Worker SHA256 고정값이 아직 옛 값인 상태에서 실행된 것이며 새 해시 pin 후 exact 코드 감사를 통과했다. 제품 앱/Worker 배포가 아닌 source-only 및 격리 SQLite 검증이다.

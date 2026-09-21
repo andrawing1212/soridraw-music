@@ -1,5 +1,18 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DK. 실서버 읽기 전용 증거 — 069 좋아요 처리 대기열 장기 정체 / 복구 미확정 (2026-09-22 KST)
+
+PREVIEW app133 사용자 스크린샷 PC 하트 ON/1 vs 모바일 OFF/0, CACHE LIVE 좋아요 상태 확인 D1 1쿼리 / 46행. 같은 곡 개인 관계가 불일치하며 정상 캐시 재진입 R0 불합격.
+
+기존 GitHub `.github/workflows/diagnose-069-live-like.yml`의 공유 D1 **SELECT만 수행한 실서버 검사**에서 `explore_like_batches_069 = 7 batches / 14 mutations`, 가장 오래된 대기 약 **8,827초**, 가장 최근 약 **2,676초**, `035/066 = 0`, processor lease 활성 0을 확인. 정상 1분 후처리 대기와 맞지 않는다. 실제 데이터가 확정되지 않은 상태에서 PC의 큐 접수 ACK/R2와 모바일의 canonical D1이 다를 수 있는 직접적인 서버측 원인이다. **이 데이터는 조회 당시 스냅샷이며, 현재 큐가 0인지는 별도 후속 증명 필요.**
+
+같은 실서버 EXPLAIN에서 현재 `/v1/me/likes` bounded 조회는 `tracks(id)` 및 `likes(track_id,user_uid)` 기본키 인덱스를 사용. R46을 46회의 HTTP 호출이나 무조건 전체 테이블 스캔이라고 설명하지 말 것. app133이 partial 개인 캐시를 재검증하며 읽는 비용과 실제 DB 조회 계획을 구분할 것.
+
+특정 공개곡 제목 `끝내 돌아온 계절처럼`으로 canonical `tracks.title` 조회 결과 0건이어서 **이 곡의 개별 회원 관계를 식별한 것은 아님**. 0/0/0 반환은 일치 증명이나 무좋아요 판정 근거가 아니다.
+
+기존 canonical scheduled 처리기로 제한된 069 대기열 복구를 시도하도록 PREVIEW GitHub trigger `5badc17d3b62299ab5cf821b4fd5ff9bff8462bb`를 push했고, 최종 읽기/cron 복귀 확인 trigger `6220e6b1eb15a6fc5987b5bf0653c363b721531e`도 push. **후처리 성공 / 현재 queue=0 / 임시 cron 복귀 / 실기기 좋아요 일치 / 추가 앱 배포는 모두 아직 미확인이다.** 로그가 확인되지 않으면 성공으로 보고하지 말고 추가 위험 조작을 중단할 것. 기 사용자 원본 강제수정·migration 없음. TEST/PRODUCTION 변경 금지.
+
+
 ## 0DJ. app133 실제 사용 FAIL — PC/모바일 좋아요 불일치 및 D1 행 읽기 46 (2026-09-22 KST)
 
 사용자 제공 app133 PC·모바일·CACHE LIVE 실사용 증거: 첫 일부 곡은 양쪽 하트/숫자 1로 맞지만 `[Underground Hip-Hop] 끝내 돌아온 계절처럼`은 PC 하트 ON/1, 모바일 OFF/0. 따라서 **좋아요 기능 전체 PASS 금지**. CACHE LIVE `좋아요 상태 확인`은 Worker 요청 1, D1 쿼리 읽기 1, 누적 읽기 행 46, 쓰기 0. `/v1/me/likes-revision`은 D1 읽기 0. R46은 해당 좋아요 확인 요청의 관측치이며 46개의 API 호출이라는 뜻은 아님. 정상 재진입 read 0 비용 목표 **FAIL**.

@@ -39,8 +39,17 @@ for(const text of [
   "operationId: mutation.operationId",
   "queue: 'd1only171'",
   "canonicalD1: 'settled'",
-  "personalLikeSnapshot: 'pending'",
 ]) assert.ok(batch.includes(text),'missing 172 batch route contract: '+text);
+if (worker.includes('SORIDRAW_LIKE_R2_REVISION_ROUTE_173_20260922')) {
+  for (const text of [
+    "personalLikeSnapshot: 'settled'",
+    "personalLikeProtocol: 'revision-safe-173'",
+    "publicLikePublication: 'generation-safe-173'",
+  ]) assert.ok(batch.includes(text),'missing 173 settlement upgrade on 172 route: '+text);
+} else {
+  assert.ok(batch.includes("personalLikeSnapshot: 'pending'"),
+    'pre-173 172 route must keep personal snapshot pending');
+}
 assert.ok(batch.indexOf("if (cutover172.mode === 'd1only171')") <
   batch.indexOf('await assertLegacyLikeIntakeOpen165(env)'),
   '171 route must bypass the legacy drain marker only after final shared cutover');

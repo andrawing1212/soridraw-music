@@ -926,9 +926,14 @@ flushPendingLikes = async (user: User): Promise<void> => {
   // Do not regenerate an ID after an ambiguous response: the persisted ID is
   // the identity of this user intention, not of each HTTP attempt.
   let upgradedLegacyOutbox144 = false;
+  const revisions172 = readLikeCanonicalRevisions172(uid);
   for (const mutation of Object.values(outbox)) {
     if (!mutation.operationId) {
       mutation.operationId = createExploreLikeOperationId144();
+      upgradedLegacyOutbox144 = true;
+    }
+    if (!Number.isSafeInteger(mutation.expectedRevision) || Number(mutation.expectedRevision) < 0) {
+      mutation.expectedRevision = revisions172[mutation.trackId] ?? 0;
       upgradedLegacyOutbox144 = true;
     }
   }
@@ -967,6 +972,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
             baseLiked: pending.baseLiked,
             mutationAt: pending.updatedAt,
             operationId: pending.operationId,
+            expectedRevision: pending.expectedRevision ?? 0,
           })),
         }),
       });
@@ -975,7 +981,11 @@ flushPendingLikes = async (user: User): Promise<void> => {
       // request. A stale/mixed response is not proof of that intent; retaining
       // the outbox is safer than clearing the user's last click.
       const sentByTrack127 = new Map(batchEntries.map((pending) => [pending.trackId, pending.desiredLiked]));
-      if (results.some((row) => sentByTrack127.get(row.trackId) !== row.liked)) {
+      if (results.some((row) =>
+        row.status !== 'revision-conflict' &&
+        row.status !== 'ineligible' &&
+        sentByTrack127.get(row.trackId) !== row.liked
+      )) {
         throw new Error('좋아요 서버 응답이 전송한 변경과 일치하지 않습니다. 최신 상태를 보관했습니다.');
       }
       // The batch ACK and an updated R2 are both PRE-final-aggregate stages.
@@ -985,6 +995,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
       const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
       const latest = readLikeOutbox(uid);
       const cache = getLikedStateCache(uid);
+      const canonicalRevisions172 = readLikeCanonicalRevisions172(uid);
       const snapshotPending127 = readSnapshotPending127(uid);
       const displayLocks = readLikeDisplayLocks(uid);
       const acknowledgedAt = Date.now();
@@ -1232,6 +1243,8 @@ export const setExploreTrackLike = async (
     updatedAt: now,
     retryCount: 0,
     operationId: createExploreLikeOperationId144(),
+    expectedRevision: existing?.expectedRevision ??
+      readLikeCanonicalRevisions172(uid)[normalizedTrackId] ?? 0,
   };
   persistLikeOutbox(uid, outbox);
 

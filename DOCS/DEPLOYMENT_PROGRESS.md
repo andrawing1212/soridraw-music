@@ -2,6 +2,18 @@
 
 최종 갱신: 2026-09-22 KST
 
+## PREVIEW app128 targeted-like unlock
+
+- 두 번째 실사용 영상에서 revision/social-snapshot 모두 HTTP 200인데 mutation gate가 계속 잠기는 문제 확인.
+- partial legacy R2 사용자에서 existing local cache가 targeted exact membership 검증을 건너뛰는 클라이언트 조건 오류 수정.
+- source audit `35636601460` SUCCESS.
+- app128 final audit `35636890502` SUCCESS.
+- PREVIEW Hosting `35637112915` SUCCESS.
+- remote app version 128 / exact build PASS.
+- active PREVIEW Worker `733c3981-4095-4c69-bf33-9abb5de7a450` 유지.
+- TEST/PRODUCTION unchanged.
+- D1 / user-data migration 없음.
+
 ## PREVIEW app127 personal-like route hotfix
 
 - 실사용 영상에서 `/v1/me/likes-revision` 404 확인.

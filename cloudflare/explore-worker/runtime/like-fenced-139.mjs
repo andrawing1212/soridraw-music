@@ -821,7 +821,7 @@ export function createLikeTrackAggregator147(trackId, storage, publishTrack) {
         throw new Error('Track count invalid or overflowed');
       }
       const version = total.version + 1;
-      await txn.put(totalKey, { count: nextCount, version });
+      await txn.put(totalKey, { ...total, count: nextCount, version });
       await txn.put(lastKey(uid), {
         id, revision, seq, previousLiked, liked, delta, count: nextCount, version,
       });
@@ -855,6 +855,71 @@ export function createLikeTrackAggregator147(trackId, storage, publishTrack) {
   }
   return function commitAggregate147(event) {
     const operation = tail.then(() => commit(event));
+    tail = operation.catch(() => {});
+    return operation;
+  };
+}
+
+
+// SORIDRAW_LIKE_LAZY_TRACK_BASELINE_158_20260921
+// Avoid a global per-track count backfill. After ALL legacy count writers are
+// frozen, the first real mutation for a track reads its existing track_stats
+// count once, pins it to an audited cutover token in the shared track owner,
+// then delegates every delta to 147. No D1 write is used for seeding.
+export function createLikeLazyTrackAggregator158(
+  trackId, storage, publishTrack, readBaseline, options = {}
+) {
+  if (!safeId(trackId, 512) || !storage?.get || !storage?.transaction ||
+      typeof publishTrack !== 'function' || typeof readBaseline !== 'function') {
+    throw new TypeError('158 requires shared track storage, publisher and read-only baseline loader');
+  }
+  if (options.legacyWriterCutoverVerified !== true) {
+    throw new Error('158 baseline blocked until all legacy count writers are cut over');
+  }
+  const cutoverToken = options.cutoverToken;
+  if (!safeId(cutoverToken, 128)) throw new TypeError('158 audited cutover token required');
+  const totalKey = 'soridraw:track-like-total:147';
+  const delegate = createLikeTrackAggregator147(trackId, storage, publishTrack);
+  let tail = Promise.resolve();
+
+  async function ensureBaseline() {
+    const existing = await storage.get(totalKey);
+    if (existing != null) {
+      if (!Number.isSafeInteger(existing?.count) || existing.count < 0 ||
+          !Number.isSafeInteger(existing?.version) || existing.version < 0 ||
+          existing.cutoverToken158 !== cutoverToken) {
+        throw new Error('158 existing track baseline token/count mismatch');
+      }
+      return;
+    }
+    const baseline = await readBaseline(trackId);
+    if (!baseline || !Number.isSafeInteger(baseline.count) || baseline.count < 0 ||
+        baseline.cutoverToken !== cutoverToken) {
+      throw new Error('158 audited track_stats baseline unavailable');
+    }
+    await storage.transaction(async (txn) => {
+      const current = await txn.get(totalKey);
+      if (current != null) {
+        if (!Number.isSafeInteger(current?.count) || current.count < 0 ||
+            !Number.isSafeInteger(current?.version) || current.version < 0 ||
+            current.cutoverToken158 !== cutoverToken) {
+          throw new Error('158 concurrent track baseline mismatch');
+        }
+        return;
+      }
+      await txn.put(totalKey, {
+        count: baseline.count,
+        version: 0,
+        cutoverToken158: cutoverToken,
+      });
+    });
+  }
+
+  return function commitAggregate158(event) {
+    const operation = tail.then(async () => {
+      await ensureBaseline();
+      return delegate(event);
+    });
     tail = operation.catch(() => {});
     return operation;
   };

@@ -1,5 +1,17 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CI. GitHub Actions 실제 검증 PASS + 운영 공유 D1 W2 불가능 원인 확인 (2026-09-21 KST)
+
+사용자가 반복된 후보/모의 보고 대신 실제 결과와 완성 요구. `preview` 시작 HEAD `cbc8a4cf004066b145076beda21a7b14efe2cb0d`. GitHub Actions Release System Audit 실제 run `35561196390` 실패 원인 `verify-127`의 TypeScript 단위 테스트 JS 추출에서 144 export가 섞이며 `exports is not defined` 발생; `scripts/verify-127-atomic-personal-like.mjs`의 clock/helper 경계와 전역 `export const` 제거를 최소 수정. 재실행 run `35561894019` commit `9001e19c1658475b181ae7571324f537ed76133d` **SUCCESS**: 실제 TypeScript, Build, release static, 127/128/135~152 격리 검증, 132/133/134/148 비용 모형, TEST/PRODUCTION Worker dry-run, 공유 D1 read-only preflight, 실 schema read-only audit 전부 PASS. audit의 모델 로그 `LEGACY_WRITER_BYPASS_RELEASE_GATE=FAIL`, `PRODUCT_RELEASE_READINESS=FAIL`, `REAL_D1_ROWS_WRITTEN=NOT_MEASURED`는 의도한 **제품 릴리스 차단**이며 audit의 SUCCESS와 다름.
+
+추가 READ-ONLY audit run `35562080167`, commit `c2dfd3bc69c3eabd0f165b3e49c6418ff7da7c13` **SUCCESS**, `likes` 실제 공유 D1 인덱스/트리거 DDL 직접 확인:
+- `sqlite_autoindex_likes_1` 자동 PK + `idx_likes_period_rank(created_at DESC,track_id,user_uid)` + `idx_likes_user_recent(user_uid,created_at DESC)` = 관계 테이블 인덱스 3개.
+- `soridraw_shared_rev_likes_ai_051` / `_ad_051` / `_au_051`는 INSERT/DELETE/UPDATE 각각 `explore_shared_revision`의 `global` 행 revision+1.
+- 기존 `track_stats`의 032 stats insert/update/delete 및 051 shared revision 트리거도 별도로 활성. Derived tracks 인기/최신/프로필 인덱스·changes seq 인덱스 활성. TEST와 PRODUCTION의 read-only 공유 DB preflight PASS tables6/triggers18.
+- 따라서 146 relation-only의 격리 SQLite 논리 '1행'을 실제 운영 D1 W1~W2로 일반화하는 것은 **틀림**. 실제 관계 자체+051 공유 버전 추가 UPDATE 및 활성 인덱스 쓰기가 수반됨. 정확한 D1 `meta.rows_written` 청구 실측은 아직 없으므로 구체 청구 수치 추정 금지. 현행 공유 schema 아래 새 146도 비용 gate 미충족, 구형 TEST/PRODUCTION reader에 숫자를 전달하지 못해 기능도 미완료. **제품 배포 BLOCKED.**
+
+이번 대화에서 수정 파일: `scripts/verify-127-atomic-personal-like.mjs`, `.github/workflows/soridraw-release-system-audit.yml`(READ-ONLY DDL 로그), `.deploy/release-system-audit.trigger`, DOCS. 앱/Worker 요청 처리 경로에 139~152 미연결이고 사용자 원본/DB 트리거/인덱스/Cloudflare/Firebase/TEST/PRODUCTION 실배포 변화 없음. 마지막 문서 기준 현장 앱126/Worker071이며 이번 run에서 실주소는 재검증하지 않음. **정식 데이터 schema 변경·기존 production Writer 컷오버는 승인 없이 실행 금지.** 새 설계·승격 전 실제 isolated D1 `meta.rows_written`, 구형 reader/Writer 호환·세 환경 수렴·2천 좋아요 캐시 확장·실기기·Work 감사 필요.
+
 ## 0CH. 150~152 곡별 숫자 결손 차단·공유 카드 CAS·전체 표시 확정 조건 (2026-09-21 KST)
 
 사용자 "더 수정해줘"에 따라 `preview` 기준 `e901bc1d849b3ec68ae4d33c5bf2b95b1cdd3584`에서 실제 코드 수정:

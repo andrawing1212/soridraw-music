@@ -284,19 +284,31 @@ export function createLikeDurableOwner143({ uid, storage, canonical, publish }) 
 // may publish the user's personal heart. Audit live D1 schema first.
 // A persisted pre-mutation membership keeps the SAME delta after an
 // ambiguous D1 commit and retry.
-export function createLikeRelationOnly146(db, commitAggregate) {
+export function createLikeRelationOnly146(db, commitAggregate, options = {}) {
   if (!db?.prepare || !db?.batch || typeof commitAggregate !== 'function') {
     throw new TypeError('D1 batch and durable idempotent track aggregation required');
   }
+  // 153 is an UNAPPLIED additive schema. Never auto-create or seed at runtime.
+  // Do not switch until all shared-data readers/writers have been cut over.
+  const table = options.relationTable ?? 'likes';
+  if (table !== 'likes' && table !== 'explore_likes_153') {
+    throw new TypeError('Unknown canonical likes table');
+  }
+  if (table === 'explore_likes_153' && options.cutoverVerified !== true) {
+    throw new Error('153 shared-user baseline and legacy writer cutover unverified');
+  }
+  const userFirst = table === 'explore_likes_153';
   const eligible = 'EXISTS (SELECT 1 FROM tracks t ' +
     'JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1 ' +
     'JOIN track_stats s ON s.track_id = t.id ' +
     "WHERE t.id = ? AND t.is_public = 1 AND t.status = 'published')";
   return {
     async readMembership(uid, trackId) {
-      const row = await db.prepare(
-        'SELECT 1 AS liked FROM likes WHERE track_id = ? AND user_uid = ? LIMIT 1'
-      ).bind(trackId, uid).first();
+      const row = userFirst
+        ? await db.prepare('SELECT 1 AS liked FROM explore_likes_153 ' +
+            'WHERE user_uid = ? AND track_id = ? LIMIT 1').bind(uid, trackId).first()
+        : await db.prepare('SELECT 1 AS liked FROM likes ' +
+            'WHERE track_id = ? AND user_uid = ? LIMIT 1').bind(trackId, uid).first();
       return Boolean(row?.liked);
     },
     async applyAtomically(uid, trackId, liked, context) {
@@ -309,15 +321,21 @@ export function createLikeRelationOnly146(db, commitAggregate) {
       }
       const now = Date.now();
       const mutation = liked
-        ? db.prepare('INSERT OR IGNORE INTO likes(track_id,user_uid,created_at) ' +
+        ? db.prepare('INSERT OR IGNORE INTO ' + table + '(track_id,user_uid,created_at) ' +
             'SELECT ?, ?, ? WHERE ' + eligible).bind(trackId, uid, now, trackId)
-        : db.prepare('DELETE FROM likes WHERE track_id = ? AND user_uid = ? ' +
-            'AND ' + eligible).bind(trackId, uid, trackId);
+        : userFirst
+          ? db.prepare('DELETE FROM explore_likes_153 WHERE user_uid = ? AND track_id = ? ' +
+              'AND ' + eligible).bind(uid, trackId, trackId)
+          : db.prepare('DELETE FROM likes WHERE track_id = ? AND user_uid = ? ' +
+              'AND ' + eligible).bind(trackId, uid, trackId);
       const results = await db.batch([
         db.prepare('SELECT ' + eligible + ' AS eligible').bind(trackId),
         mutation,
-        db.prepare('SELECT EXISTS(SELECT 1 FROM likes ' +
-          'WHERE track_id = ? AND user_uid = ?) AS liked').bind(trackId, uid),
+        userFirst
+          ? db.prepare('SELECT EXISTS(SELECT 1 FROM explore_likes_153 ' +
+              'WHERE user_uid = ? AND track_id = ?) AS liked').bind(uid, trackId)
+          : db.prepare('SELECT EXISTS(SELECT 1 FROM likes ' +
+              'WHERE track_id = ? AND user_uid = ?) AS liked').bind(trackId, uid),
       ]);
       const permitted = Number(results?.[0]?.results?.[0]?.eligible) === 1;
       const finalLiked = Number(results?.[2]?.results?.[0]?.liked) === 1;
@@ -330,6 +348,10 @@ export function createLikeRelationOnly146(db, commitAggregate) {
       const rowsWritten = results.reduce(
         (sum, result) => sum + Number(result?.meta?.rows_written || 0), 0
       );
+      if (userFirst && rowsWritten > 2) {
+        // D1 already committed: keep the pending for audited recovery.
+        throw new Error('153 relation exceeded live D1 W2 billing budget');
+      }
       // Re-send the SAME counter event after ambiguous post-D1 failures, even
       // when the relation no longer changes. The per-track owner must dedupe.
       if (previousLiked !== liked) {

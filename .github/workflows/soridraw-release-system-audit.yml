@@ -76,6 +76,43 @@ jobs:
           python3 scripts/verify-132-like-d1-write-budget.py
           python3 scripts/verify-133-like-direct-two-row.py
           python3 scripts/verify-134-like-write-amplification.py
+
+          # 160 upgrade replay: emulate a Worker that already has 054 on the
+          # batch route but still has the legacy direct RATE_DB write, then
+          # prove the same 054 patch upgrades only the missing direct route.
+          replay160="$RUNNER_TEMP/soridraw-like-054-to-160"
+          mkdir -p "$replay160"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$replay160/worker.js"
+          REPLAY160="$replay160/worker.js" node - <<'NODE'
+          const fs = require('node:fs');
+          const p = process.env.REPLAY160;
+          let source = fs.readFileSync(p, 'utf8');
+          const start = source.indexOf('async function handleLikeD1Core(');
+          if (start < 0) throw Error('160 replay fixture direct handler missing');
+          const end = source.indexOf('\n}', start);
+          if (end < 0) throw Error('160 replay fixture direct handler end missing');
+          let body = source.slice(start, end + 2);
+          body = body.replace(
+            'await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);',
+            'await enforceUserRateLimit(env, authContext.uid, "like", RATE_LIMITS.like);'
+          );
+          body = body.replace('// SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921\n  ', '');
+          source = source.slice(0, start) + body + source.slice(end + 2);
+          fs.writeFileSync(p, source);
+          NODE
+          SORIDRAW_REMOTE_WORKER_DIR="$replay160" node cloudflare/explore-worker/patches/054-explore-like-edge-rate-limit.mjs
+          REPLAY160="$replay160/worker.js" node - <<'NODE'
+          const fs = require('node:fs');
+          const source = fs.readFileSync(process.env.REPLAY160, 'utf8');
+          const start = source.indexOf('async function handleLikeD1Core(');
+          const end = source.indexOf('\n}', start);
+          const body = source.slice(start, end + 2);
+          if (!source.includes('SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921')) throw Error('160 replay marker missing');
+          if (!body.includes('enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid)')) throw Error('160 replay edge limiter missing');
+          if (body.includes('enforceUserRateLimit(')) throw Error('160 replay legacy RATE_DB limiter remained');
+          console.log('160_054_EXISTING_WORKER_REPLAY=PASS');
+          NODE
+
           generated="$RUNNER_TEMP/soridraw-like-candidate-071"
           mkdir -p "$generated"
           cp cloudflare/explore-worker/canonical/preview-worker.js "$generated/worker.js"

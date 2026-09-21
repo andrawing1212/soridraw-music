@@ -113,8 +113,16 @@ if (!finalBatch.includes('enforceExploreLikeBatchEdgeRateLimit054(env, authConte
 if (finalBatch.includes('enforceExploreLikeBatchRateLimit034(')) {
   throw new Error('[054] D1 rate limit remained on normal batch path');
 }
-for (const protectedBehavior of ['effectiveMutations', 'enqueueExploreLikeUserQueue075', 'enqueueExploreLikeBatch035']) {
-  if (!finalBatch.includes(protectedBehavior)) throw new Error(`[054] protected like batching behavior missing: ${protectedBehavior}`);
+if (!finalBatch.includes('effectiveMutations')) {
+  throw new Error('[054] protected like batching behavior missing: effectiveMutations');
+}
+const hasBatch035 = finalBatch.includes('enqueueExploreLikeBatch035');
+const hasQueue075 = finalBatch.includes('enqueueExploreLikeUserQueue075');
+if (!hasBatch035 && !hasQueue075) {
+  throw new Error('[054] no supported like queue intake remains after edge-limit patch');
+}
+if (source.includes('SORIDRAW_EXPLORE_LIKE_INTAKE_W1_HOTPATH_055_20260915') && !hasBatch035) {
+  throw new Error('[054] 055 W1 intake marker exists but batch handler no longer uses enqueueExploreLikeBatch035');
 }
 for (const forbidden of ['api_rate_limits', 'exploreRateDb031(', '.DB.prepare', 'RATE_DB']) {
   if (finalEdge.includes(forbidden)) throw new Error(`[054] edge limiter unexpectedly uses D1: ${forbidden}`);

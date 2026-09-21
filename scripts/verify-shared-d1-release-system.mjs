@@ -46,9 +46,10 @@ assert.match(workflow, /assertDerivedBaseD1Ready/);
 const preflight164Source = readFileSync('cloudflare/explore-worker/scripts/like-cutover-preflight-164.mjs', 'utf8');
 assert.equal(
   preflight164Source.split('d1Query164(config,').length - 1,
-  2,
-  '164 preflight gained an unreviewed D1 query call'
+  3,
+  '164 preflight gained an unreviewed D1 query call or definition'
 );
+assert.match(preflight164Source, /function d1Query164\(config, sql, run\)/);
 assert.match(preflight164Source, /d1Query164\(config, schemaSql164, run\)/);
 assert.match(preflight164Source, /d1Query164\(config, 'SELECT 1 AS pending FROM "/);
 assert.match(preflight164Source, /LIMIT 1/);

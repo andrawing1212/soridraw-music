@@ -28,14 +28,22 @@ def phase():
     return db.execute("SELECT phase FROM explore_like_cutover_control_174 WHERE id=1").fetchone()[0]
 
 def set_open():
-    db.execute("UPDATE explore_like_cutover_control_174 SET phase='open', epoch=epoch+1 WHERE id=1")
+    db.execute("""
+      UPDATE explore_like_cutover_control_174
+      SET phase='open', epoch=epoch+1, approved_worker_sha256='',
+          drain_token_hash='', phase_changed_at=101, frozen_at=0
+      WHERE id=1 AND phase='draining'
+    """)
 
 def begin_draining():
     return db.execute("""
       UPDATE explore_like_cutover_control_174
-      SET phase='draining', epoch=epoch+1, phase_changed_at=100
+      SET phase='draining', epoch=epoch+1,
+          approved_worker_sha256=?,
+          drain_token_hash=?,
+          phase_changed_at=100, frozen_at=0
       WHERE id=1 AND phase='open'
-    """).rowcount
+    """, ('a'*64, 'b'*64)).rowcount
 
 def queue_intake(batch_id):
     return db.execute("""
@@ -83,7 +91,7 @@ def release(owner):
 def freeze():
     return db.execute("""
       UPDATE explore_like_cutover_control_174
-      SET phase='frozen', epoch=epoch+1, frozen_at=200
+      SET phase='frozen', epoch=epoch+1, phase_changed_at=200, frozen_at=200
       WHERE id=1 AND phase='draining'
         AND NOT EXISTS (SELECT 1 FROM explore_like_batches_035 LIMIT 1)
         AND NOT EXISTS (SELECT 1 FROM explore_like_batches_066 LIMIT 1)
@@ -142,12 +150,20 @@ assert queue_intake('before-drain') == 1
 assert begin_draining() == 1
 assert phase() == 'draining'
 assert queue_intake('after-drain') == 0
-assert freeze() == 0, 'non-empty queue must block freeze'
+try:
+    freeze()
+    raise AssertionError('freeze with non-empty queue must abort in D1 trigger')
+except sqlite3.IntegrityError as exc:
+    assert 'drained queues and idle processor' in str(exc)
 db.execute("DELETE FROM explore_like_batches_069 WHERE batch_id='before-drain'")
 
 # Processor wins before freeze -> freeze must fail until the lease is released.
 assert acquire('processor-a') == 1
-assert freeze() == 0
+try:
+    freeze()
+    raise AssertionError('freeze with active processor must abort in D1 trigger')
+except sqlite3.IntegrityError as exc:
+    assert 'drained queues and idle processor' in str(exc)
 release('processor-a')
 assert freeze() == 1
 assert phase() == 'frozen'
@@ -189,5 +205,6 @@ print('174_QUEUE_INTAKE_VS_DRAIN_SERIAL_ORDER=PASS')
 print('174_DIRECT_RELATION_COUNT_AFTER_DRAIN_W0=PASS')
 print('174_EXISTING_QUEUE_DRAINS_DURING_DRAINING=PASS')
 print('174_PROCESSOR_LEASE_BLOCKS_FREEZE=PASS')
+print('174_D1_TRIGGER_REJECTS_UNSAFE_FREEZE=PASS')
 print('174_FREEZE_BLOCKS_NEW_PROCESSOR=PASS')
 print('174_171_WRITER_REQUIRES_FROZEN=PASS')

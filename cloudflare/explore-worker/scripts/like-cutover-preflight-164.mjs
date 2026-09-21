@@ -196,11 +196,18 @@ function parseCli(args) {
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index];
     if (value === '--config') config = String(args[++index] || '');
-    else if (value === '--legacy-intake-closed') legacyIntakeClosed = true;
-    else throw new Error('Usage: like-cutover-preflight-164.mjs --config <path> [--legacy-intake-closed]');
+    // 166: a CLI switch is not evidence of cross-environment intake closure.
+    // A request that passed the 165 R2 guard may still be in flight and write
+    // AFTER this read-only queue probe. Until a shared atomic write fence and
+    // its quiescence proof exist, the CLI is strictly observation-only.
+    else if (value === '--legacy-intake-closed') {
+      throw new Error('166 CUTOVER_BLOCKED: caller-declared intake closure cannot prove in-flight quiescence');
+    }
+    else throw new Error('Usage: like-cutover-preflight-164.mjs --config <path> (read-only report only)');
   }
-  if (!config) throw new Error('Usage: like-cutover-preflight-164.mjs --config <path> [--legacy-intake-closed]');
-  return { config, legacyIntakeClosed };
+  if (!config) throw new Error('Usage: like-cutover-preflight-164.mjs --config <path> (read-only report only)');
+  if (legacyIntakeClosed) throw new Error('166 CUTOVER_BLOCKED: self-attested closure');
+  return { config, legacyIntakeClosed: false };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

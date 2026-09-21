@@ -1,5 +1,23 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CU. 168 직접 좋아요 원자적 D1 batch + 169 최종 batch 재진입 차단 — 코드 감사 PASS / 제품 전환 BLOCKED (2026-09-21 KST)
+
+**고정 검사:** `preview` code-audit commit `784568e785c203978c2b2fc36e1d50d67579955e`, GitHub Actions [35596351769](https://github.com/andrawing1212/soridraw-music/actions/runs/35596351769) **SUCCESS**. 이전 direct 168 단독 감사 [35595813905](https://github.com/andrawing1212/soridraw-music/actions/runs/35595813905)도 SUCCESS. 중간 첫 실행 두 건의 static FAIL은 새 canonical Worker SHA256 고정값이 아직 옛 값인 상태에서 실행된 것이며 새 해시 pin 후 exact 코드 감사를 통과했다. 제품 앱/Worker 배포가 아닌 source-only 및 격리 SQLite 검증이다.
+
+**이번 코드 변경:**
+- `runtime/like-direct-atomic-168.txt`, `patches/080-direct-like-atomic-batch.mjs`, `canonical/preview-worker.js`: 구형 direct `adjustExploreLikeCounterDelta`의 분리된 relation 저장 및 counter 변경을 하나의 `env.DB.batch([...])` 안에 넣었다. 첫 statement의 실제 변경이 `changes()=1`인 경우에만 `track_stats`를 변경하며, 마지막 SELECT에서 실제 likeCount를 읽는다. 새 좋아요·해제에서 relation/count 둘 중 하나만 commit되지 않도록 하는 후보. 같은 상태 재요청은 relation/counter W0이 되도록 격리 모델 검증. 기존 direct 인증/edge rate limit/165 drain/163 final cutover guard는 유지.
+- `patches/081-batch-like-final-freeze.mjs`, canonical: batch `handleLikeBatch034`에도 final 162 marker를 확인하는 `assertLegacyLikeWriterOpen163(env, 'batch-like-intake')`를 기존 165 drain guard 직후·queue write 이전에 추가. final marker가 활성화된 후 drain marker가 없거나 사라져도 구형 batch queue를 새로 받지 않도록 한다. 새 검사는 **실제 좋아요 batch 요청**에만 추가되고 페이지 재진입 hot path에는 추가하지 않음.
+- `release-patches.json` 080→081 순서, `canonical/source-sha256.txt` exact SHA256 `bcace09703b7e8cb93df9535897adcab402f3b4c3d7ef670506d073753792bc9`, `scripts/verify-168-direct-atomic.py`, `scripts/verify-135-like-fenced-protocol.mjs`, 공용 audit workflow 관련 실행형 test/replay와 중복 적용 검증 보강.
+
+**검증 근거:** TS PASS / Build PASS / 168 direct 신규·중복·해제·다른 계정 격리 SQLite PASS / 두 번째 statement 실패 시 relation rollback PASS / 169 batch final marker guard PASS / 080·081 160→078→079→080→081 replay & idempotency PASS / TEST·PRODUCTION Worker **dry-run** PASS / shared D1 read-only PASS / `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`. isolated **remote** D1 `meta.rows_written`는 이번 감사에서 SKIPPED; 비용 W1~W2 실측 완료라고 주장 금지.
+
+**남은 release blocker:** 이미 실제 배포된 구형 direct Worker는 `likes`와 `track_stats`를 두 D1 호출로 처리할 수 있다. 167 queue DB fence는 격리 fixture에만 있으며 공유 D1에 실제 적용되지 않았다. final 162 marker와 old Worker·이전 in-flight를 함께 안전하게 종료했다는 **전 환경 확인 및 원자적 proof 미완료**. 157 table/index 및 157/158 owner 실제 wiring 미완료. 051 변경 신호, R2/RTDB final settlement, 실제 W1~W2/중복 W0 총비용, PC↔mobile 개인 하트·공개숫자 수렴, Work 독립검증 미완료. `164_CUTOVER_PREFLIGHT_READY=NO` (intake OPEN / 157 table,index 없음). 이전 135/139/153/159 product gates 또한 계속 FAIL이며 원인을 해소하기 전에는 PREVIEW 제품 배포 및 TEST/PRODUCTION 승격 차단.
+
+**부가 CI 이력:** 이전 069 자동 Apply workflow [35595449862](https://github.com/andrawing1212/soridraw-music/actions/runs/35595449862), [35596085726](https://github.com/andrawing1212/soridraw-music/actions/runs/35596085726)은 이번 patch-manifest 변경에 반응했으나 오래된 069 service marker가 없어 `[069] service marker: expected one target, got 0`으로 첫 수정 단계에서 실패했다. 이 두 run은 **배포 단계까지 진행하지 않았다**. 재실행 우회하거나 현재 release-system에 혼합하지 말 것; 별도 정리 필요.
+
+**실데이터/배포:** shared D1 사용자 row write 0, R2 marker arm/delete/write 0, 157·167 migration apply 0, 사용자 데이터 backfill/delete 0. Hosting/Worker/Functions/Firebase 배포 없음, main/PRODUCTION 비변경. 기존 UI·Music Note 60초 묶음 동작 코드 변경 없음. PC/모바일 실사용은 배포 전 미검증.
+
+
 ## 0CT. 167 shared D1 원자적 queue fence — 격리 SQLite PASS, direct 2단계 쓰기 위험 잔존 (2026-09-21 KST)
 
 **고정 코드 감사:** `preview` commit `37d7d654d6110194d73f358bdb2e659e40197a0c`, GitHub Actions [35590066055](https://github.com/andrawing1212/soridraw-music/actions/runs/35590066055) **SUCCESS**. TS/Build, 정적검사, 좋아요 관련 regression, TEST/PRODUCTION Worker dry-run, live shared D1 read-only audit PASS. 격리 원격 D1 billing 단계는 이번 자동감사에서 SKIPPED. 이 단계는 **실 사용자 DB migration / Worker 배포가 아닌 격리 실험**이다.

@@ -167,7 +167,6 @@ export function createLikeSharedR2Publisher141(bucket, notify) {
   if (!bucket?.get || !bucket?.put || typeof notify !== 'function') {
     throw new TypeError('Shared R2 bucket and reliable authenticated notifier required');
   }
-  const legacyCompletenessLimit = 2000;
   const maxExactSnapshotBytes = 16 * 1024 * 1024;
   // No fixed 128-track history: one globally monotonic per-UID durable
   // sequence allows a single cursor, provided ALL writers use the same owner.
@@ -194,11 +193,13 @@ export function createLikeSharedR2Publisher141(bucket, notify) {
         previous.canonicalSource156 === 'explore_likes_153' &&
         Number.isSafeInteger(previous.exactLikeCount156) &&
         previous.exactLikeCount156 === ids.length;
-      // A legacy v114 object at exactly 2,000 entries is ambiguous: the old
-      // writers used slice(0,2000), so even an unlike cannot prove the other
-      // canonical memberships are present. Never settle from that snapshot.
-      if (!exactExtended && ids.length >= legacyCompletenessLimit) {
-        throw new Error('Legacy 2000-like snapshot completeness ambiguous; canonical rebuild required');
+      // Any legacy v114 snapshot is only a cache, not proof of canonical
+      // completeness. The old path could have been truncated at 2,000 in a
+      // previous state and later fallen below 2,000. New fenced publication
+      // must therefore start only after the 156 exact cold rebuild marks the
+      // snapshot complete against explore_likes_153.
+      if (!exactExtended) {
+        throw new Error('Legacy shared like snapshot completeness unverified; exact canonical rebuild required');
       }
       const likedIds = new Set(ids);
       if (likedIds.size !== ids.length || ids.some((x) => !safeId(x, 512))) {

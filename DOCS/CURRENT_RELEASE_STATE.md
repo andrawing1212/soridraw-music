@@ -1,5 +1,41 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DE. PREVIEW app131 — PC↔모바일 좋아요 자동 동기화 복구 배포 완료 (2026-09-22 KST)
+
+**PREVIEW 배포 고정 commit:** `32117f1a81b8b2741fe616b15420201c00d05c05`.
+**제품 수정 기준:** `f6dbf81592bc64956525e4ac257ed944d50d9d41`.
+**최종 Audit:** Run `35650903841` SUCCESS.
+**PREVIEW Hosting:** Run `35651254609` SUCCESS.
+
+배포 결과:
+- remote app version **131**
+- PREVIEW exact build PASS
+- TypeScript PASS / Build PASS
+- Firebase PREVIEW Hosting PASS
+- TEST / PRODUCTION unchanged PASS
+- Worker 재배포 0
+- D1 schema/migration/user-data change 0
+- Functions / Rules 변경 0
+
+app131 핵심:
+- 같은 계정의 좋아요 변경은 30초 sliding batch 저장 후 서버 ACK가 성공하면 UID 전용 RTDB 신호로 다른 기기에 전파.
+- 다른 기기는 새로고침/탭 왕복 없이 해당 곡의 하트·숫자·내 좋아요를 같은 변경으로 반영.
+- public aggregate 정산이 늦어도 계정 개인 좋아요 동기화는 더 이상 `settled` 플래그를 기다리지 않음.
+- partial baseline marker도 원격 변경 gap 복구 시 무효화하여 오래된 모바일 캐시가 계정 최신 상태를 가로막지 않게 함.
+- UI/CSS/반응형 변경 없음.
+
+새 운영 지시:
+- 사용자가 수정 작업을 지시했고 사전검사 PASS로 PREVIEW 배포가 안전한 경우, 별도 배포 승인 질문 없이 **수정 → PREVIEW 배포까지 자동 진행**.
+- 이 규칙은 PREVIEW에만 적용. TEST/PRODUCTION 승격 규칙은 기존대로 유지.
+
+실사용 검증:
+1. A기기에서 좋아요/해제.
+2. 마지막 클릭 후 30초 batch 저장 성공 뒤 B기기에서 자동으로 같은 상태가 되는지.
+3. B기기에서 하트 + 숫자 + 내 좋아요가 함께 바뀌는지.
+4. 새로고침이나 인기/추천 탭 왕복이 필요하면 FAIL.
+5. 위 통과 전 추가 비용 최적화/171 cutover/TEST/PRODUCTION 승격 금지.
+
+
 ## 0DD. app131 — PC↔모바일 좋아요 계정 동기화 정상 경로 복구 source 감사 PASS (2026-09-22 KST)
 
 **현재 preview HEAD 기준:** `c4097dab6b6fb7b7a87d37652491429178631b9a`.

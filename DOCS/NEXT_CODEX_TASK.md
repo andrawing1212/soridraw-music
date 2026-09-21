@@ -1,5 +1,38 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — 165 legacy intake drain barrier + dormant 157/158 writer cutover
+
+164 실제 read-only preflight는 run `35584354578`에서 PASS했고, 현재 shared D1은 **075 pending 존재 + 157 schema 미적용 + legacy intake open** 상태라 전환 준비가 아직 안 됐다.
+
+다음 구현은 배포가 아니라 source-only로 아래 경계를 만든다.
+
+### 165 목표
+1. 최종 162 marker를 arm하기 전에 별도 **draining 단계**를 둔다. reader는 계속 legacy `likes`를 정상 사용하고, 새 좋아요 intake만 잠시 retriable 상태로 막는다.
+2. draining 동안 scheduled legacy processor는 계속 살아 있어 035/066/069/075를 끝까지 비울 수 있어야 한다.
+3. 앱의 durable local outbox가 draining/503 같은 retriable 실패에서 마지막 클릭을 삭제하지 않고 그대로 재시도하는지 실행형 test로 고정한다.
+4. 네 queue가 bounded probe 기준 모두 0이고, 157 table/index exact + shared owner 준비가 증명된 뒤에만 164 proof가 만들어질 수 있다.
+5. final 162 marker가 fully armed되면 163이 legacy relation/count writer를 막고, 그때부터만 157 overlay + 158 lazy count owner를 허용한다.
+6. draining 신호/검사는 페이지 진입·재방문 hot path에 넣지 않는다. 좋아요 server intake와 release operation에만 한정한다.
+
+### 반드시 보호
+- marker 없음: 현재 legacy 동작 100% 유지
+- draining: reader 정상, scheduled drain 정상, 신규 intake는 D1 write 전에 retriable reject
+- final overlay157: legacy writer 물리 차단
+- failed/partial signal: fail-closed
+- 사용자 전체 likes/feed/profile scan/backfill 없음
+- 실제 relation 변경 W1~W2 / duplicate W0 기준 유지
+- 10만 사용자 앱 업데이트/페이지 재진입 때문에 새 D1/R2 read가 생기면 FAIL
+
+### 현재 금지
+157 shared migration apply, 실제 drain signal write, final cutover marker write, PREVIEW/TEST/PRODUCTION Worker 배포, shared user data 변환/삭제/backfill, Firebase/Functions 변경은 사용자 승인 전 실행하지 않는다.
+
+### 기준
+- latest verified source before 165: `caf4950095e8288868c738b2e22c6ca98967b30f`
+- audit: `35584354578` SUCCESS
+- live preflight: intake open / 035=0 / 066=0 / 069=0 / 075=pending / 157 schema absent
+- canonical SHA256: `ea884a1bf2c6acd1bf951d6cfac1fef774242c8736bab3330df05c0194dcb2f1`
+
+
 ## 현재 최우선 — 164 proof를 실제 상태에서 만드는 read-only cutover preflight 준비
 
 162/163/164의 소비자·차단기는 코드/감사 PASS다. 다음 단계는 **공유 전환 marker를 쓰는 것 자체가 아니라, marker에 들어갈 164 증거를 실제 환경에서 안전하게 만들 수 있는 preflight를 구현·검증하는 것**이다.

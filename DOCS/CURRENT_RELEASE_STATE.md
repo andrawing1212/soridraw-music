@@ -1,5 +1,14 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CL. 155 실제 격리 D1 W2/W1 유지 + 2,053개 좋아요 무손실 페이지 조회 후보 (2026-09-21 KST)
+
+사용자의 비용 절감 작업 계속 요청. 시작 `preview` `171f96507db9bda15e2da4be2fc078a142365aef`. **추가 발견:** 153 최근 좋아요 보조 인덱스가 `(user_uid,created_at DESC)`만 정렬하여 같은 밀리초에 생성한 여러 곡을 시간 단독 커서로 페이지 조회할 때 누락할 수 있음. **미적용 migration**의 단일 보조 인덱스를 `(user_uid,created_at DESC,track_id DESC)`로 교정(`3b5be3271a62084636ba6a49cb199c5f96339d55`). 후보 runtime `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 `createLikeRecentPager155` 추가(`9c060bc54b405c11558f175b70a01c9e4a577a9d`): UID 전용, 1~128행 제한, `created_at + track_id` 복합 keyset cursor, 누락/중복/이상 순서 fail-closed, read-only. 정상 캐시 재방문/업데이트 호출 금지; cold 복구용이며 실제 Worker에 **미연결**. `scripts/verify-135-like-fenced-protocol.mjs`에서 2,053개 synthetic 곡·동일 ms 다중 곡 전부 회복, 기존 2천개 한도에서 잘리지 않는 페이지 조회 **PASS**(`bce8624dac1248da9139c8cdad848e60a627af9e`). 이는 **R2 기존 2천개 snapshot writer 확장 완료가 아님**.
+
+기존 `scripts/measure-153-isolated-d1.mjs`에 신규 키 구성 variant와 실제 같은-ms SQL 페이지, 조회계획·비용 검사를 추가(`09bcb7bc9625148cbd31cf69f9dd20ee633693e3`). [실제 GitHub Actions run 35566094717](https://github.com/andrawing1212/soridraw-music/actions/runs/35566094717), exact `1d6571eead45326f1dc6d746567640e15c85648c` **SUCCESS**. 원격 Cloudflare 고유 임시 D1에서 새 인덱스 **좋아요 W2, 중복 W0, 해제 W1, 중복 해제 W0** 실측. 합성 동일 ms 곡 페이지 **첫 2건/다음 1건 정확**, `meta.rows_read` 첫 페이지 2, 다음 페이지 3; 인덱스 순서 조회계획 PASS. `153_EPHEMERAL_D1_DELETED=PASS`로 임시 DB 삭제. TypeScript/Build/127·128·135~155 회귀, release static, 공유 D1 read-only 감사, TEST/PRODUCTION Worker dry-run, branch refs 확인 모두 PASS.
+
+**정확한 현재 상태:** 비용 합격은 신형 스키마와 합성 데이터의 격리 원격 D1에 한정. 새로운 테이블·인덱스 실제 공유 DB 미적용. 155 cold pager는 실제 서비스 R2 캐시·구형 reader/writer와 연결되지 않았고, 2천개 R2 snapshot 한도·정확한 기존 count baseline·공유 3환경 writer 전환·feed/popular/profile 부분 게시·RTDB·전체 DO/R2 비용·Work 및 PC/모바일 검증 미완료. PREVIEW 앱126/Worker071 현장 기준(실주소 재검증 전), 이번 코드 미배포; 사용자 데이터/TEST/PRODUCTION 변경 없음. 실제 제품 릴리스 **BLOCKED**, 기존 154 제한 및 `W3+` 차단 유지.
+
+
 ## 0CK. 154 D1 청구 영수증 누락·위조 W0 차단 — 소스/CI PASS, 제품 릴리스 차단 (2026-09-21 KST)
 
 사용자 이전 채팅 153 후속 실행. 기준 `preview` `49d5b596d2713c86d9b41d30fd65526b76b96246`; 153의 `explore_likes_153` user-first WITHOUT ROWID W2/W1/W0 후보는 유지. 실제 코드 `cloudflare/explore-worker/runtime/like-fenced-139.mjs`의 146/153 D1 adapter가 누락된 `meta.rows_written`을 `0`으로 합산해 **청구 영수증 없이 좋아요 확정/곡별 집계로 진행할 수 있는 오류** 수정. batch의 3개 응답과 모든 rows_written을 안전한 음이 아닌 정수로 검사하고, 153 관계 1행 변경에 청구 W0가 나오면 fail-closed. 청구 W3+ 기존 차단 유지. `scripts/verify-135-like-fenced-protocol.mjs`에 missing/NaN/negative/허위 W0 회귀를 추가해 각 경우 곡별 집계 0회 확정 확인. `preview` 커밋: 코드 `92c7063a734aa14dd5b3b414b9a79bd500799bfa`, 테스트 `053bac42a415b4861da6ac07e6e5401f08c3b902`, 실 CI 실행용 `4bf4fcf1dce9ad31e6d734a57f8d794f67a08a10`.

@@ -42,6 +42,7 @@
     "078-shared-like-reader-cutover.mjs",
     "079-like-intake-drain-barrier.mjs",
     "080-direct-like-atomic-batch.mjs",
-    "081-batch-like-final-freeze.mjs"
+    "081-batch-like-final-freeze.mjs",
+    "082-like-d1only-route.mjs"
   ]
 }

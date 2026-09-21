@@ -359,12 +359,13 @@ export function createLikeOverlayCanonical157(db, commitAggregate, options = {})
   if (options.legacyWriterCutoverVerified !== true) {
     throw new Error('157 overlay blocked until all legacy like writers are cut over');
   }
+  const baselineExpr = `EXISTS(
+    SELECT 1 FROM likes l WHERE l.track_id = ? AND l.user_uid = ?
+  )`;
   const effectiveExpr = `COALESCE((
     SELECT o.liked FROM explore_like_overrides_157 o
     WHERE o.user_uid = ? AND o.track_id = ?
-  ), EXISTS(
-    SELECT 1 FROM likes l WHERE l.track_id = ? AND l.user_uid = ?
-  ))`;
+  ), ${baselineExpr})`;
   const eligibleExpr = `EXISTS(
     SELECT 1 FROM tracks t
     JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1
@@ -394,12 +395,34 @@ export function createLikeOverlayCanonical157(db, commitAggregate, options = {})
       }
       const now = Date.now();
       const before = db.prepare(
-        'SELECT ' + eligibleExpr + ' AS eligible, ' + effectiveExpr + ' AS liked'
-      ).bind(trackId, uid, trackId, trackId, uid);
-      const mutation = db.prepare(
+        'SELECT ' + eligibleExpr + ' AS eligible, ' +
+        baselineExpr + ' AS baseline_liked, ' + effectiveExpr + ' AS liked'
+      ).bind(
+        trackId,
+        trackId, uid,
+        uid, trackId, trackId, uid
+      );
+      // Sparse override rule: if the desired state equals the immutable legacy
+      // baseline, remove the override instead of retaining a redundant row.
+      const removeOverride = db.prepare(
+        `DELETE FROM explore_like_overrides_157
+         WHERE user_uid = ? AND track_id = ?
+           AND ${eligibleExpr}
+           AND ${baselineExpr} = ?
+           AND ${effectiveExpr} = ?
+           AND ${effectiveExpr} != ?`
+      ).bind(
+        uid, trackId,
+        trackId,
+        trackId, uid, Number(liked),
+        uid, trackId, trackId, uid, Number(previousLiked),
+        uid, trackId, trackId, uid, Number(liked)
+      );
+      const upsertOverride = db.prepare(
         `INSERT INTO explore_like_overrides_157(user_uid,track_id,liked,updated_at)
          SELECT ?, ?, ?, ?
          WHERE ${eligibleExpr}
+           AND ${baselineExpr} != ?
            AND ${effectiveExpr} = ?
            AND ${effectiveExpr} != ?
          ON CONFLICT(user_uid,track_id) DO UPDATE SET
@@ -408,27 +431,37 @@ export function createLikeOverlayCanonical157(db, commitAggregate, options = {})
       ).bind(
         uid, trackId, Number(liked), now,
         trackId,
+        trackId, uid, Number(liked),
         uid, trackId, trackId, uid, Number(previousLiked),
         uid, trackId, trackId, uid, Number(liked)
       );
       const final = bindEffective(
         db.prepare('SELECT ' + effectiveExpr + ' AS liked'), uid, trackId
       );
-      const results = await db.batch([before, mutation, final]);
-      if (!Array.isArray(results) || results.length !== 3 ||
+      const results = await db.batch([before, removeOverride, upsertOverride, final]);
+      if (!Array.isArray(results) || results.length !== 4 ||
           results.some((result) => !Number.isSafeInteger(result?.meta?.rows_written) ||
             result.meta.rows_written < 0)) {
         throw new Error('157 D1 billing receipt missing or invalid');
       }
       const first = results[0]?.results?.[0];
       const prior = Number(first?.liked) === 1;
+      const baselineLiked = Number(first?.baseline_liked) === 1;
       const permitted = Number(first?.eligible) === 1;
-      const finalLiked = Number(results[2]?.results?.[0]?.liked) === 1;
-      const changes = Number(results[1]?.meta?.changes);
+      const finalLiked = Number(results[3]?.results?.[0]?.liked) === 1;
+      const removeChanges = Number(results[1]?.meta?.changes);
+      const upsertChanges = Number(results[2]?.meta?.changes);
+      if (![removeChanges, upsertChanges].every((value) =>
+            Number.isSafeInteger(value) && value >= 0 && value <= 1)) {
+        throw new Error('157 invalid sparse override change receipt');
+      }
+      const changes = removeChanges + upsertChanges;
       if (!permitted || prior !== previousLiked || finalLiked !== liked ||
-          !Number.isSafeInteger(changes) || changes < 0 || changes > 1 ||
+          changes > 1 ||
           (previousLiked === liked && changes !== 0) ||
-          (previousLiked !== liked && changes !== 1)) {
+          (previousLiked !== liked && changes !== 1) ||
+          (changes === 1 && liked === baselineLiked && removeChanges !== 1) ||
+          (changes === 1 && liked !== baselineLiked && upsertChanges !== 1)) {
         throw new Error('157 effective relation transition not proven');
       }
       const rowsWritten = results.reduce((sum, result) => sum + result.meta.rows_written, 0);
@@ -448,7 +481,10 @@ export function createLikeOverlayCanonical157(db, commitAggregate, options = {})
           throw new Error('157 durable track aggregate not confirmed');
         }
       }
-      return { canonicalCommitted: true, liked, rowsWritten, relationChanges: changes };
+      return {
+        canonicalCommitted: true, liked, rowsWritten,
+        relationChanges: changes, baselineLiked,
+      };
     },
   };
 }

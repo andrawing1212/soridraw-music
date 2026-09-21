@@ -54,6 +54,14 @@ jobs:
           node scripts/verify-shared-d1-release-system.mjs
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
+          node --check cloudflare/explore-worker/canonical/preview-worker.js
+          expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          actual_worker_sha="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          echo "CANONICAL_WORKER_EXPECTED_SHA256=$expected_worker_sha"
+          echo "CANONICAL_WORKER_ACTUAL_SHA256=$actual_worker_sha"
+          test -n "$expected_worker_sha"
+          test "$expected_worker_sha" = "$actual_worker_sha"
+          SORIDRAW_GENERATED_WORKER="$PWD/cloudflare/explore-worker/canonical/preview-worker.js" node scripts/verify-114-shared-social-parity.mjs
           grep -Fq 'permissions:' .github/workflows/soridraw-release-promotion.yml
           grep -Fq 'contents: write' .github/workflows/soridraw-release-promotion.yml
           echo 'RELEASE_CONTROLLER_MANUAL_DISPATCH_ONLY=PASS'

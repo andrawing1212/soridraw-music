@@ -119,7 +119,7 @@ jobs:
           # 078 replay proof: start from the exact pre-161 canonical Worker
           # (061/062 already deployed, 161/162 absent), then prove one patch
           # upgrades it without a second-pass diff.
-          replay078="$RUNNER_TEMP/soridraw-like-160-to-162"
+          replay078="$RUNNER_TEMP/soridraw-like-160-to-164"
           mkdir -p "$replay078"
           git fetch origin 21fa99cec7f393247b8bd3382c7a880ebfa343fc --depth=1
           git show 21fa99cec7f393247b8bd3382c7a880ebfa343fc:cloudflare/explore-worker/canonical/preview-worker.js > "$replay078/worker.js"
@@ -136,7 +136,8 @@ jobs:
           SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs
           hash078_after="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
           test "$hash078_before" = "$hash078_after"
-          echo '078_DEPLOYED_160_TO_162_REPLAY=PASS'
+          grep -Fq 'SORIDRAW_LIKE_CUTOVER_PRECONDITION_PROOF_164_20260921' "$replay078/worker.js"
+          echo '078_DEPLOYED_160_TO_164_REPLAY=PASS'
 
           generated="$RUNNER_TEMP/soridraw-like-candidate-071"
           mkdir -p "$generated"

@@ -51,7 +51,7 @@ const verifiedReaderEnd133 = service.indexOf('const persistTargetedVerifiedLikeT
 assert.ok(verifiedReaderStart133 > 0 && verifiedReaderEnd133 > verifiedReaderStart133);
 const verifiedReaderJs133 = ts.transpileModule(
   service.slice(verifiedReaderStart133, verifiedReaderEnd133) +
-  '\\nreturn readTargetedVerifiedLikeTracks127;',
+  '\nreturn readTargetedVerifiedLikeTracks127;',
   { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
 ).outputText;
 const makeVerifiedReader133 = (isPartial) => {

@@ -277,6 +277,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   }
   const r2 = mockBucket({
     schemaVersion: 1, uid: 'user', likedTrackIds: ['existing'],
+    canonicalComplete156: true, canonicalSource156: 'explore_likes_153', exactLikeCount156: 1,
     lastLikeOrders074: { existing: { at: 100, batchId: 'legacy' } },
     customLegacyField: 'untouched',
   });
@@ -333,9 +334,9 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const full = mockBucket({ schemaVersion: 1, uid: 'user',
     likedTrackIds: Array.from({ length: 2000 }, (_, i) => 'track-' + i) });
   const fullPublish = createLikeSharedR2Publisher141(full, async () => {});
-  await assert.rejects(fullPublish(event('new', 'n', 1, true)), /completeness ambiguous/);
+  await assert.rejects(fullPublish(event('new', 'n', 1, true)), /completeness unverified/);
   await assert.rejects(fullPublish(event('track-1', 'remove-legacy', 1, false, 9)),
-    /completeness ambiguous/);
+    /completeness unverified/);
   assert.equal(full.writes, 0, 'ambiguous legacy 2000 snapshot must never be mutated or truncated');
 
   // 156: cold-only exact rebuild from the 155 bounded canonical pager. This
@@ -392,7 +393,8 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
 
   // More than 128 distinct changes must remain possible with a single
   // per-UID cursor instead of a 128-track history embedded in every R2 body.
-  const longHistory = mockBucket({ schemaVersion: 1, uid: 'user', likedTrackIds: [] });
+  const longHistory = mockBucket({ schemaVersion: 1, uid: 'user', likedTrackIds: [],
+    canonicalComplete156: true, canonicalSource156: 'explore_likes_153', exactLikeCount156: 0 });
   const historyPublish = createLikeSharedR2Publisher141(longHistory, async () => {});
   for (let i = 0; i < 256; i++) {
     const result = await historyPublish(event('history-' + i, 'history-id-' + i, 1, true));
@@ -421,7 +423,8 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
 {
   const durable = new Map(), relation = new Map();
   let commits = 0, notified = 0, rejectD1 = false, rejectNotify = false;
-  let snapshot = { schemaVersion: 1, uid: 'user', likedTrackIds: [] };
+  let snapshot = { schemaVersion: 1, uid: 'user', likedTrackIds: [],
+    canonicalComplete156: true, canonicalSource156: 'explore_likes_153', exactLikeCount156: 0 };
   let etag = 1, r2Writes = 0;
   const ledger = {
     async get(key) { return structuredClone(durable.get(key)); },

@@ -167,7 +167,8 @@ export function createLikeSharedR2Publisher141(bucket, notify) {
   if (!bucket?.get || !bucket?.put || typeof notify !== 'function') {
     throw new TypeError('Shared R2 bucket and reliable authenticated notifier required');
   }
-  const limit = 2000;
+  const legacyCompletenessLimit = 2000;
+  const maxExactSnapshotBytes = 16 * 1024 * 1024;
   // No fixed 128-track history: one globally monotonic per-UID durable
   // sequence allows a single cursor, provided ALL writers use the same owner.
   return async function publishCanonicalLike141({ uid, trackId, id, revision, liked, seq }) {
@@ -185,10 +186,20 @@ export function createLikeSharedR2Publisher141(bucket, notify) {
       let previous;
       try { previous = JSON.parse(await object.text()); } catch { throw new Error('Invalid shared like snapshot'); }
       if (Number(previous?.schemaVersion) !== 1 || previous?.uid !== uid ||
-          !Array.isArray(previous.likedTrackIds) || previous.likedTrackIds.length > limit) {
+          !Array.isArray(previous.likedTrackIds)) {
         throw new Error('Shared like snapshot missing or invalid');
       }
       const ids = previous.likedTrackIds;
+      const exactExtended = previous.canonicalComplete156 === true &&
+        previous.canonicalSource156 === 'explore_likes_153' &&
+        Number.isSafeInteger(previous.exactLikeCount156) &&
+        previous.exactLikeCount156 === ids.length;
+      // A legacy v114 object at exactly 2,000 entries is ambiguous: the old
+      // writers used slice(0,2000), so even an unlike cannot prove the other
+      // canonical memberships are present. Never settle from that snapshot.
+      if (!exactExtended && ids.length >= legacyCompletenessLimit) {
+        throw new Error('Legacy 2000-like snapshot completeness ambiguous; canonical rebuild required');
+      }
       const likedIds = new Set(ids);
       if (likedIds.size !== ids.length || ids.some((x) => !safeId(x, 512))) {
         throw new Error('Shared like snapshot contains invalid or duplicated IDs');
@@ -207,18 +218,25 @@ export function createLikeSharedR2Publisher141(bucket, notify) {
         await notify({ uid, trackId, id, revision, liked, seq });
         return { settled: true, duplicate: true };
       }
-      if (liked && !likedIds.has(trackId) && likedIds.size >= limit) {
-        throw new Error('Shared like capacity reached; canonical rebuild required');
-      }
       if (liked) likedIds.add(trackId); else likedIds.delete(trackId);
       const next = {
         ...previous, schemaVersion: 1, uid,
         likedTrackIds: [...likedIds],
+        ...(exactExtended ? {
+          canonicalComplete156: true,
+          canonicalSource156: 'explore_likes_153',
+          exactLikeCount156: likedIds.size,
+          canonicalPublicationSeq156: seq,
+        } : {}),
         lastPublishedSeq141: seq,
         lastPublishedEvent141: { trackId, id, revision, liked },
         updatedAt: Date.now(),
       };
-      const result = await bucket.put(key, JSON.stringify(next), {
+      const body = JSON.stringify(next);
+      if (exactExtended && new TextEncoder().encode(body).byteLength > maxExactSnapshotBytes) {
+        throw new Error('Exact shared like snapshot exceeds safe single-object size; paged R2 migration required');
+      }
+      const result = await bucket.put(key, body, {
         onlyIf: { etagMatches: object.etag },
         httpMetadata: { contentType: 'application/json; charset=utf-8' },
         customMetadata: { soridrawSharedLikes: '114', updatedAt: String(Date.now()) },
@@ -230,6 +248,94 @@ export function createLikeSharedR2Publisher141(bucket, notify) {
       return { settled: true, attempts: attempt + 1 };
     }
     throw new Error('Shared like R2 CAS contention; pending retry required');
+  };
+}
+
+
+// SORIDRAW_LIKE_EXACT_R2_REBUILD_156_20260921
+// One-time/cold repair only. Build an exact v114-compatible shared snapshot
+// from the bounded 155 canonical pager while the SAME per-UID durable owner
+// holds a publication barrier. Normal revisit must use local/R2 cache and must
+// never run this full canonical scan. This helper does no D1 writes.
+export function createLikeExactR2Rebuilder156(bucket, listPage155, readPublicationSeq) {
+  if (!bucket?.get || !bucket?.put || typeof listPage155 !== 'function' ||
+      typeof readPublicationSeq !== 'function') {
+    throw new TypeError('Shared R2, bounded canonical pager and durable sequence reader required');
+  }
+  const maxPages = 1024; // 131,072 likes at 128/page; fail closed, never truncate.
+  const maxExactSnapshotBytes = 16 * 1024 * 1024;
+  return async function rebuildExactLikes156(uid) {
+    if (!safeId(uid, 256)) throw new TypeError('Invalid exact like rebuild UID');
+    const startSeq = await readPublicationSeq(uid);
+    if (!Number.isSafeInteger(startSeq) || startSeq < 0) {
+      throw new Error('Invalid durable publication barrier');
+    }
+    const ids = [];
+    const seen = new Set();
+    let cursor = null;
+    for (let pageNo = 0; pageNo < maxPages; pageNo += 1) {
+      const page = await listPage155(uid, cursor, 128);
+      if (!Array.isArray(page?.items) || page.items.length > 128) {
+        throw new Error('Invalid canonical like rebuild page');
+      }
+      for (const item of page.items) {
+        const trackId = item?.trackId;
+        if (!safeId(trackId, 512) || seen.has(trackId)) {
+          throw new Error('Duplicate or invalid canonical like during rebuild');
+        }
+        seen.add(trackId);
+        ids.push(trackId);
+      }
+      if (page.nextCursor == null) { cursor = null; break; }
+      cursor = page.nextCursor;
+      if (pageNo === maxPages - 1) {
+        throw new Error('Exact like rebuild exceeds safe page budget; paged R2 migration required');
+      }
+    }
+    const endSeq = await readPublicationSeq(uid);
+    if (endSeq !== startSeq) {
+      throw new Error('Concurrent like mutation during exact rebuild');
+    }
+    const key = 'internal/explore/shared-social-v114/likes/' + encodeURIComponent(uid) + '.json';
+    const object = await bucket.get(key);
+    let previous = {};
+    let onlyIf;
+    if (object?.etag) {
+      try { previous = JSON.parse(await object.text()); }
+      catch { throw new Error('Existing shared like snapshot unreadable'); }
+      if (previous?.uid != null && previous.uid !== uid) {
+        throw new Error('Existing shared like snapshot UID mismatch');
+      }
+      onlyIf = { etagMatches: object.etag };
+    } else {
+      onlyIf = { etagDoesNotMatch: '*' };
+    }
+    const now = Date.now();
+    const next = {
+      ...previous,
+      schemaVersion: 1,
+      uid,
+      likedTrackIds: ids,
+      canonicalComplete156: true,
+      canonicalSource156: 'explore_likes_153',
+      exactLikeCount156: ids.length,
+      canonicalPublicationSeq156: startSeq,
+      lastPublishedSeq141: startSeq,
+      updatedAt: now,
+    };
+    // A rebuild is a barrier, not a retry of a specific prior event.
+    delete next.lastPublishedEvent141;
+    const body = JSON.stringify(next);
+    if (new TextEncoder().encode(body).byteLength > maxExactSnapshotBytes) {
+      throw new Error('Exact shared like snapshot exceeds safe single-object size; paged R2 migration required');
+    }
+    const stored = await bucket.put(key, body, {
+      onlyIf,
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      customMetadata: { soridrawSharedLikes: '114', updatedAt: String(now), exactLikes: '156' },
+    });
+    if (!stored) throw new Error('Exact shared like rebuild CAS conflict; retry under UID owner');
+    return { rebuilt: true, count: ids.length, publicationSeq: startSeq };
   };
 }
 

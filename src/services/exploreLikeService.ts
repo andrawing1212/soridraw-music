@@ -5,6 +5,7 @@ import { auth, getFirebaseAppCheckToken, realtimeDb } from '../firebase';
 import {
   patchExploreLikedTrackMembership,
   reconcileExploreLikedTrackCollectionSnapshot127,
+  seedExploreLikedTrackCandidates129,
 } from './exploreLikedTracksService';
 import { recordCloudflareResponse } from '../lib/cloudflareDiagnostics';
 import {
@@ -500,6 +501,10 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
       // visible cache misses. The R2 revision marker prevents repeated snapshot
       // GETs until that shared object actually changes.
       if (!snapshot161.complete) {
+        // Partial R2 is never membership truth. It only expands the candidate
+        // set so My Likes can re-check those IDs through the same exact
+        // per-track membership route used by Feed/Profile hearts.
+        seedExploreLikedTrackCandidates129(uid, likedIds);
         writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid), '1');
         return;
       }

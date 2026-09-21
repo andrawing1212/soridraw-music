@@ -1,5 +1,15 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 0CI — 실제 Audit 성공 / 운영 D1 W2 구조 충돌 확정 (2026-09-21 KST)
+
+이번 턴에 `preview` 실제 회귀 검증 문제를 수정: `scripts/verify-127-atomic-personal-like.mjs`의 export 혼입으로 GitHub run 35561196390 및 35561748160 FAIL하던 문제를 고침. GitHub Actions read-only run `35561894019` `9001e19c1658475b181ae7571324f537ed76133d` **SUCCESS**: TypeScript, Build, 127/128/135~152 격리 회귀, 132/133/134/148 write 모형, TEST/PRODUCTION Worker dry-run, 공유 D1 read-only preflight 전부 PASS. 후속 run `35562080167` `c2dfd3bc69c3eabd0f165b3e49c6418ff7da7c13` **SUCCESS**에서 실제 공유 D1 `likes` DDL까지 확인:
+- `sqlite_autoindex_likes_1` PK, `idx_likes_period_rank(created_at DESC, track_id, user_uid)`, `idx_likes_user_recent(user_uid,created_at DESC)` 인덱스 3개;
+- `soridraw_shared_rev_likes_ai_051/ad_051/au_051`: likes INSERT/DELETE/UPDATE마다 `explore_shared_revision`의 `global` row revision+1;
+- track_stats 자체 032/051 트리거와 derived rank/changes 인덱스도 존재.
+**따라서 146 relation-only 후보의 메모리 SQLite 논리 1행을 운영 D1 W1~W2 합격으로 말하지 말 것**. 인덱스+051 global revision 추가 write가 반드시 존재. 실제 `meta.rows_written`은 미측정이며 유효한 비용 계약 변경·실운영 전환 없이 배포 금지. 위 CI SUCCESS는 릴리스 준비 PASS가 아닌 *기존 배포 없는 감사* PASS.
+
+**다음 구현은 더 많은 139~152 후보 함수 추가가 아님.** 현재 READ-ONLY schema와 세 환경 기존 reader/Writer 목록에서 어떤 인덱스가 개인 조회/period rank에 필수인지, 051 global revision을 제거/이동해도 동기화가 유지되는지 검증하고, 대체 projection과 무손실 복구/호환 전환을 하나의 완료 가능한 릴리스로 설계해야 함. 정확한 D1 W1~W2는 격리 D1에서 index/trigger 포함 실측. shared D1 구조 변경/새 공통 owner 인프라/프로덕션 Writer 컷오버는 사용자 **명확한 승인 전 실행 금지**, 미승인 상태에서는 공유 원본 변환·trigger DROP·앱/Worker 배포 금지. 상태 `DOCS/CURRENT_RELEASE_STATE.md` 0CI 참조.
+
 ## 최신 0CH — 150~152 계정·곡 순서 유실 보호 / 공유 트랙 카드 CAS 구현 (2026-09-21 KST)
 
 실제 `preview` 변경: `cloudflare/explore-worker/runtime/like-fenced-139.mjs`의 147은 사용자별 이전 revision+1만 승인, 새 UID의 첫 수정은 revision1만 승인(누락/기존 사용자 시드 오류 시 fail-closed). 동일 파일에 실제 공유 카드 v115 키·필드를 유지하는 `createLikeSharedTrackCardPublisher151`을 추가: 조건부 ETag PUT, 기존 필드 보존, 카드 좋아요 숫자·stats 숫자 동일하게 변경, 세대 순서 및 최초 기초 숫자 검증. R2의 구형 Writer에 의해 151 세대가 유실되면 무작정 새 세대를 쓰지 않고 감사 복구 요구. **이는 카드 하나의 게시자이지 전체 Explore 갱신자가 아님.** 147은 `surfaceGenerations.card/feed/profile` 모두 곡별 영속 세대 이상임을 증명하기 전에는 139 개인 확정을 차단(152). `scripts/verify-135-like-fenced-protocol.mjs`에 150 결손 순번, 151 새 카드/중복/역순/동시 CAS/old baseline, 152 카드만 갱신 후 개인 미확정·재시도 추가; 실제 GitHub 코드 V8 격리 전체 PASS. 기존 135 legacy writer bypass/실 D1 비용/제품 준비 FAIL 유지.

@@ -906,7 +906,8 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
       const writes = costOverride ?? (changes && liked ? 2 : changes);
       return [
         { results: [{ eligible: 1 }], meta: { rows_written: 0, changes: 0 } },
-        { results: [], meta: { rows_written: writes, changes } },
+        { results: [], meta: { rows_written: costOverride === 'missing' ? undefined :
+          costOverride === 'nan' ? NaN : writes, changes } },
         { results: [{ liked: Number(liked) }], meta: { rows_written: 0, changes: 0 } },
       ];
     },
@@ -943,6 +944,19 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   await assert.rejects(intent('like-over-budget', 3, false, true),
     /exceeded live D1 W2 billing budget/);
   assert.equal(aggregateCalls, 3, 'W3+ must not settle downstream aggregate');
+  for (const [receipt, expected] of [
+    ['missing', /billing receipt missing or invalid/],
+    ['nan', /billing receipt missing or invalid/],
+    [-1, /billing receipt missing or invalid/],
+    [0, /missing a billable relation write/],
+  ]) {
+    // Separate isolated fresh-like fixture each time. D1 may have committed
+    // even when the receipt is rejected; the aggregator must remain untouched.
+    liked = false;
+    costOverride = receipt;
+    await assert.rejects(intent('like-bad-receipt-' + String(receipt), 3, false, true), expected);
+    assert.equal(aggregateCalls, 3, 'invalid billing receipt must not settle');
+  }
   assert.ok(prepared.some(sql => sql.includes('INSERT OR IGNORE INTO explore_likes_153')));
   assert.ok(prepared.some(sql => sql.includes('DELETE FROM explore_likes_153 WHERE user_uid')));
   console.log('153_EXPLICIT_CUTOVER_USER_FIRST_D1_ADAPTER=PASS');

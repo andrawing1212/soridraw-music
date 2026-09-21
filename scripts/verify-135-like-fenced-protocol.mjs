@@ -1403,3 +1403,60 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('158_NO_GLOBAL_TRACK_COUNT_BACKFILL=PASS');
   console.log('158_CUTOVER_TOKEN_AND_RESTART_DURABILITY=PASS');
 }
+
+
+// 159: fixed inventory of the repository-owned canonical Worker paths that
+// must be reader-first / writer-cutover migrated before 157 can be enabled.
+// This is a drift guard, not proof that the currently deployed TEST/PRODUCTION
+// versions have already been upgraded.
+{
+  const worker159 = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
+  const count159 = (needle) => worker159.split(needle).length - 1;
+  assert.equal(count159('INSERT OR IGNORE INTO likes'), 3,
+    'canonical legacy relation writer inventory changed');
+  assert.equal(count159('DELETE FROM likes'), 3,
+    'canonical legacy relation delete inventory changed');
+
+  for (const name of [
+    'adjustExploreLikeCounterDelta',
+    'processExploreLikeAggregateWave035',
+    'processExploreLikeUserQueueWave075',
+  ]) {
+    assert.ok(worker159.includes('async function ' + name + '('),
+      'missing known legacy relation writer ' + name);
+  }
+  assert.match(worker159,
+    /async function refreshLikeCount\([\s\S]{0,1800}SELECT COUNT\(\*\) FROM likes/,
+    'legacy count rebuild writer inventory changed');
+  assert.match(worker159,
+    /segments\[3\] === "like"[\s\S]{0,500}handleLike\(/,
+    'direct PUT\/DELETE like route inventory changed');
+  assert.ok(worker159.includes('explore_like_batches_069'),
+    '069 intake/aggregate compatibility path missing from inventory');
+
+  // Reader-first cutover set: shared personal cache, one-time D1 rebuild and
+  // the two authenticated personal endpoints that consume that membership.
+  for (const name of [
+    'readSharedLikes061',
+    'rebuildExploreLikeR2Bundle',
+    'handleMySocialSnapshot042',
+    'handleMyLikedTracks052',
+  ]) {
+    assert.ok(worker159.includes('function ' + name + '(') ||
+      worker159.includes('async function ' + name + '('),
+      'missing known personal-like reader ' + name);
+  }
+  assert.match(worker159,
+    /async function rebuildExploreLikeR2BundleCore061\([\s\S]{0,2200}FROM likes[\s\S]{0,1200}LIMIT 2000/,
+    'legacy cold rebuild source/limit inventory changed');
+
+  // Repository canonical source already has the guard that prevents an old
+  // 061 mirror from truncating a future exact >2,000 shared snapshot.
+  assert.ok(worker159.includes('SORIDRAW_EXACT_SHARED_LIKE_GUARD_156_20260921'));
+  assert.ok(worker159.includes('existing156?.canonicalComplete156 === true'));
+
+  console.log('159_LEGACY_RELATION_WRITERS_FIXED_INVENTORY=3');
+  console.log('159_LEGACY_LIKE_COUNT_REBUILD_WRITER_FIXED_INVENTORY=1');
+  console.log('159_READER_FIRST_CUTOVER_PATHS_FIXED_INVENTORY=4');
+  console.log('159_DIRECT_LIKE_ROUTE_AND_069_QUEUE_STILL_REQUIRE_OWNER_CUTOVER=FAIL');
+}

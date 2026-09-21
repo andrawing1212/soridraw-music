@@ -64,22 +64,25 @@ print("132_D1_ROWS_WRITTEN_LIVE_METER=NOT_MEASURED")
 print("132_D1_W1_W2_RELEASE_GATE=FAIL_BY_SOURCE_LEVEL_LOWER_BOUND")
 print("132_AUDIT_TEST=PASS (release readiness deliberately remains FAIL)")
 # 136: The same persisted client mutation is sent again after an ambiguous
-# network error with a fresh server now. Because 069's batchAt includes that
-# fresh server timestamp, even an UNCHANGED client mutationAt produces a
-# DIFFERENT batch_id. Deleting a processed 069 row also removes dedupe history.
+# network error with a fresh server now. 073 deliberately orders by the server
+# receive clock only; legacy code used max(server, client). Either way a fresh
+# retry has a different batchAt even when client mutationAt is unchanged.
+# Deleting a processed 069 row also removes dedupe history.
 # This is a source-guarded counterexample, not a live D1 write.
 import hashlib
 w1_start = worker.index("async function exploreLikeW1Batch040(")
 w1_end = worker.index("\n}", w1_start) + 2
 w1 = worker[w1_start:w1_end]
 assert "const fallbackAt = Math.max(0, Math.floor(Number(now || Date.now())));" in w1
-assert "const batchAt = Math.max(fallbackAt, ...canonical.map((row) => row.mutationAt));" in w1
+server_order_073 = "const batchAt = fallbackAt;" in w1
+legacy_order = "const batchAt = Math.max(fallbackAt, ...canonical.map((row) => row.mutationAt));" in w1
+assert server_order_073 or legacy_order
 assert "'l069_' + String(batchAt).padStart(13, '0') + '_' + hex" in w1
 
 def simulated_batch_key(server_now: int, client_mutation_at: int) -> str:
     payload = '[{"trackId":"song","liked":true,"mutationAt":' + str(client_mutation_at) + '}]'
     digest = hashlib.sha256(('account-1\n' + payload).encode()).hexdigest()
-    batch_at = max(server_now, client_mutation_at)
+    batch_at = server_now if server_order_073 else max(server_now, client_mutation_at)
     return 'l069_' + str(batch_at).zfill(13) + '_' + digest
 
 original = simulated_batch_key(2000000000000, 1999999999000)

@@ -59,6 +59,8 @@ jobs:
           node --check cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs
           node --check cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs
           node --check cloudflare/explore-worker/patches/082-like-d1only-route.mjs
+          node --check cloudflare/explore-worker/patches/083-like-r2-revision.mjs
+          node --check cloudflare/explore-worker/runtime/like-r2-revision-173.mjs
           expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
           actual_worker_sha="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
           echo "CANONICAL_WORKER_EXPECTED_SHA256=$expected_worker_sha"
@@ -80,6 +82,14 @@ jobs:
           node scripts/verify-171-d1only-schema.mjs
           node scripts/verify-172-d1only-adapter.mjs
           node scripts/verify-172-d1only-route.mjs
+          node scripts/verify-173-like-r2-revision.mjs
+
+          replay173="$RUNNER_TEMP/soridraw-like-r2-173"
+          mkdir -p "$replay173"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$replay173/worker.js"
+          SORIDRAW_REMOTE_WORKER_DIR="$replay173" node cloudflare/explore-worker/patches/083-like-r2-revision.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$replay173" node cloudflare/explore-worker/patches/083-like-r2-revision.mjs
+          SORIDRAW_GENERATED_WORKER="$replay173/worker.js" node scripts/verify-173-like-r2-route.mjs
           python3 scripts/verify-171-d1only-concurrency.py
           python3 scripts/verify-167-like-atomic-fence.py
           python3 scripts/verify-168-direct-atomic.py

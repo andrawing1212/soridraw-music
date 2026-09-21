@@ -82,16 +82,20 @@ if (process.argv[2] === 'cleanup') {
       ['user_pk_without_rowid', false, 0, true, true],
       ['track_pk_without_rowid', false, 0, false, true],
       ['user_pk_one_recent_index', false, 1, true, true],
+      // Same physical index count, but track-id supplies deterministic
+      // keyset pagination when multiple likes have equal created_at.
+      ['user_pk_recent_cursor', false, 1, true, true, true],
     ];
     const observations = [];
-    for (const [table, sharedRevision, indexCount, userFirst = false, withoutRowid = false] of definitions) {
+    for (const [table, sharedRevision, indexCount, userFirst = false, withoutRowid = false, cursorReady = false] of definitions) {
       // All row values are synthetic and unique per freshly created DB.
       const pk = userFirst ? 'user_uid,track_id' : 'track_id,user_uid';
       await ddl('CREATE TABLE ' + table +
         ' (track_id TEXT NOT NULL,user_uid TEXT NOT NULL,created_at INTEGER NOT NULL, PRIMARY KEY(' + pk + '))' +
         (withoutRowid ? ' WITHOUT ROWID' : ''));
       if (indexCount >= 1) {
-        await ddl('CREATE INDEX ' + table + '_recent ON ' + table + '(user_uid,created_at DESC)');
+        await ddl('CREATE INDEX ' + table + '_recent ON ' + table +
+          (cursorReady ? '(user_uid,created_at DESC,track_id DESC)' : '(user_uid,created_at DESC)'));
       }
       if (indexCount >= 2) {
         await ddl('CREATE INDEX ' + table + '_period ON ' + table + '(created_at DESC,track_id,user_uid)');
@@ -134,7 +138,46 @@ if (process.argv[2] === 'cleanup') {
       const uidPlan = String(uidPlanner.results?.map(x => x.detail).join(' ') || '');
       if (userFirst && !uidPlan.includes('SEARCH')) fail('user-first PK must support UID recovery');
       console.log('153_UID_RECOVERY_PLAN_' + table.toUpperCase() + '=' + uidPlan);
-      observations.push({ table, sharedRevision, indexCount, userFirst, withoutRowid,
+      if (cursorReady) {
+        if (metrics[0] !== 2 || metrics[2] !== 1) {
+          fail('155 one widened recent index must still satisfy like W2/unlike W1');
+        }
+        const sample = [
+          "INSERT INTO " + table + " (track_id,user_uid,created_at) VALUES ('track-a','user-153',123)",
+          "INSERT INTO " + table + " (track_id,user_uid,created_at) VALUES ('track-b','user-153',123)",
+          "INSERT INTO " + table + " (track_id,user_uid,created_at) VALUES ('track-older','user-153',122)",
+        ];
+        for (const sql of sample) {
+          const entry = await query(sql);
+          if (entry.meta?.rows_written !== 2) fail('155 indexed sample unexpectedly exceeded W2');
+        }
+        const firstPlan = await query("EXPLAIN QUERY PLAN SELECT track_id,created_at FROM " + table +
+          " WHERE user_uid='user-153' ORDER BY created_at DESC,track_id DESC LIMIT 2");
+        const firstDetail = String(firstPlan.results?.map(x => x.detail).join(' ') || '');
+        if (!firstDetail.includes('SEARCH') || /USE TEMP B-TREE/.test(firstDetail)) {
+          fail('155 first page does not use deterministic index ordering: ' + firstDetail);
+        }
+        const first = await query("SELECT track_id,created_at FROM " + table +
+          " WHERE user_uid='user-153' ORDER BY created_at DESC,track_id DESC LIMIT 2");
+        if (first.results?.map(x => x.track_id).join(',') !== 'track-b,track-a') {
+          fail('155 first page lost equal-millisecond likes');
+        }
+        const second = await query("SELECT track_id,created_at FROM " + table +
+          " WHERE user_uid='user-153' AND (created_at < 123 OR (created_at = 123 AND track_id < 'track-a'))" +
+          " ORDER BY created_at DESC,track_id DESC LIMIT 2");
+        if (second.results?.map(x => x.track_id).join(',') !== 'track-older') {
+          fail('155 next page skipped a like or repeated cursor');
+        }
+        console.log('155_REMOTE_D1_STABLE_CURSOR_W2_W1=PASS' +
+          ' first_rows_read=' + first.meta?.rows_read +
+          ' next_rows_read=' + second.meta?.rows_read);
+        for (const sql of [
+          "DELETE FROM " + table + " WHERE user_uid='user-153' AND track_id='track-a'",
+          "DELETE FROM " + table + " WHERE user_uid='user-153' AND track_id='track-b'",
+          "DELETE FROM " + table + " WHERE user_uid='user-153' AND track_id='track-older'",
+        ]) { await query(sql); }
+      }
+      observations.push({ table, sharedRevision, indexCount, userFirst, withoutRowid, cursorReady,
         like: metrics[0], duplicateLike: metrics[1],
         unlike: metrics[2], duplicateUnlike: metrics[3],
         uidIndexed: uidPlan.includes('SEARCH'),

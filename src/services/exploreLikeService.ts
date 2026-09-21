@@ -26,6 +26,11 @@ const EXPLORE_LIKE_OUTBOX_SOURCE_TYPE = 'explore_like_outbox_120';
 const EXPLORE_LIKE_DISPLAY_LOCK_SCHEMA_VERSION = 120;
 const EXPLORE_LIKE_DISPLAY_LOCK_CACHE_KEY = 'explore-like-display-lock-120';
 const EXPLORE_LIKE_DISPLAY_LOCK_SOURCE_TYPE = 'explore_like_display_lock_120';
+// 172: local-only canonical mutation revision. This does not invalidate the
+// existing 120 membership cache and causes no page-entry/server read.
+const EXPLORE_LIKE_CANONICAL_REVISION_SCHEMA_VERSION_172 = 1;
+const EXPLORE_LIKE_CANONICAL_REVISION_CACHE_KEY_172 = 'explore-like-canonical-revision-172';
+const EXPLORE_LIKE_CANONICAL_REVISION_SOURCE_TYPE_172 = 'explore_like_canonical_revision_172';
 const EXPLORE_LIKE_BATCH_MAX = 50;
 const EXPLORE_LIKE_IDLE_FLUSH_MS_120 = 30_000;
 const EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120 = 90_000;
@@ -58,6 +63,7 @@ type ExploreLikePendingMutation = {
   updatedAt: number;
   retryCount: number;
   operationId?: string; // stable across a retry, replaced on every new click
+  expectedRevision?: number; // 172: canonical per-user/track mutation revision
 };
 
 type ExploreLikeOutbox = Record<string, ExploreLikePendingMutation>;
@@ -74,6 +80,11 @@ type ExploreLikeDisplayLocks = Record<string, ExploreLikeDisplayLock>;
 type ExploreLikeBatchResult = {
   trackId: string;
   liked: boolean;
+  likeCount?: number;
+  revision?: number;
+  generation?: number;
+  operationId?: string;
+  status?: 'applied' | 'duplicate' | 'already-desired' | 'revision-conflict' | 'ineligible' | 'legacy-queued';
 };
 
 type ExploreLikeBaselineSnapshot161 = {
@@ -163,6 +174,42 @@ const persistLikedStateCache = (uid: string, cache: Map<string, boolean>) => {
     dirty: false,
     pendingMutationId: null,
     data: Object.fromEntries(cache),
+  });
+};
+
+const readLikeCanonicalRevisions172 = (uid: string): Record<string, number> => {
+  const envelope = readSoridrawPersistentCache<Record<string, number>>({
+    cacheKey: EXPLORE_LIKE_CANONICAL_REVISION_CACHE_KEY_172,
+    sourceType: EXPLORE_LIKE_CANONICAL_REVISION_SOURCE_TYPE_172,
+    schemaVersion: EXPLORE_LIKE_CANONICAL_REVISION_SCHEMA_VERSION_172,
+    uid,
+  });
+  if (!envelope?.data || typeof envelope.data !== 'object' || Array.isArray(envelope.data)) return {};
+  return Object.entries(envelope.data).reduce<Record<string, number>>((acc, [trackId, value]) => {
+    const revision = Number(value);
+    if (trackId && Number.isSafeInteger(revision) && revision >= 0) acc[trackId] = revision;
+    return acc;
+  }, {});
+};
+
+const persistLikeCanonicalRevisions172 = (uid: string, revisions: Record<string, number>) => {
+  if (!Object.keys(revisions).length) {
+    removeSoridrawPersistentCache(EXPLORE_LIKE_CANONICAL_REVISION_CACHE_KEY_172, uid);
+    return;
+  }
+  writeSoridrawPersistentCache<Record<string, number>>({
+    cacheKey: EXPLORE_LIKE_CANONICAL_REVISION_CACHE_KEY_172,
+    sourceType: EXPLORE_LIKE_CANONICAL_REVISION_SOURCE_TYPE_172,
+    schemaVersion: EXPLORE_LIKE_CANONICAL_REVISION_SCHEMA_VERSION_172,
+    dataVersion: 172,
+    uid,
+    syncCursor: null,
+    serverRevision: null,
+    deletedIds: [],
+    expiresAt: null,
+    dirty: false,
+    pendingMutationId: null,
+    data: revisions,
   });
 };
 
@@ -613,6 +660,8 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
     retryCount: Math.max(0, Math.floor(Number(row.retryCount || 0))),
     operationId: typeof row.operationId === 'string' && /^[0-9a-f-]{36}$/i.test(row.operationId)
       ? row.operationId : undefined,
+    expectedRevision: Number.isSafeInteger(Number(row.expectedRevision)) && Number(row.expectedRevision) >= 0
+      ? Number(row.expectedRevision) : undefined,
   };
 };
 
@@ -798,7 +847,21 @@ const normalizeBatchResults = (payload: unknown, expectedTrackIds: string[]): Ex
     const row = value as Record<string, unknown>;
     const trackId = String(row.trackId || '').trim();
     if (!trackId || !expected.has(trackId) || typeof row.liked !== 'boolean') continue;
-    results.push({ trackId, liked: row.liked });
+    const likeCount = Number(row.likeCount);
+    const revision = Number(row.revision);
+    const generation = Number(row.generation);
+    const status = typeof row.status === 'string' && [
+      'applied', 'duplicate', 'already-desired', 'revision-conflict', 'ineligible', 'legacy-queued',
+    ].includes(row.status) ? row.status as ExploreLikeBatchResult['status'] : undefined;
+    results.push({
+      trackId,
+      liked: row.liked,
+      ...(Number.isSafeInteger(likeCount) && likeCount >= 0 ? { likeCount } : {}),
+      ...(Number.isSafeInteger(revision) && revision >= 0 ? { revision } : {}),
+      ...(Number.isSafeInteger(generation) && generation >= 0 ? { generation } : {}),
+      ...(typeof row.operationId === 'string' && row.operationId.trim() ? { operationId: row.operationId.trim() } : {}),
+      ...(status ? { status } : {}),
+    });
   }
   if (results.length !== expected.size || new Set(results.map((result) => result.trackId)).size !== expected.size) {
     throw new Error('좋아요 묶음 응답을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.');

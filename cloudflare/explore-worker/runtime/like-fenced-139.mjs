@@ -440,3 +440,78 @@ export function createLikeTrackAggregator147(trackId, storage, publishTrack) {
     return operation;
   };
 }
+
+
+// SORIDRAW_LIKE_SHARED_TRACK_CARD_151_20260921
+// One public surface only: existing shared-track-card-v115 R2 object.
+// This adapter alone does NOT complete Feed, popular sorting, or profile;
+// the 147 owner requires separate proven receipts for those surfaces.
+export function createLikeSharedTrackCardPublisher151(bucket) {
+  if (!bucket?.get || !bucket?.put) throw new TypeError('Shared R2 bucket required');
+  return async function publishTrackCard151({ trackId, count, generation, delta }) {
+    if (!safeId(trackId, 512) || !Number.isSafeInteger(count) || count < 0 ||
+        !Number.isSafeInteger(generation) || generation <= 0 ||
+        (delta !== 1 && delta !== -1)) {
+      throw new TypeError('Invalid canonical public track count');
+    }
+    const key = 'internal/explore/shared-track-card-v115/' +
+      encodeURIComponent(trackId) + '.json';
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const object = await bucket.get(key);
+      if (!object?.etag) throw new Error('Existing shared track card missing; verified rebuild required');
+      let bundle;
+      try { bundle = JSON.parse(await object.text()); }
+      catch { throw new Error('Shared track card unreadable'); }
+      if (Number(bundle?.schemaVersion) !== 1 ||
+          bundle.trackId !== trackId || bundle?.card?.id !== trackId ||
+          !Number.isSafeInteger(bundle.card.likeCount) ||
+          bundle.card.likeCount < 0) {
+        throw new Error('Shared track card missing expected schema or count');
+      }
+      const previousGeneration = bundle.lastLikeGeneration151 == null
+        ? 0 : bundle.lastLikeGeneration151;
+      if (!Number.isSafeInteger(previousGeneration) || previousGeneration < 0) {
+        throw new Error('Invalid shared card generation');
+      }
+      if (previousGeneration > generation) {
+        return { published: true, snapshotGeneration: previousGeneration,
+          superseded: true, surface: 'card' };
+      }
+      if (previousGeneration === generation) {
+        if (bundle.card.likeCount !== count ||
+            bundle.card?.stats?.likeCount != null &&
+              bundle.card.stats.likeCount !== count) {
+          throw new Error('Conflicting shared card generation/count');
+        }
+        return { published: true, snapshotGeneration: generation,
+          duplicate: true, surface: 'card' };
+      }
+      // The first migrated update must begin from the exact audited baseline,
+      // not a stale card reconstructed from older TEST/PRODUCTION workers.
+      if (previousGeneration === 0 && generation === 1 &&
+          bundle.card.likeCount !== count - delta) {
+        throw new Error('Shared card baseline differs from verified track total');
+      }
+      // A generation jump is safe only if the new count came from the same
+      // serialized, durable per-track owner and old writers are cut over.
+      const nextCard = {
+        ...bundle.card, likeCount: count,
+        ...(bundle.card.stats && typeof bundle.card.stats === 'object'
+          ? { stats: { ...bundle.card.stats, likeCount: count } } : {}),
+      };
+      const now = Date.now();
+      const next = {
+        ...bundle, card: nextCard,
+        lastLikeGeneration151: generation, updatedAt: now,
+      };
+      const result = await bucket.put(key, JSON.stringify(next), {
+        onlyIf: { etagMatches: object.etag },
+        httpMetadata: { contentType: 'application/json; charset=utf-8' },
+        customMetadata: { soridrawSharedTrackCard: '115', updatedAt: String(now) },
+      });
+      if (!result) continue;
+      return { published: true, snapshotGeneration: generation, surface: 'card' };
+    }
+    throw new Error('Shared public track card CAS contention; retry required');
+  };
+}

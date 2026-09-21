@@ -62,6 +62,8 @@ jobs:
           node --check cloudflare/explore-worker/patches/083-like-r2-revision.mjs
           node --check cloudflare/explore-worker/runtime/like-r2-revision-173.mjs
           node --check cloudflare/explore-worker/scripts/like-d1only-precutover-proof-173.mjs
+          node --check cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
+          node --check cloudflare/explore-worker/scripts/like-d1-cutover-proof-174.mjs
           expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
           actual_worker_sha="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
           echo "CANONICAL_WORKER_EXPECTED_SHA256=$expected_worker_sha"
@@ -85,7 +87,10 @@ jobs:
           node scripts/verify-172-d1only-route.mjs
           node scripts/verify-173-like-r2-revision.mjs
           node scripts/verify-173-d1only-precutover-proof.mjs
-          node scripts/verify-173-cutover-proof-gate.mjs
+          node scripts/verify-174-like-cutover-fence-schema.mjs
+          node scripts/verify-174-d1-cutover-proof.mjs
+          node scripts/verify-174-cutover-proof-gate.mjs
+          python3 scripts/verify-174-like-cutover-fence.py
 
           replay173="$RUNNER_TEMP/soridraw-like-r2-173"
           mkdir -p "$replay173"
@@ -93,6 +98,10 @@ jobs:
           SORIDRAW_REMOTE_WORKER_DIR="$replay173" node cloudflare/explore-worker/patches/083-like-r2-revision.mjs
           SORIDRAW_REMOTE_WORKER_DIR="$replay173" node cloudflare/explore-worker/patches/083-like-r2-revision.mjs
           SORIDRAW_GENERATED_WORKER="$replay173/worker.js" node scripts/verify-173-like-r2-route.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$replay173" node cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$replay173" node cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
+          node --check "$replay173/worker.js"
+          SORIDRAW_GENERATED_WORKER="$replay173/worker.js" node scripts/verify-174-like-d1-atomic-fence-route.mjs
           python3 scripts/verify-171-d1only-concurrency.py
           python3 scripts/verify-167-like-atomic-fence.py
           python3 scripts/verify-168-direct-atomic.py

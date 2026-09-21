@@ -2912,6 +2912,63 @@ async function readBoundedLegacyLikeMemberships161(env, uid, trackIds) {
   return new Set((result?.results || []).map((row) => String(row?.track_id || '').trim()).filter(Boolean));
 }
 
+// SORIDRAW_SHARED_LIKE_CUTOVER_GATE_162_20260921
+const exploreLikeCutoverKey162 = 'internal/explore/like-cutover-v162/active.json';
+
+async function readLikeCutoverState162(env) {
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!bucket) return { mode: 'legacy', cutoverToken: null };
+  const object = await bucket.get(exploreLikeCutoverKey162);
+  if (!object) return { mode: 'legacy', cutoverToken: null };
+  let value = null;
+  try { value = JSON.parse(await object.text()); }
+  catch { throw new Error('162 cutover manifest unreadable'); }
+  const token = String(value?.cutoverToken || '').trim();
+  const armed = Number(value?.schemaVersion) === 1 &&
+    value?.relationMode === 'overlay157' &&
+    value?.legacyRelationWritersFrozen === true &&
+    value?.legacyCountWritersFrozen === true &&
+    value?.allEnvironmentReadersReady === true &&
+    value?.allEnvironmentWritersReady === true &&
+    value?.ownerProtocol === 'uid143-track147-158' &&
+    token.length > 0 && token.length <= 128;
+  if (!armed) throw new Error('162 cutover manifest present but not fully armed');
+  return { mode: 'overlay157', cutoverToken: token };
+}
+
+async function readBoundedEffectiveLikeMemberships162(env, uid, trackIds) {
+  const normalized = String(uid || '').trim();
+  const ids = [...new Set((trackIds || []).map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 200);
+  if (!normalized || !ids.length || !env?.DB) {
+    return { likedIds: new Set(), mode: 'legacy', cutoverToken: null };
+  }
+  const cutover = await readLikeCutoverState162(env);
+  if (cutover.mode !== 'overlay157') {
+    return {
+      likedIds: await readBoundedLegacyLikeMemberships161(env, normalized, ids),
+      mode: 'legacy',
+      cutoverToken: null,
+    };
+  }
+  const values = ids.map(() => '(?)').join(',');
+  const result = await env.DB.prepare(
+    'WITH requested(track_id) AS (VALUES ' + values + ') ' +
+    'SELECT r.track_id FROM requested r ' +
+    'JOIN tracks t ON t.id = r.track_id ' +
+    'LEFT JOIN likes l ON l.track_id = r.track_id AND l.user_uid = ? ' +
+    'LEFT JOIN explore_like_overrides_157 o ON o.user_uid = ? AND o.track_id = r.track_id ' +
+    "WHERE t.is_public = 1 AND t.status = 'published' " +
+    'AND COALESCE(o.liked, CASE WHEN l.user_uid IS NULL THEN 0 ELSE 1 END) = 1'
+  ).bind(...ids, normalized, normalized).all();
+  if (!Array.isArray(result?.results)) throw new Error('162 effective membership unavailable');
+  const liked = result.results.map((row) => String(row?.track_id || '').trim()).filter(Boolean);
+  if (liked.some((id) => !ids.includes(id)) || new Set(liked).size !== liked.length) {
+    throw new Error('162 effective membership invalid');
+  }
+  return { likedIds: new Set(liked), mode: 'overlay157', cutoverToken: cutover.cutoverToken };
+}
+
+
 async function readSharedLikes061(env, uid) {
   const state = await readSharedLikesState161(env, uid);
   return state?.likedIds || null;
@@ -16773,12 +16830,13 @@ async function handleMyLikeStates(request, url, env, cors) {
       likesSnapshotSource: sharedState.source,
     } }, 200, cors);
   }
-  const targeted = await readBoundedLegacyLikeMemberships161(env, authContext.uid, trackIds);
+  const targeted162 = await readBoundedEffectiveLikeMemberships162(env, authContext.uid, trackIds);
   return json({ ok: true, data: {
-    likedTrackIds: trackIds.filter((trackId) => targeted.has(trackId)),
+    likedTrackIds: trackIds.filter((trackId) => targeted162.likedIds.has(trackId)),
     likesComplete: false,
     exactLikeCount: null,
-    likesSnapshotSource: 'legacy-targeted-161',
+    likesSnapshotSource: targeted162.mode === 'overlay157'
+      ? 'overlay157-targeted-162' : 'legacy-targeted-161',
   } }, 200, cors);
 }
 __name(handleMyLikeStates, "handleMyLikeStates");
@@ -23122,9 +23180,10 @@ async function handleMyLikedTracks052(request, env, cors) {
   if (trackIds.some((trackId) => trackId.length > 512)) throwApi('INVALID_TRACK_ID', '곡 ID가 올바르지 않습니다.', 400);
 
   const likeState = await readSharedLikesState161(env, authContext.uid);
-  const likedIds = likeState?.exact
-    ? likeState.likedIds
-    : await readBoundedLegacyLikeMemberships161(env, authContext.uid, trackIds);
+  const targeted162 = likeState?.exact
+    ? { likedIds: likeState.likedIds, mode: 'exact-r2', cutoverToken: null }
+    : await readBoundedEffectiveLikeMemberships162(env, authContext.uid, trackIds);
+  const likedIds = targeted162.likedIds;
   const likesComplete = Boolean(likeState?.exact);
   const canonicalLikedTrackIds = [...likedIds];
 

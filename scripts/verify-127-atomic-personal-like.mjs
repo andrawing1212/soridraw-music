@@ -176,7 +176,12 @@ assert.match(flush, /writeSnapshotPending127\(uid, snapshotPending127\)/);
 assert.ok(flush.indexOf('writeSnapshotPending127(uid, snapshotPending127)') <
   flush.indexOf('persistLikeOutbox(uid, latest);',flush.indexOf('writeSnapshotPending127(uid, snapshotPending127)')),
   'persist the unmaterialized state before clearing accepted D1 outbox');
-assert.match(flush, /if \(!canonicalLikeSettled127 && batchEntries\[0\]\)/);
+assert.doesNotMatch(flush, /if \(!canonicalLikeSettled127 && batchEntries\[0\]\)/,
+  'server-accepted account heart must not wait on a settled flag that current Worker never emits');
+assert.ok(
+  flush.indexOf('acceptedForSignal127.push(accepted)') < flush.indexOf('if (canonicalLikeSettled127) {'),
+  'accepted account state must be queued for cross-device sync before canonical aggregate settlement gating',
+);
 assert.match(flush, /dispatchLikeSync\(\{ \.\.\.accepted, source: canonicalLikeSettled127 \? 'confirmed' : 'local' \}\)/);
 assert.match(flush, /persistLikedStateCache\(uid, cache\)/);
 assert.match(flush, /persistLikeOutbox\(uid, latest\)/);

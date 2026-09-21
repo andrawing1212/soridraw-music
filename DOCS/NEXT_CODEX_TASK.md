@@ -1,5 +1,23 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app129 단일 좋아요 원자 규칙 PREVIEW 배포 전 상태
+
+현재:
+- source commit `2c9745487517b86f1f910c651497be6a0003bca8`
+- Release System Audit Run `35645617094` SUCCESS
+- 한 계정/한 곡 좋아요를 0/1 한 상태로 고정하고 하트·숫자·내 좋아요를 같은 변경으로 묶는 코드 반영 완료.
+- 실제 PREVIEW live 앱은 아직 app128.
+- Worker / D1 schema / 사용자 데이터는 이번 수정에서 변경 없음.
+
+다음:
+1. 사용자가 PREVIEW 배포를 요청하면 현재 검증 commit 기준으로 app129 Hosting만 승격.
+2. 배포 후 같은 곡에서 OFF→ON은 하트 ON/숫자 +1/내 좋아요 포함이 동시에 보이는지 확인.
+3. ON→OFF는 하트 OFF/숫자 -1/내 좋아요 제거가 동시에 보이는지 확인.
+4. 같은 상태 중복 요청에서 숫자가 두 번 변하지 않는지 확인.
+5. 같은 계정 PC↔모바일에서 최종 하트·숫자·내 좋아요가 같은 결과로 수렴하는지 확인.
+6. 위 검증 전 171 D1 migration / final cutover / TEST / PRODUCTION 진행 금지.
+
+
 ## 현재 최우선 — app128 PREVIEW 실사용 좋아요 검증
 
 현재:

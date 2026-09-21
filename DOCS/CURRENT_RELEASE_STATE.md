@@ -1,5 +1,45 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CZ. app129 좋아요 단일 원자 규칙 source 수정 + 감사 PASS (2026-09-22 KST)
+
+**현재 preview HEAD 기준 코드 commit:** `2c9745487517b86f1f910c651497be6a0003bca8`.
+**Release System Audit:** Run `35645617094` SUCCESS.
+
+이번 수정의 기준은 하나다.
+
+- 한 계정 + 한 곡 = 좋아요 상태 0 또는 1만 존재.
+- OFF→ON 한 번은 **하트 ON + 공개 숫자 정확히 +1 + 내 좋아요 포함**을 하나의 변경으로 취급.
+- ON→OFF 한 번은 **하트 OFF + 공개 숫자 정확히 -1 + 내 좋아요 제거**를 하나의 변경으로 취급.
+- 이미 같은 상태를 다시 적용하면 숫자와 하트 모두 변화 없음.
+- 꽉 찬 하트인데 공개 숫자 0인 화면 상태는 불가능한 상태로 취급. 현재 계정 자신의 1개 기여분까지만 최소 보정하며 다른 사용자 수는 임의 변경하지 않음.
+- 원격에서 canonical likeCount가 함께 도착하면 Feed / 공개프로필 / 내 좋아요 카드의 하트·숫자를 같은 이벤트에서 함께 갱신.
+- 내 좋아요 목록은 별도 좋아요 판정 기준이 아니라, 동일 개인 하트 membership의 표시용 카드 캐시로 유지.
+
+변경 파일:
+- `src/services/exploreLikeService.ts`
+- `src/pages/ExplorePage.tsx`
+- `scripts/verify-127-atomic-personal-like.mjs`
+
+검증:
+- TypeScript PASS
+- Build PASS
+- Static release verification PASS
+- Like regression PASS
+- TEST / PRODUCTION Worker dry-run PASS
+- live shared D1 preflight read-only PASS
+- branch refs unchanged PASS
+
+변경하지 않은 것:
+- Worker 제품 코드 변경 0
+- Firebase / Functions 변경 0
+- D1 migration / schema apply 0
+- 사용자 데이터 write / backfill / delete 0
+- TEST / PRODUCTION 배포 0
+- UI/CSS 변경 0
+
+**실제 PREVIEW 배포 상태:** 아직 app128이 live. app129 단일 좋아요 원자 수정은 source 감사 완료 상태이며 PREVIEW Hosting 배포 전이다.
+
+
 ## 0CY. PREVIEW app128 — partial R2 상태에서도 좋아요 클릭 잠금 해제 배포 완료 (2026-09-22 KST)
 
 사용자 두 번째 실사용 영상에서 중요한 사실을 다시 확인했다.

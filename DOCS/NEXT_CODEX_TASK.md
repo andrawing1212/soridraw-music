@@ -1,5 +1,14 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 155 실측·무손실 복구 조회 후보 — 다음은 R2 2천+·세 환경 무손실 전환 (2026-09-21 KST)
+
+실제 [run 35566094717](https://github.com/andrawing1212/soridraw-music/actions/runs/35566094717), exact `1d6571eead45326f1dc6d746567640e15c85648c` SUCCESS. 미적용 153 인덱스 `(user_uid, created_at DESC, track_id DESC)`가 실제 격리 Cloudflare D1에서 좋아요 **W2/해제 W1/중복 W0**임을 재확인. 같은 ms에 다른 곡을 좋아요한 경우 실제 SQL keyset 페이지가 누락 없이 넘어가는지 검증. `createLikeRecentPager155`는 128개 이하 read-only 페이지, `verify-135`는 2,053개 synthetic 좋아요 무손실 복구 PASS. **실 R2 2천개 제한 자체는 변경되지 않았고 신규 pager는 Worker 미연결.** 상태 문서 0CL.
+
+**우선 다음 구현:** 실제 공유 사용자 데이터를 변환하기 전, 기존 R2 개인 snapshot v114의 2천 제한, 061 writer `slice(0,2000)`, 141 fail-closed, 074 및 3환경 개인 좋아요 reader/writer 목록을 고정. 정상 캐시는 재진입 원본 D1 R0 유지. 기존 cache를 바꾸지 않고 새 pagination 결과를 읽어 복구할 수 있는 **호환 가능한 cold-only 경로**를 격리 계정에서 구현·검증. 불완전 목록을 완전한 현재 하트로 선언하지 않고 누락/동시 변경 검증. 051 변경 신호, 147 곡별 counter 시드, public Feed/profile, 전체 legacy writers의 단일 owner 공존 차단과 함께 완성해야 함. R2/DO/RTDB 및 최종 사용자 행동 총비용 10만 규모 검토.
+
+**차단:** 공유 D1 v153 자동 생성/백필, 기존 likes·트리거·인덱스 제거, 실제 사용자 데이터 이동, 구형 Worker 우회, PRODUCTION 수정은 명시적 변경범위·복구 및 사용자 승인 전 금지. 격리 D1 W2만으로 제품/배포 PASS 금지. 실제 PREVIEW 앱126/Worker071 유지, TypeScript/Build/회귀 PASS는 위 run 소스 커밋 한정. 이후 최종 변경은 별도 exact source audit + Work/PC·모바일/실주소 검증 후 사용자 배포 승인.
+
+
 ## 최신 153 실측 기준 — user-first WITHOUT ROWID 좋아요 W2 / 구형 공유 writer 전환 (2026-09-21 KST)
 
 사용자의 격리 D1 비용 확인 및 실제 구현 요청을 수행. GitHub Actions [35563388506](https://github.com/andrawing1212/soridraw-music/actions/runs/35563388506), [35563565716](https://github.com/andrawing1212/soridraw-music/actions/runs/35563565716)에서 각각 **신규 임시 Cloudflare 원격 D1 생성→synthetic 좋아요·해제 meta.rows_written 측정→DB 삭제까지 PASS**. 상세 표 `DOCS/LIKE_WRITE_REDESIGN_133.md` §153. 기존 rowid+PK+두 index+051 트리거 W5 좋아요, W2 해제. **사용자 우선 `WITHOUT ROWID PRIMARY KEY(user_uid,track_id)` + 최근 조회 인덱스 1개는 W2 좋아요, W1 해제, 중복 W0이며 UID index search 유지**. 추가 인덱스 없는 동일 PK는 W1/W1이나 최근 순서 인덱스 부재. 섣불리 기존 likes의 index만 DROP하지 말 것.

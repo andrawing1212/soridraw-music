@@ -1,5 +1,24 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — PREVIEW app132 실사용 PC↔모바일 좋아요 검증 (2026-09-22)
+
+실제 PREVIEW app132 배포 확인:
+- source `ffff163783c3103a9594903132480ce356846ad2`
+- audit run `35650903841` job `106508627342` rerun SUCCESS
+- Firebase PREVIEW run `35651254609` job `106509860243` rerun SUCCESS
+- remote app version 132 / exact build PASS / TEST·PRODUCTION unchanged PASS
+- Worker·Functions·Rules·공유 D1/R2 데이터 변경 없음
+
+다음은 코드 재작성 전 사용자 PC/모바일 실제 결과 확인:
+1. 같은 계정 동일 곡의 첫 화면 하트·숫자·내 좋아요 일치.
+2. PC에서 2곡 좋아요 해제 → 30초 ACK 뒤 모바일에 새로고침·탭 왕복 없이 같은 0/1 상태.
+3. 모바일 ON→OFF→ON을 한 뒤 PC도 같은 최종 상태.
+4. 페이지 재진입·앱 업데이트에서 기존 상태가 과거 캐시로 회귀하지 않음.
+5. FAIL이면 최신 승인 계정 상태·public likeCount의 실제 시점/경로를 분리 진단하여 최소 수정. 기능 제거/전체 조회/W1 강제 금지.
+
+실사용 통과 전 171 cutover, 새로운 비용 실험, TEST/PRODUCTION 승격 금지. 앱 배포 성공은 사용자 기능 실측 성공과 구분.
+
+
 ## 최신 단일 작업 — app132 PC↔모바일 첫 화면 좋아요 불일치 실사용 복구 (2026-09-22)
 
 현재 PREVIEW live app131 실사용 FAIL: PC의 찬 하트/숫자가 모바일 첫 화면에서 빈 하트/0으로 보임.

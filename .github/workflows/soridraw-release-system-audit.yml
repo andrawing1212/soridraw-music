@@ -195,6 +195,16 @@ jobs:
           }
           console.log('158_TRACK_STATS_BASELINE_PK_PLAN=PASS ' + detail);
           NODE
+          node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "EXPLAIN QUERY PLAN SELECT l.track_id FROM likes l JOIN tracks t ON t.id=l.track_id WHERE l.user_uid='__soridraw_161_probe__' AND l.track_id IN ('__soridraw_161_track__') AND t.is_public=1 AND t.status='published'" --json > "$RUNNER_TEMP/like-161-targeted-plan.json"
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const rows = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/like-161-targeted-plan.json','utf8')).flatMap(x => x.results || []);
+          const detail = rows.map(x => String(x.detail || '')).join(' | ');
+          if (!/SEARCH l /i.test(detail) || !/SEARCH t /i.test(detail) || /SCAN (?:l|t)\b/i.test(detail)) {
+            throw Error('161 targeted legacy membership is not keyed/bounded: ' + detail);
+          }
+          console.log('161_TARGETED_LEGACY_MEMBERSHIP_INDEX_PLAN=PASS ' + detail);
+          NODE
 
       - name: Real remote D1 like billing on isolated synthetic database
         if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'measure isolated D1')

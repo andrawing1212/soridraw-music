@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156, createLikeOverlayCanonical157, createLikeOverlayPager157, createLikeLazyTrackAggregator158, createTrackStatsBaselineLoader158, createLikeCutoverManifestReader162, createLikeBoundedMembershipReader162, LIKE_CUTOVER_MANIFEST_KEY_162, createLegacyLikeWriterGuard163 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156, createLikeOverlayCanonical157, createLikeOverlayPager157, createLikeLazyTrackAggregator158, createTrackStatsBaselineLoader158, createLikeCutoverManifestReader162, createLikeBoundedMembershipReader162, LIKE_CUTOVER_MANIFEST_KEY_162, createLegacyLikeWriterGuard163, LIKE_DRAIN_MANIFEST_KEY_165, createLikeDrainStateReader165, createLegacyLikeIntakeGuard165 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -1682,4 +1682,84 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('163_DIRECT_SCHEDULED_REFRESH_WRITER_ENTRY_GUARDS=PASS');
   console.log('163_IDLE_CRON_MARKER_R2_READ_ZERO_BY_ORDER=PASS');
   console.log('163_SHARED_CUTOVER_MARKER_WRITE_PATH=NONE');
+}
+
+
+// 165: Pause only NEW legacy intake while the old queue processor continues
+// draining. The marker is shared and is never written by the product Worker.
+{
+  let value165 = null;
+  let reads165 = 0;
+  const bucket165 = {
+    async get(key) {
+      assert.equal(key, LIKE_DRAIN_MANIFEST_KEY_165);
+      reads165 += 1;
+      return value165 === null ? null : { async text() { return typeof value165 === 'string' ? value165 : JSON.stringify(value165); } };
+    },
+  };
+  const guard165 = createLegacyLikeIntakeGuard165(createLikeDrainStateReader165(bucket165));
+  assert.deepEqual(await guard165(), { mode: 'open', drainToken: null });
+  const valid165 = {
+    schemaVersion: 1, phase: 'draining', allEnvironmentIntakeReady: true,
+    ownerProtocol: 'uid143-track147-158', drainToken: '165-drain-A',
+  };
+  value165 = valid165;
+  await assert.rejects(guard165(), (error) =>
+    error?.code === 'LIKE_CUTOVER_DRAINING' && error?.retryAfterSeconds === 30);
+  for (const bad of [
+    '{corrupt-json',
+    { ...valid165, phase: 'legacy' },
+    { ...valid165, allEnvironmentIntakeReady: false },
+    { ...valid165, ownerProtocol: 'unknown' },
+    { ...valid165, drainToken: '' },
+  ]) {
+    value165 = bad;
+    await assert.rejects(guard165(), /165 drain manifest/);
+  }
+  assert.equal(reads165, 7);
+  console.log('165_DRAIN_MARKER_ABSENT_OPEN_ARMED_PAUSED_CORRUPT_CLOSED=PASS');
+
+  const worker165 = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
+  const patch165 = readFileSync('cloudflare/explore-worker/patches/079-like-intake-drain-barrier.mjs', 'utf8');
+  const release165 = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
+  assert.match(worker165, /SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921/);
+  assert.equal(release165.patches.at(-1), '079-like-intake-drain-barrier.mjs');
+  assert.match(patch165, /const marker165 = 'SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921'/);
+  const slice165 = (name) => {
+    const start = worker165.indexOf('async function ' + name + '(');
+    assert.ok(start >= 0, 'missing 165 guarded Worker entry ' + name);
+    const end = worker165.indexOf('\\n}', start);
+    assert.ok(end > start);
+    return worker165.slice(start, end + 2);
+  };
+  const direct165 = slice165('handleLikeD1Core');
+  const batch165 = slice165('handleLikeBatch034');
+  const cron165 = slice165('processExploreLikeBatches035Core056');
+  for (const [label, body, write] of [
+    ['direct', direct165, 'adjustExploreLikeCounterDelta('],
+    ['batch', batch165, 'enqueueExploreLikeBatch035('],
+  ]) {
+    const markerAt = body.indexOf('await assertLegacyLikeIntakeOpen165(env)');
+    assert.ok(markerAt >= 0 && markerAt < body.indexOf(write),
+      '165 ' + label + ' intake must be guarded before D1 write');
+    assert.ok(body.indexOf('enforceExploreLikeBatchEdgeRateLimit054') < markerAt);
+  }
+  assert.doesNotMatch(cron165, /assertLegacyLikeIntakeOpen165/);
+  assert.match(cron165, /processExploreLikeUserQueueWave075/);
+  assert.doesNotMatch(worker165, /(?:put|delete)\\(exploreLikeDrainKey165/,
+    'product Worker must never create or remove the drain marker');
+  assert.equal((worker165.match(/await assertLegacyLikeIntakeOpen165\\(env\\)/g) || []).length, 2);
+  console.log('165_BATCH_DIRECT_INTAKE_GUARDED_CRON_DRAIN_REMAINS_OPEN=PASS');
+  console.log('165_SHARED_DRAIN_MARKER_WRITE_PATH=NONE');
+
+  const service165 = readFileSync('src/services/exploreLikeService.ts', 'utf8');
+  const flushStart165 = service165.indexOf('flushPendingLikes = async');
+  const flushEnd165 = service165.indexOf('// App 120 deliberately ignores historical RTDB', flushStart165);
+  const flush165 = service165.slice(flushStart165, flushEnd165);
+  assert.match(flush165, /} catch \\(reason\\) \\{/);
+  assert.match(flush165, /persistLikeOutbox\\(uid, latest\\)/);
+  assert.match(flush165, /current\\.retryCount = Math\\.min\\(8, current\\.retryCount \\+ 1\\)/);
+  assert.match(flush165, /if \\(succeeded && getPendingExploreLikeMutationCount\\(uid\\) > 0\\)/);
+  assert.match(service165, /window\\.addEventListener\\('online', retry\\)/);
+  console.log('165_CLIENT_RETRIABLE_FAILURE_LAST_INTENT_RETAINED=PASS');
 }

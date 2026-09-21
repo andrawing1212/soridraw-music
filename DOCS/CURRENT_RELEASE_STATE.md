@@ -1,5 +1,22 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CJ. 153 실 Cloudflare 격리 D1 비용 W1/W2 측정, user-first 추가형 스키마·연결 코드 (2026-09-21 KST)
+
+사용자 "니가 말한대로 작업해줘. 말만 하지말고" 요청. `preview` 기준 `9dfa6a578afb1a86f14c97d4082793e89bc14da5`에서 단순 계산/SQLite가 아니라 **실제 Cloudflare 원격 임시 D1**을 두 번 생성해 순수 테스트 UID/곡만 넣고 `meta.rows_written` 실측. 실제 run [35563388506](https://github.com/andrawing1212/soridraw-music/actions/runs/35563388506), [35563565716](https://github.com/andrawing1212/soridraw-music/actions/runs/35563565716) 전체 SUCCESS, 시험 DB는 각각 삭제 확인 `153_EPHEMERAL_D1_DELETED=PASS`. **공유 사용자 DB/R2/Firebase/Worker·실사용 계정은 읽기 전용 기존 schema 감사 이외 접근하지 않았음.**
+
+실측 새 좋아요/해제/동일 상태 중복:
+- 기존 likes에 대응하는 rowid PK+최근/기간 인덱스2+051 global revision trigger: **W5/W2/W0**. 146 관계 단독 SQL이어도 현 스키마상 W2 불가.
+- 기존 인덱스2만 유지하고 051 제거: **W4/W1/W0**. 최근 인덱스 하나만 유지: **W3/W1/W0**.
+- rowid PK만 남긴 track-first: **W2/W1/W0**, 다만 UID 목록 조회가 전체 인덱스 scan.
+- user-first `PRIMARY KEY(user_uid,track_id)` rowid PK: **W2/W1/W0**, UID 조회 인덱스 이용.
+- **user-first `WITHOUT ROWID` PK만**: **W1/W1/W0**, UID 조회 PK 검색.
+- **user-first WITHOUT ROWID + 최근 인덱스 하나 `(user_uid,created_at DESC)`**: **W2/W1/W0**, UID 최근 목록 인덱스 검색. 선택한 품질/비용 후보.
+- track-first WITHOUT ROWID PK: W1/W1이나 UID 목록은 scan. PK만+051은 W3/W2.
+
+신규 `scripts/measure-153-isolated-d1.mjs`는 고유 이름 test DB 생성, 각 SQL별 meta.rows_written/changes 및 EXPLAIN QUERY PLAN 조회, finally 및 GitHub always() 별도 cleanup; 기존 `.github/workflows/soridraw-release-system-audit.yml`에서 명시된 measurement-trigger/수동 감사에만 실행(일반 push에는 임시 D1 생성하지 않음). 신규 `cloudflare/explore-worker/migrations/20260921_01_explore_likes_v153_additive.sql`에 `explore_likes_153` user-first WITHOUT ROWID+recent index 추가형 SQL을 작성하되 **적용하지 않음**. 기존 146 adapter에 `relationTable:'explore_likes_153'` 분기·명시적 `cutoverVerified` gate, UID-first SQL, 응답 rows_written W3+ 확정 차단 추가(실 Worker 연결 없음). 135 mock에 gate·W2/W1·중복 W0·W3 차단 테스트 추가해 실제 GitHub 소스 V8 격리 PASS. 상세 표 및 실행/승격 경계: `DOCS/LIKE_WRITE_REDESIGN_133.md` §153.
+
+**정확한 현재 상태:** 새 테이블 및 직접 저장 방식의 비용 합격은 **격리 원격 D1 한정**. 실제 공유 DB에 v153은 없고 기존 개인 좋아요가 이동하지 않았음. old TEST/PRODUCTION Worker의 기존 likes+051 unconditional writer/readers, 147곡별 count의 검증 시드와 복구, R2 feed/popular/profile 동기화, 사용자 개인 2천곡 한도, UID owner 서비스 바인딩, RTDB 및 전체 PC/모바일 검증, Work 감사 미완료. 승인되지 않은 공유 DB migration/백필/기존 필드 제거/실사용 데이터 변환, TEST/PRODUCTION 승격 없음. PREVIEW 실제 앱126/Worker071 기준(새 실주소 확인 전), 이번 작업 미배포. 153 신형 table만 활성화하면 구형 앱에서 기존 하트가 소실된 것처럼 보이므로 단독 배포 금지. 공유 데이터 전환과 PRODUCTION 코드 변경은 별도 영향/복구/비용 범위와 명확한 승인 필요. 마무리 CI 결과는 새 코드 포함 run에서 다시 확인할 것.
+
 ## 0CI. GitHub Actions 실제 검증 PASS + 운영 공유 D1 W2 불가능 원인 확인 (2026-09-21 KST)
 
 사용자가 반복된 후보/모의 보고 대신 실제 결과와 완성 요구. `preview` 시작 HEAD `cbc8a4cf004066b145076beda21a7b14efe2cb0d`. GitHub Actions Release System Audit 실제 run `35561196390` 실패 원인 `verify-127`의 TypeScript 단위 테스트 JS 추출에서 144 export가 섞이며 `exports is not defined` 발생; `scripts/verify-127-atomic-personal-like.mjs`의 clock/helper 경계와 전역 `export const` 제거를 최소 수정. 재실행 run `35561894019` commit `9001e19c1658475b181ae7571324f537ed76133d` **SUCCESS**: 실제 TypeScript, Build, release static, 127/128/135~152 격리 검증, 132/133/134/148 비용 모형, TEST/PRODUCTION Worker dry-run, 공유 D1 read-only preflight, 실 schema read-only audit 전부 PASS. audit의 모델 로그 `LEGACY_WRITER_BYPASS_RELEASE_GATE=FAIL`, `PRODUCT_RELEASE_READINESS=FAIL`, `REAL_D1_ROWS_WRITTEN=NOT_MEASURED`는 의도한 **제품 릴리스 차단**이며 audit의 SUCCESS와 다름.

@@ -1,5 +1,23 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app129 PREVIEW 실사용 단일 좋아요 원자 검증
+
+현재 실제 PREVIEW:
+- app129 Hosting Run `35646734214` SUCCESS.
+- 배포 source `0a8b1d6820493c82d8cc2924446153c967fa3798`.
+- remote app version 129 / exact build PASS.
+- Worker / D1 / 사용자 원본 데이터 비변경.
+
+사용자 확인 순서:
+1. 기존 빈 하트 곡 1개를 좋아요: 하트 ON + 숫자 +1 + 내 좋아요 포함.
+2. 같은 곡을 좋아요 해제: 하트 OFF + 숫자 -1 + 내 좋아요 제거.
+3. 같은 곡을 다시 좋아요: 정확히 한 번만 +1.
+4. 30초 뒤 동일 계정의 다른 기기에서 하트·숫자·내 좋아요가 같은 상태인지 확인.
+5. 페이지 추천/최신/인기/공개프로필 사이를 이동해도 같은 곡 값이 서로 달라지지 않는지 확인.
+
+이 다섯 항목 통과 전 추가 구조 변경, 171 migration, final cutover, TEST/PRODUCTION 승격 금지.
+
+
 ## 현재 최우선 — app129 단일 좋아요 원자 규칙 PREVIEW 배포 전 상태
 
 현재:

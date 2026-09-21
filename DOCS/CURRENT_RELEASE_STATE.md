@@ -1,5 +1,39 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DA. PREVIEW app129 — 하트·숫자·내 좋아요 단일 좋아요 원자 배포 완료 (2026-09-22 KST)
+
+**PREVIEW 배포 고정 commit:** `0a8b1d6820493c82d8cc2924446153c967fa3798`.
+**제품 코드 기준:** `2c9745487517b86f1f910c651497be6a0003bca8`.
+**PREVIEW Hosting Run:** `35646734214` SUCCESS.
+
+배포된 기준:
+- 한 계정 + 한 곡 = 좋아요 0 또는 1.
+- OFF→ON = 하트 ON + 공개 숫자 +1 + 내 좋아요 포함.
+- ON→OFF = 하트 OFF + 공개 숫자 -1 + 내 좋아요 제거.
+- 동일 상태 중복 요청은 숫자/하트 변화 없음.
+- 꽉 찬 하트 + 숫자 0은 불가능한 표시로 간주하고, 현재 계정의 최소 1개 기여분만 보정.
+- 원격 canonical likeCount가 오면 Feed / 공개프로필 / 내 좋아요 카드에 하트·숫자를 같은 이벤트로 반영.
+- 내 좋아요는 별도 판정 기준이 아니라 개인 하트 membership의 카드 표시 캐시.
+
+배포/검증:
+- 사전 Release System Audit `35645617094` SUCCESS.
+- TypeScript PASS / Build PASS / Like regression PASS.
+- Firebase PREVIEW Hosting deploy PASS.
+- remote `app-version.json=129` PASS.
+- PREVIEW exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- Worker 재배포 0. active PREVIEW Worker `733c3981-4095-4c69-bf33-9abb5de7a450` 유지.
+- Functions / Rules / D1 migration / 사용자 데이터 migration·backfill·delete 0.
+
+현재 실사용 검증:
+1. 같은 곡 OFF→ON에서 하트 ON + 숫자 +1 + 내 좋아요 포함이 함께 보이는지.
+2. ON→OFF에서 하트 OFF + 숫자 -1 + 내 좋아요 제거가 함께 보이는지.
+3. 같은 상태 반복/재시도에서 숫자가 두 번 변하지 않는지.
+4. 같은 계정 PC↔모바일에서 30초 배치 후 최종 하트·숫자·내 좋아요가 같은 결과로 수렴하는지.
+
+위 실사용 통과 전 171 D1-only cutover / TEST / PRODUCTION 승격 금지.
+
+
 ## 0CZ. app129 좋아요 단일 원자 규칙 source 수정 + 감사 PASS (2026-09-22 KST)
 
 **현재 preview HEAD 기준 코드 commit:** `2c9745487517b86f1f910c651497be6a0003bca8`.

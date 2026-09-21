@@ -2,6 +2,21 @@
 
 최종 갱신: 2026-09-22 KST
 
+## PREVIEW app129 single-like atom
+
+- 사용자 승인으로 PREVIEW Hosting 배포 진행.
+- 제품 코드 `2c9745487517b86f1f910c651497be6a0003bca8`, 릴리스 source `0a8b1d6820493c82d8cc2924446153c967fa3798`.
+- 사전 audit Run `35645617094` SUCCESS.
+- PREVIEW Hosting Run `35646734214` SUCCESS.
+- TypeScript PASS / Build PASS / Firebase PREVIEW deploy PASS.
+- remote app version **129** / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- Worker 재배포 없음; PREVIEW Worker `733c3981-4095-4c69-bf33-9abb5de7a450` 유지.
+- D1 / Functions / Rules / 사용자 데이터 migration·backfill·delete 없음.
+- 실사용 검증 대상: 하트 ON↔OFF와 숫자 ±1 및 내 좋아요 포함↔제거가 같은 한 동작으로 일치하는지, PC↔모바일 최종 수렴.
+
+
+
 ## PREVIEW app128 targeted-like unlock
 
 - 두 번째 실사용 영상에서 revision/social-snapshot 모두 HTTP 200인데 mutation gate가 계속 잠기는 문제 확인.

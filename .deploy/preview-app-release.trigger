@@ -1,10 +1,10 @@
-requested_at=2026-09-21T17:33:30Z
+requested_at=2026-09-21T18:16:30Z
 requested_by=user
-product_code_target=240325c83e0b87449b2a9c9d736a6cfa4fd1af24
-release_source_target=app127_like_revision_generation_rollout
-release_purpose=127_pc_mobile_revision_safe_like_client
+product_code_target=60256b0942e1f144719b95890eafa9a801b62efc
+release_source_target=app128_partial_r2_targeted_membership_unlock
+release_purpose=fix_like_click_block_after_partial_personal_snapshot
 hosting_only=true
 worker_redeploy=false
-worker_version=f3c66d58-8e24-4eaa-923c-f61fe369e36f
+worker_version=733c3981-4095-4c69-bf33-9abb5de7a450
 no_user_data_migration=true
 preview_only=true

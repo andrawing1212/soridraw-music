@@ -122,10 +122,26 @@ const oldWorker = evaluateD1OnlyPreCutoverProof173({
     ...workerEvidence,
     test: { ...workerEvidence.test, markers: workerEvidence.test.markers.filter((marker) => !marker.includes('REVISION_ROUTE_173')) },
   },
+  approvedWorkerSha256,
   observedAt,
 });
 assert.equal(oldWorker.ready, false);
 assert.ok(oldWorker.reasons.includes('all-environment-worker-source-not-exact-approved-173'));
+
+const wrongSha = evaluateD1OnlyPreCutoverProof173({
+  schemaRows,
+  firstObservation: queueZero,
+  secondObservation: queueZero,
+  drainManifest,
+  workerEvidence: {
+    ...workerEvidence,
+    production: { ...workerEvidence.production, sha256: 'c'.repeat(64) },
+  },
+  approvedWorkerSha256,
+  observedAt,
+});
+assert.equal(wrongSha.ready, false);
+assert.ok(wrongSha.reasons.includes('all-environment-worker-source-not-exact-approved-173'));
 
 const indexedSchema = evaluateD1OnlyPreCutoverProof173({
   schemaRows: [

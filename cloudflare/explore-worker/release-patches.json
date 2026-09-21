@@ -39,6 +39,7 @@
     "069-shared-feed-targeted-parity.mjs",
     "070-shared-feed-legacy-writer-guard.mjs",
     "071-publication-canonical-like-parity.mjs",
-    "078-shared-like-reader-cutover.mjs"
+    "078-shared-like-reader-cutover.mjs",
+    "079-like-intake-drain-barrier.mjs"
   ]
 }

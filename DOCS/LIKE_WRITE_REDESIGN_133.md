@@ -132,3 +132,74 @@ Cloudflare D1 공식 문서는 쿼리 수가 아니라 **테이블 및 인덱스
 - 위 계량은 기본 relation SQL만 포함하고 147 DO transaction/R2/API 수·총비용·전환을 포함하지 않는다. W2는 **격리 테이블 단위 합격**이며 제품 전체 합격이 아니다.
 
 **결과:** D1 W1~W2를 달성할 수 있는 실제 저장 구조는 찾았다. 현재 운영 스키마를 그대로 유지하거나 구형 Worker를 방치한 채서는 충족되지 않는다. 안전한 사용자 원본 전환·새 공통 소유자/인프라·PRODUCTION 배포는 사용자에게 범위와 복구 계획을 제시해 명시적으로 승인받은 후 별도 수행한다.
+
+
+---
+
+## 157/158. 무백필 sparse override + lazy track baseline — 실제 격리 D1 W2/W1/W0 (2026-09-21 KST)
+
+153의 user-first 새 관계 테이블은 쓰기비용은 합격했지만 기존 사용자의 모든 좋아요를 새 테이블로 옮길 baseline/backfill 문제가 남았다. 157은 이 대량 백필 자체를 없애는 후보다.
+
+### 핵심 구조
+
+- 기존 `likes`는 전환경 writer 컷오버 순간의 **불변 역사 baseline**으로 남긴다. 삭제/복사/대량변환 없음.
+- 신규 `explore_like_overrides_157`는 baseline과 현재 의도가 다른 곡만 저장한다.
+  - legacy가 unliked인데 새로 like → override `liked=1`
+  - legacy가 liked인데 unlike → override `liked=0` tombstone
+  - 다시 legacy 상태로 돌아오면 override 행을 **DELETE**하여 불필요한 누적을 제거
+- effective membership = override가 있으면 override, 없으면 legacy `likes`.
+- 테이블은 `WITHOUT ROWID PRIMARY KEY(user_uid,track_id)` + 최근 복구 인덱스 하나 `(user_uid,updated_at DESC,track_id DESC)`.
+- 정상 재진입/업데이트는 기존 Local/R2 cache 우선이며 이 union은 **cold exact recovery 전용**. 앱 업데이트 때문에 전체 baseline을 다시 읽는 구조가 아니다.
+- 156 exact shared R2 rebuild가 157 baseline+override pager를 읽어 기존 v114 키에 완전한 membership을 만든다. 061 legacy mirror는 `canonicalComplete156` object를 덮어쓰지 못하도록 canonical Worker에도 guard 반영.
+- 158은 전곡 count 백필도 없앤다. 첫 실제 변경이 발생한 곡만, 컷오버 후 불변이 된 `track_stats.like_count`를 **PK 1회 read**하여 shared track owner의 baseline으로 저장하고 이후에는 147 durable count를 사용한다. 잘못된 cutover token이면 fail-closed.
+
+### 실제 Cloudflare 격리 D1 측정
+
+GitHub Actions [35568696258](https://github.com/andrawing1212/soridraw-music/actions/runs/35568696258), exact `a47f54b112d6fd732cde394fe360891f86d3de68` **SUCCESS**. 고유 임시 원격 D1 생성→synthetic data만 실행→삭제 `153_EPHEMERAL_D1_DELETED=PASS`.
+
+| 157 행동 | meta.rows_written | changes | 비고 |
+|---|---:|---:|---|
+| legacy=false → like | **2** | 1 | sparse override INSERT + recent index |
+| 동일 like 재시도 | **0** | 0 | no-op |
+| like → legacy=false로 unlike | **1** | 1 | override DELETE, baseline 복귀 |
+| 동일 unlike 재시도 | **0** | 0 | no-op |
+| legacy=true → unlike | **2** | 1 | tombstone INSERT |
+| 동일 unlike 재시도 | **0** | 0 | no-op |
+| tombstone → legacy=true로 re-like | **1** | 1 | tombstone DELETE, baseline 복귀 |
+| 동일 re-like 재시도 | **0** | 0 | no-op |
+
+따라서 **모든 실제 상태변경 W1~W2, 중복 W0**. 기존 사용자 전체를 새 관계 테이블로 쓰는 초기 대량 write가 없다. legacy baseline은 실측 중 그대로 유지됨.
+
+cold union planner도 양쪽 인덱스를 사용:
+- legacy: `SEARCH ... legacy_likes_157_user_recent (user_uid=?)`
+- override tombstone 확인: `SEARCH ... PRIMARY KEY (user_uid=? AND track_id=?)`
+- positive override: `SEARCH ... idx_explore_like_overrides_157_user_recent (user_uid=?)`
+
+실제 공유 D1 read-only planner에서 158 baseline도 `SEARCH track_stats USING INDEX sqlite_autoindex_track_stats_1 (track_id=?)` PASS. 사용자 행을 조회하지 않은 `EXPLAIN QUERY PLAN` 확인이다.
+
+### 실행형 검증
+
+동일 exact run에서:
+- `157_NO_BACKFILL_SPARSE_OVERLAY_TRANSITIONS_W2_W1_MOCK=PASS`
+- `157_TO_156_EXACT_R2_REBUILD_WITHOUT_D1_BACKFILL=PASS`
+- 2,054 effective likes cold union + tombstone/동일 timestamp 순서 PASS
+- `158_READONLY_TRACK_STATS_PK_BASELINE_LOADER=PASS`
+- `158_LAZY_TRACK_STATS_BASELINE_ONE_READ_PER_CHANGED_TRACK=PASS`
+- `158_NO_GLOBAL_TRACK_COUNT_BACKFILL=PASS`
+- restart 후 baseline 재읽기 없음 + cutover token mismatch 차단 PASS
+- canonical Worker hash 일치 및 `EXACT_156_SHARED_LIKE_LEGACY_OVERWRITE_GUARD=PASS`
+- TypeScript / Build / 기존 127·128·135~158 회귀 / TEST·PRODUCTION Worker dry-run / 공유 D1 read-only audit PASS
+
+### 현재 결론
+
+**비용과 데이터 이동 측면에서는 157/158이 153의 단순 새 테이블 전체 이전보다 우선 후보.** 기존 사용자 좋아요 전체/전곡 count를 백필하지 않고, 실제 변경된 관계와 실제 처음 변경되는 곡만 처리할 수 있다.
+
+그러나 아직 제품 배포 PASS가 아니다. 이유:
+1. PREVIEW/TEST/PRODUCTION의 모든 구형 D1/R2 writer가 동시에 old baseline을 더 이상 변경하지 않도록 컷오버되어야 한다.
+2. 세 환경 reader가 effective baseline+override 또는 exact shared R2를 읽도록 먼저 호환되어야 한다.
+3. 051 global revision 대체 신호, RTDB/클라이언트 final settlement, feed/popular/profile 부분 갱신이 아직 실제 Worker에 연결되지 않았다.
+4. 157 migration은 **미적용**이며 shared D1/user data는 변경하지 않았다.
+5. 158 lazy seed는 `track_stats`가 컷오버 이후 불변 baseline이라는 증명이 전제다.
+6. 실제 DO/R2/RTDB 총비용, Work 감사, PC↔모바일 실사용이 남아 있다.
+
+**금지:** 157 결과를 근거로 PREVIEW 한 환경만 writer를 먼저 전환하지 않는다. 공유 데이터이므로 구형 TEST/PRODUCTION writer가 baseline을 다시 변경하면 overlay 계산이 틀어진다. 실제 schema apply, writer freeze/cutover, PRODUCTION 변경은 명시적 승인 전 실행 금지.

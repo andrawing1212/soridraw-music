@@ -338,3 +338,72 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('141_CAS_RETRY_COLD_2000_128_FAIL_CLOSED=PASS');
   console.log('141_LIVE_CROSS_ENV_WRITER_AND_AUTH_NOT_CONNECTED=NOT_VERIFIED');
 }
+
+
+// 142: integrated 139 + 141 verification. The storage/API adapters below are
+// isolated fakes; validate ordering only, not Cloudflare billing or live data.
+{
+  const durable = new Map(), relation = new Map();
+  let commits = 0, notified = 0, rejectD1 = false, rejectNotify = false;
+  let snapshot = { schemaVersion: 1, uid: 'user', likedTrackIds: [] };
+  let etag = 1, r2Writes = 0;
+  const ledger = {
+    async get(key) { return structuredClone(durable.get(key)); },
+    async put(key, value) { durable.set(key, structuredClone(value)); },
+  };
+  const canonical = {
+    async readMembership(uid, id) { return relation.get(uid + ':' + id) ?? false; },
+    async applyAtomically(uid, id, liked) {
+      if (rejectD1) throw Error('canonical D1 unavailable');
+      const key = uid + ':' + id, before = relation.get(key) ?? false;
+      if (before !== liked) { relation.set(key, liked); commits++; }
+      return { canonicalCommitted: true, liked };
+    },
+  };
+  const bucket = {
+    async get() {
+      const data = JSON.stringify(snapshot), observed = String(etag);
+      return { etag: observed, text: async () => data };
+    },
+    async put(_key, json, opts) {
+      if (opts?.onlyIf?.etagMatches !== String(etag)) return null;
+      snapshot = JSON.parse(json);
+      etag++;
+      r2Writes++;
+      return { etag: String(etag) };
+    },
+  };
+  const publisher = createLikeSharedR2Publisher141(bucket, async () => {
+    if (rejectNotify) throw Error('notification temporarily unavailable');
+    notified++;
+  });
+  let integrated = new LikeFencedProcessor139({ ledger, canonical, publish: publisher });
+  const intent = (id, baseRevision, liked) =>
+    integrated.mutate({ uid: 'user', trackId: 'song', id, baseRevision, liked });
+  rejectD1 = true;
+  assert.equal((await intent('first', 0, true)).state, 'pending');
+  assert.deepEqual(snapshot.likedTrackIds, [], 'R2 must stay unchanged until actual D1 commit');
+  assert.equal(r2Writes, 0);
+  rejectD1 = false;
+  rejectNotify = true;
+  assert.equal((await intent('first', 0, true)).state, 'pending');
+  assert.equal(commits, 1, 'D1 must commit before R2 and notification');
+  assert.deepEqual(snapshot.likedTrackIds, ['song']);
+  assert.equal(r2Writes, 1);
+  integrated = new LikeFencedProcessor139({ ledger, canonical, publish: publisher });
+  rejectNotify = false;
+  assert.deepEqual(await intent('first', 0, true),
+    { state: 'settled', duplicate: true, revision: 1, liked: true });
+  assert.equal(r2Writes, 1, 'recover a notification without an extra R2 object write');
+  assert.equal(commits, 1);
+  assert.equal(notified, 1);
+  assert.equal((await intent('second', 1, false)).state, 'settled');
+  assert.equal(commits, 2);
+  assert.deepEqual(snapshot.likedTrackIds, []);
+  assert.equal((await intent('out-of-order', 0, true)).state, 'stale');
+  assert.equal(commits, 2);
+  assert.equal(r2Writes, 2);
+  console.log('142_CORE_TO_PUBLISHER_END_TO_END_MOCK=PASS');
+  console.log('142_NO_PERSONAL_CACHE_BEFORE_D1_AND_RECOVER_NOTIFICATION=PASS');
+  console.log('142_CROSS_ENV_AUTH_REAL_D1_AND_DEVICE_SIGNALS=NOT_VERIFIED');
+}

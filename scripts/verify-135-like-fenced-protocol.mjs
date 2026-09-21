@@ -666,6 +666,13 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.equal(published.count,6);
   await assert.rejects(commit(input('u2','late',1,false,true)),/Superseded track delta/);
   await assert.rejects(commit(input('u1','bad-prestate',3,true,false)),/pre-state differs/);
+  const beforeGaps150 = persisted.get('soridraw:track-like-total:147').count;
+  await assert.rejects(commit(input('u1','skip-revision',4,false,true)),
+    /Track revision gap/);
+  await assert.rejects(commit(input('brand-new','unseeded-revision',2,false,true)),
+    /Missing track user baseline/);
+  assert.equal(persisted.get('soridraw:track-like-total:147').count,beforeGaps150,
+    'invalid gaps and unseeded revisions cannot corrupt the count');
   // A different track is a different DO instance with its own storage.
   const coldStorage = {
     async transaction(fn) {
@@ -681,6 +688,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('147_TRACK_DURABLE_COUNTER_SERIAL_AND_DEDUPE_MODEL=PASS');
   console.log('147_TRACK_R2_FAILURE_RETRY_NO_DOUBLE_COUNT=PASS');
   console.log('147_COLD_COUNT_FAIL_CLOSED_AND_PRESTATE_GUARD=PASS');
+  console.log('150_MISSING_TRACK_USER_REVISION_GAP_FAIL_CLOSED=PASS');
   console.log('147_SHARED_TRACK_OWNER_SEED_AND_LIVE_R2=NOT_CONFIGURED');
 }
 

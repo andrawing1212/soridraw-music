@@ -612,7 +612,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const persisted = new Map([
     ['soridraw:track-like-total:147', { count: 5, version: 0 }],
   ]);
-  let published = { count: 5, generation: 0 }, failOnce = false, writeTransactions = 0;
+  let published = { count: 5, generation: 0 }, failOnce = false, omitProfileOnce = false, writeTransactions = 0;
   const storage = {
     async transaction(fn) {
       const draft = new Map([...persisted].map(([key,value]) => [key, structuredClone(value)]));
@@ -631,7 +631,11 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
     if (event.generation >= published.generation) {
       published = { count: event.count, generation: event.generation };
     }
-    return { published: true, snapshotGeneration: published.generation };
+    const surfaces = {card:published.generation,feed:published.generation,
+      profile:omitProfileOnce ? undefined : published.generation};
+    omitProfileOnce = false;
+    return { published: true, snapshotGeneration: published.generation,
+      surfaceGenerations:surfaces };
   };
   const commit = createLikeTrackAggregator147('song', storage, publishTrack);
   const input = (uid,id,revision,previousLiked,liked,seq=revision) => ({
@@ -642,6 +646,11 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.equal(first.aggregateConfirmed,true);
   assert.equal(first.count,6);
   assert.deepEqual(published,{count:6,generation:1});
+  omitProfileOnce = true;
+  await assert.rejects(commit(input('u1','first',1,false,true)),
+    /All public like surfaces not confirmed/);
+  assert.equal(persisted.get('soridraw:track-like-total:147').count,6,
+    'missing profile receipt does not reapply the durable count');
   const duplicate = await commit(input('u1','first',1,false,true));
   assert.equal(duplicate.duplicate,true);
   assert.equal(duplicate.generation,1);
@@ -688,6 +697,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('147_TRACK_DURABLE_COUNTER_SERIAL_AND_DEDUPE_MODEL=PASS');
   console.log('147_TRACK_R2_FAILURE_RETRY_NO_DOUBLE_COUNT=PASS');
   console.log('147_COLD_COUNT_FAIL_CLOSED_AND_PRESTATE_GUARD=PASS');
+  console.log('152_PARTIAL_PUBLIC_CARD_FEED_PROFILE_RECEIPT_NOT_SETTLED=PASS');
   console.log('150_MISSING_TRACK_USER_REVISION_GAP_FAIL_CLOSED=PASS');
   console.log('147_SHARED_TRACK_OWNER_SEED_AND_LIVE_R2=NOT_CONFIGURED');
 }
@@ -721,7 +731,9 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
       publicState.count = event.count;
       publicState.generation = event.generation;
     }
-    return {published:true,snapshotGeneration:publicState.generation};
+    return {published:true,snapshotGeneration:publicState.generation,
+      surfaceGenerations:{card:publicState.generation,feed:publicState.generation,
+        profile:publicState.generation}};
   });
   const db = {
     prepare(sql) {

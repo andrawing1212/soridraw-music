@@ -35,6 +35,9 @@ export const EXPLORE_LIKE_SYNC_ERROR_EVENT = 'soridraw:explore-like-sync-error';
 // 127: used only when a confirmed-change notification gap requires targeted reconciliation.
 export const EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT = 'soridraw:explore-like-account-invalidation';
 const EXPLORE_LIKE_BASELINE_127 = 'soridraw:explore:like-baseline:127';
+// 161: legacy v114 R2 may be truncated even below 2,000 after later unlikes.
+// This marker means the current R2 revision was observed but is NOT complete.
+const EXPLORE_LIKE_PARTIAL_BASELINE_161 = 'soridraw:explore:like-partial-baseline:161';
 const EXPLORE_LIKE_SIGNAL_SEEN_127 = 'soridraw:explore:like-signal-seen:127';
 const EXPLORE_LIKE_SIGNAL_RETRY_127 = 'soridraw:explore:like-signal-retry:127';
 const EXPLORE_LIKE_SIGNAL_GAP_127 = 'soridraw:explore:like-signal-gap:127';
@@ -71,6 +74,12 @@ type ExploreLikeDisplayLocks = Record<string, ExploreLikeDisplayLock>;
 type ExploreLikeBatchResult = {
   trackId: string;
   liked: boolean;
+};
+
+type ExploreLikeBaselineSnapshot161 = {
+  likedTrackIds: string[];
+  complete: boolean;
+  exactLikeCount: number | null;
 };
 
 type ExploreLikeSyncEventDetail = {
@@ -334,7 +343,7 @@ const startLikeSignal127 = (uid: string) => {
 // account, not once per song/card/tab. No continuous timer or global Feed reload.
 onAuthStateChanged(auth, (user) => startLikeSignal127(user?.uid || ''));
 
-const requestPersonalLikeBaseline127 = async (user: User) => {
+const requestPersonalLikeBaseline127 = async (user: User): Promise<ExploreLikeBaselineSnapshot161> => {
   const headers = await buildAuthHeaders(user);
   const response = await fetch(EXPLORE_API_BASE + '/v1/me/social-snapshot', {
     method: 'GET',
@@ -342,12 +351,30 @@ const requestPersonalLikeBaseline127 = async (user: User) => {
   });
   recordCloudflareResponse(response, '/v1/me/social-snapshot');
   if (!response.ok) throw new Error('Personal like snapshot unavailable: HTTP ' + response.status);
-  const payload = await response.json() as { ok?: boolean; data?: { likedTrackIds?: unknown } };
+  const payload = await response.json() as {
+    ok?: boolean;
+    data?: {
+      likedTrackIds?: unknown;
+      likesComplete?: unknown;
+      exactLikeCount?: unknown;
+    };
+  };
   if (payload?.ok !== true || !Array.isArray(payload?.data?.likedTrackIds)) {
     throw new Error('Personal like snapshot is invalid; preserving cached likes');
   }
-  return [...new Set(payload.data.likedTrackIds.map((id) => String(id || '').trim()).filter(Boolean))];
-};
+  const likedTrackIds = [...new Set(
+    payload.data.likedTrackIds.map((id) => String(id || '').trim()).filter(Boolean),
+  )];
+  const exactLikeCount = Number(payload.data.exactLikeCount);
+  const complete = payload.data.likesComplete === true &&
+    Number.isSafeInteger(exactLikeCount) && exactLikeCount >= 0 &&
+    exactLikeCount === likedTrackIds.length;
+  return {
+    likedTrackIds,
+    complete,
+    exactLikeCount: complete ? exactLikeCount : null,
+  };
+}
 
 // One-time per user migration from older local liked-state to the already
 // materialized per-user R2 bundle. Never clear device data, never scan D1 on
@@ -355,19 +382,16 @@ const requestPersonalLikeBaseline127 = async (user: User) => {
 const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
   const uid = user.uid;
   if (!uid || baselineCompleted127.has(uid) ||
-      readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1') return;
+      readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1' ||
+      readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid)) === '1') return;
   const inflight = baselineInFlight127.get(uid);
   if (inflight) return inflight;
   const task = (async () => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const versionAtStart = readSeenLikeSignal127(uid);
       const repairAtStart = readRepairTarget127(uid);
-      const likedIds = await requestPersonalLikeBaseline127(user);
-      // The existing R2 writer intentionally caps an account at 2,000 liked
-      // IDs. At capacity, absence from the snapshot is NOT proof of unliked.
-      if (likedIds.length >= 2000) {
-        throw new Error('Personal like snapshot reached its 2000-ID limit; existing cache preserved');
-      }
+      const snapshot161 = await requestPersonalLikeBaseline127(user);
+      const likedIds = snapshot161.likedTrackIds;
       if (readSeenLikeSignal127(uid) !== versionAtStart ||
           readRepairTarget127(uid) !== repairAtStart) {
         // Concurrent device mutation: reread the small per-user R2 snapshot,
@@ -375,6 +399,18 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
         if (attempt === 0) continue;
         throw new Error('Personal like signal advanced during baseline; retry on next entry');
       }
+
+      // Reader-first 161: an old v114 object is useful only as a cache hint.
+      // It may have been truncated at 2,000 in the past and later fallen below
+      // 2,000, so neither size nor absence proves an unliked relation. Preserve
+      // every local heart and let the bounded /v1/me/likes route verify only
+      // visible cache misses. The R2 revision marker prevents repeated snapshot
+      // GETs until that shared object actually changes.
+      if (!snapshot161.complete) {
+        writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid), '1');
+        return;
+      }
+
       const confirmed = new Set(likedIds);
       const outbox = readLikeOutbox(uid);
       const unresolved = readSnapshotPending127(uid);
@@ -399,18 +435,20 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
         writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_TARGET_127, uid), '');
       }
       baselineCompleted127.add(uid);
+      writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid), '');
       writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '1');
       return;
     }
   })().finally(() => { baselineInFlight127.delete(uid); });
   baselineInFlight127.set(uid, task);
   return task;
-};
+}
 
 export const invalidateExplorePersonalLikeBaseline127 = (uid: string) => {
   if (!uid) return;
   baselineCompleted127.delete(uid);
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '');
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid), '');
 };
 
 export const ensureExplorePersonalLikeBaseline127 = ensurePersonalLikeBaseline127;

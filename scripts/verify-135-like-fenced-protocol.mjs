@@ -1723,9 +1723,10 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const patch165 = readFileSync('cloudflare/explore-worker/patches/079-like-intake-drain-barrier.mjs', 'utf8');
   const release165 = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
   assert.match(worker165, /SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921/);
-  assert.equal(release165.patches.at(-3), '079-like-intake-drain-barrier.mjs');
-  assert.equal(release165.patches.at(-2), '080-direct-like-atomic-batch.mjs');
-  assert.equal(release165.patches.at(-1), '081-batch-like-final-freeze.mjs');
+  assert.equal(release165.patches.at(-4), '079-like-intake-drain-barrier.mjs');
+  assert.equal(release165.patches.at(-3), '080-direct-like-atomic-batch.mjs');
+  assert.equal(release165.patches.at(-2), '081-batch-like-final-freeze.mjs');
+  assert.equal(release165.patches.at(-1), '082-like-d1only-route.mjs');
   assert.match(patch165, /const marker165 = 'SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921'/);
   const slice165 = (name) => {
     const start = worker165.indexOf('async function ' + name + '(');
@@ -1778,12 +1779,20 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.match(direct165, /await adjustExploreLikeCounterDelta\(env, trackId, authContext\.uid, shouldLike, now\)/);
   console.log('168_DIRECT_LEGACY_RELATION_COUNT_SINGLE_BATCH_SOURCE=PASS');
   const patch169 = readFileSync('cloudflare/explore-worker/patches/081-batch-like-final-freeze.mjs', 'utf8');
+  const patch172 = readFileSync('cloudflare/explore-worker/patches/082-like-d1only-route.mjs', 'utf8');
   assert.match(patch169, /SORIDRAW_BATCH_LIKE_FINAL_CUTOVER_FREEZE_169_20260921/);
-  const finalGuard169 = "await assertLegacyLikeWriterOpen163(env, 'batch-like-intake')";
+  assert.match(patch172, /SORIDRAW_LIKE_D1ONLY_ROUTE_172_20260921/);
   assert.match(batch165, /SORIDRAW_BATCH_LIKE_FINAL_CUTOVER_FREEZE_169_20260921/);
-  assert.ok(batch165.indexOf(finalGuard169) > batch165.indexOf('await assertLegacyLikeIntakeOpen165(env)'));
-  assert.ok(batch165.indexOf(finalGuard169) < batch165.indexOf('enqueueExploreLikeBatch035('));
-  console.log('169_FINAL_CUTOVER_BATCH_INTAKE_GUARD=PASS');
+  const finalRead172 = 'const cutover172 = await readLikeCutoverState162(env)';
+  const legacyDrain165 = 'await assertLegacyLikeIntakeOpen165(env)';
+  const legacyQueue035 = 'enqueueExploreLikeBatch035(';
+  assert.ok(batch165.indexOf(finalRead172) >= 0);
+  assert.ok(batch165.indexOf(finalRead172) < batch165.indexOf(legacyDrain165));
+  assert.ok(batch165.indexOf(legacyDrain165) < batch165.indexOf(legacyQueue035));
+  assert.match(batch165, /if \(cutover172\.mode === 'd1only171'\)/);
+  assert.match(batch165, /if \(cutover172\.mode !== 'legacy'\)/);
+  assert.doesNotMatch(batch165, /assertLegacyLikeWriterOpen163\(env, 'batch-like-intake'\)/);
+  console.log('169_FINAL_CUTOVER_BATCH_INTAKE_GUARD_SUPERSEDED_BY_172_SINGLE_READ=PASS');
 
 
 }

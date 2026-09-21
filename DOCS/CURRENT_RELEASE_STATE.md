@@ -1,5 +1,34 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DC. PREVIEW app130 — 모바일 최초 진입 좋아요 최신계정 revision 동기화 배포 완료 (2026-09-22 KST)
+
+**PREVIEW 배포 고정 commit:** `a045c7e5b12db22cc8153c29aee44d0ae3e296c2`.
+**제품 코드 기준:** `1c850beed0a4b4409b96acbb636176ea2cfe4bac`.
+**사전 Audit:** Run `35648185770` SUCCESS.
+**PREVIEW Hosting:** Run `35648709408` SUCCESS.
+
+실사용 사진에서 확인된 모바일 최초 진입 불일치 대응:
+- 개인 좋아요 exact 검증 캐시를 계정 개인 R2 revision과 함께 저장.
+- app129 이하의 revision 없는 track-ID-only verified cache는 app130 첫 진입에서 신뢰하지 않음.
+- 저장 revision과 현재 계정 revision이 다르면 과거 검증 캐시를 무효화하고 현재 화면의 곡만 bounded exact 검증.
+- revision이 같으면 캐시 재사용하여 변경 없는 재진입 서버 읽기 증가를 막음.
+- 목표: 인기 탭 왕복 없이 모바일 첫 추천/최신 화면부터 PC 최신 하트 상태와 일치.
+
+배포 검증:
+- TypeScript PASS / Build PASS
+- Firebase PREVIEW Hosting PASS
+- remote app version **130**
+- PREVIEW exact build PASS
+- TEST / PRODUCTION unchanged PASS
+- Worker 재배포 0 / Functions 0 / Rules 0
+- D1 schema·migration·사용자 데이터 write/backfill/delete 0
+
+현재 상태:
+- 실제 PREVIEW live = app130.
+- 모바일 실사용 첫 진입 결과는 사용자 확인 전.
+- app130 확인 전 171 D1-only cutover / TEST / PRODUCTION 승격 금지.
+
+
 ## 0DB. app130 모바일 최초 진입 오래된 좋아요 캐시 차단 — source 감사 PASS (2026-09-22 KST)
 
 **현재 preview HEAD 코드:** `1c850beed0a4b4409b96acbb636176ea2cfe4bac`.

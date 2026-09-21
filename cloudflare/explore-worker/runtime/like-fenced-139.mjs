@@ -382,6 +382,63 @@ export function createLikeRelationOnly146(db, commitAggregate, options = {}) {
 }
 
 
+// SORIDRAW_LIKE_RECOVERY_PAGER_155_20260921
+// Read-only, bounded, deterministic cold-recovery tool for the UNAPPLIED
+// user-first 153 schema. This is NOT a hot-path lookup. A validated local R2
+// cache should be used on unchanged revisit; never re-page on app update.
+// Index contract: (user_uid,created_at DESC,track_id DESC). The track-id tie
+// break prevents dropping likes created in the same millisecond.
+// No full-table count, OFFSET paging, user writes, or legacy fallback here.
+export function createLikeRecentPager155(db) {
+  if (!db?.prepare) throw new TypeError('Read-only D1 binding required');
+  return async function listRecentLikes155(uid, cursor = null, limit = 128) {
+    if (!safeId(uid, 256) || !Number.isSafeInteger(limit) || limit < 1 || limit > 128) {
+      throw new TypeError('Invalid bounded personal like recovery request');
+    }
+    if (cursor !== null &&
+        (!Number.isSafeInteger(cursor.createdAt) || cursor.createdAt < 0 ||
+         !safeId(cursor.trackId, 512))) {
+      throw new TypeError('Invalid like recovery cursor');
+    }
+    const sql = 'SELECT track_id,created_at FROM explore_likes_153 ' +
+      'WHERE user_uid = ? ' +
+      (cursor === null ? '' :
+        'AND (created_at < ? OR (created_at = ? AND track_id < ?)) ') +
+      'ORDER BY created_at DESC,track_id DESC LIMIT ?';
+    const values = cursor === null
+      ? [uid, limit] : [uid, cursor.createdAt, cursor.createdAt, cursor.trackId, limit];
+    const response = await db.prepare(sql).bind(...values).all();
+    if (!Array.isArray(response?.results) || response.results.length > limit) {
+      throw new Error('Invalid bounded like recovery result');
+    }
+    const items = response.results.map((row) => {
+      if (!safeId(row?.track_id, 512) ||
+          !Number.isSafeInteger(row?.created_at) || row.created_at < 0) {
+        throw new Error('Invalid canonical like recovery row');
+      }
+      return { trackId: row.track_id, createdAt: row.created_at };
+    });
+    for (let i = 1; i < items.length; i += 1) {
+      const earlier = items[i - 1], later = items[i];
+      if (!(later.createdAt < earlier.createdAt ||
+            (later.createdAt === earlier.createdAt && later.trackId < earlier.trackId))) {
+        throw new Error('Unordered or duplicated canonical recovery rows');
+      }
+    }
+    if (cursor !== null && items.length) {
+      const first = items[0];
+      if (!(first.createdAt < cursor.createdAt ||
+            (first.createdAt === cursor.createdAt && first.trackId < cursor.trackId))) {
+        throw new Error('Canonical recovery cursor did not advance');
+      }
+    }
+    const last = items[items.length - 1];
+    return { items, nextCursor: items.length === limit ?
+      { createdAt: last.createdAt, trackId: last.trackId } : null };
+  };
+}
+
+
 // SORIDRAW_LIKE_TRACK_AGGREGATOR_147_20260921
 // Candidate separate durable track owner. One instance must own ONE track
 // across ALL environments. Seed its count from an audited canonical baseline;

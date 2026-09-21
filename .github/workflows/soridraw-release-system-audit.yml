@@ -57,6 +57,7 @@ jobs:
           node --check cloudflare/explore-worker/canonical/preview-worker.js
           node --check cloudflare/explore-worker/patches/061-shared-social-r2-parity.mjs
           node --check cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs
+          node --check cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs
           expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
           actual_worker_sha="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
           echo "CANONICAL_WORKER_EXPECTED_SHA256=$expected_worker_sha"
@@ -114,6 +115,28 @@ jobs:
           if (body.includes('enforceUserRateLimit(')) throw Error('160 replay legacy RATE_DB limiter remained');
           console.log('160_054_EXISTING_WORKER_REPLAY=PASS');
           NODE
+
+          # 078 replay proof: start from the exact pre-161 canonical Worker
+          # (061/062 already deployed, 161/162 absent), then prove one patch
+          # upgrades it without a second-pass diff.
+          replay078="$RUNNER_TEMP/soridraw-like-160-to-162"
+          mkdir -p "$replay078"
+          git fetch origin 21fa99cec7f393247b8bd3382c7a880ebfa343fc --depth=1
+          git show 21fa99cec7f393247b8bd3382c7a880ebfa343fc:cloudflare/explore-worker/canonical/preview-worker.js > "$replay078/worker.js"
+          grep -Fq 'SORIDRAW_SHARED_SOCIAL_R2_PARITY_061_20260917' "$replay078/worker.js"
+          grep -Fq 'SORIDRAW_SHARED_TRACK_CARD_R2_062_20260917' "$replay078/worker.js"
+          if grep -Fq 'SORIDRAW_SHARED_LIKE_CUTOVER_GATE_162_20260921' "$replay078/worker.js"; then
+            echo 'pre-161 replay fixture unexpectedly already has 162' >&2
+            exit 1
+          fi
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs
+          node --check "$replay078/worker.js"
+          SORIDRAW_GENERATED_WORKER="$replay078/worker.js" node scripts/verify-114-shared-social-parity.mjs
+          hash078_before="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs
+          hash078_after="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          test "$hash078_before" = "$hash078_after"
+          echo '078_DEPLOYED_160_TO_162_REPLAY=PASS'
 
           generated="$RUNNER_TEMP/soridraw-like-candidate-071"
           mkdir -p "$generated"

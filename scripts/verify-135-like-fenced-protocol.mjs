@@ -1647,10 +1647,15 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const directStart163 = worker163.indexOf('async function handleLikeD1Core(');
   const directEnd163 = worker163.indexOf('\n}', directStart163);
   const direct163 = worker163.slice(directStart163, directEnd163 + 2);
-  assert.ok(direct163.indexOf("assertLegacyLikeWriterOpen163(env, 'direct-like')") >= 0);
-  assert.ok(direct163.indexOf("assertLegacyLikeWriterOpen163(env, 'direct-like')") <
-    direct163.indexOf('adjustExploreLikeCounterDelta('),
-    '163 direct guard must run before legacy relation/count write');
+  const directCutoverRead163 = direct163.indexOf('const cutover172 = await readLikeCutoverState162(env)');
+  const directLegacyOnly163 = direct163.indexOf("if (cutover172.mode !== 'legacy')");
+  const directWrite163 = direct163.indexOf('adjustExploreLikeCounterDelta(');
+  assert.ok(directCutoverRead163 >= 0 && directLegacyOnly163 > directCutoverRead163 &&
+    directWrite163 > directLegacyOnly163,
+    '172 direct final-mode gate must run before legacy relation/count write');
+  assert.match(direct163, /cutover172\.mode === 'd1only171'/);
+  assert.match(direct163, /LIKE_CLIENT_REFRESH_REQUIRED/);
+  assert.match(direct163, /LIKE_CUTOVER_STATE_UNAVAILABLE/);
 
   const cronStart163 = worker163.indexOf('async function processExploreLikeBatches035Core056(');
   const cronEnd163 = worker163.indexOf('\n}', cronStart163);

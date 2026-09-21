@@ -861,6 +861,26 @@ export function createLikeTrackAggregator147(trackId, storage, publishTrack) {
 }
 
 
+// Read-only source for the lazy 158 seed. track_stats is treated as the
+// frozen pre-cutover count baseline; no mutation or rebuild is performed here.
+export function createTrackStatsBaselineLoader158(db, cutoverToken) {
+  if (!db?.prepare || !safeId(cutoverToken, 128)) {
+    throw new TypeError('158 track_stats loader requires D1 and audited cutover token');
+  }
+  return async function readTrackStatsBaseline158(trackId) {
+    if (!safeId(trackId, 512)) throw new TypeError('Invalid 158 baseline track');
+    const row = await db.prepare(
+      'SELECT like_count FROM track_stats WHERE track_id = ? LIMIT 1'
+    ).bind(trackId).first();
+    const count = Number(row?.like_count);
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new Error('158 frozen track_stats count unavailable');
+    }
+    return { count, cutoverToken };
+  };
+}
+
+
 // SORIDRAW_LIKE_LAZY_TRACK_BASELINE_158_20260921
 // Avoid a global per-track count backfill. After ALL legacy count writers are
 // frozen, the first real mutation for a track reads its existing track_stats

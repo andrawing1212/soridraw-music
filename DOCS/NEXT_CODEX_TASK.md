@@ -1,5 +1,74 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — 173 generation-safe R2 publication + preCutoverProof172 controller (source-only)
+
+170~172 기준은 `CURRENT_RELEASE_STATE.md` 0CV. exact code audit `32795d33710a8f0f3bec6d280a2fd3f740232bb4`, [run 35616444369](https://github.com/andrawing1212/soridraw-music/actions/runs/35616444369) **SUCCESS**. 실제 ephemeral remote D1에서 171 D1-only relation+count candidate가 **변경 W2 / 중복 W0**를 확인했고, 172 제품 batch route는 schema-v2 shared manifest 뒤에 dormant 상태로 연결되어 있다. 실제 Worker 배포/171 migration/R2 marker 변경 없음.
+
+### 1. public R2 publication을 generation-safe하게 만든다
+
+171 D1 result의 `trackId, likeCount, generation`만 사용해 변경된 곡만 patch한다.
+
+필수:
+- shared track-card-v115
+- shared latest Feed의 해당 item
+- shared popular Feed의 해당 item
+- 해당 곡 owner의 public-profile cached item/count surface
+
+원칙:
+- D1 전체 재조회/Feed 재생성 금지.
+- 각 R2 surface에 곡별 마지막 적용 `generation171`을 저장하거나 동등한 monotonic proof를 사용.
+- incoming generation < 저장 generation이면 **skip**, ==이면 같은 count일 때 duplicate PASS / 다른 count면 conflict FAIL, >이면 CAS로 갱신.
+- R2 write 실패 후 같은 operation 재시도에서 D1은 W0이고 publication만 안전하게 재시도 가능해야 함.
+- 오래된 request가 나중에 도착해 최신 likeCount를 덮는 경우를 격리 테스트로 반드시 재현하고 차단.
+- popular 순위 자체의 재정렬 정책은 명시적으로 결정. 좋아요 1회 때문에 전체 Feed D1 scan/rebuild 금지.
+
+### 2. 개인 shared likes R2를 per-track revision-safe하게 만든다
+
+현재 v114/list snapshot의 오래된 전체 배열 덮어쓰기로 172 canonical 상태를 잃으면 안 된다.
+
+필수:
+- 171 result의 `revision + operationId + liked`를 기준으로 해당 UID/track만 merge.
+- CAS/etag 또는 동등한 조건부 write.
+- incoming revision < stored revision skip, == same op/state duplicate, == conflicting state fail closed, > merge.
+- PC와 모바일의 서로 다른 곡 동시 변경이 서로의 항목을 잃지 않아야 함.
+- 기존 exact/partial 161 semantics와 2,000개 legacy truncation 문제를 다시 만들지 말 것.
+- 정상 local cache 재진입은 D1 read 0 목표 유지. 개인 revision check도 앱 업데이트 때문에 전체 D1 scan 금지.
+
+### 3. preCutoverProof172를 caller boolean이 아닌 실제 상태로 만든다
+
+기존 164는 157 전용 read-only report이며 self-attested `legacyIntakeClosed`를 이미 거부한다. 172도 같은 원칙.
+
+proof172 최소 요구:
+- exact 171 table schemas/PK/WITHOUT ROWID/no secondary hot indexes.
+- PREVIEW/TEST/PRODUCTION **실제 배포 Worker SHA**가 172 fence-aware exact approved SHA인지.
+- legacy intake DB-level closure 또는 동등한 공용 atomic fence.
+- queue 035/066/069/075 exact pending 0 (075 cursor-aware).
+- scheduled processor lease/idle 및 late in-flight old writer가 더 이상 baseline을 바꿀 수 없다는 증명.
+- migration/marker writer는 release controller에만 존재; product Worker가 스스로 arm 금지.
+- SELECT/read-only preflight 실패 시 final cutover 전부 중단.
+
+### 4. 비용 합격선
+
+- 171 D1 actual change W2, duplicate W0를 유지.
+- publication은 D1 row write를 추가하지 않는다.
+- R2는 변경된 user/track/surface만 사용. 전체 Feed/profile rebuild 금지.
+- 앱 업데이트/페이지 재진입/변경 없음은 D1 data read 0 목표.
+- 새로운 DO/RTDB/외부 서비스는 필요성이 증명되지 않으면 추가하지 않는다.
+
+### 5. 검증 및 중단 조건
+
+- exact commit TypeScript + Build + 171/172/173 regression.
+- 082 replay/idempotency 유지.
+- public/private personal R2 stale/out-of-order/duplicate/CAS failure tests.
+- TEST/PRODUCTION Worker dry-run.
+- shared D1 live audit는 read-only.
+- Work 독립 감사 전 제품 release PASS 금지.
+- 구형 실제 Worker/in-flight 차단 증명 없으면 `preCutoverProof172` READY=NO 유지.
+- 사용자 승인 전 171 migration apply, drain/cutover marker arm, Worker/Hosting/Functions/Firebase 배포 금지.
+
+**현재 배포 상태:** source-only. PREVIEW 제품 배포 전, 실사용 검증 전, TEST/PRODUCTION 비변경.
+
+
 ## 현재 최우선 — 170 실제 D1 W1~W2 검증 + 구형 Worker 호환 원자적 전환 설계 (source-only)
 
 168 direct `env.DB.batch` / 169 batch final marker guard는 exact `preview` code-audit `784568e785c203978c2b2fc36e1d50d67579955e`, [run 35596351769](https://github.com/andrawing1212/soridraw-music/actions/runs/35596351769) **SUCCESS**. `CURRENT_RELEASE_STATE.md` 0CU 기준. 그러나 **제품 release gate는 FAIL**, Worker/Firebase 배포와 사용자 D1/R2 변경 없음.

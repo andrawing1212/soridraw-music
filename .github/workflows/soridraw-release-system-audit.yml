@@ -139,6 +139,21 @@ jobs:
           console.log('D1_LIVE_MUTATION_META_ROWS_WRITTEN=NOT_MEASURED');
           NODE
 
+      - name: Real remote D1 like billing on isolated synthetic database
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'measure isolated D1')
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/measure-153-isolated-d1.mjs
+          node scripts/measure-153-isolated-d1.mjs
+
+      - name: Emergency cleanup of isolated D1 (even after a failed measurement)
+        if: always() && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'measure isolated D1'))
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/measure-153-isolated-d1.mjs cleanup
+
       - name: Verify current branch refs are unchanged by audit
         shell: bash
         run: |

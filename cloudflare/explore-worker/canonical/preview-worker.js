@@ -2950,6 +2950,44 @@ async function readLikeCutoverState162(env) {
   return { mode: 'overlay157', cutoverToken: token };
 }
 
+// SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921
+// Separate shared drain marker: readers remain legacy, scheduled legacy queues
+// keep draining, and only NEW legacy intake is paused.
+const exploreLikeDrainKey165 = "internal/explore/like-cutover-drain-v165/active.json";
+async function readLikeDrainState165(env) {
+  const bucket = env?.PROFILE_MEDIA || null;
+  if (!bucket) throw new Error("[SORIDRAW 165] shared drain bucket unavailable");
+  const object = await bucket.get(exploreLikeDrainKey165);
+  if (!object) return { mode: "open", drainToken: null };
+  let value = null;
+  try {
+    value = JSON.parse(await object.text());
+  } catch {
+    throw new Error("[SORIDRAW 165] drain manifest unreadable");
+  }
+  const token = String(value?.drainToken || "").trim();
+  const armed = Number(value?.schemaVersion) === 1 && value?.phase === "draining" && value?.allEnvironmentIntakeReady === true && value?.ownerProtocol === "uid143-track147-158" && token.length > 0 && token.length <= 128;
+  if (!armed) throw new Error("[SORIDRAW 165] drain manifest present but not fully armed");
+  return { mode: "draining", drainToken: token };
+}
+async function assertLegacyLikeIntakeOpen165(env) {
+  let state;
+  try {
+    state = await readLikeDrainState165(env);
+  } catch (error) {
+    console.warn("[SORIDRAW 165] drain state unavailable; fail closed:", String(error?.message || error || "unknown"));
+    throwApi("LIKE_CUTOVER_STATE_UNAVAILABLE", "좋아요 전환 상태를 확인 중입니다. 잠시 후 다시 시도해 주세요.", 503, { "Retry-After": "30" });
+  }
+  if (state?.mode === "draining") {
+    throwApi("LIKE_CUTOVER_DRAINING", "좋아요 전환 준비 중입니다. 변경 내용은 기기에 보관되며 잠시 후 다시 동기화됩니다.", 503, { "Retry-After": "30" });
+  }
+  if (!state || state.mode !== "open") {
+    throwApi("LIKE_CUTOVER_STATE_UNAVAILABLE", "좋아요 전환 상태를 확인 중입니다. 잠시 후 다시 시도해 주세요.", 503, { "Retry-After": "30" });
+  }
+  return state;
+}
+
+
 // SORIDRAW_LEGACY_LIKE_WRITER_FREEZE_GUARD_163_20260921
 // This is a one-way safety gate, not the cutover activator. The shared marker
 // is never written here. Once all environments are armed, old relation/count
@@ -21787,6 +21825,7 @@ async function handleLikeD1Core(request, env, cors, trackId, shouldLike) {
   // SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921
   // Retire the legacy RATE_DB write from the direct PUT/DELETE like route.
   await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);
+  await assertLegacyLikeIntakeOpen165(env);
   await assertLegacyLikeWriterOpen163(env, 'direct-like');
   const track = await getPublicTrackForWrite(env, trackId);
   const now = Date.now();
@@ -24027,6 +24066,7 @@ async function handleLikeBatch034(request, env, cors) {
   }
   const mutations = [...byTrack.values()];
   await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);
+  await assertLegacyLikeIntakeOpen165(env);
 
   // Do not discard an intent because this device's baseLiked happens to match it.
 // Another device may already have changed canonical state. The scheduled aggregate

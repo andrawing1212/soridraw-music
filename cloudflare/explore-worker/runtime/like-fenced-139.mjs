@@ -273,3 +273,75 @@ export function createLikeDurableOwner143({ uid, storage, canonical, publish }) 
     },
   };
 }
+
+
+// SORIDRAW_LIKE_RELATION_ONLY_146_20260921
+// Isolated W1-W2 D1 candidate, NOT wired into any live Worker.
+// This adapter writes ONLY likes. A separate durable and idempotent per-track
+// aggregate MUST confirm the count/rank projection before the 139 processor
+// may publish the user's personal heart. Audit live D1 schema first.
+// A persisted pre-mutation membership keeps the SAME delta after an
+// ambiguous D1 commit and retry.
+export function createLikeRelationOnly146(db, commitAggregate) {
+  if (!db?.prepare || !db?.batch || typeof commitAggregate !== 'function') {
+    throw new TypeError('D1 batch and durable idempotent track aggregation required');
+  }
+  const eligible = 'EXISTS (SELECT 1 FROM tracks t ' +
+    'JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1 ' +
+    'JOIN track_stats s ON s.track_id = t.id ' +
+    "WHERE t.id = ? AND t.is_public = 1 AND t.status = 'published')";
+  return {
+    async readMembership(uid, trackId) {
+      const row = await db.prepare(
+        'SELECT 1 AS liked FROM likes WHERE track_id = ? AND user_uid = ? LIMIT 1'
+      ).bind(trackId, uid).first();
+      return Boolean(row?.liked);
+    },
+    async applyAtomically(uid, trackId, liked, context) {
+      const { previousLiked, id, revision, seq } = context || {};
+      if (!safeId(uid, 256) || !safeId(trackId, 512) ||
+          !safeId(id, 128) || typeof previousLiked !== 'boolean' ||
+          typeof liked !== 'boolean' || !Number.isSafeInteger(revision) ||
+          revision <= 0 || !Number.isSafeInteger(seq) || seq <= 0) {
+        throw new TypeError('Durable pre-mutation intent required');
+      }
+      const now = Date.now();
+      const mutation = liked
+        ? db.prepare('INSERT OR IGNORE INTO likes(track_id,user_uid,created_at) ' +
+            'SELECT ?, ?, ? WHERE ' + eligible).bind(trackId, uid, now, trackId)
+        : db.prepare('DELETE FROM likes WHERE track_id = ? AND user_uid = ? ' +
+            'AND ' + eligible).bind(trackId, uid, trackId);
+      const results = await db.batch([
+        db.prepare('SELECT ' + eligible + ' AS eligible').bind(trackId),
+        mutation,
+        db.prepare('SELECT EXISTS(SELECT 1 FROM likes ' +
+          'WHERE track_id = ? AND user_uid = ?) AS liked').bind(trackId, uid),
+      ]);
+      const permitted = Number(results?.[0]?.results?.[0]?.eligible) === 1;
+      const finalLiked = Number(results?.[2]?.results?.[0]?.liked) === 1;
+      if (!permitted || finalLiked !== liked) throw new Error('Canonical likes relation not proven');
+      const relationChanges = Number(results?.[1]?.meta?.changes);
+      if (!Number.isSafeInteger(relationChanges) || relationChanges < 0 ||
+          relationChanges > 1 || (previousLiked === liked && relationChanges !== 0)) {
+        throw new Error('Unexpected canonical relation change; do not aggregate');
+      }
+      const rowsWritten = results.reduce(
+        (sum, result) => sum + Number(result?.meta?.rows_written || 0), 0
+      );
+      // Re-send the SAME counter event after ambiguous post-D1 failures, even
+      // when the relation no longer changes. The per-track owner must dedupe.
+      if (previousLiked !== liked) {
+        const outcome = await commitAggregate({
+          uid, trackId, id, revision, seq, previousLiked, liked,
+          delta: Number(liked) - Number(previousLiked),
+        });
+        if (outcome?.aggregateConfirmed !== true ||
+            outcome?.id !== id || outcome?.trackId !== trackId ||
+            outcome?.revision !== revision) {
+          throw new Error('Durable track aggregate not confirmed');
+        }
+      }
+      return { canonicalCommitted: true, liked, rowsWritten, relationChanges };
+    },
+  };
+}

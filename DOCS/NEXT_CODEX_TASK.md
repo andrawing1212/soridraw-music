@@ -1,5 +1,21 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 157/158 우선 — 기존 likes를 복사하지 않는 sparse override + 곡 count lazy baseline (2026-09-21 KST)
+
+실제 [run 35568696258](https://github.com/andrawing1212/soridraw-music/actions/runs/35568696258), exact `a47f54b112d6fd732cde394fe360891f86d3de68` SUCCESS. 153의 user-first 새 relation 전체 이전 대신 **기존 likes를 불변 baseline으로 남기고 달라진 관계만 override하는 157**을 우선 후보로 고정. 실제 격리 Cloudflare D1: 새 deviation INSERT/tombstone **W2**, baseline 복귀 DELETE **W1**, 동일 상태 중복 **W0**. 기존 사용자 relation 전체 backfill 0. `explore_like_overrides_157` migration은 추가형 SQL만 존재하고 shared D1에는 미적용. 157 cold union planner는 legacy user-recent + override PK/recent index를 모두 indexed SEARCH. 156 exact R2는 157 pager에서 2,054 likes 무손실 구성 mock PASS.
+
+158은 전곡 count seed를 없앰. 첫 실제 변경 곡만 frozen `track_stats.like_count` PK read 1회 → shared track owner durable baseline. restart 후 추가 baseline read 0. live D1 EXPLAIN `sqlite_autoindex_track_stats_1 (track_id=?)` PASS. cutover token mismatch와 legacy writer 미컷오버 상태는 fail-closed.
+
+**다음 단일 구현 범위 — backfill을 다시 만들지 말 것:**
+1. PREVIEW/TEST/PRODUCTION 현재 Worker의 **모든 개인 좋아요 reader/writer + legacy likes/track_stats writer** 목록을 정확히 고정. 061 canonical exact guard는 repository canonical source에 들어갔지만 현장 Worker071/TEST/PRODUCTION은 아직 기존 배포본이므로 *코드 존재=실환경 guard*로 오인 금지.
+2. **reader-first 하위호환 단계**를 구현: 기존 v114 exact shared R2를 우선 사용하고, 157 활성화 후 cold repair만 legacy baseline+override union을 사용. 정상 재진입/업데이트는 D1 R0 유지. 기존 2천 snapshot을 완전본으로 추정하지 말고 156 exact marker 없으면 신형 final publisher가 거부.
+3. **writer cutover는 세 환경 모두 같은 shared owner를 쓰는 전제**로 구현. old `likes`와 track_stats를 baseline으로 freeze한 뒤에만 157/158 허용. 한 환경만 157 writer 활성화 금지. 157 relation action은 W1~W2/W0 유지, 158은 첫 changed track read-only seed 후 147 count delta. 051 global revision은 기능등가 작은 변경신호/RTDB로 대체하고 old writer 우회가 없는지 실행형 검증.
+4. public card/feed/popular/profile의 같은 generation 부분 갱신, 141/156 개인 exact R2, 앱127 operationId/baseRevision/final settlement를 실제 Worker/Auth path에 연결. 전체 Feed/profile rebuild/scan 금지.
+5. 격리/제한 계정에서 역순·오프라인·PC↔모바일·동일 곡 다사용자·공개/비공개·구형 앱 병존/rollback 검증. D1뿐 아니라 DO/R2/RTDB 총비용 10만 사용자 기준 산정. 최종 exact TS/Build/회귀/Work/실주소 PREVIEW 후에만 배포 판단.
+
+**금지:** 157 shared migration apply, old likes/track_stats writer freeze, trigger/index DROP, 사용자 원본 변환, TEST/PRODUCTION/PRODUCTION worker 변경은 영향·복구 범위와 사용자 승인 전 실행 금지. 153 관계 전체 backfill을 새 경로에 다시 넣지 않는다. W3+ 또는 기존 하트/숫자 누락이 나오면 STOP.
+
+
 ## 최신 155 실측·무손실 복구 조회 후보 — 다음은 R2 2천+·세 환경 무손실 전환 (2026-09-21 KST)
 
 실제 [run 35566094717](https://github.com/andrawing1212/soridraw-music/actions/runs/35566094717), exact `1d6571eead45326f1dc6d746567640e15c85648c` SUCCESS. 미적용 153 인덱스 `(user_uid, created_at DESC, track_id DESC)`가 실제 격리 Cloudflare D1에서 좋아요 **W2/해제 W1/중복 W0**임을 재확인. 같은 ms에 다른 곡을 좋아요한 경우 실제 SQL keyset 페이지가 누락 없이 넘어가는지 검증. `createLikeRecentPager155`는 128개 이하 read-only 페이지, `verify-135`는 2,053개 synthetic 좋아요 무손실 복구 PASS. **실 R2 2천개 제한 자체는 변경되지 않았고 신규 pager는 Worker 미연결.** 상태 문서 0CL.

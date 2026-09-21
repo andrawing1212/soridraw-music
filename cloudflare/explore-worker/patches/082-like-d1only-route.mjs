@@ -46,14 +46,16 @@ readBody = readBody.replace(proofAnchor, `  if (Number(value?.schemaVersion) ===
     const queuesDrained172 = ['035', '066', '069', '075'].every((key) =>
       Number.isSafeInteger(queueRows172[key]) && queueRows172[key] === 0
     );
+    const approvedWorkerSha172 = String(proof172?.approvedWorkerSha256 || '').trim().toLowerCase();
     const shaMap172 = proof172?.workerSha256ByEnvironment || {};
     const versionMap172 = proof172?.workerVersionByEnvironment || {};
     const markerMap172 = proof172?.workerMarkerReadyByEnvironment || {};
-    const allWorkerEvidence172 = ['preview', 'test', 'production'].every((stage) =>
-      /^[0-9a-f]{64}$/i.test(String(shaMap172?.[stage] || '')) &&
-      String(versionMap172?.[stage] || '').trim().length > 0 &&
-      markerMap172?.[stage] === true
-    );
+    const allWorkerEvidence172 = /^[0-9a-f]{64}$/i.test(approvedWorkerSha172) &&
+      ['preview', 'test', 'production'].every((stage) =>
+        String(shaMap172?.[stage] || '').trim().toLowerCase() === approvedWorkerSha172 &&
+        String(versionMap172?.[stage] || '').trim().length > 0 &&
+        markerMap172?.[stage] === true
+      );
     const proofReady172 = Number(proof172?.schemaVersion) === 1 &&
       proof172?.proofAuthority === 'release-controller-173' &&
       Number.isSafeInteger(Number(proof172?.observedAt)) && Number(proof172.observedAt) > 0 &&

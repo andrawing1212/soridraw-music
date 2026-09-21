@@ -91,3 +91,58 @@ export class LikeFencedProcessor139 {
     return { state: 'settled', revision: value.revision, liked: value.liked };
   }
 }
+
+
+// SORIDRAW_LIKE_D1_ADAPTER_140_20260921
+// Candidate for an isolated D1 only. NOT wired to any production request.
+// Cloudflare D1 batch() runs these prepared statements atomically. Unlike a
+// queue ACK, completion of this batch proves the canonical relation commit.
+// Pricing/trigger/index fan-out MUST still be measured with meta.rows_written.
+// A shared single-writer fence MUST guard this adapter across all environments.
+export function createLikeD1Canonical140(db) {
+  if (!db?.prepare || !db?.batch) throw new TypeError('Cloudflare D1 batch binding required');
+  const eligible = `EXISTS (
+    SELECT 1 FROM tracks t
+    JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1
+    JOIN track_stats s ON s.track_id = t.id
+    WHERE t.id = ? AND t.is_public = 1 AND t.status = 'published'
+  )`;
+  return {
+    async readMembership(uid, trackId) {
+      const row = await db.prepare(
+        'SELECT 1 AS liked FROM likes WHERE track_id = ? AND user_uid = ? LIMIT 1'
+      ).bind(trackId, uid).first();
+      return Boolean(row?.liked);
+    },
+    async applyAtomically(uid, trackId, liked) {
+      const now = Date.now();
+      const change = liked
+        ? db.prepare(`INSERT OR IGNORE INTO likes(track_id, user_uid, created_at)
+            SELECT ?, ?, ? WHERE ${eligible}`).bind(trackId, uid, now, trackId)
+        : db.prepare(`DELETE FROM likes
+            WHERE track_id = ? AND user_uid = ? AND ${eligible}`).bind(trackId, uid, trackId);
+      const stat = db.prepare(
+        `UPDATE track_stats SET like_count = MAX(0, like_count + ?), updated_at = ?
+         WHERE track_id = ? AND changes() = 1`
+      ).bind(liked ? 1 : -1, now, trackId);
+      const outcome = await db.batch([
+        db.prepare(`SELECT ${eligible} AS eligible`).bind(trackId),
+        change,
+        stat,
+        db.prepare(`SELECT EXISTS(
+           SELECT 1 FROM likes WHERE track_id = ? AND user_uid = ?
+         ) AS liked`).bind(trackId, uid),
+      ]);
+      const first = outcome?.[0]?.results?.[0];
+      const final = outcome?.[3]?.results?.[0];
+      const confirmed = Number(first?.eligible) === 1 && Number(final?.liked) === Number(liked);
+      if (!confirmed) throw new Error('Canonical D1 settlement not proven');
+      const rowsWritten = outcome.reduce(
+        (sum, row) => sum + Number(row?.meta?.rows_written || 0), 0
+      );
+      // Do not mark a deployment W2-PASS based on these values: the actual
+      // target's triggers and indexes may charge additional writes.
+      return { canonicalCommitted: true, liked, rowsWritten };
+    },
+  };
+}

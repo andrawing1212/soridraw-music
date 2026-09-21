@@ -130,6 +130,10 @@ if (!effective162.includes('readBoundedLegacyLikeMemberships161')) fail('162 leg
 if (!effective162.includes('explore_like_overrides_157')) fail('162 overlay relation missing');
 if (!effective162.includes('COALESCE(o.liked')) fail('162 effective baseline+override rule missing');
 
+if (!worker.includes('SORIDRAW_LEGACY_LIKE_WRITER_FREEZE_GUARD_163_20260921')) fail('163 legacy writer freeze marker missing');
+const guard163 = functionText('assertLegacyLikeWriterOpen163');
+if (!guard163.includes("state?.mode === 'overlay157'")) fail('163 overlay writer block missing');
+
 const targeted = functionText('handleMyLikeStates');
 if (!targeted.includes('readSharedLikesState161(env, authContext.uid)')) fail('targeted reader lost 161 state');
 if (!targeted.includes('sharedState?.exact')) fail('targeted exact R2 fast path missing');
@@ -151,6 +155,7 @@ console.log('161_LEGACY_1999_2000_PARTIAL_AND_EXACT_2053=PASS');
 console.log('161_PARTIAL_VISIBLE_MEMBERSHIP_BOUNDED_D1=PASS');
 console.log('162_SHARED_CUTOVER_GATED_EFFECTIVE_MEMBERSHIP=PASS');
 console.log('078_DEPLOYED_WORKER_REPLAY_PATCH_PRESENT=PASS');
+console.log('163_LEGACY_WRITER_FREEZE_GUARD_PRESENT=PASS');
 console.log('LIKES_SOURCE=SHARED_R2_FIRST');
 console.log('FOLLOWING_SOURCE=SHARED_R2_FIRST');
 console.log('PREVIEW_EXISTING_LOCAL_CAN_SEED_SHARED_WITHOUT_D1=true');

@@ -165,7 +165,18 @@ export function inspectLikeCutoverPreflight164(
       continue;
     }
     if (!/^explore_[a-z0-9_]+$/i.test(table)) throw new Error('164 preflight: unsafe queue identifier');
-    const rows = d1Query164(config, 'SELECT 1 AS pending FROM "' + table + '" LIMIT 1', run);
+    // 075 uses a durable high-water cursor: processed rows remain in the
+    // table. Only rows strictly beyond that cursor are pending. An absent or
+    // malformed state table fails closed through d1Query164 instead of
+    // reporting a false zero or permanently treating old rows as pending.
+    const statement = key === '075'
+      ? 'SELECT 1 AS pending FROM explore_like_user_queue_075 q ' +
+        'JOIN explore_like_user_queue_state_075 s ON s.id = 1 ' +
+        'WHERE q.updated_at > s.processed_at ' +
+        'OR (q.updated_at = s.processed_at AND q.user_uid > s.processed_uid) ' +
+        'LIMIT 1'
+      : 'SELECT 1 AS pending FROM "' + table + '" LIMIT 1';
+    const rows = d1Query164(config, statement, run);
     queuePending[key] = rows.length > 0 ? 1 : 0;
   }
   return evaluateLikeCutoverPreflight164({ schemaRows, queuePending, legacyIntakeClosed });

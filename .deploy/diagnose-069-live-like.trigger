@@ -1,4 +1,4 @@
-requested_at=2026-09-21T21:25:00Z
-purpose=safe_idempotent_one_time_queue_recovery_after_auditable_preflight
-mode=one_time_queue_rescue
+requested_at=2026-09-21T21:28:00Z
+purpose=read_only_recheck_queue_after_supervised_replay
+mode=postflight_read_only
 preview_only=true

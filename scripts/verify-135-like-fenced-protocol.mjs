@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 
 // ISOLATED PROTOCOL SIMULATION ONLY. No real Cloudflare Durable Object or D1.
@@ -602,4 +602,78 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('146_NO_PERSONAL_SETTLEMENT_BEFORE_PUBLIC_COUNT=PASS');
   console.log('146_REAL_D1_TRIGGER_INDEX_ROWS_WRITTEN_AND_OLD_READERS=NOT_MEASURED');
   console.log('146_PRODUCT_RELEASE_READINESS=FAIL');
+}
+
+
+// 147: actual per-track durable counter with idempotent UID+revision receipt.
+// This simulated transaction is committed before R2 publication. It does NOT
+// grant shared ownership to old workers or prove a live DO billing figure.
+{
+  const persisted = new Map([
+    ['soridraw:track-like-total:147', { count: 5, version: 0 }],
+  ]);
+  let published = { count: 5, generation: 0 }, failOnce = false, writeTransactions = 0;
+  const storage = {
+    async transaction(fn) {
+      const draft = new Map([...persisted].map(([key,value]) => [key, structuredClone(value)]));
+      const result = await fn({
+        async get(key) { return structuredClone(draft.get(key)); },
+        async put(key,value) { draft.set(key, structuredClone(value)); },
+      });
+      persisted.clear();
+      for (const [key,value] of draft) persisted.set(key,value);
+      writeTransactions++;
+      return result;
+    },
+  };
+  const publishTrack = async (event) => {
+    if (failOnce) { failOnce = false; throw Error('R2 public track outage'); }
+    if (event.generation >= published.generation) {
+      published = { count: event.count, generation: event.generation };
+    }
+    return { published: true, snapshotGeneration: published.generation };
+  };
+  const commit = createLikeTrackAggregator147('song', storage, publishTrack);
+  const input = (uid,id,revision,previousLiked,liked,seq=revision) => ({
+    uid, trackId: 'song', id, revision, previousLiked, liked,
+    delta: Number(liked)-Number(previousLiked), seq,
+  });
+  const first = await commit(input('u1','first',1,false,true));
+  assert.equal(first.aggregateConfirmed,true);
+  assert.equal(first.count,6);
+  assert.deepEqual(published,{count:6,generation:1});
+  const duplicate = await commit(input('u1','first',1,false,true));
+  assert.equal(duplicate.duplicate,true);
+  assert.equal(duplicate.generation,1);
+  assert.equal(persisted.get('soridraw:track-like-total:147').count,6);
+  await assert.rejects(commit(input('u1','different',1,false,true)),/Conflicting durable track delta/);
+  const second = await commit(input('u1','second',2,true,false));
+  assert.equal(second.count,5);
+  const simultaneous = await Promise.all([
+    commit(input('u2','other-user',1,false,true)),
+    commit(input('u3','third-user',1,false,true)),
+  ]);
+  assert.deepEqual(simultaneous.map(x => x.generation),[3,4],
+    'different users changing one track must get serial generations');
+  assert.equal(published.count,7);
+  failOnce = true;
+  await assert.rejects(commit(input('u2','other-unlike',2,true,false)),/public track outage/);
+  assert.equal(persisted.get('soridraw:track-like-total:147').count,6);
+  assert.equal(published.count,7, 'public R2 is not yet acknowledged');
+  const repair = await commit(input('u2','other-unlike',2,true,false));
+  assert.equal(repair.duplicate,true);
+  assert.equal(repair.count,6);
+  assert.equal(published.count,6);
+  await assert.rejects(commit(input('u2','late',1,false,true)),/Superseded track delta/);
+  await assert.rejects(commit(input('u1','bad-prestate',3,false,true)),/pre-state differs/);
+  const cold = createLikeTrackAggregator147('cold',storage,publishTrack);
+  await assert.rejects(cold({
+    uid:'u1', trackId:'cold',id:'new',revision:1,seq:1,
+    previousLiked:false, liked:true, delta:1,
+  }),/not seeded/);
+  assert.equal(writeTransactions>=6,true);
+  console.log('147_TRACK_DURABLE_COUNTER_SERIAL_AND_DEDUPE_MODEL=PASS');
+  console.log('147_TRACK_R2_FAILURE_RETRY_NO_DOUBLE_COUNT=PASS');
+  console.log('147_COLD_COUNT_FAIL_CLOSED_AND_PRESTATE_GUARD=PASS');
+  console.log('147_SHARED_TRACK_OWNER_SEED_AND_LIVE_R2=NOT_CONFIGURED');
 }

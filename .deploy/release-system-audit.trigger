@@ -1,1 +1,1 @@
-release_system_audit=2026-09-21-168-direct-atomic-pinned
+release_system_audit=2026-09-21-169-batch-final-freeze-first-pass

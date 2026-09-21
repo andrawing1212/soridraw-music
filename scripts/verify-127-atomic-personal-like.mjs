@@ -35,6 +35,49 @@ assert.match(service, /clearTargetedVerifiedLikeTracks127/);
 assert.match(service, /EXPLORE_LIKE_TARGETED_VERIFIED_130/);
 assert.match(service, /readCurrentPersonalLikeRevision130/);
 assert.match(service, /targetedVerifiedRevisionByUid130/);
+
+assert.match(service, /const partial161 = readLikeLocal127\(scopedLikeKey127\(EXPLORE_LIKE_PARTIAL_BASELINE_161, normalizedUid\)\) === '1'/,
+  'partial account must not reuse R2-revision-keyed D1 verification from another app session');
+assert.match(service, /if \(currentRevision && !partial161\) \{/);
+assert.match(service, /\} else if \(readLikeLocal127\(scopedLikeKey127\(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid\)\) === '1'\) \{/);
+assert.match(service, /clearTargetedVerifiedLikeTracks127\(uid\);/,
+  'deferred D1 materialization requires scoped recheck of partial verified IDs');
+
+// Executable regression for the precise PC/mobile mismatch: the shared R2 HEAD
+// can remain r1 after a 069 deferred D1 relation applies. A mobile restart must
+// NOT trust an old persisted false membership merely because its r1 matches.
+const verifiedReaderStart133 = service.indexOf('const readTargetedVerifiedLikeTracks127 =');
+const verifiedReaderEnd133 = service.indexOf('const persistTargetedVerifiedLikeTracks127 =', verifiedReaderStart133);
+assert.ok(verifiedReaderStart133 > 0 && verifiedReaderEnd133 > verifiedReaderStart133);
+const verifiedReaderJs133 = ts.transpileModule(
+  service.slice(verifiedReaderStart133, verifiedReaderEnd133) +
+  '\\nreturn readTargetedVerifiedLikeTracks127;',
+  { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
+).outputText;
+const makeVerifiedReader133 = (isPartial) => {
+  const uid = 'device-account';
+  const revision = 'unchanged-r2-head';
+  const saved = JSON.stringify({ revision, trackIds: ['already-verified-before-canonical-drain'] });
+  const store = new Map([
+    ['partial:' + uid, isPartial ? '1' : ''],
+    ['verified:' + uid, saved],
+  ]);
+  const memory = new Map();
+  const revisionMemory = new Map();
+  const make = new Function(
+    'targetedVerifiedByUid127', 'targetedVerifiedRevisionByUid130',
+    'readCurrentPersonalLikeRevision130', 'readLikeLocal127', 'scopedLikeKey127',
+    'EXPLORE_LIKE_PARTIAL_BASELINE_161', 'EXPLORE_LIKE_TARGETED_VERIFIED_130',
+    verifiedReaderJs133,
+  );
+  return make(memory, revisionMemory, () => revision, (key) => store.get(key) || '',
+    (prefix, account) => prefix + ':' + account, 'partial', 'verified')(uid);
+};
+assert.equal(makeVerifiedReader133(true).size, 0,
+  'partial R2 must exact-recheck visible tracks after restart, not restore stale false membership');
+assert.equal(makeVerifiedReader133(false).size, 1,
+  'fully materialized R2 may retain revision-keyed membership without extra D1 reads');
+
 assert.match(service, /String\(raw\?\.revision \|\| ''\) === currentRevision/);
 assert.match(service, /JSON\.stringify\(\{ revision: currentRevision, trackIds: bounded \}\)/);
 assert.match(service, /SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_ACK_RESTORE_131_20260922/);

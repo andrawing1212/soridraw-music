@@ -258,10 +258,16 @@ export function createLikeSharedR2Publisher141(bucket, notify) {
 // from the bounded 155 canonical pager while the SAME per-UID durable owner
 // holds a publication barrier. Normal revisit must use local/R2 cache and must
 // never run this full canonical scan. This helper does no D1 writes.
-export function createLikeExactR2Rebuilder156(bucket, listPage155, readPublicationSeq) {
+export function createLikeExactR2Rebuilder156(bucket, listPage155, readPublicationSeq, options = {}) {
   if (!bucket?.get || !bucket?.put || typeof listPage155 !== 'function' ||
       typeof readPublicationSeq !== 'function') {
     throw new TypeError('Shared R2, bounded canonical pager and durable sequence reader required');
+  }
+  // The publication-sequence barrier protects only writers routed through the
+  // shared UID owner. Old PREVIEW/TEST/PRODUCTION writers can otherwise mutate
+  // the shared canonical relation during this scan without advancing that seq.
+  if (options.legacyWriterCutoverVerified !== true) {
+    throw new Error('156 exact rebuild blocked until all legacy like writers are cut over');
   }
   const maxPages = 1024; // 131,072 likes at 128/page; fail closed, never truncate.
   const maxExactSnapshotBytes = 16 * 1024 * 1024;

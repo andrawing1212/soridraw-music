@@ -8,9 +8,10 @@ Canonical likes relation rows: 0
 Track owner has liked (sum): 0
 Note: the logged-in viewer may not be the track owner; owner membership is not viewer membership.
 
-Queue q035: 0 batches, 0 pending mutations
-Queue q066: 0 batches, 0 pending mutations
-Queue q069: 7 batches, 14 pending mutations
+Processor lease remaining seconds: 0
+Queue q035: 0 batches, 0 pending mutations; oldest age seconds 0; newest age seconds 0
+Queue q066: 0 batches, 0 pending mutations; oldest age seconds 0; newest age seconds 0
+Queue q069: 7 batches, 14 pending mutations; oldest age seconds 8827; newest age seconds 2676
 Query plan current: SEARCH t USING INDEX sqlite_autoindex_tracks_1 (id=?)
 Query plan current: SEARCH l USING COVERING INDEX sqlite_autoindex_likes_1 (track_id=? AND user_uid=?)
 Query plan indexed_candidate: CO-ROUTINE requested

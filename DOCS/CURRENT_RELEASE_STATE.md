@@ -1,5 +1,14 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CK. 154 D1 청구 영수증 누락·위조 W0 차단 — 소스/CI PASS, 제품 릴리스 차단 (2026-09-21 KST)
+
+사용자 이전 채팅 153 후속 실행. 기준 `preview` `49d5b596d2713c86d9b41d30fd65526b76b96246`; 153의 `explore_likes_153` user-first WITHOUT ROWID W2/W1/W0 후보는 유지. 실제 코드 `cloudflare/explore-worker/runtime/like-fenced-139.mjs`의 146/153 D1 adapter가 누락된 `meta.rows_written`을 `0`으로 합산해 **청구 영수증 없이 좋아요 확정/곡별 집계로 진행할 수 있는 오류** 수정. batch의 3개 응답과 모든 rows_written을 안전한 음이 아닌 정수로 검사하고, 153 관계 1행 변경에 청구 W0가 나오면 fail-closed. 청구 W3+ 기존 차단 유지. `scripts/verify-135-like-fenced-protocol.mjs`에 missing/NaN/negative/허위 W0 회귀를 추가해 각 경우 곡별 집계 0회 확정 확인. `preview` 커밋: 코드 `92c7063a734aa14dd5b3b414b9a79bd500799bfa`, 테스트 `053bac42a415b4861da6ac07e6e5401f08c3b902`, 실 CI 실행용 `4bf4fcf1dce9ad31e6d734a57f8d794f67a08a10`.
+
+실제 [GitHub Actions run 35565617344](https://github.com/andrawing1212/soridraw-music/actions/runs/35565617344), exact `4bf4fcf1dce9ad31e6d734a57f8d794f67a08a10` **SUCCESS**: TypeScript, Build, release static, 127/128/135~154 격리 회귀, 132/133/134 비용 모형, TEST/PRODUCTION Worker dry-run, 공유 D1 read-only preflight/schema, branch refs 비변경. 이번 CI는 **격리 원격 D1 측정 재실행 없음**(153 실측 35563388506/35563565716 참조). 실제 PREVIEW 앱126/Worker071 비변경; 새 v153 migration 미적용, 공유 사용자 데이터·Firebase/Cloudflare/Functions/R2 비변경. main/production 승격 없음. PC/모바일 실사용 미검증.
+
+**남은 제품 FAIL:** 기존 좋아요를 v153으로 무손실 넘길 승인된 baseline/복구, 세 환경 구형 writer/readers와 051 변경신호 동시 컷오버, 각 곡 147 집계 seed와 feed/popular/profile 세대 부분 게시, 사용자 개인 2천+ 스냅샷 확장, 공통 UID/곡 owner·RTDB, 실제 전체 DO/R2/RTDB 비용/PC·모바일/Work 감사. 현행 릴리스 차단 유지. 이 코드는 누락된 비용 증거를 PASS로 오인하지 못하게 하는 국소 수정이며 실제 좋아요 기능 완성 또는 배포 완료가 아님.
+
+
 ## 0CJ. 153 실 Cloudflare 격리 D1 비용 W1/W2 측정, user-first 추가형 스키마·연결 코드 (2026-09-21 KST)
 
 사용자 "니가 말한대로 작업해줘. 말만 하지말고" 요청. `preview` 기준 `9dfa6a578afb1a86f14c97d4082793e89bc14da5`에서 단순 계산/SQLite가 아니라 **실제 Cloudflare 원격 임시 D1**을 두 번 생성해 순수 테스트 UID/곡만 넣고 `meta.rows_written` 실측. 실제 run [35563388506](https://github.com/andrawing1212/soridraw-music/actions/runs/35563388506), [35563565716](https://github.com/andrawing1212/soridraw-music/actions/runs/35563565716) 전체 SUCCESS, 시험 DB는 각각 삭제 확인 `153_EPHEMERAL_D1_DELETED=PASS`. **공유 사용자 DB/R2/Firebase/Worker·실사용 계정은 읽기 전용 기존 schema 감사 이외 접근하지 않았음.**

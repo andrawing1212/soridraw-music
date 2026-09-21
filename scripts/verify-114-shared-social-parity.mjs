@@ -90,13 +90,45 @@ const followSync = functionText('syncExploreFollowingR2AfterMutation');
 if (!followSync.includes('readSharedFollowing061(env, uid)')) fail('follow mutation does not prime from shared state');
 if (!followSync.includes('writeSharedFollowing061(env, uid, local)')) fail('follow mutation does not mirror shared state');
 
+const sharedState = functionText('normalizeSharedLikesState161');
+if (!sharedState.includes('canonicalComplete156 === true')) fail('161 exact marker validation missing');
+if (!sharedState.includes('exactLikeCount === likedIds.size')) fail('161 exact count proof missing');
+if (!sharedState.includes('values.length === likedIds.size')) fail('161 duplicate ID proof missing');
+const normalize161 = Function(sharedState + '; return normalizeSharedLikesState161;')();
+const legacy1999 = normalize161({ schemaVersion: 1, uid: 'u', likedTrackIds: Array.from({ length: 1999 }, (_, i) => 't' + i) }, 'u');
+if (!legacy1999 || legacy1999.exact !== false || legacy1999.likedIds.size !== 1999) fail('legacy <2000 must remain partial');
+const legacy2000 = normalize161({ schemaVersion: 1, uid: 'u', likedTrackIds: Array.from({ length: 2000 }, (_, i) => 't' + i) }, 'u');
+if (!legacy2000 || legacy2000.exact !== false) fail('legacy 2000 must remain partial');
+const exact2053 = normalize161({
+  schemaVersion: 1, uid: 'u', likedTrackIds: Array.from({ length: 2053 }, (_, i) => 'e' + i),
+  canonicalComplete156: true, canonicalSource156: 'explore_likes_153', exactLikeCount156: 2053,
+}, 'u');
+if (!exact2053?.exact || exact2053.exactLikeCount !== 2053 || exact2053.likedIds.size !== 2053) fail('exact >2000 snapshot rejected');
+const mismatched = normalize161({
+  schemaVersion: 1, uid: 'u', likedTrackIds: ['a','b'],
+  canonicalComplete156: true, canonicalSource156: 'explore_likes_153', exactLikeCount156: 3,
+}, 'u');
+if (!mismatched || mismatched.exact !== false) fail('mismatched exact count accepted');
+
+const targeted = functionText('handleMyLikeStates');
+if (!targeted.includes('readSharedLikesState161(env, authContext.uid)')) fail('targeted reader lost 161 state');
+if (!targeted.includes('sharedState?.exact')) fail('targeted exact R2 fast path missing');
+if (!targeted.includes('readBoundedLegacyLikeMemberships161')) fail('partial targeted D1 fallback missing');
+if (!targeted.includes('likesComplete: false')) fail('partial targeted response not marked incomplete');
+
 const social = functionText('handleMySocialSnapshot042');
-if (!social.includes('readExploreLikeR2Bundle(env, authContext.uid)')) fail('social snapshot lost shared like reader');
+if (!social.includes('readSharedLikesState161(env, authContext.uid)')) fail('social snapshot lost 161 state');
+if (!social.includes('likesComplete: likeState.exact')) fail('social snapshot completeness metadata missing');
 if (!social.includes('readExploreFollowingR2Bundle(env, authContext.uid)')) fail('social snapshot lost shared following reader');
+
 const liked = functionText('handleMyLikedTracks052');
-if (!liked.includes('readExploreLikeR2Bundle(env, authContext.uid)')) fail('liked collection lost shared like reader');
+if (!liked.includes('readSharedLikesState161(env, authContext.uid)')) fail('liked collection lost 161 state');
+if (!liked.includes('readBoundedLegacyLikeMemberships161')) fail('liked collection partial membership fallback missing');
+if (!liked.includes('readRequestedLikedTrackCardsD1161')) fail('liked collection bounded cold card recovery missing');
 
 console.log('114_SHARED_SOCIAL_PARITY=PASS');
+console.log('161_LEGACY_1999_2000_PARTIAL_AND_EXACT_2053=PASS');
+console.log('161_PARTIAL_VISIBLE_MEMBERSHIP_BOUNDED_D1=PASS');
 console.log('LIKES_SOURCE=SHARED_R2_FIRST');
 console.log('FOLLOWING_SOURCE=SHARED_R2_FIRST');
 console.log('PREVIEW_EXISTING_LOCAL_CAN_SEED_SHARED_WITHOUT_D1=true');

@@ -1,5 +1,6 @@
 import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 // ISOLATED PROTOCOL SIMULATION ONLY. No real Cloudflare Durable Object or D1.
 // Caller must send server-issued per-track base revision (not a device clock).
@@ -407,6 +408,10 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('141_STALE_REPLAY_CONFLICT_AND_IDEMPOTENT_NOTIFY=PASS');
   console.log('141_CAS_RETRY_AMBIGUOUS_2000_FAIL_CLOSED_AND_128_HISTORY_ELIMINATED=PASS');
   console.log('156_EXACT_2053_R2_REBUILD_AND_POST_REBUILD_MUTATION=PASS');
+  const legacy061 = readFileSync('cloudflare/explore-worker/patches/061-shared-social-r2-parity.mjs', 'utf8');
+  assert.match(legacy061, /existing\?\.canonicalComplete156 === true/);
+  assert.match(legacy061, /must never truncate an.*exact >2,000 canonical snapshot/s);
+  console.log('156_LEGACY_061_SHARED_MIRROR_EXACT_SNAPSHOT_GUARD=PASS');
   console.log('141_LIVE_CROSS_ENV_WRITER_AND_AUTH_NOT_CONNECTED=NOT_VERIFIED');
 }
 

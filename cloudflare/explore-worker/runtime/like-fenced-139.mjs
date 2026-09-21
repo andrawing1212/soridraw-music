@@ -345,9 +345,20 @@ export function createLikeRelationOnly146(db, commitAggregate, options = {}) {
           relationChanges > 1 || (previousLiked === liked && relationChanges !== 0)) {
         throw new Error('Unexpected canonical relation change; do not aggregate');
       }
+      // A missing/invalid D1 receipt must NEVER count as zero writes. In
+      // particular, the 153 W2 release gate is not satisfied by an absent
+      // meta.rows_written or a synthetic response with no billing metadata.
+      if (!Array.isArray(results) || results.length !== 3 ||
+          results.some((result) => !Number.isSafeInteger(result?.meta?.rows_written) ||
+            result.meta.rows_written < 0)) {
+        throw new Error('Canonical D1 billing receipt missing or invalid');
+      }
       const rowsWritten = results.reduce(
-        (sum, result) => sum + Number(result?.meta?.rows_written || 0), 0
+        (sum, result) => sum + result.meta.rows_written, 0
       );
+      if (userFirst && relationChanges === 1 && rowsWritten === 0) {
+        throw new Error('153 mutation missing a billable relation write');
+      }
       if (userFirst && rowsWritten > 2) {
         // D1 already committed: keep the pending for audited recovery.
         throw new Error('153 relation exceeded live D1 W2 billing budget');

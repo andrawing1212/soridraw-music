@@ -1,5 +1,21 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app128 PREVIEW 실사용 좋아요 검증
+
+현재:
+- PREVIEW app128 Hosting `35637112915` SUCCESS.
+- Worker personal-like routes hotfix `35635316035` SUCCESS.
+- 두 번째 영상에서 확인된 partial-R2 클릭 잠금 원인 수정 완료.
+- 171 migration / D1-only final cutover는 아직 미적용·미활성.
+
+다음:
+1. 사용자 실사용으로 빈/찬 하트 즉시 클릭 가능 여부 확인.
+2. 30초 뒤 동일 계정 PC↔모바일 최종 상태 수렴 확인.
+3. 좋아요→해제→좋아요 반복 시 최신 의도 유지 확인.
+4. 위 검증 통과 전에는 171 D1-only 최종 cutover로 넘어가지 않는다.
+5. TEST/PRODUCTION 변경 금지.
+
+
 ## 현재 최우선 — PREVIEW 앱127 + Worker173/174 실사용 검증 후 D1-only 최종 전환 준비
 
 현재 실제 PREVIEW:

@@ -19,7 +19,9 @@ CREATE TABLE IF NOT EXISTS explore_likes_153 (
   PRIMARY KEY (user_uid, track_id)
 ) WITHOUT ROWID;
 
--- Retains per-user recent-liked retrieval. Another index would increase
--- like W2 to W3+ in the isolated D1 billing comparison.
+-- Retains per-user recent-liked retrieval with a stable track-id tie break.
+-- Multiple clicks can share a millisecond; created_at-only pagination would
+-- silently skip tied songs. Still a SINGLE secondary index (W2 candidate),
+-- pending isolated Cloudflare billing verification of this widened key.
 CREATE INDEX IF NOT EXISTS idx_explore_likes_153_user_recent
-  ON explore_likes_153 (user_uid, created_at DESC);
+  ON explore_likes_153 (user_uid, created_at DESC, track_id DESC);

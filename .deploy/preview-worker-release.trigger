@@ -1,12 +1,9 @@
-requested_at=2026-09-20T05:10:10Z
+requested_at=2026-09-21T17:18:00Z
 requested_by=user
-product_code_target=e9ccd5d4092f24ae34457b81479eded73af59b87
-release_purpose=deploy_071_canonical_like_preservation_after_full_preflight
+product_code_target=af58e124b3c5ecaa227f3129c803614aa68de4a6
+release_purpose=deploy_audited_173_174_canonical_dormant_cutover
 no_d1_migration=true
 no_user_data_migration=true
-catalog_bootstrap_complete=true
-catalog_write_flag=true
-catalog_read_flag=false
-first_publisher_flag=false
+cutover_activation=false
 hosting_redeploy_separately=true
 preview_only=true

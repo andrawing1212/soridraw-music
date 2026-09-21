@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CB. 140 실제 D1 batch 좋아요/해제 어댑터 구현 및 격리 SQL 검사 — W1~W2 릴리스 차단 (2026-09-21 KST)
+
+사용자가 수일간 반복된 미완료 상황을 지적하고 조속한 PREVIEW 완성·배포 요청. 최신 기준 `preview` `0fc1fb01b5f33b70c7421a0853a662d5205dbdce`. **실제 코드 수정:** 기존 `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 `createLikeD1Canonical140(db)` 추가. `readMembership`은 해당 UID/곡의 관계만 읽음. `applyAtomically`는 기존 tracks/public_profiles/track_stats의 공개·원본 조건 확인 → 조건부 likes INSERT OR IGNORE/DELETE → 직전 `changes()=1`일 때만 track_stats ±1 → 트랜잭션 안의 최종 관계 상태 재확인을 `db.batch([...])` 하나로 묶음. 요청 실패/곡 미공개/통계 누락 시 `canonicalCommitted` 반환 금지. R2는 이 함수에서 갱신하지 않음. 실제 Cloudflare 공식 D1 API의 `batch()`는 오류 시 묶음 롤백을 명시함. **아직 배포 및 실 D1 실행 없음.**
+
+기존 `scripts/verify-135-like-fenced-protocol.mjs`에 **140 SQL 순서·조건·중복 no-op·비공개 fail-closed** D1 모의 테스트 추가. GitHub 실제 139/140 코드 및 135 전체 모의 테스트를 V8 실행: 135/139/140 로직 PASS, 135의 구형 writer 우회 FAIL과 release FAIL 표기 유지. 격리 Python sqlite3에서 SQL 구조를 적용한 결과: 트리거가 없는 모형 좋아요 2 / 동일 좋아요 0 / 해제 2 / 동일 해제 0, 비공개 계정 적용 0; 기존 derived fanout을 포함한 격리 모형에서는 좋아요·해제 **각 논리 행 6개**, 실제 Cloudflare `meta.rows_written` 청구 측정 아님(인덱스 청구 등 제외). 이 검사를 **실 D1 W1~W2 합격으로 처리 금지.**
+
+**여전히 배포 중단:** 139/140은 실제 Worker/Auth/UID별 영속 단일 소유자/공유 D1에 연결되지 않은 코드 후보. 138 intake pending-only도 finalizer가 없어 앱127과 함께 배포하면 자동 기기 수렴이 멈춤. 구형 TEST/PRODUCTION writer 우회, 실제 W1~W2 (derived trigger/index 포함) 비용, 2천/128 한도·실기기·full TS/Build·독립 감사·실주소 확인 미완료. shared migration/실사용 데이터 수정 없이 새 구조를 TEST/PRODUCTION과 함께 전환할 방법이 검증되기 전 배포 불가. 새 PRODUCTION 승인 없이는 변경 금지. 이번 작업은 preview의 기존 runtime 139·verifier 135·문서만 변경, Hosting/Cloudflare/Firebase/Functions/Rules/D1/R2 실서비스 배포·실사용 데이터 변경 0. 마지막 확인 문서 기준 실제 앱126/Worker071; 현재 라이브 버전 별도 새 조회는 미실시.
+
 ## 0CA. 139 좋아요 영속 순서·D1 확정 후 게시 코어 후보 구현, 격리 회귀 PASS / 실제 Worker 미연결 (2026-09-21 KST)
 
 기준 `preview` 138 단계에서 실제 코드 `cloudflare/explore-worker/runtime/like-fenced-139.mjs` 신규 추가. `LikeFencedProcessor139`는 인증된 UID/곡·stable operation ID·서버 발급 baseRevision 기반의 단일 영속 소유자를 전제로, **영속 pending 우선 기록 → 원자 D1 adapter 확정 증명 → 영속 revision/마지막 ID → 공유 개인 캐시 monotonic publish 확정** 순서로만 `settled` 반환. 같은 ID는 중복 적용하지 않고, 오래된 revision은 stale이며, D1 전·후 크래시나 게시 실패 시 pending을 유지해 같은 의도를 먼저 복구한 다음 새 주문을 받음. 이 코어에는 실 DB·Auth·HTTP·R2 호출이 없고 기존 Worker 경로와 아직 연결하지 않았으므로 기능 배포 완료를 뜻하지 않음.

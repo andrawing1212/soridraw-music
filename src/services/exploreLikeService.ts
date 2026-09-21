@@ -1256,39 +1256,45 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? unresolved[trackId] ?? cache.get(trackId) === true);
 };
 
+// App129 single-authority rule:
+// - My Likes is NOT allowed to overwrite personal heart membership.
+// - The liked-track collection is only a candidate/card index.
+// - Effective membership always comes from the same personal-like state used by
+//   Feed/Profile hearts: pending click > accepted-unsettled intent > verified
+//   canonical membership cache.
+export const getExploreKnownLikeCandidateIds127 = (uid: string): string[] => {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return [];
+  const cache = getLikedStateCache(normalizedUid);
+  const outbox = readLikeOutbox(normalizedUid);
+  const unresolved = readSnapshotPending127(normalizedUid);
+  const candidates = new Set<string>();
+  for (const [trackId, liked] of cache.entries()) if (liked) candidates.add(trackId);
+  for (const [trackId, liked] of Object.entries(unresolved)) if (liked) candidates.add(trackId);
+  for (const [trackId, pending] of Object.entries(outbox)) {
+    if (pending.desiredLiked) candidates.add(trackId);
+    else candidates.delete(trackId);
+  }
+  return [...candidates];
+};
+
 export const reconcileExploreLikedTrackCollectionState = (
   uid: string,
-  canonicalLikedTrackIds: string[],
+  candidateLikedTrackIds: string[],
 ): string[] => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) return [];
 
-  const canonical = new Set(
-    canonicalLikedTrackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean),
-  );
-  const cache = getLikedStateCache(normalizedUid);
-  const outbox = readLikeOutbox(normalizedUid);
-  const unresolved = readSnapshotPending127(normalizedUid);
   const scope = new Set<string>([
-    ...cache.keys(),
-    ...canonical,
-    ...Object.keys(unresolved),
-    ...Object.keys(outbox),
+    ...candidateLikedTrackIds.map((trackId) => String(trackId || '').trim()).filter(Boolean),
+    ...getExploreKnownLikeCandidateIds127(normalizedUid),
   ]);
   const effectiveLikedTrackIds: string[] = [];
-  let changed = false;
-
   for (const trackId of scope) {
-    const pending = outbox[trackId];
-    const nextLiked = pending ? pending.desiredLiked : unresolved[trackId] ?? canonical.has(trackId);
-    if (cache.get(trackId) !== nextLiked) {
-      cache.set(trackId, nextLiked);
-      changed = true;
+    if (readExploreTrackLikeMembership127(normalizedUid, trackId) === true) {
+      effectiveLikedTrackIds.push(trackId);
     }
-    if (nextLiked) effectiveLikedTrackIds.push(trackId);
   }
-
-  if (changed) persistLikedStateCache(normalizedUid, cache);
   return effectiveLikedTrackIds;
 };
 

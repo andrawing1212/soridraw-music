@@ -666,7 +666,13 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.equal(published.count,6);
   await assert.rejects(commit(input('u2','late',1,false,true)),/Superseded track delta/);
   await assert.rejects(commit(input('u1','bad-prestate',3,true,false)),/pre-state differs/);
-  const cold = createLikeTrackAggregator147('cold',storage,publishTrack);
+  // A different track is a different DO instance with its own storage.
+  const coldStorage = {
+    async transaction(fn) {
+      return fn({ async get() { return undefined; }, async put() {} });
+    },
+  };
+  const cold = createLikeTrackAggregator147('cold',coldStorage,publishTrack);
   await assert.rejects(cold({
     uid:'u1', trackId:'cold',id:'new',revision:1,seq:1,
     previousLiked:false, liked:true, delta:1,

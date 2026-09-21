@@ -7,8 +7,11 @@ const workerPath = join(remoteDir, 'worker.js');
 let source = readFileSync(workerPath, 'utf8');
 
 const marker = 'SORIDRAW_EXPLORE_LIKE_EDGE_RATE_LIMIT_054_20260915';
-if (source.includes(marker)) {
-  console.log('[054] Explore like edge rate limit already applied.');
+const marker160 = 'SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921';
+const has054 = source.includes(marker);
+const has160 = source.includes(marker160);
+if (has054 && has160) {
+  console.log('[054/160] Batch and direct Explore like edge rate limits already applied.');
   process.exit(0);
 }
 
@@ -67,30 +70,40 @@ for (const required of [
 
 const edgeHelper = `// ${marker}\nasync function enforceExploreLikeBatchEdgeRateLimit054(env, uid) {\n  const normalizedUid = String(uid || '').trim();\n  if (!normalizedUid) throwApi('UNAUTHENTICATED', '로그인이 필요합니다.', 401);\n  const limiter = env?.LIKE_RATE_LIMITER;\n  if (!limiter || typeof limiter.limit !== 'function') {\n    console.error('[SORIDRAW 054] LIKE_RATE_LIMITER binding missing');\n    throwApi('RATE_LIMIT_UNAVAILABLE', '좋아요 보호 기능을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.', 503);\n  }\n  const result = await limiter.limit({ key: 'like:' + normalizedUid });\n  if (!result?.success) {\n    throwApi('RATE_LIMITED', '좋아요 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', 429, { 'Retry-After': '60' });\n  }\n}\n\n`;
 
-const batch = functionRange('handleLikeBatch034');
-const oldRateCall = 'await enforceExploreLikeBatchRateLimit034(env, authContext.uid, mutations.length);';
-if (!batch.text.includes(oldRateCall)) throw new Error('[054] D1 like rate-limit call missing from batch handler');
-const nextBatch = batch.text.replace(oldRateCall, 'await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);');
-source = source.slice(0, batch.start) + edgeHelper + nextBatch + source.slice(batch.end);
+if (!has054) {
+  const batch = functionRange('handleLikeBatch034');
+  const oldRateCall = 'await enforceExploreLikeBatchRateLimit034(env, authContext.uid, mutations.length);';
+  if (!batch.text.includes(oldRateCall)) throw new Error('[054] D1 like rate-limit call missing from batch handler');
+  const nextBatch = batch.text.replace(oldRateCall, 'await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);');
+  source = source.slice(0, batch.start) + edgeHelper + nextBatch + source.slice(batch.end);
+} else {
+  const batch = functionRange('handleLikeBatch034').text;
+  if (!batch.includes('enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid)')) {
+    throw new Error('[054/160] 054 marker exists but batch edge limiter is missing');
+  }
+}
 
 // 160: the legacy direct PUT/DELETE route used enforceUserRateLimit(), which
 // writes RATE_DB on every click. Keep the old route compatible while removing
 // that extra D1 write by using the same Cloudflare edge limiter as batch.
-const direct = functionRange('handleLikeD1Core');
-const directRateCall = 'await enforceUserRateLimit(env, authContext.uid, "like", RATE_LIMITS.like);';
-if (!direct.text.includes(directRateCall)) {
-  throw new Error('[054/160] direct D1 like rate-limit call missing');
+if (!has160) {
+  const direct = functionRange('handleLikeD1Core');
+  const directRateCall = 'await enforceUserRateLimit(env, authContext.uid, "like", RATE_LIMITS.like);';
+  if (!direct.text.includes(directRateCall)) {
+    throw new Error('[054/160] direct D1 like rate-limit call missing');
+  }
+  const nextDirect = direct.text.replace(
+    directRateCall,
+    '// ' + marker160 + '\n  await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);'
+  );
+  source = source.slice(0, direct.start) + nextDirect + source.slice(direct.end);
 }
-const nextDirect = direct.text.replace(
-  directRateCall,
-  'await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);'
-);
-source = source.slice(0, direct.start) + nextDirect + source.slice(direct.end);
 
 const finalBatch = functionRange('handleLikeBatch034').text;
 const finalEdge = functionRange('enforceExploreLikeBatchEdgeRateLimit054').text;
 const finalDirect = functionRange('handleLikeD1Core').text;
-if (!finalDirect.includes('enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid)') ||
+if (!source.includes(marker160) ||
+    !finalDirect.includes('enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid)') ||
     finalDirect.includes('enforceUserRateLimit(')) {
   throw new Error('[054/160] direct like route did not retire D1 rate-limit write');
 }

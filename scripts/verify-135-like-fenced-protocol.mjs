@@ -665,7 +665,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.equal(repair.count,6);
   assert.equal(published.count,6);
   await assert.rejects(commit(input('u2','late',1,false,true)),/Superseded track delta/);
-  await assert.rejects(commit(input('u1','bad-prestate',3,false,true)),/pre-state differs/);
+  await assert.rejects(commit(input('u1','bad-prestate',3,true,false)),/pre-state differs/);
   const cold = createLikeTrackAggregator147('cold',storage,publishTrack);
   await assert.rejects(cold({
     uid:'u1', trackId:'cold',id:'new',revision:1,seq:1,

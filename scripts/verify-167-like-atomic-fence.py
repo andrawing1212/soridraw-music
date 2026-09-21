@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix="soridraw-167-isolated-") as root:
     db.execute("UPDATE explore_like_user_queue_075 SET updated_at=2 WHERE user_uid='user-a'")
     assert [db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] for table in QUEUE_TABLES] == [1] * 4
     db.execute("UPDATE like_cutover_control_167 SET phase='draining' WHERE id=1 AND phase='open'")
-    assert db.total_changes == 6  # 4 inserts + one update + fence update (fixture seed excluded).
+    assert db.total_changes == 7  # singleton seed + 4 queue inserts + 075 update + phase update.
 
     for kind in ("035", "066", "069"):
         expect_blocked(lambda kind=kind: db.execute(

@@ -1,5 +1,42 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CY. PREVIEW app128 — partial R2 상태에서도 좋아요 클릭 잠금 해제 배포 완료 (2026-09-22 KST)
+
+사용자 두 번째 실사용 영상에서 중요한 사실을 다시 확인했다.
+- `/v1/me/likes-revision`: **FULL 200**
+- `/v1/me/social-snapshot`: **FULL 200**
+- 그런데 화면은 계속 **“좋아요 상태를 확인하고 있어요”**로 클릭을 차단했다.
+
+실제 원인:
+- legacy 개인 좋아요 R2 snapshot이 `likesComplete=false`인 사용자에서 app127은 안전을 위해 전역 baseline을 완료 처리하지 않는다.
+- 동시에 visible track의 기존 local cache 값이 이미 존재하면 `getExploreLikedTrackIds`가 그 곡을 “missing 아님”으로 판단해 bounded exact `/v1/me/likes?trackIds=...` 검증을 생략했다.
+- 결과적으로 화면에는 하트가 보이지만 mutation gate는 영원히 `undefined` 상태가 되어 클릭이 막혔다.
+
+수정:
+- partial account snapshot에서는 기존 cache 유무와 상관없이, 아직 exact-targeted 검증되지 않은 visible track만 최대 50개 단위로 `/v1/me/likes`에서 확인.
+- 확인된 track ID만 별도 local verified set으로 저장해 mutation 허용.
+- account R2 revision 변경 / repair 요청 시 verified set을 즉시 무효화하여 오래된 상태가 새 변경을 덮지 못하게 유지.
+- complete snapshot 사용자는 기존처럼 추가 targeted read 없이 사용.
+- UI/CSS 변경 없음.
+
+검증/배포:
+- source audit Run `35636601460` SUCCESS.
+- app128 final audit Run `35636890502` SUCCESS.
+- PREVIEW Hosting Run `35637112915` SUCCESS.
+- remote app version: **128**
+- `preview.soridraw.com` exact build PASS.
+- active PREVIEW Worker는 기존 hotfix `733c3981-4095-4c69-bf33-9abb5de7a450` 유지.
+- TEST / PRODUCTION unchanged PASS.
+- D1 migration 0 / final cutover 0 / user-data migration 0.
+
+현재 사용자 확인:
+- 업데이트 후 Explore 진입.
+- 기존 하트 상태가 표시되는지.
+- 빈 하트/찬 하트가 즉시 클릭되는지.
+- “좋아요 상태를 확인하고 있어요” 반복 차단이 사라졌는지.
+- 이후 30초 배치 및 PC↔모바일 최종 수렴 확인.
+
+
 ## 0CX. 앱127 PREVIEW 좋아요 클릭 차단 hotfix 완료 (2026-09-22 KST)
 
 사용자 실사용 영상에서 `/v1/me/likes-revision` **HTTP 404**를 확인했고, 이 때문에 app127 개인 좋아요 상태 확인이 끝나지 않아 카드 클릭이 **“좋아요 상태를 확인하고 있어요”**로 차단되는 실제 배포 오류를 확인했다.

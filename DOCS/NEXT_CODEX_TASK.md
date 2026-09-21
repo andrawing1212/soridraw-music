@@ -1,5 +1,27 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 159/160 완료 — 다음은 reader-first exact/incomplete 판정 연결 (2026-09-21 KST)
+
+최종 audit [35576793526](https://github.com/andrawing1212/soridraw-music/actions/runs/35576793526), exact `7bcd28f909eda4544ee9919351d8dfd6ec7853bf` SUCCESS. canonical Worker SHA256 `c517ac6193cfe1bd12234a8158e9abcc89fd081fe0ab35b5a319b464fb553081` 일치. TypeScript/Build/156~160 회귀, 054→160 replay fixture, TEST/PRODUCTION dry-run, 공유 D1 read-only preflight PASS. 배포/공유 데이터 변경 없음.
+
+159가 고정한 legacy 범위:
+- relation writer 3개: `adjustExploreLikeCounterDelta`, `processExploreLikeAggregateWave035`, `processExploreLikeUserQueueWave075`
+- count rebuild writer 1개: `refreshLikeCount`
+- 개인 reader-first 대상 4개: `readSharedLikes061`, `rebuildExploreLikeR2Bundle`, `handleMySocialSnapshot042`, `handleMyLikedTracks052`
+- direct route + 069/055 batch는 아직 157/158 owner cutover 전.
+
+160은 direct PUT/DELETE 호환 route의 `RATE_DB.api_rate_limits` 추가 D1 write를 제거하고 기존 `LIKE_RATE_LIMITER`로 통일. 현재 앱 UI 클릭은 local outbox → `/v1/me/likes/batch`이므로 160은 구형 direct 호환 비용 제거이지 relation/count 전체 컷오버 완료가 아님.
+
+**다음 단일 구현 범위: reader-first exact/incomplete 구분**
+1. 현재 `readSharedLikes061`가 v114의 `likedTrackIds` 배열만 있으면 완전본으로 취급하는 경로를 바꿔, `canonicalComplete156:true + exactLikeCount156===likedTrackIds.length + canonicalSource156`이면 exact로 판정하고 그렇지 않은 legacy snapshot은 **정상 캐시 표시용은 유지하되 cold repair가 필요한 incomplete 상태로 구분**한다.
+2. `handleMySocialSnapshot042` / `handleMyLikedTracks052`가 incomplete legacy snapshot을 조용히 "전체 좋아요"로 확정하지 않도록 source-level 하위호환 계약을 구현한다. 기존 앱이 읽는 응답 shape는 깨지지 않게 유지하고, exact marker가 생긴 뒤에는 D1 R0 재방문 경로를 유지한다.
+3. cold repair는 157 migration이 아직 미적용이므로 **실 shared D1에서 실행 금지**. source/test에서는 157 pager → 156 exact R2 rebuild 연결만 검증하고, 실제 D1 fallback은 명시적 157 schema/cutover gate 없이는 fail-closed.
+4. reader-first 변경은 writer freeze보다 먼저 배포 가능한 하위호환이어야 한다. 구형 TEST/PRODUCTION writer가 계속 legacy `likes`를 바꾸는 동안에도 기존 v114 object를 삭제/덮어쓰거나 사용자 하트를 숨기지 않는다.
+5. exact source commit에서 기존 2,000 이하/정확히 2,000/2,000 초과 synthetic cache, PC↔모바일 stale order, old app response shape를 검증. 정상 exact R2 재방문은 D1 R0. 이후에만 세 환경 writer 단일 owner cutover 단계로 이동.
+
+**금지:** reader-first 작업을 이유로 157 shared migration apply, legacy `likes`/track_stats freeze/drop, user backfill, R2 대량재생성, TEST/PRODUCTION 실제 Worker 배포를 자동 실행하지 않는다. incomplete legacy snapshot을 exact로 선언하거나, 반대로 기존 사용자 하트를 빈 목록으로 반환하는 것도 금지.
+
+
 ## 최신 157/158 우선 — 기존 likes를 복사하지 않는 sparse override + 곡 count lazy baseline (2026-09-21 KST)
 
 실제 [run 35568696258](https://github.com/andrawing1212/soridraw-music/actions/runs/35568696258), exact `a47f54b112d6fd732cde394fe360891f86d3de68` SUCCESS. 153의 user-first 새 relation 전체 이전 대신 **기존 likes를 불변 baseline으로 남기고 달라진 관계만 override하는 157**을 우선 후보로 고정. 실제 격리 Cloudflare D1: 새 deviation INSERT/tombstone **W2**, baseline 복귀 DELETE **W1**, 동일 상태 중복 **W0**. 기존 사용자 relation 전체 backfill 0. `explore_like_overrides_157` migration은 추가형 SQL만 존재하고 shared D1에는 미적용. 157 cold union planner는 legacy user-recent + override PK/recent index를 모두 indexed SEARCH. 156 exact R2는 157 pager에서 2,054 likes 무손실 구성 mock PASS.

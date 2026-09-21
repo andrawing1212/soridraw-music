@@ -46,13 +46,28 @@ readBody = readBody.replace(proofAnchor, `  if (Number(value?.schemaVersion) ===
     const queuesDrained172 = ['035', '066', '069', '075'].every((key) =>
       Number.isSafeInteger(queueRows172[key]) && queueRows172[key] === 0
     );
+    const shaMap172 = proof172?.workerSha256ByEnvironment || {};
+    const versionMap172 = proof172?.workerVersionByEnvironment || {};
+    const markerMap172 = proof172?.workerMarkerReadyByEnvironment || {};
+    const allWorkerEvidence172 = ['preview', 'test', 'production'].every((stage) =>
+      /^[0-9a-f]{64}$/i.test(String(shaMap172?.[stage] || '')) &&
+      String(versionMap172?.[stage] || '').trim().length > 0 &&
+      markerMap172?.[stage] === true
+    );
     const proofReady172 = Number(proof172?.schemaVersion) === 1 &&
+      proof172?.proofAuthority === 'release-controller-173' &&
+      Number.isSafeInteger(Number(proof172?.observedAt)) && Number(proof172.observedAt) > 0 &&
       proof172?.legacyIntakeClosed === true &&
       queuesDrained172 &&
+      Number(proof172?.queueStablePasses) === 2 &&
       proof172?.legacyProcessorIdle === true &&
       proof172?.allEnvironmentWorkerShaVerified === true &&
+      allWorkerEvidence172 &&
+      /^[0-9a-f]{64}$/i.test(String(proof172?.drainTokenHash || '')) &&
+      Number(proof172?.drainQuiescenceMs) >= 30000 &&
       proof172?.d1OnlySchemaOwnerReady === true &&
       proof172?.d1OnlySchemaOwner === 'shared-d1' &&
+      Number(proof172?.d1OnlyHotSecondaryIndexes) === 0 &&
       proof172?.relationTable === 'explore_like_overrides_171' &&
       proof172?.countTable === 'explore_like_count_deltas_171' &&
       proof172?.ownerProtocol === 'd1-only-171';

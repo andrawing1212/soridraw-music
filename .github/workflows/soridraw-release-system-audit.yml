@@ -64,6 +64,7 @@ jobs:
           node --check cloudflare/explore-worker/scripts/like-d1only-precutover-proof-173.mjs
           node --check cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
           node --check cloudflare/explore-worker/scripts/like-d1-cutover-proof-174.mjs
+          node --check cloudflare/explore-worker/scripts/like-d1-cutover-controller-174.mjs
           expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
           actual_worker_sha="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
           echo "CANONICAL_WORKER_EXPECTED_SHA256=$expected_worker_sha"
@@ -90,6 +91,7 @@ jobs:
           node scripts/verify-174-like-cutover-fence-schema.mjs
           node scripts/verify-174-d1-cutover-proof.mjs
           node scripts/verify-174-cutover-proof-gate.mjs
+          node scripts/verify-174-cutover-controller.mjs
           python3 scripts/verify-174-like-cutover-fence.py
 
           replay173="$RUNNER_TEMP/soridraw-like-r2-173"

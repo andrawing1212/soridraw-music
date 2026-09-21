@@ -165,7 +165,9 @@ const transitionStart = service.indexOf('const clampLikeCount =');
 const transitionEnd = service.indexOf('const readLikedStateStorage =', transitionStart);
 assert.ok(transitionStart > 0 && transitionEnd > transitionStart);
 const transitionSource = service.slice(transitionStart, transitionEnd)
-  .replace('export const computeExploreLikeAction127', 'const computeExploreLikeAction127');
+  // Strip *all* exports in this extracted helper block: it also contains
+  // exported clock/UUID helpers, and new Function has no CommonJS exports.
+  .replaceAll('export const ', 'const ');
 const js = ts.transpileModule(transitionSource + '; return computeExploreLikeAction127;', {
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
 }).outputText;

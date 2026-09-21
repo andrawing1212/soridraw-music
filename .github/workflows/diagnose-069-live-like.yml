@@ -159,6 +159,7 @@ jobs:
           const read=(name)=>JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+name,'utf8'));
           const a=read('affected-track.json').flatMap(x=>x.results||[])[0]||{};
           const q=read('queue-state.json').flatMap(x=>x.results||[]);
+          const now=Date.now();
           const plans=read('like-read-plan.json').map((x,i)=>({name:i===0?'current':'indexed_candidate',rows:x.results||[]}));
           const lines=['# PREVIEW LIKE REAL-STATE READ-ONLY DIAGNOSTIC','',
             'No user identifiers or raw track IDs are included. This is a one-time read-only D1 inspection.',
@@ -167,8 +168,9 @@ jobs:
             'Canonical likes relation rows: '+Number(a.canonical_like_rows||0),
             'Track owner has liked (sum): '+Number(a.owner_liked_tracks||0),
             'Note: the logged-in viewer may not be the track owner; owner membership is not viewer membership.',''];
+          for(const row of q) if(row.kind==='processor') lines.push('Processor lease remaining seconds: '+Math.max(0,Math.floor((Number(row.lease_until||0)-now)/1000)));
           for(const row of q) if(row.kind && row.kind!=='processor')
-            lines.push('Queue '+row.kind+': '+Number(row.pending_batches||0)+' batches, '+Number(row.pending_mutations||0)+' pending mutations');
+            lines.push('Queue '+row.kind+': '+Number(row.pending_batches||0)+' batches, '+Number(row.pending_mutations||0)+' pending mutations; oldest age seconds '+(Number(row.oldest_at||0)>0?Math.max(0,Math.floor((now-Number(row.oldest_at))/1000)):0)+'; newest age seconds '+(Number(row.newest_at||0)>0?Math.max(0,Math.floor((now-Number(row.newest_at))/1000)):0));
           for(const plan of plans) for(const row of plan.rows)
             lines.push('Query plan '+plan.name+': '+String(row.detail||'').replaceAll('\`',''));
           lines.push('', 'Diagnosis only; no data was altered.', '');

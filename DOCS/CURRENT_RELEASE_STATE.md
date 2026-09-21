@@ -1,5 +1,22 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CM. 157/158 무백필 sparse override 실제 W2/W1/W0 + 곡 count lazy baseline PASS (2026-09-21 KST)
+
+사용자의 비용 절감 계속 요청. 153의 신형 relation 테이블은 격리 D1 W2/W1을 달성했지만 기존 모든 좋아요를 새 테이블로 옮기는 baseline/backfill 위험이 남아 있었음. 이를 제거하는 **157 sparse override**와 **158 lazy track baseline**을 실제 코드·격리 원격 D1로 검증.
+
+**157 핵심:** 기존 `likes`를 전환경 writer 컷오버 순간의 불변 baseline으로 보존하고, 신규 미적용 테이블 `explore_like_overrides_157`에는 baseline과 현재 의도가 다른 관계만 저장. 상태가 baseline으로 돌아오면 override/tombstone을 DELETE. 사용자 전체 relation 복사/백필 없음. effective membership은 override 우선, 없으면 legacy baseline. cold recovery는 legacy user-recent index + override PK/recent index를 합치는 bounded keyset union이며 정상 재진입/앱 업데이트에서는 호출하지 않는 계약. `cloudflare/explore-worker/migrations/20260921_02_explore_like_overrides_v157_additive.sql`은 **작성만 했고 공유 D1 미적용**.
+
+**실 Cloudflare 임시 D1:** GitHub Actions [35568696258](https://github.com/andrawing1212/soridraw-music/actions/runs/35568696258), exact `a47f54b112d6fd732cde394fe360891f86d3de68` **SUCCESS**. synthetic 전용 임시 DB 생성→측정→삭제 PASS. 신규 unliked→like **W2**, 같은 like **W0**, baseline으로 unlike **W1**, 중복 **W0**. 기존 liked→unlike tombstone **W2**, 중복 **W0**, 다시 baseline like **W1**, 중복 **W0**. legacy baseline 불변 PASS. cold union query plan은 legacy/override 양쪽 indexed SEARCH. 즉 **모든 실제 관계 변경 W1~W2, 중복 W0이며 기존 사용자 전체 backfill 0**.
+
+**156 연결:** exact shared R2 rebuild는 157 pager를 통해 2,054 effective likes를 무손실 구성하는 모의 통합 PASS. 기존 061 shared writer가 `canonicalComplete156` exact object를 2,000개로 다시 자르지 못하도록 repository patch와 **canonical PREVIEW Worker 실제 소스** 둘 다 guard 반영. canonical Worker SHA256 `47488036b5958d82410d7e7e2207a4898cf1c4d94bd625b1034e3a6196d4e9ba` 고정/감사 PASS. exact rebuild 자체는 모든 legacy writer 컷오버 확인 없이는 실행을 거부.
+
+**158 핵심:** 전곡 `track_stats` count 백필도 하지 않음. 실제 좋아요 변경이 처음 생긴 곡만 frozen `track_stats.like_count`를 read-only PK 조회 1회하여 shared track owner baseline으로 저장하고 이후 147 durable delta 사용. cutover token을 영속 total에 보존하며 restart 후 baseline 재읽기 없음. live shared D1에 사용자 행 조회 없이 EXPLAIN만 실행: `SEARCH track_stats USING INDEX sqlite_autoindex_track_stats_1 (track_id=?)` PASS. `158_LAZY_TRACK_STATS_BASELINE_ONE_READ_PER_CHANGED_TRACK=PASS`, `158_NO_GLOBAL_TRACK_COUNT_BACKFILL=PASS`.
+
+최종 exact run에서 TypeScript, Build, release static, canonical Worker hash/114 exact guard, 127/128/135~158 격리 회귀, TEST/PRODUCTION Worker dry-run, 공유 D1 read-only preflight/schema/158 planner, 원격 isolated D1 153/155/157 측정, 임시 D1 cleanup, branch refs 비변경 모두 PASS.
+
+**중요한 현재 상태:** 제품 릴리스는 여전히 BLOCKED. 157/158은 실제 Worker/Auth/공통 UID·곡 owner/RTDB/feed-popular-profile 게시에 미연결. PREVIEW/TEST/PRODUCTION 구형 writer가 공유 legacy `likes`/track_stats를 계속 바꿀 수 있으므로 한 환경만 157 writer를 켜면 baseline이 깨진다. 실제 schema apply/writer freeze/old trigger 변경/사용자 데이터 변환/배포는 실행하지 않음. PREVIEW 현장 앱126/Worker071 유지(이번 작업 실주소 미배포), TEST/PRODUCTION/user data/Firebase/Functions/R2 실서비스 비변경. 다음은 **세 환경 reader 먼저 호환 → 모든 legacy writer의 단일 owner 컷오버 계획 및 실행형 source 통합 → 051 대체 신호/public projection/RTDB → 총비용/Work/PC↔모바일** 순서.
+
+
 ## 0CL. 155 실제 격리 D1 W2/W1 유지 + 2,053개 좋아요 무손실 페이지 조회 후보 (2026-09-21 KST)
 
 사용자의 비용 절감 작업 계속 요청. 시작 `preview` `171f96507db9bda15e2da4be2fc078a142365aef`. **추가 발견:** 153 최근 좋아요 보조 인덱스가 `(user_uid,created_at DESC)`만 정렬하여 같은 밀리초에 생성한 여러 곡을 시간 단독 커서로 페이지 조회할 때 누락할 수 있음. **미적용 migration**의 단일 보조 인덱스를 `(user_uid,created_at DESC,track_id DESC)`로 교정(`3b5be3271a62084636ba6a49cb199c5f96339d55`). 후보 runtime `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 `createLikeRecentPager155` 추가(`9c060bc54b405c11558f175b70a01c9e4a577a9d`): UID 전용, 1~128행 제한, `created_at + track_id` 복합 keyset cursor, 누락/중복/이상 순서 fail-closed, read-only. 정상 캐시 재방문/업데이트 호출 금지; cold 복구용이며 실제 Worker에 **미연결**. `scripts/verify-135-like-fenced-protocol.mjs`에서 2,053개 synthetic 곡·동일 ms 다중 곡 전부 회복, 기존 2천개 한도에서 잘리지 않는 페이지 조회 **PASS**(`bce8624dac1248da9139c8cdad848e60a627af9e`). 이는 **R2 기존 2천개 snapshot writer 확장 완료가 아님**.

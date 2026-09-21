@@ -1,5 +1,38 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — 164 proof를 실제 상태에서 만드는 read-only cutover preflight 준비
+
+162/163/164의 소비자·차단기는 코드/감사 PASS다. 다음 단계는 **공유 전환 marker를 쓰는 것 자체가 아니라, marker에 들어갈 164 증거를 실제 환경에서 안전하게 만들 수 있는 preflight를 구현·검증하는 것**이다.
+
+### 목표
+1. PREVIEW/TEST/PRODUCTION의 구형 좋아요 intake 경로가 모두 같은 release operation에서 닫힐 수 있는지 source 기준으로 고정한다.
+2. shared D1에서 `explore_like_batches_035`, `explore_like_batches_066`, `explore_like_batches_069`, `explore_like_user_queue_075` 각각에 **대기 행이 1건이라도 있는지** read-only bounded 존재조회로 확인한다. 전체 COUNT/scan을 새 정상 경로로 만들지 않는다.
+3. `explore_like_overrides_157` 및 필요한 index/schema가 shared D1의 단일 owner로 준비됐는지 read-only로 증명한다.
+4. 위 결과가 모두 PASS일 때만 `preCutoverProof164` 후보를 생성한다. 이 단계에서는 shared R2 marker write 금지.
+5. 078/162/163/164 회귀 + TypeScript/Build + TEST/PRODUCTION Worker dry-run + shared D1 read-only preflight를 고정 commit에서 통과시킨다.
+
+### 반드시 지킬 전환 순서
+`legacy intake close` → `035/066/069/075 drain=0 확인` → `157 schema/owner ready 확인` → `all-env reader/writer readiness 확인` → **사용자 승인 후에만** shared cutover marker arm → 163이 legacy relation/count writer 차단 → 157/158 owner 경로 사용.
+
+marker arm 전에는 실패 시 intake를 다시 열 수 있어야 한다. **marker arm 후에는 legacy `likes`가 frozen baseline이므로 단순히 구형 writer를 다시 켜는 롤백 금지.** overlay-aware rollback 계획이 없으면 실제 cutover 실행 금지.
+
+### 현재 금지
+- 157 migration 실제 shared D1 적용
+- shared cutover marker 생성/수정/삭제
+- PREVIEW/TEST/PRODUCTION Worker 배포
+- Firebase/Functions/Rules 배포
+- 사용자 원본 데이터 backfill/delete/transform
+- 전체 likes/feed/profile scan 또는 전체 재생성
+- W3+를 허용하도록 비용 gate 완화
+
+### 현재 검증 기준
+- code-audit commit: `2157efdcb7ee5c3c2e4b437489c8e856cd99918d`
+- audit run: `35583684236` SUCCESS
+- canonical Worker SHA256: `ea884a1bf2c6acd1bf951d6cfac1fef774242c8736bab3330df05c0194dcb2f1`
+- 157 실측 비용 기준: 실제 관계 변경 W1~W2, 중복 W0; 사용자 전체 backfill 0
+- 실제 서비스/사용자 데이터/157 schema는 아직 비변경 상태
+
+
 ## 최신 161 완료 — 다음은 157 effective membership gate + 세 환경 writer cutover source 통합 (2026-09-21 KST)
 
 reader-first 161은 [run 35577973005](https://github.com/andrawing1212/soridraw-music/actions/runs/35577973005), exact `8bcc02e69f1f548f094dc2f90b44c8cfacea3767` SUCCESS. legacy 1,999/2,000 likes snapshot은 partial, 156 exact 2,053 snapshot은 exact로 판정. partial 기기는 local heart를 지우지 않고 visible cache miss만 bounded D1 membership lookup, exact R2는 원본 D1 R0. canonical Worker hash `fabe274fde6d2ed1099f14f54852c06e12e4e37a5799708bbf8e1176fb85cc45`. 배포/데이터 변경 없음.

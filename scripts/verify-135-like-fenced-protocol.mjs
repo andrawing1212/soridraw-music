@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156, createLikeOverlayCanonical157, createLikeOverlayPager157 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -1087,4 +1087,165 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('155_BOUNDED_2053_LIKES_SAME_MS_CURSOR_RECOVERY=PASS');
   console.log('155_W2_WIDENED_INDEX_REAL_REMOTE_BILLING=NOT_YET_MEASURED');
   console.log('155_LEGACY_2000_R2_SNAPSHOT_CUTOVER=NOT_CONNECTED');
+}
+
+
+// 157: no-backfill overlay model. Existing legacy likes stay immutable;
+// post-cutover changes are one override/tombstone row plus one secondary index.
+// This D1-shaped mock validates transition semantics only; real billing is
+// measured separately by measure-153-isolated-d1.mjs.
+{
+  const legacy = new Set(['legacy-song']);
+  const overrides = new Map();
+  let aggregateCalls157 = 0;
+  let cost157 = null;
+  const effective157 = (trackId) => overrides.has(trackId)
+    ? Boolean(overrides.get(trackId).liked) : legacy.has(trackId);
+  const db157 = {
+    prepare(sql) {
+      return {
+        bind(...args) {
+          return {
+            sql, args,
+            async first() {
+              const trackId = args[1];
+              return { liked: Number(effective157(trackId)) };
+            },
+          };
+        },
+      };
+    },
+    async batch(statements) {
+      assert.equal(statements.length, 3);
+      assert.match(statements[0].sql, /track_stats/);
+      assert.match(statements[1].sql, /explore_like_overrides_157/);
+      const args = statements[1].args;
+      const uid = args[0], trackId = args[1], desired = Boolean(args[2]);
+      const expectedPrevious = Boolean(args[9]);
+      assert.equal(uid, 'u157');
+      const before = effective157(trackId);
+      let changes = 0;
+      if (before === expectedPrevious && before !== desired) {
+        overrides.set(trackId, { liked: desired, updatedAt: args[3] });
+        changes = 1;
+      }
+      const written = cost157 == null ? changes * 2 : cost157;
+      return [
+        { results: [{ eligible: 1, liked: Number(before) }], meta: { rows_written: 0, changes: 0 } },
+        { results: [], meta: { rows_written: written, changes } },
+        { results: [{ liked: Number(effective157(trackId)) }], meta: { rows_written: 0, changes: 0 } },
+      ];
+    },
+  };
+  const aggregate157 = async (event) => {
+    aggregateCalls157++;
+    return { aggregateConfirmed: true, id: event.id, trackId: event.trackId, revision: event.revision };
+  };
+  assert.throws(() => createLikeOverlayCanonical157(db157, aggregate157),
+    /blocked until all legacy like writers/);
+  const overlay = createLikeOverlayCanonical157(db157, aggregate157,
+    { legacyWriterCutoverVerified: true });
+  assert.equal(await overlay.readMembership('u157', 'legacy-song'), true);
+  assert.equal(await overlay.readMembership('u157', 'new-song'), false);
+
+  const apply157 = (trackId, id, revision, previousLiked, liked, seq = revision) =>
+    overlay.applyAtomically('u157', trackId, liked,
+      { id, revision, previousLiked, seq });
+
+  assert.equal((await apply157('new-song', 'n1', 1, false, true)).rowsWritten, 2);
+  assert.equal(legacy.has('new-song'), false, 'new relation must not backfill legacy table');
+  assert.equal(overrides.get('new-song').liked, true);
+  assert.equal((await apply157('new-song', 'n1-dup', 2, true, true)).rowsWritten, 0);
+  assert.equal((await apply157('new-song', 'n2', 2, true, false)).rowsWritten, 2);
+  assert.equal(overrides.get('new-song').liked, false);
+
+  assert.equal((await apply157('legacy-song', 'l1', 1, true, false)).rowsWritten, 2);
+  assert.equal(legacy.has('legacy-song'), true, 'legacy baseline must remain immutable');
+  assert.equal(overrides.get('legacy-song').liked, false);
+  assert.equal((await apply157('legacy-song', 'l2', 2, false, true)).rowsWritten, 2);
+  assert.equal(overrides.get('legacy-song').liked, true);
+  assert.equal(aggregateCalls157, 4, 'only actual membership changes aggregate');
+
+  await assert.rejects(apply157('legacy-song', 'bad-prev', 3, false, false),
+    /effective relation transition not proven/);
+  assert.equal(overrides.get('legacy-song').liked, true, 'stale pre-state must not mutate overlay');
+  cost157 = 3;
+  await assert.rejects(apply157('new-cost-song', 'cost', 1, false, true),
+    /exceeded live D1 W2 billing budget/);
+  assert.equal(aggregateCalls157, 4, 'W3+ must not settle downstream aggregate');
+  cost157 = null;
+
+  // Cold exact union: one legacy tombstone, one legacy re-like override, and
+  // two post-cutover additions. No copy of the other 2,052 legacy rows.
+  const legacyRows157 = Array.from({ length: 2053 }, (_, i) => ({
+    trackId: 'base-' + String(i).padStart(5, '0'),
+    createdAt: 1900000000000 - Math.floor(i / 9),
+  }));
+  const overrideRows157 = new Map([
+    ['base-00001', { liked: false, updatedAt: 1900000001000 }],
+    ['base-00002', { liked: true, updatedAt: 1900000002000 }],
+    ['added-a', { liked: true, updatedAt: 1900000003000 }],
+    ['added-b', { liked: true, updatedAt: 1900000003000 }],
+  ]);
+  const exactEffective157 = () => {
+    const rows = [];
+    for (const row of legacyRows157) {
+      if (overrideRows157.has(row.trackId)) continue;
+      rows.push(row);
+    }
+    for (const [trackId, value] of overrideRows157) {
+      if (value.liked) rows.push({ trackId, createdAt: value.updatedAt });
+    }
+    rows.sort((a, b) => b.createdAt - a.createdAt ||
+      (a.trackId < b.trackId ? 1 : a.trackId > b.trackId ? -1 : 0));
+    return rows;
+  };
+  const dbPager157 = {
+    prepare(sql) {
+      assert.match(sql, /WITH effective_likes AS/);
+      assert.match(sql, /NOT EXISTS/);
+      assert.match(sql, /explore_like_overrides_157/);
+      return {
+        bind(...args) {
+          return {
+            async all() {
+              assert.equal(args[0], 'u157');
+              assert.equal(args[1], 'u157');
+              const limit = args.at(-1);
+              let rows = exactEffective157();
+              if (args.length === 6) {
+                const [, , at1, at2, trackId] = args;
+                assert.equal(at1, at2);
+                rows = rows.filter(row => row.createdAt < at1 ||
+                  (row.createdAt === at1 && row.trackId < trackId));
+              }
+              return { results: rows.slice(0, limit).map(row => ({
+                track_id: row.trackId, liked_at: row.createdAt,
+              })) };
+            },
+          };
+        },
+      };
+    },
+  };
+  assert.throws(() => createLikeOverlayPager157(dbPager157),
+    /blocked until all legacy like writers/);
+  const pager157 = createLikeOverlayPager157(dbPager157,
+    { legacyWriterCutoverVerified: true });
+  const recovered157 = [];
+  let cursor157 = null;
+  do {
+    const page157 = await pager157('u157', cursor157, 128);
+    recovered157.push(...page157.items);
+    cursor157 = page157.nextCursor;
+  } while (cursor157);
+  const expected157 = exactEffective157();
+  assert.equal(recovered157.length, 2054);
+  assert.deepEqual(recovered157.map(x => x.trackId), expected157.map(x => x.trackId));
+  assert.equal(recovered157.some(x => x.trackId === 'base-00001'), false);
+  assert.equal(recovered157.filter(x => x.trackId === 'base-00002').length, 1);
+  assert.equal(overrideRows157.size, 4, 'no user-wide backfill is created');
+  console.log('157_NO_BACKFILL_OVERLAY_TRANSITIONS_W2_MOCK=PASS');
+  console.log('157_2054_EFFECTIVE_COLD_UNION_WITH_TOMBSTONE=PASS');
+  console.log('157_REAL_REMOTE_D1_BILLING=MEASURE_SEPARATELY');
 }

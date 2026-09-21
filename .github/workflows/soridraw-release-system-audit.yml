@@ -182,6 +182,26 @@ jobs:
           test "$hash168_before" = "$hash168_after"
           echo '080_DIRECT_ATOMIC_PATCH_IDEMPOTENT=PASS'
 
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/081-batch-like-final-freeze.mjs
+          node --check "$replay078/worker.js"
+          REPLAY169="$replay078/worker.js" node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const source=fs.readFileSync(process.env.REPLAY169,'utf8');
+          const start=source.indexOf('async function handleLikeBatch034(');
+          const end=source.indexOf('\n}',start);
+          assert.ok(start>=0 && end>start);
+          const body=source.slice(start,end+2);
+          const marker="await assertLegacyLikeWriterOpen163(env, 'batch-like-intake')";
+          assert.ok(body.indexOf(marker)>body.indexOf('await assertLegacyLikeIntakeOpen165(env)'));
+          assert.ok(body.indexOf(marker)<body.indexOf('enqueueExploreLikeBatch035('));
+          console.log('081_DEPLOYED_168_TO_169_REPLAY=PASS');
+          NODE
+          hash169_before="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/081-batch-like-final-freeze.mjs
+          hash169_after="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          test "$hash169_before" = "$hash169_after"
+          echo '081_BATCH_FREEZE_PATCH_IDEMPOTENT=PASS'
+
           generated="$RUNNER_TEMP/soridraw-like-candidate-071"
           mkdir -p "$generated"
           cp cloudflare/explore-worker/canonical/preview-worker.js "$generated/worker.js"

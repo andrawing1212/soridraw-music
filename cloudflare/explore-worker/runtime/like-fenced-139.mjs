@@ -488,7 +488,10 @@ export function createLikeSharedTrackCardPublisher151(bucket) {
       }
       // The first migrated update must begin from the exact audited baseline,
       // not a stale card reconstructed from older TEST/PRODUCTION workers.
-      if (previousGeneration === 0 && generation === 1 &&
+      if (previousGeneration === 0 && generation !== 1) {
+        throw new Error('Shared card generation missing; audited rebuild required');
+      }
+      if (previousGeneration === 0 &&
           bundle.card.likeCount !== count - delta) {
         throw new Error('Shared card baseline differs from verified track total');
       }

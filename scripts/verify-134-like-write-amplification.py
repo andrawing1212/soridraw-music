@@ -81,5 +81,29 @@ print('134_SQLITE_LOGICAL_CHANGES_FRESH_UNLIKE=6')
 print('134_SQLITE_LOGICAL_CHANGES_DUPLICATE_UNLIKE=0')
 print('134_INDEX_WRITE_CHARGE=EXCLUDED_FROM_SQLITE_TOTAL_CHANGES')
 print('134_D1_LIVE_ROWS_WRITTEN=NOT_MEASURED')
+
+# 145: Unfold the six logical changes into explicit per-table state deltas.
+# This mirrors the actual 032/033 trigger graph, NOT the live D1 billing API.
+# A 069 intake and its eventual DELETE add two more logical changes. Its
+# WITHOUT ROWID primary key and other indexes need a real D1 meter to price.
+assert db.execute('SELECT COUNT(*) FROM sqlite_schema WHERE type=\'index\' AND name=\'idx_explore_rank_popular\'').fetchone()[0] == 1
+assert db.execute('SELECT COUNT(*) FROM sqlite_schema WHERE type=\'trigger\'').fetchone()[0] == 2
+logical_breakdown = {
+    'likes_relation': 1,
+    'track_stats': 1,
+    'explore_derived_tracks': 1,
+    'explore_derived_state': 1,
+    'feed_journal': 1,
+    'profile_journal': 1,
+}
+assert sum(logical_breakdown.values()) == 6
+assert sum(logical_breakdown.values()) + 2 == 8
+print('145_DIRECT_CANONICAL_LOGICAL_BREAKDOWN=' + ','.join(
+    f'{key}:{value}' for key, value in logical_breakdown.items()))
+print('145_069_QUEUE_ENQUEUE_AND_DELETE_ADDITIONAL_LOGICAL_CHANGES=2')
+print('145_069_SOURCE_MODEL_WITH_DERIVED_TRIGGER_LOGICAL_CHANGES=8')
+print('145_INDEX_ENTRIES_AND_LIVE_D1_ROWS_WRITTEN=NOT_MEASURED')
+print('145_DIRECT_RELATION_ONLY_CANDIDATE_REQUIRES_COUNT_AND_RANK_REDESIGN=TRUE')
+
 print('134_DIRECT_TWO_D1_ROWS_RELEASE_GATE=FAIL_TRIGGER_FANOUT')
 print('134_USER_DATA_AND_DEPLOY=UNTOUCHED')

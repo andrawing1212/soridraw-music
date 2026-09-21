@@ -413,6 +413,52 @@ export function createLegacyLikeWriterGuard163(readCutover) {
 }
 
 
+// SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921
+// A separate shared R2 marker pauses NEW legacy intake while readers and the
+// scheduled legacy processor stay live. The product Worker never creates or
+// changes this marker. Missing marker means ordinary legacy intake remains open.
+export const LIKE_DRAIN_MANIFEST_KEY_165 =
+  'internal/explore/like-cutover-drain-v165/active.json';
+
+export function createLikeDrainStateReader165(bucket) {
+  if (!bucket?.get) throw new TypeError('165 shared R2 bucket required');
+  return async function readLikeDrainState165() {
+    const object = await bucket.get(LIKE_DRAIN_MANIFEST_KEY_165);
+    if (!object) return { mode: 'open', drainToken: null };
+    let value;
+    try { value = JSON.parse(await object.text()); }
+    catch { throw new Error('165 drain manifest unreadable'); }
+    const token = String(value?.drainToken || '').trim();
+    const armed = Number(value?.schemaVersion) === 1 &&
+      value?.phase === 'draining' &&
+      value?.allEnvironmentIntakeReady === true &&
+      value?.ownerProtocol === 'uid143-track147-158' &&
+      safeId(token, 128);
+    if (!armed) throw new Error('165 drain manifest present but not fully armed');
+    return { mode: 'draining', drainToken: token };
+  };
+}
+
+export function createLegacyLikeIntakeGuard165(readDrainState) {
+  if (typeof readDrainState !== 'function') {
+    throw new TypeError('165 shared drain reader required');
+  }
+  return async function assertLegacyLikeIntakeOpen165() {
+    const state = await readDrainState();
+    if (state?.mode === 'draining') {
+      const error = new Error('165 legacy like intake paused for cutover drain');
+      error.code = 'LIKE_CUTOVER_DRAINING';
+      error.retryAfterSeconds = 30;
+      throw error;
+    }
+    if (!state || state.mode !== 'open') {
+      throw new Error('165 shared drain state unavailable');
+    }
+    return state;
+  };
+}
+
+
 // Bounded membership reader for visible/current IDs only. Before cutover it
 // uses the existing legacy relation. After the one shared manifest is armed it
 // treats likes as immutable baseline and overlays only changed relations.

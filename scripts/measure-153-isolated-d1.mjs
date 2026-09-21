@@ -183,6 +183,70 @@ if (process.argv[2] === 'cleanup') {
         uidIndexed: uidPlan.includes('SEARCH'),
         withinW2: metrics[0] <= 2 && metrics[2] <= 2 });
     }
+    // 157: no-backfill overlay. Legacy likes are an immutable baseline after
+    // coordinated writer cutover; only changed memberships write this table.
+    await ddl('CREATE TABLE legacy_likes_157 (track_id TEXT NOT NULL,user_uid TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(track_id,user_uid))');
+    await ddl('CREATE INDEX legacy_likes_157_user_recent ON legacy_likes_157(user_uid,created_at DESC,track_id DESC)');
+    await ddl("INSERT INTO legacy_likes_157(track_id,user_uid,created_at) VALUES ('legacy-song','user-157',100)");
+    await ddl('CREATE TABLE explore_like_overrides_157 (user_uid TEXT NOT NULL,track_id TEXT NOT NULL,liked INTEGER NOT NULL CHECK(liked IN (0,1)),updated_at INTEGER NOT NULL,PRIMARY KEY(user_uid,track_id)) WITHOUT ROWID');
+    await ddl('CREATE INDEX idx_explore_like_overrides_157_user_recent ON explore_like_overrides_157(user_uid,updated_at DESC,track_id DESC)');
+    const effective157 = (track) =>
+      "COALESCE((SELECT liked FROM explore_like_overrides_157 WHERE user_uid='user-157' AND track_id='" + track + "')," +
+      " EXISTS(SELECT 1 FROM legacy_likes_157 WHERE track_id='" + track + "' AND user_uid='user-157'))";
+    async function mutate157(track, desired, at) {
+      const sql = "INSERT INTO explore_like_overrides_157(user_uid,track_id,liked,updated_at) " +
+        "SELECT 'user-157','" + track + "'," + Number(desired) + "," + at +
+        " WHERE " + effective157(track) + " != " + Number(desired) +
+        " ON CONFLICT(user_uid,track_id) DO UPDATE SET liked=excluded.liked,updated_at=excluded.updated_at" +
+        " WHERE explore_like_overrides_157.liked != excluded.liked";
+      const out = await query(sql);
+      if (!Number.isInteger(out.meta?.rows_written) || !Number.isInteger(out.meta?.changes)) {
+        fail('157 missing D1 billing receipt');
+      }
+      const final = await query('SELECT ' + effective157(track) + ' AS liked');
+      if (Number(final.results?.[0]?.liked) !== Number(desired)) fail('157 effective membership mismatch');
+      console.log('157_REMOTE_D1_' + track.toUpperCase().replace(/-/g,'_') + '_' +
+        (desired ? 'LIKE' : 'UNLIKE') + '_AT_' + at +
+        '=rows_written:' + out.meta.rows_written + ',changes:' + out.meta.changes +
+        ',rows_read:' + out.meta.rows_read);
+      return { written: out.meta.rows_written, changes: out.meta.changes };
+    }
+    const overlaySequence157 = [
+      await mutate157('new-song', true, 200),
+      await mutate157('new-song', true, 201),
+      await mutate157('new-song', false, 202),
+      await mutate157('new-song', false, 203),
+      await mutate157('legacy-song', false, 204),
+      await mutate157('legacy-song', false, 205),
+      await mutate157('legacy-song', true, 206),
+      await mutate157('legacy-song', true, 207),
+    ];
+    const writes157 = overlaySequence157.map(x => x.written);
+    const changes157 = overlaySequence157.map(x => x.changes);
+    if (writes157.join(',') !== '2,0,2,0,2,0,2,0' ||
+        changes157.join(',') !== '1,0,1,0,1,0,1,0') {
+      fail('157 overlay W2/W0 contract failed writes=' + writes157 + ' changes=' + changes157);
+    }
+    const baselineStill = await query("SELECT COUNT(*) AS n FROM legacy_likes_157 WHERE user_uid='user-157'");
+    if (Number(baselineStill.results?.[0]?.n) !== 1) fail('157 mutated legacy baseline');
+    const plan157 = await query("EXPLAIN QUERY PLAN SELECT track_id,liked_at FROM (" +
+      "SELECT l.track_id,l.created_at AS liked_at FROM legacy_likes_157 l WHERE l.user_uid='user-157' " +
+      "AND NOT EXISTS(SELECT 1 FROM explore_like_overrides_157 o WHERE o.user_uid=l.user_uid AND o.track_id=l.track_id) " +
+      "UNION ALL SELECT o.track_id,o.updated_at AS liked_at FROM explore_like_overrides_157 o " +
+      "WHERE o.user_uid='user-157' AND o.liked=1) ORDER BY liked_at DESC,track_id DESC LIMIT 128");
+    const detail157 = String(plan157.results?.map(x => x.detail).join(' | ') || '');
+    if (!detail157.includes('SEARCH')) fail('157 cold recovery lacks indexed user search: ' + detail157);
+    const effectiveRows157 = await query("SELECT track_id,liked_at FROM (" +
+      "SELECT l.track_id,l.created_at AS liked_at FROM legacy_likes_157 l WHERE l.user_uid='user-157' " +
+      "AND NOT EXISTS(SELECT 1 FROM explore_like_overrides_157 o WHERE o.user_uid=l.user_uid AND o.track_id=l.track_id) " +
+      "UNION ALL SELECT o.track_id,o.updated_at AS liked_at FROM explore_like_overrides_157 o " +
+      "WHERE o.user_uid='user-157' AND o.liked=1) ORDER BY liked_at DESC,track_id DESC LIMIT 128");
+    if (effectiveRows157.results?.map(x => x.track_id).join(',') !== 'legacy-song') {
+      fail('157 effective cold list mismatch after override sequence');
+    }
+    console.log('157_NO_BACKFILL_OVERLAY_REMOTE_D1_W2_W0=PASS');
+    console.log('157_LEGACY_BASELINE_IMMUTABLE=PASS');
+    console.log('157_COLD_UNION_INDEX_PLAN=' + detail157.replace(/\s+/g,' ').slice(0,700));
     console.log('153_REMOTE_D1_BILLING_SUMMARY=' + JSON.stringify(observations));
     console.log('153_SYNTHETIC_ONLY_NO_SHARED_USER_DATA=PASS');
     console.log('153_PRODUCT_RELEASE_GATE=NOT_VERIFIED_LEGACY_CUTOVER_OR_PUBLIC_PROJECTION');

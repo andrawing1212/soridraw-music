@@ -1,1 +1,1 @@
-release_system_audit=2026-09-21-172-generalized-freeze-verifier
+release_system_audit=2026-09-21-172-direct-final-mode-gate

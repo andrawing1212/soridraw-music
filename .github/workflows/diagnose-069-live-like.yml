@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: diagnose-069-live-like
@@ -123,6 +123,65 @@ jobs:
           }
           console.log('READ_ONLY_DIAG=PASS');
           NODE
+
+      - name: Persist privacy-safe same-track canonical proof and read plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT COUNT(*) AS matched_tracks,
+              COALESCE(SUM(COALESCE(s.like_count,0)),0) AS public_like_count,
+              COALESCE(SUM(CASE WHEN EXISTS (
+                SELECT 1 FROM likes l
+                WHERE l.track_id=t.id AND l.user_uid=t.owner_uid
+              ) THEN 1 ELSE 0 END),0) AS owner_liked_tracks,
+              COALESCE(SUM((SELECT COUNT(*) FROM likes l WHERE l.track_id=t.id)),0) AS canonical_like_rows
+            FROM tracks t
+            LEFT JOIN track_stats s ON s.track_id=t.id
+            WHERE t.title LIKE '%끝내 돌아온 계절처럼%';
+          " --json > "$RUNNER_TEMP/affected-track.json"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            EXPLAIN QUERY PLAN SELECT l.track_id FROM likes l
+            JOIN tracks t ON t.id=l.track_id
+            WHERE l.user_uid='__diag__' AND l.track_id IN ('__diag_a__','__diag_b__')
+              AND t.is_public=1 AND t.status='published';
+            EXPLAIN QUERY PLAN WITH requested(track_id) AS (VALUES ('__diag_a__'),('__diag_b__'))
+            SELECT r.track_id FROM requested r
+            CROSS JOIN likes l INDEXED BY sqlite_autoindex_likes_1
+            JOIN tracks t ON t.id=r.track_id
+            WHERE l.track_id=r.track_id AND l.user_uid='__diag__'
+              AND t.is_public=1 AND t.status='published';
+          " --json > "$RUNNER_TEMP/like-read-plan.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const read=(name)=>JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/'+name,'utf8'));
+          const a=read('affected-track.json').flatMap(x=>x.results||[])[0]||{};
+          const q=read('queue-state.json').flatMap(x=>x.results||[]);
+          const plans=read('like-read-plan.json').map((x,i)=>({name:i===0?'current':'indexed_candidate',rows:x.results||[]}));
+          const lines=['# PREVIEW LIKE REAL-STATE READ-ONLY DIAGNOSTIC','',
+            'No user identifiers or raw track IDs are included. This is a one-time read-only D1 inspection.',
+            '', 'Affected public title match count: '+Number(a.matched_tracks||0),
+            'Canonical public count sum: '+Number(a.public_like_count||0),
+            'Canonical likes relation rows: '+Number(a.canonical_like_rows||0),
+            'Track owner has liked (sum): '+Number(a.owner_liked_tracks||0),
+            'Note: the logged-in viewer may not be the track owner; owner membership is not viewer membership.',''];
+          for(const row of q) if(row.kind && row.kind!=='processor')
+            lines.push('Queue '+row.kind+': '+Number(row.pending_batches||0)+' batches, '+Number(row.pending_mutations||0)+' pending mutations');
+          for(const plan of plans) for(const row of plan.rows)
+            lines.push('Query plan '+plan.name+': '+String(row.detail||'').replaceAll('\`',''));
+          lines.push('', 'Diagnosis only; no data was altered.', '');
+          fs.writeFileSync('DOCS/LIKE_READONLY_DIAG_LATEST.md',lines.join('\\n'));
+          NODE
+          git config user.name "soridraw-readonly-diagnostic"
+          git config user.email "actions@users.noreply.github.com"
+          git add DOCS/LIKE_READONLY_DIAG_LATEST.md
+          if ! git diff --cached --quiet; then
+            git commit -m "diag(preview): record anonymized canonical like and query-plan evidence"
+            git push origin HEAD:preview
+          fi
+          echo 'SANITIZED_READONLY_PROOF_COMMITTED=PASS'
 
       - name: Probe current PREVIEW feed payload for recent like
         shell: bash

@@ -57,6 +57,7 @@ const EXPLORE_LIKE_R2_REVISION_127 = 'soridraw:explore:like-r2-revision:127';
 const EXPLORE_LIKE_SNAPSHOT_PENDING_127 = 'soridraw:explore:like-snapshot-pending:127';
 const EXPLORE_LIKE_LEGACY_CHECK_MS_127 = 5 * 60_000;
 const EXPLORE_LIKE_SIGNAL_MAX_127 = 50;
+// SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_ACK_RESTORE_131_20260922
 
 type ExploreLikePendingMutation = {
   trackId: string;
@@ -365,7 +366,11 @@ const requestRepair127 = (uid: string, version: number) => {
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_TARGET_127, uid), String(target));
   baselineCompleted127.delete(uid);
   clearTargetedVerifiedLikeTracks127(uid);
+  // A remote account change must invalidate BOTH complete and partial baseline
+  // markers. Otherwise a partial legacy snapshot can make ensurePersonalLikeBaseline127
+  // return immediately and the other device never re-checks the changed heart.
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '');
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid), '');
 };
 
 type ExploreLikeAcceptedRow127 = ExploreLikeSyncEventDetail;
@@ -438,8 +443,9 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
     cache.set(item.trackId, item.liked);
     patchExploreLikedTrackMembership(uid, item.trackId, item.liked);
     changed = true;
-    // The numeric count is from the shared Feed, not this personal signal.
-    // Do not replace a public count with another device's optimistic estimate.
+    // The signal carries the server-accepted count paired with this account's
+    // 0/1 heart transition. The page keeps that pair together until shared
+    // publication catches up.
     dispatchLikeSync({ ...item, uid, source: 'remote' });
   }
   if (changed) persistLikedStateCache(uid, cache);
@@ -1081,9 +1087,10 @@ flushPendingLikes = async (user: User): Promise<void> => {
       )) {
         throw new Error('좋아요 서버 응답이 전송한 변경과 일치하지 않습니다. 최신 상태를 보관했습니다.');
       }
-      // The batch ACK and an updated R2 are both PRE-final-aggregate stages.
-      // Only independent canonical settlement may release a personal heart
-      // to another device; no intake Worker currently issues that proof.
+      // The account-private heart state is committed at batch ACK/R2 intake.
+      // Public aggregate publication may still be delayed, but another device
+      // must receive the accepted account state now instead of waiting for a
+      // "settled" flag that the current Worker never emits.
       const canonicalLikeSettled127 = canBroadcastExploreLikeSnapshot127(payload?.data?.personalLikeSnapshot);
       const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
       const latest = readLikeOutbox(uid);
@@ -1156,9 +1163,13 @@ flushPendingLikes = async (user: User): Promise<void> => {
             likeCount: canonicalLikeCount,
             source: 'confirmed',
           };
+          // Cross-device membership follows the server-accepted account state,
+          // not the later public aggregate. Keep the local snapshot-pending guard
+          // until canonical settlement, but still publish this accepted 0/1 heart
+          // to the same account's other devices immediately after the 30s batch.
+          acceptedForSignal127.push(accepted);
           if (canonicalLikeSettled127) {
             delete snapshotPending127[pending.trackId];
-            acceptedForSignal127.push(accepted);
           } else {
             snapshotPending127[pending.trackId] = result.liked;
           }
@@ -1172,19 +1183,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
       writeSnapshotPending127(uid, snapshotPending127);
       persistLikeOutbox(uid, latest);
       succeeded = true;
-      // The Worker has acknowledged the D1 batch for processing. A personal
-      // R2 failure is not final membership confirmation and must not be
-      // broadcast as a successful cross-device snapshot.
-      if (!canonicalLikeSettled127 && batchEntries[0]) {
-        dispatchLikeSyncError({
-          uid,
-          trackId: batchEntries[0].trackId,
-          ownerUid: batchEntries[0].ownerUid,
-          liked: batchEntries[0].desiredLiked,
-          likeCount: batchEntries[0].optimisticLikeCount,
-          message: '좋아요 저장은 접수됐지만 다른 기기 동기화는 확인 중이에요.',
-        });
-      }
+      // Cross-device notification is now tied to the accepted account state.
       // Notification failure must NEVER replay a successful D1 queue intake.
       try {
         await publishConfirmedLikeSignal127(uid, acceptedForSignal127);

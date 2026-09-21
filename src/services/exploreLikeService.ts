@@ -1006,28 +1006,61 @@ flushPendingLikes = async (user: User): Promise<void> => {
         if (!result) continue;
         const current = latest[pending.trackId];
         const hasNewerPending = Boolean(current && current.updatedAt !== pending.updatedAt);
+        const canonicalLikeCount = Number.isSafeInteger(result.likeCount)
+          ? Number(result.likeCount) : pending.optimisticLikeCount;
+        if (Number.isSafeInteger(result.revision) && Number(result.revision) >= 0) {
+          canonicalRevisions172[pending.trackId] = Number(result.revision);
+        }
         if (hasNewerPending && current) {
-          // Preserve the last click as its own server mutation. The earlier
-          // batch may materialize after this ACK; do not optimize it away as
-          // desiredLiked === the pre-flight baseLiked.
-          latest[pending.trackId] = rebaseExploreLikeAfterInFlight127(current, pending);
+          // A newer local click continues only after rebasing onto the exact
+          // canonical revision returned for the older in-flight request.
+          if (Number.isSafeInteger(result.revision) && Number(result.revision) >= 0) {
+            const baseLiked = result.liked;
+            const baseLikeCount = canonicalLikeCount;
+            latest[pending.trackId] = {
+              ...current,
+              baseLiked,
+              baseLikeCount,
+              expectedRevision: Number(result.revision),
+              optimisticLikeCount: computeExploreLikeAction127(
+                baseLiked, current.desiredLiked, baseLikeCount,
+              ).likeCount,
+            };
+          } else {
+            latest[pending.trackId] = rebaseExploreLikeAfterInFlight127(current, pending);
+          }
           continue;
         }
         if (!hasNewerPending) {
+          // A stale PC/mobile request is not automatically replayed over a
+          // newer canonical state. The returned server state becomes local
+          // truth; the next explicit click creates a fresh operation.
           cache.set(pending.trackId, result.liked);
           displayLocks[pending.trackId] = {
             liked: result.liked,
-            likeCount: pending.optimisticLikeCount,
+            likeCount: canonicalLikeCount,
             updatedAt: acknowledgedAt,
             protectUntil: acknowledgedAt + EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120,
           };
           delete latest[pending.trackId];
+          if (result.status === 'revision-conflict' || result.status === 'ineligible') {
+            delete snapshotPending127[pending.trackId];
+            dispatchLikeSync({
+              uid,
+              trackId: pending.trackId,
+              ownerUid: pending.ownerUid,
+              liked: result.liked,
+              likeCount: canonicalLikeCount,
+              source: 'remote',
+            });
+            continue;
+          }
           const accepted: ExploreLikeAcceptedRow127 = {
             uid,
             trackId: pending.trackId,
             ownerUid: pending.ownerUid,
             liked: result.liked,
-            likeCount: pending.optimisticLikeCount,
+            likeCount: canonicalLikeCount,
             source: 'confirmed',
           };
           if (canonicalLikeSettled127) {
@@ -1041,6 +1074,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
       }
 
       persistLikedStateCache(uid, cache);
+      persistLikeCanonicalRevisions172(uid, canonicalRevisions172);
       persistLikeDisplayLocks(uid, displayLocks);
       writeSnapshotPending127(uid, snapshotPending127);
       persistLikeOutbox(uid, latest);

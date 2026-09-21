@@ -1,5 +1,21 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app130 모바일 첫 화면 실사용 확인
+
+현재 실제 PREVIEW:
+- app130 Run `35648709408` SUCCESS.
+- remote app version 130 / exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker/D1/user data unchanged.
+
+사용자 확인:
+1. 모바일 앱 업데이트 후 Explore 추천 첫 화면을 바로 확인.
+2. 인기 탭 왕복 전에 PC 최신 좋아요 하트와 동일해야 함.
+3. 같은 곡의 하트·숫자·내 좋아요가 하나의 0/1 상태로 일치해야 함.
+4. 페이지 이동 후 값이 바뀐다면 아직 FAIL로 간주하고 그 경로만 계속 수정.
+5. 통과 전 TEST/PRODUCTION 및 171 cutover 금지.
+
+
 ## 현재 최우선 — app130 PREVIEW 배포 후 모바일 최초 진입 검증
 
 현재:

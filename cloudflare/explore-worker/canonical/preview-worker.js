@@ -2936,6 +2936,22 @@ async function readLikeCutoverState162(env) {
   return { mode: 'overlay157', cutoverToken: token };
 }
 
+// SORIDRAW_LEGACY_LIKE_WRITER_FREEZE_GUARD_163_20260921
+// This is a one-way safety gate, not the cutover activator. The shared marker
+// is never written here. Once all environments are armed, old relation/count
+// writers must stop before the immutable baseline can be consumed by 157/158.
+async function assertLegacyLikeWriterOpen163(env, writerName) {
+  const state = await readLikeCutoverState162(env);
+  if (state?.mode === 'overlay157') {
+    throw new Error('[SORIDRAW 163] legacy like writer frozen after shared cutover: ' + String(writerName || 'unknown'));
+  }
+  if (!state || state.mode !== 'legacy') {
+    throw new Error('[SORIDRAW 163] shared cutover state unavailable');
+  }
+  return state;
+}
+
+
 async function readBoundedEffectiveLikeMemberships162(env, uid, trackIds) {
   const normalized = String(uid || '').trim();
   const ids = [...new Set((trackIds || []).map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 200);
@@ -21659,6 +21675,7 @@ __name22222222222222222222222222222222222222222222222222222222222222222222222(ha
 __name222222222222222222222222222222222222222222222222222222222222222222222222(handleVisibility, "handleVisibility");
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(handleVisibility, "handleVisibility");
 async function refreshLikeCount(env, trackId, now) {
+  await assertLegacyLikeWriterOpen163(env, 'refresh-like-count');
   await env.DB.batch([
     env.DB.prepare(`
       INSERT INTO track_stats (track_id, like_count, comment_count, play_count, updated_at)
@@ -21756,6 +21773,7 @@ async function handleLikeD1Core(request, env, cors, trackId, shouldLike) {
   // SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921
   // Retire the legacy RATE_DB write from the direct PUT/DELETE like route.
   await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);
+  await assertLegacyLikeWriterOpen163(env, 'direct-like');
   const track = await getPublicTrackForWrite(env, trackId);
   const now = Date.now();
   const likeCount = await adjustExploreLikeCounterDelta(env, trackId, authContext.uid, shouldLike, now);
@@ -22442,7 +22460,7 @@ async function processExploreLikeBatches035Core056(env, scheduledTime = Date.now
     return idle;
   }
 
-  const owner = 'like042_' + now + '_' + crypto.randomUUID();
+  // 163 runs only after read-only queue preflight proves actual pending work.\n  // Idle cron remains free of this shared R2 marker read.\n  await assertLegacyLikeWriterOpen163(env, 'scheduled-like-aggregate');\n\n  const owner = 'like042_' + now + '_' + crypto.randomUUID();
   const acquired = await acquireExploreLikeProcessor035(env, owner, now);
   if (!acquired) return { skipped: true, reason: 'lease' };
   const totals = {

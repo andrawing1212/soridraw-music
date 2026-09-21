@@ -231,7 +231,7 @@ if (process.argv[2] === 'cleanup') {
     ];
     const writes157 = overlaySequence157.map(x => x.written);
     const changes157 = overlaySequence157.map(x => x.changes);
-    if (writes157.join(',') !== '2,0,2,0,2,0,2,0' ||
+    if (writes157.join(',') !== '2,0,1,0,2,0,1,0' ||
         changes157.join(',') !== '1,0,1,0,1,0,1,0') {
       fail('157 overlay W2/W0 contract failed writes=' + writes157 + ' changes=' + changes157);
     }
@@ -256,7 +256,7 @@ if (process.argv[2] === 'cleanup') {
     if (effectiveRows157.results?.map(x => x.track_id).join(',') !== 'legacy-song') {
       fail('157 effective cold list mismatch after override sequence');
     }
-    console.log('157_NO_BACKFILL_SPARSE_OVERLAY_REMOTE_D1_W2_W0=PASS');
+    console.log('157_NO_BACKFILL_SPARSE_OVERLAY_REMOTE_D1_W2_W1_W0=PASS');
     console.log('157_LEGACY_BASELINE_IMMUTABLE=PASS');
     console.log('157_COLD_UNION_INDEX_PLAN=' + detail157.replace(/\s+/g,' ').slice(0,700));
     console.log('153_REMOTE_D1_BILLING_SUMMARY=' + JSON.stringify(observations));

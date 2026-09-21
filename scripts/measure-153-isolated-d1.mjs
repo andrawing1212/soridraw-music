@@ -259,6 +259,39 @@ if (process.argv[2] === 'cleanup') {
     console.log('157_NO_BACKFILL_SPARSE_OVERLAY_REMOTE_D1_W2_W1_W0=PASS');
     console.log('157_LEGACY_BASELINE_IMMUTABLE=PASS');
     console.log('157_COLD_UNION_INDEX_PLAN=' + detail157.replace(/\s+/g,' ').slice(0,700));
+
+    // 162: exact structure of the post-cutover visible-ID membership lookup.
+    // Synthetic-only tables mirror the production PK direction while avoiding
+    // any shared/user data. The VALUES CTE is bounded by the caller (<=200).
+    await ddl('CREATE TABLE tracks_162 (id TEXT PRIMARY KEY,is_public INTEGER NOT NULL,status TEXT NOT NULL)');
+    await ddl('CREATE TABLE likes_162 (track_id TEXT NOT NULL,user_uid TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(track_id,user_uid))');
+    await ddl("INSERT INTO tracks_162(id,is_public,status) VALUES ('track-a',1,'published'),('track-b',1,'published'),('track-c',1,'published')");
+    await ddl("INSERT INTO likes_162(track_id,user_uid,created_at) VALUES ('track-a','user-162',100),('track-b','user-162',101)");
+    await ddl("INSERT INTO explore_like_overrides_157(user_uid,track_id,liked,updated_at) VALUES ('user-162','track-b',0,300),('user-162','track-c',1,301)");
+    const targeted162Sql =
+      "WITH requested(track_id) AS (VALUES ('track-a'),('track-b'),('track-c')) " +
+      "SELECT r.track_id FROM requested r " +
+      "JOIN tracks_162 t ON t.id=r.track_id " +
+      "LEFT JOIN likes_162 l ON l.track_id=r.track_id AND l.user_uid='user-162' " +
+      "LEFT JOIN explore_like_overrides_157 o ON o.user_uid='user-162' AND o.track_id=r.track_id " +
+      "WHERE t.is_public=1 AND t.status='published' " +
+      "AND COALESCE(o.liked,CASE WHEN l.user_uid IS NULL THEN 0 ELSE 1 END)=1";
+    const targeted162Plan = await query('EXPLAIN QUERY PLAN ' + targeted162Sql);
+    const detail162 = String(targeted162Plan.results?.map(x => x.detail).join(' | ') || '');
+    if (!/SEARCH t /i.test(detail162) || !/SEARCH l /i.test(detail162) ||
+        !/SEARCH o /i.test(detail162) ||
+        /SCAN (?:tracks_162|likes_162|explore_like_overrides_157)\b/i.test(detail162)) {
+      fail('162 effective membership planner not fully keyed: ' + detail162);
+    }
+    const targeted162 = await query(targeted162Sql);
+    const effective162 = targeted162.results?.map(x => x.track_id).sort().join(',');
+    if (effective162 !== 'track-a,track-c') {
+      fail('162 effective membership result mismatch: ' + effective162);
+    }
+    console.log('162_REMOTE_D1_EFFECTIVE_TARGETED_INDEX_PLAN=PASS ' +
+      detail162.replace(/\s+/g,' ').slice(0,700));
+    console.log('162_REMOTE_D1_EFFECTIVE_TARGETED_RESULT=PASS rows_read=' + targeted162.meta?.rows_read);
+
     console.log('153_REMOTE_D1_BILLING_SUMMARY=' + JSON.stringify(observations));
     console.log('153_SYNTHETIC_ONLY_NO_SHARED_USER_DATA=PASS');
     console.log('153_PRODUCT_RELEASE_GATE=NOT_VERIFIED_LEGACY_CUTOVER_OR_PUBLIC_PROJECTION');

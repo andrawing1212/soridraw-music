@@ -1,5 +1,28 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CT. 167 shared D1 원자적 queue fence — 격리 SQLite PASS, direct 2단계 쓰기 위험 잔존 (2026-09-21 KST)
+
+**고정 코드 감사:** `preview` commit `37d7d654d6110194d73f358bdb2e659e40197a0c`, GitHub Actions [35590066055](https://github.com/andrawing1212/soridraw-music/actions/runs/35590066055) **SUCCESS**. TS/Build, 정적검사, 좋아요 관련 regression, TEST/PRODUCTION Worker dry-run, live shared D1 read-only audit PASS. 격리 원격 D1 billing 단계는 이번 자동감사에서 SKIPPED. 이 단계는 **실 사용자 DB migration / Worker 배포가 아닌 격리 실험**이다.
+
+추가 파일:
+- `scripts/fixtures/167-like-atomic-fence-isolated.sql`: shared D1 최종 migration이 아닌 **로컬 전용 실험용 SQL**. 단일 control row (open / draining / frozen)와 035/066/069/075 queue INSERT·075 UPDATE의 BEFORE trigger, frozen 시 legacy likes 변경 방지 trigger를 독립 SQLite fixture에만 구성. 배포 대상 `migrations/`에 넣지 않았다.
+- `scripts/verify-167-like-atomic-fence.py`: 임시 독립 SQLite DB에서 old Worker INSERT/UPDATE, guard를 통과한 뒤 멈춘 요청, 종료 직전 수락된 queue, direct 두 문장 쓰기를 시뮬레이션.
+- `.github/workflows/soridraw-release-system-audit.yml`: 기존 공용 감사에 해당 fixture test 연결. 신규 임시 Workflow 없음.
+
+실행 결과:
+- `167_OLD_WORKER_QUEUE_INSERT_UPDATE_FENCED=PASS`
+- `167_INFLIGHT_OLD_QUEUE_AFTER_CLOSURE_BLOCKED=PASS`
+- `167_ACCEPTED_BEFORE_CLOSE_IS_DRAINABLE=PASS`
+- `167_DIRECT_TWO_STATEMENT_INFLIGHT_STILL_UNFENCED=FAIL_EXPECTED`
+- `167_PRODUCT_CUTOVER_REMAINS_BLOCKED=PASS`
+
+**핵심:** queue에 대한 DB-level trigger는 오래된 Worker의 R2 marker 무시와 166 in-flight 경쟁을 막을 수 있음을 격리 SQLite에서 확인했다. 그러나 구형 direct `handleLikeD1Core → adjustExploreLikeCounterDelta`는 현재 `likes` INSERT/DELETE 후 `track_stats` UPDATE를 *별개의 요청*으로 처리한다. direct 첫 문장이 drain/freeze 사이 완료되고 숫자 변경이 freeze 뒤 도착하는 경우, queue=0 검사에는 드러나지 않는다. 따라서 167 fixture의 좋아요 relation freeze만으로 전체 안전 전환을 선언할 수 없다. DB trigger 실험 PASS를 D1 원격 / 제품 W1~W2 PASS로 확장해서는 안 된다.
+
+**다음:** direct 경로를 한 원자적 D1 batch/단일 owner 경계로 바꾸고 구형 배포본과 이미 진행 중인 요청까지 막을 수 있는지 격리·원격 비용 테스트. 그 다음에만 전체 관계·카운터 owner 통합 검토. 157/158 writer wiring, cross-environment readiness, 051 invalidation, personal R2/RTDB final settlement, PC↔mobile convergence, 전체 비용·배포 감사가 남아 있어 제품 릴리스 gate는 FAIL 유지.
+
+**변경 없음:** UI/앱 버전/제품 Worker/canonical hash `316fc57b2a0ed6ff30a26b5a26e0309b9667db95bb164289de422f6132899f08` 유지. shared D1/R2 사용자 데이터 read-only audit 외 mutation 없음; 157/167 schema migration 미적용; drain/cutover marker 미작성; Hosting/Worker/Firebase/Functions 배포 없음; TEST/PRODUCTION 비변경. PC/모바일 실사용 미검증.
+
+
 ## 0CS. 166 in-flight 좋아요 경쟁 재현 + 허위 전환 증거 차단 — 코드 감사 PASS / 실제 전환 BLOCKED (2026-09-21 KST)
 
 **기준:** `preview` code-audit commit `5ed766f92c31cda2407efd25c0324b167b2f84bc`, GitHub Actions [35588084201](https://github.com/andrawing1212/soridraw-music/actions/runs/35588084201) **SUCCESS**. source-only + live shared D1 read-only 감사이며 배포가 아니다.

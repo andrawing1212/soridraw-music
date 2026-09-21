@@ -59,6 +59,22 @@ jobs:
           echo 'RELEASE_CONTROLLER_MANUAL_DISPATCH_ONLY=PASS'
           echo 'SHARED_D1_FIXED_PATH_STATIC_AUDIT=PASS'
 
+      - name: Like candidate regression, isolated only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-127-atomic-personal-like.mjs
+          node scripts/verify-135-like-fenced-protocol.mjs
+          generated="$RUNNER_TEMP/soridraw-like-candidate-071"
+          mkdir -p "$generated"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$generated/worker.js"
+          for patch in 072-personal-like-r2-revision 073-server-like-queue-order 074-personal-like-r2-cas; do
+            SORIDRAW_REMOTE_WORKER_DIR="$generated" node "cloudflare/explore-worker/patches/$patch.mjs"
+          done
+          SORIDRAW_GENERATED_WORKER="$generated/worker.js" node scripts/verify-128-like-concurrency.mjs
+          echo 'LIKE_SOURCE_AND_ISOLATED_REGRESSION=PASS'
+          echo 'LIKE_PRODUCT_RELEASE_GATE=NOT_VERIFIED_CROSS_ENV_D1_COST_AND_REAL_DEVICES'
+
       - name: Install Worker tooling
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false

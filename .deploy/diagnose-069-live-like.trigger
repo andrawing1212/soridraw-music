@@ -1,5 +1,3 @@
-requested_at=2026-09-21T21:17:00Z
-purpose=supervised_recovery_of_7_stalled_069_batches_14_intents_using_existing_worker_handler
-mode=one_time_queue_rescue
-preflight=read_only
-preview_only=true
+requested_at=2026-09-21T21:22:00Z
+purpose=verify_canonical_queue_replay_and_preview_cron_restored
+mode=postflight_read_only

@@ -63,6 +63,11 @@ const functionText = (name) => {
   fail(`unterminated ${name}`);
 };
 
+const sharedWriter = functionText('writeSharedLikes061');
+if (!sharedWriter.includes('SORIDRAW_EXACT_SHARED_LIKE_GUARD_156_20260921')) fail('exact >2000 shared-like guard missing');
+if (!sharedWriter.includes('canonicalComplete156 === true')) fail('legacy shared writer can overwrite exact 156 snapshot');
+if (!sharedWriter.includes('return false')) fail('legacy exact-snapshot writer guard does not fail closed');
+
 const likeReader = functionText('readExploreLikeR2Bundle');
 if (!likeReader.includes('readSharedLikes061(env, uid)')) fail('like reader does not prefer shared R2');
 if (!likeReader.includes('seedSharedLikesFromPreviewLocal061')) fail('PREVIEW like seed path missing');
@@ -97,6 +102,7 @@ console.log('FOLLOWING_SOURCE=SHARED_R2_FIRST');
 console.log('PREVIEW_EXISTING_LOCAL_CAN_SEED_SHARED_WITHOUT_D1=true');
 console.log('ONE_TIME_D1_RECOVERY_PROMOTED_TO_SHARED=true');
 console.log('WARM_SOCIAL_D1=R0_BY_SHARED_R2_CONTRACT');
+console.log('EXACT_156_SHARED_LIKE_LEGACY_OVERWRITE_GUARD=PASS');
 console.log('NO_D1_SCHEMA_CHANGE=true');
 console.log('NO_USER_DATA_MIGRATION=true');
 console.log('NO_UI_CSS_CHANGE=true');

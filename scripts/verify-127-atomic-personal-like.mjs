@@ -134,7 +134,9 @@ assert.match(service, /computeExploreLikeAction127\(baseLiked, liked, baseLikeCo
 assert.match(service, /readExploreTrackLikeMembership127\(uid, normalizedTrackId\) \?\? !liked/);
 assert.match(service, /const now = nextExploreLikeMutationAt127\(existing\?\.updatedAt \|\| 0, Date\.now\(\)\)/);
 const clockStart127 = service.indexOf('export const nextExploreLikeMutationAt127 =');
-const clockEnd127 = service.indexOf('// One transition represents', clockStart127);
+// The 144 exported UUID helper now follows the clock: do not feed the other
+// ES-module export into an isolated new Function() CommonJS transpilation.
+const clockEnd127 = service.indexOf('export const createExploreLikeOperationId144 =', clockStart127);
 assert.ok(clockStart127 > 0 && clockEnd127 > clockStart127);
 const clockSource127 = service.slice(clockStart127, clockEnd127)
   .replace('export const nextExploreLikeMutationAt127', 'const nextExploreLikeMutationAt127');

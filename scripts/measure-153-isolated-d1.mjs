@@ -194,11 +194,19 @@ if (process.argv[2] === 'cleanup') {
       "COALESCE((SELECT liked FROM explore_like_overrides_157 WHERE user_uid='user-157' AND track_id='" + track + "')," +
       " EXISTS(SELECT 1 FROM legacy_likes_157 WHERE track_id='" + track + "' AND user_uid='user-157'))";
     async function mutate157(track, desired, at) {
-      const sql = "INSERT INTO explore_like_overrides_157(user_uid,track_id,liked,updated_at) " +
-        "SELECT 'user-157','" + track + "'," + Number(desired) + "," + at +
-        " WHERE " + effective157(track) + " != " + Number(desired) +
-        " ON CONFLICT(user_uid,track_id) DO UPDATE SET liked=excluded.liked,updated_at=excluded.updated_at" +
-        " WHERE explore_like_overrides_157.liked != excluded.liked";
+      const baseline = await query(
+        "SELECT EXISTS(SELECT 1 FROM legacy_likes_157 WHERE track_id='" + track +
+        "' AND user_uid='user-157') AS liked"
+      );
+      const baselineLiked = Number(baseline.results?.[0]?.liked) === 1;
+      const sql = baselineLiked === Boolean(desired)
+        ? "DELETE FROM explore_like_overrides_157 WHERE user_uid='user-157' AND track_id='" + track +
+          "' AND " + effective157(track) + " != " + Number(desired)
+        : "INSERT INTO explore_like_overrides_157(user_uid,track_id,liked,updated_at) " +
+          "SELECT 'user-157','" + track + "'," + Number(desired) + "," + at +
+          " WHERE " + effective157(track) + " != " + Number(desired) +
+          " ON CONFLICT(user_uid,track_id) DO UPDATE SET liked=excluded.liked,updated_at=excluded.updated_at" +
+          " WHERE explore_like_overrides_157.liked != excluded.liked";
       const out = await query(sql);
       if (!Number.isInteger(out.meta?.rows_written) || !Number.isInteger(out.meta?.changes)) {
         fail('157 missing D1 billing receipt');
@@ -208,7 +216,7 @@ if (process.argv[2] === 'cleanup') {
       console.log('157_REMOTE_D1_' + track.toUpperCase().replace(/-/g,'_') + '_' +
         (desired ? 'LIKE' : 'UNLIKE') + '_AT_' + at +
         '=rows_written:' + out.meta.rows_written + ',changes:' + out.meta.changes +
-        ',rows_read:' + out.meta.rows_read);
+        ',rows_read:' + out.meta.rows_read + ',baseline:' + Number(baselineLiked));
       return { written: out.meta.rows_written, changes: out.meta.changes };
     }
     const overlaySequence157 = [
@@ -229,6 +237,10 @@ if (process.argv[2] === 'cleanup') {
     }
     const baselineStill = await query("SELECT COUNT(*) AS n FROM legacy_likes_157 WHERE user_uid='user-157'");
     if (Number(baselineStill.results?.[0]?.n) !== 1) fail('157 mutated legacy baseline');
+    const sparseOverrides157 = await query("SELECT COUNT(*) AS n FROM explore_like_overrides_157 WHERE user_uid='user-157'");
+    if (Number(sparseOverrides157.results?.[0]?.n) !== 0) {
+      fail('157 sparse overlay retained redundant rows after returning to baseline');
+    }
     const plan157 = await query("EXPLAIN QUERY PLAN SELECT track_id,liked_at FROM (" +
       "SELECT l.track_id,l.created_at AS liked_at FROM legacy_likes_157 l WHERE l.user_uid='user-157' " +
       "AND NOT EXISTS(SELECT 1 FROM explore_like_overrides_157 o WHERE o.user_uid=l.user_uid AND o.track_id=l.track_id) " +
@@ -244,7 +256,7 @@ if (process.argv[2] === 'cleanup') {
     if (effectiveRows157.results?.map(x => x.track_id).join(',') !== 'legacy-song') {
       fail('157 effective cold list mismatch after override sequence');
     }
-    console.log('157_NO_BACKFILL_OVERLAY_REMOTE_D1_W2_W0=PASS');
+    console.log('157_NO_BACKFILL_SPARSE_OVERLAY_REMOTE_D1_W2_W0=PASS');
     console.log('157_LEGACY_BASELINE_IMMUTABLE=PASS');
     console.log('157_COLD_UNION_INDEX_PLAN=' + detail157.replace(/\s+/g,' ').slice(0,700));
     console.log('153_REMOTE_D1_BILLING_SUMMARY=' + JSON.stringify(observations));

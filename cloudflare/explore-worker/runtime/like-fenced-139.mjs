@@ -347,6 +347,102 @@ export function createLikeExactR2Rebuilder156(bucket, listPage155, readPublicati
 }
 
 
+// SORIDRAW_LIKE_SHARED_CUTOVER_MANIFEST_162_20260921
+// One shared R2 marker coordinates reader semantics across PREVIEW/TEST/
+// PRODUCTION. Absence means legacy likes is still canonical. Presence is
+// accepted only when every environment is reader/writer ready and the legacy
+// relation/count writers are frozen under one audited token. This module never
+// creates or changes the marker.
+export const LIKE_CUTOVER_MANIFEST_KEY_162 =
+  'internal/explore/like-cutover-v162/active.json';
+
+export function createLikeCutoverManifestReader162(bucket) {
+  if (!bucket?.get) throw new TypeError('162 shared R2 bucket required');
+  return async function readLikeCutoverManifest162() {
+    const object = await bucket.get(LIKE_CUTOVER_MANIFEST_KEY_162);
+    if (!object) return { mode: 'legacy', cutoverToken: null };
+    let value;
+    try { value = JSON.parse(await object.text()); }
+    catch { throw new Error('162 cutover manifest unreadable'); }
+    const token = String(value?.cutoverToken || '').trim();
+    const armed = Number(value?.schemaVersion) === 1 &&
+      value?.relationMode === 'overlay157' &&
+      value?.legacyRelationWritersFrozen === true &&
+      value?.legacyCountWritersFrozen === true &&
+      value?.allEnvironmentReadersReady === true &&
+      value?.allEnvironmentWritersReady === true &&
+      value?.ownerProtocol === 'uid143-track147-158' &&
+      safeId(token, 128);
+    if (!armed) {
+      throw new Error('162 cutover manifest present but not fully armed');
+    }
+    return { mode: 'overlay157', cutoverToken: token };
+  };
+}
+
+// Bounded membership reader for visible/current IDs only. Before cutover it
+// uses the existing legacy relation. After the one shared manifest is armed it
+// treats likes as immutable baseline and overlays only changed relations.
+// No user-wide scan, COUNT, OFFSET, backfill or schema creation is allowed.
+export function createLikeBoundedMembershipReader162(db, readCutover) {
+  if (!db?.prepare || typeof readCutover !== 'function') {
+    throw new TypeError('162 D1 and shared cutover reader required');
+  }
+  return async function readBoundedMembership162(uid, trackIds) {
+    if (!safeId(uid, 256) || !Array.isArray(trackIds)) {
+      throw new TypeError('Invalid 162 membership request');
+    }
+    const ids = [...new Set(trackIds.map((value) => String(value || '').trim())
+      .filter((value) => safeId(value, 512)))];
+    if (ids.length !== trackIds.filter((value) => String(value || '').trim()).length ||
+        ids.length > 200) {
+      throw new TypeError('Invalid or oversized 162 membership request');
+    }
+    if (!ids.length) return { likedTrackIds: [], mode: 'legacy', cutoverToken: null };
+    const state = await readCutover();
+    if (!state || (state.mode !== 'legacy' && state.mode !== 'overlay157')) {
+      throw new Error('162 cutover state unavailable');
+    }
+    const placeholders = ids.map(() => '?').join(',');
+    let response;
+    if (state.mode === 'legacy') {
+      response = await db.prepare(
+        'SELECT l.track_id FROM likes l JOIN tracks t ON t.id = l.track_id ' +
+        'WHERE l.user_uid = ? AND l.track_id IN (' + placeholders + ') ' +
+        "AND t.is_public = 1 AND t.status = 'published'"
+      ).bind(uid, ...ids).all();
+    } else {
+      if (!safeId(state.cutoverToken, 128)) {
+        throw new Error('162 overlay cutover token missing');
+      }
+      const values = ids.map(() => '(?)').join(',');
+      response = await db.prepare(
+        'WITH requested(track_id) AS (VALUES ' + values + ') ' +
+        'SELECT r.track_id FROM requested r ' +
+        'JOIN tracks t ON t.id = r.track_id ' +
+        'LEFT JOIN likes l ON l.track_id = r.track_id AND l.user_uid = ? ' +
+        'LEFT JOIN explore_like_overrides_157 o ' +
+        'ON o.user_uid = ? AND o.track_id = r.track_id ' +
+        "WHERE t.is_public = 1 AND t.status = 'published' " +
+        'AND COALESCE(o.liked, CASE WHEN l.user_uid IS NULL THEN 0 ELSE 1 END) = 1'
+      ).bind(...ids, uid, uid).all();
+    }
+    if (!Array.isArray(response?.results)) {
+      throw new Error('162 bounded membership result unavailable');
+    }
+    const liked = response.results.map((row) => String(row?.track_id || '').trim());
+    if (liked.some((id) => !ids.includes(id)) || new Set(liked).size !== liked.length) {
+      throw new Error('162 bounded membership result invalid');
+    }
+    return {
+      likedTrackIds: liked,
+      mode: state.mode,
+      cutoverToken: state.mode === 'overlay157' ? state.cutoverToken : null,
+    };
+  };
+}
+
+
 // SORIDRAW_LIKE_NO_BACKFILL_OVERLAY_157_20260921
 // Candidate post-cutover canonical adapter. The legacy `likes` table becomes
 // an immutable baseline; this WITHOUT ROWID table stores only post-cutover

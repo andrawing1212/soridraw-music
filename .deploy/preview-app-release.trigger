@@ -1,8 +1,8 @@
-requested_at=2026-09-21T20:03:40Z
+requested_at=2026-09-21T20:28:10Z
 requested_by=user
-product_code_target=1c850beed0a4b4409b96acbb636176ea2cfe4bac
-release_source_target=app130_revision_scoped_mobile_like_cache
-release_purpose=make_mobile_first_entry_match_latest_account_like_state
+product_code_target=f6dbf81592bc64956525e4ac257ed944d50d9d41
+release_source_target=app131_cross_device_like_restore
+release_purpose=restore_same_account_pc_mobile_like_sync_after_server_batch_ack
 hosting_only=true
 worker_redeploy=false
 worker_version=733c3981-4095-4c69-bf33-9abb5de7a450

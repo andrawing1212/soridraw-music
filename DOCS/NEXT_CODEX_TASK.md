@@ -1,5 +1,24 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app131 PREVIEW 배포 후 PC↔모바일 좋아요 자동 동기화 검증
+
+현재:
+- app131 source fix 완료.
+- 최종 Audit Run `35650903841` SUCCESS.
+- 실제 PREVIEW live는 아직 app130.
+- Worker / D1 / 사용자 원본 데이터 비변경.
+
+배포 후 확인 기준:
+1. A기기에서 좋아요/해제.
+2. 마지막 클릭 후 30초 batch ACK 성공 뒤 B기기에서 새로고침/탭 왕복 없이 자동 반영.
+3. B기기 하트 + 숫자 + 내 좋아요가 같은 곡에서 함께 바뀌어야 함.
+4. B기기에 더 최신 local pending click이 있으면 오래된 remote signal이 덮지 않아야 함.
+5. 앱 재진입/업데이트 후에도 마지막 계정 좋아요 상태가 같아야 함.
+6. 위 기능 통과 전 추가 비용 최적화 / 171 cutover / TEST / PRODUCTION 금지.
+
+배포는 사용자의 명확한 PREVIEW 배포 요청 전에는 하지 않는다.
+
+
 ## 현재 최우선 — app130 모바일 첫 화면 실사용 확인
 
 현재 실제 PREVIEW:

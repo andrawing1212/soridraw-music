@@ -683,3 +683,111 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('147_COLD_COUNT_FAIL_CLOSED_AND_PRESTATE_GUARD=PASS');
   console.log('147_SHARED_TRACK_OWNER_SEED_AND_LIVE_R2=NOT_CONFIGURED');
 }
+
+
+// 149: integrated real 143 → 139 → 146 → 147 → public R2 → personal
+// publisher path in one isolated execution. NOT the deployed Worker or live D1.
+{
+  const relations = new Set();
+  const accounts = new Map();
+  const trackData = new Map([
+    ['soridraw:track-like-total:147',{count:5,version:0}],
+  ]);
+  const publicState = { count:5, generation:0 }, personal = new Map();
+  let blockPublicOnce = true, relationWrites = 0, oldStats = 5;
+  const trackStorage = {
+    async transaction(callback) {
+      const draft = new Map([...trackData].map(([k,v]) => [k,structuredClone(v)]));
+      const result = await callback({
+        get: async (k) => structuredClone(draft.get(k)),
+        put: async (k,v) => draft.set(k,structuredClone(v)),
+      });
+      trackData.clear();
+      for (const [k,v] of draft) trackData.set(k,v);
+      return result;
+    },
+  };
+  const trackAggregate = createLikeTrackAggregator147('song',trackStorage,async (event) => {
+    if (blockPublicOnce) { blockPublicOnce=false; throw Error('temporary public R2 outage'); }
+    if (event.generation >= publicState.generation) {
+      publicState.count = event.count;
+      publicState.generation = event.generation;
+    }
+    return {published:true,snapshotGeneration:publicState.generation};
+  });
+  const db = {
+    prepare(sql) {
+      return {bind(...args) {
+        return {
+          sql,args,
+          async first() {
+            return relations.has(args[1] + ':' + args[0]) ? {liked:1} : null;
+          },
+        };
+      }};
+    },
+    async batch(statements) {
+      const [trackId,uid] = statements[1].args;
+      const key = uid + ':' + trackId, before = relations.has(key);
+      const desired = statements[1].sql.includes('INSERT OR IGNORE');
+      if (desired) relations.add(key); else relations.delete(key);
+      const changes = Number(before !== relations.has(key));
+      relationWrites += changes;
+      return [
+        {results:[{eligible:1}],meta:{changes:0,rows_written:0}},
+        {results:[],meta:{changes,rows_written:changes}},
+        {results:[{liked:Number(relations.has(key))}],meta:{changes:0,rows_written:0}},
+      ];
+    },
+  };
+  const canonical = createLikeRelationOnly146(db,trackAggregate);
+  const makeUidOwner = (uid) => {
+    const values = accounts.get(uid) || new Map();
+    accounts.set(uid,values);
+    const storage = {
+      get: async (key) => structuredClone(values.get(key)),
+      put: async (key,value) => values.set(key,structuredClone(value)),
+      transaction: async (cb) => cb({
+        get: async (key) => structuredClone(values.get(key)),
+        put: async (key,value) => values.set(key,structuredClone(value)),
+      }),
+    };
+    return createLikeDurableOwner143({
+      uid,storage,canonical,
+      publish: async (event) => {
+        assert.equal(publicState.count,trackData.get('soridraw:track-like-total:147').count,
+          'public count must converge before personal heart is confirmed');
+        personal.set(uid,event.liked);
+        return {settled:true};
+      },
+    });
+  };
+  const pc = makeUidOwner('pc-user'), mobile = makeUidOwner('mobile-user');
+  const like = (uid,id,baseRevision,liked) => ({
+    uid,trackId:'song',id,baseRevision,liked,
+  });
+  assert.equal((await pc.mutate(like('pc-user','pc-like',0,true))).state,'pending');
+  assert.equal(relationWrites,1);
+  assert.equal(publicState.count,5,'outage must not falsely announce a new public count');
+  assert.equal(trackData.get('soridraw:track-like-total:147').count,6,
+    'durable delta persists while R2 is offline');
+  assert.equal(personal.has('pc-user'),false);
+  assert.equal((await pc.mutate(like('pc-user','pc-like',0,true))).state,'settled');
+  assert.equal(relationWrites,1,'D1 is not rewritten on retry');
+  assert.equal(publicState.count,6);
+  assert.equal(personal.get('pc-user'),true);
+  assert.equal((await mobile.mutate(like('mobile-user','mobile-like',0,true))).state,'settled');
+  assert.equal(publicState.count,7);
+  assert.equal(relationWrites,2);
+  assert.equal((await pc.mutate(like('pc-user','pc-unlike',1,false))).state,'settled');
+  assert.equal(publicState.count,6);
+  assert.equal(personal.get('pc-user'),false);
+  assert.equal(personal.get('mobile-user'),true);
+  assert.equal((await pc.mutate(like('pc-user','old-like',0,true))).state,'stale');
+  assert.equal(publicState.count,6);
+  assert.equal(oldStats,5,'legacy track_stats MUST be cut over before release');
+  console.log('149_UID_D1_TRACK_R2_INTEGRATED_MODEL=PASS');
+  console.log('149_CROSS_ACCOUNT_PUBLIC_COUNT_AND_PERSONAL_HEART_MODEL=PASS');
+  console.log('149_LEGACY_READER_UNCHANGED_COUNT_RELEASE_GATE=FAIL');
+  console.log('149_REAL_SHARED_WORKERS_D1_BILLING=NOT_VERIFIED');
+}

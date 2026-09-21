@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156, createLikeOverlayCanonical157, createLikeOverlayPager157, createLikeLazyTrackAggregator158 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156, createLikeOverlayCanonical157, createLikeOverlayPager157, createLikeLazyTrackAggregator158, createTrackStatsBaselineLoader158 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -1312,11 +1312,23 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   };
   let baselineReads158 = 0;
   const cutover158 = 'cutover-158-A';
-  const loadBaseline158 = async (trackId) => {
-    assert.equal(trackId, 'track-158');
-    baselineReads158++;
-    return { count: 5, cutoverToken: cutover158 };
+  const baselineDb158 = {
+    prepare(sql) {
+      assert.equal(sql, 'SELECT like_count FROM track_stats WHERE track_id = ? LIMIT 1');
+      return {
+        bind(trackId) {
+          assert.equal(trackId, 'track-158');
+          return {
+            async first() {
+              baselineReads158++;
+              return { like_count: 5 };
+            },
+          };
+        },
+      };
+    },
   };
+  const loadBaseline158 = createTrackStatsBaselineLoader158(baselineDb158, cutover158);
   const publish158 = async (event) => ({
     published: true,
     snapshotGeneration: event.generation,
@@ -1386,6 +1398,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   await assert.rejects(badBaseline158(event158('u1', 'bad', 1, 1, false, true)),
     /audited track_stats baseline unavailable/);
   assert.equal(emptyValues158.size, 0);
+  console.log('158_READONLY_TRACK_STATS_PK_BASELINE_LOADER=PASS');
   console.log('158_LAZY_TRACK_STATS_BASELINE_ONE_READ_PER_CHANGED_TRACK=PASS');
   console.log('158_NO_GLOBAL_TRACK_COUNT_BACKFILL=PASS');
   console.log('158_CUTOVER_TOKEN_AND_RESTART_DURABILITY=PASS');

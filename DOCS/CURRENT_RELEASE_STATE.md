@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CC. 141 공유 개인 R2 최종 게시 연결부 + 142 전체 연결 모의 검사 (2026-09-21 KST)
+
+사용자가 "최대한 하나씩이라도 집중해서 해결" 지시. 기준 preview `a16c0ffaee06567fa178446a6807b66a71987d63`에서 `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 **`createLikeSharedR2Publisher141(bucket,notify)` 실제 코드 후보**를 추가. 139가 D1 확정 후에만 호출하는 게시 콜백으로, 기존 공유 키 `internal/explore/shared-social-v114/likes/<UID>.json` / `schemaVersion:1` / `likedTrackIds`를 유지하며 별도의 곡별 `lastLikeRevisions141`에 operation ID·revision·liked를 기록한다. ETag 조건부 R2 PUT 최대 12회, 최신 revision만 쓰고 오래된 revision이나 같은 revision의 불일치 payload 차단, 동일 ID/상태 중복 알림 재시도에는 R2 재쓰기 0. 성공한 조건부 PUT 뒤 `notify` 성공까지 확인해야 settled. 공유 R2가 없거나 손상됐거나 목록 중복/2천 초과, 신규 좋아요에서 2천 용량 초과, 신규 곡 revision 128 한도 도달 시 **기존 상태를 덮어쓰지 않고 오류**. 기존 074 order/그 외 필드는 보존함.
+
+기존 `scripts/verify-135-like-fenced-protocol.mjs`에 141 단독 및 139+141 결합(142) **실제 GitHub 소스 V8 격리 실행형 검사**를 추가. PASS: 원본 리스트/074 필드 보호, CAS 충돌 재시도, 과거 요청이 최신 하트 무효화 금지, ID·revision 충돌, 알림 실패 뒤 R2 중복 쓰기 없이 복구, cold/2000/128 fail-closed, D1 실패 전 개인 R2 0, D1 성공 후 R2·알림, 오래된 요청 stale. 테스트 결과 135 원래 `LEGACY_WRITER_BYPASS_RELEASE_GATE=FAIL` 및 139/140 실 D1/DO 비용 미측정·제품 릴리스 FAIL은 **그대로 유지**. 이번 검사에서는 공유 실사용 R2/실 D1/RTDB 호출 없음.
+
+**중요 미완료:** 새 141도 기존 개인 snapshot **2천 곡 / revision 128곡 한도**를 넘어 사용자 전체 좋아요를 표시할 방법을 제공하지 못함. 128 한도 도달 시 pending이 영구화될 수 있으므로 분할/복구 설계 필요. 기존 TEST/PRODUCTION Worker의 unconditional shared R2 writer는 `lastLikeRevisions141`을 지울 수 있어 신규 CAS를 우회함. `notify`는 실제 인증된 RTDB 통지에 아직 연결되지 않았고, UID별 공유 durable owner/HTTP/Auth/실 D1 140/구형 writer 컷오버도 미연결. 운영 D1 trigger/index 포함 W1~W2 미검증(격리 논리 변경 6). **앱127/Worker 후보 배포 금지**, 기존 앱126/Worker071 현장 유지(이번 턴의 실주소 재검사는 미실시), main/production·사용자 원본·Hosting/Worker/Functions/Rules/DB/R2 실서비스 비변경. TS/Build/전체 CI/Work/PC↔모바일 실검증 전.
+
 ## 0CB. 140 실제 D1 batch 좋아요/해제 어댑터 구현 및 격리 SQL 검사 — W1~W2 릴리스 차단 (2026-09-21 KST)
 
 사용자가 수일간 반복된 미완료 상황을 지적하고 조속한 PREVIEW 완성·배포 요청. 최신 기준 `preview` `0fc1fb01b5f33b70c7421a0853a662d5205dbdce`. **실제 코드 수정:** 기존 `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 `createLikeD1Canonical140(db)` 추가. `readMembership`은 해당 UID/곡의 관계만 읽음. `applyAtomically`는 기존 tracks/public_profiles/track_stats의 공개·원본 조건 확인 → 조건부 likes INSERT OR IGNORE/DELETE → 직전 `changes()=1`일 때만 track_stats ±1 → 트랜잭션 안의 최종 관계 상태 재확인을 `db.batch([...])` 하나로 묶음. 요청 실패/곡 미공개/통계 누락 시 `canonicalCommitted` 반환 금지. R2는 이 함수에서 갱신하지 않음. 실제 Cloudflare 공식 D1 API의 `batch()`는 오류 시 묶음 롤백을 명시함. **아직 배포 및 실 D1 실행 없음.**

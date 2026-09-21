@@ -1,5 +1,19 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 단일 작업 — app132 PC↔모바일 첫 화면 좋아요 불일치 실사용 복구 (2026-09-22)
+
+현재 PREVIEW live app131 실사용 FAIL: PC의 찬 하트/숫자가 모바일 첫 화면에서 빈 하트/0으로 보임.
+app132 source candidate: `164c9f77fe3540df9e721bdc4c1e2f868c0918f0`; 상태 문서 0DF 참고.
+
+다음 순서:
+1. `scripts/verify-127-atomic-personal-like.mjs` 포함 독립 회귀 + TypeScript/Build + Release System Audit 고정 commit 성공 확인.
+2. 실패 시 이번 Explore 개인 좋아요 신호·캐시 경로만 수정. 공유 데이터/기존 기능 삭제, 무근거 W1 강제 금지.
+3. 성공 시 사용자가 이미 허용한 운영 지시에 따라 PREVIEW Hosting만 배포. Worker/Functions/Rules/D1 마이그레이션 금지.
+4. remote `app-version.json=132`, exact build, TEST/PRODUCTION 비변경 확인.
+5. PC/모바일 같은 계정 동일 4곡에서 첫 화면, ON→OFF→ON, 30초 ACK 이후 자동 동기화 및 내 좋아요 결과 확인. 어느 한 면이라도 틀리면 FAIL.
+6. 공개 숫자 후처리 지연은 별도 실측 전 즉시 일치라고 선언하지 말 것. 선행 기능 정상화 전 171 cutover 및 추가 비용 최적화 중단.
+
+
 ## 현재 최우선 — app131 실사용 PC↔모바일 좋아요 자동 동기화 확인
 
 현재 실제 PREVIEW:

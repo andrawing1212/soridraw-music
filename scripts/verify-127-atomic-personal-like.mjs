@@ -28,6 +28,10 @@ assert.match(service, /writeLikeLocal127\(scopedLikeKey127\(EXPLORE_LIKE_REPAIR_
 assert.match(service, /baselineCompleted127\.add\(uid\)/);
 assert.match(service, /reconcileExploreLikedTrackCollectionSnapshot127/);
 assert.match(service, /EXPLORE_LIKE_PARTIAL_BASELINE_161/);
+assert.match(service, /EXPLORE_LIKE_TARGETED_VERIFIED_127/);
+assert.match(service, /readTargetedVerifiedLikeTracks127/);
+assert.match(service, /persistTargetedVerifiedLikeTracks127/);
+assert.match(service, /clearTargetedVerifiedLikeTracks127/);
 assert.match(service, /payload\.data\.likesComplete === true/);
 assert.match(service, /exactLikeCount === likedTrackIds\.length/);
 assert.match(service, /if \(!snapshot161\.complete\)/);
@@ -41,7 +45,9 @@ assert.match(collection, /cache\.canonicalLikedTrackIds = \[\.\.\.next\]/);
 
 const getter = service.slice(service.indexOf('export const getExploreLikedTrackIds = async'),service.indexOf('export const reconcileExploreLikedTrackCollectionState'));
 assert.match(getter, /await ensurePersonalLikeBaseline127\(user\)/);
-assert.match(getter, /const missing = normalized\.filter\(\(trackId\) => !cache\.has\(trackId\)\)/);
+assert.match(getter, /const verified127 = readTargetedVerifiedLikeTracks127\(user\.uid\)/);
+assert.match(getter, /const baselineReady127 = baselineCompleted127\.has\(user\.uid\)/);
+assert.match(getter, /!cache\.has\(trackId\) \|\| \(!baselineReady127 && !verified127\.has\(trackId\)\)/);
 assert.match(getter, /readLikeOutbox\(user\.uid\)/);
 assert.match(getter, /const currentOutbox127 = readLikeOutbox\(user\.uid\)/);
 assert.match(getter, /const currentUnresolved127 = readSnapshotPending127\(user\.uid\)/);
@@ -49,8 +55,17 @@ assert.match(getter, /if \(currentOutbox127\[trackId\] \|\|/);
 assert.match(getter, /Object\.prototype\.hasOwnProperty\.call\(currentUnresolved127, trackId\)/);
 assert.ok(getter.indexOf('const currentOutbox127 =') > getter.indexOf('await requestExploreLike(user,'),
   'late API payload must re-read pending state after network request');
-assert.match(getter, /if \(!cache\.has\(trackId\)\) cache\.set\(trackId, likedIds\.has\(trackId\)\)/);
+assert.match(getter, /cache\.set\(trackId, likedIds\.has\(trackId\)\)/);
+assert.match(getter, /verified127\.add\(trackId\)/);
+assert.match(getter, /persistTargetedVerifiedLikeTracks127\(user\.uid, verified127\)/);
 assert.match(getter, /outbox\[trackId\]\?\.desiredLiked \?\? unresolved\[trackId\] \?\? cache\.get\(trackId\) === true/);
+
+const membershipStart127 = service.indexOf('export const readExploreTrackLikeMembership127 =');
+const membershipEnd127 = service.indexOf('\n};', membershipStart127) + 3;
+const membership127 = service.slice(membershipStart127, membershipEnd127);
+assert.match(membership127, /baselineReady/);
+assert.match(membership127, /readTargetedVerifiedLikeTracks127\(uid\)\.has\(id\)/);
+assert.match(membership127, /return getLikedStateCache\(uid\)\.get\(id\)/);
 
 const listener = service.slice(service.indexOf('const applyRemoteLikeSignal127'), service.indexOf('const readSignalRetry127'));
 assert.match(listener, /if \(pending\[item\.trackId\] \|\| Object\.prototype\.hasOwnProperty\.call\(unresolved, item\.trackId\)\) continue/);

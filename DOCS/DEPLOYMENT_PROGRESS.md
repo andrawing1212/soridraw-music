@@ -2,7 +2,16 @@
 
 > 현재 기준 문서는 `DOCS/CURRENT_RELEASE_STATE.md`다. 아래는 배포 관점 요약이며 과거 버전은 GitHub 기록을 참조한다.
 
-최종 갱신: 2026-09-20 KST
+최종 갱신: 2026-09-22 KST
+
+## 현재 최신 배포: PREVIEW 앱127 + Worker173/174
+
+- 앱127 PREVIEW Hosting Run `35632767964` **SUCCESS**. `preview.soridraw.com` exact build 및 `app-version.json=127` PASS.
+- Worker PREVIEW Run `35631742053` **SUCCESS**. active version `f3c66d58-8e24-4eaa-923c-f61fe369e36f`, canonical SHA256 `49f15336ae91af13f75c45f6d349645b336520426d8bfdc9ee9b8c95b7d27047`.
+- 최종 release audit Run `35632451095` **SUCCESS**.
+- TEST / PRODUCTION Hosting 및 Worker 비변경 PASS.
+- 171 D1 migration / final cutover marker / 사용자 데이터 migration은 아직 실행하지 않음.
+- 현재 상태: **PREVIEW 배포 완료 / PC↔모바일 실사용 좋아요 수렴 검증 단계**.
 
 ## 현재 최신 배포: PREVIEW 앱126 + Worker071 (2026-09-20 KST)
 

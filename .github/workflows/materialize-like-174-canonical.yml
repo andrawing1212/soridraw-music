@@ -1,0 +1,107 @@
+name: SORIDRAW Materialize Like 174 Canonical
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/materialize-like-174-canonical.trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-materialize-like-174-canonical
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Resolve exact approved source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          trigger_url="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/.deploy/materialize-like-174-canonical.trigger"
+          target="$(curl -fsSL "$trigger_url" | sed -n 's/^product_code_target=//p' | tail -1 | tr -d '\r')"
+          printf '%s' "$target" | grep -Eq '^[0-9a-f]{40}$'
+          echo "sha=$target" >> "$GITHUB_OUTPUT"
+          echo "MATERIALIZE_TARGET=$target"
+
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build exact canonical candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          old_manifest="$(sha256sum cloudflare/explore-worker/release-patches.json | awk '{print $1}')"
+          old_worker="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
+          pinned="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
+          test "$old_worker" = "$pinned"
+
+          node --check cloudflare/explore-worker/patches/083-like-r2-revision.mjs
+          node --check cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
+          node --check cloudflare/explore-worker/runtime/like-r2-revision-173.mjs
+
+          tmp="$RUNNER_TEMP/soridraw-like-174-canonical"
+          mkdir -p "$tmp"
+          cp cloudflare/explore-worker/canonical/preview-worker.js "$tmp/worker.js"
+
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/083-like-r2-revision.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/083-like-r2-revision.mjs
+          SORIDRAW_GENERATED_WORKER="$tmp/worker.js" node scripts/verify-173-like-r2-route.mjs
+
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
+          node --check "$tmp/worker.js"
+          SORIDRAW_GENERATED_WORKER="$tmp/worker.js" node scripts/verify-174-like-d1-atomic-fence-route.mjs
+
+          grep -Fq 'SORIDRAW_LIKE_R2_REVISION_ROUTE_173_20260922' "$tmp/worker.js"
+          grep -Fq 'SORIDRAW_LIKE_D1_ATOMIC_CUTOVER_FENCE_174_20260922' "$tmp/worker.js"
+          grep -Fq "revisionProtocol173 === 'd1only171'" "$tmp/worker.js"
+          grep -Fq "phase = 'frozen'" "$tmp/worker.js"
+
+          cp "$tmp/worker.js" cloudflare/explore-worker/canonical/preview-worker.js
+          sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}' > cloudflare/explore-worker/canonical/source-sha256.txt
+
+          test "$(sha256sum cloudflare/explore-worker/release-patches.json | awk '{print $1}')" = "$old_manifest"
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const manifest=JSON.parse(fs.readFileSync('cloudflare/explore-worker/release-patches.json','utf8'));
+          for (const p of ['083-like-r2-revision.mjs','084-like-d1-atomic-cutover-fence.mjs']) {
+            if (manifest.patches.includes(p)) throw new Error('083/084 must remain dormant in historical replay manifest: '+p);
+          }
+          NODE
+
+          echo "CANONICAL_174_SHA256=$(cat cloudflare/explore-worker/canonical/source-sha256.txt)"
+          echo 'MATERIALIZE_LIKE_174_CANONICAL=PASS'
+          echo 'D1_R2_FIREBASE_USER_DATA_WRITE=0'
+          echo 'DEPLOY=0'
+
+      - name: Commit canonical artifact only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short
+          changed="$(git status --short | awk '{print $2}' | sort)"
+          expected="$(printf '%s\n'             cloudflare/explore-worker/canonical/preview-worker.js             cloudflare/explore-worker/canonical/source-sha256.txt | sort)"
+          test "$changed" = "$expected"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt
+          git diff --cached --check
+          git commit -m 'build(preview): materialize audited like 174 canonical'
+          git push origin HEAD:preview

@@ -380,6 +380,25 @@ export function createLikeCutoverManifestReader162(bucket) {
   };
 }
 
+// SORIDRAW_LEGACY_LIKE_WRITER_FREEZE_GUARD_163_20260921
+// Pure guard used by the release audit. It never writes/arms the cutover marker.
+export function createLegacyLikeWriterGuard163(readCutover) {
+  if (typeof readCutover !== 'function') {
+    throw new TypeError('163 shared cutover reader required');
+  }
+  return async function assertLegacyLikeWriterOpen163(writerName = 'unknown') {
+    const state = await readCutover();
+    if (state?.mode === 'overlay157') {
+      throw new Error('163 legacy like writer frozen after shared cutover: ' + String(writerName));
+    }
+    if (!state || state.mode !== 'legacy') {
+      throw new Error('163 shared cutover state unavailable');
+    }
+    return state;
+  };
+}
+
+
 // Bounded membership reader for visible/current IDs only. Before cutover it
 // uses the existing legacy relation. After the one shared manifest is armed it
 // treats likes as immutable baseline and overlays only changed relations.

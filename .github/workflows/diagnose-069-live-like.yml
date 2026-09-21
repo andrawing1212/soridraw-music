@@ -172,7 +172,7 @@ jobs:
           for(const plan of plans) for(const row of plan.rows)
             lines.push('Query plan '+plan.name+': '+String(row.detail||'').replaceAll('\`',''));
           lines.push('', 'Diagnosis only; no data was altered.', '');
-          fs.writeFileSync('DOCS/LIKE_READONLY_DIAG_LATEST.md',lines.join('\\n'));
+          fs.writeFileSync('DOCS/LIKE_READONLY_DIAG_LATEST.md',lines.join('\n'));
           NODE
           git config user.name "soridraw-readonly-diagnostic"
           git config user.email "actions@users.noreply.github.com"

@@ -7,7 +7,7 @@ const safeId = (value, max) => typeof value === 'string' && value.trim() === val
 
 export class LikeFencedProcessor139 {
   constructor({ ledger, canonical, publish }) {
-    if (!ledger?.get || !ledger?.put || !canonical?.readMembership || !canonical?.applyAtomically || !publish) {
+    if (!ledger?.get || !ledger?.put || !ledger?.nextPublicationSeq || !canonical?.readMembership || !canonical?.applyAtomically || !publish) {
       throw new TypeError('Durable ledger, canonical D1 adapter and post-commit publisher required');
     }
     this.ledger = ledger;
@@ -45,7 +45,7 @@ export class LikeFencedProcessor139 {
         ...value, revision: intent.revision, liked: intent.liked,
         last: { id: intent.id, revision: intent.revision, liked: intent.liked },
         pending: null,
-        publication: { revision: intent.revision, liked: intent.liked, id: intent.id },
+        publication: { revision: intent.revision, liked: intent.liked, id: intent.id, seq: intent.seq },
       };
       await this.persist(value);
     }
@@ -84,7 +84,12 @@ export class LikeFencedProcessor139 {
 
     // Durable intent first. On crash, recover this exact operation before a
     // newer one; never derive order from the client clock or receive time.
-    value = { ...value, pending: { id, revision: value.revision + 1, liked } };
+    // The durable, atomic per-UID counter is owned by the SAME serialized
+    // actor as this account's entire like stream. Gaps from a crash between
+    // allocation and pending persistence are harmless; reuse is not.
+    const seq = await this.ledger.nextPublicationSeq(uid);
+    if (!Number.isSafeInteger(seq) || seq <= 0) throw new Error('Invalid durable publication sequence');
+    value = { ...value, pending: { id, revision: value.revision + 1, liked, seq } };
     await this.persist(value);
     try { value = await this.flush(value); }
     catch { return { state: 'pending', revision: value.revision }; }
@@ -159,10 +164,12 @@ export function createLikeSharedR2Publisher141(bucket, notify) {
     throw new TypeError('Shared R2 bucket and reliable authenticated notifier required');
   }
   const limit = 2000;
-  const orderLimit = 128;
-  return async function publishCanonicalLike141({ uid, trackId, id, revision, liked }) {
+  // No fixed 128-track history: one globally monotonic per-UID durable
+  // sequence allows a single cursor, provided ALL writers use the same owner.
+  return async function publishCanonicalLike141({ uid, trackId, id, revision, liked, seq }) {
     if (!safeId(uid, 256) || !safeId(trackId, 512) || !safeId(id, 128) ||
-        !Number.isSafeInteger(revision) || revision <= 0 || typeof liked !== 'boolean') {
+        !Number.isSafeInteger(revision) || revision <= 0 ||
+        !Number.isSafeInteger(seq) || seq <= 0 || typeof liked !== 'boolean') {
       throw new TypeError('Invalid post-commit like event');
     }
     const key = 'internal/explore/shared-social-v114/likes/' + encodeURIComponent(uid) + '.json';
@@ -182,25 +189,19 @@ export function createLikeSharedR2Publisher141(bucket, notify) {
       if (likedIds.size !== ids.length || ids.some((x) => !safeId(x, 512))) {
         throw new Error('Shared like snapshot contains invalid or duplicated IDs');
       }
-      const history = previous.lastLikeRevisions141 == null ? {} : previous.lastLikeRevisions141;
-      if (typeof history !== 'object' || Array.isArray(history)) throw new Error('Invalid per-track revision history');
-      const prior = history[trackId];
-      if (prior != null) {
-        if (!Number.isSafeInteger(prior.revision) || prior.revision <= 0 || !safeId(prior.id, 128) ||
-            typeof prior.liked !== 'boolean') throw new Error('Invalid per-track revision');
-        if (prior.revision > revision) return { settled: false, superseded: true };
-        if (prior.revision === revision) {
-          if (prior.id !== id || prior.liked !== liked || likedIds.has(trackId) !== liked) {
-            throw new Error('Conflicting revision or shared snapshot');
-          }
-          // A previous R2 CAS may have committed before notification failed.
-          // Retry the notification WITHOUT rewriting the same R2 object.
-          await notify({ uid, trackId, id, revision, liked });
-          return { settled: true, duplicate: true };
+      const priorSeq = previous.lastPublishedSeq141 == null ? 0 : previous.lastPublishedSeq141;
+      if (!Number.isSafeInteger(priorSeq) || priorSeq < 0) throw new Error('Invalid shared publication sequence');
+      if (priorSeq > seq) return { settled: false, superseded: true };
+      if (priorSeq === seq) {
+        const last = previous.lastPublishedEvent141;
+        if (last?.id !== id || last?.trackId !== trackId ||
+            last?.revision !== revision || last?.liked !== liked ||
+            likedIds.has(trackId) !== liked) {
+          throw new Error('Conflicting publication sequence or shared snapshot');
         }
-      }
-      if (prior == null && Object.keys(history).length >= orderLimit) {
-        throw new Error('Per-track revision capacity reached; canonical rebuild required');
+        // Retry only the notifier; the R2 CAS was already committed.
+        await notify({ uid, trackId, id, revision, liked, seq });
+        return { settled: true, duplicate: true };
       }
       if (liked && !likedIds.has(trackId) && likedIds.size >= limit) {
         throw new Error('Shared like capacity reached; canonical rebuild required');
@@ -209,10 +210,8 @@ export function createLikeSharedR2Publisher141(bucket, notify) {
       const next = {
         ...previous, schemaVersion: 1, uid,
         likedTrackIds: [...likedIds],
-        lastLikeRevisions141: {
-          ...history,
-          [trackId]: { id, revision, liked },
-        },
+        lastPublishedSeq141: seq,
+        lastPublishedEvent141: { trackId, id, revision, liked },
         updatedAt: Date.now(),
       };
       const result = await bucket.put(key, JSON.stringify(next), {
@@ -223,7 +222,7 @@ export function createLikeSharedR2Publisher141(bucket, notify) {
       // R2 may reject conditional PUT because another user action updated
       // the object. Re-read only this UID and retry; never blind overwrite.
       if (!result) continue;
-      await notify({ uid, trackId, id, revision, liked });
+      await notify({ uid, trackId, id, revision, liked, seq });
       return { settled: true, attempts: attempt + 1 };
     }
     throw new Error('Shared like R2 CAS contention; pending retry required');

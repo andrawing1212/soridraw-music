@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CF. 좋아요 D1 쓰기 2행 초과 원인 검증 및 해법 조사 — 145 (2026-09-21 KST)
+
+사용자가 "세계 전체를 다 뒤져서라도 정확한 원인/방법" 지시. 기준 preview 2a597445b83f7e7ce0e802b0ec1d97135ca2d5aa. GitHub Worker071 canonical 소스·069 큐·032/033 SQL 트리거와 Cloudflare D1/SQLite 공식 과금 문서를 대조하여 원인 분해. 핵심: 069 INSERT+DELETE 논리 2, canonical likes+track_stats 논리 2, track_stats→derived_tracks→global seq + Feed/프로필 journal 추가 논리 4. 134 격리 모형에서는 큐 제거 직접 경로 좋아요/해제 논리 6; 기존 069을 이 모형과 합성하면 논리 8. 이것은 실제 D1 청구 수치가 아니고 인덱스 변경·라이브 운영 SQL 차이는 미측정. Cloudflare 공식 D1 과금은 테이블뿐 아니라 인덱스 쓰기도 meta.rows_written에 포함한다. 기존 indexed derived popular/indexed journal 때문에 2원본 SQL로 W2 보장 불가능. 자세한 근거·외부 문헌·후보 비교 및 승인 전 실행 규칙은 DOCS/LIKE_WRITE_REDESIGN_133.md 145 참조.
+
+변경 내용: scripts/verify-134-like-write-amplification.py에 테이블별 6개 논리 변경과 069 추가 2개 원인 기록. 기존 배포 없는 .github/workflows/soridraw-release-system-audit.yml의 기존 검증에 132/133/134 격리 비용 검사 및 실제 공유 D1 sqlite_schema table/trigger/index SELECT 전용 검사 추가(실사용 계정/곡 SELECT나 DML 없음). 새 read-only schema query는 활성 live SQL을 hash로 표시해 032/033 실제 설치 여부·인덱스 수량을 대조하도록 구성. 기존 앱/Worker/실사용 원본 변경/배포 없음. CI run/TS/Build/실 Cloudflare meta.rows_written 아직 미확인. 보고 시 source 분석 확정과 운영 계량 미확정을 혼동하지 않는다.
+
+구조 판단: 현행 069과 실시간 D1 count/derived/journal을 모두 유지하는 조건에서는 W1~W2 합격 불가. 비용 목표를 지키는 **격리 검증 후보**는 D1에 개인 likes 관계 1행만 변경하고 곡별 숫자/인기/Feed/프로필 신호는 별도 영속 집계와 작은 R2 변경분으로 전환. 이 경우 likes 활성 인덱스 청구가 D1 W1~W2인지 격리 D1 실측 후 확정; DO/R2 자체 비용·복구·동일 곡 여러 사용자 경쟁·구형 TEST/PRODUCTION reader/writer 하위호환·전체 UX 보존을 증명해야 한다. 별도 집계만 도입해도 총비용이 반드시 감소한다는 결론은 아님. 트리거 제거·원본 사용자 데이터 변환·새 인프라·환경 승격은 명시적 승인 전 실행 금지. 138 pending-only 앱127/Worker 후보 배포 금지 유지.
+
 ## 0CE. 앱127 좋아요 요청 고유 ID 144 — 재전송 시 동일 ID·신규 클릭 새 ID (2026-09-21 KST)
 
 기존 `src/services/exploreLikeService.ts`에 `createExploreLikeOperationId144` 추가: secure-origin `crypto.randomUUID()`로 **신규 클릭마다 고유 operationId** 생성·사용자별 outbox에 영속 저장. 30초 flush 시 같은 ID 그대로 전달하고 응답이 모호해 재시도해도 바꾸지 않음. 과거 앱 outbox는 flush 이전 UID별 한 번만 UUID 채워 로컬에 저장(기존 데이터 삭제/전역 강제 재생성 없음). `normalizePendingMutation`이 operationId를 보존하고 0BW rebase는 latest 객체를 spread해 최신 클릭의 ID를 유지. 실제 배포 Worker071은 추가 JSON 필드를 무시하므로 기존 batch 경로 동작·D1 쓰기 구조 변경 없음. 새 139/143 서버가 사용하는 별도 `baseRevision`의 안전한 전달은 아직 미구현; 현재 단지 **고유 ID의 보존을 준비한 단계**임.

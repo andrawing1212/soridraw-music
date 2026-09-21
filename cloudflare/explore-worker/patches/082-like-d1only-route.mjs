@@ -57,16 +57,19 @@ readBody = readBody.replace(proofAnchor, `  if (Number(value?.schemaVersion) ===
         markerMap172?.[stage] === true
       );
     const proofReady172 = Number(proof172?.schemaVersion) === 1 &&
-      proof172?.proofAuthority === 'release-controller-173' &&
+      proof172?.proofAuthority === 'release-controller-174' &&
       Number.isSafeInteger(Number(proof172?.observedAt)) && Number(proof172.observedAt) > 0 &&
       proof172?.legacyIntakeClosed === true &&
       queuesDrained172 &&
-      Number(proof172?.queueStablePasses) === 2 &&
       proof172?.legacyProcessorIdle === true &&
       proof172?.allEnvironmentWorkerShaVerified === true &&
       allWorkerEvidence172 &&
+      proof172?.d1AtomicFenceReady === true &&
+      proof172?.d1FenceTable === 'explore_like_cutover_control_174' &&
+      proof172?.d1FencePhase === 'frozen' &&
+      Number.isSafeInteger(Number(proof172?.d1FenceEpoch)) && Number(proof172.d1FenceEpoch) > 0 &&
+      Number(proof172?.d1FenceFrozenAt) > 0 &&
       /^[0-9a-f]{64}$/i.test(String(proof172?.drainTokenHash || '')) &&
-      Number(proof172?.drainQuiescenceMs) >= 30000 &&
       proof172?.d1OnlySchemaOwnerReady === true &&
       proof172?.d1OnlySchemaOwner === 'shared-d1' &&
       Number(proof172?.d1OnlyHotSecondaryIndexes) === 0 &&

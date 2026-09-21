@@ -42,6 +42,21 @@ assert.doesNotMatch(service, /likedIds\.length >= 2000/,
 assert.match(service, /for \(let attempt = 0; attempt < 2; attempt \+= 1\)/);
 assert.match(collection, /reconcileExploreLikedTrackCollectionSnapshot127/);
 assert.match(collection, /cache\.canonicalLikedTrackIds = \[\.\.\.next\]/);
+assert.match(service, /export const getExploreKnownLikeCandidateIds127 =/);
+assert.match(service, /if \(readExploreTrackLikeMembership127\(normalizedUid, trackId\) === true\)/);
+const collectionReconcile129 = service.slice(
+  service.indexOf('export const reconcileExploreLikedTrackCollectionState ='),
+  service.indexOf('export const setExploreTrackLike ='),
+);
+assert.doesNotMatch(collectionReconcile129, /cache\.set\(/,
+  'My Likes collection must never overwrite heart membership authority');
+assert.match(collection, /authoritativeLikedTrackIds\?: string\[\]/);
+assert.match(collection, /const explicitAuthority = Array\.isArray\(authoritativeLikedTrackIds\)/);
+assert.match(page, /getExploreKnownLikeCandidateIds127\(user\.uid\)/);
+assert.match(page, /await getExploreLikedTrackIds\(user, candidates\.slice\(start, start \+ 50\)\)/);
+assert.match(page, /const rows = await getExploreLikedTracks\(user, effectiveLikedTrackIds\)/);
+assert.match(page, /rememberExploreLikedTrack\(/);
+
 
 const getter = service.slice(service.indexOf('export const getExploreLikedTrackIds = async'),service.indexOf('export const reconcileExploreLikedTrackCollectionState'));
 assert.match(getter, /await ensurePersonalLikeBaseline127\(user\)/);
@@ -250,7 +265,8 @@ assert.match(page, /detail\?\.source !== 'remote'/);
 assert.match(page, /const effectiveLiked127 = readExploreTrackLikeMembership127\(user\.uid, detail\.trackId\)/);
 assert.match(page, /if \(effectiveLiked127 !== detail\.liked\) return/);
 assert.match(page, /setLikedTrackIds\(\(previous\) => \(\{ \.\.\.previous, \[detail\.trackId!\]: effectiveLiked127 \}\)\)/);
-assert.match(page, /next\[id\] = readExploreTrackLikeMembership127\(user\.uid, id\) \?\? likedSet\.has\(id\)/);
+assert.match(page, /const liked = readExploreTrackLikeMembership127\(user\.uid, id\) \?\? likedSet\.has\(id\)/);
+assert.match(page, /verifiedMembership\.forEach\(\(liked, id\) => \{ next\[id\] = liked; \}\)/);
 assert.doesNotMatch(page, /invalidateExplorePersonalLikeBaseline127\(user\.uid\)/);
 assert.match(page, /checkExplorePersonalLikeRevision127\(user\)/);
 assert.match(page, /window\.addEventListener\('focus', onResume\)/);

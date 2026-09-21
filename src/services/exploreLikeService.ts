@@ -287,7 +287,13 @@ const readTargetedVerifiedLikeTracks127 = (uid: string): Set<string> => {
   if (cached && targetedVerifiedRevisionByUid130.get(normalizedUid) === currentRevision) return cached;
 
   const verified = new Set<string>();
-  if (currentRevision) {
+  // A partial legacy R2 revision identifies only the truncated R2 object.
+  // Its queued likes can materialize into canonical D1 later WITHOUT changing
+  // that R2 HEAD. Persisted per-track "verified" booleans are therefore NOT
+  // valid across app sessions on partial accounts. Reverify only visible IDs,
+  // once per session (bounded batches), while exact complete R2 remains R0.
+  const partial161 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, normalizedUid)) === '1';
+  if (currentRevision && !partial161) {
     try {
       const raw = JSON.parse(
         readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_130, normalizedUid)),
@@ -653,6 +659,13 @@ export const checkExplorePersonalLikeRevision127 = async (user: User): Promise<v
             detail: { uid, reason: 'personal-r2-revision-changed' },
           }));
         }
+      } else if (readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid)) === '1') {
+        // The 069/075 deferred processor may have applied a queued relation in
+        // D1 since the last check without touching this incomplete R2 object.
+        // At most once per five minutes of active use, expire ONLY the partial
+        // per-track verification. The currently displayed heart remains until
+        // bounded exact membership confirms the visible IDs.
+        clearTargetedVerifiedLikeTracks127(uid);
       }
       revisionCheckAtByUid127.set(uid, Date.now());
     } catch (error) {

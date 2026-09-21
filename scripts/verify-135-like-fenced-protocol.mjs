@@ -1728,7 +1728,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const slice165 = (name) => {
     const start = worker165.indexOf('async function ' + name + '(');
     assert.ok(start >= 0, 'missing 165 guarded Worker entry ' + name);
-    const end = worker165.indexOf('\\n}', start);
+    const end = worker165.indexOf(String.fromCharCode(10) + '}', start);
     assert.ok(end > start);
     return worker165.slice(start, end + 2);
   };
@@ -1746,9 +1746,9 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   }
   assert.doesNotMatch(cron165, /assertLegacyLikeIntakeOpen165/);
   assert.match(cron165, /processExploreLikeUserQueueWave075/);
-  assert.doesNotMatch(worker165, /(?:put|delete)\\(exploreLikeDrainKey165/,
+  assert.doesNotMatch(worker165, /(?:put|delete)\(exploreLikeDrainKey165/,
     'product Worker must never create or remove the drain marker');
-  assert.equal((worker165.match(/await assertLegacyLikeIntakeOpen165\\(env\\)/g) || []).length, 2);
+  assert.equal((worker165.match(/await assertLegacyLikeIntakeOpen165\(env\)/g) || []).length, 2);
   console.log('165_BATCH_DIRECT_INTAKE_GUARDED_CRON_DRAIN_REMAINS_OPEN=PASS');
   console.log('165_SHARED_DRAIN_MARKER_WRITE_PATH=NONE');
 
@@ -1756,10 +1756,10 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const flushStart165 = service165.indexOf('flushPendingLikes = async');
   const flushEnd165 = service165.indexOf('// App 120 deliberately ignores historical RTDB', flushStart165);
   const flush165 = service165.slice(flushStart165, flushEnd165);
-  assert.match(flush165, /} catch \\(reason\\) \\{/);
-  assert.match(flush165, /persistLikeOutbox\\(uid, latest\\)/);
-  assert.match(flush165, /current\\.retryCount = Math\\.min\\(8, current\\.retryCount \\+ 1\\)/);
-  assert.match(flush165, /if \\(succeeded && getPendingExploreLikeMutationCount\\(uid\\) > 0\\)/);
-  assert.match(service165, /window\\.addEventListener\\('online', retry\\)/);
+  assert.match(flush165, /} catch \(reason\) \{/);
+  assert.match(flush165, /persistLikeOutbox\(uid, latest\)/);
+  assert.match(flush165, /current\.retryCount = Math\.min\(8, current\.retryCount \+ 1\)/);
+  assert.match(flush165, /if \(succeeded && getPendingExploreLikeMutationCount\(uid\) > 0\)/);
+  assert.match(service165, /window\.addEventListener\('online', retry\)/);
   console.log('165_CLIENT_RETRIABLE_FAILURE_LAST_INTENT_RETAINED=PASS');
 }

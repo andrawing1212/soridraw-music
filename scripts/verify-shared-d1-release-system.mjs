@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import {
   evaluateLikeCutoverPreflight164,
   inspectLikeCutoverPreflight164,
@@ -146,6 +147,52 @@ const invalidCursor164 = (args) => {
 assert.throws(() => inspectLikeCutoverPreflight164('mock-wrangler.jsonc',
   { legacyIntakeClosed: false }, invalidCursor164), /processing cursor missing or invalid/);
 console.log('164_075_PROCESSED_ROWS_NOT_PENDING_CURSOR_REQUIRED=PASS');
+
+// 166: deterministic counterexample to treating a one-time empty queue
+// and a user-supplied "closed" boolean as final cutover proof. A request that
+// already passed the 165 R2 guard can resume and enqueue after the observation.
+let resumeInFlight166;
+const held166 = new Promise((resolve) => { resumeInFlight166 = resolve; });
+let marker166 = 'open';
+let active166 = 0;
+let queued166 = 0;
+const inFlight166 = (async () => {
+  if (marker166 !== 'open') throw new Error('fixture intake unexpectedly closed');
+  active166++;
+  await held166; // suspended AFTER an open guard, BEFORE the D1 queue write
+  queued166++;
+  active166--;
+})();
+assert.equal(active166, 1);
+marker166 = 'draining';
+assert.equal(queued166, 0, 'first queue probe sees empty while a writer is suspended');
+const falseProof166 = evaluateLikeCutoverPreflight164({
+  schemaRows: schema164,
+  queuePending: queuesEmpty164,
+  legacyIntakeClosed: true,
+});
+assert.equal(falseProof166.ready, true,
+  'legacy caller-declared closure would create a false proof without a fence');
+assert.throws(() => inspectLikeCutoverPreflight164('mock-wrangler.jsonc',
+  { legacyIntakeClosed: true }, replay164), /166 CUTOVER_BLOCKED/);
+const beforeResumeQueries166 = statements164.length;
+assert.equal(queued166, 0);
+resumeInFlight166();
+await inFlight166;
+assert.equal(queued166, 1, 'old accepted request enqueues AFTER apparent empty-queue proof');
+assert.equal(active166, 0);
+assert.equal(statements164.length, beforeResumeQueries166,
+  'programmatic preflight must reject self-attestation before D1 querying');
+const forgedCli166 = spawnSync(process.execPath, [
+  'cloudflare/explore-worker/scripts/like-cutover-preflight-164.mjs',
+  '--config', 'mock-wrangler.jsonc', '--legacy-intake-closed',
+], { encoding: 'utf8' });
+assert.notEqual(forgedCli166.status, 0);
+assert.match(forgedCli166.stderr, /166 CUTOVER_BLOCKED/);
+assert.doesNotMatch(forgedCli166.stdout, /164_CUTOVER_PREFLIGHT_PROOF=/);
+console.log('166_INFLIGHT_AFTER_EMPTY_QUEUE_RACE_REPRODUCED=PASS');
+console.log('166_SELF_ATTESTED_CUTOVER_PROOF_FAILS_CLOSED=PASS');
+console.log('166_SHARED_ATOMIC_FENCE_NOT_IMPLEMENTED_PRODUCT_RELEASE_BLOCKED=PASS');
 
 console.log('164_READONLY_CUTOVER_PREFLIGHT_MODEL=PASS');
 console.log('PASS shared D1 release system: fixed trigger-driven additive schema path, exact SHA/blob pinning, no per-release hardcoded migration, rollback of newly-created objects only');

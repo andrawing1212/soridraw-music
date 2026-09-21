@@ -10,9 +10,10 @@ const marker = 'SORIDRAW_SHARED_LIKE_READER_CUTOVER_078_20260921';
 const marker161 = 'SORIDRAW_SHARED_LIKE_READER_FIRST_161_20260921';
 const marker162 = 'SORIDRAW_SHARED_LIKE_CUTOVER_GATE_162_20260921';
 const marker163 = 'SORIDRAW_LEGACY_LIKE_WRITER_FREEZE_GUARD_163_20260921';
+const marker164 = 'SORIDRAW_LIKE_CUTOVER_PRECONDITION_PROOF_164_20260921';
 const hasReaders = source.includes(marker161) && source.includes(marker162);
-if (hasReaders && source.includes(marker163)) {
-  console.log('[078/163] shared like reader cutover and legacy-writer freeze already applied.');
+if (hasReaders && source.includes(marker163) && source.includes(marker164)) {
+  console.log('[078/164] shared like cutover, freeze guard, and precondition proof already applied.');
   process.exit(0);
 }
 
@@ -124,6 +125,7 @@ async function readBoundedLegacyLikeMemberships161(env, uid, trackIds) {
 }
 
 // ${marker162}
+// ${marker164}
 const exploreLikeCutoverKey162 = 'internal/explore/like-cutover-v162/active.json';
 
 async function readLikeCutoverState162(env) {
@@ -135,6 +137,18 @@ async function readLikeCutoverState162(env) {
   try { value = JSON.parse(await object.text()); }
   catch { throw new Error('162 cutover manifest unreadable'); }
   const token = String(value?.cutoverToken || '').trim();
+  const proof164 = value?.preCutoverProof164;
+  const queueRows164 = proof164?.legacyQueueRows || {};
+  const queuesDrained164 = ['035', '066', '069', '075'].every((key) =>
+    Number.isSafeInteger(queueRows164[key]) && queueRows164[key] === 0
+  );
+  const preconditions164 = Number(proof164?.schemaVersion) === 1 &&
+    proof164?.legacyIntakeClosed === true &&
+    queuesDrained164 &&
+    proof164?.overlay157SchemaOwnerReady === true &&
+    proof164?.overlay157SchemaOwner === 'shared-d1' &&
+    proof164?.overlay157RelationTable === 'explore_like_overrides_157' &&
+    proof164?.ownerProtocol === 'uid143-track147-158';
   const armed = Number(value?.schemaVersion) === 1 &&
     value?.relationMode === 'overlay157' &&
     value?.legacyRelationWritersFrozen === true &&
@@ -142,6 +156,7 @@ async function readLikeCutoverState162(env) {
     value?.allEnvironmentReadersReady === true &&
     value?.allEnvironmentWritersReady === true &&
     value?.ownerProtocol === 'uid143-track147-158' &&
+    preconditions164 &&
     token.length > 0 && token.length <= 128;
   if (!armed) throw new Error('162 cutover manifest present but not fully armed');
   return { mode: 'overlay157', cutoverToken: token };
@@ -208,6 +223,38 @@ async function readRequestedLikedTrackCardsD1161(env, trackIds) {
   })).filter(Boolean);
 }
 `;
+
+if (hasReaders && !source.includes(marker164)) {
+  const existing = functionRange('readLikeCutoverState162');
+  let upgraded = existing.text;
+  upgraded = upgraded.replace(
+    "  const token = String(value?.cutoverToken || '').trim();\n  const armed =",
+    "  const token = String(value?.cutoverToken || '').trim();\n" +
+    "  const proof164 = value?.preCutoverProof164;\n" +
+    "  const queueRows164 = proof164?.legacyQueueRows || {};\n" +
+    "  const queuesDrained164 = ['035', '066', '069', '075'].every((key) =>\n" +
+    "    Number.isSafeInteger(queueRows164[key]) && queueRows164[key] === 0\n" +
+    "  );\n" +
+    "  const preconditions164 = Number(proof164?.schemaVersion) === 1 &&\n" +
+    "    proof164?.legacyIntakeClosed === true &&\n" +
+    "    queuesDrained164 &&\n" +
+    "    proof164?.overlay157SchemaOwnerReady === true &&\n" +
+    "    proof164?.overlay157SchemaOwner === 'shared-d1' &&\n" +
+    "    proof164?.overlay157RelationTable === 'explore_like_overrides_157' &&\n" +
+    "    proof164?.ownerProtocol === 'uid143-track147-158';\n" +
+    "  const armed ="
+  );
+  upgraded = upgraded.replace(
+    "    value?.ownerProtocol === 'uid143-track147-158' &&\n    token.length > 0",
+    "    value?.ownerProtocol === 'uid143-track147-158' &&\n    preconditions164 &&\n    token.length > 0"
+  );
+  if (!upgraded.includes('preCutoverProof164') || !upgraded.includes('preconditions164')) {
+    throw new Error('[078/164] existing cutover reader upgrade anchor changed');
+  }
+  replaceFunction('readLikeCutoverState162', upgraded);
+  const state = functionRange('readLikeCutoverState162');
+  source = source.slice(0, state.start) + '// ' + marker164 + '\n' + source.slice(state.start);
+}
 
 if (!hasReaders) {
 const insertBefore = functionRange('readSharedLikes061').start;
@@ -403,7 +450,7 @@ async function assertLegacyLikeWriterOpen163(env, writerName) {
 }
 
 for (const required of [
-  marker, marker161, marker162, marker163,
+  marker, marker161, marker162, marker163, marker164,
   'normalizeSharedLikesState161',
   'readSharedLikesState161',
   'readBoundedLegacyLikeMemberships161',
@@ -415,4 +462,4 @@ for (const required of [
   if (!source.includes(required)) throw new Error('[072] final runtime missing: ' + required);
 }
 writeFileSync(workerPath, source, 'utf8');
-console.log('[078/163] Shared like readers are cutover-gated and all legacy relation/count writer entry paths freeze after the shared marker is armed.');
+console.log('[078/164] Shared like readers are cutover-gated; legacy writers freeze only after intake-close, queue-drain, and overlay157 schema-owner proof is present.');

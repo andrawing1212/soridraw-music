@@ -24084,6 +24084,8 @@ async function handleLikeBatch034(request, env, cors) {
   const mutations = [...byTrack.values()];
   await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);
   await assertLegacyLikeIntakeOpen165(env);
+  // SORIDRAW_BATCH_LIKE_FINAL_CUTOVER_FREEZE_169_20260921
+  await assertLegacyLikeWriterOpen163(env, 'batch-like-intake');
 
   // Do not discard an intent because this device's baseLiked happens to match it.
 // Another device may already have changed canonical state. The scheduled aggregate

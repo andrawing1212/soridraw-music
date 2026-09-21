@@ -1,5 +1,14 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DJ. app133 실제 사용 FAIL — PC/모바일 좋아요 불일치 및 D1 행 읽기 46 (2026-09-22 KST)
+
+사용자 제공 app133 PC·모바일·CACHE LIVE 실사용 증거: 첫 일부 곡은 양쪽 하트/숫자 1로 맞지만 `[Underground Hip-Hop] 끝내 돌아온 계절처럼`은 PC 하트 ON/1, 모바일 OFF/0. 따라서 **좋아요 기능 전체 PASS 금지**. CACHE LIVE `좋아요 상태 확인`은 Worker 요청 1, D1 쿼리 읽기 1, 누적 읽기 행 46, 쓰기 0. `/v1/me/likes-revision`은 D1 읽기 0. R46은 해당 좋아요 확인 요청의 관측치이며 46개의 API 호출이라는 뜻은 아님. 정상 재진입 read 0 비용 목표 **FAIL**.
+
+원인 미확정: 서버 개인 canonical `likes`, 069/075 대기 중인 변경, 계정 R2 객체, PC `snapshotPending`, 모바일 확인 결과를 **같은 uid/trackId 기준으로 실제 대조하지 않았음**. PC 하트 ON을 서버 확정으로 가정하거나 공용 숫자만으로 본인 좋아요를 추론하지 말 것. 이전 app131~133의 정적/모의 테스트 PASS는 이 실제 오류를 검출하지 못했음.
+
+**현재 운영 중단 지점:** PREVIEW app133 배포됨, 실사용 기능·비용 FAIL. 임의 추가 캐시 패치/배포/TEST·PRODUCTION 승격 보류. 공유 사용자 데이터 삭제·변환 금지. 먼저 실제 상태의 read-only 증거를 확보하고, 기능 보호를 선행할 것. 1~2 W 비용 목표를 위해 정상 기능을 제거하거나 사용자 데이터를 덮어쓰지 않는다.
+
+
 ## 0DI. PREVIEW app133 — partial legacy 좋아요 D1 재검증 수정 배포 완료 (2026-09-22 KST)
 
 **배포 exact commit:** `587e60ff451ce64d9d24be5ae943f5a32d71825d`.

@@ -345,3 +345,87 @@ export function createLikeRelationOnly146(db, commitAggregate) {
     },
   };
 }
+
+
+// SORIDRAW_LIKE_TRACK_AGGREGATOR_147_20260921
+// Candidate separate durable track owner. One instance must own ONE track
+// across ALL environments. Seed its count from an audited canonical baseline;
+// never invent zero or reset a missing count. The track owner atomically stores
+// both count and each UID's last applied operation (id + revision).
+// Publishing to public R2 is a SECOND recoverable step. No unconditional
+// overwrite or fire-and-forget notification is permitted.
+export function createLikeTrackAggregator147(trackId, storage, publishTrack) {
+  if (!safeId(trackId, 512) || !storage?.transaction || typeof publishTrack !== 'function') {
+    throw new TypeError('Shared track owner, durable transaction and versioned publisher required');
+  }
+  const totalKey = 'soridraw:track-like-total:147';
+  const lastKey = (uid) => 'soridraw:track-like-user:147:' + uid;
+  let tail = Promise.resolve();
+  async function commit(event) {
+    const { uid, id, revision, seq, previousLiked, liked, delta } = event || {};
+    if (event?.trackId !== trackId || !safeId(uid, 256) || !safeId(id, 128) ||
+        !Number.isSafeInteger(revision) || revision <= 0 ||
+        !Number.isSafeInteger(seq) || seq <= 0 ||
+        typeof previousLiked !== 'boolean' || typeof liked !== 'boolean' ||
+        delta !== Number(liked) - Number(previousLiked) || delta === 0) {
+      throw new TypeError('Invalid durable track delta');
+    }
+    const persisted = await storage.transaction(async (txn) => {
+      const total = await txn.get(totalKey);
+      if (!total || !Number.isSafeInteger(total.count) || total.count < 0 ||
+          !Number.isSafeInteger(total.version) || total.version < 0) {
+        throw new Error('Track count not seeded from audited canonical baseline');
+      }
+      const previous = await txn.get(lastKey(uid));
+      if (previous) {
+        if (!Number.isSafeInteger(previous.revision) || previous.revision <= 0 ||
+            typeof previous.liked !== 'boolean' || !safeId(previous.id, 128)) {
+          throw new Error('Invalid durable per-user track revision');
+        }
+        if (previous.revision > revision) throw new Error('Superseded track delta');
+        if (previous.revision === revision) {
+          if (previous.id !== id || previous.liked !== liked ||
+              previous.previousLiked !== previousLiked || previous.delta !== delta) {
+            throw new Error('Conflicting durable track delta');
+          }
+          return { version: previous.version, count: previous.count, duplicate: true };
+        }
+        if (previous.liked !== previousLiked) {
+          throw new Error('Track delta pre-state differs from previously committed action');
+        }
+      }
+      const nextCount = total.count + delta;
+      if (!Number.isSafeInteger(nextCount) || nextCount < 0 ||
+          total.version >= Number.MAX_SAFE_INTEGER) {
+        throw new Error('Track count invalid or overflowed');
+      }
+      const version = total.version + 1;
+      await txn.put(totalKey, { count: nextCount, version });
+      await txn.put(lastKey(uid), {
+        id, revision, seq, previousLiked, liked, delta, count: nextCount, version,
+      });
+      return { version, count: nextCount, duplicate: false };
+    });
+    // The durable count was committed above. If this conditional R2 publish
+    // fails, 139 retains pending and repeats the SAME id. A later snapshot may
+    // supersede this event only if it proves >= the durable generation.
+    const published = await publishTrack({
+      ...event, count: persisted.count, generation: persisted.version,
+    });
+    if (published?.published !== true ||
+        !Number.isSafeInteger(published?.snapshotGeneration) ||
+        published.snapshotGeneration < persisted.version) {
+      throw new Error('Public track snapshot not confirmed after durable count');
+    }
+    return {
+      aggregateConfirmed: true, id, trackId, revision,
+      generation: persisted.version, count: persisted.count,
+      duplicate: persisted.duplicate,
+    };
+  }
+  return function commitAggregate147(event) {
+    const operation = tail.then(() => commit(event));
+    tail = operation.catch(() => {});
+    return operation;
+  };
+}

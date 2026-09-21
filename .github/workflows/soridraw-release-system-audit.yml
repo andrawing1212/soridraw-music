@@ -58,6 +58,7 @@ jobs:
           node --check cloudflare/explore-worker/patches/061-shared-social-r2-parity.mjs
           node --check cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs
           node --check cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs
+          node --check cloudflare/explore-worker/patches/082-like-d1only-route.mjs
           expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
           actual_worker_sha="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
           echo "CANONICAL_WORKER_EXPECTED_SHA256=$expected_worker_sha"
@@ -78,6 +79,7 @@ jobs:
           node scripts/verify-135-like-fenced-protocol.mjs
           node scripts/verify-171-d1only-schema.mjs
           node scripts/verify-172-d1only-adapter.mjs
+          node scripts/verify-172-d1only-route.mjs
           python3 scripts/verify-171-d1only-concurrency.py
           python3 scripts/verify-167-like-atomic-fence.py
           python3 scripts/verify-168-direct-atomic.py
@@ -204,6 +206,29 @@ jobs:
           hash169_after="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
           test "$hash169_before" = "$hash169_after"
           echo '081_BATCH_FREEZE_PATCH_IDEMPOTENT=PASS'
+
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/082-like-d1only-route.mjs
+          node --check "$replay078/worker.js"
+          REPLAY172="$replay078/worker.js" node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const source=fs.readFileSync(process.env.REPLAY172,'utf8');
+          assert.match(source,/SORIDRAW_LIKE_D1ONLY_ROUTE_172_20260921/);
+          const start=source.indexOf('async function handleLikeBatch034(');
+          const end=source.indexOf('\n}',start);
+          assert.ok(start>=0 && end>start);
+          const body=source.slice(start,end+2);
+          assert.match(body,/cutover172\.mode === 'd1only171'/);
+          assert.match(body,/createLikeD1OnlyCanonical171\(env\.DB, \{ cutoverVerified: true \}\)/);
+          assert.ok(body.indexOf("cutover172.mode === 'd1only171'") <
+            body.indexOf('await assertLegacyLikeIntakeOpen165(env)'));
+          assert.match(body,/personalLikeSnapshot: 'pending'/);
+          console.log('082_DEPLOYED_169_TO_172_REPLAY=PASS');
+          NODE
+          hash172_before="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          SORIDRAW_REMOTE_WORKER_DIR="$replay078" node cloudflare/explore-worker/patches/082-like-d1only-route.mjs
+          hash172_after="$(sha256sum "$replay078/worker.js" | awk '{print $1}')"
+          test "$hash172_before" = "$hash172_after"
+          echo '082_D1ONLY_ROUTE_PATCH_IDEMPOTENT=PASS'
 
           generated="$RUNNER_TEMP/soridraw-like-candidate-071"
           mkdir -p "$generated"

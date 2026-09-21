@@ -1,5 +1,47 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DD. app131 — PC↔모바일 좋아요 계정 동기화 정상 경로 복구 source 감사 PASS (2026-09-22 KST)
+
+**현재 preview HEAD 기준:** `c4097dab6b6fb7b7a87d37652491429178631b9a`.
+**제품 수정 기준:** `f6dbf81592bc64956525e4ac257ed944d50d9d41`.
+**최종 Release System Audit:** Run `35650903841` SUCCESS.
+
+실제 원인:
+- app119~120 비용 최적화 과정에서 기존 RTDB 계정 좋아요 동기화 경로가 비활성화됨.
+- 이후 app127~130에서는 서버 batch ACK 뒤에도 `settled` 상태를 받아야만 다른 기기에 좋아요를 알리도록 막혀 있었음.
+- 현재 PREVIEW Worker는 그 `settled` 값을 발행하지 않아, 한 기기에서 좋아요를 바꿔도 다른 기기는 자동으로 최신 상태를 받지 못할 수 있었음.
+
+app131 수정:
+- 30초 묶음 저장은 그대로 유지.
+- 서버 batch ACK가 성공한 계정 좋아요 0/1 상태는 public aggregate 정산을 기다리지 않고 UID 전용 RTDB 신호로 다른 기기에 전파.
+- 다른 기기는 해당 곡의 하트 + 숫자 + 내 좋아요를 같은 account state 이벤트로 반영.
+- canonical aggregate가 아직 늦게 반영되는 동안에는 기존 local display lock/snapshot pending 보호를 유지.
+- revision-conflict / ineligible 응답은 기존대로 최신 canonical 상태를 수용하며 잘못된 사용자 의도를 재전파하지 않음.
+- 원격 signal gap 복구 시 complete baseline뿐 아니라 partial baseline marker도 같이 무효화하여, partial legacy 계정에서도 다른 기기 변경을 다시 확인할 수 있게 수정.
+- 알림 실패 시 성공한 D1 batch를 다시 전송하지 않고 기존 RTDB retry 경로만 유지.
+- UI/CSS/반응형 변경 없음.
+
+검증:
+- TypeScript PASS
+- Build PASS
+- Static release verification PASS
+- Like candidate regression PASS
+- TEST / PRODUCTION Worker dry-run PASS
+- live shared D1 preflight read-only PASS
+- branch refs unchanged PASS
+- Audit Run `35650903841` SUCCESS
+
+비용/데이터:
+- 30초 sliding batch 유지.
+- Worker 제품 코드 변경 0.
+- D1 schema/migration/write 구조 변경 0.
+- 사용자 데이터 migration/backfill/delete 0.
+- Firebase Functions/Rules 변경 0.
+- TEST / PRODUCTION 변경 0.
+
+**실제 PREVIEW live는 아직 app130. app131은 배포 전이다.**
+
+
 ## 0DC. PREVIEW app130 — 모바일 최초 진입 좋아요 최신계정 revision 동기화 배포 완료 (2026-09-22 KST)
 
 **PREVIEW 배포 고정 commit:** `a045c7e5b12db22cc8153c29aee44d0ae3e296c2`.

@@ -41,19 +41,32 @@ const normalizeDdl = (sql) => cleanSql(sql)
 const migration171 = statementsFrom(fileURLToPath(
   new URL('../migrations/20260921_03_explore_like_d1only_v171_additive.sql', import.meta.url)
 ));
-const migration174 = statementsFrom(fileURLToPath(
+const migration174Path = fileURLToPath(
   new URL('../migrations/20260922_01_explore_like_cutover_control_v174_additive.sql', import.meta.url)
-));
+);
+const migration174Raw = cleanSql(readFileSync(migration174Path, 'utf8'));
+
+function extractMigrationObject174(kind, name) {
+  const startNeedle = kind === 'table'
+    ? 'CREATE TABLE IF NOT EXISTS ' + name
+    : 'CREATE TRIGGER IF NOT EXISTS ' + name;
+  const start = migration174Raw.indexOf(startNeedle);
+  if (start < 0) return '';
+  if (kind === 'table') {
+    const end = migration174Raw.indexOf('\n);', start);
+    return end >= 0 ? migration174Raw.slice(start, end + 3).trim() : '';
+  }
+  const next = migration174Raw.indexOf('CREATE TRIGGER IF NOT EXISTS ', start + startNeedle.length);
+  return migration174Raw.slice(start, next >= 0 ? next : migration174Raw.length).trim().replace(/;+\s*$/, '');
+}
 
 const expected = {
   relation: migration171.find((s) => /^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+explore_like_overrides_171\b/i.test(s)),
   count: migration171.find((s) => /^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+explore_like_count_deltas_171\b/i.test(s)),
-  control: migration174.find((s) => /^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+explore_like_cutover_control_174\b/i.test(s)),
+  control: extractMigrationObject174('table', LIKE_CUTOVER_CONTROL_TABLE_174),
   triggers: Object.fromEntries(LIKE_CUTOVER_CONTROL_TRIGGERS_174.map((name) => [
     name,
-    migration174.find((s) => new RegExp(
-      '^CREATE\\s+TRIGGER\\s+IF\\s+NOT\\s+EXISTS\\s+' + name + '\\b', 'i'
-    ).test(s)),
+    extractMigrationObject174('trigger', name),
   ])),
 };
 if (!expected.relation || !expected.count || !expected.control ||

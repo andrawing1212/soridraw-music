@@ -43,7 +43,28 @@ const functionRange = (name) => {
     if (start >= 0) break;
   }
   if (start < 0) throw new Error('[084/174] function missing: ' + name);
-  const brace = source.indexOf('{', start);
+  const openParen = source.indexOf('(', start);
+  if (openParen < 0) throw new Error('[084/174] function signature missing: ' + name);
+  let signatureEnd = -1;
+  let parenDepth = 0, signatureQuote = '', signatureEscaped = false, signatureComment = '';
+  for (let index = openParen; index < source.length; index += 1) {
+    const char = source[index], next = source[index + 1];
+    if (signatureComment === 'line') { if (char === '\n') signatureComment = ''; continue; }
+    if (signatureComment === 'block') { if (char === '*' && next === '/') { signatureComment = ''; index += 1; } continue; }
+    if (signatureQuote) {
+      if (signatureEscaped) signatureEscaped = false;
+      else if (char === '\\') signatureEscaped = true;
+      else if (char === signatureQuote) signatureQuote = '';
+      continue;
+    }
+    if (char === '/' && next === '/') { signatureComment = 'line'; index += 1; continue; }
+    if (char === '/' && next === '*') { signatureComment = 'block'; index += 1; continue; }
+    if ('"\'\`'.includes(char)) { signatureQuote = char; continue; }
+    if (char === '(') parenDepth += 1;
+    if (char === ')' && --parenDepth === 0) { signatureEnd = index; break; }
+  }
+  if (signatureEnd < 0) throw new Error('[084/174] function signature unterminated: ' + name);
+  const brace = source.indexOf('{', signatureEnd);
   if (brace < 0) throw new Error('[084/174] function body missing: ' + name);
   let depth = 0, quote = '', escaped = false, comment = '';
   for (let index = brace; index < source.length; index += 1) {

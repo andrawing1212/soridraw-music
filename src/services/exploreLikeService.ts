@@ -43,6 +43,10 @@ const EXPLORE_LIKE_BASELINE_127 = 'soridraw:explore:like-baseline:127';
 // 161: legacy v114 R2 may be truncated even below 2,000 after later unlikes.
 // This marker means the current R2 revision was observed but is NOT complete.
 const EXPLORE_LIKE_PARTIAL_BASELINE_161 = 'soridraw:explore:like-partial-baseline:161';
+// App127: when the legacy shared R2 bundle is incomplete, a bounded /v1/me/likes
+// response is still authoritative for the requested visible track IDs. Persist
+// only those verified IDs so clicks work without trusting stale legacy booleans.
+const EXPLORE_LIKE_TARGETED_VERIFIED_127 = 'soridraw:explore:like-targeted-verified:127';
 const EXPLORE_LIKE_SIGNAL_SEEN_127 = 'soridraw:explore:like-signal-seen:127';
 const EXPLORE_LIKE_SIGNAL_RETRY_127 = 'soridraw:explore:like-signal-retry:127';
 const EXPLORE_LIKE_SIGNAL_GAP_127 = 'soridraw:explore:like-signal-gap:127';
@@ -111,6 +115,7 @@ const signalRevisionByUid127 = new Map<string, number>();
 const signalPublishInFlight127 = new Map<string, Promise<void>>();
 const revisionCheckAtByUid127 = new Map<string, number>();
 const revisionCheckInFlight127 = new Map<string, Promise<void>>();
+const targetedVerifiedByUid127 = new Map<string, Set<string>>();
 
 const clampLikeCount = (value: unknown) => {
   const count = Number(value ?? 0);
@@ -234,10 +239,12 @@ export const readExploreTrackLikeMembership127 = (uid: string, trackId: string):
   if (pending) return pending.desiredLiked;
   const acceptedButNotMaterialized = readSnapshotPending127(uid);
   if (Object.prototype.hasOwnProperty.call(acceptedButNotMaterialized, id)) return acceptedButNotMaterialized[id];
-  // Do not allow a stale legacy-cache boolean to initiate a new mutation until
-  // the account's one-time authoritative R2 reconciliation has succeeded.
-  if (!baselineCompleted127.has(uid) &&
-      readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) !== '1') return undefined;
+  // A complete account snapshot is globally authoritative. If the legacy R2
+  // snapshot is partial, only IDs explicitly rechecked through the bounded
+  // /v1/me/likes endpoint may unlock a mutation.
+  const baselineReady = baselineCompleted127.has(uid) ||
+    readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1';
+  if (!baselineReady && !readTargetedVerifiedLikeTracks127(uid).has(id)) return undefined;
   return getLikedStateCache(uid).get(id);
 };
 
@@ -249,6 +256,44 @@ const readLikeLocal127 = (key: string) => {
 const writeLikeLocal127 = (key: string, value: string) => {
   if (typeof window === 'undefined') return;
   try { window.localStorage.setItem(key, value); } catch {}
+};
+
+const readTargetedVerifiedLikeTracks127 = (uid: string): Set<string> => {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return new Set<string>();
+  const cached = targetedVerifiedByUid127.get(normalizedUid);
+  if (cached) return cached;
+  const verified = new Set<string>();
+  try {
+    const raw = JSON.parse(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_127, normalizedUid)));
+    if (Array.isArray(raw)) {
+      raw.slice(-1000).forEach((value) => {
+        const id = String(value || '').trim();
+        if (id) verified.add(id);
+      });
+    }
+  } catch {}
+  targetedVerifiedByUid127.set(normalizedUid, verified);
+  return verified;
+};
+
+const persistTargetedVerifiedLikeTracks127 = (uid: string, verified: Set<string>) => {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return;
+  const bounded = [...verified].slice(-1000);
+  const next = new Set(bounded);
+  targetedVerifiedByUid127.set(normalizedUid, next);
+  writeLikeLocal127(
+    scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_127, normalizedUid),
+    JSON.stringify(bounded),
+  );
+};
+
+const clearTargetedVerifiedLikeTracks127 = (uid: string) => {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return;
+  targetedVerifiedByUid127.delete(normalizedUid);
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_127, normalizedUid), '');
 };
 // Accepted D1 queue != updated personal R2. Keep a UID-scoped override for
 // accepted tracks whose shared R2 CAS was not materialized; an older R2 read
@@ -287,6 +332,7 @@ const requestRepair127 = (uid: string, version: number) => {
   const target = Math.max(readRepairTarget127(uid), version);
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_TARGET_127, uid), String(target));
   baselineCompleted127.delete(uid);
+  clearTargetedVerifiedLikeTracks127(uid);
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '');
 };
 
@@ -494,6 +540,7 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
 export const invalidateExplorePersonalLikeBaseline127 = (uid: string) => {
   if (!uid) return;
   baselineCompleted127.delete(uid);
+  clearTargetedVerifiedLikeTracks127(uid);
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '');
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid), '');
 };
@@ -1169,7 +1216,16 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
   }
 
   const cache = getLikedStateCache(user.uid);
-  const missing = normalized.filter((trackId) => !cache.has(trackId));
+  const verified127 = readTargetedVerifiedLikeTracks127(user.uid);
+  const baselineReady127 = baselineCompleted127.has(user.uid) ||
+    readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, user.uid)) === '1';
+  const beforeOutbox127 = readLikeOutbox(user.uid);
+  const beforeUnresolved127 = readSnapshotPending127(user.uid);
+  const missing = normalized.filter((trackId) => {
+    if (beforeOutbox127[trackId] ||
+        Object.prototype.hasOwnProperty.call(beforeUnresolved127, trackId)) return false;
+    return !cache.has(trackId) || (!baselineReady127 && !verified127.has(trackId));
+  });
   if (missing.length) {
     const query = new URLSearchParams({ trackIds: missing.join(',') });
     const payload = await requestExploreLike(user, `/v1/me/likes?${query.toString()}`);
@@ -1178,18 +1234,19 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
         ? payload.data.likedTrackIds.map((trackId: unknown) => String(trackId || '').trim()).filter(Boolean)
         : [],
     );
-    // A response requested before an optimistic click (or before its intake
-    // ACK) is an older snapshot. It must not write through the local intent.
-    // Re-read the durable guards AFTER the awaited network request.
+    // A bounded /v1/me/likes result is exact for every requested ID even when
+    // the account-wide legacy R2 snapshot is partial. Re-read local mutation
+    // guards after the request; only untouched IDs become click-authoritative.
     const currentOutbox127 = readLikeOutbox(user.uid);
     const currentUnresolved127 = readSnapshotPending127(user.uid);
     for (const trackId of missing) {
       if (currentOutbox127[trackId] ||
           Object.prototype.hasOwnProperty.call(currentUnresolved127, trackId)) continue;
-      // Another local path may have already filled the same cache ID.
-      if (!cache.has(trackId)) cache.set(trackId, likedIds.has(trackId));
+      cache.set(trackId, likedIds.has(trackId));
+      verified127.add(trackId);
     }
     persistLikedStateCache(user.uid, cache);
+    persistTargetedVerifiedLikeTracks127(user.uid, verified127);
   }
 
   const outbox = readLikeOutbox(user.uid);

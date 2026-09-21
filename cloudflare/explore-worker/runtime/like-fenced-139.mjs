@@ -423,10 +423,19 @@ export function createLikeTrackAggregator147(trackId, storage, publishTrack) {
     const published = await publishTrack({
       ...event, count: persisted.count, generation: persisted.version,
     });
+    // Updating only a shared track card is NOT enough: recommended/latest,
+    // popular ordering and the owner's public profile may show an old count.
+    // Require a generation receipt for every existing public read surface.
+    const surfaces = published?.surfaceGenerations;
+    const allPublicSurfacesConfirmed = ['card', 'feed', 'profile'].every(
+      (scope) => Number.isSafeInteger(surfaces?.[scope]) &&
+        surfaces[scope] >= persisted.version
+    );
     if (published?.published !== true ||
         !Number.isSafeInteger(published?.snapshotGeneration) ||
-        published.snapshotGeneration < persisted.version) {
-      throw new Error('Public track snapshot not confirmed after durable count');
+        published.snapshotGeneration < persisted.version ||
+        !allPublicSurfacesConfirmed) {
+      throw new Error('All public like surfaces not confirmed after durable count');
     }
     return {
       aggregateConfirmed: true, id, trackId, revision,

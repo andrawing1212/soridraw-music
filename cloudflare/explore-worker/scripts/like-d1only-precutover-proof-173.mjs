@@ -58,6 +58,7 @@ export function evaluateD1OnlyPreCutoverProof173({
   secondObservation = {},
   drainManifest = null,
   workerEvidence = {},
+  approvedWorkerSha256 = '',
   observedAt = Date.now(),
   minQuiescenceMs = LIKE_PRECUTOVER_MIN_QUIESCENCE_MS_173,
 } = {}) {
@@ -115,6 +116,8 @@ export function evaluateD1OnlyPreCutoverProof173({
     drainArmedAt !== null && drainArmedAt > 0 &&
     drainAgeMs >= Number(minQuiescenceMs);
 
+  const approvedSha173 = clean(approvedWorkerSha256).toLowerCase();
+  const approvedShaReady173 = hexSha173(approvedSha173);
   const environments = ['preview', 'test', 'production'];
   const workerSha256ByEnvironment = {};
   const workerVersionByEnvironment = {};
@@ -129,7 +132,7 @@ export function evaluateD1OnlyPreCutoverProof173({
     workerSha256ByEnvironment[environment] = sha;
     workerVersionByEnvironment[environment] = versionId;
     workerMarkerReadyByEnvironment[environment] = markerReady;
-    if (!hexSha173(sha) || !versionId || !markerReady) allEnvironmentWorkerShaVerified = false;
+    if (!hexSha173(sha) || !versionId || !markerReady || !approvedShaReady173 || sha !== approvedSha173) allEnvironmentWorkerShaVerified = false;
   }
 
   const legacyIntakeClosed = drainManifestReady && allEnvironmentWorkerShaVerified;
@@ -152,6 +155,7 @@ export function evaluateD1OnlyPreCutoverProof173({
     queueStablePasses: 2,
     legacyProcessorIdle: true,
     allEnvironmentWorkerShaVerified: true,
+    approvedWorkerSha256: approvedSha173,
     workerSha256ByEnvironment,
     workerVersionByEnvironment,
     workerMarkerReadyByEnvironment,
@@ -171,7 +175,8 @@ export function evaluateD1OnlyPreCutoverProof173({
   if (!firstQueues.zero) reasons.push('legacy-queues-first-pass-not-zero');
   if (!secondQueues.zero) reasons.push('legacy-queues-second-pass-not-zero');
   if (!legacyProcessorIdle) reasons.push('legacy-processor-not-idle');
-  if (!allEnvironmentWorkerShaVerified) reasons.push('all-environment-worker-source-not-173-ready');
+  if (!approvedShaReady173) reasons.push('approved-worker-sha-missing');
+  if (!allEnvironmentWorkerShaVerified) reasons.push('all-environment-worker-source-not-exact-approved-173');
 
   return {
     ready,
@@ -192,6 +197,7 @@ export function evaluateD1OnlyPreCutoverProof173({
       firstProcessorIdle,
       secondProcessorIdle,
       allEnvironmentWorkerShaVerified,
+      approvedWorkerSha256: approvedSha173,
       workerSha256ByEnvironment,
       workerVersionByEnvironment,
       workerMarkerReadyByEnvironment,
@@ -398,20 +404,22 @@ async function readWorkerEvidence173() {
 
 function parseCli173(args) {
   let config = '';
+  let approvedWorkerSha256 = clean(process.env.SORIDRAW_APPROVED_WORKER_SHA256_173 || '');
   let secondPassMs = 1_500;
   let minQuiescenceMs = LIKE_PRECUTOVER_MIN_QUIESCENCE_MS_173;
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index];
     if (value === '--config') config = clean(args[++index]);
+    else if (value === '--approved-worker-sha256') approvedWorkerSha256 = clean(args[++index]).toLowerCase();
     else if (value === '--second-pass-ms') secondPassMs = Number(args[++index]);
     else if (value === '--min-quiescence-ms') minQuiescenceMs = Number(args[++index]);
-    else throw new Error('Usage: like-d1only-precutover-proof-173.mjs --config <wrangler.jsonc> [--second-pass-ms N] [--min-quiescence-ms N]');
+    else throw new Error('Usage: like-d1only-precutover-proof-173.mjs --config <wrangler.jsonc> --approved-worker-sha256 <sha256> [--second-pass-ms N] [--min-quiescence-ms N]');
   }
-  if (!config || !Number.isSafeInteger(secondPassMs) || secondPassMs < 0 ||
+  if (!config || !hexSha173(approvedWorkerSha256) || !Number.isSafeInteger(secondPassMs) || secondPassMs < 0 ||
       !Number.isSafeInteger(minQuiescenceMs) || minQuiescenceMs < LIKE_PRECUTOVER_MIN_QUIESCENCE_MS_173) {
     throw new Error('173 proof: invalid read-only preflight arguments');
   }
-  return { config: resolve(config), secondPassMs, minQuiescenceMs };
+  return { config: resolve(config), approvedWorkerSha256, secondPassMs, minQuiescenceMs };
 }
 
 const sleep = (ms) => new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
@@ -430,6 +438,7 @@ async function main173() {
     secondObservation,
     drainManifest,
     workerEvidence,
+    approvedWorkerSha256: options.approvedWorkerSha256,
     observedAt: Date.now(),
     minQuiescenceMs: options.minQuiescenceMs,
   });

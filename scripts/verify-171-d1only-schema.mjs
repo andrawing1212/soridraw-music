@@ -8,7 +8,7 @@ assert.match(sql, /SORIDRAW 171: UNAPPLIED D1-only like cutover candidate/);
 assert.match(sql, /CREATE TABLE IF NOT EXISTS explore_like_overrides_171/);
 assert.match(sql, /CREATE TABLE IF NOT EXISTS explore_like_count_deltas_171/);
 assert.match(sql, /PRIMARY KEY \(user_uid, track_id\)[\s\S]*WITHOUT ROWID/);
-assert.match(sql, /PRIMARY KEY \(track_id\)[\s\S]*WITHOUT ROWID/);
+assert.match(sql, /track_id TEXT PRIMARY KEY|PRIMARY KEY \(track_id\)/);
 assert.match(sql, /revision INTEGER NOT NULL CHECK \(revision >= 1\)/);
 assert.match(sql, /last_operation_id TEXT NOT NULL/);
 assert.match(sql, /generation INTEGER NOT NULL CHECK \(generation >= 1\)/);

@@ -185,6 +185,72 @@ jobs:
           fi
           echo 'SANITIZED_READONLY_PROOF_COMMITTED=PASS'
 
+      - name: One-time bounded replay of already-accepted 069 batches
+        if: ${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'repair(preview): one-time supervised like queue replay') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
+          deployment_api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/deployments"
+          schedule_api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules"
+          auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+          active="$(curl -fsS -H "$auth" "$deployment_api" | jq -er '.result.deployments[0].versions | max_by(.percentage) | select(.percentage >= 99.99) | .version_id')"
+          test "$active" = '733c3981-4095-4c69-bf33-9abb5de7a450'
+          grep -Fq 'SORIDRAW_EXPLORE_LIKE_EVENT_BATCH_103_20260916' cloudflare/explore-worker/canonical/preview-entry.js
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT COUNT(*) AS pending, COALESCE(SUM(mutation_count),0) AS changes
+            FROM explore_like_batches_069;
+            SELECT lease_until FROM explore_like_processor_035 WHERE id=1;
+          " --json > "$RUNNER_TEMP/pre-replay.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const results=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/pre-replay.json','utf8')).flatMap(x=>x.results||[]);
+          const q=results.find(x=>'pending' in x)||{};
+          const lease=results.find(x=>'lease_until' in x)||{};
+          const n=Number(q.pending||0),m=Number(q.changes||0);
+          console.log('REPLAY_PREFLIGHT pending_batches='+n+' pending_mutations='+m);
+          if(n<1||n>20||m<1||m>100)throw Error('Unsafe pending batch count for bounded replay');
+          if(Number(lease.lease_until||0)>Date.now())throw Error('Existing aggregate processor lease still active');
+          NODE
+          old_schedules="$(curl -fsS -H "$auth" "$schedule_api" | jq -c '.result.schedules // [] | map({cron})')"
+          test "$old_schedules" = '[]'
+          printf '%s' "$old_schedules" > "$RUNNER_TEMP/preview-schedule-before.json"
+          restore=0
+          restore_original() {
+            status=$?
+            trap - EXIT
+            if [ "$restore" = 1 ]; then
+              if ! curl -fsS -X PUT -H "$auth" -H 'Content-Type: application/json' --data-binary @"$RUNNER_TEMP/preview-schedule-before.json" "$schedule_api" > "$RUNNER_TEMP/schedule-restore.json"; then
+                echo 'PREVIEW_CRON_RESTORE=FAIL' >&2
+                exit 1
+              fi
+              if ! jq -e '.success == true' "$RUNNER_TEMP/schedule-restore.json" >/dev/null; then
+                echo 'PREVIEW_CRON_RESTORE_RESPONSE=FAIL' >&2
+                exit 1
+              fi
+              echo 'PREVIEW_CRON_RESTORED=PASS'
+            fi
+            exit "$status"
+          }
+          trap restore_original EXIT
+          restore=1
+          printf '[{"cron":"* * * * *"}]' > "$RUNNER_TEMP/preview-queue-rescue-cron.json"
+          curl -fsS -X PUT -H "$auth" -H 'Content-Type: application/json' --data-binary @"$RUNNER_TEMP/preview-queue-rescue-cron.json" "$schedule_api" > "$RUNNER_TEMP/rescue-cron-result.json"
+          jq -e '.success == true' "$RUNNER_TEMP/rescue-cron-result.json" >/dev/null
+          echo 'PREVIEW_CRON_TEMPORARY_ONE_MINUTE=PASS'
+          remaining=999
+          for attempt in 1 2 3; do
+            sleep 75
+            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS remaining FROM explore_like_batches_069" --json > "$RUNNER_TEMP/replay-count.json"
+            remaining="$(node -e "let x=require(process.env.RUNNER_TEMP+'/replay-count.json');process.stdout.write(String(Number(x.flatMap(y=>y.results||[])[0]?.remaining??999)))")"
+            echo "CANONICAL_QUEUE_REPLAY_ATTEMPT=$attempt REMAINING=$remaining"
+            if [ "$remaining" = 0 ]; then break; fi
+          done
+          test "$remaining" = 0
+          echo 'CANONICAL_QUEUE_069_DRAINED=PASS'
+          echo 'Note: processing used existing Worker scheduled handler, not a direct data migration or custom data rewrite.'
+
       - name: Probe current PREVIEW feed payload for recent like
         shell: bash
         run: |

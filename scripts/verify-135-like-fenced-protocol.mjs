@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 
 // ISOLATED PROTOCOL SIMULATION ONLY. No real Cloudflare Durable Object or D1.
@@ -798,4 +798,64 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('149_CROSS_ACCOUNT_PUBLIC_COUNT_AND_PERSONAL_HEART_MODEL=PASS');
   console.log('149_LEGACY_READER_UNCHANGED_COUNT_RELEASE_GATE=FAIL');
   console.log('149_REAL_SHARED_WORKERS_D1_BILLING=NOT_VERIFIED');
+}
+
+
+// 151: real shared-track-card-v115 CAS adapter, not a claim about public Feed
+// or profile. It refuses cold, broken, conflicting and unsafely reset bundles.
+{
+  let stored = { schemaVersion: 1, trackId: 'song', updatedAt: 1,
+    card: { id: 'song', title: 'existing-title', likeCount: 5,
+      stats: { likeCount: 5, playCount: 17 } }, keepLegacy: 'untouched' };
+  let revision = 1, writes = 0, forceConflict = false;
+  const bucket = {
+    get snapshot() { return structuredClone(stored); },
+    get writes() { return writes; },
+    conflictOnce() { forceConflict = true; },
+    async get(key) {
+      assert.equal(key, 'internal/explore/shared-track-card-v115/song.json');
+      if (!stored) return null;
+      const body = JSON.stringify(stored), etag = String(revision);
+      return { etag, text: async () => body };
+    },
+    async put(key, body, options) {
+      assert.equal(key, 'internal/explore/shared-track-card-v115/song.json');
+      if (forceConflict) { forceConflict = false; return null; }
+      if (options?.onlyIf?.etagMatches !== String(revision)) return null;
+      stored = JSON.parse(body);
+      revision++;
+      writes++;
+      return { etag: String(revision) };
+    },
+  };
+  const publish = createLikeSharedTrackCardPublisher151(bucket);
+  const evt = (count,generation,delta) => ({trackId:'song',count,generation,delta});
+  const first = await publish(evt(6,1,1));
+  assert.equal(first.published,true);
+  assert.equal(first.surface,'card');
+  assert.equal(bucket.snapshot.card.likeCount,6);
+  assert.equal(bucket.snapshot.card.stats.likeCount,6);
+  assert.equal(bucket.snapshot.card.stats.playCount,17);
+  assert.equal(bucket.snapshot.card.title,'existing-title');
+  assert.equal(bucket.snapshot.keepLegacy,'untouched');
+  const beforeDuplicate = writes;
+  assert.equal((await publish(evt(6,1,1))).duplicate,true);
+  assert.equal(writes,beforeDuplicate);
+  await assert.rejects(publish(evt(100,1,1)),/Conflicting shared card/);
+  assert.equal((await publish(evt(6,0,1)).catch(e => String(e).includes('Invalid canonical'))), true);
+  bucket.conflictOnce();
+  assert.equal((await publish(evt(7,2,1))).published,true);
+  assert.equal(bucket.snapshot.card.likeCount,7);
+  assert.equal((await publish(evt(6,1,1))).superseded,true);
+  assert.equal(bucket.snapshot.card.likeCount,7);
+  stored = null;
+  await assert.rejects(publish(evt(8,3,1)), /missing/);
+  assert.equal(writes,2);
+  stored = {schemaVersion:1,trackId:'song',card:{id:'song',likeCount:1}};
+  await assert.rejects(publish(evt(8,3,1)), /generation missing/);
+  await assert.rejects(publish(evt(8,1,1)), /baseline differs/);
+  assert.equal(writes,2);
+  console.log('151_SHARED_TRACK_CARD_ETAG_CAS_AND_LEGACY_FIELDS=PASS');
+  console.log('151_COLD_BASELINE_CONFLICT_AND_STALE_FAIL_CLOSED=PASS');
+  console.log('151_FEED_POPULAR_PROFILE_SURFACES=NOT_CONNECTED');
 }

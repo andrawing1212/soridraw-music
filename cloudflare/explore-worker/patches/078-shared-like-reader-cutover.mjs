@@ -6,11 +6,13 @@ if (!remoteDir) throw new Error('SORIDRAW_REMOTE_WORKER_DIR is required.');
 const workerPath = join(remoteDir, 'worker.js');
 let source = readFileSync(workerPath, 'utf8');
 
-const marker = 'SORIDRAW_SHARED_LIKE_READER_CUTOVER_072_20260921';
+const marker = 'SORIDRAW_SHARED_LIKE_READER_CUTOVER_078_20260921';
 const marker161 = 'SORIDRAW_SHARED_LIKE_READER_FIRST_161_20260921';
 const marker162 = 'SORIDRAW_SHARED_LIKE_CUTOVER_GATE_162_20260921';
-if (source.includes(marker) && source.includes(marker161) && source.includes(marker162)) {
-  console.log('[072] shared like reader cutover already applied.');
+const marker163 = 'SORIDRAW_LEGACY_LIKE_WRITER_FREEZE_GUARD_163_20260921';
+const hasReaders = source.includes(marker161) && source.includes(marker162);
+if (hasReaders && source.includes(marker163)) {
+  console.log('[078/163] shared like reader cutover and legacy-writer freeze already applied.');
   process.exit(0);
 }
 
@@ -207,6 +209,7 @@ async function readRequestedLikedTrackCardsD1161(env, trackIds) {
 }
 `;
 
+if (!hasReaders) {
 const insertBefore = functionRange('readSharedLikes061').start;
 source = source.slice(0, insertBefore) + readerHelpers + '\n' + source.slice(insertBefore);
 
@@ -344,16 +347,72 @@ replaceFunction('handleMyLikedTracks052', `async function handleMyLikedTracks052
   } }, 200, cors);
 }`);
 
+}
+
+// 163: after the shared marker is fully armed, the old likes/track_stats
+// writers must be physically blocked. This patch never creates the marker.
+if (!source.includes(marker163)) {
+  const stateRange = functionRange('readLikeCutoverState162');
+  const guard = `
+
+// ${marker163}
+async function assertLegacyLikeWriterOpen163(env, writerName) {
+  const state = await readLikeCutoverState162(env);
+  if (state?.mode === 'overlay157') {
+    throw new Error('[SORIDRAW 163] legacy like writer frozen after shared cutover: ' + String(writerName || 'unknown'));
+  }
+  if (!state || state.mode !== 'legacy') {
+    throw new Error('[SORIDRAW 163] shared cutover state unavailable');
+  }
+  return state;
+}
+`;
+  source = source.slice(0, stateRange.end) + guard + source.slice(stateRange.end);
+}
+
+{
+  const range = functionRange('handleLikeD1Core');
+  if (!range.text.includes('assertLegacyLikeWriterOpen163')) {
+    const anchor = '  await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);\n';
+    if (range.text.split(anchor).length !== 2) throw new Error('[078/163] direct like guard anchor changed');
+    replaceFunction('handleLikeD1Core',
+      range.text.replace(anchor, anchor + "  await assertLegacyLikeWriterOpen163(env, 'direct-like');\n"));
+  }
+}
+
+{
+  const range = functionRange('processExploreLikeBatches035Core056');
+  if (!range.text.includes('assertLegacyLikeWriterOpen163')) {
+    const anchor = "  const owner = 'like042_' + now + '_' + crypto.randomUUID();\n";
+    if (range.text.split(anchor).length !== 2) throw new Error('[078/163] aggregate guard anchor changed');
+    replaceFunction('processExploreLikeBatches035Core056', range.text.replace(
+      anchor,
+      "  // Guard only after the existing queue preflight proves actual pending work.\n" +
+      "  await assertLegacyLikeWriterOpen163(env, 'scheduled-like-aggregate');\n\n" + anchor
+    ));
+  }
+}
+
+{
+  const range = functionRange('refreshLikeCount');
+  if (!range.text.includes('assertLegacyLikeWriterOpen163')) {
+    const anchor = 'async function refreshLikeCount(env, trackId, now) {\n';
+    replaceFunction('refreshLikeCount',
+      range.text.replace(anchor, anchor + "  await assertLegacyLikeWriterOpen163(env, 'refresh-like-count');\n"));
+  }
+}
+
 for (const required of [
-  marker, marker161, marker162,
+  marker, marker161, marker162, marker163,
   'normalizeSharedLikesState161',
   'readSharedLikesState161',
   'readBoundedLegacyLikeMemberships161',
   'readLikeCutoverState162',
   'readBoundedEffectiveLikeMemberships162',
   'readRequestedLikedTrackCardsD1161',
+  'assertLegacyLikeWriterOpen163',
 ]) {
   if (!source.includes(required)) throw new Error('[072] final runtime missing: ' + required);
 }
 writeFileSync(workerPath, source, 'utf8');
-console.log('[072] Shared like readers now distinguish exact/partial R2 and switch visible membership to baseline+override only through one shared armed cutover marker.');
+console.log('[078/163] Shared like readers are cutover-gated and all legacy relation/count writer entry paths freeze after the shared marker is armed.');

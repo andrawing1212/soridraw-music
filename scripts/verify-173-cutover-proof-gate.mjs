@@ -17,6 +17,7 @@ for (const required of [
   "proof172?.countTable === 'explore_like_count_deltas_171'",
   "proof172?.ownerProtocol === 'd1-only-171'",
   "proof172?.drainQuiescenceMs) >= 30000",
+  "approvedWorkerSha256",
   "workerSha256ByEnvironment",
   "workerVersionByEnvironment",
   "workerMarkerReadyByEnvironment",
@@ -53,9 +54,10 @@ const drain = {
   drainToken: 'proof-token',
   armedAt: now - 35_000,
 };
-const evidence = Object.fromEntries(['preview','test','production'].map((stage, index) => [stage, {
+const approvedWorkerSha256 = 'b'.repeat(64);
+const evidence = Object.fromEntries(['preview','test','production'].map((stage) => [stage, {
   versionId: stage + '-v',
-  sha256: String(index + 1).repeat(64),
+  sha256: approvedWorkerSha256,
   markers: [...LIKE_PRECUTOVER_REQUIRED_WORKER_MARKERS_173],
 }]));
 const result = evaluateD1OnlyPreCutoverProof173({
@@ -64,10 +66,12 @@ const result = evaluateD1OnlyPreCutoverProof173({
   secondObservation: zero,
   drainManifest: drain,
   workerEvidence: evidence,
+  approvedWorkerSha256,
   observedAt: now,
 });
 assert.equal(result.ready, true);
 assert.equal(result.proof.proofAuthority, 'release-controller-173');
+assert.equal(result.proof.approvedWorkerSha256, approvedWorkerSha256);
 assert.equal(result.proof.queueStablePasses, 2);
 assert.equal(result.proof.legacyProcessorIdle, true);
 assert.equal(result.proof.d1OnlyHotSecondaryIndexes, 0);
@@ -80,6 +84,6 @@ for (const stage of ['preview','test','production']) {
 
 console.log('173_CUTOVER_FINAL_GATE_REQUIRES_CONTROLLER_PROOF=PASS');
 console.log('173_CUTOVER_FINAL_GATE_REQUIRES_TWO_ZERO_PASSES_IDLE=PASS');
-console.log('173_CUTOVER_FINAL_GATE_REQUIRES_ALL_ENV_SOURCE_SHA=PASS');
+console.log('173_CUTOVER_FINAL_GATE_REQUIRES_ALL_ENV_EXACT_APPROVED_SOURCE_SHA=PASS');
 console.log('173_CUTOVER_FINAL_GATE_REQUIRES_30S_QUIESCENCE=PASS');
 console.log('173_CUTOVER_FINAL_GATE_REQUIRES_EXACT_171_SCHEMA_NO_HOT_INDEX=PASS');

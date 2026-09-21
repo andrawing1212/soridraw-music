@@ -1,5 +1,15 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 0CG — 146/147/149 단일 좋아요 관계 + 곡별 영속 집계 후보까지 실제 코드 구현 (2026-09-21 KST)
+
+새 파일 없이 `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 `createLikeRelationOnly146(db,commitAggregate)`와 `createLikeTrackAggregator147(trackId,storage,publishTrack)` 구현. 139이 사전 확정 membership/operation ID/revision/seq 전달; 146이 **likes 관계만 D1 batch로 변경**, 원본 count/derived 실시간 트리거 호출을 의도적으로 제거한 후보. D1 확정 후 147이 정확한 미리 검증된 곡별 초기 count에 대한 UID별 revision/idempotent delta를 트랜잭션 안에서 기록, 버전부여 공개 R2 갱신 증명을 받은 뒤에야 139 개인 R2 확정. 실제 DO/DB 공통 바인딩에 미연결. 기존 135 실행형 테스트에 146/147/149 검증 추가: 애매한 D1 응답, 공개 R2 장애, 다른 사용자 동일곡, 뒤늦은 요청, 곡 total 미시드, 잘못된 사전 membership 등 격리 PASS. 134 격리 SQLite 148은 원본 likes 단독 논리 좋아요1/중복0/해제1, **구형 track_stats 및 derived 숫자 미갱신**을 명시적 release FAIL로 검증. 별도 in-memory SQLite 결과 6/6 대 1/0/1 재확인; D1 인덱스 과금과는 별개. 0CG 현재 상태 문서 참조.
+
+**실제 배포 후보까지 필수 순서:**
+1. 공유 D1 live sqlite_schema READ-ONLY 확인 및 격리 D1에서 기존 likes 실제 인덱스 포함 meta.rows_written W1~W2 측정. 결과 W3+면 relation-only도 실패, 단일 PK/인덱스 최소화 대체를 별도 격리 검증. 인덱스 삭제로 검색/개인조회 full scan 허용하지 않음.
+2. 각 곡의 기존 track_stats 값을 건드리지 않고 정확한 초기 총수 검증/영속 count 시드 설계(승인된 제한된 테스트 데이터 우선) 및 구형 reader의 track_stats/derived 숫자 접근을 하위호환으로 전환. 원본 전체 백필·migration·트리거 DROP은 승인 전 실행 금지.
+3. TEST/PRODUCTION 구형 모든 공유 D1/R2 writer를 새 143 UID owner·147 곡별 owner에 우회 없이 연결할 단계별 계획. 사용자 승인 없는 PRODUCTION 변경 금지. 실제 인증 HTTP 서비스 바인딩, 141 개인 R2, 공개 Feed/프로필의 부분 갱신과 RTDB 신호, 기존 2천 곡 좋아요 캐시 확장까지 묶어 검증.
+4. D1 절감뿐 아니라 147의 UID별 영속 기록·총수 행·DO 실행·R2 추가 API 총비용을 10만 사용자 기준 측정. 전체 TS/Build/실제 Worker 검증/Work 독립 감사/PC↔모바일 실사용 후 PREVIEW 출시 판단. W1~W2 또는 핵심 기능 하나라도 미달 시 배포 중단.
+
 ## 최신 145 — D1 쓰기 행 폭증 원인 확정 / 실서비스 계량 전 새 Worker 배포 금지 (2026-09-21 KST)
 
 사용자 "왜 2행 이상인지 세계 전체를 뒤져서라도 정확히 알아보고 방법을 찾아봐" 요청. DOCS/LIKE_WRITE_REDESIGN_133.md 145에서 원인별 SQL·실무 문헌·실행계획을 고정. **현재 069 queue INSERT/DELETE 논리 2 + likes/track_stats 논리 2 + 032/033 derived_tracks/global seq/Feed journal/profile journal 논리 4 = 격리 합성 8**. 큐 없는 140에도 파생 트리거 때문에 격리 논리 6. 실제 D1 rows_written는 인덱스 변경까지 청구하므로 반드시 따로 측정해야 함. 기존 트리거·인덱스를 유지하고 SQL batch로 묶는 접근은 W2 후보에서 제외.

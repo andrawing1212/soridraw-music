@@ -1,5 +1,29 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — PREVIEW 앱127 + Worker173/174 실사용 검증 후 D1-only 최종 전환 준비
+
+현재 실제 PREVIEW:
+- 앱127 Hosting Run `35632767964` SUCCESS
+- Worker173/174 Run `35631742053` SUCCESS
+- 최종 감사 Run `35632451095` SUCCESS
+- active PREVIEW Worker `f3c66d58-8e24-4eaa-923c-f61fe369e36f`
+- 171 migration / cutover marker는 아직 미적용·미활성
+
+다음 순서:
+1. 사용자 실사용으로 PC↔모바일 동일 계정 하트/숫자 수렴, 업데이트 후 기존 상태 유지, 좋아요→해제→좋아요 반복을 확인한다.
+2. 이상이 없으면 171 additive schema 적용 전 read-only preflight를 다시 실행한다.
+3. PREVIEW에만 171 schema를 안전하게 준비하고, legacy queue/drain/processor idle proof를 확인한다.
+4. 실제 W2 D1-only cutover는 별도 고정 commit과 proof가 모두 PASS일 때만 arm한다.
+5. TEST/PRODUCTION은 사용자 승격 승인 전 변경 금지.
+
+절대 유지:
+- UI/CSS/반응형 비변경.
+- 30초 좋아요 묶음 처리 유지.
+- 사용자 원본 데이터 backfill/복제/대량변환 금지.
+- 변경 없음 재진입 D1/Firestore read 0 목표.
+- 실제 변경 D1 rows_written W1~W2 hard gate.
+
+
 ## 현재 최우선 — 173 generation-safe R2 publication + preCutoverProof172 controller (source-only)
 
 170~172 기준은 `CURRENT_RELEASE_STATE.md` 0CV. exact code audit `32795d33710a8f0f3bec6d280a2fd3f740232bb4`, [run 35616444369](https://github.com/andrawing1212/soridraw-music/actions/runs/35616444369) **SUCCESS**. 실제 ephemeral remote D1에서 171 D1-only relation+count candidate가 **변경 W2 / 중복 W0**를 확인했고, 172 제품 batch route는 schema-v2 shared manifest 뒤에 dormant 상태로 연결되어 있다. 실제 Worker 배포/171 migration/R2 marker 변경 없음.

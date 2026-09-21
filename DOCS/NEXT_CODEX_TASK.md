@@ -1,5 +1,25 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app131 실사용 PC↔모바일 좋아요 자동 동기화 확인
+
+현재 실제 PREVIEW:
+- app131 Hosting Run `35651254609` SUCCESS.
+- remote app version 131 / exact build PASS.
+- TEST / PRODUCTION unchanged.
+- Worker / D1 / 사용자 원본 데이터 비변경.
+
+사용자 확인:
+1. PC 또는 모바일에서 좋아요/해제.
+2. 마지막 클릭 후 30초 뒤 다른 기기에서 새로고침 없이 자동 반영.
+3. 같은 곡의 하트·숫자·내 좋아요가 함께 일치.
+4. 페이지 이동이나 탭 왕복을 해야만 맞으면 FAIL.
+5. 통과 전 추가 비용 최적화/171 cutover/TEST/PRODUCTION 금지.
+
+운영:
+- 이후 사용자가 수정 지시를 하면, 사전검사 PASS이고 PREVIEW 배포 안전 상태면 같은 흐름에서 PREVIEW 배포까지 자동 진행.
+- 사용자가 명시적으로 배포 금지/소스만 수정이라고 한 경우만 예외.
+
+
 ## 현재 최우선 — app131 PREVIEW 배포 후 PC↔모바일 좋아요 자동 동기화 검증
 
 현재:

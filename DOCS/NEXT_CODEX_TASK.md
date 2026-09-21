@@ -1,5 +1,19 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 153 실측 기준 — user-first WITHOUT ROWID 좋아요 W2 / 구형 공유 writer 전환 (2026-09-21 KST)
+
+사용자의 격리 D1 비용 확인 및 실제 구현 요청을 수행. GitHub Actions [35563388506](https://github.com/andrawing1212/soridraw-music/actions/runs/35563388506), [35563565716](https://github.com/andrawing1212/soridraw-music/actions/runs/35563565716)에서 각각 **신규 임시 Cloudflare 원격 D1 생성→synthetic 좋아요·해제 meta.rows_written 측정→DB 삭제까지 PASS**. 상세 표 `DOCS/LIKE_WRITE_REDESIGN_133.md` §153. 기존 rowid+PK+두 index+051 트리거 W5 좋아요, W2 해제. **사용자 우선 `WITHOUT ROWID PRIMARY KEY(user_uid,track_id)` + 최근 조회 인덱스 1개는 W2 좋아요, W1 해제, 중복 W0이며 UID index search 유지**. 추가 인덱스 없는 동일 PK는 W1/W1이나 최근 순서 인덱스 부재. 섣불리 기존 likes의 index만 DROP하지 말 것.
+
+새 미적용 추가형 migration `cloudflare/explore-worker/migrations/20260921_01_explore_likes_v153_additive.sql`, 새 code path `createLikeRelationOnly146(...,{relationTable:'explore_likes_153',cutoverVerified:true})`, 기존 135 격리 검사 153 분기. 실제 Cloudflare 공유 DB에 해당 테이블이 아직 없으며 cutover flag는 **실제 승인·데이터 전환의 증빙이 아님**. 현 Worker071 및 TEST/PRODUCTION 구형 reader/writer·051 global revision을 우회하면 기존 개인 좋아요가 누락될 수 있으므로 단독 배포 금지.
+
+**다음 개발자의 구체적 완성 순서:**
+1. 먼저 shared D1의 실제 원본 좋아요와 실사용 캐시를 **READ-ONLY**로 비교해 legacy writer 목록·새 user-first 질의·공개곡 단일 count의 복구 설계를 고정. 신규 v153에 기존 사용자 좋아요를 옮기는 backfill, schema 실제 적용, D1 원본/trigger/index 변경은 명확한 변경범위·복구계획 승인 전 실행 금지. 소수 테스트 계정/flag 검증 우선.
+2. 세 환경의 기존 D1/R2 writer와 reader가 새 153 canonical에 단일 owner를 거쳐 순차 수렴하도록 하위호환 단계 설계/구현. 051 global revision은 값만 사라지면 기존 사용자/캐시가 감지 못하므로 기능등가 변경신호가 필요. 곡별 147 counter의 기존 track_stats 검증 시드, Feed/latest/popular/profile 부분 갱신, 141 개인 좋아요 2천+ 분할과 RTDB 알림을 함께 검증할 것.
+3. 승인된 별도 isolated test resources에서 실제 153 adapter가 SQL batch/DO/R2를 통해 W2 및 10만 사용자 총비용을 재현하는지 확인. 다 기기 역순·공개/비공개/재공개·동일 곡 여러 사용자·old Worker 병존/복구 검증. 기존 데이터 대량변환 또는 파괴적 migration은 절대 자동 실행하지 않음.
+4. exact commit TS/Build/기능 검증/Work 감사/실주소 PREVIEW 검증. TEST/PRODUCTION 승격은 사용자의 단계별 승인에 따름.
+
+**금지:** 최신 원격 실측 W2를 서비스 전체 비용 PASS로 혼동 금지. 추가형 SQL을 앱127/Worker 후보와 함께 먼저 배포하는 방식 금지. W3+가 나오면 이전 구조로 되돌리거나 비용/호환성 원인 해결 전 승격 중지. 신규 임시 D1 측정은 기존 감사 Workflow에 명시적으로만 통합되며 모든 push에서 자동 생성하지 않음.
+
 ## 최신 0CI — 실제 Audit 성공 / 운영 D1 W2 구조 충돌 확정 (2026-09-21 KST)
 
 이번 턴에 `preview` 실제 회귀 검증 문제를 수정: `scripts/verify-127-atomic-personal-like.mjs`의 export 혼입으로 GitHub run 35561196390 및 35561748160 FAIL하던 문제를 고침. GitHub Actions read-only run `35561894019` `9001e19c1658475b181ae7571324f537ed76133d` **SUCCESS**: TypeScript, Build, 127/128/135~152 격리 회귀, 132/133/134/148 write 모형, TEST/PRODUCTION Worker dry-run, 공유 D1 read-only preflight 전부 PASS. 후속 run `35562080167` `c2dfd3bc69c3eabd0f165b3e49c6418ff7da7c13` **SUCCESS**에서 실제 공유 D1 `likes` DDL까지 확인:

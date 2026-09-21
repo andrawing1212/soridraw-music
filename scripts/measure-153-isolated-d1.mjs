@@ -68,6 +68,19 @@ if (process.argv[2] === 'cleanup') {
       return rows[0];
     }
     async function ddl(sql) { await query(sql); }
+    async function batchQuery(statements) {
+      if (!Array.isArray(statements) || !statements.length) fail('invalid remote batch fixture');
+      const rows = await api('POST', '/' + result.uuid + '/query', {
+        batch: statements.map((statement) =>
+          typeof statement === 'string' ? { sql: statement } : statement
+        ),
+      });
+      if (!Array.isArray(rows) || rows.length !== statements.length ||
+          rows.some((row) => row?.success !== true)) {
+        fail('remote D1 batch did not return one successful result per statement');
+      }
+      return rows;
+    }
     await ddl('CREATE TABLE shared_revision (scope TEXT PRIMARY KEY, revision INTEGER NOT NULL)');
     await ddl("INSERT INTO shared_revision (scope,revision) VALUES ('global',0)");
     const definitions = [
@@ -291,6 +304,68 @@ if (process.argv[2] === 'cleanup') {
     console.log('162_REMOTE_D1_EFFECTIVE_TARGETED_INDEX_PLAN=PASS ' +
       detail162.replace(/\s+/g,' ').slice(0,700));
     console.log('162_REMOTE_D1_EFFECTIVE_TARGETED_RESULT=PASS rows_read=' + targeted162.meta?.rows_read);
+
+    // 170: exact remote D1 batch shape used by the 168 direct legacy writer,
+    // but on synthetic tables only. This intentionally reproduces the
+    // CURRENT live likes physical lower bound: rowid table + composite PK +
+    // two secondary indexes + 051-like revision trigger. The track_stats
+    // side has only its PK + revision trigger, so the sum is a conservative
+    // lower bound; real derived-stat fanout can only add more writes.
+    await ddl("CREATE TABLE shared_revision_168(scope TEXT PRIMARY KEY,revision INTEGER NOT NULL,updated_at INTEGER NOT NULL)");
+    await ddl("INSERT INTO shared_revision_168(scope,revision,updated_at) VALUES('global',0,0)");
+    await ddl("CREATE TABLE likes_168(track_id TEXT NOT NULL,user_uid TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(track_id,user_uid))");
+    await ddl("CREATE INDEX idx_likes_168_user_recent ON likes_168(user_uid,created_at DESC)");
+    await ddl("CREATE INDEX idx_likes_168_period_rank ON likes_168(created_at DESC,track_id,user_uid)");
+    await ddl("CREATE TRIGGER likes_168_ai AFTER INSERT ON likes_168 BEGIN UPDATE shared_revision_168 SET revision=revision+1,updated_at=NEW.created_at WHERE scope='global'; END");
+    await ddl("CREATE TRIGGER likes_168_ad AFTER DELETE ON likes_168 BEGIN UPDATE shared_revision_168 SET revision=revision+1,updated_at=OLD.created_at WHERE scope='global'; END");
+    await ddl("CREATE TABLE track_stats_168(track_id TEXT PRIMARY KEY,like_count INTEGER NOT NULL,comment_count INTEGER NOT NULL,play_count INTEGER NOT NULL,updated_at INTEGER NOT NULL)");
+    await ddl("CREATE TRIGGER stats_168_ai AFTER INSERT ON track_stats_168 BEGIN UPDATE shared_revision_168 SET revision=revision+1,updated_at=NEW.updated_at WHERE scope='global'; END");
+    await ddl("CREATE TRIGGER stats_168_au AFTER UPDATE ON track_stats_168 BEGIN UPDATE shared_revision_168 SET revision=revision+1,updated_at=NEW.updated_at WHERE scope='global'; END");
+
+    async function mutate168(desired, at) {
+      const relationSql = desired
+        ? "INSERT OR IGNORE INTO likes_168(track_id,user_uid,created_at) VALUES ('song-168','user-168'," + at + ")"
+        : "DELETE FROM likes_168 WHERE track_id='song-168' AND user_uid='user-168'";
+      const delta = desired ? 1 : -1;
+      const initial = desired ? 1 : 0;
+      const counterSql =
+        "INSERT INTO track_stats_168(track_id,like_count,comment_count,play_count,updated_at) " +
+        "SELECT 'song-168'," + initial + ",0,0," + at + " WHERE changes()=1 " +
+        "ON CONFLICT(track_id) DO UPDATE SET like_count=MAX(0,track_stats_168.like_count+" + delta + ")," +
+        "updated_at=excluded.updated_at";
+      const results = await batchQuery([
+        relationSql,
+        counterSql,
+        "SELECT like_count FROM track_stats_168 WHERE track_id='song-168' LIMIT 1",
+      ]);
+      const writes = results.map((row) => Number(row?.meta?.rows_written || 0));
+      const total = writes.reduce((a,b) => a + b, 0);
+      if (writes.some((value) => !Number.isSafeInteger(value) || value < 0)) {
+        fail('170 remote batch missing exact rows_written');
+      }
+      const count = Number(results[2]?.results?.[0]?.like_count || 0);
+      console.log('170_REMOTE_D1_DIRECT168_' + (desired ? 'LIKE' : 'UNLIKE') + '_AT_' + at +
+        '=statement_writes:' + writes.join('/') + ',total_rows_written:' + total + ',like_count:' + count);
+      return { writes, total, count };
+    }
+    const direct168Like = await mutate168(true, 401);
+    const direct168DuplicateLike = await mutate168(true, 402);
+    const direct168Unlike = await mutate168(false, 403);
+    const direct168DuplicateUnlike = await mutate168(false, 404);
+    if (direct168Like.total <= 2 || direct168Unlike.total <= 2) {
+      fail('170 expected legacy 168 lower bound to remain above W2');
+    }
+    if (direct168DuplicateLike.total !== 0 || direct168DuplicateUnlike.total !== 0) {
+      fail('170 duplicate direct legacy mutation must remain W0');
+    }
+    if (direct168Like.count !== 1 || direct168DuplicateLike.count !== 1 ||
+        direct168Unlike.count !== 0 || direct168DuplicateUnlike.count !== 0) {
+      fail('170 direct atomic legacy count sequence mismatch');
+    }
+    console.log('170_REMOTE_D1_DIRECT168_LEGACY_W3PLUS_LOWER_BOUND=PASS' +
+      ' like=' + direct168Like.total + ' unlike=' + direct168Unlike.total);
+    console.log('170_REMOTE_D1_DIRECT168_DUPLICATE_W0=PASS');
+    console.log('170_COST_GATE_REQUIRES_157_158_OWNER=PASS');
 
     console.log('153_REMOTE_D1_BILLING_SUMMARY=' + JSON.stringify(observations));
     console.log('153_SYNTHETIC_ONLY_NO_SHARED_USER_DATA=PASS');

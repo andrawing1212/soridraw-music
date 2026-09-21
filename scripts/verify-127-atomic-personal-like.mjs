@@ -9,7 +9,7 @@ const rules = JSON.parse(readFileSync('database.rules.json', 'utf8'));
 const version = JSON.parse(readFileSync('public/app-version.json', 'utf8'));
 const legacyPatch = readFileSync('cloudflare/explore-worker/patches/072-personal-like-r2-revision.mjs', 'utf8');
 
-assert.equal(Number(version.version), 126, '127 candidate must not change live app version before release authorization');
+assert.ok(Number(version.version) >= 127, '127 atomic personal-like contract requires app version 127 or newer');
 assert.match(service, /SORIDRAW_EXPLORE_ATOMIC_PERSONAL_LIKE_127_20260920/);
 assert.match(page, /SORIDRAW_EXPLORE_ATOMIC_PERSONAL_LIKE_127_20260920/);
 assert.match(service, /EXPLORE_LIKE_BASELINE_127/);

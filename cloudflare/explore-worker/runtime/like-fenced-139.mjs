@@ -146,3 +146,86 @@ export function createLikeD1Canonical140(db) {
     },
   };
 }
+
+
+// SORIDRAW_LIKE_POSTCOMMIT_R2_141_20260921
+// Post-D1 canonical publication only. Must be invoked by 139 AFTER its D1
+// adapter commits. No intake handler may call this publisher. The caller owns
+// authentication and a cross-environment single-writer fence.
+// This revision field is additive: preserve all existing v114 fields. Older
+// unconditional shared-R2 writers must be cut over before this can be live.
+export function createLikeSharedR2Publisher141(bucket, notify) {
+  if (!bucket?.get || !bucket?.put || typeof notify !== 'function') {
+    throw new TypeError('Shared R2 bucket and reliable authenticated notifier required');
+  }
+  const limit = 2000;
+  const orderLimit = 128;
+  return async function publishCanonicalLike141({ uid, trackId, id, revision, liked }) {
+    if (!safeId(uid, 256) || !safeId(trackId, 512) || !safeId(id, 128) ||
+        !Number.isSafeInteger(revision) || revision <= 0 || typeof liked !== 'boolean') {
+      throw new TypeError('Invalid post-commit like event');
+    }
+    const key = 'internal/explore/shared-social-v114/likes/' + encodeURIComponent(uid) + '.json';
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const object = await bucket.get(key);
+      // Cold or truncated user bundles cannot prove an absence. Never build
+      // a new snapshot from one changed track or delete 2,000 existing likes.
+      if (!object?.etag) throw new Error('Shared like snapshot unavailable; canonical rebuild required');
+      let previous;
+      try { previous = JSON.parse(await object.text()); } catch { throw new Error('Invalid shared like snapshot'); }
+      if (Number(previous?.schemaVersion) !== 1 || previous?.uid !== uid ||
+          !Array.isArray(previous.likedTrackIds) || previous.likedTrackIds.length > limit) {
+        throw new Error('Shared like snapshot missing or invalid');
+      }
+      const ids = previous.likedTrackIds;
+      const likedIds = new Set(ids);
+      if (likedIds.size !== ids.length || ids.some((x) => !safeId(x, 512))) {
+        throw new Error('Shared like snapshot contains invalid or duplicated IDs');
+      }
+      const history = previous.lastLikeRevisions141 == null ? {} : previous.lastLikeRevisions141;
+      if (typeof history !== 'object' || Array.isArray(history)) throw new Error('Invalid per-track revision history');
+      const prior = history[trackId];
+      if (prior != null) {
+        if (!Number.isSafeInteger(prior.revision) || prior.revision <= 0 || !safeId(prior.id, 128) ||
+            typeof prior.liked !== 'boolean') throw new Error('Invalid per-track revision');
+        if (prior.revision > revision) return { settled: false, superseded: true };
+        if (prior.revision === revision) {
+          if (prior.id !== id || prior.liked !== liked || likedIds.has(trackId) !== liked) {
+            throw new Error('Conflicting revision or shared snapshot');
+          }
+          // A previous R2 CAS may have committed before notification failed.
+          // Retry the notification WITHOUT rewriting the same R2 object.
+          await notify({ uid, trackId, id, revision, liked });
+          return { settled: true, duplicate: true };
+        }
+      }
+      if (prior == null && Object.keys(history).length >= orderLimit) {
+        throw new Error('Per-track revision capacity reached; canonical rebuild required');
+      }
+      if (liked && !likedIds.has(trackId) && likedIds.size >= limit) {
+        throw new Error('Shared like capacity reached; canonical rebuild required');
+      }
+      if (liked) likedIds.add(trackId); else likedIds.delete(trackId);
+      const next = {
+        ...previous, schemaVersion: 1, uid,
+        likedTrackIds: [...likedIds],
+        lastLikeRevisions141: {
+          ...history,
+          [trackId]: { id, revision, liked },
+        },
+        updatedAt: Date.now(),
+      };
+      const result = await bucket.put(key, JSON.stringify(next), {
+        onlyIf: { etagMatches: object.etag },
+        httpMetadata: { contentType: 'application/json; charset=utf-8' },
+        customMetadata: { soridrawSharedLikes: '114', updatedAt: String(Date.now()) },
+      });
+      // R2 may reject conditional PUT because another user action updated
+      // the object. Re-read only this UID and retry; never blind overwrite.
+      if (!result) continue;
+      await notify({ uid, trackId, id, revision, liked });
+      return { settled: true, attempts: attempt + 1 };
+    }
+    throw new Error('Shared like R2 CAS contention; pending retry required');
+  };
+}

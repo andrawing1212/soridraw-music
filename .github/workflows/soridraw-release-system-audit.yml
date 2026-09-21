@@ -65,6 +65,9 @@ jobs:
           set -euo pipefail
           node scripts/verify-127-atomic-personal-like.mjs
           node scripts/verify-135-like-fenced-protocol.mjs
+          python3 scripts/verify-132-like-d1-write-budget.py
+          python3 scripts/verify-133-like-direct-two-row.py
+          python3 scripts/verify-134-like-write-amplification.py
           generated="$RUNNER_TEMP/soridraw-like-candidate-071"
           mkdir -p "$generated"
           cp cloudflare/explore-worker/canonical/preview-worker.js "$generated/worker.js"

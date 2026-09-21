@@ -150,6 +150,12 @@ export function inspectLikeCutoverPreflight164(
   { legacyIntakeClosed = false } = {},
   run = defaultWranglerRun,
 ) {
+  // The read-only observation API must never turn a caller-supplied boolean
+  // into a release certificate. 166 will add a separate, independently
+  // verified atomic fence/quiescence protocol before live activation.
+  if (legacyIntakeClosed !== false) {
+    throw new Error('166 CUTOVER_BLOCKED: read-only preflight cannot attest legacy intake closure');
+  }
   const config = resolve(configPath);
   const schemaRows = d1Query164(config, schemaSql164, run);
   const presentTables = new Set(

@@ -1,5 +1,62 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CP. 162/163/164 좋아요 전환 안전장치 — 공유 전환 신호·구형 writer 동결·대기열/스키마 증명 PASS (2026-09-21 KST)
+
+161의 partial reader가 157 writer cutover 이후에도 구형 `likes`만 보게 되는 문제를 막기 위해, **전환 자체를 한 번에 안전하게 제어하는 162→163→164 경계**를 코드와 실행형 감사에 추가했다. 기준 코드 감사 commit은 `2157efdcb7ee5c3c2e4b437489c8e856cd99918d`.
+
+**162 — 하나의 공유 전환 신호**
+- PREVIEW/TEST/PRODUCTION이 공유하는 R2 키 `internal/explore/like-cutover-v162/active.json` 하나로 reader 의미를 전환한다.
+- 신호가 없으면 기존 `likes`가 canonical이고, fully armed 신호일 때만 `likes`를 frozen baseline으로 보고 `explore_like_overrides_157`을 우선하는 effective membership을 사용한다.
+- 불완전/손상 신호는 fail-closed. 제품 Worker 자체에는 이 신호를 생성/삭제하는 경로가 없다.
+- targeted reader는 최대 200곡만 보고 전체 사용자 likes scan/COUNT/OFFSET을 하지 않는다.
+
+**163 — 구형 relation/count writer 물리 차단**
+- 신호가 실제 overlay157 상태가 된 뒤에는 구형 direct like writer, scheduled aggregate writer, `refreshLikeCount`가 모두 중단된다.
+- scheduled 경로는 먼저 read-only queue preflight를 하고 **실제 대기 작업이 있을 때만** shared marker를 읽는다. 변경 없는 idle cron은 추가 R2 read 0 순서를 유지한다.
+- 구형 writer 호출 수 inventory를 고정해 새 우회 경로가 생기면 verifier가 실패하도록 했다.
+
+**164 — 전환 전에 반드시 증명해야 하는 조건 추가**
+162의 boolean들만으로는 “대기 중인 구형 좋아요가 남아 있는데 writer를 닫는” 사고를 막기에 부족하므로 `preCutoverProof164`를 필수로 만들었다. 아래가 모두 맞아야만 overlay157 전환을 인정한다.
+- `legacyIntakeClosed === true`
+- `legacyQueueRows['035'/'066'/'069'/'075'] === 0` — 네 구형 대기열이 모두 완전히 비어 있음
+- `overlay157SchemaOwnerReady === true`
+- `overlay157SchemaOwner === 'shared-d1'`
+- `overlay157RelationTable === 'explore_like_overrides_157'`
+- `ownerProtocol === 'uid143-track147-158'`
+
+하나라도 누락/비정상/queue 1건 이상이면 전환 신호를 거부한다. 즉 **구형 접수 종료 → 기존 대기열 완전 배출 → 157 스키마/owner 준비 확인 → 그 다음에만 공유 전환 신호** 순서를 코드가 강제한다.
+
+**078 replay 호환:** `cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs` 하나가 과거 160 Worker를 161/162/163/164 상태까지 올릴 수 있고, 이미 163까지 적용된 Worker도 164 proof gate만 추가할 수 있게 보강했다. 두 번째 실행은 변화가 없어야 한다.
+
+**변경 source**
+- `cloudflare/explore-worker/runtime/like-fenced-139.mjs`
+- `cloudflare/explore-worker/patches/078-shared-like-reader-cutover.mjs`
+- `cloudflare/explore-worker/canonical/preview-worker.js`
+- `scripts/verify-135-like-fenced-protocol.mjs`
+- `.github/workflows/soridraw-release-system-audit.yml`
+- canonical Worker SHA256: `ea884a1bf2c6acd1bf951d6cfac1fef774242c8736bab3330df05c0194dcb2f1`
+
+최종 GitHub Actions [35583684236](https://github.com/andrawing1212/soridraw-music/actions/runs/35583684236), exact code-audit commit `2157efdcb7ee5c3c2e4b437489c8e856cd99918d` **SUCCESS**:
+- TypeScript PASS / Build PASS
+- canonical expected/actual SHA256 일치
+- `164_CUTOVER_REQUIRES_INTAKE_CLOSED_QUEUE_DRAIN_SCHEMA_OWNER=PASS`
+- `162_PARTIAL_OR_CORRUPT_SHARED_CUTOVER_FAILS_CLOSED=PASS`
+- `163_SHARED_MARKER_ARMED_BLOCKS_LEGACY_WRITERS=PASS`
+- `163_DIRECT_SCHEDULED_REFRESH_WRITER_ENTRY_GUARDS=PASS`
+- `163_IDLE_CRON_MARKER_R2_READ_ZERO_BY_ORDER=PASS`
+- `078_DEPLOYED_160_TO_164_REPLAY=PASS`
+- TEST/PRODUCTION Worker dry-run PASS
+- TEST/PRODUCTION shared D1 preflight read-only PASS
+- 158 track_stats keyed plan / 161 targeted membership indexed plan PASS
+- `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`
+
+이번 164는 **전환 허용 조건을 강화하는 코드 변경**이라 새 mutation billing은 실행하지 않았다. 157의 격리 원격 D1 실측 W2/W1/W0(run 35568696258)을 그대로 비용 기준으로 유지한다.
+
+**실서비스 상태:** 배포 없음. 157 migration 미적용. shared D1/R2 사용자 데이터, Firebase, Functions, 실제 PREVIEW/TEST/PRODUCTION Worker 변경 없음. backfill/delete/transform 없음. UI 변경 없음.
+
+**다음 안전 경계:** 아직 실제 전환을 실행하면 안 된다. 다음은 release controller 쪽에서 164 proof를 **실제 상태에서 읽기 전용으로 생성·검증하는 절차**를 준비해야 한다. 세 환경의 legacy intake를 안전하게 닫고, 035/066/069/075가 0인지 확인하고, shared D1에 157 schema/owner가 준비됐음을 검증한 뒤에만 단일 shared marker를 arm할 수 있다. marker가 arm된 뒤에는 legacy baseline을 다시 쓰는 단순 롤백을 금지한다. 실제 migration/marker write/deploy는 별도 승인 전 실행 금지.
+
+
 ## 0CO. 161 reader-first exact/partial 분리 — 2천 한도 오판 제거·visible bounded 복구 PASS (2026-09-21 KST)
 
 159/160 완료 후 다음 비용·무손실 단계로 **기존 개인 좋아요 R2 snapshot이 완전본인지 불완전본인지 명시적으로 구분하는 161 reader-first 경로**를 구현했다.

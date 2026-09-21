@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156, createLikeOverlayCanonical157, createLikeOverlayPager157, createLikeLazyTrackAggregator158, createTrackStatsBaselineLoader158, createLikeCutoverManifestReader162, createLikeBoundedMembershipReader162, LIKE_CUTOVER_MANIFEST_KEY_162 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156, createLikeOverlayCanonical157, createLikeOverlayPager157, createLikeLazyTrackAggregator158, createTrackStatsBaselineLoader158, createLikeCutoverManifestReader162, createLikeBoundedMembershipReader162, LIKE_CUTOVER_MANIFEST_KEY_162, createLegacyLikeWriterGuard163 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -1595,4 +1595,67 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const collection162Body = worker162.slice(collection162Start, collection162End + 2);
   assert.match(collection162Body, /readBoundedEffectiveLikeMemberships162/);
   console.log('162_CANONICAL_WORKER_EFFECTIVE_READER_WIRING=PASS');
+}
+
+
+// 163: the reader cutover is not safe until every old writer physically stops.
+// Guard is checked on actual-write paths only; an idle scheduled cron must
+// return before paying the shared-marker R2 read.
+{
+  let state163 = { mode: 'legacy', cutoverToken: null };
+  let reads163 = 0;
+  const guard163 = createLegacyLikeWriterGuard163(async () => {
+    reads163++;
+    return state163;
+  });
+  assert.deepEqual(await guard163('legacy-fixture'), state163);
+  assert.equal(reads163, 1);
+  state163 = { mode: 'overlay157', cutoverToken: 'cutover-163-A' };
+  await assert.rejects(guard163('legacy-fixture'), /legacy like writer frozen/);
+  state163 = { mode: 'unknown' };
+  await assert.rejects(guard163('legacy-fixture'), /cutover state unavailable/);
+  console.log('163_SHARED_MARKER_ARMED_BLOCKS_LEGACY_WRITERS=PASS');
+
+  const worker163 = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
+  assert.match(worker163, /SORIDRAW_LEGACY_LIKE_WRITER_FREEZE_GUARD_163_20260921/);
+  assert.match(worker163, /async function assertLegacyLikeWriterOpen163\(/);
+
+  const directStart163 = worker163.indexOf('async function handleLikeD1Core(');
+  const directEnd163 = worker163.indexOf('\n}', directStart163);
+  const direct163 = worker163.slice(directStart163, directEnd163 + 2);
+  assert.ok(direct163.indexOf("assertLegacyLikeWriterOpen163(env, 'direct-like')") >= 0);
+  assert.ok(direct163.indexOf("assertLegacyLikeWriterOpen163(env, 'direct-like')") <
+    direct163.indexOf('adjustExploreLikeCounterDelta('),
+    '163 direct guard must run before legacy relation/count write');
+
+  const cronStart163 = worker163.indexOf('async function processExploreLikeBatches035Core056(');
+  const cronEnd163 = worker163.indexOf('\n}', cronStart163);
+  const cron163 = worker163.slice(cronStart163, cronEnd163 + 2);
+  const idle163 = cron163.indexOf('if (!legacyBoundary && !userQueuePending)');
+  const guardAt163 = cron163.indexOf("assertLegacyLikeWriterOpen163(env, 'scheduled-like-aggregate')");
+  const lease163 = cron163.indexOf('acquireExploreLikeProcessor035(');
+  assert.ok(idle163 >= 0 && guardAt163 > idle163 && lease163 > guardAt163,
+    '163 scheduled guard must be after idle preflight and before lease/writers');
+
+  const refreshStart163 = worker163.indexOf('async function refreshLikeCount(');
+  const refreshEnd163 = worker163.indexOf('\n}', refreshStart163);
+  const refresh163 = worker163.slice(refreshStart163, refreshEnd163 + 2);
+  assert.ok(refresh163.indexOf("assertLegacyLikeWriterOpen163(env, 'refresh-like-count')") >= 0);
+  assert.ok(refresh163.indexOf("assertLegacyLikeWriterOpen163(env, 'refresh-like-count')") <
+    refresh163.indexOf('env.DB.batch('));
+
+  const countCalls163 = (needle) => worker163.split(needle).length - 1;
+  assert.equal(countCalls163('adjustExploreLikeCounterDelta('), 2,
+    'direct legacy relation writer call graph changed');
+  assert.equal(countCalls163('processExploreLikeAggregateWave035('), 2,
+    'legacy aggregate wave call graph changed');
+  assert.equal(countCalls163('processExploreLikeUserQueueWave075('), 2,
+    'legacy user-queue wave call graph changed');
+  assert.equal(countCalls163('refreshLikeCount('), 1,
+    'refreshLikeCount unexpectedly gained a caller');
+  assert.doesNotMatch(worker163, /(?:put|delete)\(exploreLikeCutoverKey162/,
+    'product Worker must never arm or delete the shared cutover marker');
+  console.log('163_DIRECT_SCHEDULED_REFRESH_WRITER_ENTRY_GUARDS=PASS');
+  console.log('163_IDLE_CRON_MARKER_R2_READ_ZERO_BY_ORDER=PASS');
+  console.log('163_SHARED_CUTOVER_MARKER_WRITE_PATH=NONE');
 }

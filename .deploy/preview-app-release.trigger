@@ -1,8 +1,8 @@
-requested_at=2026-09-21T18:16:30Z
+requested_at=2026-09-21T19:44:00Z
 requested_by=user
-product_code_target=60256b0942e1f144719b95890eafa9a801b62efc
-release_source_target=app128_partial_r2_targeted_membership_unlock
-release_purpose=fix_like_click_block_after_partial_personal_snapshot
+product_code_target=2c9745487517b86f1f910c651497be6a0003bca8
+release_source_target=app129_single_like_atom
+release_purpose=unify_heart_count_and_my_likes_as_one_account_track_like_state
 hosting_only=true
 worker_redeploy=false
 worker_version=733c3981-4095-4c69-bf33-9abb5de7a450

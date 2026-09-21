@@ -108,6 +108,29 @@ jobs:
           done
           echo 'D1_WRITE_MIGRATION_SEED=NONE'
 
+      - name: Audit current shared D1 like write fanout (SELECT only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          cfg="$PWD/cloudflare/explore-worker/.release-system/test/wrangler.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE (type='trigger' AND tbl_name IN ('likes','track_stats','explore_derived_tracks','explore_derived_state','explore_derived_changes')) OR (type='index' AND tbl_name IN ('likes','track_stats','explore_derived_tracks','explore_derived_changes','explore_like_batches_069')) OR (type='table' AND name IN ('likes','track_stats','explore_derived_tracks','explore_derived_changes','explore_like_batches_069')) ORDER BY type,tbl_name,name" --json > "$RUNNER_TEMP/like-fanout-live-schema.json"
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const rows = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/like-fanout-live-schema.json','utf8')).flatMap(x => x.results || []);
+          const wanted = ['explore032_stats_update','explore032_derived_track_update','idx_explore_rank_popular'];
+          for (const name of wanted) {
+            if (!rows.some(x => x.name === name)) throw Error('Missing expected live dependency: ' + name);
+          }
+          for (const row of rows) {
+            const hash = crypto.createHash('sha256').update(String(row.sql || '')).digest('hex').slice(0,16);
+            console.log('LIVE_LIKE_SCHEMA ' + row.type + ' ' + row.tbl_name + ' ' + row.name + ' sha256_16=' + hash);
+          }
+          console.log('LIKE_READONLY_SCHEMA_AUDIT=PASS objects=' + rows.length);
+          console.log('D1_LIVE_MUTATION_META_ROWS_WRITTEN=NOT_MEASURED');
+          NODE
+
       - name: Verify current branch refs are unchanged by audit
         shell: bash
         run: |

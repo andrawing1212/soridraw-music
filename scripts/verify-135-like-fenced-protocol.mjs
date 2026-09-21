@@ -1538,6 +1538,15 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('162_SHARED_MANIFEST_ABSENT_LEGACY_TARGETED=PASS');
 
   const token162 = 'cutover-162-A';
+  const proof164 = {
+    schemaVersion: 1,
+    legacyIntakeClosed: true,
+    legacyQueueRows: { '035': 0, '066': 0, '069': 0, '075': 0 },
+    overlay157SchemaOwnerReady: true,
+    overlay157SchemaOwner: 'shared-d1',
+    overlay157RelationTable: 'explore_like_overrides_157',
+    ownerProtocol: 'uid143-track147-158',
+  };
   const armed162 = {
     schemaVersion: 1,
     relationMode: 'overlay157',
@@ -1547,6 +1556,7 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
     allEnvironmentReadersReady: true,
     allEnvironmentWritersReady: true,
     ownerProtocol: 'uid143-track147-158',
+    preCutoverProof164: proof164,
   };
   const overlayReader162 = createLikeBoundedMembershipReader162(
     db162, createLikeCutoverManifestReader162(makeBucket162(armed162))
@@ -1571,6 +1581,15 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
     { ...armed162, allEnvironmentWritersReady: false },
     { ...armed162, ownerProtocol: 'legacy' },
     { ...armed162, cutoverToken: '' },
+    { ...armed162, preCutoverProof164: undefined },
+    { ...armed162, preCutoverProof164: { ...proof164, legacyIntakeClosed: false } },
+    { ...armed162, preCutoverProof164: { ...proof164, legacyQueueRows: { ...proof164.legacyQueueRows, '035': 1 } } },
+    { ...armed162, preCutoverProof164: { ...proof164, legacyQueueRows: { ...proof164.legacyQueueRows, '066': 1 } } },
+    { ...armed162, preCutoverProof164: { ...proof164, legacyQueueRows: { ...proof164.legacyQueueRows, '069': 1 } } },
+    { ...armed162, preCutoverProof164: { ...proof164, legacyQueueRows: { ...proof164.legacyQueueRows, '075': 1 } } },
+    { ...armed162, preCutoverProof164: { ...proof164, overlay157SchemaOwnerReady: false } },
+    { ...armed162, preCutoverProof164: { ...proof164, overlay157SchemaOwner: 'preview-only' } },
+    { ...armed162, preCutoverProof164: { ...proof164, overlay157RelationTable: 'likes' } },
   ]) {
     const read = createLikeCutoverManifestReader162(makeBucket162(invalid));
     await assert.rejects(read(), /162 cutover manifest/);
@@ -1580,10 +1599,15 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
     /oversized/
   );
   console.log('162_PARTIAL_OR_CORRUPT_SHARED_CUTOVER_FAILS_CLOSED=PASS');
+  console.log('164_CUTOVER_REQUIRES_INTAKE_CLOSED_QUEUE_DRAIN_SCHEMA_OWNER=PASS');
 
   const worker162 = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
   assert.match(worker162, /SORIDRAW_SHARED_LIKE_READER_FIRST_161_20260921/);
   assert.match(worker162, /SORIDRAW_SHARED_LIKE_CUTOVER_GATE_162_20260921/);
+  assert.match(worker162, /SORIDRAW_LIKE_CUTOVER_PRECONDITION_PROOF_164_20260921/);
+  assert.match(worker162, /preCutoverProof164/);
+  assert.match(worker162, /legacyIntakeClosed/);
+  assert.match(worker162, /explore_like_overrides_157/);
   assert.match(worker162, /async function readLikeCutoverState162\(/);
   assert.match(worker162, /async function readBoundedEffectiveLikeMemberships162\(/);
   const target162Start = worker162.indexOf('async function handleMyLikeStates(');

@@ -1,5 +1,33 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CX. 앱127 PREVIEW 좋아요 클릭 차단 hotfix 완료 (2026-09-22 KST)
+
+사용자 실사용 영상에서 `/v1/me/likes-revision` **HTTP 404**를 확인했고, 이 때문에 app127 개인 좋아요 상태 확인이 끝나지 않아 카드 클릭이 **“좋아요 상태를 확인하고 있어요”**로 차단되는 실제 배포 오류를 확인했다.
+
+원인:
+- app127은 private personal-like revision route(072)를 호출하지만,
+- 당시 배포 canonical Worker 173/174에는 072/073/074가 materialize되지 않아 route가 실제 Worker에 없었다.
+- 기존 Worker release smoke가 batch route만 확인해 이 조합 불일치를 놓쳤다.
+
+수정/검증:
+- canonical Worker에 072 personal revision route + 073 server-order queue + 074 personal R2 CAS/precommit guard materialize.
+- materialize Run `35634804179` SUCCESS.
+- final audit Run `35635080613` SUCCESS.
+- PREVIEW Worker hotfix Run `35635316035` SUCCESS.
+- canonical SHA256 `bee426ca157957c83c658370658e41b7bde68ae650c68c9e13a3c49a7fa83d1d`.
+- active PREVIEW Worker `733c3981-4095-4c69-bf33-9abb5de7a450`.
+- smoke: like batch HTTP 401, **like revision HTTP 401 (404 아님)**.
+- Feed/Profile smoke PASS.
+- TEST/PRODUCTION Worker unchanged PASS.
+- D1 migration 0 / cutover activation 0 / user-data migration 0.
+
+현재 사용자 확인:
+- PREVIEW 새로고침 후 기존 하트 표시.
+- 빈/찬 하트 모두 즉시 클릭 가능.
+- “좋아요 상태를 확인하고 있어요” 반복 차단이 사라졌는지.
+- PC↔모바일 최종 좋아요 상태 수렴.
+
+
 ## 0CW. PREVIEW 앱127 + Worker173/174 배포 완료 — 실사용 검증 단계 (2026-09-22 KST)
 
 **현재 PREVIEW HEAD:** `f677bccbc2111ce51ba983cc88fc23690ae37882`.

@@ -35,7 +35,9 @@ export class LikeFencedProcessor139 {
   async flush(value) {
     if (value.pending) {
       const intent = value.pending;
-      const applied = await this.canonical.applyAtomically(value.uid, value.trackId, intent.liked);
+      const applied = await this.canonical.applyAtomically(value.uid, value.trackId, intent.liked, {
+        previousLiked: value.liked, id: intent.id, revision: intent.revision, seq: intent.seq,
+      });
       // This adapter must return only after the likes relation AND public
       // count have committed together. An intake queue ACK is insufficient.
       if (applied?.canonicalCommitted !== true || applied?.liked !== intent.liked) {

@@ -48,6 +48,7 @@ const EXPLORE_LIKE_PARTIAL_BASELINE_161 = 'soridraw:explore:like-partial-baselin
 // response is still authoritative for the requested visible track IDs. Persist
 // only those verified IDs so clicks work without trusting stale legacy booleans.
 const EXPLORE_LIKE_TARGETED_VERIFIED_127 = 'soridraw:explore:like-targeted-verified:127';
+const EXPLORE_LIKE_TARGETED_VERIFIED_130 = 'soridraw:explore:like-targeted-verified:130';
 const EXPLORE_LIKE_SIGNAL_SEEN_127 = 'soridraw:explore:like-signal-seen:127';
 const EXPLORE_LIKE_SIGNAL_RETRY_127 = 'soridraw:explore:like-signal-retry:127';
 const EXPLORE_LIKE_SIGNAL_GAP_127 = 'soridraw:explore:like-signal-gap:127';
@@ -117,6 +118,7 @@ const signalPublishInFlight127 = new Map<string, Promise<void>>();
 const revisionCheckAtByUid127 = new Map<string, number>();
 const revisionCheckInFlight127 = new Map<string, Promise<void>>();
 const targetedVerifiedByUid127 = new Map<string, Set<string>>();
+const targetedVerifiedRevisionByUid130 = new Map<string, string>();
 
 const clampLikeCount = (value: unknown) => {
   const count = Number(value ?? 0);
@@ -273,34 +275,47 @@ const writeLikeLocal127 = (key: string, value: string) => {
   try { window.localStorage.setItem(key, value); } catch {}
 };
 
+const readCurrentPersonalLikeRevision130 = (uid: string) =>
+  readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_R2_REVISION_127, uid));
+
 const readTargetedVerifiedLikeTracks127 = (uid: string): Set<string> => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) return new Set<string>();
+  const currentRevision = readCurrentPersonalLikeRevision130(normalizedUid);
   const cached = targetedVerifiedByUid127.get(normalizedUid);
-  if (cached) return cached;
+  if (cached && targetedVerifiedRevisionByUid130.get(normalizedUid) === currentRevision) return cached;
+
   const verified = new Set<string>();
-  try {
-    const raw = JSON.parse(readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_127, normalizedUid)));
-    if (Array.isArray(raw)) {
-      raw.slice(-1000).forEach((value) => {
-        const id = String(value || '').trim();
-        if (id) verified.add(id);
-      });
-    }
-  } catch {}
+  if (currentRevision) {
+    try {
+      const raw = JSON.parse(
+        readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_130, normalizedUid)),
+      ) as { revision?: unknown; trackIds?: unknown };
+      if (String(raw?.revision || '') === currentRevision && Array.isArray(raw?.trackIds)) {
+        raw.trackIds.slice(-1000).forEach((value) => {
+          const id = String(value || '').trim();
+          if (id) verified.add(id);
+        });
+      }
+    } catch {}
+  }
+
   targetedVerifiedByUid127.set(normalizedUid, verified);
+  targetedVerifiedRevisionByUid130.set(normalizedUid, currentRevision);
   return verified;
 };
 
 const persistTargetedVerifiedLikeTracks127 = (uid: string, verified: Set<string>) => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) return;
+  const currentRevision = readCurrentPersonalLikeRevision130(normalizedUid);
   const bounded = [...verified].slice(-1000);
-  const next = new Set(bounded);
-  targetedVerifiedByUid127.set(normalizedUid, next);
+  targetedVerifiedByUid127.set(normalizedUid, new Set(bounded));
+  targetedVerifiedRevisionByUid130.set(normalizedUid, currentRevision);
+  if (!currentRevision) return;
   writeLikeLocal127(
-    scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_127, normalizedUid),
-    JSON.stringify(bounded),
+    scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_130, normalizedUid),
+    JSON.stringify({ revision: currentRevision, trackIds: bounded }),
   );
 };
 
@@ -308,7 +323,9 @@ const clearTargetedVerifiedLikeTracks127 = (uid: string) => {
   const normalizedUid = String(uid || '').trim();
   if (!normalizedUid) return;
   targetedVerifiedByUid127.delete(normalizedUid);
+  targetedVerifiedRevisionByUid130.delete(normalizedUid);
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_127, normalizedUid), '');
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_130, normalizedUid), '');
 };
 // Accepted D1 queue != updated personal R2. Keep a UID-scoped override for
 // accepted tracks whose shared R2 CAS was not materialized; an older R2 read

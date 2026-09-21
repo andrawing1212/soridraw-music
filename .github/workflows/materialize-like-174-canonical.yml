@@ -59,6 +59,14 @@ jobs:
           mkdir -p "$tmp"
           cp cloudflare/explore-worker/canonical/preview-worker.js "$tmp/worker.js"
 
+          # App127 requires the private personal-like revision route and the
+          # legacy queued writer ordering/CAS guards. Materialize them into the
+          # same canonical Worker before re-checking 173/174.
+          for patch in 072-personal-like-r2-revision 073-server-like-queue-order 074-personal-like-r2-cas; do
+            SORIDRAW_REMOTE_WORKER_DIR="$tmp" node "cloudflare/explore-worker/patches/$patch.mjs"
+          done
+          SORIDRAW_GENERATED_WORKER="$tmp/worker.js" node scripts/verify-128-like-concurrency.mjs
+
           SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/083-like-r2-revision.mjs
           SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/083-like-r2-revision.mjs
           SORIDRAW_GENERATED_WORKER="$tmp/worker.js" node scripts/verify-173-like-r2-route.mjs
@@ -68,6 +76,10 @@ jobs:
           node --check "$tmp/worker.js"
           SORIDRAW_GENERATED_WORKER="$tmp/worker.js" node scripts/verify-174-like-d1-atomic-fence-route.mjs
 
+          grep -Fq 'SORIDRAW_PERSONAL_LIKE_R2_REVISION_072_20260920' "$tmp/worker.js"
+          grep -Fq 'SORIDRAW_SERVER_ORDER_LIKE_QUEUE_073_20260920' "$tmp/worker.js"
+          grep -Fq 'SORIDRAW_PERSONAL_LIKE_R2_CAS_074_20260920' "$tmp/worker.js"
+          grep -Fq '/v1/me/likes-revision' "$tmp/worker.js"
           grep -Fq 'SORIDRAW_LIKE_R2_REVISION_ROUTE_173_20260922' "$tmp/worker.js"
           grep -Fq 'SORIDRAW_LIKE_D1_ATOMIC_CUTOVER_FENCE_174_20260922' "$tmp/worker.js"
           grep -Fq "revisionProtocol173 === 'd1only171'" "$tmp/worker.js"

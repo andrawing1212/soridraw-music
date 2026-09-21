@@ -51,6 +51,8 @@ const functionRange = (name) => {
 // that must exist in the 053 baseline rather than on a source comment marker.
 for (const required of [
   'handleLikeBatch034',
+  'handleLikeD1Core',
+  'enforceUserRateLimit',
   'enforceExploreLikeBatchRateLimit034',
   'readExploreLikeBatchStates035',
   'enqueueExploreLikeBatch035',
@@ -71,8 +73,27 @@ if (!batch.text.includes(oldRateCall)) throw new Error('[054] D1 like rate-limit
 const nextBatch = batch.text.replace(oldRateCall, 'await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);');
 source = source.slice(0, batch.start) + edgeHelper + nextBatch + source.slice(batch.end);
 
+// 160: the legacy direct PUT/DELETE route used enforceUserRateLimit(), which
+// writes RATE_DB on every click. Keep the old route compatible while removing
+// that extra D1 write by using the same Cloudflare edge limiter as batch.
+const direct = functionRange('handleLikeD1Core');
+const directRateCall = 'await enforceUserRateLimit(env, authContext.uid, "like", RATE_LIMITS.like);';
+if (!direct.text.includes(directRateCall)) {
+  throw new Error('[054/160] direct D1 like rate-limit call missing');
+}
+const nextDirect = direct.text.replace(
+  directRateCall,
+  'await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);'
+);
+source = source.slice(0, direct.start) + nextDirect + source.slice(direct.end);
+
 const finalBatch = functionRange('handleLikeBatch034').text;
 const finalEdge = functionRange('enforceExploreLikeBatchEdgeRateLimit054').text;
+const finalDirect = functionRange('handleLikeD1Core').text;
+if (!finalDirect.includes('enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid)') ||
+    finalDirect.includes('enforceUserRateLimit(')) {
+  throw new Error('[054/160] direct like route did not retire D1 rate-limit write');
+}
 if (!finalBatch.includes('enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid)')) {
   throw new Error('[054] batch handler did not switch to edge rate limit');
 }
@@ -90,4 +111,4 @@ for (const required of ["env?.LIKE_RATE_LIMITER", ".limit({ key: 'like:' + norma
 }
 
 writeFileSync(workerPath, source, 'utf8');
-console.log('[054] Normal like batches now use Cloudflare Rate Limiting binding; D1 api_rate_limits write retired from the batch hot path.');
+console.log('[054/160] Batch and legacy direct like routes use Cloudflare Rate Limiting binding; D1 api_rate_limits write retired from both like hot paths.');

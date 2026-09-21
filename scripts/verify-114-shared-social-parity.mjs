@@ -9,6 +9,7 @@ const fail = (message) => { throw new Error(`[114] ${message}`); };
 const appVersion = Number(version.version);
 if (!Number.isFinite(appVersion) || appVersion < 114) fail('app version is older than 114');
 if (!Array.isArray(manifest.patches) || !manifest.patches.includes('061-shared-social-r2-parity.mjs')) fail('patch 061 missing from manifest');
+if (!manifest.patches.includes('078-shared-like-reader-cutover.mjs')) fail('patch 078 reader cutover missing from manifest');
 
 for (const required of [
   'SORIDRAW_SHARED_SOCIAL_R2_PARITY_061_20260917',
@@ -110,10 +111,29 @@ const mismatched = normalize161({
 }, 'u');
 if (!mismatched || mismatched.exact !== false) fail('mismatched exact count accepted');
 
+const cutover162 = functionText('readLikeCutoverState162');
+if (!cutover162.includes('internal/explore/like-cutover-v162/active.json') &&
+    !worker.includes("internal/explore/like-cutover-v162/active.json")) {
+  fail('162 shared cutover key missing');
+}
+for (const proof of [
+  'legacyRelationWritersFrozen === true',
+  'legacyCountWritersFrozen === true',
+  'allEnvironmentReadersReady === true',
+  'allEnvironmentWritersReady === true',
+  "ownerProtocol === 'uid143-track147-158'",
+]) {
+  if (!cutover162.includes(proof)) fail('162 shared cutover proof missing: ' + proof);
+}
+const effective162 = functionText('readBoundedEffectiveLikeMemberships162');
+if (!effective162.includes('readBoundedLegacyLikeMemberships161')) fail('162 legacy pre-cutover fallback missing');
+if (!effective162.includes('explore_like_overrides_157')) fail('162 overlay relation missing');
+if (!effective162.includes('COALESCE(o.liked')) fail('162 effective baseline+override rule missing');
+
 const targeted = functionText('handleMyLikeStates');
 if (!targeted.includes('readSharedLikesState161(env, authContext.uid)')) fail('targeted reader lost 161 state');
 if (!targeted.includes('sharedState?.exact')) fail('targeted exact R2 fast path missing');
-if (!targeted.includes('readBoundedLegacyLikeMemberships161')) fail('partial targeted D1 fallback missing');
+if (!targeted.includes('readBoundedEffectiveLikeMemberships162')) fail('partial targeted 162 gate missing');
 if (!targeted.includes('likesComplete: false')) fail('partial targeted response not marked incomplete');
 
 const social = functionText('handleMySocialSnapshot042');
@@ -123,12 +143,14 @@ if (!social.includes('readExploreFollowingR2Bundle(env, authContext.uid)')) fail
 
 const liked = functionText('handleMyLikedTracks052');
 if (!liked.includes('readSharedLikesState161(env, authContext.uid)')) fail('liked collection lost 161 state');
-if (!liked.includes('readBoundedLegacyLikeMemberships161')) fail('liked collection partial membership fallback missing');
+if (!liked.includes('readBoundedEffectiveLikeMemberships162')) fail('liked collection partial 162 membership gate missing');
 if (!liked.includes('readRequestedLikedTrackCardsD1161')) fail('liked collection bounded cold card recovery missing');
 
 console.log('114_SHARED_SOCIAL_PARITY=PASS');
 console.log('161_LEGACY_1999_2000_PARTIAL_AND_EXACT_2053=PASS');
 console.log('161_PARTIAL_VISIBLE_MEMBERSHIP_BOUNDED_D1=PASS');
+console.log('162_SHARED_CUTOVER_GATED_EFFECTIVE_MEMBERSHIP=PASS');
+console.log('078_DEPLOYED_WORKER_REPLAY_PATCH_PRESENT=PASS');
 console.log('LIKES_SOURCE=SHARED_R2_FIRST');
 console.log('FOLLOWING_SOURCE=SHARED_R2_FIRST');
 console.log('PREVIEW_EXISTING_LOCAL_CAN_SEED_SHARED_WITHOUT_D1=true');

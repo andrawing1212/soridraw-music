@@ -1,5 +1,19 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — 170 실제 D1 W1~W2 검증 + 구형 Worker 호환 원자적 전환 설계 (source-only)
+
+168 direct `env.DB.batch` / 169 batch final marker guard는 exact `preview` code-audit `784568e785c203978c2b2fc36e1d50d67579955e`, [run 35596351769](https://github.com/andrawing1212/soridraw-music/actions/runs/35596351769) **SUCCESS**. `CURRENT_RELEASE_STATE.md` 0CU 기준. 그러나 **제품 release gate는 FAIL**, Worker/Firebase 배포와 사용자 D1/R2 변경 없음.
+
+1. 먼저 isolated remote D1에서 실제 168 SQL `env.DB.batch`의 신규 좋아요·해제·중복·다른 기기 뒤집기·두 번째 SQL 실패 rollback과 `meta.rows_written`를 정량 확인. D1 및 기존 스키마 trigger/index 기반으로 W1~W2, duplicate W0(관계·count), R2/DO/RTDB 부가 비용까지 보고. 격리 DB 이외 실제 사용자 원본 접근은 read-only만.
+2. 이미 실행 중이거나 구형 Worker가 `likes` INSERT/DELETE 후 별도 `track_stats` write하는 부분 커밋을 어떻게 정합하게 마무리하는지 다룬다. 167 queue fence fixture가 그 직접 두 호출을 보호하지 못한다. 원자적 fence/실제 배포 버전/인입 종료/기존 요청 정리의 객관적 증거 없이는 164 CLI self-attestation 차단 해제 금지.
+3. `169` batch guard는 최종 162 manifest의 신규 batch 재진입만 막는다. 165 이전에 열린 요청의 늦은 D1 write와 구형 Worker가 marker를 모르는 경로는 그대로 별도 DB fence 필요. 구형 scheduled 035/066/069/075는 닫기 전에 완전히 소진해야 한다.
+4. 157 additive schema + 157 sparse relation owner / 158 lazy count writer 실제 routing, legacy baseline freeze, 051 변경 신호, 141/156 exact 개인 R2 및 RTDB final settlement를 3개 환경에서 호환성 있게 통합하는 구현 순서를 작은 릴리스 단위로 정한다. 기존 하트/카운트와 UI 보호 및 테스트 장치 유지.
+5. 기존 `069` auto Apply workflow는 patch-manifest 변경에 반응하고 service marker mismatch로 FAIL했다. [35595449862](https://github.com/andrawing1212/soridraw-music/actions/runs/35595449862), [35596085726](https://github.com/andrawing1212/soridraw-music/actions/runs/35596085726). **별도 workflow cleanup 작업으로 분리**하고, 이 경로를 우회하여 배포하지 말 것.
+6. exact commit에서 TypeScript/Build/관련 isolated tests/모든 release gates 및 필요시 Work 독립감사. 승인된 PREVIEW 전체 코드 배포 후 PC↔모바일 하트·공개수치·비공개·읽기쓰기 비용 실사용 검증. TEST 승격은 통과 후 요청시, PRODUCTION 승격은 별도 명시 승인 시에만.
+
+**현 시점 금지:** 사용자 shared D1에 157/167 migration, shared R2 drain/cutover marker arm, 사용자 원본 데이터 bulk write/delete/backfill, Worker/Hosting/Functions 배포. W3+를 허용하거나 single-device 통과만으로 release PASS 보고 금지. `164_CUTOVER_PREFLIGHT_READY=NO` 유지.
+
+
 ## 현재 최우선 — 168 direct like 원자적 관계·카운터 수정 및 실배포 구버전 경계 (격리 우선)
 
 167 source-only SQLite 격리 검증은 exact `37d7d654d6110194d73f358bdb2e659e40197a0c`, run `35590066055` SUCCESS. queue 035/066/069/075는 DB write-level fence 실험에서 old Worker + in-flight 요청 차단 PASS. 하지만 `167_DIRECT_TWO_STATEMENT_INFLIGHT_STILL_UNFENCED=FAIL_EXPECTED`: 구형 direct `adjustExploreLikeCounterDelta`가 `likes`와 `track_stats`를 두 개의 분리된 D1 쓰기로 처리하므로, queue 0이어도 direct in-flight는 존재할 수 있다. 제품 전환 절대 금지.

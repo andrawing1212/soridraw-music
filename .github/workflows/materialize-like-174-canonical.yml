@@ -104,4 +104,6 @@ jobs:
           git add cloudflare/explore-worker/canonical/preview-worker.js cloudflare/explore-worker/canonical/source-sha256.txt
           git diff --cached --check
           git commit -m 'build(preview): materialize audited like 174 canonical'
+          git fetch origin preview --no-tags
+          git rebase origin/preview
           git push origin HEAD:preview

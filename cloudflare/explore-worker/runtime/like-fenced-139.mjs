@@ -347,6 +347,177 @@ export function createLikeExactR2Rebuilder156(bucket, listPage155, readPublicati
 }
 
 
+// SORIDRAW_LIKE_NO_BACKFILL_OVERLAY_157_20260921
+// Candidate post-cutover canonical adapter. The legacy `likes` table becomes
+// an immutable baseline; this WITHOUT ROWID table stores only post-cutover
+// overrides/tombstones. No user-wide backfill is required.
+// ALL PREVIEW/TEST/PRODUCTION writers must be frozen/cut over first.
+export function createLikeOverlayCanonical157(db, commitAggregate, options = {}) {
+  if (!db?.prepare || !db?.batch || typeof commitAggregate !== 'function') {
+    throw new TypeError('D1 batch and durable idempotent track aggregation required');
+  }
+  if (options.legacyWriterCutoverVerified !== true) {
+    throw new Error('157 overlay blocked until all legacy like writers are cut over');
+  }
+  const effectiveExpr = `COALESCE((
+    SELECT o.liked FROM explore_like_overrides_157 o
+    WHERE o.user_uid = ? AND o.track_id = ?
+  ), EXISTS(
+    SELECT 1 FROM likes l WHERE l.track_id = ? AND l.user_uid = ?
+  ))`;
+  const eligibleExpr = `EXISTS(
+    SELECT 1 FROM tracks t
+    JOIN public_profiles p ON p.uid = t.owner_uid AND p.is_public = 1
+    JOIN track_stats s ON s.track_id = t.id
+    WHERE t.id = ? AND t.is_public = 1 AND t.status = 'published'
+  )`;
+  const bindEffective = (statement, uid, trackId) =>
+    statement.bind(uid, trackId, trackId, uid);
+  return {
+    async readMembership(uid, trackId) {
+      if (!safeId(uid, 256) || !safeId(trackId, 512)) {
+        throw new TypeError('Invalid overlay membership identity');
+      }
+      const row = await bindEffective(
+        db.prepare('SELECT ' + effectiveExpr + ' AS liked'), uid, trackId
+      ).first();
+      if (row?.liked == null) throw new Error('Effective like membership unavailable');
+      return Number(row.liked) === 1;
+    },
+    async applyAtomically(uid, trackId, liked, context) {
+      const { previousLiked, id, revision, seq } = context || {};
+      if (!safeId(uid, 256) || !safeId(trackId, 512) || !safeId(id, 128) ||
+          typeof previousLiked !== 'boolean' || typeof liked !== 'boolean' ||
+          !Number.isSafeInteger(revision) || revision <= 0 ||
+          !Number.isSafeInteger(seq) || seq <= 0) {
+        throw new TypeError('Durable pre-mutation overlay intent required');
+      }
+      const now = Date.now();
+      const before = db.prepare(
+        'SELECT ' + eligibleExpr + ' AS eligible, ' + effectiveExpr + ' AS liked'
+      ).bind(trackId, uid, trackId, trackId, uid);
+      const mutation = db.prepare(
+        `INSERT INTO explore_like_overrides_157(user_uid,track_id,liked,updated_at)
+         SELECT ?, ?, ?, ?
+         WHERE ${eligibleExpr}
+           AND ${effectiveExpr} = ?
+           AND ${effectiveExpr} != ?
+         ON CONFLICT(user_uid,track_id) DO UPDATE SET
+           liked=excluded.liked, updated_at=excluded.updated_at
+         WHERE explore_like_overrides_157.liked != excluded.liked`
+      ).bind(
+        uid, trackId, Number(liked), now,
+        trackId,
+        uid, trackId, trackId, uid, Number(previousLiked),
+        uid, trackId, trackId, uid, Number(liked)
+      );
+      const final = bindEffective(
+        db.prepare('SELECT ' + effectiveExpr + ' AS liked'), uid, trackId
+      );
+      const results = await db.batch([before, mutation, final]);
+      if (!Array.isArray(results) || results.length !== 3 ||
+          results.some((result) => !Number.isSafeInteger(result?.meta?.rows_written) ||
+            result.meta.rows_written < 0)) {
+        throw new Error('157 D1 billing receipt missing or invalid');
+      }
+      const first = results[0]?.results?.[0];
+      const prior = Number(first?.liked) === 1;
+      const permitted = Number(first?.eligible) === 1;
+      const finalLiked = Number(results[2]?.results?.[0]?.liked) === 1;
+      const changes = Number(results[1]?.meta?.changes);
+      if (!permitted || prior !== previousLiked || finalLiked !== liked ||
+          !Number.isSafeInteger(changes) || changes < 0 || changes > 1 ||
+          (previousLiked === liked && changes !== 0) ||
+          (previousLiked !== liked && changes !== 1)) {
+        throw new Error('157 effective relation transition not proven');
+      }
+      const rowsWritten = results.reduce((sum, result) => sum + result.meta.rows_written, 0);
+      if (changes === 1 && rowsWritten === 0) {
+        throw new Error('157 mutation missing a billable override write');
+      }
+      if (rowsWritten > 2) {
+        throw new Error('157 overlay exceeded live D1 W2 billing budget');
+      }
+      if (previousLiked !== liked) {
+        const outcome = await commitAggregate({
+          uid, trackId, id, revision, seq, previousLiked, liked,
+          delta: Number(liked) - Number(previousLiked),
+        });
+        if (outcome?.aggregateConfirmed !== true || outcome?.id !== id ||
+            outcome?.trackId !== trackId || outcome?.revision !== revision) {
+          throw new Error('157 durable track aggregate not confirmed');
+        }
+      }
+      return { canonicalCommitted: true, liked, rowsWritten, relationChanges: changes };
+    },
+  };
+}
+
+
+// Cold-only exact recovery for the 157 overlay model. Legacy likes remain an
+// immutable baseline; overrides replace/tombstone only changed memberships.
+// This query is never used for a normal revisit or app update.
+export function createLikeOverlayPager157(db, options = {}) {
+  if (!db?.prepare) throw new TypeError('Read-only D1 binding required');
+  if (options.legacyWriterCutoverVerified !== true) {
+    throw new Error('157 pager blocked until all legacy like writers are cut over');
+  }
+  return async function listEffectiveLikes157(uid, cursor = null, limit = 128) {
+    if (!safeId(uid, 256) || !Number.isSafeInteger(limit) || limit < 1 || limit > 128) {
+      throw new TypeError('Invalid bounded overlay recovery request');
+    }
+    if (cursor !== null &&
+        (!Number.isSafeInteger(cursor.createdAt) || cursor.createdAt < 0 ||
+         !safeId(cursor.trackId, 512))) {
+      throw new TypeError('Invalid overlay recovery cursor');
+    }
+    const sql = `WITH effective_likes AS (
+      SELECT l.track_id AS track_id, l.created_at AS liked_at
+      FROM likes l
+      WHERE l.user_uid = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM explore_like_overrides_157 o
+          WHERE o.user_uid = l.user_uid AND o.track_id = l.track_id
+        )
+      UNION ALL
+      SELECT o.track_id AS track_id, o.updated_at AS liked_at
+      FROM explore_like_overrides_157 o
+      WHERE o.user_uid = ? AND o.liked = 1
+    )
+    SELECT track_id, liked_at
+    FROM effective_likes
+    ${cursor === null ? '' :
+      'WHERE (liked_at < ? OR (liked_at = ? AND track_id < ?))'}
+    ORDER BY liked_at DESC, track_id DESC
+    LIMIT ?`;
+    const values = cursor === null
+      ? [uid, uid, limit]
+      : [uid, uid, cursor.createdAt, cursor.createdAt, cursor.trackId, limit];
+    const response = await db.prepare(sql).bind(...values).all();
+    if (!Array.isArray(response?.results) || response.results.length > limit) {
+      throw new Error('Invalid bounded 157 recovery result');
+    }
+    const items = response.results.map((row) => {
+      if (!safeId(row?.track_id, 512) ||
+          !Number.isSafeInteger(row?.liked_at) || row.liked_at < 0) {
+        throw new Error('Invalid effective 157 recovery row');
+      }
+      return { trackId: row.track_id, createdAt: row.liked_at };
+    });
+    for (let i = 1; i < items.length; i += 1) {
+      const a = items[i - 1], b = items[i];
+      if (!(b.createdAt < a.createdAt ||
+            (b.createdAt === a.createdAt && b.trackId < a.trackId))) {
+        throw new Error('Unordered or duplicated effective 157 rows');
+      }
+    }
+    const last = items.at(-1);
+    return { items, nextCursor: items.length === limit
+      ? { createdAt: last.createdAt, trackId: last.trackId } : null };
+  };
+}
+
+
 // SORIDRAW_LIKE_DURABLE_OWNER_143_20260921
 // Glue for one Durable Object instance per authenticated UID, shared by ALL
 // SORIDRAW environments through one service binding. This module does not

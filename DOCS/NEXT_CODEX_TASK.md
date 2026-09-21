@@ -1,5 +1,19 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — 168 direct like 원자적 관계·카운터 수정 및 실배포 구버전 경계 (격리 우선)
+
+167 source-only SQLite 격리 검증은 exact `37d7d654d6110194d73f358bdb2e659e40197a0c`, run `35590066055` SUCCESS. queue 035/066/069/075는 DB write-level fence 실험에서 old Worker + in-flight 요청 차단 PASS. 하지만 `167_DIRECT_TWO_STATEMENT_INFLIGHT_STILL_UNFENCED=FAIL_EXPECTED`: 구형 direct `adjustExploreLikeCounterDelta`가 `likes`와 `track_stats`를 두 개의 분리된 D1 쓰기로 처리하므로, queue 0이어도 direct in-flight는 존재할 수 있다. 제품 전환 절대 금지.
+
+1. `handleLikeD1Core`, `adjustExploreLikeCounterDelta`, batch intake와 scheduled 035/066/069/075 실제 호출을 범위 내에서 검토. direct 변경분이 반드시 한 원자적 D1 transaction/동등한 단일 owner로 처리되도록 경계를 설계. Cloudflare D1 `batch()` rollback이 이번 runtime·schema에서 실제 동작하는지 격리 DB에서 테스트.
+2. 이미 배포된 **구형 direct Worker** 및 165 guard를 통과한 in-flight가 여전히 두 번 나누어 쓸 수 있는 문제를 해결해야 한다. 신규 168 Worker만 원자적이어도 구형 버전이 살아있으면 cutover 불가. 구형 compatibility window/차단/진행중 요청을 실제 증명하지 못하면 final marker arm 금지.
+3. 167 fixture는 DB trigger 후보의 **격리 모델**이다. `migrations/`로 이동 또는 사용자 shared D1 apply 금지. 기존 공유 SQL trigger·인덱스와 충돌, schema owner, R2/Worker 권한, rollback, 비용을 조사하고 release controller에 실제 증명될 때만 채택.
+4. 164 proof는 현재 CLI에서 self-attested closure를 거부하며 계속 read-only report 전용으로 유지. queue 0을 컷오버 승인으로 바꾸지 말 것. old direct writer 무력화 + outstanding mutation settlement + 157 schema exact + 모든 환경 reader/writer 준비가 모두 완료되어야 한다.
+5. 격리 D1의 `meta.rows_written` **실제 W1~W2 / duplicate W0**, published_count/track_stats triggers 및 R2/DO/RTDB 요청당 총비용 검증. 전체 Feed/profile rebuild 없음. 051 change signals/157·158 owner 및 PC↔모바일 개인 heart와 공개 count 수렴 최종 감사 별개.
+6. 기존 UI 및 Music Note 60초 묶음 저장 보호. source-only → TypeScript/Build/test → 독립 Work 감사 → 사용자 PREVIEW 검증 → TEST → 명시적 PRODUCTION 승인 순서.
+
+**절대 금지:** 실제 shared D1 migration, R2 marker arm, 사용자 원본 backfill/overwrite/delete, PREVIEW/TEST/PRODUCTION 배포는 별도 배포 승인 전 금지. 제품 release gate FAIL 유지. 167 isolated fixture가 제품 Worker를 보호한다고 주장하지 말 것.
+
+
 ## 현재 최우선 — 167 공유 D1 원자적 fence 설계·격리 실행 검증 (source-only)
 
 166 in-flight 경쟁 재현 및 허위 proof 차단은 `preview` exact `5ed766f92c31cda2407efd25c0324b167b2f84bc`, 감사 run `35588084201` **SUCCESS**. 단, 제품 전환은 아직 BLOCKED. 164 CLI는 `--legacy-intake-closed`를 거부하고 shared D1은 035/066/069/075 미처리 0, intake OPEN, 157 table/index 없음. 자세한 결과 `CURRENT_RELEASE_STATE.md` 0CS.

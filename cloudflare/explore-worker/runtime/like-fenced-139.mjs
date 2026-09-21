@@ -392,9 +392,18 @@ export function createLikeTrackAggregator147(trackId, storage, publishTrack) {
           }
           return { version: previous.version, count: previous.count, duplicate: true };
         }
+        if (previous.revision + 1 !== revision) {
+          // A missing intermediate receipt must not be silently skipped. It
+          // may represent a committed delta whose count is not yet reconciled.
+          throw new Error('Track revision gap; audited recovery required');
+        }
         if (previous.liked !== previousLiked) {
           throw new Error('Track delta pre-state differs from previously committed action');
         }
+      } else if (revision !== 1) {
+        // A new per-UID track ledger can start only with the first operation.
+        // Existing users with higher revisions need an audited initial state.
+        throw new Error('Missing track user baseline; audited recovery required');
       }
       const nextCount = total.count + delta;
       if (!Number.isSafeInteger(nextCount) || nextCount < 0 ||

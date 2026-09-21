@@ -1,5 +1,22 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 161 완료 — 다음은 157 effective membership gate + 세 환경 writer cutover source 통합 (2026-09-21 KST)
+
+reader-first 161은 [run 35577973005](https://github.com/andrawing1212/soridraw-music/actions/runs/35577973005), exact `8bcc02e69f1f548f094dc2f90b44c8cfacea3767` SUCCESS. legacy 1,999/2,000 likes snapshot은 partial, 156 exact 2,053 snapshot은 exact로 판정. partial 기기는 local heart를 지우지 않고 visible cache miss만 bounded D1 membership lookup, exact R2는 원본 D1 R0. canonical Worker hash `fabe274fde6d2ed1099f14f54852c06e12e4e37a5799708bbf8e1176fb85cc45`. 배포/데이터 변경 없음.
+
+**다음 단일 구현 범위 — 157 활성화 전 반드시 해결:**
+1. 161의 `readBoundedLegacyLikeMemberships161`는 현재 legacy `likes`가 canonical인 동안만 정답이다. 157 cutover 이후에는 `likes`가 frozen baseline이므로 **cutover flag가 true일 때만 baseline + `explore_like_overrides_157` effective membership을 읽는 분기**를 source-level로 구현한다. flag false / table 미적용 환경은 기존 legacy query를 그대로 사용. migration을 실제 적용하지 않는다.
+2. 159에서 고정한 relation writer 3개(`adjustExploreLikeCounterDelta`, `processExploreLikeAggregateWave035`, `processExploreLikeUserQueueWave075`)와 count rebuild 1개(`refreshLikeCount`)의 실제 호출/route/scheduled 경로를 하나씩 고정하고, 157/158 shared owner로 전환했을 때 구형 writer가 legacy baseline을 다시 쓰지 못하도록 **실행형 cutover gate**를 구현한다. 한 환경만 활성화하는 host guard 금지.
+3. PREVIEW/TEST/PRODUCTION이 같은 공유 사용자 원본을 쓰므로 writer freeze는 세 환경 코드가 모두 호환 준비된 뒤 하나의 승인된 cutover token으로만 활성화. 코드에 `true` 상수로 우회 금지. token mismatch/누락 시 new writer가 아니라 legacy 안전 경로 또는 fail-closed 중 기능 손실이 없는 쪽을 명시적으로 검증.
+4. 158 lazy count baseline도 같은 cutover token과 묶고 `track_stats`가 frozen 이후 첫 changed track 1회 read만 허용. `refreshLikeCount`나 035/075가 동시에 track_stats를 갱신하는 상태에서 158 활성화 금지.
+5. 051 global revision 대체 신호/RTDB final settlement/public card-feed-profile generation은 writer owner 전환과 같은 operation ID/revision 계약을 사용해야 한다. 좋아요 하나로 전체 Feed/Profile rebuild/scan 금지.
+6. source-only/isolated tests로 old→new 순서, new→old retry, same-track multi-user, duplicate operation, partial legacy device, exact R2 device, rollback을 검증. W3+면 STOP. 실제 shared migration/writer freeze/deploy는 별도 승인 전 금지.
+
+**합격선:** unchanged exact R2 revisit D1 R0, partial visible membership은 요청 track 수에만 비례하는 indexed lookup, relation actual change W1~W2/duplicate W0, 기존 likes/track_stats 전체 backfill 0, old app response shape 유지, PC↔모바일 eventual convergence 설계가 실행형 test로 증명될 것.
+
+**금지:** 157 migration apply, legacy likes/track_stats 실제 freeze, trigger/index DROP, 대량 R2 rebuild, 사용자 데이터 복사/변환, TEST/PRODUCTION 실제 Worker 변경은 사용자 승인 전 실행하지 않는다.
+
+
 ## 최신 159/160 완료 — 다음은 reader-first exact/incomplete 판정 연결 (2026-09-21 KST)
 
 최종 audit [35576793526](https://github.com/andrawing1212/soridraw-music/actions/runs/35576793526), exact `7bcd28f909eda4544ee9919351d8dfd6ec7853bf` SUCCESS. canonical Worker SHA256 `c517ac6193cfe1bd12234a8158e9abcc89fd081fe0ab35b5a319b464fb553081` 일치. TypeScript/Build/156~160 회귀, 054→160 replay fixture, TEST/PRODUCTION dry-run, 공유 D1 read-only preflight PASS. 배포/공유 데이터 변경 없음.

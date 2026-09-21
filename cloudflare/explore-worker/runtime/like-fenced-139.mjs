@@ -348,6 +348,7 @@ export function createLikeExactR2Rebuilder156(bucket, listPage155, readPublicati
 
 
 // SORIDRAW_LIKE_SHARED_CUTOVER_MANIFEST_162_20260921
+// SORIDRAW_LIKE_CUTOVER_PRECONDITION_PROOF_164_20260921
 // One shared R2 marker coordinates reader semantics across PREVIEW/TEST/
 // PRODUCTION. Absence means legacy likes is still canonical. Presence is
 // accepted only when every environment is reader/writer ready and the legacy
@@ -365,6 +366,18 @@ export function createLikeCutoverManifestReader162(bucket) {
     try { value = JSON.parse(await object.text()); }
     catch { throw new Error('162 cutover manifest unreadable'); }
     const token = String(value?.cutoverToken || '').trim();
+    const proof164 = value?.preCutoverProof164;
+    const queueRows164 = proof164?.legacyQueueRows || {};
+    const queuesDrained164 = ['035', '066', '069', '075'].every((key) =>
+      Number.isSafeInteger(queueRows164[key]) && queueRows164[key] === 0
+    );
+    const preconditions164 = Number(proof164?.schemaVersion) === 1 &&
+      proof164?.legacyIntakeClosed === true &&
+      queuesDrained164 &&
+      proof164?.overlay157SchemaOwnerReady === true &&
+      proof164?.overlay157SchemaOwner === 'shared-d1' &&
+      proof164?.overlay157RelationTable === 'explore_like_overrides_157' &&
+      proof164?.ownerProtocol === 'uid143-track147-158';
     const armed = Number(value?.schemaVersion) === 1 &&
       value?.relationMode === 'overlay157' &&
       value?.legacyRelationWritersFrozen === true &&
@@ -372,6 +385,7 @@ export function createLikeCutoverManifestReader162(bucket) {
       value?.allEnvironmentReadersReady === true &&
       value?.allEnvironmentWritersReady === true &&
       value?.ownerProtocol === 'uid143-track147-158' &&
+      preconditions164 &&
       safeId(token, 128);
     if (!armed) {
       throw new Error('162 cutover manifest present but not fully armed');

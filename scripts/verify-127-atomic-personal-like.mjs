@@ -42,6 +42,14 @@ assert.doesNotMatch(service, /likedIds\.length >= 2000/,
 assert.match(service, /for \(let attempt = 0; attempt < 2; attempt \+= 1\)/);
 assert.match(collection, /reconcileExploreLikedTrackCollectionSnapshot127/);
 assert.match(collection, /cache\.canonicalLikedTrackIds = \[\.\.\.next\]/);
+assert.match(collection, /export const seedExploreLikedTrackCandidates129 =/);
+assert.match(collection, /const next = new Set\(cache\.canonicalLikedTrackIds \|\| \[\]\)/);
+assert.match(service, /seedExploreLikedTrackCandidates129\(uid, likedIds\)/);
+assert.ok(
+  service.indexOf('seedExploreLikedTrackCandidates129(uid, likedIds)') <
+    service.indexOf("writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid), '1')"),
+  'partial R2 IDs must be retained as candidates before the partial marker is stored',
+);
 assert.match(service, /export const getExploreKnownLikeCandidateIds127 =/);
 assert.match(service, /if \(readExploreTrackLikeMembership127\(normalizedUid, trackId\) === true\)/);
 const collectionReconcile129 = service.slice(

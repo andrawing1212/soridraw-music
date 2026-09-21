@@ -257,6 +257,36 @@ jobs:
           git commit -m "diag(preview): record bounded canonical queue recovery result"
           git push origin HEAD:preview
 
+      - name: Publish sanitized post-recovery queue and schedule status
+        if: ${{ always() && github.event_name == 'push' && (startsWith(github.event.head_commit.message, 'repair(preview): one-time supervised like queue replay') || startsWith(github.event.head_commit.message, 'diag(preview): verify queue recovery final state')) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS pending, COALESCE(SUM(mutation_count),0) AS changes FROM explore_like_batches_069" --json > "$RUNNER_TEMP/post-recovery.json"
+          curl -fsS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${PREVIEW_WORKER}/schedules" > "$RUNNER_TEMP/post-schedules.json"
+          node <<'NODE'
+          const fs=require('fs');
+          const a=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/post-recovery.json','utf8')).flatMap(x=>x.results||[])[0]||{};
+          const sched=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/post-schedules.json','utf8'));
+          const cron=Array.isArray(sched?.result?.schedules)?sched.result.schedules.length:-1;
+          const lines=['','## One-time recovery postflight',
+            'Pending 069 batches: '+Number(a.pending||0),
+            'Pending 069 user mutations: '+Number(a.changes||0),
+            'PREVIEW cron schedule count: '+cron,
+            'Cron restored to original zero schedules: '+(cron===0?'YES':'NO'),
+            'This does not independently prove PC/mobile user membership convergence.',''];
+          fs.appendFileSync('DOCS/LIKE_READONLY_DIAG_LATEST.md',lines.join('\n'));
+          NODE
+          git config user.name "soridraw-readonly-diagnostic"
+          git config user.email "actions@users.noreply.github.com"
+          git add DOCS/LIKE_READONLY_DIAG_LATEST.md
+          if ! git diff --cached --quiet; then
+            git commit -m "diag(preview): record queue recovery postflight and cron safety"
+            git push origin HEAD:preview
+          fi
+
       - name: Probe current PREVIEW feed payload for recent like
         shell: bash
         run: |

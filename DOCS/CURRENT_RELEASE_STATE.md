@@ -1,5 +1,33 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CR. 165 좋아요 drain barrier + 164 실제 대기열 판정 정정 — exact 감사 PASS (2026-09-21 KST)
+
+**기준:** `preview` code-audit commit `9eafb865114456139cdd8b51882537b6ca11eec7`, GitHub Actions [35586848857](https://github.com/andrawing1212/soridraw-music/actions/runs/35586848857) **SUCCESS**. 실제 앱/Worker 배포가 아니라 GitHub source-only / 공유 D1 read-only 감사다.
+
+**중요 정정: 앞선 0CQ의 “075 pending=1 이상” 결론은 잘못된 대기열 판정이었다.** 075는 처리한 행도 테이블에 보존하고 별도 `explore_like_user_queue_state_075` cursor로 이미 처리한 범위를 구분한다. 0CQ에서는 `SELECT 1 FROM explore_like_user_queue_075 LIMIT 1`만 사용하여 존재하는 처리완료 행을 미처리로 오판했다. 이번 수정은 075의 `processed_at/processed_uid`를 함께 읽고 **cursor보다 뒤에 있는 작업만** `LIMIT 1`로 탐지한다. cursor가 없거나 형식이 잘못되면 proof 생성 전에 fail-closed 한다. 사용자 데이터는 바뀌지 않았다.
+
+수정 후 실제 read-only 관측:
+- 구형 신규 intake: **OPEN** (`legacyIntakeClosed=false`)
+- 035/066/069/075: 실제 미처리 각각 **0/0/0/0**
+- 157 새 table/index: **아직 없음**
+- 결론: `164_CUTOVER_PREFLIGHT_READY=NO` — 현재 미충족은 intake 미동결 + 157 schema/owner 미준비. 075 대기 작업 때문이 아니다.
+
+**165 source-only 구현:**
+- `runtime/like-fenced-139.mjs`: 별도의 shared R2 drain marker `internal/explore/like-cutover-drain-v165/active.json` reader와 신규 intake guard 추가. missing=open, fully armed=draining, partial/corrupt=fail-closed. 제품 Worker는 marker를 만들거나 삭제하지 않는다.
+- `patches/079-like-intake-drain-barrier.mjs`, `release-patches.json`, `canonical/preview-worker.js`: batch 및 direct 좋아요 진입에서 신규 접수 전 drain 상태 검사. draining일 때 D1 mutation 전에 재시도 가능한 503, Retry-After 30 반환. 기존 035/066/069/075 scheduled processor는 guard를 통과하지 않으므로 대기열을 계속 처리할 수 있다. reader와 일반 페이지는 변경하지 않았다.
+- `scripts/verify-135-like-fenced-protocol.mjs`: absent/armed/corrupt 상태, 진입 경로, scheduled 유지, 사용자 기기의 durable outbox 재시도 보존 검증.
+- `scripts/verify-shared-d1-release-system.mjs`, `scripts/like-cutover-preflight-164.mjs`, 감사 Workflow: 075 cursor 판정 검증 및 078→079 replay + idempotency 검증.
+- pinned canonical SHA256: `316fc57b2a0ed6ff30a26b5a26e0309b9667db95bb164289de422f6132899f08`.
+
+**감사 결과:** TypeScript PASS / Build PASS / 관련 source·isolated tests PASS / `164_075_PROCESSED_ROWS_NOT_PENDING_CURSOR_REQUIRED=PASS` / `165_DRAIN_MARKER_ABSENT_OPEN_ARMED_PAUSED_CORRUPT_CLOSED=PASS` / `165_BATCH_DIRECT_INTAKE_GUARDED_CRON_DRAIN_REMAINS_OPEN=PASS` / `079_DEPLOYED_164_TO_165_REPLAY=PASS` / TEST·PRODUCTION Worker dry-run PASS / shared D1 read-only PASS / `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`.
+
+**절대 혼동 금지:** 이 감사 SUCCESS는 165 코드 검사의 성공이다. 제품 릴리스 gate는 계속 FAIL. 157/158 owner 실제 연결, 051 후속 변경 신호, R2/RTDB final settlement, 전 환경 최신 Worker 준비, 최종 W1~W2/중복 W0 총비용, PC↔모바일 실제 수렴 검증 전에는 배포 불가.
+
+**남은 안전 문제:** 165의 R2 drain marker를 본 후에도 이전 요청이 guard를 이미 지나 D1 queue write 직전일 수 있다. queue 0을 단 한 번 확인했다고 구형 쓰기가 완전히 멎은 증거는 아니다. 현재 164 CLI의 `--legacy-intake-closed`도 호출자 주장이지 전 환경의 실제 intake 종료 증빙이 아니다. 전 환경 취합 + in-flight quiescence/atomic barrier 증빙 + 최종 재조회 없이 marker arm 금지. marker arm 이후 구형 baseline으로 단순 롤백 금지.
+
+**실사용 영향:** 이번 작업에서 Worker/Firebase/Functions/Hosting 배포 0, 실제 shared D1/R2 데이터 write 0, 157 migration 0, 사용자 데이터 backfill/delete/transform 0, UI 변경 0, PC/모바일 실사용 검증 전. 격리 원격 D1 write billing은 이번 read-only 감사에서 재실행하지 않았으며 기존 157 W2/W1/W0 측정은 격리 기준만 유지한다.
+
+
 ## 0CQ. 164 실제 shared D1 read-only preflight — 현재 전환 차단 조건 실측 PASS (2026-09-21 KST)
 
 164 proof를 실제 shared D1 상태에서 **쓰기 없이** 생성 가능한지 검증하는 preflight를 구현했다. exact audit commit `caf4950095e8288868c738b2e22c6ca98967b30f`, GitHub Actions run `35584354578` SUCCESS.
@@ -9,12 +37,12 @@
 - 035 queue pending: 0
 - 066 queue pending: 0
 - 069 queue pending: 0
-- 075 queue pending: **1 이상 존재** — 전체 COUNT가 아니라 `SELECT 1 ... LIMIT 1` bounded sentinel
+- 075 queue pending: **당시 원시 테이블 행 존재=1 (실제 pending 증거 아님)** — 0CR에서 cursor 기준 재측정 결과 실제 미처리는 0으로 정정
 - `explore_like_overrides_157` table: 아직 없음
 - `idx_explore_like_overrides_157_user_recent` index: 아직 없음
 - 따라서 `164_CUTOVER_PREFLIGHT_READY=NO`
 
-즉 지금 163으로 구형 writer를 닫았으면 075에 남은 변경이 고립될 수 있었고, 164가 실제로 그 잘못된 전환을 차단했다.
+당시에는 075 잔여 변경 가능성을 경고했으나, 0CR에서 처리완료 행을 잘못 센 것으로 정정했다. 전환은 여전히 intake 미동결 및 157 schema 미준비 때문에 차단된다.
 
 추가 source:
 - `cloudflare/explore-worker/scripts/like-cutover-preflight-164.mjs`

@@ -2,6 +2,21 @@
 
 최종 갱신: 2026-09-22 KST
 
+## PREVIEW app131 cross-device like restore
+
+- 사용자 운영 지시에 따라 수정 완료 후 PREVIEW까지 연속 배포.
+- 제품 코드 `f6dbf81592bc64956525e4ac257ed944d50d9d41`.
+- 릴리스 source `32117f1a81b8b2741fe616b15420201c00d05c05`.
+- 사전 Audit `35650903841` SUCCESS.
+- Hosting Run `35651254609` SUCCESS.
+- TypeScript / Build / Firebase PREVIEW deploy PASS.
+- remote app version **131** / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- Worker `733c3981-4095-4c69-bf33-9abb5de7a450` 유지.
+- D1 / Functions / Rules / 사용자 데이터 변경 없음.
+- 목적: 30초 batch ACK 뒤 같은 계정 PC↔모바일에 좋아요 0/1 상태를 자동 전파하고, 하트·숫자·내 좋아요를 함께 맞춤.
+
+
 ## PREVIEW app130 mobile first-entry like sync
 
 - 사용자 승인으로 PREVIEW Hosting 배포.

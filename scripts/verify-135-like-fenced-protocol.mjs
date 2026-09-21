@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156, createLikeOverlayCanonical157, createLikeOverlayPager157, createLikeLazyTrackAggregator158, createTrackStatsBaselineLoader158 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156, createLikeOverlayCanonical157, createLikeOverlayPager157, createLikeLazyTrackAggregator158, createTrackStatsBaselineLoader158, createLikeCutoverManifestReader162, createLikeBoundedMembershipReader162, LIKE_CUTOVER_MANIFEST_KEY_162 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -1492,4 +1492,96 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.match(patch160, /if \(!has160\)/);
   console.log('160_DIRECT_LIKE_RATE_DB_WRITE_RETIRED=PASS');
   console.log('160_054_TO_160_PATCH_REPLAY_GUARD=PASS');
+}
+
+
+// 162: one shared R2 cutover marker controls reader semantics across every
+// environment. No marker means legacy likes remains canonical; a present but
+// incomplete/corrupt marker must fail closed. Only a fully armed marker may
+// switch bounded visible membership to legacy-baseline + sparse override.
+{
+  const makeBucket162 = (value) => ({
+    async get(key) {
+      assert.equal(key, LIKE_CUTOVER_MANIFEST_KEY_162);
+      if (value === null) return null;
+      return { async text() { return typeof value === 'string' ? value : JSON.stringify(value); } };
+    },
+  });
+  const calls162 = [];
+  const db162 = {
+    prepare(sql) {
+      return {
+        bind(...args) {
+          return {
+            async all() {
+              calls162.push({ sql, args });
+              if (sql.includes('explore_like_overrides_157')) {
+                return { results: [{ track_id: 'track-b' }] };
+              }
+              return { results: [{ track_id: 'track-a' }] };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const legacyReader162 = createLikeBoundedMembershipReader162(
+    db162, createLikeCutoverManifestReader162(makeBucket162(null))
+  );
+  assert.deepEqual(
+    await legacyReader162('user-162', ['track-a', 'track-b']),
+    { likedTrackIds: ['track-a'], mode: 'legacy', cutoverToken: null }
+  );
+  assert.match(calls162.at(-1).sql, /FROM likes l JOIN tracks t/);
+  assert.doesNotMatch(calls162.at(-1).sql, /explore_like_overrides_157/);
+  console.log('162_SHARED_MANIFEST_ABSENT_LEGACY_TARGETED=PASS');
+
+  const token162 = 'cutover-162-A';
+  const armed162 = {
+    schemaVersion: 1,
+    relationMode: 'overlay157',
+    cutoverToken: token162,
+    legacyRelationWritersFrozen: true,
+    legacyCountWritersFrozen: true,
+    allEnvironmentReadersReady: true,
+    allEnvironmentWritersReady: true,
+    ownerProtocol: 'uid143-track147-158',
+  };
+  const overlayReader162 = createLikeBoundedMembershipReader162(
+    db162, createLikeCutoverManifestReader162(makeBucket162(armed162))
+  );
+  assert.deepEqual(
+    await overlayReader162('user-162', ['track-a', 'track-b']),
+    { likedTrackIds: ['track-b'], mode: 'overlay157', cutoverToken: token162 }
+  );
+  const overlaySql162 = calls162.at(-1).sql;
+  assert.match(overlaySql162, /WITH requested\(track_id\) AS \(VALUES/);
+  assert.match(overlaySql162, /LEFT JOIN likes l/);
+  assert.match(overlaySql162, /LEFT JOIN explore_like_overrides_157 o/);
+  assert.match(overlaySql162, /COALESCE\(o\.liked/);
+  assert.doesNotMatch(overlaySql162, /COUNT\(|OFFSET|ORDER BY/);
+  console.log('162_ARMED_MANIFEST_OVERLAY_EFFECTIVE_TARGETED=PASS');
+
+  for (const invalid of [
+    '{not-json',
+    { ...armed162, legacyRelationWritersFrozen: false },
+    { ...armed162, legacyCountWritersFrozen: false },
+    { ...armed162, allEnvironmentReadersReady: false },
+    { ...armed162, allEnvironmentWritersReady: false },
+    { ...armed162, ownerProtocol: 'legacy' },
+    { ...armed162, cutoverToken: '' },
+  ]) {
+    const read = createLikeCutoverManifestReader162(makeBucket162(invalid));
+    await assert.rejects(read(), /162 cutover manifest/);
+  }
+  await assert.rejects(
+    overlayReader162('user-162', Array.from({ length: 201 }, (_, i) => 't-' + i)),
+    /oversized/
+  );
+  console.log('162_PARTIAL_OR_CORRUPT_SHARED_CUTOVER_FAILS_CLOSED=PASS');
+
+  const worker162 = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
+  assert.match(worker162, /SORIDRAW_SHARED_LIKE_READER_FIRST_161_20260921/);
+  console.log('162_CANONICAL_WORKER_EFFECTIVE_READER_WIRING=NOT_YET_PROVEN');
 }

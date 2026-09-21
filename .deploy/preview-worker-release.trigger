@@ -1,9 +1,9 @@
-requested_at=2026-09-21T17:22:30Z
+requested_at=2026-09-21T17:56:30Z
 requested_by=user
-product_code_target=89511f1cad7b7bf5d1a48ab88ba1910f77cd8e65
-release_purpose=deploy_audited_173_174_canonical_dormant_cutover_retry
+product_code_target=b0950d2106563ba6bb0a2ee6a947b26e1999a91f
+release_purpose=fix_app127_missing_personal_like_revision_route
 no_d1_migration=true
 no_user_data_migration=true
 cutover_activation=false
-hosting_redeploy_separately=true
+hosting_redeploy_separately=false
 preview_only=true

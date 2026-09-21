@@ -17,6 +17,7 @@ for (const required of [
   'readExploreLikeR2Bundle',
   'readSharedLikesState161',
   'readBoundedLegacyLikeMemberships161',
+  'readBoundedEffectiveLikeMemberships162',
   'exploreSharedFeedR2Key059',
   'readExploreSharedProfile060',
   'syncExploreFeedR2Publication043',
@@ -260,9 +261,10 @@ wrapAsyncFunction('handleMyLikedTracks052', 'Core062', (coreName) => `async func
   if (trackIds.some((trackId) => trackId.length > 512)) throwApi('INVALID_TRACK_ID', '곡 ID가 올바르지 않습니다.', 400);
 
   const likeState = await readSharedLikesState161(env, authContext.uid);
-  const likedIds = likeState?.exact
-    ? likeState.likedIds
-    : await readBoundedLegacyLikeMemberships161(env, authContext.uid, trackIds);
+  const targeted162 = likeState?.exact
+    ? { likedIds: likeState.likedIds, mode: 'exact-r2', cutoverToken: null }
+    : await readBoundedEffectiveLikeMemberships162(env, authContext.uid, trackIds);
+  const likedIds = targeted162.likedIds;
   const likesComplete = Boolean(likeState?.exact);
   const canonicalLikedTrackIds = [...likedIds];
 

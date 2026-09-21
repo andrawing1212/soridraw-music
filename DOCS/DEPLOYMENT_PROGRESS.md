@@ -1,8 +1,18 @@
 # SORIDRAW Deployment Progress
 
-> 현재 기준 문서는 `DOCS/CURRENT_RELEASE_STATE.md`다. 아래는 배포 관점 요약이며 과거 버전은 GitHub 기록을 참조한다.
-
 최종 갱신: 2026-09-22 KST
+
+## PREVIEW app127 personal-like route hotfix
+
+- 실사용 영상에서 `/v1/me/likes-revision` 404 확인.
+- canonical Worker에 072/073/074 materialize.
+- audit `35635080613` SUCCESS.
+- PREVIEW Worker `35635316035` SUCCESS.
+- active Worker `733c3981-4095-4c69-bf33-9abb5de7a450`.
+- canonical SHA256 `bee426ca157957c83c658370658e41b7bde68ae650c68c9e13a3c49a7fa83d1d`.
+- like revision smoke 401: route 존재, 404 아님.
+- TEST/PRODUCTION unchanged.
+- D1/user-data migration 없음.
 
 ## 현재 최신 배포: PREVIEW 앱127 + Worker173/174
 

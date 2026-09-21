@@ -377,8 +377,8 @@ if (process.argv[2] === 'cleanup') {
     await ddl("CREATE TABLE baseline_stats_171(track_id TEXT PRIMARY KEY,like_count INTEGER NOT NULL)");
     await ddl("INSERT INTO legacy_likes_171(track_id,user_uid,created_at) VALUES ('legacy-song-171','user-171',100)");
     await ddl("INSERT INTO baseline_stats_171(track_id,like_count) VALUES ('new-song-171',0),('legacy-song-171',1)");
-    await ddl("CREATE TABLE overlay_171(user_uid TEXT NOT NULL,track_id TEXT NOT NULL,liked INTEGER NOT NULL CHECK(liked IN(0,1)),updated_at INTEGER NOT NULL,PRIMARY KEY(user_uid,track_id)) WITHOUT ROWID");
-    await ddl("CREATE TABLE count_delta_171(track_id TEXT PRIMARY KEY,delta INTEGER NOT NULL,updated_at INTEGER NOT NULL) WITHOUT ROWID");
+    await ddl("CREATE TABLE overlay_171(user_uid TEXT NOT NULL,track_id TEXT NOT NULL,liked INTEGER NOT NULL CHECK(liked IN(0,1)),revision INTEGER NOT NULL CHECK(revision>=1),last_operation_id TEXT NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(user_uid,track_id)) WITHOUT ROWID");
+    await ddl("CREATE TABLE count_delta_171(track_id TEXT PRIMARY KEY,delta INTEGER NOT NULL,generation INTEGER NOT NULL CHECK(generation>=1),updated_at INTEGER NOT NULL) WITHOUT ROWID");
 
     const effective171 = (track) =>
       "COALESCE((SELECT liked FROM overlay_171 WHERE user_uid='user-171' AND track_id='" + track + "')," +
@@ -386,30 +386,36 @@ if (process.argv[2] === 'cleanup') {
     async function mutate171(track, desired, at) {
       const delta = desired ? 1 : -1;
       const relation =
-        "INSERT INTO overlay_171(user_uid,track_id,liked,updated_at) " +
-        "SELECT 'user-171','" + track + "'," + Number(desired) + "," + at +
+        "INSERT INTO overlay_171(user_uid,track_id,liked,revision,last_operation_id,updated_at) " +
+        "SELECT 'user-171','" + track + "'," + Number(desired) + ",1,'op-" + at + "'," + at +
         " WHERE " + effective171(track) + " != " + Number(desired) +
-        " ON CONFLICT(user_uid,track_id) DO UPDATE SET liked=excluded.liked,updated_at=excluded.updated_at" +
+        " ON CONFLICT(user_uid,track_id) DO UPDATE SET liked=excluded.liked,revision=overlay_171.revision+1," +
+        "last_operation_id=excluded.last_operation_id,updated_at=excluded.updated_at" +
         " WHERE overlay_171.liked != excluded.liked";
       const count =
-        "INSERT INTO count_delta_171(track_id,delta,updated_at) " +
-        "SELECT '" + track + "'," + delta + "," + at + " WHERE changes()=1 " +
+        "INSERT INTO count_delta_171(track_id,delta,generation,updated_at) " +
+        "SELECT '" + track + "'," + delta + ",1," + at + " WHERE changes()=1 " +
         "ON CONFLICT(track_id) DO UPDATE SET delta=count_delta_171.delta+excluded.delta," +
-        "updated_at=excluded.updated_at";
+        "generation=count_delta_171.generation+1,updated_at=excluded.updated_at";
       const final =
         "SELECT " + effective171(track) + " AS liked," +
+        "COALESCE((SELECT revision FROM overlay_171 WHERE user_uid='user-171' AND track_id='" + track + "'),0) AS revision," +
         "(SELECT like_count FROM baseline_stats_171 WHERE track_id='" + track + "')+" +
-        "COALESCE((SELECT delta FROM count_delta_171 WHERE track_id='" + track + "'),0) AS like_count";
+        "COALESCE((SELECT delta FROM count_delta_171 WHERE track_id='" + track + "'),0) AS like_count," +
+        "COALESCE((SELECT generation FROM count_delta_171 WHERE track_id='" + track + "'),0) AS generation";
       const out = await batchQuery([relation, count, final]);
       const writes = out.map(row => Number(row?.meta?.rows_written || 0));
       const total = writes.reduce((a,b) => a+b, 0);
       const liked = Number(out[2]?.results?.[0]?.liked) === 1;
       const likeCount = Number(out[2]?.results?.[0]?.like_count);
+      const revision = Number(out[2]?.results?.[0]?.revision || 0);
+      const generation = Number(out[2]?.results?.[0]?.generation || 0);
       console.log('171_REMOTE_D1_D1ONLY_' + track.toUpperCase().replace(/-/g,'_') + '_' +
         (desired ? 'LIKE' : 'UNLIKE') + '_AT_' + at +
         '=statement_writes:' + writes.join('/') + ',total_rows_written:' + total +
-        ',liked:' + Number(liked) + ',like_count:' + likeCount);
-      return { total, liked, likeCount, writes };
+        ',liked:' + Number(liked) + ',like_count:' + likeCount +
+        ',revision:' + revision + ',generation:' + generation);
+      return { total, liked, likeCount, revision, generation, writes };
     }
     const seq171 = [
       await mutate171('new-song-171', true, 501),
@@ -424,6 +430,16 @@ if (process.argv[2] === 'cleanup') {
     const writes171 = seq171.map(x => x.total);
     if (writes171.join(',') !== '2,0,2,0,2,0,2,0') {
       fail('171 D1-only overlay+count delta W2/W0 contract failed: ' + writes171);
+    }
+    if (seq171[0].revision !== 1 || seq171[1].revision !== 1 ||
+        seq171[2].revision !== 2 || seq171[3].revision !== 2 ||
+        seq171[4].revision !== 1 || seq171[5].revision !== 1 ||
+        seq171[6].revision !== 2 || seq171[7].revision !== 2 ||
+        seq171[0].generation !== 1 || seq171[1].generation !== 1 ||
+        seq171[2].generation !== 2 || seq171[3].generation !== 2 ||
+        seq171[4].generation !== 1 || seq171[5].generation !== 1 ||
+        seq171[6].generation !== 2 || seq171[7].generation !== 2) {
+      fail('171 relation revision or track generation did not advance exactly once per actual change');
     }
     const finalNew171 = await query("SELECT " + effective171('new-song-171') + " AS liked,(SELECT like_count FROM baseline_stats_171 WHERE track_id='new-song-171')+COALESCE((SELECT delta FROM count_delta_171 WHERE track_id='new-song-171'),0) AS like_count");
     const finalLegacy171 = await query("SELECT " + effective171('legacy-song-171') + " AS liked,(SELECT like_count FROM baseline_stats_171 WHERE track_id='legacy-song-171')+COALESCE((SELECT delta FROM count_delta_171 WHERE track_id='legacy-song-171'),0) AS like_count");

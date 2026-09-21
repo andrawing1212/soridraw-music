@@ -1,5 +1,46 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CW. PREVIEW 앱127 + Worker173/174 배포 완료 — 실사용 검증 단계 (2026-09-22 KST)
+
+**현재 PREVIEW HEAD:** `f677bccbc2111ce51ba983cc88fc23690ae37882`.
+
+### 실제 PREVIEW 배포 완료
+- **앱 127** Firebase PREVIEW Hosting Run `35632767964` — **SUCCESS**.
+  - 배포 고정 SHA: `f677bccbc2111ce51ba983cc88fc23690ae37882`
+  - TypeScript PASS / Build PASS
+  - Firebase PREVIEW Hosting deploy PASS
+  - `preview.soridraw.com` exact build PASS
+  - remote `app-version.json=127` PASS
+  - TEST / PRODUCTION branch + Hosting unchanged PASS
+- **Explore Worker 173/174 canonical** Run `35631742053` — **SUCCESS**.
+  - active PREVIEW Worker version: `f3c66d58-8e24-4eaa-923c-f61fe369e36f`
+  - canonical Worker SHA256: `49f15336ae91af13f75c45f6d349645b336520426d8bfdc9ee9b8c95b7d27047`
+  - Feed smoke PASS / Profile smoke PASS / revision HEAD-only PASS
+  - warm revision D1 R0/W0 PASS
+  - TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f` unchanged
+  - PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` unchanged
+
+### 배포 전 최종 감사
+- 앱127/Worker173~174 최종 감사 Run `35632451095` — **SUCCESS**.
+- TypeScript / Build / static release verification / like regression / TEST+PRODUCTION Worker dry-run / live shared D1 read-only audit PASS.
+- 기존 구형 검사식이 173/174의 정상 승격 상태를 구형 기준으로 오판하던 부분만 갱신했고, 제품 동작을 검사에 맞추기 위해 되돌리지는 않았다.
+
+### 이번 PREVIEW에서 실제 확인할 핵심
+- 동일 계정 PC↔모바일에서 하트 상태가 오래된 요청에 의해 역행하지 않는지.
+- 좋아요/해제 후 공개 숫자가 늦게 도착한 오래된 Feed/Profile/Card 응답으로 되돌아가지 않는지.
+- 30초 묶음 처리 후 다른 기기에서 개인 하트가 최신 상태로 수렴하는지.
+- 업데이트 후 기존 좋아요 상태가 유지되는지.
+
+### 아직 활성화하지 않은 것
+- 171 shared D1 additive migration: **미적용**.
+- D1-only 최종 cutover marker: **미활성**.
+- drain/cutover R2 marker write: **0**.
+- 사용자 원본 데이터 migration / 대량변환 / backfill: **0**.
+- TEST / PRODUCTION 승격: **0**.
+
+즉 현재 PREVIEW에는 173/174 안전장치와 앱127 클라이언트가 실제 배포되어 테스트 가능하지만, **W2 D1-only 최종 전환 자체는 아직 dormant**다. 사용자 PREVIEW 실사용 확인 후 다음 단계에서 171 schema + cutover 절차를 별도 승인/검증한다.
+
+
 ## 0CV. 170~172 실제 D1 비용 실측 + D1-only W2 구조 + dormant 제품 route — 감사 PASS / 전환 미활성 (2026-09-21 KST)
 
 **현재 코드 감사 기준:** `preview` exact commit `32795d33710a8f0f3bec6d280a2fd3f740232bb4`, GitHub Actions [35616444369](https://github.com/andrawing1212/soridraw-music/actions/runs/35616444369) **SUCCESS**. canonical Worker exact SHA256 `f215f3d49a4259183c829d3d73d0055013eb199c8d33637730c48ec07d906750`. TypeScript / Build / static release verification / isolated like regression / TEST Worker dry-run / PRODUCTION Worker dry-run / live shared D1 read-only audit PASS, `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`.

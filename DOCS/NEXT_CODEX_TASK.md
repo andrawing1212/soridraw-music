@@ -1,5 +1,20 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app130 PREVIEW 배포 후 모바일 최초 진입 검증
+
+현재:
+- app130 source/audit commit `1c850beed0a4b4409b96acbb636176ea2cfe4bac`
+- Audit Run `35648185770` SUCCESS
+- 실제 PREVIEW live는 app129
+
+다음:
+1. 사용자가 PREVIEW 배포를 요청하면 app130 Hosting만 배포.
+2. 모바일에서 앱 업데이트 후 Explore 첫 진입 즉시 PC의 최종 하트/숫자와 같은지 확인.
+3. 인기 탭 왕복 없이 추천/최신 첫 화면 자체가 맞아야 통과.
+4. 같은 계정 한 곡 좋아요는 0/1 하나만 존재하고 하트·숫자·내 좋아요가 함께 움직이는지 확인.
+5. 통과 전 171 migration / final cutover / TEST / PRODUCTION 승격 금지.
+
+
 ## 현재 최우선 — app129 PREVIEW 실사용 단일 좋아요 원자 검증
 
 현재 실제 PREVIEW:

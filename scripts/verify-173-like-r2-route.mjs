@@ -41,7 +41,8 @@ for (const needle of [
   'publicationFailures173',
   'LIKE_PUBLICATION_RETRY_REQUIRED',
   "'Retry-After': '2'",
-  "personalLikeSnapshot: 'revision-safe-173'",
+  "personalLikeSnapshot: 'settled'",
+  "personalLikeProtocol: 'revision-safe-173'",
   "publicLikePublication: 'generation-safe-173'",
 ]) if (!batch.includes(needle)) fail('batch route missing: ' + needle);
 if (batch.indexOf('publisher173.publish') < batch.indexOf('canonical171.applyAtomically')) {

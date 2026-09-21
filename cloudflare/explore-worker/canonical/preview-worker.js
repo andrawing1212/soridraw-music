@@ -2915,6 +2915,7 @@ async function readBoundedLegacyLikeMemberships161(env, uid, trackIds) {
 // SORIDRAW_SHARED_LIKE_CUTOVER_GATE_162_20260921
 const exploreLikeCutoverKey162 = 'internal/explore/like-cutover-v162/active.json';
 
+// SORIDRAW_LIKE_CUTOVER_PRECONDITION_PROOF_164_20260921
 async function readLikeCutoverState162(env) {
   const bucket = env?.PROFILE_MEDIA || null;
   if (!bucket) return { mode: 'legacy', cutoverToken: null };
@@ -2924,6 +2925,18 @@ async function readLikeCutoverState162(env) {
   try { value = JSON.parse(await object.text()); }
   catch { throw new Error('162 cutover manifest unreadable'); }
   const token = String(value?.cutoverToken || '').trim();
+  const proof164 = value?.preCutoverProof164;
+  const queueRows164 = proof164?.legacyQueueRows || {};
+  const queuesDrained164 = ['035', '066', '069', '075'].every((key) =>
+    Number.isSafeInteger(queueRows164[key]) && queueRows164[key] === 0
+  );
+  const preconditions164 = Number(proof164?.schemaVersion) === 1 &&
+    proof164?.legacyIntakeClosed === true &&
+    queuesDrained164 &&
+    proof164?.overlay157SchemaOwnerReady === true &&
+    proof164?.overlay157SchemaOwner === 'shared-d1' &&
+    proof164?.overlay157RelationTable === 'explore_like_overrides_157' &&
+    proof164?.ownerProtocol === 'uid143-track147-158';
   const armed = Number(value?.schemaVersion) === 1 &&
     value?.relationMode === 'overlay157' &&
     value?.legacyRelationWritersFrozen === true &&
@@ -2931,6 +2944,7 @@ async function readLikeCutoverState162(env) {
     value?.allEnvironmentReadersReady === true &&
     value?.allEnvironmentWritersReady === true &&
     value?.ownerProtocol === 'uid143-track147-158' &&
+    preconditions164 &&
     token.length > 0 && token.length <= 128;
   if (!armed) throw new Error('162 cutover manifest present but not fully armed');
   return { mode: 'overlay157', cutoverToken: token };

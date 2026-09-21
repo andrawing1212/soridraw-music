@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156, createLikeOverlayCanonical157, createLikeOverlayPager157 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156, createLikeOverlayCanonical157, createLikeOverlayPager157, createLikeLazyTrackAggregator158 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -1292,4 +1292,99 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('157_TO_156_EXACT_R2_REBUILD_WITHOUT_D1_BACKFILL=PASS');
   console.log('157_2054_EFFECTIVE_COLD_UNION_WITH_TOMBSTONE=PASS');
   console.log('157_REAL_REMOTE_D1_BILLING=MEASURE_SEPARATELY');
+}
+
+
+// 158: lazy per-track total baseline. First changed track reads the frozen
+// legacy count once; later mutations/restarts use durable owner state only.
+{
+  const values158 = new Map();
+  const storage158 = {
+    async get(key) { return structuredClone(values158.get(key)); },
+    async transaction(cb) {
+      return cb({
+        get: async (key) => structuredClone(values158.get(key)),
+        put: async (key, value) => values158.set(key, structuredClone(value)),
+      });
+    },
+  };
+  let baselineReads158 = 0;
+  const cutover158 = 'cutover-158-A';
+  const loadBaseline158 = async (trackId) => {
+    assert.equal(trackId, 'track-158');
+    baselineReads158++;
+    return { count: 5, cutoverToken: cutover158 };
+  };
+  const publish158 = async (event) => ({
+    published: true,
+    snapshotGeneration: event.generation,
+    surfaceGenerations: {
+      card: event.generation, feed: event.generation, profile: event.generation,
+    },
+  });
+  assert.throws(() => createLikeLazyTrackAggregator158(
+    'track-158', storage158, publish158, loadBaseline158,
+    { cutoverToken: cutover158 }
+  ), /legacy count writers/);
+
+  let aggregate158 = createLikeLazyTrackAggregator158(
+    'track-158', storage158, publish158, loadBaseline158,
+    { legacyWriterCutoverVerified: true, cutoverToken: cutover158 }
+  );
+  const event158 = (uid, id, revision, seq, previousLiked, liked) => ({
+    uid, trackId: 'track-158', id, revision, seq, previousLiked, liked,
+    delta: Number(liked) - Number(previousLiked),
+  });
+  const first158 = await aggregate158(event158('u1', 'a1', 1, 1, false, true));
+  assert.equal(first158.count, 6);
+  assert.equal(first158.generation, 1);
+  assert.equal(baselineReads158, 1);
+  assert.deepEqual(values158.get('soridraw:track-like-total:147'),
+    { count: 6, version: 1, cutoverToken158: cutover158 });
+
+  const second158 = await aggregate158(event158('u1', 'a2', 2, 2, true, false));
+  assert.equal(second158.count, 5);
+  assert.equal(second158.generation, 2);
+  assert.equal(baselineReads158, 1, 'same track must not reread D1 baseline');
+
+  // Simulated owner restart: durable total+token survives; another user can
+  // change the same track without a second track_stats baseline read.
+  aggregate158 = createLikeLazyTrackAggregator158(
+    'track-158', storage158, publish158, loadBaseline158,
+    { legacyWriterCutoverVerified: true, cutoverToken: cutover158 }
+  );
+  const third158 = await aggregate158(event158('u2', 'b1', 1, 3, false, true));
+  assert.equal(third158.count, 6);
+  assert.equal(third158.generation, 3);
+  assert.equal(baselineReads158, 1);
+
+  const wrongToken158 = createLikeLazyTrackAggregator158(
+    'track-158', storage158, publish158, loadBaseline158,
+    { legacyWriterCutoverVerified: true, cutoverToken: 'cutover-158-B' }
+  );
+  await assert.rejects(wrongToken158(event158('u3', 'c1', 1, 4, false, true)),
+    /baseline token\/count mismatch/);
+  assert.equal(baselineReads158, 1);
+
+  const emptyValues158 = new Map();
+  const emptyStorage158 = {
+    async get(key) { return structuredClone(emptyValues158.get(key)); },
+    async transaction(cb) {
+      return cb({
+        get: async (key) => structuredClone(emptyValues158.get(key)),
+        put: async (key, value) => emptyValues158.set(key, structuredClone(value)),
+      });
+    },
+  };
+  const badBaseline158 = createLikeLazyTrackAggregator158(
+    'track-158', emptyStorage158, publish158,
+    async () => ({ count: 5, cutoverToken: 'wrong' }),
+    { legacyWriterCutoverVerified: true, cutoverToken: cutover158 }
+  );
+  await assert.rejects(badBaseline158(event158('u1', 'bad', 1, 1, false, true)),
+    /audited track_stats baseline unavailable/);
+  assert.equal(emptyValues158.size, 0);
+  console.log('158_LAZY_TRACK_STATS_BASELINE_ONE_READ_PER_CHANGED_TRACK=PASS');
+  console.log('158_NO_GLOBAL_TRACK_COUNT_BACKFILL=PASS');
+  console.log('158_CUTOVER_TOKEN_AND_RESTART_DURABILITY=PASS');
 }

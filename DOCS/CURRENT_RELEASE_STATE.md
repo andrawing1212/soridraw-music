@@ -1,5 +1,42 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CQ. 164 실제 shared D1 read-only preflight — 현재 전환 차단 조건 실측 PASS (2026-09-21 KST)
+
+164 proof를 실제 shared D1 상태에서 **쓰기 없이** 생성 가능한지 검증하는 preflight를 구현했다. exact audit commit `caf4950095e8288868c738b2e22c6ca98967b30f`, GitHub Actions run `35584354578` SUCCESS.
+
+실제 read-only 관측:
+- legacy intake: **OPEN** (`legacyIntakeClosed=false`)
+- 035 queue pending: 0
+- 066 queue pending: 0
+- 069 queue pending: 0
+- 075 queue pending: **1 이상 존재** — 전체 COUNT가 아니라 `SELECT 1 ... LIMIT 1` bounded sentinel
+- `explore_like_overrides_157` table: 아직 없음
+- `idx_explore_like_overrides_157_user_recent` index: 아직 없음
+- 따라서 `164_CUTOVER_PREFLIGHT_READY=NO`
+
+즉 지금 163으로 구형 writer를 닫았으면 075에 남은 변경이 고립될 수 있었고, 164가 실제로 그 잘못된 전환을 차단했다.
+
+추가 source:
+- `cloudflare/explore-worker/scripts/like-cutover-preflight-164.mjs`
+- `scripts/verify-shared-d1-release-system.mjs`
+- `.github/workflows/soridraw-release-system-audit.yml`
+
+검증:
+- TypeScript PASS / Build PASS
+- `164_READONLY_CUTOVER_PREFLIGHT_MODEL=PASS`
+- live shared D1 preflight read-only PASS
+- TEST/PRODUCTION Worker dry-run PASS
+- canonical Worker SHA256 `ea884a1bf2c6acd1bf951d6cfac1fef774242c8736bab3330df05c0194dcb2f1` exact
+- `078_DEPLOYED_160_TO_164_REPLAY=PASS`
+- `RELEASE_SYSTEM_AUDIT_NO_DEPLOY=PASS`
+
+직전 run `35584199084`의 FAIL은 새 preflight의 D1 query helper **함수 정의까지 호출 수로 잘못 센 정적 검사 오류**였고, 실제 D1/Worker 변경 전 단계에서 실패했다. verifier를 수정해 재실행한 `35584354578`은 전체 SUCCESS.
+
+**실서비스/데이터 변경:** 없음. 157 migration 미적용, cutover marker 미작성, Worker/Firebase/Functions 배포 없음, shared D1 사용자 row 쓰기 없음, R2 사용자 object 변경 없음.
+
+**다음 단계:** 실제 전환 실행이 아니라 **legacy intake를 잠시 닫아도 사용자 마지막 클릭이 사라지지 않는 drain barrier + 157/158 shared owner writer를 dormant/source-only로 준비**한다. marker arm 전에는 언제든 legacy로 복귀 가능해야 하고, marker arm 후 단순 legacy writer 재개는 금지한다.
+
+
 ## 0CP. 162/163/164 좋아요 전환 안전장치 — 공유 전환 신호·구형 writer 동결·대기열/스키마 증명 PASS (2026-09-21 KST)
 
 161의 partial reader가 157 writer cutover 이후에도 구형 `likes`만 보게 되는 문제를 막기 위해, **전환 자체를 한 번에 안전하게 제어하는 162→163→164 경계**를 코드와 실행형 감사에 추가했다. 기준 코드 감사 commit은 `2157efdcb7ee5c3c2e4b437489c8e856cd99918d`.

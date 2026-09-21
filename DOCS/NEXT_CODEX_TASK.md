@@ -1,5 +1,27 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — 167 공유 D1 원자적 fence 설계·격리 실행 검증 (source-only)
+
+166 in-flight 경쟁 재현 및 허위 proof 차단은 `preview` exact `5ed766f92c31cda2407efd25c0324b167b2f84bc`, 감사 run `35588084201` **SUCCESS**. 단, 제품 전환은 아직 BLOCKED. 164 CLI는 `--legacy-intake-closed`를 거부하고 shared D1은 035/066/069/075 미처리 0, intake OPEN, 157 table/index 없음. 자세한 결과 `CURRENT_RELEASE_STATE.md` 0CS.
+
+### 단일 작업: 진짜 원자적 종료를 설계하고 격리 모형으로 검증
+
+1. 단순한 R2 drain guard(165)를 최종 전환 증거로 쓰지 말 것. 165 검사 직후 멈춘 기존 요청이 나중에 쓰는 166 재현 사례를 먼저 그대로 재사용한다.
+2. 공유 D1 안에 최소한의 additive cutover-control/fence 후보를 설계한다. 좋아요 queue intake가 실제 D1에 쓰는 것과 “legacy intake closed” 상태 변경 사이의 원자적 순서를 보장해야 한다. SQL 한 문장 안의 조건부 INSERT, 단일 소유자 직렬화 등 실현 가능한 최소 경로만 비교한다. 하나의 조건 조회 + 별개 INSERT는 TOCTOU이며 FAIL.
+3. legacy direct `PUT/DELETE`의 기존 `likes`/track_stats 변경과 069/055 batch queue, 035/066/075 scheduled processor의 모든 실제 진입 경로를 확인한다. 157/158 이후 legacy mutation은 확실히 차단하고, 전환 전 이미 수락된 요청은 안전하게 처리되어야 한다.
+4. PREVIEW/TEST/PRODUCTION의 모든 **실제 배포 Worker 버전**이 공용 fence를 준수하는지 확인할 방법을 마련한다. 신규 코드가 준비됐다는 문서 또는 R2 bool만으로 구형 배포본의 준수를 가정하지 않는다. 구형 in-flight가 남을 수 있는 경우에는 full cutover를 계속 거부한다.
+5. 기존 `164`의 read-only queue/schema 검사, 165 client durable retry, 162 effective reader, 163 legacy writer freeze를 변경 없이 보호하고 새 격리 fixture에서 **in-flight vs fence / fence vs intake / queue drain 후 fence / old Worker bypass / duplicate / PC↔mobile intent** 순서를 검증한다.
+6. D1 실제 격리 원격 DB에서 SQL query plan과 `meta.rows_written`을 검증하기 전에는 W1~W2 PASS 선언 금지. R2/DO/RTDB 추가 비용과 크로스 환경 호환성, 복구 계획도 확인한다. shared user DB migration apply 금지.
+7. 안전한 barrier 증명이 불가능하거나 old Worker가 fence를 우회하면 제품 릴리스 gate는 FAIL 상태로 유지하고 정확한 우회 경로를 문서화한다.
+
+### 고정 제한
+- shared D1 실제 migration/seed/write 금지, 사용자 R2 drain/cutover marker arm 금지, PREVIEW/TEST/PRODUCTION Worker 배포 금지. 사용자 원본 데이터 삭제·백필·변환 없음.
+- 안정 캐시 재진입에서 D1 data read 0 목표; 누른 좋아요는 바뀐 곡만. 원격 W3+ 또는 전체 재생성은 FAIL.
+- 기존 좋아요/공개/비공개/UI/Music Note 묶음 저장 보호.
+- exact commit에서 TypeScript/Build/isolated SQL tests/전체 release-system 감사 완료 후 Work 독립감사. 실제 PREVIEW/PC·모바일 실사용은 사용자 배포 승인 이후.
+- 코드 승인과 PRODUCTION 승격은 별개. 사용자 명시 승인 없이 production 비변경.
+
+
 ## 현재 최우선 — 166 전 환경 intake 종료 증명 + in-flight 안전 전환 (source-only)
 
 165 구현과 164 cursor 교정은 [run 35586848857](https://github.com/andrawing1212/soridraw-music/actions/runs/35586848857)에서 exact `9eafb865114456139cdd8b51882537b6ca11eec7` SUCCESS. 0CR 기준 **075의 실제 pending은 0**으로 정정되었다. 현재 164 read-only preflight가 막히는 이유는 `legacyIntakeClosed=false`와 157 table/index 미적용이다. 현재 신규 shared drain marker는 source-only이며 실제로 arm되지 않았다.

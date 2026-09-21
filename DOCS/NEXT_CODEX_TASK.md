@@ -1,5 +1,13 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 145 — D1 쓰기 행 폭증 원인 확정 / 실서비스 계량 전 새 Worker 배포 금지 (2026-09-21 KST)
+
+사용자 "왜 2행 이상인지 세계 전체를 뒤져서라도 정확히 알아보고 방법을 찾아봐" 요청. DOCS/LIKE_WRITE_REDESIGN_133.md 145에서 원인별 SQL·실무 문헌·실행계획을 고정. **현재 069 queue INSERT/DELETE 논리 2 + likes/track_stats 논리 2 + 032/033 derived_tracks/global seq/Feed journal/profile journal 논리 4 = 격리 합성 8**. 큐 없는 140에도 파생 트리거 때문에 격리 논리 6. 실제 D1 rows_written는 인덱스 변경까지 청구하므로 반드시 따로 측정해야 함. 기존 트리거·인덱스를 유지하고 SQL batch로 묶는 접근은 W2 후보에서 제외.
+
+변경: 기존 134 fixture에 원인 6+069 2 출력 추가. 기존 READ-ONLY release-system audit에 Python 132/133/134와 shared live D1 관련 sqlite_schema SELECT만 추가. 이를 실제 run 결과로 확인할 때까지 LIVE_SCHEMA / TypeScript / Build / 비용 PASS 주장 금지. 공유 DB 실제 사용자 행 SELECT/변환/삭제 금지.
+
+**우선 구현 방향:** 원본 D1 likes 1관계 변경만 각 좋아요/해제 hot path에 남기는 모델을 격리 D1에서 검증하고, track_stats/인기 랭킹/파생 Feed/프로필 상태를 별도의 영속 작은 집계와 R2 부분 갱신으로 옮긴다. 원본 likes PK/기존 추가 인덱스의 실제 D1 청구가 W1~W2인지 확인 후 적합한 키 구조 결정. 원본 DB stats를 비워두거나 stale 시켜놓고 기존 reader를 계속 쓰게 하는 방식 금지. shared 세 환경의 기존 reader 및 모든 writer 호환 컷오버, 같은 곡 다른 사용자 동시성, 최종 canonical 후 게시, 2천 개인 snapshot 확장 및 DO/R2 전체 비용 모두 통과해야 함. 격리 D1 생성/새 DO 바인딩/공유 migration/Worker 승격 전에 필요한 영향·비용·복구방안을 보고하고 사용자 승인에 따를 것.
+
 ## 0CE 앱127의 안정적인 operationId 전송 준비 (2026-09-21 KST)
 
 `src/services/exploreLikeService.ts`는 신규 클릭마다 `crypto.randomUUID()`를 1회 생성하고 outbox에 저장, 재시도에서는 동일 `operationId` 전송. 과거 캐시에는 최초 flush 전 1회 생성·저장. `scripts/verify-127-atomic-personal-like.mjs`에 persist-before-send, 신규 클릭별 다른 ID, legacy 보정 테스트 추가. 실제 GitHub 소스 연결 정적 가드 PASS, 전체 CI 결과는 아직 미확인. 현행 071 Worker는 ID 필드 무시 → 실제 멱등성은 139/143 server owner 라우팅 및 baseRevision 연동까지 FAIL. `DOCS/CURRENT_RELEASE_STATE.md` 0CE 참조.

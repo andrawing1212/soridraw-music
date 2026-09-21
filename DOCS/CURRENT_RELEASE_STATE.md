@@ -1,5 +1,13 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CE. 앱127 좋아요 요청 고유 ID 144 — 재전송 시 동일 ID·신규 클릭 새 ID (2026-09-21 KST)
+
+기존 `src/services/exploreLikeService.ts`에 `createExploreLikeOperationId144` 추가: secure-origin `crypto.randomUUID()`로 **신규 클릭마다 고유 operationId** 생성·사용자별 outbox에 영속 저장. 30초 flush 시 같은 ID 그대로 전달하고 응답이 모호해 재시도해도 바꾸지 않음. 과거 앱 outbox는 flush 이전 UID별 한 번만 UUID 채워 로컬에 저장(기존 데이터 삭제/전역 강제 재생성 없음). `normalizePendingMutation`이 operationId를 보존하고 0BW rebase는 latest 객체를 spread해 최신 클릭의 ID를 유지. 실제 배포 Worker071은 추가 JSON 필드를 무시하므로 기존 batch 경로 동작·D1 쓰기 구조 변경 없음. 새 139/143 서버가 사용하는 별도 `baseRevision`의 안전한 전달은 아직 미구현; 현재 단지 **고유 ID의 보존을 준비한 단계**임.
+
+기존 `scripts/verify-127-atomic-personal-like.mjs`에 ID 생성·신규 클릭·legacy 복구·persist-before-request·같은 ID로 재전송 source+순수 helper 검증 추가. GitHub 실제 서비스 소스에서 위 연결 가드 전부 존재 PASS; 신규 127 전체 CI/TypeScript/Build 실행 결과는 아직 미확인. 0CD의 256곡 전역 seq 격리 PASS와 별도.
+
+**기존 릴리스 FAIL:** D1 운영 trigger/index W1~W2 실제 충족 미검증(격리 모형 논리 6), 141 shared snapshot 2천 곡 제한, 세 환경 구형 Writer 우회, 실제 UID owner/auth/RTDB/Work/PC↔모바일 및 139-144 Worker 연결 전. 앱126/Worker071 현장 유지(이번 턴 실주소 재검증 전), 공유 사용자 데이터·TEST/PRODUCTION 비변경. 신규 변경은 preview 소스와 검사/문서만, 배포 없음.
+
 ## 0CD. 좋아요 128 변경 기록 한도 제거 후보 + 사용자별 영속 소유자 + 배포 전 실제 CI 연결 (2026-09-21 KST)
 
 사용자의 "보고만 하지 말고 배포 전까지 계속 진행" 지시. 기준 `preview` `482087ad10ae9c288d4ac371f7dcc01019359bf0` 이후 **실제 소스 변경**:

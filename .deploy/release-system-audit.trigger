@@ -1,1 +1,1 @@
-release_system_audit=2026-09-21-153-user-key-without-rowid-real-cost
+release_system_audit=2026-09-21-153-adapter-schema-ts-build-readonly

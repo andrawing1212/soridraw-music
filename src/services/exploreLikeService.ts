@@ -411,10 +411,11 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
   // If an initial retained signal arrives after the R2 baseline, its rows
   // could predate that snapshot. Reconcile once rather than accepting it as
   // a newer personal state solely because no local signal version was stored.
-  const baselineAlreadyVerified = baselineCompleted127.has(uid) ||
-    readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1';
-  const gap = (lastSeen > 0 && signal.previousVersion !== lastSeen) ||
-    (lastSeen === 0 && baselineAlreadyVerified);
+  // On first subscription the retained RTDB signal can contain account changes
+  // accepted after this device's R2 baseline. Do not discard those exact track
+  // transitions merely because this device has no prior signal watermark.
+  // An actual missing interval (a previously seen version) still requires repair.
+  const gap = lastSeen > 0 && signal.previousVersion !== lastSeen;
   if (gap || readRepairTarget127(uid) > 0) {
     // A failed R2 repair must never ACK the incoming RTDB revision. Record a
     // durable retry target and let the verified personal snapshot finish first.
@@ -436,19 +437,43 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
   const pending = readLikeOutbox(uid);
   const unresolved = readSnapshotPending127(uid);
   const cache = getLikedStateCache(uid);
+  const displayLocks = readLikeDisplayLocks(uid);
+  const acceptedAt = Date.now();
   let changed = false;
+  let unresolvedChanged = false;
+  let locksChanged = false;
   for (const item of signal.results) {
-    if (pending[item.trackId] || Object.prototype.hasOwnProperty.call(unresolved, item.trackId)) continue;
-    if (cache.get(item.trackId) === item.liked) continue;
-    cache.set(item.trackId, item.liked);
-    patchExploreLikedTrackMembership(uid, item.trackId, item.liked);
-    changed = true;
-    // The signal carries the server-accepted count paired with this account's
-    // 0/1 heart transition. The page keeps that pair together until shared
-    // publication catches up.
+    // A newer unsent local click must win. An older accepted-but-unsettled
+    // intention must NOT permanently block a newer server-accepted device state.
+    if (pending[item.trackId]) continue;
+    if (cache.get(item.trackId) !== item.liked) {
+      cache.set(item.trackId, item.liked);
+      patchExploreLikedTrackMembership(uid, item.trackId, item.liked);
+      changed = true;
+    }
+    // The same accepted state must remain visible even on partial legacy R2
+    // accounts, where a targeted D1 read can still lag behind the intake queue.
+    // It is not an extra write to the shared user database.
+    if (unresolved[item.trackId] !== item.liked) {
+      unresolved[item.trackId] = item.liked;
+      unresolvedChanged = true;
+    }
+    // Persist the accepted count as well as the heart: an RTDB event can arrive
+    // before Explore mounts, and a cached Feed may still carry an older count.
+    displayLocks[item.trackId] = {
+      liked: item.liked,
+      likeCount: clampLikeCount(item.likeCount),
+      updatedAt: acceptedAt,
+      protectUntil: acceptedAt + EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120,
+    };
+    locksChanged = true;
+    // A changed count matters even when the heart boolean is already identical.
+    // Reconcile Feed/Profile/My Likes with the same accepted account pair.
     dispatchLikeSync({ ...item, uid, source: 'remote' });
   }
   if (changed) persistLikedStateCache(uid, cache);
+  if (unresolvedChanged) writeSnapshotPending127(uid, unresolved);
+  if (locksChanged) persistLikeDisplayLocks(uid, displayLocks);
   markSeenLikeSignal127(uid, signal.version);
 };
 

@@ -1,5 +1,24 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DF. app132 PREVIEW source 후보 — 최신 계정 좋아요 신호와 기기 캐시 일치 복구 (2026-09-22 KST)
+
+**기준 PREVIEW app131 live:** Hosting Run `35651254609` SUCCESS. **현재 app132는 아직 배포되지 않았다.**
+**이번 소스 후보:** `164c9f77fe3540df9e721bdc4c1e2f868c0918f0` (서비스 수정 `e5b6ff64cd649577411c3208c7970b97c8f61499`; 회귀 검사 `8941b412b1f970df5f2346f93b60f070da979db2`).
+
+사용자 실사용 PC/모바일 사진: PC의 기존 찬 하트 여러 개가 모바일 첫 추천 화면에서 빈 하트/0으로 표시. 사용자의 요구는 최신 계정 상태를 캐시·서버 어느 경로든 일관되게 표시하는 것. **app131 실사용 FAIL**.
+
+이번 좁은 수정:
+- 첫 RTDB retained signal이 오는데 기기 자체 signal watermark가 0이라는 이유만으로 이전 R2 baseline 복구 분기로 돌려 현재 signal을 버리던 조건 제거. 실제 놓친 signal 구간은 기존 repair 유지.
+- 다른 기기의 새 ACK가 왔을 때 이전 `snapshotPending`이 최신 개인 상태를 영구 차단하지 않게 변경. 아직 전송하지 않은 해당 기기 로컬 클릭은 기존대로 보호.
+- partial R2 계정에서도 이미 서버 ACK된 개인 0/1 상태는 기존 원격 signal을 `snapshotPending`에 보관, 느린 targeted legacy D1 응답이 다시 덮지 않게 한다.
+- 같은 하트 상태라도 서버가 보내온 좋아요 숫자가 달라졌다면 이를 생략하지 않고 Feed/프로필/내 좋아요 및 기기 저장 display lock에 반영. 이벤트가 Explore 마운트 전에 도착해도 보호.
+- 30초 묶음 저장·기존 Worker/공유 D1·UI/CSS/Functions/Rules는 변경하지 않음.
+
+**검증 단계:** TypeScript / Build / 관련 회귀 / Release Audit는 아직 실행 결과 확인 전. GitHub push는 배포가 아니다. 사전검사 PASS 시에만 고정 PREVIEW Hosting 릴리스 트리거를 사용하며, 실패하면 배포 보류.
+**실사용 합격:** PC와 모바일의 동일한 곡 하트 + 공개 숫자 + 내 좋아요가 첫 화면부터 일치하고, 마지막 클릭 후 30초 ACK 후에는 탭 왕복·새로고침 없이 수렴해야 한다. 불일치면 비용 최적화/TEST/PRODUCTION 금지.
+**알려진 제약:** 공유 공개 집계가 Worker에서 후처리되는 동안 서버 자체 공개 숫자는 지연될 수 있다. 개인 계정 승인 상태를 보호하는 이번 수정만으로 공개 집계의 즉시 확정까지 증명된 것은 아님.
+
+
 ## 0DE. PREVIEW app131 — PC↔모바일 좋아요 자동 동기화 복구 배포 완료 (2026-09-22 KST)
 
 **PREVIEW 배포 고정 commit:** `32117f1a81b8b2741fe616b15420201c00d05c05`.

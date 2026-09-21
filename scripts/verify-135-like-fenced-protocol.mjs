@@ -1,4 +1,4 @@
-import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
+import { LikeFencedProcessor139, createLikeD1Canonical140, createLikeSharedR2Publisher141, createLikeDurableOwner143, createLikeRelationOnly146, createLikeTrackAggregator147, createLikeSharedTrackCardPublisher151, createLikeRecentPager155, createLikeExactR2Rebuilder156 } from '../cloudflare/explore-worker/runtime/like-fenced-139.mjs';
 import assert from 'node:assert/strict';
 
 // ISOLATED PROTOCOL SIMULATION ONLY. No real Cloudflare Durable Object or D1.
@@ -332,11 +332,62 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const full = mockBucket({ schemaVersion: 1, uid: 'user',
     likedTrackIds: Array.from({ length: 2000 }, (_, i) => 'track-' + i) });
   const fullPublish = createLikeSharedR2Publisher141(full, async () => {});
-  await assert.rejects(fullPublish(event('new', 'n', 1, true)), /capacity/);
-  assert.equal(full.writes, 0, 'no liked song may be truncated');
-  assert.equal((await fullPublish(event('track-1', 'remove', 1, false))).settled, true,
-    'unlike must be permitted on a full bundle');
-  assert.equal(full.value.likedTrackIds.length, 1999);
+  await assert.rejects(fullPublish(event('new', 'n', 1, true)), /completeness ambiguous/);
+  await assert.rejects(fullPublish(event('track-1', 'remove-legacy', 1, false, 9)),
+    /completeness ambiguous/);
+  assert.equal(full.writes, 0, 'ambiguous legacy 2000 snapshot must never be mutated or truncated');
+
+  // 156: cold-only exact rebuild from the 155 bounded canonical pager. This
+  // turns an ambiguous legacy 2,000-item object into an exact >2,000 snapshot
+  // without changing the v114 key/schema consumed by older readers.
+  const canonical2053 = Array.from({ length: 2053 }, (_, i) => ({
+    trackId: 'exact-' + String(i).padStart(5, '0'),
+    createdAt: 1800000000000 - Math.floor(i / 7),
+  }));
+  let pageCalls156 = 0;
+  const listPage156 = async (_uid, cursor, limit) => {
+    assert.equal(limit, 128);
+    let start = 0;
+    if (cursor) {
+      start = canonical2053.findIndex(x => x.createdAt === cursor.createdAt &&
+        x.trackId === cursor.trackId) + 1;
+      assert.ok(start > 0, 'cursor must be one of the canonical rows');
+    }
+    pageCalls156++;
+    const items = canonical2053.slice(start, start + limit);
+    const last = items.at(-1);
+    return {
+      items,
+      nextCursor: items.length === limit && start + items.length < canonical2053.length
+        ? { createdAt: last.createdAt, trackId: last.trackId } : null,
+    };
+  };
+  let barrier156 = 10;
+  const rebuild156 = createLikeExactR2Rebuilder156(full, listPage156,
+    async () => barrier156);
+  assert.deepEqual(await rebuild156('user'),
+    { rebuilt: true, count: 2053, publicationSeq: 10 });
+  assert.equal(full.value.canonicalComplete156, true);
+  assert.equal(full.value.canonicalSource156, 'explore_likes_153');
+  assert.equal(full.value.exactLikeCount156, 2053);
+  assert.equal(full.value.likedTrackIds.length, 2053);
+  assert.ok(pageCalls156 <= Math.ceil(2053 / 128) + 1);
+
+  const exactPublish = createLikeSharedR2Publisher141(full, async () => {});
+  assert.equal((await exactPublish(event('exact-new', 'exact-add', 1, true, 11))).settled, true);
+  assert.equal(full.value.likedTrackIds.length, 2054);
+  assert.equal(full.value.exactLikeCount156, 2054);
+  assert.equal((await exactPublish(event('exact-00001', 'exact-remove', 1, false, 12))).settled, true);
+  assert.equal(full.value.likedTrackIds.length, 2053);
+  assert.equal(full.value.exactLikeCount156, 2053);
+
+  const contested = mockBucket({ schemaVersion: 1, uid: 'user', likedTrackIds: ['legacy'] });
+  let seqReads156 = 0;
+  const contestedRebuild = createLikeExactR2Rebuilder156(contested,
+    async () => ({ items: [], nextCursor: null }),
+    async () => (++seqReads156 === 1 ? 20 : 21));
+  await assert.rejects(contestedRebuild('user'), /Concurrent like mutation/);
+  assert.equal(contested.writes, 0, 'rebuild must not publish across a concurrent UID mutation');
 
   // More than 128 distinct changes must remain possible with a single
   // per-UID cursor instead of a 128-track history embedded in every R2 body.
@@ -354,7 +405,8 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
     { settled: false, superseded: true });
   console.log('141_SHARED_R2_POSTCOMMIT_CAS_AND_LEGACY_FIELDS=PASS');
   console.log('141_STALE_REPLAY_CONFLICT_AND_IDEMPOTENT_NOTIFY=PASS');
-  console.log('141_CAS_RETRY_COLD_2000_AND_128_HISTORY_ELIMINATED=PASS');
+  console.log('141_CAS_RETRY_AMBIGUOUS_2000_FAIL_CLOSED_AND_128_HISTORY_ELIMINATED=PASS');
+  console.log('156_EXACT_2053_R2_REBUILD_AND_POST_REBUILD_MUTATION=PASS');
   console.log('141_LIVE_CROSS_ENV_WRITER_AND_AUTH_NOT_CONNECTED=NOT_VERIFIED');
 }
 

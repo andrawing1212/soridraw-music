@@ -55,6 +55,8 @@ jobs:
           node --check .deploy/release-worker-runtime.mjs
           node --check cloudflare/explore-worker/canonical/preview-entry.js
           node --check cloudflare/explore-worker/canonical/preview-worker.js
+          node --check cloudflare/explore-worker/patches/061-shared-social-r2-parity.mjs
+          node --check cloudflare/explore-worker/patches/062-shared-track-card-r2.mjs
           expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
           actual_worker_sha="$(sha256sum cloudflare/explore-worker/canonical/preview-worker.js | awk '{print $1}')"
           echo "CANONICAL_WORKER_EXPECTED_SHA256=$expected_worker_sha"

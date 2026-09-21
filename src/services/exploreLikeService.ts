@@ -54,6 +54,7 @@ type ExploreLikePendingMutation = {
   queuedAt: number;
   updatedAt: number;
   retryCount: number;
+  operationId?: string; // stable across a retry, replaced on every new click
 };
 
 type ExploreLikeOutbox = Record<string, ExploreLikePendingMutation>;
@@ -100,6 +101,16 @@ const clampLikeCount = (value: unknown) => {
 // distinct user intentions, and older ACKs may not resolve the later one.
 export const nextExploreLikeMutationAt127 = (previousUpdatedAt: number, now: number): number =>
   Math.max(now, previousUpdatedAt + 1);
+
+// A device clock, track ID or UID is not a globally unique operation ID.
+// Generate once per new click and persist before sending: retries must reuse
+// the SAME ID so the future fenced server can reject duplicate executions.
+export const createExploreLikeOperationId144 = (): string => {
+  if (typeof crypto === 'undefined' || typeof crypto.randomUUID !== 'function') {
+    throw new Error('안전한 좋아요 요청 ID를 생성할 수 없습니다.');
+  }
+  return crypto.randomUUID();
+};
 
 // One transition represents the actor's action, not two unrelated UI edits.
 // The public total is adjusted only by the actor's own delta; other users'
@@ -562,6 +573,8 @@ const normalizePendingMutation = (value: unknown): ExploreLikePendingMutation | 
     queuedAt: Math.max(0, Number(row.queuedAt || updatedAt)),
     updatedAt,
     retryCount: Math.max(0, Math.floor(Number(row.retryCount || 0))),
+    operationId: typeof row.operationId === 'string' && /^[0-9a-f-]{36}$/i.test(row.operationId)
+      ? row.operationId : undefined,
   };
 };
 
@@ -808,6 +821,17 @@ flushPendingLikes = async (user: User): Promise<void> => {
   if (!uid || inflightByUid.has(uid)) return;
 
   const outbox = readLikeOutbox(uid);
+  // One-time recovery for pending entries written by older app versions.
+  // Do not regenerate an ID after an ambiguous response: the persisted ID is
+  // the identity of this user intention, not of each HTTP attempt.
+  let upgradedLegacyOutbox144 = false;
+  for (const mutation of Object.values(outbox)) {
+    if (!mutation.operationId) {
+      mutation.operationId = createExploreLikeOperationId144();
+      upgradedLegacyOutbox144 = true;
+    }
+  }
+  if (upgradedLegacyOutbox144) persistLikeOutbox(uid, outbox);
   const ordered = Object.values(outbox)
     .sort((a, b) => (a.queuedAt || a.updatedAt) - (b.queuedAt || b.updatedAt))
     .slice(0, EXPLORE_LIKE_BATCH_MAX);
@@ -841,6 +865,7 @@ flushPendingLikes = async (user: User): Promise<void> => {
             liked: pending.desiredLiked,
             baseLiked: pending.baseLiked,
             mutationAt: pending.updatedAt,
+            operationId: pending.operationId,
           })),
         }),
       });
@@ -1105,6 +1130,7 @@ export const setExploreTrackLike = async (
     queuedAt: existing?.queuedAt || now,
     updatedAt: now,
     retryCount: 0,
+    operationId: createExploreLikeOperationId144(),
   };
   persistLikeOutbox(uid, outbox);
 

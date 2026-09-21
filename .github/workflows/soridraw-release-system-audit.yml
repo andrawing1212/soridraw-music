@@ -146,6 +146,16 @@ jobs:
           console.log('LIKE_READONLY_SCHEMA_AUDIT=PASS objects=' + rows.length);
           console.log('D1_LIVE_MUTATION_META_ROWS_WRITTEN=NOT_MEASURED');
           NODE
+          node "$WRANGLER" d1 execute DB --remote --config "$cfg" --command "EXPLAIN QUERY PLAN SELECT like_count FROM track_stats WHERE track_id='__soridraw_158_probe__' LIMIT 1" --json > "$RUNNER_TEMP/track-stats-158-plan.json"
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const rows = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/track-stats-158-plan.json','utf8')).flatMap(x => x.results || []);
+          const detail = rows.map(x => String(x.detail || '')).join(' | ');
+          if (!detail.includes('SEARCH') || !detail.includes('track_stats') || !detail.includes('track_id=?')) {
+            throw Error('158 track_stats baseline is not a keyed lookup: ' + detail);
+          }
+          console.log('158_TRACK_STATS_BASELINE_PK_PLAN=PASS ' + detail);
+          NODE
 
       - name: Real remote D1 like billing on isolated synthetic database
         if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'measure isolated D1')

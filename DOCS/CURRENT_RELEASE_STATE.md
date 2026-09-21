@@ -1,5 +1,14 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0CD. 좋아요 128 변경 기록 한도 제거 후보 + 사용자별 영속 소유자 + 배포 전 실제 CI 연결 (2026-09-21 KST)
+
+사용자의 "보고만 하지 말고 배포 전까지 계속 진행" 지시. 기준 `preview` `482087ad10ae9c288d4ac371f7dcc01019359bf0` 이후 **실제 소스 변경**:
+- `cloudflare/explore-worker/runtime/like-fenced-139.mjs`: 기존 `lastLikeRevisions141` 무제한 증가·128곡 차단 대신 사용자별 `lastPublishedSeq141` 단일 단조 순번 및 마지막 게시 ID·곡·상태만 shared v114 R2에 추가(기존 likedTrackIds/074 필드 보존). 139 영속 pending에도 seq를 저장·복구. 새 `createLikeDurableOwner143({uid,storage,canonical,publish})`은 **한 UID당 하나의 DO 인스턴스**를 가정한 호출 직렬화·트랜잭션 seq 발급 및 UID 일치 검사를 포함. 서로 다른 곡 동시 클릭에도 seq 1,2,3... 순서 발급.
+- 기존 `scripts/verify-135-like-fenced-protocol.mjs`에 256곡 새 좋아요 후 R2 기록 한도 초과 없이 목록 유지, 늦은 과거 seq 차단, 임의 seq 위조 충돌, 동시 3곡 직렬화·owner 재시작 후 seq 보존·다른 UID 거부 검사 추가. 실제 GitHub 139/140/141/143 + 135 소스 재조회 격리 실행 전체 PASS. 135 기존 `LEGACY_WRITER_BYPASS_RELEASE_GATE=FAIL`, 140 `REAL_D1_ROWS_WRITTEN=NOT_MEASURED`, product release FAIL 의도대로 유지.
+- 기존 `.github/workflows/soridraw-release-system-audit.yml`에 **배포 없는** 127/135 검사 및 실제 071 Worker 복사본에 072→073→074 생성 후 128 검사를 포함. 기존 TypeScript/Build, Worker dry-run, 공유 D1 SELECT 전용 감사와 동일 워크플로. 128 한도에 대한 074 내부 기록은 여전히 존재하지만 `138` 후보에서 intake 호출이 차단돼 있고 신형 141은 143 단일 owner global seq를 사용한다. 전체 워크플로 실행 결과는 별도로 확인해야 하며 통과했다고 기록 금지.
+
+**제품/배포 차단 조건 유지:** 143은 아직 실제 Cloudflare 공통 service binding/DO 인스턴스/인증된 HTTP routing에 연결되지 않았고 TEST/PRODUCTION 구형 Worker는 이를 우회할 수 있다. 앱127의 30초 outbox 역시 새 seq/baseRevision 프로토콜로 전환 전. 141 공유 개인 R2의 **기존 2천 likedTrackIds 한도는 미해결**(초과 시 덮어쓰기 없이 중단)이며 구형 061 writer는 2천 잘라 저장. D1 기존 derived trigger/index 비용이 격리 논리 6변경으로 W1~W2 미달; 실 Cloudflare `meta.rows_written` 미검증. 신형 139/140/141/143은 실제 Worker 요청 경로와 미연결, 후단 RTDB 인증 게시 미연결. TS/Build/전체 CI/Work/실기기 미검증. 기존 **실배포 PREVIEW 앱126/Worker071 유지**, main/production/공유 사용자 데이터/Cloudflare/Firebase/R2 실서비스 미변경. 138 pending-only 코드만 배포하면 기기 수렴이 멈추므로 배포 금지. 현재 변경은 preview 소스·테스트·감사 워크플로·문서만 대상.
+
 ## 0CC. 141 공유 개인 R2 최종 게시 연결부 + 142 전체 연결 모의 검사 (2026-09-21 KST)
 
 사용자가 "최대한 하나씩이라도 집중해서 해결" 지시. 기준 preview `a16c0ffaee06567fa178446a6807b66a71987d63`에서 `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 **`createLikeSharedR2Publisher141(bucket,notify)` 실제 코드 후보**를 추가. 139가 D1 확정 후에만 호출하는 게시 콜백으로, 기존 공유 키 `internal/explore/shared-social-v114/likes/<UID>.json` / `schemaVersion:1` / `likedTrackIds`를 유지하며 별도의 곡별 `lastLikeRevisions141`에 operation ID·revision·liked를 기록한다. ETag 조건부 R2 PUT 최대 12회, 최신 revision만 쓰고 오래된 revision이나 같은 revision의 불일치 payload 차단, 동일 ID/상태 중복 알림 재시도에는 R2 재쓰기 0. 성공한 조건부 PUT 뒤 `notify` 성공까지 확인해야 settled. 공유 R2가 없거나 손상됐거나 목록 중복/2천 초과, 신규 좋아요에서 2천 용량 초과, 신규 곡 revision 128 한도 도달 시 **기존 상태를 덮어쓰지 않고 오류**. 기존 074 order/그 외 필드는 보존함.

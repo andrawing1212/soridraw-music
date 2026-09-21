@@ -79,12 +79,22 @@ source = source.slice(0, batchAnchor) + runtime + '\n// ' + marker + '\n' + sour
 
 {
   const range = functionRange('writeSharedLikes061');
-  const oldGuard = '  if (existing?.canonicalComplete156 === true) return false;';
-  if (range.text.split(oldGuard).length !== 2) throw new Error('[083/173] shared-like legacy guard anchor changed');
-  replaceFunction('writeSharedLikes061', range.text.replace(
-    oldGuard,
-    "  if (existing?.canonicalComplete156 === true || existing?.revisionProtocol173 === 'd1only171') return false;"
-  ));
+  const guarded173 = "revisionProtocol173 === 'd1only171'";
+  if (!range.text.includes(guarded173)) {
+    const candidates = [
+      {
+        old: '  if (existing156?.canonicalComplete156 === true) return false;',
+        next: "  if (existing156?.canonicalComplete156 === true || existing156?.revisionProtocol173 === 'd1only171') return false;",
+      },
+      {
+        old: '  if (existing?.canonicalComplete156 === true) return false;',
+        next: "  if (existing?.canonicalComplete156 === true || existing?.revisionProtocol173 === 'd1only171') return false;",
+      },
+    ];
+    const match = candidates.find((candidate) => range.text.split(candidate.old).length === 2);
+    if (!match) throw new Error('[083/173] shared-like legacy guard anchor changed');
+    replaceFunction('writeSharedLikes061', range.text.replace(match.old, match.next));
+  }
 }
 
 {

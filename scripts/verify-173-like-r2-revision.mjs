@@ -9,6 +9,7 @@ class FakeBucket {
   constructor(entries = {}) {
     this.map = new Map();
     this.seq = 0;
+    this.failPuts = new Map();
     for (const [key, value] of Object.entries(entries)) this.seed(key, value);
   }
   seed(key, value) {
@@ -23,7 +24,15 @@ class FakeBucket {
       text: async () => row.body,
     };
   }
+  failNextPuts(key, count) {
+    this.failPuts.set(key, Math.max(0, Number(count) || 0));
+  }
   async put(key, body, options = {}) {
+    const remaining = this.failPuts.get(key) || 0;
+    if (remaining > 0) {
+      this.failPuts.set(key, remaining - 1);
+      return null;
+    }
     const row = this.map.get(key);
     const onlyIf = options.onlyIf || {};
     if (onlyIf.etagMatches && row?.etag !== onlyIf.etagMatches) return null;
@@ -140,7 +149,52 @@ assert.equal(merged.likeRevisionByTrack171.t2.revision, 1);
 const popularIds = bucket.json(feedKey('popular')).payload.data.items.map((x) => x.id);
 assert.deepEqual(new Set(popularIds), new Set(['t1', 't2']));
 
+// Cross-store atomicity is impossible, so 173 deliberately uses an idempotent
+// retry protocol: D1 settles once, any partial R2 projection may fail, and the
+// exact same canonical revision/generation can be replayed until every surface
+// converges. The failed attempt must not make a later retry conflict with itself.
+const retryBucket = new FakeBucket({
+  [trackKey('retry')]: card('retry', 'owner', 0),
+  [feedKey('latest')]: feedBundle([item('retry', 'owner', 0, 11)]),
+  [feedKey('popular')]: feedBundle([item('retry', 'owner', 0, 11)]),
+  [profileKey('owner')]: profileBundle('owner', [item('retry', 'owner', 0)]),
+  [personalKey('u')]: { schemaVersion: 1, uid: 'u', likedTrackIds: [] },
+});
+const retryPublisher = createLikeR2RevisionPublisher173({ PROFILE_MEDIA: retryBucket }, {
+  trackCardKey: trackKey,
+  feedKey,
+  profileKey,
+  sortItems: (items, sort) => sort === 'popular'
+    ? [...items].sort((a, b) => Number(b.likeCount || 0) - Number(a.likeCount || 0))
+    : [...items].sort((a, b) => Number(b.publishedAt || 0) - Number(a.publishedAt || 0)),
+  feedLimit: 40,
+});
+retryBucket.failNextPuts(feedKey('latest'), 8);
+const retryUpdate = {
+  uid: 'u', trackId: 'retry', liked: true, likeCount: 1,
+  revision: 1, generation: 1, operationId: 'retry-op-1', status: 'applied',
+};
+const firstRetry = await retryPublisher.publish(retryUpdate);
+assert.equal(firstRetry.ok, false);
+assert.equal(firstRetry.stage, 'feeds');
+assert.deepEqual(retryBucket.json(personalKey('u')).likedTrackIds, ['retry']);
+assert.equal(retryBucket.json(trackKey('retry')).card.likeCount, 1);
+assert.equal(retryBucket.json(feedKey('latest')).payload.data.items[0].likeCount, 0);
+assert.equal(retryBucket.json(feedKey('popular')).payload.data.items[0].likeCount, 1);
+assert.equal(retryBucket.json(profileKey('owner')).body.data.items[0].likeCount, 0);
+
+const secondRetry = await retryPublisher.publish(retryUpdate);
+assert.equal(secondRetry.ok, true);
+assert.deepEqual(retryBucket.json(personalKey('u')).likedTrackIds, ['retry']);
+assert.equal(retryBucket.json(trackKey('retry')).card.likeCount, 1);
+assert.equal(retryBucket.json(feedKey('latest')).payload.data.items[0].likeCount, 1);
+assert.equal(retryBucket.json(feedKey('popular')).payload.data.items[0].likeCount, 1);
+assert.equal(retryBucket.json(profileKey('owner')).body.data.items[0].likeCount, 1);
+assert.equal(retryBucket.json(personalKey('u')).likeRevisionByTrack171.retry.revision, 1);
+assert.equal(retryBucket.json(trackKey('retry')).card.likeGeneration171, 1);
+
 console.log('173_GENERATION_STALE_PUBLICATION_BLOCKED=PASS');
+console.log('173_PARTIAL_R2_FAILURE_SAME_CANONICAL_RETRY_CONVERGES=PASS');
 console.log('173_PERSONAL_REVISION_STALE_OVERWRITE_BLOCKED=PASS');
 console.log('173_PERSONAL_PC_MOBILE_DIFFERENT_TRACK_CAS_MERGE=PASS');
 console.log('173_LEGACY_2000_TRUNCATION_NOT_REINTRODUCED=PASS');

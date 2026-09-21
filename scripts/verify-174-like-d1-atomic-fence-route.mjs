@@ -13,7 +13,28 @@ const functionText = (name) => {
     if (start >= 0) break;
   }
   assert.ok(start >= 0, 'missing function ' + name);
-  const brace = source.indexOf('{', start);
+  const openParen = source.indexOf('(', start);
+  assert.ok(openParen >= 0, 'missing function signature ' + name);
+  let signatureEnd = -1;
+  let parenDepth = 0, signatureQuote = '', signatureEscaped = false, signatureComment = '';
+  for (let i = openParen; i < source.length; i += 1) {
+    const c = source[i], n = source[i + 1];
+    if (signatureComment === 'line') { if (c === '\n') signatureComment = ''; continue; }
+    if (signatureComment === 'block') { if (c === '*' && n === '/') { signatureComment = ''; i += 1; } continue; }
+    if (signatureQuote) {
+      if (signatureEscaped) signatureEscaped = false;
+      else if (c === '\\') signatureEscaped = true;
+      else if (c === signatureQuote) signatureQuote = '';
+      continue;
+    }
+    if (c === '/' && n === '/') { signatureComment = 'line'; i += 1; continue; }
+    if (c === '/' && n === '*') { signatureComment = 'block'; i += 1; continue; }
+    if ('"\'\`'.includes(c)) { signatureQuote = c; continue; }
+    if (c === '(') parenDepth += 1;
+    if (c === ')' && --parenDepth === 0) { signatureEnd = i; break; }
+  }
+  assert.ok(signatureEnd >= 0, 'unterminated function signature ' + name);
+  const brace = source.indexOf('{', signatureEnd);
   let depth = 0, quote = '', escaped = false, comment = '';
   for (let i = brace; i < source.length; i += 1) {
     const c = source[i], n = source[i + 1];

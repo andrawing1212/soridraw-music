@@ -228,3 +228,46 @@ export function createLikeSharedR2Publisher141(bucket, notify) {
     throw new Error('Shared like R2 CAS contention; pending retry required');
   };
 }
+
+
+// SORIDRAW_LIKE_DURABLE_OWNER_143_20260921
+// Glue for one Durable Object instance per authenticated UID, shared by ALL
+// SORIDRAW environments through one service binding. This module does not
+// create that binding, authenticate the caller, or migrate shared user data.
+// The queue is per DO instance, not a cross-Worker global mutex: every legacy
+// writer must be cut over before enabling this route.
+export function createLikeDurableOwner143({ uid, storage, canonical, publish }) {
+  if (!safeId(uid, 256) || !storage?.get || !storage?.put ||
+      !storage?.transaction || !canonical || !publish) {
+    throw new TypeError('Authenticated UID, durable storage and canonical adapters required');
+  }
+  const sequenceKey = 'soridraw:account-like-seq:143:' + uid;
+  const ledger = {
+    get: (key) => storage.get(key),
+    put: (key, value) => storage.put(key, value),
+    async nextPublicationSeq(requestUid) {
+      if (requestUid !== uid) throw new Error('UID owner mismatch');
+      return storage.transaction(async (txn) => {
+        const prior = (await txn.get(sequenceKey)) ?? 0;
+        if (!Number.isSafeInteger(prior) || prior < 0 || prior >= Number.MAX_SAFE_INTEGER) {
+          throw new Error('Durable like publication counter invalid or exhausted');
+        }
+        const next = prior + 1;
+        await txn.put(sequenceKey, next);
+        return next;
+      });
+    },
+  };
+  const processor = new LikeFencedProcessor139({ ledger, canonical, publish });
+  let tail = Promise.resolve();
+  return {
+    mutate(input) {
+      if (input?.uid !== uid) return Promise.reject(new Error('UID owner mismatch'));
+      // Coalesce DO event concurrency into a single ordered stream; a thrown
+      // operation must not poison the queue for later retries.
+      const job = tail.then(() => processor.mutate(input));
+      tail = job.catch(() => {});
+      return job;
+    },
+  };
+}

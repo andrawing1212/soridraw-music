@@ -287,17 +287,17 @@ async function acquireExploreLikeProcessor035(env, owner, now) {
 {
   const range = functionRange('createLikeD1OnlyCanonical171');
   let body = range.text;
-  const mutationAnchor = `        WHERE ${eligible171}
-          AND ${effectiveLiked171} != ?`;
+  const mutationAnchor = `        WHERE \${eligible171}
+          AND \${effectiveLiked171} != ?`;
   if (body.split(mutationAnchor).length !== 2) {
     throw new Error('[084/174] 171 mutation fence anchor changed');
   }
-  body = body.replace(mutationAnchor, `        WHERE ${eligible171}
+  body = body.replace(mutationAnchor, `        WHERE \${eligible171}
           AND EXISTS (
             SELECT 1 FROM explore_like_cutover_control_174
             WHERE id = 1 AND phase = 'frozen'
           )
-          AND ${effectiveLiked171} != ?`);
+          AND \${effectiveLiked171} != ?`);
   replaceFunction('createLikeD1OnlyCanonical171', body);
 }
 

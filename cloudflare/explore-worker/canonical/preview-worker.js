@@ -21637,7 +21637,9 @@ __name222222222222222222222222222222222222222222222222222222222222222222222222(r
 __name2222222222222222222222222222222222222222222222222222222222222222222222222(refreshLikeCount, "refreshLikeCount");
 async function handleLikeD1Core(request, env, cors, trackId, shouldLike) {
   const authContext = await requireExploreAuth(request);
-  await enforceUserRateLimit(env, authContext.uid, "like", RATE_LIMITS.like);
+  // SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921
+  // Retire the legacy RATE_DB write from the direct PUT/DELETE like route.
+  await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);
   const track = await getPublicTrackForWrite(env, trackId);
   const now = Date.now();
   const likeCount = await adjustExploreLikeCounterDelta(env, trackId, authContext.uid, shouldLike, now);

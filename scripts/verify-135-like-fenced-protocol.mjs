@@ -1723,7 +1723,8 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const patch165 = readFileSync('cloudflare/explore-worker/patches/079-like-intake-drain-barrier.mjs', 'utf8');
   const release165 = JSON.parse(readFileSync('cloudflare/explore-worker/release-patches.json', 'utf8'));
   assert.match(worker165, /SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921/);
-  assert.equal(release165.patches.at(-1), '079-like-intake-drain-barrier.mjs');
+  assert.equal(release165.patches.at(-2), '079-like-intake-drain-barrier.mjs');
+  assert.equal(release165.patches.at(-1), '080-direct-like-atomic-batch.mjs');
   assert.match(patch165, /const marker165 = 'SORIDRAW_LIKE_LEGACY_INTAKE_DRAIN_BARRIER_165_20260921'/);
   const slice165 = (name) => {
     const start = worker165.indexOf('async function ' + name + '(');
@@ -1762,4 +1763,18 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.match(flush165, /if \(succeeded && getPendingExploreLikeMutationCount\(uid\) > 0\)/);
   assert.match(service165, /window\.addEventListener\('online', retry\)/);
   console.log('165_CLIENT_RETRIABLE_FAILURE_LAST_INTENT_RETAINED=PASS');
+  const atomic168 = slice165('adjustExploreLikeCounterDelta');
+  const candidate168 = readFileSync('cloudflare/explore-worker/runtime/like-direct-atomic-168.txt', 'utf8');
+  const patch168 = readFileSync('cloudflare/explore-worker/patches/080-direct-like-atomic-batch.mjs', 'utf8');
+  assert.match(atomic168, /SORIDRAW_DIRECT_LIKE_ATOMIC_D1_BATCH_168_20260921|env\.DB\.batch\(\[/);
+  assert.match(worker165, /SORIDRAW_DIRECT_LIKE_ATOMIC_D1_BATCH_168_20260921/);
+  assert.match(atomic168, /const result = await env\.DB\.batch\(\[/);
+  assert.match(atomic168, /WHERE changes\(\) = 1/);
+  assert.match(atomic168, /SELECT like_count FROM track_stats WHERE track_id = \? LIMIT 1/);
+  assert.doesNotMatch(atomic168, /\.run\(\)|\.all\(\)/);
+  assert.match(candidate168, /one database transaction/i);
+  assert.match(patch168, /SORIDRAW_DIRECT_LIKE_ATOMIC_D1_BATCH_168_20260921/);
+  assert.match(direct165, /await adjustExploreLikeCounterDelta\(env, trackId, authContext\.uid, shouldLike, now\)/);
+  console.log('168_DIRECT_LEGACY_RELATION_COUNT_SINGLE_BATCH_SOURCE=PASS');
+
 }

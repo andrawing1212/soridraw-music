@@ -1412,12 +1412,17 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
 {
   const worker159 = readFileSync('cloudflare/explore-worker/canonical/preview-worker.js', 'utf8');
   const count159 = (needle) => worker159.split(needle).length - 1;
-  assert.equal(count159('INSERT OR IGNORE INTO likes'), 3,
+  // 174 keeps the pre-fence direct writer as a named fallback only while
+  // the additive cutover-control table is still absent. That makes the source
+  // inventory four SQL copies, but only three logical legacy paths remain:
+  // direct (wrapper + fallback copy), aggregate 035, and user queue 075.
+  assert.equal(count159('INSERT OR IGNORE INTO likes'), 4,
     'canonical legacy relation writer inventory changed');
-  assert.equal(count159('DELETE FROM likes'), 3,
+  assert.equal(count159('DELETE FROM likes'), 4,
     'canonical legacy relation delete inventory changed');
 
   for (const name of [
+    'adjustExploreLikeCounterDeltaCore174',
     'adjustExploreLikeCounterDelta',
     'processExploreLikeAggregateWave035',
     'processExploreLikeUserQueueWave075',
@@ -1425,6 +1430,9 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
     assert.ok(worker159.includes('async function ' + name + '('),
       'missing known legacy relation writer ' + name);
   }
+  assert.match(worker159,
+    /async function adjustExploreLikeCounterDelta\([\s\S]{0,5000}phase = 'open'[\s\S]{0,5000}adjustExploreLikeCounterDeltaCore174/,
+    '174 direct wrapper must fence the active path and retain only the pre-schema fallback');
   assert.match(worker159,
     /async function refreshLikeCount\([\s\S]{0,1800}SELECT COUNT\(\*\) FROM likes/,
     'legacy count rebuild writer inventory changed');

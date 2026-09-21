@@ -851,25 +851,27 @@ export default function ExplorePage() {
         }
         const likedSet = new Set(likedIds);
         const visibleById = new Map(visibleTracks.map((track) => [track.id, track]));
+        const verifiedMembership = new Map<string, boolean>();
+        ids.forEach((id) => {
+          const liked = readExploreTrackLikeMembership127(user.uid, id) ?? likedSet.has(id);
+          verifiedMembership.set(id, liked);
+          const visibleTrack = visibleById.get(id);
+          if (visibleTrack) {
+            // Keep the My Likes card index aligned with the same verified
+            // heart state. This is a cache projection, never a second source
+            // of membership truth.
+            rememberExploreLikedTrack(
+              user.uid,
+              visibleTrack as unknown as Record<string, unknown>,
+              liked,
+            );
+          }
+        });
         setLikedTrackIds((prev) => {
           const next = { ...prev };
           // This network response may have started before an optimistic
           // action. Never use its absence to clear a later local heart.
-          ids.forEach((id) => {
-            const liked = readExploreTrackLikeMembership127(user.uid, id) ?? likedSet.has(id);
-            next[id] = liked;
-            const visibleTrack = visibleById.get(id);
-            if (visibleTrack) {
-              // Keep the My Likes card index aligned with the same verified
-              // heart state. This is a cache projection, never a second source
-              // of membership truth.
-              rememberExploreLikedTrack(
-                user.uid,
-                visibleTrack as unknown as Record<string, unknown>,
-                liked,
-              );
-            }
-          });
+          verifiedMembership.forEach((liked, id) => { next[id] = liked; });
           return next;
         });
         // 089: heart membership is personal; numeric likeCount stays on the shared public feed/profile value.

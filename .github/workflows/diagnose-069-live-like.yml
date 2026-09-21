@@ -125,6 +125,7 @@ jobs:
           NODE
 
       - name: Persist privacy-safe same-track canonical proof and read plan
+        if: ${{ github.event_name != 'push' || (!startsWith(github.event.head_commit.message, 'repair(preview): one-time supervised like queue replay') && !startsWith(github.event.head_commit.message, 'diag(preview): verify queue recovery final state')) }}
         shell: bash
         run: |
           set -euo pipefail
@@ -213,6 +214,11 @@ jobs:
           if(n<1||n>20||m<1||m>100)throw Error('Unsafe pending batch count for bounded replay');
           if(Number(lease.lease_until||0)>Date.now())throw Error('Existing aggregate processor lease still active');
           NODE
+          pending_before="$(node -e "const x=require(process.env.RUNNER_TEMP+'/pre-replay.json').flatMap(y=>y.results||[]).find(y=>'pending' in y); process.stdout.write(String(Number(x?.pending||0)))")"
+          if [ "$pending_before" = 0 ]; then
+            echo 'CANONICAL_QUEUE_ALREADY_DRAINED=PASS'
+            exit 0
+          fi
           old_schedules="$(curl -fsS -H "$auth" "$schedule_api" | jq -c '.result.schedules // [] | map({cron})')"
           test "$old_schedules" = '[]'
           printf '%s' "$old_schedules" > "$RUNNER_TEMP/preview-schedule-before.json"

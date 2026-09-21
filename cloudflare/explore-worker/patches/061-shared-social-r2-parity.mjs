@@ -24,6 +24,8 @@ for (const required of [
   'writeExploreR2Json',
   'handleMySocialSnapshot042',
   'handleMyLikedTracks052',
+  'handleMyLikeStates',
+  'handleMyLikeStatesD1Core',
 ]) {
   if (!source.includes(required)) throw new Error(`[061] required runtime missing: ${required}`);
 }
@@ -62,6 +64,11 @@ const functionRange = (name) => {
   throw new Error(`[061] unterminated function: ${name}`);
 };
 
+const replaceFunction = (name, nextText) => {
+  const range = functionRange(name);
+  source = source.slice(0, range.start) + nextText + source.slice(range.end);
+};
+
 const wrapAsyncFunction = (name, suffix, wrapperBuilder) => {
   const range = functionRange(name);
   const coreName = `${name}${suffix}`;
@@ -71,10 +78,70 @@ const wrapAsyncFunction = (name, suffix, wrapperBuilder) => {
 };
 
 const helperAnchor = functionRange('readExploreLikeR2Bundle').start;
-const helpers = `// ${marker}\nconst EXPLORE_SHARED_SOCIAL_VERSION_061 = 114;\nconst exploreSharedLikesKey061 = (uid) => \`internal/explore/shared-social-v114/likes/\${encodeURIComponent(String(uid || '').trim())}.json\`;\nconst exploreSharedFollowingKey061 = (uid) => \`internal/explore/shared-social-v114/following/\${encodeURIComponent(String(uid || '').trim())}.json\`;\n\nfunction exploreSharedSocialEnvironment061(env) {\n  return String(env?.SORIDRAW_ENVIRONMENT || env?.ENV_NAME || '').trim().toLowerCase();\n}\n\nasync function readSharedSocialJson061(env, key) {\n  const bucket = env?.PROFILE_MEDIA || null;\n  if (!bucket) return null;\n  const object = await bucket.get(key);\n  if (!object) return null;\n  try { return JSON.parse(await object.text()); } catch { return null; }\n}\n\nasync function writeSharedLikes061(env, uid, likedIds) {\n  const normalized = String(uid || '').trim();\n  const bucket = env?.PROFILE_MEDIA || null;\n  if (!normalized || !bucket || !likedIds) return false;\n  // 156 exact snapshots are owned by the post-canonical publisher. Legacy\n  // 061/034/044 mirror paths are capped at 2,000 and must never truncate an\n  // exact >2,000 canonical snapshot after cutover. New exact writes bypass\n  // this helper and use the fenced 139/141/156 path.\n  const existing = await readSharedSocialJson061(env, exploreSharedLikesKey061(normalized));\n  if (existing?.canonicalComplete156 === true) return false;\n  const ids = [...new Set([...likedIds].map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 2000);\n  await bucket.put(exploreSharedLikesKey061(normalized), JSON.stringify({\n    schemaVersion: 1,\n    uid: normalized,\n    updatedAt: Date.now(),\n    likedTrackIds: ids,\n  }), {\n    httpMetadata: { contentType: 'application/json; charset=utf-8' },\n    customMetadata: { soridrawSharedLikes: '114', updatedAt: String(Date.now()) },\n  });\n  return true;\n}\n\nasync function readSharedLikes061(env, uid) {\n  const normalized = String(uid || '').trim();\n  if (!normalized) return null;\n  const bundle = await readSharedSocialJson061(env, exploreSharedLikesKey061(normalized));\n  if (!bundle || Number(bundle.schemaVersion) !== 1 || !Array.isArray(bundle.likedTrackIds)) return null;\n  return new Set(bundle.likedTrackIds.map((value) => String(value || '').trim()).filter(Boolean));\n}\n\nasync function writeSharedFollowing061(env, uid, followingUids) {\n  const normalized = String(uid || '').trim();\n  const bucket = env?.PROFILE_MEDIA || null;\n  if (!normalized || !bucket || !followingUids) return false;\n  const ids = [...new Set([...followingUids].map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 5000);\n  await bucket.put(exploreSharedFollowingKey061(normalized), JSON.stringify({\n    schemaVersion: 1,\n    uid: normalized,\n    updatedAt: Date.now(),\n    followingUids: ids,\n  }), {\n    httpMetadata: { contentType: 'application/json; charset=utf-8' },\n    customMetadata: { soridrawSharedFollowing: '114', updatedAt: String(Date.now()) },\n  });\n  return true;\n}\n\nasync function readSharedFollowing061(env, uid) {\n  const normalized = String(uid || '').trim();\n  if (!normalized) return null;\n  const bundle = await readSharedSocialJson061(env, exploreSharedFollowingKey061(normalized));\n  if (!bundle || Number(bundle.schemaVersion) !== 1 || !Array.isArray(bundle.followingUids)) return null;\n  return [...new Set(bundle.followingUids.map((value) => String(value || '').trim()).filter(Boolean))];\n}\n\nasync function seedSharedLikesFromPreviewLocal061(env, uid, localReader) {\n  if (exploreSharedSocialEnvironment061(env) !== 'preview') return null;\n  const local = await localReader(env, uid);\n  if (!local) return null;\n  await writeSharedLikes061(env, uid, local);\n  return local;\n}\n\nasync function seedSharedFollowingFromPreviewLocal061(env, uid, localReader) {\n  if (exploreSharedSocialEnvironment061(env) !== 'preview') return null;\n  const local = await localReader(env, uid);\n  if (!local) return null;\n  await writeSharedFollowing061(env, uid, local);\n  return local;\n}\n`;
+const helpers = `// ${marker}\nconst EXPLORE_SHARED_SOCIAL_VERSION_061 = 114;\nconst exploreSharedLikesKey061 = (uid) => \`internal/explore/shared-social-v114/likes/\${encodeURIComponent(String(uid || '').trim())}.json\`;\nconst exploreSharedFollowingKey061 = (uid) => \`internal/explore/shared-social-v114/following/\${encodeURIComponent(String(uid || '').trim())}.json\`;\n\nfunction exploreSharedSocialEnvironment061(env) {\n  return String(env?.SORIDRAW_ENVIRONMENT || env?.ENV_NAME || '').trim().toLowerCase();\n}\n\nasync function readSharedSocialJson061(env, key) {\n  const bucket = env?.PROFILE_MEDIA || null;\n  if (!bucket) return null;\n  const object = await bucket.get(key);\n  if (!object) return null;\n  try { return JSON.parse(await object.text()); } catch { return null; }\n}\n\nasync function writeSharedLikes061(env, uid, likedIds) {\n  const normalized = String(uid || '').trim();\n  const bucket = env?.PROFILE_MEDIA || null;\n  if (!normalized || !bucket || !likedIds) return false;\n  // 156 exact snapshots are owned by the post-canonical publisher. Legacy\n  // 061/034/044 mirror paths are capped at 2,000 and must never truncate an\n  // exact >2,000 canonical snapshot after cutover. New exact writes bypass\n  // this helper and use the fenced 139/141/156 path.\n  const existing = await readSharedSocialJson061(env, exploreSharedLikesKey061(normalized));\n  if (existing?.canonicalComplete156 === true) return false;\n  const ids = [...new Set([...likedIds].map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 2000);\n  await bucket.put(exploreSharedLikesKey061(normalized), JSON.stringify({\n    schemaVersion: 1,\n    uid: normalized,\n    updatedAt: Date.now(),\n    likedTrackIds: ids,\n  }), {\n    httpMetadata: { contentType: 'application/json; charset=utf-8' },\n    customMetadata: { soridrawSharedLikes: '114', updatedAt: String(Date.now()) },\n  });\n  return true;\n}\n\nconst EXPLORE_SHARED_LIKE_EXACT_MARKER_161 = 'SORIDRAW_SHARED_LIKE_EXACT_STATE_161_20260921';\n\nfunction normalizeSharedLikesState161(bundle, uid) {\n  const normalized = String(uid || '').trim();\n  if (!normalized || !bundle || Number(bundle.schemaVersion) !== 1 ||\n      String(bundle.uid || '').trim() !== normalized || !Array.isArray(bundle.likedTrackIds)) return null;\n  const values = bundle.likedTrackIds.map((value) => String(value || '').trim()).filter(Boolean);\n  const likedIds = new Set(values);\n  const exactLikeCount = Number(bundle.exactLikeCount156);\n  const canonicalSource = String(bundle.canonicalSource156 || '').trim();\n  const exact = bundle.canonicalComplete156 === true &&\n    Boolean(canonicalSource) &&\n    Number.isSafeInteger(exactLikeCount) && exactLikeCount >= 0 &&\n    exactLikeCount === likedIds.size && values.length === likedIds.size;\n  return {\n    likedIds,\n    exact,\n    exactLikeCount: exact ? exactLikeCount : null,\n    source: exact ? canonicalSource : 'legacy-v114-partial',\n  };\n}\n\nasync function readSharedLikesState161(env, uid) {\n  const normalized = String(uid || '').trim();\n  if (!normalized) return null;\n  const bundle = await readSharedSocialJson061(env, exploreSharedLikesKey061(normalized));\n  return normalizeSharedLikesState161(bundle, normalized);\n}\n\nasync function readSharedLikes061(env, uid) {\n  const state = await readSharedLikesState161(env, uid);\n  return state?.likedIds || null;\n}\n\nasync function readBoundedLegacyLikeMemberships161(env, uid, trackIds) {\n  const normalized = String(uid || '').trim();\n  const ids = [...new Set((trackIds || []).map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 200);\n  if (!normalized || !ids.length || !env?.DB) return new Set();\n  const placeholders = ids.map(() => '?').join(',');\n  const result = await env.DB.prepare(\n    'SELECT l.track_id FROM likes l JOIN tracks t ON t.id = l.track_id ' +\n    'WHERE l.user_uid = ? AND l.track_id IN (' + placeholders + ') ' +\n    "AND t.is_public = 1 AND t.status = 'published'"\n  ).bind(normalized, ...ids).all();\n  return new Set((result?.results || []).map((row) => String(row?.track_id || '').trim()).filter(Boolean));\n}\n\nasync function writeSharedFollowing061(env, uid, followingUids) {\n  const normalized = String(uid || '').trim();\n  const bucket = env?.PROFILE_MEDIA || null;\n  if (!normalized || !bucket || !followingUids) return false;\n  const ids = [...new Set([...followingUids].map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 5000);\n  await bucket.put(exploreSharedFollowingKey061(normalized), JSON.stringify({\n    schemaVersion: 1,\n    uid: normalized,\n    updatedAt: Date.now(),\n    followingUids: ids,\n  }), {\n    httpMetadata: { contentType: 'application/json; charset=utf-8' },\n    customMetadata: { soridrawSharedFollowing: '114', updatedAt: String(Date.now()) },\n  });\n  return true;\n}\n\nasync function readSharedFollowing061(env, uid) {\n  const normalized = String(uid || '').trim();\n  if (!normalized) return null;\n  const bundle = await readSharedSocialJson061(env, exploreSharedFollowingKey061(normalized));\n  if (!bundle || Number(bundle.schemaVersion) !== 1 || !Array.isArray(bundle.followingUids)) return null;\n  return [...new Set(bundle.followingUids.map((value) => String(value || '').trim()).filter(Boolean))];\n}\n\nasync function seedSharedLikesFromPreviewLocal061(env, uid, localReader) {\n  if (exploreSharedSocialEnvironment061(env) !== 'preview') return null;\n  const local = await localReader(env, uid);\n  if (!local) return null;\n  await writeSharedLikes061(env, uid, local);\n  return local;\n}\n\nasync function seedSharedFollowingFromPreviewLocal061(env, uid, localReader) {\n  if (exploreSharedSocialEnvironment061(env) !== 'preview') return null;\n  const local = await localReader(env, uid);\n  if (!local) return null;\n  await writeSharedFollowing061(env, uid, local);\n  return local;\n}\n`;
 source = source.slice(0, helperAnchor) + helpers + '\n' + source.slice(helperAnchor);
 
 wrapAsyncFunction('readExploreLikeR2Bundle', 'Core061', (coreName) => `async function readExploreLikeR2Bundle(env, uid) {\n  const shared = await readSharedLikes061(env, uid);\n  if (shared) return shared;\n  return await seedSharedLikesFromPreviewLocal061(env, uid, ${coreName});\n}`);
+
+replaceFunction('handleMyLikeStates', `async function handleMyLikeStates(request, url, env, cors) {
+  const authContext = await requireExploreAuth(request);
+  const raw = safeString(url.searchParams.get("trackIds"));
+  const trackIds = [...new Set(raw.split(",").map((value) => value.trim()).filter(Boolean))].slice(0, 50);
+  if (!trackIds.length) return json({ ok: true, data: { likedTrackIds: [], likesComplete: false, exactLikeCount: null } }, 200, cors);
+  if (trackIds.some((trackId) => trackId.length > 512)) {
+    throwApi("INVALID_TRACK_ID", "\\uACE1 ID\\uAC00 \\uC62C\\uBC14\\uB974\\uC9C0 \\uC54A\\uC2B5\\uB2C8\\uB2E4.", 400);
+  }
+  const sharedState = await readSharedLikesState161(env, authContext.uid);
+  if (sharedState?.exact) {
+    return json({ ok: true, data: {
+      likedTrackIds: trackIds.filter((trackId) => sharedState.likedIds.has(trackId)),
+      likesComplete: true,
+      exactLikeCount: sharedState.exactLikeCount,
+      likesSnapshotSource: sharedState.source,
+    } }, 200, cors);
+  }
+  const targeted = await readBoundedLegacyLikeMemberships161(env, authContext.uid, trackIds);
+  return json({ ok: true, data: {
+    likedTrackIds: trackIds.filter((trackId) => targeted.has(trackId)),
+    likesComplete: false,
+    exactLikeCount: null,
+    likesSnapshotSource: 'legacy-targeted-161',
+  } }, 200, cors);
+}`);
+
+replaceFunction('handleMySocialSnapshot042', `async function handleMySocialSnapshot042(request, env, cors) {
+  const authContext = await requireExploreAuth(request);
+  let [likeState, followingUids] = await Promise.all([
+    readSharedLikesState161(env, authContext.uid),
+    readExploreFollowingR2Bundle(env, authContext.uid),
+  ]);
+  if (!likeState || !followingUids) {
+    await Promise.all([
+      likeState ? Promise.resolve() : rebuildExploreLikeR2Bundle(env, authContext.uid),
+      followingUids ? Promise.resolve() : rebuildExploreFollowingR2Bundle(env, authContext.uid),
+    ]);
+    [likeState, followingUids] = await Promise.all([
+      readSharedLikesState161(env, authContext.uid),
+      readExploreFollowingR2Bundle(env, authContext.uid),
+    ]);
+  }
+  if (!likeState || !followingUids) {
+    return json({ ok: false, error: 'SOCIAL_SNAPSHOT_UNAVAILABLE' }, 503, cors);
+  }
+  return json({
+    ok: true,
+    data: {
+      schemaVersion: 1,
+      likedTrackIds: [...likeState.likedIds],
+      likesComplete: likeState.exact,
+      exactLikeCount: likeState.exact ? likeState.exactLikeCount : null,
+      likesSnapshotSource: likeState.source,
+      followingUids: [...followingUids],
+      source: 'r2-social-042',
+      updatedAt: Date.now(),
+    },
+  }, 200, cors);
+}`);
 
 wrapAsyncFunction('rebuildExploreLikeR2Bundle', 'Core061', (coreName) => `async function rebuildExploreLikeR2Bundle(env, uid) {\n  const result = await ${coreName}(env, uid);\n  const local = await readExploreLikeR2BundleCore061(env, uid);\n  if (local) await writeSharedLikes061(env, uid, local);\n  return result;\n}`);
 
@@ -91,6 +158,9 @@ for (const required of [
   'exploreSharedLikesKey061',
   'exploreSharedFollowingKey061',
   'readSharedLikes061',
+  'readSharedLikesState161',
+  'readBoundedLegacyLikeMemberships161',
+  'SORIDRAW_SHARED_LIKE_EXACT_STATE_161_20260921',
   'writeSharedLikes061',
   'readSharedFollowing061',
   'writeSharedFollowing061',

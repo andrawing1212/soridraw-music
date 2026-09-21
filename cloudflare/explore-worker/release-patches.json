@@ -38,6 +38,7 @@
     "068-catalog-publication-artist-parity.mjs",
     "069-shared-feed-targeted-parity.mjs",
     "070-shared-feed-legacy-writer-guard.mjs",
-    "071-publication-canonical-like-parity.mjs"
+    "071-publication-canonical-like-parity.mjs",
+    "072-shared-like-reader-cutover.mjs"
   ]
 }

@@ -871,3 +871,81 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   console.log('151_COLD_BASELINE_CONFLICT_AND_STALE_FAIL_CLOSED=PASS');
   console.log('151_FEED_POPULAR_PROFILE_SURFACES=NOT_CONNECTED');
 }
+
+
+// 153: the new table is additive and UNAPPLIED. Even with a D1 W2 result,
+// the actual new adapter must refuse use until an independently verified
+// shared-data cutover. These checks use only a D1-shaped synthetic mock.
+{
+  let liked = false, costOverride = null, aggregateCalls = 0, prepared = [];
+  const db = {
+    prepare(sql) {
+      prepared.push(sql);
+      return {
+        bind(...args) {
+          return {
+            sql, args,
+            async first() {
+              assert.match(sql, /FROM explore_likes_153 WHERE user_uid = \? AND track_id = \?/);
+              assert.deepEqual(args, ['actor', 'song']);
+              return liked ? { liked: 1 } : null;
+            },
+          };
+        },
+      };
+    },
+    async batch(statements) {
+      assert.equal(statements.length, 3);
+      assert.match(statements[0].sql, /JOIN public_profiles/);
+      assert.match(statements[1].sql, /explore_likes_153/);
+      const desired = statements[1].sql.includes('INSERT OR IGNORE');
+      if (!desired) assert.deepEqual(statements[1].args, ['actor', 'song', 'song']);
+      const before = liked;
+      liked = desired;
+      const changes = Number(before !== liked);
+      const writes = costOverride ?? (changes && liked ? 2 : changes);
+      return [
+        { results: [{ eligible: 1 }], meta: { rows_written: 0, changes: 0 } },
+        { results: [], meta: { rows_written: writes, changes } },
+        { results: [{ liked: Number(liked) }], meta: { rows_written: 0, changes: 0 } },
+      ];
+    },
+  };
+  const aggregate = async (event) => {
+    aggregateCalls++;
+    return { aggregateConfirmed: true, id: event.id,
+      trackId: event.trackId, revision: event.revision };
+  };
+  let refused = false;
+  try { createLikeRelationOnly146(db, aggregate, { relationTable: 'explore_likes_153' }); }
+  catch (error) { refused = /cutover unverified/.test(String(error)); }
+  assert.equal(refused, true, 'new table must be gated until legacy data and writers are ready');
+  const newTable = createLikeRelationOnly146(db, aggregate, {
+    relationTable: 'explore_likes_153',
+    cutoverVerified: true, // fixture only: production is not verified or activated
+  });
+  assert.equal(await newTable.readMembership('actor', 'song'), false);
+  const intent = (id, revision, previousLiked, desiredLiked, seq = revision) =>
+    newTable.applyAtomically('actor', 'song', desiredLiked,
+      { id, revision, previousLiked, seq });
+  const first = await intent('like-1', 1, false, true);
+  assert.equal(first.rowsWritten, 2);
+  assert.equal(aggregateCalls, 1);
+  const repeat = await intent('like-1', 1, false, true);
+  assert.equal(repeat.rowsWritten, 0);
+  assert.equal(aggregateCalls, 2,
+    'idempotent external aggregator still receives retries for the same intent');
+  const unlike = await intent('unlike-2', 2, true, false);
+  assert.equal(unlike.rowsWritten, 1);
+  assert.equal(liked, false);
+  assert.equal(aggregateCalls, 3);
+  costOverride = 3;
+  await assert.rejects(intent('like-over-budget', 3, false, true),
+    /exceeded live D1 W2 billing budget/);
+  assert.equal(aggregateCalls, 3, 'W3+ must not settle downstream aggregate');
+  assert.ok(prepared.some(sql => sql.includes('INSERT OR IGNORE INTO explore_likes_153')));
+  assert.ok(prepared.some(sql => sql.includes('DELETE FROM explore_likes_153 WHERE user_uid')));
+  console.log('153_EXPLICIT_CUTOVER_USER_FIRST_D1_ADAPTER=PASS');
+  console.log('153_W2_RELATION_AND_W3_FAIL_CLOSED_MOCK=PASS');
+  console.log('153_SHARED_BASELINE_AND_LEGACY_WORKERS_RELEASE_GATE=FAIL');
+}

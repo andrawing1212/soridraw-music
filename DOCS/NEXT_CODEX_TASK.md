@@ -1,5 +1,11 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최신 0CC — 141 post-D1 공유 R2 publisher·142 결합검사 구현 (2026-09-21 KST)
+
+사용자 "하나씩이라도 집중해 해결" 지시. `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 `createLikeSharedR2Publisher141` 추가. 139의 검증된 D1 확정 이후에만 공유 `shared-social-v114/likes/<UID>.json` ETag CAS 갱신, 곡별 `lastLikeRevisions141` 기록, 기존 likedTrackIds/074 필드 보존. 기존 `scripts/verify-135-like-fenced-protocol.mjs`에 141 단독 및 139→141 결합 142 mock 회귀 추가. 실제 GitHub 소스 V8 격리 실행 PASS: 동시 CAS, 오래된 좋아요 역전 방지, 동일 ID 중복 no-op, 알림 실패 후 재시도, D1 실패 전 캐시 변경 0, 2천/128 실패 시 덮어쓰기 0. 모든 PASS는 가짜 공유 R2·D1·통지 모델이며 실제 배포/Cloudflare 비용 실측이 아님. `DOCS/CURRENT_RELEASE_STATE.md` 0CC 참조.
+
+**다음 집중 작업:** (1) 영속 데이터/기존 R2와 공존하면서 2천 곡·128 revision 한도를 안전하게 복구하는 개인 좋아요 분할/동기화 구조, (2) 세 Worker 모두 무조건 개인 R2 갱신을 중단하고 단일 공유 인증 UID owner를 거치는 호환성 전환 경로, (3) 실제 인증 RTDB 신호, Cloudflare D1 실제 `rows_written` 및 trigger/index W1~W2 증명. 139/140/141은 여전히 사용자 요청 처리·실서비스에 연결되지 않았으며 단순 patch/guard PASS를 제품 완료로 간주 금지. 새 데이터 스키마/migration/PRODUCTION·실데이터 수정 전 필요한 승인·복구 수단 보고. 138 pending-only Worker도 finalizer/모든 환경 전환 전에는 배포 금지. 마무리 시 기존 127·128·135 전체 및 TS/Build/Work/PC↔모바일 실검증.
+
 ## 0CB 최신 구현 — 140 D1 원자 어댑터, 트리거 비용 선행 FAIL (2026-09-21 KST)
 
 사용자의 조속한 배포 요청 이후 `cloudflare/explore-worker/runtime/like-fenced-139.mjs`에 `createLikeD1Canonical140` 실제 D1 prepared `batch` 연결부 추가. 실행 순서: 기존 곡/공개프로필/통계 존재 검사 → 원하는 좋아요 관계 하나만 INSERT/DELETE → 직전 relation `changes()=1`인 경우에만 track_stats ±1 → 최종 UID/곡 관계 확인. 불일치 fail-closed, 최종 D1 commit 전 개인 캐시 게시 없음. `scripts/verify-135-like-fenced-protocol.mjs`의 기존 모의 테스트에 D1 shaped mock 실제 어댑터 검사 추가 및 PASS. 독립 sqlite3 단순 2/0/2/0, derived trigger 모형 좋아요/해제 각각 논리 6행, **Cloudflare 청구 rows_written 미검증, W1~W2 릴리스 FAIL**. 현행 069 queue와 구형 writer에 139/140을 연결하거나 실제 DB에 쓰는 단계 아님.

@@ -22345,6 +22345,72 @@ async function syncExploreLikeR2AfterBatch034Core061(env, uid, results) {
   return { ok: true };
 }
 
+// SORIDRAW_PERSONAL_LIKE_R2_CAS_074_20260920
+const EXPLORE_LIKE_R2_TRACK_ORDER_LIMIT_074 = 128;
+function compareLikeOrder074(a, b) {
+  const at = Number(a?.at || 0) - Number(b?.at || 0);
+  if (at) return at > 0 ? 1 : -1;
+  const left = String(a?.batchId || '');
+  const right = String(b?.batchId || '');
+  return left === right ? 0 : left > right ? 1 : -1;
+}
+async function syncExploreLikeR2AfterBatch074(env, uid, results, acceptedAt, batchId) {
+  const bucket = env?.PROFILE_MEDIA;
+  if (!bucket) return { ok: false, repairNeeded: true, reason: 'shared_r2_unavailable' };
+  const key = exploreSharedLikesKey061(uid);
+  const incoming = { at: Math.floor(Number(acceptedAt || 0)), batchId: String(batchId || '') };
+  if (!Number.isSafeInteger(incoming.at) || incoming.at <= 0) {
+    return { ok: false, repairNeeded: true, reason: 'invalid_server_order' };
+  }
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const object = await bucket.get(key);
+    if (!object) return { ok: false, repairNeeded: true, reason: 'shared_r2_cold_requires_canonical_rebuild' };
+    let previous = null;
+    try { previous = JSON.parse(await object.text()); } catch {}
+    if (Number(previous?.schemaVersion) !== 1 || !Array.isArray(previous?.likedTrackIds)) {
+      return { ok: false, repairNeeded: true, reason: 'invalid_shared_r2' };
+    }
+    if (previous.likedTrackIds.length >= 2000) return { ok: false, repairNeeded: true, reason: 'shared_r2_capacity_requires_canonical_rebuild' };
+    const liked = new Set(previous.likedTrackIds.map((id) => String(id || '').trim()).filter(Boolean));
+    const order = previous?.lastLikeOrders074 && typeof previous.lastLikeOrders074 === 'object'
+      ? { ...previous.lastLikeOrders074 } : {};
+    let changed = false;
+    let superseded = false;
+    for (const result of results) {
+      const id = String(result?.trackId || '').trim();
+      if (!id || id.length > 512) continue;
+      const current = order[id];
+      if (current && compareLikeOrder074(current, incoming) >= 0) {
+        // A late ACK may describe an earlier user intention. Never announce
+        // that stale response as the other device's confirmed membership.
+        if (compareLikeOrder074(current, incoming) > 0 || liked.has(id) !== Boolean(result.liked)) superseded = true;
+        continue;
+      }
+      if (result.liked) liked.add(id); else liked.delete(id);
+      order[id] = incoming;
+      changed = true;
+    }
+    if (!changed) return superseded
+      ? { ok: false, repairNeeded: true, reason: 'superseded_like_batch' }
+      : { ok: true, unchanged: true };
+    if (Object.keys(order).length > EXPLORE_LIKE_R2_TRACK_ORDER_LIMIT_074) return { ok: false, repairNeeded: true, reason: 'shared_r2_order_capacity_requires_canonical_rebuild' };
+    if (liked.size > 2000) return { ok: false, repairNeeded: true, reason: 'shared_r2_capacity_requires_canonical_rebuild' };
+    const body = {
+      ...previous, schemaVersion: 1, uid: String(uid || ''),
+      likedTrackIds: [...liked], lastLikeOrders074: order, updatedAt: Date.now(),
+    };
+    const stored = await bucket.put(key, JSON.stringify(body), {
+      onlyIf: { etagMatches: object.etag },
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      customMetadata: { soridrawSharedLikes: '114', updatedAt: String(Date.now()) },
+    });
+    if (stored) return superseded
+      ? { ok: false, repairNeeded: true, reason: 'partially_superseded_like_batch', attempts: attempt + 1 }
+      : { ok: true, attempts: attempt + 1 };
+  }
+  console.warn('[074] shared personal R2 contested; canonical queue retained', String(uid || ''));
+  return { ok: false, repairNeeded: true, reason: 'r2_cas_exhausted' };
+}
 async function syncExploreLikeR2AfterBatch034(env, uid, results) {
   const shared = await readSharedLikes061(env, uid);
   if (shared) {
@@ -23195,7 +23261,11 @@ async function exploreLikeW1Batch040(uid, mutations, now) {
       mutationAt: Math.max(1, Math.floor(Number(row.mutationAt || fallbackAt)))
     }))
     .sort((a, b) => a.trackId.localeCompare(b.trackId));
-  const batchAt = Math.max(fallbackAt, ...canonical.map((row) => row.mutationAt));
+  /* SORIDRAW_SERVER_ORDER_LIKE_QUEUE_073_20260920 */
+  // Queue order is a server-provided receive timestamp; never max with a
+  // user-device clock. Same-ms batches remain deterministically ordered by
+  // their stable SHA batch id in the existing aggregate CTE.
+  const batchAt = fallbackAt;
   const input = new TextEncoder().encode(String(uid || '') + '\n' + JSON.stringify(canonical));
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', input));
   const hex = [...digest].map((value) => value.toString(16).padStart(2, '0')).join('');
@@ -23708,6 +23778,23 @@ async function handleMyLikedTracks052Core062(request, env, cors) {
   return json({ ok: true, data: { likedTrackIds: canonicalLikedTrackIds, items, unavailableTrackIds } }, 200, cors);
 }
 
+// SORIDRAW_PERSONAL_LIKE_R2_REVISION_072_20260920
+async function handleMyLikeRevision072(request, env, cors) {
+  const authContext = await requireExploreAuth(request);
+  const bucket = env?.PROFILE_MEDIA;
+  if (!bucket) throwApi('PERSONAL_LIKE_R2_UNAVAILABLE', '좋아요 변경 확인을 잠시 할 수 없습니다.', 503);
+  // Exactly one UID-scoped R2 HEAD; no D1, shared edge cache or full list.
+  const head = await bucket.head(exploreSharedLikesKey061(authContext.uid));
+  if (!head) throwApi('PERSONAL_LIKE_R2_UNAVAILABLE', '개인 좋아요 캐시가 준비되지 않았습니다.', 503);
+  const revision = String(
+    head.httpEtag || head.etag ||
+    head.customMetadata?.updatedAt ||
+    (head.uploaded && typeof head.uploaded.getTime === 'function' ? head.uploaded.getTime() : '') ||
+    ''
+  ).trim();
+  if (!revision) throwApi('PERSONAL_LIKE_REVISION_MISSING', '좋아요 변경 번호를 확인하지 못했습니다.', 503);
+  return json({ ok: true, data: { revision, source: 'account-r2-head-072' } }, 200, cors);
+}
 async function handleMyLikedTracks052(request, env, cors) {
   const bodyRequest = request.clone();
   const authContext = await requireExploreAuth(request);
@@ -24956,11 +25043,16 @@ const effectiveMutations = mutations;
     queued = await enqueueExploreLikeBatch035(env, authContext.uid, effectiveMutations, receivedAt);
   }
 
-  await syncExploreLikeR2AfterBatch034(env, authContext.uid, results);
+  // SORIDRAW_LIKE_PRECOMMIT_R2_BLOCK_138_20260921
+  const personalR2 = { ok: false, repairNeeded: true, reason: 'awaiting_canonical_d1_settlement' };
   return json({
     ok: true,
     data: {
       results,
+      // A queued D1 mutation and a materialized personal R2 snapshot are
+      // separate stages. Do not tell other devices that an R2 update worked
+      // when this worker has only accepted the server-side queue.
+      personalLikeSnapshot: 'pending',
       queued: Boolean(effectiveMutations.length),
       batchId: queued.batchId || null,
       queue: queued.queue || '075'
@@ -25766,6 +25858,9 @@ async function handleExploreRequest(request, env) {
     }
     if (url.pathname === "/v1/public-folders" && request.method === "POST") {
       return await handleUpsertPublicFolder(request, env, cors);
+    }
+    if (url.pathname === "/v1/me/likes-revision" && request.method === "GET") {
+      return await handleMyLikeRevision072(request, env, cors);
     }
     if (url.pathname === "/v1/me/liked-tracks" && request.method === "POST") {
       return await handleMyLikedTracks052(request, env, cors);

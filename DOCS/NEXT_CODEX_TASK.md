@@ -1,5 +1,15 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — PREVIEW app133 실제 동일 계정의 canonical 좋아요 검증 (2026-09-22)
+
+- PREVIEW exact source `587e60ff451ce64d9d24be5ae943f5a32d71825d`, remote version **133**, Hosting Run `35651254609` job `106515752564` SUCCESS.
+- 실행형 partial-R2 stale verification 회귀·TypeScript·Build·release-system audit PASS. TEST/PRODUCTION 비변경, Worker/공유 사용자 원본 비변경.
+- 같은 계정의 PC와 모바일에서 사진의 다섯 곡 하트·숫자·내 좋아요 첫 진입 일치, PC 좋아요 해제→30초 ACK 후 모바일 자동 일치 확인.
+- 불일치면 화면 수치로 해당 계정 membership을 추정하지 말고 **실제 인증 uid + trackId** 기준 private R2 accepted state, D1 `likes` 현재 relation, 069/075 queued state, PC local `snapshotPending` 및 모바일 targeted verified result를 순서대로 비교. 개인 ID·토큰 등은 사용자에게 공개 요청하지 않는다. 파괴적 데이터 수정·전체조회 금지.
+- 특히 ACK는 queue accepted이지 canonical D1 materialized가 아니므로 PC의 하트 ON 표시를 서버 확정으로 보고 모바일을 강제로 ON시키지 않는다.
+- 실사용 PASS 전 171 cutover / 신규 비용 작업 / TEST·PRODUCTION 승격 금지. 사용자 수정 지시와 안전검사 PASS이면 PREVIEW 배포까지 이어간다.
+
+
 ## 현재 최우선 — app133 partial R2 캐시 검증 감사 및 안전 PREVIEW 배포
 
 app132 PC/모바일 사진 FAIL: 하트 OFF/숫자1 vs PC ON/숫자1. `DOCS/CURRENT_RELEASE_STATE.md` 0DH 원인·한계 참고.

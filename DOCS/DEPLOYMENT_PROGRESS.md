@@ -2,6 +2,20 @@
 
 최종 갱신: 2026-09-22 KST
 
+## PREVIEW app130 mobile first-entry like sync
+
+- 사용자 승인으로 PREVIEW Hosting 배포.
+- 제품 코드 `1c850beed0a4b4409b96acbb636176ea2cfe4bac`, 릴리스 source `a045c7e5b12db22cc8153c29aee44d0ae3e296c2`.
+- 사전 Audit `35648185770` SUCCESS.
+- Hosting Run `35648709408` SUCCESS.
+- TypeScript / Build / Firebase PREVIEW deploy PASS.
+- remote app version **130** / exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- Worker `733c3981-4095-4c69-bf33-9abb5de7a450` 유지.
+- D1 / Functions / Rules / 사용자 데이터 변경 없음.
+- 목적: 모바일 최초 Explore 진입에서 과거 revision 없는 개인 좋아요 캐시를 최신값으로 오인하지 않고 PC 계정 최신 상태와 즉시 맞추기.
+
+
 ## PREVIEW app129 single-like atom
 
 - 사용자 승인으로 PREVIEW Hosting 배포 진행.

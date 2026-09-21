@@ -271,11 +271,20 @@ export const getExploreLikedTrackCollectionIds = (uid: string): string[] | null 
   return cache.canonicalLikedTrackIds === null ? null : normalizeIds(cache.canonicalLikedTrackIds);
 };
 
-export const getExploreLikedTracks = async (user: User): Promise<Array<Record<string, unknown>>> => {
+export const getExploreLikedTracks = async (
+  user: User,
+  authoritativeLikedTrackIds?: string[],
+): Promise<Array<Record<string, unknown>>> => {
   const cache = readCache(user.uid);
+  const explicitAuthority = Array.isArray(authoritativeLikedTrackIds);
   const hadCanonicalCache = cache.canonicalLikedTrackIds !== null;
 
-  if (cache.canonicalLikedTrackIds === null) {
+  // App129: when the personal-like service already resolved the effective
+  // membership set, this service is only a card cache/fetcher. Never replace
+  // that membership with its older collection cache.
+  if (explicitAuthority) {
+    cache.canonicalLikedTrackIds = normalizeIds(authoritativeLikedTrackIds);
+  } else if (cache.canonicalLikedTrackIds === null) {
     const verification = await requestLikedTracks(user, []);
     if (verification.canonicalLikedTrackIds === null) {
       throw new Error('좋아요 곡 상태를 확인하지 못했습니다.');
@@ -288,7 +297,7 @@ export const getExploreLikedTracks = async (user: User): Promise<Array<Record<st
     cache.unavailable = {};
     cache.canonicalLikedTrackIds = [];
     writeCache(user.uid, cache);
-    if (hadCanonicalCache) recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 없음');
+    if (hadCanonicalCache || explicitAuthority) recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 없음');
     return [];
   }
 
@@ -300,7 +309,7 @@ export const getExploreLikedTracks = async (user: User): Promise<Array<Record<st
   const missing = likedTrackIds.filter((trackId) => !cache.items[trackId] && !cache.unavailable[trackId]);
   if (!missing.length) {
     writeCache(user.uid, cache);
-    if (hadCanonicalCache) recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 전체 캐시');
+    if (hadCanonicalCache || explicitAuthority) recordCloudflareLocalCacheHit(LIKED_TRACK_ROUTE, 'LOCAL HIT · 좋아요 곡 전체 캐시');
     return likedTrackIds.map((trackId) => cache.items[trackId]).filter(Boolean);
   }
 

@@ -12532,31 +12532,48 @@ __name2222222222222222222222222222222222222222222(patchExploreFirstViewFollowCou
 __name22222222222222222222222222222222222222222222(patchExploreFirstViewFollowCounts, "patchExploreFirstViewFollowCounts");
 __name222222222222222222222222222222222222222222222(patchExploreFirstViewFollowCounts, "patchExploreFirstViewFollowCounts");
 __name2222222222222222222222222222222222222222222222(patchExploreFirstViewFollowCounts, "patchExploreFirstViewFollowCounts");
+// SORIDRAW_DIRECT_LIKE_ATOMIC_D1_BATCH_168_20260921
+// One D1 batch = one database transaction. The conditional counter statement
+// uses SQLite changes() from the immediately preceding relation statement.
+// No intermediate await, D1 query or JS-side stale baseCount is allowed.
+// This is still a LEGACY writer: it does not authorize a 157 cutover while
+// older deployed direct Workers are alive.
 async function adjustExploreLikeCounterDelta(env, trackId, userUid, shouldLike, now) {
-  const mutation = shouldLike ? await env.DB.prepare(`
-        INSERT OR IGNORE INTO likes (track_id, user_uid, created_at)
-        VALUES (?, ?, ?)
-      `).bind(trackId, userUid, now).run() : await env.DB.prepare(`
-        DELETE FROM likes WHERE track_id = ? AND user_uid = ?
-      `).bind(trackId, userUid).run();
-  const changed = Number(mutation?.meta?.changes || 0) > 0;
-  if (!changed) {
-    const stat = await env.DB.prepare(`
-      SELECT like_count FROM track_stats WHERE track_id = ? LIMIT 1
-    `).bind(trackId).first();
-    return clampExploreSocialCount(stat?.like_count);
+  if (!env?.DB?.batch || !env?.DB?.prepare) {
+    throw new Error('[SORIDRAW 168] atomic D1 batch unavailable');
   }
+  const relation = shouldLike
+    ? env.DB.prepare(`
+      INSERT OR IGNORE INTO likes (track_id, user_uid, created_at)
+      VALUES (?, ?, ?)
+    `).bind(trackId, userUid, now)
+    : env.DB.prepare(`
+      DELETE FROM likes WHERE track_id = ? AND user_uid = ?
+    `).bind(trackId, userUid);
   const delta = shouldLike ? 1 : -1;
   const initial = shouldLike ? 1 : 0;
-  const result = await env.DB.prepare(`
-    INSERT INTO track_stats (track_id, like_count, comment_count, play_count, updated_at)
-    VALUES (?, ?, 0, 0, ?)
-    ON CONFLICT(track_id) DO UPDATE SET
-      like_count = MAX(0, track_stats.like_count + ?),
-      updated_at = excluded.updated_at
-    RETURNING like_count
-  `).bind(trackId, initial, now, delta).all();
-  return clampExploreSocialCount(result?.results?.[0]?.like_count);
+  const result = await env.DB.batch([
+    relation,
+    env.DB.prepare(`
+      INSERT INTO track_stats(track_id, like_count, comment_count, play_count, updated_at)
+      SELECT ?, ?, 0, 0, ?
+      WHERE changes() = 1
+      ON CONFLICT(track_id) DO UPDATE SET
+        like_count = MAX(0, track_stats.like_count + ?),
+        updated_at = excluded.updated_at
+    `).bind(trackId, initial, now, delta),
+    env.DB.prepare(`
+      SELECT like_count FROM track_stats WHERE track_id = ? LIMIT 1
+    `).bind(trackId),
+  ]);
+  if (!Array.isArray(result) || result.length !== 3 ||
+      result.some((row) => row?.success === false) ||
+      !Number.isInteger(result[0]?.meta?.changes) ||
+      result[0].meta.changes < 0 || result[0].meta.changes > 1 ||
+      !Array.isArray(result[2]?.results)) {
+    throw new Error('[SORIDRAW 168] atomic D1 batch result unavailable; retry idempotently');
+  }
+  return clampExploreSocialCount(result[2].results[0]?.like_count);
 }
 __name(adjustExploreLikeCounterDelta, "adjustExploreLikeCounterDelta");
 __name2(adjustExploreLikeCounterDelta, "adjustExploreLikeCounterDelta");

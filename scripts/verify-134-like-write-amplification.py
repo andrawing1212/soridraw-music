@@ -105,5 +105,31 @@ print('145_069_SOURCE_MODEL_WITH_DERIVED_TRIGGER_LOGICAL_CHANGES=8')
 print('145_INDEX_ENTRIES_AND_LIVE_D1_ROWS_WRITTEN=NOT_MEASURED')
 print('145_DIRECT_RELATION_ONLY_CANDIDATE_REQUIRES_COUNT_AND_RANK_REDESIGN=TRUE')
 
+
+# 148: Execute the 146 relation-only proposal against the SAME in-memory
+# 032/033 trigger fixture. This deliberately leaves track_stats unchanged:
+# old readers must be migrated BEFORE any real source cutover. No live data.
+before_relation = db.total_changes
+db.execute("INSERT OR IGNORE INTO likes VALUES('song','user')")
+assert db.total_changes - before_relation == 1
+assert db.execute("SELECT COUNT(*) FROM likes").fetchone()[0] == 1
+assert db.execute("SELECT like_count FROM track_stats").fetchone()[0] == 0
+assert db.execute("SELECT likes FROM explore_derived_tracks").fetchone()[0] == 0
+assert db.execute("SELECT seq FROM explore_derived_state").fetchone()[0] == 2
+before_duplicate = db.total_changes
+db.execute("INSERT OR IGNORE INTO likes VALUES('song','user')")
+assert db.total_changes - before_duplicate == 0
+before_unlike = db.total_changes
+db.execute("DELETE FROM likes WHERE track_id='song' AND user_uid='user'")
+assert db.total_changes - before_unlike == 1
+assert db.execute("SELECT COUNT(*) FROM likes").fetchone()[0] == 0
+assert db.execute("SELECT like_count FROM track_stats").fetchone()[0] == 0
+print('148_RELATION_ONLY_WITH_032_033_TRIGGERS_LOGICAL_LIKE=1')
+print('148_RELATION_ONLY_WITH_032_033_TRIGGERS_LOGICAL_DUPLICATE=0')
+print('148_RELATION_ONLY_WITH_032_033_TRIGGERS_LOGICAL_UNLIKE=1')
+print('148_LEGACY_TRACK_STATS_AND_DERIVED_LIKES_NOT_UPDATED=CONFIRMED')
+print('148_EXISTING_READERS_REQUIRE_COMPATIBILITY_CUTOVER=FAIL')
+print('148_CLOUDFLARE_INDEX_ROWS_WRITTEN=NOT_MEASURED')
+
 print('134_DIRECT_TWO_D1_ROWS_RELEASE_GATE=FAIL_TRIGGER_FANOUT')
 print('134_USER_DATA_AND_DEPLOY=UNTOUCHED')

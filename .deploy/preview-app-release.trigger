@@ -1,10 +1,10 @@
-requested_at=2026-09-20T06:44:01Z
+requested_at=2026-09-21T17:33:30Z
 requested_by=user
-product_code_target=f88ba1f1ef644208acf938a18122f8651ed6c68a
-release_source_target=app126_warm_entry_cross_device_like_count_convergence
-release_purpose=126_mobile_recommended_latest_stale_like_count_after_unlike
+product_code_target=240325c83e0b87449b2a9c9d736a6cfa4fd1af24
+release_source_target=app127_like_revision_generation_rollout
+release_purpose=127_pc_mobile_revision_safe_like_client
 hosting_only=true
 worker_redeploy=false
-worker_version=a6fda48f-ec20-48b3-a08d-ef43128c2e43
+worker_version=f3c66d58-8e24-4eaa-923c-f61fe369e36f
 no_user_data_migration=true
 preview_only=true

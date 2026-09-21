@@ -1,1 +1,22 @@
-# PREVIEW LIKE REAL-STATE READ-ONLY DIAGNOSTIC\n\nNo user identifiers or raw track IDs are included. This is a one-time read-only D1 inspection.\n\nAffected public title match count: 0\nCanonical public count sum: 0\nCanonical likes relation rows: 0\nTrack owner has liked (sum): 0\nNote: the logged-in viewer may not be the track owner; owner membership is not viewer membership.\n\nQueue q035: 0 batches, 0 pending mutations\nQueue q066: 0 batches, 0 pending mutations\nQueue q069: 7 batches, 14 pending mutations\nQuery plan current: SEARCH t USING INDEX sqlite_autoindex_tracks_1 (id=?)\nQuery plan current: SEARCH l USING COVERING INDEX sqlite_autoindex_likes_1 (track_id=? AND user_uid=?)\nQuery plan indexed_candidate: CO-ROUTINE requested\nQuery plan indexed_candidate: SCAN 2 CONSTANT ROWS\nQuery plan indexed_candidate: SCAN r\nQuery plan indexed_candidate: SEARCH t USING INDEX sqlite_autoindex_tracks_1 (id=?)\nQuery plan indexed_candidate: SEARCH l USING COVERING INDEX sqlite_autoindex_likes_1 (track_id=? AND user_uid=?)\n\nDiagnosis only; no data was altered.\n
+# PREVIEW LIKE REAL-STATE READ-ONLY DIAGNOSTIC
+
+No user identifiers or raw track IDs are included. This is a one-time read-only D1 inspection.
+
+Affected public title match count: 0
+Canonical public count sum: 0
+Canonical likes relation rows: 0
+Track owner has liked (sum): 0
+Note: the logged-in viewer may not be the track owner; owner membership is not viewer membership.
+
+Queue q035: 0 batches, 0 pending mutations
+Queue q066: 0 batches, 0 pending mutations
+Queue q069: 7 batches, 14 pending mutations
+Query plan current: SEARCH t USING INDEX sqlite_autoindex_tracks_1 (id=?)
+Query plan current: SEARCH l USING COVERING INDEX sqlite_autoindex_likes_1 (track_id=? AND user_uid=?)
+Query plan indexed_candidate: CO-ROUTINE requested
+Query plan indexed_candidate: SCAN 2 CONSTANT ROWS
+Query plan indexed_candidate: SCAN r
+Query plan indexed_candidate: SEARCH t USING INDEX sqlite_autoindex_tracks_1 (id=?)
+Query plan indexed_candidate: SEARCH l USING COVERING INDEX sqlite_autoindex_likes_1 (track_id=? AND user_uid=?)
+
+Diagnosis only; no data was altered.

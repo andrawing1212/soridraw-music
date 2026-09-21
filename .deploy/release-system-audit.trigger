@@ -1,1 +1,1 @@
-release_system_audit=2026-09-21-172-dormant-route-pinned
+release_system_audit=2026-09-21-172-generalized-freeze-verifier

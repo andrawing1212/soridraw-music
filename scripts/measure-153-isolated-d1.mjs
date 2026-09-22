@@ -401,9 +401,8 @@ if (process.argv[2] === 'cleanup') {
         ',statement_writes:' + writes.join('/') +
         ',statement_reads:' + reads.join('/') +
         ',phase:' + phase + ',like_count:' + likeCount);
-      if (!Number.isInteger(firstChanges) || firstChanges < 0 || firstChanges > 1 ||
-          phase !== 'open') {
-        fail('174 fenced batch receipt contract does not match Worker validation');
+      if (!Number.isInteger(firstChanges) || firstChanges < 0 || phase !== 'open') {
+        fail('174 fenced batch receipt is malformed');
       }
       return { firstChanges, writes, reads, likeCount };
     }
@@ -415,7 +414,13 @@ if (process.argv[2] === 'cleanup') {
         fencedUnlike174.likeCount !== 0 || fencedDuplicateUnlike174.likeCount !== 0) {
       fail('174 fenced isolated count sequence mismatch');
     }
-    console.log('174_ISOLATED_FENCED_BATCH_RECEIPT=PASS');
+    if (fencedLike174.firstChanges !== 2 || fencedDuplicateLike174.firstChanges !== 0 ||
+        fencedUnlike174.firstChanges !== 2 || fencedDuplicateUnlike174.firstChanges !== 0) {
+      fail('174 expected trigger-inclusive D1 meta.changes sequence 2/0/2/0, got ' +
+        [fencedLike174.firstChanges, fencedDuplicateLike174.firstChanges,
+         fencedUnlike174.firstChanges, fencedDuplicateUnlike174.firstChanges].join('/'));
+    }
+    console.log('174_ISOLATED_FENCED_TRIGGER_INCLUSIVE_RECEIPT=PASS sequence=2/0/2/0');
 
     // 171 candidate: no Durable Object, no hot-path secondary index.
     // Legacy likes/track_stats become immutable baselines at coordinated

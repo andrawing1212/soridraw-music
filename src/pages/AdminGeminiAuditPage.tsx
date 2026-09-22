@@ -82,6 +82,7 @@ function geminiErrorText(value?: string): string {
 
   const exactReasons: Record<string, string> = {
     model_unavailable_or_overloaded: '모델을 일시적으로 사용할 수 없거나 요청이 몰린 상태',
+    daily_quota_exhausted: '무료 등급 일일 요청 한도 소진 · 태평양 시간 자정 리셋까지 건너뜀',
     quota_or_rate_limit: '요청 한도 또는 할당량 초과',
     model_not_found_or_rollout: '모델을 찾을 수 없거나 단계적 배포 중',
     attempt_timeout: '응답 시간 초과',
@@ -144,6 +145,7 @@ function geminiErrorText(value?: string): string {
 
   translated = translated
     .replace(/model_unavailable_or_overloaded/gi, '모델을 일시적으로 사용할 수 없거나 요청이 몰린 상태')
+    .replace(/daily_quota_exhausted/gi, '무료 등급 일일 요청 한도 소진 · 태평양 시간 자정 리셋까지 건너뜀')
     .replace(/quota_or_rate_limit/gi, '요청 한도 또는 할당량 초과')
     .replace(/model_not_found_or_rollout/gi, '모델을 찾을 수 없거나 단계적 배포 중');
 

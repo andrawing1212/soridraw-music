@@ -42,7 +42,10 @@ if (appVersion >= 120) {
     likes.includes('baseLikeCount + (liked ? 1 : 0) - (baseLiked ? 1 : 0)');
   const helperOptimistic127 =
     likes.includes('export const computeExploreLikeAction127 = (') &&
-    likes.includes('publicCount + Number(desiredLiked) - Number(baseLiked)') &&
+    (
+      likes.includes('publicCount + Number(desiredLiked) - Number(baseLiked)') ||
+      likes.includes('base.likeCount + Number(desiredLiked) - Number(baseLiked)')
+    ) &&
     likes.includes('const optimisticAction127 = computeExploreLikeAction127(baseLiked, liked, baseLikeCount);') &&
     likes.includes('const optimisticLikeCount = optimisticAction127.likeCount;');
   if (!directOptimistic120 && !helperOptimistic127) {

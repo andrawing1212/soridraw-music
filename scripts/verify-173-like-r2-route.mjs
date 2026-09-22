@@ -35,18 +35,31 @@ for (const marker of [
 ]) if (!source.includes(marker)) fail('missing marker: ' + marker);
 
 const batch = functionText('handleLikeBatch034');
-for (const needle of [
-  'canonical171.applyAtomically',
-  'publisher173.publish',
-  'publicationFailures173',
-  'LIKE_PUBLICATION_RETRY_REQUIRED',
-  "'Retry-After': '2'",
-  "personalLikeSnapshot: 'settled'",
-  "personalLikeProtocol: 'revision-safe-173'",
-  "publicLikePublication: 'generation-safe-173'",
-]) if (!batch.includes(needle)) fail('batch route missing: ' + needle);
-if (batch.indexOf('publisher173.publish') < batch.indexOf('canonical171.applyAtomically')) {
-  fail('publication occurs before canonical D1 settlement');
+if (batch.includes('SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922')) {
+  for (const needle of [
+    'enqueueExploreLikeBatch035(env, authContext.uid, mutations, receivedAt)',
+    'syncExploreLikeR2AfterBatch074(',
+    "canonicalD1: 'queued'",
+    "personalLikeProtocol: 'w1-queue-changed-track-188'",
+    "publicLikePublication: 'background-targeted-aggregate'",
+  ]) if (!batch.includes(needle)) fail('final W1 batch route missing: ' + needle);
+  if (batch.includes('canonical171.applyAtomically')) fail('final W1 batch route reintroduced direct canonical settlement');
+  if (batch.includes('publisher173.publish')) fail('final W1 batch route reintroduced synchronous 173 publisher');
+  if (batch.includes('LIKE_PUBLICATION_RETRY_REQUIRED')) fail('R2 publication may not turn accepted W1 queue intake into retry');
+} else {
+  for (const needle of [
+    'canonical171.applyAtomically',
+    'publisher173.publish',
+    'publicationFailures173',
+    'LIKE_PUBLICATION_RETRY_REQUIRED',
+    "'Retry-After': '2'",
+    "personalLikeSnapshot: 'settled'",
+    "personalLikeProtocol: 'revision-safe-173'",
+    "publicLikePublication: 'generation-safe-173'",
+  ]) if (!batch.includes(needle)) fail('batch route missing: ' + needle);
+  if (batch.indexOf('publisher173.publish') < batch.indexOf('canonical171.applyAtomically')) {
+    fail('publication occurs before canonical D1 settlement');
+  }
 }
 
 const legacy = functionText('writeSharedLikes061');
@@ -61,7 +74,7 @@ if (!runtime.includes('same-generation-count-conflict')) fail('generation confli
 if (!runtime.includes('same-revision-personal-conflict')) fail('personal revision conflict guard missing');
 if (runtime.includes('.slice(0, 2000)')) fail('2,000 truncation reintroduced');
 
-console.log('173_ROUTE_CANONICAL_THEN_R2=PASS');
+console.log('173_ROUTE_COMPAT_OR_FINAL_W1_CHANGED_TRACK_R2=PASS');
 console.log('173_R2_RUNTIME_D1_WRITE_READ=0_BY_STATIC_CONTRACT');
 console.log('173_R2_CAS_REQUIRED=PASS');
 console.log('173_LEGACY_FULL_LIST_OVERWRITE_BLOCKED=PASS');

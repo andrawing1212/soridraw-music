@@ -1,5 +1,29 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 단일 최우선 — Explore 좋아요 개인 카탈로그 정상화
+
+목표: Music Note처럼 **로컬 우선 + 작은 revision + 변경분만**. 공개곡 수/페이지 재진입/앱 업데이트에 비례한 D1 membership 읽기를 없앤다.
+
+구현 범위:
+1. 현재 계정별 shared R2 likes snapshot을 개인 좋아요 카탈로그의 서버 기준으로 정리. exact 여부와 revision을 명시하고 PC/모바일이 같은 카탈로그를 사용.
+2. 클라이언트는 로컬 카탈로그 즉시 표시 → 개인 revision만 확인. 동일 revision이면 `/v1/me/likes` 호출 금지 / D1 rows read 0.
+3. revision 변경 시 R2 카탈로그만 다시 받아 변경된 membership을 반영. 정상 변경 동기화에 D1 membership scan 금지.
+4. 실제 좋아요/해제는 changed track만 canonical D1 relation/count 처리 후 계정 R2 catalog/revision + 해당 public count만 갱신. 30초 로컬 묶음 UI 동작은 보호하되 서버 ACK와 canonical settlement를 혼동하지 말 것.
+5. 기존 069 deferred queue가 왜 scheduled에서 drain되지 않는지 원인 확인 후 신규 intake에서 제거하거나 확실히 동작하도록 정상화. 현재 7 batches / 14 mutations 보존 데이터를 임의 삭제 금지.
+6. 새 기기/카탈로그 부재·손상만 1회 bootstrap/repair 허용. 앱 업데이트/Explore 진입/포커스복귀는 repair 사유가 아님.
+7. app133에서 추가된 partial-account 반복 targeted D1 verification과 focus hydration reset은 정상 경로에서 제거.
+
+필수 테스트:
+- 정상 캐시 Explore 첫 진입 / 재진입 / 포커스복귀 / 앱 업데이트: 개인 좋아요 D1 rows read 0.
+- PC↔모바일 동일 계정: 같은 곡 하트 + 공개 숫자 + 내 좋아요 첫 화면부터 일치.
+- 좋아요 ON/OFF/ON 후 최종상태 두 기기 수렴.
+- 수천/수만 공개곡 수가 늘어도 좋아요 상태 확인 비용이 곡 수에 비례하지 않음.
+- actual like mutation D1 rows written 1~2 목표. W3+ FAIL.
+- UI/CSS/Feed 구조/TEST/PRODUCTION 비변경.
+
+현재 `0afd303a...`, `6dd49e50...`는 중간 소스이며 카탈로그 구조 완성 전 PREVIEW 배포하지 않는다.
+
+
 ## 현재 최우선 — PREVIEW app133 실제 동일 계정의 canonical 좋아요 검증 (2026-09-22)
 
 - PREVIEW exact source `587e60ff451ce64d9d24be5ae943f5a32d71825d`, remote version **133**, Hosting Run `35651254609` job `106515752564` SUCCESS.

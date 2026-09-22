@@ -71,6 +71,8 @@ console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
     Date,
     Map,
     Set,
+    clampLikeCount: (value) => Math.max(0, Math.floor(Number(value) || 0)),
+    EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120: 90_000,
     auth: { currentUser: { uid: 'same-account' } },
     readSeenLikeSignal127: () => seen,
     readRepairTarget127: () => 0,

@@ -32834,7 +32834,7 @@ ABSOLUTE RULES:
         },
       },
       pass === 0 ? 'rewriteLyricHardBanLines' : 'rewriteLyricHardBanLinesSecondPass',
-      [GEMINI_TEXT_MODEL_CHAIN[0]],
+      ['gemini-3.5-flash-lite'],
     );
 
     let parsed: any = {};
@@ -32948,6 +32948,7 @@ Rewrite only the listed lyric-body lines in each card.
       },
     },
     'rewriteLyricHardBanCards',
+    ['gemini-3.5-flash-lite'],
   );
 
   const parsed = parseGeminiJsonObject(response?.text || '{}');

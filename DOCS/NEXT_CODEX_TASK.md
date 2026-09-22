@@ -1,5 +1,23 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app146 Gemini 실사용 확인
+
+현재 PREVIEW:
+- app146 remote exact build PASS.
+- 최초 생성 5단 chain 유지: `3.8 → 3.7 → 3.6 → 3.5 → 3.5-lite`.
+- daily quota / cooldown / in-flight skip은 app145 실사용에서 PASS.
+- 금지어 통합 교정은 app146부터 3.5-lite 단일 1회.
+- Free Tier rate-limit 영어 잔여 문구 번역 수정 완료.
+- shared TEST/PRODUCTION Gemini Function 및 사용자 데이터 비변경.
+
+사용자 확인:
+1. 곡 1~3개 생성.
+2. 금지어 통합 교정이 뜨면 3.5-lite 단일 호출인지 확인.
+3. 이미 daily quota인 3.8/3.7이 실제 호출 없이 skip되는지 확인.
+4. 오류 설명에 영어 provider 문장이 남는지 확인.
+5. 입력 토큰은 계속 기록. 34k가 유지되더라도 품질 규칙은 즉시 삭제하지 말고 별도 prompt-size source audit에서 큰 블록별 실제 기여도를 먼저 측정.
+
+
 ## 현재 최우선 — Gemini 생성시간 2차 최적화
 
 현재 app144 / PREVIEW:

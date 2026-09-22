@@ -1,0 +1,72 @@
+name: SORIDRAW Readonly Like Live Signal Probe
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/diagnose-like-live-signal.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+      - name: Probe RTDB like signal read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os, time, urllib.parse, requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          p=os.environ.get('GOOGLE_GHA_CREDS_PATH') or os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+          creds=service_account.Credentials.from_service_account_file(
+              p, scopes=['https://www.googleapis.com/auth/firebase.database','https://www.googleapis.com/auth/userinfo.email'])
+          creds.refresh(Request())
+          token=creds.token
+          base='https://soridraw-app-866a5-default-rtdb.firebaseio.com'
+          response=requests.get(base+'/userSync.json',params={'shallow':'true','access_token':token},timeout=30)
+          response.raise_for_status()
+          uids=response.json() or {}
+          if not isinstance(uids,dict): raise RuntimeError('RTDB account shape invalid')
+          print('RTDB_ACCOUNT_COUNT='+str(len(uids)))
+          if len(uids)>25: raise RuntimeError('Read-only probe bounded to 25 accounts; stop without scanning')
+          now=int(time.time()*1000)
+          rows=[]
+          for uid in uids.keys():
+              response=requests.get(base+'/userSync/'+urllib.parse.quote(uid,safe='')+'/exploreLike.json',
+                  params={'access_token':token},timeout=10)
+              response.raise_for_status()
+              data=response.json()
+              if isinstance(data,dict) and isinstance(data.get('version'),(int,float)):
+                  rows.append({
+                    'version':int(data.get('version') or 0),
+                    'previousVersion':int(data.get('previousVersion') or 0),
+                    'count':len(data.get('results') or []) if isinstance(data.get('results'),(list,dict)) else 0,
+                  })
+          rows.sort(key=lambda x:x['version'], reverse=True)
+          print('RTDB_PROBE_AT_EPOCH_MS='+str(now))
+          print('RTDB_LIKE_SIGNAL_ACCOUNT_COUNT='+str(len(rows)))
+          if rows:
+              latest=rows[0]
+              print('RTDB_LATEST_SIGNAL_EPOCH_MS='+str(latest['version']))
+              print('RTDB_LATEST_SIGNAL_AGE_SECONDS='+str(max(0,(now-latest['version'])//1000)))
+              print('RTDB_LATEST_SIGNAL_RESULT_COUNT='+str(latest['count']))
+              print('RTDB_LATEST_SIGNAL_CHAIN_OK='+str(latest['version']>latest['previousVersion']).upper())
+              print('RTDB_LATEST_SIGNAL_WITHIN_5_MIN='+str(now-latest['version']<=5*60*1000).upper())
+          else:
+              print('RTDB_LATEST_SIGNAL_WITHIN_5_MIN=FALSE')
+          print('RTDB_USER_DATA_WRITE=0')
+          PY

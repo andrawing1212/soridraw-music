@@ -1,5 +1,33 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DV. PREVIEW app141 — RTDB 원격 좋아요 UI 전달 순서 수정 및 Hosting 배포 완료 (2026-09-23 KST)
+
+**원인 (코드에서 재현된 결정적 순서 오류):** app140의 `applyRemoteLikeSignal127`는 RTDB changed-track을 받은 뒤, 새 membership을 memory cache와 local `snapshotPending` 객체에 반영하지만 **기기 영구 저장소에 `snapshotPending`을 쓰기 전에** `dispatchLikeSync`를 호출했다. ExplorePage subscriber는 안전장치로 `readExploreTrackLikeMembership127`을 다시 읽는다. 이 함수는 memory cache보다 영구 저장된 이전 `snapshotPending`을 우선하므로, 과거 pending 상태와 새 RTDB 상태가 다른 곡의 UI 갱신을 거절했다. 페이지/탭 이동 시 별도 hydration으로 회복되는 실사용 현상과 일치한다.
+
+**app141 최소 수정:**
+- `src/services/exploreLikeService.ts`: 원격 changed-track을 최대 기존 50개만 `acceptedForUi141`에 모으고, 기존 membership cache / `snapshotPending` / display lock 영구 저장 및 signal watermark 기록을 마친 후 `dispatchLikeSync`로 화면에 알림. pending local click 및 stale signal 보호, R2 gap-repair 순서, 30초 W1 queue / Worker 구조 그대로.
+- `scripts/verify-180-like-live-signal-and-cached-paint.mjs`: 과거 `snapshotPending=false`, 새로운 RTDB like=true 조건에서 실제 receiver를 TypeScript transpile + VM mock으로 실행해 UI가 최종 상태를 받는지 확인. duplicate/stale signal 및 newer local outbox 보호 검사. 서버 추가 IO 없는 receiver 경로.
+- `scripts/verify-127-atomic-personal-like.mjs`: 과거 즉시 dispatch 코드 형태만 기대한 정적 검사를 persist-before-dispatch 불변조건으로 갱신.
+- `public/app-version.json`: 141.
+- UI/CSS/배치·테마·공유 사용자 데이터 / Functions / Rules / Cloudflare Worker / D1 schema 변경 없음.
+
+**검증 및 배포:**
+- 첫 감사 Run `35756053383` FAIL: 구버전 verifier가 즉시 dispatch 형태를 강제 → 새 저장 후 전달 계약을 검증하도록 수정.
+- 두 번째 감사 Run `35756277341` FAIL: 실행형 test fixture에 `clampLikeCount`/display-lock 상수 누락 → fixture만 수정.
+- **최종 감사 Run `35756483569` / job `106843437339` SUCCESS**. TypeScript, Build, Static release-system, like candidate regression, Worker dry-run, shared D1 preflight read-only, current D1 like fanout SELECT-only, refs unchanged PASS.
+- 회귀 출력: `APP141_REMOTE_PERSIST_BEFORE_UI_REPLAY=PASS`, `APP141_LOCAL_OUTBOX_AND_STALE_SIGNAL_PROTECTED=PASS`, `APP141_RECEIVER_ADDITIONAL_SERVER_IO=0`.
+- Firebase PREVIEW Hosting Run `35756677133` / job `106844080762` SUCCESS. 배포 source `3032247b531b213999c235baca5ce413fda65187`. remote `preview.soridraw.com/app-version.json=141`; `PREVIEW_EXACT_BUILD=PASS`; `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker 재배포 없음. PREVIEW Worker 유지 `45afab7c-1da2-45b6-b34d-cb3943cec559`.
+- 사용자 원본 데이터 migration/backfill/delete/write 없음. 정상 비용 경로 W1 / R0 구조 변경 없음. 실제 신규 클릭 시 D1 비용, PC↔모바일 자동 화면 전파는 아직 실기기 미검증.
+
+**실기기 합격선 (별도):**
+1. 같은 계정 PC/모바일 모두 app141 확인, 캐시 삭제 금지. app140에서 통과한 업데이트 첫 하트 표시가 유지되는지.
+2. 모바일 추천 화면 그대로, PC에서 1~3곡 좋아요/해제 → 마지막 클릭 35초 후 모바일이 탭/페이지 이동·새로고침 없이 하트/숫자 변경.
+3. 반대로 모바일→PC 동일 확인.
+4. 90초 무동작 추가 like R/W 0, 페이지 왕복 write 0, 정상 catalog membership D1 R0 확인.
+5. FAIL이면 141에서 수정한 receiver 경계 또는 남은 auth/listener/old-outbox 가드만 read-only 계측. W1/Worker/카탈로그 전체 변경 금지. 실기기 PASS 전 TEST 승격 금지.
+
+
 ## 0DU. PREVIEW app140 실사용 FAIL — RTDB 발송은 복구, 상대 기기 화면 동기화는 미해결 (2026-09-23 KST)
 
 **사용자 실제 확인:** app140 첫 Explore 진입의 기존 하트 spinner는 PASS. PC↔모바일 이동·새로고침 없는 양방향 자동 하트 반영은 여전히 FAIL. 따라서 app140 기능 완료 / TEST 승격 선언 금지.

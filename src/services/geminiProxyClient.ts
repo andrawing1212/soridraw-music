@@ -4,6 +4,18 @@ import { getGeminiModelCooldown } from './geminiModelPreferences';
 import { recordGeminiAuditModelSkips } from './geminiAuditLog';
 
 const CLOUD_FUNCTIONS_BASE_URL = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net';
+const DEFAULT_GEMINI_FUNCTION_NAME = 'generateGeminiContent';
+const PREVIEW_GEMINI_FUNCTION_NAME = 'generateGeminiContentPreview';
+
+function resolveGeminiFunctionName(): string {
+  if (typeof window === 'undefined') return DEFAULT_GEMINI_FUNCTION_NAME;
+  const host = String(window.location?.hostname || '').toLowerCase();
+  return host === 'preview.soridraw.com'
+    || host === 'soridraw-preview.web.app'
+    || host === 'soridraw-preview.firebaseapp.com'
+    ? PREVIEW_GEMINI_FUNCTION_NAME
+    : DEFAULT_GEMINI_FUNCTION_NAME;
+}
 const GEMINI_LATENCY_POLICY = 'bounded-v1' as const;
 const GEMINI_THINKING_POLICY = 'initial-36-low-small-35-low-v2' as const;
 const FAST_REPAIR_CONTEXT = 'repairV1FinalProductionCues';
@@ -333,7 +345,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
   }
   const releaseClientInFlight = acquireClientModelInFlight(modelChain[0] || '');
 
-  const response = await fetch(`${CLOUD_FUNCTIONS_BASE_URL}/generateGeminiContent`, {
+  const response = await fetch(`${CLOUD_FUNCTIONS_BASE_URL}/${resolveGeminiFunctionName()}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

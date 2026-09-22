@@ -1059,12 +1059,19 @@ const schedulePendingFlush = (user: User) => {
   const uid = String(user?.uid || '').trim();
   if (!uid || typeof window === 'undefined') return;
   const outbox = readLikeOutbox(uid);
-  if (!Object.keys(outbox).length) {
+  const eligible = Object.values(outbox).filter((pending) => (pending.retryCount || 0) === 0);
+  if (!eligible.length) {
+    // A failed/ambiguous write must never become an idle or navigation retry
+    // loop. Keep the durable intent locally, but wait for an explicit new click
+    // or a read-only reconciliation path instead of spending more server writes.
     clearFlushTimer(uid);
     return;
   }
   clearFlushTimer(uid);
-  const deadline = latestOutboxUpdatedAt(outbox) + EXPLORE_LIKE_IDLE_FLUSH_MS_120;
+  const latestEligibleUpdatedAt = eligible.reduce(
+    (latest, pending) => Math.max(latest, pending.updatedAt || 0), 0,
+  );
+  const deadline = latestEligibleUpdatedAt + EXPLORE_LIKE_IDLE_FLUSH_MS_120;
   const delay = Math.max(0, deadline - Date.now());
   const timer = window.setTimeout(() => {
     flushTimerByUid.delete(uid);
@@ -1114,6 +1121,9 @@ flushPendingLikes = async (user: User): Promise<void> => {
   }
   if (upgradedLegacyOutbox144) persistLikeOutbox(uid, outbox);
   const ordered = Object.values(outbox)
+    // retryCount>0 means the previous response was ambiguous/failed. Do not
+    // replay writes automatically from idle timers, rerenders, or navigation.
+    .filter((pending) => (pending.retryCount || 0) === 0)
     .sort((a, b) => (a.queuedAt || a.updatedAt) - (b.queuedAt || b.updatedAt))
     .slice(0, EXPLORE_LIKE_BATCH_MAX);
 
@@ -1322,10 +1332,11 @@ flushPendingLikes = async (user: User): Promise<void> => {
 // targeted canonical request for missing visible track IDs.
 export const observeExploreLikeAccountSyncSignal = (_user: User, _value: unknown) => {};
 
-export const flushPendingExploreLikesForPageExit = async (user: User): Promise<void> => {
-  // Page/profile navigation must not cut short the 30-second idle window.
-  // The module-level timer survives route changes; the durable 120 outbox survives reloads.
-  schedulePendingFlush(user);
+export const flushPendingExploreLikesForPageExit = async (_user: User): Promise<void> => {
+  // Page/profile navigation itself must never create a server read/write.
+  // The existing module-level 30-second timer already survives route changes,
+  // and the durable outbox survives reloads. Do not reschedule an expired failed
+  // mutation merely because the user moved between pages.
 };
 
 export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): Promise<string[]> => {
@@ -1382,7 +1393,9 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
 
   const outbox = readLikeOutbox(user.uid);
   const unresolved = readSnapshotPending127(user.uid);
-  if (Object.keys(outbox).length) schedulePendingFlush(user);
+  if (Object.values(outbox).some((pending) => (pending.retryCount || 0) === 0)) {
+    schedulePendingFlush(user);
+  }
 
   return normalized.filter((trackId) => outbox[trackId]?.desiredLiked ?? unresolved[trackId] ?? cache.get(trackId) === true);
 };

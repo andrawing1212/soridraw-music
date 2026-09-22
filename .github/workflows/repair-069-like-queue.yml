@@ -16,11 +16,12 @@ concurrency:
 jobs:
   repair:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 10
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
-      PREVIEW_WORKER: soridraw-explore-preview
+      D1_DATABASE_ID: 217ef5b1-5d80-4f7c-afc7-9e07eb05c06b
+      SHARED_R2_BUCKET: soridraw-profile-media
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
@@ -33,37 +34,34 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install Worker tooling
+      - name: Install pinned Worker tooling
         working-directory: cloudflare/explore-worker
         run: npm install --no-audit --no-fund --package-lock=false
 
-      - name: Drain only already accepted PREVIEW 069 queue
+      - name: Settle accepted queue atomically and rebuild only affected catalogs
         shell: bash
         run: |
           set -euo pipefail
-          cd cloudflare/explore-worker
-          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
-          CFG="$PWD/canonical/wrangler.preview.jsonc"
-          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PREVIEW_WORKER/schedules"
-          AUTH="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+          WRANGLER="$PWD/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/cloudflare/explore-worker/canonical/wrangler.preview.jsonc"
 
           node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
             SELECT COUNT(*) AS pending, COALESCE(SUM(mutation_count),0) AS mutations
             FROM explore_like_batches_069;
-            SELECT lease_until FROM explore_like_processor_035 WHERE id=1;
+            SELECT DISTINCT user_uid FROM explore_like_batches_069 ORDER BY user_uid;
           " --json > "$RUNNER_TEMP/pre.json"
 
           node <<'NODE'
           const fs=require('fs');
           const rows=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/pre.json','utf8')).flatMap(x=>x.results||[]);
           const q=rows.find(x=>'pending' in x)||{};
-          const lease=rows.find(x=>'lease_until' in x)||{};
           const pending=Number(q.pending||0), mutations=Number(q.mutations||0);
+          const uids=[...new Set(rows.map(x=>String(x.user_uid||'').trim()).filter(Boolean))];
           console.log('REPAIR_PREFLIGHT_PENDING='+pending);
           console.log('REPAIR_PREFLIGHT_MUTATIONS='+mutations);
-          if (pending===0) process.exit(0);
-          if (pending<0 || pending>20 || mutations<0 || mutations>100) throw new Error('bounded repair gate failed');
-          if (Number(lease.lease_until||0)>Date.now()) throw new Error('processor lease is active');
+          console.log('REPAIR_AFFECTED_USERS='+uids.length);
+          if (pending<0 || pending>20 || mutations<0 || mutations>100 || uids.length>20) throw new Error('bounded repair gate failed');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/uids.json', JSON.stringify(uids));
           NODE
 
           pending="$(node -e "const r=require(process.env.RUNNER_TEMP+'/pre.json').flatMap(x=>x.results||[]).find(x=>'pending' in x)||{};process.stdout.write(String(Number(r.pending||0)))")"
@@ -72,33 +70,153 @@ jobs:
             exit 0
           fi
 
-          curl -fsS -H "$AUTH" "$API" | jq -c '.result.schedules // [] | map({cron})' > "$RUNNER_TEMP/schedules-before.json"
-          cp "$RUNNER_TEMP/schedules-before.json" "$RUNNER_TEMP/schedules-restore.json"
+          cat > "$RUNNER_TEMP/repair.sql" <<'SQL'
+          WITH expanded AS (
+            SELECT q.user_uid, q.created_at, q.batch_id,
+              TRIM(CAST(j.value ->> '$.trackId' AS TEXT)) AS track_id,
+              CASE WHEN json_extract(j.value,'$.liked') THEN 1 ELSE 0 END AS desired_liked
+            FROM explore_like_batches_069 q, json_each(q.mutations_json) j
+          ), latest AS (
+            SELECT user_uid,track_id,desired_liked,created_at,batch_id FROM (
+              SELECT expanded.*,
+                ROW_NUMBER() OVER (
+                  PARTITION BY user_uid,track_id
+                  ORDER BY created_at DESC,batch_id DESC
+                ) AS rn
+              FROM expanded WHERE track_id <> ''
+            ) WHERE rn=1
+          ), deltas AS (
+            SELECT latest.*,
+              CASE
+                WHEN desired_liked=1 AND existing.user_uid IS NULL THEN 1
+                WHEN desired_liked=0 AND existing.user_uid IS NOT NULL THEN -1
+                ELSE 0
+              END AS delta
+            FROM latest
+            LEFT JOIN likes existing
+              ON existing.track_id=latest.track_id AND existing.user_uid=latest.user_uid
+          )
+          INSERT INTO track_stats(track_id,like_count,comment_count,play_count,updated_at)
+          SELECT track_id,SUM(delta),0,0,unixepoch('subsec')*1000
+          FROM deltas GROUP BY track_id HAVING SUM(delta)>0
+          ON CONFLICT(track_id) DO UPDATE SET
+            like_count=MAX(0,track_stats.like_count+excluded.like_count),
+            updated_at=excluded.updated_at;
 
-          restore_schedule() {
-            status=$?
-            trap - EXIT
-            curl -fsS -X PUT -H "$AUTH" -H 'Content-Type: application/json'               --data-binary @"$RUNNER_TEMP/schedules-restore.json" "$API" > "$RUNNER_TEMP/restore-result.json" || exit 1
-            jq -e '.success == true' "$RUNNER_TEMP/restore-result.json" >/dev/null || exit 1
-            echo 'PREVIEW_SCHEDULE_RESTORED=PASS'
-            exit "$status"
-          }
-          trap restore_schedule EXIT
+          WITH expanded AS (
+            SELECT q.user_uid,q.created_at,q.batch_id,
+              TRIM(CAST(j.value ->> '$.trackId' AS TEXT)) AS track_id,
+              CASE WHEN json_extract(j.value,'$.liked') THEN 1 ELSE 0 END AS desired_liked
+            FROM explore_like_batches_069 q, json_each(q.mutations_json) j
+          ), latest AS (
+            SELECT user_uid,track_id,desired_liked,created_at,batch_id FROM (
+              SELECT expanded.*,
+                ROW_NUMBER() OVER (
+                  PARTITION BY user_uid,track_id
+                  ORDER BY created_at DESC,batch_id DESC
+                ) AS rn
+              FROM expanded WHERE track_id <> ''
+            ) WHERE rn=1
+          ), deltas AS (
+            SELECT latest.*,
+              CASE
+                WHEN desired_liked=1 AND existing.user_uid IS NULL THEN 1
+                WHEN desired_liked=0 AND existing.user_uid IS NOT NULL THEN -1
+                ELSE 0
+              END AS delta
+            FROM latest
+            LEFT JOIN likes existing
+              ON existing.track_id=latest.track_id AND existing.user_uid=latest.user_uid
+          )
+          UPDATE track_stats
+          SET like_count=MAX(0,like_count+COALESCE((SELECT SUM(delta) FROM deltas d WHERE d.track_id=track_stats.track_id),0)),
+              updated_at=unixepoch('subsec')*1000
+          WHERE track_id IN (SELECT track_id FROM deltas GROUP BY track_id HAVING SUM(delta)<0);
 
-          printf '[{"cron":"* * * * *"}]' > "$RUNNER_TEMP/temp-cron.json"
-          curl -fsS -X PUT -H "$AUTH" -H 'Content-Type: application/json'             --data-binary @"$RUNNER_TEMP/temp-cron.json" "$API" > "$RUNNER_TEMP/temp-result.json"
-          jq -e '.success == true' "$RUNNER_TEMP/temp-result.json" >/dev/null
-          echo 'TEMP_ONE_MINUTE_CRON=PASS'
+          WITH expanded AS (
+            SELECT q.user_uid,q.created_at,q.batch_id,
+              TRIM(CAST(j.value ->> '$.trackId' AS TEXT)) AS track_id,
+              CASE WHEN json_extract(j.value,'$.liked') THEN 1 ELSE 0 END AS desired_liked
+            FROM explore_like_batches_069 q, json_each(q.mutations_json) j
+          ), latest AS (
+            SELECT user_uid,track_id,desired_liked,created_at,batch_id FROM (
+              SELECT expanded.*,
+                ROW_NUMBER() OVER (
+                  PARTITION BY user_uid,track_id
+                  ORDER BY created_at DESC,batch_id DESC
+                ) AS rn
+              FROM expanded WHERE track_id <> ''
+            ) WHERE rn=1
+          )
+          INSERT OR IGNORE INTO likes(track_id,user_uid,created_at)
+          SELECT track_id,user_uid,created_at FROM latest WHERE desired_liked=1;
 
-          remaining="$pending"
-          for attempt in 1 2 3; do
-            sleep 75
-            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
-              SELECT COUNT(*) AS remaining FROM explore_like_batches_069;
-            " --json > "$RUNNER_TEMP/remaining.json"
-            remaining="$(node -e "const r=require(process.env.RUNNER_TEMP+'/remaining.json').flatMap(x=>x.results||[])[0]||{};process.stdout.write(String(Number(r.remaining||0)))")"
-            echo "REPAIR_ATTEMPT=$attempt REMAINING=$remaining"
-            if [ "$remaining" = "0" ]; then break; fi
-          done
-          test "$remaining" = "0"
+          WITH expanded AS (
+            SELECT q.user_uid,q.created_at,q.batch_id,
+              TRIM(CAST(j.value ->> '$.trackId' AS TEXT)) AS track_id,
+              CASE WHEN json_extract(j.value,'$.liked') THEN 1 ELSE 0 END AS desired_liked
+            FROM explore_like_batches_069 q, json_each(q.mutations_json) j
+          ), latest AS (
+            SELECT user_uid,track_id,desired_liked,created_at,batch_id FROM (
+              SELECT expanded.*,
+                ROW_NUMBER() OVER (
+                  PARTITION BY user_uid,track_id
+                  ORDER BY created_at DESC,batch_id DESC
+                ) AS rn
+              FROM expanded WHERE track_id <> ''
+            ) WHERE rn=1
+          )
+          DELETE FROM likes
+          WHERE (track_id,user_uid) IN (
+            SELECT track_id,user_uid FROM latest WHERE desired_liked=0
+          );
+
+          DELETE FROM explore_like_batches_069;
+          SQL
+
+          node <<'NODE'
+          const fs=require('fs');
+          const sql=fs.readFileSync(process.env.RUNNER_TEMP+'/repair.sql','utf8');
+          const url='https://api.cloudflare.com/client/v4/accounts/'+process.env.CLOUDFLARE_ACCOUNT_ID+
+            '/d1/database/'+process.env.D1_DATABASE_ID+'/query';
+          (async()=>{
+            const res=await fetch(url,{
+              method:'POST',
+              headers:{Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN,'Content-Type':'application/json'},
+              body:JSON.stringify({sql}),
+            });
+            const body=await res.json();
+            if(!res.ok||body?.success===false||(body?.result||[]).some(x=>x?.success===false)){
+              throw new Error('D1 repair batch failed: '+JSON.stringify(body).slice(0,1600));
+            }
+            console.log('QUEUE_SETTLEMENT_TRANSACTION=PASS');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "SELECT COUNT(*) AS remaining FROM explore_like_batches_069" --json > "$RUNNER_TEMP/post.json"
+          test "$(node -e "const r=require(process.env.RUNNER_TEMP+'/post.json').flatMap(x=>x.results||[])[0]||{};process.stdout.write(String(Number(r.remaining||0)))")" = "0"
           echo 'QUEUE_069_DRAINED=PASS'
+
+          node <<'NODE'
+          const fs=require('fs'), cp=require('child_process');
+          const uids=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/uids.json','utf8'));
+          const wrangler=process.cwd()+'/cloudflare/explore-worker/node_modules/wrangler/bin/wrangler.js';
+          const cfg=process.cwd()+'/cloudflare/explore-worker/canonical/wrangler.preview.jsonc';
+          const run=(args)=>cp.execFileSync(process.execPath,[wrangler,...args],{encoding:'utf8',env:process.env,maxBuffer:16*1024*1024});
+          const parse=(text)=>{const s=Math.min(...[text.indexOf('['),text.indexOf('{')].filter(x=>x>=0));return JSON.parse(text.slice(s));};
+          for(const uid of uids){
+            const quoted=uid.replaceAll("'","''");
+            const out=run(['d1','execute','DB','--remote','--config',cfg,'--command',
+              "SELECT l.track_id FROM likes l JOIN tracks t ON t.id=l.track_id WHERE l.user_uid='"+quoted+"' AND t.is_public=1 AND t.status='published' ORDER BY l.created_at DESC","--json"]);
+            const ids=parse(out).flatMap(x=>x.results||[]).map(x=>String(x.track_id||'').trim()).filter(Boolean);
+            const body={schemaVersion:1,uid,updatedAt:Date.now(),likedTrackIds:[...new Set(ids)],
+              canonicalComplete156:true,exactLikeCount156:new Set(ids).size,canonicalSource156:'repair-069-canonical-20260922',lastLikeOrders074:{}};
+            const file=process.env.RUNNER_TEMP+'/catalog-'+Buffer.from(uid).toString('hex')+'.json';
+            fs.writeFileSync(file,JSON.stringify(body));
+            const key='internal/explore/shared-social-v114/likes/'+encodeURIComponent(uid)+'.json';
+            run(['r2','object','put',process.env.SHARED_R2_BUCKET+'/'+key,'--file',file,'--content-type','application/json','--remote','--force']);
+          }
+          console.log('AFFECTED_PERSONAL_R2_CATALOGS_EXACT=PASS count='+uids.length);
+          NODE
+
+          echo 'REPAIR_USER_DATA_SCOPE=accepted_069_mutations_and_affected_personal_like_catalogs_only'

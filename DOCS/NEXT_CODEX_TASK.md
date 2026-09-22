@@ -1,5 +1,22 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — Gemini provider 503 resilience 보강
+
+현재 PREVIEW app143:
+- 초기 모델 체인 실제 적용 확인: `3.8 → 3.7 → 3.6 → 3.5 → 3.5-lite`.
+- PREVIEW 전용 Function `generateGeminiContentPreview` ACTIVE, shared `generateGeminiContent` unchanged.
+- 관리자 Gemini 오류 설명 한국어 표시 완료.
+- 실사용에서 3.8/3.7/3.6/3.5가 high-demand 503, 3.5-lite가 timeout으로 5회 모두 실패하는 사례 확인.
+
+다음 범위:
+1. 모델 순서 변경 금지.
+2. 정상 첫 성공 경로 추가 지연 0 유지.
+3. transient 500/502/503/504에서만 짧은 bounded backoff/jitter 또는 Retry-After 준수 검토.
+4. 마지막 3.5-lite timeout 정책을 전체 생성 성공률/최대 대기시간 관점에서 조정.
+5. 최대 물리 호출 5회, Auth/App Check/API key 보안, UI/가사 엔진/좋아요/사용자 데이터 보호.
+6. PREVIEW 전용 Function에서만 검증 후 사용자 실생성 테스트. TEST/PRODUCTION shared Function 변경 금지.
+
+
 ## 현재 최우선 — Gemini 곡 생성 503 복구 설계/수정
 
 확정 증상: 최초 곡 생성 physical calls가 `3.6 → 3.5 Flash-Lite → 3.1 Flash-Lite` 3회 모두 provider HTTP 503 high-demand로 실패.

@@ -1,5 +1,22 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app143 Gemini low-thinking 실생성 확인
+
+배포 완료:
+- PREVIEW 전용 Function만 수정.
+- 초기 체인 순서 `3.8 → 3.7 → 3.6 → 3.5 → 3.5-lite` 유지.
+- 3.8/3.7/3.6/3.5 최초 곡 생성은 low thinking.
+- Run `35768064306` SUCCESS, shared TEST/PRODUCTION Gemini Function unchanged.
+
+사용자 확인:
+1. app143에서 동일/유사 조건으로 곡 1회 생성.
+2. 관리자 Gemini 호출 기록에서 3.8이 첫 호출인지 확인.
+3. 3.8 성공이면 호출수/처리시간/입력·출력·추론 토큰 기록.
+4. 3.8 503이면 실패까지 걸린 시간과 다음 fallback 총시간 기록.
+5. 여전히 3.8/3.7 고수요가 반복되면 모델 순서/가사 규칙을 바꾸지 말고, 약 33k 입력의 중복/정적 prompt payload를 품질 손실 없이 줄일 수 있는지 소유 파일별 감사부터 한다.
+6. 동일 모델 재시도로 최대 5회 상한을 몰래 초과하거나, 정상 규칙을 삭제해 성공률을 올리는 방식 금지.
+
+
 ## 현재 최우선 — Gemini provider 503 resilience 보강
 
 현재 PREVIEW app143:

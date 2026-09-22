@@ -1,0 +1,59 @@
+name: SORIDRAW PREVIEW Gemini App142 Post Verify
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/preview-gemini-app142-postverify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PROJECT: soridraw-app-866a5
+      REGION: us-central1
+      PREVIEW_FUNCTION: generateGeminiContentPreview
+      SHARED_FUNCTION: generateGeminiContent
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+      EXPECTED_SHARED_UPDATE_TIME: '2026-08-30T22:58:13.839878918Z'
+      EXPECTED_SHARED_SOURCE_OBJECT: 'generateGeminiContent/function-source.zip'
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Verify deployed PREVIEW Function and unchanged shared Function
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions describe "$PREVIEW_FUNCTION" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$RUNNER_TEMP/preview.json"
+          gcloud functions describe "$SHARED_FUNCTION" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$RUNNER_TEMP/shared.json"
+          python3 - "$RUNNER_TEMP/preview.json" "$RUNNER_TEMP/shared.json" <<'PY'
+          import json,os,sys
+          preview=json.load(open(sys.argv[1],encoding='utf-8'))
+          shared=json.load(open(sys.argv[2],encoding='utf-8'))
+          if str(preview.get('state') or '') != 'ACTIVE':
+              raise SystemExit('Preview Gemini Function is not ACTIVE')
+          if str((preview.get('buildConfig') or {}).get('runtime') or '') != 'nodejs22':
+              raise SystemExit('Preview Gemini Function runtime is not nodejs22')
+          update=str(shared.get('updateTime') or '')
+          source=str(((((shared.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}).get('object')) or '')
+          if update != os.environ['EXPECTED_SHARED_UPDATE_TIME']:
+              raise SystemExit('Shared Gemini Function updateTime changed: '+update)
+          if source != os.environ['EXPECTED_SHARED_SOURCE_OBJECT']:
+              raise SystemExit('Shared Gemini Function source changed: '+source)
+          print('PREVIEW_GEMINI_FUNCTION_ACTIVE=PASS')
+          print('SHARED_TEST_PRODUCTION_GEMINI_FUNCTION_UNCHANGED=PASS')
+          print('PREVIEW_RUNTIME=nodejs22')
+          PY
+
+          url="https://us-central1-$PROJECT.cloudfunctions.net/$PREVIEW_FUNCTION"
+          code="$(curl -sS -o /tmp/body -D /tmp/head -w '%{http_code}' -X OPTIONS             -H "Origin: $PREVIEW_ORIGIN"             -H 'Access-Control-Request-Method: POST'             -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck'             "$url")"
+          allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/head)"
+          test "$code" = "204"
+          test "$allow" = "$PREVIEW_ORIGIN"
+          echo 'PREVIEW_GEMINI_CORS=PASS'

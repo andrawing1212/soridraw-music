@@ -367,6 +367,56 @@ if (process.argv[2] === 'cleanup') {
     console.log('170_REMOTE_D1_DIRECT168_DUPLICATE_W0=PASS');
     console.log('170_COST_GATE_REQUIRES_157_158_OWNER=PASS');
 
+    // 174 live-shape receipt check: reproduce the current fenced legacy
+    // 4-statement batch against isolated synthetic D1. This catches runtime
+    // semantics that mocked Worker tests cannot prove.
+    await ddl("CREATE TABLE explore_like_cutover_control_174_iso(id INTEGER PRIMARY KEY,phase TEXT NOT NULL)");
+    await ddl("INSERT INTO explore_like_cutover_control_174_iso(id,phase) VALUES(1,'open')");
+    async function mutate174Iso(desired, at) {
+      const relation = desired
+        ? "INSERT OR IGNORE INTO likes_168(track_id,user_uid,created_at) SELECT 'song-174','user-174'," + at +
+          " WHERE EXISTS(SELECT 1 FROM explore_like_cutover_control_174_iso WHERE id=1 AND phase='open')"
+        : "DELETE FROM likes_168 WHERE track_id='song-174' AND user_uid='user-174' AND EXISTS(" +
+          "SELECT 1 FROM explore_like_cutover_control_174_iso WHERE id=1 AND phase='open')";
+      const delta = desired ? 1 : -1;
+      const initial = desired ? 1 : 0;
+      const counter =
+        "INSERT INTO track_stats_168(track_id,like_count,comment_count,play_count,updated_at) " +
+        "SELECT 'song-174'," + initial + ",0,0," + at + " WHERE changes()=1 " +
+        "ON CONFLICT(track_id) DO UPDATE SET like_count=MAX(0,track_stats_168.like_count+" + delta + ")," +
+        "updated_at=excluded.updated_at";
+      const out = await batchQuery([
+        relation,
+        counter,
+        "SELECT like_count FROM track_stats_168 WHERE track_id='song-174' LIMIT 1",
+        "SELECT phase FROM explore_like_cutover_control_174_iso WHERE id=1 LIMIT 1",
+      ]);
+      const firstChanges = out[0]?.meta?.changes;
+      const writes = out.map(row => Number(row?.meta?.rows_written || 0));
+      const reads = out.map(row => Number(row?.meta?.rows_read || 0));
+      const phase = String(out[3]?.results?.[0]?.phase || '');
+      const likeCount = Number(out[2]?.results?.[0]?.like_count || 0);
+      console.log('174_ISOLATED_FENCED_' + (desired ? 'LIKE' : 'UNLIKE') + '_AT_' + at +
+        '=first_changes:' + String(firstChanges) +
+        ',statement_writes:' + writes.join('/') +
+        ',statement_reads:' + reads.join('/') +
+        ',phase:' + phase + ',like_count:' + likeCount);
+      if (!Number.isInteger(firstChanges) || firstChanges < 0 || firstChanges > 1 ||
+          phase !== 'open') {
+        fail('174 fenced batch receipt contract does not match Worker validation');
+      }
+      return { firstChanges, writes, reads, likeCount };
+    }
+    const fencedLike174 = await mutate174Iso(true, 501);
+    const fencedDuplicateLike174 = await mutate174Iso(true, 502);
+    const fencedUnlike174 = await mutate174Iso(false, 503);
+    const fencedDuplicateUnlike174 = await mutate174Iso(false, 504);
+    if (fencedLike174.likeCount !== 1 || fencedDuplicateLike174.likeCount !== 1 ||
+        fencedUnlike174.likeCount !== 0 || fencedDuplicateUnlike174.likeCount !== 0) {
+      fail('174 fenced isolated count sequence mismatch');
+    }
+    console.log('174_ISOLATED_FENCED_BATCH_RECEIPT=PASS');
+
     // 171 candidate: no Durable Object, no hot-path secondary index.
     // Legacy likes/track_stats become immutable baselines at coordinated
     // cutover. One WITHOUT ROWID override row stores the effective personal

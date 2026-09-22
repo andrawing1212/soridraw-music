@@ -10,9 +10,11 @@ const FAST_REPAIR_CONTEXT = 'repairV1FinalProductionCues';
 const SORIDRAW_887_LATENCY_FASTPATH = true;
 const SORIDRAW_888_SPLIT_LANGUAGE_MIX_ROUTE = true;
 const INITIAL_SONG_MODEL_CHAIN = [
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
   'gemini-3.6-flash',
+  'gemini-3.5-flash',
   'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite',
 ] as const;
 const LANGUAGE_MIX_MODEL_CHAIN = [
   'gemini-3.7-flash',
@@ -28,6 +30,7 @@ const FAST_REPAIR_MODEL_CHAIN = [
 const SLOW_SUCCESS_THRESHOLD_MS = 30_000;
 const SLOW_SUCCESS_SESSION_TTL_MS = 20 * 60_000;
 const CLIENT_INFLIGHT_COORDINATED_MODELS = new Set([
+  'gemini-3.8-flash',
   'gemini-3.7-flash',
   'gemini-3.6-flash',
   'gemini-3.5-flash',
@@ -172,7 +175,7 @@ function normalizeModelRequest(params: any): any {
   if (!params || typeof params !== 'object') return params;
   const next = { ...params };
   const model = String(next.model || '').trim();
-  if ((model === 'gemini-3.7-flash' || model === 'gemini-3.6-flash' || model === 'gemini-3.5-flash-lite') && next.config) {
+  if ((model === 'gemini-3.8-flash' || model === 'gemini-3.7-flash' || model === 'gemini-3.6-flash' || model === 'gemini-3.5-flash-lite') && next.config) {
     const config = { ...next.config };
     delete config.temperature;
     delete config.topP;
@@ -257,8 +260,11 @@ function resolveLatencyModelChain(meta: any, requestParams: any): string[] {
   }
 
   if (isInitialSongGenerationContext(context) && requested.length > 1) {
-    const initialFastChain = INITIAL_SONG_MODEL_CHAIN.filter((model) => requested.includes(model));
-    if (initialFastChain.length) return initialFastChain;
+    // App142: the proxy owns the verified five-model production chain.
+    // Older callers may not know newly released stable models yet, so build the
+    // chain here while still honoring the existing per-model cooldown cache.
+    const initialFastChain = INITIAL_SONG_MODEL_CHAIN.filter((model) => !getGeminiModelCooldown(model));
+    return initialFastChain.length ? initialFastChain : [...INITIAL_SONG_MODEL_CHAIN];
   }
 
   return requested;

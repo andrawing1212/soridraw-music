@@ -1,5 +1,43 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app137 실기기 좋아요 재시도 폭증 차단 + 양방향 동기화 검증
+
+현재 PREVIEW:
+- app137 Hosting Run `35734551788` / job `106768328033` SUCCESS.
+- Worker Run `35734337978` / job `106767585369` SUCCESS, version `91f2b33b-7f62-4776-b363-33e729912e8f`.
+- final audit `35732623427` / job `106761752048` SUCCESS.
+- TEST/PRODUCTION unchanged.
+- user data migration/backfill/delete 없음.
+
+app137에서 수정한 문제:
+- D1 AFTER trigger 때문에 정상 relation mutation이 `meta.changes=2`로 보고되는데 이를 실패로 오판하던 Worker receipt 검증 수정.
+- 실패 outbox를 30초 idle / navigation / re-entry가 자동 재전송해 시간이 지나도 R/W가 계속 증가하던 경로 차단.
+- page exit/navigation 자체 server read/write 0 유지.
+- 실제 새 클릭은 기존 30초 묶음 저장 유지.
+
+실기기 검증 순서:
+1. PC/모바일 app137 확인. 캐시/저장 데이터 삭제 금지.
+2. CACHE LIVE `진단 초기화`.
+3. PC에서 새 좋아요 1~3곡 변경 → 마지막 클릭 후 35초.
+4. 첫 batch 결과 사진. HTTP 500 없어야 함.
+5. 그 상태로 **아무것도 하지 않고 90초 추가 대기** → D1 누적 R/W 숫자가 그대로인지 사진.
+6. 다른 페이지 → Explore 복귀 → D1 누적 R/W 추가 증가 없는지 사진.
+7. 모바일은 새로고침/페이지 이동 없이 같은 변경곡의 하트/숫자가 자동 반영되는지 확인.
+8. 모바일→PC 방향도 1곡 이상 같은 방식으로 확인.
+
+FAIL 기준:
+- 시간만 지나도 R/W 증가.
+- 페이지 이동만으로 R/W 증가.
+- HTTP 500.
+- 다른 기기 자동 동기화 실패.
+- `/v1/me/likes` 전체/visible membership scan 재발.
+
+기능 PASS 후 별도 비용 구조 작업:
+- isolated remote D1에서 현재 legacy likes physical shape는 like W8 / unlike W4 lower bound가 확인됨.
+- W1~W2 목표는 기능 삭제가 아니라 likes 물리구조/파생 trigger/index fanout 정리로 달성할 것.
+- destructive migration / backfill / shared user data rewrite는 사용자 승인 없이 금지.
+
+
 ## 현재 최우선 — app136 실기기 좋아요 정상화/비용 최종 판정
 
 현재 PREVIEW:

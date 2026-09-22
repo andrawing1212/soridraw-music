@@ -224,15 +224,17 @@ assert.equal((flush.match(/\/v1\/me\/likes\/batch/g)||[]).length,1,'only one D1 
 assert.doesNotMatch(flush, /runTransaction\(/);
 
 const publish = service.slice(service.indexOf('const publishConfirmedLikeSignal127'), service.indexOf('let likeSignalRetryListenerInstalled127'));
-assert.match(publish, /runTransaction\(/);
-assert.match(publish, /applyLocally: false/);
-assert.match(publish, /previousVersion: forceGap \? 0 : current\?\.version \|\| 0/);
+assert.match(publish, /setRealtimeValue\(/,
+  'app140 live changed-track signal must use the proven RTDB set transport');
+assert.match(publish, /const previousVersion = Math\.max\(0, readSeenLikeSignal127\(uid\)\)/);
+assert.match(publish, /const version = Math\.max\(Date\.now\(\), previousVersion \+ 1\)/);
+assert.match(publish, /previousVersion: forceGap \? 0 : previousVersion/);
+assert.match(publish, /markSeenLikeSignal127\(uid, version\)/);
 assert.match(publish, /if \(pending\.size > EXPLORE_LIKE_SIGNAL_MAX_127\)/);
 assert.ok(publish.indexOf('const task = signalPublishInFlight127.get(uid)') < publish.indexOf('saveSignalRetry127(uid, rows)'), 'in-flight notification must serialize before durable queue mutation');
 assert.match(publish, /EXPLORE_LIKE_SIGNAL_MAX_127/);
 assert.match(publish, /saveSignalRetry127\(uid, rows\)/);
-assert.match(publish, /notification\.committed/);
-assert.doesNotMatch(publish, /firebase\/firestore|env\.DB|D1/);
+assert.doesNotMatch(publish, /runTransaction\(|firebase\/firestore|env\.DB|D1/);
 
 assert.ok(rules.rules.userSync.$uid.exploreLike, 'existing UID-scoped like signal rules required');
 assert.match(page, /readExploreTrackLikeMembership127\(user\.uid, track\.id\)/);

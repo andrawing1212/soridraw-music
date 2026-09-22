@@ -1828,19 +1828,30 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const patch172 = readFileSync('cloudflare/explore-worker/patches/082-like-d1only-route.mjs', 'utf8');
   assert.match(patch169, /SORIDRAW_BATCH_LIKE_FINAL_CUTOVER_FREEZE_169_20260921/);
   assert.match(patch172, /SORIDRAW_LIKE_D1ONLY_ROUTE_172_20260921/);
-  assert.match(batch165, /SORIDRAW_LEGACY_LIKE_DIRECT_NORMALIZE_185_20260922/,
-    'app134 replaces the 169 queued legacy body with direct settled 185');
-  const finalRead172 = 'const cutover172 = await readLikeCutoverState162(env)';
-  const legacyDrain165 = 'await assertLegacyLikeIntakeOpen165(env)';
-  const legacyDirectWrite185 = 'adjustExploreLikeCounterDelta(';
-  assert.ok(batch165.indexOf(finalRead172) >= 0);
-  assert.ok(batch165.indexOf(finalRead172) < batch165.indexOf(legacyDrain165));
-  assert.ok(batch165.indexOf(legacyDrain165) < batch165.indexOf(legacyDirectWrite185));
-  assert.match(batch165, /if \(cutover172\.mode === 'd1only171'\)/);
-  assert.match(batch165, /if \(cutover172\.mode !== 'legacy'\)/);
-  assert.doesNotMatch(batch165, /assertLegacyLikeWriterOpen163\(env, 'batch-like-intake'\)/);
-  assert.doesNotMatch(batch165, /enqueueExploreLikeBatch035\(/);
-  console.log('169_FINAL_CUTOVER_BATCH_INTAKE_GUARD_SUPERSEDED_BY_172_SINGLE_READ=PASS');
+  if (batch165.includes('SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922')) {
+    const legacyDrain165 = 'await assertLegacyLikeIntakeOpen165(env)';
+    const queueWrite188 = 'enqueueExploreLikeBatch035(env, authContext.uid, mutations, receivedAt)';
+    assert.ok(batch165.indexOf(legacyDrain165) >= 0);
+    assert.ok(batch165.indexOf(legacyDrain165) < batch165.indexOf(queueWrite188));
+    assert.doesNotMatch(batch165, /readLikeCutoverState162\(env\)/);
+    assert.doesNotMatch(batch165, /adjustExploreLikeCounterDelta\(/);
+    assert.doesNotMatch(batch165, /assertLegacyLikeWriterOpen163\(env, 'batch-like-intake'\)/);
+    assert.match(batch165, /canonicalD1: 'queued'/);
+    console.log('188_FINAL_W1_BATCH_INTAKE_GUARDED_AND_DIRECT_CUTOVER_REMOVED=PASS');
+  } else {
+    assert.match(batch165, /SORIDRAW_LEGACY_LIKE_DIRECT_NORMALIZE_185_20260922/);
+    const finalRead172 = 'const cutover172 = await readLikeCutoverState162(env)';
+    const legacyDrain165 = 'await assertLegacyLikeIntakeOpen165(env)';
+    const legacyDirectWrite185 = 'adjustExploreLikeCounterDelta(';
+    assert.ok(batch165.indexOf(finalRead172) >= 0);
+    assert.ok(batch165.indexOf(finalRead172) < batch165.indexOf(legacyDrain165));
+    assert.ok(batch165.indexOf(legacyDrain165) < batch165.indexOf(legacyDirectWrite185));
+    assert.match(batch165, /if \(cutover172\.mode === 'd1only171'\)/);
+    assert.match(batch165, /if \(cutover172\.mode !== 'legacy'\)/);
+    assert.doesNotMatch(batch165, /assertLegacyLikeWriterOpen163\(env, 'batch-like-intake'\)/);
+    assert.doesNotMatch(batch165, /enqueueExploreLikeBatch035\(/);
+    console.log('169_FINAL_CUTOVER_BATCH_INTAKE_GUARD_SUPERSEDED_BY_172_SINGLE_READ=PASS');
+  }
 
 
 }

@@ -1,5 +1,129 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app147 Gemini prompt-size source audit + 불필요한 섹션 production-cue 추가 호출 제거
+
+### 기준
+- 작업 branch: `preview`
+- 기준 commit: `d3d8d87157dec499d7b51293034700531f6efea3`
+- 현재 PREVIEW: app146 exact build PASS
+- 이번 구현은 **Codex가 분석 → 구현 → 관련 검증 → TypeScript/Build/Test → commit까지** 진행한다.
+- **배포하지 않는다.** ChatGPT/Work 검증 전 PREVIEW 배포 금지.
+- UI / Firebase 사용자 데이터 / Firestore / D1 / Cloudflare Worker / Rules / TEST / PRODUCTION 변경 금지.
+
+### 사용자 app146 실사용에서 확정된 증상
+한 번의 곡 생성에서:
+- `gemini-3.8-flash`, `gemini-3.7-flash`: Free Tier 일일 quota 상태라 실제 호출 없이 skip.
+- `gemini-3.6-flash`: cooldown 상태 skip 후 최초 생성 시 약 3.9초 실패.
+- `gemini-3.5-flash`: 20.0초 timeout 실패.
+- `gemini-3.5-flash-lite`: 약 12.7초 성공.
+- 최초 성공 입력 약 **33,853 tokens**, 출력 4,068.
+- 이후 `repairV1FinalProductionCues` / 관리자 표시 **섹션 지시문 보완**이 추가 실행:
+  - 3.5 약 15.0초 timeout.
+  - 3.5-lite 약 9.5초 성공.
+  - 해당 보완 호출은 입력 576 / 출력 117 정도로 작지만 총 대기시간을 크게 늘림.
+- 전체 약 **1분 4초**.
+- app145의 creative/story raw-source 중복 제거 후에도 최초 입력은 약 33.8k~34.4k로 유지됨.
+
+### 코드에서 이미 확인된 원인 경로
+- `src/services/geminiService.ts`
+  - `requestV1MissingProductionCuesWithGemini()`가 `repairV1FinalProductionCues`를 호출한다.
+  - `collectV1MissingProductionCueSections()`는 instrument section cue 옵션이 켜져 있으면 현재 blueprint의 **모든 section**에 standalone production cue가 있어야 하는 것으로 판정한다.
+  - 먼저 sibling language card와 canonical `sectionPerformancePlan.soundCue / arrangementAction`을 재사용하고, 그래도 없는 section을 추가 Gemini 호출로 채운다.
+  - 이 integrity 단계는 pre-language-mix / post-language-mix-final 양쪽 경계에서 실행된다.
+- 최초 생성의 `sectionPerformancePlan` 계약은 이미 performance cue와 production event를 분리한다.
+  - **가창 section의 performance cue는 필수.**
+  - `soundCue`는 해당 section에 실제 audible production event가 있을 때만 필요하며, purely vocal / local production event 없음이면 빈 값이 허용된다.
+- 따라서 현재 최종 integrity의 “instrument 옵션 ON이면 모든 section에 production cue 강제”가 최초 plan 계약보다 더 강해서, 정상적인 optional blank까지 후속 Gemini 보완 대상으로 만들 가능성이 있다.
+
+### 구현 목표 A — 섹션 performance cue는 100% 보호
+다음은 절대 약화하지 않는다.
+1. 모든 sung / vocal-ad-lib section tag에는 현재 곡의 **짧고 유효한 performance cue**가 있어야 한다.
+2. bare sung tag, 악기-only tag, 추상어-only tag, 복사된 동일 cue는 실패로 본다.
+3. performance cue는 section tag 안에, instrument / ambience / texture / arrangement event는 별도 square-bracket cue로 분리한다.
+4. 기존 `sectionPerformancePlan`과 structured vocal fields를 먼저 재사용한다.
+5. 성능을 위해 section tag 기능 자체를 삭제하거나 느슨하게 만들지 않는다.
+
+### 구현 목표 B — production cue의 “필수/선택” 판정 정합화
+- **모든 section에 standalone production cue를 무조건 강제하지 않는다.**
+- 다음처럼 현재 곡에서 실제 production event 소유권이 있는 section만 required 대상으로 계산한다.
+  - canonical `sectionPerformancePlan.soundCue`가 유효함.
+  - canonical `arrangementAction`이 실제 audible production event를 소유함.
+  - custom/user section 지시가 해당 section에 악기/효과/production event를 명시함.
+  - Break / Stop / Instrumental / Interlude 등 lyric-free transition/production section에서 cue가 section의 실제 내용 계약상 필요한 경우.
+- purely vocal section이면서 canonical plan에 local production event가 없으면 standalone production cue 없음은 정상으로 인정한다.
+- sibling card / canonical plan에 이미 유효 cue가 있으면 그것을 재사용하고 Gemini를 부르지 않는다.
+- **진짜 required production event가 누락된 경우에만** 기존 `requestV1MissingProductionCuesWithGemini` fallback을 남긴다.
+- 결과적으로 normal generation에서 optional blank 때문에 `repairV1FinalProductionCues`가 호출되는 것을 막는다.
+- 이미 정상인 performance-cue validation / language mix / hard-ban / hook / structure 기능은 건드리지 않는다.
+
+### 구현 목표 C — 33~34k prompt-size source audit
+품질 규칙을 바로 삭제하지 말고 먼저 **큰 블록별 실제 크기**를 계측/정리한다.
+1. 최초 생성 `systemInstruction`과 contents를 구성하는 owner block별 문자수/대략적 token 기여도를 deterministic하게 출력할 수 있는 기존 verifier 또는 개발용 정적 검사 경로를 우선 재사용한다.
+2. 최소 측정 대상:
+   - sectionPerformancePlanOutputInstruction
+   - V1 section slot / blueprint contract
+   - structure instruction
+   - language / language-mix instruction
+   - Japanese first-pass contract
+   - style intent / arrangement / section cue instructions
+   - mood distribution / mood role translation
+   - title/lyric anti-repeat
+   - user/director/story context
+   - output schema 및 contents payload
+3. **의미가 완전히 동일한 중복만** 합치거나 한 canonical source를 참조하도록 한다.
+4. 5단 작곡 프롬프트, 사용자 직접입력/Situation 우선순위, 가사 밀도, section-role, 언어 혼합, 네이티브 언어 품질, output schema를 약화시키지 않는다.
+5. “34k를 줄이기 위해 규칙을 지운다”는 접근 금지. 각 삭제/통합은 중복 근거가 있어야 한다.
+6. 새 런타임 서버 호출/Firestore/D1 read/write를 추가하지 않는다. prompt-size audit은 로컬/정적 검증으로 끝낸다.
+
+### 반드시 보호할 app146 정상 기능
+- 최초 모델 순서 `3.8 → 3.7 → 3.6 → 3.5 → 3.5-lite` 변경 금지.
+- daily quota / cooldown / in-flight skip 유지.
+- 최대 물리 호출 5회 유지.
+- app146 hard-ban 단순 교정은 `3.5-lite` 단일 호출 유지.
+- PREVIEW 전용 Gemini Function 정책을 이유 없이 변경하지 않는다.
+- shared TEST/PRODUCTION `generateGeminiContent` 변경 금지.
+- 결과 가사/제목/5단 prompt 품질 계약 유지.
+- 정상 UI/좋아요/Music Note/Library/Explore 코드 비변경.
+
+### 검증
+1. targeted unit/static test:
+   - sung section performance cue 필수 계약 PASS.
+   - instrument option ON이어도 local production event가 없는 sung section은 “missing production cue”로 잘못 분류되지 않음.
+   - canonical plan에 soundCue/arrangementAction이 있으면 그대로 재사용.
+   - 실제 required production event가 없어진 경우만 fallback 대상.
+2. normal representative V1 generation fixture에서 optional production-cue blank 때문에 `repairV1FinalProductionCues`가 필요하지 않음을 증명.
+3. custom structure / multi-vocal / instrumental transition / language mix 회귀 검사.
+4. prompt-size source audit 결과에서 큰 블록 순위와 exact duplicate 후보를 기록.
+5. 중복 제거를 실제 적용했다면 before/after prompt size를 동일 fixture로 비교.
+6. TypeScript PASS.
+7. Build PASS.
+8. 관련 generation test PASS.
+9. 기존 좋아요 regression verifier PASS.
+10. TEST / PRODUCTION unchanged 확인.
+
+### 중단 조건
+- production cue 필수 범위를 안전하게 판정하려면 기존 사용자 출력 의미를 바꿔야 하는 경우.
+- 언어 혼합/일본어/구조/가사 품질 규칙을 삭제해야만 34k를 줄일 수 있는 경우.
+- migration / 사용자 데이터 변경 / shared Function 변경이 필요해지는 경우.
+- 정상 첫 생성 결과가 악화되거나 performance cue 누락이 증가하는 경우.
+- 이 경우 구현을 밀어붙이지 말고 근거와 대안을 보고한다.
+
+### Codex 완료 보고 형식
+- 작업 branch
+- 기준 commit
+- 최종 commit SHA
+- 변경 파일
+- prompt-size before/after
+- `repairV1FinalProductionCues` 호출 조건 before/after
+- TypeScript
+- Build
+- Test
+- Firebase/Functions/Cloudflare 변경 여부
+- 사용자 데이터 변경 여부
+- 남은 위험
+- **배포 여부: 반드시 미배포**
+
+
 ## 현재 최우선 — app146 Gemini 실사용 확인
 
 현재 PREVIEW:

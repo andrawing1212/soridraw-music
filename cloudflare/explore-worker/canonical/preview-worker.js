@@ -25043,41 +25043,34 @@ async function handleLikeBatch034(request, env, cors) {
     catch (error) { console.warn('[185] shared feed/card like patch deferred:', String(error?.message || error || 'unknown')); }
   }
   const settlementBatchId185 = 'direct185_' + String(receivedAt) + '_' + crypto.randomUUID();
-  const catalogBefore185 = await readSharedLikesState161(env, authContext.uid);
-  let personalR2 = await syncExploreLikeR2AfterBatch074(env, authContext.uid, results, receivedAt, settlementBatchId185);
-  if (!personalR2?.ok) {
+  // SORIDRAW_LEGACY_LIKE_POSTWRITE_ACK_186_20260922
+  // Canonical D1 is already committed above. R2/cache publication is best-effort:
+  // it must never turn a successful mutation into HTTP 5xx and cause client replay.
+  let catalogBefore185 = null;
+  try { catalogBefore185 = await readSharedLikesState161(env, authContext.uid); }
+  catch (error) { console.warn('[186] personal catalog pre-read deferred:', String(error?.message || error || 'unknown')); }
+  let personalR2 = { ok: false, repairNeeded: true, reason: 'not-attempted' };
+  try { personalR2 = await syncExploreLikeR2AfterBatch074(env, authContext.uid, results, receivedAt, settlementBatchId185); }
+  catch (error) { console.warn('[186] personal R2 incremental publish deferred:', String(error?.message || error || 'unknown')); }
+  let personalLikeSnapshot185 = 'repair-needed';
+  if (personalR2?.ok && catalogBefore185?.exact) {
     try {
-      await rebuildExploreLikeR2Bundle(env, authContext.uid);
-      personalR2 = { ok: true, repaired: true, reason: personalR2?.reason || 'rebuild' };
-    } catch (error) {
-      console.warn('[185] canonical D1 settled but personal R2 repair failed:', String(error?.message || error || 'unknown'));
-      throwApi('LIKE_PUBLICATION_RETRY_REQUIRED', '좋아요 상태는 저장되었고 기기 간 표시를 맞추는 중입니다. 잠시 후 다시 동기화합니다.', 503, { 'Retry-After': '2' });
-    }
-  }
-  try {
-    const key185 = exploreSharedLikesKey061(authContext.uid);
-    if (catalogBefore185?.exact) {
+      const key185 = exploreSharedLikesKey061(authContext.uid);
+      let exactFinalized185 = false;
       for (let attempt185 = 0; attempt185 < 8; attempt185 += 1) {
         const object185 = await env.PROFILE_MEDIA.get(key185);
         if (!object185) break;
         let body185 = null; try { body185 = JSON.parse(await object185.text()); } catch {}
         if (!body185 || !Array.isArray(body185.likedTrackIds)) break;
         const ids185 = [...new Set(body185.likedTrackIds.map((id) => String(id || '').trim()).filter(Boolean))];
-        const next185 = { ...body185, canonicalComplete156: true, exactLikeCount156: ids185.length, canonicalSource156: 'direct-d1-catalog-185', updatedAt: Date.now(), likedTrackIds: ids185 };
-        const stored185 = await env.PROFILE_MEDIA.put(key185, JSON.stringify(next185), { onlyIf: { etagMatches: object185.etag }, httpMetadata: { contentType: 'application/json; charset=utf-8' }, customMetadata: { soridrawSharedLikes: '185', updatedAt: String(next185.updatedAt) } });
-        if (stored185) break;
+        const next185 = { ...body185, canonicalComplete156: true, exactLikeCount156: ids185.length, canonicalSource156: 'direct-d1-catalog-186', updatedAt: Date.now(), likedTrackIds: ids185 };
+        const stored185 = await env.PROFILE_MEDIA.put(key185, JSON.stringify(next185), { onlyIf: { etagMatches: object185.etag }, httpMetadata: { contentType: 'application/json; charset=utf-8' }, customMetadata: { soridrawSharedLikes: '186', updatedAt: String(next185.updatedAt) } });
+        if (stored185) { exactFinalized185 = true; break; }
       }
-    } else {
-      const exact185 = await env.DB.prepare("SELECT l.track_id FROM likes l JOIN tracks t ON t.id=l.track_id WHERE l.user_uid=? AND t.is_public=1 AND t.status='published' ORDER BY l.created_at DESC").bind(authContext.uid).all();
-      if (!Array.isArray(exact185?.results)) throw new Error('exact catalog query unavailable');
-      const ids185 = [...new Set(exact185.results.map((row) => String(row?.track_id || '').trim()).filter(Boolean))];
-      const previous185 = await env.PROFILE_MEDIA.get(key185); let base185 = {}; if (previous185) { try { base185 = JSON.parse(await previous185.text()); } catch {} }
-      const next185 = { ...base185, schemaVersion: 1, uid: authContext.uid, canonicalComplete156: true, exactLikeCount156: ids185.length, canonicalSource156: 'canonical-d1-catalog-185', likedTrackIds: ids185, lastLikeOrders074: base185?.lastLikeOrders074 && typeof base185.lastLikeOrders074 === 'object' ? base185.lastLikeOrders074 : {}, updatedAt: Date.now() };
-      await env.PROFILE_MEDIA.put(key185, JSON.stringify(next185), { httpMetadata: { contentType: 'application/json; charset=utf-8' }, customMetadata: { soridrawSharedLikes: '185', updatedAt: String(next185.updatedAt) } });
+      if (exactFinalized185) personalLikeSnapshot185 = 'settled';
+    } catch (catalogError185) {
+      console.warn('[186] exact personal catalog metadata finalize deferred:', String(catalogError185?.message || catalogError185 || 'unknown'));
     }
-  } catch (catalogError185) {
-    console.warn('[185] exact personal like catalog refresh failed:', String(catalogError185?.message || catalogError185 || 'unknown'));
-    throwApi('LIKE_PUBLICATION_RETRY_REQUIRED', '좋아요 상태는 저장되었고 기기 간 표시를 맞추는 중입니다. 잠시 후 다시 동기화합니다.', 503, { 'Retry-After': '2' });
   }
   return json({
     ok: true,
@@ -25087,9 +25080,9 @@ async function handleLikeBatch034(request, env, cors) {
       batchId: settlementBatchId185,
       queue: 'direct-legacy-185',
       canonicalD1: 'settled',
-      personalLikeSnapshot: 'settled',
-      personalLikeProtocol: 'legacy-direct-185',
-      publicLikePublication: 'targeted-r2-185',
+      personalLikeSnapshot: personalLikeSnapshot185,
+      personalLikeProtocol: 'legacy-direct-186-postwrite-ack',
+      publicLikePublication: personalLikeSnapshot185 === 'settled' ? 'targeted-r2-186' : 'repair-needed',
     },
   }, 200, cors);
 }

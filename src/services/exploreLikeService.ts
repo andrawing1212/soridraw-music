@@ -48,7 +48,9 @@ const EXPLORE_LIKE_PARTIAL_BASELINE_161 = 'soridraw:explore:like-partial-baselin
 // response is still authoritative for the requested visible track IDs. Persist
 // only those verified IDs so clicks work without trusting stale legacy booleans.
 const EXPLORE_LIKE_TARGETED_VERIFIED_127 = 'soridraw:explore:like-targeted-verified:127';
-// App134 starts one clean targeted proof generation after the stalled 069 period.\n// Once verified against canonical D1, the proof survives ordinary re-entry while\n// the account-private R2 revision is unchanged.\nconst EXPLORE_LIKE_TARGETED_VERIFIED_130 = 'soridraw:explore:like-targeted-verified:130';
+// App134 keeps the prior revision-bound targeted proof key across app updates.
+// App version changes alone must never force another D1 membership read.
+const EXPLORE_LIKE_TARGETED_VERIFIED_130 = 'soridraw:explore:like-targeted-verified:130';
 const EXPLORE_LIKE_SIGNAL_SEEN_127 = 'soridraw:explore:like-signal-seen:127';
 const EXPLORE_LIKE_SIGNAL_RETRY_127 = 'soridraw:explore:like-signal-retry:127';
 const EXPLORE_LIKE_SIGNAL_GAP_127 = 'soridraw:explore:like-signal-gap:127';

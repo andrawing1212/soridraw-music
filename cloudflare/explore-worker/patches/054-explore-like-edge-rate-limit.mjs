@@ -9,9 +9,11 @@ let source = readFileSync(workerPath, 'utf8');
 const marker = 'SORIDRAW_EXPLORE_LIKE_EDGE_RATE_LIMIT_054_20260915';
 const marker160 = 'SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921';
 const marker185 = 'SORIDRAW_LEGACY_LIKE_DIRECT_NORMALIZE_185_20260922';
+const marker188 = 'SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922';
 const has054 = source.includes(marker);
 const has160 = source.includes(marker160);
 const has185 = source.includes(marker185);
+const has188 = source.includes(marker188);
 if (has054 && has160) {
   console.log('[054/160] Batch and direct Explore like edge rate limits already applied.');
   process.exit(0);
@@ -61,7 +63,7 @@ const requiredRuntime = [
   'EXPLORE_LIKE_BATCH_MAX_034',
   'throwApi',
 ];
-if (!has185) {
+if (!has185 && !has188) {
   requiredRuntime.push(
     'enforceExploreLikeBatchRateLimit034',
     'readExploreLikeBatchStates035',
@@ -120,7 +122,12 @@ if (!finalBatch.includes('enforceExploreLikeBatchEdgeRateLimit054(env, authConte
 if (finalBatch.includes('enforceExploreLikeBatchRateLimit034(')) {
   throw new Error('[054] D1 rate limit remained on normal batch path');
 }
-if (!has185) {
+if (has188) {
+  if (!finalBatch.includes('enqueueExploreLikeBatch035(env, authContext.uid, mutations, receivedAt)') ||
+      finalBatch.includes('adjustExploreLikeCounterDelta(')) {
+    throw new Error('[054/188] final W1 queued batch shape is invalid');
+  }
+} else if (!has185) {
   if (!finalBatch.includes('effectiveMutations')) {
     throw new Error('[054] protected like batching behavior missing: effectiveMutations');
   }

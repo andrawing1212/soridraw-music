@@ -1,5 +1,90 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DR. FINAL LIKE ARCHITECTURE LOCK + PREVIEW app138 배포 완료 (2026-09-22 KST)
+
+**최종 고정 구조:** `DOCS/EXPLORE_LIKE_FINAL_ARCHITECTURE.md`  
+**핵심:** **쓰기 = app121~124 검증 W1 queue intake / 읽기·동기화 = local personal catalog + changed-track signal**.  
+이 네 조건은 변경 금지: **기능 보존 + W1 interactive queue intake + R0 normal re-entry + changed-track cross-device sync**.
+
+### 현재 PREVIEW 배포
+- 앱: **138**
+- Firebase PREVIEW Hosting Run `35744548706` / job `106802636922` SUCCESS.
+- remote `preview.soridraw.com/app-version.json = 138`, exact build PASS.
+- PREVIEW Worker release Run `35744224208` / job `106802080992` SUCCESS.
+- 현재 PREVIEW Worker version: `45afab7c-1da2-45b6-b34d-cb3943cec559`.
+- Worker locked product source: `5d5e7d5f53655115d378b0b52c3095da2c06cfc4`.
+- Final exact Release System Audit: Run `35743962351` / job `106800609321` SUCCESS.
+- isolated D1 measurement: Run `35743171196` SUCCESS.
+- TEST Worker `6e8dca9c-2c58-42ea-ae7d-765e10afef8f` unchanged.
+- PRODUCTION Worker `d6b0a284-6e3c-4b57-aebf-0a7d1c3513e0` unchanged.
+- TEST / PRODUCTION 앱 비변경 PASS.
+
+### 쓰기 경로 — 최종
+- 클릭 즉시 local UI/cache/outbox 반영.
+- 마지막 클릭 기준 30초 trailing batch 유지.
+- `/v1/me/likes/batch` interactive Worker는 더 이상 곡별 likes/track_stats direct settlement를 하지 않음.
+- 정상 interactive path는 `explore_like_batches_069`에 **묶음 1 row** enqueue.
+- background processor가 canonical relation/count 및 파생 상태를 **변경된 곡만** 처리.
+- R2 changed-track publication failure가 성공한 queue acceptance를 HTTP 실패/재쓰기 루프로 되돌리지 않음.
+- failed/ambiguous outbox는 idle/navigation만으로 자동 write retry하지 않음.
+
+### 실제 원격 D1 비용 증명
+격리된 임시 Cloudflare D1에서 production `explore_like_batches_069`와 같은 WITHOUT ROWID queue shape로 6곡 mutation 묶음을 측정:
+- **첫 queue intake: rows_written = 1**
+- mutation_count = 6
+- 동일 batch_id duplicate: rows_written = 0
+- 로그: `188_REMOTE_D1_W1_QUEUE_INTAKE=PASS rows_written=1 mutations=6 duplicate_rows_written=0`
+- 임시 D1은 검사 후 삭제 PASS.
+비교용 legacy direct shape는 동일 검사에서 like W8 / unlike W4 lower bound가 다시 확인됨. 따라서 interactive path를 direct settlement에서 W1 queue로 되돌린 결정은 실제 D1 billing 기준으로도 타당함.
+
+### 읽기/동기화 경로 — 유지
+- 정상 device personal-like catalog 우선.
+- Explore 진입/재진입에서 정상 catalog가 있으면 membership D1 R0 계약.
+- `/v1/me/likes` visible-track scan은 정상 경로 금지.
+- 앱 버전 변경만으로 전체 개인 좋아요 재조회 금지.
+- RTDB `userSync/{uid}/exploreLike`는 account 당 1 listener.
+- queue ACK 뒤 **변경된 trackId + final desired liked + 현재 local count pair**만 다른 기기에 전달.
+- 다른 기기는 해당 changed-track만 local catalog/display lock에 merge.
+- gap/revision 변화 때문에 정상 device catalog 전체를 폐기하지 않음.
+
+### 최종 감사
+- TypeScript PASS
+- Build PASS
+- Static release verification PASS
+- Like candidate regression PASS
+- `FINAL_LIKE_W1_QUEUE_INTAKE=PASS`
+- `FINAL_LIKE_INTERACTIVE_DIRECT_D1_SETTLEMENT=0`
+- `FINAL_LIKE_NORMAL_LOCAL_CATALOG_REENTRY_D1_MEMBERSHIP=0_CONTRACT`
+- `FINAL_LIKE_CHANGED_TRACK_ACCOUNT_SIGNAL=PASS`
+- TEST/PRODUCTION Worker dry-run PASS
+- shared D1 preflight read-only PASS
+- shared D1 like fanout audit SELECT-only PASS
+- PREVIEW Worker Feed/Profile smoke PASS
+- warm revision R0/W0 PASS
+- fixed cron disabled PASS
+
+### 데이터/백엔드 안전
+- 공유 사용자 데이터 migration/backfill/delete 없음.
+- 기존 likes 강제 재생성 없음.
+- Firebase Rules / Functions 변경 없음.
+- D1 schema migration 없음.
+- PREVIEW 코드/Worker만 변경.
+- TEST / PRODUCTION 비변경.
+
+### 아직 남은 최종 실기기 검증
+코드/CI/격리 D1는 PASS했지만 **실제 계정 PC↔모바일 검증 전**이므로 기능 완료 선언은 아직 금지.
+1. 양쪽 app138 확인, 캐시 삭제 금지.
+2. 진단 초기화.
+3. PC에서 3~6곡 변경 → 30초 후 interactive intake가 한 묶음으로 처리되는지.
+4. 이후 90초 무동작 시 추가 like write 0.
+5. 다른 페이지 왕복만으로 추가 like write 0.
+6. 모바일이 새로고침/페이지 이동 없이 changed-track heart를 자동 반영.
+7. 모바일→PC도 동일.
+8. 재진입 membership D1 R0.
+9. public likeCount가 background aggregate 뒤 최종 일치.
+10. FAIL 시 전체 구조를 다시 바꾸지 말고 W1 intake / local catalog / changed-track signal 세 구간 중 실패 구간만 수정.
+
+
 ## 0DQ. PREVIEW app137 배포 완료 — 좋아요 자동 재시도 폭증 + D1 trigger receipt 오판 수정 (2026-09-22 KST)
 
 **현재 PREVIEW live app:** 137  

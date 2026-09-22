@@ -1,3 +1,3 @@
-requested_at=2026-09-22T08:42:00Z
-purpose=drain_stalled_accepted_like_queue_after_yaml_guard_fix
+requested_at=2026-09-22T09:13:00Z
+purpose=apply_only_already_accepted_069_intents_then_rebuild_only_affected_exact_personal_catalogs
 preview_only=true

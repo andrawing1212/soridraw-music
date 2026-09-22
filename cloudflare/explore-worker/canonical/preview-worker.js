@@ -24948,143 +24948,39 @@ async function handleLikeBatch034(request, env, cors) {
   }
   const mutations = [...byTrack.values()];
   await enforceExploreLikeBatchEdgeRateLimit054(env, authContext.uid);
-  const cutover172 = await readLikeCutoverState162(env);
-  if (cutover172.mode === 'd1only171') {
-    await assertD1OnlyFrozen174(env);
-    const canonical171 = createLikeD1OnlyCanonical171(env.DB, { cutoverVerified: true });
-    const publisher173 = createLikeR2RevisionPublisher173(env, {
-      trackCardKey: exploreSharedTrackCardKey062,
-      feedKey: exploreSharedFeedR2Key059,
-      profileKey: exploreSharedProfileR2Key060,
-      sortItems: sortExploreFeedItems012,
-      feedLimit: EXPLORE_R2_FEED_LIMIT,
-    });
-    const results171 = [];
-    const publicationFailures173 = [];
-    for (const mutation of mutations) {
-      if (!mutation.operationId || mutation.operationId.length > 128 ||
-          !Number.isSafeInteger(mutation.expectedRevision) || mutation.expectedRevision < 0) {
-        throwApi('LIKE_CLIENT_REFRESH_REQUIRED', '좋아요 저장 방식을 업데이트했습니다. 새로고침 후 다시 시도해 주세요.', 409);
-      }
-      const settled = await canonical171.applyAtomically(
-        authContext.uid,
-        mutation.trackId,
-        mutation.liked,
-        {
-          expectedRevision: mutation.expectedRevision,
-          operationId: mutation.operationId,
-          now: receivedAt,
-        },
-      );
-      const publication173 = await publisher173.publish({
-        uid: authContext.uid,
-        trackId: mutation.trackId,
-        liked: settled.liked,
-        likeCount: settled.likeCount,
-        revision: settled.revision,
-        generation: settled.generation,
-        operationId: settled.operationId || mutation.operationId,
-        status: settled.status,
-      });
-      if (!publication173.ok) publicationFailures173.push({ trackId: mutation.trackId, stage: publication173.stage || publication173.reason || 'unknown' });
-      results171.push({
-        trackId: mutation.trackId,
-        liked: settled.liked,
-        likeCount: settled.likeCount,
-        revision: settled.revision,
-        generation: settled.generation,
-        operationId: settled.operationId || mutation.operationId,
-        status: settled.status,
-      });
-    }
-    if (publicationFailures173.length) {
-      console.warn('[SORIDRAW 173] canonical D1 settled but R2 publication needs retry:', JSON.stringify(publicationFailures173));
-      throwApi(
-        'LIKE_PUBLICATION_RETRY_REQUIRED',
-        '좋아요 상태는 저장되었고 기기 간 표시를 맞추는 중입니다. 잠시 후 다시 동기화합니다.',
-        503,
-        { 'Retry-After': '2' },
-      );
-    }
-    return json({
-      ok: true,
-      data: {
-        results: results171,
-        queued: false,
-        batchId: null,
-        queue: 'd1only171',
-        canonicalD1: 'settled',
-        personalLikeSnapshot: 'settled',
-        personalLikeProtocol: 'revision-safe-173',
-        publicLikePublication: 'generation-safe-173',
-      },
-    }, 200, cors);
-  }
-  if (cutover172.mode !== 'legacy') {
-    throwApi('LIKE_CUTOVER_STATE_UNAVAILABLE', '좋아요 전환 상태를 확인 중입니다. 잠시 후 다시 시도해 주세요.', 503, { 'Retry-After': '30' });
-  }
-  // SORIDRAW_LEGACY_LIKE_DIRECT_NORMALIZE_185_20260922
-  // Functionality-first recovery: legacy batch settles requested state synchronously.
-  // One real toggle changes membership + track_stats only in canonical D1 (W2).
+  // SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922
+  // Final contract: 30s client batch -> one durable 069 queue row.
+  // No per-track likes/track_stats direct settlement on the interactive request.
+  // Personal R2 is changed-track best-effort only; it may never force a D1 scan or replay.
   await assertLegacyLikeIntakeOpen165(env);
-  const results = [];
-  const sharedRows185 = [];
-  for (const mutation of mutations) {
-    const track = await getPublicTrackForWrite(env, mutation.trackId);
-    const settledAt = Date.now();
-    const likeCount = await adjustExploreLikeCounterDelta(env, mutation.trackId, authContext.uid, mutation.liked, settledAt);
-    results.push({ trackId: mutation.trackId, liked: mutation.liked, likeCount });
-    sharedRows185.push({ trackId: mutation.trackId, ownerUid: String(track?.owner_uid || '').trim(), likeCount });
-    if (track?.owner_uid) {
-      try { await patchExploreProfileR2Like044(env, track.owner_uid, mutation.trackId, likeCount); }
-      catch (error) { console.warn('[185] profile R2 like patch deferred:', String(error?.message || error || 'unknown')); }
-    }
+  const results = mutations.map((mutation) => ({
+    trackId: mutation.trackId,
+    liked: mutation.liked,
+    status: 'legacy-queued',
+  }));
+  let queued = { batchId: '', inserted: false, queue: 'none' };
+  if (mutations.length) {
+    queued = await enqueueExploreLikeBatch035(env, authContext.uid, mutations, receivedAt);
   }
-  if (sharedRows185.length) {
-    try { await patchSharedFeedLikeCounts065(env, sharedRows185); }
-    catch (error) { console.warn('[185] shared feed/card like patch deferred:', String(error?.message || error || 'unknown')); }
-  }
-  const settlementBatchId185 = 'direct185_' + String(receivedAt) + '_' + crypto.randomUUID();
-  // SORIDRAW_LEGACY_LIKE_POSTWRITE_ACK_186_20260922
-  // Canonical D1 is already committed above. R2/cache publication is best-effort:
-  // it must never turn a successful mutation into HTTP 5xx and cause client replay.
-  let catalogBefore185 = null;
-  try { catalogBefore185 = await readSharedLikesState161(env, authContext.uid); }
-  catch (error) { console.warn('[186] personal catalog pre-read deferred:', String(error?.message || error || 'unknown')); }
   let personalR2 = { ok: false, repairNeeded: true, reason: 'not-attempted' };
-  try { personalR2 = await syncExploreLikeR2AfterBatch074(env, authContext.uid, results, receivedAt, settlementBatchId185); }
-  catch (error) { console.warn('[186] personal R2 incremental publish deferred:', String(error?.message || error || 'unknown')); }
-  let personalLikeSnapshot185 = 'repair-needed';
-  if (personalR2?.ok && catalogBefore185?.exact) {
+  if (mutations.length && queued.batchId) {
     try {
-      const key185 = exploreSharedLikesKey061(authContext.uid);
-      let exactFinalized185 = false;
-      for (let attempt185 = 0; attempt185 < 8; attempt185 += 1) {
-        const object185 = await env.PROFILE_MEDIA.get(key185);
-        if (!object185) break;
-        let body185 = null; try { body185 = JSON.parse(await object185.text()); } catch {}
-        if (!body185 || !Array.isArray(body185.likedTrackIds)) break;
-        const ids185 = [...new Set(body185.likedTrackIds.map((id) => String(id || '').trim()).filter(Boolean))];
-        const next185 = { ...body185, canonicalComplete156: true, exactLikeCount156: ids185.length, canonicalSource156: 'direct-d1-catalog-186', updatedAt: Date.now(), likedTrackIds: ids185 };
-        const stored185 = await env.PROFILE_MEDIA.put(key185, JSON.stringify(next185), { onlyIf: { etagMatches: object185.etag }, httpMetadata: { contentType: 'application/json; charset=utf-8' }, customMetadata: { soridrawSharedLikes: '186', updatedAt: String(next185.updatedAt) } });
-        if (stored185) { exactFinalized185 = true; break; }
-      }
-      if (exactFinalized185) personalLikeSnapshot185 = 'settled';
-    } catch (catalogError185) {
-      console.warn('[186] exact personal catalog metadata finalize deferred:', String(catalogError185?.message || catalogError185 || 'unknown'));
+      personalR2 = await syncExploreLikeR2AfterBatch074(env, authContext.uid, results, receivedAt, queued.batchId);
+    } catch (error) {
+      console.warn('[188] queued like accepted; personal R2 delta deferred:', String(error?.message || error || 'unknown'));
     }
   }
   return json({
     ok: true,
     data: {
       results,
-      queued: false,
-      batchId: settlementBatchId185,
-      queue: 'direct-legacy-185',
-      canonicalD1: 'settled',
-      personalLikeSnapshot: personalLikeSnapshot185,
-      personalLikeProtocol: 'legacy-direct-186-postwrite-ack',
-      publicLikePublication: personalLikeSnapshot185 === 'settled' ? 'targeted-r2-186' : 'repair-needed',
+      queued: Boolean(mutations.length),
+      batchId: queued.batchId || null,
+      queue: queued.queue || '069',
+      canonicalD1: 'queued',
+      personalLikeSnapshot: personalR2?.ok ? 'changed-track-r2' : 'repair-needed',
+      personalLikeProtocol: 'w1-queue-changed-track-188',
+      publicLikePublication: 'background-targeted-aggregate',
     },
   }, 200, cors);
 }

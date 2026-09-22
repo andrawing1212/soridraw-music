@@ -92,7 +92,7 @@ const GEMINI_BOUNDED_ATTEMPT_TIMEOUT_MS: Record<string, number> = {
   "gemini-3.8-flash": 35_000,
   "gemini-3.7-flash": 55_000,
   "gemini-3.6-flash": 45_000,
-  "gemini-3.5-flash": 30_000,
+  "gemini-3.5-flash": 20_000,
   "gemini-3.5-flash-lite": 20_000,
   "gemini-3.1-flash-lite": 15_000,
 };
@@ -138,13 +138,13 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any, attemp
   replaceOnce(
     'Gemini timeout attempt record',
     '  const statusCode = extractGeminiErrorStatus(error);\n  const retryAfterMs = Math.max(0, Math.round(Number(anyError?.retryAfterMs) || 0));\n  const cooldownMs = getGeminiServerCooldownMs(statusCode, retryAfterMs);',
-    '  const isAttemptTimeout = (anyError?.name === "TimeoutError" || anyError?.name === "AbortError") && /timeout|aborted/i.test(String(anyError?.message || ""));\n  const statusCode = isAttemptTimeout ? 504 : extractGeminiErrorStatus(error);\n  const retryAfterMs = Math.max(0, Math.round(Number(anyError?.retryAfterMs) || 0));\n  const cooldownMs = isAttemptTimeout ? 0 : getGeminiServerCooldownMs(statusCode, retryAfterMs);',
+    '  const isAttemptTimeout = (anyError?.name === "TimeoutError" || anyError?.name === "AbortError") && /timeout|aborted/i.test(String(anyError?.message || ""));\n  const statusCode = isAttemptTimeout ? 504 : extractGeminiErrorStatus(error);\n  const rawErrorMessage = String(anyError?.message || "");\n  const isDailyQuotaExhausted = statusCode === 429 && /(?:requests?\\s+per\\s+day|per day on Free Tier|GenerateRequestsPerDay)/i.test(rawErrorMessage);\n  const retryAfterMs = Math.max(0, Math.round(Number(anyError?.retryAfterMs) || 0));\n  const cooldownMs = isAttemptTimeout ? 0 : getGeminiServerCooldownMs(statusCode, retryAfterMs);',
   );
 
   replaceOnce(
     'Gemini timeout attempt code',
     '    code: anyError?.code || statusCode,\n    ...(retryAfterMs > 0 ? { retryAfterMs } : {}),\n    ...(cooldownMs > 0 ? { cooldownMs } : {}),\n    ...(cooldownMs > 0 ? { cooldownReason: statusCode === 429 ? "quota_or_rate_limit" : statusCode === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded" } : {}),',
-    '    code: isAttemptTimeout ? "GEMINI_ATTEMPT_TIMEOUT" : anyError?.code || statusCode,\n    ...(retryAfterMs > 0 ? { retryAfterMs } : {}),\n    ...(cooldownMs > 0 ? { cooldownMs } : {}),\n    ...(isAttemptTimeout ? { cooldownReason: "model_response_timeout" } : cooldownMs > 0 ? { cooldownReason: statusCode === 429 ? "quota_or_rate_limit" : statusCode === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded" } : {}),',
+    '    code: isAttemptTimeout ? "GEMINI_ATTEMPT_TIMEOUT" : anyError?.code || statusCode,\n    ...(retryAfterMs > 0 ? { retryAfterMs } : {}),\n    ...(cooldownMs > 0 ? { cooldownMs } : {}),\n    ...(isAttemptTimeout ? { cooldownReason: "model_response_timeout" } : cooldownMs > 0 ? { cooldownReason: isDailyQuotaExhausted ? "daily_quota_exhausted" : statusCode === 429 ? "quota_or_rate_limit" : statusCode === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded" } : {}),',
   );
 
   replaceOnce(

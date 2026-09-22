@@ -383,10 +383,9 @@ export default function ExplorePage() {
   // never derive membership from the shared public likeCount.
   useEffect(() => {
     if (!user?.uid) return;
-    const onRemote = (event: Event) => {
-      const detail = (event as CustomEvent<{
-        uid?: string; trackId?: string; ownerUid?: string; liked?: boolean; likeCount?: number; source?: string;
-      }>).detail;
+    const onRemote = (detail: {
+      uid?: string; trackId?: string; ownerUid?: string; liked?: boolean; likeCount?: number; source?: string;
+    }) => {
       if (detail?.source !== 'remote' || detail.uid !== user.uid ||
           !detail.trackId || typeof detail.liked !== 'boolean') return;
       // React may commit this event after a newer local click. Read the

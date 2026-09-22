@@ -1810,7 +1810,8 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const patch172 = readFileSync('cloudflare/explore-worker/patches/082-like-d1only-route.mjs', 'utf8');
   assert.match(patch169, /SORIDRAW_BATCH_LIKE_FINAL_CUTOVER_FREEZE_169_20260921/);
   assert.match(patch172, /SORIDRAW_LIKE_D1ONLY_ROUTE_172_20260921/);
-  assert.match(batch165, /SORIDRAW_BATCH_LIKE_FINAL_CUTOVER_FREEZE_169_20260921/);
+  assert.match(batch165, /SORIDRAW_LEGACY_LIKE_DIRECT_NORMALIZE_185_20260922/,
+    'app134 replaces the 169 queued legacy body with direct settled 185');
   const finalRead172 = 'const cutover172 = await readLikeCutoverState162(env)';
   const legacyDrain165 = 'await assertLegacyLikeIntakeOpen165(env)';
   const legacyDirectWrite185 = 'adjustExploreLikeCounterDelta(';

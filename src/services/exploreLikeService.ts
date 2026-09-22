@@ -57,6 +57,9 @@ const EXPLORE_LIKE_SIGNAL_GAP_127 = 'soridraw:explore:like-signal-gap:127';
 const EXPLORE_LIKE_REPAIR_TARGET_127 = 'soridraw:explore:like-repair-target:127';
 const EXPLORE_LIKE_R2_REVISION_127 = 'soridraw:explore:like-r2-revision:127';
 const EXPLORE_LIKE_SNAPSHOT_PENDING_127 = 'soridraw:explore:like-snapshot-pending:127';
+// App135: once this device owns a durable personal-like catalog, revision changes
+// refresh that catalog from R2/deltas but must never fall back to visible-track D1 scans.
+const EXPLORE_LIKE_LOCAL_CATALOG_READY_135 = 'soridraw:explore:like-local-catalog-ready:135';
 const EXPLORE_LIKE_LEGACY_CHECK_MS_127 = 5 * 60_000;
 const EXPLORE_LIKE_SIGNAL_MAX_127 = 50;
 // SORIDRAW_EXPLORE_LIKE_CROSS_DEVICE_ACK_RESTORE_131_20260922
@@ -272,7 +275,8 @@ export const readExploreTrackLikeMembership127 = (uid: string, trackId: string):
   // snapshot is partial, only IDs explicitly rechecked through the bounded
   // /v1/me/likes endpoint may unlock a mutation.
   const baselineReady = baselineCompleted127.has(uid) ||
-    readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1';
+    readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid)) === '1' ||
+    hasLocalLikeCatalog135(uid);
   if (!baselineReady && !readTargetedVerifiedLikeTracks127(uid).has(id)) return undefined;
   return getLikedStateCache(uid).get(id);
 };
@@ -289,6 +293,15 @@ const writeLikeLocal127 = (key: string, value: string) => {
 
 const readCurrentPersonalLikeRevision130 = (uid: string) =>
   readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_R2_REVISION_127, uid));
+
+const hasLocalLikeCatalog135 = (uid: string): boolean =>
+  readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_LOCAL_CATALOG_READY_135, uid)) === '1' ||
+  hasLikedStateStorage127(uid);
+
+const markLocalLikeCatalogReady135 = (uid: string) => {
+  if (!uid) return;
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_LOCAL_CATALOG_READY_135, uid), '1');
+};
 
 const readTargetedVerifiedLikeTracks127 = (uid: string): Set<string> => {
   const normalizedUid = String(uid || '').trim();
@@ -379,7 +392,10 @@ const requestRepair127 = (uid: string, version: number) => {
   const target = Math.max(readRepairTarget127(uid), version);
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_TARGET_127, uid), String(target));
   baselineCompleted127.delete(uid);
-  clearTargetedVerifiedLikeTracks127(uid);
+  // Keep the device catalog/targeted proof visible while R2 catches up. Clearing it
+  // here caused a page-return /v1/me/likes scan and stale-heart flicker on app134.
+  // A changed revision refreshes only the changed catalog state; it is not a reason
+  // to forget every already-known membership.
   // A remote account change must invalidate BOTH complete and partial baseline
   // markers. Otherwise a partial legacy snapshot can make ensurePersonalLikeBaseline127
   // return immediately and the other device never re-checks the changed heart.
@@ -430,23 +446,13 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
   // transitions merely because this device has no prior signal watermark.
   // An actual missing interval (a previously seen version) still requires repair.
   const gap = lastSeen > 0 && signal.previousVersion !== lastSeen;
-  if (gap || readRepairTarget127(uid) > 0) {
-    // A failed R2 repair must never ACK the incoming RTDB revision. Record a
-    // durable retry target and let the verified personal snapshot finish first.
+  const needsRepair = gap || readRepairTarget127(uid) > 0;
+  if (needsRepair) {
+    // The retained signal rows are exact changed-track final states. Apply them
+    // immediately even when an older notification interval was missed; then use
+    // the personal R2 catalog only to repair any unknown gap. App134 returned here
+    // before applying these rows, which left mobile stale and triggered D1 fallback.
     requestRepair127(uid, signal.version);
-    const current = auth.currentUser;
-    if (current?.uid === uid) {
-      void ensurePersonalLikeBaseline127(current)
-        .then(() => {
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
-              detail: { uid, reason: 'personal-like-repair-complete' },
-            }));
-          }
-        })
-        .catch((error) => console.warn('[127] Personal like gap repair retained for retry:', error));
-    }
-    return;
   }
   const pending = readLikeOutbox(uid);
   const unresolved = readSnapshotPending127(uid);
@@ -488,7 +494,22 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
   if (changed) persistLikedStateCache(uid, cache);
   if (unresolvedChanged) writeSnapshotPending127(uid, unresolved);
   if (locksChanged) persistLikeDisplayLocks(uid, displayLocks);
+  markLocalLikeCatalogReady135(uid);
   markSeenLikeSignal127(uid, signal.version);
+  if (needsRepair) {
+    const current = auth.currentUser;
+    if (current?.uid === uid) {
+      void ensurePersonalLikeBaseline127(current)
+        .then(() => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, {
+              detail: { uid, reason: 'personal-like-repair-complete' },
+            }));
+          }
+        })
+        .catch((error) => console.warn('[135] Personal like gap repair retained for retry:', error));
+    }
+  }
 };
 
 let activeLikeSignalUid127 = '';
@@ -580,6 +601,7 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
         // Legacy partial R2 is a positive catalog hint, never a reason to scan
         // visible Feed rows on every entry. Merge its known liked IDs into the
         // device catalog and keep the last device state for the rest.
+        const hadLocalCatalog135 = hasLocalLikeCatalog135(uid);
         seedExploreLikedTrackCandidates129(uid, likedIds);
         const cache = getLikedStateCache(uid);
         let changed = false;
@@ -589,6 +611,10 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
           changed = true;
         }
         if (changed) persistLikedStateCache(uid, cache);
+        // Existing devices keep their durable catalog across revision changes.
+        // A truly new device without any catalog may still use the one-time
+        // bounded bootstrap below, but ordinary page return can never regress to it.
+        if (hadLocalCatalog135) markLocalLikeCatalogReady135(uid);
         writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid), '1');
         return;
       }
@@ -612,6 +638,7 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
           ...Object.fromEntries(Object.entries(outbox).map(([id, row]) => [id, row.desiredLiked])),
         },
       );
+      markLocalLikeCatalogReady135(uid);
       if (repairAtStart > 0) {
         markSeenLikeSignal127(uid, repairAtStart);
         writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_REPAIR_TARGET_127, uid), '');
@@ -629,7 +656,7 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
 export const invalidateExplorePersonalLikeBaseline127 = (uid: string) => {
   if (!uid) return;
   baselineCompleted127.delete(uid);
-  clearTargetedVerifiedLikeTracks127(uid);
+  // Revision changes refresh the catalog; they do not erase a healthy device catalog.
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, uid), '');
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid), '');
 };
@@ -1315,7 +1342,7 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
     readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, user.uid)) === '1';
   const beforeOutbox127 = readLikeOutbox(user.uid);
   const beforeUnresolved127 = readSnapshotPending127(user.uid);
-  const localCatalogReady127 = baselineReady127 || hasLikedStateStorage127(user.uid);
+  const localCatalogReady127 = baselineReady127 || hasLocalLikeCatalog135(user.uid);
   const missing = localCatalogReady127 ? [] : normalized.filter((trackId) => {
     if (beforeOutbox127[trackId] ||
         Object.prototype.hasOwnProperty.call(beforeUnresolved127, trackId)) return false;
@@ -1342,6 +1369,9 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
     }
     persistLikedStateCache(user.uid, cache);
     persistTargetedVerifiedLikeTracks127(user.uid, verified127);
+    // This was the one-time bootstrap for a device without a catalog. From now
+    // on navigation/revision changes stay local-first and never repeat /v1/me/likes.
+    markLocalLikeCatalogReady135(user.uid);
   }
 
   const outbox = readLikeOutbox(user.uid);

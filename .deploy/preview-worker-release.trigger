@@ -1,9 +1,9 @@
-requested_at=2026-09-22T13:17:30Z
+requested_at=2026-09-22T13:33:30Z
 requested_by=user
-product_code_target=1e0bdcb9da7970b51020f691ef3e5f052ff2105d
-release_purpose=app137_fix_trigger_inclusive_like_receipt_and_idle_navigation_retry_loop
-audit_run=35732241097
-audit_job=106760460110
+product_code_target=5407a56508c21e8c98e187159b9ea1f0a577a26e
+release_purpose=app137_fix_trigger_inclusive_like_receipt_and_idle_navigation_retry_loop_r2
+audit_run=35732623427
+audit_job=106761752048
 audit_result=success
 no_d1_migration=true
 no_user_data_migration=true

@@ -82,6 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/verify-127-atomic-personal-like.mjs
+          node scripts/verify-175-explore-like-catalog-reentry.mjs
           node scripts/verify-135-like-fenced-protocol.mjs
           node scripts/verify-171-d1only-schema.mjs
           node scripts/verify-172-d1only-adapter.mjs

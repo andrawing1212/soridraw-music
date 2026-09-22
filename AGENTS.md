@@ -12,6 +12,12 @@
 7. 과거 원인이 정말 필요할 때만 `DOCS/WORK_LOG.md`
 8. 실제 `preview` HEAD와 최근 commit을 확인해 문서와 실제 GitHub가 일치하는지 확인
 
+## 기능별 스킬
+- 좋아요/해제, 개인 좋아요 카탈로그, PC↔모바일 동기화, Explore 좋아요 비용 최적화 작업 전에는 반드시 `.agents/skills/local-first-like-sync/SKILL.md`를 읽는다.
+- SORIDRAW 작업에서는 해당 스킬의 `references/soridraw-app141-baseline.md`를 현재 검증된 정상 기준으로 사용한다.
+- 비용/캐시/동기화 변경이면 `references/cost-regression-checklist.md`도 함께 읽는다.
+- 이 스킬은 정상 기능을 비용 때문에 삭제하거나 약화하는 근거로 사용할 수 없다. 현재 사용자 지시와 `CURRENT_RELEASE_STATE.md`가 항상 우선한다.
+
 ## 절대 원칙
 - 현재 사용자 지시 → `CURRENT_RELEASE_STATE.md` → GitHub/Firebase/Cloudflare 실제 상태 순으로 판단한다.
 - `preview` = 개발/큰 수정/비용 최적화/배포 전 검증.

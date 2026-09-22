@@ -522,6 +522,7 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
   let changed = false;
   let unresolvedChanged = false;
   let locksChanged = false;
+  const acceptedForUi141: ExploreLikeSyncEventDetail[] = [];
   for (const item of signal.results) {
     // A newer unsent local click must win. An older accepted-but-unsettled
     // intention must NOT permanently block a newer server-accepted device state.
@@ -547,15 +548,21 @@ const applyRemoteLikeSignal127 = (uid: string, signal: ExploreLikeSignal127) => 
       protectUntil: acceptedAt + EXPLORE_LIKE_SHARED_PUBLISH_LOCK_MS_120,
     };
     locksChanged = true;
-    // A changed count matters even when the heart boolean is already identical.
-    // Reconcile Feed/Profile/My Likes with the same accepted account pair.
-    dispatchLikeSync({ ...item, uid, source: 'remote' });
+    // Collect notifications until both the membership and pending snapshot
+    // are durable. Explore rereads effective membership in its UI subscriber;
+    // dispatching here would expose an OLD snapshotPending value and drop this
+    // exact remote change until the next page/tab visit.
+    acceptedForUi141.push({ ...item, uid, source: 'remote' });
   }
   if (changed) persistLikedStateCache(uid, cache);
   if (unresolvedChanged) writeSnapshotPending127(uid, unresolved);
   if (locksChanged) persistLikeDisplayLocks(uid, displayLocks);
   markLocalLikeCatalogReady135(uid);
   markSeenLikeSignal127(uid, signal.version);
+  // App141: publish to the mounted/replayable UI only AFTER its authoritative
+  // local membership read can observe this entire accepted changed-track batch.
+  // No new server request, extra listener, retry, or layout change is involved.
+  acceptedForUi141.forEach(dispatchLikeSync);
   if (needsRepair) {
     const current = auth.currentUser;
     if (current?.uid === uid) {

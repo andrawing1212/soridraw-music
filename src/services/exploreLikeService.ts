@@ -114,6 +114,66 @@ type ExploreLikeSyncEventDetail = {
   source?: 'local' | 'confirmed' | 'remote';
 };
 
+type ExploreLikeUiSyncListener139 = (detail: ExploreLikeSyncEventDetail) => void;
+
+// App139: RTDB can deliver a retained/remote changed-track signal before the
+// Explore React effect is attached (especially on mobile resume/PWA restore).
+// Keep only the latest small changed-track set in memory and replay it to the
+// current screen. This is UI-only: no D1/Firestore/R2 read or write is added.
+const remoteLikeUiSubscribers139 = new Map<string, Set<ExploreLikeUiSyncListener139>>();
+const latestRemoteLikeUiRows139 = new Map<string, Map<string, ExploreLikeSyncEventDetail>>();
+
+export const subscribeExploreLikeUiSync139 = (
+  uid: string,
+  listener: ExploreLikeUiSyncListener139,
+): (() => void) => {
+  const normalizedUid = String(uid || '').trim();
+  if (!normalizedUid) return () => {};
+
+  let listeners = remoteLikeUiSubscribers139.get(normalizedUid);
+  if (!listeners) {
+    listeners = new Set<ExploreLikeUiSyncListener139>();
+    remoteLikeUiSubscribers139.set(normalizedUid, listeners);
+  }
+  listeners.add(listener);
+
+  // Replay only exact remote changed-track rows already accepted by the service.
+  // This closes the one-shot window-event race without re-fetching any server data.
+  latestRemoteLikeUiRows139.get(normalizedUid)?.forEach((detail) => listener(detail));
+
+  return () => {
+    const current = remoteLikeUiSubscribers139.get(normalizedUid);
+    current?.delete(listener);
+    if (current && current.size === 0) remoteLikeUiSubscribers139.delete(normalizedUid);
+  };
+};
+
+const notifyExploreLikeUiSync139 = (detail: ExploreLikeSyncEventDetail) => {
+  if (detail.source !== 'remote') return;
+  const normalizedUid = String(detail.uid || '').trim();
+  const trackId = String(detail.trackId || '').trim();
+  if (!normalizedUid || !trackId) return;
+
+  let latest = latestRemoteLikeUiRows139.get(normalizedUid);
+  if (!latest) {
+    latest = new Map<string, ExploreLikeSyncEventDetail>();
+    latestRemoteLikeUiRows139.set(normalizedUid, latest);
+  }
+  if (latest.has(trackId)) latest.delete(trackId);
+  latest.set(trackId, detail);
+  while (latest.size > EXPLORE_LIKE_SIGNAL_MAX_127) {
+    const oldestTrackId = latest.keys().next().value as string | undefined;
+    if (!oldestTrackId) break;
+    latest.delete(oldestTrackId);
+  }
+
+  remoteLikeUiSubscribers139.get(normalizedUid)?.forEach((listener) => {
+    try { listener(detail); } catch (error) {
+      console.warn('[139] Explore like UI listener failed:', error);
+    }
+  });
+};
+
 const likedStateByUid = new Map<string, Map<string, boolean>>();
 const flushTimerByUid = new Map<string, number>();
 const inflightByUid = new Map<string, Promise<void>>();
@@ -969,6 +1029,11 @@ export function overlayExploreLikeDisplayCounts<T extends { id: string; likeCoun
 }
 
 const dispatchLikeSync = (detail: ExploreLikeSyncEventDetail) => {
+  // App139: deliver remote changed-track state through a replayable in-memory
+  // subscription first. Keep the historical window event for compatibility
+  // with any other consumers, but ExplorePage no longer depends on catching
+  // that one-shot event at exactly the right moment.
+  notifyExploreLikeUiSync139(detail);
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent<ExploreLikeSyncEventDetail>(EXPLORE_LIKE_SYNC_EVENT, { detail }));
 };

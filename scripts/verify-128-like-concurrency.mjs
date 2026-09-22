@@ -190,7 +190,11 @@ if (/SORIDRAW_LEGACY_LIKE_DIRECT_NORMALIZE_185_20260922/.test(legacyIntake138)) 
   assert.match(legacyIntake138,/adjustExploreLikeCounterDelta\(/);
   assert.match(legacyIntake138,/syncExploreLikeR2AfterBatch074\(/);
   assert.match(legacyIntake138,/canonicalD1: 'settled'/);
-  assert.match(legacyIntake138,/personalLikeSnapshot: 'settled'/);
+  assert.match(legacyIntake138,/SORIDRAW_LEGACY_LIKE_POSTWRITE_ACK_186_20260922/);
+  assert.match(legacyIntake138,/personalLikeSnapshot: personalLikeSnapshot185/);
+  assert.match(legacyIntake138,/personalLikeSnapshot185 = 'repair-needed'/);
+  assert.doesNotMatch(legacyIntake138,/throwApi\('LIKE_PUBLICATION_RETRY_REQUIRED'/);
+  assert.doesNotMatch(legacyIntake138,/SELECT l\.track_id FROM likes l JOIN tracks t/);
   assert.doesNotMatch(legacyIntake138,/enqueueExploreLikeBatch035\(/);
   assert.doesNotMatch(legacyIntake138,/awaiting_canonical_d1_settlement/);
   console.log('185_CANONICAL_D1_BEFORE_PERSONAL_R2=PASS');

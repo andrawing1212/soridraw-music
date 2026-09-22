@@ -1682,8 +1682,21 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
     refresh163.indexOf('env.DB.batch('));
 
   const countCalls163 = (needle) => worker163.split(needle).length - 1;
-  assert.equal(countCalls163('adjustExploreLikeCounterDelta('), 2,
-    'direct legacy relation writer call graph changed');
+  // App134/185 intentionally moves the legacy batch route off the stalled 069
+  // queue and into the same canonical direct relation/count writer. The third
+  // call is therefore expected and must live only in handleLikeBatch034.
+  assert.equal(countCalls163('adjustExploreLikeCounterDelta('), 3,
+    'direct + app134 batch legacy relation writer call graph changed');
+  const batchStart185 = worker163.indexOf('async function handleLikeBatch034(');
+  const batchEnd185 = worker163.indexOf('\n}', batchStart185);
+  const batch185 = worker163.slice(batchStart185, batchEnd185 + 2);
+  assert.match(batch185, /SORIDRAW_LEGACY_LIKE_DIRECT_NORMALIZE_185_20260922/);
+  assert.match(batch185, /adjustExploreLikeCounterDelta\(/);
+  assert.match(batch185, /syncExploreLikeR2AfterBatch074\(/);
+  assert.doesNotMatch(batch185, /enqueueExploreLikeBatch035\(env, authContext\.uid/,
+    'app134 batch route must not create new 069 deferred work');
+  assert.match(worker163, /canonicalSource156: 'direct-d1-catalog-185'/,
+    'app134 direct settlement must keep the personal R2 catalog exact');
   assert.equal(countCalls163('processExploreLikeAggregateWave035('), 2,
     'legacy aggregate wave call graph changed');
   assert.equal(countCalls163('processExploreLikeUserQueueWave075('), 2,

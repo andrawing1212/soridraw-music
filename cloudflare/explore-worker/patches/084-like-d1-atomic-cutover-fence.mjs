@@ -191,10 +191,16 @@ async function adjustExploreLikeCounterDelta(env, trackId, userUid, shouldLike, 
     if (!Array.isArray(result) || result.length !== 4 ||
         result.some((row) => row?.success === false) ||
         !Number.isInteger(result[0]?.meta?.changes) ||
-        result[0].meta.changes < 0 || result[0].meta.changes > 1 ||
+        result[0].meta.changes < 0 ||
         !Array.isArray(result[2]?.results) || !Array.isArray(result[3]?.results)) {
       throw new Error('[SORIDRAW 174] fenced direct D1 receipt unavailable; retry idempotently');
     }
+    // Cloudflare D1 meta.changes includes AFTER-trigger side effects. The live
+    // likes table has a shared-revision trigger, so one real relation mutation
+    // reports changes=2 even though the direct relation change is exactly one.
+    // SQL changes() in the following batch statement remains the direct-change
+    // gate for track_stats; do not reject a committed mutation because billing
+    // metadata includes trigger work.
     const phase = String(result[3]?.results?.[0]?.phase || '');
     if (phase !== 'open') throwLikeCutoverFenceClosed174(phase);
     return clampExploreSocialCount(result[2].results[0]?.like_count);

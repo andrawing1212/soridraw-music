@@ -1,5 +1,34 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EE. app146 실사용 1분 4초 병목 확인 + app147 Codex 작업 기준 고정 (2026-09-23 KST)
+
+**사용자 실사용 결과**
+- app146 곡 생성 총 약 1분 4초.
+- 3.8/3.7은 Free Tier 일일 quota로 skip, 3.6은 cooldown/최초 시도 실패, 3.5는 20초 timeout, 3.5-lite가 12.7초에 최초 생성 성공.
+- 최초 성공 호출 입력 33,853 / 출력 4,068.
+- 이후 `repairV1FinalProductionCues`(관리자 표시: 섹션 지시문 보완)가 추가 실행되어 3.5 15초 timeout + 3.5-lite 9.5초 성공. 보완 payload 자체는 입력 576 / 출력 117로 작지만 전체 지연을 크게 늘림.
+
+**코드 감사에서 확인한 핵심**
+- 후속 “섹션 지시문 보완”은 sung section의 performance cue 보완이 아니라, section별 standalone **production/sound cue** 누락을 채우는 경로다.
+- `collectV1MissingProductionCueSections()`가 instrument cue 옵션 ON일 때 blueprint의 모든 section을 production-cue 필수 대상으로 잡는다.
+- 반면 최초 `sectionPerformancePlan` 계약은 sung section의 performance cue는 필수로 두면서, `soundCue`는 해당 section에 실제 audible production event가 있을 때만 요구한다.
+- 즉 최종 integrity가 최초 생성 계약보다 더 엄격해 optional production-cue blank를 추가 Gemini 호출로 보완할 가능성이 확인됐다.
+- sung section performance cue 필수 규칙은 그대로 보호한다.
+
+**다음 작업**
+- `DOCS/NEXT_CODEX_TASK.md`에 app147 Codex 작업을 고정.
+- 목표 1: optional production cue 때문에 `repairV1FinalProductionCues`가 발생하지 않게 필수/선택 판정을 canonical sectionPerformancePlan과 정합화.
+- 목표 2: 33~34k 최초 입력을 블록별로 계측하고 **완전 중복만** 축소. 품질 규칙 삭제 금지.
+- 모델 5단 chain, quota/cooldown/in-flight, hard-ban 3.5-lite 단일 교정, UI/사용자 데이터/TEST/PRODUCTION은 보호.
+- Codex는 구현/테스트/commit까지만 수행하고 **배포하지 않는다**. 이후 Work/ChatGPT 독립 검증 후 PREVIEW 배포 판단.
+
+**현재 상태**
+- 런타임 코드 변경 없음.
+- PREVIEW app146 배포 상태 그대로.
+- Firebase / Functions / Worker / Rules / 사용자 데이터 변경 없음.
+- TEST / PRODUCTION 변경 없음.
+
+
 ## 0ED. PREVIEW app146 — Gemini 후속 교정 호출 축소 + quota 문구 한글화 완료 (2026-09-23 KST)
 
 **app145 사용자 3곡 실사용 결과**

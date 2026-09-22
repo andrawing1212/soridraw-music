@@ -170,7 +170,10 @@ replaceOnce(
           || context === "generateSongCompactFallback"
           || context.startsWith("languageMixLockedWholeRewrite")
           || context.startsWith("generateSong v2");
-        const useInitial36LowThinking = (thinkingPolicy === "initial-36-low-v1" || thinkingPolicy === "initial-36-low-small-35-low-v2")
+        const useInitialFlashLowThinking = thinkingPolicy === "initial-36-low-small-35-low-v2"
+          && ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash"].includes(attemptModel)
+          && isInitialSongContext;
+        const useLegacyInitial36LowThinking = thinkingPolicy === "initial-36-low-v1"
           && attemptModel === "gemini-3.6-flash"
           && isInitialSongContext;
         const isSmall35LowThinkingContext = context === "repairV1FinalProductionCues"
@@ -181,7 +184,7 @@ replaceOnce(
         const useSmall35LowThinking = thinkingPolicy === "initial-36-low-small-35-low-v2"
           && attemptModel === "gemini-3.5-flash"
           && isSmall35LowThinkingContext;
-        if (useInitial36LowThinking || useSmall35LowThinking) {
+        if (useInitialFlashLowThinking || useLegacyInitial36LowThinking || useSmall35LowThinking) {
           const existingConfig = attemptPayload?.config && typeof attemptPayload.config === "object"
             ? attemptPayload.config
             : {};
@@ -197,7 +200,7 @@ replaceOnce(
           };
           console.info(useSmall35LowThinking
             ? "[Gemini 854 Thinking] small 3.5 correction request uses low thinking"
-            : "[Gemini 850 Thinking] initial 3.6 request uses low thinking", {
+            : "[Gemini 143 Initial Thinking] initial Flash request uses low thinking", {
             context,
             sessionId,
             model: attemptModel,

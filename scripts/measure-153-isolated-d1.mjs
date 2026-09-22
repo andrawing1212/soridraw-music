@@ -83,6 +83,40 @@ if (process.argv[2] === 'cleanup') {
     }
     await ddl('CREATE TABLE shared_revision (scope TEXT PRIMARY KEY, revision INTEGER NOT NULL)');
     await ddl("INSERT INTO shared_revision (scope,revision) VALUES ('global',0)");
+
+    // 188 final architecture: interactive client batch must cost exactly one
+    // durable queue-row write regardless of how many changed tracks are inside
+    // mutations_json. This mirrors production explore_like_batches_069.
+    await ddl("CREATE TABLE explore_like_batches_069_iso (" +
+      "batch_id TEXT PRIMARY KEY,user_uid TEXT NOT NULL,created_at INTEGER NOT NULL," +
+      "mutation_count INTEGER NOT NULL CHECK(mutation_count BETWEEN 1 AND 50)," +
+      "mutations_json TEXT NOT NULL CHECK(length(mutations_json)<=24000)) WITHOUT ROWID");
+    const queuePayload188 = JSON.stringify([
+      { trackId: 'song-a', liked: true },
+      { trackId: 'song-b', liked: false },
+      { trackId: 'song-c', liked: true },
+      { trackId: 'song-d', liked: false },
+      { trackId: 'song-e', liked: true },
+      { trackId: 'song-f', liked: false },
+    ]).replaceAll("'", "''");
+    const queueInsert188 = await query(
+      "INSERT OR IGNORE INTO explore_like_batches_069_iso(batch_id,user_uid,created_at,mutation_count,mutations_json) " +
+      "VALUES('batch-188','user-188',188000,6,'" + queuePayload188 + "')"
+    );
+    const queueDuplicate188 = await query(
+      "INSERT OR IGNORE INTO explore_like_batches_069_iso(batch_id,user_uid,created_at,mutation_count,mutations_json) " +
+      "VALUES('batch-188','user-188',188000,6,'" + queuePayload188 + "')"
+    );
+    const queueRows188 = Number(queueInsert188.meta?.rows_written);
+    const queueDupRows188 = Number(queueDuplicate188.meta?.rows_written);
+    if (queueRows188 !== 1 || queueDupRows188 !== 0) {
+      fail('188 W1 queue intake billing mismatch first=' + queueRows188 + ' duplicate=' + queueDupRows188);
+    }
+    const queueRead188 = await query("SELECT mutation_count FROM explore_like_batches_069_iso WHERE batch_id='batch-188'");
+    if (Number(queueRead188.results?.[0]?.mutation_count) !== 6) fail('188 queue payload count mismatch');
+    console.log('188_REMOTE_D1_W1_QUEUE_INTAKE=PASS rows_written=' + queueRows188 +
+      ' mutations=6 duplicate_rows_written=' + queueDupRows188);
+
     const definitions = [
       ['full_live_like_shape', true, 2],
       ['relation_only_indexed', false, 2],

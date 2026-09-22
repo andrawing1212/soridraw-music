@@ -17,8 +17,19 @@ for (const text of [page, likes]) {
   }
 }
 
-if (!page.includes('track={track}')) fail('cards do not render shared track payload directly');
-if (page.includes('displayTrack =')) fail('account-scoped display track remains');
+const directSharedCard107 = page.includes('track={track}');
+const atomicPairCard129 =
+  page.includes('const pair129 = normalizeExploreLikeDisplayPair129(liked129, track.likeCount);') &&
+  page.includes('const displayTrack129 = pair129.likeCount === track.likeCount') &&
+  page.includes('track={displayTrack129}') &&
+  page.includes('liked={pair129.liked}');
+if (!directSharedCard107 && !atomicPairCard129) {
+  fail('cards must render the shared payload or the single 0/1 atomic stale-display repair only');
+}
+if (/const displayTrack\s*=/.test(page)) fail('legacy account-scoped display track remains');
+if (atomicPairCard129 && !likes.includes('likeCount: Math.max(clampLikeCount(publicCount), liked ? 1 : 0)')) {
+  fail('129 card repair must only fix impossible filled-heart/public-zero state');
+}
 
 if (appVersion >= 120) {
   if (!likes.includes('SORIDRAW_EXPLORE_LIKE_ACTOR_COUNT_LOCK_120_20260918')) fail('current actor-count lock marker missing');

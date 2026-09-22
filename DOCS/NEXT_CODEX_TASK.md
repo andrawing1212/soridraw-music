@@ -1,5 +1,27 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app147 PREVIEW 실사용 확인
+
+현재 PREVIEW:
+- app147 Firebase Hosting 배포 완료.
+- Release System Audit Run `35783411655` SUCCESS.
+- Hosting Run `35783654947` SUCCESS.
+- exact build PASS / TEST+PRODUCTION unchanged PASS.
+- Codex 구현 commit `718c9b5b00d90ab0a1509c19df9038621fdce182`.
+- Functions / Worker / Rules / 사용자 데이터 변경 없음.
+
+사용자 확인:
+1. 일반 V1 곡 1~3개 생성.
+2. 관리자 Gemini 호출 기록에서 최초 생성 후 `섹션 지시문 보완(repairV1FinalProductionCues)` 호출 유무 확인.
+3. ordinary sung section에 별도 production event가 없을 때 보완 호출이 없어야 한다.
+4. sung section의 performance cue는 기존처럼 유지되어야 한다.
+5. Instrumental/Interlude/Break/Stop 또는 명시적 production event가 실제로 있는 구조에서는 필요한 cue가 유지되어야 한다.
+6. 최초 입력 token과 전체 처리시간 기록.
+7. prompt 자체는 이번 app147에서 줄이지 않았으므로 33.8k~34.4k가 유지돼도 실패로 보지 않는다. 다음 단계는 실사용 결과를 보고 prompt-size 원인을 별도로 좁힌다.
+
+실사용 PASS 전 추가 구조 변경 금지.
+
+
 ## 현재 최우선 — app147 Gemini prompt-size source audit + 불필요한 섹션 production-cue 추가 호출 제거
 
 ### 기준

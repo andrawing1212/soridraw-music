@@ -200,7 +200,8 @@ assert.equal(
   2,
   'successful ACK and ambiguous failure must both preserve a newer explicit intent',
 );
-assert.match(flush, /const canonicalLikeSettled127 = canBroadcastExploreLikeSnapshot127\(payload\?\.data\?\.personalLikeSnapshot\)/);
+assert.match(flush, /const canonicalLikeSettled127 =\s*\n\s*payload\?\.data\?\.canonicalD1 === 'settled' \|\|\s*\n\s*canBroadcastExploreLikeSnapshot127\(payload\?\.data\?\.personalLikeSnapshot\)/,
+  'canonical D1 settlement must outrank derived R2 publication state');
 assert.match(flush, /if \(canonicalLikeSettled127\) \{/);
 assert.match(flush, /snapshotPending127\[pending\.trackId\] = result\.liked/);
 assert.match(flush, /writeSnapshotPending127\(uid, snapshotPending127\)/);

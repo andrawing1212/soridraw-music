@@ -8,8 +8,10 @@ let source = readFileSync(workerPath, 'utf8');
 
 const marker = 'SORIDRAW_EXPLORE_LIKE_EDGE_RATE_LIMIT_054_20260915';
 const marker160 = 'SORIDRAW_DIRECT_LIKE_EDGE_RATE_LIMIT_160_20260921';
+const marker185 = 'SORIDRAW_LEGACY_LIKE_DIRECT_NORMALIZE_185_20260922';
 const has054 = source.includes(marker);
 const has160 = source.includes(marker160);
+const has185 = source.includes(marker185);
 if (has054 && has160) {
   console.log('[054/160] Batch and direct Explore like edge rate limits already applied.');
   process.exit(0);
@@ -52,19 +54,24 @@ const functionRange = (name) => {
 // The repository-owned canonical Worker is the already-built current runtime.
 // Build-time patch markers can be removed by bundling, so guard on durable behavior
 // that must exist in the 053 baseline rather than on a source comment marker.
-for (const required of [
+const requiredRuntime = [
   'handleLikeBatch034',
   'handleLikeD1Core',
   'enforceUserRateLimit',
-  'enforceExploreLikeBatchRateLimit034',
-  'readExploreLikeBatchStates035',
-  'enqueueExploreLikeBatch035',
-  'enqueueExploreLikeUserQueue075',
-  'exploreLikeW1Batch040',
-  'effectiveMutations',
   'EXPLORE_LIKE_BATCH_MAX_034',
   'throwApi',
-]) {
+];
+if (!has185) {
+  requiredRuntime.push(
+    'enforceExploreLikeBatchRateLimit034',
+    'readExploreLikeBatchStates035',
+    'enqueueExploreLikeBatch035',
+    'enqueueExploreLikeUserQueue075',
+    'exploreLikeW1Batch040',
+    'effectiveMutations',
+  );
+}
+for (const required of requiredRuntime) {
   if (!source.includes(required)) throw new Error(`[054] required runtime behavior missing: ${required}`);
 }
 
@@ -113,16 +120,23 @@ if (!finalBatch.includes('enforceExploreLikeBatchEdgeRateLimit054(env, authConte
 if (finalBatch.includes('enforceExploreLikeBatchRateLimit034(')) {
   throw new Error('[054] D1 rate limit remained on normal batch path');
 }
-if (!finalBatch.includes('effectiveMutations')) {
-  throw new Error('[054] protected like batching behavior missing: effectiveMutations');
-}
-const hasBatch035 = finalBatch.includes('enqueueExploreLikeBatch035');
-const hasQueue075 = finalBatch.includes('enqueueExploreLikeUserQueue075');
-if (!hasBatch035 && !hasQueue075) {
-  throw new Error('[054] no supported like queue intake remains after edge-limit patch');
-}
-if (source.includes('SORIDRAW_EXPLORE_LIKE_INTAKE_W1_HOTPATH_055_20260915') && !hasBatch035) {
-  throw new Error('[054] 055 W1 intake marker exists but batch handler no longer uses enqueueExploreLikeBatch035');
+if (!has185) {
+  if (!finalBatch.includes('effectiveMutations')) {
+    throw new Error('[054] protected like batching behavior missing: effectiveMutations');
+  }
+  const hasBatch035 = finalBatch.includes('enqueueExploreLikeBatch035');
+  const hasQueue075 = finalBatch.includes('enqueueExploreLikeUserQueue075');
+  if (!hasBatch035 && !hasQueue075) {
+    throw new Error('[054] no supported like queue intake remains after edge-limit patch');
+  }
+  if (source.includes('SORIDRAW_EXPLORE_LIKE_INTAKE_W1_HOTPATH_055_20260915') && !hasBatch035) {
+    throw new Error('[054] 055 W1 intake marker exists but batch handler no longer uses enqueueExploreLikeBatch035');
+  }
+} else {
+  if (!finalBatch.includes('adjustExploreLikeCounterDelta(') ||
+      finalBatch.includes('enqueueExploreLikeBatch035(')) {
+    throw new Error('[054/185] direct-settled batch shape is invalid');
+  }
 }
 for (const forbidden of ['api_rate_limits', 'exploreRateDb031(', '.DB.prepare', 'RATE_DB']) {
   if (finalEdge.includes(forbidden)) throw new Error(`[054] edge limiter unexpectedly uses D1: ${forbidden}`);

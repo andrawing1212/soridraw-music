@@ -1,5 +1,44 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app135 PREVIEW 실기기 좋아요 동기화 + 페이지복귀 R0 검증
+
+현재 배포 완료:
+- PREVIEW app135 Hosting Run `35723863422` / job `106732740826` SUCCESS.
+- remote app version 135 / exact build PASS.
+- locked source `790f8113dde0346020eff97773bbfe6f95d70822`.
+- Release System Audit Run `35723609001` / job `106731917567` SUCCESS.
+- PREVIEW Worker는 재배포하지 않았고 기존 version `4a145c23-adf0-4f41-8426-6de8cbebda66` 유지.
+- TEST/PRODUCTION unchanged.
+
+app134 실사용에서 재현된 실패:
+- 첫 진입/즉시 재진입 R0였으나 PC 6곡 좋아요 해제 후 모바일이 갱신되지 않음.
+- 다른 페이지 왕복 후 `/v1/me/likes`가 다시 실행되어 D1 membership R46 재발.
+- app135는 exact changed-track RTDB delta를 gap repair보다 먼저 적용하고, 정상 기기의 local catalog authority를 revision/gap 때문에 버리지 않도록 수정함.
+
+다음은 **새 코드 작업 전 실기기 판정만** 수행:
+1. PC/모바일 모두 PREVIEW app135 확인. 브라우저 저장 데이터/캐시는 지우지 않는다.
+2. 양쪽 CACHE LIVE `진단 초기화`.
+3. PC에서 좋아요 2~6곡 OFF 또는 ON → 마지막 클릭 후 약 35초 대기.
+4. 모바일은 새로고침·페이지 이동 없이 하트와 숫자가 같은 상태로 자동 수렴해야 함.
+5. 그 뒤 모바일에서 다른 페이지 → Explore 복귀. CACHE LIVE에 `좋아요 상태 확인 (/v1/me/likes)`가 나타나면 FAIL. 개인 membership D1 rows read 0이 합격.
+6. 모바일→PC 방향도 1곡 이상 동일하게 확인.
+7. 기능이 맞은 뒤 mutation 비용 재측정. W1~W2/행동 목표, W3+ FAIL.
+
+FAIL 시 금지:
+- visible track 전체 `/v1/me/likes` scan을 정상 경로에 복구하지 않는다.
+- public likeCount로 개인 하트를 추론하지 않는다.
+- shared user data 전체 재생성/backfill/delete 금지.
+- TEST/PRODUCTION 승격 금지.
+
+FAIL 시 다음 진단 범위:
+- 해당 계정 RTDB retained signal의 exact changed-track rows/version chain.
+- 개인 R2 catalog revision과 실제 changed delta.
+- device local catalog marker/state.
+- 해당 track의 direct settlement 결과.
+전체 Feed/전체 사용자 membership 조회로 우회하지 않는다.
+
+
+
 ## 현재 최우선 — app134 PREVIEW 실기기 좋아요 카탈로그 R0 + PC/모바일 일치 검증
 
 현재 배포 완료:

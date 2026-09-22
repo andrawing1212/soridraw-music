@@ -1,5 +1,44 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DM. PREVIEW app134 — Explore 좋아요 개인 카탈로그 정상화 + 직접 확정 저장 배포 완료 (2026-09-22)
+
+**현재 PREVIEW live app:** 134  
+**PREVIEW Hosting Run:** `35720055123` / job `106720597230` SUCCESS. 실제 `preview.soridraw.com/app-version.json=134`, exact build PASS.  
+**PREVIEW Worker Run:** `35719972386` / job `106720327350` SUCCESS. 현재 Worker version `4a145c23-adf0-4f41-8426-6de8cbebda66`.  
+**최종 전체 감사:** Run `35719747351` / job `106719597910` SUCCESS. TypeScript / Build / like candidate regression / live shared D1 read-only preflight / TEST·PRODUCTION dry-run PASS.  
+**배포 앱 source:** Hosting workflow가 배포 시점 preview HEAD `319ce44bacd165d6996b37fb3f2650a3d5c7b393`를 고정하여 build/deploy했고, 그 HEAD는 감사된 제품 source `634cc69c6ded43c52b46c9bf0c1aa36b2c453422` 이후 release trigger만 추가된 상태.
+
+정상화 내용:
+- Explore 개인 좋아요는 Music Note식 **local-first 개인 카탈로그 + 작은 개인 revision**을 정상 경로로 사용.
+- 정상 기기 캐시가 있으면 Explore 진입/재진입/포커스복귀/앱 업데이트 자체로 `/v1/me/likes` 대상곡 D1 membership 재확인을 하지 않도록 변경. 앱 버전 변경은 개인 카탈로그 재생성 사유가 아님.
+- private R2 revision이 동일하면 기존 개인 카탈로그/검증 결과를 유지. 포커스 복귀는 tiny revision check만 수행.
+- legacy partial R2는 known-liked positive hint로만 합치고, partial이라는 이유만으로 매번 visible tracks 46행/92행을 다시 읽는 경로 제거.
+- 새 좋아요/해제는 기존 069 deferred intake를 새로 만들지 않고 canonical D1 관계/카운트를 직접 확정한 뒤 개인 R2 카탈로그와 공개 R2 숫자를 갱신하는 185 경로로 전환.
+- 서버에서 장기 정체되어 있던 기존 `explore_like_batches_069` 7 batches / 14 accepted mutations는 repair Run `35709706139` SUCCESS로 **이미 접수된 최종 의도만** canonical D1에 반영했고, 영향 계정 1개의 개인 R2 좋아요 카탈로그만 canonical D1 기준 exact로 재생성. 전체 백필/전체 사용자 재생성/삭제 없음.
+- Worker 배포 직전 실제 공유 D1에서 `pending035=0 / pending069=0` 확인. 배포 후 warm feed revision `R0/W0`, Feed/Profile smoke PASS, fixed like cron 0, TEST/PRODUCTION Worker unchanged PASS.
+
+비용/기능 합격 상태:
+- **코드/배포 검증:** 정상 캐시 개인 좋아요 entry path D1 membership read 0 설계 + 회귀 PASS.
+- **실기기 CACHE LIVE:** 사용자 PC/모바일에서 app134 배포 후 아직 재측정 전. 이전 app133의 `46행 × 2 = 92행`은 FAIL 기록이며 app134 결과로 간주하지 않는다.
+- **PC↔모바일 하트/숫자/내 좋아요 실사용 일치:** 사용자 실기기 재검증 전. 아직 기능 PASS로 선언 금지.
+- 실제 좋아요 변경 write fanout은 별도 W1~W2 최종 실측 전이며, 기능을 희생해 W1을 강제하지 않는다.
+
+환경/데이터:
+- Firebase PREVIEW Hosting만 app134로 갱신.
+- Cloudflare PREVIEW Worker만 새 version으로 갱신.
+- Functions / Rules 변경 없음.
+- TEST / PRODUCTION 코드·Worker·실제 HTML 비변경 PASS.
+- 파괴적 migration/대량삭제/전체 backfill 없음.
+- 사용자 원본 변경은 위 repair Run에서 **이미 서버가 접수했던 14개 좋아요 의도 반영 + 해당 1계정 exact 개인 카탈로그 재생성**으로 제한.
+
+다음 실사용 합격선:
+1. Cache Live 초기화 후 Explore 첫 진입: 좋아요 상태 D1 membership 행 읽기 **0 목표**. tiny revision/공용 R2/Worker 요청은 D1 membership scan과 구분.
+2. 같은 화면 재진입/앱 포커스복귀/앱 새로고침: 개인 좋아요 D1 rows read 0.
+3. PC/모바일 동일 계정 첫 화면 하트 + 공개 숫자 + 내 좋아요 동일.
+4. PC에서 좋아요 OFF/ON 후 30초 묶음 확정 → 모바일 수렴, 반대 방향도 동일.
+5. 실패 시 app134를 PASS 처리하지 말고 해당 track의 catalog revision/delta/direct settlement만 진단. 전체조회 fallback 복구 금지.
+
+
 ## 0DL. 사용자 확정 — Explore 좋아요도 Music Note식 개인 카탈로그 구조로 고정 (2026-09-22 KST)
 
 사용자 실사용 CACHE LIVE에서 `좋아요 상태 확인`이 1회당 약 46 D1 rows read, 동일 진입 흐름에서 2회 실행되어 누적 92 rows read가 관측됨. 이는 전체 공개곡 Feed를 92곡 읽은 것이 아니라 **현재 개인 좋아요 membership을 D1에서 대상곡 단위로 재확인한 비용**이다. 그러나 정상 캐시 재진입에서 D1 read 0이라는 SORIDRAW 절대 기준에는 FAIL.

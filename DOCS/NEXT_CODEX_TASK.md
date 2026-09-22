@@ -1,5 +1,24 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 단일 최우선 — app140 실사용 FAIL, 송신→수신→화면 경계 진단부터
+
+실제 결과: 첫 화면 하트 spinner PASS; PC↔모바일 양방향 즉시 하트 반영 FAIL. TEST/PRODUCTION 승격 금지.
+
+2026-09-23 live read-only RTDB probe:
+- Run `35754369030` / `35754457146`: 최신 계정 changed-track signal version `1790094204064` (UTC 16:23:24), changed tracks 2. probe UTC 16:28:55 age 331초. 실제 server publish는 한 번 이상 확인.
+- 이는 수신/화면 반영 성공까지 뜻하지 않음. 이전 app139의 오래된 signal 문제와 구별.
+- 임시 read-only probe workflow 제거 완료. 사용자 데이터 write 0.
+
+원인 확인 작업 지시 (먼저 분석/진단, 무근거 패치 금지):
+1. 같은 계정의 송신 성공한 batch 시점과 RTDB persisted signal version/results를 대조. private UID/track ID를 로그에 직접 노출하지 않을 것.
+2. 수신 device에서 `onValue` subscribe/error/auth UID 일치, signal normalize, `version <= lastSeen` skip, `previousVersion` gap/repair, `pending[trackId]` skip를 **순서대로** 추적.
+3. service remote `dispatchLikeSync` 이후 Explore subscriber 연결/replay 여부, `effectiveLiked !== detail.liked` guard, hydration overwrite 여부 확인.
+4. `set()` 송신자의 local seen/Date.now 기반 version과 server latest 간 동시성/clock skew/stale overwrite 가능성을 따로 검토하되 증거 없이 guard 제거 금지.
+5. 원인 확정 뒤 막힌 구간만 최소 수정 + 해당 경로 실행형 회귀 + TS/Build + Audit. 사용자 PREVIEW 자동 배포는 사전검사 PASS 후. 실제 양방향 결과 재확인 필요.
+
+보호: app138 W1 30초 묶음쓰기, R0 재진입, local personal catalog, Worker version `45afab7c-1da2-45b6-b34d-cb3943cec559`, UI/CSS, shared user data, TEST/PRODUCTION 그대로. 전체 조회, 반복 write, 무승인 migration 금지.
+
+
 ## 현재 최우선 — app140 양방향 실시간 changed-track + 첫 화면 spinner 실기기 확인
 
 현재 PREVIEW:

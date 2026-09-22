@@ -1,4 +1,4 @@
-requested_at=2026-09-21T21:28:00Z
-purpose=read_only_recheck_queue_after_supervised_replay
-mode=postflight_read_only
+requested_at=2026-09-22T13:01:00Z
+purpose=read_only_trace_app136_idle_like_retry_cost
+mode=diagnostic_read_only
 preview_only=true

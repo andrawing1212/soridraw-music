@@ -1770,17 +1770,29 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const direct165 = slice165('handleLikeD1Core');
   const batch165 = slice165('handleLikeBatch034');
   const cron165 = slice165('processExploreLikeBatches035Core056');
-  for (const [label, body, write] of [
-    ['direct', direct165, 'adjustExploreLikeCounterDelta('],
-    ['batch', batch165, 'adjustExploreLikeCounterDelta('],
-  ]) {
-    const markerAt = body.indexOf('await assertLegacyLikeIntakeOpen165(env)');
-    assert.ok(markerAt >= 0 && markerAt < body.indexOf(write),
-      '165 ' + label + ' intake must be guarded before D1 write');
-    assert.ok(body.indexOf('enforceExploreLikeBatchEdgeRateLimit054') < markerAt);
+  {
+    const markerAt = direct165.indexOf('await assertLegacyLikeIntakeOpen165(env)');
+    assert.ok(markerAt >= 0 && markerAt < direct165.indexOf('adjustExploreLikeCounterDelta('),
+      '165 direct intake must be guarded before D1 write');
+    assert.ok(direct165.indexOf('enforceExploreLikeBatchEdgeRateLimit054') < markerAt);
   }
-  assert.doesNotMatch(batch165, /enqueueExploreLikeBatch035\(/,
-    'app134 batch route must not recreate the stalled 069 queue');
+  {
+    const markerAt = batch165.indexOf('await assertLegacyLikeIntakeOpen165(env)');
+    const finalW1188 = batch165.includes('SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922');
+    const writeAt = finalW1188
+      ? batch165.indexOf('enqueueExploreLikeBatch035(env, authContext.uid, mutations, receivedAt)')
+      : batch165.indexOf('adjustExploreLikeCounterDelta(');
+    assert.ok(markerAt >= 0 && writeAt > markerAt,
+      '165 batch intake must be guarded before D1 write');
+    assert.ok(batch165.indexOf('enforceExploreLikeBatchEdgeRateLimit054') < markerAt);
+    if (finalW1188) {
+      assert.match(batch165, /enqueueExploreLikeBatch035\(env, authContext\.uid, mutations, receivedAt\)/);
+      assert.doesNotMatch(batch165, /adjustExploreLikeCounterDelta\(/);
+    } else {
+      assert.doesNotMatch(batch165, /enqueueExploreLikeBatch035\(/,
+        'legacy direct batch route must not recreate 069 queue');
+    }
+  }
   assert.doesNotMatch(cron165, /assertLegacyLikeIntakeOpen165/);
   assert.match(cron165, /processExploreLikeUserQueueWave075/);
   assert.doesNotMatch(worker165, /(?:put|delete)\(exploreLikeDrainKey165/,

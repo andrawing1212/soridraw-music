@@ -31,28 +31,42 @@ const batchStart=worker.indexOf('async function handleLikeBatch034(request, env,
 const batchEnd=worker.indexOf('\n}',batchStart);
 assert.ok(batchStart>=0 && batchEnd>batchStart);
 const batch=worker.slice(batchStart,batchEnd+2);
-for(const text of [
-  "const cutover172 = await readLikeCutoverState162(env)",
-  "if (cutover172.mode === 'd1only171')",
-  "createLikeD1OnlyCanonical171(env.DB, { cutoverVerified: true })",
-  "expectedRevision: mutation.expectedRevision",
-  "operationId: mutation.operationId",
-  "queue: 'd1only171'",
-  "canonicalD1: 'settled'",
-]) assert.ok(batch.includes(text),'missing 172 batch route contract: '+text);
-if (worker.includes('SORIDRAW_LIKE_R2_REVISION_ROUTE_173_20260922')) {
+if (batch.includes('SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922')) {
   for (const text of [
-    "personalLikeSnapshot: 'settled'",
-    "personalLikeProtocol: 'revision-safe-173'",
-    "publicLikePublication: 'generation-safe-173'",
-  ]) assert.ok(batch.includes(text),'missing 173 settlement upgrade on 172 route: '+text);
+    "await assertLegacyLikeIntakeOpen165(env)",
+    "enqueueExploreLikeBatch035(env, authContext.uid, mutations, receivedAt)",
+    "status: 'legacy-queued'",
+    "queue: queued.queue || '069'",
+    "canonicalD1: 'queued'",
+    "personalLikeProtocol: 'w1-queue-changed-track-188'",
+  ]) assert.ok(batch.includes(text),'missing final W1 batch route contract: '+text);
+  assert.doesNotMatch(batch,/readLikeCutoverState162\(env\)/);
+  assert.doesNotMatch(batch,/createLikeD1OnlyCanonical171\(/);
+  assert.doesNotMatch(batch,/adjustExploreLikeCounterDelta\(/);
 } else {
-  assert.ok(batch.includes("personalLikeSnapshot: 'pending'"),
-    'pre-173 172 route must keep personal snapshot pending');
+  for(const text of [
+    "const cutover172 = await readLikeCutoverState162(env)",
+    "if (cutover172.mode === 'd1only171')",
+    "createLikeD1OnlyCanonical171(env.DB, { cutoverVerified: true })",
+    "expectedRevision: mutation.expectedRevision",
+    "operationId: mutation.operationId",
+    "queue: 'd1only171'",
+    "canonicalD1: 'settled'",
+  ]) assert.ok(batch.includes(text),'missing 172 batch route contract: '+text);
+  if (worker.includes('SORIDRAW_LIKE_R2_REVISION_ROUTE_173_20260922')) {
+    for (const text of [
+      "personalLikeSnapshot: 'settled'",
+      "personalLikeProtocol: 'revision-safe-173'",
+      "publicLikePublication: 'generation-safe-173'",
+    ]) assert.ok(batch.includes(text),'missing 173 settlement upgrade on 172 route: '+text);
+  } else {
+    assert.ok(batch.includes("personalLikeSnapshot: 'pending'"),
+      'pre-173 172 route must keep personal snapshot pending');
+  }
+  assert.ok(batch.indexOf("if (cutover172.mode === 'd1only171')") <
+    batch.indexOf('await assertLegacyLikeIntakeOpen165(env)'),
+    '171 route must bypass the legacy drain marker only after final shared cutover');
 }
-assert.ok(batch.indexOf("if (cutover172.mode === 'd1only171')") <
-  batch.indexOf('await assertLegacyLikeIntakeOpen165(env)'),
-  '171 route must bypass the legacy drain marker only after final shared cutover');
 assert.doesNotMatch(batch,/assertLegacyLikeWriterOpen163\(env, 'batch-like-intake'\)/);
 
 const directStart=worker.indexOf('async function handleLikeD1Core(request, env, cors, trackId, shouldLike) {');
@@ -78,7 +92,7 @@ assert.match(migration,/WITHOUT ROWID/);
 assert.doesNotMatch(migration,/CREATE\s+INDEX/i);
 
 console.log('172_DORMANT_ROUTE_REQUIRES_SCHEMA2_SHARED_PROOF=PASS');
-console.log('172_BATCH_W2_ROUTE_PRECEDES_LEGACY_QUEUE=PASS');
+console.log('172_BATCH_ROUTE_COMPAT_OR_FINAL_W1_QUEUE=PASS');
 console.log('172_DIRECT_BODYLESS_ROUTE_FAILS_CLOSED_AFTER_CUTOVER=PASS');
 console.log('172_CLIENT_EXPECTED_REVISION_BACKWARD_COMPATIBLE=PASS');
 console.log('172_ROUTE_NOT_ARMED_BY_SOURCE_CHANGE=PASS');

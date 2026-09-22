@@ -27,7 +27,7 @@
 - app146 곡 생성 총 약 1분 4초.
 - 3.8/3.7은 Free Tier 일일 quota로 skip, 3.6은 cooldown/최초 시도 실패, 3.5는 20초 timeout, 3.5-lite가 12.7초에 최초 생성 성공.
 - 최초 성공 호출 입력 33,853 / 출력 4,068.
-- 이후 `repairV1FinalProductionCues`(관리자 표시: 섹션 지시문 보완)가 추가 실행되어 3.5 15초 timeout + 3.5-lite 9.5초 성공. 보완 payload 자체는 입력 576 / 출력 117로 작지만 전체 지연을 크게 늘림.
+- 이후 `repairV1FinalProductionCues`(관리자 표시: 섹션 지시문 보완)가 추가 실행되어 3.5 15초 timeout + 3.5-lite 0.951초 성공. 보완 payload 자체는 입력 576 / 출력 117로 작지만 전체 지연을 크게 늘림.
 
 **코드 감사에서 확인한 핵심**
 - 후속 “섹션 지시문 보완”은 sung section의 performance cue 보완이 아니라, section별 standalone **production/sound cue** 누락을 채우는 경로다.

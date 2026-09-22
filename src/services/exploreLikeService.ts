@@ -48,7 +48,7 @@ const EXPLORE_LIKE_PARTIAL_BASELINE_161 = 'soridraw:explore:like-partial-baselin
 // response is still authoritative for the requested visible track IDs. Persist
 // only those verified IDs so clicks work without trusting stale legacy booleans.
 const EXPLORE_LIKE_TARGETED_VERIFIED_127 = 'soridraw:explore:like-targeted-verified:127';
-const EXPLORE_LIKE_TARGETED_VERIFIED_130 = 'soridraw:explore:like-targeted-verified:130';
+// App134 starts one clean targeted proof generation after the stalled 069 period.\n// Once verified against canonical D1, the proof survives ordinary re-entry while\n// the account-private R2 revision is unchanged.\nconst EXPLORE_LIKE_TARGETED_VERIFIED_134 = 'soridraw:explore:like-targeted-verified:134';
 const EXPLORE_LIKE_SIGNAL_SEEN_127 = 'soridraw:explore:like-signal-seen:127';
 const EXPLORE_LIKE_SIGNAL_RETRY_127 = 'soridraw:explore:like-signal-retry:127';
 const EXPLORE_LIKE_SIGNAL_GAP_127 = 'soridraw:explore:like-signal-gap:127';
@@ -287,16 +287,15 @@ const readTargetedVerifiedLikeTracks127 = (uid: string): Set<string> => {
   if (cached && targetedVerifiedRevisionByUid130.get(normalizedUid) === currentRevision) return cached;
 
   const verified = new Set<string>();
-  // A partial legacy R2 revision identifies only the truncated R2 object.
-  // Its queued likes can materialize into canonical D1 later WITHOUT changing
-  // that R2 HEAD. Persisted per-track "verified" booleans are therefore NOT
-  // valid across app sessions on partial accounts. Reverify only visible IDs,
-  // once per session (bounded batches), while exact complete R2 remains R0.
-  const partial161 = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, normalizedUid)) === '1';
-  if (currentRevision && !partial161) {
+  // App134: targeted canonical membership is durable for the SAME private R2
+  // revision, including legacy-partial accounts. A real like/unlike now settles
+  // canonical D1 first and then changes that account R2 revision. Therefore an
+  // unchanged revision means ordinary page re-entry must not spend another D1
+  // membership read. The 134 key deliberately ignores stale app133 proofs once.
+  if (currentRevision) {
     try {
       const raw = JSON.parse(
-        readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_130, normalizedUid)),
+        readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_134, normalizedUid)),
       ) as { revision?: unknown; trackIds?: unknown };
       if (String(raw?.revision || '') === currentRevision && Array.isArray(raw?.trackIds)) {
         raw.trackIds.slice(-1000).forEach((value) => {
@@ -321,7 +320,7 @@ const persistTargetedVerifiedLikeTracks127 = (uid: string, verified: Set<string>
   targetedVerifiedRevisionByUid130.set(normalizedUid, currentRevision);
   if (!currentRevision) return;
   writeLikeLocal127(
-    scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_130, normalizedUid),
+    scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_134, normalizedUid),
     JSON.stringify({ revision: currentRevision, trackIds: bounded }),
   );
 };
@@ -332,7 +331,7 @@ const clearTargetedVerifiedLikeTracks127 = (uid: string) => {
   targetedVerifiedByUid127.delete(normalizedUid);
   targetedVerifiedRevisionByUid130.delete(normalizedUid);
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_127, normalizedUid), '');
-  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_130, normalizedUid), '');
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_134, normalizedUid), '');
 };
 // Accepted D1 queue != updated personal R2. Keep a UID-scoped override for
 // accepted tracks whose shared R2 CAS was not materialized; an older R2 read
@@ -659,14 +658,9 @@ export const checkExplorePersonalLikeRevision127 = async (user: User): Promise<v
             detail: { uid, reason: 'personal-r2-revision-changed' },
           }));
         }
-      } else if (readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid)) === '1') {
-        // The 069/075 deferred processor may have applied a queued relation in
-        // D1 since the last check without touching this incomplete R2 object.
-        // At most once per five minutes of active use, expire ONLY the partial
-        // per-track verification. The currently displayed heart remains until
-        // bounded exact membership confirms the visible IDs.
-        clearTargetedVerifiedLikeTracks127(uid);
       }
+      // Same private R2 revision means no account like changed. Keep the
+      // app134 per-track canonical proof and make ordinary re-entry D1 R0.
       revisionCheckAtByUid127.set(uid, Date.now());
     } catch (error) {
       // Throttle a broken connection for only 30 seconds, not for the entire

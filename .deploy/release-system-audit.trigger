@@ -1,1 +1,1 @@
-release_system_audit=2026-09-22-app135-like-catalog-reentry-cross-device-r3
+release_system_audit=2026-09-22-app136-postwrite-safe-like-sync-r1

@@ -20,7 +20,6 @@ import {
 } from '../services/exploreSessionCache';
 import {
   EXPLORE_LIKE_SYNC_ERROR_EVENT,
-  EXPLORE_LIKE_SYNC_EVENT,
   EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT,
   flushPendingExploreLikesForPageExit,
   getExploreKnownLikeCandidateIds127,
@@ -32,6 +31,7 @@ import {
   overlayExploreLikeDisplayCounts,
   reconcileExploreLikedTrackCollectionState,
   setExploreTrackLike,
+  subscribeExploreLikeUiSync139,
 } from '../services/exploreLikeService';
 import {
   getExploreLikedTrackCollectionIds,
@@ -442,14 +442,14 @@ export default function ExplorePage() {
         console.warn('Explore like revision resume check failed:', reason);
       });
     };
+    const unsubscribeLikeUi139 = subscribeExploreLikeUiSync139(user.uid, onRemote);
     window.addEventListener('focus', onResume);
     document.addEventListener('visibilitychange', onResume);
-    window.addEventListener(EXPLORE_LIKE_SYNC_EVENT, onRemote);
     window.addEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onGap);
     return () => {
+      unsubscribeLikeUi139();
       window.removeEventListener('focus', onResume);
       document.removeEventListener('visibilitychange', onResume);
-      window.removeEventListener(EXPLORE_LIKE_SYNC_EVENT, onRemote);
       window.removeEventListener(EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT, onGap);
     };
   }, [user?.uid]);

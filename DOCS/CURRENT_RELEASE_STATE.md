@@ -1,5 +1,58 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DP. PREVIEW app136 — 좋아요 D1 확정 후 HTTP 500 재시도/모바일 미동기화 복구 배포 완료 (2026-09-22 KST)
+
+**현재 PREVIEW live app:** 136  
+**PREVIEW Hosting Run:** `35729271895` / job `106750503334` SUCCESS. locked source `dc43f30372b71fc4b5570756bf7441130d2eeb4c`, remote `app-version.json=136`, exact build PASS.  
+**PREVIEW Worker Run:** `35729148720` / job `106750087137` SUCCESS. 현재 Worker version `314608e3-1490-4eab-ade5-f5909bc2af96`.  
+**최종 Release System Audit:** `35728910481` / job `106749307465` SUCCESS. TypeScript / Build / like regression / TEST·PRODUCTION Worker dry-run / shared D1 read-only preflight / refs unchanged PASS.  
+**canonical materialize:** Run `35728218642` / job `106746999636` SUCCESS, commit `addb280c87149c00cea9c0b2ff7ba386ba9c24f1`.
+
+app135 실기기 최종 FAIL:
+- PC에서 좋아요 3곡 변경 후 CACHE LIVE가 `좋아요 변경 묶음 저장` 마지막 **HTTP 500**, 누적 D1 `R12 / W11`을 표시.
+- 모바일은 같은 시간 동안 하트/숫자 변화가 전혀 없어 PC→모바일 동기화 FAIL.
+- 별도 **read-only RTDB 실서버 진단** Run `35727265636` / job `106743856843`에서 live RTDB rules는 source와 일치했지만, 최신 `userSync/*/exploreLike` 신호는 약 47분 전 상태였고 최근 15분 신호가 없음을 확인. 진단 중 사용자 데이터 write 0.
+- 즉 모바일 수신 문제가 아니라 **PC 서버 처리 이후 새 cross-device signal 자체가 발행되지 않은 상태**였음.
+
+확정 원인:
+- app135 Worker의 direct like 경로는 먼저 canonical D1 좋아요 관계/숫자를 저장한 뒤 개인 R2 카탈로그 후처리를 수행.
+- **D1 저장은 이미 성공했는데 후속 R2 카탈로그 갱신/복구가 실패하면 HTTP 5xx를 반환**하는 구조였음.
+- 클라이언트는 전체 요청 실패로 판단해 outbox를 남기고 RTDB changed-track signal을 발행하지 않음.
+- 결과적으로 다른 기기는 변화를 못 받고, 재시도 시 같은 사용자 동작이 다시 서버 경로를 타며 D1 write 비용도 증폭될 수 있었음.
+- 또한 이 후처리 경로에 조건부 **개인 좋아요 전체 D1 목록 조회**가 남아 있어 실제 변경 hotpath 비용 원칙에도 어긋났음.
+
+app136 수정:
+- canonical D1 저장 성공을 사용자의 최종 좋아요 상태로 확정. 그 뒤 R2/cache 갱신 실패가 **성공한 D1 변경을 HTTP 5xx로 되돌리지 못하도록** 수정.
+- 개인 R2는 변경곡 기반 incremental/best-effort 처리. 실패 시 `repair-needed`만 남기고 canonical 성공을 재실행하지 않음.
+- like mutation hotpath의 개인 좋아요 전체 D1 scan 및 synchronous full catalog rebuild 제거.
+- 클라이언트도 `canonicalD1='settled'`를 최종 ACK로 인정해 outbox를 정리하고 해당 변경곡만 RTDB account signal로 다른 기기에 전달.
+- app135에서 넣은 local-first 개인 카탈로그 / page-return D1 membership R0 보호는 그대로 유지.
+- 신규 회귀 `scripts/verify-176-like-postwrite-ack.mjs` + 기존 127/128/135 회귀 업데이트.
+- Worker canonical marker `SORIDRAW_LEGACY_LIKE_POSTWRITE_ACK_186_20260922`.
+
+비용/데이터:
+- 코드상 변경 hotpath의 **개인 전체 좋아요 D1 scan 제거** PASS.
+- canonical 성공 후 R2 실패 때문에 같은 좋아요를 재시도하여 쓰기 증폭하는 경로 제거 PASS.
+- Worker 배포 직전 `pending035=0 / pending069=0`; warm revision `R0/W0`; Feed/Profile smoke PASS.
+- 공유 사용자 데이터 migration/backfill/delete 없음. 사용자 원본 강제수정 없음.
+- Functions / Rules 변경 없음.
+- TEST / PRODUCTION Worker·앱 비변경 PASS.
+- app135에서 이미 남은 실패 outbox가 app136 첫 실행에서 1회 정리될 수 있으므로 **첫 회복 batch 비용은 새 동작의 정상 비용으로 판정하지 않는다**.
+- 정상화 후 새 1~3곡 변경 cycle에서 실제 D1 write는 W1~W2/행동 목표로 재실측. 아직 실기기 비용 PASS 선언 금지.
+
+실기기 합격선:
+1. app136 진입 후 기존 실패 outbox가 있다면 한 번 정리될 시간을 준다.
+2. 그 뒤 CACHE LIVE 진단 초기화.
+3. PC에서 새 좋아요 1~3곡 변경 → 약 35초 후 모바일이 페이지 이동/새로고침 없이 자동 수렴.
+4. 반대 방향 모바일→PC도 동일.
+5. 정상 새 cycle에서 HTTP 500 없어야 함.
+6. Explore 다른 페이지 왕복 후 개인 좋아요 membership D1 rows read 0 유지.
+7. 새 cycle mutation D1 rows written W1~W2/실제 변경곡 목표. 기능이 정상이어도 W3+ / 행동이면 비용 FAIL로 계속 수정.
+8. 위 실기기 PASS 전 TEST/PRODUCTION 승격 금지.
+
+임시 read-only RTDB 진단 workflow/trigger는 원인 확인 후 preview에서 제거 완료. 진단 자체는 사용자 데이터 write 0.
+
+
 ## 0DO. PREVIEW app135 배포 완료 — app134 페이지복귀 R46/모바일 비동기 결함 수정, 실기기 재검증 대기 (2026-09-22 KST)
 
 **현재 PREVIEW live app:** 135  

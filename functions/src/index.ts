@@ -1356,10 +1356,12 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
   const responseMimeType = String(config.responseMimeType || "").trim();
   const responseSchema = config.responseSchema;
 
+  const requestedThinkingLevel = String(config?.thinkingConfig?.thinkingLevel || "").trim().toLowerCase();
+  const interactionThinkingLevel = ["low", "medium", "high"].includes(requestedThinkingLevel)
+    ? requestedThinkingLevel
+    : "medium";
   const generationConfig: Record<string, any> = {
-    // AI Studio currently emits Gemini 3.7 Flash with medium thinking by default.
-    // Keep it explicit so the production proxy matches the model's current default profile.
-    thinking_level: "medium",
+    thinking_level: interactionThinkingLevel,
   };
   if (Number.isFinite(Number(config.maxOutputTokens)) && Number(config.maxOutputTokens) > 0) {
     generationConfig.max_output_tokens = Math.round(Number(config.maxOutputTokens));

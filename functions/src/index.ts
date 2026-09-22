@@ -2305,15 +2305,15 @@ export const getGoogleGeminiApiKey = onRequest(
   }
 );
 
-export const generateGeminiContent = onRequest(
-  {
-    region: "us-central1",
-    timeoutSeconds: 180,
-    memory: "512MiB",
-    concurrency: 20,
-    maxInstances: 30,
-  },
-  async (req, res) => {
+const GEMINI_CONTENT_FUNCTION_OPTIONS = {
+  region: "us-central1",
+  timeoutSeconds: 180,
+  memory: "512MiB",
+  concurrency: 20,
+  maxInstances: 30,
+} as const;
+
+const generateGeminiContentHandler = async (req: any, res: any) => {
     if (handleCors(req, res)) return;
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method Not Allowed", ok: false });
@@ -2492,7 +2492,18 @@ export const generateGeminiContent = onRequest(
     } finally {
       if (guardAcquired) await releaseGeminiRequestGuard(uid);
     }
-  }
+};
+
+export const generateGeminiContent = onRequest(
+  GEMINI_CONTENT_FUNCTION_OPTIONS,
+  generateGeminiContentHandler,
+);
+
+// PREVIEW-only endpoint. Deploying this export does not mutate the shared
+// TEST/PRODUCTION generateGeminiContent runtime.
+export const generateGeminiContentPreview = onRequest(
+  GEMINI_CONTENT_FUNCTION_OPTIONS,
+  generateGeminiContentHandler,
 );
 
 export const saveSunoApiKey = onRequest(

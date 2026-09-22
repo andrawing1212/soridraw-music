@@ -1,5 +1,24 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DL. 사용자 확정 — Explore 좋아요도 Music Note식 개인 카탈로그 구조로 고정 (2026-09-22 KST)
+
+사용자 실사용 CACHE LIVE에서 `좋아요 상태 확인`이 1회당 약 46 D1 rows read, 동일 진입 흐름에서 2회 실행되어 누적 92 rows read가 관측됨. 이는 전체 공개곡 Feed를 92곡 읽은 것이 아니라 **현재 개인 좋아요 membership을 D1에서 대상곡 단위로 재확인한 비용**이다. 그러나 정상 캐시 재진입에서 D1 read 0이라는 SORIDRAW 절대 기준에는 FAIL.
+
+사용자 확정 구조:
+- Explore 공개곡과 별도로 **계정별 좋아요 카탈로그**를 기기 캐시 + 공유 R2에 유지한다.
+- 앱/페이지 진입: 기기 카탈로그를 즉시 사용하고 작은 개인 revision만 확인한다.
+- revision 동일: 좋아요 상태 D1 read **0**, 전체/가시곡 membership 재조회 금지.
+- revision 변경: D1 membership을 다시 훑지 않고 계정 R2 좋아요 카탈로그만 갱신한다.
+- 새 기기/카탈로그 손상/정확한 카탈로그 자체가 없는 경우에만 1회 복구/bootstrap 허용. 앱 버전 업데이트 자체는 bootstrap 사유가 아님.
+- 실제 좋아요/해제: 변경된 곡만 canonical relation/count 처리하고 해당 계정 카탈로그 + revision과 해당 공개곡 숫자만 갱신한다.
+- 정상 진입 경로의 `/v1/me/likes` D1 membership 확인은 제거 대상. 예외 repair 전용으로만 제한한다.
+- 수천/수만 공개곡 수에 비례하는 개인 좋아요 확인 금지. 사용자가 Explore를 열었다는 이유만으로 서버 데이터비용이 늘지 않아야 한다.
+
+현재 source `0afd303a6ea3ac850747c31b920197b76ab13df8` + `6dd49e5079530058e512b182627425a91d499f1f`는 중복 재확인 방지의 일부일 뿐, 위 카탈로그 구조 완성본이 아니며 **아직 배포 금지**. 기존 PREVIEW live는 app133. PC/모바일 좋아요 비대칭과 069 queue 정체도 함께 정상화되어야 완료.
+
+합격선: 정상 캐시가 있는 PC/모바일 Explore 첫 진입·재진입·포커스복귀·앱 업데이트에서 좋아요 상태 D1 rows read 0, 하트/숫자/내 좋아요 일치. 실제 좋아요 변경 때만 변경곡 단위 서버 사용. TEST/PRODUCTION 승격 금지 유지.
+
+
 ## 0DK. 실서버 읽기 전용 증거 — 069 좋아요 처리 대기열 장기 정체 / 복구 미확정 (2026-09-22 KST)
 
 PREVIEW app133 사용자 스크린샷 PC 하트 ON/1 vs 모바일 OFF/0, CACHE LIVE 좋아요 상태 확인 D1 1쿼리 / 46행. 같은 곡 개인 관계가 불일치하며 정상 캐시 재진입 R0 불합격.

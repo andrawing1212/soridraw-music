@@ -1695,8 +1695,14 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.match(batch185, /syncExploreLikeR2AfterBatch074\(/);
   assert.doesNotMatch(batch185, /enqueueExploreLikeBatch035\(env, authContext\.uid/,
     'app134 batch route must not create new 069 deferred work');
-  assert.match(worker163, /canonicalSource156: 'direct-d1-catalog-185'/,
-    'app134 direct settlement must keep the personal R2 catalog exact');
+  assert.match(worker163, /SORIDRAW_LEGACY_LIKE_POSTWRITE_ACK_186_20260922/,
+    'app136 post-write ACK guard missing');
+  assert.match(worker163, /canonicalSource156: 'direct-d1-catalog-186'/,
+    'app136 direct settlement must keep a healthy exact personal R2 catalog exact incrementally');
+  assert.doesNotMatch(batch185, /throwApi\('LIKE_PUBLICATION_RETRY_REQUIRED'/,
+    'canonical D1 success must not become a post-write retry response');
+  assert.doesNotMatch(batch185, /SELECT l\.track_id FROM likes l JOIN tracks t/,
+    'like mutation hotpath must not full-scan the personal catalog');
   assert.equal(countCalls163('processExploreLikeAggregateWave035('), 2,
     'legacy aggregate wave call graph changed');
   assert.equal(countCalls163('processExploreLikeUserQueueWave075('), 2,

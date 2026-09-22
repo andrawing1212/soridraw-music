@@ -1,10 +1,12 @@
-requested_at=2026-09-22T13:33:30Z
+requested_at=2026-09-22T15:00:30Z
 requested_by=user
-product_code_target=5407a56508c21e8c98e187159b9ea1f0a577a26e
-release_purpose=app137_fix_trigger_inclusive_like_receipt_and_idle_navigation_retry_loop_r2
-audit_run=35732623427
-audit_job=106761752048
+product_code_target=5d5e7d5f53655115d378b0b52c3095da2c06cfc4
+release_purpose=app138_final_w1_queue_intake_local_catalog_changed_track_sync
+audit_run=35743962351
+audit_job=106800489095
 audit_result=success
+isolated_w1_run=35743171196
+isolated_w1_result=188_REMOTE_D1_W1_QUEUE_INTAKE_PASS
 no_d1_migration=true
 no_user_data_migration=true
 cutover_activation=false

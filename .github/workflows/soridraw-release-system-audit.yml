@@ -66,6 +66,7 @@ jobs:
           node --check cloudflare/explore-worker/patches/085-legacy-like-direct-normalize.mjs
           node --check cloudflare/explore-worker/patches/086-legacy-like-postwrite-ack.mjs
           node --check cloudflare/explore-worker/patches/087-d1-trigger-receipt.mjs
+          node --check cloudflare/explore-worker/patches/088-final-like-w1-hybrid.mjs
           node --check cloudflare/explore-worker/scripts/like-d1-cutover-proof-174.mjs
           node --check cloudflare/explore-worker/scripts/like-d1-cutover-controller-174.mjs
           expected_worker_sha="$(tr -d '[:space:]' < cloudflare/explore-worker/canonical/source-sha256.txt)"
@@ -88,6 +89,7 @@ jobs:
           node scripts/verify-175-explore-like-catalog-reentry.mjs
           node scripts/verify-176-like-postwrite-ack.mjs
           node scripts/verify-177-like-idle-retry-guard.mjs
+          node scripts/verify-178-final-like-architecture.mjs
           node scripts/verify-135-like-fenced-protocol.mjs
           node scripts/verify-171-d1only-schema.mjs
           node scripts/verify-172-d1only-adapter.mjs

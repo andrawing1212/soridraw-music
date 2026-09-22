@@ -861,6 +861,20 @@ export default function ExplorePage() {
   useEffect(() => {
     if (!user || visibleTracks.length === 0) return;
     const ids = [...new Set(visibleTracks.map((track) => track.id).filter(Boolean))].slice(0, 50);
+
+    // App140: paint any already-known local catalog membership synchronously.
+    // After an app update/reload, a healthy device must not show every heart as
+    // a spinner while the tiny revision/baseline check runs in the background.
+    // Unknown/new-device IDs still keep the loader until the normal bootstrap.
+    const immediateLocal: Record<string, boolean> = {};
+    ids.forEach((id) => {
+      const liked = readExploreTrackLikeMembership127(user.uid, id);
+      if (typeof liked === 'boolean') immediateLocal[id] = liked;
+    });
+    if (Object.keys(immediateLocal).length) {
+      setLikedTrackIds((previous) => ({ ...previous, ...immediateLocal }));
+    }
+
     const hydrationKey = `${user.uid}:${profileUid || 'feed'}:${profileUid ? profileCollection : 'feed'}:${ids.join(',')}`;
     if (!ids.length || likeHydrationKeyRef.current === hydrationKey) return;
     likeHydrationKeyRef.current = hydrationKey;

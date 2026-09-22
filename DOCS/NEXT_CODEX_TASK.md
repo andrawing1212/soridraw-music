@@ -1,5 +1,35 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app138 FINAL LIKE ARCHITECTURE 실기기 검증
+
+구조 기준: `DOCS/EXPLORE_LIKE_FINAL_ARCHITECTURE.md` — 변경 금지.
+
+배포 완료:
+- PREVIEW app138 Hosting Run `35744548706` SUCCESS / exact build PASS.
+- PREVIEW Worker Run `35744224208` SUCCESS / version `45afab7c-1da2-45b6-b34d-cb3943cec559`.
+- exact audit `35743962351` SUCCESS.
+- isolated D1 `35743171196`: 6곡 묶음 queue intake **W1**, duplicate W0.
+- TEST/PRODUCTION unchanged.
+- user data migration/backfill/delete 없음.
+
+실기기 검증만 수행:
+1. PC/모바일 모두 app138 확인. 저장 캐시 삭제 금지.
+2. 양쪽 CACHE LIVE 진단 초기화.
+3. PC에서 3~6곡 좋아요/해제를 연속 변경하고 35초 대기.
+4. 첫 batch에서 HTTP 5xx 없어야 함. interactive queue는 한 묶음 W1 목표.
+5. 모바일은 새로고침/페이지 이동 없이 changed-track heart가 자동 반영돼야 함.
+6. 90초 추가 무동작 → 추가 like write 0.
+7. PC 다른 페이지 왕복 → 추가 like write 0, membership D1 R0.
+8. 모바일→PC 방향도 1~3곡 동일 검증.
+9. public likeCount는 background aggregate 후 양쪽 최종 일치.
+
+FAIL이면:
+- 구조를 다시 갈아엎지 않는다.
+- **쓰기 queue intake / personal catalog merge / changed-track RTDB signal** 셋 중 실패 구간만 수정.
+- 전체 /v1/me/likes scan, direct interactive D1 settlement, navigation retry를 재도입하지 않는다.
+- TEST/PRODUCTION 승격 금지.
+
+
 ## 현재 최우선 — app137 실기기 좋아요 재시도 폭증 차단 + 양방향 동기화 검증
 
 현재 PREVIEW:

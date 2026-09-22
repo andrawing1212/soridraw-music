@@ -1,26 +1,4 @@
-function cleanText(value: unknown): string {
-  return String(value ?? '')
-    .replace(/[\u200B-\u200D\uFEFF]/g, '')
-    .replace(/\r\n?/g, '\n')
-    .replace(/[ \t]+/g, ' ')
-    .trim();
-}
-
-function listValues(values: unknown, limit = 10): string {
-  if (!Array.isArray(values)) return '';
-  return values
-    .map((value) => cleanText(value))
-    .filter(Boolean)
-    .slice(0, limit)
-    .join(' / ');
-}
-
-function compact(value: unknown, fallback = 'none'): string {
-  const text = cleanText(value);
-  return text || fallback;
-}
-
-export function buildLyricStoryBriefInstruction(params: any): string {
+export function buildLyricStoryBriefInstruction(_params: any): string {
   return `LYRIC STORY BRIEF FIRST (MANDATORY, INTERNAL ONLY):
 Before writing title or lyrics, silently create a short lyric story brief from the COMMON SONG CREATIVE BRIEF. Do NOT output the brief.
 

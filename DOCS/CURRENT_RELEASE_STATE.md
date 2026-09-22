@@ -1,5 +1,15 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DW. PREVIEW app141 실사용 기능 PASS — PC↔모바일 양방향 좋아요 자동 반영 정상 (2026-09-23 KST)
+
+**사용자 실기기 최종 확인:** app141에서 업데이트 후 첫 Explore 진입의 기존 좋아요 하트가 즉시 정상 표시되고, PC→모바일 및 모바일→PC 모두 페이지/탭 이동·새로고침 없이 좋아요/해제 변경이 정상 자동 반영됨. app140까지 남았던 실시간 UI 전달 결함은 app141 수정으로 해소된 것으로 판정. 이 정상 동작을 다음 작업의 보호 기준점으로 고정한다.
+
+- 기능 판정: **PASS** — 첫 화면 cached heart + 양방향 changed-track UI 자동 반영.
+- 기존 W1 30초 묶음쓰기 / R0 정상 재진입 / local personal catalog / Worker `45afab7c-1da2-45b6-b34d-cb3943cec559` 변경 없음.
+- UI/CSS/레이아웃, Functions, Rules, D1 schema, 공유 사용자 원본 데이터 변경 없음.
+- 이번 사용자 확인은 기능 동기화 PASS이며, 별도의 90초 무동작 비용 숫자/페이지 왕복 비용 수치는 이번 확인에서 새로 재측정했다고 기록하지 않는다.
+- TEST/PRODUCTION은 비변경. 승격은 별도 사용자 지시 전 진행하지 않는다.
+
 ## 0DV. PREVIEW app141 — RTDB 원격 좋아요 UI 전달 순서 수정 및 Hosting 배포 완료 (2026-09-23 KST)
 
 **원인 (코드에서 재현된 결정적 순서 오류):** app140의 `applyRemoteLikeSignal127`는 RTDB changed-track을 받은 뒤, 새 membership을 memory cache와 local `snapshotPending` 객체에 반영하지만 **기기 영구 저장소에 `snapshotPending`을 쓰기 전에** `dispatchLikeSync`를 호출했다. ExplorePage subscriber는 안전장치로 `readExploreTrackLikeMembership127`을 다시 읽는다. 이 함수는 memory cache보다 영구 저장된 이전 `snapshotPending`을 우선하므로, 과거 pending 상태와 새 RTDB 상태가 다른 곡의 UI 갱신을 거절했다. 페이지/탭 이동 시 별도 hydration으로 회복되는 실사용 현상과 일치한다.

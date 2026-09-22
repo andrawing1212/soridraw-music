@@ -1,5 +1,29 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EA. PREVIEW app143 — 초기 Gemini Flash low-thinking 최적화 Function 배포 완료 (2026-09-23 KST)
+
+**직전 사용자 실사용:** 5단 체인 `3.8 → 3.7 → 3.6 → 3.5 → 3.5-lite`가 실제 순서대로 작동했고, 3.8/3.7/3.6/3.5는 provider high-demand로 실패한 뒤 3.5-lite가 성공. 총 5회, 약 1분 20초. 성공 호출 입력 토큰은 33,812로 확인.
+
+**판정:** 앞 모델 실패는 SORIDRAW 품질 검증 탈락이 아니라 upstream high-demand 응답. 따라서 가사 기준/프롬프트 규칙을 느슨하게 삭제하는 방식은 사용하지 않음.
+
+**최소 최적화:**
+- PREVIEW 전용 `generateGeminiContentPreview`에서 최초 곡 생성의 `gemini-3.8-flash / 3.7 / 3.6 / 3.5` 요청을 `thinking_level=low`로 통일.
+- 3.8/3.7 Interactions API가 기존 hard-coded medium이 아니라 request `thinkingConfig.thinkingLevel`을 존중하도록 수정.
+- 3.5-lite는 기존 최소 사고 특성/정책 그대로.
+- 모델 순서, 최대 물리 호출 5회, 프롬프트/가사 규칙, fallback, Auth/App Check/API key 보안은 변경하지 않음.
+- Google 공식 문서상 3.8/3.7은 low/medium/high를 지원하며 low는 latency-critical 작업의 시간/토큰 감소 용도.
+
+**검증/배포:**
+- Workflow Run `35768064306` / job `106882520565` SUCCESS.
+- Functions build + generated runtime contract: `PREVIEW_GEMINI_INITIAL_FLASH_LOW_THINKING=PASS`, `PREVIEW_GEMINI_CHAIN_ORDER_UNCHANGED=PASS`.
+- PREVIEW Function update: PASS / CORS PASS.
+- shared `generateGeminiContent` updateTime/source 비변경 PASS → TEST/PRODUCTION 경로 영향 없음.
+- Firebase CLI artifact cleanup-policy 경고는 기존처럼 발생했지만 Function update 자체는 성공했고 Workflow가 실제 ACTIVE/updateTime/shared isolation을 별도로 확인해 SUCCESS 처리.
+- Hosting/app version은 app143 그대로. Worker/Rules/user data/UI/좋아요 기능 변경 없음.
+
+**남은 확인:** 실제 곡 생성 1회에서 3.8 응답시간/성공 여부 및 fallback 총시간 재측정. provider 503 자체는 클라이언트 설정으로 성공을 보장할 수 없음. 3.8이 계속 high-demand라면 다음 단계에서 33k 입력의 중복/정적 규칙을 품질 손실 없이 줄일 수 있는지 별도 감사한다. 프롬프트 규칙 삭제는 증거 없이 금지.
+
+
 ## 0DZ. PREVIEW app143 — Gemini 관리자 오류 설명 한글화 배포 완료 (2026-09-23 KST)
 
 - 사용자 요청에 따라 관리자 `Gemini 호출 기록`의 provider 오류 설명 문장을 한국어 표시로 변경.

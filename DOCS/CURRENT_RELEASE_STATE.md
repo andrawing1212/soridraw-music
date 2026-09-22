@@ -1,5 +1,53 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DO. PREVIEW app135 배포 완료 — app134 페이지복귀 R46/모바일 비동기 결함 수정, 실기기 재검증 대기 (2026-09-22 KST)
+
+**현재 PREVIEW live app:** 135  
+**PREVIEW Hosting Run:** `35723863422` / job `106732740826` SUCCESS. locked source `790f8113dde0346020eff97773bbfe6f95d70822`, 실제 `preview.soridraw.com/app-version.json=135`, exact build PASS.  
+**최종 Release System Audit:** Run `35723609001` / job `106731917567` SUCCESS. TypeScript / Build / static release checks / like regression / TEST·PRODUCTION Worker dry-run / live shared D1 read-only preflight PASS.  
+**PREVIEW Worker:** 재배포 없음. 기존 version `4a145c23-adf0-4f41-8426-6de8cbebda66` 유지.  
+**TEST / PRODUCTION:** 코드·실제 주소 비변경 PASS.
+
+app134 실사용 최종 FAIL 증거:
+- 정상 캐시 첫 진입·즉시 재진입은 PC/모바일 모두 개인 좋아요 D1 membership R0.
+- PC에서 좋아요 6곡을 30초 묶음으로 해제한 뒤 모바일은 기존 하트를 계속 표시하여 PC↔모바일 동기화 FAIL.
+- 이후 다른 페이지 이동 → Explore 복귀에서 `/v1/me/likes` **좋아요 상태 확인 D1 행 읽기 46** 재발.
+- 같은 누적 CACHE LIVE에서 D1 행 읽기 약 103 / 쓰기 8까지 증가. 따라서 app134는 비용·동기화 전체 PASS가 아님.
+- 6곡 변경 당시 묶음 저장 자체는 D1 누적 R13/W8 수준이었으나 기능 동기화가 실패했으므로 비용만 따로 합격 처리하지 않음.
+
+app135 수정:
+- RTDB retained like signal에 이전 신호 gap이 있어도 **현재 신호가 가진 변경곡 최종 상태를 먼저 로컬 개인 카탈로그/하트에 반영**하고, 누락 가능 구간만 뒤에서 R2 repair.
+- revision/gap repair 때문에 정상 기기의 개인 좋아요 카탈로그/검증 근거를 통째로 폐기하지 않도록 변경.
+- 정상 기기는 페이지 이동·복귀·개인 revision 변경 때문에 visible track `/v1/me/likes` D1 membership scan으로 되돌아가지 않도록 durable local catalog marker 추가.
+- 정말 새 기기/카탈로그 부재 상태에서만 1회 bounded bootstrap 허용. 1회 bootstrap 후에는 정상 local-first 경로로 승격.
+- 전체조회 fallback 복구 없음. 공개 숫자만으로 개인 하트를 추론하지 않음.
+
+변경/검증:
+- 제품 수정: `src/services/exploreLikeService.ts` — commit `8f5b3db711b08be4f97a918225a77bde451a9971`.
+- 신규 회귀: `scripts/verify-175-explore-like-catalog-reentry.mjs`.
+- 기존 atomic-like 회귀를 app135 동작 기준으로 갱신.
+- 최종 감사 source `daa9916c2c1956861da17622712756b1cee24cbc` 기준 전체 감사 SUCCESS.
+- 앱 버전 135 commit `e4b2ac866425a9efbd2e165fc397e43339e44736`.
+- PREVIEW 배포 locked source `790f8113dde0346020eff97773bbfe6f95d70822`.
+
+환경/데이터:
+- Firebase PREVIEW Hosting만 app135로 갱신.
+- Cloudflare Worker / Functions / Rules 변경 없음.
+- 공유 D1/R2 사용자 원본 migration/backfill/delete/write 없음.
+- app135 수정·배포로 사용자 원본 데이터 변경 없음.
+- TEST / PRODUCTION 비변경.
+
+실기기 합격선 — 아직 미검증:
+1. PC에서 좋아요 OFF/ON 묶음 확정 후 35초 내 모바일이 **페이지 이동/새로고침 없이** 같은 하트·숫자로 수렴.
+2. 그 뒤 모바일에서 다른 페이지 → Explore 복귀해도 `좋아요 상태 확인 (/v1/me/likes)`가 나타나지 않고 개인 membership D1 rows read 0.
+3. 반대 방향 모바일→PC도 동일.
+4. 하트 / 공개 likeCount / 내 좋아요가 두 기기에서 동일.
+5. 실제 변경 D1 write는 기능 정상 상태에서 W1~W2/행동 목표로 다시 실측. W3+면 TEST 승격 금지.
+
+위 실기기 검증 전 app135를 기능 PASS로 선언하지 않으며 TEST/PRODUCTION 승격 금지.
+
+
+
 ## 0DN. app134 실사용 FAIL — 페이지 복귀 시 좋아요 D1 R46 재발 + 모바일 동기화 누락, app135 수정 착수 (2026-09-22 KST)
 
 사용자 실기기 재검증에서 app134는 **최종 FAIL**. 첫 진입/즉시 재진입은 PC·모바일 모두 좋아요 membership D1 R0였으나, PC에서 좋아요 6곡을 30초 묶음으로 해제한 뒤 모바일은 기존 하트를 유지했고, 다른 페이지 이동 후 Explore 복귀에서 `/v1/me/likes`가 다시 실행되어 **좋아요 상태 확인 D1 행 읽기 46**이 재발했다. 같은 누적 진단 화면은 D1 행 읽기 103 / 쓰기 8까지 증가. 따라서 0DM의 실기기 합격은 취소하며 TEST/PRODUCTION 승격 금지.

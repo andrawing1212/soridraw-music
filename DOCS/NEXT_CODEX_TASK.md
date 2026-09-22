@@ -1,5 +1,27 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — Gemini 곡 생성 503 복구 설계/수정
+
+확정 증상: 최초 곡 생성 physical calls가 `3.6 → 3.5 Flash-Lite → 3.1 Flash-Lite` 3회 모두 provider HTTP 503 high-demand로 실패.
+
+원인:
+- 모델 ID 폐기 아님.
+- 887 latency fastpath 이후 초기 생성 fallback이 3개로 축소되어 resilience가 약해짐.
+- 현재 최신 GA `gemini-3.8-flash` 미지원.
+- `gemini-3.5-flash`는 Function allowlist에 있으나 initial chain에서 제외됨.
+- 동일 Function 요청의 5xx fallback은 즉시 다음 모델로 넘어가며 bounded backoff가 없음.
+
+다음 구현 범위:
+1. Google 공식 현재 모델/API 요구사항 기준으로 3.8 Flash 지원을 client + Function에 최소 추가.
+2. 초기 생성 체인을 품질/지연/가용성 기준으로 재구성하되 최대 물리 호출 5회 유지. 우선 후보: `3.8 → 3.6 → 3.5 → 3.5-lite → 3.1-lite`; 3.7은 기존 latency 제외 결정과 현재 품질을 비교 후 필요할 때만 포함.
+3. 500/502/503/504에서 Retry-After가 있으면 존중하고, 없으면 짧은 bounded backoff+jitter 후 다음 모델. 정상 성공 경로 지연 0 증가.
+4. 400/401/403/schema/Auth/App Check 오류에는 fallback 금지 유지.
+5. deprecated sampling field 제거를 3.8에도 적용. Interactions API 또는 공식 지원 generateContent 중 기존 구조와 가장 작은 안전 변경 선택.
+6. API Key는 계속 server-only; user data/Firestore schema/UI/CSS/Suno/좋아요 기능 변경 금지.
+7. 관련 verifier → Functions TypeScript/build → PREVIEW Function deploy → 실제 곡 생성. 실패 모델 기록에서 fallback 및 성공 모델 확인.
+8. TEST/PRODUCTION 변경 금지.
+
+
 ## 완료 기준점 — PREVIEW app141 좋아요 양방향 동기화 실사용 PASS (2026-09-23)
 
 사용자 실기기 확인 완료:

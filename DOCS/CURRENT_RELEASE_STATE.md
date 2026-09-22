@@ -1,5 +1,40 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EC. PREVIEW app145 — Gemini 2차 최적화 및 Hosting 배포 완료 (2026-09-23 KST)
+
+**적용 내용**
+- lyric story brief에서 COMMON SONG CREATIVE BRIEF와 중복되던 raw source/mood payload 제거. 품질 규칙/우선순위/분리 규칙은 유지.
+- Gemini Free Tier 일일 요청 한도(`requests per day`)가 명시된 429는 `daily_quota_exhausted`로 분리하고, 태평양 시간 자정 리셋까지 해당 모델을 건너뜀. 일반 429/503은 기존 짧은 cooldown 유지.
+- 초기 fallback의 `gemini-3.5-flash` bounded timeout 30초 → 20초.
+- 모델 우선순위 `3.8 → 3.7 → 3.6 → 3.5 → 3.5-lite` 유지.
+- 관리자 화면에서 daily quota cooldown 사유 한국어 표시.
+- app version 145.
+
+**PREVIEW Function 검증/배포**
+- Function Tune Run `35773813273` / job `106901814634` SUCCESS.
+- `PREVIEW_GEMINI_35_TIMEOUT_20S=PASS`
+- `PREVIEW_GEMINI_DAILY_QUOTA_SKIP=PASS`
+- `PREVIEW_GEMINI_PROMPT_DUPLICATE_REMOVAL=PASS`
+- `PREVIEW_GEMINI_CHAIN_ORDER_UNCHANGED=PASS`
+- PREVIEW Gemini Function updated PASS / CORS PASS.
+- shared `generateGeminiContent` unchanged PASS → TEST/PRODUCTION 공용 Function 비변경.
+
+**전체 Audit / Hosting**
+- Release Audit Run `35774060137` / job `106902650471` SUCCESS.
+- TypeScript PASS / Build PASS / static release verification PASS.
+- PREVIEW Hosting Run `35777003931` / job `106912643575` SUCCESS.
+- locked source `4cd2fd0263e97c746a5d75f913cf42d0ef571988`.
+- remote `PREVIEW_APP_VERSION=145`.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Worker/Rules/user data/좋아요 구조 변경 없음.
+
+**실사용 다음 확인**
+- app145에서 동일 조건 3곡 생성.
+- 3.8 첫 성공률/시간, 3.7 daily quota skip, 3.5 실패 시 최대 약 20초 ceiling, 최초 입력 token 감소폭 비교.
+- 실사용 결과 확인 전 Gemini 2차 최적화를 기능 완료로 최종 판정하지 않음.
+
+
 ## 0EB. PREVIEW app144 — Gemini 관리자 오류 설명 전체 한글화 + 3곡 실사용 결과 기록 (2026-09-23 KST)
 
 **사용자 3곡 실사용 결과:**

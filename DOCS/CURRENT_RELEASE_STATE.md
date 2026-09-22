@@ -1,5 +1,63 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DS. PREVIEW app139 — 모바일 changed-track 실시간 화면 갱신 보강 (2026-09-23 KST)
+
+**범위:** app138의 정상 W1 쓰기 / local catalog / R0 재진입 / Worker 구조는 그대로 보호하고, 모바일에서 changed-track 데이터가 이미 도착했는데 현재 추천 화면 하트가 탭 전환 전까지 다시 그려지지 않는 UI 전달 구간만 수정.
+
+### 원인
+- RTDB account signal은 서비스 레이어에서 받아 local personal-like catalog/display lock까지 정상 반영됨.
+- 하지만 ExplorePage는 one-shot `window CustomEvent`를 정확한 시점에 잡아야 현재 React 화면을 갱신하는 구조였음.
+- 모바일 resume/PWA lifecycle에서 retained/remote signal이 Explore React effect보다 먼저 처리되면 이벤트는 소실될 수 있음.
+- 이후 인기/최신 탭 전환 시 visible-track hydration이 이미 갱신된 local catalog를 다시 읽기 때문에 그때서야 하트가 정상화됨.
+- 즉 서버/카탈로그 문제는 아니고 **현재 화면 repaint 전달 race**.
+
+### app139 수정
+- `src/services/exploreLikeService.ts`
+  - remote changed-track UI 전용 **replayable in-memory subscriber** 추가.
+  - 최근 remote changed-track 최대 50개만 메모리에 유지.
+  - Explore UI가 늦게 mount되어도 이미 수신된 changed-track을 즉시 replay.
+  - 이 subscriber는 fetch / D1 / Firestore / R2 / RTDB 추가 요청을 전혀 하지 않음.
+  - 기존 window event는 호환성 때문에 유지하지만 ExplorePage는 더 이상 one-shot event 포착에 의존하지 않음.
+- `src/pages/ExplorePage.tsx`
+  - 현재 Explore 화면이 service subscriber에 직접 연결.
+  - remote signal 수신 또는 late-mount replay 즉시 해당 track 하트/숫자 React state patch.
+  - cleanup unsubscribe 추가.
+- 신규 회귀: `scripts/verify-179-like-live-ui-replay.mjs`.
+
+### 보호 확인
+- W1 30초 묶음 쓰기 경로 변경 없음.
+- Worker 변경 없음. PREVIEW Worker version 그대로 `45afab7c-1da2-45b6-b34d-cb3943cec559`.
+- 페이지 이동 server read/write 경로 변경 없음.
+- local catalog / revision / changed-track 데이터 계약 변경 없음.
+- UI/CSS/레이아웃 변경 없음.
+- 사용자 데이터 migration/backfill/delete 없음.
+- Functions / Rules / D1 schema 변경 없음.
+- TEST / PRODUCTION 비변경.
+
+### 검증 / 배포
+- 첫 audit Run `35748162313`은 TypeScript signature 오류로 FAIL → 코드 타입만 수정.
+- 재감사 Run `35748373032` SUCCESS:
+  - TypeScript PASS
+  - Build PASS
+  - Static verification PASS
+  - Like candidate regression PASS
+  - app139 UI replay regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 read-only checks PASS
+- version 139 exact audit Run `35748628236` / job `106816605112` SUCCESS.
+- Firebase PREVIEW Hosting Run `35748877001` / job `106817450432` SUCCESS.
+- remote `preview.soridraw.com/app-version.json = 139`.
+- PREVIEW exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+- Worker 재배포 없음.
+
+### 실기기 다음 확인 — 딱 1개
+- PC에서 새 좋아요/해제 1~3곡 → 30초 batch 완료 후,
+- 모바일은 **추천 탭에 그대로 둔 상태 / 새로고침 없음 / 인기·최신 이동 없음**으로 changed-track 하트/숫자가 자동 갱신되는지 확인.
+- CACHE LIVE 비용은 app138과 동일해야 하며, 이 UI replay 자체는 서버 read/write 0.
+- 이 항목 PASS 시 app138에서 남은 마지막 모바일 즉시 화면 갱신 결함 해결로 판단.
+
+
 ## 0DR. FINAL LIKE ARCHITECTURE LOCK + PREVIEW app138 배포 완료 (2026-09-22 KST)
 
 **최종 고정 구조:** `DOCS/EXPLORE_LIKE_FINAL_ARCHITECTURE.md`  

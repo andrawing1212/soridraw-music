@@ -92,13 +92,15 @@ function geminiErrorText(value?: string): string {
   let translated = clean;
 
   translated = translated.replace(
-    /Rate limit exceeded for model\s+([^\s(]+)\s*\(limit:\s*(\d+)\s+requests per day on Free Tier\)\.\s*Please retry in\s*(\d+)s\s*or upgrade your tier at\s*https?:\/\/\S+\.?/gi,
+    /Rate limit exceeded for model\s+([^\s(]+)\s*\(limit:\s*(\d+)\s+requests per day on Free Tier\)\.\s*(?:Please retry in\s*(\d+)s\s*or\s*)?(?:Please retry later\s*or\s*)?upgrade your tier at\s*https?:\/\/\S+\.?/gi,
     (_match, model, limit, retrySeconds) =>
-      `${model}의 무료 등급 일일 요청 한도(${limit}회)를 초과했습니다. ${retrySeconds}초 후 다시 시도하거나 API 요금제와 사용 한도를 확인해 주세요.`,
+      retrySeconds
+        ? `${model}의 무료 등급 일일 요청 한도(${limit}회)를 초과했습니다. ${retrySeconds}초 후 다시 시도하거나 API 요금제와 사용 한도를 확인해 주세요.`
+        : `${model}의 무료 등급 일일 요청 한도(${limit}회)를 초과했습니다. 태평양 시간 자정 리셋 후 다시 시도하거나 API 요금제와 사용 한도를 확인해 주세요.`,
   );
 
   translated = translated.replace(
-    /Rate limit exceeded for model\s+([^\s.]+)\.?/gi,
+    /Rate limit exceeded for model\s+([^\s(]+)(?:\s*\([^)]*\))?(?:\.\s*[^\n]*)?/gi,
     (_match, model) => `${model}의 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.`,
   );
 

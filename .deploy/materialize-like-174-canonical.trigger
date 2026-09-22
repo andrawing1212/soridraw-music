@@ -1,1 +1,2 @@
-product_code_target=a208c25b684ae13df21d31e57f2f91089e3c6fe3
+product_code_target=62af23ca0ab441772c3ac5eaf15649a5a76d8786
+architecture=final_like_w1_hybrid_188

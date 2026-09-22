@@ -1,5 +1,26 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DU. PREVIEW app140 실사용 FAIL — RTDB 발송은 복구, 상대 기기 화면 동기화는 미해결 (2026-09-23 KST)
+
+**사용자 실제 확인:** app140 첫 Explore 진입의 기존 하트 spinner는 PASS. PC↔모바일 이동·새로고침 없는 양방향 자동 하트 반영은 여전히 FAIL. 따라서 app140 기능 완료 / TEST 승격 선언 금지.
+
+**신규 live read-only 서버 증거:**
+- 임시 read-only RTDB probe Run `35754369030` / job `106836295199` SUCCESS, 2026-09-22 16:28:55 UTC (KST 2026-09-23 01:28:55).
+- 최신 `userSync/*/exploreLike` version `1790094204064` = 2026-09-22 16:23:24 UTC. probe 당시 age 331초, changed-track 2개, valid version chain.
+- follow-up Run `35754457146` / job `106836588260`: 해당 계정 previousVersion `1790092268601`; 다른 계정의 latest는 약 6.45일 전. 개인 uid/trackId는 로그에 출력하지 않음.
+- probe는 인증 read-only GET만 실행, 사용자 데이터 write 0. 임시 probe workflow는 진단 직후 삭제. 실제 PREVIEW Hosting/Worker 배포 없음.
+- app139 probe의 624초 signal age와 달리, app140 직후 새 RTDB signal이 실제 서버에 기록된 것은 증명. 단, 변경 2곡이 사용자 실험과 동일한지, 상대 기기가 수신했는지까지 서버 기록만으로 확정하지는 못함.
+
+**정적 코드 확인 및 차단 후보:**
+- `src/services/exploreLikeService.ts`: RTDB `onValue` callback은 현재 auth uid 일치 검사 후 `normalizeLikeSignal127`→`applyRemoteLikeSignal127` 호출. `version <= lastSeen`이면 전체 신호 무시; 대상 track이 local outbox에 남아 있으면 해당 track 무시.
+- `src/pages/ExplorePage.tsx`: UI subscriber도 현재 service membership과 event liked 값이 다르면 화면 patch를 거절. 이는 정상 동시수정 보호 조건이나 실제 수신/거절 계측 없이는 어떤 조건에서 멈췄는지 미확정.
+- navigation/focus는 별도 `likes-revision`/R2 catalog 경로로 정상화될 수 있어 **탭 이동 후 일치는 RTDB 실시간 수신 성공의 근거가 아님**.
+- app140 verifier `verify-180-like-live-signal-and-cached-paint.mjs`는 `setRealtimeValue` 코드 존재를 확인했을 뿐 실제 RTDB 수신 및 UI patch까지 실행 검증하지 않음.
+- app140 `set()` version은 송신 기기의 local seen + `Date.now()`에서 생성하며 서버 원자적 버전 증가가 아님. 동시 송신/기기 시계차의 stale overwrite 위험을 별도 점검해야 하나 이번 실패의 원인으로 단정 금지.
+
+**다음 작업:** 기존 관리 진단 경로에서 동일 uid/track의 publish ACK, RTDB subscribe/error, received version/lastSeen, outbox skip, UI membership guard 결과를 **개인 식별자 노출 없이**, 변경곡 최대 3개로 단계별 확인. 각 단계 PASS/FAIL로 막힌 지점만 최소 수정. 전체 Worker/W1 queue/catalog/DB schema/UI/CSS 변경 금지. UI 실사용 재검증 전 배포 성공을 기능 성공으로 표현 금지.
+
+
 ## 0DT. PREVIEW app140 — 양방향 changed-track 실시간 동기화 + 업데이트 직후 하트 스피너 수정 (2026-09-23 KST)
 
 **범위:** app138의 W1 queue 쓰기 / local catalog / R0 재진입 / Worker 구조는 그대로 보호. app139 실사용에서 남은 두 현상만 수정:

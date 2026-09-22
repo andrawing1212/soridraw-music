@@ -1,0 +1,163 @@
+name: SORIDRAW PREVIEW Gemini App142 Release
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/preview-gemini-app142-release.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-preview-gemini-app142
+  cancel-in-progress: false
+
+jobs:
+  verify-and-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PROJECT: soridraw-app-866a5
+      REGION: us-central1
+      PREVIEW_FUNCTION: generateGeminiContentPreview
+      SHARED_FUNCTION: generateGeminiContent
+      PREVIEW_ORIGIN: https://preview.soridraw.com
+
+    steps:
+      - name: Checkout exact preview source
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Set up Node.js 20 for app
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify app TypeScript and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+
+      - name: Verify app142 Gemini routing contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const src = fs.readFileSync('src/services/geminiProxyClient.ts', 'utf8');
+          const expected = [
+            "'gemini-3.8-flash'",
+            "'gemini-3.7-flash'",
+            "'gemini-3.6-flash'",
+            "'gemini-3.5-flash'",
+            "'gemini-3.5-flash-lite'",
+          ];
+          const block = src.slice(src.indexOf('const INITIAL_SONG_MODEL_CHAIN'), src.indexOf('const LANGUAGE_MIX_MODEL_CHAIN'));
+          let cursor = -1;
+          for (const model of expected) {
+            const next = block.indexOf(model);
+            if (next <= cursor) throw new Error('Gemini model order mismatch: ' + model);
+            cursor = next;
+          }
+          if (block.includes('gemini-3.1-flash-lite')) throw new Error('3.1 lite must not remain in initial five-model chain');
+          if (!src.includes("const PREVIEW_GEMINI_FUNCTION_NAME = 'generateGeminiContentPreview'")) throw new Error('Preview function route missing');
+          if (!src.includes("host === 'preview.soridraw.com'")) throw new Error('Preview hostname isolation missing');
+          if (!src.includes('INITIAL_SONG_MODEL_CHAIN.filter((model) => !getGeminiModelCooldown(model))')) throw new Error('Cooldown-aware canonical chain missing');
+          const version = JSON.parse(fs.readFileSync('public/app-version.json', 'utf8')).version;
+          if (version !== '142') throw new Error('Expected app version 142, got ' + version);
+          console.log('APP142_GEMINI_CHAIN=3.8>3.7>3.6>3.5>3.5-lite');
+          console.log('APP142_PREVIEW_FUNCTION_ISOLATION=PASS');
+          NODE
+
+      - name: Set up Node.js 22 for Functions
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify Functions build and generated runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd functions
+          npm ci --no-audit --no-fund
+          npm run build
+          node <<'NODE'
+          const fs = require('node:fs');
+          const src = fs.readFileSync('src/securedIndex.ts', 'utf8');
+          if (!src.includes('"gemini-3.8-flash"')) throw new Error('3.8 missing from generated Function');
+          if (!src.includes('model === "gemini-3.8-flash" || model === "gemini-3.7-flash"')) throw new Error('3.8/3.7 Interactions route missing');
+          if (!src.includes('export const generateGeminiContentPreview = onRequest')) throw new Error('Preview Gemini Function export missing');
+          if (!src.includes('"gemini-3.8-flash": 35_000')) throw new Error('3.8 bounded timeout missing');
+          if (!src.includes('GEMINI_38_BUSY_SKIP_MS = 45_000')) throw new Error('3.8 busy cooldown missing');
+          console.log('FUNCTIONS_BUILD=PASS');
+          console.log('GEMINI_38_INTERACTIONS_ROUTE=PASS');
+          console.log('GEMINI_38_BOUNDED_LATENCY=PASS');
+          NODE
+
+      - name: Authenticate Google
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Snapshot shared Function before PREVIEW-only deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions describe "$SHARED_FUNCTION" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$RUNNER_TEMP/shared-before.json"
+          python3 - "$RUNNER_TEMP/shared-before.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1],encoding='utf-8'))
+          print('SHARED_BEFORE_UPDATE_TIME='+str(d.get('updateTime') or ''))
+          print('SHARED_BEFORE_SOURCE='+str((((d.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {}).get('object') or ''))
+          PY
+
+      - name: Deploy PREVIEW Gemini Function only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy             --project "$PROJECT"             --only "functions:$PREVIEW_FUNCTION"             --non-interactive
+
+      - name: Verify PREVIEW Function and shared Function isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud functions describe "$PREVIEW_FUNCTION" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$RUNNER_TEMP/preview-after.json"
+          gcloud functions describe "$SHARED_FUNCTION" --gen2 --region "$REGION" --project "$PROJECT" --format=json > "$RUNNER_TEMP/shared-after.json"
+          python3 - "$RUNNER_TEMP/shared-before.json" "$RUNNER_TEMP/shared-after.json" "$RUNNER_TEMP/preview-after.json" <<'PY'
+          import json,sys
+          before=json.load(open(sys.argv[1],encoding='utf-8'))
+          after=json.load(open(sys.argv[2],encoding='utf-8'))
+          preview=json.load(open(sys.argv[3],encoding='utf-8'))
+          def shared_identity(d):
+              src=(((d.get('buildConfig') or {}).get('source') or {}).get('storageSource') or {})
+              return (d.get('updateTime'), src.get('bucket'), src.get('object'))
+          if shared_identity(before) != shared_identity(after):
+              raise SystemExit('Shared TEST/PRODUCTION Gemini Function changed during PREVIEW deploy')
+          if str(preview.get('state') or '') != 'ACTIVE':
+              raise SystemExit('Preview Gemini Function is not ACTIVE')
+          runtime=str((preview.get('buildConfig') or {}).get('runtime') or '')
+          if runtime != 'nodejs22':
+              raise SystemExit('Unexpected preview runtime: '+runtime)
+          print('PREVIEW_GEMINI_FUNCTION_ACTIVE=PASS')
+          print('SHARED_GEMINI_FUNCTION_UNCHANGED=PASS')
+          PY
+
+          url="https://us-central1-$PROJECT.cloudfunctions.net/$PREVIEW_FUNCTION"
+          for attempt in $(seq 1 12); do
+            code="$(curl -sS -o /tmp/gemini-preview-body -D /tmp/gemini-preview-head -w '%{http_code}' -X OPTIONS               -H "Origin: $PREVIEW_ORIGIN"               -H 'Access-Control-Request-Method: POST'               -H 'Access-Control-Request-Headers: authorization,content-type,x-firebase-appcheck'               "$url" || true)"
+            allow="$(awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {gsub(/\r/,""); sub(/^[^:]*:[[:space:]]*/,""); print; exit}' /tmp/gemini-preview-head)"
+            if [ "$code" = "204" ] && [ "$allow" = "$PREVIEW_ORIGIN" ]; then
+              echo "PREVIEW_GEMINI_CORS=PASS"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "PREVIEW_GEMINI_CORS=FAIL"
+          cat /tmp/gemini-preview-head || true
+          exit 1

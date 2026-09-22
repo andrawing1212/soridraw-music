@@ -1,5 +1,34 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EB. PREVIEW app144 — Gemini 관리자 오류 설명 전체 한글화 + 3곡 실사용 결과 기록 (2026-09-23 KST)
+
+**사용자 3곡 실사용 결과:**
+1. 곡 A: 최초 생성 `gemini-3.8-flash` 14.5초 SUCCESS. 이후 섹션 지시문 보완에서 3.5 high-demand 실패 후 3.5-lite 성공. 전체 약 23.9초.
+2. 곡 B: 3.8 high-demand 약 19.1초 FAIL → 3.7 약 24.8초 SUCCESS. 이후 금지어 교정에서 3.7 Free Tier 일일 20회 rate limit, 3.6/3.5 high-demand 실패. 전체 약 1분 10초.
+3. 곡 C: 3.8 high-demand 약 17.4초 FAIL → 3.7 Free Tier rate limit(약 280ms) → 3.6은 기존 overload cooldown으로 건너뜀 → 3.5 30초 timeout → 3.5-lite 약 13.8초 SUCCESS. 이후 금지어 교정 3.5-lite SUCCESS. 전체 약 1분 9초.
+
+**판정:**
+- low-thinking 적용 후 3.8은 실제 14.5초 성공 사례가 확인되어 모델/API 경로 자체는 정상.
+- 3.8 반복 실패는 품질 검증 탈락이 아니라 provider high-demand.
+- 3.7은 별도로 Free Tier 일일 20회 한도에 실제 도달한 사례가 있어 이후 같은 날 요청에서는 fallback 성공률/속도에 불리함.
+- 3.5의 30초 timeout은 실패 시 전체 대기시간을 크게 늘리는 병목.
+- 최초 생성 입력은 약 33k~34k 토큰 범위. 다음 성능 작업은 품질 규칙 삭제보다 prompt 중복/정적 규칙 압축 가능성 감사가 우선.
+
+**app144 한글화:**
+- `src/pages/AdminGeminiAuditPage.tsx`의 표시 변환을 확대.
+- high demand 문장, Free Tier rate-limit 문장, retry seconds, timeout, resource exhausted, too many requests, `model_unavailable_or_overloaded`, `quota_or_rate_limit`, `model_not_found_or_rollout` 등을 한국어 표시.
+- 모델 ID/HTTP 코드/진단 code는 식별자이므로 유지.
+- 기존 local audit 기록도 데이터 migration 없이 렌더링 시 한국어로 표시.
+
+**검증/배포:**
+- app version 144.
+- Release Audit Run `35771102156` / job `106892733469` SUCCESS.
+- PREVIEW Hosting Run `35771330552` / job `106893498936` SUCCESS.
+- remote `PREVIEW_APP_VERSION=144`, exact build PASS, TEST/PRODUCTION unchanged PASS.
+- 이번 app144 Hosting 작업에서 Functions/Worker/Rules/user data 변경 없음.
+- PREVIEW 전용 Gemini Function low-thinking 튜닝은 이전 Run `35768064306` SUCCESS 상태 그대로 유지.
+
+
 ## 0EA. PREVIEW app143 — 초기 Gemini Flash low-thinking 최적화 Function 배포 완료 (2026-09-23 KST)
 
 **직전 사용자 실사용:** 5단 체인 `3.8 → 3.7 → 3.6 → 3.5 → 3.5-lite`가 실제 순서대로 작동했고, 3.8/3.7/3.6/3.5는 provider high-demand로 실패한 뒤 3.5-lite가 성공. 총 5회, 약 1분 20초. 성공 호출 입력 토큰은 33,812로 확인.

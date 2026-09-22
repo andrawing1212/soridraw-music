@@ -1,5 +1,23 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DN. app134 실사용 FAIL — 페이지 복귀 시 좋아요 D1 R46 재발 + 모바일 동기화 누락, app135 수정 착수 (2026-09-22 KST)
+
+사용자 실기기 재검증에서 app134는 **최종 FAIL**. 첫 진입/즉시 재진입은 PC·모바일 모두 좋아요 membership D1 R0였으나, PC에서 좋아요 6곡을 30초 묶음으로 해제한 뒤 모바일은 기존 하트를 유지했고, 다른 페이지 이동 후 Explore 복귀에서 `/v1/me/likes`가 다시 실행되어 **좋아요 상태 확인 D1 행 읽기 46**이 재발했다. 같은 누적 진단 화면은 D1 행 읽기 103 / 쓰기 8까지 증가. 따라서 0DM의 실기기 합격은 취소하며 TEST/PRODUCTION 승격 금지.
+
+확인된 클라이언트 결함:
+- RTDB retained like signal의 `previousVersion`이 기기 `lastSeen`과 다르면 app134 `applyRemoteLikeSignal127`이 현재 신호에 포함된 정확한 변경곡 결과도 적용하지 않고 곧바로 repair로 return함. 이 경로가 PC 해제 후 모바일 하트 미반영을 만들 수 있음.
+- repair/revision invalidation이 baseline/targeted proof를 지우고, 이후 정상 페이지 복귀에서 local catalog authority가 사라지면 visible track `/v1/me/likes` fallback이 다시 열릴 수 있음. 실사용에서 R46으로 재현됨.
+- revision 변경은 “전체 개인 membership을 잊는 사건”이 아니라 “기존 로컬 카탈로그에 변경분을 반영하는 사건”이어야 함.
+
+즉시 수정 commit `8f5b3db711b08be4f97a918225a77bde451a9971`:
+- signal gap이 있어도 현재 retained signal 안의 track-level 최종 상태는 먼저 로컬 카탈로그/하트에 반영하고, 누락 가능 구간만 R2 repair로 후속 처리.
+- revision/gap repair 때 정상 device catalog/targeted 상태를 통째로 버리지 않음.
+- durable local personal-like catalog marker를 추가해 정상 기기는 페이지 이동/복귀/개인 revision 변경 때문에 `/v1/me/likes` visible-track D1 scan으로 되돌아가지 않도록 함.
+- 정말 새 기기/카탈로그 부재 상태의 1회 bounded bootstrap만 fallback 허용.
+- 변경 파일: `src/services/exploreLikeService.ts`.
+- 아직 **미배포 / TypeScript·Build·회귀 검증 전**. 현재 PREVIEW live는 계속 app134이며 사용자에게 추가 테스트 요구 금지. 먼저 app135 후보 검증 후 PREVIEW 배포할 것.
+
+
 ## 0DM. PREVIEW app134 — Explore 좋아요 개인 카탈로그 정상화 + 직접 확정 저장 배포 완료 (2026-09-22)
 
 **현재 PREVIEW live app:** 134  

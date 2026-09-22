@@ -34,6 +34,7 @@ const getGeminiAttemptTimeoutMs = (`,
   "gemini-3.1-flash-lite": 10_000,
 };
 
+const GEMINI_38_BUSY_SKIP_MS = 45_000;
 const GEMINI_37_BUSY_SKIP_MS = 45_000;
 const GEMINI_36_BUSY_SKIP_MS = 5 * 60_000;
 const GEMINI_RETRY_AFTER_SAFETY_MS = 1_500;
@@ -41,6 +42,7 @@ const GEMINI_RATE_LIMIT_NO_HINT_COOLDOWN_MS = 15_000;
 const GEMINI_RATE_LIMIT_MAX_COOLDOWN_MS = 60_000;
 const GEMINI_SERVER_INFLIGHT_LEASE_MS = 70_000;
 const GEMINI_SERVER_INFLIGHT_COORDINATED_MODELS = new Set([
+  "gemini-3.8-flash",
   "gemini-3.7-flash",
   "gemini-3.6-flash",
   "gemini-3.5-flash",
@@ -109,6 +111,7 @@ const getGeminiPolicyBusyCooldownMs = (
   }
   const isBusyFailure = isAttemptTimeout || [500, 502, 503, 504].includes(statusCode);
   if (!isBusyFailure) return 0;
+  if (model === "gemini-3.8-flash") return GEMINI_38_BUSY_SKIP_MS;
   if (model === "gemini-3.7-flash") return GEMINI_37_BUSY_SKIP_MS;
   if (model === "gemini-3.6-flash") return GEMINI_36_BUSY_SKIP_MS;
   return 0;

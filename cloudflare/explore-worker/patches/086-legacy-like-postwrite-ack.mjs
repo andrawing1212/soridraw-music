@@ -74,14 +74,16 @@ const safe = [
   '  }',
 ].join('\n') + '\n';
 
-let next = range.text.slice(0, start) + safe + range.text.slice(end);
-next = next.replace("      personalLikeSnapshot: 'settled',", '      personalLikeSnapshot: personalLikeSnapshot185,');
-next = next.replace("      personalLikeProtocol: 'legacy-direct-185',", "      personalLikeProtocol: 'legacy-direct-186-postwrite-ack',");
-next = next.replace("      publicLikePublication: 'targeted-r2-185',", "      publicLikePublication: personalLikeSnapshot185 === 'settled' ? 'targeted-r2-186' : 'repair-needed',");
+let legacyTail = range.text.slice(end);
+legacyTail = legacyTail.replace("      personalLikeSnapshot: 'settled',", '      personalLikeSnapshot: personalLikeSnapshot185,');
+legacyTail = legacyTail.replace("      personalLikeProtocol: 'legacy-direct-185',", "      personalLikeProtocol: 'legacy-direct-186-postwrite-ack',");
+legacyTail = legacyTail.replace("      publicLikePublication: 'targeted-r2-185',", "      publicLikePublication: personalLikeSnapshot185 === 'settled' ? 'targeted-r2-186' : 'repair-needed',");
+let next = range.text.slice(0, start) + safe + legacyTail;
 
 if (!next.includes(marker186)) throw new Error('[086/186] marker not materialized');
 if (!next.includes("canonicalD1: 'settled'")) throw new Error('[086/186] canonical settlement marker lost');
-if (!next.includes('personalLikeSnapshot: personalLikeSnapshot185')) throw new Error('[086/186] dynamic snapshot state missing');
+if (!legacyTail.includes('personalLikeSnapshot: personalLikeSnapshot185')) throw new Error('[086/186] dynamic legacy snapshot state missing');
+if (!range.text.slice(0, start).includes("personalLikeSnapshot: 'settled'")) throw new Error('[086/186] D1-only settled response fixture missing');
 if (next.includes("throwApi('LIKE_PUBLICATION_RETRY_REQUIRED'")) throw new Error('[086/186] post-write 5xx replay path remains');
 if (next.includes('SELECT l.track_id FROM likes l JOIN tracks t')) throw new Error('[086/186] mutation hotpath still scans full personal likes');
 if (next.includes('rebuildExploreLikeR2Bundle(env, authContext.uid)')) throw new Error('[086/186] mutation hotpath still performs synchronous full repair');

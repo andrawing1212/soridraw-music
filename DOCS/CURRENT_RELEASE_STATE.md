@@ -1,5 +1,39 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0ED. PREVIEW app146 — Gemini 후속 교정 호출 축소 + quota 문구 한글화 완료 (2026-09-23 KST)
+
+**app145 사용자 3곡 실사용 결과**
+- 곡 1: `gemini-3.8-flash` 최초 생성 18.3초 SUCCESS, 호출 1회. 입력 34,383 / 출력 3,533 / 전체 37,916.
+- 곡 2: 3.8 Free Tier 일일 20회 한도 FAIL → 3.7 10.3초 SUCCESS. 이후 금지어 통합 교정이 3.7 rate limit → 3.6 high-demand → 3.5 high-demand로 추가 호출을 소모. 전체 47.1초.
+- 곡 3: 3.8 daily quota, 3.7 in-flight, 3.6/3.5 cooldown을 실제 호출 없이 건너뜀 → 3.5-lite 13.1초 SUCCESS. 금지어 통합 교정도 3.5-lite 0.682초 SUCCESS. 전체 18.4초.
+- 판정: app145 daily quota / cooldown / in-flight skip은 실제 작동 PASS. 최초 생성 5단 chain 유지가 타당.
+- 입력 토큰은 여전히 약 33.8k~34.4k로, 145의 creative/story 중복 제거만으로는 유의미하게 줄지 않음. 품질 규칙을 증거 없이 추가 삭제하지 않는다.
+
+**app146 최소 수정**
+- 최초 곡 생성의 `3.8 → 3.7 → 3.6 → 3.5 → 3.5-lite` 5단 chain은 그대로 보호.
+- 단순 최종 금지어 교정(`rewriteLyricHardBanCards`, `rewriteLyricHardBanLines*`)은 `gemini-3.5-flash-lite` **단일 1회**만 사용.
+- 3.5-lite 교정 실패 시 상위 `applySharedLyricHardBanGuard`의 기존 local fail-open 정리가 작동하므로 3.8/3.7/3.6/3.5를 교정 때문에 추가 소모하지 않음.
+- 관리자 audit의 Free Tier rate-limit 번역 정규식 수정. `requests per day on Free Tier`, `Please retry later`, provider URL이 영어 조각으로 남던 현상 제거.
+- 모델 ID / HTTP code / 진단 code는 식별자로 유지.
+- app version 146.
+
+**검증/배포**
+- 정적 코드 계약: hard-ban line/card 모두 3.5-lite single model PASS.
+- Release Audit Run `35779322021` / job `106920447942` SUCCESS.
+- TypeScript PASS / Build PASS / like regression PASS / TEST+PRODUCTION dry-run unchanged.
+- PREVIEW Hosting Run `35779541715` / job `106921223017` SUCCESS.
+- locked source `9db0470cf5186266dbca49e2426565e4a6339e68`.
+- remote `PREVIEW_APP_VERSION=146`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Functions/Worker/Rules/user data 변경 없음. PREVIEW Gemini Function은 app145의 daily quota skip / 3.5 20s / low-thinking 상태 그대로.
+
+**다음 실사용 합격선**
+1. app146에서 최초 생성 1~3곡. 3.8 성공 가능 여부/시간은 provider 상태에 따라 변동 가능.
+2. 금지어 통합 교정이 발생하면 모델 호출은 3.5-lite 1회만 보여야 함. 3.7/3.6/3.5 추가 교정 fallback 금지.
+3. 3.8/3.7 daily quota 상태면 다음 곡에서 실제 호출 없이 skip 표시 확인.
+4. 관리자 오류 설명에 Free Tier/requests per day/Please retry/URL 영어 문장이 남지 않아야 함.
+5. 최초 입력 34k 자체는 별도 prompt-size 감사 항목으로 유지. 이번 app146에서 품질 규칙 추가 삭제 없음.
+
+
 ## 0EC. PREVIEW app145 — Gemini 2차 최적화 및 Hosting 배포 완료 (2026-09-23 KST)
 
 **적용 내용**

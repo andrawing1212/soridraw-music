@@ -1,9 +1,9 @@
-requested_at=2026-09-22T11:11:00Z
+requested_at=2026-09-22T12:44:30Z
 requested_by=user
-product_code_target=634cc69c6ded43c52b46c9bf0c1aa36b2c453422
-release_purpose=app134_zero_read_personal_like_catalog_and_direct_canonical_settlement
-audit_run=35719747351
-audit_job=106719597910
+product_code_target=f180bb7373a79b7876bc7afa840688f88ec4018c
+release_purpose=app136_postwrite_safe_like_ack_and_cross_device_signal
+audit_run=35728910481
+audit_job=106749307465
 audit_result=success
 no_d1_migration=true
 no_user_data_migration=true

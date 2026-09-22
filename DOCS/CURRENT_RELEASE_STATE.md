@@ -1,5 +1,18 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DX. app141 좋아요/비용 구조를 재사용 가능한 Agent Skill로 고정 (2026-09-23 KST)
+
+검증된 app141 좋아요 구조와 비용 합격선을 저장소 범위 Agent Skill로 추가했다. 런타임 앱 코드/배포/사용자 데이터에는 영향이 없다.
+
+- Skill: `.agents/skills/local-first-like-sync/SKILL.md`
+- SORIDRAW 검증 기준: `.agents/skills/local-first-like-sync/references/soridraw-app141-baseline.md`
+- 비용/회귀 체크리스트: `.agents/skills/local-first-like-sync/references/cost-regression-checklist.md`
+- `AGENTS.md`에 Explore 좋아요/카탈로그/양방향 동기화/비용 작업 전 필수 참조로 연결.
+- 스킬은 다른 앱에서도 재사용할 수 있도록 portable mode를 포함한다. 다른 앱에서는 Firebase/D1/RTDB/30초 규칙을 무조건 강제하지 않고, local-first·changed-item-only·persist-before-UI-notify·O(1) 비용·기능보존 원칙을 해당 스택에 맞춰 적용한다.
+- SORIDRAW mode에서는 app141의 W1 30초 묶음쓰기, R0 재진입, local catalog, RTDB changed-track 양방향 동기화, persist-before-UI-notify, D1 W1-W2 합격선을 보호한다.
+- 앱 버전 141 / PREVIEW Hosting / Worker / Functions / Rules / D1 schema / TEST / PRODUCTION 변경 없음.
+
+
 ## 0DW. PREVIEW app141 실사용 기능 PASS — PC↔모바일 양방향 좋아요 자동 반영 정상 (2026-09-23 KST)
 
 **사용자 실기기 최종 확인:** app141에서 업데이트 후 첫 Explore 진입의 기존 좋아요 하트가 즉시 정상 표시되고, PC→모바일 및 모바일→PC 모두 페이지/탭 이동·새로고침 없이 좋아요/해제 변경이 정상 자동 반영됨. app140까지 남았던 실시간 UI 전달 결함은 app141 수정으로 해소된 것으로 판정. 이 정상 동작을 다음 작업의 보호 기준점으로 고정한다.

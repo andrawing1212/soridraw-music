@@ -12648,6 +12648,8 @@ async function adjustExploreLikeCounterDeltaCore174(env, trackId, userUid, shoul
   return clampExploreSocialCount(result[2].results[0]?.like_count);
 }
 async function adjustExploreLikeCounterDelta(env, trackId, userUid, shouldLike, now) {
+  // SORIDRAW_D1_TRIGGER_RECEIPT_187_20260922
+  // D1 meta.changes includes AFTER-trigger side effects; live relation mutations report 2.
   if (!env?.DB?.batch || !env?.DB?.prepare) {
     throw new Error('[SORIDRAW 174] atomic D1 batch unavailable');
   }
@@ -12691,7 +12693,7 @@ async function adjustExploreLikeCounterDelta(env, trackId, userUid, shouldLike, 
     if (!Array.isArray(result) || result.length !== 4 ||
         result.some((row) => row?.success === false) ||
         !Number.isInteger(result[0]?.meta?.changes) ||
-        result[0].meta.changes < 0 || result[0].meta.changes > 1 ||
+        result[0].meta.changes < 0 ||
         !Array.isArray(result[2]?.results) || !Array.isArray(result[3]?.results)) {
       throw new Error('[SORIDRAW 174] fenced direct D1 receipt unavailable; retry idempotently');
     }

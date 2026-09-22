@@ -1,3 +1,3 @@
-requested_at=2026-09-22T08:35:00Z
-purpose=drain_stalled_7_batches_14_mutations_using_existing_preview_scheduled_handler
+requested_at=2026-09-22T08:42:00Z
+purpose=drain_stalled_accepted_like_queue_after_yaml_guard_fix
 preview_only=true

@@ -1,9 +1,9 @@
-requested_at=2026-09-22T12:44:30Z
+requested_at=2026-09-22T13:17:30Z
 requested_by=user
-product_code_target=f180bb7373a79b7876bc7afa840688f88ec4018c
-release_purpose=app136_postwrite_safe_like_ack_and_cross_device_signal
-audit_run=35728910481
-audit_job=106749307465
+product_code_target=1e0bdcb9da7970b51020f691ef3e5f052ff2105d
+release_purpose=app137_fix_trigger_inclusive_like_receipt_and_idle_navigation_retry_loop
+audit_run=35732241097
+audit_job=106760460110
 audit_result=success
 no_d1_migration=true
 no_user_data_migration=true

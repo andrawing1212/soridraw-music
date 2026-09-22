@@ -1,5 +1,26 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — Gemini 생성시간 2차 최적화
+
+현재 app144 / PREVIEW:
+- 3.8 low-thinking 실제 SUCCESS 14.5초 확인.
+- 3.8 high-demand FAIL도 17~19초 두 번 확인.
+- 3.7은 Free Tier 일일 20회 rate limit 실제 확인.
+- 3.5는 실패 시 30초 timeout이 전체 지연 병목.
+- 최초 생성 입력 약 33k~34k 토큰.
+- 관리자 Gemini 오류 설명 전체 한글화 완료.
+
+다음 작업 순서:
+1. 가사/프롬프트 품질 규칙 삭제 금지.
+2. 33k 입력에서 중복 system instruction / 반복 guideline / 같은 canonical plan 반복 삽입 여부를 소유 파일별 감사.
+3. 의미가 완전히 동일한 중복만 제거하고 품질/출력 schema/섹션 규칙은 보존.
+4. 3.7 rate-limit cooldown이 Free Tier reset/retry-after를 충분히 반영하는지 확인해 이미 한도 초과된 모델을 같은 세션/후속 세션에서 불필요하게 재호출하지 않도록 검토.
+5. 3.5 initial fallback 30초 timeout을 줄여도 성공률을 해치지 않는지 실측 기반으로 조정.
+6. 모델 순서는 `3.8 → 3.7 → 3.6 → 3.5 → 3.5-lite` 유지.
+7. 최대 물리 호출 5회 유지. shared TEST/PRODUCTION Gemini Function 변경 금지.
+8. PREVIEW 전용 Function/client만 수정 후 실생성 3회로 성공 모델, 총시간, 입력토큰 재비교.
+
+
 ## 현재 최우선 — app143 Gemini low-thinking 실생성 확인
 
 배포 완료:

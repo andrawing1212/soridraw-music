@@ -1,0 +1,104 @@
+name: Repair PREVIEW 069 Like Queue
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/repair-069-like-queue.trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repair-preview-069-like-queue
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e1a30fc9ef497fda1d34f4ab3dc1da45
+      PREVIEW_WORKER: soridraw-explore-preview
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Worker tooling
+        working-directory: cloudflare/explore-worker
+        run: npm install --no-audit --no-fund --package-lock=false
+
+      - name: Drain only already accepted PREVIEW 069 queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/explore-worker
+          WRANGLER="$PWD/node_modules/wrangler/bin/wrangler.js"
+          CFG="$PWD/canonical/wrangler.preview.jsonc"
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PREVIEW_WORKER/schedules"
+          AUTH="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+
+          node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+            SELECT COUNT(*) AS pending, COALESCE(SUM(mutation_count),0) AS mutations
+            FROM explore_like_batches_069;
+            SELECT lease_until FROM explore_like_processor_035 WHERE id=1;
+          " --json > "$RUNNER_TEMP/pre.json"
+
+          node <<'NODE'
+          const fs=require('fs');
+          const rows=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/pre.json','utf8')).flatMap(x=>x.results||[]);
+          const q=rows.find(x=>'pending' in x)||{};
+          const lease=rows.find(x=>'lease_until' in x)||{};
+          const pending=Number(q.pending||0), mutations=Number(q.mutations||0);
+          console.log('REPAIR_PREFLIGHT_PENDING='+pending);
+          console.log('REPAIR_PREFLIGHT_MUTATIONS='+mutations);
+          if (pending===0) process.exit(0);
+          if (pending<0 || pending>20 || mutations<0 || mutations>100) throw new Error('bounded repair gate failed');
+          if (Number(lease.lease_until||0)>Date.now()) throw new Error('processor lease is active');
+          NODE
+
+          pending="$(node -e "const r=require(process.env.RUNNER_TEMP+'/pre.json').flatMap(x=>x.results||[]).find(x=>'pending' in x)||{};process.stdout.write(String(Number(r.pending||0)))")"
+          if [ "$pending" = "0" ]; then
+            echo 'QUEUE_ALREADY_EMPTY=PASS'
+            exit 0
+          fi
+
+          curl -fsS -H "$AUTH" "$API" | jq -c '.result.schedules // [] | map({cron})' > "$RUNNER_TEMP/schedules-before.json"
+          cp "$RUNNER_TEMP/schedules-before.json" "$RUNNER_TEMP/schedules-restore.json"
+
+          restore_schedule() {
+            status=$?
+            trap - EXIT
+            curl -fsS -X PUT -H "$AUTH" -H 'Content-Type: application/json'               --data-binary @"$RUNNER_TEMP/schedules-restore.json" "$API" > "$RUNNER_TEMP/restore-result.json" || exit 1
+            jq -e '.success == true' "$RUNNER_TEMP/restore-result.json" >/dev/null || exit 1
+            echo 'PREVIEW_SCHEDULE_RESTORED=PASS'
+            exit "$status"
+          }
+          trap restore_schedule EXIT
+
+          printf '[{"cron":"* * * * *"}]' > "$RUNNER_TEMP/temp-cron.json"
+          curl -fsS -X PUT -H "$AUTH" -H 'Content-Type: application/json'             --data-binary @"$RUNNER_TEMP/temp-cron.json" "$API" > "$RUNNER_TEMP/temp-result.json"
+          jq -e '.success == true' "$RUNNER_TEMP/temp-result.json" >/dev/null
+          echo 'TEMP_ONE_MINUTE_CRON=PASS'
+
+          remaining="$pending"
+          for attempt in 1 2 3; do
+            sleep 75
+            node "$WRANGLER" d1 execute DB --remote --config "$CFG" --command "
+              SELECT COUNT(*) AS remaining FROM explore_like_batches_069;
+            " --json > "$RUNNER_TEMP/remaining.json"
+            remaining="$(node -e "const r=require(process.env.RUNNER_TEMP+'/remaining.json').flatMap(x=>x.results||[])[0]||{};process.stdout.write(String(Number(r.remaining||0)))")"
+            echo "REPAIR_ATTEMPT=$attempt REMAINING=$remaining"
+            if [ "$remaining" = "0" ]; then break; fi
+          done
+          test "$remaining" = "0"
+          echo 'QUEUE_069_DRAINED=PASS'

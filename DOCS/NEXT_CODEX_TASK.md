@@ -1,5 +1,30 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app134 PREVIEW 실기기 좋아요 카탈로그 R0 + PC/모바일 일치 검증
+
+현재 배포 완료:
+- PREVIEW app134 Hosting Run `35720055123` SUCCESS, remote version 134 / exact build PASS.
+- PREVIEW Worker Run `35719972386` SUCCESS, Worker version `4a145c23-adf0-4f41-8426-6de8cbebda66`.
+- final release audit Run `35719747351` SUCCESS.
+- 기존 stalled 069 accepted queue 7 batches / 14 mutations는 repair Run `35709706139`에서 canonical 반영 + 영향 1계정 exact 개인 R2 catalog 재생성 완료. 현재 pending069=0.
+- TEST/PRODUCTION unchanged.
+
+다음은 새 코드 작업 전 **실기기 기능·비용 판정**:
+1. 관리자 CACHE LIVE 초기화 후 Explore 첫 진입. `좋아요 상태 확인` D1 membership rows read가 0인지 확인. app133의 46×2=92행과 비교.
+2. Explore 재진입 / 다른 탭 왕복 / 앱 포커스복귀 / 새로고침에서도 membership D1 rows read 0.
+3. PC와 모바일 동일 계정에서 첫 화면 하트·likeCount·내 좋아요 목록 일치.
+4. PC에서 2곡 OFF→ON, 30초 batch settlement 후 모바일 자동 수렴. 모바일→PC도 1곡 수행.
+5. 좋아요 실제 변경 때 Worker/D1 write fanout 실측. 기능 정상 상태에서 W1~W2 목표, W3+면 원인 분석. 기능 삭제로 W1 강제 금지.
+6. 실기기 PASS면 app134 CURRENT_RELEASE_STATE를 PASS로 갱신하고 다음 비용 작업으로 이동. FAIL이면 전체조회 fallback을 되살리지 말고 catalog revision/delta/direct settlement 범위에서만 수정.
+
+금지:
+- 정상 캐시 재진입에서 `/v1/me/likes` targeted membership scan 재도입.
+- 앱 업데이트를 개인 카탈로그 bootstrap 사유로 사용.
+- public likeCount만으로 개인 하트 추론.
+- shared user data 전체 backfill/재생성/삭제.
+- TEST/PRODUCTION 승격 전 실기기 PASS 선언.
+
+
 ## 현재 단일 최우선 — Explore 좋아요 개인 카탈로그 정상화
 
 목표: Music Note처럼 **로컬 우선 + 작은 revision + 변경분만**. 공개곡 수/페이지 재진입/앱 업데이트에 비례한 D1 membership 읽기를 없앤다.

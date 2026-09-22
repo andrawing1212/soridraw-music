@@ -1,5 +1,22 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — PREVIEW app141 PC↔모바일 실기기 검증 (2026-09-23)
+
+- audited code source `4568795945b9e98539d72feb1300bbc1e3f0b35b`, Firebase Hosting source `3032247b531b213999c235baca5ce413fda65187`.
+- final audit Run `35756483569` SUCCESS, Hosting Run `35756677133` SUCCESS.
+- remote `preview.soridraw.com/app-version.json=141`, exact build PASS, TEST/PRODUCTION unchanged.
+- PREVIEW Worker unchanged `45afab7c-1da2-45b6-b34d-cb3943cec559`.
+- 핵심 수정: remote signal 수신 후 `snapshotPending`을 먼저 영구 저장하고 그 뒤 Explore UI subscriber에 알림. 이전에는 UI membership guard가 오래된 persisted pending을 읽어 이벤트를 거절.
+- 실행형 회귀: previous pending=false / new RTDB=true에서 UI delivery PASS, stale signal 및 local outbox precedence PASS. 실제 PC↔모바일 실기기는 **미검증**.
+
+사용자 테스트:
+1. PC/모바일 app141, 캐시 지우지 않기. 최초 진입 스피너 재발 없는지.
+2. 모바일 추천 탭 유지, PC 1~3곡 좋아요/해제 → 마지막 클릭 후 35초. 이동/새로고침 없이 모바일 하트+숫자 자동 갱신.
+3. 모바일→PC도 동일.
+4. 90초 무동작 후 R/W 증가 0, 페이지 이동 write 0, 정상 catalog membership D1 R0.
+5. FAIL이면 RTDB onValue auth/listener/lastSeen, 오래된 outbox guard, UI hydrate overwrite만 read-only로 좁혀 진단. W1 queue/Worker/catalog/DB/UI/CSS 임의 재작성 금지. 기능 실기기 PASS 전 TEST 승격 금지.
+
+
 ## 단일 최우선 — app140 실사용 FAIL, 송신→수신→화면 경계 진단부터
 
 실제 결과: 첫 화면 하트 spinner PASS; PC↔모바일 양방향 즉시 하트 반영 FAIL. TEST/PRODUCTION 승격 금지.

@@ -1,5 +1,40 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app136 실기기 좋아요 정상화/비용 최종 판정
+
+현재 PREVIEW:
+- app136 Hosting Run `35729271895` / job `106750503334` SUCCESS, exact build / remote version 136 PASS.
+- Worker Run `35729148720` / job `106750087137` SUCCESS, version `314608e3-1490-4eab-ade5-f5909bc2af96`.
+- final audit `35728910481` / `106749307465` SUCCESS.
+- TEST/PRODUCTION unchanged.
+- user data migration/backfill/delete 없음.
+
+이번 app136 핵심:
+- app135의 “canonical D1 저장 성공 → 후속 R2 실패 → HTTP 5xx → outbox 재시도 + RTDB signal 미발행” 경로 제거.
+- canonical D1 ACK가 최종 사용자 상태.
+- R2 후처리는 changed-track incremental/best-effort.
+- mutation hotpath 개인 전체 likes D1 scan/full rebuild 제거.
+- canonical ACK 뒤 RTDB changed-track signal로 PC↔모바일 자동 동기화.
+
+다음은 새 코드 수정 전 실기기 판정:
+1. app136 양쪽 확인. 저장 데이터/브라우저 캐시는 삭제하지 않는다.
+2. app135 실패 때 남은 outbox가 있으면 app136 최초 1회 서버 정리를 기다린다.
+3. 이후 양쪽 CACHE LIVE `진단 초기화`.
+4. PC에서 새 좋아요 1~3곡 변경 → 마지막 클릭 후 약 35초.
+5. 모바일은 새로고침/페이지 이동 없이 하트·숫자가 자동으로 같은 최종 상태가 되어야 함.
+6. 모바일→PC 방향도 1곡 이상 동일 확인.
+7. 새 cycle에서 HTTP 500 없어야 함.
+8. 다른 페이지 → Explore 복귀 후 `/v1/me/likes` membership rows read 0.
+9. 새 실제 변경 cycle 비용은 W1~W2/행동 목표. W3+ / 행동이면 기능 PASS여도 비용 FAIL.
+
+FAIL이면 해당 한 경로만 수정:
+- HTTP 응답/ACK
+- RTDB changed-track signal
+- 개인 R2 incremental catalog
+- local catalog merge
+전체 Feed/전체 personal likes scan 재도입 금지. shared user data 전체 재생성/backfill/delete 금지. TEST/PRODUCTION 승격 금지.
+
+
 ## 현재 최우선 — app135 PREVIEW 실기기 좋아요 동기화 + 페이지복귀 R0 검증
 
 현재 배포 완료:

@@ -995,6 +995,7 @@ const verifyAppCheckForRequest = async (
 };
 
 const GEMINI_ALLOWED_MODELS = new Set([
+  "gemini-3.8-flash",
   "gemini-3.7-flash",
   "gemini-3.6-flash",
   "gemini-3.5-flash",
@@ -1427,7 +1428,7 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
 
 const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {
   const model = String(requestPayload?.model || "").trim();
-  if (model === "gemini-3.7-flash") {
+  if (model === "gemini-3.8-flash" || model === "gemini-3.7-flash") {
     return callGeminiInteraction(apiKey, requestPayload);
   }
   const config = requestPayload?.config && typeof requestPayload.config === "object"
@@ -1515,7 +1516,7 @@ const normalizeGeminiServerAttemptRequest = (
       : requestPayload?.config,
   };
 
-  if ((model === "gemini-3.7-flash" || model === "gemini-3.6-flash" || model === "gemini-3.5-flash-lite") && next.config) {
+  if ((model === "gemini-3.8-flash" || model === "gemini-3.7-flash" || model === "gemini-3.6-flash" || model === "gemini-3.5-flash-lite") && next.config) {
     delete next.config.temperature;
     delete next.config.topP;
     delete next.config.topK;

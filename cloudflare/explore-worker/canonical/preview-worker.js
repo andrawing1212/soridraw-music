@@ -25021,42 +25021,76 @@ async function handleLikeBatch034(request, env, cors) {
   if (cutover172.mode !== 'legacy') {
     throwApi('LIKE_CUTOVER_STATE_UNAVAILABLE', '좋아요 전환 상태를 확인 중입니다. 잠시 후 다시 시도해 주세요.', 503, { 'Retry-After': '30' });
   }
+  // SORIDRAW_LEGACY_LIKE_DIRECT_NORMALIZE_185_20260922
+  // Functionality-first recovery: legacy batch settles requested state synchronously.
+  // One real toggle changes membership + track_stats only in canonical D1 (W2).
   await assertLegacyLikeIntakeOpen165(env);
-  // SORIDRAW_BATCH_LIKE_FINAL_CUTOVER_FREEZE_169_20260921
-  // Final marker state was read above; only legacy mode reaches this queue.
-
-  // Do not discard an intent because this device's baseLiked happens to match it.
-// Another device may already have changed canonical state. The scheduled aggregate
-// is the authoritative idempotent comparison against canonical likes.
-const effectiveMutations = mutations;
-  const results = mutations.map((mutation) => ({
-    trackId: mutation.trackId,
-    liked: mutation.liked,
-    likeCount: mutation.likeCount,
-  }));
-
-  // SORIDRAW_EXPLORE_LIKE_INTAKE_W1_HOTPATH_055_20260915
-  // New intake uses the single-B-tree 069 queue: one warm batch => D1 R0/W1.
-  // The 075 processor remains enabled below to drain already-queued legacy rows.
-  let queued = { batchId: '', inserted: false, queue: 'none' };
-  if (effectiveMutations.length) {
-    queued = await enqueueExploreLikeBatch035(env, authContext.uid, effectiveMutations, receivedAt);
+  const results = [];
+  const sharedRows185 = [];
+  for (const mutation of mutations) {
+    const track = await getPublicTrackForWrite(env, mutation.trackId);
+    const settledAt = Date.now();
+    const likeCount = await adjustExploreLikeCounterDelta(env, mutation.trackId, authContext.uid, mutation.liked, settledAt);
+    results.push({ trackId: mutation.trackId, liked: mutation.liked, likeCount });
+    sharedRows185.push({ trackId: mutation.trackId, ownerUid: String(track?.owner_uid || '').trim(), likeCount });
+    if (track?.owner_uid) {
+      try { await patchExploreProfileR2Like044(env, track.owner_uid, mutation.trackId, likeCount); }
+      catch (error) { console.warn('[185] profile R2 like patch deferred:', String(error?.message || error || 'unknown')); }
+    }
   }
-
-  // SORIDRAW_LIKE_PRECOMMIT_R2_BLOCK_138_20260921
-  const personalR2 = { ok: false, repairNeeded: true, reason: 'awaiting_canonical_d1_settlement' };
+  if (sharedRows185.length) {
+    try { await patchSharedFeedLikeCounts065(env, sharedRows185); }
+    catch (error) { console.warn('[185] shared feed/card like patch deferred:', String(error?.message || error || 'unknown')); }
+  }
+  const settlementBatchId185 = 'direct185_' + String(receivedAt) + '_' + crypto.randomUUID();
+  const catalogBefore185 = await readSharedLikesState161(env, authContext.uid);
+  let personalR2 = await syncExploreLikeR2AfterBatch074(env, authContext.uid, results, receivedAt, settlementBatchId185);
+  if (!personalR2?.ok) {
+    try {
+      await rebuildExploreLikeR2Bundle(env, authContext.uid);
+      personalR2 = { ok: true, repaired: true, reason: personalR2?.reason || 'rebuild' };
+    } catch (error) {
+      console.warn('[185] canonical D1 settled but personal R2 repair failed:', String(error?.message || error || 'unknown'));
+      throwApi('LIKE_PUBLICATION_RETRY_REQUIRED', '좋아요 상태는 저장되었고 기기 간 표시를 맞추는 중입니다. 잠시 후 다시 동기화합니다.', 503, { 'Retry-After': '2' });
+    }
+  }
+  try {
+    const key185 = exploreSharedLikesKey061(authContext.uid);
+    if (catalogBefore185?.exact) {
+      for (let attempt185 = 0; attempt185 < 8; attempt185 += 1) {
+        const object185 = await env.PROFILE_MEDIA.get(key185);
+        if (!object185) break;
+        let body185 = null; try { body185 = JSON.parse(await object185.text()); } catch {}
+        if (!body185 || !Array.isArray(body185.likedTrackIds)) break;
+        const ids185 = [...new Set(body185.likedTrackIds.map((id) => String(id || '').trim()).filter(Boolean))];
+        const next185 = { ...body185, canonicalComplete156: true, exactLikeCount156: ids185.length, canonicalSource156: 'direct-d1-catalog-185', updatedAt: Date.now(), likedTrackIds: ids185 };
+        const stored185 = await env.PROFILE_MEDIA.put(key185, JSON.stringify(next185), { onlyIf: { etagMatches: object185.etag }, httpMetadata: { contentType: 'application/json; charset=utf-8' }, customMetadata: { soridrawSharedLikes: '185', updatedAt: String(next185.updatedAt) } });
+        if (stored185) break;
+      }
+    } else {
+      const exact185 = await env.DB.prepare("SELECT l.track_id FROM likes l JOIN tracks t ON t.id=l.track_id WHERE l.user_uid=? AND t.is_public=1 AND t.status='published' ORDER BY l.created_at DESC").bind(authContext.uid).all();
+      if (!Array.isArray(exact185?.results)) throw new Error('exact catalog query unavailable');
+      const ids185 = [...new Set(exact185.results.map((row) => String(row?.track_id || '').trim()).filter(Boolean))];
+      const previous185 = await env.PROFILE_MEDIA.get(key185); let base185 = {}; if (previous185) { try { base185 = JSON.parse(await previous185.text()); } catch {} }
+      const next185 = { ...base185, schemaVersion: 1, uid: authContext.uid, canonicalComplete156: true, exactLikeCount156: ids185.length, canonicalSource156: 'canonical-d1-catalog-185', likedTrackIds: ids185, lastLikeOrders074: base185?.lastLikeOrders074 && typeof base185.lastLikeOrders074 === 'object' ? base185.lastLikeOrders074 : {}, updatedAt: Date.now() };
+      await env.PROFILE_MEDIA.put(key185, JSON.stringify(next185), { httpMetadata: { contentType: 'application/json; charset=utf-8' }, customMetadata: { soridrawSharedLikes: '185', updatedAt: String(next185.updatedAt) } });
+    }
+  } catch (catalogError185) {
+    console.warn('[185] exact personal like catalog refresh failed:', String(catalogError185?.message || catalogError185 || 'unknown'));
+    throwApi('LIKE_PUBLICATION_RETRY_REQUIRED', '좋아요 상태는 저장되었고 기기 간 표시를 맞추는 중입니다. 잠시 후 다시 동기화합니다.', 503, { 'Retry-After': '2' });
+  }
   return json({
     ok: true,
     data: {
       results,
-      // A queued D1 mutation and a materialized personal R2 snapshot are
-      // separate stages. Do not tell other devices that an R2 update worked
-      // when this worker has only accepted the server-side queue.
-      personalLikeSnapshot: 'pending',
-      queued: Boolean(effectiveMutations.length),
-      batchId: queued.batchId || null,
-      queue: queued.queue || '075'
-    }
+      queued: false,
+      batchId: settlementBatchId185,
+      queue: 'direct-legacy-185',
+      canonicalD1: 'settled',
+      personalLikeSnapshot: 'settled',
+      personalLikeProtocol: 'legacy-direct-185',
+      publicLikePublication: 'targeted-r2-185',
+    },
   }, 200, cors);
 }
 __name(handleLikeBatch034, "handleLikeBatch034");

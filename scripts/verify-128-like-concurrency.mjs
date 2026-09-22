@@ -183,31 +183,43 @@ const intake138=worker.slice(intakeStart138,intakeEnd138+2);
 // to keep personal R2 pending. App134 intentionally removes that queue: the
 // legacy branch settles canonical D1 first, then publishes the personal R2
 // catalog. Verify whichever contract is actually present.
-const legacyStart138=intake138.indexOf("if (cutover172.mode !== 'legacy')");
-assert.ok(legacyStart138>=0,'legacy intake boundary missing');
-const legacyIntake138=intake138.slice(legacyStart138);
-if (/SORIDRAW_LEGACY_LIKE_DIRECT_NORMALIZE_185_20260922/.test(legacyIntake138)) {
-  assert.match(legacyIntake138,/adjustExploreLikeCounterDelta\(/);
-  assert.match(legacyIntake138,/syncExploreLikeR2AfterBatch074\(/);
-  assert.match(legacyIntake138,/canonicalD1: 'settled'/);
-  assert.match(legacyIntake138,/SORIDRAW_LEGACY_LIKE_POSTWRITE_ACK_186_20260922/);
-  assert.match(legacyIntake138,/personalLikeSnapshot: personalLikeSnapshot185/);
-  assert.match(legacyIntake138,/personalLikeSnapshot185 = 'repair-needed'/);
-  assert.doesNotMatch(legacyIntake138,/throwApi\('LIKE_PUBLICATION_RETRY_REQUIRED'/);
-  assert.doesNotMatch(legacyIntake138,/SELECT l\.track_id FROM likes l JOIN tracks t/);
-  assert.doesNotMatch(legacyIntake138,/enqueueExploreLikeBatch035\(/);
-  assert.doesNotMatch(legacyIntake138,/awaiting_canonical_d1_settlement/);
-  console.log('185_CANONICAL_D1_BEFORE_PERSONAL_R2=PASS');
-  console.log('185_LEGACY_QUEUE_REMOVED=PASS');
+if (/SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922/.test(intake138)) {
+  assert.match(intake138,/await assertLegacyLikeIntakeOpen165\(env\)/);
+  assert.match(intake138,/enqueueExploreLikeBatch035\(env, authContext\.uid, mutations, receivedAt\)/);
+  assert.match(intake138,/syncExploreLikeR2AfterBatch074\(/);
+  assert.match(intake138,/canonicalD1: 'queued'/);
+  assert.match(intake138,/personalLikeProtocol: 'w1-queue-changed-track-188'/);
+  assert.doesNotMatch(intake138,/adjustExploreLikeCounterDelta\(/);
+  assert.doesNotMatch(intake138,/readLikeCutoverState162\(env\)/);
+  console.log('188_W1_QUEUE_ACCEPTANCE_BEFORE_CHANGED_TRACK_R2=PASS');
+  console.log('188_INTERACTIVE_DIRECT_SETTLEMENT_REMOVED=PASS');
 } else {
-  assert.match(legacyIntake138,/SORIDRAW_LIKE_PRECOMMIT_R2_BLOCK_138_20260921/);
-  assert.match(legacyIntake138,/awaiting_canonical_d1_settlement/);
-  assert.match(legacyIntake138,/personalLikeSnapshot: 'pending'/);
-  assert.doesNotMatch(legacyIntake138,/personalLikeSnapshot: 'updated'|personalLikeSnapshot: 'settled'/);
-  assert.doesNotMatch(legacyIntake138,/syncExploreLikeR2AfterBatch074\(|syncExploreLikeR2AfterBatch034\(/);
-  assert.match(legacyIntake138,/await enqueueExploreLikeBatch035\(/);
-  console.log('138_PRECOMMIT_R2_WRITE_SUPPRESSED=PASS');
-  console.log('138_QUEUE_ACK_PENDING_ONLY=PASS');
+  const legacyStart138=intake138.indexOf("if (cutover172.mode !== 'legacy')");
+  assert.ok(legacyStart138>=0,'legacy intake boundary missing');
+  const legacyIntake138=intake138.slice(legacyStart138);
+  if (/SORIDRAW_LEGACY_LIKE_DIRECT_NORMALIZE_185_20260922/.test(legacyIntake138)) {
+    assert.match(legacyIntake138,/adjustExploreLikeCounterDelta\(/);
+    assert.match(legacyIntake138,/syncExploreLikeR2AfterBatch074\(/);
+    assert.match(legacyIntake138,/canonicalD1: 'settled'/);
+    assert.match(legacyIntake138,/SORIDRAW_LEGACY_LIKE_POSTWRITE_ACK_186_20260922/);
+    assert.match(legacyIntake138,/personalLikeSnapshot: personalLikeSnapshot185/);
+    assert.match(legacyIntake138,/personalLikeSnapshot185 = 'repair-needed'/);
+    assert.doesNotMatch(legacyIntake138,/throwApi\('LIKE_PUBLICATION_RETRY_REQUIRED'/);
+    assert.doesNotMatch(legacyIntake138,/SELECT l\.track_id FROM likes l JOIN tracks t/);
+    assert.doesNotMatch(legacyIntake138,/enqueueExploreLikeBatch035\(/);
+    assert.doesNotMatch(legacyIntake138,/awaiting_canonical_d1_settlement/);
+    console.log('185_CANONICAL_D1_BEFORE_PERSONAL_R2=PASS');
+    console.log('185_LEGACY_QUEUE_REMOVED=PASS');
+  } else {
+    assert.match(legacyIntake138,/SORIDRAW_LIKE_PRECOMMIT_R2_BLOCK_138_20260921/);
+    assert.match(legacyIntake138,/awaiting_canonical_d1_settlement/);
+    assert.match(legacyIntake138,/personalLikeSnapshot: 'pending'/);
+    assert.doesNotMatch(legacyIntake138,/personalLikeSnapshot: 'updated'|personalLikeSnapshot: 'settled'/);
+    assert.doesNotMatch(legacyIntake138,/syncExploreLikeR2AfterBatch074\(|syncExploreLikeR2AfterBatch034\(/);
+    assert.match(legacyIntake138,/await enqueueExploreLikeBatch035\(/);
+    console.log('138_PRECOMMIT_R2_WRITE_SUPPRESSED=PASS');
+    console.log('138_QUEUE_ACK_PENDING_ONLY=PASS');
+  }
 }
 console.log('074_SERVER_RECEIPT_BEATS_DEVICE_CLOCK=PASS');
 console.log('074_CONCURRENT_SAME_TRACK_LAST_SERVER_ORDER=PASS');

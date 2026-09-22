@@ -89,6 +89,7 @@ function patchGeminiBoundedLatencyPolicy() {
   const helperBlock = `type GeminiLatencyPolicy = "bounded-v1" | null;
 
 const GEMINI_BOUNDED_ATTEMPT_TIMEOUT_MS: Record<string, number> = {
+  "gemini-3.8-flash": 35_000,
   "gemini-3.7-flash": 55_000,
   "gemini-3.6-flash": 45_000,
   "gemini-3.5-flash": 30_000,
@@ -124,8 +125,8 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any, attemp
 
   replaceOnce(
     'Gemini generateContent timeout signature',
-    'const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {\n  const model = String(requestPayload?.model || "").trim();\n  if (model === "gemini-3.7-flash") {\n    return callGeminiInteraction(apiKey, requestPayload);\n  }',
-    'const callGeminiGenerateContent = async (apiKey: string, requestPayload: any, attemptTimeoutMs = 0): Promise<any> => {\n  const model = String(requestPayload?.model || "").trim();\n  if (model === "gemini-3.7-flash") {\n    return callGeminiInteraction(apiKey, requestPayload, attemptTimeoutMs);\n  }',
+    'const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {\n  const model = String(requestPayload?.model || "").trim();\n  if (model === "gemini-3.8-flash" || model === "gemini-3.7-flash") {\n    return callGeminiInteraction(apiKey, requestPayload);\n  }',
+    'const callGeminiGenerateContent = async (apiKey: string, requestPayload: any, attemptTimeoutMs = 0): Promise<any> => {\n  const model = String(requestPayload?.model || "").trim();\n  if (model === "gemini-3.8-flash" || model === "gemini-3.7-flash") {\n    return callGeminiInteraction(apiKey, requestPayload, attemptTimeoutMs);\n  }',
   );
 
   replaceOnce(

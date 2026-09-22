@@ -187,7 +187,7 @@ jobs:
           echo 'SANITIZED_READONLY_PROOF_COMMITTED=PASS'
 
       - name: One-time bounded replay of already-accepted 069 batches
-        if: ${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'repair(preview): one-time supervised like queue replay') }}
+        if: "${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'repair(preview): one-time supervised like queue replay') }}"
         shell: bash
         run: |
           set -euo pipefail
@@ -264,7 +264,7 @@ jobs:
           git push origin HEAD:preview
 
       - name: Publish sanitized post-recovery queue and schedule status
-        if: ${{ always() && github.event_name == 'push' && (startsWith(github.event.head_commit.message, 'repair(preview): one-time supervised like queue replay') || startsWith(github.event.head_commit.message, 'diag(preview): verify queue recovery final state')) }}
+        if: "${{ always() && github.event_name == 'push' && (startsWith(github.event.head_commit.message, 'repair(preview): one-time supervised like queue replay') || startsWith(github.event.head_commit.message, 'diag(preview): verify queue recovery final state')) }}"
         shell: bash
         run: |
           set -euo pipefail

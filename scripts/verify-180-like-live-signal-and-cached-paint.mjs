@@ -38,3 +38,81 @@ console.log('APP140_LIVE_CHANGED_TRACK_RTDB_SET=PASS');
 console.log('APP140_LIVE_SIGNAL_D1_FIRESTORE_IO=0');
 console.log('APP140_CACHED_HEART_INITIAL_SPINNER_AVOIDED=PASS');
 console.log('APP140_W1_QUEUE_AND_LOCAL_CATALOG_UNCHANGED=PASS');
+
+// App141 executable regression: an older durable snapshotPending can still
+// exist on the receiving device after the other device accepted a new like.
+// The UI subscriber rereads that durable snapshot synchronously. Prove that
+// the new remote state is persisted BEFORE the UI is notified, without
+// changing the protected local-outbox-wins or stale-signal behavior.
+{
+  const { default: ts } = await import('typescript');
+  const { default: vm } = await import('node:vm');
+  const start = service.indexOf('const applyRemoteLikeSignal127 =');
+  const end = service.indexOf('let activeLikeSignalUid127', start);
+  assert.ok(start >= 0 && end > start, 'remote signal receiver boundaries missing');
+  const receiver = service.slice(start, end);
+  assert.match(receiver, /acceptedForUi141\.forEach\(dispatchLikeSync\)/);
+  assert.ok(
+    receiver.indexOf('writeSnapshotPending127(uid, unresolved)') <
+    receiver.indexOf('acceptedForUi141.forEach(dispatchLikeSync)'),
+    'durable pending state must be published before the UI can reread it',
+  );
+  const executable = ts.transpileModule(
+    receiver + '\n(globalThis.__apply = applyRemoteLikeSignal127);',
+    { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+  ).outputText;
+  const cache = new Map([['track-a', false]]);
+  let persistentPending = { 'track-a': false };
+  let seen = 10;
+  let outbox = {};
+  const rendered = [];
+  const env = {
+    console,
+    Date,
+    Map,
+    Set,
+    auth: { currentUser: { uid: 'same-account' } },
+    readSeenLikeSignal127: () => seen,
+    readRepairTarget127: () => 0,
+    requestRepair127: () => { throw new Error('unexpected gap repair'); },
+    readLikeOutbox: () => outbox,
+    readSnapshotPending127: () => ({ ...persistentPending }),
+    getLikedStateCache: () => cache,
+    readLikeDisplayLocks: () => ({}),
+    patchExploreLikedTrackMembership: () => {},
+    persistLikedStateCache: () => {},
+    writeSnapshotPending127: (_uid, next) => { persistentPending = { ...next }; },
+    persistLikeDisplayLocks: () => {},
+    markLocalLikeCatalogReady135: () => {},
+    markSeenLikeSignal127: (_uid, version) => { seen = version; },
+    dispatchLikeSync: (detail) => {
+      const effective = outbox[detail.trackId]?.desiredLiked ??
+        persistentPending[detail.trackId] ?? cache.get(detail.trackId);
+      if (detail.source === 'remote' && effective === detail.liked) rendered.push(detail);
+    },
+  };
+  vm.runInNewContext(executable, env, { timeout: 1000 });
+  env.__apply('same-account', {
+    version: 11, previousVersion: 10,
+    results: [{ trackId: 'track-a', ownerUid: '', liked: true, likeCount: 1 }],
+  });
+  assert.equal(persistentPending['track-a'], true, 'new membership not persisted');
+  assert.equal(rendered.length, 1, 'UI rejected latest changed-track because it read old pending state');
+  assert.equal(rendered[0].liked, true);
+  assert.equal(rendered[0].likeCount, 1);
+  env.__apply('same-account', {
+    version: 11, previousVersion: 10,
+    results: [{ trackId: 'track-a', ownerUid: '', liked: false, likeCount: 0 }],
+  });
+  assert.equal(rendered.length, 1, 'stale signal must not repaint');
+  outbox = { 'track-a': { desiredLiked: false } };
+  env.__apply('same-account', {
+    version: 12, previousVersion: 11,
+    results: [{ trackId: 'track-a', ownerUid: '', liked: false, likeCount: 0 }],
+  });
+  assert.equal(rendered.length, 1, 'an unresolved local click must retain precedence');
+  assert.equal(persistentPending['track-a'], true, 'remote change must not erase unresolved local click');
+  console.log('APP141_REMOTE_PERSIST_BEFORE_UI_REPLAY=PASS');
+  console.log('APP141_LOCAL_OUTBOX_AND_STALE_SIGNAL_PROTECTED=PASS');
+  console.log('APP141_RECEIVER_ADDITIONAL_SERVER_IO=0');
+}

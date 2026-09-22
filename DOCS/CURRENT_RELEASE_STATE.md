@@ -1,5 +1,33 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DY. 곡 생성 Gemini 503 연속 실패 원인 확정 — 모델 폐기 아님, provider overload + 초기 fallback 체인 노후화 (2026-09-23 KST)
+
+**사용자 실사용 증상:** 곡 생성이 약 27초 후 실패. 관리자 Gemini 호출 기록에서 물리 호출 3회 모두 실패:
+1. `gemini-3.6-flash`
+2. `gemini-3.5-flash-lite`
+3. `gemini-3.1-flash-lite`
+공통 응답: HTTP 503 / `GEMINI_UPSTREAM_UNAVAILABLE` / "This model is currently experiencing high demand."
+
+**현재 코드와 정확히 일치하는 원인:**
+- `src/services/geminiProxyClient.ts`의 `INITIAL_SONG_MODEL_CHAIN`은 현재 위 3개 모델만 포함.
+- 이 구조는 887 latency fastpath에서 초기 3.7 probe를 의도적으로 제거해 속도를 우선하도록 변경된 결과.
+- Functions `GEMINI_ALLOWED_MODELS`에는 3.7/3.6/3.5/3.5-lite/3.1-lite 등이 남아 있지만, 최초 곡 생성 클라이언트가 3.5와 3.7을 server modelChain에 보내지 않아 실제 초기 생성에서는 사용되지 않음.
+- Function 내부 fallback loop는 503 시 다음 모델로 즉시 이동하고, 실패한 모델 cooldown은 후속 호출을 위한 보호다. 같은 logical request 안에서 provider 권장 exponential backoff 대기는 하지 않는다.
+- 따라서 여러 Gemini 모델이 같은 시간대에 capacity 503을 반환하면 현재 초기 생성은 3회 연속 실패 후 종료한다.
+
+**모델 버전 판정:**
+- Google 공식 최신 모델 문서 기준 `gemini-3.6-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`는 현재 유효한 모델. 즉 404/deprecation 문제가 아님.
+- Google은 2026-09-02 `gemini-3.8-flash`를 GA로 출시했으나 현재 SORIDRAW client chain과 Function allowlist/route에는 아직 3.8이 없음.
+- 현재 Function의 Interactions API 전용 분기는 `gemini-3.7-flash`에만 적용되어 있어 3.8을 쓰려면 client+Function 최소 변경과 Function 재배포가 필요.
+
+**수정 방향(아직 미적용):**
+- 정상 UI/프롬프트/가사 엔진/사용자 데이터는 건드리지 않는다.
+- 최신 stable 3.8을 초기 생성 후보에 추가하고, 현재 빠른 체인의 누락된 3.5 full fallback을 복구하는 방향을 우선 검토.
+- transient 5xx에서 Retry-After 또는 짧은 bounded exponential backoff/jitter를 같은 Function fallback 안에 추가해 순간 capacity spike를 3연속 즉시 실패로 소진하지 않도록 검증.
+- 물리 호출 절대 상한 5회, API Key 보안, Auth/App Check, 기존 cooldown, 품질 보정 상한은 보호.
+- Functions 변경이므로 PREVIEW에서 Function만 필요한 경우에 한해 재배포 후 실제 생성 검증. TEST/PRODUCTION은 사용자 승인 전 변경 금지.
+
+
 ## 0DX. app141 좋아요/비용 구조를 재사용 가능한 Agent Skill로 고정 (2026-09-23 KST)
 
 검증된 app141 좋아요 구조와 비용 합격선을 저장소 범위 Agent Skill로 추가했다. 런타임 앱 코드/배포/사용자 데이터에는 영향이 없다.

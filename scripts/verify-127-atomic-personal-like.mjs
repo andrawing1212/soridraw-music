@@ -36,7 +36,7 @@ assert.match(service, /EXPLORE_LIKE_TARGETED_VERIFIED_130/);
 assert.match(service, /readCurrentPersonalLikeRevision130/);
 assert.match(service, /targetedVerifiedRevisionByUid130/);
 
-assert.match(service, /const localCatalogReady127 = baselineReady127 \|\| hasLikedStateStorage127\(user\.uid\)/,
+assert.match(service, /const localCatalogReady127 = baselineReady127 \|\| (?:hasLikedStateStorage127|hasLocalLikeCatalog135)\(user\.uid\)/,
   'persisted personal catalog must be the zero-read authority on normal entry');
 assert.match(service, /const missing = localCatalogReady127 \? \[\] : normalized\.filter/,
   'cached Explore entry must not issue targeted D1 membership reads');
@@ -89,7 +89,7 @@ const getter = service.slice(service.indexOf('export const getExploreLikedTrackI
 assert.match(getter, /await ensurePersonalLikeBaseline127\(user\)/);
 assert.match(getter, /const verified127 = readTargetedVerifiedLikeTracks127\(user\.uid\)/);
 assert.match(getter, /const baselineReady127 = baselineCompleted127\.has\(user\.uid\)/);
-assert.match(getter, /const localCatalogReady127 = baselineReady127 \|\| hasLikedStateStorage127\(user\.uid\)/);
+assert.match(getter, /const localCatalogReady127 = baselineReady127 \|\| (?:hasLikedStateStorage127|hasLocalLikeCatalog135)\(user\.uid\)/);
 assert.match(getter, /const missing = localCatalogReady127 \? \[\] : normalized\.filter/);
 assert.match(getter, /readLikeOutbox\(user\.uid\)/);
 assert.match(getter, /const currentOutbox127 = readLikeOutbox\(user\.uid\)/);

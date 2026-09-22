@@ -434,11 +434,13 @@ export default function ExplorePage() {
     };
     const onResume = () => {
       if (document.visibilityState === 'hidden') return;
-      // This does not force a data read. The account-private R2 HEAD is
-      // independently throttled in the service; an unchanged HEAD keeps
-      // the existing liked membership and all card bodies locally.
-      likeHydrationKeyRef.current = '';
-      setLikeAccountSyncSignal((value) => value + 1);
+      // App134: focus/visibility may check only the tiny account-private R2
+      // revision. Do not reset hydration or re-run /v1/me/likes on every focus.
+      // A real revision change dispatches the existing account invalidation
+      // event, which then performs one targeted reconciliation for visible IDs.
+      void checkExplorePersonalLikeRevision127(user).catch((reason) => {
+        console.warn('Explore like revision resume check failed:', reason);
+      });
     };
     window.addEventListener('focus', onResume);
     document.addEventListener('visibilitychange', onResume);

@@ -48,7 +48,7 @@ const EXPLORE_LIKE_PARTIAL_BASELINE_161 = 'soridraw:explore:like-partial-baselin
 // response is still authoritative for the requested visible track IDs. Persist
 // only those verified IDs so clicks work without trusting stale legacy booleans.
 const EXPLORE_LIKE_TARGETED_VERIFIED_127 = 'soridraw:explore:like-targeted-verified:127';
-// App134 starts one clean targeted proof generation after the stalled 069 period.\n// Once verified against canonical D1, the proof survives ordinary re-entry while\n// the account-private R2 revision is unchanged.\nconst EXPLORE_LIKE_TARGETED_VERIFIED_134 = 'soridraw:explore:like-targeted-verified:134';
+// App134 starts one clean targeted proof generation after the stalled 069 period.\n// Once verified against canonical D1, the proof survives ordinary re-entry while\n// the account-private R2 revision is unchanged.\nconst EXPLORE_LIKE_TARGETED_VERIFIED_130 = 'soridraw:explore:like-targeted-verified:130';
 const EXPLORE_LIKE_SIGNAL_SEEN_127 = 'soridraw:explore:like-signal-seen:127';
 const EXPLORE_LIKE_SIGNAL_RETRY_127 = 'soridraw:explore:like-signal-retry:127';
 const EXPLORE_LIKE_SIGNAL_GAP_127 = 'soridraw:explore:like-signal-gap:127';
@@ -183,6 +183,15 @@ const readLikedStateStorage = (uid: string): Map<string, boolean> => {
   return values;
 };
 
+const hasLikedStateStorage127 = (uid: string): boolean => Boolean(
+  readSoridrawPersistentCache<Record<string, boolean>>({
+    cacheKey: EXPLORE_LIKE_CACHE_KEY,
+    sourceType: EXPLORE_LIKE_SOURCE_TYPE,
+    schemaVersion: EXPLORE_LIKE_CACHE_SCHEMA_VERSION,
+    uid,
+  }),
+);
+
 const persistLikedStateCache = (uid: string, cache: Map<string, boolean>) => {
   writeSoridrawPersistentCache<Record<string, boolean>>({
     cacheKey: EXPLORE_LIKE_CACHE_KEY,
@@ -287,15 +296,13 @@ const readTargetedVerifiedLikeTracks127 = (uid: string): Set<string> => {
   if (cached && targetedVerifiedRevisionByUid130.get(normalizedUid) === currentRevision) return cached;
 
   const verified = new Set<string>();
-  // App134: targeted canonical membership is durable for the SAME private R2
-  // revision, including legacy-partial accounts. A real like/unlike now settles
-  // canonical D1 first and then changes that account R2 revision. Therefore an
-  // unchanged revision means ordinary page re-entry must not spend another D1
-  // membership read. The 134 key deliberately ignores stale app133 proofs once.
+  // App134: an unchanged private R2 revision preserves existing verified/local
+  // membership across an app update. App version changes are never a reason to
+  // force another D1 membership read.
   if (currentRevision) {
     try {
       const raw = JSON.parse(
-        readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_134, normalizedUid)),
+        readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_130, normalizedUid)),
       ) as { revision?: unknown; trackIds?: unknown };
       if (String(raw?.revision || '') === currentRevision && Array.isArray(raw?.trackIds)) {
         raw.trackIds.slice(-1000).forEach((value) => {
@@ -320,7 +327,7 @@ const persistTargetedVerifiedLikeTracks127 = (uid: string, verified: Set<string>
   targetedVerifiedRevisionByUid130.set(normalizedUid, currentRevision);
   if (!currentRevision) return;
   writeLikeLocal127(
-    scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_134, normalizedUid),
+    scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_130, normalizedUid),
     JSON.stringify({ revision: currentRevision, trackIds: bounded }),
   );
 };
@@ -331,7 +338,7 @@ const clearTargetedVerifiedLikeTracks127 = (uid: string) => {
   targetedVerifiedByUid127.delete(normalizedUid);
   targetedVerifiedRevisionByUid130.delete(normalizedUid);
   writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_127, normalizedUid), '');
-  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_134, normalizedUid), '');
+  writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_TARGETED_VERIFIED_130, normalizedUid), '');
 };
 // Accepted D1 queue != updated personal R2. Keep a UID-scoped override for
 // accepted tracks whose shared R2 CAS was not materialized; an older R2 read
@@ -568,10 +575,18 @@ const ensurePersonalLikeBaseline127 = async (user: User): Promise<void> => {
       // visible cache misses. The R2 revision marker prevents repeated snapshot
       // GETs until that shared object actually changes.
       if (!snapshot161.complete) {
-        // Partial R2 is never membership truth. It only expands the candidate
-        // set so My Likes can re-check those IDs through the same exact
-        // per-track membership route used by Feed/Profile hearts.
+        // Legacy partial R2 is a positive catalog hint, never a reason to scan
+        // visible Feed rows on every entry. Merge its known liked IDs into the
+        // device catalog and keep the last device state for the rest.
         seedExploreLikedTrackCandidates129(uid, likedIds);
+        const cache = getLikedStateCache(uid);
+        let changed = false;
+        for (const id of likedIds) {
+          if (cache.get(id) === true) continue;
+          cache.set(id, true);
+          changed = true;
+        }
+        if (changed) persistLikedStateCache(uid, cache);
         writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid), '1');
         return;
       }
@@ -1298,10 +1313,11 @@ export const getExploreLikedTrackIds = async (user: User, trackIds: string[]): P
     readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_BASELINE_127, user.uid)) === '1';
   const beforeOutbox127 = readLikeOutbox(user.uid);
   const beforeUnresolved127 = readSnapshotPending127(user.uid);
-  const missing = normalized.filter((trackId) => {
+  const localCatalogReady127 = baselineReady127 || hasLikedStateStorage127(user.uid);
+  const missing = localCatalogReady127 ? [] : normalized.filter((trackId) => {
     if (beforeOutbox127[trackId] ||
         Object.prototype.hasOwnProperty.call(beforeUnresolved127, trackId)) return false;
-    return !cache.has(trackId) || (!baselineReady127 && !verified127.has(trackId));
+    return !cache.has(trackId) || !verified127.has(trackId);
   });
   if (missing.length) {
     const query = new URLSearchParams({ trackIds: missing.join(',') });

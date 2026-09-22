@@ -1,9 +1,12 @@
-requested_at=2026-09-21T17:56:30Z
+requested_at=2026-09-22T11:03:00Z
 requested_by=user
-product_code_target=b0950d2106563ba6bb0a2ee6a947b26e1999a91f
-release_purpose=fix_app127_missing_personal_like_revision_route
+product_code_target=4833b2fd6ed2a3f0aa29ba54f52757407c5c2b41
+release_purpose=app134_zero_read_personal_like_catalog_and_direct_canonical_settlement
+audit_run=35719004360
+audit_job=106717228992
+audit_result=success
 no_d1_migration=true
 no_user_data_migration=true
 cutover_activation=false
-hosting_redeploy_separately=false
+hosting_redeploy_separately=true
 preview_only=true

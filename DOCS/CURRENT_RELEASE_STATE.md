@@ -1,5 +1,76 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DT. PREVIEW app140 — 양방향 changed-track 실시간 동기화 + 업데이트 직후 하트 스피너 수정 (2026-09-23 KST)
+
+**범위:** app138의 W1 queue 쓰기 / local catalog / R0 재진입 / Worker 구조는 그대로 보호. app139 실사용에서 남은 두 현상만 수정:
+1. PC→모바일, 모바일→PC 모두 다른 페이지/탭 이동 전에는 하트가 즉시 바뀌지 않음.
+2. 앱 업데이트 직후 기존 좋아요가 있는 곡도 하트 자리에서 spinner가 돌고, 페이지를 한 번 이동해야 정상 표시.
+
+### 실서버 진단으로 확정한 원인
+app139 실사용 직후 read-only RTDB 진단 Run `35751292862` / job `106825800549`:
+- live RTDB rules/source 일치 상태에서 userSync Explore like signal 계정 2개 확인.
+- 최신 `userSync/*/exploreLike` signal age가 **624초**.
+- `RTDB_LATEST_SIGNAL_WITHIN_5_MIN=FALSE`.
+- 진단 사용자 데이터 write **0**.
+
+즉 app139에서 추정했던 “모바일 React가 signal은 받았지만 repaint만 놓침”이 주원인이 아니었음.
+최근 PC/모바일 좋아요 변경 자체가 **RTDB changed-track live signal에 새로 publish되지 않고 있었음**.
+그래서 다른 탭/페이지 이동 때 `likes-revision + personal R2 catalog` 재검증이 실행된 뒤에야 양쪽 화면이 맞아졌음.
+양방향에서 동일하게 재현된 이유도 이 live publish 경로 때문.
+
+### app140 수정 — 정상 구조는 유지
+- `src/services/exploreLikeService.ts`
+  - like live signal publisher를 기존 `runTransaction` transport에서 **RTDB `set()` changed-track signal**로 단순화.
+  - Music Note/recent-song domain sync에서 이미 사용하는 RTDB set transport와 같은 방향.
+  - payload는 현재 batch의 changed-track 최대 50개만 포함.
+  - `version / previousVersion` 유지.
+  - concurrent/stale signal gap은 수신 측 기존 `previousVersion` mismatch + personal R2 catalog repair로 처리.
+  - live signal 자체에서 D1 / Firestore read/write 없음.
+  - W1 Cloudflare batch request / 30초 묶음 / outbox 구조 변경 없음.
+- `src/pages/ExplorePage.tsx`
+  - visible track이 mount되면 이미 device local catalog에서 알고 있는 membership을 **동기적으로 먼저 paint**.
+  - 그 뒤 기존 tiny revision/baseline check는 background에서 그대로 실행.
+  - 정상 cache가 있는 업데이트/재진입에서 하트 spinner를 기다릴 이유 제거.
+  - 정말 새 기기/catalog 부재 ID만 기존 loader 유지.
+
+### 검증
+- 임시 read-only live-signal probe는 원인 확인 후 삭제 완료.
+- 첫 app140 audit `35751997323`은 제품 코드가 아니라 verifier가 주석의 "D1" 문자열까지 금지해 FAIL → verifier만 수정.
+- app140 audit r2 Run `35752228649` / job `106829023461` SUCCESS:
+  - TypeScript PASS
+  - Build PASS
+  - Static verification PASS
+  - Like candidate regression PASS
+  - app140 live-signal / cached-paint regression PASS
+  - TEST/PRODUCTION Worker dry-run PASS
+  - shared D1 preflight SELECT-only PASS
+  - refs unchanged PASS
+- version 140 exact audit Run `35752471675` / job `106829852900` SUCCESS.
+- Firebase PREVIEW Hosting Run `35752721030` / job `106830699375` SUCCESS.
+- remote `preview.soridraw.com/app-version.json = 140`.
+- PREVIEW exact build PASS.
+- TEST / PRODUCTION unchanged PASS.
+
+### 배포 영향
+- Worker 재배포 없음. PREVIEW Worker 계속 `45afab7c-1da2-45b6-b34d-cb3943cec559`.
+- Functions 변경 없음.
+- Firebase Rules 변경 없음.
+- D1 schema/migration 변경 없음.
+- 공유 사용자 데이터 migration/backfill/delete 없음.
+- UI/CSS/레이아웃 변경 없음.
+- W1 final architecture 문서 `DOCS/EXPLORE_LIKE_FINAL_ARCHITECTURE.md` 기준 유지.
+
+### app140 실기기 합격선
+1. PC/모바일 모두 app140 확인, cache 삭제 금지.
+2. 업데이트 직후 Explore 첫 화면에서 정상 local catalog 곡의 하트가 spinner 없이 즉시 보여야 함.
+3. PC에서 1~3곡 변경 → 30초 batch 완료 후 모바일은 **탭/페이지 이동/새로고침 없이** 변경곡 하트 자동 반영.
+4. 모바일→PC도 동일.
+5. 90초 무동작 후 D1 like R/W 추가 증가 0.
+6. 페이지/탭 이동만으로 추가 like write 0.
+7. 재진입 membership D1 R0 유지.
+8. 실패 시 W1/Worker/catalog 구조를 바꾸지 말고 RTDB changed-track publish/receive 한 구간만 재조사.
+
+
 ## 0DS. PREVIEW app139 — 모바일 changed-track 실시간 화면 갱신 보강 (2026-09-23 KST)
 
 **범위:** app138의 정상 W1 쓰기 / local catalog / R0 재진입 / Worker 구조는 그대로 보호하고, 모바일에서 changed-track 데이터가 이미 도착했는데 현재 추천 화면 하트가 탭 전환 전까지 다시 그려지지 않는 UI 전달 구간만 수정.

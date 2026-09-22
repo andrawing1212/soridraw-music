@@ -1,5 +1,33 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app140 양방향 실시간 changed-track + 첫 화면 spinner 실기기 확인
+
+현재 PREVIEW:
+- app140 Hosting Run `35752721030` / job `106830699375` SUCCESS.
+- remote app version 140 / exact build PASS.
+- Worker는 app138부터 동일: `45afab7c-1da2-45b6-b34d-cb3943cec559`.
+- exact audit `35752471675` SUCCESS.
+- TEST/PRODUCTION unchanged.
+- user data / Functions / Rules / D1 schema 변경 없음.
+
+확정 진단:
+- app139 직후 read-only RTDB probe에서 최신 Explore like signal이 약 624초 전 상태였음.
+- 따라서 tab/page 이동 후 정상화는 live RTDB 수신 성공이 아니라 personal R2 revision/catalog reconciliation 결과.
+- app140은 live changed-track publish를 RTDB set transport로 복구하고, update 첫 화면은 local catalog를 synchronous paint.
+
+실기기:
+1. cache 삭제하지 말고 PC/모바일 app140.
+2. 업데이트 직후 Explore 첫 진입 하트 spinner 여부 확인.
+3. 모바일 추천 탭 그대로 둔 상태에서 PC 1~3곡 변경 → 35초.
+4. 모바일이 이동/새로고침 없이 자동 반영되는지.
+5. 반대로 모바일 1~3곡 → PC 자동 반영.
+6. 90초 무동작 추가 like R/W 0.
+7. 페이지/탭 왕복만으로 write 0 / membership D1 R0.
+
+FAIL이면 W1 queue, Worker, catalog 전체를 변경하지 않는다.
+RTDB publish/receive 또는 local synchronous paint 중 실패한 구간만 수정한다.
+
+
 ## 현재 최우선 — app139 모바일 changed-track 즉시 화면 반영 실기기 확인
 
 현재 PREVIEW:

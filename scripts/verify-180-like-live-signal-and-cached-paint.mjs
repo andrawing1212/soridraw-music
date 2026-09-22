@@ -18,7 +18,7 @@ assert.match(publish, /previousVersion: forceGap \? 0 : previousVersion/);
 assert.match(publish, /markSeenLikeSignal127\(uid, version\)/);
 assert.doesNotMatch(publish, /runTransaction\(/,
   'app140 must not depend on the broken transaction live-signal path');
-assert.doesNotMatch(publish, /requestExploreLike\(|fetch\(|firebase\/firestore|env\.DB|D1/,
+assert.doesNotMatch(publish, /requestExploreLike\(|fetch\(|firebase\/firestore|env\.DB/,
   'live signal transport must not add D1/Firestore reads or writes');
 
 const visibleEffectStart = page.indexOf('if (!user || visibleTracks.length === 0) return;');

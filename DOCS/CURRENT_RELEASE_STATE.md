@@ -1,5 +1,35 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EG. PREVIEW app147 — production-cue ownership 정합화 배포 완료 / 실사용 확인 대기 (2026-09-23 KST)
+
+**코드/감사**
+- Codex 구현 commit: `718c9b5b00d90ab0a1509c19df9038621fdce182`.
+- 최종 production-cue 판정은 모든 section 강제가 아니라 실제 audible production event 소유 section만 required로 본다.
+- ordinary sung section에 local production event가 없으면 standalone production cue blank를 정상 허용한다.
+- sung / vocal-ad-lib section의 mandatory performance cue 계약은 그대로 유지한다.
+- canonical sectionPerformancePlan 또는 sibling card에 유효 production cue가 있으면 재사용하고, 실제 required event가 끝까지 없는 경우에만 `repairV1FinalProductionCues` fallback을 남겼다.
+- prompt-size source audit은 품질 규칙을 삭제하지 않았으며 source-character 기준 측정값은 before/after 동일했다. 실제 provider 입력 token 감소는 아직 주장하지 않는다.
+- Release System Audit Run `35783411655` / job `106934224450` SUCCESS.
+- TypeScript PASS / Build PASS / static release verification PASS / like regression PASS / TEST+PRODUCTION Worker dry-run PASS / shared D1 read-only preflight PASS.
+- isolated synthetic D1 billing 단계는 이번 audit에서 SKIPPED였으며, 이번 app147은 D1/Worker 변경이 없어 배포 합격 판단에 필요한 경로는 아님.
+
+**PREVIEW 배포**
+- Firebase PREVIEW Hosting Run `35783654947` / job `106935052147` SUCCESS.
+- locked release source: `c277be333fd1ed5e9e7efa11d66271ef5153fc0a`.
+- `PREVIEW_APP_VERSION=147` PASS.
+- `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Functions / Cloudflare Worker / Rules / Firestore / D1 / 사용자 데이터 변경 없음.
+
+**실사용 확인**
+1. app147에서 일반 V1 곡 1~3개 생성.
+2. 관리자 Gemini 호출 기록에서 ordinary sung section의 optional production cue 때문에 `섹션 지시문 보완(repairV1FinalProductionCues)`이 추가 호출되지 않는지 확인.
+3. 실제 Instrumental / Interlude / Break / Stop 또는 사용자가 지정한 production event가 누락되는 경우에는 필요한 보완 경로가 여전히 작동하는지 확인.
+4. sung section의 performance cue가 빠지거나 bare section tag가 생기지 않는지 확인.
+5. 최초 생성 입력 token을 계속 기록해 33.8k~34.4k 상태를 비교한다. app147은 prompt 자체를 줄이지 않았으므로 입력 token이 비슷해도 이상이 아니다.
+6. 직전 app146 화면의 3.5-lite 섹션 보완 성공시간은 **9.5초가 아니라 0.951초**가 정확한 값이다.
+
+
 ## 0EF. app147 source-only — production-cue ownership 정합화 + prompt-size source audit 완료 (2026-09-23 KST)
 
 **구현**

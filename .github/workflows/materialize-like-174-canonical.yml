@@ -55,6 +55,7 @@ jobs:
           node --check cloudflare/explore-worker/patches/084-like-d1-atomic-cutover-fence.mjs
           node --check cloudflare/explore-worker/patches/085-legacy-like-direct-normalize.mjs
           node --check cloudflare/explore-worker/patches/086-legacy-like-postwrite-ack.mjs
+          node --check cloudflare/explore-worker/patches/087-d1-trigger-receipt.mjs
           node --check cloudflare/explore-worker/runtime/like-r2-revision-173.mjs
 
           tmp="$RUNNER_TEMP/soridraw-like-174-canonical"
@@ -79,10 +80,13 @@ jobs:
           SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/085-legacy-like-direct-normalize.mjs
           SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/086-legacy-like-postwrite-ack.mjs
           SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/086-legacy-like-postwrite-ack.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/087-d1-trigger-receipt.mjs
+          SORIDRAW_REMOTE_WORKER_DIR="$tmp" node cloudflare/explore-worker/patches/087-d1-trigger-receipt.mjs
           node --check "$tmp/worker.js"
           SORIDRAW_GENERATED_WORKER="$tmp/worker.js" node scripts/verify-174-like-d1-atomic-fence-route.mjs
           grep -Fq 'SORIDRAW_LEGACY_LIKE_DIRECT_NORMALIZE_185_20260922' "$tmp/worker.js"
           grep -Fq 'SORIDRAW_LEGACY_LIKE_POSTWRITE_ACK_186_20260922' "$tmp/worker.js"
+          grep -Fq 'SORIDRAW_D1_TRIGGER_RECEIPT_187_20260922' "$tmp/worker.js"
           grep -Fq "queue: 'direct-legacy-185'" "$tmp/worker.js"
           ! grep -A220 'async function handleLikeBatch034' "$tmp/worker.js" | grep -Fq 'enqueueExploreLikeBatch035(env, authContext.uid'
           ! grep -A220 'async function handleLikeBatch034' "$tmp/worker.js" | grep -Fq "throwApi('LIKE_PUBLICATION_RETRY_REQUIRED'"
@@ -106,7 +110,7 @@ jobs:
           node - <<'NODE'
           const fs=require('node:fs');
           const manifest=JSON.parse(fs.readFileSync('cloudflare/explore-worker/release-patches.json','utf8'));
-          for (const p of ['083-like-r2-revision.mjs','084-like-d1-atomic-cutover-fence.mjs','085-legacy-like-direct-normalize.mjs','086-legacy-like-postwrite-ack.mjs']) {
+          for (const p of ['083-like-r2-revision.mjs','084-like-d1-atomic-cutover-fence.mjs','085-legacy-like-direct-normalize.mjs','086-legacy-like-postwrite-ack.mjs','087-d1-trigger-receipt.mjs']) {
             if (manifest.patches.includes(p)) throw new Error('083/084 must remain dormant in historical replay manifest: '+p);
           }
           NODE

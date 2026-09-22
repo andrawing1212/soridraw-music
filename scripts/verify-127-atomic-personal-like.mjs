@@ -36,47 +36,14 @@ assert.match(service, /EXPLORE_LIKE_TARGETED_VERIFIED_130/);
 assert.match(service, /readCurrentPersonalLikeRevision130/);
 assert.match(service, /targetedVerifiedRevisionByUid130/);
 
-assert.match(service, /const partial161 = readLikeLocal127\(scopedLikeKey127\(EXPLORE_LIKE_PARTIAL_BASELINE_161, normalizedUid\)\) === '1'/,
-  'partial account must not reuse R2-revision-keyed D1 verification from another app session');
-assert.match(service, /if \(currentRevision && !partial161\) \{/);
-assert.match(service, /\} else if \(readLikeLocal127\(scopedLikeKey127\(EXPLORE_LIKE_PARTIAL_BASELINE_161, uid\)\) === '1'\) \{/);
-assert.match(service, /clearTargetedVerifiedLikeTracks127\(uid\);/,
-  'deferred D1 materialization requires scoped recheck of partial verified IDs');
-
-// Executable regression for the precise PC/mobile mismatch: the shared R2 HEAD
-// can remain r1 after a 069 deferred D1 relation applies. A mobile restart must
-// NOT trust an old persisted false membership merely because its r1 matches.
-const verifiedReaderStart133 = service.indexOf('const readTargetedVerifiedLikeTracks127 =');
-const verifiedReaderEnd133 = service.indexOf('const persistTargetedVerifiedLikeTracks127 =', verifiedReaderStart133);
-assert.ok(verifiedReaderStart133 > 0 && verifiedReaderEnd133 > verifiedReaderStart133);
-const verifiedReaderJs133 = ts.transpileModule(
-  service.slice(verifiedReaderStart133, verifiedReaderEnd133) +
-  '\nreturn readTargetedVerifiedLikeTracks127;',
-  { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
-).outputText;
-const makeVerifiedReader133 = (isPartial) => {
-  const uid = 'device-account';
-  const revision = 'unchanged-r2-head';
-  const saved = JSON.stringify({ revision, trackIds: ['already-verified-before-canonical-drain'] });
-  const store = new Map([
-    ['partial:' + uid, isPartial ? '1' : ''],
-    ['verified:' + uid, saved],
-  ]);
-  const memory = new Map();
-  const revisionMemory = new Map();
-  const make = new Function(
-    'targetedVerifiedByUid127', 'targetedVerifiedRevisionByUid130',
-    'readCurrentPersonalLikeRevision130', 'readLikeLocal127', 'scopedLikeKey127',
-    'EXPLORE_LIKE_PARTIAL_BASELINE_161', 'EXPLORE_LIKE_TARGETED_VERIFIED_130',
-    verifiedReaderJs133,
-  );
-  return make(memory, revisionMemory, () => revision, (key) => store.get(key) || '',
-    (prefix, account) => prefix + ':' + account, 'partial', 'verified')(uid);
-};
-assert.equal(makeVerifiedReader133(true).size, 0,
-  'partial R2 must exact-recheck visible tracks after restart, not restore stale false membership');
-assert.equal(makeVerifiedReader133(false).size, 1,
-  'fully materialized R2 may retain revision-keyed membership without extra D1 reads');
+assert.match(service, /const localCatalogReady127 = baselineReady127 \|\| hasLikedStateStorage127\(user\.uid\)/,
+  'persisted personal catalog must be the zero-read authority on normal entry');
+assert.match(service, /const missing = localCatalogReady127 \? \[\] : normalized\.filter/,
+  'cached Explore entry must not issue targeted D1 membership reads');
+assert.match(service, /Legacy partial R2 is a positive catalog hint/,
+  'partial legacy R2 may merge positive catalog hints without forcing page-entry D1 scans');
+assert.doesNotMatch(service, /currentRevision && !partial161/,
+  'app update/partial marker must not discard a revision-bound local catalog');
 
 assert.match(service, /String\(raw\?\.revision \|\| ''\) === currentRevision/);
 assert.match(service, /JSON\.stringify\(\{ revision: currentRevision, trackIds: bounded \}\)/);
@@ -122,7 +89,8 @@ const getter = service.slice(service.indexOf('export const getExploreLikedTrackI
 assert.match(getter, /await ensurePersonalLikeBaseline127\(user\)/);
 assert.match(getter, /const verified127 = readTargetedVerifiedLikeTracks127\(user\.uid\)/);
 assert.match(getter, /const baselineReady127 = baselineCompleted127\.has\(user\.uid\)/);
-assert.match(getter, /!cache\.has\(trackId\) \|\| \(!baselineReady127 && !verified127\.has\(trackId\)\)/);
+assert.match(getter, /const localCatalogReady127 = baselineReady127 \|\| hasLikedStateStorage127\(user\.uid\)/);
+assert.match(getter, /const missing = localCatalogReady127 \? \[\] : normalized\.filter/);
 assert.match(getter, /readLikeOutbox\(user\.uid\)/);
 assert.match(getter, /const currentOutbox127 = readLikeOutbox\(user\.uid\)/);
 assert.match(getter, /const currentUnresolved127 = readSnapshotPending127\(user\.uid\)/);
@@ -385,3 +353,6 @@ console.log('129_HEART_COUNT_ONE_ATOM=PASS');
 console.log('127_D1_MUTATION_ROUTE_UNCHANGED=PASS');
 console.log('127_WORKER071_UNCHANGED=PASS');
 console.log('127_NO_DEPLOY_OR_USER_DATA_MIGRATION=PASS');
+
+assert.doesNotMatch(page, /likeHydrationKeyRef\.current = ''/,
+  'cached focus must not reset like hydration and trigger another D1 membership read');

@@ -80,23 +80,74 @@ function geminiErrorText(value?: string): string {
   const clean = String(value || '').trim();
   if (!clean) return '';
 
-  return clean
-    .replace(
-      /This model is currently experiencing high demand\. Spikes in demand are usually temporary\. Please try again later\.?/gi,
-      '현재 해당 Gemini 모델에 요청이 몰려 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.',
-    )
-    .replace(
-      /The operation was aborted due to timeout\.?/gi,
-      '응답 시간이 초과되어 요청이 중단되었습니다.',
-    )
-    .replace(
-      /Please try again later\.?/gi,
-      '잠시 후 다시 시도해 주세요.',
-    )
-    .replace(
-      /Resource has been exhausted\.?/gi,
-      '현재 사용 가능한 요청 한도를 초과했습니다.',
-    );
+  const exactReasons: Record<string, string> = {
+    model_unavailable_or_overloaded: '모델을 일시적으로 사용할 수 없거나 요청이 몰린 상태',
+    quota_or_rate_limit: '요청 한도 또는 할당량 초과',
+    model_not_found_or_rollout: '모델을 찾을 수 없거나 단계적 배포 중',
+    attempt_timeout: '응답 시간 초과',
+  };
+  if (exactReasons[clean]) return exactReasons[clean];
+
+  let translated = clean;
+
+  translated = translated.replace(
+    /Rate limit exceeded for model\s+([^\s(]+)\s*\(limit:\s*(\d+)\s+requests per day on Free Tier\)\.\s*Please retry in\s*(\d+)s\s*or upgrade your tier at\s*https?:\/\/\S+\.?/gi,
+    (_match, model, limit, retrySeconds) =>
+      `${model}의 무료 등급 일일 요청 한도(${limit}회)를 초과했습니다. ${retrySeconds}초 후 다시 시도하거나 API 요금제와 사용 한도를 확인해 주세요.`,
+  );
+
+  translated = translated.replace(
+    /Rate limit exceeded for model\s+([^\s.]+)\.?/gi,
+    (_match, model) => `${model}의 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.`,
+  );
+
+  translated = translated.replace(
+    /(gemini-[\w.-]+)\s+is currently experiencing high demand,?\s*spikes in demand are usually temporary\.?/gi,
+    (_match, model) =>
+      `${model}에 현재 요청이 몰려 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.`,
+  );
+
+  translated = translated.replace(
+    /This model is currently experiencing high demand\.\s*Spikes in demand are usually temporary\.\s*Please try again later\.?/gi,
+    '현재 해당 Gemini 모델에 요청이 몰려 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.',
+  );
+
+  translated = translated.replace(
+    /The operation was aborted due to timeout\.?/gi,
+    '응답 시간이 초과되어 요청이 중단되었습니다.',
+  );
+
+  translated = translated.replace(
+    /Resource has been exhausted\.?/gi,
+    '현재 사용 가능한 요청 한도 또는 자원이 소진되었습니다.',
+  );
+
+  translated = translated.replace(
+    /Too many requests\.?/gi,
+    '요청이 너무 많아 일시적으로 처리할 수 없습니다.',
+  );
+
+  translated = translated.replace(
+    /Please retry in\s*(\d+)s\.?/gi,
+    (_match, retrySeconds) => `${retrySeconds}초 후 다시 시도해 주세요.`,
+  );
+
+  translated = translated.replace(
+    /Please try again later\.?/gi,
+    '잠시 후 다시 시도해 주세요.',
+  );
+
+  translated = translated.replace(
+    /upgrade your tier/gi,
+    'API 요금제를 상향해 주세요',
+  );
+
+  translated = translated
+    .replace(/model_unavailable_or_overloaded/gi, '모델을 일시적으로 사용할 수 없거나 요청이 몰린 상태')
+    .replace(/quota_or_rate_limit/gi, '요청 한도 또는 할당량 초과')
+    .replace(/model_not_found_or_rollout/gi, '모델을 찾을 수 없거나 단계적 배포 중');
+
+  return translated;
 }
 
 function modelSkipReasonText(skip: GeminiAuditModelSkip): string {

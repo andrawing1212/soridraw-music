@@ -1167,7 +1167,13 @@ flushPendingLikes = async (user: User): Promise<void> => {
       // Public aggregate publication may still be delayed, but another device
       // must receive the accepted account state now instead of waiting for a
       // "settled" flag that the current Worker never emits.
-      const canonicalLikeSettled127 = canBroadcastExploreLikeSnapshot127(payload?.data?.personalLikeSnapshot);
+      // App136: canonical D1 settlement is the durable user truth. R2 is a derived
+      // catalog/cache publication and may be repaired later; a post-write R2 delay
+      // must not keep an already committed click in snapshotPending or suppress the
+      // exact changed-track RTDB notification to the user's other devices.
+      const canonicalLikeSettled127 =
+        payload?.data?.canonicalD1 === 'settled' ||
+        canBroadcastExploreLikeSnapshot127(payload?.data?.personalLikeSnapshot);
       const resultByTrack = new Map(results.map((result) => [result.trackId, result]));
       const latest = readLikeOutbox(uid);
       const cache = getLikedStateCache(uid);

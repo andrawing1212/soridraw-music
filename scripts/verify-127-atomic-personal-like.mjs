@@ -120,7 +120,13 @@ assert.match(listener, /unresolved\[item\.trackId\] = item\.liked/,
   'accepted device state must outrank a partial legacy R2/D1 snapshot');
 assert.match(listener, /persistLikeDisplayLocks\(uid, displayLocks\)/,
   'accepted remote count must survive an Explore remount or early RTDB event');
-assert.match(listener, /dispatchLikeSync\(\{ \.\.\.item, uid, source: 'remote' \}\)/);
+assert.match(listener, /acceptedForUi141\.push\(\{ \.\.\.item, uid, source: 'remote' \}\)/);
+assert.match(listener, /acceptedForUi141\.forEach\(dispatchLikeSync\)/);
+assert.ok(
+  listener.indexOf('writeSnapshotPending127(uid, unresolved)') <
+    listener.indexOf('acceptedForUi141.forEach(dispatchLikeSync)'),
+  'remote changed-track UI must observe durable membership before notification',
+);
 assert.doesNotMatch(listener, /if \(cache\.get\(item\.trackId\) === item\.liked\) continue/,
   'an unchanged heart must not suppress a changed accepted public count');
 assert.doesNotMatch(listener, /lastSeen === 0 && baselineAlreadyVerified/,

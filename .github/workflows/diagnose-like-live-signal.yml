@@ -57,6 +57,8 @@ jobs:
                     'count':len(data.get('results') or []) if isinstance(data.get('results'),(list,dict)) else 0,
                   })
           rows.sort(key=lambda x:x['version'], reverse=True)
+          for index, signal in enumerate(rows):
+              print('RTDB_SIGNAL_INDEX='+str(index)+' AGE_SECONDS='+str(max(0,(now-signal['version'])//1000))+' VERSION='+str(signal['version'])+' PREVIOUS='+str(signal['previousVersion'])+' RESULTS='+str(signal['count']))
           print('RTDB_PROBE_AT_EPOCH_MS='+str(now))
           print('RTDB_LIKE_SIGNAL_ACCOUNT_COUNT='+str(len(rows)))
           if rows:

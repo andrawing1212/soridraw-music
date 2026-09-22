@@ -129,9 +129,19 @@ assert.match(listener, /onValue\(/);
 assert.match(listener, /onAuthStateChanged\(auth/);
 assert.doesNotMatch(listener, /\.prepare\(|firebase\/firestore|setInterval\(/);
 assert.match(listener, /signal\.previousVersion !== lastSeen/);
-assert.match(listener, /if \(gap \|\| readRepairTarget127\(uid\) > 0\) \{/);
-assert.ok(listener.indexOf('if (gap || readRepairTarget127(uid) > 0) {') < listener.indexOf('const pending = readLikeOutbox(uid)'), 'gap must revalidate before applying any potentially stale replay');
-assert.doesNotMatch(listener.slice(listener.indexOf('if (gap ||'), listener.indexOf('const pending =')), /markSeenLikeSignal127\(/, 'failed repair must not mark the signal seen');
+assert.match(listener, /const needsRepair = gap \|\| readRepairTarget127\(uid\) > 0;/);
+assert.ok(listener.indexOf('const needsRepair = gap || readRepairTarget127(uid) > 0;') < listener.indexOf('const pending = readLikeOutbox(uid)'),
+  'gap must be recorded before applying retained exact rows');
+assert.doesNotMatch(
+  listener.slice(listener.indexOf('const needsRepair = gap ||'), listener.indexOf('const pending = readLikeOutbox(uid)')),
+  /\breturn\s*;/,
+  'current retained exact rows must not be discarded merely because an older interval was missed',
+);
+assert.ok(
+  listener.indexOf('markSeenLikeSignal127(uid, signal.version)') <
+    listener.indexOf('void ensurePersonalLikeBaseline127(current)', listener.indexOf('markSeenLikeSignal127(uid, signal.version)')),
+  'exact changed-track rows must be applied before the R2 gap repair',
+);
 assert.match(listener, /invalidate|EXPLORE_LIKE_ACCOUNT_INVALIDATION_EVENT/);
 
 const flush = service.slice(service.indexOf('flushPendingLikes = async'), service.indexOf('// App 120 deliberately ignores historical RTDB'));

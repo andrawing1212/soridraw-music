@@ -1,5 +1,32 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app139 모바일 changed-track 즉시 화면 반영 실기기 확인
+
+현재 PREVIEW:
+- app139 Hosting Run `35748877001` / job `106817450432` SUCCESS.
+- remote app version 139 / exact build PASS.
+- Worker는 app138과 동일: `45afab7c-1da2-45b6-b34d-cb3943cec559` (재배포 없음).
+- exact audit `35748628236` SUCCESS.
+- TEST/PRODUCTION unchanged.
+- 사용자 데이터 / Functions / Rules / D1 schema 변경 없음.
+
+이번 수정 범위는 UI 전달 race 하나뿐:
+- server write path 변경 금지.
+- local catalog 구조 변경 금지.
+- revision / gap / bootstrap 구조 변경 금지.
+- CSS/UI layout 변경 금지.
+- remote changed-track을 replayable in-memory subscriber로 현재 ExplorePage에 즉시 전달.
+
+실기기 확인:
+1. PC/모바일 app139 확인. 캐시 삭제 금지.
+2. 모바일을 추천 탭에 그대로 둔다.
+3. PC에서 새 좋아요/해제 1~3곡.
+4. 30초 batch 처리 후 모바일에서 **탭 이동/새로고침 없이** 하트와 숫자가 자동 반영되는지 확인.
+5. 비용 숫자는 app138과 동일해야 하며 UI replay 때문에 D1/Firestore read/write가 추가되면 FAIL.
+6. PASS 시 구조 변경 없이 다음 전체 양방향 검증으로 진행.
+7. FAIL 시 W1/Worker/catalog를 건드리지 말고 service→ExplorePage UI subscriber 전달만 다시 조사.
+
+
 ## 현재 최우선 — app138 FINAL LIKE ARCHITECTURE 실기기 검증
 
 구조 기준: `DOCS/EXPLORE_LIKE_FINAL_ARCHITECTURE.md` — 변경 금지.

@@ -234,7 +234,7 @@ assert.match(publish, /if \(pending\.size > EXPLORE_LIKE_SIGNAL_MAX_127\)/);
 assert.ok(publish.indexOf('const task = signalPublishInFlight127.get(uid)') < publish.indexOf('saveSignalRetry127(uid, rows)'), 'in-flight notification must serialize before durable queue mutation');
 assert.match(publish, /EXPLORE_LIKE_SIGNAL_MAX_127/);
 assert.match(publish, /saveSignalRetry127\(uid, rows\)/);
-assert.doesNotMatch(publish, /runTransaction\(|firebase\/firestore|env\.DB|D1/);
+assert.doesNotMatch(publish, /runTransaction\(|firebase\/firestore|env\.DB|requestExploreLike\(|fetch\(/);
 
 assert.ok(rules.rules.userSync.$uid.exploreLike, 'existing UID-scoped like signal rules required');
 assert.match(page, /readExploreTrackLikeMembership127\(user\.uid, track\.id\)/);

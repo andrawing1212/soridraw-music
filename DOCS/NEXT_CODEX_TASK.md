@@ -1,5 +1,18 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 완료 기준점 — PREVIEW app141 좋아요 양방향 동기화 실사용 PASS (2026-09-23)
+
+사용자 실기기 확인 완료:
+- 업데이트 후 Explore 첫 진입 기존 좋아요 하트 즉시 표시 PASS.
+- PC→모바일 좋아요/해제 자동 반영 PASS.
+- 모바일→PC 좋아요/해제 자동 반영 PASS.
+- 탭/페이지 이동·새로고침 없이 반영 PASS.
+- 이 경로는 정상 기준점으로 보호. 추가 최적화 때문에 다시 수정하지 않는다.
+- W1 30초 묶음쓰기 / R0 재진입 / local catalog / 현재 Worker / UI/CSS 보호.
+- 별도 90초 무동작 비용 재측정은 이번 사용자 메시지로 새로 검증된 항목이 아니므로 필요 시 다음 비용 감사에서만 확인.
+- TEST/PRODUCTION 승격은 사용자 지시 전 진행 금지.
+
+
 ## 현재 최우선 — PREVIEW app141 PC↔모바일 실기기 검증 (2026-09-23)
 
 - audited code source `4568795945b9e98539d72feb1300bbc1e3f0b35b`, Firebase Hosting source `3032247b531b213999c235baca5ce413fda65187`.

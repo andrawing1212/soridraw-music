@@ -1,9 +1,9 @@
-requested_at=2026-09-22T11:03:00Z
+requested_at=2026-09-22T11:07:00Z
 requested_by=user
-product_code_target=4833b2fd6ed2a3f0aa29ba54f52757407c5c2b41
+product_code_target=62e4478d3b271468e6b9b0e3ebf49f93bbdcedb3
 release_purpose=app134_zero_read_personal_like_catalog_and_direct_canonical_settlement
-audit_run=35719004360
-audit_job=106717228992
+audit_run=35719421636
+audit_job=106718547782
 audit_result=success
 no_d1_migration=true
 no_user_data_migration=true

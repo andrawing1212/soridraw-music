@@ -1,5 +1,49 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DQ. PREVIEW app137 배포 완료 — 좋아요 자동 재시도 폭증 + D1 trigger receipt 오판 수정 (2026-09-22 KST)
+
+**현재 PREVIEW live app:** 137  
+**PREVIEW Hosting Run:** `35734551788` / job `106768328033` SUCCESS. remote `app-version.json=137`, exact build PASS, TEST/PRODUCTION unchanged PASS.  
+**PREVIEW Worker Run:** `35734337978` / job `106767585369` SUCCESS. 현재 Worker version `91f2b33b-7f62-4776-b363-33e729912e8f`.  
+**최종 Release System Audit:** `35732623427` / job `106761752048` SUCCESS. TypeScript / Build / like regression / TEST·PRODUCTION Worker dry-run / shared D1 read-only preflight PASS.
+
+app136 실기기 FAIL 증거:
+- 좋아요 해제 뒤 CACHE LIVE에서 D1 누적이 시간 경과만으로 `R12/W12 → R18/W18` 식으로 증가.
+- 다른 페이지 이동/Explore 재진입 뒤에도 추가 증가.
+- 즉 사용자가 추가 동작을 하지 않았는데 실패 outbox가 idle timer / navigation 경로에서 다시 전송되어 서버 비용이 계속 증가.
+- 모바일의 stale 개인 좋아요는 페이지 재진입 시 D1 membership read 0으로 복구되는 것은 확인됐지만, mutation retry 비용이 비정상이라 app136 전체 FAIL.
+
+확정 원인:
+- 실제 Cloudflare D1 isolated remote 측정에서 fenced direct like batch의 첫 relation statement가 정상 1건 변경에도 **AFTER trigger side effect를 포함해 `meta.changes=2`**를 반환함.
+- app136 Worker의 174 receipt 검증은 `changes > 1`을 실패로 판단하여, canonical D1 변경이 이미 반영된 뒤에도 요청을 실패로 오인.
+- 클라이언트 outbox는 실패 상태를 남기고 30초 idle timer / 페이지 진입·이동에서 자동 재시도하여 같은 동작의 D1 read/write 비용을 반복 발생시킴.
+- isolated D1에서 기존 legacy physical shape 자체도 like W8 / unlike W4 lower bound가 확인되어 현재 legacy likes 물리구조는 W1~W2 최종 목표를 아직 만족하지 않음. 기능 정상화 후 별도 구조 최적화 필요.
+
+app137 수정:
+- Worker 174 direct receipt에서 Cloudflare의 trigger-inclusive `meta.changes=2`를 정상 receipt로 허용. relation 변경 여부는 SQL `changes()`가 후속 track_stats gate로 계속 사용.
+- failed/ambiguous outbox(`retryCount>0`)는 **idle timer, rerender, page navigation, Explore 재진입으로 자동 재전송하지 않음**.
+- page exit 자체는 server read/write 0: 기존 30초 timer는 실제 새 클릭에만 유지.
+- 새 클릭은 retryCount를 0으로 재설정해 정상 30초 묶음 저장은 그대로 유지.
+- 신규 회귀 `scripts/verify-177-like-idle-retry-guard.mjs` 및 retry-safe batching 회귀 추가.
+- 실제 isolated D1 측정으로 trigger-inclusive sequence `2/0/2/0` 검증.
+
+배포/안전:
+- PREVIEW Worker preflight: pending035=0 / pending069=0, Feed/Profile smoke PASS, warm revision R0/W0, fixed cron disabled.
+- 사용자 데이터 migration/backfill/delete 없음.
+- Functions / Rules 변경 없음.
+- TEST / PRODUCTION 앱·Worker 비변경 PASS.
+- 현재 사용자 실기기 app137 비용/동기화 검증 전이므로 TEST 승격 금지.
+
+실기기 다음 합격선:
+1. app137 확인 후 CACHE LIVE 진단 초기화.
+2. PC에서 새 좋아요 1~3곡 변경, 35초 대기.
+3. HTTP 500 없어야 하고, 이후 **아무 동작 없이 1~2분 기다려도 D1 R/W가 추가 증가하지 않아야 함**.
+4. 다른 페이지 → Explore 복귀해도 D1 R/W가 추가 증가하지 않아야 함.
+5. 모바일이 새로고침/페이지 이동 없이 동일 하트/숫자로 수렴해야 함.
+6. 반대 방향 모바일→PC도 동일.
+7. 기능 정상화 후 실제 mutation 비용은 현재 legacy physical lower bound 때문에 W1~W2 달성 여부를 별도 구조 작업으로 판단. 기능을 깨서 숫자만 낮추는 변경 금지.
+
+
 ## 0DP. PREVIEW app136 — 좋아요 D1 확정 후 HTTP 500 재시도/모바일 미동기화 복구 배포 완료 (2026-09-22 KST)
 
 **현재 PREVIEW live app:** 136  

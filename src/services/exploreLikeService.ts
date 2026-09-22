@@ -1,6 +1,6 @@
 import { EXPLORE_API_BASE } from '../config/exploreEnvironment';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { onValue, ref as databaseRef, runTransaction, type Unsubscribe } from 'firebase/database';
+import { onValue, ref as databaseRef, set as setRealtimeValue, type Unsubscribe } from 'firebase/database';
 import { auth, getFirebaseAppCheckToken, realtimeDb } from '../firebase';
 import {
   patchExploreLikedTrackMembership,
@@ -802,37 +802,35 @@ const publishConfirmedLikeSignal127 = async (uid: string, fresh: ExploreLikeAcce
   for (const row of [...fresh, ...readSignalRetry127(uid)]) {
     if (row.trackId && !pending.has(row.trackId)) pending.set(row.trackId, row);
   }
-  // If >50 distinct changes accrued during an offline notification failure,
-  // tell recipients they missed an interval. They revalidate their personal
-  // R2 snapshot once instead of treating the retained 50 as a complete delta.
   if (pending.size > EXPLORE_LIKE_SIGNAL_MAX_127) {
     writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_GAP_127, uid), '1');
   }
   const forceGap = readLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_GAP_127, uid)) === '1';
   const rows = [...pending.values()].slice(0, EXPLORE_LIKE_SIGNAL_MAX_127);
   saveSignalRetry127(uid, rows);
-  // Persist latest final-state mutations even if the Firebase notification fails:
-  // retry is triggered on the next successful batch or after reconnect/focus.
+
+  // App140: live cross-device notification is a small changed-track signal, not
+  // a retained account snapshot. Use the same proven RTDB set() transport as
+  // Music Note/recent-song domain signals. Concurrent/stale writers are detected
+  // by previousVersion mismatch on the receiving device and repaired from the
+  // existing personal R2 catalog; no D1/Firestore recovery read is added here.
   const publish = (async () => {
-    const notification = await runTransaction(
+    const previousVersion = Math.max(0, readSeenLikeSignal127(uid));
+    const version = Math.max(Date.now(), previousVersion + 1);
+    await setRealtimeValue(
       databaseRef(realtimeDb, `userSync/${uid}/exploreLike`),
-      (raw) => {
-        const current = normalizeLikeSignal127(raw);
-        const version = Math.max(Date.now(), (current?.version || 0) + 1);
-        const merged = new Map<string, ExploreLikeAcceptedRow127>();
-        [...rows, ...(current?.results || [])].forEach((row) => {
-          if (!merged.has(row.trackId) && merged.size < EXPLORE_LIKE_SIGNAL_MAX_127) merged.set(row.trackId, row);
-        });
-        return {
-          version,
-          previousVersion: forceGap ? 0 : current?.version || 0,
-          results: [...merged.values()].map(({ trackId, ownerUid, liked, likeCount }) =>
-            ({ trackId, ownerUid, liked, likeCount: clampLikeCount(likeCount) })),
-        };
+      {
+        version,
+        previousVersion: forceGap ? 0 : previousVersion,
+        results: rows.map(({ trackId, ownerUid, liked, likeCount }) => ({
+          trackId,
+          ownerUid,
+          liked,
+          likeCount: clampLikeCount(likeCount),
+        })),
       },
-      { applyLocally: false },
     );
-    if (!notification.committed) throw new Error('Personal like notification was not committed');
+    markSeenLikeSignal127(uid, version);
     saveSignalRetry127(uid, []);
     writeLikeLocal127(scopedLikeKey127(EXPLORE_LIKE_SIGNAL_GAP_127, uid), '');
   })().finally(() => { signalPublishInFlight127.delete(uid); });

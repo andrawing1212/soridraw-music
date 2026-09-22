@@ -1,5 +1,26 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EF. app147 source-only — production-cue ownership 정합화 + prompt-size source audit 완료 (2026-09-23 KST)
+
+**구현**
+- 최종 section integrity가 instrument cue 옵션만으로 모든 section의 standalone production cue를 강제하던 판정을 제거했다.
+- 이제 canonical `sectionPerformancePlan.soundCue / arrangementAction`, custom section의 실제 audible event, 또는 lyric-free Instrumental/Interlude/Break/Stop/Solo 계약이 있는 section만 production cue required 대상으로 계산한다.
+- ordinary sung section의 optional production-cue blank는 정상으로 인정한다. 반면 sung section tag의 기존 performance-cue 필수 계약은 변경하지 않았다.
+- sibling/canonical cue 재사용은 유지하고, 실제 required event가 누락된 경우에만 `repairV1FinalProductionCues` fallback을 유지했다.
+
+**prompt-size source audit**
+- 기준 `d3d8d87157dec499d7b51293034700531f6efea3`과 동일한 TypeScript initializer source-character 방식으로 owner block을 측정했다.
+- 측정 owner 합계 before/after `15,761 / 15,761 chars`, `systemInstruction` initializer source before/after `1,817 / 1,817 chars`로 동일하다.
+- 가장 큰 계측 블록은 Japanese first-pass contract `6,031 chars`, sectionPerformancePlan output instruction `5,933 chars`였다.
+- prompt owner 블록 사이에서 안전하게 제거할 완전 동일 중복은 확인되지 않았다. 품질 계약을 추측으로 삭제하지 않았으므로 최초 실사용 입력 약 33.8k~34.4k token은 이번 source-only 후보에서도 감소를 주장하지 않는다.
+- 신규 verifier가 optional sung blank, canonical required/present cue, custom vocal-only, instrumental transition 및 prompt owner size/중복 후보를 deterministic하게 검사한다.
+
+**상태/보호**
+- app version 후보를 147로 올렸지만 **미배포**다. 실제 PREVIEW는 app146 그대로다.
+- Firebase Functions / shared Function / Cloudflare Worker / Rules / Firestore / D1 / 사용자 데이터 / TEST / PRODUCTION 변경 없음.
+- 모델 5단 chain, quota/cooldown/in-flight, hard-ban 3.5-lite 단일 교정, UI/좋아요/Music Note/Library/Explore 비변경.
+- 남은 위험: source audit은 실제 provider tokenizer 측정이 아니며, app147 실사용 입력 token과 required production event의 실제 추가 호출 여부는 배포 후 별도 확인이 필요하다.
+
 ## 0EE. app146 실사용 1분 4초 병목 확인 + app147 Codex 작업 기준 고정 (2026-09-23 KST)
 
 **사용자 실사용 결과**

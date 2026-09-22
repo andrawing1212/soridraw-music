@@ -94,6 +94,7 @@ import {
 } from "./generation/v1/lyrics";
 import { buildV1LanguageArrangementBrief, buildV1PublicLanguageMixAudit } from "./generation/v1/language";
 import { measureV1LineLanguageOccupancy, measureV1SungLanguageOccupancy } from "./generation/v1/language/languageMixMeasurement";
+import { selectV1MissingRequiredProductionCueSections } from "./generation/v1/sections/productionCueOwnership";
 import {
   applyV1WholeRewriteResponse,
   buildV1LanguageMixBlockPlan,
@@ -34437,13 +34438,55 @@ function collectV1ProductionCueBySection(
 function collectV1MissingProductionCueSections(
   lyrics: string,
   params: GenerateSongParams,
+  rawPlan: unknown = [],
+  productionPrompt = '',
 ): string[] {
   if (!resolveSectionCueOptions(params).instrument) return [];
   const blueprint = getV1SectionBlueprint(params);
   const cueMap = collectV1ProductionCueBySection(lyrics, params);
-  return blueprint.entries
-    .map((entry) => entry.name)
-    .filter((sectionName) => !cueMap.has(normalizeV1FinalIntegritySectionKey(sectionName)));
+  const plan = Array.isArray(rawPlan) ? rawPlan as V1GeneratedSectionPerformancePlanItem[] : [];
+  const customStructure = params.songStructure === 'custom' ? (params.customStructure || []) : [];
+  const candidates = blueprint.entries
+    .map((entry, sectionIndex) => ({ entry, sectionIndex }))
+    .map(({ entry, sectionIndex }) => {
+      const sectionName = entry.name;
+      const key = normalizeV1FinalIntegritySectionKey(sectionName);
+      const planItem = plan.find((candidate) => normalizeV1FinalIntegritySectionKey(candidate?.sectionName) === key)
+        || plan.find((candidate) => Number(candidate?.sectionIndex || 0) === sectionIndex + 1);
+      const planOwnsAudibleEvent = Boolean(planItem && getV1PlanProductionCueForSection(
+        plan,
+        sectionName,
+        sectionIndex,
+        productionPrompt,
+      ));
+      const customItem = customStructure[sectionIndex];
+      const customMatches = customItem
+        && normalizeV1FinalIntegritySectionKey(customItem.section) === key;
+      const customTags = customMatches ? (customItem.tags || []) : [];
+      const customContext: V1CueRepairContext = {
+        local: customTags,
+        arrangement: [productionPrompt],
+        global: customStructure.flatMap((item) => item.tags || []),
+      };
+      const customOwnsAudibleEvent = customTags.some((tag) => Boolean(
+        sanitizeV1GeneratedPlanSoundCueForSection(tag, sectionName, customContext),
+      ));
+      const explicitlyProductionOnly = isForcedInstrumentalLyricSection(sectionName, params)
+        || sectionHasCustomStop(sectionName, params)
+        || (!entry.requiresLyrics && /^(?:Break|Stop|Instrumental(?: Opening)?|Interlude|Solo)(?:\s+\d+)?$/i.test(sectionName));
+
+      // A standalone cue is optional for an ordinary sung section. The canonical plan or an
+      // explicit custom/lyric-free production contract must own a real audible event before the
+      // final integrity stage is allowed to repair it with another Gemini request.
+      return {
+        sectionName,
+        hasRenderedCue: cueMap.has(key),
+        planOwnsAudibleEvent,
+        customOwnsAudibleEvent,
+        explicitlyProductionOnly,
+      };
+    });
+  return selectV1MissingRequiredProductionCueSections(candidates);
 }
 
 function getV1PlanProductionCueForSection(
@@ -34838,7 +34881,12 @@ async function repairV1FinalSectionAndCueIntegrity(
     key: card.key,
     lyrics: String(result.lyrics[card.key] || '').trim(),
     cues: collectV1ProductionCueBySection(String(result.lyrics[card.key] || ''), params),
-    missing: collectV1MissingProductionCueSections(String(result.lyrics[card.key] || ''), params),
+    missing: collectV1MissingProductionCueSections(
+      String(result.lyrics[card.key] || ''),
+      params,
+      rawSectionPerformancePlan,
+      productionPrompt,
+    ),
   })).filter((card) => Boolean(card.lyrics));
   const unionMissing = Array.from(new Set(cardCueMaps.flatMap((card) => card.missing)));
   if (!unionMissing.length) return { result, summary };
@@ -34897,7 +34945,12 @@ async function repairV1FinalSectionAndCueIntegrity(
 
   summary.productionCueSections = unionMissing.filter((sectionName) => cueBySection.has(normalizeV1FinalIntegritySectionKey(sectionName)));
   summary.unresolvedSections = Array.from(new Set(cards.flatMap((card) => [
-    ...collectV1MissingProductionCueSections(String(result.lyrics[card.key] || ''), params),
+    ...collectV1MissingProductionCueSections(
+      String(result.lyrics[card.key] || ''),
+      params,
+      rawSectionPerformancePlan,
+      productionPrompt,
+    ),
     ...inspectV1SectionContractCompletion(String(result.lyrics[card.key] || ''), params).missingRequired,
   ])));
   const expectedOrder = blueprint.entries.map((entry) => entry.name);
@@ -38574,4 +38627,3 @@ Translate the provided text into ${targetLanguage}.
     throw error;
   }
 }
-

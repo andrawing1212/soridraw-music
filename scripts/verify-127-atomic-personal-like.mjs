@@ -354,5 +354,11 @@ console.log('127_D1_MUTATION_ROUTE_UNCHANGED=PASS');
 console.log('127_WORKER071_UNCHANGED=PASS');
 console.log('127_NO_DEPLOY_OR_USER_DATA_MIGRATION=PASS');
 
-assert.doesNotMatch(page, /likeHydrationKeyRef\.current = ''/,
+const resumeStart134 = page.indexOf('const onResume = () => {');
+const resumeEnd134 = page.indexOf('window.addEventListener(\'focus\', onResume)', resumeStart134);
+assert.ok(resumeStart134 > 0 && resumeEnd134 > resumeStart134, 'Explore focus resume block missing');
+const resume134 = page.slice(resumeStart134, resumeEnd134);
+assert.doesNotMatch(resume134, /likeHydrationKeyRef\.current = ''/,
   'cached focus must not reset like hydration and trigger another D1 membership read');
+assert.match(resume134, /checkExplorePersonalLikeRevision127\(user\)/,
+  'focus may check only the tiny private revision');

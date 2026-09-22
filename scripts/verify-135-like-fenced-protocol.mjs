@@ -1766,13 +1766,15 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   const cron165 = slice165('processExploreLikeBatches035Core056');
   for (const [label, body, write] of [
     ['direct', direct165, 'adjustExploreLikeCounterDelta('],
-    ['batch', batch165, 'enqueueExploreLikeBatch035('],
+    ['batch', batch165, 'adjustExploreLikeCounterDelta('],
   ]) {
     const markerAt = body.indexOf('await assertLegacyLikeIntakeOpen165(env)');
     assert.ok(markerAt >= 0 && markerAt < body.indexOf(write),
       '165 ' + label + ' intake must be guarded before D1 write');
     assert.ok(body.indexOf('enforceExploreLikeBatchEdgeRateLimit054') < markerAt);
   }
+  assert.doesNotMatch(batch165, /enqueueExploreLikeBatch035\(/,
+    'app134 batch route must not recreate the stalled 069 queue');
   assert.doesNotMatch(cron165, /assertLegacyLikeIntakeOpen165/);
   assert.match(cron165, /processExploreLikeUserQueueWave075/);
   assert.doesNotMatch(worker165, /(?:put|delete)\(exploreLikeDrainKey165/,
@@ -1811,13 +1813,14 @@ console.log('135_PRODUCT_RELEASE_READINESS=FAIL');
   assert.match(batch165, /SORIDRAW_BATCH_LIKE_FINAL_CUTOVER_FREEZE_169_20260921/);
   const finalRead172 = 'const cutover172 = await readLikeCutoverState162(env)';
   const legacyDrain165 = 'await assertLegacyLikeIntakeOpen165(env)';
-  const legacyQueue035 = 'enqueueExploreLikeBatch035(';
+  const legacyDirectWrite185 = 'adjustExploreLikeCounterDelta(';
   assert.ok(batch165.indexOf(finalRead172) >= 0);
   assert.ok(batch165.indexOf(finalRead172) < batch165.indexOf(legacyDrain165));
-  assert.ok(batch165.indexOf(legacyDrain165) < batch165.indexOf(legacyQueue035));
+  assert.ok(batch165.indexOf(legacyDrain165) < batch165.indexOf(legacyDirectWrite185));
   assert.match(batch165, /if \(cutover172\.mode === 'd1only171'\)/);
   assert.match(batch165, /if \(cutover172\.mode !== 'legacy'\)/);
   assert.doesNotMatch(batch165, /assertLegacyLikeWriterOpen163\(env, 'batch-like-intake'\)/);
+  assert.doesNotMatch(batch165, /enqueueExploreLikeBatch035\(/);
   console.log('169_FINAL_CUTOVER_BATCH_INTAKE_GUARD_SUPERSEDED_BY_172_SINGLE_READ=PASS');
 
 

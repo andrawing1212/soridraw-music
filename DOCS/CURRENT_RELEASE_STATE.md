@@ -1,5 +1,18 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0DZ. PREVIEW app143 — Gemini 관리자 오류 설명 한글화 배포 완료 (2026-09-23 KST)
+
+- 사용자 요청에 따라 관리자 `Gemini 호출 기록`의 provider 오류 설명 문장을 한국어 표시로 변경.
+- 진단에 필요한 `HTTP 500/503`, `GEMINI_UPSTREAM_UNAVAILABLE`, 모델명/오류 코드는 그대로 유지.
+- 기존 local audit 기록도 저장 데이터 변환 없이 화면 렌더링 시 한국어로 표시.
+- 현재 번역 대상: 모델 고수요(high demand), timeout, 재시도 안내, resource exhausted.
+- 변경 파일: `src/pages/AdminGeminiAuditPage.tsx`, `public/app-version.json=143`.
+- Release Audit Run `35766331164` / job `106876689754` SUCCESS.
+- PREVIEW Hosting Run `35766616101` / job `106877650804` SUCCESS. exact build PASS, TEST/PRODUCTION unchanged PASS.
+- Firebase Functions/Worker/Rules/user data 변경 없음. app142의 PREVIEW 전용 `generateGeminiContentPreview` 및 5단 모델 체인은 그대로 유지.
+- Gemini 503 resilience/backoff 추가 최적화는 이번 한글화 작업과 분리되어 아직 미적용.
+
+
 ## 0DY. 곡 생성 Gemini 503 연속 실패 원인 확정 — 모델 폐기 아님, provider overload + 초기 fallback 체인 노후화 (2026-09-23 KST)
 
 **사용자 실사용 증상:** 곡 생성이 약 27초 후 실패. 관리자 Gemini 호출 기록에서 물리 호출 3회 모두 실패:

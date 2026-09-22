@@ -76,6 +76,29 @@ function dateText(value?: string): string {
   });
 }
 
+function geminiErrorText(value?: string): string {
+  const clean = String(value || '').trim();
+  if (!clean) return '';
+
+  return clean
+    .replace(
+      /This model is currently experiencing high demand\. Spikes in demand are usually temporary\. Please try again later\.?/gi,
+      '현재 해당 Gemini 모델에 요청이 몰려 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.',
+    )
+    .replace(
+      /The operation was aborted due to timeout\.?/gi,
+      '응답 시간이 초과되어 요청이 중단되었습니다.',
+    )
+    .replace(
+      /Please try again later\.?/gi,
+      '잠시 후 다시 시도해 주세요.',
+    )
+    .replace(
+      /Resource has been exhausted\.?/gi,
+      '현재 사용 가능한 요청 한도를 초과했습니다.',
+    );
+}
+
 function modelSkipReasonText(skip: GeminiAuditModelSkip): string {
   if (skip.reason === 'in_flight') return '다른 생성이 같은 모델 시험 중';
   if (skip.reason === 'slow_success') return '같은 곡에서 느린 성공 모델 제외';
@@ -83,7 +106,7 @@ function modelSkipReasonText(skip: GeminiAuditModelSkip): string {
     const remaining = skip.remainingMs ? ` · ${durationText(skip.remainingMs)} 남음` : '';
     return `쿨다운${remaining}`;
   }
-  return skip.detail || '모델 상태 정책으로 제외';
+  return geminiErrorText(skip.detail) || '모델 상태 정책으로 제외';
 }
 
 function statusBadge(session: GeminiAuditSession) {
@@ -264,7 +287,7 @@ export default function AdminGeminiAuditPage() {
 
                     {session.errorMessage && (
                       <div className="mt-3 rounded-xl border border-red-500/15 bg-red-500/[0.07] px-3 py-2 text-xs leading-5 text-red-300">
-                        {session.errorMessage}
+                        {geminiErrorText(session.errorMessage)}
                       </div>
                     )}
 
@@ -278,7 +301,7 @@ export default function AdminGeminiAuditPage() {
                               <span className="text-[var(--text-secondary)]">· {contextLabel(skip.context)}</span>
                             </div>
                             {skip.detail && skip.reason !== 'in_flight' && (
-                              <div className="mt-0.5 break-words text-[var(--text-secondary)]">사유: {skip.detail}</div>
+                              <div className="mt-0.5 break-words text-[var(--text-secondary)]">사유: {geminiErrorText(skip.detail)}</div>
                             )}
                           </div>
                         ))}
@@ -316,7 +339,7 @@ export default function AdminGeminiAuditPage() {
                             <span>전체 {numberText(call.usage.totalTokens)}</span>
                           </div>
                           {call.errorMessage && (
-                            <p className="mt-2 break-words text-[10px] leading-4 text-red-300/80">{call.errorMessage}</p>
+                            <p className="mt-2 break-words text-[10px] leading-4 text-red-300/80">{geminiErrorText(call.errorMessage)}</p>
                           )}
                         </div>
                       ))}

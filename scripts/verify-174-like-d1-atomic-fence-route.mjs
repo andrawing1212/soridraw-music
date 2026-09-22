@@ -87,11 +87,18 @@ assert.ok(
 );
 
 const batch = functionText('handleLikeBatch034');
-const modeAt = batch.indexOf("cutover172.mode === 'd1only171'");
-const frozenAt = batch.indexOf('await assertD1OnlyFrozen174(env)');
-const canonicalAt = batch.indexOf('createLikeD1OnlyCanonical171(env.DB');
-assert.ok(modeAt >= 0 && frozenAt > modeAt && canonicalAt > frozenAt);
-assert.match(batch, /personalLikeSnapshot: 'settled'/);
+if (batch.includes('SORIDRAW_FINAL_LIKE_W1_HYBRID_188_20260922')) {
+  assert.match(batch, /enqueueExploreLikeBatch035\(env, authContext\.uid, mutations, receivedAt\)/);
+  assert.match(batch, /canonicalD1: 'queued'/);
+  assert.doesNotMatch(batch, /createLikeD1OnlyCanonical171\(/);
+  assert.doesNotMatch(batch, /adjustExploreLikeCounterDelta\(/);
+} else {
+  const modeAt = batch.indexOf("cutover172.mode === 'd1only171'");
+  const frozenAt = batch.indexOf('await assertD1OnlyFrozen174(env)');
+  const canonicalAt = batch.indexOf('createLikeD1OnlyCanonical171(env.DB');
+  assert.ok(modeAt >= 0 && frozenAt > modeAt && canonicalAt > frozenAt);
+  assert.match(batch, /personalLikeSnapshot: 'settled'/);
+}
 
 // Product Worker may read/condition on the fence, but it must never arm,
 // reopen, or freeze the cutover control row itself.
@@ -110,6 +117,6 @@ assert.equal(manifest.patches.includes('084-like-d1-atomic-cutover-fence.mjs'), 
 console.log('174_DIRECT_WRITE_FENCED_IN_SAME_D1_BATCH=PASS');
 console.log('174_QUEUE_INTAKE_FENCED_IN_SAME_D1_BATCH=PASS');
 console.log('174_PROCESSOR_ALLOWED_OPEN_DRAINING_BLOCKED_FROZEN=PASS');
-console.log('174_171_WRITE_REQUIRES_D1_FROZEN=PASS');
+console.log('174_171_WRITE_REQUIRES_D1_FROZEN_OR_FINAL_W1_QUEUE=PASS');
 console.log('174_PRODUCT_WORKER_CANNOT_SELF_ARM_CONTROL=PASS');
 console.log('174_RELEASE_MANIFEST_DORMANT=PASS');

@@ -2309,7 +2309,7 @@ export const getGoogleGeminiApiKey = onRequest(
 
 const GEMINI_CONTENT_FUNCTION_OPTIONS = {
   region: "us-central1",
-  timeoutSeconds: 180,
+  timeoutSeconds: 330,
   memory: "512MiB",
   concurrency: 20,
   maxInstances: 30,

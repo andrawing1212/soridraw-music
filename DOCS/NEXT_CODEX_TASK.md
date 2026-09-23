@@ -1,5 +1,14 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최우선 — app148 실사용 썸네일 확인 후 Gemini 진단 복귀
+
+- app148 PREVIEW Hosting Run `35857460912` SUCCESS; locked source `6fab9fc859304049ee832ab2889c37c0dadcde16`; exact build 148 PASS; TEST/PRODUCTION unchanged PASS.
+- 사용자 검증 대기: 디테일 Suno URL 연결 → 목록 커버 즉시 표시 → 상세 닫기 → 1/2순위 변경 및 삭제 → 페이지 재진입 → PC/모바일.
+- 실패 시 실제 같은 곡의 catalog summary, IndexedDB draft, selectedSong, favoritesStore의 최소 Suno 메타데이터만 비교. 불필요한 서버 조회/쓰기 또는 전체 계정 rebuild 금지.
+- 성공 확인 후 app147 Gemini Folk Rock에 남은 `repairV1FinalProductionCues` 호출의 실제 필요성과 33k 입력 원인을 순서대로 분석한다. 후속 작업은 별도 범위/commit으로 분리.
+- PRODUCTION은 명확한 별도 승인 전 배포 금지.
+
+
 ## 현재 최우선 — Music Note Suno 연결 썸네일 app148 실사용 확인
 
 - PREVIEW source-only 후보 app148, 실제 Hosting app147.

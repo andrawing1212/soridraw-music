@@ -89,6 +89,7 @@ jobs:
           node scripts/verify-175-explore-like-catalog-reentry.mjs
           node scripts/verify-176-like-postwrite-ack.mjs
           node scripts/verify-177-like-idle-retry-guard.mjs
+          node scripts/verify-031-music-note-detail-batched-draft.mjs
           node scripts/verify-178-final-like-architecture.mjs
           node scripts/verify-179-like-live-ui-replay.mjs
           node scripts/verify-180-like-live-signal-and-cached-paint.mjs

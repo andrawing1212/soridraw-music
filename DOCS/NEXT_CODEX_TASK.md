@@ -1,5 +1,19 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최우선 / 사용자 승인 합격선 — 모든 계정 × PC·모바일 좋아요 완전 일치 (2026-09-24 KST)
+
+사용자 최신 실사용: **동일 계정 모바일 내 좋아요 10곡, PC 5곡**. 기존 app155/Worker156에서 확인된 4곡 공개 카운트 1 복구는 이 문제의 해결이 아님. 임의 숫자/개인 카탈로그를 서버에 덮어쓰거나 강제 초기화하지 말 것.
+
+**필수 원칙 (사용자 명시)**: PC 또는 모바일에서 A가 좋아요/해제 시, A 본인의 PC+모바일 **개인 하트/내 좋아요 목록**이 같아야 한다. 다른 계정 B/C의 PC+모바일에는 **같은 곡 공용 likeCount**가 동일하게 반영되어야 한다. B/C의 개인 하트는 각자 실제 좋아요 여부여야 하며 A의 개인 하트를 전파하면 FAIL. B/C도 각각 누르고 해제할 수 있어야 하며 반복 변경, 화면 유지·탭 전환·재접속·업데이트 후 동일성을 유지해야 한다. 단지 특정 4곡 복구/한 시점 스냅샷 PASS는 최종 합격 아님.
+
+**즉시 수행**:
+1. source HEAD 고정. 같은 계정 모바일 10 vs PC 5 원본 차이는 **읽기 전용**으로 기기별 local pending/outbox + 개인 R2 snapshot(revision, likesComplete/exactLikeCount) + D1 canonical membership을 구분. 사용자 UID/원본 리스트를 공개 로그에 출력하지 않는다. canonical 수치를 무조건 10 또는 5라 가정하지 않는다. 다른 기기의 미전송 local intention 절대 삭제 금지.
+2. 새 좋아요/해제 1건에 대해 queue enqueue → settlement → personal R2 exact catalog → same-UID RTDB signal → shared latest/popular/profile R2 publication → per-device revision check → UI까지 **전 구간** 재현. 특히 4곡 복구 전 canonical=1, shared R2=0이었던 경로의 미래 모든 곡에 대한 일반 갱신 확인.
+3. 기존 캐시 우선, 30초 묶음, changed-track만 변경, W1~W2, 변경 없음 D1 R0 목표 유지. 새로운 모든 사용자별 D1 polling/Feed 전체 scan/원본 전체 overwrite/대량 백필 금지. 실시간을 즉시 보장할 수 없다면 실제 반영 지연 및 비용을 명시하고 **사용자 승인 없이 합격 조건 완화 금지**.
+4. 자동 회귀: A PC→A 모바일 / A 모바일→A PC, A→B PC·모바일 / B→A PC·모바일, 좋아요→해제→재좋아요, 동시 A/B 클릭, 10↔5 후보 차집합 / 중간 실패·재진입·다른 계정 전환, 추천/최신/인기/공개프로필/내 좋아요, 처음 로그인/업데이트 후 캐시. 서버 권위와 모든 실제 카드 동시 비교. 동일 계정의 personal membership과 공개 aggregate는 각각 별도 비교.
+5. GitHub source test, TS/Build, W1~W2 / no-change read 검증, Work 독립 감사까지 PASS 후 **PREVIEW만** 배포. 실제 2개 계정 × PC·모바일 양방향 반복 테스트 PASS 전 "해결 완료" 보고 금지. TEST/PRODUCTION 승격 금지.
+
+
 ## 가장 최근: app155 + PREVIEW Worker 156 shared R2 좋아요 복구 배포 완료, 교차계정 실제 신규 변경 검증 대기
 
 - READ-ONLY root cause Run `35905492085`: D1 canonical + standard Feed 4곡 1, but client direct/revision-keyed shared R2 latest/popular 0. UI만 다시 맞추는 접근 금지.

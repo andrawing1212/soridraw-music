@@ -1,5 +1,28 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EL. PREVIEW app149 — Music Note 재접속 썸네일 보완 Hosting 배포 완료 (2026-09-23 KST)
+
+**배포**
+- app148 사용자 영상 재검증 FAIL을 바로잡는 app149 PREVIEW Hosting 배포.
+- Firebase Hosting Run `35864856848` / job `107193751360` SUCCESS.
+- locked source `337c2b0e6e9ca72d518607310ee90e75dc3dc225`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=149`, `PREVIEW_EXACT_BUILD=PASS`.
+- `TEST_PRODUCTION_UNCHANGED=PASS`. main 및 production 분리 유지.
+- URL `https://preview.soridraw.com/`.
+- Audit Run `35864420171` SUCCESS: TypeScript/Build/verify-031/like regression PASS. Hosting TypeScript/Build도 PASS.
+- Functions / Worker / Rules / Firestore / D1 / 사용자 데이터 삭제·변환·migration 없음. 서버 read/write 호출 종류 증가 없음.
+
+**app149 수정 내용**
+- IndexedDB 상세 draft를 목록에 다시 반영하여 stale catalog가 신규 Suno 썸네일을 덮어쓰는 문제 완화.
+- Music Note 상세 저장 성공 후 catalog delta를 직렬 발행하여 기존 snapshot이 먼저 발행되는 순서 문제 수정. 정상 묶음 저장과 성능/UI 보호.
+- 실제 모바일 및 PC 재접속 시나리오 **사용자 실사용 검증 전**. app149 배포 SUCCESS와 실제 버그 해결 PASS는 별개.
+
+**다음**
+- 사용자 모바일에서 기존 URL 연결 곡 열기 → Suno URL 저장 → 목록 커버 → 앱 완전 종료/재접속 → 목록 커버 지속 확인. 2개 URL 우선순위 교체/삭제와 PC도 확인.
+- 기존 app148에서 이미 서버 저장되고 R2 catalog 갱신이 누락된 곡은 app149에서 다시 저장해 새 delta가 발행되는지 확인. 재저장 없이 복구가 필요하면 추가 설계·검증; 전체 재생성·백필 금지.
+- 썸네일 문제 검증 후 Gemini 33k/후속 섹션 보완 문제로 복귀.
+
+
 ## 0EK. app148 영상 재검증 FAIL → app149 원인 보완 (2026-09-23 KST)
 
 **사용자 모바일 64초 영상**

@@ -183,6 +183,33 @@ jobs:
           ]) console.log('ACTIVE_MARKER '+marker+'='+(src.includes(marker)?'YES':'NO'));
           NODE
 
+      - name: Compare revision and revision-keyed first-page R2 against direct R2
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sort in latest popular; do
+            curl -fsS -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed-revision?sort=$sort" > "$RUNNER_TEMP/revision-$sort.json"
+            revision="$(SORT="$sort" node -e "const x=require(process.env.RUNNER_TEMP+'/revision-'+process.env.SORT+'.json');process.stdout.write(String(x?.data?.revision||''))")"
+            test -n "$revision"
+            curl -fsS -H "Origin: $PREVIEW_ORIGIN" "$PREVIEW_BASE/v1/feed?sort=$sort&limit=40&__soridraw_r2_only=108" > "$RUNNER_TEMP/direct-$sort.json"
+            curl -fsS -H "Origin: $PREVIEW_ORIGIN" --get "$PREVIEW_BASE/v1/feed" \
+              --data-urlencode "sort=$sort" --data-urlencode "limit=40" \
+              --data-urlencode "__soridraw_r2_only=108" \
+              --data-urlencode "__soridraw_r2_revision=$revision" > "$RUNNER_TEMP/keyed-$sort.json"
+            SORT="$sort" node <<'NODE'
+          const fs=require('fs');
+          const sort=process.env.SORT, path=process.env.RUNNER_TEMP+'/';
+          const direct=JSON.parse(fs.readFileSync(path+'direct-'+sort+'.json'));
+          const keyed=JSON.parse(fs.readFileSync(path+'keyed-'+sort+'.json'));
+          const revision=JSON.parse(fs.readFileSync(path+'revision-'+sort+'.json'))?.data?.revision||'';
+          const selected=rows=>Object.fromEntries((rows||[]).filter(x=>/Leaving One Step Open|Left Unsaid|Through the Night|Just Stay Here Awhile/.test(String(x.title||''))).map(x=>[x.title,Number(x.likeCount??x.stats?.likeCount??0)]));
+          const d=selected(direct?.data?.items),k=selected(keyed?.data?.items);
+          console.log('PUBLIC_SNAPSHOT_'+sort.toUpperCase()+' revisionPresent='+Boolean(revision)+' direct='+JSON.stringify(d)+' keyed='+JSON.stringify(k)+' match='+JSON.stringify(d)===JSON.stringify(k));
+          if(direct?.ok!==true||keyed?.ok!==true||JSON.stringify(d)!==JSON.stringify(k)) throw Error('R2 first-page direct vs revision-keyed mismatch');
+          NODE
+          done
+          echo 'REVISION_KEYED_SHARED_R2_PARITY=PASS'
+
       - name: Read public shared Feed only
         shell: bash
         run: |

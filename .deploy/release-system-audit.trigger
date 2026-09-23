@@ -1,9 +1,8 @@
-requested_at=2026-09-24T05:03:00+09:00
-requested_by=app182_user_requested_same_account_pc_mobile_like_partial_repair
+requested_at=2026-09-24T05:15:00+09:00
+requested_by=app182_auth_query_no_custom_header_reaudit
 target=preview
-purpose=verify_account_only_canonical_exact_metadata_repair_no_user_data_overwrite
+purpose=verify_one_time_partial_like_repair_without_cors_preflight
 expected_app_version=156
 required_verifier=scripts/verify-182-account-partial-like-repair.mjs
-required_verifier_2=scripts/verify-181-personal-r2-exact-mutation.mjs
 no_user_data_migration=true
 no_deploy=true

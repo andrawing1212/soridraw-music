@@ -360,11 +360,113 @@ export class ExploreLikeBatchScheduler103 extends DurableObject {
   }
 }
 
+// SORIDRAW_VERIFIED_SHARED_LIKE_SNAPSHOT_REPAIR_156_20260924
+// One-time bounded derived R2 repair, not a canonical user-data migration.
+// D1 is consulted only once for four confirmed public tracks. All shared R2
+// writes use conditional ETags and update only those tracks' public likeCount.
+// The marker is committed only after both public first-page snapshots agree.
+const VERIFIED_LIKE_REPAIR_MARKER_156 = 'internal/explore/repair-v156/verified-first-page.json';
+const VERIFIED_LIKE_REPAIR_TITLES_156 = [
+  'Leaving One Step Open', 'Left Unsaid', 'Through the Night', 'Just Stay Here Awhile',
+];
+async function repairVerifiedSharedLikeSnapshots156(env) {
+  const bucket = env?.PROFILE_MEDIA;
+  if (!bucket || !env?.DB) throw new Error('[156] missing shared R2 or canonical DB');
+  if (await bucket.head(VERIFIED_LIKE_REPAIR_MARKER_156)) return { alreadyRepaired: true };
+
+  const latestKey = sharedFeedR2Key112('latest');
+  const latestObject = await bucket.get(latestKey);
+  if (!latestObject) throw new Error('[156] shared latest snapshot missing');
+  const latestBundle = JSON.parse(await latestObject.text());
+  const items = latestBundle?.payload?.data?.items;
+  if (!Array.isArray(items)) throw new Error('[156] invalid shared latest snapshot');
+  const targetById = new Map();
+  for (const titlePart of VERIFIED_LIKE_REPAIR_TITLES_156) {
+    const matches = items.filter(item => String(item?.title || '').includes(titlePart));
+    if (matches.length !== 1) throw new Error('[156] expected exactly one title: ' + titlePart);
+    const id = String(matches[0]?.id || matches[0]?.trackId || '').trim();
+    if (!id || targetById.has(id)) throw new Error('[156] invalid/duplicate target id');
+    targetById.set(id, null);
+  }
+  const ids = [...targetById.keys()];
+  const sql = 'SELECT t.id, COALESCE(s.like_count,0) AS like_count FROM tracks t ' +
+    'LEFT JOIN track_stats s ON s.track_id=t.id WHERE t.id IN (?,?,?,?) ' +
+    "AND t.is_public=1 AND t.status='published'";
+  const result = await env.DB.prepare(sql).bind(...ids).all();
+  const rows = result?.results || [];
+  if (rows.length !== ids.length) throw new Error('[156] canonical track mismatch');
+  for (const row of rows) {
+    const id = String(row?.id || '');
+    const count = Number(row?.like_count);
+    if (!targetById.has(id) || !Number.isSafeInteger(count) || count < 0) {
+      throw new Error('[156] invalid canonical count');
+    }
+    targetById.set(id, count);
+  }
+
+  const results = [];
+  for (const sort of ['latest', 'popular']) {
+    const key = sharedFeedR2Key112(sort);
+    let done = false;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const object = await bucket.get(key);
+      if (!object) throw new Error('[156] shared snapshot unavailable: ' + sort);
+      const bundle = JSON.parse(await object.text());
+      const data = bundle?.payload?.data;
+      if (!Array.isArray(data?.items)) throw new Error('[156] invalid shared snapshot: ' + sort);
+      const observed = new Set();
+      let changed = false;
+      const nextItems = data.items.map(item => {
+        const id = String(item?.id || item?.trackId || '').trim();
+        if (!targetById.has(id)) return item;
+        observed.add(id);
+        const likeCount = targetById.get(id);
+        if (Number(item.likeCount ?? item.stats?.likeCount ?? 0) === likeCount &&
+            (!item.stats || Number(item.stats.likeCount ?? likeCount) === likeCount)) return item;
+        changed = true;
+        return {
+          ...item,
+          likeCount,
+          ...(item.stats && typeof item.stats === 'object'
+            ? { stats: { ...item.stats, likeCount } } : {}),
+        };
+      });
+      if (observed.size !== ids.length) throw new Error('[156] target missing in shared ' + sort);
+      if (!changed) { done = true; results.push(sort + ':already-current'); break; }
+      const saved = await bucket.put(key, JSON.stringify({
+        ...bundle, updatedAt: Date.now(),
+        payload: { ...bundle.payload, data: { ...data, items: nextItems } },
+      }), {
+        onlyIf: { etagMatches: object.etag },
+        httpMetadata: { contentType: 'application/json; charset=utf-8' },
+        customMetadata: {
+          ...(object.customMetadata || {}),
+          targetedLikeRepair: '156',
+          mirroredAt: String(Date.now()),
+        },
+      });
+      if (saved) { done = true; results.push(sort + ':patched'); break; }
+    }
+    if (!done) throw new Error('[156] CAS contention: ' + sort);
+  }
+  const marker = await bucket.put(VERIFIED_LIKE_REPAIR_MARKER_156,
+    JSON.stringify({ schemaVersion: 1, repairedAt: Date.now(), tracks: ids.length }), {
+      onlyIf: { etagDoesNotMatch: '*' },
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    });
+  if (!marker && !(await bucket.head(VERIFIED_LIKE_REPAIR_MARKER_156))) {
+    throw new Error('[156] repair marker not persisted');
+  }
+  return { repaired: true, rows: ids.length, results };
+}
+
 export default {
   async scheduled(controller, env, ctx) {
     if (typeof baseWorker?.scheduled === 'function') {
-      return baseWorker.scheduled(controller, env, ctx);
+      await baseWorker.scheduled(controller, env, ctx);
     }
+    const repair156 = await repairVerifiedSharedLikeSnapshots156(env);
+    if (repair156?.repaired) console.log('[SORIDRAW 156] verified shared R2 like snapshot repair:', JSON.stringify(repair156));
   },
 
   async fetch(request, env, ctx) {

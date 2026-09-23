@@ -1,5 +1,112 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최우선 — app150 Gemini 실제 입력 구성 계측 + section repair 소유권 진단
+
+### 기준
+- branch: `preview`
+- 기준 HEAD: 이 작업 시작 시 최신 `preview` HEAD를 다시 확인한다.
+- 현재 PREVIEW: app149, Music Note Suno 썸네일 사용자 실사용 PASS.
+- 배포 금지. 분석 → 구현 → 관련 verifier → TypeScript → Build → commit까지만 수행.
+- UI 일반 사용자 화면, 모델 chain/timeout, 가사/작곡 품질 계약, Firebase/Firestore/D1/R2/Worker/Functions/Rules/사용자 데이터 변경 금지.
+
+### 사용자 실사용 근거
+- app147 V1 최초 성공 입력: 약 32.9k~33.8k tokens.
+- V1 최종 `systemInstruction` source template만 약 59,945 chars이며 많은 동적 instruction block이 삽입된다.
+- 기존 source-only owner audit(15,761 chars)은 실제 provider promptTokenCount와 대응되지 않았다.
+- Folk Rock 1건에서 `repairV1FinalProductionCues`가 추가 호출됐지만 현재 audit 화면만으로 required section의 ownership 이유를 확인할 수 없다.
+
+### 목표 A — 최초 생성 실제 payload breakdown
+**최종 문자열을 바꾸지 말고** `generateSong` 요청 직전에 런타임 구성 길이를 측정한다.
+
+최소 기록:
+- final `systemInstruction` chars
+- final `contents` chars
+- serialized `responseSchema` chars
+- 위 세 값 합계(진단용 approx request chars)
+- provider가 반환한 기존 `promptTokens`
+
+systemInstruction owner blocks 최소 분류:
+- sectionPerformancePlanOutputInstruction
+- v1SectionSlotContractInstruction
+- styleIntentSingleSourceInstruction
+- hookBlueprintOutputInstruction
+- user free-text/detail layer + direct genre/style/sound lock
+- recent story memory
+- global mood distribution / mood role translation
+- recent title anti-repeat / lyric anti-repeat
+- lyric writing style / user primary story lock / technical lyric guard
+- genre / instrument / selected sound / ensemble / style texture inputs
+- vocal expression
+- storyContext / Situation / Theme
+- finalPrompt / vocalPrompt / basePromptSeed
+- language guards / mixed lyrics / lyric draft
+- section blueprint / structure
+- mood-transition / point-sound / requested-language / rap
+- generation-engine output contract
+- lyric guidance / lyric density
+- section-cue variety / arrangement plan / multi-vocal anchor / extra technique / section-cue output
+- specialPrompt
+
+규칙:
+1. raw prompt, raw lyrics, user text, API key 등 내용은 audit log에 저장 금지. **label + char count 숫자만**.
+2. 기존 `GeminiAuditCall`에 optional diagnostic metadata를 추가하거나 기존 admin audit 구조를 최소 확장한다.
+3. 관리자 화면에서 `generateSong` 성공 호출에만 “입력 구성” 접기 영역 또는 짧은 top-size rows를 표시한다. 일반 사용자 비노출.
+4. 같은 fallback physical attempts는 동일 logical request breakdown을 공유해 중복 저장량을 최소화한다.
+5. 계측을 넣기 전/후 동일 fixture에서 최종 `systemInstruction`, `contents`, responseSchema 직렬화 결과가 byte-for-byte 동일함을 verifier로 증명한다. 계측 때문에 prompt가 바뀌면 FAIL.
+
+### 목표 B — `repairV1FinalProductionCues` 호출 이유 기록
+- `collectV1MissingProductionCueSections`가 만드는 candidate의 다음 boolean을 **진단용으로만** 남긴다:
+  - `hasRenderedCue`
+  - `planOwnsAudibleEvent`
+  - `customOwnsAudibleEvent`
+  - `explicitlyProductionOnly`
+- 실제 Gemini fallback target이 된 section마다:
+  - sectionName
+  - sectionIndex
+  - ownership reason(`plan/custom/production-only`, 복수 가능)
+  - phase(`pre-language-mix` / `post-language-mix-final`)
+  만 기록한다.
+- 가사 내용, cue 본문, productionPrompt 원문은 audit log에 저장하지 않는다.
+- 기존 selector의 required/optional 판정 결과 자체를 변경하지 않는다.
+
+### 목표 C — 이 단계에서 하지 말 것
+- 33k를 줄이기 위해 instruction 삭제/요약 금지.
+- 모델 `3.8 → 3.7 → 3.6 → 3.5 → 3.5-lite` 순서 변경 금지.
+- timeout 변경 금지.
+- 최대 physical call 5회 / correction 상한 변경 금지.
+- `repairV1FinalProductionCues` 제거 금지.
+- section performance cue / language mix / Japanese / hard-ban / lyric density / 5단 prompt 계약 변경 금지.
+- 새 서버 호출/서버 로그/Firestore 문서 추가 금지.
+
+### 검증
+1. 새 verifier 또는 기존 app147 verifier 확장: 동일 fixture의 최종 request 문자열/스키마가 계측 전후 의미·문자열 동일.
+2. breakdown 합계와 owner rows가 deterministic하게 생성됨.
+3. raw user text/lyrics/prompt가 audit persistence에 저장되지 않는 정적 검사.
+4. production cue owner reason fixture:
+   - ordinary sung + no local event → no repair target
+   - canonical plan event missing → reason=plan
+   - custom audible event missing → reason=custom
+   - instrumental/break/stop production-only missing → reason=production-only
+   - rendered cue present → no fallback target
+5. existing `verify-147-gemini-prompt-and-cues.ts` PASS.
+6. TypeScript PASS.
+7. Build PASS.
+8. 기존 like/Music Note regression verifier PASS.
+9. TEST/PRODUCTION unchanged.
+10. 최종 report에 실제 코드에서 측정 가능한 **가장 큰 owner block 순위**를 적되, provider token 감소는 배포 실사용 전 주장하지 않는다.
+
+### 완료 보고
+- 작업 branch / 기준 SHA / 최종 SHA
+- 변경 파일
+- 최종 request string parity
+- owner breakdown 예시(숫자만)
+- production repair ownership 예시
+- TypeScript / Build / verifier
+- Firebase/Functions/Worker/D1/사용자 데이터 변경 여부
+- 남은 위험
+- 배포 여부: 반드시 미배포
+
+
 ## 현재 최우선 — app149 Suno 썸네일 모바일/PC 재접속 실사용 검증
 
 - PREVIEW Hosting `35864856848` SUCCESS, exact build 149 PASS, locked `337c2b0e6e9ca72d518607310ee90e75dc3dc225`, TEST/PRODUCTION unchanged.

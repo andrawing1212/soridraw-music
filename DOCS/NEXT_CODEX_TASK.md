@@ -1,5 +1,14 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 가장 최근: app155 + PREVIEW Worker 156 shared R2 좋아요 복구 배포 완료, 교차계정 실제 신규 변경 검증 대기
+
+- READ-ONLY root cause Run `35905492085`: D1 canonical + standard Feed 4곡 1, but client direct/revision-keyed shared R2 latest/popular 0. UI만 다시 맞추는 접근 금지.
+- PREVIEW 156 audit `35908413058` PASS, active Worker release `35908607512` PASS / `e4c8d394-a5c5-43b9-bf52-fc9513184089`. 4곡만 canonical 1회 read + latest/popular targeted R2 CAS, one-time marker; temporary cron restored. Hosting app155 유지.
+- POST deploy readonly `35909223575` PASS: D1 canonical/relation/derived, normal Feed, direct shared R2, revision-keyed shared R2 모두 4곡 1; 069 queue=0.
+- **다음은 새 좋아요와 해제 테스트**: A계정 Chrome/Edge/mobile 하나의 공개곡 좋아요→30초+aggregate 완료 확인→B계정 같은 곡 공용 숫자 비교→A계정 해제 후 재확인→추천/최신/인기/프로필 일관성. 새로운 활동 없는 다른 계정의 열린 탭은 global push 미구현. 사용자가 실제 기기 결과를 주기 전 "모든 향후 변경 해결"로 판정 금지.
+- 증상 재발 시 DB 원본 재작성/전체 R2 재생성 금지. 동일 곡 queue→canonical→R2 direct/revision-keyed→클라이언트 순서로 비교. 비용 W1~W2, no-change D1 R0 유지. TEST/PRODUCTION 승격 금지.
+
+
 ## 현재 최우선 — app155 공용 좋아요 cache separation 검증 및 안전 배포
 
 - 배포 완료: 기능 commit `9ec45d026be84b6bd17124553ac881e02cfb1930`; Firebase PREVIEW app155 locked source `f400203bf8205adc7f2a3d53c7d632537e9acd4e`; Audit Run `35901617762` SUCCESS; Hosting Run `35901871632` SUCCESS / exact build PASS.

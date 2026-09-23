@@ -1,5 +1,15 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 최우선 — app149 Music Note Suno 썸네일 재접속 확인
+
+- 사용자 app148 실사용 FAIL: 상세 커버는 정상, 저장 직후 목록 커버 일시 표시, 앱 재접속 후 목록 음표 복귀.
+- app149 수정: 기존 IndexedDB detail draft를 목록에 UID/곡 단위 오버레이, post-mutation Catalog delta publish 순서 바로잡음.
+- Audit Run `35864420171` SUCCESS, TypeScript/Build/verify-031 PASS. 실제 앱은 아직 app148, app149 실기기 검증 전.
+- 확인: 저장 후 목록 즉시 표시 → 앱 완전 종료/재접속 → 목록 커버 지속 → URL 1/2 우선순위 변경 → 다시 재접속 → PC/모바일 동일 사용자 데이터 확인.
+- 별도 사용자 데이터 재생성, cache generation bump, 전곡 Firestore 상세 조회, 백필/마이그레이션 금지.
+- 이 문제가 PASS되기 전 Gemini 최적화 재개 금지. PRODUCTION 명확 승인 전 승격 금지.
+
+
 ## 최우선 — app148 실사용 썸네일 확인 후 Gemini 진단 복귀
 
 - app148 PREVIEW Hosting Run `35857460912` SUCCESS; locked source `6fab9fc859304049ee832ab2889c37c0dadcde16`; exact build 148 PASS; TEST/PRODUCTION unchanged PASS.

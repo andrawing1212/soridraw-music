@@ -1,5 +1,45 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EU. PREVIEW app154 — 타계정 공용 좋아요 revision 재검증 수정 배포 완료 (2026-09-24 KST)
+
+**사용자 증상**
+- 같은 계정의 개인 좋아요 상태는 정상.
+- 다른 계정에서 같은 공개곡의 공용 좋아요 숫자가 최신 상태로 보이지 않는 증상.
+- 타계정의 꽉 찬 하트는 계정별 개인 상태이므로 공유 대상이 아니며, 공유 대상은 공개 likeCount.
+
+**원인**
+- Explore Feed의 마지막 revision 확인 시간이 requestUrl만 기준으로 저장되어 계정 A의 최근 확인 시간이 계정 B에도 재사용될 수 있었음.
+- Feed 로드/revalidation effect도 `user?.uid` 변경을 dependency로 보지 않아 같은 브라우저/탭에서 계정 전환 시 공용 캐시가 그대로 남을 수 있었음.
+- 개인 RTDB 좋아요 signal은 의도대로 같은 UID 전용이며, 타계정 공용 숫자는 shared R2 Feed/Profile projection이 권위 소스.
+
+**수정**
+- source commit `6c759b3a216b40bcca01cbd8c59fc26d97502dcd`.
+- revision gate key를 `uid + requestUrl` 기준으로 분리.
+- Feed effect dependency에 `user?.uid` 추가.
+- 계정 전환 시 기존 shared Feed cache는 즉시 표시하되, 새 계정 기준으로 작은 shared revision만 다시 확인.
+- revision이 같으면 Feed data 재조회 없음.
+- revision이 다르면 현재 shared R2 first-page snapshot만 갱신.
+- D1 Feed read/write 추가 없음. polling/새 실시간 listener/Worker/Functions/Rules/사용자 데이터 변경 없음.
+
+**검증 / 배포**
+- Release System Audit Run `35891693207` SUCCESS.
+- `CROSS_ACCOUNT_SHARED_FEED_REVALIDATION=PASS`.
+- `ACCOUNT_SWITCH_REUSES_SHARED_FEED_BUT_RECHECKS_REVISION=PASS`.
+- `NO_D1_FEED_READ_ADDED=PASS`.
+- TypeScript PASS / Build PASS / 기존 like regression PASS / Music Note regression PASS / Gemini verifier PASS.
+- Firebase PREVIEW App Release Run `35892105284` / job `107286832733` SUCCESS.
+- locked source `3ea7a0ca5a31c32b17c4b0474bac239ba9b5ae3e`.
+- `FIREBASE_PREVIEW_DEPLOY=PASS`, `PREVIEW_APP_VERSION=154`, `PREVIEW_EXACT_BUILD=PASS`, `TEST_PRODUCTION_UNCHANGED=PASS`.
+- Hosting only. Worker / Functions / Cloudflare / D1 / Firestore / Rules / 사용자 데이터 변경 없음.
+
+**실사용 확인**
+1. A계정에서 공개곡 좋아요.
+2. 기존 30초 actor batch + 1분 shared aggregate가 지나 shared public count가 확정될 시간을 둔다.
+3. B계정으로 전환 후 Explore 진입.
+4. B계정에서는 꽉 찬 하트가 아니라 공용 좋아요 숫자가 +1 반영되는지 확인.
+5. B계정이 직접 좋아요하면 그때 B계정 하트가 채워져야 함.
+- TEST / PRODUCTION 승격 금지.
+
 ## 0ET. app153 최초 생성 fallback 시간 복구 + PREVIEW Function 배포 완료 (2026-09-24 KST)
 
 **사용자 실사용 실패 근거**

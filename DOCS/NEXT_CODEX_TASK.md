@@ -1,5 +1,17 @@
 # SORIDRAW NEXT CODEX TASK
 
+## 현재 최우선 — app154 타계정 공용 좋아요 실사용 확인
+
+- PREVIEW app154 배포 완료.
+- Audit `35891693207` SUCCESS.
+- Hosting Run `35892105284` SUCCESS / exact build 154 PASS / TEST·PRODUCTION unchanged.
+- 계정 전환 시 shared Feed revision gate를 uid+URL 기준으로 분리했고 Feed effect가 user.uid 변경을 다시 처리함.
+- D1 read/write 추가 없음.
+- 실사용은 A계정 좋아요 → shared aggregate 반영 시간 후 B계정 Explore 진입 → 공용 likeCount +1 확인.
+- 타계정의 filled heart는 공유하지 않음. heart는 각 계정 개인 membership.
+- 실패 시 타계정 화면의 시간/탭(추천·최신·인기·공개프로필)과 shared aggregate 반영 여부만 추적. Gemini 작업은 동결.
+- TEST/PRODUCTION 승격 금지.
+
 ## 현재 최우선 — app153 + fallback 60s 실사용 완전 성공 1곡 확인
 
 - PREVIEW Gemini Function Tune Run `35888544983` SUCCESS.

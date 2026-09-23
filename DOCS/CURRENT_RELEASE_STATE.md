@@ -1,5 +1,30 @@
 # SORIDRAW CURRENT RELEASE STATE
 
+## 0EK. app148 영상 재검증 FAIL → app149 원인 보완 (2026-09-23 KST)
+
+**사용자 모바일 64초 영상**
+- 수노 URL 1/2 아트워크가 디테일 화면에서 보여도 해당 Music Note 목록은 음표로 표시된다.
+- 디테일 URL 저장을 누르면 목록에 커버가 보이나 앱을 종료/재접속하면 사라진다.
+- 따라서 app148의 카드 메모리 미러링만으로는 미완료. app148 실사용 FAIL로 판정.
+
+**코드에서 추가 확인한 두 개의 별도 원인**
+1. R2 Music Note catalog의 기존 summary가 나중에 도착하거나 앱 재시작 시 기존 로컬 목록을 덮을 수 있다. app148의 카드 미러링은 `favoritesStore` 메모리만 갱신하고, 미전송된 IndexedDB 상세 draft를 목록 부트스트랩에 합성하지 않았다.
+2. `pageSyncCoordinator`가 catalog delta publish를 Music Note 상세 Firestore 배치 flush와 동시에 시작했다. catalog dirty가 실제 저장 후 표시될 때는 처음 pending count가 0일 수 있으며, 먼저 전송할 경우 이전 커버 상태가 R2에 남는 타이밍 문제가 있었다.
+
+**app149 PREVIEW 변경**
+- `src/pages/FavoritesPage.tsx`: 기존 IndexedDB 상세 draft를 UID·곡 ID 단위로 읽어, R2 catalog와 동일 기기 화면이 새로 갱신될 때 미전송 Suno 미디어를 카드에 복원한다. 서버 버전이 draft보다 최신이면 덮어쓰지 않는다. 기존 상세·목록·정상 묶음 저장 유지.
+- `src/lib/pageSyncCoordinator.ts`: 기존 페이지 종료 batch에서 관련 mutation handler 성공을 확인한 **이후에만** 최신 dirty catalog delta를 계산해 발행. 잘못된 사전 카탈로그를 배포하거나 성공 전 dirty를 지우지 않는다. 실제 저장 없음 상태에는 catalog write 없음.
+- `scripts/verify-031-music-note-detail-batched-draft.mjs`: draft 재적용, 버전 충돌 보호, batch→catalog 순서 검사 추가.
+- `public/app-version.json`: 149 후보. Firestore/R2/D1 스키마, 사용자 데이터, Functions, Worker, Rules 변경 없음. TEST/PRODUCTION 변경 없음.
+
+**검증**
+- Release System Audit Run `35864420171` / job `107192283722` SUCCESS.
+- TypeScript PASS, Build PASS, `VERIFY_031_MUSIC_NOTE_DETAIL_BATCHED_DRAFT=PASS`, 기존 like regression PASS, TEST/PRODUCTION Worker dry-run PASS, shared D1 read-only preflight PASS.
+- isolated synthetic D1 billing 단계 SKIPPED.
+- 실제 모바일/PC 앱149 실사용 검증 전이며 재접속 문제 해결을 아직 PASS로 주장하지 않는다.
+- app147 Gemini 작업은 보류 유지.
+
+
 ## 0EJ. PREVIEW app148 — Music Note Suno 썸네일 수정 Hosting 배포 완료 (2026-09-23 KST)
 
 **사용자 승인/배포 결과**

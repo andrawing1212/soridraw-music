@@ -125,8 +125,8 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any, attemp
 
   replaceOnce(
     'Gemini generateContent timeout signature',
-    'const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {\n  const model = String(requestPayload?.model || "").trim();\n  if (model === "gemini-3.8-flash" || model === "gemini-3.7-flash") {\n    return callGeminiInteraction(apiKey, requestPayload);\n  }',
-    'const callGeminiGenerateContent = async (apiKey: string, requestPayload: any, attemptTimeoutMs = 0): Promise<any> => {\n  const model = String(requestPayload?.model || "").trim();\n  if (model === "gemini-3.8-flash" || model === "gemini-3.7-flash") {\n    return callGeminiInteraction(apiKey, requestPayload, attemptTimeoutMs);\n  }',
+    'const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {\n  const model = String(requestPayload?.model || "").trim();\n  if (["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].includes(model)) {\n    return callGeminiInteraction(apiKey, requestPayload);\n  }',
+    'const callGeminiGenerateContent = async (apiKey: string, requestPayload: any, attemptTimeoutMs = 0): Promise<any> => {\n  const model = String(requestPayload?.model || "").trim();\n  if (["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].includes(model)) {\n    return callGeminiInteraction(apiKey, requestPayload, attemptTimeoutMs);\n  }',
   );
 
   replaceOnce(

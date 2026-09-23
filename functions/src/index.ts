@@ -1430,7 +1430,7 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
 
 const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {
   const model = String(requestPayload?.model || "").trim();
-  if (model === "gemini-3.8-flash" || model === "gemini-3.7-flash") {
+  if (["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].includes(model)) {
     return callGeminiInteraction(apiKey, requestPayload);
   }
   const config = requestPayload?.config && typeof requestPayload.config === "object"

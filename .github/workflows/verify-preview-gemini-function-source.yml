@@ -1,0 +1,62 @@
+name: SORIDRAW PREVIEW Gemini Function Source Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'functions/src/index.ts'
+      - 'functions/scripts/build-secured-index.cjs'
+      - '.github/workflows/verify-preview-gemini-function-source.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-preview-gemini-function-source-audit
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build Functions without deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd functions
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Verify Gemini fallback route contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const src = fs.readFileSync('functions/src/securedIndex.ts', 'utf8');
+          const route = '["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].includes(model)';
+          if (!src.includes(route)) throw new Error('Unified Interactions fallback route missing');
+          if (!src.includes('return callGeminiInteraction(apiKey, requestPayload, attemptTimeoutMs);')) throw new Error('Interactions timeout-preserving call missing');
+          if (!src.includes('const GEMINI_MAX_REQUESTS_PER_SESSION = 5;')) throw new Error('5-attempt ceiling changed');
+          for (const model of ['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite']) {
+            if (!src.includes(model)) throw new Error('Model missing: ' + model);
+          }
+          if (!src.includes('daily_quota_exhausted')) throw new Error('Daily quota cooldown detection missing');
+          if (!src.includes('GEMINI_ATTEMPT_TIMEOUT')) throw new Error('Bounded timeout contract missing');
+          console.log('PREVIEW_GEMINI_INTERACTIONS_FALLBACK_ROUTE=PASS');
+          console.log('PREVIEW_GEMINI_FIVE_ATTEMPT_CEILING=PASS');
+          console.log('PREVIEW_GEMINI_DAILY_QUOTA_GUARD=PASS');
+          console.log('PREVIEW_GEMINI_FUNCTION_SOURCE_AUDIT_NO_DEPLOY=PASS');
+          NODE

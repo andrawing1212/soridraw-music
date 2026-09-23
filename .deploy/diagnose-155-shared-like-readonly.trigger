@@ -1,5 +1,6 @@
-requested_at=2026-09-24T02:45:00+09:00
-requested_by=post_worker_restore_cross_account_like_verification
+requested_at=2026-09-24T03:28:00+09:00
+requested_by=app155_two_browser_all_zero_live_mismatch
 target=preview
-purpose=verify_live_worker_identity_and_public_shared_like_counts_after_restore
+purpose=read_only_compare_D1_canonical_069_queue_shared_latest_popular_worker_identity
 read_only=true
+no_mutation=true
